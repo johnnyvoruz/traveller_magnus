@@ -85,6 +85,8 @@ function initializeInput() {
     setupContextMenu();
     setupSettingsPanel();
     setupHelpToggle();
+    SystemInspector.setup();
+    CampaignAtlas.setup();
     setupHexEditor();
     setupSaveLoad();
     setupTWImport();
@@ -263,6 +265,7 @@ function bringToFront(element) {
 // ============================================================================
 
 function openHelpModal() {
+    if (window.SystemInspector?.isOpen() && !SystemInspector.close()) return;
     document.getElementById('context-menu').classList.remove('visible');
     // Mutually exclusive: close settings if open
     const settingsPanel = document.getElementById('settings-panel');

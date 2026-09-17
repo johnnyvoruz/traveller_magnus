@@ -6,6 +6,20 @@
  */
 
 (function () {
+    // Presentation only: keep generated values and exported data at full precision.
+    const displayFormats = new Map();
+    window.formatDisplayNumber = function (value, decimals = 2, unit = '') {
+        if (value == null || value === '') return '—';
+        const numeric = typeof value === 'number' ? value : Number(value);
+        if (!Number.isFinite(numeric)) return String(value);
+        if (!displayFormats.has(decimals)) displayFormats.set(decimals,
+            new Intl.NumberFormat('en-US', { maximumFractionDigits: decimals }));
+        const minimum = Math.pow(10, -decimals);
+        const formatted = numeric !== 0 && Math.abs(numeric) < minimum
+            ? `${numeric < 0 ? '−' : ''}<${displayFormats.get(decimals).format(minimum)}`
+            : displayFormats.get(decimals).format(numeric);
+        return formatted + (unit ? ` ${unit}` : '');
+    };
     const KM_PER_AU = 149597870;
     const SUN_DIAMETER_KM = 1392700;
 

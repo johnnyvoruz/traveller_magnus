@@ -425,7 +425,7 @@ const DisclosureGrid = (() => {
     function setup() {
         window.addEventListener('keydown', (e) => {
             const t = e.target;
-            if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) {
+            if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) {
                 if (e.key === 'Escape' && isOpen()) close();
                 return;
             }

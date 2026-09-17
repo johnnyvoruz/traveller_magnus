@@ -75,6 +75,9 @@
     <!-- Modular JavaScript Input Handling -->
     <script src="js/input_init.js" defer></script>
     <script src="js/system_viewer.js" defer></script>
+    <script src="js/system_inspector.js" defer></script>
+    <script src="js/campaign_assets.js" defer></script>
+    <script src="js/campaign_atlas.js" defer></script>
     <script src="js/mgt2e_editor_adapter.js" defer></script>
     <script src="js/ct_editor_adapter.js" defer></script>
     <script src="js/t5_editor_adapter.js" defer></script>
@@ -954,9 +957,9 @@
     <div id="splash-screen">
         <div class="splash-content">
             <h1>Bartleby the Coder's:<br><span class="highlight">As Above<br> So Below</span></h1>
-            <div class="splash-banner">New: Point to Point Route upgrades</div>
+            <div class="splash-banner">Campaign Atlas and system inspection</div>
             <p class="splash-subtitle">High-Fidelity Star System Generator</p>
-            <div class="splash-version">v0.17.5</div>
+            <div class="splash-version">v0.18.0 — Campaign Atlas</div>
 
             <div id="splash-shortcuts">
                 <h3>Controls & Shortcuts</h3>
@@ -966,6 +969,7 @@
                     <div class="shortcut-item"><strong>Shift + Click</strong><span>Toggle Select Hex</span></div>
                     <div class="shortcut-item"><strong>Shift + Drag</strong><span>Paint Multiple Hexes</span></div>
                     <div class="shortcut-item"><strong>Ctrl + Click</strong><span>Open World Details</span></div>
+                    <div class="shortcut-item"><strong>Click / Double-click</strong><span>Inspect system / Open orbit view</span></div>
                     <div class="shortcut-item"><strong>Right Click</strong><span>Open Context Menu</span></div>
                     <div class="shortcut-item"><strong>Ctrl + S</strong><span>Toggle Select Sector</span></div>
                     <div class="shortcut-item"><strong>Ctrl + B</strong><span>Toggle Select Subsector</span></div>
@@ -990,6 +994,25 @@
 
     <canvas id="map-canvas"></canvas>
 
+    <nav id="map-toolbar" aria-label="Map tools">
+        <button type="button" data-map-tool="select" aria-pressed="false" title="Click or drag to select hexes (Shift+drag)">Select hexes</button>
+        <button type="button" data-map-tool="routes" title="Routes (R)">Routes <kbd>R</kbd></button>
+        <button type="button" data-map-tool="borders" title="Borders (B)">Borders <kbd>B</kbd></button>
+        <button type="button" data-map-tool="regions" title="Regions (G)">Regions <kbd>G</kbd></button>
+        <button type="button" data-map-tool="filters" title="Filters (F)">Filters <kbd>F</kbd></button>
+        <button type="button" data-map-tool="suspend" title="Suspend or resume filters (Shift+F)">Suspend filters</button>
+        <button type="button" data-map-tool="disclosure" title="Player disclosure (D)">Disclosure <kbd>D</kbd></button>
+        <label class="map-generate">Generate
+            <select id="map-generate" aria-label="Generate systems in selected hexes">
+                <option value="">Choose edition…</option>
+                <option value="ct">Classic Traveller</option>
+                <option value="mgt">Mongoose 2E</option>
+                <option value="t5">Traveller 5</option>
+                <option value="rtt">Revised Traveller</option>
+            </select>
+        </label>
+    </nav>
+
     <!-- Settings Toggle -->
     <div id="settings-toggle" title="Toggle Settings">
         <i class="fas fa-cog"></i>
@@ -999,6 +1022,18 @@
     <div id="help-toggle" title="Help & Shortcuts">
         <i class="fas fa-question"></i>
     </div>
+
+    <button id="atlas-toggle" type="button" title="System inspector" aria-label="System inspector"
+            aria-controls="system-inspector" aria-expanded="false">&#9737; <span>System</span></button>
+    <button id="campaign-toggle" type="button" aria-controls="system-inspector" aria-expanded="false">Campaign</button>
+    <aside id="system-inspector" aria-label="System inspector" hidden inert>
+        <header class="atlas-header">
+            <div><span id="workspace-label" class="atlas-eyebrow">SYSTEM INSPECTOR</span><h2 id="atlas-title"></h2><p id="atlas-subtitle"></p></div>
+            <button id="atlas-close" type="button" aria-label="Close inspector">×</button>
+        </header>
+        <div id="atlas-content" aria-labelledby="atlas-title"></div>
+        <footer id="atlas-footer" hidden></footer>
+    </aside>
 
     <!-- UI Side Panels -->
     <div id="settings-panel" class="side-panel right">
@@ -1439,7 +1474,7 @@
         </div>
         <div
             style="text-align: center; border-bottom: 1px solid rgba(69, 162, 158, 0.3); padding-bottom: 10px; margin-bottom: 20px;">
-            <p style="margin: 5px 0; color: #c5c6c7; font-size: 14px;">Version: <span id="app-version">v0.17.5</span>
+            <p style="margin: 5px 0; color: #c5c6c7; font-size: 14px;">Version: <span id="app-version">v0.18.0</span>
             </p>
         </div>
 
@@ -1461,6 +1496,8 @@
                     System Editing</h3>
                 <div class="help-grid">
                     <strong>Ctrl + Click</strong><span>Open World Details</span>
+                    <strong>Click a system</strong><span>Open system inspector</span>
+                    <strong>Double-click a system</strong><span>Open orbit view</span>
                     <strong>Right Click</strong><span>Open Context Menu</span>
                     <strong>Ctrl + Alt + M</strong><span style="color: #ffa500;">Bulk Mongoose Macro</span>
                     <strong>Ctrl + Alt + C</strong><span style="color: #66fcf1;">Bulk CT / Book 6 Macro</span>
@@ -2067,6 +2104,7 @@
     <!-- Hex Editor Modal -->
     <div id="hex-editor" class="draggable-palette">
         <h3 id="hex-editor-title">World Details</h3>
+        <button type="button" onclick="CampaignAtlas.openForHex(editingHexId)">Campaign</button>
         <button id="btn-close-editor" class="btn-close-palette" onclick="closeHexEditor()" title="Close"><i
                 class="fas fa-times"></i></button>
 

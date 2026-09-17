@@ -12,6 +12,10 @@ function setupCanvasEvents() {
     // reach the hex they mean to click.
     let pickDownX = 0, pickDownY = 0, pickDownArmed = false;
     const PICK_SLOP_PX = 4;
+    let inspectDown = null;
+    let inspectDragged = false;
+    let lastInspection = null;
+    let suppressDoubleUntil = 0;
 
     // 1. Hide context menu when clicking OUTSIDE it
     window.addEventListener('mousedown', (e) => {
@@ -183,6 +187,8 @@ function setupCanvasEvents() {
         if (e.button !== 0) return; // ONLY process Left-Click here
 
         pickDownArmed = false;      // re-armed below only on a plain left-click
+        inspectDown = null;
+        inspectDragged = false;
 
         const world = getMouseWorldCoords(e);
         const coords = pixelToHex(world.x, world.y, baseHexSize);
@@ -191,7 +197,7 @@ function setupCanvasEvents() {
         if (e.ctrlKey) {
             // Ctrl+Left-Click: Open Hex Editor
             if (hexId) openHexEditor(hexId, e);
-        } else if (e.shiftKey) {
+        } else if (e.shiftKey || (window.mapSelectionMode && !window.MapPick?.isArmed())) {
             // Shift+Left-Click: Highlight Single Hex AND Start Painting
             isPainting = true;
             if (hexId) {
@@ -221,9 +227,11 @@ function setupCanvasEvents() {
                 console.log(`Routing Mode Active: Route #${activeDef.id} (${activeDef.name})`);
                 requestAnimationFrame(draw);
             } else {
-                // Plain Left-Click: ONLY Panning (No selection logic whatsoever)
+                // A stationary plain click inspects; dragging continues to pan.
                 // — or, when a Route Manager pick is armed, a candidate pick.
                 pickDownArmed = !!(window.MapPick && window.MapPick.isArmed());
+                if (pickDownArmed) { lastInspection = null; suppressDoubleUntil = performance.now() + 800; }
+                if (!pickDownArmed && !e.altKey && !e.metaKey) inspectDown = { hexId, x: e.clientX, y: e.clientY };
                 pickDownX = e.clientX;
                 pickDownY = e.clientY;
                 isDragging = true;
@@ -236,6 +244,7 @@ function setupCanvasEvents() {
 
     // 4. Mouse Move: Pan Camera or Paint Hexes
     window.addEventListener('mousemove', (e) => {
+        if (inspectDown && Math.hypot(e.clientX - inspectDown.x, e.clientY - inspectDown.y) > PICK_SLOP_PX) inspectDragged = true;
         currentMouseX = e.clientX;
         currentMouseY = e.clientY;
 
@@ -267,6 +276,15 @@ function setupCanvasEvents() {
 
     // 5. Mouse Up: Stop Actions entirely
     window.addEventListener('mouseup', (e) => {
+        if (e.button === 0 && inspectDown && !inspectDragged && e.target === mapCanvas &&
+            !e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey &&
+            Math.hypot(e.clientX - inspectDown.x, e.clientY - inspectDown.y) <= PICK_SLOP_PX) {
+            const id = inspectDown.hexId;
+            if (hexStates.get(id)?.type === 'SYSTEM_PRESENT' && SystemInspector.openForHex(id)) {
+                lastInspection = { id, time: performance.now() };
+            } else lastInspection = null;
+        }
+        inspectDown = null;
         // Deliver an armed Route Manager pick — a click, not a drag.
         if (pickDownArmed && window.MapPick && window.MapPick.isArmed() && !e.ctrlKey && !e.shiftKey) {
             const moved = Math.hypot(e.clientX - pickDownX, e.clientY - pickDownY);
@@ -323,23 +341,30 @@ function setupCanvasEvents() {
         requestAnimationFrame(draw);
     });
 
+    mapCanvas.addEventListener('dblclick', e => {
+        if (performance.now() < suppressDoubleUntil) return;
+        if (e.ctrlKey || e.shiftKey || e.altKey || e.metaKey || inspectDragged ||
+            window.mapSelectionMode || (window.MapPick && window.MapPick.isArmed())) return;
+        if ((window.routeDefinitions || []).some(d => d.shortcut && keysDown.has(d.shortcut))) return;
+        const world = getMouseWorldCoords(e);
+        const coords = pixelToHex(world.x, world.y, baseHexSize);
+        const id = getHexId(coords.q, coords.r);
+        if (!lastInspection || lastInspection.id !== id || performance.now() - lastInspection.time > 600) return;
+        if (!SystemViewer.normalizeSystem(hexStates.get(id) || {})) {
+            showToast('Orbit data has not been generated for this system.', 4000);
+            return;
+        }
+        SystemViewer.open(id);
+    });
+
     // 6. Mouse Wheel: Zoom
     mapCanvas.addEventListener('wheel', (e) => {
         e.preventDefault();
         const zoomFactor = 1.1;
         const direction  = e.deltaY > 0 ? -1 : 1;
 
-        // Route to system viewer when open
-        if (window.SystemViewer && window.SystemViewer.isOpen()) {
-            window.SystemViewer.handleWheel(direction);
-            return;
-        }
-
-        // Trigger system viewer on scroll-in at max zoom
-        if (direction > 0 && zoom >= 10 && window.SystemViewer) {
-            window.SystemViewer.open();
-            return;
-        }
+        // Wheel gestures only zoom the current view. System entry is explicit.
+        if (window.SystemViewer?.isOpen()) return;
 
         const mouseWorldX = cameraX + e.clientX / zoom;
         const mouseWorldY = cameraY + e.clientY / zoom;

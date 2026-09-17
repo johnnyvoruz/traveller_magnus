@@ -21,10 +21,48 @@ function _restoreRouteDefinitions(snap) {
 }
 
 function setupKeyboardShortcuts() {
+    const actions = {
+        select: () => {
+            window.mapSelectionMode = !window.mapSelectionMode;
+            document.querySelector('[data-map-tool="select"]').setAttribute('aria-pressed', String(window.mapSelectionMode));
+            document.getElementById('map-canvas').classList.toggle('selection-mode', window.mapSelectionMode);
+        },
+        routes: () => window.toggleRouteWindow(),
+        borders: () => window.toggleBorderWindow(),
+        regions: () => window.toggleRegionWindow(),
+        filters: () => toggleFilterModal(),
+        suspend: () => window.toggleFilterSuspension(),
+        disclosure: () => window.toggleDisclosureGrid()
+    };
+    document.querySelectorAll('[data-map-tool]').forEach(button => {
+        button.addEventListener('click', () => actions[button.dataset.mapTool]());
+    });
+    document.getElementById('map-generate').addEventListener('change', e => {
+        const generate = { ct: runCTNewMacro, mgt: runMgT2EMacro, t5: runT5Macro, rtt: runRTTMacro }[e.target.value];
+        e.target.value = '';
+        generate?.();
+    });
+    const toolbar = document.getElementById('map-toolbar');
+    new ResizeObserver(() => {
+        document.documentElement.style.setProperty('--map-toolbar-bottom', `${toolbar.getBoundingClientRect().bottom + 10}px`);
+    }).observe(toolbar);
+    // Reflect keyboard changes in the same visible controls.
+    const syncTools = () => {
+        for (const [tool, id] of Object.entries({ routes: 'route-window', borders: 'border-window', regions: 'region-window', filters: 'filter-modal' })) {
+            toolbar.querySelector(`[data-map-tool="${tool}"]`).setAttribute('aria-pressed', String(!!document.getElementById(id)?.classList.contains('visible')));
+        }
+        toolbar.querySelector('[data-map-tool="disclosure"]').setAttribute('aria-pressed', String(!!window.DisclosureGrid?.isOpen()));
+        const suspend = toolbar.querySelector('[data-map-tool="suspend"]');
+        suspend.setAttribute('aria-pressed', String(window.filterSuspended === true));
+        suspend.textContent = window.filterSuspended ? 'Resume filters' : 'Suspend filters';
+    };
+    new MutationObserver(syncTools).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class'] });
+    syncTools();
     window.addEventListener('keydown', async (e) => {
+        if (e.defaultPrevented && e.key === 'Escape') return;
         // Skip shortcuts if the user is typing in an input field or textarea, except for Escape
         const _t = e.target;
-        const _inField = _t.tagName === 'INPUT' || _t.tagName === 'TEXTAREA' || _t.isContentEditable;
+        const _inField = _t.tagName === 'INPUT' || _t.tagName === 'TEXTAREA' || _t.tagName === 'SELECT' || _t.isContentEditable;
 
         // Shift+F (suspend filter) additionally passes through from controls
         // that are not text entry. Clicking a radio or checkbox parks focus on
@@ -144,6 +182,7 @@ function setupKeyboardShortcuts() {
             }
 
             // Cleanup
+            if (window.mapSelectionMode) actions.select();
             deselectAllHexes();
         } else if (key === 'f' && e.shiftKey && !e.ctrlKey && !e.altKey) {
             // MUST be tested before the bare 'f' branch below: `key` is
@@ -170,49 +209,30 @@ function setupKeyboardShortcuts() {
         // and filter are unaffected.
         } else if (e.ctrlKey && key === 'z') {
             e.preventDefault();
-            if (e.shiftKey) {
-                // REDO
-                if (window.redoStack.length > 0) {
-                    const snap = window.redoStack.pop();
-                    const current = {
-                        action: snap.action,
-                        routes: JSON.parse(JSON.stringify(window.sectorRoutes || [])),
-                        hexStates: JSON.parse(JSON.stringify(Array.from(hexStates.entries())))
-                    };
-                    if (snap.routeDefinitions) {
-                        current.routeDefinitions = JSON.parse(JSON.stringify(window.routeDefinitions || []));
-                    }
-                    window.undoStack.push(current);
-                    window.sectorRoutes = snap.routes;
+            const from = e.shiftKey ? window.redoStack : window.undoStack;
+            const to = e.shiftKey ? window.undoStack : window.redoStack;
+            const snap = from[from.length - 1];
+            if (!snap || !CampaignAtlas.confirmLeave()) return;
+            const current = {
+                action: snap.action,
+                campaignAtlas: CampaignAtlas.snapshot(),
+                routes: JSON.parse(JSON.stringify(window.sectorRoutes || [])),
+                hexStates: JSON.parse(JSON.stringify(Array.from(hexStates.entries())))
+            };
+            if (snap.routeDefinitions) current.routeDefinitions = JSON.parse(JSON.stringify(window.routeDefinitions || []));
+            try {
+                await CampaignAtlas.restoreHistory(snap.campaignAtlas, () => {
+                    from.pop(); to.push(current);
+                    // Clone: restored state must not mutate the saved snapshot.
+                    window.sectorRoutes = JSON.parse(JSON.stringify(snap.routes));
                     hexStates.clear();
-                    snap.hexStates.forEach(([id, st]) => hexStates.set(id, st));
+                    JSON.parse(JSON.stringify(snap.hexStates)).forEach(([id, st]) => hexStates.set(id, st));
                     _restoreRouteDefinitions(snap);
-                    showToast(`Redid: ${snap.action}`, 2000);
-                    requestAnimationFrame(draw);
-                    if (window.dbManager) { window.dbManager.syncAllHexes(); window.dbManager.saveRoutes(); }
-                }
-            } else {
-                // UNDO
-                if (window.undoStack.length > 0) {
-                    const snap = window.undoStack.pop();
-                    const current = {
-                        action: snap.action,
-                        routes: JSON.parse(JSON.stringify(window.sectorRoutes || [])),
-                        hexStates: JSON.parse(JSON.stringify(Array.from(hexStates.entries())))
-                    };
-                    if (snap.routeDefinitions) {
-                        current.routeDefinitions = JSON.parse(JSON.stringify(window.routeDefinitions || []));
-                    }
-                    window.redoStack.push(current);
-                    window.sectorRoutes = snap.routes;
-                    hexStates.clear();
-                    snap.hexStates.forEach(([id, st]) => hexStates.set(id, st));
-                    _restoreRouteDefinitions(snap);
-                    showToast(`Undid: ${snap.action}`, 2000);
-                    requestAnimationFrame(draw);
-                    if (window.dbManager) { window.dbManager.syncAllHexes(); window.dbManager.saveRoutes(); }
-                }
-            }
+                });
+                showToast(`${e.shiftKey ? 'Redid' : 'Undid'}: ${snap.action}`, 2000);
+                requestAnimationFrame(draw);
+                if (window.dbManager) { window.dbManager.syncAllHexes(); window.dbManager.saveRoutes(); }
+            } catch (err) { showToast(`Undo/redo could not be saved: ${err.message}. Nothing was changed.`, 8000); }
         }
     });
 

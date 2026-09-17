@@ -1,6 +1,6 @@
 // =============================================================================
 // SYSTEM_VIEWER.JS  —  Orrery Overlay
-// Triggered when user scrolls past max map zoom.
+// Entered by double-clicking a system on the map.
 // Supports MgT2E, CT, and T5 systems via normalisation.
 // Exposes window.SystemViewer  { open, close, isOpen, handleWheel }
 //
@@ -46,12 +46,23 @@ const SystemViewer = (() => {
     let _viewZoom = 1.0;
     let _viewOffX = 0;
     let _viewOffY = 0;
+    let _minZoom = 1;
+    let _atFit = true;
+    let _fitOffX = 0, _fitOffY = 0;
 
     let _dragging = false;
     let _dragLast = null;
 
     let _linearScale = false;
-    let _orbitOpacity = 0.25;
+    let _orbitOpacity = 0.65;
+    let _showOrbits = true;
+    let _showDayNight = false;
+    let _localClock = null;
+    let _clockSecond = -1;
+    let _selectedBody = null;
+    let _pointerDown = null;
+    let _pointerMoved = false;
+    let _resizeObserver = null;
 
     let _hideMoons              = false;
     let _hideHZ                 = false;
@@ -63,11 +74,16 @@ const SystemViewer = (() => {
     // In-game clock
     let _gameYear        = 0;
     let _gameDay         = 1;    // float, range [1, 366)
-    let _speedDaysPerSec = 2;    // in-game days advancing per real second
+    let _speedDaysPerSec = 0.10; // in-game days advancing per real second
 
     // DOM refs updated each frame
     let _yearInput = null;
     let _dayInput  = null;
+    let _timeInput = null;
+    let _shuttleRate = 0;
+    let _stopShuttle = null;
+    let _alignmentRun = 0;
+    let _invalidateAlignment = null;
 
     let _paused   = false;
     let _pauseBtn = null;
@@ -219,6 +235,24 @@ const SystemViewer = (() => {
     function _updateDateDisplay() {
         if (_yearInput && document.activeElement !== _yearInput) _yearInput.value = _gameYear;
         if (_dayInput  && document.activeElement !== _dayInput)  _dayInput.value  = Math.max(1, Math.floor(_gameDay));
+        if (_timeInput && document.activeElement !== _timeInput) _timeInput.value = _clockText((_gameDay - Math.floor(_gameDay)) * 86400);
+    }
+
+    function _clockText(seconds) {
+        seconds = Math.floor(seconds + 1e-5) % 86400;
+        return [Math.floor(seconds / 3600), Math.floor(seconds / 60) % 60, seconds % 60]
+            .map(n => String(n).padStart(2, '0')).join(':');
+    }
+    function _totalDays() { return _gameYear * 365 + _gameDay - 1; }
+    function _setDays(days) {
+        if (!Number.isFinite(days)) return;
+        _gameYear = Math.floor(days / 365);
+        _gameDay = days - _gameYear * 365 + 1;
+        _updateDateDisplay();
+    }
+    function _dateText(days) {
+        const year = Math.floor(days / 365), day = days - year * 365;
+        return `Year ${formatDisplayNumber(year, 0)} · Day ${Math.floor(day) + 1} · ${_clockText((day % 1) * 86400)}`;
     }
 
     // ── System normalisation ──────────────────────────────────────────────────
@@ -829,16 +863,19 @@ const SystemViewer = (() => {
         if (!state) return;
         const found = _detectSystem(state);
         if (!found) return;
+        _invalidateAlignment?.();
         if      (found.edition === 'AoW')   _sys = _normalizeAoW(found.raw);
         else if (found.edition === 'MgT2E') _sys = _normalizeMgT2E(found.raw);
         else if (found.edition === 'CT')    _sys = _normalizeCT(found.raw);
         else if (found.edition === 'T5')    _sys = _normalizeT5(found.raw);
         else                                _sys = _normalizeRTT(found.raw);
         _hitBodies = [];
+        _selectedBody = null;
+        _atFit = true;
         if (_tooltip) _tooltip.style.display = 'none';
     }
 
-    function open(explicitHexId) {
+    function open(explicitHexId, inspectorTab = window.SystemInspector?.currentWorkspace() || 'system') {
         const hexId = explicitHexId || _centerHexId();
         if (!hexId) return;
         const state = hexStates.get(hexId);
@@ -846,6 +883,9 @@ const SystemViewer = (() => {
 
         const found = _detectSystem(state);
         if (!found) return;  // no system expansion — silently do nothing
+        if (window.SystemInspector && !SystemInspector.openForHex(hexId, inspectorTab)) return;
+        if (_overlay && _hexId === hexId) return;
+        if (_overlay) close();
 
         let normalised;
         if      (found.edition === 'AoW')   normalised = _normalizeAoW(found.raw);
@@ -860,18 +900,30 @@ const SystemViewer = (() => {
         _viewZoom    = 1.0;
         _viewOffX    = 0;
         _viewOffY    = 0;
+        _atFit      = true;
         _gameYear    = (window.orreryDefaultYear !== undefined) ? window.orreryDefaultYear : 0;
         _gameDay     = (window.orreryDefaultDay  !== undefined) ? window.orreryDefaultDay  : 1;
         _paused      = false;
+        document.body.classList.add('orrery-open');
         _buildOverlay(hexId);
+        window.SystemInspector?.refresh(true);
         _startLoop();
     }
 
     function close() {
         if (!_overlay) return;
+        _alignmentRun++; _invalidateAlignment = null;
+        window.CampaignAtlas?.cancelPick();
+        window.CampaignAtlas?.clearLocator();
+        document.body.classList.remove('orrery-open');
+        _localClock = null;
+        _stopShuttle?.(); _stopShuttle = null; _timeInput = null;
         window.removeEventListener('mousemove', _onWindowMouseMove);
         window.removeEventListener('mouseup',   _onWindowMouseUp);
         cancelAnimationFrame(_animFrameId);
+        _resizeObserver?.disconnect();
+        _resizeObserver = null;
+        _selectedBody = null;
         _overlay.remove();
         _overlay     = null;
         _orrCanvas   = null;
@@ -899,25 +951,240 @@ const SystemViewer = (() => {
         _hideHZ                 = false;
         _hideMainworldHighlight = false;
         if (typeof SystemEditor !== 'undefined') SystemEditor.close();
+        window.SystemInspector?.refresh(true);
     }
 
-    function handleWheel(direction) {
-        if (direction < 0 && _viewZoom <= 0.5) close();
-    }
+    function handleWheel() { /* Map wheel gestures never change views. */ }
 
     // ── Play / Pause ──────────────────────────────────────────────────────────
 
     function _togglePause() {
+        _stopShuttle?.();
         _paused = !_paused;
-        if (_pauseBtn) _pauseBtn.textContent = _paused ? '▶' : '⏸';
+        _syncPause();
+    }
+    function _syncPause() {
+        if (_pauseBtn) {
+            _pauseBtn.textContent = _paused ? 'Play' : 'Pause';
+            _pauseBtn.setAttribute('aria-label', _paused ? 'Play simulation' : 'Pause simulation');
+            _pauseBtn.setAttribute('aria-pressed', String(_paused));
+        }
+    }
+
+    function _updateLocalClock() {
+        const second = Math.floor(Date.now() / 1000);
+        if (!_localClock || second === _clockSecond) return;
+        const date = new Date();
+        _localClock.textContent = `Local ${date.toLocaleTimeString()}`;
+        _localClock.dateTime = date.toISOString();
+        _clockSecond = second;
     }
 
     // ── DOM Construction ──────────────────────────────────────────────────────
 
+    // All phases and periods come from the SAME helpers as the renderer. This
+    // searches the circular visualisation, not a new physical/RPG ephemeris.
+    function _alignmentBodies(includeMoons) {
+        if (!_sys) return [];
+        const phases = [], stars = _sys.stars || [];
+        const add = (key, period, name) => {
+            if (Number.isFinite(period) && period > 0) phases.push({ phase: _hashEpoch(key), omega: 2 * Math.PI / (period * 365.25), name });
+        };
+        stars.slice(1).forEach((s, i) => add(`${_hexId}:star:${i + 1}`,
+            s.periodYears || _keplerYears(Math.max(_starCompanionAU(s), 0.05), stars[s.parentStarIdx ?? 0]?.mass || 1), s.name || `Star ${i + 2}`));
+        (_sys.worlds || []).filter(w => w.type !== 'Empty').forEach((w, i) => {
+            if (w.type === 'Planetoid Belt' || _isMainworldBelt(w)) return;
+            add(`${_hexId}:world:${i}`, _worldPeriodYears(w, stars[w.parentStarIdx ?? 0]?.mass || 1), w.name || `World ${i + 1}`);
+            if (includeMoons) (w.moons || []).filter(m => m.type !== 'Empty').forEach((m, j) => {
+                if (m.size !== 'R' && m.type !== 'Ring') add(`${_hexId}:moon:${i}:${j}`, _moonPeriodYears(m, w), m.name || `Moon ${j + 1}`);
+            });
+        });
+        return phases;
+    }
+    function _phaseSpread(phases, days, modulus) {
+        const angles = phases.map(p => ((p.phase + p.omega * days) % modulus + modulus) % modulus).sort((a, b) => a - b);
+        let gap = angles[0] + modulus - angles[angles.length - 1];
+        for (let i = 1; i < angles.length; i++) gap = Math.max(gap, angles[i] - angles[i - 1]);
+        return (modulus - gap) * 180 / Math.PI;
+    }
+    async function searchAlignments({ includeMoons = true, sameSide = false, tolerance = 5, horizonDays = 3650, startDays = _totalDays() } = {}) {
+        const run = ++_alignmentRun, phases = _alignmentBodies(includeMoons);
+        const modulus = sameSide ? Math.PI * 2 : Math.PI;
+        tolerance = Math.max(0.1, Math.min(45, Number(tolerance) || 5));
+        horizonDays = Math.max(1, Math.min(365000, Number(horizonDays) || 3650));
+        const result = { bodies: phases.length, names: phases.map(p => p.name), tolerance, matches: [], startDays, scannedDays: horizonDays };
+        if (phases.length < 2) return { ...result, constant: true, best: { days: startDays, spread: 0 } };
+        const velocities = phases.map(p => p.omega);
+        const velocityRange = Math.max(...velocities) - Math.min(...velocities);
+        if (velocityRange < 1e-14) return { ...result, constant: true, best: { days: startDays, spread: _phaseSpread(phases, startDays, modulus) } };
+        if (phases.length === 2) {
+            const diff = phases[1].phase - phases[0].phase, velocity = phases[1].omega - phases[0].omega;
+            const turns = (diff + velocity * startDays) / modulus;
+            const target = velocity > 0 ? Math.ceil(turns - 1e-10) : Math.floor(turns + 1e-10);
+            const next = Math.max(startDays, (target * modulus - diff) / velocity);
+            const recurrence = modulus / Math.abs(velocity);
+            return { ...result, exact: true, recurrence, best: { days: next, spread: 0 },
+                matches: [0, 1, 2].map(i => ({ days: next + i * recurrence, spread: 0 })) };
+        }
+        // Sample relative phase drift at <= a quarter of the chosen tolerance.
+        // Cap the *duration*, never silently coarsen sampling to claim a full search.
+        const step = Math.min(horizonDays / 2000, tolerance * Math.PI / 180 / (4 * velocityRange));
+        const count = Math.min(200000, Math.ceil(horizonDays / step));
+        result.scannedDays = Math.min(horizonDays, count * step);
+        result.truncated = result.scannedDays < horizonDays;
+        result.stepDays = step;
+        let best = { days: startDays, spread: Infinity }, episode = null;
+        const refine = candidate => {
+            let lo = Math.max(startDays, candidate.days - step), hi = Math.min(startDays + result.scannedDays, candidate.days + step);
+            for (let i = 0; i < 24; i++) {
+                const a = lo + (hi - lo) / 3, b = hi - (hi - lo) / 3;
+                if (_phaseSpread(phases, a, modulus) < _phaseSpread(phases, b, modulus)) hi = b; else lo = a;
+            }
+            const days = (lo + hi) / 2, spread = _phaseSpread(phases, days, modulus);
+            return spread < candidate.spread ? { days, spread } : candidate;
+        };
+        for (let i = 0; i <= count; i++) {
+            if (run !== _alignmentRun) return null;
+            const days = startDays + Math.min(i * step, result.scannedDays);
+            const candidate = { days, spread: _phaseSpread(phases, days, modulus) };
+            if (candidate.spread < best.spread) best = candidate;
+            if (candidate.spread <= tolerance) {
+                if (!episode || candidate.spread < episode.spread) episode = candidate;
+            } else if (episode) { result.matches.push(refine(episode)); episode = null; }
+            if (i % 2000 === 0) await new Promise(resolve => setTimeout(resolve, 0));
+        }
+        if (episode) result.matches.push(refine(episode));
+        result.best = refine(best);
+        if (!result.matches.length && result.best.spread <= tolerance) result.matches.push(result.best);
+        return result;
+    }
+    function _buildAlignmentControls() {
+        const el = (tag, text) => { const node = document.createElement(tag); if (text) node.textContent = text; return node; };
+        const details = el('details'); details.className = 'sv-alignment';
+        details.append(el('summary', 'Find celestial alignments'));
+        details.append(el('p', 'Find a common orbital axis using this simulation’s phases. Belts and rings have no single position and are excluded. Dates use 365-day display years; orbital periods retain their existing 365.25-day units.'));
+        const controls = el('div'); controls.className = 'sv-alignment-controls';
+        const field = (text, type, value) => {
+            const label = el('label', text), input = el('input'); input.type = type;
+            if (type === 'checkbox') input.checked = value; else input.value = value;
+            label.append(input); controls.append(label); return input;
+        };
+        const moons = field('Include moons', 'checkbox', true);
+        const sameSide = field('Same side only', 'checkbox', false);
+        const tolerance = field('Spread ≤ degrees', 'number', 5); tolerance.min = '0.1'; tolerance.max = '45'; tolerance.step = '0.1';
+        const years = field('Search years', 'number', 10); years.min = '1'; years.max = '1000'; years.step = '1';
+        const search = el('button', 'Find alignments'); search.type = 'button';
+        const cancel = el('button', 'Cancel search'); cancel.type = 'button'; cancel.hidden = true;
+        const results = el('div'); results.className = 'sv-alignment-results'; results.setAttribute('role', 'status');
+        const invalidate = () => { _alignmentRun++; search.disabled = false; cancel.hidden = true; results.replaceChildren(); };
+        _invalidateAlignment = invalidate;
+        [moons, sameSide, tolerance, years].forEach(input => input.addEventListener('change', invalidate));
+        cancel.addEventListener('click', invalidate);
+        search.addEventListener('click', async () => {
+            if (!tolerance.reportValidity() || !years.reportValidity()) return;
+            search.disabled = true; cancel.hidden = false;
+            results.textContent = 'Searching orbital phases…';
+            let run;
+            try {
+                const pending = searchAlignments({ includeMoons: moons.checked, sameSide: sameSide.checked, tolerance: Number(tolerance.value), horizonDays: Number(years.value) * 365 });
+                run = _alignmentRun;
+                const result = await pending;
+                if (!details.isConnected || run !== _alignmentRun) return;
+                if (!result) { results.textContent = 'Search cancelled or system data changed. Run again to use the current system.'; return; }
+                results.replaceChildren(el('p', `${result.bodies} orbiting bodies. ${sameSide.checked ? 'Same-side' : 'Either-side'} alignment; spread ≤ ${result.tolerance}°.`));
+                if (result.constant) {
+                    results.append(el('p', result.bodies < 2 ? 'Fewer than two orbiting bodies: a line is always possible, so there is no distinct alignment date.'
+                        : `Relative phases are constant (${formatDisplayNumber(result.best.spread, 2)}° spread). ${result.best.spread <= result.tolerance ? 'Always within tolerance.' : 'No alignment within this tolerance.'}`));
+                    return;
+                }
+                if (result.exact) results.append(el('p', `Two-body alignment repeats every ${formatDisplayNumber(result.recurrence, 3, 'days')} in this model. Next three exact dates:`));
+                else {
+                    results.append(el('p', `Sampled ${formatDisplayNumber(result.scannedDays, 2, 'days')} from ${_dateText(result.startDays)}; step ${formatDisplayNumber(result.stepDays * 24, 3, 'hours')}.${result.truncated ? ' Search duration was capped to keep fine sampling for fast bodies; exclude moons or search again from a later date to explore farther.' : ''}`));
+                    results.append(el('p', `${result.matches.length} near-alignment windows found. Sampling can miss very brief windows; this is not proof of exact alignment or a permanent repeat cycle.`));
+                    if (result.matches.length > 1) {
+                        const gaps = result.matches.slice(1).map((event, i) => event.days - result.matches[i].days);
+                        results.append(el('p', `Observed gaps in this search: ${formatDisplayNumber(Math.min(...gaps), 2)}–${formatDisplayNumber(Math.max(...gaps), 2)} days.`));
+                    }
+                }
+                const events = result.matches.length ? result.matches.slice(0, 12) : [result.best];
+                for (const event of events) {
+                    const jump = el('button', `${result.matches.length ? 'Go to' : 'Closest found:'} ${_dateText(event.days)} · ${formatDisplayNumber(event.spread, 2)}° spread`);
+                    jump.type = 'button';
+                    jump.addEventListener('click', () => {
+                        _stopShuttle?.(); _paused = true; _syncPause(); _setDays(event.days);
+                        details.open = false; fitView();
+                    });
+                    results.append(jump);
+                }
+            } catch (error) { results.textContent = `Search failed: ${error.message}`; }
+            finally { if (run === _alignmentRun) { search.disabled = false; cancel.hidden = true; } }
+        });
+        controls.append(search, cancel); details.append(controls, results);
+        return details;
+    }
+
+    function _buildTimeControls() {
+        const row = document.createElement('div'); row.className = 'sv-controls sv-time-controls';
+        const make = (tag, text) => { const el = document.createElement(tag); if (text) el.textContent = text; return el; };
+        const timeLabel = make('label', 'Time');
+        _timeInput = make('input'); _timeInput.type = 'time'; _timeInput.step = '1';
+        _timeInput.setAttribute('aria-label', 'Simulation time');
+        _timeInput.addEventListener('change', () => {
+            if (!_timeInput.value) { _updateDateDisplay(); return; }
+            const parts = _timeInput.value.split(':').map(Number);
+            _setDays(Math.floor(_totalDays()) + (parts[0] * 3600 + parts[1] * 60 + (parts[2] || 0)) / 86400);
+        });
+        timeLabel.append(_timeInput); row.append(timeLabel);
+        for (const [label, delta] of [['−1 h', -1 / 24], ['+1 h', 1 / 24]]) {
+            const btn = make('button', label); btn.type = 'button';
+            btn.addEventListener('click', () => { _stopShuttle?.(); _paused = true; _syncPause(); _setDays(_totalDays() + delta); });
+            row.append(btn);
+        }
+        const scrubLabel = make('label', 'Scrub ±30 d');
+        const scrub = make('input'); scrub.type = 'range'; scrub.min = '-30'; scrub.max = '30'; scrub.step = '0.001'; scrub.value = '0';
+        scrub.setAttribute('aria-label', 'Scrub time, thirty days backward or forward');
+        let scrubStart = null;
+        scrub.addEventListener('input', () => {
+            if (scrubStart === null) scrubStart = _totalDays();
+            _stopShuttle?.(); _paused = true; _syncPause();
+            _setDays(scrubStart + Number(scrub.value));
+            scrub.setAttribute('aria-valuetext', _dateText(_totalDays()));
+        });
+        const releaseScrub = () => { scrubStart = null; scrub.value = '0'; };
+        scrub.addEventListener('change', releaseScrub); scrub.addEventListener('blur', releaseScrub);
+        scrubLabel.append(scrub); row.append(scrubLabel);
+        const shuttleLabel = make('label', 'Shuttle');
+        const shuttle = make('input'); shuttle.type = 'range'; shuttle.min = '-100'; shuttle.max = '100'; shuttle.step = '1'; shuttle.value = '0';
+        shuttle.setAttribute('aria-label', 'Time shuttle, reverse or forward');
+        shuttle.title = 'Hold left to reverse or right to advance. Release to stop.';
+        const rate = make('output', 'Stopped');
+        const limit = make('select'); limit.setAttribute('aria-label', 'Maximum shuttle speed');
+        for (const n of [1, 10, 365, 3650]) { const option = make('option', `${formatDisplayNumber(n, 0)} d/s`); option.value = n; limit.append(option); }
+        limit.value = '365';
+        let shuttleKeyHeld = false;
+        const updateShuttle = () => {
+            _paused = true; _syncPause();
+            _shuttleRate = Math.pow(Number(shuttle.value) / 100, 3) * Number(limit.value);
+            rate.textContent = _shuttleRate ? `${formatDisplayNumber(_shuttleRate, 2)} d/s` : 'Stopped';
+            shuttle.setAttribute('aria-valuetext', rate.textContent);
+        };
+        _stopShuttle = () => { shuttleKeyHeld = false; _shuttleRate = 0; shuttle.value = '0'; rate.textContent = 'Stopped'; shuttle.setAttribute('aria-valuetext', 'Stopped'); };
+        shuttle.addEventListener('input', updateShuttle);
+        limit.addEventListener('change', updateShuttle);
+        shuttle.addEventListener('change', () => { if (!shuttleKeyHeld) _stopShuttle?.(); });
+        for (const event of ['pointerup', 'pointercancel', 'blur']) shuttle.addEventListener(event, () => _stopShuttle?.());
+        shuttle.addEventListener('pointerdown', e => shuttle.setPointerCapture(e.pointerId));
+        shuttle.addEventListener('keydown', e => { if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) shuttleKeyHeld = true; });
+        shuttle.addEventListener('keyup', e => { if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) _stopShuttle?.(); });
+        shuttleLabel.append(shuttle); row.append(shuttleLabel, limit, rate);
+        _updateDateDisplay();
+        return row;
+    }
+
     function _buildOverlay(hexId) {
         const sys      = _sys;
         const starLine = sys.stars.map(s => s.name).join(' / ');
-        const age      = (sys.age || 0).toFixed(2);
+        const age      = formatDisplayNumber(sys.age || 0, 2);
         const edition  = sys.edition || '';
 
         // Palette: dark (default) or light (print mode)
@@ -964,7 +1231,7 @@ const SystemViewer = (() => {
             fontSize: '11px', color: P.hint,
             marginLeft: 'auto', marginRight: '12px'
         });
-        hint.textContent = 'Scroll to zoom orbits  ·  Drag to pan  ·  Scroll out at full view or ESC to return';
+        hint.textContent = 'Scroll to zoom · Drag to pan · Space to play / pause · Esc to return to map';
 
         // Year input
         const yearWrap = document.createElement('span');
@@ -980,7 +1247,7 @@ const SystemViewer = (() => {
             fontFamily: 'inherit', fontSize: '11px', padding: '1px 4px'
         });
         _yearInput.addEventListener('change', () => {
-            _gameYear = parseInt(_yearInput.value) || 0;
+            _setDays((parseInt(_yearInput.value) || 0) * 365 + _gameDay - 1);
             _yearInput.value = _gameYear;
         });
         yearWrap.append(yearLbl, _yearInput);
@@ -992,7 +1259,7 @@ const SystemViewer = (() => {
         dayLbl.textContent = 'Day:';
         Object.assign(dayLbl.style, { color: P.sub, whiteSpace: 'nowrap' });
         _dayInput = document.createElement('input');
-        _dayInput.type = 'number'; _dayInput.value = '1'; _dayInput.min = '1'; _dayInput.max = '365'; _dayInput.step = '1';
+        _dayInput.type = 'number'; _dayInput.value = String(Math.floor(_gameDay)); _dayInput.min = '1'; _dayInput.max = '365'; _dayInput.step = '1';
         Object.assign(_dayInput.style, {
             width: '52px', background: 'transparent', textAlign: 'center',
             border: `1px solid ${P.badge}`, color: P.accent,
@@ -1000,7 +1267,7 @@ const SystemViewer = (() => {
         });
         _dayInput.addEventListener('change', () => {
             const d = parseInt(_dayInput.value) || 1;
-            _gameDay = Math.min(365, Math.max(1, d));
+            _setDays(_gameYear * 365 + Math.min(365, Math.max(1, d)) - 1 + _gameDay % 1);
             _dayInput.value = Math.floor(_gameDay);
         });
         dayWrap.append(dayLbl, _dayInput);
@@ -1009,7 +1276,7 @@ const SystemViewer = (() => {
         // Slider pos 0–100 maps via: speed = 0.1 * 3650^(pos/100)
         const _sliderToSpeed = v => 0.1 * Math.pow(3650, v / 100);
         const _speedToSlider = s => Math.log(s / 0.1) / Math.log(3650) * 100;
-        const _fmtSpeed = s => s < 1 ? s.toFixed(2) + 'd/s' : s < 10 ? s.toFixed(1) + 'd/s' : Math.round(s) + 'd/s';
+        const _fmtSpeed = s => s < 1 ? s.toFixed(2) + 'd/s' : formatDisplayNumber(s, s < 10 ? 1 : 0) + 'd/s';
 
         const speedWrap = document.createElement('span');
         Object.assign(speedWrap.style, { display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px' });
@@ -1018,6 +1285,7 @@ const SystemViewer = (() => {
         Object.assign(speedLbl.style, { color: P.sub, whiteSpace: 'nowrap' });
         const speedSlider = document.createElement('input');
         speedSlider.type = 'range'; speedSlider.min = '0'; speedSlider.max = '100';
+        speedSlider.setAttribute('aria-label', 'Simulation speed in days per second');
         speedSlider.step = '1'; speedSlider.value = String(Math.round(_speedToSlider(_speedDaysPerSec)));
         Object.assign(speedSlider.style, { width: '90px', cursor: 'pointer' });
         const speedVal = document.createElement('span');
@@ -1044,20 +1312,27 @@ const SystemViewer = (() => {
         Object.assign(linearLbl.style, { color: P.sub });
         linearCheck.addEventListener('change', () => {
             _linearScale = linearCheck.checked;
-            _viewZoom = 1.0;
-            _viewOffX = 0;
-            _viewOffY = 0;
+            fitView();
         });
         linearWrap.append(linearCheck, linearLbl);
+
+        const orbitCheck = document.createElement('input');
+        orbitCheck.type = 'checkbox';
+        orbitCheck.id = 'sv-show-orbits';
+        orbitCheck.checked = _showOrbits;
+        const orbitCheckLabel = document.createElement('label');
+        orbitCheckLabel.append(orbitCheck, document.createTextNode(' Show orbit rings'));
+        orbitCheck.addEventListener('change', () => { _showOrbits = orbitCheck.checked; });
 
         // Orbit lines slider
         const orbitWrap = document.createElement('span');
         Object.assign(orbitWrap.style, { display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px' });
         const orbitLbl = document.createElement('span');
-        orbitLbl.textContent = 'Orbit Lines:';
+        orbitLbl.textContent = 'Strength:';
         Object.assign(orbitLbl.style, { color: P.sub, whiteSpace: 'nowrap' });
         const orbitSlider = document.createElement('input');
-        orbitSlider.type = 'range'; orbitSlider.min = '0'; orbitSlider.max = '1';
+        orbitSlider.type = 'range'; orbitSlider.min = '0.1'; orbitSlider.max = '1';
+        orbitSlider.setAttribute('aria-label', 'Orbit ring strength');
         orbitSlider.step = '0.05'; orbitSlider.value = String(_orbitOpacity);
         Object.assign(orbitSlider.style, { width: '70px', cursor: 'pointer' });
         orbitSlider.addEventListener('input', () => {
@@ -1111,7 +1386,9 @@ const SystemViewer = (() => {
         hideHighlightWrap.append(hideHighlightChk, hideHighlightLbl);
 
         _pauseBtn = document.createElement('button');
-        _pauseBtn.textContent = '⏸';
+        _pauseBtn.textContent = 'Pause';
+        _pauseBtn.setAttribute('aria-label', 'Pause simulation');
+        _pauseBtn.setAttribute('aria-pressed', 'false');
         Object.assign(_pauseBtn.style, {
             background: 'transparent', border: `1px solid ${P.badge}`,
             color: P.accent, padding: '3px 10px', cursor: 'pointer',
@@ -1137,7 +1414,7 @@ const SystemViewer = (() => {
         }
 
         const closeBtn = document.createElement('button');
-        closeBtn.textContent = '✕';
+        closeBtn.textContent = 'Return to map';
         Object.assign(closeBtn.style, {
             background: 'transparent', border: `1px solid ${P.badge}`,
             color: P.accent, padding: '3px 10px', cursor: 'pointer',
@@ -1145,10 +1422,40 @@ const SystemViewer = (() => {
         });
         closeBtn.addEventListener('click', close);
 
-        header.append(...[title, editionBadge, sub, hint, yearWrap, dayWrap, speedWrap, linearWrap, orbitWrap, hideMoonsWrap, hideHZWrap, hideHighlightWrap, _pauseBtn, editBtn, closeBtn].filter(Boolean));
+        const campaignBtn = document.createElement('button');
+        campaignBtn.textContent = 'Campaign';
+        campaignBtn.addEventListener('click', () => window.CampaignAtlas.openForHex(_hexId));
+        header.className = 'system-viewer-header';
+        const dayNightLabel = document.createElement('label');
+        dayNightLabel.title = 'Illustrative lighting facing the host star; does not model axial tilt, eclipses, or surface time.';
+        const dayNight = document.createElement('input');
+        dayNight.type = 'checkbox'; dayNight.checked = _showDayNight;
+        dayNight.addEventListener('change', () => { _showDayNight = dayNight.checked; });
+        dayNightLabel.append(dayNight, document.createTextNode('Day / night sides'));
+        _localClock = document.createElement('time');
+        _localClock.className = 'sv-local-clock';
+        _localClock.title = 'Your computer’s local time, independent of simulation speed';
+        _clockSecond = -1;
+        _updateLocalClock();
+        const resetView = document.createElement('button');
+        resetView.textContent = 'Fit system';
+        resetView.addEventListener('click', fitView);
+        yearLbl.id = 'sv-year-label'; _yearInput.setAttribute('aria-labelledby', yearLbl.id);
+        dayLbl.id = 'sv-day-label'; _dayInput.setAttribute('aria-labelledby', dayLbl.id);
+        const heading = document.createElement('div'); heading.className = 'sv-heading';
+        const playback = document.createElement('div'); playback.className = 'sv-controls';
+        const display = document.createElement('div'); display.className = 'sv-controls';
+        heading.append(...[title, editionBadge, sub, editBtn, campaignBtn, closeBtn].filter(Boolean));
+        playback.append(_pauseBtn, yearWrap, dayWrap, speedWrap, _localClock);
+        display.append(linearWrap, orbitCheckLabel, orbitWrap, hideMoonsWrap, hideHZWrap, hideHighlightWrap, dayNightLabel, resetView);
+        hint.className = 'sv-hint';
+        header.append(heading, playback, _buildTimeControls(), display, _buildAlignmentControls(), hint);
         _overlay.appendChild(header);
 
         _orrCanvas = document.createElement('canvas');
+        _orrCanvas.id = 'orrery-canvas';
+        _orrCanvas.tabIndex = 0;
+        _orrCanvas.setAttribute('aria-label', 'System orbits. Space plays or pauses; scroll zooms; drag pans.');
         Object.assign(_orrCanvas.style, { display: 'block', cursor: 'crosshair' });
         _overlay.appendChild(_orrCanvas);
 
@@ -1176,6 +1483,10 @@ const SystemViewer = (() => {
         _orrCanvas.height = Math.round(_canvasH * dpr);
         _orrCtx = _orrCanvas.getContext('2d');
         _orrCtx.scale(dpr, dpr);
+        _resizeObserver = new ResizeObserver(resize);
+        _resizeObserver.observe(_overlay);
+        _resizeObserver.observe(header);
+        resize();
 
         _orrCanvas.addEventListener('wheel',      _onWheel,     { passive: false });
         _orrCanvas.addEventListener('mousedown',  _onMouseDown);
@@ -1192,28 +1503,23 @@ const SystemViewer = (() => {
     function _startLoop() {
         _lastFrameTime = performance.now();
         function tick(now) {
-            if (!_paused) {
-                const deltaDay = ((now - _lastFrameTime) / 1000) * _speedDaysPerSec;
-                _gameDay += deltaDay;
-                while (_gameDay > 365) { _gameDay -= 365; _gameYear++; }
-                while (_gameDay < 1)   { _gameDay += 365; _gameYear--; }
-                _updateDateDisplay();
-            }
+            const rate = _shuttleRate || (_paused ? 0 : _speedDaysPerSec);
+            if (rate) _setDays(_totalDays() + Math.min((now - _lastFrameTime) / 1000, 0.25) * rate);
             _lastFrameTime = now;
+            _updateLocalClock();
+            if (_atFit) _fitCamera();
             _drawOrrery();
+            window.CampaignAtlas?.updateLocator();
             _animFrameId = requestAnimationFrame(tick);
         }
         _animFrameId = requestAnimationFrame(tick);
     }
 
-    function _drawOrrery() {
+    function _drawOrrery(measureOnly = false) {
         if (!_orrCtx || !_canvasW || !_canvasH) return;
         const W   = _canvasW;
         const H   = _canvasH;
         const ctx = _orrCtx;
-
-        ctx.clearRect(0, 0, W, H);
-        _hitBodies = [];
 
         const sys    = _sys;
         const stars  = sys.stars || [];
@@ -1229,7 +1535,7 @@ const SystemViewer = (() => {
         maxAU = Math.max(maxAU * 1.18, 2);
 
         const margin     = 70;
-        const baseMaxR   = Math.min(W, H) / 2 - margin;
+        const baseMaxR   = Math.max(10, Math.min(W, H) / 2 - margin);
         const scaledMaxR = baseMaxR * _viewZoom;
 
         const originX = W / 2 + _viewOffX;
@@ -1280,7 +1586,7 @@ const SystemViewer = (() => {
         starPos.set(0, { cx: originX, cy: originY });
 
         // Elapsed in-game years drives all orbital angles
-        const elapsed_years = _gameYear + (_gameDay - 1) / 365.25;
+        const elapsed_years = _totalDays() / 365.25;
 
         // Build a stable world→index map for epoch hashing
         const worldIdxMap = new Map(worlds.map((w, i) => [w, i]));
@@ -1300,6 +1606,37 @@ const SystemViewer = (() => {
             });
         });
 
+        if (measureOnly) {
+            const bounds = { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity };
+            const include = (x, y, r, label = '') => {
+                const labelHalf = Math.min(180, String(label).length * 3.5);
+                bounds.left = Math.min(bounds.left, x - Math.max(r, labelHalf));
+                bounds.right = Math.max(bounds.right, x + Math.max(r, labelHalf));
+                bounds.top = Math.min(bounds.top, y - r - 20);
+                bounds.bottom = Math.max(bounds.bottom, y + r + 28);
+            };
+            const includeWorlds = (list, x, y, max, pixels) => list.forEach(w => {
+                const moonCount = _hideMoons ? 0 : (w.moons || []).filter(m => m.type !== 'Empty').length + (w.rings || []).length;
+                const extent = Math.max(_worldBodyRadius(w) + (moonCount ? 20 + moonCount * 6 : 10), Math.min(180, String(w.name || '').length * 3.5));
+                include(x, y, _scaleR(w.au || 0, max, pixels) + extent, w.name);
+            });
+            stars.forEach((s, i) => {
+                const pos = starPos.get(i);
+                include(pos.cx, pos.cy, _starBodyRadius(s) + 10, s.name);
+                if (i) {
+                    const parent = starPos.get(s.parentStarIdx ?? 0) || starPos.get(0);
+                    include(parent.cx, parent.cy, _compRingR.get(s) + 4);
+                    const list = worlds.filter(w => w.orbitType === 'S-Type' && w.parentStarIdx === i);
+                    const max = list.reduce((m, w) => Math.max(m, w.au || 0), 0.01) * 1.2;
+                    includeWorlds(list, pos.cx, pos.cy, max, _compRingR.get(s) * 0.28);
+                }
+            });
+            includeWorlds(primaryWorlds, originX, originY, maxAU, scaledMaxR);
+            if (!Number.isFinite(bounds.left)) include(originX, originY, 15);
+            return bounds;
+        }
+        ctx.clearRect(0, 0, W, H);
+        _hitBodies = [];
         if (!_lightMode) _drawStarField(ctx, W, H);
 
         // HZ band — hzAU is set by the normaliser for all editions
@@ -1315,7 +1652,7 @@ const SystemViewer = (() => {
             const orbitR    = _compRingR.get(s);
             const parentPos = starPos.get(s.parentStarIdx ?? 0) || { cx: originX, cy: originY };
 
-            if (_orbitOpacity > 0 && orbitR <= _MAX_DASHED_RING_RADIUS) {
+            if (_showOrbits && _orbitOpacity > 0 && orbitR <= _MAX_DASHED_RING_RADIUS) {
                 const orbitAlpha = _lightMode ? _orbitOpacity * 0.80 : _orbitOpacity * 0.55;
                 ctx.beginPath();
                 ctx.arc(parentPos.cx, parentPos.cy, orbitR, 0, Math.PI * 2);
@@ -1353,6 +1690,16 @@ const SystemViewer = (() => {
                 r: _starBodyRadius(s) + 8
             });
         });
+        const selected = _hitBodies.find(hit => hit.body === _selectedBody);
+        if (selected) {
+            ctx.save();
+            ctx.strokeStyle = _lightMode ? '#935200' : '#ffce73';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(selected.cx, selected.cy, selected.r + 3, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+        }
     }
 
     // ── World set ─────────────────────────────────────────────────────────────
@@ -1392,7 +1739,7 @@ const SystemViewer = (() => {
             });
         });
 
-        if (_orbitOpacity > 0) bodies.forEach(w => {
+        if (_showOrbits && _orbitOpacity > 0) bodies.forEach(w => {
             const r = _scaleR(w.au || 0, maxAU, maxPx);
             if (r < 2) return;
             const worldAlpha = _lightMode ? _orbitOpacity * 0.65 : _orbitOpacity * 0.40;
@@ -1411,7 +1758,7 @@ const SystemViewer = (() => {
             const angle  = epoch + (2 * Math.PI / period) * elapsed_years;
             const px     = cx + r * Math.cos(angle);
             const py     = cy + r * Math.sin(angle);
-            _drawWorld(ctx, w, px, py, elapsed_years, wIdx);
+            _drawWorld(ctx, w, px, py, elapsed_years, wIdx, cx, cy);
         });
     }
 
@@ -1500,7 +1847,18 @@ const SystemViewer = (() => {
         ctx.stroke();
     }
 
-    function _drawWorld(ctx, w, px, py, elapsed_years, wIdx) {
+    function _shadeNight(ctx, x, y, radius, starX, starY) {
+        if (!_showDayNight) return;
+        // A top-down hemisphere illustration, using the existing host-star position.
+        const angle = Math.atan2(starY - y, starX - x) + Math.PI;
+        ctx.save();
+        ctx.fillStyle = 'rgba(0, 5, 15, 0.72)';
+        ctx.beginPath();
+        ctx.arc(x, y, radius, angle - Math.PI / 2, angle + Math.PI / 2);
+        ctx.closePath(); ctx.fill(); ctx.restore();
+    }
+
+    function _drawWorld(ctx, w, px, py, elapsed_years, wIdx, starX, starY) {
         const r     = _worldBodyRadius(w);
         const color = (_hideMainworldHighlight && w.type === 'Mainworld') ? '#a0a0b0' : _worldColor(w);
 
@@ -1516,6 +1874,7 @@ const SystemViewer = (() => {
         ctx.beginPath();
         ctx.arc(px, py, r, 0, Math.PI * 2);
         ctx.fill();
+        _shadeNight(ctx, px, py, r, starX, starY);
 
         const moons = (w.moons || []).filter(m => m.type !== 'Empty');
         if (!_hideMoons) moons.forEach((m, mi) => {
@@ -1551,6 +1910,7 @@ const SystemViewer = (() => {
             ctx.beginPath();
             ctx.arc(mx, my, moonR, 0, Math.PI * 2);
             ctx.fill();
+            _shadeNight(ctx, mx, my, moonR, starX, starY);
 
             if (isMainworld && m.name && !_hideMainworldHighlight) {
                 ctx.save();
@@ -1624,17 +1984,19 @@ const SystemViewer = (() => {
         if (Math.abs(mx - cx) <= SNAP_PX) mx = cx;
         if (Math.abs(my - cy) <= SNAP_PX) my = cy;
 
+        _fitCamera(true);
         if (direction > 0) {
             const newZoom = Math.min(_viewZoom * factor, _MAX_ZOOM);
             const ratio   = newZoom / _viewZoom;
             _viewOffX = mx - cx - (mx - cx - _viewOffX) * ratio;
             _viewOffY = my - cy - (my - cy - _viewOffY) * ratio;
             _viewZoom = newZoom;
+            _atFit = false;
             _redraw();
         } else {
-            const newZoom = _viewZoom / factor;
-            if (newZoom < 0.5) {
-                close();
+            const newZoom = Math.max(_minZoom, _viewZoom / factor);
+            if (newZoom <= _minZoom * 1.001) {
+                fitView();
             } else {
                 const ratio = newZoom / _viewZoom;
                 _viewOffX = mx - cx - (mx - cx - _viewOffX) * ratio;
@@ -1651,21 +2013,34 @@ const SystemViewer = (() => {
         if (e.button !== 0) return;
         _dragging = true;
         _dragLast = { x: e.clientX, y: e.clientY };
+        _pointerDown = { x: e.clientX, y: e.clientY };
+        _pointerMoved = false;
         _orrCanvas.style.cursor = 'grabbing';
     }
 
     function _onWindowMouseMove(e) {
         if (!_dragging) return;
+        if (_pointerDown && Math.hypot(e.clientX - _pointerDown.x, e.clientY - _pointerDown.y) > 4) _pointerMoved = true;
         _viewOffX += e.clientX - _dragLast.x;
         _viewOffY += e.clientY - _dragLast.y;
+        if (_pointerMoved) _atFit = false;
         _dragLast  = { x: e.clientX, y: e.clientY };
         _hideTooltip();
         _redraw();
     }
 
-    function _onWindowMouseUp() {
+    function _onWindowMouseUp(e) {
         if (!_dragging) return;
         _dragging = false;
+        if (!_pointerMoved && e.button === 0 && e.target === _orrCanvas) {
+            const rect = _orrCanvas.getBoundingClientRect();
+            const hit = [..._hitBodies].reverse().find(b => {
+                const dist = Math.hypot(e.clientX - rect.left - b.cx, e.clientY - rect.top - b.cy);
+                return dist <= b.r && (b.innerR === undefined || dist >= b.innerR);
+            });
+            if (hit && !window.CampaignAtlas?.pickBody(hit.body)) selectBody(hit.body);
+        }
+        _pointerDown = null;
         if (_orrCanvas) _orrCanvas.style.cursor = 'crosshair';
     }
 
@@ -1712,14 +2087,14 @@ const SystemViewer = (() => {
             html += `<div style="color:${TH};margin-bottom:5px;border-bottom:1px solid ${TBORDER};padding-bottom:4px">`;
             html += `${s.name} <span style="color:${TSUB}">(${s.role || 'Primary'})</span></div>`;
             html += `<div>Type: ${s.sType}${s.subType ?? ''} ${s.sClass}</div>`;
-            if (s.temp)       html += `<div>Temperature: ${Math.round(s.temp).toLocaleString()} K</div>`;
-            if (s.mass)       html += `<div>Mass: ${s.mass.toFixed(3)} M☉</div>`;
-            if (s.diam)       html += `<div>Diameter: ${s.diam.toFixed(3)} D☉</div>`;
-            if (s.lum)        html += `<div>Luminosity: ${s.lum.toFixed(4)} L☉</div>`;
+            if (s.temp != null) html += `<div>Temperature: ${formatDisplayNumber(s.temp, 0, 'K')}</div>`;
+            if (s.mass != null) html += `<div>Mass: ${formatDisplayNumber(s.mass, 3, 'M☉')}</div>`;
+            if (s.diam != null) html += `<div>Diameter: ${formatDisplayNumber(s.diam, 3, 'D☉')}</div>`;
+            if (s.lum != null) html += `<div>Luminosity: ${formatDisplayNumber(s.lum, 3, 'L☉')}</div>`;
             if (s.separation) html += `<div>Separation: ${s.separation}</div>`;
             if (s.role !== 'Primary') {
                 const compAU = _starCompanionAU(s);
-                if (compAU)   html += `<div>Distance: ${compAU.toFixed(3)} AU</div>`;
+                if (compAU != null) html += `<div>Distance: ${formatDisplayNumber(compAU, 3, 'AU')}</div>`;
             }
 
         } else if (hit.kind === 'world') {
@@ -1730,9 +2105,9 @@ const SystemViewer = (() => {
                 : '';
             html += `<div style="color:${TH};margin-bottom:5px;border-bottom:1px solid ${TBORDER};padding-bottom:4px">`;
             html += `${w.name || w.type}${typeTag}</div>`;
-            if (w.orbitId != null) html += `<div>Orbit #: ${w.orbitId.toFixed ? w.orbitId.toFixed(2) : w.orbitId}</div>`;
-            if (w.au)              html += `<div>Distance: ${w.au.toFixed(3)} AU</div>`;
-            if (w.eccentricity)    html += `<div>Eccentricity: ${w.eccentricity.toFixed(3)}</div>`;
+            if (w.orbitId != null) html += `<div>Orbit #: ${formatDisplayNumber(w.orbitId, 2)}</div>`;
+            if (w.au != null) html += `<div>Distance: ${formatDisplayNumber(w.au, 3, 'AU')}</div>`;
+            if (w.eccentricity != null) html += `<div>Eccentricity: ${formatDisplayNumber(w.eccentricity, 3)}</div>`;
             if (w.uwp)             html += `<div style="margin-top:4px">UWP: <strong>${w.uwp}</strong></div>`;
             if (w.starport)        html += `<div>Starport: ${w.starport}</div>`;
             if (w.tl != null)      html += `<div>TL: ${w.tl}</div>`;
@@ -1740,10 +2115,10 @@ const SystemViewer = (() => {
                                    html += `<div>Codes: ${w.tradeCodes.join(' ')}</div>`;
             if (w.travelZone && w.travelZone !== 'G')
                                    html += `<div>Zone: ${w.travelZone}</div>`;
-            if (w.diamKm)          html += `<div style="margin-top:4px">Diameter: ${w.diamKm.toLocaleString()} km</div>`;
-            if (w.mass)            html += `<div>Mass: ${w.mass.toFixed(2)} M⊕</div>`;
-            if (w.gravity)         html += `<div>Gravity: ${w.gravity.toFixed(2)} G</div>`;
-            if (w.meanTempK)       html += `<div>Mean Temp: ${Math.round(w.meanTempK - 273.15)}°C</div>`;
+            if (w.diamKm != null) html += `<div style="margin-top:4px">Diameter: ${formatDisplayNumber(w.diamKm, 0, 'km')}</div>`;
+            if (w.mass != null) html += `<div>Mass: ${formatDisplayNumber(w.mass, 3, 'M⊕')}</div>`;
+            if (w.gravity != null) html += `<div>Gravity: ${formatDisplayNumber(w.gravity, 2, 'G')}</div>`;
+            if (w.meanTempK != null) html += `<div>Temperature: ${formatDisplayNumber(w.meanTempK, 0, 'K')}</div>`;
             const moons = (w.moons || []).filter(m => m.type !== 'Empty');
             if (moons.length)      html += `<div style="margin-top:4px">Moons: ${moons.length}</div>`;
 
@@ -1754,7 +2129,7 @@ const SystemViewer = (() => {
             const typeLabel   = isMainworld ? 'Mainworld Satellite' : 'Satellite';
             html += `<div style="color:${TH};margin-bottom:5px;border-bottom:1px solid ${TBORDER};padding-bottom:4px">`;
             html += `${label} <span style="color:${TSUB}">(${typeLabel})</span></div>`;
-            if (m.pd != null)      html += `<div>Orbit: ${m.pd.toFixed(1)} PD from parent</div>`;
+            if (m.pd != null) html += `<div>Orbit: ${formatDisplayNumber(m.pd, 2, 'PD')} from parent</div>`;
             if (m.uwp)             html += `<div style="margin-top:4px">UWP: <strong>${m.uwp}</strong></div>`;
             if (m.starport)        html += `<div>Starport: ${m.starport}</div>`;
             if (m.tl != null)      html += `<div>TL: ${m.tl}</div>`;
@@ -1762,18 +2137,18 @@ const SystemViewer = (() => {
                                    html += `<div>Codes: ${m.tradeCodes.join(' ')}</div>`;
             if (m.travelZone && m.travelZone !== 'G')
                                    html += `<div>Zone: ${m.travelZone}</div>`;
-            if (m.diamKm)          html += `<div style="margin-top:4px">Diameter: ${m.diamKm.toLocaleString()} km</div>`;
-            if (m.mass)            html += `<div>Mass: ${m.mass.toFixed(2)} M⊕</div>`;
-            if (m.gravity)         html += `<div>Gravity: ${m.gravity.toFixed(2)} G</div>`;
-            if (m.meanTempK)       html += `<div>Mean Temp: ${Math.round(m.meanTempK - 273.15)}°C</div>`;
+            if (m.diamKm != null) html += `<div style="margin-top:4px">Diameter: ${formatDisplayNumber(m.diamKm, 0, 'km')}</div>`;
+            if (m.mass != null) html += `<div>Mass: ${formatDisplayNumber(m.mass, 3, 'M⊕')}</div>`;
+            if (m.gravity != null) html += `<div>Gravity: ${formatDisplayNumber(m.gravity, 2, 'G')}</div>`;
+            if (m.meanTempK != null) html += `<div>Temperature: ${formatDisplayNumber(m.meanTempK, 0, 'K')}</div>`;
             if (m.size != null)    html += `<div>Size: ${m.size}</div>`;
 
         } else if (hit.kind === 'belt') {
             const beltName = body.name ? `${body.name} ` : '';
             html += `<div style="color:${TH};margin-bottom:5px;border-bottom:1px solid ${TBORDER};padding-bottom:4px">`;
             html += `${beltName}<span style="color:${TSUB}">(Planetoid Belt)</span></div>`;
-            if (body.orbitId != null) html += `<div>Orbit #: ${body.orbitId.toFixed ? body.orbitId.toFixed(2) : body.orbitId}</div>`;
-            if (body.au)              html += `<div>Distance: ${body.au.toFixed(3)} AU</div>`;
+            if (body.orbitId != null) html += `<div>Orbit #: ${formatDisplayNumber(body.orbitId, 2)}</div>`;
+            if (body.au != null) html += `<div>Distance: ${formatDisplayNumber(body.au, 3, 'AU')}</div>`;
             if (body.uwp)             html += `<div style="margin-top:4px">UWP: <strong>${body.uwp}</strong></div>`;
             if (body.starport)        html += `<div>Spaceport: ${body.starport}</div>`;
             if (body.tl != null)      html += `<div>TL: ${body.tl}</div>`;
@@ -1801,10 +2176,18 @@ const SystemViewer = (() => {
 
     // ── ESC ───────────────────────────────────────────────────────────────────
     document.addEventListener('keydown', e => {
-        if (e.key === 'Escape' && isOpen() &&
+        if (e.code === 'Space' && isOpen() && !e.defaultPrevented && !e.ctrlKey && !e.altKey && !e.metaKey &&
+            !e.target.closest('button, a, summary, textarea, select, [contenteditable="true"], input:not([type="range"])') &&
+            !window.SurfaceViewer?.isOpen() && !window.ApproachViewer?.isOpen()) {
+            e.preventDefault(); e.stopPropagation();
+            if (!e.repeat) _togglePause();
+            return;
+        }
+        if (!e.defaultPrevented && e.key === 'Escape' && isOpen() &&
             !(window.SurfaceViewer  && window.SurfaceViewer.isOpen()) &&
             !(window.ApproachViewer && window.ApproachViewer.isOpen())) close();
     });
+    window.addEventListener('blur', () => _stopShuttle?.());
 
     function normalizeSystem(state) {
         const found = _detectSystem(state);
@@ -1919,6 +2302,9 @@ const SystemViewer = (() => {
             lightMode:    _lightMode,
             linearScale:  _linearScale,
             orbitOpacity:          _orbitOpacity,
+            showOrbits:             _showOrbits,
+            showDayNight:           _showDayNight,
+            selectedBody:           _selectedBody,
             hitBodies:             _hitBodies,
             hideMoons:              _hideMoons,
             hideHZ:                 _hideHZ,
@@ -1943,6 +2329,9 @@ const SystemViewer = (() => {
         _lightMode    = false;  // always dark-mode for export
         _linearScale  = false;
         _orbitOpacity           = 0.3;    // light orbit rings add context without clutter
+        _showOrbits             = true;
+        _showDayNight           = false;
+        _selectedBody           = null;
         _hideMoons              = false;
         _hideHZ                 = false;
         // The mainworld highlight is identification, which is (g) — a coloured
@@ -1967,6 +2356,9 @@ const SystemViewer = (() => {
         _lightMode    = saved.lightMode;
         _linearScale  = saved.linearScale;
         _orbitOpacity           = saved.orbitOpacity;
+        _showOrbits             = saved.showOrbits;
+        _showDayNight           = saved.showDayNight;
+        _selectedBody           = saved.selectedBody;
         _hitBodies              = saved.hitBodies;
         _hideMoons              = saved.hideMoons;
         _hideHZ                 = saved.hideHZ;
@@ -1980,7 +2372,96 @@ const SystemViewer = (() => {
         });
     }
 
-    return { open, close, isOpen, refresh, handleWheel, normalizeSystem, renderSnapshot };
+    function _fitCamera(preserve = false) {
+        if (!_orrCtx || !_sys || !_canvasW || !_canvasH) return;
+        const oldZoom = _viewZoom, oldMin = _minZoom;
+        const oldX = _viewOffX - _fitOffX, oldY = _viewOffY - _fitOffY;
+        _viewOffX = 0; _viewOffY = 0;
+        _viewZoom = _minZoom || 1;
+        const width = Math.max(20, _canvasW - 32), height = Math.max(20, _canvasH - 32);
+        let bounds, lastSpan = null;
+        const hasOrbits = (_sys.stars || []).length > 1 || (_sys.worlds || []).some(w => w.type !== 'Empty' && w.au > 0);
+        if (!hasOrbits) _viewZoom = 1;
+        for (let i = 0; i < 12; i++) {
+            bounds = _drawOrrery(true);
+            const bw = bounds.right - bounds.left, bh = bounds.bottom - bounds.top;
+            const ratio = Math.min(width / Math.max(1, bw), height / Math.max(1, bh));
+            if (!hasOrbits || Math.abs(1 - ratio) < 0.0005 || (lastSpan !== null && Math.abs(bw + bh - lastSpan) < 0.001)) break;
+            lastSpan = bw + bh;
+            _viewZoom = Math.max(0.00001, Math.min(_MAX_ZOOM, _viewZoom * ratio));
+        }
+        bounds = _drawOrrery(true);
+        _minZoom = _viewZoom;
+        _fitOffX = _canvasW / 2 - (bounds.left + bounds.right) / 2;
+        _fitOffY = _canvasH / 2 - (bounds.top + bounds.bottom) / 2;
+        _viewOffX = _fitOffX; _viewOffY = _fitOffY;
+        if (preserve && !_atFit) {
+            const ratio = _minZoom / oldMin;
+            _viewZoom = Math.max(_minZoom, oldZoom * ratio);
+            _viewOffX += oldX * ratio; _viewOffY += oldY * ratio;
+        }
+    }
+    function fitView() { _atFit = true; _fitCamera(); }
+
+    function resize() {
+        if (!_overlay || !_orrCanvas) return;
+        const header = _overlay.firstElementChild;
+        const width = Math.max(1, _overlay.clientWidth);
+        const height = Math.max(1, _overlay.clientHeight - header.getBoundingClientRect().height);
+        if (width === _canvasW && height === _canvasH) return;
+        _canvasW = width; _canvasH = height;
+        const dpr = window.devicePixelRatio || 1;
+        _orrCanvas.style.width = width + 'px';
+        _orrCanvas.style.height = height + 'px';
+        _orrCanvas.width = Math.round(width * dpr);
+        _orrCanvas.height = Math.round(height * dpr);
+        _orrCtx = _orrCanvas.getContext('2d');
+        _orrCtx.scale(dpr, dpr);
+        _fitCamera(true);
+    }
+    function selectBody(body) {
+        if (window.SystemInspector?.selectBody(body) !== false) _selectedBody = body;
+    }
+    function locationEntries() {
+        if (!_sys) return [];
+        const entries = [];
+        function add(body, path, fallback) {
+            if (body.type === 'Empty') return;
+            // Include identifying data so regenerated/reordered bodies cannot silently
+            // inherit a campaign location solely because they occupy the old slot.
+            const key = JSON.stringify([path, body.name || '', body.type || '', body.orbitId ?? null, body.au ?? null, body.pd ?? null]);
+            entries.push({ body, key, label: body.name || fallback });
+        }
+        (_sys.stars || []).forEach((s, i) => add(s, `star:${i}`, `Star ${i + 1}`));
+        (_sys.worlds || []).forEach((w, i) => {
+            add(w, `world:${i}`, `${w.type || 'World'} ${i + 1}`);
+            (w.moons || []).forEach((m, j) => add(m, `world:${i}:moon:${j}`, `${w.name || `World ${i + 1}`} / Moon ${j + 1}`));
+            (w.rings || []).forEach((r, j) => add(r, `world:${i}:ring:${j}`, `${w.name || `World ${i + 1}`} / Ring ${j + 1}`));
+        });
+        return entries;
+    }
+    function locationForBody(body) {
+        return locationEntries().find(entry => entry.body === body) || null;
+    }
+    function locationPosition(anchor) {
+        if (!_orrCanvas || anchor.hexId !== _hexId) return null;
+        const entries = locationEntries();
+        const matches = anchor.bodyKey ? entries.filter(e => e.key === anchor.bodyKey)
+            : entries.filter(e => e.label.toLocaleLowerCase() === anchor.locationLabel?.trim().toLocaleLowerCase());
+        if (matches.length !== 1) return null;
+        const hit = _hitBodies.find(h => h.body === matches[0].body);
+        if (!hit) return null; // Hidden moons and missing bodies must not point elsewhere.
+        const rect = _orrCanvas.getBoundingClientRect();
+        const ring = hit.innerR !== undefined;
+        const x = hit.cx, y = hit.cy - (ring ? (hit.r + hit.innerR) / 2 : 0);
+        if (x < 0 || y < 0 || x > rect.width || y > rect.height) return null;
+        return { x: rect.left + x, y: rect.top + y, radius: ring ? 9 : hit.r,
+            left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom };
+    }
+    return { open, close, isOpen, refresh, handleWheel, normalizeSystem, renderSnapshot, resize, selectBody,
+        locationForBody, locationPosition, fitView, searchAlignments,
+        time: () => ({ days: _totalDays(), year: _gameYear, day: _gameDay, paused: _paused, shuttleRate: _shuttleRate }),
+        currentHexId: () => _hexId, currentSystem: () => _sys };
 
 })();
 

@@ -23,6 +23,8 @@
 
     let _db        = null;
     let _syncTimer = null;
+    let _campaignQueue = Promise.resolve();
+    let _campaignLoadError = null;
 
     // -------------------------------------------------------------------------
     // Internal: open (or reuse) the database connection
@@ -61,16 +63,32 @@
             const db = await _openDB();
 
             // Load app state (gridWidth, gridHeight, routes)
-            const appState = await new Promise((resolve) => {
+            const appState = await new Promise((resolve, reject) => {
                 const tx     = db.transaction(STORE_APP, 'readonly');
                 const store  = tx.objectStore(STORE_APP);
                 const result = {};
-                store.openCursor().onsuccess = (e) => {
+                tx.oncomplete = () => resolve(result);
+                tx.onabort = () => reject(tx.error || new Error('Browser storage could not be read.'));
+                store.openKeyCursor().onsuccess = (e) => {
                     const cur = e.target.result;
-                    if (cur) { result[cur.key] = cur.value; cur.continue(); }
-                    else resolve(result);
+                    if (cur) {
+                        // Never materialize image Blobs in the startup metadata read.
+                        if (!String(cur.key).startsWith('campaignAsset:')) {
+                            const key = cur.key;
+                            store.get(key).onsuccess = event => { result[key] = event.target.result; };
+                        }
+                        cur.continue();
+                    }
                 };
             });
+
+            try {
+                window.campaignAtlas = window.CampaignAtlas.normalizeStore(appState.campaignAtlas);
+                _campaignLoadError = null;
+            } catch (err) {
+                _campaignLoadError = err;
+                alert(`Campaign Atlas could not be restored: ${err.message}\n\nStored campaign data has been preserved. Campaign writes are disabled until you load a supported backup or clear the canvas.`);
+            }
 
             if (typeof appState.gridWidth       === 'number') gridWidth             = appState.gridWidth;
             if (typeof appState.gridHeight      === 'number') gridHeight            = appState.gridHeight;
@@ -229,6 +247,7 @@
             saveBorderPaths();
             saveRegionDefinitions();
             saveRegionPaths();
+            if (window.CampaignAtlas) void window.CampaignAtlas.persist();
         }, 2000);
     }
 
@@ -401,22 +420,111 @@
     // Wipe the entire database.
     // Called before Universe import or when the user starts a new map.
     // -------------------------------------------------------------------------
-    async function clearDB() {
+    async function clearDB(clearCampaign = false) {
+        await _campaignQueue;
+        if (_syncTimer) { clearTimeout(_syncTimer); _syncTimer = null; }
         try {
             const db = await _openDB();
             const tx = db.transaction([STORE_HEX, STORE_APP, STORE_TSV], 'readwrite');
             tx.objectStore(STORE_HEX).clear();
-            tx.objectStore(STORE_APP).clear();
+            if (clearCampaign) {
+                tx.objectStore(STORE_APP).clear();
+            } else {
+                // Universe/TravellerMap imports replace generated map data but
+                // must leave campaign records and portrait bytes intact.
+                const req = tx.objectStore(STORE_APP).openCursor();
+                req.onsuccess = () => {
+                    const cur = req.result;
+                    if (!cur) return;
+                    if (cur.key !== 'campaignAtlas' && !String(cur.key).startsWith('campaignAsset:')) cur.delete();
+                    cur.continue();
+                };
+            }
             tx.objectStore(STORE_TSV).clear();
+            await new Promise((resolve, reject) => {
+                tx.oncomplete = resolve;
+                tx.onabort = () => reject(tx.error || new Error('Database clear was interrupted.'));
+                tx.onerror = () => reject(tx.error);
+            });
+            if (clearCampaign) _campaignLoadError = null;
         } catch (err) {
             console.warn('[DB] clearDB failed:', err);
+            throw err;
         }
+    }
+
+    function _campaignWrite(work) {
+        const task = _campaignQueue.then(work);
+        _campaignQueue = task.catch(() => {});
+        return task;
+    }
+    function commitCampaignAtlas(atlas, payloads = new Map(), replaceUnrestored = false) {
+        return _campaignWrite(async () => {
+            if (_campaignLoadError && !replaceUnrestored) throw _campaignLoadError;
+            const db = await _openDB();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(STORE_APP, 'readwrite');
+                const store = tx.objectStore(STORE_APP);
+                let missing = null;
+                tx.oncomplete = () => { if (replaceUnrestored) _campaignLoadError = null; resolve(); };
+                tx.onabort = () => reject(missing || tx.error || new Error('Campaign save was interrupted. Try saving again.'));
+                tx.onerror = () => {}; // onabort reports request and quota failures
+                for (const [id, payload] of payloads) store.put(payload, 'campaignAsset:' + id);
+                for (const id of CampaignAssets.referenced(atlas)) {
+                    if (payloads.has(id)) continue;
+                    const request = store.get('campaignAsset:' + id);
+                    request.onsuccess = () => {
+                        if (!request.result?.display || !request.result?.thumbnail) {
+                            missing = new Error('A referenced image is missing from browser storage. Restore a complete backup.');
+                            tx.abort();
+                        }
+                    };
+                }
+                store.put(atlas, 'campaignAtlas');
+            });
+        });
+    }
+    function saveCampaignAtlas() {
+        return commitCampaignAtlas(window.CampaignAtlas.snapshot());
+    }
+    async function readCampaignAsset(id) {
+        const db = await _openDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE_APP, 'readonly');
+            const req = tx.objectStore(STORE_APP).get('campaignAsset:' + id);
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+    }
+    function collectCampaignAssets(keep) {
+        return _campaignWrite(async () => {
+            if (_campaignLoadError) return;
+            const db = await _openDB();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(STORE_APP, 'readwrite');
+                const range = IDBKeyRange.bound('campaignAsset:', 'campaignAsset:\uffff');
+                const req = tx.objectStore(STORE_APP).openKeyCursor(range);
+                req.onsuccess = () => {
+                    const cur = req.result;
+                    if (!cur) return;
+                    if (!keep.has(String(cur.key).slice('campaignAsset:'.length))) tx.objectStore(STORE_APP).delete(cur.key);
+                    cur.continue();
+                };
+                tx.oncomplete = resolve;
+                tx.onabort = () => reject(tx.error || new Error('Asset cleanup was interrupted.'));
+            });
+        });
     }
 
     // -------------------------------------------------------------------------
     // Public API
     // -------------------------------------------------------------------------
     window.dbManager = {
+        campaignLoadError: () => _campaignLoadError,
+        saveCampaignAtlas,
+        commitCampaignAtlas,
+        readCampaignAsset,
+        collectCampaignAssets,
         loadFromDB,
         saveHexesBySectorNum,
         saveHexes,

@@ -1,4 +1,4 @@
-# As Above, So Below (v0.17.5)
+# As Above, So Below (v0.18.0)
 
 **"As Above, So Below"** is a star system generator and sector management tool for the Traveller TTRPG. It provides a seamless transition between sector mapping and the granular physical reality of individual worlds and moons.
 ---
@@ -18,6 +18,9 @@ This tool is an unofficial fan project and is not affiliated with Mongoose Publi
 This workbench allows Game Masters and world-builders to generate, import, and expand star systems using multiple generations of Traveller logic. Whether you are running a Classic Traveller campaign or a high-crunch Traveller 5 (T5) simulation, this tool ensures that your "expanded" systems remain 100% consistent with your sector-level data.
 
 ## Key Features
+- **Campaign Atlas:** Click a system to open the left inspector; double-click to explore its orbits. Select a planet or use the body list for persistent details. The **Campaign** tab holds people, places, businesses, organizations, jobs, events, items, and notes, with portraits and image galleries. Records belong to the displayed system, with a free-text location, and survive regeneration.
+- **Portable campaign backups:** Records and images are included in browser autosaves, map JSON, and individual-system JSON, with undo/redo. These JSON files are referee backups containing private material. Campaign content is excluded from HTML and Obsidian wiki exports. Keep original backups before using older app versions, which cannot preserve campaign content when saving again.
+- **Local image attachments:** Up to 10 JPEG, PNG, or WebP still images per record, 10 MiB / 20 megapixels per upload. Stored images are resized to 2048 pixels with metadata removed; originals are not retained. Each map has a 50 MiB serialized image budget including thumbnails.
 - **Multi-Era Engine:** Toggle between **Classic Traveller (Book 6)**, **Mongoose Traveller (2nd Edition)**, **Traveller 5 (T5)**, **RTT WorldGen** and **Architect of Worlds** expansion logic.
 - **System Editor:** Build a system by hand or reshape a generated one — add and delete stars, worlds, gas giants, belts, and moons, seed individual UWP digits, and let the engine fill in the rest. Available for MgT2E, CT, and T5 systems.
 - **Interstellar Connectivity:** Automatic generation of X-boat trade lanes based on world Importance {Ix} scores.

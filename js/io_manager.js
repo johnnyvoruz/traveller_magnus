@@ -28,6 +28,53 @@ function downloadBatchLog(actionName, hexCount) {
 const SAVE_CHUNK_THRESHOLD = 250 * 1024 * 1024; // 250 MB — single file below this
 const SAVE_CHUNK_SIZE      = 250 * 1024 * 1024; // 250 MB per chunk above threshold
 
+// Measure encoded bytes, including the portable image dictionary in Part 1.
+// Kept pure so small limits can exercise multipart saves in browser tests.
+function partitionMapSave(state, limit = SAVE_CHUNK_SIZE) {
+    const encoder = new TextEncoder();
+    const size = value => encoder.encode(JSON.stringify(value)).length;
+    const { hexStates: hexes, ...metadata } = state;
+    const entries = Object.entries(hexes);
+    const wholeSize = size({ ...metadata, hexStates: {} }) + entries.reduce((n, [id, value], index) =>
+        n + size(id) + 1 + size(value) + (index ? 1 : 0), 0);
+    if (wholeSize <= limit) return [state];
+    const saveId = CampaignAssets.id();
+    const parts = [];
+    const make = first => ({ ...(first ? metadata : { version: state.version, gridWidth: state.gridWidth, gridHeight: state.gridHeight }),
+        saveId, saveType: 'chunked', part: 999999999, totalParts: 999999999, hexStates: [] });
+    let part = make(true), bytes = size(part);
+    if (bytes > limit) throw new Error('Shared map metadata and images cannot fit in Part 1. Reduce image attachments or map metadata.');
+    for (const entry of entries) {
+        const entrySize = size(entry);
+        if (bytes + entrySize + (part.hexStates.length ? 1 : 0) > limit) {
+            parts.push(part); part = make(false); bytes = size(part);
+        }
+        if (bytes + entrySize > limit) throw new Error(`System ${entry[0]} is too large for a save part.`);
+        bytes += entrySize + (part.hexStates.length ? 1 : 0);
+        part.hexStates.push(entry);
+    }
+    parts.push(part);
+    parts.forEach((p, i) => { p.part = i + 1; p.totalParts = parts.length; });
+    return parts;
+}
+
+function combineMapParts(parts) {
+    const ordered = [...parts].sort((a, b) => a.part - b.part), first = ordered[0];
+    if (!first || first.saveType !== 'chunked' || first.totalParts !== ordered.length) throw new Error('Select all parts of one map backup.');
+    const hexes = Object.create(null);
+    ordered.forEach((part, i) => {
+        if (part.part !== i + 1 || part.totalParts !== first.totalParts || part.gridWidth !== first.gridWidth ||
+            part.gridHeight !== first.gridHeight || part.saveId !== first.saveId || part.version !== first.version || !Array.isArray(part.hexStates)) {
+            throw new Error('These files are incomplete or belong to different map backups.');
+        }
+        for (const [id, state] of part.hexStates) {
+            if (Object.hasOwn(hexes, id)) throw new Error(`Duplicate hex ${id} in multipart backup.`);
+            hexes[id] = state;
+        }
+    });
+    return { ...first, hexStates: hexes };
+}
+
 /** Promise-based FileReader helper. */
 function readFileAsText(file) {
     return new Promise((resolve, reject) => {
@@ -148,9 +195,11 @@ function setupSaveLoad() {
         await new Promise(r => setTimeout(r, 100));
 
         try {
-            const jsonStr = JSON.stringify(stateObj);
+            Object.assign(stateObj, await CampaignAtlas.exportMap());
+            const parts = partitionMapSave(stateObj);
 
-            if (jsonStr.length <= SAVE_CHUNK_THRESHOLD) {
+            if (parts.length === 1) {
+                const jsonStr = JSON.stringify(stateObj);
                 // ---- Single file (the common case) ----
                 if (window.showSaveFilePicker) {
                     const handle = await window.showSaveFilePicker({
@@ -161,23 +210,19 @@ function setupSaveLoad() {
                     await writable.write(jsonStr);
                     await writable.close();
                 } else {
-                    triggerDownload(jsonStr, 'traveller_map.json');
+                    if (!triggerDownload(jsonStr, 'traveller_map.json')) throw new Error('The map download could not be started.');
                 }
-                if (typeof showToast === 'function') showToast('Map saved successfully.', 3000);
+                if (typeof showToast === 'function') showToast('Referee map backup sent to your browser. Keep this original when using older app versions.', 7000);
 
             } else {
                 // ---- Chunked save ----
-                const sizeMB     = Math.round(jsonStr.length / (1024 * 1024));
-                const numChunks  = Math.ceil(jsonStr.length / SAVE_CHUNK_SIZE);
-                const entries    = Array.from(hexStates.entries())
-                                        .map(([id, st]) => [id, stripHexViewState(st)]);
-                const perChunk   = Math.ceil(entries.length / numChunks);
+                const numChunks = parts.length;
 
                 const confirmed = confirm(
-                    `Your map is approximately ${sizeMB} MB — too large for a single file.\n\n` +
+                    `This referee map backup is too large for a single file.\n\n` +
                     `It will be saved in ${numChunks} parts. Keep all ${numChunks} files together;\n` +
                     `you must select all of them at once when loading.\n\n` +
-                    `Your work is also auto-saved locally and won't be lost if you skip this.\n\n` +
+                    `Campaign images are included in Part 1. These files contain private referee material.\n\n` +
                     `Continue?`
                 );
                 if (!confirmed) return;
@@ -186,28 +231,7 @@ function setupSaveLoad() {
                 const failedParts = [];
 
                 for (let i = 0; i < numChunks; i++) {
-                    const chunkEntries = entries.slice(i * perChunk, (i + 1) * perChunk);
-                    const chunkObj = {
-                        version:    APP_VERSION,
-                        saveType:   'chunked',
-                        part:       i + 1,
-                        totalParts: numChunks,
-                        gridWidth,
-                        gridHeight,
-                        hexStates:  chunkEntries   // array of [hexId, state] pairs
-                    };
-                    // Routes, aesthetics, settings, and border/region state travel with Part 1 only
-                    if (i === 0) {
-                        chunkObj.routes               = window.sectorRoutes || [];
-                        chunkObj.rules                = window.activeFilterRules || [];
-                        chunkObj.aesthetics           = aesthetics;
-                        chunkObj.settings             = settings;
-                        chunkObj.borderDefinitions       = window.borderDefinitions || [];
-                        chunkObj.hexBorderAssignments    = Array.from((window.hexBorderAssignments || new Map()).entries());
-                        chunkObj.borderPaths             = Array.from((window.borderPaths || new Map()).entries());
-                        chunkObj.regionDefinitions       = window.regionDefinitions || [];
-                        chunkObj.regionPaths             = Array.from((window.regionPaths || new Map()).entries());
-                    }
+                    const chunkObj = parts[i];
 
                     const ok = triggerDownload(
                         JSON.stringify(chunkObj),
@@ -268,7 +292,7 @@ function setupSaveLoad() {
                     return;
                 }
 
-                applyLoadedMapData(data);
+                await applyLoadedMapData(data);
 
             } else {
                 // --- Multiple files selected — must be a chunked save ---
@@ -313,18 +337,9 @@ function setupSaveLoad() {
                 }
 
                 // Build a unified data object using metadata from Part 1
-                const merged = {
-                    version:    parts[0].version,
-                    gridWidth:  parts[0].gridWidth,
-                    gridHeight: parts[0].gridHeight,
-                    routes:     parts[0].routes     || [],
-                    rules:      parts[0].rules       || [],
-                    aesthetics: parts[0].aesthetics  || {},
-                    settings:   parts[0].settings   || {},
-                    hexStates:  mergedHexStates
-                };
+                const merged = combineMapParts(parts);
 
-                applyLoadedMapData(merged);
+                await applyLoadedMapData(merged);
                 if (typeof showToast === 'function') {
                     showToast(`Loaded ${parts.length}-part save successfully.`, 3000);
                 }
@@ -342,7 +357,7 @@ function setupSaveLoad() {
                 alert("Solo 6 sector data not found. Run convert_solo6.ps1 to generate js/solo_6_data.js.");
                 return;
             }
-            applyLoadedMapData(window.SOLO_6_DATA);
+            applyLoadedMapData(window.SOLO_6_DATA).catch(err => alert(`Could not load map: ${err.message}`));
         });
     }
 
@@ -356,12 +371,18 @@ function setupSaveLoad() {
  * Triggered by the Settings button or Ctrl+Delete.
  */
 async function clearCanvas() {
+    if (CampaignAtlas.isBusy()) { showToast('Please wait for the campaign operation to finish.', 3000); return; }
     const confirmed = confirm(
-        'Clear Canvas will erase all hex data, routes, borders, and auto-saved progress.\n\n' +
+        'Clear Canvas will erase all hex data, routes, borders, campaign records, images, drafts, and auto-saved progress.\n\n' +
         'The canvas will reset to the default 7×5 grid.\n\n' +
         'This cannot be undone. Continue?'
     );
     if (!confirmed) return;
+    try { if (window.dbManager) await window.dbManager.clearDB(true); }
+    catch (err) { alert(`Canvas was not cleared: ${err.message}`); return; }
+    CampaignAtlas.discard();
+    window.campaignAtlas = CampaignAtlas.emptyStore();
+    SystemInspector.reset();
 
     // Leave the orrery/System Viewer (and anything stacked on top of it — Surface/Approach
     // Viewer) if open — otherwise its now-stale system (from a hex that no longer exists
@@ -372,7 +393,6 @@ async function clearCanvas() {
     if (typeof SystemViewer   !== 'undefined' && SystemViewer.isOpen())   SystemViewer.close();
 
     // Wipe IndexedDB so the next startup doesn't reload old data
-    if (window.dbManager) await window.dbManager.clearDB();
 
     // Reset grid dimensions to default
     gridWidth  = 7;
@@ -596,12 +616,28 @@ function applyLoadedSettings(settings) {
     localStorage.setItem('traveller_gen_starport_mod', String(starportMod));
 }
 
-function applyLoadedMapData(parsedData) {
+async function applyLoadedMapData(parsedData) {
+    if (!parsedData || typeof parsedData !== 'object' || Array.isArray(parsedData)) throw new Error('Invalid map backup.');
+    const mapHexes = parsedData.hexStates || parsedData;
+    if (!mapHexes || typeof mapHexes !== 'object' || Array.isArray(mapHexes) ||
+        Object.entries(mapHexes).some(([id, state]) => !/^[A-Za-z0-9]+-[A-P]-\d{4}$/.test(id) || !state || typeof state !== 'object')) {
+        throw new Error('Invalid hex data in map backup.');
+    }
+    // Validate all image payloads and future schemas before touching the map.
+    const prepared = await CampaignAtlas.prepareImport(parsedData);
+    if (!CampaignAtlas.confirmLeave()) return false;
+    await CampaignAtlas.commit(prepared.store, prepared.payloads, 'Load Map JSON', () => {
+        if (SystemViewer.isOpen()) SystemViewer.close();
+        _applyLoadedMapData(parsedData);
+    }, { includeRouteDefinitions: true, replaceCampaign: true });
+    return true;
+}
+
+function _applyLoadedMapData(parsedData) {
     // includeRouteDefinitions, because loading a map replaces window.routeDefinitions
     // wholesale from the file below. Without it Ctrl+Z restored the previous hexes
     // and segments but left the loaded file's route slots in place, so the segments
     // came back belonging to slots that were no longer theirs.
-    saveHistoryState('Load Map JSON', { includeRouteDefinitions: true });
     hexStates.clear();
 
     if (parsedData.hexStates) {
@@ -2249,7 +2285,7 @@ function _rewriteHexIdRefs(obj, oldId, newId) {
  * Export the system in the given hex as a downloadable JSON file.
  * Only SYSTEM_PRESENT hexes can be exported.
  */
-function exportSystemJson(hexId) {
+async function exportSystemJson(hexId) {
     const state = hexStates.get(hexId);
     if (!state || state.type !== 'SYSTEM_PRESENT') {
         if (typeof showToast === 'function') showToast('No system in this hex to export.', 2500);
@@ -2264,8 +2300,12 @@ function exportSystemJson(hexId) {
     };
     const safeName = systemName.replace(/[^a-z0-9_\-]/gi, '_');
     const safeHexId = String(hexId).replace(/[^a-z0-9_\-]/gi, '_');
-    triggerDownload(JSON.stringify(envelope, null, 2), `${safeHexId}_${safeName}_system.json`);
-    if (typeof showToast === 'function') showToast(`System "${systemName}" exported.`, 2500);
+    try {
+        Object.assign(envelope, await CampaignAtlas.exportForHex(hexId));
+        envelope.backupAudience = 'referee';
+        if (!triggerDownload(JSON.stringify(envelope), `${safeHexId}_${safeName}_system.json`)) throw new Error('Download could not be started.');
+        if (typeof showToast === 'function') showToast(`Referee backup for "${systemName}" sent to your browser, including private records and images.`, 6000);
+    } catch (err) { alert(`System backup failed: ${err.message}`); }
 }
 window.exportSystemJson = exportSystemJson;
 
@@ -2276,13 +2316,23 @@ window.exportSystemJson = exportSystemJson;
  * Post-import side-effects (redraw, DB save, filter reapply) are handled
  * here so all UI entry points get them for free.
  */
-function importSystemJson(jsonObj, targetHexId) {
+async function importSystemJson(jsonObj, targetHexId, campaignChoice = null) {
     if (!jsonObj || jsonObj.exportType !== 'asab-system' || !jsonObj.state) {
         throw new Error('Not a valid system export file (missing exportType or state).');
     }
     if (!targetHexId) {
         throw new Error('No target hex specified.');
     }
+    if (CampaignAtlas.isBusy()) throw new Error('Wait for the current campaign operation.');
+    const incoming = CampaignAtlas.normalizeStore(jsonObj.campaignAtlas);
+    if (campaignChoice === null && Object.keys(incoming.records).length && CampaignAtlas.recordsForHex(targetHexId).length) {
+        campaignChoice = await chooseCampaignImport();
+        if (campaignChoice === 'cancel') return false;
+    }
+    const prepared = campaignChoice === 'system-only'
+        ? { store: CampaignAtlas.snapshot(), payloads: new Map() }
+        : await CampaignAtlas.prepareImport(jsonObj, targetHexId);
+    if (!CampaignAtlas.confirmLeave()) return false;
 
     const sourceHexId = jsonObj.sourceHexId || null;
 
@@ -2299,14 +2349,34 @@ function importSystemJson(jsonObj, targetHexId) {
         computeSystemCounts(newState);
     }
 
-    hexStates.set(targetHexId, newState);
+    await CampaignAtlas.commit(prepared.store, prepared.payloads, 'Import ASAB System', () => {
+        hexStates.set(targetHexId, newState);
+    });
 
     if (typeof reapplyAllRules === 'function')   reapplyAllRules();
     if (typeof applyActiveFilters === 'function') applyActiveFilters();
     if (window.dbManager) window.dbManager.saveHexes([targetHexId]);
     requestAnimationFrame(draw);
+    return true;
 }
 window.importSystemJson = importSystemJson;
+
+function chooseCampaignImport() {
+    return new Promise(resolve => {
+        const dialog = document.createElement('dialog');
+        dialog.className = 'atlas-lightbox';
+        const title = document.createElement('h3'); title.textContent = 'This system already has campaign records';
+        const text = document.createElement('p'); text.textContent = 'Merge the imported records into this system, or import only its generated system data. Existing campaign records are kept.';
+        dialog.append(title, text);
+        let choice = 'cancel';
+        for (const [label, value] of [['Merge records', 'merge'], ['Import system only', 'system-only'], ['Cancel', 'cancel']]) {
+            const button = document.createElement('button'); button.type = 'button'; button.textContent = label;
+            button.addEventListener('click', () => { choice = value; dialog.close(); }); dialog.append(button);
+        }
+        dialog.addEventListener('close', () => { dialog.remove(); resolve(choice); }, { once: true });
+        document.body.append(dialog); dialog.showModal();
+    });
+}
 
 // ============================================================================
 // ASAB IMPORT / EXPORT SETUP
@@ -2326,10 +2396,9 @@ function setupAsabImportExport() {
         document.getElementById('asab-import-modal').style.display = 'flex';
     }
 
-    function doImport() {
+    async function doImport() {
         try {
-            saveHistoryState('Import ASAB System');
-            importSystemJson(_jsonObj, _hexId);
+            if (!await importSystemJson(_jsonObj, _hexId)) return;
             document.getElementById('asab-import-modal').style.display = 'none';
             showToast(`System imported into hex ${_hexId}.`, 3000);
         } catch (err) {

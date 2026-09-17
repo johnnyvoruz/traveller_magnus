@@ -5,8 +5,9 @@
 // -----------------------------------------------------------------------------
 // Global Constants
 // -----------------------------------------------------------------------------
-const APP_VERSION = "v0.17.5";
-const APP_BANNER = "v0.17.5: New: Point to Point Route upgrades";
+const APP_VERSION = "v0.18.0";
+const APP_BANNER = "v0.18.0: Campaign Atlas and system inspection";
+window.campaignAtlas = { schemaVersion: 1, records: {}, assets: {} };
 
 // -----------------------------------------------------------------------------
 // Application State
@@ -179,6 +180,7 @@ window.redoStack = [];
 function saveHistoryState(actionName, opts = {}) {
     const stateSnapshot = {
         action: actionName,
+        campaignAtlas: JSON.parse(JSON.stringify(window.campaignAtlas)),
         routes: JSON.parse(JSON.stringify(window.sectorRoutes || [])),
         hexStates: JSON.parse(JSON.stringify(Array.from(hexStates.entries())))
     };
