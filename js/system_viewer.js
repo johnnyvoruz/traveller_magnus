@@ -4,8 +4,14 @@
 // Supports MgT2E, CT, and T5 systems via normalisation.
 // Exposes window.SystemViewer  { open, close, isOpen, handleWheel }
 //
-// Zoom model: SEMANTIC ZOOM — orbital radii scale with _viewZoom,
-// but star/planet body sizes stay constant in screen pixels.
+// Zoom model: orbital radii scale with _viewZoom. Body discs and moon/ring
+// offsets grow with zoom relative to the fitted system view, so zooming in
+// on a planet actually enlarges it. Double-click frames that body and its
+// local children (a star’s worlds, a world’s moons).
+//
+// Lineup (Horizontal / Vertical) keeps the same bodies and arcs, but parks
+// every orbiting body on one axis in orbit order so the system reads as a
+// list. Full circles are still drawn; the fitted strip clips them into arcs.
 // =============================================================================
 
 'use strict';
@@ -47,6 +53,8 @@ const SystemViewer = (() => {
     let _viewOffX = 0;
     let _viewOffY = 0;
     let _minZoom = 1;
+    let _systemFitZoom = 1;
+    let _fitting = false;
     let _atFit = true;
     let _fitOffX = 0, _fitOffY = 0;
 
@@ -60,6 +68,8 @@ const SystemViewer = (() => {
     let _localClock = null;
     let _clockSecond = -1;
     let _selectedBody = null;
+    let _trackedBody = null;
+    let _tracking = false;
     let _pointerDown = null;
     let _pointerMoved = false;
     let _resizeObserver = null;
@@ -67,6 +77,10 @@ const SystemViewer = (() => {
     let _hideMoons              = false;
     let _hideHZ                 = false;
     let _hideMainworldHighlight = false;
+    // 'orbits' draws the live orrery. 'row' and 'column' line bodies up in
+    // orbit order (star first) with even slots so each one stays readable.
+    let _lineup = 'orbits';
+    let _lineupDisc = 1;
 
     let _animFrameId   = null;
     let _lastFrameTime = 0;
@@ -108,29 +122,54 @@ const SystemViewer = (() => {
         M: '#b82800', D: '#6070a0', BD: '#7a4010'
     };
 
-    // ── Fixed body sizes (never scale with zoom) ──────────────────────────────
+    // Body discs and satellite offsets grow once the view is closer than the
+    // fitted system. Fit itself uses scale 1 so the whole orrery still lands
+    // in the viewport.
+    function _zoomScale() {
+        const fit = _systemFitZoom || 1;
+        if (_lineup !== 'orbits') {
+            const disc = _lineupDisc || 1;
+            if (_fitting) return disc;
+            return disc * Math.max(1, _viewZoom / fit);
+        }
+        if (_fitting) return 1;
+        return Math.max(1, _viewZoom / fit);
+    }
 
     function _starBodyRadius(s) {
         const cls = s.sClass || 'V';
-        if (cls === 'Ia' || cls === 'Ib') return 28;
-        if (cls === 'II' || cls === 'III') return 22;
-        if (cls === 'IV') return 16;
-        if (s.sType === 'BD') return 6;
-        if (s.sType === 'D')  return 5;
-        if (s.sType === 'M')  return 8;
-        if (s.sType === 'K')  return 10;
-        return 14;
+        let r = 14;
+        if (cls === 'Ia' || cls === 'Ib') r = 28;
+        else if (cls === 'II' || cls === 'III') r = 22;
+        else if (cls === 'IV') r = 16;
+        else if (s.sType === 'BD') r = 6;
+        else if (s.sType === 'D')  r = 5;
+        else if (s.sType === 'M')  r = 8;
+        else if (s.sType === 'K')  r = 10;
+        return r * _zoomScale();
     }
 
     function _worldBodyRadius(w) {
+        let r = 5;
         if (w.type === 'Gas Giant') {
-            if (w.ggType === 'GL') return 14;
-            if (w.ggType === 'GM') return 10;
-            return 8;
-        }
-        if (w.type === 'Mainworld') return 8;
-        if (w.worldType === 'Worldlet') return 3;
-        return 5;
+            if (w.ggType === 'GL') r = 14;
+            else if (w.ggType === 'GM') r = 10;
+            else r = 8;
+        } else if (w.type === 'Mainworld') r = 8;
+        else if (w.worldType === 'Worldlet') r = 3;
+        return r * _zoomScale();
+    }
+
+    function _satelliteRadius(isMainworld) {
+        return (isMainworld ? 5 : 3) * _zoomScale();
+    }
+
+    function _moonOrbitRadius(planetR, index) {
+        return planetR + (10 + index * 6) * _zoomScale();
+    }
+
+    function _ringOrbitRadius(planetR, index) {
+        return planetR + (6 + index * 5) * _zoomScale();
     }
 
     // ── Colour helpers ────────────────────────────────────────────────────────
@@ -146,9 +185,30 @@ const SystemViewer = (() => {
             if (w.ggType === 'GM') return '#d4b98a';
             return '#e0cc9a';
         }
-        if (w.type === 'Mainworld')      return '#4fc3a1';
         if (w.type === 'Planetoid Belt') return '#888888';
         return '#a0a0b0';
+    }
+
+    function _drawMainworldStar(ctx, x, y, bodyR) {
+        if (_hideMainworldHighlight) return;
+        const z = _zoomScale();
+        const outer = Math.min(Math.max(3.5, 4.5 * z), Math.max(3, bodyR * 0.45));
+        const inner = outer * 0.38;
+        const cx = x;
+        const cy = y;
+        ctx.save();
+        ctx.fillStyle = _lightMode ? '#0d6b64' : '#66fcf1';
+        ctx.beginPath();
+        for (let i = 0; i < 5; i++) {
+            const a = -Math.PI / 2 + i * (Math.PI * 2 / 5);
+            const b = a + Math.PI / 5;
+            if (i === 0) ctx.moveTo(cx + Math.cos(a) * outer, cy + Math.sin(a) * outer);
+            else ctx.lineTo(cx + Math.cos(a) * outer, cy + Math.sin(a) * outer);
+            ctx.lineTo(cx + Math.cos(b) * inner, cy + Math.sin(b) * inner);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
     }
 
     // ── Orbit / AU helpers ────────────────────────────────────────────────────
@@ -864,14 +924,19 @@ const SystemViewer = (() => {
         const found = _detectSystem(state);
         if (!found) return;
         _invalidateAlignment?.();
+        const trackKey = _tracking && _trackedBody ? locationForBody(_trackedBody)?.key : null;
+        const selectedKey = _selectedBody ? locationForBody(_selectedBody)?.key : null;
         if      (found.edition === 'AoW')   _sys = _normalizeAoW(found.raw);
         else if (found.edition === 'MgT2E') _sys = _normalizeMgT2E(found.raw);
         else if (found.edition === 'CT')    _sys = _normalizeCT(found.raw);
         else if (found.edition === 'T5')    _sys = _normalizeT5(found.raw);
         else                                _sys = _normalizeRTT(found.raw);
         _hitBodies = [];
-        _selectedBody = null;
-        _atFit = true;
+        const entries = locationEntries();
+        _selectedBody = selectedKey ? entries.find(e => e.key === selectedKey)?.body || null : null;
+        _trackedBody = trackKey ? entries.find(e => e.key === trackKey)?.body || null : null;
+        _tracking = !!_trackedBody;
+        if (!_tracking) _atFit = true;
         if (_tooltip) _tooltip.style.display = 'none';
     }
 
@@ -901,6 +966,10 @@ const SystemViewer = (() => {
         _viewOffX    = 0;
         _viewOffY    = 0;
         _atFit      = true;
+        _tracking    = false;
+        _trackedBody = null;
+        _systemFitZoom = 1;
+        _fitting     = false;
         _gameYear    = (window.orreryDefaultYear !== undefined) ? window.orreryDefaultYear : 0;
         _gameDay     = (window.orreryDefaultDay  !== undefined) ? window.orreryDefaultDay  : 1;
         _paused      = false;
@@ -916,6 +985,9 @@ const SystemViewer = (() => {
         window.CampaignAtlas?.cancelPick();
         window.CampaignAtlas?.clearLocator();
         document.body.classList.remove('orrery-open');
+        document.getElementById('orbit-controls-tray').hidden = true;
+        document.getElementById('orbit-controls-content').replaceChildren();
+        document.getElementById('nav-map').hidden = true;
         _localClock = null;
         _stopShuttle?.(); _stopShuttle = null; _timeInput = null;
         window.removeEventListener('mousemove', _onWindowMouseMove);
@@ -924,6 +996,10 @@ const SystemViewer = (() => {
         _resizeObserver?.disconnect();
         _resizeObserver = null;
         _selectedBody = null;
+        _trackedBody = null;
+        _tracking    = false;
+        _systemFitZoom = 1;
+        _fitting     = false;
         _overlay.remove();
         _overlay     = null;
         _orrCanvas   = null;
@@ -952,6 +1028,7 @@ const SystemViewer = (() => {
         _hideMainworldHighlight = false;
         if (typeof SystemEditor !== 'undefined') SystemEditor.close();
         window.SystemInspector?.refresh(true);
+        window.CampaignAtlas?.syncMapFocus({ forcePan: true });
     }
 
     function handleWheel() { /* Map wheel gestures never change views. */ }
@@ -964,11 +1041,12 @@ const SystemViewer = (() => {
         _syncPause();
     }
     function _syncPause() {
-        if (_pauseBtn) {
-            _pauseBtn.textContent = _paused ? 'Play' : 'Pause';
-            _pauseBtn.setAttribute('aria-label', _paused ? 'Play simulation' : 'Pause simulation');
-            _pauseBtn.setAttribute('aria-pressed', String(_paused));
-        }
+        if (!_pauseBtn) return;
+        _pauseBtn.innerHTML = _paused
+            ? '<i class="fas fa-play" aria-hidden="true"></i>'
+            : '<i class="fas fa-pause" aria-hidden="true"></i>';
+        _pauseBtn.setAttribute('aria-label', _paused ? 'Play simulation' : 'Pause simulation');
+        _pauseBtn.setAttribute('aria-pressed', String(!_paused));
     }
 
     function _updateLocalClock() {
@@ -1126,20 +1204,6 @@ const SystemViewer = (() => {
     function _buildTimeControls() {
         const row = document.createElement('div'); row.className = 'sv-controls sv-time-controls';
         const make = (tag, text) => { const el = document.createElement(tag); if (text) el.textContent = text; return el; };
-        const timeLabel = make('label', 'Time');
-        _timeInput = make('input'); _timeInput.type = 'time'; _timeInput.step = '1';
-        _timeInput.setAttribute('aria-label', 'Simulation time');
-        _timeInput.addEventListener('change', () => {
-            if (!_timeInput.value) { _updateDateDisplay(); return; }
-            const parts = _timeInput.value.split(':').map(Number);
-            _setDays(Math.floor(_totalDays()) + (parts[0] * 3600 + parts[1] * 60 + (parts[2] || 0)) / 86400);
-        });
-        timeLabel.append(_timeInput); row.append(timeLabel);
-        for (const [label, delta] of [['−1 h', -1 / 24], ['+1 h', 1 / 24]]) {
-            const btn = make('button', label); btn.type = 'button';
-            btn.addEventListener('click', () => { _stopShuttle?.(); _paused = true; _syncPause(); _setDays(_totalDays() + delta); });
-            row.append(btn);
-        }
         const scrubLabel = make('label', 'Scrub ±30 d');
         const scrub = make('input'); scrub.type = 'range'; scrub.min = '-30'; scrub.max = '30'; scrub.step = '0.001'; scrub.value = '0';
         scrub.setAttribute('aria-label', 'Scrub time, thirty days backward or forward');
@@ -1183,7 +1247,6 @@ const SystemViewer = (() => {
 
     function _buildOverlay(hexId) {
         const sys      = _sys;
-        const starLine = sys.stars.map(s => s.name).join(' / ');
         const age      = formatDisplayNumber(sys.age || 0, 2);
         const edition  = sys.edition || '';
 
@@ -1200,9 +1263,53 @@ const SystemViewer = (() => {
             position: 'fixed', inset: '0', zIndex: '9000',
             background: P.bg,
             display: 'flex', flexDirection: 'column',
-            fontFamily: '"Share Tech Mono", "Courier New", monospace',
+            fontFamily: 'Inter, sans-serif',
             color: P.text, userSelect: 'none'
         });
+
+        const viewNav = document.createElement('div');
+        viewNav.className = 'sv-view-nav';
+        const back = document.createElement('button');
+        back.type = 'button'; back.id = 'sv-back-sector';
+        back.textContent = 'Back to sector';
+        back.setAttribute('aria-label', 'Back to sector');
+        back.addEventListener('click', () => {
+            close();
+            document.getElementById('atlas-toggle').focus({ preventScroll: true });
+        });
+        const sysName = window.SystemInspector?.systemName?.(hexId) || hexId;
+        const identity = document.createElement('div');
+        identity.className = 'sv-identity';
+        const nameEl = document.createElement('span');
+        nameEl.className = 'sv-identity-name';
+        nameEl.textContent = sysName;
+        identity.append(nameEl);
+        if (sysName !== hexId) {
+            const hexEl = document.createElement('span');
+            hexEl.className = 'sv-identity-hex';
+            hexEl.textContent = hexId;
+            identity.append(hexEl);
+        }
+        const editionBadge = document.createElement('span');
+        editionBadge.className = 'sv-badge';
+        editionBadge.textContent = edition;
+        const ageEl = document.createElement('span');
+        ageEl.className = 'sv-identity-age';
+        ageEl.textContent = `Age ${age} Gyr`;
+        identity.append(editionBadge, ageEl);
+        viewNav.append(back, identity);
+        if (edition === 'MgT2E' || edition === 'CT' || edition === 'T5') {
+            const editBtn = document.createElement('button');
+            editBtn.type = 'button';
+            editBtn.id = 'sv-edit-btn';
+            editBtn.className = 'sv-edit';
+            editBtn.textContent = 'Edit system';
+            editBtn.addEventListener('click', () => {
+                if (typeof SystemEditor !== 'undefined') SystemEditor.openEdit(_hexId);
+            });
+            viewNav.append(editBtn);
+        }
+        _overlay.append(viewNav);
 
         const header = document.createElement('div');
         Object.assign(header.style, {
@@ -1211,41 +1318,20 @@ const SystemViewer = (() => {
             borderBottom: `1px solid ${P.border}`
         });
 
-        const title = document.createElement('span');
-        Object.assign(title.style, { color: P.accent, fontSize: '15px', fontWeight: 'bold' });
-        title.textContent = `SYSTEM  ${hexId}`;
-
-        const editionBadge = document.createElement('span');
-        Object.assign(editionBadge.style, {
-            fontSize: '10px', color: P.badge,
-            border: `1px solid ${P.badgeBorder}`, padding: '1px 6px'
-        });
-        editionBadge.textContent = edition;
-
-        const sub = document.createElement('span');
-        Object.assign(sub.style, { fontSize: '12px', color: P.sub });
-        sub.textContent = `${starLine}   ·   Age ${age} Gyr`;
-
         const hint = document.createElement('span');
         Object.assign(hint.style, {
             fontSize: '11px', color: P.hint,
             marginLeft: 'auto', marginRight: '12px'
         });
-        hint.textContent = 'Scroll to zoom · Drag to pan · Space to play / pause · Esc to return to map';
+        hint.textContent = 'Scroll to zoom · Drag to pan · Click to follow · Double-click to frame · Space to play / pause · Esc to return to map';
 
         // Year input
-        const yearWrap = document.createElement('span');
-        Object.assign(yearWrap.style, { display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px' });
+        const yearWrap = document.createElement('label');
+        yearWrap.className = 'sv-timecode-field';
         const yearLbl = document.createElement('span');
-        yearLbl.textContent = 'Year:';
-        Object.assign(yearLbl.style, { color: P.sub, whiteSpace: 'nowrap' });
+        yearLbl.textContent = 'Year';
         _yearInput = document.createElement('input');
         _yearInput.type = 'number'; _yearInput.value = String(_gameYear); _yearInput.step = '1';
-        Object.assign(_yearInput.style, {
-            width: '64px', background: 'transparent', textAlign: 'center',
-            border: `1px solid ${P.badge}`, color: P.accent,
-            fontFamily: 'inherit', fontSize: '11px', padding: '1px 4px'
-        });
         _yearInput.addEventListener('change', () => {
             _setDays((parseInt(_yearInput.value) || 0) * 365 + _gameDay - 1);
             _yearInput.value = _gameYear;
@@ -1253,18 +1339,12 @@ const SystemViewer = (() => {
         yearWrap.append(yearLbl, _yearInput);
 
         // Day input
-        const dayWrap = document.createElement('span');
-        Object.assign(dayWrap.style, { display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px' });
+        const dayWrap = document.createElement('label');
+        dayWrap.className = 'sv-timecode-field';
         const dayLbl = document.createElement('span');
-        dayLbl.textContent = 'Day:';
-        Object.assign(dayLbl.style, { color: P.sub, whiteSpace: 'nowrap' });
+        dayLbl.textContent = 'Day';
         _dayInput = document.createElement('input');
         _dayInput.type = 'number'; _dayInput.value = String(Math.floor(_gameDay)); _dayInput.min = '1'; _dayInput.max = '365'; _dayInput.step = '1';
-        Object.assign(_dayInput.style, {
-            width: '52px', background: 'transparent', textAlign: 'center',
-            border: `1px solid ${P.badge}`, color: P.accent,
-            fontFamily: 'inherit', fontSize: '11px', padding: '1px 4px'
-        });
         _dayInput.addEventListener('change', () => {
             const d = parseInt(_dayInput.value) || 1;
             _setDays(_gameYear * 365 + Math.min(365, Math.max(1, d)) - 1 + _gameDay % 1);
@@ -1385,46 +1465,51 @@ const SystemViewer = (() => {
         hideHighlightChk.addEventListener('change', () => { _hideMainworldHighlight = hideHighlightChk.checked; });
         hideHighlightWrap.append(hideHighlightChk, hideHighlightLbl);
 
-        _pauseBtn = document.createElement('button');
-        _pauseBtn.textContent = 'Pause';
-        _pauseBtn.setAttribute('aria-label', 'Pause simulation');
-        _pauseBtn.setAttribute('aria-pressed', 'false');
-        Object.assign(_pauseBtn.style, {
-            background: 'transparent', border: `1px solid ${P.badge}`,
-            color: P.accent, padding: '3px 10px', cursor: 'pointer',
-            fontFamily: 'inherit', fontSize: '13px'
+        const iconBtn = (icon, label, onClick) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'sv-icon-btn';
+            btn.setAttribute('aria-label', label);
+            btn.innerHTML = `<i class="fas ${icon}" aria-hidden="true"></i>`;
+            btn.addEventListener('click', onClick);
+            return btn;
+        };
+        const skip = delta => {
+            _stopShuttle?.();
+            _paused = true;
+            _syncPause();
+            _setDays(_totalDays() + delta);
+        };
+        _pauseBtn = iconBtn('fa-pause', 'Pause simulation', _togglePause);
+        _pauseBtn.classList.add('sv-play-btn');
+        _pauseBtn.setAttribute('aria-pressed', 'true');
+        _timeInput = document.createElement('input');
+        _timeInput.type = 'time';
+        _timeInput.step = '1';
+        _timeInput.setAttribute('aria-label', 'Simulation time');
+        _timeInput.addEventListener('change', () => {
+            if (!_timeInput.value) { _updateDateDisplay(); return; }
+            const parts = _timeInput.value.split(':').map(Number);
+            _setDays(Math.floor(_totalDays()) + (parts[0] * 3600 + parts[1] * 60 + (parts[2] || 0)) / 86400);
         });
-        _pauseBtn.addEventListener('click', _togglePause);
+        const timeWrap = document.createElement('label');
+        timeWrap.className = 'sv-timecode-field';
+        const timeLbl = document.createElement('span');
+        timeLbl.textContent = 'Time';
+        timeWrap.append(timeLbl, _timeInput);
+        const timecode = document.createElement('div');
+        timecode.className = 'sv-timecode';
+        timecode.append(yearWrap, dayWrap, timeWrap);
+        const transport = document.createElement('div');
+        transport.className = 'sv-transport';
+        transport.append(
+            iconBtn('fa-backward', 'Skip back one hour', () => skip(-1 / 24)),
+            _pauseBtn,
+            iconBtn('fa-forward', 'Skip forward one hour', () => skip(1 / 24)),
+            timecode,
+            speedWrap
+        );
 
-        // RTT/AoW System Editor support is still preliminary and slated for an overhaul — T5
-        // was closed out 2026-07-16 (OW-19/42/43/44/45/46/47) and is now exposed too.
-        let editBtn = null;
-        if (edition === 'MgT2E' || edition === 'CT' || edition === 'T5') {
-            editBtn = document.createElement('button');
-            editBtn.id = 'sv-edit-btn';
-            editBtn.textContent = 'Edit System';
-            Object.assign(editBtn.style, {
-                background: 'transparent', border: `1px solid ${P.badge}`,
-                color: P.accent, padding: '3px 10px', cursor: 'pointer',
-                fontFamily: 'inherit', fontSize: '11px', whiteSpace: 'nowrap'
-            });
-            editBtn.addEventListener('click', () => {
-                if (typeof SystemEditor !== 'undefined') SystemEditor.openEdit(_hexId);
-            });
-        }
-
-        const closeBtn = document.createElement('button');
-        closeBtn.textContent = 'Return to map';
-        Object.assign(closeBtn.style, {
-            background: 'transparent', border: `1px solid ${P.badge}`,
-            color: P.accent, padding: '3px 10px', cursor: 'pointer',
-            fontFamily: 'inherit', fontSize: '13px'
-        });
-        closeBtn.addEventListener('click', close);
-
-        const campaignBtn = document.createElement('button');
-        campaignBtn.textContent = 'Campaign';
-        campaignBtn.addEventListener('click', () => window.CampaignAtlas.openForHex(_hexId));
         header.className = 'system-viewer-header';
         const dayNightLabel = document.createElement('label');
         dayNightLabel.title = 'Illustrative lighting facing the host star; does not model axial tilt, eclipses, or surface time.';
@@ -1442,21 +1527,44 @@ const SystemViewer = (() => {
         resetView.addEventListener('click', fitView);
         yearLbl.id = 'sv-year-label'; _yearInput.setAttribute('aria-labelledby', yearLbl.id);
         dayLbl.id = 'sv-day-label'; _dayInput.setAttribute('aria-labelledby', dayLbl.id);
-        const heading = document.createElement('div'); heading.className = 'sv-heading';
-        const playback = document.createElement('div'); playback.className = 'sv-controls';
         const display = document.createElement('div'); display.className = 'sv-controls';
-        heading.append(...[title, editionBadge, sub, editBtn, campaignBtn, closeBtn].filter(Boolean));
-        playback.append(_pauseBtn, yearWrap, dayWrap, speedWrap, _localClock);
-        display.append(linearWrap, orbitCheckLabel, orbitWrap, hideMoonsWrap, hideHZWrap, hideHighlightWrap, dayNightLabel, resetView);
+        const lineupWrap = document.createElement('div');
+        lineupWrap.className = 'sv-lineup';
+        const lineupLabel = document.createElement('span');
+        lineupLabel.className = 'sv-lineup-label';
+        lineupLabel.id = 'sv-lineup-label';
+        lineupLabel.textContent = 'Lineup';
+        const lineupGroup = document.createElement('div');
+        lineupGroup.className = 'sv-layout';
+        lineupGroup.setAttribute('role', 'group');
+        lineupGroup.setAttribute('aria-labelledby', 'sv-lineup-label');
+        const lineupModes = [
+            ['orbits', 'Orbits', 'Bodies at their current orbital positions'],
+            ['row', 'Horizontal', 'Line planets up left to right, star on the left, even spacing in orbit order'],
+            ['column', 'Vertical', 'Line planets up top to bottom, star at the top, even spacing in orbit order']
+        ];
+        for (const [mode, label, title] of lineupModes) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.textContent = label;
+            btn.title = title;
+            btn.dataset.layout = mode;
+            btn.setAttribute('aria-pressed', _lineup === mode ? 'true' : 'false');
+            btn.addEventListener('click', () => _setLineup(mode));
+            lineupGroup.append(btn);
+        }
+        lineupWrap.append(lineupLabel, lineupGroup);
+        display.append(lineupWrap, linearWrap, orbitCheckLabel, orbitWrap, hideMoonsWrap, hideHZWrap, hideHighlightWrap, dayNightLabel, resetView, _localClock);
         hint.className = 'sv-hint';
-        header.append(heading, playback, _buildTimeControls(), display, _buildAlignmentControls(), hint);
-        _overlay.appendChild(header);
+        header.append(transport, _buildTimeControls(), display, _buildAlignmentControls(), hint);
+        _overlay.append(header);
+        document.getElementById('nav-map').hidden = false;
 
         _orrCanvas = document.createElement('canvas');
         _orrCanvas.id = 'orrery-canvas';
         _orrCanvas.tabIndex = 0;
-        _orrCanvas.setAttribute('aria-label', 'System orbits. Space plays or pauses; scroll zooms; drag pans.');
-        Object.assign(_orrCanvas.style, { display: 'block', cursor: 'crosshair' });
+        _syncCanvasLabel();
+        Object.assign(_orrCanvas.style, { display: 'block', cursor: 'default', flex: '1 1 auto', minHeight: '0', width: '100%' });
         _overlay.appendChild(_orrCanvas);
 
         _tooltip = document.createElement('div');
@@ -1472,9 +1580,8 @@ const SystemViewer = (() => {
 
         document.body.appendChild(_overlay);
 
-        const headerH = header.getBoundingClientRect().height || 44;
         _canvasW = window.innerWidth;
-        _canvasH = window.innerHeight - headerH;
+        _canvasH = window.innerHeight;
         _orrCanvas.style.width  = _canvasW + 'px';
         _orrCanvas.style.height = _canvasH + 'px';
 
@@ -1485,13 +1592,18 @@ const SystemViewer = (() => {
         _orrCtx.scale(dpr, dpr);
         _resizeObserver = new ResizeObserver(resize);
         _resizeObserver.observe(_overlay);
+        _resizeObserver.observe(viewNav);
         _resizeObserver.observe(header);
         resize();
 
         _orrCanvas.addEventListener('wheel',      _onWheel,     { passive: false });
         _orrCanvas.addEventListener('mousedown',  _onMouseDown);
         _orrCanvas.addEventListener('mousemove',  _onMouseMove);
-        _orrCanvas.addEventListener('mouseleave', _hideTooltip);
+        _orrCanvas.addEventListener('dblclick',   _onDblClick);
+        _orrCanvas.addEventListener('mouseleave', () => {
+            _hideTooltip();
+            if (!_dragging && _orrCanvas) _orrCanvas.style.cursor = 'default';
+        });
         window.addEventListener('mousemove', _onWindowMouseMove);
         window.addEventListener('mouseup',   _onWindowMouseUp);
     }
@@ -1509,14 +1621,352 @@ const SystemViewer = (() => {
             _updateLocalClock();
             if (_atFit) _fitCamera();
             _drawOrrery();
-            window.CampaignAtlas?.updateLocator();
+            if (_followSelected()) _drawOrrery();
             _animFrameId = requestAnimationFrame(tick);
         }
         _animFrameId = requestAnimationFrame(tick);
     }
 
+    function _setLineup(mode) {
+        if (mode !== 'row' && mode !== 'column') mode = 'orbits';
+        if (_lineup === mode) return;
+        _lineup = mode;
+        document.querySelectorAll('#system-viewer-overlay .sv-layout button').forEach(btn => {
+            btn.setAttribute('aria-pressed', btn.dataset.layout === mode ? 'true' : 'false');
+        });
+        _syncCanvasLabel();
+        fitView();
+    }
+
+    function _syncCanvasLabel() {
+        if (!_orrCanvas) return;
+        const layout = _lineup === 'row'
+            ? 'Planets lined up horizontally, star on the left.'
+            : _lineup === 'column'
+                ? 'Planets lined up vertically, star at the top.'
+                : 'System orbits.';
+        _orrCanvas.setAttribute('aria-label',
+            `${layout} Click a body to follow it; double-click to frame it and its local orbits; drag to pan; scroll zooms; Space plays or pauses.`);
+    }
+
+    function _drawSelection(ctx) {
+        const selected = _hitBodies.find(hit => hit.body === ((_tracking && _trackedBody) || _selectedBody));
+        if (!selected) return;
+        ctx.save();
+        ctx.strokeStyle = _lightMode ? '#935200' : '#ffce73';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        const ringR = selected.innerR !== undefined
+            ? selected.r + 3
+            : (selected.visualR ?? selected.r) + 5;
+        ctx.arc(selected.cx, selected.cy, ringR, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+        _drawFocusPulse(ctx, selected, ringR);
+    }
+
+    // Primary-orbit bodies match the orrery: P-type, or S-type around star 0.
+    function _isPrimaryWorld(w) {
+        if (w.orbitType === 'P-Type') return true;
+        return w.orbitType === 'S-Type' && Number(w.parentStarIdx ?? 0) === 0;
+    }
+
+    function _lineupNodes() {
+        const stars = _sys?.stars || [];
+        const worlds = (_sys?.worlds || []).filter(w => w.type !== 'Empty');
+        const nodes = [];
+        if (stars[0]) nodes.push({ kind: 'star', body: stars[0], starIndex: 0, sortAu: -1, order: -1, hzAu: null });
+        const items = [];
+        let order = 0;
+        worlds.filter(_isPrimaryWorld).forEach(w => {
+            items.push({
+                kind: (w.type === 'Planetoid Belt' || _isMainworldBelt(w)) ? 'belt' : 'world',
+                body: w,
+                sortAu: w.au || 0,
+                order: order++,
+                hzAu: w.au || 0
+            });
+        });
+        stars.slice(1).forEach((s, i) => {
+            const starIndex = i + 1;
+            const parent = Number(s.parentStarIdx ?? 0);
+            const parentAu = parent > 0 ? _starCompanionAU(stars[parent] || s) : 0;
+            const au = parent > 0
+                ? parentAu + 0.0001 + _starCompanionAU(s) * 0.00001
+                : _starCompanionAU(s);
+            items.push({
+                kind: 'star', body: s, starIndex,
+                sortAu: au, order: order++,
+                hzAu: parent > 0 ? parentAu : au
+            });
+            worlds.filter(w => w.orbitType === 'S-Type' && Number(w.parentStarIdx) === starIndex)
+                .forEach(w => {
+                    items.push({
+                        kind: (w.type === 'Planetoid Belt' || _isMainworldBelt(w)) ? 'belt' : 'world',
+                        body: w,
+                        sortAu: au + 0.000001 * (1 + (w.au || 0)),
+                        order: order++,
+                        hzAu: parent > 0 ? parentAu : au
+                    });
+                });
+        });
+        items.sort((a, b) => a.sortAu - b.sortAu || a.order - b.order);
+        return nodes.concat(items);
+    }
+
+    // Disc scale is chosen so a gas giant plus its moons fits in its slot and
+    // still leaves a gutter for the caption. Positions themselves are even.
+    function _lineupMetrics(nodes, W, H) {
+        const horizontal = _lineup === 'row';
+        const along = Math.max(1, horizontal ? W : H);
+        const cross = Math.max(1, horizontal ? H : W);
+        const pad = 44;
+        const slot = Math.max(8, (along - pad * 2) / Math.max(1, nodes.length));
+        const labelGutter = horizontal ? 52 : Math.min(210, Math.max(108, cross * 0.36));
+        const crossPos = Math.max(24, (cross - labelGutter) / 2);
+        let moonGap = 0;
+        if (!_hideMoons) {
+            for (const node of nodes) {
+                if (node.kind === 'star') continue;
+                const moons = (node.body.moons || []).filter(m => m.type !== 'Empty').length;
+                const rings = (node.body.rings || []).length;
+                const idx = Math.max(moons, rings) - 1;
+                if (idx >= 0) moonGap = Math.max(moonGap, 10 + idx * 6);
+            }
+        }
+        const room = Math.max(12, crossPos - 12);
+        const byRoom = room / (14 + moonGap);
+        const bySlot = (slot * 0.42) / (14 + moonGap);
+        const byStar = (slot * 0.32) / 28;
+        _lineupDisc = Math.max(0.45, Math.min(byRoom, bySlot, byStar, 2.4));
+        return { horizontal, pad, slot, crossPos, labelGutter };
+    }
+
+    function _lineupScreen(lx, ly, W, H) {
+        return {
+            x: W / 2 + _viewOffX + (lx - W / 2) * _viewZoom,
+            y: H / 2 + _viewOffY + (ly - H / 2) * _viewZoom
+        };
+    }
+
+    function _lineupCaption(node) {
+        const body = node.body || {};
+        if (node.kind === 'star') {
+            const spec = body.name || [body.sType, body.sClass].filter(Boolean).join(' ') || 'Star';
+            return body.separation ? `${spec} (${body.separation})` : spec;
+        }
+        if (body.name) return body.name;
+        if (node.kind === 'belt') return 'Planetoid belt';
+        return body.type || 'World';
+    }
+
+    function _lineupReach(node) {
+        if (node.kind === 'star') return _starBodyRadius(node.body);
+        if (node.kind === 'belt') return Math.max(16, 14 * _viewZoom);
+        const r = _worldBodyRadius(node.body);
+        if (_hideMoons) return r;
+        let reach = r;
+        const moons = (node.body.moons || []).filter(m => m.type !== 'Empty');
+        moons.forEach((m, mi) => { reach = Math.max(reach, _moonOrbitRadius(r, mi)); });
+        (node.body.rings || []).forEach((rg, ri) => { reach = Math.max(reach, _ringOrbitRadius(r, ri)); });
+        return reach;
+    }
+
+    function _inHabitableZone(au) {
+        const hz = _sys?.hzAU;
+        if (hz == null || !Number.isFinite(hz) || au == null || !Number.isFinite(au)) return false;
+        return au >= hz * 0.70 && au <= hz * 1.55;
+    }
+
+    function _drawLineupBelt(ctx, node, p, metrics, maxReach, W, H) {
+        const { horizontal, crossPos } = metrics;
+        const reachV = maxReach / Math.max(_viewZoom, 0.0001);
+        // Stop the band short of the caption row (below a horizontal lineup,
+        // beside a vertical one) so the rocks don't sit on the names.
+        const halfLen = horizontal
+            ? Math.max(18, Math.min(reachV * 0.72, H * 0.2))
+            : Math.max(14, Math.min(reachV * 0.65, Math.max(12, crossPos - 10)));
+        const halfThick = Math.max(8, 11 * _lineupDisc);
+        let h = 2166136261;
+        const key = `${_hexId || ''}:${node.body.name || ''}:${node.body.au || 0}`;
+        for (let i = 0; i < key.length; i++) {
+            h ^= key.charCodeAt(i);
+            h = Math.imul(h, 16777619) >>> 0;
+        }
+        const rand = () => {
+            h ^= h >>> 16;
+            h = Math.imul(h, 0x7feb352d) >>> 0;
+            h ^= h >>> 15;
+            h = Math.imul(h, 0x846ca68b) >>> 0;
+            h ^= h >>> 16;
+            return (h >>> 0) / 4294967296;
+        };
+        ctx.save();
+        for (let i = 0; i < 72; i++) {
+            const alongJitter = (rand() * 2 - 1) * halfThick;
+            const crossJitter = (rand() * 2 - 1) * halfLen;
+            const vx = node.lx + (horizontal ? alongJitter : crossJitter);
+            const vy = node.ly + (horizontal ? crossJitter : alongJitter);
+            const dot = _lineupScreen(vx, vy, W, H);
+            const big = rand() < 0.16;
+            ctx.globalAlpha = 0.35 + rand() * 0.55;
+            ctx.fillStyle = _lightMode ? '#3d4a4e' : '#e4e8ea';
+            ctx.beginPath();
+            ctx.arc(dot.x, dot.y, (big ? 1.8 : 0.85) * _viewZoom, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.restore();
+        const isMW = _isMainworldBelt(node.body);
+        if (isMW) _drawMainworldStar(ctx, p.x, p.y, Math.max(4, 6 * _lineupDisc * _viewZoom));
+        const hitR = Math.max(14, 12 * _lineupDisc * _viewZoom);
+        _hitBodies.push({
+            kind: isMW ? 'world' : 'belt', body: node.body,
+            cx: p.x, cy: p.y, r: hitR, visualR: hitR * 0.65
+        });
+        for (let i = -2; i <= 2; i++) {
+            if (i === 0) continue;
+            const vx = node.lx + (horizontal ? 0 : halfLen * i / 3);
+            const vy = node.ly + (horizontal ? halfLen * i / 3 : 0);
+            const q = _lineupScreen(vx, vy, W, H);
+            _hitBodies.push({
+                kind: isMW ? 'world' : 'belt', body: node.body,
+                cx: q.x, cy: q.y, r: Math.max(12, 10 * _viewZoom), visualR: hitR * 0.65
+            });
+        }
+    }
+
+    function _drawLineupLabel(ctx, node, metrics, maxReach, W, H) {
+        const text = _lineupCaption(node);
+        if (!text) return;
+        const { horizontal, slot, crossPos } = metrics;
+        const isMW = node.body.type === 'Mainworld' || _isMainworldBelt(node.body);
+        const fontPx = Math.max(12, Math.min(20, 13 * _viewZoom));
+        const virtual = crossPos + maxReach / Math.max(_viewZoom, 0.0001) + 16;
+        const at = horizontal
+            ? _lineupScreen(node.lx, virtual, W, H)
+            : _lineupScreen(virtual, node.ly, W, H);
+        const maxW = horizontal
+            ? Math.max(24, slot * 0.92 * _viewZoom)
+            : W - at.x - 6;
+        if (!(maxW >= 16) || at.x > W - 4 || at.y > H - 4 || at.y < 0) return;
+        ctx.save();
+        ctx.font = `600 ${fontPx}px Inter, sans-serif`;
+        ctx.fillStyle = (isMW && !_hideMainworldHighlight)
+            ? (_lightMode ? '#0d6b64' : '#66fcf1')
+            : (_lightMode ? '#1a1a2e' : '#d5d8dc');
+        let label = text;
+        if (ctx.measureText(label).width > maxW) {
+            while (label.length > 1 && ctx.measureText(label + '…').width > maxW) label = label.slice(0, -1);
+            label = label.replace(/\s+$/, '') + '…';
+        }
+        if (horizontal) {
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            ctx.fillText(label, at.x, at.y);
+        } else {
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(label, at.x, at.y);
+        }
+        ctx.restore();
+    }
+
+    function _drawLineup(measureOnly = false) {
+        const W = _canvasW;
+        const H = _canvasH;
+        const ctx = _orrCtx;
+        const nodes = _lineupNodes();
+        const metrics = _lineupMetrics(nodes, W, H);
+        const { horizontal, pad, slot, crossPos } = metrics;
+        nodes.forEach((node, i) => {
+            const alongPos = pad + slot * (i + 0.5);
+            node.lx = horizontal ? alongPos : crossPos;
+            node.ly = horizontal ? crossPos : alongPos;
+        });
+        let maxReach = 0;
+        nodes.forEach(node => { maxReach = Math.max(maxReach, _lineupReach(node)); });
+
+        if (measureOnly) {
+            const bounds = { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity };
+            const include = (x, y, r) => {
+                bounds.left = Math.min(bounds.left, x - r);
+                bounds.right = Math.max(bounds.right, x + r);
+                bounds.top = Math.min(bounds.top, y - r);
+                bounds.bottom = Math.max(bounds.bottom, y + r);
+            };
+            nodes.forEach(node => {
+                const p = _lineupScreen(node.lx, node.ly, W, H);
+                include(p.x, p.y, _lineupReach(node) + 24);
+            });
+            if (!Number.isFinite(bounds.left)) include(W / 2, H / 2, 20);
+            return bounds;
+        }
+
+        ctx.clearRect(0, 0, W, H);
+        _hitBodies = [];
+        if (!_lightMode) _drawStarField(ctx, W, H);
+
+        const starNode = nodes.find(n => n.kind === 'star' && n.starIndex === 0) || nodes[0];
+        const starAt = starNode ? _lineupScreen(starNode.lx, starNode.ly, W, H) : { x: W / 2, y: H / 2 };
+
+        if (!_hideHZ) {
+            nodes.forEach(node => {
+                if (!_inHabitableZone(node.hzAu)) return;
+                const c = _lineupScreen(node.lx, node.ly, W, H);
+                const pw = slot * 0.9 * _viewZoom;
+                const ph = Math.min((horizontal ? H : W) * 0.7, maxReach * 2 + 28 * _viewZoom);
+                ctx.save();
+                ctx.fillStyle = 'rgba(80, 200, 100, 0.13)';
+                ctx.beginPath();
+                ctx.roundRect(c.x - pw / 2, c.y - ph / 2, pw, ph, Math.min(16, 8 * _viewZoom));
+                ctx.fill();
+                ctx.restore();
+            });
+        }
+
+        if (_showOrbits && _orbitOpacity > 0 && starNode) {
+            const worldAlpha = _lightMode ? _orbitOpacity * 0.75 : _orbitOpacity * 0.55;
+            nodes.forEach(node => {
+                if (node === starNode) return;
+                const p = _lineupScreen(node.lx, node.ly, W, H);
+                const radius = Math.hypot(p.x - starAt.x, p.y - starAt.y);
+                if (radius < 2) return;
+                ctx.beginPath();
+                ctx.arc(starAt.x, starAt.y, radius, 0, Math.PI * 2);
+                ctx.strokeStyle = `rgba(69, 162, 158, ${worldAlpha.toFixed(3)})`;
+                ctx.lineWidth = 1 + _orbitOpacity * 1.5;
+                ctx.stroke();
+            });
+        }
+
+        const elapsedYears = _totalDays() / 365.25;
+        const worldIdxMap = new Map(((_sys?.worlds || []).filter(w => w.type !== 'Empty')).map((w, i) => [w, i]));
+        nodes.forEach(node => {
+            const p = _lineupScreen(node.lx, node.ly, W, H);
+            if (node.kind === 'belt') {
+                _drawLineupBelt(ctx, node, p, metrics, maxReach, W, H);
+                return;
+            }
+            if (node.kind === 'star') {
+                _drawStar(ctx, node.body, p.x, p.y, node.starIndex || 0);
+                _hitBodies.push({
+                    kind: 'star', body: node.body,
+                    cx: p.x, cy: p.y,
+                    r: _starBodyRadius(node.body) + 8 * _zoomScale(),
+                    visualR: _starBodyRadius(node.body)
+                });
+                return;
+            }
+            _drawWorld(ctx, node.body, p.x, p.y, elapsedYears, worldIdxMap.get(node.body) ?? 0, starAt.x, starAt.y);
+        });
+        nodes.forEach(node => _drawLineupLabel(ctx, node, metrics, maxReach, W, H));
+        _drawSelection(ctx);
+        return null;
+    }
+
     function _drawOrrery(measureOnly = false) {
         if (!_orrCtx || !_canvasW || !_canvasH) return;
+        if (_lineup !== 'orbits') return _drawLineup(measureOnly);
         const W   = _canvasW;
         const H   = _canvasH;
         const ctx = _orrCtx;
@@ -1617,12 +2067,13 @@ const SystemViewer = (() => {
             };
             const includeWorlds = (list, x, y, max, pixels) => list.forEach(w => {
                 const moonCount = _hideMoons ? 0 : (w.moons || []).filter(m => m.type !== 'Empty').length + (w.rings || []).length;
-                const extent = Math.max(_worldBodyRadius(w) + (moonCount ? 20 + moonCount * 6 : 10), Math.min(180, String(w.name || '').length * 3.5));
+                const local = (moonCount ? 20 + moonCount * 6 : 10) * _zoomScale();
+                const extent = Math.max(_worldBodyRadius(w) + local, Math.min(180, String(w.name || '').length * 3.5));
                 include(x, y, _scaleR(w.au || 0, max, pixels) + extent, w.name);
             });
             stars.forEach((s, i) => {
                 const pos = starPos.get(i);
-                include(pos.cx, pos.cy, _starBodyRadius(s) + 10, s.name);
+                include(pos.cx, pos.cy, _starBodyRadius(s) + 10 * _zoomScale(), s.name);
                 if (i) {
                     const parent = starPos.get(s.parentStarIdx ?? 0) || starPos.get(0);
                     include(parent.cx, parent.cy, _compRingR.get(s) + 4);
@@ -1687,19 +2138,29 @@ const SystemViewer = (() => {
             _hitBodies.push({
                 kind: 'star', body: s,
                 cx: pos.cx, cy: pos.cy,
-                r: _starBodyRadius(s) + 8
+                r: _starBodyRadius(s) + 8 * _zoomScale(),
+                visualR: _starBodyRadius(s)
             });
         });
-        const selected = _hitBodies.find(hit => hit.body === _selectedBody);
-        if (selected) {
-            ctx.save();
-            ctx.strokeStyle = _lightMode ? '#935200' : '#ffce73';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.arc(selected.cx, selected.cy, selected.r + 3, 0, Math.PI * 2);
-            ctx.stroke();
-            ctx.restore();
-        }
+        _drawSelection(ctx);
+    }
+
+    // Same 1.8s ease-out ring as the campaign locator pulse, drawn in canvas
+    // so it stays locked to the selected/tracked body as it orbits.
+    function _drawFocusPulse(ctx, hit, baseR) {
+        if (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) return;
+        const t = (performance.now() % 1800) / 1800;
+        const ease = 1 - (1 - t) * (1 - t);
+        const r = baseR * (0.8 + 0.65 * ease);
+        const alpha = 1 - ease * 0.85;
+        const rgb = window.printMode || _lightMode ? '9, 105, 94' : '102, 252, 241';
+        ctx.save();
+        ctx.strokeStyle = `rgba(${rgb}, ${alpha.toFixed(3)})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(hit.cx, hit.cy, r, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
     }
 
     // ── World set ─────────────────────────────────────────────────────────────
@@ -1724,18 +2185,21 @@ const SystemViewer = (() => {
             const period = _worldPeriodYears(w, starMass);
             const epoch  = _hashEpoch(_hexId + ':world:' + wIdx);
             const angle  = epoch + (2 * Math.PI / period) * elapsed_years;
-            _drawBeltRing(ctx, cx, cy, r, isMW && !_hideMainworldHighlight, -(angle * r));
-            if (isMW && w.name && !_hideMainworldHighlight) {
-                ctx.save();
-                ctx.fillStyle = _lightMode ? '#0d6b64' : '#66fcf1';
-                ctx.font      = '11px "Share Tech Mono", monospace';
-                ctx.textAlign = 'center';
-                ctx.fillText(w.name, cx, cy - r - 8);
-                ctx.restore();
+            _drawBeltRing(ctx, cx, cy, r, false, -(angle * r));
+            if (isMW && !_hideMainworldHighlight) {
+                _drawMainworldStar(ctx, cx, cy - r, 2);
+                if (w.name) {
+                    ctx.save();
+                    ctx.fillStyle = _lightMode ? '#0d6b64' : '#66fcf1';
+                    ctx.font      = '11px Inter, sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(w.name, cx, cy - r - 10);
+                    ctx.restore();
+                }
             }
             _hitBodies.push({
                 kind: isMW ? 'world' : 'belt',
-                body: w, cx, cy, r: r + 7, innerR: r - 7
+                body: w, cx, cy, r: r + 7 * _zoomScale(), innerR: Math.max(0, r - 7 * _zoomScale())
             });
         });
 
@@ -1802,12 +2266,13 @@ const SystemViewer = (() => {
         const color = _starColor(s);
 
         ctx.save();
-        const glow = ctx.createRadialGradient(cx, cy, r * 0.2, cx, cy, r * 3);
+        const glowReach = r * (_lineup === 'orbits' ? 3 : 1.65);
+        const glow = ctx.createRadialGradient(cx, cy, r * 0.2, cx, cy, glowReach);
         glow.addColorStop(0, color + (_lightMode ? '66' : 'aa'));
         glow.addColorStop(1, color + '00');
         ctx.fillStyle = glow;
         ctx.beginPath();
-        ctx.arc(cx, cy, r * 3, 0, Math.PI * 2);
+        ctx.arc(cx, cy, glowReach, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
 
@@ -1820,14 +2285,15 @@ const SystemViewer = (() => {
         ctx.arc(cx, cy, r, 0, Math.PI * 2);
         ctx.fill();
 
+        if (_lineup !== 'orbits') return;
         ctx.save();
         ctx.fillStyle = _lightMode ? '#1a1a2e' : '#c5c6c7';
-        ctx.font      = '11px "Share Tech Mono", monospace';
+        ctx.font      = '11px Inter, sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText(s.name, cx, cy + r + 15);
         if (idx > 0 && s.separation) {
             ctx.fillStyle = _lightMode ? '#4a5568' : '#65706e';
-            ctx.font      = '10px "Share Tech Mono", monospace';
+            ctx.font      = '10px Inter, sans-serif';
             ctx.fillText(s.separation, cx, cy + r + 27);
         }
         ctx.restore();
@@ -1860,15 +2326,7 @@ const SystemViewer = (() => {
 
     function _drawWorld(ctx, w, px, py, elapsed_years, wIdx, starX, starY) {
         const r     = _worldBodyRadius(w);
-        const color = (_hideMainworldHighlight && w.type === 'Mainworld') ? '#a0a0b0' : _worldColor(w);
-
-        if (w.type === 'Mainworld' && !_hideMainworldHighlight) {
-            ctx.beginPath();
-            ctx.arc(px, py, r + 5, 0, Math.PI * 2);
-            ctx.strokeStyle = _lightMode ? '#0d6b64' : '#66fcf1';
-            ctx.lineWidth   = 1.5;
-            ctx.stroke();
-        }
+        const color = _worldColor(w);
 
         ctx.fillStyle = color;
         ctx.beginPath();
@@ -1877,8 +2335,23 @@ const SystemViewer = (() => {
         _shadeNight(ctx, px, py, r, starX, starY);
 
         const moons = (w.moons || []).filter(m => m.type !== 'Empty');
+        // Moon paths use the same "Show orbit rings" control as planetary orbits.
+        // Rings (size R) already have _drawStaticRing and are not discrete orbits.
+        if (!_hideMoons && _showOrbits && _orbitOpacity > 0) {
+            const moonAlpha = _lightMode ? _orbitOpacity * 0.65 : _orbitOpacity * 0.40;
+            moons.forEach((m, mi) => {
+                if (m.size === 'R') return;
+                const mDist = _moonOrbitRadius(r, mi);
+                if (mDist < 2) return;
+                ctx.beginPath();
+                ctx.arc(px, py, mDist, 0, Math.PI * 2);
+                ctx.strokeStyle = `rgba(69, 162, 158, ${moonAlpha.toFixed(3)})`;
+                ctx.lineWidth = 1 + _orbitOpacity * 1.5;
+                ctx.stroke();
+            });
+        }
         if (!_hideMoons) moons.forEach((m, mi) => {
-            const mDist = r + 10 + mi * 6;
+            const mDist = _moonOrbitRadius(r, mi);
 
             // A Ring (CT: size === 'R', from either generation path — Bottom-Up also sets
             // type:'Ring' but Top-Down doesn't, so size is the one field both paths agree on)
@@ -1886,7 +2359,7 @@ const SystemViewer = (() => {
             // orbital angle entirely and draw a thin static circle instead.
             if (m.size === 'R') {
                 _drawStaticRing(ctx, px, py, mDist);
-                _hitBodies.push({ kind: 'moon', body: m, cx: px, cy: py, r: mDist + 3, innerR: mDist - 3 });
+                _hitBodies.push({ kind: 'moon', body: m, cx: px, cy: py, r: mDist + 3 * _zoomScale(), innerR: Math.max(0, mDist - 3 * _zoomScale()) });
                 return;
             }
 
@@ -1896,32 +2369,25 @@ const SystemViewer = (() => {
             const mx          = px + mDist * Math.cos(mAngle);
             const my          = py + mDist * Math.sin(mAngle);
             const isMainworld = m.type === 'Mainworld';
-            const moonR       = isMainworld ? 5 : 3;
+            const moonR       = _satelliteRadius(isMainworld);
 
-            if (isMainworld && !_hideMainworldHighlight) {
-                ctx.beginPath();
-                ctx.arc(mx, my, moonR + 3, 0, Math.PI * 2);
-                ctx.strokeStyle = _lightMode ? '#0d6b64' : '#66fcf1';
-                ctx.lineWidth   = 1.2;
-                ctx.stroke();
-            }
-
-            ctx.fillStyle = (isMainworld && !_hideMainworldHighlight) ? '#4fc3a1' : '#6a7070';
+            ctx.fillStyle = '#6a7070';
             ctx.beginPath();
             ctx.arc(mx, my, moonR, 0, Math.PI * 2);
             ctx.fill();
             _shadeNight(ctx, mx, my, moonR, starX, starY);
+            if (isMainworld) _drawMainworldStar(ctx, mx, my, moonR);
 
-            if (isMainworld && m.name && !_hideMainworldHighlight) {
+            if (_lineup === 'orbits' && isMainworld && m.name && !_hideMainworldHighlight) {
                 ctx.save();
                 ctx.fillStyle = _lightMode ? '#0d6b64' : '#66fcf1';
-                ctx.font      = '10px "Share Tech Mono", monospace';
+                ctx.font      = '10px Inter, sans-serif';
                 ctx.textAlign = 'center';
                 ctx.fillText(m.name, mx, my - moonR - 5);
                 ctx.restore();
             }
 
-            _hitBodies.push({ kind: 'moon', body: m, cx: mx, cy: my, r: Math.max(moonR + 6, 9) });
+            _hitBodies.push({ kind: 'moon', body: m, cx: mx, cy: my, r: Math.max(moonR + 6 * _zoomScale(), 9), visualR: moonR });
         });
 
         // MgT2E rings: RAW's "moon-size roll comes up Ring" outcome is stored on the planet
@@ -1930,21 +2396,22 @@ const SystemViewer = (() => {
         // interleaved with the moon index sequence above, so rings get their own close-in offset.
         const rings = w.rings || [];
         if (!_hideMoons) rings.forEach((rg, ri) => {
-            const rDist = r + 6 + ri * 5;
+            const rDist = _ringOrbitRadius(r, ri);
             _drawStaticRing(ctx, px, py, rDist);
-            _hitBodies.push({ kind: 'ring', body: rg, cx: px, cy: py, r: rDist + 3, innerR: rDist - 3 });
+            _hitBodies.push({ kind: 'ring', body: rg, cx: px, cy: py, r: rDist + 3 * _zoomScale(), innerR: Math.max(0, rDist - 3 * _zoomScale()) });
         });
 
-        if (w.type === 'Mainworld' && w.name && !_hideMainworldHighlight) {
+        if (w.type === 'Mainworld') _drawMainworldStar(ctx, px, py, r);
+        if (_lineup === 'orbits' && w.type === 'Mainworld' && w.name && !_hideMainworldHighlight) {
             ctx.save();
             ctx.fillStyle = _lightMode ? '#0d6b64' : '#66fcf1';
-            ctx.font      = '11px "Share Tech Mono", monospace';
+            ctx.font      = '11px Inter, sans-serif';
             ctx.textAlign = 'center';
             ctx.fillText(w.name, px, py - r - 8);
             ctx.restore();
         }
 
-        _hitBodies.push({ kind: 'world', body: w, cx: px, cy: py, r: Math.max(r + 9, 14) });
+        _hitBodies.push({ kind: 'world', body: w, cx: px, cy: py, r: Math.max(r + 9 * _zoomScale(), 14), visualR: r });
     }
 
     function _drawBeltRing(ctx, cx, cy, r, isMainworld = false, dashOffset = 0) {
@@ -1961,7 +2428,7 @@ const SystemViewer = (() => {
         ctx.restore();
     }
 
-    // ── Wheel: semantic zoom toward mouse ─────────────────────────────────────
+    // ── Wheel: zoom toward mouse (orbits and body discs both scale) ───────────
 
     function _onWheel(e) {
         e.preventDefault();
@@ -1981,6 +2448,7 @@ const SystemViewer = (() => {
         // enough to fling the primary off-screen well before reaching deep zoom levels,
         // even though the cursor never actually moved off center.
         const SNAP_PX = 3;
+        if (_tracking) { mx = cx; my = cy; }
         if (Math.abs(mx - cx) <= SNAP_PX) mx = cx;
         if (Math.abs(my - cy) <= SNAP_PX) my = cy;
 
@@ -2015,7 +2483,7 @@ const SystemViewer = (() => {
         _dragLast = { x: e.clientX, y: e.clientY };
         _pointerDown = { x: e.clientX, y: e.clientY };
         _pointerMoved = false;
-        _orrCanvas.style.cursor = 'grabbing';
+        _orrCanvas.style.cursor = 'move';
     }
 
     function _onWindowMouseMove(e) {
@@ -2023,25 +2491,45 @@ const SystemViewer = (() => {
         if (_pointerDown && Math.hypot(e.clientX - _pointerDown.x, e.clientY - _pointerDown.y) > 4) _pointerMoved = true;
         _viewOffX += e.clientX - _dragLast.x;
         _viewOffY += e.clientY - _dragLast.y;
-        if (_pointerMoved) _atFit = false;
+        if (_pointerMoved) { _atFit = false; _stopFollow(); }
         _dragLast  = { x: e.clientX, y: e.clientY };
         _hideTooltip();
         _redraw();
+    }
+
+    function _hitAtEvent(e) {
+        if (!_orrCanvas) return null;
+        const rect = _orrCanvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+        return [..._hitBodies].reverse().find(b => {
+            const dist = Math.hypot(mx - b.cx, my - b.cy);
+            return dist <= b.r && (b.innerR === undefined || dist >= b.innerR);
+        }) || null;
     }
 
     function _onWindowMouseUp(e) {
         if (!_dragging) return;
         _dragging = false;
         if (!_pointerMoved && e.button === 0 && e.target === _orrCanvas) {
-            const rect = _orrCanvas.getBoundingClientRect();
-            const hit = [..._hitBodies].reverse().find(b => {
-                const dist = Math.hypot(e.clientX - rect.left - b.cx, e.clientY - rect.top - b.cy);
-                return dist <= b.r && (b.innerR === undefined || dist >= b.innerR);
-            });
-            if (hit && !window.CampaignAtlas?.pickBody(hit.body)) selectBody(hit.body);
+            const hit = _hitAtEvent(e);
+            if (hit && !window.CampaignAtlas?.pickBody(hit.body)) {
+                if (selectBody(hit.body)) _followHit(hit);
+                else _stopFollow();
+            } else if (!hit) {
+                _stopFollow();
+            }
         }
         _pointerDown = null;
-        if (_orrCanvas) _orrCanvas.style.cursor = 'crosshair';
+        if (_orrCanvas) _orrCanvas.style.cursor = _hitAtEvent(e) ? 'pointer' : 'default';
+    }
+
+    function _onDblClick(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (window.CampaignAtlas?.isPicking()) return;
+        const hit = _hitAtEvent(e);
+        if (hit) frameBody(hit.body);
+        else fitView();
     }
 
     // ── Hover / tooltip ───────────────────────────────────────────────────────
@@ -2070,7 +2558,7 @@ const SystemViewer = (() => {
             _orrCanvas.style.cursor = 'pointer';
         } else {
             _hideTooltip();
-            _orrCanvas.style.cursor = _dragging ? 'grabbing' : 'crosshair';
+            _orrCanvas.style.cursor = _dragging ? 'move' : 'default';
         }
     }
 
@@ -2109,10 +2597,10 @@ const SystemViewer = (() => {
             if (w.au != null) html += `<div>Distance: ${formatDisplayNumber(w.au, 3, 'AU')}</div>`;
             if (w.eccentricity != null) html += `<div>Eccentricity: ${formatDisplayNumber(w.eccentricity, 3)}</div>`;
             if (w.uwp)             html += `<div style="margin-top:4px">UWP: <strong>${w.uwp}</strong></div>`;
-            if (w.starport)        html += `<div>Starport: ${w.starport}</div>`;
+            if (w.starport)        html += `<div>Starport: ${typeof formatUwpDigit === 'function' ? formatUwpDigit('starport', w.starport) : w.starport}</div>`;
             if (w.tl != null)      html += `<div>TL: ${w.tl}</div>`;
             if (w.tradeCodes && w.tradeCodes.length)
-                                   html += `<div>Codes: ${w.tradeCodes.join(' ')}</div>`;
+                                   html += `<div>Codes: ${typeof formatTradeCodes === 'function' ? formatTradeCodes(w.tradeCodes) : w.tradeCodes.join(' ')}</div>`;
             if (w.travelZone && w.travelZone !== 'G')
                                    html += `<div>Zone: ${w.travelZone}</div>`;
             if (w.diamKm != null) html += `<div style="margin-top:4px">Diameter: ${formatDisplayNumber(w.diamKm, 0, 'km')}</div>`;
@@ -2131,10 +2619,10 @@ const SystemViewer = (() => {
             html += `${label} <span style="color:${TSUB}">(${typeLabel})</span></div>`;
             if (m.pd != null) html += `<div>Orbit: ${formatDisplayNumber(m.pd, 2, 'PD')} from parent</div>`;
             if (m.uwp)             html += `<div style="margin-top:4px">UWP: <strong>${m.uwp}</strong></div>`;
-            if (m.starport)        html += `<div>Starport: ${m.starport}</div>`;
+            if (m.starport)        html += `<div>Starport: ${typeof formatUwpDigit === 'function' ? formatUwpDigit('starport', m.starport) : m.starport}</div>`;
             if (m.tl != null)      html += `<div>TL: ${m.tl}</div>`;
             if (m.tradeCodes && m.tradeCodes.length)
-                                   html += `<div>Codes: ${m.tradeCodes.join(' ')}</div>`;
+                                   html += `<div>Codes: ${typeof formatTradeCodes === 'function' ? formatTradeCodes(m.tradeCodes) : m.tradeCodes.join(' ')}</div>`;
             if (m.travelZone && m.travelZone !== 'G')
                                    html += `<div>Zone: ${m.travelZone}</div>`;
             if (m.diamKm != null) html += `<div style="margin-top:4px">Diameter: ${formatDisplayNumber(m.diamKm, 0, 'km')}</div>`;
@@ -2305,10 +2793,14 @@ const SystemViewer = (() => {
             showOrbits:             _showOrbits,
             showDayNight:           _showDayNight,
             selectedBody:           _selectedBody,
+            trackedBody:            _trackedBody,
+            tracking:               _tracking,
             hitBodies:             _hitBodies,
             hideMoons:              _hideMoons,
             hideHZ:                 _hideHZ,
             hideMainworldHighlight: _hideMainworldHighlight,
+            lineup:                 _lineup,
+            lineupDisc:             _lineupDisc,
         };
 
         // Create an off-screen canvas and install snapshot render state
@@ -2332,15 +2824,21 @@ const SystemViewer = (() => {
         _showOrbits             = true;
         _showDayNight           = false;
         _selectedBody           = null;
+        _trackedBody            = null;
+        _tracking               = false;
         _hideMoons              = false;
         _hideHZ                 = false;
+        _lineup                 = 'orbits';
+        _lineupDisc             = 1;
         // The mainworld highlight is identification, which is (g) — a coloured
         // body says "this is the one that matters" as loudly as a caption.
         _hideMainworldHighlight = !!(opts.level && EC2 &&
             !(window.DisclosureModel && window.DisclosureModel.atLeast(opts.level, 'g')));
         _hitBodies              = [];
-
+        const savedFitting = _fitting;
+        _fitting = true;
         _drawOrrery();
+        _fitting = savedFitting;
 
         // Restore every saved variable before yielding
         _orrCtx       = saved.orrCtx;
@@ -2359,10 +2857,14 @@ const SystemViewer = (() => {
         _showOrbits             = saved.showOrbits;
         _showDayNight           = saved.showDayNight;
         _selectedBody           = saved.selectedBody;
+        _trackedBody            = saved.trackedBody;
+        _tracking               = saved.tracking;
         _hitBodies              = saved.hitBodies;
         _hideMoons              = saved.hideMoons;
         _hideHZ                 = saved.hideHZ;
         _hideMainworldHighlight = saved.hideMainworldHighlight;
+        _lineup                 = saved.lineup;
+        _lineupDisc             = saved.lineupDisc;
 
         return new Promise(resolve => {
             canvas.toBlob(blob => {
@@ -2374,40 +2876,94 @@ const SystemViewer = (() => {
 
     function _fitCamera(preserve = false) {
         if (!_orrCtx || !_sys || !_canvasW || !_canvasH) return;
-        const oldZoom = _viewZoom, oldMin = _minZoom;
-        const oldX = _viewOffX - _fitOffX, oldY = _viewOffY - _fitOffY;
-        _viewOffX = 0; _viewOffY = 0;
-        _viewZoom = _minZoom || 1;
-        const width = Math.max(20, _canvasW - 32), height = Math.max(20, _canvasH - 32);
-        let bounds, lastSpan = null;
-        const hasOrbits = (_sys.stars || []).length > 1 || (_sys.worlds || []).some(w => w.type !== 'Empty' && w.au > 0);
-        if (!hasOrbits) _viewZoom = 1;
-        for (let i = 0; i < 12; i++) {
-            bounds = _drawOrrery(true);
-            const bw = bounds.right - bounds.left, bh = bounds.bottom - bounds.top;
-            const ratio = Math.min(width / Math.max(1, bw), height / Math.max(1, bh));
-            if (!hasOrbits || Math.abs(1 - ratio) < 0.0005 || (lastSpan !== null && Math.abs(bw + bh - lastSpan) < 0.001)) break;
-            lastSpan = bw + bh;
-            _viewZoom = Math.max(0.00001, Math.min(_MAX_ZOOM, _viewZoom * ratio));
+        if (_lineup !== 'orbits') {
+            // The lineup is laid out to fill the canvas at zoom 1. Zooming in
+            // enlarges that layout; zooming out stops at the fitted strip.
+            _minZoom = 1;
+            _systemFitZoom = 1;
+            _fitOffX = 0;
+            _fitOffY = 0;
+            if (!preserve || _atFit) {
+                _viewZoom = 1;
+                _viewOffX = 0;
+                _viewOffY = 0;
+            } else {
+                _viewZoom = Math.max(1, _viewZoom);
+            }
+            return;
         }
-        bounds = _drawOrrery(true);
-        _minZoom = _viewZoom;
-        _fitOffX = _canvasW / 2 - (bounds.left + bounds.right) / 2;
-        _fitOffY = _canvasH / 2 - (bounds.top + bounds.bottom) / 2;
-        _viewOffX = _fitOffX; _viewOffY = _fitOffY;
-        if (preserve && !_atFit) {
-            const ratio = _minZoom / oldMin;
-            _viewZoom = Math.max(_minZoom, oldZoom * ratio);
-            _viewOffX += oldX * ratio; _viewOffY += oldY * ratio;
+        _fitting = true;
+        try {
+            const oldZoom = _viewZoom, oldMin = _minZoom;
+            const oldX = _viewOffX - _fitOffX, oldY = _viewOffY - _fitOffY;
+            _viewOffX = 0; _viewOffY = 0;
+            _viewZoom = _minZoom || 1;
+            const width = Math.max(20, _canvasW - 32), height = Math.max(20, _canvasH - 32);
+            let bounds, lastSpan = null;
+            const hasOrbits = (_sys.stars || []).length > 1 || (_sys.worlds || []).some(w => w.type !== 'Empty' && w.au > 0);
+            if (!hasOrbits) _viewZoom = 1;
+            for (let i = 0; i < 12; i++) {
+                bounds = _drawOrrery(true);
+                const bw = bounds.right - bounds.left, bh = bounds.bottom - bounds.top;
+                const ratio = Math.min(width / Math.max(1, bw), height / Math.max(1, bh));
+                if (!hasOrbits || Math.abs(1 - ratio) < 0.0005 || (lastSpan !== null && Math.abs(bw + bh - lastSpan) < 0.001)) break;
+                lastSpan = bw + bh;
+                _viewZoom = Math.max(0.00001, Math.min(_MAX_ZOOM, _viewZoom * ratio));
+            }
+            bounds = _drawOrrery(true);
+            _minZoom = _viewZoom;
+            _systemFitZoom = _minZoom;
+            _fitOffX = _canvasW / 2 - (bounds.left + bounds.right) / 2;
+            _fitOffY = _canvasH / 2 - (bounds.top + bounds.bottom) / 2;
+            _viewOffX = _fitOffX; _viewOffY = _fitOffY;
+            if (preserve && !_atFit) {
+                const ratio = _minZoom / oldMin;
+                _viewZoom = Math.max(_minZoom, oldZoom * ratio);
+                _viewOffX += oldX * ratio; _viewOffY += oldY * ratio;
+            }
+        } finally {
+            _fitting = false;
         }
     }
-    function fitView() { _atFit = true; _fitCamera(); }
+    function _stopFollow() {
+        const was = _tracking;
+        _tracking = false;
+        _trackedBody = null;
+        if (was && window.SystemInspector?.currentWorkspace?.() === 'system') SystemInspector.refresh(true);
+    }
+    function _bodyHit(body) {
+        return body ? _hitBodies.find(hit => hit.body === body) : null;
+    }
+    function _followHit(hit) {
+        if (!hit) return false;
+        _trackedBody = hit.body;
+        _tracking = true;
+        _atFit = false;
+        _viewOffX += _canvasW / 2 - hit.cx;
+        _viewOffY += _canvasH / 2 - hit.cy;
+        return true;
+    }
+    function _followSelected() {
+        if (!_tracking || !_trackedBody) return false;
+        const hit = _bodyHit(_trackedBody);
+        if (!hit) return false;
+        const dx = _canvasW / 2 - hit.cx, dy = _canvasH / 2 - hit.cy;
+        if (dx * dx + dy * dy < 0.25) return false;
+        _viewOffX += dx;
+        _viewOffY += dy;
+        return true;
+    }
+    function fitView() { _stopFollow(); _atFit = true; _fitCamera(); }
 
     function resize() {
         if (!_overlay || !_orrCanvas) return;
-        const header = _overlay.firstElementChild;
         const width = Math.max(1, _overlay.clientWidth);
-        const height = Math.max(1, _overlay.clientHeight - header.getBoundingClientRect().height);
+        let chrome = 0;
+        for (const node of _overlay.children) {
+            if (node === _orrCanvas || node === _tooltip) continue;
+            chrome += node.getBoundingClientRect().height;
+        }
+        const height = Math.max(1, _overlay.clientHeight - chrome);
         if (width === _canvasW && height === _canvasH) return;
         _canvasW = width; _canvasH = height;
         const dpr = window.devicePixelRatio || 1;
@@ -2420,7 +2976,100 @@ const SystemViewer = (() => {
         _fitCamera(true);
     }
     function selectBody(body) {
-        if (window.SystemInspector?.selectBody(body) !== false) _selectedBody = body;
+        if (body == null) {
+            _selectedBody = null;
+            window.SystemInspector?.selectBody(null);
+            return true;
+        }
+        const previous = _selectedBody;
+        _selectedBody = body;
+        if (window.SystemInspector?.selectBody(body) === false) {
+            _selectedBody = previous;
+            return false;
+        }
+        return true;
+    }
+    function _worldsForStar(star) {
+        const stars = _sys?.stars || [];
+        const idx = stars.indexOf(star);
+        if (idx < 0) return [];
+        const worlds = (_sys.worlds || []).filter(w => w.type !== 'Empty');
+        if (idx === 0) {
+            return worlds.filter(w => w.orbitType === 'P-Type' || w.parentStarIdx === 0 || w.parentStarIdx === undefined);
+        }
+        return worlds.filter(w => w.orbitType === 'S-Type' && w.parentStarIdx === idx);
+    }
+    function _localBodies(focus) {
+        const set = new Set([focus]);
+        const stars = _sys?.stars || [];
+        if (stars.includes(focus)) {
+            for (const w of _worldsForStar(focus)) {
+                set.add(w);
+                (w.moons || []).forEach(m => set.add(m));
+                (w.rings || []).forEach(r => set.add(r));
+            }
+        } else {
+            (focus.moons || []).forEach(m => set.add(m));
+            (focus.rings || []).forEach(r => set.add(r));
+        }
+        return set;
+    }
+    function _localBounds(focus) {
+        const local = _localBodies(focus);
+        const hits = _hitBodies.filter(h => local.has(h.body));
+        if (!hits.length) return null;
+        const box = { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity };
+        for (const h of hits) {
+            const outer = h.r, inner = h.innerR;
+            if (inner !== undefined) {
+                box.left = Math.min(box.left, h.cx - outer);
+                box.right = Math.max(box.right, h.cx + outer);
+                box.top = Math.min(box.top, h.cy - outer);
+                box.bottom = Math.max(box.bottom, h.cy + outer);
+            } else {
+                box.left = Math.min(box.left, h.cx - outer);
+                box.right = Math.max(box.right, h.cx + outer);
+                box.top = Math.min(box.top, h.cy - outer);
+                box.bottom = Math.max(box.bottom, h.cy + outer);
+            }
+        }
+        return box;
+    }
+    function frameBody(body) {
+        if (!_overlay || !body) return false;
+        if (!selectBody(body)) return false;
+        _trackedBody = body;
+        _tracking = true;
+        _atFit = false;
+        const pad = 36;
+        const width = Math.max(20, _canvasW - pad * 2);
+        const height = Math.max(20, _canvasH - pad * 2);
+        const cx = _canvasW / 2, cy = _canvasH / 2;
+        for (let i = 0; i < 12; i++) {
+            _drawOrrery();
+            const box = _localBounds(body);
+            if (!box) { _stopFollow(); return false; }
+            const bw = Math.max(1, box.right - box.left);
+            const bh = Math.max(1, box.bottom - box.top);
+            const lcx = (box.left + box.right) / 2;
+            const lcy = (box.top + box.bottom) / 2;
+            const ratio = Math.min(width / bw, height / bh);
+            _viewOffX += cx - lcx;
+            _viewOffY += cy - lcy;
+            if (Math.abs(1 - ratio) < 0.02) break;
+            const newZoom = Math.max(_minZoom, Math.min(_MAX_ZOOM, _viewZoom * ratio));
+            const zratio = newZoom / _viewZoom;
+            _viewOffX *= zratio;
+            _viewOffY *= zratio;
+            _viewZoom = newZoom;
+        }
+        _drawOrrery();
+        if (!_followHit(_bodyHit(body))) { _stopFollow(); return false; }
+        if (window.SystemInspector?.currentWorkspace?.() === 'system') SystemInspector.refresh(true);
+        return true;
+    }
+    function centerOnBody(body) {
+        return frameBody(body);
     }
     function locationEntries() {
         if (!_sys) return [];
@@ -2458,10 +3107,15 @@ const SystemViewer = (() => {
         return { x: rect.left + x, y: rect.top + y, radius: ring ? 9 : hit.r,
             left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom };
     }
+    function remapHexId(fn) {
+        if (typeof fn === 'function' && _hexId) _hexId = fn(_hexId);
+    }
     return { open, close, isOpen, refresh, handleWheel, normalizeSystem, renderSnapshot, resize, selectBody,
+        centerOnBody, frameBody, isTracking: () => _tracking && !!_trackedBody,
+        trackedBody: () => _trackedBody,
         locationForBody, locationPosition, fitView, searchAlignments,
         time: () => ({ days: _totalDays(), year: _gameYear, day: _gameDay, paused: _paused, shuttleRate: _shuttleRate }),
-        currentHexId: () => _hexId, currentSystem: () => _sys };
+        currentHexId: () => _hexId, currentSystem: () => _sys, remapHexId };
 
 })();
 

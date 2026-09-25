@@ -130,6 +130,7 @@ window.renderRegionWindow = function () {
             hexStates.forEach(state => {
                 if (state.cluster === oldName) state.cluster = newName;
             });
+            if (typeof window.invalidateRegionFillCache === 'function') window.invalidateRegionFillCache();
             // Invalidate stored region paths for the old name
             if (window.regionPaths) {
                 window.regionPaths.forEach((val, key) => {
@@ -173,6 +174,7 @@ window.renderRegionWindow = function () {
             hexStates.forEach(state => {
                 if (state.cluster === def.name) state.cluster = '----';
             });
+            if (typeof window.invalidateRegionFillCache === 'function') window.invalidateRegionFillCache();
             if (window.regionPaths) {
                 window.regionPaths.forEach((val, key) => {
                     if (key.endsWith(':' + def.name)) window.regionPaths.delete(key);
@@ -195,6 +197,7 @@ window.renderRegionWindow = function () {
             hexStates.forEach(state => {
                 if (state.cluster === def.name) state.cluster = '----';
             });
+            if (typeof window.invalidateRegionFillCache === 'function') window.invalidateRegionFillCache();
             if (window.regionPaths) {
                 window.regionPaths.forEach((val, key) => {
                     if (key.endsWith(':' + def.name)) window.regionPaths.delete(key);
@@ -266,7 +269,7 @@ window.refreshRegionWindowCounts = function () {
 // ── Assign-modal: open (called from right-click context menu) ─────────────────
 window.openAssignRegionModal = function () {
     document.getElementById('context-menu').classList.remove('visible');
-    const count = selectedHexes.size;
+    const count = currentActionHexes().length;
     if (count === 0) { showToast('No hexes selected.', 2000); return; }
 
     document.getElementById('region-assign-modal-count').textContent = count;
@@ -282,13 +285,14 @@ window.openAssignRegionModal = function () {
     clearBtn.innerHTML = `<span class="border-assign-num">✕</span>`
                        + `<span class="border-assign-name">Clear Region</span>`;
     clearBtn.addEventListener('click', () => {
-        const hexList = [...selectedHexes];
+        const hexList = currentActionHexes();
         saveHistoryState('Clear Region');
         hexList.forEach(hexId => {
             const s = hexStates.get(hexId);
             if (!s) return;
             s.cluster = '----';
         });
+        if (typeof window.invalidateRegionFillCache === 'function') window.invalidateRegionFillCache();
         document.getElementById('region-assign-modal').style.display = 'none';
         window.renderRegionWindow();
         requestAnimationFrame(draw);
@@ -311,10 +315,10 @@ window.openAssignRegionModal = function () {
 };
 
 // ── Assign-modal: confirm selection ──────────────────────────────────────────
-window.confirmAssignRegion = function (regionId) {
+window.confirmAssignRegion = function (regionId, hexList = currentActionHexes()) {
     const def = (window.regionDefinitions || []).find(d => d.id === regionId);
     if (!def) return;
-    const hexList = [...selectedHexes];
+    if (!hexList.length) { showToast('No hexes selected.', 2000); return; }
     saveHistoryState('Assign Region');
 
     hexList.forEach(hexId => {
@@ -327,6 +331,7 @@ window.confirmAssignRegion = function (regionId) {
         }
         s.cluster = def.name;
     });
+    if (typeof window.invalidateRegionFillCache === 'function') window.invalidateRegionFillCache();
 
     document.getElementById('region-assign-modal').style.display = 'none';
     window.ensureFreeRegionSlot();

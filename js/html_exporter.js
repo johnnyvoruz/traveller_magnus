@@ -38,6 +38,17 @@ const HtmlExporter = (() => {
 
     const EC = ExportCore;
 
+    function _subName(sectorNum, letter) {
+        return (typeof getSubsectorName === 'function')
+            ? getSubsectorName(sectorNum, letter)
+            : `Subsector ${letter}`;
+    }
+    function _subLabel(sectorNum, letter) {
+        return (typeof getSubsectorLabel === 'function')
+            ? getSubsectorLabel(sectorNum, letter)
+            : `Subsector ${letter}`;
+    }
+
     // ── Escaping ──────────────────────────────────────────────────────────────
     // Applied to every interpolated value. System names and especially
     // state.notes are free text — one '<' would otherwise corrupt the document.
@@ -363,7 +374,8 @@ ${extraJs || ''}
         H.push('<nav class="crumbs">',
             _a(linkSector(), 'subsector', sectorName),
             '<span>›</span>',
-            _a(linkSubsector(subsectorChar), 'subsector', `Subsector ${subsectorChar}`),
+            _a(linkSubsector(subsectorChar), 'subsector',
+                _subName(parseInt(String(hexId).split('-')[0], 10), subsectorChar)),
             `<span>›</span><strong>${_esc(systemName)}</strong>`,
             '<button id="theme-toggle" type="button" title="Toggle light/dark">◐</button>',
             '</nav>');
@@ -645,15 +657,16 @@ ${extraJs || ''}
         return { html: `<figure class="map">${parts.join('')}</figure>`, hits };
     }
 
-    function _buildSubsectorIndex(sectorName, subsectorChar, systems, mapImage, mapCap) {
+    function _buildSubsectorIndex(sectorName, sectorNum, subsectorChar, systems, mapImage, mapCap) {
         const H = [];
+        const subTitle = _subName(sectorNum, subsectorChar);
         H.push('<nav class="crumbs">',
             _a(linkSector(), 'subsector', sectorName),
-            `<span>›</span><strong>Subsector ${_esc(subsectorChar)}</strong>`,
+            `<span>›</span><strong>${_esc(subTitle)}</strong>`,
             '<button id="theme-toggle" type="button" title="Toggle light/dark">◐</button>',
             '</nav>');
         H.push('<header class="page">');
-        H.push(`<h1>${_esc(sectorName)} — Subsector ${_esc(subsectorChar)}</h1>`);
+        H.push(`<h1>${_esc(sectorName)} — ${_esc(subTitle)}</h1>`);
         H.push(`<p class="dim">${systems.length} system${systems.length === 1 ? '' : 's'}</p>`);
         H.push('</header>');
 
@@ -748,7 +761,7 @@ ${extraJs || ''}
         }
         H.push('</tbody></table></div></section>');
 
-        return _shell(`${sectorName} — Subsector ${subsectorChar}`, '../style.css',
+        return _shell(`${sectorName} — ${subTitle}`, '../style.css',
             { sector: sectorName, subsector: subsectorChar }, H.join('\n'), TABLE_JS);
     }
 
@@ -771,7 +784,7 @@ ${extraJs || ''}
         H.push('<div class="tw"><table><thead><tr><th>Subsector</th><th>Systems</th></tr></thead><tbody>');
         for (const s of presentSubs) {
             H.push('<tr>' +
-                `<td>${_a(linkSubsector(s.char), 'sector', 'Subsector ' + s.char)}</td>` +
+                `<td>${_a(linkSubsector(s.char), 'sector', _subLabel(sectorNum, s.char))}</td>` +
                 `<td>${s.count}</td></tr>`);
         }
         H.push('</tbody></table></div>');
@@ -985,7 +998,7 @@ tbody tr:nth-child(even) { background:var(--panel);
         }
 
         put(`${sub}/index.html`,
-            _buildSubsectorIndex(sectorName, subsectorChar, systems, mapImage, mapCap));
+            _buildSubsectorIndex(sectorName, sectorNum, subsectorChar, systems, mapImage, mapCap));
 
         for (let si = 0; si < systems.length; si++) {
             const { hexId, hexCode, state } = systems[si];
@@ -1002,7 +1015,7 @@ tbody tr:nth-child(even) { background:var(--panel);
                 put(pageFile, _shell(`${systemName} (${hexCode})`, '../style.css',
                     { hex: hexCode, sector: sectorName, subsector: subsectorChar },
                     `<nav class="crumbs">${_a(linkSector(), 'subsector', sectorName)}` +
-                    `<span>›</span>${_a(linkSubsector(subsectorChar), 'subsector', 'Subsector ' + subsectorChar)}` +
+                    `<span>›</span>${_a(linkSubsector(subsectorChar), 'subsector', _subName(sectorNum, subsectorChar))}` +
                     `<span>›</span><strong>${_esc(systemName)}</strong>` +
                     '<button id="theme-toggle" type="button">◐</button></nav>' +
                     `<header class="page"><h1>${_esc(systemName)}</h1></header>` +

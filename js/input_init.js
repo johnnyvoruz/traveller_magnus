@@ -38,10 +38,6 @@ function initializeInput() {
     const hexEditorHeader = hexEditor.querySelector('h3');
 
     // Initialize Floating Palettes
-    const filterModal = document.getElementById('filter-modal');
-    const filterHandle = filterModal.querySelector('.modal-drag-handle');
-    makeDraggable(filterModal, filterHandle);
-
     const routeWindow = document.getElementById('route-window');
     const routeHandle = routeWindow.querySelector('.modal-drag-handle');
     makeDraggable(routeWindow, routeHandle);
@@ -54,12 +50,13 @@ function initializeInput() {
     const regionHandle = regionWindow.querySelector('.modal-drag-handle');
     makeDraggable(regionWindow, regionHandle);
 
+    const sectorWindow = document.getElementById('sector-window');
+    const sectorHandle = sectorWindow.querySelector('.modal-drag-handle');
+    makeDraggable(sectorWindow, sectorHandle);
+
     makeDraggable(hexEditor, hexEditorHeader);
 
     // Default Placement
-    filterModal.style.left = '10px';
-    filterModal.style.top = '50px';
-
     routeWindow.style.left = '10px';
     routeWindow.style.top = '110px';
 
@@ -68,6 +65,9 @@ function initializeInput() {
 
     regionWindow.style.left = '10px';
     regionWindow.style.top = '110px';
+
+    sectorWindow.style.left = '10px';
+    sectorWindow.style.top = '110px';
 
     // For Hex Editor (Right-aligned)
     hexEditor.style.right = '400px';
@@ -96,11 +96,12 @@ function initializeInput() {
     setupObsidianExport();
     setupSectorImporter();
     setupXmlMetadataImporter();
-    setupSplashScreen();
     setupRouteWindow();
     setupBorderWindow();
     setupRegionWindow();
+    setupSectorWindow();
     setupDisclosureUI();
+    setupNavigation();
 }
 
 // ============================================================================
@@ -265,6 +266,7 @@ function bringToFront(element) {
 // ============================================================================
 
 function openHelpModal() {
+    if (window.AppNavigation?.prepare('help-panel') === false) return;
     if (window.SystemInspector?.isOpen() && !SystemInspector.close()) return;
     document.getElementById('context-menu').classList.remove('visible');
     // Mutually exclusive: close settings if open
@@ -276,29 +278,533 @@ function openHelpModal() {
 
 
 
-function setupSplashScreen() {
-    const splash = document.getElementById('splash-screen');
-    const launchBtn = document.getElementById('btn-launch-app');
-
-    if (splash && launchBtn) {
-        launchBtn.addEventListener('click', () => {
-            splash.classList.add('hidden');
-            // Give a small toast welcome
-            setTimeout(() => {
-                showToast("Welcome to As Above So Below", 3000);
-            }, 800);
+function setupNavigation() {
+    const nav = document.getElementById('app-nav');
+    const icons = {
+        menu: 'bars', map: 'map', system: 'planet-ringed', time: 'clock',
+        campaign: 'book-sparkles', person: 'user', place: 'location-dot',
+        business: 'store', organization: 'sitemap', job: 'briefcase',
+        event: 'calendar-star', item: 'gem', note: 'note-sticky',
+        select: 'hexagon-check', route: 'route', border: 'draw-polygon',
+        region: 'layer-group', sectors: 'table-cells',
+        eye: 'eye', generate: 'wand-magic-sparkles', legend: 'book-atlas',
+        settings: 'gear', help: 'circle-question'
+    };
+    const labels = { person: 'People', place: 'Places', business: 'Businesses', organization: 'Organizations', job: 'Jobs', event: 'Events', item: 'Items', note: 'Notes' };
+    for (const [type, label] of Object.entries(labels)) {
+        const button = document.createElement('button');
+        button.type = 'button'; button.dataset.navIcon = type; button.dataset.campaignType = type;
+        button.title = label; button.setAttribute('aria-label', label); button.setAttribute('aria-expanded', 'false');
+        button.setAttribute('aria-controls', 'system-inspector');
+        const span = document.createElement('span'); span.className = 'nav-label'; span.textContent = label;
+        button.append(span); document.getElementById('campaign-nav').append(button);
+        button.addEventListener('click', () => {
+            if (SystemInspector.isOpen() && SystemInspector.currentWorkspace() === 'campaign' && CampaignAtlas.currentType() === type) SystemInspector.close();
+            else CampaignAtlas.openType(type);
         });
     }
+    for (const button of nav.querySelectorAll('[data-nav-icon]')) {
+        const name = icons[button.dataset.navIcon];
+        if (!name) continue;
+        const icon = document.createElement('i');
+        icon.className = `fa-solid fa-${name}`;
+        icon.setAttribute('aria-hidden', 'true');
+        button.prepend(icon);
+    }
+    const palettes = { 'route-window': 'toggleRouteWindow', 'border-window': 'toggleBorderWindow', 'region-window': 'toggleRegionWindow', 'sector-window': 'toggleSectorWindow' };
+    const isVisible = id => document.getElementById(id)?.classList.contains('visible');
+    function prepare(id) {
+        if (id !== 'system-inspector' && SystemInspector.isOpen() && !SystemInspector.close()) return false;
+        if (typeof window.closeOmniFilter === 'function') window.closeOmniFilter();
+        for (const [other, toggle] of Object.entries(palettes)) if (other !== id && isVisible(other)) window[toggle]();
+        for (const other of ['settings-panel', 'help-panel']) if (other !== id) document.getElementById(other).classList.remove('open');
+        for (const tray of document.querySelectorAll('.nav-tray')) if (tray.id !== id) tray.hidden = true;
+        if (innerWidth < 1000) nav.classList.remove('expanded');
+        layout(); return true;
+    }
+    function layout() {
+        const railRight = nav.getBoundingClientRect().right;
+        document.documentElement.style.setProperty('--nav-width', `${railRight}px`);
+        const active = [document.querySelector('#system-inspector:not([hidden])'), ...document.querySelectorAll('.nav-tray:not([hidden]), .side-panel.open'), ...Object.keys(palettes).filter(isVisible).map(id => document.getElementById(id))].filter(Boolean);
+        const edge = Math.max(railRight, ...active.map(node => node.getBoundingClientRect().right + 10));
+        document.documentElement.style.setProperty('--workspace-left', `${Math.min(edge, innerWidth - 120)}px`);
+        document.getElementById('nav-expand').setAttribute('aria-expanded', String(nav.classList.contains('expanded')));
+        document.getElementById('nav-expand').setAttribute('aria-label', nav.classList.contains('expanded') ? 'Collapse navigation' : 'Expand navigation');
+        for (const button of nav.querySelectorAll('[aria-controls]')) {
+            if (button.getAttribute('aria-controls') === 'system-inspector') {
+                const campaign = SystemInspector.isOpen() && SystemInspector.currentWorkspace() === 'campaign';
+                const type = CampaignAtlas.currentType();
+                button.setAttribute('aria-expanded', String(button.dataset.campaignType ? campaign && type === button.dataset.campaignType : button.id === 'campaign-toggle' ? campaign && !type : SystemInspector.isOpen() && !campaign));
+            } else {
+                const target = document.getElementById(button.getAttribute('aria-controls'));
+                const open = !target ? false
+                    : (target.classList.contains('nav-tray') || target.id === 'legend-tray') ? !target.hidden
+                    : !!target.classList.contains('open');
+                button.setAttribute('aria-expanded', String(open));
+            }
+        }
+        window.SystemViewer?.resize();
+    }
+    function toggleTray(id) {
+        const tray = document.getElementById(id);
+        if (!tray.hidden) tray.hidden = true;
+        else if (prepare(id)) tray.hidden = false;
+        layout();
+    }
+    window.AppNavigation = { prepare, layout, toggleTray, labels };
+    for (const [id, name] of Object.entries(palettes)) {
+        const original = window[name];
+        if (typeof original !== 'function') continue;
+        window[name] = function (...args) {
+            if (!isVisible(id) && !prepare(id)) return;
+            original.apply(this, args); layout();
+        };
+    }
+    for (const id of ['settings', 'help']) document.getElementById(`${id}-toggle`).addEventListener('click', e => {
+        if (!document.getElementById(`${id}-panel`).classList.contains('open') && !prepare(`${id}-panel`)) { e.preventDefault(); e.stopImmediatePropagation(); }
+    }, true);
+    document.getElementById('nav-expand').addEventListener('click', () => { nav.classList.toggle('expanded'); layout(); });
+    document.getElementById('generate-toggle').addEventListener('click', () => toggleTray('generation-tray'));
+    document.getElementById('disclosure-toggle').addEventListener('click', () => {
+        window.toggleDisclosureGrid();
+    });
+    function setLegendOpen(open) {
+        const tray = document.getElementById('legend-tray');
+        tray.hidden = !open;
+        if (open) renderMapLegend();
+        document.getElementById('legend-toggle').setAttribute('aria-expanded', String(open));
+    }
+    document.getElementById('legend-toggle').addEventListener('click', () => {
+        setLegendOpen(document.getElementById('legend-tray').hidden);
+    });
+    document.getElementById('legend-close').addEventListener('click', () => setLegendOpen(false));
+    document.getElementById('orbit-tools-toggle').addEventListener('click', () => toggleTray('orbit-controls-tray'));
+    document.getElementById('nav-map').addEventListener('click', () => SystemViewer.close());
+    document.querySelectorAll('[data-close-tray]').forEach(button => button.addEventListener('click', () => { button.closest('.nav-tray').hidden = true; layout(); }));
+    new MutationObserver(() => requestAnimationFrame(layout)).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class', 'hidden'] });
+    new ResizeObserver(layout).observe(nav);
+    window.addEventListener('resize', layout);
+    document.addEventListener('keydown', e => {
+        if (e.key !== 'Escape' || e.defaultPrevented || e.target.closest('#omni-search')) return;
+        const trays = document.querySelectorAll('.nav-tray:not([hidden])');
+        const legend = document.getElementById('legend-tray');
+        if (!trays.length && legend.hidden) return;
+        trays.forEach(tray => { tray.hidden = true; });
+        if (!legend.hidden) legend.hidden = true;
+        e.preventDefault(); e.stopImmediatePropagation(); layout();
+    }, true);
+    nav.inert = false;
+    setupOmniSearch();
+    setupMapActionBar();
+    document.body.dataset.appReady = 'true';
+    layout();
 }
 
 // ============================================================================
 // APP STARTUP
 // ============================================================================
 
+function setupOmniSearch() {
+    const root = document.getElementById('omni-search');
+    const input = document.getElementById('omni-search-input');
+    const popup = document.getElementById('omni-search-popup');
+    const searchPane = document.getElementById('omni-search-pane');
+    const filterPane = document.getElementById('omni-filter-pane');
+    const filterToggle = document.getElementById('omni-filter-toggle');
+    const list = document.getElementById('omni-search-results');
+    const status = document.getElementById('omni-search-status');
+    const clear = document.getElementById('omni-search-clear');
+    let matches = [], active = -1, timer, mode = 'search';
+    const normalize = value => String(value ?? '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase();
+    function isFilterOpen() { return mode === 'filter' && !popup.hidden; }
+    function dismiss() {
+        clearTimeout(timer); popup.hidden = true; active = -1; mode = 'search';
+        root.classList.remove('is-filter');
+        searchPane.hidden = false; filterPane.hidden = true;
+        filterToggle.setAttribute('aria-expanded', 'false');
+        input.setAttribute('aria-expanded', 'false'); input.removeAttribute('aria-activedescendant');
+    }
+    function showSearchPane() {
+        mode = 'search';
+        root.classList.remove('is-filter');
+        searchPane.hidden = false; filterPane.hidden = true;
+        filterToggle.setAttribute('aria-expanded', 'false');
+        popup.hidden = false; input.setAttribute('aria-expanded', 'true');
+    }
+    function showFilterPane() {
+        mode = 'filter';
+        root.classList.add('is-filter');
+        searchPane.hidden = true; filterPane.hidden = false;
+        filterToggle.setAttribute('aria-expanded', 'true');
+        popup.hidden = false; input.setAttribute('aria-expanded', 'false');
+        input.removeAttribute('aria-activedescendant');
+        input.blur();
+    }
+    window.openOmniFilter = function () { showFilterPane(); };
+    window.closeOmniFilter = function () { if (isFilterOpen()) dismiss(); };
+    window.isOmniFilterOpen = function () { return isFilterOpen(); };
+    function focusSystem(id) {
+        // Search never enters orbit view; only double-clicking the map does.
+        if (SystemViewer.isOpen()) {
+            if (SystemViewer.currentHexId() === id) return;
+            SystemViewer.close();
+        }
+        centerHexInView(id);
+        draw();
+    }
+    function openResult(index) {
+        const result = matches[index];
+        if (!result || CampaignAtlas.isBusy()) return;
+        if (result.kind === 'filter') {
+            if (typeof window.toggleFilterModal === 'function') window.toggleFilterModal();
+            return;
+        }
+        if (result.kind === 'system') {
+            if (!SystemInspector.canLeave() || !SystemInspector.openForHex(result.id, 'system')) return;
+            focusSystem(result.id);
+        } else if (result.kind === 'campaign') {
+            if (!CampaignAtlas.openRecord(result.id)) return;
+            focusSystem(result.hexId);
+        } else {
+            result.button.click();
+        }
+        dismiss(); input.blur();
+    }
+    function activate(index) {
+        active = index;
+        [...list.children].forEach((row, i) => row.setAttribute('aria-selected', String(i === active)));
+        const row = list.children[active];
+        if (row) { input.setAttribute('aria-activedescendant', row.id); row.scrollIntoView({ block: 'nearest' }); }
+        else input.removeAttribute('aria-activedescendant');
+    }
+    function search() {
+        clearTimeout(timer); timer = null;
+        const query = normalize(input.value.trim()), words = query.split(/\s+/).filter(Boolean);
+        const candidates = [];
+        function add(result, text) {
+            const haystack = normalize(text);
+            if (words.every(word => haystack.includes(word))) {
+                const name = normalize(result.name);
+                result.rank = name === query ? 0 : name.startsWith(query) ? 1 : 2;
+                candidates.push(result);
+            }
+        }
+        if (query) {
+            for (const [id, state] of hexStates) {
+                if (state.type !== 'SYSTEM_PRESENT') continue;
+                const name = SystemInspector.systemName(id);
+                const world = state.aowSystem?.mainworld || state.mgt2eData || state.ctData || state.t5Data || state.rttData || {};
+                add({ kind: 'system', id, name, detail: `System · ${id}` }, `${name} ${id} ${world.name || ''} ${world.uwp || ''}`);
+            }
+            for (const record of Object.values(window.campaignAtlas.records)) {
+                const system = SystemInspector.systemName(record.anchor.hexId);
+                add({ kind: 'campaign', id: record.id, hexId: record.anchor.hexId, name: record.name,
+                    detail: `${record.type} · ${system}${record.anchor.locationLabel ? ' · ' + record.anchor.locationLabel : ''}` },
+                    `${record.name} ${record.type} ${record.summary} ${record.details} ${record.tags.join(' ')} ${system} ${record.anchor.hexId} ${record.anchor.locationLabel}`);
+            }
+        }
+        add({ kind: 'filter', name: 'Filter worlds', detail: 'Tool · F' }, 'filter worlds hide suspend');
+        for (const button of document.querySelectorAll('#app-nav button:not(:disabled)')) {
+            if (button.id === 'nav-expand' || !button.getClientRects().length) continue;
+            const name = button.getAttribute('aria-label');
+            add({ kind: 'tool', button, name, detail: 'Tool' }, name);
+        }
+        candidates.sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name));
+        matches = candidates.slice(0, 40); active = -1; list.replaceChildren();
+        input.removeAttribute('aria-activedescendant');
+        matches.forEach((result, index) => {
+            const row = document.createElement('div'); row.id = `omni-result-${index}`;
+            row.setAttribute('role', 'option'); row.setAttribute('aria-selected', 'false');
+            const name = document.createElement('strong'), detail = document.createElement('span');
+            name.textContent = result.name; detail.textContent = result.detail; row.append(name, detail);
+            row.addEventListener('mousedown', e => e.preventDefault());
+            row.addEventListener('click', () => openResult(index));
+            list.append(row);
+        });
+        status.textContent = !query ? 'Search systems, hex IDs, campaign records, or tools.' : candidates.length
+            ? `${candidates.length} result${candidates.length === 1 ? '' : 's'}${candidates.length > 40 ? ' · showing the first 40; refine your search' : ''}`
+            : 'No matches. Try a system name, hex ID, campaign tag, or tool.';
+        clear.hidden = !input.value;
+        showSearchPane();
+    }
+    input.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(search, 100); });
+    input.addEventListener('focus', search);
+    filterToggle.addEventListener('mousedown', e => e.preventDefault());
+    filterToggle.addEventListener('click', () => {
+        if (typeof window.toggleFilterModal === 'function') window.toggleFilterModal();
+    });
+    document.getElementById('omni-filter-suspend').addEventListener('click', () => {
+        if (typeof window.toggleFilterSuspension === 'function') window.toggleFilterSuspension();
+    });
+    document.getElementById('btn-clear-filters').addEventListener('click', () => {
+        if (typeof window.clearFilterInputs === 'function') window.clearFilterInputs();
+    });
+    // Capture before map/orbit Escape listeners so search never closes the view.
+    root.addEventListener('keydown', e => {
+        if (e.isComposing) return;
+        if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); dismiss(); return; }
+        if (e.target !== input) return;
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault(); e.stopPropagation();
+            if (popup.hidden || timer || mode !== 'search') { search(); timer = null; }
+            if (matches.length) activate((active + (e.key === 'ArrowDown' ? 1 : active < 0 ? 0 : -1) + matches.length) % matches.length);
+        } else if (e.key === 'Enter') {
+            e.preventDefault(); e.stopPropagation();
+            if (timer) { search(); timer = null; }
+            openResult(active < 0 ? 0 : active);
+        }
+    }, true);
+    clear.addEventListener('click', () => { input.value = ''; input.focus(); search(); });
+    document.addEventListener('pointerdown', e => {
+        if (root.contains(e.target) || isFilterOpen()) return;
+        dismiss();
+    });
+    root.addEventListener('focusout', () => queueMicrotask(() => {
+        if (isFilterOpen() || root.contains(document.activeElement)) return;
+        dismiss();
+    }));
+    root.inert = false;
+}
+
+function collectMapLegend() {
+    const sections = [];
+    const routes = window.sectorRoutes || [];
+    const routeItems = [];
+    const seenRoutes = new Set();
+    (window.routeDefinitions || []).forEach(def => {
+        if (def.visible === false) return;
+        const count = routes.filter(r => r.routeId === def.id).length;
+        if (!count) return;
+        seenRoutes.add(def.id);
+        routeItems.push({ color: def.color || '#ffffff', label: def.name, swatch: 'line' });
+    });
+    routes.forEach(r => {
+        if (r.routeId != null && seenRoutes.has(r.routeId)) return;
+        const key = r.groupId || r.name || r.color || r.type;
+        if (seenRoutes.has(key)) return;
+        seenRoutes.add(key);
+        routeItems.push({ color: r.color || '#ffffff', label: r.name || r.groupId || r.type || 'Route', swatch: 'line' });
+    });
+    if (routeItems.length) sections.push({ title: 'Routes', items: routeItems });
+
+    const regionCounts = new Map();
+    hexStates.forEach(state => {
+        if (state.cluster && state.cluster !== '----') regionCounts.set(state.cluster, true);
+    });
+    const regionItems = (window.regionDefinitions || []).filter(def => def.visible !== false && regionCounts.has(def.name))
+        .map(def => ({ color: def.color, label: def.name, swatch: 'fill' }));
+    if (regionItems.length) sections.push({ title: 'Regions', items: regionItems });
+
+    const borderCounts = new Map();
+    (window.hexBorderAssignments || new Map()).forEach(id => borderCounts.set(id, true));
+    const borderItems = (window.borderDefinitions || []).filter(def => def.visible !== false && borderCounts.has(def.id))
+        .map(def => ({ color: def.color, label: def.name, swatch: 'outline' }));
+    if (borderItems.length) sections.push({ title: 'Borders', items: borderItems });
+
+    const filterItems = (window.activeFilterRules || []).filter(rule => rule.visible !== false).map(rule => ({
+        color: rule.color || rule.ringColor || rule.bgFillColor || '#a0a8b0',
+        label: rule.description || 'Filter',
+        swatch: 'dot'
+    }));
+    if (filterItems.length) sections.push({ title: 'Filters', items: filterItems });
+
+    let amber = false, red = false;
+    hexStates.forEach(state => {
+        if (state.type !== 'SYSTEM_PRESENT') return;
+        const data = state.rttData || state.t5Data || state.mgt2eData || state.ctData || {};
+        const zone = data.travelZone || state.travelZone;
+        if (!zone || zone === 'Green' || zone === 'G') return;
+        if (zone === 'Red' || zone === 'R') red = true;
+        else amber = true;
+    });
+    const zoneItems = [];
+    if (amber) zoneItems.push({ color: '#FFBF00', label: 'Amber zone', swatch: 'ring' });
+    if (red) zoneItems.push({ color: '#FF0000', label: 'Red zone', swatch: 'ring' });
+    if (zoneItems.length) sections.push({ title: 'Travel zones', items: zoneItems });
+    return sections;
+}
+
+function renderMapLegend() {
+    const host = document.getElementById('legend-content');
+    if (!host) return;
+    host.replaceChildren();
+    const sections = collectMapLegend();
+    if (!sections.length) {
+        const empty = document.createElement('p');
+        empty.className = 'legend-empty';
+        empty.textContent = 'Nothing to key yet. Routes, regions, borders, filters, and travel zones appear here when they are on the map.';
+        host.append(empty);
+        return;
+    }
+    sections.forEach(section => {
+        const group = document.createElement('section');
+        group.className = 'legend-section';
+        const heading = document.createElement('h3');
+        heading.textContent = section.title;
+        group.append(heading);
+        section.items.forEach(item => {
+            const row = document.createElement('div');
+            row.className = 'legend-row';
+            const swatch = document.createElement('span');
+            swatch.className = `legend-swatch legend-swatch-${item.swatch}`;
+            swatch.style.setProperty('--legend-color', item.color);
+            const label = document.createElement('span');
+            label.textContent = item.label;
+            row.append(swatch, label);
+            group.append(row);
+        });
+        host.append(group);
+    });
+}
+
+function setupMapActionBar() {
+    const bar = document.getElementById('map-action-bar');
+    if (!bar) return;
+    const countEl = document.getElementById('map-action-count');
+    const deselect = document.getElementById('map-action-deselect');
+    const autoClear = document.getElementById('map-action-auto-clear');
+    const autoClearWrap = document.getElementById('map-action-auto-clear-wrap');
+    const menus = {
+        region: document.getElementById('map-action-region-menu'),
+        players: document.getElementById('map-action-players-menu'),
+        more: document.getElementById('map-action-more-menu')
+    };
+    const buttons = {
+        region: document.getElementById('map-action-region'),
+        players: document.getElementById('map-action-players'),
+        more: document.getElementById('map-action-more')
+    };
+    function closeMenus() {
+        for (const [name, menu] of Object.entries(menus)) {
+            menu.hidden = true;
+            buttons[name].setAttribute('aria-expanded', 'false');
+        }
+    }
+    function openMenu(name) {
+        const willOpen = menus[name].hidden;
+        closeMenus();
+        if (willOpen) {
+            if (name === 'region') fillRegionMenu();
+            if (name === 'players') fillPlayersMenu();
+            if (name === 'more') {
+                const dev = menus.more.querySelector('[data-expand="ctx-expand-socio-mgt2e-dev"]');
+                if (dev) dev.hidden = window.devView !== true;
+            }
+            menus[name].hidden = false;
+            buttons[name].setAttribute('aria-expanded', 'true');
+        }
+    }
+    function fillRegionMenu() {
+        const menu = menus.region;
+        menu.replaceChildren();
+        const add = (label, onClick) => {
+            const btn = document.createElement('button');
+            btn.type = 'button'; btn.setAttribute('role', 'menuitem');
+            btn.textContent = label; btn.addEventListener('click', onClick);
+            menu.append(btn);
+        };
+        add('Clear region', () => {
+            const hexList = currentActionHexes();
+            if (!hexList.length) return;
+            saveHistoryState('Clear Region');
+            hexList.forEach(hexId => { const s = hexStates.get(hexId); if (s) s.cluster = '----'; });
+            if (typeof window.invalidateRegionFillCache === 'function') window.invalidateRegionFillCache();
+            window.renderRegionWindow?.();
+            requestAnimationFrame(draw);
+            showToast(`Region cleared for ${hexList.length} hex(es).`, 2500);
+            finishAction();
+        });
+        (window.regionDefinitions || []).forEach(def => {
+            add(def.name, () => {
+                window.confirmAssignRegion(def.id, currentActionHexes());
+                finishAction();
+            });
+        });
+    }
+    function fillPlayersMenu() {
+        window.renderPlayerKnowledgePanel(menus.players, currentActionHexes());
+    }
+    function finishAction() {
+        closeMenus();
+        if (autoClear.checked && selectedHexes.size) deselectAllHexes();
+    }
+    function withActionHexes(run) {
+        const hexes = currentActionHexes();
+        if (!hexes.length) { showToast('Select hexes, or click a system.', 2000); return; }
+        run();
+        finishAction();
+    }
+    menus.more.addEventListener('click', e => {
+        const expandId = e.target.closest('[data-expand]')?.dataset.expand;
+        const populate = e.target.closest('[data-populate]')?.dataset.populate;
+        const edition = e.target.closest('[data-generate]')?.dataset.generate;
+        if (!expandId && !populate && !edition) return;
+        withActionHexes(() => {
+            if (expandId) document.getElementById(expandId)?.click();
+            else if (populate === 'sparse') autoPopulate(2);
+            else if (populate === 'standard') autoPopulate(3);
+            else if (populate === 'dense') autoPopulate(4);
+            else if (populate === 'manual') document.getElementById('ctx-manual-system').click();
+            else if (populate === 'empty') document.getElementById('ctx-manual-empty').click();
+            else if (populate === 'clear') document.getElementById('ctx-manual-clear').click();
+            else if (edition) {
+                const generate = { ct: runCTNewMacro, mgt: runMgT2EMacro, t5: runT5Macro, rtt: runRTTMacro }[edition];
+                generate?.();
+            }
+        });
+    });
+    buttons.region.addEventListener('click', () => openMenu('region'));
+    buttons.players.addEventListener('click', () => openMenu('players'));
+    buttons.more.addEventListener('click', () => openMenu('more'));
+    document.getElementById('map-action-build').addEventListener('click', () => {
+        closeMenus();
+        window.runMgtBuild?.();
+        finishAction();
+    });
+    deselect.addEventListener('click', () => { closeMenus(); deselectAllHexes(); });
+    document.addEventListener('pointerdown', e => {
+        if (bar.contains(e.target)) return;
+        if (!menus.players.hidden && e.target.closest('#map-canvas')) return;
+        closeMenus();
+    });
+    const origAdd = selectedHexes.add.bind(selectedHexes);
+    const origDelete = selectedHexes.delete.bind(selectedHexes);
+    const origClear = selectedHexes.clear.bind(selectedHexes);
+    selectedHexes.add = function (id) { const out = origAdd(id); queueMicrotask(syncMapActionBar); return out; };
+    selectedHexes.delete = function (id) { const out = origDelete(id); queueMicrotask(syncMapActionBar); return out; };
+    selectedHexes.clear = function () { origClear(); queueMicrotask(syncMapActionBar); };
+    window.syncMapActionBar = syncMapActionBar;
+    function syncMapActionBar() {
+        const selected = selectedHexes.size;
+        const inspect = window.SystemInspector?.inspectedHexId?.();
+        const active = selected || inspect;
+        bar.hidden = !active;
+        window.DisclosureGrid?.syncSelection?.();
+        if (!active) { closeMenus(); return; }
+        if (!menus.players.hidden) fillPlayersMenu();
+        if (selected) {
+            countEl.textContent = `${selected} hex${selected === 1 ? '' : 'es'} selected`;
+            deselect.hidden = false;
+            autoClearWrap.hidden = false;
+        } else {
+            countEl.textContent = SystemInspector.systemName(inspect);
+            deselect.hidden = true;
+            autoClearWrap.hidden = true;
+        }
+        const offer = window.mgtBuildOffer?.(currentActionHexes());
+        const build = document.getElementById('map-action-build');
+        build.hidden = !offer;
+        if (offer) {
+            build.textContent = offer.label;
+            build.title = offer.title;
+        }
+    }
+    syncMapActionBar();
+}
+
 window.addEventListener('load', async () => {
     // Load persisted data from IndexedDB before initialising the UI.
-    // The splash screen is visible during this period so the user never sees
-    // a blank map flash. loadFromDB() resolves quickly even for large datasets.
+    // Keep navigation inert while the saved map is being restored.
     if (window.dbManager) {
         const hadData = await window.dbManager.loadFromDB();
         if (hadData) {

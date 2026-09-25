@@ -957,7 +957,7 @@ const SurfaceViewer = (() => {
         _overlay.appendChild(header);
 
         _canvas = document.createElement('canvas');
-        Object.assign(_canvas.style, { display: 'block', cursor: 'grab' });
+        Object.assign(_canvas.style, { display: 'block', cursor: 'default' });
         _overlay.appendChild(_canvas);
 
         // Tooltip
@@ -995,7 +995,10 @@ const SurfaceViewer = (() => {
         _canvas.addEventListener('mousedown',  _onMouseDown);
         _canvas.addEventListener('wheel',      _onWheel, { passive: false });
         _canvas.addEventListener('mousemove',  _onCanvasMouseMove);
-        _canvas.addEventListener('mouseleave', _hideTooltip);
+        _canvas.addEventListener('mouseleave', () => {
+            _hideTooltip();
+            if (!_dragging && _canvas) _canvas.style.cursor = 'default';
+        });
         window.addEventListener('mousemove',   _onWindowMouseMove);
         window.addEventListener('mouseup',     _onWindowMouseUp);
     }
@@ -1007,7 +1010,7 @@ const SurfaceViewer = (() => {
         _hideTooltip();
         _dragging = true;
         _dragLast = { x: e.clientX };
-        _canvas.style.cursor = 'grabbing';
+        _canvas.style.cursor = 'move';
     }
 
     function _onWindowMouseMove(e) {
@@ -1020,7 +1023,7 @@ const SurfaceViewer = (() => {
     function _onWindowMouseUp() {
         if (!_dragging) return;
         _dragging = false;
-        if (_canvas) _canvas.style.cursor = 'grab';
+        if (_canvas) _canvas.style.cursor = 'default';
     }
 
     function _onWheel(e) {
@@ -1041,10 +1044,12 @@ const SurfaceViewer = (() => {
             const dy = my - h.y;
             if (dx * dx + dy * dy <= h.r * h.r) {
                 _showBodyTooltip(h, mx, my);
+                _canvas.style.cursor = 'pointer';
                 return;
             }
         }
         _hideTooltip();
+        _canvas.style.cursor = 'default';
     }
 
     function _showBodyTooltip(hit, mx, my) {

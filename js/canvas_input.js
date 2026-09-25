@@ -200,12 +200,14 @@ function setupCanvasEvents() {
         } else if (e.shiftKey || (window.mapSelectionMode && !window.MapPick?.isArmed())) {
             // Shift+Left-Click: Highlight Single Hex AND Start Painting
             isPainting = true;
+            mapCanvas.classList.add('dragging');
+            mapCanvas.classList.remove('hover-target');
             if (hexId) {
                 paintAction = selectedHexes.has(hexId) ? 'deselect' : 'select';
                 if (paintAction === 'select') selectedHexes.add(hexId);
                 else selectedHexes.delete(hexId);
                 lastPaintedHexId = hexId;
-                requestAnimationFrame(draw);
+                scheduleDraw();
             }
         } else {
             // Check if any held key is a route shortcut
@@ -225,7 +227,9 @@ function setupCanvasEvents() {
                 const typeMap = { 1: 'Xboat', 2: 'Trade', 3: 'Secondary' };
                 altDragType = typeMap[activeDef.id] || 'Filter';
                 console.log(`Routing Mode Active: Route #${activeDef.id} (${activeDef.name})`);
-                requestAnimationFrame(draw);
+                mapCanvas.classList.add('dragging');
+                mapCanvas.classList.remove('hover-target');
+                scheduleDraw();
             } else {
                 // A stationary plain click inspects; dragging continues to pan.
                 // — or, when a Route Manager pick is armed, a candidate pick.
@@ -238,6 +242,7 @@ function setupCanvasEvents() {
                 lastMouseX = e.clientX;
                 lastMouseY = e.clientY;
                 mapCanvas.classList.add('dragging');
+                mapCanvas.classList.remove('hover-target');
             }
         }
     });
@@ -257,7 +262,7 @@ function setupCanvasEvents() {
                 if (paintAction === 'select') selectedHexes.add(hexId);
                 else selectedHexes.delete(hexId);
                 lastPaintedHexId = hexId;
-                requestAnimationFrame(draw);
+                scheduleDraw();
             }
         } else if (isDragging) {
             const dx = e.clientX - lastMouseX;
@@ -267,12 +272,32 @@ function setupCanvasEvents() {
             cameraY -= dy / zoom;
             lastMouseX = e.clientX;
             lastMouseY = e.clientY;
-            requestAnimationFrame(draw);
+            scheduleDraw();
         } else if (isAltDragging) {
-            // Just request redraw to show the preview line
-            requestAnimationFrame(draw);
+            scheduleDraw();
+        } else {
+            syncMapHoverCursor(e);
         }
     });
+
+    function hexIdAtEvent(e) {
+        const world = getMouseWorldCoords(e);
+        const coords = pixelToHex(world.x, world.y, baseHexSize);
+        return getHexId(coords.q, coords.r);
+    }
+    function isMapClickTarget(hexId) {
+        if (!hexId) return false;
+        if (window.MapPick?.isArmed() || window.mapSelectionMode) return true;
+        const state = hexStates.get(hexId);
+        if (!state || state.type !== 'SYSTEM_PRESENT') return false;
+        if (state.isHiddenByFilter && !window.filterSuspended) return false;
+        return true;
+    }
+    function syncMapHoverCursor(e) {
+        if (isDragging || isPainting || isAltDragging) return;
+        const over = e.target === mapCanvas;
+        mapCanvas.classList.toggle('hover-target', over && isMapClickTarget(hexIdAtEvent(e)));
+    }
 
     // 5. Mouse Up: Stop Actions entirely
     window.addEventListener('mouseup', (e) => {
@@ -338,8 +363,11 @@ function setupCanvasEvents() {
         altDragRouteId = null;
         lastPaintedHexId = null;
         mapCanvas.classList.remove('dragging');
-        requestAnimationFrame(draw);
+        syncMapHoverCursor(e);
+        scheduleDraw();
     });
+
+    mapCanvas.addEventListener('mouseleave', () => mapCanvas.classList.remove('hover-target'));
 
     mapCanvas.addEventListener('dblclick', e => {
         if (performance.now() < suppressDoubleUntil) return;
@@ -375,7 +403,8 @@ function setupCanvasEvents() {
         zoom = Math.max(0.03, Math.min(zoom, 10));
         cameraX = mouseWorldX - e.clientX / zoom;
         cameraY = mouseWorldY - e.clientY / zoom;
-        requestAnimationFrame(draw);
+        _invalidateViewCache();
+        scheduleDraw();
     }, { passive: false });
 }
 
@@ -387,7 +416,7 @@ function deselectAllHexes() {
     selectedHexes.clear();
     document.getElementById('context-menu').classList.remove('visible');
     console.log("Cleared all hexes.");
-    requestAnimationFrame(draw);
+    scheduleDraw();
 }
 
 function toggleSectorHexes() {
@@ -404,7 +433,7 @@ function toggleSectorHexes() {
     }
     document.getElementById('context-menu').classList.remove('visible');
     console.log("Selected hexes size:", selectedHexes.size);
-    requestAnimationFrame(draw);
+    scheduleDraw();
 }
 
 function toggleSubsectorHexes() {
@@ -421,7 +450,7 @@ function toggleSubsectorHexes() {
     }
     document.getElementById('context-menu').classList.remove('visible');
     console.log("Selected hexes size:", selectedHexes.size);
-    requestAnimationFrame(draw);
+    scheduleDraw();
 }
 
 function toggleSingleHex() {
@@ -434,5 +463,5 @@ function toggleSingleHex() {
     }
     console.log("Selected hexes size is now:", selectedHexes.size);
     document.getElementById('context-menu').classList.remove('visible');
-    requestAnimationFrame(draw);
+    scheduleDraw();
 }

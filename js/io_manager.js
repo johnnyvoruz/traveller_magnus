@@ -144,7 +144,7 @@ function setupSaveLoad() {
         };
 
         const settings = {
-            borderFillEnabled:           window.borderFillEnabled           ?? false,
+            borderFillEnabled:           window.borderFillEnabled           ?? true,
             borderNamesEnabled:          window.borderNamesEnabled          ?? false,
             regionNamesEnabled:          window.regionNamesEnabled          ?? false,
             rttShowIndustry:             window.rttShowIndustry             ?? false,
@@ -180,6 +180,7 @@ function setupSaveLoad() {
             aesthetics,
             settings,
             sectorNames:          window.sectorNames || {},
+            subsectorNames:       window.subsectorNames || {},
             hexStates:            hexObj,
             borderDefinitions:       window.borderDefinitions || [],
             hexBorderAssignments:    Array.from((window.hexBorderAssignments || new Map()).entries()),
@@ -401,6 +402,7 @@ async function clearCanvas() {
     // Clear all in-memory state
     hexStates.clear();
     window.sectorNames        = {};
+    window.subsectorNames     = {};
     window.sectorRoutes      = [];
     window.routeDefinitions  = (typeof getDefaultRouteDefinitions === 'function') ? getDefaultRouteDefinitions() : [];
     window.undoStack         = [];
@@ -507,7 +509,7 @@ function applyLoadedSettings(settings) {
     const s = settings || {};
 
     // --- Display toggles ---
-    const borderFillEnabled = s.borderFillEnabled ?? false;
+    const borderFillEnabled = s.borderFillEnabled ?? true;
     window.borderFillEnabled = borderFillEnabled;
     const borderFillEl = document.getElementById('toggle-border-fill');
     if (borderFillEl) borderFillEl.checked = borderFillEnabled;
@@ -691,7 +693,8 @@ function _applyLoadedMapData(parsedData) {
             if (typeof writeLogLine === 'function') writeLogLine(`JSON Load: Legacy routes migrated — ${window.routeDefinitions.length} route definition(s) created.`);
         }
 
-        window.sectorNames  = parsedData.sectorNames || {};
+        window.sectorNames    = parsedData.sectorNames || {};
+        window.subsectorNames = parsedData.subsectorNames || {};
 
         // Restore border and region state
         window.borderDefinitions    = Array.isArray(parsedData.borderDefinitions) && parsedData.borderDefinitions.length > 0
@@ -977,7 +980,9 @@ function setupObsidianExport() {
         [...subs].sort().forEach(sub => {
             const opt = document.createElement('option');
             opt.value       = sub;
-            opt.textContent = `Subsector ${sub}`;
+            opt.textContent = (typeof getSubsectorLabel === 'function')
+                ? getSubsectorLabel(sectorNum, sub)
+                : `Subsector ${sub}`;
             subsectorSel.appendChild(opt);
         });
 
@@ -1326,9 +1331,23 @@ function exportMetadataXml(sectorID) {
         }
     });
 
+    // ── Subsectors ────────────────────────────────────────────────────────────
+    const subsectorLines = [];
+    const xmlEsc = (s) => String(s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    for (let i = 0; i < 16; i++) {
+        const letter = String.fromCharCode(65 + i);
+        const key = sectorNum + '-' + letter;
+        const name = window.subsectorNames && window.subsectorNames[key];
+        if (name && String(name).trim()) {
+            subsectorLines.push(`    <Subsector Index="${letter}">${xmlEsc(String(name).trim())}</Subsector>`);
+        }
+    }
+
     // ── Guard ─────────────────────────────────────────────────────────────────
-    if (routeLines.length === 0 && borderLines.length === 0 && regionLines.length === 0) {
-        showToast(`No routes, borders, or regions to export for Sector ${sectorID}.`, 2500);
+    if (routeLines.length === 0 && borderLines.length === 0 && regionLines.length === 0 && subsectorLines.length === 0) {
+        showToast(`No routes, borders, regions, or subsector names to export for Sector ${sectorID}.`, 2500);
         return;
     }
 
@@ -1338,6 +1357,12 @@ function exportMetadataXml(sectorID) {
         '<Sector>',
         `  <Name>Sector ${sectorID}</Name>`,
     ];
+
+    if (subsectorLines.length > 0) {
+        xmlLines.push('  <Subsectors>');
+        subsectorLines.forEach(l => xmlLines.push(l));
+        xmlLines.push('  </Subsectors>');
+    }
 
     if (routeLines.length > 0) {
         xmlLines.push('  <Routes>');
@@ -1361,6 +1386,7 @@ function exportMetadataXml(sectorID) {
     downloadBlob(content, `Sector_${sectorID}_Metadata.xml`, 'text/xml;charset=utf-8');
 
     const parts = [];
+    if (subsectorLines.length > 0) parts.push(`${subsectorLines.length} subsector name(s)`);
     if (routeLines.length > 0) parts.push(`${routeLines.length} route(s)`);
     if (borderLines.length > 0) parts.push(`${borderLines.length} border(s)`);
     if (regionLines.length > 0) parts.push(`${regionLines.length} region(s)`);
@@ -2139,6 +2165,11 @@ function setupXmlMetadataImporter() {
                         requestAnimationFrame(draw);
                     }
                 }
+            }
+
+            if (typeof window.importSubsectorNamesFromXml === 'function' && parsedDoc) {
+                const n = window.importSubsectorNamesFromXml(parsedDoc, slotNum);
+                if (n > 0 && window.dbManager) window.dbManager.saveSubsectorNames?.();
             }
 
             // Region import — runs whenever <Regions> is present in the XML

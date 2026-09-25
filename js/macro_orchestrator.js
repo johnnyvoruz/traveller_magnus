@@ -88,13 +88,14 @@ function _printWetWorldPct(label, targetHexes) {
 // ============================================================================
 
 function validateSelection(actionType, skipPopCheck = false) {
-    if (selectedHexes.size === 0) {
+    const hexes = currentActionHexes();
+    if (hexes.length === 0) {
         alert("Please select one or more hexes first (Shift + Left Click).");
         document.getElementById('context-menu').classList.remove('visible');
         return false;
     }
 
-    if (actionType !== 'clear' && selectedHexes.size > 1280) {
+    if (actionType !== 'clear' && hexes.length > 1280) {
         alert("We are currently limited to generating one sector (1280 hexes) at a time to prevent browser crashes. Please reduce your selection.");
         document.getElementById('context-menu').classList.remove('visible');
         return false;
@@ -104,7 +105,7 @@ function validateSelection(actionType, skipPopCheck = false) {
     if (!skipPopCheck && (actionType === 'generate' || actionType === 'socio' || actionType === 'physical')) {
         let hasPopulated = false;
         let popCount = 0;
-        for (let hexId of selectedHexes) {
+        for (let hexId of hexes) {
             let state = hexStates.get(hexId);
             if (state && state.type === 'SYSTEM_PRESENT') {
                 hasPopulated = true;
@@ -112,7 +113,7 @@ function validateSelection(actionType, skipPopCheck = false) {
             }
         }
         if (window.isLoggingEnabled) {
-            writeLogLine(`[AUDIT] validateSelection: Checked ${selectedHexes.size} selected hexes. Found ${popCount} populated hexes. hasPopulated=${hasPopulated}`);
+            writeLogLine(`[AUDIT] validateSelection: Checked ${hexes.length} selected hexes. Found ${popCount} populated hexes. hasPopulated=${hasPopulated}`);
         }
         if (!hasPopulated) {
             alert("No populated hexes to update. You must populate hexes first.");
@@ -123,7 +124,7 @@ function validateSelection(actionType, skipPopCheck = false) {
 
     if (actionType === 'populate') {
         let willOverwrite = false;
-        for (let hexId of selectedHexes) {
+        for (let hexId of hexes) {
             if (hexStates.has(hexId)) {
                 willOverwrite = true;
                 break;
@@ -137,7 +138,7 @@ function validateSelection(actionType, skipPopCheck = false) {
         }
     } else if (actionType === 'generate') {
         let willOverwrite = false;
-        for (let hexId of selectedHexes) {
+        for (let hexId of hexes) {
             let state = hexStates.get(hexId);
             if (state && (state.ctData || state.mgt2eData || state.t5Data || state.aowSystem)) {
                 willOverwrite = true;
@@ -152,7 +153,7 @@ function validateSelection(actionType, skipPopCheck = false) {
         }
     } else if (actionType === 'socio') {
         let willOverwrite = false;
-        for (let hexId of selectedHexes) {
+        for (let hexId of hexes) {
             let state = hexStates.get(hexId);
             if (state && (state.t5Socio || state.mgtSocio)) {
                 willOverwrite = true;
@@ -167,7 +168,7 @@ function validateSelection(actionType, skipPopCheck = false) {
         }
     } else if (actionType === 'physical') {
         let willOverwrite = false;
-        for (let hexId of selectedHexes) {
+        for (let hexId of hexes) {
             let state = hexStates.get(hexId);
             if (state && state.t5Physical) {
                 willOverwrite = true;
@@ -185,13 +186,130 @@ function validateSelection(actionType, skipPopCheck = false) {
 }
 
 // ============================================================================
+// ONE-CLICK MONGOOSE BUILD
+// The action bar offers the remaining Mongoose 2e step for the current hexes.
+// Imported profiles are kept and fleshed out. A blank present hex is generated.
+// A system that already has stars and worlds only receives the society pass.
+// ============================================================================
+
+function mgtProfile(state) {
+    if (!state) return null;
+    return state.mgt2eData || state.t5Data || state.ctData || state.rttData || null;
+}
+
+function mgtSystemReady(state) {
+    const sys = state && state.mgtSystem;
+    return !!(sys && sys.stars && sys.stars.length && sys.worlds && sys.worlds.length);
+}
+
+function mgtBuildStage(state) {
+    if (!state || state.type === 'EMPTY') return null;
+    const profile = mgtProfile(state);
+    if (state.type !== 'SYSTEM_PRESENT' && !profile) return null;
+    if (mgtSystemReady(state)) return state.mgtSocio ? null : 'society';
+    if (profile) return 'flesh';
+    return state.type === 'SYSTEM_PRESENT' ? 'generate' : null;
+}
+
+function mgtBuildOffer(hexes) {
+    const stages = [...new Set((hexes || []).map(id => mgtBuildStage(hexStates.get(id))).filter(Boolean))];
+    if (!stages.length) return null;
+    if (stages.length > 1) return {
+        label: 'Finish systems',
+        title: 'Finish each selected system from the stage it is in, using Mongoose 2e.'
+    };
+    const only = stages[0];
+    if (only === 'flesh') return {
+        label: 'Flesh out',
+        title: 'Keep the imported profile and build the Mongoose 2e system around it.'
+    };
+    if (only === 'society') return {
+        label: 'Expand society',
+        title: 'Add Mongoose 2e society to the system that is already here.'
+    };
+    return {
+        label: 'Generate',
+        title: 'Roll a Mongoose 2e mainworld and build the full system.'
+    };
+}
+
+function _storeMgtBuild(state, sys) {
+    let mainworld = null;
+    const findMW = (list) => {
+        for (const world of list || []) {
+            if (world.type === 'Mainworld' || world.isLunarMainworld || world.targetWorld === 'Mainworld') {
+                mainworld = world;
+                return true;
+            }
+            if (world.moons && findMW(world.moons)) return true;
+        }
+        return false;
+    };
+    findMW(sys.worlds);
+    if (!mainworld) mainworld = sys.mainworld || sys.worlds[0];
+    if (mainworld && mainworld.isLunarMainworld) mainworld.gasGiant = sys.gasGiants > 0;
+    else if (mainworld) mainworld.gasGiant = mainworld.gasGiant || (sys.gasGiants > 0);
+    state.mgtSystem = sys;
+    state.mgt2eData = mainworld;
+    state.mgtSocio = mainworld;
+    if (!state.name && mainworld && mainworld.name) state.name = mainworld.name;
+    state.type = 'SYSTEM_PRESENT';
+    computeSystemCounts(state);
+}
+
+function runMgtBuild() {
+    const hexes = currentActionHexes();
+    if (hexes.length > 1280) {
+        showToast('Build up to one sector (1280 hexes) at a time.', 4000);
+        return;
+    }
+    const work = hexes
+        .map(id => ({ id, stage: mgtBuildStage(hexStates.get(id)) }))
+        .filter(item => item.stage);
+    if (!work.length) return;
+    const offer = mgtBuildOffer(work.map(item => item.id));
+    saveHistoryState('Mongoose build');
+    if (window.isLoggingEnabled) window.batchLogData = [];
+    let count = 0;
+    work.forEach(({ id, stage }) => {
+        try {
+            const state = hexStates.get(id);
+            const sys = stage === 'society'
+                ? expandLoadedSocioeconomicsMgT2E(id, state)
+                : generateMgT2ESystemTopDown(id, stage === 'flesh' ? mgtProfile(state) : null);
+            if (!sys) return;
+            _storeMgtBuild(state, sys);
+            hexStates.set(id, state);
+            count++;
+        } catch (err) {
+            console.error(`Mongoose build failed for ${id}:`, err);
+        }
+    });
+    if (typeof window.reapplyAllRules === 'function') window.reapplyAllRules();
+    if (typeof window.applyActiveFilters === 'function') window.applyActiveFilters();
+    const openHex = window.SystemViewer?.currentHexId?.();
+    if (openHex && work.some(item => item.id === openHex)) window.SystemViewer.refresh(openHex);
+    window.SystemInspector?.refresh?.(true);
+    requestAnimationFrame(draw);
+    window.syncMapActionBar?.();
+    if (!count) return;
+    const verb = !offer || offer.label === 'Finish systems' ? 'Finished'
+        : offer.label === 'Flesh out' ? 'Fleshed out'
+        : offer.label === 'Expand society' ? 'Expanded society for'
+        : 'Generated';
+    showToast(`${verb} ${count} Mongoose system${count === 1 ? '' : 's'}.`, 4000);
+}
+window.mgtBuildOffer = mgtBuildOffer;
+window.runMgtBuild = runMgtBuild;
+
+// ============================================================================
 // AUTO POPULATE
 // ============================================================================
 
 function autoPopulate(chanceOutOfSix) {
     if (!validateSelection('populate')) return;
     saveHistoryState('Auto Populate');
-    selectedHexes.forEach(hexId => {
+    currentActionHexes().forEach(hexId => {
         reseedForHex(hexId);
         const roll = roll1D();
         if (roll <= chanceOutOfSix) {
@@ -225,7 +343,7 @@ async function runMgT2EMacro(skipPop = false) {
     await ensureNamesLoaded();
 
     // Capture the target hexes NOW so they don't change if the user deselects during the wait
-    const targetHexes = Array.from(selectedHexes);
+    const targetHexes = currentActionHexes();
 
     // Warn if any selected hex has manually-overridden MgT2E fields
     let _mgtManualCount = 0;
@@ -430,7 +548,7 @@ async function runMgT2EBottomUpMacro(skipPop = false) {
         return;
     }
 
-    const targetHexes = Array.from(selectedHexes);
+    const targetHexes = currentActionHexes();
 
     // v0.6.1.0: Statistical auditor
     const _auditor_mgt2e_bu = (typeof StatisticalAuditor !== 'undefined')
@@ -658,7 +776,7 @@ async function runCTNewMacro(skipPop = false) {
     console.log("Bulk Generating CT (New Modular) Full System...");
     await ensureNamesLoaded();
 
-    const targetHexes = Array.from(selectedHexes);
+    const targetHexes = currentActionHexes();
 
     // Warn if any selected hex has manually-overridden CT fields
     let _ctManualCount = 0;
@@ -797,7 +915,7 @@ async function runCTBottomUpMacro(skipPop = false) {
     console.log("Bulk Generating CT Bottom-Up Full System...");
     await ensureNamesLoaded();
 
-    const targetHexes = Array.from(selectedHexes);
+    const targetHexes = currentActionHexes();
 
     // Warn if any selected hex has manually-overridden CT fields
     let _ctManualCount = 0;
@@ -932,7 +1050,7 @@ async function runRTTMacro(skipPop = false) {
     console.log("Bulk Generating RTT Full System...");
     await ensureNamesLoaded();
 
-    const targetHexes = Array.from(selectedHexes);
+    const targetHexes = currentActionHexes();
 
     // Warn if any selected hex has manually-overridden fields that will be lost
     let totalManualBodies = 0;
@@ -1083,7 +1201,7 @@ async function runAoWMacro(skipPop = false) {
     console.log("Bulk Generating AoW Bottom-Up Full System...");
     await ensureNamesLoaded();
 
-    const targetHexes = Array.from(selectedHexes);
+    const targetHexes = currentActionHexes();
 
     if (!confirm(`This will completely overwrite ANY existing data in the selected hexes with a Full Architect of Worlds (Bottom-Up) generation sequence.\n\nProceed?`)) {
         return;
@@ -1185,7 +1303,7 @@ async function runT5Macro(skipPop = false) {
         return;
     }
 
-    const targetHexes = Array.from(selectedHexes);
+    const targetHexes = currentActionHexes();
 
     // v0.6.1.0: Statistical auditor
     const _auditor_t5 = (typeof StatisticalAuditor !== 'undefined')

@@ -5,7 +5,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>As Above So Below</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="assets/fontawesome/css/all.min.css">
     <!-- Google Fonts: Orbitron & Inter -->
     <link
         href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;600;800&display=swap"
@@ -47,6 +47,7 @@
     <script src="js/routes.js" defer></script>
     <script src="js/borders.js" defer></script>
     <script src="js/regions.js" defer></script>
+    <script src="js/sector_manager.js" defer></script>
     <script src="js/disclosure.js" defer></script>
     <script src="js/disclosure_grid.js" defer></script>
     <script src="rules/t5_data.js" defer></script>
@@ -111,64 +112,6 @@
     <script src="js/foreven_mixon_data.js" onerror="console.info('foreven_mixon_data.js not found — Foreven (Mixon) option will be unavailable.')"></script>
 
     <style>
-        .filter-grid-uwp .filter-field,
-        .filter-conditional-container .filter-field {
-            display: flex !important;
-            flex-direction: row !important;
-            align-items: center !important;
-            justify-content: space-between !important;
-            margin-bottom: 6px !important;
-        }
-
-        .filter-grid-uwp .filter-field label,
-        .filter-conditional-container .filter-field label {
-            margin-bottom: 0 !important;
-            flex: 0 0 45% !important;
-            font-size: 0.75rem !important;
-            text-align: left !important;
-        }
-
-        .filter-grid-uwp .filter-field input,
-        .filter-conditional-container .filter-field input {
-            flex: 0 0 50% !important;
-            margin-bottom: 0 !important;
-            padding: 4px 8px !important;
-            font-size: 0.8rem !important;
-        }
-
-        /* Accordion Styles */
-        .filter-accordion-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            cursor: pointer;
-            padding: 8px 0;
-            user-select: none;
-        }
-
-        .filter-accordion-header:hover {
-            color: #66fcf1;
-        }
-
-        .filter-accordion-content {
-            display: none;
-            /* Hidden by default */
-            padding-top: 5px;
-        }
-
-        .filter-accordion-content.open {
-            display: block;
-            /* Shown when open class is added */
-        }
-
-        .filter-accordion-header i {
-            transition: transform 0.2s ease;
-        }
-
-        .filter-accordion-header.open i {
-            transform: rotate(180deg);
-        }
-
         /* Route Manager Window */
         #route-window {
             /* Wide enough for a route row at its natural width (480px measured:
@@ -937,6 +880,8 @@
             transition: background 0.15s;
         }
         .border-assign-btn:hover { background: rgba(255,255,255,0.1); }
+        #disclosure-assign-grid button[aria-pressed="true"] { background: #1c383e; box-shadow: inset 0 0 0 1px currentColor; }
+        #disclosure-assign-grid button[aria-pressed="mixed"] { background: #16232c; opacity: 0.85; }
         .border-assign-num {
             font-size: 1rem;
             font-weight: bold;
@@ -953,79 +898,388 @@
 </head>
 
 <body>
-    <!-- Splash Screen -->
-    <div id="splash-screen">
-        <div class="splash-content">
-            <h1>Bartleby the Coder's:<br><span class="highlight">As Above<br> So Below</span></h1>
-            <div class="splash-banner">Campaign Atlas and system inspection</div>
-            <p class="splash-subtitle">High-Fidelity Star System Generator</p>
-            <div class="splash-version">v0.18.0 — Campaign Atlas</div>
-
-            <div id="splash-shortcuts">
-                <h3>Controls & Shortcuts</h3>
-                <div class="splash-shortcuts-grid">
-                    <div class="shortcut-item"><strong>Left Click + Drag</strong><span>Pan Map</span></div>
-                    <div class="shortcut-item"><strong>Scroll Wheel</strong><span>Zoom In / Out</span></div>
-                    <div class="shortcut-item"><strong>Shift + Click</strong><span>Toggle Select Hex</span></div>
-                    <div class="shortcut-item"><strong>Shift + Drag</strong><span>Paint Multiple Hexes</span></div>
-                    <div class="shortcut-item"><strong>Ctrl + Click</strong><span>Open World Details</span></div>
-                    <div class="shortcut-item"><strong>Click / Double-click</strong><span>Inspect system / Open orbit view</span></div>
-                    <div class="shortcut-item"><strong>Right Click</strong><span>Open Context Menu</span></div>
-                    <div class="shortcut-item"><strong>Ctrl + S</strong><span>Toggle Select Sector</span></div>
-                    <div class="shortcut-item"><strong>Ctrl + B</strong><span>Toggle Select Subsector</span></div>
-                    <div class="shortcut-item"><strong>Ctrl + Alt + M</strong><span>Full MgT2E Macro</span></div>
-                    <div class="shortcut-item"><strong>Ctrl + Alt + C</strong><span>Full CT Macro</span></div>
-                    <div class="shortcut-item"><strong>Ctrl + Alt + R</strong><span>Full RTT Macro</span></div>
-                    <div class="shortcut-item"><strong>Ctrl + Alt + 5</strong><span>Full T5 Macro</span></div>
-                    <div class="shortcut-item"><strong>F Key</strong><span>Open Filter Window</span></div>
-                    <div class="shortcut-item"><strong>Shift + F</strong><span>Suspend / Restore Filter</span></div>
-                    <div class="shortcut-item"><strong>R Key</strong><span>Open Route Manager</span></div>
-                    <div class="shortcut-item"><strong>B Key</strong><span>Open Border Manager</span></div>
-                    <div class="shortcut-item"><strong>G Key</strong><span>Open Region Manager</span></div>
-                    <div class="shortcut-item"><strong>D Key</strong><span>Open Player Disclosure</span></div>
-                    <div class="shortcut-item"><strong>Escape</strong><span>Cancel / Close All</span></div>
-                    <div class="shortcut-item"><strong>Ctrl + Delete</strong><span>Clear Canvas</span></div>
+    <canvas id="map-canvas"></canvas>
+    <div id="map-chrome">
+    <div id="omni-search" role="search" aria-label="Search map and campaign" inert>
+        <div class="omni-search-field">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg>
+            <input id="omni-search-input" type="text" role="combobox" placeholder="Search" aria-label="Search" aria-autocomplete="list" aria-expanded="false" aria-controls="omni-search-results" aria-describedby="omni-search-status" autocomplete="off" spellcheck="false">
+            <button id="omni-search-clear" type="button" aria-label="Clear search" hidden>×</button>
+            <button id="omni-filter-toggle" type="button" aria-expanded="false" aria-pressed="false" aria-controls="omni-filter-pane" title="Filter worlds (F)">
+                <i class="fa-solid fa-filter" aria-hidden="true"></i>
+                <span id="omni-filter-label">Filter</span>
+            </button>
+        </div>
+        <div id="omni-search-popup" hidden>
+            <div id="omni-search-pane">
+                <p id="omni-search-status" role="status">Loading your map…</p>
+                <div id="omni-search-results" role="listbox" aria-label="Search results"></div>
+            </div>
+            <div id="omni-filter-pane" hidden>
+                <div class="omni-filter-toolbar">
+                    <p id="filter-results-count" role="status">0 / 0</p>
+                    <button type="button" id="omni-filter-suspend" title="Suspend filters (Shift+F)">Suspend</button>
+                    <button type="button" id="btn-clear-filters">Clear</button>
+                </div>
+                <div class="omni-filter-body">
+                    <div class="filter-section">
+                        <div class="filter-accordion-header open" onclick="this.classList.toggle('open'); document.getElementById('visibility-accordion-body').classList.toggle('open');">
+                            <span class="filter-title">Visibility</span>
+                            <i class="fas fa-chevron-down"></i>
+                        </div>
+                        <div id="visibility-accordion-body" class="filter-accordion-content open">
+                            <label class="filter-toggle-item">
+                                <input type="checkbox" id="filter-hex-bg-visible" checked>
+                                Hex background
+                            </label>
+                        </div>
+                    </div>
+                    <div class="filter-section">
+                        <div class="filter-accordion-header open" onclick="this.classList.toggle('open'); document.getElementById('uwp-accordion-body').classList.toggle('open');">
+                            <span class="filter-title">Physical &amp; social (UWP)</span>
+                            <i class="fas fa-chevron-down"></i>
+                        </div>
+                        <div id="uwp-accordion-body" class="filter-grid-uwp filter-accordion-content open">
+                            <div class="filter-field">
+                                <label for="filter-name">System name</label>
+                                <input type="text" id="filter-name" placeholder="e.g. Sol, Ara" autocomplete="off">
+                            </div>
+                            <div class="filter-field">
+                                <label for="filter-starport">Starport</label>
+                                <input type="text" id="filter-starport" placeholder="e.g. A, B">
+                            </div>
+                            <div class="filter-field">
+                                <label for="filter-size">Size</label>
+                                <input type="text" id="filter-size" placeholder="e.g. &gt;5, 0, A">
+                            </div>
+                            <div class="filter-field">
+                                <label for="filter-atm">Atmosphere</label>
+                                <input type="text" id="filter-atm" placeholder="6, 8">
+                            </div>
+                            <div class="filter-field">
+                                <label for="filter-hydro">Hydrographics</label>
+                                <input type="text" id="filter-hydro" placeholder="&gt;0">
+                            </div>
+                            <div class="filter-field">
+                                <label for="filter-pop">Population</label>
+                                <input type="text" id="filter-pop" placeholder="&gt;8">
+                            </div>
+                            <div class="filter-field">
+                                <label for="filter-total-pop">Total pop</label>
+                                <input type="text" id="filter-total-pop" placeholder="&gt;10m">
+                            </div>
+                            <div class="filter-field">
+                                <label for="filter-gov">Government</label>
+                                <input type="text" id="filter-gov">
+                            </div>
+                            <div class="filter-field">
+                                <label for="filter-law">Law level</label>
+                                <input type="text" id="filter-law">
+                            </div>
+                            <div class="filter-field">
+                                <label for="filter-tl">Tech level</label>
+                                <input type="text" id="filter-tl" placeholder="&gt;10">
+                            </div>
+                            <div class="filter-field">
+                                <label for="filter-trade-codes">Trade codes</label>
+                                <input type="text" id="filter-trade-codes" placeholder="Ag, In">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="filter-section" id="filter-stellar-section" style="display: none;">
+                        <div class="filter-accordion-header" onclick="this.classList.toggle('open'); document.getElementById('stellar-accordion-body').classList.toggle('open');">
+                            <span class="filter-title">Stellar info</span>
+                            <i class="fas fa-chevron-down"></i>
+                        </div>
+                        <div id="stellar-accordion-body" class="filter-conditional-container filter-accordion-content">
+                            <label class="filter-toggle-item">
+                                <input type="checkbox" id="filter-stellar-primary-only">
+                                Primary only
+                            </label>
+                            <div class="filter-field filter-field-stack">
+                                <label for="filter-stellar-class">Class</label>
+                                <select id="filter-stellar-class" class="omni-filter-select" multiple size="5">
+                                    <option value="V">V — Main Sequence</option>
+                                    <option value="IV">IV — Sub-giant</option>
+                                    <option value="III">III — Giant</option>
+                                    <option value="II">II — Bright Giant</option>
+                                    <option value="Ib">Ib — Supergiant</option>
+                                    <option value="Ia">Ia — Luminous Supergiant</option>
+                                    <option value="VI">VI — Sub-dwarf</option>
+                                </select>
+                                <span class="filter-hint">Ctrl+click to select multiple</span>
+                            </div>
+                            <div class="filter-field filter-field-stack">
+                                <label for="filter-stellar-type">Type</label>
+                                <select id="filter-stellar-type" class="omni-filter-select" multiple size="5">
+                                    <option value="O">O</option>
+                                    <option value="B">B</option>
+                                    <option value="A">A</option>
+                                    <option value="F">F</option>
+                                    <option value="G">G</option>
+                                    <option value="K">K</option>
+                                    <option value="M">M</option>
+                                    <option value="D">D — White Dwarf</option>
+                                    <option value="BD">BD — Brown Dwarf</option>
+                                </select>
+                                <span class="filter-hint">Ctrl+click to select multiple</span>
+                            </div>
+                            <div class="filter-field">
+                                <label for="filter-stellar-subtype">Subtype</label>
+                                <input type="text" id="filter-stellar-subtype" placeholder="e.g. 0-4, &gt;5">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="filter-section">
+                        <div class="filter-accordion-header" onclick="this.classList.toggle('open'); document.getElementById('polities-accordion-body').classList.toggle('open');">
+                            <span class="filter-title">Polities</span>
+                            <i class="fas fa-chevron-down"></i>
+                        </div>
+                        <div id="polities-accordion-body" class="filter-conditional-container filter-accordion-content">
+                            <div class="filter-field">
+                                <label for="filter-allegiance">Allegiance</label>
+                                <input type="text" id="filter-allegiance" placeholder="Im, Aa, Na">
+                            </div>
+                            <div class="filter-field filter-field-stack">
+                                <label for="filter-region">Region</label>
+                                <select id="filter-region" class="omni-filter-select" multiple size="4">
+                                    <option value="">— Any —</option>
+                                </select>
+                                <span class="filter-hint">Ctrl+click to select multiple</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="filter-section">
+                        <div class="filter-accordion-header" onclick="this.classList.toggle('open'); document.getElementById('zones-accordion-body').classList.toggle('open');">
+                            <span class="filter-title">Zones, belts, gas giants</span>
+                            <i class="fas fa-chevron-down"></i>
+                        </div>
+                        <div id="zones-accordion-body" class="filter-conditional-container filter-accordion-content">
+                            <div class="filter-field">
+                                <label for="filter-belts">Belts</label>
+                                <input type="text" id="filter-belts" placeholder="&gt;0">
+                            </div>
+                            <div class="filter-field">
+                                <label for="filter-gas-giant">Gas giants</label>
+                                <input type="text" id="filter-gas-giant" placeholder="&gt;0">
+                            </div>
+                            <div class="filter-field">
+                                <label for="filter-travel-zone">Travel zone</label>
+                                <input type="text" id="filter-travel-zone" placeholder="G, A, R">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="filter-section" id="filter-conditional-section" style="display: none;">
+                        <div class="filter-accordion-header" onclick="this.classList.toggle('open'); document.getElementById('advanced-accordion-body').classList.toggle('open');">
+                            <span class="filter-title">Advanced data</span>
+                            <i class="fas fa-chevron-down"></i>
+                        </div>
+                        <div id="advanced-accordion-body" class="filter-conditional-container filter-accordion-content">
+                            <div class="filter-field" id="filter-field-t5-ix" style="display: none;"><label for="filter-t5-ix">T5 Ix</label><input type="text" id="filter-t5-ix" placeholder="&gt;2"></div>
+                            <div class="filter-field" id="filter-field-mgt-importance" style="display: none;"><label for="filter-mgt-importance">Imp.</label><input type="text" id="filter-mgt-importance" placeholder="&gt;0"></div>
+                            <div class="filter-field" id="filter-field-mgt-wtn" style="display: none;"><label for="filter-mgt-wtn">WTN</label><input type="text" id="filter-mgt-wtn" placeholder="&gt;3.5"></div>
+                            <div class="filter-field" id="filter-field-mgt-gwp" style="display: none;"><label for="filter-mgt-gwp">GWP</label><input type="text" id="filter-mgt-gwp" placeholder="&gt;1000k"></div>
+                            <div class="filter-field" id="filter-field-gravity" style="display: none;"><label for="filter-gravity">Gravity</label><input type="text" id="filter-gravity" placeholder="&gt;1.0"></div>
+                            <div class="filter-field" id="filter-field-temperature" style="display: none;"><label for="filter-temperature">Temp (°C)</label><input type="text" id="filter-temperature" placeholder="0-20"></div>
+                        </div>
+                    </div>
+                    <div class="filter-section no-border">
+                        <div class="filter-accordion-header" id="btn-toggle-rules-pane" onclick="this.classList.toggle('open'); document.getElementById('filter-right-pane').classList.toggle('open');">
+                            <span class="filter-title">Styling rules</span>
+                            <i class="fas fa-chevron-down"></i>
+                        </div>
+                        <div id="filter-right-pane" class="filter-accordion-content">
+                            <div class="design-grid">
+                                <label class="design-field">
+                                    <input type="checkbox" id="enable-design-color" title="Include primary color">
+                                    <span>
+                                        <span class="design-field-label">Primary color</span>
+                                        <input type="color" id="design-glow-color" value="#66fcf1">
+                                    </span>
+                                </label>
+                                <label class="design-field">
+                                    <input type="checkbox" id="enable-design-ring" title="Include ring color">
+                                    <span>
+                                        <span class="design-field-label">Ring color</span>
+                                        <input type="color" id="design-ring-color" value="#ffffff">
+                                    </span>
+                                </label>
+                                <label class="design-field">
+                                    <input type="checkbox" id="enable-design-icon" title="Include icon in rule">
+                                    <span>
+                                        <span class="design-field-label">Icon style</span>
+                                        <select id="design-icon-style">
+                                            <option value="Classic">Classic Dot</option>
+                                            <option value="Asteroid Belt">Asteroid Belt</option>
+                                            <option value="Rounded Rectangle">Rounded Rectangle</option>
+                                            <option value="Refined">Glow Sphere</option>
+                                            <option value="Minimal">Crosshair</option>
+                                            <option value="Square">Square</option>
+                                            <option value="Diamond">Diamond</option>
+                                            <option value="Octagon">Octagon</option>
+                                            <option value="Asteroid Grid">Asteroid Grid</option>
+                                        </select>
+                                    </span>
+                                </label>
+                                <label class="design-field">
+                                    <input type="checkbox" id="enable-design-text-case" title="ALL CAPS name">
+                                    <span class="design-field-label">ALL CAPS name</span>
+                                </label>
+                                <label class="design-field">
+                                    <input type="checkbox" id="enable-design-italics" title="Apply italics">
+                                    <span class="design-field-label">Italicize name</span>
+                                </label>
+                                <label class="design-field">
+                                    <input type="checkbox" id="enable-design-underline" title="Apply underline">
+                                    <span class="design-field-label">Underline name</span>
+                                </label>
+                                <label class="design-field">
+                                    <input type="checkbox" id="enable-design-bg-fill" title="Apply hex background color">
+                                    <span>
+                                        <span class="design-field-label">Hex background fill</span>
+                                        <input type="color" id="design-bg-fill-color" value="#005500">
+                                        <span class="filter-hint">30% opacity</span>
+                                    </span>
+                                </label>
+                            </div>
+                            <button type="button" class="btn-batch-apply" onclick="applyBatchStyles()">Apply as new rule</button>
+                            <div id="rules-ledger-container">
+                                <span class="filter-title">Active styling rules</span>
+                                <div id="active-rules-list">
+                                    <div class="omni-filter-empty">No active rules.</div>
+                                </div>
+                            </div>
+                            <p class="filter-hint">Rules apply in order.</p>
+                            <div class="omni-filter-io">
+                                <button type="button" onclick="exportFilterRules()">Export</button>
+                                <button type="button" onclick="document.getElementById('file-import-rules').click()">Import</button>
+                                <input type="file" id="file-import-rules" accept=".json" hidden>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
-
-            <button id="btn-launch-app" class="splash-btn">Launch System</button>
         </div>
     </div>
-
-    <canvas id="map-canvas"></canvas>
-
-    <nav id="map-toolbar" aria-label="Map tools">
-        <button type="button" data-map-tool="select" aria-pressed="false" title="Click or drag to select hexes (Shift+drag)">Select hexes</button>
-        <button type="button" data-map-tool="routes" title="Routes (R)">Routes <kbd>R</kbd></button>
-        <button type="button" data-map-tool="borders" title="Borders (B)">Borders <kbd>B</kbd></button>
-        <button type="button" data-map-tool="regions" title="Regions (G)">Regions <kbd>G</kbd></button>
-        <button type="button" data-map-tool="filters" title="Filters (F)">Filters <kbd>F</kbd></button>
-        <button type="button" data-map-tool="suspend" title="Suspend or resume filters (Shift+F)">Suspend filters</button>
-        <button type="button" data-map-tool="disclosure" title="Player disclosure (D)">Disclosure <kbd>D</kbd></button>
-        <label class="map-generate">Generate
-            <select id="map-generate" aria-label="Generate systems in selected hexes">
-                <option value="">Choose edition…</option>
-                <option value="ct">Classic Traveller</option>
-                <option value="mgt">Mongoose 2E</option>
-                <option value="t5">Traveller 5</option>
-                <option value="rtt">Revised Traveller</option>
-            </select>
+    <div id="map-action-bar" hidden>
+        <span id="map-action-count">0 hexes selected</span>
+        <button type="button" id="map-action-build" hidden>Flesh out</button>
+        <div class="map-action-group">
+            <button type="button" id="map-action-region" aria-haspopup="menu" aria-expanded="false">Region</button>
+            <div id="map-action-region-menu" class="map-action-menu" role="menu" hidden></div>
+        </div>
+        <div class="map-action-group">
+            <button type="button" id="map-action-players" aria-haspopup="true" aria-expanded="false">Player Knowledge</button>
+            <div id="map-action-players-menu" class="map-action-menu player-knowledge" role="menu" hidden></div>
+        </div>
+        <div class="map-action-group">
+            <button type="button" id="map-action-more" aria-haspopup="menu" aria-expanded="false">More</button>
+            <div id="map-action-more-menu" class="map-action-menu" role="menu" hidden>
+                <div class="map-action-menu-label">Expand system</div>
+                <button type="button" role="menuitem" data-expand="ctx-expand-physical-ct">Book 6 (Classic Traveller)</button>
+                <button type="button" role="menuitem" data-expand="ctx-expand-physical-mgt2e">MgT2E (System &amp; Physical)</button>
+                <button type="button" role="menuitem" data-expand="ctx-expand-physical-t5">Traveller 5 (T5)</button>
+                <button type="button" role="menuitem" data-expand="ctx-expand-rtt-bio">RTT (Re-run Biographer Only)</button>
+                <div class="map-action-menu-label">Expand socioeconomic</div>
+                <button type="button" role="menuitem" data-expand="ctx-expand-socio-mgt2e">Mongoose 2nd Ed (MgT2E)</button>
+                <button type="button" role="menuitem" data-expand="ctx-expand-socio-mgt2e-dev" class="map-action-dev">[DEV] MgT2E (No Regen)</button>
+                <button type="button" role="menuitem" data-expand="ctx-expand-socio-t5">Traveller 5 (T5)</button>
+                <div class="map-action-menu-label">Populate</div>
+                <button type="button" role="menuitem" data-populate="sparse">Sparse (2 in 6)</button>
+                <button type="button" role="menuitem" data-populate="standard">Standard (3 in 6)</button>
+                <button type="button" role="menuitem" data-populate="dense">Dense (4 in 6)</button>
+                <button type="button" role="menuitem" data-populate="manual">Place systems</button>
+                <button type="button" role="menuitem" data-populate="empty">Mark empty</button>
+                <button type="button" role="menuitem" data-populate="clear">Reset hexes</button>
+                <div class="map-action-menu-label">Generate</div>
+                <button type="button" role="menuitem" data-generate="ct">Classic Traveller</button>
+                <button type="button" role="menuitem" data-generate="mgt">Mongoose 2E</button>
+                <button type="button" role="menuitem" data-generate="t5">Traveller 5</button>
+                <button type="button" role="menuitem" data-generate="rtt">Revised Traveller</button>
+            </div>
+        </div>
+        <button type="button" id="map-action-deselect">Clear selection</button>
+        <label id="map-action-auto-clear-wrap">
+            <input type="checkbox" id="map-action-auto-clear">
+            Clear after action
         </label>
+    </div>
+    </div>
+    <nav id="app-nav" aria-label="Workspace navigation" inert>
+        <button type="button" id="nav-expand" data-nav-icon="menu" aria-label="Expand navigation" title="Expand navigation" aria-expanded="false"><span class="nav-label">Expand navigation</span></button>
+        <div class="nav-scroll">
+            <div class="nav-group" aria-label="Explore">
+                <button type="button" id="nav-map" data-nav-icon="map" aria-label="Return to map" title="Return to map" hidden><span class="nav-label">Return to map</span></button>
+                <button type="button" id="atlas-toggle" data-nav-icon="system" aria-label="System" title="System" aria-controls="system-inspector" aria-expanded="false"><span class="nav-label">System</span></button>
+                <button type="button" id="orbit-tools-toggle" data-nav-icon="time" aria-label="Time & orbits" title="Time & orbits" hidden disabled aria-controls="orbit-controls-tray" aria-expanded="false"><span class="nav-label">Time & orbits</span></button>
+            </div>
+            <div id="map-toolbar" class="nav-group" aria-label="Map tools">
+                <button type="button"  data-nav-icon="select" aria-label="Select hexes" title="Select hexes (Space)" data-map-tool="select" aria-pressed="false"><span class="nav-label">Select hexes</span></button>
+                <button type="button"  data-nav-icon="route" aria-label="Routes (R)" title="Routes (R)" data-map-tool="routes" aria-pressed="false"><span class="nav-label">Routes (R)</span></button>
+                <button type="button"  data-nav-icon="border" aria-label="Borders (B)" title="Borders (B)" data-map-tool="borders" aria-pressed="false"><span class="nav-label">Borders (B)</span></button>
+                <button type="button"  data-nav-icon="region" aria-label="Regions (G)" title="Regions (G)" data-map-tool="regions" aria-pressed="false"><span class="nav-label">Regions (G)</span></button>
+                <button type="button"  data-nav-icon="sectors" aria-label="Sectors" title="Sectors" data-map-tool="sectors" aria-pressed="false"><span class="nav-label">Sectors</span></button>
+                <button type="button" id="generate-toggle" data-nav-icon="generate" aria-label="Generate systems" title="Generate systems" aria-controls="generation-tray" aria-expanded="false"><span class="nav-label">Generate systems</span></button>
+            </div>
+            <div id="campaign-nav" class="nav-group" aria-label="Campaign categories">
+                <button type="button" id="campaign-toggle" data-nav-icon="campaign" aria-label="Campaign" title="Campaign" aria-controls="system-inspector" aria-expanded="false"><span class="nav-label">Campaign</span></button>
+            </div>
+        </div>
+        <div class="nav-footer">
+            <button type="button" id="disclosure-toggle" data-nav-icon="eye" aria-label="Player knowledge (D)" title="Player knowledge (D)" aria-controls="disclosure-tray" aria-expanded="false"><span class="nav-label">Player knowledge (D)</span></button>
+            <button type="button" id="legend-toggle" data-nav-icon="legend" aria-label="Legend" title="Legend" aria-controls="legend-tray" aria-expanded="false"><span class="nav-label">Legend</span></button>
+            <button type="button" id="settings-toggle" data-nav-icon="settings" aria-label="Settings" title="Settings" aria-controls="settings-panel" aria-expanded="false"><span class="nav-label">Settings</span></button>
+            <button type="button" id="help-toggle" data-nav-icon="help" aria-label="Help & shortcuts" title="Help & shortcuts" aria-controls="help-panel" aria-expanded="false"><span class="nav-label">Help & shortcuts</span></button>
+        </div>
     </nav>
-
-    <!-- Settings Toggle -->
-    <div id="settings-toggle" title="Toggle Settings">
-        <i class="fas fa-cog"></i>
-    </div>
-
-    <!-- Help Toggle -->
-    <div id="help-toggle" title="Help & Shortcuts">
-        <i class="fas fa-question"></i>
-    </div>
-
-    <button id="atlas-toggle" type="button" title="System inspector" aria-label="System inspector"
-            aria-controls="system-inspector" aria-expanded="false">&#9737; <span>System</span></button>
-    <button id="campaign-toggle" type="button" aria-controls="system-inspector" aria-expanded="false">Campaign</button>
+    <aside id="generation-tray" class="nav-tray" aria-label="Generate systems" hidden>
+        <header><h2>Generate systems</h2><button type="button" data-close-tray aria-label="Close generation">×</button></header>
+        <div class="nav-tray-content"><p>Select hexes on the map, then choose an edition.</p>
+            <label>Traveller edition<select id="map-generate" aria-label="Generate systems in selected hexes">
+                <option value="">Choose edition…</option><option value="ct">Classic Traveller</option><option value="mgt">Mongoose 2E</option><option value="t5">Traveller 5</option><option value="rtt">Revised Traveller</option>
+            </select></label>
+        </div>
+    </aside>
+    <aside id="disclosure-tray" class="nav-tray" aria-label="Player knowledge" hidden>
+        <header>
+            <h2>Player knowledge</h2>
+            <button type="button" data-close-tray aria-label="Close player knowledge">×</button>
+        </header>
+        <div class="nav-tray-content disclosure-tray-body">
+            <div class="disclosure-toolbar">
+                <label class="disclosure-scope-sector">Sector <select id="dg-sector"></select></label>
+                <label>Subsector <select id="dg-sub"></select></label>
+                <input type="search" id="dg-search" placeholder="Filter by name or hex…" autocomplete="off" spellcheck="false">
+            </div>
+            <p class="disclosure-warn" id="dg-warn" hidden></p>
+            <section class="disclosure-apply" aria-label="Bulk player knowledge">
+                <div class="disclosure-apply-head">
+                    <p id="dg-apply-label">Set for all shown</p>
+                    <div class="disclosure-target" role="group" aria-label="Apply to">
+                        <button type="button" id="dg-target-shown" aria-pressed="true">Shown</button>
+                        <button type="button" id="dg-target-selected" aria-pressed="false">Selected</button>
+                    </div>
+                </div>
+                <div id="dg-panel" class="player-knowledge"></div>
+            </section>
+            <div class="disclosure-roster">
+                <div class="disclosure-roster-head">
+                    <button type="button" data-sort="hex">Hex</button>
+                    <button type="button" data-sort="name">System</button>
+                    <button type="button" data-sort="level">Knowledge</button>
+                </div>
+                <div class="disclosure-roster-list" id="dg-body"></div>
+            </div>
+        </div>
+    </aside>
+    <aside id="legend-tray" aria-label="Map legend" hidden>
+        <header><h2>Legend</h2><button type="button" id="legend-close" aria-label="Close legend">×</button></header>
+        <div id="legend-content"></div>
+    </aside>
+    <aside id="orbit-controls-tray" class="nav-tray" aria-label="Time and orbit controls" hidden>
+        <header><h2>Time & orbits</h2><button type="button" data-close-tray aria-label="Close time controls">×</button></header>
+        <div id="orbit-controls-content" class="nav-tray-content"></div>
+    </aside>
     <aside id="system-inspector" aria-label="System inspector" hidden inert>
         <header class="atlas-header">
             <div><span id="workspace-label" class="atlas-eyebrow">SYSTEM INSPECTOR</span><h2 id="atlas-title"></h2><p id="atlas-subtitle"></p></div>
@@ -1070,7 +1324,7 @@
                     <label for="toggle-borders" style="cursor:pointer;">Show Subsector Borders</label>
                 </div>
                 <div class="settings-row" style="display:flex;align-items:center;gap:10px;">
-                    <input type="checkbox" id="toggle-border-fill">
+                    <input type="checkbox" id="toggle-border-fill" checked>
                     <label for="toggle-border-fill" style="cursor:pointer;">Fill Border Territories</label>
                 </div>
                 <div class="settings-row" style="display:flex;align-items:center;gap:10px;">
@@ -1086,7 +1340,7 @@
                     <label for="toggle-print-mode" style="cursor:pointer;">White Background Mode</label>
                 </div>
                 <div class="settings-row" style="display:flex;align-items:center;gap:10px;">
-                    <input type="checkbox" id="toggle-sector-names">
+                    <input type="checkbox" id="toggle-sector-names" checked>
                     <label for="toggle-sector-names" style="cursor:pointer;">Show Sector Names</label>
                 </div>
                 <div class="settings-row" style="display:flex;align-items:center;justify-content:space-between;">
@@ -1097,7 +1351,7 @@
                 <div style="padding-top:4px;">
                     <button class="menu-btn" id="btn-edit-sector-names"
                         style="width:100%;padding:8px;display:flex;align-items:center;justify-content:center;gap:8px;">
-                        <i class="fas fa-tag"></i> Edit Sector Names
+                        <i class="fas fa-table-cells"></i> Sector Manager
                     </button>
                 </div>
                 <div style="font-size:0.7rem;color:#45a29e;letter-spacing:0.06em;text-transform:uppercase;padding-top:4px;border-top:1px solid #1f2833;">World Image Generation</div>
@@ -1315,28 +1569,25 @@
         </div>
     </div>
 
-    <!-- Sector Name Editor Modal -->
-    <div id="sector-name-editor-modal"
-        style="display:none; position:fixed; top:0; left:0; width:100%; height:100%;
-               background:rgba(0,0,0,0.75); z-index:2000;
-               align-items:center; justify-content:center;">
-        <div style="background:#1f2833; border:1px solid #45a29e; border-radius:8px;
-                    padding:24px; width:620px; max-height:80vh;
-                    display:flex; flex-direction:column; gap:12px; box-shadow:0 8px 32px rgba(0,0,0,0.6);">
-            <h3 style="margin:0; color:#66fcf1; font-size:1.1rem;">Edit Sector Names</h3>
-            <p style="margin:0; color:#c5c6c7; font-size:0.8rem;">
-                Names are arranged to match the map layout. Leave blank to use the default <em>Sector N</em> label.
-            </p>
-            <div id="sector-name-grid"
-                style="overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:4px;">
-                <!-- Built dynamically by ui_menus.js -->
+    <!-- Sector Manager Window -->
+    <div id="sector-window" class="draggable-palette">
+        <div class="modal-drag-handle">
+            <h2>Sector Manager</h2>
+            <button id="btn-close-sector-window" class="btn-close-palette" title="Close"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="palette-content" style="padding: 0;">
+            <div class="sector-window-toolbar">
+                <button type="button" id="btn-sector-add-col" class="menu-btn" title="Add a column on the east edge"><i class="fas fa-plus"></i> Column</button>
+                <button type="button" id="btn-sector-add-row" class="menu-btn" title="Add a row on the south edge"><i class="fas fa-plus"></i> Row</button>
+                <span id="sector-window-size">7 × 5 sectors</span>
+                <button type="button" id="btn-sector-del-col" class="menu-btn sector-window-danger" title="Remove the east column">− Column</button>
+                <button type="button" id="btn-sector-del-row" class="menu-btn sector-window-danger" title="Remove the south row">− Row</button>
             </div>
-            <div style="display:flex; gap:8px; justify-content:flex-end; border-top:1px solid #45a29e; padding-top:12px;">
-                <button id="btn-sector-names-cancel" class="menu-btn"
-                    style="padding:8px 20px;">Cancel</button>
-                <button id="btn-sector-names-save" class="menu-btn"
-                    style="padding:8px 20px; background:#45a29e; color:#0b0c10; border-color:#45a29e;">Save</button>
-            </div>
+            <p class="sector-window-hint">Tiles match the map. Name a sector, click its number to go there, or add a column/row on the trailing edge.</p>
+            <div id="sector-window-grid"></div>
+        </div>
+        <div class="sector-window-footer">
+            <button id="btn-close-sector-window-footer" class="btn-cancel" style="padding: 4px 12px; font-size: 0.8rem;">Close</button>
         </div>
     </div>
 
@@ -1485,6 +1736,7 @@
                 <div class="help-grid">
                     <strong>Left Click + Drag</strong><span>Pan Map</span>
                     <strong>Scroll Wheel</strong><span>Zoom In / Out</span>
+                    <strong>Space</strong><span>Toggle select mode</span>
                     <strong>Shift + Click</strong><span>Toggle Select Hex</span>
                     <strong>Shift + Drag</strong><span>Paint Multiple Hexes</span>
                     <strong>Ctrl + S</strong><span>Select Sector</span>
@@ -1498,6 +1750,8 @@
                     <strong>Ctrl + Click</strong><span>Open World Details</span>
                     <strong>Click a system</strong><span>Open system inspector</span>
                     <strong>Double-click a system</strong><span>Open orbit view</span>
+                    <strong>Space (orbit view)</strong><span>Play / pause simulation</span>
+                    <strong>Left navigation icons</strong><span>Toggle tools and campaign trays</span>
                     <strong>Right Click</strong><span>Open Context Menu</span>
                     <strong>Ctrl + Alt + M</strong><span style="color: #ffa500;">Bulk Mongoose Macro</span>
                     <strong>Ctrl + Alt + C</strong><span style="color: #66fcf1;">Bulk CT / Book 6 Macro</span>
@@ -1506,12 +1760,13 @@
                     <strong>Ctrl + Z</strong><span>Undo Last Action</span>
                     <strong>Ctrl + Shift + Z</strong><span>Redo Action</span>
                     <strong>Ctrl + Delete</strong><span style="color: #e74c3c;">Clear Canvas</span>
-                    <strong>F Key</strong><span>Open Filter Window</span>
-                    <strong>Shift + F</strong><span>Suspend / Restore Filter</span>
+                    <strong>F Key</strong><span>Open filter in search</span>
+                    <strong>Shift + F</strong><span>Suspend / restore filter</span>
                     <strong>R Key</strong><span>Open Route Manager</span>
                     <strong>B Key</strong><span>Open Border Manager</span>
                     <strong>G Key</strong><span>Open Region Manager</span>
-                    <strong>D Key</strong><span>Open Player Disclosure</span>
+                    <strong>D Key</strong><span>Open Player Knowledge</span>
+                    <strong>Left nav · Sectors</strong><span>Open Sector Manager</span>
                 </div>
             </div>
 
@@ -1535,9 +1790,9 @@
     <!-- Player Disclosure (Fog of War) Assignment Modal -->
     <div id="disclosure-assign-modal" class="modal-overlay" style="display: none;">
         <div class="modal-content" style="width: 400px; text-align: left;">
-            <h3 style="text-align: center; margin-bottom: 8px;">Assign Player Disclosure</h3>
+            <h3 style="text-align: center; margin-bottom: 8px;">Player Knowledge</h3>
             <p style="color: #c5c6c7; font-size: 0.85rem; margin: 0 0 4px;">
-                Setting <strong id="disclosure-assign-modal-count" style="color: #66fcf1;"></strong> hex(es) to disclosure level:
+                Toggle what players see for <strong id="disclosure-assign-modal-count" style="color: #66fcf1;"></strong> hex(es):
             </p>
             <p id="disclosure-assign-current" style="color: #8a8f98; font-size: 0.78rem; margin: 0 0 12px;"></p>
             <div id="disclosure-assign-grid"></div>
@@ -1546,7 +1801,7 @@
                 view and the GM export are never affected.
             </p>
             <button id="btn-disclosure-assign-cancel" class="btn-cancel"
-                style="width: 100%; padding: 10px; border-radius: 4px; border: none; cursor: pointer; font-weight: bold; font-size: 0.9rem;">Cancel</button>
+                style="width: 100%; padding: 10px; border-radius: 4px; border: none; cursor: pointer; font-weight: bold; font-size: 0.9rem;">Done</button>
         </div>
     </div>
 
@@ -2077,10 +2332,10 @@
             MANAGERS
             <div class="submenu">
                 <button class="context-menu-item" id="ctx-open-border-window">Border Manager (B)</button>
-                <button class="context-menu-item" id="ctx-open-filter" onclick="toggleFilterModal()">Filter Manager (F)</button>
+                <button class="context-menu-item" id="ctx-open-filter" onclick="toggleFilterModal()">Filter (F)</button>
                 <button class="context-menu-item" id="ctx-open-region-window">Region Manager (G)</button>
                 <button class="context-menu-item" id="ctx-open-route-window">Route Manager (R)</button>
-                <button class="context-menu-item" id="ctx-open-disclosure-grid">Player Disclosure (D)</button>
+                <button class="context-menu-item" id="ctx-open-disclosure-grid">Player Knowledge (D)</button>
             </div>
         </div>
         <!-- ASSIGN Menu -->
@@ -2519,326 +2774,6 @@
         </div>
     </div>
 
-    <!-- Filter Window Modal (Phase 2 & 3 Split-Pane) -->
-    <div id="filter-modal" class="draggable-palette">
-        <div class="modal-drag-handle">
-            <h2>Filter Manager</h2>
-            <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
-                <span id="btn-clear-filters" class="filter-clear-link" onclick="clearFilterInputs()">Clear
-                    Filters</span>
-            </div>
-            <button id="btn-close-filter" class="btn-close-palette" title="Close"><i class="fas fa-times"></i></button>
-        </div>
-
-        <div class="palette-content"
-            style="max-height: 70vh; overflow-y: auto; padding-left: 12px; padding-right: 12px; display: flex; flex-direction: row; flex-wrap: nowrap; gap: 15px; align-items: flex-start; overflow-x: hidden; transition: width 0.3s ease; width: 100%;">
-
-            <!-- Left Pane: Primary Filters -->
-            <div id="filter-left-pane" style="flex: 1; min-width: 280px; display: flex; flex-direction: column;">
-                <!-- Visibility Options (Routes + Layers combined) -->
-                <div class="filter-section">
-                    <div class="filter-accordion-header open"
-                        onclick="this.classList.toggle('open'); document.getElementById('visibility-accordion-body').classList.toggle('open');">
-                        <span class="filter-title">Visibility Options</span>
-                        <i class="fas fa-chevron-down"></i>
-                    </div>
-                    <div id="visibility-accordion-body" class="filter-accordion-content open">
-                        <div class="filter-route-toggles">
-                            <label class="filter-toggle-item">
-                                <input type="checkbox" id="filter-hex-bg-visible" checked>
-                                <span style="color: #a0a8b0;">Hex Background</span>
-                            </label>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- UWP Filters (Accordion) - Open by Default -->
-                <div class="filter-section">
-                    <div class="filter-accordion-header open"
-                        onclick="this.classList.toggle('open'); document.getElementById('uwp-accordion-body').classList.toggle('open');">
-                        <span class="filter-title">Physical & Social (UWP)</span>
-                        <i class="fas fa-chevron-down"></i>
-                    </div>
-                    <div id="uwp-accordion-body" class="filter-grid-uwp filter-accordion-content open">
-                        <div class="filter-field" style="grid-column: 1 / -1;">
-                            <label>System Name</label>
-                            <input type="text" id="filter-name" placeholder="e.g. Sol, Ara" autocomplete="off">
-                        </div>
-                        <div class="filter-field">
-                            <label>Starport</label>
-                            <input type="text" id="filter-starport" placeholder="e.g. A, B">
-                        </div>
-                        <div class="filter-field">
-                            <label>Size</label>
-                            <input type="text" id="filter-size" placeholder="e.g. >5, 0, A">
-                        </div>
-                        <div class="filter-field">
-                            <label>Atmosphere</label>
-                            <input type="text" id="filter-atm" placeholder="6, 8">
-                        </div>
-                        <div class="filter-field">
-                            <label>Hydrographics</label>
-                            <input type="text" id="filter-hydro" placeholder=">0">
-                        </div>
-                        <div class="filter-field">
-                            <label>Population</label>
-                            <input type="text" id="filter-pop" placeholder=">8">
-                        </div>
-                        <div class="filter-field">
-                            <label>Total Pop</label>
-                            <input type="text" id="filter-total-pop" placeholder=">10m">
-                        </div>
-                        <div class="filter-field">
-                            <label>Government</label>
-                            <input type="text" id="filter-gov">
-                        </div>
-                        <div class="filter-field">
-                            <label>Law Level</label>
-                            <input type="text" id="filter-law">
-                        </div>
-                        <div class="filter-field">
-                            <label>Tech Level</label>
-                            <input type="text" id="filter-tl" placeholder=">10">
-                        </div>
-                        <div class="filter-field">
-                            <label>Trade Codes</label>
-                            <input type="text" id="filter-trade-codes" placeholder="Ag, In">
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Stellar Info (Accordion) - Closed by Default, Conditional -->
-                <div class="filter-section" id="filter-stellar-section" style="display: none;">
-                    <div class="filter-accordion-header"
-                        onclick="this.classList.toggle('open'); document.getElementById('stellar-accordion-body').classList.toggle('open');">
-                        <span class="filter-title">Stellar Info</span>
-                        <i class="fas fa-chevron-down"></i>
-                    </div>
-                    <div id="stellar-accordion-body" class="filter-conditional-container filter-accordion-content">
-                        <div class="filter-field" style="grid-column: 1 / -1;">
-                            <label>Primary Only</label>
-                            <input type="checkbox" id="filter-stellar-primary-only" style="width: auto; margin-top: 2px;">
-                        </div>
-                        <div style="margin-bottom: 2px;">
-                            <label style="display: block; font-size: 0.7rem; color: #a0a8b0; text-transform: uppercase; font-weight: 900; margin-bottom: 4px;">Class</label>
-                            <select id="filter-stellar-class" multiple size="5" style="width: 100%; background: #0b0c10; border: 1px solid #45a29e; color: #66fcf1; font-family: 'Courier New', monospace; font-size: 0.85rem; padding: 2px; border-radius: 3px;">
-                                <option value="V">V — Main Sequence</option>
-                                <option value="IV">IV — Sub-giant</option>
-                                <option value="III">III — Giant</option>
-                                <option value="II">II — Bright Giant</option>
-                                <option value="Ib">Ib — Supergiant</option>
-                                <option value="Ia">Ia — Luminous Supergiant</option>
-                                <option value="VI">VI — Sub-dwarf</option>
-                            </select>
-                            <span style="font-size: 0.7rem; color: #888; margin-top: 2px; display: block;">Ctrl+click to select multiple</span>
-                        </div>
-                        <div style="margin-bottom: 2px;">
-                            <label style="display: block; font-size: 0.7rem; color: #a0a8b0; text-transform: uppercase; font-weight: 900; margin-bottom: 4px;">Type</label>
-                            <select id="filter-stellar-type" multiple size="5" style="width: 100%; background: #0b0c10; border: 1px solid #45a29e; color: #66fcf1; font-family: 'Courier New', monospace; font-size: 0.85rem; padding: 2px; border-radius: 3px;">
-                                <option value="O">O</option>
-                                <option value="B">B</option>
-                                <option value="A">A</option>
-                                <option value="F">F</option>
-                                <option value="G">G</option>
-                                <option value="K">K</option>
-                                <option value="M">M</option>
-                                <option value="D">D — White Dwarf</option>
-                                <option value="BD">BD — Brown Dwarf</option>
-                            </select>
-                            <span style="font-size: 0.7rem; color: #888; margin-top: 2px; display: block;">Ctrl+click to select multiple</span>
-                        </div>
-                        <div class="filter-field">
-                            <label>Subtype</label>
-                            <input type="text" id="filter-stellar-subtype" placeholder="e.g. 0-4, >5">
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Polities (Accordion) - Closed by Default -->
-                <div class="filter-section">
-                    <div class="filter-accordion-header"
-                        onclick="this.classList.toggle('open'); document.getElementById('polities-accordion-body').classList.toggle('open');">
-                        <span class="filter-title">Polities</span>
-                        <i class="fas fa-chevron-down"></i>
-                    </div>
-                    <div id="polities-accordion-body" class="filter-conditional-container filter-accordion-content">
-                        <div class="filter-field">
-                            <label>Allegiance</label>
-                            <input type="text" id="filter-allegiance" placeholder="Im, Aa, Na">
-                        </div>
-                        <div class="filter-field" style="flex-direction: column; align-items: stretch; grid-column: span 2;">
-                            <label>Region</label>
-                            <select id="filter-region" multiple size="4" style="width: 100%; background: #0b0c10; border: 1px solid #45a29e; color: #66fcf1; font-family: 'Courier New', monospace; font-size: 0.85rem; padding: 2px; border-radius: 3px;">
-                                <option value="">— Any —</option>
-                            </select>
-                            <span style="font-size: 0.7rem; color: #888; margin-top: 2px;">Ctrl+click to select multiple</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Zones Belts GG (Accordion) - Closed by Default -->
-                <div class="filter-section">
-                    <div class="filter-accordion-header"
-                        onclick="this.classList.toggle('open'); document.getElementById('zones-accordion-body').classList.toggle('open');">
-                        <span class="filter-title">Zones Belts GG</span>
-                        <i class="fas fa-chevron-down"></i>
-                    </div>
-                    <div id="zones-accordion-body" class="filter-conditional-container filter-accordion-content">
-                        <div class="filter-field">
-                            <label>Belts</label>
-                            <input type="text" id="filter-belts" placeholder=">0">
-                        </div>
-                        <div class="filter-field">
-                            <label>Gas Giants</label>
-                            <input type="text" id="filter-gas-giant" placeholder=">0">
-                        </div>
-                        <div class="filter-field">
-                            <label>Travel Zone</label>
-                            <input type="text" id="filter-travel-zone" placeholder="G, A, R">
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Advanced Data (Accordion) - Closed by Default -->
-                <div class="filter-section" id="filter-conditional-section" style="display: none;">
-                    <div class="filter-accordion-header"
-                        onclick="this.classList.toggle('open'); document.getElementById('advanced-accordion-body').classList.toggle('open');">
-                        <span class="filter-title">Advanced Data</span>
-                        <i class="fas fa-chevron-down"></i>
-                    </div>
-                    <div id="advanced-accordion-body" class="filter-conditional-container filter-accordion-content">
-                        <div class="filter-field" id="filter-field-t5-ix" style="display: none;"><label>T5
-                                Ix</label><input type="text" id="filter-t5-ix" placeholder=">2"></div>
-                        <div class="filter-field" id="filter-field-mgt-importance" style="display: none;">
-                            <label>Imp.</label><input type="text" id="filter-mgt-importance" placeholder=">0">
-                        </div>
-                        <div class="filter-field" id="filter-field-mgt-wtn" style="display: none;">
-                            <label>WTN</label><input type="text" id="filter-mgt-wtn" placeholder=">3.5">
-                        </div>
-                        <div class="filter-field" id="filter-field-mgt-gwp" style="display: none;">
-                            <label>GWP</label><input type="text" id="filter-mgt-gwp" placeholder=">1000k">
-                        </div>
-                        <div class="filter-field" id="filter-field-gravity" style="display: none;">
-                            <label>Gravity</label><input type="text" id="filter-gravity" placeholder=">1.0">
-                        </div>
-                        <div class="filter-field" id="filter-field-temperature" style="display: none;"><label>Temp
-                                (°C)</label><input type="text" id="filter-temperature" placeholder="0-20"></div>
-                    </div>
-                </div>
-
-                <!-- Toggle Button for Rules Pane -->
-                <div class="filter-section no-border">
-                    <div class="filter-accordion-header" id="btn-toggle-rules-pane"
-                        onclick="const pane = document.getElementById('filter-right-pane'); const modal = document.getElementById('filter-modal'); const isOpen = pane.style.display === 'block'; if(isOpen) { pane.style.display = 'none'; modal.style.width = '320px'; this.querySelector('i').className = 'fas fa-chevron-right'; } else { pane.style.display = 'block'; modal.style.width = '660px'; this.querySelector('i').className = 'fas fa-chevron-left'; }">
-                        <span class="filter-title">Advanced Styling Rules</span>
-                        <i class="fas fa-chevron-right"></i>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Right Pane: Styling Rule Engine & Ledger -->
-            <div id="filter-right-pane"
-                style="display: none; flex: 1; min-width: 320px; border-left: 1px solid #45a29e; padding-left: 15px;">
-                <div class="design-grid">
-                    <div class="design-field" style="display: flex; align-items: center; gap: 8px;">
-                        <input type="checkbox" id="enable-design-color" title="Include Primary Color">
-                        <div style="flex-grow: 1;">
-                            <label for="design-glow-color">Primary Color</label>
-                            <input type="color" id="design-glow-color" value="#66fcf1" style="width: 100%;">
-                        </div>
-                    </div>
-                    <div class="design-field" style="display: flex; align-items: center; gap: 8px;">
-                        <input type="checkbox" id="enable-design-ring" title="Include Ring Color">
-                        <div style="flex-grow: 1;">
-                            <label for="design-ring-color">Ring Color</label>
-                            <input type="color" id="design-ring-color" value="#ffffff" style="width: 100%;">
-                        </div>
-                    </div>
-                    <div class="design-field" style="display: flex; align-items: center; gap: 8px;">
-                        <input type="checkbox" id="enable-design-icon" title="Include Icon in Rule">
-                        <div style="flex-grow: 1;">
-                            <label for="design-icon-style">Icon Style</label>
-                            <select id="design-icon-style" style="width: 100%;">
-                                <option value="Classic">Classic Dot</option>
-                                <option value="Asteroid Belt">Asteroid Belt</option>
-                                <option value="Rounded Rectangle">Rounded Rectangle</option>
-                                <option value="Refined">Glow Sphere</option>
-                                <option value="Minimal">Crosshair</option>
-                                <option value="Square">Square</option>
-                                <option value="Diamond">Diamond</option>
-                                <option value="Octagon">Octagon</option>
-                                <option value="Asteroid Grid">Asteroid Grid</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="design-field" style="display: flex; align-items: center; gap: 8px;">
-                        <input type="checkbox" id="enable-design-text-case" title="ALL CAPS Name">
-                        <label for="enable-design-text-case"
-                            style="flex-grow: 1; cursor: pointer; color: #fff; font-size: 0.75rem;">ALL CAPS
-                            Name</label>
-                    </div>
-                    <div class="design-field" style="display: flex; align-items: center; gap: 8px;">
-                        <input type="checkbox" id="enable-design-italics" title="Apply Italics">
-                        <label for="enable-design-italics"
-                            style="flex-grow: 1; cursor: pointer; color: #fff; font-size: 0.75rem;">Italicize
-                            Name</label>
-                    </div>
-                    <div class="design-field" style="display: flex; align-items: center; gap: 8px;">
-                        <input type="checkbox" id="enable-design-underline" title="Apply Underline">
-                        <label for="enable-design-underline"
-                            style="flex-grow: 1; cursor: pointer; color: #fff; font-size: 0.75rem;">Underline
-                            Name</label>
-                    </div>
-                    <div class="design-field" style="display: flex; align-items: center; gap: 8px;">
-                        <input type="checkbox" id="enable-design-bg-fill" title="Apply Political Background Color">
-                        <div style="flex-grow: 1;">
-                            <label for="design-bg-fill-color">Hex Background Fill</label>
-                            <div style="display: flex; align-items: center; gap: 4px;">
-                                <input type="color" id="design-bg-fill-color" value="#005500" style="width: 100%;">
-                                <span style="font-size: 0.6rem; color: #45a29e; white-space: nowrap;">(30% Opacity)</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <button class="btn-batch-apply" onclick="applyBatchStyles()" style="margin-top: 10px;">Apply as New
-                    Rule</button>
-
-                <!-- Rules Ledger -->
-                <div id="rules-ledger-container"
-                    style="margin-top: 15px; border-top: 1px solid rgba(69, 162, 158, 0.3); padding-top: 10px;">
-                    <span class="filter-title"
-                        style="font-size: 0.75rem; color: #66fcf1; margin-bottom: 5px; display: block;">Active Styling
-                        Rules</span>
-                    <div id="active-rules-list"
-                        style="max-height: 150px; overflow-y: auto; background: rgba(0, 0, 0, 0.2); border-radius: 4px; padding: 5px;">
-                        <div style="color: #45a29e; font-size: 0.7rem; text-align: center; padding: 10px;">No active
-                            rules.</div>
-                    </div>
-                </div>
-
-                <p style="font-size: 0.65rem; color: #a0a8b0; text-align: center; margin-top: 10px;">
-                    * Rules apply in order.
-                </p>
-
-                <!-- Rule I/O -->
-                <div
-                    style="display: flex; gap: 10px; margin-top: 10px; justify-content: center; border-top: 1px solid rgba(69, 162, 158, 0.2); padding-top: 10px;">
-                    <button onclick="exportFilterRules()"
-                        style="background: rgba(69, 162, 158, 0.2); color: #66fcf1; border: 1px solid #45a29e; border-radius: 4px; padding: 4px 10px; font-size: 0.7rem; cursor: pointer;">Export</button>
-                    <button onclick="document.getElementById('file-import-rules').click()"
-                        style="background: rgba(69, 162, 158, 0.2); color: #66fcf1; border: 1px solid #45a29e; border-radius: 4px; padding: 4px 10px; font-size: 0.7rem; cursor: pointer;">Import</button>
-                    <input type="file" id="file-import-rules" accept=".json" style="display: none;">
-                </div>
-            </div>
-        </div>
-
-        <div class="filter-modal-footer">
-            <button class="btn-cancel" id="btn-footer-close-filter"
-                style="padding: 4px 12px; font-size: 0.8rem;">Close</button>
-            <span>Matches: <span id="filter-results-count">0</span></span>
-        </div>
-    </div>
-
     <!-- Route Manager Window -->
     <div id="route-window" class="draggable-palette">
         <div class="modal-drag-handle">
@@ -3080,12 +3015,6 @@
     </div>
 
     <!-- Toast Notifications -->
-    <!-- Always-visible notice that worlds are being hidden. Lives directly in
-         <body>, never inside a .draggable-palette: backdrop-filter on those makes
-         them the containing block for position:fixed children, which displaces and
-         then clips them (see the v0.17.2 autocomplete fix). -->
-    <div id="filter-active-indicator" style="display:none;" title="Open the Filter Manager"></div>
-
     <div id="toast-container"></div>
 
 

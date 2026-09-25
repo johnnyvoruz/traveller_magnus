@@ -12,6 +12,7 @@ window.CampaignAtlas = (() => {
     let picking = false, pickButton = null, pickStatus = null;
     let locator = null;
     let systemFilter = '';
+    let lastMapFocus = null;
     const emptyStore = () => ({ schemaVersion: 1, records: {}, assets: {} });
     const newId = () => 'cr_' + CampaignAssets.id().slice(3);
     const isId = id => typeof id === 'string' && /^(?:cr|ca)_[A-Za-z0-9_-]{1,116}$/.test(id);
@@ -229,12 +230,13 @@ window.CampaignAtlas = (() => {
         return true;
     }
     function clearLocator() {
+        if (locator) cancelAnimationFrame(locator.frame);
         locator?.svg.remove();
         locator = null;
     }
     function showLocator(anchor, source) {
         clearLocator();
-        if (!anchor.locationLabel && !anchor.bodyKey) return;
+        if (!anchor.hexId) return;
         const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
         svg.id = 'campaign-locator';
         svg.setAttribute('aria-hidden', 'true');
@@ -248,12 +250,35 @@ window.CampaignAtlas = (() => {
         svg.style.visibility = 'hidden';
         document.body.append(svg);
         locator = { svg, path, pulse, dot, anchor, source };
-        updateLocator();
+        // Follow sector pan/zoom, tray layout, and orbit animation alike. This
+        // loop exists only while a record is active, and never redraws the map.
+        const tick = () => {
+            updateLocator();
+            if (locator) locator.frame = requestAnimationFrame(tick);
+        };
+        tick();
+    }
+    function sectorLocationPosition(anchor) {
+        const state = hexStates.get(anchor.hexId);
+        const coords = getHexCoords(anchor.hexId);
+        if (!coords || state?.type !== 'SYSTEM_PRESENT' || zoom < 0.07 ||
+            (state.isHiddenByFilter && !window.filterSuspended)) return null;
+        const data = state.rttData || state.t5Data || state.mgt2eData || state.ctData;
+        if (hideNoPlanetSystems && (data?.isStellarOnly || (state.aowSystem && !state.aowSystem.mainworld))) return null;
+        if (coords.q < 0 || coords.r < 0 || coords.q >= gridWidth * 32 || coords.r >= gridHeight * 40) return null;
+        const pixel = getHexPixel(coords.q, coords.r);
+        const x = (pixel.x - cameraX) * zoom, y = (pixel.y - cameraY) * zoom;
+        if (x < 0 || y < 0 || x > innerWidth || y > innerHeight) return null;
+        // At sector scale the record points to its assigned system, even when
+        // its free-text location cannot be resolved to an individual planet.
+        return { x, y, radius: Math.max(4, 10 * zoom) };
     }
     function updateLocator() {
         if (!locator) return;
         const { svg, path, pulse, dot, anchor, source } = locator;
-        const target = window.SystemViewer?.locationPosition(anchor);
+        const inOrbit = window.SystemViewer?.isOpen();
+        const target = inOrbit ? SystemViewer.locationPosition(anchor) : sectorLocationPosition(anchor);
+        svg.dataset.view = inOrbit ? 'orbit' : 'sector';
         if (!source.isConnected || !SystemInspector.isOpen()) { clearLocator(); return; }
         if (!target || window.SurfaceViewer?.isOpen() || window.ApproachViewer?.isOpen()) {
             svg.style.visibility = 'hidden'; return;
@@ -308,7 +333,7 @@ window.CampaignAtlas = (() => {
         const systemId = record?.anchor.hexId || systemFilter || activeHex || availableSystems()[0]?.[0];
         if (!systemId) { error('Add a system to the map before creating a campaign record.'); return; }
         const now = new Date().toISOString();
-        draft = record ? clone(record) : { id: null, type: 'person', name: '', summary: '', details: '', tags: [],
+        draft = record ? clone(record) : { id: null, type: filter || 'person', name: '', summary: '', details: '', tags: [],
             anchor: { kind: 'system', hexId: systemId, locationLabel: '' }, visibility: 'referee',
             provenance: { kind: 'campaign', citation: '' }, links: [], images: [], primaryImageId: null,
             createdAt: now, updatedAt: now };
@@ -361,7 +386,7 @@ window.CampaignAtlas = (() => {
             if (!matches.length) list.append(el('p', records.length ? 'No matching records. Try another search or type.' : 'Add your first record: a contact, a starport bar, a rumor, or anything your players might encounter.', 'atlas-empty'));
         }
         search.addEventListener('input', () => { query = search.value; update(); });
-        select.addEventListener('change', () => { filter = select.value; update(); });
+        select.addEventListener('change', () => { filter = select.value; redraw(); window.AppNavigation?.layout(); });
         systems.addEventListener('change', () => { systemFilter = systems.value; update(); });
         update();
     }
@@ -476,6 +501,7 @@ window.CampaignAtlas = (() => {
             fields.append(systemLabel);
         }
         const typeLabel = el('label', undefined, 'atlas-field'), type = el('select');
+        type.setAttribute('aria-label', 'Type');
         type.name = 'type'; typeLabel.append(el('span', 'Type'), type);
         TYPES.forEach(t => { const o = el('option', t); o.value = t; type.append(o); });
         type.value = draft.type;
@@ -572,6 +598,23 @@ window.CampaignAtlas = (() => {
         host.append(form);
         showLocator(draft.anchor, locationInput);
     }
+    function focusedHexId() {
+        if (!window.SystemInspector?.isOpen() || SystemInspector.currentWorkspace() !== 'campaign') return null;
+        if (draft) return draft.anchor.hexId;
+        const record = selectedId && window.campaignAtlas.records[selectedId];
+        return record ? record.anchor.hexId : null;
+    }
+    function focusedAnchor() {
+        if (!focusedHexId()) return null;
+        return draft ? draft.anchor : window.campaignAtlas.records[selectedId]?.anchor || null;
+    }
+    function syncMapFocus(opts = {}) {
+        const id = focusedHexId();
+        const changed = id !== lastMapFocus;
+        lastMapFocus = id;
+        if (id && !window.SystemViewer?.isOpen() && (changed || opts.forcePan)) centerHexInView(id);
+        if ((changed || opts.forcePan) && typeof draw === 'function') requestAnimationFrame(draw);
+    }
     function render(container, hexId) {
         releaseView(); host = container;
         activeHex = draft?.anchor.hexId || window.campaignAtlas.records[selectedId]?.anchor.hexId || hexId;
@@ -579,6 +622,7 @@ window.CampaignAtlas = (() => {
         if (draft) renderEditor();
         else if (selectedId && window.campaignAtlas.records[selectedId]) renderRecord(window.campaignAtlas.records[selectedId]);
         else renderList();
+        syncMapFocus();
     }
     function setup() {
         window.campaignAtlas ||= emptyStore();
@@ -597,10 +641,23 @@ window.CampaignAtlas = (() => {
         return SystemInspector.openForHex(id, 'campaign');
     }
     return { setup, openForHex, close: () => SystemInspector.close(),
+        openRecord: id => {
+            const record = window.campaignAtlas.records[id];
+            if (!record || !confirmLeave()) return false;
+            systemFilter = ''; query = ''; filter = record.type; selectedId = id; activeHex = record.anchor.hexId;
+            return SystemInspector.openForHex(record.anchor.hexId, 'campaign');
+        },
+        openType: type => {
+            if (!TYPES.includes(type) || !confirmLeave()) return false;
+            systemFilter = ''; selectedId = null; query = ''; filter = type;
+            return SystemInspector.openForHex(SystemInspector.currentHexId(), 'campaign');
+        },
+        currentType: () => filter,
         showAll: () => { systemFilter = ''; selectedId = null; query = ''; filter = ''; },
         draftHexId: () => draft?.anchor.hexId,
         addRecord, updateRecord, deleteRecord, recordsForHex, exportForHex, exportMap, importForHex, prepareImport,
         emptyStore, normalizeStore, snapshot, commit, restoreHistory, persist, collect, reachable, render, releaseView, hasDraft,
         confirmLeave, discard, isBusy: () => busy || loading, TYPES,
-        pickBody, cancelPick, isPicking: () => picking, clearLocator, updateLocator };
+        pickBody, cancelPick, isPicking: () => picking, clearLocator, updateLocator,
+        focusedHexId, focusedAnchor, syncMapFocus };
 })();

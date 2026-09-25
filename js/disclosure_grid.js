@@ -1,112 +1,26 @@
 // ============================================================================
-// DISCLOSURE_GRID.JS - Player Disclosure status grid (shortcut: D)
+// DISCLOSURE_GRID.JS - Player Knowledge tray (shortcut: D)
 //
-// Answers the question the right-click assign cannot: "what is every system in
-// this subsector set to, and which have I never looked at?"
-//
-// SELF-CONTAINED BY DESIGN. Sean asked that this not bloat hex_map.html or the
-// existing modules, so this file owns:
-//   - its own markup, built at runtime (nothing in hex_map.html but a <script>)
-//   - its own stylesheet, injected once as a scoped <style>
-//   - its own keydown listener, so keyboard_shortcuts.js is untouched
-//
-// It only ever reads and writes `state.disclosure` through DisclosureModel, so
-// it cannot reach the exporters or the renderer.
-//
-// The "never set" column is the point of the whole screen. The default is FULL
-// disclosure, so a system nobody has reviewed exports everything — "not set" is
-// therefore a warning, not a neutral state, and it is coloured as one.
+// Bulk version of the selected-hex Player Knowledge menu: the same Default /
+// independent tags, applied to every shown system (or to the current selection).
+// The roster answers "what is every system in this subsector set to?"
 // ============================================================================
 
 const DisclosureGrid = (() => {
 
-    const WIN_ID = 'disclosure-grid-window';
-    let _win = null;
-    let _sortKey = 'hex';       // 'hex' | 'name' | 'level'
+    const TRAY_ID = 'disclosure-tray';
+    let _sortKey = 'hex';
     let _filterText = '';
-    // Remembered between openings. Without this the window re-derives its scope
-    // every time and, because `selectedHexes` is normally empty by then, always
-    // lands on the first sector with data — sector 1 on a Universe import,
-    // which is rarely where the referee is working. Found by screenshot.
-    let _lastScope = null;      // { sector, sub }
+    let _target = 'shown';
+    let _shown = [];
+    let _rosterDirty = true;
+    let _refreshing = false;
+    let _lastScope = null;
+    let _bound = false;
 
-    // ── Styles ────────────────────────────────────────────────────────────────
-    // Injected once. Deliberately namespaced under #disclosure-grid-window so
-    // nothing here can affect the rest of the app.
+    function _tray() { return document.getElementById(TRAY_ID); }
+    function isOpen() { return !!(_tray() && !_tray().hidden); }
 
-    const CSS = `
-#${WIN_ID} {
-    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-    width: min(1100px, 94vw); height: min(760px, 88vh);
-    background: #1f2833; border: 1px solid #45a29e; border-radius: 8px;
-    box-shadow: 0 8px 30px rgba(0,0,0,0.6); z-index: 300;
-    display: none; flex-direction: column; font-family: 'Inter', sans-serif;
-    color: #c5c6c7;
-}
-#${WIN_ID}.visible { display: flex; }
-#${WIN_ID} .dg-head {
-    padding: 12px 16px; border-bottom: 1px solid #2c3a47;
-    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-}
-#${WIN_ID} h3 { margin: 0; color: #66fcf1; font-size: 1.05rem; flex: 1 1 auto; }
-#${WIN_ID} select, #${WIN_ID} input[type="text"] {
-    padding: 5px 8px; background: #1a2332; color: #cdd6e3;
-    border: 1px solid #45a29e; border-radius: 4px; font-size: 0.85rem;
-}
-#${WIN_ID} .dg-warn {
-    margin: 0; padding: 8px 16px; background: rgba(255,170,60,0.12);
-    border-bottom: 1px solid #2c3a47; color: #ffcf8a; font-size: 0.8rem;
-}
-#${WIN_ID} .dg-warn.clean { background: rgba(102,252,241,0.08); color: #a8d8d4; }
-#${WIN_ID} .dg-body { flex: 1; min-height: 0; overflow: auto; }
-#${WIN_ID} table { border-collapse: collapse; width: 100%; font-size: 0.82rem; }
-#${WIN_ID} thead th {
-    position: sticky; top: 0; background: #16202b; color: #a0a8b0;
-    padding: 8px 6px; text-align: center; font-weight: 600;
-    border-bottom: 1px solid #2c3a47; white-space: nowrap; z-index: 1;
-}
-#${WIN_ID} thead th.dg-sortable { cursor: pointer; }
-#${WIN_ID} thead th.dg-sortable:hover { color: #66fcf1; }
-#${WIN_ID} thead th.dg-lvl { font-size: 0.72rem; line-height: 1.25; }
-#${WIN_ID} thead th .dg-count {
-    display: block; font-size: 0.7rem; font-weight: 700; margin-top: 3px;
-}
-#${WIN_ID} tbody td {
-    padding: 5px 6px; border-bottom: 1px solid #232f3b; text-align: center;
-}
-#${WIN_ID} tbody td.dg-hex  { text-align: left; color: #8fa0b5; white-space: nowrap; }
-#${WIN_ID} tbody td.dg-name { text-align: left; color: #cdd6e3; }
-#${WIN_ID} tbody tr:hover td { background: rgba(69,162,158,0.10); }
-#${WIN_ID} tbody tr.dg-unset td.dg-name::after {
-    content: ' • never set'; color: #ffaa3c; font-size: 0.72rem;
-}
-#${WIN_ID} input[type="radio"] { cursor: pointer; accent-color: #45a29e; }
-#${WIN_ID} .dg-foot {
-    padding: 10px 16px; border-top: 1px solid #2c3a47;
-    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
-}
-#${WIN_ID} .dg-foot .dg-spacer { flex: 1; }
-#${WIN_ID} button {
-    padding: 6px 12px; border-radius: 4px; border: 1px solid #45a29e;
-    background: #1a2332; color: #cdd6e3; cursor: pointer; font-size: 0.82rem;
-}
-#${WIN_ID} button:hover { background: #24313f; }
-#${WIN_ID} button.dg-close { background: #45a29e; color: #0b0c10; font-weight: 600; }
-#${WIN_ID} .dg-empty { padding: 40px 16px; text-align: center; color: #8fa0b5; }
-`;
-
-    function _injectCss() {
-        if (document.getElementById('dg-style')) return;
-        const el = document.createElement('style');
-        el.id = 'dg-style';
-        el.textContent = CSS;
-        document.head.appendChild(el);
-    }
-
-    // ── Scope helpers ─────────────────────────────────────────────────────────
-
-    // Only populated hexes can meaningfully carry a level — there is nothing to
-    // disclose about empty space. Same filter the exporters use.
     function _systemsIn(sectorNum, subChar) {
         const out = [];
         hexStates.forEach((state, hexId) => {
@@ -138,8 +52,6 @@ const DisclosureGrid = (() => {
         return [...seen].sort();
     }
 
-    // Default the pickers to whatever the user is already looking at: the
-    // current selection if there is one, else the first sector with data.
     function _defaultScope() {
         if (typeof selectedHexes !== 'undefined' && selectedHexes.size) {
             const p = [...selectedHexes][0].split('-');
@@ -157,297 +69,332 @@ const DisclosureGrid = (() => {
             : (state.name || `System ${hexCode}`);
     }
 
-    // ── Window construction ───────────────────────────────────────────────────
+    function _esc(s) {
+        return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
 
-    function _build() {
-        _injectCss();
-        const w = document.createElement('div');
-        w.id = WIN_ID;
-        w.innerHTML = `
-            <div class="dg-head">
-                <h3>Player Disclosure</h3>
-                <label style="font-size:0.8rem;color:#a0a8b0;">Sector
-                    <select id="dg-sector"></select></label>
-                <label style="font-size:0.8rem;color:#a0a8b0;">Subsector
-                    <select id="dg-sub"></select></label>
-                <input type="text" id="dg-search" placeholder="Filter by name or hex…" style="width:190px;">
-            </div>
-            <p class="dg-warn" id="dg-warn"></p>
-            <div class="dg-body" id="dg-body"></div>
-            <div class="dg-foot">
-                <span style="font-size:0.8rem;color:#8fa0b5;">Set all shown to:</span>
-                <select id="dg-bulk"></select>
-                <button id="dg-bulk-apply">Apply</button>
-                <span class="dg-spacer"></span>
-                <button id="dg-close" class="dg-close">Close</button>
-            </div>`;
-        document.body.appendChild(w);
-        _win = w;
-
-        w.querySelector('#dg-close').addEventListener('click', close);
-        w.querySelector('#dg-sector').addEventListener('change', () => {
-            _fillSubs(); _rememberScope(); _render();
-        });
-        w.querySelector('#dg-sub').addEventListener('change', () => { _rememberScope(); _render(); });
-        w.querySelector('#dg-search').addEventListener('input', (e) => {
-            _filterText = e.target.value.trim().toLowerCase();
-            _render();
-        });
-        w.querySelector('#dg-bulk-apply').addEventListener('click', _applyBulk);
-
-        const bulk = w.querySelector('#dg-bulk');
-        bulk.innerHTML = '<option value="">— unset (never reviewed) —</option>'
-            + DisclosureModel.LEVELS.map(l =>
-                `<option value="${l.id}">${l.id.toUpperCase()} — ${l.name}</option>`).join('');
-        return w;
+    function _tagLabel(row) {
+        if (row.level == null) return 'Default';
+        const on = DisclosureModel.LEVELS.filter(l => DisclosureModel.has(row.state, l.id));
+        if (!on.length) return 'Default';
+        if (on.length === 1 && on[0].id === '0') return 'Unknown';
+        return on.map(l => l.name).join(' · ');
     }
 
     function _fillSectors() {
-        const sel = _win.querySelector('#dg-sector');
+        const tray = _tray();
+        if (!tray) return;
+        const sel = tray.querySelector('#dg-sector');
         const cur = sel.value;
         sel.innerHTML = _sectorsWithData().map(n => {
             const nm = (window.sectorNames && window.sectorNames[n]) || `Sector ${n}`;
-            return `<option value="${n}">${nm}</option>`;
+            return `<option value="${n}">${_esc(nm)}</option>`;
         }).join('');
         if (cur) sel.value = cur;
     }
 
     function _fillSubs() {
-        const sel = _win.querySelector('#dg-sub');
-        const sector = parseInt(_win.querySelector('#dg-sector').value, 10);
+        const tray = _tray();
+        if (!tray) return;
+        const sel = tray.querySelector('#dg-sub');
+        const sector = parseInt(tray.querySelector('#dg-sector').value, 10);
         const cur = sel.value;
-        const subs = _subsectorsIn(sector);
+        const subs = Number.isNaN(sector) ? [] : _subsectorsIn(sector);
         sel.innerHTML = '<option value="">All subsectors</option>'
-            + subs.map(s => `<option value="${s}">Subsector ${s}</option>`).join('');
-        if (cur && subs.includes(cur)) sel.value = cur;
+            + subs.map(s => `<option value="${s}">${_esc(
+                (typeof getSubsectorLabel === 'function') ? getSubsectorLabel(sector, s) : ('Subsector ' + s)
+            )}</option>`).join('');
+        if (cur && (cur === '' || subs.includes(cur))) sel.value = cur;
     }
 
-    // ── Rendering ─────────────────────────────────────────────────────────────
+    function _rememberScope() {
+        const tray = _tray();
+        if (!tray) return;
+        const sector = parseInt(tray.querySelector('#dg-sector').value, 10);
+        if (!isNaN(sector)) _lastScope = { sector, sub: tray.querySelector('#dg-sub').value || null };
+    }
 
-    function _render() {
-        if (!_win) return;
-        const sector = parseInt(_win.querySelector('#dg-sector').value, 10);
-        const sub    = _win.querySelector('#dg-sub').value || null;
-        let rows = _systemsIn(sector, sub).map(r => ({
+    function _collectRows() {
+        const tray = _tray();
+        if (!tray) { _shown = []; return; }
+        const sector = parseInt(tray.querySelector('#dg-sector').value, 10);
+        const sub = tray.querySelector('#dg-sub').value || null;
+        let rows = Number.isNaN(sector) ? [] : _systemsIn(sector, sub).map(r => ({
             ...r,
-            name:  _systemName(r.state, r.hexCode),
-            level: DisclosureModel.getRaw(r.state),      // null when never set
+            name: _systemName(r.state, r.hexCode),
+            level: DisclosureModel.getRaw(r.state),
         }));
-
         if (_filterText) {
             rows = rows.filter(r =>
                 r.name.toLowerCase().includes(_filterText) ||
                 r.hexCode.toLowerCase().includes(_filterText));
         }
-
-        const ORDER = DisclosureModel.ORDER;
         rows.sort((a, b) => {
             if (_sortKey === 'name') return a.name.localeCompare(b.name);
             if (_sortKey === 'level') {
-                // Never-set first: it is what the referee most needs to act on.
-                const ai = a.level == null ? -1 : ORDER.indexOf(a.level);
-                const bi = b.level == null ? -1 : ORDER.indexOf(b.level);
-                if (ai !== bi) return ai - bi;
+                const ak = a.level == null ? '' : a.level.join('');
+                const bk = b.level == null ? '' : b.level.join('');
+                if (ak !== bk) return ak.localeCompare(bk);
             }
             return a.hexCode.localeCompare(b.hexCode);
         });
+        _shown = rows;
+    }
 
-        const counts = { unset: 0 };
-        ORDER.forEach(id => { counts[id] = 0; });
-        rows.forEach(r => { if (r.level == null) counts.unset++; else counts[r.level]++; });
+    function _selectedHexes() {
+        const ids = (typeof currentActionHexes === 'function')
+            ? currentActionHexes()
+            : [...(typeof selectedHexes !== 'undefined' ? selectedHexes : [])];
+        return ids.filter(id => {
+            const s = hexStates.get(id);
+            return s && s.type !== 'EMPTY';
+        });
+    }
 
-        // The warning line — the real point of the screen.
-        const warn = _win.querySelector('#dg-warn');
-        if (counts.unset > 0) {
-            warn.className = 'dg-warn';
-            warn.textContent =
-                `${counts.unset} of ${rows.length} system(s) shown have never been set. `
-                + `Unset systems export in FULL to players — they are not hidden.`;
+    function _targetHexes() {
+        return _target === 'selected' ? _selectedHexes() : _shown.map(r => r.hexId);
+    }
+
+    function _syncTargetButtons() {
+        const tray = _tray();
+        if (!tray) return;
+        const shownBtn = tray.querySelector('#dg-target-shown');
+        const selectedBtn = tray.querySelector('#dg-target-selected');
+        const selectedCount = _selectedHexes().length;
+        shownBtn.textContent = `Shown (${_shown.length})`;
+        selectedBtn.textContent = `Selected (${selectedCount})`;
+        shownBtn.setAttribute('aria-pressed', String(_target === 'shown'));
+        selectedBtn.setAttribute('aria-pressed', String(_target === 'selected'));
+        const label = tray.querySelector('#dg-apply-label');
+        if (_target === 'selected') {
+            label.textContent = selectedCount
+                ? `Set for ${selectedCount} selected`
+                : 'Set for selected hexes';
         } else {
-            warn.className = 'dg-warn clean';
-            warn.textContent = `All ${rows.length} system(s) shown have a disclosure level set.`;
+            label.textContent = _shown.length
+                ? `Set for all ${_shown.length} shown`
+                : 'Set for all shown';
         }
+    }
 
-        const body = _win.querySelector('#dg-body');
-        if (!rows.length) {
-            body.innerHTML = '<p class="dg-empty">No populated systems in this scope.</p>';
+    function _renderWarn() {
+        const warn = _tray()?.querySelector('#dg-warn');
+        if (!warn) return;
+        const unset = _shown.filter(r => r.level == null).length;
+        if (!_shown.length) {
+            warn.hidden = true;
             return;
         }
-
-        const head = [
-            `<th class="dg-sortable" data-sort="hex" style="text-align:left;">Hex</th>`,
-            `<th class="dg-sortable" data-sort="name" style="text-align:left;">System</th>`,
-            `<th class="dg-sortable dg-lvl" data-sort="level" style="color:#ffaa3c;">Not set`
-                + `<span class="dg-count">${counts.unset}</span></th>`,
-            ...DisclosureModel.LEVELS.map(l =>
-                `<th class="dg-lvl" title="${l.hint}" style="color:${l.color};">`
-                + `${l.id.toUpperCase()} — ${l.name}<span class="dg-count">${counts[l.id]}</span></th>`),
-        ].join('');
-
-        const trs = rows.map(r => {
-            const cells = [`<td><input type="radio" name="dg-${r.hexId}" value=""`
-                           + `${r.level == null ? ' checked' : ''}></td>`];
-            DisclosureModel.LEVELS.forEach(l => {
-                cells.push(`<td><input type="radio" name="dg-${r.hexId}" value="${l.id}"`
-                           + `${r.level === l.id ? ' checked' : ''}></td>`);
-            });
-            return `<tr class="${r.level == null ? 'dg-unset' : ''}" data-hex="${r.hexId}">`
-                 + `<td class="dg-hex">${r.hexCode}</td>`
-                 + `<td class="dg-name">${_esc(r.name)}</td>`
-                 + cells.join('') + '</tr>';
-        }).join('');
-
-        body.innerHTML = `<table><thead><tr>${head}</tr></thead><tbody>${trs}</tbody></table>`;
-
-        body.querySelectorAll('th.dg-sortable').forEach(th => {
-            th.addEventListener('click', () => { _sortKey = th.dataset.sort; _render(); });
-        });
-        // Delegated: one listener for the whole table, not one per radio.
-        body.addEventListener('change', _onRadio);
-    }
-
-    function _esc(s) {
-        return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    }
-
-    // ── Editing ───────────────────────────────────────────────────────────────
-
-    function _onRadio(e) {
-        const input = e.target;
-        if (!input || input.type !== 'radio') return;
-        const tr = input.closest('tr');
-        if (!tr) return;
-        const hexId = tr.dataset.hex;
-        const val   = input.value;
-
-        // One undo entry per change, matching the right-click assign.
-        saveHistoryState(val ? 'Assign Disclosure' : 'Clear Disclosure');
-        if (val) DisclosureModel.set(hexId, val);
-        else     DisclosureModel.clear(hexId);
-
-        tr.classList.toggle('dg-unset', !val);
-        _refreshCountsOnly();
-        requestAnimationFrame(draw);
-    }
-
-    // Recompute the header counts and warning without rebuilding the table —
-    // rebuilding would lose focus and scroll position on every click.
-    function _refreshCountsOnly() {
-        const sector = parseInt(_win.querySelector('#dg-sector').value, 10);
-        const sub    = _win.querySelector('#dg-sub').value || null;
-        let rows = _systemsIn(sector, sub);
-        if (_filterText) {
-            rows = rows.filter(r => {
-                const nm = _systemName(r.state, r.hexCode).toLowerCase();
-                return nm.includes(_filterText) || r.hexCode.toLowerCase().includes(_filterText);
-            });
-        }
-        const counts = { unset: 0 };
-        DisclosureModel.ORDER.forEach(id => { counts[id] = 0; });
-        rows.forEach(r => {
-            const lv = DisclosureModel.getRaw(r.state);
-            if (lv == null) counts.unset++; else counts[lv]++;
-        });
-
-        const ths = _win.querySelectorAll('#dg-body thead th .dg-count');
-        if (ths.length) {
-            ths[0].textContent = counts.unset;
-            DisclosureModel.LEVELS.forEach((l, i) => {
-                if (ths[i + 1]) ths[i + 1].textContent = counts[l.id];
-            });
-        }
-        const warn = _win.querySelector('#dg-warn');
-        if (counts.unset > 0) {
-            warn.className = 'dg-warn';
+        warn.hidden = false;
+        if (unset > 0) {
+            warn.className = 'disclosure-warn';
             warn.textContent =
-                `${counts.unset} of ${rows.length} system(s) shown have never been set. `
+                `${unset} of ${_shown.length} system(s) shown have never been set. `
                 + `Unset systems export in FULL to players — they are not hidden.`;
         } else {
-            warn.className = 'dg-warn clean';
-            warn.textContent = `All ${rows.length} system(s) shown have a disclosure level set.`;
+            warn.className = 'disclosure-warn clean';
+            warn.textContent = `All ${_shown.length} system(s) shown have player knowledge set.`;
         }
     }
 
-    function _applyBulk() {
-        const val = _win.querySelector('#dg-bulk').value;
-        const hexIds = [..._win.querySelectorAll('#dg-body tbody tr')].map(tr => tr.dataset.hex);
-        if (!hexIds.length) return;
-        // One undo entry for the whole bulk action, not one per system.
-        saveHistoryState(val ? 'Assign Disclosure' : 'Clear Disclosure');
-        hexIds.forEach(id => { if (val) DisclosureModel.set(id, val); else DisclosureModel.clear(id); });
-        _render();
+    function _renderPanel() {
+        const panel = _tray()?.querySelector('#dg-panel');
+        if (!panel) return;
+        const hexes = _targetHexes();
+        if (!hexes.length) {
+            panel.classList.remove('is-set');
+            panel.replaceChildren();
+            const empty = document.createElement('p');
+            empty.className = 'player-knowledge-empty';
+            empty.textContent = _target === 'selected'
+                ? 'Select hexes on the map, or click a system below.'
+                : 'No populated systems in this scope.';
+            panel.append(empty);
+            return;
+        }
+        window.renderPlayerKnowledgePanel(panel, hexes, {
+            hexes: () => _targetHexes(),
+            emptyMessage: _target === 'selected'
+                ? 'Select hexes, or click a system.'
+                : 'No systems in this scope.',
+        });
+    }
+
+    function _isSelected(hexId) {
+        return typeof selectedHexes !== 'undefined' && selectedHexes.has(hexId);
+    }
+
+    function _renderRoster() {
+        const tray = _tray();
+        if (!tray) return;
+        tray.querySelectorAll('.disclosure-roster-head [data-sort]').forEach(btn => {
+            btn.classList.toggle('is-active', btn.dataset.sort === _sortKey);
+        });
+        const body = tray.querySelector('#dg-body');
+        if (!_shown.length) {
+            body.innerHTML = '<p class="disclosure-roster-empty">No populated systems in this scope.</p>';
+            return;
+        }
+        body.innerHTML = _shown.map(r => {
+            const selected = _isSelected(r.hexId) ? ' is-selected' : '';
+            const unset = r.level == null ? ' dg-unset' : '';
+            return `<button type="button" class="disclosure-row${selected}${unset}" data-hex="${_esc(r.hexId)}">`
+                + `<span class="dg-hex">${_esc(r.hexCode)}</span>`
+                + `<span class="dg-name">${_esc(r.name)}</span>`
+                + `<span class="dg-tags">${_esc(_tagLabel(r))}</span>`
+                + `</button>`;
+        }).join('');
+    }
+
+    function _updateRosterTags() {
+        const body = _tray()?.querySelector('#dg-body');
+        if (!body) return;
+        if (!body.querySelector('.disclosure-row')) {
+            _renderRoster();
+            return;
+        }
+        const byId = new Map(_shown.map(r => [r.hexId, r]));
+        body.querySelectorAll('.disclosure-row').forEach(row => {
+            const r = byId.get(row.dataset.hex);
+            if (!r) return;
+            row.classList.toggle('dg-unset', r.level == null);
+            row.classList.toggle('is-selected', _isSelected(r.hexId));
+            const tags = row.querySelector('.dg-tags');
+            if (tags) tags.textContent = _tagLabel(r);
+        });
+    }
+
+    function _syncRowSelection() {
+        const body = _tray()?.querySelector('#dg-body');
+        if (!body) return;
+        body.querySelectorAll('.disclosure-row').forEach(row => {
+            row.classList.toggle('is-selected', _isSelected(row.dataset.hex));
+        });
+    }
+
+    function _selectRow(hexId, additive) {
+        if (typeof selectedHexes === 'undefined') return;
+        if (!additive) selectedHexes.clear();
+        if (additive && selectedHexes.has(hexId)) selectedHexes.delete(hexId);
+        else selectedHexes.add(hexId);
+        if (typeof centerHexInView === 'function') centerHexInView(hexId);
         requestAnimationFrame(draw);
-        if (typeof showToast === 'function') {
-            const def = val ? DisclosureModel.def(val) : null;
-            showToast(`${hexIds.length} system(s) set to "${def ? def.name : 'not set'}".`, 2500);
+    }
+
+    function refresh() {
+        if (!isOpen() || _refreshing) return;
+        _refreshing = true;
+        try {
+            const list = _tray()?.querySelector('#dg-body');
+            const scroll = list ? list.scrollTop : 0;
+            _collectRows();
+            _renderWarn();
+            _syncTargetButtons();
+            _renderPanel();
+            if (_rosterDirty) {
+                _renderRoster();
+                _rosterDirty = false;
+            } else {
+                _updateRosterTags();
+            }
+            if (list) list.scrollTop = scroll;
+        } finally {
+            _refreshing = false;
         }
     }
 
-    // ── Open / close ──────────────────────────────────────────────────────────
+    function syncSelection() {
+        if (!isOpen()) return;
+        _syncTargetButtons();
+        _syncRowSelection();
+        if (_target === 'selected') _renderPanel();
+    }
 
     function open() {
-        if (!_win) _build();
-        _fillSectors();
-        // A stale filter makes the window look empty for no visible reason.
+        const tray = _tray();
+        if (!tray) return;
+        if (tray.hidden) {
+            if (window.AppNavigation?.toggleTray) window.AppNavigation.toggleTray(TRAY_ID);
+            else tray.hidden = false;
+        }
+        if (tray.hidden) return;
         _filterText = '';
-        const search = _win.querySelector('#dg-search');
+        const search = tray.querySelector('#dg-search');
         if (search) search.value = '';
+        _fillSectors();
         const scope = _lastScope || _defaultScope();
         if (scope.sector != null) {
-            const ss = _win.querySelector('#dg-sector');
+            const ss = tray.querySelector('#dg-sector');
             if ([...ss.options].some(o => o.value === String(scope.sector))) ss.value = String(scope.sector);
         }
         _fillSubs();
         if (scope.sub) {
-            const sb = _win.querySelector('#dg-sub');
+            const sb = tray.querySelector('#dg-sub');
             if ([...sb.options].some(o => o.value === scope.sub)) sb.value = scope.sub;
         }
-        _render();
-        _win.classList.add('visible');
+        _rosterDirty = true;
+        refresh();
     }
 
-    // Remember whatever scope the user last looked at.
-    function _rememberScope() {
-        if (!_win) return;
-        const sector = parseInt(_win.querySelector('#dg-sector').value, 10);
-        if (!isNaN(sector)) _lastScope = { sector, sub: _win.querySelector('#dg-sub').value || null };
+    function close() {
+        const tray = _tray();
+        if (!tray || tray.hidden) return;
+        if (window.AppNavigation?.toggleTray) window.AppNavigation.toggleTray(TRAY_ID);
+        else tray.hidden = true;
     }
 
-    function close() { if (_win) _win.classList.remove('visible'); }
-    function isOpen() { return !!(_win && _win.classList.contains('visible')); }
     function toggle() { isOpen() ? close() : open(); }
 
-    // ── Wiring ────────────────────────────────────────────────────────────────
-    // Own listener, so keyboard_shortcuts.js needs no edit. The typing guard is
-    // duplicated from keyboard_shortcuts.js:8 on purpose — better a few repeated
-    // lines than a change to a working file.
-
     function setup() {
-        window.addEventListener('keydown', (e) => {
-            const t = e.target;
-            if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) {
-                if (e.key === 'Escape' && isOpen()) close();
-                return;
-            }
-            if (e.ctrlKey || e.altKey || e.metaKey) return;
-            if (e.key === 'Escape' && isOpen()) { close(); return; }
-            if (e.key && e.key.toLowerCase() === 'd') { e.preventDefault(); toggle(); }
+        const tray = _tray();
+        if (!tray || _bound) return;
+        _bound = true;
+        tray.querySelector('#dg-sector').addEventListener('change', () => {
+            _fillSubs(); _rememberScope(); _rosterDirty = true; refresh();
         });
-
+        tray.querySelector('#dg-sub').addEventListener('change', () => {
+            _rememberScope(); _rosterDirty = true; refresh();
+        });
+        tray.querySelector('#dg-search').addEventListener('input', (e) => {
+            _filterText = e.target.value.trim().toLowerCase();
+            _rosterDirty = true;
+            refresh();
+        });
+        tray.querySelector('#dg-target-shown').addEventListener('click', () => {
+            _target = 'shown';
+            _syncTargetButtons();
+            _renderPanel();
+        });
+        tray.querySelector('#dg-target-selected').addEventListener('click', () => {
+            _target = 'selected';
+            _syncTargetButtons();
+            _renderPanel();
+        });
+        tray.querySelector('.disclosure-roster-head').addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-sort]');
+            if (!btn) return;
+            _sortKey = btn.dataset.sort;
+            _rosterDirty = true;
+            refresh();
+        });
+        tray.querySelector('#dg-body').addEventListener('click', (e) => {
+            const row = e.target.closest('.disclosure-row');
+            if (!row) return;
+            _selectRow(row.dataset.hex, e.shiftKey);
+        });
         const ctxBtn = document.getElementById('ctx-open-disclosure-grid');
         if (ctxBtn) ctxBtn.addEventListener('click', () => {
-            document.getElementById('context-menu').classList.remove('visible');
+            document.getElementById('context-menu')?.classList.remove('visible');
             open();
         });
     }
 
-    return { open, close, toggle, isOpen, setup };
+    return { open, close, toggle, isOpen, setup, refresh, syncSelection };
 })();
 
 window.DisclosureGrid = DisclosureGrid;
 window.toggleDisclosureGrid = DisclosureGrid.toggle;
 
-// Self-initialise — no edit to input_init.js.
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', DisclosureGrid.setup);
 } else {

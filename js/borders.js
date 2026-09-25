@@ -116,6 +116,7 @@ window.sortAndTrimBorderDefinitions = function () {
     }
 
     if (typeof window.invalidateBorderNamesCache === 'function') window.invalidateBorderNamesCache();
+    if (typeof window.invalidateBorderGeomCache === 'function') window.invalidateBorderGeomCache();
     window.ensureFreeBorderSlot();
     if (window.dbManager) {
         window.dbManager.saveBorderDefinitions?.();
@@ -278,7 +279,7 @@ window.refreshBorderWindowCounts = function () {
 
 window.openAssignBorderModal = function () {
     document.getElementById('context-menu').classList.remove('visible');
-    const count = selectedHexes.size;
+    const count = currentActionHexes().length;
     if (count === 0) { showToast('No hexes selected.', 2000); return; }
 
     document.getElementById('border-assign-modal-count').textContent = count;
@@ -294,7 +295,7 @@ window.openAssignBorderModal = function () {
     clearBtn.innerHTML = `<span class="border-assign-num">✕</span>`
                        + `<span class="border-assign-name">Clear Border</span>`;
     clearBtn.addEventListener('click', () => {
-        const hexList = [...selectedHexes];
+        const hexList = currentActionHexes();
         saveHistoryState('Clear Border');
         hexList.forEach(hexId => {
             if (window.hexBorderAssignments) window.hexBorderAssignments.delete(hexId);
@@ -339,7 +340,7 @@ window.openAssignBorderModal = function () {
 };
 
 window.confirmAssignBorder = function (borderId) {
-    const hexList = [...selectedHexes];
+    const hexList = currentActionHexes();
     saveHistoryState('Assign Border');
     if (window.borderPaths) window.borderPaths.delete(borderId);
     hexList.forEach(hexId => {
@@ -1359,6 +1360,7 @@ window.importRegionsFromXml = function (regionsElement, slotNum) {
     if (typeof window.reapplyAllRules    === 'function') window.reapplyAllRules();
     if (typeof window.sortAndTrimRegionDefinitions === 'function') window.sortAndTrimRegionDefinitions();
     if (typeof window.renderRegionWindow === 'function') window.renderRegionWindow();
+    if (typeof window.invalidateRegionFillCache === 'function') window.invalidateRegionFillCache();
 
     return { assigned, skipped };
 };

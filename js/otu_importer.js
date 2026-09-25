@@ -191,6 +191,9 @@
             if (hexId.startsWith(prefix)) hexStates.delete(hexId);
         }
         delete window.sectorNames[slotNum];
+        if (typeof clearSubsectorNamesForSector === 'function') {
+            clearSubsectorNamesForSector(slotNum);
+        }
         if (window.hexBorderAssignments) {
             for (const hexId of window.hexBorderAssignments.keys()) {
                 if (hexId.startsWith(prefix)) window.hexBorderAssignments.delete(hexId);
@@ -427,6 +430,7 @@
                     await delay(0);
                 }
             }
+            if (window.dbManager) window.dbManager.saveSubsectorNames?.();
             if (opts.importRoutes && typeof window.ensureFreeRouteSlot === 'function') {
                 if (window.ensureFreeRouteSlot() && window.dbManager) window.dbManager.saveRouteDefinitions();
             }
@@ -500,6 +504,7 @@
         gridHeight = 8;
         hexStates.clear();
         window.sectorNames        = {};
+        window.subsectorNames     = {};
         window.sectorRoutes       = [];
         window.routeDefinitions   = (typeof getDefaultRouteDefinitions === 'function') ? getDefaultRouteDefinitions() : [];
         window.undoStack          = [];
@@ -633,6 +638,7 @@
                 parseAndAddOtuRoutes(m.name, m.metaXml, m.slotNum, m.x, m.y, coordLookup, opts);
                 await delay(0);
             }
+            if (window.dbManager) window.dbManager.saveSubsectorNames?.();
             if (typeof window.sortAndTrimBorderDefinitions === 'function') window.sortAndTrimBorderDefinitions();
             if (typeof window.renderBorderWindow === 'function') window.renderBorderWindow();
         }

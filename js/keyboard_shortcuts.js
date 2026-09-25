@@ -30,9 +30,7 @@ function setupKeyboardShortcuts() {
         routes: () => window.toggleRouteWindow(),
         borders: () => window.toggleBorderWindow(),
         regions: () => window.toggleRegionWindow(),
-        filters: () => toggleFilterModal(),
-        suspend: () => window.toggleFilterSuspension(),
-        disclosure: () => window.toggleDisclosureGrid()
+        sectors: () => window.toggleSectorWindow()
     };
     document.querySelectorAll('[data-map-tool]').forEach(button => {
         button.addEventListener('click', () => actions[button.dataset.mapTool]());
@@ -43,18 +41,11 @@ function setupKeyboardShortcuts() {
         generate?.();
     });
     const toolbar = document.getElementById('map-toolbar');
-    new ResizeObserver(() => {
-        document.documentElement.style.setProperty('--map-toolbar-bottom', `${toolbar.getBoundingClientRect().bottom + 10}px`);
-    }).observe(toolbar);
     // Reflect keyboard changes in the same visible controls.
     const syncTools = () => {
-        for (const [tool, id] of Object.entries({ routes: 'route-window', borders: 'border-window', regions: 'region-window', filters: 'filter-modal' })) {
-            toolbar.querySelector(`[data-map-tool="${tool}"]`).setAttribute('aria-pressed', String(!!document.getElementById(id)?.classList.contains('visible')));
+        for (const [tool, id] of Object.entries({ routes: 'route-window', borders: 'border-window', regions: 'region-window', sectors: 'sector-window' })) {
+            toolbar.querySelector(`[data-map-tool="${tool}"]`)?.setAttribute('aria-pressed', String(!!document.getElementById(id)?.classList.contains('visible')));
         }
-        toolbar.querySelector('[data-map-tool="disclosure"]').setAttribute('aria-pressed', String(!!window.DisclosureGrid?.isOpen()));
-        const suspend = toolbar.querySelector('[data-map-tool="suspend"]');
-        suspend.setAttribute('aria-pressed', String(window.filterSuspended === true));
-        suspend.textContent = window.filterSuspended ? 'Resume filters' : 'Suspend filters';
     };
     new MutationObserver(syncTools).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class'] });
     syncTools();
@@ -85,7 +76,7 @@ function setupKeyboardShortcuts() {
 
         // Prevent default for route shortcut keys (dynamic from definitions), R, B, and G
         const routeShortcuts = (window.routeDefinitions || []).map(d => d.shortcut).filter(s => s && s.length === 1);
-        if (key === 'r' || key === 'b' || key === 'g' || routeShortcuts.includes(key)) {
+        if (key === 'r' || key === 'b' || key === 'g' || key === 'd' || routeShortcuts.includes(key)) {
             e.preventDefault();
         }
 
@@ -129,13 +120,17 @@ function setupKeyboardShortcuts() {
             e.preventDefault();
             keysDown.clear();
             runT5Macro();
+        } else if (e.code === 'Space' && !e.repeat && !e.ctrlKey && !e.altKey && !e.metaKey) {
+            if (e.target.closest?.('button, a, summary')) return;
+            if (window.SystemViewer?.isOpen?.() || window.SurfaceViewer?.isOpen?.() || window.ApproachViewer?.isOpen?.()) return;
+            e.preventDefault();
+            actions.select();
         } else if (e.key === 'Escape') {
             e.preventDefault();
             const contextMenu = document.getElementById('context-menu');
             const helpPanel = document.getElementById('help-panel');
             const settingsPanel = document.getElementById('settings-panel');
             const hexEditor = document.getElementById('hex-editor');
-            const filterModal = document.getElementById('filter-modal');
 
             // Priority 0: An armed map pick. Must come first — otherwise Escape
             // falls through to Priority 3 and closes the whole Route Manager
@@ -166,8 +161,8 @@ function setupKeyboardShortcuts() {
                 closeHexEditor();
                 return;
             }
-            if (filterModal && filterModal.classList.contains('visible')) {
-                closeFilterModal();
+            if (typeof window.isOmniFilterOpen === 'function' && window.isOmniFilterOpen()) {
+                window.closeOmniFilter();
                 return;
             }
             const routeWindow = document.getElementById('route-window');
@@ -180,6 +175,11 @@ function setupKeyboardShortcuts() {
                 window.closeBorderWindow();
                 return;
             }
+            const sectorWindow = document.getElementById('sector-window');
+            if (sectorWindow && sectorWindow.classList.contains('visible')) {
+                window.closeSectorWindow();
+                return;
+            }
 
             // Cleanup
             if (window.mapSelectionMode) actions.select();
@@ -187,7 +187,7 @@ function setupKeyboardShortcuts() {
         } else if (key === 'f' && e.shiftKey && !e.ctrlKey && !e.altKey) {
             // MUST be tested before the bare 'f' branch below: `key` is
             // lowercased above, so Shift+F arrives here as 'f' and would
-            // otherwise just open the Filter Manager.
+            // otherwise just open the filter pane.
             e.preventDefault();
             if (typeof window.toggleFilterSuspension === 'function') window.toggleFilterSuspension();
         } else if (key === 'f') {
@@ -202,6 +202,9 @@ function setupKeyboardShortcuts() {
         } else if (key === 'g' && !e.ctrlKey) {
             e.preventDefault();
             if (typeof window.toggleRegionWindow === 'function') window.toggleRegionWindow();
+        } else if (key === 'd' && !e.ctrlKey) {
+            e.preventDefault();
+            window.toggleDisclosureGrid?.();
         // NOTE: the 'A' key used to open an Allegiance Manager window. That
         // window was removed and #allegiance-window no longer exists, so the
         // shortcut swallowed the key and did nothing. Assigning allegiances is

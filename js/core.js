@@ -52,16 +52,72 @@ keysDown = new Set();
 // Selection state
 selectedHexes = new Set();
 
+// Orange paint-select, or the teal inspected system if nothing is painted.
+function currentActionHexes() {
+    if (selectedHexes.size) return [...selectedHexes];
+    const id = window.SystemInspector?.inspectedHexId?.();
+    return id ? [id] : [];
+}
+
 // UI Display state
 showSubsectorBorders = true;
 devView = false;
 hideNoPlanetSystems = true;
-showSectorNames = false;
+showSectorNames = true;
+window.borderFillEnabled = true;
 window.borderNamesEnabled = false;
 window.regionNamesEnabled = false;
 
 // Sector name store — keyed by integer sector number
 window.sectorNames = {};
+
+// Subsector name store — keyed "sectorNum-letter", e.g. "37-C" → "Regina".
+// Filled from TravellerMap metadata <Subsector Index="A">…</Subsector> on OTU
+// / XML import. Absent keys fall back to "Subsector C".
+window.subsectorNames = {};
+
+function subsectorNameKey(sectorNum, letter) {
+    const L = String(letter || '').toUpperCase();
+    if (!/^[A-P]$/.test(L)) return null;
+    const n = parseInt(sectorNum, 10);
+    if (!Number.isFinite(n) || n < 1) return null;
+    return n + '-' + L;
+}
+
+function getSubsectorName(sectorNum, letter) {
+    const key = subsectorNameKey(sectorNum, letter);
+    const n = key && window.subsectorNames && window.subsectorNames[key];
+    const trimmed = n && String(n).trim();
+    const L = String(letter || '').toUpperCase();
+    return trimmed || (`Subsector ${L}`);
+}
+
+function getSubsectorLabel(sectorNum, letter) {
+    const key = subsectorNameKey(sectorNum, letter);
+    const n = key && window.subsectorNames && window.subsectorNames[key];
+    const trimmed = n && String(n).trim();
+    const L = String(letter || '').toUpperCase();
+    return trimmed ? `${trimmed} (${L})` : `Subsector ${L}`;
+}
+
+function setSubsectorName(sectorNum, letter, name) {
+    const key = subsectorNameKey(sectorNum, letter);
+    if (!key) return;
+    if (!window.subsectorNames) window.subsectorNames = {};
+    const trimmed = (name || '').trim();
+    if (trimmed) window.subsectorNames[key] = trimmed;
+    else delete window.subsectorNames[key];
+}
+
+function clearSubsectorNamesForSector(sectorNum) {
+    if (!window.subsectorNames) return;
+    const n = parseInt(sectorNum, 10);
+    if (!Number.isFinite(n)) return;
+    const re = new RegExp('^' + n + '-[A-P]$');
+    Object.keys(window.subsectorNames).forEach(k => {
+        if (re.test(k)) delete window.subsectorNames[k];
+    });
+}
 
 // Hex state (Map of hexId -> STATE)
 hexStates = new Map();
@@ -338,6 +394,189 @@ function getHexPixel(q, r) {
     const heightStep = Math.sqrt(3) * size;
     const offset = (q & 1) ? 0.5 : 0;
     return { x: widthStep * q, y: heightStep * (r + offset) };
+}
+
+function centerHexInView(hexId) {
+    if (!hexId || window.SystemViewer?.isOpen()) return;
+    const coords = getHexCoords(hexId);
+    if (!coords) return;
+    const pixel = getHexPixel(coords.q, coords.r);
+    const left = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--workspace-left')) || 68;
+    zoom = Math.max(2, Math.min(zoom, 10));
+    cameraX = pixel.x - (left + (innerWidth - left) / 2) / zoom;
+    cameraY = pixel.y - (70 + (innerHeight - 70) / 2) / zoom;
+}
+
+function centerSectorInView(sectorNum) {
+    if (window.SystemViewer?.isOpen()) return;
+    const n = parseInt(sectorNum, 10);
+    if (!Number.isFinite(n) || n < 1) return;
+    const sX = (n - 1) % gridWidth;
+    const sY = Math.floor((n - 1) / gridWidth);
+    const pixel = getHexPixel(sX * 32 + 15, sY * 40 + 19);
+    const left = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--workspace-left')) || 68;
+    cameraX = pixel.x - (left + (innerWidth - left) / 2) / zoom;
+    cameraY = pixel.y - (70 + (innerHeight - 70) / 2) / zoom;
+}
+
+const MAX_GRID_WIDTH = 16;
+const MAX_GRID_HEIGHT = 8;
+
+function _rewriteHexIdSlot(hexId, oldW, newW) {
+    if (!hexId || oldW === newW) return hexId;
+    const parts = String(hexId).split('-');
+    const oldSlot = parseInt(parts[0], 10);
+    if (!Number.isFinite(oldSlot) || oldSlot < 1) return hexId;
+    const sX = (oldSlot - 1) % oldW;
+    const sY = Math.floor((oldSlot - 1) / oldW);
+    const newSlot = sY * newW + sX + 1;
+    if (newSlot === oldSlot) return hexId;
+    parts[0] = String(newSlot);
+    return parts.join('-');
+}
+
+function _remapKeyedMap(map, fn) {
+    if (!map) return map;
+    const next = new Map();
+    map.forEach((v, k) => next.set(fn(k), v));
+    return next;
+}
+
+function remapAllHexIds(oldW, newW) {
+    if (oldW === newW) return;
+    const fn = id => _rewriteHexIdSlot(id, oldW, newW);
+    hexStates = _remapKeyedMap(hexStates, fn);
+    selectedHexes = new Set([...selectedHexes].map(fn));
+    if (window.hexBorderAssignments) window.hexBorderAssignments = _remapKeyedMap(window.hexBorderAssignments, fn);
+    if (window.hexAllegianceAssignments) window.hexAllegianceAssignments = _remapKeyedMap(window.hexAllegianceAssignments, fn);
+    (window.sectorRoutes || []).forEach(r => {
+        if (r.startId) r.startId = fn(r.startId);
+        if (r.endId) r.endId = fn(r.endId);
+    });
+    if (window.campaignAtlas && window.campaignAtlas.records) {
+        Object.values(window.campaignAtlas.records).forEach(rec => {
+            if (rec.anchor && rec.anchor.hexId) rec.anchor.hexId = fn(rec.anchor.hexId);
+        });
+    }
+    if (window.sectorNames) {
+        const next = {};
+        Object.keys(window.sectorNames).forEach(k => {
+            const n = parseInt(k, 10);
+            if (!Number.isFinite(n)) { next[k] = window.sectorNames[k]; return; }
+            const sX = (n - 1) % oldW;
+            const sY = Math.floor((n - 1) / oldW);
+            next[sY * newW + sX + 1] = window.sectorNames[k];
+        });
+        window.sectorNames = next;
+    }
+    if (window.subsectorNames) {
+        const next = {};
+        Object.keys(window.subsectorNames).forEach(k => {
+            const m = /^(\d+)-([A-P])$/.exec(k);
+            if (!m) { next[k] = window.subsectorNames[k]; return; }
+            const n = parseInt(m[1], 10);
+            const sX = (n - 1) % oldW;
+            const sY = Math.floor((n - 1) / oldW);
+            next[(sY * newW + sX + 1) + '-' + m[2]] = window.subsectorNames[k];
+        });
+        window.subsectorNames = next;
+    }
+    if (window.regionPaths) {
+        const next = new Map();
+        window.regionPaths.forEach((v, k) => {
+            const key = String(k);
+            const idx = key.indexOf(':');
+            if (idx === -1) { next.set(k, v); return; }
+            const n = parseInt(key.slice(0, idx), 10);
+            if (!Number.isFinite(n)) { next.set(k, v); return; }
+            const sX = (n - 1) % oldW;
+            const sY = Math.floor((n - 1) / oldW);
+            next.set((sY * newW + sX + 1) + key.slice(idx), v);
+        });
+        window.regionPaths = next;
+    }
+    window.SystemInspector?.remapHexId?.(fn);
+    window.SystemViewer?.remapHexId?.(fn);
+    window.invalidateMapDrawCaches?.();
+    window.invalidateBorderNamesCache?.();
+    window.invalidateBorderGeomCache?.();
+    window.invalidateRegionFillCache?.();
+}
+
+function slotsInColumn(sX) {
+    const out = [];
+    for (let sY = 0; sY < gridHeight; sY++) out.push(sY * gridWidth + sX + 1);
+    return out;
+}
+
+function slotsInRow(sY) {
+    const out = [];
+    for (let sX = 0; sX < gridWidth; sX++) out.push(sY * gridWidth + sX + 1);
+    return out;
+}
+
+function countSystemsInSlots(slots) {
+    const set = new Set(slots);
+    let n = 0;
+    hexStates.forEach((state, hexId) => {
+        if (state && state.type === 'SYSTEM_PRESENT' && set.has(parseInt(hexId.split('-')[0], 10))) n++;
+    });
+    return n;
+}
+
+function countHexesInSlots(slots) {
+    const set = new Set(slots);
+    let n = 0;
+    hexStates.forEach((_, hexId) => {
+        if (set.has(parseInt(hexId.split('-')[0], 10))) n++;
+    });
+    return n;
+}
+
+function purgeSectorSlots(slots) {
+    const set = new Set(slots);
+    const inSlots = hexId => set.has(parseInt(String(hexId).split('-')[0], 10));
+    [...hexStates.keys()].filter(inSlots).forEach(hexId => {
+        hexStates.delete(hexId);
+        selectedHexes.delete(hexId);
+        window.hexBorderAssignments?.delete(hexId);
+        window.hexAllegianceAssignments?.delete(hexId);
+    });
+    if (window.sectorRoutes) {
+        window.sectorRoutes = window.sectorRoutes.filter(r => !inSlots(r.startId) && !inSlots(r.endId));
+    }
+    if (window.campaignAtlas && window.campaignAtlas.records) {
+        Object.keys(window.campaignAtlas.records).forEach(id => {
+            const rec = window.campaignAtlas.records[id];
+            if (rec.anchor && inSlots(rec.anchor.hexId)) delete window.campaignAtlas.records[id];
+        });
+    }
+    slots.forEach(n => {
+        delete window.sectorNames[n];
+        if (typeof clearSubsectorNamesForSector === 'function') clearSubsectorNamesForSector(n);
+        if (window.regionPaths) {
+            [...window.regionPaths.keys()].forEach(k => {
+                if (String(k).startsWith(n + ':')) window.regionPaths.delete(k);
+            });
+        }
+    });
+    window.invalidateMapDrawCaches?.();
+    window.invalidateBorderNamesCache?.();
+    window.invalidateBorderGeomCache?.();
+    window.invalidateRegionFillCache?.();
+}
+
+function persistGridChange() {
+    window.undoStack = [];
+    window.redoStack = [];
+    if (!window.dbManager) return;
+    window.dbManager.saveGridDimensions?.();
+    window.dbManager.saveSectorNames?.();
+    window.dbManager.saveSubsectorNames?.();
+    window.dbManager.saveBorderAssignments?.();
+    window.dbManager.saveRegionPaths?.();
+    window.dbManager.saveRoutes?.();
+    window.dbManager.scheduleSyncAll?.();
 }
 
 function getMouseWorldCoords(e) {

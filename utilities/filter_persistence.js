@@ -88,8 +88,8 @@ function readStore() {
         let hidden = 0;
         window.hexStates.forEach(s => { if (s.isHiddenByFilter) hidden++; });
         await window.dbManager.syncAllHexes();
-        const el = document.getElementById('filter-active-indicator');
-        return { hidden: hidden, indicator: el.textContent, shown: el.style.display !== 'none' };
+        const el = document.getElementById('omni-filter-toggle');
+        return { hidden: hidden, indicator: el.title, shown: el.getAttribute('aria-pressed') === 'true' };
     });
     check('filter hides worlds while applied', before.hidden > 0, before.hidden + ' hidden');
     check('5. indicator appears and names the filter while it is on',
@@ -136,14 +136,14 @@ function readStore() {
             if (s.type === 'SYSTEM_PRESENT') systems++;
             if (s.isHiddenByFilter) hidden++;
         });
-        const el = document.getElementById('filter-active-indicator');
+        const el = document.getElementById('omni-filter-toggle');
         return {
             hidden: hidden, systems: systems,
             popField: document.getElementById('filter-pop').value,
             counter: document.getElementById('filter-results-count').textContent,
             hasAnyActiveFilter: hasAnyActiveFilter(),
             visibleToRouting: getFilteredHexIds().length,
-            indicatorShown: el.style.display !== 'none'
+            indicatorShown: el.getAttribute('aria-pressed') === 'true'
         };
     });
     check('1. no worlds hidden after a restart', after.hidden === 0, after.hidden + ' hidden');

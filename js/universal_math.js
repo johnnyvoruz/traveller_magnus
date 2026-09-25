@@ -16,10 +16,119 @@
             new Intl.NumberFormat('en-US', { maximumFractionDigits: decimals }));
         const minimum = Math.pow(10, -decimals);
         const formatted = numeric !== 0 && Math.abs(numeric) < minimum
-            ? `${numeric < 0 ? '−' : ''}<${displayFormats.get(decimals).format(minimum)}`
+            ? `${numeric < 0 ? '> −' : '<'}${displayFormats.get(decimals).format(minimum)}`
             : displayFormats.get(decimals).format(numeric);
         return formatted + (unit ? ` ${unit}` : '');
     };
+
+    // Long names from rules/rtt_worldgen.md, guideline_4_1, guideline_1_3,
+    // and mgt2e_logic_tech_sustainability.md. Codes not named there stay as-is.
+    const TRADE_CODE_NAMES = {
+        Ag: 'Agricultural', As: 'Asteroid Belt', Ba: 'Barren', De: 'Desert',
+        Fl: 'Fluid Oceans', Ga: 'Garden', Hi: 'High Population', Ht: 'High Technology',
+        Ic: 'Ice-Capped', In: 'Industrial', Lo: 'Low Population', Lt: 'Low Technology',
+        Na: 'Non-Agricultural', Ni: 'Non-Industrial', Pa: 'Pre-Agricultural', Po: 'Poor',
+        Ri: 'Rich', Sa: 'Satellite', Lk: 'Locked Satellite', St: 'Sterile',
+        Va: 'Vacuum', Wa: 'Water World', Zo: 'Zoo'
+    };
+    const STARPORT_NAMES = {
+        A: 'Excellent Starport', B: 'Good Starport', C: 'Routine Starport',
+        D: 'Poor Starport', E: 'Frontier Starport or Emergency Beacon', X: 'No starport'
+    };
+    const SIZE_NAMES = {
+        0: '≤800 km, neg. gravity', 1: '1,600 km, 0.05 G',
+        2: '3,200 km, 0.15 G (Triton, Luna, Europa)', 3: '4,800 km, 0.25 G (Mercury, Ganymede)',
+        4: '6,400 km, 0.35 G (Mars)', 5: '8,000 km, 0.45 G', 6: '9,600 km, 0.70 G',
+        7: '11,200 km, 0.9 G', 8: '12,800 km, 1.0 G (Terra)', 9: '14,400 km, 1.25 G',
+        A: '≥16,000 km, ≥1.4 G', B: 'Helian sizes', C: 'Helian sizes', D: 'Helian sizes',
+        E: 'Helian sizes', G: 'Jovian sizes', X: 'Planetary-Mass Artifact', Y: 'Asteroid Belt'
+    };
+    const ATMOSPHERE_NAMES = {
+        0: 'Vacuum', 1: 'Trace', 2: 'Very Thin Tainted', 3: 'Very Thin Breathable',
+        4: 'Thin Tainted', 5: 'Thin Breathable', 6: 'Standard Breathable',
+        7: 'Standard Tainted', 8: 'Dense Breathable', 9: 'Dense Tainted',
+        A: 'Exotic', B: 'Corrosive', C: 'Insidious', D: 'Super-High Density',
+        G: 'Gas Giant Envelope'
+    };
+    const HYDRO_NAMES = {
+        0: '≤5% (Trace)', 1: '≤15% (Dry / tiny ice caps)', 2: '≤25% (Small seas / ice caps)',
+        3: '≤35% (Small oceans / large ice caps)', 4: '≤45% (Wet)', 5: '≤55% (Large oceans)',
+        6: '≤65%', 7: '≤75% (Terra)', 8: '≤85% (Water world)', 9: '≤95% (No continents)',
+        A: '≤100% (Total coverage)', B: 'Superdense (incredibly deep world oceans)'
+    };
+    const POPULATION_NAMES = {
+        0: 'Uninhabited', 1: 'Few', 2: 'Hundreds', 3: 'Thousands', 4: 'Tens of thousands',
+        5: 'Hundreds of thousands', 6: 'Millions', 7: 'Tens of millions',
+        8: 'Hundreds of millions', 9: 'Billions', A: 'Tens of billions',
+        B: 'Hundreds of billions', C: 'Trillions'
+    };
+    const GOVERNMENT_NAMES = {
+        0: 'None (tends toward family/clan/tribal)', 1: 'Company or corporation',
+        2: 'Participatory democracy', 3: 'Self-perpetuating oligarchy',
+        4: 'Representative democracy', 5: 'Feudal technocracy',
+        6: 'Captive government (colony or conquered territory)', 7: 'Balkanized',
+        8: 'Civil service bureaucracy', 9: 'Impersonal bureaucracy',
+        A: 'Charismatic dictator', B: 'Non-charismatic dictator',
+        C: 'Charismatic oligarchy', D: 'Theocracy', E: 'Supreme authority',
+        F: 'Hive-mind collective'
+    };
+
+    function uwpDigitKey(value) {
+        if (value == null || value === '') return '';
+        if (typeof value === 'string') {
+            const trimmed = value.trim().toUpperCase();
+            if (/^[A-Z]$/.test(trimmed) || trimmed === 'X' || trimmed === 'Y') return trimmed;
+            if (/^\d+$/.test(trimmed)) return (typeof toEHex === 'function') ? toEHex(Number(trimmed)) : trimmed;
+            return trimmed.charAt(0);
+        }
+        if (typeof value === 'number' && Number.isFinite(value)) {
+            return (typeof toEHex === 'function') ? toEHex(value) : String(value);
+        }
+        return String(value);
+    }
+    function namedDigit(map, value) {
+        const key = uwpDigitKey(value);
+        return map[key] || map[String(value)] || '';
+    }
+    function lawName(value) {
+        const n = typeof value === 'number' ? value : (typeof fromEHex === 'function' ? fromEHex(value) : Number(value));
+        if (!Number.isFinite(n)) return '';
+        if (n === 0) return 'No restrictions';
+        if (n === 1) return 'Only restrictions upon WMD and other dangerous technologies';
+        if (n >= 2 && n <= 4) return 'Light restrictions: heavy weapons, narcotics, alien technology';
+        if (n >= 5 && n <= 7) return 'Heavy restrictions: most weapons, specialized tools and information, foreigners';
+        if (n >= 8) return 'Extreme restrictions: extensive monitoring and limitations, free speech curtailed';
+        return '';
+    }
+    function withName(value, name) {
+        if (value == null || value === '') return '';
+        return name ? `${value} — ${name}` : String(value);
+    }
+    function formatTradeCode(code) {
+        const key = String(code || '').trim();
+        if (!key) return '';
+        const name = TRADE_CODE_NAMES[key];
+        return name ? `${name} (${key})` : key;
+    }
+    function formatTradeCodes(codes) {
+        if (codes == null || codes === '') return '';
+        const list = Array.isArray(codes) ? codes : String(codes).split(/[\s,]+/).filter(Boolean);
+        return list.map(formatTradeCode).join(', ');
+    }
+    function formatUwpDigit(kind, value) {
+        if (value == null || value === '') return '';
+        if (kind === 'starport') return withName(value, namedDigit(STARPORT_NAMES, value));
+        if (kind === 'size') return withName(value, namedDigit(SIZE_NAMES, value));
+        if (kind === 'atmosphere') return withName(value, namedDigit(ATMOSPHERE_NAMES, value));
+        if (kind === 'hydrographics') return withName(value, namedDigit(HYDRO_NAMES, value));
+        if (kind === 'population') return withName(value, namedDigit(POPULATION_NAMES, value));
+        if (kind === 'government') return withName(value, namedDigit(GOVERNMENT_NAMES, value));
+        if (kind === 'law') return withName(value, lawName(value));
+        return String(value);
+    }
+    window.formatTradeCodes = formatTradeCodes;
+    window.formatUwpDigit = formatUwpDigit;
+
     const KM_PER_AU = 149597870;
     const SUN_DIAMETER_KM = 1392700;
 
@@ -441,7 +550,10 @@
         calculateBaseJourneyTimes,
         isMaskingEligible,
         calculateMaskedJourneyTimes,
-        estimateStellarDiameter
+        estimateStellarDiameter,
+        formatTradeCode,
+        formatTradeCodes,
+        formatUwpDigit
     };
 
     if (typeof window !== 'undefined') {

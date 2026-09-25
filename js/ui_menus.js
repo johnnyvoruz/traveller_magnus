@@ -10,7 +10,7 @@ function setupContextMenu() {
     document.getElementById('ctx-manual-empty').addEventListener('click', () => {
         if (!validateSelection('populate')) return;
         saveHistoryState('Manual: Set Empty');
-        selectedHexes.forEach(hexId => {
+        currentActionHexes().forEach(hexId => {
             hexStates.set(hexId, { type: 'EMPTY' });
         });
         document.getElementById('context-menu').classList.remove('visible');
@@ -26,7 +26,7 @@ function setupContextMenu() {
     document.getElementById('ctx-manual-system').addEventListener('click', () => {
         if (!validateSelection('populate')) return;
         saveHistoryState('Manual: Populate System');
-        selectedHexes.forEach(hexId => {
+        currentActionHexes().forEach(hexId => {
             hexStates.set(hexId, { type: 'SYSTEM_PRESENT' });
         });
         document.getElementById('context-menu').classList.remove('visible');
@@ -41,8 +41,9 @@ function setupContextMenu() {
 
     document.getElementById('ctx-manual-clear').addEventListener('click', () => {
         if (!validateSelection('clear')) return;
+        const hexList = currentActionHexes();
         saveHistoryState('Batch Clear');
-        selectedHexes.forEach(hexId => {
+        hexList.forEach(hexId => {
             hexStates.delete(hexId);
             removeRoutesForHex(hexId);
         });
@@ -52,7 +53,7 @@ function setupContextMenu() {
         if (typeof window.reapplyAllRules === 'function') window.reapplyAllRules();
         if (typeof window.applyActiveFilters === 'function') window.applyActiveFilters();
 
-        showToast(`Cleared ${selectedHexes.size} hex(es) and connected routes.`, 2000);
+        showToast(`Cleared ${hexList.length} hex(es) and connected routes.`, 2000);
         selectedHexes.clear();
         requestAnimationFrame(draw);
     });
@@ -75,7 +76,7 @@ function setupContextMenu() {
     // --- Assign Background Color ---
     function openBgColorModal() {
         document.getElementById('context-menu').classList.remove('visible');
-        const hexList = [...selectedHexes];
+        const hexList = currentActionHexes();
         if (hexList.length === 0) {
             showToast('No hexes selected.', 2000);
             return;
@@ -92,7 +93,7 @@ function setupContextMenu() {
 
     function applyBgColor() {
         const color = document.getElementById('bg-color-picker').value;
-        const hexList = [...selectedHexes];
+        const hexList = currentActionHexes();
         saveHistoryState('Assign Background Color');
         hexList.forEach(hexId => {
             let s = hexStates.get(hexId);
@@ -108,7 +109,7 @@ function setupContextMenu() {
     }
 
     function clearBgColor() {
-        const hexList = [...selectedHexes];
+        const hexList = currentActionHexes();
         saveHistoryState('Clear Background Color');
         hexList.forEach(hexId => {
             const s = hexStates.get(hexId);
@@ -126,7 +127,7 @@ function setupContextMenu() {
     // --- Assign Allegiance ---
     function openAssignAllegianceModal() {
         document.getElementById('context-menu').classList.remove('visible');
-        const count = selectedHexes.size;
+        const count = currentActionHexes().length;
         if (count === 0) { showToast('No hexes selected.', 2000); return; }
         document.getElementById('allegiance-assign-count').textContent = count;
         document.getElementById('allegiance-assign-input').value = '';
@@ -137,7 +138,7 @@ function setupContextMenu() {
     function applyAllegiance() {
         const code = document.getElementById('allegiance-assign-input').value.trim();
         if (!code) { showToast('Please enter an allegiance code.', 2000); return; }
-        const hexList = [...selectedHexes];
+        const hexList = currentActionHexes();
         saveHistoryState('Assign Allegiance');
         hexList.forEach(hexId => {
             const s = hexStates.get(hexId);
@@ -178,7 +179,7 @@ function setupGenerationHandlers() {
         await ensureNamesLoaded();
         if (window.isLoggingEnabled) window.batchLogData = [];
         let count = 0;
-        selectedHexes.forEach(hexId => {
+        currentActionHexes().forEach(hexId => {
             let stateObj = hexStates.get(hexId);
             if (typeof stateObj === 'string') stateObj = { type: stateObj };
 
@@ -206,7 +207,7 @@ function setupGenerationHandlers() {
         // v0.6.1.0: Individual System Audit to console
         if (count > 0 && typeof StatisticalAuditor !== 'undefined') {
             const auditor = new StatisticalAuditor('ct', true);
-            selectedHexes.forEach(hexId => {
+            currentActionHexes().forEach(hexId => {
                 const s = hexStates.get(hexId);
                 if (s && s.ctData) {
                     auditor.recordSystem({
@@ -245,7 +246,7 @@ function setupGenerationHandlers() {
         await ensureNamesLoaded();
         if (window.isLoggingEnabled) window.batchLogData = [];
         let count = 0;
-        selectedHexes.forEach(hexId => {
+        currentActionHexes().forEach(hexId => {
             let stateObj = hexStates.get(hexId);
             if (typeof stateObj === 'string') stateObj = { type: stateObj };
 
@@ -293,7 +294,7 @@ function setupGenerationHandlers() {
         // v0.6.1.0: Individual System Audit to console
         if (count > 0 && typeof StatisticalAuditor !== 'undefined') {
             const auditor = new StatisticalAuditor('mgt2e', true);
-            selectedHexes.forEach(hexId => {
+            currentActionHexes().forEach(hexId => {
                 const s = hexStates.get(hexId);
                 if (s && s.mgt2eData) {
                     const mw = s.mgt2eData;
@@ -333,7 +334,7 @@ function setupGenerationHandlers() {
         await ensureNamesLoaded();
         if (window.isLoggingEnabled) window.batchLogData = [];
         let count = 0;
-        selectedHexes.forEach(hexId => {
+        currentActionHexes().forEach(hexId => {
             let stateObj = hexStates.get(hexId);
             if (typeof stateObj === 'string') stateObj = { type: stateObj };
 
@@ -365,7 +366,7 @@ function setupGenerationHandlers() {
         // v0.6.1.0: Individual System Audit to console
         if (count > 0 && typeof StatisticalAuditor !== 'undefined') {
             const auditor = new StatisticalAuditor('t5', true);
-            selectedHexes.forEach(hexId => {
+            currentActionHexes().forEach(hexId => {
                 const s = hexStates.get(hexId);
                 if (s && s.t5Data) {
                     const mw = s.t5Data;
@@ -405,7 +406,7 @@ function setupGenerationHandlers() {
         saveHistoryState('Expand T5 Socioeconomics');
         if (window.isLoggingEnabled) window.batchLogData = [];
         let missingData = false;
-        selectedHexes.forEach(hexId => {
+        currentActionHexes().forEach(hexId => {
             let stateObj = hexStates.get(hexId);
             let baseData = null;
             if (stateObj) {
@@ -429,14 +430,14 @@ function setupGenerationHandlers() {
         }
 
         if (window.isLoggingEnabled && window.batchLogData.length > 0) {
-            downloadBatchLog('T5_Socio', selectedHexes.size);
+            downloadBatchLog('T5_Socio', currentActionHexes().length);
         }
 
         document.getElementById('context-menu').classList.remove('visible');
-        showToast(`Expanded T5 Socioeconomics for ${selectedHexes.size} hex(es)`);
+        showToast(`Expanded T5 Socioeconomics for ${currentActionHexes().length} hex(es)`);
 
         // Sean Protocol: Sync Rule Engine and Filters with updated socio data
-        if (typeof writeLogLine === 'function') writeLogLine(`Refreshing rules for ${selectedHexes.size} updated systems (Socio Expansion).`);
+        if (typeof writeLogLine === 'function') writeLogLine(`Refreshing rules for ${currentActionHexes().length} updated systems (Socio Expansion).`);
         if (typeof window.reapplyAllRules === 'function') window.reapplyAllRules();
         if (typeof window.applyActiveFilters === 'function') window.applyActiveFilters();
 
@@ -450,7 +451,7 @@ function setupGenerationHandlers() {
         saveHistoryState('Expand MgT2E Socioeconomics');
         if (window.isLoggingEnabled) window.batchLogData = [];
         let missingData = false;
-        selectedHexes.forEach(hexId => {
+        currentActionHexes().forEach(hexId => {
             let stateObj = hexStates.get(hexId);
             let baseData = null;
             if (stateObj) {
@@ -509,14 +510,14 @@ function setupGenerationHandlers() {
         }
 
         if (window.isLoggingEnabled && window.batchLogData.length > 0) {
-            downloadBatchLog('MgT2E_Socio', selectedHexes.size);
+            downloadBatchLog('MgT2E_Socio', currentActionHexes().length);
         }
 
         document.getElementById('context-menu').classList.remove('visible');
-        showToast(`Expanded MgT2E Socioeconomics for ${selectedHexes.size} hex(es)`);
+        showToast(`Expanded MgT2E Socioeconomics for ${currentActionHexes().length} hex(es)`);
         
         // Sean Protocol: Sync Rule Engine and Filters with updated socio data
-        if (typeof writeLogLine === 'function') writeLogLine(`Refreshing rules for ${selectedHexes.size} updated systems (Socio Expansion).`);
+        if (typeof writeLogLine === 'function') writeLogLine(`Refreshing rules for ${currentActionHexes().length} updated systems (Socio Expansion).`);
         if (typeof window.reapplyAllRules === 'function') window.reapplyAllRules();
         if (typeof window.applyActiveFilters === 'function') window.applyActiveFilters();
 
@@ -530,7 +531,7 @@ function setupGenerationHandlers() {
         saveHistoryState('Expand MgT2E Socioeconomics (Dev)');
         if (window.isLoggingEnabled) window.batchLogData = [];
         let missingSystem = false;
-        selectedHexes.forEach(hexId => {
+        currentActionHexes().forEach(hexId => {
             let stateObj = hexStates.get(hexId);
             if (stateObj && stateObj.mgtSystem) {
                 // Call the new non-regenerative orchestrator
@@ -574,14 +575,14 @@ function setupGenerationHandlers() {
         }
 
         if (window.isLoggingEnabled && window.batchLogData.length > 0) {
-            downloadBatchLog('MgT2E_Socio_Dev', selectedHexes.size);
+            downloadBatchLog('MgT2E_Socio_Dev', currentActionHexes().length);
         }
 
         document.getElementById('context-menu').classList.remove('visible');
-        showToast(`[DEV] Expanded Socioeconomics for ${selectedHexes.size} hex(es) (No Regen)`);
+        showToast(`[DEV] Expanded Socioeconomics for ${currentActionHexes().length} hex(es) (No Regen)`);
         
         // Sean Protocol: Sync Rule Engine and Filters with updated socio data
-        if (typeof writeLogLine === 'function') writeLogLine(`Refreshing rules for ${selectedHexes.size} updated systems (Socio Expansion).`);
+        if (typeof writeLogLine === 'function') writeLogLine(`Refreshing rules for ${currentActionHexes().length} updated systems (Socio Expansion).`);
         if (typeof window.reapplyAllRules === 'function') window.reapplyAllRules();
         if (typeof window.applyActiveFilters === 'function') window.applyActiveFilters();
 
@@ -589,7 +590,7 @@ function setupGenerationHandlers() {
         requestAnimationFrame(draw);
 
         // Auto-refresh the hex editor if it is currently open
-        if (typeof editingHexId !== 'undefined' && editingHexId && selectedHexes.has(editingHexId)) {
+        if (typeof editingHexId !== 'undefined' && editingHexId && currentActionHexes().includes(editingHexId)) {
             if (typeof openHexEditor === 'function') {
                 openHexEditor(editingHexId);
             }
@@ -605,7 +606,7 @@ function setupGenerationHandlers() {
 
         if (window.isLoggingEnabled) window.batchLogData = [];
 
-        selectedHexes.forEach(hexId => {
+        currentActionHexes().forEach(hexId => {
             let stateObj = hexStates.get(hexId);
             let baseData = stateObj ? (stateObj.ctData || stateObj.mgt2eData || stateObj.t5Data) : null;
 
@@ -633,14 +634,14 @@ function setupGenerationHandlers() {
         }
 
         if (window.isLoggingEnabled && window.batchLogData && window.batchLogData.length > 0) {
-            downloadBatchLog('CT_Systems', selectedHexes.size);
+            downloadBatchLog('CT_Systems', currentActionHexes().length);
         }
 
         document.getElementById('context-menu').classList.remove('visible');
-        showToast(`Expanded CT System for ${selectedHexes.size} hex(es)`);
+        showToast(`Expanded CT System for ${currentActionHexes().length} hex(es)`);
         
         // Sean Protocol: Sync Rule Engine and Filters with updated physical data
-        if (typeof writeLogLine === 'function') writeLogLine(`Refreshing rules for ${selectedHexes.size} updated systems (Physical Expansion).`);
+        if (typeof writeLogLine === 'function') writeLogLine(`Refreshing rules for ${currentActionHexes().length} updated systems (Physical Expansion).`);
         if (typeof window.reapplyAllRules === 'function') window.reapplyAllRules();
         if (typeof window.applyActiveFilters === 'function') window.applyActiveFilters();
 
@@ -655,7 +656,7 @@ function setupGenerationHandlers() {
         saveHistoryState('Expand MgT2E System');
         if (window.isLoggingEnabled) window.batchLogData = [];
         let missingData = false;
-        selectedHexes.forEach(hexId => {
+        currentActionHexes().forEach(hexId => {
             let stateObj = hexStates.get(hexId);
             let baseData = stateObj ? (stateObj.mgt2eData || stateObj.t5Data || stateObj.ctData || stateObj.rttData) : null;
 
@@ -709,14 +710,14 @@ function setupGenerationHandlers() {
         }
 
         if (window.isLoggingEnabled && window.batchLogData.length > 0) {
-            downloadBatchLog('MgT2E_Systems', selectedHexes.size);
+            downloadBatchLog('MgT2E_Systems', currentActionHexes().length);
         }
 
         document.getElementById('context-menu').classList.remove('visible');
-        showToast(`Expanded MgT2E Physical system for ${selectedHexes.size} hex(es)`);
+        showToast(`Expanded MgT2E Physical system for ${currentActionHexes().length} hex(es)`);
         
         // Sean Protocol: Sync Rule Engine and Filters with updated physical data
-        if (typeof writeLogLine === 'function') writeLogLine(`Refreshing rules for ${selectedHexes.size} updated systems (Physical Expansion).`);
+        if (typeof writeLogLine === 'function') writeLogLine(`Refreshing rules for ${currentActionHexes().length} updated systems (Physical Expansion).`);
         if (typeof window.reapplyAllRules === 'function') window.reapplyAllRules();
         if (typeof window.applyActiveFilters === 'function') window.applyActiveFilters();
 
@@ -729,21 +730,21 @@ function setupGenerationHandlers() {
 
         // Warn if any selected hex has manual field overrides that will be preserved
         let totalManualBodies = 0;
-        selectedHexes.forEach(hexId => {
+        currentActionHexes().forEach(hexId => {
             const s = hexStates.get(hexId);
             if (s && s.t5System) totalManualBodies += countT5ManualBodies(s.t5System);
         });
         const manualNote = totalManualBodies > 0
             ? `\n\n${totalManualBodies} body/bodies have manual field overrides. These will be preserved.`
             : '';
-        if (!confirm(`Re-expand the T5 system for ${selectedHexes.size} hex(es). Stars and orbits will be regenerated.${manualNote}\n\nProceed?`)) {
+        if (!confirm(`Re-expand the T5 system for ${currentActionHexes().length} hex(es). Stars and orbits will be regenerated.${manualNote}\n\nProceed?`)) {
             return;
         }
 
         saveHistoryState('Expand T5 System');
         if (window.isLoggingEnabled) window.batchLogData = [];
         let missingData = false;
-        selectedHexes.forEach(hexId => {
+        currentActionHexes().forEach(hexId => {
             let stateObj = hexStates.get(hexId);
             let baseData = null;
             if (stateObj) {
@@ -776,14 +777,14 @@ function setupGenerationHandlers() {
         }
 
         if (window.isLoggingEnabled && window.batchLogData.length > 0) {
-            downloadBatchLog('T5_Systems', selectedHexes.size);
+            downloadBatchLog('T5_Systems', currentActionHexes().length);
         }
 
         document.getElementById('context-menu').classList.remove('visible');
-        showToast(`Expanded T5 Physical system for ${selectedHexes.size} hex(es)`);
+        showToast(`Expanded T5 Physical system for ${currentActionHexes().length} hex(es)`);
         
         // Sean Protocol: Sync Rule Engine and Filters with updated physical data
-        if (typeof writeLogLine === 'function') writeLogLine(`Refreshing rules for ${selectedHexes.size} updated systems (Physical Expansion).`);
+        if (typeof writeLogLine === 'function') writeLogLine(`Refreshing rules for ${currentActionHexes().length} updated systems (Physical Expansion).`);
         if (typeof window.reapplyAllRules === 'function') window.reapplyAllRules();
         if (typeof window.applyActiveFilters === 'function') window.applyActiveFilters();
 
@@ -795,7 +796,7 @@ function setupGenerationHandlers() {
     document.getElementById('ctx-expand-rtt-bio').addEventListener('click', () => {
         if (!validateSelection('physical')) return;
 
-        const targetHexes = Array.from(selectedHexes).filter(hexId => {
+        const targetHexes = currentActionHexes().filter(hexId => {
             const s = hexStates.get(hexId);
             return s && s.rttSystem;
         });
@@ -3699,7 +3700,7 @@ window.openRouteAutoPanel = function (routeId, routeName) {
 window.closeRouteAutoPanel = function () {
     const panel = document.getElementById('route-auto-panel');
     if (!panel) return;
-    MapPick.cancel();   // the crosshair must not outlive the panel
+    MapPick.cancel();   // the pick cursor must not outlive the panel
     _wacHideActive();   // portaled onto <body>; hiding the panel won't hide it
     panel.style.display = 'none';
     panel.dataset.targetRouteId = '';
@@ -3825,61 +3826,21 @@ function setupSettingsPanel() {
         requestAnimationFrame(draw);
     });
 
-    document.getElementById('toggle-sector-names').addEventListener('change', (e) => {
-        showSectorNames = e.target.checked;
-        requestAnimationFrame(draw);
-    });
-
-    // --- Sector Name Editor ---
-    document.getElementById('btn-edit-sector-names').addEventListener('click', () => {
-        const modal = document.getElementById('sector-name-editor-modal');
-        const grid  = document.getElementById('sector-name-grid');
-        grid.innerHTML = '';
-
-        // Build a row of inputs per grid row, mirroring the map layout
-        for (let sY = 0; sY < gridHeight; sY++) {
-            const row = document.createElement('div');
-            row.style.cssText = 'display:flex; gap:4px;';
-            for (let sX = 0; sX < gridWidth; sX++) {
-                const sectorNum = sY * gridWidth + sX + 1;
-                const current = (window.sectorNames && window.sectorNames[sectorNum]) || '';
-                const cell = document.createElement('div');
-                cell.style.cssText = 'flex:1; display:flex; flex-direction:column; gap:2px;';
-                cell.innerHTML = `
-                    <span style="color:#45a29e; font-size:0.65rem; text-align:center;">${sectorNum}</span>
-                    <input type="text" data-sector="${sectorNum}"
-                        value="${current.replace(/"/g, '&quot;')}"
-                        placeholder="Sector ${sectorNum}"
-                        style="width:100%; padding:3px 4px; background:#0d0f13; border:1px solid #2a3a3a;
-                               color:#c5c6c7; font-size:0.7rem; font-family:'Courier New',monospace;
-                               border-radius:3px; box-sizing:border-box;">
-                `;
-                row.appendChild(cell);
-            }
-            grid.appendChild(row);
-        }
-
-        modal.style.display = 'flex';
-    });
-
-    document.getElementById('btn-sector-names-save').addEventListener('click', () => {
-        const inputs = document.querySelectorAll('#sector-name-grid input[data-sector]');
-        inputs.forEach(input => {
-            const num = parseInt(input.dataset.sector, 10);
-            const val = input.value.trim();
-            if (val) {
-                window.sectorNames[num] = val;
-            } else {
-                delete window.sectorNames[num];
-            }
+    const sectorNamesToggle = document.getElementById('toggle-sector-names');
+    if (sectorNamesToggle) {
+        const saved = localStorage.getItem('traveller_sector_names');
+        showSectorNames = saved === null ? true : saved === 'true';
+        sectorNamesToggle.checked = showSectorNames;
+        sectorNamesToggle.addEventListener('change', (e) => {
+            showSectorNames = e.target.checked;
+            localStorage.setItem('traveller_sector_names', String(showSectorNames));
+            requestAnimationFrame(draw);
         });
-        document.getElementById('sector-name-editor-modal').style.display = 'none';
-        if (window.dbManager) window.dbManager.saveSectorNames();
-        requestAnimationFrame(draw);
-    });
+    }
 
-    document.getElementById('btn-sector-names-cancel').addEventListener('click', () => {
-        document.getElementById('sector-name-editor-modal').style.display = 'none';
+    document.getElementById('btn-edit-sector-names')?.addEventListener('click', () => {
+        document.getElementById('settings-panel')?.classList.remove('open');
+        if (typeof window.toggleSectorWindow === 'function') window.toggleSectorWindow();
     });
 
     const printModeToggle = document.getElementById('toggle-print-mode');
@@ -3945,8 +3906,9 @@ function setupSettingsPanel() {
     const borderFillToggle = document.getElementById('toggle-border-fill');
     if (borderFillToggle) {
         const saved = localStorage.getItem('traveller_border_fill');
-        window.borderFillEnabled = saved === 'true';
+        window.borderFillEnabled = saved === null ? true : saved === 'true';
         borderFillToggle.checked = window.borderFillEnabled;
+        if (saved === null) localStorage.setItem('traveller_border_fill', 'true');
         borderFillToggle.addEventListener('change', () => {
             window.borderFillEnabled = borderFillToggle.checked;
             localStorage.setItem('traveller_border_fill', String(window.borderFillEnabled));
@@ -3963,6 +3925,7 @@ function setupSettingsPanel() {
         borderNamesToggle.addEventListener('change', () => {
             window.borderNamesEnabled = borderNamesToggle.checked;
             localStorage.setItem('traveller_border_names', String(window.borderNamesEnabled));
+            if (typeof window.invalidateBorderNamesCache === 'function') window.invalidateBorderNamesCache();
             requestAnimationFrame(draw);
         });
     }
@@ -3976,6 +3939,7 @@ function setupSettingsPanel() {
         regionNamesToggle.addEventListener('change', () => {
             window.regionNamesEnabled = regionNamesToggle.checked;
             localStorage.setItem('traveller_region_names', String(window.regionNamesEnabled));
+            if (typeof window.invalidateRegionFillCache === 'function') window.invalidateRegionFillCache();
             requestAnimationFrame(draw);
         });
     }

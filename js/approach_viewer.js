@@ -296,7 +296,7 @@ const ApproachViewer = (() => {
         _overlay.appendChild(header);
 
         _canvas = document.createElement('canvas');
-        Object.assign(_canvas.style, { display: 'block', cursor: 'grab' });
+        Object.assign(_canvas.style, { display: 'block', cursor: 'default' });
         _overlay.appendChild(_canvas);
 
         document.body.appendChild(_overlay);
@@ -325,7 +325,7 @@ const ApproachViewer = (() => {
         if (e.button !== 0) return;
         _dragging = true;
         _dragLast = { x: e.clientX, y: e.clientY };
-        _canvas.style.cursor = 'grabbing';
+        _canvas.style.cursor = 'move';
     }
 
     function _onWindowMouseMove(e) {
@@ -343,7 +343,7 @@ const ApproachViewer = (() => {
     function _onWindowMouseUp() {
         if (!_dragging) return;
         _dragging = false;
-        if (_canvas) _canvas.style.cursor = 'grab';
+        if (_canvas) _canvas.style.cursor = 'default';
     }
 
     function _onWheel(e) {

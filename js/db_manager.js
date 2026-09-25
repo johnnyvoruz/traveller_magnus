@@ -97,6 +97,9 @@
             if (appState.sectorNames && typeof appState.sectorNames === 'object') {
                 window.sectorNames = appState.sectorNames;
             }
+            if (appState.subsectorNames && typeof appState.subsectorNames === 'object') {
+                window.subsectorNames = appState.subsectorNames;
+            }
 
             // Restore routeDefinitions, or migrate from legacy segments if missing
             if (Array.isArray(appState.routeDefinitions) && appState.routeDefinitions.length > 0) {
@@ -416,6 +419,16 @@
         }
     }
 
+    async function saveSubsectorNames() {
+        try {
+            const db = await _openDB();
+            const tx = db.transaction(STORE_APP, 'readwrite');
+            tx.objectStore(STORE_APP).put(window.subsectorNames || {}, 'subsectorNames');
+        } catch (err) {
+            console.warn('[DB] saveSubsectorNames failed:', err);
+        }
+    }
+
     // -------------------------------------------------------------------------
     // Wipe the entire database.
     // Called before Universe import or when the user starts a new map.
@@ -540,6 +553,7 @@
         saveRegionDefinitions,
         saveRegionPaths,
         saveSectorNames,
+        saveSubsectorNames,
         clearDB,
         getTsvCache,
         putTsvCache

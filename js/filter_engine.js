@@ -24,51 +24,9 @@
     // Initialization
     window.addEventListener('DOMContentLoaded', () => {
         setupFilterListeners();
-        setupFilterCloseButton();
-        setupFilterIndicator();
         restoreDesignCheckboxes();
-        // initDraggable(); // Now handled globally in input_init.js
         initializeDefaultStyleRule();
     });
-
-    /**
-     * Click-through from the filter-active notice to the Filter Manager.
-     */
-    function setupFilterIndicator() {
-        const el = document.getElementById('filter-active-indicator');
-        if (!el) return;
-        el.addEventListener('click', () => {
-            const modal = document.getElementById('filter-modal');
-            // Only open it; clicking the notice must never close the window the
-            // user is about to read.
-            if (modal && !modal.classList.contains('visible') &&
-                typeof window.toggleFilterModal === 'function') {
-                window.toggleFilterModal();
-            }
-        });
-    }
-
-    /**
-     * Sean Protocol: Dedicated listener for the draggable palette close button.
-     * Includes stopPropagation to avoid triggering global drag handlers.
-     */
-    function setupFilterCloseButton() {
-        const btnX = document.getElementById('btn-close-filter');
-        if (btnX) {
-            btnX.addEventListener('click', (e) => {
-                e.stopPropagation();
-                window.closeFilterModal();
-            });
-            btnX.addEventListener('mousedown', (e) => e.stopPropagation());
-        }
-
-        const btnFooter = document.getElementById('btn-footer-close-filter');
-        if (btnFooter) {
-            btnFooter.addEventListener('click', () => {
-                window.closeFilterModal();
-            });
-        }
-    }
 
     function initializeDefaultStyleRule() {
         if (typeof tSection === 'function') tSection("Initialize Default Styling Rule");
@@ -133,32 +91,29 @@
     };
 
     /**
-     * Toggles the filter modal visibility and performs a data scan for conditional fields.
+     * Toggles the omni-search filter pane and scans for conditional fields.
      */
     window.toggleFilterModal = function() {
         if (typeof tSection === 'function') tSection("Toggle Filter Modal");
-        const modal = document.getElementById('filter-modal');
-        const isOpening = !modal.classList.contains('visible');
-
-        if (isOpening) {
-            modal.classList.add('visible');
-            // Opening the manager is re-engaging with the filter; a bypassed
-            // one here would contradict the match count shown in this window.
-            if (typeof window.restoreFilterView === 'function') window.restoreFilterView(false);
-            window.populateFilterRegionDropdown();
-            scanForConditionalFields();
-            if (typeof writeLogLine === 'function') writeLogLine("Filter Modal Opened - Performing data scan for Ix/GWP/WTN.");
-        } else {
-            modal.classList.remove('visible');
-            if (typeof writeLogLine === 'function') writeLogLine("Filter Modal Closed.");
+        if (typeof window.isOmniFilterOpen === 'function' && window.isOmniFilterOpen()) {
+            window.closeOmniFilter();
+            if (typeof writeLogLine === 'function') writeLogLine("Filter pane closed.");
+            return;
         }
+        // Opening the manager is re-engaging with the filter; a bypassed
+        // one here would contradict the match count shown in this window.
+        if (typeof window.restoreFilterView === 'function') window.restoreFilterView(false);
+        window.populateFilterRegionDropdown();
+        scanForConditionalFields();
+        if (typeof window.openOmniFilter === 'function') window.openOmniFilter();
+        if (typeof writeLogLine === 'function') writeLogLine("Filter pane opened - Performing data scan for Ix/GWP/WTN.");
     };
 
     /**
-     * Closes the filter modal.
+     * Closes the omni-search filter pane.
      */
     window.closeFilterModal = function() {
-        document.getElementById('filter-modal').classList.remove('visible');
+        if (typeof window.closeOmniFilter === 'function') window.closeOmniFilter();
     };
 
     // ── Filter bypass (Shift+F) ──────────────────────────────────────────────
@@ -184,39 +139,36 @@
     }
 
     /**
-     * The always-visible notice that worlds are being hidden.
-     *
-     * A filtered map looks exactly like a sparse one. That is why a filter could
-     * outlive the form that created it without anyone being able to see why their
-     * worlds were missing — the map simply looked emptier than it should. This
-     * removes the ambiguity: if anything is hidden, it says so, permanently.
-     *
-     * Derived on every call from isHiddenByFilter, never stored, so it cannot go
-     * stale the way the flags themselves did.
+     * The Filter control on omni-search is the always-visible notice that worlds
+     * are being hidden. A filtered map looks exactly like a sparse one, so the
+     * button carries the match count (and Shift+F state) even while the pane is
+     * closed. Derived on every call from isHiddenByFilter, never stored.
      */
     window.updateFilterIndicator = function () {
-        const el = document.getElementById('filter-active-indicator');
-        if (!el) return;
+        const btn = document.getElementById('omni-filter-toggle');
+        const label = document.getElementById('omni-filter-label');
+        const icon = btn?.querySelector('i');
+        const suspendBtn = document.getElementById('omni-filter-suspend');
+        if (!btn) return;
 
         const { match, total } = _filterMatchCounts();
         const hidden = total - match;
-
-        // Nothing hidden means nothing to say — an indicator that is always on
-        // screen is furniture, and stops being read.
-        if (hidden <= 0) {
-            el.style.display = 'none';
-            return;
-        }
-
         const suspended = window.filterSuspended === true;
-        el.style.display = 'flex';
-        el.classList.toggle('suspended', suspended);
-        el.textContent = suspended
-            ? `Filter suspended — showing all ${total} worlds · Shift+F to reapply`
-            : `Filter active — showing ${match} of ${total} worlds`;
-        el.title = suspended
-            ? 'The filter is bypassed for viewing. Click to open the Filter Manager.'
-            : `${hidden} world(s) hidden by the current filter. Click to open the Filter Manager.`;
+
+        btn.classList.toggle('is-suspended', suspended);
+        btn.setAttribute('aria-pressed', String(hidden > 0 || suspended));
+        if (icon) icon.className = `fa-solid ${suspended ? 'fa-filter-slash' : 'fa-filter'}`;
+        if (label) label.textContent = hidden <= 0 ? 'Filter' : suspended ? 'Off' : String(match);
+        btn.title = hidden <= 0
+            ? 'Filter worlds (F)'
+            : suspended
+                ? `Filter suspended — showing all ${total} worlds · Shift+F to reapply`
+                : `Filter active — showing ${match} of ${total} worlds`;
+
+        if (suspendBtn) {
+            suspendBtn.textContent = suspended ? 'Resume' : 'Suspend';
+            suspendBtn.title = suspended ? 'Restore filters (Shift+F)' : 'Suspend filters (Shift+F)';
+        }
     };
 
     window.isFilterSuspended = function () {
@@ -354,7 +306,6 @@
         if (!note) {
             note = document.createElement('div');
             note.id = 'filter-stellar-unavailable';
-            note.style.cssText = 'font-size:0.7rem; color:#c5883a; padding:2px 0 4px; line-height:1.3;';
             const header = section.querySelector('.filter-accordion-header');
             if (header && header.nextSibling) section.insertBefore(note, header.nextSibling);
             else section.appendChild(note);
@@ -706,14 +657,14 @@
         if (!listContainer) return;
 
         if (window.activeFilterRules.length === 0) {
-            listContainer.innerHTML = `<div style="color: #45a29e; font-size: 0.7rem; text-align: center; padding: 10px;">No active rules.</div>`;
+            listContainer.innerHTML = `<div class="omni-filter-empty">No active rules.</div>`;
             return;
         }
 
         listContainer.innerHTML = '';
         window.activeFilterRules.forEach((rule, index) => {
             const row = document.createElement('div');
-            row.style.cssText = "display: flex; align-items: center; justify-content: space-between; background: rgba(102, 252, 241, 0.05); border: 1px solid rgba(102, 252, 241, 0.2); border-radius: 3px; margin-bottom: 4px; padding: 4px 8px; font-size: 0.7rem; color: #fff;";
+            row.className = 'omni-filter-rule';
             
             // Determine what little badge to show in the ledger based on iconStyle
             let styleIndicator = '';
@@ -754,14 +705,14 @@
             }
 
             const isHidden = rule.visible === false;
-            row.style.opacity = isHidden ? '0.45' : '1';
+            if (isHidden) row.classList.add('is-hidden');
             row.innerHTML = `
-                <div style="display: flex; align-items: center; flex: 1; overflow: hidden;">
+                <div class="omni-filter-rule-main">
                     ${styleIndicator}
-                    <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${rule.description}">${rule.description}</span>
+                    <span title="${rule.description}">${rule.description}</span>
                 </div>
-                <i class="fas fa-eye${isHidden ? '-slash' : ''}" style="color: ${isHidden ? '#666' : '#45a29e'}; cursor: pointer; margin-left: 8px; font-size: 0.8rem;" title="${isHidden ? 'Enable rule' : 'Disable rule'}" onclick="toggleFilterRuleVisibility('${rule.id}')"></i>
-                <i class="fas fa-times" style="color: #ff4500; cursor: pointer; margin-left: 8px; font-size: 0.8rem;" onclick="deleteFilterRule('${rule.id}')"></i>
+                <button type="button" title="${isHidden ? 'Enable rule' : 'Disable rule'}" onclick="toggleFilterRuleVisibility('${rule.id}')"><i class="fas fa-eye${isHidden ? '-slash' : ''}"></i></button>
+                <button type="button" class="omni-filter-rule-delete" title="Delete rule" onclick="deleteFilterRule('${rule.id}')"><i class="fas fa-times"></i></button>
             `;
             listContainer.appendChild(row);
         });

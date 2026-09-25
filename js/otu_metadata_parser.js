@@ -70,6 +70,10 @@
             return;
         }
 
+        // Subsector names live in the same metadata file as routes/borders.
+        // Always apply them when XML is in hand — they are not optional layers.
+        importSubsectorNamesFromXml(doc, slotNum);
+
         if (importRoutes) {
             const routeEls = doc.querySelectorAll('Route');
             let added = 0, skipped = 0;
@@ -148,5 +152,27 @@
 
     }
 
+    /**
+     * Reads TravellerMap <Subsector Index="A">Name</Subsector> nodes into
+     * window.subsectorNames keyed "slotNum-letter".
+     */
+    function importSubsectorNamesFromXml(doc, slotNum) {
+        if (!doc || slotNum == null) return 0;
+        if (typeof setSubsectorName !== 'function') return 0;
+        if (typeof clearSubsectorNamesForSector === 'function') {
+            clearSubsectorNamesForSector(slotNum);
+        }
+        let n = 0;
+        doc.querySelectorAll('Subsector').forEach(el => {
+            const idx = (el.getAttribute('Index') || '').trim().toUpperCase();
+            const name = (el.textContent || '').trim();
+            if (!/^[A-P]$/.test(idx) || !name) return;
+            setSubsectorName(slotNum, idx, name);
+            n++;
+        });
+        return n;
+    }
+
     window.parseAndAddOtuRoutes = parseAndAddOtuRoutes;
+    window.importSubsectorNamesFromXml = importSubsectorNamesFromXml;
 }());
