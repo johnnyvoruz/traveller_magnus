@@ -386,6 +386,7 @@ function setupNavigation() {
     window.addEventListener('resize', layout);
     document.addEventListener('keydown', e => {
         if (e.key !== 'Escape' || e.defaultPrevented || e.target.closest('#omni-search')) return;
+        if (document.getElementById('world-image-panel')) return;
         const trays = document.querySelectorAll('.nav-tray:not([hidden])');
         const legend = document.getElementById('legend-tray');
         if (!trays.length && legend.hidden) return;

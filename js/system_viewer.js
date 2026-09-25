@@ -375,6 +375,14 @@ const SystemViewer = (() => {
         return Object.assign({}, sys, { edition: 'MgT2E', hzAU, worlds });
     }
 
+    // A UWP physical digit (0–9, A–F). Gas-giant words ("Large") and ring
+    // letters ("R") are not map size codes, so they stay off the body.
+    function _surfaceDigit(value) {
+        if (typeof value === 'number' && Number.isFinite(value)) return value;
+        if (typeof value === 'string' && /^[0-9A-Fa-f]$/.test(value.trim())) return value.trim().toUpperCase();
+        return null;
+    }
+
     // Shared moon normaliser for CT and T5 (both use world.satellites[]).
     function _normMoon(m, mainworldRef) {
         const isMainworld = _isSameWorld(m, mainworldRef);
@@ -390,7 +398,9 @@ const SystemViewer = (() => {
             mass:        m.mass       || null,
             gravity:     m.gravity    || null,
             meanTempK:   m.meanTempK  || null,
-            size:        m.size       ?? null,
+            size:        _surfaceDigit(m.size),
+            atm:         _surfaceDigit(m.atm),
+            hydro:       _surfaceDigit(m.hydro),
             pd:          m.pd         || null,
         };
     }
@@ -533,6 +543,9 @@ const SystemViewer = (() => {
             diamKm:        w.diamKm   || null,
             gravity:       w.gravity  || null,
             meanTempK:     w.meanTempK|| null,
+            size:          _surfaceDigit(w.size),
+            atm:           _surfaceDigit(w.atm),
+            hydro:         _surfaceDigit(w.hydro),
             moons:         (w.satellites || []).map(m => _normMoon(m, mainworldRef)),
             uwp:           w.uwp      || null,
             name:          w.name     || null,
@@ -652,6 +665,9 @@ const SystemViewer = (() => {
             diamKm:        w.diamKm    || (type === 'Gas Giant' ? 215000 : null),
             gravity:       w.gravity   || null,
             meanTempK:     w.meanTempK || null,
+            size:          _surfaceDigit(w.size),
+            atm:           _surfaceDigit(w.atm),
+            hydro:         _surfaceDigit(w.hydro),
             moons:         (w.satellites || []).map(m => _normMoon(m, mainworldRef)),
             uwp:           w.uwp       || null,
             name:          w.name      || null,
@@ -759,7 +775,9 @@ const SystemViewer = (() => {
             mass:       null,
             gravity:    m.gravity    || null,
             meanTempK:  m.meanTempK  || null,
-            size:       (typeof m.size === 'number') ? m.size : null,
+            size:       _surfaceDigit(m.size),
+            atm:        _surfaceDigit(m.atmosphere ?? m.atm),
+            hydro:      _surfaceDigit(m.hydrosphere ?? m.hydro),
             pd:         null,
         }));
 
@@ -771,6 +789,9 @@ const SystemViewer = (() => {
             diamKm:       body.diamKm    || null,
             gravity:      body.gravity   || null,
             meanTempK:    body.meanTempK || null,
+            size:         _surfaceDigit(body.size),
+            atm:          _surfaceDigit(body.atmosphere ?? body.atm),
+            hydro:        _surfaceDigit(body.hydrosphere ?? body.hydro),
             moons,
             uwp,
             name:         body.name      || null,
@@ -850,7 +871,9 @@ const SystemViewer = (() => {
                 mass:      m.mass       ?? null,
                 gravity:   m.gravity    ?? null,
                 meanTempK: m.avgSurfaceTemp ?? null,
-                size:      m.size       ?? null,
+                size:      _surfaceDigit(m.size),
+                atm:       _surfaceDigit(m.atmCode ?? m.atm),
+                hydro:     _surfaceDigit(m.hydroCode ?? m.hydro),
             }));
 
             const parentStarIdx = Math.min(w.parentStarIdx ?? 0, Math.max(0, stars.length - 1));

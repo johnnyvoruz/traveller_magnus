@@ -142,8 +142,8 @@ window.SystemInspector = (() => {
             render();
         }, 'atlas-link');
         content.append(back, el('h2', selected.name || selected.type || 'Star'));
+        const actions = el('div', undefined, 'atlas-actions');
         if (window.SystemViewer?.isOpen() && SystemViewer.currentHexId() === hexId) {
-            const actions = el('div', undefined, 'atlas-actions');
             const following = SystemViewer.isTracking() && SystemViewer.trackedBody() === selected;
             const center = button(following ? 'Tracking' : 'Center view', () => {
                 SystemViewer.centerOnBody(selected);
@@ -152,8 +152,13 @@ window.SystemInspector = (() => {
             center.title = 'Frame this body and anything orbiting it';
             center.setAttribute('aria-pressed', String(following));
             actions.append(center);
-            content.append(actions);
         }
+        if (window.openDiamondWorldMap?.canMap(selected)) {
+            const map = button('World map', () => openDiamondWorldMap(selected, hexId));
+            map.title = 'Diamond surface map with this world\u2019s hex grid';
+            actions.append(map);
+        }
+        if (actions.childElementCount) content.append(actions);
         const namedType = selected.worldType || selected.type;
         const spectral = spectralPhrase(selected);
         const typeRestatesName = !namedType && spectral && selected.name &&
@@ -235,6 +240,16 @@ window.SystemInspector = (() => {
         });
         parent.append(section);
     }
+    function mappedMainworld(state) {
+        if (system) {
+            for (const world of system.worlds || []) {
+                if (world.type === 'Mainworld') return world;
+                const moon = (world.moons || []).find(item => item.type === 'Mainworld');
+                if (moon) return moon;
+            }
+        }
+        return mainworld(state);
+    }
     function renderSystem(state) {
         if (body) { renderBody(body); return; }
         const world = mainworld(state);
@@ -242,6 +257,12 @@ window.SystemInspector = (() => {
         if (!window.SystemViewer?.isOpen()) content.append(el('p', 'Double-click this system on the map to explore its orbits.', 'atlas-muted'));
         if (state.ctData || state.mgt2eData || state.t5Data || state.rttData) {
             actions.append(button('World details', () => openHexEditor(hexId)));
+        }
+        const mappedMain = mappedMainworld(state);
+        if (window.openDiamondWorldMap?.canMap(mappedMain)) {
+            const map = button('World map', () => openDiamondWorldMap(mappedMain, hexId));
+            map.title = 'Diamond surface map of the mainworld, with its hex grid';
+            actions.append(map);
         }
         if (state.ctData || state.ctSystem || state.mgt2eData || state.mgtSystem || state.t5Data || state.t5System) {
             actions.append(button('Edit system', () => SystemEditor.openEdit(hexId)));
@@ -354,6 +375,7 @@ window.SystemInspector = (() => {
         setInterval(() => refresh(), 800);
         document.addEventListener('keydown', e => {
             if (e.key !== 'Escape' || !open || e.target.closest('#omni-search')) return;
+            if (document.getElementById('world-image-panel')) return;
             if (window.CampaignAtlas?.isPicking()) {
                 e.preventDefault(); e.stopImmediatePropagation();
                 CampaignAtlas.cancelPick();

@@ -2030,7 +2030,7 @@ function openBodyImagePanel(worldData, label, seedFallback) {
     });
     openMapBtn.addEventListener('click', () => {
         panel.remove();
-        openFlatMapPanel(worldData, _seed, label, editingHexId);
+        openFlatMapPanel(worldData, _seed, label, editingHexId, 'diamond');
     });
 
     const closeBtn = document.createElement('button');
@@ -2129,7 +2129,7 @@ function openWorldImagePanel() {
     });
     openMapBtn.addEventListener('click', () => {
         panel.remove();
-        openFlatMapPanel(worldData, _seed, worldName + '  ·  ' + editingHexId, editingHexId);
+        openFlatMapPanel(worldData, _seed, worldName + '  ·  ' + editingHexId, editingHexId, 'diamond');
     });
 
     const closeBtn = document.createElement('button');
@@ -2157,7 +2157,7 @@ function openWorldImagePanel() {
 // both callers compute it so the flat map matches the globe it opened from.
 // `hexLabel` is the bare hex id, kept separate because it is printed in the
 // map header where a seed string would be meaningless.
-function openFlatMapPanel(worldData, seed, titleText, hexLabel) {
+function openFlatMapPanel(worldData, seed, titleText, hexLabel, initialProjection) {
     const existing = document.getElementById('world-image-panel');
     if (existing) existing.remove();
 
@@ -2188,13 +2188,13 @@ function openFlatMapPanel(worldData, seed, titleText, hexLabel) {
     });
 
     // ── Projection selector ───────────────────────────────────────────────────
-    let currentProjection = 'sinusoidal';
     const projections = [
+        { key: 'diamond',    label: 'Diamond'    },
         { key: 'sinusoidal', label: 'Sinusoidal' },
         { key: 'mercator',   label: 'Mercator'   },
         { key: 'mollweide',  label: 'Mollweide'  },
-        { key: 'diamond',    label: 'Diamond'    },
     ];
+    let currentProjection = projections.some(p => p.key === initialProjection) ? initialProjection : 'diamond';
     const projBtnStyle = {
         padding: '4px 12px',
         background: 'transparent', border: '1px solid #45a29e55',
@@ -2270,17 +2270,29 @@ function openFlatMapPanel(worldData, seed, titleText, hexLabel) {
     Object.assign(downloadBtn.style, btnStyle);
     downloadBtn.addEventListener('click', () => {
         const link = document.createElement('a');
-        const safeName = (worldData.name || hexId || 'world').replace(/[^a-z0-9_\-]/gi, '_');
+        const safeName = (worldData.name || hexLabel || 'world').replace(/[^a-z0-9_\-]/gi, '_');
         link.download = safeName + '_map.jpg';
         link.href = canvas.toDataURL('image/jpeg', 0.95);
         link.click();
     });
 
+    function dismissMap() {
+        document.removeEventListener('keydown', onMapKey, true);
+        panel.remove();
+    }
+    function onMapKey(e) {
+        if (e.key !== 'Escape') return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        dismissMap();
+    }
+    document.addEventListener('keydown', onMapKey, true);
+
     const closeBtn = document.createElement('button');
     closeBtn.textContent = 'Close';
     Object.assign(closeBtn.style, btnStyle);
-    closeBtn.addEventListener('click', () => panel.remove());
-    panel.addEventListener('click', e => { if (e.target === panel) panel.remove(); });
+    closeBtn.addEventListener('click', dismissMap);
+    panel.addEventListener('click', e => { if (e.target === panel) dismissMap(); });
 
     const btnRow = document.createElement('div');
     Object.assign(btnRow.style, { display: 'flex', gap: '10px' });
@@ -2290,6 +2302,66 @@ function openFlatMapPanel(worldData, seed, titleText, hexLabel) {
     document.body.appendChild(panel);
     _doRender();
 }
+
+// Physical stats the diamond map needs. Prefer the body's own digits; a UWP
+// string is the fallback for profiles that never copied size, atmosphere, and
+// hydrographics onto the body. Hydro percent (0–100) is scaled back to the
+// 0–10 digit the renderer expects.
+function worldMapData(body) {
+    const uwp = typeof body.uwp === 'string' ? body.uwp : '';
+    const fromUwp = (index) => {
+        const n = parseInt(uwp[index], 16);
+        return Number.isFinite(n) ? n : null;
+    };
+    const size = body.size ?? fromUwp(1) ?? 0;
+    const atmosphere = body.atmCode ?? body.atm ?? body.atmosphere ?? fromUwp(2) ?? 0;
+    let hydro = body.hydroCode ?? body.hydro ?? body.hydrographics ?? body.hydrosphere;
+    if (hydro == null || hydro === '') {
+        hydro = (typeof body.hydroPercent === 'number') ? body.hydroPercent / 10 : (fromUwp(3) ?? 0);
+    }
+    const temperatureK = Number(body.meanTempK || body.avgSurfaceTemp || body.temperatureK || 0) || 0;
+    let temperature = body.tempBand || '';
+    if (!temperature && temperatureK > 0 && window.PlanetRenderer?.tempBandFromKelvin) {
+        temperature = PlanetRenderer.tempBandFromKelvin(temperatureK);
+    }
+    return {
+        name: (body.name && String(body.name).trim()) || '',
+        atmosphere,
+        hydrographics: hydro,
+        temperature,
+        temperatureK,
+        size,
+        uwp,
+    };
+}
+
+function worldMapSizeCode(value) {
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (typeof value === 'string') return parseInt(value, 16) || 0;
+    return 0;
+}
+
+const WORLD_MAP_SKIP = new Set(['Gas Giant', 'Planetoid Belt', 'Empty', 'Star', 'Asteroid Belt']);
+
+function canMapWorld(body) {
+    if (!body || WORLD_MAP_SKIP.has(body.type)) return false;
+    if (body.sType != null && body.size == null && !body.uwp) return false;
+    return worldMapSizeCode(worldMapData(body).size) > 0;
+}
+
+// Opens the Cosmographer diamond sheet for one body. The hex grid is drawn by
+// PlanetRenderer.renderFlatMap; this only chooses the body and the projection.
+function openDiamondWorldMap(body, hexId) {
+    if (!window.PlanetRenderer || !canMapWorld(body)) return;
+    const worldData = worldMapData(body);
+    const named = worldData.name;
+    const fallback = [body.type || 'body', body.orbitId, body.au, body.pd, body.uwp, body.size]
+        .filter(v => v != null && v !== '').join('-');
+    const seed = PlanetRenderer.imageSeed(hexId, named ? body : worldData, fallback || undefined);
+    const title = [named, hexId].filter(Boolean).join('  ·  ');
+    openFlatMapPanel(worldData, seed, title || 'World', hexId, 'diamond');
+}
+openDiamondWorldMap.canMap = canMapWorld;
 
 function closeHexEditor() {
     editingHexId = null;
