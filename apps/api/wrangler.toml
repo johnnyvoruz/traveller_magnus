@@ -63,8 +63,15 @@ dead_letter_queue = "voyage-dlq"
 [[queues.consumers]]
 queue = "voyage-truth-build"
 max_batch_size = 1
+max_concurrency = 6
 max_retries = 3
+retry_delay = 30
 dead_letter_queue = "voyage-dlq"
+
+[[queues.consumers]]
+queue = "voyage-dlq"
+max_batch_size = 10
+max_retries = 3
 
 [[analytics_engine_datasets]]
 binding = "METRICS"

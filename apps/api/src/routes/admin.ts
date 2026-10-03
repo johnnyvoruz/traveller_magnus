@@ -133,9 +133,9 @@ admin.post('/truth/builds/:version/retry', async (c) => {
     if (!row) return fail(c, 404, 'not_found', 'No such truth build.');
     if (row.state === 'released') return fail(c, 409, 'conflict', 'That truth version is already released.');
     const recorded = await c.env.DB.prepare(
-        `SELECT sector_slug, state FROM truth_build_sectors WHERE version = ?`,
-    ).bind(version).all<{ sector_slug: string; state: string }>();
-    const bySlug = new Map(recorded.results.map((item) => [item.sector_slug, item.state]));
+        `SELECT sector_slug, state, updated_at FROM truth_build_sectors WHERE version = ?`,
+    ).bind(version).all<{ sector_slug: string; state: string; updated_at: string }>();
+    const bySlug = new Map(recorded.results.map((item) => [item.sector_slug, item]));
     let targets: string[];
     if (parsed.data.sectors) {
         for (const slug of parsed.data.sectors) {
@@ -143,7 +143,11 @@ admin.post('/truth/builds/:version/retry', async (c) => {
         }
         targets = parsed.data.sectors;
     } else {
-        targets = recorded.results.filter((item) => item.state === 'failed').map((item) => item.sector_slug);
+        const staleBefore = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+        targets = recorded.results.filter((item) => {
+            if (item.state === 'failed') return true;
+            return item.state === 'building' && item.updated_at < staleBefore;
+        }).map((item) => item.sector_slug);
     }
     const now = new Date().toISOString();
     const updates = targets.map((slug) => c.env.DB.prepare(

@@ -54,7 +54,7 @@ How Johnny works, learned the hard way:
 | Queues | `voyage-generate`, `voyage-publish`, `voyage-truth-build`, `voyage-dlq` exist and are bound. |
 | Workers Builds | Connected to `johnnyvoruz/traveller_magnus`, branch `campaign`. See §4 for an unverified setting. |
 | Tests | `npm test`: 45 tests, 41 pass, 4 skipped (three need `RUN_API_TESTS=1`, one legacy XML case is permanently skipped). `npm run check`: clean. B reports the gated API suite 4 of 4 green. |
-| Truth v1 | **Not built.** First attempt hit Worker limits before starting; nothing to clean up. |
+| Truth v1 | **Build started 2026-10-03T07:40Z and stalled at 298 of 512 sectors.** 212 stuck in `building`, 2 `failed`. Not released. Read §11 first. |
 
 Code on `campaign` is at `7a5f8ee` (name pool in the generation package) plus `a74d35b`
 (Workers Logs in config); `c0dc264` after those carries only directive and `CLAUDE.md` edits.
@@ -68,6 +68,9 @@ Uncommitted in the working tree:
   `slice_0_foundation.md`, and part of `CLAUDE.md` (§7 lists what is still missing there).
 
 ## 3. The one thing in flight: truth build must work in slices
+
+**Superseded in part by §11**, which holds the live state of the v1 build and the next prompt.
+The steps below still describe how to deploy, watch, retry and release.
 
 **Problem found 2026-10-03.** A Worker invocation gets about 1,000 binding calls (every R2
 get/head/put, queue send, D1 call) and 128 MB. The build endpoint read 1,024 files and sent
@@ -342,4 +345,80 @@ Run npm run check, npm test, and RUN_API_TESTS=1 node --test "tests/api/**/*.tes
 
 If step 2 (a) or (b) fails, do not touch the engines or the generation package: stop and report the first differing hex and field.
 Stop and report. Unchanged rules: no edits under rules/, js/, hex_map.html or style.css; no git; only you run npm install; never adjust a fixture or an engine toward each other; no new migration is needed for this, and if you think one is, stop and report.
+```
+
+## 11. Live state of the v1 build (written 2026-10-03, about 08:15Z) and what to do next
+
+**What happened.** Johnny pushed B's work (`2f5ffea`, `3665b0f`), the deploy went out at
+07:40Z with migration `0004`, and he started the build (`enqueued: 512`). The queue scaled up
+by itself. By 08:01Z 298 sectors were `done` (75,513 systems: 51,451 trees and 24,062 partial
+rows), and then nothing more happened: no queue invocation in a 40-second live tail at 08:12Z
+(the tail was proven to work with a health request).
+
+| State | Sectors | Notes |
+|---|---|---|
+| `done` | 298 | every sector of 150 rows or fewer, plus many larger ones up to Yejiariebr (1,029) |
+| `building` | 212 | 151 to 921 rows each, 103,988 rows in all; `updated_at` never moved; some have no part file at all (Abresh, Aed), some have all of them (Spinward Marches: 0, 200, 400) |
+| `failed` | 2 | `Veg_Fergakh`, `Far_Frontiers`: `put: We encountered an internal error. Please try again. (10001)` from R2 on all four deliveries |
+
+**Diagnosis (likely, not proven).** The stuck sectors' messages died without throwing, so
+`markFailed` never ran and they went to `voyage-dlq`, which nothing reads. Measured in Node:
+one 200-row slice holds 15-19 MB of tree JSON and peaks 50-80 MB of heap; nothing leaks from
+slice to slice. Concurrent invocations sharing one 128 MB isolate would exceed it. The two R2
+errors point at write pressure from the same uncapped concurrency. **The proof is in Workers
+Logs:** Workers & Pages → `voyage` → Logs, filter 07:40-08:05Z for outcomes other than `ok`;
+`exceededMemory` confirms it. Ask Johnny for a screenshot before trusting this paragraph. The
+Chrome extension was not connected, so the orchestrator could not look.
+
+**Decision, recorded in `architecture.md` §5 and §6, `api.md` and `slice_0_foundation.md`
+§10.5:** slices of 25 rows; `max_concurrency = 6` and `retry_delay = 30` on the truth-build
+consumer; every slice touches the sector's `updated_at`; the Worker consumes `voyage-dlq` and
+marks dead-lettered sectors `failed`; the retry route with no body also picks up `building`
+sectors not updated for 10 minutes. This holds whichever limit killed the invocations.
+
+**Nothing needs cleaning up.** The 298 finished sectors are correct and stay. A retried sector
+restarts at offset 0 and overwrites every old part (25 divides 200). `v1` is not released, so
+no manifest exists; the finished sector indexes are immutable and right.
+
+**Next, in order:**
+1. Done: B reported green on the prompt below and the code was read (25-row slices,
+   `max_concurrency = 6`, `retry_delay = 30`, `src/jobs/dead_letter.ts`, per-slice
+   `updated_at`, stalled sectors in the default retry). `npm test` 45/41/4 and `npm run check`
+   clean here; B reports the gated suite 5 of 5. A non-final slice is 29 binding calls.
+   Uncommitted: `apps/api/wrangler.toml`, `src/index.ts`, `src/jobs/truth_build.ts`,
+   `src/jobs/dead_letter.ts`, `src/routes/admin.ts`, `tests/api/truth_build.test.js`, and the
+   four directive files.
+2. Commit and push (Johnny, or the orchestrator on his word); confirm with
+   `wrangler deployments list`. On deploy the new dead-letter consumer drains `voyage-dlq`
+   and the stuck sectors turn `failed` with `dead-lettered`.
+3. Johnny runs the retry in the browser console on `https://traveller.voyage/`:
+   `await (await fetch('/api/admin/truth/builds/v1/retry', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })).json()`.
+   Expected: `enqueued: 214` (212 stalled or dead-lettered plus 2 failed).
+4. Watch with the D1 query in §3 step 4. About 4,200 slices at 6 at a time: roughly half an
+   hour. Run the retry again for anything that fails.
+5. All 512 `done` → release (§3 step 7). Expect 180,312 `truth_systems` rows.
+
+**Prompt for Agent B:**
+
+```
+The first production build stalled: 298 of 512 sectors done, 212 stuck in 'building' with no error, 2 failed on R2 internal errors. Most likely the 200-row slices exceeded the isolate's memory when several ran at once, so the invocations died without throwing and their messages went to voyage-dlq, which nothing reads. Re-read architecture.md §5 (the "Memory is shared" and "Failure and retry" bullets), §6 (the two queue consumer blocks) and slice_0_foundation.md §10.5.
+
+Do this, in order:
+
+1. apps/api/wrangler.toml: on the voyage-truth-build consumer add max_concurrency = 6 and retry_delay = 30. Add a consumer for voyage-dlq with max_batch_size = 10 and max_retries = 3 (no dead_letter_queue). Copy architecture.md §6.
+
+2. src/jobs/truth_build.ts: SLICE = 25. After the part file is written and before the next message is sent or finalize runs, run one D1 statement that sets updated_at to now for (version, slug) where state is not 'done'.
+
+3. New file src/jobs/dead_letter.ts: export deadLetterConsumer(batch, env). For each message whose body has string version and slug: upsert truth_build_sectors to 'failed' with error 'dead-lettered: the invocation died without throwing; see Workers Logs' and a new updated_at, but leave a row that is 'done' untouched; console.log one JSON line { job: 'dead-letter', version, slug, offset }. Ack every message, including ones with any other body.
+
+4. src/index.ts: route batch.queue === 'voyage-dlq' to deadLetterConsumer.
+
+5. src/routes/admin.ts, retry: with no body.sectors, the targets are every 'failed' row plus every 'building' row whose updated_at is more than 10 minutes old. Named slugs behave as before.
+
+6. Tests (gated): the 450-row case now chains eighteen slices of 25 (eighteen part files; everything else as before). Add: a 'building' row with updated_at 11 minutes old is picked up by a retry with an empty body and one with a fresh updated_at is not; a dead-letter message for a 'building' sector turns it 'failed', and for a 'done' sector changes nothing. Update the binding-call counter test for 25 and report the counts.
+
+Run npm run check, npm test, and RUN_API_TESTS=1 node --test "tests/api/**/*.test.js"; paste the output.
+
+If the installed wrangler rejects max_concurrency, retry_delay or the second consumer block, stop and report the exact error.
+Stop and report. Unchanged rules: no edits under rules/, js/, hex_map.html or style.css; no git; only you run npm install; never adjust a fixture or an engine toward each other; do not change packages/generation; no new migration.
 ```

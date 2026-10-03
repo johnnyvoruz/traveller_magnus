@@ -8,7 +8,7 @@ type CatalogueSector = { slug: string; name: string; x: number; y: number; tags:
 type SliceRow = { hex: string; indexEntry: Record<string, unknown> };
 
 const MAX_DELIVERIES = 4;
-const SLICE = 200;
+const SLICE = 25;
 const PARAM_LIMIT = 100;
 const SYSTEM_COLUMNS = 9;
 
@@ -49,6 +49,9 @@ async function buildSlice(env: Env, body: TruthMessage): Promise<void> {
         stable({ offset, total: slice.total, rows: slice.rows }),
         { httpMetadata: { contentType: 'application/json' } },
     );
+    await env.DB.prepare(
+        `UPDATE truth_build_sectors SET updated_at = ? WHERE version = ? AND sector_slug = ? AND state != 'done'`,
+    ).bind(new Date().toISOString(), version, slug).run();
     if (slice.nextOffset != null) {
         await env.TRUTH_QUEUE.send({ version, slug, offset: slice.nextOffset, pinned });
         return;

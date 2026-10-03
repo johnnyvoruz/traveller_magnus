@@ -132,13 +132,23 @@ whole sector or a whole catalogue:
 
 - **The build endpoint** verifies inputs with paginated `list({ prefix })` (two calls for
   1,025 keys), never per-file reads, and enqueues with `sendBatch` in groups of 100.
-- **The truth-build consumer works in slices of 200 rows.** A message is
+- **Memory is shared, so slices are small and concurrency is capped (learned 2026-10-03, first
+  production build).** One 200-row slice needs 50-80 MB while it runs (about 15-19 MB of tree
+  JSON plus engine garbage, measured in Node), and concurrent queue invocations can share one
+  128 MB isolate. With 200-row slices and default concurrency the build stalled at 298 of 512
+  sectors: the small sectors finished, 212 larger ones died without throwing (so nothing
+  marked them failed) and two failed on R2 internal errors under write pressure. The slice is
+  therefore **25 rows**, the consumer has `max_concurrency = 6` and `retry_delay = 30`, and
+  two things make a silent death visible: every slice touches the sector's `updated_at`, and
+  a consumer on `voyage-dlq` marks a dead-lettered sector `failed`.
+- **The truth-build consumer works in slices of 25 rows.** A message is
   `{ version, slug, offset, pinned }`, where `pinned` is `{ seed, settings, engineVersion }`
   copied from the build request so a slice needs no D1 read to start. The consumer generates
-  only rows `[offset, offset + 200)` (every hex is seeded independently, so a slice is
+  only rows `[offset, offset + 25)` (every hex is seeded independently, so a slice is
   deterministic on its own), `put`s each tree without a preceding `head` (content-addressed
   writes are idempotent), writes the slice's index rows to
-  `inputs/<version>/_parts/<slug>/<offset>.json` in the private bucket, then enqueues the next
+  `inputs/<version>/_parts/<slug>/<offset>.json` in the private bucket, sets the sector's
+  `updated_at`, then enqueues the next
   offset or, on the last slice, finalizes: reads the parts, checks that their entries add up
   to the sector's row count (a mismatch throws; nothing is written), writes the sector index,
   replaces the sector's `truth_systems` rows in one D1 batch, and upserts the sector's row in
@@ -151,16 +161,20 @@ whole sector or a whole catalogue:
   per sector.
 - **Failure and retry.** `max_retries = 3` means a message is delivered up to four times. On
   the fourth failed attempt the consumer upserts the sector to `failed` with the error text,
-  and the message goes to `voyage-dlq`. `POST /api/admin/truth/builds/:version/retry` (admin)
-  sets sectors back to `building` and enqueues `{ version, slug, offset: 0, pinned }` for
-  them, with `pinned` rebuilt from the `truth_versions` row: every `failed` sector by default,
-  or the slugs named in the body in any state (for a sector stuck in `building` because a
-  message was lost). It refuses a released version. Restarting a sector at offset 0 is safe
+  and the message goes to `voyage-dlq`. An invocation that is killed (memory, CPU) never
+  reaches that code, so the Worker also consumes `voyage-dlq`: a dead truth-build message
+  upserts its sector to `failed` with "dead-lettered" unless the sector is already `done`.
+  `POST /api/admin/truth/builds/:version/retry` (admin) sets sectors back to `building` and
+  enqueues `{ version, slug, offset: 0, pinned }` for them, with `pinned` rebuilt from the
+  `truth_versions` row: by default every `failed` sector plus every `building` sector whose
+  `updated_at` is more than 10 minutes old (stalled), or the slugs named in the body in any
+  state. It refuses a released version. Restarting a sector at offset 0 is safe
   for the same reason a duplicate is.
 - **Bulk generation in slice 2 follows the same rule:** batches of 64, one transaction each.
 
-Worker CPU limit is raised in `wrangler.toml` (`[limits] cpu_ms`); a 200-row slice uses a
-fraction of it.
+Worker CPU limit is raised in `wrangler.toml` (`[limits] cpu_ms`); a 25-row slice uses a
+fraction of it. Changing the slice size mid-build is safe when the new size divides the old
+one: a restarted sector overwrites every old part key.
 
 ## 6. Worker configuration (`apps/api/wrangler.toml`)
 
@@ -230,8 +244,15 @@ dead_letter_queue = "voyage-dlq"
 [[queues.consumers]]
 queue = "voyage-truth-build"
 max_batch_size = 1
+max_concurrency = 6
 max_retries = 3
+retry_delay = 30
 dead_letter_queue = "voyage-dlq"
+
+[[queues.consumers]]
+queue = "voyage-dlq"
+max_batch_size = 10
+max_retries = 3
 
 [[analytics_engine_datasets]]
 binding = "METRICS"

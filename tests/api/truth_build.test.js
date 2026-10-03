@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { DatabaseSync } from 'node:sqlite';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -6,6 +7,7 @@ import test from 'node:test';
 import { existsSync } from 'node:fs';
 import { TSV } from '../golden/cases.js';
 import { TRUTH_SEED, TRUTH_SETTINGS } from '../../tools/truth/settings.js';
+import { deadLetterConsumer } from '../../apps/api/src/jobs/dead_letter.ts';
 import { truthBuildConsumer } from '../../apps/api/src/jobs/truth_build.ts';
 import { adminCookie, runWrangler } from './session.js';
 import { withDevServer, wranglerBin } from './server.js';
@@ -49,7 +51,7 @@ function wideTsv(count) {
 
 function bindingDouble(files) {
     const stored = new Map(Object.entries(files));
-    const calls = { get: 0, put: 0, list: 0, send: 0, batch: 0 };
+    const calls = { get: 0, put: 0, list: 0, send: 0, batch: 0, run: 0 };
     const sent = [];
     const bucket = () => ({
         async get(key) {
@@ -77,7 +79,12 @@ function bindingDouble(files) {
             PUBLIC_BUCKET: bucket(),
             TRUTH_QUEUE: { async send(body) { calls.send += 1; sent.push(body); } },
             DB: {
-                prepare() { return { bind() { return this; } }; },
+                prepare() {
+                    return {
+                        bind() { return this; },
+                        async run() { calls.run += 1; },
+                    };
+                },
                 async batch() { calls.batch += 1; },
             },
         },
@@ -103,7 +110,7 @@ if (process.env.RUN_API_TESTS !== '1') {
         const catalogue = JSON.stringify({
             sectors: [{ slug: 'Wide', name: 'Wide Chart', x: 3, y: 4, tags: ['OTU'], canonical: true }],
         });
-        const chained = bindingDouble({ 'inputs/vcount/Wide.tsv': wideTsv(201) });
+        const chained = bindingDouble({ 'inputs/vcount/Wide.tsv': wideTsv(26) });
         await truthBuildConsumer({
             messages: [{
                 body: { version: 'vcount', slug: 'Wide', offset: 0, pinned },
@@ -111,8 +118,8 @@ if (process.env.RUN_API_TESTS !== '1') {
                 ack() {},
             }],
         }, chained.env);
-        assert.deepEqual(chained.calls, { get: 1, put: 201, list: 0, send: 1, batch: 0 });
-        assert.equal(chained.sent[0].offset, 200);
+        assert.deepEqual(chained.calls, { get: 1, put: 26, list: 0, send: 1, batch: 0, run: 1 });
+        assert.equal(chained.sent[0].offset, 25);
         const finished = bindingDouble({
             'inputs/vcount/Wide.tsv': wideTsv(1),
             'inputs/vcount/Wide.xml': xml,
@@ -125,7 +132,68 @@ if (process.env.RUN_API_TESTS !== '1') {
                 ack() {},
             }],
         }, finished.env);
-        assert.deepEqual(finished.calls, { get: 4, put: 3, list: 1, send: 0, batch: 1 });
+        assert.deepEqual(finished.calls, { get: 4, put: 3, list: 1, send: 0, batch: 1, run: 1 });
+    });
+
+    test('dead letter marks a building sector failed and leaves done alone', async () => {
+        const db = new DatabaseSync(':memory:');
+        db.exec(`CREATE TABLE truth_build_sectors (
+            version text NOT NULL,
+            sector_slug text NOT NULL,
+            state text NOT NULL,
+            systems integer NOT NULL DEFAULT 0,
+            built integer NOT NULL DEFAULT 0,
+            partial integer NOT NULL DEFAULT 0,
+            index_hash text,
+            error text,
+            updated_at text NOT NULL,
+            PRIMARY KEY(version, sector_slug)
+        )`);
+        const insert = db.prepare(`INSERT INTO truth_build_sectors
+            (version, sector_slug, state, systems, built, partial, index_hash, error, updated_at)
+            VALUES (?, ?, ?, 0, 0, 0, ?, NULL, ?)`);
+        insert.run('vdl', 'Stuck', 'building', null, '2020-01-01T00:00:00.000Z');
+        insert.run('vdl', 'Finished', 'done', 'abc', '2020-01-01T00:00:00.000Z');
+        const acked = [];
+        const lines = [];
+        const original = console.log;
+        console.log = (...args) => { lines.push(args.map(String).join(' ')); };
+        try {
+            await deadLetterConsumer({
+                messages: [
+                    { body: { version: 'vdl', slug: 'Stuck', offset: 25 }, ack() { acked.push('Stuck'); } },
+                    { body: { version: 'vdl', slug: 'Finished', offset: 0 }, ack() { acked.push('Finished'); } },
+                    { body: { kind: 'other' }, ack() { acked.push('other'); } },
+                ],
+            }, {
+                DB: {
+                    prepare(sql) {
+                        return {
+                            bind(...args) {
+                                return { async run() { db.prepare(sql).run(...args); } };
+                            },
+                        };
+                    },
+                },
+            });
+        } finally {
+            console.log = original;
+        }
+        const stuck = db.prepare(`SELECT state, error FROM truth_build_sectors WHERE sector_slug = 'Stuck'`).get();
+        const finished = db.prepare(`SELECT state, error, index_hash, updated_at FROM truth_build_sectors WHERE sector_slug = 'Finished'`).get();
+        assert.equal(stuck.state, 'failed');
+        assert.equal(stuck.error, 'dead-lettered: the invocation died without throwing; see Workers Logs');
+        assert.equal(finished.state, 'done');
+        assert.equal(finished.error, null);
+        assert.equal(finished.index_hash, 'abc');
+        assert.equal(finished.updated_at, '2020-01-01T00:00:00.000Z');
+        assert.deepEqual(acked, ['Stuck', 'Finished', 'other']);
+        const logged = lines.map((line) => JSON.parse(line));
+        assert.equal(logged.length, 2);
+        assert.equal(logged[0].job, 'dead-letter');
+        assert.equal(logged[0].slug, 'Stuck');
+        assert.equal(logged[0].offset, 25);
+        assert.equal(logged[1].slug, 'Finished');
     });
 
     test('truth build', { timeout: 600000 }, async () => {
@@ -333,11 +401,16 @@ if (process.env.RUN_API_TESTS !== '1') {
             assert.equal(wideSector.state, 'done');
             assert.equal(wideSector.built, 450);
             assert.equal(wideSector.partial, 0);
-            for (const offset of [0, 200, 400]) {
+            const sliceOffsets = [];
+            for (let offset = 0; offset < 450; offset += 25) sliceOffsets.push(offset);
+            assert.equal(sliceOffsets.length, 18);
+            for (const offset of sliceOffsets) {
                 const partFile = path.join(dir, `part-${offset}.json`);
                 runWrangler(['r2', 'object', 'get', `voyage-private/inputs/vwide/_parts/Wide/${offset}.json`, '--file', partFile, '--local']);
                 const part = JSON.parse(readFileSync(partFile, 'utf8'));
-                assert.equal(part.rows.length, offset === 400 ? 50 : 200);
+                assert.equal(part.offset, offset);
+                assert.equal(part.total, 450);
+                assert.equal(part.rows.length, 25);
             }
             const wideIndexFile = path.join(dir, 'wide-index.json');
             runWrangler(['r2', 'object', 'get', 'voyage-public/truth/vwide/sectors/Wide/index.json', '--file', wideIndexFile, '--local']);
@@ -358,6 +431,31 @@ if (process.env.RUN_API_TESTS !== '1') {
             assert.equal(wideRecord[0].results[0].systems, 450);
             assert.equal(wideRecord[0].results[0].built, 450);
             assert.equal(wideRecord[0].results[0].partial, 0);
+            const staleAt = new Date(Date.now() - 11 * 60 * 1000).toISOString();
+            const freshAt = new Date().toISOString();
+            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_build_sectors WHERE version = 'vwide' AND sector_slug IN ('Stale', 'Fresh')"]);
+            runWrangler(['d1', 'execute', 'voyage', '--local', '--command',
+                `INSERT INTO truth_build_sectors (version, sector_slug, state, systems, built, partial, index_hash, error, updated_at) VALUES ('vwide', 'Stale', 'building', 0, 0, 0, NULL, NULL, '${staleAt}')`]);
+            runWrangler(['d1', 'execute', 'voyage', '--local', '--command',
+                `INSERT INTO truth_build_sectors (version, sector_slug, state, systems, built, partial, index_hash, error, updated_at) VALUES ('vwide', 'Fresh', 'building', 0, 0, 0, NULL, NULL, '${freshAt}')`]);
+            const stalled = await fetch(`${base}/api/admin/truth/builds/vwide/retry`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json', cookie },
+                body: JSON.stringify({}),
+            });
+            const stalledBody = await stalled.json();
+            assert.equal(stalled.status, 202, JSON.stringify(stalledBody));
+            assert.equal(stalledBody.data.enqueued, 1);
+            const picked = jsonFrom(runWrangler([
+                'd1', 'execute', 'voyage', '--local', '--command',
+                "SELECT sector_slug, state, updated_at FROM truth_build_sectors WHERE version = 'vwide' AND sector_slug IN ('Stale', 'Fresh') ORDER BY sector_slug",
+            ]));
+            const fresh = picked[0].results.find((item) => item.sector_slug === 'Fresh');
+            const stale = picked[0].results.find((item) => item.sector_slug === 'Stale');
+            assert.equal(fresh.updated_at, freshAt);
+            assert.equal(fresh.state, 'building');
+            assert.notEqual(stale.updated_at, staleAt);
+            assert.equal(stale.state, 'building');
         });
     });
 }

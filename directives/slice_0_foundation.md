@@ -785,12 +785,14 @@ hash of the Node `generateHex` output for the same input (`tests/api/parity.test
 Rewritten 2026-10-03 after the first build attempt hit Worker limits; the shape and its
 reasons are in `architecture.md` §5 "Limits, and the shape they force".
 
-One message `{ version, slug, offset, pinned }` is one slice of 200 rows: read
-`inputs/<version>/<slug>.tsv`; `buildSectorSlice({ slug, tsv, pinned, offset, limit: 200 })`;
+One message `{ version, slug, offset, pinned }` is one slice of 25 rows (`architecture.md`
+§5 says why not 200): read `inputs/<version>/<slug>.tsv`;
+`buildSectorSlice({ slug, tsv, pinned, offset, limit: 25 })`;
 `put` each object to `PUBLIC_BUCKET` at `objects/<hash>` with no preceding `head`, with
 `httpMetadata.cacheControl = 'public, max-age=31536000, immutable'` and
 `contentType = 'application/json'`; put the slice's index entries to `PRIVATE_BUCKET` at
-`inputs/<version>/_parts/<slug>/<offset>.json`. If `nextOffset` is not null, send
+`inputs/<version>/_parts/<slug>/<offset>.json` (with `total`); set the sector's `updated_at`
+(state stays `building`). If `nextOffset` is not null, send
 `{ version, slug, offset: nextOffset, pinned }` and return.
 
 On the last slice, finalize: list and read the parts; throw unless their entries add up to
@@ -803,8 +805,10 @@ fields and the metadata from `<slug>.xml`; then one D1 batch that deletes the se
 Write one `METRICS` data point per slice `{ job: 'truth-build', slug, rows, objects, ms }`.
 Throw on any failure so Queues retries. `max_retries = 3` is four deliveries; on the fourth
 failed attempt upsert `truth_build_sectors` to `failed` with the error text before rethrowing,
-and the message lands in `voyage-dlq`. A failed sector is retried through the retry route
-(§10.3), never by rebuilding the version.
+and the message lands in `voyage-dlq`. The Worker consumes `voyage-dlq` too
+(`src/jobs/dead_letter.ts`): a message with a `version` and `slug` upserts that sector to
+`failed` with `dead-lettered` unless it is `done`, logs one JSON line, and acks. A failed or
+stalled sector is retried through the retry route (§10.3), never by rebuilding the version.
 
 ### 10.6 Durable Object stub
 
@@ -835,7 +839,7 @@ message if `wrangler` is absent):
   `scripts/dev_make_admin.js` sets `role = 'admin'` on a user in the local D1), wait for the
   sector to finish, assert the index and at least one object exist in local R2 and that
   `truth_systems` has two rows. A second case builds a 450-row fixture sector (valid rows
-  repeated with distinct hexes) so the consumer chains three slices: three part files, one
+  repeated with distinct hexes) so the consumer chains eighteen slices of 25: eighteen part files, one
   index with 450 entries, 450 `truth_systems` rows, one `truth_build_sectors` row in `done`.
 
 The suite is gated: `npm test` skips it unless `RUN_API_TESTS=1`.

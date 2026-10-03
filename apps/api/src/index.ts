@@ -7,6 +7,7 @@ import { me } from './routes/auth';
 import { generate } from './routes/generate';
 import { truth } from './routes/truth';
 import { admin } from './routes/admin';
+import { deadLetterConsumer } from './jobs/dead_letter';
 import { truthBuildConsumer } from './jobs/truth_build';
 import { fail } from './http';
 export { UniverseDO } from './universe/UniverseDO';
@@ -26,6 +27,7 @@ export default {
     fetch: app.fetch,
     async queue(batch: MessageBatch, env: Env) {
         if (batch.queue === 'voyage-truth-build') await truthBuildConsumer(batch, env);
+        else if (batch.queue === 'voyage-dlq') await deadLetterConsumer(batch, env);
         else batch.ackAll();
     },
     async scheduled() { /* slice 2: snapshots and GC */ }
