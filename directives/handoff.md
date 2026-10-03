@@ -107,6 +107,22 @@ build runs):
 - Noted, not blocking: the Mongoose auditor prints violations to the console (four in
   Spinward Marches), so the build writes those lines into Workers Logs.
 
+**B reported green on the §10 follow-up too (2026-10-03), and the code was read again.** All
+eight items are in: the index uses the message's version; `MAX_DELIVERIES = 4`; parts carry
+`total` and finalize checks it before any public write; progress carries `systems` and
+`error`; `TruthRetry` and the retry route exist; the slice test compares against a single
+pass and a lone last slice. `npm test` 45/41/4 and `npm run check` clean here; B reports the
+gated suite 4 of 4. The open list above is closed except the auditor's console lines.
+**The work is ready to commit and push; nothing has been pushed.**
+
+Found while checking, not from B's work and not blocking the build: `tsc --noEmit` in
+`apps/api` reports 7 type errors in files B did not touch (`src/index.ts` types the app as
+`{ Bindings: Env }` instead of `AppEnv`; `src/auth/session.ts` reads `role` that the session
+type lacks; `src/auth/auth.cli.ts` uses `process` without Node types) plus 13 `TS5097`
+import-extension errors from `packages/shared`. Wrangler's bundler does not type-check, so
+deploys pass. No command or check runs `tsc` today; a typecheck script and these fixes are
+one small recipe for B after the build (§7).
+
 **Fallback if the Worker build fails in production (Johnny offered this 2026-10-03):** build
 on this machine with `npm run truth:local` and upload. Not specified yet; it needs an uploader
 over R2's S3 interface, an R2 API token from Johnny, a D1 import file for `truth_systems`, and
@@ -114,7 +130,7 @@ the local manifest brought to the released shape (`tags`, `canonical`, `built`, 
 Write that recipe only if step 5 below cannot recover the Worker build.
 
 **Next:**
-1. Send §10 and read its report as critically as the first.
+1. Done: §10 sent, reported, reviewed.
 2. B's files are committed by path and pushed (by Johnny, or by you when he says so). The
    automatic deploy applies the migration (§4). `/api/health` does **not** confirm it: it
    returns a static `1.0.0` whether or not the new Worker went out. Confirm from `apps/api`
@@ -242,7 +258,11 @@ For reference: raw chart TSV/XML are gitignored; `universe/raw/sectors.json` is 
   that; they change when he confirms, in the slice 2 recipe at the latest.
 
 For the orchestrator, before the truth build:
-- Send B the follow-up prompt in §10 and review its report.
+- Commit and push B's work with the directive edits (§2 lists the files), then §3 step 2.
+
+For the orchestrator, after the build is running (B is free):
+- Recipe for B: add a `typecheck` script (`tsc --noEmit`) for `apps/api`, fix the 7 type
+  errors and the `TS5097` setting (§3), and make it part of "done".
 
 For the orchestrator, after truth v1 is released:
 - Reconcile drizzle's journal with the hand-written migrations (§5), as its own small recipe.
