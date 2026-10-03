@@ -847,16 +847,20 @@ manifesto check, which need no Cloudflare credentials.
 Workers & Pages → `voyage` → Settings → Builds → Connect to Git → the repository and the
 production branch. Build configuration:
 
+The connect form has no root-directory field, so commands run at the repository root and
+point wrangler at the config (connected 2026-10-03, production branch `campaign`):
+
 | Setting | Value |
 |---|---|
-| Root directory | `apps/api` |
-| Build command | `cd ../.. && npm ci && npm run build` |
-| Deploy command | `npx wrangler d1 migrations apply voyage --remote && npx wrangler deploy` |
-| Non-production branches | preview deployments on; each branch gets its own URL |
+| Build command | `npm ci && npm run build` |
+| Deploy command | `npx wrangler d1 migrations apply voyage --remote --config apps/api/wrangler.toml && npx wrangler deploy --config apps/api/wrangler.toml` |
+| Preview command | `npx wrangler versions upload --config apps/api/wrangler.toml` |
 
-`npm run build` at the root runs `rules:gen`, the shared build and the web build, so
-`apps/web/dist` exists when `wrangler deploy` reads it. Migrations run before the deploy so
-a new Worker never runs ahead of its schema. Secrets stay on the Worker; the build needs none.
+Wrangler resolves `main`, the assets directory and `migrations_dir` relative to the config
+file, so nothing in `wrangler.toml` changes. `npm run build` at the root runs `rules:gen`, the
+shared build and the web build, so `apps/web/dist` exists when `wrangler deploy` reads it.
+Migrations run before the deploy so a new Worker never runs ahead of its schema. Secrets stay
+on the Worker; the build needs none.
 
 ### 13.2 `.github/workflows/test.yml` (implementer)
 
