@@ -76,10 +76,13 @@ Nothing visible. The safety net and the skeleton.
 
 ### Slice 1 — Viewer
 The charted universe, read-only, for anyone. The product for the ten thousand.
-- **User story:** I open traveller.voyage, see the Spinward Marches, search "Regina", fly
-  there, open its dossier, enter the orbit view, scrub time, and share the URL.
-- **In:** map canvas (wrapped legacy renderer behind `MapRenderer`), pan/zoom/select with
-  inertia and keyboard, sector and subsector chrome, omni-search as the command palette,
+- **User story:** I open traveller.voyage, see the charted galaxy, zoom into the Spinward
+  Marches, search "Regina", fly there, open its dossier, enter the orbit view, scrub time,
+  and share the URL.
+- **In:** map canvas (a new TypeScript `MapRenderer`, rebuilt rather than wrapped: decided
+  2026-10-03, `feature_inventory.md` A1) showing all 512 sectors from galaxy level down to a
+  single hex, fed at far zoom by an overview file the truth build writes; phones and tablets
+  not yet decided; pan/zoom/select with inertia and keyboard, sector and subsector chrome, omni-search as the command palette,
   inspector at three widths (dossier: mainworld, stellar, tree, world map lead), orbit view
   as a **2.5D WebGL orrery** (constrained tilt and rotate, real spheres from the cube-map
   bakes, HTML labels; the orrery model is a pure TS module with a 2D canvas fallback renderer;

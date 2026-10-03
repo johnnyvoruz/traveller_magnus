@@ -38,17 +38,25 @@ truth.get('/versions', async (c) => {
     }));
 });
 
+function ftsQuery(q: string): string | null {
+    const tokens = q.split(/\s+/).map((token) => token.replaceAll('"', '')).filter((token) => token.length > 0);
+    if (!tokens.length) return null;
+    return tokens.map((token, index) => index === tokens.length - 1 ? `"${token}"*` : `"${token}"`).join(' ');
+}
+
 truth.get('/search', async (c) => {
     const q = (c.req.query('q') ?? '').trim();
     const version = c.req.query('version') ?? '';
-    if (!q) return ok(c, { items: [] });
-    const match = `"${q.replaceAll('"', ' ')}"`;
+    const match = ftsQuery(q);
+    if (!match) return ok(c, { items: [] });
     const result = await c.env.DB.prepare(
         `SELECT ts.version, ts.sector_slug AS sectorSlug, ts.hex, ts.name, ts.uwp,
                 ts.allegiance, ts.zone, ts.tree_hash AS treeHash
          FROM truth_systems_fts
          JOIN truth_systems ts ON ts.rowid = truth_systems_fts.rowid
-         WHERE truth_systems_fts MATCH ? AND (? = '' OR ts.version = ?)
+         JOIN truth_versions tv ON tv.version = ts.version
+         WHERE truth_systems_fts MATCH ? AND tv.state = 'released' AND (? = '' OR ts.version = ?)
+         ORDER BY rank
          LIMIT 50`,
     ).bind(match, version, version).all();
     return ok(c, { items: result.results });

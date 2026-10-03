@@ -35,14 +35,14 @@ test('Caesillian C8858??-4 is a partial survey: size 8, government and law unkno
     assert.equal(row.t5Data.tl, 4);
     assert.deepEqual(row.tradeCodes, ['Ga', 'Ph']);
 
-    const built = await buildSector({ slug: 'Caesillian', tsv, metadataXml, pinned });
+    const built = await buildSector({ slug: 'Caesillian', tsv, metadataXml, pinned, version: 'v2' });
     assert.equal(built.objects.size, 0);
     assert.deepEqual(built.counts, { systems: 1, built: 0, partial: 1 });
     const hex = built.index.hexes['0914'];
     assert.equal(hex.tree, null);
     assert.equal(hex.uwp, 'C8858??-4');
     assert.equal(hex.partial, 'partial');
-    assert.equal(hex.summary.partial, 'partial');
+    assert.equal(Object.hasOwn(hex, 'summary'), false);
     assert.throws(
         () => generateHex({ hexKey: 'Caesillian/0914', edition: 'MgT2E', mode: 'flesh', summary: row, pinned }),
         /refusing partial UWP C8858\?\?-4 \(partial\)/,
@@ -69,7 +69,7 @@ test('Just Empty ???????-? is fully unknown and builds no tree', async () => {
     assert.equal(row.t5Socio.belts, null);
     assert.equal(row.t5Socio.gasGiants, null);
 
-    const built = await buildSector({ slug: 'Just_Empty', tsv, metadataXml, pinned });
+    const built = await buildSector({ slug: 'Just_Empty', tsv, metadataXml, pinned, version: 'v2' });
     assert.equal(built.objects.size, 0);
     assert.deepEqual(built.counts, { systems: 1, built: 0, partial: 1 });
     const hex = built.index.hexes['1702'];

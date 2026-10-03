@@ -1,10 +1,9 @@
-import { buildSectorSlice } from '@voyage/generation';
-import { parseMetadataXml, sha256Hex, stable } from '@voyage/shared';
+import { assembleSectorIndex, buildSectorSlice, type CatalogueEntry } from '@voyage/generation';
+import { SectorIndex, sha256Hex, stable } from '@voyage/shared';
 import type { Env } from '../env';
 
 type Pinned = { seed: string; settings: Record<string, unknown>; engineVersion: string };
 type TruthMessage = { version: string; slug: string; offset?: number; pinned: Pinned };
-type CatalogueSector = { slug: string; name: string; x: number; y: number; tags: string[]; canonical: boolean };
 type SliceRow = { hex: string; indexEntry: Record<string, unknown> };
 
 const MAX_DELIVERIES = 4;
@@ -12,13 +11,13 @@ const SLICE = 25;
 const PARAM_LIMIT = 100;
 const SYSTEM_COLUMNS = 9;
 
-export async function truthBuildConsumer(batch: MessageBatch<TruthMessage>, env: Env): Promise<void> {
+export async function truthBuildConsumer(batch: MessageBatch, env: Env): Promise<void> {
     for (const message of batch.messages) {
         try {
-            await buildSlice(env, message.body);
+            await buildSlice(env, message.body as TruthMessage);
             message.ack();
         } catch (err) {
-            if (message.attempts >= MAX_DELIVERIES) await markFailed(env, message.body, err);
+            if (message.attempts >= MAX_DELIVERIES) await markFailed(env, message.body as TruthMessage | undefined, err);
             throw err;
         }
     }
@@ -29,6 +28,7 @@ async function buildSlice(env: Env, body: TruthMessage): Promise<void> {
     const offset = body.offset ?? 0;
     const tsvObject = await env.PRIVATE_BUCKET.get(`inputs/${version}/${slug}.tsv`);
     if (!tsvObject) throw new Error(`Sector inputs are missing for ${version}/${slug}.`);
+    const started = Date.now();
     const slice = await buildSectorSlice({
         slug,
         tsv: await tsvObject.text(),
@@ -36,13 +36,15 @@ async function buildSlice(env: Env, body: TruthMessage): Promise<void> {
         offset,
         limit: SLICE,
     });
-    for (const [hash, json] of slice.objects) {
-        await env.PUBLIC_BUCKET.put(`objects/${hash}`, json, {
+    const trees = [...slice.objects];
+    for (let i = 0; i < trees.length; i += 5) {
+        const group = trees.slice(i, i + 5);
+        await Promise.all(group.map(([hash, json]) => env.PUBLIC_BUCKET.put(`objects/${hash}`, json, {
             httpMetadata: {
                 contentType: 'application/json',
                 cacheControl: 'public, max-age=31536000, immutable',
             },
-        });
+        })));
     }
     await env.PRIVATE_BUCKET.put(
         `inputs/${version}/_parts/${slug}/${offset}.json`,
@@ -54,9 +56,18 @@ async function buildSlice(env: Env, body: TruthMessage): Promise<void> {
     ).bind(new Date().toISOString(), version, slug).run();
     if (slice.nextOffset != null) {
         await env.TRUTH_QUEUE.send({ version, slug, offset: slice.nextOffset, pinned });
-        return;
+    } else {
+        await finalize(env, version, slug);
     }
-    await finalize(env, version, slug);
+    console.log(JSON.stringify({
+        job: 'truth-build',
+        version,
+        slug,
+        offset,
+        rows: slice.rows.length,
+        objects: slice.objects.size,
+        ms: Date.now() - started,
+    }));
 }
 
 async function finalize(env: Env, version: string, slug: string): Promise<void> {
@@ -92,31 +103,15 @@ async function finalize(env: Env, version: string, slug: string): Promise<void> 
     }
     const xmlObject = await env.PRIVATE_BUCKET.get(`inputs/${version}/${slug}.xml`);
     if (!xmlObject) throw new Error(`Sector metadata is missing for ${version}/${slug}.`);
-    const meta = parseMetadataXml(await xmlObject.text());
-    if (meta.x === null || meta.y === null || Number.isNaN(meta.x) || Number.isNaN(meta.y)) {
-        throw new Error(`Sector metadata has no coordinates for ${slug}.`);
-    }
     const catalogueObject = await env.PRIVATE_BUCKET.get(`inputs/${version}/sectors.json`);
-    const catalogue = catalogueObject ? catalogueEntry(await catalogueObject.text(), slug) : null;
-    let built = 0;
-    let partial = 0;
-    for (const row of Object.values(hexes)) {
-        if (row.partial == null) built += 1;
-        else partial += 1;
-    }
-    const index = {
+    const catalogue = catalogueObject ? catalogueEntry(await catalogueObject.text(), slug) : undefined;
+    const index = SectorIndex.parse(assembleSectorIndex({
         slug,
-        name: catalogue?.name ?? meta.name,
-        x: catalogue?.x ?? meta.x,
-        y: catalogue?.y ?? meta.y,
-        ...(catalogue ? { tags: catalogue.tags, canonical: catalogue.canonical } : {}),
-        truthVersion: version,
-        systems: Object.keys(hexes).length,
-        built,
-        partial,
+        version,
+        metadataXml: await xmlObject.text(),
+        catalogue,
         hexes,
-        metadata: { routes: meta.routes, borders: meta.borders, names: meta.names },
-    };
+    }));
     const body = stable(index);
     const indexHash = await sha256Hex(body);
     await env.PUBLIC_BUCKET.put(`truth/${version}/sectors/${slug}/index.json`, body, {
@@ -126,7 +121,7 @@ async function finalize(env: Env, version: string, slug: string): Promise<void> 
     const statements: D1PreparedStatement[] = [
         env.DB.prepare('DELETE FROM truth_systems WHERE version = ? AND sector_slug = ?').bind(version, slug),
     ];
-    const entries = Object.entries(hexes);
+    const entries = Object.entries(index.hexes);
     const per = Math.floor(PARAM_LIMIT / SYSTEM_COLUMNS);
     for (let i = 0; i < entries.length; i += per) {
         const chunk = entries.slice(i, i + per);
@@ -150,7 +145,7 @@ async function finalize(env: Env, version: string, slug: string): Promise<void> 
          ON CONFLICT(version, sector_slug) DO UPDATE SET
             state = 'done', systems = excluded.systems, built = excluded.built, partial = excluded.partial,
             index_hash = excluded.index_hash, error = NULL, updated_at = excluded.updated_at`,
-    ).bind(version, slug, Object.keys(hexes).length, built, partial, indexHash, now));
+    ).bind(version, slug, index.systems, index.built, index.partial, indexHash, now));
     await env.DB.batch(statements);
 }
 
@@ -166,18 +161,18 @@ async function markFailed(env: Env, body: TruthMessage | undefined, err: unknown
     ).bind(body.version, body.slug, message, now).run();
 }
 
-function catalogueEntry(raw: string, slug: string): CatalogueSector | null {
+function catalogueEntry(raw: string, slug: string): CatalogueEntry | undefined {
     const parsed = JSON.parse(raw) as { sectors?: unknown };
     if (!Array.isArray(parsed.sectors)) throw new Error('Sector catalogue has no sectors array.');
     const found = parsed.sectors.find((item) => {
         return !!item && typeof item === 'object' && (item as { slug?: unknown }).slug === slug;
     }) as Record<string, unknown> | undefined;
-    if (!found) return null;
+    if (!found) return undefined;
     if (typeof found.name !== 'string' || typeof found.x !== 'number' || typeof found.y !== 'number') {
         throw new Error(`Sector catalogue entry ${slug} is missing name or coordinates.`);
     }
     const tags = Array.isArray(found.tags) ? found.tags.filter((tag): tag is string => typeof tag === 'string') : [];
-    return { slug, name: found.name, x: found.x, y: found.y, tags, canonical: found.canonical === true };
+    return { name: found.name, x: found.x, y: found.y, tags, canonical: found.canonical === true };
 }
 
 function textOrNull(value: unknown): string | null {

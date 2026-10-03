@@ -11,8 +11,10 @@ hex sha256 of the object bytes.
 ## 1. Objects (R2)
 
 An object is an immutable blob named by its hash. JSON objects use the stable serialization
-(`packages/shared/stable.ts`: sorted keys, two-space indent, explicit non-finite numbers) so
-identical content always has the same hash.
+(`packages/shared/stable.ts`: sorted keys, **no whitespace** from truth v2 on, explicit non-finite
+numbers) so identical content always has the same hash. Truth v1 was built pretty-printed (two-space
+indent, about 85 KB a tree against 50 KB compact) and is not released; changing the serialisation
+changes every hash, which is why it was done before any universe pinned a version.
 
 | Where | Key | Contents |
 |---|---|---|
@@ -156,19 +158,28 @@ objects/<hash>                         system trees, shared by every version tha
   "attribution": "Sector data from the Traveller Map (travellermap.com), used under Far Future Enterprises' Fair Use Policy. Traveller is a registered trademark of Far Future Enterprises.",
   "releasedAt": "set by the release endpoint, absent from a local build so two builds hash alike",
   "sectors": [ { "slug": "Spinward_Marches", "name": "Spinward Marches", "x": -4, "y": -1,
-                 "systems": 439, "indexHash": "…" } ] }
+                 "tags": ["Official", "OTU"], "canonical": true,
+                 "systems": 439, "built": 439, "partial": 0, "indexHash": "…" } ] }
 ```
 
 `sectors/<slug>/index.json`
 ```json
-{ "slug": "Spinward_Marches", "name": "Spinward Marches", "x": -4, "y": -1, "truthVersion": "v1",
+{ "slug": "Spinward_Marches", "name": "Spinward Marches", "x": -4, "y": -1, "truthVersion": "v2",
+  "tags": ["Official", "OTU"], "canonical": true, "systems": 439, "built": 439, "partial": 0,
   "hexes": { "1910": { "tree": "<hash>", "type": "SYSTEM_PRESENT", "name": "Regina", "uwp": "A788899-C",
                        "allegiance": "ImDd", "zone": "", "bases": "NS", "tradeCodes": [], "pbg": "703",
-                       "ix": 4, "partial": null, "summary": { } },
+                       "ix": 4, "stars": "F7 V BD M3 V", "partial": null },
              "0914": { "tree": null, "type": "SYSTEM_PRESENT", "name": "Beauniture", "uwp": "C8858??-4",
-                       "partial": "partial", "summary": { } } },
+                       "partial": "partial" } },
   "metadata": { "routes": [], "borders": [], "names": {} }, "wiki": { "1910": { } } }
 ```
+
+An index entry is the chart row and nothing else: the fields the map draws, each stored once.
+`stars` is the chart's Stars column as written. Truth v1 entries carried a `summary` that was a
+second copy of the same fields (Spinward Marches: 327 KB, against about 116 KB compact without
+it); v2 drops it. Anything the map needs from the generated tree is added here by name when a
+slice needs it, never by copying the row. One function, `assembleSectorIndex` in
+`packages/generation`, builds this document for both the local build and the Worker.
 
 **Which sectors (decided 2026-10-03).** The truth is **every** M1105 sector in TravellerMap's
 catalogue that has world data: 512 on 2026-10-03. Each carries its TravellerMap `tags` and a

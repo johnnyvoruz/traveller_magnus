@@ -7,6 +7,7 @@ import test from 'node:test';
 import { existsSync } from 'node:fs';
 import { TSV } from '../golden/cases.js';
 import { TRUTH_SEED, TRUTH_SETTINGS } from '../../tools/truth/settings.js';
+import { SectorIndex, TruthManifest } from '@voyage/shared';
 import { deadLetterConsumer } from '../../apps/api/src/jobs/dead_letter.ts';
 import { truthBuildConsumer } from '../../apps/api/src/jobs/truth_build.ts';
 import { adminCookie, runWrangler } from './session.js';
@@ -154,6 +155,9 @@ if (process.env.RUN_API_TESTS !== '1') {
             VALUES (?, ?, ?, 0, 0, 0, ?, NULL, ?)`);
         insert.run('vdl', 'Stuck', 'building', null, '2020-01-01T00:00:00.000Z');
         insert.run('vdl', 'Finished', 'done', 'abc', '2020-01-01T00:00:00.000Z');
+        db.prepare(`INSERT INTO truth_build_sectors
+            (version, sector_slug, state, systems, built, partial, index_hash, error, updated_at)
+            VALUES ('vdl', 'Broken', 'failed', 0, 0, 0, NULL, 'r2 blew up', '2020-01-01T00:00:00.000Z')`).run();
         const acked = [];
         const lines = [];
         const original = console.log;
@@ -163,6 +167,7 @@ if (process.env.RUN_API_TESTS !== '1') {
                 messages: [
                     { body: { version: 'vdl', slug: 'Stuck', offset: 25 }, ack() { acked.push('Stuck'); } },
                     { body: { version: 'vdl', slug: 'Finished', offset: 0 }, ack() { acked.push('Finished'); } },
+                    { body: { version: 'vdl', slug: 'Broken', offset: 50 }, ack() { acked.push('Broken'); } },
                     { body: { kind: 'other' }, ack() { acked.push('other'); } },
                 ],
             }, {
@@ -181,15 +186,19 @@ if (process.env.RUN_API_TESTS !== '1') {
         }
         const stuck = db.prepare(`SELECT state, error FROM truth_build_sectors WHERE sector_slug = 'Stuck'`).get();
         const finished = db.prepare(`SELECT state, error, index_hash, updated_at FROM truth_build_sectors WHERE sector_slug = 'Finished'`).get();
+        const broken = db.prepare(`SELECT state, error, updated_at FROM truth_build_sectors WHERE sector_slug = 'Broken'`).get();
         assert.equal(stuck.state, 'failed');
         assert.equal(stuck.error, 'dead-lettered: the invocation died without throwing; see Workers Logs');
         assert.equal(finished.state, 'done');
         assert.equal(finished.error, null);
         assert.equal(finished.index_hash, 'abc');
         assert.equal(finished.updated_at, '2020-01-01T00:00:00.000Z');
-        assert.deepEqual(acked, ['Stuck', 'Finished', 'other']);
-        const logged = lines.map((line) => JSON.parse(line));
-        assert.equal(logged.length, 2);
+        assert.equal(broken.state, 'failed');
+        assert.equal(broken.error, 'r2 blew up');
+        assert.equal(broken.updated_at, '2020-01-01T00:00:00.000Z');
+        assert.deepEqual(acked, ['Stuck', 'Finished', 'Broken', 'other']);
+        const logged = lines.filter((line) => line.includes('"job":"dead-letter"')).map((line) => JSON.parse(line));
+        assert.equal(logged.length, 3);
         assert.equal(logged[0].job, 'dead-letter');
         assert.equal(logged[0].slug, 'Stuck');
         assert.equal(logged[0].offset, 25);
@@ -315,6 +324,8 @@ if (process.env.RUN_API_TESTS !== '1') {
             const manifestFile = path.join(dir, 'manifest.json');
             runWrangler(['r2', 'object', 'get', 'voyage-public/truth/vtest/manifest.json', '--file', manifestFile, '--local']);
             const manifest = JSON.parse(readFileSync(manifestFile, 'utf8'));
+            const manifestParsed = TruthManifest.safeParse(manifest);
+            assert.equal(manifestParsed.success, true, JSON.stringify(manifestParsed.success ? null : manifestParsed.error.issues[0]));
             assert.equal(manifest.attribution, ATTRIBUTION);
             assert.equal(typeof manifest.releasedAt, 'string');
             assert.ok(manifest.releasedAt.length > 0);
@@ -347,6 +358,17 @@ if (process.env.RUN_API_TESTS !== '1') {
             assert.equal(found.status, 200, JSON.stringify(foundBody));
             assert.equal(foundBody.data.items.length, 1);
             assert.equal(foundBody.data.items[0].name, 'Regina');
+            const prefix = await fetch(`${base}/api/truth/search?q=${encodeURIComponent('Regi')}&version=vtest`);
+            const prefixBody = await prefix.json();
+            assert.equal(prefix.status, 200, JSON.stringify(prefixBody));
+            assert.equal(prefixBody.data.items.length, 1);
+            assert.equal(prefixBody.data.items[0].name, 'Regina');
+            const tokens = await fetch(`${base}/api/truth/search?q=${encodeURIComponent('Regina 191')}&version=vtest`);
+            const tokensBody = await tokens.json();
+            assert.equal(tokens.status, 200, JSON.stringify(tokensBody));
+            assert.equal(tokensBody.data.items.length, 1);
+            assert.equal(tokensBody.data.items[0].name, 'Regina');
+            assert.equal(tokensBody.data.items[0].hex, '1910');
 
             const wideTsvFile = path.join(dir, 'Wide.tsv');
             const wideXmlFile = path.join(dir, 'Wide.xml');
@@ -415,6 +437,9 @@ if (process.env.RUN_API_TESTS !== '1') {
             const wideIndexFile = path.join(dir, 'wide-index.json');
             runWrangler(['r2', 'object', 'get', 'voyage-public/truth/vwide/sectors/Wide/index.json', '--file', wideIndexFile, '--local']);
             const wideIndex = JSON.parse(readFileSync(wideIndexFile, 'utf8'));
+            const wideParsed = SectorIndex.safeParse(wideIndex);
+            assert.equal(wideParsed.success, true, JSON.stringify(wideParsed.success ? null : wideParsed.error.issues[0]));
+            for (const entry of Object.values(wideIndex.hexes)) assert.equal(Object.hasOwn(entry, 'summary'), false);
             assert.equal(wideIndex.truthVersion, 'vwide');
             assert.equal(Object.keys(wideIndex.hexes).length, 450);
             const wideRows = jsonFrom(runWrangler([
@@ -456,6 +481,15 @@ if (process.env.RUN_API_TESTS !== '1') {
             assert.equal(fresh.state, 'building');
             assert.notEqual(stale.updated_at, staleAt);
             assert.equal(stale.state, 'building');
+            const hidden = await fetch(`${base}/api/truth/search?q=${encodeURIComponent('Regi')}&version=vwide`);
+            const hiddenBody = await hidden.json();
+            assert.equal(hidden.status, 200, JSON.stringify(hiddenBody));
+            assert.equal(hiddenBody.data.items.length, 0);
+            const releasedOnly = await fetch(`${base}/api/truth/search?q=${encodeURIComponent('Regi')}`);
+            const releasedOnlyBody = await releasedOnly.json();
+            assert.equal(releasedOnly.status, 200, JSON.stringify(releasedOnlyBody));
+            assert.ok(releasedOnlyBody.data.items.some((item) => item.version === 'vtest' && item.name === 'Regina'));
+            assert.equal(releasedOnlyBody.data.items.some((item) => item.version === 'vwide'), false);
         });
     });
 }

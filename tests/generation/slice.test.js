@@ -40,7 +40,7 @@ test('Spinward Marches slices of 200 match buildSector', { timeout: 600000 }, as
     const tsv = readFileSync(path.join(root, 'universe/raw/Spinward_Marches.tsv'), 'utf8');
     const xml = readFileSync(path.join(root, 'universe/raw/Spinward_Marches.xml'), 'utf8');
     const pinned = { seed: TRUTH_SEED, settings: { ...TRUTH_SETTINGS }, engineVersion };
-    const full = await buildSector({ slug: 'Spinward_Marches', tsv, metadataXml: xml, pinned });
+    const full = await buildSector({ slug: 'Spinward_Marches', tsv, metadataXml: xml, pinned, version: 'v2' });
     const hexes = {};
     const chainRows = [];
     const objects = new Map();

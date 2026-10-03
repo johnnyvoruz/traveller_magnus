@@ -5,15 +5,28 @@ import { stable, sha256Hex } from '@voyage/shared';
 import { buildSector } from '@voyage/generation';
 import { TRUTH_SEED, TRUTH_SETTINGS, TRUTH_MILIEU } from './settings.js';
 
+const version = process.argv[2];
+if (!/^v\d+$/.test(version || '')) {
+    console.error('usage: node tools/truth/build.js v<N>');
+    process.exit(1);
+}
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const engineVersion = JSON.parse(fs.readFileSync(path.join(ROOT, 'packages/engines/package.json'), 'utf8')).version;
 const OUT = path.join(ROOT, 'truth-local');
-const TRUTH_VERSION = 'v1';
 
 const started = Date.now();
 fs.rmSync(OUT, { recursive: true, force: true });
 
 const rawDir = path.join(ROOT, 'universe/raw');
+const catalogueList = JSON.parse(fs.readFileSync(path.join(rawDir, 'sectors.json'), 'utf8')).sectors;
+const catalogue = new Map(catalogueList.map(entry => [entry.slug, {
+    name: entry.name,
+    x: entry.x,
+    y: entry.y,
+    tags: entry.tags,
+    canonical: entry.canonical,
+}]));
 const failed = [];
 const sectors = [];
 let objects = 0;
@@ -40,21 +53,23 @@ for (const file of fs.readdirSync(rawDir).filter(name => name.endsWith('.tsv')).
     try {
         const tsv = fs.readFileSync(path.join(rawDir, file), 'utf8');
         const metadataXml = fs.readFileSync(xmlPath, 'utf8');
-        const sector = await buildSector({ slug, tsv, metadataXml, pinned });
+        const entry = catalogue.get(slug);
+        if (!entry) throw new Error('no catalogue entry');
+        const sector = await buildSector({ slug, tsv, metadataXml, pinned, version, catalogue: entry });
         if (sector.index.x === undefined || sector.index.y === undefined) {
             throw new Error('coordinates missing after parse');
         }
         const objDir = path.join(OUT, 'objects');
         fs.mkdirSync(objDir, { recursive: true });
         for (const [hash, json] of sector.objects) {
-            fs.writeFileSync(path.join(objDir, `${hash}.json`), json);
+            fs.writeFileSync(path.join(objDir, hash), json);
             const size = Buffer.byteLength(json);
             objects += 1;
             bytes += size;
             if (size > largest) largest = size;
         }
         const indexJson = stable(sector.index);
-        const indexDir = path.join(OUT, TRUTH_VERSION, 'sectors', slug);
+        const indexDir = path.join(OUT, version, 'sectors', slug);
         fs.mkdirSync(indexDir, { recursive: true });
         fs.writeFileSync(path.join(indexDir, 'index.json'), indexJson);
         const indexHash = await sha256Hex(indexJson);
@@ -67,7 +82,11 @@ for (const file of fs.readdirSync(rawDir).filter(name => name.endsWith('.tsv')).
             name: sector.index.name,
             x: sector.index.x,
             y: sector.index.y,
+            tags: sector.index.tags,
+            canonical: sector.index.canonical,
             systems: sector.counts.systems,
+            built: sector.counts.built,
+            partial: sector.counts.partial,
             indexHash,
         });
         console.error(`${slug} systems=${sector.counts.systems} built=${sector.counts.built} partial=${sector.counts.partial}`);
@@ -79,16 +98,18 @@ for (const file of fs.readdirSync(rawDir).filter(name => name.endsWith('.tsv')).
 }
 
 const manifest = {
-    truthVersion: TRUTH_VERSION,
+    truthVersion: version,
     milieu: TRUTH_MILIEU,
     seed: TRUTH_SEED,
     settings: TRUTH_SETTINGS,
     engineVersion,
     attribution: "Sector data from the Traveller Map (travellermap.com), used under Far Future Enterprises' Fair Use Policy. Traveller is a registered trademark of Far Future Enterprises.",
-    sectors: sectors.map(({ slug, name, x, y, systems, indexHash }) => ({ slug, name, x, y, systems, indexHash })),
+    sectors: sectors.map(({ slug, name, x, y, tags, canonical, systems, built, partial, indexHash }) => (
+        { slug, name, x, y, tags, canonical, systems, built, partial, indexHash }
+    )),
 };
-fs.mkdirSync(path.join(OUT, TRUTH_VERSION), { recursive: true });
-fs.writeFileSync(path.join(OUT, TRUTH_VERSION, 'manifest.json'), stable(manifest));
+fs.mkdirSync(path.join(OUT, version), { recursive: true });
+fs.writeFileSync(path.join(OUT, version, 'manifest.json'), stable(manifest));
 
 const elapsed = Date.now() - started;
 console.log(JSON.stringify({ failed, systems, built: builtTotal, partial, objects, bytes, largest, elapsed, sectors: sectorCounts }, null, 2));

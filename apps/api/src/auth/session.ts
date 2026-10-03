@@ -2,6 +2,7 @@ import type { Context } from 'hono';
 import { createAuth } from './auth';
 import type { AppEnv } from '../env';
 import { fail } from '../http';
+import { roleSatisfies, type RoleName } from './roles';
 
 export type AppContext = Context<AppEnv>;
 
@@ -35,15 +36,16 @@ export type SessionUser = {
 export async function requireUser(c: AppContext): Promise<SessionUser | Response> {
     const session = await createAuth(c.env).api.getSession({ headers: c.req.raw.headers });
     if (!session?.user) return fail(c, 401, 'unauthenticated', 'Sign in required.');
-    const role = session.user.role ?? '';
-    const user = { id: session.user.id, email: session.user.email, role };
+    const account = session.user as typeof session.user & { role?: string };
+    const role = account.role ?? '';
+    const user = { id: account.id, email: account.email, role };
     c.set('userId', user.id);
     return user;
 }
 
-export async function requireRole(c: AppContext, role: 'user' | 'reviewer' | 'admin'): Promise<SessionUser | Response> {
+export async function requireRole(c: AppContext, role: RoleName): Promise<SessionUser | Response> {
     const user = await requireUser(c);
     if (user instanceof Response) return user;
-    if (user.role !== role) return fail(c, 403, 'forbidden', 'Role required.');
+    if (!roleSatisfies(user.role, role)) return fail(c, 403, 'forbidden', 'Role required.');
     return user;
 }

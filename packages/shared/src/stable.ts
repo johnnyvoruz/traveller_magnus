@@ -6,7 +6,7 @@ export function stable(value: unknown): string {
             return Object.keys(v as object).sort().reduce((o: Record<string, unknown>, key) => { o[key] = (v as any)[key]; return o; }, {});
         }
         return v;
-    }, 2);
+    });
 }
 export async function sha256Hex(text: string): Promise<string> {
     const bytes = new TextEncoder().encode(text);

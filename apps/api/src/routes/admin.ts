@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { Hono } from 'hono';
-import { sha256Hex, stable, TruthBuild, TruthRetry } from '@voyage/shared';
+import { sha256Hex, stable, TruthBuild, TruthManifest, TruthRetry } from '@voyage/shared';
 import { originAllowed, requireRole, ulid, type AppContext } from '../auth/session';
 import { auditLog, truthVersions } from '../db/schema';
 import type { AppEnv } from '../env';
@@ -194,11 +194,11 @@ admin.post('/truth/release/:version', async (c) => {
     if (catalogue) {
         const parsed = JSON.parse(await catalogue.text()) as { sectors?: Record<string, unknown>[] };
         for (const item of parsed.sectors ?? []) {
-            if (typeof item.slug !== 'string') continue;
+            if (typeof item.slug !== 'string' || typeof item.name !== 'string' || typeof item.x !== 'number' || typeof item.y !== 'number') continue;
             catalogueBySlug.set(item.slug, {
-                name: typeof item.name === 'string' ? item.name : item.slug,
-                x: typeof item.x === 'number' ? item.x : 0,
-                y: typeof item.y === 'number' ? item.y : 0,
+                name: item.name,
+                x: item.x,
+                y: item.y,
                 tags: Array.isArray(item.tags) ? item.tags.filter((tag): tag is string => typeof tag === 'string') : [],
                 canonical: item.canonical === true,
             });
@@ -210,13 +210,14 @@ admin.post('/truth/release/:version', async (c) => {
         const item = bySlug.get(slug);
         if (!item || !item.index_hash) return fail(c, 409, 'conflict', 'Sector build record is missing.', { slug });
         const listed = catalogueBySlug.get(slug);
+        if (!listed) return fail(c, 409, 'conflict', `No catalogue entry for ${slug}.`, { slug });
         sectors.push({
             slug,
-            name: listed?.name ?? slug,
-            x: listed?.x ?? null,
-            y: listed?.y ?? null,
-            tags: listed?.tags ?? [],
-            canonical: listed?.canonical === true,
+            name: listed.name,
+            x: listed.x,
+            y: listed.y,
+            tags: listed.tags,
+            canonical: listed.canonical,
             systems: item.systems,
             built: item.built,
             partial: item.partial,
@@ -224,16 +225,16 @@ admin.post('/truth/release/:version', async (c) => {
         });
     }
     const releasedAt = new Date().toISOString();
-    const manifest = {
+    const manifest = TruthManifest.parse({
         truthVersion: version,
         milieu: row.milieu,
         seed: row.seed,
-        settings: JSON.parse(row.settings) as Record<string, unknown>,
+        settings: JSON.parse(row.settings),
         engineVersion: row.engineVersion,
         attribution: ATTRIBUTION,
         releasedAt,
         sectors,
-    };
+    });
     const body = stable(manifest);
     const manifestHash = await sha256Hex(body);
     await c.env.PUBLIC_BUCKET.put(`truth/${version}/manifest.json`, body, {

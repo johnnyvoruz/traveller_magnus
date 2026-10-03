@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import type { Env } from './env';
+import type { AppEnv, Env } from './env';
 import { requestContext } from './http';
 import { createAuth } from './auth/auth';
 import { health } from './routes/health';
@@ -12,7 +12,7 @@ import { truthBuildConsumer } from './jobs/truth_build';
 import { fail } from './http';
 export { UniverseDO } from './universe/UniverseDO';
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new Hono<AppEnv>();
 app.use('*', requestContext);
 app.on(['GET', 'POST'], '/api/auth/*', (c) => createAuth(c.env).handler(c.req.raw));
 app.route('/api', health);

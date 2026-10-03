@@ -1,3 +1,5 @@
+declare const process: { env: Record<string, string | undefined> };
+
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from '@better-auth/drizzle-adapter';
 import { drizzle } from 'drizzle-orm/d1';

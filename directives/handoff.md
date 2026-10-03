@@ -422,3 +422,241 @@ Run npm run check, npm test, and RUN_API_TESTS=1 node --test "tests/api/**/*.tes
 If the installed wrangler rejects max_concurrency, retry_delay or the second consumer block, stop and report the exact error.
 Stop and report. Unchanged rules: no edits under rules/, js/, hex_map.html or style.css; no git; only you run npm install; never adjust a fixture or an engine toward each other; do not change packages/generation; no new migration.
 ```
+
+## 12. Truth-build improvements for the next version (noted during the v1 run, not started)
+
+The v1 run works but is slow and opaque. Before any `v2` build, in one recipe for Agent B:
+
+1. **Feed sectors a few at a time.** Today every sector's first slice is enqueued at once and
+   each slice re-enqueues at the back, so all sectors advance round-robin and none finishes
+   for the first 45 minutes. Enqueue a window of sectors (about 12) and start the next sector
+   when one finalizes. Same total time; steady visible progress; a bad sector shows early.
+2. **Write a slice's trees in parallel.** A 25-row slice used 195 ms of CPU and 12 s of wall
+   time: the trees are `put` one after another at roughly half a second each. Putting them
+   five at a time cuts the wall time several-fold without using more memory. This is the real
+   speed lever; concurrency across invocations is not.
+3. **Log what each slice did.** One JSON line per slice `{ job, version, slug, offset, rows,
+   ms }`. Workers Logs currently shows only that a queue invocation ran.
+4. **Silence the auditor in the Worker.** The Mongoose auditor prints violations to the
+   console during generation; route them through the trace sink like every other line.
+
+Also still open from §3: the `apps/api` type errors and a `typecheck` script.
+
+## 13. Agent M's review (2026-10-03), checked by the orchestrator
+
+A separate review agent wrote `findings/` at the repo root (`agent_m_technical.md`, 20
+findings; `agent_m_features.md`). Its truth-build status is a snapshot from between the
+deploy and the retry and is out of date (§11 is current). Confirmed against production by the
+orchestrator:
+
+| Finding | Confirmed | What to do |
+|---|---|---|
+| T1 `cdn.traveller.voyage` sends no `Access-Control-Allow-Origin` | yes | **Blocks slice 1.** CORS policy on `voyage-public` allowing `https://traveller.voyage` (and the preview host), `GET`/`HEAD`. A bucket setting: Johnny's go. |
+| T2 CDN returns `cf-cache-status: DYNAMIC` | yes | One Cache Rule on the zone for `cdn.traveller.voyage` (cache everything, respect origin headers). Johnny, dashboard. Until then "immutable" binds browsers only. |
+| T3 dead-letter consumer overwrites an existing error | yes (code) | Recipe for B: only set `error` when the row is not already `failed`. |
+| T5 search has no prefix match and returns unreleased versions | yes (`q=Regi` empty; `q=Regina` returns a `v1` row) | Recipe for B: join `truth_versions` on `state = 'released'`; prefix match on the last token. |
+| T6 every index entry stores its fields twice (`...projection, summary: projection`) and carries nothing from the generated tree | yes (Calidan index) | Index shape is decided in the slice 1 recipe, from what the viewer draws. See below. |
+| T9 no test gate before a production deploy | yes (already §7) | CI workflow; consider production from `main` with `campaign` as preview. Johnny's call. |
+
+**Recommendation recorded here, Johnny decides:** let the v1 build finish (it proves the
+pipeline end to end) but **do not release it**. Fix the index shape while writing the slice 1
+recipe, apply §12, and build and release that as `v2`. Trees are content-addressed, so `v2`
+points at the same objects; only indexes and search rows are new. Nothing reads an unreleased
+version once T5 is fixed.
+
+Not yet read in full by the orchestrator: T7, T8, T10-T20 and the feature gap file.
+
+## 14. Agent X's review (2026-10-03) and the v2 format question
+
+A second review agent (read-only, no file written) agrees with Agent M and §13: let v1 finish
+as proof, release a fixed format as `v2`. Spot-checked by the orchestrator: `requireRole` is
+an exact match, so an admin fails a `reviewer` check (`apps/api/src/auth/session.ts`);
+`packages/generation/src/index.ts` hardcodes `TRUTH_VERSION = 'v1'` for `buildSector`;
+`feature_inventory.md` A1 says to wrap `renderer.js`.
+
+**Correction to §13:** if trees are stored compact instead of pretty-printed (X measured 85 KB
+against 50 KB per tree), every tree hash changes, so `v2` rewrites all ~156,000 objects and
+the v1 objects become garbage for the weekly sweep. Only an index-only change would reuse the
+v1 objects.
+
+**What v2 should settle in one rebuild (to be specified before slice 1's recipe, Johnny
+decides the starred ones):**
+1. Compact stable JSON for trees and indexes. `data_model.md` §1 says "two-space indent"; the
+   golden fixtures are stored in that form, so the fixtures are re-serialised from the legacy
+   oracle, never edited. ★ Needs Johnny's explicit yes because of CLAUDE.md rule 4.
+2. Index entries without the duplicated `summary`; add from the tree only what the map draws.
+3. A galaxy-level overview file built by the truth job, if slice 1 shows all 512 sectors. ★
+4. Zod schemas in `packages/shared` brought in line with what the build writes (`tags`,
+   `canonical`, `built`, `partial`); one index shape for the local and the Worker build.
+5. The §12 build improvements.
+
+X's other open questions for Johnny: map scope for slice 1; renderer wrap versus rebuild
+(X argues rebuild: the legacy renderer has 144 references to `window` or `hexStates`, which
+the no-globals rule and the M2 deletion both forbid); phones and tablets; whether the
+FontAwesome Pro kit stays; and X's own lane. Cleanup must not touch `js/`, `rules/`,
+`hex_map.html`, `style.css`, `tests/oracle` or `tests/golden/fixtures` before M2.
+
+## 15. Prompt for Agent B: Worker fixes from the reviews (written 2026-10-03, not yet sent)
+
+Touches only `apps/api`, `tests/api` and the root `package.json` scripts, so Agent A can work
+in `packages/` at the same time. **Do not push the result until the v1 build has finished**
+(a push redeploys the Worker mid-run). Windowed sector feeding (§12 item 1) needs a new sector
+state and a migration, so it waits for the v2 recipe; the auditor's console lines (§12 item 4)
+are engine code and belong to Agent A.
+
+```
+Two reviews of the Worker found defects I confirmed in production. None changes the truth-build design. Re-read api.md slice 0 (the /api/truth rows) and architecture.md §5 "Failure and retry".
+
+Do this, in order:
+
+1. src/routes/truth.ts, GET /search: (a) return rows only from versions whose truth_versions.state is 'released' (join truth_versions); the version query parameter still narrows within those. (b) Type-ahead: split q on whitespace, drop empty tokens and any double quotes, quote each token for FTS5, and append * to the last one, so q=Regi matches Regina and q=Spin Mar matches a row containing both. (c) ORDER BY rank before LIMIT 50. An empty q still returns no items.
+
+2. src/jobs/dead_letter.ts: the upsert must not replace an error that is already recorded. Change the conflict clause so it updates only a row whose state is 'building'. A 'failed' row keeps its error; a 'done' row stays done.
+
+3. src/auth/session.ts, requireRole: roles are ordered user < reviewer < admin, and a user passes when their role is at or above the one required. Today an admin fails a reviewer check.
+
+4. src/jobs/truth_build.ts: put the slice's trees in groups of 5 with Promise.all instead of one at a time; the part file is still written only after every tree put has resolved. After the slice finishes, console.log one JSON line { job: 'truth-build', version, slug, offset, rows, objects, ms }.
+
+5. Typecheck: add "typecheck": "tsc --noEmit -p apps/api" to the root package.json scripts and make it pass. Today it reports errors in src/index.ts (the app is typed { Bindings: Env } instead of AppEnv), src/auth/session.ts (role is not on the session user type), src/auth/auth.cli.ts (process without Node types) and TS5097 for the .ts import extensions in packages/shared (fix that in apps/api/tsconfig.json, not by editing packages/shared). Fix types only: if making an error go away would change what the code does at run time, stop and report that error instead.
+
+6. Tests (gated): search finds a released row by prefix and by two tokens, and does not return a row from a version that is still 'building'; a dead-letter message leaves a 'failed' row's error unchanged; an admin passes a reviewer check and a user fails it (unit-level if the route does not exist yet). Update the binding-call counter test if the grouping changes its counts, and report them.
+
+Run npm run check, npm test, npm run typecheck, and RUN_API_TESTS=1 node --test "tests/api/**/*.test.js"; paste the output.
+
+Stop and report. Unchanged rules: no edits under rules/, js/, hex_map.html or style.css; no git; only you run npm install; do not change anything under packages/; no new migration, and if you think one is needed, stop and report.
+```
+
+## 16. Decisions of 2026-10-03 (afternoon) and the prompt for Agent A
+
+**Johnny decided, in chat:**
+- **Content is wide open.** Mongoose has given permission to build whatever we want; they will
+  review and say what to cut later. Treat licensing as a blank cheque, not a blocker. This
+  does **not** change the Johnny Protocol: `rules/` stays read-only and rules are never filled
+  in from memory; it means features may carry Mongoose content once Johnny supplies it.
+- **Unblock Agent A on the v2 format.** He asked for A's prompt after the orchestrator
+  recommended compact JSON and a galaxy-level map of all 512 sectors; taken as yes to both.
+  The overview file for the zoomed-out map is derived from the sector indexes at release, so
+  it is specified with the slice 1 recipe and does not hold A up.
+
+- **The map renderer is rebuilt, not wrapped** (confirmed later the same day).
+  `feature_inventory.md` A1 and `plan.md` slice 1 say so. The slice 1 recipe is written around
+  a new TypeScript `MapRenderer` with a galaxy tier; `js/renderer.js` is read for look and
+  behaviour only.
+
+**Orchestrator recommendations he has seen but not confirmed** (record as decisions when he
+does): phones and tablets in scope; drop the
+FontAwesome Pro kit; production from `main` with `campaign` as preview and a test gate;
+Discord and Google sign-in before inviting anyone; a thin players-and-campaign slice ahead of
+the Builder; a campaign as its own entity.
+
+**v2 format, recorded in `data_model.md` §1 and §5:** compact stable JSON; index entries are
+the chart row once (no `summary` copy) plus `stars`; the index and manifest carry `tags`,
+`canonical`, `systems`, `built`, `partial`; one `assembleSectorIndex` for local and Worker.
+
+**After A reports:** a short prompt for B switches the Worker's finalize and release to
+`assembleSectorIndex` and the shared schemas (B's §15 work lands first). Then deploy, build
+`v2` (inputs go up with `node tools/truth/upload_inputs.js v2`), release `v2`. `v1` stays
+unreleased.
+
+**Prompt for Agent A:**
+
+```
+New work for Track A: the truth format changes before anyone pins a version. Read data_model.md §1 (the stable serialisation paragraph) and §5 (manifest.json, sectors/<slug>/index.json and the paragraph that starts "An index entry is the chart row"). Agent B is working in apps/api and tests/api at the same time: do not edit there, and if a failure you see comes from those folders, report it and leave it.
+
+Do this, in order:
+
+1. Fixtures first, as a proof. Copy tests/golden/fixtures to tests/golden/fixtures_before (a temporary folder). Then in packages/shared/src/stable.ts remove the indent argument so stable() writes no whitespace; change nothing else in that function. Run UPDATE_GOLDEN=1 npm test once to rewrite the fixtures from the legacy oracle. Then prove nothing but whitespace changed: for every file, JSON.parse of the old file must deep-equal JSON.parse of the new file (a throwaway node -e is fine; paste its output). Delete tests/golden/fixtures_before. This is the only permitted way a fixture changes: re-serialised from the oracle, never edited. If any file differs in content, restore the folder from fixtures_before, put the indent back, stop and report the file and the first differing path.
+
+2. packages/generation/src/index.ts:
+   a. Remove the constant TRUTH_VERSION. buildSector takes a required version: string and an optional catalogue: { name: string; x: number; y: number; tags: string[]; canonical: boolean }.
+   b. An index entry is { tree, type, name, uwp, allegiance, zone, bases, tradeCodes, pbg, ix, stars, partial }. Remove the summary copy. stars is the chart's Stars column exactly as the parser already keeps it (row.t5Data.homestar), omitted when the parser has none. Nothing else is added.
+   c. Export assembleSectorIndex({ slug, version, metadataXml, catalogue, hexes }) returning the data_model.md §5 index: slug, name, x, y (from the catalogue when given, else from the XML; missing coordinates still throw), tags and canonical (from the catalogue; [] and false without one), truthVersion, systems, built, partial (counted from hexes), hexes, metadata. buildSector builds its index with it and keeps returning { index, objects, counts }.
+   Do not touch generateHex or anything under packages/engines.
+
+3. packages/shared/src/schemas/truth.ts: make SectorHex, SectorIndex and TruthManifest describe exactly what step 2 and data_model.md §5 write: SectorHex without summary and with optional stars; SectorIndex with tags, canonical, systems, built, partial; each TruthManifest sector with tags, canonical, built, partial. Use .strict() on the three so an extra or missing field fails.
+
+4. tools/truth/build.js: take the version as the first argument (required, v<N>); read universe/raw/sectors.json and pass each sector's catalogue entry to buildSector; write objects without the .json extension (the bucket key is objects/<hash>); write the manifest with the fields from step 3 and no releasedAt. Update the "truth:local" script in the root package.json to "node tools/truth/build.js v2". tools/truth/hash.js needs no change unless it assumed .json names; say which.
+
+5. Tests: tests/generation: parity and slice tests updated for the version argument; a new test that SectorIndex.parse accepts buildSector's index for Spinward Marches with the real catalogue entry, and that no entry has a summary key. tests/shared: stable() output contains no newline and no two consecutive spaces outside strings for a nested sample, and still sorts keys and writes { "$num": "Infinity" }.
+
+6. Report these numbers, v1 form against v2 form, for Spinward Marches: index bytes, average and largest tree bytes, and wall time of buildSector.
+
+Run npm run check and npm test; paste the output. Then run TRUTH_SLUGS=Spinward_Marches,Calidan npm run truth:local twice and node tools/truth/hash.js after each; the two hashes must match.
+
+If any golden or parity test fails after step 1 for a reason other than whitespace, stop and report: do not adjust a fixture, an engine or the oracle.
+Stop and report. Unchanged rules: no edits under rules/, js/, hex_map.html or style.css; no git; no npm install (only Agent B installs); never adjust a fixture or an engine toward each other.
+```
+
+**B reported green on §15 (2026-10-03) and the code was read.** All six items are in; here
+`npm run typecheck` exits 0, `npm test` is 46/41/5, `npm run check` is clean; B reports the
+gated suite 6 of 6. Two things B did to get the typecheck clean that its report did not
+mention, both accepted for now and both worth replacing later: `apps/api/src/engines.d.ts`
+declares `@voyage/engines` as an untyped module (everything imported from the engines is
+`any`), and `src/auth/auth.cli.ts` declares `process` locally instead of using Node types.
+Uncommitted and **not to be pushed until the v1 build finishes**: `apps/api/src/auth/auth.cli.ts`,
+`auth/roles.ts`, `auth/session.ts`, `engines.d.ts`, `index.ts`, `jobs/dead_letter.ts`,
+`jobs/truth_build.ts`, `routes/truth.ts`, `apps/api/tsconfig.json`, root `package.json`,
+`tests/api/role.test.js`, `tests/api/truth_build.test.js`.
+
+## 17. Agent A's v2 format work is in (2026-10-03); last prompt for B before the v2 build
+
+**A reported green on §16 and the work was checked.** Independently verified here: every one
+of the ten golden fixtures parses to exactly the content of its committed version (compared
+against `git show HEAD:`), so the rewrite changed whitespace only; `npm test` 48/43/5,
+`npm run check` clean, `npm run typecheck` clean with A's and B's changes together. A's
+numbers for Spinward Marches: index 327,282 → 123,907 bytes; average tree 86,433 → 50,893.
+All 180,312 chart rows in the 512 sectors carry every field the strict `SectorHex` requires.
+**106,146 of them have no `stars`**: the chart's Stars column is empty for most non-Imperial
+sectors, so a map that draws star colour must take it from the generated tree for those. That
+is a slice 1 design input, not a defect.
+
+Uncommitted from A: `packages/shared/src/stable.ts`, `schemas/truth.ts`,
+`packages/generation/src/index.ts`, `tools/truth/build.js`, root `package.json`
+(`truth:local`), the ten files in `tests/golden/fixtures`, `tests/generation/slice.test.js`,
+`tests/generation/sector_index.test.js`, `tests/shared/partial_uwp.test.js`,
+`tests/shared/stable.test.js`.
+
+**Still wrong until B does the prompt below:** the Worker's finalize builds the index by hand
+(old shape plus A's new entries, no schema check) and release can write `x: null`.
+
+**Order from here:** B does the prompt below → v1 build finishes → one commit and push of
+everything (A, B, directives, `findings/`) → confirm deploy → Johnny's CORS go and Cache Rule
+(§13) → `node tools/truth/upload_inputs.js v2` → Johnny runs the §3 build command with
+`version: 'v2'` → watch → release `v2`. `v1` is never released.
+
+**Prompt for Agent B:**
+
+```
+Accepted: the review fixes are in. Agent A has changed the truth format for v2: stable() is compact, an index entry is the chart row once (no summary), and packages/generation now exports assembleSectorIndex and CatalogueEntry. packages/shared SectorIndex and TruthManifest are strict and describe exactly what is written. Read data_model.md §5 and packages/generation/src/index.ts (assembleSectorIndex) before starting.
+
+Do this, in order:
+
+1. src/jobs/truth_build.ts, finalize: stop building the index by hand. Call assembleSectorIndex({ slug, version, metadataXml: <the XML text>, catalogue: <this sector's sectors.json entry, or undefined>, hexes }) and take systems, built and partial from the returned index. Validate the result with SectorIndex.parse before anything is written; a failure throws like any other error. The completeness check on the parts stays where it is, before this.
+
+2. src/routes/admin.ts, release: a sector with no catalogue entry is a 409 naming the slug, not a manifest row with null coordinates. Validate the manifest with TruthManifest.parse before the put.
+
+3. Delete any helper those two changes leave unused. Do not change packages/.
+
+4. Tests (gated): the 450-row case asserts that its index passes SectorIndex.parse, that no entry has a summary key, and that the released vtest manifest passes TruthManifest.parse. Keep every existing assertion.
+
+Run npm run check, npm test, npm run typecheck, and RUN_API_TESTS=1 node --test "tests/api/**/*.test.js"; paste the output.
+
+If SectorIndex.parse rejects an index built from the fixture, do not loosen the schema or the fixture: stop and report the first issue zod names.
+Stop and report. Unchanged rules: no edits under rules/, js/, hex_map.html or style.css; no git; only you run npm install; do not change anything under packages/; no new migration.
+```
+
+**B reported green on the §17 prompt (2026-10-03) and the code was read.** Finalize calls
+`assembleSectorIndex` and `SectorIndex.parse` before any public write; release refuses a
+sector without a catalogue entry and runs `TruthManifest.parse`. Here: `npm test` 48/43/5,
+`npm run check` and `npm run typecheck` clean; B reports the gated suite 6 of 6. **All code
+for v2 is now in the working tree, uncommitted.**
+
+**Do not deploy this while v1 messages are still in the queue.** v1's part files hold
+old-shape entries (with `summary`), which the strict schema rejects, so every v1 sector that
+finalizes under the new code would fail. Either wait for v1 to finish, or purge
+`voyage-truth-build` first (`wrangler queues purge voyage-truth-build`) and abandon v1 where
+it stands. v1 is never released either way. Purging is Johnny's call.
+
+**v2 inputs:** `node tools/truth/upload_inputs.js v2` sends 1,025 files one wrangler call at a
+time (the best part of an hour); it writes only under `inputs/v2/` in the private bucket and
+can run while v1 is still building.

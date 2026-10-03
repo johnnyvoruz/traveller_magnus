@@ -75,8 +75,6 @@ export function generateHex(input: GenerateHexInput) {
     };
 }
 
-const TRUTH_VERSION = 'v1';
-
 function zoneCode(travelZone: unknown): string {
     if (travelZone === 'Amber') return 'A';
     if (travelZone === 'Red') return 'R';
@@ -99,13 +97,11 @@ function presentRows(tsv: string): [string, Record<string, any>][] {
         .sort((a, b) => a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0);
 }
 
-async function rowEntry(slug: string, hhhh: string, row: Record<string, any>, pinned: Pinned): Promise<{
-    indexEntry: Record<string, unknown>;
-    object: [string, string] | null;
-}> {
+function chartEntry(row: Record<string, any>, tree: string | null): Record<string, unknown> {
     const data = row.t5Data as Record<string, any> | undefined;
     const socio = row.t5Socio as Record<string, any> | undefined;
-    const projection = {
+    const entry: Record<string, unknown> = {
+        tree,
         type: row.type,
         name: row.name,
         uwp: row.uwp,
@@ -117,15 +113,21 @@ async function rowEntry(slug: string, hhhh: string, row: Record<string, any>, pi
         ix: socio ? socio.Ix : undefined,
         partial: row.partial ?? null,
     };
-    if (row.partial != null) {
-        return { indexEntry: { tree: null, ...projection, summary: projection }, object: null };
-    }
+    if (data && data.homestar) entry.stars = data.homestar;
+    return entry;
+}
+
+async function rowEntry(slug: string, hhhh: string, row: Record<string, any>, pinned: Pinned): Promise<{
+    indexEntry: Record<string, unknown>;
+    object: [string, string] | null;
+}> {
+    if (row.partial != null) return { indexEntry: chartEntry(row, null), object: null };
     const envelope = generateHex({
         hexKey: `${slug}/${hhhh}`, edition: 'MgT2E', mode: 'flesh', summary: row, pinned,
     });
     const json = stable(envelope);
     const hash = await sha256Hex(json);
-    return { indexEntry: { tree: hash, ...projection, summary: projection }, object: [hash, json] };
+    return { indexEntry: chartEntry(row, hash), object: [hash, json] };
 }
 
 /** SYSTEM_PRESENT rows ordered by hex. Generates only [offset, offset + limit). */
@@ -150,44 +152,81 @@ export async function buildSectorSlice(input: {
     return { rows, objects, total: present.length, nextOffset: next < present.length ? next : null };
 }
 
-/**
- * Mongoose staged path for every SYSTEM_PRESENT row. Coordinates come from the
- * metadata XML. Missing coordinates throw. truthVersion is the data_model.md
- * example tag "v1".
- */
-export async function buildSector(input: { slug: string; tsv: string; metadataXml?: string; pinned: Pinned }) {
+export type CatalogueEntry = { name: string; x: number; y: number; tags: string[]; canonical: boolean };
+
+/** data_model.md §5 sector index. Coordinates come from the catalogue, else the XML. */
+export function assembleSectorIndex(input: {
+    slug: string;
+    version: string;
+    metadataXml?: string;
+    catalogue?: CatalogueEntry;
+    hexes: Record<string, any>;
+}) {
     const meta = input.metadataXml ? parseMetadataXml(input.metadataXml) : null;
-    if (!meta || meta.x === null || meta.y === null || Number.isNaN(meta.x) || Number.isNaN(meta.y)) {
-        throw new Error(`buildSector ${input.slug}: metadata XML has no sector coordinates`);
+    const x = input.catalogue ? input.catalogue.x : meta?.x;
+    const y = input.catalogue ? input.catalogue.y : meta?.y;
+    if (x === null || x === undefined || y === null || y === undefined || Number.isNaN(x) || Number.isNaN(y)) {
+        throw new Error(`assembleSectorIndex ${input.slug}: metadata XML has no sector coordinates`);
     }
-    const hexes: Record<string, unknown> = {};
-    const objects = new Map<string, string>();
     let systems = 0;
     let built = 0;
     let partial = 0;
+    for (const entry of Object.values(input.hexes)) {
+        systems += 1;
+        if (entry && entry.partial != null) partial += 1;
+        else built += 1;
+    }
+    return {
+        slug: input.slug,
+        name: input.catalogue ? input.catalogue.name : (meta?.name ?? ''),
+        x,
+        y,
+        tags: input.catalogue ? input.catalogue.tags : [],
+        canonical: input.catalogue ? !!input.catalogue.canonical : false,
+        truthVersion: input.version,
+        systems,
+        built,
+        partial,
+        hexes: input.hexes,
+        metadata: { routes: meta?.routes ?? [], borders: meta?.borders ?? [], names: meta?.names ?? {} },
+    };
+}
+
+/**
+ * Mongoose staged path for every SYSTEM_PRESENT row. version is required
+ * (truth v2 is the first compact index). Missing coordinates throw.
+ */
+export async function buildSector(input: {
+    slug: string;
+    tsv: string;
+    metadataXml?: string;
+    pinned: Pinned;
+    version: string;
+    catalogue?: CatalogueEntry;
+}) {
+    if (typeof input.version !== 'string' || input.version === '') {
+        throw new Error('buildSector: version is required');
+    }
+    const hexes: Record<string, unknown> = {};
+    const objects = new Map<string, string>();
     let offset = 0;
+    let total = 0;
     do {
         const slice = await buildSectorSlice({
             slug: input.slug, tsv: input.tsv, pinned: input.pinned, offset, limit: 200,
         });
-        systems = slice.total;
-        for (const row of slice.rows) {
-            hexes[row.hex] = row.indexEntry;
-            if (row.indexEntry.partial == null) built += 1;
-            else partial += 1;
-        }
+        total = slice.total;
+        for (const row of slice.rows) hexes[row.hex] = row.indexEntry;
         for (const [hash, json] of slice.objects) objects.set(hash, json);
         if (slice.nextOffset == null) break;
         offset = slice.nextOffset;
-    } while (offset < systems);
-    const index = {
+    } while (offset < total);
+    const index = assembleSectorIndex({
         slug: input.slug,
-        name: meta.name,
-        x: meta.x,
-        y: meta.y,
-        truthVersion: TRUTH_VERSION,
+        version: input.version,
+        metadataXml: input.metadataXml,
+        catalogue: input.catalogue,
         hexes,
-        metadata: { routes: meta.routes, borders: meta.borders, names: meta.names },
-    };
-    return { index, objects, counts: { systems, built, partial } };
+    });
+    return { index, objects, counts: { systems: index.systems, built: index.built, partial: index.partial } };
 }

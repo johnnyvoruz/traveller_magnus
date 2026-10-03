@@ -18,7 +18,7 @@ Line counts are from 2026-10-02 (`js/` total 96,877; 21,401 of that is `otu_syst
 
 | # | Feature | Where today | Verdict | Slice | Notes |
 |---|---|---|---|---|---|
-| A1 | Hex grid canvas: sectors, subsectors, LOD text, pan cache, zone rings, route/border/region layers | `renderer.js` (2,784) | wrap | 1 | Behind `MapRenderer.draw(viewport, layers)`. Replace when the viewer is stable. |
+| A1 | Hex grid canvas: sectors, subsectors, LOD text, pan cache, zone rings, route/border/region layers | `renderer.js` (2,784) | rebuild | 1 | New TS class `MapRenderer.draw(viewport, layers)` with a galaxy tier for all 512 sectors. Changed from wrap on 2026-10-03: the legacy file has 144 references to `window` or `hexStates`, a 1,200-line `draw()` and a fixed slot grid with legacy hex ids, which the no-globals rule, the M2 deletion and the sector-slug identity all rule out. Keep its ideas (pan cache, level-of-detail text layers, path batching); read it for look and behaviour. |
 | A2 | Pan, zoom, click/box select, alt-drag route draw, wheel | `canvas_input.js` (459), `input_init.js` (878) | rebuild | 1 | Inertia, `deltaMode`, keyboard pan per manifesto Graceful. |
 | A3 | Camera: centre hex, fit hexes, centre sector | `core.js:455-518` | rebuild | 1 | Flights, never teleports. |
 | A4 | Sector slots: insert/remove column/row, slot numbering, remap hex ids | `sector_manager.js` (438), `core.js:330-731` | keep slot math, rebuild UI | 2 | Truth is layout-independent (sector slug + local hex). Slots are a layout concern of the builder. |
@@ -174,7 +174,7 @@ Line counts are from 2026-10-02 (`js/` total 96,877; 21,401 of that is `otu_syst
 | Verdict | Rows |
 |---|---|
 | keep (logic copied, golden-tested) | 38 |
-| wrap | 1 |
-| rebuild | 26 |
+| wrap | 0 |
+| rebuild | 27 |
 | drop | 8 |
 | defer or new | 3 |
