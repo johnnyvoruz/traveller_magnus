@@ -1,8 +1,8 @@
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { Hono } from 'hono';
-import { sectorOverview } from '@voyage/generation';
-import { SectorIndex, sha256Hex, stable, TruthBuild, TruthManifest, TruthOverview, TruthRetry } from '@voyage/shared';
+import { polityOutlines, sectorOverview } from '@voyage/generation';
+import { SectorIndex, sha256Hex, stable, TruthBuild, TruthManifest, TruthOverview, TruthPolities, TruthRetry } from '@voyage/shared';
 import { originAllowed, requireRole, ulid, type AppContext } from '../auth/session';
 import { auditLog, truthVersions } from '../db/schema';
 import type { AppEnv } from '../env';
@@ -274,6 +274,16 @@ admin.post('/truth/release/:version', async (c) => {
     await c.env.PUBLIC_BUCKET.put(`truth/${version}/overview.json`, overviewBody, {
         httpMetadata: { contentType: 'application/json', cacheControl: 'public, max-age=31536000, immutable' },
     });
+    const outlinesStarted = Date.now();
+    const polities = polityOutlines(overviews);
+    const politiesMs = Date.now() - outlinesStarted;
+    const politiesDoc = TruthPolities.parse({ truthVersion: version, polities });
+    console.log(JSON.stringify({ polities: politiesDoc.polities.length, ms: politiesMs }));
+    const politiesBody = stable(politiesDoc);
+    const politiesHash = await sha256Hex(politiesBody);
+    await c.env.PUBLIC_BUCKET.put(`truth/${version}/polities.json`, politiesBody, {
+        httpMetadata: { contentType: 'application/json', cacheControl: 'public, max-age=31536000, immutable' },
+    });
     const releasedAt = new Date().toISOString();
     const manifest = TruthManifest.parse({
         truthVersion: version,
@@ -282,6 +292,7 @@ admin.post('/truth/release/:version', async (c) => {
         settings: JSON.parse(row.settings),
         engineVersion: row.engineVersion,
         overviewHash,
+        politiesHash,
         attribution: ATTRIBUTION,
         releasedAt,
         sectors,

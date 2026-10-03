@@ -157,6 +157,52 @@ test('a failed tree fetch is not cached', async () => {
     assert.equal(doc.hexKey, 'h');
 });
 
+test('polities is one cached request and a 404 is an empty document', async () => {
+    let calls = 0;
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    const client = new TruthClient({
+        cdnBase: 'https://cdn.example',
+        apiBase: 'https://api.example',
+        fetch: async (url) => {
+            calls += 1;
+            await gate;
+            assert.equal(String(url), 'https://cdn.example/truth/v3/polities.json');
+            return jsonResponse(404, null);
+        },
+    });
+    const pending = Promise.all([client.polities('v3'), client.polities('v3')]);
+    assert.equal(calls, 1);
+    release();
+    const [a, b] = await pending;
+    assert.deepEqual(a, { truthVersion: 'v3', polities: [] });
+    assert.equal(a, b);
+    const again = await client.polities('v3');
+    assert.equal(calls, 1);
+    assert.equal(again, a);
+});
+
+test('polities keeps a document and retries after a non-404 failure', async () => {
+    let calls = 0;
+    const body = { truthVersion: 'v4', polities: [] };
+    const client = new TruthClient({
+        cdnBase: 'https://cdn.example',
+        apiBase: 'https://api.example',
+        fetch: async () => {
+            calls += 1;
+            if (calls === 1) return jsonResponse(500, null);
+            return jsonResponse(200, body);
+        },
+    });
+    await assert.rejects(() => client.polities('v4'));
+    const doc = await client.polities('v4');
+    assert.equal(calls, 2);
+    assert.equal(doc, body);
+    const again = await client.polities('v4');
+    assert.equal(calls, 2);
+    assert.equal(again, doc);
+});
+
 test('the injected fetch is never called as a method of the client', async () => {
     // A browser's fetch throws "Illegal invocation" unless `this` is undefined or the global.
     let seenThis = 'unset';

@@ -57,7 +57,7 @@ for (const slug of SLUGS) {
         const index = assembleSectorIndex({ slug, version: 'v3', metadataXml: xml, hexes: {} });
         const parsed = SectorIndex.parse(index);
         const fromPort = regionsOf(slug);
-        assert.deepEqual(parsed.regions, fromPort.filter(region => region.hexes.length > 0));
+        assert.deepEqual(parsed.regions.map(region => ({ name: region.name, color: region.color, hexes: region.hexes })), fromPort.filter(region => region.hexes.length > 0));
     });
 }
 
@@ -84,5 +84,5 @@ test('assembleSectorIndex drops a region left with no hexes', () => {
     assert.deepEqual(fromPort.map(region => region.name), ['Second']);
     assert.deepEqual(fromPort[0].hexes, ['1507']);
     const index = assembleSectorIndex({ slug: 'T', version: 'v3', metadataXml: xml, hexes: {} });
-    assert.deepEqual(SectorIndex.parse(index).regions, fromPort);
+    assert.deepEqual(SectorIndex.parse(index).regions.map(region => ({ name: region.name, color: region.color, hexes: region.hexes })), fromPort);
 });

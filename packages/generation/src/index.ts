@@ -7,8 +7,13 @@ import { parseT5Tab, parseMetadataXml, stable, sha256Hex } from '@voyage/shared'
 import { sectorTerritories } from './territories.ts';
 import { sectorRegions } from './regions.ts';
 import { routeColour, routeStylesheetRules } from './route_colours.ts';
+import { toGlobal } from './geometry.ts';
+import { roundedLoops } from './polities.ts';
 
 export { sectorOverview } from './overview.ts';
+export { polityOutlines } from './polities.ts';
+export { outlineLoops } from './outline.ts';
+export { HEX_SIZE, hexCentre, hexCorners, toGlobal } from './geometry.ts';
 export { sectorTerritories };
 export { sectorRegions };
 export { routeColour, routeStylesheetRules };
@@ -219,7 +224,10 @@ export function assembleSectorIndex(input: {
             }).filter(territory => territory.hexes.length > 0)
             : [],
         regions: meta
-            ? sectorRegions({ regions: meta.regions }).filter(region => region.hexes.length > 0)
+            ? sectorRegions({ regions: meta.regions }).filter(region => region.hexes.length > 0).map(region => ({
+                ...region,
+                loops: roundedLoops(region.hexes.map(hex => toGlobal(x, y, Number(hex.slice(0, 2)), Number(hex.slice(2, 4))))),
+            }))
             : [],
     };
 }

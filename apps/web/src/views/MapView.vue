@@ -345,7 +345,6 @@ function frame(): void {
     if (renderer) {
         const drawn = renderer.draw(cam);
         if (drawn.tier === 'hex' && version) requestIndexes(drawn.sectorsOnScreen);
-        if (drawn.pending) dirty = true;
     }
     if (fly) dirty = true;
     if (dirty) raf = nextFrame(frame);
@@ -482,6 +481,13 @@ async function boot(): Promise<void> {
         versionRef.value = version;
         const manifestPromise = client.manifest(version);
         const overviewPromise = client.overview(version);
+        const politiesPromise = client.polities(version);
+        void politiesPromise.then((doc) => {
+            if (renderer) renderer.setPolities(doc);
+            markDirty();
+        }).catch(() => {
+            // A 404 is an empty document inside the client. Any other failure leaves the chart without borders.
+        });
         const manifest = await manifestPromise;
         chart = manifest;
         manifestRef.value = manifest;

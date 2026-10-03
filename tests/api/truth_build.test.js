@@ -7,7 +7,7 @@ import test from 'node:test';
 import { existsSync } from 'node:fs';
 import { TSV } from '../golden/cases.js';
 import { TRUTH_SEED, TRUTH_SETTINGS } from '../../tools/truth/settings.js';
-import { SectorIndex, TruthManifest, TruthOverview, sha256Hex } from '@voyage/shared';
+import { SectorIndex, TruthManifest, TruthOverview, TruthPolities, sha256Hex } from '@voyage/shared';
 import { deadLetterConsumer } from '../../apps/api/src/jobs/dead_letter.ts';
 import { truthBuildConsumer } from '../../apps/api/src/jobs/truth_build.ts';
 import { adminCookie, runWrangler } from './session.js';
@@ -680,6 +680,12 @@ if (process.env.RUN_API_TESTS !== '1') {
                 assert.notEqual(overview.sectors[0].cells[at], '.');
             }
             assert.equal(manifest.overviewHash, await sha256Hex(overviewText));
+            const politiesFile = path.join(dir, 'polities.json');
+            runWrangler(['r2', 'object', 'get', 'voyage-public/truth/vtest/polities.json', '--file', politiesFile, '--local']);
+            const politiesText = readFileSync(politiesFile, 'utf8');
+            const politiesParsed = TruthPolities.safeParse(JSON.parse(politiesText));
+            assert.equal(politiesParsed.success, true, JSON.stringify(politiesParsed.success ? null : politiesParsed.error.issues[0]));
+            assert.equal(manifest.politiesHash, await sha256Hex(politiesText));
             assert.equal(typeof manifest.releasedAt, 'string');
             assert.ok(manifest.releasedAt.length > 0);
             const fixture = manifest.sectors.find((item) => item.slug === 'Fixture');

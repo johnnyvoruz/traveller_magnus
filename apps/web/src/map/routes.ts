@@ -1,7 +1,15 @@
 import type { Camera } from './camera.ts';
 import { hexCentre, parseHex, sectorRect, SECTOR_COLS, SECTOR_ROWS, toGlobal, type Rect } from './geometry.ts';
 
-export type ChartSector = { slug: string; x: number; y: number; tags: string[] };
+export type ChartSector = {
+    slug: string;
+    x: number;
+    y: number;
+    tags: string[];
+    name?: string;
+    /** Absent means the sector is on the drawn layer. False is off the canonical chart. */
+    canonical?: boolean;
+};
 export type ChartManifest = { sectors: ChartSector[] };
 
 export type Target =
@@ -76,6 +84,9 @@ export function targetFor(route: { path: string }, manifest: ChartManifest): Tar
         const slug = decodeURIComponent(parts[1]);
         const sector = findSector(manifest, slug);
         if (!sector) return { kind: 'unknown', message: 'No sector ' + slug + '.' };
+        if (sector.canonical === false) {
+            return { kind: 'unknown', message: (sector.name || sector.slug) + ' is not on the canonical chart.' };
+        }
         if (parts.length === 2) return { kind: 'fit', rect: sectorRect(sector.x, sector.y) };
         const hhhh = decodeURIComponent(parts[2]);
         const local = parseHex(hhhh);

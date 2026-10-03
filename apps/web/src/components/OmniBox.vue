@@ -89,7 +89,7 @@ async function search(): Promise<void> {
     let failed = false;
     try {
         const items = await loadSystems(text, signal);
-        if (props.manifest) systems = systemResults(items, props.manifest);
+        if (props.manifest) systems = systemResults(items, props.manifest, props.layer);
     } catch {
         if (signal.aborted || ticket !== generation) return;
         failed = true;

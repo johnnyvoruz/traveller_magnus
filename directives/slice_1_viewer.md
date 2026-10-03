@@ -740,6 +740,35 @@ order is top edge, bottom edge, then sides. `tests/web/renderer.test.js`: at ppp
 loaded index, one title text containing the sector name and ` - ` is drawn; at ppp 40, none.
 **Frame-time note:** the B1.4 drag again with titles on.
 
+### B1.12a Subsector titles that do not jitter (written 2026-10-03; replaces B1.12's placement)
+
+Seen in the browser: while panning, a title pill jumps between spots and changes size at the
+screen edge. B1.12 ported the legacy placement faithfully (`js/renderer.js:2080` onward): it
+re-decides every frame from candidates laid along the **visible** part of the subsector, so
+the candidates and their scores move with the view. The legacy app has the same flaw. This is
+a deliberate departure from it.
+
+- **Decide once, in map space.** Candidates and scores are computed against the subsector's
+  **full** rectangle in map coordinates, with the worlds of that subsector. The result is an
+  anchor in parsecs, cached per subsector and zoom step (`Math.round(Math.log2(ppp) * 2)`),
+  recomputed only when the step changes or the sector's index arrives. While panning the
+  pill rides with the map.
+- **Sticky at the edges.** When the anchor leaves the viewport but the subsector is still in
+  view, the pill is clamped to the viewport edge (and to the panel's and rail's edge), as a
+  sticky header is. A clamp is continuous: it slides, it never jumps.
+- **Fade, do not dodge.** Where the pill would cover the selected hex, or the visible part of
+  the subsector is too small, it fades out over `--t-fast` instead of moving. The font size
+  is fixed per zoom step; it does not shrink with the visible sliver.
+- **Cross-fade on a zoom step** that picks a different anchor.
+- `placeTitle` and `titleCandidates` keep their signatures; what changes is the rectangle
+  they are given and that the result is cached.
+
+**Check (`tests/web/titles.test.js`):** panning in ten steps across a subsector at a fixed
+zoom leaves the pill's map-space anchor unchanged (its screen movement equals the pan); the
+anchor changes only when the zoom step changes; a clamped pill's position is a continuous
+function of the pan (no step larger than the pan step). Browser check: drag slowly across
+the Spinward Marches at ppp 80 and at ppp 30: no pill jumps or resizes.
+
 ### B1.11 Verification for B1
 
 - [ ] `npm test`, `npm run check`, `npm run typecheck`, `npm run build` green
@@ -1179,6 +1208,140 @@ nothing and must not throw.
   reports the milliseconds in the test output without asserting on it.
 - **Frame-time note for the browser check (after truth v3):** the home view, dragging and
   zooming, with polities on.
+
+### B2c.4 Borders without the slowdown (written 2026-10-03 after the first look)
+
+**Superseded the same evening by B2c.5 and never built.** Its measurements and its two causes
+stand; its remedy (a Web Worker in the browser) still left every cold visit computing 447
+outlines. Kept for the record.
+
+Johnny, on first seeing borders: "they hit hard, BIG COMPUTE and slowdown on initial paint".
+Measured on released v3: 447 distinct polities own 116,705 hexes; the Third Imperium alone
+is 21,813. Two causes, both in the browser (the Worker serves files and does none of this):
+
+1. Zoomed out, the main thread builds one polity's outline per frame: hundreds of frames,
+   the first ten at tens of milliseconds each.
+2. Zoomed in, `territoryShapes` rebuilds **every** territory of **every** loaded index each
+   time one more sector index arrives, so panning recomputes the Imperium over and over.
+
+The fix is one polity layer for every tier, built once, off the main thread.
+
+- **One source.** The overview's `polities` and `owners` already say who owns every hex in
+  the chart. The outlines built from them are the borders at every zoom. `MapRenderer`
+  draws the cached polity paths at tier `hex` too (fill `TERRITORY_FILL_ALPHA`, stroke
+  2.5 px) and at `galaxy` and `sector` as now (fill `POLITY_FILL_ALPHA`). The
+  index-based `territoryShapes` pass is removed from the renderer; `regionShapes` stays
+  (regions are few and are not in the overview) but is computed **per index, once, when that
+  index first arrives** (a `WeakMap` keyed by the index object), never for all loaded
+  indexes again.
+- **Off the main thread.** `apps/web/src/map/outline.worker.ts` (new): receives the list
+  from `polityHexes` and posts back, polity by polity, largest first, each polity's loops as
+  transferable `Float32Array`s with their bounding box. It only calls `outlineLoops`.
+  `apps/web/src/map/polity_builder.ts` (new, pure plus the worker handle): the same job
+  behind one interface, `start(list, onPolity)` and `cancel()`, with the worker created
+  through `platform/browser.ts` (add `createModuleWorker(url)` there; it stays the only file
+  that names a browser global). When a worker cannot be created the builder falls back to
+  the existing one-polity-per-frame loop, so nothing breaks.
+- **The main thread only draws.** On each message the renderer makes one `Path2D` from the
+  arrays and marks the view dirty. Polities appear as they arrive; nothing waits for all of
+  them. A polity whose bounding box is outside the view is skipped when drawing.
+- **`setChart` again** (layer change) cancels the running job and starts a new one.
+- **Check:** `tests/web/polity_builder.test.js` with a fake worker: polities arrive largest
+  first; `cancel` stops delivery; the fallback path delivers the same loops as the worker
+  path for a three-polity sample. `tests/web/renderer.test.js`: at ppp 40 with one built
+  polity the renderer draws one fill at 0.2 and one stroke and calls no outline function;
+  a second index arriving does not rebuild anything for the first; a polity outside the view
+  is not drawn. The timing test stays and still only reports.
+- **Browser check (Johnny or the orchestrator):** cold load of the home view and of Regina:
+  no visible stall; dragging at tier `hex` across three sector edges stays smooth; report
+  the worst frame.
+
+Later, if first paint of the borders should be instant rather than progressive: build the
+joined outlines in the truth release and ship them in the overview. That is a truth change
+(a derived version, minutes), noted here and not started.
+
+### B2c.5 Borders as a file: outlines built once, at release (written 2026-10-03)
+
+Johnny, after trying a private window: once loaded it is "buttery smooth", but a cold visit
+has "a heavy load". Every cold visit recomputes the same 447 outlines from the same immutable
+data. The manifesto's first sentence is the answer: immutable things are files. The outlines
+are computed **once, when a truth version is released**, and the viewer downloads and draws
+them. No outline code runs in the browser.
+
+**The file.** `truth/<v>/polities.json`, immutable, listed in the manifest by hash:
+
+```json
+{ "truthVersion": "v4",
+  "polities": [ { "name": "Third Imperium", "color": "#e9c46a", "hexes": 21813,
+                  "box": [-672.5, -401.2, 351.0, 505.8],
+                  "loops": [ [ -110.062, -35.796, -109.729, -35.796, "..." ] ] } ] }
+```
+
+One entry per distinct name and colour over the **canonical** sectors only (alternate
+sectors share coordinates with canonical ones; their layer comes with the layer chooser).
+`loops` are closed outlines as flat `x, y` lists in parsecs (the map model's world space,
+`slice_1_viewer.md` §1), rounded to 3 decimals; `box` is `[minX, minY, maxX, maxY]`; entries
+are ordered by `hexes`, largest first.
+
+#### B2c.5a Build side (Agent B: `packages/`, `tests/generation`, `tools/`, `apps/api`, `tests/api`)
+
+1. `packages/generation/src/outline.ts`: **copy** `apps/web/src/map/outline.ts` and the three
+   things it needs from `apps/web/src/map/geometry.ts` (`toGlobal`, `hexCorners`, the
+   constants) into the package, unchanged in behaviour. Copy its test to
+   `tests/generation/outline.test.js`. Do not edit the files under `apps/web`; Agent C
+   removes them.
+2. `packages/generation/src/polities.ts`: `polityOutlines(sectors: SectorOverview[]): TruthPolities['polities']`.
+   Canonical sectors only; hexes joined by name and colour across sectors through
+   `toGlobal`; `outlineLoops` per polity; coordinates rounded to 3 decimals; `box`; ordered by
+   hex count, then name.
+3. `packages/shared/src/schemas/truth.ts`: strict `TruthPolities`; `TruthManifest` gains
+   `politiesHash: z.string()`. Each region in `SectorIndex` gains `loops: z.array(z.array(z.number()))`
+   and `assembleSectorIndex` fills it with that region's `outlineLoops` in the same world
+   space (the sector's `x`, `y` through `toGlobal`), rounded the same way.
+4. `tools/truth/build.js`: write `truth-local/<version>/polities.json` and put its hash in the
+   manifest; `truth:local` builds `v4`.
+5. `apps/api/src/routes/admin.ts`, release: after the overview is built, call
+   `polityOutlines` on the sector overviews already in memory, validate with
+   `TruthPolities.parse`, put `truth/<version>/polities.json` with the immutable headers, and
+   put its sha256 in the manifest as `politiesHash`. Two more binding calls. Log one JSON
+   line with the polity count and the milliseconds the outlines took.
+6. Tests: `tests/generation/polities.test.js`: two canonical sectors whose polities share a
+   name and colour and touch give one polity with no loop segment on the shared edge; a
+   non-canonical sector contributes nothing; every coordinate has at most 3 decimals; the
+   Spinward Marches alone gives four polities with hex counts 739, 60, 52, 36 in that order;
+   regions of Riftspan Reaches carry loops. Gated: the released `vtest` has a
+   `polities.json` that parses and whose hash is in the manifest.
+7. Report: for the catalogue built locally (the sectors under `universe/raw` you have),
+   the bytes of `polities.json`, the number of loop points, and the milliseconds
+   `polityOutlines` took.
+
+#### B2c.5b Draw side (Agent C: `apps/web`, `tests/web`)
+
+1. `TruthClient` gains `polities(version): Promise<TruthPolities>` (one request, cached).
+   `MapView` asks for it with the manifest and overview; the map does not wait for it.
+   A version without the file (a 404, as on v2 and v3) means no borders and no error.
+2. `MapRenderer.setPolities(doc)`: one `Path2D` per polity from its loops, made when the
+   document arrives (447 of them; report the milliseconds in a test). Drawn at **every**
+   tier with the camera as a canvas transform, skipping any polity whose `box` is outside
+   the view: fill `evenodd` at `POLITY_FILL_ALPHA` when zoomed out and
+   `TERRITORY_FILL_ALPHA` at tier `hex`, stroke 2.5 px (`lineWidth = 2.5 / ppp`). Paint
+   order as now: fills under the grid, outlines after the routes, before the worlds.
+3. Regions: draw each loaded index's `regions[].loops` (fill at `REGION_FILL_ALPHA`, no
+   outline), paths cached per index object. An index without `loops` draws no regions.
+4. **Remove** from `apps/web`: `map/outline.ts`, `map/territory_layer.ts`,
+   `map/polity_layer.ts`, the per-frame polity build, `pending`, and their tests. The
+   viewer contains no outline computation after this step.
+5. Tests: the renderer draws nothing for borders before `setPolities`; after it, one fill
+   and one stroke per polity in view and none for a polity outside the view; no rebuild
+   when an index arrives; a region with loops is filled once per frame from a cached path.
+   Use a small hand-written polities document as the fixture.
+6. Browser check (Johnny): a private window on the home view and on Regina: borders appear
+   with the first paint of the overview or a moment after, with no stall.
+
+#### B2c.5c Then
+
+Push both; Johnny derives **v4 from v3** (minutes) and releases it; the live viewer picks up
+`polities.json` by itself.
 
 ### B2c. The viewer draws them (outline)
 

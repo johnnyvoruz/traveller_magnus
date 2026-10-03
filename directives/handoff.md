@@ -1279,3 +1279,117 @@ or closes the dossier and the rail's System item uses it; subsector titles read
 under `apps/web` and `tests/web`) is complete and unpushed:** A's dossier, D's two design
 passes and rail, C's borders, polities and wiring. **v3 is still unreleased** (health reports
 v2), so borders have not been seen by anyone yet.
+
+## 38. Truth v3 released and the web work is live (2026-10-03, about 23:00Z)
+
+- **Pushed:** `45421b0` "dossier, design pass, rail, borders and polities" (all of `apps/web`
+  and `tests/web`). GitHub tests passed; deployed 22:58Z; `/`, the Regina deep link,
+  `/account`, `/design` and `/favicon.svg` answer.
+- **v3 released by Johnny** (manifest hash `25e71e51...2afe`); `/api/health` reports
+  `truthVersion: v3`. Verified by the orchestrator: manifest and overview pass the strict
+  schemas, 512 sectors, 180,312 systems, the overview hash matches the manifest, and the
+  overview carries polities and owners.
+- **Font Awesome:** Johnny holds a Pro licence and says the icons are fine as they are.
+- **Live now, not yet seen by anyone in a browser on production:** borders and polity fills,
+  the rail, the restyled dossier. Johnny looks next.
+- **Slice 1 still to do:** jump times and Trade Match in the dossier (B3b); legend, help,
+  view settings, toast (B3c); regions' and territories' names with the view settings; the
+  orbit view and planet imagery (part C). Open with Johnny: the two low-contrast route
+  colours; whether small text stays at 7:1; the favicon's red.
+
+## 39. Borders work and are too heavy on first paint (2026-10-03, about 23:10Z)
+
+- **Johnny saw borders locally on v3:** they draw, and they cost: "BIG COMPUTE and slowdown
+  on initial paint". He expected the Worker to matter; it does not, the cost is in the
+  browser and production behaves the same.
+- **Measured:** 447 distinct polities, 116,705 owned hexes, Third Imperium 21,813, Aslan
+  Hierate 17,723, Zhodani Consulate 13,468. Causes: one outline per frame on the main thread
+  when zoomed out, and a full rebuild of every loaded territory whenever one more index
+  arrives when zoomed in.
+- **Fix written, `slice_1_viewer.md` B2c.4, for Agent C:** one polity layer from the overview
+  for every tier, built once in a Web Worker and cached as paths; the index-based territory
+  rebuild is removed; regions are computed once per index. A possible later step (ship
+  prebuilt outlines in the overview) is noted, not started.
+- **Seen while verifying v3:** `/api/truth/search` without a `version` now returns rows from
+  both released versions (v2 and v3). The omnibox always passes the version, so the app is
+  unaffected; the API should default to the newest released version. Small item for the
+  next Worker prompt.
+- The overview is 1.4 MB raw with polities (it was 715 KB); it compresses well, but measure
+  the transfer size in the next browser check.
+
+## 40. Border performance: the plan changed from a browser worker to a file (2026-10-03, about 23:25Z)
+
+- **Johnny's second look:** once loaded the map is "buttery smooth"; a cold visit (private
+  window) has "a heavy load". The cost is the browser recomputing 447 outlines on every cold
+  visit.
+- **Decision (orchestrator):** B2c.4 (a Web Worker) is superseded before being built. B2c.5:
+  the outlines are computed once at release and shipped as `truth/<v>/polities.json`; region
+  loops go into the index; the viewer only draws. This removes all outline code from the
+  browser and makes a cold visit one more small download.
+- **Assignments:** Agent B, B2c.5a (packages, tools, release route). Agent C, B2c.5b (the
+  viewer reads and draws the file; the compute modules are deleted). They can run at the same
+  time: B copies `outline.ts` into the package and does not touch `apps/web`; C works from the
+  documented file shape with a hand-written fixture.
+- **Then:** push, derive v4 from v3, release v4.
+
+## 41. Bug: search lands on a blank hex for worlds in sectors the map does not draw (2026-10-03)
+
+- **Johnny's report:** searching "Rigel" and opening the first result goes to
+  `/s/Rigel/3103`, an empty hex far from everything.
+- **Cause:** `Rigel` is a non-canonical sector (tags `Apocryphal`, `Faraway`, at 69, 60). The
+  search API returns worlds from all 512 sectors; the map draws only the 399 canonical ones,
+  so the camera flies to a place where nothing is drawn. For `q=Rigel`, 47 of the first 50
+  results are worlds in non-canonical sectors (the sector's name matches the query).
+- **Fix now (Agent A, viewer):** the omnibox shows only systems whose sector is on the drawn
+  layer, and a route to a sector that is not on the layer falls back to the home view with a
+  message instead of a blank chart.
+- **Fix later (Worker, with the next API prompt):** the search takes the layer so its 50
+  results are all usable; that needs the canonical flag in D1 (a column on
+  `truth_build_sectors`, filled when a sector is published). Bundle with: search without
+  `version` should default to the newest released version (it returns v2 and v3 rows today).
+- The alternate-sector layer chooser (part B3c) is what will make those worlds reachable.
+
+**Display bug found by Agent D (2026-10-03): subsector titles jitter while panning.** The
+placement is recomputed every frame against the visible part of the subsector, as the legacy
+code does. Decision: D's recommended approach, written as `slice_1_viewer.md` B1.12a (anchor
+in map space, cached per zoom step, sticky clamp at the edges, fade instead of dodging). The
+title colours D asked for (R3) are already done by Agent C. **Who:** Agent D, with its
+boundary lifted for `map/titles.ts`, the title pass in `MapRenderer.ts` and
+`tests/web/titles.test.js`, because D has a browser and this is judged by eye. **When:** after
+Agent C reports on B2c.5b, since C is editing `MapRenderer.ts` now.
+
+**Search bug fixed in the viewer (Agent A, 2026-10-03), checked:** on the canonical layer the
+omnibox drops systems whose sector is not canonical or not in the manifest; a route to a
+non-canonical sector goes to the home view with "<name> is not on the canonical chart."
+`npm test` green with it. Note from A: `targetFor` does not take the layer, so when the map
+can draw the `all` layer it must be told. Unpushed; goes out with Agent C's border work, which
+is in flight in the same folder.
+
+**B2c.5b is in (Agent C, 2026-10-03), checked:** the viewer fetches `truth/<v>/polities.json`
+(a 404 means no borders, no error), builds one `Path2D` per polity (447 paths in under a
+millisecond in the test), draws them at every tier with bounding-box culling, and fills
+regions from each index's `loops`. `outline.ts`, `territory_layer.ts`, `polity_layer.ts`,
+the per-frame build and `pending` are gone: the viewer computes no outlines. `npm test`
+221/216/5, check clean. **Until v4 exists the viewer draws no borders at all** (v3 has no
+`polities.json`), which is also what the live site will show if this is pushed before v4 is
+released. Agent B's build side (B2c.5a) appears to be in the tree (`packages/generation`
+has `outline.ts`, `geometry.ts`, `polities.ts`; the release route and `tools/truth/build.js`
+mention polities); its report has not been pasted yet. Agent D can start B1.12a now that
+`MapRenderer.ts` is free.
+
+## 42. Borders as a file: both halves in and verified (2026-10-03, about 23:55Z)
+
+- **B2c.5a (Agent B):** `packages/generation/src/geometry.ts`, `outline.ts`, `polities.ts`;
+  `TruthPolities` and `politiesHash`; region `loops` in the index; the release route writes
+  `truth/<version>/polities.json`; `truth:local` builds `v4`. Measured on the local
+  catalogue: 345 canonical polities, 45,902 loop points, 752,455 bytes, **104 ms** to build.
+- **Verified by the orchestrator on the combined tree:** `npm test` 221/216/5, check clean,
+  typecheck clean, build succeeds, gated Worker suite 9 of 9.
+- **Ready to push in one commit** (`git add -A`; no agent is mid-task: Agent D has not yet
+  started B1.12a). It also carries Agent A's search fix.
+- **v4 inputs** are being uploaded by the orchestrator (`upload_inputs.js v4`, about 20
+  minutes): the derived build reads the metadata XML from `inputs/<version>/`. Improvement to
+  make later: a derived build should read its inputs from the source version, so nothing has
+  to be uploaded again.
+- **Then:** push → confirm deploy → Johnny derives `v4` from `v3` → release `v4` → borders
+  come back on the live site, drawn from the file.

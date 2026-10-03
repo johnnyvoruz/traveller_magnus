@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { HEX_SIZE, hexCentre, hexCorners } from '../../apps/web/src/map/geometry.ts';
-import { outlineLoops } from '../../apps/web/src/map/outline.ts';
+import { HEX_SIZE, hexCentre, hexCorners, outlineLoops } from '@voyage/generation';
 
 const INSET = HEX_SIZE * 0.1;
 

@@ -1,4 +1,4 @@
-import type { SectorHex, SectorIndex, TruthManifest, TruthOverview } from '@voyage/shared';
+import type { SectorHex, SectorIndex, TruthManifest, TruthOverview, TruthPolities } from '@voyage/shared';
 import farLabels from '../../../../universe/far_labels.json' with { type: 'json' };
 import { now } from '../platform/browser.ts';
 import type { Camera, Viewport } from './camera.ts';
@@ -11,10 +11,7 @@ import {
     POLITY_FILL_ALPHA, REGION_FILL_ALPHA, SCOUT_R, SCOUT_X, SCOUT_Y, SELECT_STROKE,
     TERRITORY_FILL_ALPHA, TERRITORY_STROKE, UWP_Y,
 } from './glyphs.ts';
-import { outlineLoops } from './outline.ts';
-import { polityHexes, type PolityHexes } from './polity_layer.ts';
 import { routeSegments, type RouteSegment } from './route_lines.ts';
-import { regionShapes, territoryShapes, type Shape } from './territory_layer.ts';
 import type { MapTheme } from './theme.ts';
 import { PPP_GRID, PPP_NAMES, tierFor, type Tier } from './tiers.ts';
 import { placeTitle, type Box } from './titles.ts';
@@ -52,6 +49,14 @@ type DrawSector = {
     rect: Rect;
     cells: string | null;
 };
+
+type DrawnPolity = {
+    color: string;
+    path: Path2D;
+    box: [number, number, number, number];
+};
+
+type DrawnRegion = { color: string; path: Path2D };
 
 type Mark = {
     sx: number;
@@ -94,6 +99,21 @@ function intersects(a: Rect, b: Rect): boolean {
     return a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0;
 }
 
+function boxHits(box: [number, number, number, number], view: Rect): boolean {
+    return box[0] < view.x1 && box[2] > view.x0 && box[1] < view.y1 && box[3] > view.y0;
+}
+
+function pathFromLoops(loops: number[][]): Path2D {
+    const path = new Path2D();
+    for (const loop of loops) {
+        if (loop.length < 4) continue;
+        path.moveTo(loop[0], loop[1]);
+        for (let i = 2; i < loop.length; i += 2) path.lineTo(loop[i], loop[i + 1]);
+        path.closePath();
+    }
+    return path;
+}
+
 function subsectorName(index: SectorIndex, letter: string): string {
     const names = index.metadata?.names;
     const found = names ? names[letter] : undefined;
@@ -130,15 +150,10 @@ export class MapRenderer {
     private readonly nameWidthAt18 = new Map<string, number>();
     /** routeSegments cached per index object. */
     private readonly routeCache = new WeakMap<SectorIndex, RouteSegment[]>();
-    /** Territory and region outlines. Rebuilt when the loaded slugs change, not per frame. */
-    private shapeKey = '';
-    private territoryCache: Shape[] = [];
-    private regionCache: Shape[] = [];
-    /** Zoomed-out polities. One outlineLoops per galaxy or sector frame, largest first. */
-    private polities: PolityHexes[] = [];
-    private polityRank: number[] = [];
-    private polityCursor = 0;
-    private readonly polityPaths: { color: string; path: Path2D }[] = [];
+    /** Polity paths from polities.json. Built once in setPolities. */
+    private polityPaths: DrawnPolity[] = [];
+    /** Region paths cached per index object. An index without loops stores an empty list. */
+    private readonly regionPaths = new WeakMap<object, DrawnRegion[]>();
     /** code and canonical in the file are ignored. */
     private labels: FarLabel[] = farLabels.labels;
     private selected: Selection | null = null;
@@ -169,13 +184,15 @@ export class MapRenderer {
             rect: sectorRect(sector.x, sector.y),
             cells: cells.get(sector.slug) ?? null,
         }));
-        this.polities = polityHexes(overview, layer, manifest);
-        this.polityRank = this.polities.map((_item, index) => index).sort((a, b) => {
-            const bySize = this.polities[b].hexes.length - this.polities[a].hexes.length;
-            return bySize !== 0 ? bySize : a - b;
-        });
-        this.polityCursor = 0;
-        this.polityPaths.length = 0;
+    }
+
+    /** One Path2D per polity, built when the document arrives. Replaces any previous list. */
+    setPolities(doc: TruthPolities): void {
+        const drawn: DrawnPolity[] = [];
+        for (const polity of doc.polities) {
+            drawn.push({ color: polity.color, box: polity.box, path: pathFromLoops(polity.loops) });
+        }
+        this.polityPaths = drawn;
     }
 
     setIndexSource(get: (slug: string) => SectorIndex | null): void {
@@ -207,7 +224,7 @@ export class MapRenderer {
         this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     }
 
-    draw(cam: Camera): { tier: Tier; sectorsOnScreen: string[]; ms: number; pending: boolean } {
+    draw(cam: Camera): { tier: Tier; sectorsOnScreen: string[]; ms: number } {
         const started = now();
         const tier = tierFor(cam.ppp);
         const vp: Viewport = { width: this.width, height: this.height };
@@ -235,8 +252,8 @@ export class MapRenderer {
             }
             this.overviewPoints(waiting, cam, vp);
         } else {
-            this.advancePolity();
-            this.paintPolities(cam, vp);
+            this.paintPolityFills(cam, vp, view, POLITY_FILL_ALPHA);
+            this.paintPolityStrokes(cam, vp, view);
             this.overviewPoints(on, cam, vp);
         }
 
@@ -246,14 +263,12 @@ export class MapRenderer {
         }
         if (tier === 'hex') {
             const hexes = visibleHexes(view);
-            if (cam.ppp >= PPP_GRID) {
-                this.cachedShapes(ready);
-                this.fillShapes(this.territoryCache, TERRITORY_FILL_ALPHA, cam, vp);
-                this.fillShapes(this.regionCache, REGION_FILL_ALPHA, cam, vp);
-            }
+            const fillAlpha = TERRITORY_FILL_ALPHA;
+            this.paintPolityFills(cam, vp, view, fillAlpha);
+            if (cam.ppp >= PPP_GRID) this.paintRegions(ready, cam, vp);
             if (hexes.length <= HEX_OUTLINE_CAP) this.hexOutlines(hexes, cam, vp);
             if (cam.ppp >= PPP_GRID) this.routes(ready, cam, vp);
-            if (cam.ppp >= PPP_GRID) this.strokeShapes(this.territoryCache, cam, vp);
+            this.paintPolityStrokes(cam, vp, view);
             marks = this.marks(ready, cam, vp);
             if (cam.ppp >= PPP_NAMES) this.chartMarks(marks, cam.ppp);
             else this.chartDiscs(marks, cam.ppp);
@@ -263,8 +278,7 @@ export class MapRenderer {
         this.selectionOutline(cam, vp);
         if (tier === 'hex' && cam.ppp >= PPP_NAMES) this.subsectorTitles(ready, marks, cam, vp);
 
-        const pending = tier !== 'hex' && this.polityCursor < this.polityRank.length;
-        return { tier, sectorsOnScreen: on.map((sector) => sector.slug), ms: now() - started, pending };
+        return { tier, sectorsOnScreen: on.map((sector) => sector.slug), ms: now() - started };
     }
 
     private distance(sector: DrawSector, cam: Camera): number {
@@ -339,25 +353,12 @@ export class MapRenderer {
         ctx.setLineDash([]);
     }
 
-    /** Builds one polity outline. Stays unfinished until every entry has a path. */
-    private advancePolity(): void {
-        if (this.polityCursor >= this.polityRank.length) return;
-        const item = this.polities[this.polityRank[this.polityCursor]];
-        this.polityCursor += 1;
-        const path = new Path2D();
-        for (const loop of outlineLoops(item.hexes)) {
-            const pts = loop.points;
-            if (pts.length < 4) continue;
-            path.moveTo(pts[0], pts[1]);
-            for (let i = 2; i < pts.length; i += 2) path.lineTo(pts[i], pts[i + 1]);
-            path.closePath();
-        }
-        this.polityPaths.push({ color: item.color, path });
+    private visiblePolities(view: Rect): DrawnPolity[] {
+        return this.polityPaths.filter((item) => boxHits(item.box, view));
     }
 
-    /** Cached paths in parsecs. The transform is the camera, so the stroke is 2.5 px. */
-    private paintPolities(cam: Camera, vp: Viewport): void {
-        if (!this.polityPaths.length) return;
+    /** Paths are in parsecs. The transform is the camera, so a stroke of TERRITORY_STROKE / ppp is 2.5 px. */
+    private withCamera(cam: Camera, vp: Viewport, paint: () => void): void {
         const ctx = this.ctx;
         const ppp = cam.ppp;
         ctx.save();
@@ -369,69 +370,67 @@ export class MapRenderer {
         ctx.lineJoin = 'round';
         ctx.lineCap = 'round';
         ctx.lineWidth = TERRITORY_STROKE / ppp;
-        for (const item of this.polityPaths) {
-            ctx.fillStyle = item.color;
-            ctx.strokeStyle = item.color;
-            ctx.globalAlpha = POLITY_FILL_ALPHA;
-            ctx.fill(item.path, 'evenodd');
-            ctx.globalAlpha = 1;
-            ctx.stroke(item.path);
-        }
+        paint();
         ctx.restore();
     }
 
-    /** Slugs of the indexes on screen, sorted. The same set keeps the cached loops. */
-    private cachedShapes(ready: { sector: DrawSector; index: SectorIndex }[]): void {
-        const key = ready.map((item) => item.index.slug || item.sector.slug).sort().join('\n');
-        if (key === this.shapeKey) return;
-        this.shapeKey = key;
-        const indexes = ready.map((item) => item.index);
-        this.territoryCache = territoryShapes(indexes);
-        this.regionCache = regionShapes(indexes);
-    }
-
-    private fillShapes(shapes: Shape[], alpha: number, cam: Camera, vp: Viewport): void {
-        if (!shapes.length) return;
+    private paintPolityFills(cam: Camera, vp: Viewport, view: Rect, alpha: number): void {
+        const visible = this.visiblePolities(view);
+        if (!visible.length) return;
         const ctx = this.ctx;
-        ctx.globalAlpha = alpha;
-        for (const shape of shapes) {
-            ctx.beginPath();
-            ctx.fillStyle = shape.color;
-            this.addLoops(shape.loops, cam, vp);
-            ctx.fill('evenodd');
-        }
-        ctx.globalAlpha = 1;
-    }
-
-    /** Solid territory outline. Legacy drawBorderGroups is 2.5 / zoom, round joins and caps. */
-    private strokeShapes(shapes: Shape[], cam: Camera, vp: Viewport): void {
-        if (!shapes.length) return;
-        const ctx = this.ctx;
-        ctx.lineWidth = TERRITORY_STROKE;
-        ctx.lineJoin = 'round';
-        ctx.lineCap = 'round';
-        ctx.setLineDash([]);
-        for (const shape of shapes) {
-            ctx.beginPath();
-            ctx.strokeStyle = shape.color;
-            this.addLoops(shape.loops, cam, vp);
-            ctx.stroke();
-        }
-    }
-
-    private addLoops(loops: Shape['loops'], cam: Camera, vp: Viewport): void {
-        const ctx = this.ctx;
-        for (const loop of loops) {
-            const pts = loop.points;
-            if (pts.length < 4) continue;
-            const first = toScreen(cam, vp, pts[0], pts[1]);
-            ctx.moveTo(first.sx, first.sy);
-            for (let i = 2; i < pts.length; i += 2) {
-                const point = toScreen(cam, vp, pts[i], pts[i + 1]);
-                ctx.lineTo(point.sx, point.sy);
+        this.withCamera(cam, vp, () => {
+            ctx.globalAlpha = alpha;
+            for (const item of visible) {
+                ctx.fillStyle = item.color;
+                ctx.fill(item.path, 'evenodd');
             }
-            ctx.closePath();
+            ctx.globalAlpha = 1;
+        });
+    }
+
+    private paintPolityStrokes(cam: Camera, vp: Viewport, view: Rect): void {
+        const visible = this.visiblePolities(view);
+        if (!visible.length) return;
+        const ctx = this.ctx;
+        this.withCamera(cam, vp, () => {
+            ctx.globalAlpha = 1;
+            for (const item of visible) {
+                ctx.strokeStyle = item.color;
+                ctx.stroke(item.path);
+            }
+        });
+    }
+
+    private regionsOf(index: SectorIndex): DrawnRegion[] {
+        const found = this.regionPaths.get(index);
+        if (found) return found;
+        const regions = index.regions;
+        const drawn: DrawnRegion[] = [];
+        if (regions) {
+            for (const region of regions) {
+                if (!region.loops || region.loops.length === 0) continue;
+                drawn.push({ color: region.color ?? '', path: pathFromLoops(region.loops) });
+            }
         }
+        this.regionPaths.set(index, drawn);
+        return drawn;
+    }
+
+    private paintRegions(ready: { sector: DrawSector; index: SectorIndex }[], cam: Camera, vp: Viewport): void {
+        const shapes: DrawnRegion[] = [];
+        for (const item of ready) {
+            for (const shape of this.regionsOf(item.index)) shapes.push(shape);
+        }
+        if (!shapes.length) return;
+        const ctx = this.ctx;
+        this.withCamera(cam, vp, () => {
+            ctx.globalAlpha = REGION_FILL_ALPHA;
+            for (const shape of shapes) {
+                ctx.fillStyle = shape.color;
+                ctx.fill(shape.path, 'evenodd');
+            }
+            ctx.globalAlpha = 1;
+        });
     }
 
     private routeColour(key: string): string {

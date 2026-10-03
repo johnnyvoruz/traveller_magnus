@@ -1,8 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { stable, sha256Hex } from '@voyage/shared';
-import { buildSector, sectorOverview } from '@voyage/generation';
+import { stable, sha256Hex, TruthPolities } from '@voyage/shared';
+import { buildSector, polityOutlines, sectorOverview } from '@voyage/generation';
 import { TRUTH_SEED, TRUTH_SETTINGS, TRUTH_MILIEU } from './settings.js';
 
 const version = process.argv[2];
@@ -105,6 +105,15 @@ const overviewHash = await sha256Hex(overviewJson);
 fs.mkdirSync(path.join(OUT, version), { recursive: true });
 fs.writeFileSync(path.join(OUT, version, 'overview.json'), overviewJson);
 
+const politiesStarted = Date.now();
+const polities = polityOutlines(overviewSectors);
+const politiesMs = Date.now() - politiesStarted;
+const politiesJson = stable(TruthPolities.parse({ truthVersion: version, polities }));
+const politiesHash = await sha256Hex(politiesJson);
+fs.writeFileSync(path.join(OUT, version, 'polities.json'), politiesJson);
+let loopPoints = 0;
+for (const polity of polities) for (const loop of polity.loops) loopPoints += loop.length / 2;
+
 const manifest = {
     truthVersion: version,
     milieu: TRUTH_MILIEU,
@@ -112,6 +121,7 @@ const manifest = {
     settings: TRUTH_SETTINGS,
     engineVersion,
     overviewHash,
+    politiesHash,
     attribution: "Sector data from the Traveller Map (travellermap.com), used under Far Future Enterprises' Fair Use Policy. Traveller is a registered trademark of Far Future Enterprises.",
     sectors: sectors.map(({ slug, name, x, y, tags, canonical, systems, built, partial, indexHash }) => (
         { slug, name, x, y, tags, canonical, systems, built, partial, indexHash }
@@ -120,5 +130,8 @@ const manifest = {
 fs.writeFileSync(path.join(OUT, version, 'manifest.json'), stable(manifest));
 
 const elapsed = Date.now() - started;
-console.log(JSON.stringify({ failed, systems, built: builtTotal, partial, objects, bytes, largest, elapsed, sectors: sectorCounts }, null, 2));
+console.log(JSON.stringify({
+    failed, systems, built: builtTotal, partial, objects, bytes, largest, elapsed, sectors: sectorCounts,
+    polities: polities.length, politiesBytes: Buffer.byteLength(politiesJson), loopPoints, politiesMs,
+}, null, 2));
 if (failed.length) process.exitCode = 1;

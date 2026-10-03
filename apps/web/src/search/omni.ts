@@ -48,11 +48,18 @@ export function sectorMatches(query: string, manifest: TruthManifest, layer: 'ca
     return rankResults(query, results);
 }
 
-export function systemResults(items: SearchItem[], manifest: TruthManifest): OmniResult[] {
-    const names = new Map<string, string>();
-    for (const sector of manifest.sectors) names.set(sector.slug, sector.name);
-    return items.map((item) => {
-        const sectorName = names.get(item.sectorSlug) ?? item.sectorSlug;
+export function systemResults(items: SearchItem[], manifest: TruthManifest, layer: 'canonical' | 'all'): OmniResult[] {
+    const sectors = new Map<string, { name: string; canonical: boolean }>();
+    for (const sector of manifest.sectors) sectors.set(sector.slug, { name: sector.name, canonical: sector.canonical });
+    const visible = layer === 'canonical'
+        ? items.filter((item) => {
+            const sector = sectors.get(item.sectorSlug);
+            return sector !== undefined && sector.canonical;
+        })
+        : items;
+    return visible.map((item) => {
+        const sector = sectors.get(item.sectorSlug);
+        const sectorName = sector ? sector.name : item.sectorSlug;
         return {
             kind: 'system' as const,
             name: item.name,

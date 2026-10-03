@@ -1,4 +1,4 @@
-import type { SectorIndex, TreeEnvelope, TruthManifest, TruthOverview } from '@voyage/shared';
+import type { SectorIndex, TreeEnvelope, TruthManifest, TruthOverview, TruthPolities } from '@voyage/shared';
 
 type FetchLike = typeof fetch;
 
@@ -25,6 +25,8 @@ export class TruthClient {
     /** At most 16 parsed trees, least recently read first. A failed fetch is not stored. */
     private readonly trees = new Map<string, TreeEnvelope>();
     private readonly treeFlying = new Map<string, Promise<TreeEnvelope>>();
+    /** One polities document per version. A 404 is cached as an empty document. A failure is not. */
+    private readonly polityDocs = new Map<string, Promise<TruthPolities>>();
 
     constructor(opts: { cdnBase: string; apiBase: string; fetch: FetchLike; maxIndexes?: number; maxInFlight?: number }) {
         // The browser's fetch throws "Illegal invocation" when called as a method of another
@@ -58,6 +60,26 @@ export class TruthClient {
 
     overview(version: string): Promise<TruthOverview> {
         return this.load(this.cdnBase + '/truth/' + version + '/overview.json') as Promise<TruthOverview>;
+    }
+
+    /**
+     * One request per version however many callers ask. A 404 (v2 and v3 have no file)
+     * resolves to an empty document and is cached. Any other failure is not cached.
+     */
+    polities(version: string): Promise<TruthPolities> {
+        const existing = this.polityDocs.get(version);
+        if (existing) return existing;
+        const url = this.cdnBase + '/truth/' + version + '/polities.json';
+        const tracked = Promise.resolve(this.fetch(url)).then(async (res) => {
+            if (res.status === 404) return { truthVersion: version, polities: [] };
+            if (!res.ok) throw new Error('TruthClient: ' + res.status + ' ' + url);
+            return await res.json() as TruthPolities;
+        }).catch((err: unknown) => {
+            if (this.polityDocs.get(version) === tracked) this.polityDocs.delete(version);
+            throw err;
+        });
+        this.polityDocs.set(version, tracked);
+        return tracked;
     }
 
     /** The parsed index, or null when it has not arrived. Reading counts as a use. */

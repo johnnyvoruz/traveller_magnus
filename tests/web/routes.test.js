@@ -43,6 +43,21 @@ test('targetFor covers the five routes and an unknown sector', () => {
     assert.match(unknown.message, /Nope/);
 });
 
+test('a non-canonical sector gives the home view and that message', () => {
+    const chart = {
+        sectors: [
+            { slug: 'Spinward_Marches', name: 'Spinward Marches', x: -4, y: -1, tags: ['OTU'], canonical: true },
+            { slug: 'Rigel', name: 'Rigel', x: 5, y: -1, tags: [], canonical: false },
+        ],
+    };
+    const off = targetFor({ path: '/s/Rigel/3103' }, chart);
+    assert.equal(off.kind, 'unknown');
+    assert.equal(off.message, 'Rigel is not on the canonical chart.');
+    const home = targetFor({ path: '/' }, chart);
+    assert.equal(home.kind, 'fit');
+    assert.deepEqual(home.rect, homeRect(chart));
+});
+
 test('dossierRoute reads the overview, a body, and an unknown body key', () => {
     assert.deepEqual(dossierRoute('/s/Spinward_Marches/1910'), {
         kind: 'overview',

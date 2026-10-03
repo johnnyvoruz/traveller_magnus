@@ -48,6 +48,7 @@ export const SectorIndex = z.object({
         name: z.string(),
         color: z.string(),
         hexes: z.array(z.string()),
+        loops: z.array(z.array(z.number())),
     }).strict()),
 }).strict();
 export type SectorIndex = z.infer<typeof SectorIndex>;
@@ -60,6 +61,7 @@ export const TruthManifest = z.object({
     settings: Settings,
     engineVersion: z.string(),
     overviewHash: z.string(),
+    politiesHash: z.string(),
     attribution: z.string(),
     releasedAt: z.string().optional(),
     sectors: z.array(z.object({
@@ -92,3 +94,16 @@ export const TruthOverview = z.object({
     sectors: z.array(SectorOverview),
 }).strict();
 export type TruthOverview = z.infer<typeof TruthOverview>;
+
+/** truth/<v>/polities.json: canonical polity outlines, largest hex count first. */
+export const TruthPolities = z.object({
+    truthVersion: z.string(),
+    polities: z.array(z.object({
+        name: z.string(),
+        color: z.string(),
+        hexes: z.number(),
+        box: z.tuple([z.number(), z.number(), z.number(), z.number()]),
+        loops: z.array(z.array(z.number())),
+    }).strict()),
+}).strict();
+export type TruthPolities = z.infer<typeof TruthPolities>;

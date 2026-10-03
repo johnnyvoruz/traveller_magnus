@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { rankResults, sectorMatches } from '../../apps/web/src/search/omni.ts';
+import { rankResults, sectorMatches, systemResults } from '../../apps/web/src/search/omni.ts';
 
 function systems(names) {
     return names.map((name) => ({ kind: 'system', name, detail: '', sector: 'Spinward_Marches', hex: '1910' }));
@@ -30,4 +30,20 @@ test('sectorMatches finds Spinward Marches and skips non-canonical sectors on th
     assert.deepEqual(canonical, ['Spinward_Marches']);
     const all = sectorMatches('spin', manifest, 'all').map((row) => row.sector);
     assert.deepEqual(all, ['Spinward Marches', 'Spinward Reach'].map((_name, index) => manifest.sectors[index].slug));
+});
+
+test('systemResults on the canonical layer keeps the canonical hit for one query', () => {
+    const manifest = {
+        sectors: [
+            { slug: 'Spinward_Marches', name: 'Spinward Marches', canonical: true },
+            { slug: 'Rigel', name: 'Rigel', canonical: false },
+        ],
+    };
+    const items = [
+        { sectorSlug: 'Spinward_Marches', hex: '2204', name: 'Rigel', uwp: 'A123456-7' },
+        { sectorSlug: 'Rigel', hex: '3103', name: 'Rigel', uwp: 'A123456-7' },
+        { sectorSlug: 'Missing', hex: '0101', name: 'Rigel', uwp: 'X000000-0' },
+    ];
+    assert.deepEqual(systemResults(items, manifest, 'canonical').map((row) => row.sector), ['Spinward_Marches']);
+    assert.deepEqual(systemResults(items, manifest, 'all').map((row) => row.sector), ['Spinward_Marches', 'Rigel', 'Missing']);
 });
