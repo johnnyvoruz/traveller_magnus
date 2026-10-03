@@ -32,6 +32,21 @@ export const truthVersions = sqliteTable('truth_versions', {
     check('truth_versions_state_check', sql`${t.state} in ('building', 'released', 'withdrawn')`),
 ]);
 
+export const truthBuildSectors = sqliteTable('truth_build_sectors', {
+    version: text('version').notNull(),
+    sectorSlug: text('sector_slug').notNull(),
+    state: text('state').notNull(),
+    systems: integer('systems').notNull().default(0),
+    built: integer('built').notNull().default(0),
+    partial: integer('partial').notNull().default(0),
+    indexHash: text('index_hash'),
+    error: text('error'),
+    updatedAt: text('updated_at').notNull(),
+}, (t) => [
+    primaryKey({ columns: [t.version, t.sectorSlug] }),
+    check('truth_build_sectors_state_check', sql`${t.state} in ('building', 'done', 'failed')`),
+]);
+
 export const truthSystems = sqliteTable('truth_systems', {
     version: text('version').notNull(),
     sectorSlug: text('sector_slug').notNull(),

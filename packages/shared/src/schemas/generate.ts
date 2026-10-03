@@ -58,3 +58,9 @@ export const TruthBuild = z.object({
     sectors: z.union([z.literal('all'), z.array(z.string())]),
 });
 export type TruthBuild = z.infer<typeof TruthBuild>;
+
+/** POST /api/admin/truth/builds/:version/retry body. Absent sectors retries every failed sector. */
+export const TruthRetry = z.object({
+    sectors: z.array(z.string()).optional(),
+});
+export type TruthRetry = z.infer<typeof TruthRetry>;

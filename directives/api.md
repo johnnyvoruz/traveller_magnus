@@ -25,9 +25,10 @@ players' views are read from `https://cdn.traveller.voyage`.
 | POST | `/api/generate/preview` | user | stateless: `{ edition, mode, seed, settings, hexKey, inputs }` → tree document; nothing stored; proves the Worker and Node produce the same hash | `GeneratePreview` |
 | GET | `/api/truth/versions` | public | released truth versions | — |
 | GET | `/api/truth/search?q=&version=` | public | FTS over `truth_systems`: name, hex, UWP, sector | — |
-| POST | `/api/admin/truth/build` | admin | `{ version, milieu, engineVersion, seed, settings, sectors[] }` → 202, enqueues one `truth-build` message per sector; `milieu` is a TravellerMap milieu code such as `M1105` | `TruthBuild` |
-| GET | `/api/admin/truth/builds/:version` | admin | progress and per-sector state | — |
-| POST | `/api/admin/truth/release/:version` | admin | marks released once every sector is done and the manifest exists | — |
+| POST | `/api/admin/truth/build` | admin | `{ version, milieu, engineVersion, seed, settings, sectors }` → 202 `{ version, enqueued }`; `sectors` is a slug array or `'all'` (every slug in `inputs/<version>/sectors.json`); enqueues one `truth-build` message per sector at offset 0; 409 if the version exists; `milieu` is a TravellerMap milieu code such as `M1105` | `TruthBuild` |
+| GET | `/api/admin/truth/builds/:version` | admin | progress and per-sector state, read from `truth_build_sectors` | — |
+| POST | `/api/admin/truth/builds/:version/retry` | admin | `{ sectors?: string[] }`; re-enqueues at offset 0 every `failed` sector, or the named slugs in any state; → 202 `{ version, enqueued }`; 409 if released; audit logged (`architecture.md` §5) | `TruthRetry` |
+| POST | `/api/admin/truth/release/:version` | admin | refuses unless every sector is `done`; writes the manifest from `truth_build_sectors`; marks released; audit logged | — |
 
 ## Slice 2 — universes, generation, changes
 

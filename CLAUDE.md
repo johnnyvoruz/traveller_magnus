@@ -19,7 +19,8 @@ This repository now holds two things:
 
 **Start every session by reading, in order:** `directives/manifesto.md` → `directives/plan.md`
 → `directives/handoff.md` (current state, what is in flight, traps already hit) → the
-directive for the slice you are on. `architecture.md`, `data_model.md`, `api.md` and
+directive for the slice you are on. This is the one reading order; `directives/README.md` and
+the handoff repeat it. `architecture.md`, `data_model.md`, `api.md` and
 `design_reference.md` are the specs those point to. `feature_inventory.md` says what happens to
 every legacy feature.
 
@@ -58,7 +59,7 @@ listing what was created, what was stubbed or skipped and every Halt & Challenge
 
 | Command | Does |
 |---|---|
-| `npm test` | `node --test tests/` — legacy golden fixtures, ESM parity, shared schemas, API handlers |
+| `npm test` | `node --test "tests/**/*.test.js"` — legacy golden fixtures, ESM parity, shared schemas, generation; the `tests/api` black-box suite runs only with `RUN_API_TESTS=1` |
 | `npm run check` | manifesto checker over `apps/*/src` and `packages/*/src` |
 | `npm run rules:gen` | regenerates `packages/engines/src/generated/rules/` from `rules/` |
 | `npm run truth:build` | builds `truth/<version>/` from `universe/raw/` with pinned seed and settings |
@@ -69,7 +70,9 @@ listing what was created, what was stubbed or skipped and every Halt & Challenge
 
 See `directives/architecture.md` §3. Short version: `packages/engines` (pure ESM engines +
 core: rng, trace, hex, names, manual, settings, audit), `packages/shared` (zod schemas and
-types for the overlay document v3, truth files, package manifest, API envelopes), `apps/web`
+types for the overlay document v3, truth files, package manifest, API envelopes),
+`packages/generation` (the one generation code path: `generateHex`, `buildSector`,
+`buildSectorSlice`), `apps/web`
 (Vue), `apps/api` (Hono Worker, Drizzle schema, migrations, auth), `tools/truth`, `tests/`.
 
 Boundaries enforced by the checker: engines import nothing from `apps/`; `shared` imports

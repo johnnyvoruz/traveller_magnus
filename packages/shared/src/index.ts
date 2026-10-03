@@ -1,7 +1,7 @@
 export { stable, sha256Hex } from './stable.ts';
 export { ErrorCode, Fail, Ok } from './schemas/envelope.ts';
 export { Role, Profile, User } from './schemas/user.ts';
-export { Settings, Milieu, GeneratePreview, GenerateRequest, GenerateSector, TruthBuild } from './schemas/generate.ts';
+export { Settings, Milieu, GeneratePreview, GenerateRequest, GenerateSector, TruthBuild, TruthRetry } from './schemas/generate.ts';
 export { HexSummary, Derivation, TreeEnvelope } from './schemas/hex.ts';
 export type { HexState } from './schemas/hex.ts';
 export { OverlaySector, OverlayBase, Tombstone, OverlayDoc } from './schemas/overlay.ts';

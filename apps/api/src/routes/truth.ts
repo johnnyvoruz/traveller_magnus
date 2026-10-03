@@ -10,22 +10,32 @@ export const truth = new Hono<AppEnv>();
 truth.get('/versions', async (c) => {
     const db = drizzle(c.env.DB, { schema: { truthVersions } });
     const rows = await db.select().from(truthVersions).where(eq(truthVersions.state, 'released'));
-    return ok(c, rows.map((row) => ({
-        version: row.version,
-        engineVersion: row.engineVersion,
-        milieu: row.milieu,
-        seed: row.seed,
-        settings: row.settings,
-        sectors: row.sectors,
-        state: row.state,
-        startedAt: row.startedAt,
-        releasedAt: row.releasedAt,
-        notes: row.notes,
-        sectorsFailed: row.sectorsFailed,
-        manifestHash: row.manifestHash,
-        sectorsTotal: row.sectorsTotal,
-        sectorsDone: row.sectorsDone,
-    })));
+    const counts = await c.env.DB.prepare(
+        `SELECT version,
+                SUM(CASE WHEN state = 'done' THEN 1 ELSE 0 END) AS sectors_done,
+                SUM(CASE WHEN state = 'failed' THEN 1 ELSE 0 END) AS sectors_failed
+         FROM truth_build_sectors GROUP BY version`,
+    ).all<{ version: string; sectors_done: number; sectors_failed: number }>();
+    const byVersion = new Map(counts.results.map((row) => [row.version, row]));
+    return ok(c, rows.map((row) => {
+        const count = byVersion.get(row.version);
+        return {
+            version: row.version,
+            engineVersion: row.engineVersion,
+            milieu: row.milieu,
+            seed: row.seed,
+            settings: row.settings,
+            sectors: row.sectors,
+            state: row.state,
+            startedAt: row.startedAt,
+            releasedAt: row.releasedAt,
+            notes: row.notes,
+            sectorsFailed: Number(count?.sectors_failed ?? 0),
+            manifestHash: row.manifestHash,
+            sectorsTotal: row.sectorsTotal,
+            sectorsDone: Number(count?.sectors_done ?? 0),
+        };
+    }));
 });
 
 truth.get('/search', async (c) => {

@@ -113,12 +113,16 @@ client polls `GET /api/universes/:id/jobs/:jobId` or subscribes to the universe'
 stream (Server-Sent Events from the Durable Object). Failed batches retry three times, then go
 to the dead-letter queue and the job reports them by hex key.
 
-**Truth builds.** `POST /api/admin/truth/build` (admin) enqueues one `truth-build` message per
-sector. Each consumer runs the engines over that sector's inputs at the pinned seed and
-settings, hashes every tree, writes only new objects to the public bucket, writes the sector
-index, and updates the build record. When every sector is done the manifest is written and the
-`truth_versions` row and `truth_systems` search rows are inserted. A truth version is never
-rewritten; a change is a new version.
+**Truth builds.** `POST /api/admin/truth/build` (admin) inserts the `truth_versions` row and
+one `truth_build_sectors` row per sector, then enqueues one `truth-build` message per sector.
+The consumer runs the engines over that sector's inputs at the pinned seed and settings in
+slices (below), hashes every tree, writes the objects to the public bucket, and on the last
+slice writes the sector index, the sector's `truth_systems` search rows and its
+`truth_build_sectors` row. When every sector is `done`, release writes the manifest and marks
+the version `released`. A truth version is never rewritten; a change is a new version. That
+includes a build that went wrong after any of its sector indexes was written: indexes are
+served `immutable` for a year from `truth/<version>/`, so the fix is the next version name,
+not a rebuild under the same one.
 
 **Limits, and the shape they force (learned 2026-10-03).** One Worker invocation gets a
 bounded number of binding calls (about 1,000 subrequests: every R2 `get`/`head`/`put`, queue
@@ -129,16 +133,30 @@ whole sector or a whole catalogue:
 - **The build endpoint** verifies inputs with paginated `list({ prefix })` (two calls for
   1,025 keys), never per-file reads, and enqueues with `sendBatch` in groups of 100.
 - **The truth-build consumer works in slices of 200 rows.** A message is
-  `{ version, slug, offset }`. The consumer generates only rows `[offset, offset + 200)`
-  (every hex is seeded independently, so a slice is deterministic on its own), `put`s each
-  tree without a preceding `head` (content-addressed writes are idempotent), writes the
-  slice's index rows to `inputs/<version>/_parts/<slug>/<offset>.json` in the private
-  bucket, then enqueues the next offset or, on the last slice, finalizes: reads the parts,
-  writes the sector index, replaces the sector's `truth_systems` rows in one D1 batch, and
-  upserts the sector's row in `truth_build_sectors`.
+  `{ version, slug, offset, pinned }`, where `pinned` is `{ seed, settings, engineVersion }`
+  copied from the build request so a slice needs no D1 read to start. The consumer generates
+  only rows `[offset, offset + 200)` (every hex is seeded independently, so a slice is
+  deterministic on its own), `put`s each tree without a preceding `head` (content-addressed
+  writes are idempotent), writes the slice's index rows to
+  `inputs/<version>/_parts/<slug>/<offset>.json` in the private bucket, then enqueues the next
+  offset or, on the last slice, finalizes: reads the parts, checks that their entries add up
+  to the sector's row count (a mismatch throws; nothing is written), writes the sector index,
+  replaces the sector's `truth_systems` rows in one D1 batch, and upserts the sector's row in
+  `truth_build_sectors`. Queues deliver at least once; every write here is a replace keyed by
+  content or by `(version, slug[, offset])`, so a duplicate message repeats work and changes
+  nothing.
 - **Progress is counted, never incremented.** `sectors_done` is `COUNT(*)` of
   `truth_build_sectors` rows in state `done` for the version, so a retried message cannot
-  double count.
+  double count. The progress route and release read that table; neither reads one R2 object
+  per sector.
+- **Failure and retry.** `max_retries = 3` means a message is delivered up to four times. On
+  the fourth failed attempt the consumer upserts the sector to `failed` with the error text,
+  and the message goes to `voyage-dlq`. `POST /api/admin/truth/builds/:version/retry` (admin)
+  sets sectors back to `building` and enqueues `{ version, slug, offset: 0, pinned }` for
+  them, with `pinned` rebuilt from the `truth_versions` row: every `failed` sector by default,
+  or the slugs named in the body in any state (for a sector stuck in `building` because a
+  message was lost). It refuses a released version. Restarting a sector at offset 0 is safe
+  for the same reason a duplicate is.
 - **Bulk generation in slice 2 follows the same rule:** batches of 64, one transaction each.
 
 Worker CPU limit is raised in `wrangler.toml` (`[limits] cpu_ms`); a 200-row slice uses a

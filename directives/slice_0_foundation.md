@@ -756,13 +756,21 @@ export default {
   `sectors_failed`; `data_model.md` §2). Nothing is stashed in `notes`.
 - `GET /api/truth/versions`: rows of `truth_versions` with `state = 'released'`.
 - `GET /api/truth/search?q=&version=`: FTS5 `MATCH` on `truth_systems_fts`, limit 50.
-- `POST /api/admin/truth/build` (admin): validates `TruthBuild`, inserts `truth_versions`
-  (`state = 'building'`), reads sector inputs from the private bucket at
-  `inputs/<version>/<slug>.tsv|.xml` (uploaded by Johnny with `wrangler r2 object put`; the
-  fetch script in `utilities/build_universe_snapshot/fetch.js` produces them), and sends one
-  message per sector to `TRUTH_QUEUE`. Returns 202 `{ version, sectors }`.
-- `POST /api/admin/truth/release/:version` (admin): refuses unless `sectors_done ===
-  sectors_total`; writes `truth/<version>/manifest.json`; sets `released`; audit logged.
+- `POST /api/admin/truth/build` (admin): validates `TruthBuild`; 409 if the version exists;
+  resolves `sectors` (`'all'` = every slug in `inputs/<version>/sectors.json`); verifies each
+  slug's `.tsv` and `.xml` exist with a paginated `PRIVATE_BUCKET.list({ prefix })`, never
+  per-file reads (inputs come from `tools/truth/fetch_inputs.js` and `upload_inputs.js`, §12);
+  inserts `truth_versions` (`state = 'building'`) and one `truth_build_sectors` row per slug
+  (`building`, D1 batches of 50 statements); enqueues `{ version, slug, offset: 0, pinned }`
+  per sector with `TRUTH_QUEUE.sendBatch` in groups of 100. Returns 202
+  `{ version, enqueued }`.
+- `GET /api/admin/truth/builds/:version` (admin): the version row plus per-sector state from
+  `truth_build_sectors`; `sectorsDone` and `sectorsFailed` are counts over that table.
+- `POST /api/admin/truth/builds/:version/retry` (admin): per `architecture.md` §5 "Failure and
+  retry"; audit logged.
+- `POST /api/admin/truth/release/:version` (admin): refuses unless `COUNT(state = 'done')`
+  over `truth_build_sectors` equals `sectors_total`; writes `truth/<version>/manifest.json`
+  from that table's rows; sets `released`; audit logged.
 
 ### 10.4 `POST /api/generate/preview`
 
@@ -774,14 +782,29 @@ hash of the Node `generateHex` output for the same input (`tests/api/parity.test
 
 ### 10.5 `src/jobs/truth_build.ts`
 
-For each message `{ version, slug, pinned }`: read `inputs/<version>/<slug>.tsv` and `.xml`;
-`buildSector`; for each object, `PUBLIC_BUCKET.head('objects/' + hash)` and `put` only when
-absent, with `httpMetadata.cacheControl = 'public, max-age=31536000, immutable'` and
-`contentType = 'application/json'`; put `truth/<version>/sectors/<slug>/index.json`; insert
-`truth_systems` rows for the sector in one D1 batch; increment `sectors_done`. Write one
-`METRICS` data point `{ job: 'truth-build', slug, systems, newObjects, ms }`. Throw on any
-failure so Queues retries; after `max_retries` the message lands in `voyage-dlq` and the build
-record shows the sector as failed.
+Rewritten 2026-10-03 after the first build attempt hit Worker limits; the shape and its
+reasons are in `architecture.md` §5 "Limits, and the shape they force".
+
+One message `{ version, slug, offset, pinned }` is one slice of 200 rows: read
+`inputs/<version>/<slug>.tsv`; `buildSectorSlice({ slug, tsv, pinned, offset, limit: 200 })`;
+`put` each object to `PUBLIC_BUCKET` at `objects/<hash>` with no preceding `head`, with
+`httpMetadata.cacheControl = 'public, max-age=31536000, immutable'` and
+`contentType = 'application/json'`; put the slice's index entries to `PRIVATE_BUCKET` at
+`inputs/<version>/_parts/<slug>/<offset>.json`. If `nextOffset` is not null, send
+`{ version, slug, offset: nextOffset, pinned }` and return.
+
+On the last slice, finalize: list and read the parts; throw unless their entries add up to
+`total`; put `truth/<version>/sectors/<slug>/index.json` with the `sectors.json` catalogue
+fields and the metadata from `<slug>.xml`; then one D1 batch that deletes the sector's
+`truth_systems` rows for the version, inserts them again (multi-row inserts within D1's
+100-bound-parameter limit) and upserts `truth_build_sectors` to `done` with `systems`, `built`,
+`partial`, `index_hash`. Nothing increments `sectors_done`.
+
+Write one `METRICS` data point per slice `{ job: 'truth-build', slug, rows, objects, ms }`.
+Throw on any failure so Queues retries. `max_retries = 3` is four deliveries; on the fourth
+failed attempt upsert `truth_build_sectors` to `failed` with the error text before rethrowing,
+and the message lands in `voyage-dlq`. A failed sector is retried through the retry route
+(§10.3), never by rebuilding the version.
 
 ### 10.6 Durable Object stub
 
@@ -811,9 +834,13 @@ message if `wrangler` is absent):
   `inputs/vtest/Fixture.tsv`, call the admin build with a seeded admin user (a local-only
   `scripts/dev_make_admin.js` sets `role = 'admin'` on a user in the local D1), wait for the
   sector to finish, assert the index and at least one object exist in local R2 and that
-  `truth_systems` has two rows.
+  `truth_systems` has two rows. A second case builds a 450-row fixture sector (valid rows
+  repeated with distinct hexes) so the consumer chains three slices: three part files, one
+  index with 450 entries, 450 `truth_systems` rows, one `truth_build_sectors` row in `done`.
 
-**Check:** `npm test` runs all three green locally.
+The suite is gated: `npm test` skips it unless `RUN_API_TESTS=1`.
+
+**Check:** `RUN_API_TESTS=1 node --test "tests/api/**/*.test.js"` runs all three green locally.
 
 ---
 
@@ -826,8 +853,9 @@ message if `wrangler` is absent):
    TravellerMap (512 on 2026-10-03, 399 canonical) into `universe/raw/` plus `sectors.json`; then
    `node tools/truth/upload_inputs.js v1` sends them to the private bucket under `inputs/v1/`.
    The legacy `utilities/build_universe_snapshot/fetch.js` and its 128-sector list are retired.
-2. Johnny calls `POST /api/admin/truth/build` with `{ version: 'v1', milieu: 'M1105', engineVersion, seed, settings, sectors: [...every slug from sectors.json] }`, the values from `tools/truth/settings.js`. The job reads `inputs/v1/sectors.json` for each sector's name, coordinates and tags.
-3. `GET /api/admin/truth/builds/v1` reaches `sectors_done === sectors_total`; Johnny calls release.
+2. Johnny calls `POST /api/admin/truth/build` with `{ version: 'v1', milieu: 'M1105', engineVersion, seed, settings, sectors: 'all' }`, the values from `tools/truth/settings.js` (the exact command is in `handoff.md` §3). The job reads `inputs/v1/sectors.json` for each sector's name, coordinates and tags.
+3. Every `truth_build_sectors` row for `v1` reaches `done` (`GET /api/admin/truth/builds/v1`, or the D1 query in `handoff.md` §3); failed sectors go through the retry route; then Johnny calls release.
+4. A build that turns out wrong after sector indexes were written is abandoned and rebuilt as the next version name (`architecture.md` §5); `v1` is not reused.
 
 **Check:** `https://cdn.traveller.voyage/truth/v1/manifest.json` loads with the immutable
 header; one `objects/<hash>.json` named in a sector index loads; `GET /api/truth/search?q=Regina`
