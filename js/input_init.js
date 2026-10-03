@@ -81,6 +81,7 @@ function initializeInput() {
     // Setup all event listeners (These functions will live in our other new files)
     setupAccordions();
     setupCanvasEvents();
+    window.TradeMatch?.setup();
     setupKeyboardShortcuts();
     setupContextMenu();
     setupSettingsPanel();
@@ -111,68 +112,26 @@ function initializeInput() {
 function setupAccordions() {
     const accordions = document.querySelectorAll('.accordion-btn');
     accordions.forEach(acc => {
-        // Default all accordions to closed state
         acc.classList.remove('active');
         const panel = acc.nextElementSibling;
         if (panel && panel.classList.contains('accordion-content')) {
             panel.style.display = 'none';
-            // Teleport panel to document.body to escape backdrop-filter stacking context
-            // backdrop-filter on .draggable-palette traps position:fixed children inside it
-            if (panel.parentElement !== document.body) {
-                document.body.appendChild(panel);
-            }
+            if (panel.id) acc.dataset.accordionPanel = panel.id;
         }
 
         acc.addEventListener('click', function () {
-            const isActive = this.classList.contains('active');
-            const panelId = this.dataset.accordionPanel || this.nextElementSibling?.id;
-
-            // Close all panels
-            accordions.forEach(btn => {
-                btn.classList.remove('active');
-            });
-            document.querySelectorAll('.accordion-content').forEach(p => {
-                p.style.display = 'none';
-            });
-
-            // If it wasn't active before, open it
-            if (!isActive) {
-                this.classList.add('active');
-                // Find the panel by stored reference (it may have been moved to body)
-                const targetPanel = panelId ? document.getElementById(panelId) : null;
-                if (targetPanel) {
-                    const rect = this.getBoundingClientRect();
-                    const panelW = 440;
-                    // Use 80vh (the CSS max-height) as the assumed panel height — scrollHeight is 0 on hidden elements
-                    const panelH = window.innerHeight * 0.8;
-                    const margin = 10;
-
-                    // Prefer right of the editor; flip left if it would overflow
-                    let left = rect.right + margin;
-                    if (left + panelW > window.innerWidth) {
-                        left = rect.left - panelW - margin;
-                    }
-                    // Clamp so panel never goes off left or right edge
-                    left = Math.max(margin, Math.min(left, window.innerWidth - panelW - margin));
-
-                    // Align top of panel with top of button; clamp bottom
-                    let top = rect.top;
-                    if (top + panelH > window.innerHeight - margin) {
-                        top = window.innerHeight - panelH - margin;
-                    }
-                    top = Math.max(margin, top);
-
-                    targetPanel.style.left = left + 'px';
-                    targetPanel.style.top = top + 'px';
-                    targetPanel.style.display = 'block';
-                }
+            const panelId = this.dataset.accordionPanel;
+            const target = panelId ? document.getElementById(panelId) : null;
+            const span = document.getElementById('system-inspector')?.dataset.span || 'column';
+            const willOpen = !this.classList.contains('active');
+            // Column width keeps a single open section. Wider panes leave the others open.
+            if (span === 'column') {
+                accordions.forEach(btn => btn.classList.remove('active'));
+                document.querySelectorAll('.accordion-content').forEach(node => { node.style.display = 'none'; });
             }
+            this.classList.toggle('active', willOpen);
+            if (target) target.style.display = willOpen ? 'block' : 'none';
         });
-
-        // Store panel ID on button for lookup after DOM move
-        if (panel && panel.id) {
-            acc.dataset.accordionPanel = panel.id;
-        }
     });
 }
 
@@ -185,6 +144,9 @@ function showToast(message, duration = 3000) {
     const container = document.getElementById('toast-container');
     if (!container) return;
 
+    const sticky = !(duration > 0);
+    if (sticky && [...container.children].some(node => node.dataset.sticky === '1' && node.textContent === message)) return;
+
     const toast = document.createElement('div');
     toast.className = 'toast';
     toast.textContent = message;
@@ -193,14 +155,19 @@ function showToast(message, duration = 3000) {
     void toast.offsetWidth;
     toast.classList.add('show');
 
-    setTimeout(() => {
+    const dismiss = () => {
         toast.classList.remove('show');
         toast.addEventListener('transitionend', () => {
-            if (toast.parentNode) {
-                toast.parentNode.removeChild(toast);
-            }
+            if (toast.parentNode) toast.parentNode.removeChild(toast);
         });
-    }, duration);
+    };
+    if (sticky) {
+        toast.dataset.sticky = '1';
+        toast.title = 'Click to dismiss';
+        toast.addEventListener('click', dismiss);
+        return;
+    }
+    setTimeout(dismiss, duration);
 }
 
 // ============================================================================
@@ -278,14 +245,51 @@ function openHelpModal() {
 
 
 
+// Player knowledge is paused. The flag (Settings, default off) only shows or
+// hides the entry points. Tags already stored on hexes are left alone.
+function applyPlayerKnowledgeChrome(enabled) {
+    const on = !!enabled;
+    window.playerKnowledgeExperimental = on;
+    const navBtn = document.getElementById('disclosure-toggle');
+    if (navBtn) {
+        navBtn.hidden = !on;
+        if (!on) navBtn.setAttribute('aria-expanded', 'false');
+    }
+    if (!on) {
+        const tray = document.getElementById('disclosure-tray');
+        if (tray) tray.hidden = true;
+        const menu = document.getElementById('map-action-players-menu');
+        if (menu) menu.hidden = true;
+        const playersBtn = document.getElementById('map-action-players');
+        if (playersBtn) playersBtn.setAttribute('aria-expanded', 'false');
+        const modal = document.getElementById('disclosure-assign-modal');
+        if (modal) modal.style.display = 'none';
+    }
+    const group = document.getElementById('map-action-players-group');
+    if (group) group.hidden = !on;
+    for (const id of ['ctx-open-disclosure-grid', 'ctx-assign-disclosure', 'help-player-knowledge-key', 'help-player-knowledge']) {
+        const el = document.getElementById(id);
+        if (el) el.hidden = !on;
+    }
+    const playerOpt = document.querySelector('#obs-version option[value="player"]');
+    if (playerOpt) playerOpt.hidden = !on;
+    const versionSel = document.getElementById('obs-version');
+    if (versionSel && !on && versionSel.value === 'player') {
+        versionSel.value = 'gm';
+        versionSel.dispatchEvent(new Event('change'));
+    }
+    if (window.AppNavigation) window.AppNavigation.layout();
+}
+window.applyPlayerKnowledgeChrome = applyPlayerKnowledgeChrome;
+
 function setupNavigation() {
     const nav = document.getElementById('app-nav');
     const icons = {
-        menu: 'bars', map: 'map', system: 'planet-ringed', time: 'clock',
+        menu: 'bars', map: 'map', system: 'planet-ringed',
         campaign: 'book-sparkles', person: 'user', place: 'location-dot',
         business: 'store', organization: 'sitemap', job: 'briefcase',
         event: 'calendar-star', item: 'gem', note: 'note-sticky',
-        select: 'hexagon-check', route: 'route', border: 'draw-polygon',
+        route: 'route', border: 'draw-polygon',
         region: 'layer-group', sectors: 'table-cells',
         eye: 'eye', generate: 'wand-magic-sparkles', legend: 'book-atlas',
         settings: 'gear', help: 'circle-question'
@@ -323,8 +327,12 @@ function setupNavigation() {
         layout(); return true;
     }
     function layout() {
-        const railRight = nav.getBoundingClientRect().right;
+        // Width ignores the boot slide. A translated rail would otherwise report
+        // a right edge of 0 and pull the map chrome over with it.
+        const railRight = nav.getBoundingClientRect().width;
         document.documentElement.style.setProperty('--nav-width', `${railRight}px`);
+        const inspector = document.querySelector('#system-inspector:not([hidden])');
+        document.documentElement.style.setProperty('--inspector-right', inspector ? `${inspector.getBoundingClientRect().right}px` : '0px');
         const active = [document.querySelector('#system-inspector:not([hidden])'), ...document.querySelectorAll('.nav-tray:not([hidden]), .side-panel.open'), ...Object.keys(palettes).filter(isVisible).map(id => document.getElementById(id))].filter(Boolean);
         const edge = Math.max(railRight, ...active.map(node => node.getBoundingClientRect().right + 10));
         document.documentElement.style.setProperty('--workspace-left', `${Math.min(edge, innerWidth - 120)}px`);
@@ -351,7 +359,7 @@ function setupNavigation() {
         else if (prepare(id)) tray.hidden = false;
         layout();
     }
-    window.AppNavigation = { prepare, layout, toggleTray, labels };
+    window.AppNavigation = { prepare, layout, toggleTray, labels, icons };
     for (const [id, name] of Object.entries(palettes)) {
         const original = window[name];
         if (typeof original !== 'function') continue;
@@ -366,6 +374,7 @@ function setupNavigation() {
     document.getElementById('nav-expand').addEventListener('click', () => { nav.classList.toggle('expanded'); layout(); });
     document.getElementById('generate-toggle').addEventListener('click', () => toggleTray('generation-tray'));
     document.getElementById('disclosure-toggle').addEventListener('click', () => {
+        if (!window.playerKnowledgeExperimental) return;
         window.toggleDisclosureGrid();
     });
     function setLegendOpen(open) {
@@ -378,7 +387,6 @@ function setupNavigation() {
         setLegendOpen(document.getElementById('legend-tray').hidden);
     });
     document.getElementById('legend-close').addEventListener('click', () => setLegendOpen(false));
-    document.getElementById('orbit-tools-toggle').addEventListener('click', () => toggleTray('orbit-controls-tray'));
     document.getElementById('nav-map').addEventListener('click', () => SystemViewer.close());
     document.querySelectorAll('[data-close-tray]').forEach(button => button.addEventListener('click', () => { button.closest('.nav-tray').hidden = true; layout(); }));
     new MutationObserver(() => requestAnimationFrame(layout)).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class', 'hidden'] });
@@ -386,6 +394,7 @@ function setupNavigation() {
     window.addEventListener('resize', layout);
     document.addEventListener('keydown', e => {
         if (e.key !== 'Escape' || e.defaultPrevented || e.target.closest('#omni-search')) return;
+        if (document.querySelector('.campaign-stardate-dialog[open], .atlas-crop-dialog[open]')) return;
         if (document.getElementById('world-image-panel')) return;
         const trays = document.querySelectorAll('.nav-tray:not([hidden])');
         const legend = document.getElementById('legend-tray');
@@ -505,7 +514,7 @@ function setupOmniSearch() {
             }
         }
         add({ kind: 'filter', name: 'Filter worlds', detail: 'Tool · F' }, 'filter worlds hide suspend');
-        for (const button of document.querySelectorAll('#app-nav button:not(:disabled)')) {
+        for (const button of document.querySelectorAll('#app-nav button:not(:disabled), #hex-select-toggle')) {
             if (button.id === 'nav-expand' || !button.getClientRects().length) continue;
             const name = button.getAttribute('aria-label');
             add({ kind: 'tool', button, name, detail: 'Tool' }, name);
@@ -707,7 +716,7 @@ function setupMapActionBar() {
         add('Clear region', () => {
             const hexList = currentActionHexes();
             if (!hexList.length) return;
-            saveHistoryState('Clear Region');
+            saveHistoryState('Clear Region', { hexIds: hexList });
             hexList.forEach(hexId => { const s = hexStates.get(hexId); if (s) s.cluster = '----'; });
             if (typeof window.invalidateRegionFillCache === 'function') window.invalidateRegionFillCache();
             window.renderRegionWindow?.();
@@ -803,11 +812,30 @@ function setupMapActionBar() {
     syncMapActionBar();
 }
 
+function _releaseBoot(message) {
+    const nav = document.getElementById('app-nav');
+    if (nav) nav.inert = false;
+    document.body.dataset.appReady = 'true';
+    window.__mapBootDrawn = true;
+    if (typeof window.__bootTryReveal === 'function') window.__bootTryReveal();
+    if (message && typeof showToast === 'function') showToast(message, 0);
+}
+
 window.addEventListener('load', async () => {
     // Load persisted data from IndexedDB before initialising the UI.
     // Keep navigation inert while the saved map is being restored.
+    // A failed restore must still wire up the UI: an un-inerted nav rail with
+    // no handlers behind it is not "usable". The error is shown after boot.
+    let bootError = null;
+    let hadData = false;
+    try {
+        if (window.dbManager) hadData = await window.dbManager.loadFromDB();
+    } catch (err) {
+        bootError = err;
+        console.error('[Boot] stored map could not be restored:', err);
+    }
+    try {
     if (window.dbManager) {
-        const hadData = await window.dbManager.loadFromDB();
         if (hadData) {
             // Recompute the filter before the first draw.
             //
@@ -834,5 +862,17 @@ window.addEventListener('load', async () => {
     initializeInput();
     if (typeof resize === 'function') {
         resize();
+    }
+    // The boot starfield waits for this. Revealing earlier fades in the
+    // default 300×150 bitmap, stretched across the window by CSS.
+    window.__mapBootDrawn = true;
+    if (typeof window.__bootTryReveal === 'function') window.__bootTryReveal();
+    } catch (err) {
+        console.error('[Boot]', err);
+        _releaseBoot(err && err.message ? err.message : 'The map could not be opened. Autosave is paused.');
+        return;
+    }
+    if (bootError) {
+        showToast(`The stored map could not be restored: ${bootError.message || bootError}. Autosave is paused until you load a map file or clear the canvas.`, 0);
     }
 });

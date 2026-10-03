@@ -75,15 +75,200 @@ window.sortAndTrimRegionDefinitions = function () {
     if (window.dbManager) window.dbManager.saveRegionDefinitions?.();
 };
 
+let _regionSort = 'default';
+let _selectedRegionId = null;
+let _regionMenuEl = null;
+let _regionMenuAnchor = null;
+
+function _regionNameLines(name) {
+    const comma = String(name).indexOf(',');
+    if (comma < 0) return String(name);
+    const rest = name.slice(comma + 1).trim();
+    if (!rest) return String(name);
+    return name.slice(0, comma + 1) + '\n' + rest;
+}
+
+function _regionHexIds(name) {
+    const ids = [];
+    hexStates.forEach((state, hexId) => {
+        if (state.cluster === name) ids.push(hexId);
+    });
+    return ids;
+}
+
+function _orderedRegionDefs(defs, hexCounts) {
+    if (_regionSort === 'default') return defs;
+    const list = defs.slice();
+    const byName = (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+    const hexes = name => hexCounts.get(name) || 0;
+    if (_regionSort === 'alpha-asc') list.sort((a, b) => byName(a, b) || a.id - b.id);
+    else if (_regionSort === 'alpha-desc') list.sort((a, b) => byName(b, a) || a.id - b.id);
+    else if (_regionSort === 'hex-desc') list.sort((a, b) => hexes(b.name) - hexes(a.name) || a.id - b.id);
+    else if (_regionSort === 'hex-asc') list.sort((a, b) => hexes(a.name) - hexes(b.name) || a.id - b.id);
+    return list;
+}
+
+function _markRegionRows() {
+    document.querySelectorAll('#region-window-list .border-row').forEach(row => {
+        row.classList.toggle('is-selected', row.dataset.regionId === String(_selectedRegionId));
+    });
+}
+
+function _closeRegionMenu() {
+    if (_regionMenuAnchor) _regionMenuAnchor.setAttribute('aria-expanded', 'false');
+    _regionMenuAnchor = null;
+    if (_regionMenuEl) _regionMenuEl.style.display = 'none';
+}
+
+function _renameRegion(def, newName) {
+    const oldName = def.name;
+    if (!newName || newName === oldName) return;
+    hexStates.forEach(state => {
+        if (state.cluster === oldName) state.cluster = newName;
+    });
+    if (typeof window.invalidateRegionFillCache === 'function') window.invalidateRegionFillCache();
+    if (window.regionPaths) {
+        window.regionPaths.forEach((val, key) => {
+            if (key.endsWith(':' + oldName)) window.regionPaths.delete(key);
+        });
+    }
+    def.name = newName;
+    if (window.dbManager) { window.dbManager.saveRegionDefinitions?.(); window.dbManager.saveRegionPaths?.(); }
+    requestAnimationFrame(draw);
+    window.renderRegionWindow();
+}
+
+function _clearRegion(def) {
+    const count = _regionHexIds(def.name).length;
+    if (count === 0) { showToast(`"${def.name}" has no hexes to clear.`, 2000); return; }
+    if (!confirm(`Clear all ${count} hex assignment(s) for "${def.name}"?`)) return;
+    const touched = _regionHexIds(def.name);
+    saveHistoryState(`Clear ${def.name}`, { hexIds: touched, regions: true });
+    hexStates.forEach(state => {
+        if (state.cluster === def.name) state.cluster = '----';
+    });
+    if (typeof window.invalidateRegionFillCache === 'function') window.invalidateRegionFillCache();
+    if (window.regionPaths) {
+        window.regionPaths.forEach((val, key) => {
+            if (key.endsWith(':' + def.name)) window.regionPaths.delete(key);
+        });
+    }
+    if (window.dbManager) window.dbManager.saveRegionPaths?.();
+    requestAnimationFrame(draw);
+    window.renderRegionWindow();
+    showToast(`Cleared all hexes for "${def.name}".`, 2000);
+}
+
+function _deleteRegion(def) {
+    const count = _regionHexIds(def.name).length;
+    const hexMsg = count > 0 ? `\nThis will also clear its ${count} hex assignment(s).` : '';
+    if (!confirm(`Delete region "${def.name}"?${hexMsg}\n\nThis can be undone with Ctrl+Z.`)) return;
+    const touched = _regionHexIds(def.name);
+    saveHistoryState(`Delete ${def.name}`, { hexIds: touched, regions: true });
+    hexStates.forEach(state => {
+        if (state.cluster === def.name) state.cluster = '----';
+    });
+    if (typeof window.invalidateRegionFillCache === 'function') window.invalidateRegionFillCache();
+    if (window.regionPaths) {
+        window.regionPaths.forEach((val, key) => {
+            if (key.endsWith(':' + def.name)) window.regionPaths.delete(key);
+        });
+    }
+    window.regionDefinitions = (window.regionDefinitions || []).filter(d => d.id !== def.id);
+    if (String(_selectedRegionId) === String(def.id)) _selectedRegionId = null;
+    if (window.dbManager) {
+        window.dbManager.saveRegionDefinitions?.();
+        window.dbManager.saveRegionPaths?.();
+    }
+    requestAnimationFrame(draw);
+    window.renderRegionWindow();
+    showToast(`Deleted region "${def.name}".`, 2000);
+}
+
+function _openRegionMenu(def, anchor, hexCount) {
+    if (_regionMenuEl && _regionMenuEl.style.display !== 'none' && _regionMenuEl.dataset.regionId === String(def.id)) {
+        _closeRegionMenu();
+        return;
+    }
+    if (!_regionMenuEl) {
+        const el = document.createElement('div');
+        el.id = 'region-more-menu';
+        el.className = 'app-menu';
+        el.setAttribute('role', 'menu');
+        el.style.display = 'none';
+        document.body.appendChild(el);
+        _regionMenuEl = el;
+    }
+    const el = _regionMenuEl;
+    el.dataset.regionId = String(def.id);
+    el.replaceChildren();
+    const addItem = (label, opts = {}) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.setAttribute('role', 'menuitem');
+        btn.textContent = label;
+        if (opts.danger) btn.className = 'danger';
+        btn.disabled = !!opts.disabled;
+        if (!opts.disabled) btn.addEventListener('click', () => { _closeRegionMenu(); opts.run(); });
+        el.appendChild(btn);
+    };
+    addItem('Rename', { run: () => {
+        if (typeof window.openRecordNameModal !== 'function') return;
+        window.openRecordNameModal({
+            title: 'Rename region',
+            value: def.name,
+            okLabel: 'Rename',
+            onOk: (name) => _renameRegion(def, name)
+        });
+    } });
+    addItem('Clear hexes', { disabled: hexCount === 0, run: () => _clearRegion(def) });
+    const sep = document.createElement('div');
+    sep.className = 'app-menu-sep';
+    el.appendChild(sep);
+    addItem('Delete region', { danger: true, run: () => _deleteRegion(def) });
+    if (_regionMenuAnchor) _regionMenuAnchor.setAttribute('aria-expanded', 'false');
+    _regionMenuAnchor = anchor;
+    anchor.setAttribute('aria-expanded', 'true');
+    el.style.display = 'block';
+    const r = anchor.getBoundingClientRect();
+    const w = el.offsetWidth || 180;
+    let left = r.right - w;
+    let top = r.bottom + 4;
+    if (left < 8) left = 8;
+    if (top + el.offsetHeight > window.innerHeight - 8) top = Math.max(8, r.top - el.offsetHeight - 4);
+    el.style.left = left + 'px';
+    el.style.top = top + 'px';
+}
+
+window.addRegionSlot = function (name) {
+    if (!window.regionDefinitions) window.regionDefinitions = getDefaultRegionDefinitions();
+    saveHistoryState('Add region', { regions: true });
+    const nextId = window.regionDefinitions.length
+        ? Math.max(...window.regionDefinitions.map(d => d.id)) + 1 : 1;
+    const def = {
+        id: nextId,
+        name: (name && String(name).trim()) || `Region ${nextId}`,
+        color: REGION_COLOR_CYCLE[(nextId - 1) % REGION_COLOR_CYCLE.length],
+        visible: true
+    };
+    window.regionDefinitions.push(def);
+    if (window.dbManager) window.dbManager.saveRegionDefinitions?.();
+    _selectedRegionId = nextId;
+    window.renderRegionWindow();
+    const row = document.querySelector(`#region-window-list .border-row[data-region-id="${nextId}"]`);
+    if (row) row.scrollIntoView({ block: 'end' });
+    showToast(`Added "${def.name}".`, 2200);
+    return nextId;
+};
+
 // ── Render the Region Manager window list ─────────────────────────────────────
 window.renderRegionWindow = function () {
     const list = document.getElementById('region-window-list');
     if (!list) return;
     list.innerHTML = '';
+    _closeRegionMenu();
 
     if (!window.regionDefinitions) window.regionDefinitions = getDefaultRegionDefinitions();
-
-    window.ensureFreeRegionSlot();
 
     // Count hexes per region by scanning state.cluster
     const hexCounts = new Map();
@@ -93,122 +278,68 @@ window.renderRegionWindow = function () {
         }
     });
 
-    window.regionDefinitions.forEach(def => {
+    _orderedRegionDefs(window.regionDefinitions, hexCounts).forEach(def => {
         const hexCount = hexCounts.get(def.name) || 0;
         const hexClass = hexCount > 0 ? 'used' : 'free';
         const hexLabel = hexCount > 0 ? String(hexCount) : '—';
+        const safeName = def.name.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        const selected = String(_selectedRegionId) === String(def.id);
 
         const row = document.createElement('div');
-        row.className = 'border-row';
-        row.style.opacity = def.visible ? '1' : '0.45';
+        row.className = 'border-row route-row' + (def.visible ? '' : ' is-hidden') + (selected ? ' is-selected' : '');
         row.dataset.regionId = def.id;
         row.innerHTML = `
-            <span class="border-hex-count ${hexClass}" title="${hexCount} hex(es)">${hexLabel}</span>
-            <input type="text" class="border-name-input" value="${def.name.replace(/"/g, '&quot;')}" title="Region name" />
-            <input type="color" class="border-color-swatch" value="${def.color}" title="Region color" />
-            <i class="fas fa-eye${def.visible ? '' : '-slash'} region-eye-btn"
-               style="color:${def.visible ? '#45a29e' : '#666'};cursor:pointer;font-size:0.8rem;"
-               title="${def.visible ? 'Disable region' : 'Enable region'}"></i>
-            <button class="border-clear-btn" title="Remove all hex assignments for this region">C</button>
-            <i class="fas fa-times region-delete-btn"
-               style="color:#ff4500;cursor:pointer;font-size:0.8rem;"
-               title="Delete region '${def.name.replace(/'/g, "&#39;")}'"></i>
+            <button type="button" class="route-eye" aria-label="${def.visible ? 'Hide' : 'Show'} ${safeName}" title="${def.visible ? 'Hide region' : 'Show region'}">
+                <i class="fas fa-eye${def.visible ? '' : '-slash'} route-eye-btn region-eye-btn${def.visible ? ' is-on' : ''}"></i>
+            </button>
+            <input type="color" class="route-color-swatch" value="${def.color}" title="Region color" aria-label="Region color">
+            <div class="route-name"></div>
+            <button type="button" class="route-seg-count border-hex-count ${hexClass}"${hexCount > 0 ? '' : ' disabled'} title="${hexCount > 0 ? hexCount + ' hex(es) — click to frame them on the map' : 'No hexes'}">${hexLabel}</button>
+            <button type="button" class="app-btn icon small region-more-btn" aria-label="More actions for ${safeName}" aria-haspopup="menu" aria-expanded="false" title="More"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></button>
         `;
+        row.querySelector('.route-name').textContent = _regionNameLines(def.name);
 
-        const nameIn   = row.querySelector('.border-name-input');
-        const colorIn  = row.querySelector('.border-color-swatch');
-        const eyeBtn   = row.querySelector('.region-eye-btn');
-        const delBtn   = row.querySelector('.region-delete-btn');
-        const clearBtn = row.querySelector('.border-clear-btn');
-
-        nameIn.addEventListener('change', () => {
-            const oldName = def.name;
-            const newName = nameIn.value.trim() || def.name;
-            nameIn.value  = newName;
-            if (oldName === newName) return;
-            // Rename cluster values on all matching hexes
-            hexStates.forEach(state => {
-                if (state.cluster === oldName) state.cluster = newName;
-            });
-            if (typeof window.invalidateRegionFillCache === 'function') window.invalidateRegionFillCache();
-            // Invalidate stored region paths for the old name
-            if (window.regionPaths) {
-                window.regionPaths.forEach((val, key) => {
-                    if (key.endsWith(':' + oldName)) window.regionPaths.delete(key);
-                });
-            }
-            def.name = newName;
-            if (window.dbManager) { window.dbManager.saveRegionDefinitions?.(); window.dbManager.saveRegionPaths?.(); }
-            requestAnimationFrame(draw);
+        const colorIn = row.querySelector('input[type="color"]');
+        const eyeBtn = row.querySelector('.region-eye-btn');
+        const eyeWrap = row.querySelector('.route-eye');
+        row.addEventListener('click', (e) => {
+            if (e.target.closest('.route-eye, .border-hex-count, .region-more-btn, .route-color-swatch')) return;
+            _selectedRegionId = def.id;
+            _markRegionRows();
         });
-
         colorIn.addEventListener('input', () => {
             def.color = colorIn.value;
             if (window.dbManager) window.dbManager.saveRegionDefinitions?.();
             requestAnimationFrame(draw);
         });
-
-        eyeBtn.addEventListener('click', () => {
+        eyeWrap.addEventListener('click', () => {
             def.visible = !def.visible;
-            const vis = def.visible;
-            eyeBtn.className = `fas fa-eye${vis ? '' : '-slash'} region-eye-btn`;
-            eyeBtn.style.color = vis ? '#45a29e' : '#666';
-            eyeBtn.title = vis ? 'Disable region' : 'Enable region';
-            row.style.opacity = vis ? '1' : '0.45';
+            eyeBtn.classList.toggle('fa-eye', def.visible);
+            eyeBtn.classList.toggle('fa-eye-slash', !def.visible);
+            eyeBtn.classList.toggle('is-on', def.visible);
+            eyeWrap.title = def.visible ? 'Hide region' : 'Show region';
+            row.classList.toggle('is-hidden', !def.visible);
             if (window.dbManager) window.dbManager.saveRegionDefinitions?.();
             const allCb = document.getElementById('region-vis-all-check');
             if (allCb) {
                 const defs2 = window.regionDefinitions || [];
                 const vis2 = defs2.filter(d => d.visible).length;
                 allCb.indeterminate = vis2 > 0 && vis2 < defs2.length;
-                allCb.checked       = vis2 === defs2.length;
+                allCb.checked = vis2 === defs2.length;
             }
             requestAnimationFrame(draw);
         });
-
-        delBtn.addEventListener('click', () => {
-            const hexMsg = hexCount > 0
-                ? `\nThis will also clear its ${hexCount} hex assignment(s).` : '';
-            if (!confirm(`Delete region "${def.name}"?${hexMsg}\n\nThis can be undone with Ctrl+Z.`)) return;
-            saveHistoryState(`Delete ${def.name}`);
-            hexStates.forEach(state => {
-                if (state.cluster === def.name) state.cluster = '----';
+        const pill = row.querySelector('.border-hex-count');
+        if (pill && hexCount > 0) {
+            pill.addEventListener('click', () => {
+                const ids = _regionHexIds(def.name);
+                if (typeof fitHexesInView === 'function') fitHexesInView(ids);
             });
-            if (typeof window.invalidateRegionFillCache === 'function') window.invalidateRegionFillCache();
-            if (window.regionPaths) {
-                window.regionPaths.forEach((val, key) => {
-                    if (key.endsWith(':' + def.name)) window.regionPaths.delete(key);
-                });
-            }
-            window.regionDefinitions = (window.regionDefinitions || []).filter(d => d.id !== def.id);
-            if (window.dbManager) {
-                window.dbManager.saveRegionDefinitions?.();
-                window.dbManager.saveRegionPaths?.();
-            }
-            requestAnimationFrame(draw);
-            window.renderRegionWindow();
-            showToast(`Deleted region "${def.name}".`, 2000);
+        }
+        row.querySelector('.region-more-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            _openRegionMenu(def, e.currentTarget, hexCount);
         });
-
-        clearBtn.addEventListener('click', () => {
-            const count = hexCounts.get(def.name) || 0;
-            if (count === 0) { showToast(`Region #${def.id} has no hexes to clear.`, 2000); return; }
-            if (!confirm(`Clear all ${count} hex assignment(s) for "${def.name}"?`)) return;
-            hexStates.forEach(state => {
-                if (state.cluster === def.name) state.cluster = '----';
-            });
-            if (typeof window.invalidateRegionFillCache === 'function') window.invalidateRegionFillCache();
-            if (window.regionPaths) {
-                window.regionPaths.forEach((val, key) => {
-                    if (key.endsWith(':' + def.name)) window.regionPaths.delete(key);
-                });
-            }
-            if (window.dbManager) window.dbManager.saveRegionPaths?.();
-            requestAnimationFrame(draw);
-            window.renderRegionWindow();
-            showToast(`Cleared all hexes for "${def.name}".`, 2000);
-        });
-
         list.appendChild(row);
     });
 
@@ -260,9 +391,10 @@ window.refreshRegionWindowCounts = function () {
         const pill = row.querySelector('.border-hex-count');
         if (!pill) return;
         const count = hexCounts.get(def.name) || 0;
-        pill.className   = `border-hex-count ${count > 0 ? 'used' : 'free'}`;
+        pill.className   = `route-seg-count border-hex-count ${count > 0 ? 'used' : 'free'}`;
+        pill.disabled    = count === 0;
         pill.textContent = count > 0 ? String(count) : '—';
-        pill.title       = `${count} hex(es)`;
+        pill.title       = count > 0 ? `${count} hex(es) — click to frame them on the map` : 'No hexes';
     });
 };
 
@@ -286,7 +418,7 @@ window.openAssignRegionModal = function () {
                        + `<span class="border-assign-name">Clear Region</span>`;
     clearBtn.addEventListener('click', () => {
         const hexList = currentActionHexes();
-        saveHistoryState('Clear Region');
+        saveHistoryState('Clear Region', { hexIds: hexList });
         hexList.forEach(hexId => {
             const s = hexStates.get(hexId);
             if (!s) return;
@@ -319,7 +451,7 @@ window.confirmAssignRegion = function (regionId, hexList = currentActionHexes())
     const def = (window.regionDefinitions || []).find(d => d.id === regionId);
     if (!def) return;
     if (!hexList.length) { showToast('No hexes selected.', 2000); return; }
-    saveHistoryState('Assign Region');
+    saveHistoryState('Assign Region', { hexIds: hexList, regions: true });
 
     hexList.forEach(hexId => {
         let s = hexStates.get(hexId);
@@ -366,6 +498,30 @@ window.populateRegionDropdown = function (currentCluster) {
 
 // ── Wire up event listeners ───────────────────────────────────────────────────
 function setupRegionWindow() {
+    const addBtn = document.getElementById('btn-region-add');
+    if (addBtn) addBtn.addEventListener('click', () => {
+        if (typeof window.openRecordNameModal !== 'function') return;
+        window.openRecordNameModal({
+            title: 'New region',
+            value: '',
+            placeholder: 'Region name',
+            okLabel: 'Add region',
+            onOk: (name) => window.addRegionSlot(name)
+        });
+    });
+    const sortSel = document.getElementById('region-sort');
+    if (sortSel) sortSel.addEventListener('change', () => {
+        _regionSort = sortSel.value;
+        window.renderRegionWindow();
+    });
+    document.addEventListener('mousedown', (e) => {
+        if (_regionMenuEl && _regionMenuEl.style.display !== 'none'
+            && !_regionMenuEl.contains(e.target)
+            && !(e.target.closest && e.target.closest('.region-more-btn'))) {
+            _closeRegionMenu();
+        }
+    });
+
     const closeBtn = document.getElementById('btn-close-region-window');
     if (closeBtn) closeBtn.addEventListener('click', window.closeRegionWindow);
 
@@ -405,12 +561,14 @@ function setupRegionWindow() {
                 const d = (window.regionDefinitions || []).find(x => x.id === regionId);
                 if (!d) return;
                 const eye = row.querySelector('.region-eye-btn');
+                const wrap = row.querySelector('.route-eye');
                 if (eye) {
-                    eye.className = `fas fa-eye${show ? '' : '-slash'} region-eye-btn`;
-                    eye.style.color = show ? '#45a29e' : '#666';
-                    eye.title = show ? 'Disable region' : 'Enable region';
+                    eye.classList.toggle('fa-eye', show);
+                    eye.classList.toggle('fa-eye-slash', !show);
+                    eye.classList.toggle('is-on', show);
                 }
-                row.style.opacity = show ? '1' : '0.45';
+                if (wrap) wrap.title = show ? 'Hide region' : 'Show region';
+                row.classList.toggle('is-hidden', !show);
             });
             visAllCb.indeterminate = false;
             requestAnimationFrame(draw);

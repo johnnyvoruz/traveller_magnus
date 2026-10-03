@@ -37,6 +37,11 @@ function setupCanvasEvents() {
             return;
         }
 
+        if (window.RouteEdit && window.RouteEdit.isActive()) {
+            window.RouteEdit.removeHex(hexId);
+            return;
+        }
+
         if (hexId) {
             const parts = hexId.split('-');
             contextHexId = hexId;
@@ -210,40 +215,18 @@ function setupCanvasEvents() {
                 scheduleDraw();
             }
         } else {
-            // Check if any held key is a route shortcut
-            const defs = window.routeDefinitions || [];
-            let activeDef = null;
-            for (const key of keysDown) {
-                const match = defs.find(d => d.shortcut && d.shortcut === key);
-                if (match) { activeDef = match; break; }
-            }
-
-            if (activeDef && hexId) {
-                // Route shortcut + Left-Click: Start Manual Route Creation
-                saveHistoryState('Manual Route');
-                isAltDragging = true;
-                altDragStartId = hexId;
-                altDragRouteId = activeDef.id;
-                const typeMap = { 1: 'Xboat', 2: 'Trade', 3: 'Secondary' };
-                altDragType = typeMap[activeDef.id] || 'Filter';
-                console.log(`Routing Mode Active: Route #${activeDef.id} (${activeDef.name})`);
-                mapCanvas.classList.add('dragging');
-                mapCanvas.classList.remove('hover-target');
-                scheduleDraw();
-            } else {
-                // A stationary plain click inspects; dragging continues to pan.
-                // — or, when a Route Manager pick is armed, a candidate pick.
-                pickDownArmed = !!(window.MapPick && window.MapPick.isArmed());
-                if (pickDownArmed) { lastInspection = null; suppressDoubleUntil = performance.now() + 800; }
-                if (!pickDownArmed && !e.altKey && !e.metaKey) inspectDown = { hexId, x: e.clientX, y: e.clientY };
-                pickDownX = e.clientX;
-                pickDownY = e.clientY;
-                isDragging = true;
-                lastMouseX = e.clientX;
-                lastMouseY = e.clientY;
-                mapCanvas.classList.add('dragging');
-                mapCanvas.classList.remove('hover-target');
-            }
+            // A stationary plain click inspects; dragging continues to pan.
+            // — or, when a Route Manager pick is armed, a candidate pick.
+            pickDownArmed = !!(window.MapPick && window.MapPick.isArmed());
+            if (pickDownArmed) { lastInspection = null; suppressDoubleUntil = performance.now() + 800; }
+            if (!pickDownArmed && !e.altKey && !e.metaKey) inspectDown = { hexId, x: e.clientX, y: e.clientY };
+            pickDownX = e.clientX;
+            pickDownY = e.clientY;
+            isDragging = true;
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+            mapCanvas.classList.add('dragging');
+            mapCanvas.classList.remove('hover-target');
         }
     });
 
@@ -305,8 +288,14 @@ function setupCanvasEvents() {
             !e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey &&
             Math.hypot(e.clientX - inspectDown.x, e.clientY - inspectDown.y) <= PICK_SLOP_PX) {
             const id = inspectDown.hexId;
-            if (hexStates.get(id)?.type === 'SYSTEM_PRESENT' && SystemInspector.openForHex(id)) {
-                lastInspection = { id, time: performance.now() };
+            if (window.RouteEdit && window.RouteEdit.isActive()) {
+                window.RouteEdit.addHex(id);
+                lastInspection = null;
+            } else if (hexStates.get(id)?.type === 'SYSTEM_PRESENT') {
+                const tracked = window.CampaignAtlas?.trackedHexId?.();
+                const workspace = tracked && tracked !== id ? 'system' : undefined;
+                if (SystemInspector.openForHex(id, workspace)) lastInspection = { id, time: performance.now() };
+                else lastInspection = null;
             } else lastInspection = null;
         }
         inspectDown = null;
@@ -373,7 +362,6 @@ function setupCanvasEvents() {
         if (performance.now() < suppressDoubleUntil) return;
         if (e.ctrlKey || e.shiftKey || e.altKey || e.metaKey || inspectDragged ||
             window.mapSelectionMode || (window.MapPick && window.MapPick.isArmed())) return;
-        if ((window.routeDefinitions || []).some(d => d.shortcut && keysDown.has(d.shortcut))) return;
         const world = getMouseWorldCoords(e);
         const coords = pixelToHex(world.x, world.y, baseHexSize);
         const id = getHexId(coords.q, coords.r);
@@ -396,6 +384,8 @@ function setupCanvasEvents() {
 
         const mouseWorldX = cameraX + e.clientX / zoom;
         const mouseWorldY = cameraY + e.clientY / zoom;
+        // Subsector titles keep clear of whatever the user zoomed toward.
+        window.mapZoomFocus = { x: mouseWorldX, y: mouseWorldY };
 
         if (direction > 0) zoom *= zoomFactor;
         else zoom /= zoomFactor;
@@ -403,7 +393,9 @@ function setupCanvasEvents() {
         zoom = Math.max(0.03, Math.min(zoom, 10));
         cameraX = mouseWorldX - e.clientX / zoom;
         cameraY = mouseWorldY - e.clientY / zoom;
-        _invalidateViewCache();
+        // Scale the picture already on screen before the sharp frame is ready,
+        // and keep that bitmap. Invalidating it here is what opened a black frame.
+        if (typeof _presentScaledCache === 'function') _presentScaledCache();
         scheduleDraw();
     }, { passive: false });
 }

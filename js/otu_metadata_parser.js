@@ -2,7 +2,9 @@
  * PROJECT AS ABOVE, SO BELOW
  * Module: OTU Metadata Parser
  * Description: Parses travellermap sector metadata XML and registers
- *   <Route> elements as Xboat routes in window.sectorRoutes.
+ *   <Route> elements. Links with no allegiance stay on the X-boat route.
+ *   Links with an Allegiance use that code's stylesheet color and their
+ *   own route slot.
  *
  * Sean Protocol: Zero RPG logic here. Pure XML → hexId mapping.
  * Depends on: routes.js (addRoute), core.js (sectorSlotToNumber)
@@ -24,6 +26,101 @@
 
     function hexCodeToHexId(slotNum, hexCode) {
         return `${slotNum}-${hexCodeToSubChar(hexCode)}-${hexCode}`;
+    }
+
+    // Route colors from Traveller Map's default OTU stylesheet
+    // (res/styles/otu.css). A sector stylesheet overrides these.
+    const OTU_DEFAULT_ROUTE_COLORS = {
+        'Im': '#048104',
+        'SoCf': '#048104',
+        'ZhCo': 'lightblue',
+        'As': 'yellow',
+        'AsXX': 'yellow',
+        'HvFd': 'gray',
+        'Kk': 'gray',
+        'KkTw': 'gray',
+        'JuPr': 'lightgreen',
+        'JAOz': 'lightblue',
+        'JAsi': 'lightblue',
+        'JCoK': 'lightblue',
+        'JHhk': 'lightblue',
+        'JLum': 'lightblue',
+        'JMen': 'lightblue',
+        'JPSt': 'lightblue',
+        'JRar': 'lightblue',
+        'JUkh': 'lightblue',
+        'JVug': 'lightblue',
+        'JuHl': 'lightblue',
+        'JuRu': 'lightblue',
+        'Core Route': 'purple'
+    };
+
+    // Read `route.CODE { color: ... }` rules, including comma-separated
+    // selectors and escaped spaces (route.Core\ Route).
+    function routeColorsFromStylesheet(text) {
+        const map = new Map();
+        if (!text) return map;
+        const rules = text.split('}');
+        for (let i = 0; i < rules.length; i++) {
+            const parts = rules[i].split('{');
+            if (parts.length < 2) continue;
+            const colorMatch = parts[1].match(/color:\s*([^;}\s]+)/i);
+            if (!colorMatch) continue;
+            const color = colorMatch[1];
+            const selRe = /route\.((?:\\[\s\S]|[^\s,{])+)/g;
+            let match;
+            while ((match = selRe.exec(parts[0]))) {
+                const code = match[1].replace(/\\ /g, ' ').replace(/\\/g, '');
+                map.set(code, color);
+            }
+        }
+        return map;
+    }
+
+    function nextRouteSlotId() {
+        const ids = [
+            ...(window.routeDefinitions || []).map(d => d.id),
+            ...(window.sectorRoutes || []).map(r => r.routeId)
+        ].map(Number).filter(n => Number.isFinite(n));
+        return ids.length > 0 ? Math.max(...ids) + 1 : 1;
+    }
+
+    function nextRouteColor() {
+        const used = new Set((window.routeDefinitions || []).map(d => (d.color || '').toLowerCase()));
+        const palette = (typeof getRouteColorPalette === 'function')
+            ? getRouteColorPalette()
+            : ['#016a01', '#ff0000', '#ffff00', '#ff8800', '#00ddff'];
+        return palette.find(c => !used.has(c.toLowerCase()))
+            || ('#' + Math.floor(Math.random() * 0x1000000).toString(16).padStart(6, '0'));
+    }
+
+    // One Route Manager slot per allegiance code, reused across sectors.
+    function claimOtuRouteSlot(code, color, label, style) {
+        const groupId = 'otu-route:' + code;
+        if (!window.routeDefinitions) {
+            window.routeDefinitions = (typeof getDefaultRouteDefinitions === 'function')
+                ? getDefaultRouteDefinitions()
+                : [];
+        }
+        let def = window.routeDefinitions.find(d => d.groupId === groupId);
+        if (!def) {
+            def = {
+                id: nextRouteSlotId(),
+                name: label || code,
+                color: color || nextRouteColor(),
+                shortcut: null,
+                visible: true,
+                automationRef: null,
+                groupId,
+                style: style || ''
+            };
+            window.routeDefinitions.push(def);
+            return def;
+        }
+        if (label) def.name = label;
+        if (color) def.color = color;
+        if (style) def.style = style;
+        return def;
     }
 
     /**
@@ -77,6 +174,15 @@
         if (importRoutes) {
             const routeEls = doc.querySelectorAll('Route');
             let added = 0, skipped = 0;
+            const sheetEl = doc.querySelector('Stylesheet');
+            const sheetColors = routeColorsFromStylesheet(sheetEl ? sheetEl.textContent : '');
+            const allegianceNames = (options && options.allegianceNames) || {};
+
+            doc.querySelectorAll('Allegiance').forEach(el => {
+                const code = (el.getAttribute('Code') || '').trim();
+                const name = (el.textContent || '').trim();
+                if (code && name) allegianceNames[code] = name;
+            });
 
             routeEls.forEach(el => {
                 const startCode = el.getAttribute('Start');
@@ -116,10 +222,21 @@
                 }
 
                 const endId = hexCodeToHexId(endSlotNum, endCode);
-                if (typeof addRoute === 'function') {
+                if (typeof addRoute !== 'function') return;
+
+                const alleg = (el.getAttribute('Allegiance') || '').trim();
+                if (!alleg) {
                     addRoute(startId, endId, 'Xboat');
                     added++;
+                    return;
                 }
+
+                const ownColor = (el.getAttribute('Color') || '').trim();
+                const color = ownColor || sheetColors.get(alleg) || OTU_DEFAULT_ROUTE_COLORS[alleg] || '';
+                const style = (el.getAttribute('Style') || '').trim();
+                const def = claimOtuRouteSlot(alleg, color, allegianceNames[alleg] || alleg, style);
+                addRoute(startId, endId, 'Xboat', null, { routeId: def.id, groupId: def.groupId });
+                added++;
             });
 
             if (added > 0 || skipped > 0) {

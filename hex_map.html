@@ -73,12 +73,16 @@
     <!-- Planet hemisphere renderer -->
     <script src="js/planet_renderer.js" defer></script>
     <script src="js/approach_viewer.js" defer></script>
+    <script src="js/planet_profile.js" defer></script>
+    <script src="js/planet_gl.js" defer></script>
     <!-- Modular JavaScript Input Handling -->
     <script src="js/input_init.js" defer></script>
     <script src="js/system_viewer.js" defer></script>
     <script src="js/system_inspector.js" defer></script>
+    <script src="js/trade_match.js" defer></script>
     <script src="js/campaign_assets.js" defer></script>
     <script src="js/campaign_atlas.js" defer></script>
+    <script src="js/campaign_sample.js" defer></script>
     <script src="js/mgt2e_editor_adapter.js" defer></script>
     <script src="js/ct_editor_adapter.js" defer></script>
     <script src="js/t5_editor_adapter.js" defer></script>
@@ -112,111 +116,182 @@
     <script src="js/foreven_mixon_data.js" onerror="console.info('foreven_mixon_data.js not found — Foreven (Mixon) option will be unavailable.')"></script>
 
     <style>
-        /* Route Manager Window */
-        #route-window {
-            /* Wide enough for a route row at its natural width (480px measured:
-               eleven controls plus ten 5px gaps) PLUS room for the vertical
-               scrollbar the Auto panel makes inevitable. At the old 430px the
-               row was squeezed below its own min-content width, which shrank
-               the colour swatch from 50px to a 14px sliver, clipped the delete
-               cross, and put a horizontal scrollbar under the whole palette
-               the moment the list grew tall enough to scroll. The ~20px over
-               the strict minimum is deliberate: scrollbar width and font
-               metrics vary by machine, and a width that only just fits here
-               would start scrolling again on someone else's. */
-            width: 520px;
-            padding: 25px;
+        /* Shared manager shell. Route, border, region, and sector windows use it;
+           each one only supplies its own toolbar content and list. */
+        .manager-window {
+            padding: 12.5px;
             color: #c5c6c7;
             font-family: 'Inter', sans-serif;
             font-size: 14px;
             gap: 10px;
-            border: 2px solid #66fcf1;
-            /* Viewport height cap: header and footer stay pinned; body scrolls */
+            border: 1px solid #334550;
+            border-radius: 12px;
             max-height: 85vh;
             display: flex;
             flex-direction: column;
+            box-sizing: border-box;
         }
-        #route-window .modal-drag-handle { flex-shrink: 0; }
-        #route-window .palette-content   { flex: 1; min-height: 0; overflow-y: auto; }
-        #route-window .route-window-footer { flex-shrink: 0; }
-        .route-window-footer {
+        .manager-window .modal-drag-handle { flex-shrink: 0; margin: -12.5px -12.5px 0 -12.5px; }
+        .manager-window .palette-content { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 0; padding: 0; }
+        .manager-footer {
+            flex-shrink: 0;
             display: flex;
             justify-content: flex-end;
-            padding-top: 8px;
-            border-top: 1px solid rgba(69, 162, 158, 0.4);
-            margin-top: 2px;
+            margin: 0 -12.5px -12.5px;
+            padding: 12px 12.5px;
+            border-top: 1px solid #334550;
         }
+        .manager-list { flex: 1; min-height: 0; overflow-y: auto; padding: 6px 14px 4px 0; }
+        .manager-scroll { flex: 1; min-height: 0; overflow: auto; }
+        .route-window-toolbar {
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding: 2px 4px 10px;
+            border-bottom: 1px solid #334550;
+        }
+        .route-sort { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+        .route-sort span { color: #8aa0ab; font-size: 12px; font-weight: 600; }
+        .route-sort select {
+            width: 100%;
+            height: 32px;
+            box-sizing: border-box;
+            border: 1px solid #415864;
+            border-radius: 8px;
+            background: #1c383e;
+            color: #d2e0e5;
+            font: 600 12px Inter, sans-serif;
+            padding: 0 8px;
+        }
+        .route-window-toolbar-actions { display: flex; align-items: center; gap: 8px; }
+        .route-window-toolbar-actions > .route-show-all,
+        .route-window-toolbar-actions > .app-btn {
+            flex: 1 1 0;
+            width: auto;
+            min-width: 0;
+            padding-left: 8px;
+            padding-right: 8px;
+        }
+        .route-show-all {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            height: 32px;
+            box-sizing: border-box;
+            color: #c5d0d6;
+            font-size: 13px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .route-show-all input, .route-select input {
+            accent-color: #66fcf1;
+            width: 16px;
+            height: 16px;
+            margin: 0;
+            cursor: pointer;
+        }
+        #route-orphan-notice { flex-shrink: 0; }
+        #route-systems-panel, #route-auto-panel { flex-shrink: 0; max-height: 42%; overflow: auto; }
         .route-row {
             display: flex;
             align-items: center;
-            gap: 5px;
-            margin-bottom: 2px;
-            padding: 3px 0;
-            border-bottom: 1px solid rgba(255,255,255,0.08);
+            gap: 8px;
+            margin: 0;
+            padding: 5px 4px;
+            border-radius: 8px;
         }
-        .route-num {
-            color: #66fcf1;
-            font-size: 0.85rem;
-            font-weight: bold;
-            min-width: 22px;
+        .route-row:hover { background: #182430; }
+        .route-row.is-hidden { opacity: 0.45; }
+        .route-eye {
+            display: flex; align-items: center; justify-content: center;
+            width: 28px; height: 28px; flex: 0 0 28px; padding: 0;
+            border: 0; border-radius: 8px; background: transparent; cursor: pointer;
         }
-        .route-name-input {
-            width: 110px;
-            flex: none;
-            background: #1a1a2e;
-            border: 1px solid #45a29e;
-            color: #c5c6c7;
-            padding: 2px 5px;
-            font-size: 0.82rem;
-            border-radius: 3px;
+        .route-eye:hover { background: #243444; }
+        .route-combine-modal {
+            position: fixed; inset: 0; z-index: 100000;
+            display: flex; align-items: center; justify-content: center;
+            background: rgba(8, 12, 16, 0.72);
         }
+        .route-combine-modal[hidden] { display: none; }
+        .route-combine-card {
+            width: min(440px, calc(100vw - 32px));
+            max-height: min(640px, calc(100vh - 48px));
+            display: flex; flex-direction: column; gap: 12px;
+            padding: 18px; border: 1px solid #334550; border-radius: 12px;
+            background: #141e29; box-shadow: 0 18px 48px #000a; color: #d2e0e5;
+            font: 13px Inter, sans-serif; text-align: left;
+        }
+        .route-combine-card h3 { margin: 0; color: #e7eef2; font-size: 16px; }
+        .rcm-lead, .rcm-note { margin: 0; color: #8aa0ab; line-height: 1.45; }
+        .rcm-list { overflow: auto; display: flex; flex-direction: column; gap: 4px; min-height: 0; }
+        .rcm-row {
+            display: flex; align-items: center; gap: 10px;
+            padding: 8px 10px; border-radius: 8px; cursor: pointer;
+        }
+        .rcm-row:hover { background: #1c2a36; }
+        .rcm-row input { accent-color: #66fcf1; width: 16px; height: 16px; margin: 0; }
+        .rcm-row .rcp-swatch { width: 12px; height: 12px; flex: 0 0 12px; border-radius: 3px; border: 1px solid rgba(255,255,255,.25); }
+        .rcm-name { flex: 1; min-width: 0; color: #e7eef2; font-weight: 600; }
+        .rcm-meta { color: #8aa0ab; font-size: 12px; }
+        .rcm-dest { display: flex; flex-direction: column; gap: 6px; color: #c5d0d6; }
+        .rcm-dest select {
+            height: 32px; border: 1px solid #415864; border-radius: 8px;
+            background: #101820; color: #e7eef2; padding: 0 8px; font: inherit;
+        }
+        .rcm-actions { display: flex; justify-content: flex-end; gap: 8px; }
+        .route-name {
+            flex: 1;
+            min-width: 0;
+            white-space: pre-line;
+            overflow-wrap: break-word;
+            color: #e7eef2;
+            padding: 4px 8px;
+            font: 600 13px Inter, sans-serif;
+            cursor: pointer;
+        }
+        .route-row.is-selected { background: #1c3344; }
+        .route-row.is-editing { box-shadow: inset 3px 0 0 #ffce73; }
+        .route-name-field {
+            width: 100%;
+            box-sizing: border-box;
+            height: 36px;
+            border: 1px solid #415864;
+            border-radius: 8px;
+            background: #101820;
+            color: #e7eef2;
+            padding: 0 10px;
+            font: 600 14px Inter, sans-serif;
+        }
+        .route-name-field:focus { border-color: #66fcf1; outline: none; }
         .route-color-swatch {
-            width: 50px;
-            height: 24px;
-            padding: 1px;
-            border: 1px solid #45a29e;
-            border-radius: 3px;
+            -webkit-appearance: none;
+            appearance: none;
+            width: 28px;
+            height: 28px;
+            min-width: 28px;
+            flex: 0 0 28px;
+            padding: 0;
+            border: 1px solid rgba(255, 255, 255, 0.28);
+            border-radius: 8px;
             cursor: pointer;
             background: none;
+            overflow: hidden;
         }
-        .route-shortcut-input {
+        .route-color-swatch::-webkit-color-swatch-wrapper { padding: 0; }
+        .route-color-swatch::-webkit-color-swatch { border: 0; border-radius: 6px; }
+        .route-color-swatch::-moz-color-swatch { border: 0; }
+        .route-eye-btn {
             width: 28px;
+            flex: 0 0 28px;
             text-align: center;
-            background: #1a1a2e;
-            border: 1px solid #45a29e;
-            color: #c5c6c7;
-            padding: 2px 3px;
-            font-size: 0.82rem;
-            border-radius: 3px;
-        }
-        .route-clear-btn {
-            background: #1a1a2e;
-            border: 1px solid #8b3a3a;
-            color: #e06c6c;
-            padding: 2px 6px;
-            font-size: 0.8rem;
-            border-radius: 3px;
+            color: #7d9aa3;
             cursor: pointer;
-            min-width: 22px;
-            text-align: center;
+            font-size: 13px;
         }
-        .route-clear-btn:hover {
-            background: #3a1a1a;
-            border-color: #e06c6c;
-        }
-        .route-auto-btn {
-            background: #1a1a2e;
-            border: 1px solid #45a29e;
-            color: #66fcf1;
-            padding: 2px 6px;
-            font-size: 0.8rem;
-            border-radius: 3px;
-            cursor: pointer;
-        }
-        .route-auto-btn:hover {
-            background: #0d2a2a;
-            border-color: #66fcf1;
-        }
+        .route-eye-btn.is-on { color: #9afff2; }
         #route-orphan-notice {
             display: flex;
             align-items: center;
@@ -245,95 +320,51 @@
             background: rgba(224, 176, 64, 0.18);
             color: #fff;
         }
-        /* Save / load one route's connections. Grouped in a single cell so the
-           row gains one column rather than two. */
-        .route-file-cell {
-            display: flex;
-            align-items: center;
-            gap: 3px;
-            flex-shrink: 0;
-            font-size: 0.8rem;
-        }
-        .route-save-btn:hover, .route-load-btn:hover { color: #66fcf1 !important; }
-        /* WP5, legibility. The row carries three file-shaped icons and adding a
-           fourth control made them indistinguishable at a glance. The CSV export
-           is the one whose shape misdescribes it — it exports the WORLDS a route
-           passes through, not the route — so it becomes a word, leaving the two
-           icons that really are route files paired together in .route-file-cell. */
-        .route-csv-btn {
-            background: #1a1a2e;
-            border: 1px solid #45a29e;
-            color: #45a29e;
-            padding: 1px 5px;
-            font-size: 0.66rem;
-            letter-spacing: 0.04em;
-            border-radius: 3px;
-            cursor: pointer;
-            flex-shrink: 0;
-        }
-        .route-csv-btn:hover:not(:disabled) { background: #0d2a2a; color: #66fcf1; border-color: #66fcf1; }
-        .route-csv-btn:disabled { opacity: 0.3; cursor: default; }
-        .route-combine-btn { flex-shrink: 0; font-size: 0.8rem; cursor: pointer; }
-        .route-combine-btn:hover:not(.disabled) { color: #66fcf1 !important; }
-        .route-combine-btn.disabled { opacity: 0.3; cursor: default; }
-
-        /* Portalled to <body>, never left inside #route-window: backdrop-filter on
-           .draggable-palette makes it the containing block for position:fixed
-           children and its overflow:hidden then clips them. That trap cost most of
-           v0.17.2 item 1. */
-        #route-combine-picker {
-            position: fixed;
-            z-index: 100000;
-            min-width: 240px;
-            max-width: 340px;
-            background: #0d1117;
-            border: 1px solid #45a29e;
-            border-radius: 4px;
-            box-shadow: 0 6px 22px rgba(0,0,0,0.75);
-            font-family: 'Share Tech Mono', 'Courier New', monospace;
-            font-size: 0.78rem;
-            color: #c5c6c7;
-            overflow: hidden;
-        }
+        /* Portalled to <body>. backdrop-filter on .draggable-palette would
+           otherwise trap a position:fixed menu inside the palette and clip it. */
+        #route-combine-picker { min-width: 240px; max-width: 340px; }
         #route-combine-picker .rcp-head {
-            padding: 6px 10px;
-            border-bottom: 1px solid #2a3a3a;
-            color: #66fcf1;
-            font-size: 0.72rem;
+            padding: 6px 10px 8px;
+            color: #8aa0ab;
+            font-size: 11px;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
         }
         #route-combine-picker .rcp-item {
             display: flex;
             align-items: center;
             gap: 8px;
-            padding: 7px 10px;
+            padding: 8px 10px;
             cursor: pointer;
-            border-bottom: 1px solid #161b22;
+            border-radius: 6px;
         }
-        #route-combine-picker .rcp-item:last-child { border-bottom: none; }
-        #route-combine-picker .rcp-item:hover { background: #14212a; }
+        #route-combine-picker .rcp-item:hover { background: #263744; }
         #route-combine-picker .rcp-swatch {
-            width: 12px; height: 12px; border-radius: 2px; flex-shrink: 0;
+            width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0;
             border: 1px solid rgba(255,255,255,0.25);
         }
-        #route-combine-picker .rcp-name { color: #c5c6c7; }
-        #route-combine-picker .rcp-meta { margin-left: auto; color: #7b8a8a; font-size: 0.68rem; }
+        #route-combine-picker .rcp-name { color: #e7eef2; }
+        #route-combine-picker .rcp-meta { margin-left: auto; color: #8aa0ab; font-size: 12px; }
         .route-seg-count {
-            font-size: 0.7rem;
+            flex: 0 0 auto;
             min-width: 28px;
+            height: 22px;
+            padding: 0 6px;
+            border-radius: 999px;
+            font: 600 11px 'Share Tech Mono', monospace;
             text-align: center;
-            border-radius: 10px;
-            padding: 1px 5px;
-            font-family: 'Courier New', monospace;
+            cursor: pointer;
         }
+        .route-seg-count:disabled { cursor: default; }
         .route-seg-count.used {
             background: rgba(102, 252, 241, 0.15);
-            color: #66fcf1;
+            color: #9afff2;
             border: 1px solid rgba(102, 252, 241, 0.4);
         }
         .route-seg-count.free {
-            background: rgba(255,255,255,0.04);
-            color: #555;
-            border: 1px solid rgba(255,255,255,0.08);
+            background: transparent;
+            color: #5c6e76;
+            border: 1px solid #334550;
         }
 
         /* Settings Panel Accordion Sections */
@@ -721,53 +752,7 @@
             background-color: #66fcf1;
         }
 
-        /* ── Region Manager Window ───────────────────────────────────────── */
-        #region-window {
-            width: 390px;
-            padding: 25px;
-            color: #c5c6c7;
-            font-family: 'Inter', sans-serif;
-            font-size: 14px;
-            gap: 10px;
-            border: 2px solid #66fcf1;
-            max-height: 85vh;
-            display: flex;
-            flex-direction: column;
-        }
-        #region-window .modal-drag-handle { flex-shrink: 0; }
-        #region-window .palette-content   { flex: 1; min-height: 0; overflow-y: auto; }
-        #region-window .region-window-footer { flex-shrink: 0; }
-        .region-window-footer {
-            display: flex;
-            justify-content: flex-end;
-            padding-top: 8px;
-            border-top: 1px solid rgba(69, 162, 158, 0.4);
-            margin-top: 2px;
-        }
-
-        /* ── Border Manager Window ───────────────────────────────────────── */
-        #border-window {
-            width: 390px;
-            padding: 25px;
-            color: #c5c6c7;
-            font-family: 'Inter', sans-serif;
-            font-size: 14px;
-            gap: 10px;
-            border: 2px solid #66fcf1;
-            max-height: 85vh;
-            display: flex;
-            flex-direction: column;
-        }
-        #border-window .modal-drag-handle { flex-shrink: 0; }
-        #border-window .palette-content   { flex: 1; min-height: 0; overflow-y: auto; }
-        #border-window .border-window-footer { flex-shrink: 0; }
-        .border-window-footer {
-            display: flex;
-            justify-content: flex-end;
-            padding-top: 8px;
-            border-top: 1px solid rgba(69, 162, 158, 0.4);
-            margin-top: 2px;
-        }
+        /* Region and border rows. The window frame itself is .manager-window. */
         .border-row {
             display: flex;
             align-items: center;
@@ -776,6 +761,11 @@
             padding: 3px 0;
             border-bottom: 1px solid rgba(255,255,255,0.08);
         }
+        .border-row > .border-hex-count,
+        .border-row > .border-color-swatch,
+        .border-row > .border-clear-btn,
+        .border-row > i,
+        .border-row > button { flex-shrink: 0; align-self: center; }
         .border-num {
             color: #66fcf1;
             font-size: 0.85rem;
@@ -783,14 +773,26 @@
             min-width: 22px;
         }
         .border-name-input {
-            width: 110px;
-            flex: none;
+            flex: 1 1 auto;
+            width: auto;
+            min-width: 0;
+            box-sizing: border-box;
+            min-height: 28px;
+            height: 28px;
+            max-height: 48px;
+            resize: none;
+            overflow: hidden;
+            line-height: 1.25;
+            white-space: pre-wrap;
+            overflow-wrap: break-word;
             background: #1a1a2e;
             border: 1px solid #45a29e;
             color: #c5c6c7;
-            padding: 2px 5px;
+            padding: 4px 6px;
+            font: inherit;
             font-size: 0.82rem;
             border-radius: 3px;
+            field-sizing: content;
         }
         .border-color-swatch {
             width: 50px;
@@ -898,6 +900,107 @@
 </head>
 
 <body>
+    <!-- Boot starfield. Stays up until resize() has replaced the default canvas bitmap. -->
+    <div id="boot-sky" aria-hidden="true"></div>
+    <script>
+        (function () {
+            var sky = document.getElementById('boot-sky');
+            if (!sky) return;
+            var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            var area = Math.max(1, window.innerWidth * window.innerHeight);
+            var count = Math.max(18, Math.min(32, Math.round(area / 50000)));
+            var gap = Math.max(150, Math.round(4200 / count));
+            var seed = (Date.now() ^ 0xA5A5A5A5) >>> 0;
+            function rnd() {
+                seed = (Math.imul(1664525, seed) + 1013904223) >>> 0;
+                return seed / 4294967296;
+            }
+            var colors = ['#d5e4ff', '#f4f7ff', '#f7f9ff', '#c9d6ee', '#f3ddb0', '#b7fff4'];
+            var navFrac = Math.min(0.24, 78 / Math.max(window.innerWidth, 1));
+            var topFrac = Math.min(0.16, 78 / Math.max(window.innerHeight, 1));
+            var stars = [];
+            for (var i = 0; i < count; i++) {
+                var star = document.createElement('span');
+                var roll = rnd();
+                var bright = roll > 0.82;
+                star.className = bright ? 'boot-star bright' : 'boot-star';
+                var size = bright ? 4.2 : roll > 0.5 ? 3 : 2.2;
+                var glow = bright ? 16 : roll > 0.5 ? 11 : 8;
+                var x0 = navFrac * 100 + 1;
+                var y0 = topFrac * 100 + 1;
+                star.style.setProperty('--x', (x0 + rnd() * (98 - x0)).toFixed(2) + '%');
+                star.style.setProperty('--y', (y0 + rnd() * (96 - y0)).toFixed(2) + '%');
+                star.style.setProperty('--s', size.toFixed(1) + 'px');
+                star.style.setProperty('--o', (bright ? 0.9 : 0.62 + rnd() * 0.3).toFixed(2));
+                star.style.setProperty('--c', colors[Math.floor(rnd() * colors.length)]);
+                star.style.setProperty('--g', glow.toFixed(0) + 'px');
+                sky.appendChild(star);
+                stars.push(star);
+            }
+
+            function bitmapStretched() {
+                var canvas = document.getElementById('map-canvas');
+                if (!canvas) return true;
+                return canvas.width === 300 && canvas.height === 150
+                    && (window.innerWidth > 320 || window.innerHeight > 170);
+            }
+
+            function dropSky() {
+                if (sky.isConnected) sky.remove();
+            }
+
+            window.__bootTryReveal = function () {
+                if (document.body.classList.contains('boot-reveal')) return true;
+                if (sky.dataset.stars !== 'done' || !window.__mapBootDrawn) return false;
+                if (bitmapStretched() && typeof window.resize === 'function') window.resize();
+                if (bitmapStretched()) return false;
+                document.body.classList.add('boot-reveal');
+                if (reduce) {
+                    dropSky();
+                    return true;
+                }
+                sky.addEventListener('transitionend', function (event) {
+                    if (event.propertyName === 'opacity') dropSky();
+                });
+                setTimeout(dropSky, 1200);
+                return true;
+            };
+
+            var next = 0;
+            function step() {
+                if (next >= stars.length) {
+                    if (reduce) {
+                        sky.dataset.stars = 'done';
+                        window.__bootTryReveal();
+                    } else {
+                        setTimeout(function () {
+                            sky.dataset.stars = 'done';
+                            window.__bootTryReveal();
+                        }, 1800);
+                    }
+                    return;
+                }
+                stars[next].classList.add('on');
+                next += 1;
+                if (reduce) step();
+                else setTimeout(step, gap + Math.floor(rnd() * 36) - 12);
+            }
+
+            if (reduce) step();
+            else requestAnimationFrame(function () { setTimeout(step, 400); });
+
+            setTimeout(function () {
+                if (document.body.classList.contains('boot-reveal')) return;
+                if (typeof window.resize === 'function') window.resize();
+                window.__mapBootDrawn = true;
+                sky.dataset.stars = 'done';
+                if (!window.__bootTryReveal()) {
+                    document.body.classList.add('boot-reveal');
+                    dropSky();
+                }
+            }, 14000);
+        })();
+    </script>
     <canvas id="map-canvas"></canvas>
     <div id="map-chrome">
     <div id="omni-search" role="search" aria-label="Search map and campaign" inert>
@@ -1161,6 +1264,10 @@
             </div>
         </div>
     </div>
+    <button type="button" id="hex-select-toggle" data-map-tool="select" aria-pressed="false" aria-label="Select hexes" title="Select hexes (Space)">
+        <i class="fa-solid fa-hexagon-check" aria-hidden="true"></i>
+        <span>Select hexes</span>
+    </button>
     <div id="map-action-bar" hidden>
         <span id="map-action-count">0 hexes selected</span>
         <button type="button" id="map-action-build" hidden>Flesh out</button>
@@ -1168,7 +1275,7 @@
             <button type="button" id="map-action-region" aria-haspopup="menu" aria-expanded="false">Region</button>
             <div id="map-action-region-menu" class="map-action-menu" role="menu" hidden></div>
         </div>
-        <div class="map-action-group">
+        <div class="map-action-group" id="map-action-players-group" hidden>
             <button type="button" id="map-action-players" aria-haspopup="true" aria-expanded="false">Player Knowledge</button>
             <div id="map-action-players-menu" class="map-action-menu player-knowledge" role="menu" hidden></div>
         </div>
@@ -1176,14 +1283,14 @@
             <button type="button" id="map-action-more" aria-haspopup="menu" aria-expanded="false">More</button>
             <div id="map-action-more-menu" class="map-action-menu" role="menu" hidden>
                 <div class="map-action-menu-label">Expand system</div>
-                <button type="button" role="menuitem" data-expand="ctx-expand-physical-ct">Book 6 (Classic Traveller)</button>
+                <button type="button" role="menuitem" class="edition-other" data-expand="ctx-expand-physical-ct">Book 6 (Classic Traveller)</button>
                 <button type="button" role="menuitem" data-expand="ctx-expand-physical-mgt2e">MgT2E (System &amp; Physical)</button>
-                <button type="button" role="menuitem" data-expand="ctx-expand-physical-t5">Traveller 5 (T5)</button>
-                <button type="button" role="menuitem" data-expand="ctx-expand-rtt-bio">RTT (Re-run Biographer Only)</button>
+                <button type="button" role="menuitem" class="edition-other" data-expand="ctx-expand-physical-t5">Traveller 5 (T5)</button>
+                <button type="button" role="menuitem" class="edition-other" data-expand="ctx-expand-rtt-bio">RTT (Re-run Biographer Only)</button>
                 <div class="map-action-menu-label">Expand socioeconomic</div>
                 <button type="button" role="menuitem" data-expand="ctx-expand-socio-mgt2e">Mongoose 2nd Ed (MgT2E)</button>
                 <button type="button" role="menuitem" data-expand="ctx-expand-socio-mgt2e-dev" class="map-action-dev">[DEV] MgT2E (No Regen)</button>
-                <button type="button" role="menuitem" data-expand="ctx-expand-socio-t5">Traveller 5 (T5)</button>
+                <button type="button" role="menuitem" class="edition-other" data-expand="ctx-expand-socio-t5">Traveller 5 (T5)</button>
                 <div class="map-action-menu-label">Populate</div>
                 <button type="button" role="menuitem" data-populate="sparse">Sparse (2 in 6)</button>
                 <button type="button" role="menuitem" data-populate="standard">Standard (3 in 6)</button>
@@ -1192,10 +1299,10 @@
                 <button type="button" role="menuitem" data-populate="empty">Mark empty</button>
                 <button type="button" role="menuitem" data-populate="clear">Reset hexes</button>
                 <div class="map-action-menu-label">Generate</div>
-                <button type="button" role="menuitem" data-generate="ct">Classic Traveller</button>
+                <button type="button" role="menuitem" class="edition-other" data-generate="ct">Classic Traveller</button>
                 <button type="button" role="menuitem" data-generate="mgt">Mongoose 2E</button>
-                <button type="button" role="menuitem" data-generate="t5">Traveller 5</button>
-                <button type="button" role="menuitem" data-generate="rtt">Revised Traveller</button>
+                <button type="button" role="menuitem" class="edition-other" data-generate="t5">Traveller 5</button>
+                <button type="button" role="menuitem" class="edition-other" data-generate="rtt">Revised Traveller</button>
             </div>
         </div>
         <button type="button" id="map-action-deselect">Clear selection</button>
@@ -1211,10 +1318,8 @@
             <div class="nav-group" aria-label="Explore">
                 <button type="button" id="nav-map" data-nav-icon="map" aria-label="Return to map" title="Return to map" hidden><span class="nav-label">Return to map</span></button>
                 <button type="button" id="atlas-toggle" data-nav-icon="system" aria-label="System" title="System" aria-controls="system-inspector" aria-expanded="false"><span class="nav-label">System</span></button>
-                <button type="button" id="orbit-tools-toggle" data-nav-icon="time" aria-label="Time & orbits" title="Time & orbits" hidden disabled aria-controls="orbit-controls-tray" aria-expanded="false"><span class="nav-label">Time & orbits</span></button>
             </div>
             <div id="map-toolbar" class="nav-group" aria-label="Map tools">
-                <button type="button"  data-nav-icon="select" aria-label="Select hexes" title="Select hexes (Space)" data-map-tool="select" aria-pressed="false"><span class="nav-label">Select hexes</span></button>
                 <button type="button"  data-nav-icon="route" aria-label="Routes (R)" title="Routes (R)" data-map-tool="routes" aria-pressed="false"><span class="nav-label">Routes (R)</span></button>
                 <button type="button"  data-nav-icon="border" aria-label="Borders (B)" title="Borders (B)" data-map-tool="borders" aria-pressed="false"><span class="nav-label">Borders (B)</span></button>
                 <button type="button"  data-nav-icon="region" aria-label="Regions (G)" title="Regions (G)" data-map-tool="regions" aria-pressed="false"><span class="nav-label">Regions (G)</span></button>
@@ -1226,7 +1331,7 @@
             </div>
         </div>
         <div class="nav-footer">
-            <button type="button" id="disclosure-toggle" data-nav-icon="eye" aria-label="Player knowledge (D)" title="Player knowledge (D)" aria-controls="disclosure-tray" aria-expanded="false"><span class="nav-label">Player knowledge (D)</span></button>
+            <button type="button" id="disclosure-toggle" data-nav-icon="eye" aria-label="Player knowledge (D)" title="Player knowledge (D)" aria-controls="disclosure-tray" aria-expanded="false" hidden><span class="nav-label">Player knowledge (D)</span></button>
             <button type="button" id="legend-toggle" data-nav-icon="legend" aria-label="Legend" title="Legend" aria-controls="legend-tray" aria-expanded="false"><span class="nav-label">Legend</span></button>
             <button type="button" id="settings-toggle" data-nav-icon="settings" aria-label="Settings" title="Settings" aria-controls="settings-panel" aria-expanded="false"><span class="nav-label">Settings</span></button>
             <button type="button" id="help-toggle" data-nav-icon="help" aria-label="Help & shortcuts" title="Help & shortcuts" aria-controls="help-panel" aria-expanded="false"><span class="nav-label">Help & shortcuts</span></button>
@@ -1234,10 +1339,12 @@
     </nav>
     <aside id="generation-tray" class="nav-tray" aria-label="Generate systems" hidden>
         <header><h2>Generate systems</h2><button type="button" data-close-tray aria-label="Close generation">×</button></header>
-        <div class="nav-tray-content"><p>Select hexes on the map, then choose an edition.</p>
+        <div class="nav-tray-content"><p>Select hexes on the map, then generate them in Mongoose 2e.</p>
             <label>Traveller edition<select id="map-generate" aria-label="Generate systems in selected hexes">
-                <option value="">Choose edition…</option><option value="ct">Classic Traveller</option><option value="mgt">Mongoose 2E</option><option value="t5">Traveller 5</option><option value="rtt">Revised Traveller</option>
+                <option value="">Choose edition…</option><option value="ct" hidden>Classic Traveller</option><option value="mgt">Mongoose 2E</option><option value="t5" hidden>Traveller 5</option><option value="rtt" hidden>Revised Traveller</option>
             </select></label>
+            <button type="button" id="btn-build-imported" class="app-btn" style="width:100%;margin-top:10px;">Build systems already on the map</button>
+            <p style="margin:8px 0 0;color:#8aa0ab;font-size:12px;line-height:1.4;">Fleshes out the imported worlds in Mongoose 2e, one sector at a time. The chart you already loaded does not need to be imported again.</p>
         </div>
     </aside>
     <aside id="disclosure-tray" class="nav-tray" aria-label="Player knowledge" hidden>
@@ -1276,14 +1383,22 @@
         <header><h2>Legend</h2><button type="button" id="legend-close" aria-label="Close legend">×</button></header>
         <div id="legend-content"></div>
     </aside>
-    <aside id="orbit-controls-tray" class="nav-tray" aria-label="Time and orbit controls" hidden>
-        <header><h2>Time & orbits</h2><button type="button" data-close-tray aria-label="Close time controls">×</button></header>
-        <div id="orbit-controls-content" class="nav-tray-content"></div>
-    </aside>
-    <aside id="system-inspector" aria-label="System inspector" hidden inert>
+    <aside id="system-inspector" aria-label="System inspector" data-span="column" data-workspace="system" hidden inert>
         <header class="atlas-header">
-            <div><span id="workspace-label" class="atlas-eyebrow">SYSTEM INSPECTOR</span><h2 id="atlas-title"></h2><p id="atlas-subtitle"></p></div>
-            <button id="atlas-close" type="button" aria-label="Close inspector">×</button>
+            <div class="atlas-heading">
+                <p id="atlas-context" class="atlas-eyebrow" hidden></p>
+                <div class="atlas-title-row"><span id="atlas-glyph" class="atlas-glyph" hidden></span><h2 id="atlas-title"></h2><span id="atlas-hex" class="atlas-hex" hidden></span></div>
+                <p id="atlas-place" class="atlas-place" hidden></p>
+            </div>
+            <div class="atlas-pane-tools">
+                <div class="atlas-span" role="group" aria-label="Pane width">
+                    <button type="button" data-span="column" aria-pressed="true" title="Column">Column</button>
+                    <button type="button" data-span="half" aria-pressed="false" title="Half page">Half</button>
+                    <button type="button" data-span="full" aria-pressed="false" title="Full page">Full</button>
+                </div>
+                <button id="atlas-edit" type="button" aria-pressed="false" title="Edit this world's details" hidden>Edit</button>
+            </div>
+            <button id="atlas-close" type="button" aria-label="Close inspector" title="Close"><i class="fas fa-times" aria-hidden="true"></i></button>
         </header>
         <div id="atlas-content" aria-labelledby="atlas-title"></div>
         <footer id="atlas-footer" hidden></footer>
@@ -1306,6 +1421,26 @@
         <div class="settings-row" style="display:flex;align-items:center;gap:10px;padding:4px 0;">
             <input type="checkbox" id="toggle-logging">
             <label for="toggle-logging" style="cursor:pointer;">Enable Batch Logging (Download .txt)</label>
+        </div>
+        <div class="settings-row" style="display:flex;align-items:center;gap:10px;padding:4px 0;">
+            <input type="checkbox" id="toggle-player-knowledge">
+            <label for="toggle-player-knowledge" style="cursor:pointer;">Player knowledge (experimental)</label>
+        </div>
+
+        <div class="settings-section">
+            <div class="settings-section-header open" onclick="toggleSettingsSection(this)">
+                <span>Campaign sample</span>
+                <i class="fas fa-chevron-down"></i>
+            </div>
+            <div class="settings-section-body open" style="display:flex;flex-direction:column;gap:8px;padding-top:4px;">
+                <p style="margin:0;font-size:0.8rem;color:#9faeb8;line-height:1.45;">
+                    Twelve of each Traveller record — people, places, businesses, organizations, jobs, events, items, and notes — each with an image. Loading adds them to this browser session.
+                </p>
+                <button type="button" class="menu-btn" id="btn-load-campaign-sample"
+                    style="width:100%;padding:8px;display:flex;align-items:center;justify-content:center;gap:8px;">
+                    <i class="fas fa-book-open"></i> Load sample campaign
+                </button>
+            </div>
         </div>
 
         <!-- Visual Options -->
@@ -1570,24 +1705,16 @@
     </div>
 
     <!-- Sector Manager Window -->
-    <div id="sector-window" class="draggable-palette">
+    <div id="sector-window" class="draggable-palette manager-window">
         <div class="modal-drag-handle">
             <h2>Sector Manager</h2>
             <button id="btn-close-sector-window" class="btn-close-palette" title="Close"><i class="fas fa-times"></i></button>
         </div>
         <div class="palette-content" style="padding: 0;">
-            <div class="sector-window-toolbar">
-                <button type="button" id="btn-sector-add-col" class="menu-btn" title="Add a column on the east edge"><i class="fas fa-plus"></i> Column</button>
-                <button type="button" id="btn-sector-add-row" class="menu-btn" title="Add a row on the south edge"><i class="fas fa-plus"></i> Row</button>
-                <span id="sector-window-size">7 × 5 sectors</span>
-                <button type="button" id="btn-sector-del-col" class="menu-btn sector-window-danger" title="Remove the east column">− Column</button>
-                <button type="button" id="btn-sector-del-row" class="menu-btn sector-window-danger" title="Remove the south row">− Row</button>
-            </div>
-            <p class="sector-window-hint">Tiles match the map. Name a sector, click its number to go there, or add a column/row on the trailing edge.</p>
-            <div id="sector-window-grid"></div>
+            <div id="sector-window-grid" class="manager-scroll"></div>
         </div>
-        <div class="sector-window-footer">
-            <button id="btn-close-sector-window-footer" class="btn-cancel" style="padding: 4px 12px; font-size: 0.8rem;">Close</button>
+        <div class="sector-window-footer manager-footer">
+            <button type="button" id="btn-close-sector-window-footer" class="app-btn">Close</button>
         </div>
     </div>
 
@@ -1601,6 +1728,7 @@
                     display:flex; flex-direction:column; gap:12px; box-shadow:0 8px 32px rgba(0,0,0,0.6);">
 
             <h3 style="margin:0; color:#66fcf1; font-size:1.1rem;">Import the Imperium</h3>
+            <p style="margin:0; color:#8aa0ab; font-size:0.8rem; line-height:1.45;">After the charts load, every world is built as a full Mongoose 2e system, one sector at a time. The map stays usable. Stop the build from the card at the bottom right. Published routes load into their own slots. Trading Route stays empty for trade routes once that build has written a trade number on each world.</p>
 
             <!-- Import options -->
             <div style="border-bottom:1px solid #45a29e; padding-bottom:10px;">
@@ -1642,7 +1770,8 @@
                 <label for="otu-select-all" style="color:#c5c6c7; cursor:pointer; font-size:0.85rem;">
                     Select / Deselect All
                 </label>
-                <span style="margin-left:auto; color:#45a29e; font-size:0.78rem;">Slot</span>
+                <span id="otu-review-summary" style="margin-left:auto; color:#8aa0ab; font-size:0.75rem;"></span>
+                <span style="margin-left:12px; color:#45a29e; font-size:0.78rem;">Slot</span>
             </div>
 
             <!-- Sector list (populated dynamically) -->
@@ -1683,9 +1812,13 @@
                 &bull;&nbsp;Erase ALL existing hex data and routes<br>
                 &bull;&nbsp;Fetch up to <span id="universe-modal-sector-count">128</span> sectors
                     from travellermap.com<br>
-                &nbsp;&nbsp;&nbsp;(cached sectors load instantly; live fetches are 1 second apart)<br><br>
+                &nbsp;&nbsp;&nbsp;(cached sectors load instantly; live fetches are 1 second apart)<br>
+                &bull;&nbsp;Then build a full Mongoose 2e system for every world, one sector at a time.
+                    The map stays usable, and Stop is on the card at the bottom right.<br>
+                &bull;&nbsp;Published routes load into their own slots. Trading Route stays empty.<br><br>
                 This cannot be undone.
             </div>
+            <p id="universe-review-summary" style="margin:0; color:#8aa0ab; font-size:0.8rem; line-height:1.45;"></p>
 
             <!-- Options -->
             <div style="border-top:1px solid #2a3a3a; padding-top:10px;">
@@ -1736,7 +1869,7 @@
                 <div class="help-grid">
                     <strong>Left Click + Drag</strong><span>Pan Map</span>
                     <strong>Scroll Wheel</strong><span>Zoom In / Out</span>
-                    <strong>Space</strong><span>Toggle select mode</span>
+                    <strong>Space</strong><span>Toggle select mode (button beside search)</span>
                     <strong>Shift + Click</strong><span>Toggle Select Hex</span>
                     <strong>Shift + Drag</strong><span>Paint Multiple Hexes</span>
                     <strong>Ctrl + S</strong><span>Select Sector</span>
@@ -1747,16 +1880,16 @@
                 <h3 style="color: #66fcf1; border-bottom: 1px solid #45a29e; padding-bottom: 5px; margin-top: 15px;">
                     System Editing</h3>
                 <div class="help-grid">
-                    <strong>Ctrl + Click</strong><span>Open World Details</span>
+                    <strong>Ctrl + Click</strong><span>Open this system for editing</span>
                     <strong>Click a system</strong><span>Open system inspector</span>
                     <strong>Double-click a system</strong><span>Open orbit view</span>
                     <strong>Space (orbit view)</strong><span>Play / pause simulation</span>
                     <strong>Left navigation icons</strong><span>Toggle tools and campaign trays</span>
                     <strong>Right Click</strong><span>Open Context Menu</span>
                     <strong>Ctrl + Alt + M</strong><span style="color: #ffa500;">Bulk Mongoose Macro</span>
-                    <strong>Ctrl + Alt + C</strong><span style="color: #66fcf1;">Bulk CT / Book 6 Macro</span>
-                    <strong>Ctrl + Alt + R</strong><span style="color: #45a29e;">Bulk RTT Macro</span>
-                    <strong>Ctrl + Alt + 5</strong><span style="color: #66fcf1;">Bulk T5 Macro</span>
+                    <strong class="edition-other">Ctrl + Alt + C</strong><span class="edition-other" style="color: #66fcf1;">Bulk CT / Book 6 Macro</span>
+                    <strong class="edition-other">Ctrl + Alt + R</strong><span class="edition-other" style="color: #45a29e;">Bulk RTT Macro</span>
+                    <strong class="edition-other">Ctrl + Alt + 5</strong><span class="edition-other" style="color: #66fcf1;">Bulk T5 Macro</span>
                     <strong>Ctrl + Z</strong><span>Undo Last Action</span>
                     <strong>Ctrl + Shift + Z</strong><span>Redo Action</span>
                     <strong>Ctrl + Delete</strong><span style="color: #e74c3c;">Clear Canvas</span>
@@ -1765,7 +1898,7 @@
                     <strong>R Key</strong><span>Open Route Manager</span>
                     <strong>B Key</strong><span>Open Border Manager</span>
                     <strong>G Key</strong><span>Open Region Manager</span>
-                    <strong>D Key</strong><span>Open Player Knowledge</span>
+                    <strong id="help-player-knowledge-key" hidden>D Key</strong><span id="help-player-knowledge" hidden>Open Player Knowledge</span>
                     <strong>Left nav · Sectors</strong><span>Open Sector Manager</span>
                 </div>
             </div>
@@ -1928,10 +2061,10 @@
                 <label style="color: #c5c6c7; cursor: pointer; display: flex; align-items: center; gap: 10px;">
                     <input type="radio" name="se-engine-choice" value="MgT2E" checked> Mongoose Traveller 2nd Ed (MgT2E)
                 </label>
-                <label style="color: #c5c6c7; cursor: pointer; display: flex; align-items: center; gap: 10px;">
+                <label class="edition-other" style="color: #c5c6c7; cursor: pointer; display: flex; align-items: center; gap: 10px;">
                     <input type="radio" name="se-engine-choice" value="CT"> Classic Traveller (CT)
                 </label>
-                <label style="color: #c5c6c7; cursor: pointer; display: flex; align-items: center; gap: 10px;">
+                <label class="edition-other" style="color: #c5c6c7; cursor: pointer; display: flex; align-items: center; gap: 10px;">
                     <input type="radio" name="se-engine-choice" value="T5"> Traveller 5 (T5)
                 </label>
                 <label style="color: #6b6f73; cursor: not-allowed; display: flex; align-items: center; gap: 10px;" title="Not yet available in the System Editor">
@@ -2118,7 +2251,7 @@
                     <label style="display:block;margin-bottom:4px;color:#a0a8b0;font-size:0.85em;">VERSION</label>
                     <select id="obs-version" style="width:100%;padding:6px;background:#1a2332;color:#cdd6e3;border:1px solid #45a29e;border-radius:4px;">
                         <option value="gm" selected>Referee — everything</option>
-                        <option value="player">Players — fog of war</option>
+                        <option value="player" hidden>Players — fog of war</option>
                     </select>
                     <p id="obs-version-hint" style="margin:4px 0 0;color:#8fa0b5;font-size:0.78em;"></p>
                     <div id="obs-version-warning" style="display:none;margin:8px 0 0;padding:8px 10px;background:rgba(102,252,241,0.10);border-left:3px solid #45a29e;border-radius:3px;">
@@ -2236,9 +2369,9 @@
         <div class="context-menu-item has-submenu">
             GENERATE MAINWORLD
             <div class="submenu">
-                <button class="context-menu-item" id="ctx-gen-ct">Classic Traveller (CT)</button>
+                <button class="context-menu-item edition-other" id="ctx-gen-ct">Classic Traveller (CT)</button>
                 <button class="context-menu-item" id="ctx-gen-mgt2e">Mongoose 2nd Ed (MgT2E)</button>
-                <button class="context-menu-item" id="ctx-gen-t5">Traveller 5 (T5)</button>
+                <button class="context-menu-item edition-other" id="ctx-gen-t5">Traveller 5 (T5)</button>
             </div>
         </div>
 
@@ -2246,10 +2379,10 @@
         <div class="context-menu-item has-submenu">
             EXPAND SYSTEM
             <div class="submenu">
-                <button class="context-menu-item" id="ctx-expand-physical-ct">Book 6 (Classic Traveller)</button>
+                <button class="context-menu-item edition-other" id="ctx-expand-physical-ct">Book 6 (Classic Traveller)</button>
                 <button class="context-menu-item" id="ctx-expand-physical-mgt2e">MgT2E (System &amp; Physical)</button>
-                <button class="context-menu-item" id="ctx-expand-physical-t5">Traveller 5 (T5)</button>
-                <button class="context-menu-item" id="ctx-expand-rtt-bio">RTT (Re-run Biographer Only)</button>
+                <button class="context-menu-item edition-other" id="ctx-expand-physical-t5">Traveller 5 (T5)</button>
+                <button class="context-menu-item edition-other" id="ctx-expand-rtt-bio">RTT (Re-run Biographer Only)</button>
             </div>
         </div>
 
@@ -2260,7 +2393,7 @@
                 <button class="context-menu-item" id="ctx-expand-socio-mgt2e">Mongoose 2nd Ed (MgT2E)</button>
                 <button class="context-menu-item" id="ctx-expand-socio-mgt2e-dev"
                     style="color: #ffa500; font-weight: bold;">[DEV] MgT2E (No Regen)</button>
-                <button class="context-menu-item" id="ctx-expand-socio-t5">Traveller 5 (T5)</button>
+                <button class="context-menu-item edition-other" id="ctx-expand-socio-t5">Traveller 5 (T5)</button>
             </div>
         </div>
 
@@ -2270,9 +2403,9 @@
         <div class="context-menu-item has-submenu">
             GENERATE FULL SYSTEM TOP DOWN
             <div class="submenu">
-                <button class="context-menu-item" id="ctx-gen-sys-ct">Classic Traveller (CT) Top-Down</button>
+                <button class="context-menu-item edition-other" id="ctx-gen-sys-ct">Classic Traveller (CT) Top-Down</button>
                 <button class="context-menu-item" id="ctx-gen-sys-mgt2e">Mongoose 2nd Ed (MgT2E) Top-Down</button>
-                <button class="context-menu-item" id="ctx-gen-sys-t5">Traveller 5 (T5) Top-Down</button>
+                <button class="context-menu-item edition-other" id="ctx-gen-sys-t5">Traveller 5 (T5) Top-Down</button>
             </div>
         </div>
 
@@ -2280,10 +2413,10 @@
         <div class="context-menu-item has-submenu">
             GENERATE FULL SYSTEM BOTTOM UP
             <div class="submenu">
-                <button class="context-menu-item" id="ctx-gen-sys-ct-bu">Classic Traveler (Bottom Up)</button>
+                <button class="context-menu-item edition-other" id="ctx-gen-sys-ct-bu">Classic Traveler (Bottom Up)</button>
                 <button class="context-menu-item" id="ctx-gen-sys-mgt2e-bu">Mongoose 2nd Ed (Bottom Up)</button>
-                <button class="context-menu-item" id="ctx-gen-sys-rtt-bu">RTT WORLDGEN (Bottom Up)</button>
-                <button class="context-menu-item" id="ctx-gen-sys-aow-bu">Architect of Worlds (+ MgT2e WBH)</button>
+                <button class="context-menu-item edition-other" id="ctx-gen-sys-rtt-bu">RTT WORLDGEN (Bottom Up)</button>
+                <button class="context-menu-item edition-other" id="ctx-gen-sys-aow-bu">Architect of Worlds (+ MgT2e WBH)</button>
             </div>
         </div>
 
@@ -2293,9 +2426,9 @@
         <div class="context-menu-item has-submenu">
             POPULATE AND GENERATE FULL SYSTEM TOP DOWN
             <div class="submenu">
-                <button class="context-menu-item" id="ctx-full-ct">Classic Traveller (CT) (Ctrl+Alt+C)</button>
+                <button class="context-menu-item edition-other" id="ctx-full-ct">Classic Traveller (CT) (Ctrl+Alt+C)</button>
                 <button class="context-menu-item" id="ctx-full-mgt2e">Mongoose 2nd Ed (MgT2E) (Ctrl+Alt+M)</button>
-                <button class="context-menu-item" id="ctx-full-t5">Traveller 5 (T5) (Ctrl+Alt+5)</button>
+                <button class="context-menu-item edition-other" id="ctx-full-t5">Traveller 5 (T5) (Ctrl+Alt+5)</button>
             </div>
         </div>
 
@@ -2303,10 +2436,10 @@
         <div class="context-menu-item has-submenu">
             POPULATE AND GENERATE FULL SYSTEM BOTTOM UP
             <div class="submenu">
-                <button class="context-menu-item" id="ctx-full-ct-bu">Classic Traveler (Bottom Up)</button>
+                <button class="context-menu-item edition-other" id="ctx-full-ct-bu">Classic Traveler (Bottom Up)</button>
                 <button class="context-menu-item" id="ctx-full-mgt2e-bu">Mongoose 2nd Ed (Bottom Up)</button>
-                <button class="context-menu-item" id="ctx-full-rtt-bu">RTT WORLDGEN (Bottom Up) (Ctrl+Alt+R)</button>
-                <button class="context-menu-item" id="ctx-full-aow-bu">Architect of Worlds (+ MgT2e WBH)</button>
+                <button class="context-menu-item edition-other" id="ctx-full-rtt-bu">RTT WORLDGEN (Bottom Up) (Ctrl+Alt+R)</button>
+                <button class="context-menu-item edition-other" id="ctx-full-aow-bu">Architect of Worlds (+ MgT2e WBH)</button>
             </div>
         </div>
 
@@ -2335,7 +2468,7 @@
                 <button class="context-menu-item" id="ctx-open-filter" onclick="toggleFilterModal()">Filter (F)</button>
                 <button class="context-menu-item" id="ctx-open-region-window">Region Manager (G)</button>
                 <button class="context-menu-item" id="ctx-open-route-window">Route Manager (R)</button>
-                <button class="context-menu-item" id="ctx-open-disclosure-grid">Player Knowledge (D)</button>
+                <button class="context-menu-item" id="ctx-open-disclosure-grid" hidden>Player Knowledge (D)</button>
             </div>
         </div>
         <!-- ASSIGN Menu -->
@@ -2346,7 +2479,7 @@
                 <button class="context-menu-item" id="ctx-assign-border">Assign Border</button>
                 <button class="context-menu-item" id="ctx-assign-region">Assign Region</button>
                 <button class="context-menu-item" id="ctx-assign-bg-color">Assign Background Color</button>
-                <button class="context-menu-item" id="ctx-assign-disclosure">Assign Player Disclosure</button>
+                <button class="context-menu-item" id="ctx-assign-disclosure" hidden>Assign Player Disclosure</button>
             </div>
         </div>
 
@@ -2374,6 +2507,7 @@
         </div>
 
         <div class="palette-content">
+            <div class="dossier-edit-identity">
             <div class="editor-grid">
                 <div class="editor-row" style="grid-column: span 2;">
                     <label>System Name:</label>
@@ -2519,36 +2653,9 @@
                 </div>
             </div>
 
-            <!-- CT Scouts System Expand Accordion -->
-            <button class="accordion-btn" id="acc-btn-ct-system" style="display: none;">CT Star System</button>
-            <div class="accordion-content" id="editor-ct-system-root" style="display: none;">
-                <!-- Content will be injected via JS -->
             </div>
 
-            <!-- MgT2E Stellar Configuration (populated by JS when mgtSystem is present) -->
-            <div id="mgt-stellar-config" class="editor-full-row" style="display: none; margin-top: 10px;">
-                <label>Stellar Config:</label>
-                <div id="mgt-stellar-config-lines" style="font-family: monospace; font-size: 0.9em; color: #66fcf1; line-height: 1.6; padding: 2px 4px;"></div>
-            </div>
-
-            <!-- MgT2E System Expand Accordion -->
-            <button class="accordion-btn" id="acc-btn-mgt-system" style="display: none;">MgT2E System</button>
-            <div class="accordion-content" id="editor-mgt-system-root" style="display: none;">
-                <!-- Content will be injected via JS -->
-            </div>
-
-            <!-- RTT System Expand Accordion -->
-            <button class="accordion-btn" id="acc-btn-rtt-system" style="display: none;">RTT System</button>
-            <div class="accordion-content" id="editor-rtt-system-root" style="display: none;">
-                <!-- Content will be injected via JS -->
-            </div>
-
-            <!-- AoW Bottom-Up System Accordion -->
-            <button class="accordion-btn" id="acc-btn-aow-system" style="display: none;">AoW System</button>
-            <div class="accordion-content" id="editor-aow-system-root" style="display: none;">
-                <!-- Content will be injected via JS -->
-            </div>
-
+            <div class="dossier-edit-socio">
             <!-- MgT2E Socioeconomics Accordion -->
             <button class="accordion-btn" id="acc-btn-mgt-socio" style="display: none;">MgT2E Socioeconomics</button>
             <div class="accordion-content" id="editor-socio-mgt-container">
@@ -2651,6 +2758,39 @@
                 </div>
             </div>
 
+            </div>
+
+            <div class="dossier-edit-system">
+            <!-- CT Scouts System Expand Accordion -->
+            <button class="accordion-btn" id="acc-btn-ct-system" style="display: none;">CT Star System</button>
+            <div class="accordion-content" id="editor-ct-system-root" style="display: none;">
+                <!-- Content will be injected via JS -->
+            </div>
+
+            <!-- MgT2E Stellar Configuration (populated by JS when mgtSystem is present) -->
+            <div id="mgt-stellar-config" class="editor-full-row" style="display: none; margin-top: 10px;">
+                <label>Stellar Config:</label>
+                <div id="mgt-stellar-config-lines" style="font-family: monospace; font-size: 0.9em; color: #66fcf1; line-height: 1.6; padding: 2px 4px;"></div>
+            </div>
+
+            <!-- MgT2E System Expand Accordion -->
+            <button class="accordion-btn" id="acc-btn-mgt-system" style="display: none;">MgT2E System</button>
+            <div class="accordion-content" id="editor-mgt-system-root" style="display: none;">
+                <!-- Content will be injected via JS -->
+            </div>
+
+            <!-- RTT System Expand Accordion -->
+            <button class="accordion-btn" id="acc-btn-rtt-system" style="display: none;">RTT System</button>
+            <div class="accordion-content" id="editor-rtt-system-root" style="display: none;">
+                <!-- Content will be injected via JS -->
+            </div>
+
+            <!-- AoW Bottom-Up System Accordion -->
+            <button class="accordion-btn" id="acc-btn-aow-system" style="display: none;">AoW System</button>
+            <div class="accordion-content" id="editor-aow-system-root" style="display: none;">
+                <!-- Content will be injected via JS -->
+            </div>
+
             <!-- T5 System Expand Accordion -->
             <button class="accordion-btn" id="acc-btn-t5-system" style="display: none;">T5 System</button>
             <div class="accordion-content" id="editor-t5-system-root" style="display: none;">
@@ -2675,6 +2815,14 @@
                     <div class="editor-row" style="grid-column: span 2;">
                         <label>Resource Units:</label>
                         <input type="number" id="edit-ru">
+                    </div>
+                    <div class="editor-row" style="grid-column: span 2;">
+                        <label>Nobility:</label>
+                        <input type="text" id="edit-nobility" maxlength="12">
+                    </div>
+                    <div class="editor-row" style="grid-column: span 2;">
+                        <label>T5 Bases:</label>
+                        <input type="text" id="edit-t5-bases" maxlength="8" title="Second Survey base codes, for example NS or KM">
                     </div>
                 </div>
 
@@ -2766,6 +2914,7 @@
                     </div>
                 </div>
             </div>
+            </div>
         </div>
 
         <div class="editor-buttons">
@@ -2775,19 +2924,32 @@
     </div>
 
     <!-- Route Manager Window -->
-    <div id="route-window" class="draggable-palette">
+    <div id="route-window" class="draggable-palette manager-window">
         <div class="modal-drag-handle">
             <h2>Route Manager</h2>
             <button id="btn-close-route-window" class="btn-close-palette" title="Close"><i class="fas fa-times"></i></button>
         </div>
         <div class="palette-content" style="padding: 0;">
-            <div style="display:flex;align-items:center;gap:6px;padding:4px 8px 6px;border-bottom:1px solid #45a29e;">
-                <label style="display:flex;align-items:center;gap:5px;cursor:pointer;color:#c5c6c7;font-size:0.82em;">
-                    <input type="checkbox" id="route-vis-all-check"> Show All Routes
+            <div class="route-window-toolbar">
+                <label class="route-sort">
+                    <span>Sort routes</span>
+                    <select id="route-sort" aria-label="Sort routes">
+                        <option value="default">Default</option>
+                        <option value="alpha-asc">Alpha A-Z</option>
+                        <option value="alpha-desc">Alpha Z-A</option>
+                        <option value="seg-desc">Route Segments High to Low</option>
+                        <option value="seg-asc">Route Segments Low to High</option>
+                    </select>
                 </label>
-                <button id="btn-route-add" class="menu-btn" style="margin-left:auto;padding:2px 10px;font-size:0.78em;" title="Add a new empty route"><i class="fas fa-plus"></i> Add Route</button>
+                <div class="route-window-toolbar-actions">
+                    <label class="route-show-all">
+                        <input type="checkbox" id="route-vis-all-check"> Show Routes
+                    </label>
+                    <button type="button" id="btn-route-combine" class="app-btn" disabled title="Select two or more routes to combine">Combine</button>
+                    <button type="button" id="btn-route-add" class="app-btn primary" title="Add a new empty route"><i class="fas fa-plus" aria-hidden="true"></i> Add route</button>
+                </div>
             </div>
-            <div id="route-window-list"></div>
+            <div id="route-window-list" class="manager-list"></div>
             <!-- One picker shared by every route row; see _pickRouteFileFor() -->
             <input type="file" id="file-import-route" accept=".json,application/json" style="display:none;">
 
@@ -2971,50 +3133,87 @@
 
             </div><!-- end #route-auto-panel -->
         </div>
-        <div class="route-window-footer">
-            <button id="btn-close-route-window-footer" class="btn-cancel" style="padding: 4px 12px; font-size: 0.8rem;">Close</button>
+        <div class="route-window-footer manager-footer">
+            <button type="button" id="btn-close-route-window-footer" class="app-btn">Close</button>
         </div>
     </div>
 
     <!-- Border Manager Window -->
-    <div id="border-window" class="draggable-palette">
+    <div id="border-window" class="draggable-palette manager-window">
         <div class="modal-drag-handle">
             <h2>Border Manager</h2>
             <button id="btn-close-border-window" class="btn-close-palette" title="Close"><i class="fas fa-times"></i></button>
         </div>
         <div class="palette-content" style="padding: 0;">
-            <div style="display:flex;align-items:center;gap:6px;padding:4px 8px 6px;border-bottom:1px solid #45a29e;">
-                <label style="display:flex;align-items:center;gap:5px;cursor:pointer;color:#c5c6c7;font-size:0.82em;">
-                    <input type="checkbox" id="border-vis-all-check"> Show All Borders
+            <div class="route-window-toolbar">
+                <label class="route-sort">
+                    <span>Sort borders</span>
+                    <select id="border-sort" aria-label="Sort borders">
+                        <option value="default">Default</option>
+                        <option value="alpha-asc">Alpha A-Z</option>
+                        <option value="alpha-desc">Alpha Z-A</option>
+                        <option value="hex-desc">Hexes High to Low</option>
+                        <option value="hex-asc">Hexes Low to High</option>
+                    </select>
                 </label>
+                <div class="route-window-toolbar-actions">
+                    <label class="route-show-all">
+                        <input type="checkbox" id="border-vis-all-check"> Show Borders
+                    </label>
+                    <button type="button" id="btn-border-add" class="app-btn primary" title="Add a border"><i class="fas fa-plus" aria-hidden="true"></i> Add border</button>
+                </div>
             </div>
-            <div id="border-window-list"></div>
+            <div id="border-window-list" class="manager-list"></div>
         </div>
-        <div class="border-window-footer">
-            <button id="btn-close-border-window-footer" class="btn-cancel" style="padding: 4px 12px; font-size: 0.8rem;">Close</button>
+        <div class="border-window-footer manager-footer">
+            <button type="button" id="btn-close-border-window-footer" class="app-btn">Close</button>
         </div>
     </div>
 
     <!-- Region Manager Window -->
-    <div id="region-window" class="draggable-palette">
+    <div id="region-window" class="draggable-palette manager-window">
         <div class="modal-drag-handle">
             <h2>Region Manager</h2>
             <button id="btn-close-region-window" class="btn-close-palette" title="Close"><i class="fas fa-times"></i></button>
         </div>
         <div class="palette-content" style="padding: 0;">
-            <div style="display:flex;align-items:center;gap:6px;padding:4px 8px 6px;border-bottom:1px solid #45a29e;">
-                <label style="display:flex;align-items:center;gap:5px;cursor:pointer;color:#c5c6c7;font-size:0.82em;">
-                    <input type="checkbox" id="region-vis-all-check"> Show All Regions
+            <div class="route-window-toolbar">
+                <label class="route-sort">
+                    <span>Sort regions</span>
+                    <select id="region-sort" aria-label="Sort regions">
+                        <option value="default">Default</option>
+                        <option value="alpha-asc">Alpha A-Z</option>
+                        <option value="alpha-desc">Alpha Z-A</option>
+                        <option value="hex-desc">Hexes High to Low</option>
+                        <option value="hex-asc">Hexes Low to High</option>
+                    </select>
                 </label>
+                <div class="route-window-toolbar-actions">
+                    <label class="route-show-all">
+                        <input type="checkbox" id="region-vis-all-check"> Show Regions
+                    </label>
+                    <button type="button" id="btn-region-add" class="app-btn primary" title="Add a region"><i class="fas fa-plus" aria-hidden="true"></i> Add region</button>
+                </div>
             </div>
-            <div id="region-window-list"></div>
+            <div id="region-window-list" class="manager-list"></div>
         </div>
-        <div class="region-window-footer">
-            <button id="btn-close-region-window-footer" class="btn-cancel" style="padding: 4px 12px; font-size: 0.8rem;">Close</button>
+        <div class="region-window-footer manager-footer">
+            <button type="button" id="btn-close-region-window-footer" class="app-btn">Close</button>
         </div>
     </div>
 
     <!-- Toast Notifications -->
+    <div id="route-edit-hint" hidden role="status" aria-live="polite">
+        <p id="route-edit-hint-title">Editing route</p>
+        <p id="route-edit-hint-detail"></p>
+        <button type="button" id="route-edit-hint-done" class="app-btn small">Done</button>
+    </div>
+    <div id="mgt-build-progress" hidden role="status" aria-live="polite">
+        <p id="mgt-build-progress-title">Building Mongoose systems</p>
+        <p id="mgt-build-progress-detail"></p>
+        <div class="mgt-build-track"><div id="mgt-build-progress-fill"></div></div>
+        <button type="button" id="mgt-build-progress-stop" class="app-btn small">Stop</button>
+    </div>
     <div id="toast-container"></div>
 
 

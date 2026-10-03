@@ -268,7 +268,7 @@ function runMgtBuild() {
         .filter(item => item.stage);
     if (!work.length) return;
     const offer = mgtBuildOffer(work.map(item => item.id));
-    saveHistoryState('Mongoose build');
+    saveHistoryState('Mongoose build', { hexIds: work.map(item => item.id) });
     if (window.isLoggingEnabled) window.batchLogData = [];
     let count = 0;
     work.forEach(({ id, stage }) => {
@@ -303,12 +303,219 @@ window.mgtBuildOffer = mgtBuildOffer;
 window.runMgtBuild = runMgtBuild;
 
 // ============================================================================
+// BACKGROUND MONGOOSE BUILD
+// Import the Imperium / Import the Universe queue every world that still needs
+// a full Mongoose system. One sector at a time, a few worlds per turn, so the
+// map stays usable. Logging is off for the run: a trace per world would fill
+// memory long before the build finished.
+// ============================================================================
+
+let _mgtBuildCancel = false;
+let _mgtBuildRunning = false;
+let _workStop = null;
+
+function showWorkStatus({ title, detail, fraction, onStop, dismiss }) {
+    _workStop = onStop || (dismiss ? hideWorkStatus : null);
+    _paintBuildProgress({ title, detail, fraction: fraction || 0 });
+    const stop = document.getElementById('mgt-build-progress-stop');
+    if (!stop) return;
+    stop.hidden = !_workStop;
+    if (dismiss) {
+        stop.hidden = false;
+        stop.disabled = false;
+        stop.textContent = 'Dismiss';
+    }
+}
+function hideWorkStatus() {
+    _workStop = null;
+    _hideBuildProgress();
+}
+window.showWorkStatus = showWorkStatus;
+window.hideWorkStatus = hideWorkStatus;
+
+function _buildOneMgtHex(id) {
+    const state = hexStates.get(id);
+    const stage = mgtBuildStage(state);
+    if (!stage) return false;
+    const sys = stage === 'society'
+        ? expandLoadedSocioeconomicsMgT2E(id, state)
+        : generateMgT2ESystemTopDown(id, stage === 'flesh' ? mgtProfile(state) : null);
+    if (!sys) return false;
+    _storeMgtBuild(state, sys);
+    hexStates.set(id, state);
+    return true;
+}
+
+function _mgtSectorsToBuild(preferred) {
+    const groups = new Map();
+    hexStates.forEach((state, id) => {
+        if (!mgtBuildStage(state)) return;
+        const key = String(id).split('-')[0];
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(id);
+    });
+    groups.forEach(ids => ids.sort());
+    const ordered = [];
+    const seen = new Set();
+    (preferred || []).forEach(sector => {
+        const key = String(sector.key);
+        if (seen.has(key) || !groups.has(key)) return;
+        seen.add(key);
+        ordered.push({ key, name: sector.name || window.sectorNames?.[key] || `Sector ${key}`, hexes: groups.get(key) });
+    });
+    [...groups.keys()].sort((a, b) => Number(a) - Number(b)).forEach(key => {
+        if (seen.has(key)) return;
+        ordered.push({ key, name: window.sectorNames?.[key] || `Sector ${key}`, hexes: groups.get(key) });
+    });
+    return ordered;
+}
+
+function _paintBuildProgress({ title, detail, fraction }) {
+    const root = document.getElementById('mgt-build-progress');
+    if (!root) return;
+    root.hidden = false;
+    document.body.classList.add('mgt-build-active');
+    const titleEl = document.getElementById('mgt-build-progress-title');
+    const detailEl = document.getElementById('mgt-build-progress-detail');
+    const fill = document.getElementById('mgt-build-progress-fill');
+    const stop = document.getElementById('mgt-build-progress-stop');
+    if (titleEl) titleEl.textContent = title;
+    if (detailEl) detailEl.textContent = detail;
+    if (fill) fill.style.width = `${Math.max(0, Math.min(100, fraction * 100))}%`;
+    if (stop) {
+        stop.hidden = false;
+        stop.textContent = 'Stop';
+        stop.disabled = false;
+    }
+}
+
+function _hideBuildProgress() {
+    const root = document.getElementById('mgt-build-progress');
+    if (root) root.hidden = true;
+    document.body.classList.remove('mgt-build-active');
+}
+
+function _mgtCensus() {
+    let present = 0, needs = 0, withWtn = 0, chartOnly = 0;
+    let sample = null;
+    hexStates.forEach((state, id) => {
+        if (!state || state.type !== 'SYSTEM_PRESENT') return;
+        present++;
+        if (mgtBuildStage(state)) needs++;
+        if (state.mgt2eData && Number.isFinite(state.mgt2eData.WTN)) withWtn++;
+        else if (state.t5Data && !state.mgt2eData) chartOnly++;
+        if (!sample) {
+            sample = {
+                id,
+                stage: mgtBuildStage(state),
+                hasMgt: !!state.mgt2eData,
+                mgtWtn: state.mgt2eData ? state.mgt2eData.WTN : null,
+                hasChart: !!state.t5Data
+            };
+        }
+    });
+    return { present, needs, withWtn, chartOnly, sample };
+}
+
+function startBackgroundMgtBuild(options) {
+    const census = _mgtCensus();
+    console.log('[MgtBuild] requested', census);
+    if (_mgtBuildRunning) {
+        console.warn('[MgtBuild] already running');
+        showToast('A Mongoose build is already running.', 2500);
+        return;
+    }
+    const sectors = _mgtSectorsToBuild(options && options.sectors);
+    const total = sectors.reduce((sum, sector) => sum + sector.hexes.length, 0);
+    if (!total) {
+        const msg = census.present
+            ? 'Every world on the map already has a Mongoose system. No build was started.'
+            : 'There are no worlds on the map to build.';
+        console.warn('[MgtBuild] nothing to do.', msg, census);
+        showToast(msg, 6000);
+        return;
+    }
+    console.log(`[MgtBuild] starting ${total} worlds across ${sectors.length} sectors`);
+    _mgtBuildCancel = false;
+    _mgtBuildRunning = true;
+    const wasLogging = window.isLoggingEnabled;
+    window.isLoggingEnabled = false;
+    const yieldTurn = () => new Promise(resolve => setTimeout(resolve, 0));
+    (async () => {
+        let done = 0;
+        let built = 0;
+        let failed = 0;
+        let stopped = false;
+        _paintBuildProgress({
+            title: 'Building Mongoose systems',
+            detail: `${sectors[0].name} · 0 of ${total.toLocaleString()} worlds · sector 1 of ${sectors.length}`,
+            fraction: 0
+        });
+        await yieldTurn();
+        try {
+            for (let s = 0; s < sectors.length; s++) {
+                const sector = sectors[s];
+                console.log(`[MgtBuild] sector ${s + 1}/${sectors.length} ${sector.name}: ${sector.hexes.length} worlds`);
+                const saved = [];
+                for (let i = 0; i < sector.hexes.length; i++) {
+                    if (_mgtBuildCancel) { stopped = true; break; }
+                    try {
+                        if (_buildOneMgtHex(sector.hexes[i])) built++;
+                    } catch (err) {
+                        failed++;
+                        console.error(`Mongoose build failed for ${sector.hexes[i]}:`, err);
+                    }
+                    saved.push(sector.hexes[i]);
+                    done++;
+                    if (done % 200 === 0) console.log(`[MgtBuild] ${done}/${total} ${sector.name}`);
+                    if (i % 4 === 3 || i === sector.hexes.length - 1) {
+                        _paintBuildProgress({
+                            title: 'Building Mongoose systems',
+                            detail: `${sector.name} · ${done.toLocaleString()} of ${total.toLocaleString()} worlds · sector ${s + 1} of ${sectors.length}`,
+                            fraction: done / total
+                        });
+                        await yieldTurn();
+                    }
+                }
+                if (saved.length && window.dbManager?.saveHexes) await window.dbManager.saveHexes(saved);
+                requestAnimationFrame(draw);
+                if (stopped) break;
+                await yieldTurn();
+            }
+            if (typeof window.reapplyAllRules === 'function') window.reapplyAllRules();
+            if (typeof window.applyActiveFilters === 'function') window.applyActiveFilters();
+            requestAnimationFrame(draw);
+            const failNote = failed ? ` ${failed} failed.` : '';
+            showToast(stopped
+                ? `Stopped after ${built.toLocaleString()} Mongoose system${built === 1 ? '' : 's'}.${failNote}`
+                : `Built ${built.toLocaleString()} Mongoose system${built === 1 ? '' : 's'}.${failNote}`, stopped ? 5000 : 6000);
+        } finally {
+            window.isLoggingEnabled = wasLogging;
+            _mgtBuildRunning = false;
+            _mgtBuildCancel = false;
+            _hideBuildProgress();
+        }
+    })();
+}
+window.startBackgroundMgtBuild = startBackgroundMgtBuild;
+
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('mgt-build-progress-stop')?.addEventListener('click', () => {
+        _mgtBuildCancel = true;
+        const stopFn = _workStop;
+        const stop = document.getElementById('mgt-build-progress-stop');
+        if (stop) { stop.disabled = true; stop.textContent = 'Stopping…'; }
+        if (stopFn) stopFn();
+    });
+});
+
+// ============================================================================
 // AUTO POPULATE
 // ============================================================================
 
 function autoPopulate(chanceOutOfSix) {
     if (!validateSelection('populate')) return;
-    saveHistoryState('Auto Populate');
+    saveHistoryState('Auto Populate', { hexIds: currentActionHexes() });
     currentActionHexes().forEach(hexId => {
         reseedForHex(hexId);
         const roll = roll1D();
@@ -336,14 +543,12 @@ function autoPopulate(chanceOutOfSix) {
 async function runMgT2EMacro(skipPop = false) {
     if (!validateSelection('generate', !skipPop)) return;
 
-    saveHistoryState('Mongoose Macro');
+    const targetHexes = currentActionHexes();
+    saveHistoryState('Mongoose Macro', { hexIds: targetHexes });
     if (window.isLoggingEnabled) window.batchLogData = [];
 
     console.log("Bulk Generating MgT2E Full System...");
     await ensureNamesLoaded();
-
-    // Capture the target hexes NOW so they don't change if the user deselects during the wait
-    const targetHexes = currentActionHexes();
 
     // Warn if any selected hex has manually-overridden MgT2E fields
     let _mgtManualCount = 0;
@@ -539,8 +744,6 @@ async function runMgT2EMacro(skipPop = false) {
 async function runMgT2EBottomUpMacro(skipPop = false) {
     if (!validateSelection('generate', !skipPop)) return;
 
-    saveHistoryState('MgT2E Bottom-Up Macro');
-
     console.log("Bulk Generating MgT2E Bottom-Up Full System...");
     await ensureNamesLoaded();
 
@@ -549,6 +752,7 @@ async function runMgT2EBottomUpMacro(skipPop = false) {
     }
 
     const targetHexes = currentActionHexes();
+    saveHistoryState('MgT2E Bottom-Up Macro', { hexIds: targetHexes });
 
     // v0.6.1.0: Statistical auditor
     const _auditor_mgt2e_bu = (typeof StatisticalAuditor !== 'undefined')
@@ -771,12 +975,11 @@ function _mergeCTManualFields(oldSys, newSys) {
 async function runCTNewMacro(skipPop = false) {
     if (!validateSelection('generate', !skipPop)) return;
 
-    saveHistoryState('CT New Macro');
-
     console.log("Bulk Generating CT (New Modular) Full System...");
     await ensureNamesLoaded();
 
     const targetHexes = currentActionHexes();
+    saveHistoryState('CT New Macro', { hexIds: targetHexes });
 
     // Warn if any selected hex has manually-overridden CT fields
     let _ctManualCount = 0;
@@ -910,12 +1113,11 @@ async function runCTNewMacro(skipPop = false) {
 async function runCTBottomUpMacro(skipPop = false) {
     if (!validateSelection('generate', !skipPop)) return;
 
-    saveHistoryState('CT Bottom-Up Macro');
-
     console.log("Bulk Generating CT Bottom-Up Full System...");
     await ensureNamesLoaded();
 
     const targetHexes = currentActionHexes();
+    saveHistoryState('CT Bottom-Up Macro', { hexIds: targetHexes });
 
     // Warn if any selected hex has manually-overridden CT fields
     let _ctManualCount = 0;
@@ -1044,13 +1246,13 @@ async function runCTBottomUpMacro(skipPop = false) {
 async function runRTTMacro(skipPop = false) {
     if (!validateSelection('generate', !skipPop)) return;
 
-    saveHistoryState('RTT Macro');
     if (window.isLoggingEnabled) window.batchLogData = [];
 
     console.log("Bulk Generating RTT Full System...");
     await ensureNamesLoaded();
 
     const targetHexes = currentActionHexes();
+    saveHistoryState('RTT Macro', { hexIds: targetHexes });
 
     // Warn if any selected hex has manually-overridden fields that will be lost
     let totalManualBodies = 0;
@@ -1195,13 +1397,13 @@ async function runRTTMacro(skipPop = false) {
 async function runAoWMacro(skipPop = false) {
     if (!validateSelection('generate', !skipPop)) return;
 
-    saveHistoryState('AoW Macro');
     if (window.isLoggingEnabled) window.batchLogData = [];
 
     console.log("Bulk Generating AoW Bottom-Up Full System...");
     await ensureNamesLoaded();
 
     const targetHexes = currentActionHexes();
+    saveHistoryState('AoW Macro', { hexIds: targetHexes });
 
     if (!confirm(`This will completely overwrite ANY existing data in the selected hexes with a Full Architect of Worlds (Bottom-Up) generation sequence.\n\nProceed?`)) {
         return;
@@ -1293,7 +1495,6 @@ async function runAoWMacro(skipPop = false) {
 async function runT5Macro(skipPop = false) {
     if (!validateSelection('generate', !skipPop)) return;
 
-    saveHistoryState('T5 Macro');
     if (window.isLoggingEnabled) window.batchLogData = [];
 
     console.log("Bulk Generating T5 Full System...");
@@ -1304,6 +1505,7 @@ async function runT5Macro(skipPop = false) {
     }
 
     const targetHexes = currentActionHexes();
+    saveHistoryState('T5 Macro', { hexIds: targetHexes });
 
     // v0.6.1.0: Statistical auditor
     const _auditor_t5 = (typeof StatisticalAuditor !== 'undefined')

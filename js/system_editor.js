@@ -2592,7 +2592,7 @@ const SystemEditor = (() => {
         const hexId = _workingCopy.hexId;
 
         // Save global undo snapshot before mutating
-        if (typeof saveHistoryState === 'function') saveHistoryState('Fill & Save System');
+        if (typeof saveHistoryState === 'function') saveHistoryState('Fill & Save System', { hexIds: [hexId] });
 
         const result = _generateAndCommit('Fill & Save');
         if (!result) return;

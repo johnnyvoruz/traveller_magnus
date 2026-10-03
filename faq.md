@@ -393,39 +393,22 @@ a gas giant's Large/Small class, drag moons to reorder them, and toggle which bo
 
 ---
 
-## 11. How do I draw routes manually?
+## 11. How do I draw routes?
 
-**Hold a route slot's shortcut key and drag from one hex to an adjacent hex.**
+Routes are built from the **Route Manager** (press **R**). A fresh map starts with two routes: **XBoat Route** (green) and **Trading Route** (red). More are added with **+ Add Route**, each taking the next unused colour.
 
-Each of the nine route slots has a shortcut key, assigned **1** through **9** by default:
+Open a route's **⋯** menu and choose **Auto** to generate its segments. Published routes also arrive with an Imperium or Universe import, in their own slots, and a route file can be loaded from the same menu.
 
-| Slot | Default name | Default colour | Key |
-|---|---|---|---|
-| 1 | XBoat Route | Green | **1** |
-| 2 | Trading Route | Red | **2** |
-| 3 | Secondary Route | Yellow | **3** |
-| 4–9 | Route 4 … Route 9 | Orange, cyan, pink, purple, blue, lime | **4**–**9** |
-
-So holding **1** and dragging between two neighbouring hexes lays a green X-boat segment;
-holding **2** lays a red trade segment, and so on.
-
-**Doing the same thing again over an existing segment deletes it** — the drag toggles.
-
-Notes:
-
-- Segments connect **adjacent hexes only**. A long route is a chain of individual segments.
-- **Ctrl + Z** undoes the last segment; **Ctrl + Shift + Z** redoes it.
-- Names, colours, and shortcut keys are all editable in the Route Manager (press **R**). The
-  letters **f** and **r** are reserved (Filter and Route Manager) and can't be used as shortcuts.
+- **Ctrl + Z** undoes the last change; **Ctrl + Shift + Z** redoes it.
+- Names and colours are edited on the route's row.
 - Deleting a populated hex removes every route segment attached to it, across all slots.
 
 ---
 
 ## 12. How do I create automated routes?
 
-Press **R** (or right-click → MANAGERS → Route Manager) to open the **Route Window**, then click
-**⚙ Auto** on any route slot. Pick a generation method, set its parameters, and click
-**Generate**.
+Press **R** to open the **Route Manager**, open a route's **⋯** menu, and choose **Auto**.
+Pick a generation method, set its parameters, and click **Generate**.
 
 Four methods are available:
 
@@ -489,7 +472,7 @@ to choose from:
 Switch freely between them — the terrain is identical, only the projection changes. The map is
 captioned with the world's name, hex ID, and UWP.
 
-**Download Map** saves the current view as a JPEG named after the world.
+**Download Map** saves the current view as a PNG named after the world. Diamond, sinusoidal, and Mollweide leave the area outside the map transparent.
 
 ### Bulk export
 

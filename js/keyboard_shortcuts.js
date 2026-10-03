@@ -40,6 +40,10 @@ function setupKeyboardShortcuts() {
         e.target.value = '';
         generate?.();
     });
+    document.getElementById('btn-build-imported')?.addEventListener('click', () => {
+        console.log('[MgtBuild] Build systems already on the map');
+        window.startBackgroundMgtBuild?.();
+    });
     const toolbar = document.getElementById('map-toolbar');
     // Reflect keyboard changes in the same visible controls.
     const syncTools = () => {
@@ -74,9 +78,7 @@ function setupKeyboardShortcuts() {
         const key = e.key.toLowerCase();
         keysDown.add(key);
 
-        // Prevent default for route shortcut keys (dynamic from definitions), R, B, and G
-        const routeShortcuts = (window.routeDefinitions || []).map(d => d.shortcut).filter(s => s && s.length === 1);
-        if (key === 'r' || key === 'b' || key === 'g' || key === 'd' || routeShortcuts.includes(key)) {
+        if (key === 'r' || key === 'b' || key === 'g' || (key === 'd' && window.playerKnowledgeExperimental)) {
             e.preventDefault();
         }
 
@@ -126,6 +128,7 @@ function setupKeyboardShortcuts() {
             e.preventDefault();
             actions.select();
         } else if (e.key === 'Escape') {
+            if (document.querySelector('.campaign-stardate-dialog[open], .atlas-crop-dialog[open]')) return;
             e.preventDefault();
             const contextMenu = document.getElementById('context-menu');
             const helpPanel = document.getElementById('help-panel');
@@ -202,7 +205,7 @@ function setupKeyboardShortcuts() {
         } else if (key === 'g' && !e.ctrlKey) {
             e.preventDefault();
             if (typeof window.toggleRegionWindow === 'function') window.toggleRegionWindow();
-        } else if (key === 'd' && !e.ctrlKey) {
+        } else if (key === 'd' && !e.ctrlKey && window.playerKnowledgeExperimental) {
             e.preventDefault();
             window.toggleDisclosureGrid?.();
         // NOTE: the 'A' key used to open an Allegiance Manager window. That
@@ -216,22 +219,15 @@ function setupKeyboardShortcuts() {
             const to = e.shiftKey ? window.undoStack : window.redoStack;
             const snap = from[from.length - 1];
             if (!snap || !CampaignAtlas.confirmLeave()) return;
-            const current = {
-                action: snap.action,
-                campaignAtlas: CampaignAtlas.snapshot(),
-                routes: JSON.parse(JSON.stringify(window.sectorRoutes || [])),
-                hexStates: JSON.parse(JSON.stringify(Array.from(hexStates.entries())))
-            };
-            if (snap.routeDefinitions) current.routeDefinitions = JSON.parse(JSON.stringify(window.routeDefinitions || []));
             try {
-                await CampaignAtlas.restoreHistory(snap.campaignAtlas, () => {
+                const current = captureHistoryInverse(snap);
+                const apply = () => {
                     from.pop(); to.push(current);
-                    // Clone: restored state must not mutate the saved snapshot.
-                    window.sectorRoutes = JSON.parse(JSON.stringify(snap.routes));
-                    hexStates.clear();
-                    JSON.parse(JSON.stringify(snap.hexStates)).forEach(([id, st]) => hexStates.set(id, st));
+                    applyHistoryPatch(snap);
                     _restoreRouteDefinitions(snap);
-                });
+                };
+                if (snap.campaignAtlas) await CampaignAtlas.restoreHistory(snap.campaignAtlas, apply);
+                else apply();
                 showToast(`${e.shiftKey ? 'Redid' : 'Undid'}: ${snap.action}`, 2000);
                 requestAnimationFrame(draw);
                 if (window.dbManager) { window.dbManager.syncAllHexes(); window.dbManager.saveRoutes(); }

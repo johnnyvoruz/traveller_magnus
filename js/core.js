@@ -70,6 +70,7 @@ window.regionNamesEnabled = false;
 
 // Sector name store — keyed by integer sector number
 window.sectorNames = {};
+window.sectorReview = {};
 
 // Subsector name store — keyed "sectorNum-letter", e.g. "37-C" → "Regina".
 // Filled from TravellerMap metadata <Subsector Index="A">…</Subsector> on OTU
@@ -130,20 +131,22 @@ window.autoRouteCounter = 0; // Persistent sequential counter for Auto Route gro
 window.routeDefinitions = [];
 
 /**
- * Returns the 9 default route definitions used on a fresh map.
- * Route IDs are fixed and never change; name/color/shortcut are user-editable.
+ * Colours handed to new routes, in order. A fresh map uses the first two.
+ * Further routes from Add route take the next colour not already in use.
+ */
+function getRouteColorPalette() {
+    return ['#016a01', '#ff0000', '#ffff00', '#ff8800', '#00ddff', '#ff44aa', '#aa66ff', '#66aaff', '#aaff44'];
+}
+
+/**
+ * Routes present on a fresh map. Saved maps keep whatever the Route Manager
+ * already has; this list is only the starting pair.
  */
 function getDefaultRouteDefinitions() {
+    const [xboat, trade] = getRouteColorPalette();
     return [
-        { id: 1, name: "XBoat Route",     color: "#016a01", shortcut: "1", visible: true, automationRef: null },
-        { id: 2, name: "Trading Route",   color: "#ff0000", shortcut: "2", visible: true, automationRef: null },
-        { id: 3, name: "Secondary Route", color: "#ffff00", shortcut: "3", visible: true, automationRef: null },
-        { id: 4, name: "Route 4",         color: "#ff8800", shortcut: "4", visible: true, automationRef: null },
-        { id: 5, name: "Route 5",         color: "#00ddff", shortcut: "5", visible: true, automationRef: null },
-        { id: 6, name: "Route 6",         color: "#ff44aa", shortcut: "6", visible: true, automationRef: null },
-        { id: 7, name: "Route 7",         color: "#aa66ff", shortcut: "7", visible: true, automationRef: null },
-        { id: 8, name: "Route 8",         color: "#66aaff", shortcut: "8", visible: true, automationRef: null },
-        { id: 9, name: "Route 9",         color: "#aaff44", shortcut: "9", visible: true, automationRef: null }
+        { id: 1, name: "XBoat Route",   color: xboat, shortcut: null, visible: true, automationRef: null },
+        { id: 2, name: "Trading Route", color: trade, shortcut: null, visible: true, automationRef: null }
     ];
 }
 
@@ -228,38 +231,133 @@ window.undoStack = [];
 window.redoStack = [];
 
 /**
+ * Undo records the records an action is about to change, not the campaign.
+ *
  * @param {string} actionName - label shown by "Undid: …"
  * @param {Object} [opts]
- * @param {boolean} [opts.includeRouteDefinitions] - also snapshot
- *        window.routeDefinitions, for actions that add or remove route slots.
+ * @param {string[]} [opts.hexIds] - hexes this action will replace or delete.
+ *        Captured before the edit. A missing hex is stored as null.
+ * @param {boolean} [opts.routes] - copy window.sectorRoutes (the leg list).
+ * @param {boolean} [opts.includeRouteDefinitions] - copy window.routeDefinitions.
+ * @param {boolean} [opts.campaignAtlas] - copy the campaign atlas.
+ * @param {boolean} [opts.borders] - copy border definitions, assignments, and paths.
+ * @param {boolean} [opts.allegiances] - copy allegiance definitions and assignments.
+ * @param {boolean} [opts.regions] - copy region definitions and paths.
  */
-function saveHistoryState(actionName, opts = {}) {
-    const stateSnapshot = {
-        action: actionName,
-        campaignAtlas: JSON.parse(JSON.stringify(window.campaignAtlas)),
-        routes: JSON.parse(JSON.stringify(window.sectorRoutes || [])),
-        hexStates: JSON.parse(JSON.stringify(Array.from(hexStates.entries())))
-    };
+function _historyClone(value) {
+    if (value == null) return null;
+    return JSON.parse(JSON.stringify(value));
+}
 
-    // Opt-in, not automatic. A route's name, colour, shortcut and visibility are
-    // all edited without pushing a history entry of their own, so a snapshot
-    // that always carried the definitions would let an undo of some unrelated
-    // action — painting a hex, say — silently revert a rename made afterwards.
-    // Only actions that add or remove slots record them, and undo restores them
-    // only from a snapshot that has them.
-    if (opts.includeRouteDefinitions) {
-        stateSnapshot.routeDefinitions = JSON.parse(JSON.stringify(window.routeDefinitions || []));
+function _historyMapEntries(map) {
+    if (!map || typeof map.forEach !== 'function') return [];
+    const out = [];
+    map.forEach((value, key) => out.push([key, _historyClone(value)]));
+    return out;
+}
+
+function saveHistoryState(actionName, opts = {}) {
+    const hexIds = Array.isArray(opts.hexIds) ? opts.hexIds : null;
+    const hasScope = !!(hexIds || opts.routes || opts.includeRouteDefinitions || opts.campaignAtlas
+        || opts.borders || opts.allegiances || opts.regions);
+    if (!hasScope) {
+        console.warn(`[History] "${actionName}" was not recorded. Name the hexes or lists this edit changes.`);
+        if (window.dbManager) window.dbManager.scheduleSyncAll();
+        return false;
     }
-    // Cap undo history by grid size: 50 snapshots for the default 7×5 canvas,
-    // 5 for larger canvases where each snapshot can be hundreds of MB.
+    let stateSnapshot;
+    try {
+        stateSnapshot = { action: actionName, hexes: [] };
+        if (hexIds) {
+            for (const id of hexIds) {
+                const cur = hexStates.get(id);
+                stateSnapshot.hexes.push({ id, before: cur === undefined ? null : _historyClone(cur) });
+            }
+        }
+        // Route names and colours are not on the hex. Copy them only for the
+        // action that adds or removes slots, or an undo of a later hex edit
+        // would put a renamed route back.
+        if (opts.routes) stateSnapshot.routes = _historyClone(window.sectorRoutes || []);
+        if (opts.includeRouteDefinitions) stateSnapshot.routeDefinitions = _historyClone(window.routeDefinitions || []);
+        if (opts.campaignAtlas) stateSnapshot.campaignAtlas = _historyClone(window.campaignAtlas);
+        if (opts.borders) {
+            stateSnapshot.borderDefinitions = _historyClone(window.borderDefinitions || []);
+            stateSnapshot.borderAssignments = _historyMapEntries(window.hexBorderAssignments);
+            stateSnapshot.borderPaths = _historyMapEntries(window.borderPaths);
+        }
+        if (opts.allegiances) {
+            stateSnapshot.allegianceDefinitions = _historyClone(window.allegianceDefinitions || []);
+            stateSnapshot.allegianceAssignments = _historyMapEntries(window.hexAllegianceAssignments);
+        }
+        if (opts.regions) {
+            stateSnapshot.regionDefinitions = _historyClone(window.regionDefinitions || []);
+            stateSnapshot.regionPaths = _historyMapEntries(window.regionPaths);
+        }
+    } catch (err) {
+        console.warn(`[History] "${actionName}" was not recorded. Its patch was too large to copy for undo.`, err);
+        if (window.dbManager) window.dbManager.scheduleSyncAll();
+        return false;
+    }
     const undoLimit = (gridWidth * gridHeight) > 35 ? 5 : 50;
     window.undoStack.push(stateSnapshot);
     if (window.undoStack.length > undoLimit) window.undoStack.shift();
-    window.redoStack = []; // Clear redo stack on new action
+    window.redoStack = [];
 
-    // Schedule a debounced DB sync. Fires 2 seconds after the last action,
-    // so bulk generation runs produce one write rather than thousands.
     if (window.dbManager) window.dbManager.scheduleSyncAll();
+    return true;
+}
+
+function _historyReplaceMap(map, entries) {
+    if (!map) return;
+    map.clear();
+    for (const [key, value] of entries) map.set(key, _historyClone(value));
+}
+
+/** Write a patch (or a legacy full-map snapshot) back onto the live stores. */
+function applyHistoryPatch(snap) {
+    if (!snap) return;
+    if (Array.isArray(snap.hexes)) {
+        for (const entry of snap.hexes) {
+            if (entry.before == null) hexStates.delete(entry.id);
+            else hexStates.set(entry.id, _historyClone(entry.before));
+        }
+    } else if (Array.isArray(snap.hexStates)) {
+        hexStates.clear();
+        for (const [id, state] of snap.hexStates) hexStates.set(id, _historyClone(state));
+    }
+    if (snap.routes) window.sectorRoutes = _historyClone(snap.routes);
+    if (snap.campaignAtlas) window.campaignAtlas = _historyClone(snap.campaignAtlas);
+    if (snap.borderDefinitions) window.borderDefinitions = _historyClone(snap.borderDefinitions);
+    if (snap.borderAssignments && window.hexBorderAssignments) _historyReplaceMap(window.hexBorderAssignments, snap.borderAssignments);
+    if (snap.borderPaths && window.borderPaths) _historyReplaceMap(window.borderPaths, snap.borderPaths);
+    if (snap.allegianceDefinitions) window.allegianceDefinitions = _historyClone(snap.allegianceDefinitions);
+    if (snap.allegianceAssignments && window.hexAllegianceAssignments) _historyReplaceMap(window.hexAllegianceAssignments, snap.allegianceAssignments);
+    if (snap.regionDefinitions) window.regionDefinitions = _historyClone(snap.regionDefinitions);
+    if (snap.regionPaths && window.regionPaths) _historyReplaceMap(window.regionPaths, snap.regionPaths);
+}
+
+/** The same shape as snap, filled with the live values, so redo can reverse an undo. */
+function captureHistoryInverse(snap) {
+    const current = { action: snap.action };
+    if (Array.isArray(snap.hexes)) {
+        current.hexes = snap.hexes.map(entry => {
+            const cur = hexStates.get(entry.id);
+            return { id: entry.id, before: cur === undefined ? null : _historyClone(cur) };
+        });
+    } else if (Array.isArray(snap.hexStates)) {
+        current.hexStates = Array.from(hexStates.entries()).map(([id, state]) => [id, _historyClone(state)]);
+    }
+    if (snap.routes) current.routes = _historyClone(window.sectorRoutes || []);
+    if (snap.routeDefinitions) current.routeDefinitions = _historyClone(window.routeDefinitions || []);
+    if (snap.campaignAtlas) current.campaignAtlas = _historyClone(window.campaignAtlas);
+    if (snap.borderDefinitions) current.borderDefinitions = _historyClone(window.borderDefinitions || []);
+    if (snap.borderAssignments) current.borderAssignments = _historyMapEntries(window.hexBorderAssignments);
+    if (snap.borderPaths) current.borderPaths = _historyMapEntries(window.borderPaths);
+    if (snap.allegianceDefinitions) current.allegianceDefinitions = _historyClone(window.allegianceDefinitions || []);
+    if (snap.allegianceAssignments) current.allegianceAssignments = _historyMapEntries(window.hexAllegianceAssignments);
+    if (snap.regionDefinitions) current.regionDefinitions = _historyClone(window.regionDefinitions || []);
+    if (snap.regionPaths) current.regionPaths = _historyMapEntries(window.regionPaths);
+    return current;
 }
 
 // -----------------------------------------------------------------------------
@@ -407,6 +505,44 @@ function centerHexInView(hexId) {
     cameraY = pixel.y - (70 + (innerHeight - 70) / 2) / zoom;
 }
 
+function fitHexesInView(hexIds) {
+    if (window.SystemViewer?.isOpen()) return;
+    const pixels = [];
+    (hexIds || []).forEach(id => {
+        const coords = getHexCoords(id);
+        if (coords) pixels.push(getHexPixel(coords.q, coords.r));
+    });
+    if (!pixels.length) return;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    pixels.forEach(p => {
+        minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+        minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+    });
+    const pad = baseHexSize * 2.2;
+    minX -= pad; minY -= pad; maxX += pad; maxY += pad;
+    const nav = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--workspace-left')) || 68;
+    const route = document.getElementById('route-window');
+    const routeOpen = route && route.classList.contains('visible');
+    let left = routeOpen ? route.getBoundingClientRect().right + 16 : nav + 16;
+    const trade = document.getElementById('trade-match');
+    let bottom = 16;
+    if (trade && !trade.hidden) {
+        const rect = trade.getBoundingClientRect();
+        const sheet = rect.bottom > window.innerHeight - 24 && rect.top > 120 && rect.width > window.innerWidth * 0.6;
+        if (sheet) bottom = Math.max(bottom, window.innerHeight - rect.top + 16);
+        else if (rect.right > left) left = rect.right + 16;
+    }
+    const top = 76;
+    const viewW = Math.max(120, window.innerWidth - left - 16);
+    const viewH = Math.max(120, window.innerHeight - top - bottom);
+    const boxW = Math.max(maxX - minX, baseHexSize);
+    const boxH = Math.max(maxY - minY, baseHexSize);
+    zoom = Math.max(0.03, Math.min(viewW / boxW, viewH / boxH, 10));
+    cameraX = (minX + maxX) / 2 - (left + viewW / 2) / zoom;
+    cameraY = (minY + maxY) / 2 - (top + viewH / 2) / zoom;
+    requestAnimationFrame(draw);
+}
+
 function centerSectorInView(sectorNum) {
     if (window.SystemViewer?.isOpen()) return;
     const n = parseInt(sectorNum, 10);
@@ -438,46 +574,84 @@ function _rewriteHexIdSlot(hexId, oldW, newW) {
 function _remapKeyedMap(map, fn) {
     if (!map) return map;
     const next = new Map();
-    map.forEach((v, k) => next.set(fn(k), v));
+    map.forEach((v, k) => {
+        const nk = fn(k);
+        if (nk != null) next.set(nk, v);
+    });
     return next;
 }
 
 function remapAllHexIds(oldW, newW) {
     if (oldW === newW) return;
-    const fn = id => _rewriteHexIdSlot(id, oldW, newW);
+    remapSectorSlots(oldW, oldSlot => {
+        const sX = (oldSlot - 1) % oldW;
+        const sY = Math.floor((oldSlot - 1) / oldW);
+        return sY * newW + sX + 1;
+    });
+}
+
+// mapSlot(oldSlot) returns the new slot number, or null to drop the key.
+// Used when a column or row is inserted or removed anywhere in the sheet.
+function remapSectorSlots(oldW, mapSlot) {
+    const fn = hexId => {
+        if (hexId == null) return hexId;
+        const parts = String(hexId).split('-');
+        const oldSlot = parseInt(parts[0], 10);
+        if (!Number.isFinite(oldSlot) || oldSlot < 1) return hexId;
+        const newSlot = mapSlot(oldSlot);
+        if (newSlot == null) return null;
+        if (newSlot === oldSlot) return hexId;
+        parts[0] = String(newSlot);
+        return parts.join('-');
+    };
+    const mapKey = key => {
+        const n = parseInt(key, 10);
+        if (!Number.isFinite(n) || n < 1) return key;
+        const mapped = mapSlot(n);
+        return mapped == null ? null : mapped;
+    };
     hexStates = _remapKeyedMap(hexStates, fn);
-    selectedHexes = new Set([...selectedHexes].map(fn));
+    selectedHexes = new Set([...selectedHexes].map(fn).filter(Boolean));
     if (window.hexBorderAssignments) window.hexBorderAssignments = _remapKeyedMap(window.hexBorderAssignments, fn);
     if (window.hexAllegianceAssignments) window.hexAllegianceAssignments = _remapKeyedMap(window.hexAllegianceAssignments, fn);
-    (window.sectorRoutes || []).forEach(r => {
-        if (r.startId) r.startId = fn(r.startId);
-        if (r.endId) r.endId = fn(r.endId);
-    });
+    if (window.sectorRoutes) {
+        window.sectorRoutes.forEach(r => {
+            if (r.startId) r.startId = fn(r.startId);
+            if (r.endId) r.endId = fn(r.endId);
+        });
+        window.sectorRoutes = window.sectorRoutes.filter(r => r.startId && r.endId);
+    }
     if (window.campaignAtlas && window.campaignAtlas.records) {
         Object.values(window.campaignAtlas.records).forEach(rec => {
-            if (rec.anchor && rec.anchor.hexId) rec.anchor.hexId = fn(rec.anchor.hexId);
+            if (rec.anchor && rec.anchor.hexId) {
+                const next = fn(rec.anchor.hexId);
+                if (next) rec.anchor.hexId = next;
+            }
         });
     }
     if (window.sectorNames) {
         const next = {};
         Object.keys(window.sectorNames).forEach(k => {
-            const n = parseInt(k, 10);
-            if (!Number.isFinite(n)) { next[k] = window.sectorNames[k]; return; }
-            const sX = (n - 1) % oldW;
-            const sY = Math.floor((n - 1) / oldW);
-            next[sY * newW + sX + 1] = window.sectorNames[k];
+            const mapped = mapKey(k);
+            if (mapped != null) next[mapped] = window.sectorNames[k];
         });
         window.sectorNames = next;
+    }
+    if (window.sectorReview) {
+        const next = {};
+        Object.keys(window.sectorReview).forEach(k => {
+            const mapped = mapKey(k);
+            if (mapped != null) next[mapped] = window.sectorReview[k];
+        });
+        window.sectorReview = next;
     }
     if (window.subsectorNames) {
         const next = {};
         Object.keys(window.subsectorNames).forEach(k => {
             const m = /^(\d+)-([A-P])$/.exec(k);
             if (!m) { next[k] = window.subsectorNames[k]; return; }
-            const n = parseInt(m[1], 10);
-            const sX = (n - 1) % oldW;
-            const sY = Math.floor((n - 1) / oldW);
-            next[(sY * newW + sX + 1) + '-' + m[2]] = window.subsectorNames[k];
+            const mapped = mapSlot(parseInt(m[1], 10));
+            if (mapped != null) next[mapped + '-' + m[2]] = window.subsectorNames[k];
         });
         window.subsectorNames = next;
     }
@@ -489,9 +663,8 @@ function remapAllHexIds(oldW, newW) {
             if (idx === -1) { next.set(k, v); return; }
             const n = parseInt(key.slice(0, idx), 10);
             if (!Number.isFinite(n)) { next.set(k, v); return; }
-            const sX = (n - 1) % oldW;
-            const sY = Math.floor((n - 1) / oldW);
-            next.set((sY * newW + sX + 1) + key.slice(idx), v);
+            const mapped = mapSlot(n);
+            if (mapped != null) next.set(mapped + key.slice(idx), v);
         });
         window.regionPaths = next;
     }
@@ -553,6 +726,7 @@ function purgeSectorSlots(slots) {
     }
     slots.forEach(n => {
         delete window.sectorNames[n];
+        if (window.sectorReview) delete window.sectorReview[n];
         if (typeof clearSubsectorNamesForSector === 'function') clearSubsectorNamesForSector(n);
         if (window.regionPaths) {
             [...window.regionPaths.keys()].forEach(k => {
@@ -572,6 +746,7 @@ function persistGridChange() {
     if (!window.dbManager) return;
     window.dbManager.saveGridDimensions?.();
     window.dbManager.saveSectorNames?.();
+    window.dbManager.saveSectorReview?.();
     window.dbManager.saveSubsectorNames?.();
     window.dbManager.saveBorderAssignments?.();
     window.dbManager.saveRegionPaths?.();

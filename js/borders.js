@@ -2,6 +2,21 @@
 // BORDERS.JS - Border Manager UI & Import
 // ============================================================================
 
+function fitBorderNameField(el) {
+    if (!el) return;
+    el.style.height = '28px';
+    if (el.scrollHeight > el.clientHeight + 1) {
+        el.style.height = Math.min(el.scrollHeight, 48) + 'px';
+    }
+}
+
+function fitBorderNames(root) {
+    const scope = root || document;
+    requestAnimationFrame(() => {
+        scope.querySelectorAll('.border-name-input').forEach(fitBorderNameField);
+    });
+}
+
 // Maps common CSS/TravellerMap color name strings to in-app hex colors.
 const BORDER_COLOR_MAP = {
     'red':       '#e63946', 'crimson':   '#dc143c', 'darkred':   '#8b0000',
@@ -125,12 +140,184 @@ window.sortAndTrimBorderDefinitions = function () {
     }
 };
 
+let _borderSort = 'default';
+let _selectedBorderId = null;
+let _borderMenuEl = null;
+let _borderMenuAnchor = null;
+
+function _borderNameLines(name) {
+    const comma = String(name).indexOf(',');
+    if (comma < 0) return String(name);
+    const rest = name.slice(comma + 1).trim();
+    if (!rest) return String(name);
+    return name.slice(0, comma + 1) + '\n' + rest;
+}
+
+function _borderHexIds(borderId) {
+    const ids = [];
+    (window.hexBorderAssignments || new Map()).forEach((bId, hexId) => {
+        if (bId === borderId) ids.push(hexId);
+    });
+    return ids;
+}
+
+function _orderedBorderDefs(defs, hexCounts) {
+    if (_borderSort === 'default') return defs;
+    const list = defs.slice();
+    const byName = (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+    const hexes = id => hexCounts.get(id) || 0;
+    if (_borderSort === 'alpha-asc') list.sort((a, b) => byName(a, b) || a.id - b.id);
+    else if (_borderSort === 'alpha-desc') list.sort((a, b) => byName(b, a) || a.id - b.id);
+    else if (_borderSort === 'hex-desc') list.sort((a, b) => hexes(b.id) - hexes(a.id) || a.id - b.id);
+    else if (_borderSort === 'hex-asc') list.sort((a, b) => hexes(a.id) - hexes(b.id) || a.id - b.id);
+    return list;
+}
+
+function _markBorderRows() {
+    document.querySelectorAll('#border-window-list .border-row').forEach(row => {
+        row.classList.toggle('is-selected', row.dataset.borderId === String(_selectedBorderId));
+    });
+}
+
+function _closeBorderMenu() {
+    if (_borderMenuAnchor) _borderMenuAnchor.setAttribute('aria-expanded', 'false');
+    _borderMenuAnchor = null;
+    if (_borderMenuEl) _borderMenuEl.style.display = 'none';
+}
+
+function _openBorderMenu(def, anchor, hexCount) {
+    if (_borderMenuEl && _borderMenuEl.style.display !== 'none' && _borderMenuEl.dataset.borderId === String(def.id)) {
+        _closeBorderMenu();
+        return;
+    }
+    if (!_borderMenuEl) {
+        const el = document.createElement('div');
+        el.id = 'border-more-menu';
+        el.className = 'app-menu';
+        el.setAttribute('role', 'menu');
+        el.style.display = 'none';
+        document.body.appendChild(el);
+        _borderMenuEl = el;
+    }
+    const el = _borderMenuEl;
+    el.dataset.borderId = String(def.id);
+    el.replaceChildren();
+    const addItem = (label, opts = {}) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.setAttribute('role', 'menuitem');
+        btn.textContent = label;
+        if (opts.danger) btn.className = 'danger';
+        btn.disabled = !!opts.disabled;
+        if (!opts.disabled) btn.addEventListener('click', () => { _closeBorderMenu(); opts.run(); });
+        el.appendChild(btn);
+    };
+    addItem('Rename', { run: () => {
+        if (typeof window.openRecordNameModal !== 'function') return;
+        window.openRecordNameModal({
+            title: 'Rename border',
+            value: def.name,
+            okLabel: 'Rename',
+            onOk: (name) => {
+                def.name = name;
+                if (window.dbManager) window.dbManager.saveBorderDefinitions?.();
+                if (typeof window.invalidateBorderNamesCache === 'function') window.invalidateBorderNamesCache();
+                window.renderBorderWindow();
+                requestAnimationFrame(draw);
+            }
+        });
+    } });
+    addItem('Clear hexes', { disabled: hexCount === 0, run: () => _clearBorder(def) });
+    const sep = document.createElement('div');
+    sep.className = 'app-menu-sep';
+    el.appendChild(sep);
+    addItem('Delete border', { danger: true, run: () => _deleteBorder(def) });
+    if (_borderMenuAnchor) _borderMenuAnchor.setAttribute('aria-expanded', 'false');
+    _borderMenuAnchor = anchor;
+    anchor.setAttribute('aria-expanded', 'true');
+    el.style.display = 'block';
+    const r = anchor.getBoundingClientRect();
+    const w = el.offsetWidth || 180;
+    let left = r.right - w;
+    let top = r.bottom + 4;
+    if (left < 8) left = 8;
+    if (top + el.offsetHeight > window.innerHeight - 8) top = Math.max(8, r.top - el.offsetHeight - 4);
+    el.style.left = left + 'px';
+    el.style.top = top + 'px';
+}
+
+function _deleteBorder(def) {
+    const count = _borderHexIds(def.id).length;
+    const hexMsg = count > 0 ? `\nThis will also clear its ${count} hex assignment(s).` : '';
+    if (!confirm(`Delete border "${def.name}"?${hexMsg}\n\nThis can be undone with Ctrl+Z.`)) return;
+    saveHistoryState(`Delete ${def.name}`, { borders: true });
+    if (window.hexBorderAssignments) {
+        window.hexBorderAssignments.forEach((bId, hexId) => {
+            if (bId === def.id) window.hexBorderAssignments.delete(hexId);
+        });
+    }
+    if (window.borderPaths) window.borderPaths.delete(def.id);
+    window.borderDefinitions = (window.borderDefinitions || []).filter(d => d.id !== def.id);
+    if (String(_selectedBorderId) === String(def.id)) _selectedBorderId = null;
+    if (window.dbManager) {
+        window.dbManager.saveBorderAssignments?.();
+        window.dbManager.saveBorderDefinitions?.();
+        window.dbManager.saveBorderPaths?.();
+    }
+    if (typeof window.invalidateBorderNamesCache === 'function') window.invalidateBorderNamesCache();
+    requestAnimationFrame(draw);
+    window.renderBorderWindow();
+    showToast(`Deleted border "${def.name}".`, 2000);
+}
+
+function _clearBorder(def) {
+    const ids = _borderHexIds(def.id);
+    if (ids.length === 0) { showToast(`"${def.name}" has no hexes to clear.`, 2000); return; }
+    if (!confirm(`Clear all ${ids.length} hex assignment(s) for "${def.name}"?`)) return;
+    saveHistoryState(`Clear ${def.name}`, { borders: true });
+    if (window.hexBorderAssignments) {
+        window.hexBorderAssignments.forEach((bId, hexId) => {
+            if (bId === def.id) window.hexBorderAssignments.delete(hexId);
+        });
+    }
+    if (window.borderPaths) window.borderPaths.delete(def.id);
+    if (window.dbManager) {
+        window.dbManager.saveBorderAssignments?.();
+        window.dbManager.saveBorderPaths?.();
+    }
+    requestAnimationFrame(draw);
+    window.renderBorderWindow();
+    showToast(`Cleared all hexes for "${def.name}".`, 2000);
+}
+
+window.addBorderSlot = function (name) {
+    if (!window.borderDefinitions) window.borderDefinitions = getDefaultBorderDefinitions();
+    saveHistoryState('Add border', { borders: true });
+    const nextId = window.borderDefinitions.length
+        ? Math.max(...window.borderDefinitions.map(d => d.id)) + 1 : 1;
+    const def = {
+        id: nextId,
+        name: (name && String(name).trim()) || `Border ${nextId}`,
+        color: BORDER_COLOR_CYCLE[(nextId - 1) % BORDER_COLOR_CYCLE.length],
+        visible: true
+    };
+    window.borderDefinitions.push(def);
+    if (window.dbManager) window.dbManager.saveBorderDefinitions?.();
+    _selectedBorderId = nextId;
+    window.renderBorderWindow();
+    const row = document.querySelector(`#border-window-list .border-row[data-border-id="${nextId}"]`);
+    if (row) row.scrollIntoView({ block: 'end' });
+    showToast(`Added "${def.name}".`, 2200);
+    return nextId;
+};
+
 window.renderBorderWindow = function () {
     const list = document.getElementById('border-window-list');
     if (!list) return;
     list.innerHTML = '';
+    _closeBorderMenu();
 
-    window.ensureFreeBorderSlot();
+    if (!window.borderDefinitions) window.borderDefinitions = getDefaultBorderDefinitions();
 
     const hexCounts = new Map();
     (window.hexBorderAssignments || new Map()).forEach((borderId) => {
@@ -138,94 +325,68 @@ window.renderBorderWindow = function () {
     });
 
     const defs = window.borderDefinitions;
-    defs.forEach((def) => {
+    _orderedBorderDefs(defs, hexCounts).forEach((def) => {
         const hexCount = hexCounts.get(def.id) || 0;
         const hexClass = hexCount > 0 ? 'used' : 'free';
         const hexLabel = hexCount > 0 ? String(hexCount) : '—';
+        const safeName = def.name.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        const selected = String(_selectedBorderId) === String(def.id);
 
         const row = document.createElement('div');
-        row.className = 'border-row';
+        row.className = 'border-row route-row' + (def.visible ? '' : ' is-hidden') + (selected ? ' is-selected' : '');
         row.dataset.borderId = def.id;
-        row.style.opacity = def.visible ? '1' : '0.45';
         row.innerHTML = `
-            <span class="border-hex-count ${hexClass}" title="${hexCount} hex(es)">${hexLabel}</span>
-            <input type="text" class="border-name-input" value="${def.name.replace(/"/g, '&quot;')}" title="Border name" />
-            <input type="color" class="border-color-swatch" value="${def.color}" title="Border color" />
-            <i class="fas fa-eye${def.visible ? '' : '-slash'} border-eye-btn" style="color:${def.visible ? '#45a29e' : '#666'};cursor:pointer;font-size:0.8rem;" title="${def.visible ? 'Disable border' : 'Enable border'}"></i>
-            <button class="border-clear-btn" title="Remove all hex assignments for this border">C</button>
-            <i class="fas fa-times border-delete-btn" style="color:#ff4500;cursor:pointer;font-size:0.8rem;" title="Delete border '${def.name.replace(/'/g, "&#39;")}'"></i>
+            <button type="button" class="route-eye" aria-label="${def.visible ? 'Hide' : 'Show'} ${safeName}" title="${def.visible ? 'Hide border' : 'Show border'}">
+                <i class="fas fa-eye${def.visible ? '' : '-slash'} route-eye-btn border-eye-btn${def.visible ? ' is-on' : ''}"></i>
+            </button>
+            <input type="color" class="route-color-swatch" value="${def.color}" title="Border color" aria-label="Border color">
+            <div class="route-name"></div>
+            <button type="button" class="route-seg-count border-hex-count ${hexClass}"${hexCount > 0 ? '' : ' disabled'} title="${hexCount > 0 ? hexCount + ' hex(es) — click to frame them on the map' : 'No hexes'}">${hexLabel}</button>
+            <button type="button" class="app-btn icon small border-more-btn" aria-label="More actions for ${safeName}" aria-haspopup="menu" aria-expanded="false" title="More"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></button>
         `;
+        row.querySelector('.route-name').textContent = _borderNameLines(def.name);
 
-        const nameIn   = row.querySelector('.border-name-input');
-        const colorIn  = row.querySelector('.border-color-swatch');
-        const eyeBtn   = row.querySelector('.border-eye-btn');
-        const clearBtn = row.querySelector('.border-clear-btn');
-        const delBtn   = row.querySelector('.border-delete-btn');
+        const colorIn = row.querySelector('input[type="color"]');
+        const eyeBtn = row.querySelector('.border-eye-btn');
+        const eyeWrap = row.querySelector('.route-eye');
 
-        nameIn.addEventListener('change', () => {
-            def.name = nameIn.value;
-            if (window.dbManager) window.dbManager.saveBorderDefinitions?.();
+        row.addEventListener('click', (e) => {
+            if (e.target.closest('.route-eye, .border-hex-count, .border-more-btn, .route-color-swatch')) return;
+            _selectedBorderId = def.id;
+            _markBorderRows();
         });
-
         colorIn.addEventListener('input', () => {
             def.color = colorIn.value;
             if (window.dbManager) window.dbManager.saveBorderDefinitions?.();
             requestAnimationFrame(draw);
         });
-
-        eyeBtn.addEventListener('click', () => {
+        eyeWrap.addEventListener('click', () => {
             def.visible = !def.visible;
             eyeBtn.classList.toggle('fa-eye', def.visible);
             eyeBtn.classList.toggle('fa-eye-slash', !def.visible);
-            eyeBtn.style.color = def.visible ? '#45a29e' : '#666';
-            eyeBtn.title = def.visible ? 'Disable border' : 'Enable border';
-            row.style.opacity = def.visible ? '1' : '0.45';
+            eyeBtn.classList.toggle('is-on', def.visible);
+            eyeWrap.title = def.visible ? 'Hide border' : 'Show border';
+            row.classList.toggle('is-hidden', !def.visible);
             if (window.dbManager) window.dbManager.saveBorderDefinitions?.();
             const allCb = document.getElementById('border-vis-all-check');
             if (allCb) {
                 const defs2 = window.borderDefinitions || [];
                 const vis2 = defs2.filter(d => d.visible).length;
                 allCb.indeterminate = vis2 > 0 && vis2 < defs2.length;
-                allCb.checked       = vis2 === defs2.length;
+                allCb.checked = vis2 === defs2.length;
             }
             requestAnimationFrame(draw);
         });
-
-        delBtn.addEventListener('click', () => {
-            const count = hexCounts.get(def.id) || 0;
-            const hexMsg = count > 0 ? `\nThis will also clear its ${count} hex assignment(s).` : '';
-            if (!confirm(`Delete border "${def.name}"?${hexMsg}\n\nThis can be undone with Ctrl+Z.`)) return;
-            saveHistoryState(`Delete ${def.name}`);
-            if (window.hexBorderAssignments) {
-                window.hexBorderAssignments.forEach((bId, hexId) => {
-                    if (bId === def.id) window.hexBorderAssignments.delete(hexId);
-                });
-            }
-            if (window.borderPaths) window.borderPaths.delete(def.id);
-            window.borderDefinitions = (window.borderDefinitions || []).filter(d => d.id !== def.id);
-            if (window.dbManager) {
-                window.dbManager.saveBorderAssignments?.();
-                window.dbManager.saveBorderDefinitions?.();
-            }
-            requestAnimationFrame(draw);
-            window.renderBorderWindow();
-            showToast(`Deleted border "${def.name}".`, 2000);
-        });
-
-        clearBtn.addEventListener('click', () => {
-            const count = hexCounts.get(def.id) || 0;
-            if (count === 0) { showToast(`Border #${def.id} has no hexes to clear.`, 2000); return; }
-            if (!confirm(`Clear all ${count} hex assignment(s) for "${def.name}"?`)) return;
-            if (window.hexBorderAssignments) {
-                window.hexBorderAssignments.forEach((bId, hexId) => {
-                    if (bId === def.id) window.hexBorderAssignments.delete(hexId);
-                });
-            }
-            if (window.borderPaths) window.borderPaths.delete(def.id);
-            if (window.dbManager) window.dbManager.saveBorderAssignments?.();
-            requestAnimationFrame(draw);
-            window.renderBorderWindow();
-            showToast(`Cleared all hexes for "${def.name}".`, 2000);
+        const pill = row.querySelector('.border-hex-count');
+        if (pill && hexCount > 0) {
+            pill.addEventListener('click', () => {
+                const ids = _borderHexIds(def.id);
+                if (typeof fitHexesInView === 'function') fitHexesInView(ids);
+            });
+        }
+        row.querySelector('.border-more-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            _openBorderMenu(def, e.currentTarget, hexCount);
         });
 
         list.appendChild(row);
@@ -239,6 +400,7 @@ window.renderBorderWindow = function () {
         visAllCb.indeterminate = visCount > 0 && visCount < defs.length;
         visAllCb.checked       = visCount === defs.length;
     }
+    fitBorderNames(list);
 };
 
 window.toggleBorderWindow = function () {
@@ -249,6 +411,7 @@ window.toggleBorderWindow = function () {
     } else {
         window.renderBorderWindow();
         win.classList.add('visible');
+        fitBorderNames(document.getElementById('border-window-list'));
     }
 };
 
@@ -271,9 +434,10 @@ window.refreshBorderWindowCounts = function () {
         const pill = row.querySelector('.border-hex-count');
         if (!pill) return;
         const count = hexCounts.get(borderId) || 0;
-        pill.className = `border-hex-count ${count > 0 ? 'used' : 'free'}`;
+        pill.className = `route-seg-count border-hex-count ${count > 0 ? 'used' : 'free'}`;
+        pill.disabled = count === 0;
         pill.textContent = count > 0 ? String(count) : '—';
-        pill.title = `${count} hex(es)`;
+        pill.title = count > 0 ? `${count} hex(es) — click to frame them on the map` : 'No hexes';
     });
 };
 
@@ -296,7 +460,7 @@ window.openAssignBorderModal = function () {
                        + `<span class="border-assign-name">Clear Border</span>`;
     clearBtn.addEventListener('click', () => {
         const hexList = currentActionHexes();
-        saveHistoryState('Clear Border');
+        saveHistoryState('Clear Border', { borders: true });
         hexList.forEach(hexId => {
             if (window.hexBorderAssignments) window.hexBorderAssignments.delete(hexId);
         });
@@ -341,7 +505,7 @@ window.openAssignBorderModal = function () {
 
 window.confirmAssignBorder = function (borderId) {
     const hexList = currentActionHexes();
-    saveHistoryState('Assign Border');
+    saveHistoryState('Assign Border', { borders: true });
     if (window.borderPaths) window.borderPaths.delete(borderId);
     hexList.forEach(hexId => {
         window.hexBorderAssignments.set(hexId, borderId);
@@ -1366,6 +1530,32 @@ window.importRegionsFromXml = function (regionsElement, slotNum) {
 };
 
 function setupBorderWindow() {
+    const addBtn = document.getElementById('btn-border-add');
+    if (addBtn) addBtn.addEventListener('click', () => {
+        if (typeof window.openRecordNameModal !== 'function') return;
+        window.openRecordNameModal({
+            title: 'New border',
+            value: '',
+            placeholder: 'Border name',
+            okLabel: 'Add border',
+            onOk: (name) => window.addBorderSlot(name)
+        });
+    });
+
+    const sortSel = document.getElementById('border-sort');
+    if (sortSel) sortSel.addEventListener('change', () => {
+        _borderSort = sortSel.value;
+        window.renderBorderWindow();
+    });
+
+    document.addEventListener('mousedown', (e) => {
+        if (_borderMenuEl && _borderMenuEl.style.display !== 'none'
+            && !_borderMenuEl.contains(e.target)
+            && !(e.target.closest && e.target.closest('.border-more-btn'))) {
+            _closeBorderMenu();
+        }
+    });
+
     const closeBtn = document.getElementById('btn-close-border-window');
     if (closeBtn) closeBtn.addEventListener('click', window.closeBorderWindow);
 
@@ -1389,13 +1579,14 @@ function setupBorderWindow() {
             if (window.dbManager) window.dbManager.saveBorderDefinitions?.();
             document.querySelectorAll('#border-window-list .border-row').forEach(row => {
                 const eye = row.querySelector('.border-eye-btn');
+                const wrap = row.querySelector('.route-eye');
                 if (eye) {
                     eye.classList.toggle('fa-eye', show);
                     eye.classList.toggle('fa-eye-slash', !show);
-                    eye.style.color = show ? '#45a29e' : '#666';
-                    eye.title = show ? 'Disable border' : 'Enable border';
+                    eye.classList.toggle('is-on', show);
                 }
-                row.style.opacity = show ? '1' : '0.45';
+                if (wrap) wrap.title = show ? 'Hide border' : 'Show border';
+                row.classList.toggle('is-hidden', !show);
             });
             visAllCb.indeterminate = false;
             requestAnimationFrame(draw);

@@ -99,6 +99,9 @@ function addRoute(id1, id2, type = "Trade", adjMap = null, extras = {}) {
     const exists = window.sectorRoutes.some(r => {
         if (r.startId !== sorted[0] || r.endId !== sorted[1]) return false;
         if (type === 'Filter' && extras.groupId) return r.groupId === extras.groupId;
+        // Same segment may carry two networks (Imperial X-boat and a polity
+        // route). Those have different route ids and both have to be kept.
+        if (extras.routeId != null) return r.routeId === extras.routeId;
         return r.type === type;
     });
 
@@ -1185,6 +1188,34 @@ function _btnTradeBonus(tcA, tcB) {
     return bonus;
 }
 
+function _btnFlags(codes) {
+    const list = codes || [];
+    return {
+        ag: list.includes('Ag'), na: list.includes('Na'),
+        inn: list.includes('In'), ni: list.includes('Ni')
+    };
+}
+
+function _btnTradeBonusFlags(a, b) {
+    let bonus = 0;
+    if ((a.ag && b.na) || (b.ag && a.na)) bonus += 1;
+    if ((a.inn && b.ni) || (b.inn && a.ni)) bonus += 1;
+    return bonus;
+}
+
+// The chart import stores the mainworld on t5Data, which has no trade number.
+// The Mongoose build writes WTN onto mgt2eData. Use the first profile in the
+// usual edition order that actually carries a finite WTN.
+function _btnProfile(state) {
+    const blobs = [state.rttData, state.t5Data, state.mgt2eData, state.ctData];
+    for (let i = 0; i < blobs.length; i++) {
+        const data = blobs[i];
+        if (!data || !Number.isFinite(data.WTN)) continue;
+        return data;
+    }
+    return null;
+}
+
 /**
  * Attempt to add a BTN route segment, enforcing the no-share rule across
  * different BTN route groups. Null btnMax is treated as +Infinity.
@@ -1233,110 +1264,120 @@ function _btnAddSegment(id1, id2, extras) {
  * @param {number}      cfg.routeId   - Route definition ID for rendering.
  * @returns {{ segments, fullRoutes, promoted, included, skipped }}
  */
-function generateBTNRoutes({ lowerBTN, minBTN, maxBTN, maxJump, range, color, groupId, name, routeId }) {
-    if (!window.sectorRoutes) window.sectorRoutes = [];
-
-    // ── 1. Collect worlds with a valid WTN ──────────────────────────────────
+function _btnCollect(lowerBTN) {
     const worlds = [];
-    let included = 0, skipped = 0;
-
+    let present = 0;
+    let skipped = 0;
+    let tooLow = 0;
+    // The cap is min(WTN) + 10, so a world below lowerBTN − 10 can never qualify.
+    const wtnFloor = lowerBTN - 10;
     hexStates.forEach((state, id) => {
         if (state.type !== 'SYSTEM_PRESENT') return;
-        const data = state.rttData || state.t5Data || state.mgt2eData || state.ctData;
+        present++;
+        const data = _btnProfile(state);
         if (!data) { skipped++; return; }
-        const wtn = data.WTN;
-        if (wtn === undefined || wtn === null || !Number.isFinite(wtn)) { skipped++; return; }
+        if (data.WTN < wtnFloor) { tooLow++; return; }
         const coords = getHexCoords(id);
+        if (!coords) { skipped++; return; }
+        const flags = _btnFlags(data.tradeCodes);
         worlds.push({
             id, q: coords.q, r: coords.r,
             name: data.name || id,
-            WTN: wtn,
-            tradeCodes: data.tradeCodes || [],
+            WTN: data.WTN,
+            flags,
             travelZone: data.travelZone || 'Green'
         });
-        included++;
     });
-
-    // ── 2. Sort descending by WTN ────────────────────────────────────────────
     worlds.sort((a, b) => b.WTN - a.WTN);
+    const summary = { present, included: worlds.length, skipped, tooLow };
+    console.log('[BTN] worlds', summary);
+    return { worlds, ...summary };
+}
 
-    const worldById = new Map(worlds.map(w => [w.id, w]));
+function _btnContext(collected, cfg) {
+    const worlds = collected.worlds;
+    return {
+        worlds,
+        included: collected.included,
+        skipped: collected.skipped,
+        tooLow: collected.tooLow,
+        present: collected.present,
+        worldById: new Map(worlds.map(w => [w.id, w])),
+        nonRedWorlds: worlds.filter(w => w.travelZone !== 'Red'),
+        // Same cube-space buckets the hop search uses, sized to the pair range,
+        // so a world is only compared with worlds that could be inside range.
+        rangeIndex: _getWorldIndex(worlds, cfg.range),
+        extras: { subtype: 'BTN', color: cfg.color, groupId: cfg.groupId, name: cfg.name, btnMax: cfg.maxBTN, minBTN: cfg.minBTN, routeId: cfg.routeId },
+        cfg,
+        partials: [],
+        fullRoutes: 0,
+        segments: 0,
+        logging: !!window.isLoggingEnabled,
+        stopped: false
+    };
+}
 
-    // BFS candidate list that allows Red-zone endpoints but bars Red intermediaries.
-    const nonRedWorlds = worlds.filter(w => w.travelZone !== 'Red');
-
-    const extras = { subtype: 'BTN', color, groupId, name, btnMax: maxBTN, minBTN, routeId };
-
-    const partials = [];
-    let fullRoutes = 0;
-    let segments = 0;
-
-    const logging = !!window.isLoggingEnabled;
+function _btnScoreOne(i, ctx) {
+    const { worlds, cfg, worldById, nonRedWorlds, rangeIndex, extras } = ctx;
+    const { lowerBTN, minBTN, maxBTN, maxJump, range } = cfg;
+    const wa = worlds[i];
+    const logging = ctx.logging;
     const wLabel = w => `${w.name} [${w.id}] WTN:${w.WTN}`;
+    const near = _indexNeighbours(rangeIndex, wa.q, wa.r, range);
+    for (let n = 0; n < near.length; n++) {
+        const j = near[n];
+        if (j <= i) continue;
+        const wb = worlds[j];
+        if (wa.WTN + wb.WTN + 2 < lowerBTN) continue;
+        if (Math.min(wa.WTN, wb.WTN) + 10 < lowerBTN) continue;
 
-    if (logging) {
-        const maxLabel = maxBTN !== null ? maxBTN : 'none';
-        tSection(`BTN Route Generation: ${name}`);
-        writeLogLine(`Thresholds: Lower ${lowerBTN} / Min ${minBTN} / Max ${maxLabel} | Jump ${maxJump} | Range ${range}`);
-        writeLogLine(`Worlds eligible: ${included} | Skipped (no WTN): ${skipped}`);
-        tSection('Full Routes');
-    }
+        const d = getHexDistance(wa.q, wa.r, wb.q, wb.r);
+        if (d === 0 || d > range) continue;
 
-    // ── 3 & 4. Pair iteration ────────────────────────────────────────────────
-    for (let i = 0; i < worlds.length; i++) {
-        const wa = worlds[i];
-        for (let j = i + 1; j < worlds.length; j++) {
-            const wb = worlds[j];
-            const d = getHexDistance(wa.q, wa.r, wb.q, wb.r);
-            if (d === 0 || d > range) continue;
+        const pen    = _btnDistancePenalty(d);
+        const bon    = _btnTradeBonusFlags(wa.flags, wb.flags);
+        const rawBTN = wa.WTN + wb.WTN - pen + bon;
+        const btnCap = Math.min(wa.WTN, wb.WTN) + 10;
+        const btn    = Math.min(rawBTN, btnCap);
+        const isFull = btn >= minBTN && (maxBTN === null || btn <= maxBTN);
+        const isPartial = !isFull && btn >= lowerBTN;
+        if (!isFull && !isPartial) continue;
 
-            const pen     = _btnDistancePenalty(d);
-            const bon     = _btnTradeBonus(wa.tradeCodes, wb.tradeCodes);
-            const rawBTN  = wa.WTN + wb.WTN - pen + bon;
-            const btnCap  = Math.min(wa.WTN, wb.WTN) + 10;
-            const btn     = Math.min(rawBTN, btnCap);
+        const needA = wa.travelZone === 'Red';
+        const needB = wb.travelZone === 'Red';
+        let bfsWorlds, bfsById;
+        if (needA || needB) {
+            bfsWorlds = [...nonRedWorlds];
+            if (needA) bfsWorlds.push(wa);
+            if (needB) bfsWorlds.push(wb);
+            bfsById = new Map(bfsWorlds.map(w => [w.id, w]));
+        } else {
+            bfsWorlds = nonRedWorlds;
+            bfsById = worldById;
+        }
 
-            const isFull    = btn >= minBTN && (maxBTN === null || btn <= maxBTN);
-            const isPartial = !isFull && btn >= lowerBTN;
+        const path = _bfsPath(wa.id, wb.id, bfsWorlds, maxJump, bfsById);
+        if (!path) continue;
 
-            if (!isFull && !isPartial) continue;
-
-            // ── 5. BFS — bar Red intermediaries, but allow Red endpoints ────
-            const needA = wa.travelZone === 'Red';
-            const needB = wb.travelZone === 'Red';
-            let bfsWorlds, bfsById;
-            if (needA || needB) {
-                bfsWorlds = [...nonRedWorlds];
-                if (needA) bfsWorlds.push(wa);
-                if (needB) bfsWorlds.push(wb);
-                bfsById = new Map(bfsWorlds.map(w => [w.id, w]));
-            } else {
-                bfsWorlds = nonRedWorlds;
-                bfsById = worldById;
+        if (isFull) {
+            if (logging) {
+                const capNote = rawBTN > btnCap ? ` (capped from ${rawBTN})` : '';
+                writeLogLine(`  ${wLabel(wa)} + ${wLabel(wb)} | dist:${d} pen:${pen} bon:${bon} | raw:${rawBTN} cap:${btnCap} BTN:${btn}${capNote} → ROUTE`);
             }
-
-            const path = _bfsPath(wa.id, wb.id, bfsWorlds, maxJump, bfsById);
-            if (!path) continue;
-
-            if (isFull) {
-                if (logging) {
-                    const capNote = rawBTN > btnCap ? ` (capped from ${rawBTN})` : '';
-                    writeLogLine(`  ${wLabel(wa)} + ${wLabel(wb)} | dist:${d} pen:${pen} bon:${bon} | raw:${rawBTN} cap:${btnCap} BTN:${btn}${capNote} → ROUTE`);
-                }
-                for (let k = 0; k < path.length - 1; k++) {
-                    const before = window.sectorRoutes.length;
-                    _btnAddSegment(path[k], path[k + 1], extras);
-                    if (window.sectorRoutes.length > before) segments++;
-                }
-                fullRoutes++;
-            } else {
-                partials.push({ path, wa, wb, pen, bon, rawBTN, btnCap, btn });
+            for (let k = 0; k < path.length - 1; k++) {
+                const before = window.sectorRoutes.length;
+                _btnAddSegment(path[k], path[k + 1], extras);
+                if (window.sectorRoutes.length > before) ctx.segments++;
             }
+            ctx.fullRoutes++;
+        } else {
+            ctx.partials.push({ path, wa, wb, pen, bon, rawBTN, btnCap, btn });
         }
     }
+}
 
-    // ── 7. Partial-success promotion ─────────────────────────────────────────
-    // Map each segment key → indices into partials[]
+function _btnFinish(ctx) {
+    const { partials, worldById, extras, logging } = ctx;
     const segToPartials = new Map();
     for (let pi = 0; pi < partials.length; pi++) {
         const { path } = partials[pi];
@@ -1347,14 +1388,11 @@ function generateBTNRoutes({ lowerBTN, minBTN, maxBTN, maxJump, range, color, gr
         }
     }
 
-    // Draw only segments that appear in 2+ partial paths (segment-level promotion)
     if (logging) tSection('Promoted Segments');
-
     let promoted = 0;
     for (const [key, indices] of segToPartials) {
         if (indices.length < 2) continue;
         const [id1, id2] = key.split('|');
-
         if (logging) {
             const hopA = worldById.get(id1);
             const hopB = worldById.get(id2);
@@ -1364,22 +1402,56 @@ function generateBTNRoutes({ lowerBTN, minBTN, maxBTN, maxJump, range, color, gr
                 .join(', ');
             writeLogLine(`  ${hopLabel}  (shared by: ${sharers})`);
         }
-
         const before = window.sectorRoutes.length;
         _btnAddSegment(id1, id2, extras);
         if (window.sectorRoutes.length > before) {
-            segments++;
+            ctx.segments++;
             promoted++;
         }
     }
 
-
     if (logging) {
         tSection('BTN Generation Summary');
-        writeLogLine(`Full routes: ${fullRoutes} | Promoted: ${promoted} | Total segments: ${segments}`);
-        writeLogLine(`Worlds included: ${included} | Skipped (no WTN): ${skipped}`);
+        writeLogLine(`Full routes: ${ctx.fullRoutes} | Promoted: ${promoted} | Total segments: ${ctx.segments}`);
+        writeLogLine(`Worlds included: ${ctx.included} | Skipped (no WTN): ${ctx.skipped}`);
     }
-
-    console.log(`BTN Routes "${name}": ${segments} segments, ${fullRoutes} full + ${promoted} promoted, ${included} worlds included, ${skipped} skipped.`);
-    return { segments, fullRoutes, promoted, included, skipped };
+    console.log(`BTN Routes "${ctx.cfg.name}": ${ctx.segments} segments, ${ctx.fullRoutes} full + ${promoted} promoted, ${ctx.included} worlds included, ${ctx.skipped} skipped.`);
+    return { segments: ctx.segments, fullRoutes: ctx.fullRoutes, promoted, included: ctx.included, skipped: ctx.skipped, tooLow: ctx.tooLow, present: ctx.present, stopped: false };
 }
+
+function generateBTNRoutes({ lowerBTN, minBTN, maxBTN, maxJump, range, color, groupId, name, routeId }) {
+    if (!window.sectorRoutes) window.sectorRoutes = [];
+    const cfg = { lowerBTN, minBTN, maxBTN, maxJump, range, color, groupId, name, routeId };
+    const collected = _btnCollect(lowerBTN);
+    const ctx = _btnContext(collected, cfg);
+    if (ctx.logging) {
+        const maxLabel = maxBTN !== null ? maxBTN : 'none';
+        tSection(`BTN Route Generation: ${name}`);
+        writeLogLine(`Thresholds: Lower ${lowerBTN} / Min ${minBTN} / Max ${maxLabel} | Jump ${maxJump} | Range ${range}`);
+        writeLogLine(`Worlds eligible: ${ctx.included} | Skipped (no WTN): ${ctx.skipped}`);
+        tSection('Full Routes');
+    }
+    for (let i = 0; i < ctx.worlds.length; i++) _btnScoreOne(i, ctx);
+    return _btnFinish(ctx);
+}
+
+async function generateBTNRoutesAsync(cfg, hooks = {}) {
+    if (!window.sectorRoutes) window.sectorRoutes = [];
+    const collected = _btnCollect(cfg.lowerBTN);
+    const ctx = _btnContext(collected, cfg);
+    if (!ctx.worlds.length) return _btnFinish(ctx);
+    const step = 40;
+    for (let i = 0; i < ctx.worlds.length; i++) {
+        if (hooks.shouldStop && hooks.shouldStop()) {
+            ctx.stopped = true;
+            return { segments: 0, fullRoutes: 0, promoted: 0, included: ctx.included, skipped: ctx.skipped, tooLow: ctx.tooLow, present: ctx.present, stopped: true };
+        }
+        _btnScoreOne(i, ctx);
+        if (hooks.onProgress && (i % step === step - 1 || i === ctx.worlds.length - 1)) {
+            hooks.onProgress(i + 1, ctx.worlds.length);
+            await new Promise(resolve => setTimeout(resolve, 0));
+        }
+    }
+    return _btnFinish(ctx);
+}
+window.generateBTNRoutesAsync = generateBTNRoutesAsync;

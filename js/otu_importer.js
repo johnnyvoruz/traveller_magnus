@@ -50,7 +50,7 @@
      * Throws on HTTP error. Shared by both cache paths.
      */
     async function fetchSectorText(name) {
-        const url = `https://travellermap.com/data/${encodeURIComponent(name)}/tab`;
+        const url = `https://travellermap.com/data/${encodeURIComponent(name)}/tab?milieu=M1105`;
         const response = await fetch(url);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         return await response.text();
@@ -118,8 +118,8 @@
      */
     async function fetchAndCacheMetadata(name, x, y) {
         const url = (x !== undefined && y !== undefined)
-            ? `https://travellermap.com/api/metadata?sx=${x}&sy=${y}&accept=text/xml`
-            : `https://travellermap.com/api/metadata?sector=${encodeURIComponent(name)}&accept=text/xml`;
+            ? `https://travellermap.com/api/metadata?sx=${x}&sy=${y}&accept=text/xml&milieu=M1105`
+            : `https://travellermap.com/api/metadata?sector=${encodeURIComponent(name)}&accept=text/xml&milieu=M1105`;
         let text;
         try {
             const response = await fetch(url);
@@ -161,8 +161,8 @@
      */
     async function fetchAndCacheUniverseMetadata(name, x, y) {
         const url = (x !== undefined && y !== undefined)
-            ? `https://travellermap.com/api/metadata?sx=${x}&sy=${y}&accept=text/xml`
-            : `https://travellermap.com/api/metadata?sector=${encodeURIComponent(name)}&accept=text/xml`;
+            ? `https://travellermap.com/api/metadata?sx=${x}&sy=${y}&accept=text/xml&milieu=M1105`
+            : `https://travellermap.com/api/metadata?sector=${encodeURIComponent(name)}&accept=text/xml&milieu=M1105`;
         let text;
         try {
             const response = await fetch(url);
@@ -179,6 +179,178 @@
         return text;
     }
 
+    const ALLEG_KEY = 'otu_t5ss_allegiances';
+
+    /**
+     * One list of T5SS allegiance code → name. Cached for a day.
+     * Returns { names, live } so the caller can pause after a real request.
+     */
+    async function fetchAllegianceNames() {
+        try {
+            const raw = localStorage.getItem(ALLEG_KEY);
+            if (raw) {
+                const entry = JSON.parse(raw);
+                if (entry && entry.data && entry.timestamp && Date.now() - entry.timestamp < CACHE_TTL_MS) {
+                    return { names: entry.data, live: false };
+                }
+            }
+        } catch (e) { /* cache miss */ }
+        try {
+            const response = await fetch('https://travellermap.com/t5ss/allegiances');
+            if (!response.ok) return { names: {}, live: false };
+            const list = await response.json();
+            const names = {};
+            (Array.isArray(list) ? list : []).forEach(item => {
+                if (item && item.Code && item.Name) names[item.Code] = item.Name;
+            });
+            try {
+                localStorage.setItem(ALLEG_KEY, JSON.stringify({ timestamp: Date.now(), data: names }));
+            } catch (e) { /* quota */ }
+            return { names, live: true };
+        } catch (e) {
+            console.warn(`[OTU Importer] Allegiance list failed: ${e.message}`);
+            return { names: {}, live: false };
+        }
+    }
+
+    function applyAllegianceNames(names) {
+        if (!names) return;
+        hexStates.forEach(state => {
+            if (!state || !state.allegiance) return;
+            const name = names[state.allegiance];
+            if (name) state.allegianceName = name;
+        });
+    }
+
+    // Traveller Map Tags for the year-1105 chart, keyed "x,y".
+    const REVIEW_KEY = 'otu_sector_review_index';
+    let sectorReviewByCoord = null;
+    let sectorReviewLoad = null;
+    let reviewLiveAt = 0;
+
+    function describeSectorReview(tags) {
+        const text = (tags || '').trim();
+        if (!text) return null;
+        if (/\bOfficial\b/i.test(text)) return { label: 'Official', tone: 'official', title: text };
+        if (/InReview/i.test(text)) return { label: 'In review', tone: 'review', title: text };
+        if (/Preserve/i.test(text)) return { label: 'Preserve', tone: 'preserve', title: text };
+        if (/Apocryphal/i.test(text)) return { label: 'Apocrypha', tone: 'apocrypha', title: text };
+        if (/Unreviewed/i.test(text)) return { label: 'Unreviewed', tone: 'unreviewed', title: text };
+        if (text === 'OTU') return { label: 'OTU', tone: 'otu', title: 'OTU, not marked official or in review' };
+        return { label: text, tone: 'otu', title: text };
+    }
+    window.describeSectorReview = describeSectorReview;
+
+    function reviewSummary(tagList) {
+        const counts = new Map();
+        tagList.forEach(tags => {
+            const described = describeSectorReview(tags);
+            const label = described ? described.label : 'Unknown';
+            counts.set(label, (counts.get(label) || 0) + 1);
+        });
+        const order = ['Official', 'In review', 'Unreviewed', 'OTU', 'Preserve', 'Apocrypha'];
+        return [...counts.keys()]
+            .sort((a, b) => (order.indexOf(a) === -1 ? 99 : order.indexOf(a)) - (order.indexOf(b) === -1 ? 99 : order.indexOf(b)))
+            .map(label => `${counts.get(label)} ${label.toLowerCase()}`)
+            .join(' · ');
+    }
+
+    function paintReviewPill(el, tags, pending) {
+        el.className = 'otu-review';
+        if (pending) {
+            el.classList.add('otu-review-pending');
+            el.textContent = '…';
+            el.title = 'Checking Traveller Map review status';
+            return;
+        }
+        const described = describeSectorReview(tags);
+        if (!described) {
+            el.textContent = '';
+            el.title = '';
+            return;
+        }
+        el.classList.add('otu-review-' + described.tone);
+        el.textContent = described.label;
+        el.title = described.title;
+    }
+
+    async function fetchSectorReviewMap() {
+        try {
+            const raw = localStorage.getItem(REVIEW_KEY);
+            if (raw) {
+                const entry = JSON.parse(raw);
+                if (entry && entry.data && entry.timestamp && Date.now() - entry.timestamp < CACHE_TTL_MS) {
+                    return entry.data;
+                }
+            }
+        } catch (e) { /* cache miss */ }
+        const response = await fetch('https://travellermap.com/api/universe?milieu=M1105');
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        const byCoord = {};
+        (data.Sectors || []).forEach(sector => {
+            byCoord[`${sector.X},${sector.Y}`] = sector.Tags || '';
+        });
+        reviewLiveAt = Date.now();
+        try {
+            localStorage.setItem(REVIEW_KEY, JSON.stringify({ timestamp: Date.now(), data: byCoord }));
+        } catch (e) { /* quota */ }
+        return byCoord;
+    }
+
+    function loadSectorReview() {
+        if (sectorReviewByCoord) return Promise.resolve(sectorReviewByCoord);
+        if (!sectorReviewLoad) {
+            sectorReviewLoad = fetchSectorReviewMap().then(map => {
+                sectorReviewByCoord = map;
+                return map;
+            }).catch(err => {
+                sectorReviewLoad = null;
+                throw err;
+            });
+        }
+        return sectorReviewLoad;
+    }
+
+    function rememberSectorReview(slotNum, x, y, byCoord) {
+        if (!byCoord || slotNum == null || !Number.isFinite(slotNum)) return;
+        const tags = byCoord[`${x},${y}`];
+        if (!tags) return;
+        if (!window.sectorReview) window.sectorReview = {};
+        window.sectorReview[slotNum] = tags;
+    }
+
+    function fillImperiumReview(sectors) {
+        const summary = document.getElementById('otu-review-summary');
+        if (summary) summary.textContent = 'Checking review status…';
+        loadSectorReview().then(byCoord => {
+            const modal = document.getElementById('otu-import-modal');
+            if (!modal || modal.style.display === 'none') return;
+            document.querySelectorAll('#otu-sector-list .otu-review').forEach(el => {
+                const sector = sectors[parseInt(el.dataset.idx, 10)];
+                paintReviewPill(el, sector ? byCoord[`${sector.x},${sector.y}`] : '', false);
+            });
+            if (summary) summary.textContent = reviewSummary(sectors.map(s => byCoord[`${s.x},${s.y}`] || ''));
+        }).catch(err => {
+            if (summary) summary.textContent = 'Review status unavailable';
+            console.warn(`[OTU Importer] Review status failed: ${err.message}`);
+        });
+    }
+
+    function fillUniverseReview(sectors) {
+        const summary = document.getElementById('universe-review-summary');
+        if (!summary) return;
+        summary.textContent = 'Checking review status…';
+        loadSectorReview().then(byCoord => {
+            const modal = document.getElementById('universe-import-modal');
+            if (!modal || modal.style.display === 'none') return;
+            summary.textContent = reviewSummary(sectors.map(s => byCoord[`${s.x},${s.y}`] || ''));
+        }).catch(err => {
+            summary.textContent = 'Review status unavailable';
+            console.warn(`[OTU Importer] Review status failed: ${err.message}`);
+        });
+    }
+
     /**
      * Clears all in-memory data for one sector slot before a re-import.
      * Removes hex states, the sector name, and border hex assignments.
@@ -191,6 +363,7 @@
             if (hexId.startsWith(prefix)) hexStates.delete(hexId);
         }
         delete window.sectorNames[slotNum];
+        if (window.sectorReview) delete window.sectorReview[slotNum];
         if (typeof clearSubsectorNamesForSector === 'function') {
             clearSubsectorNamesForSector(slotNum);
         }
@@ -220,7 +393,9 @@
      */
     function openImperiumModal() {
         try {
-            renderModal(getImperiumSectors());
+            const sectors = getImperiumSectors();
+            renderModal(sectors);
+            fillImperiumReview(sectors);
         } catch (err) {
             alert(`Failed to load sector list: ${err.message}`);
         }
@@ -247,6 +422,7 @@
                     style="flex-shrink:0; cursor:pointer; accent-color:#66fcf1;">
                 <span class="otu-sector-name"
                     style="color:#c5c6c7; font-size:0.85rem; white-space:nowrap;">${sector.name}</span>
+                <span class="otu-review otu-review-pending" data-idx="${idx}" title="Checking Traveller Map review status">…</span>
                 <span style="flex:1; border-bottom:1px dotted #2a3a3a; margin:0 4px; height:1px; align-self:center;"></span>
                 <input type="text" class="otu-sector-slot" value="${sector.defaultSlot}"
                     maxlength="2" size="2"
@@ -335,6 +511,14 @@
         // (TSV then metadata) with a 1-second pause between each live call.
         const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+        opts.allegianceNames = {};
+        let reviewByCoord = null;
+        try { reviewByCoord = await loadSectorReview(); } catch (e) { reviewByCoord = null; }
+        if (Date.now() - reviewLiveAt < 1000) await delay(1000 - (Date.now() - reviewLiveAt));
+        const allegFetch = await fetchAllegianceNames();
+        Object.assign(opts.allegianceNames, allegFetch.names);
+        if (allegFetch.live) await delay(1000);
+
         // Build coord lookup for cross-sector route resolution.
         // Only include sectors the user actually imported — pre-loading all sectors
         // caused routes to unimported neighbours to resolve to wrong hexIds on canvas.
@@ -381,6 +565,8 @@
                     const slotNum = parseInt(slot, 10);
                     if (!isNaN(slotNum)) {
                         window.sectorNames[slotNum] = name;
+                        const placed = sectors.find(s => s.name === name);
+                        if (placed) rememberSectorReview(slotNum, placed.x, placed.y, reviewByCoord);
                     }
                 } catch (err) {
                     alert(`Failed to import "${name}": ${err.message}`);
@@ -407,18 +593,12 @@
             }
         }
 
-        // Post-processing deferred from bulkMode importT5Tab calls — run once here.
-        if (opts.importSector) {
-            if (typeof window.reapplyAllRules === 'function') window.reapplyAllRules();
-            if (typeof window.applyActiveFilters === 'function') window.applyActiveFilters();
-            if (window.dbManager) window.dbManager.syncAllHexes();
-            if (window.dbManager) window.dbManager.saveSectorNames();
-        }
-
         if (needsMeta) {
-            // Wipe existing Route 1 segments before populating from OTU metadata
+            // Wipe the X-boat slot and any allegiance slots this import owns.
+            // Trade routes and hand-drawn slots stay.
             if (opts.importRoutes && window.sectorRoutes) {
-                window.sectorRoutes = window.sectorRoutes.filter(r => r.routeId !== 1);
+                window.sectorRoutes = window.sectorRoutes.filter(r =>
+                    r.routeId !== 1 && !(r.groupId && String(r.groupId).startsWith('otu-route:')));
             }
 
             // Parse all routes/borders in a single pass after every sector is loaded,
@@ -431,11 +611,28 @@
                 }
             }
             if (window.dbManager) window.dbManager.saveSubsectorNames?.();
-            if (opts.importRoutes && typeof window.ensureFreeRouteSlot === 'function') {
-                if (window.ensureFreeRouteSlot() && window.dbManager) window.dbManager.saveRouteDefinitions();
+            if (opts.importRoutes) {
+                if (typeof window.ensureFreeRouteSlot === 'function') window.ensureFreeRouteSlot();
+                if (window.dbManager) {
+                    window.dbManager.saveRouteDefinitions?.();
+                    window.dbManager.saveRoutes?.();
+                }
+                if (typeof window.renderRouteWindow === 'function') window.renderRouteWindow();
             }
             if (typeof window.sortAndTrimBorderDefinitions === 'function') window.sortAndTrimBorderDefinitions();
             if (typeof window.renderBorderWindow === 'function') window.renderBorderWindow();
+        }
+
+        applyAllegianceNames(opts.allegianceNames);
+
+        // Post-processing deferred from bulkMode importT5Tab calls — run once here,
+        // after allegiance names have been written onto the hexes.
+        if (opts.importSector) {
+            if (typeof window.reapplyAllRules === 'function') window.reapplyAllRules();
+            if (typeof window.applyActiveFilters === 'function') window.applyActiveFilters();
+            if (window.dbManager) window.dbManager.syncAllHexes();
+            if (window.dbManager) window.dbManager.saveSectorNames();
+            if (window.dbManager) window.dbManager.saveSectorReview?.();
         }
 
         if (opts.importSystemData && typeof applyOtuSystemData === 'function') {
@@ -448,6 +645,12 @@
             const preview = metaFailures.slice(0, 3).join(', ') + (metaFailures.length > 3 ? `… (+${metaFailures.length - 3} more)` : '');
             showToast(`${metaFailures.length} metadata fetch(es) failed (no borders/routes): ${preview}`, 6000);
             console.warn(`[Imperium Import] Metadata fetch failed for: ${metaFailures.join(', ')}`);
+        }
+
+        if (opts.importSector && typeof window.startBackgroundMgtBuild === 'function') {
+            window.startBackgroundMgtBuild({
+                sectors: selected.map(sel => ({ key: sectorSlotToNumber(sel.slot), name: sel.name }))
+            });
         }
     }
 
@@ -474,6 +677,7 @@
         const countEl = document.getElementById('universe-modal-sector-count');
         if (countEl) countEl.textContent = sectors.length;
         document.getElementById('universe-import-modal').style.display = 'flex';
+        fillUniverseReview(sectors);
     }
 
     /** Close the Universe import modal. */
@@ -504,6 +708,7 @@
         gridHeight = 8;
         hexStates.clear();
         window.sectorNames        = {};
+        window.sectorReview       = {};
         window.subsectorNames     = {};
         window.sectorRoutes       = [];
         window.routeDefinitions   = (typeof getDefaultRouteDefinitions === 'function') ? getDefaultRouteDefinitions() : [];
@@ -524,6 +729,14 @@
 
         const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
         let errorCount = 0;
+
+        opts.allegianceNames = {};
+        let reviewByCoord = null;
+        try { reviewByCoord = await loadSectorReview(); } catch (e) { reviewByCoord = null; }
+        if (Date.now() - reviewLiveAt < 1000) await delay(1000 - (Date.now() - reviewLiveAt));
+        const allegFetch = await fetchAllegianceNames();
+        Object.assign(opts.allegianceNames, allegFetch.names);
+        if (allegFetch.live) await delay(1000);
 
         // Build coord lookup from all universe sectors using their default slots.
         const coordLookup = new Map();
@@ -559,6 +772,7 @@
                         const slotNum = parseInt(defaultSlot, 10);
                         if (!isNaN(slotNum)) {
                             window.sectorNames[slotNum] = 'Foreven';
+                            rememberSectorReview(slotNum, x, y, reviewByCoord);
                         }
                     } else {
                         const cached = await getCachedUniverseSector(name);
@@ -587,6 +801,7 @@
                         const slotNum = parseInt(defaultSlot, 10);
                         if (!isNaN(slotNum)) {
                             window.sectorNames[slotNum] = name;
+                            rememberSectorReview(slotNum, x, y, reviewByCoord);
                         }
                     }
                 } catch (err) {
@@ -621,14 +836,6 @@
             }
         }
 
-        // Post-processing deferred from bulkMode importT5Tab calls — run once here.
-        if (opts.importSector) {
-            if (typeof window.reapplyAllRules === 'function') window.reapplyAllRules();
-            if (typeof window.applyActiveFilters === 'function') window.applyActiveFilters();
-            if (window.dbManager) window.dbManager.syncAllHexes();
-            if (window.dbManager) window.dbManager.saveSectorNames();
-        }
-
         if (needsMeta && typeof parseAndAddOtuRoutes === 'function') {
             // Parse all routes/borders in a single pass after every sector is loaded,
             // so cross-sector routes can resolve both endpoints correctly.
@@ -639,8 +846,28 @@
                 await delay(0);
             }
             if (window.dbManager) window.dbManager.saveSubsectorNames?.();
+            if (opts.importRoutes) {
+                if (typeof window.ensureFreeRouteSlot === 'function') window.ensureFreeRouteSlot();
+                if (window.dbManager) {
+                    window.dbManager.saveRouteDefinitions?.();
+                    window.dbManager.saveRoutes?.();
+                }
+                if (typeof window.renderRouteWindow === 'function') window.renderRouteWindow();
+            }
             if (typeof window.sortAndTrimBorderDefinitions === 'function') window.sortAndTrimBorderDefinitions();
             if (typeof window.renderBorderWindow === 'function') window.renderBorderWindow();
+        }
+
+        applyAllegianceNames(opts.allegianceNames);
+
+        // Post-processing deferred from bulkMode importT5Tab calls — run once here,
+        // after allegiance names have been written onto the hexes.
+        if (opts.importSector) {
+            if (typeof window.reapplyAllRules === 'function') window.reapplyAllRules();
+            if (typeof window.applyActiveFilters === 'function') window.applyActiveFilters();
+            if (window.dbManager) window.dbManager.syncAllHexes();
+            if (window.dbManager) window.dbManager.saveSectorNames();
+            if (window.dbManager) window.dbManager.saveSectorReview?.();
         }
 
         if (typeof window.renderBorderWindow === 'function') window.renderBorderWindow();
@@ -651,6 +878,12 @@
         }
 
         requestAnimationFrame(draw);
+
+        if (opts.importSector && typeof window.startBackgroundMgtBuild === 'function') {
+            window.startBackgroundMgtBuild({
+                sectors: sectors.map(s => ({ key: parseInt(s.defaultSlot, 10), name: s.name }))
+            });
+        }
 
         let summary = errorCount > 0
             ? `Universe import complete. ${errorCount} sector(s) failed — see console for details.`

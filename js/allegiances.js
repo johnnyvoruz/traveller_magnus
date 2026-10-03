@@ -298,7 +298,7 @@ window.renderAllegianceWindow = function () {
         row.innerHTML = `
             <span class="border-hex-count ${hexClass}" title="${count} hex(es)">${hexLabel}</span>
             <input type="text" class="alleg-code-input" value="${codesStr.replace(/"/g, '&quot;')}" placeholder="----" title="Allegiance codes (comma-separated, e.g. ImDd, ImSy)" />
-            <input type="text" class="border-name-input" value="${def.name.replace(/"/g, '&quot;')}" title="Allegiance name" />
+            <textarea class="border-name-input" rows="1" title="Allegiance name">${def.name.replace(/</g, '&lt;')}</textarea>
             <input type="color" class="border-color-swatch" value="${def.color}" title="Allegiance color" />
             <i class="fas fa-eye${def.visible ? '' : '-slash'} alleg-eye-btn" style="color:${def.visible ? '#45a29e' : '#666'};cursor:pointer;font-size:0.8rem;" title="${def.visible ? 'Disable allegiance' : 'Enable allegiance'}"></i>
             <button class="border-clear-btn" title="Remove all hex assignments for this allegiance">C</button>
@@ -352,9 +352,17 @@ window.renderAllegianceWindow = function () {
             requestAnimationFrame(draw);
         });
 
+        fitBorderNameField(nameIn);
+        nameIn.addEventListener('input', () => fitBorderNameField(nameIn));
+        nameIn.addEventListener('keydown', (e) => {
+            if (e.key !== 'Enter') return;
+            e.preventDefault();
+            nameIn.blur();
+        });
         nameIn.addEventListener('change', () => {
             def.name = nameIn.value.trim() || def.name;
             nameIn.value = def.name;
+            fitBorderNameField(nameIn);
             if (window.dbManager) window.dbManager.saveAllegianceDefinitions?.();
         });
 
@@ -386,7 +394,11 @@ window.renderAllegianceWindow = function () {
             const codeStr = def.codes.length > 0 ? ` (${def.codes.join(', ')})` : '';
             const hexMsg  = count > 0 ? `\nThis will also clear its ${count} hex assignment(s).` : '';
             if (!confirm(`Delete allegiance "${def.name}"${codeStr}?${hexMsg}\n\nThis can be undone with Ctrl+Z.`)) return;
-            saveHistoryState(`Delete ${def.name}`);
+            const touched = [];
+            hexStates.forEach((state, hexId) => {
+                if (def.codes.includes(state.allegiance)) touched.push(hexId);
+            });
+            saveHistoryState(`Delete ${def.name}`, { hexIds: touched, allegiances: true });
             if (window.hexAllegianceAssignments) {
                 window.hexAllegianceAssignments.forEach((c, hexId) => {
                     if (def.codes.includes(c)) window.hexAllegianceAssignments.delete(hexId);
@@ -441,6 +453,7 @@ window.renderAllegianceWindow = function () {
         visAllCb.indeterminate = visCount > 0 && visCount < defs.length;
         visAllCb.checked       = visCount === defs.length;
     }
+    fitBorderNames(list);
 };
 
 // ── Toggle / close ────────────────────────────────────────────────────────────
@@ -452,6 +465,7 @@ window.toggleAllegianceWindow = function () {
     } else {
         window.renderAllegianceWindow();
         win.classList.add('visible');
+        fitBorderNames(document.getElementById('allegiance-window-list'));
     }
 };
 
@@ -507,7 +521,7 @@ window.openAssignAllegianceModal = function () {
                        + `<span class="border-assign-name">Clear</span>`;
     clearBtn.addEventListener('click', () => {
         const hexList = [...selectedHexes];
-        saveHistoryState('Clear Allegiance');
+        saveHistoryState('Clear Allegiance', { hexIds: hexList, allegiances: true });
         hexList.forEach(hexId => {
             if (window.hexAllegianceAssignments) window.hexAllegianceAssignments.delete(hexId);
             const s = hexStates.get(hexId);
@@ -608,7 +622,7 @@ function _showAllegianceCodeStep(def) {
 // Write the assignment for all selected hexes and close the modal.
 function _writeAllegianceAssignment(def, code) {
     const hexList = [...selectedHexes];
-    saveHistoryState('Assign Allegiance');
+    saveHistoryState('Assign Allegiance', { hexIds: hexList, allegiances: true });
 
     if (!window.hexAllegianceAssignments) window.hexAllegianceAssignments = new Map();
     hexList.forEach(hexId => {

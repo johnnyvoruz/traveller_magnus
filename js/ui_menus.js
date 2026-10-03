@@ -9,7 +9,7 @@
 function setupContextMenu() {
     document.getElementById('ctx-manual-empty').addEventListener('click', () => {
         if (!validateSelection('populate')) return;
-        saveHistoryState('Manual: Set Empty');
+        saveHistoryState('Manual: Set Empty', { hexIds: currentActionHexes() });
         currentActionHexes().forEach(hexId => {
             hexStates.set(hexId, { type: 'EMPTY' });
         });
@@ -25,7 +25,7 @@ function setupContextMenu() {
 
     document.getElementById('ctx-manual-system').addEventListener('click', () => {
         if (!validateSelection('populate')) return;
-        saveHistoryState('Manual: Populate System');
+        saveHistoryState('Manual: Populate System', { hexIds: currentActionHexes() });
         currentActionHexes().forEach(hexId => {
             hexStates.set(hexId, { type: 'SYSTEM_PRESENT' });
         });
@@ -42,7 +42,7 @@ function setupContextMenu() {
     document.getElementById('ctx-manual-clear').addEventListener('click', () => {
         if (!validateSelection('clear')) return;
         const hexList = currentActionHexes();
-        saveHistoryState('Batch Clear');
+        saveHistoryState('Batch Clear', { hexIds: hexList, routes: true });
         hexList.forEach(hexId => {
             hexStates.delete(hexId);
             removeRoutesForHex(hexId);
@@ -94,7 +94,7 @@ function setupContextMenu() {
     function applyBgColor() {
         const color = document.getElementById('bg-color-picker').value;
         const hexList = currentActionHexes();
-        saveHistoryState('Assign Background Color');
+        saveHistoryState('Assign Background Color', { hexIds: hexList });
         hexList.forEach(hexId => {
             let s = hexStates.get(hexId);
             if (!s) {
@@ -110,7 +110,7 @@ function setupContextMenu() {
 
     function clearBgColor() {
         const hexList = currentActionHexes();
-        saveHistoryState('Clear Background Color');
+        saveHistoryState('Clear Background Color', { hexIds: hexList });
         hexList.forEach(hexId => {
             const s = hexStates.get(hexId);
             if (s) delete s.manualBgColor;
@@ -139,7 +139,7 @@ function setupContextMenu() {
         const code = document.getElementById('allegiance-assign-input').value.trim();
         if (!code) { showToast('Please enter an allegiance code.', 2000); return; }
         const hexList = currentActionHexes();
-        saveHistoryState('Assign Allegiance');
+        saveHistoryState('Assign Allegiance', { hexIds: hexList });
         hexList.forEach(hexId => {
             const s = hexStates.get(hexId);
             if (s) s.allegiance = code;
@@ -175,7 +175,7 @@ function setupGenerationHandlers() {
     // CT Generation
     document.getElementById('ctx-gen-ct').addEventListener('click', async () => {
         if (!validateSelection('generate')) return;
-        saveHistoryState('Generate CT Mainworld');
+        saveHistoryState('Generate CT Mainworld', { hexIds: currentActionHexes() });
         await ensureNamesLoaded();
         if (window.isLoggingEnabled) window.batchLogData = [];
         let count = 0;
@@ -242,7 +242,7 @@ function setupGenerationHandlers() {
     // MgT2E Generation
     document.getElementById('ctx-gen-mgt2e').addEventListener('click', async () => {
         if (!validateSelection('generate')) return;
-        saveHistoryState('Generate MgT2E Mainworld');
+        saveHistoryState('Generate MgT2E Mainworld', { hexIds: currentActionHexes() });
         await ensureNamesLoaded();
         if (window.isLoggingEnabled) window.batchLogData = [];
         let count = 0;
@@ -330,7 +330,7 @@ function setupGenerationHandlers() {
     // T5 Generation
     document.getElementById('ctx-gen-t5').addEventListener('click', async () => {
         if (!validateSelection('generate')) return;
-        saveHistoryState('Generate T5 Mainworld');
+        saveHistoryState('Generate T5 Mainworld', { hexIds: currentActionHexes() });
         await ensureNamesLoaded();
         if (window.isLoggingEnabled) window.batchLogData = [];
         let count = 0;
@@ -403,7 +403,7 @@ function setupGenerationHandlers() {
     document.getElementById('ctx-expand-socio-t5').addEventListener('click', () => {
         if (!validateSelection('socio')) return;
 
-        saveHistoryState('Expand T5 Socioeconomics');
+        saveHistoryState('Expand T5 Socioeconomics', { hexIds: currentActionHexes() });
         if (window.isLoggingEnabled) window.batchLogData = [];
         let missingData = false;
         currentActionHexes().forEach(hexId => {
@@ -448,7 +448,7 @@ function setupGenerationHandlers() {
     document.getElementById('ctx-expand-socio-mgt2e').addEventListener('click', () => {
         if (!validateSelection('socio')) return;
 
-        saveHistoryState('Expand MgT2E Socioeconomics');
+        saveHistoryState('Expand MgT2E Socioeconomics', { hexIds: currentActionHexes() });
         if (window.isLoggingEnabled) window.batchLogData = [];
         let missingData = false;
         currentActionHexes().forEach(hexId => {
@@ -528,7 +528,7 @@ function setupGenerationHandlers() {
     document.getElementById('ctx-expand-socio-mgt2e-dev').addEventListener('click', () => {
         if (!validateSelection('socio')) return;
 
-        saveHistoryState('Expand MgT2E Socioeconomics (Dev)');
+        saveHistoryState('Expand MgT2E Socioeconomics (Dev)', { hexIds: currentActionHexes() });
         if (window.isLoggingEnabled) window.batchLogData = [];
         let missingSystem = false;
         currentActionHexes().forEach(hexId => {
@@ -601,7 +601,7 @@ function setupGenerationHandlers() {
     document.getElementById('ctx-expand-physical-ct').addEventListener('click', () => {
         if (!validateSelection('physical')) return;
 
-        saveHistoryState('Expand CT System');
+        saveHistoryState('Expand CT System', { hexIds: currentActionHexes() });
         let missingData = false;
 
         if (window.isLoggingEnabled) window.batchLogData = [];
@@ -653,7 +653,7 @@ function setupGenerationHandlers() {
     document.getElementById('ctx-expand-physical-mgt2e').addEventListener('click', () => {
         if (!validateSelection('physical')) return;
 
-        saveHistoryState('Expand MgT2E System');
+        saveHistoryState('Expand MgT2E System', { hexIds: currentActionHexes() });
         if (window.isLoggingEnabled) window.batchLogData = [];
         let missingData = false;
         currentActionHexes().forEach(hexId => {
@@ -741,7 +741,7 @@ function setupGenerationHandlers() {
             return;
         }
 
-        saveHistoryState('Expand T5 System');
+        saveHistoryState('Expand T5 System', { hexIds: currentActionHexes() });
         if (window.isLoggingEnabled) window.batchLogData = [];
         let missingData = false;
         currentActionHexes().forEach(hexId => {
@@ -820,7 +820,7 @@ function setupGenerationHandlers() {
             return;
         }
 
-        saveHistoryState('RTT Re-expand Biographer');
+        saveHistoryState('RTT Re-expand Biographer', { hexIds: currentActionHexes() });
         targetHexes.forEach(hexId => {
             reseedForHex(hexId);
             if (typeof window.expandRTTBiographerOnly === 'function') {
@@ -1561,7 +1561,7 @@ function importRouteFile(routeId, routeName, file) {
             + `This replaces the ${existing} segment(s) currently in "${routeName}".\n`
             + `It keeps that route's name and colour, and can be undone with Ctrl+Z.`)) return;
 
-        saveHistoryState(`Import route: ${routeName}`);
+        saveHistoryState(`Import route: ${routeName}`, { routes: true });
         window.sectorRoutes = (window.sectorRoutes || []).filter(r => r.routeId !== routeId);
 
         // The same mapping canvas_input.js uses for hand-drawn segments. An
@@ -1769,6 +1769,7 @@ window.openRouteSystemsPanel = function (routeId, routeName) {
 
     panel.style.display = 'block';
     panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    if (typeof fitHexesInView === 'function') fitHexesInView(worlds);
 };
 
 window.closeRouteSystemsPanel = function () {
@@ -2499,7 +2500,7 @@ function _generateIntoSlot(actionName, routeId, generate, opts = {}) {
     const redoBefore   = window.redoStack;
     const countBefore  = routesBefore.filter(r => r.routeId === routeId).length;
 
-    saveHistoryState(actionName);
+    saveHistoryState(actionName, { routes: true });
     // opts.append — Continue adds to the route already in the slot, so the one
     // destructive step every generator otherwise takes is skipped. Everything
     // else, including the restore-on-failure below, is unchanged: a continuation
@@ -2529,6 +2530,106 @@ function _generateIntoSlot(actionName, routeId, generate, opts = {}) {
     return { result, produced };
 }
 
+function _btnEmptyReason(routeName, result, minBTN, maxBTN) {
+    const cap = maxBTN !== null ? `–${maxBTN}` : '+';
+    if (!result.present) return `"${routeName}": there are no worlds on the map.`;
+    if (!result.included && result.skipped === result.present) {
+        return `"${routeName}": none of the ${result.present.toLocaleString()} worlds have a trade number yet. The Mongoose system build has to finish first. Nothing was changed.`;
+    }
+    if (!result.included) {
+        return `"${routeName}": the worlds have trade numbers, but none are high enough to reach BTN ${minBTN}${cap}. Nothing was changed.`;
+    }
+    return `"${routeName}": ${result.included.toLocaleString()} worlds have a trade number, but no pair reached BTN ${minBTN}${cap}. Nothing was changed.`;
+}
+
+async function _runBtnGeneration(routeId, routeName, routeDef, cfg) {
+    if (window._routeGenRunning) {
+        showToast('A route is already being generated.', 2500);
+        return;
+    }
+    window._routeGenRunning = true;
+    console.log('[BTN] run started', { routeId, routeName, cfg, showWorkStatus: typeof showWorkStatus });
+    let stop = false;
+    const stopRun = () => { stop = true; };
+    const { lowerBTN, minBTN, maxBTN, maxJump, range } = cfg;
+    const groupId = `btn_${routeId}`;
+    if (typeof showWorkStatus === 'function') {
+        showWorkStatus({
+            title: `Generating “${routeName}”`,
+            detail: 'Reading worlds…',
+            fraction: 0,
+            onStop: stopRun
+        });
+    }
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    const routesBefore = (window.sectorRoutes || []).slice();
+    const redoBefore = window.redoStack;
+    saveHistoryState(`Generate BTN Routes: ${routeName}`, { routes: true });
+    window.sectorRoutes = (window.sectorRoutes || []).filter(r => r.routeId !== routeId);
+
+    let result;
+    try {
+        result = await generateBTNRoutesAsync({
+            lowerBTN, minBTN, maxBTN, maxJump, range,
+            color: routeDef ? routeDef.color : '#ff0000', groupId, name: routeName, routeId
+        }, {
+            shouldStop: () => stop,
+            onProgress: (done, total) => {
+                if (typeof showWorkStatus !== 'function') return;
+                showWorkStatus({
+                    title: `Generating “${routeName}”`,
+                    detail: `${done.toLocaleString()} of ${total.toLocaleString()} worlds scored`,
+                    fraction: total ? done / total : 1,
+                    onStop: stopRun
+                });
+            }
+        });
+    } catch (err) {
+        console.error(err);
+        result = { stopped: true, present: 0, included: 0 };
+    }
+
+    const produced = !result.stopped && (window.sectorRoutes || []).some(r => r.routeId === routeId);
+    console.log('[BTN] finished', { produced, result });
+    if (!produced) {
+        window.sectorRoutes = routesBefore;
+        window.undoStack.pop();
+        window.redoStack = redoBefore;
+    }
+    window._routeGenRunning = false;
+
+    if (result.stopped) {
+        if (typeof hideWorkStatus === 'function') hideWorkStatus();
+        showToast(`“${routeName}” stopped. Nothing was changed.`, 4000);
+        return;
+    }
+    if (!produced) {
+        const msg = _btnEmptyReason(routeName, result, minBTN, maxBTN);
+        console.warn('[BTN]', msg, result);
+        if (typeof showWorkStatus === 'function') {
+            showWorkStatus({ title: 'Trade routes', detail: msg, fraction: 1, dismiss: true });
+        } else {
+            showToast(msg, 7000);
+        }
+        return;
+    }
+    if (typeof hideWorkStatus === 'function') hideWorkStatus();
+    if (window.isLoggingEnabled && window.batchLogData && window.batchLogData.length > 0) {
+        downloadBatchLog('BTN_Routes', result.included);
+    }
+    _saveAutomationConfig(routeId, 'btn', { lowerBTN, minBTN, maxBTN, maxJump, range });
+    if (window.dbManager) window.dbManager.saveRoutes();
+    requestAnimationFrame(draw);
+    window.closeRouteAutoPanel();
+    window.refreshRouteWindowCounts();
+    const maxLabel = maxBTN !== null ? `–${maxBTN}` : '+';
+    showToast(
+        `"${routeName}" BTN[${lowerBTN}/${minBTN}${maxLabel}]: ${result.segments} seg — ${result.fullRoutes} full + ${result.promoted} promoted seg. (${result.included} worlds, ${result.skipped} skipped)`,
+        5000
+    );
+}
+
 // ============================================================================
 // ROUTE WINDOW
 // ============================================================================
@@ -2549,7 +2650,26 @@ function setupRouteWindow() {
     }
 
     const addBtn = document.getElementById('btn-route-add');
-    if (addBtn) addBtn.addEventListener('click', () => window.addRouteSlot());
+    if (addBtn) addBtn.addEventListener('click', () => _openRouteNameModal({
+        title: 'New route',
+        value: '',
+        placeholder: 'Route name',
+        okLabel: 'Add route',
+        onOk: (name) => {
+            const id = window.addRouteSlot(name);
+            if (id == null) return;
+            _selectRoute(id, { scroll: true });
+        }
+    }));
+
+    const combineBtn = document.getElementById('btn-route-combine');
+    if (combineBtn) combineBtn.addEventListener('click', () => _openCombineModal());
+
+    const sortSel = document.getElementById('route-sort');
+    if (sortSel) sortSel.addEventListener('change', () => {
+        _routeSort = sortSel.value;
+        window.renderRouteWindow();
+    });
 
     const visAllCb = document.getElementById('route-vis-all-check');
     if (visAllCb) {
@@ -2559,13 +2679,14 @@ function setupRouteWindow() {
             if (window.dbManager) window.dbManager.saveRouteDefinitions();
             document.querySelectorAll('#route-window-list .route-row').forEach(row => {
                 const eye = row.querySelector('.route-eye-btn');
+                const wrap = row.querySelector('.route-eye');
                 if (eye) {
                     eye.classList.toggle('fa-eye', show);
                     eye.classList.toggle('fa-eye-slash', !show);
-                    eye.style.color = show ? '#45a29e' : '#666';
-                    eye.title = show ? 'Disable route' : 'Enable route';
+                    eye.classList.toggle('is-on', show);
                 }
-                row.style.opacity = show ? '1' : '0.45';
+                if (wrap) wrap.title = show ? 'Hide route' : 'Show route';
+                row.classList.toggle('is-hidden', !show);
             });
             visAllCb.indeterminate = false;
             requestAnimationFrame(draw);
@@ -2932,6 +3053,7 @@ function setupRouteWindow() {
             }
 
             if (type === 'btn') {
+                console.log('[BTN] Generate clicked', { routeId, routeName, config: configs.btn });
                 const { lowerBTN, minBTN, maxBTN, maxJump, range } = configs.btn;
                 if (!Number.isFinite(lowerBTN) || !Number.isFinite(minBTN)) {
                     showToast('Lower BTN and Min BTN must be valid numbers.', 2500);
@@ -2945,30 +3067,7 @@ function setupRouteWindow() {
                     showToast('Max Jump and Range must be valid numbers.', 2500);
                     return;
                 }
-                const groupId = `btn_${routeId}`;
-                const btnRun = _generateIntoSlot(`Generate BTN Routes: ${routeName}`, routeId,
-                    () => generateBTNRoutes({
-                        lowerBTN, minBTN, maxBTN, maxJump, range,
-                        color: routeDef.color, groupId, name: routeName, routeId
-                    }));
-                const result = btnRun.result;
-                if (!btnRun.produced) {
-                    showToast(`"${routeName}": no world pairs met BTN ${minBTN}${maxBTN !== null ? `–${maxBTN}` : '+'} — nothing was changed.`, 4000);
-                    return;
-                }
-                if (window.isLoggingEnabled && window.batchLogData && window.batchLogData.length > 0) {
-                    downloadBatchLog('BTN_Routes', result.included);
-                }
-                _saveAutomationConfig(routeId, 'btn', { lowerBTN, minBTN, maxBTN, maxJump, range });
-                if (window.dbManager) window.dbManager.saveRoutes();
-                requestAnimationFrame(draw);
-                window.closeRouteAutoPanel();
-                window.refreshRouteWindowCounts();
-                const maxLabel = maxBTN !== null ? `–${maxBTN}` : '+';
-                showToast(
-                    `"${routeName}" BTN[${lowerBTN}/${minBTN}${maxLabel}]: ${result.segments} seg — ${result.fullRoutes} full + ${result.promoted} promoted seg. (${result.included} worlds, ${result.skipped} skipped)`,
-                    5000
-                );
+                _runBtnGeneration(routeId, routeName, routeDef, { lowerBTN, minBTN, maxBTN, maxJump, range });
                 return;
             }
 
@@ -3038,7 +3137,7 @@ window.ensureFreeRouteSlot = function () {
     const nextId = _nextRouteSlotId();
     window.routeDefinitions.push({
         id: nextId, name: `Route ${nextId}`, color: _nextRouteColor(),
-        shortcut: _nextRouteShortcut(), visible: true, automationRef: null,
+        shortcut: null, visible: true, automationRef: null,
     });
     return true;
 };
@@ -3067,28 +3166,19 @@ function _nextRouteSlotId() {
 }
 
 /**
- * A colour for a new slot: the first of the nine defaults not already on the
- * map, so a map whose routes have been deleted and rebuilt looks like a fresh
- * one rather than a column of identical green. Past nine routes the palette is
- * exhausted and a random colour is used, which the user can change anyway.
+ * A colour for a new slot: the first palette colour not already on the map,
+ * so a rebuilt list is not a column of identical green. Past the palette a
+ * random colour is used, which the user can change anyway.
  */
 function _nextRouteColor() {
     const used = new Set((window.routeDefinitions || [])
         .map(d => (d.color || '').toLowerCase()));
-    const free = getDefaultRouteDefinitions().map(d => d.color)
-        .find(c => !used.has(c.toLowerCase()));
+    const palette = (typeof getRouteColorPalette === 'function')
+        ? getRouteColorPalette()
+        : getDefaultRouteDefinitions().map(d => d.color);
+    const free = palette.find(c => !used.has(c.toLowerCase()));
     if (free) return free;
     return '#' + Math.floor(Math.random() * 0x1000000).toString(16).padStart(6, '0');
-}
-
-/**
- * The lowest digit key not already bound to a route, or null when all nine are
- * taken. Deleting a route frees its key, so a rebuilt map gets its 1-9 back.
- */
-function _nextRouteShortcut() {
-    const used = new Set((window.routeDefinitions || [])
-        .map(d => (d.shortcut || '').toLowerCase()).filter(Boolean));
-    return '123456789'.split('').find(k => !used.has(k)) || null;
 }
 
 /**
@@ -3099,33 +3189,30 @@ function _nextRouteShortcut() {
  * already in use, so a user who has deleted slots down to a set that still
  * contains one empty one has no way to obtain a second. This is that way.
  */
-window.addRouteSlot = function () {
+window.addRouteSlot = function (name) {
+    const requested = (name && String(name).trim()) || '';
+    console.info(`[Route] Create attempt: "${requested || '(no name given)'}"`);
     if (!window.routeDefinitions) window.routeDefinitions = getDefaultRouteDefinitions();
-    saveHistoryState('Add route', { includeRouteDefinitions: true });
 
     const id = _nextRouteSlotId();
     const def = {
         id,
-        name: `Route ${id}`,
+        name: requested || `Route ${id}`,
         color: _nextRouteColor(),
-        shortcut: _nextRouteShortcut(),
+        shortcut: null,
         visible: true,
         automationRef: null,
     };
     window.routeDefinitions.push(def);
     if (window.dbManager) window.dbManager.saveRouteDefinitions();
-
+    _selectedRouteId = id;
     window.renderRouteWindow();
-
-    // Put the cursor in the new row's name so it can be named straight away —
-    // the row is appended at the bottom, which on a long list is off-screen.
+    RouteEdit.start(def);
     const row = document.querySelector(`#route-window-list .route-row[data-route-id="${def.id}"]`);
-    if (row) {
-        row.scrollIntoView({ block: 'nearest' });
-        const nameIn = row.querySelector('.route-name-input');
-        if (nameIn) { nameIn.focus(); nameIn.select(); }
-    }
-    showToast(`Added "${def.name}". Ctrl+Z removes it.`, 2500);
+    if (row) row.scrollIntoView({ block: 'end' });
+    console.info(`[Route] Created #${id} "${def.name}" (${def.color}). Rows now: ${window.routeDefinitions.length}. Left-click hexes to draw.`);
+    showToast(`Added "${def.name}". Left-click hexes to draw it.`, 3200);
+    return id;
 };
 
 
@@ -3193,12 +3280,55 @@ function renderOrphanRouteNotice() {
     notice.style.display = 'flex';
 }
 
+let _routeSort = 'default';
+
+function _routeNameForField(name) {
+    const comma = String(name).indexOf(',');
+    if (comma < 0) return name;
+    const rest = name.slice(comma + 1).trim();
+    if (!rest) return name;
+    return name.slice(0, comma + 1) + '\n' + rest;
+}
+
+let _selectedRouteId = null;
+
+function _markRouteRows() {
+    document.querySelectorAll('#route-window-list .route-row').forEach(row => {
+        const id = row.dataset.routeId;
+        row.classList.toggle('is-selected', id === String(_selectedRouteId));
+        row.classList.toggle('is-editing', !!(window.RouteEdit && String(window.RouteEdit.routeId) === id));
+    });
+}
+
+function _selectRoute(id, opts = {}) {
+    _selectedRouteId = id;
+    _markRouteRows();
+    if (!opts.scroll) return;
+    const row = document.querySelector(`#route-window-list .route-row[data-route-id="${id}"]`);
+    if (row) row.scrollIntoView({ block: 'nearest' });
+}
+
+function _orderedRouteDefs(defs, segCounts) {
+    if (!defs) return [];
+    if (_routeSort === 'default') return defs;
+    const list = defs.slice();
+    const byName = (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+    const segs = id => segCounts.get(id) || 0;
+    if (_routeSort === 'alpha-asc') list.sort((a, b) => byName(a, b) || a.id - b.id);
+    else if (_routeSort === 'alpha-desc') list.sort((a, b) => byName(b, a) || a.id - b.id);
+    else if (_routeSort === 'seg-desc') list.sort((a, b) => segs(b.id) - segs(a.id) || a.id - b.id);
+    else if (_routeSort === 'seg-asc') list.sort((a, b) => segs(a.id) - segs(b.id) || a.id - b.id);
+    return list;
+}
+
 window.renderRouteWindow = function () {
     const list = document.getElementById('route-window-list');
     if (!list) return;
     list.innerHTML = '';
     window.closeRouteAutoPanel();
     window.closeRouteSystemsPanel();
+    _closeCombinePicker();
+    _closeRouteMenu();
 
     // No ensureFreeRouteSlot() here. It used to top the list up to one spare
     // every time the window drew, which put it in direct conflict with Delete:
@@ -3219,72 +3349,46 @@ window.renderRouteWindow = function () {
     });
 
     const defs = window.routeDefinitions;
-    defs.forEach((def) => {
+    _orderedRouteDefs(defs, segCounts).forEach((def) => {
         const segCount = segCounts.get(def.id) || 0;
         const segClass = segCount > 0 ? 'used' : 'free';
         const segLabel = segCount > 0 ? segCount : '&mdash;';
+        const safeName = def.name.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
         const row = document.createElement('div');
-        row.className = 'route-row';
+        const selected = String(_selectedRouteId) === String(def.id);
+        const editing = !!(window.RouteEdit && String(window.RouteEdit.routeId) === String(def.id));
+        row.className = 'route-row' + (def.visible ? '' : ' is-hidden') + (selected ? ' is-selected' : '') + (editing ? ' is-editing' : '');
         row.dataset.routeId = def.id;
-        row.style.opacity = def.visible ? '1' : '0.45';
         row.innerHTML = `
-            <span class="route-seg-count ${segClass}" title="${segCount} segment(s)">${segLabel}</span>
-            <input type="text" class="route-name-input" value="${def.name.replace(/"/g, '&quot;')}" title="Route name" />
-            <input type="color" class="route-color-swatch" value="${def.color}" title="Route color" />
-            <input type="text" class="route-shortcut-input" maxlength="1" placeholder="key" value="${def.shortcut || ''}" title="Shortcut key" />
-            <i class="fas fa-eye${def.visible ? '' : '-slash'} route-eye-btn" style="color:${def.visible ? '#45a29e' : '#666'};cursor:pointer;font-size:0.8rem;" title="${def.visible ? 'Disable route' : 'Enable route'}"></i>
-            <button class="route-clear-btn" title="Remove all map segments for this route">C</button>
-            <button class="route-csv-btn route-export-btn"${segCount > 0 ? '' : ' disabled'} title="${segCount > 0 ? 'Export the worlds this route passes through, as a spreadsheet' : 'No segments to export'}">CSV</button>
-            <span class="route-file-cell">
-                <i class="fas fa-file-export route-save-btn" style="color:${segCount > 0 ? '#45a29e' : '#333'};cursor:${segCount > 0 ? 'pointer' : 'default'};opacity:${segCount > 0 ? '1' : '0.3'};" title="${segCount > 0 ? 'Save this route to a file' : 'No connections to save'}"></i>
-                <i class="fas fa-file-import route-load-btn" style="color:#45a29e;cursor:pointer;" title="Load a route file into '${def.name.replace(/'/g, "&#39;")}'"></i>
-            </span>
-            <i class="fas fa-link route-combine-btn" style="color:#45a29e;" title="Combine another route into this one"></i>
-            <button class="route-auto-btn" title="Set up automation for ${def.name}">&#9881; Auto</button>
-            <i class="fas fa-times route-delete-btn" style="color:#ff4500;cursor:pointer;font-size:0.8rem;" title="Delete route '${def.name.replace(/'/g, "&#39;")}'"></i>
+            <button type="button" class="route-eye" aria-label="${def.visible ? 'Hide' : 'Show'} ${safeName}" title="${def.visible ? 'Hide route' : 'Show route'}">
+                <i class="fas fa-eye${def.visible ? '' : '-slash'} route-eye-btn${def.visible ? ' is-on' : ''}"></i>
+            </button>
+            <input type="color" class="route-color-swatch" value="${def.color}" title="Line color" aria-label="Line color">
+            <div class="route-name"></div>
+            <button type="button" class="route-seg-count ${segClass}"${segCount > 0 ? '' : ' disabled'} title="${segCount > 0 ? segCount + ' segment(s) — click to list them and frame them on the map' : 'No segments'}">${segLabel}</button>
+            <button type="button" class="app-btn icon small route-more-btn" aria-label="More actions for ${safeName}" aria-haspopup="menu" aria-expanded="false" title="More"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></button>
         `;
-        const nameIn  = row.querySelector('.route-name-input');
+        row.querySelector('.route-name').textContent = _routeNameForField(def.name);
         const colorIn = row.querySelector('.route-color-swatch');
-        const shortIn = row.querySelector('.route-shortcut-input');
         const eyeBtn  = row.querySelector('.route-eye-btn');
-        const delBtn  = row.querySelector('.route-delete-btn');
-        const combBtn = row.querySelector('.route-combine-btn');
-        if (combBtn) {
-            combBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                if (combBtn.classList.contains('disabled')) return;
-                _openCombinePicker(def.id, combBtn);
-            });
-        }
-
-        nameIn.addEventListener('change', () => {
-            def.name = nameIn.value;
-            if (window.dbManager) window.dbManager.saveRouteDefinitions();
-            requestAnimationFrame(draw);
+        const eyeWrap = row.querySelector('.route-eye');
+        row.addEventListener('click', (e) => {
+            if (e.target.closest('.route-eye, .route-seg-count, .route-more-btn, .route-color-swatch')) return;
+            _selectRoute(def.id);
         });
         colorIn.addEventListener('input', () => {
             def.color = colorIn.value;
             if (window.dbManager) window.dbManager.saveRouteDefinitions();
             requestAnimationFrame(draw);
         });
-        shortIn.addEventListener('change', () => {
-            const RESERVED = ['f', 'r'];
-            const typed = shortIn.value.toLowerCase();
-            if (RESERVED.includes(typed)) {
-                showToast(`'${typed}' is reserved for a window shortcut.`, 2500);
-                shortIn.value = def.shortcut || '';
-                return;
-            }
-            def.shortcut = typed;
-            if (window.dbManager) window.dbManager.saveRouteDefinitions();
-        });
-        eyeBtn.addEventListener('click', () => {
+        eyeWrap.addEventListener('click', () => {
             def.visible = !def.visible;
             eyeBtn.classList.toggle('fa-eye', def.visible);
             eyeBtn.classList.toggle('fa-eye-slash', !def.visible);
-            eyeBtn.style.color = def.visible ? '#45a29e' : '#666';
-            eyeBtn.title = def.visible ? 'Disable route' : 'Enable route';
-            row.style.opacity = def.visible ? '1' : '0.45';
+            eyeBtn.classList.toggle('is-on', def.visible);
+            eyeWrap.title = def.visible ? 'Hide route' : 'Show route';
+            eyeWrap.setAttribute('aria-label', `${def.visible ? 'Hide' : 'Show'} ${def.name}`);
+            row.classList.toggle('is-hidden', !def.visible);
             if (window.dbManager) window.dbManager.saveRouteDefinitions();
             const allCb = document.getElementById('route-vis-all-check');
             if (allCb) {
@@ -3296,77 +3400,20 @@ window.renderRouteWindow = function () {
             requestAnimationFrame(draw);
         });
 
-        delBtn.addEventListener('click', () => {
-            const segments = (window.sectorRoutes || []).filter(r => r.routeId === def.id);
-            const segMsg = segments.length > 0 ? `\nThis will also clear its ${segments.length} segment(s).` : '';
-            if (!window.confirm(`Delete route "${def.name}"?${segMsg}\n\nThis can be undone with Ctrl+Z.`)) return;
-            // The confirm above promises Ctrl+Z will bring it back, and until
-            // the snapshot carried the definitions that was only half true: the
-            // segments returned, orphaned, to a slot that no longer existed.
-            saveHistoryState(`Delete ${def.name}`, { includeRouteDefinitions: true });
-            window.sectorRoutes = (window.sectorRoutes || []).filter(r => r.routeId !== def.id);
-            window.routeDefinitions = (window.routeDefinitions || []).filter(d => d.id !== def.id);
-            if (window.dbManager) { window.dbManager.saveRoutes(); window.dbManager.saveRouteDefinitions(); }
-            requestAnimationFrame(draw);
-            window.renderRouteWindow();
-            showToast(`Deleted route "${def.name}".`, 2000);
-        });
-
-        // Segment-count pill: click to view route systems
         const pill = row.querySelector('.route-seg-count');
         if (pill && segCount > 0) {
-            pill.style.cursor = 'pointer';
-            pill.title = `${segCount} segment(s) — click to view systems`;
             pill.addEventListener('click', () => window.openRouteSystemsPanel(def.id, def.name));
         }
 
-        // .onclick for save, matching the export button below and for the same
-        // reason: refreshRouteWindowCounts() re-assigns it as counts change, and
-        // a listener here would stack alongside that one.
-        const saveBtn = row.querySelector('.route-save-btn');
-        if (saveBtn) saveBtn.onclick = segCount > 0 ? () => exportRouteFile(def.id, def.name) : null;
-
-        // Load is always available — filling an empty slot is the normal case —
-        // and refreshRouteWindowCounts() never touches it, so a listener is safe.
-        const loadBtn = row.querySelector('.route-load-btn');
-        if (loadBtn) loadBtn.addEventListener('click', () => _pickRouteFileFor(def.id, def.name));
-
-        const exportBtn = row.querySelector('.route-export-btn');
-        if (exportBtn) {
-            // .onclick, not addEventListener — refreshRouteWindowCounts() assigns
-            // this same property, and a listener here would stack alongside it so
-            // one click opened the export modal twice.
-            exportBtn.onclick = segCount > 0 ? () => openRouteExportModal(def.id, def.name) : null;
-        }
-
-        const autoBtn = row.querySelector('.route-auto-btn');
-        autoBtn.addEventListener('click', () => {
-            window.closeRouteSystemsPanel();
-            window.openRouteAutoPanel(def.id, def.name);
-        });
-
-        const clearBtn = row.querySelector('.route-clear-btn');
-        clearBtn.addEventListener('click', () => {
-            const segments = (window.sectorRoutes || []).filter(r => r.routeId === def.id);
-            if (segments.length === 0) {
-                showToast(`No segments to clear for "${def.name}".`, 2000);
-                return;
-            }
-            const confirmed = window.confirm(
-                `Clear all ${segments.length} segment(s) from "${def.name}"?\n\nThis can be undone with Ctrl+Z.`
-            );
-            if (!confirmed) return;
-            saveHistoryState(`Clear ${def.name}`);
-            window.sectorRoutes = window.sectorRoutes.filter(r => r.routeId !== def.id);
-            if (window.dbManager) window.dbManager.saveRoutes();
-            requestAnimationFrame(draw);
-            window.closeRouteSystemsPanel();
-            window.refreshRouteWindowCounts();
-            showToast(`Cleared ${segments.length} segment(s) from "${def.name}".`, 2000);
+        row.querySelector('.route-more-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            _openRouteMenu(def, e.currentTarget);
         });
 
         list.appendChild(row);
     });
+
+    _syncRouteCombineButton();
 
     renderOrphanRouteNotice();
 
@@ -3397,24 +3444,45 @@ window.closeRouteWindow = function () {
     if (win) win.classList.remove('visible');
 };
 
-// ── Combine (route_extend_spec.md §5) ────────────────────────────────────────
+// ── Combine and the per-route menu ───────────────────────────────────────────
 
+const _routeSelection = new Set();
 let _combinePickerEl = null;
+let _routeMenuEl = null;
+let _routeMenuAnchor = null;
+
+function _syncRouteCombineButton() {
+    const btn = document.getElementById('btn-route-combine');
+    if (!btn) return;
+    btn.disabled = false;
+    btn.title = 'Choose routes to combine';
+}
 
 /**
- * The picker lives on <body>, not inside #route-window. `.draggable-palette`
- * carries backdrop-filter, which makes it the containing block for position:fixed
- * descendants, and its overflow:hidden then clips them — the failure is invisible
- * (built, display:block, correct contents, painted somewhere off-screen) and it
- * cost most of v0.17.2 item 1.
+ * Menus live on <body>, not inside #route-window. `.draggable-palette` carries
+ * backdrop-filter, which makes it the containing block for position:fixed
+ * descendants, and its overflow then clips them.
  */
 function _ensureCombinePicker() {
     if (_combinePickerEl && document.body.contains(_combinePickerEl)) return _combinePickerEl;
     const el = document.createElement('div');
     el.id = 'route-combine-picker';
+    el.className = 'app-menu';
     el.style.display = 'none';
     document.body.appendChild(el);
     _combinePickerEl = el;
+    return el;
+}
+
+function _ensureRouteMenu() {
+    if (_routeMenuEl && document.body.contains(_routeMenuEl)) return _routeMenuEl;
+    const el = document.createElement('div');
+    el.id = 'route-more-menu';
+    el.className = 'app-menu';
+    el.setAttribute('role', 'menu');
+    el.style.display = 'none';
+    document.body.appendChild(el);
+    _routeMenuEl = el;
     return el;
 }
 
@@ -3422,73 +3490,324 @@ function _closeCombinePicker() {
     if (_combinePickerEl) _combinePickerEl.style.display = 'none';
 }
 
+function _closeRouteMenu() {
+    if (_routeMenuAnchor) _routeMenuAnchor.setAttribute('aria-expanded', 'false');
+    _routeMenuAnchor = null;
+    if (_routeMenuEl) _routeMenuEl.style.display = 'none';
+}
+
+function _placeFloating(el, anchorEl, alignEnd) {
+    el.style.display = 'block';
+    const r = anchorEl.getBoundingClientRect();
+    const w = el.offsetWidth || 220;
+    const h = el.offsetHeight || 80;
+    let left = alignEnd ? r.right - w : r.left;
+    let top = r.bottom + 4;
+    if (left + w > window.innerWidth - 8) left = window.innerWidth - w - 8;
+    if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 4);
+    el.style.left = `${Math.max(8, left)}px`;
+    el.style.top = `${top}px`;
+}
+
 document.addEventListener('mousedown', (e) => {
-    if (!_combinePickerEl || _combinePickerEl.style.display === 'none') return;
-    if (_combinePickerEl.contains(e.target)) return;
-    if (e.target.closest && e.target.closest('.route-combine-btn')) return;
-    _closeCombinePicker();
+    if (_combinePickerEl && _combinePickerEl.style.display !== 'none'
+        && !_combinePickerEl.contains(e.target)
+        && !(e.target.closest && e.target.closest('#btn-route-combine'))) {
+        _closeCombinePicker();
+    }
+    if (_routeMenuEl && _routeMenuEl.style.display !== 'none'
+        && !_routeMenuEl.contains(e.target)
+        && !(e.target.closest && e.target.closest('.route-more-btn'))) {
+        _closeRouteMenu();
+    }
 });
 document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') _closeCombinePicker();
+    if (e.key !== 'Escape') return;
+    if (_routeNameModalEl && !_routeNameModalEl.hidden) { _closeRouteNameModal(); return; }
+    if (window.RouteEdit && window.RouteEdit.isActive()) { window.RouteEdit.stop(); return; }
+    _closeCombineModal();
+    _closeCombinePicker();
+    _closeRouteMenu();
 });
 
-function _openCombinePicker(routeId, anchorEl) {
-    const def = (window.routeDefinitions || []).find(d => d.id === routeId);
-    if (!def) return;
-    const cands = getCombineCandidates(routeId);
-    if (cands.length === 0) {
-        showToast(`No other route meets "${def.name}" end to end, so there is nothing to `
-                + `combine it with.`, 4000);
+let _combineModalEl = null;
+let _combineModalIds = new Set();
+
+function _ensureCombineModal() {
+    if (_combineModalEl && document.body.contains(_combineModalEl)) return _combineModalEl;
+    const el = document.createElement('div');
+    el.id = 'route-combine-modal';
+    el.className = 'route-combine-modal';
+    el.hidden = true;
+    el.innerHTML = `
+        <div class="route-combine-card" role="dialog" aria-modal="true" aria-labelledby="route-combine-title">
+            <h3 id="route-combine-title">Combine routes</h3>
+            <p class="rcm-lead">Select the routes to join, then choose which one they become.</p>
+            <div class="rcm-list"></div>
+            <label class="rcm-dest">Combine into
+                <select id="route-combine-dest"></select>
+            </label>
+            <p class="rcm-note"></p>
+            <div class="rcm-actions">
+                <button type="button" class="app-btn" data-rcm="cancel">Cancel</button>
+                <button type="button" class="app-btn primary" data-rcm="go" disabled>Combine</button>
+            </div>
+        </div>`;
+    el.addEventListener('click', (e) => { if (e.target === el) _closeCombineModal(); });
+    el.querySelector('[data-rcm="cancel"]').addEventListener('click', _closeCombineModal);
+    el.querySelector('[data-rcm="go"]').addEventListener('click', () => {
+        const destId = parseInt(el.querySelector('#route-combine-dest').value, 10);
+        const sources = [..._combineModalIds].filter(id => id !== destId);
+        _closeCombineModal();
+        _combineSelectedInto(destId, sources, true);
+    });
+    document.body.appendChild(el);
+    _combineModalEl = el;
+    return el;
+}
+
+function _closeCombineModal() {
+    if (_combineModalEl) _combineModalEl.hidden = true;
+    _combineModalIds = new Set();
+}
+
+function _refreshCombineChoices() {
+    const el = _combineModalEl;
+    if (!el) return;
+    const withSegs = _routesWithSegments([..._combineModalIds]);
+    const choices = withSegs.filter(id => _combineFoldOrder(id, withSegs));
+    const select = el.querySelector('#route-combine-dest');
+    const note = el.querySelector('.rcm-note');
+    const go = el.querySelector('[data-rcm="go"]');
+    select.replaceChildren();
+    if (withSegs.length < 2) {
+        note.textContent = 'Select two or more routes.';
+        select.disabled = true;
+        go.disabled = true;
+        return;
+    }
+    if (!choices.length) {
+        note.textContent = 'Those routes do not join into a single line.';
+        select.disabled = true;
+        go.disabled = true;
+        return;
+    }
+    const defs = window.routeDefinitions || [];
+    choices.forEach(id => {
+        const def = defs.find(d => d.id === id);
+        const opt = document.createElement('option');
+        opt.value = String(id);
+        opt.textContent = def ? def.name : `Route ${id}`;
+        select.appendChild(opt);
+    });
+    select.disabled = false;
+    go.disabled = false;
+    note.textContent = 'Segments move into the route you choose and take on its colour. The others are removed. Ctrl+Z brings them back.';
+}
+
+function _openCombineModal() {
+    _closeRouteMenu();
+    _closeCombinePicker();
+    const defs = (window.routeDefinitions || []).filter(d =>
+        (window.sectorRoutes || []).some(r => r.routeId === d.id));
+    if (defs.length < 2) {
+        showToast('You need at least two routes with segments before they can be combined.', 4000);
+        return;
+    }
+    const el = _ensureCombineModal();
+    const list = el.querySelector('.rcm-list');
+    list.replaceChildren();
+    _combineModalIds = new Set();
+    defs.forEach(def => {
+        const count = (window.sectorRoutes || []).filter(r => r.routeId === def.id).length;
+        const row = document.createElement('label');
+        row.className = 'rcm-row';
+        const box = document.createElement('input');
+        box.type = 'checkbox';
+        const sw = document.createElement('span');
+        sw.className = 'rcp-swatch';
+        sw.style.background = def.color || '#888';
+        const name = document.createElement('span');
+        name.className = 'rcm-name';
+        name.textContent = def.name;
+        const meta = document.createElement('span');
+        meta.className = 'rcm-meta';
+        meta.textContent = `${count} segment${count === 1 ? '' : 's'}`;
+        box.addEventListener('change', () => {
+            if (box.checked) _combineModalIds.add(def.id);
+            else _combineModalIds.delete(def.id);
+            _refreshCombineChoices();
+        });
+        row.append(box, sw, name, meta);
+        list.appendChild(row);
+    });
+    _refreshCombineChoices();
+    el.hidden = false;
+}
+
+/** Routes in `ids` that currently hold at least one segment. */
+function _routesWithSegments(ids) {
+    const all = window.sectorRoutes || [];
+    return ids.filter(id => all.some(r => r.routeId === id));
+}
+
+/**
+ * Order in which `sourceIds` can be folded into `destId` without breaking the
+ * chain invariant, or null when no such order exists. Does not mutate the map.
+ * A destination has to already be one chain; a source may be the piece that
+ * extends it, including one that is not itself a chain.
+ */
+function _combineFoldOrder(destId, sourceIds) {
+    const segs = (window.sectorRoutes || []).map(s => ({ routeId: s.routeId, startId: s.startId, endId: s.endId }));
+    if (!walkRouteChain(segs.filter(s => s.routeId === destId)).ok) return null;
+    const left = new Set(sourceIds.filter(id => id !== destId && segs.some(s => s.routeId === id)));
+    const order = [];
+    while (left.size) {
+        let progressed = false;
+        for (const srcId of left) {
+            if (!walkRouteChain(segs.filter(s => s.routeId === destId || s.routeId === srcId)).ok) continue;
+            segs.forEach(s => { if (s.routeId === srcId) s.routeId = destId; });
+            left.delete(srcId);
+            order.push(srcId);
+            progressed = true;
+            break;
+        }
+        if (!progressed) return null;
+    }
+    return order;
+}
+
+function _openSelectionCombinePicker(anchorEl) {
+    _closeRouteMenu();
+    const withSegs = _routesWithSegments([..._routeSelection]);
+    if (withSegs.length < 2) {
+        showToast('Select two or more routes that already have segments.', 3000);
+        return;
+    }
+    const defs = window.routeDefinitions || [];
+    const choices = withSegs.filter(id => _combineFoldOrder(id, withSegs));
+    if (choices.length === 0) {
+        showToast('Those routes do not join into a single line, so they cannot be combined.', 4000);
         return;
     }
 
     const el = _ensureCombinePicker();
-    el.innerHTML = '';
-
+    el.replaceChildren();
     const head = document.createElement('div');
     head.className = 'rcp-head';
-    head.textContent = `Combine into "${def.name}"`;
+    head.textContent = 'Combine into';
     el.appendChild(head);
 
-    cands.forEach(c => {
+    choices.forEach(id => {
+        const def = defs.find(d => d.id === id);
+        if (!def) return;
+        const count = (window.sectorRoutes || []).filter(r => r.routeId === id).length;
         const row = document.createElement('div');
         row.className = 'rcp-item';
-
         const sw = document.createElement('span');
         sw.className = 'rcp-swatch';
-        sw.style.background = c.color || '#888';
-        row.appendChild(sw);
-
+        sw.style.background = def.color || '#888';
         const nm = document.createElement('span');
         nm.className = 'rcp-name';
-        nm.textContent = c.name;
-        row.appendChild(nm);
-
+        nm.textContent = def.name;
         const meta = document.createElement('span');
         meta.className = 'rcp-meta';
-        meta.textContent = c.sharedIds.length === 1
-            ? `meets at ${formatWorldLabel(c.sharedIds[0])}`
-            : `${c.segCount} segment(s)`;
-        row.appendChild(meta);
-
-        row.title = `${c.segCount} segment(s) will move into "${def.name}".`;
+        meta.textContent = `${count} segment${count === 1 ? '' : 's'}`;
+        row.append(sw, nm, meta);
         row.addEventListener('click', () => {
             _closeCombinePicker();
-            _combineRoutes(routeId, c);
+            _combineSelectedInto(id, withSegs.filter(other => other !== id));
         });
         el.appendChild(row);
     });
+    _placeFloating(el, anchorEl, true);
+}
 
-    el.style.display = 'block';
-    const r = anchorEl.getBoundingClientRect();
-    const w = el.offsetWidth || 260;
-    const h = el.offsetHeight || 120;
-    let left = r.left;
-    let top  = r.bottom + 4;
-    if (left + w > window.innerWidth - 8)  left = window.innerWidth - w - 8;
-    if (top  + h > window.innerHeight - 8) top  = Math.max(8, r.top - h - 4);
-    el.style.left = `${Math.max(8, left)}px`;
-    el.style.top  = `${top}px`;
+function _combineSelectedInto(destId, sourceIds, alreadyConfirmed) {
+    const order = _combineFoldOrder(destId, sourceIds);
+    const defs = window.routeDefinitions || [];
+    const destDef = defs.find(d => d.id === destId);
+    if (!order || !order.length || !destDef) {
+        showToast('Those routes do not join into a single line, so they cannot be combined.', 4000);
+        return;
+    }
+    const sources = order.map(id => defs.find(d => d.id === id)).filter(Boolean);
+    const lines = sources.map(d => {
+        const n = (window.sectorRoutes || []).filter(r => r.routeId === d.id).length;
+        return `${d.name} (${n} segment${n === 1 ? '' : 's'})`;
+    }).join('\n');
+    if (!alreadyConfirmed) {
+        const ok = window.confirm(
+            `Combine ${sources.length} route${sources.length === 1 ? '' : 's'} into "${destDef.name}"?\n\n` +
+            `${lines}\n\n` +
+            `Their segments move into "${destDef.name}" and take on its colour. Those routes are then removed.\n\n` +
+            `This can be undone with Ctrl+Z.`
+        );
+        if (!ok) return;
+    }
+
+    saveHistoryState(
+        sources.length === 1 ? `Combine ${sources[0].name} into ${destDef.name}` : `Combine ${sources.length} routes into ${destDef.name}`,
+        { routes: true, includeRouteDefinitions: true }
+    );
+    let moved = 0, duplicates = 0;
+    for (const srcId of order) {
+        const cand = (typeof getCombineCandidates === 'function' ? getCombineCandidates(destId) : []).find(c => c.routeId === srcId);
+        if (!cand) continue;
+        const result = _applyCombine(destId, cand);
+        if (!result) continue;
+        moved += result.moved;
+        duplicates += result.duplicates;
+        _routeSelection.delete(srcId);
+    }
+    if (window.dbManager) { window.dbManager.saveRoutes(); window.dbManager.saveRouteDefinitions(); }
+    window.renderRouteWindow();
+    requestAnimationFrame(draw);
+    _toastCombined(destId, destDef.name, moved, duplicates);
+}
+
+/**
+ * Moves one route's segments onto `destId` and removes the absorbed slot.
+ * No confirm, history entry, save, or redraw — callers own those, so several
+ * routes can fold in a single undo step.
+ */
+function _applyCombine(destId, cand) {
+    const defs    = window.routeDefinitions || [];
+    const destDef = defs.find(d => d.id === destId);
+    const srcDef  = defs.find(d => d.id === cand.routeId);
+    if (!destDef || !srcDef) return null;
+
+    const all      = window.sectorRoutes || [];
+    const destSegs = all.filter(r => r.routeId === destId);
+    const srcSegs  = all.filter(r => r.routeId === cand.routeId);
+    if (srcSegs.length === 0) return null;
+
+    // The same typeMap canvas_input, the XML importer and route-file import all
+    // use. An absorbed segment has to be indistinguishable from one drawn on the
+    // destination, or the renderer draws it on a different layer and the alt-drag
+    // toggle behaves inconsistently.
+    const typeMap = { 1: 'Xboat', 2: 'Trade', 3: 'Secondary' };
+    const type    = typeMap[destId] || 'Filter';
+    const groupId = (destSegs.length && destSegs[0].groupId) ? destSegs[0].groupId : `p2p_${destId}`;
+
+    const key  = seg => [seg.startId, seg.endId].slice().sort().join('|');
+    const have = new Set(destSegs.map(key));
+
+    let moved = 0, duplicates = 0;
+    for (const seg of srcSegs) {
+        if (have.has(key(seg))) { duplicates++; continue; }
+        seg.routeId = destId;
+        seg.type    = type;
+        if (type === 'Filter') seg.groupId = groupId; else delete seg.groupId;
+        delete seg.color;
+        have.add(key(seg));
+        moved++;
+    }
+
+    window.sectorRoutes = all.filter(r => r.routeId !== cand.routeId);
+    stampRouteSubtype(destId);
+    window.routeDefinitions = defs.filter(d => d.id !== cand.routeId);
+    return { moved, duplicates };
 }
 
 /**
@@ -3501,9 +3820,7 @@ function _combineRoutes(destId, cand) {
     const srcDef  = defs.find(d => d.id === cand.routeId);
     if (!destDef || !srcDef) return;
 
-    const all      = window.sectorRoutes || [];
-    const destSegs = all.filter(r => r.routeId === destId);
-    const srcSegs  = all.filter(r => r.routeId === cand.routeId);
+    const srcSegs = (window.sectorRoutes || []).filter(r => r.routeId === cand.routeId);
     if (srcSegs.length === 0) return;
 
     const where = cand.sharedIds.length === 1
@@ -3521,53 +3838,265 @@ function _combineRoutes(destId, cand) {
     // includeRouteDefinitions: a definition is being deleted, and without it the
     // absorbed slot would not come back on undo — the segments would return
     // belonging to a route that no longer exists.
-    saveHistoryState(`Combine ${srcDef.name} into ${destDef.name}`, { includeRouteDefinitions: true });
-
-    // The same typeMap canvas_input, the XML importer and route-file import all
-    // use. An absorbed segment has to be indistinguishable from one drawn on the
-    // destination, or the renderer draws it on a different layer and the alt-drag
-    // toggle behaves inconsistently.
-    const typeMap = { 1: 'Xboat', 2: 'Trade', 3: 'Secondary' };
-    const type    = typeMap[destId] || 'Filter';
-    const groupId = (destSegs.length && destSegs[0].groupId) ? destSegs[0].groupId : `p2p_${destId}`;
-
-    const key  = seg => [seg.startId, seg.endId].slice().sort().join('|');
-    const have = new Set(destSegs.map(key));
-
-    let moved = 0, duplicates = 0;
-    for (const seg of srcSegs) {
-        if (have.has(key(seg))) { duplicates++; continue; }   // left behind, dropped below
-        seg.routeId = destId;
-        seg.type    = type;
-        if (type === 'Filter') seg.groupId = groupId; else delete seg.groupId;
-        // No colour of its own: the renderer prefers the definition's colour and
-        // only falls back to seg.color, so dropping it is what makes the segment
-        // wear the destination's colour.
-        delete seg.color;
-        have.add(key(seg));
-        moved++;
-    }
-
-    // Anything still carrying the source id is a duplicate of a segment the
-    // destination already had, so this both removes the old slot's segments and
-    // performs the dedupe.
-    window.sectorRoutes = all.filter(r => r.routeId !== cand.routeId);
-
-    stampRouteSubtype(destId);
-    window.routeDefinitions = defs.filter(d => d.id !== cand.routeId);
+    saveHistoryState(`Combine ${srcDef.name} into ${destDef.name}`, { routes: true, includeRouteDefinitions: true });
+    const result = _applyCombine(destId, cand);
+    if (!result) return;
+    _routeSelection.delete(cand.routeId);
 
     if (window.dbManager) { window.dbManager.saveRoutes(); window.dbManager.saveRouteDefinitions(); }
     window.renderRouteWindow();
     requestAnimationFrame(draw);
+    _toastCombined(destId, destDef.name, result.moved, result.duplicates);
+}
 
+function _toastCombined(destId, name, moved, duplicates) {
     const merged = getRouteChain(destId);
     const dupNote = duplicates > 0 ? ` ${duplicates} duplicate segment(s) were not added twice.` : '';
     if (merged.ok) {
-        showToast(`Combined into "${destDef.name}": ${moved} segment(s) added — the route now runs `
+        showToast(`Combined into "${name}": ${moved} segment(s) added — the route now runs `
                 + `${formatWorldLabel(merged.ends[0])} to ${formatWorldLabel(merged.ends[1])}.${dupNote}`, 6000);
     } else {
-        showToast(`Combined into "${destDef.name}": ${moved} segment(s) added.${dupNote}`, 5000);
+        showToast(`Combined into "${name}": ${moved} segment(s) added.${dupNote}`, 5000);
     }
+}
+
+let _routeNameModalEl = null;
+
+function _closeRouteNameModal() {
+    if (_routeNameModalEl) _routeNameModalEl.hidden = true;
+}
+
+function _openRouteNameModal({ title, value, placeholder, okLabel, onOk }) {
+    if (!_routeNameModalEl) {
+        const el = document.createElement('div');
+        el.id = 'route-name-modal';
+        el.className = 'route-combine-modal';
+        el.hidden = true;
+        el.innerHTML = `
+            <form class="route-combine-card" role="dialog" aria-modal="true">
+                <h3></h3>
+                <input type="text" class="route-name-field" maxlength="80" autocomplete="off">
+                <div class="rcm-actions">
+                    <button type="button" class="app-btn" data-rn="cancel">Cancel</button>
+                    <button type="submit" class="app-btn primary" data-rn="ok"></button>
+                </div>
+            </form>`;
+        el.addEventListener('click', (e) => { if (e.target === el) _closeRouteNameModal(); });
+        el.querySelector('[data-rn="cancel"]').addEventListener('click', _closeRouteNameModal);
+        el.querySelector('form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const input = el.querySelector('.route-name-field');
+            const name = input.value.replace(/\s+/g, ' ').trim();
+            if (!name) { showToast('Give the route a name.', 2000); input.focus(); return; }
+            const done = el._onOk;
+            _closeRouteNameModal();
+            if (done) done(name);
+        });
+        document.body.appendChild(el);
+        _routeNameModalEl = el;
+    }
+    const el = _routeNameModalEl;
+    el._onOk = onOk;
+    el.querySelector('h3').textContent = title;
+    el.querySelector('[data-rn="ok"]').textContent = okLabel;
+    const input = el.querySelector('.route-name-field');
+    input.placeholder = placeholder || '';
+    input.value = value || '';
+    el.hidden = false;
+    input.focus();
+    input.select();
+}
+window.openRecordNameModal = _openRouteNameModal;
+
+function _routeEditHint(detail) {
+    const root = document.getElementById('route-edit-hint');
+    if (!root) return;
+    const def = (window.routeDefinitions || []).find(d => d.id === RouteEdit.routeId);
+    root.hidden = false;
+    document.body.classList.add('route-editing');
+    const build = document.getElementById('mgt-build-progress');
+    root.style.bottom = build && !build.hidden ? '148px' : '20px';
+    document.getElementById('route-edit-hint-title').textContent = def ? `Editing ${def.name}` : 'Editing route';
+    document.getElementById('route-edit-hint-detail').textContent = detail;
+}
+
+const RouteEdit = {
+    routeId: null,
+    tip: null,
+    isActive() { return this.routeId != null; },
+    start(def) {
+        this.routeId = def.id;
+        const ends = (typeof getRouteEnds === 'function') ? getRouteEnds(def.id) : null;
+        this.tip = (ends && ends.ok && ends.ends && ends.ends.length) ? ends.ends[ends.ends.length - 1] : null;
+        _selectRoute(def.id, { scroll: true });
+        _markRouteRows();
+        this.refreshHint();
+    },
+    stop() {
+        if (this.routeId == null) return;
+        this.routeId = null;
+        this.tip = null;
+        const root = document.getElementById('route-edit-hint');
+        if (root) root.hidden = true;
+        document.body.classList.remove('route-editing');
+        _markRouteRows();
+    },
+    refreshHint() {
+        if (!this.isActive()) return;
+        const extra = this.tip
+            ? ` Next leg starts at ${formatWorldLabel(this.tip)}.`
+            : ' Left-click the first hex.';
+        _routeEditHint('Left-click a hex to extend the route. Right-click a hex on the route to remove it. Drag to pan, scroll to zoom.' + extra);
+    },
+    _hasLeg(a, b) {
+        const [s, e] = [a, b].sort();
+        return (window.sectorRoutes || []).some(r => r.routeId === this.routeId && r.startId === s && r.endId === e);
+    },
+    addHex(hexId) {
+        if (!hexId || !this.isActive()) return;
+        if (!this.tip) {
+            this.tip = hexId;
+            this.refreshHint();
+            console.info(`[Route] #${this.routeId} start ${hexId}`);
+            showToast(`Start set at ${formatWorldLabel(hexId)}. Left-click the next hex.`, 2200);
+            return;
+        }
+        if (hexId === this.tip) return;
+        if (this._hasLeg(this.tip, hexId)) {
+            this.tip = hexId;
+            this.refreshHint();
+            showToast('That leg is already on the route.', 1800);
+            return;
+        }
+        const def = (window.routeDefinitions || []).find(d => d.id === this.routeId);
+        const typeMap = { 1: 'Xboat', 2: 'Trade', 3: 'Secondary' };
+        const type = typeMap[this.routeId] || 'Filter';
+        const [startId, endId] = [this.tip, hexId].sort();
+        const leg = { startId, endId, type, routeId: this.routeId, subtype: 'PointToPoint' };
+        if (type === 'Filter' && def) leg.color = def.color;
+        if (!window.sectorRoutes) window.sectorRoutes = [];
+        window.sectorRoutes.push(leg);
+        console.info(`[Route] #${this.routeId} leg ${startId} → ${endId}. Segments now: ${window.sectorRoutes.filter(r => r.routeId === this.routeId).length}.`);
+        if (typeof stampRouteSubtype === 'function') stampRouteSubtype(this.routeId);
+        this.tip = hexId;
+        if (window.dbManager) window.dbManager.saveRoutes();
+        if (window.refreshRouteWindowCounts) window.refreshRouteWindowCounts();
+        requestAnimationFrame(draw);
+        this.refreshHint();
+    },
+    removeHex(hexId) {
+        if (!hexId || !this.isActive()) return;
+        const had = (window.sectorRoutes || []).some(r => r.routeId === this.routeId && (r.startId === hexId || r.endId === hexId));
+        if (!had) {
+            if (this.tip === hexId) { this.tip = null; this.refreshHint(); }
+            else showToast('That hex is not on this route.', 1600);
+            return;
+        }
+        window.sectorRoutes = (window.sectorRoutes || []).filter(r => r.routeId !== this.routeId || (r.startId !== hexId && r.endId !== hexId));
+        console.info(`[Route] #${this.routeId} removed hex ${hexId}.`);
+        if (typeof stampRouteSubtype === 'function') stampRouteSubtype(this.routeId);
+        const ends = (typeof getRouteEnds === 'function') ? getRouteEnds(this.routeId) : null;
+        this.tip = (ends && ends.ok && ends.ends && ends.ends.length) ? ends.ends[ends.ends.length - 1] : null;
+        if (window.dbManager) window.dbManager.saveRoutes();
+        if (window.refreshRouteWindowCounts) window.refreshRouteWindowCounts();
+        requestAnimationFrame(draw);
+        this.refreshHint();
+    }
+};
+window.RouteEdit = RouteEdit;
+
+document.getElementById('route-edit-hint-done')?.addEventListener('click', () => RouteEdit.stop());
+
+function _openRouteMenu(def, anchor) {
+    if (_routeMenuEl && _routeMenuEl.style.display !== 'none' && _routeMenuEl.dataset.routeId === String(def.id)) {
+        _closeRouteMenu();
+        return;
+    }
+    _closeCombinePicker();
+    const el = _ensureRouteMenu();
+    el.dataset.routeId = String(def.id);
+    el.replaceChildren();
+    const segCount = (window.sectorRoutes || []).filter(r => r.routeId === def.id).length;
+    const addItem = (label, opts = {}) => {
+        if (opts.sep) {
+            const sep = document.createElement('div');
+            sep.className = 'app-menu-sep';
+            el.appendChild(sep);
+            return;
+        }
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.setAttribute('role', 'menuitem');
+        btn.textContent = label;
+        if (opts.danger) btn.className = 'danger';
+        btn.disabled = !!opts.disabled;
+        if (!opts.disabled) btn.addEventListener('click', () => { _closeRouteMenu(); opts.run(); });
+        el.appendChild(btn);
+    };
+    addItem('Rename', { run: () => _openRouteNameModal({
+        title: 'Rename route',
+        value: def.name,
+        okLabel: 'Rename',
+        onOk: (name) => {
+            def.name = name;
+            if (window.dbManager) window.dbManager.saveRouteDefinitions();
+            window.renderRouteWindow();
+            if (window.RouteEdit && window.RouteEdit.isActive()) window.RouteEdit.refreshHint();
+        }
+    }) });
+    addItem(window.RouteEdit && String(window.RouteEdit.routeId) === String(def.id) ? 'Finish editing' : 'Edit route', {
+        run: () => {
+            if (window.RouteEdit && String(window.RouteEdit.routeId) === String(def.id)) window.RouteEdit.stop();
+            else window.RouteEdit.start(def);
+        }
+    });
+    addItem('Auto', { run: () => {
+        window.closeRouteSystemsPanel();
+        window.openRouteAutoPanel(def.id, def.name);
+    } });
+    addItem('Clear segments', { disabled: segCount === 0, run: () => _clearRoute(def) });
+    addItem('Export worlds (CSV)', { disabled: segCount === 0, run: () => openRouteExportModal(def.id, def.name) });
+    addItem('Save route file', { disabled: segCount === 0, run: () => exportRouteFile(def.id, def.name) });
+    addItem('Load route file', { run: () => _pickRouteFileFor(def.id, def.name) });
+    addItem('', { sep: true });
+    addItem('Delete route', { danger: true, run: () => _deleteRoute(def) });
+    if (_routeMenuAnchor) _routeMenuAnchor.setAttribute('aria-expanded', 'false');
+    _routeMenuAnchor = anchor;
+    anchor.setAttribute('aria-expanded', 'true');
+    _placeFloating(el, anchor, true);
+}
+
+function _clearRoute(def) {
+    const segments = (window.sectorRoutes || []).filter(r => r.routeId === def.id);
+    if (segments.length === 0) {
+        showToast(`No segments to clear for "${def.name}".`, 2000);
+        return;
+    }
+    if (!window.confirm(`Clear all ${segments.length} segment(s) from "${def.name}"?`)) return;
+    console.info(`[Route] Clear attempt: #${def.id} "${def.name}" (${segments.length} segment(s))`);
+    window.sectorRoutes = window.sectorRoutes.filter(r => r.routeId !== def.id);
+    if (window.dbManager) window.dbManager.saveRoutes();
+    requestAnimationFrame(draw);
+    window.closeRouteSystemsPanel();
+    window.refreshRouteWindowCounts();
+    showToast(`Cleared ${segments.length} segment(s) from "${def.name}".`, 2000);
+}
+
+function _deleteRoute(def) {
+    const segments = (window.sectorRoutes || []).filter(r => r.routeId === def.id);
+    const segMsg = segments.length > 0 ? `\nThis will also clear its ${segments.length} segment(s).` : '';
+    if (!window.confirm(`Delete route "${def.name}"?${segMsg}`)) return;
+    console.info(`[Route] Delete attempt: #${def.id} "${def.name}" (${segments.length} segment(s))`);
+    window.sectorRoutes = (window.sectorRoutes || []).filter(r => r.routeId !== def.id);
+    window.routeDefinitions = (window.routeDefinitions || []).filter(d => d.id !== def.id);
+    _routeSelection.delete(def.id);
+    if (window.RouteEdit && String(window.RouteEdit.routeId) === String(def.id)) window.RouteEdit.stop();
+    if (String(_selectedRouteId) === String(def.id)) _selectedRouteId = null;
+    if (window.dbManager) { window.dbManager.saveRoutes(); window.dbManager.saveRouteDefinitions(); }
+    requestAnimationFrame(draw);
+    window.renderRouteWindow();
+    console.info(`[Route] Deleted #${def.id} "${def.name}". Rows now: ${(window.routeDefinitions || []).length}.`);
+    showToast(`Deleted route "${def.name}".`, 2000);
 }
 
 window.refreshRouteWindowCounts = function () {
@@ -3592,57 +4121,20 @@ window.refreshRouteWindowCounts = function () {
         const def = (window.routeDefinitions || []).find(d => d.id === routeId);
         const routeName = def ? def.name : `Route #${routeId}`;
 
+        pill.disabled = count === 0;
         if (count > 0) {
-            pill.style.cursor = 'pointer';
             pill.title = `${count} segment(s) — click to view systems`;
             if (!pill.dataset.listenerAttached) {
                 pill.addEventListener('click', () => window.openRouteSystemsPanel(routeId, routeName));
                 pill.dataset.listenerAttached = 'true';
             }
         } else {
-            pill.style.cursor = '';
-            pill.title = '0 segment(s)';
+            pill.title = 'No segments';
             if (routeId === sysPanelRouteId) window.closeRouteSystemsPanel();
-        }
-
-        const saveBtn = row.querySelector('.route-save-btn');
-        if (saveBtn) {
-            saveBtn.style.color   = count > 0 ? '#45a29e' : '#333';
-            saveBtn.style.cursor  = count > 0 ? 'pointer'  : 'default';
-            saveBtn.style.opacity = count > 0 ? '1' : '0.3';
-            saveBtn.title   = count > 0 ? 'Save this route to a file' : 'No connections to save';
-            saveBtn.onclick = count > 0 ? () => exportRouteFile(routeId, routeName) : null;
-        }
-
-        // Eligibility depends on the segments in EVERY slot, so it changes whenever
-        // any route does. Setting it only in renderRouteWindow would leave the icon
-        // stale the moment a route was generated.
-        const combBtn2 = row.querySelector('.route-combine-btn');
-        if (combBtn2) {
-            const eligible = count > 0 && getCombineCandidates(routeId).length > 0;
-            combBtn2.classList.toggle('disabled', !eligible);
-            combBtn2.style.color = eligible ? '#45a29e' : '#333';
-            combBtn2.title = eligible
-                ? 'Combine another route into this one'
-                : (count === 0
-                    ? 'This route has no segments to combine into'
-                    : 'No other route meets this one end to end');
-        }
-
-        const exportBtn = row.querySelector('.route-export-btn');
-        if (exportBtn) {
-            // A <button> since WP5, so enablement is `disabled` rather than
-            // inline opacity — .route-csv-btn:disabled carries the styling.
-            exportBtn.disabled = count === 0;
-            exportBtn.title = count > 0
-                ? 'Export the worlds this route passes through, as a spreadsheet'
-                : 'No segments to export';
-            exportBtn.onclick = count > 0 ? () => openRouteExportModal(routeId, routeName) : null;
         }
     });
 
-    // The Continue box has the same problem the Combine icon above has, and for
-    // the same reason: it describes the segments in a slot, so it goes stale the
+    // The Continue box describes the segments in a slot, so it goes stale the
     // moment they change. Every path that alters a slot's segments with the
     // Automation Panel open — drawing on the map, Clear, loading a route file —
     // passes through here.
@@ -3808,6 +4300,18 @@ function setupSettingsPanel() {
         loggingToggle.addEventListener('change', (e) => {
             window.isLoggingEnabled = e.target.checked;
             showToast(window.isLoggingEnabled ? "Batch Logging Enabled" : "Batch Logging Disabled", 2000);
+        });
+    }
+
+    const playerKnowledgeToggle = document.getElementById('toggle-player-knowledge');
+    if (playerKnowledgeToggle) {
+        const saved = localStorage.getItem('traveller_player_knowledge') === 'true';
+        playerKnowledgeToggle.checked = saved;
+        applyPlayerKnowledgeChrome(saved);
+        playerKnowledgeToggle.addEventListener('change', (e) => {
+            const on = e.target.checked;
+            localStorage.setItem('traveller_player_knowledge', String(on));
+            applyPlayerKnowledgeChrome(on);
         });
     }
 

@@ -1,8 +1,113 @@
 // ============================================================================
-// SECTOR_MANAGER.JS - Left-click sector CRUD (name, add/remove, go, clear)
-// Hex IDs encode slot as sY * gridWidth + sX + 1, so adding a column remaps
-// later rows. Rows added on the south edge do not remap existing slots.
+// SECTOR_MANAGER.JS - Spreadsheet of sectors.
+// Columns are letters, rows are numbers. Right-click a header to insert or
+// delete. Hex IDs encode slot as sY * gridWidth + sX + 1.
 // ============================================================================
+
+function _columnLetter(index) {
+    let n = index + 1;
+    let out = '';
+    while (n > 0) {
+        n -= 1;
+        out = String.fromCharCode(65 + (n % 26)) + out;
+        n = Math.floor(n / 26);
+    }
+    return out;
+}
+
+function _fitSectorName(el) {
+    if (!el || el.clientWidth <= 0) return;
+    // The card stretches the field, so a plain scrollHeight read is the card
+    // height. Collapse it first, then shrink the type if one word still overflows.
+    el.style.flex = '0 0 auto';
+    el.style.height = '0px';
+    el.style.fontSize = '';
+    if (el.scrollWidth > el.clientWidth + 1) {
+        const fitted = Math.max(8, 12 * (el.clientWidth - 1) / el.scrollWidth);
+        el.style.fontSize = (Math.floor(fitted * 10) / 10) + 'px';
+        if (el.scrollWidth > el.clientWidth + 1) {
+            const again = Math.max(7, parseFloat(el.style.fontSize) * (el.clientWidth - 1) / el.scrollWidth);
+            el.style.fontSize = (Math.floor(again * 10) / 10) + 'px';
+        }
+    }
+    el.style.height = Math.max(28, el.scrollHeight) + 'px';
+    el.style.flex = '';
+}
+
+// The full phrase ("439 systems") stays when the card has room. A 16-column
+// row is narrower than that phrase, so the card shows the number alone.
+function _fitSectorCount(count) {
+    if (!count || !count.dataset.full || count.clientWidth <= 0) return;
+    const probe = document.createElement('span');
+    probe.style.cssText = 'position:absolute;left:-9999px;top:0;visibility:hidden;white-space:nowrap;';
+    probe.style.font = getComputedStyle(count).font;
+    probe.textContent = count.dataset.full;
+    document.body.appendChild(probe);
+    const fullW = probe.getBoundingClientRect().width;
+    probe.remove();
+    const want = fullW > count.clientWidth + 1 ? count.dataset.short : count.dataset.full;
+    if (count.textContent !== want) count.textContent = want;
+}
+
+let _sectorFitObserver = null;
+function _fitSectorSheet() {
+    const grid = document.getElementById('sector-window-grid');
+    if (!grid) return;
+    if (_sectorFitObserver) _sectorFitObserver.unobserve(grid);
+    grid.querySelectorAll('.sector-tile-name').forEach(_fitSectorName);
+    grid.querySelectorAll('.sector-tile-count').forEach(_fitSectorCount);
+    if (_sectorFitObserver) _sectorFitObserver.observe(grid);
+}
+function _ensureSectorFitObserver() {
+    const grid = document.getElementById('sector-window-grid');
+    if (!grid || _sectorFitObserver || typeof ResizeObserver === 'undefined') return;
+    _sectorFitObserver = new ResizeObserver(() => _fitSectorSheet());
+    _sectorFitObserver.observe(grid);
+}
+
+let _sheetMenuEl = null;
+function _openSheetMenu(x, y, items) {
+    if (!_sheetMenuEl) {
+        const el = document.createElement('div');
+        el.id = 'sector-sheet-menu';
+        el.className = 'app-menu';
+        el.setAttribute('role', 'menu');
+        el.style.display = 'none';
+        document.body.appendChild(el);
+        document.addEventListener('mousedown', (e) => {
+            if (_sheetMenuEl && _sheetMenuEl.style.display !== 'none' && !_sheetMenuEl.contains(e.target)) {
+                _sheetMenuEl.style.display = 'none';
+            }
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && _sheetMenuEl) _sheetMenuEl.style.display = 'none';
+        });
+        _sheetMenuEl = el;
+    }
+    const el = _sheetMenuEl;
+    el.replaceChildren();
+    items.forEach(item => {
+        if (item.sep) {
+            const sep = document.createElement('div');
+            sep.className = 'app-menu-sep';
+            el.appendChild(sep);
+            return;
+        }
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.setAttribute('role', 'menuitem');
+        btn.textContent = item.label;
+        if (item.danger) btn.className = 'danger';
+        btn.disabled = !!item.disabled;
+        if (!item.disabled) btn.addEventListener('click', () => { el.style.display = 'none'; item.run(); });
+        el.appendChild(btn);
+    });
+    el.style.display = 'block';
+    const w = el.offsetWidth || 200;
+    const h = el.offsetHeight || 120;
+    el.style.left = Math.max(8, Math.min(x, window.innerWidth - w - 8)) + 'px';
+    el.style.top = Math.max(8, Math.min(y, window.innerHeight - h - 8)) + 'px';
+}
 
 window.renderSectorWindow = function () {
     const grid = document.getElementById('sector-window-grid');
@@ -18,11 +123,54 @@ window.renderSectorWindow = function () {
     });
 
     grid.style.setProperty('--sector-cols', String(gridWidth));
+    grid.style.setProperty('--sector-rows', String(gridHeight));
     grid.replaceChildren();
 
+    const corner = document.createElement('div');
+    corner.className = 'sector-sheet-corner';
+    corner.textContent = `${gridWidth}×${gridHeight}`;
+    corner.title = `${gridWidth} columns × ${gridHeight} rows`;
+    grid.appendChild(corner);
+
+    for (let sX = 0; sX < gridWidth; sX++) {
+        const col = document.createElement('button');
+        col.type = 'button';
+        col.className = 'sector-sheet-col';
+        col.textContent = _columnLetter(sX);
+        col.title = 'Right-click to insert or delete this column';
+        col.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            const letter = _columnLetter(sX);
+            _openSheetMenu(e.clientX, e.clientY, [
+                { label: 'Insert column before', disabled: gridWidth >= MAX_GRID_WIDTH, run: () => insertSectorColumn(sX) },
+                { label: 'Insert column after', disabled: gridWidth >= MAX_GRID_WIDTH, run: () => insertSectorColumn(sX + 1) },
+                { sep: true },
+                { label: `Delete column ${letter}`, danger: true, disabled: gridWidth <= 1, run: () => removeSectorColumn(sX) }
+            ]);
+        });
+        grid.appendChild(col);
+    }
+
     for (let sY = 0; sY < gridHeight; sY++) {
+        const rowHead = document.createElement('button');
+        rowHead.type = 'button';
+        rowHead.className = 'sector-sheet-row';
+        rowHead.textContent = String(sY + 1);
+        rowHead.title = 'Right-click to insert or delete this row';
+        rowHead.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            _openSheetMenu(e.clientX, e.clientY, [
+                { label: 'Insert row above', disabled: gridHeight >= MAX_GRID_HEIGHT, run: () => insertSectorRow(sY) },
+                { label: 'Insert row below', disabled: gridHeight >= MAX_GRID_HEIGHT, run: () => insertSectorRow(sY + 1) },
+                { sep: true },
+                { label: `Delete row ${sY + 1}`, danger: true, disabled: gridHeight <= 1, run: () => removeSectorRow(sY) }
+            ]);
+        });
+        grid.appendChild(rowHead);
+
         for (let sX = 0; sX < gridWidth; sX++) {
             const sectorNum = sY * gridWidth + sX + 1;
+            const addr = _columnLetter(sX) + (sY + 1);
             const name = (window.sectorNames && window.sectorNames[sectorNum]) || '';
             const worlds = worldCounts.get(sectorNum) || 0;
             const tile = document.createElement('div');
@@ -31,15 +179,13 @@ window.renderSectorWindow = function () {
 
             const head = document.createElement('div');
             head.className = 'sector-tile-head';
-            const numBtn = document.createElement('button');
-            numBtn.type = 'button';
-            numBtn.className = 'sector-tile-num';
-            numBtn.textContent = String(sectorNum);
-            numBtn.title = 'Go to this sector on the map';
-            numBtn.addEventListener('click', () => {
-                centerSectorInView(sectorNum);
-                requestAnimationFrame(draw);
-            });
+            const idEl = document.createElement('span');
+            idEl.className = 'sector-tile-id';
+            idEl.textContent = String(sectorNum);
+            idEl.title = 'Sector id';
+            const addrEl = document.createElement('span');
+            addrEl.className = 'sector-tile-addr';
+            addrEl.textContent = `(${addr})`;
             const goBtn = document.createElement('button');
             goBtn.type = 'button';
             goBtn.className = 'sector-tile-go';
@@ -49,16 +195,25 @@ window.renderSectorWindow = function () {
                 centerSectorInView(sectorNum);
                 requestAnimationFrame(draw);
             });
-            head.append(numBtn, goBtn);
+            head.append(idEl, addrEl, goBtn);
 
-            const nameIn = document.createElement('input');
-            nameIn.type = 'text';
+            const nameIn = document.createElement('textarea');
             nameIn.className = 'sector-tile-name';
+            nameIn.rows = 1;
             nameIn.value = name;
             nameIn.placeholder = `Sector ${sectorNum}`;
-            nameIn.setAttribute('aria-label', `Name for sector ${sectorNum}`);
+            nameIn.setAttribute('aria-label', `Name for sector ${addr}`);
+            nameIn.title = name;
+            nameIn.addEventListener('input', () => _fitSectorName(nameIn));
+            nameIn.addEventListener('keydown', (e) => {
+                if (e.key !== 'Enter') return;
+                e.preventDefault();
+                nameIn.blur();
+            });
             nameIn.addEventListener('change', () => {
-                const val = nameIn.value.trim();
+                const val = nameIn.value.replace(/\s+/g, ' ').trim();
+                nameIn.value = val;
+                _fitSectorName(nameIn);
                 if (val) window.sectorNames[sectorNum] = val;
                 else delete window.sectorNames[sectorNum];
                 if (window.dbManager) window.dbManager.saveSectorNames?.();
@@ -67,32 +222,49 @@ window.renderSectorWindow = function () {
 
             const meta = document.createElement('div');
             meta.className = 'sector-tile-meta';
+            const reviewTags = window.sectorReview && window.sectorReview[sectorNum];
+            const review = reviewTags && typeof window.describeSectorReview === 'function'
+                ? window.describeSectorReview(reviewTags) : null;
+            const left = document.createElement('span');
+            left.style.cssText = 'display:flex; align-items:center; justify-content:center; gap:6px; min-width:0; flex:1 1 auto; overflow:hidden;';
+            if (review) {
+                const pill = document.createElement('span');
+                pill.className = 'sector-review sector-review-' + review.tone;
+                pill.textContent = review.label;
+                pill.title = review.title;
+                left.append(pill);
+            }
             const count = document.createElement('span');
-            count.textContent = worlds ? `${worlds} system${worlds === 1 ? '' : 's'}` : 'Empty';
-            const clearBtn = document.createElement('button');
-            clearBtn.type = 'button';
-            clearBtn.className = 'sector-tile-clear';
-            clearBtn.textContent = 'Clear';
-            clearBtn.title = 'Remove all hex data in this sector';
-            clearBtn.disabled = worlds === 0 && countHexesInSlots([sectorNum]) === 0;
-            clearBtn.addEventListener('click', () => window.clearSectorSlot(sectorNum));
-            meta.append(count, clearBtn);
+            count.className = 'sector-tile-count';
+            const fullCount = worlds ? `${worlds} system${worlds === 1 ? '' : 's'}` : 'Empty';
+            count.dataset.full = fullCount;
+            count.dataset.short = worlds ? String(worlds) : 'Empty';
+            count.title = fullCount;
+            count.textContent = fullCount;
+            left.append(count);
+            meta.append(left);
+            if (worlds || countHexesInSlots([sectorNum]) > 0) {
+                const clearBtn = document.createElement('button');
+                clearBtn.type = 'button';
+                clearBtn.className = 'sector-tile-clear';
+                clearBtn.textContent = 'Clear';
+                clearBtn.title = 'Remove all hex data in this sector';
+                clearBtn.addEventListener('click', () => window.clearSectorSlot(sectorNum));
+                meta.append(clearBtn);
+            }
 
-            tile.append(head, nameIn, meta);
+            const nameWrap = document.createElement('div');
+            nameWrap.className = 'sector-tile-name-wrap';
+            nameWrap.appendChild(nameIn);
+            tile.append(head, nameWrap, meta);
             grid.appendChild(tile);
+            _fitSectorName(nameIn);
         }
     }
+    _ensureSectorFitObserver();
+    requestAnimationFrame(_fitSectorSheet);
 
     if (sizeEl) sizeEl.textContent = `${gridWidth} × ${gridHeight} sectors`;
-
-    const addCol = document.getElementById('btn-sector-add-col');
-    const addRow = document.getElementById('btn-sector-add-row');
-    const delCol = document.getElementById('btn-sector-del-col');
-    const delRow = document.getElementById('btn-sector-del-row');
-    if (addCol) addCol.disabled = gridWidth >= MAX_GRID_WIDTH;
-    if (addRow) addRow.disabled = gridHeight >= MAX_GRID_HEIGHT;
-    if (delCol) delCol.disabled = gridWidth <= 1;
-    if (delRow) delRow.disabled = gridHeight <= 1;
 };
 
 window.toggleSectorWindow = function () {
@@ -122,8 +294,8 @@ window.clearSectorSlot = function (sectorNum) {
         return;
     }
     const extra = worlds ? ` ${worlds} system${worlds === 1 ? '' : 's'} will be deleted.` : '';
-    if (!confirm(`Clear ${label}?${extra}\n\nThis can be undone with Ctrl+Z.`)) return;
-    saveHistoryState(`Clear ${label}`);
+    if (!confirm(`Clear ${label}?${extra}\n\nThis cannot be undone. Save a map file first if you want a way back.`)) return;
+    console.info(`[History] Clear ${label} is not undoable. The sector is removed without copying its hexes.`);
     purgeSectorSlots([n]);
     if (window.dbManager) window.dbManager.scheduleSyncAll?.();
     window.renderSectorWindow();
@@ -131,76 +303,107 @@ window.clearSectorSlot = function (sectorNum) {
     showToast(`Cleared ${label}.`, 2500);
 };
 
-window.addSectorColumn = function () {
+function _shiftColumn(oldW, atX, delta) {
+    remapSectorSlots(oldW, oldSlot => {
+        const sX = (oldSlot - 1) % oldW;
+        const sY = Math.floor((oldSlot - 1) / oldW);
+        if (delta < 0 && sX === atX) return null;
+        const nextX = delta > 0 ? (sX >= atX ? sX + 1 : sX) : (sX > atX ? sX - 1 : sX);
+        return sY * (oldW + delta) + nextX + 1;
+    });
+}
+
+function _shiftRow(atY, delta) {
+    const w = gridWidth;
+    remapSectorSlots(w, oldSlot => {
+        const sX = (oldSlot - 1) % w;
+        const sY = Math.floor((oldSlot - 1) / w);
+        if (delta < 0 && sY === atY) return null;
+        const nextY = delta > 0 ? (sY >= atY ? sY + 1 : sY) : (sY > atY ? sY - 1 : sY);
+        return nextY * w + sX + 1;
+    });
+}
+
+function insertSectorColumn(atX) {
     if (gridWidth >= MAX_GRID_WIDTH) {
-        showToast(`Column limit is ${MAX_GRID_WIDTH} (Universe width).`, 2500);
+        showToast(`Column limit is ${MAX_GRID_WIDTH}.`, 2500);
         return;
     }
     const oldW = gridWidth;
-    remapAllHexIds(oldW, oldW + 1);
+    _shiftColumn(oldW, atX, 1);
     gridWidth = oldW + 1;
     persistGridChange();
     window.renderSectorWindow();
     requestAnimationFrame(draw);
-    showToast(`Added a column on the east edge (${gridWidth} × ${gridHeight}). Undo history cleared.`, 3500);
-};
+    showToast(`Inserted column ${_columnLetter(atX)}. Undo history cleared.`, 3000);
+}
 
-window.addSectorRow = function () {
+function insertSectorRow(atY) {
     if (gridHeight >= MAX_GRID_HEIGHT) {
-        showToast(`Row limit is ${MAX_GRID_HEIGHT} (Universe height).`, 2500);
+        showToast(`Row limit is ${MAX_GRID_HEIGHT}.`, 2500);
         return;
     }
+    _shiftRow(atY, 1);
     gridHeight += 1;
     persistGridChange();
     window.renderSectorWindow();
     requestAnimationFrame(draw);
-    showToast(`Added a row on the south edge (${gridWidth} × ${gridHeight}). Undo history cleared.`, 3500);
-};
+    showToast(`Inserted row ${atY + 1}. Undo history cleared.`, 3000);
+}
 
-window.removeSectorColumn = function () {
+window.addSectorColumn = function () { insertSectorColumn(gridWidth); };
+window.addSectorRow = function () { insertSectorRow(gridHeight); };
+
+window.removeSectorColumn = function (atX) {
+    const index = Number.isFinite(atX) ? atX : gridWidth - 1;
     if (gridWidth <= 1) {
         showToast('The map needs at least one column.', 2000);
         return;
     }
-    const slots = slotsInColumn(gridWidth - 1);
+    const slots = [];
+    for (let sY = 0; sY < gridHeight; sY++) slots.push(sY * gridWidth + index + 1);
     const worlds = countSystemsInSlots(slots);
     const hexes = countHexesInSlots(slots);
+    const letter = _columnLetter(index);
     if (worlds || hexes) {
         const msg = worlds
-            ? `Remove the east column? ${worlds} system${worlds === 1 ? '' : 's'} in ${slots.length} sector(s) will be deleted.\n\nUndo history will be cleared.`
-            : `Remove the east column? Hex data in ${slots.length} sector(s) will be deleted.\n\nUndo history will be cleared.`;
+            ? `Delete column ${letter}? ${worlds} system${worlds === 1 ? '' : 's'} will be deleted.\n\nUndo history will be cleared.`
+            : `Delete column ${letter}? Hex data in that column will be deleted.\n\nUndo history will be cleared.`;
         if (!confirm(msg)) return;
         purgeSectorSlots(slots);
     }
     const oldW = gridWidth;
-    remapAllHexIds(oldW, oldW - 1);
+    _shiftColumn(oldW, index, -1);
     gridWidth = oldW - 1;
     persistGridChange();
     window.renderSectorWindow();
     requestAnimationFrame(draw);
-    showToast(`Removed the east column (${gridWidth} × ${gridHeight}).`, 3000);
+    showToast(`Deleted column ${letter}.`, 3000);
 };
 
-window.removeSectorRow = function () {
+window.removeSectorRow = function (atY) {
+    const index = Number.isFinite(atY) ? atY : gridHeight - 1;
     if (gridHeight <= 1) {
         showToast('The map needs at least one row.', 2000);
         return;
     }
-    const slots = slotsInRow(gridHeight - 1);
+    const slots = [];
+    for (let sX = 0; sX < gridWidth; sX++) slots.push(index * gridWidth + sX + 1);
     const worlds = countSystemsInSlots(slots);
     const hexes = countHexesInSlots(slots);
     if (worlds || hexes) {
         const msg = worlds
-            ? `Remove the south row? ${worlds} system${worlds === 1 ? '' : 's'} in ${slots.length} sector(s) will be deleted.\n\nUndo history will be cleared.`
-            : `Remove the south row? Hex data in ${slots.length} sector(s) will be deleted.\n\nUndo history will be cleared.`;
+            ? `Delete row ${index + 1}? ${worlds} system${worlds === 1 ? '' : 's'} will be deleted.\n\nUndo history will be cleared.`
+            : `Delete row ${index + 1}? Hex data in that row will be deleted.\n\nUndo history will be cleared.`;
         if (!confirm(msg)) return;
         purgeSectorSlots(slots);
     }
+    _shiftRow(index, -1);
     gridHeight -= 1;
     persistGridChange();
     window.renderSectorWindow();
     requestAnimationFrame(draw);
-    showToast(`Removed the south row (${gridWidth} × ${gridHeight}).`, 3000);
+    showToast(`Deleted row ${index + 1}.`, 3000);
 };
 
 function setupSectorWindow() {
@@ -208,8 +411,4 @@ function setupSectorWindow() {
     if (closeBtn) closeBtn.addEventListener('click', window.closeSectorWindow);
     const closeFooter = document.getElementById('btn-close-sector-window-footer');
     if (closeFooter) closeFooter.addEventListener('click', window.closeSectorWindow);
-    document.getElementById('btn-sector-add-col')?.addEventListener('click', window.addSectorColumn);
-    document.getElementById('btn-sector-add-row')?.addEventListener('click', window.addSectorRow);
-    document.getElementById('btn-sector-del-col')?.addEventListener('click', window.removeSectorColumn);
-    document.getElementById('btn-sector-del-row')?.addEventListener('click', window.removeSectorRow);
 }

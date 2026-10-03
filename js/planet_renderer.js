@@ -914,7 +914,7 @@ const PlanetRenderer = (() => {
         }
     }
 
-    function _drawHexGrid(ctx, W, H, size, numLobes) {
+    function _drawHexGrid(ctx, W, H, size, numLobes, stroke = 'rgba(0,0,0,0.45)') {
         if (size <= 0) return;
         const hexesAcross = Math.max(1, Math.round(Math.PI * size * 1600 / 1005));
         // Pointy-top hex: N hexes fill width W, centre-to-centre column spacing = R√3.
@@ -940,7 +940,7 @@ const PlanetRenderer = (() => {
         // bandTop onto those positions, for all world sizes.
         const xPhase = numLobes ? colStep / 2 : 0;
 
-        ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+        ctx.strokeStyle = stroke;
         ctx.lineWidth   = 0.6;
 
         const rowCount = Math.ceil(H / rowStep) + 2;
@@ -1012,11 +1012,11 @@ const PlanetRenderer = (() => {
         ctx.clip();
     }
 
-    function _drawDiamondSeparators(ctx, W, H, N) {
+    function _drawDiamondSeparators(ctx, W, H, N, stroke = 'rgba(0,0,0,0.65)') {
         const hw      = W / (2 * N);
         const bandTop = Math.round(POLE_FRAC * H);
         const bandBot = H - bandTop;
-        ctx.strokeStyle = 'rgba(0,0,0,0.65)';
+        ctx.strokeStyle = stroke;
         ctx.lineWidth   = 1.0;
         // Northern upward triangles — two slanted sides only, no base
         for (let li = 0; li <= N; li++) {
@@ -1218,6 +1218,24 @@ const PlanetRenderer = (() => {
         }
     }
 
+    // The diamond sheet with no surface: a dark field under the same hex grid
+    // renderFlatMap draws for this world, so a surface drawn in later lines up.
+    function renderDiamondBlank(canvas, worldData, options) {
+        const W = 800, H = 400, N = 5;
+        canvas.width = W;
+        canvas.height = H;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, W, H);
+        ctx.save();
+        _applyDiamondClip(ctx, W, H, N);
+        ctx.fillStyle = (options && options.fill) || '#04090b';
+        ctx.fillRect(0, 0, W, H);
+        const sizeCode = _parseStat(worldData.size);
+        if (sizeCode > 0) _drawHexGrid(ctx, W, H, sizeCode, N, (options && options.grid) || 'rgba(102, 252, 241, 0.34)');
+        ctx.restore();
+        _drawDiamondSeparators(ctx, W, H, N, (options && options.edges) || 'rgba(102, 252, 241, 0.55)');
+    }
+
     // ── Test helpers ──────────────────────────────────────────────────────────
 
     function _openTestModal(label, worldData, hexId) {
@@ -1363,7 +1381,7 @@ const PlanetRenderer = (() => {
         ctx.putImageData(imageData, 0, 0);
     }
 
-    return { renderPlanetHemispheres, renderFlatMap, renderApproachFrame, imageSeed, tempBandFromKelvin, test, testMolten, testFlatMap };
+    return { renderPlanetHemispheres, renderFlatMap, renderDiamondBlank, renderApproachFrame, imageSeed, tempBandFromKelvin, test, testMolten, testFlatMap };
 
 })();
 

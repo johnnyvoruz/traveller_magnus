@@ -6,8 +6,8 @@
  *   browser sessions without requiring a manual JSON save.
  *
  *   The in-memory state (hexStates, sectorRoutes) is always authoritative.
- *   All DB writes are background fire-and-forget operations. If the DB is
- *   unavailable or throws, a console warning is emitted and the app continues.
+ *   Writes wait for the transaction to finish. A failure stays on screen as a
+ *   sticky toast and does not clear data that was already stored.
  *
  * Sean Protocol: Zero RPG logic. Pure storage orchestration.
  */
@@ -16,7 +16,7 @@
     'use strict';
 
     const DB_NAME       = 'traveller_magnus';
-    const DB_VERSION    = 2;
+    const DB_VERSION    = 3;
     const STORE_HEX     = 'hexStates';
     const STORE_APP     = 'appState';
     const STORE_TSV     = 'tsvCache';
@@ -25,6 +25,58 @@
     let _syncTimer = null;
     let _campaignQueue = Promise.resolve();
     let _campaignLoadError = null;
+    let _autosaveBlocked = false;
+    let _writesHeld = false;
+    let _idle = Promise.resolve();
+
+    function _track(promise) {
+        _idle = _idle.then(() => promise.then(() => {}, () => {}));
+        return promise;
+    }
+
+    function whenWritesSettle() {
+        return (async () => {
+            let seen = null;
+            while (seen !== _idle) {
+                seen = _idle;
+                await seen;
+            }
+        })();
+    }
+
+    function _reportWriteFailure(err) {
+        console.warn('[DB] write failed:', err);
+        const quota = err && (err.name === 'QuotaExceededError' || /quota/i.test(String(err.message || '')));
+        const message = quota
+            ? 'This browser is out of space, so the map was not stored. Free some space, then save a map file.'
+            : 'This browser could not store the map. The saved copy was left as it was. Save a map file before you reload.';
+        if (typeof showToast === 'function') showToast(message, 0);
+    }
+
+    function _done(tx) {
+        return new Promise((resolve, reject) => {
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => {};
+            tx.onabort = () => reject(tx.error || new Error('The browser storage write was interrupted.'));
+        });
+    }
+
+    function _watch(work) {
+        const run = (async () => {
+            if (_autosaveBlocked || _writesHeld) return;
+            try { await work(); }
+            catch (err) { _reportWriteFailure(err); }
+        })();
+        return _track(run);
+    }
+
+    function holdWrites() {
+        _writesHeld = true;
+        if (_syncTimer) { clearTimeout(_syncTimer); _syncTimer = null; }
+    }
+    function releaseWrites() { _writesHeld = false; }
+    function allowAutosave() { _autosaveBlocked = false; }
+    function autosaveBlocked() { return _autosaveBlocked; }
 
     // -------------------------------------------------------------------------
     // Internal: open (or reuse) the database connection
@@ -48,8 +100,20 @@
                 }
             };
 
-            req.onsuccess = (e) => { _db = e.target.result; resolve(_db); };
-            req.onerror   = (e) => reject(e.target.error);
+            req.onsuccess = (e) => {
+                _db = e.target.result;
+                _db.onversionchange = () => {
+                    _db.close();
+                    _db = null;
+                    _autosaveBlocked = true;
+                    if (typeof showToast === 'function') {
+                        showToast('This map was opened in another tab. Reload this one before editing, so the two do not overwrite each other.', 0);
+                    }
+                };
+                resolve(_db);
+            };
+            req.onerror = (e) => reject(e.target.error || new Error('Browser storage could not be opened.'));
+            req.onblocked = () => reject(new Error('This map is open in another tab. Close that tab, then reload.'));
         });
     }
 
@@ -69,19 +133,26 @@
                 const result = {};
                 tx.oncomplete = () => resolve(result);
                 tx.onabort = () => reject(tx.error || new Error('Browser storage could not be read.'));
-                store.openKeyCursor().onsuccess = (e) => {
+                const cursorReq = store.openKeyCursor();
+                cursorReq.onerror = () => reject(cursorReq.error || new Error('Browser storage could not be read.'));
+                cursorReq.onsuccess = (e) => {
                     const cur = e.target.result;
                     if (cur) {
                         // Never materialize image Blobs in the startup metadata read.
                         if (!String(cur.key).startsWith('campaignAsset:')) {
                             const key = cur.key;
-                            store.get(key).onsuccess = event => { result[key] = event.target.result; };
+                            const getReq = store.get(key);
+                            getReq.onerror = () => reject(getReq.error || new Error('Browser storage could not be read.'));
+                            getReq.onsuccess = event => { result[key] = event.target.result; };
                         }
                         cur.continue();
                     }
                 };
             });
 
+            if (appState.campaignTime && Number.isFinite(appState.campaignTime.days)) {
+                window.campaignTime = { days: appState.campaignTime.days };
+            }
             try {
                 window.campaignAtlas = window.CampaignAtlas.normalizeStore(appState.campaignAtlas);
                 _campaignLoadError = null;
@@ -96,6 +167,9 @@
             if (typeof appState.autoRouteCounter === 'number') window.autoRouteCounter = appState.autoRouteCounter;
             if (appState.sectorNames && typeof appState.sectorNames === 'object') {
                 window.sectorNames = appState.sectorNames;
+            }
+            if (appState.sectorReview && typeof appState.sectorReview === 'object') {
+                window.sectorReview = appState.sectorReview;
             }
             if (appState.subsectorNames && typeof appState.subsectorNames === 'object') {
                 window.subsectorNames = appState.subsectorNames;
@@ -130,14 +204,23 @@
             if (Array.isArray(appState.regionPaths)) {
                 window.regionPaths = new Map(appState.regionPaths);
             }
+            if (Array.isArray(appState.allegianceDefinitions)) {
+                window.allegianceDefinitions = appState.allegianceDefinitions;
+            }
+            if (Array.isArray(appState.allegianceAssignments)) {
+                window.hexAllegianceAssignments = new Map(appState.allegianceAssignments);
+            }
 
             // Load hex states
-            const hexCount = await new Promise((resolve) => {
+            const hexCount = await new Promise((resolve, reject) => {
                 const tx    = db.transaction(STORE_HEX, 'readonly');
                 const store = tx.objectStore(STORE_HEX);
                 let   count = 0;
                 hexStates.clear();
-                store.openCursor().onsuccess = (e) => {
+                const cursorReq = store.openCursor();
+                cursorReq.onerror = () => reject(cursorReq.error || new Error('Saved hexes could not be read.'));
+                tx.onabort = () => reject(tx.error || new Error('Saved hexes could not be read.'));
+                cursorReq.onsuccess = (e) => {
                     const cur = e.target.result;
                     if (cur) {
                         hexStates.set(cur.key, cur.value);
@@ -155,8 +238,12 @@
             return hexCount > 0;
 
         } catch (err) {
-            console.warn('[DB] loadFromDB failed — starting fresh:', err);
-            return false;
+            // A failed read must not be treated as an empty map. The next edit
+            // would otherwise overwrite the stored campaign.
+            hexStates.clear();
+            _autosaveBlocked = true;
+            console.warn('[DB] loadFromDB failed — autosave paused:', err);
+            throw err;
         }
     }
 
@@ -172,8 +259,8 @@
     // Save all hexes belonging to one sector by numeric sector number.
     // Called after importT5Tab — efficient because it only touches one sector.
     // -------------------------------------------------------------------------
-    async function saveHexesBySectorNum(sectorNum) {
-        try {
+    function saveHexesBySectorNum(sectorNum) {
+        return _watch(async () => {
             const prefix = sectorNum + '-';
             const db     = await _openDB();
             const tx     = db.transaction(STORE_HEX, 'readwrite');
@@ -181,18 +268,17 @@
             for (const [hexId, state] of hexStates) {
                 if (hexId.startsWith(prefix)) store.put(stripHexViewState(state), hexId);
             }
-        } catch (err) {
-            console.warn('[DB] saveHexesBySectorNum failed:', err);
-        }
+            await _done(tx);
+        });
     }
 
     // -------------------------------------------------------------------------
     // Save a specific iterable of hexIds (Set or Array).
     // Used for targeted saves after manual edits or generation runs.
     // -------------------------------------------------------------------------
-    async function saveHexes(hexIds) {
-        if (!hexIds) return;
-        try {
+    function saveHexes(hexIds) {
+        if (!hexIds) return Promise.resolve();
+        return _watch(async () => {
             const db    = await _openDB();
             const tx    = db.transaction(STORE_HEX, 'readwrite');
             const store = tx.objectStore(STORE_HEX);
@@ -200,37 +286,27 @@
                 const state = hexStates.get(hexId);
                 if (state !== undefined) store.put(stripHexViewState(state), hexId);
             }
-        } catch (err) {
-            console.warn('[DB] saveHexes failed:', err);
-        }
+            await _done(tx);
+        });
     }
 
     // -------------------------------------------------------------------------
     // Full sync: replace every hex record with the current in-memory hexStates.
     // Used after JSON load, undo/redo, and Universe import.
     // -------------------------------------------------------------------------
-    async function syncAllHexes() {
-        try {
+    function syncAllHexes() {
+        return _watch(async () => {
             const db = await _openDB();
-
-            // Clear all existing hex records in one transaction
-            await new Promise((resolve, reject) => {
-                const tx  = db.transaction(STORE_HEX, 'readwrite');
-                const req = tx.objectStore(STORE_HEX).clear();
-                tx.oncomplete = resolve;
-                req.onerror   = reject;
-            });
-
-            // Write the current in-memory state
-            const db2   = await _openDB();
-            const tx    = db2.transaction(STORE_HEX, 'readwrite');
+            const tx = db.transaction(STORE_HEX, 'readwrite');
             const store = tx.objectStore(STORE_HEX);
+            // Clear and rewrite in one transaction. A quota failure aborts both,
+            // so the store cannot be left empty after a wipe that did not finish.
+            store.clear();
             for (const [hexId, state] of hexStates) {
                 store.put(stripHexViewState(state), hexId);
             }
-        } catch (err) {
-            console.warn('[DB] syncAllHexes failed:', err);
-        }
+            await _done(tx);
+        });
     }
 
     // -------------------------------------------------------------------------
@@ -239,9 +315,11 @@
     // bulk expansion run triggers one DB write rather than thousands.
     // -------------------------------------------------------------------------
     function scheduleSyncAll() {
+        if (_autosaveBlocked || _writesHeld) return;
         if (_syncTimer) clearTimeout(_syncTimer);
         _syncTimer = setTimeout(() => {
             _syncTimer = null;
+            if (_autosaveBlocked || _writesHeld) return;
             syncAllHexes();
             saveRoutes();
             saveRouteDefinitions();
@@ -250,62 +328,39 @@
             saveBorderPaths();
             saveRegionDefinitions();
             saveRegionPaths();
+            saveSectorNames();
+            saveSectorReview();
+            saveSubsectorNames();
+            saveAllegianceDefinitions();
+            saveAllegianceAssignments();
             if (window.CampaignAtlas) void window.CampaignAtlas.persist();
         }, 2000);
     }
 
-    // -------------------------------------------------------------------------
-    // Persist routes array
-    // -------------------------------------------------------------------------
-    async function saveRoutes() {
-        try {
-            const db    = await _openDB();
-            const tx    = db.transaction(STORE_APP, 'readwrite');
-            tx.objectStore(STORE_APP).put(window.sectorRoutes || [], 'routes');
-        } catch (err) {
-            console.warn('[DB] saveRoutes failed:', err);
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // Persist route definitions
-    // -------------------------------------------------------------------------
-    async function saveRouteDefinitions() {
-        try {
+    function _putApp(entries) {
+        return _watch(async () => {
             const db = await _openDB();
             const tx = db.transaction(STORE_APP, 'readwrite');
-            tx.objectStore(STORE_APP).put(window.routeDefinitions || [], 'routeDefinitions');
-        } catch (err) {
-            console.warn('[DB] saveRouteDefinitions failed:', err);
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // Persist grid dimensions
-    // -------------------------------------------------------------------------
-    async function saveGridDimensions() {
-        try {
-            const db    = await _openDB();
-            const tx    = db.transaction(STORE_APP, 'readwrite');
             const store = tx.objectStore(STORE_APP);
-            store.put(gridWidth,  'gridWidth');
-            store.put(gridHeight, 'gridHeight');
-        } catch (err) {
-            console.warn('[DB] saveGridDimensions failed:', err);
-        }
+            for (const [key, value] of entries) store.put(value, key);
+            await _done(tx);
+        });
     }
 
-    // -------------------------------------------------------------------------
-    // Persist the Auto Route sequential counter.
-    // -------------------------------------------------------------------------
-    async function saveAutoRouteCounter() {
-        try {
-            const db = await _openDB();
-            const tx = db.transaction(STORE_APP, 'readwrite');
-            tx.objectStore(STORE_APP).put(window.autoRouteCounter || 0, 'autoRouteCounter');
-        } catch (err) {
-            console.warn('[DB] saveAutoRouteCounter failed:', err);
-        }
+    function saveRoutes() {
+        return _putApp([['routes', window.sectorRoutes || []]]);
+    }
+
+    function saveRouteDefinitions() {
+        return _putApp([['routeDefinitions', window.routeDefinitions || []]]);
+    }
+
+    function saveGridDimensions() {
+        return _putApp([['gridWidth', gridWidth], ['gridHeight', gridHeight]]);
+    }
+
+    function saveAutoRouteCounter() {
+        return _putApp([['autoRouteCounter', window.autoRouteCounter || 0]]);
     }
 
     // -------------------------------------------------------------------------
@@ -328,105 +383,57 @@
     // -------------------------------------------------------------------------
     // Write one TSV cache entry. Fire-and-forget; logs on failure.
     // -------------------------------------------------------------------------
-    async function putTsvCache(name, data) {
-        try {
+    function putTsvCache(name, data) {
+        return _watch(async () => {
             const db = await _openDB();
             const tx = db.transaction(STORE_TSV, 'readwrite');
             tx.objectStore(STORE_TSV).put({ data, timestamp: Date.now() }, name);
-        } catch (err) {
-            console.warn('[DB] putTsvCache failed:', err);
-        }
+            await _done(tx);
+        });
     }
 
-    // -------------------------------------------------------------------------
-    // Persist border definitions
-    // -------------------------------------------------------------------------
-    async function saveBorderDefinitions() {
-        try {
-            const db = await _openDB();
-            const tx = db.transaction(STORE_APP, 'readwrite');
-            tx.objectStore(STORE_APP).put(window.borderDefinitions || [], 'borderDefinitions');
-        } catch (err) {
-            console.warn('[DB] saveBorderDefinitions failed:', err);
-        }
+    function saveBorderDefinitions() {
+        return _putApp([['borderDefinitions', window.borderDefinitions || []]]);
     }
 
-    // -------------------------------------------------------------------------
-    // Persist hex→border assignments (Map serialised as entries array)
-    // -------------------------------------------------------------------------
-    async function saveBorderAssignments() {
-        try {
-            const db      = await _openDB();
-            const tx      = db.transaction(STORE_APP, 'readwrite');
-            const entries = window.hexBorderAssignments ? [...window.hexBorderAssignments.entries()] : [];
-            tx.objectStore(STORE_APP).put(entries, 'hexBorderAssignments');
-        } catch (err) {
-            console.warn('[DB] saveBorderAssignments failed:', err);
-        }
+    function saveBorderAssignments() {
+        const entries = window.hexBorderAssignments ? [...window.hexBorderAssignments.entries()] : [];
+        return _putApp([['hexBorderAssignments', entries]]);
     }
 
-    // -------------------------------------------------------------------------
-    // Persist border polygon paths (Map serialised as entries array)
-    // -------------------------------------------------------------------------
-    async function saveBorderPaths() {
-        try {
-            const db      = await _openDB();
-            const tx      = db.transaction(STORE_APP, 'readwrite');
-            const entries = window.borderPaths ? [...window.borderPaths.entries()] : [];
-            tx.objectStore(STORE_APP).put(entries, 'borderPaths');
-        } catch (err) {
-            console.warn('[DB] saveBorderPaths failed:', err);
-        }
+    function saveBorderPaths() {
+        const entries = window.borderPaths ? [...window.borderPaths.entries()] : [];
+        return _putApp([['borderPaths', entries]]);
     }
 
-    // -------------------------------------------------------------------------
-    // Persist region definitions
-    // -------------------------------------------------------------------------
-    async function saveRegionDefinitions() {
-        try {
-            const db = await _openDB();
-            const tx = db.transaction(STORE_APP, 'readwrite');
-            tx.objectStore(STORE_APP).put(window.regionDefinitions || [], 'regionDefinitions');
-        } catch (err) {
-            console.warn('[DB] saveRegionDefinitions failed:', err);
-        }
+    function saveRegionDefinitions() {
+        return _putApp([['regionDefinitions', window.regionDefinitions || []]]);
     }
 
-    // -------------------------------------------------------------------------
-    // Persist region polygon paths (Map serialised as entries array)
-    // -------------------------------------------------------------------------
-    async function saveRegionPaths() {
-        try {
-            const db      = await _openDB();
-            const tx      = db.transaction(STORE_APP, 'readwrite');
-            const entries = window.regionPaths ? [...window.regionPaths.entries()] : [];
-            tx.objectStore(STORE_APP).put(entries, 'regionPaths');
-        } catch (err) {
-            console.warn('[DB] saveRegionPaths failed:', err);
-        }
+    function saveRegionPaths() {
+        const entries = window.regionPaths ? [...window.regionPaths.entries()] : [];
+        return _putApp([['regionPaths', entries]]);
     }
 
-    // -------------------------------------------------------------------------
-    // Persist sector names (window.sectorNames keyed by integer slot number).
-    // -------------------------------------------------------------------------
-    async function saveSectorNames() {
-        try {
-            const db = await _openDB();
-            const tx = db.transaction(STORE_APP, 'readwrite');
-            tx.objectStore(STORE_APP).put(window.sectorNames || {}, 'sectorNames');
-        } catch (err) {
-            console.warn('[DB] saveSectorNames failed:', err);
-        }
+    function saveSectorNames() {
+        return _putApp([['sectorNames', window.sectorNames || {}]]);
     }
 
-    async function saveSubsectorNames() {
-        try {
-            const db = await _openDB();
-            const tx = db.transaction(STORE_APP, 'readwrite');
-            tx.objectStore(STORE_APP).put(window.subsectorNames || {}, 'subsectorNames');
-        } catch (err) {
-            console.warn('[DB] saveSubsectorNames failed:', err);
-        }
+    function saveSectorReview() {
+        return _putApp([['sectorReview', window.sectorReview || {}]]);
+    }
+
+    function saveSubsectorNames() {
+        return _putApp([['subsectorNames', window.subsectorNames || {}]]);
+    }
+
+    function saveAllegianceDefinitions() {
+        return _putApp([['allegianceDefinitions', window.allegianceDefinitions || []]]);
+    }
+
+    function saveAllegianceAssignments() {
+        const entries = window.hexAllegianceAssignments ? [...window.hexAllegianceAssignments.entries()] : [];
+        return _putApp([['allegianceAssignments', entries]]);
     }
 
     // -------------------------------------------------------------------------
@@ -449,7 +456,7 @@
                 req.onsuccess = () => {
                     const cur = req.result;
                     if (!cur) return;
-                    if (cur.key !== 'campaignAtlas' && !String(cur.key).startsWith('campaignAsset:')) cur.delete();
+                    if (cur.key !== 'campaignAtlas' && cur.key !== 'campaignTime' && !String(cur.key).startsWith('campaignAsset:')) cur.delete();
                     cur.continue();
                 };
             }
@@ -500,6 +507,11 @@
     function saveCampaignAtlas() {
         return commitCampaignAtlas(window.CampaignAtlas.snapshot());
     }
+    function saveCampaignTime() {
+        const value = (window.campaignTime && Number.isFinite(window.campaignTime.days))
+            ? { days: window.campaignTime.days } : null;
+        return _putApp([['campaignTime', value]]);
+    }
     async function readCampaignAsset(id) {
         const db = await _openDB();
         return new Promise((resolve, reject) => {
@@ -535,6 +547,7 @@
     window.dbManager = {
         campaignLoadError: () => _campaignLoadError,
         saveCampaignAtlas,
+        saveCampaignTime,
         commitCampaignAtlas,
         readCampaignAsset,
         collectCampaignAssets,
@@ -543,6 +556,11 @@
         saveHexes,
         syncAllHexes,
         scheduleSyncAll,
+        whenWritesSettle,
+        holdWrites,
+        releaseWrites,
+        allowAutosave,
+        autosaveBlocked,
         saveRoutes,
         saveRouteDefinitions,
         saveGridDimensions,
@@ -553,7 +571,10 @@
         saveRegionDefinitions,
         saveRegionPaths,
         saveSectorNames,
+        saveSectorReview,
         saveSubsectorNames,
+        saveAllegianceDefinitions,
+        saveAllegianceAssignments,
         clearDB,
         getTsvCache,
         putTsvCache

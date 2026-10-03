@@ -2,17 +2,20 @@
 window.CampaignAtlas = (() => {
     'use strict';
     const TYPES = ['person', 'place', 'business', 'organization', 'job', 'event', 'item', 'note'];
+    const SINGULAR = { person: 'Person', place: 'Place', business: 'Business', organization: 'Organization', job: 'Job', event: 'Event', item: 'Item', note: 'Note' };
     const clone = value => JSON.parse(JSON.stringify(value));
     const own = (object, key) => Object.hasOwn(object, key);
     const object = v => !!v && typeof v === 'object' && !Array.isArray(v);
     const fail = message => { throw new Error(message); };
     let busy = false, draft = null, baseline = '', host = null, activeHex = null;
-    let selectedId = null, query = '', filter = '', viewUrls = [], renderToken = 0;
+    let selectedId = null, trackedId = null, query = '', filter = '', viewUrls = [], renderToken = 0;
     let staged = new Map(), loading = false;
     let picking = false, pickButton = null, pickStatus = null;
     let locator = null;
     let systemFilter = '';
     let lastMapFocus = null;
+    // Where a record was opened from the system panel, so the editor can lead back there.
+    let origin = null;
     const emptyStore = () => ({ schemaVersion: 1, records: {}, assets: {} });
     const newId = () => 'cr_' + CampaignAssets.id().slice(3);
     const isId = id => typeof id === 'string' && /^(?:cr|ca)_[A-Za-z0-9_-]{1,116}$/.test(id);
@@ -80,6 +83,14 @@ window.CampaignAtlas = (() => {
         return Object.values(window.campaignAtlas.records).filter(r => r.anchor.hexId === hexId)
             .sort((a, b) => a.name.localeCompare(b.name));
     }
+    // Records placed on one body. A picked location matches by key; a typed
+    // one matches the body's label, as the orbit-view locator does.
+    function recordsForBody(hexId, location) {
+        if (!location) return [];
+        const label = location.label.toLocaleLowerCase();
+        return recordsForHex(hexId).filter(r => r.anchor.bodyKey ? r.anchor.bodyKey === location.key
+            : r.anchor.locationLabel.trim().toLocaleLowerCase() === label);
+    }
     function snapshot() { return clone(window.campaignAtlas); }
     function reachable() {
         const ids = CampaignAssets.referenced(window.campaignAtlas);
@@ -108,7 +119,7 @@ window.CampaignAtlas = (() => {
         busy = true;
         try {
             await window.dbManager.commitCampaignAtlas(normalized, payloads, !!historyOptions.replaceCampaign);
-            saveHistoryState(action, historyOptions);
+            saveHistoryState(action, Object.assign({ campaignAtlas: true }, historyOptions));
             CampaignAssets.remember(payloads);
             window.campaignAtlas = normalized;
             if (apply) apply();
@@ -234,6 +245,9 @@ window.CampaignAtlas = (() => {
         locator?.svg.remove();
         locator = null;
     }
+    function trackedHexId() {
+        return locator?.anchor?.hexId || null;
+    }
     function showLocator(anchor, source) {
         clearLocator();
         if (!anchor.hexId) return;
@@ -351,43 +365,93 @@ window.CampaignAtlas = (() => {
         for (const [id] of availableSystems()) { const opt = el('option', `${SystemInspector.systemName(id)} (${id})`); opt.value = id; select.append(opt); }
     }
     function renderList() {
-        const controls = el('div', undefined, 'atlas-search');
-        const search = el('input'); search.type = 'search'; search.placeholder = 'Search campaign…';
+        const scoped = Object.values(window.campaignAtlas.records)
+            .filter(r => !systemFilter || r.anchor.hexId === systemFilter)
+            .sort((a, b) => a.name.localeCompare(b.name));
+        const toolbar = el('div', undefined, 'atlas-toolbar');
+        const searchRow = el('div', undefined, 'atlas-toolbar-row');
+        const search = el('input'); search.type = 'search'; search.placeholder = 'Search records';
         search.setAttribute('aria-label', 'Search campaign records'); search.value = query;
-        const select = el('select'); select.setAttribute('aria-label', 'Filter record type');
-        for (const type of ['', ...TYPES]) { const opt = el('option', type || 'All types'); opt.value = type; select.append(opt); }
-        select.value = filter;
-        const systems = el('select'); systems.setAttribute('aria-label', 'Filter campaign by system');
-        systemOptions(systems, true); systems.value = systemFilter;
-        controls.append(search, systems, select, button('+ Add record', () => startDraft(), 'atlas-primary'));
+        const add = button('Add', () => startDraft(), 'atlas-primary');
+        add.setAttribute('aria-label', '+ Add record');
+        searchRow.append(search, add);
+        const types = el('div', undefined, 'atlas-types');
+        types.setAttribute('role', 'group'); types.setAttribute('aria-label', 'Filter record type');
+        const typeCount = type => scoped.filter(r => r.type === type).length;
+        const chips = [['', 'All', scoped.length], ...TYPES.filter(t => typeCount(t) || filter === t).map(t => [t, window.AppNavigation?.labels[t] || SINGULAR[t], typeCount(t)])];
+        for (const [value, label, count] of chips) {
+            const chip = button('', () => { filter = value; redraw(); window.AppNavigation?.layout(); });
+            chip.setAttribute('aria-pressed', String(filter === value));
+            chip.append(document.createTextNode(label), el('b', String(count)));
+            types.append(chip);
+        }
+        toolbar.append(searchRow);
+        if (scoped.length) toolbar.append(types);
+        if (availableSystems().length) {
+            const systems = el('select'); systems.setAttribute('aria-label', 'Filter campaign by system');
+            systemOptions(systems, true); systems.value = systemFilter;
+            systems.addEventListener('change', () => { systemFilter = systems.value; redraw(); });
+            toolbar.append(systems);
+        }
         const list = el('div', undefined, 'atlas-record-list');
-        const counts = el('p', '', 'atlas-muted');
-        host.append(controls, counts, list);
+        host.append(toolbar, list);
         function update() {
             list.replaceChildren();
-            const records = Object.values(window.campaignAtlas.records).filter(r => !systemFilter || r.anchor.hexId === systemFilter).sort((a, b) => a.name.localeCompare(b.name));
             const q = query.trim().toLocaleLowerCase();
-            counts.textContent = records.length ? TYPES.map(t => `${t}: ${records.filter(r => r.type === t).length}`).join(' · ') : 'People, places, jobs, and stories — all in one system.';
-            const matches = records.filter(r => (!filter || r.type === filter) &&
+            const matches = scoped.filter(r => (!filter || r.type === filter) &&
                 [r.name, r.summary, r.details, r.anchor.locationLabel, SystemInspector.systemName(r.anchor.hexId), ...r.tags].join('\n').toLocaleLowerCase().includes(q));
             for (const r of matches) {
-                const row = button('', () => {
+                const row = el('div', undefined, 'atlas-record-row');
+                row.dataset.recordId = r.id;
+                const track = button('', () => {
+                    trackedId = r.id;
+                    activeHex = r.anchor.hexId;
+                    syncTracked();
+                    syncMapFocus();
+                }, 'atlas-record-track');
+                const cover = r.images.find(a => a.assetId === r.primaryImageId);
+                if (cover) track.append(imageFor(cover));
+                else {
+                    const mark = el('span', (r.name.trim()[0] || '·').toLocaleUpperCase(), 'atlas-placeholder');
+                    mark.setAttribute('aria-hidden', 'true');
+                    track.append(mark);
+                }
+                const info = el('span', undefined, 'atlas-record-copy');
+                info.append(el('strong', r.name, 'atlas-record-name'));
+                if (r.summary) info.append(el('span', r.summary, 'atlas-record-summary'));
+                const where = systemFilter ? '' : SystemInspector.systemName(r.anchor.hexId);
+                info.append(el('span', [SINGULAR[r.type] || r.type, where].filter(Boolean).join(' · '), 'atlas-record-meta'));
+                track.append(info);
+                const openDetails = button('', () => {
+                    trackedId = r.id;
                     selectedId = r.id;
                     activeHex = r.anchor.hexId;
                     redraw();
-                }, 'atlas-record-row');
-                const cover = r.images.find(a => a.assetId === r.primaryImageId);
-                if (cover) row.append(imageFor(cover)); else row.append(el('span', '◇', 'atlas-placeholder'));
-                const info = el('span');
-                info.append(el('small', r.type, 'atlas-eyebrow'), el('strong', r.name), el('span', r.summary), el('small', r.tags.join(' · '), 'atlas-muted'));
-                info.append(el('small', SystemInspector.systemName(r.anchor.hexId), 'atlas-muted'));
-                row.append(info); list.append(row);
+                }, 'atlas-record-open');
+                openDetails.setAttribute('aria-label', `View details for ${r.name}`);
+                openDetails.title = 'View details';
+                const openMark = el('i', undefined, 'fa-solid fa-circle-info');
+                openMark.setAttribute('aria-hidden', 'true');
+                openDetails.append(openMark);
+                row.append(track, openDetails);
+                list.append(row);
             }
-            if (!matches.length) list.append(el('p', records.length ? 'No matching records. Try another search or type.' : 'Add your first record: a contact, a starport bar, a rumor, or anything your players might encounter.', 'atlas-empty'));
+            if (!matches.length) list.append(el('p', scoped.length ? 'No matching records.' : 'No records yet.', 'atlas-empty'));
+            syncTracked();
+        }
+        function syncTracked() {
+            const record = trackedId && window.campaignAtlas.records[trackedId];
+            let source = null;
+            for (const row of list.querySelectorAll('.atlas-record-row')) {
+                const on = !!record && row.dataset.recordId === trackedId;
+                row.classList.toggle('is-tracked', on);
+                row.querySelector('.atlas-record-track')?.setAttribute('aria-pressed', String(on));
+                if (on) source = row;
+            }
+            if (source && record) showLocator(record.anchor, source);
+            else clearLocator();
         }
         search.addEventListener('input', () => { query = search.value; update(); });
-        select.addEventListener('change', () => { filter = select.value; redraw(); window.AppNavigation?.layout(); });
-        systems.addEventListener('change', () => { systemFilter = systems.value; update(); });
         update();
     }
     function fullImage(attachment) {
@@ -401,37 +465,246 @@ window.CampaignAtlas = (() => {
         }, { once: true });
         document.body.append(dialog); dialog.showModal(); close.focus();
     }
+    const coverSources = new Map();
+    function imageFiles(list) {
+        return [...(list || [])].filter(file => file && (
+            ['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || /\.(png|jpe?g|webp)$/i.test(file.name || '')));
+    }
+    function clipboardImageFiles(data) {
+        if (!data) return [];
+        const found = [];
+        for (const item of data.items || []) {
+            if (item.kind !== 'file') continue;
+            const file = item.getAsFile();
+            if (file && (file.type.startsWith('image/') || /\.(png|jpe?g|webp|gif|bmp|avif)$/i.test(file.name || ''))) found.push(file);
+        }
+        if (!found.length) {
+            for (const file of data.files || []) if (file.type.startsWith('image/')) found.push(file);
+        }
+        return found;
+    }
+    function bindFileDrop(node, onFiles, active = () => true) {
+        const fileDrag = e => active() && [...(e.dataTransfer?.types || [])].includes('Files');
+        const allow = e => {
+            if (!fileDrag(e)) return false;
+            e.preventDefault();
+            e.stopPropagation();
+            e.dataTransfer.dropEffect = 'copy';
+            return true;
+        };
+        node.addEventListener('dragenter', e => { if (allow(e)) node.classList.add('is-dropping'); });
+        node.addEventListener('dragover', allow);
+        node.addEventListener('dragleave', e => { if (!node.contains(e.relatedTarget)) node.classList.remove('is-dropping'); });
+        node.addEventListener('drop', e => {
+            if (!fileDrag(e)) return;
+            node.classList.remove('is-dropping');
+            const files = e.dataTransfer.files;
+            if (files && files.length) {
+                e.preventDefault();
+                e.stopPropagation();
+                onFiles(files);
+                return;
+            }
+            // Chrome can leave dataTransfer empty when the pointer is on a file input,
+            // and still assign those files through the input's own change event.
+            if (e.target instanceof HTMLInputElement && e.target.type === 'file') {
+                e.stopPropagation();
+                return;
+            }
+            e.preventDefault();
+            e.stopPropagation();
+        });
+    }
+    function decodeFile(file) {
+        if (typeof createImageBitmap === 'function') return createImageBitmap(file, { imageOrientation: 'from-image' });
+        return new Promise((resolve, reject) => {
+            const url = URL.createObjectURL(file);
+            const img = new Image();
+            img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+            img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('decode')); };
+            img.src = url;
+        });
+    }
+    function frameImage(file) {
+        if (document.querySelector('.atlas-crop-dialog')) return Promise.resolve(null);
+        return decodeFile(file).then(decoded => new Promise(resolve => {
+            const dialog = el('dialog', undefined, 'atlas-crop-dialog');
+            dialog.setAttribute('aria-labelledby', 'atlas-crop-title');
+            const title = el('h2', 'Frame image');
+            title.id = 'atlas-crop-title';
+            const note = el('p', 'Drag to move the image. Scroll or use the slider to zoom.');
+            const stage = el('div', undefined, 'atlas-crop-stage');
+            const previewUrl = URL.createObjectURL(file);
+            const img = el('img');
+            img.src = previewUrl;
+            img.alt = '';
+            img.draggable = false;
+            stage.append(img);
+            const zoomLabel = el('label', undefined, 'atlas-crop-zoom');
+            const range = el('input');
+            range.type = 'range'; range.min = '1'; range.max = '4'; range.step = '0.01'; range.value = '1';
+            range.setAttribute('aria-label', 'Zoom');
+            zoomLabel.append(el('span', 'Zoom'), range);
+            const use = el('button', 'Use image');
+            use.type = 'button';
+            const cancel = button('Cancel', () => dialog.close());
+            const actions = el('div', undefined, 'atlas-crop-actions');
+            actions.append(cancel, use);
+            dialog.append(title, note, stage, zoomLabel, actions);
+            let zoom = 1, x = 0, y = 0, settled = false;
+            const widthOf = image => image.naturalWidth || image.width;
+            const heightOf = image => image.naturalHeight || image.height;
+            const place = () => {
+                const view = stage.clientWidth || 1;
+                const base = Math.max(view / widthOf(decoded), view / heightOf(decoded));
+                const scale = base * zoom;
+                const dw = widthOf(decoded) * scale, dh = heightOf(decoded) * scale;
+                x = Math.min(0, Math.max(view - dw, x));
+                y = Math.min(0, Math.max(view - dh, y));
+                img.style.width = `${dw}px`;
+                img.style.height = `${dh}px`;
+                img.style.transform = `translate(${x}px, ${y}px)`;
+                return { view, scale };
+            };
+            const zoomAbout = (nextZoom, px, py) => {
+                const view = stage.clientWidth || 1;
+                const base = Math.max(view / widthOf(decoded), view / heightOf(decoded));
+                const prev = base * zoom;
+                const ix = (px - x) / prev, iy = (py - y) / prev;
+                zoom = Math.min(4, Math.max(1, nextZoom));
+                const next = base * zoom;
+                x = px - ix * next;
+                y = py - iy * next;
+                range.value = String(zoom);
+                place();
+            };
+            range.addEventListener('input', () => zoomAbout(Number(range.value), (stage.clientWidth || 1) / 2, (stage.clientWidth || 1) / 2));
+            stage.addEventListener('wheel', e => {
+                e.preventDefault();
+                const rect = stage.getBoundingClientRect();
+                zoomAbout(zoom * (e.deltaY < 0 ? 1.08 : 0.92), e.clientX - rect.left, e.clientY - rect.top);
+            }, { passive: false });
+            let drag = null;
+            stage.addEventListener('pointerdown', e => {
+                if (e.button !== 0) return;
+                drag = { id: e.pointerId, sx: e.clientX, sy: e.clientY, ox: x, oy: y };
+                stage.setPointerCapture(e.pointerId);
+                stage.classList.add('is-panning');
+            });
+            stage.addEventListener('pointermove', e => {
+                if (!drag || e.pointerId !== drag.id) return;
+                x = drag.ox + (e.clientX - drag.sx);
+                y = drag.oy + (e.clientY - drag.sy);
+                place();
+            });
+            const endDrag = e => {
+                if (!drag || e.pointerId !== drag.id) return;
+                drag = null;
+                stage.classList.remove('is-panning');
+            };
+            stage.addEventListener('pointerup', endDrag);
+            stage.addEventListener('pointercancel', endDrag);
+            const finish = fileOut => {
+                if (settled) return;
+                settled = true;
+                URL.revokeObjectURL(previewUrl);
+                decoded.close?.();
+                resolve(fileOut);
+            };
+            use.addEventListener('click', () => {
+                if (settled) return;
+                use.disabled = true;
+                const { view, scale } = place();
+                const sw = view / scale, sh = view / scale;
+                const out = Math.max(1, Math.round(Math.min(sw, 2048)));
+                const canvas = document.createElement('canvas');
+                canvas.width = out; canvas.height = out;
+                canvas.getContext('2d').drawImage(decoded, -x / scale, -y / scale, sw, sh, 0, 0, out, out);
+                canvas.toBlob(blob => {
+                    canvas.width = canvas.height = 1;
+                    if (!blob) { use.disabled = false; error('The browser could not encode this image. Try another file.'); return; }
+                    finish(new File([blob], 'cover.webp', { type: blob.type || 'image/webp' }));
+                    dialog.close();
+                }, 'image/webp', 0.92);
+            });
+            dialog.addEventListener('close', () => { dialog.remove(); finish(null); }, { once: true });
+            dialog.addEventListener('click', e => { if (e.target === dialog) dialog.close(); });
+            document.body.append(dialog);
+            dialog.showModal();
+            const view0 = stage.clientWidth || 280;
+            const base0 = Math.max(view0 / widthOf(decoded), view0 / heightOf(decoded));
+            x = (view0 - widthOf(decoded) * base0) / 2;
+            y = (view0 - heightOf(decoded) * base0) / 2;
+            place();
+            stage.focus();
+        })).catch(() => { error('This file could not be decoded as an image. Choose a different file.'); return null; });
+    }
+    async function useCoverFile(file, extras = []) {
+        const framed = await frameImage(file);
+        if (!framed || !draft) return;
+        const replace = draft.primaryImageId;
+        const known = new Set(draft.images.map(a => a.assetId));
+        await addImages([framed], replace || null);
+        if (!draft) return;
+        const added = draft.images.find(a => !known.has(a.assetId));
+        if (added) coverSources.set(added.assetId, file);
+        if (extras.length) await addImages(extras);
+    }
+    async function reframeCover(attachment) {
+        let file = coverSources.get(attachment.assetId);
+        if (!file) {
+            const payload = staged.get(attachment.assetId)?.payload || await CampaignAssets.read(attachment.assetId);
+            file = new File([payload.display], 'cover.webp', { type: payload.display.type || 'image/webp' });
+        }
+        const framed = await frameImage(file);
+        if (!framed || !draft) return;
+        const known = new Set(draft.images.map(a => a.assetId));
+        await addImages([framed], attachment.assetId);
+        const added = draft?.images.find(a => !known.has(a.assetId));
+        if (added) coverSources.set(added.assetId, file);
+    }
     function renderRecord(record) {
-        host.append(button('‹ All records', () => { selectedId = null; redraw(); }, 'atlas-link'), el('small', record.type, 'atlas-eyebrow'), el('h2', record.name));
-        const recordTitle = host.querySelector('h2');
-        host.append(el('p', `System: ${SystemInspector.systemName(record.anchor.hexId)} (${record.anchor.hexId})`, 'atlas-muted'));
-        if (SystemViewer.currentHexId() !== record.anchor.hexId) host.append(el('p', 'Double-click this system on the map to see its location in orbit view.', 'atlas-muted'));
-        recordTitle.classList.add('atlas-active-record');
-        showLocator(record.anchor, recordTitle);
+        host.append(button('‹ All records', () => { selectedId = null; redraw(); }, 'atlas-link atlas-back'));
+        const identity = el('div', undefined, 'atlas-identity');
         const cover = record.images.find(a => a.assetId === record.primaryImageId);
         if (cover) {
-            const fig = el('figure'), btn = button('', () => fullImage(cover), 'atlas-image-button');
-            btn.setAttribute('aria-label', `View ${record.type === 'person' ? 'portrait' : 'cover image'}`);
-            btn.append(imageFor(cover, false));
-            fig.append(btn, el('figcaption', [cover.caption, cover.credit, cover.sourceUrl].filter(Boolean).join(' — ')));
-            host.append(fig);
+            const photo = button('', () => fullImage(cover), 'atlas-image-button atlas-identity-photo');
+            photo.setAttribute('aria-label', `View ${record.type === 'person' ? 'portrait' : 'cover image'}`);
+            photo.title = [cover.caption, cover.credit].filter(Boolean).join(' — ');
+            photo.append(imageFor(cover, false));
+            identity.append(photo);
         }
+        const copy = el('div', undefined, 'atlas-identity-copy');
+        copy.append(el('h2', record.name));
+        const meta = el('p', [SINGULAR[record.type] || record.type, SystemInspector.systemName(record.anchor.hexId), record.anchor.locationLabel].filter(Boolean).join(' · '), 'atlas-kicker');
+        meta.title = 'Double-click this system on the map to see its location in orbit view.';
+        copy.append(meta);
+        identity.append(copy);
+        host.append(identity);
+        showLocator(record.anchor, identity);
         if (record.summary) host.append(el('p', record.summary, 'atlas-summary'));
-        if (record.anchor.locationLabel) host.append(el('p', `Location: ${record.anchor.locationLabel}`));
-        if (record.tags.length) host.append(el('p', record.tags.join(' · '), 'atlas-muted'));
-        host.append(el('p', record.details, 'atlas-details'));
-        for (const attachment of record.images) {
-            if (attachment === cover) continue;
-            const fig = el('figure');
-            const view = button('', () => fullImage(attachment), 'atlas-image-button');
-            view.setAttribute('aria-label', 'View attached image'); view.append(imageFor(attachment, false));
-            fig.append(view, el('figcaption', [attachment.caption, attachment.credit, attachment.sourceUrl].filter(Boolean).join(' — ')));
-            host.append(fig);
+        if (record.details) host.append(el('p', record.details, 'atlas-details'));
+        if (record.tags.length) {
+            const tags = el('div', undefined, 'atlas-tags');
+            for (const tag of record.tags) tags.append(el('span', tag));
+            host.append(tags);
+        }
+        const extras = record.images.filter(a => a !== cover);
+        if (extras.length) {
+            const strip = el('div', undefined, 'atlas-strip');
+            for (const attachment of extras) {
+                const view = button('', () => fullImage(attachment), 'atlas-strip-button');
+                view.setAttribute('aria-label', attachment.altText || attachment.caption || 'View attached image');
+                view.title = [attachment.caption, attachment.credit].filter(Boolean).join(' — ');
+                view.append(imageFor(attachment));
+                strip.append(view);
+            }
+            host.append(strip);
         }
         const actions = el('div', undefined, 'atlas-actions');
         actions.append(button('Edit record', () => startDraft(record), 'atlas-primary'), button('Delete', async () => {
             if (!confirm(`Delete campaign record “${record.name}”? You can undo this.`)) return;
-            try { await deleteRecord(record.id); selectedId = null; redraw(); } catch (err) { error(err.message); }
+            try { await deleteRecord(record.id); if (trackedId === record.id) trackedId = null; selectedId = null; redraw(); } catch (err) { error(err.message); }
         }, 'atlas-danger'));
         const footer = document.getElementById('atlas-footer');
         footer.hidden = false; footer.append(actions);
@@ -485,11 +758,49 @@ window.CampaignAtlas = (() => {
         }
     }
     function renderEditor() {
-        host.append(el('h2', draft.id ? 'Edit record' : 'New campaign record'), el('p', `System: ${SystemInspector.systemName(draft.anchor.hexId)} (${draft.anchor.hexId})`, 'atlas-muted'));
+        if (draft.id) host.append(el('p', `${SINGULAR[draft.type] || draft.type} · ${SystemInspector.systemName(draft.anchor.hexId)}`, 'atlas-kicker'));
         const form = el('form'), fields = el('fieldset');
         form.id = 'atlas-record-form';
         fields.disabled = busy || loading;
         form.append(fields);
+        const coverAttachment = draft.images.find(a => a.assetId === draft.primaryImageId);
+        const coverBlock = el('div', undefined, 'atlas-cover-block');
+        const slot = el('div', undefined, 'atlas-cover-slot');
+        slot.setAttribute('aria-label', 'Record image');
+        if (coverAttachment) {
+            slot.classList.add('has-image');
+            const preview = imageFor(coverAttachment, false);
+            preview.classList.add('atlas-avatar-img');
+            slot.append(preview);
+        } else slot.append(el('p', 'Drop, paste, or choose an image'));
+        const coverPicker = el('input');
+        coverPicker.type = 'file';
+        coverPicker.accept = 'image/jpeg,image/png,image/webp';
+        coverPicker.hidden = true;
+        coverPicker.setAttribute('aria-label', 'Choose record image');
+        coverPicker.addEventListener('change', () => {
+            const chosen = coverPicker.files?.[0];
+            coverPicker.value = '';
+            if (chosen) void useCoverFile(chosen);
+        });
+        const coverActions = el('div', undefined, 'atlas-cover-actions');
+        coverActions.append(button(coverAttachment ? 'Replace image' : 'Choose image', () => coverPicker.click()));
+        if (coverAttachment) {
+            coverActions.append(button('Adjust framing', () => { void reframeCover(coverAttachment); }));
+            coverActions.append(button('Remove image', () => {
+                draft.images = draft.images.filter(a => a.assetId !== coverAttachment.assetId);
+                coverSources.delete(coverAttachment.assetId);
+                draft.primaryImageId = draft.images[0]?.assetId || null;
+                redraw();
+            }));
+        }
+        bindFileDrop(slot, incoming => {
+            const images = imageFiles(incoming);
+            if (!images.length) { error('Choose a still JPEG, PNG, or WebP image.'); return; }
+            void useCoverFile(images[0], images.slice(1));
+        });
+        coverBlock.append(slot, coverActions, coverPicker);
+        fields.append(coverBlock);
         if (!draft.id) {
             const systemLabel = el('label', undefined, 'atlas-field'), systemSelect = el('select');
             systemLabel.append(el('span', 'System'), systemSelect); systemOptions(systemSelect);
@@ -503,14 +814,13 @@ window.CampaignAtlas = (() => {
         const typeLabel = el('label', undefined, 'atlas-field'), type = el('select');
         type.setAttribute('aria-label', 'Type');
         type.name = 'type'; typeLabel.append(el('span', 'Type'), type);
-        TYPES.forEach(t => { const o = el('option', t); o.value = t; type.append(o); });
+        TYPES.forEach(t => { const o = el('option', SINGULAR[t]); o.value = t; type.append(o); });
         type.value = draft.type;
         type.addEventListener('change', () => { draft.type = type.value; redraw(); }); fields.append(typeLabel);
         field(fields, 'Name', 'name', draft.name, v => draft.name = v, { required: true, max: 120 });
         field(fields, 'Summary', 'summary', draft.summary, v => draft.summary = v, { max: 300 });
         field(fields, 'Details', 'details', draft.details, v => draft.details = v, { multiline: true, max: 100000, rows: 7 });
-        const locationTools = el('div', undefined, 'atlas-location-tools');
-        pickButton = button('⌖', () => {
+        pickButton = button('', () => {
             if (picking) { cancelPick(); return; }
             if (window.SystemViewer.currentHexId() !== draft.anchor.hexId) {
                 error('Double-click this record’s system on the map to open orbit view, then use the target. Your draft will stay here.'); return;
@@ -520,22 +830,28 @@ window.CampaignAtlas = (() => {
             pickStatus.textContent = 'Click a world, moon, belt, or star. Esc cancels.';
             document.body.classList.add('atlas-picking');
         }, 'atlas-target');
+        const pickMark = el('i', undefined, 'fa-solid fa-location-crosshairs');
+        pickMark.setAttribute('aria-hidden', 'true');
+        pickButton.append(pickMark);
         pickButton.setAttribute('aria-label', 'Pick location from orbit view');
         pickButton.setAttribute('aria-pressed', 'false');
         pickButton.title = 'Pick location from orbit view';
-        locationTools.append(el('span', 'Location'), pickButton); fields.append(locationTools);
-        const locationInput = field(fields, 'Location name', 'location', draft.anchor.locationLabel, v => {
+        const locationInput = field(fields, 'Location', 'location', draft.anchor.locationLabel, v => {
             draft.anchor.locationLabel = v;
             delete draft.anchor.bodyKey;
             cancelPick(); clearLocator();
         }, { max: 300 });
-        locationInput.parentElement.classList.add('atlas-location-field');
+        const locationWrap = locationInput.parentElement;
+        locationWrap.classList.add('atlas-location-field');
+        const locationRow = el('div', undefined, 'atlas-location-row');
+        locationRow.append(locationInput, pickButton);
+        locationWrap.append(locationRow);
         pickStatus = el('p', 'Pick a body in orbit view, or enter a location below.', 'atlas-muted atlas-pick-status');
         pickStatus.setAttribute('role', 'status');
         fields.append(pickStatus);
         field(fields, 'Tags (comma separated)', 'tags', draft.tags, v => draft.tags = v, { max: 3000 });
         const gallery = el('section', undefined, 'atlas-gallery');
-        gallery.append(el('h3', draft.type === 'person' ? 'Portrait and images' : 'Cover and images'));
+        gallery.append(el('h3', 'Images'));
         draft.images.forEach((a, index) => {
             const item = el('div', undefined, 'atlas-gallery-item');
             item.append(imageFor(a));
@@ -563,8 +879,11 @@ window.CampaignAtlas = (() => {
         files.setAttribute('aria-label', 'Add images');
         files.addEventListener('change', () => addImages(files.files));
         drop.append(el('p', 'Add images or drop them here'), files);
-        drop.addEventListener('dragover', e => { e.preventDefault(); });
-        drop.addEventListener('drop', e => { e.preventDefault(); void addImages(e.dataTransfer.files); });
+        bindFileDrop(drop, incoming => {
+            const images = imageFiles(incoming);
+            if (!images.length) { error('Choose a still JPEG, PNG, or WebP image.'); return; }
+            void addImages(images);
+        });
         const budgetStore = snapshot();
         for (const [id, asset] of staged) budgetStore.assets[id] = asset.metadata;
         budgetStore.records[draft.id || 'cr_draft'] = draft;
@@ -575,7 +894,10 @@ window.CampaignAtlas = (() => {
         const save = el('button', 'Save record', 'atlas-primary'); save.type = 'submit';
         save.setAttribute('form', form.id);
         save.disabled = busy || loading;
-        const cancel = button('Cancel', () => { if (confirmLeave()) redraw(); });
+        const cancel = button('Cancel', () => {
+            if (origin) returnToOrigin();
+            else if (confirmLeave()) redraw();
+        });
         cancel.disabled = busy || loading;
         actions.append(save, cancel);
         const footer = document.getElementById('atlas-footer');
@@ -591,7 +913,7 @@ window.CampaignAtlas = (() => {
                     const asset = staged.get(a.assetId); payloads.set(a.assetId, asset.payload); metadata[a.assetId] = asset.metadata;
                 }
                 const id = record.id ? await updateRecord(record.id, record, payloads, metadata) : await addRecord(record, payloads, metadata);
-                discard(); selectedId = id; redraw(); showToast('Campaign record saved.', 2500);
+                discard(); selectedId = id; trackedId = id; redraw(); showToast('Campaign record saved.', 2500);
             } catch (err) { error(`Record was not saved: ${err.message}`); }
             finally { fields.disabled = false; save.disabled = false; cancel.disabled = false; }
         });
@@ -602,11 +924,14 @@ window.CampaignAtlas = (() => {
         if (!window.SystemInspector?.isOpen() || SystemInspector.currentWorkspace() !== 'campaign') return null;
         if (draft) return draft.anchor.hexId;
         const record = selectedId && window.campaignAtlas.records[selectedId];
-        return record ? record.anchor.hexId : null;
+        if (record) return record.anchor.hexId;
+        const tracked = trackedId && host?.querySelector(`.atlas-record-row[data-record-id="${trackedId}"]`);
+        return tracked ? window.campaignAtlas.records[trackedId].anchor.hexId : null;
     }
     function focusedAnchor() {
         if (!focusedHexId()) return null;
-        return draft ? draft.anchor : window.campaignAtlas.records[selectedId]?.anchor || null;
+        if (draft) return draft.anchor;
+        return window.campaignAtlas.records[selectedId]?.anchor || window.campaignAtlas.records[trackedId]?.anchor || null;
     }
     function syncMapFocus(opts = {}) {
         const id = focusedHexId();
@@ -615,10 +940,90 @@ window.CampaignAtlas = (() => {
         if (id && !window.SystemViewer?.isOpen() && (changed || opts.forcePan)) centerHexInView(id);
         if ((changed || opts.forcePan) && typeof draw === 'function') requestAnimationFrame(draw);
     }
+    function clockText(seconds) {
+        seconds = Math.floor(seconds + 1e-5) % 86400;
+        return [Math.floor(seconds / 3600), Math.floor(seconds / 60) % 60, seconds % 60]
+            .map(n => String(n).padStart(2, '0')).join(':');
+    }
+    function renderStardate() {
+        const row = button(undefined, openStardateDialog, 'campaign-stardate-readout');
+        row.title = 'Edit stardate';
+        const value = el('span', window.SystemViewer.formatCampaignClock(), 'campaign-stardate-value');
+        value.id = 'campaign-stardate-value';
+        row.append(el('span', 'Stardate', 'campaign-stardate-label'), value);
+        host.append(row);
+    }
+    function openStardateDialog() {
+        if (document.querySelector('.campaign-stardate-dialog, .atlas-crop-dialog')) return;
+        const parts = window.SystemViewer.campaignClockParts();
+        const dialog = el('dialog', undefined, 'campaign-stardate-dialog');
+        dialog.setAttribute('aria-labelledby', 'campaign-stardate-title');
+        const title = el('h2', 'Stardate');
+        title.id = 'campaign-stardate-title';
+        const note = el('p', 'A year is 365 days. Orbit view starts on this date and keeps it. Until you change it, the default start date in Settings is used.');
+        const form = el('form');
+        form.noValidate = true;
+        const field = (label, input) => {
+            const wrap = el('label');
+            wrap.append(el('span', label), input);
+            return wrap;
+        };
+        const year = el('input');
+        year.type = 'number'; year.step = '1'; year.required = true; year.value = String(parts.year);
+        year.setAttribute('aria-label', 'Year');
+        const day = el('input');
+        day.type = 'number'; day.min = '1'; day.max = '365'; day.step = '1'; day.required = true; day.value = String(parts.day);
+        day.setAttribute('aria-label', 'Day');
+        const time = el('input');
+        time.type = 'time'; time.step = '1'; time.required = true; time.value = clockText(parts.seconds);
+        time.setAttribute('aria-label', 'Time');
+        const message = el('p', '', 'campaign-stardate-error');
+        message.hidden = true; message.setAttribute('role', 'alert');
+        for (const input of [year, day, time]) input.addEventListener('input', () => { message.hidden = true; });
+        const save = el('button', 'Save stardate');
+        save.type = 'submit';
+        const cancel = button('Cancel', () => dialog.close());
+        const actions = el('div', undefined, 'campaign-stardate-actions');
+        actions.append(cancel, save);
+        form.append(field('Year', year), field('Day', day), field('Time', time), message, actions);
+        form.addEventListener('submit', e => {
+            e.preventDefault();
+            const yearValue = Number(year.value);
+            const dayValue = Number(day.value);
+            const clock = (time.value || '').split(':').map(Number);
+            if (year.value.trim() === '' || !Number.isInteger(yearValue)) { message.hidden = false; message.textContent = 'Enter a whole year.'; year.focus(); return; }
+            if (day.value.trim() === '' || !Number.isInteger(dayValue) || dayValue < 1 || dayValue > 365) { message.hidden = false; message.textContent = 'Day must be from 1 to 365.'; day.focus(); return; }
+            if (!time.value || clock.length < 2 || clock.some(n => !Number.isInteger(n))) { message.hidden = false; message.textContent = 'Enter a time.'; time.focus(); return; }
+            const seconds = clock[0] * 3600 + clock[1] * 60 + (clock[2] || 0);
+            if (seconds < 0 || seconds > 86399) { message.hidden = false; message.textContent = 'Enter a time.'; time.focus(); return; }
+            window.SystemViewer.setCampaignClock(yearValue, dayValue, seconds);
+            dialog.close();
+        });
+        dialog.append(title, note, form);
+        dialog.addEventListener('click', e => { if (e.target === dialog) dialog.close(); });
+        dialog.addEventListener('close', () => dialog.remove(), { once: true });
+        document.body.append(dialog);
+        dialog.showModal();
+        year.focus();
+    }
+    function returnToOrigin() {
+        const from = origin;
+        if (!from || !confirmLeave()) return;
+        origin = null;
+        SystemInspector.showBody(from.hexId, from.bodyKey);
+    }
     function render(container, hexId) {
         releaseView(); host = container;
         activeHex = draft?.anchor.hexId || window.campaignAtlas.records[selectedId]?.anchor.hexId || hexId;
+        if (origin && (draft || selectedId)) {
+            const back = button('', returnToOrigin, 'atlas-link atlas-origin');
+            const mark = el('i', undefined, 'fa-solid fa-arrow-left');
+            mark.setAttribute('aria-hidden', 'true');
+            back.append(mark, document.createTextNode(` Back to ${origin.label}`));
+            host.append(back);
+        } else origin = null;
         host.append(errorArea());
+        renderStardate();
         if (draft) renderEditor();
         else if (selectedId && window.campaignAtlas.records[selectedId]) renderRecord(window.campaignAtlas.records[selectedId]);
         else renderList();
@@ -626,6 +1031,23 @@ window.CampaignAtlas = (() => {
     }
     function setup() {
         window.campaignAtlas ||= emptyStore();
+        const inspector = document.getElementById('system-inspector');
+        document.addEventListener('paste', e => {
+            if (!draft || inspector.hidden || document.querySelector('.atlas-crop-dialog')) return;
+            const found = clipboardImageFiles(e.clipboardData);
+            if (!found.length) return;
+            const field = e.target?.closest?.('input, textarea, [contenteditable="true"]');
+            if (field && !inspector.contains(field)) return;
+            e.preventDefault();
+            const images = imageFiles(found);
+            if (!images.length) { error('Choose a still JPEG, PNG, or WebP image.'); return; }
+            void useCoverFile(images[0], images.slice(1));
+        });
+        bindFileDrop(inspector, incoming => {
+            const images = imageFiles(incoming);
+            if (!images.length) { error('Choose a still JPEG, PNG, or WebP image.'); return; }
+            void useCoverFile(images[0], images.slice(1));
+        }, () => !!draft && !inspector.hidden && !document.querySelector('.atlas-crop-dialog'));
         for (const type of ['click', 'mousedown', 'keydown', 'dblclick', 'drop']) {
             document.addEventListener(type, e => {
                 if (busy) { e.preventDefault(); e.stopImmediatePropagation(); }
@@ -637,27 +1059,46 @@ window.CampaignAtlas = (() => {
     }
     function openForHex(id) {
         if (!confirmLeave()) return false;
-        systemFilter = id || ''; selectedId = null;
+        systemFilter = id || ''; selectedId = null; origin = null;
         return SystemInspector.openForHex(id, 'campaign');
     }
+    // A new record already placed at a system or one of its bodies.
+    // `from` ({ hexId, bodyKey, label }) is the panel view to return to.
+    function createAt(type, anchor, from = null) {
+        if (!TYPES.includes(type) || busy || loading || !confirmLeave()) return false;
+        const now = new Date().toISOString();
+        systemFilter = anchor.hexId; selectedId = null; query = ''; filter = '';
+        draft = { id: null, type, name: '', summary: '', details: '', tags: [],
+            anchor: { kind: 'system', hexId: anchor.hexId, locationLabel: String(anchor.locationLabel || '').slice(0, 300),
+                ...(anchor.bodyKey ? { bodyKey: anchor.bodyKey } : {}) },
+            visibility: 'referee', provenance: { kind: 'campaign', citation: '' }, links: [], images: [], primaryImageId: null,
+            createdAt: now, updatedAt: now };
+        baseline = JSON.stringify(draft);
+        origin = from;
+        if (!SystemInspector.openForHex(anchor.hexId, 'campaign')) { discard(); origin = null; return false; }
+        host?.querySelector('[name="name"]')?.focus();
+        return true;
+    }
     return { setup, openForHex, close: () => SystemInspector.close(),
-        openRecord: id => {
+        heading: () => draft ? (draft.id ? 'Edit record' : `New ${(SINGULAR[draft.type] || 'record').toLocaleLowerCase()}`) : ((filter && window.AppNavigation?.labels[filter]) || 'Campaign'),
+        openRecord: (id, from = null) => {
             const record = window.campaignAtlas.records[id];
             if (!record || !confirmLeave()) return false;
-            systemFilter = ''; query = ''; filter = record.type; selectedId = id; activeHex = record.anchor.hexId;
+            systemFilter = ''; query = ''; filter = record.type; selectedId = id; trackedId = id; activeHex = record.anchor.hexId;
+            origin = from;
             return SystemInspector.openForHex(record.anchor.hexId, 'campaign');
         },
         openType: type => {
             if (!TYPES.includes(type) || !confirmLeave()) return false;
-            systemFilter = ''; selectedId = null; query = ''; filter = type;
+            systemFilter = ''; selectedId = null; query = ''; filter = type; origin = null;
             return SystemInspector.openForHex(SystemInspector.currentHexId(), 'campaign');
         },
         currentType: () => filter,
-        showAll: () => { systemFilter = ''; selectedId = null; query = ''; filter = ''; },
+        showAll: () => { systemFilter = ''; selectedId = null; query = ''; filter = ''; origin = null; },
         draftHexId: () => draft?.anchor.hexId,
-        addRecord, updateRecord, deleteRecord, recordsForHex, exportForHex, exportMap, importForHex, prepareImport,
+        addRecord, updateRecord, deleteRecord, recordsForHex, recordsForBody, createAt, SINGULAR, exportForHex, exportMap, importForHex, prepareImport,
         emptyStore, normalizeStore, snapshot, commit, restoreHistory, persist, collect, reachable, render, releaseView, hasDraft,
         confirmLeave, discard, isBusy: () => busy || loading, TYPES,
-        pickBody, cancelPick, isPicking: () => picking, clearLocator, updateLocator,
+        pickBody, cancelPick, isPicking: () => picking, clearLocator, updateLocator, trackedHexId,
         focusedHexId, focusedAnchor, syncMapFocus };
 })();

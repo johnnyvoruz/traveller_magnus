@@ -97,7 +97,13 @@ const HELPERS = `
     const { browser, page } = await launchApp({ headless: true });
     await buildMap(page, CFG);
     await page.evaluate(HELPERS);
-    await page.evaluate(() => { window.showToast = m => { window.__lastToast = m; }; });
+    await page.evaluate(() => {
+        window.showToast = m => { window.__lastToast = m; };
+        // Continuation is exercised on slot 4, which a fresh map does not start with.
+        if (!(window.routeDefinitions || []).some(d => d.id === 4)) {
+            window.routeDefinitions.push({ id: 4, name: 'Route 4', color: '#ff8800', shortcut: '4', visible: true, automationRef: null });
+        }
+    });
 
     const ids = await page.evaluate(() => window.__T.corridor(40));
 

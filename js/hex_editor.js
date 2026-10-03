@@ -96,46 +96,8 @@ function openHexEditor(hexId, e = null) {
     if (!stateObj || stateObj.type !== 'SYSTEM_PRESENT' || (!stateObj.ctData && !stateObj.mgt2eData && !stateObj.t5Data && !stateObj.rttData)) {
         return;
     }
-
-    const hexEditor = document.getElementById('hex-editor');
-
-    // Position the editor near the mouse click if an event is provided
-    if (e && e.clientX !== undefined && e.clientY !== undefined) {
-        setTimeout(() => {
-            // Ensure visible before measuring
-            hexEditor.classList.add('visible');
-
-            const rect = hexEditor.getBoundingClientRect();
-            const editorWidth = rect.width;
-            const editorHeight = rect.height;
-            const viewportWidth = window.innerWidth;
-            const viewportHeight = window.innerHeight;
-            const padding = 15;
-
-            let x = e.clientX + 30; // 30px offset to the right
-            let y = e.clientY - (editorHeight / 2); // Center vertically on the click
-
-            // Clamping logic: ensure it stays within viewport
-            if (x + editorWidth > viewportWidth) {
-                x = viewportWidth - editorWidth - padding;
-            }
-            if (y + editorHeight > viewportHeight) {
-                y = viewportHeight - editorHeight - padding;
-            }
-
-            // Safeguards: ensure it doesn't clip off the top or left
-            x = Math.max(padding, x);
-            y = Math.max(padding, y);
-            
-            hexEditor.style.left = `${x}px`;
-            hexEditor.style.right = 'auto'; // Clear any right alignment
-            hexEditor.style.top = `${y}px`;
-            
-            // Clean up temp visibility styles
-            hexEditor.style.visibility = '';
-            hexEditor.style.display = '';
-        }, 50);
-    }
+    // Editing from the campaign workspace would hide that draft. Ask before leaving it.
+    if (window.SystemInspector?.currentWorkspace?.() === 'campaign' && !SystemInspector.canLeave()) return;
 
     editingHexId = hexId;
     const data = stateObj.rttData || stateObj.t5Data || stateObj.mgt2eData || stateObj.ctData;
@@ -155,9 +117,10 @@ function openHexEditor(hexId, e = null) {
     document.getElementById('edit-law').value = data.law;
     document.getElementById('edit-tl').value = data.tl;
 
-    const b = data.bases || [];
-    document.getElementById('edit-naval').checked = data.navalBase || b.includes('N') || false;
-    document.getElementById('edit-scout').checked = data.scoutBase || b.includes('S') || false;
+    const b = Array.isArray(data.bases) ? data.bases : [];
+    const baseCodes = typeof data.baseCodes === 'string' ? data.baseCodes : '';
+    document.getElementById('edit-naval').checked = data.navalBase || baseCodes.includes('N') || b.includes('N') || false;
+    document.getElementById('edit-scout').checked = data.scoutBase || baseCodes.includes('S') || b.includes('S') || false;
     document.getElementById('edit-military').checked = data.militaryBase || false; // RTT uses M for Merchant
     document.getElementById('edit-corsair').checked = data.corsairBase || b.includes('P') || false;
     document.getElementById('edit-research').checked = data.researchBase || b.includes('R') || false;
@@ -315,7 +278,12 @@ function openHexEditor(hexId, e = null) {
         t5QuickStatsDiv.style.display = 'grid';
     }
 
-    document.getElementById('hex-editor').classList.add('visible');
+    const hexEditor = document.getElementById('hex-editor');
+    hexEditor.classList.add('visible');
+    hexEditor.style.left = '';
+    hexEditor.style.right = '';
+    hexEditor.style.top = '';
+    window.SystemInspector?.noteEditing?.(hexId);
 }
 
 function populateEditorAccordions(stateObj) {
@@ -383,7 +351,9 @@ function populateEditorAccordions(stateObj) {
             'edit-gas-giants': ts.gasGiants,
             'edit-worlds': ts.worlds,
             'edit-ix': ts.Importance || ts.Ix,
-            'edit-ru': ts.ResourceUnits || ts.RU,
+            'edit-ru': ts.ResourceUnits != null ? ts.ResourceUnits : ts.RU,
+            'edit-nobility': ts.nobleCodes || (stateObj.t5Data && stateObj.t5Data.nobleCodes) || '',
+            'edit-t5-bases': (stateObj.t5Data && stateObj.t5Data.baseCodes) || '',
             'edit-r': ts.ecoResources || ts.R,
             'edit-l': ts.ecoLabor || ts.L,
             'edit-i': ts.ecoInfrastructure || ts.I,
@@ -1949,10 +1919,16 @@ function populateEditorAccordions(stateObj) {
 }
 
 // Global handler for T5 Travel Zone manual overrides
+function _recordEditingHex(action) {
+    if (!editingHexId || typeof saveHistoryState !== 'function') return;
+    saveHistoryState(action, { hexIds: [editingHexId] });
+}
+
 window.handleT5ZoneChange = function (el) {
     if (!editingHexId) return;
     const stateObj = hexStates.get(editingHexId);
     if (!stateObj || !stateObj.t5Data) return;
+    _recordEditingHex('Edit travel zone');
 
     const newZone = el.value;
     stateObj.t5Data.travelZone = newZone;
@@ -2182,8 +2158,8 @@ function openFlatMapPanel(worldData, seed, titleText, hexLabel, initialProjectio
     canvas.width  = 800;
     canvas.height = 400;
     Object.assign(canvas.style, {
-        border: '1px solid #45a29e55',
-        background: window.printMode ? '#ffffff' : '#000011',
+        border: '0',
+        background: 'transparent',
         display: 'block', maxWidth: '90vw',
     });
 
@@ -2230,6 +2206,10 @@ function openFlatMapPanel(worldData, seed, titleText, hexLabel, initialProjectio
     // Renders the terrain for the current projection then repaints the header
     // strip. Called on open and on every projection switch.
     function _doRender() {
+        // Diamond, sinusoidal, and Mollweide leave the field outside the map
+        // transparent. A filled plate would paint those cuts black.
+        canvas.style.border = currentProjection === 'diamond' ? '0' : '1px solid #45a29e55';
+        canvas.style.background = window.printMode ? '#ffffff' : 'transparent';
         PlanetRenderer.renderFlatMap(canvas, worldData, seed, { projection: currentProjection });
 
         const hCtx    = canvas.getContext('2d');
@@ -2243,8 +2223,10 @@ function openFlatMapPanel(worldData, seed, titleText, hexLabel, initialProjectio
 
         canvas.height = 400 + headerH;   // resizing clears the canvas
 
-        hCtx.fillStyle = window.printMode ? '#ffffff' : '#000011';
-        hCtx.fillRect(0, 0, 800, headerH);
+        if (window.printMode) {
+            hCtx.fillStyle = '#ffffff';
+            hCtx.fillRect(0, 0, 800, headerH);
+        }
 
         if (hLines.length > 0) {
             const lineH = 17;
@@ -2271,8 +2253,8 @@ function openFlatMapPanel(worldData, seed, titleText, hexLabel, initialProjectio
     downloadBtn.addEventListener('click', () => {
         const link = document.createElement('a');
         const safeName = (worldData.name || hexLabel || 'world').replace(/[^a-z0-9_\-]/gi, '_');
-        link.download = safeName + '_map.jpg';
-        link.href = canvas.toDataURL('image/jpeg', 0.95);
+        link.download = safeName + '_map.png';
+        link.href = canvas.toDataURL('image/png');
         link.click();
     });
 
@@ -2349,19 +2331,28 @@ function canMapWorld(body) {
     return worldMapSizeCode(worldMapData(body).size) > 0;
 }
 
-// Opens the Cosmographer diamond sheet for one body. The hex grid is drawn by
-// PlanetRenderer.renderFlatMap; this only chooses the body and the projection.
-function openDiamondWorldMap(body, hexId) {
-    if (!window.PlanetRenderer || !canMapWorld(body)) return;
+// The preview and the overlay have to share this seed, or the dossier image
+// and the opened sheet draw different coastlines.
+function diamondMapSpec(body, hexId) {
+    if (!window.PlanetRenderer || !canMapWorld(body)) return null;
     const worldData = worldMapData(body);
     const named = worldData.name;
     const fallback = [body.type || 'body', body.orbitId, body.au, body.pd, body.uwp, body.size]
         .filter(v => v != null && v !== '').join('-');
     const seed = PlanetRenderer.imageSeed(hexId, named ? body : worldData, fallback || undefined);
-    const title = [named, hexId].filter(Boolean).join('  ·  ');
-    openFlatMapPanel(worldData, seed, title || 'World', hexId, 'diamond');
+    return { worldData, seed };
+}
+
+// Opens the Cosmographer diamond sheet for one body. The hex grid is drawn by
+// PlanetRenderer.renderFlatMap; this only chooses the body and the projection.
+function openDiamondWorldMap(body, hexId) {
+    const spec = diamondMapSpec(body, hexId);
+    if (!spec) return;
+    const title = [spec.worldData.name, hexId].filter(Boolean).join('  ·  ');
+    openFlatMapPanel(spec.worldData, spec.seed, title || 'World', hexId, 'diamond');
 }
 openDiamondWorldMap.canMap = canMapWorld;
+openDiamondWorldMap.spec = diamondMapSpec;
 
 function closeHexEditor() {
     editingHexId = null;
@@ -2407,6 +2398,7 @@ function closeHexEditor() {
 
     const hexEditor = document.getElementById('hex-editor');
     hexEditor.classList.remove('visible');
+    window.SystemInspector?.endEdit?.();
 }
 
 // ============================================================================
@@ -2515,6 +2507,7 @@ function setupHexEditor() {
         if (e.target && e.target.id === 'edit-stellar-mask') {
             if (editingHexId && hexStates.has(editingHexId)) {
                 const s = hexStates.get(editingHexId);
+                _recordEditingHex('Edit stellar mask');
                 s.isStellarMaskingActive = e.target.checked;
                 populateEditorAccordions(s);
             }
@@ -2620,6 +2613,7 @@ function setupHexEditor() {
             const { body, stateObj } = found;
 
             if (radioTZ.checked) {
+                _recordEditingHex('Edit solar day');
                 body.solarDayHours  = Infinity;
                 body.tidallyLocked  = true;
                 body.isTwilightZone = true;
@@ -2634,6 +2628,7 @@ function setupHexEditor() {
                     return;
                 }
                 hoursInp.style.borderColor = '';
+                _recordEditingHex('Edit solar day');
                 body.solarDayHours  = hrs;
                 body.tidallyLocked  = false;
                 body.isTwilightZone = false;
@@ -2653,6 +2648,7 @@ function setupHexEditor() {
             const found = _getContext();
             if (!found) { _closePopup(); return; }
             const { body, parentWorld, sys, stateObj } = found;
+            _recordEditingHex('Recalculate solar day');
 
             // Clear narrative overrides so the engine owns these fields again
             if (Array.isArray(body._manualFields)) {
@@ -2860,6 +2856,7 @@ function setupHexEditor() {
             const found = _getContext();
             if (!found) { _closePopup(); return; }
             const { body, stateObj } = found;
+            _recordEditingHex('Edit atmosphere');
 
             let entries = [];
             selList.querySelectorAll('.agp-gas-row').forEach(row => {
@@ -2917,6 +2914,7 @@ function setupHexEditor() {
             const found = _getContext();
             if (!found) { _closePopup(); return; }
             const { body, parentWorld, sys, stateObj } = found;
+            _recordEditingHex('Regenerate atmosphere');
 
             // Snapshot hydro — generateAtmospherics regenerates hydro as a side effect
             const hydroSnap = {
@@ -2954,6 +2952,7 @@ function setupHexEditor() {
 }
 
 function _propagateSystemName(stateObj, oldName, newName) {
+    _recordEditingHex('Propagate system name');
     function renameFn(n) {
         if (!n) return n;
         if (n === oldName) return newName;
@@ -3093,6 +3092,7 @@ function saveHexEditorChanges() {
 
     const stateObj = hexStates.get(editingHexId);
     if (!stateObj || stateObj.type !== 'SYSTEM_PRESENT') return;
+    _recordEditingHex('Edit system');
 
     const oldSystemName = stateObj.name || '';
 
@@ -3217,7 +3217,8 @@ function saveHexEditorChanges() {
             H: parseInt(document.getElementById('edit-h').value, 10) || 1,
             A: parseInt(document.getElementById('edit-a').value, 10) || 1,
             S: parseInt(document.getElementById('edit-s').value, 10) || 1,
-            Sym: parseInt(document.getElementById('edit-sym').value, 10) || 1
+            Sym: parseInt(document.getElementById('edit-sym').value, 10) || 1,
+            nobleCodes: (document.getElementById('edit-nobility')?.value || '').trim()
         };
         // Aliases and Sync
         t5SocioInputs.Ix = t5SocioInputs.Importance;
@@ -3249,6 +3250,32 @@ function saveHexEditorChanges() {
     // 2. Update T5 Socio Overlay
     if (stateObj.t5Socio) {
         Object.assign(stateObj.t5Socio, t5SocioInputs);
+        const ts = stateObj.t5Socio;
+        const nob = ts.nobleCodes ? ` ${ts.nobleCodes}` : '';
+        if (ts.ixString || ts.exString || ts.cxString) {
+            ts.displayString = `${ts.ixString || ''} ${ts.exString || ''} ${ts.cxString || ''} RU:${ts.RU}${nob}`.trim();
+        }
+    }
+
+    // Keep the Second Survey base string. N and S follow the naval and scout
+    // checkboxes; every other letter (K, M, W, …) stays as imported.
+    const baseField = document.getElementById('edit-t5-bases');
+    if (baseField && stateObj.t5Data) {
+        const had = stateObj.t5Data.baseCodes || '';
+        let codes = baseField.value.trim().toUpperCase().replace(/[^A-Z]/g, '');
+        if (navalBase) { if (!codes.includes('N')) codes += 'N'; }
+        else codes = codes.replace(/N/g, '');
+        if (scoutBase) { if (!codes.includes('S')) codes += 'S'; }
+        else codes = codes.replace(/S/g, '');
+        codes = [...new Set(codes)].sort().join('');
+        // A rolled world keeps its checkboxes. The string is written when the
+        // world was imported with one, or the field holds a code other than N/S.
+        if (had || codes.replace(/[NS]/g, '')) {
+            stateObj.t5Data.baseCodes = codes;
+            if (stateObj.t5System && stateObj.t5System.mainworld) {
+                stateObj.t5System.mainworld.baseCodes = codes;
+            }
+        }
     }
 
     // 3. Update Domain-Specific Primary Data Objects
@@ -3313,6 +3340,7 @@ function saveHexEditorChanges() {
 
     // Refresh the UI to reflect changes (and Keep Window Open as requested)
     populateEditorAccordions(stateObj);
+    window.SystemInspector?.noteEditing?.(editingHexId);
 
     // Provide visual feedback that save occurred
     if (typeof showToast === 'function') {
@@ -3343,6 +3371,7 @@ function saveHexEditorChanges() {
         if (typeof editingHexId === 'undefined' || !editingHexId) return;
         const stateObj = hexStates.get(editingHexId);
         if (!stateObj || !stateObj.rttSystem) return;
+        _recordEditingHex('Edit system');
         const sys = stateObj.rttSystem;
 
         const level = el.dataset.rttLevel;
@@ -3458,6 +3487,7 @@ function saveHexEditorChanges() {
         if (typeof editingHexId === 'undefined' || !editingHexId) return;
         const stateObj = hexStates.get(editingHexId);
         if (!stateObj || !stateObj.ctSystem) return;
+        _recordEditingHex('Edit system');
         const sys = stateObj.ctSystem;
 
         // ── Star fields (data-ct-sidx present, no data-ct-orbit) ─────────────
@@ -3603,6 +3633,7 @@ function saveHexEditorChanges() {
         if (typeof editingHexId === 'undefined' || !editingHexId) return;
         const stateObj = hexStates.get(editingHexId);
         if (!stateObj || !stateObj.t5System) return;
+        _recordEditingHex('Edit system');
         const sys = stateObj.t5System;
 
         // ── Star fields (data-t5-isstar="1") ─────────────────────────────────
@@ -3734,6 +3765,7 @@ function saveHexEditorChanges() {
         if (typeof editingHexId === 'undefined' || !editingHexId) return;
         const stateObj = hexStates.get(editingHexId);
         if (!stateObj || !stateObj.mgtSystem) return;
+        _recordEditingHex('Edit system');
         const sys = stateObj.mgtSystem;
 
         // ── Star fields (data-mgt-sidx present, no data-mgt-widx) ────────────
@@ -3880,6 +3912,7 @@ function saveHexEditorChanges() {
         if (typeof editingHexId === 'undefined' || !editingHexId) return;
         const stateObj = hexStates.get(editingHexId);
         if (!stateObj || !stateObj.aowSystem) return;
+        _recordEditingHex('Edit system');
         const sys = stateObj.aowSystem;
 
         const widx = parseInt(el.dataset.aowWidx, 10);

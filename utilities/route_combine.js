@@ -41,6 +41,17 @@ const HELPERS = `
         reset() {
             window.sectorRoutes = [];
             window.routeDefinitions = getDefaultRouteDefinitions();
+            // These checks address slots 4–7. A fresh map only starts with
+            // XBoat and Trading, so the harness adds the slots it drives.
+            const extras = [
+                { id: 4, name: 'Route 4', color: '#ff8800', shortcut: '4', visible: true, automationRef: null },
+                { id: 5, name: 'Route 5', color: '#00ddff', shortcut: '5', visible: true, automationRef: null },
+                { id: 6, name: 'Route 6', color: '#ff44aa', shortcut: '6', visible: true, automationRef: null },
+                { id: 7, name: 'Route 7', color: '#aa66ff', shortcut: '7', visible: true, automationRef: null }
+            ];
+            for (const extra of extras) {
+                if (!window.routeDefinitions.some(d => d.id === extra.id)) window.routeDefinitions.push(extra);
+            }
             window.undoStack = []; window.redoStack = [];
         }
     };

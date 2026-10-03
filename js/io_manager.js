@@ -161,7 +161,10 @@ function setupSaveLoad() {
             generationRttTL:             window.generationRttTL             ?? 15,
             generationStarportMax:       window.generationStarportMax       || 'A',
             generationStarportMod:       window.generationStarportMod       ?? 0,
+            playerKnowledgeExperimental: window.playerKnowledgeExperimental === true,
         };
+        const campaignTime = (window.campaignTime && Number.isFinite(window.campaignTime.days))
+            ? { days: window.campaignTime.days } : null;
 
         // Build hexStates as a plain object (current format, backward compatible)
         // stripHexViewState (core.js): a saved map must carry map data only. The
@@ -180,11 +183,15 @@ function setupSaveLoad() {
             aesthetics,
             settings,
             sectorNames:          window.sectorNames || {},
+            sectorReview:         window.sectorReview || {},
             subsectorNames:       window.subsectorNames || {},
+            allegianceDefinitions:    window.allegianceDefinitions || [],
+            hexAllegianceAssignments: Array.from((window.hexAllegianceAssignments || new Map()).entries()),
             hexStates:            hexObj,
             borderDefinitions:       window.borderDefinitions || [],
             hexBorderAssignments:    Array.from((window.hexBorderAssignments || new Map()).entries()),
             borderPaths:             Array.from((window.borderPaths || new Map()).entries()),
+            campaignTime,
             regionDefinitions:       window.regionDefinitions || [],
             regionPaths:             Array.from((window.regionPaths || new Map()).entries()),
         };
@@ -362,6 +369,9 @@ function setupSaveLoad() {
         });
     }
 
+    const btnSample = document.getElementById('btn-load-campaign-sample');
+    if (btnSample) btnSample.addEventListener('click', () => { loadSampleCampaign().catch(err => alert(`Sample campaign was not loaded: ${err.message}`)); });
+
     const btnClear = document.getElementById('btn-clear-canvas');
     if (btnClear) btnClear.addEventListener('click', clearCanvas);
 }
@@ -371,6 +381,82 @@ function setupSaveLoad() {
  * Clears IndexedDB so the next startup starts fresh.
  * Triggered by the Settings button or Ctrl+Delete.
  */
+function sampleCampaignHex(index, systems) {
+    if (systems.length) return systems[index % systems.length];
+    const col = (index % 8) + 1;
+    const row = (Math.floor(index / 8) % 4) + 1;
+    return `1-A-${String(col).padStart(2, '0')}${String(row).padStart(2, '0')}`;
+}
+
+function openSampleCampaign(hexId) {
+    if (!hexId || !window.SystemInspector || !window.CampaignAtlas) return;
+    CampaignAtlas.showAll();
+    SystemInspector.openForHex(hexId, 'campaign');
+    document.getElementById('settings-panel')?.classList.remove('open');
+    document.getElementById('settings-toggle')?.setAttribute('aria-expanded', 'false');
+}
+
+async function loadSampleCampaign() {
+    if (!window.CAMPAIGN_SAMPLE?.campaignAtlas || !window.CAMPAIGN_SAMPLE?.campaignAssets) {
+        alert('Sample campaign data was not found. Run node utilities/build_campaign_sample.js to generate js/campaign_sample.js.');
+        return;
+    }
+    if (CampaignAtlas.isBusy()) {
+        showToast('Please wait for the campaign operation to finish.', 3000);
+        return;
+    }
+    if (!CampaignAtlas.confirmLeave()) return;
+
+    const source = window.CAMPAIGN_SAMPLE;
+    const ids = Object.keys(source.campaignAtlas.records);
+    const already = ids.filter(id => window.campaignAtlas.records[id]).length;
+    if (already === ids.length) {
+        showToast('The sample campaign is already in this browser session.', 4000);
+        openSampleCampaign(window.campaignAtlas.records[ids[0]]?.anchor.hexId);
+        return;
+    }
+
+    const systems = [...hexStates.entries()]
+        .filter(([, state]) => state?.type === 'SYSTEM_PRESENT')
+        .map(([id]) => id)
+        .sort();
+    const adding = ids.length - already;
+    const where = systems.length
+        ? `They attach to the ${systems.length} system${systems.length === 1 ? '' : 's'} already on this map.`
+        : 'This map has no systems yet, so they attach to hexes in sector 1. Generate or import a sector when you want them on worlds.';
+    const confirmed = confirm(
+        `Add ${adding} sample Traveller campaign records, each with an image?\n\n` +
+        'Twelve each of people, places, businesses, organizations, jobs, events, items, and notes.\n\n' +
+        `${where}\n\n` +
+        'They are saved in this browser. Ctrl+Z removes the load.'
+    );
+    if (!confirmed) return;
+
+    const button = document.getElementById('btn-load-campaign-sample');
+    if (button) button.disabled = true;
+    try {
+        showToast('Loading sample campaign…', 2500);
+        const store = JSON.parse(JSON.stringify(source.campaignAtlas));
+        ids.forEach((id, index) => { store.records[id].anchor.hexId = sampleCampaignHex(index, systems); });
+        const payloads = await CampaignAssets.deserialize(store, source.campaignAssets);
+        const next = CampaignAtlas.snapshot();
+        let added = 0;
+        for (const id of ids) {
+            if (next.records[id]) continue;
+            next.records[id] = store.records[id];
+            added++;
+        }
+        for (const [id, meta] of Object.entries(store.assets)) {
+            if (!next.assets[id]) next.assets[id] = meta;
+        }
+        await CampaignAtlas.commit(next, payloads, 'Load Sample Campaign');
+        showToast(`Added ${added} sample campaign records.`, 4000);
+        openSampleCampaign(next.records[ids[0]]?.anchor.hexId);
+    } finally {
+        if (button) button.disabled = false;
+    }
+}
+
 async function clearCanvas() {
     if (CampaignAtlas.isBusy()) { showToast('Please wait for the campaign operation to finish.', 3000); return; }
     const confirmed = confirm(
@@ -379,8 +465,20 @@ async function clearCanvas() {
         'This cannot be undone. Continue?'
     );
     if (!confirmed) return;
-    try { if (window.dbManager) await window.dbManager.clearDB(true); }
-    catch (err) { alert(`Canvas was not cleared: ${err.message}`); return; }
+    let writesHeld = false;
+    try {
+        if (window.dbManager) {
+            window.dbManager.holdWrites();
+            writesHeld = true;
+            await window.dbManager.whenWritesSettle();
+            await window.dbManager.clearDB(true);
+        }
+    }
+    catch (err) {
+        if (writesHeld) window.dbManager.releaseWrites();
+        alert(`Canvas was not cleared: ${err.message}`);
+        return;
+    }
     CampaignAtlas.discard();
     window.campaignAtlas = CampaignAtlas.emptyStore();
     SystemInspector.reset();
@@ -392,6 +490,8 @@ async function clearCanvas() {
     if (typeof ApproachViewer !== 'undefined' && ApproachViewer.isOpen()) ApproachViewer.close();
     if (typeof SurfaceViewer  !== 'undefined' && SurfaceViewer.isOpen())  SurfaceViewer.close();
     if (typeof SystemViewer   !== 'undefined' && SystemViewer.isOpen())   SystemViewer.close();
+    window.campaignTime = null;
+    window.SystemViewer?.syncCampaignTimeFields?.();
 
     // Wipe IndexedDB so the next startup doesn't reload old data
 
@@ -402,6 +502,7 @@ async function clearCanvas() {
     // Clear all in-memory state
     hexStates.clear();
     window.sectorNames        = {};
+    window.sectorReview       = {};
     window.subsectorNames     = {};
     window.sectorRoutes      = [];
     window.routeDefinitions  = (typeof getDefaultRouteDefinitions === 'function') ? getDefaultRouteDefinitions() : [];
@@ -415,12 +516,20 @@ async function clearCanvas() {
     window.regionPaths          = new Map();
     window.borderDefinitions    = (typeof getDefaultBorderDefinitions === 'function') ? getDefaultBorderDefinitions() : [];
     window.regionDefinitions    = (typeof getDefaultRegionDefinitions === 'function') ? getDefaultRegionDefinitions() : [];
+    window.allegianceDefinitions = (typeof getDefaultAllegianceDefinitions === 'function') ? getDefaultAllegianceDefinitions() : [];
+    window.hexAllegianceAssignments = new Map();
     if (typeof window.renderBorderWindow === 'function') window.renderBorderWindow();
     if (typeof window.renderRegionWindow === 'function') window.renderRegionWindow();
 
     // Re-centre camera on the fresh 7×5 canvas
     centerCameraOnGrid();
 
+    if (window.dbManager) {
+        window.dbManager.allowAutosave();
+        window.dbManager.releaseWrites();
+        window.dbManager.saveCampaignTime();
+        window.dbManager.scheduleSyncAll();
+    }
     if (typeof draw === 'function') requestAnimationFrame(draw);
     if (typeof showToast === 'function') showToast('Canvas cleared. Ready for a new map.', 3000);
 }
@@ -467,10 +576,14 @@ function migrateToRouteDefinitions(segments) {
     const defs = (typeof getDefaultRouteDefinitions === 'function')
         ? getDefaultRouteDefinitions()
         : [
-            { id: 1, name: "XBoat Route",     color: "#00ff00", shortcut: "g", visible: true, automationRef: null },
-            { id: 2, name: "Trading Route",   color: "#ff0000", shortcut: "r", visible: true, automationRef: null },
-            { id: 3, name: "Secondary Route", color: "#ffff00", shortcut: "y", visible: true, automationRef: null }
+            { id: 1, name: "XBoat Route",   color: "#016a01", shortcut: "1", visible: true, automationRef: null },
+            { id: 2, name: "Trading Route", color: "#ff0000", shortcut: "2", visible: true, automationRef: null }
           ];
+    // Legacy files stamp Secondary segments onto slot 3. A fresh map no longer
+    // starts with that slot, so it is created only when the file actually has some.
+    if ((segments || []).some(seg => seg.type === 'Secondary') && !defs.some(d => d.id === 3)) {
+        defs.push({ id: 3, name: "Secondary Route", color: "#ffff00", shortcut: "3", visible: true, automationRef: null });
+    }
 
     const groupIdToRouteId = {};
     let nextId = 4;
@@ -616,6 +729,14 @@ function applyLoadedSettings(settings) {
     const starportModEl = document.getElementById('input-starport-mod');
     if (starportModEl) starportModEl.value = starportMod;
     localStorage.setItem('traveller_gen_starport_mod', String(starportMod));
+
+    // Absent on older saves, so a loaded map stays paused unless it says otherwise.
+    const playerKnowledge = s.playerKnowledgeExperimental === true;
+    window.playerKnowledgeExperimental = playerKnowledge;
+    const playerKnowledgeEl = document.getElementById('toggle-player-knowledge');
+    if (playerKnowledgeEl) playerKnowledgeEl.checked = playerKnowledge;
+    localStorage.setItem('traveller_player_knowledge', String(playerKnowledge));
+    if (typeof window.applyPlayerKnowledgeChrome === 'function') window.applyPlayerKnowledgeChrome(playerKnowledge);
 }
 
 async function applyLoadedMapData(parsedData) {
@@ -694,7 +815,16 @@ function _applyLoadedMapData(parsedData) {
         }
 
         window.sectorNames    = parsedData.sectorNames || {};
+        window.sectorReview   = (parsedData.sectorReview && typeof parsedData.sectorReview === 'object' && !Array.isArray(parsedData.sectorReview))
+            ? parsedData.sectorReview : {};
         window.subsectorNames = parsedData.subsectorNames || {};
+        window.allegianceDefinitions = Array.isArray(parsedData.allegianceDefinitions)
+            ? parsedData.allegianceDefinitions.map(def => ({ ...def }))
+            : (typeof getDefaultAllegianceDefinitions === 'function' ? getDefaultAllegianceDefinitions() : []);
+        if (typeof _migrateAllegianceDef === 'function') window.allegianceDefinitions.forEach(_migrateAllegianceDef);
+        window.hexAllegianceAssignments = Array.isArray(parsedData.hexAllegianceAssignments)
+            ? new Map(parsedData.hexAllegianceAssignments)
+            : new Map();
 
         // Restore border and region state
         window.borderDefinitions    = Array.isArray(parsedData.borderDefinitions) && parsedData.borderDefinitions.length > 0
@@ -799,6 +929,10 @@ function _applyLoadedMapData(parsedData) {
     }
 
     applyLoadedSettings(parsedData.settings);
+    window.campaignTime = (parsedData.campaignTime && Number.isFinite(parsedData.campaignTime.days))
+        ? { days: parsedData.campaignTime.days } : null;
+    window.SystemViewer?.syncCampaignTimeFields?.();
+    window.dbManager?.saveCampaignTime?.();
 
     selectedHexes.clear();
     document.getElementById('context-menu').classList.remove('visible');
@@ -808,6 +942,7 @@ function _applyLoadedMapData(parsedData) {
 
     // Sync the freshly loaded state to IndexedDB, replacing whatever was there.
     if (window.dbManager) {
+        window.dbManager.allowAutosave();
         window.dbManager.syncAllHexes();
         window.dbManager.saveRoutes();
         window.dbManager.saveGridDimensions();
@@ -816,6 +951,11 @@ function _applyLoadedMapData(parsedData) {
         window.dbManager.saveBorderPaths?.();
         window.dbManager.saveRegionDefinitions?.();
         window.dbManager.saveRegionPaths?.();
+        window.dbManager.saveSectorNames?.();
+        window.dbManager.saveSectorReview?.();
+        window.dbManager.saveSubsectorNames?.();
+        window.dbManager.saveAllegianceDefinitions?.();
+        window.dbManager.saveAllegianceAssignments?.();
     }
 }
 
@@ -943,7 +1083,8 @@ function setupObsidianExport() {
     // Release 2. The players' version applies to BOTH formats — the disclosure
     // filter lives in export_core, so the Obsidian wiki gets it for free.
     function _isPlayerVersion() {
-        return !!(versionSel && versionSel.value === 'player');
+        // Paused feature: the option is hidden, but hide-only is not a gate.
+        return window.playerKnowledgeExperimental === true && !!(versionSel && versionSel.value === 'player');
     }
 
     function _applyVersion() {
@@ -1416,7 +1557,7 @@ function _countRTTGasGiants(rttSystem) {
 }
 
 function generateT5TabData(sectorID) {
-    const header = "Hex\tName\tUWP\tBases\tRemarks\tZone\tPBG\tAllegiance\tStars\t{Ix}\t(Ex)\t[Cx]\tNobility\tW.\tNotes";
+    const header = "Hex\tName\tUWP\tBases\tRemarks\tZone\tPBG\tAllegiance\tStars\t{Ix}\t(Ex)\t[Cx]\tNobility\tW.\tRU\tNotes";
     let lines = [header];
 
     hexStates.forEach((state, hexId) => {
@@ -1428,12 +1569,15 @@ function generateT5TabData(sectorID) {
             const hexParts = hexId.split('-');
             const hexNum = hexParts[hexParts.length - 1];
 
-            // Bases (T5 Mapping)
-            let bases = "";
-            if (data.navalBase) bases += "N";
-            if (data.scoutBase) bases += "S";
-            if (data.researchBase) bases += "R";
-            if (data.tas) bases += "T";
+            // The imported Second Survey string (KM, NW, NS) is the bases
+            // field. Booleans only fill in worlds that were rolled here.
+            let bases = (data.baseCodes || "").trim();
+            if (!bases) {
+                if (data.navalBase) bases += "N";
+                if (data.scoutBase) bases += "S";
+                if (data.researchBase) bases += "R";
+                if (data.tas) bases += "T";
+            }
 
             // PBG (Pop-Multiplier, Belts, Gas Giants)
             const p = data.popDigit !== undefined ? data.popDigit : (data.pop > 0 ? 5 : 0);
@@ -1523,6 +1667,7 @@ function generateT5TabData(sectorID) {
                 cxVal,
                 state.t5Socio?.nobleCodes || state.t5Data?.nobleCodes || "-",
                 w,
+                (state.t5Socio && state.t5Socio.RU != null && state.t5Socio.RU !== "") ? state.t5Socio.RU : "",
                 state.notes || ""
             ];
             lines.push(row.join('\t'));
@@ -1660,7 +1805,7 @@ function setupSectorImporter() {
 }
 
 function importT5Tab(fileContent, fileName, forcedSectorSlot = null, bulkMode = false) {
-    if (!bulkMode) saveHistoryState('Import Sector');
+    if (!bulkMode) console.info('[History] Sector import is not undoable on a campaign of this size. Save a map file first.');
     const lines = fileContent.split(/\r?\n/);
     if (lines.length < 2) return;
 
@@ -1683,6 +1828,8 @@ function importT5Tab(fileContent, fileName, forcedSectorSlot = null, bulkMode = 
     const idxCx = getIndex('[Cx]');
     const idxW = getIndex('W.') !== -1 ? getIndex('W.') : getIndex('W');
     const idxNotes = getIndex('Notes');
+    const idxNobility = getIndex('Nobility');
+    const idxRU = getIndex('RU');
 
     if (idxHex === -1 || idxUWP === -1) {
         alert("Invalid file format. 'Hex' and 'UWP' columns (tab-separated) are required.");
@@ -1781,7 +1928,14 @@ function importT5Tab(fileContent, fileName, forcedSectorSlot = null, bulkMode = 
         const calcL = L === 0 ? 1 : L;
         const calcI = I_val === 0 ? 1 : I_val;
         const calcE = E_val === 0 ? 1 : E_val;
-        const RU = Math.abs(calcR * calcL * calcI * calcE);
+        // The tab file publishes RU, sign included. Rebuilding it from the
+        // extension drops that sign (Zeycude is -180, not 180).
+        const ruText = idxRU !== -1 ? (row[idxRU] || '').trim() : '';
+        const RU = /^-?\d+$/.test(ruText)
+            ? parseInt(ruText, 10)
+            : Math.abs(calcR * calcL * calcI * calcE);
+        const nobleCodes = idxNobility !== -1 ? (row[idxNobility] || '').trim() : '';
+        const baseCodes = idxBases !== -1 ? (row[idxBases] || '').trim() : '';
 
         const zoneRaw = (idxZone !== -1 ? row[idxZone] : "").trim().toUpperCase();
         const travelZone = zoneRaw === 'A' ? 'Amber' : (zoneRaw === 'R' ? 'Red' : 'Green');
@@ -1794,8 +1948,10 @@ function importT5Tab(fileContent, fileName, forcedSectorSlot = null, bulkMode = 
             planetoidBelts: belts,
             gasGiantsCount: gG,
             gasGiant: gG > 0,
-            navalBase: idxBases !== -1 && row[idxBases].includes('N'),
-            scoutBase: idxBases !== -1 && row[idxBases].includes('S'),
+            baseCodes,
+            navalBase: baseCodes.includes('N'),
+            scoutBase: baseCodes.includes('S'),
+            nobleCodes,
             worldCount: idxW !== -1 ? parseInt(row[idxW], 10) : undefined,
         };
 
@@ -1829,8 +1985,10 @@ function importT5Tab(fileContent, fileName, forcedSectorSlot = null, bulkMode = 
             worlds: idxW !== -1 ? parseInt(row[idxW], 10) : 1,
             ixString: (idxIx !== -1) ? row[idxIx] : `{${Ix >= 0 ? '+' : ''}${Ix}}`,
             exString: (idxEx !== -1) ? row[idxEx] : `(${toEHex(R)}${toEHex(L)}${toEHex(I_val)}${E_val >= 0 ? '+' : ''}${E_val})`,
-            cxString: (idxCx !== -1) ? row[idxCx] : `[${toEHex(H)}${toEHex(A)}${toEHex(S)}${toEHex(Sym)}]`
+            cxString: (idxCx !== -1) ? row[idxCx] : `[${toEHex(H)}${toEHex(A)}${toEHex(S)}${toEHex(Sym)}]`,
+            nobleCodes
         };
+        t5Socio.displayString = `${t5Socio.ixString} ${t5Socio.exString} ${t5Socio.cxString} RU:${RU}${nobleCodes ? ' ' + nobleCodes : ''}`;
 
         let t5System = { totalWorlds: idxW !== -1 ? parseInt(row[idxW], 10) : 1 };
         if (idxStars !== -1 && row[idxStars] !== "-") {
@@ -2063,7 +2221,7 @@ function _autoAssignXmlRoutes(groups, slotNum) {
     // not just the segments: ensureFreeRouteSlot() creates slots, and each group
     // recolours and may rename the slot it lands in. Without it Ctrl+Z took the
     // segments back but left the created, recoloured and renamed slots behind.
-    saveHistoryState('Import XML Metadata', { includeRouteDefinitions: true });
+    saveHistoryState('Import XML Metadata', { routes: true, includeRouteDefinitions: true });
     const coordLookup = _buildSectorCoordLookup();
     const sectorX     = (slotNum - 1) % gridWidth;
     const sectorY     = Math.floor((slotNum - 1) / gridWidth);
@@ -2221,7 +2379,7 @@ function setupTWImport() {
 
     function doImport() {
         try {
-            saveHistoryState('Import TW System');
+            saveHistoryState('Import TW System', { hexIds: [_hexId] });
             TravellerWorldsImporter.importSystem(_jsonObj, _hexId, 'T5');
             document.getElementById('tw-import-modal').style.display = 'none';
             if (typeof window.reapplyAllRules === 'function') window.reapplyAllRules();

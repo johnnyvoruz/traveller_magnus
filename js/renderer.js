@@ -129,7 +129,7 @@ function _defsStamp(defs) {
     let s = '';
     for (let i = 0; i < defs.length; i++) {
         const d = defs[i];
-        s += d.id + '\t' + (d.color || '') + '\t' + (d.visible === false ? '0' : '1') + '\t' + (d.name || '') + '\n';
+        s += d.id + '\t' + (d.color || '') + '\t' + (d.visible === false ? '0' : '1') + '\t' + (d.name || '') + '\t' + (d.style || '') + '\n';
     }
     return s;
 }
@@ -169,21 +169,40 @@ const LOD_GRID = 0.3;
 const LOD_LABELS = 0.85;
 const LOD_SNAP_DOTS = 0.05;
 const LOD_SNAP_GRID = 0.22;
-const LOD_SNAP_LABELS = 0.45;
 
-// Last full frame, reused while panning at the same zoom (TM tile blit).
+// Pan bitmap. Larger than the window by a margin on every side, so a drag
+// copies pixels that are already drawn. The on-screen canvas never shows a
+// strip of bare background where the map has not been painted yet.
+// Kept under PAN_CACHE_BUDGET; a viewport that already fills the budget is
+// drawn straight to the screen instead.
+const PAN_CACHE_BUDGET = 64 * 1024 * 1024;
 const _viewCache = {
     canvas: null,
+    ctx: null,
     zoom: 0,
     cameraX: 0,
     cameraY: 0,
-    w: 0,
-    h: 0,
+    dpr: 1,
+    screenW: 0,
+    screenH: 0,
+    margin: 0,
+    printMode: false,
     valid: false
 };
 let _drawRaf = 0;
+let _paintingPanCache = false;
+let _mapViewCssW = 0;
+let _mapViewCssH = 0;
+let _lodFrameAnimating = false;
 
 function _invalidateViewCache() { _viewCache.valid = false; }
+
+function _mapFrameCss() {
+    return {
+        w: _mapViewCssW || window.innerWidth,
+        h: _mapViewCssH || window.innerHeight
+    };
+}
 
 function scheduleDraw() {
     if (_drawRaf) return;
@@ -194,39 +213,230 @@ function scheduleDraw() {
 }
 window.scheduleDraw = scheduleDraw;
 
-function _saveViewCache() {
-    if (!canvas || canvas !== document.getElementById('map-canvas')) return;
-    if (!_viewCache.canvas) _viewCache.canvas = document.createElement('canvas');
-    if (_viewCache.canvas.width !== canvas.width || _viewCache.canvas.height !== canvas.height) {
-        _viewCache.canvas.width = canvas.width;
-        _viewCache.canvas.height = canvas.height;
+function _panMarginCss() {
+    const dpr = window.devicePixelRatio || 1;
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    if (w < 2 || h < 2) return 0;
+    const bpp = 4 * dpr * dpr;
+    if (w * h * bpp >= PAN_CACHE_BUDGET * 0.85) return 0;
+    let lo = 0;
+    let hi = Math.round(Math.min(w, h) * 0.5);
+    while (lo < hi) {
+        const mid = Math.ceil((lo + hi) / 2);
+        const bytes = (w + 2 * mid) * (h + 2 * mid) * bpp;
+        if (bytes <= PAN_CACHE_BUDGET) lo = mid;
+        else hi = mid - 1;
     }
-    const cctx = _viewCache.canvas.getContext('2d');
-    cctx.setTransform(1, 0, 0, 1, 0, 0);
-    cctx.clearRect(0, 0, canvas.width, canvas.height);
-    cctx.drawImage(canvas, 0, 0);
-    _viewCache.zoom = zoom;
-    _viewCache.cameraX = cameraX;
-    _viewCache.cameraY = cameraY;
-    _viewCache.w = canvas.width;
-    _viewCache.h = canvas.height;
-    _viewCache.valid = true;
+    return lo >= 32 ? lo : 0;
 }
 
-function _blitViewCache() {
-    if (!_viewCache.valid || !_viewCache.canvas) return false;
-    if (zoom !== _viewCache.zoom) return false;
-    if (canvas.width !== _viewCache.w || canvas.height !== _viewCache.h) return false;
+// CSS pixels of already-drawn map left around the window, or null when the
+// cached bitmap cannot cover this view.
+function _cacheSlackCss() {
+    const cache = _viewCache;
+    if (!cache.valid || !cache.canvas) return null;
     const dpr = window.devicePixelRatio || 1;
-    const dx = (_viewCache.cameraX - cameraX) * zoom * dpr;
-    const dy = (_viewCache.cameraY - cameraY) * zoom * dpr;
-    const maxPx = Math.max(64, Math.min(canvas.width, canvas.height) * 0.28);
-    if (Math.abs(dx) > maxPx || Math.abs(dy) > maxPx) return false;
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = window.printMode ? '#ffffff' : '#0b0c10';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(_viewCache.canvas, dx, dy);
+    if (cache.zoom !== zoom || cache.dpr !== dpr) return null;
+    if (cache.screenW !== window.innerWidth || cache.screenH !== window.innerHeight) return null;
+    if (cache.printMode !== !!window.printMode) return null;
+    const sx = (cameraX - cache.cameraX) * zoom * dpr;
+    const sy = (cameraY - cache.cameraY) * zoom * dpr;
+    const sw = window.innerWidth * dpr;
+    const sh = window.innerHeight * dpr;
+    if (sx < -1 || sy < -1) return null;
+    if (sx + sw > cache.canvas.width + 1 || sy + sh > cache.canvas.height + 1) return null;
+    return Math.min(
+        sx / dpr,
+        sy / dpr,
+        (cache.canvas.width - sx - sw) / dpr,
+        (cache.canvas.height - sy - sh) / dpr
+    );
+}
+
+function _rebuildPanCache(forcedMargin) {
+    const margin = forcedMargin == null ? _panMarginCss() : forcedMargin;
+    if (!(zoom > 0)) return false;
+    if (forcedMargin == null && margin < 32) return false;
+    const dpr = window.devicePixelRatio || 1;
+    const cssW = window.innerWidth + margin * 2;
+    const cssH = window.innerHeight + margin * 2;
+    if (!_viewCache.canvas) {
+        _viewCache.canvas = document.createElement('canvas');
+        _viewCache.ctx = _viewCache.canvas.getContext('2d', { alpha: false });
+    }
+    const off = _viewCache.canvas;
+    const devW = Math.max(1, Math.round(cssW * dpr));
+    const devH = Math.max(1, Math.round(cssH * dpr));
+    if (off.width !== devW) off.width = devW;
+    if (off.height !== devH) off.height = devH;
+    const screenCanvas = canvas;
+    const screenCtx = ctx;
+    const savedX = cameraX;
+    const savedY = cameraY;
+    _paintingPanCache = true;
+    _mapViewCssW = cssW;
+    _mapViewCssH = cssH;
+    canvas = off;
+    ctx = _viewCache.ctx;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+    cameraX = savedX - margin / zoom;
+    cameraY = savedY - margin / zoom;
+    let painted = false;
+    try {
+        draw();
+        painted = true;
+    } finally {
+        cameraX = savedX;
+        cameraY = savedY;
+        canvas = screenCanvas;
+        ctx = screenCtx;
+        _paintingPanCache = false;
+        _mapViewCssW = 0;
+        _mapViewCssH = 0;
+    }
+    if (!painted) return false;
+    _viewCache.zoom = zoom;
+    _viewCache.cameraX = savedX - margin / zoom;
+    _viewCache.cameraY = savedY - margin / zoom;
+    _viewCache.dpr = dpr;
+    _viewCache.screenW = window.innerWidth;
+    _viewCache.screenH = window.innerHeight;
+    _viewCache.margin = margin;
+    _viewCache.printMode = !!window.printMode;
+    _viewCache.valid = true;
     return true;
+}
+
+function _presentPanCache() {
+    const cache = _viewCache;
+    const dpr = cache.dpr;
+    let sx = Math.round((cameraX - cache.cameraX) * zoom * dpr);
+    let sy = Math.round((cameraY - cache.cameraY) * zoom * dpr);
+    let sw = window.innerWidth * dpr;
+    let sh = window.innerHeight * dpr;
+    if (sx < 0) { sw += sx; sx = 0; }
+    if (sy < 0) { sh += sy; sy = 0; }
+    if (sx + sw > cache.canvas.width) sw = cache.canvas.width - sx;
+    if (sy + sh > cache.canvas.height) sh = cache.canvas.height - sy;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = 1;
+    if (sw > 0 && sh > 0) ctx.drawImage(cache.canvas, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+    // Sticky titles and territory names are laid out for the window, so they
+    // are painted after the bitmap instead of being dragged along with it.
+    _paintPinnedMapLabels();
+}
+
+// Draw the cached map at the current zoom, anchored to the camera, so a zoom
+// wheel scales the picture that is already on screen. The sharp frame replaces
+// it when the offscreen paint finishes. Gaps outside the cache stay the map
+// background only until that frame; the visible canvas is not cleared first.
+function _presentScaledCache() {
+    const cache = _viewCache;
+    if (!cache.valid || !cache.canvas || !(cache.zoom > 0) || !(zoom > 0)) return false;
+    const dpr = window.devicePixelRatio || 1;
+    if (cache.dpr !== dpr || cache.printMode !== !!window.printMode) return false;
+    if (cache.screenW !== window.innerWidth || cache.screenH !== window.innerHeight) return false;
+    const zScale = cache.zoom / zoom;
+    let sx = (cameraX - cache.cameraX) * cache.zoom * dpr;
+    let sy = (cameraY - cache.cameraY) * cache.zoom * dpr;
+    let sw = canvas.width * zScale;
+    let sh = canvas.height * zScale;
+    let dx = 0;
+    let dy = 0;
+    let dw = canvas.width;
+    let dh = canvas.height;
+    const srcW = cache.canvas.width;
+    const srcH = cache.canvas.height;
+    if (sx < 0) {
+        dx += -sx / zScale;
+        dw -= -sx / zScale;
+        sw += sx;
+        sx = 0;
+    }
+    if (sy < 0) {
+        dy += -sy / zScale;
+        dh -= -sy / zScale;
+        sh += sy;
+        sy = 0;
+    }
+    if (sx + sw > srcW) {
+        const cut = sx + sw - srcW;
+        dw -= cut / zScale;
+        sw -= cut;
+    }
+    if (sy + sh > srcH) {
+        const cut = sy + sh - srcH;
+        dh -= cut / zScale;
+        sh -= cut;
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = 1;
+    ctx.imageSmoothingEnabled = true;
+    const bg = window.printMode ? '#ffffff' : '#0b0c10';
+    ctx.fillStyle = bg;
+    if (dx > 0.5) ctx.fillRect(0, 0, dx, canvas.height);
+    if (dx + dw < canvas.width - 0.5) ctx.fillRect(dx + dw, 0, canvas.width - (dx + dw), canvas.height);
+    if (dy > 0.5) ctx.fillRect(dx, 0, Math.max(0, dw), dy);
+    if (dy + dh < canvas.height - 0.5) ctx.fillRect(dx, dy + dh, Math.max(0, dw), canvas.height - (dy + dh));
+    if (sw > 1 && sh > 1 && dw > 1 && dh > 1) ctx.drawImage(cache.canvas, sx, sy, sw, sh, dx, dy, dw, dh);
+    _paintPinnedMapLabels();
+    return true;
+}
+
+function _paintPinnedMapLabels() {
+    // The scale blit runs before the sharp frame. Snap here so a zoom-out does
+    // not lay out titles that this zoom has already turned off.
+    _applyTextLod();
+    const dpr = window.devicePixelRatio || 1;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (_lod.subLabels.alpha > 0.001) {
+        const size = baseHexSize;
+        ctx.save();
+        ctx.scale(zoom, zoom);
+        ctx.translate(-cameraX, -cameraY);
+        drawSubsectorTitles(_lod.subLabels.alpha, 1.5 * size, Math.sqrt(3) * size, size, false);
+        ctx.restore();
+    }
+    drawBorderNames();
+    drawRegionNames();
+}
+
+// While a pan is in progress, show the cached margin. Rebuild it only when
+// the window is about to slide off the bitmap, then show the new one.
+function _presentPanIfDragging() {
+    if (canvas !== document.getElementById('map-canvas')) return false;
+    if (typeof isDragging === 'undefined' || !isDragging) return false;
+    if (typeof isPainting !== 'undefined' && isPainting) return false;
+    if (typeof isAltDragging !== 'undefined' && isAltDragging) return false;
+    const slack = _cacheSlackCss();
+    const limit = _viewCache.margin ? Math.min(48, _viewCache.margin * 0.25) : 48;
+    if (slack == null || slack < limit) {
+        if (_viewCache.valid && _viewCache.zoom !== zoom) _presentScaledCache();
+        if (!_rebuildPanCache()) return false;
+    }
+    const t0 = window.showMapPerf ? performance.now() : 0;
+    _presentPanCache();
+    if (window.showMapPerf) _drawPerfOverlay(performance.now() - t0, 0, 0, 0, 0, true);
+    return true;
+}
+
+// Live frames paint offscreen and then copy. The on-screen canvas is never
+// cleared at the start of a long render, which is what flashed black on zoom.
+function _presentLiveFrame() {
+    if (_presentPanIfDragging()) {
+        if (_lodFrameAnimating) requestAnimationFrame(draw);
+        return true;
+    }
+    if (_viewCache.valid && _viewCache.zoom !== zoom) _presentScaledCache();
+    if (_rebuildPanCache() || _rebuildPanCache(0)) {
+        _presentPanCache();
+        if (_lodFrameAnimating) requestAnimationFrame(draw);
+        return true;
+    }
+    return false;
 }
 
 function _starHash(x, y) {
@@ -332,8 +542,9 @@ function _drawPerfOverlay(ms, fills, routes, borders, worlds, blit) {
     window._mapDrawPerf = { ms, fills, routes, borders, worlds, blit: !!blit };
 }
 
-// LOD fades — 500ms ease-out so dots, hex grid, world labels, and sector names
-// do not pop in. First draw (and off-screen captures) snap to the target.
+// LOD fades — 500ms ease-out for dots and the hex grid. World labels, subsector
+// titles, and sector names snap on and off: easing them rebuilds the pan bitmap
+// and lays the titles out again on every frame of the fade.
 const LOD_FADE_MS = 500;
 const _lod = {
     dots:        { alpha: 0, target: null, from: 0, t0: 0 },
@@ -357,6 +568,24 @@ function _syncLodLayer(name, on, now, snap) {
     layer.from = layer.alpha;
     layer.t0 = now;
     layer.target = t;
+}
+
+// Text is redrawn from scratch. An in-between alpha does not reuse the last
+// glyphs, so a fade is a full extra paint. On or off only.
+function _snapLodLayer(name, on) {
+    const layer = _lod[name];
+    const t = on ? 1 : 0;
+    layer.alpha = t;
+    layer.target = t;
+    layer.from = t;
+}
+
+function _applyTextLod() {
+    const wantLabels = zoom >= LOD_LABELS;
+    const namesOn = typeof showSectorNames !== 'undefined' && !!showSectorNames;
+    _snapLodLayer('labels', wantLabels);
+    _snapLodLayer('sectorNames', namesOn && !wantLabels && !!showSubsectorBorders);
+    _snapLodLayer('subLabels', namesOn && wantLabels);
 }
 
 function _tickLod(now, snap) {
@@ -513,6 +742,13 @@ function _ensureFillPaths() {
     return out;
 }
 
+function _routeDash(style) {
+    const s = (style || '').toLowerCase();
+    if (s === 'dashed') return [8, 5];
+    if (s === 'dotted') return [1.5, 3];
+    return [];
+}
+
 function _appendRouteLine(path, route, gap) {
     const sPx = _hexGeom(route.startId);
     const ePx = _hexGeom(route.endId);
@@ -575,12 +811,12 @@ function _ensureRouteStrokes(showFilter, gap) {
     }
 
     const strokes = [];
-    filterByColor.forEach((path, color) => strokes.push({ color, path }));
+    filterByColor.forEach((path, color) => strokes.push({ color, path, dash: [] }));
     for (let i = 0; i < defs.length; i++) {
         const def = defs[i];
         if (def.visible === false) continue;
         const path = defPaths.get(def.id);
-        if (path) strokes.push({ color: def.color, path });
+        if (path) strokes.push({ color: def.color, path, dash: _routeDash(def.style) });
     }
     const typeColors = { Xboat: '#00ff00', Trade: '#ff0000', Secondary: '#ffff00' };
     legacyByType.forEach((path, type) => {
@@ -618,17 +854,15 @@ function getHexPath(x, y, size) {
 function draw() {
     // 1. Structural Safety Check
     if (!initCanvas()) return;
+    if (!_paintingPanCache && canvas === document.getElementById('map-canvas')) {
+        _lodFrameAnimating = false;
+        if (_presentLiveFrame()) return;
+    }
 
     const _perfOn = !!window.showMapPerf;
     const _drawT0 = _perfOn ? performance.now() : 0;
     let _perfFills = 0, _perfRoutes = 0, _perfBorders = 0, _perfWorlds = 0;
-    const snapLod = canvas !== document.getElementById('map-canvas');
-    const panBlitting = !snapLod && typeof isDragging !== 'undefined' && isDragging
-        && !isPainting && !isAltDragging;
-    if (panBlitting && _blitViewCache()) {
-        if (_perfOn) _drawPerfOverlay(performance.now() - _drawT0, 0, 0, 0, 0, true);
-        return;
-    }
+    const snapLod = !_paintingPanCache && canvas !== document.getElementById('map-canvas');
 
     // 2. Clear the canvas using the actual pixel dimensions
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -652,11 +886,12 @@ function draw() {
     const widthStep = (3 / 2) * size;
     const heightStep = Math.sqrt(3) * size;
 
-    // 6. Calculate visible bounds
+    // 6. Calculate visible bounds. A pan-cache paint uses the larger bitmap.
+    const frame = _mapFrameCss();
     const viewLeft = cameraX;
-    const viewRight = cameraX + window.innerWidth / zoom;
+    const viewRight = cameraX + frame.w / zoom;
     const viewTop = cameraY;
-    const viewBottom = cameraY + window.innerHeight / zoom;
+    const viewBottom = cameraY + frame.h / zoom;
 
     const qMin = Math.floor(viewLeft / widthStep) - 2;
     const qMax = Math.ceil(viewRight / widthStep) + 2;
@@ -671,33 +906,21 @@ function draw() {
     const visR = Math.min(MAX_GLOBAL_R, rMax) - Math.max(0, rMin) + 1;
     const visCells = visQ * visR;
 
-    // LOD: Computed once per frame, then faded over 500ms instead of snapping.
+    // LOD: dots and the hex grid fade. Text snaps on or off.
     // Below HEX_FILLS, hex washes and real routes are replaced with simplified
     // polity loops + a cheap starfield (TravellerMap Charted Space view).
     const wantDots = zoom >= LOD_DOTS && visCells <= 12000;
     const wantRoutes = zoom >= LOD_ROUTES;
     const wantGrid = zoom >= LOD_GRID;
-    const wantLabels = zoom >= LOD_LABELS;
-    const wantSectorNames = !!(showSectorNames && !wantLabels && showSubsectorBorders);
-    const wantSubLabels = !!(showSectorNames && wantLabels);
     const now = performance.now();
+    _applyTextLod();
     _syncLodLayer('dots', wantDots, now, snapLod);
     _syncLodLayer('grid', wantGrid, now, snapLod);
-    _syncLodLayer('labels', wantLabels, now, snapLod);
-    _syncLodLayer('sectorNames', wantSectorNames, now, snapLod);
-    _syncLodLayer('subLabels', wantSubLabels, now, snapLod);
     _syncLodLayer('regionNames', !!window.regionNamesEnabled, now, snapLod);
     _syncLodLayer('borderNames', !!window.borderNamesEnabled, now, snapLod);
     const lodAnimating = _tickLod(now, snapLod);
-    // Fast zoom-out would otherwise keep the per-hex label pass alive over the
-    // whole universe for the rest of the 500ms fade. Below ~0.45 the type is
-    // already unreadable, so snap the rest of that fade off.
-    if (!wantLabels && zoom < LOD_SNAP_LABELS) {
-        _lod.labels.alpha = 0;
-        _lod.labels.target = 0;
-    }
-    // Same for the hex-outline pass: fading grid alpha still visits every
-    // on-screen cell. At universe scale that is 40k–160k Path2D strokes.
+    // Fading grid alpha still visits every on-screen cell. At universe scale
+    // that is 40k–160k Path2D strokes.
     if (!wantGrid && zoom < LOD_SNAP_GRID) {
         _lod.grid.alpha = 0;
         _lod.grid.target = 0;
@@ -871,7 +1094,9 @@ function draw() {
             const strokes = _ensureRouteStrokes(showFilter, gap);
             for (let i = 0; i < strokes.length; i++) {
                 ctx.strokeStyle = strokes[i].color;
+                ctx.setLineDash(strokes[i].dash || []);
                 ctx.stroke(strokes[i].path);
+                ctx.setLineDash([]);
             }
         } else {
         // Pre-build segment usage map for side-by-side offset computation.
@@ -983,9 +1208,11 @@ function draw() {
             const defRoutes = byDefId.get(def.id);
             if (!defRoutes || defRoutes.length === 0) return;
             ctx.strokeStyle = def.color;
+            ctx.setLineDash(_routeDash(def.style));
             ctx.beginPath();
             defRoutes.forEach(r => drawRouteSegment(r));
             ctx.stroke();
+            ctx.setLineDash([]);
         });
 
         const typeColors = { Xboat: '#00ff00', Trade: '#ff0000', Secondary: '#ffff00' };
@@ -1571,6 +1798,19 @@ function draw() {
                             ctx.fill();
                         }
 
+                        // Base codes other than N and S (K naval, M military, W way
+                        // station, and the rest of the Second Survey list). N and S
+                        // already have icons.
+                        if (showText && data.baseCodes && /[^NS]/.test(data.baseCodes) && _mapShow(hexId, 'g')) {
+                            ctx.save();
+                            ctx.font = `${pFontSmall}px 'Inter', sans-serif`;
+                            ctx.fillStyle = pTextColor;
+                            ctx.textAlign = 'right';
+                            ctx.textBaseline = 'middle';
+                            ctx.fillText(data.baseCodes, cx - symOffset - 2, cy);
+                            ctx.restore();
+                        }
+
                         // 8. Naval Base — 6-point star TOP-LEFT of dot
                         if (showText && data.navalBase && _mapShow(hexId, 'g')) {
                             const sx = cx - symOffset + GUI_CONFIG.OFFSETS.BASE_X_ADJ;
@@ -1656,7 +1896,8 @@ function draw() {
                                 ? data.uwp.slice(0, -1) + data.industry
                                 : data.uwp;
                             ctx.fillText(topLabel, cx, cy - (size * 0.75));
-                            ctx.fillText(displayUwp910 + tcs, cx, cy - (size * 0.75) + fontSize * 1.2);
+                            const baseBit = data.baseCodes ? ' ' + data.baseCodes : '';
+                            ctx.fillText(displayUwp910 + tcs + baseBit, cx, cy - (size * 0.75) + fontSize * 1.2);
 
                             if (stateObj.t5Socio) {
                                 let sStrings = stateObj.t5Socio.displayStrings || [stateObj.t5Socio.displayString];
@@ -1768,7 +2009,7 @@ function draw() {
         }
     }
 
-    if (subLabelAlpha > 0.001) {
+    if (subLabelAlpha > 0.001 && !_paintingPanCache) {
         drawSubsectorTitles(subLabelAlpha, widthStep, heightStep, size, snapLod);
     }
 
@@ -1798,41 +2039,64 @@ function draw() {
     // Screen-space pills. World-space strokeText used a font of ~22/zoom px
     // (hundreds of pixels when zoomed out) and Chrome rasterizes that before
     // the camera scale — turning names on froze a full-OTU view.
-    drawBorderNames();
-    drawRegionNames();
+    // The pan bitmap leaves these to _presentPanCache so they stay pinned
+    // to the window instead of sliding with the copy.
+    if (!_paintingPanCache) {
+        drawBorderNames();
+        drawRegionNames();
+    }
 
-    if (!snapLod) _saveViewCache();
+    _lodFrameAnimating = !!(lodAnimating && !snapLod);
+    if (_lodFrameAnimating && !_paintingPanCache && canvas === document.getElementById('map-canvas')) {
+        requestAnimationFrame(draw);
+    }
 
-    if (lodAnimating && !snapLod) requestAnimationFrame(draw);
+    // A direct paint of the live canvas bypassed the offscreen frame. Drop
+    // the bitmap so the next gesture rebuilds it instead of sliding stale pixels.
+    if (!_paintingPanCache && canvas === document.getElementById('map-canvas')) _invalidateViewCache();
 
-    if (_perfOn && !snapLod) {
+    if (_perfOn && !snapLod && !_paintingPanCache) {
         _drawPerfOverlay(performance.now() - _drawT0, _perfFills, _perfRoutes, _perfBorders, _perfWorlds, false);
     }
 }
 
 // ============================================================================
 // SUBSECTOR TITLES (zoomed-in chrome)
-// When the diagonal sector name is gone, pin "Sector - Subsector" to the top
-// of each visible subsector so the viewer still has map context.
+// "Sector - Subsector" stays on the map as a small cartouche pinned inside the
+// visible part of its own subsector, like a sticky header. It prefers the
+// top-left and slides along that area's edges to the first spot that covers
+// no system. It never covers the system the user is looking at; when every
+// spot would, the title is left off.
 // ============================================================================
 
-function drawSubsectorTitles(alpha, widthStep, heightStep, size, offscreen) {
-    const viewLeft   = cameraX;
-    const viewRight  = cameraX + (offscreen ? canvas.width : window.innerWidth) / zoom;
-    const viewTop    = cameraY;
-    const viewBottom = cameraY + (offscreen ? canvas.height : window.innerHeight) / zoom;
+function _rectHitsCircle(rx, ry, rw, rh, cx, cy, rad) {
+    const nx = Math.max(rx, Math.min(cx, rx + rw));
+    const ny = Math.max(ry, Math.min(cy, ry + rh));
+    const dx = cx - nx;
+    const dy = cy - ny;
+    return dx * dx + dy * dy < rad * rad;
+}
 
-    let insetL = 0;
+function drawSubsectorTitles(alpha, widthStep, heightStep, size, offscreen) {
+    const viewW = offscreen ? canvas.width : window.innerWidth;
+    const viewH = offscreen ? canvas.height : window.innerHeight;
+    const viewLeft = cameraX;
+    const viewRight = cameraX + viewW / zoom;
+    const viewTop = cameraY;
+    const viewBottom = cameraY + viewH / zoom;
+
+    let insetL = 12;
     let insetT = 0;
     if (!offscreen) {
         const leftPx = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--workspace-left')) || 68;
-        insetL = leftPx / zoom;
-        insetT = 56 / zoom;
+        insetL = leftPx + 12;
+        const chrome = document.getElementById('map-chrome');
+        const chromeBottom = chrome ? chrome.getBoundingClientRect().bottom : 48;
+        insetT = Math.max(56, chromeBottom + 6);
     }
 
-    const clipL = viewLeft + insetL;
-    const clipT = viewTop + insetT;
-    const pad = 14 / zoom;
+    const clipL = viewLeft + (offscreen ? 0 : (insetL - 12) / zoom);
+    const clipT = viewTop + insetT / zoom;
     const minSpanX = 56 / zoom;
     const minSpanY = 24 / zoom;
 
@@ -1842,10 +2106,38 @@ function drawSubsectorTitles(alpha, widthStep, heightStep, size, offscreen) {
     const row1 = Math.min(gridHeight * 4 - 1, Math.floor((viewBottom / heightStep) / 10));
     if (col1 < col0 || row1 < row0) return;
 
-    ctx.save();
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
+    const maxQ = gridWidth * 32 - 1;
+    const maxR = gridHeight * 40 - 1;
+    const qA = Math.max(0, Math.floor((viewLeft - size) / widthStep) - 1);
+    const qB = Math.min(maxQ, Math.ceil((viewRight + size) / widthStep) + 1);
+    const rA = Math.max(0, Math.floor((viewTop - size) / heightStep) - 1);
+    const rB = Math.min(maxR, Math.ceil((viewBottom + size) / heightStep) + 1);
+    // Systems the user is looking at are never covered: the inspected or
+    // campaign-focused hex, selected hexes, whatever sits at the view center,
+    // and the point the user last zoomed toward.
+    const inspected = window.SystemInspector?.inspectedHexId?.();
+    const focused = window.CampaignAtlas?.focusedHexId?.();
+    const focusPoints = [{ x: cameraX + viewW / 2 / zoom, y: cameraY + viewH / 2 / zoom }];
+    if (!offscreen && window.mapZoomFocus) focusPoints.push(window.mapZoomFocus);
+    const systems = [];
+    for (let q = qA; q <= qB; q++) {
+        for (let r = rA; r <= rB; r++) {
+            const id = getHexId(q, r);
+            const state = id && hexStates.get(id);
+            if (!state || state.type !== 'SYSTEM_PRESENT' || state.isHiddenByFilter) continue;
+            const pixel = getHexPixel(q, r);
+            const guarded = !offscreen && (id === inspected || id === focused || selectedHexes.has(id)
+                || focusPoints.some(p => Math.hypot(p.x - pixel.x, p.y - pixel.y) < size));
+            systems.push({ x: (pixel.x - cameraX) * zoom, y: (pixel.y - cameraY) * zoom, guarded });
+        }
+    }
+    // Glyph, name, and UWP fill most of a hex. A guarded system keeps its whole
+    // hex, hex number included.
+    const hitR = size * zoom * 0.8;
+    const coreR = size * zoom * 0.35;
+    const guardR = size * zoom;
 
+    const entries = [];
     for (let subRow = row0; subRow <= row1; subRow++) {
         for (let subCol = col0; subCol <= col1; subCol++) {
             const sX = Math.floor(subCol / 4);
@@ -1858,56 +2150,139 @@ function drawSubsectorTitles(alpha, widthStep, heightStep, size, offscreen) {
             const subName = (typeof getSubsectorName === 'function')
                 ? getSubsectorName(sectorNum, letter)
                 : `Subsector ${letter}`;
-            const label = sectorName + ' - ' + subName;
 
             const q0 = sX * 32 + subX * 8;
             const q1 = q0 + 7;
             const r0 = sY * 40 + subY * 10;
             const r1 = r0 + 9;
-            const left   = widthStep * q0 - size * 0.2;
-            const right  = widthStep * q1 + size * 0.8;
-            const top    = heightStep * r0 - size * 0.15;
+            const left = widthStep * q0 - size * 0.2;
+            const right = widthStep * q1 + size * 0.8;
+            const top = heightStep * r0 - size * 0.15;
             const bottom = heightStep * (r1 + 0.5) + size * 0.2;
-
             const visL = Math.max(left, clipL);
             const visR = Math.min(right, viewRight);
             const visT = Math.max(top, clipT);
             const visB = Math.min(bottom, viewBottom);
             if (visR - visL < minSpanX || visB - visT < minSpanY) continue;
 
-            const x = (visL + visR) / 2;
-            const y = visT + pad;
-
-            let fontPx = 13 / zoom;
-            ctx.font = `600 ${fontPx}px 'Inter', sans-serif`;
-            let textW = ctx.measureText(label).width;
-            const maxW = visR - visL - pad * 2;
-            if (maxW > 0 && textW > maxW) {
-                fontPx *= maxW / textW;
-                if (fontPx * zoom < 9) continue;
-                ctx.font = `600 ${fontPx}px 'Inter', sans-serif`;
-                textW = ctx.measureText(label).width;
-            }
-
-            const hPad = fontPx * 0.55;
-            const vPad = fontPx * 0.32;
-            const bgW = textW + hPad * 2;
-            const bgH = fontPx + vPad * 2;
-            const bgX = x - bgW / 2;
-            const bgY = y - vPad * 0.15;
-            const radius = Math.min(fontPx * 0.3, bgH / 2);
-
-            ctx.globalAlpha = alpha * 0.55;
-            ctx.fillStyle = window.printMode ? '#ffffff' : '#000000';
-            ctx.beginPath();
-            if (ctx.roundRect) ctx.roundRect(bgX, bgY, bgW, bgH, radius);
-            else ctx.rect(bgX, bgY, bgW, bgH);
-            ctx.fill();
-
-            ctx.globalAlpha = alpha * 0.95;
-            ctx.fillStyle = window.printMode ? '#09695e' : '#66fcf1';
-            ctx.fillText(label, x, y + vPad * 0.35);
+            entries.push({
+                label: sectorName + ' - ' + subName,
+                sx0: (visL - cameraX) * zoom,
+                sy0: (visT - cameraY) * zoom,
+                sx1: (visR - cameraX) * zoom,
+                sy1: (visB - cameraY) * zoom
+            });
         }
+    }
+    if (!entries.length) return;
+
+    ctx.save();
+    const dpr = offscreen ? 1 : (window.devicePixelRatio || 1);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+
+    const occupied = [];
+    // How much of the map a pill at (x, y) hides: a system's glyph counts ten
+    // times its hex number or name. Infinity when it would cover a guarded
+    // system or another title. Stops counting once `limit` is reached.
+    function cost(near, x, y, w, h, limit) {
+        for (let i = 0; i < occupied.length; i++) {
+            const o = occupied[i];
+            if (x < o.x + o.w && x + w > o.x && y < o.y + o.h && y + h > o.y) return Infinity;
+        }
+        let n = 0;
+        for (let i = 0; i < near.length; i++) {
+            const s = near[i];
+            if (s.guarded) {
+                if (_rectHitsCircle(x, y, w, h, s.x, s.y, guardR)) return Infinity;
+            } else if (_rectHitsCircle(x, y, w, h, s.x, s.y, hitR)) {
+                n += _rectHitsCircle(x, y, w, h, s.x, s.y, coreR) ? 10 : 1;
+                if (n >= limit) return n;
+            }
+        }
+        return n;
+    }
+    // Spots along the inside edge of the subsector's visible area: the top
+    // edge left to right, then the bottom edge, then down the sides. The title
+    // reads as a header or footer of its subsector and never drifts toward the
+    // middle of the view.
+    function edgeSpots(entry, w, h) {
+        const m = 4;
+        const xL = entry.sx0 + m;
+        const yT = entry.sy0 + m;
+        const xR = Math.max(xL, entry.sx1 - w - m);
+        const yB = Math.max(yT, entry.sy1 - h - m);
+        const step = Math.max(12, h);
+        const spots = [];
+        const row = y => {
+            for (let x = xL; ; x = Math.min(xR, x + step)) {
+                spots.push({ x, y });
+                if (x >= xR) break;
+            }
+        };
+        row(yT);
+        if (yB > yT) row(yB);
+        for (let y = yT + step; y < yB; y += step) {
+            spots.push({ x: xL, y });
+            if (xR > xL) spots.push({ x: xR, y });
+        }
+        return spots;
+    }
+
+    const placements = [];
+    for (let i = 0; i < entries.length; i++) {
+        const entry = entries[i];
+        let fontPx = 13;
+        ctx.font = `600 ${fontPx}px 'Inter', sans-serif`;
+        let textW = ctx.measureText(entry.label).width;
+        const room = Math.min(entry.sx1 - entry.sx0, viewW - insetL) - 24;
+        if (room > 0 && textW > room) {
+            fontPx *= room / textW;
+            if (fontPx < 9) continue;
+            ctx.font = `600 ${fontPx}px 'Inter', sans-serif`;
+            textW = ctx.measureText(entry.label).width;
+        }
+        const hPad = fontPx * 0.55;
+        const vPad = fontPx * 0.32;
+        const pillW = textW + hPad * 2;
+        const pillH = fontPx + vPad * 2;
+        const near = systems.filter(s =>
+            s.x > entry.sx0 - guardR && s.x < entry.sx1 + guardR && s.y > entry.sy0 - guardR && s.y < entry.sy1 + guardR);
+        const spots = edgeSpots(entry, pillW, pillH);
+        let best = null;
+        let bestCost = Infinity;
+        for (let s = 0; s < spots.length && bestCost > 0; s++) {
+            const c = cost(near, spots[s].x, spots[s].y, pillW, pillH, bestCost);
+            if (c < bestCost) { best = spots[s]; bestCost = c; }
+        }
+        // Every spot would cover a guarded system or another title: leave it off.
+        if (!best) continue;
+        const pillX = best.x;
+        const pillY = best.y;
+        occupied.push({ x: pillX, y: pillY, w: pillW, h: pillH });
+        // Center on the capital height so the pill reads balanced whether or
+        // not the name has descenders.
+        const capH = ctx.measureText('H').actualBoundingBoxAscent || fontPx * 0.72;
+        placements.push({
+            label: entry.label, fontPx, textW, hPad, vPad, pillW, pillH,
+            textX: pillX + hPad, textY: pillY + (pillH + capH) / 2, pillX, pillY
+        });
+    }
+
+    for (let i = 0; i < placements.length; i++) {
+        const pill = placements[i];
+        const radius = Math.min(pill.fontPx * 0.3, pill.pillH / 2);
+        ctx.font = `600 ${pill.fontPx}px 'Inter', sans-serif`;
+        ctx.globalAlpha = alpha * 0.55;
+        ctx.fillStyle = window.printMode ? '#ffffff' : '#000000';
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(pill.pillX, pill.pillY, pill.pillW, pill.pillH, radius);
+        else ctx.rect(pill.pillX, pill.pillY, pill.pillW, pill.pillH);
+        ctx.fill();
+        ctx.globalAlpha = alpha * 0.95;
+        ctx.fillStyle = window.printMode ? '#09695e' : '#66fcf1';
+        ctx.fillText(pill.label, pill.textX, pill.textY);
     }
 
     ctx.restore();
@@ -2045,10 +2420,11 @@ function drawBorderGroups() {
     if (!_borderGeomCache) _rebuildBorderGeomCache();
     if (!_borderGeomCache || _borderGeomCache.length === 0) return;
 
+    const frame = _mapFrameCss();
     const viewLeft   = cameraX;
-    const viewRight  = cameraX + window.innerWidth / zoom;
+    const viewRight  = cameraX + frame.w / zoom;
     const viewTop    = cameraY;
-    const viewBottom = cameraY + window.innerHeight / zoom;
+    const viewBottom = cameraY + frame.h / zoom;
     const pad = baseHexSize * 2;
 
     ctx.save();

@@ -180,12 +180,12 @@ window.applyPlayerKnowledge = function (tagId, hexList, opts = {}) {
     }
     if (tagId == null || tagId === '') {
         if (hexList.every(id => !isDisclosureSet(id))) return false;
-        saveHistoryState('Clear Disclosure');
+        saveHistoryState('Clear Disclosure', { hexIds: hexList });
         hexList.forEach(id => clearDisclosure(id));
         showToast(`${hexList.length} hex(es) set to Default.`, 2500);
     } else {
         const allOn = hexList.every(id => hasDisclosureTag(id, tagId));
-        saveHistoryState('Assign Disclosure');
+        saveHistoryState('Assign Disclosure', { hexIds: hexList });
         hexList.forEach(id => setDisclosureTag(id, tagId, !allOn));
         const def = getDisclosureDef(tagId);
         showToast(`${hexList.length} hex(es): ${def ? def.name : tagId} ${allOn ? 'off' : 'on'}.`, 2500);

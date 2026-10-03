@@ -9,6 +9,12 @@
 // on a planet actually enlarges it. Double-click frames that body and its
 // local children (a star’s worlds, a world’s moons).
 //
+// Disc size is a compressed reading of the stored diameter (solar diameters
+// for stars, kilometres for worlds). Order is kept — a larger body draws
+// larger — and a cap stops a supergiant filling the map. Orbits keep their
+// AU spacing, shifted outward so the innermost ring starts outside the star
+// disc. Neither transform writes back into the system.
+//
 // Lineup (Horizontal / Vertical) keeps the same bodies and arcs, but parks
 // every orbiting body on one axis in orbit order so the system reads as a
 // list. Full circles are still drawn; the fitted strip clips them into arcs.
@@ -27,6 +33,7 @@ const SystemViewer = (() => {
     let _sys       = null;   // normalised system object
     let _hexId     = null;   // hex currently shown in the orrery
     let _tooltip   = null;
+    let _tipDocked = false;   // hover card parked in the map's corner (orbit view)
     let _hitBodies = [];
 
     let _canvasW = 0;
@@ -64,7 +71,7 @@ const SystemViewer = (() => {
     let _linearScale = false;
     let _orbitOpacity = 0.65;
     let _showOrbits = true;
-    let _showDayNight = false;
+    let _showDayNight = true;
     let _localClock = null;
     let _clockSecond = -1;
     let _selectedBody = null;
@@ -76,6 +83,31 @@ const SystemViewer = (() => {
 
     let _hideMoons              = false;
     let _hideHZ                 = false;
+    // Scan view: sensor reticles on every world and moon, and a slow sweep.
+    let _scanView               = false;
+    let _hideJumpLimit          = false;
+    // AU scale of the world-set currently being drawn, so a body's own
+    // 100-diameter ring can be sized on the same map as its orbit.
+    let _orbitScale            = null;
+    // Displayed eclipse depth per moon, so the shade eases instead of popping.
+    const _eclipseShade = new Map();
+    // Painted surfaces for day / night, keyed by body and size bucket, and the
+    // paintings still waiting for frame time.
+    const _surfaceCache = new Map();
+    const _surfaceQueue = new Map();
+    // How fast the clock is actually moving on screen (game days per second),
+    // smoothed, so fast spin can blur instead of strobing.
+    let _visualRate = 0;
+    let _lastFrameDays = null;
+    // frameBody redraws several times to measure; those passes skip the paint.
+    let _measuringFrame = false;
+    // GPU planets: a layout pass collects each visible world, PlanetGL shades
+    // them all into tiles, then the painted frame copies the tiles in.
+    let _collectingPlanets = false;
+    let _planetRequests = [];
+    let _planetTiles = false;
+    let _followPending = false;
+    let _frameDt = 1 / 60;
     let _hideMainworldHighlight = false;
     // 'orbits' draws the live orrery. 'row' and 'column' line bodies up in
     // orbit order (star first) with even slots so each one stays readable.
@@ -88,7 +120,7 @@ const SystemViewer = (() => {
     // In-game clock
     let _gameYear        = 0;
     let _gameDay         = 1;    // float, range [1, 366)
-    let _speedDaysPerSec = 0.10; // in-game days advancing per real second
+    let _speedDaysPerSec = 1 / 86400; // in-game days per real second; real time to start
 
     // DOM refs updated each frame
     let _yearInput = null;
@@ -103,6 +135,14 @@ const SystemViewer = (() => {
     let _pauseBtn = null;
 
     const GOLDEN = 2.39996;   // golden angle (rad) for spiral angular spacing
+
+    // Same kilometre the Mongoose stellar engine uses for the 100-diameter limit.
+    const _SUN_DIAM_KM = 1392700;
+    const _AU_KM = 149597870.7;
+    // 1 D☉ at the fitted view. Exponent 0.42: Earth ~5 px, a large gas giant
+    // ~14 px, a G dwarf ~33 px, an M5 dwarf ~17 px. Capped below.
+    const _SOL_RADIUS_PX = 34;
+    const _SIZE_EXP = 0.42;
 
     // ── Fallback orbit→AU table ───────────────────────────────────────────────
     const _FALLBACK_ORBIT_AU = [
@@ -136,40 +176,82 @@ const SystemViewer = (() => {
         return Math.max(1, _viewZoom / fit);
     }
 
+    function _pxFromDiamKm(diamKm) {
+        if (!(diamKm > 0)) return null;
+        return _SOL_RADIUS_PX * Math.pow(diamKm / _SUN_DIAM_KM, _SIZE_EXP);
+    }
+
+    // Base pixels at the fitted view, before zoom / lineup disc scale.
+    function _starBasePx(s) {
+        const fromDiam = _pxFromDiamKm((s && s.diam > 0) ? s.diam * _SUN_DIAM_KM : 0);
+        let r = fromDiam;
+        if (r == null) {
+            const cls = (s && s.sClass) || 'V';
+            r = 28;
+            if (cls === 'Ia' || cls === 'Ib') r = 52;
+            else if (cls === 'II' || cls === 'III') r = 40;
+            else if (cls === 'IV') r = 32;
+            else if (s && s.sType === 'BD') r = 12;
+            else if (s && s.sType === 'D') r = 8;
+            else if (s && s.sType === 'M') r = 18;
+            else if (s && s.sType === 'K') r = 22;
+        }
+        return Math.max(4, Math.min(58, r));
+    }
+
+    function _worldBasePx(w) {
+        let r = _pxFromDiamKm(w && w.diamKm);
+        if (r == null) {
+            r = 4.5;
+            if (w && w.type === 'Gas Giant') {
+                if (w.ggType === 'GL') r = 14;
+                else if (w.ggType === 'GM') r = 10;
+                else r = 8;
+            } else if (w && w.type === 'Mainworld') r = 6;
+            else if (w && w.worldType === 'Worldlet') r = 3;
+        }
+        return Math.max(2.4, Math.min(22, r));
+    }
+
+    function _moonBasePx(m) {
+        const isMainworld = m && m.type === 'Mainworld';
+        let r = _pxFromDiamKm(m && m.diamKm);
+        if (r == null) r = isMainworld ? 4.2 : 2.6;
+        return Math.max(2, Math.min(10, r));
+    }
+
     function _starBodyRadius(s) {
-        const cls = s.sClass || 'V';
-        let r = 14;
-        if (cls === 'Ia' || cls === 'Ib') r = 28;
-        else if (cls === 'II' || cls === 'III') r = 22;
-        else if (cls === 'IV') r = 16;
-        else if (s.sType === 'BD') r = 6;
-        else if (s.sType === 'D')  r = 5;
-        else if (s.sType === 'M')  r = 8;
-        else if (s.sType === 'K')  r = 10;
-        return r * _zoomScale();
+        return _starBasePx(s) * _zoomScale();
     }
 
     function _worldBodyRadius(w) {
-        let r = 5;
-        if (w.type === 'Gas Giant') {
-            if (w.ggType === 'GL') r = 14;
-            else if (w.ggType === 'GM') r = 10;
-            else r = 8;
-        } else if (w.type === 'Mainworld') r = 8;
-        else if (w.worldType === 'Worldlet') r = 3;
-        return r * _zoomScale();
+        return _worldBasePx(w) * _zoomScale();
     }
 
-    function _satelliteRadius(isMainworld) {
-        return (isMainworld ? 5 : 3) * _zoomScale();
+    function _satelliteRadius(m) {
+        return _moonBasePx(m) * _zoomScale();
     }
 
-    function _moonOrbitRadius(planetR, index) {
-        return planetR + (10 + index * 6) * _zoomScale();
+    // Pixel radius at which a body's orbit is drawn, so the ring clears the
+    // parent star's disc. starRadiusPx already includes zoom.
+    function _orbitHole(starRadiusPx) {
+        return (starRadiusPx || 0) + 14 * _zoomScale();
     }
 
-    function _ringOrbitRadius(planetR, index) {
-        return planetR + (6 + index * 5) * _zoomScale();
+    // A ringed world keeps its moons clear of its rings: the rings reach about
+    // twice the planet's radius, and the moons are spaced out beyond them.
+    const _RING_OUTER = 2.05;
+    function _hasRings(world) {
+        return !_hideMoons && !!world && ((world.rings || []).length > 0 || (world.moons || []).some(m => m.size === 'R'));
+    }
+    function _moonOrbitRadius(planetR, index, world = null) {
+        const base = _hasRings(world) ? planetR * (_RING_OUTER + 0.1) : planetR;
+        return base + (10 + index * 6) * _zoomScale();
+    }
+
+    // Flat rings (no GPU): spread across the same band the shaded rings fill.
+    function _ringOrbitRadius(planetR, index, count = 1) {
+        return planetR * (1.3 + 0.7 * (index + 1) / (count + 1));
     }
 
     // ── Colour helpers ────────────────────────────────────────────────────────
@@ -192,10 +274,16 @@ const SystemViewer = (() => {
     function _drawMainworldStar(ctx, x, y, bodyR) {
         if (_hideMainworldHighlight) return;
         const z = _zoomScale();
-        const outer = Math.min(Math.max(3.5, 4.5 * z), Math.max(3, bodyR * 0.45));
+        let outer = Math.min(Math.max(3.5, 4.5 * z), Math.max(3, bodyR * 0.45));
+        let cx = x;
+        let cy = y;
+        // Up close the star would cover the surface, so it becomes a badge on the rim.
+        if (bodyR > 16) {
+            outer = 8;
+            cx = x + bodyR * 0.74;
+            cy = y - bodyR * 0.74;
+        }
         const inner = outer * 0.38;
-        const cx = x;
-        const cy = y;
         ctx.save();
         ctx.fillStyle = _lightMode ? '#0d6b64' : '#66fcf1';
         ctx.beginPath();
@@ -232,15 +320,31 @@ const SystemViewer = (() => {
             : _orbitToAU(s.orbitId || 0.5);
     }
 
-    function _logR(au, maxAU, maxPx) {
-        if (au <= 0 || maxAU <= 0 || maxPx <= 0) return 0;
-        return maxPx * Math.log(1 + au) / Math.log(1 + maxAU);
+    // Fraction of the way from the star's clearance ring to the outer edge.
+    // Linear mode keeps AU proportions in that span. Log mode is the default.
+    function _unitT(au, maxAU) {
+        if (!(au > 0) || !(maxAU > 0)) return 0;
+        if (_linearScale) return Math.min(1, au / maxAU);
+        return Math.log(1 + au) / Math.log(1 + maxAU);
     }
 
-    function _scaleR(au, maxAU, maxPx) {
-        return _linearScale
-            ? (maxAU > 0 ? maxPx * (au / maxAU) : 0)
-            : _logR(au, maxAU, maxPx);
+    // holePx is the parent star's clearance. The outer edge never shrinks
+    // inside that hole, so a tight companion system still has a ladder of
+    // orbits outside its star.
+    function _scaleR(au, maxAU, maxPx, holePx) {
+        const hole = Math.max(0, holePx || 0);
+        const outer = Math.max(maxPx || 0, hole > 0 ? hole / 0.58 : 0);
+        const span = outer - hole;
+        if (span <= 0) return hole;
+        return hole + span * _unitT(au, maxAU);
+    }
+
+    // Room granted to a companion's own planets. Stays at 28% of the
+    // companion's orbit when that already clears the companion's disc.
+    function _subSystemRadius(star, orbitR) {
+        const needed = _orbitHole(_starBodyRadius(star)) / 0.58;
+        const share = (orbitR || 0) * 0.28;
+        return Math.max(share, needed);
     }
 
     // ── Deterministic epoch hash ──────────────────────────────────────────────
@@ -296,6 +400,7 @@ const SystemViewer = (() => {
         if (_yearInput && document.activeElement !== _yearInput) _yearInput.value = _gameYear;
         if (_dayInput  && document.activeElement !== _dayInput)  _dayInput.value  = Math.max(1, Math.floor(_gameDay));
         if (_timeInput && document.activeElement !== _timeInput) _timeInput.value = _clockText((_gameDay - Math.floor(_gameDay)) * 86400);
+        _syncStardateFields();
     }
 
     function _clockText(seconds) {
@@ -308,6 +413,8 @@ const SystemViewer = (() => {
         if (!Number.isFinite(days)) return;
         _gameYear = Math.floor(days / 365);
         _gameDay = days - _gameYear * 365 + 1;
+        window.campaignTime = { days: _totalDays() };
+        _scheduleCampaignTimeSave();
         _updateDateDisplay();
     }
     function _dateText(days) {
@@ -398,6 +505,11 @@ const SystemViewer = (() => {
             mass:        m.mass       || null,
             gravity:     m.gravity    || null,
             meanTempK:   m.meanTempK  || null,
+            siderealHours: (typeof m.siderealHours === 'number') ? m.siderealHours : null,
+            axialTilt:   (typeof m.axialTilt === 'number') ? m.axialTilt : null,
+            tidallyLocked: m.tidallyLocked === true,
+            isTwilightZone: m.isTwilightZone === true,
+            rotationPeriod: m.rotationPeriod ?? null,
             size:        _surfaceDigit(m.size),
             atm:         _surfaceDigit(m.atm),
             hydro:       _surfaceDigit(m.hydro),
@@ -543,6 +655,11 @@ const SystemViewer = (() => {
             diamKm:        w.diamKm   || null,
             gravity:       w.gravity  || null,
             meanTempK:     w.meanTempK|| null,
+            siderealHours: (typeof w.siderealHours === 'number') ? w.siderealHours : null,
+            axialTilt:     (typeof w.axialTilt === 'number') ? w.axialTilt : null,
+            tidallyLocked: w.tidallyLocked === true,
+            isTwilightZone: w.isTwilightZone === true,
+            rotationPeriod: w.rotationPeriod ?? null,
             size:          _surfaceDigit(w.size),
             atm:           _surfaceDigit(w.atm),
             hydro:         _surfaceDigit(w.hydro),
@@ -665,6 +782,10 @@ const SystemViewer = (() => {
             diamKm:        w.diamKm    || (type === 'Gas Giant' ? 215000 : null),
             gravity:       w.gravity   || null,
             meanTempK:     w.meanTempK || null,
+            siderealHours: (typeof w.siderealHours === 'number') ? w.siderealHours : null,
+            axialTilt:     (typeof w.axialTilt === 'number') ? w.axialTilt : null,
+            tidallyLocked: w.tidallyLocked === true,
+            rotationPeriod: w.rotationPeriod ?? null,
             size:          _surfaceDigit(w.size),
             atm:           _surfaceDigit(w.atm),
             hydro:         _surfaceDigit(w.hydro),
@@ -789,6 +910,10 @@ const SystemViewer = (() => {
             diamKm:       body.diamKm    || null,
             gravity:      body.gravity   || null,
             meanTempK:    body.meanTempK || null,
+            siderealHours: (typeof body.siderealHours === 'number') ? body.siderealHours : null,
+            axialTilt:    (typeof body.axialTilt === 'number') ? body.axialTilt : null,
+            tidallyLocked: body.tidallyLocked === true,
+            rotationPeriod: body.rotationPeriod ?? null,
             size:         _surfaceDigit(body.size),
             atm:          _surfaceDigit(body.atmosphere ?? body.atm),
             hydro:        _surfaceDigit(body.hydrosphere ?? body.hydro),
@@ -840,6 +965,7 @@ const SystemViewer = (() => {
                 sType, subType, sClass,
                 mass:          star.wdMass || star.initialMass || 1.0,
                 lum:           star.luminosity ?? null,
+                diam:          (star.radius > 0) ? (star.radius * 2 * _AU_KM) / _SUN_DIAM_KM : null,
                 age:           sys.systemAge ?? null,
                 orbitAU,
                 name:          (star.label ? `${star.label}: ` : '') + (sc || '?'),
@@ -869,6 +995,8 @@ const SystemViewer = (() => {
                 travelZone: m.travelZone || 'G',
                 diamKm:    (m.radius != null) ? Math.round(m.radius * 2) : null,
                 mass:      m.mass       ?? null,
+                rotationPeriod: (typeof m.rotationPeriod === 'number') ? m.rotationPeriod : null,
+                orbitalPeriod: (typeof m.orbitalPeriod === 'number') ? m.orbitalPeriod : null,
                 gravity:   m.gravity    ?? null,
                 meanTempK: m.avgSurfaceTemp ?? null,
                 size:      _surfaceDigit(m.size),
@@ -888,6 +1016,8 @@ const SystemViewer = (() => {
                 mass:         w.mass       ?? null,
                 gravity:      w.gravity    ?? null,
                 meanTempK:    w.avgSurfaceTemp ?? null,
+                rotationPeriod: (typeof w.rotationPeriod === 'number') ? w.rotationPeriod : null,
+                orbitalPeriod: (typeof w.orbitalPeriod === 'number') ? w.orbitalPeriod : null,
                 size:         w.size       ?? null,
                 atm:          w.atmCode    ?? w.atm ?? null,
                 hydro:        w.hydroCode  ?? w.hydro ?? null,
@@ -993,9 +1123,8 @@ const SystemViewer = (() => {
         _trackedBody = null;
         _systemFitZoom = 1;
         _fitting     = false;
-        _gameYear    = (window.orreryDefaultYear !== undefined) ? window.orreryDefaultYear : 0;
-        _gameDay     = (window.orreryDefaultDay  !== undefined) ? window.orreryDefaultDay  : 1;
         _paused      = false;
+        _setDays(campaignClockDays());
         document.body.classList.add('orrery-open');
         _buildOverlay(hexId);
         window.SystemInspector?.refresh(true);
@@ -1008,8 +1137,7 @@ const SystemViewer = (() => {
         window.CampaignAtlas?.cancelPick();
         window.CampaignAtlas?.clearLocator();
         document.body.classList.remove('orrery-open');
-        document.getElementById('orbit-controls-tray').hidden = true;
-        document.getElementById('orbit-controls-content').replaceChildren();
+        _flushCampaignTimeSave();
         document.getElementById('nav-map').hidden = true;
         _localClock = null;
         _stopShuttle?.(); _stopShuttle = null; _timeInput = null;
@@ -1028,6 +1156,11 @@ const SystemViewer = (() => {
         _orrCanvas   = null;
         _orrCtx      = null;
         _sys         = null;
+        _eclipseShade.clear();
+        _surfaceCache.clear();
+        _surfaceQueue.clear();
+        _visualRate = 0;
+        _lastFrameDays = null;
         _hexId       = null;
         _tooltip     = null;
         _hitBodies   = [];
@@ -1048,6 +1181,7 @@ const SystemViewer = (() => {
         _pauseBtn      = null;
         _hideMoons              = false;
         _hideHZ                 = false;
+        _hideJumpLimit          = false;
         _hideMainworldHighlight = false;
         if (typeof SystemEditor !== 'undefined') SystemEditor.close();
         window.SystemInspector?.refresh(true);
@@ -1083,24 +1217,33 @@ const SystemViewer = (() => {
 
     // ── DOM Construction ──────────────────────────────────────────────────────
 
-    // All phases and periods come from the SAME helpers as the renderer. This
-    // searches the circular visualisation, not a new physical/RPG ephemeris.
+    // Phases and periods are the same helpers the orrery paints with. A lineup is
+    // those circular orbits, not a physical ephemeris. Display years are 365 days.
+    const _ALIGNMENT_HORIZON_YEARS = 200000;
+
     function _alignmentBodies(includeMoons) {
-        if (!_sys) return [];
-        const phases = [], stars = _sys.stars || [];
-        const add = (key, period, name) => {
-            if (Number.isFinite(period) && period > 0) phases.push({ phase: _hashEpoch(key), omega: 2 * Math.PI / (period * 365.25), name });
+        const phases = [];
+        let planetCount = 0, starCount = 0;
+        if (!_sys) return { phases, planetCount, starCount };
+        const stars = _sys.stars || [];
+        const add = (key, period, name, kind) => {
+            if (!(Number.isFinite(period) && period > 0)) return;
+            phases.push({ phase: _hashEpoch(key), omega: 2 * Math.PI / (period * 365.25), name, kind });
+            if (kind === 'star') starCount++;
+            else if (kind === 'planet') planetCount++;
         };
         stars.slice(1).forEach((s, i) => add(`${_hexId}:star:${i + 1}`,
-            s.periodYears || _keplerYears(Math.max(_starCompanionAU(s), 0.05), stars[s.parentStarIdx ?? 0]?.mass || 1), s.name || `Star ${i + 2}`));
+            s.periodYears || _keplerYears(Math.max(_starCompanionAU(s), 0.05), stars[s.parentStarIdx ?? 0]?.mass || 1),
+            s.name || `Star ${i + 2}`, 'star'));
         (_sys.worlds || []).filter(w => w.type !== 'Empty').forEach((w, i) => {
             if (w.type === 'Planetoid Belt' || _isMainworldBelt(w)) return;
-            add(`${_hexId}:world:${i}`, _worldPeriodYears(w, stars[w.parentStarIdx ?? 0]?.mass || 1), w.name || `World ${i + 1}`);
-            if (includeMoons) (w.moons || []).filter(m => m.type !== 'Empty').forEach((m, j) => {
-                if (m.size !== 'R' && m.type !== 'Ring') add(`${_hexId}:moon:${i}:${j}`, _moonPeriodYears(m, w), m.name || `Moon ${j + 1}`);
+            add(`${_hexId}:world:${i}`, _worldPeriodYears(w, stars[w.parentStarIdx ?? 0]?.mass || 1), w.name || `World ${i + 1}`, 'planet');
+            if (!includeMoons) return;
+            (w.moons || []).filter(m => m.type !== 'Empty').forEach((m, j) => {
+                if (m.size !== 'R' && m.type !== 'Ring') add(`${_hexId}:moon:${i}:${j}`, _moonPeriodYears(m, w), m.name || `Moon ${j + 1}`, 'moon');
             });
         });
-        return phases;
+        return { phases, planetCount, starCount };
     }
     function _phaseSpread(phases, days, modulus) {
         const angles = phases.map(p => ((p.phase + p.omega * days) % modulus + modulus) % modulus).sort((a, b) => a - b);
@@ -1108,128 +1251,316 @@ const SystemViewer = (() => {
         for (let i = 1; i < angles.length; i++) gap = Math.max(gap, angles[i] - angles[i - 1]);
         return (modulus - gap) * 180 / Math.PI;
     }
-    async function searchAlignments({ includeMoons = true, sameSide = false, tolerance = 5, horizonDays = 3650, startDays = _totalDays() } = {}) {
-        const run = ++_alignmentRun, phases = _alignmentBodies(includeMoons);
-        const modulus = sameSide ? Math.PI * 2 : Math.PI;
-        tolerance = Math.max(0.1, Math.min(45, Number(tolerance) || 5));
-        horizonDays = Math.max(1, Math.min(365000, Number(horizonDays) || 3650));
-        const result = { bodies: phases.length, names: phases.map(p => p.name), tolerance, matches: [], startDays, scannedDays: horizonDays };
-        if (phases.length < 2) return { ...result, constant: true, best: { days: startDays, spread: 0 } };
-        const velocities = phases.map(p => p.omega);
-        const velocityRange = Math.max(...velocities) - Math.min(...velocities);
-        if (velocityRange < 1e-14) return { ...result, constant: true, best: { days: startDays, spread: _phaseSpread(phases, startDays, modulus) } };
-        if (phases.length === 2) {
-            const diff = phases[1].phase - phases[0].phase, velocity = phases[1].omega - phases[0].omega;
-            const turns = (diff + velocity * startDays) / modulus;
-            const target = velocity > 0 ? Math.ceil(turns - 1e-10) : Math.floor(turns + 1e-10);
-            const next = Math.max(startDays, (target * modulus - diff) / velocity);
-            const recurrence = modulus / Math.abs(velocity);
-            return { ...result, exact: true, recurrence, best: { days: next, spread: 0 },
-                matches: [0, 1, 2].map(i => ({ days: next + i * recurrence, spread: 0 })) };
+    function _alignDist(psi, modulus) {
+        const x = ((psi % modulus) + modulus) % modulus;
+        return x < modulus - x ? x : modulus - x;
+    }
+    // 'in'  — the body stays within epsilon of the reference for the whole window
+    // 'out' — it never gets that close
+    // 'cut' — the window has to be split at the body's crossings
+    function _alignBand(body, lo, hi, epsilon, modulus) {
+        const sweep = Math.abs(body.dw) * (hi - lo);
+        if (!(sweep > 0)) return _alignDist(body.dphi + body.dw * lo, modulus) <= epsilon ? 'in' : 'out';
+        if (sweep >= modulus) return 'cut';
+        const left = Math.min(body.dphi + body.dw * lo, body.dphi + body.dw * hi);
+        const right = Math.max(body.dphi + body.dw * lo, body.dphi + body.dw * hi);
+        let minD = Infinity, maxD = 0;
+        if (Math.ceil(left / modulus - 1e-12) <= Math.floor(right / modulus + 1e-12)) minD = 0;
+        for (const p of [left, right]) {
+            const d = _alignDist(p, modulus);
+            if (d < minD) minD = d;
+            if (d > maxD) maxD = d;
         }
-        // Sample relative phase drift at <= a quarter of the chosen tolerance.
-        // Cap the *duration*, never silently coarsen sampling to claim a full search.
-        const step = Math.min(horizonDays / 2000, tolerance * Math.PI / 180 / (4 * velocityRange));
-        const count = Math.min(200000, Math.ceil(horizonDays / step));
-        result.scannedDays = Math.min(horizonDays, count * step);
-        result.truncated = result.scannedDays < horizonDays;
-        result.stepDays = step;
-        let best = { days: startDays, spread: Infinity }, episode = null;
-        const refine = candidate => {
-            let lo = Math.max(startDays, candidate.days - step), hi = Math.min(startDays + result.scannedDays, candidate.days + step);
-            for (let i = 0; i < 24; i++) {
-                const a = lo + (hi - lo) / 3, b = hi - (hi - lo) / 3;
-                if (_phaseSpread(phases, a, modulus) < _phaseSpread(phases, b, modulus)) hi = b; else lo = a;
+        const anti = modulus / 2 + Math.ceil((left - modulus / 2) / modulus - 1e-12) * modulus;
+        if (anti >= left - 1e-9 && anti <= right + 1e-9) maxD = modulus / 2;
+        if (maxD <= epsilon + 1e-12) return 'in';
+        if (minD > epsilon + 1e-12) return 'out';
+        return 'cut';
+    }
+    function _polishSpread(phases, lo, hi, modulus) {
+        const omegas = phases.map(p => p.omega);
+        const rate = Math.max(...omegas) - Math.min(...omegas);
+        const step = (0.12 * Math.PI / 180) / Math.max(rate, 1e-15);
+        const n = Math.min(700, Math.max(16, Math.ceil((hi - lo) / step)));
+        let bestT = (lo + hi) / 2, bestS = Infinity;
+        for (let i = 0; i <= n; i++) {
+            const t = lo + (hi - lo) * i / n;
+            const s = _phaseSpread(phases, t, modulus);
+            if (s < bestS) { bestS = s; bestT = t; }
+        }
+        let a = Math.max(lo, bestT - (hi - lo) / n);
+        let b = Math.min(hi, bestT + (hi - lo) / n);
+        for (let i = 0; i < 24; i++) {
+            const m1 = a + (b - a) / 3, m2 = b - (b - a) / 3;
+            if (_phaseSpread(phases, m1, modulus) < _phaseSpread(phases, m2, modulus)) b = m2;
+            else a = m1;
+        }
+        const days = (a + b) / 2;
+        return { days, spread: _phaseSpread(phases, days, modulus) };
+    }
+    // Earliest moment in (start, end] when the bodies share a line through the
+    // star no wider than `epsilon` radians. Opposite sides of the star count,
+    // because the folded circle has circumference π. Being within epsilon of
+    // one reference body only guarantees an arc of 2ε, so a candidate window
+    // is kept only when its own tightest moment is inside the tolerance.
+    function _earliestLine(phases, start, end, epsilon, modulus, budget) {
+        let ref = phases[0];
+        for (const p of phases) if (p.omega < ref.omega) ref = p;
+        const others = phases.filter(p => p !== ref).map(p => ({
+            dw: p.omega - ref.omega, dphi: p.phase - ref.phase
+        })).sort((a, b) => Math.abs(a.dw) - Math.abs(b.dw));
+        const toleranceDeg = epsilon * 180 / Math.PI;
+        let visits = 0;
+        const walk = (level, lo, hi) => {
+            if (budget.hit) return null;
+            if (++visits > budget.max) { budget.hit = true; return null; }
+            if (!(hi > lo)) return null;
+            if (level === others.length) {
+                const ev = _polishSpread(phases, lo, hi, modulus);
+                if (!(ev.days > start && ev.days <= end) || ev.spread > toleranceDeg + 0.02) return null;
+                if (lo <= start + 1e-7) {
+                    const inward = Math.min(hi, lo + Math.max((hi - lo) * 0.05, 1e-4));
+                    const leaving = _phaseSpread(phases, lo, modulus) <= _phaseSpread(phases, inward, modulus) + 1e-6;
+                    if (leaving && ev.days <= lo + (hi - lo) * 0.15) return null;
+                }
+                return ev;
             }
-            const days = (lo + hi) / 2, spread = _phaseSpread(phases, days, modulus);
-            return spread < candidate.spread ? { days, spread } : candidate;
+            const body = others[level];
+            if (Math.abs(body.dw) < 1e-15) {
+                if (_alignDist(body.dphi, modulus) > epsilon) return null;
+                return walk(level + 1, lo, hi);
+            }
+            const status = _alignBand(body, lo, hi, epsilon, modulus);
+            if (status === 'out') return null;
+            if (status === 'in') return walk(level + 1, lo, hi);
+            const half = epsilon / Math.abs(body.dw);
+            const dir = body.dw > 0 ? 1 : -1;
+            const target = ((lo - half) * body.dw + body.dphi) / modulus;
+            let k = body.dw > 0 ? Math.ceil(target - 1e-9) : Math.floor(target + 1e-9);
+            let guard = 0;
+            while (guard++ < 5000000) {
+                const c = (k * modulus - body.dphi) / body.dw;
+                if (c - half > hi + 1e-8) return null;
+                if (c + half > start && c + half >= lo) {
+                    const a = Math.max(lo, c - half), b = Math.min(hi, c + half);
+                    if (b > a) {
+                        const hit = walk(level + 1, a, b);
+                        if (hit) return hit;
+                    }
+                }
+                k += dir;
+                if ((++visits & 65535) === 0 && visits > budget.max) { budget.hit = true; return null; }
+            }
+            budget.hit = true;
+            return null;
         };
-        for (let i = 0; i <= count; i++) {
-            if (run !== _alignmentRun) return null;
-            const days = startDays + Math.min(i * step, result.scannedDays);
-            const candidate = { days, spread: _phaseSpread(phases, days, modulus) };
-            if (candidate.spread < best.spread) best = candidate;
-            if (candidate.spread <= tolerance) {
-                if (!episode || candidate.spread < episode.spread) episode = candidate;
-            } else if (episode) { result.matches.push(refine(episode)); episode = null; }
-            if (i % 2000 === 0) await new Promise(resolve => setTimeout(resolve, 0));
+        const ev = walk(0, start, end);
+        budget.visits = (budget.visits || 0) + visits;
+        return ev;
+    }
+    function _twoBodyLine(phases, start, modulus) {
+        const diff = phases[1].phase - phases[0].phase, velocity = phases[1].omega - phases[0].omega;
+        const turns = (diff + velocity * start) / modulus;
+        const target = velocity > 0 ? Math.ceil(turns - 1e-10) : Math.floor(turns + 1e-10);
+        const next = Math.max(start, (target * modulus - diff) / velocity);
+        const recurrence = modulus / Math.abs(velocity);
+        return {
+            exact: true, recurrence,
+            best: { days: next, spread: _phaseSpread(phases, next, modulus) },
+            next: { days: next + recurrence, spread: _phaseSpread(phases, next + recurrence, modulus) }
+        };
+    }
+    async function searchAlignments({ includeMoons = false, sameSide = false, tolerance = null, strict = false, horizonDays = _ALIGNMENT_HORIZON_YEARS * 365, startDays = _totalDays() } = {}) {
+        const run = ++_alignmentRun;
+        const found = _alignmentBodies(includeMoons);
+        const phases = found.phases;
+        const modulus = sameSide ? Math.PI * 2 : Math.PI;
+        horizonDays = Math.max(1, Number(horizonDays) || _ALIGNMENT_HORIZON_YEARS * 365);
+        const result = {
+            bodies: phases.length, planetCount: found.planetCount, starCount: found.starCount,
+            names: phases.map(p => p.name), horizonDays, scannedDays: horizonDays, truncated: false,
+            startDays, matches: [], constant: false, exact: false, recurrence: null, best: null, next: null
+        };
+        await new Promise(resolve => setTimeout(resolve, 0));
+        if (run !== _alignmentRun) return null;
+        if (phases.length < 2) return { ...result, constant: true };
+        const rates = phases.map(p => p.omega);
+        if (Math.max(...rates) - Math.min(...rates) < 1e-14) {
+            return { ...result, constant: true, best: { days: startDays, spread: _phaseSpread(phases, startDays, modulus) } };
         }
-        if (episode) result.matches.push(refine(episode));
-        result.best = refine(best);
-        if (!result.matches.length && result.best.spread <= tolerance) result.matches.push(result.best);
+        if (phases.length === 2) {
+            const pair = _twoBodyLine(phases, startDays, modulus);
+            return { ...result, ...pair, matches: [pair.best, pair.next] };
+        }
+        const end = startDays + horizonDays;
+        const budget = { max: 8000000, hit: false, visits: 0 };
+        const alive = () => run === _alignmentRun && !budget.hit;
+        let best = null;
+        const asked = Number(tolerance);
+        if (Number.isFinite(asked) && asked > 0) best = _earliestLine(phases, startDays, end, asked * Math.PI / 180, modulus, budget);
+        // A strict search stays at the closeness already shown. The open search
+        // falls through and finds the tightest line the horizon contains.
+        if (!best && !strict && alive()) {
+            let lo = 0.35, hi = 170, probes = 0;
+            while (hi - lo > 0.3 && probes < 16 && alive()) {
+                const mid = (lo + hi) / 2;
+                probes++;
+                const hit = _earliestLine(phases, startDays, end, mid * Math.PI / 180, modulus, budget);
+                if (budget.hit) break;
+                if (hit) { best = hit; hi = Math.min(mid, hit.spread); }
+                else lo = mid;
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
+        }
+        if (run !== _alignmentRun) return null;
+        result.truncated = budget.hit;
+        if (!best) return result;
+        const bar = strict && Number.isFinite(asked) ? asked : Math.max(best.spread + 0.35, best.spread * 1.12);
+        const next = _earliestLine(phases, best.days + 0.5, best.days + 0.5 + horizonDays, bar * Math.PI / 180, modulus, budget);
+        if (run !== _alignmentRun) return null;
+        result.best = best;
+        result.next = next;
+        result.tolerance = bar;
+        result.matches = next ? [best, next] : [best];
+        result.truncated = budget.hit;
         return result;
     }
+    function _alignmentWho(result) {
+        const planets = result.planetCount === 1 ? 'The planet'
+            : result.planetCount === 2 ? 'Both planets'
+            : `All ${result.planetCount} planets`;
+        if (!result.starCount) return planets;
+        const stars = result.starCount === 1 ? 'the companion star' : `${result.starCount} companion stars`;
+        if (!result.planetCount) return result.starCount === 1 ? 'The companion star' : `All ${result.starCount} companion stars`;
+        return `${planets} and ${stars}`;
+    }
+    function _laterText(days) {
+        const years = days / 365;
+        if (years >= 0.95) {
+            const nearest = Math.round(years);
+            const whole = Math.abs(years - nearest) < 0.06;
+            const text = formatDisplayNumber(years, years >= 20 || whole ? 0 : 1);
+            return `${text} ${whole && nearest === 1 ? 'year' : 'years'} later`;
+        }
+        if (days >= 2) return `${formatDisplayNumber(days, days >= 10 ? 0 : 1)} days later`;
+        const hours = days * 24;
+        if (hours >= 2) return `${formatDisplayNumber(hours, 1)} hours later`;
+        return `${formatDisplayNumber(days * 1440, 0)} minutes later`;
+    }
+    function _showLineup(days) {
+        _stopShuttle?.();
+        _paused = true;
+        _syncPause();
+        _setDays(days);
+        if (_lineup !== 'orbits') _setLineup('orbits');
+        else fitView();
+    }
     function _buildAlignmentControls() {
-        const el = (tag, text) => { const node = document.createElement(tag); if (text) node.textContent = text; return node; };
-        const details = el('details'); details.className = 'sv-alignment';
-        details.append(el('summary', 'Find celestial alignments'));
-        details.append(el('p', 'Find a common orbital axis using this simulation’s phases. Belts and rings have no single position and are excluded. Dates use 365-day display years; orbital periods retain their existing 365.25-day units.'));
-        const controls = el('div'); controls.className = 'sv-alignment-controls';
-        const field = (text, type, value) => {
-            const label = el('label', text), input = el('input'); input.type = type;
-            if (type === 'checkbox') input.checked = value; else input.value = value;
-            label.append(input); controls.append(label); return input;
+        const el = (tag, text, cls) => {
+            const node = document.createElement(tag);
+            if (cls) node.className = cls;
+            if (text) node.textContent = text;
+            return node;
         };
-        const moons = field('Include moons', 'checkbox', true);
-        const sameSide = field('Same side only', 'checkbox', false);
-        const tolerance = field('Spread ≤ degrees', 'number', 5); tolerance.min = '0.1'; tolerance.max = '45'; tolerance.step = '0.1';
-        const years = field('Search years', 'number', 10); years.min = '1'; years.max = '1000'; years.step = '1';
-        const search = el('button', 'Find alignments'); search.type = 'button';
-        const cancel = el('button', 'Cancel search'); cancel.type = 'button'; cancel.hidden = true;
-        const results = el('div'); results.className = 'sv-alignment-results'; results.setAttribute('role', 'status');
+        const details = el('details'); details.className = 'sv-alignment sv-pop';
+        const summary = el('summary'); summary.className = 'sv-pop-btn';
+        summary.innerHTML = '<i class="fa-solid fa-arrows-to-dot" aria-hidden="true"></i><span>Line up</span>';
+        summary.title = 'Jump to the next time the planets sit on one line';
+        const panel = el('div', '', 'sv-pop-panel');
+        details.append(summary, panel);
+        panel.append(el('p', `Jumps to the next time every planet sits on one line through the star. Companion stars are included. Moons, belts, and rings are left out. The search follows these circular orbits and looks ${_ALIGNMENT_HORIZON_YEARS.toLocaleString('en-US')} years ahead.`));
+        const controls = el('div', '', 'sv-alignment-controls');
+        const search = el('button', 'Line up the planets', 'sv-alignment-go'); search.type = 'button';
+        const cancel = el('button', 'Cancel', 'sv-alignment-cancel'); cancel.type = 'button'; cancel.hidden = true;
+        const results = el('div', '', 'sv-alignment-results'); results.setAttribute('role', 'status');
         const invalidate = () => { _alignmentRun++; search.disabled = false; cancel.hidden = true; results.replaceChildren(); };
         _invalidateAlignment = invalidate;
-        [moons, sameSide, tolerance, years].forEach(input => input.addEventListener('change', invalidate));
         cancel.addEventListener('click', invalidate);
-        search.addEventListener('click', async () => {
-            if (!tolerance.reportValidity() || !years.reportValidity()) return;
+        const paint = (result, shown) => {
+            results.replaceChildren();
+            if (!result) { results.append(el('p', 'Search cancelled. Line them up again to use the current system.')); return; }
+            if (result.bodies < 2) {
+                results.append(el('p', 'This system needs at least two orbiting planets before there is a lineup to find. Belts and rings have no single position, so they are skipped.'));
+                return;
+            }
+            if (result.constant && !shown) {
+                const spread = result.best ? result.best.spread : 0;
+                const who = _alignmentWho(result);
+                const verb = result.bodies === 1 ? 'holds' : 'hold';
+                results.append(el('p', `${who} ${verb} a fixed spread of ${formatDisplayNumber(spread, 1)}°. There is no later date when they line up differently.`));
+                return;
+            }
+            if (!result.best && !shown) {
+                results.append(el('p', result.truncated
+                    ? 'The search stopped early. Line them up again to continue from this date.'
+                    : `No lineup turned up in the next ${formatDisplayNumber(result.horizonDays / 365, 0)} years.`));
+                return;
+            }
+            const current = shown || result.best;
+            const upcoming = shown ? result.best : result.next;
+            results.append(el('p', _dateText(current.days), 'sv-alignment-date'));
+            const spread = current.spread;
+            const who = _alignmentWho(result);
+            const horizon = formatDisplayNumber(result.horizonDays / 365, 0);
+            let sentence;
+            if (spread < 0.05) sentence = `${who} are exactly on one line through the star.`;
+            else if (spread <= 12) sentence = `${who} are on one line through the star, within ${formatDisplayNumber(spread, spread < 10 ? 1 : 0)}°.`;
+            else if (spread <= 25) sentence = `${who} gather into a ${formatDisplayNumber(spread, 0)}° line through the star.`;
+            else sentence = `${who} are ${formatDisplayNumber(spread, 0)}° from a straight line. That is as close as this search gets.`;
+            results.append(el('p', sentence));
+            if (result.exact && result.recurrence) {
+                const every = _laterText(result.recurrence).replace(/ later$/, '');
+                results.append(el('p', `The same line repeats ${every === '1 year' ? 'every year' : `every ${every}`}.`, 'sv-alignment-next'));
+            }
+            if (upcoming) {
+                results.append(el('p', `Next time: ${_dateText(upcoming.days)}, ${_laterText(upcoming.days - current.days)}.`, 'sv-alignment-next'));
+                const jump = el('button', 'Show the next lineup');
+                jump.type = 'button';
+                const bar = result.tolerance;
+                jump.addEventListener('click', () => runSearch(upcoming.days + 1 / 86400, upcoming, bar));
+                results.append(jump);
+                const scroller = jump.closest('.sv-pop-panel');
+                if (scroller) scroller.scrollTop = scroller.scrollHeight;
+            } else {
+                results.append(el('p', `The next lineup this close is more than ${horizon} years after this one.`, 'sv-alignment-next'));
+            }
+        };
+        const runSearch = async (startDays, shown, matchSpread) => {
             search.disabled = true; cancel.hidden = false;
-            results.textContent = 'Searching orbital phases…';
+            results.textContent = shown ? 'Looking for the lineup after this one…' : 'Searching ahead for a lineup…';
             let run;
             try {
-                const pending = searchAlignments({ includeMoons: moons.checked, sameSide: sameSide.checked, tolerance: Number(tolerance.value), horizonDays: Number(years.value) * 365 });
+                const pending = searchAlignments(shown
+                    ? { startDays, tolerance: matchSpread, strict: true }
+                    : { startDays });
                 run = _alignmentRun;
                 const result = await pending;
                 if (!details.isConnected || run !== _alignmentRun) return;
-                if (!result) { results.textContent = 'Search cancelled or system data changed. Run again to use the current system.'; return; }
-                results.replaceChildren(el('p', `${result.bodies} orbiting bodies. ${sameSide.checked ? 'Same-side' : 'Either-side'} alignment; spread ≤ ${result.tolerance}°.`));
-                if (result.constant) {
-                    results.append(el('p', result.bodies < 2 ? 'Fewer than two orbiting bodies: a line is always possible, so there is no distinct alignment date.'
-                        : `Relative phases are constant (${formatDisplayNumber(result.best.spread, 2)}° spread). ${result.best.spread <= result.tolerance ? 'Always within tolerance.' : 'No alignment within this tolerance.'}`));
-                    return;
-                }
-                if (result.exact) results.append(el('p', `Two-body alignment repeats every ${formatDisplayNumber(result.recurrence, 3, 'days')} in this model. Next three exact dates:`));
-                else {
-                    results.append(el('p', `Sampled ${formatDisplayNumber(result.scannedDays, 2, 'days')} from ${_dateText(result.startDays)}; step ${formatDisplayNumber(result.stepDays * 24, 3, 'hours')}.${result.truncated ? ' Search duration was capped to keep fine sampling for fast bodies; exclude moons or search again from a later date to explore farther.' : ''}`));
-                    results.append(el('p', `${result.matches.length} near-alignment windows found. Sampling can miss very brief windows; this is not proof of exact alignment or a permanent repeat cycle.`));
-                    if (result.matches.length > 1) {
-                        const gaps = result.matches.slice(1).map((event, i) => event.days - result.matches[i].days);
-                        results.append(el('p', `Observed gaps in this search: ${formatDisplayNumber(Math.min(...gaps), 2)}–${formatDisplayNumber(Math.max(...gaps), 2)} days.`));
-                    }
-                }
-                const events = result.matches.length ? result.matches.slice(0, 12) : [result.best];
-                for (const event of events) {
-                    const jump = el('button', `${result.matches.length ? 'Go to' : 'Closest found:'} ${_dateText(event.days)} · ${formatDisplayNumber(event.spread, 2)}° spread`);
-                    jump.type = 'button';
-                    jump.addEventListener('click', () => {
-                        _stopShuttle?.(); _paused = true; _syncPause(); _setDays(event.days);
-                        details.open = false; fitView();
-                    });
-                    results.append(jump);
-                }
+                paint(result, shown || null);
+                const landed = shown || result?.best;
+                if (landed && result && result.bodies >= 2 && !result.constant) _showLineup(shown ? shown.days : result.best.days);
             } catch (error) { results.textContent = `Search failed: ${error.message}`; }
             finally { if (run === _alignmentRun) { search.disabled = false; cancel.hidden = true; } }
-        });
-        controls.append(search, cancel); details.append(controls, results);
+        };
+        search.addEventListener('click', () => runSearch(_totalDays() + 1 / 86400, null));
+        controls.append(search, cancel);
+        panel.append(controls, results);
         return details;
     }
 
     function _buildTimeControls() {
-        const row = document.createElement('div'); row.className = 'sv-controls sv-time-controls';
+        const row = document.createElement('div'); row.className = 'sv-time-controls';
         const make = (tag, text) => { const el = document.createElement(tag); if (text) el.textContent = text; return el; };
-        const scrubLabel = make('label', 'Scrub ±30 d');
+        const jog = (input, labelText) => {
+            const label = make('label', labelText);
+            const slot = make('span'); slot.className = 'sv-jog-slot';
+            input.className = 'sv-jog';
+            slot.append(input); label.append(slot); row.append(label);
+            return label;
+        };
         const scrub = make('input'); scrub.type = 'range'; scrub.min = '-30'; scrub.max = '30'; scrub.step = '0.001'; scrub.value = '0';
         scrub.setAttribute('aria-label', 'Scrub time, thirty days backward or forward');
+        scrub.title = 'Drag backward or forward up to 30 days. Release to snap back.';
         let scrubStart = null;
         scrub.addEventListener('input', () => {
             if (scrubStart === null) scrubStart = _totalDays();
@@ -1239,23 +1570,27 @@ const SystemViewer = (() => {
         });
         const releaseScrub = () => { scrubStart = null; scrub.value = '0'; };
         scrub.addEventListener('change', releaseScrub); scrub.addEventListener('blur', releaseScrub);
-        scrubLabel.append(scrub); row.append(scrubLabel);
-        const shuttleLabel = make('label', 'Shuttle');
+        jog(scrub, 'Scrub ±30 d');
         const shuttle = make('input'); shuttle.type = 'range'; shuttle.min = '-100'; shuttle.max = '100'; shuttle.step = '1'; shuttle.value = '0';
         shuttle.setAttribute('aria-label', 'Time shuttle, reverse or forward');
-        shuttle.title = 'Hold left to reverse or right to advance. Release to stop.';
+        shuttle.title = 'Hold left to reverse or right to advance. Release to snap back and stop.';
         const rate = make('output', 'Stopped');
+        rate.hidden = true;
         const limit = make('select'); limit.setAttribute('aria-label', 'Maximum shuttle speed');
         for (const n of [1, 10, 365, 3650]) { const option = make('option', `${formatDisplayNumber(n, 0)} d/s`); option.value = n; limit.append(option); }
         limit.value = '365';
         let shuttleKeyHeld = false;
-        const updateShuttle = () => {
-            _paused = true; _syncPause();
-            _shuttleRate = Math.pow(Number(shuttle.value) / 100, 3) * Number(limit.value);
+        const showRate = () => {
+            rate.hidden = !_shuttleRate;
             rate.textContent = _shuttleRate ? `${formatDisplayNumber(_shuttleRate, 2)} d/s` : 'Stopped';
             shuttle.setAttribute('aria-valuetext', rate.textContent);
         };
-        _stopShuttle = () => { shuttleKeyHeld = false; _shuttleRate = 0; shuttle.value = '0'; rate.textContent = 'Stopped'; shuttle.setAttribute('aria-valuetext', 'Stopped'); };
+        const updateShuttle = () => {
+            _paused = true; _syncPause();
+            _shuttleRate = Math.pow(Number(shuttle.value) / 100, 3) * Number(limit.value);
+            showRate();
+        };
+        _stopShuttle = () => { shuttleKeyHeld = false; _shuttleRate = 0; shuttle.value = '0'; showRate(); };
         shuttle.addEventListener('input', updateShuttle);
         limit.addEventListener('change', updateShuttle);
         shuttle.addEventListener('change', () => { if (!shuttleKeyHeld) _stopShuttle?.(); });
@@ -1263,7 +1598,8 @@ const SystemViewer = (() => {
         shuttle.addEventListener('pointerdown', e => shuttle.setPointerCapture(e.pointerId));
         shuttle.addEventListener('keydown', e => { if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) shuttleKeyHeld = true; });
         shuttle.addEventListener('keyup', e => { if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) _stopShuttle?.(); });
-        shuttleLabel.append(shuttle); row.append(shuttleLabel, limit, rate);
+        jog(shuttle, 'Shuttle');
+        row.append(limit, rate);
         _updateDateDisplay();
         return row;
     }
@@ -1294,39 +1630,58 @@ const SystemViewer = (() => {
         viewNav.className = 'sv-view-nav';
         const back = document.createElement('button');
         back.type = 'button'; back.id = 'sv-back-sector';
-        back.textContent = 'Back to sector';
+        back.innerHTML = '<i class="fa-solid fa-arrow-left" aria-hidden="true"></i><span>Sector</span>';
         back.setAttribute('aria-label', 'Back to sector');
+        back.title = 'Back to the sector map (Esc)';
         back.addEventListener('click', () => {
             close();
             document.getElementById('atlas-toggle').focus({ preventScroll: true });
         });
         const sysName = window.SystemInspector?.systemName?.(hexId) || hexId;
+        // Same hierarchy as the inspector header: name and hex tag, then a
+        // quieter line with the location, edition, and age.
         const identity = document.createElement('div');
         identity.className = 'sv-identity';
+        const titleRow = document.createElement('div');
+        titleRow.className = 'sv-identity-title';
         const nameEl = document.createElement('span');
         nameEl.className = 'sv-identity-name';
         nameEl.textContent = sysName;
-        identity.append(nameEl);
+        titleRow.append(nameEl);
         if (sysName !== hexId) {
             const hexEl = document.createElement('span');
-            hexEl.className = 'sv-identity-hex';
+            hexEl.className = 'atlas-hex';
             hexEl.textContent = hexId;
-            identity.append(hexEl);
+            titleRow.append(hexEl);
         }
-        const editionBadge = document.createElement('span');
-        editionBadge.className = 'sv-badge';
-        editionBadge.textContent = edition;
+        const meta = document.createElement('div');
+        meta.className = 'sv-identity-meta';
+        const place = window.SystemInspector?.locationLine?.(hexId);
+        if (place) {
+            const placeEl = document.createElement('span');
+            placeEl.className = 'sv-identity-place';
+            placeEl.textContent = place;
+            meta.append(placeEl);
+        }
+        if (edition) {
+            const editionBadge = document.createElement('span');
+            editionBadge.className = 'sv-badge';
+            editionBadge.textContent = edition;
+            meta.append(editionBadge);
+        }
         const ageEl = document.createElement('span');
         ageEl.className = 'sv-identity-age';
-        ageEl.textContent = `Age ${age} Gyr`;
-        identity.append(editionBadge, ageEl);
+        ageEl.textContent = `${age} Gyr`;
+        ageEl.title = 'System age';
+        meta.append(ageEl);
+        identity.append(titleRow, meta);
         viewNav.append(back, identity);
         if (edition === 'MgT2E' || edition === 'CT' || edition === 'T5') {
             const editBtn = document.createElement('button');
             editBtn.type = 'button';
             editBtn.id = 'sv-edit-btn';
             editBtn.className = 'sv-edit';
-            editBtn.textContent = 'Edit system';
+            editBtn.innerHTML = '<i class="fa-solid fa-pen-to-square" aria-hidden="true"></i><span>Edit system</span>';
             editBtn.addEventListener('click', () => {
                 if (typeof SystemEditor !== 'undefined') SystemEditor.openEdit(_hexId);
             });
@@ -1334,165 +1689,51 @@ const SystemViewer = (() => {
         }
         _overlay.append(viewNav);
 
+        // ── Controls ──────────────────────────────────────────────────────────
+        // Two rows: time first, then what the view shows. Tools that are used
+        // now and then open as popovers over the canvas, so it keeps its height.
         const header = document.createElement('div');
-        Object.assign(header.style, {
-            display: 'flex', alignItems: 'center', gap: '14px',
-            padding: '8px 18px', flexShrink: '0',
-            borderBottom: `1px solid ${P.border}`
+        header.className = 'system-viewer-header';
+        const make = (tag, cls, text) => {
+            const node = document.createElement(tag);
+            if (cls) node.className = cls;
+            if (text != null) node.textContent = text;
+            return node;
+        };
+        const faIcon = name => {
+            const node = make('i', `fa-solid fa-${name}`);
+            node.setAttribute('aria-hidden', 'true');
+            return node;
+        };
+        const popovers = [];
+        const trackPopover = details => {
+            details.addEventListener('toggle', () => {
+                if (details.open) popovers.forEach(other => { if (other !== details) other.open = false; });
+            });
+            popovers.push(details);
+        };
+        const popover = (iconName, label, title, cls = '') => {
+            const details = make('details', `sv-pop ${cls}`.trim());
+            const summary = make('summary', 'sv-pop-btn');
+            summary.append(faIcon(iconName));
+            if (label) summary.append(make('span', null, label));
+            else summary.setAttribute('aria-label', title);
+            summary.title = title;
+            const panel = make('div', 'sv-pop-panel');
+            details.append(summary, panel);
+            trackPopover(details);
+            return { details, panel };
+        };
+        _overlay.addEventListener('pointerdown', e => {
+            popovers.forEach(details => { if (details.open && !details.contains(e.target)) details.open = false; });
         });
 
-        const hint = document.createElement('span');
-        Object.assign(hint.style, {
-            fontSize: '11px', color: P.hint,
-            marginLeft: 'auto', marginRight: '12px'
-        });
-        hint.textContent = 'Scroll to zoom · Drag to pan · Click to follow · Double-click to frame · Space to play / pause · Esc to return to map';
-
-        // Year input
-        const yearWrap = document.createElement('label');
-        yearWrap.className = 'sv-timecode-field';
-        const yearLbl = document.createElement('span');
-        yearLbl.textContent = 'Year';
-        _yearInput = document.createElement('input');
-        _yearInput.type = 'number'; _yearInput.value = String(_gameYear); _yearInput.step = '1';
-        _yearInput.addEventListener('change', () => {
-            _setDays((parseInt(_yearInput.value) || 0) * 365 + _gameDay - 1);
-            _yearInput.value = _gameYear;
-        });
-        yearWrap.append(yearLbl, _yearInput);
-
-        // Day input
-        const dayWrap = document.createElement('label');
-        dayWrap.className = 'sv-timecode-field';
-        const dayLbl = document.createElement('span');
-        dayLbl.textContent = 'Day';
-        _dayInput = document.createElement('input');
-        _dayInput.type = 'number'; _dayInput.value = String(Math.floor(_gameDay)); _dayInput.min = '1'; _dayInput.max = '365'; _dayInput.step = '1';
-        _dayInput.addEventListener('change', () => {
-            const d = parseInt(_dayInput.value) || 1;
-            _setDays(_gameYear * 365 + Math.min(365, Math.max(1, d)) - 1 + _gameDay % 1);
-            _dayInput.value = Math.floor(_gameDay);
-        });
-        dayWrap.append(dayLbl, _dayInput);
-
-        // Single speed slider — logarithmic scale 0.1–365 d/s
-        // Slider pos 0–100 maps via: speed = 0.1 * 3650^(pos/100)
-        const _sliderToSpeed = v => 0.1 * Math.pow(3650, v / 100);
-        const _speedToSlider = s => Math.log(s / 0.1) / Math.log(3650) * 100;
-        const _fmtSpeed = s => s < 1 ? s.toFixed(2) + 'd/s' : formatDisplayNumber(s, s < 10 ? 1 : 0) + 'd/s';
-
-        const speedWrap = document.createElement('span');
-        Object.assign(speedWrap.style, { display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px' });
-        const speedLbl = document.createElement('span');
-        speedLbl.textContent = 'Speed:';
-        Object.assign(speedLbl.style, { color: P.sub, whiteSpace: 'nowrap' });
-        const speedSlider = document.createElement('input');
-        speedSlider.type = 'range'; speedSlider.min = '0'; speedSlider.max = '100';
-        speedSlider.setAttribute('aria-label', 'Simulation speed in days per second');
-        speedSlider.step = '1'; speedSlider.value = String(Math.round(_speedToSlider(_speedDaysPerSec)));
-        Object.assign(speedSlider.style, { width: '90px', cursor: 'pointer' });
-        const speedVal = document.createElement('span');
-        speedVal.textContent = _fmtSpeed(_speedDaysPerSec);
-        Object.assign(speedVal.style, { color: P.accent, minWidth: '48px' });
-        speedSlider.addEventListener('input', () => {
-            _speedDaysPerSec = _sliderToSpeed(parseFloat(speedSlider.value));
-            speedVal.textContent = _fmtSpeed(_speedDaysPerSec);
-        });
-        speedWrap.append(speedLbl, speedSlider, speedVal);
-
-        // Linear scale toggle
-        const linearWrap = document.createElement('label');
-        Object.assign(linearWrap.style, {
-            display: 'flex', alignItems: 'center', gap: '5px',
-            fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap'
-        });
-        const linearCheck = document.createElement('input');
-        linearCheck.type    = 'checkbox';
-        linearCheck.checked = _linearScale;
-        Object.assign(linearCheck.style, { cursor: 'pointer' });
-        const linearLbl = document.createElement('span');
-        linearLbl.textContent = 'Linear (true scale)';
-        Object.assign(linearLbl.style, { color: P.sub });
-        linearCheck.addEventListener('change', () => {
-            _linearScale = linearCheck.checked;
-            fitView();
-        });
-        linearWrap.append(linearCheck, linearLbl);
-
-        const orbitCheck = document.createElement('input');
-        orbitCheck.type = 'checkbox';
-        orbitCheck.id = 'sv-show-orbits';
-        orbitCheck.checked = _showOrbits;
-        const orbitCheckLabel = document.createElement('label');
-        orbitCheckLabel.append(orbitCheck, document.createTextNode(' Show orbit rings'));
-        orbitCheck.addEventListener('change', () => { _showOrbits = orbitCheck.checked; });
-
-        // Orbit lines slider
-        const orbitWrap = document.createElement('span');
-        Object.assign(orbitWrap.style, { display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px' });
-        const orbitLbl = document.createElement('span');
-        orbitLbl.textContent = 'Strength:';
-        Object.assign(orbitLbl.style, { color: P.sub, whiteSpace: 'nowrap' });
-        const orbitSlider = document.createElement('input');
-        orbitSlider.type = 'range'; orbitSlider.min = '0.1'; orbitSlider.max = '1';
-        orbitSlider.setAttribute('aria-label', 'Orbit ring strength');
-        orbitSlider.step = '0.05'; orbitSlider.value = String(_orbitOpacity);
-        Object.assign(orbitSlider.style, { width: '70px', cursor: 'pointer' });
-        orbitSlider.addEventListener('input', () => {
-            _orbitOpacity = parseFloat(orbitSlider.value);
-        });
-        orbitWrap.append(orbitLbl, orbitSlider);
-
-        const hideMoonsWrap = document.createElement('label');
-        Object.assign(hideMoonsWrap.style, {
-            display: 'flex', alignItems: 'center', gap: '5px',
-            fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap'
-        });
-        const hideMoonsChk = document.createElement('input');
-        hideMoonsChk.type    = 'checkbox';
-        hideMoonsChk.checked = _hideMoons;
-        Object.assign(hideMoonsChk.style, { cursor: 'pointer' });
-        const hideMoonsLbl = document.createElement('span');
-        hideMoonsLbl.textContent = 'Hide Moons';
-        Object.assign(hideMoonsLbl.style, { color: P.sub });
-        hideMoonsChk.addEventListener('change', () => { _hideMoons = hideMoonsChk.checked; });
-        hideMoonsWrap.append(hideMoonsChk, hideMoonsLbl);
-
-        const hideHZWrap = document.createElement('label');
-        Object.assign(hideHZWrap.style, {
-            display: 'flex', alignItems: 'center', gap: '5px',
-            fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap'
-        });
-        const hideHZChk = document.createElement('input');
-        hideHZChk.type    = 'checkbox';
-        hideHZChk.checked = _hideHZ;
-        Object.assign(hideHZChk.style, { cursor: 'pointer' });
-        const hideHZLbl = document.createElement('span');
-        hideHZLbl.textContent = 'Hide HZ';
-        Object.assign(hideHZLbl.style, { color: P.sub });
-        hideHZChk.addEventListener('change', () => { _hideHZ = hideHZChk.checked; });
-        hideHZWrap.append(hideHZChk, hideHZLbl);
-
-        const hideHighlightWrap = document.createElement('label');
-        Object.assign(hideHighlightWrap.style, {
-            display: 'flex', alignItems: 'center', gap: '5px',
-            fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap'
-        });
-        const hideHighlightChk = document.createElement('input');
-        hideHighlightChk.type    = 'checkbox';
-        hideHighlightChk.checked = _hideMainworldHighlight;
-        Object.assign(hideHighlightChk.style, { cursor: 'pointer' });
-        const hideHighlightLbl = document.createElement('span');
-        hideHighlightLbl.textContent = 'Hide MW';
-        Object.assign(hideHighlightLbl.style, { color: P.sub });
-        hideHighlightChk.addEventListener('change', () => { _hideMainworldHighlight = hideHighlightChk.checked; });
-        hideHighlightWrap.append(hideHighlightChk, hideHighlightLbl);
-
+        // Row 1 — time.
         const iconBtn = (icon, label, onClick) => {
-            const btn = document.createElement('button');
+            const btn = make('button', 'sv-icon-btn');
             btn.type = 'button';
-            btn.className = 'sv-icon-btn';
             btn.setAttribute('aria-label', label);
+            btn.title = label;
             btn.innerHTML = `<i class="fas ${icon}" aria-hidden="true"></i>`;
             btn.addEventListener('click', onClick);
             return btn;
@@ -1506,6 +1747,33 @@ const SystemViewer = (() => {
         _pauseBtn = iconBtn('fa-pause', 'Pause simulation', _togglePause);
         _pauseBtn.classList.add('sv-play-btn');
         _pauseBtn.setAttribute('aria-pressed', 'true');
+        _pauseBtn.title = 'Play / pause (Space)';
+        const transport = make('div', 'sv-transport');
+        transport.append(
+            iconBtn('fa-backward', 'Skip back one hour', () => skip(-1 / 24)),
+            _pauseBtn,
+            iconBtn('fa-forward', 'Skip forward one hour', () => skip(1 / 24))
+        );
+
+        const field = (labelText, input, cls = '') => {
+            const wrap = make('label', `sv-timecode-field ${cls}`.trim());
+            const lbl = make('span', null, labelText);
+            wrap.append(lbl, input);
+            return { wrap, lbl };
+        };
+        _yearInput = document.createElement('input');
+        _yearInput.type = 'number'; _yearInput.value = String(_gameYear); _yearInput.step = '1';
+        _yearInput.addEventListener('change', () => {
+            _setDays((parseInt(_yearInput.value) || 0) * 365 + _gameDay - 1);
+            _yearInput.value = _gameYear;
+        });
+        _dayInput = document.createElement('input');
+        _dayInput.type = 'number'; _dayInput.value = String(Math.floor(_gameDay)); _dayInput.min = '1'; _dayInput.max = '365'; _dayInput.step = '1';
+        _dayInput.addEventListener('change', () => {
+            const d = parseInt(_dayInput.value) || 1;
+            _setDays(_gameYear * 365 + Math.min(365, Math.max(1, d)) - 1 + _gameDay % 1);
+            _dayInput.value = Math.floor(_gameDay);
+        });
         _timeInput = document.createElement('input');
         _timeInput.type = 'time';
         _timeInput.step = '1';
@@ -1515,71 +1783,182 @@ const SystemViewer = (() => {
             const parts = _timeInput.value.split(':').map(Number);
             _setDays(Math.floor(_totalDays()) + (parts[0] * 3600 + parts[1] * 60 + (parts[2] || 0)) / 86400);
         });
-        const timeWrap = document.createElement('label');
-        timeWrap.className = 'sv-timecode-field';
-        const timeLbl = document.createElement('span');
-        timeLbl.textContent = 'Time';
-        timeWrap.append(timeLbl, _timeInput);
-        const timecode = document.createElement('div');
-        timecode.className = 'sv-timecode';
-        timecode.append(yearWrap, dayWrap, timeWrap);
-        const transport = document.createElement('div');
-        transport.className = 'sv-transport';
-        transport.append(
-            iconBtn('fa-backward', 'Skip back one hour', () => skip(-1 / 24)),
-            _pauseBtn,
-            iconBtn('fa-forward', 'Skip forward one hour', () => skip(1 / 24)),
-            timecode,
-            speedWrap
-        );
+        const year = field('Year', _yearInput, 'sv-field-year');
+        const day = field('Day', _dayInput, 'sv-field-day');
+        const time = field('Time', _timeInput, 'sv-field-time');
+        year.lbl.id = 'sv-year-label'; _yearInput.setAttribute('aria-labelledby', year.lbl.id);
+        day.lbl.id = 'sv-day-label'; _dayInput.setAttribute('aria-labelledby', day.lbl.id);
+        _yearInput.title = 'Year'; _dayInput.title = 'Day of the year'; _timeInput.title = 'Time of day';
+        const timecode = make('div', 'sv-timecode');
+        timecode.append(year.wrap, day.wrap, time.wrap);
 
-        header.className = 'system-viewer-header';
-        const dayNightLabel = document.createElement('label');
-        dayNightLabel.title = 'Illustrative lighting facing the host star; does not model axial tilt, eclipses, or surface time.';
-        const dayNight = document.createElement('input');
-        dayNight.type = 'checkbox'; dayNight.checked = _showDayNight;
-        dayNight.addEventListener('change', () => { _showDayNight = dayNight.checked; });
-        dayNightLabel.append(dayNight, document.createTextNode('Day / night sides'));
-        _localClock = document.createElement('time');
-        _localClock.className = 'sv-local-clock';
+        // One speed slider on a log scale, from real time (a game second per
+        // second) to a year per second.
+        const REAL_TIME = 1 / 86400, FASTEST = 365;
+        const _sliderToSpeed = v => REAL_TIME * Math.pow(FASTEST / REAL_TIME, v / 1000);
+        const _speedToSlider = s => Math.log(s / REAL_TIME) / Math.log(FASTEST / REAL_TIME) * 1000;
+        const _fmtSpeed = daysPerSec => {
+            const secs = daysPerSec * 86400;
+            if (secs < 1.5) return 'Real time';
+            if (secs < 60) return `${formatDisplayNumber(secs, 0)} s/s`;
+            if (secs < 3600) return `${formatDisplayNumber(secs / 60, secs < 600 ? 1 : 0)} min/s`;
+            if (secs < 86400) return `${formatDisplayNumber(secs / 3600, secs < 36000 ? 1 : 0)} h/s`;
+            if (daysPerSec < 364.5) return `${formatDisplayNumber(daysPerSec, daysPerSec < 10 ? 1 : 0)} d/s`;
+            return '1 yr/s';
+        };
+        const speedWrap = make('div', 'sv-speed');
+        speedWrap.title = 'Simulation speed: game time per real second';
+        const realTime = make('button', 'sv-speed-reset');
+        realTime.type = 'button';
+        realTime.append(faIcon('clock'));
+        realTime.setAttribute('aria-label', 'Real time');
+        realTime.title = 'Back to real time: one game second per second';
+        const speedSlider = make('input');
+        speedSlider.type = 'range'; speedSlider.min = '0'; speedSlider.max = '1000'; speedSlider.step = '1';
+        speedSlider.setAttribute('aria-label', 'Simulation speed');
+        speedSlider.value = String(Math.round(_speedToSlider(_speedDaysPerSec)));
+        const speedVal = make('output', 'sv-speed-value');
+        const syncSpeed = () => {
+            const text = _fmtSpeed(_speedDaysPerSec);
+            speedVal.textContent = text;
+            speedVal.title = `${formatDisplayNumber(_speedDaysPerSec * 86400, 0)}× real time`;
+            speedSlider.setAttribute('aria-valuetext', text);
+            realTime.setAttribute('aria-pressed', String(_speedDaysPerSec * 86400 < 1.5));
+        };
+        speedSlider.addEventListener('input', () => {
+            _speedDaysPerSec = _sliderToSpeed(parseFloat(speedSlider.value));
+            syncSpeed();
+        });
+        realTime.addEventListener('click', () => {
+            _speedDaysPerSec = REAL_TIME;
+            speedSlider.value = '0';
+            syncSpeed();
+        });
+        syncSpeed();
+        speedWrap.append(realTime, speedSlider, speedVal);
+
+        const timePop = popover('clock-rotate-left', 'Scrub', 'Scrub and shuttle through time');
+        _localClock = make('time', 'sv-local-clock');
         _localClock.title = 'Your computer’s local time, independent of simulation speed';
         _clockSecond = -1;
         _updateLocalClock();
-        const resetView = document.createElement('button');
-        resetView.textContent = 'Fit system';
-        resetView.addEventListener('click', fitView);
-        yearLbl.id = 'sv-year-label'; _yearInput.setAttribute('aria-labelledby', yearLbl.id);
-        dayLbl.id = 'sv-day-label'; _dayInput.setAttribute('aria-labelledby', dayLbl.id);
-        const display = document.createElement('div'); display.className = 'sv-controls';
-        const lineupWrap = document.createElement('div');
-        lineupWrap.className = 'sv-lineup';
-        const lineupLabel = document.createElement('span');
-        lineupLabel.className = 'sv-lineup-label';
-        lineupLabel.id = 'sv-lineup-label';
-        lineupLabel.textContent = 'Lineup';
-        const lineupGroup = document.createElement('div');
-        lineupGroup.className = 'sv-layout';
+        timePop.panel.append(
+            make('p', 'sv-pop-note', 'Scrub drags up to 30 days either way. The shuttle runs time backward or forward while held. Both snap back when you let go.'),
+            _buildTimeControls(),
+            _localClock
+        );
+        const alignment = _buildAlignmentControls();
+        trackPopover(alignment);
+
+        const timeRow = make('div', 'sv-row');
+        const timeMain = make('div', 'sv-row-group');
+        timeMain.append(transport, timecode, speedWrap);
+        const timeTools = make('div', 'sv-row-group sv-row-end');
+        timeTools.append(timePop.details, alignment);
+        timeRow.append(timeMain, timeTools);
+
+        // Row 2 — view.
+        const lineupGroup = make('div', 'sv-layout');
         lineupGroup.setAttribute('role', 'group');
-        lineupGroup.setAttribute('aria-labelledby', 'sv-lineup-label');
+        lineupGroup.setAttribute('aria-label', 'Lineup');
         const lineupModes = [
-            ['orbits', 'Orbits', 'Bodies at their current orbital positions'],
-            ['row', 'Horizontal', 'Line planets up left to right, star on the left, even spacing in orbit order'],
-            ['column', 'Vertical', 'Line planets up top to bottom, star at the top, even spacing in orbit order']
+            ['orbits', 'Orbits', 'bullseye', 'Bodies at their current orbital positions'],
+            ['row', 'Row', 'grip-lines-vertical', 'Line planets up left to right, star on the left, even spacing in orbit order'],
+            ['column', 'Column', 'grip-lines', 'Line planets up top to bottom, star at the top, even spacing in orbit order']
         ];
-        for (const [mode, label, title] of lineupModes) {
-            const btn = document.createElement('button');
+        for (const [mode, label, iconName, title] of lineupModes) {
+            const btn = make('button');
             btn.type = 'button';
-            btn.textContent = label;
+            btn.append(faIcon(iconName), make('span', null, label));
             btn.title = title;
             btn.dataset.layout = mode;
             btn.setAttribute('aria-pressed', _lineup === mode ? 'true' : 'false');
             btn.addEventListener('click', () => _setLineup(mode));
             lineupGroup.append(btn);
         }
-        lineupWrap.append(lineupLabel, lineupGroup);
-        display.append(lineupWrap, linearWrap, orbitCheckLabel, orbitWrap, hideMoonsWrap, hideHZWrap, hideHighlightWrap, dayNightLabel, resetView, _localClock);
-        hint.className = 'sv-hint';
-        header.append(transport, _buildTimeControls(), display, _buildAlignmentControls(), hint);
+
+        // Layers are real checkboxes, styled as chips, and read as "show".
+        const layer = (iconName, label, title, checked, onChange, id) => {
+            const wrap = make('label', 'sv-toggle');
+            wrap.title = title;
+            const input = make('input');
+            input.type = 'checkbox';
+            input.checked = checked;
+            if (id) input.id = id;
+            input.addEventListener('change', () => onChange(input.checked));
+            wrap.append(input, faIcon(iconName), make('span', null, label));
+            return wrap;
+        };
+        const layers = make('div', 'sv-layers');
+        layers.setAttribute('role', 'group');
+        layers.setAttribute('aria-label', 'Show on the map');
+        layers.append(
+            layer('solar-system', 'Paths', 'Orbit paths for worlds and moons', _showOrbits, v => { _showOrbits = v; }, 'sv-show-orbits'),
+            layer('moon', 'Moons', 'Moons and rings around each world', !_hideMoons, v => { _hideMoons = !v; }),
+            layer('seedling', 'Habitable', 'Habitable zone: green band around the habitable-zone center. Worlds here can have liquid water. It is a climate band, not a safe-jump line. The generator uses that center orbit when it places a mainworld and when it rolls temperature, density, and belt composition.',
+                !_hideHZ, v => { _hideHZ = !v; }),
+            layer('circle-dashed', 'Jump limit', 'Blue circle at 100 diameters from a star or world. A jump drive cannot engage inside it, so a ship inside the line has to fly out to the circle first.',
+                !_hideJumpLimit, v => { _hideJumpLimit = !v; }),
+            layer('circle-half-stroke', 'Day / night', 'Illustrative lighting facing the host star. Surface markings turn with each body’s sidereal day, so a spinning world slides under the night side. A tidally locked world keeps one face toward the star. Does not model axial tilt, eclipses, or weather.',
+                _showDayNight, v => { _showDayNight = v; }),
+            layer('radar', 'Scan', 'Scan view: sensor outlines and designations on every world and moon, and a slow sweep around the primary. Makes small and night-side worlds easy to find.',
+                _scanView, v => { _scanView = v; })
+        );
+
+        const viewPop = popover('sliders', 'View', 'Scale and orbit ring strength');
+        const linearWrap = make('label', 'sv-pop-check');
+        linearWrap.title = 'Space orbits in proportion to their AU. The star’s drawn size still holds the innermost orbit outside the disc.';
+        const linearCheck = make('input');
+        linearCheck.type = 'checkbox';
+        linearCheck.checked = _linearScale;
+        linearCheck.addEventListener('change', () => {
+            _linearScale = linearCheck.checked;
+            fitView();
+        });
+        linearWrap.append(linearCheck, make('span', null, 'Linear scale (true AU spacing)'));
+        const markWrap = make('label', 'sv-pop-check');
+        markWrap.title = 'The cyan star that marks the mainworld';
+        const markCheck = make('input');
+        markCheck.type = 'checkbox';
+        markCheck.checked = !_hideMainworldHighlight;
+        markCheck.addEventListener('change', () => { _hideMainworldHighlight = !markCheck.checked; });
+        markWrap.append(markCheck, make('span', null, 'Mark the mainworld'));
+        const orbitWrap = make('label', 'sv-pop-range');
+        const orbitSlider = make('input');
+        orbitSlider.type = 'range'; orbitSlider.min = '0.1'; orbitSlider.max = '1'; orbitSlider.step = '0.05';
+        orbitSlider.value = String(_orbitOpacity);
+        orbitSlider.addEventListener('input', () => { _orbitOpacity = parseFloat(orbitSlider.value); });
+        orbitWrap.append(make('span', null, 'Orbit ring strength'), orbitSlider);
+        viewPop.panel.append(linearWrap, markWrap, orbitWrap);
+
+        const resetView = make('button', 'sv-fit');
+        resetView.type = 'button';
+        resetView.append(faIcon('expand'), make('span', null, 'Fit'));
+        resetView.title = 'Fit the whole system in view';
+        resetView.addEventListener('click', fitView);
+
+        const helpPop = popover('keyboard', '', 'Mouse and keyboard', 'sv-help');
+        const keys = make('dl', 'sv-keys');
+        [['Scroll', 'Zoom'], ['Drag', 'Pan'], ['Click', 'Select and follow a body'], ['Double-click', 'Frame a body and its moons'],
+            ['Space', 'Play / pause'], ['Esc', 'Back to the sector map']].forEach(([key, action]) => {
+            const row = make('div');
+            row.append(make('dt', null, key), make('dd', null, action));
+            keys.append(row);
+        });
+        helpPop.panel.append(keys);
+
+        const viewRow = make('div', 'sv-row');
+        const viewMain = make('div', 'sv-row-group');
+        viewMain.append(lineupGroup, layers);
+        const viewTools = make('div', 'sv-row-group sv-row-end');
+        viewTools.append(viewPop.details);
+        // Fit floats over the canvas corner, where it stays in reach at any zoom.
+        resetView.classList.add('sv-floating');
+        viewRow.append(viewMain, viewTools);
+
+        header.append(timeRow, viewRow);
+        helpPop.details.classList.add('sv-nav-help');
+        viewNav.insertBefore(helpPop.details, viewNav.querySelector('.sv-edit'));
         _overlay.append(header);
         document.getElementById('nav-map').hidden = false;
 
@@ -1600,6 +1979,7 @@ const SystemViewer = (() => {
             maxWidth: '280px', zIndex: '9100', fontFamily: 'inherit'
         });
         _overlay.appendChild(_tooltip);
+        _overlay.appendChild(resetView);
 
         document.body.appendChild(_overlay);
 
@@ -1640,14 +2020,53 @@ const SystemViewer = (() => {
         function tick(now) {
             const rate = _shuttleRate || (_paused ? 0 : _speedDaysPerSec);
             if (rate) _setDays(_totalDays() + Math.min((now - _lastFrameTime) / 1000, 0.25) * rate);
+            const dt = Math.max(0.001, (now - _lastFrameTime) / 1000);
+            _trackVisualRate(dt);
+            _frameDt += (Math.min(0.1, dt) - _frameDt) * 0.25;
             _lastFrameTime = now;
+            _paintQueuedSurfaces(6);
             _updateLocalClock();
             if (_atFit) _fitCamera();
+            if (_tracking && _trackedBody) {
+                if (_planetGLReady()) _followPending = true;
+                else _probeFollow();
+            }
             _drawOrrery();
-            if (_followSelected()) _drawOrrery();
             _animFrameId = requestAnimationFrame(tick);
         }
         _animFrameId = requestAnimationFrame(tick);
+    }
+
+    // Following a body needs its position before the frame is painted. A pass
+    // on a 1×1 canvas lays out the bodies without painting any of them, so
+    // the frame itself is drawn once.
+    let _probeCtx = null;
+    function _probeFollow() {
+        if (!_probeCtx) {
+            const probe = document.createElement('canvas');
+            probe.width = probe.height = 1;
+            _probeCtx = probe.getContext('2d');
+        }
+        const real = _orrCtx;
+        _orrCtx = _probeCtx;
+        _measuringFrame = true;
+        try { _drawOrrery(); } finally {
+            _orrCtx = real;
+            _measuringFrame = false;
+        }
+        _followSelected();
+    }
+
+    // Scrubbing and the shuttle move the clock outside the play rate, so the
+    // rate is read from the clock itself. A jump (a typed date, an alignment)
+    // is a cut, not motion, and does not blur.
+    function _trackVisualRate(dt) {
+        const days = _totalDays();
+        const moved = _lastFrameDays == null ? 0 : Math.abs(days - _lastFrameDays);
+        _lastFrameDays = days;
+        const instant = moved / dt;
+        if (instant > 20000) return;
+        _visualRate += (Math.min(instant, 3650) - _visualRate) * Math.min(1, dt / 0.18);
     }
 
     function _setLineup(mode) {
@@ -1672,20 +2091,262 @@ const SystemViewer = (() => {
             `${layout} Click a body to follow it; double-click to frame it and its local orbits; drag to pan; scroll zooms; Space plays or pauses.`);
     }
 
-    function _drawSelection(ctx) {
-        const selected = _hitBodies.find(hit => hit.body === ((_tracking && _trackedBody) || _selectedBody));
-        if (!selected) return;
+    // Scan view. Each world and moon gets a reticle: a faint ring, four turning
+    // brackets, and (where there is room) its designation. In orbit layout a
+    // sweep circles the primary every eight seconds and each reticle brightens
+    // as it passes.
+    const _SCAN_SWEEP_SECONDS = 8;
+    function _scanLabel(body) {
+        const name = String(body.name || body.type || '');
+        const system = window.SystemInspector?.systemName?.(_hexId) || '';
+        return system && name.startsWith(system + ' ') ? name.slice(system.length + 1) : name;
+    }
+    function _drawScanOverlay(ctx, centre) {
+        if (!_scanView || ctx === _probeCtx || _collectingPlanets || _measuringFrame) return;
+        const now = _motionOk() ? performance.now() / 1000 : 0;
+        const teal = _lightMode ? '13, 107, 100' : '102, 252, 241';
+        const sweep = ((now / _SCAN_SWEEP_SECONDS) % 1) * Math.PI * 2;
         ctx.save();
-        ctx.strokeStyle = _lightMode ? '#935200' : '#ffce73';
+        if (centre && _motionOk() && !_lightMode) {
+            // The sweep: a soft wedge trailing a bright leading edge.
+            const trail = 0.7;
+            const wedge = ctx.createConicGradient(sweep - trail, centre.x, centre.y);
+            wedge.addColorStop(0, `rgba(${teal}, 0)`);
+            wedge.addColorStop(trail / (Math.PI * 2), `rgba(${teal}, 0.035)`);
+            wedge.addColorStop(trail / (Math.PI * 2) + 0.0005, `rgba(${teal}, 0)`);
+            wedge.addColorStop(1, `rgba(${teal}, 0)`);
+            ctx.fillStyle = wedge;
+            ctx.fillRect(0, 0, _canvasW, _canvasH);
+            const reach = Math.hypot(Math.max(centre.x, _canvasW - centre.x), Math.max(centre.y, _canvasH - centre.y));
+            ctx.strokeStyle = `rgba(${teal}, 0.22)`;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(centre.x, centre.y);
+            ctx.lineTo(centre.x + Math.cos(sweep) * reach, centre.y + Math.sin(sweep) * reach);
+            ctx.stroke();
+        }
+        ctx.font = '600 10px ui-monospace, "Cascadia Mono", Consolas, monospace';
+        ctx.textBaseline = 'alphabetic';
+        for (const hit of _hitBodies) {
+            if ((hit.kind !== 'world' && hit.kind !== 'moon') || hit.innerR !== undefined) continue;
+            const { cx, cy } = hit;
+            const visual = hit.visualR ?? hit.r;
+            if (cx < -40 || cy < -40 || cx > _canvasW + 40 || cy > _canvasH + 40) continue;
+            const moon = hit.kind === 'moon';
+            const main = hit.body?.type === 'Mainworld';
+            // Brighten as the sweep passes, then fade over a second or so.
+            let ping = 0;
+            if (centre && _motionOk()) {
+                const since = ((sweep - Math.atan2(cy - centre.y, cx - centre.x)) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+                ping = Math.exp(-since * 2.2);
+            }
+            const base = (moon ? 0.42 : 0.68) + (main ? 0.2 : 0);
+            const alpha = Math.min(1, base + ping * 0.45);
+            // A moon too small to show detail gets a quiet ring, not brackets,
+            // so a crowded moon system stays readable.
+            if (moon && visual < 2.5 && !main) {
+                ctx.strokeStyle = `rgba(${teal}, ${(alpha * 0.55).toFixed(3)})`;
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.arc(cx, cy, 4 + ping * 2, 0, Math.PI * 2);
+                ctx.stroke();
+                continue;
+            }
+            const R = Math.max(visual + 5, moon ? 7 : 9) + ping * 3;
+            ctx.strokeStyle = `rgba(${teal}, ${(alpha * 0.32).toFixed(3)})`;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(cx, cy, R, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.strokeStyle = `rgba(${teal}, ${alpha.toFixed(3)})`;
+            ctx.lineWidth = main ? 2 : 1.5;
+            const turn = now * (moon ? 0.5 : 0.3) + (cx * 0.013 + cy * 0.007);
+            for (let k = 0; k < 4; k++) {
+                const a = turn + k * Math.PI / 2;
+                ctx.beginPath();
+                ctx.arc(cx, cy, R + 3, a - 0.3, a + 0.3);
+                ctx.stroke();
+            }
+            if (_lineup !== 'orbits' || (moon && R < 12)) continue;
+            // Designation up and to the right, on a short leader.
+            const corner = (R + 3) * Math.SQRT1_2;
+            const lx = cx + corner + 6, ly = cy - corner - 6;
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = `rgba(${teal}, ${(alpha * 0.55).toFixed(3)})`;
+            ctx.beginPath();
+            ctx.moveTo(cx + corner, cy - corner);
+            ctx.lineTo(lx - 2, ly + 3);
+            ctx.stroke();
+            ctx.fillStyle = `rgba(${teal}, ${Math.min(1, alpha + 0.1).toFixed(3)})`;
+            ctx.fillText(_scanLabel(hit.body), lx, ly);
+        }
+        ctx.restore();
+    }
+
+    // Selection: a target lock. On selecting, four brackets swing in from wide
+    // and snap onto the body while the ring draws itself around it; then a
+    // turning range scale, counter-rotating arcs, a soft glow, a periodic
+    // ping, and a readout tag with the body's name and profile hold the lock.
+    let _lockBody = null, _lockStart = 0;
+    const _LOCK_MS = 650;
+    function _selectionLabel(body) {
+        const name = String(body.name || body.type || 'Body');
+        const spectral = body.sType != null && !body.uwp ? [body.sType, body.subType, body.sClass].filter(v => v != null && v !== '').join('') : '';
+        const detail = body.uwp || spectral || (body.ggType ? `Gas Giant ${body.ggType}` : body.worldType || body.type || '');
+        return [name, detail && detail !== name ? detail : ''];
+    }
+    function _drawSelection(ctx) {
+        const body = (_tracking && _trackedBody) || _selectedBody;
+        const selected = body ? _hitBodies.find(hit => hit.body === body) : null;
+        if (!selected || ctx === _probeCtx) return;
+        const motion = _motionOk();
+        const now = performance.now();
+        if (_lockBody !== body) { _lockBody = body; _lockStart = now; }
+        const k = motion ? Math.min(1, (now - _lockStart) / _LOCK_MS) : 1;
+        const easeOut = 1 - Math.pow(1 - k, 3);
+        // A slight overshoot as the brackets land.
+        const snap = motion ? 1 + 2.4 * Math.pow(k - 1, 3) + 1.4 * Math.pow(k - 1, 2) : 1;
+        const time = motion ? now / 1000 : 0;
+        const gold = _lightMode ? '147, 82, 0' : '255, 206, 115';
+        const teal = _lightMode ? '9, 105, 94' : '102, 252, 241';
+        const band = selected.innerR !== undefined;
+        let { cx, cy } = selected;
+        let R = (selected.visualR ?? selected.r) + 5;
+        ctx.save();
+        if (band) {
+            // A belt or ring runs the whole way round, so the lock sits on one
+            // point of it (the top, where its label is, or the point nearest
+            // the middle of the view when the top is off screen) and the band's
+            // two edges are traced in gold.
+            const mid = (selected.r + selected.innerR) / 2;
+            let angle = -Math.PI / 2;
+            if (cy - mid < -20) angle = Math.atan2(_canvasH / 2 - cy, _canvasW / 2 - cx);
+            ctx.strokeStyle = `rgba(${gold}, ${(0.55 * easeOut).toFixed(3)})`;
+            ctx.lineWidth = 1;
+            for (const edge of [selected.innerR, selected.r]) if (edge > 2) _strokeVisibleCircle(ctx, cx, cy, edge);
+            cx += Math.cos(angle) * mid;
+            cy += Math.sin(angle) * mid;
+            R = Math.max(9, (selected.r - selected.innerR) / 2 + 4);
+        }
+        // Glow under the lock.
+        if (!_lightMode) {
+            const glow = ctx.createRadialGradient(cx, cy, R * 0.9, cx, cy, R + 22);
+            glow.addColorStop(0, `rgba(${gold}, ${(0.16 * easeOut).toFixed(3)})`);
+            glow.addColorStop(1, `rgba(${gold}, 0)`);
+            ctx.fillStyle = glow;
+            ctx.beginPath();
+            ctx.arc(cx, cy, R + 22, 0, Math.PI * 2);
+            ctx.arc(cx, cy, R * 0.9, 0, Math.PI * 2, true);
+            ctx.fill();
+        }
+        // The ring draws itself on.
+        ctx.strokeStyle = `rgba(${gold}, 0.95)`;
         ctx.lineWidth = 2;
         ctx.beginPath();
-        const ringR = selected.innerR !== undefined
-            ? selected.r + 3
-            : (selected.visualR ?? selected.r) + 5;
-        ctx.arc(selected.cx, selected.cy, ringR, 0, Math.PI * 2);
+        ctx.arc(cx, cy, R, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * easeOut);
         ctx.stroke();
+        // Range scale: 72 ticks, every sixth long, turning slowly, with gaps
+        // where the brackets sit.
+        const scaleR = R + 8;
+        const turn = time * 0.12;
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = `rgba(${gold}, ${(0.5 * easeOut).toFixed(3)})`;
+        ctx.beginPath();
+        for (let i = 0; i < 72; i++) {
+            const a = turn + i * Math.PI / 36;
+            const fromBracket = Math.abs(((a - Math.PI / 4) % (Math.PI / 2) + Math.PI / 2) % (Math.PI / 2) - Math.PI / 4);
+            if (fromBracket < 0.22) continue;
+            const len = i % 6 === 0 ? 5 : 2.5;
+            ctx.moveTo(cx + Math.cos(a) * scaleR, cy + Math.sin(a) * scaleR);
+            ctx.lineTo(cx + Math.cos(a) * (scaleR + len), cy + Math.sin(a) * (scaleR + len));
+        }
+        ctx.stroke();
+        // Three counter-rotating arcs further out.
+        const arcR = R + 17;
+        ctx.strokeStyle = `rgba(${teal}, ${(0.55 * easeOut).toFixed(3)})`;
+        ctx.lineWidth = 1.5;
+        for (let i = 0; i < 3; i++) {
+            const a = -time * 0.35 + i * Math.PI * 2 / 3;
+            ctx.beginPath();
+            ctx.arc(cx, cy, arcR, a, a + 0.75);
+            ctx.stroke();
+        }
+        // Brackets swing in from wide and a quarter-turn round, then breathe.
+        const breathe = k >= 1 && motion ? Math.sin(time * 2.4) * 1.2 : 0;
+        const bracketR = (R + 4) * (1 + 1.1 * (1 - snap)) + breathe;
+        const spin = (1 - easeOut) * Math.PI / 2;
+        const arm = Math.max(5, Math.min(12, R * 0.35));
+        ctx.strokeStyle = `rgba(${gold}, ${Math.min(1, 0.2 + easeOut).toFixed(3)})`;
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'square';
+        for (let i = 0; i < 4; i++) {
+            const a = Math.PI / 4 + i * Math.PI / 2 + spin;
+            const bx = cx + Math.cos(a) * bracketR * Math.SQRT2 * 0.78, by = cy + Math.sin(a) * bracketR * Math.SQRT2 * 0.78;
+            const ux = -Math.cos(a), uy = -Math.sin(a);
+            // An L: two arms running back along the square's edges.
+            const ax = Math.sign(ux) || 1, ay = Math.sign(uy) || 1;
+            ctx.save();
+            ctx.translate(bx, by);
+            ctx.rotate(spin);
+            ctx.beginPath();
+            ctx.moveTo(ax * arm, 0);
+            ctx.lineTo(0, 0);
+            ctx.lineTo(0, ay * arm);
+            ctx.stroke();
+            ctx.restore();
+        }
+        ctx.lineCap = 'butt';
+        // Cardinal notches pointing in.
+        ctx.strokeStyle = `rgba(${gold}, ${(0.8 * easeOut).toFixed(3)})`;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        for (let i = 0; i < 4; i++) {
+            const a = i * Math.PI / 2;
+            ctx.moveTo(cx + Math.cos(a) * (R + 3), cy + Math.sin(a) * (R + 3));
+            ctx.lineTo(cx + Math.cos(a) * (R + 7), cy + Math.sin(a) * (R + 7));
+        }
+        ctx.stroke();
+        // The readout tag, up and to the right on a leader (left, near the edge).
+        if (k > 0.35 && _lineup === 'orbits') {
+            const [name, detail] = _selectionLabel(selected.body);
+            const show = Math.min(1, (k - 0.35) / 0.4);
+            ctx.font = '700 11px ui-monospace, "Cascadia Mono", Consolas, monospace';
+            const nameW = ctx.measureText(name.toUpperCase()).width;
+            ctx.font = '10px ui-monospace, "Cascadia Mono", Consolas, monospace';
+            const detailW = detail ? ctx.measureText(detail).width : 0;
+            const w = Math.max(nameW, detailW) + 16, h = detail ? 34 : 20;
+            const corner = (arcR + 2) * Math.SQRT1_2;
+            const flip = cx + corner + 22 + w > _canvasW - 8;
+            const dir = flip ? -1 : 1;
+            const ex = cx + dir * corner, ey = cy - corner;
+            const kx = ex + dir * 14, ky = ey - 14;
+            const tx = flip ? kx - 8 - w : kx + 8, ty = ky - h / 2;
+            ctx.globalAlpha = show;
+            ctx.strokeStyle = `rgba(${gold}, 0.75)`;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(ex, ey); ctx.lineTo(kx, ky); ctx.lineTo(kx + dir * 8, ky);
+            ctx.stroke();
+            ctx.fillStyle = _lightMode ? 'rgba(255, 255, 255, 0.92)' : 'rgba(8, 14, 18, 0.82)';
+            ctx.strokeStyle = `rgba(${gold}, 0.8)`;
+            ctx.beginPath();
+            ctx.roundRect(tx, ty, w, h, 3);
+            ctx.fill();
+            ctx.stroke();
+            ctx.fillStyle = `rgba(${gold}, 1)`;
+            ctx.fillRect(flip ? tx + w - 3 : tx, ty, 3, h);
+            ctx.textBaseline = 'alphabetic';
+            ctx.font = '700 11px ui-monospace, "Cascadia Mono", Consolas, monospace';
+            ctx.fillText(name.toUpperCase(), tx + 8, ty + 14);
+            if (detail) {
+                ctx.font = '10px ui-monospace, "Cascadia Mono", Consolas, monospace';
+                ctx.fillStyle = `rgba(${teal}, 0.95)`;
+                ctx.fillText(detail, tx + 8, ty + 28);
+            }
+            ctx.globalAlpha = 1;
+        }
         ctx.restore();
-        _drawFocusPulse(ctx, selected, ringR);
+        _drawFocusPulse(ctx, { cx, cy }, R);
     }
 
     // Primary-orbit bodies match the orrery: P-type, or S-type around star 0.
@@ -1729,7 +2390,8 @@ const SystemViewer = (() => {
                         body: w,
                         sortAu: au + 0.000001 * (1 + (w.au || 0)),
                         order: order++,
-                        hzAu: parent > 0 ? parentAu : au
+                        hzAu: w.au || 0,
+                        hzStar: starIndex
                     });
                 });
         });
@@ -1760,7 +2422,11 @@ const SystemViewer = (() => {
         const room = Math.max(12, crossPos - 12);
         const byRoom = room / (14 + moonGap);
         const bySlot = (slot * 0.42) / (14 + moonGap);
-        const byStar = (slot * 0.32) / 28;
+        let starBase = 28;
+        for (const node of nodes) {
+            if (node.kind === 'star') starBase = Math.max(starBase, _starBasePx(node.body));
+        }
+        const byStar = (slot * 0.32) / starBase;
         _lineupDisc = Math.max(0.45, Math.min(byRoom, bySlot, byStar, 2.4));
         return { horizontal, pad, slot, crossPos, labelGutter };
     }
@@ -1790,14 +2456,24 @@ const SystemViewer = (() => {
         if (_hideMoons) return r;
         let reach = r;
         const moons = (node.body.moons || []).filter(m => m.type !== 'Empty');
-        moons.forEach((m, mi) => { reach = Math.max(reach, _moonOrbitRadius(r, mi)); });
-        (node.body.rings || []).forEach((rg, ri) => { reach = Math.max(reach, _ringOrbitRadius(r, ri)); });
+        moons.forEach((m, mi) => { reach = Math.max(reach, _moonOrbitRadius(r, mi, node.body)); });
+        (node.body.rings || []).forEach((rg, ri, all) => { reach = Math.max(reach, _ringOrbitRadius(r, ri, all.length)); });
         return reach;
     }
 
-    function _inHabitableZone(au) {
-        const hz = _sys?.hzAU;
-        if (hz == null || !Number.isFinite(hz) || au == null || !Number.isFinite(au)) return false;
+    // A star's habitable-zone centre in AU, by the generator's rule
+    // (computeWorldHzco in mgt2e_stellar_engine.js). The primary's is the
+    // system's, which already counts a close companion's light; any other
+    // star's comes from its own luminosity, √L. Null when that is unknown.
+    function _starHzAU(starIndex = 0) {
+        if (!_sys) return null;
+        if (!starIndex) return Number.isFinite(_sys.hzAU) ? _sys.hzAU : null;
+        const lum = Number(_sys.stars?.[starIndex]?.lum);
+        return Number.isFinite(lum) && lum > 0 ? Math.sqrt(lum) : null;
+    }
+    function _inHabitableZone(au, starIndex = 0) {
+        const hz = _starHzAU(starIndex);
+        if (hz == null || au == null || !Number.isFinite(au)) return false;
         return au >= hz * 0.70 && au <= hz * 1.55;
     }
 
@@ -1934,15 +2610,19 @@ const SystemViewer = (() => {
 
         if (!_hideHZ) {
             nodes.forEach(node => {
-                if (!_inHabitableZone(node.hzAu)) return;
+                if (!_inHabitableZone(node.hzAu, node.hzStar || 0)) return;
                 const c = _lineupScreen(node.lx, node.ly, W, H);
                 const pw = slot * 0.9 * _viewZoom;
                 const ph = Math.min((horizontal ? H : W) * 0.7, maxReach * 2 + 28 * _viewZoom);
                 ctx.save();
-                ctx.fillStyle = 'rgba(80, 200, 100, 0.13)';
+                ctx.fillStyle = _hzColor(0.2);
+                ctx.strokeStyle = _hzColor(0.8);
+                ctx.lineWidth = 1.5;
+                ctx.setLineDash([7, 4]);
                 ctx.beginPath();
                 ctx.roundRect(c.x - pw / 2, c.y - ph / 2, pw, ph, Math.min(16, 8 * _viewZoom));
                 ctx.fill();
+                ctx.stroke();
                 ctx.restore();
             });
         }
@@ -1983,11 +2663,114 @@ const SystemViewer = (() => {
             _drawWorld(ctx, node.body, p.x, p.y, elapsedYears, worldIdxMap.get(node.body) ?? 0, starAt.x, starAt.y);
         });
         nodes.forEach(node => _drawLineupLabel(ctx, node, metrics, maxReach, W, H));
+        _drawScanOverlay(ctx, null);
         _drawSelection(ctx);
         return null;
     }
 
+    function _planetGLReady() {
+        return _showDayNight && !!window.PlanetGL && !!window.PlanetProfile && PlanetGL.available();
+    }
     function _drawOrrery(measureOnly = false) {
+        if (measureOnly || _measuringFrame || !_planetGLReady()) return _paintOrrery(measureOnly);
+        _collectPlanets();
+        if (_followPending) { _followPending = false; _followSelected(); }
+        PlanetGL.render(_planetRequests);
+        _planetTiles = true;
+        try { return _paintOrrery(false); } finally { _planetTiles = false; }
+    }
+    // Lays the frame out on the 1×1 probe, recording every world to shade.
+    function _collectPlanets() {
+        if (!_probeCtx) {
+            const probe = document.createElement('canvas');
+            probe.width = probe.height = 1;
+            _probeCtx = probe.getContext('2d');
+        }
+        const real = _orrCtx;
+        _orrCtx = _probeCtx;
+        _planetRequests = [];
+        _collectingPlanets = true;
+        try { _paintOrrery(false); } finally {
+            _orrCtx = real;
+            _collectingPlanets = false;
+        }
+        // Eclipses: a moon can shade its world, and the world its moons.
+        const byBody = new Map(_planetRequests.map(req => [req.key, req]));
+        for (const req of _planetRequests) {
+            const related = [];
+            if (req.parent && byBody.has(req.parent)) related.push(byBody.get(req.parent));
+            for (const other of _planetRequests) if (other.parent === req.key) related.push(other);
+            related.sort((a, b) => Math.hypot(a.x - req.x, a.y - req.y) - Math.hypot(b.x - req.x, b.y - req.y));
+            req.casters = related.slice(0, 4).map(o => [(o.x - req.x) / req.r, (o.y - req.y) / req.r, o.r / req.r]);
+        }
+        _planetRequests = _planetRequests.filter(req => !req.hidden);
+    }
+    // Light from the primary, tinted by its spectral class.
+    function _sunColor() {
+        const hex = _STAR_COLORS[_sys?.stars?.[0]?.sType] || '#ffffff';
+        const n = parseInt(hex.slice(1), 16);
+        const rgb = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(v => v / 255);
+        return rgb.map(v => 0.45 + v * 0.55);
+    }
+    // A world, halo and all, that cannot reach the canvas.
+    function _offCanvas(x, y, r) {
+        const reach = r * 1.25 + 2;
+        return x + reach < 0 || y + reach < 0 || x - reach > _canvasW || y - reach > _canvasH;
+    }
+    function _collectPlanet(x, y, r, body, elapsedYears, starX, starY, parent) {
+        const kind = window.PlanetProfile.kind(body);
+        if (r < 2.5 || !kind || kind === 'star' || kind === 'belt' || kind === 'ring') return;
+        const profile = PlanetProfile.of(body, _surfaceId(body, kind));
+        const starAngle = Math.atan2(starY - y, starX - x);
+        const TAU = Math.PI * 2;
+        // Rings: MgT keeps them on the world, CT as ring-sized moons. They are
+        // laid inside the first real moon's orbit, broader the more there are.
+        let ring = null;
+        const moons = (body.moons || []).filter(m => m.type !== 'Empty');
+        const ringCount = (body.rings || []).length + moons.filter(m => m.size === 'R').length;
+        if (ringCount > 0 && !_hideMoons) {
+            const first = moons.findIndex(m => m.size !== 'R');
+            const limit = first >= 0 ? (_moonOrbitRadius(r, first, body) - _satelliteRadius(moons[first]) - 2) / r : _RING_OUTER;
+            const outer = Math.max(1.4, Math.min(limit, 1.6 + 0.2 * Math.min(ringCount, 4), _RING_OUTER));
+            // Ring particles are shown circling the inner edge every seven hours.
+            const ringHours = 7;
+            const ringTurns = elapsedYears * 365.25 * 24 / ringHours;
+            const ringSweep = TAU * (_visualRate * 24 / ringHours) * _frameDt;
+            ring = { inner: 1.22, outer, fill: Math.min(1, 0.55 + ringCount * 0.15),
+                phase: _motionOk() ? (ringTurns % 1) * TAU : 0,
+                detail: 1 - Math.max(0, Math.min(1, (ringSweep - 0.05) / 0.4)) };
+        }
+        const reachFactor = Math.max(1.16, ring ? ring.outer * 1.01 : 0);
+        // Off-canvas worlds still cast eclipses, so they are kept as casters only.
+        const hidden = _offCanvas(x, y, r * reachFactor / 1.25);
+        const hours = profile.rotation.hours;
+        const locked = profile.rotation.locked;
+        let spin = 0, cloudSpin = 0, sweep = 0;
+        if (locked) {
+            spin = cloudSpin = starAngle;
+        } else if (hours > 0 && _motionOk()) {
+            // Whole turns are dropped in double precision; the GPU only sees the angle.
+            const turns = elapsedYears * 365.25 * 24 / hours;
+            spin = (turns % 1) * TAU;
+            cloudSpin = ((turns * 1.03) % 1) * TAU;
+            sweep = Math.min(TAU, TAU * (_visualRate * 24 / hours) * _frameDt);
+        }
+        const dpr = window.devicePixelRatio || 1;
+        // A world larger than the tile limit is shaded smaller and scaled up;
+        // at that size the surface is already at its sharpest cube map.
+        const full = r * dpr;
+        const scale = Math.min(1, 1100 / full, 2000 / (full * reachFactor));
+        const radius = full * scale;
+        const samples = sweep > 0.02 ? Math.min(radius < 10 ? 6 : radius < 60 ? 24 : 32, Math.ceil(sweep / 0.035) + 1) : 1;
+        _planetRequests.push({
+            key: body, profile, radius, scale, hidden, ring, spin, cloudSpin, sweep, samples,
+            tilt: locked ? 0 : profile.rotation.tilt,
+            light: [Math.cos(starAngle), Math.sin(starAngle)],
+            sun: _sunColor(), casters: [], lightMode: _lightMode,
+            x, y, r, parent: parent || null
+        });
+    }
+    function _paintOrrery(measureOnly = false) {
         if (!_orrCtx || !_canvasW || !_canvasH) return;
         if (_lineup !== 'orbits') return _drawLineup(measureOnly);
         const W   = _canvasW;
@@ -2028,26 +2811,29 @@ const SystemViewer = (() => {
         const _COMP_ABS_MIN =  4;  // absolute floor — ring never drawn smaller than this
         const _COMP_GAP     =  3;  // pixel gap to maintain between adjacent rings
         const _compRingR    = new Map();
+        const _parentHole = (s) => _orbitHole(_starBodyRadius(stars[s.parentStarIdx ?? 0] || stars[0] || {}));
+        const primaryHole = _orbitHole(_starBodyRadius(stars[0] || {}));
         stars.slice(1).forEach(s => {
             const pIdx   = s.parentStarIdx ?? 0;
             const compAU = _starCompanionAU(s);
-            const natR   = _scaleR(compAU, maxAU, scaledMaxR);
+            const hole   = _parentHole(s);
+            const natR   = _scaleR(compAU, maxAU, scaledMaxR, hole);
             if (_linearScale || pIdx !== 0) {
                 // Linear mode or sub-companion: simple floor, no ordering constraint needed
-                _compRingR.set(s, _linearScale ? Math.max(30, natR) : Math.max(8, natR));
+                _compRingR.set(s, natR);
                 return;
             }
             // Primary companion: find pixel radius of nearest outer body in primary orbit
             let outerMinR = Infinity;
             primaryWorlds.forEach(w => {
                 if ((w.au || 0) > compAU)
-                    outerMinR = Math.min(outerMinR, _scaleR(w.au || 0, maxAU, scaledMaxR));
+                    outerMinR = Math.min(outerMinR, _scaleR(w.au || 0, maxAU, scaledMaxR, primaryHole));
             });
             stars.slice(1).forEach(t => {
                 if (t !== s && (t.parentStarIdx ?? 0) === 0 && _starCompanionAU(t) > compAU)
-                    outerMinR = Math.min(outerMinR, _scaleR(_starCompanionAU(t), maxAU, scaledMaxR));
+                    outerMinR = Math.min(outerMinR, _scaleR(_starCompanionAU(t), maxAU, scaledMaxR, primaryHole));
             });
-            let r = Math.max(natR, _COMP_MIN_PX);
+            let r = Math.max(natR, _COMP_MIN_PX, hole);
             if (outerMinR !== Infinity && r >= outerMinR - _COMP_GAP)
                 r = Math.max(natR, outerMinR - _COMP_GAP - 1);
             _compRingR.set(s, Math.max(r, _COMP_ABS_MIN));
@@ -2055,6 +2841,8 @@ const SystemViewer = (() => {
 
         // Companion star screen positions
         const companions = stars.slice(1);
+        // Secondary stars' zone labels, drawn last so no body covers them.
+        const hzLabels = [];
         const starPos    = new Map();
         starPos.set(0, { cx: originX, cy: originY });
 
@@ -2088,11 +2876,11 @@ const SystemViewer = (() => {
                 bounds.top = Math.min(bounds.top, y - r - 20);
                 bounds.bottom = Math.max(bounds.bottom, y + r + 28);
             };
-            const includeWorlds = (list, x, y, max, pixels) => list.forEach(w => {
+            const includeWorlds = (list, x, y, max, pixels, hole) => list.forEach(w => {
                 const moonCount = _hideMoons ? 0 : (w.moons || []).filter(m => m.type !== 'Empty').length + (w.rings || []).length;
                 const local = (moonCount ? 20 + moonCount * 6 : 10) * _zoomScale();
                 const extent = Math.max(_worldBodyRadius(w) + local, Math.min(180, String(w.name || '').length * 3.5));
-                include(x, y, _scaleR(w.au || 0, max, pixels) + extent, w.name);
+                include(x, y, _scaleR(w.au || 0, max, pixels, hole) + extent, w.name);
             });
             stars.forEach((s, i) => {
                 const pos = starPos.get(i);
@@ -2102,10 +2890,15 @@ const SystemViewer = (() => {
                     include(parent.cx, parent.cy, _compRingR.get(s) + 4);
                     const list = worlds.filter(w => w.orbitType === 'S-Type' && w.parentStarIdx === i);
                     const max = list.reduce((m, w) => Math.max(m, w.au || 0), 0.01) * 1.2;
-                    includeWorlds(list, pos.cx, pos.cy, max, _compRingR.get(s) * 0.28);
+                    const subR = _subSystemRadius(s, _compRingR.get(s));
+                    includeWorlds(list, pos.cx, pos.cy, max, subR, _orbitHole(_starBodyRadius(s)));
                 }
             });
-            includeWorlds(primaryWorlds, originX, originY, maxAU, scaledMaxR);
+            includeWorlds(primaryWorlds, originX, originY, maxAU, scaledMaxR, primaryHole);
+            if (!_hideJumpLimit && stars[0]) {
+                const jumpR = _scaleR(_starHundredDau(stars[0]), maxAU, scaledMaxR, primaryHole);
+                if (jumpR > 0 && jumpR < scaledMaxR * 1.25) include(originX, originY, jumpR + 36, '100D jump');
+            }
             if (!Number.isFinite(bounds.left)) include(originX, originY, 15);
             return bounds;
         }
@@ -2115,9 +2908,46 @@ const SystemViewer = (() => {
 
         // HZ band — hzAU is set by the normaliser for all editions
         const hzAU      = sys.hzAU !== undefined ? sys.hzAU : _orbitToAU(sys.hzco || 3);
-        const hzInnerPx = _scaleR(hzAU * 0.70, maxAU, scaledMaxR);
-        const hzOuterPx = _scaleR(hzAU * 1.55, maxAU, scaledMaxR);
+        const hzInnerPx = _scaleR(hzAU * 0.70, maxAU, scaledMaxR, primaryHole);
+        const hzOuterPx = _scaleR(hzAU * 1.55, maxAU, scaledMaxR, primaryHole);
         if (!_hideHZ) _drawHZBand(ctx, originX, originY, hzInnerPx, hzOuterPx);
+
+        if (!_hideJumpLimit && _lineup === 'orbits') {
+            const jumpRings = [];
+            const queueJump = (cx, cy, r, label) => {
+                if (r >= 6 && r <= _MAX_DASHED_RING_RADIUS) jumpRings.push({ cx, cy, r, label });
+            };
+            const queueWorldJumps = (list, cx, cy, maxAU, maxPx, hole, starMass) => {
+                list.forEach(w => {
+                    if (!(w.diamKm > 0) || w.type === 'Planetoid Belt' || _isMainworldBelt(w)) return;
+                    const at = _worldScreen(w, cx, cy, maxAU, maxPx, hole, elapsed_years, starMass, worldIdxMap);
+                    const ring = _hundredDpx(w.au || 0, _hundredDau(w.diamKm), maxAU, maxPx, hole);
+                    if (ring > _worldBodyRadius(w) + 5) queueJump(at.x, at.y, ring, '');
+                });
+            };
+            const primaryD = _starHundredDau(stars[0]);
+            queueJump(originX, originY,
+                _visibleJumpRadius(_scaleR(primaryD, maxAU, scaledMaxR, primaryHole), stars[0]),
+                '100D jump');
+            const primaryStarMass = ((stars[0] || {}).mass) || 1;
+            queueWorldJumps(primaryWorlds, originX, originY, maxAU, scaledMaxR, primaryHole, primaryStarMass);
+            companions.forEach((s, i) => {
+                const pos = starPos.get(i + 1);
+                if (!pos) return;
+                const dAu = _starHundredDau(s);
+                const at = _starCompanionAU(s);
+                const truePx = _hundredDpx(at, dAu, maxAU, scaledMaxR, primaryHole);
+                queueJump(pos.cx, pos.cy, _visibleJumpRadius(truePx, s), '100D jump');
+                const sIdx = i + 1;
+                const sWorlds = worlds.filter(w => w.orbitType === 'S-Type' && w.parentStarIdx === sIdx);
+                if (!sWorlds.length) return;
+                const subMaxAU = sWorlds.reduce((m, w) => Math.max(m, w.au || 0), 0.01) * 1.2;
+                const subMaxR = _subSystemRadius(s, _compRingR.get(s));
+                const subHole = _orbitHole(_starBodyRadius(s));
+                queueWorldJumps(sWorlds, pos.cx, pos.cy, subMaxAU, subMaxR, subHole, s.mass || 1);
+            });
+            _visibleJumpCircles(jumpRings).forEach(ring => _drawJumpLimit(ctx, ring.cx, ring.cy, ring.r, ring.label));
+        }
 
         // Companion orbit rings + sub-orreries
         companions.forEach((s, i) => {
@@ -2128,30 +2958,41 @@ const SystemViewer = (() => {
 
             if (_showOrbits && _orbitOpacity > 0 && orbitR <= _MAX_DASHED_RING_RADIUS) {
                 const orbitAlpha = _lightMode ? _orbitOpacity * 0.80 : _orbitOpacity * 0.55;
-                ctx.beginPath();
-                ctx.arc(parentPos.cx, parentPos.cy, orbitR, 0, Math.PI * 2);
                 ctx.strokeStyle = `rgba(69, 162, 158, ${orbitAlpha.toFixed(3)})`;
                 ctx.lineWidth   = 1 + _orbitOpacity * 1.5;
                 ctx.setLineDash([4, 6]);
-                ctx.stroke();
+                _strokeVisibleCircle(ctx, parentPos.cx, parentPos.cy, orbitR, 10);
                 ctx.setLineDash([]);
             }
 
             const sWorlds = worlds.filter(
                 w => w.orbitType === 'S-Type' && w.parentStarIdx === sIdx
             );
+            // This star's own habitable zone, on its subsystem's scale. A star
+            // with no worlds is scaled so the zone sits inside its subsystem.
+            const starHz = s.separation === 'Companion' ? null : _starHzAU(sIdx);
+            if (starHz && !_hideHZ) {
+                const hzMaxAU = sWorlds.length ? sWorlds.reduce((m, w) => Math.max(m, w.au || 0), 0.01) * 1.2 : starHz * 1.55 * 1.25;
+                const hzMaxR = _subSystemRadius(stars[sIdx], orbitR);
+                const hzHole = _orbitHole(_starBodyRadius(stars[sIdx]));
+                const inner = _scaleR(starHz * 0.70, hzMaxAU, hzMaxR, hzHole);
+                const outer = _scaleR(starHz * 1.55, hzMaxAU, hzMaxR, hzHole);
+                _drawHZBand(ctx, pos.cx, pos.cy, inner, outer);
+                hzLabels.push([pos.cx, pos.cy, inner, outer, `HABITABLE ZONE · ${_scanLabel(stars[sIdx])}`]);
+            }
             if (sWorlds.length > 0) {
                 const subMaxAU    = sWorlds.reduce((m, w) => Math.max(m, w.au || 0), 0.01) * 1.2;
-                const subMaxR     = orbitR * 0.28;
+                const subMaxR     = _subSystemRadius(stars[sIdx], orbitR);
                 const compStarMass = ((stars[sIdx] || {}).mass) || 1;
-                _drawWorldSet(ctx, sWorlds, pos.cx, pos.cy, subMaxAU, subMaxR, elapsed_years, compStarMass, worldIdxMap);
+                const subHole     = _orbitHole(_starBodyRadius(stars[sIdx]));
+                _drawWorldSet(ctx, sWorlds, pos.cx, pos.cy, subMaxAU, subMaxR, elapsed_years, compStarMass, worldIdxMap, subHole);
             }
         });
 
         // Primary worlds
         if (primaryWorlds.length > 0) {
             const primaryStarMass = ((stars[0] || {}).mass) || 1;
-            _drawWorldSet(ctx, primaryWorlds, originX, originY, maxAU, scaledMaxR, elapsed_years, primaryStarMass, worldIdxMap);
+            _drawWorldSet(ctx, primaryWorlds, originX, originY, maxAU, scaledMaxR, elapsed_years, primaryStarMass, worldIdxMap, primaryHole);
         }
 
         // Stars — topmost layer
@@ -2165,24 +3006,32 @@ const SystemViewer = (() => {
                 visualR: _starBodyRadius(s)
             });
         });
+        // The zone's label goes over the bodies so a planet cannot hide it.
+        if (!_hideHZ) {
+            _drawHZLabel(ctx, originX, originY, hzInnerPx, hzOuterPx);
+            hzLabels.forEach(([x, y, inner, outer, text]) => _drawHZLabel(ctx, x, y, inner, outer, text));
+        }
+        _drawScanOverlay(ctx, { x: originX, y: originY });
         _drawSelection(ctx);
     }
 
     // Same 1.8s ease-out ring as the campaign locator pulse, drawn in canvas
     // so it stays locked to the selected/tracked body as it orbits.
     function _drawFocusPulse(ctx, hit, baseR) {
-        if (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) return;
-        const t = (performance.now() % 1800) / 1800;
-        const ease = 1 - (1 - t) * (1 - t);
-        const r = baseR * (0.8 + 0.65 * ease);
-        const alpha = 1 - ease * 0.85;
+        if (!_motionOk()) return;
         const rgb = window.printMode || _lightMode ? '9, 105, 94' : '102, 252, 241';
         ctx.save();
-        ctx.strokeStyle = `rgba(${rgb}, ${alpha.toFixed(3)})`;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(hit.cx, hit.cy, r, 0, Math.PI * 2);
-        ctx.stroke();
+        // Two pings, half a beat apart, every 2.4 s.
+        for (const offset of [0, 0.22]) {
+            const t = ((performance.now() / 2400) + 1 - offset) % 1;
+            if (t > 0.6) continue;
+            const ease = 1 - Math.pow(1 - t / 0.6, 3);
+            ctx.strokeStyle = `rgba(${rgb}, ${((1 - ease) * (offset ? 0.35 : 0.6)).toFixed(3)})`;
+            ctx.lineWidth = offset ? 1 : 1.5;
+            ctx.beginPath();
+            ctx.arc(hit.cx, hit.cy, baseR + 4 + ease * (baseR * 0.8 + 26), 0, Math.PI * 2);
+            ctx.stroke();
+        }
         ctx.restore();
     }
 
@@ -2196,13 +3045,157 @@ const SystemViewer = (() => {
         return false;
     }
 
-    function _drawWorldSet(ctx, worldList, cx, cy, maxAU, maxPx, elapsed_years, starMass, worldIdxMap) {
+    // 100 diameters, in AU. Same kilometre the journey-time math uses.
+    function _hundredDau(diamKm) {
+        return (diamKm > 0) ? (100 * diamKm) / _AU_KM : 0;
+    }
+
+    function _starHundredDau(s) {
+        return _hundredDau((s && s.diam > 0) ? s.diam * _SUN_DIAM_KM : 0);
+    }
+
+    // Pixel radius of a circle of `deltaAu` centered on a body that already
+    // sits at `au` on this map. The star's own limit is the special case au = 0.
+    function _hundredDpx(au, deltaAu, maxAU, maxPx, hole) {
+        if (!(deltaAu > 0)) return 0;
+        const outer = _scaleR((au || 0) + deltaAu, maxAU, maxPx, hole);
+        const inner = _scaleR(au || 0, maxAU, maxPx, hole);
+        return Math.abs(outer - inner);
+    }
+
+    // The drawn star is larger than its true disc. A 100D ring that the AU
+    // scale squeezes inside that disc — easy for a companion on the log map —
+    // is lifted to just outside the corona. A ring that already clears the
+    // star, as on the linear scale, stays where the AU scale put it.
+    function _visibleJumpRadius(truePx, star) {
+        const body = _starBodyRadius(star);
+        const clear = body * 1.62;
+        return Math.max(truePx || 0, clear);
+    }
+
+    // A jump circle fully inside another one never changes where a ship can
+    // engage, so the inner line is dropped.
+    function _jumpCircleContains(outer, inner) {
+        return Math.hypot(outer.cx - inner.cx, outer.cy - inner.cy) + inner.r <= outer.r + 1;
+    }
+
+    function _visibleJumpCircles(rings) {
+        return rings.filter((inner, i) => !rings.some((outer, j) =>
+            j !== i && outer.r > inner.r && _jumpCircleContains(outer, inner)
+        ));
+    }
+
+    // The part of a circle that can reach the canvas, as [start, end] angles,
+    // or null when none of it can. Zoomed in, an orbit can be tens of
+    // thousands of pixels across; stroking (and dashing) all of it every
+    // frame is what makes a close-up stutter, so only the visible span is drawn.
+    function _arcSpan(cx, cy, r, margin = 6) {
+        const W = _canvasW, H = _canvasH;
+        const near = Math.hypot(cx - Math.max(0, Math.min(W, cx)), cy - Math.max(0, Math.min(H, cy)));
+        const far = Math.max(Math.hypot(cx, cy), Math.hypot(cx - W, cy), Math.hypot(cx, cy - H), Math.hypot(cx - W, cy - H));
+        if (r + margin < near || r - margin > far) return null;
+        const inside = cx >= 0 && cx <= W && cy >= 0 && cy <= H;
+        if (inside || r < 3000) return [0, Math.PI * 2];
+        // From a centre off the canvas, the canvas spans less than a half-turn.
+        const mid = Math.atan2(H / 2 - cy, W / 2 - cx);
+        let lo = 0, hi = 0;
+        for (const [x, y] of [[0, 0], [W, 0], [0, H], [W, H]]) {
+            const d = Math.atan2(y - cy, x - cx) - mid;
+            const wrapped = Math.atan2(Math.sin(d), Math.cos(d));
+            lo = Math.min(lo, wrapped); hi = Math.max(hi, wrapped);
+        }
+        const pad = margin / r + 0.002;
+        return [mid + lo - pad, mid + hi + pad];
+    }
+    // Strokes the visible part of a circle. A dash pattern keeps its phase
+    // from angle 0, so dashes do not crawl as the span moves with the camera.
+    function _strokeVisibleCircle(ctx, cx, cy, r, dashLength = 0, dashOffset = 0) {
+        const span = _arcSpan(cx, cy, r, ctx.lineWidth + 4);
+        if (!span) return;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, span[0], span[1]);
+        if (dashLength) ctx.lineDashOffset = ((dashOffset + span[0] * r) % dashLength + dashLength) % dashLength;
+        ctx.stroke();
+        if (dashLength) ctx.lineDashOffset = 0;
+    }
+
+    function _drawJumpLimit(ctx, cx, cy, r, label) {
+        if (!(r >= 6) || r > _MAX_DASHED_RING_RADIUS) return;
+        ctx.save();
+        ctx.strokeStyle = _lightMode ? 'rgba(20, 92, 186, 0.9)' : 'rgba(120, 186, 255, 0.95)';
+        ctx.lineWidth = 1.5;
+        _strokeVisibleCircle(ctx, cx, cy, r);
+        if (label && r >= 22 && r < 2000) {
+            ctx.font = '11px Inter, sans-serif';
+            ctx.fillStyle = _lightMode ? '#145cba' : '#9ecbff';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(label, cx + 4, cy - r - 2);
+        }
+        ctx.restore();
+    }
+
+    // 0 outside the parent's shadow, 1 deep inside it. The edge is a smooth
+    // ramp, so a moon dims as it slides behind the parent instead of flipping.
+    function _shadowCover(bx, by, px, py, parentR, starX, starY) {
+        const sx = starX - bx;
+        const sy = starY - by;
+        const seg2 = sx * sx + sy * sy;
+        if (seg2 < 4) return 0;
+        const t = ((px - bx) * sx + (py - by) * sy) / seg2;
+        if (t <= 0 || t >= 1) return 0;
+        const qx = bx + t * sx;
+        const qy = by + t * sy;
+        const miss = Math.hypot(px - qx, py - qy);
+        const margin = Math.max(3, parentR * 0.45);
+        const outer = parentR + margin;
+        if (miss >= outer) return 0;
+        const inner = Math.max(0, parentR * 0.45);
+        if (miss <= inner) return 1;
+        const u = (outer - miss) / (outer - inner);
+        return u * u * (3 - 2 * u);
+    }
+
+    // Follow the geometric shadow with a short ease, so a fast time step
+    // still fades instead of popping. Reduced-motion skips the fade.
+    function _easeEclipse(key, target) {
+        if (!_motionOk()) return target;
+        const now = performance.now();
+        let rec = _eclipseShade.get(key);
+        if (!rec) {
+            rec = { value: target, at: now };
+            _eclipseShade.set(key, rec);
+            return target;
+        }
+        const dt = Math.min(0.05, Math.max(0, (now - rec.at) / 1000));
+        rec.at = now;
+        const blend = 1 - Math.exp(-dt / 0.16);
+        rec.value += (target - rec.value) * blend;
+        if (Math.abs(rec.value - target) < 0.01) rec.value = target;
+        return rec.value;
+    }
+
+    function _worldScreen(w, cx, cy, maxAU, maxPx, holePx, elapsed_years, starMass, worldIdxMap) {
+        const orbitR = _scaleR(w.au || 0, maxAU, maxPx, holePx);
+        const wIdx = worldIdxMap.get(w) ?? 0;
+        const period = _worldPeriodYears(w, starMass);
+        const angle = _hashEpoch(_hexId + ':world:' + wIdx) + (2 * Math.PI / period) * elapsed_years;
+        return {
+            x: cx + orbitR * Math.cos(angle),
+            y: cy + orbitR * Math.sin(angle),
+            orbitR, wIdx
+        };
+    }
+
+    function _drawWorldSet(ctx, worldList, cx, cy, maxAU, maxPx, elapsed_years, starMass, worldIdxMap, holePx) {
+        const prevScale = _orbitScale;
+        _orbitScale = { maxAU, maxPx, hole: holePx || 0 };
         const isBelt = w => w.type === 'Planetoid Belt' || _isMainworldBelt(w);
         const belts  = worldList.filter(isBelt);
         const bodies = worldList.filter(w => !isBelt(w));
 
         belts.forEach(w => {
-            const r      = _scaleR(w.au || 0, maxAU, maxPx);
+            const r      = _scaleR(w.au || 0, maxAU, maxPx, holePx);
             const isMW   = _isMainworldBelt(w);
             const wIdx   = worldIdxMap.get(w) ?? 0;
             const period = _worldPeriodYears(w, starMass);
@@ -2227,60 +3220,193 @@ const SystemViewer = (() => {
         });
 
         if (_showOrbits && _orbitOpacity > 0) bodies.forEach(w => {
-            const r = _scaleR(w.au || 0, maxAU, maxPx);
+            const r = _scaleR(w.au || 0, maxAU, maxPx, holePx);
             if (r < 2) return;
             const worldAlpha = _lightMode ? _orbitOpacity * 0.65 : _orbitOpacity * 0.40;
-            ctx.beginPath();
-            ctx.arc(cx, cy, r, 0, Math.PI * 2);
             ctx.strokeStyle = `rgba(69, 162, 158, ${worldAlpha.toFixed(3)})`;
             ctx.lineWidth   = 1 + _orbitOpacity * 1.5;
-            ctx.stroke();
+            _strokeVisibleCircle(ctx, cx, cy, r);
         });
 
         bodies.forEach(w => {
-            const r      = _scaleR(w.au || 0, maxAU, maxPx);
-            const wIdx   = worldIdxMap.get(w) ?? 0;
-            const period = _worldPeriodYears(w, starMass);
-            const epoch  = _hashEpoch(_hexId + ':world:' + wIdx);
-            const angle  = epoch + (2 * Math.PI / period) * elapsed_years;
-            const px     = cx + r * Math.cos(angle);
-            const py     = cy + r * Math.sin(angle);
-            _drawWorld(ctx, w, px, py, elapsed_years, wIdx, cx, cy);
+            const at = _worldScreen(w, cx, cy, maxAU, maxPx, holePx, elapsed_years, starMass, worldIdxMap);
+            _drawWorld(ctx, w, at.x, at.y, elapsed_years, at.wIdx, cx, cy);
         });
+        _orbitScale = prevScale;
     }
 
     // ── Element drawing ───────────────────────────────────────────────────────
 
-    function _drawStarField(ctx, W, H) {
-        ctx.save();
-        ctx.fillStyle = '#ffffff';
-        let s = 0xdeadbeef;
-        const _r = () => { s = (Math.imul(s ^ (s >>> 16), 0x45d9f3b) + 1) | 0; return (s >>> 0) / 0x100000000; };
-        for (let i = 0; i < 280; i++) {
-            const x = _r() * W;
-            const y = _r() * H;
-            const r = _r() < 0.18 ? 0.9 : 0.45;
-            ctx.globalAlpha = 0.08 + _r() * 0.22;
+    // Deep space behind the system, so dark worlds read against something:
+    // a faint nebula and galactic band (painted once on the GPU, different for
+    // every system) under a field of small stars of mixed colour, denser along
+    // the band. It is a little larger than the canvas and drifts slowly with
+    // the camera, which gives the field depth.
+    const _BACKDROP_MARGIN = 0.06;
+    const _NEBULAE = [
+        [[40, 150, 170], [170, 60, 150], [150, 170, 210]],
+        [[190, 110, 50], [110, 60, 170], [200, 170, 140]],
+        [[40, 170, 150], [60, 110, 190], [160, 200, 200]],
+        [[170, 50, 70], [60, 80, 180], [190, 160, 170]],
+        [[150, 140, 60], [40, 140, 150], [190, 190, 160]]
+    ];
+    const _FIELD_COLOURS = ['#9bb0ff', '#cad7ff', '#f8f7ff', '#fff4ea', '#fff4ea', '#ffd2a1', '#ffcc6f'];
+    let _backdrop = null;
+    function _buildBackdrop(W, H) {
+        const dpr = window.devicePixelRatio || 1;
+        const mx = Math.round(W * _BACKDROP_MARGIN), my = Math.round(H * _BACKDROP_MARGIN);
+        const BW = W + mx * 2, BH = H + my * 2;
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(BW * dpr));
+        canvas.height = Math.max(1, Math.round(BH * dpr));
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        const rand = _rng(_seedOf(`backdrop|${_hexId || ''}`));
+        const palette = _NEBULAE[Math.floor(rand() * _NEBULAE.length)];
+        const bandAngle = rand() * Math.PI, bandOffset = (rand() - 0.5) * 0.5;
+        const nebula = window.PlanetGL?.available?.()
+            ? PlanetGL.paintBackdrop(canvas.width / 4, canvas.height / 4, [rand() * 60, rand() * 60, rand() * 60], palette, [bandAngle, bandOffset], 0.34)
+            : null;
+        if (nebula) {
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(nebula, 0, 0, canvas.width, canvas.height);
+        } else {
+            // Without the GPU: a few broad, faint glows in the same colours.
+            for (let i = 0; i < 4; i++) {
+                const [r, g, b] = palette[i % 3];
+                const x = rand() * canvas.width, y = rand() * canvas.height, radius = (0.3 + rand() * 0.4) * canvas.width;
+                const glow = ctx.createRadialGradient(x, y, 0, x, y, radius);
+                glow.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.05)`);
+                glow.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+                ctx.fillStyle = glow;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+        }
+        ctx.scale(dpr, dpr);
+        // Stars, in the same frame the nebula's band was laid out in (y up).
+        const bandNormal = [-Math.sin(bandAngle), Math.cos(bandAngle)];
+        const centreX = 0.5 * BW / BH;
+        const count = Math.round(BW * BH / 800);
+        for (let i = 0; i < count; i++) {
+            const x = rand() * BW, y = rand() * BH;
+            const across = (x / BH - centreX) * bandNormal[0] + ((BH - y) / BH - 0.5) * bandNormal[1] - bandOffset;
+            if (rand() > 0.3 + 0.7 * Math.exp(-across * across / 0.05)) continue;
+            ctx.globalAlpha = 0.05 + Math.pow(rand(), 3) * 0.45;
+            ctx.fillStyle = _FIELD_COLOURS[Math.floor(rand() * _FIELD_COLOURS.length)];
             ctx.beginPath();
-            ctx.arc(x, y, r, 0, Math.PI * 2);
+            ctx.arc(x, y, 0.3 + Math.pow(rand(), 4) * 0.8, 0, Math.PI * 2);
             ctx.fill();
         }
-        ctx.restore();
+        // A few brighter stars with a soft glow.
+        for (let i = 0; i < Math.round(BW * BH / 60000); i++) {
+            const x = rand() * BW, y = rand() * BH;
+            const colour = _FIELD_COLOURS[Math.floor(rand() * _FIELD_COLOURS.length)];
+            const glow = ctx.createRadialGradient(x, y, 0, x, y, 3 + rand() * 3);
+            glow.addColorStop(0, colour);
+            glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            ctx.globalAlpha = 0.14 + rand() * 0.12;
+            ctx.fillStyle = glow;
+            ctx.fillRect(x - 6, y - 6, 12, 12);
+            ctx.globalAlpha = 0.55 + rand() * 0.3;
+            ctx.fillStyle = colour;
+            ctx.beginPath();
+            ctx.arc(x, y, 0.7, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        return { canvas, w: W, h: H, dpr, hex: _hexId, mx, my, bw: BW, bh: BH };
+    }
+    function _drawStarField(ctx, W, H) {
+        if (ctx === _probeCtx) return;
+        const dpr = window.devicePixelRatio || 1;
+        if (!_backdrop || _backdrop.w !== W || _backdrop.h !== H || _backdrop.dpr !== dpr || _backdrop.hex !== _hexId) {
+            _backdrop = _buildBackdrop(W, H);
+        }
+        const { mx, my } = _backdrop;
+        const ox = Math.max(-mx, Math.min(mx, _viewOffX * 0.02));
+        const oy = Math.max(-my, Math.min(my, _viewOffY * 0.02));
+        ctx.drawImage(_backdrop.canvas, -mx + ox, -my + oy, _backdrop.bw, _backdrop.bh);
     }
 
+    function _hzColor(alpha) {
+        return _lightMode ? `rgba(22,128,58,${alpha})` : `rgba(88,214,120,${alpha})`;
+    }
+    // Filled band with dashed edges at both limits. _drawHZLabel names it,
+    // after the bodies are drawn.
     function _drawHZBand(ctx, cx, cy, innerR, outerR) {
         if (outerR <= innerR || innerR < 0) return;
-        const grad = ctx.createRadialGradient(cx, cy, innerR, cx, cy, outerR);
-        grad.addColorStop(0,    'rgba(80,200,100,0)');
-        grad.addColorStop(0.25, 'rgba(80,200,100,0.07)');
-        grad.addColorStop(0.75, 'rgba(80,200,100,0.07)');
-        grad.addColorStop(1,    'rgba(80,200,100,0)');
+        const inner = Math.max(0, innerR);
+        const grad = ctx.createRadialGradient(cx, cy, inner, cx, cy, outerR);
+        grad.addColorStop(0,   _hzColor(0.16));
+        grad.addColorStop(0.5, _hzColor(_lightMode ? 0.24 : 0.28));
+        grad.addColorStop(1,   _hzColor(0.16));
+        const span = _arcSpan(cx, cy, outerR);
+        const fromCentre = Math.hypot(cx - _canvasW / 2, cy - _canvasH / 2);
+        // The canvas sits wholly in the hole: nothing of the band shows.
+        if (inner > 0 && !_arcSpan(cx, cy, inner) && fromCentre < inner) return;
+        if (!span) {
+            // The canvas sits wholly inside the band: fill it.
+            if (fromCentre < outerR) {
+                ctx.save();
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.rect(0, 0, _canvasW, _canvasH);
+                const hole = inner > 0 ? _arcSpan(cx, cy, inner) : null;
+                if (hole) {
+                    // A slice from the centre, so the whole hole in view is cut,
+                    // not just the sliver between the arc and its chord.
+                    ctx.moveTo(cx, cy);
+                    ctx.arc(cx, cy, inner, hole[0], hole[1]);
+                    ctx.closePath();
+                }
+                ctx.fill(hole ? 'evenodd' : 'nonzero');
+                ctx.restore();
+            }
+            return;
+        }
         ctx.save();
         ctx.fillStyle = grad;
         ctx.beginPath();
-        ctx.arc(cx, cy, outerR, 0, Math.PI * 2, false);
-        ctx.arc(cx, cy, Math.max(0, innerR), 0, Math.PI * 2, true);
+        if (span[1] - span[0] >= Math.PI * 2) {
+            ctx.arc(cx, cy, outerR, 0, Math.PI * 2, false);
+            ctx.arc(cx, cy, inner, 0, Math.PI * 2, true);
+        } else {
+            ctx.arc(cx, cy, outerR, span[0], span[1], false);
+            ctx.arc(cx, cy, inner, span[1], span[0], true);
+            ctx.closePath();
+        }
         ctx.fill();
+        ctx.strokeStyle = _hzColor(_lightMode ? 0.85 : 0.8);
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([7, 4]);
+        for (const r of [inner, outerR]) {
+            if (r >= 2) _strokeVisibleCircle(ctx, cx, cy, r, 11);
+        }
+        ctx.setLineDash([]);
+        ctx.restore();
+    }
+    function _drawHZLabel(ctx, cx, cy, innerR, outerR, text = 'HABITABLE ZONE') {
+        const inner = Math.max(0, innerR);
+        const mid = (inner + outerR) / 2;
+        ctx.save();
+        if (outerR - inner >= 9 && mid >= 40) {
+            // A dark pill keeps the label legible over planets and orbit paths.
+            ctx.font = '700 10px Inter, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            if ('letterSpacing' in ctx) ctx.letterSpacing = '1.2px';
+            const width = ctx.measureText(text).width + 14;
+            ctx.fillStyle = _lightMode ? 'rgba(255,255,255,0.9)' : 'rgba(6,18,14,0.85)';
+            ctx.strokeStyle = _hzColor(0.8);
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.roundRect(cx - width / 2, cy - mid - 8, width, 16, 8);
+            ctx.fill();
+            ctx.stroke();
+            ctx.fillStyle = _hzColor(1);
+            ctx.fillText(text, cx, cy - mid + 0.5);
+        }
         ctx.restore();
     }
 
@@ -2289,7 +3415,9 @@ const SystemViewer = (() => {
         const color = _starColor(s);
 
         ctx.save();
-        const glowReach = r * (_lineup === 'orbits' ? 3 : 1.65);
+        // Corona stays just past the limb. The orbit clearance sits further out,
+        // so the glow fades before the first planet.
+        const glowReach = r * (_lineup === 'orbits' ? 1.38 : 1.45);
         const glow = ctx.createRadialGradient(cx, cy, r * 0.2, cx, cy, glowReach);
         glow.addColorStop(0, color + (_lightMode ? '66' : 'aa'));
         glow.addColorStop(1, color + '00');
@@ -2336,26 +3464,1080 @@ const SystemViewer = (() => {
         ctx.stroke();
     }
 
+    // Signed hours. MgT stores siderealHours (retrograde is axial tilt past 90°).
+    // AoW stores rotationPeriod in hours. CT stores a string such as "18h" or "2d".
+    function _siderealHours(body) {
+        if (!body) return null;
+        if (typeof body.siderealHours === 'number' && Number.isFinite(body.siderealHours) && body.siderealHours !== 0)
+            return Math.abs(body.siderealHours);
+        if (typeof body.rotationPeriod === 'number' && Number.isFinite(body.rotationPeriod) && body.rotationPeriod > 0)
+            return body.rotationPeriod;
+        if (typeof body.rotationPeriod === 'string') {
+            const m = body.rotationPeriod.match(/([\d.]+)\s*([hdw])/i);
+            if (m) {
+                const n = parseFloat(m[1]);
+                const u = m[2].toLowerCase();
+                if (u === 'h') return n;
+                if (u === 'd') return n * 24;
+                if (u === 'w') return n * 168;
+            }
+        }
+        return null;
+    }
+
+    function _isTideLocked(body) {
+        if (!body) return false;
+        if (body.tidallyLocked || body.isTwilightZone) return true;
+        if (typeof body.rotationPeriod === 'string' && /tidal/i.test(body.rotationPeriod)) return true;
+        if (typeof body.rotationPeriod === 'number' && typeof body.orbitalPeriod === 'number'
+            && Math.abs(body.rotationPeriod - body.orbitalPeriod) < 0.001) return true;
+        return false;
+    }
+
+    const _reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)') || null;
+    function _motionOk() {
+        return !_reducedMotion?.matches;
+    }
+
+    // starAngle points from the body toward its light source. A locked body
+    // keeps that face; a spinning body turns under a star-fixed night side.
+    function _spinAngle(body, elapsedYears, starAngle) {
+        if (_isTideLocked(body)) return starAngle;
+        if (!_motionOk()) return 0;
+        const hours = _siderealHours(body);
+        if (!(hours > 0)) return 0;
+        const sign = body.axialTilt > 90 ? -1 : 1;
+        return sign * ((elapsedYears * 365.25 * 24) / hours) * Math.PI * 2;
+    }
+
+    // ── Painted worlds (day / night) ───────────────────────────────────────
+    // Presentation only. Orbit view looks down on the ecliptic, so each world
+    // is seen pole-on: it turns about the disc centre, its latitudes are
+    // circles (z, toward the viewer, is the sine of latitude), and its
+    // terminator is a straight line through the middle.
+    //
+    // A world is painted once per size bucket from its own atmosphere,
+    // hydrographics, temperature, and biomass, then rotated each frame.
+    // Light depends only on where the star is, so the shading and the
+    // atmosphere are computed per pixel once and turned to face the star.
+    function _hexDigit(value) {
+        if (typeof value === 'number' && Number.isFinite(value)) return value;
+        if (typeof value === 'string' && /^[0-9A-Fa-f]$/.test(value.trim())) return parseInt(value.trim(), 16);
+        return null;
+    }
+    function _uwpDigit(body, index) {
+        return typeof body.uwp === 'string' ? _hexDigit(body.uwp[index]) : null;
+    }
+    // Also read by the inspector's body icons, so a world looks the same in both.
+    function surfaceKind(body) {
+        return window.PlanetProfile ? PlanetProfile.kind(body) : null;
+    }
+    function _atmDigit(body) { return _hexDigit(body.atmCode) ?? _hexDigit(body.atm) ?? _uwpDigit(body, 2); }
+    function _hydroDigit(body) { return _hexDigit(body.hydroCode) ?? _hexDigit(body.hydro) ?? _uwpDigit(body, 3); }
+
+    // How strongly an atmosphere scatters light, by atmosphere digit. A look,
+    // not a physical model: trace air barely shows, dense air glows.
+    const _AIR_STRENGTH = [0, 0.15, 0.3, 0.35, 0.55, 0.6, 0.8, 0.85, 1.0, 1.05, 1.2, 1.3, 1.3, 1.4, 0.8, 1.1];
+    const _BAND_KELVIN = { Frozen: 200, Cold: 250, Cool: 278, Temperate: 295, Warm: 320, Hot: 380, Boiling: 420 };
+    // Everything a painting needs to know about one world.
+    function _climate(body, kind) {
+        const atm = _atmDigit(body);
+        const hydro = _hydroDigit(body);
+        const kelvin = Number(body.meanTempK) || _BAND_KELVIN[body.tempBand] || (kind === 'ice' ? 200 : kind === 'hot' ? 600 : 288);
+        const meanC = kelvin - 273.15;
+        const water = (hydro ?? 0) / 10;
+        // MgT biomass says whether anything grows; other editions fall back to
+        // a breathable, wet, mild world.
+        const life = body.biomass != null && body.biomass !== ''
+            ? Number(body.biomass) > 0
+            : (atm != null && atm >= 4 && atm <= 9 && (hydro ?? 0) >= 2 && meanC > -25 && meanC < 50);
+        let air = kind === 'gas' ? 0.7 : _AIR_STRENGTH[Math.max(0, Math.min(15, atm ?? 0))] || 0;
+        if (kind === 'barren') air = 0;
+        const pop = _hexDigit(body.pop) ?? _hexDigit(body.popCode) ?? _uwpDigit(body, 4) ?? 0;
+        return { atm: atm ?? 0, hydro: hydro ?? 0, water, kelvin, meanC, life, air, pop };
+    }
+    // Rim colour of each kind's air: Rayleigh blue for breathable air, dust
+    // for thin dry air, sulphur for corrosive air.
+    function _airColor(kind, climate, body) {
+        if (kind === 'gas') {
+            const type = body.ggType || '';
+            return type === 'GS' ? [120, 190, 255] : [255, 224, 176];
+        }
+        if (kind === 'exotic') return [236, 206, 120];
+        if (kind === 'hot') return [255, 150, 80];
+        if (kind === 'rad') return [190, 236, 120];
+        if (kind === 'storm') return [160, 196, 255];
+        if (kind === 'desert' && climate.atm <= 3) return [236, 184, 140];
+        if (kind === 'ice') return [180, 214, 255];
+        return [104, 164, 255];
+    }
+
+    function _seedOf(text) {
+        let h = 2166136261;
+        for (let i = 0; i < text.length; i++) {
+            h ^= text.charCodeAt(i);
+            h = Math.imul(h, 16777619) >>> 0;
+        }
+        return h;
+    }
+    function _rng(seed) {
+        let h = seed >>> 0 || 1;
+        return () => {
+            h ^= h >>> 16; h = Math.imul(h, 0x7feb352d) >>> 0;
+            h ^= h >>> 15; h = Math.imul(h, 0x846ca68b) >>> 0;
+            h ^= h >>> 16;
+            return (h >>> 0) / 4294967296;
+        };
+    }
+    // Seeded 3D value noise. Sampling on the sphere keeps features round
+    // near the rim instead of stretching them.
+    function _noise3(seed) {
+        const hash = (x, y, z) => {
+            let h = Math.imul(x, 374761393) ^ Math.imul(y, 668265263) ^ Math.imul(z, 1440670441) ^ seed;
+            h = Math.imul(h ^ (h >>> 13), 1274126177);
+            return ((h ^ (h >>> 16)) >>> 0) * 2.3283064365386963e-10;
+        };
+        return (x, y, z) => {
+            const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z);
+            const xf = x - xi, yf = y - yi, zf = z - zi;
+            const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf), w = zf * zf * (3 - 2 * zf);
+            const a = hash(xi, yi, zi), b = hash(xi + 1, yi, zi), c = hash(xi, yi + 1, zi), d = hash(xi + 1, yi + 1, zi);
+            const e = hash(xi, yi, zi + 1), f = hash(xi + 1, yi, zi + 1), g = hash(xi, yi + 1, zi + 1), k = hash(xi + 1, yi + 1, zi + 1);
+            const x00 = a + (b - a) * u, x10 = c + (d - c) * u, x01 = e + (f - e) * u, x11 = g + (k - g) * u;
+            const y0 = x00 + (x10 - x00) * v, y1 = x01 + (x11 - x01) * v;
+            return y0 + (y1 - y0) * w;
+        };
+    }
+    function _fbm(noise, x, y, z, octaves) {
+        let sum = 0, amp = 0.5, freq = 1, norm = 0;
+        for (let i = 0; i < octaves; i++) {
+            sum += amp * noise(x * freq, y * freq, z * freq);
+            norm += amp; amp *= 0.5; freq *= 2.03;
+        }
+        return sum / norm;
+    }
+    // Sharp crests: mountain chains, lineae, lava channels.
+    function _ridged(noise, x, y, z, octaves) {
+        let sum = 0, amp = 0.5, freq = 1, norm = 0, prev = 1;
+        for (let i = 0; i < octaves; i++) {
+            let n = 1 - Math.abs(noise(x * freq, y * freq, z * freq) * 2 - 1);
+            n *= n;
+            sum += n * amp * prev;
+            prev = n; norm += amp; amp *= 0.5; freq *= 2.1;
+        }
+        return sum / norm;
+    }
+    const _mixRGB = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+    const _smooth = (e0, e1, x) => { const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
+    function _ramp(stops, t) {
+        if (t <= stops[0][0]) return stops[0][1];
+        for (let i = 1; i < stops.length; i++) {
+            if (t <= stops[i][0]) {
+                const [t0, c0] = stops[i - 1], [t1, c1] = stops[i];
+                return _mixRGB(c0, c1, (t - t0) / (t1 - t0));
+            }
+        }
+        return stops[stops.length - 1][1];
+    }
+    // Vegetation by local temperature (°C): tundra scrub, boreal, temperate, tropical.
+    const _FOREST = [[-8, [86, 92, 72]], [2, [44, 78, 48]], [14, [58, 104, 50]], [26, [28, 88, 38]]];
+    const _GRASS = [[-8, [150, 146, 128]], [4, [138, 132, 96]], [14, [150, 150, 88]], [26, [196, 172, 104]]];
+    const _ARID = [[-10, [168, 160, 146]], [10, [192, 168, 124]], [30, [216, 184, 128]]];
+    const _OXIDE = [[0, [104, 58, 40]], [0.35, [160, 88, 56]], [0.7, [194, 124, 80]], [1, [222, 172, 128]]];
+    const _BARE = [[0, [88, 82, 74]], [0.5, [128, 118, 100]], [1, [174, 164, 146]]];
+    const _GAS_LOOKS = {
+        GS: { zone: [176, 216, 230], belt: [106, 160, 200], pole: [74, 118, 170], storm: [60, 90, 150] },
+        GM: { zone: [238, 222, 180], belt: [198, 166, 116], pole: [150, 140, 120], storm: [220, 204, 170] },
+        GL: { zone: [240, 226, 198], belt: [188, 128, 84], pole: [118, 108, 110], storm: [198, 96, 62] }
+    };
+
+    function _surfaceId(body, kind) {
+        return `${_hexId || ''}|${body.name || ''}|${body.type || ''}|${body.uwp || ''}|${body.diamKm || body.diam || ''}|${body.au ?? ''}|${body.pd ?? ''}|${kind}`;
+    }
+    const _disc = (px, py, size) => {
+        const u = (px + 0.5) / size * 2 - 1, v = (py + 0.5) / size * 2 - 1;
+        const d2 = u * u + v * v;
+        return d2 > 1 ? null : [u, v, Math.sqrt(1 - d2)];
+    };
+    function _canvas(size) {
+        const canvas = document.createElement('canvas');
+        canvas.width = canvas.height = size;
+        return canvas;
+    }
+    // A generator: it yields every few rows so a large painting is spread
+    // across frames instead of stalling one.
+    function* _paintWorldSteps(body, kind, size) {
+        const climate = _climate(body, kind);
+        const seed = _seedOf(_surfaceId(body, kind));
+        const rand = _rng(seed);
+        const shape = _noise3(seed);
+        const warp = _noise3(seed ^ 0x27d4eb2f);
+        const ridge = _noise3(seed ^ 0x165667b1);
+        const wet = _noise3(seed ^ 0x9e3779b9);
+        const grain = _noise3(seed ^ 0x85ebca6b);
+        const rowsPerStep = Math.max(2, Math.round(4096 / size));
+        const o = [rand() * 60, rand() * 60, rand() * 60];
+        const count = size * size;
+        const height = new Float32Array(count).fill(-1);
+        const rough = new Float32Array(count);
+        const damp = new Float32Array(count);
+        const terran = kind === 'ocean' || kind === 'temperate' || kind === 'desert';
+
+        // Pass 1: height, ridges, moisture.
+        for (let py = 0; py < size; py++) {
+            for (let px = 0; px < size; px++) {
+                const p = _disc(px, py, size);
+                if (!p) continue;
+                const [u, v, z] = p, i = py * size + px;
+                if (kind === 'gas') {
+                    height[i] = _fbm(shape, u * 3 + o[0], v * 3 + o[1], z * 14 + o[2], 4);
+                    rough[i] = _fbm(warp, u * 1.5 + o[1], v * 1.5 + o[2], z * 5 + o[0], 3);
+                    continue;
+                }
+                const s = 1.7;
+                const qx = _fbm(warp, u * s + o[0], v * s + o[1], z * s + o[2], 3) - 0.5;
+                const qy = _fbm(warp, u * s + o[2], v * s + o[0], z * s + o[1], 3) - 0.5;
+                height[i] = _fbm(shape, (u + qx * 0.9) * 2.1 + o[1], (v + qy * 0.9) * 2.1 + o[2], z * 2.1 + o[0], 6);
+                rough[i] = _ridged(ridge, u * 3.4 + o[2], v * 3.4 + o[0], z * 3.4 + o[1], 5);
+                damp[i] = _fbm(wet, u * 2.4 + o[0], v * 2.4 + o[2], z * 2.4 + o[1], 3);
+            }
+            if (py % rowsPerStep === rowsPerStep - 1) yield;
+        }
+        // Sea level from a sample, so the low ground covers the world's water share.
+        const samples = [];
+        for (let n = 0; n < 2000; n++) {
+            const h = height[Math.floor(rand() * count)];
+            if (h >= 0) samples.push(h);
+        }
+        samples.sort((a, b) => a - b);
+        const share = terran ? Math.min(0.97, Math.max(0.02, climate.water))
+            : ({ barren: 0.35, ice: 0.4, hot: 0.3, exotic: 0.4, storm: 0.5, rad: 0.35 }[kind] ?? 0.4);
+        const sea = samples[Math.floor((samples.length - 1) * share)] ?? 0.5;
+        const hasWater = terran && climate.hydro >= 1 && climate.kelvin < 373;
+        const oxide = kind === 'desert' && climate.atm <= 3;
+        const gas = _GAS_LOOKS[body.ggType] || _GAS_LOOKS.GL;
+
+        const surface = _canvas(size), ctx = surface.getContext('2d');
+        const image = ctx.createImageData(size, size), data = image.data;
+        const ocean = hasWater ? _canvas(size) : null;
+        const oceanImage = ocean ? ocean.getContext('2d').createImageData(size, size) : null;
+        const lava = kind === 'hot' ? _canvas(size) : null;
+        const lavaImage = lava ? lava.getContext('2d').createImageData(size, size) : null;
+        const elevation = (i) => {
+            const h = height[i];
+            if (h < 0) return 0;
+            const land = Math.max(0, (h - sea) / Math.max(0.001, 1 - sea));
+            return land + rough[i] * 0.28 * _smooth(0, 0.25, land);
+        };
+
+        // Pass 2: colour, with relief shading from the height field.
+        for (let py = 0; py < size; py++) {
+            for (let px = 0; px < size; px++) {
+                const i = py * size + px, h = height[i], k = i * 4;
+                if (h < 0) continue;
+                const [u, v, z] = _disc(px, py, size);
+                const fine = _fbm(grain, u * 14, v * 14, z * 14, 2) - 0.5;
+                let rgb;
+                let relief = 1;
+                if (kind === 'gas') {
+                    // Zones and belts spaced by latitude, so equatorial bands crowd
+                    // toward the rim. Uneven widths, and edges stirred into eddies.
+                    const lat = Math.asin(Math.min(1, z + (h - 0.5) * 0.06 + (rough[i] - 0.5) * 0.04));
+                    const pattern = Math.sin(lat * (10 + (seed % 5)) + (seed % 11))
+                        + 0.55 * Math.sin(lat * 23 + (seed % 3)) + 0.35 * Math.sin(lat * 5.3 + 1);
+                    const beltness = _smooth(-0.35, 0.55, pattern);
+                    rgb = _mixRGB(gas.zone, gas.belt, beltness * (0.55 + rough[i] * 0.6));
+                    // Polar regions lose the bands to a mottle of storms.
+                    const polar = _smooth(0.78, 0.94, z);
+                    if (polar > 0) rgb = _mixRGB(rgb, _mixRGB(gas.pole, gas.zone, _smooth(0.35, 0.7, h)), polar * 0.85);
+                    relief = 1 + fine * 0.14;
+                } else {
+                    const land = h >= sea;
+                    const e = elevation(i);
+                    // Local temperature: warm equator (the rim), cold poles (the centre), cold heights.
+                    const localC = climate.meanC + 15 - 45 * z * z - e * 28;
+                    if (terran) {
+                        if (!land && hasWater) {
+                            const depth = (sea - h) / Math.max(0.001, sea);
+                            rgb = _mixRGB([54, 146, 166], [10, 36, 90], _smooth(0.02, 0.3, depth));
+                            if (localC < -6) rgb = _mixRGB(rgb, [226, 236, 244], _smooth(-6, -14, localC));
+                            else if (oceanImage) oceanImage.data[k + 3] = 255;
+                        } else if (!land) {
+                            rgb = oxide ? [150, 110, 86] : [168, 152, 128];
+                        } else if (climate.life) {
+                            const moist = damp[i] - Math.exp(-(((z - 0.45) / 0.14) ** 2)) * 0.28 + (climate.water - 0.5) * 0.3;
+                            rgb = _mixRGB(_ramp(_GRASS, localC), _ramp(_FOREST, localC), _smooth(0.38, 0.6, moist));
+                            if (moist < 0.3) rgb = _mixRGB(rgb, _ramp(_ARID, localC), _smooth(0.3, 0.18, moist));
+                        } else {
+                            rgb = _ramp(oxide ? _OXIDE : _BARE, Math.min(1, e * 1.4 + (damp[i] - 0.5) * 0.5));
+                        }
+                        if (land) {
+                            rgb = _mixRGB(rgb, [124, 114, 102], _smooth(0.35, 0.7, e) * 0.7);
+                            if (hasWater && e < 0.012 && localC > 4) rgb = _mixRGB(rgb, [220, 204, 160], 0.6);
+                            if (localC < -8) rgb = _mixRGB(rgb, [240, 244, 248], _smooth(-8, -16, localC));
+                        }
+                    } else if (kind === 'barren') {
+                        rgb = _ramp([[0, [66, 68, 72]], [0.45, [104, 106, 110]], [0.55, [136, 138, 142]], [1, [184, 186, 190]]], h);
+                        if (climate.kelvin > 350) rgb = _mixRGB(rgb, [150, 120, 96], 0.25);
+                    } else if (kind === 'ice') {
+                        rgb = _ramp([[0, [146, 170, 194]], [0.5, [212, 224, 234]], [1, [246, 249, 252]]], h);
+                        rgb = _mixRGB(rgb, [164, 112, 90], _smooth(0.72, 0.95, rough[i]) * 0.65);
+                    } else if (kind === 'hot') {
+                        rgb = _ramp([[0, [34, 22, 20]], [0.6, [70, 44, 34]], [1, [110, 80, 60]]], h);
+                        const melt = Math.max(_smooth(0.74, 0.92, rough[i]), _smooth(sea, sea - 0.06, h));
+                        if (melt > 0) {
+                            rgb = _mixRGB(rgb, [255, 140, 50], melt * 0.85);
+                            lavaImage.data[k] = 255; lavaImage.data[k + 1] = 120 + melt * 90; lavaImage.data[k + 2] = 40;
+                            lavaImage.data[k + 3] = melt * 255;
+                        }
+                    } else if (kind === 'exotic') {
+                        rgb = _ramp([[0, [82, 80, 38]], [0.5, [138, 128, 64]], [1, [184, 170, 96]]], h);
+                    } else if (kind === 'storm') {
+                        rgb = _ramp([[0, [60, 70, 100]], [1, [140, 150, 184]]], h);
+                    } else {
+                        rgb = _ramp([[0, [56, 72, 38]], [0.6, [110, 130, 62]], [1, [162, 184, 96]]], h);
+                    }
+                    // Relief: slopes darken a little, measured per unit of radius so
+                    // every size bucket shades alike, and it reads at any sun angle.
+                    const right = px + 1 < size && height[i + 1] >= 0 ? elevation(i + 1) : e;
+                    const down = py + 1 < size && height[i + size] >= 0 ? elevation(i + size) : e;
+                    const perRadius = size / 2;
+                    const slope = Math.hypot(right - e, down - e) * perRadius;
+                    const facet = Math.max(-0.1, Math.min(0.1, (e - right) * perRadius * 0.06));
+                    relief = 1 - Math.min(0.2, slope * 0.06) + facet + fine * 0.1;
+                }
+                data[k] = Math.max(0, Math.min(255, rgb[0] * relief));
+                data[k + 1] = Math.max(0, Math.min(255, rgb[1] * relief));
+                data[k + 2] = Math.max(0, Math.min(255, rgb[2] * relief));
+                data[k + 3] = 255;
+            }
+            if (py % rowsPerStep === rowsPerStep - 1) yield;
+        }
+        ctx.putImageData(image, 0, 0);
+        if (ocean) ocean.getContext('2d').putImageData(oceanImage, 0, 0);
+        if (lava) lava.getContext('2d').putImageData(lavaImage, 0, 0);
+        yield;
+
+        const half = size / 2;
+        if (kind === 'barren' || kind === 'rad' || (kind === 'desert' && !climate.life && climate.atm <= 3)) {
+            // Craters, most of them small: a dark floor, a pale rim, and a few bright young rays.
+            const craters = kind === 'barren' ? 60 : 22;
+            for (let n = 0; n < craters; n++) {
+                const a = rand() * Math.PI * 2, d = Math.sqrt(rand()) * 0.94;
+                const cr = size * 0.09 * Math.pow(rand(), 2.4) * (1 - d * 0.45) + size * 0.004;
+                const cx = half + Math.cos(a) * d * half, cy = half + Math.sin(a) * d * half;
+                const floor = ctx.createRadialGradient(cx, cy, 0, cx, cy, cr);
+                floor.addColorStop(0, 'rgba(30, 30, 34, 0.38)');
+                floor.addColorStop(0.8, 'rgba(30, 30, 34, 0.22)');
+                floor.addColorStop(1, 'rgba(30, 30, 34, 0)');
+                ctx.fillStyle = floor;
+                ctx.beginPath(); ctx.arc(cx, cy, cr, 0, Math.PI * 2); ctx.fill();
+                ctx.strokeStyle = 'rgba(236, 236, 240, 0.22)';
+                ctx.lineWidth = Math.max(0.5, cr * 0.16);
+                ctx.beginPath(); ctx.arc(cx, cy, cr * 0.95, 0, Math.PI * 2); ctx.stroke();
+                if (cr > size * 0.03 && rand() < 0.2) {
+                    const rays = ctx.createRadialGradient(cx, cy, cr, cx, cy, cr * 3);
+                    rays.addColorStop(0, 'rgba(240, 240, 244, 0.16)');
+                    rays.addColorStop(1, 'rgba(240, 240, 244, 0)');
+                    ctx.fillStyle = rays;
+                    ctx.beginPath(); ctx.arc(cx, cy, cr * 3, 0, Math.PI * 2); ctx.fill();
+                }
+            }
+        }
+        if (kind === 'gas') {
+            // A ring of cyclones around the pole, each a pale core in a dark collar.
+            const ringCount = 5 + Math.floor(rand() * 4);
+            for (let n = 0; n < ringCount + 1; n++) {
+                const a = n / ringCount * Math.PI * 2 + rand() * 0.4, d = n === ringCount ? 0 : 0.13 + rand() * 0.06;
+                const cr = size * (0.028 + rand() * 0.018);
+                const cx = half + Math.cos(a) * d * half, cy = half + Math.sin(a) * d * half;
+                const swirl = ctx.createRadialGradient(cx, cy, 0, cx, cy, cr);
+                swirl.addColorStop(0, `rgba(${gas.zone.join(',')}, 0.55)`);
+                swirl.addColorStop(0.55, `rgba(${gas.pole.join(',')}, 0.45)`);
+                swirl.addColorStop(1, `rgba(${gas.pole.join(',')}, 0)`);
+                ctx.fillStyle = swirl;
+                ctx.beginPath(); ctx.arc(cx, cy, cr, 0, Math.PI * 2); ctx.fill();
+            }
+            // Storm ovals ride their latitude, so they are laid along it.
+            for (let n = 0; n < 3; n++) {
+                const a = rand() * Math.PI * 2, d = 0.4 + rand() * 0.45;
+                const sr = size * (n === 0 ? 0.075 : 0.03 + rand() * 0.02);
+                const cx = half + Math.cos(a) * d * half, cy = half + Math.sin(a) * d * half;
+                ctx.save();
+                ctx.translate(cx, cy); ctx.rotate(a + Math.PI / 2); ctx.scale(1.8, 1);
+                const storm = ctx.createRadialGradient(0, 0, 0, 0, 0, sr);
+                const tone = n === 0 ? gas.storm : gas.zone;
+                storm.addColorStop(0, `rgba(${tone.join(',')}, 0.9)`);
+                storm.addColorStop(0.7, `rgba(${tone.join(',')}, 0.55)`);
+                storm.addColorStop(1, `rgba(${tone.join(',')}, 0)`);
+                ctx.fillStyle = storm;
+                ctx.beginPath(); ctx.arc(0, 0, sr, 0, Math.PI * 2); ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        const world = { surface, blur: null, clouds: null, shade: null, ocean, lava, lights: null,
+            profile: { air: climate.air > 0 ? _airColor(kind, climate, body) : null, strength: climate.air, gas: kind === 'gas' } };
+
+        // Clouds: zonal streaks and a few cyclones, cover set by the air and water.
+        let cover = 0;
+        if (kind === 'exotic' || (kind === 'hot' && climate.atm >= 10)) cover = 0.92;
+        else if (kind === 'storm') cover = 0.8;
+        else if (terran && !oxide) cover = Math.min(0.72, 0.1 + climate.air * 0.38 * (0.5 + climate.water));
+        else if (oxide) cover = climate.air * 0.12;
+        else if (kind === 'ice' || kind === 'rad') cover = climate.air * 0.2;
+        if (cover > 0.03) {
+            const cloudNoise = _noise3(seed ^ 0x5bd1e995);
+            const cloudWarp = _noise3(seed ^ 0x3c6ef372);
+            const vortices = [];
+            for (let n = 0; n < 3; n++) {
+                const a = rand() * Math.PI * 2, d = 0.3 + rand() * 0.55;
+                vortices.push([Math.cos(a) * d, Math.sin(a) * d, 0.08 + rand() * 0.1, (rand() < 0.5 ? -1 : 1) * (3 + rand() * 3)]);
+            }
+            const density = new Float32Array(count);
+            for (let py = 0; py < size; py++) {
+                for (let px = 0; px < size; px++) {
+                    const p = _disc(px, py, size);
+                    if (!p) continue;
+                    let [u, v, z] = p;
+                    for (const [vx, vy, vr, turn] of vortices) {
+                        const dx = u - vx, dy = v - vy, fall = Math.exp(-(dx * dx + dy * dy) / (vr * vr));
+                        if (fall < 0.01) continue;
+                        const ang = turn * fall, c = Math.cos(ang), s = Math.sin(ang);
+                        u = vx + dx * c - dy * s; v = vy + dx * s + dy * c;
+                    }
+                    const w = _fbm(cloudWarp, u * 2 + 7, v * 2 + 3, z * 6, 3) - 0.5;
+                    density[py * size + px] = _fbm(cloudNoise, (u + w * 0.5) * 2.6, (v + w * 0.5) * 2.6, z * 8 + w, 5);
+                }
+                if (py % rowsPerStep === rowsPerStep - 1) yield;
+            }
+            const values = [];
+            for (let n = 0; n < 2000; n++) {
+                const i = Math.floor(rand() * count);
+                if (height[i] >= 0) values.push(density[i]);
+            }
+            values.sort((a, b) => a - b);
+            const edge = values[Math.floor((values.length - 1) * (1 - cover))] ?? 0.6;
+            const tone = kind === 'exotic' || kind === 'hot' ? [238, 222, 168] : kind === 'storm' ? [226, 232, 246] : oxide ? [240, 214, 190] : [255, 255, 255];
+            const clouds = _canvas(size), cctx = clouds.getContext('2d');
+            const shade = _canvas(size), sctx = shade.getContext('2d');
+            const cimg = cctx.createImageData(size, size), simg = sctx.createImageData(size, size);
+            for (let i = 0; i < count; i++) {
+                if (height[i] < 0) continue;
+                const a = _smooth(edge - 0.02, edge + 0.12, density[i]);
+                if (!a) continue;
+                const k = i * 4;
+                const lift = 0.86 + _smooth(edge, edge + 0.25, density[i]) * 0.14;
+                cimg.data[k] = tone[0] * lift; cimg.data[k + 1] = tone[1] * lift; cimg.data[k + 2] = tone[2] * lift;
+                cimg.data[k + 3] = a * 235;
+                simg.data[k + 3] = a * 150;
+            }
+            cctx.putImageData(cimg, 0, 0);
+            sctx.putImageData(simg, 0, 0);
+            world.clouds = clouds;
+            world.shade = shade;
+            yield;
+        }
+
+        // City lights come from population alone: none on an empty world, and
+        // roughly doubling with each population digit. Lights gather in
+        // cities of falling size, on dry ground where the world has seas.
+        if (climate.pop > 0) {
+            const lights = _canvas(size), lctx = lights.getContext('2d');
+            const dryOnly = hasWater;
+            const ground = (px, py) => {
+                if (px < 0 || py < 0 || px >= size || py >= size) return false;
+                const h = height[Math.floor(py) * size + Math.floor(px)];
+                return h >= 0 && (!dryOnly || h >= sea);
+            };
+            const total = Math.round(3 * Math.pow(1.95, climate.pop));
+            const cityCount = Math.min(64, 1 + climate.pop * 4);
+            const cities = [];
+            for (let tries = 0; cities.length < cityCount && tries < cityCount * 40; tries++) {
+                const px = rand() * size, py = rand() * size;
+                if (ground(px, py)) cities.push([px, py]);
+            }
+            // Zipf: the largest city holds the most lights.
+            const shares = cities.map((_, n) => 1 / (n + 1));
+            const shareSum = shares.reduce((a, b) => a + b, 0) || 1;
+            const dot = Math.max(0.45, size / 440);
+            const bright = Math.min(1, 0.45 + climate.pop * 0.06);
+            for (let c = 0; c < cities.length; c++) {
+                const [cx, cy] = cities[c];
+                const lightsHere = Math.max(1, Math.round(total * shares[c] / shareSum));
+                const spread = size * (0.006 + 0.03 * Math.sqrt(shares[c]));
+                for (let n = 0; n < lightsHere; n++) {
+                    const a = rand() * Math.PI * 2, d = spread * Math.sqrt(-2 * Math.log(1 - rand() * 0.98)) * 0.55;
+                    const px = cx + Math.cos(a) * d, py = cy + Math.sin(a) * d;
+                    if (!ground(px, py)) continue;
+                    const r = dot * (0.6 + rand() * 1.1);
+                    const glow = lctx.createRadialGradient(px, py, 0, px, py, r * 2.2);
+                    glow.addColorStop(0, `rgba(255, 214, 150, ${(bright * (0.55 + rand() * 0.45)).toFixed(2)})`);
+                    glow.addColorStop(1, 'rgba(255, 170, 80, 0)');
+                    lctx.fillStyle = glow;
+                    lctx.fillRect(px - r * 2.2, py - r * 2.2, r * 4.4, r * 4.4);
+                }
+                yield;
+            }
+            world.lights = lights;
+        }
+        return world;
+    }
+    function _paintWorld(body, kind, size) {
+        const steps = _paintWorldSteps(body, kind, size);
+        let step = steps.next();
+        while (!step.done) step = steps.next();
+        return step.value;
+    }
+    // The painting averaged over a full turn: what a fast spin looks like.
+    function _blurredSurface(world) {
+        if (world.blur) return world.blur;
+        const size = world.surface.width;
+        const blur = _canvas(size);
+        const ctx = blur.getContext('2d');
+        ctx.translate(size / 2, size / 2);
+        const steps = 36;
+        for (let i = 0; i < steps; i++) {
+            ctx.globalAlpha = 1 / (i + 1);
+            ctx.rotate(Math.PI * 2 / steps);
+            ctx.drawImage(world.surface, -size / 2, -size / 2);
+        }
+        world.blur = blur;
+        return blur;
+    }
+
+    // ── Light, fixed to the star ──────────────────────────────────────────
+    // In a frame where +x points at the star, a pole-on sphere at (x, y) has
+    // normal (x, y, z): sunlight is Lambert on x, the view is along z. So the
+    // night side, the twilight, the haze, and the halo never change shape;
+    // they are drawn once and turned toward the star.
+    const _LIGHT_SIZE = 256;
+    const _HALO = 0.16;
+    const _lightCache = new Map();
+    function _lightLayers(profile) {
+        const key = `${_lightMode ? 'L' : 'D'}|${profile.gas ? 'g' : 'r'}|${profile.air ? profile.air.join(',') : '-'}|${profile.strength}`;
+        let layers = _lightCache.get(key);
+        if (layers) return layers;
+        const size = _LIGHT_SIZE;
+        const strength = profile.strength || 0;
+        const ambient = _lightMode ? 0.45 : 0.045;
+        const wrap = 0.04 + Math.min(strength, 1.4) * 0.1;
+        const ink = _lightMode ? [96, 104, 118] : [2, 5, 12];
+        const night = _canvas(size), nctx = night.getContext('2d'), nimg = nctx.createImageData(size, size);
+        for (let py = 0; py < size; py++) {
+            for (let px = 0; px < size; px++) {
+                const p = _disc(px, py, size);
+                if (!p) continue;
+                const [x, , z] = p;
+                const diffuse = Math.pow(Math.max(0, Math.min(1, (x + wrap) / (1 + wrap))), 0.85);
+                let light = ambient + (1 - ambient) * diffuse;
+                light *= profile.gas ? 0.72 + 0.28 * Math.sqrt(z) : 0.9 + 0.1 * z;
+                const k = (py * size + px) * 4;
+                nimg.data[k] = ink[0]; nimg.data[k + 1] = ink[1]; nimg.data[k + 2] = ink[2];
+                nimg.data[k + 3] = Math.round((1 - light) * 255);
+            }
+        }
+        nctx.putImageData(nimg, 0, 0);
+        layers = { night, glow: null };
+        if (profile.air && strength > 0 && !_lightMode) {
+            // Additive: haze thickening toward the limb, a sunset band at the
+            // terminator, and a thin lit halo that wraps a little into the dark.
+            const gsize = Math.round(size * (1 + _HALO));
+            const glow = _canvas(gsize), gctx = glow.getContext('2d'), gimg = gctx.createImageData(gsize, gsize);
+            const [ar, ag, ab] = profile.air;
+            const shell = 0.03 + Math.min(strength, 1.4) * 0.035;
+            const reach = 1 + _HALO;
+            for (let py = 0; py < gsize; py++) {
+                for (let px = 0; px < gsize; px++) {
+                    const x = ((px + 0.5) / gsize * 2 - 1) * reach, y = ((py + 0.5) / gsize * 2 - 1) * reach;
+                    const d = Math.hypot(x, y);
+                    if (d > reach) continue;
+                    const facing = x / Math.max(d, 0.0001);
+                    const sunset = Math.exp(-(((facing + 0.02) / 0.14) ** 2)) * (profile.gas ? 0.2 : 0.65);
+                    const cr = ar + (255 - ar) * sunset, cg = ag + (140 - ag) * sunset, cb = ab + (80 - ab) * sunset;
+                    let amount;
+                    if (d <= 1) {
+                        const z = Math.sqrt(1 - d * d);
+                        const path = Math.min(7, 1 / Math.max(z, 0.07));
+                        amount = strength * 0.075 * Math.pow(path, 0.95) * _smooth(-0.22, 0.45, x);
+                    } else {
+                        const altitude = (d - 1) / shell;
+                        const limb = strength * 0.075 * Math.pow(7, 0.95);
+                        amount = limb * Math.exp(-altitude * 1.6) * (1 + 0.6 * Math.exp(-altitude * 6))
+                            * _smooth(-0.45, 0.45, facing) * _smooth(reach, 1 + _HALO * 0.45, d);
+                    }
+                    if (amount < 0.004) continue;
+                    const k = (py * gsize + px) * 4;
+                    gimg.data[k] = Math.min(255, cr * amount);
+                    gimg.data[k + 1] = Math.min(255, cg * amount);
+                    gimg.data[k + 2] = Math.min(255, cb * amount);
+                    gimg.data[k + 3] = 255;
+                }
+            }
+            gctx.putImageData(gimg, 0, 0);
+            layers.glow = glow;
+        }
+        _lightCache.set(key, layers);
+        return layers;
+    }
+    // Where emitted light shows, in the star frame: city lights only by
+    // night, lava always but brightest by night.
+    let _nightMasks = null;
+    function _emissionMasks() {
+        if (_nightMasks) return _nightMasks;
+        const size = 128;
+        const make = (dayLevel) => {
+            const canvas = _canvas(size), ctx = canvas.getContext('2d'), img = ctx.createImageData(size, size);
+            for (let py = 0; py < size; py++) {
+                for (let px = 0; px < size; px++) {
+                    const p = _disc(px, py, size);
+                    if (!p) continue;
+                    img.data[(py * size + px) * 4 + 3] = 255 * (dayLevel + (1 - dayLevel) * _smooth(0.06, -0.14, p[0]));
+                }
+            }
+            ctx.putImageData(img, 0, 0);
+            return canvas;
+        };
+        _nightMasks = { city: make(0), lava: make(0.35) };
+        return _nightMasks;
+    }
+    // One scratch canvas masks a rotating layer against a star-fixed one.
+    let _scratch = null;
+    function _maskedLayer(layer, turn, mask, r, makeFirst) {
+        const dpr = window.devicePixelRatio || 1;
+        const size = Math.max(8, Math.ceil(r * 2 * dpr));
+        if (!_scratch) _scratch = _canvas(size);
+        if (_scratch.width < size) _scratch.width = _scratch.height = size;
+        const sctx = _scratch.getContext('2d');
+        sctx.setTransform(1, 0, 0, 1, 0, 0);
+        sctx.globalCompositeOperation = 'source-over';
+        sctx.globalAlpha = 1;
+        sctx.clearRect(0, 0, size, size);
+        if (makeFirst) makeFirst(sctx, size);
+        else {
+            sctx.translate(size / 2, size / 2);
+            sctx.rotate(turn);
+            sctx.drawImage(layer, -size / 2, -size / 2, size, size);
+            sctx.setTransform(1, 0, 0, 1, 0, 0);
+        }
+        sctx.globalCompositeOperation = 'destination-in';
+        if (mask) sctx.drawImage(mask, 0, 0, size, size);
+        else {
+            sctx.translate(size / 2, size / 2);
+            sctx.rotate(turn);
+            sctx.drawImage(layer, -size / 2, -size / 2, size, size);
+            sctx.setTransform(1, 0, 0, 1, 0, 0);
+        }
+        return size;
+    }
+
+    const _SURFACE_SIZES = [32, 64, 128, 256, 512];
+    const _SURFACE_BUDGET = 24e6;
+    let _surfacePixels = 0;
+    function _surfaceSize(radius) {
+        const px = radius * 2 * (window.devicePixelRatio || 1);
+        return _SURFACE_SIZES.find(size => size >= px) || 512;
+    }
+    function _worldPixels(world) {
+        const layers = [world.surface, world.clouds, world.shade, world.ocean, world.lava, world.lights, world.blur].filter(Boolean).length;
+        return world.surface.width * world.surface.width * layers;
+    }
+    function _cacheWorld(key, world) {
+        _surfaceCache.set(key, world);
+        _surfacePixels += _worldPixels(world);
+        for (const [old, stale] of _surfaceCache) {
+            if (_surfacePixels <= _SURFACE_BUDGET || old === key) break;
+            _surfaceCache.delete(old);
+            _surfacePixels -= _worldPixels(stale);
+        }
+    }
+    // The best painting on hand. A tiny one is painted at once, so a world
+    // never shows bare; sharper ones are painted in frame time.
+    function _surfaceFor(body, kind, radius) {
+        const id = _surfaceId(body, kind);
+        const want = _surfaceSize(radius);
+        const key = `${id}@${want}`;
+        const ready = _surfaceCache.get(key);
+        if (ready) {
+            _surfaceCache.delete(key);
+            _surfaceCache.set(key, ready);
+            return ready;
+        }
+        if (!_surfaceQueue.has(key)) _surfaceQueue.set(key, { body, kind, size: want, steps: null });
+        for (const size of [..._SURFACE_SIZES].reverse()) {
+            const have = _surfaceCache.get(`${id}@${size}`);
+            if (have) return have;
+        }
+        const first = _paintWorld(body, kind, 32);
+        _cacheWorld(`${id}@32`, first);
+        _surfaceQueue.delete(`${id}@32`);
+        return first;
+    }
+    function _paintQueuedSurfaces(budgetMs) {
+        if (!_surfaceQueue.size) return;
+        const start = performance.now();
+        for (const [key, job] of _surfaceQueue) {
+            if (_surfaceCache.has(key)) { _surfaceQueue.delete(key); continue; }
+            job.steps ||= _paintWorldSteps(job.body, job.kind, job.size);
+            let step = job.steps.next();
+            while (!step.done && performance.now() - start < budgetMs) step = job.steps.next();
+            if (!step.done) return;
+            _surfaceQueue.delete(key);
+            _cacheWorld(key, step.value);
+        }
+    }
+    // 0 while a turn is easy to follow, 1 once it would strobe (about 3 turns
+    // a second on screen).
+    function _spinBlur(body) {
+        if (!_motionOk() || _isTideLocked(body)) return 0;
+        const hours = _siderealHours(body);
+        if (!(hours > 0)) return 0;
+        const t = Math.max(0, Math.min(1, (_visualRate * 24 / hours - 0.8) / 2.2));
+        return t * t * (3 - 2 * t);
+    }
+
+    // Fallback for bodies too small to paint: the flat night half.
     function _shadeNight(ctx, x, y, radius, starX, starY) {
         if (!_showDayNight) return;
-        // A top-down hemisphere illustration, using the existing host-star position.
         const angle = Math.atan2(starY - y, starX - x) + Math.PI;
         ctx.save();
-        ctx.fillStyle = 'rgba(0, 5, 15, 0.72)';
+        ctx.fillStyle = _lightMode ? 'rgba(109, 116, 128, 0.55)' : 'rgba(0, 5, 15, 0.72)';
         ctx.beginPath();
         ctx.arc(x, y, radius, angle - Math.PI / 2, angle + Math.PI / 2);
-        ctx.closePath(); ctx.fill(); ctx.restore();
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+    }
+
+    function _drawLitDisc(ctx, x, y, r, color, body, elapsedYears, starX, starY, parent = null) {
+        if (_collectingPlanets) {
+            _collectPlanet(x, y, r, body, elapsedYears, starX, starY, parent);
+            return false;
+        }
+        if (_planetTiles && _offCanvas(x, y, r * 2.2)) return true;
+        const tile = _planetTiles ? PlanetGL.tile(body) : null;
+        if (tile) {
+            const half = tile.size / 2 / (window.devicePixelRatio || 1) / tile.scale;
+            ctx.drawImage(PlanetGL.canvas, tile.sx, tile.sy, tile.size, tile.size, x - half, y - half, half * 2, half * 2);
+            return true;
+        }
+        const kind = _showDayNight && r >= 2.5 && !_measuringFrame ? surfaceKind(body) : null;
+        if (!kind || kind === 'star' || kind === 'belt' || kind === 'ring') {
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, Math.PI * 2);
+            ctx.fill();
+            _shadeNight(ctx, x, y, r, starX, starY);
+            return;
+        }
+        const world = _surfaceFor(body, kind, r);
+        const light = _lightLayers(world.profile);
+        const starAngle = Math.atan2(starY - y, starX - x);
+        const spin = _spinAngle(body, elapsedYears, starAngle);
+        const blur = _spinBlur(body);
+        const turn = spin - starAngle;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(0, 0, r, 0, Math.PI * 2);
+        ctx.clip();
+        // Ground, turning with the world's sidereal day.
+        ctx.save();
+        ctx.rotate(spin);
+        if (blur < 1) ctx.drawImage(world.surface, -r, -r, r * 2, r * 2);
+        if (blur > 0) {
+            ctx.globalAlpha = blur;
+            ctx.drawImage(_blurredSurface(world), -r, -r, r * 2, r * 2);
+        }
+        ctx.restore();
+        ctx.rotate(starAngle);
+        // Sun glint on open water, where the star's reflection meets the eye.
+        if (world.ocean && r >= 12 && blur < 1 && !_lightMode) {
+            const size = _maskedLayer(world.ocean, turn, null, r, (sctx, s) => {
+                const gx = s / 2 + s / 2 * 0.7, gy = s / 2;
+                const glint = sctx.createRadialGradient(gx, gy, 0, gx, gy, s * 0.16);
+                glint.addColorStop(0, 'rgba(255, 246, 226, 0.75)');
+                glint.addColorStop(0.35, 'rgba(255, 236, 200, 0.25)');
+                glint.addColorStop(1, 'rgba(255, 236, 200, 0)');
+                sctx.fillStyle = glint;
+                sctx.fillRect(0, 0, s, s);
+            });
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            ctx.globalAlpha = 1 - blur;
+            ctx.drawImage(_scratch, 0, 0, size, size, -r, -r, r * 2, r * 2);
+            ctx.restore();
+        }
+        // Weather runs a little ahead of the ground; its shadow falls away from the star.
+        if (world.clouds) {
+            const drift = spin * 1.08 - starAngle;
+            const alpha = 1 - blur * 0.85;
+            ctx.save();
+            ctx.translate(-r * 0.025, 0);
+            ctx.rotate(drift);
+            ctx.globalAlpha = alpha * 0.8;
+            ctx.drawImage(world.shade, -r, -r, r * 2, r * 2);
+            ctx.restore();
+            ctx.save();
+            ctx.rotate(drift);
+            ctx.globalAlpha = alpha;
+            ctx.drawImage(world.clouds, -r, -r, r * 2, r * 2);
+            ctx.restore();
+        }
+        // Night, twilight, and the dimming toward the limb.
+        ctx.drawImage(light.night, -r, -r, r * 2, r * 2);
+        // Emitted light after dark: cities, and lava that never quite goes out.
+        if (!_lightMode && r >= 4) {
+            const masks = _emissionMasks();
+            for (const [layer, mask, strength] of [[world.lights, masks.city, 0.95], [world.lava, masks.lava, 0.9]]) {
+                if (!layer) continue;
+                const size = _maskedLayer(layer, turn, mask, r);
+                ctx.save();
+                ctx.globalCompositeOperation = 'lighter';
+                ctx.globalAlpha = strength * (1 - blur * 0.8);
+                ctx.drawImage(_scratch, 0, 0, size, size, -r, -r, r * 2, r * 2);
+                ctx.restore();
+            }
+        }
+        ctx.restore();
+        // Air: haze across the disc and the lit halo past the limb.
+        if (light.glow && r >= 3) {
+            const reach = r * (1 + _HALO);
+            ctx.rotate(starAngle);
+            ctx.globalCompositeOperation = 'lighter';
+            ctx.drawImage(light.glow, -reach, -reach, reach * 2, reach * 2);
+        }
+        ctx.restore();
+    }
+
+    // Plain-text rotation for the inspector, from the same rules as the tooltip.
+    function rotationText(body) {
+        if (_isTideLocked(body)) return 'Tidally locked';
+        const hours = _siderealHours(body);
+        if (!(hours > 0)) return '';
+        return `${formatDisplayNumber(hours, 1, 'h')}${body.axialTilt > 90 ? ', retrograde' : ''}`;
+    }
+
+    function _rotationNote(body) {
+        if (_isTideLocked(body)) return '<div>Rotation: tidally locked</div>';
+        const hours = _siderealHours(body);
+        if (!(hours > 0)) return '';
+        const retro = body.axialTilt > 90 ? ', retrograde' : '';
+        return `<div>Sidereal day: ${formatDisplayNumber(hours, 1, 'h')}${retro}</div>`;
+    }
+
+    // A highport: a station in low orbit, drawn as a small lit structure, not a
+    // moon. Its period comes from the world's own size and gravity (a circular
+    // orbit a few hundred kilometres up); it circles in the equatorial plane
+    // and passes behind the world and through its shadow.
+    function _highportPeriodYears(body) {
+        const radiusM = Number(body.diamKm) > 0 ? body.diamKm * 500 : null;
+        const g = Number(body.gravity) > 0 ? body.gravity * 9.81 : null;
+        const seconds = radiusM && g ? 2 * Math.PI * Math.sqrt(Math.pow(radiusM * 1.06, 3) / (g * radiusM * radiusM)) : 90 * 60;
+        return seconds / (365.25 * 86400);
+    }
+    // Highport art: one painted station per starport class (assets/starports),
+    // loaded the first time a highport is drawn. Each entry crops the art to
+    // its opaque bounds, names the hub the station turns about, and places its
+    // navigation lights (red to port, green to starboard, by the side of the
+    // hub each tip lies on) and white anti-collision strobes on the real spar
+    // tips of that painting. Coordinates are fractions of the cropped half
+    // width and half height, from the crop's centre. Class D has no art of
+    // its own and borrows E's.
+    const _HIGHPORT_ART = {
+        A: { file: 'highport-a.png', crop: [22, 22, 359, 364], pivot: [0, 0],
+             nav: [[0.92, -0.89], [0.92, 0.89], [-0.92, 0.89], [-0.92, -0.89]],
+             strobe: [[0, -0.98], [0.98, 0], [0, 0.98], [-0.98, 0]] },
+        B: { file: 'highport-b.png', crop: [17, 17, 282, 286], pivot: [0, 0],
+             nav: [[0.9, -0.85], [0.85, 0.9], [-0.86, 0.9], [-0.9, -0.85]],
+             strobe: [[0, -0.98], [0.98, 0], [0, 0.98], [-0.98, 0]] },
+        C: { file: 'highport-c.png', crop: [16, 17, 267, 244], pivot: [0.1, 0],
+             nav: [[0.96, -0.94], [0.96, 0.95], [-1, -0.05]],
+             strobe: [[0.96, -0.48], [0.99, 0.42]] },
+        E: { file: 'highport-e.png', crop: [12, 12, 178, 206], pivot: [0, 0.2],
+             nav: [[1, 0.2], [-1, 0.19]],
+             strobe: [[0.04, -0.98], [0, 1]] }
+    };
+    _HIGHPORT_ART.D = _HIGHPORT_ART.E;
+    function _highportArt(cls) {
+        const art = _HIGHPORT_ART[cls] || _HIGHPORT_ART.E;
+        if (!art.img) {
+            art.img = new Image();
+            art.img.onload = () => { art.ready = true; };
+            art.img.src = 'assets/starports/' + art.file;
+        }
+        return art;
+    }
+    // The painting is a few hundred pixels across and shows on screen at a
+    // few dozen at most, so each on-screen size gets one careful downscale,
+    // kept, instead of a fresh resample every frame. A shaded copy (the hull
+    // in the world's shadow, windows still faintly lit) is made alongside.
+    const _highportMips = new Map();
+    function _highportSprite(art, widthPx) {
+        const w = Math.max(4, Math.min(320, Math.ceil(widthPx / 4) * 4));
+        const key = `${art.file}:${w}`;
+        let mip = _highportMips.get(key);
+        if (mip) return mip;
+        const [sx, sy, sw, sh] = art.crop;
+        const h = Math.max(4, Math.round(w * sh / sw));
+        const lit = _canvas(w); lit.height = h;
+        const c = lit.getContext('2d');
+        c.imageSmoothingEnabled = true;
+        c.imageSmoothingQuality = 'high';
+        c.drawImage(art.img, sx, sy, sw, sh, 0, 0, w, h);
+        const dark = _canvas(w); dark.height = h;
+        const d = dark.getContext('2d');
+        d.drawImage(lit, 0, 0);
+        d.globalCompositeOperation = 'source-atop';
+        d.fillStyle = 'rgba(10, 18, 36, 0.5)';
+        d.fillRect(0, 0, w, h);
+        mip = { lit, dark, w, h };
+        _highportMips.set(key, mip);
+        return mip;
+    }
+    // The station's orbit lasts about ninety minutes, so at any time rate
+    // beyond a few minutes per second it would jump around the world several
+    // times a second. Its drawn angle follows the true one at up to a turn
+    // every six seconds or so and falls behind past that: scenery that moves
+    // gracefully rather than scenery that strobes. Nothing reads it back.
+    const _highportAngles = new WeakMap();
+    function _highportAngle(body, want) {
+        const MAX_RATE = 1.1;   // radians per second of wall time
+        let st = _highportAngles.get(body);
+        if (!st) { st = { angle: want, want }; _highportAngles.set(body, st); return want; }
+        const delta = want - st.want;
+        st.want = want;
+        const cap = MAX_RATE * Math.max(_frameDt, 1 / 240);
+        st.angle += Math.max(-cap, Math.min(cap, delta));
+        return st.angle;
+    }
+    function _drawHighport(ctx, body, x, y, r, elapsedYears, starX, starY, front) {
+        if (_collectingPlanets || _lineup !== 'orbits' || !window.PlanetProfile) return;
+        const kind = PlanetProfile.kind(body);
+        if (!kind || kind === 'belt') return;
+        const profile = PlanetProfile.of(body, _surfaceId(body, kind));
+        if (!profile.port?.high || r < 1.5) return;
+        const basis = window.PlanetGL?.axisBasis ? PlanetGL.axisBasis(profile, profile.rotation.locked ? 0 : profile.rotation.tilt)
+            : { e1: [1, 0, 0], e2: [0, 1, 0] };
+        const orbitR = Math.max(r * 1.3, r + 7);
+        const t = _highportAngle(body, _hashEpoch(`${_hexId}:highport`) + (2 * Math.PI / _highportPeriodYears(body)) * elapsedYears);
+        const vx = Math.cos(t) * basis.e1[0] + Math.sin(t) * basis.e2[0];
+        const vy = Math.cos(t) * basis.e1[1] + Math.sin(t) * basis.e2[1];
+        const vz = Math.cos(t) * basis.e1[2] + Math.sin(t) * basis.e2[2];
+        const sx = x + vx * orbitR, sy = y + vy * orbitR;
+        // Drawn in two passes: the far half before the world, the near half after.
+        const behind = vz < 0;
+        if (behind === front) {
+            if (front && _showOrbits && _orbitOpacity > 0) {
+                // The station's path, faint, as an ellipse in the equatorial plane.
+                ctx.save();
+                ctx.strokeStyle = `rgba(190, 240, 255, ${(0.18 * _orbitOpacity).toFixed(3)})`;
+                ctx.setLineDash([2, 4]);
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                for (let k = 0; k <= 64; k++) {
+                    const a = k / 64 * Math.PI * 2;
+                    const px = x + (Math.cos(a) * basis.e1[0] + Math.sin(a) * basis.e2[0]) * orbitR;
+                    const py = y + (Math.cos(a) * basis.e1[1] + Math.sin(a) * basis.e2[1]) * orbitR;
+                    if (k) ctx.lineTo(px, py); else ctx.moveTo(px, py);
+                }
+                ctx.stroke();
+                ctx.restore();
+            }
+            return;
+        }
+        if (behind && Math.hypot(sx - x, sy - y) < r) return;
+        // In the world's shadow: the station's own lights stay on, the sunlit hull goes dark.
+        const toStar = Math.atan2(starY - y, starX - x);
+        const along = vx * Math.cos(toStar) + vy * Math.sin(toStar);
+        const across = Math.abs(-vx * Math.sin(toStar) + vy * Math.cos(toStar)) * orbitR;
+        const shaded = along < 0 && across < r;
+        // Half width of the station on screen: a quarter of the world's radius,
+        // never below 4 px so it reads, never above 18 so it stays a station.
+        const size = Math.max(4, Math.min(18, r * 0.24));
+        const now = _motionOk() ? performance.now() / 1000 : 0;
+        const phase = _hashEpoch(`${_hexId}:highport:lights`);
+        const art = _highportArt(profile.port.cls);
+        const [cr, cg, cb] = profile.port.color;
+        const aspect = art.crop[3] / art.crop[2];
+        const sizeY = size * aspect;
+        const ox = -art.pivot[0] * size, oy = -art.pivot[1] * sizeY;   // hub to the station's point
+        const lampR = Math.max(0.7, size * 0.075);                       // one navigation light
+        ctx.save();
+        ctx.translate(sx, sy);
+        // Running lights: the whole station's wash, breathing slowly.
+        const breathe = 0.85 + 0.15 * Math.sin(now * 1.3 + phase);
+        const wash = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 2.6);
+        wash.addColorStop(0, `rgba(${cr}, ${cg}, ${cb}, ${((shaded ? 0.22 : 0.34) * breathe).toFixed(3)})`);
+        wash.addColorStop(0.5, `rgba(${cr}, ${cg}, ${cb}, ${((shaded ? 0.08 : 0.12) * breathe).toFixed(3)})`);
+        wash.addColorStop(1, `rgba(${cr}, ${cg}, ${cb}, 0)`);
+        ctx.fillStyle = wash;
+        ctx.fillRect(-size * 2.6, -size * 2.6, size * 5.2, size * 5.2);
+        // The station turns slowly about its hub, on the wall clock alone: the
+        // orbital angle steps in jumps whenever simulated time runs faster
+        // than real time, and a spin tied to it snaps instead of turning.
+        ctx.rotate(now * 0.25 + phase);
+        if (art.ready) {
+            const dpr = window.devicePixelRatio || 1;
+            const mip = _highportSprite(art, size * 2 * dpr);
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(shaded ? mip.dark : mip.lit, ox - size, oy - sizeY, size * 2, sizeY * 2);
+        }
+        // The hub's own glow, pulsing, over the painted core.
+        ctx.globalCompositeOperation = 'lighter';
+        const pulse = 0.6 + 0.4 * (0.5 + 0.5 * Math.sin(now * 2.1 + phase));
+        const hub = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 0.3);
+        hub.addColorStop(0, `rgba(255, 250, 225, ${(0.6 * pulse).toFixed(3)})`);
+        hub.addColorStop(0.45, `rgba(${cr}, ${cg}, ${cb}, ${(0.25 * pulse).toFixed(3)})`);
+        hub.addColorStop(1, `rgba(${cr}, ${cg}, ${cb}, 0)`);
+        ctx.fillStyle = hub;
+        ctx.fillRect(-size * 0.3, -size * 0.3, size * 0.6, size * 0.6);
+        const lamp = (lx, ly, rgb, on) => {
+            const a = on ? 1 : 0.22;
+            const halo = ctx.createRadialGradient(lx, ly, 0, lx, ly, lampR * 2.6);
+            halo.addColorStop(0, `rgba(${rgb}, ${(0.4 * a).toFixed(3)})`);
+            halo.addColorStop(1, `rgba(${rgb}, 0)`);
+            ctx.fillStyle = halo;
+            ctx.fillRect(lx - lampR * 2.6, ly - lampR * 2.6, lampR * 5.2, lampR * 5.2);
+            ctx.fillStyle = `rgba(${rgb}, ${(0.95 * a).toFixed(3)})`;
+            ctx.beginPath(); ctx.arc(lx, ly, lampR, 0, Math.PI * 2); ctx.fill();
+        };
+        // Navigation lights: red to port, green to starboard, blinking in turn.
+        const blink = Math.floor(now * 1.2 + phase) % 2;
+        art.nav.forEach(([nx, ny]) => {
+            const starboard = nx - art.pivot[0] > 0;
+            lamp(nx * size + ox, ny * sizeY + oy, starboard ? '70, 255, 140' : '255, 70, 70',
+                starboard ? blink === 0 : blink === 1);
+        });
+        // Anti-collision strobes: a white double flash every second and a half.
+        // With motion reduced they simply stay lit.
+        const cycle = (now + phase * 0.3) % 1.5;
+        const flash = !now || cycle < 0.07 || (cycle > 0.18 && cycle < 0.25);
+        if (flash) art.strobe.forEach(([nx, ny]) => lamp(nx * size + ox, ny * sizeY + oy, '255, 255, 255', true));
+        ctx.restore();
+        if (_scanView && r >= 6) {
+            ctx.save();
+            ctx.font = '600 9px ui-monospace, "Cascadia Mono", Consolas, monospace';
+            ctx.fillStyle = 'rgba(190, 240, 255, 0.85)';
+            ctx.fillText(`HIGHPORT ${profile.port.cls}`, sx + size + 5, sy - size - 3);
+            ctx.restore();
+        }
     }
 
     function _drawWorld(ctx, w, px, py, elapsed_years, wIdx, starX, starY) {
         const r     = _worldBodyRadius(w);
         const color = _worldColor(w);
-
-        ctx.fillStyle = color;
-        ctx.beginPath();
-        ctx.arc(px, py, r, 0, Math.PI * 2);
-        ctx.fill();
-        _shadeNight(ctx, px, py, r, starX, starY);
+        _drawHighport(ctx, w, px, py, r, elapsed_years, starX, starY, false);
+        _drawLitDisc(ctx, px, py, r, color, w, elapsed_years, starX, starY);
+        _drawHighport(ctx, w, px, py, r, elapsed_years, starX, starY, true);
+        // Rings shaded on the GPU replace the flat circles; clicks land on the real band.
+        const gpuRings = _planetTiles ? PlanetGL.tile(w)?.rings : null;
+        const ringHit = body => _hitBodies.push({ kind: body.size === 'R' ? 'moon' : 'ring', body, cx: px, cy: py,
+            r: gpuRings.outer * r, innerR: gpuRings.inner * r });
 
         const moons = (w.moons || []).filter(m => m.type !== 'Empty');
         // Moon paths use the same "Show orbit rings" control as planetary orbits.
@@ -2364,7 +4546,7 @@ const SystemViewer = (() => {
             const moonAlpha = _lightMode ? _orbitOpacity * 0.65 : _orbitOpacity * 0.40;
             moons.forEach((m, mi) => {
                 if (m.size === 'R') return;
-                const mDist = _moonOrbitRadius(r, mi);
+                const mDist = _moonOrbitRadius(r, mi, w);
                 if (mDist < 2) return;
                 ctx.beginPath();
                 ctx.arc(px, py, mDist, 0, Math.PI * 2);
@@ -2373,14 +4555,18 @@ const SystemViewer = (() => {
                 ctx.stroke();
             });
         }
+        const ringMoons = moons.filter(m => m.size === 'R');
         if (!_hideMoons) moons.forEach((m, mi) => {
-            const mDist = _moonOrbitRadius(r, mi);
+            const mDist = m.size === 'R'
+                ? _ringOrbitRadius(r, ringMoons.indexOf(m), ringMoons.length)
+                : _moonOrbitRadius(r, mi, w);
 
             // A Ring (CT: size === 'R', from either generation path — Bottom-Up also sets
             // type:'Ring' but Top-Down doesn't, so size is the one field both paths agree on)
             // is a band around the planet, not a discrete orbiting body — skip the per-frame
             // orbital angle entirely and draw a thin static circle instead.
             if (m.size === 'R') {
+                if (gpuRings) { ringHit(m); return; }
                 _drawStaticRing(ctx, px, py, mDist);
                 _hitBodies.push({ kind: 'moon', body: m, cx: px, cy: py, r: mDist + 3 * _zoomScale(), innerR: Math.max(0, mDist - 3 * _zoomScale()) });
                 return;
@@ -2392,13 +4578,29 @@ const SystemViewer = (() => {
             const mx          = px + mDist * Math.cos(mAngle);
             const my          = py + mDist * Math.sin(mAngle);
             const isMainworld = m.type === 'Mainworld';
-            const moonR       = _satelliteRadius(isMainworld);
-
-            ctx.fillStyle = '#6a7070';
-            ctx.beginPath();
-            ctx.arc(mx, my, moonR, 0, Math.PI * 2);
-            ctx.fill();
-            _shadeNight(ctx, mx, my, moonR, starX, starY);
+            const moonR       = _satelliteRadius(m);
+            _drawHighport(ctx, m, mx, my, moonR, elapsed_years, starX, starY, false);
+            const shadedOnGPU = _drawLitDisc(ctx, mx, my, moonR, '#6a7070', m, elapsed_years, starX, starY, w);
+            _drawHighport(ctx, m, mx, my, moonR, elapsed_years, starX, starY, true);
+            if (_showDayNight && !shadedOnGPU && !_collectingPlanets) {
+                const cover = _easeEclipse(
+                    `${_hexId}:${wIdx}:${mi}`,
+                    _shadowCover(mx, my, px, py, r, starX, starY)
+                );
+                if (cover > 0.02) {
+                    ctx.save();
+                    const wash = ctx.createRadialGradient(mx, my, moonR * 0.15, mx, my, moonR);
+                    const ink = _lightMode ? '109, 116, 128' : '8, 12, 18';
+                    wash.addColorStop(0, `rgba(${ink}, ${(cover * 0.94).toFixed(3)})`);
+                    wash.addColorStop(0.7, `rgba(${ink}, ${(cover * 0.82).toFixed(3)})`);
+                    wash.addColorStop(1, `rgba(${ink}, ${(cover * 0.28).toFixed(3)})`);
+                    ctx.fillStyle = wash;
+                    ctx.beginPath();
+                    ctx.arc(mx, my, moonR, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                }
+            }
             if (isMainworld) _drawMainworldStar(ctx, mx, my, moonR);
 
             if (_lineup === 'orbits' && isMainworld && m.name && !_hideMainworldHighlight) {
@@ -2419,7 +4621,8 @@ const SystemViewer = (() => {
         // interleaved with the moon index sequence above, so rings get their own close-in offset.
         const rings = w.rings || [];
         if (!_hideMoons) rings.forEach((rg, ri) => {
-            const rDist = _ringOrbitRadius(r, ri);
+            if (gpuRings) { ringHit(rg); return; }
+            const rDist = _ringOrbitRadius(r, ri, rings.length);
             _drawStaticRing(ctx, px, py, rDist);
             _hitBodies.push({ kind: 'ring', body: rg, cx: px, cy: py, r: rDist + 3 * _zoomScale(), innerR: Math.max(0, rDist - 3 * _zoomScale()) });
         });
@@ -2440,13 +4643,10 @@ const SystemViewer = (() => {
     function _drawBeltRing(ctx, cx, cy, r, isMainworld = false, dashOffset = 0) {
         if (r < 2 || r > _MAX_DASHED_RING_RADIUS) return;
         ctx.save();
-        ctx.beginPath();
-        ctx.arc(cx, cy, r, 0, Math.PI * 2);
         ctx.strokeStyle    = isMainworld ? '#4fc3a188' : '#88888855';
         ctx.lineWidth      = isMainworld ? 7 : 5;
-        ctx.lineDashOffset = dashOffset;
         ctx.setLineDash([3, 7]);
-        ctx.stroke();
+        _strokeVisibleCircle(ctx, cx, cy, r, 10, dashOffset);
         ctx.setLineDash([]);
         ctx.restore();
     }
@@ -2627,6 +4827,7 @@ const SystemViewer = (() => {
             if (w.travelZone && w.travelZone !== 'G')
                                    html += `<div>Zone: ${w.travelZone}</div>`;
             if (w.diamKm != null) html += `<div style="margin-top:4px">Diameter: ${formatDisplayNumber(w.diamKm, 0, 'km')}</div>`;
+            html += _rotationNote(w);
             if (w.mass != null) html += `<div>Mass: ${formatDisplayNumber(w.mass, 3, 'M⊕')}</div>`;
             if (w.gravity != null) html += `<div>Gravity: ${formatDisplayNumber(w.gravity, 2, 'G')}</div>`;
             if (w.meanTempK != null) html += `<div>Temperature: ${formatDisplayNumber(w.meanTempK, 0, 'K')}</div>`;
@@ -2649,6 +4850,7 @@ const SystemViewer = (() => {
             if (m.travelZone && m.travelZone !== 'G')
                                    html += `<div>Zone: ${m.travelZone}</div>`;
             if (m.diamKm != null) html += `<div style="margin-top:4px">Diameter: ${formatDisplayNumber(m.diamKm, 0, 'km')}</div>`;
+            html += _rotationNote(m);
             if (m.mass != null) html += `<div>Mass: ${formatDisplayNumber(m.mass, 3, 'M⊕')}</div>`;
             if (m.gravity != null) html += `<div>Gravity: ${formatDisplayNumber(m.gravity, 2, 'G')}</div>`;
             if (m.meanTempK != null) html += `<div>Temperature: ${formatDisplayNumber(m.meanTempK, 0, 'K')}</div>`;
@@ -2677,6 +4879,14 @@ const SystemViewer = (() => {
         let tx = mx + 16, ty = my - 12;
         if (tx + 295 > W) tx = mx - 305;
         if (ty + 280 > H) ty = my - 290;
+        // The orbit view parks the card in the map's top left corner, where it
+        // never sits on the body it describes.
+        _tipDocked = true;
+        _tooltip.classList.toggle('sv-tip-docked', _tipDocked);
+        if (_tipDocked) {
+            const rect = _orrCanvas.getBoundingClientRect();
+            tx = rect.left + 18; ty = rect.top + 18;
+        }
         _tooltip.style.left = Math.max(0, tx) + 'px';
         _tooltip.style.top  = Math.max(0, ty) + 'px';
     }
@@ -2694,7 +4904,15 @@ const SystemViewer = (() => {
             if (!e.repeat) _togglePause();
             return;
         }
+        const openPopover = e.key === 'Escape' && isOpen() && document.querySelector('#system-viewer-overlay .sv-pop[open]');
+        if (openPopover && !e.defaultPrevented) {
+            e.preventDefault();
+            openPopover.open = false;
+            openPopover.querySelector('summary')?.focus();
+            return;
+        }
         if (!e.defaultPrevented && e.key === 'Escape' && isOpen() &&
+            !document.querySelector('.campaign-stardate-dialog[open], .atlas-crop-dialog[open]') &&
             !(window.SurfaceViewer  && window.SurfaceViewer.isOpen()) &&
             !(window.ApproachViewer && window.ApproachViewer.isOpen())) close();
     });
@@ -2821,6 +5039,7 @@ const SystemViewer = (() => {
             hitBodies:             _hitBodies,
             hideMoons:              _hideMoons,
             hideHZ:                 _hideHZ,
+            hideJumpLimit:          _hideJumpLimit,
             hideMainworldHighlight: _hideMainworldHighlight,
             lineup:                 _lineup,
             lineupDisc:             _lineupDisc,
@@ -2851,6 +5070,7 @@ const SystemViewer = (() => {
         _tracking               = false;
         _hideMoons              = false;
         _hideHZ                 = false;
+        _hideJumpLimit          = false;
         _lineup                 = 'orbits';
         _lineupDisc             = 1;
         // The mainworld highlight is identification, which is (g) — a coloured
@@ -2885,6 +5105,7 @@ const SystemViewer = (() => {
         _hitBodies              = saved.hitBodies;
         _hideMoons              = saved.hideMoons;
         _hideHZ                 = saved.hideHZ;
+        _hideJumpLimit          = !!saved.hideJumpLimit;
         _hideMainworldHighlight = saved.hideMainworldHighlight;
         _lineup                 = saved.lineup;
         _lineupDisc             = saved.lineupDisc;
@@ -2983,7 +5204,7 @@ const SystemViewer = (() => {
         const width = Math.max(1, _overlay.clientWidth);
         let chrome = 0;
         for (const node of _overlay.children) {
-            if (node === _orrCanvas || node === _tooltip) continue;
+            if (node === _orrCanvas || node === _tooltip || node.classList.contains('sv-floating')) continue;
             chrome += node.getBoundingClientRect().height;
         }
         const height = Math.max(1, _overlay.clientHeight - chrome);
@@ -3068,23 +5289,28 @@ const SystemViewer = (() => {
         const width = Math.max(20, _canvasW - pad * 2);
         const height = Math.max(20, _canvasH - pad * 2);
         const cx = _canvasW / 2, cy = _canvasH / 2;
-        for (let i = 0; i < 12; i++) {
-            _drawOrrery();
-            const box = _localBounds(body);
-            if (!box) { _stopFollow(); return false; }
-            const bw = Math.max(1, box.right - box.left);
-            const bh = Math.max(1, box.bottom - box.top);
-            const lcx = (box.left + box.right) / 2;
-            const lcy = (box.top + box.bottom) / 2;
-            const ratio = Math.min(width / bw, height / bh);
-            _viewOffX += cx - lcx;
-            _viewOffY += cy - lcy;
-            if (Math.abs(1 - ratio) < 0.02) break;
-            const newZoom = Math.max(_minZoom, Math.min(_MAX_ZOOM, _viewZoom * ratio));
-            const zratio = newZoom / _viewZoom;
-            _viewOffX *= zratio;
-            _viewOffY *= zratio;
-            _viewZoom = newZoom;
+        _measuringFrame = true;
+        try {
+            for (let i = 0; i < 12; i++) {
+                _drawOrrery();
+                const box = _localBounds(body);
+                if (!box) { _stopFollow(); return false; }
+                const bw = Math.max(1, box.right - box.left);
+                const bh = Math.max(1, box.bottom - box.top);
+                const lcx = (box.left + box.right) / 2;
+                const lcy = (box.top + box.bottom) / 2;
+                const ratio = Math.min(width / bw, height / bh);
+                _viewOffX += cx - lcx;
+                _viewOffY += cy - lcy;
+                if (Math.abs(1 - ratio) < 0.02) break;
+                const newZoom = Math.max(_minZoom, Math.min(_MAX_ZOOM, _viewZoom * ratio));
+                const zratio = newZoom / _viewZoom;
+                _viewOffX *= zratio;
+                _viewOffY *= zratio;
+                _viewZoom = newZoom;
+            }
+        } finally {
+            _measuringFrame = false;
         }
         _drawOrrery();
         if (!_followHit(_bodyHit(body))) { _stopFollow(); return false; }
@@ -3094,8 +5320,10 @@ const SystemViewer = (() => {
     function centerOnBody(body) {
         return frameBody(body);
     }
-    function locationEntries() {
-        if (!_sys) return [];
+    // `sys` defaults to the open system. The inspector passes its own normalized
+    // copy, which yields the same keys because they come from the same paths.
+    function locationEntries(sys = _sys) {
+        if (!sys) return [];
         const entries = [];
         function add(body, path, fallback) {
             if (body.type === 'Empty') return;
@@ -3104,16 +5332,16 @@ const SystemViewer = (() => {
             const key = JSON.stringify([path, body.name || '', body.type || '', body.orbitId ?? null, body.au ?? null, body.pd ?? null]);
             entries.push({ body, key, label: body.name || fallback });
         }
-        (_sys.stars || []).forEach((s, i) => add(s, `star:${i}`, `Star ${i + 1}`));
-        (_sys.worlds || []).forEach((w, i) => {
+        (sys.stars || []).forEach((s, i) => add(s, `star:${i}`, `Star ${i + 1}`));
+        (sys.worlds || []).forEach((w, i) => {
             add(w, `world:${i}`, `${w.type || 'World'} ${i + 1}`);
             (w.moons || []).forEach((m, j) => add(m, `world:${i}:moon:${j}`, `${w.name || `World ${i + 1}`} / Moon ${j + 1}`));
             (w.rings || []).forEach((r, j) => add(r, `world:${i}:ring:${j}`, `${w.name || `World ${i + 1}`} / Ring ${j + 1}`));
         });
         return entries;
     }
-    function locationForBody(body) {
-        return locationEntries().find(entry => entry.body === body) || null;
+    function locationForBody(body, sys = _sys) {
+        return locationEntries(sys).find(entry => entry.body === body) || null;
     }
     function locationPosition(anchor) {
         if (!_orrCanvas || anchor.hexId !== _hexId) return null;
@@ -3133,11 +5361,57 @@ const SystemViewer = (() => {
     function remapHexId(fn) {
         if (typeof fn === 'function' && _hexId) _hexId = fn(_hexId);
     }
+    let _timeSaveTimer = null;
+
+    function campaignClockDays() {
+        if (window.campaignTime && Number.isFinite(window.campaignTime.days)) return window.campaignTime.days;
+        const year = Number.isFinite(window.orreryDefaultYear) ? window.orreryDefaultYear : 0;
+        const day = Number.isFinite(window.orreryDefaultDay) ? window.orreryDefaultDay : 1;
+        return year * 365 + Math.min(365, Math.max(1, day)) - 1;
+    }
+    function _scheduleCampaignTimeSave() {
+        clearTimeout(_timeSaveTimer);
+        _timeSaveTimer = setTimeout(() => {
+            _timeSaveTimer = null;
+            window.dbManager?.saveCampaignTime?.();
+        }, 600);
+    }
+    function _flushCampaignTimeSave() {
+        if (!_timeSaveTimer) return;
+        clearTimeout(_timeSaveTimer);
+        _timeSaveTimer = null;
+        window.dbManager?.saveCampaignTime?.();
+    }
+    function _syncStardateFields() {
+        const value = document.getElementById('campaign-stardate-value');
+        if (value) value.textContent = _dateText(campaignClockDays());
+    }
+    function _clockParts(days) {
+        if (!Number.isFinite(days)) days = 0;
+        const year = Math.floor(days / 365);
+        const gameDay = days - year * 365 + 1;
+        return {
+            year,
+            day: Math.max(1, Math.min(365, Math.floor(gameDay))),
+            seconds: Math.floor(((gameDay - Math.floor(gameDay)) * 86400) + 1e-5) % 86400
+        };
+    }
+    function setCampaignClock(year, day, seconds) {
+        _setDays((Number.isFinite(year) ? Math.trunc(year) : 0) * 365
+            + Math.min(365, Math.max(1, day || 1)) - 1
+            + Math.min(86399, Math.max(0, seconds || 0)) / 86400);
+        _flushCampaignTimeSave();
+    }
+
     return { open, close, isOpen, refresh, handleWheel, normalizeSystem, renderSnapshot, resize, selectBody,
-        centerOnBody, frameBody, isTracking: () => _tracking && !!_trackedBody,
+        centerOnBody, frameBody, isTracking: () => _tracking && !!_trackedBody, surfaceKind,
         trackedBody: () => _trackedBody,
-        locationForBody, locationPosition, fitView, searchAlignments,
+        locationForBody, locationEntries, locationPosition, fitView, searchAlignments,
+        rotationText, starColor: s => _STAR_COLORS[s?.sType] || null,
         time: () => ({ days: _totalDays(), year: _gameYear, day: _gameDay, paused: _paused, shuttleRate: _shuttleRate }),
+        campaignClockParts: () => _clockParts(campaignClockDays()),
+        formatCampaignClock: () => _dateText(campaignClockDays()),
+        setCampaignClock, syncCampaignTimeFields: _syncStardateFields,
         currentHexId: () => _hexId, currentSystem: () => _sys, remapHexId };
 
 })();
