@@ -1,6 +1,6 @@
 import type { SectorHex, SectorIndex, TruthManifest, TruthOverview, TruthPolities } from '@voyage/shared';
 import farLabels from '../../../../universe/far_labels.json' with { type: 'json' };
-import { now } from '../platform/browser.ts';
+import { nextFrame, now, prefersReducedMotion } from '../platform/browser.ts';
 import type { Camera, Viewport } from './camera.ts';
 import { toScreen, visibleRect } from './camera.ts';
 import { hexCentre, hexCorners, parseHex, ROW_STEP, sectorRect, SECTOR_COLS, SECTOR_ROWS, toGlobal, type Rect } from './geometry.ts';
@@ -14,7 +14,7 @@ import {
 import { routeSegments, type RouteSegment } from './route_lines.ts';
 import type { MapTheme } from './theme.ts';
 import { PPP_GRID, PPP_NAMES, tierFor, type Tier } from './tiers.ts';
-import { placeTitle, type Box } from './titles.ts';
+import { boxesOverlap, clampTitle, fadeToward, stepScale, titleAnchor, titleFits, zoomStep, type Box } from './titles.ts';
 import { baseMarks, hasGasGiant, starport, worldHasWater, worldIsBelt } from './uwp.ts';
 
 const HEX_OUTLINE_CAP = 12000;
@@ -29,16 +29,31 @@ const FAR_LABEL_DOT = 3;
 const TITLE_FONT = 13;
 const TITLE_MIN_FONT = 9;
 const TITLE_TOP = 56;
-const TITLE_MIN_W = 56;
-const TITLE_MIN_H = 24;
 const TITLE_PAD_X = 0.55;
 const TITLE_PAD_Y = 0.32;
 const TITLE_RADIUS = 0.3;
 const TITLE_PILL_ALPHA = 0.55;
 const TITLE_TEXT_ALPHA = 0.95;
+/** A new zoom step whose spot lands within this many pixels of the old one is the same spot: no cross-fade. */
+const TITLE_SAME_PX = 2;
 
 type FarLabel = { sector: string; hex: string; name: string };
 type Selection = { slug: string; hhhh: string };
+
+/** A placed title: top-left anchor in map units, size in pixels. */
+type TitlePill = { x: number; y: number; w: number; h: number; fontPx: number };
+
+/** One subsector's title: where it was placed for a zoom step, and how visible it is now. */
+type TitleState = {
+    step: number;
+    index: SectorIndex;
+    label: string;
+    pill: TitlePill | null;
+    alpha: number;
+    moving: boolean;
+    /** The previous step's pill, fading out while the new one fades in. */
+    out: { label: string; pill: TitlePill; alpha: number } | null;
+};
 
 type DrawSector = {
     slug: string;
@@ -120,12 +135,6 @@ function subsectorName(index: SectorIndex, letter: string): string {
     return found ? found : 'Subsector ' + letter;
 }
 
-function worldsNear(worlds: { x: number; y: number }[], visible: Box, reach: number): { x: number; y: number }[] {
-    const x1 = visible.x + visible.w + reach;
-    const y1 = visible.y + visible.h + reach;
-    return worlds.filter((world) => world.x > visible.x - reach && world.x < x1 && world.y > visible.y - reach && world.y < y1);
-}
-
 function visibleHexes(view: Rect): { q: number; r: number }[] {
     const q0 = Math.floor(view.x0) - 1;
     const q1 = Math.ceil(view.x1) + 1;
@@ -159,6 +168,12 @@ export class MapRenderer {
     private selected: Selection | null = null;
     /** Left inset for subsector titles, in CSS pixels. 0 keeps titles at the viewport edge. */
     private workspaceLeft = 0;
+    /** Subsector titles by "slug:letter": placement per zoom step and the current fade. */
+    private readonly titleStates = new Map<string, TitleState>();
+    /** World centres per index object, for title placement. */
+    private readonly titleWorlds = new WeakMap<object, { x: number; y: number }[]>();
+    private titleTime = 0;
+    private titleSeq = 0;
     private width = 0;
     private height = 0;
     private dpr = 1;
@@ -742,87 +757,178 @@ export class MapRenderer {
     }
 
     /**
-     * One pill per subsector, in screen space, from PPP_NAMES up.
-     * The selected hex is blocked as the square of radius one hex size.
+     * One pill per subsector, from PPP_NAMES up (B1.12a). Where a pill sits is decided once
+     * per subsector and zoom step, in map space, and cached; while panning it rides with the
+     * map. Each frame only clamps it to the usable canvas (sticky) and fades it: out where it
+     * would cover the selected hex or the visible part of its subsector cannot hold it, and
+     * across a zoom step that picks a different spot.
      */
     private subsectorTitles(
         ready: { sector: DrawSector; index: SectorIndex }[],
-        marks: Mark[],
+        _marks: Mark[],
         cam: Camera,
         vp: Viewport,
     ): void {
-        if (!ready.length) return;
-        const hexSizePx = cam.ppp / 1.5;
-        const worlds = marks.map((mark) => ({ x: mark.sx, y: mark.sy }));
-        const blocked: Box[] = [];
-        const guard = this.selectedGuard(cam, vp, hexSizePx);
-        if (guard) blocked.push(guard);
-        const ctx = this.ctx;
+        const time = now();
+        const elapsed = time - this.titleTime;
+        this.titleTime = time;
+        this.titleSeq += 1;
+        const duration = this.theme.tFast * 1000;
+        const instant = !(duration > 0) || prefersReducedMotion();
+        const amount = instant ? 1 : elapsed / duration;
+        const step = zoomStep(cam.ppp);
+        const bounds: Box = {
+            x: this.workspaceLeft,
+            y: TITLE_TOP,
+            w: vp.width - this.workspaceLeft,
+            h: vp.height - TITLE_TOP,
+        };
+        const guard = this.selectedGuard(cam, vp, cam.ppp / 1.5);
+        const spanX = SECTOR_COLS / 4;
+        const spanY = (SECTOR_ROWS / 4) * ROW_STEP;
+        const live = new Set<string>();
+        let moving = false;
         let drew = false;
         for (const item of ready) {
             for (let row = 0; row < 4; row++) {
                 for (let col = 0; col < 4; col++) {
-                    const visible = this.subsectorVisible(item.sector, col, row, cam, vp);
-                    if (!visible) continue;
+                    const rect: Box = { x: item.sector.rect.x0 + col * spanX, y: item.sector.rect.y0 + row * spanY, w: spanX, h: spanY };
+                    const topLeft = toScreen(cam, vp, rect.x, rect.y);
+                    const home: Box = { x: topLeft.sx, y: topLeft.sy, w: rect.w * cam.ppp, h: rect.h * cam.ppp };
+                    if (home.x >= vp.width || home.y >= vp.height || home.x + home.w <= 0 || home.y + home.h <= 0) continue;
                     const letter = String.fromCharCode(65 + row * 4 + col);
-                    const label = item.sector.name + ' - ' + subsectorName(item.index, letter);
-                    let fontPx = TITLE_FONT;
-                    ctx.font = '600 ' + fontPx + 'px ' + this.theme.fontText;
-                    let textW = ctx.measureText(label).width;
-                    const room = visible.w - 24;
-                    if (room > 0 && textW > room) {
-                        fontPx *= room / textW;
-                        if (fontPx < TITLE_MIN_FONT) continue;
-                        ctx.font = '600 ' + fontPx + 'px ' + this.theme.fontText;
-                        textW = ctx.measureText(label).width;
+                    const key = item.sector.slug + ':' + letter;
+                    live.add(key);
+
+                    let state = this.titleStates.get(key);
+                    if (!state || state.step !== step || state.index !== item.index) {
+                        const label = item.sector.name + ' - ' + subsectorName(item.index, letter);
+                        const pill = this.placeSubsectorTitle(item, rect, label, step);
+                        const kept = state && state.index === item.index && state.pill && pill
+                            && state.pill.fontPx === pill.fontPx
+                            && Math.abs(state.pill.x - pill.x) * cam.ppp < TITLE_SAME_PX
+                            && Math.abs(state.pill.y - pill.y) * cam.ppp < TITLE_SAME_PX;
+                        if (state && kept) {
+                            state.step = step;
+                            state.pill = pill;
+                        } else {
+                            const leaving = !instant && state && state.pill && state.alpha > 0
+                                ? { label: state.label, pill: state.pill, alpha: state.alpha }
+                                : null;
+                            state = { step, index: item.index, label, pill, alpha: 0, moving: false, out: leaving };
+                            this.titleStates.set(key, state);
+                        }
                     }
-                    const hPad = fontPx * TITLE_PAD_X;
-                    const vPad = fontPx * TITLE_PAD_Y;
-                    const pillW = textW + hPad * 2;
-                    const pillH = fontPx + vPad * 2;
-                    const spot = placeTitle(
-                        visible,
-                        pillW,
-                        pillH,
-                        worldsNear(worlds, visible, hexSizePx * 0.8),
-                        hexSizePx,
-                        blocked,
-                    );
-                    if (!spot) continue;
-                    blocked.push({ x: spot.x, y: spot.y, w: pillW, h: pillH });
-                    const radius = Math.min(fontPx * TITLE_RADIUS, pillH / 2);
-                    ctx.beginPath();
-                    ctx.roundRect(spot.x, spot.y, pillW, pillH, radius);
-                    ctx.globalAlpha = TITLE_PILL_ALPHA;
-                    ctx.fillStyle = this.theme.chart.titlePill;
-                    ctx.fill();
-                    ctx.globalAlpha = TITLE_TEXT_ALPHA;
-                    ctx.fillStyle = this.theme.chart.titleText;
-                    ctx.textAlign = 'left';
-                    ctx.textBaseline = 'middle';
-                    ctx.fillText(label, spot.x + hPad, spot.y + pillH / 2);
-                    drew = true;
+
+                    const out = state.out;
+                    if (out) {
+                        out.alpha = fadeToward(out.alpha, 0, amount);
+                        if (out.alpha > 0) {
+                            const at = toScreen(cam, vp, out.pill.x, out.pill.y);
+                            const spot = clampTitle({ x: at.sx, y: at.sy }, out.pill.w, out.pill.h, home, bounds);
+                            this.paintTitle(out.label, out.pill, spot, out.alpha);
+                            drew = true;
+                            moving = true;
+                        } else {
+                            state.out = null;
+                        }
+                    }
+
+                    const pill = state.pill;
+                    if (!pill) continue;
+                    const at = toScreen(cam, vp, pill.x, pill.y);
+                    const spot = clampTitle({ x: at.sx, y: at.sy }, pill.w, pill.h, home, bounds);
+                    const covers = guard !== null && boxesOverlap({ x: spot.x, y: spot.y, w: pill.w, h: pill.h }, guard);
+                    const target = !covers && titleFits(pill.w, pill.h, home, bounds) ? 1 : 0;
+                    if (instant) {
+                        state.alpha = target;
+                        state.moving = false;
+                    } else if (state.moving) {
+                        state.alpha = fadeToward(state.alpha, target, amount);
+                        state.moving = state.alpha !== target;
+                    } else if (state.alpha !== target) {
+                        // The fade starts this frame; it advances from the next one.
+                        state.moving = true;
+                    }
+                    if (state.moving) moving = true;
+                    if (state.alpha > 0) {
+                        this.paintTitle(state.label, pill, spot, state.alpha);
+                        drew = true;
+                    }
                 }
             }
         }
-        if (drew) ctx.globalAlpha = 1;
+        for (const key of this.titleStates.keys()) if (!live.has(key)) this.titleStates.delete(key);
+        if (drew) this.ctx.globalAlpha = 1;
+        if (moving) this.requestTitleFrame(cam);
     }
 
-    private subsectorVisible(sector: DrawSector, col: number, row: number, cam: Camera, vp: Viewport): Box | null {
-        const spanX = SECTOR_COLS / 4;
-        const spanY = (SECTOR_ROWS / 4) * ROW_STEP;
-        const x0 = sector.rect.x0 + col * spanX;
-        const y0 = sector.rect.y0 + row * spanY;
-        const topLeft = toScreen(cam, vp, x0, y0);
-        const bottomRight = toScreen(cam, vp, x0 + spanX, y0 + spanY);
-        const x = Math.max(topLeft.sx, this.workspaceLeft);
-        const y = Math.max(topLeft.sy, TITLE_TOP);
-        const right = Math.min(bottomRight.sx, vp.width);
-        const bottom = Math.min(bottomRight.sy, vp.height);
-        const w = right - x;
-        const h = bottom - y;
-        if (w < TITLE_MIN_W || h < TITLE_MIN_H) return null;
-        return { x, y, w, h };
+    /** Label size and anchor for one subsector at one zoom step. The font is fixed for the step. */
+    private placeSubsectorTitle(
+        item: { sector: DrawSector; index: SectorIndex },
+        rect: Box,
+        label: string,
+        step: number,
+    ): TitlePill | null {
+        const ctx = this.ctx;
+        let fontPx = TITLE_FONT;
+        ctx.font = '600 ' + fontPx + 'px ' + this.theme.fontText;
+        let textW = ctx.measureText(label).width;
+        const room = rect.w * stepScale(step) - 24;
+        if (room > 0 && textW > room) {
+            fontPx *= room / textW;
+            if (fontPx < TITLE_MIN_FONT) return null;
+            ctx.font = '600 ' + fontPx + 'px ' + this.theme.fontText;
+            textW = ctx.measureText(label).width;
+        }
+        const w = textW + fontPx * TITLE_PAD_X * 2;
+        const h = fontPx + fontPx * TITLE_PAD_Y * 2;
+        const anchor = titleAnchor(rect, step, w, h, this.titleWorldsOf(item.sector, item.index));
+        return anchor ? { x: anchor.x, y: anchor.y, w, h, fontPx } : null;
+    }
+
+    /** World centres of one sector in map units, built once per index object. */
+    private titleWorldsOf(sector: DrawSector, index: SectorIndex): { x: number; y: number }[] {
+        const cached = this.titleWorlds.get(index);
+        if (cached) return cached;
+        const worlds: { x: number; y: number }[] = [];
+        for (const hhhh of Object.keys(index.hexes)) {
+            const local = parseHex(hhhh);
+            if (!local) continue;
+            const global = toGlobal(sector.x, sector.y, local.col, local.row);
+            worlds.push(hexCentre(global.q, global.r));
+        }
+        this.titleWorlds.set(index, worlds);
+        return worlds;
+    }
+
+    private paintTitle(label: string, pill: TitlePill, spot: { x: number; y: number }, alpha: number): void {
+        const ctx = this.ctx;
+        ctx.font = '600 ' + pill.fontPx + 'px ' + this.theme.fontText;
+        ctx.beginPath();
+        ctx.roundRect(spot.x, spot.y, pill.w, pill.h, Math.min(pill.fontPx * TITLE_RADIUS, pill.h / 2));
+        ctx.globalAlpha = TITLE_PILL_ALPHA * alpha;
+        ctx.fillStyle = this.theme.chart.titlePill;
+        ctx.fill();
+        ctx.globalAlpha = TITLE_TEXT_ALPHA * alpha;
+        ctx.fillStyle = this.theme.chart.titleText;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, spot.x + pill.fontPx * TITLE_PAD_X, spot.y + pill.h / 2);
+    }
+
+    /**
+     * A fade needs frames the view does not otherwise draw. One more draw is asked for, and
+     * dropped if the view has drawn in the meantime (the timeout lets the view's own frame
+     * callback, registered later, run first).
+     */
+    private requestTitleFrame(cam: Camera): void {
+        const seq = this.titleSeq;
+        nextFrame(() => {
+            setTimeout(() => {
+                if (this.titleSeq === seq) this.draw(cam);
+            }, 0);
+        });
     }
 
     /** Axis-aligned square around the selected hex. Radius is one hex size. */

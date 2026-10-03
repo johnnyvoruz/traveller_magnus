@@ -31,6 +31,8 @@ export type MapTheme = {
     fontDisplay: string;
     fontData: string;
     fontText: string;
+    /** --t-fast in seconds: the title fade. 0 when the token is absent, which means no fade. */
+    tFast: number;
     chart: ChartColours;
     routeColours: Record<string, string>;
 };
@@ -66,6 +68,7 @@ export function readTheme(el: HTMLElement): MapTheme {
         fontDisplay: token(style, '--font-display'),
         fontData: token(style, '--font-data'),
         fontText: token(style, '--font-text'),
+        tFast: token(style, '--t-fast') === '' ? 0 : cssTime(token(style, '--t-fast')),
         chart: {
             world: token(style, '--chart-world'),
             water: token(style, '--chart-water'),

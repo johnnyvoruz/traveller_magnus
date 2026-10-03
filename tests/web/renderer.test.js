@@ -283,6 +283,45 @@ test('subsector titles name the sector from PPP_NAMES and are absent below it', 
     assert.equal(calls.filter((call) => call[0] === 'fillText' && String(call[1]).includes(' - ')).length, 0);
 });
 
+test('a subsector title rides with the map while panning and keeps its size (B1.12a)', () => {
+    const { canvas, calls } = recordingCanvas();
+    const renderer = new MapRenderer(canvas, theme);
+    renderer.setChart({
+        sectors: [{ slug: 'On', name: 'On Sector', x: 0, y: 0, canonical: true }],
+    }, { truthVersion: 'v2', sectors: [] }, 'canonical');
+    const index = { hexes: { '0101': { name: 'Alpha' } } };
+    renderer.setIndexSource(() => index);
+    renderer.resize(1200, 900, 1);
+    const pills = [];
+    const fonts = new Set();
+    for (let i = 0; i <= 10; i++) {
+        calls.length = 0;
+        renderer.draw({ x: 2.5 + i * 0.05, y: 3, ppp: 80 });
+        const rects = calls.filter((call) => call[0] === 'roundRect');
+        assert.equal(rects.length, 1, 'one title in view');
+        pills.push(rects[0]);
+        const text = calls.findIndex((call) => call[0] === 'fillText' && String(call[1]).includes(' - '));
+        for (let at = text; at >= 0; at--) {
+            if (calls[at][0] === 'set' && calls[at][1] === 'font') { fonts.add(calls[at][2]); break; }
+        }
+    }
+    for (let i = 1; i < pills.length; i++) {
+        assert.ok(Math.abs((pills[i][1] - pills[i - 1][1]) - (-0.05 * 80)) < 1e-6, 'x follows the pan');
+        assert.equal(pills[i][2], pills[0][2], 'y unchanged');
+        assert.equal(pills[i][3], pills[0][3], 'width unchanged');
+        assert.equal(pills[i][4], pills[0][4], 'height unchanged');
+    }
+    assert.equal(fonts.size, 1, 'one font size for the whole pan');
+
+    // Inside the same zoom step the anchor stays put on the map; the pill size does not change.
+    calls.length = 0;
+    renderer.draw({ x: 2.5, y: 3, ppp: 90 });
+    const zoomed = calls.filter((call) => call[0] === 'roundRect')[0];
+    const mapX = (pill, ppp) => (pill[1] - 600) / ppp + 2.5;
+    assert.ok(Math.abs(mapX(zoomed, 90) - mapX(pills[0], 80)) < 1e-9);
+    assert.equal(zoomed[3], pills[0][3]);
+});
+
 /** Canvas ops with the style that was current when fill or stroke ran. */
 function paintEvents(calls) {
     let alpha = 1;
