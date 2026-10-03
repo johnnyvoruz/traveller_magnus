@@ -13,8 +13,9 @@
     "truth:local": "node tools/truth/build.js",
     "dev:web": "npm --workspace apps/web run dev",
     "dev:api": "npm --workspace apps/api run dev",
-    "build": "npm run rules:gen && npm --workspace packages/shared run build && npm --workspace apps/web run build",
+    "build": "npm run rules:gen && npm run names:gen && npm --workspace apps/web run build",
     "deploy": "npm run build && npm --workspace apps/api run deploy",
-    "xauth": "node scripts/xauth.js"
+    "xauth": "node scripts/xauth.js",
+    "names:gen": "node scripts/gen_names_esm.js"
   }
 }
