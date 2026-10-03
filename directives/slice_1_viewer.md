@@ -28,8 +28,9 @@ copied from `packages/engines/src/core/hex.js` (it is already ESM and golden-tes
 | Truth is read from `v2` or later: compact JSON, index entries are the chart row once | `data_model.md` §1, §5 |
 | The viewer makes **two API calls**, no more: `GET /api/truth/versions` (which version to read) and `GET /api/truth/search`. Everything else is the CDN. `plan.md` said "no API calls"; that sentence was wrong, since nothing else can tell a cold browser which version is current | `findings/agent_m_technical.md` T8 |
 | The **canonical layer** (399 sectors flagged `canonical`) is drawn by default. The other 113 sectors share coordinates with canonical ones or sit far away; choosing an alternate layer is part B | `data_model.md` §5 |
-| Input is **Pointer Events** from the first line (mouse, touch, pen, pinch). Whether phone and tablet *layouts* are in scope is still open; pointer input costs nothing and keeps the door open | orchestrator; Johnny to confirm layouts |
-| World **names at far zoom** are not drawn. Which worlds deserve a label when zoomed out (capitals, high importance) is a chart-reading convention that `rules/` does not hold and the legacy renderer does not implement, so it is a Halt & Challenge question, listed at the end | Zero-Assumption Policy |
+| **Phones and tablets are not supported in slice 1** ("maybe later"). Layouts are designed for desktop and laptop widths only. Input is still **Pointer Events** (mouse, touch, pen, pinch): it costs nothing and a touch-screen laptop works | Johnny 2026-10-03 |
+| **Anyone can see and use the map without signing in.** Signing in unlocks the campaign tools and anything that alters a map; nothing in the viewer is hidden behind an account. Part B's rail carries the way in to `/account` | Johnny 2026-10-03 |
+| World **names when zoomed out: none, except capitals** ("super critical worlds like capital or other empire capital worlds"). Part A draws none. The names come from our own hand-kept list, `universe/far_labels.json`, bundled into the viewer in part B; nothing is derived from chart remarks at run time | Johnny 2026-10-03 |
 
 ## 1. Map model (everything the map code agrees on)
 
@@ -159,7 +160,11 @@ does this when A0 reports, with the measured size).
 **Order matters for v2:** v2 is released only after A0.5 is deployed, so its manifest carries
 `overviewHash` from the start. The build itself does not depend on any of this.
 
-## 3. Part A1 — the map (Track W: `apps/web` and `tests/web`)
+## 3. Part A1 — the map (Track W: `apps/web` and `tests/web`; Agent A from 2026-10-03)
+
+The implementer has no browser. Everything checkable by `npm test`, `npm run check` and
+`npm run build` is theirs; the browser checks in A1.11 and A1.12 are run by the orchestrator
+or Johnny after the report, and the implementer lists them as not run.
 
 Rules for every file in this part:
 
@@ -366,6 +371,14 @@ toast-less status line message (the toast component is part B).
 **Check (`tests/web/routes.test.js`):** the pure function that turns a route into a target
 camera (`targetFor(route, manifest)`), for all five rows plus an unknown sector.
 
+### A1.10a Running the dev server against production data
+
+`apps/web/vite.config.ts`: the `/api` proxy target becomes
+`process.env.VOYAGE_API ?? 'http://127.0.0.1:8787'` with `changeOrigin: true`. Then
+`VOYAGE_API=https://traveller.voyage npm run dev:web` serves the local viewer against the
+released truth: the two API calls go through the proxy (no CORS involved) and the CDN allows
+any origin. Nothing else in the config changes.
+
 ### A1.11 Pan cache, after measuring
 
 With A1.7 working, measure a drag at tier `sector` over the Spinward Marches and at tier
@@ -374,6 +387,35 @@ frame). The budget is 16 ms (`architecture.md` §10). If either is over, add the
 inside `MapRenderer`: draw to an offscreen canvas larger than the viewport by a margin, blit
 it while the camera only translates, redraw when the margin is used up or `ppp` changes.
 If both are under, do not add it; say so in the report.
+
+### A1.11a Amendments accepted from the A1 report (2026-10-03)
+
+The implementer met three gaps in this recipe and reported each; all three are accepted and
+are now the spec:
+
+- `attachInput`'s api also has `home(): Camera`, so the `Home` key has a target.
+- `flight` has no viewport, so a far flight zooms out to
+  `clamp(min(from.ppp, to.ppp) * 12 / distance)`: the two centres end up 12 parsecs apart
+  on screen in units of the closer zoom. Tune by feel in the browser check.
+- Wheel gain is the legacy notch: 1.1 per 100 CSS pixels; `deltaMode` 1 counts a line as
+  16 px and `deltaMode` 2 a page as the viewport height. A drag coasts only if the last move
+  was within 100 ms of release.
+- `platform/browser.ts` also exports `pageOrigin()` and `scrollToTop()`.
+- Canvas type sizes follow `design_reference.md` §5: 13 px hex numbers, 14 px world names,
+  18 px sector names.
+
+### A1.11b Sector names must fit their sector (from the first browser look, 2026-10-03)
+
+At the home view a sector is about 110 px wide and an 18 px name is often wider, so names ran
+into each other. Rule, replacing layer 7 of A1.7: measure the name at 18 px. If it is wider
+than 84% of the sector rectangle, scale the font down so it fits that width exactly; if
+that would go below 9 px, do not draw the name. Never draw a name wider than its rectangle.
+Above 2,400 px of rectangle width the name is still hidden. The measured widths are cached
+per name, so `measureText` runs once per sector, not once per frame.
+
+**Check (`tests/web/renderer.test.js`):** with a stub `measureText` that returns 12 px per
+character at 18 px, a 20-character name in a 110 px rectangle is drawn with a font size under
+18 and a measured width of at most 92.4 px; in a 40 px rectangle it is not drawn.
 
 ### A1.12 Verification for part A
 
@@ -391,6 +433,17 @@ If both are under, do not add it; say so in the report.
       for Johnny
 
 ## B. Chart detail and the dossier (outline; recipe written when part A reports)
+
+- **Smoothness is an acceptance criterion** (Johnny, 2026-10-03: "it's so smooth, we want
+  to keep that smoothness"). Part A at hex tier felt smooth on his machine with no pan cache.
+  Every layer part B adds is measured before and after (frame time while dragging at tier
+  `sector` and at tier `hex`); a layer that pushes a frame over 16 ms is reworked or cached
+  before the next one is added.
+- **Hex label layout.** In part A the world name sits at the bottom of its hex, directly
+  above the next hex's number, so "Hefry" (1909) reads as if it belonged to "1910" and
+  Regina (1910) to "1911". The data is right; the spacing misleads. Part B places the number
+  tight under the hex's top edge and the name tight under its own world symbol, following
+  the legacy layout.
 
 - **Chart glyphs.** Replace the dot: starport letter, world disc, gas giant mark, base marks,
   zone ring, allegiance tint, name styling. Every one of these is a Traveller chart
@@ -429,18 +482,20 @@ projections (`planet_profile.js`, `planet_gl.js`, `planet_renderer.js`), body de
 
 ## Halt & Challenge items this recipe already raises
 
-1. **Which worlds get a name when zoomed out?** Capitals? Importance above some value? High
-   population in capitals, as printed charts do? `rules/` does not say and the legacy map
-   draws no names below its label threshold. Until Johnny answers, names appear only from
-   `PPP_NAMES` up.
+1. (closed 2026-10-03) **Which worlds are named when zoomed out** is not derived from the
+   chart at all: it is **our own list**, `universe/far_labels.json`, which Johnny owns and edits
+   by hand ("make our own table or file that calls out the names after the fact"). It was
+   seeded from the chart remarks `Cx` and `Cs` as a starting point; no code depends on what
+   those remarks mean. Part B bundles the file into the viewer and draws those names from
+   tier `sector` down to the galaxy view. It is not part of the truth, so it needs no new
+   truth version and can change with any deploy.
 2. **Alternate sectors that share coordinates with canonical ones** (the Judges Guild
    sectors and others): shown how? Part A draws the canonical layer only.
 3. Any chart symbol whose legacy rule cannot be found in `js/renderer.js` (part B).
 
 ## Needed from Johnny
 
-- Phones and tablets: are their **layouts** in scope for slice 1? (Input already is.)
-- Which agent takes Track W (`apps/web`). Agent A is free once A0 is in.
+- Prune or extend `universe/far_labels.json` to taste before part B.
 - Icons: `design_reference.md` §6 says Font Awesome Free through one `<Icon>` component;
   the reviewers suggest dropping the 9 MB Pro kit. Part A draws no icons, so this waits for
   part B.

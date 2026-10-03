@@ -942,17 +942,17 @@ Every engine golden fixture is byte-equal; these are the only intentional differ
 
 ## Verification list (all must be true before slice 0 is done)
 
-- [ ] `npm test`: every legacy case deterministic and matching its committed fixture
-- [ ] `npm test`: every ESM case byte-equal to the legacy fixture; none pending at the end of §7
-- [ ] `npm test`: parser parity, generation parity (Node vs oracle), Worker parity (Node vs Worker) green
-- [ ] `npm run check`: clean on every `apps/*/src` and `packages/*/src`
-- [ ] `npm run rules:gen`: all five rules files export their names; `git status rules/` empty
-- [ ] `npm run truth:local` twice: identical hash; `failed: []`; sizes reported
-- [ ] `npm run build` writes `apps/web/dist`; the holding page uses only tokens
-- [ ] `npm run dev:api` answers health against local D1; Durable Object migration applied (`wrangler tail` or local log)
-- [ ] CI green on a pull request; preview deploy answers `/api/health`
-- [ ] `git status js/ hex_map.html style.css rules/` shows nothing changed by this slice
-- [ ] Johnny: production `/api/health` answers; truth v1 released; `cdn.traveller.voyage/truth/v1/manifest.json` loads; search finds Regina
+- [x] `npm test`: every legacy case deterministic and matching its committed fixture (2026-10-03: 49 tests, 44 pass, 5 skipped; fixtures re-serialised compact for v2, content proven unchanged against git)
+- [x] `npm test`: every ESM case byte-equal to the legacy fixture; none pending at the end of §7
+- [x] `npm test`: parser parity, generation parity (Node vs oracle), Worker parity (Node vs Worker) green (Worker parity is the gated suite: reported 6 of 6 by Agent B, not rerun by the orchestrator; in production the Spinward Marches index is byte-for-byte the size of the local build, 123,907)
+- [x] `npm run check`: clean on every `apps/*/src` and `packages/*/src`
+- [x] `npm run rules:gen`: all five rules files export their names; `git status rules/` empty
+- [ ] `npm run truth:local` twice: identical hash; `failed: []`; sizes reported (**partly:** done for two sectors, Spinward Marches and Calidan, identical hashes; never run for all 512 locally)
+- [x] `npm run build` writes `apps/web/dist`; the holding page uses only tokens
+- [ ] `npm run dev:api` answers health against local D1; Durable Object migration applied (`wrangler tail` or local log) (**partly:** the gated health test passes against local D1; nobody has confirmed the Durable Object migration log line)
+- [ ] CI green on a pull request; preview deploy answers `/api/health` (**not done:** there is no `.github/workflows/test.yml`; every push to `campaign` deploys to production with no test gate)
+- [ ] `git status js/ hex_map.html style.css rules/` shows nothing changed by this slice (**cannot be proven from git:** the working tree is clean, but commits `089551d`, `595457c` and `0b96b80` on 2026-10-02/03 include legacy files alongside the new tree; Johnny to say whether those were his own pending legacy work)
+- [x] Johnny: production `/api/health` answers; truth released; the manifest loads from the CDN; search finds Regina (**as v2, not v1:** released 2026-10-03T18:15:16Z, 512 sectors, 180,312 systems, 156,222 trees, 24,090 partial; manifest and overview validate against the strict schemas and the overview hash matches; v1 was abandoned unreleased)
 - [ ] Report lists: oracle stubs added, the TODO cases resolved or skipped with reasons, the two settings defaults as decided by Johnny, any dependency or wrangler key that had to be reported, every Halt & Challenge item
 
 ## Tuning knobs

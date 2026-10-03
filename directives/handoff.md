@@ -729,3 +729,102 @@ indexes one after another, so **the v2 release request will take up to a minute*
 expected. Uncommitted with A's files: `apps/api/src/routes/admin.ts`,
 `tests/api/truth_build.test.js`. **Safe to push while v2 builds:** it touches only the release
 route. Then, when all 512 are `done`, Johnny runs the v2 release.
+
+**2026-10-03 about 18:00Z.** A0 is deployed (`0ce2cfc`, live 17:48Z) and v2 slices kept
+finishing `ok` after it. v2 at 17:58Z: 362 of 512 done, none failed; expect completion near
+18:55Z. Johnny tried the release early and got "Build is not finished", which is the guard
+working. **Agent A now has Track W:** the prompt for `slice_1_viewer.md` part A1 was handed to
+Johnny. A has no browser, so the visual and frame-time checks (A1.11, A1.12) are the
+orchestrator's or Johnny's after A reports; they need v2 released.
+
+**Johnny decided 2026-10-03 (evening):** phones and tablets are **not** supported for now
+("maybe later"); slice 1 designs for desktop and laptop only. World names when zoomed out:
+**none, except capitals**. Both are in `slice_1_viewer.md` §0. Open with him: which chart
+remark marks a capital (`Cx` 222 worlds, `Cs` 52, `Cp` 1,007; proposal `Cx` and `Cs`). The
+labels need the overview file to carry them, so they land with the next truth version, not v2.
+
+**Far-zoom labels are our own file (Johnny, 2026-10-03):** `universe/far_labels.json`, a
+hand-kept list of `{ sector, hex, name }` that Johnny owns. Seeded by the orchestrator from
+the chart remarks `Cx` and `Cs` as a starting point only; nothing interprets those remarks at
+run time. Part B bundles it into the viewer. It is outside the truth, so no new truth version
+is needed for it. This supersedes the "next truth version" note above. Uncommitted.
+
+## 20. Truth v2 is released (2026-10-03T18:15:16Z). Slice 0 is closed except three boxes.
+
+**Verified by the orchestrator after Johnny ran the release:**
+- Build: all 512 sectors `done` by 18:08Z, about an hour after it started, none failed.
+  180,312 systems, 156,222 trees, 24,090 partial rows: exactly the expected numbers, in both
+  `truth_build_sectors` and `truth_systems`.
+- `truth/v2/manifest.json` (107,767 bytes) and `truth/v2/overview.json` (715,379 bytes) load
+  from the CDN with the immutable header, both pass the strict schemas, the manifest's
+  `overviewHash` is the overview's sha256, the overview marks 180,312 cells, and D1's
+  `manifest_hash` is the manifest's sha256.
+- The Spinward Marches index on the CDN is 123,907 bytes, the same as the local build; Regina's
+  tree downloads from `objects/<hash>`, hashes to its name and is compact.
+- `/api/health` reports `truthVersion: v2`; `/api/truth/versions` lists v2; `q=Regi` returns
+  rows and `q=Regina 191` returns Regina. The release request took about a minute, as
+  predicted, and returned nothing visible in the tail until it finished.
+
+**Slice 0 verification list** (`slice_0_foundation.md`) is ticked honestly: eight of twelve.
+Open: the full 512-sector local build was never run twice; the Durable Object migration log
+line is unconfirmed; there is no CI workflow; and whether three commits that include legacy
+files were Johnny's own pending work. The twelfth box (the report) has no single owner.
+
+**Small things seen during verification, for part B:** `/api/truth/versions` returns
+`settings` and `sectors` as JSON strings, not objects; search ranks "Regis" and "Reginante"
+above "Regina" for `q=Regi`.
+
+**Left behind by v1:** its rows in `truth_versions` (`building`), `truth_build_sectors` and
+`truth_systems` (about 95,000 rows), its parts under `inputs/v1/_parts/`, its indexes under
+`truth/v1/` and roughly 100,000 pretty-printed objects. Nothing reads them. Cleaning them up
+is a deliberate deletion in production: Johnny's call, and not urgent.
+
+**In flight:** Agent A on `slice_1_viewer.md` part A1 (the map). Uncommitted:
+`directives/handoff.md`, `plan.md`, `slice_0_foundation.md`, `slice_1_viewer.md`,
+`universe/far_labels.json`, plus whatever A has written under `apps/web` and `tests/web`.
+
+## 21. Slice 1 part A1 (the map) is written; browser checks are outstanding
+
+**Agent A reported A1.1-A1.10a done (2026-10-03).** Checked here: `npm test` 63/58/5,
+`npm run check` clean with exactly one new allowlist file (`platform/browser.ts`), no global
+or literal colour anywhere else in `apps/web/src`, the dev server starts, its `/api` proxy
+reaches production (`v2`), and the map module compiles. A's three deviations (a `home()`
+callback, the far-flight zoom formula, the legacy wheel gain) are accepted and written into
+`slice_1_viewer.md` A1.11a.
+
+**Not verified by anyone yet, because neither A nor the orchestrator has a browser** (the
+Chrome extension was not connected): that the map actually draws, that drag, wheel and
+keyboard move it, that `/s/Spinward_Marches/1910` lands on Regina with its name, the cold-load
+time, the two frame-time measurements of A1.11 (so the pan cache is undecided), and that
+`/account` still signs in. Run it with `VOYAGE_API=https://traveller.voyage npm run dev:web`
+and open `http://localhost:5173/`. **Do not push A1 before someone has looked at it**: a push
+replaces the live holding page with the map.
+
+Uncommitted: `apps/web/src/App.vue`, `main.ts`, `router.ts`, `map/`, `platform/`, `views/`,
+`apps/web/vite.config.ts`, `scripts/check_allowlist.json`, `tests/web/`,
+`universe/far_labels.json`, and the directive edits.
+
+**First browser look found a real bug (Johnny, 2026-10-03):** `Failed to execute 'fetch' on
+'Window': Illegal invocation`. `TruthClient` stored the injected `fetch` and called it as
+`this.fetch(url)`; a browser's `fetch` refuses any `this` but the global. The Node tests could
+not see it because a stub does not care. **Fixed by the orchestrator** in
+`apps/web/src/map/truth_client.ts` (the injected function is called bare), with a test in
+`tests/web/truth_client.test.js` that fails if `this` is ever the client. This is why A1 is
+not pushed before someone looks at it. **Decision recorded (Johnny):** the map is public and
+fully usable signed out; sign-in gates the campaign tools and map-altering tools
+(`slice_1_viewer.md` §0).
+
+**The map draws (Johnny's screenshot, 2026-10-03):** the home view shows sector outlines, a
+point per system and sector names from live v2 data. First defect seen: sector names overlap
+their neighbours (fixed 18 px text in 110 px sectors); the rule is now `slice_1_viewer.md`
+A1.11b and goes to Agent A. Johnny's reaction: very pleased, and "big UI changes will be
+needed, doesn't look like the old app yet", which is part B (chart glyphs, routes, borders,
+panels). Still unchecked in a browser: the Regina deep link, input feel, frame times,
+`/account` sign-in.
+
+**Second browser look (Johnny, 2026-10-03):** `/s/Spinward_Marches/1910` flies to Regina; hex
+numbers and world names draw; "it's so smooth". Checked against his screenshot: positions are
+right (Regina's dot is in the hex numbered 1910, Hefry's in 1909), but each name sits just
+above the next hex's number and reads as belonging to it. Logged for part B with smoothness
+as an explicit acceptance criterion. No pan cache is added (A1.11): smooth by eye on Johnny's
+machine, not measured in milliseconds. Still unchecked: `/account` sign-in.

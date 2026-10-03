@@ -1,5 +1,8 @@
 {
   "packages/engines/src/aow_seed_bridge.js": {
     "window.": "legacy data property named window on the AoW seed object; not the global"
+  },
+  "apps/web/src/platform/browser.ts": {
+    "window.": "single browser-globals adapter (slice 1 A1.1)"
   }
 }

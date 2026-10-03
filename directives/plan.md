@@ -81,8 +81,8 @@ The charted universe, read-only, for anyone. The product for the ten thousand.
   and share the URL.
 - **In:** map canvas (a new TypeScript `MapRenderer`, rebuilt rather than wrapped: decided
   2026-10-03, `feature_inventory.md` A1) showing all 512 sectors from galaxy level down to a
-  single hex, fed at far zoom by an overview file the truth build writes; phones and tablets
-  not yet decided; pan/zoom/select with inertia and keyboard, sector and subsector chrome, omni-search as the command palette,
+  single hex, fed at far zoom by an overview file the truth build writes; desktop and laptop only (phones
+  and tablets maybe later: Johnny 2026-10-03); pan/zoom/select with inertia and keyboard, sector and subsector chrome, omni-search as the command palette,
   inspector at three widths (dossier: mainworld, stellar, tree, world map lead), orbit view
   as a **2.5D WebGL orrery** (constrained tilt and rotate, real spheres from the cube-map
   bakes, HTML labels; the orrery model is a pure TS module with a 2D canvas fallback renderer;
