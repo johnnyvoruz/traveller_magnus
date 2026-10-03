@@ -1,0 +1,290 @@
+/*
+ * Shared primitives of the shell, ported from the legacy inspector (style.css: scrollbar rules,
+ * #system-inspector button, .atlas-icon-btn, .atlas-span, .atlas-chip, #atlas-content h3,
+ * .atlas-count). Every colour and duration is a token; tokens.css imports this file.
+ * The design page (/design) shows each one in its states.
+ */
+
+:root {
+  color-scheme: dark;
+}
+
+/* Scrollbars: a teal pill in an outlined track. */
+*::-webkit-scrollbar {
+  width: var(--scroll-size);
+  height: var(--scroll-size);
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--scroll-track);
+  border-radius: var(--r-pill);
+  box-shadow: inset 0 0 0 1px var(--scroll-track-line);
+}
+
+*::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--signal) 0%, var(--signal-dim) 100%);
+  border-radius: var(--r-pill);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  min-height: 36px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--signal);
+  background-clip: padding-box;
+  box-shadow: 0 0 10px var(--signal-glow);
+}
+
+*::-webkit-scrollbar-thumb:active {
+  background: var(--signal-bright);
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--signal-dim) var(--scroll-track);
+  }
+}
+
+/* A scrolling pane keeps its bar clear of the text. */
+.ui-scroll {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  padding-inline-end: 14px;
+}
+
+/* Focus: one ring everywhere. */
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+/* Buttons. */
+.ui-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--control-line);
+  border-radius: var(--r-2);
+  background: var(--panel-raised);
+  color: var(--text-1);
+  font: 600 13px/1.2 var(--font-text);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color var(--t-fast) var(--ease-out), background var(--t-fast) var(--ease-out);
+}
+
+.ui-btn:hover {
+  border-color: var(--signal);
+}
+
+.ui-btn:disabled {
+  opacity: 0.45;
+  border-color: var(--control-line);
+  cursor: default;
+}
+
+.ui-btn .ui-icon {
+  color: var(--signal);
+}
+
+.ui-btn.is-primary {
+  background: var(--signal);
+  border-color: var(--signal);
+  color: var(--on-signal);
+}
+
+.ui-btn.is-primary:hover {
+  background: var(--signal-bright);
+  border-color: var(--signal-bright);
+}
+
+.ui-btn.is-primary .ui-icon {
+  color: inherit;
+}
+
+.ui-btn.is-icon {
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+}
+
+/* Segmented control (panel width). */
+.ui-seg {
+  display: flex;
+  flex: 0 0 auto;
+  border: 1px solid var(--control-line);
+  border-radius: var(--r-3);
+  overflow: hidden;
+}
+
+.ui-seg button {
+  margin: 0;
+  padding: 4px 9px;
+  border: 0;
+  border-right: 1px solid var(--line-1);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font: 600 12px/1.4 var(--font-text);
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease-out), color var(--t-fast) var(--ease-out);
+}
+
+.ui-seg button:last-child {
+  border-right: 0;
+}
+
+.ui-seg button:hover {
+  color: var(--text-1);
+}
+
+.ui-seg button[aria-pressed="true"] {
+  background: var(--row-active);
+  color: var(--signal);
+}
+
+.ui-seg button:focus-visible {
+  outline-offset: -2px;
+}
+
+/* Chips and pills. */
+.ui-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  max-width: 100%;
+  padding: 3px 8px 4px;
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-pill);
+  background: var(--panel-raised);
+  color: var(--text-1);
+  font: 400 12px/1.35 var(--font-text);
+}
+
+.ui-chip b {
+  color: var(--signal);
+  font: 700 11px/1 var(--font-code);
+  letter-spacing: 0.04em;
+}
+
+.ui-tag {
+  flex: 0 0 auto;
+  padding: 2px 7px;
+  border-radius: var(--r-pill);
+  background: var(--signal);
+  color: var(--on-signal);
+  font: 700 10px/1.4 var(--font-text);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.ui-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 3px 9px 3px 8px;
+  border-radius: var(--r-pill);
+  background: var(--wash);
+  color: var(--signal);
+  font: 700 10.5px/1.3 var(--font-text);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.ui-badge > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ui-count {
+  margin-left: 8px;
+  padding: 0 6px;
+  border-radius: var(--r-pill);
+  background: var(--neutral-wash);
+  color: var(--text-1);
+  font-size: 10.5px;
+  letter-spacing: 0;
+  font-variant-numeric: var(--tabular);
+}
+
+/* Section heading inside a panel. */
+.ui-heading {
+  display: flex;
+  align-items: center;
+  margin: 18px 0 8px;
+  color: var(--text-muted);
+  font: 700 12px/1.55 var(--font-text);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+/* The code of a coded value: one big mono glyph on a wash. */
+.ui-code {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.75em;
+  height: 1.75em;
+  padding: 0 0.3em;
+  border-radius: var(--r-2);
+  background: var(--wash);
+  color: var(--signal);
+  font: 700 19px/1 var(--font-code);
+  letter-spacing: 0.04em;
+}
+
+/* One line of status over the live map: a glass pill, gone when it has nothing to say. */
+.ui-status {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-3);
+  background: var(--chrome-glass);
+  box-shadow: var(--shadow-chrome);
+  color: var(--text-1);
+  font: 400 12px/1.35 var(--font-text);
+  font-variant-numeric: var(--tabular);
+}
+
+.ui-status:empty {
+  display: none;
+}
+
+.ui-icon {
+  flex: 0 0 auto;
+  display: block;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.ui-icon.is-solid {
+  fill: currentColor;
+  stroke: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-btn,
+  .ui-seg button {
+    transition: none;
+  }
+}

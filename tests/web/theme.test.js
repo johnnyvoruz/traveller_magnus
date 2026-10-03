@@ -11,6 +11,8 @@ const CHART = {
     '--chart-selected': '#66fcf1',
     '--chart-route-xboat': '#016a01',
     '--chart-route-other': '#9faeb8',
+    '--chart-title-text': '#ffffff',
+    '--chart-title-pill': '#0b0c10',
 };
 
 test('readTheme maps the 22 route allegiance colours by their original codes', () => {
@@ -31,6 +33,8 @@ test('readTheme maps the 22 route allegiance colours by their original codes', (
         assert.equal(theme.chart.world, '#ffffff');
         assert.equal(theme.chart.water, '#46b4e8');
         assert.equal(theme.chart.routeXboat, '#016a01');
+        assert.equal(theme.chart.titleText, '#ffffff');
+        assert.equal(theme.chart.titlePill, '#0b0c10');
     } finally {
         globalThis.getComputedStyle = previous;
     }

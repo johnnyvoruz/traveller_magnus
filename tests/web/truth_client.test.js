@@ -102,6 +102,61 @@ test('a 404 does not poison later calls', async () => {
     assert.equal(client.index('v2', 'A').systems, 1);
 });
 
+test('two concurrent tree calls make one request', async () => {
+    let calls = 0;
+    const doc = { kind: 'tree', hexKey: 'Spinward_Marches/1910' };
+    const client = new TruthClient({
+        cdnBase: 'https://cdn.example',
+        apiBase: 'https://api.example',
+        fetch: async (url) => {
+            calls += 1;
+            assert.equal(url, 'https://cdn.example/objects/abc');
+            return jsonResponse(200, doc);
+        },
+    });
+    assert.equal(client.treeNow('abc'), null);
+    const [a, b] = await Promise.all([client.tree('abc'), client.tree('abc')]);
+    assert.equal(calls, 1);
+    assert.equal(a.hexKey, 'Spinward_Marches/1910');
+    assert.equal(b, a);
+    assert.equal(client.treeNow('abc').hexKey, doc.hexKey);
+});
+
+test('the 17th tree drops the least recently read', async () => {
+    const client = new TruthClient({
+        cdnBase: 'https://cdn.example',
+        apiBase: 'https://api.example',
+        fetch: async (url) => {
+            const hash = String(url).split('/').at(-1);
+            return jsonResponse(200, { kind: 'tree', hexKey: hash });
+        },
+    });
+    for (let i = 0; i < 16; i++) await client.tree('h' + i);
+    assert.equal(client.treeNow('h0').hexKey, 'h0');
+    await client.tree('h16');
+    assert.equal(client.treeNow('h0').hexKey, 'h0');
+    assert.equal(client.treeNow('h1'), null);
+    assert.equal(client.treeNow('h16').hexKey, 'h16');
+});
+
+test('a failed tree fetch is not cached', async () => {
+    let calls = 0;
+    const client = new TruthClient({
+        cdnBase: 'https://cdn.example',
+        apiBase: 'https://api.example',
+        fetch: async () => {
+            calls += 1;
+            if (calls === 1) return jsonResponse(404, null);
+            return jsonResponse(200, { kind: 'tree', hexKey: 'h' });
+        },
+    });
+    await assert.rejects(() => client.tree('h'));
+    assert.equal(client.treeNow('h'), null);
+    const doc = await client.tree('h');
+    assert.equal(calls, 2);
+    assert.equal(doc.hexKey, 'h');
+});
+
 test('the injected fetch is never called as a method of the client', async () => {
     // A browser's fetch throws "Illegal invocation" unless `this` is undefined or the global.
     let seenThis = 'unset';

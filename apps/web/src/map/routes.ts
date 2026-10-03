@@ -37,6 +37,29 @@ function findSector(manifest: ChartManifest, slug: string): ChartSector | null {
     return null;
 }
 
+export type DossierRoute =
+    | { kind: 'closed' }
+    | { kind: 'overview'; slug: string; hex: string }
+    | { kind: 'body'; slug: string; hex: string; body: string };
+
+/**
+ * Panel route. A body key is the overview until `keys` is known and does not contain it.
+ * Omit `keys` while the system tree has not arrived.
+ */
+export function dossierRoute(path: string, keys?: readonly string[]): DossierRoute {
+    const parts = path.split('/').filter((part) => part.length > 0);
+    if (parts[0] !== 's' || parts.length < 3) return { kind: 'closed' };
+    const slug = decodeURIComponent(parts[1]);
+    const hex = decodeURIComponent(parts[2]);
+    if (parts.length === 3) return { kind: 'overview', slug, hex };
+    if (parts.length === 5 && parts[3] === 'b') {
+        const body = decodeURIComponent(parts[4]);
+        if (keys && !keys.includes(body)) return { kind: 'overview', slug, hex };
+        return { kind: 'body', slug, hex, body };
+    }
+    return { kind: 'closed' };
+}
+
 /** Route path to a camera target. Account and design are pages, not cameras. */
 export function targetFor(route: { path: string }, manifest: ChartManifest): Target {
     const path = route.path;
@@ -48,7 +71,8 @@ export function targetFor(route: { path: string }, manifest: ChartManifest): Tar
     if (path === '/account') return { kind: 'account' };
     if (path === '/design') return { kind: 'design' };
     const parts = path.split('/').filter((part) => part.length > 0);
-    if (parts[0] === 's' && (parts.length === 2 || parts.length === 3)) {
+    const bodyPath = parts.length === 5 && parts[3] === 'b';
+    if (parts[0] === 's' && (parts.length === 2 || parts.length === 3 || bodyPath)) {
         const slug = decodeURIComponent(parts[1]);
         const sector = findSector(manifest, slug);
         if (!sector) return { kind: 'unknown', message: 'No sector ' + slug + '.' };

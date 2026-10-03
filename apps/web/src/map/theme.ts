@@ -9,6 +9,8 @@ export type ChartColours = {
     selected: string;
     routeXboat: string;
     routeOther: string;
+    titleText: string;
+    titlePill: string;
 };
 
 /** Original allegiance codes from OTU_DEFAULT_ROUTE_COLORS. Keys of routeColours. */
@@ -73,6 +75,8 @@ export function readTheme(el: HTMLElement): MapTheme {
             selected: token(style, '--chart-selected'),
             routeXboat: token(style, '--chart-route-xboat'),
             routeOther: token(style, '--chart-route-other'),
+            titleText: token(style, '--chart-title-text'),
+            titlePill: token(style, '--chart-title-pill'),
         },
         routeColours: routeColours(style),
     };

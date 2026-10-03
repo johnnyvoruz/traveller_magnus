@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import type { TruthManifest } from '@voyage/shared';
 import {
@@ -10,12 +10,15 @@ import {
     type SearchItem,
 } from '../search/omni.ts';
 import { commands, registerCommand } from '../shell/registry.ts';
+import Icon from '../design/Icon.vue';
 
 const props = withDefaults(defineProps<{
     version: string;
     manifest: TruthManifest | null;
     layer?: 'canonical' | 'all';
 }>(), { layer: 'canonical' });
+
+const emit = defineEmits<{ open: [open: boolean] }>();
 
 const router = useRouter();
 const inputEl = ref<HTMLInputElement | null>(null);
@@ -151,6 +154,8 @@ function onKeydown(event: KeyboardEvent): void {
     }
 }
 
+watch(open, (value) => { emit('open', value); });
+
 onMounted(() => {
     unregister = registerCommand({
         id: 'search',
@@ -170,6 +175,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="omni">
     <div class="omni-field">
+      <Icon name="search" :size="22" />
       <input
         ref="inputEl"
         v-model="query"
@@ -201,8 +207,10 @@ onBeforeUnmount(() => {
           @mousedown.prevent
           @click="openResult(index)"
         >
-          <span class="omni-kind">{{ result.kind }}</span>
-          <strong>{{ result.name }}</strong>
+          <span class="omni-line">
+            <strong>{{ result.name }}</strong>
+            <span class="omni-kind">{{ result.kind }}</span>
+          </span>
           <span class="omni-detail">{{ result.detail }}</span>
         </div>
       </div>
@@ -211,76 +219,148 @@ onBeforeUnmount(() => {
 </template>
 
 <style>
+/*
+ * The legacy omnibox (style.css #omni-search, .omni-search-field, #omni-search-popup): first
+ * item of the chrome row, on the same left edge as the panel below it.
+ */
 .omni {
   position: absolute;
-  top: var(--sp-3);
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(32rem, calc(100% - var(--sp-8)));
-  z-index: 2;
+  top: var(--chrome-top);
+  left: calc(var(--rail-width) + var(--chrome-inset));
+  z-index: 4;
+  width: min(440px, calc(100% - var(--rail-width) - 2 * var(--chrome-inset)));
+  color: var(--text-1);
+  font: 400 14px/1.4 var(--font-text);
+  transition: left var(--t-rail) ease;
 }
+
 .omni-field {
   display: flex;
-  align-items: stretch;
-  background: var(--bg-1);
-  border: 1px solid var(--line-2);
+  align-items: center;
+  gap: 12px;
+  box-sizing: border-box;
+  height: var(--chrome-height);
+  padding: 0 14px;
+  border: 1px solid var(--control-line);
+  border-radius: var(--r-4);
+  background: var(--chrome-glass);
+  box-shadow: var(--shadow-chrome);
+  transition: border-color var(--t-fast) var(--ease-out);
 }
+
+.omni-field:focus-within {
+  border-color: var(--signal);
+}
+
+.omni-field .ui-icon {
+  color: var(--text-muted);
+}
+
 .omni-field input {
   flex: 1;
   min-width: 0;
+  padding: 8px 0;
   border: 0;
+  outline: none;
   background: transparent;
-  color: var(--text-1);
-  font-family: var(--font-text);
-  font-size: 14px;
-  padding: var(--sp-2) var(--sp-3);
+  color: inherit;
+  font: inherit;
 }
-.omni-field input:focus {
-  outline: 1px solid var(--signal);
-  outline-offset: -1px;
+
+.omni-field input::placeholder {
+  color: var(--text-2);
+  opacity: 1;
 }
+
 .omni-reserve {
-  width: var(--sp-8);
   flex: none;
+  width: var(--sp-2);
 }
+
 .omni-popup {
-  background: var(--bg-1);
+  margin-top: 8px;
   border: 1px solid var(--line-2);
-  margin-top: var(--sp-1);
-  max-height: 50vh;
-  overflow: auto;
+  border-radius: var(--r-4);
+  background: var(--chrome-bg);
+  box-shadow: var(--shadow-pop);
+  overflow: hidden;
 }
+
+/* Nothing to list and nothing to say: no empty card. */
+.omni-popup:not(:has([role="option"])):has(.omni-note:empty) {
+  display: none;
+}
+
 .omni-note {
   margin: 0;
-  padding: var(--sp-2) var(--sp-3) 0;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line-1);
   color: var(--text-muted);
-  font-family: var(--font-text);
   font-size: 12px;
 }
+
 .omni-note:empty {
   display: none;
 }
-.omni-popup [role="option"] {
-  display: flex;
-  gap: var(--sp-2);
-  align-items: baseline;
-  padding: var(--sp-2) var(--sp-3);
-  color: var(--text-1);
-  font-family: var(--font-text);
-  cursor: pointer;
+
+#omni-list {
+  max-height: min(460px, calc(100dvh - 150px));
+  overflow-y: auto;
 }
+
+.omni-popup [role="option"] {
+  display: grid;
+  gap: 5px;
+  padding: 12px 14px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
 .omni-popup [role="option"]:hover,
 .omni-popup [role="option"][aria-selected="true"] {
-  background: var(--surface-2);
+  background: var(--row-active);
+  color: var(--signal-active);
 }
+
+/* On the selected row the muted second line would fall to 4.7:1; it takes the body colour. */
+.omni-popup [role="option"]:hover .omni-kind,
+.omni-popup [role="option"]:hover .omni-detail,
+.omni-popup [role="option"][aria-selected="true"] .omni-kind,
+.omni-popup [role="option"][aria-selected="true"] .omni-detail {
+  color: var(--text-1);
+}
+
+.omni-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.omni-line strong {
+  min-width: 0;
+  font-weight: 700;
+}
+
 .omni-kind {
+  flex: 0 0 auto;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
 }
+
 .omni-detail {
   color: var(--text-muted);
-  font-family: var(--font-data);
   font-size: 12px;
+  font-variant-numeric: var(--tabular);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .omni,
+  .omni-field {
+    transition: none;
+  }
 }
 </style>

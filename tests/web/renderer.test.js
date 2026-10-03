@@ -1,8 +1,16 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { MapRenderer } from '../../apps/web/src/map/MapRenderer.ts';
-import { DISC_R, GAS_R, HALO_R, RING_R, RING_SCALE_X, RING_SCALE_Y } from '../../apps/web/src/map/glyphs.ts';
+import { DISC_R, GAS_R, HALO_R, POLITY_FILL_ALPHA, REGION_FILL_ALPHA, RING_R, RING_SCALE_X, RING_SCALE_Y, TERRITORY_FILL_ALPHA, TERRITORY_STROKE } from '../../apps/web/src/map/glyphs.ts';
 import { ROW_STEP, sectorRect } from '../../apps/web/src/map/geometry.ts';
+
+if (typeof globalThis.Path2D !== 'function') {
+    globalThis.Path2D = class Path2D {
+        moveTo() {}
+        lineTo() {}
+        closePath() {}
+    };
+}
 
 function cellsOf(hexes) {
     const cells = new Array(1280).fill('.');
@@ -47,6 +55,7 @@ const theme = {
     chart: {
         world: 'world', water: 'water', zoneAmber: 'amber', zoneRed: 'red',
         grid: 'grid', selected: 'selected', routeXboat: 'xboat', routeOther: 'other',
+        titleText: 'title', titlePill: 'pill',
     },
     routeColours: {},
 };
@@ -272,4 +281,146 @@ test('subsector titles name the sector from PPP_NAMES and are absent below it', 
     calls.length = 0;
     renderer.draw({ x: 4, y: 5 * ROW_STEP, ppp: 40 });
     assert.equal(calls.filter((call) => call[0] === 'fillText' && String(call[1]).includes(' - ')).length, 0);
+});
+
+/** Canvas ops with the style that was current when fill or stroke ran. */
+function paintEvents(calls) {
+    let alpha = 1;
+    let fillStyle = '';
+    let strokeStyle = '';
+    let lineWidth = 0;
+    let lineJoin = '';
+    let lineCap = '';
+    const events = [];
+    for (const call of calls) {
+        if (call[0] === 'set' && call[1] === 'globalAlpha') alpha = call[2];
+        else if (call[0] === 'set' && call[1] === 'fillStyle') fillStyle = call[2];
+        else if (call[0] === 'set' && call[1] === 'strokeStyle') strokeStyle = call[2];
+        else if (call[0] === 'set' && call[1] === 'lineWidth') lineWidth = call[2];
+        else if (call[0] === 'set' && call[1] === 'lineJoin') lineJoin = call[2];
+        else if (call[0] === 'set' && call[1] === 'lineCap') lineCap = call[2];
+        else if (call[0] === 'fill') {
+            const rule = call.slice(1).find((arg) => arg === 'evenodd' || arg === 'nonzero');
+            events.push({ op: 'fill', rule, alpha, fillStyle });
+        }
+        else if (call[0] === 'stroke') events.push({ op: 'stroke', strokeStyle, lineWidth, lineJoin, lineCap });
+    }
+    return events;
+}
+
+test('tier hex fills territories and regions under the grid and strokes territories after the routes', () => {
+    const territory = '#112233';
+    const region = '#445566';
+    const route = 'route-colour';
+    const index = {
+        slug: 'On',
+        x: 0,
+        y: 0,
+        hexes: { '0101': { name: 'Alpha' } },
+        territories: [{ name: 'Imperium', color: territory, hexes: ['0101'] }],
+        regions: [{ name: 'Rift', color: region, hexes: ['0101'] }],
+        metadata: { routes: [{ Start: '0101', End: '0110', Color: route }] },
+    };
+    const { canvas, calls } = recordingCanvas();
+    const renderer = new MapRenderer(canvas, theme);
+    renderer.setChart({
+        sectors: [{ slug: 'On', name: 'On Sector', x: 0, y: 0, canonical: true }],
+    }, { truthVersion: 'v3', sectors: [] }, 'canonical');
+    renderer.setIndexSource(() => index);
+    renderer.resize(800, 600, 1);
+    renderer.draw({ ...centreOf(0, 0), ppp: 40 });
+
+    const events = paintEvents(calls);
+    const fills = events.filter((event) => event.op === 'fill' && event.rule === 'evenodd');
+    assert.equal(fills.length, 2);
+    assert.equal(fills[0].alpha, TERRITORY_FILL_ALPHA);
+    assert.equal(fills[0].fillStyle, territory);
+    assert.equal(fills[1].alpha, REGION_FILL_ALPHA);
+    assert.equal(fills[1].fillStyle, region);
+    const gridAt = events.findIndex((event) => event.op === 'stroke' && event.strokeStyle === theme.chart.grid);
+    const routeAt = events.findIndex((event) => event.op === 'stroke' && event.strokeStyle === route);
+    const borderAt = events.findIndex((event) => event.op === 'stroke' && event.strokeStyle === territory);
+    assert.ok(events.indexOf(fills[0]) < gridAt);
+    assert.ok(events.indexOf(fills[1]) < gridAt);
+    assert.ok(gridAt < routeAt);
+    assert.ok(routeAt < borderAt);
+    assert.equal(events[borderAt].lineWidth, TERRITORY_STROKE);
+    assert.equal(events[borderAt].lineJoin, 'round');
+    assert.equal(events[borderAt].lineCap, 'round');
+    assert.equal(events.filter((event) => event.op === 'stroke' && event.strokeStyle === region).length, 0);
+
+    calls.length = 0;
+    index.territories[0].color = '#abcdef';
+    index.regions[0].color = '#fedcba';
+    renderer.draw({ ...centreOf(0, 0), ppp: 40 });
+    const again = paintEvents(calls).filter((event) => event.op === 'fill' && event.rule === 'evenodd');
+    assert.equal(again.length, 2);
+    assert.equal(again[0].fillStyle, territory);
+    assert.equal(again[1].fillStyle, region);
+    assert.equal(again[0].alpha, TERRITORY_FILL_ALPHA);
+    assert.equal(again[1].alpha, REGION_FILL_ALPHA);
+});
+
+function ownersOf(spec) {
+    const chars = new Array(1280).fill('.');
+    for (const [hhhh, digit] of spec) {
+        const col = Number(hhhh.slice(0, 2));
+        const row = Number(hhhh.slice(2, 4));
+        chars[(col - 1) * 40 + (row - 1)] = digit;
+    }
+    return chars.join('');
+}
+
+test('zoomed-out polities build one per frame and draw nothing at tier hex', () => {
+    const { canvas, calls } = recordingCanvas();
+    const renderer = new MapRenderer(canvas, theme);
+    renderer.setChart({
+        sectors: [{ slug: 'On', name: 'On Sector', x: 0, y: 0, canonical: true }],
+    }, {
+        truthVersion: 'v3',
+        sectors: [{
+            slug: 'On',
+            x: 0,
+            y: 0,
+            polities: [
+                { name: 'Big', color: 'big-colour' },
+                { name: 'Small', color: 'small-colour' },
+            ],
+            owners: ownersOf([['0101', '0'], ['0102', '0'], ['0103', '0'], ['0201', '1']]),
+        }],
+    }, 'canonical');
+    renderer.resize(800, 600, 1);
+
+    function polityFills() {
+        return paintEvents(calls).filter((event) => event.op === 'fill' && event.rule === 'evenodd' && event.alpha === POLITY_FILL_ALPHA);
+    }
+
+    const atHex = renderer.draw({ ...centreOf(0, 0), ppp: 40 });
+    assert.equal(polityFills().length, 0);
+    assert.equal(atHex.pending, false);
+
+    calls.length = 0;
+    const firstDraw = renderer.draw({ ...centreOf(0, 0), ppp: 3 });
+    assert.equal(firstDraw.pending, true);
+    const first = polityFills();
+    assert.equal(first.length, 1);
+    assert.equal(first[0].fillStyle, 'big-colour');
+    const firstStroke = paintEvents(calls).filter((event) => event.op === 'stroke' && event.strokeStyle === 'big-colour');
+    assert.equal(firstStroke.length, 1);
+    assert.equal(firstStroke[0].lineWidth, TERRITORY_STROKE / 3);
+    assert.equal(firstStroke[0].lineJoin, 'round');
+    assert.equal(firstStroke[0].lineCap, 'round');
+
+    calls.length = 0;
+    const secondDraw = renderer.draw({ ...centreOf(0, 0), ppp: 3 });
+    assert.equal(secondDraw.pending, false);
+    const second = polityFills();
+    assert.equal(second.length, 2);
+    assert.equal(second[0].fillStyle, 'big-colour');
+    assert.equal(second[1].fillStyle, 'small-colour');
+
+    calls.length = 0;
+    const backToHex = renderer.draw({ ...centreOf(0, 0), ppp: 40 });
+    assert.equal(polityFills().length, 0);
+    assert.equal(backToHex.pending, false);
 });

@@ -40,3 +40,9 @@ export const FONT_SMALL = 10 / 75;
 export const FONT_NAME = 12 / 75;
 export const FONT_PORT = 18 / 75;
 export const SELECT_STROKE = 2.5;
+/** Fill alphas are fractions. The stroke is screen pixels: legacy 2.5 / zoom. */
+export const TERRITORY_FILL_ALPHA = 0.2;
+export const REGION_FILL_ALPHA = 0.3;
+export const TERRITORY_STROKE = 2.5;
+/** Zoomed-out polity fill. Legacy drawMacroPolityFills uses 0.22. */
+export const POLITY_FILL_ALPHA = 0.22;

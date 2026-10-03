@@ -8,9 +8,13 @@ import {
     BASE_TEXT_X, BASE_TEXT_Y, BELT_DOTS, BELT_R, DISC_R, FONT_NAME, FONT_PORT, FONT_SMALL,
     GAS_R, GAS_X, GAS_Y, HALO_FILL, HALO_R, HALO_STROKE, NAME_Y, NAVAL_INNER, NAVAL_OUTER,
     NAVAL_X, NAVAL_Y, NUMBER_Y, PORT_Y, RING_R, RING_SCALE_X, RING_SCALE_Y, RING_STROKE,
-    SCOUT_R, SCOUT_X, SCOUT_Y, SELECT_STROKE, UWP_Y,
+    POLITY_FILL_ALPHA, REGION_FILL_ALPHA, SCOUT_R, SCOUT_X, SCOUT_Y, SELECT_STROKE,
+    TERRITORY_FILL_ALPHA, TERRITORY_STROKE, UWP_Y,
 } from './glyphs.ts';
+import { outlineLoops } from './outline.ts';
+import { polityHexes, type PolityHexes } from './polity_layer.ts';
 import { routeSegments, type RouteSegment } from './route_lines.ts';
+import { regionShapes, territoryShapes, type Shape } from './territory_layer.ts';
 import type { MapTheme } from './theme.ts';
 import { PPP_GRID, PPP_NAMES, tierFor, type Tier } from './tiers.ts';
 import { placeTitle, type Box } from './titles.ts';
@@ -126,9 +130,20 @@ export class MapRenderer {
     private readonly nameWidthAt18 = new Map<string, number>();
     /** routeSegments cached per index object. */
     private readonly routeCache = new WeakMap<SectorIndex, RouteSegment[]>();
+    /** Territory and region outlines. Rebuilt when the loaded slugs change, not per frame. */
+    private shapeKey = '';
+    private territoryCache: Shape[] = [];
+    private regionCache: Shape[] = [];
+    /** Zoomed-out polities. One outlineLoops per galaxy or sector frame, largest first. */
+    private polities: PolityHexes[] = [];
+    private polityRank: number[] = [];
+    private polityCursor = 0;
+    private readonly polityPaths: { color: string; path: Path2D }[] = [];
     /** code and canonical in the file are ignored. */
     private labels: FarLabel[] = farLabels.labels;
     private selected: Selection | null = null;
+    /** Left inset for subsector titles, in CSS pixels. 0 keeps titles at the viewport edge. */
+    private workspaceLeft = 0;
     private width = 0;
     private height = 0;
     private dpr = 1;
@@ -154,6 +169,13 @@ export class MapRenderer {
             rect: sectorRect(sector.x, sector.y),
             cells: cells.get(sector.slug) ?? null,
         }));
+        this.polities = polityHexes(overview, layer, manifest);
+        this.polityRank = this.polities.map((_item, index) => index).sort((a, b) => {
+            const bySize = this.polities[b].hexes.length - this.polities[a].hexes.length;
+            return bySize !== 0 ? bySize : a - b;
+        });
+        this.polityCursor = 0;
+        this.polityPaths.length = 0;
     }
 
     setIndexSource(get: (slug: string) => SectorIndex | null): void {
@@ -169,6 +191,11 @@ export class MapRenderer {
         this.selected = selection;
     }
 
+    /** Subsector titles start at this x when the panel covers the left of the map. */
+    setWorkspaceLeft(px: number): void {
+        this.workspaceLeft = px > 0 ? px : 0;
+    }
+
     resize(width: number, height: number, dpr: number): void {
         this.width = width;
         this.height = height;
@@ -180,7 +207,7 @@ export class MapRenderer {
         this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     }
 
-    draw(cam: Camera): { tier: Tier; sectorsOnScreen: string[]; ms: number } {
+    draw(cam: Camera): { tier: Tier; sectorsOnScreen: string[]; ms: number; pending: boolean } {
         const started = now();
         const tier = tierFor(cam.ppp);
         const vp: Viewport = { width: this.width, height: this.height };
@@ -208,6 +235,8 @@ export class MapRenderer {
             }
             this.overviewPoints(waiting, cam, vp);
         } else {
+            this.advancePolity();
+            this.paintPolities(cam, vp);
             this.overviewPoints(on, cam, vp);
         }
 
@@ -217,8 +246,14 @@ export class MapRenderer {
         }
         if (tier === 'hex') {
             const hexes = visibleHexes(view);
+            if (cam.ppp >= PPP_GRID) {
+                this.cachedShapes(ready);
+                this.fillShapes(this.territoryCache, TERRITORY_FILL_ALPHA, cam, vp);
+                this.fillShapes(this.regionCache, REGION_FILL_ALPHA, cam, vp);
+            }
             if (hexes.length <= HEX_OUTLINE_CAP) this.hexOutlines(hexes, cam, vp);
             if (cam.ppp >= PPP_GRID) this.routes(ready, cam, vp);
+            if (cam.ppp >= PPP_GRID) this.strokeShapes(this.territoryCache, cam, vp);
             marks = this.marks(ready, cam, vp);
             if (cam.ppp >= PPP_NAMES) this.chartMarks(marks, cam.ppp);
             else this.chartDiscs(marks, cam.ppp);
@@ -228,7 +263,8 @@ export class MapRenderer {
         this.selectionOutline(cam, vp);
         if (tier === 'hex' && cam.ppp >= PPP_NAMES) this.subsectorTitles(ready, marks, cam, vp);
 
-        return { tier, sectorsOnScreen: on.map((sector) => sector.slug), ms: now() - started };
+        const pending = tier !== 'hex' && this.polityCursor < this.polityRank.length;
+        return { tier, sectorsOnScreen: on.map((sector) => sector.slug), ms: now() - started, pending };
     }
 
     private distance(sector: DrawSector, cam: Camera): number {
@@ -301,6 +337,101 @@ export class MapRenderer {
             ctx.stroke();
         }
         ctx.setLineDash([]);
+    }
+
+    /** Builds one polity outline. Stays unfinished until every entry has a path. */
+    private advancePolity(): void {
+        if (this.polityCursor >= this.polityRank.length) return;
+        const item = this.polities[this.polityRank[this.polityCursor]];
+        this.polityCursor += 1;
+        const path = new Path2D();
+        for (const loop of outlineLoops(item.hexes)) {
+            const pts = loop.points;
+            if (pts.length < 4) continue;
+            path.moveTo(pts[0], pts[1]);
+            for (let i = 2; i < pts.length; i += 2) path.lineTo(pts[i], pts[i + 1]);
+            path.closePath();
+        }
+        this.polityPaths.push({ color: item.color, path });
+    }
+
+    /** Cached paths in parsecs. The transform is the camera, so the stroke is 2.5 px. */
+    private paintPolities(cam: Camera, vp: Viewport): void {
+        if (!this.polityPaths.length) return;
+        const ctx = this.ctx;
+        const ppp = cam.ppp;
+        ctx.save();
+        ctx.setTransform(
+            this.dpr * ppp, 0, 0, this.dpr * ppp,
+            this.dpr * (vp.width / 2 - cam.x * ppp),
+            this.dpr * (vp.height / 2 - cam.y * ppp),
+        );
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+        ctx.lineWidth = TERRITORY_STROKE / ppp;
+        for (const item of this.polityPaths) {
+            ctx.fillStyle = item.color;
+            ctx.strokeStyle = item.color;
+            ctx.globalAlpha = POLITY_FILL_ALPHA;
+            ctx.fill(item.path, 'evenodd');
+            ctx.globalAlpha = 1;
+            ctx.stroke(item.path);
+        }
+        ctx.restore();
+    }
+
+    /** Slugs of the indexes on screen, sorted. The same set keeps the cached loops. */
+    private cachedShapes(ready: { sector: DrawSector; index: SectorIndex }[]): void {
+        const key = ready.map((item) => item.index.slug || item.sector.slug).sort().join('\n');
+        if (key === this.shapeKey) return;
+        this.shapeKey = key;
+        const indexes = ready.map((item) => item.index);
+        this.territoryCache = territoryShapes(indexes);
+        this.regionCache = regionShapes(indexes);
+    }
+
+    private fillShapes(shapes: Shape[], alpha: number, cam: Camera, vp: Viewport): void {
+        if (!shapes.length) return;
+        const ctx = this.ctx;
+        ctx.globalAlpha = alpha;
+        for (const shape of shapes) {
+            ctx.beginPath();
+            ctx.fillStyle = shape.color;
+            this.addLoops(shape.loops, cam, vp);
+            ctx.fill('evenodd');
+        }
+        ctx.globalAlpha = 1;
+    }
+
+    /** Solid territory outline. Legacy drawBorderGroups is 2.5 / zoom, round joins and caps. */
+    private strokeShapes(shapes: Shape[], cam: Camera, vp: Viewport): void {
+        if (!shapes.length) return;
+        const ctx = this.ctx;
+        ctx.lineWidth = TERRITORY_STROKE;
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+        ctx.setLineDash([]);
+        for (const shape of shapes) {
+            ctx.beginPath();
+            ctx.strokeStyle = shape.color;
+            this.addLoops(shape.loops, cam, vp);
+            ctx.stroke();
+        }
+    }
+
+    private addLoops(loops: Shape['loops'], cam: Camera, vp: Viewport): void {
+        const ctx = this.ctx;
+        for (const loop of loops) {
+            const pts = loop.points;
+            if (pts.length < 4) continue;
+            const first = toScreen(cam, vp, pts[0], pts[1]);
+            ctx.moveTo(first.sx, first.sy);
+            for (let i = 2; i < pts.length; i += 2) {
+                const point = toScreen(cam, vp, pts[i], pts[i + 1]);
+                ctx.lineTo(point.sx, point.sy);
+            }
+            ctx.closePath();
+        }
     }
 
     private routeColour(key: string): string {
@@ -664,10 +795,10 @@ export class MapRenderer {
                     ctx.beginPath();
                     ctx.roundRect(spot.x, spot.y, pillW, pillH, radius);
                     ctx.globalAlpha = TITLE_PILL_ALPHA;
-                    ctx.fillStyle = this.theme.bg0;
+                    ctx.fillStyle = this.theme.chart.titlePill;
                     ctx.fill();
                     ctx.globalAlpha = TITLE_TEXT_ALPHA;
-                    ctx.fillStyle = this.theme.signal;
+                    ctx.fillStyle = this.theme.chart.titleText;
                     ctx.textAlign = 'left';
                     ctx.textBaseline = 'middle';
                     ctx.fillText(label, spot.x + hPad, spot.y + pillH / 2);
@@ -685,7 +816,7 @@ export class MapRenderer {
         const y0 = sector.rect.y0 + row * spanY;
         const topLeft = toScreen(cam, vp, x0, y0);
         const bottomRight = toScreen(cam, vp, x0 + spanX, y0 + spanY);
-        const x = Math.max(topLeft.sx, 0);
+        const x = Math.max(topLeft.sx, this.workspaceLeft);
         const y = Math.max(topLeft.sy, TITLE_TOP);
         const right = Math.min(bottomRight.sx, vp.width);
         const bottom = Math.min(bottomRight.sy, vp.height);

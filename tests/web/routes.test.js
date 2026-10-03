@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { hexCentre, sectorRect, toGlobal } from '../../apps/web/src/map/geometry.ts';
-import { homeRect, targetFor } from '../../apps/web/src/map/routes.ts';
+import { dossierRoute, homeRect, targetFor } from '../../apps/web/src/map/routes.ts';
 
 const manifest = {
     sectors: [
@@ -41,4 +41,33 @@ test('targetFor covers the five routes and an unknown sector', () => {
     const unknown = targetFor({ path: '/s/Nope' }, manifest);
     assert.equal(unknown.kind, 'unknown');
     assert.match(unknown.message, /Nope/);
+});
+
+test('dossierRoute reads the overview, a body, and an unknown body key', () => {
+    assert.deepEqual(dossierRoute('/s/Spinward_Marches/1910'), {
+        kind: 'overview',
+        slug: 'Spinward_Marches',
+        hex: '1910',
+    });
+    assert.deepEqual(dossierRoute('/s/Spinward_Marches/1910/b/w0'), {
+        kind: 'body',
+        slug: 'Spinward_Marches',
+        hex: '1910',
+        body: 'w0',
+    });
+    assert.deepEqual(dossierRoute('/s/Spinward_Marches/1910/b/w0', ['s0', 'w0']), {
+        kind: 'body',
+        slug: 'Spinward_Marches',
+        hex: '1910',
+        body: 'w0',
+    });
+    assert.deepEqual(dossierRoute('/s/Spinward_Marches/1910/b/nope', ['s0', 'w0']), {
+        kind: 'overview',
+        slug: 'Spinward_Marches',
+        hex: '1910',
+    });
+    const hex = targetFor({ path: '/s/Spinward_Marches/1910' }, manifest);
+    const body = targetFor({ path: '/s/Spinward_Marches/1910/b/w0' }, manifest);
+    assert.deepEqual(body, hex);
+    assert.equal(body.kind, 'camera');
 });

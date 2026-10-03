@@ -2,8 +2,23 @@ export type Command = {
     id: string;
     name: string;
     keys?: string[];
+    /** Absent means the command can always run. The rail disables an item while this is false. */
+    runnable?: () => boolean;
     run: () => void;
 };
+
+export type PanelWorld = { slug: string; hex: string };
+
+/**
+ * System panel. An open panel closes. A closed panel opens the selected or
+ * last-opened world. With neither, the command is not runnable.
+ */
+export function systemPanel(state: { panelOpen: boolean; world: PanelWorld | null }):
+    { runnable: false } | { runnable: true; kind: 'close' } | { runnable: true; kind: 'open'; slug: string; hex: string } {
+    if (state.panelOpen) return { runnable: true, kind: 'close' };
+    if (!state.world) return { runnable: false };
+    return { runnable: true, kind: 'open', slug: state.world.slug, hex: state.world.hex };
+}
 
 const registered: Command[] = [];
 
@@ -39,6 +54,7 @@ export function handleKey(event: KeyboardEvent): boolean {
         if (!command.keys) continue;
         for (const spec of command.keys) {
             if (!matches(event, spec)) continue;
+            if (command.runnable && !command.runnable()) continue;
             event.preventDefault();
             command.run();
             return true;

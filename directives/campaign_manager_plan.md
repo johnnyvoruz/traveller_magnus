@@ -1405,6 +1405,24 @@ system unrolling left to right; the mainworld's locator line (if a record is tra
 stays attached throughout; switching back mid-flight reverses smoothly; `showMapPerf`-style
 timing in the orrery shows no frame over 8 ms during the tween.
 
+### 7.9 Delighter (note for later): days of the week
+
+**From Johnny, 2026-10-03. Not started; a note so it is implemented when the date and time
+readout is rebuilt.** The date and time display shows the day of the week. The names, in
+order:
+
+| 1 | 2 | 3 | 4 | 5 | 6 | 7 |
+|---|---|---|---|---|---|---|
+| Wonday | Tuday | Thirday | Forday | Fiday | Sixday | Senday |
+
+**Day 001 is called "Holiday"** (Johnny, 2026-10-03) and is outside the week. The week
+starts after it: day 002 is Wonday, and the seven names repeat through day 365 (364 days,
+exactly 52 weeks, so day 365 is Senday). The "Holiday" name is confirmed; the day 002 start
+follows from it.
+
+Where it shows: wherever the stardate does (§7.1: the orrery header, the stardate dialog,
+the timeline's Now line), beside the `DDD-YYYY` form answered in §10 Q4.
+
 ---
 
 ## 8. Journal

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- A far-trader wedge, nose down, carrying a red V. Field is the design token bg-0, hull is text-0. -->
+  <rect width="32" height="32" rx="7" fill="#0b0c10"/>
+  <path d="M4 5.5H13L16 8.5L19 5.5H28L16 27.5Z" fill="#e6eef0"/>
+  <path d="M8.6 5.5H12.7L16 12.3L19.3 5.5H23.4L16 20.6Z" fill="#d8202a"/>
+</svg>

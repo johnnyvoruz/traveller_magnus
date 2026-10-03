@@ -1,17 +1,21 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import type { TruthManifest, TruthOverview } from '@voyage/shared';
+import type { SectorHex, SectorIndex, TreeEnvelope, TruthManifest, TruthOverview } from '@voyage/shared';
 import { fit, flight, SHORT_HOP, toWorld, zoomAt, type Camera, type Viewport } from '../map/camera.ts';
 import { formatHex, fromGlobal, hexAt, parseHex, SECTOR_ROWS } from '../map/geometry.ts';
 import { attachInput, type InputWhy } from '../map/input.ts';
 import { MapRenderer } from '../map/MapRenderer.ts';
-import { homeRect, targetFor } from '../map/routes.ts';
+import { dossierRoute, homeRect, targetFor, type DossierRoute } from '../map/routes.ts';
 import { readMotion, readTheme } from '../map/theme.ts';
 import { tierFor } from '../map/tiers.ts';
 import { TruthClient } from '../map/truth_client.ts';
 import OmniBox from '../components/OmniBox.vue';
-import { handleKey, registerCommand } from '../shell/registry.ts';
+import DossierPanel from '../dossier/DossierPanel.vue';
+import { bodyKeys, pickSystem, type AllegianceName } from '../dossier/model.ts';
+import { handleKey, registerCommand, systemPanel, type PanelWorld } from '../shell/registry.ts';
+import { escapeAction } from '../shell/panel_state.ts';
+import Rail from '../shell/Rail.vue';
 import {
     cancelFrame,
     devicePixelRatio,
@@ -25,9 +29,16 @@ import {
 const route = useRoute();
 const router = useRouter();
 const canvasEl = ref<HTMLCanvasElement | null>(null);
+const dossierEl = ref<{ remeasure: () => void } | null>(null);
 const status = ref('Loading the chart.');
 const versionRef = ref('');
 const manifestRef = ref<TruthManifest | null>(null);
+const omniOpen = ref(false);
+const treeRef = ref<TreeEnvelope | null>(null);
+const treeError = ref(false);
+const pendingSector = ref(false);
+const missingHex = ref(false);
+const dossierTick = ref(0);
 
 let cam: Camera = { x: 0, y: 0, ppp: 1 };
 let chart: TruthManifest | null = null;
@@ -35,11 +46,15 @@ let overview: TruthOverview | null = null;
 let version = '';
 let overviewReady = false;
 let selected: { slug: string; hhhh: string } | null = null;
+/** Last world opened this session. Survives closing the panel. */
+let remembered: PanelWorld | null = null;
 let suppressFly = false;
 let renderer: MapRenderer | null = null;
 let detachInput: (() => void) | null = null;
 let unregisterHome: (() => void) | null = null;
 let unregisterAccount: (() => void) | null = null;
+let unregisterClose: (() => void) | null = null;
+let unregisterSystem: (() => void) | null = null;
 let stopDpr: (() => void) | null = null;
 let observer: ResizeObserver | null = null;
 let raf = 0;
@@ -50,6 +65,9 @@ let pendingApply = false;
 let sawQuery = false;
 let fallbackNote = '';
 let keepNote = false;
+let treeGen = 0;
+let loadedHex = '';
+let lastPlace = '';
 const pendingIndexes = new Set<string>();
 
 const client = new TruthClient({
@@ -82,14 +100,226 @@ function showStatus(): void {
     else status.value = selectionLine();
 }
 
+const dossier = computed(() => dossierRoute(route.path));
+
 function syncSelection(): void {
-    const parts = route.path.split('/').filter((part) => part.length > 0);
-    if (parts[0] === 's' && parts.length === 3) {
-        selected = { slug: decodeURIComponent(parts[1]), hhhh: decodeURIComponent(parts[2]) };
+    const state = dossier.value;
+    if (state.kind === 'overview' || state.kind === 'body') {
+        selected = { slug: state.slug, hhhh: state.hex };
+        remembered = { slug: state.slug, hex: state.hex };
     } else {
         selected = null;
     }
     if (renderer) renderer.setSelection(selected);
+}
+
+function placeKey(state: DossierRoute): string {
+    if (state.kind === 'closed') return '';
+    return state.slug + '/' + state.hex;
+}
+
+function sectorIndex(slug: string): SectorIndex | null {
+    if (!version) return null;
+    return client.index(version, slug);
+}
+
+function subsectorName(index: SectorIndex, hex: string): string {
+    const col = Number(hex.slice(0, 2));
+    const row = Number(hex.slice(2));
+    if (!Number.isFinite(col) || !Number.isFinite(row)) return '';
+    const letter = String.fromCharCode(65 + Math.floor((row - 1) / 10) * 4 + Math.floor((col - 1) / 8));
+    const names = index.metadata.names;
+    const found = names[letter];
+    return found ? found : 'Subsector ' + letter;
+}
+
+const dossierEntry = computed((): SectorHex | null => {
+    void dossierTick.value;
+    const state = dossier.value;
+    if (state.kind === 'closed') return null;
+    const index = sectorIndex(state.slug);
+    if (!index) return null;
+    return index.hexes[state.hex] ?? null;
+});
+
+const dossierSectorName = computed(() => {
+    void dossierTick.value;
+    const state = dossier.value;
+    if (state.kind === 'closed') return '';
+    const index = sectorIndex(state.slug);
+    if (index) return index.name;
+    if (!chart) return state.slug;
+    for (const sector of chart.sectors) if (sector.slug === state.slug) return sector.name;
+    return state.slug;
+});
+
+const dossierSubsector = computed(() => {
+    void dossierTick.value;
+    const state = dossier.value;
+    if (state.kind === 'closed') return '';
+    const index = sectorIndex(state.slug);
+    return index ? subsectorName(index, state.hex) : '';
+});
+
+const dossierAllegiances = computed((): AllegianceName[] => {
+    void dossierTick.value;
+    const state = dossier.value;
+    if (state.kind === 'closed') return [];
+    const index = sectorIndex(state.slug);
+    if (!index) return [];
+    // Truth v2 indexes have no allegiance table; it arrives with v3.
+    const table = (index.metadata as { allegiances?: { code: string; name: string }[] }).allegiances ?? [];
+    return table.map((row) => ({ code: row.code, name: row.name }));
+});
+
+const dossierBody = computed(() => dossier.value.kind === 'body' ? dossier.value.body : null);
+
+function acceptTree(ticket: number, key: string, doc: TreeEnvelope): void {
+    if (ticket !== treeGen) return;
+    if (placeKey(dossierRoute(route.path)) !== key) return;
+    treeRef.value = doc;
+    treeError.value = false;
+}
+
+function rejectTree(ticket: number): void {
+    if (ticket !== treeGen) return;
+    treeRef.value = null;
+    treeError.value = true;
+}
+
+function loadDossier(): void {
+    dossierTick.value += 1;
+    const state = dossierRoute(route.path);
+    if (state.kind === 'closed' || !version) {
+        treeGen += 1;
+        loadedHex = '';
+        treeRef.value = null;
+        treeError.value = false;
+        pendingSector.value = false;
+        missingHex.value = false;
+        return;
+    }
+    const key = placeKey(state);
+    const index = sectorIndex(state.slug);
+    if (!index) {
+        if (loadedHex !== key) {
+            treeRef.value = null;
+            treeError.value = false;
+        }
+        pendingSector.value = true;
+        missingHex.value = false;
+        client.want(version, [state.slug]);
+        return;
+    }
+    pendingSector.value = false;
+    const entry = index.hexes[state.hex];
+    if (!entry) {
+        loadedHex = key;
+        treeGen += 1;
+        missingHex.value = true;
+        treeRef.value = null;
+        treeError.value = false;
+        return;
+    }
+    missingHex.value = false;
+    if (entry.tree === null) {
+        loadedHex = key;
+        treeGen += 1;
+        treeRef.value = null;
+        treeError.value = false;
+        return;
+    }
+    const cached = client.treeNow(entry.tree);
+    if (cached) {
+        loadedHex = key;
+        treeGen += 1;
+        treeRef.value = cached;
+        treeError.value = false;
+        return;
+    }
+    if (loadedHex !== key) {
+        treeRef.value = null;
+        treeError.value = false;
+    }
+    loadedHex = key;
+    const hash = entry.tree;
+    const ticket = ++treeGen;
+    void client.tree(hash).then(
+        (doc) => { acceptTree(ticket, key, doc); },
+        () => { rejectTree(ticket); },
+    );
+}
+
+function retryTree(): void {
+    const state = dossierRoute(route.path);
+    if (state.kind === 'closed' || !version) return;
+    const index = sectorIndex(state.slug);
+    const entry = index ? index.hexes[state.hex] : null;
+    if (!entry || entry.tree === null) return;
+    treeError.value = false;
+    const key = placeKey(state);
+    const hash = entry.tree;
+    const ticket = ++treeGen;
+    void client.tree(hash).then(
+        (doc) => { acceptTree(ticket, key, doc); },
+        () => { rejectTree(ticket); },
+    );
+}
+
+function panelWorld(): PanelWorld | null {
+    if (selected) return { slug: selected.slug, hex: selected.hhhh };
+    return remembered;
+}
+
+function runSystemPanel(): void {
+    const action = systemPanel({ panelOpen: dossier.value.kind !== 'closed', world: panelWorld() });
+    if (!action.runnable) return;
+    if (action.kind === 'close') {
+        closePanel();
+        return;
+    }
+    void router.push({
+        path: '/s/' + encodeURIComponent(action.slug) + '/' + action.hex,
+        query: route.query,
+    });
+}
+
+function closePanel(): void {
+    if (route.path === '/' || route.path === '') return;
+    suppressFly = true;
+    void router.push({
+        path: '/',
+        query: { x: cam.x.toFixed(3), y: cam.y.toFixed(3), z: cam.ppp.toFixed(3) },
+    });
+}
+
+function onEscape(): void {
+    const state = dossierRoute(route.path);
+    const panelOpen = state.kind !== 'closed';
+    let bodyOpen = state.kind === 'body';
+    if (state.kind === 'body' && treeRef.value) {
+        const system = pickSystem(treeRef.value.body);
+        const keys = system ? bodyKeys(system) : [];
+        if (!keys.includes(state.body)) bodyOpen = false;
+    }
+    const action = escapeAction({ omniOpen: omniOpen.value, panelOpen, bodyOpen });
+    if (action === 'ignore') return;
+    if (action === 'overview' && state.kind === 'body') {
+        suppressFly = true;
+        void router.push({
+            path: '/s/' + encodeURIComponent(state.slug) + '/' + state.hex,
+            query: route.query,
+        });
+        return;
+    }
+    closePanel();
+}
+
+function onPanelWidth(px: number): void {
+    const map = canvasEl.value ? canvasEl.value.parentElement : null;
+    if (map) map.style.setProperty('--panel-width', px + 'px');
+    if (renderer) renderer.setWorkspaceLeft(px);
+    markDirty();
 }
 
 function markDirty(): void {
@@ -115,11 +345,10 @@ function frame(): void {
     if (renderer) {
         const drawn = renderer.draw(cam);
         if (drawn.tier === 'hex' && version) requestIndexes(drawn.sectorsOnScreen);
+        if (drawn.pending) dirty = true;
     }
-    if (fly) {
-        dirty = true;
-        raf = nextFrame(frame);
-    }
+    if (fly) dirty = true;
+    if (dirty) raf = nextFrame(frame);
 }
 
 function requestIndexes(slugs: string[]): void {
@@ -195,8 +424,13 @@ function applyRoute(): void {
     }
     pendingApply = false;
     syncSelection();
+    loadDossier();
+    const place = placeKey(dossierRoute(route.path));
+    const sameHex = place !== '' && place === lastPlace;
+    if (place === '') lastPlace = '';
     if (suppressFly) {
         suppressFly = false;
+        if (place) lastPlace = place;
         showStatus();
         markDirty();
         return;
@@ -215,6 +449,12 @@ function applyRoute(): void {
     else fallbackNote = '';
     showStatus();
     if (target.kind === 'account' || target.kind === 'design') return;
+    if (target.kind === 'camera' && sameHex) {
+        lastPlace = place;
+        markDirty();
+        return;
+    }
+    if (target.kind === 'camera') lastPlace = place;
     const queried = cameraFromQuery();
     if (queried && !sawQuery) {
         sawQuery = true;
@@ -232,6 +472,7 @@ function onResize(): void {
     if (!el || !renderer) return;
     renderer.resize(el.clientWidth, el.clientHeight, devicePixelRatio());
     if (pendingApply) applyRoute();
+    if (dossierEl.value) dossierEl.value.remeasure();
     markDirty();
 }
 
@@ -269,6 +510,8 @@ onMounted(() => {
     stopDpr = onDevicePixelRatioChange(() => onResize());
     client.onArrive((slug) => {
         pendingIndexes.delete(slug);
+        const state = dossierRoute(route.path);
+        if (state.kind !== 'closed' && state.slug === slug) loadDossier();
         showStatus();
         markDirty();
     });
@@ -318,6 +561,18 @@ onMounted(() => {
         name: 'Account',
         run: () => { void router.push('/account'); },
     });
+    unregisterClose = registerCommand({
+        id: 'close-panel',
+        name: 'Close panel',
+        keys: ['Escape'],
+        run: () => { onEscape(); },
+    });
+    unregisterSystem = registerCommand({
+        id: 'system-panel',
+        name: 'System panel',
+        runnable: () => systemPanel({ panelOpen: dossier.value.kind !== 'closed', world: panelWorld() }).runnable,
+        run: () => { runSystemPanel(); },
+    });
     el.focus();
     void boot();
 });
@@ -364,14 +619,35 @@ onBeforeUnmount(() => {
     if (observer) observer.disconnect();
     if (unregisterHome) unregisterHome();
     if (unregisterAccount) unregisterAccount();
+    if (unregisterClose) unregisterClose();
+    if (unregisterSystem) unregisterSystem();
 });
 </script>
 
 <template>
   <div class="map" @keydown="onMapKey">
     <canvas ref="canvasEl" tabindex="0"></canvas>
-    <OmniBox :version="versionRef" :manifest="manifestRef" />
-    <p class="status" aria-live="polite">{{ status }}</p>
+    <Rail :panel-open="dossier.kind !== 'closed'" :search-open="omniOpen" />
+    <OmniBox :version="versionRef" :manifest="manifestRef" @open="omniOpen = $event" />
+    <DossierPanel
+      ref="dossierEl"
+      :open="dossier.kind !== 'closed'"
+      :slug="dossier.kind === 'closed' ? '' : dossier.slug"
+      :hex="dossier.kind === 'closed' ? '' : dossier.hex"
+      :sector-name="dossierSectorName"
+      :subsector-name="dossierSubsector"
+      :entry="dossierEntry"
+      :tree="treeRef"
+      :body-key="dossierBody"
+      :error="treeError"
+      :pending="pendingSector"
+      :missing="missingHex"
+      :allegiances="dossierAllegiances"
+      @close="closePanel"
+      @retry="retryTree"
+      @width="onPanelWidth"
+    />
+    <p class="status ui-status" aria-live="polite">{{ status }}</p>
   </div>
 </template>
 
@@ -381,8 +657,16 @@ onBeforeUnmount(() => {
   inset: 0;
   background: var(--bg-0);
 }
+/* An expanded rail pushes the chart, the omnibox, the panel and the status pill; it covers nothing. */
+.map:has(.rail.is-expanded) {
+  --rail-width: var(--rail-width-open);
+}
+/* The chart begins at the rail's edge, so the camera centres on what is visible. */
 .map canvas {
-  width: 100%;
+  position: absolute;
+  top: 0;
+  left: var(--rail-width);
+  width: calc(100% - var(--rail-width));
   height: 100%;
   display: block;
   touch-action: none;
@@ -393,12 +677,15 @@ onBeforeUnmount(() => {
 }
 .map .status {
   position: absolute;
-  left: var(--sp-3);
-  bottom: var(--sp-3);
-  margin: 0;
-  color: var(--text-muted);
-  font-family: var(--font-text);
-  font-size: 12px;
+  left: calc(var(--rail-width) + max(var(--chrome-inset), var(--panel-width, 0px)));
+  bottom: var(--chrome-inset);
+  max-width: calc(100% - var(--rail-width) - 2 * var(--chrome-inset));
   pointer-events: none;
+  transition: left var(--t-rail) ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .map .status {
+    transition: none;
+  }
 }
 </style>

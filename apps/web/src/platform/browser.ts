@@ -42,3 +42,27 @@ export function pageOrigin(): string {
 export function scrollToTop(): void {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
 }
+
+/** Device storage for the panel width. A private window can refuse it. */
+export function storageGet(key: string): string | null {
+    try {
+        return localStorage.getItem(key);
+    } catch {
+        return null;
+    }
+}
+
+export function storageSet(key: string, value: string): void {
+    try {
+        localStorage.setItem(key, value);
+    } catch {
+        // The span stays at the default when storage is blocked.
+    }
+}
+
+/** Fires when an element's border box changes. Returns an unsubscribe. */
+export function observeSize(element: Element, fn: () => void): () => void {
+    const observer = new ResizeObserver(() => fn());
+    observer.observe(element);
+    return () => observer.disconnect();
+}

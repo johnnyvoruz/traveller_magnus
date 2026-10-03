@@ -1,4 +1,4 @@
-import type { SectorIndex, TruthManifest, TruthOverview } from '@voyage/shared';
+import type { SectorIndex, TreeEnvelope, TruthManifest, TruthOverview } from '@voyage/shared';
 
 type FetchLike = typeof fetch;
 
@@ -22,6 +22,9 @@ export class TruthClient {
     private readonly queued = new Map<string, { version: string; slug: string }>();
     private readonly flying = new Set<string>();
     private readonly listeners = new Set<(slug: string) => void>();
+    /** At most 16 parsed trees, least recently read first. A failed fetch is not stored. */
+    private readonly trees = new Map<string, TreeEnvelope>();
+    private readonly treeFlying = new Map<string, Promise<TreeEnvelope>>();
 
     constructor(opts: { cdnBase: string; apiBase: string; fetch: FetchLike; maxIndexes?: number; maxInFlight?: number }) {
         // The browser's fetch throws "Illegal invocation" when called as a method of another
@@ -82,6 +85,36 @@ export class TruthClient {
         this.pump();
     }
 
+    /**
+     * One request per hash however many callers ask. The 16 most recently read stay.
+     * A failed fetch is not cached.
+     */
+    tree(hash: string): Promise<TreeEnvelope> {
+        const cached = this.treeNow(hash);
+        if (cached) return Promise.resolve(cached);
+        const flying = this.treeFlying.get(hash);
+        if (flying) return flying;
+        const url = this.cdnBase + '/objects/' + encodeURIComponent(hash);
+        const tracked = this.load(url).then((body) => {
+            const doc = body as TreeEnvelope;
+            this.rememberTree(hash, doc);
+            return doc;
+        }).finally(() => {
+            if (this.treeFlying.get(hash) === tracked) this.treeFlying.delete(hash);
+        });
+        this.treeFlying.set(hash, tracked);
+        return tracked;
+    }
+
+    /** The parsed tree, or null when it has not arrived. Reading counts as a use. */
+    treeNow(hash: string): TreeEnvelope | null {
+        const found = this.trees.get(hash);
+        if (!found) return null;
+        this.trees.delete(hash);
+        this.trees.set(hash, found);
+        return found;
+    }
+
     onArrive(fn: (slug: string) => void): () => void {
         this.listeners.add(fn);
         return () => { this.listeners.delete(fn); };
@@ -118,6 +151,16 @@ export class TruthClient {
                 this.flying.delete(key);
                 this.pump();
             });
+        }
+    }
+
+    private rememberTree(hash: string, doc: TreeEnvelope): void {
+        if (this.trees.has(hash)) this.trees.delete(hash);
+        this.trees.set(hash, doc);
+        while (this.trees.size > 16) {
+            const oldest = this.trees.keys().next().value;
+            if (oldest === undefined) break;
+            this.trees.delete(oldest);
         }
     }
 

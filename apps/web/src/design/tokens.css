@@ -1,3 +1,5 @@
+@import '/src/design/base.css';
+
 @font-face {
   font-family: 'Orbitron';
   src: url('/fonts/orbitron-latin-400-normal.woff2') format('woff2');
@@ -39,6 +41,18 @@
   --surface-2: #1c383e;   /* hover / selected rows */
   --line-1: #324650;      /* hairlines */
   --line-2: #415864;      /* stronger rules, borders */
+  --panel-raised: #19252f;   /* legacy --atlas-raised: buttons, chips, tiles, cards in a panel */
+  --chrome-bg: #18232f;      /* floating chrome: omnibox popup */
+  --chrome-glass: #18232ff5; /* chrome over the live map: omnibox field, status pill */
+  --row-active: #254346;     /* selected option, pressed segment */
+  --row-active-line: #3d6868;
+  --scroll-track: #0a1016;
+  --control-line: #5b7886;   /* border of an interactive control: 3:1 on every panel and map field */
+  --rail-glass: #131c26f5;   /* the rail (legacy #app-nav) */
+  --rail-hover: #263744;
+  --rail-text: #afc1cc;
+  --rail-icon: #f4fafb;
+  --line-soft: color-mix(in srgb, var(--line-1) 75%, transparent);  /* row rules */
 
   /* signal */
   --signal: #66fcf1;      /* primary teal: active, links, locator, numerics */
@@ -46,17 +60,29 @@
   --signal-bright: #9afff2; /* hover / focus of signal */
   --attention: #ffce73;   /* amber: focus-of-interest, warnings, trade focus */
   --danger: #ff6b6b;      /* destructive; use rarely */
+  --signal-active: #79fff0;  /* text of the selected option */
+  --on-signal: var(--bg-2);  /* text on a filled teal control */
+  --wash-faint: color-mix(in srgb, var(--signal) 8%, transparent);   /* ribbon cell, mainworld row */
+  --wash: color-mix(in srgb, var(--signal) 15%, transparent);        /* code badge, map badge */
+  --signal-line: color-mix(in srgb, var(--signal-dim) 50%, transparent);  /* panel header rule */
+  --signal-edge: color-mix(in srgb, var(--signal) 45%, transparent);      /* mainworld row border */
+  --signal-glow: color-mix(in srgb, var(--signal) 40%, transparent);
+  --scroll-track-line: color-mix(in srgb, var(--signal-dim) 33%, transparent);
+  --focus-ring: var(--attention);  /* legacy :focus-visible is 2px amber */
 
   /* text */
+  --text-0: #e6eef0;      /* panel title */
   --text-1: #d2e0e5;      /* body */
   --text-2: #c5c6c7;      /* secondary */
-  --text-muted: #9faeb8;  /* captions, meta (legacy --atlas-muted) */
+  --text-muted: #a8b6bf;  /* captions, meta: legacy --atlas-muted #9faeb8 lifted to 7:1 on panel surfaces for text under 12 px */
   --text-faint: #8aa0ab;
+  --neutral-wash: color-mix(in srgb, var(--text-1) 9%, transparent);  /* count pill */
 
   /* type */
   --font-display: 'Orbitron', sans-serif;   /* headings, sector names, timecodes */
   --font-text: 'Inter', sans-serif;         /* everything else */
   --font-data: ui-monospace, monospace;     /* UWP strings, hex ids, coordinates */
+  --font-code: ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', monospace;  /* code badges, ribbon, chips (legacy mono stack) */
   --tabular: tabular-nums;
 
   /* space (4-based) */
@@ -72,11 +98,60 @@
   --t-long: 800ms;        /* scanner reveal, camera long flight */
   --ease-out: cubic-bezier(.2,.8,.2,1);
   --ease-in-out: cubic-bezier(.4,0,.2,1);
+  --t-scan: 1200ms;       /* one scanner pass over the surface stage */
+  --ease-scan: cubic-bezier(.45,0,.25,1);
+  --t-rail: 500ms;        /* rail expand and label fade */
 
-  /* elevation: no shadows; depth comes from --bg steps and hairlines */
+  /* layout of the floating chrome (legacy #map-chrome and #system-inspector) */
+  --chrome-inset: 10px;   /* viewport edge to chrome */
+  --chrome-top: 14px;     /* top of the search row */
+  --chrome-height: 48px;  /* search field */
+  --panel-top: 76px;      /* top of the panel card, under the search row */
+  --panel-column: 520px;  /* panel column width */
+  --rail-width: 68px;     /* the icon rail (legacy --nav-width) */
+  --rail-width-open: 196px;
+  --scroll-size: 12px;
+
+  /* elevation: floating chrome only (panel, omnibox, popup), as in the legacy app */
+  --shadow-chrome: 0 4px 16px #0004;
+  --shadow-pop: 0 10px 30px #0006;
+  --shadow-panel: 0 12px 45px #0007;
+  --shadow-rail: 3px 0 20px #0003;
+
+  /* travel zones in a panel (system_inspector: .atlas-stat-zone-*) */
+  --zone-green: #3ddc6a;
+  --zone-amber: var(--chart-zone-amber);
+  --zone-red: #ff4d4d;    /* text: the chart red is 4.48:1 on the panel, below AA */
+  --zone-green-wash: color-mix(in srgb, var(--zone-green) 16%, transparent);
+  --zone-amber-wash: color-mix(in srgb, var(--zone-amber) 16%, transparent);
+  --zone-red-wash: color-mix(in srgb, var(--zone-red) 16%, transparent);
+
+  /* body glyphs: star classes (system_viewer.js:153-157), surfaces (system_inspector.js:207-257) */
+  --star-o: #9bb0ff;
+  --star-b: #aabfff;
+  --star-a: #cad7ff;
+  --star-f: #f8f7ff;
+  --star-g: #fff4ea;
+  --star-k: #ffd2a1;
+  --star-m: #ffcc6f;
+  --star-d: #dce0ff;
+  --star-bd: #a56432;
+  --glyph-gas: #d8b98a;
+  --glyph-gas-band-1: #b98f5e;
+  --glyph-gas-band-2: #e8d2a8;
+  --glyph-gas-band-3: #c39462;
+  --glyph-gas-band-4: #a97f52;
+  --glyph-gas-band-5: #c8a473;
+  --glyph-belt: #a2a8ae;
+  --glyph-rock: #8c9299;
+  --glyph-rock-mark: #6b7179;
+  --glyph-light: #fff;
+  --glyph-dark: #000;
 
   /* chart */
   --chart-world: #ffffff;        /* default world disc and chart text (renderer.js:1438, 1468) */
+  --chart-title-text: var(--chart-world); /* subsector title */
+  --chart-title-pill: var(--bg-0);        /* subsector title pill, drawn at 55% */
   --chart-water: #46b4e8;        /* default wet-world rule (filter_engine.js:58) */
   --chart-zone-amber: #FFBF00;   /* renderer.js:1415 */
   --chart-zone-red: #FF0000;

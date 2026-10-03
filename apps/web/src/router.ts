@@ -15,6 +15,7 @@ export const router = createRouter({
         { path: '/', name: 'home', component: MapView },
         { path: '/s/:sector', name: 'sector', component: MapView },
         { path: '/s/:sector/:hex', name: 'hex', component: MapView },
+        { path: '/s/:sector/:hex/b/:body', name: 'body', component: MapView },
         { path: '/account', name: 'account', component: Account },
     ],
 });

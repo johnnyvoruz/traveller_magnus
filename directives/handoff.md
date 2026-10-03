@@ -1205,3 +1205,77 @@ on disk; that removal is staged and goes out with the next commit. The folder is
 papers: reviews, the inspector inventory, the design audit and screenshots. The recipes still
 cite `findings/legacy_inspector_inventory.md` and `findings/ui_design_audit.md`; they exist on
 this machine only, so a fresh clone will not have them.
+
+## 36. Truth v3 derived from v2 in under three minutes (2026-10-03, 22:38-22:41Z)
+
+- Pushed as one clean commit `469f212` (non-web only; an earlier local commit that had picked
+  up half of `apps/web` was undone with `git reset origin/campaign` before pushing). GitHub
+  tests passed; deployed 22:16Z; migration `0006` applied.
+- Johnny ran the build with `version: 'v3', from: 'v2'` at 22:38:55Z. Twelve sectors in
+  flight, about 1.2 s each, every `truth-derive` invocation `ok`. **All 512 `done` by
+  22:41:37Z**, none failed: 180,312 systems, 156,222 built, 24,090 partial, 180,312
+  `truth_systems` rows, exactly v2's numbers. No tree was written.
+- Verified on the CDN: the v3 Spinward Marches index is 131,999 bytes (the local build's
+  size), `truthVersion` `v3`, four territories (36, 60, 739, 52 hexes), an allegiance table,
+  36 of 127 routes with a resolved colour, and Regina's tree hash unchanged from v2.
+- **Next:** Johnny releases v3 (`POST /api/admin/truth/release/v3`, up to a minute). The live
+  viewer and the local dev server then read v3 by themselves; borders appear locally as soon
+  as it is released, because Agent C's drawing is already in the working tree.
+
+**B2c.3 is in (Agent C, 2026-10-03), checked from the report:** `polity_layer.ts`, zoomed-out
+polities built one per drawn frame into cached `Path2D`s. Three loose ends:
+1. **Not wired to the frame loop.** `MapView.vue` clears its dirty flag after one draw, so a
+   map that sits still builds only the largest polity; the rest wait for the next drag or
+   zoom. The renderer must report unfinished work (`draw` returns `pending`) and `MapView`
+   must stay dirty while it does. `MapView.vue` is Agent D's file until D's second pass
+   reports; then this is a small step for Agent C.
+2. **Timing:** one synthetic 30,000-hex polity took 51.7 ms inside the full suite and 21.6 ms
+   alone. Borderline against the 50 ms rule; accepted until the browser check on real v3 data
+   says whether a frame hitches. If it does, the remedy is building in a Web Worker.
+3. `tests/web/contrast.test.js` currently fails four pairs: that is Agent D's second pass in
+   progress (the test exists, the tokens are not all fixed yet), not C's.
+**v3 is derived but not yet released** (health still reports v2; no `truth/v3/overview.json`).
+
+## 37. Agent D's second pass is in; the web tree is whole again (2026-10-03, about 23:00Z)
+
+- **Done by D:** dividers in the system tree; contrast held to WCAG 2.1 AA with
+  `tests/web/contrast.test.js` (61 pairs; small text held to 7:1 by D's choice); the rail
+  (`shell/Rail.vue`, 68 px, 196 px expanded, and at Johnny's request to D the expanded rail
+  pushes the panel, omnibox and chart aside instead of covering them); 34 icons extracted
+  from the legacy kit into `design/icons.ts`, no webfont shipped.
+- **Checked here:** `npm test` 214/209/5, check clean, typecheck clean, build succeeds; no
+  global outside the browser adapter.
+- **Open, from D:** (R8) the registry has no command that opens the system panel, so the
+  rail's System item can only close it; (R3) subsector pill theme fields in the renderer;
+  two route colours under 3:1 on the map (X-boat green 2.85, core-route purple 2.08), left
+  for Johnny to decide.
+- **Licence flag for Johnny (not legal advice):** the legacy kit in `assets/fontawesome` is
+  Font Awesome **Pro** 7.3.1, 67 tracked files, and the GitHub repository is **public**. Four
+  of the new icons are Pro-only (planet-ringed, book-sparkles, calendar-star, solar-system).
+  Whether a Pro kit and Pro icon outlines may sit in a public repository is his to check
+  against his Font Awesome licence; the safe options are swapping the four for Free icons,
+  or making the repository private.
+- **Next for Agent C (MapView is free again):** the renderer reports unfinished polity
+  outlines and the frame loop keeps drawing; a registry command that opens the system panel
+  for the current selection; the subsector pill theme fields.
+- **v3 is still unreleased**; nothing of the border work can be seen until it is.
+- **All of `apps/web` and `tests/web` is unpushed** and, with C's next step, ready for one
+  push once Johnny has seen borders locally.
+
+**Note recorded for later (Johnny, 2026-10-03):** the date and time readout shows days of the
+week: Wonday, Tuday, Thirday, Forday, Fiday, Sixday, Senday, starting after day 001 and
+running to day 365. Written into `campaign_manager_plan.md` §7.9 with the delighters. The
+orchestrator's reading (day 001 has no weekday; day 002 is Wonday; day 365 is Senday) needs
+his confirmation before it is built. Not started.
+
+**Weekday note corrected:** day 001 is called "Holiday" (Johnny), outside the week; day 002 is
+Wonday. `campaign_manager_plan.md` §7.9.
+
+**Agent C's wiring is in (2026-10-03), checked:** `draw` returns `pending` and the frame loop
+keeps going until every polity outline is built; the `system-panel` registry command opens
+or closes the dossier and the rail's System item uses it; subsector titles read
+`--chart-title-text` and `--chart-title-pill`, with the pair in the contrast test.
+`npm test` 217/212/5, check clean, build succeeds. **The web tree (37 changed or new files
+under `apps/web` and `tests/web`) is complete and unpushed:** A's dossier, D's two design
+passes and rail, C's borders, polities and wiring. **v3 is still unreleased** (health reports
+v2), so borders have not been seen by anyone yet.
