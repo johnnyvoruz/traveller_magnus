@@ -198,6 +198,11 @@ dead_letter_queue = "voyage-dlq"
 [[analytics_engine_datasets]]
 binding = "METRICS"
 
+[observability.logs]
+enabled = true
+invocation_logs = true
+persist = true
+
 [triggers]
 crons = ["0 4 * * *", "0 5 * * SUN"]   # daily universe snapshots; weekly object GC and universe purge
 

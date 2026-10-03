@@ -86,3 +86,8 @@ BETTER_AUTH_URL = "https://traveller.voyage"
 
 [env.preview]
 routes = [{ pattern = "preview.traveller.voyage", custom_domain = true }]
+
+[observability.logs]
+enabled = true
+invocation_logs = true
+persist = true
