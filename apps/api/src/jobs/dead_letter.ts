@@ -4,7 +4,7 @@ import { claimNext } from './truth_build.ts';
 const DEAD_ERROR = 'dead-lettered: the invocation died without throwing; see Workers Logs';
 
 type Pinned = { seed: string; settings: Record<string, unknown>; engineVersion: string };
-type DeadBody = { version?: unknown; slug?: unknown; offset?: unknown; pinned?: unknown };
+type DeadBody = { version?: unknown; slug?: unknown; offset?: unknown; pinned?: unknown; from?: unknown };
 
 export async function deadLetterConsumer(batch: MessageBatch, env: Env): Promise<void> {
     for (const message of batch.messages) {
@@ -26,11 +26,25 @@ export async function deadLetterConsumer(batch: MessageBatch, env: Env): Promise
             }));
             if ((written?.meta?.changes ?? 0) > 0) {
                 const pinned = readPinned(body.pinned) ?? await pinnedFromVersion(env, body.version);
-                if (pinned) await claimNext(env, body.version, pinned);
+                if (pinned) {
+                    const from = readFrom(body.from) ?? await derivedFromVersion(env, body.version);
+                    await claimNext(env, body.version, pinned, from);
+                }
             }
         }
         message.ack();
     }
+}
+
+function readFrom(value: unknown): string | undefined {
+    return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+async function derivedFromVersion(env: Env, version: string): Promise<string | undefined> {
+    const row = await env.DB.prepare(
+        `SELECT derived_from AS derivedFrom FROM truth_versions WHERE version = ?`,
+    ).bind(version).first<{ derivedFrom: string | null }>();
+    return row?.derivedFrom || undefined;
 }
 
 function readPinned(value: unknown): Pinned | null {

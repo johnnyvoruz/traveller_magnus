@@ -55,12 +55,13 @@ export type MetadataXml = {
     names: Record<string, string>;
     allegiances: { code: string; base?: string; name: string }[];
     borders: Record<string, string>[];
+    regions: Record<string, string>[];
     routes: Record<string, string>[];
     sectorLang: Record<string, string>;
     stylesheet: string;
 };
 
-/** { routes, borders, names, allegiances } plus the sector name, coordinates and milieu. */
+/** { routes, borders, regions, names, allegiances } plus the sector name, coordinates and milieu. */
 export function parseMetadataXml(text: string): MetadataXml {
     const sector = parseXmlElements(text).children.find(c => c.name === 'Sector');
     if (!sector) throw new Error('metadata xml: no Sector element');
@@ -81,11 +82,12 @@ export function parseMetadataXml(text: string): MetadataXml {
         name: a.text.trim(),
     }));
     const borders = kids(child(sector, 'Borders'), 'Border').map(b => ({ ...b.attrs, path: b.text.trim() }));
+    const regions = kids(child(sector, 'Regions'), 'Region').map(r => ({ ...r.attrs, path: r.text.trim() }));
     const routes = kids(child(sector, 'Routes'), 'Route').map(r => ({ ...r.attrs }));
     return {
         name, x: xText === '' ? null : Number(xText), y: yText === '' ? null : Number(yText),
         milieu: child(sector, 'DataFile')?.attrs.Milieu || '',
-        names, allegiances, borders, routes, sectorLang,
+        names, allegiances, borders, regions, routes, sectorLang,
         stylesheet: child(sector, 'Stylesheet')?.text ?? '',
     };
 }

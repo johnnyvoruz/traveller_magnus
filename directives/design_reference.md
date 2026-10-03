@@ -13,6 +13,25 @@ lead), `system_viewer.js` (`.sv-view-nav`, `.sv-pop*`, `.sv-jog`, `.sv-timecode`
 
 ---
 
+## 0. Amendments (2026-10-03): where the legacy app and this file disagreed, the legacy app won
+
+Johnny rejected a first dossier that followed this file's tokens but not the legacy look
+("not cohesive at all"). A design pass (Agent D, `findings/ui_design_audit.md`, screenshots in
+`findings/ui_design_shots/`) then matched the legacy app directly. Where the two disagreed the
+legacy look is now the rule, and the sections below are read with these changes:
+
+| This file said | The rule now |
+|---|---|
+| §1, §2.1: no shadows; depth from background steps and hairlines | floating chrome (panel card, omnibox, popups) carries the legacy shadows |
+| §2.6: a 1px `--signal` focus ring | a 2 px amber ring, everywhere |
+| §5: panel title and section headings in the display font | Inter 700 in the panel; no Orbitron in the inspector |
+| §2.7: column width 320 px | 520 px, the legacy inspector's column |
+| §3 command palette: centred input over a dimmed map | the omnibox: an always-visible field at the top left, on the panel's edge, no dimming |
+
+Shared primitives are in `apps/web/src/design/base.css`; the design-system page is `/design`.
+New UI copies from those, and is judged side by side with the legacy app before it is called
+done.
+
 ## 1. Tokens (`tokens.css`) — the only place a literal colour or duration may appear
 
 Extracted from `style.css` by frequency; names are new, values are the legacy ones.

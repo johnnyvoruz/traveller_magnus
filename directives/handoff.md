@@ -1042,3 +1042,166 @@ A's inventory of `js/system_inspector.js`.
   report received). B2c (drawing borders) moves after v3.
 - Johnny said he is losing track of who has what; every reply now ends with a three-line
   board (A, B, Johnny).
+
+## 31. Three fresh implementers; B3a and the derived build specified (2026-10-03, about 20:45Z)
+
+- **Pushed and live:** `8880ef2` ("b2") deployed 20:27Z; migration `0005` applied in
+  production; the GitHub test workflow passed. The tree was clean after it.
+- **Johnny is clearing the implementers' contexts and adding a third (Agent C).** A fresh
+  session knows nothing, so `directives/implementer_brief.md` now exists: rules, commands,
+  what is already built, how to report. Every prompt starts by sending the agent there.
+- **Assignments (no two share a folder):**
+  - **Agent A:** B3a, the panel and dossier (`apps/web`, `tests/web`). Recipe
+    `slice_1_viewer.md` §B3, written from `findings/legacy_inspector_inventory.md`.
+  - **Agent B:** B2d.1, the regions port (`packages/`, `tests/golden`, `tests/oracle`,
+    `tests/generation`, `.gitignore`).
+  - **Agent C:** B2d.4, the derived build (`apps/api`, `tests/api`, plus the one file
+    `packages/shared/src/schemas/generate.ts`). It includes migration `0006`. Only C may run
+    `npm install`, and should not need to.
+- **B3a decisions made by the orchestrator:** the panel's column width is the legacy 520 px,
+  not the design reference's 320 px (Johnny: keep everything); display name tables are copied
+  into `apps/web/src/dossier/labels.ts` and held to the engines by a test, because the viewer
+  may not import the engines; the surface-map lead, the scanner and the orbit buttons wait
+  for part C with a slot left; referee notes, the campaign block and the edit controls wait
+  for the slices where that data exists; body deep links use new keys (`s0`, `w3`, `w3m1`).
+- **Still to write:** B2d.2 (route colours) and B2d.3 (polities in the overview), then v3 is
+  derived from v2 and B2c draws borders.
+
+## 32. Regions and the derived build are in and verified (2026-10-03, about 21:15Z)
+
+- **B2d.1 regions (Agent B):** `packages/generation/src/regions.ts`, six golden cases over
+  Riftspan Reaches, Kalash and Afawahisa, exact parity. `SectorIndex` now requires `regions`.
+  Open nit: the oracle does not load `js/regions.js`, so the legacy default region slots are
+  not in play; names, colours and hexes come from the XML either way. B is asked to load it
+  and confirm the fixtures do not change.
+- **B2d.4 derived build (Agent C):** `from` on the build request, migration
+  `0006_truth_versions_derived_from.sql`, `deriveSector` sharing `publishSector` with
+  finalize; six or seven binding calls a sector. **Not applied to production yet.**
+- **Verified together by the orchestrator:** `npm test` 129/124/5, check clean, and the gated
+  Worker suite 9 of 9 with B's and C's changes in the same tree.
+- **Legacy behaviour made visible by the regions port, carried as it is:** region colours
+  `SeaGreen` and `Plum` are not in the legacy colour table and come out grey; the region gap
+  seal uses a different (cruder) hex-line routine than the border one.
+- **Written now:** B2d.2 (route colours at build time) and B2d.3 (polities in the overview)
+  for Agent B in one prompt; B2c.1 (outline geometry, new files only) for Agent C. Agent A is
+  mid-B3a in `apps/web`.
+- **Push:** B's and C's work can go by path (everything outside `apps/web` and `tests/web`),
+  or wait for A. It carries migration `0006`.
+- **Then:** when B2d.2 and B2d.3 are in and pushed, Johnny derives v3 from v2 with
+  `{ version: 'v3', from: 'v2', ...same pinned values, sectors: 'all' }` and releases it.
+
+**B3a is in (Agent A, 2026-10-03), read and checked:** the one panel, the dossier overview
+and body profile, tree fetching, display labels held to the engines by a test, body deep
+links. `npm test` 130/125/5 and check clean here; no new allowlist file, no global, literal
+colour or engine import in `apps/web/src`. A's three questions are answered by the
+orchestrator and recorded in `slice_1_viewer.md` B3a.6a (all accepted). **Unseen in a
+browser:** everything in B3a.7. The dev server on port 5173 is still running against
+production. Do not push `apps/web` before Johnny has looked.
+
+## 33. The dossier's look was rejected; a design agent is being added (2026-10-03, about 21:40Z)
+
+- **Johnny saw B3a in the browser:** the data is right, the look is not. "This is not cohesive
+  at all ... I feel like we lost all the work we did before." Visible in his screenshot: plain
+  rows with no hierarchy, an empty boxed map slot, the omnibox colliding with the panel
+  header, loud subsector title pills, the status line overlapping the map edge, nothing that
+  reads as the legacy sci-fi inspector.
+- **Cause, the orchestrator's:** the B3a recipe specified structure and data and told the
+  implementer to restyle with tokens and copy no CSS rule. Nobody was asked to reproduce the
+  legacy look, and nobody with a browser judged it. Nothing is lost: the legacy app is
+  intact, and the data path, model and behaviour are done; the presentation layer needs a
+  design pass.
+- **Agent D (high effort, UI design)** gets the presentation layer of `apps/web`: the shell
+  (panel, omnibox, status line, title styling), the dossier components' templates and styles,
+  `tokens.css`, and the design-system page. It does not change models, map logic or tests'
+  meaning. **While D works, no other agent edits existing files in `apps/web`** (Agent C's
+  two new outline files are fine).
+- **Rule from now on:** a UI part that rebuilds a legacy feature has the legacy look in its
+  spec and a visual acceptance step against the legacy app; tests alone do not make it ready.
+- B3a's `apps/web` work is unpushed and stays unpushed until D's pass is accepted.
+
+**B stopped correctly on the regions loose end (2026-10-03).** With `js/regions.js` loaded
+(as the real legacy app has it), the region definitions start from default slots and are
+sorted and trimmed afterwards (`js/regions.js:50-76`): the named regions' colours and hexes
+are unchanged, but their order becomes alphabetical and one empty default slot is appended.
+**Decision (orchestrator):** the oracle loads `js/regions.js`, because parity is with the real
+app; the golden case returns only regions that own at least one hex, in the legacy order; the
+three fixtures are rewritten once from that oracle, with a check that every named region's
+colour and hexes equal the old fixture's; the port orders its output the same way. Then B
+continues with B2d.2 and B2d.3.
+
+**B2c.1 is in (Agent C, 2026-10-03), checked:** `apps/web/src/map/outline.ts` and its test;
+`npm test` green with it. C kept the legacy vertex rounding at the legacy pixel scale (in
+parsecs the same rounding would merge a hex's own corners) and noted that the legacy mitre
+moves a corner by `inset * 2 / sqrt(3)`, not by the inset; both ported as they are.
+**B2c.2 written** (territories and regions at hex tier, one filled and stroked path per
+polity joined across sectors) and handed to Agent C. It edits `MapRenderer.ts`, which Agent D
+(presentation only) does not touch; it cannot be seen in a browser until truth v3 exists.
+
+## 34. All truth changes for v3 are in and verified (2026-10-03, about 22:00Z)
+
+- **Agent B finished B2d.1 (corrected), B2d.2 and B2d.3:** regions with the real legacy
+  ordering (only order changed in the rewritten fixtures; colours and hexes identical),
+  route colours resolved at build time (`resolvedColor` on each route; parity on Spinward
+  Marches, Gvurrdon and Tuglikki), polities in the overview (`polities`, `owners`).
+- **Verified by the orchestrator with everything in one tree:** `npm test` 148/143/5, check
+  clean, typecheck clean, gated Worker suite 9 of 9.
+- **v3 is ready to derive.** Steps: push everything **except `apps/web` and `tests/web`**
+  (Agents C and D are mid-work there, and A's dossier awaits D's design pass); the push
+  carries migration `0006`. Confirm the deploy. Johnny runs the build command with
+  `version: 'v3', from: 'v2'` and the same pinned values. Twelve sectors in flight, a few
+  minutes in all, no tree written. Then `POST /api/admin/truth/release/v3`.
+- After release the live viewer (B1) reads v3 by itself; nothing changes on screen until
+  B2c.2 (borders) is pushed.
+
+## 35. Agent D's design pass is in (2026-10-03, about 22:30Z)
+
+- **Result:** the panel, dossier, omnibox and status line now follow the legacy look
+  (`findings/ui_design_audit.md`; before, after and legacy screenshots in
+  `findings/ui_design_shots/`). Compared by the orchestrator: `after_column.png` against
+  `legacy_column.png` is very close: floating card, title with hex chip, width control, UWP
+  ribbon cells, two-line stat rows with the code tile, the surface stage as a framed
+  placeholder. `/design` renders the primitives. `npm test` 150/145/5, check clean, build
+  succeeds. D also added a favicon (a far-trader wedge with a red V; the red is D's guess).
+- **Defect D found, fixed by the orchestrator:** `MapView.vue` read
+  `index.metadata.allegiances` unguarded; truth v2 indexes have no such table, so the
+  computed threw and clicking a body left the panel on the overview. Now defaults to an
+  empty table.
+- **`design_reference.md` amended (new §0):** where it disagreed with the legacy app, the
+  legacy look is now the rule (shadows on floating chrome, 2 px amber focus ring, Inter in the
+  panel, 520 px column, the omnibox as an always-visible top-left field).
+- **D's open requests** (audit §3): glyph data in the dossier model (R1), body position
+  "14 / 30" (R2), subsector pill theme fields in the renderer (R3), Inter 500 and 600 font
+  files (R4), the icon set (R5), a prop rename (R6), the rail (R7). R1, R2, R6 go to Agent A
+  now; R3 to Agent C after B2c.2; R4 and R5 need Johnny; R7 is B3c.
+- **Still unpushed:** all of `apps/web` (A's dossier, D's restyle, C's outline and
+  territory work in progress). Johnny looks first.
+
+**Johnny's feedback on D's pass (2026-10-03):** (1) the system tree needs dividers between
+parent planets, like every other panel section; (2) text contrast must meet accessibility
+requirements, and some of the small text does not look like it does; (3) not all of Font
+Awesome is needed, but the icon sidebar (rail) used it and the rail does not exist yet.
+Sequence: Agent A's model changes first (they touch `Panel.vue`, `DossierPanel.vue`,
+`glyph.ts`), then Agent D's second pass, so the two do not edit the same files at once.
+
+**Agent A's model changes for the design are in (2026-10-03), checked:** glyph kind and star
+letter on tree rows, body links and body models; `index` and `total` on the body model;
+`Panel`'s `chip` prop. `npm test` 150/145/5, check clean, build succeeds; `glyph.ts` no longer
+matches on label text. A also updated the design page's sample data so it still matches the
+components. Legacy puts the position counter after Next; the prompt asked for between, and
+that is what was built. **Agent D's second pass (dividers, contrast, rail, icons) can start.**
+
+**B2c.2 is in (Agent C, 2026-10-03), checked:** `territory_layer.ts`, the renderer passes and
+tests; territories and regions join across sector edges, fills under the grid, outlines after
+the routes; shapes rebuilt only when the set of loaded indexes changes. Suite 150/145/5.
+Unseen until truth v3 exists. **B2c.3 written** (polities at the zoomed-out tiers from the
+overview's `polities` and `owners`, outlines built one polity per frame, cached paths) and
+handed to Agent C. The subsector pill theme fields (D's R3) wait until D's second pass is
+done, since both touch the map theme.
+
+**`findings/` is now git-ignored (Johnny's request, 2026-10-03).** Four files that were already
+committed (`README.md`, `agent_m_features.md`, `agent_m_technical.md`,
+`legacy_inspector_inventory.md`) were removed from git's index with `git rm --cached` and stay
+on disk; that removal is staged and goes out with the next commit. The folder is working
+papers: reviews, the inspector inventory, the design audit and screenshots. The recipes still
+cite `findings/legacy_inspector_inventory.md` and `findings/ui_design_audit.md`; they exist on
+this machine only, so a fresh clone will not have them.

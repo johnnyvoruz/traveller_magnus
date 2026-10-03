@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseT5Tab, parseMetadataXml } from '@voyage/shared';
-import { sectorTerritories } from '@voyage/generation';
+import { sectorTerritories, sectorRegions, routeColour, routeStylesheetRules } from '@voyage/generation';
 import { TRUTH_SETTINGS } from '../../tools/truth/settings.js';
 import { SYSTEM_NAMES } from '../../packages/engines/src/generated/names_data.js';
 import { loadLegacy } from '../oracle/legacy.js';
@@ -104,5 +104,35 @@ for (const slug of ['Spinward_Marches', 'Empty_Quarter', 'Solomani_Rim', 'Riftsp
                 stylesheet: meta.stylesheet,
             }),
         };
+    };
+}
+
+for (const slug of ['Riftspan_Reaches', 'Kalash', 'Afawahisa']) {
+    const xml = fs.readFileSync(path.join(RAW, `${slug}.xml`), 'utf8');
+    cases[`regions_${slug}`] = () => {
+        const meta = parseMetadataXml(xml);
+        return { regions: sectorRegions({ regions: meta.regions }) };
+    };
+}
+
+// Same allegiance colour the legacy slot keeps: last non-empty resolution wins.
+// Offset routes are skipped because the golden case passes an empty coord lookup.
+for (const slug of ['Spinward_Marches', 'Gvurrdon', 'Tuglikki']) {
+    const xml = fs.readFileSync(path.join(RAW, `${slug}.xml`), 'utf8');
+    cases[`routes_${slug}`] = () => {
+        const meta = parseMetadataXml(xml);
+        const rules = routeStylesheetRules(meta.stylesheet);
+        const colours = {};
+        for (const route of meta.routes) {
+            if (!route.Start || !route.End) continue;
+            const startOff = parseInt(route.StartOffsetX || '0', 10) !== 0 || parseInt(route.StartOffsetY || '0', 10) !== 0;
+            const endOff = parseInt(route.EndOffsetX || '0', 10) !== 0 || parseInt(route.EndOffsetY || '0', 10) !== 0;
+            if (startOff || endOff) continue;
+            const color = routeColour(route, rules);
+            const alleg = (route.Allegiance || '').trim();
+            if (!alleg || !color) continue;
+            colours[alleg] = color;
+        }
+        return { colours };
     };
 }

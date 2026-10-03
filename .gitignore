@@ -19,6 +19,9 @@ universe/raw/*.xml
 !universe/raw/Riftspan_Reaches.xml
 !universe/raw/Verge.xml
 !universe/raw/Gvurrdon.xml
+!universe/raw/Kalash.xml
+!universe/raw/Afawahisa.xml
+!universe/raw/Tuglikki.xml
 universe/raw/_*.log
 universe/raw/.uploaded.*
 
@@ -39,3 +42,6 @@ venv/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+
+# Review notes, design audits and screenshots: working papers, kept local.
+findings/

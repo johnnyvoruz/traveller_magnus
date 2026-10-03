@@ -28,6 +28,7 @@ export const truthVersions = sqliteTable('truth_versions', {
     sectorsTotal: integer('sectors_total').notNull(),
     sectorsDone: integer('sectors_done').notNull(),
     sectorsFailed: text('sectors_failed').notNull().default('[]'),
+    derivedFrom: text('derived_from'),
 }, (t) => [
     check('truth_versions_state_check', sql`${t.state} in ('building', 'released', 'withdrawn')`),
 ]);

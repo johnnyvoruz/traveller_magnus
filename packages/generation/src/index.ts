@@ -5,10 +5,15 @@ import {
 import { parseT5Tab, parseMetadataXml, stable, sha256Hex } from '@voyage/shared';
 
 import { sectorTerritories } from './territories.ts';
+import { sectorRegions } from './regions.ts';
+import { routeColour, routeStylesheetRules } from './route_colours.ts';
 
 export { sectorOverview } from './overview.ts';
 export { sectorTerritories };
+export { sectorRegions };
+export { routeColour, routeStylesheetRules };
 export type { BorderRecord, Territory } from './territories.ts';
+export type { RegionRecord, Region } from './regions.ts';
 
 // One pool for the Worker and the local truth build. Trim, keep non-empty, sort.
 const namePool = [];
@@ -182,6 +187,12 @@ export function assembleSectorIndex(input: {
         if (entry && entry.partial != null) partial += 1;
         else built += 1;
     }
+    const routeRules = routeStylesheetRules(meta?.stylesheet ?? '');
+    const routes = (meta?.routes ?? []).map(route => {
+        const resolvedColor = routeColour(route, routeRules);
+        if (!resolvedColor) return route;
+        return { ...route, resolvedColor };
+    });
     return {
         slug: input.slug,
         name: input.catalogue ? input.catalogue.name : (meta?.name ?? ''),
@@ -195,7 +206,7 @@ export function assembleSectorIndex(input: {
         partial,
         hexes: input.hexes,
         metadata: {
-            routes: meta?.routes ?? [],
+            routes,
             borders: meta?.borders ?? [],
             names: meta?.names ?? {},
             allegiances: meta?.allegiances ?? [],
@@ -206,6 +217,9 @@ export function assembleSectorIndex(input: {
                 allegiances: meta.allegiances,
                 stylesheet: meta.stylesheet,
             }).filter(territory => territory.hexes.length > 0)
+            : [],
+        regions: meta
+            ? sectorRegions({ regions: meta.regions }).filter(region => region.hexes.length > 0)
             : [],
     };
 }

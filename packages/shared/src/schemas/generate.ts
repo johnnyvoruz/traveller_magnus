@@ -56,6 +56,7 @@ export const TruthBuild = z.object({
     seed: z.string(),
     settings: Settings,
     sectors: z.union([z.literal('all'), z.array(z.string())]),
+    from: z.string().optional(),
 });
 export type TruthBuild = z.infer<typeof TruthBuild>;
 

@@ -9,6 +9,7 @@ Read in this order.
 
 | File | Holds |
 |---|---|
+| `implementer_brief.md` | what a fresh implementer session reads first: the rules, the commands, what already exists, how to report |
 | `manifesto.md` | the rules every session obeys and their checks; decisions taken |
 | `plan.md` | what we are building, roles and protocol, the six slices, milestones |
 | `handoff.md` | where the work stands right now, what is in flight, traps already hit; kept current by the orchestrator |

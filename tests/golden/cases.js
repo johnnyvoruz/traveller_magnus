@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { TRUTH_SETTINGS } from '../../tools/truth/settings.js';
-import { bordersElementOf } from '../oracle/xml_dom.js';
+import { bordersElementOf, regionsElementOf, MetadataDOMParser } from '../oracle/xml_dom.js';
 
 export const TSV = [
     'Hex\tName\tUWP\tBases\tRemarks\tZone\tPBG\tAllegiance\tStars\t{Ix}\t(Ex)\t[Cx]\tNobility\tW\tRU',
@@ -71,6 +71,59 @@ for (const slug of ['Spinward_Marches', 'Empty_Quarter', 'Solomani_Rim', 'Riftsp
                 })),
         };
     };
+}
+
+// importRegionsFromXml writes state.cluster only when the hex already exists (js/borders.js:1337, 1486-1503).
+function fillSlotOne(ctx) {
+    ctx.hexStates.clear();
+    for (let col = 1; col <= 32; col++) {
+        for (let row = 1; row <= 40; row++) {
+            const code = String(col).padStart(2, '0') + String(row).padStart(2, '0');
+            const subX = Math.floor((col - 1) / 8);
+            const subY = Math.floor((row - 1) / 10);
+            const sub = String.fromCharCode(65 + (subY * 4 + subX));
+            ctx.hexStates.set(`1-${sub}-${code}`, {});
+        }
+    }
+    delete ctx.regionDefinitions;
+    delete ctx.regionPaths;
+}
+
+for (const slug of ['Riftspan_Reaches', 'Kalash', 'Afawahisa']) {
+    const xml = fs.readFileSync(path.join(RAW, `${slug}.xml`), 'utf8');
+    cases[`regions_${slug}`] = (ctx) => {
+        fillSlotOne(ctx);
+        ctx.importRegionsFromXml(regionsElementOf(xml), 1);
+        return {
+            regions: ctx.regionDefinitions
+                .map(d => ({
+                    name: d.name,
+                    color: d.color,
+                    hexes: [...ctx.hexStates].filter(([, state]) => state.cluster === d.name)
+                        .map(([hexId]) => hexId.split('-').pop()).sort(),
+                }))
+                .filter(d => d.hexes.length > 0),
+        };
+    };
+}
+
+// Colour left on each allegiance's route slot by parseAndAddOtuRoutes.
+// An empty coord lookup skips offset routes, the same way a one-sector import does.
+function routeColoursOf(ctx, xml, name) {
+    ctx.addRoute = () => {};
+    ctx.DOMParser = MetadataDOMParser;
+    ctx.parseAndAddOtuRoutes(name, xml, 1, 0, 0, new Map(), { importBorders: false, importRegions: false });
+    const colours = {};
+    for (const def of ctx.routeDefinitions || []) {
+        if (!def.groupId || !String(def.groupId).startsWith('otu-route:')) continue;
+        colours[def.groupId.slice('otu-route:'.length)] = def.color;
+    }
+    return { colours };
+}
+
+for (const slug of ['Spinward_Marches', 'Gvurrdon', 'Tuglikki']) {
+    const xml = fs.readFileSync(path.join(RAW, `${slug}.xml`), 'utf8');
+    cases[`routes_${slug}`] = (ctx) => routeColoursOf(ctx, xml, slug);
 }
 
 // Not a case: the legacy metadata XML parser (io_manager.js:2279 parseXmlRouteGroups) needs a browser

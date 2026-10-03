@@ -46,3 +46,38 @@ test('overview cells, a ? UWP, and stable bytes', async () => {
     assert.equal(parsed.sectors.length, 2);
     assert.equal(parsed.sectors[1].cells[641], '?');
 });
+
+test('Spinward Marches owners match the four territories and a bare sector is empty', async () => {
+    const spinwardIndex = await builtIndex('Spinward_Marches');
+    const spinward = sectorOverview(spinwardIndex);
+    assert.deepEqual(spinward.polities, spinwardIndex.territories.map(territory => ({
+        name: territory.name, color: territory.color,
+    })));
+    const counts = {};
+    for (const ch of spinward.owners) counts[ch] = (counts[ch] || 0) + 1;
+    assert.deepEqual(counts, { '.': 393, '0': 36, '1': 60, '2': 739, '3': 52 });
+    const bare = sectorOverview({
+        slug: 'Bare', name: 'Bare', x: 0, y: 0, tags: [], canonical: false,
+        truthVersion: 'v3', systems: 0, built: 0, partial: 0, hexes: {},
+        metadata: { routes: [], borders: [], names: {}, allegiances: [] },
+        territories: [], regions: [],
+    });
+    assert.deepEqual(bare.polities, []);
+    assert.equal(bare.owners, '.'.repeat(1280));
+    const parsed = TruthOverview.parse({ truthVersion: 'v3', sectors: [spinward, bare] });
+    assert.equal(parsed.sectors[0].owners.length, 1280);
+    assert.equal(parsed.sectors[1].polities.length, 0);
+});
+
+test('more than 36 territories throws with the sector slug', () => {
+    const territories = Array.from({ length: 37 }, (_, i) => ({
+        id: i + 1, name: `Polity ${i}`, color: '#888888', allegianceCodes: ['X'], hexes: [],
+    }));
+    const index = {
+        slug: 'Wide', name: 'Wide', x: 0, y: 0, tags: [], canonical: false,
+        truthVersion: 'v3', systems: 0, built: 0, partial: 0, hexes: {},
+        metadata: { routes: [], borders: [], names: {}, allegiances: [] },
+        territories, regions: [],
+    };
+    assert.throws(() => sectorOverview(index), /Wide/);
+});

@@ -35,3 +35,63 @@ export function bordersElementOf(xmlText) {
     };
     return standIn(borders, doc);
 }
+
+function regionStandIn(el) {
+    return {
+        getAttribute(name) {
+            return Object.prototype.hasOwnProperty.call(el.attrs, name) ? el.attrs[name] : null;
+        },
+        textContent: el.text,
+        querySelectorAll(sel) {
+            if (sel !== 'Region') throw new Error(`regions stand-in: unsupported selector ${sel}`);
+            return el.children.filter((child) => child.name === 'Region').map((child) => regionStandIn(child));
+        },
+    };
+}
+
+/** The <Regions> element, or null when the sector metadata has none. */
+export function regionsElementOf(xmlText) {
+    const sector = parseXmlElements(xmlText).children.find((child) => child.name === 'Sector');
+    const regions = sector && sector.children.find((child) => child.name === 'Regions');
+    if (!regions) return null;
+    return regionStandIn(regions);
+}
+
+function tagName(sel) {
+    if (!/^[A-Za-z_][\w:.-]*$/.test(sel)) throw new Error(`metadata stand-in: unsupported selector ${sel}`);
+    return sel;
+}
+
+function metadataElement(el) {
+    return {
+        getAttribute(name) {
+            return Object.prototype.hasOwnProperty.call(el.attrs, name) ? el.attrs[name] : null;
+        },
+        textContent: el.text,
+        querySelector(sel) {
+            return metadataQuery(el, tagName(sel))[0] || null;
+        },
+        querySelectorAll(sel) {
+            return metadataQuery(el, tagName(sel));
+        },
+    };
+}
+
+function metadataQuery(el, name) {
+    const out = [];
+    const walk = (node) => {
+        for (const child of node.children) {
+            if (child.name === name) out.push(metadataElement(child));
+            walk(child);
+        }
+    };
+    walk(el);
+    return out;
+}
+
+/** DOMParser stand-in for parseAndAddOtuRoutes. Node has no DOMParser. */
+export class MetadataDOMParser {
+    parseFromString(xml) {
+        return metadataElement(parseXmlElements(xml));
+    }
+}

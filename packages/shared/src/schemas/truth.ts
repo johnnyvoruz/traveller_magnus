@@ -44,6 +44,11 @@ export const SectorIndex = z.object({
         allegiances: z.array(z.object({ code: z.string(), name: z.string(), base: z.string().optional() }).strict()),
     }),
     territories: z.array(Territory),
+    regions: z.array(z.object({
+        name: z.string(),
+        color: z.string(),
+        hexes: z.array(z.string()),
+    }).strict()),
 }).strict();
 export type SectorIndex = z.infer<typeof SectorIndex>;
 
@@ -77,6 +82,8 @@ export const SectorOverview = z.object({
     slug: z.string(), name: z.string(), x: z.number(), y: z.number(),
     tags: z.array(z.string()), canonical: z.boolean(), systems: z.number(),
     cells: z.string().length(1280),
+    polities: z.array(z.object({ name: z.string(), color: z.string() }).strict()),
+    owners: z.string().length(1280),
 }).strict();
 export type SectorOverview = z.infer<typeof SectorOverview>;
 

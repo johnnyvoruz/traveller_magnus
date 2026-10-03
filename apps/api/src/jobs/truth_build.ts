@@ -3,7 +3,7 @@ import { SectorIndex, sha256Hex, stable } from '@voyage/shared';
 import type { Env } from '../env';
 
 type Pinned = { seed: string; settings: Record<string, unknown>; engineVersion: string };
-type TruthMessage = { version: string; slug: string; offset?: number; pinned: Pinned };
+type TruthMessage = { version: string; slug: string; offset?: number; from?: string; pinned: Pinned };
 type SliceRow = { hex: string; indexEntry: Record<string, unknown> };
 
 const MAX_DELIVERIES = 4;
@@ -14,7 +14,9 @@ const SYSTEM_COLUMNS = 9;
 export async function truthBuildConsumer(batch: MessageBatch, env: Env): Promise<void> {
     for (const message of batch.messages) {
         try {
-            await buildSlice(env, message.body as TruthMessage);
+            const body = message.body as TruthMessage;
+            if (body?.from) await deriveSector(env, body);
+            else await buildSlice(env, body);
             message.ack();
         } catch (err) {
             if (message.attempts >= MAX_DELIVERIES) await markFailed(env, message.body as TruthMessage | undefined, err);
@@ -102,6 +104,11 @@ async function finalize(env: Env, version: string, slug: string): Promise<void> 
     if (total == null || seen.size !== total) {
         throw new Error(`Sector parts for ${slug} cover ${seen.size} hexes, not ${total}.`);
     }
+    await publishSector(env, version, slug, hexes);
+}
+
+/** Index write and search rows shared by a full build and a derived build. */
+async function publishSector(env: Env, version: string, slug: string, hexes: Record<string, Record<string, unknown>>): Promise<void> {
     const xmlObject = await env.PRIVATE_BUCKET.get(`inputs/${version}/${slug}.xml`);
     if (!xmlObject) throw new Error(`Sector metadata is missing for ${version}/${slug}.`);
     const catalogueObject = await env.PRIVATE_BUCKET.get(`inputs/${version}/sectors.json`);
@@ -150,7 +157,28 @@ async function finalize(env: Env, version: string, slug: string): Promise<void> 
     await env.DB.batch(statements);
 }
 
-export async function claimNext(env: Env, version: string, pinned: Pinned): Promise<void> {
+async function deriveSector(env: Env, body: TruthMessage): Promise<void> {
+    const { version, slug, pinned, from } = body;
+    if (!from) throw new Error('Derived build is missing a source version.');
+    const started = Date.now();
+    const indexObject = await env.PUBLIC_BUCKET.get(`truth/${from}/sectors/${slug}/index.json`);
+    if (!indexObject) throw new Error(`Sector index is missing for ${from}/${slug}.`);
+    const source = JSON.parse(await indexObject.text()) as { hexes?: unknown };
+    if (!source.hexes || typeof source.hexes !== 'object' || Array.isArray(source.hexes)) {
+        throw new Error(`Sector index for ${from}/${slug} has no hexes.`);
+    }
+    await publishSector(env, version, slug, source.hexes as Record<string, Record<string, unknown>>);
+    await claimNext(env, version, pinned, from);
+    console.log(JSON.stringify({
+        job: 'truth-derive',
+        version,
+        slug,
+        from,
+        ms: Date.now() - started,
+    }));
+}
+
+export async function claimNext(env: Env, version: string, pinned: Pinned, from?: string): Promise<void> {
     const claimed = await env.DB.prepare(
         `UPDATE truth_build_sectors
          SET state = 'building', updated_at = ?
@@ -164,7 +192,8 @@ export async function claimNext(env: Env, version: string, pinned: Pinned): Prom
     ).bind(new Date().toISOString(), version, version).run<{ sector_slug: string }>();
     const slug = claimed?.results?.[0]?.sector_slug;
     if (!slug) return;
-    await env.TRUTH_QUEUE.send({ version, slug, offset: 0, pinned });
+    if (from) await env.TRUTH_QUEUE.send({ version, slug, offset: 0, from, pinned });
+    else await env.TRUTH_QUEUE.send({ version, slug, offset: 0, pinned });
 }
 
 async function markFailed(env: Env, body: TruthMessage | undefined, err: unknown): Promise<void> {
@@ -177,7 +206,7 @@ async function markFailed(env: Env, body: TruthMessage | undefined, err: unknown
          ON CONFLICT(version, sector_slug) DO UPDATE SET
             state = 'failed', error = excluded.error, updated_at = excluded.updated_at`,
     ).bind(body.version, body.slug, message, now).run();
-    if (body.pinned) await claimNext(env, body.version, body.pinned);
+    if (body.pinned) await claimNext(env, body.version, body.pinned, body.from);
 }
 
 function catalogueEntry(raw: string, slug: string): CatalogueEntry | undefined {

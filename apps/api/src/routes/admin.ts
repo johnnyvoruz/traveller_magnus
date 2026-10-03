@@ -32,11 +32,24 @@ admin.post('/truth/build', async (c) => {
     const input = parsed.data;
     const existing = await db(c).select().from(truthVersions).where(eq(truthVersions.version, input.version)).get();
     if (existing) return fail(c, 409, 'conflict', 'That truth version already exists.');
+    let sourceSectors: string[] | null = null;
+    if (input.from) {
+        const source = await db(c).select().from(truthVersions).where(eq(truthVersions.version, input.from)).get();
+        if (!source) return fail(c, 404, 'not_found', 'No such source truth version.');
+        if (source.state !== 'released') return fail(c, 409, 'conflict', 'The source truth version is not released.');
+        const mismatch = sourceMismatch(input, source);
+        if (mismatch) return fail(c, 409, 'conflict', `${mismatch} differs from the source version.`);
+        if (input.sectors !== 'all') return fail(c, 400, 'validation', "sectors must be 'all'.");
+        sourceSectors = parseStringArray(source.sectors);
+        if (!sourceSectors.length) return fail(c, 400, 'validation', 'Source truth version has no sectors.');
+    }
     const keys = await inputKeys(c.env.PRIVATE_BUCKET, input.version);
     const catalogueKey = `inputs/${input.version}/sectors.json`;
     if (!keys.has(catalogueKey)) return fail(c, 404, 'not_found', 'Sector catalogue is missing.');
     let slugs: string[];
-    if (input.sectors === 'all') {
+    if (sourceSectors) {
+        slugs = sourceSectors;
+    } else if (input.sectors === 'all') {
         const catalogue = await c.env.PRIVATE_BUCKET.get(catalogueKey);
         if (!catalogue) return fail(c, 404, 'not_found', 'Sector catalogue is missing.');
         try {
@@ -68,6 +81,7 @@ admin.post('/truth/build', async (c) => {
         sectorsTotal: slugs.length,
         sectorsDone: 0,
         sectorsFailed: '[]',
+        ...(input.from ? { derivedFrom: input.from } : {}),
     }).run();
     const now = new Date().toISOString();
     const sectorRows = slugs.map((slug) => c.env.DB.prepare(
@@ -88,7 +102,9 @@ admin.post('/truth/build', async (c) => {
     ).bind(now, input.version, input.version, FEED).all<{ sector_slug: string }>();
     const pinned = { seed: input.seed, settings: input.settings, engineVersion: input.engineVersion };
     const messages = started.results.map((row) => ({
-        body: { version: input.version, slug: row.sector_slug, offset: 0, pinned },
+        body: input.from
+            ? { version: input.version, slug: row.sector_slug, from: input.from, pinned }
+            : { version: input.version, slug: row.sector_slug, offset: 0, pinned },
     }));
     for (let i = 0; i < messages.length; i += 100) await c.env.TRUTH_QUEUE.sendBatch(messages.slice(i, i + 100));
     if (input.sectors === 'all') return ok(c, { version: input.version, enqueued: slugs.length }, 202);
@@ -175,7 +191,12 @@ admin.post('/truth/builds/:version/retry', async (c) => {
         settings: JSON.parse(row.settings) as Record<string, unknown>,
         engineVersion: row.engineVersion,
     };
-    const messages = targets.map((slug) => ({ body: { version, slug, offset: 0, pinned } }));
+    const from = row.derivedFrom || undefined;
+    const messages = targets.map((slug) => ({
+        body: from
+            ? { version, slug, offset: 0, from, pinned }
+            : { version, slug, offset: 0, pinned },
+    }));
     for (let i = 0; i < messages.length; i += 100) await c.env.TRUTH_QUEUE.sendBatch(messages.slice(i, i + 100));
     await db(c).insert(auditLog).values({
         id: ulid(),
@@ -330,6 +351,17 @@ function slugsFromCatalogue(raw: string): string[] {
         }
         return (item as { slug: string }).slug;
     });
+}
+
+function sourceMismatch(
+    input: { milieu: string; seed: string; engineVersion: string; settings: unknown },
+    source: { milieu: string; seed: string; engineVersion: string; settings: string },
+): string | null {
+    if (input.milieu !== source.milieu) return 'milieu';
+    if (input.seed !== source.seed) return 'seed';
+    if (input.engineVersion !== source.engineVersion) return 'engineVersion';
+    if (stable(JSON.parse(source.settings)) !== stable(input.settings)) return 'settings';
+    return null;
 }
 
 function parseStringArray(value: string | null): string[] {

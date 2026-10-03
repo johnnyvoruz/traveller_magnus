@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -11,7 +11,7 @@ import { SectorIndex, TruthManifest, TruthOverview, sha256Hex } from '@voyage/sh
 import { deadLetterConsumer } from '../../apps/api/src/jobs/dead_letter.ts';
 import { truthBuildConsumer } from '../../apps/api/src/jobs/truth_build.ts';
 import { adminCookie, runWrangler } from './session.js';
-import { withDevServer, wranglerBin } from './server.js';
+import { apiRoot, withDevServer, wranglerBin } from './server.js';
 
 const ATTRIBUTION = 'Sector data from the Traveller Map (travellermap.com), used under Far Future Enterprises\' Fair Use Policy. Traveller is a registered trademark of Far Future Enterprises.';
 const XML = '<Sector><Name>Fixture</Name><X>0</X><Y>0</Y></Sector>\n';
@@ -54,6 +54,7 @@ function bindingDouble(files) {
     const stored = new Map(Object.entries(files));
     const calls = { get: 0, put: 0, list: 0, send: 0, batch: 0, run: 0 };
     const sent = [];
+    const puts = [];
     const bucket = () => ({
         async get(key) {
             calls.get += 1;
@@ -63,6 +64,7 @@ function bindingDouble(files) {
         },
         async put(key, body) {
             calls.put += 1;
+            puts.push(key);
             stored.set(key, String(body));
         },
         async list(options) {
@@ -75,6 +77,7 @@ function bindingDouble(files) {
     return {
         calls,
         sent,
+        puts,
         env: {
             PRIVATE_BUCKET: bucket(),
             PUBLIC_BUCKET: bucket(),
@@ -90,6 +93,59 @@ function bindingDouble(files) {
             },
         },
     };
+}
+
+function openReadonly(file) {
+    let last;
+    for (let attempt = 0; attempt < 20; attempt++) {
+        try {
+            return new DatabaseSync(file, { readOnly: true });
+        } catch (err) {
+            last = err;
+            if (!/SQLITE_BUSY|database is locked/i.test(String(err))) throw err;
+            Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+        }
+    }
+    throw last;
+}
+
+function objectKeys() {
+    const dir = path.join(apiRoot, '.wrangler', 'state', 'v3', 'r2', 'miniflare-R2BucketObject');
+    if (!existsSync(dir)) return [];
+    const keys = [];
+    for (const name of readdirSync(dir)) {
+        if (!name.endsWith('.sqlite') || name === 'metadata.sqlite') continue;
+        const db = openReadonly(path.join(dir, name));
+        try {
+            const rows = db.prepare("SELECT key FROM _mf_objects WHERE key LIKE 'objects/%'").all();
+            for (const row of rows) keys.push(row.key);
+        } catch (err) {
+            if (!/no such table/i.test(String(err))) throw err;
+        } finally {
+            db.close();
+        }
+    }
+    keys.sort();
+    return keys;
+}
+
+function traceMessages(needle) {
+    const dir = path.join(apiRoot, '.wrangler', 'state', 'v3', 'observability', 'miniflare-wobs-trace-store');
+    if (!existsSync(dir)) return [];
+    const messages = [];
+    for (const name of readdirSync(dir)) {
+        if (!name.endsWith('.sqlite') || name === 'metadata.sqlite') continue;
+        const db = openReadonly(path.join(dir, name));
+        try {
+            const rows = db.prepare('SELECT message FROM logs WHERE message LIKE ?').all(`%${needle}%`);
+            for (const row of rows) messages.push(String(row.message));
+        } catch (err) {
+            if (!/no such table/i.test(String(err))) throw err;
+        } finally {
+            db.close();
+        }
+    }
+    return messages;
 }
 
 function jsonFrom(text) {
@@ -223,7 +279,8 @@ if (process.env.RUN_API_TESTS !== '1') {
             version text PRIMARY KEY,
             seed text NOT NULL,
             settings text NOT NULL,
-            engine_version text NOT NULL
+            engine_version text NOT NULL,
+            derived_from text
         )`);
         const insert = db.prepare(`INSERT INTO truth_build_sectors
             (version, sector_slug, state, systems, built, partial, index_hash, error, updated_at)
@@ -283,6 +340,207 @@ if (process.env.RUN_API_TESTS !== '1') {
         assert.equal(sent[1].pinned.seed, 'from-row');
         assert.equal(sent[1].pinned.settings.generationPopMax, 20);
         assert.equal(sent[1].pinned.engineVersion, '1.0.0');
+        assert.equal(sent[0].from, undefined);
+        assert.equal(sent[1].from, undefined);
+        db.prepare(`UPDATE truth_versions SET derived_from = 'vsource' WHERE version = 'vdl'`).run();
+        insert.run('vdl', 'Derived', 'building', '2020-01-01T00:00:00.000Z');
+        insert.run('vdl', 'After', 'queued', '2020-01-01T00:00:00.000Z');
+        await deadLetterConsumer({
+            messages: [{
+                body: { version: 'vdl', slug: 'Derived', offset: 0, pinned },
+                ack() {},
+            }],
+        }, { DB: database, TRUTH_QUEUE: { async send(body) { sent.push(body); } } });
+        assert.equal(sent.length, 3);
+        assert.equal(sent[2].slug, 'After');
+        assert.equal(sent[2].offset, 0);
+        assert.equal(sent[2].from, 'vsource');
+        insert.run('vdl', 'Explicit', 'building', '2020-01-01T00:00:00.000Z');
+        insert.run('vdl', 'Last', 'queued', '2020-01-01T00:00:00.000Z');
+        await deadLetterConsumer({
+            messages: [{
+                body: { version: 'vdl', slug: 'Explicit', offset: 0, from: 'vexplicit', pinned },
+                ack() {},
+            }],
+        }, { DB: database, TRUTH_QUEUE: { async send(body) { sent.push(body); } } });
+        assert.equal(sent[3].slug, 'Last');
+        assert.equal(sent[3].from, 'vexplicit');
+    });
+
+    test('derived sector binding calls', async () => {
+        const pinned = { seed: TRUTH_SEED, settings: { ...TRUTH_SETTINGS }, engineVersion: '1.0.0' };
+        const xml = '<Sector><Name>Wide</Name><X>1</X><Y>2</Y></Sector>\n';
+        const catalogue = JSON.stringify({
+            sectors: [{ slug: 'Wide', name: 'Wide Chart', x: 3, y: 4, tags: ['OTU'], canonical: true }],
+        });
+        const hexes = {
+            '1910': {
+                tree: 'abc', type: 'SYSTEM_PRESENT', name: 'Regina', uwp: 'A788899-C',
+                allegiance: 'Im', zone: '', bases: '', tradeCodes: [], pbg: '100', ix: 1, partial: null,
+            },
+        };
+        const source = JSON.stringify({ hexes });
+        const alone = bindingDouble({
+            'truth/vsource/sectors/Wide/index.json': source,
+            'inputs/vderived/Wide.xml': xml,
+            'inputs/vderived/sectors.json': catalogue,
+        });
+        await truthBuildConsumer({
+            messages: [{
+                body: { version: 'vderived', slug: 'Wide', from: 'vsource', pinned },
+                attempts: 1,
+                ack() {},
+            }],
+        }, alone.env);
+        assert.deepEqual(alone.calls, { get: 3, put: 1, list: 0, send: 0, batch: 1, run: 1 });
+        assert.deepEqual(alone.puts.filter((key) => key.startsWith('objects/')), []);
+        assert.equal(alone.puts[0], 'truth/vderived/sectors/Wide/index.json');
+        const written = await alone.env.PUBLIC_BUCKET.get('truth/vderived/sectors/Wide/index.json');
+        const index = JSON.parse(await written.text());
+        assert.equal(index.truthVersion, 'vderived');
+        assert.deepEqual(index.hexes, hexes);
+
+        const db = new DatabaseSync(':memory:');
+        db.exec(`CREATE TABLE truth_build_sectors (
+            version text NOT NULL,
+            sector_slug text NOT NULL,
+            state text NOT NULL,
+            systems integer NOT NULL DEFAULT 0,
+            built integer NOT NULL DEFAULT 0,
+            partial integer NOT NULL DEFAULT 0,
+            index_hash text,
+            error text,
+            updated_at text NOT NULL,
+            PRIMARY KEY(version, sector_slug)
+        )`);
+        db.prepare(`INSERT INTO truth_build_sectors
+            (version, sector_slug, state, systems, built, partial, index_hash, error, updated_at)
+            VALUES ('vderived', 'Next', 'queued', 0, 0, 0, NULL, NULL, '2020-01-01T00:00:00.000Z')`).run();
+        const calls = { get: 0, put: 0, list: 0, send: 0, batch: 0, run: 0 };
+        const sent = [];
+        const puts = [];
+        const files = new Map([
+            ['truth/vsource/sectors/Wide/index.json', source],
+            ['inputs/vderived/Wide.xml', xml],
+            ['inputs/vderived/sectors.json', catalogue],
+        ]);
+        const bucket = () => ({
+            async get(key) {
+                calls.get += 1;
+                const value = files.get(key);
+                if (value == null) return null;
+                return { text: async () => value };
+            },
+            async put(key, body) {
+                calls.put += 1;
+                puts.push(key);
+                files.set(key, String(body));
+            },
+            async list() {
+                calls.list += 1;
+                return { objects: [], truncated: false };
+            },
+        });
+        await truthBuildConsumer({
+            messages: [{
+                body: { version: 'vderived', slug: 'Wide', from: 'vsource', pinned },
+                attempts: 1,
+                ack() {},
+            }],
+        }, {
+            PRIVATE_BUCKET: bucket(),
+            PUBLIC_BUCKET: bucket(),
+            TRUTH_QUEUE: { async send(body) { calls.send += 1; sent.push(body); } },
+            DB: {
+                prepare(sql) {
+                    return {
+                        bind(...args) {
+                            return {
+                                async run() {
+                                    calls.run += 1;
+                                    const statement = db.prepare(sql);
+                                    if (/returning/i.test(sql)) {
+                                        const results = statement.all(...args);
+                                        return { results, meta: { changes: results.length } };
+                                    }
+                                    statement.run(...args);
+                                    return { results: [], meta: { changes: 0 } };
+                                },
+                            };
+                        },
+                    };
+                },
+                async batch() { calls.batch += 1; },
+            },
+        });
+        assert.deepEqual(calls, { get: 3, put: 1, list: 0, send: 1, batch: 1, run: 1 });
+        assert.deepEqual(puts.filter((key) => key.startsWith('objects/')), []);
+        assert.equal(sent.length, 1);
+        assert.equal(sent[0].version, 'vderived');
+        assert.equal(sent[0].slug, 'Next');
+        assert.equal(sent[0].offset, 0);
+        assert.equal(sent[0].from, 'vsource');
+    });
+
+    test('a failed derived delivery carries from to the next sector', async () => {
+        const db = new DatabaseSync(':memory:');
+        db.exec(`CREATE TABLE truth_build_sectors (
+            version text NOT NULL,
+            sector_slug text NOT NULL,
+            state text NOT NULL,
+            systems integer NOT NULL DEFAULT 0,
+            built integer NOT NULL DEFAULT 0,
+            partial integer NOT NULL DEFAULT 0,
+            index_hash text,
+            error text,
+            updated_at text NOT NULL,
+            PRIMARY KEY(version, sector_slug)
+        )`);
+        const now = '2020-01-01T00:00:00.000Z';
+        db.prepare(`INSERT INTO truth_build_sectors
+            (version, sector_slug, state, systems, built, partial, index_hash, error, updated_at)
+            VALUES (?, ?, 'building', 0, 0, 0, NULL, NULL, ?)`).run('vder', 'Current', now);
+        db.prepare(`INSERT INTO truth_build_sectors
+            (version, sector_slug, state, systems, built, partial, index_hash, error, updated_at)
+            VALUES (?, ?, 'queued', 0, 0, 0, NULL, NULL, ?)`).run('vder', 'Next', now);
+        const sent = [];
+        const database = {
+            prepare(sql) {
+                return {
+                    bind(...args) {
+                        return {
+                            async run() {
+                                const statement = db.prepare(sql);
+                                if (/returning/i.test(sql)) {
+                                    const results = statement.all(...args);
+                                    return { results, meta: { changes: results.length } };
+                                }
+                                const info = statement.run(...args);
+                                return { results: [], meta: { changes: info.changes } };
+                            },
+                        };
+                    },
+                };
+            },
+        };
+        const pinned = { seed: 's', settings: { generationPopMax: 20 }, engineVersion: '1.0.0' };
+        await assert.rejects(() => truthBuildConsumer({
+            messages: [{
+                body: { version: 'vder', slug: 'Current', from: 'vsource', pinned },
+                attempts: 4,
+                ack() {},
+            }],
+        }, {
+            DB: database,
+            TRUTH_QUEUE: { async send(body) { sent.push(body); } },
+            PUBLIC_BUCKET: { async get() { return null; } },
+            PRIVATE_BUCKET: { async get() { return null; } },
+        }));
+        assert.equal(db.prepare(`SELECT state FROM truth_build_sectors WHERE sector_slug = 'Current'`).get().state, 'failed');
+        assert.equal(sent.length, 1);
+        assert.equal(sent[0].slug, 'Next');
+        assert.equal(sent[0].offset, 0);
+        assert.equal(sent[0].from, 'vsource');
     });
 
     test('truth build', { timeout: 600000 }, async () => {
@@ -469,6 +727,113 @@ if (process.env.RUN_API_TESTS !== '1') {
             assert.equal(tokensBody.data.items[0].name, 'Regina');
             assert.equal(tokensBody.data.items[0].hex, '1910');
 
+            const missingSource = await fetch(`${base}/api/admin/truth/build`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json', cookie },
+                body: JSON.stringify({
+                    milieu: 'M1105',
+                    version: 'vmissingfrom',
+                    engineVersion: '1.0.0',
+                    seed: TRUTH_SEED,
+                    settings: { ...TRUTH_SETTINGS },
+                    sectors: 'all',
+                    from: 'vdoesnotexist',
+                }),
+            });
+            const missingSourceBody = await missingSource.json();
+            assert.equal(missingSource.status, 404, JSON.stringify(missingSourceBody));
+            const changed = await fetch(`${base}/api/admin/truth/build`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json', cookie },
+                body: JSON.stringify({
+                    milieu: 'M1105',
+                    version: 'vderivedbad',
+                    engineVersion: '1.0.0',
+                    seed: TRUTH_SEED,
+                    settings: { ...TRUTH_SETTINGS, generationPopMax: 19 },
+                    sectors: 'all',
+                    from: 'vtest',
+                }),
+            });
+            const changedBody = await changed.json();
+            assert.equal(changed.status, 409, JSON.stringify(changedBody));
+            assert.match(changedBody.error.message, /\bsettings\b/);
+            runWrangler(['r2', 'object', 'put', 'voyage-private/inputs/vderived/Fixture.tsv', '--file', tsv, '--local']);
+            runWrangler(['r2', 'object', 'put', 'voyage-private/inputs/vderived/Fixture.xml', '--file', xml, '--local']);
+            runWrangler(['r2', 'object', 'put', 'voyage-private/inputs/vderived/sectors.json', '--file', catalogue, '--local']);
+            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_systems WHERE version = 'vderived'"]);
+            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_build_sectors WHERE version = 'vderived'"]);
+            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_versions WHERE version = 'vderived'"]);
+            const objectsBefore = objectKeys();
+            const derivedPosted = await fetch(`${base}/api/admin/truth/build`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json', cookie },
+                body: JSON.stringify({
+                    milieu: 'M1105',
+                    version: 'vderived',
+                    engineVersion: '1.0.0',
+                    seed: TRUTH_SEED,
+                    settings: { ...TRUTH_SETTINGS },
+                    sectors: 'all',
+                    from: 'vtest',
+                }),
+            });
+            const derivedPostedBody = await derivedPosted.json();
+            assert.equal(derivedPosted.status, 202, JSON.stringify(derivedPostedBody));
+            assert.equal(derivedPostedBody.data.enqueued, 1);
+            let derivedBuild;
+            const derivedDeadline = Date.now() + 90000;
+            while (Date.now() < derivedDeadline) {
+                const response = await fetch(`${base}/api/admin/truth/builds/vderived`, { headers: { cookie } });
+                derivedBuild = await response.json();
+                assert.equal(response.status, 200, JSON.stringify(derivedBuild));
+                const sector = derivedBuild.data.sectors.find((item) => item.slug === 'Fixture');
+                if (sector && sector.state === 'failed') throw new Error(JSON.stringify(derivedBuild));
+                if (derivedBuild.data.sectorsDone === 1) break;
+                await sleep(1000);
+            }
+            assert.equal(derivedBuild.data.sectorsDone, 1, JSON.stringify(derivedBuild));
+            for (const sector of derivedBuild.data.sectors) assert.equal(sector.state, 'done', JSON.stringify(sector));
+            const derivedIndexFile = path.join(dir, 'derived-index.json');
+            runWrangler(['r2', 'object', 'get', 'voyage-public/truth/vderived/sectors/Fixture/index.json', '--file', derivedIndexFile, '--local']);
+            const derivedIndex = JSON.parse(readFileSync(derivedIndexFile, 'utf8'));
+            assert.equal(derivedIndex.truthVersion, 'vderived');
+            assert.deepEqual(derivedIndex.hexes, index.hexes);
+            const derivedRows = jsonFrom(runWrangler([
+                'd1', 'execute', 'voyage', '--local', '--command',
+                "SELECT COUNT(*) AS n FROM truth_systems WHERE version = 'vderived'",
+            ]));
+            assert.equal(Number(derivedRows[0].results[0].n), 3);
+            assert.deepEqual(objectKeys(), objectsBefore);
+            const derivedLogsBefore = traceMessages('truth-derive').length;
+            runWrangler([
+                'd1', 'execute', 'voyage', '--local', '--command',
+                "UPDATE truth_build_sectors SET state = 'failed', error = 'injected' WHERE version = 'vderived' AND sector_slug = 'Fixture'",
+            ]);
+            const derivedRetried = await fetch(`${base}/api/admin/truth/builds/vderived/retry`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json', cookie },
+                body: JSON.stringify({ sectors: ['Fixture'] }),
+            });
+            const derivedRetriedBody = await derivedRetried.json();
+            assert.equal(derivedRetried.status, 202, JSON.stringify(derivedRetriedBody));
+            assert.equal(derivedRetriedBody.data.enqueued, 1);
+            let derivedAgain;
+            const derivedRetryDeadline = Date.now() + 90000;
+            while (Date.now() < derivedRetryDeadline) {
+                const logged = traceMessages('truth-derive');
+                const response = await fetch(`${base}/api/admin/truth/builds/vderived`, { headers: { cookie } });
+                derivedAgain = await response.json();
+                const sector = derivedAgain.data.sectors.find((item) => item.slug === 'Fixture');
+                if (sector && sector.state === 'failed') throw new Error(JSON.stringify(derivedAgain));
+                if (derivedAgain.data.sectorsDone === 1 && sector && sector.state === 'done' && logged.length > derivedLogsBefore) break;
+                await sleep(1000);
+            }
+            assert.equal(derivedAgain.data.sectorsDone, 1, JSON.stringify(derivedAgain));
+            const retryLogs = traceMessages('truth-derive').slice(derivedLogsBefore);
+            assert.ok(retryLogs.some((line) => line.includes('vtest')), JSON.stringify(retryLogs));
+            assert.deepEqual(objectKeys(), objectsBefore);
+
             const wideTsvFile = path.join(dir, 'Wide.tsv');
             const wideXmlFile = path.join(dir, 'Wide.xml');
             const wideCatalogueFile = path.join(dir, 'wide-sectors.json');
@@ -555,6 +920,21 @@ if (process.env.RUN_API_TESTS !== '1') {
             assert.equal(wideRecord[0].results[0].systems, 450);
             assert.equal(wideRecord[0].results[0].built, 450);
             assert.equal(wideRecord[0].results[0].partial, 0);
+            const unreleased = await fetch(`${base}/api/admin/truth/build`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json', cookie },
+                body: JSON.stringify({
+                    milieu: 'M1105',
+                    version: 'vfromwide',
+                    engineVersion: '1.0.0',
+                    seed: TRUTH_SEED,
+                    settings: { ...TRUTH_SETTINGS },
+                    sectors: 'all',
+                    from: 'vwide',
+                }),
+            });
+            const unreleasedBody = await unreleased.json();
+            assert.equal(unreleased.status, 409, JSON.stringify(unreleasedBody));
             const staleAt = new Date(Date.now() - 11 * 60 * 1000).toISOString();
             const freshAt = new Date().toISOString();
             runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_build_sectors WHERE version = 'vwide' AND sector_slug IN ('Stale', 'Fresh', 'Queued')"]);

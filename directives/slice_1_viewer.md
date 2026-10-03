@@ -16,7 +16,7 @@ copied from `packages/engines/src/core/hex.js` (it is already ESM and golden-tes
 | **A. Data path and map** | Open traveller.voyage, see the whole chart, drag and zoom smoothly down to one hex, see where every system is and what it is called, share the URL | below, in full |
 | **B1. Chart symbols and the omnibox** | Read a hex like a chart (starport, world, bases, zones, gas giants), see routes and capital names, select a world, search from the omnibox | in full, §B1 |
 | **B2. Borders and polities** | See who owns what: borders, polity colours, regions (needs truth v3) | B2a (the port) in full, §B2; B2b and B2c outlined |
-| **B3. The dossier and the shell** | Read a world's dossier in the one panel; rail, toasts, help, legend, design-system page | outline, §B |
+| **B3. The dossier and the shell** | Read a world's dossier in the one panel; rail, toasts, help, legend, design-system page | B3a (panel and dossier) in full, §B3; B3b and B3c outlined |
 | **C. Orbit view** | Enter a system, see it in 2.5D, scrub time, line-up, planet imagery | outline, §C |
 
 ---
@@ -996,12 +996,403 @@ steps written here just before it is handed out; B2d.1 is first.
 - Parity cases `esm regions_<slug>`; `tests/generation/regions.test.js` for validity (every
   `hhhh` valid, purity, no regions → `[]`).
 
+#### B2d.2 Route colours resolved at build time (Track A scope: `packages/`, `tests/`)
+
+B1 colours a route from its own `Color`, else a table by allegiance; 62 sectors colour their
+routes through a `<Stylesheet>` the viewer never sees, so those show grey.
+
+- `packages/generation/src/route_colours.ts`: `routeColour(route, stylesheetRules)` and
+  `routeStylesheetRules(stylesheet)`, ported from `js/otu_metadata_parser.js:33-95` and the
+  colour line at 235: the route's own `Color`; else the stylesheet rule `route.CODE { color }`
+  for its `Allegiance`; else `OTU_DEFAULT_ROUTE_COLORS[Allegiance]` (copy the table exactly,
+  named colours as written); else `''`. A route with no `Allegiance` returns `''` (the viewer
+  draws it in the X-boat colour). The legacy "next unused palette colour" for an unknown
+  allegiance is session state and is **not** ported; such a route returns `''`.
+- `assembleSectorIndex`: each record of `metadata.routes` gains `resolvedColor` when the
+  result is not `''`. Records are otherwise unchanged.
+- Parity: if `js/otu_metadata_parser.js` loads in the oracle, golden cases
+  `routes_<slug>` for Spinward Marches, Gvurrdon and one sector that has `route.` rules in
+  its stylesheet (name it in the report; un-ignore its XML), each returning the colour the
+  legacy import gives every allegiance code; the port must match. If it does not load, stop
+  and report the error rather than stubbing more than the one global it names.
+- `tests/generation/route_colours.test.js`: own colour wins; a stylesheet rule beats the
+  table; the table is used when there is no rule; no allegiance → `''`; unknown allegiance →
+  `''`.
+
+#### B2d.3 Polities in the overview (Track A scope, same prompt as B2d.2)
+
+So the zoomed-out map can show who owns what without loading an index.
+
+- `SectorOverview` gains `polities: z.array(z.object({ name: z.string(), color: z.string() }).strict())`
+  and `owners: z.string().length(1280)`.
+- `sectorOverview(index)`: `polities` is the index's `territories` in order (name and
+  colour); `owners` has one character per hex at the same position as `cells`: `.` when no
+  territory owns the hex, otherwise the territory's position in `polities` as one base-36
+  digit (`0`-`9`, `a`-`z`). A sector with more than 36 territories throws with the sector's
+  slug; do not invent a wider encoding. Regions are not in the overview.
+- `tests/generation/overview.test.js`: for Spinward Marches the counts of each digit in
+  `owners` equal the four territories' hex counts (36, 60, 739, 52) and every other position
+  is `.`; a sector with no territories has `polities` `[]` and `owners` all `.`; the document
+  still passes `TruthOverview.parse`.
+
+#### B2d.4 The derived build (Track C: `apps/api`, `tests/api`, one file in `packages/shared`)
+
+Makes version N+1 from version N without running the engines. Independent of B2d.1-B2d.3:
+it calls `assembleSectorIndex` as it is on the day, so whatever those add is picked up.
+
+- **`packages/shared/src/schemas/generate.ts`:** `TruthBuild` gains `from: z.string().optional()`.
+- **Migration `0006_truth_versions_derived_from.sql`** (hand-written):
+  `ALTER TABLE truth_versions ADD COLUMN derived_from text;` and the column in `schema.ts`.
+- **`POST /api/admin/truth/build` with `from`:** 404 if the source version does not exist;
+  409 unless it is `released`; 409 unless `milieu`, `seed`, `engineVersion` and `settings`
+  (compared with `stable`) equal the source row's, naming the first field that differs. The
+  sector list is the source's; `sectors` must be `'all'`. Inputs for the **new** version are
+  verified by listing as today (the XML is read from `inputs/<version>/`). The row is inserted
+  with `derived_from`; sectors go in `queued`, twelve start; each message is
+  `{ version, slug, from, pinned }`.
+- **Consumer:** a message with `from` runs `deriveSector`: get
+  `truth/<from>/sectors/<slug>/index.json` from `PUBLIC_BUCKET` (a missing index throws),
+  take its `hexes` object unchanged, then do exactly what finalize does after it has the
+  hexes: `assembleSectorIndex` with this version, the XML and the catalogue entry,
+  `SectorIndex.parse`, put the index, the one D1 batch (replace `truth_systems` rows, upsert
+  `done`), then `claimNext`. Factor that shared tail out of `finalize` into one function
+  both paths call; do not copy it. No tree is generated, read or written. About eight binding
+  calls a sector.
+- **`claimNext`, `markFailed`, the dead-letter consumer and the retry route** carry `from`
+  through: a message they send for a derived version has `from` (read from
+  `truth_versions.derived_from` when the dead message or the retry does not have it).
+- **Release** is unchanged.
+- **Gated tests:** build `vtest` fully and release it; derive `vderived` from it and assert
+  each sector is `done`, its index's `hexes` deep-equal the source's, `truthVersion` is
+  `vderived`, the `truth_systems` row counts match, and no object was put under `objects/`
+  during the derive (count the puts on the test double, or compare the object listing before
+  and after). Deriving from an unreleased version is 409; with one setting changed is 409
+  naming `settings`; a retry of a derived sector marked `failed` sends a message with `from`.
+
+### B2c.1 Outline geometry (written 2026-10-03; new files only, so it can run beside B3a)
+
+`apps/web/src/map/outline.ts` (new, pure) and `tests/web/outline.test.js`. Ported from
+`js/renderer.js:2297-2414` (`_rebuildBorderGeomCache`): read those lines first and port the
+algorithm as it is, in parsecs.
+
+```ts
+export type Loop = { points: number[]; minX: number; minY: number; maxX: number; maxY: number };   // x0, y0, x1, y1, ...
+export function outlineLoops(hexes: { q: number; r: number }[]): Loop[]
+```
+
+- Input is a set of **global** hexes (`toGlobal` from `geometry.ts`), so a polity that spans
+  sectors is one set and gets one outline across the sector edge.
+- A hex side is a border edge when the neighbour across it is not in the set. Neighbours are
+  the legacy `NEIGHBOR` table for odd-q offset (`renderer.js:2309-2316`); `q & 1` is correct
+  for negative `q`.
+- Edges are chained into closed loops by matching vertex keys rounded as the legacy code
+  rounds them (2366-2384).
+- Each loop vertex is moved **inward** by 10% of the hex size (`HEX_SIZE * 0.1`) along the
+  mitre of the two adjacent edge normals (2388-2401).
+- Hex corners come from `hexCorners` in `geometry.ts`; do not write a second corner
+  function.
+
+**Check:** one hex gives one loop of 6 points, each closer to the centre than the corner by
+the inset; two adjacent hexes give one loop of 10 points; a ring of six hexes around an empty
+centre gives two loops (outer and inner); two hexes that do not touch give two loops; the
+same input in a different order gives the same loops; a hex at negative `q` and `r` works.
+Report the legacy lines ported as written that looked wrong.
+
+### B2c.2 Territories and regions on the chart (written 2026-10-03)
+
+`apps/web/src/map/territory_layer.ts` (new, pure) and passes in `MapRenderer.ts`. Runs on
+any index that has `territories` and `regions` (truth v3); an index without them (v2) draws
+nothing and must not throw.
+
+```ts
+export type Shape = { key: string; color: string; loops: Loop[] };
+export function territoryShapes(indexes: SectorIndex[]): Shape[]   // borders
+export function regionShapes(indexes: SectorIndex[]): Shape[]      // regions
+```
+
+- **Joining across sectors.** Territories with the same `name` and `color` in different
+  indexes are one shape: their hexes are converted with `toGlobal` and passed to
+  `outlineLoops` together, so no line is drawn along a sector edge inside a polity.
+  Regions join the same way.
+- **Caching.** The renderer recomputes shapes only when the set of loaded indexes on screen
+  changes (key: their slugs, sorted and joined). Never per frame.
+- **Painting**, at tier `hex` (`ppp >= PPP_GRID`), in the legacy order
+  (`legacy_map_inventory.md`, paint order): territory fills and region fills first, under the
+  grid; then grid and routes as today; then territory outlines; then the worlds.
+  - Territory fill: its loops as one path, filled with the territory's colour at
+    `TERRITORY_FILL_ALPHA = 0.2`, fill rule `evenodd` so an enclosed hole stays open.
+  - Region fill: the same at `REGION_FILL_ALPHA = 0.3`; regions have no outline.
+  - Territory outline: the same loops stroked in the territory's colour, 2.5 px, round joins
+    and caps, solid (`js/renderer.js:2431-2447`).
+  The colours come from the truth data and are used as given; the two alphas and the stroke
+  width are named constants in `glyphs.ts`.
+- **A difference from legacy, on purpose:** the legacy app fills each whole hex at grid zoom
+  and the inset loop only when zoomed out. Here the inset loop is filled at both, so one path
+  per polity replaces thousands of hex paths. The thin unfilled margin is 10% of a hex.
+- Territory and region **names** are not drawn in this step (they are off by default in the
+  legacy app); they come with the view settings. Polities at tiers `sector` and `galaxy`
+  come from the overview's `polities` and `owners` in the next step.
+
+**Check (`tests/web/territory_layer.test.js` and `tests/web/renderer.test.js`):** two
+indexes whose territories share a name and colour and touch across the sector edge give one
+shape whose loops have no segment on that edge; different names give two shapes; an index
+with no `territories` field gives `[]`; with the recording context at ppp 40, one territory
+produces one `evenodd` fill at alpha 0.2 before the grid and one stroke after the routes,
+and a region produces one fill at 0.3 and no stroke; shapes are computed once across two
+`draw` calls with the same indexes.
+**Frame-time note for the browser check (after truth v3):** tier `hex` over the Spinward
+Marches with borders on, dragging.
+
+### B2c.3 Polities when zoomed out (written 2026-10-03)
+
+At tiers `galaxy` and `sector` no index is loaded, so polities come from the overview
+(truth v3): each sector's `polities` (name, colour) and `owners` (one character per hex:
+`.` or a base-36 digit indexing `polities`). An overview without those fields (v2) draws
+nothing and must not throw.
+
+- **`apps/web/src/map/polity_layer.ts` (new, pure):**
+  ```ts
+  export type PolityHexes = { key: string; name: string; color: string; hexes: { q: number; r: number }[] };
+  export function polityHexes(overview: TruthOverview, layer: 'canonical' | 'all', manifest: TruthManifest): PolityHexes[]
+  ```
+  One entry per distinct name and colour across all sectors of the drawn layer, its hexes in
+  global coordinates (`toGlobal`), entries ordered by key. The position of a hex in `owners`
+  is the same as in `cells`: `(col - 1) * 40 + (row - 1)`.
+- **Building the outlines without blocking.** `MapRenderer` holds the list from
+  `polityHexes` (computed once per `setChart`) and turns entries into loops with
+  `outlineLoops` **one polity per drawn frame**, largest first, marking itself dirty until
+  all are done; a frame never builds more than one. The manifesto's 50 ms limit applies: if
+  one polity's loops take longer than that in the test below, stop and report the number
+  rather than splitting it yourself.
+- **Drawing**, at tiers `galaxy` and `sector`, under the system points: each finished
+  polity's loops as one cached `Path2D` in parsec coordinates, drawn with the camera as a
+  canvas transform; filled with its colour at `POLITY_FILL_ALPHA = 0.22` (`evenodd`) and
+  stroked at 2.5 px (set `lineWidth` to `2.5 / ppp` under the transform), as the legacy
+  zoomed-out layer does (`js/renderer.js:486-517`). The legacy vertex thinning is not ported:
+  measure first. At tier `hex` this layer is off and B2c.2's index layer draws.
+- **Check (`tests/web/polity_layer.test.js`, `tests/web/renderer.test.js`):** a two-sector
+  overview whose polities share a name and colour gives one entry with hexes from both
+  sectors; an overview without `owners` gives `[]`; a sector outside the layer contributes
+  nothing; with the recording context at ppp 3, the first `draw` builds exactly one polity
+  and the second the next; at ppp 40 the layer draws nothing. A timing test builds the loops
+  for a synthetic polity of 30,000 hexes (a filled rectangle of 150 by 200 global hexes) and
+  reports the milliseconds in the test output without asserting on it.
+- **Frame-time note for the browser check (after truth v3):** the home view, dragging and
+  zooming, with polities on.
+
 ### B2c. The viewer draws them (outline)
 
 Outline loops from each territory's hex set (`js/renderer.js:2297-2452`: sides whose
 neighbour is outside the set, chained, inset 10%), with territories of the same name joined
 across sector edges; fills at 20% (22% zoomed out); border names; zoomed-out polity shapes.
 Measured for frame time like every B1 layer.
+
+## B3. The dossier and the shell
+
+**Status:** B3a WRITTEN 2026-10-03. B3b and B3c are outlines at the end of this section.
+**Johnny's instruction:** keep **everything** the legacy inspector shows, restyled to
+`design_reference.md`. **The checklist is `findings/legacy_inspector_inventory.md`**; its
+section letters (A-K, "Body profile") are used below. Re-read the legacy lines it cites
+before each step; if they say something this recipe does not, follow the recipe and list the
+difference.
+
+**What moves where.** Nothing is dropped; some things have a later home:
+
+| Inventory item | Where it is built |
+|---|---|
+| Header, UWP ribbon (C), identity rows (D), no-orbit brief (G), socioeconomics (I), stellar lines (J), system tree (K), body profile, body navigation, the three widths | **B3a, here** |
+| Surface-map lead and its scanner (A), Explore orbits, Center, Orbits | part C, with the planet renderer and the orbit view; B3a leaves the slot |
+| 100D jump times (F), trade-code chips opening Trade Match | B3b |
+| Rail, toast, help, legend, design-system page | B3c |
+| Referee notes (E), campaign block (H), Edit, Edit system | Builder and Campaign slices: they show or change a referee's own data, which does not exist until then |
+
+**Data.** The panel reads the selected world's index entry (already loaded by the map) and
+its generated system document, `objects/<tree hash>`, whose `body` holds the same fields the
+legacy hex state held (`t5Data`, `mgt2eData`, `mgtSocio`, `t5Socio`, `mgtSystem`, `t5System`,
+`name`, `uwp`, `allegiance`, `travelZone`, `bases`, `tradeCodes`, `gasGiantCount`,
+`beltCount`). Documents are immutable, so there is no polling (the legacy 800 ms poll is
+gone) and a document seen once is never fetched again in a session.
+
+### B3a.1 Fetching a tree — `apps/web/src/map/truth_client.ts`
+
+Add `tree(hash: string): Promise<TreeEnvelope>` and `treeNow(hash: string): TreeEnvelope | null`.
+One request per hash however many callers ask; the 16 most recently read are kept; a failed
+fetch is not cached. Same rules as the index cache.
+
+**Check (`tests/web/truth_client.test.js`):** two concurrent `tree` calls make one request;
+the 17th tree drops the least recently read; `treeNow` is null before arrival.
+
+### B3a.2 Display names — `apps/web/src/dossier/labels.ts` (new, data and three functions)
+
+The viewer may not import the engines. The name tables it needs for display are in
+`packages/engines/src/universal_math.js:26-101` (`TRADE_CODE_NAMES`, `STARPORT_NAMES`,
+`SIZE_NAMES`, `ATMOSPHERE_NAMES`, `HYDRO_NAMES`, `POPULATION_NAMES`, `GOVERNMENT_NAMES` and
+the rest of that block). Copy the tables **character for character** and port
+`formatUwpDigit`, `formatTradeCodes` and `formatDisplayNumber` (lines 11-21 and 103-121)
+beside them. No name is written from memory; a code the tables do not hold is shown as the
+code alone, as the legacy functions do.
+
+**Check (`tests/web/labels.test.js`):** the test imports the engine functions from
+`@voyage/engines` and asserts that for every key of every table, and for the values `?`,
+`''`, `undefined` and an unknown code, the web functions return exactly what the engine
+functions return. If the engines' tables change, this test fails until the copy follows.
+
+### B3a.3 The view model — `apps/web/src/dossier/model.ts` (new, pure)
+
+```ts
+export function pickSystem(body: HexBody): SystemDoc | null       // first of aowSystem, mgtSystem, ctSystem, t5System, rttSystem with stars.length > 0
+export function mainworldProfile(body: HexBody): Record<string, unknown>   // aowSystem?.mainworld || mgt2eData || ctData || t5Data || rttData || {}
+export function overviewModel(input: { sectorName: string; subsectorName: string; hex: string; entry: SectorHex; tree: TreeEnvelope | null }): OverviewModel
+export function bodyModel(tree: TreeEnvelope, bodyKey: string): BodyModel | null
+export function bodyKeys(system: SystemDoc): string[]              // navigation order
+```
+
+`OverviewModel` holds exactly what the inventory lists, as plain strings and arrays, so the
+components contain no logic:
+
+- **header**: title (`body.name`, else the profile's `name`, else the hex), hex chip, place
+  line `Sector Name - Subsector Name` (inventory "Header").
+- **ribbon**: the UWP split by the legacy expression into `Port Size Atm Hyd Pop Gov Law`, a
+  dash and `TL`; a string that does not match is one cell; empty is no ribbon (C,
+  `system_inspector.js:443-458`).
+- **rows**: the identity table of D, in its order, with its paths and formats: Starport,
+  Size, Atmosphere, Hydrographics, Population, Government, Law level, Tech level, Trade
+  codes (each a chip), Travel zone, Allegiance, Bases, Nobility, PBG, Resource units, Gas
+  giants, Belts, Age (Gyr), Edition. A row whose value is undefined, null, `''` or an empty
+  array is omitted (`system_inspector.js:395`). Allegiance name: the entry of the sector
+  index's `metadata.allegiances` with that code when the index has the table (truth v3),
+  else the code alone.
+- **noOrbit**: true when there is a tree but `pickSystem` is null or has no star and no
+  non-`Empty` world (G); the sentence is "Orbit data has not been generated." (the legacy
+  sentence's campaign half belongs to a later slice).
+- **socio**: headline and rows of I from `body.mgtSocio`, in its order and formats; when
+  `mgtSocio.pValue` is undefined, the legacy sentence.
+- **stellar**: the lines of J.
+- **tree**: the rows of K: every star, each non-`Empty` world, its non-`Empty` moons
+  indented; details, the `Mainworld` tag, the UWP at the right; the count in the heading.
+- **partial**: when `entry.tree` is null. Header, ribbon and the rows the chart row can fill
+  (trade codes, travel zone, allegiance, bases, PBG) plus the sentence "Incomplete survey:
+  this world has unknown values, so no system has been generated."
+
+`BodyModel` holds the body profile of the inventory: title, crumb, place line, ribbon, fact
+tiles, the Star section or the World, Orbit, Physical and Life & resources sections with
+the listed fields, units and decimals, the Moons list, and for a star its Worlds list.
+Booleans render `Yes`; a false value omits the row.
+
+**Body keys** (new; the legacy key format was not found): `s<i>` for star `i`, `w<i>` for
+world `i`, `w<i>m<j>` for its moon `j`, indexes into `stars`, `worlds`, `moons` as stored.
+`bodyKeys` is stars, then each non-`Empty` world followed by its non-`Empty` moons: the
+order of the tree and of Previous / Next.
+
+**Check (`tests/web/dossier_model.test.js`):** build Regina's tree in the test with
+`buildSector` from `@voyage/generation` (Spinward Marches, the pinned seed and settings, as
+`tests/generation/sector_index.test.js` does) and assert: title `Regina`; ribbon cells
+`A 7 8 8 8 9 9 - C`; the Starport row equals `formatUwpDigit('starport', 'A')`; the tree
+heading count equals stars plus non-empty worlds; exactly one row carries `Mainworld`;
+`bodyModel(tree, 'w0')` returns a title and at least one fact tile; `bodyKeys` starts with
+`s0`. For hex `0914` of Caesillian (a partial row): `partial` is true, there is a ribbon, no
+socio, no tree. No expected value in this test is typed from memory except the UWP `A788899-C`,
+which the chart row holds.
+
+### B3a.4 The one panel — `apps/web/src/shell/Panel.vue`, `shell/panel_state.ts`
+
+One panel component for the whole app (manifesto, Simplicity). Props: `title`, `meta`,
+`eyebrow`; slots: default body, `actions`. Header: eyebrow, title in `--font-display`, meta
+in `--text-muted`, the three span buttons (Column, Half, Full) and Close. Body scrolls.
+
+Widths are the legacy ones (`style.css:2687-2698`), because the legacy column is 520 px and
+Johnny keeps the inspector as it is; `design_reference.md` §2.7's 320 px is superseded:
+
+- column: `min(520px, 100vw - rail - 20px)`
+- half: `min(100vw - rail - 20px, max(520px, (100vw - rail - 20px) / 2))`
+- full: `100vw - rail - 20px`
+
+`rail` is a CSS variable `--rail-width`, `0px` until the rail exists (B3c). The panel sits
+on the **left**, over the map; the map stays alive behind it. Open and close: opacity plus
+an 8 px translate over `--t-base` with `--ease-out`; none under reduced motion.
+
+`panel_state.ts` (pure plus one storage call through `platform/browser.ts`): the span is
+remembered per device (`localStorage` key `voyage_panel_span`; add `storageGet` and
+`storageSet` to `platform/browser.ts`). `Escape` closes the panel when the omnibox is not
+open and no body is selected; with a body selected it returns to the overview (inventory
+§3). Register "Close panel" in the command registry.
+
+`MapView` tells the renderer the panel's width so subsector titles inset on the left by it
+(the legacy `--workspace-left` inset that B1.12 left out).
+
+### B3a.5 The dossier — `apps/web/src/dossier/*.vue`
+
+`DossierPanel.vue` (chooses overview or body from the route and feeds `Panel`),
+`DossierOverview.vue`, `DossierBody.vue`, `UwpRibbon.vue`, `StatRows.vue`, `SocioBlock.vue`,
+`StellarLines.vue`, `SystemTree.vue`, `FactTiles.vue`. Each renders a model from B3a.3 and
+nothing else.
+
+Layout by span, as the inventory §2 records:
+- **column**: one scrolling stack: map slot, identity (ribbon and rows), socio (accordion
+  closed) with stellar inside it, tree.
+- **half**: two columns: map slot over identity; socio, stellar and tree in the second with
+  its own scroll. Tree rows hide the facts after the first.
+- **full**: three columns: map slot over identity; socio (accordion open) with stellar; tree.
+- Body profile: one column, two equal columns, `1.1fr 1fr`.
+
+The **map slot** is an empty block with the legacy aspect (800 by 400) carrying the caption
+badge text of inventory A (`Mainworld`, `Mainworld · <name>`, `Mainworld · moon of
+<parent>`) and the hint "Surface map arrives with the orbit view." Part C fills it.
+
+While the tree is loading, the header, ribbon and chart-row rows render at once from the
+index entry; the rest appears when the tree lands, with no layout jump in what is already
+shown (reserve nothing; append below). A tree already in memory renders complete on the
+first frame. A failed fetch shows "This world's system could not be loaded." and a Retry
+button.
+
+Styling: tokens only. Ribbon cells and stat values in `--font-data`; section headings in
+`--font-display` 13 / 16 uppercase; hairline rows; chips as pills (`design_reference.md`
+§3, §5). Read `style.css` `.dossier-*` and `.atlas-*` for proportions; copy no rule.
+
+### B3a.6 Routes and selection — `apps/web/src/router.ts`, `MapView.vue`
+
+- `/s/:sector/:hex` opens the panel on the overview (it already selects and flies).
+- `/s/:sector/:hex/b/:body` opens the body profile for that key; an unknown key falls back
+  to the overview.
+- Clicking a world on the map, or opening a system from the omnibox, opens the panel.
+  Clicking a tree row, the Mainworld button, the breadcrumb, Previous or Next changes the
+  body with `router.push`, so Back works. Previous and Next are disabled at the ends.
+- Close returns to `/` with the camera query kept and clears the selection.
+
+**Check (`tests/web/routes.test.js`):** the route-to-state function for the two shapes and
+an unknown body key.
+
+### B3a.6a Amendments accepted from the B3a report (2026-10-03)
+
+- `overviewModel` takes the sector index's `metadata.allegiances` as an optional argument.
+- The title falls back to the index entry's `name` before the hex, so a partial world and a
+  world whose tree has not arrived are titled by name.
+- Two sentences the recipe did not give: "This hex has no world in the sector index." and
+  "Loading this sector."
+- The ribbon's dash cell is ASCII `-` (the legacy cell is an en dash); cosmetic, revisit in
+  the browser check.
+- An unknown body key shows the overview once the tree's keys are known.
+- The omnibox stays above a full-width panel; the status line shifts by the panel width.
+
+### B3a.7 Verification for B3a
+
+- [ ] `npm test`, `npm run check`, `npm run typecheck`, `npm run build` green
+- [ ] Browser, against production (not run by the implementer): Regina's dossier shows the
+      ribbon, every identity row the legacy inspector shows for Regina, socioeconomics, the
+      stellar line and the system tree; a body opens from the tree and Previous / Next walk
+      it; the three widths lay out as described; Back returns from a body; a partial world
+      (Caesillian 0914) shows the incomplete-survey sentence; the map stays smooth with the
+      panel open
+- [ ] Report: every inventory item and where it now lives (built, slot left, or which later
+      part), every legacy line that differed from the recipe, every question for Johnny
+
+### B3b and B3c (outlines)
+
+- **B3b:** 100D jump times (the generated worlds carry a `journeyTimes` field; whether it
+  holds what the legacy helper computed is checked first; if not, a small Worker route
+  computes it with the engines); Trade Match from a trade-code chip (`js/trade_match.js`).
+- **B3c:** the rail, toast, progress, the generated shortcut help, the legend, view settings,
+  the design-system page at `/design`.
 
 ## B. What is left of part B after B1 (outline)
 

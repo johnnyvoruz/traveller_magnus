@@ -10,7 +10,7 @@ export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 // io_manager.js is loaded only for parseT5Tab/parseXmlRouteGroups parity; macro_orchestrator.js only for
 // mgtBuildStage/_storeMgtBuild/_buildOneMgtHex parity. No renderer, no persistence, no UI files.
 export const FILES = [
-    'js/constants.js', 'js/core.js', 'js/borders.js', 'js/seed_restoration.js',
+    'js/constants.js', 'js/core.js', 'js/borders.js', 'js/regions.js', 'js/seed_restoration.js',
     'rules/ct_data.js', 'js/ct_constants.js', 'js/ct_stellar_engine.js', 'js/ct_physical_library.js',
     'js/ct_world_engine.js', 'js/ct_social_engine.js', 'js/ct_bottomup_generator.js',
     'js/ct_topdown_generator.js', 'js/ct_uwp_auditor.js', 'js/ct_system_driver.js',
@@ -23,7 +23,7 @@ export const FILES = [
     'rules/aow_data.js', 'js/aow_stellar_engine.js', 'js/aow_world_engine.js', 'js/aow_uwp_auditor.js',
     'js/aow_seed_bridge.js', 'js/aow_bottomup_generator.js',
     'rules/expectations_data.js', 'js/statistical_auditor.js',
-    'js/macro_orchestrator.js', 'js/io_manager.js', 'names.js'
+    'js/macro_orchestrator.js', 'js/io_manager.js', 'js/otu_metadata_parser.js', 'names.js'
 ];
 
 function element() {
