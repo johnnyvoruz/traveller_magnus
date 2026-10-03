@@ -92,6 +92,7 @@ function formatJourneyTimesHTML(times, eligible, isMaskingActive) {
 // ============================================================================
 
 function openHexEditor(hexId, e = null) {
+    if (window.UniverseSnapshot && window.UniverseSnapshot.ensureSystemBuilt) window.UniverseSnapshot.ensureSystemBuilt(hexId);
     const stateObj = hexStates.get(hexId);
     if (!stateObj || stateObj.type !== 'SYSTEM_PRESENT' || (!stateObj.ctData && !stateObj.mgt2eData && !stateObj.t5Data && !stateObj.rttData)) {
         return;
@@ -100,6 +101,8 @@ function openHexEditor(hexId, e = null) {
     if (window.SystemInspector?.currentWorkspace?.() === 'campaign' && !SystemInspector.canLeave()) return;
 
     editingHexId = hexId;
+    installChartRevert();
+    syncChartRevert();
     const data = stateObj.rttData || stateObj.t5Data || stateObj.mgt2eData || stateObj.ctData;
 
     // Check multiple potential locations for the name
@@ -1920,8 +1923,8 @@ function populateEditorAccordions(stateObj) {
 
 // Global handler for T5 Travel Zone manual overrides
 function _recordEditingHex(action) {
-    if (!editingHexId || typeof saveHistoryState !== 'function') return;
-    saveHistoryState(action, { hexIds: [editingHexId] });
+    if (!editingHexId || typeof markChanged !== 'function') return;
+    markChanged(action, { hexIds: [editingHexId] });
 }
 
 window.handleT5ZoneChange = function (el) {
@@ -2353,6 +2356,55 @@ function openDiamondWorldMap(body, hexId) {
 }
 openDiamondWorldMap.canMap = canMapWorld;
 openDiamondWorldMap.spec = diamondMapSpec;
+
+const CHART_FIELDS = {
+    'edit-name': 'name', 'edit-starport': 'starport', 'edit-size': 'size', 'edit-atm': 'atm',
+    'edit-hydro': 'hydro', 'edit-pop': 'pop', 'edit-gov': 'gov', 'edit-law': 'law', 'edit-tl': 'tl',
+    'edit-allegiance': 'allegiance', 'edit-notes': 'notes', 'edit-trade-codes': 'remarks'
+};
+
+function installChartRevert() {
+    const root = document.querySelector('#hex-editor .dossier-edit-identity');
+    if (!root || root.dataset.chartRevert) return;
+    root.dataset.chartRevert = '1';
+    root.querySelectorAll('input, select, textarea').forEach(input => {
+        if (!input.id || !CHART_FIELDS[input.id]) return;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'revert-base';
+        button.hidden = true;
+        button.textContent = 'Chart';
+        button.title = 'Put the chart value back in this field';
+        button.addEventListener('click', () => revertEditorField(input.id));
+        input.insertAdjacentElement('afterend', button);
+    });
+}
+
+function syncChartRevert() {
+    const base = window.UniverseSnapshot && window.UniverseSnapshot.baseState(editingHexId);
+    document.querySelectorAll('#hex-editor .revert-base').forEach(button => { button.hidden = !base; });
+}
+
+function revertEditorField(inputId) {
+    const base = window.UniverseSnapshot && window.UniverseSnapshot.baseState(editingHexId);
+    const state = hexStates.get(editingHexId);
+    if (!base || !state) return;
+    const source = base.mgt2eData || base.ctData || base.t5Data || base.rttData || {};
+    const key = CHART_FIELDS[inputId];
+    const value = key === 'name' ? (source.name || base.name || '') : (key === 'notes' ? (base.notes || '') : source[key]);
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    if (input.type === 'checkbox') input.checked = !!value;
+    else input.value = value == null ? '' : value;
+    const live = state.mgt2eData || state.ctData || state.t5Data || state.rttData;
+    if (key === 'name') {
+        state.name = value || '';
+        if (live) live.name = state.name;
+    } else if (key === 'notes') state.notes = value || '';
+    else if (live && key) live[key] = value;
+    if (typeof markChanged === 'function') markChanged('Revert ' + key + ' to chart', { hexIds: [editingHexId] });
+    if (typeof draw === 'function') requestAnimationFrame(draw);
+}
 
 function closeHexEditor() {
     editingHexId = null;

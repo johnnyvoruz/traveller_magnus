@@ -2,9 +2,9 @@
  * PROJECT AS ABOVE, SO BELOW
  * Module: OTU Importer
  * Description: Handles the "Import the Imperium" feature.
- *   - Loads the sector list from /sectors/imperium.tsv
+ *   - Loads the sector list from the local chart index
  *   - Presents a modal for sector selection and slot assignment
- *   - Fetches each selected sector from the travellermap API
+ *   - Reads each selected sector from the local chart snapshot
  *   - Feeds the result into the existing importT5Tab parser
  *
  * Sean Protocol: Zero RPG logic here. Pure orchestration and UI.
@@ -24,209 +24,58 @@
         return window.IMPERIUM_SECTORS;
     }
 
-    const CACHE_PREFIX = 'otu_cache_';
-    const META_PREFIX  = 'otu_meta_';
-    const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+    /**
+     * Reads one sector from the local chart snapshot.
+     */
+    async function readSnapshot(name) {
+        if (!window.UniverseSnapshot) throw new Error('The chart snapshot is not loaded.');
+        return window.UniverseSnapshot.load(name);
+    }
 
     /**
-     * Returns cached TSV text for a sector if it exists and is less than 24 hours old.
-     * Returns null on a miss, an expired entry, or any storage error.
+     * Reads sector metadata XML from the local snapshot.
+     * Non-fatal: logs a warning and returns null so the import continues.
      */
-    function getCachedSector(name) {
+    async function fetchAndCacheMetadata(name) {
         try {
-            const raw = localStorage.getItem(CACHE_PREFIX + name);
-            if (!raw) return null;
-            const entry = JSON.parse(raw);
-            if (!entry || !entry.timestamp || !entry.data) return null;
-            if (Date.now() - entry.timestamp > CACHE_TTL_MS) return null;
-            return entry.data;
-        } catch (e) {
+            const data = await readSnapshot(name);
+            return data.metadataXml || null;
+        } catch (err) {
+            console.warn(`[OTU Importer] No metadata for "${name}": ${err.message}`);
             return null;
         }
     }
 
-    /**
-     * Fetches raw TSV text for a sector from the travellermap API.
-     * Throws on HTTP error. Shared by both cache paths.
-     */
-    async function fetchSectorText(name) {
-        const url = `https://travellermap.com/data/${encodeURIComponent(name)}/tab?milieu=M1105`;
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return await response.text();
+    async function fetchAndCacheUniverseMetadata(name) {
+        return fetchAndCacheMetadata(name);
     }
 
     /**
-     * Fetches a sector, writes it to localStorage, and returns the TSV text.
-     * Used by the Imperium import (small number of sectors, fits in localStorage).
-     * Silently skips the cache write on QuotaExceededError so import still completes.
-     */
-    async function fetchAndCacheSector(name) {
-        const text = await fetchSectorText(name);
-        try {
-            localStorage.setItem(CACHE_PREFIX + name, JSON.stringify({
-                timestamp: Date.now(),
-                data: text
-            }));
-        } catch (e) {
-            console.warn(`[OTU Importer] Could not cache "${name}": ${e.message}`);
-        }
-        return text;
-    }
-
-    /**
-     * Reads a universe sector TSV from IndexedDB. Returns the text string or null
-     * on a miss, expiry, or if dbManager is unavailable.
-     */
-    async function getCachedUniverseSector(name) {
-        if (!window.dbManager) return null;
-        const entry = await window.dbManager.getTsvCache(name);
-        if (!entry || !entry.data || !entry.timestamp) return null;
-        if (Date.now() - entry.timestamp > CACHE_TTL_MS) return null;
-        return entry.data;
-    }
-
-    /**
-     * Fetches a sector, writes it to the IndexedDB TSV cache, and returns the text.
-     * Used by the Universe import (128 sectors, exceeds localStorage quota).
-     */
-    async function fetchAndCacheUniverseSector(name) {
-        const text = await fetchSectorText(name);
-        if (window.dbManager) await window.dbManager.putTsvCache(name, text);
-        return text;
-    }
-
-    /**
-     * Returns cached metadata XML for a sector, or null on miss/expiry.
-     */
-    function getCachedMetadata(name) {
-        try {
-            const raw = localStorage.getItem(META_PREFIX + name);
-            if (!raw) return null;
-            const entry = JSON.parse(raw);
-            if (!entry || !entry.timestamp || !entry.data) return null;
-            if (Date.now() - entry.timestamp > CACHE_TTL_MS) return null;
-            return entry.data;
-        } catch (e) {
-            return null;
-        }
-    }
-
-    /**
-     * Fetches sector metadata XML from travellermap, caches it, and returns the raw text.
-     * Non-fatal: logs a warning and returns null on HTTP error so the import continues.
-     */
-    async function fetchAndCacheMetadata(name, x, y) {
-        const url = (x !== undefined && y !== undefined)
-            ? `https://travellermap.com/api/metadata?sx=${x}&sy=${y}&accept=text/xml&milieu=M1105`
-            : `https://travellermap.com/api/metadata?sector=${encodeURIComponent(name)}&accept=text/xml&milieu=M1105`;
-        let text;
-        try {
-            const response = await fetch(url);
-            if (!response.ok) {
-                console.warn(`[OTU Importer] Metadata fetch failed for "${name}": HTTP ${response.status}`);
-                return null;
-            }
-            text = await response.text();
-        } catch (e) {
-            console.warn(`[OTU Importer] Metadata fetch error for "${name}": ${e.message}`);
-            return null;
-        }
-        try {
-            localStorage.setItem(META_PREFIX + name, JSON.stringify({
-                timestamp: Date.now(),
-                data: text
-            }));
-        } catch (e) {
-            console.warn(`[OTU Importer] Could not cache metadata for "${name}": ${e.message}`);
-        }
-        return text;
-    }
-
-    /**
-     * Reads universe metadata XML from IndexedDB. Returns text or null.
-     * Keyed as 'meta:<name>' inside the shared tsvCache store.
-     */
-    async function getCachedUniverseMetadata(name) {
-        if (!window.dbManager) return null;
-        const entry = await window.dbManager.getTsvCache('meta:' + name);
-        if (!entry || !entry.data || !entry.timestamp) return null;
-        if (Date.now() - entry.timestamp > CACHE_TTL_MS) return null;
-        return entry.data;
-    }
-
-    /**
-     * Fetches sector metadata XML and writes it to IndexedDB.
-     * Non-fatal: logs a warning and returns null on HTTP error.
-     */
-    async function fetchAndCacheUniverseMetadata(name, x, y) {
-        const url = (x !== undefined && y !== undefined)
-            ? `https://travellermap.com/api/metadata?sx=${x}&sy=${y}&accept=text/xml&milieu=M1105`
-            : `https://travellermap.com/api/metadata?sector=${encodeURIComponent(name)}&accept=text/xml&milieu=M1105`;
-        let text;
-        try {
-            const response = await fetch(url);
-            if (!response.ok) {
-                console.warn(`[OTU Importer] Metadata fetch failed for "${name}": HTTP ${response.status}`);
-                return null;
-            }
-            text = await response.text();
-        } catch (e) {
-            console.warn(`[OTU Importer] Metadata fetch error for "${name}": ${e.message}`);
-            return null;
-        }
-        if (window.dbManager) await window.dbManager.putTsvCache('meta:' + name, text);
-        return text;
-    }
-
-    const ALLEG_KEY = 'otu_t5ss_allegiances';
-
-    /**
-     * One list of T5SS allegiance code → name. Cached for a day.
-     * Returns { names, live } so the caller can pause after a real request.
+     * Allegiance code → name from the local chart list.
+     * Returns { names, live }. live stays false: nothing is requested.
      */
     async function fetchAllegianceNames() {
-        try {
-            const raw = localStorage.getItem(ALLEG_KEY);
-            if (raw) {
-                const entry = JSON.parse(raw);
-                if (entry && entry.data && entry.timestamp && Date.now() - entry.timestamp < CACHE_TTL_MS) {
-                    return { names: entry.data, live: false };
-                }
-            }
-        } catch (e) { /* cache miss */ }
-        try {
-            const response = await fetch('https://travellermap.com/t5ss/allegiances');
-            if (!response.ok) return { names: {}, live: false };
-            const list = await response.json();
-            const names = {};
-            (Array.isArray(list) ? list : []).forEach(item => {
-                if (item && item.Code && item.Name) names[item.Code] = item.Name;
-            });
-            try {
-                localStorage.setItem(ALLEG_KEY, JSON.stringify({ timestamp: Date.now(), data: names }));
-            } catch (e) { /* quota */ }
-            return { names, live: true };
-        } catch (e) {
-            console.warn(`[OTU Importer] Allegiance list failed: ${e.message}`);
-            return { names: {}, live: false };
-        }
+        const names = window.UNIVERSE_ALLEGIANCES || {};
+        return { names, live: false };
     }
 
     function applyAllegianceNames(names) {
-        if (!names) return;
-        hexStates.forEach(state => {
+        const touched = [];
+        if (!names) return touched;
+        hexStates.forEach((state, id) => {
             if (!state || !state.allegiance) return;
             const name = names[state.allegiance];
-            if (name) state.allegianceName = name;
+            if (name) {
+                state.allegianceName = name;
+                touched.push(id);
+            }
         });
+        return touched;
     }
 
     // Traveller Map Tags for the year-1105 chart, keyed "x,y".
-    const REVIEW_KEY = 'otu_sector_review_index';
     let sectorReviewByCoord = null;
     let sectorReviewLoad = null;
-    let reviewLiveAt = 0;
 
     function describeSectorReview(tags) {
         const text = (tags || '').trim();
@@ -260,7 +109,7 @@
         if (pending) {
             el.classList.add('otu-review-pending');
             el.textContent = '…';
-            el.title = 'Checking Traveller Map review status';
+            el.title = 'Checking review status';
             return;
         }
         const described = describeSectorReview(tags);
@@ -275,26 +124,13 @@
     }
 
     async function fetchSectorReviewMap() {
-        try {
-            const raw = localStorage.getItem(REVIEW_KEY);
-            if (raw) {
-                const entry = JSON.parse(raw);
-                if (entry && entry.data && entry.timestamp && Date.now() - entry.timestamp < CACHE_TTL_MS) {
-                    return entry.data;
-                }
-            }
-        } catch (e) { /* cache miss */ }
-        const response = await fetch('https://travellermap.com/api/universe?milieu=M1105');
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const data = await response.json();
         const byCoord = {};
-        (data.Sectors || []).forEach(sector => {
-            byCoord[`${sector.X},${sector.Y}`] = sector.Tags || '';
+        (window.UNIVERSE_SECTORS || []).forEach(sector => {
+            if (sector.tags) byCoord[`${sector.x},${sector.y}`] = sector.tags;
         });
-        reviewLiveAt = Date.now();
-        try {
-            localStorage.setItem(REVIEW_KEY, JSON.stringify({ timestamp: Date.now(), data: byCoord }));
-        } catch (e) { /* quota */ }
+        (window.UNIVERSE_INDEX && window.UNIVERSE_INDEX.sectors || []).forEach(sector => {
+            if (sector.tags) byCoord[`${sector.x},${sector.y}`] = sector.tags;
+        });
         return byCoord;
     }
 
@@ -485,39 +321,17 @@
 
         closeModal();
 
-        // A multi-sector import is a new-document operation, not an edit.
-        //
-        // It replaces whole sectors — tens of thousands of hexes — and takes no
-        // history snapshot of its own. That used to leave whatever snapshot
-        // happened to be on top of the undo stack sitting there untouched, so
-        // Ctrl+Z afterwards LOOKED like it undid the import (the imported hexes
-        // did disappear) while actually restoring a much older state and silently
-        // discarding editing done before the import. Measured 2026-09-01: with two
-        // ordinary edits made beforehand, one was reverted by an undo the user
-        // would reasonably read as "undo the import".
-        //
-        // Taking a snapshot instead was considered and rejected: a pre-import copy
-        // of hexStates is precisely the size the undo cap — already down to 5
-        // snapshots on large grids — exists to avoid. So this matches
-        // executeUniverseImport(), which has cleared the stacks all along for the
-        // same reason.
-        //
-        // Cleared BEFORE the work rather than after, so an import that fails
-        // partway through cannot leave a stale snapshot behind either.
-        window.undoStack = [];
-        window.redoStack = [];
-
-        // Fetch and import one sector at a time. Each sector makes two API calls
-        // (TSV then metadata) with a 1-second pause between each live call.
+        const importLabel = selected.length === 1 ? selected[0].name : (selected.length + ' sectors');
+        let importSlot = null;
+        if (window.Saves) importSlot = await window.Saves.beforeBulk('Import ' + importLabel);
+        try {
         const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
         opts.allegianceNames = {};
         let reviewByCoord = null;
         try { reviewByCoord = await loadSectorReview(); } catch (e) { reviewByCoord = null; }
-        if (Date.now() - reviewLiveAt < 1000) await delay(1000 - (Date.now() - reviewLiveAt));
         const allegFetch = await fetchAllegianceNames();
         Object.assign(opts.allegianceNames, allegFetch.names);
-        if (allegFetch.live) await delay(1000);
 
         // Build coord lookup for cross-sector route resolution.
         // Only include sectors the user actually imported — pre-loading all sectors
@@ -536,55 +350,28 @@
 
             if (opts.importSector) {
                 try {
-                    clearSectorSlotData(sectorSlotToNumber(slot));
-
-                    const cached = getCachedSector(name);
-                    tsvFromCache = cached !== null;
-
                     if (typeof showToast === 'function') {
-                        const source = tsvFromCache ? 'cache' : `API (${i + 1} of ${selected.length})`;
-                        showToast(`Importing ${name} into Slot ${slot}… [${source}]`);
+                        showToast(`Importing ${name} into slot ${slot}… (${i + 1} of ${selected.length})`);
                     }
-
-                    const text = tsvFromCache ? cached : await fetchAndCacheSector(name);
-
-                    // bulkMode=true: skip the per-sector rule re-application,
-                    // allegiance scan, draw and DB write — those are done once after
-                    // the loop. NOT saveHistoryState: this comment used to promise a
-                    // deferred snapshot "done once after the loop" that was never
-                    // written, and the post-loop block does no history save. A bulk
-                    // import is deliberately not undoable — see where the undo stacks
-                    // are cleared, above.
-                    if (typeof importT5Tab === 'function') {
-                        importT5Tab(text, name, slot, true);
-                    } else {
-                        throw new Error('importT5Tab not available');
-                    }
-
-                    // Always use the full name from IMPERIUM_SECTORS (importT5Tab sets an abbreviation)
-                    const slotNum = parseInt(slot, 10);
-                    if (!isNaN(slotNum)) {
-                        window.sectorNames[slotNum] = name;
-                        const placed = sectors.find(s => s.name === name);
-                        if (placed) rememberSectorReview(slotNum, placed.x, placed.y, reviewByCoord);
+                    const slotNum = (typeof sectorSlotToNumber === 'function') ? sectorSlotToNumber(slot) : parseInt(slot, 10);
+                    if (!Number.isFinite(slotNum) || slotNum < 1) throw new Error('Sector slot "' + slot + '" is not a slot on this map.');
+                    const data = await window.UniverseSnapshot.adopt(name, slotNum);
+                    const placed = sectors.find(s => s.name === name);
+                    if (!isNaN(slotNum) && placed) rememberSectorReview(slotNum, placed.x, placed.y, reviewByCoord);
+                    if (needsMeta) {
+                        if (data.metadataXml && placed) {
+                            sectorMetas.push({ name, metaXml: data.metadataXml, slotNum: sectorSlotToNumber(slot), x: placed.x, y: placed.y });
+                        } else metaFailures.push(name);
                     }
                 } catch (err) {
                     alert(`Failed to import "${name}": ${err.message}`);
                 }
-
-                // Pause before metadata fetch if TSV came from a live API call.
-                if (!tsvFromCache) await delay(1000);
             }
 
-            if (needsMeta) {
-                // Fetch and cache metadata now, but defer parsing until all sectors are loaded.
+            if (needsMeta && !opts.importSector) {
                 const sectorInfo = sectors.find(s => s.name === name);
-                let metaXml = getCachedMetadata(name);
-                if (!metaXml) {
-                    if (typeof showToast === 'function') showToast(`Fetching metadata for ${name}…`);
-                    metaXml = await fetchAndCacheMetadata(name, sectorInfo?.x, sectorInfo?.y);
-                    if (i < selected.length - 1) await delay(1000);
-                }
+                if (typeof showToast === 'function') showToast(`Fetching metadata for ${name}…`);
+                const metaXml = await fetchAndCacheMetadata(name);
                 if (metaXml && sectorInfo) {
                     sectorMetas.push({ name, metaXml, slotNum: sectorSlotToNumber(slot), x: sectorInfo.x, y: sectorInfo.y });
                 } else if (!metaXml) {
@@ -623,34 +410,30 @@
             if (typeof window.renderBorderWindow === 'function') window.renderBorderWindow();
         }
 
-        applyAllegianceNames(opts.allegianceNames);
+        const namedIds = applyAllegianceNames(opts.allegianceNames) || [];
+        const systemIds = (opts.importSystemData && typeof applyOtuSystemData === 'function') ? (applyOtuSystemData() || []) : [];
 
         // Post-processing deferred from bulkMode importT5Tab calls — run once here,
         // after allegiance names have been written onto the hexes.
         if (opts.importSector) {
             if (typeof window.reapplyAllRules === 'function') window.reapplyAllRules();
             if (typeof window.applyActiveFilters === 'function') window.applyActiveFilters();
-            if (window.dbManager) window.dbManager.syncAllHexes();
-            if (window.dbManager) window.dbManager.saveSectorNames();
-            if (window.dbManager) window.dbManager.saveSectorReview?.();
-        }
-
-        if (opts.importSystemData && typeof applyOtuSystemData === 'function') {
-            applyOtuSystemData();
+            const touched = namedIds.concat(systemIds);
+            if (typeof markChanged === 'function') markChanged('Import ' + importLabel, { hexIds: touched, skipAutoslot: true });
+            if (window.dbManager) await window.dbManager.replaceWorkingCopy();
         }
 
         requestAnimationFrame(draw);
 
+        if (typeof showToast === 'function' && opts.importSector) {
+            showToast('Imported ' + importLabel + '.', 6000);
+        }
         if (metaFailures.length > 0 && typeof showToast === 'function') {
             const preview = metaFailures.slice(0, 3).join(', ') + (metaFailures.length > 3 ? `… (+${metaFailures.length - 3} more)` : '');
-            showToast(`${metaFailures.length} metadata fetch(es) failed (no borders/routes): ${preview}`, 6000);
-            console.warn(`[Imperium Import] Metadata fetch failed for: ${metaFailures.join(', ')}`);
+            showToast(`${metaFailures.length} metadata file(s) missing (no borders/routes): ${preview}`, 6000);
         }
-
-        if (opts.importSector && typeof window.startBackgroundMgtBuild === 'function') {
-            window.startBackgroundMgtBuild({
-                sectors: selected.map(sel => ({ key: sectorSlotToNumber(sel.slot), name: sel.name }))
-            });
+        } finally {
+            if (importSlot && window.Saves) window.Saves.endBulk();
         }
     }
 
@@ -700,20 +483,22 @@
             return;
         }
 
-        // Wipe IndexedDB before clearing memory so no stale data remains.
+        let importSlot = null;
+        if (window.Saves) importSlot = await window.Saves.beforeBulk('Import universe');
+        const bulkHexIds = [];
+        try {
         if (window.dbManager) await window.dbManager.clearDB();
 
-        // Resize canvas to 16×8 and clear all in-memory state (mirrors clearCanvas).
         gridWidth  = 16;
         gridHeight = 8;
         hexStates.clear();
+        window.overlayHexes = new Set();
+        window.overlayBase = null;
         window.sectorNames        = {};
         window.sectorReview       = {};
         window.subsectorNames     = {};
         window.sectorRoutes       = [];
         window.routeDefinitions   = (typeof getDefaultRouteDefinitions === 'function') ? getDefaultRouteDefinitions() : [];
-        window.undoStack          = [];
-        window.redoStack          = [];
         selectedHexes.clear();
         window.hexBorderAssignments = new Map();
         window.borderPaths          = new Map();
@@ -733,10 +518,8 @@
         opts.allegianceNames = {};
         let reviewByCoord = null;
         try { reviewByCoord = await loadSectorReview(); } catch (e) { reviewByCoord = null; }
-        if (Date.now() - reviewLiveAt < 1000) await delay(1000 - (Date.now() - reviewLiveAt));
         const allegFetch = await fetchAllegianceNames();
         Object.assign(opts.allegianceNames, allegFetch.names);
-        if (allegFetch.live) await delay(1000);
 
         // Build coord lookup from all universe sectors using their default slots.
         const coordLookup = new Map();
@@ -764,7 +547,8 @@
                         const text = window.FOREVEN_MIXON_TSV;
 
                         if (typeof importT5Tab === 'function') {
-                            importT5Tab(text, 'Foreven', defaultSlot, true);
+                            const forevenIds = await importT5Tab(text, 'Foreven', defaultSlot, true);
+                            if (Array.isArray(forevenIds)) bulkHexIds.push(...forevenIds);
                         } else {
                             throw new Error('importT5Tab not available');
                         }
@@ -775,33 +559,15 @@
                             rememberSectorReview(slotNum, x, y, reviewByCoord);
                         }
                     } else {
-                        const cached = await getCachedUniverseSector(name);
-                        tsvFromCache = cached !== null;
-
                         if (typeof showToast === 'function') {
-                            const source = tsvFromCache ? 'cache' : `API (${i + 1} of ${sectors.length})`;
-                            showToast(`Importing ${name} into Slot ${defaultSlot}… [${source}]`);
+                            showToast(`Importing ${name} into slot ${defaultSlot}… (${i + 1} of ${sectors.length})`);
                         }
-
-                        const text = tsvFromCache ? cached : await fetchAndCacheUniverseSector(name);
-
-                        // bulkMode=true: skip the per-sector rule re-application,
-                        // allegiance scan, draw and DB write — those are done once after
-                        // the loop. NOT saveHistoryState: this comment used to promise a
-                        // deferred snapshot "done once after the loop" that was never
-                        // written, and the post-loop block does no history save. A bulk
-                        // import is deliberately not undoable — see where the undo stacks
-                        // are cleared, above.
-                        if (typeof importT5Tab === 'function') {
-                            importT5Tab(text, name, defaultSlot, true);
-                        } else {
-                            throw new Error('importT5Tab not available');
-                        }
-
+                        const data = await window.UniverseSnapshot.adopt(name, defaultSlot);
                         const slotNum = parseInt(defaultSlot, 10);
-                        if (!isNaN(slotNum)) {
-                            window.sectorNames[slotNum] = name;
-                            rememberSectorReview(slotNum, x, y, reviewByCoord);
+                        if (!isNaN(slotNum)) rememberSectorReview(slotNum, x, y, reviewByCoord);
+                        if (needsMeta) {
+                            if (data.metadataXml) universeMetas.push({ name, metaXml: data.metadataXml, slotNum, x, y });
+                            else metaFailures.push(name);
                         }
                     }
                 } catch (err) {
@@ -809,24 +575,18 @@
                     errorCount++;
                 }
 
-                // Pause before metadata fetch only for live API calls (not local or cached).
-                if (!tsvFromCache && !isMixonForeven) await delay(1000);
             }
 
-            if (needsMeta) {
+            if (needsMeta && (isMixonForeven || !opts.importSector)) {
                 if (isMixonForeven) {
-                    // Use the locally embedded XML instead of travellermap metadata.
+                    // Use the locally embedded Foreven XML.
                     if (window.FOREVEN_MIXON_XML) {
                         universeMetas.push({ name: 'Foreven', metaXml: window.FOREVEN_MIXON_XML, slotNum: parseInt(defaultSlot, 10), x, y });
                     }
                 } else {
                 // Fetch and cache metadata, but defer parsing until all sectors are loaded.
-                let metaXml = await getCachedUniverseMetadata(name);
-                if (!metaXml) {
-                    if (typeof showToast === 'function') showToast(`Fetching metadata for ${name}…`);
-                    metaXml = await fetchAndCacheUniverseMetadata(name, x, y);
-                    if (i < sectors.length - 1) await delay(1000);
-                }
+                if (typeof showToast === 'function') showToast(`Fetching metadata for ${name}…`);
+                const metaXml = await fetchAndCacheUniverseMetadata(name);
                 if (metaXml) {
                     universeMetas.push({ name, metaXml, slotNum: parseInt(defaultSlot, 10), x, y });
                 } else if (needsMeta) {
@@ -858,32 +618,23 @@
             if (typeof window.renderBorderWindow === 'function') window.renderBorderWindow();
         }
 
-        applyAllegianceNames(opts.allegianceNames);
+        const namedIds = applyAllegianceNames(opts.allegianceNames) || [];
+        const systemIds = (opts.importSystemData && typeof applyOtuSystemData === 'function') ? (applyOtuSystemData() || []) : [];
 
         // Post-processing deferred from bulkMode importT5Tab calls — run once here,
         // after allegiance names have been written onto the hexes.
         if (opts.importSector) {
             if (typeof window.reapplyAllRules === 'function') window.reapplyAllRules();
             if (typeof window.applyActiveFilters === 'function') window.applyActiveFilters();
-            if (window.dbManager) window.dbManager.syncAllHexes();
-            if (window.dbManager) window.dbManager.saveSectorNames();
-            if (window.dbManager) window.dbManager.saveSectorReview?.();
+            const touched = bulkHexIds.concat(namedIds, systemIds);
+            if (typeof markChanged === 'function') markChanged('Import universe', { hexIds: touched, skipAutoslot: true });
+            if (window.dbManager) await window.dbManager.replaceWorkingCopy();
         }
 
         if (typeof window.renderBorderWindow === 'function') window.renderBorderWindow();
         if (typeof window.renderRegionWindow === 'function') window.renderRegionWindow();
 
-        if (opts.importSystemData && typeof applyOtuSystemData === 'function') {
-            applyOtuSystemData();
-        }
-
         requestAnimationFrame(draw);
-
-        if (opts.importSector && typeof window.startBackgroundMgtBuild === 'function') {
-            window.startBackgroundMgtBuild({
-                sectors: sectors.map(s => ({ key: parseInt(s.defaultSlot, 10), name: s.name }))
-            });
-        }
 
         let summary = errorCount > 0
             ? `Universe import complete. ${errorCount} sector(s) failed — see console for details.`
@@ -894,6 +645,9 @@
             console.warn(`[Universe Import] Metadata fetch failed for: ${metaFailures.join(', ')}`);
         }
         if (typeof showToast === 'function') showToast(summary, 6000);
+        } finally {
+            if (importSlot && window.Saves) window.Saves.endBulk();
+        }
     }
 
     /** Wire up all event listeners once the DOM is ready. */

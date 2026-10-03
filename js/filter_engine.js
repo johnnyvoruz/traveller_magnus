@@ -960,10 +960,12 @@
         }
 
         const reader = new FileReader();
-        reader.onload = function(e) {
+        reader.onload = async function(e) {
+            let rulesSlot = null;
             try {
                 const importedRules = JSON.parse(e.target.result);
-                
+                if (window.Saves) rulesSlot = await window.Saves.beforeBulk('Rules import');
+
                 if (!Array.isArray(importedRules)) {
                     throw new Error("Invalid format: Rule file must contain a JSON array.");
                 }
@@ -983,6 +985,7 @@
                 if (typeof writeLogLine === 'function') writeLogLine(`Import Failed: ${err.message}`);
                 if (typeof showToast === 'function') showToast("Import Error: Invalid rule file.", 3000);
             } finally {
+                if (rulesSlot && window.Saves && window.Saves.endBulk) window.Saves.endBulk();
                 // Clear the input value so the user can re-import the same file if needed
                 event.target.value = '';
             }

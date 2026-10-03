@@ -9,7 +9,7 @@
 function setupContextMenu() {
     document.getElementById('ctx-manual-empty').addEventListener('click', () => {
         if (!validateSelection('populate')) return;
-        saveHistoryState('Manual: Set Empty', { hexIds: currentActionHexes() });
+        markChanged('Manual: Set Empty', { hexIds: currentActionHexes() });
         currentActionHexes().forEach(hexId => {
             hexStates.set(hexId, { type: 'EMPTY' });
         });
@@ -25,7 +25,7 @@ function setupContextMenu() {
 
     document.getElementById('ctx-manual-system').addEventListener('click', () => {
         if (!validateSelection('populate')) return;
-        saveHistoryState('Manual: Populate System', { hexIds: currentActionHexes() });
+        markChanged('Manual: Populate System', { hexIds: currentActionHexes() });
         currentActionHexes().forEach(hexId => {
             hexStates.set(hexId, { type: 'SYSTEM_PRESENT' });
         });
@@ -42,7 +42,7 @@ function setupContextMenu() {
     document.getElementById('ctx-manual-clear').addEventListener('click', () => {
         if (!validateSelection('clear')) return;
         const hexList = currentActionHexes();
-        saveHistoryState('Batch Clear', { hexIds: hexList, routes: true });
+        markChanged('Batch Clear', { hexIds: hexList, routes: true });
         hexList.forEach(hexId => {
             hexStates.delete(hexId);
             removeRoutesForHex(hexId);
@@ -94,7 +94,7 @@ function setupContextMenu() {
     function applyBgColor() {
         const color = document.getElementById('bg-color-picker').value;
         const hexList = currentActionHexes();
-        saveHistoryState('Assign Background Color', { hexIds: hexList });
+        markChanged('Assign Background Color', { hexIds: hexList });
         hexList.forEach(hexId => {
             let s = hexStates.get(hexId);
             if (!s) {
@@ -110,7 +110,7 @@ function setupContextMenu() {
 
     function clearBgColor() {
         const hexList = currentActionHexes();
-        saveHistoryState('Clear Background Color', { hexIds: hexList });
+        markChanged('Clear Background Color', { hexIds: hexList });
         hexList.forEach(hexId => {
             const s = hexStates.get(hexId);
             if (s) delete s.manualBgColor;
@@ -139,7 +139,7 @@ function setupContextMenu() {
         const code = document.getElementById('allegiance-assign-input').value.trim();
         if (!code) { showToast('Please enter an allegiance code.', 2000); return; }
         const hexList = currentActionHexes();
-        saveHistoryState('Assign Allegiance', { hexIds: hexList });
+        markChanged('Assign Allegiance', { hexIds: hexList });
         hexList.forEach(hexId => {
             const s = hexStates.get(hexId);
             if (s) s.allegiance = code;
@@ -175,7 +175,7 @@ function setupGenerationHandlers() {
     // CT Generation
     document.getElementById('ctx-gen-ct').addEventListener('click', async () => {
         if (!validateSelection('generate')) return;
-        saveHistoryState('Generate CT Mainworld', { hexIds: currentActionHexes() });
+        markChanged('Generate CT Mainworld', { hexIds: currentActionHexes() });
         await ensureNamesLoaded();
         if (window.isLoggingEnabled) window.batchLogData = [];
         let count = 0;
@@ -242,7 +242,7 @@ function setupGenerationHandlers() {
     // MgT2E Generation
     document.getElementById('ctx-gen-mgt2e').addEventListener('click', async () => {
         if (!validateSelection('generate')) return;
-        saveHistoryState('Generate MgT2E Mainworld', { hexIds: currentActionHexes() });
+        markChanged('Generate MgT2E Mainworld', { hexIds: currentActionHexes() });
         await ensureNamesLoaded();
         if (window.isLoggingEnabled) window.batchLogData = [];
         let count = 0;
@@ -330,7 +330,7 @@ function setupGenerationHandlers() {
     // T5 Generation
     document.getElementById('ctx-gen-t5').addEventListener('click', async () => {
         if (!validateSelection('generate')) return;
-        saveHistoryState('Generate T5 Mainworld', { hexIds: currentActionHexes() });
+        markChanged('Generate T5 Mainworld', { hexIds: currentActionHexes() });
         await ensureNamesLoaded();
         if (window.isLoggingEnabled) window.batchLogData = [];
         let count = 0;
@@ -403,7 +403,7 @@ function setupGenerationHandlers() {
     document.getElementById('ctx-expand-socio-t5').addEventListener('click', () => {
         if (!validateSelection('socio')) return;
 
-        saveHistoryState('Expand T5 Socioeconomics', { hexIds: currentActionHexes() });
+        markChanged('Expand T5 Socioeconomics', { hexIds: currentActionHexes() });
         if (window.isLoggingEnabled) window.batchLogData = [];
         let missingData = false;
         currentActionHexes().forEach(hexId => {
@@ -448,7 +448,7 @@ function setupGenerationHandlers() {
     document.getElementById('ctx-expand-socio-mgt2e').addEventListener('click', () => {
         if (!validateSelection('socio')) return;
 
-        saveHistoryState('Expand MgT2E Socioeconomics', { hexIds: currentActionHexes() });
+        markChanged('Expand MgT2E Socioeconomics', { hexIds: currentActionHexes() });
         if (window.isLoggingEnabled) window.batchLogData = [];
         let missingData = false;
         currentActionHexes().forEach(hexId => {
@@ -528,7 +528,7 @@ function setupGenerationHandlers() {
     document.getElementById('ctx-expand-socio-mgt2e-dev').addEventListener('click', () => {
         if (!validateSelection('socio')) return;
 
-        saveHistoryState('Expand MgT2E Socioeconomics (Dev)', { hexIds: currentActionHexes() });
+        markChanged('Expand MgT2E Socioeconomics (Dev)', { hexIds: currentActionHexes() });
         if (window.isLoggingEnabled) window.batchLogData = [];
         let missingSystem = false;
         currentActionHexes().forEach(hexId => {
@@ -601,7 +601,7 @@ function setupGenerationHandlers() {
     document.getElementById('ctx-expand-physical-ct').addEventListener('click', () => {
         if (!validateSelection('physical')) return;
 
-        saveHistoryState('Expand CT System', { hexIds: currentActionHexes() });
+        markChanged('Expand CT System', { hexIds: currentActionHexes() });
         let missingData = false;
 
         if (window.isLoggingEnabled) window.batchLogData = [];
@@ -653,7 +653,7 @@ function setupGenerationHandlers() {
     document.getElementById('ctx-expand-physical-mgt2e').addEventListener('click', () => {
         if (!validateSelection('physical')) return;
 
-        saveHistoryState('Expand MgT2E System', { hexIds: currentActionHexes() });
+        markChanged('Expand MgT2E System', { hexIds: currentActionHexes() });
         if (window.isLoggingEnabled) window.batchLogData = [];
         let missingData = false;
         currentActionHexes().forEach(hexId => {
@@ -741,7 +741,7 @@ function setupGenerationHandlers() {
             return;
         }
 
-        saveHistoryState('Expand T5 System', { hexIds: currentActionHexes() });
+        markChanged('Expand T5 System', { hexIds: currentActionHexes() });
         if (window.isLoggingEnabled) window.batchLogData = [];
         let missingData = false;
         currentActionHexes().forEach(hexId => {
@@ -820,7 +820,7 @@ function setupGenerationHandlers() {
             return;
         }
 
-        saveHistoryState('RTT Re-expand Biographer', { hexIds: currentActionHexes() });
+        markChanged('RTT Re-expand Biographer', { hexIds: currentActionHexes() });
         targetHexes.forEach(hexId => {
             reseedForHex(hexId);
             if (typeof window.expandRTTBiographerOnly === 'function') {
@@ -1545,7 +1545,7 @@ function _parseRouteFile(text) {
  * The slot's name, colour, shortcut and visibility are never touched.
  */
 function importRouteFile(routeId, routeName, file) {
-    readFileAsText(file).then(text => {
+    readFileAsText(file).then(async text => {
         const parsed = _parseRouteFile(text);
         if (!parsed.ok) { showToast(parsed.error, 5000); return; }
 
@@ -1559,9 +1559,12 @@ function importRouteFile(routeId, routeName, file) {
         if (existing > 0 && !window.confirm(
             `Load ${source} into "${routeName}"?\n\n`
             + `This replaces the ${existing} segment(s) currently in "${routeName}".\n`
-            + `It keeps that route's name and colour, and can be undone with Ctrl+Z.`)) return;
+            + `It keeps that route's name and colour. A timed autosave is the way back.`)) return;
 
-        saveHistoryState(`Import route: ${routeName}`, { routes: true });
+        let routeSlot = null;
+        if (window.Saves) routeSlot = await window.Saves.beforeBulk('Import route');
+        try {
+        markChanged(`Import route: ${routeName}`, { routes: true });
         window.sectorRoutes = (window.sectorRoutes || []).filter(r => r.routeId !== routeId);
 
         // The same mapping canvas_input.js uses for hand-drawn segments. An
@@ -1586,6 +1589,9 @@ function importRouteFile(routeId, routeName, file) {
         requestAnimationFrame(draw);
         window.refreshRouteWindowCounts();
         showToast(`Loaded ${added} segment(s) into "${routeName}".`, 3000);
+        } finally {
+            if (routeSlot && window.Saves && window.Saves.endBulk) window.Saves.endBulk();
+        }
     }).catch(err => {
         console.error('[Route File]', err);
         showToast('That route file could not be read.', 3000);
@@ -2482,7 +2488,7 @@ function _p2pFailureMessage(outcome, maxJump, allowPartial) {
  * generateBTNRoutes measures the array's net growth, which reads as zero on
  * any segment that evicted a rival as it was added.
  *
- * @param {string}   actionName - undo label, as passed to saveHistoryState
+ * @param {string}   actionName - undo label, as passed to markChanged
  * @param {number}   routeId    - the slot to clear and generate into
  * @param {Function} generate   - performs the generation; its return value is
  *                                passed back as .result
@@ -2492,15 +2498,17 @@ function _p2pFailureMessage(outcome, maxJump, allowPartial) {
  *          holds the restored route again and is indistinguishable from a
  *          successful run.
  */
-function _generateIntoSlot(actionName, routeId, generate, opts = {}) {
+async function _generateIntoSlot(actionName, routeId, generate, opts = {}) {
+    let routeSlot = null;
+    if (window.Saves) routeSlot = await window.Saves.beforeBulk(actionName);
+    try {
     // A shallow copy is enough: generation pushes to and splices this array but
     // never mutates the segment objects inside it, so anything evicted along
     // the way survives in the snapshot.
     const routesBefore = (window.sectorRoutes || []).slice();
-    const redoBefore   = window.redoStack;
     const countBefore  = routesBefore.filter(r => r.routeId === routeId).length;
 
-    saveHistoryState(actionName, { routes: true });
+    markChanged(actionName, { routes: true });
     // opts.append — Continue adds to the route already in the slot, so the one
     // destructive step every generator otherwise takes is skipped. Everything
     // else, including the restore-on-failure below, is unchanged: a continuation
@@ -2518,16 +2526,12 @@ function _generateIntoSlot(actionName, routeId, generate, opts = {}) {
         // has to be measured as growth rather than as presence.
         produced = opts.append ? (countAfter > countBefore) : (countAfter > 0);
     } finally {
-        if (!produced) {
-            window.sectorRoutes = routesBefore;
-            // Drop the undo entry recorded for our own clear and restore the
-            // redo stack it discarded: nothing happened in the end, so Ctrl+Z
-            // must not step through a snapshot identical to the current state.
-            window.undoStack.pop();
-            window.redoStack = redoBefore;
-        }
+        if (!produced) window.sectorRoutes = routesBefore;
     }
     return { result, produced };
+    } finally {
+        if (routeSlot && window.Saves && window.Saves.endBulk) window.Saves.endBulk();
+    }
 }
 
 function _btnEmptyReason(routeName, result, minBTN, maxBTN) {
@@ -2564,8 +2568,9 @@ async function _runBtnGeneration(routeId, routeName, routeDef, cfg) {
     await new Promise(resolve => setTimeout(resolve, 0));
 
     const routesBefore = (window.sectorRoutes || []).slice();
-    const redoBefore = window.redoStack;
-    saveHistoryState(`Generate BTN Routes: ${routeName}`, { routes: true });
+    let routeSlot = null;
+    if (window.Saves) routeSlot = await window.Saves.beforeBulk('Generate BTN Routes');
+    markChanged(`Generate BTN Routes: ${routeName}`, { routes: true });
     window.sectorRoutes = (window.sectorRoutes || []).filter(r => r.routeId !== routeId);
 
     let result;
@@ -2592,16 +2597,13 @@ async function _runBtnGeneration(routeId, routeName, routeDef, cfg) {
 
     const produced = !result.stopped && (window.sectorRoutes || []).some(r => r.routeId === routeId);
     console.log('[BTN] finished', { produced, result });
-    if (!produced) {
-        window.sectorRoutes = routesBefore;
-        window.undoStack.pop();
-        window.redoStack = redoBefore;
-    }
+    if (!produced) window.sectorRoutes = routesBefore;
     window._routeGenRunning = false;
 
     if (result.stopped) {
         if (typeof hideWorkStatus === 'function') hideWorkStatus();
         showToast(`“${routeName}” stopped. Nothing was changed.`, 4000);
+        if (routeSlot && window.Saves && window.Saves.endBulk) window.Saves.endBulk();
         return;
     }
     if (!produced) {
@@ -2612,6 +2614,7 @@ async function _runBtnGeneration(routeId, routeName, routeDef, cfg) {
         } else {
             showToast(msg, 7000);
         }
+        if (routeSlot && window.Saves && window.Saves.endBulk) window.Saves.endBulk();
         return;
     }
     if (typeof hideWorkStatus === 'function') hideWorkStatus();
@@ -2628,6 +2631,7 @@ async function _runBtnGeneration(routeId, routeName, routeDef, cfg) {
         `"${routeName}" BTN[${lowerBTN}/${minBTN}${maxLabel}]: ${result.segments} seg — ${result.fullRoutes} full + ${result.promoted} promoted seg. (${result.included} worlds, ${result.skipped} skipped)`,
         5000
     );
+    if (routeSlot && window.Saves && window.Saves.endBulk) window.Saves.endBulk();
 }
 
 // ============================================================================
@@ -2721,7 +2725,7 @@ function setupRouteWindow() {
     // Generate button stub — logs config payload; replaced per-type in later phases
     const genBtn = document.getElementById('btn-route-auto-generate');
     if (genBtn) {
-        genBtn.addEventListener('click', () => {
+        genBtn.addEventListener('click', async () => {
             const panel = document.getElementById('route-auto-panel');
             const routeId = parseInt(panel.dataset.targetRouteId, 10);
             const routeDef = (window.routeDefinitions || []).find(d => d.id === routeId);
@@ -2760,7 +2764,7 @@ function setupRouteWindow() {
 
             if (type === 'xboat') {
                 const { maxJump, maxRange, minIx } = configs.xboat;
-                const xbRun = _generateIntoSlot('Generate Xboat Routes', routeId,
+                const xbRun = await _generateIntoSlot('Generate Xboat Routes', routeId,
                     () => generateXboatRoutes(maxJump, maxRange, minIx, routeId, `xboat_${routeId}`));
                 if (!xbRun.produced) {
                     showToast(`No XBoat routes could be generated at Ix ${minIx}+ — nothing was changed.`, 3500);
@@ -2788,7 +2792,7 @@ function setupRouteWindow() {
                 }
                 const { maxJump, maxRange, allowEmptyHexes: netAllowEmpty, maxEmptyJumps: netMaxEmpty } = configs.network;
                 const groupId = `net_${routeId}`;
-                const netRun = _generateIntoSlot(`Generate Custom Network: ${routeName}`, routeId,
+                const netRun = await _generateIntoSlot(`Generate Custom Network: ${routeName}`, routeId,
                     () => generateAutoRoutes(filteredIds, maxJump, maxRange, routeDef.color, groupId, routeName, routeId, netAllowEmpty, netMaxEmpty));
                 const count = netRun.result;
                 if (!netRun.produced) {
@@ -2868,7 +2872,7 @@ function setupRouteWindow() {
                         return;
                     }
 
-                    const contRun = _generateIntoSlot(`Continue: ${routeName}`, routeId,
+                    const contRun = await _generateIntoSlot(`Continue: ${routeName}`, routeId,
                         () => generatePointToPointRoute(startId, endId, maxJump, routeDef.color, groupId, routeName, true, filteredIds, routeId, waypointIds, p2pAllowEmpty, p2pMaxEmpty, p2pAllowPartial),
                         { append: true });
 
@@ -3002,7 +3006,7 @@ function setupRouteWindow() {
                     return;
                 }
 
-                const p2pRun = _generateIntoSlot(`Generate Point-to-Point: ${routeName}`, routeId,
+                const p2pRun = await _generateIntoSlot(`Generate Point-to-Point: ${routeName}`, routeId,
                     () => generatePointToPointRoute(startId, endId, maxJump, routeDef.color, groupId, routeName, true, filteredIds, routeId, waypointIds, p2pAllowEmpty, p2pMaxEmpty, p2pAllowPartial));
                 if (!p2pRun.produced) {
                     // Duration scales with the message: naming the closest world it
@@ -3261,18 +3265,21 @@ function renderOrphanRouteNotice() {
     btn.type = 'button';
     btn.className = 'route-orphan-remove';
     btn.textContent = 'Remove';
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
         const names = orphans.map(d => `  • ${d.name}`).join('\n');
         if (!window.confirm(
             `Remove ${orphans.length} empty duplicate route slot${orphans.length !== 1 ? 's' : ''}?\n\n${names}\n\n` +
-            'None of them holds any map segments. This can be undone with Ctrl+Z.')) return;
+            'None of them holds any map segments. A timed autosave is the way back.')) return;
 
-        saveHistoryState('Remove duplicate route slots', { includeRouteDefinitions: true });
+        let routeSlot = null;
+        if (window.Saves) routeSlot = await window.Saves.beforeBulk('Remove duplicate route slots');
+        markChanged('Remove duplicate route slots', { includeRouteDefinitions: true });
         const doomed = new Set(orphans.map(d => d.id));
         window.routeDefinitions = (window.routeDefinitions || []).filter(d => !doomed.has(d.id));
         if (window.dbManager) window.dbManager.saveRouteDefinitions();
         window.renderRouteWindow();
         showToast(`Removed ${doomed.size} duplicate route slot${doomed.size !== 1 ? 's' : ''}.`, 2500);
+        if (routeSlot && window.Saves && window.Saves.endBulk) window.Saves.endBulk();
     });
 
     notice.appendChild(text);
@@ -3602,7 +3609,7 @@ function _refreshCombineChoices() {
     });
     select.disabled = false;
     go.disabled = false;
-    note.textContent = 'Segments move into the route you choose and take on its colour. The others are removed. Ctrl+Z brings them back.';
+    note.textContent = 'Segments move into the route you choose and take on its colour. The others are removed. A timed autosave is the way back.';
 }
 
 function _openCombineModal() {
@@ -3723,7 +3730,7 @@ function _openSelectionCombinePicker(anchorEl) {
     _placeFloating(el, anchorEl, true);
 }
 
-function _combineSelectedInto(destId, sourceIds, alreadyConfirmed) {
+async function _combineSelectedInto(destId, sourceIds, alreadyConfirmed) {
     const order = _combineFoldOrder(destId, sourceIds);
     const defs = window.routeDefinitions || [];
     const destDef = defs.find(d => d.id === destId);
@@ -3741,12 +3748,14 @@ function _combineSelectedInto(destId, sourceIds, alreadyConfirmed) {
             `Combine ${sources.length} route${sources.length === 1 ? '' : 's'} into "${destDef.name}"?\n\n` +
             `${lines}\n\n` +
             `Their segments move into "${destDef.name}" and take on its colour. Those routes are then removed.\n\n` +
-            `This can be undone with Ctrl+Z.`
+            `A timed autosave is the way back.`
         );
         if (!ok) return;
     }
 
-    saveHistoryState(
+    let routeSlot = null;
+    if (window.Saves) routeSlot = await window.Saves.beforeBulk('Combine routes');
+    markChanged(
         sources.length === 1 ? `Combine ${sources[0].name} into ${destDef.name}` : `Combine ${sources.length} routes into ${destDef.name}`,
         { routes: true, includeRouteDefinitions: true }
     );
@@ -3764,6 +3773,7 @@ function _combineSelectedInto(destId, sourceIds, alreadyConfirmed) {
     window.renderRouteWindow();
     requestAnimationFrame(draw);
     _toastCombined(destId, destDef.name, moved, duplicates);
+    if (routeSlot && window.Saves && window.Saves.endBulk) window.Saves.endBulk();
 }
 
 /**
@@ -3814,7 +3824,7 @@ function _applyCombine(destId, cand) {
  * Folds `cand` into `destId`. The destination keeps its name, colour and shortcut;
  * the absorbed slot is removed (M4).
  */
-function _combineRoutes(destId, cand) {
+async function _combineRoutes(destId, cand) {
     const defs    = window.routeDefinitions || [];
     const destDef = defs.find(d => d.id === destId);
     const srcDef  = defs.find(d => d.id === cand.routeId);
@@ -3831,22 +3841,28 @@ function _combineRoutes(destId, cand) {
         `${where}\n` +
         `${srcSegs.length} segment(s) move across, and they take on "${destDef.name}"'s colour.\n` +
         `"${srcDef.name}" is then removed from the Route Manager.\n\n` +
-        `This can be undone with Ctrl+Z.`
+        `A timed autosave is the way back.`
     );
     if (!ok) return;
 
     // includeRouteDefinitions: a definition is being deleted, and without it the
     // absorbed slot would not come back on undo — the segments would return
     // belonging to a route that no longer exists.
-    saveHistoryState(`Combine ${srcDef.name} into ${destDef.name}`, { routes: true, includeRouteDefinitions: true });
+    let routeSlot = null;
+    if (window.Saves) routeSlot = await window.Saves.beforeBulk('Combine routes');
+    markChanged(`Combine ${srcDef.name} into ${destDef.name}`, { routes: true, includeRouteDefinitions: true });
     const result = _applyCombine(destId, cand);
-    if (!result) return;
+    if (!result) {
+        if (routeSlot && window.Saves && window.Saves.endBulk) window.Saves.endBulk();
+        return;
+    }
     _routeSelection.delete(cand.routeId);
 
     if (window.dbManager) { window.dbManager.saveRoutes(); window.dbManager.saveRouteDefinitions(); }
     window.renderRouteWindow();
     requestAnimationFrame(draw);
     _toastCombined(destId, destDef.name, result.moved, result.duplicates);
+    if (routeSlot && window.Saves && window.Saves.endBulk) window.Saves.endBulk();
 }
 
 function _toastCombined(destId, name, moved, duplicates) {

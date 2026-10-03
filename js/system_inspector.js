@@ -98,7 +98,9 @@ window.SystemInspector = (() => {
         hexId = id;
         tab = requestedTab;
         show();
+        if (window.UniverseSnapshot && window.UniverseSnapshot.ensureSystemBuilt) window.UniverseSnapshot.ensureSystemBuilt(id);
         refresh(true);
+        if (window.UniverseSnapshot && window.UniverseSnapshot.prefetchAround) window.UniverseSnapshot.prefetchAround(id);
         if (editing && tab === 'system' && hexChanged) openHexEditor(hexId);
         return true;
     }
@@ -1201,6 +1203,7 @@ window.SystemInspector = (() => {
             signature = next;
             if (window.SystemViewer?.currentHexId?.() === hexId) SystemViewer.refresh(hexId);
         }
+        if (state && window.UniverseSnapshot && window.UniverseSnapshot.ensureSystemBuilt) window.UniverseSnapshot.ensureSystemBuilt(hexId);
         system = state ? (window.SystemViewer?.currentHexId?.() === hexId ? SystemViewer.currentSystem() : SystemViewer.normalizeSystem(state)) : null;
         // A fresh normalization has fresh objects; find the same body again.
         if (body && bodyKey && !navBodies().includes(body)) body = bodyForKey(bodyKey);

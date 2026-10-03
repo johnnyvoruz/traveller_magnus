@@ -396,13 +396,14 @@
      * Inconsistencies between JSON and imported data are logged and the import wins.
      */
     function applyOtuSystemData() {
+        const touched = [];
         if (!window.OTU_LOCATIONS || !window.OTU_STARS || !window.OTU_WORLDS) {
             console.warn('[OTU System Data] Constants not loaded — skipping enrichment.');
-            return;
+            return touched;
         }
         if (typeof hexStates === 'undefined' || !window.sectorNames) {
             console.warn('[OTU System Data] hexStates or sectorNames unavailable — skipping enrichment.');
-            return;
+            return touched;
         }
 
         if (window.isLoggingEnabled && typeof writeLogLine === 'function') {
@@ -445,6 +446,7 @@
 
             stateObj.t5System = sys;
             stateObj.t5Physical = null;
+            touched.push(hexId);
             enriched++;
         }
 
@@ -460,6 +462,7 @@
             ? `Published system data applied to ${enriched} system(s). ${totalInconsistencies} inconsistenc${totalInconsistencies === 1 ? 'y' : 'ies'} found — see log.`
             : `Published system data applied to ${enriched} system(s).`;
         if (typeof showToast === 'function') showToast(toastMsg, totalInconsistencies > 0 ? 7000 : 4000);
+        return touched;
     }
 
     window.applyOtuSystemData = applyOtuSystemData;

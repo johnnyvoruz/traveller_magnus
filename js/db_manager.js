@@ -16,10 +16,13 @@
     'use strict';
 
     const DB_NAME       = 'traveller_magnus';
-    const DB_VERSION    = 3;
-    const STORE_HEX     = 'hexStates';
+    const DB_VERSION    = 5;
+    const STORE_HEX     = 'overlayHexes';
     const STORE_APP     = 'appState';
-    const STORE_TSV     = 'tsvCache';
+    const STORE_SAVES   = 'saves';
+    const STORE_CAMPAIGN = 'campaign';
+    const STORE_LEGACY_HEX = 'hexStates';
+    const STORE_BUILT = 'baseBuilt';
 
     let _db        = null;
     let _syncTimer = null;
@@ -65,8 +68,14 @@
         const run = (async () => {
             if (_autosaveBlocked || _writesHeld) return;
             try { await work(); }
-            catch (err) { _reportWriteFailure(err); }
+            catch (err) {
+                _reportWriteFailure(err);
+                throw err;
+            }
         })();
+        // A handler keeps fire-and-forget saves from becoming unhandled rejections.
+        // Awaiters of this same promise still see the failure.
+        run.catch(() => {});
         return _track(run);
     }
 
@@ -89,14 +98,27 @@
 
             req.onupgradeneeded = (e) => {
                 const database = e.target.result;
-                if (!database.objectStoreNames.contains(STORE_HEX)) {
-                    database.createObjectStore(STORE_HEX); // key = hexId string
-                }
-                if (!database.objectStoreNames.contains(STORE_APP)) {
-                    database.createObjectStore(STORE_APP); // key = named string
-                }
-                if (!database.objectStoreNames.contains(STORE_TSV)) {
-                    database.createObjectStore(STORE_TSV); // key = sector name string
+                const upgrade = e.target.transaction;
+                if (!database.objectStoreNames.contains(STORE_HEX)) database.createObjectStore(STORE_HEX);
+                if (!database.objectStoreNames.contains(STORE_APP)) database.createObjectStore(STORE_APP);
+                if (!database.objectStoreNames.contains(STORE_SAVES)) database.createObjectStore(STORE_SAVES);
+                if (!database.objectStoreNames.contains(STORE_CAMPAIGN)) database.createObjectStore(STORE_CAMPAIGN);
+                if (database.objectStoreNames.contains('tsvCache')) database.deleteObjectStore('tsvCache');
+                if (!database.objectStoreNames.contains(STORE_BUILT)) database.createObjectStore(STORE_BUILT);
+                if (e.oldVersion < 4 && database.objectStoreNames.contains(STORE_LEGACY_HEX)) {
+                    const source = upgrade.objectStore(STORE_LEGACY_HEX);
+                    const copied = source.openCursor();
+                    copied.onsuccess = (ev) => {
+                        const cur = ev.target.result;
+                        if (!cur) {
+                            database.deleteObjectStore(STORE_LEGACY_HEX);
+                            return;
+                        }
+                        upgrade.objectStore(STORE_HEX).put(cur.value, cur.key);
+                        cur.continue();
+                    };
+                } else if (database.objectStoreNames.contains(STORE_LEGACY_HEX)) {
+                    database.deleteObjectStore(STORE_LEGACY_HEX);
                 }
             };
 
@@ -110,6 +132,9 @@
                         showToast('This map was opened in another tab. Reload this one before editing, so the two do not overwrite each other.', 0);
                     }
                 };
+                if (navigator.storage && navigator.storage.persist) {
+                    navigator.storage.persist().catch(() => {});
+                }
                 resolve(_db);
             };
             req.onerror = (e) => reject(e.target.error || new Error('Browser storage could not be opened.'));
@@ -211,31 +236,39 @@
                 window.hexAllegianceAssignments = new Map(appState.allegianceAssignments);
             }
 
-            // Load hex states
-            const hexCount = await new Promise((resolve, reject) => {
-                const tx    = db.transaction(STORE_HEX, 'readonly');
-                const store = tx.objectStore(STORE_HEX);
-                let   count = 0;
-                hexStates.clear();
-                const cursorReq = store.openCursor();
+            if (Number.isInteger(appState.autosaveRing) && window.Saves) window.Saves.noteRing(appState.autosaveRing);
+            if (appState.campaignId) window.overlayCampaignId = appState.campaignId;
+            if (appState.base) window.overlayBase = appState.base;
+
+            const records = await new Promise((resolve, reject) => {
+                const tx = db.transaction(STORE_HEX, 'readonly');
+                const out = [];
+                const cursorReq = tx.objectStore(STORE_HEX).openCursor();
                 cursorReq.onerror = () => reject(cursorReq.error || new Error('Saved hexes could not be read.'));
                 tx.onabort = () => reject(tx.error || new Error('Saved hexes could not be read.'));
                 cursorReq.onsuccess = (e) => {
                     const cur = e.target.result;
-                    if (cur) {
-                        hexStates.set(cur.key, cur.value);
-                        count++;
-                        cur.continue();
-                    } else {
-                        resolve(count);
-                    }
+                    if (cur) { out.push([cur.key, cur.value]); cur.continue(); }
+                    else resolve(out);
                 };
             });
 
-            if (hexCount > 0) {
-                console.log(`[DB] Loaded ${hexCount} hex(es) from IndexedDB (gridWidth=${gridWidth}, gridHeight=${gridHeight}).`);
+            const doc = {
+                format: 'asab-overlay', schemaVersion: 3,
+                base: appState.base || null,
+                campaignId: appState.campaignId || null,
+                hexes: Object.fromEntries(records)
+            };
+            const merged = window.Overlay ? await window.Overlay.mergedHexes(doc) : { merged: new Map(records.filter(([, v]) => !(v && v.deleted))), overlayIds: new Set(records.map(([id]) => id)) };
+            hexStates.clear();
+            merged.merged.forEach((state, id) => hexStates.set(id, state));
+            if (window.Overlay) window.Overlay.rememberOverlay(doc, merged.overlayIds);
+            else window.overlayHexes = merged.overlayIds;
+
+            if (hexStates.size > 0) {
+                console.log(`[DB] Loaded ${hexStates.size} hex(es) from IndexedDB (gridWidth=${gridWidth}, gridHeight=${gridHeight}).`);
             }
-            return hexCount > 0;
+            return hexStates.size > 0;
 
         } catch (err) {
             // A failed read must not be treated as an empty map. The next edit
@@ -259,80 +292,110 @@
     // Save all hexes belonging to one sector by numeric sector number.
     // Called after importT5Tab — efficient because it only touches one sector.
     // -------------------------------------------------------------------------
-    function saveHexesBySectorNum(sectorNum) {
-        return _watch(async () => {
-            const prefix = sectorNum + '-';
-            const db     = await _openDB();
-            const tx     = db.transaction(STORE_HEX, 'readwrite');
-            const store  = tx.objectStore(STORE_HEX);
-            for (const [hexId, state] of hexStates) {
-                if (hexId.startsWith(prefix)) store.put(stripHexViewState(state), hexId);
-            }
-            await _done(tx);
-        });
+    function _putOverlayHex(store, hexId) {
+        if (!window.overlayHexes || !window.overlayHexes.has(hexId)) {
+            store.delete(hexId);
+            return;
+        }
+        const state = hexStates.get(hexId);
+        if (state && typeof state === 'object') {
+            const stamped = window.Overlay ? window.Overlay.stamp(state) : stripHexViewState(state);
+            store.put(stamped, hexId);
+            return;
+        }
+        const pending = window.dirtyJournal && window.dirtyJournal.pending(hexId);
+        store.put({
+            deleted: true,
+            rev: (pending && pending.rev) || 1,
+            updatedAt: (pending && pending.updatedAt) || new Date().toISOString()
+        }, hexId);
     }
 
-    // -------------------------------------------------------------------------
-    // Save a specific iterable of hexIds (Set or Array).
-    // Used for targeted saves after manual edits or generation runs.
-    // -------------------------------------------------------------------------
+    function saveHexesBySectorNum(sectorNum) {
+        const prefix = sectorNum + '-';
+        const ids = [];
+        window.overlayHexes.forEach(id => { if (String(id).startsWith(prefix)) ids.push(id); });
+        return saveHexes(ids);
+    }
+
     function saveHexes(hexIds) {
         if (!hexIds) return Promise.resolve();
-        return _watch(async () => {
-            const db    = await _openDB();
-            const tx    = db.transaction(STORE_HEX, 'readwrite');
-            const store = tx.objectStore(STORE_HEX);
-            for (const hexId of hexIds) {
-                const state = hexStates.get(hexId);
-                if (state !== undefined) store.put(stripHexViewState(state), hexId);
-            }
-            await _done(tx);
-        });
-    }
-
-    // -------------------------------------------------------------------------
-    // Full sync: replace every hex record with the current in-memory hexStates.
-    // Used after JSON load, undo/redo, and Universe import.
-    // -------------------------------------------------------------------------
-    function syncAllHexes() {
         return _watch(async () => {
             const db = await _openDB();
             const tx = db.transaction(STORE_HEX, 'readwrite');
             const store = tx.objectStore(STORE_HEX);
-            // Clear and rewrite in one transaction. A quota failure aborts both,
-            // so the store cannot be left empty after a wipe that did not finish.
-            store.clear();
-            for (const [hexId, state] of hexStates) {
-                store.put(stripHexViewState(state), hexId);
-            }
+            for (const hexId of hexIds) _putOverlayHex(store, hexId);
             await _done(tx);
         });
     }
 
-    // -------------------------------------------------------------------------
-    // Debounced sync — safe to call from high-frequency hooks like
-    // saveHistoryState. Waits 2 seconds of inactivity before writing, so a
-    // bulk expansion run triggers one DB write rather than thousands.
-    // -------------------------------------------------------------------------
+    function _metadataEntries() {
+        const settings = (typeof window.collectMapSettings === 'function') ? window.collectMapSettings() : null;
+        const entries = [
+            ['routes', window.sectorRoutes || []],
+            ['routeDefinitions', window.routeDefinitions || []],
+            ['autoRouteCounter', window.autoRouteCounter || 0],
+            ['gridWidth', gridWidth],
+            ['gridHeight', gridHeight],
+            ['borderDefinitions', window.borderDefinitions || []],
+            ['hexBorderAssignments', window.hexBorderAssignments ? [...window.hexBorderAssignments.entries()] : []],
+            ['borderPaths', window.borderPaths ? [...window.borderPaths.entries()] : []],
+            ['regionDefinitions', window.regionDefinitions || []],
+            ['regionPaths', window.regionPaths ? [...window.regionPaths.entries()] : []],
+            ['sectorNames', window.sectorNames || {}],
+            ['sectorReview', window.sectorReview || {}],
+            ['subsectorNames', window.subsectorNames || {}],
+            ['allegianceDefinitions', window.allegianceDefinitions || []],
+            ['allegianceAssignments', window.hexAllegianceAssignments ? [...window.hexAllegianceAssignments.entries()] : []],
+            ['base', window.overlayBase || null],
+            ['campaignId', window.overlayCampaignId || null]
+        ];
+        if (settings) entries.push(['settings', settings]);
+        return entries;
+    }
+
+    // Replace the stored overlay. Base hexes stay out of this store.
+    function replaceWorkingCopy() {
+        return _watch(async () => {
+            const db = await _openDB();
+            const tx = db.transaction([STORE_HEX, STORE_APP], 'readwrite');
+            const hexStore = tx.objectStore(STORE_HEX);
+            const appStore = tx.objectStore(STORE_APP);
+            hexStore.clear();
+            window.overlayHexes.forEach(id => _putOverlayHex(hexStore, id));
+            _metadataEntries().forEach(([key, value]) => appStore.put(value, key));
+            await _done(tx);
+        });
+    }
+
+    function dropOverlayHexes(ids) {
+        if (!ids || !ids.length) return Promise.resolve();
+        return _watch(async () => {
+            const db = await _openDB();
+            const tx = db.transaction(STORE_HEX, 'readwrite');
+            const store = tx.objectStore(STORE_HEX);
+            ids.forEach(id => store.delete(id));
+            await _done(tx);
+        });
+    }
+
     function scheduleSyncAll() {
         if (_autosaveBlocked || _writesHeld) return;
         if (_syncTimer) clearTimeout(_syncTimer);
         _syncTimer = setTimeout(() => {
             _syncTimer = null;
             if (_autosaveBlocked || _writesHeld) return;
-            syncAllHexes();
-            saveRoutes();
-            saveRouteDefinitions();
-            saveBorderDefinitions();
-            saveBorderAssignments();
-            saveBorderPaths();
-            saveRegionDefinitions();
-            saveRegionPaths();
-            saveSectorNames();
-            saveSectorReview();
-            saveSubsectorNames();
-            saveAllegianceDefinitions();
-            saveAllegianceAssignments();
+            const taken = window.dirtyJournal ? window.dirtyJournal.take() : null;
+            _watch(async () => {
+                const db = await _openDB();
+                const tx = db.transaction([STORE_HEX, STORE_APP], 'readwrite');
+                const hexStore = tx.objectStore(STORE_HEX);
+                const appStore = tx.objectStore(STORE_APP);
+                if (taken) taken.hexIds.forEach(id => _putOverlayHex(hexStore, id));
+                _metadataEntries().forEach(([key, value]) => appStore.put(value, key));
+                await _done(tx);
+                if (taken && window.dirtyJournal) window.dirtyJournal.ack(taken);
+            });
             if (window.CampaignAtlas) void window.CampaignAtlas.persist();
         }, 2000);
     }
@@ -363,33 +426,64 @@
         return _putApp([['autoRouteCounter', window.autoRouteCounter || 0]]);
     }
 
-    // -------------------------------------------------------------------------
-    // Read one TSV cache entry by sector name. Returns { data, timestamp } or null.
-    // -------------------------------------------------------------------------
-    async function getTsvCache(name) {
-        try {
+    function open() { return _openDB(); }
+
+    function writeStores(names, fill) {
+        return (async () => {
+            if (_autosaveBlocked) throw new Error('Browser storage is paused.');
             const db = await _openDB();
-            const tx = db.transaction(STORE_TSV, 'readonly');
-            return await new Promise((resolve) => {
-                const req = tx.objectStore(STORE_TSV).get(name);
-                req.onsuccess = () => resolve(req.result || null);
-                req.onerror   = () => resolve(null);
-            });
-        } catch {
-            return null;
-        }
+            const tx = db.transaction(names, 'readwrite');
+            const stores = {};
+            names.forEach(name => { stores[name] = tx.objectStore(name); });
+            fill(stores);
+            await _done(tx);
+        })();
     }
 
-    // -------------------------------------------------------------------------
-    // Write one TSV cache entry. Fire-and-forget; logs on failure.
-    // -------------------------------------------------------------------------
-    function putTsvCache(name, data) {
-        return _watch(async () => {
+    function getAllKeys(storeName) {
+        return (async () => {
             const db = await _openDB();
-            const tx = db.transaction(STORE_TSV, 'readwrite');
-            tx.objectStore(STORE_TSV).put({ data, timestamp: Date.now() }, name);
-            await _done(tx);
-        });
+            return await new Promise((resolve, reject) => {
+                const tx = db.transaction(storeName, 'readonly');
+                const req = tx.objectStore(storeName).getAllKeys();
+                req.onsuccess = () => resolve(req.result || []);
+                req.onerror = () => reject(req.error || new Error('Browser storage could not be read.'));
+            });
+        })();
+    }
+
+    function getRecord(storeName, key) {
+        return (async () => {
+            const db = await _openDB();
+            return await new Promise((resolve, reject) => {
+                const tx = db.transaction(storeName, 'readonly');
+                const req = tx.objectStore(storeName).get(key);
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => reject(req.error || new Error('Browser storage could not be read.'));
+            });
+        })();
+    }
+
+    function readAll(storeName) {
+        return (async () => {
+            const db = await _openDB();
+            return await new Promise((resolve, reject) => {
+                const tx = db.transaction(storeName, 'readonly');
+                const out = [];
+                const req = tx.objectStore(storeName).openCursor();
+                req.onerror = () => reject(req.error || new Error('Browser storage could not be read.'));
+                req.onsuccess = () => {
+                    const cur = req.result;
+                    if (!cur) return;
+                    const value = cur.value || {};
+                    value.key = cur.key;
+                    out.push(value);
+                    cur.continue();
+                };
+                tx.oncomplete = () => resolve(out);
+                tx.onabort = () => reject(tx.error || new Error('Browser storage could not be read.'));
+            });
+        })();
     }
 
     function saveBorderDefinitions() {
@@ -445,8 +539,10 @@
         if (_syncTimer) { clearTimeout(_syncTimer); _syncTimer = null; }
         try {
             const db = await _openDB();
-            const tx = db.transaction([STORE_HEX, STORE_APP, STORE_TSV], 'readwrite');
+            const names = [STORE_HEX, STORE_APP, STORE_BUILT];
+            const tx = db.transaction(names, 'readwrite');
             tx.objectStore(STORE_HEX).clear();
+            tx.objectStore(STORE_BUILT).clear();
             if (clearCampaign) {
                 tx.objectStore(STORE_APP).clear();
             } else {
@@ -460,7 +556,6 @@
                     cur.continue();
                 };
             }
-            tx.objectStore(STORE_TSV).clear();
             await new Promise((resolve, reject) => {
                 tx.oncomplete = resolve;
                 tx.onabort = () => reject(tx.error || new Error('Database clear was interrupted.'));
@@ -554,8 +649,14 @@
         loadFromDB,
         saveHexesBySectorNum,
         saveHexes,
-        syncAllHexes,
+        replaceWorkingCopy,
+        dropOverlayHexes,
         scheduleSyncAll,
+        open,
+        writeStores,
+        readAll,
+        getAllKeys,
+        getRecord,
         whenWritesSettle,
         holdWrites,
         releaseWrites,
@@ -576,8 +677,48 @@
         saveAllegianceDefinitions,
         saveAllegianceAssignments,
         clearDB,
-        getTsvCache,
-        putTsvCache
+        putBuilt(hexId, record) {
+            return _watch(async () => {
+                const db = await _openDB();
+                const tx = db.transaction(STORE_BUILT, 'readwrite');
+                tx.objectStore(STORE_BUILT).put(record, hexId);
+                await _done(tx);
+            });
+        },
+        loadBuilt(slot) {
+            return (async () => {
+                const db = await _openDB();
+                return await new Promise((resolve, reject) => {
+                    const tx = db.transaction(STORE_BUILT, 'readonly');
+                    const out = [];
+                    const req = tx.objectStore(STORE_BUILT).openCursor();
+                    req.onerror = () => reject(req.error);
+                    req.onsuccess = () => {
+                        const cur = req.result;
+                        if (!cur) return;
+                        if (String(cur.key).startsWith(String(slot) + '-')) out.push([cur.key, cur.value]);
+                        cur.continue();
+                    };
+                    tx.oncomplete = () => resolve(out);
+                });
+            })();
+        },
+        dropBuiltSlots(slots) {
+            const prefixes = (slots || []).map(slot => String(slot) + '-');
+            return _watch(async () => {
+                const db = await _openDB();
+                const tx = db.transaction(STORE_BUILT, 'readwrite');
+                const store = tx.objectStore(STORE_BUILT);
+                const req = store.openCursor();
+                req.onsuccess = () => {
+                    const cur = req.result;
+                    if (!cur) return;
+                    if (prefixes.some(prefix => String(cur.key).startsWith(prefix))) cur.delete();
+                    cur.continue();
+                };
+                await _done(tx);
+            });
+        }
     };
 
 }());

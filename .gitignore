@@ -1,32 +1,30 @@
-# Environment & secrets
+node_modules/
+apps/web/dist/
+packages/engines/src/generated/
+apps/api/.wrangler/
+.dev.vars
+truth-local/
+
+# Truth-build inputs: TravellerMap chart data lives in the private bucket (inputs/<version>/), not in git. sectors.json is committed.
+universe/raw/*.tsv
+universe/raw/*.xml
+universe/raw/_*.log
+universe/raw/.uploaded.*
+
+# Local tooling and secrets (restored from the legacy ignore list)
 .env
 credentials.json
 token.json
-.clineignore
-
-# Intermediate / temp files (always regenerated, never committed)
-.tmp/
 .idea/
-tmp/
-!.tmp/.gitkeep
-
-# Python
+.tmp/
 __pycache__/
 *.py[cod]
-*.egg-info/
 .venv/
 venv/
-dist/
-build/
 
-# Node / npm (installed by tooling, not needed for browser app)
-node_modules/
-package-lock.json
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Editor / IDE (local to one machine, not part of the app)
-*.code-workspace
-.vscode/
+# Local wrangler state from tests and dev servers, anywhere in the tree
+.wrangler/
+**/.wrangler/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal

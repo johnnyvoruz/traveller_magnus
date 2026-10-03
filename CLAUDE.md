@@ -2,74 +2,94 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project Overview
+## Read this first — the project changed direction on 2026-10-02
 
-**"As Above, So Below"** is a browser-based hex map tool for generating star systems across four Traveller RPG editions: Classic Traveller (CT), Mongoose Traveller 2nd Edition (MgT2E), Traveller 5 (T5), and Revised Traveller (RTT). It runs as a single HTML file (`hex_map.html`) with vanilla JavaScript — no build step, no framework, no bundler.
+This repository now holds two things:
 
-**To run:** Open `hex_map.html` directly in a browser. There are no build, lint, or test commands.
+1. **Traveller.voyage** — the product being built: a hosted, account-based mapping engine and
+   orbit engine for the Traveller RPG on Cloudflare (Vue 3 + Vite + TS, one Worker with Hono,
+   D1 for the catalogue, one Durable Object per universe, content-addressed objects in R2,
+   Queues for bulk generation and truth builds). The platform runs the engines; no engine code
+   reaches a browser. It lives under `apps/`, `packages/`, `tests/`, `tools/`. **All new work
+   goes here.** The storage model is git-shaped: immutable objects named by hash, pointer
+   rows, manifests for versions, snapshots and packages (`directives/architecture.md` §2).
+2. **The legacy single-file app** ("As Above, So Below", `hex_map.html` + `js/` + `style.css`) —
+   **frozen** as the reference implementation. Read it to learn behaviour and to copy engine
+   logic. Never extend it. It is deleted at milestone M2.
 
-## Critical Rules (The Sean Protocol)
+**Start every session by reading, in order:** `directives/manifesto.md` → `directives/plan.md`
+→ the directive for the slice you are on. `architecture.md`, `data_model.md`, `api.md` and
+`design_reference.md` are the specs those point to. `feature_inventory.md` says what happens to
+every legacy feature.
 
-1. **`rules/` is read-only.** Never edit `rules/ct_data.js`, `rules/mgt2e_data.js`, or `rules/t5_data.js`. These are the authoritative RPG data tables.
-2. **Zero-Assumption Policy.** Do not interpret, guess, or "fill in" Traveller RPG rules from training data. If a rule is ambiguous or missing from `rules/`, stop and ask — do not implement a best guess.
-3. **Halt & Challenge.** When encountering an ambiguity in RPG logic, draft a specific question for the user rather than guessing. Log the issue and stop.
-4. **Check `js/` before creating new files.** Prefer extending an existing module over creating a new one.
-5. **Do Not Interact with Git.**  All git adding, staging and committing will be handled manually by the user.  You will only work on the code.
+## Roles and protocol (from `directives/plan.md` §3)
 
-## Architecture
+- **Johnny** is the referee: owns `rules/`, product decisions, Halt & Challenge answers, git,
+  deploys and secrets.
+- **Orchestrator sessions** write recipes just-in-time from the specs, review reports and keep
+  the directives true.
+- **Implementer sessions** (lower-effort model) execute one recipe exactly as written and
+  report. They never change approach, never "clean up", never touch `rules/` or the legacy
+  tree, never run git.
 
-The codebase uses a strict 3-layer separation:
+A recipe is numbered steps naming the file, the function, the exact code and a one-line check.
+Done means `npm test` green, `npm run check` clean, every verification box ticked, and a report
+listing what was created, what was stubbed or skipped and every Halt & Challenge item raised.
 
-| Layer | Location | Role |
-|---|---|---|
-| Directives (Source of Truth) | `directives/` + `rules/` | SOPs in Markdown; read-only RPG data tables |
-| Orchestration | AI agent | Routing, auditing, Halt & Challenge |
-| Execution | `js/` | Deterministic JS generation engines |
+## Critical rules (The Johnny Protocol)
 
-### Script Load Order (from `hex_map.html`)
+1. **`rules/` is read-only.** Never edit any file in `rules/`. The new app consumes them through
+   a generated ESM wrapper (`scripts/gen_rules_esm.js`). These are the authoritative RPG tables.
+2. **Zero-Assumption Policy.** Do not interpret, guess, or "fill in" Traveller RPG rules from
+   training data. If a rule is ambiguous or missing from `rules/`, stop and ask.
+3. **Halt & Challenge.** On any ambiguity in RPG logic, or any step of a recipe that cannot be
+   done as written, draft a specific question for Johnny, log it, and stop. Do not improvise.
+4. **Engine parity is sacred.** Engine code is copied from `js/` into `packages/engines` and must
+   produce byte-identical output to the golden fixtures in `tests/golden/fixtures`. Any
+   difference is reported, never "fixed" toward either side.
+5. **No globals, no native dialogs, no hex colours outside `tokens.css`.** `npm run check`
+   enforces the manifesto; a session is not done while it fails.
+6. **Do not interact with Git.** Johnny stages and commits. You only work on the code.
+7. **New files over edits** in the new tree; **no edits at all** in `js/`, `hex_map.html`,
+   `style.css` or `rules/`.
 
-Scripts must be loaded in dependency order. The current order is:
-1. `js/constants.js` — large static data (zone tables, etc.)
-2. `js/core.js` — global app state, seeded RNG (`mulberry32`/`hashString`), coordinate math
-3. `js/renderer.js` — canvas drawing
-4. Per-edition engines (CT → MgT2E → T5 → RTT), each with `rules/` data loaded first
-5. `js/universal_math.js` — shared math utilities
-6. Input/UI layer: `input_init.js`, `canvas_input.js`, `keyboard_shortcuts.js`, `macro_orchestrator.js`, `hex_editor.js`, `ui_menus.js`, `filter_engine.js`, `io_manager.js`
-7. `names.js` (optional — generated by `convert_names.ps1`)
+## Commands (root `package.json`, npm workspaces)
 
-### Per-Edition Module Pattern
+| Command | Does |
+|---|---|
+| `npm test` | `node --test tests/` — legacy golden fixtures, ESM parity, shared schemas, API handlers |
+| `npm run check` | manifesto checker over `apps/*/src` and `packages/*/src` |
+| `npm run rules:gen` | regenerates `packages/engines/src/generated/rules/` from `rules/` |
+| `npm run truth:build` | builds `truth/<version>/` from `universe/raw/` with pinned seed and settings |
+| `npm run dev:web` / `npm run dev:api` | Vite dev server / `wrangler dev` |
+| `npm run build` / `npm run deploy` | builds `apps/web/dist` and deploys the Worker (deploy is Johnny's) |
 
-Each Traveller edition (CT, MgT2E, T5) follows the same module structure:
+## Layout
 
-- `*_world_engine.js` — mainworld UWP generation
-- `*_stellar_engine.js` — star system generation
-- `*_socio_engine.js` — socioeconomic expansion
-- `*_topdown_generator.js` — top-down system generation orchestrator
-- `*_bottomup_generator.js` — bottom-up system generation orchestrator
-- `*_uwp_auditor.js` — post-generation validation
-- `*_system_driver.js` / `system_driver.js` — drives full system generation sequence
+See `directives/architecture.md` §3. Short version: `packages/engines` (pure ESM engines +
+core: rng, trace, hex, names, manual, settings, audit), `packages/shared` (zod schemas and
+types for the overlay document v3, truth files, package manifest, API envelopes), `apps/web`
+(Vue), `apps/api` (Hono Worker, Drizzle schema, migrations, auth), `tools/truth`, `tests/`.
 
-### Key Global State (in `js/core.js`)
+Boundaries enforced by the checker: engines import nothing from `apps/`; `shared` imports
+only zod; `api` never imports `web`; `web` never imports `api`.
 
-- `hexStates` (Map) — all hex data, keyed by hexId
-- `masterSeed` + `rng` (mulberry32) — deterministic seeded generation; re-seeded per hex via `reseedForHex(hexId)`
-- `selectedHexes` (Set) — currently selected hexes
-- `window.sectorRoutes` — trade/xboat route array
-- `window.activeFilterRules` — filter/color rules
+## Determinism and trace logging
 
-### Trace Logging
+Generation is seeded: `masterSeed` + `reseedForHex(hexId)` via `mulberry32(hashString(...))`
+in `packages/engines/src/core/rng.js`. Twelve `generation*` settings keys affect output and are
+pinned for the truth in `tools/truth/settings.js`. Every generation step logs through
+`tSection` / `tResult` / `writeLogLine` in `core/trace.js`; the sink is an array, the UI
+decides what to do with it.
 
-Every significant generation step must use the trace logging framework:
-- `tSection("description")` — open a log section
-- `tResult("label", value)` — log a result
-- `writeLogLine(text)` — raw log line
+## Legacy notes (for reading `js/`, not for extending it)
 
-Generation logs are gated on `window.isLoggingEnabled` and downloaded as `.txt` files via `io_manager.js`.
+Script load order is in `hex_map.html` lines 16-121. Per-edition files follow
+`*_stellar_engine`, `*_world_engine`, `*_socio_engine`, `*_topdown_generator`,
+`*_bottomup_generator`, `*_uwp_auditor`, plus `system_driver.js`. Global state lived in
+`js/core.js` (`hexStates`, `masterSeed`, `rng`, `selectedHexes`, `window.sectorRoutes`,
+`window.activeFilterRules`). The headless harness `tests/harness/legacy.js` loads this layer
+into a Node `vm` context; use it instead of a browser when you need legacy behaviour.
 
-## Version Update Procedure
-
-When bumping the version, update these locations (see `directives/update_version.md`):
-1. `js/core.js` — `APP_VERSION` and `APP_BANNER` constants
-2. `README.md` — version header
-3. `changelog.md` — add entry at top with date and description
-4. `hex_map.html` — update entries on splash screen and shortcut help screen
+The legacy version procedure (`directives/update_version.md`) no longer applies; the new app's
+version is `packages/engines/package.json` and `apps/web/src/version.ts`.

@@ -595,6 +595,7 @@ const ObsidianExporter = (() => {
 
             report(si, systems.length, `Processing ${systemName}…`);
 
+            if (window.UniverseSnapshot && window.UniverseSnapshot.ensureSystemBuilt) window.UniverseSnapshot.ensureSystemBuilt(hexId);
             const normalized = (typeof SystemViewer !== 'undefined')
                 ? SystemViewer.normalizeSystem(state)
                 : null;

@@ -1094,6 +1094,7 @@ const SystemViewer = (() => {
     }
 
     function open(explicitHexId, inspectorTab = window.SystemInspector?.currentWorkspace() || 'system') {
+        if (window.UniverseSnapshot && window.UniverseSnapshot.ensureSystemBuilt) window.UniverseSnapshot.ensureSystemBuilt(explicitHexId);
         const hexId = explicitHexId || _centerHexId();
         if (!hexId) return;
         const state = hexStates.get(hexId);

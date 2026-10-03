@@ -393,12 +393,12 @@ window.renderAllegianceWindow = function () {
         delBtn.addEventListener('click', () => {
             const codeStr = def.codes.length > 0 ? ` (${def.codes.join(', ')})` : '';
             const hexMsg  = count > 0 ? `\nThis will also clear its ${count} hex assignment(s).` : '';
-            if (!confirm(`Delete allegiance "${def.name}"${codeStr}?${hexMsg}\n\nThis can be undone with Ctrl+Z.`)) return;
+            if (!confirm(`Delete allegiance "${def.name}"${codeStr}?${hexMsg}\n\nA timed autosave is the way back.`)) return;
             const touched = [];
             hexStates.forEach((state, hexId) => {
                 if (def.codes.includes(state.allegiance)) touched.push(hexId);
             });
-            saveHistoryState(`Delete ${def.name}`, { hexIds: touched, allegiances: true });
+            markChanged(`Delete ${def.name}`, { hexIds: touched, allegiances: true });
             if (window.hexAllegianceAssignments) {
                 window.hexAllegianceAssignments.forEach((c, hexId) => {
                     if (def.codes.includes(c)) window.hexAllegianceAssignments.delete(hexId);
@@ -521,7 +521,7 @@ window.openAssignAllegianceModal = function () {
                        + `<span class="border-assign-name">Clear</span>`;
     clearBtn.addEventListener('click', () => {
         const hexList = [...selectedHexes];
-        saveHistoryState('Clear Allegiance', { hexIds: hexList, allegiances: true });
+        markChanged('Clear Allegiance', { hexIds: hexList, allegiances: true });
         hexList.forEach(hexId => {
             if (window.hexAllegianceAssignments) window.hexAllegianceAssignments.delete(hexId);
             const s = hexStates.get(hexId);
@@ -622,7 +622,7 @@ function _showAllegianceCodeStep(def) {
 // Write the assignment for all selected hexes and close the modal.
 function _writeAllegianceAssignment(def, code) {
     const hexList = [...selectedHexes];
-    saveHistoryState('Assign Allegiance', { hexIds: hexList, allegiances: true });
+    markChanged('Assign Allegiance', { hexIds: hexList, allegiances: true });
 
     if (!window.hexAllegianceAssignments) window.hexAllegianceAssignments = new Map();
     hexList.forEach(hexId => {

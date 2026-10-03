@@ -58,6 +58,73 @@ function partitionMapSave(state, limit = SAVE_CHUNK_SIZE) {
     return parts;
 }
 
+function partitionOverlaySave(doc, limit = SAVE_CHUNK_SIZE) {
+    const encoder = new TextEncoder();
+    const size = value => encoder.encode(JSON.stringify(value)).length;
+    if (size(doc) <= limit) return [doc];
+    const hexes = doc.hexes || {};
+    const rest = Object.assign({}, doc);
+    delete rest.hexes;
+    const head = Object.assign({}, rest, {
+        hexes: {},
+        saveType: 'chunked-overlay',
+        part: 1,
+        totalParts: 1
+    });
+    if (size(head) > limit) throw new Error('Shared map metadata and images cannot fit in Part 1. Reduce image attachments or map metadata.');
+    const parts = [head];
+    let part = {
+        format: doc.format,
+        schemaVersion: doc.schemaVersion,
+        saveId: doc.saveId,
+        saveType: 'chunked-overlay',
+        base: doc.base || null,
+        hexes: {}
+    };
+    let bytes = size(part);
+    Object.keys(hexes).forEach(id => {
+        const entrySize = size({ [id]: hexes[id] });
+        if (Object.keys(part.hexes).length && bytes + entrySize > limit) {
+            parts.push(part);
+            part = {
+                format: doc.format,
+                schemaVersion: doc.schemaVersion,
+                saveId: doc.saveId,
+                saveType: 'chunked-overlay',
+                base: doc.base || null,
+                hexes: {}
+            };
+            bytes = size(part);
+        }
+        part.hexes[id] = hexes[id];
+        bytes += entrySize;
+    });
+    if (Object.keys(part.hexes).length) parts.push(part);
+    parts.forEach((item, index) => {
+        item.part = index + 1;
+        item.totalParts = parts.length;
+    });
+    return parts;
+}
+
+function combineOverlayParts(parts) {
+    const ordered = [...parts].sort((a, b) => a.part - b.part);
+    const first = ordered[0];
+    if (!first || first.saveType !== 'chunked-overlay' || first.totalParts !== ordered.length) {
+        throw new Error('Select all parts of one map backup.');
+    }
+    const hexes = {};
+    ordered.forEach((part, index) => {
+        if (part.part !== index + 1 || part.saveId !== first.saveId) throw new Error('These files are incomplete or belong to different map backups.');
+        Object.assign(hexes, part.hexes || {});
+    });
+    const doc = Object.assign({}, first, { hexes });
+    delete doc.part;
+    delete doc.totalParts;
+    delete doc.saveType;
+    return doc;
+}
+
 function combineMapParts(parts) {
     const ordered = [...parts].sort((a, b) => a.part - b.part), first = ordered[0];
     if (!first || first.saveType !== 'chunked' || first.totalParts !== ordered.length) throw new Error('Select all parts of one map backup.');
@@ -131,6 +198,52 @@ function triggerDownload(content, filename) {
     return downloadBlob(content, filename, 'application/json');
 }
 
+function collectMapSettings() {
+    return {
+        borderFillEnabled:           window.borderFillEnabled           ?? true,
+        borderNamesEnabled:          window.borderNamesEnabled          ?? false,
+        regionNamesEnabled:          window.regionNamesEnabled          ?? false,
+        rttShowIndustry:             window.rttShowIndustry             ?? false,
+        borderMinSystems:            window.borderMinSystems            ?? 20,
+        planetContinentalDefinition: window.planetContinentalDefinition ?? 0.55,
+        planetCoastlineComplexity:   window.planetCoastlineComplexity   ?? 0.45,
+        generationPopMax:            window.generationPopMax            ?? 20,
+        generationPopMod:            window.generationPopMod            ?? 0,
+        generationTlMax:             window.generationTlMax             ?? 20,
+        generationTlMod:             window.generationTlMod             ?? 0,
+        generationUseRealisticStellar: window.generationUseRealisticStellar ?? false,
+        generationUseTlFloor:        window.generationUseTlFloor        ?? false,
+        generationRttSettlement:     window.generationRttSettlement      ?? 2,
+        generationRttTL:             window.generationRttTL             ?? 15,
+        generationStarportMax:       window.generationStarportMax       || 'A',
+        generationStarportMod:       window.generationStarportMod       ?? 0,
+        playerKnowledgeExperimental: window.playerKnowledgeExperimental === true
+    };
+}
+window.collectMapSettings = collectMapSettings;
+
+async function applyOverlayFile(source, opts = {}) {
+    const doc = window.Overlay.normalize(source);
+    const merged = await window.Overlay.mergedHexes(doc);
+    const file = window.Overlay.asFile(doc);
+    const hexes = {};
+    merged.merged.forEach((state, id) => { hexes[id] = state; });
+    file.hexStates = hexes;
+    if (doc.grid && doc.grid.width) file.gridWidth = doc.grid.width;
+    if (doc.grid && doc.grid.height) file.gridHeight = doc.grid.height;
+    if (file.campaignAtlas == null) delete file.campaignAtlas;
+    const prepared = opts.prepared || await CampaignAtlas.prepareImport(file);
+    if (!CampaignAtlas.confirmLeave()) return false;
+    if (typeof SystemViewer !== 'undefined' && SystemViewer.isOpen()) SystemViewer.close();
+    _applyLoadedMapData(file);
+    window.Overlay.rememberOverlay(doc, doc.base ? merged.overlayIds : new Set(hexStates.keys()));
+    if (!doc.base) window.overlayBase = null;
+    if (window.dbManager) await window.dbManager.replaceWorkingCopy();
+    await CampaignAtlas.commit(prepared.store, prepared.payloads, 'Load Map JSON', null, { includeRouteDefinitions: true, replaceCampaign: true, skipAutoslot: true });
+    return true;
+}
+window.applyOverlayFile = applyOverlayFile;
+
 function setupSaveLoad() {
     // -----------------------------------------------------------------------
     // SAVE
@@ -143,28 +256,52 @@ function setupSaveLoad() {
             activeRules:  window.activeFilterRules || []
         };
 
-        const settings = {
-            borderFillEnabled:           window.borderFillEnabled           ?? true,
-            borderNamesEnabled:          window.borderNamesEnabled          ?? false,
-            regionNamesEnabled:          window.regionNamesEnabled          ?? false,
-            rttShowIndustry:             window.rttShowIndustry             ?? false,
-            borderMinSystems:            window.borderMinSystems            ?? 20,
-            planetContinentalDefinition: window.planetContinentalDefinition ?? 0.55,
-            planetCoastlineComplexity:   window.planetCoastlineComplexity   ?? 0.45,
-            generationPopMax:            window.generationPopMax            ?? 20,
-            generationPopMod:            window.generationPopMod            ?? 0,
-            generationTlMax:             window.generationTlMax             ?? 20,
-            generationTlMod:             window.generationTlMod             ?? 0,
-            generationUseRealisticStellar: window.generationUseRealisticStellar ?? false,
-            generationUseTlFloor:        window.generationUseTlFloor        ?? false,
-            generationRttSettlement:     window.generationRttSettlement      ?? 2,
-            generationRttTL:             window.generationRttTL             ?? 15,
-            generationStarportMax:       window.generationStarportMax       || 'A',
-            generationStarportMod:       window.generationStarportMod       ?? 0,
-            playerKnowledgeExperimental: window.playerKnowledgeExperimental === true,
-        };
+        const settings = collectMapSettings();
         const campaignTime = (window.campaignTime && Number.isFinite(window.campaignTime.days))
             ? { days: window.campaignTime.days } : null;
+
+        if (window.Overlay && window.overlayBase) {
+            if (typeof showToast === 'function') showToast('Preparing save file…', 8000);
+            await new Promise(r => setTimeout(r, 100));
+            try {
+                const doc = window.Overlay.capture();
+                const exported = await CampaignAtlas.exportMap();
+                doc.campaignAtlas = exported.campaignAtlas;
+                doc.campaignAssets = exported.campaignAssets;
+                doc.aesthetics = aesthetics;
+                doc.rules = window.activeFilterRules || [];
+                const jsonStr = JSON.stringify(doc);
+                const parts = partitionOverlaySave(doc);
+                if (parts.length > 1) {
+                    parts.forEach((part, index) => {
+                        const name = 'traveller_map_part' + (index + 1) + 'of' + parts.length + '.json';
+                        if (!triggerDownload(JSON.stringify(part), name)) throw new Error('The map download could not be started.');
+                    });
+                    if (typeof showToast === 'function') showToast('Referee map backup sent as ' + parts.length + ' parts. Every part carries the chart.', 7000);
+                    return;
+                }
+                if (jsonStr.length <= SAVE_CHUNK_THRESHOLD) {
+                    if (window.showSaveFilePicker) {
+                        const handle = await window.showSaveFilePicker({
+                            suggestedName: 'traveller_map.json',
+                            types: [{ description: 'JSON Files', accept: { 'application/json': ['.json'] } }],
+                        });
+                        const writable = await handle.createWritable();
+                        await writable.write(jsonStr);
+                        await writable.close();
+                    } else if (!triggerDownload(jsonStr, 'traveller_map.json')) {
+                        throw new Error('The map download could not be started.');
+                    }
+                    if (typeof showToast === 'function') showToast('Referee map backup sent to your browser. Keep this original when using older app versions.', 7000);
+                    return;
+                }
+            } catch (err) {
+                if (err.name === 'AbortError') return;
+                console.error('Save failed:', err);
+                alert('Failed to save file. Check console for details.');
+                return;
+            }
+        }
 
         // Build hexStates as a plain object (current format, backward compatible)
         // stripHexViewState (core.js): a saved map must carry map data only. The
@@ -292,7 +429,7 @@ function setupSaveLoad() {
                 const text = await readFileAsText(files[0]);
                 const data = JSON.parse(text);
 
-                if (data.saveType === 'chunked' && data.totalParts > 1) {
+                if ((data.saveType === 'chunked' || data.saveType === 'chunked-overlay') && data.totalParts > 1) {
                     alert(
                         `This is Part ${data.part} of ${data.totalParts} of a chunked save.\n\n` +
                         `Please select all ${data.totalParts} parts at once to load your map.`
@@ -308,7 +445,7 @@ function setupSaveLoad() {
                 for (const file of files) {
                     const text = await readFileAsText(file);
                     const data = JSON.parse(text);
-                    if (!data.saveType || data.saveType !== 'chunked') {
+                    if (!data.saveType || (data.saveType !== 'chunked' && data.saveType !== 'chunked-overlay')) {
                         alert('One or more selected files is not a chunked save part. Please select only the parts of a single chunked save.');
                         return;
                     }
@@ -345,7 +482,7 @@ function setupSaveLoad() {
                 }
 
                 // Build a unified data object using metadata from Part 1
-                const merged = combineMapParts(parts);
+                const merged = parts[0].saveType === 'chunked-overlay' ? combineOverlayParts(parts) : combineMapParts(parts);
 
                 await applyLoadedMapData(merged);
                 if (typeof showToast === 'function') {
@@ -428,7 +565,7 @@ async function loadSampleCampaign() {
         `Add ${adding} sample Traveller campaign records, each with an image?\n\n` +
         'Twelve each of people, places, businesses, organizations, jobs, events, items, and notes.\n\n' +
         `${where}\n\n` +
-        'They are saved in this browser. Ctrl+Z removes the load.'
+        'They are saved in this browser. A timed autosave is the way back.'
     );
     if (!confirmed) return;
 
@@ -459,15 +596,20 @@ async function loadSampleCampaign() {
 
 async function clearCanvas() {
     if (CampaignAtlas.isBusy()) { showToast('Please wait for the campaign operation to finish.', 3000); return; }
+    const slot = window.Saves ? window.Saves.nextSlotLabel() : 'the next autosave';
     const confirmed = confirm(
-        'Clear Canvas will erase all hex data, routes, borders, campaign records, images, drafts, and auto-saved progress.\n\n' +
+        'Clear Canvas will erase all hex data, routes, borders, campaign records, images, and drafts.\n\n' +
         'The canvas will reset to the default 7×5 grid.\n\n' +
-        'This cannot be undone. Continue?'
+        'The current map will be kept in ' + slot + '. Continue?'
     );
     if (!confirmed) return;
+    let clearSlot = null;
+    try { if (window.Saves) clearSlot = await window.Saves.beforeBulk('Clear Canvas'); }
+    catch (err) { return; }
     let writesHeld = false;
     try {
         if (window.dbManager) {
+            window.dbManager.allowAutosave();
             window.dbManager.holdWrites();
             writesHeld = true;
             await window.dbManager.whenWritesSettle();
@@ -477,6 +619,7 @@ async function clearCanvas() {
     catch (err) {
         if (writesHeld) window.dbManager.releaseWrites();
         alert(`Canvas was not cleared: ${err.message}`);
+        if (clearSlot && window.Saves) window.Saves.endBulk();
         return;
     }
     CampaignAtlas.discard();
@@ -506,8 +649,9 @@ async function clearCanvas() {
     window.subsectorNames     = {};
     window.sectorRoutes      = [];
     window.routeDefinitions  = (typeof getDefaultRouteDefinitions === 'function') ? getDefaultRouteDefinitions() : [];
-    window.undoStack         = [];
-    window.redoStack         = [];
+    window.overlayHexes = new Set();
+    window.overlayBase = null;
+    if (typeof window.syncChartBuildButton === 'function') window.syncChartBuildButton();
     selectedHexes.clear();
 
     // Reset all border/region state to defaults
@@ -532,6 +676,7 @@ async function clearCanvas() {
     }
     if (typeof draw === 'function') requestAnimationFrame(draw);
     if (typeof showToast === 'function') showToast('Canvas cleared. Ready for a new map.', 3000);
+    if (clearSlot && window.Saves) window.Saves.endBulk();
 }
 
 /**
@@ -740,27 +885,10 @@ function applyLoadedSettings(settings) {
 }
 
 async function applyLoadedMapData(parsedData) {
-    if (!parsedData || typeof parsedData !== 'object' || Array.isArray(parsedData)) throw new Error('Invalid map backup.');
-    const mapHexes = parsedData.hexStates || parsedData;
-    if (!mapHexes || typeof mapHexes !== 'object' || Array.isArray(mapHexes) ||
-        Object.entries(mapHexes).some(([id, state]) => !/^[A-Za-z0-9]+-[A-P]-\d{4}$/.test(id) || !state || typeof state !== 'object')) {
-        throw new Error('Invalid hex data in map backup.');
-    }
-    // Validate all image payloads and future schemas before touching the map.
-    const prepared = await CampaignAtlas.prepareImport(parsedData);
-    if (!CampaignAtlas.confirmLeave()) return false;
-    await CampaignAtlas.commit(prepared.store, prepared.payloads, 'Load Map JSON', () => {
-        if (SystemViewer.isOpen()) SystemViewer.close();
-        _applyLoadedMapData(parsedData);
-    }, { includeRouteDefinitions: true, replaceCampaign: true });
-    return true;
+    return applyOverlayFile(parsedData);
 }
 
 function _applyLoadedMapData(parsedData) {
-    // includeRouteDefinitions, because loading a map replaces window.routeDefinitions
-    // wholesale from the file below. Without it Ctrl+Z restored the previous hexes
-    // and segments but left the loaded file's route slots in place, so the segments
-    // came back belonging to slots that were no longer theirs.
     hexStates.clear();
 
     if (parsedData.hexStates) {
@@ -818,6 +946,8 @@ function _applyLoadedMapData(parsedData) {
         window.sectorReview   = (parsedData.sectorReview && typeof parsedData.sectorReview === 'object' && !Array.isArray(parsedData.sectorReview))
             ? parsedData.sectorReview : {};
         window.subsectorNames = parsedData.subsectorNames || {};
+        if (typeof parsedData.autoRouteCounter === 'number') window.autoRouteCounter = parsedData.autoRouteCounter;
+        if (parsedData.campaignId) window.overlayCampaignId = parsedData.campaignId;
         window.allegianceDefinitions = Array.isArray(parsedData.allegianceDefinitions)
             ? parsedData.allegianceDefinitions.map(def => ({ ...def }))
             : (typeof getDefaultAllegianceDefinitions === 'function' ? getDefaultAllegianceDefinitions() : []);
@@ -941,22 +1071,7 @@ function _applyLoadedMapData(parsedData) {
     if (typeof showToast === 'function') showToast("Map loaded successfully!", 2000);
 
     // Sync the freshly loaded state to IndexedDB, replacing whatever was there.
-    if (window.dbManager) {
-        window.dbManager.allowAutosave();
-        window.dbManager.syncAllHexes();
-        window.dbManager.saveRoutes();
-        window.dbManager.saveGridDimensions();
-        window.dbManager.saveBorderDefinitions?.();
-        window.dbManager.saveBorderAssignments?.();
-        window.dbManager.saveBorderPaths?.();
-        window.dbManager.saveRegionDefinitions?.();
-        window.dbManager.saveRegionPaths?.();
-        window.dbManager.saveSectorNames?.();
-        window.dbManager.saveSectorReview?.();
-        window.dbManager.saveSubsectorNames?.();
-        window.dbManager.saveAllegianceDefinitions?.();
-        window.dbManager.saveAllegianceAssignments?.();
-    }
+    if (window.dbManager) window.dbManager.allowAutosave();
 }
 
 // ============================================================================
@@ -1796,7 +1911,7 @@ function setupSectorImporter() {
                     ? sectorSlotToNumber(nameMatch[1])
                     : Math.ceil(gridWidth * gridHeight / 2);
                 openSectorSlotPicker(file.name, suggested, (slotNum) => {
-                    importT5Tab(content, file.name, String(slotNum));
+                    void importT5Tab(content, file.name, String(slotNum));
                 });
             };
             reader.readAsText(file);
@@ -1804,10 +1919,23 @@ function setupSectorImporter() {
     }
 }
 
-function importT5Tab(fileContent, fileName, forcedSectorSlot = null, bulkMode = false) {
-    if (!bulkMode) console.info('[History] Sector import is not undoable on a campaign of this size. Save a map file first.');
+function parseT5Tab(fileContent, forcedSectorSlot) {
+    const sink = new Map();
+    const previous = window.__t5ParseSink;
+    window.__t5ParseSink = sink;
+    try {
+        importT5Tab(fileContent, '', forcedSectorSlot, true);
+    } finally {
+        window.__t5ParseSink = previous || null;
+    }
+    return sink;
+}
+window.parseT5Tab = parseT5Tab;
+
+async function importT5Tab(fileContent, fileName, forcedSectorSlot = null, bulkMode = false) {
+    const written = [];
     const lines = fileContent.split(/\r?\n/);
-    if (lines.length < 2) return;
+    if (lines.length < 2) return written;
 
     const header = lines[0].split('\t');
     const getIndex = (label) => header.indexOf(label);
@@ -1833,8 +1961,11 @@ function importT5Tab(fileContent, fileName, forcedSectorSlot = null, bulkMode = 
 
     if (idxHex === -1 || idxUWP === -1) {
         alert("Invalid file format. 'Hex' and 'UWP' columns (tab-separated) are required.");
-        return;
+        return written;
     }
+    let importSlot = null;
+    if (!bulkMode && window.Saves) importSlot = await window.Saves.beforeBulk('Import ' + (fileName || 'sector'));
+    try {
 
     let importCount = 0;
     let fallbackSectorSlot = "18";
@@ -1848,7 +1979,7 @@ function importT5Tab(fileContent, fileName, forcedSectorSlot = null, bulkMode = 
 
     // Populate sector name if not already set.
     // Priority: (1) Sector column in TSV, (2) fileName stripped of extension.
-    if (!window.sectorNames[sectorNum]) {
+    if (!window.__t5ParseSink && !window.sectorNames[sectorNum]) {
         let derivedName = '';
         if (idxSector !== -1) {
             for (let i = 1; i < lines.length; i++) {
@@ -2040,11 +2171,17 @@ function importT5Tab(fileContent, fileName, forcedSectorSlot = null, bulkMode = 
             gasGiantCount: gG,
             t5Data,
             t5Socio,
-            t5System
+            t5System,
+            uwp,
+            tradeCodes: t5Data.tradeCodes,
+            travelZone,
+            bases: baseCodes
         };
 
-        hexStates.set(hexId, stateObj);
+        if (window.__t5ParseSink) window.__t5ParseSink.set(hexId, stateObj);
+        else hexStates.set(hexId, stateObj);
         importedHexes.add(hexNum);
+        written.push(hexId);
         importCount++;
     }
 
@@ -2059,14 +2196,17 @@ function importT5Tab(fileContent, fileName, forcedSectorSlot = null, bulkMode = 
             const subChar = String.fromCharCode(65 + (subY * 4 + subX));
             const hexId = `${sectorNum}-${subChar}-${hexNum}`;
 
-            hexStates.set(hexId, { type: 'EMPTY' });
+            const emptyState = { type: 'EMPTY' };
+            if (window.__t5ParseSink) window.__t5ParseSink.set(hexId, emptyState);
+            else hexStates.set(hexId, emptyState);
+            written.push(hexId);
             emptyCount++;
         }
     }
 
-    selectedHexes.clear();
+    if (!window.__t5ParseSink) selectedHexes.clear();
 
-    if (!bulkMode) {
+    if (!bulkMode && !window.__t5ParseSink) {
         showToast(`Successfully imported ${importCount} worlds into Sector ${sectorNum} (${fallbackSectorSlot})`);
         if (emptyCount > 0) showToast(`Initialized ${emptyCount} empty space hexes in sector bounds.`, 2000);
 
@@ -2075,7 +2215,12 @@ function importT5Tab(fileContent, fileName, forcedSectorSlot = null, bulkMode = 
 
         if (typeof draw === 'function') requestAnimationFrame(draw);
 
-        if (window.dbManager) window.dbManager.saveHexesBySectorNum(sectorNum);
+        if (typeof markChanged === 'function') markChanged('Import T5 tab', { hexIds: written, skipAutoslot: true });
+        if (window.dbManager) await window.dbManager.saveHexesBySectorNum(sectorNum);
+    }
+    return written;
+    } finally {
+        if (importSlot && window.Saves && window.Saves.endBulk) window.Saves.endBulk();
     }
 }
 
@@ -2217,11 +2362,7 @@ function _applyXmlRoutesForGroup(segments, slotNum, sectorX, sectorY, targetRout
 // ── Auto route assigner ───────────────────────────────────────────────────────
 
 function _autoAssignXmlRoutes(groups, slotNum) {
-    // includeRouteDefinitions, because this function edits the definitions and
-    // not just the segments: ensureFreeRouteSlot() creates slots, and each group
-    // recolours and may rename the slot it lands in. Without it Ctrl+Z took the
-    // segments back but left the created, recoloured and renamed slots behind.
-    saveHistoryState('Import XML Metadata', { routes: true, includeRouteDefinitions: true });
+    markChanged('Import XML Metadata', { routes: true, includeRouteDefinitions: true });
     const coordLookup = _buildSectorCoordLookup();
     const sectorX     = (slotNum - 1) % gridWidth;
     const sectorY     = Math.floor((slotNum - 1) / gridWidth);
@@ -2296,7 +2437,10 @@ function setupXmlMetadataImporter() {
         const suggested = Math.ceil(gridWidth * gridHeight / 2);
         openSectorSlotPicker(file.name, suggested, (slotNum) => {
 
-        readFileAsText(file).then(xmlText => {
+        readFileAsText(file).then(async xmlText => {
+            let xmlSlot = null;
+            if (window.Saves) xmlSlot = await window.Saves.beforeBulk('XML metadata import');
+            try {
             let parsedDoc;
             // Strip <DataFile .../> before parsing — its Author attribute sometimes
             // contains unescaped double quotes (e.g. Jason "Flynn" Kemp) which
@@ -2348,6 +2492,9 @@ function setupXmlMetadataImporter() {
 
             const groups = parseXmlRouteGroups(parsedDoc);
             if (groups) _autoAssignXmlRoutes(groups, slotNum);
+            } finally {
+                if (xmlSlot && window.Saves && window.Saves.endBulk) window.Saves.endBulk();
+            }
         }).catch(err => {
             showToast('Error reading XML file.', 3000);
             console.error('[XML Import]', err);
@@ -2379,7 +2526,7 @@ function setupTWImport() {
 
     function doImport() {
         try {
-            saveHistoryState('Import TW System', { hexIds: [_hexId] });
+            markChanged('Import TW System', { hexIds: [_hexId] });
             TravellerWorldsImporter.importSystem(_jsonObj, _hexId, 'T5');
             document.getElementById('tw-import-modal').style.display = 'none';
             if (typeof window.reapplyAllRules === 'function') window.reapplyAllRules();
@@ -2540,6 +2687,7 @@ async function importSystemJson(jsonObj, targetHexId, campaignChoice = null) {
 
     await CampaignAtlas.commit(prepared.store, prepared.payloads, 'Import ASAB System', () => {
         hexStates.set(targetHexId, newState);
+        if (typeof markChanged === 'function') markChanged('Import ASAB System', { hexIds: [targetHexId] });
     });
 
     if (typeof reapplyAllRules === 'function')   reapplyAllRules();

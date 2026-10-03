@@ -2418,7 +2418,7 @@ const SystemEditor = (() => {
     // the two callers had in common (OW-5) — the two remaining differences are deliberately left
     // to the caller rather than folded in here: (1) the pre-generation snapshot side effect
     // (_preview takes a _previewOriginalState snapshot; _fillAndSave calls the global
-    // saveHistoryState() undo instead) and (2) what happens to the editor/viewer after a
+    // markChanged() undo instead) and (2) what happens to the editor/viewer after a
     // successful commit (_preview refreshes in place and keeps editing; _fillAndSave closes the
     // editor). Folding either of those in here would risk a duplicate undo snapshot on every
     // Preview click, or a missing one on Fill & Save.
@@ -2592,7 +2592,7 @@ const SystemEditor = (() => {
         const hexId = _workingCopy.hexId;
 
         // Save global undo snapshot before mutating
-        if (typeof saveHistoryState === 'function') saveHistoryState('Fill & Save System', { hexIds: [hexId] });
+        if (typeof markChanged === 'function') markChanged('Fill & Save System', { hexIds: [hexId] });
 
         const result = _generateAndCommit('Fill & Save');
         if (!result) return;
@@ -2676,6 +2676,7 @@ const SystemEditor = (() => {
     }
 
     function openEdit(hexId) {
+        if (window.UniverseSnapshot && window.UniverseSnapshot.ensureSystemBuilt) window.UniverseSnapshot.ensureSystemBuilt(hexId);
         if (_workingCopy) return;
         const stateObj = (typeof hexStates !== 'undefined') ? hexStates.get(hexId) : null;
         if (!stateObj) return;

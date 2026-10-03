@@ -143,7 +143,7 @@ function _clearRegion(def) {
     if (count === 0) { showToast(`"${def.name}" has no hexes to clear.`, 2000); return; }
     if (!confirm(`Clear all ${count} hex assignment(s) for "${def.name}"?`)) return;
     const touched = _regionHexIds(def.name);
-    saveHistoryState(`Clear ${def.name}`, { hexIds: touched, regions: true });
+    markChanged(`Clear ${def.name}`, { hexIds: touched, regions: true });
     hexStates.forEach(state => {
         if (state.cluster === def.name) state.cluster = '----';
     });
@@ -162,9 +162,9 @@ function _clearRegion(def) {
 function _deleteRegion(def) {
     const count = _regionHexIds(def.name).length;
     const hexMsg = count > 0 ? `\nThis will also clear its ${count} hex assignment(s).` : '';
-    if (!confirm(`Delete region "${def.name}"?${hexMsg}\n\nThis can be undone with Ctrl+Z.`)) return;
+    if (!confirm(`Delete region "${def.name}"?${hexMsg}\n\nA timed autosave is the way back.`)) return;
     const touched = _regionHexIds(def.name);
-    saveHistoryState(`Delete ${def.name}`, { hexIds: touched, regions: true });
+    markChanged(`Delete ${def.name}`, { hexIds: touched, regions: true });
     hexStates.forEach(state => {
         if (state.cluster === def.name) state.cluster = '----';
     });
@@ -242,7 +242,7 @@ function _openRegionMenu(def, anchor, hexCount) {
 
 window.addRegionSlot = function (name) {
     if (!window.regionDefinitions) window.regionDefinitions = getDefaultRegionDefinitions();
-    saveHistoryState('Add region', { regions: true });
+    markChanged('Add region', { regions: true });
     const nextId = window.regionDefinitions.length
         ? Math.max(...window.regionDefinitions.map(d => d.id)) + 1 : 1;
     const def = {
@@ -418,7 +418,7 @@ window.openAssignRegionModal = function () {
                        + `<span class="border-assign-name">Clear Region</span>`;
     clearBtn.addEventListener('click', () => {
         const hexList = currentActionHexes();
-        saveHistoryState('Clear Region', { hexIds: hexList });
+        markChanged('Clear Region', { hexIds: hexList });
         hexList.forEach(hexId => {
             const s = hexStates.get(hexId);
             if (!s) return;
@@ -451,7 +451,7 @@ window.confirmAssignRegion = function (regionId, hexList = currentActionHexes())
     const def = (window.regionDefinitions || []).find(d => d.id === regionId);
     if (!def) return;
     if (!hexList.length) { showToast('No hexes selected.', 2000); return; }
-    saveHistoryState('Assign Region', { hexIds: hexList, regions: true });
+    markChanged('Assign Region', { hexIds: hexList, regions: true });
 
     hexList.forEach(hexId => {
         let s = hexStates.get(hexId);

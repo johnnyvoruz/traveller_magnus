@@ -92,17 +92,18 @@ window.CampaignAtlas = (() => {
             : r.anchor.locationLabel.trim().toLocaleLowerCase() === label);
     }
     function snapshot() { return clone(window.campaignAtlas); }
-    function reachable() {
+    async function reachable() {
         const ids = CampaignAssets.referenced(window.campaignAtlas);
-        for (const snap of [...(window.undoStack || []), ...(window.redoStack || [])]) {
-            if (snap.campaignAtlas) for (const id of CampaignAssets.referenced(snap.campaignAtlas)) ids.add(id);
+        if (window.Saves) {
+            const saved = await window.Saves.assetIds();
+            saved.forEach(id => ids.add(id));
         }
         for (const id of staged.keys()) ids.add(id);
         return ids;
     }
     async function collect() {
         if (busy || loading) return;
-        const keep = reachable();
+        const keep = await reachable();
         await window.dbManager.collectCampaignAssets(keep);
         CampaignAssets.prune(keep);
     }
@@ -119,7 +120,7 @@ window.CampaignAtlas = (() => {
         busy = true;
         try {
             await window.dbManager.commitCampaignAtlas(normalized, payloads, !!historyOptions.replaceCampaign);
-            saveHistoryState(action, Object.assign({ campaignAtlas: true }, historyOptions));
+            markChanged(action, Object.assign({ campaignAtlas: true }, historyOptions));
             CampaignAssets.remember(payloads);
             window.campaignAtlas = normalized;
             if (apply) apply();
@@ -135,18 +136,6 @@ window.CampaignAtlas = (() => {
         Object.assign(next.assets, metadata);
         await commit(next, payloads, 'Add Campaign Record');
         return id;
-    }
-    async function restoreHistory(atlas, apply) {
-        if (busy || loading) return fail('A campaign operation is still in progress.');
-        const normalized = normalizeStore(atlas);
-        busy = true;
-        try {
-            await window.dbManager.commitCampaignAtlas(normalized);
-            window.campaignAtlas = normalized;
-            apply();
-        } finally { busy = false; }
-        window.SystemInspector?.refresh(true);
-        void collect().catch(err => console.warn('[Campaign asset cleanup]', err));
     }
     async function updateRecord(id, raw, payloads = new Map(), metadata = {}) {
         if (!own(window.campaignAtlas.records, id)) return fail('This record no longer exists.');
@@ -175,11 +164,11 @@ window.CampaignAtlas = (() => {
         const store = normalizeStore(window.campaignAtlas);
         return { campaignAtlas: store, campaignAssets: await CampaignAssets.serialize(store) };
     }
-    // IDs from history count as occupied too: old bytes must remain immutable for undo.
+    // Slot asset ids stay occupied so a restore still finds its portraits.
     async function prepareImport(envelope, targetHexId = null) {
         const store = normalizeStore(envelope.campaignAtlas);
         const payloads = await CampaignAssets.deserialize(store, envelope.campaignAssets);
-        const used = reachable(), assetMap = new Map();
+        const used = await reachable(), assetMap = new Map();
         for (const id of Object.keys(store.assets)) if (used.has(id)) assetMap.set(id, CampaignAssets.id());
         for (const [oldId, newId] of assetMap) {
             store.assets[newId] = { ...store.assets[oldId], id: newId }; delete store.assets[oldId];
@@ -1097,7 +1086,7 @@ window.CampaignAtlas = (() => {
         showAll: () => { systemFilter = ''; selectedId = null; query = ''; filter = ''; origin = null; },
         draftHexId: () => draft?.anchor.hexId,
         addRecord, updateRecord, deleteRecord, recordsForHex, recordsForBody, createAt, SINGULAR, exportForHex, exportMap, importForHex, prepareImport,
-        emptyStore, normalizeStore, snapshot, commit, restoreHistory, persist, collect, reachable, render, releaseView, hasDraft,
+        emptyStore, normalizeStore, snapshot, commit, persist, collect, reachable, render, releaseView, hasDraft,
         confirmLeave, discard, isBusy: () => busy || loading, TYPES,
         pickBody, cancelPick, isPicking: () => picking, clearLocator, updateLocator, trackedHexId,
         focusedHexId, focusedAnchor, syncMapFocus };

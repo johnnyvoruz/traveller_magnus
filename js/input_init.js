@@ -291,7 +291,7 @@ function setupNavigation() {
         event: 'calendar-star', item: 'gem', note: 'note-sticky',
         route: 'route', border: 'draw-polygon',
         region: 'layer-group', sectors: 'table-cells',
-        eye: 'eye', generate: 'wand-magic-sparkles', legend: 'book-atlas',
+        eye: 'eye', generate: 'wand-magic-sparkles', legend: 'book-atlas', saves: 'clock-rotate-left',
         settings: 'gear', help: 'circle-question'
     };
     const labels = { person: 'People', place: 'Places', business: 'Businesses', organization: 'Organizations', job: 'Jobs', event: 'Events', item: 'Items', note: 'Notes' };
@@ -716,7 +716,7 @@ function setupMapActionBar() {
         add('Clear region', () => {
             const hexList = currentActionHexes();
             if (!hexList.length) return;
-            saveHistoryState('Clear Region', { hexIds: hexList });
+            markChanged('Clear Region', { hexIds: hexList });
             hexList.forEach(hexId => { const s = hexStates.get(hexId); if (s) s.cluster = '----'; });
             if (typeof window.invalidateRegionFillCache === 'function') window.invalidateRegionFillCache();
             window.renderRegionWindow?.();

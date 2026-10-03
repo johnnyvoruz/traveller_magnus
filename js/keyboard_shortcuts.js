@@ -2,24 +2,6 @@
 // KEYBOARD_SHORTCUTS.JS - Hotkeys and Key Event Listeners
 // ============================================================================
 
-/**
- * Puts the route slots back from a history snapshot that carries them.
- *
- * Most snapshots do not: see the note in saveHistoryState(). Repainting the
- * Route Manager wholesale rather than calling refreshRouteWindowCounts() is
- * deliberate — restoring a deleted slot has to put its row back, and the count
- * refresh only updates rows that already exist.
- */
-function _restoreRouteDefinitions(snap) {
-    if (!snap.routeDefinitions) return;
-    window.routeDefinitions = snap.routeDefinitions;
-    if (window.dbManager) window.dbManager.saveRouteDefinitions?.();
-    const win = document.getElementById('route-window');
-    if (win && win.classList.contains('visible') && window.renderRouteWindow) {
-        window.renderRouteWindow();
-    }
-}
-
 function setupKeyboardShortcuts() {
     const actions = {
         select: () => {
@@ -213,25 +195,6 @@ function setupKeyboardShortcuts() {
         // shortcut swallowed the key and did nothing. Assigning allegiances is
         // still available from the right-click menu, and the allegiance field
         // and filter are unaffected.
-        } else if (e.ctrlKey && key === 'z') {
-            e.preventDefault();
-            const from = e.shiftKey ? window.redoStack : window.undoStack;
-            const to = e.shiftKey ? window.undoStack : window.redoStack;
-            const snap = from[from.length - 1];
-            if (!snap || !CampaignAtlas.confirmLeave()) return;
-            try {
-                const current = captureHistoryInverse(snap);
-                const apply = () => {
-                    from.pop(); to.push(current);
-                    applyHistoryPatch(snap);
-                    _restoreRouteDefinitions(snap);
-                };
-                if (snap.campaignAtlas) await CampaignAtlas.restoreHistory(snap.campaignAtlas, apply);
-                else apply();
-                showToast(`${e.shiftKey ? 'Redid' : 'Undid'}: ${snap.action}`, 2000);
-                requestAnimationFrame(draw);
-                if (window.dbManager) { window.dbManager.syncAllHexes(); window.dbManager.saveRoutes(); }
-            } catch (err) { showToast(`Undo/redo could not be saved: ${err.message}. Nothing was changed.`, 8000); }
         }
     });
 

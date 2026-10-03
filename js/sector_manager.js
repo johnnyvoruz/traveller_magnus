@@ -283,7 +283,7 @@ window.closeSectorWindow = function () {
     if (win) win.classList.remove('visible');
 };
 
-window.clearSectorSlot = function (sectorNum) {
+window.clearSectorSlot = async function (sectorNum) {
     const n = parseInt(sectorNum, 10);
     if (!Number.isFinite(n) || n < 1) return;
     const worlds = countSystemsInSlots([n]);
@@ -294,13 +294,19 @@ window.clearSectorSlot = function (sectorNum) {
         return;
     }
     const extra = worlds ? ` ${worlds} system${worlds === 1 ? '' : 's'} will be deleted.` : '';
-    if (!confirm(`Clear ${label}?${extra}\n\nThis cannot be undone. Save a map file first if you want a way back.`)) return;
-    console.info(`[History] Clear ${label} is not undoable. The sector is removed without copying its hexes.`);
+    const slot = window.Saves ? window.Saves.nextSlotLabel() : 'the next autosave';
+    if (!confirm(`Clear ${label}?${extra}\n\nThe current map will be kept in ${slot}.`)) return;
+    let gridSlot = null;
+    if (window.Saves) gridSlot = await window.Saves.beforeBulk('Clear ' + label);
+    try {
     purgeSectorSlots([n]);
     if (window.dbManager) window.dbManager.scheduleSyncAll?.();
     window.renderSectorWindow();
     requestAnimationFrame(draw);
     showToast(`Cleared ${label}.`, 2500);
+    } finally {
+        if (gridSlot && window.Saves && window.Saves.endBulk) window.Saves.endBulk();
+    }
 };
 
 function _shiftColumn(oldW, atX, delta) {
@@ -324,37 +330,49 @@ function _shiftRow(atY, delta) {
     });
 }
 
-function insertSectorColumn(atX) {
+async function insertSectorColumn(atX) {
     if (gridWidth >= MAX_GRID_WIDTH) {
         showToast(`Column limit is ${MAX_GRID_WIDTH}.`, 2500);
         return;
     }
+    let gridSlot = null;
+    if (window.Saves) gridSlot = await window.Saves.beforeBulk('Insert column ' + _columnLetter(atX));
+    try {
     const oldW = gridWidth;
     _shiftColumn(oldW, atX, 1);
     gridWidth = oldW + 1;
     persistGridChange();
     window.renderSectorWindow();
     requestAnimationFrame(draw);
-    showToast(`Inserted column ${_columnLetter(atX)}. Undo history cleared.`, 3000);
+    showToast(`Inserted column ${_columnLetter(atX)}.`, 3000);
+    } finally {
+        if (gridSlot && window.Saves && window.Saves.endBulk) window.Saves.endBulk();
+    }
 }
 
-function insertSectorRow(atY) {
+async function insertSectorRow(atY) {
     if (gridHeight >= MAX_GRID_HEIGHT) {
         showToast(`Row limit is ${MAX_GRID_HEIGHT}.`, 2500);
         return;
     }
+    let gridSlot = null;
+    if (window.Saves) gridSlot = await window.Saves.beforeBulk('Insert row ' + (atY + 1));
+    try {
     _shiftRow(atY, 1);
     gridHeight += 1;
     persistGridChange();
     window.renderSectorWindow();
     requestAnimationFrame(draw);
-    showToast(`Inserted row ${atY + 1}. Undo history cleared.`, 3000);
+    showToast(`Inserted row ${atY + 1}.`, 3000);
+    } finally {
+        if (gridSlot && window.Saves && window.Saves.endBulk) window.Saves.endBulk();
+    }
 }
 
 window.addSectorColumn = function () { insertSectorColumn(gridWidth); };
 window.addSectorRow = function () { insertSectorRow(gridHeight); };
 
-window.removeSectorColumn = function (atX) {
+window.removeSectorColumn = async function (atX) {
     const index = Number.isFinite(atX) ? atX : gridWidth - 1;
     if (gridWidth <= 1) {
         showToast('The map needs at least one column.', 2000);
@@ -365,11 +383,13 @@ window.removeSectorColumn = function (atX) {
     const worlds = countSystemsInSlots(slots);
     const hexes = countHexesInSlots(slots);
     const letter = _columnLetter(index);
+    let gridSlot = null;
     if (worlds || hexes) {
         const msg = worlds
-            ? `Delete column ${letter}? ${worlds} system${worlds === 1 ? '' : 's'} will be deleted.\n\nUndo history will be cleared.`
-            : `Delete column ${letter}? Hex data in that column will be deleted.\n\nUndo history will be cleared.`;
+            ? `Delete column ${letter}? ${worlds} system${worlds === 1 ? '' : 's'} will be deleted.\n\nThe current map will be kept in an autosave.`
+            : `Delete column ${letter}? Hex data in that column will be deleted.\n\nThe current map will be kept in an autosave.`;
         if (!confirm(msg)) return;
+        if (window.Saves) gridSlot = await window.Saves.beforeBulk('Delete column ' + letter);
         purgeSectorSlots(slots);
     }
     const oldW = gridWidth;
@@ -379,9 +399,10 @@ window.removeSectorColumn = function (atX) {
     window.renderSectorWindow();
     requestAnimationFrame(draw);
     showToast(`Deleted column ${letter}.`, 3000);
+    if (gridSlot && window.Saves && window.Saves.endBulk) window.Saves.endBulk();
 };
 
-window.removeSectorRow = function (atY) {
+window.removeSectorRow = async function (atY) {
     const index = Number.isFinite(atY) ? atY : gridHeight - 1;
     if (gridHeight <= 1) {
         showToast('The map needs at least one row.', 2000);
@@ -391,11 +412,13 @@ window.removeSectorRow = function (atY) {
     for (let sX = 0; sX < gridWidth; sX++) slots.push(index * gridWidth + sX + 1);
     const worlds = countSystemsInSlots(slots);
     const hexes = countHexesInSlots(slots);
+    let gridSlot = null;
     if (worlds || hexes) {
         const msg = worlds
-            ? `Delete row ${index + 1}? ${worlds} system${worlds === 1 ? '' : 's'} will be deleted.\n\nUndo history will be cleared.`
-            : `Delete row ${index + 1}? Hex data in that row will be deleted.\n\nUndo history will be cleared.`;
+            ? `Delete row ${index + 1}? ${worlds} system${worlds === 1 ? '' : 's'} will be deleted.\n\nThe current map will be kept in an autosave.`
+            : `Delete row ${index + 1}? Hex data in that row will be deleted.\n\nThe current map will be kept in an autosave.`;
         if (!confirm(msg)) return;
+        if (window.Saves) gridSlot = await window.Saves.beforeBulk('Delete row ' + (index + 1));
         purgeSectorSlots(slots);
     }
     _shiftRow(index, -1);
@@ -404,6 +427,7 @@ window.removeSectorRow = function (atY) {
     window.renderSectorWindow();
     requestAnimationFrame(draw);
     showToast(`Deleted row ${index + 1}.`, 3000);
+    if (gridSlot && window.Saves && window.Saves.endBulk) window.Saves.endBulk();
 };
 
 function setupSectorWindow() {

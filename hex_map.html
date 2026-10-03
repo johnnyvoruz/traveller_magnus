@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>As Above So Below</title>
+    <title>IISS Astrogation Cartographer</title>
     <link rel="stylesheet" href="assets/fontawesome/css/all.min.css">
     <!-- Google Fonts: Orbitron & Inter -->
     <link
@@ -102,6 +102,11 @@
     <script src="js/io_manager.js" defer></script>
     <script src="js/traveller_worlds_importer.js" defer></script>
     <script src="js/db_manager.js" defer></script>
+    <script src="js/overlay.js" defer></script>
+    <script src="js/universe_snapshot.js" defer></script>
+    <script src="js/saves.js" defer></script>
+    <script src="universe/index.js" onerror="console.info('universe/index.js not found — chart snapshots are unavailable.')"></script>
+    <script src="universe/allegiances.js" onerror="console.info('universe/allegiances.js not found — allegiance names are unavailable.')"></script>
     <script src="js/imperium_data.js" defer></script>
     <script src="js/universe_data.js" defer></script>
     <script src="js/otu_system_data.js" defer></script>
@@ -1331,6 +1336,7 @@
             </div>
         </div>
         <div class="nav-footer">
+            <button type="button" id="saves-toggle" data-nav-icon="saves" aria-label="Saves" title="Saves" aria-controls="saves-tray" aria-expanded="false"><span class="nav-label">Saves</span></button>
             <button type="button" id="disclosure-toggle" data-nav-icon="eye" aria-label="Player knowledge (D)" title="Player knowledge (D)" aria-controls="disclosure-tray" aria-expanded="false" hidden><span class="nav-label">Player knowledge (D)</span></button>
             <button type="button" id="legend-toggle" data-nav-icon="legend" aria-label="Legend" title="Legend" aria-controls="legend-tray" aria-expanded="false"><span class="nav-label">Legend</span></button>
             <button type="button" id="settings-toggle" data-nav-icon="settings" aria-label="Settings" title="Settings" aria-controls="settings-panel" aria-expanded="false"><span class="nav-label">Settings</span></button>
@@ -1378,6 +1384,10 @@
                 <div class="disclosure-roster-list" id="dg-body"></div>
             </div>
         </div>
+    </aside>
+    <aside id="saves-tray" class="nav-tray" aria-label="Saves" hidden>
+        <header><h2>Saves</h2><button type="button" id="saves-close" aria-label="Close saves">×</button></header>
+        <div class="nav-tray-content" id="saves-body"></div>
     </aside>
     <aside id="legend-tray" aria-label="Map legend" hidden>
         <header><h2>Legend</h2><button type="button" id="legend-close" aria-label="Close legend">×</button></header>
@@ -1890,8 +1900,6 @@
                     <strong class="edition-other">Ctrl + Alt + C</strong><span class="edition-other" style="color: #66fcf1;">Bulk CT / Book 6 Macro</span>
                     <strong class="edition-other">Ctrl + Alt + R</strong><span class="edition-other" style="color: #45a29e;">Bulk RTT Macro</span>
                     <strong class="edition-other">Ctrl + Alt + 5</strong><span class="edition-other" style="color: #66fcf1;">Bulk T5 Macro</span>
-                    <strong>Ctrl + Z</strong><span>Undo Last Action</span>
-                    <strong>Ctrl + Shift + Z</strong><span>Redo Action</span>
                     <strong>Ctrl + Delete</strong><span style="color: #e74c3c;">Clear Canvas</span>
                     <strong>F Key</strong><span>Open filter in search</span>
                     <strong>Shift + F</strong><span>Suspend / restore filter</span>

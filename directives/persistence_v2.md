@@ -1,6 +1,6 @@
 # Persistence v2 — no undo, rolling autosaves, base + overlay, local universe snapshot
 
-**Status:** SPEC, agreed in principle 2026-10-02, not implemented. Supersedes
+**Status:** Implemented 2026-10-02 (Step 2). The shipped chart snapshot is Spinward Marches; the builder can add the rest. Supersedes
 `directives/large_campaigns.md` (undo patches) once Step 2 of `directives/bugfix_pass.md`
 lands. Precedes `directives/campaign_manager_plan.md` Phase 0 and does its persistence half.
 
@@ -30,64 +30,139 @@ overlay once; after that the referee's lists are the truth.
 
 "Build your own map" = base is `null`. Nothing else differs.
 
-### 1.1 Base snapshot files
+### 1.1 Base snapshot files (REVISED 2026-10-02 — inputs only, systems built on demand)
+
+> **Decision (Johnny, 2026-10-02):** the snapshot holds the *inputs*, not the built systems.
+> A built snapshot measured 21 MB for one sector (439 systems × ~48 KB of MgT2E trees),
+> ~2.7 GB for the universe. Instead each system's tree is built **the first time it is
+> needed**, deterministically from the snapshot's seed, in a few milliseconds, and cached.
+> This must be **invisible to the referee** ("rule grace"): no progress bars, no "building…"
+> text, no delay the eye can see. §1.4 says exactly how.
 
 ```
 universe/
-  index.js                              window.UNIVERSE_INDEX = { milieu:'M1105', snapshotVersion, builtAt,
-                                          buildVersion (APP_VERSION), masterSeed, sectors:[{ name, x, y, defaultSlot, bytes }] }
-  sectors/Spinward_Marches.js           window.UNIVERSE_SECTOR_DATA = window.UNIVERSE_SECTOR_DATA || {};
-                                        UNIVERSE_SECTOR_DATA['Spinward Marches'] = {
-                                          name, x, y, milieu, snapshotVersion,
-                                          tsv:  '…raw TravellerMap tab-delimited text…',
-                                          metadataXml: '…raw TravellerMap metadata XML…',
-                                          built: { hexes: { 'A-0101': state, … }, buildVersion, seed, sectorName, subsectorNames }
-                                        };
+  index.js                      window.UNIVERSE_INDEX = { milieu:'M1105', snapshotVersion, builtAt,
+                                  buildVersion (APP_VERSION), seed, buildSettings, sectors:[{ name, slug, x, y, defaultSlot, bytes }] }
+  allegiances.js                window.UNIVERSE_ALLEGIANCES = [...]        (the t5ss/allegiances list, fetched once)
+  sectors/Spinward_Marches.js   window.UNIVERSE_SECTOR_DATA = window.UNIVERSE_SECTOR_DATA || {};
+                                UNIVERSE_SECTOR_DATA['Spinward Marches'] = {
+                                  name, x, y, milieu, snapshotVersion,
+                                  tsv: '…raw TravellerMap tab-delimited text…',
+                                  metadataXml: '…raw TravellerMap metadata XML…'
+                                };
 ```
 
-- Keys inside `built.hexes` are **sector-local** (`<subsector>-<QQRR>`); the slot prefix is
-  added at load (`${slot}-${key}`). So a base sector can sit in any slot, and the files do
-  not depend on the grid.
-- States inside `built.hexes` are exactly what `_storeMgtBuild` writes today
-  (`mgtSystem`, `mgt2eData`, `mgtSocio`, counts, name, allegiance, …) with view state
-  stripped and **no** `disclosure`, `notes`, `custom_ui`, `manualBgColor` (those are overlay
-  by definition).
-- Loaded on demand by injecting `<script src="universe/sectors/<file>.js">` — the same
-  mechanism `solo_6_data.js` uses today, split per sector so a 7×5 campaign loads 35 files
-  of ~0.5 MB rather than one of 60 MB. Works from `file://` and from Pages. Loaded sectors
-  are cached in memory for the session; `UNIVERSE_SECTOR_DATA[name]` is frozen.
-- The raw `tsv` and `metadataXml` are kept so the importer can re-run (own-map mode can
-  "start from the Marches without the build"), and so a future snapshot rebuild has its
-  inputs without the API.
+- No `built` key. A sector file is ~50 KB; the universe is ~6 MB.
+- `index.js` carries the two things determinism needs: `seed` (the string passed to the
+  seeded RNG) and `buildSettings` — the generation-affecting keys of `collectMapSettings()`
+  (every key whose name starts with `generation`) as they were when the snapshot was made.
+- Loaded on demand by `<script>` injection exactly as before (`UniverseSnapshot.load`).
 
 ### 1.2 Building the snapshot (one time, by script)
 
 `utilities/build_universe_snapshot/`:
-1. `fetch.js` (Node): for every sector in `js/universe_data.js`, fetch
-   `data/<name>/tab?milieu=M1105` and `api/metadata?…` from travellermap.com with a polite
-   delay, write `universe/raw/<name>.tsv` and `.xml`. Run once; re-run only to refresh.
-   (Read Far Future Enterprises' fair-use policy before publishing the result anywhere.)
-2. `build.html` (browser, because the engines are browser modules that use `window`):
-   loads the app's scripts, iterates the raw files, places each sector in its
-   `defaultSlot` on the 16×8 grid, runs the existing Mongoose build with a fixed
-   `masterSeed` recorded in `index.js`, strips view state, re-keys to sector-local, and
-   downloads `sectors/<name>.js`. Progress through the existing `showWorkStatus` bar. A
-   Node runner can replace this later if the engines are shimmed; the page is the sure path.
-3. `index.js` is written last with sizes and the build version.
-
-The seed is fixed and `reseedForHex(hexId)` is hexId-based, so two builds of the same
-snapshot version are identical. A new app version that changes generation makes a new
-`snapshotVersion`; overlays record which version they were made against (§2.1) and the
-loader warns when they differ (it still loads).
+1. `fetch.js` (Node) — unchanged: writes `universe/raw/<name>.tsv` and `.xml` and
+   `universe/allegiances.js`, with a polite delay.
+2. `pack.js` (Node, **replaces `build.html`**): for every pair in `universe/raw/`, writes
+   `universe/sectors/<slug>.js` with the shape above, then writes `index.js` with sizes,
+   `APP_VERSION` read from `js/core.js` by regex, `seed: 'TravellerMagnus'`, and
+   `buildSettings` copied from the defaults in `js/io_manager.js` `collectMapSettings()`
+   (read the literal defaults by regex, or hard-code the object and keep it in step — note
+   which in a comment). No browser is involved.
+3. Delete `build.html` and `.tmp/atlas-testing/build-snapshot.cjs`.
 
 ### 1.3 Offline importer
 
-`otu_importer.js` keeps its UI (pick sectors, place them in slots) and loses the network:
-`fetchSectorTsv`/metadata read from `UNIVERSE_SECTOR_DATA` after `loadBaseSector(name)`;
-the `tsvCache` store and the API pauses go. Import of a sector = record it in
-`overlay.base.sectors`, merge its built hexes into `hexStates`, copy its routes/borders into
-the overlay lists. No Mongoose build runs in universe mode. The allegiance list
-(`t5ss/allegiances`) is snapshotted too (`universe/allegiances.js`).
+Unchanged in intent: `otu_importer.js` reads TSV and XML from `UNIVERSE_SECTOR_DATA` after
+`UniverseSnapshot.load(name)`; no `fetch(`; no `travellermap.com`; no delays; no
+localStorage cache readers. `UniverseSnapshot.adopt(name, slot)` now:
+1. Parses the TSV with the existing T5 tab parser (the same code `importT5Tab` uses —
+   extract it into `parseT5Tab(text, slot)` returning `Map<hexId, state>` so both callers
+   share it) → **base hexes at sector scale**: `type`, `name`, `allegiance`, `t5Data`,
+   `t5Socio`, `t5System`, `beltCount`, `gasGiantCount`, `uwp`, `tradeCodes`, `travelZone`,
+   `bases`. This is everything the sector map, the omni-search, trade match and the
+   campaign anchors need. It takes milliseconds.
+2. Sets them into `hexStates` under `${slot}-${key}`; they are **not** in `overlayHexes`.
+3. Records `overlayBase.sectors[] = { name, slot }`; copies routes/borders/regions from the
+   XML into the overlay lists as before.
+4. Marks the sector's built-cache entries (§1.4) stale if `snapshotVersion` changed.
+
+### 1.4 Systems built on demand (the invisible part)
+
+**One accessor, called by every consumer that needs a full system tree:**
+
+```js
+// js/universe_snapshot.js
+function ensureSystemBuilt(hexId) {
+    const state = hexStates.get(hexId);
+    if (!state || state.type !== 'SYSTEM_PRESENT') return state;
+    if (state.mgtSystem || window.overlayHexes.has(hexId)) return state;   // built already, or the referee's own
+    if (!UniverseSnapshot.baseSectorFor(hexId)) return state;              // not a chart hex
+    const cached = _builtCache.get(hexId);                                  // in-memory copy of the IndexedDB baseBuilt store
+    if (cached && cached.buildVersion === UNIVERSE_INDEX.buildVersion && cached.snapshotVersion === UNIVERSE_INDEX.snapshotVersion) {
+        Object.assign(state, cached.state);
+        return state;
+    }
+    _withSnapshotGeneration(() => _buildOneMgtHex(hexId));                  // §1.4a
+    void dbManager.putBuilt(hexId, { state: stripHexViewState(state), buildVersion, snapshotVersion }); // fire-and-forget cache
+    return state;
+}
+```
+
+**1.4a Determinism — `_withSnapshotGeneration(fn)`.** `_buildOneMgtHex` reads the global
+`masterSeed`/`rng` (`reseedForHex(hexId)`) *and* the generation settings on `window`
+(`generationStarportMod`, `generationRttTL`, … — every key `collectMapSettings()` emits
+starting with `generation`). The referee's own seed and settings must not change a chart
+system, so the wrapper: saves `masterSeed` and the current values of those `window`
+keys → sets `masterSeed = UNIVERSE_INDEX.seed` and the keys from `UNIVERSE_INDEX.buildSettings`
+→ runs `fn` → restores everything in `finally`. Trace logging (`tSection`/`tResult`) stays
+as it is; if logging is enabled the build appears in the log like any generation.
+
+**1.4b Where it is called (all of them, nothing else needs trees):**
+- `SystemInspector.openForHex` and `refresh` (before `normalizeSystem`)
+- `SystemViewer.open` (orbit view) — *this file belongs to Johnny; add the one call at the
+  top of `open(hexId)` and nothing else*
+- `openHexEditor` (hex editor) and `SystemEditor.open`
+- `HtmlExporter`/`ObsidianExporter` per-hex page builders, before `normalizeSystem`
+- `CampaignAtlas.recordsForBody` / `SystemViewer.locationEntries` callers that resolve a
+  `bodyKey` (through the inspector, so covered by the first item)
+- Approach/Surface viewers (through the orbit view)
+- `captureSubsector` does **not** need trees (it draws from mainworld fields) — do not add it.
+
+**1.4c Invisible.** A single build is a few milliseconds, synchronous, before the panel
+renders — there is nothing to show. Two things keep it that way:
+- **Prefetch neighbours:** after `openForHex(id)` renders, schedule
+  `requestIdleCallback(() => for each system within 2 hexes: ensureSystemBuilt(id))`
+  (fallback `setTimeout(…, 50)`), one hex per idle slice, so the next click is already built.
+- **Exports** build many systems in a row: they already yield between pages
+  (`await new Promise(r => setTimeout(r, 0))`) and already show their own progress bar; the
+  per-hex build rides inside that. No new UI.
+- Never `showWorkStatus` for a build. Never a toast. If a build throws, the hex stays at
+  sector-scale data, the error is logged with the hexId, and the inspector shows the
+  mainworld as it does for any system without a tree.
+
+**1.4d Cache.** IndexedDB store `baseBuilt` (DB_VERSION 5), key hexId, value
+`{ state, buildVersion, snapshotVersion }`. Read into `_builtCache` lazily per sector on
+first `ensureSystemBuilt` for that sector (one cursor over the key range `${slot}-`), not
+at boot. Cleared by `Clear Canvas`, by `purgeSectorSlots` for the purged slots, and ignored
+(then overwritten) on version mismatch. It is **never** in saves, overlays or files — it is
+reproducible.
+
+**1.4e What "base" means for comparisons now.** `UniverseSnapshot.baseState(hexId)` returns
+the sector-scale state from the TSV (built on the fly from the parsed row, cheap). For
+`sameAsBase` (Attach snapshot) and the hex editor's per-field "Chart" revert:
+- Sector-scale fields (name, UWP, bases, zone, allegiance, PBG, trade codes) compare and
+  revert against the TSV row.
+- Tree fields (orbits, worlds, moons): if the live hex has `mgtSystem`, compare against a
+  fresh `_withSnapshotGeneration` build of that hex into a scratch object (do not touch
+  `hexStates`); Attach shows progress through `showWorkStatus` because it may build
+  hundreds (this is a one-time referee action, not the invisible path). **Known effect,
+  stated in the Attach confirm text:** a hex that matches is dropped from the overlay and
+  its tree will be the chart's build from then on.
+
+**1.4f Own maps.** `base` is null; `ensureSystemBuilt` returns immediately (the second
+guard). The "Build systems" action stays for own maps and is hidden on universe maps (a
+chart hex builds itself).
 
 ---
 
@@ -262,3 +337,82 @@ Checks after each step are listed in `directives/bugfix_pass.md` Step 2 and here
   the import is gone and "Before: Restore" exists.
 - After 6: fresh profile, Import → Spinward Marches, no network → systems present with
   orbits; edit one world; reload → edit present, `overlayHexes.size === 1`.
+
+---
+
+## 6. Delighter: cache everything (decided 2026-10-02)
+
+Johnny's rule: **local-cache as much of the experience as possible.** Nothing the app has
+fetched, parsed, generated, baked or rendered once is ever done again on the same machine
+unless its inputs changed. Second visits are instant; the app works without a network; the
+referee never sees a loading state for something they have already seen.
+
+### 6.1 What is redone today, and the cache that stops it
+
+| Today | Cost | Cache (store · key · value) | Invalidated by | Prefetch |
+|---|---|---|---|---|
+| `js/solo_6_data.js` (17 MB), `names.js` (0.8 MB), `otu_system_data.js` (0.5 MB) parsed by `<script>` on **every boot** (`hex_map.html:112-121`) | seconds of parse before the map appears | Move Solo 6 and Foreven into `universe/sectors/` as input snapshots (§1.1) loaded on demand; `names.js` and `otu_system_data.js` become on-demand scripts loaded the first time a generator or the inspector needs them, then held in memory | file version in `UNIVERSE_INDEX` | none needed |
+| Universe sector files (§1.1) | ~50 KB script per sector, network on the hosted version | Service worker runtime cache (§6.3) on the hosted version; `file://` reads from disk anyway | `snapshotVersion` | adjacent sectors of any attached sector, at idle |
+| System trees (§1.4) | ms per hex, repeated per visit | `baseBuilt` IndexedDB store (§1.4d) | `buildVersion`, `snapshotVersion` | systems within 2 hexes of the inspected one, at idle (§1.4c) |
+| Planet bakes: colour + height cube maps per world, GPU only, redone on every orbit-view open (`planet_gl.js:916-1033`) | 6 faces per body, tens of ms each; the first second of an orbit view is bakes | `planetBakes` store · `profile.id` · the six face bitmaps as `ImageBitmap`/`Blob` (PNG, via `canvas.toBlob` from `readPixels` at `planet_gl.js:1188`) plus `world.stats` | `profile.id` already encodes hex, name, type, UWP, diameter, AU, PD (and, after campaign plan §7.7, terrain and palette ids); add `PlanetGL.VERSION` | on inspector open, bake the mainworld and its moons at idle before the orbit view is asked for |
+| Surface map sheets (diamond maps) rendered per view (`system_inspector.js:507-552`, hidden by the scanner animation) | ~100–300 ms per sheet | `surfaceSheets` store · `profile.id + ':' + projection + ':' + size` · PNG `Blob` | same as bakes, plus `PlanetRenderer.VERSION` | the inspected world's sheet when its dossier opens; the scanner still plays on first render, and on a cache hit the sheet simply appears sharp (no fake delay) |
+| Campaign image thumbnails/display | already cached in IndexedDB (`campaignAsset:*`) | — | — | — |
+| Google Fonts Inter + Orbitron (`hex_map.html:11`) | network on every boot; fallback fonts offline, so the UI changes shape without a network | **Self-host** under `assets/fonts/` with `@font-face` + `font-display: swap`; delete the Google link | — | — |
+| Omni-search / campaign word index rebuilt from scratch at boot and per keystroke | O(records) per query | In-memory `CampaignIndex` (campaign plan §2.7) rebuilt incrementally from `campaign:changed`; persisted to `appState.searchIndex` and rehydrated at boot, rebuilt only if `rev` sums differ | per-document `rev` | — |
+| Exports' subsector PNG captures (`captureSubsector`) | hundreds of ms each, per export | `captures` store · `sectorNum:subsector:hash(options + max hex rev)` · PNG `Blob` | any hex `rev` in the subsector | — |
+| Snapshot parse (`JSON` inside the sector script) | once per session | the sector script is already cached by the browser's HTTP cache on the hosted version and by disk on `file://` | — | — |
+
+### 6.2 Policy
+
+- **One module, `js/cache.js`** (new; nothing in `js/` does this): `Cache.get(store, key)`,
+  `Cache.put(store, key, value, { version, bytes })`, `Cache.touch`, `Cache.evict(store,
+  budget)`, `Cache.sizes()`. All caches share it. Values are structured-cloneable (`Blob`,
+  `ImageBitmap`, plain objects). Every record carries `{ version, bytes, lastUsed }`.
+- **Budgets per store** (LRU by `lastUsed`): `baseBuilt` 200 MB, `planetBakes` 300 MB,
+  `surfaceSheets` 100 MB, `captures` 100 MB. `Cache.evict` runs after each put that pushes a
+  store over budget, dropping least-recently-used records until under.
+- **Never block on a cache.** Every read is `await`ed off the render path with the
+  uncached path as the fallback; a cache miss costs exactly what today costs. A cache
+  error (quota, corruption) logs once per store per session and disables that store for
+  the session — never a toast, never a broken feature.
+- **Never cache referee data here.** Saves, overlays and files are the truth; everything in
+  §6 is reproducible from them and can be deleted at any time without loss. The Saves tray
+  gets a **Storage** section listing each cache with its size and a *Clear* button, and a
+  *Clear all caches* — separate from saves, with no confirm (nothing can be lost).
+- **`navigator.storage.persist()`** is already requested (§2.4), so caches are not evicted
+  by the browser behind the referee's back.
+- **Idle prefetch** uses `requestIdleCallback` (fallback `setTimeout 50`), one item per
+  idle slice, cancelled when the camera moves to a different subsector, so prefetch never
+  competes with a drag.
+
+### 6.3 The hosted version: a service worker (not for `file://`)
+
+When served from Pages (`_redirects` already routes `/` to `hex_map.html`), `sw.js`:
+- **Precache** the app shell on install: `hex_map.html`, `style.css`, every `js/*.js` the
+  page loads at boot, `assets/fontawesome/**`, `assets/fonts/**`, `universe/index.js`,
+  `universe/allegiances.js`. Versioned by `APP_VERSION`; a new version installs in the
+  background and a toast offers "Reload for v0.19" (never a forced reload mid-session).
+- **Runtime cache, cache-first,** for `universe/sectors/*.js` (immutable per
+  `snapshotVersion`) and `assets/starports/**`.
+- **Network-only** for nothing — the app has no API. Offline, everything the referee has
+  opened before works; a sector never opened says "not in this copy" exactly as `file://`
+  does today.
+- Registration is guarded: `if (location.protocol.startsWith('http') && 'serviceWorker' in navigator)`.
+  On `file://` nothing changes.
+
+### 6.4 Order of work
+
+This is **Step 2b**, after Step 2's fix list (R1–R23) passes and before Step 3 (Grace):
+1. `js/cache.js` + Storage section in the Saves tray.
+2. Boot data on demand (Solo 6, Foreven → snapshots; `names.js`, `otu_system_data.js` lazy).
+   *Check:* boot on a cold profile shows the map in under one second on a laptop; DevTools
+   shows no 17 MB script.
+3. Self-hosted fonts. *Check:* offline reload keeps Inter/Orbitron.
+4. `baseBuilt` already exists (§1.4d) — move it onto `Cache`.
+5. `planetBakes` and `surfaceSheets`. *Check:* open a system's orbit view, close, reopen →
+   no bake time (`showMapPerf`-style counter in the orrery reads 0 bakes); open the dossier
+   twice → the second sheet appears sharp immediately.
+6. Idle prefetch (neighbour systems, mainworld bakes, adjacent sectors).
+7. `captures` for exports. *Check:* exporting the same subsector twice takes half the time.
+8. Service worker for the hosted build. *Check:* load on Pages, go offline, reload → app
+   opens; previously opened sectors work.

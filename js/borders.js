@@ -249,8 +249,8 @@ function _openBorderMenu(def, anchor, hexCount) {
 function _deleteBorder(def) {
     const count = _borderHexIds(def.id).length;
     const hexMsg = count > 0 ? `\nThis will also clear its ${count} hex assignment(s).` : '';
-    if (!confirm(`Delete border "${def.name}"?${hexMsg}\n\nThis can be undone with Ctrl+Z.`)) return;
-    saveHistoryState(`Delete ${def.name}`, { borders: true });
+    if (!confirm(`Delete border "${def.name}"?${hexMsg}\n\nA timed autosave is the way back.`)) return;
+    markChanged(`Delete ${def.name}`, { borders: true });
     if (window.hexBorderAssignments) {
         window.hexBorderAssignments.forEach((bId, hexId) => {
             if (bId === def.id) window.hexBorderAssignments.delete(hexId);
@@ -274,7 +274,7 @@ function _clearBorder(def) {
     const ids = _borderHexIds(def.id);
     if (ids.length === 0) { showToast(`"${def.name}" has no hexes to clear.`, 2000); return; }
     if (!confirm(`Clear all ${ids.length} hex assignment(s) for "${def.name}"?`)) return;
-    saveHistoryState(`Clear ${def.name}`, { borders: true });
+    markChanged(`Clear ${def.name}`, { borders: true });
     if (window.hexBorderAssignments) {
         window.hexBorderAssignments.forEach((bId, hexId) => {
             if (bId === def.id) window.hexBorderAssignments.delete(hexId);
@@ -292,7 +292,7 @@ function _clearBorder(def) {
 
 window.addBorderSlot = function (name) {
     if (!window.borderDefinitions) window.borderDefinitions = getDefaultBorderDefinitions();
-    saveHistoryState('Add border', { borders: true });
+    markChanged('Add border', { borders: true });
     const nextId = window.borderDefinitions.length
         ? Math.max(...window.borderDefinitions.map(d => d.id)) + 1 : 1;
     const def = {
@@ -460,7 +460,7 @@ window.openAssignBorderModal = function () {
                        + `<span class="border-assign-name">Clear Border</span>`;
     clearBtn.addEventListener('click', () => {
         const hexList = currentActionHexes();
-        saveHistoryState('Clear Border', { borders: true });
+        markChanged('Clear Border', { borders: true });
         hexList.forEach(hexId => {
             if (window.hexBorderAssignments) window.hexBorderAssignments.delete(hexId);
         });
@@ -505,7 +505,7 @@ window.openAssignBorderModal = function () {
 
 window.confirmAssignBorder = function (borderId) {
     const hexList = currentActionHexes();
-    saveHistoryState('Assign Border', { borders: true });
+    markChanged('Assign Border', { borders: true });
     if (window.borderPaths) window.borderPaths.delete(borderId);
     hexList.forEach(hexId => {
         window.hexBorderAssignments.set(hexId, borderId);
@@ -778,7 +778,7 @@ window.importBordersFromXml = function (bordersElement, slotNum) {
 
             // Store original polygon path for round-trip metadata export.
             if (!window.borderPaths.has(def.id)) window.borderPaths.set(def.id, []);
-            window.borderPaths.get(def.id).push({ rawPath: raw, labelPos, allegianceCode: itemAllegCode });
+            window.borderPaths.get(def.id).push({ rawPath: raw, labelPos, allegianceCode: itemAllegCode, sectorNum: slotNum });
             raw.split(/\s+/).forEach(code => {
                 if (code.length !== 4) return;
                 // Skip adjacent-sector codes (col 00, col 33+, row 00, row 41+).
@@ -1513,8 +1513,9 @@ window.importRegionsFromXml = function (regionsElement, slotNum) {
     });
 
     // ── Persist changed hexes & refresh filter rules UI ──────────────────────
-    if (affectedHexIds.length > 0 && window.dbManager) {
-        window.dbManager.saveHexes(affectedHexIds);
+    if (affectedHexIds.length > 0) {
+        if (typeof markChanged === 'function') markChanged('Import regions', { hexIds: affectedHexIds, skipAutoslot: true });
+        if (window.dbManager) window.dbManager.saveHexes(affectedHexIds);
     }
     if (window.dbManager) {
         window.dbManager.saveRegionDefinitions?.();

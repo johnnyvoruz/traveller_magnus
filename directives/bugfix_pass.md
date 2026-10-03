@@ -220,6 +220,78 @@ plan's Phase 0 (per-document `rev`, tombstones, campaign-id namespace), done onc
 Closes A5, A7, A8, A9, A10, A16, B4, B12c, B15c by construction; A12 is handled by the new
 load path (parse and validate everything before touching the live state).
 
+### Step 2 — REVIEW 2026-10-02: NOT DONE. Fix list before Step 3 (recipe)
+
+Reviewed by reading `overlay.js`, `saves.js`, `universe_snapshot.js`, `db_manager.js`,
+`core.js`, the load/save paths, plus two independent verification passes. The architecture
+is right and most of the spec is present (ring, tray, gzip, migration via the versionchange
+transaction, dirty journal with correct take/ack, offline importer, revert-to-base). What is
+wrong is wrong in a data-losing way. The rule for the implementer: **do these in order,
+re-run the checks after each, do not start Step 3 until R1–R9 pass.**
+
+**The one mechanism behind five of the bugs:** `_putOverlayHex` (`db_manager.js:283-300`)
+*deletes* any hex whose id is not in `window.overlayHexes`. Every write path must therefore
+go through `markChanged(action, { hexIds })` *first*, which adds the ids to `overlayHexes`.
+Five paths still call `saveHexes`/`replaceWorkingCopy` without it.
+
+| # | Defect | Where | Fix | Check |
+|---|---|---|---|---|
+| R1 | **Clear Canvas wipes every save**, including the slot it just wrote: `clearDB(true)` clears `STORE_SAVES` | `io_manager.js:531-539`, `db_manager.js:506-511` | `clearDB` never clears `saves`. Add a separate, explicit `Saves.purgeAll()` behind its own confirm in the tray ("Delete all saves") | Clear Canvas → open Saves → "Before: Clear Canvas" is listed and restores |
+| R2 | **Grid insert/remove desyncs overlay from hexes**: `remapSectorSlots` renames `hexStates` keys but not `overlayHexes`, `_dirtyHexes`, `_pendingRev`, or `overlayBase.sectors[].slot`; `purgeSectorSlots` never drops the base entry | `core.js:556-638, 670, 706`, `sector_manager.js:328-412` | In `remapSectorSlots`, remap all four with the same `mapSlot`; in `purgeSectorSlots`, remove `overlayBase.sectors` entries for purged slots; after a grid change call `dbManager.replaceWorkingCopy()` (not `markChanged` with no ids) | Universe map, insert a column, reload → sectors, names, routes agree; edit one hex after the move, reload → edit present |
+| R3 | **T5 tab import never persisted** (`importT5Tab` never marks ids; `saveHexesBySectorNum` filters by `overlayHexes`); Foreven/Mixon in universe import likewise; sector file import has no `beforeBulk` or `markChanged` | `io_manager.js:1834, 2081-2113`, `otu_importer.js:654` | `await Saves.beforeBulk('Import <name>')` then `markChanged('Import T5 tab', { hexIds: <all ids written>, skipAutoslot: true })` before the write | Import a TSV, reload → present |
+| R4 | **Background Mongoose build drops its results**: `saveHexes(saved)` with ids not in overlay → `store.delete` | `macro_orchestrator.js:488` | `markChanged('Build systems', { hexIds: saved, skipAutoslot: true })` before `saveHexes`; `await Saves.beforeBulk('Build systems')` once at the start of the build (not per batch) | Build 3 hexes on a universe map, reload → built |
+| R5 | **ASAB single-system import lost** (commit marks `campaignAtlas` only; `saveHexes([target])` deletes) | `io_manager.js:2575-2579` | `markChanged('Import ASAB System', { hexIds: [targetHexId] })` inside the apply callback, before `saveHexes` | Import over a base hex, reload → present |
+| R6 | **Region XML fills lost** (`importRegionsFromXml` sets `cluster`, then `saveHexes` without marking) | `borders.js:1490-1517` | `markChanged('Import regions', { hexIds: affectedHexIds, skipAutoslot: true })` before `saveHexes` | Import metadata XML with regions on a universe map, reload → regions present |
+| R7 | **Importer enrichments after the write**: `applyOtuSystemData` and `applyAllegianceNames` edit hexes after `replaceWorkingCopy` and never mark them | `otu_importer.js:159-165, 526-531, 738-745` | Run both *before* `replaceWorkingCopy`, and mark the ids they touch | Import Marches, reload → published system data and allegiance names present |
+| R8 | **Every multi-hex edit takes a ring slot** (`markChanged` calls `beforeBulk` for `hexIds.length > 1`): assign region/allegiance/colour/disclosure overwrite the five slots | `core.js:293-295` | Delete the `beforeBulk` call from `markChanged`. `beforeBulk` is called explicitly and **awaited** at the sites in `persistence_v2.md` §3.1 only. Add the missing explicit, awaited calls: the eight generation macros (`macro_orchestrator.js:526, 573, 763, 1004, 1142, 1277, 1418, 1516`), route generation (`ui_menus.js:1564, 2502, 2559, 3257, 3736, 3828`) | Assign a region five times → ring unchanged; Ctrl+Alt+M → "Before: Generate" slot exists |
+| R9 | **Restore and Clear Canvas refuse after a boot failure** (`_autosaveBlocked` makes `writeStores` throw; the boot toast tells the referee to do exactly these) | `db_manager.js:421`, `saves.js:142`, `io_manager.js:531` | `beforeBulk` skips (with a toast "no autosave taken: storage is paused") instead of throwing while blocked; Restore and Clear call `allowAutosave()` before writing | Simulate boot failure → Restore works |
+| R10 | Load writes the campaign before the hexes, and a failed hex write still reports success | `io_manager.js:168-176` | Order: `replaceWorkingCopy` first, then the campaign commit; make `_watch` return the failure to callers that `await` it (keep the toast) | Fill quota, load → error, DB unchanged |
+| R11 | `attach()` does not tombstone base hexes missing from the live map; drops previously adopted sectors whose slot name no longer matches | `universe_snapshot.js:119-136` | For each base key with no live state: `overlayHexes.add(id)` and mark dirty (tombstone follows); start `sectors` from the existing `overlayBase.sectors` and only add matches | Delete a world, Attach, reload → still deleted |
+| R12 | "Loading chart" bar stays on failure | `overlay.js:201-218` | `try/finally` around the loop with `hideWorkStatus()` in `finally` | Remove a sector file, load → bar hidden, error toast |
+| R13 | Rename has no visible effect (`trigger` shown over `label`) | `saves.js:177, 299` | Display `label \|\| trigger`; rename sets `label` | Rename → new name shows |
+| R14 | `beforeBulk` 800 ms throttle skips snapshots silently; Restore toast names the wrong slot on wrap; Restore reports success after a cancelled load | `saves.js:86-87, 144-146` | Remove the throttle (R8 removes the storm it guarded against); compute the slot number from the `meta` `beforeBulk` returns; check `applyOverlayFile`'s return before the toast | Restore after Clear Sector → "Before: Restore" exists with the right number |
+| R15 | Timed autosave can capture a half-finished bulk action | `saves.js:105-114` | A `Saves.bulkDepth` counter incremented by `beforeBulk` and decremented by a new `Saves.endBulk()` that every awaited site calls in `finally`; `timed()` returns while depth > 0 | Import 10 sectors, timer fires → no partial slot |
+| R16 | Universe-mode save over `SAVE_CHUNK_THRESHOLD` falls through to the own-map writer (no `base`) | `io_manager.js:208-229` | Chunk the overlay document the same way (Part 1 = everything but `hexes`); never fall through | Save a huge universe overlay → parts carry `base` |
+| R17 | Slot blobs embed all campaign image payloads (`putSlot` serializes assets into each slot) → 5× image storage and a 10-minute re-serialize of every image | `saves.js:70-73` | Per spec §3.4: payloads stay out of slots; slots carry `meta.assetIds`; the GC keep-set (already wired) protects them | Five autosaves on a 40 MB image campaign → storage grows by the JSON, not 200 MB |
+| R18 | `Saves.list()` reads every slot's blob to render the list | `saves.js:120-125, 246` | Store `meta` under its own key (`meta:auto:n`) or read with a key cursor and `meta` only; blobs only on Restore/Keep/Export | Open the tray with 5 big slots → no multi-MB reads (DevTools) |
+| R19 | Letters in the Imperium slot field produce `NaN-A-0101` ids | `otu_importer.js:414, 459`, `universe_snapshot.js:75` | Resolve through `sectorSlotToNumber` before `adopt` | Enter "AA" → correct slot or a validation error |
+| R20 | `rev` resets to 1 when a macro replaces the hex object | `overlay.js:26-29`, `core.js:301-308` | In `stamp()`, take `rev` from `dirtyJournal.pending(id)` when the object has none | Generate over an existing hex → rev increments |
+| R21 | Deleted saves can linger forever if the tab closes within 10 s; `assetIds()` swallows read errors | `saves.js:127-135, 198-225` | On tray open, hard-delete rows with `meta.deleted` older than 10 s; on a read error, abort the GC run instead of returning a partial set | — |
+| R22 | Dead code / leftovers: no-op loop `overlay.js:25`; `otu_importer.js` localStorage cache readers, 1 s delays, API comments; `built.buildVersion` missing because `build.html:73` reads `win.APP_VERSION` (a `const`, not on `window`); `DB_VERSION` is 4, spec said 3 (fine, keep 4); legacy `hexStates` store not deleted after migration | — | Delete the leftovers; `build.html` reads `APP_VERSION` from the frame's script scope; delete the legacy store in `onupgradeneeded` *after* the copy cursor completes | — |
+
+| R23 | **Snapshot rebuilt as inputs-only with on-demand system builds** per `persistence_v2.md` §1.1–1.4: `pack.js` replaces `build.html`; sector files lose `built`; `index.js` gains `seed` and `buildSettings`; `adopt()` parses the TSV into sector-scale base hexes; `ensureSystemBuilt(hexId)` with `_withSnapshotGeneration`; `baseBuilt` store (DB_VERSION 5); the call sites in §1.4b; idle prefetch of neighbours; Attach compares trees against a scratch build. Delete `universe/sectors/Spinward_Marches.js` (21 MB) and regenerate it with `pack.js`. | `universe/`, `utilities/build_universe_snapshot/`, `universe_snapshot.js`, `otu_importer.js`, `io_manager.js` (`parseT5Tab` extraction), `db_manager.js`, `system_inspector.js`, `hex_editor.js`, `system_editor.js`, `html_exporter.js`, `obsidian_exporter.js`, `system_viewer.js` (one line, Johnny's file) | Import Spinward Marches with DevTools Network open → one ~50 KB script; click Regina → orbit view opens with the full system with no visible delay and no progress UI; reload → still instant (cache); change your own seed in Settings → Regina's orbits unchanged |
+
+**Checks after the whole list** are the ones in `persistence_v2.md` §5, run in the browser,
+plus: import Spinward Marches → edit one world → build three hexes → assign a region → insert
+a column → reload: everything present, `overlayHexes.size` is small, Saves lists exactly the
+expected "Before:" slots.
+
+**Decision (Johnny, 2026-10-02): option 2 — inputs only, systems built on demand, invisibly. Specified in `persistence_v2.md` §1.1–1.4; it is R23 below.** The analysis that led there: `universe/sectors/Spinward_Marches.js`
+holds 439 systems at ~48 KB each (full MgT2E trees; gas-giant moon lists dominate). That is
+real data, not a bug, but it scales to ~2.7 GB for the 16×8 universe, and the boot path
+parses every attached sector's file before the map appears (`db_manager.js:250` →
+`Overlay.mergedHexes`). Three options:
+1. **Keep built snapshots, shrink them** — round floats to 6 significant digits, drop the
+   841 `EMPTY` entries (implied), de-duplicate `mgtSocio`/`mainworld` (they are references to
+   objects already in `worlds[]`) → roughly 3× smaller, still ~1 GB. Not viable in the repo.
+2. **Snapshot the inputs, build on demand** — commit TSV + metadata + seed + build version
+   (~50 KB per sector, ~6 MB for the universe). A system's full tree is built the first time
+   its hex is inspected (one `_buildOneMgtHex`, milliseconds, deterministic from the seed)
+   and cached in `overlayHexes`-adjacent store `baseCache`. The map at sector scale needs
+   only the TSV (UWP, name, zone, bases, allegiance), which is already there. No API calls,
+   no in-browser bulk build, instant boot. **Recommended.** The "built systems" promise is
+   kept in substance — nothing is ever generated twice and nothing waits on the referee —
+   while the artefact stays small.
+3. **Keep both** — ship inputs in the repo, let a script produce built files for a local
+   install that wants them (`universe/built/`, git-ignored). The loader prefers built when
+   present, else builds on demand.
+
+### Step 2b — Cache everything (`directives/persistence_v2.md` §6)
+After R1–R23 pass. `js/cache.js` + Storage section in the Saves tray; boot data on demand
+(the 17 MB `solo_6_data.js` stops loading at boot); self-hosted fonts; `baseBuilt`,
+`planetBakes`, `surfaceSheets`, `captures` stores with LRU budgets; idle prefetch; service
+worker for the hosted build only. Checks are listed in §6.4.
+
 ### Step 3 — Grace: LOD dissolve, eased zoom, one chrome convention (§G)
 Files: `renderer.js`, `canvas_input.js`, `input_init.js`, `style.css`, `hex_map.html`
 (markup attributes only), `ui_menus.js` (show/hide call sites).
@@ -380,4 +452,34 @@ runs on attribute changes via its MutationObserver.
 
 Camera flights (`flyTo`), pan inertia, keyboard panning and per-frame map resizing while a
 panel animates stay in the campaign plan; they build on G.2–G.4 without changing them.
+
+### Step 2 — implementation report 2026-10-02
+
+Isolated headless Chrome (Playwright, channel chrome). A row is DONE only for the check named here. Checks not run are not run.
+
+- R1 DONE. `db_manager.js` `clearDB` (around line 537) no longer clears `saves`; `saves.js:407` `purgeAll` is the separate tray action. Check: Clear Canvas, reload, Saves listed "Before: Clear Canvas", Restore put back hex `1-B-0101` with its Mongoose system. Passed.
+- R2 DONE. `core.js:553` `remapSectorSlots` remaps the overlay sets and `overlayBase` slots; `core.js:731` `persistGridChange` calls `replaceWorkingCopy`. Check: Spinward Marches adopted, insert column 0, rename the moved hex to Edited, wait out the 2 second save, reload. Name was Edited, sector name and base slot were on slot 2. An immediate reload before that save still showed the pre-edit name. Passed after the save.
+- R3 NOT DONE. `io_manager.js:1967` and `:2218` await `beforeBulk` and `markChanged('Import T5 tab')` before the write. Check "Import a TSV, reload → present" was not run.
+- R4 NOT DONE as written. `macro_orchestrator.js:461` and `:487` take one "Build systems" slot and mark the ids before `saveHexes`. Three blank worlds were built with the chart detached, reloaded, and all three were in `overlayHexes` with `mgtSystem`. The Build button is hidden while a chart is attached (`universe_snapshot.js:308`), so this was not a build left running on an attached universe map.
+- R5 NOT DONE. `io_manager.js:2690` marks `Import ASAB System` before the save. Check "Import over a base hex, reload" was not run.
+- R6 NOT DONE. `borders.js:1517` marks `Import regions` before the save. Check "Import metadata XML with regions" was not run.
+- R7 DONE. Allegiance names and published system data are applied before `replaceWorkingCopy`, and the ids they touch are marked (`otu_importer.js` import finish). Check: Import Spinward Marches, reload. Regina's allegiance name was "Third Imperium, Domain of Deneb". A second run applied published system data and reloaded: Regina still had 3 stars, a mainworld, and UWP A788899-C. Passed. The same mark put 439 worlds into the overlay.
+- R8 DONE. `core.js:291` `markChanged` does not call `beforeBulk`. The eight macros call `beforeBulk('Generate')` (first at `macro_orchestrator.js:583`). Check: five allegiance assigns left the autosave count unchanged. `runMgT2EMacro()` (the Ctrl+Alt+M handler; the key was not pressed) listed a slot "Before: Generate". Passed.
+- R9 DONE. `saves.js:88` toasts "no autosave taken: storage is paused" and returns null while blocked; Restore calls `allowAutosave` before it writes. Check: `autosaveBlocked` was stubbed to return true (not a second tab). The toast appeared, and Restore of a named save put the hex name back to "Kept". Passed.
+- R10 NOT DONE. `applyOverlayFile` writes the hexes before the campaign commit, and `_watch` rethrows. Check "Fill quota, load → error, DB unchanged" was not run.
+- R11 DONE. `universe_snapshot.js` `attach` confirms, tombstones a missing world, and compares a scratch build when the live hex already has `mgtSystem`. The scratch swaps a copy into `hexStates` and puts the live object back in `finally`. Check: delete Regina, Attach, reload. Regina was still absent. Passed.
+- R12 DONE. `overlay.js` `mergedHexes` hides the loading bar in `finally`. Check: a map whose chart name has no file was reloaded. The bar was hidden and the toast was "The stored map could not be restored: The chart for Not A Sector is not in this copy of the cartographer." The file on disk was not deleted. Passed.
+- R13 DONE. `saves.js:356` shows `label || trigger`. Check: Rename, accept "Renamed save". The tray showed that name. Passed.
+- R14 DONE. The 800 ms throttle is gone. Restore toasts `prior.n + 1`. Check: Clear Alpha landed in Autosave 1 (`n=0`). Restore created "Before: Restore Before: Clear Alpha" at `n=1` and the toast said Autosave 2. Passed.
+- R15 NOT DONE. `bulkDepth` gates `timed()`, and the bulk sites call `endBulk` in `finally`. Check "Import 10 sectors, timer fires → no partial slot" was not run. Only Spinward Marches has a snapshot file, so a 10-sector import cannot succeed.
+- R16 NOT DONE. `io_manager.js:61` `partitionOverlaySave` puts `base` on every part and hexes only after part 1. In-page, an 800-byte limit produced 7 parts, every part had `base`, and part 1 had 0 hexes. A real save over 250 MB was not downloaded.
+- R17 NOT DONE. Slot writes no longer embed campaign image payloads. Check "Five autosaves on a 40 MB image campaign" was not run.
+- R18 DONE. `saves.js:127` `list` reads `meta:` keys. Check: five named saves with a 200 KB note. `list()` called `get` only on `meta:` keys. A 40 MB image campaign was not used. Passed for the blob-read defect.
+- R19 NOT DONE. `sectorSlotToNumber('AA')` returned 27 in the page, and the importer uses that function before `adopt`. The Imperium slot field was not typed.
+- R20 DONE. `overlay.js:20` `stamp` takes `rev` from `dirtyJournal.pending` when the object has none. Check: rev 1, mark, replace the object, mark again. Result rev 3 and pending 3. Passed.
+- R21 DONE. Check column is "—". `saves.js:427` runs `purgeExpiredDeletes` when the tray opens. `assetIds` no longer swallows a list error.
+- R22 DONE. Check column is "—". localStorage cache readers, the 1 second delays, and the Traveller Map header comment are gone from `otu_importer.js`. `build.html` and `.tmp/atlas-testing/build-snapshot.cjs` are deleted. The legacy `hexStates` store is deleted in `onupgradeneeded` after the copy when upgrading from before version 4, and immediately when it is still there. `DB_VERSION` is 5 because R23 adds `baseBuilt`, not 4.
+- R23 NOT DONE. `utilities/build_universe_snapshot/pack.js` rewrote `universe/sectors/Spinward_Marches.js` to 59026 bytes (name, x, y, milieu, snapshotVersion, tsv, metadataXml; no `built`). `universe/index.js` has seed `TravellerMagnus` and the generation defaults. Import fetched that script once. Regina's name was Regina and her UWP was A788899-C, with no Mongoose tree yet. The Build button was hidden while a chart was attached. `SystemViewer.open` on Regina did not build a system: the import had put her in `overlayHexes` (439 worlds), and `ensureSystemBuilt` (`universe_snapshot.js:127`) returns when the hex is in the overlay, which is the rule in persistence_v2.md §1.4. Calling `adopt` without that mark, then `ensureSystemBuilt`, built Regina with 3 stars and 9 worlds and did not show the progress bar. Reload-from-cache and "change your seed, orbits unchanged" were not run on the import path. There is no `SystemEditor.open`; the call is on `openEdit`. The on-demand build does not wait for the IndexedDB cache, so the first open after a reload rebuilds. `baseBuilt` is cleared by Clear Canvas and by `purgeSectorSlots`, not by an ordinary overlay save.
+
+The whole-list check (import, edit, build three, assign a region, insert a column, reload, small overlay, expected Before slots) was not run as one pass. After this import the overlay is 439 hexes, not small, because R7 marks the allegiance-named worlds. Old overlays that expected baked trees in the sector file now reload the published listing only.
 

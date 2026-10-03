@@ -258,6 +258,10 @@ function _storeMgtBuild(state, sys) {
 }
 
 function runMgtBuild() {
+    if (window.overlayBase) {
+        showToast('These worlds already come from the chart. Edit a world to change it.', 4000);
+        return;
+    }
     const hexes = currentActionHexes();
     if (hexes.length > 1280) {
         showToast('Build up to one sector (1280 hexes) at a time.', 4000);
@@ -268,7 +272,7 @@ function runMgtBuild() {
         .filter(item => item.stage);
     if (!work.length) return;
     const offer = mgtBuildOffer(work.map(item => item.id));
-    saveHistoryState('Mongoose build', { hexIds: work.map(item => item.id) });
+    markChanged('Mongoose build', { hexIds: work.map(item => item.id) });
     if (window.isLoggingEnabled) window.batchLogData = [];
     let count = 0;
     work.forEach(({ id, stage }) => {
@@ -452,7 +456,9 @@ function startBackgroundMgtBuild(options) {
             fraction: 0
         });
         await yieldTurn();
+        let buildSlot = null;
         try {
+            if (window.Saves) buildSlot = await window.Saves.beforeBulk('Build systems');
             for (let s = 0; s < sectors.length; s++) {
                 const sector = sectors[s];
                 console.log(`[MgtBuild] sector ${s + 1}/${sectors.length} ${sector.name}: ${sector.hexes.length} worlds`);
@@ -477,7 +483,10 @@ function startBackgroundMgtBuild(options) {
                         await yieldTurn();
                     }
                 }
-                if (saved.length && window.dbManager?.saveHexes) await window.dbManager.saveHexes(saved);
+                if (saved.length && window.dbManager?.saveHexes) {
+                    if (typeof markChanged === 'function') markChanged('Build systems', { hexIds: saved, skipAutoslot: true });
+                    await window.dbManager.saveHexes(saved);
+                }
                 requestAnimationFrame(draw);
                 if (stopped) break;
                 await yieldTurn();
@@ -490,6 +499,7 @@ function startBackgroundMgtBuild(options) {
                 ? `Stopped after ${built.toLocaleString()} Mongoose system${built === 1 ? '' : 's'}.${failNote}`
                 : `Built ${built.toLocaleString()} Mongoose system${built === 1 ? '' : 's'}.${failNote}`, stopped ? 5000 : 6000);
         } finally {
+            if (buildSlot && window.Saves && window.Saves.endBulk) window.Saves.endBulk();
             window.isLoggingEnabled = wasLogging;
             _mgtBuildRunning = false;
             _mgtBuildCancel = false;
@@ -513,10 +523,14 @@ document.addEventListener('DOMContentLoaded', () => {
 // AUTO POPULATE
 // ============================================================================
 
-function autoPopulate(chanceOutOfSix) {
+async function autoPopulate(chanceOutOfSix) {
     if (!validateSelection('populate')) return;
-    saveHistoryState('Auto Populate', { hexIds: currentActionHexes() });
-    currentActionHexes().forEach(hexId => {
+    const populateIds = currentActionHexes();
+    let genSlot = null;
+    if (populateIds.length > 1 && window.Saves) genSlot = await window.Saves.beforeBulk('Generate');
+    try {
+    markChanged('Auto Populate', { hexIds: populateIds });
+    populateIds.forEach(hexId => {
         reseedForHex(hexId);
         const roll = roll1D();
         if (roll <= chanceOutOfSix) {
@@ -534,6 +548,9 @@ function autoPopulate(chanceOutOfSix) {
 
     selectedHexes.clear();
     requestAnimationFrame(draw);
+    } finally {
+        if (genSlot && window.Saves && window.Saves.endBulk) window.Saves.endBulk();
+    }
 }
 
 // ============================================================================
@@ -544,7 +561,6 @@ async function runMgT2EMacro(skipPop = false) {
     if (!validateSelection('generate', !skipPop)) return;
 
     const targetHexes = currentActionHexes();
-    saveHistoryState('Mongoose Macro', { hexIds: targetHexes });
     if (window.isLoggingEnabled) window.batchLogData = [];
 
     console.log("Bulk Generating MgT2E Full System...");
@@ -563,6 +579,9 @@ async function runMgT2EMacro(skipPop = false) {
     if (!confirm(`This will completely overwrite ANY existing data in the selected hexes with a Full Mongoose 2E Generation sequence.${_mgtManualWarning}\n\nProceed?`)) {
         return;
     }
+    let genSlot = null;
+    if (targetHexes.length > 1 && window.Saves) genSlot = await window.Saves.beforeBulk('Generate');
+    markChanged('Mongoose Macro', { hexIds: targetHexes });
 
     // v0.6.1.0: Statistical auditor for this generation run
     const _auditor_mgt2e = (typeof StatisticalAuditor !== 'undefined')
@@ -738,6 +757,7 @@ async function runMgT2EMacro(skipPop = false) {
 
         selectedHexes.clear();
         requestAnimationFrame(draw);
+        if (genSlot && window.Saves && window.Saves.endBulk) window.Saves.endBulk();
     }, 500);
 }
 
@@ -752,7 +772,9 @@ async function runMgT2EBottomUpMacro(skipPop = false) {
     }
 
     const targetHexes = currentActionHexes();
-    saveHistoryState('MgT2E Bottom-Up Macro', { hexIds: targetHexes });
+    let genSlot = null;
+    if (targetHexes.length > 1 && window.Saves) genSlot = await window.Saves.beforeBulk('Generate');
+    markChanged('MgT2E Bottom-Up Macro', { hexIds: targetHexes });
 
     // v0.6.1.0: Statistical auditor
     const _auditor_mgt2e_bu = (typeof StatisticalAuditor !== 'undefined')
@@ -924,6 +946,7 @@ async function runMgT2EBottomUpMacro(skipPop = false) {
 
         selectedHexes.clear();
         requestAnimationFrame(draw);
+        if (genSlot && window.Saves && window.Saves.endBulk) window.Saves.endBulk();
     }, 500);
 }
 
@@ -979,7 +1002,6 @@ async function runCTNewMacro(skipPop = false) {
     await ensureNamesLoaded();
 
     const targetHexes = currentActionHexes();
-    saveHistoryState('CT New Macro', { hexIds: targetHexes });
 
     // Warn if any selected hex has manually-overridden CT fields
     let _ctManualCount = 0;
@@ -994,6 +1016,9 @@ async function runCTNewMacro(skipPop = false) {
     if (!confirm(`This will completely overwrite ANY existing data in the selected hexes with the NEW Modular Classic Traveller Generation sequence.${_ctManualWarning}\n\nProceed?`)) {
         return;
     }
+    let genSlot = null;
+    if (targetHexes.length > 1 && window.Saves) genSlot = await window.Saves.beforeBulk('Generate');
+    markChanged('CT New Macro', { hexIds: targetHexes });
 
     // v0.6.1.0: Statistical auditor
     const _auditor_ct = (typeof StatisticalAuditor !== 'undefined')
@@ -1107,6 +1132,7 @@ async function runCTNewMacro(skipPop = false) {
 
         selectedHexes.clear();
         requestAnimationFrame(draw);
+        if (genSlot && window.Saves && window.Saves.endBulk) window.Saves.endBulk();
     }, 500);
 }
 
@@ -1117,7 +1143,6 @@ async function runCTBottomUpMacro(skipPop = false) {
     await ensureNamesLoaded();
 
     const targetHexes = currentActionHexes();
-    saveHistoryState('CT Bottom-Up Macro', { hexIds: targetHexes });
 
     // Warn if any selected hex has manually-overridden CT fields
     let _ctManualCount = 0;
@@ -1132,6 +1157,9 @@ async function runCTBottomUpMacro(skipPop = false) {
     if (!confirm(`This will completely overwrite ANY existing data in the selected hexes with a Bottom-Up Classic Traveller Generation sequence.${_ctManualWarning}\n\nProceed?`)) {
         return;
     }
+    let genSlot = null;
+    if (targetHexes.length > 1 && window.Saves) genSlot = await window.Saves.beforeBulk('Generate');
+    markChanged('CT Bottom-Up Macro', { hexIds: targetHexes });
 
     // v0.6.1.0: Statistical auditor
     const _auditor_ct_bu = (typeof StatisticalAuditor !== 'undefined')
@@ -1240,6 +1268,7 @@ async function runCTBottomUpMacro(skipPop = false) {
 
         selectedHexes.clear();
         requestAnimationFrame(draw);
+        if (genSlot && window.Saves && window.Saves.endBulk) window.Saves.endBulk();
     }, 500);
 }
 
@@ -1252,7 +1281,6 @@ async function runRTTMacro(skipPop = false) {
     await ensureNamesLoaded();
 
     const targetHexes = currentActionHexes();
-    saveHistoryState('RTT Macro', { hexIds: targetHexes });
 
     // Warn if any selected hex has manually-overridden fields that will be lost
     let totalManualBodies = 0;
@@ -1267,6 +1295,9 @@ async function runRTTMacro(skipPop = false) {
     if (!confirm(`This will completely overwrite ANY existing data in the selected hexes with a Full RTT Generation sequence.${manualWarning}\n\nProceed?`)) {
         return;
     }
+    let genSlot = null;
+    if (targetHexes.length > 1 && window.Saves) genSlot = await window.Saves.beforeBulk('Generate');
+    markChanged('RTT Macro', { hexIds: targetHexes });
 
     // v0.6.1.0: Statistical auditor
     const _auditor_rtt = (typeof StatisticalAuditor !== 'undefined')
@@ -1387,6 +1418,7 @@ async function runRTTMacro(skipPop = false) {
 
         selectedHexes.clear();
         requestAnimationFrame(draw);
+        if (genSlot && window.Saves && window.Saves.endBulk) window.Saves.endBulk();
     }, 500);
 }
 
@@ -1403,11 +1435,13 @@ async function runAoWMacro(skipPop = false) {
     await ensureNamesLoaded();
 
     const targetHexes = currentActionHexes();
-    saveHistoryState('AoW Macro', { hexIds: targetHexes });
 
     if (!confirm(`This will completely overwrite ANY existing data in the selected hexes with a Full Architect of Worlds (Bottom-Up) generation sequence.\n\nProceed?`)) {
         return;
     }
+    let genSlot = null;
+    if (targetHexes.length > 1 && window.Saves) genSlot = await window.Saves.beforeBulk('Generate');
+    markChanged('AoW Macro', { hexIds: targetHexes });
 
     // 1. Auto Populate (Standard 3 in 6)
     // Use "-pop" salt so the populate check doesn't share a seed with the stellar
@@ -1489,6 +1523,7 @@ async function runAoWMacro(skipPop = false) {
 
         selectedHexes.clear();
         requestAnimationFrame(draw);
+        if (genSlot && window.Saves && window.Saves.endBulk) window.Saves.endBulk();
     }, 500);
 }
 
@@ -1505,7 +1540,9 @@ async function runT5Macro(skipPop = false) {
     }
 
     const targetHexes = currentActionHexes();
-    saveHistoryState('T5 Macro', { hexIds: targetHexes });
+    let genSlot = null;
+    if (targetHexes.length > 1 && window.Saves) genSlot = await window.Saves.beforeBulk('Generate');
+    markChanged('T5 Macro', { hexIds: targetHexes });
 
     // v0.6.1.0: Statistical auditor
     const _auditor_t5 = (typeof StatisticalAuditor !== 'undefined')
@@ -1618,5 +1655,6 @@ async function runT5Macro(skipPop = false) {
 
         selectedHexes.clear();
         requestAnimationFrame(draw);
+        if (genSlot && window.Saves && window.Saves.endBulk) window.Saves.endBulk();
     }, 500);
 }
