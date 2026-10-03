@@ -120,9 +120,29 @@ index, and updates the build record. When every sector is done the manifest is w
 `truth_versions` row and `truth_systems` search rows are inserted. A truth version is never
 rewritten; a change is a new version.
 
-**Limits.** Worker CPU limit is raised in `wrangler.toml` (`[limits] cpu_ms`) so a batch of 64
-systems or one sector of ~440 fits comfortably in one invocation; batches are sized so no
-single invocation exceeds half the limit.
+**Limits, and the shape they force (learned 2026-10-03).** One Worker invocation gets a
+bounded number of binding calls (about 1,000 subrequests: every R2 `get`/`head`/`put`, queue
+`send` and D1 call counts) and 128 MB of memory. A system tree is ~86 KB, sectors run to
+1,029 rows, and 167 of 512 have over 450. So no invocation ever does per-item work across a
+whole sector or a whole catalogue:
+
+- **The build endpoint** verifies inputs with paginated `list({ prefix })` (two calls for
+  1,025 keys), never per-file reads, and enqueues with `sendBatch` in groups of 100.
+- **The truth-build consumer works in slices of 200 rows.** A message is
+  `{ version, slug, offset }`. The consumer generates only rows `[offset, offset + 200)`
+  (every hex is seeded independently, so a slice is deterministic on its own), `put`s each
+  tree without a preceding `head` (content-addressed writes are idempotent), writes the
+  slice's index rows to `inputs/<version>/_parts/<slug>/<offset>.json` in the private
+  bucket, then enqueues the next offset or, on the last slice, finalizes: reads the parts,
+  writes the sector index, replaces the sector's `truth_systems` rows in one D1 batch, and
+  upserts the sector's row in `truth_build_sectors`.
+- **Progress is counted, never incremented.** `sectors_done` is `COUNT(*)` of
+  `truth_build_sectors` rows in state `done` for the version, so a retried message cannot
+  double count.
+- **Bulk generation in slice 2 follows the same rule:** batches of 64, one transaction each.
+
+Worker CPU limit is raised in `wrangler.toml` (`[limits] cpu_ms`); a 200-row slice uses a
+fraction of it.
 
 ## 6. Worker configuration (`apps/api/wrangler.toml`)
 

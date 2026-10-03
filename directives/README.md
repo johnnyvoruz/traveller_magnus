@@ -10,6 +10,7 @@ Read in this order.
 | File | Holds |
 |---|---|
 | `manifesto.md` | the rules every session obeys and their checks; decisions taken |
+| `handoff.md` | where the work stands right now, what is in flight, traps already hit; kept current by the orchestrator |
 | `plan.md` | what we are building, roles and protocol, the six slices, milestones |
 | `architecture.md` | stack, topology, repo layout, Worker configuration, sync model, budgets |
 | `data_model.md` | D1 tables, R2 key schemes, truth files, overlay v3, package format |

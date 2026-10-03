@@ -18,7 +18,8 @@ This repository now holds two things:
    logic. Never extend it. It is deleted at milestone M2.
 
 **Start every session by reading, in order:** `directives/manifesto.md` → `directives/plan.md`
-→ the directive for the slice you are on. `architecture.md`, `data_model.md`, `api.md` and
+→ `directives/handoff.md` (current state, what is in flight, traps already hit) → the
+directive for the slice you are on. `architecture.md`, `data_model.md`, `api.md` and
 `design_reference.md` are the specs those point to. `feature_inventory.md` says what happens to
 every legacy feature.
 

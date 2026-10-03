@@ -52,7 +52,9 @@ universes        (id PK, owner_id FK, name, slug, truth_version NULL, engine_ver
 truth_versions   (version PK, engine_version, milieu, seed, settings JSON, sectors JSON,   -- the exact build inputs
                   state ('building'|'released'|'withdrawn'), started_at, released_at NULL, notes,
                   manifest_hash NULL, sectors_total INT, sectors_done INT, sectors_failed JSON)
-truth_systems    (version, sector_slug, hex, name, uwp, allegiance, zone, tree_hash, PK(version, sector_slug, hex))
+truth_build_sectors (version, sector_slug, state ('building'|'done'|'failed'), systems INT, built INT, partial INT,
+                  index_hash NULL, error NULL, updated_at, PK(version, sector_slug))   -- sectors_done = COUNT(state='done')
+truth_systems    (version, sector_slug, hex, name, uwp, allegiance, zone, tree_hash NULL, partial NULL, PK(version, sector_slug, hex))
 truth_systems_fts  FTS5 virtual table over truth_systems(name, hex, uwp, sector_slug) content-synced by triggers
 
 packages         (id PK, author_id FK, kind, title, slug UNIQUE, description, tags JSON, edition,
