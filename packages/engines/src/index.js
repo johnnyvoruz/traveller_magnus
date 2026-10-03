@@ -8,6 +8,7 @@ export { MGT2E_ORBIT_AU, MGT2E_STAR_STATS, MGT2E_HZ_DEVIATION, MGT2E_MAO, MGT2E_
 export { hexStates, gridWidth, gridHeight, baseHexSize, legacySectorLetterToIndex, sectorSlotToNumber, getHexId, pixelToHex, getHexCoords, isVacantHex, HEX_VIEW_STATE_KEYS, stripHexViewState, getHexDistance, getHexPixel } from './core/hex.js';
 export { markManual, isManual, clearManual, countManualCTBodies, countT5ManualBodies, countManualBodies, countManualMgt2eBodies } from './core/manual.js';
 export { namePool, usedNames, setNamePool, getNextSystemName, _toRoman, _assignMoonNames, applyMgT2EOrbitalNames, applyCTOrbitalNames, applyT5OrbitalNames, applyRTTOrbitalNames } from './core/names.js';
+export { SYSTEM_NAMES } from './generated/names_data.js';
 export { masterSeed, rng, hashString, mulberry32, setRandomSeed, reseedForHex, shouldGeneratePopulation, clampUWP, roll1D, roll2D, rollFlux, rollD3, rollND, roll3D, roll4D, toEHex, fromEHex } from './core/rng.js';
 export { placeCompanionOrbits } from './core/stars.js';
 export { settings, configure, genState } from './core/settings.js';

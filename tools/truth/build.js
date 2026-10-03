@@ -1,8 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { setNamePool } from '@voyage/engines';
-import { SYSTEM_NAMES } from '../../packages/engines/src/generated/names_data.js';
 import { stable, sha256Hex } from '@voyage/shared';
 import { buildSector } from '@voyage/generation';
 import { TRUTH_SEED, TRUTH_SETTINGS, TRUTH_MILIEU } from './settings.js';
@@ -12,19 +10,8 @@ const engineVersion = JSON.parse(fs.readFileSync(path.join(ROOT, 'packages/engin
 const OUT = path.join(ROOT, 'truth-local');
 const TRUTH_VERSION = 'v1';
 
-function fillNamePool() {
-    const pool = [];
-    for (const name of SYSTEM_NAMES) {
-        const cleaned = name ? name.trim() : '';
-        if (cleaned) pool.push(cleaned);
-    }
-    pool.sort();
-    setNamePool(pool);
-}
-
 const started = Date.now();
 fs.rmSync(OUT, { recursive: true, force: true });
-fillNamePool();
 
 const rawDir = path.join(ROOT, 'universe/raw');
 const failed = [];

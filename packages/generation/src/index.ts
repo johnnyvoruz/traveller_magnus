@@ -1,8 +1,17 @@
 import {
     configure, setRandomSeed, reseedForHex, buildOne, stripHexViewState, toEHex, placeCompanionOrbits,
-    generateSystem, generateRTTSectorStep1, generateAoWSystemBottomUp,
+    generateSystem, generateRTTSectorStep1, generateAoWSystemBottomUp, setNamePool, SYSTEM_NAMES,
 } from '@voyage/engines';
 import { parseT5Tab, parseMetadataXml, stable, sha256Hex } from '@voyage/shared';
+
+// One pool for the Worker and the local truth build. Trim, keep non-empty, sort.
+const namePool = [];
+for (const name of SYSTEM_NAMES) {
+    const cleaned = name ? name.trim() : '';
+    if (cleaned) namePool.push(cleaned);
+}
+namePool.sort();
+setNamePool(namePool);
 
 export type Pinned = { seed: string; settings: Record<string, unknown>; engineVersion: string };
 export type Edition = 'MgT2E' | 'CT' | 'T5' | 'RTT' | 'AoW';
