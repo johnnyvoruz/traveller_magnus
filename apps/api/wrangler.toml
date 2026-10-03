@@ -1,0 +1,88 @@
+name = "voyage"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]
+# Top-level keys must come before the first table header; a bare `routes` after [assets] would attach to assets.
+routes = [{ pattern = "traveller.voyage", custom_domain = true }]
+
+[limits]
+cpu_ms = 60000
+
+[assets]
+directory = "../web/dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "voyage"
+database_id = "dce853bf-fd23-4073-99b6-1f8e1d2f569a"
+migrations_dir = "src/db/migrations"
+
+[[durable_objects.bindings]]
+name = "UNIVERSE"
+class_name = "UniverseDO"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["UniverseDO"]
+
+[[r2_buckets]]
+binding = "PRIVATE_BUCKET"
+bucket_name = "voyage-private"
+
+[[r2_buckets]]
+binding = "PUBLIC_BUCKET"
+bucket_name = "voyage-public"
+
+[[queues.producers]]
+binding = "GENERATE_QUEUE"
+queue = "voyage-generate"
+
+[[queues.producers]]
+binding = "PUBLISH_QUEUE"
+queue = "voyage-publish"
+
+[[queues.producers]]
+binding = "TRUTH_QUEUE"
+queue = "voyage-truth-build"
+
+[[queues.consumers]]
+queue = "voyage-generate"
+max_batch_size = 1
+max_retries = 3
+dead_letter_queue = "voyage-dlq"
+
+[[queues.consumers]]
+queue = "voyage-publish"
+max_batch_size = 1
+max_retries = 3
+dead_letter_queue = "voyage-dlq"
+
+[[queues.consumers]]
+queue = "voyage-truth-build"
+max_batch_size = 1
+max_retries = 3
+dead_letter_queue = "voyage-dlq"
+
+[[analytics_engine_datasets]]
+binding = "METRICS"
+
+[triggers]
+crons = ["0 4 * * *", "0 5 * * SUN"]   # daily universe snapshots; weekly object GC and universe purge
+
+[vars]
+APP_ENV = "production"
+PUBLIC_CDN_BASE = "https://cdn.traveller.voyage"
+BETTER_AUTH_URL = "https://traveller.voyage"
+
+# secrets (wrangler secret put, or `npm run xauth` for the X keys):
+#   BETTER_AUTH_SECRET,
+#   TWITTER_CLIENT_ID, TWITTER_CLIENT_SECRET,
+#   DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET,
+#   GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
+#   X_CONSUMER_KEY, X_CONSUMER_SECRET, X_BEARER_TOKEN
+
+[env.preview]
+routes = [{ pattern = "preview.traveller.voyage", custom_domain = true }]

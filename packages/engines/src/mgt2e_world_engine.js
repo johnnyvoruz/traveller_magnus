@@ -1,0 +1,2725 @@
+/**
+ * PROJECT AS ABOVE, SO BELOW
+ * MGT2E WORLD ENGINE - Planetary Physics & Atmospherics Module
+ * 
+ * This module contains the core terrestrial world generation functions:
+ * - generatePhysicals: Size, mass, gravity, moons (Chunk 3)
+ * - generateAtmospherics: Atmosphere, temperature, hydrographics (Chunk 4)
+ * 
+ * Architectural Compliance:
+ * - All RPG mechanics pulled from MgT2EData (Data Shield)
+ * - All physics calculations via MgT2EMath (Math Chassis)
+ * - State mutation pattern (sys object passed & returned)
+ * - Comprehensive trace logging (tSection, tRoll2D, tDM, tResult, tSkip)
+ */
+import { rng, roll1D, roll2D, roll3D, toEHex, fromEHex } from './core/rng.js';
+import { trace, writeLogLine, tSection, tResult, tDM, tSkip, tRoll1D, tRoll2D, tRoll3D, tRoll4D } from './core/trace.js';
+import { isManual } from './core/manual.js';
+import { MgT2EData } from './generated/rules/mgt2e_data.js';
+import { MGT2E_SURFACE_DISTS, MGT2E_PLATE_INTERACTIONS } from './core/constants.js';
+import { isMaskingEligible } from './universal_math.js';
+import { MgT2EMath } from './mgt2e_math.js';
+    // =====================================================================
+    // HELPER FUNCTIONS
+    // =====================================================================
+
+    /**
+     * Calculate terrestrial physical properties (density, gravity, mass, velocities)
+     * @param {Object} body - The world or moon object to populate
+     * @param {string} label - Label for trace logging
+     * @param {Object} sys - System object for context
+     */
+    function calculateTerrestrialPhysical(body, label, sys) {
+        if (body.size === 0 || body.size === 'R') {
+            body.density = null;
+            body.gravity = null;
+            body.mass = null;
+            body.escapeVel = null;
+            body.orbitalVelSurface = null;
+            return;
+        }
+
+        tSection(`${label} Physical Stats`);
+
+        // 1. Size 'S' math override
+        let mathSize = body.size;
+        if (body.size === 'S' || body.size === 's') mathSize = 0.375;
+        else if (body.size === 'R' || body.size === 'r' || body.size === 'GG') mathSize = 0;
+        else if (typeof body.size === 'string') {
+            mathSize = parseInt(body.size, 16);
+            if (isNaN(mathSize)) {
+                mathSize = fromEHex(body.size);
+            }
+        }
+        
+        if (isNaN(mathSize)) {
+            if (typeof writeLogLine === 'function') writeLogLine(`[Engine Error] [MgT2E World] calculateTerrestrialPhysical: body.size "${body.size}" resolved to NaN. Defaulting mathSize to 0 to prevent downstream physical corruption.`);
+            mathSize = 0;
+        }
+
+        // 2. Terrestrial Composition
+        let compRoll = tRoll2D('Composition Roll');
+        let compDM = 0;
+
+        let sVal = mathSize;
+        if (sVal <= 4) { compDM -= 1; tDM('Size 0-4', -1); }
+        else if (sVal >= 6 && sVal <= 9) { compDM += 1; tDM('Size 6-9', 1); }
+        else if (sVal >= 10) { compDM += 3; tDM('Size A-F', 3); }
+
+        let hzco = body.worldHzco || (sys ? (sys.ptypeHzco || sys.hzco) : 0);
+        if (hzco > 0 && body.orbitId !== undefined) {
+            let diff = getEffectiveHzcoDeviation(body.orbitId, hzco);
+            if (diff <= 0) {
+                compDM += 1;
+                tDM('At/Closer than HZCO', 1);
+            } else {
+                let penalty = 1 + Math.floor(diff);
+                compDM -= penalty;
+                tDM(`Further than HZCO (-${penalty})`, -penalty);
+            }
+        }
+
+        if (sys && sys.age > 10) {
+            compDM -= 1;
+            tDM('System Age > 10 Gyr', -1);
+        }
+
+        let compModRoll = compRoll + compDM;
+
+        // 2. Terrestrial Composition (Data-Driven Lookup)
+        const compTable = MgT2EData.stellar.coreComposition;
+        let coreType = compTable.find(entry => compModRoll <= entry.threshold).type;
+
+        if (!isManual(body, 'composition')) body.composition = coreType;
+        tResult('Composition Result', coreType, 'MgT2E 2.1: Composition & Gravity');
+
+        // 3. Density Lookup from MgT2EData
+        let densityRoll = tRoll2D('Density Roll (No DMs)');
+        const densityTable = MgT2EData.stellar.densityLookup;
+        let baseDensity = densityTable[densityRoll][coreType];
+
+        // Linear interpolation: pick a random value between the neighbouring rows.
+        // Lower bound = row(N-1) + 0.001 so we never equal that row's exact value.
+        // Upper bound = row(N+1) - 0.001 so we never equal that row's exact value.
+        // At the floor (roll=2) use the table value itself as the lower bound.
+        // At the ceiling (roll=12) use the table value itself as the upper bound.
+        const lowerRow = densityTable[String(densityRoll - 1)];
+        const upperRow = densityTable[String(densityRoll + 1)];
+        const lowerBound = lowerRow ? lowerRow[coreType] + 0.001 : baseDensity;
+        const upperBound = upperRow ? upperRow[coreType] - 0.001 : baseDensity;
+        const finalDensity = parseFloat((lowerBound + rng() * (upperBound - lowerBound)).toFixed(3));
+
+        if (!isManual(body, 'density')) body.density = finalDensity;
+        tResult('Density', `${baseDensity.toFixed(2)} (table) → ${body.density.toFixed(3)} (interpolated, range ${lowerBound.toFixed(3)}–${upperBound.toFixed(3)})`, 'MgT2E 2.1: Composition & Gravity');
+
+        // 4. Roll Diameter from worldSizeTable
+        if (!isManual(body, 'diamKm')) {
+            const sizeKey = (typeof body.size === 'number') ? toEHex(body.size) : String(body.size).toUpperCase();
+            const sizeEntry = MgT2EData.stellar.worldSizeTable.find(e => e.size === sizeKey);
+            if (sizeEntry && sizeEntry.minDiameterKm !== null) {
+                const minD = sizeEntry.minDiameterKm;
+                const maxD = sizeEntry.maxDiameterKm;
+                body.diamKm = Math.floor(rng() * (maxD - minD + 1)) + minD;
+                writeLogLine(`  Diameter Roll: Size(${body.size}) range [${minD} - ${maxD}] km → rolled ${body.diamKm} km`);
+            } else {
+                body.diamKm = 0;
+                writeLogLine(`  Diameter Roll: Size(${body.size}) has no diameter range — set to 0`);
+            }
+        } else {
+            writeLogLine(`  Diameter: ${body.diamKm} km (manual override)`);
+        }
+        tResult('Diameter (km)', body.diamKm, 'MgT2E 2.1: Physical Foundations');
+
+        // 5. Calculate Physics using MgT2EMath (diameter-based)
+        const diamRatio = (body.diamKm / 12742).toFixed(4);
+        if (!isManual(body, 'gravity')) body.gravity = parseFloat(MgT2EMath.calculateGravity(body.density, body.diamKm).toFixed(3));
+        writeLogLine(`  Gravity Formula: Density(${body.density.toFixed(3)}) × (DiamKm(${body.diamKm}) / 12742) [ratio=${diamRatio}] = ${body.gravity.toFixed(3)} G`);
+        tResult('Gravity (G)', body.gravity.toFixed(3), 'MgT2E 2.1: Composition & Gravity');
+
+        if (!isManual(body, 'mass')) body.mass = parseFloat(MgT2EMath.calculateMass(body.density, body.diamKm).toFixed(4));
+        writeLogLine(`  Mass Formula: Density(${body.density.toFixed(3)}) × (DiamKm(${body.diamKm}) / 12742)³ [ratio=${diamRatio}] = ${body.mass.toFixed(4)} M⊕`);
+        tResult('Mass (Earths)', body.mass.toFixed(4), 'MgT2E 2.1: Composition & Gravity');
+
+        // 6. Orbital Velocity & Escape Velocity
+        body.escapeVel = MgT2EMath.calculateEscapeVelocity(body.mass, body.diamKm);
+        writeLogLine(`  Escape Velocity Formula: sqrt(Mass(${body.mass.toFixed(4)}) / (DiamKm(${body.diamKm}) / 12742)) [ratio=${diamRatio}] × 11186 = ${body.escapeVel.toFixed(2)} m/s`);
+        tResult('Escape Velocity (m/s)', body.escapeVel.toFixed(2), 'MgT2E 2.1: Composition & Gravity');
+
+        body.orbitalVelSurface = MgT2EMath.calculateOrbitalVelocity(body.escapeVel);
+        writeLogLine(`  Orbital Velocity Formula: EscapeVel(${body.escapeVel.toFixed(2)}) / sqrt(2) = ${body.orbitalVelSurface.toFixed(2)} m/s`);
+        tResult('Orbital Velocity (m/s)', body.orbitalVelSurface.toFixed(2), 'MgT2E 2.1: Composition & Gravity');
+    }
+
+    /**
+     * Size a gas giant body with type-specific math
+     * @param {Object} w - World object
+     * @param {string} type - 'GS', 'GM', or 'GL'
+     */
+    function sizeGasGiantBody(w, type) {
+        w.ggType = type;
+        if (type === 'GS') {
+            let d1 = Math.ceil(tRoll1D('Small GG Diam (D3)') / 2);
+            let d2 = Math.ceil(tRoll1D('Small GG Diam (D3)') / 2);
+            let diam = d1 + d2;
+            if (!isManual(w, 'diamTerra')) { w.diamTerra = diam; w.diameterStr = `${diam} (GS)`; w.diamKm = diam * 12800; }
+            // Mass: scaledK = round(5 × diam / 4); mass = scaledK × (1D6+1), clamped 10–35
+            const scaledK = Math.round(5 * (isManual(w, 'diamTerra') ? w.diamTerra : diam) / 4);
+            tResult('GS Scaled K (round(5×diam/4))', scaledK, 'MgT2E: diameter-linked multiplier');
+            if (!isManual(w, 'mass')) w.mass = Math.max(10, Math.min(35, scaledK * (tRoll1D('Small GG Mass (1D+1)') + 1)));
+        } else if (type === 'GM') {
+            let diam = tRoll1D('Medium GG Diameter (1D+6)') + 6;
+            if (!isManual(w, 'diamTerra')) { w.diamTerra = diam; w.diameterStr = `${diam} (GM)`; w.diamKm = diam * 12800; }
+            // Mass: scaledK = round(20 × diam / 10); mass = scaledK × (3D6−1), clamped 40–340
+            const scaledK = Math.round(20 * (isManual(w, 'diamTerra') ? w.diamTerra : diam) / 10);
+            tResult('GM Scaled K (round(20×diam/10))', scaledK, 'MgT2E: diameter-linked multiplier');
+            if (!isManual(w, 'mass')) w.mass = Math.max(40, Math.min(340, scaledK * (tRoll3D('Medium GG Mass (3D-1)') - 1)));
+        } else {
+            w.ggType = 'GL';
+            let diam = tRoll2D('Large GG Diameter (2D+6)') + 6;
+            if (!isManual(w, 'diamTerra')) { w.diamTerra = diam; w.diameterStr = `${diam} (GL)`; w.diamKm = diam * 12800; }
+            // Mass: scaledK = round(50 × diam / 13); mass = 1D3 × scaledK × (3D6+4)
+            const scaledK = Math.round(50 * (isManual(w, 'diamTerra') ? w.diamTerra : diam) / 13);
+            tResult('GL Scaled K (round(50×diam/13))', scaledK, 'MgT2E: diameter-linked multiplier');
+            let initMass = tRoll3D('Large GG Mass Base (3D)');
+            let d3Multiplier = Math.ceil(tRoll1D('Large GG Multiplier (D3)') / 2);
+            let computedMass = d3Multiplier * scaledK * (initMass + 4);
+            tResult('GL Initial Mass', computedMass, 'MgT2E: 1D3 × scaledK × (3D6+4)');
+            // Cap rule: initial mass ≥ 3000 → 4000 − (2D6−2) × 200
+            if (computedMass >= 3000) {
+                computedMass = 4000 - ((tRoll2D('Mass Cap Adjust') - 2) * 200);
+                tResult('GL Mass Cap Applied (≥3000)', computedMass, 'MgT2E: 4000-(2D6-2)×200');
+            }
+            if (!isManual(w, 'mass')) w.mass = Math.max(350, Math.min(4000, computedMass));
+        }
+        w.size = 'GG';
+        // SAH UWP code: G + category (S/M/L) + eHex diameter (2–J)
+        w.uwpGG = 'G' + w.ggType[1] + toEHex(w.diamTerra);
+        if (!isManual(w, 'composition')) w.composition = `Gas Giant (${w.ggType})`;
+        tResult('Type', w.ggType, 'MgT2E 2.1: Composition & Gravity');
+        tResult('SAH UWP (uwpGG)', w.uwpGG, 'MgT2E: G + category + eHex diameter');
+        tResult('Diameter (Terran)', w.diamTerra, 'MgT2E 2.1: Composition & Gravity');
+        tResult('Diameter', w.diameterStr, 'MgT2E 2.1: Composition & Gravity');
+        tResult('Mass (Earths)', w.mass, 'MgT2E 2.1: Composition & Gravity');
+
+        let radiusE = w.diamKm / 12742;
+        if (!isManual(w, 'gravity')) w.gravity = radiusE > 0 ? (w.mass / (radiusE * radiusE)) : 0;
+        if (!isManual(w, 'density')) w.density = radiusE > 0 ? (w.mass / (radiusE * radiusE * radiusE)) : 0.1;
+        tResult('Composition', w.composition, 'MgT2E 2.1: Composition & Gravity');
+        tResult('Gravity (G)', w.gravity.toFixed(3), 'MgT2E 2.1: Composition & Gravity');
+    }
+
+    /**
+     * Get effective HZCO deviation for atmospheric table lookup
+     * @param {number} orbitId - Orbit number
+     * @param {number} hzco - Habitable zone center orbit
+     * @returns {number} Deviation value
+     */
+    function toScale(v) { return v < 1.0 ? 10 * v : v + 9; }
+
+    function getEffectiveHzcoDeviation(orbitId, hzco) {
+        return toScale(orbitId) - toScale(hzco);
+    }
+
+    /**
+     * Get temperature band label
+     * @param {number} orbitId - Orbit number
+     * @param {number} hzco - Habitable zone center orbit
+     * @returns {string} Temperature band
+     */
+    function getTempBand(orbitId, hzco) {
+        const scaledOrbit = toScale(orbitId);
+        const scaledHzco  = toScale(hzco);
+        const diff        = scaledOrbit - scaledHzco;
+        const table = MgT2EData.temperatureBands;
+        let band = table[table.length - 1].band;
+        for (const entry of table) {
+            if (entry.maxDeviation === undefined || diff <= entry.maxDeviation) {
+                band = entry.band;
+                break;
+            }
+        }
+        const threshold = (table.find(e => e.band === band && e.maxDeviation !== undefined) || {}).maxDeviation ?? '∞';
+        tResult('Temp Band', band);
+        writeLogLine(`  HZCO calc: orbit ${orbitId} → scaled ${scaledOrbit.toFixed(2)} | HZCO ${hzco} → scaled ${scaledHzco.toFixed(2)} | diff ${diff.toFixed(3)} | threshold ≤ ${threshold}`);
+        return band;
+    }
+
+    // =====================================================================
+    // CHUNK 3: WORLD & MOON SIZING (PHYSICAL GENERATION)
+    // =====================================================================
+
+    /**
+     * Generate physical properties for all worlds and moons in the system.
+     * Handles sizing, mass, gravity, moon quantities, and Hill Sphere limits.
+     * 
+     * @param {Object} sys - System object with worlds array
+     * @param {Object} mainworldBase - Mainworld baseline data (for size locking)
+     * @returns {Object} Modified system object
+     */
+    function generatePhysicals(sys, mainworldBase) {
+        let primary = sys.stars[0];
+        tSection('World & Moon Sizing');
+
+        // 1. Size Terrestrial Planets & Gas Giants
+            let processBody = (body, label) => {
+                if (body.type === 'Empty') return;
+
+                tSection(`${label || body.type} Orbit ${body.orbitId !== undefined ? body.orbitId.toFixed(2) : 'Moon'} Sizing`);
+                if (body.type === 'Gas Giant') {
+                    const ggCatDM = (primary.sClass === 'VI' || (primary.sType === 'M' && primary.sClass === 'V') || primary.sType === 'BD') ? -1 : 0;
+                    tResult('Gas Giant Category DM', ggCatDM, 'MgT2E: Class VI / M-V / BD → -1');
+                    let gType;
+                    if (body.ggType) {
+                        gType = body.ggType;
+                        tResult('Gas Giant Category (Preserved)', gType, 'Seed already has ggType — skipping re-roll');
+                    } else {
+                        let catRoll = tRoll1D('Gas Giant Category') + ggCatDM;
+                        tResult('Gas Giant Category (after DM)', catRoll, 'MgT2E: ≤2=GS, 3-4=GM, ≥5=GL');
+                        gType = (catRoll <= 2) ? 'GS' : (catRoll <= 4 ? 'GM' : 'GL');
+                    }
+                    sizeGasGiantBody(body, gType);
+                } else if (body.type === 'Terrestrial Planet' || body.type === 'Mainworld' || body.type === 'Satellite') {
+                    if (body.type === 'Mainworld' && mainworldBase && mainworldBase.size !== undefined) {
+                        body.size = mainworldBase.size;
+                        tResult('Size', `${body.size} (Mainworld Auth)`);
+                    } else if (body.size === undefined || (typeof body.size !== 'string' && isNaN(parseInt(body.size, 16))) || (typeof body.size === 'string' && body.size !== 'S' && body.size !== 'R' && body.size !== 'GG' && isNaN(parseInt(body.size, 16)))) {
+                        let sizeCat = tRoll1D('Size Roll Basis (1D)');
+                        if (sizeCat <= 2) {
+                            body.size = tRoll1D('Tiny/Small (1D)');
+                        } else if (sizeCat <= 4) {
+                            body.size = tRoll2D('Standard (2D)');
+                        } else {
+                            body.size = tRoll2D('Large (2D+3)') + 3;
+                        }
+                        tResult('Size', body.size);
+                    }
+
+                    if (body.size === 0 || body.size === 'R') {
+                        body.density = null;
+                        body.gravity = null;
+                        body.mass = null;
+                        body.escapeVel = null;
+                        body.orbitalVelSurface = null;
+                    } else {
+                        // Ensure size is numeric for math
+                        let parsedSize = parseInt(body.size, 16);
+                        if (isNaN(parsedSize) && typeof body.size === 'string' && body.size !== 'GG' && body.size !== 'S' && body.size !== 'R') {
+                            if (typeof writeLogLine === 'function') writeLogLine(`[Engine Error] [MgT2E World] processBody: string body.size "${body.size}" evaluated to NaN. Reverting to size 1 to prevent cascade.`);
+                            parsedSize = 1;
+                        }
+                        const mathSize = (typeof body.size === 'string' && body.size !== 'GG' && body.size !== 'S' && body.size !== 'R') ? parsedSize : (Number(body.size) || 1);
+                        calculateTerrestrialPhysical(body, body.type, sys);
+                    }
+                } else if (body.type === 'Planetoid Belt') {
+                    tSection(`Planetoid Belt Orbit ${body.orbitId !== undefined ? body.orbitId.toFixed(2) : ''}`);
+                    body.size = 0;
+                    body.eccentricity = 0;
+                    tResult('Belt Eccentricity', 0, 'Belts have no orbital eccentricity');
+                    body.gravity = null;
+                    body.mass = null;
+                    body.density = null;
+                    body.escapeVel = null;
+                    body.orbitalVelSurface = null;
+
+                    // WBH RAW: The Belt Rule (Thermal Composition)
+                    let beltRoll = tRoll2D('Belt Composition Roll');
+                    let beltDM = 0;
+                    let hzco = body.worldHzco || (sys ? (sys.ptypeHzco || sys.hzco) : 0);
+
+                    if (hzco > 0 && body.orbitId !== undefined) {
+                        if (body.orbitId < hzco) {
+                            tDM('Inner Zone (Orbit < HZCO)', -4);
+                            beltDM = -4;
+                        } else if (body.orbitId > hzco + 2) {
+                            tDM('Outer Zone (Orbit > HZCO+2)', 4);
+                            beltDM = 4;
+                        } else {
+                            tDM('Middle Zone (HZCO to HZCO+2)', 0);
+                        }
+                    }
+
+                    let totalRoll = Math.max(0, Math.min(12, beltRoll + beltDM));
+                    const compTable = MgT2EData.belts.compositionTable;
+                    let compData = compTable[totalRoll] || compTable[0];
+
+                    body.beltM = compData.m;
+                    body.beltS = compData.s;
+                    body.beltC = compData.c;
+                    body.composition = `M:${compData.m}%, S:${compData.s}%, C:${compData.c}%`;
+
+                    tResult('Belt Composition', body.composition, 'MgT2E 4.2: Belt Morphology');
+                }
+
+                // Precision Orbit Recalculation
+                if (body.au && body.type !== 'Empty') {
+                    let Sum_M = 0;
+                    if (body.orbitType === 'P-Type') {
+                        Sum_M = sys.stars.reduce((sum, s) => {
+                            let sOrbit = (s.orbitId !== null && s.orbitId !== undefined) ? s.orbitId : 0;
+                            return sOrbit < body.orbitId ? sum + s.mass : sum;
+                        }, 0);
+                    } else {
+                        let pIdx = (body.parentStarIdx !== undefined) ? body.parentStarIdx : 0;
+                        Sum_M = (sys.stars[pIdx] || sys.stars[0]).mass;
+                    }
+                    body.periodYears = MgT2EMath.calculateOrbitalPeriodYears(body.au, Sum_M, body.mass || 0);
+                    body.periodDays = body.periodYears * 365.25;
+                    body.periodHours = body.periodYears * 8766;
+                    tResult('Calibrated Orbital Period', body.periodYears.toFixed(4) + ' yrs (' + body.periodDays.toFixed(1) + ' days)');
+                }
+            };
+
+            for (let i = 0; i < sys.worlds.length; i++) {
+                let w = sys.worlds[i];
+                w.moons = w.moons || [];
+                w.rings = w.rings || [];
+                
+                processBody(w);
+
+                // WBH Fix: Process existing moons (e.g. demoted mainworlds) during sizing pass
+                if (w.moons && w.moons.length > 0) {
+                    for (let m of w.moons) {
+                        processBody(m, "Moon");
+                    }
+                }
+
+                // Sean Protocol: Distance and 100D Logging (Planets Only)
+                const worldDistAU = w.au || w.distAU || 0;
+                if (worldDistAU && w.type !== 'Empty') {
+                    const orbitMkm = (worldDistAU * 149597870) / 1000000;
+                    tResult("Orbit Distance", `${worldDistAU.toFixed(2)} AU (${orbitMkm.toFixed(1)} M km)`);
+
+                    const world100D = (w.diamKm || 0) * 100 / 1000000;
+                    tResult("World 100D Limit", `${world100D.toFixed(2)} M km`);
+
+                    // Stellar Masking Eligibility
+                    if (typeof UniversalMath !== 'undefined' && UniversalMath.isMaskingEligible) {
+                        const starDiam = primary ? primary.diam : 1.0;
+                        const isEligible = UniversalMath.isMaskingEligible(starDiam, worldDistAU, w.size, w.diamKm);
+                        tResult("Stellar Masking", isEligible ? "ELIGIBLE" : "Ineligible");
+                    }
+                }
+            }
+
+        // 2. Determine Moon Quantities & Sizes
+        for (let i = 0; i < sys.worlds.length; i++) {
+            let w = sys.worlds[i];
+            if (w.type === 'Empty' || w.type === 'Planetoid Belt') continue;
+
+            tSection(`${w.type} Orbit ${w.orbitId != null ? w.orbitId.toFixed(2) : '?'} Moons`);
+            // Handle UWP char string sizes (e.g. 'A') for logic
+            let parsedWSize = parseInt(w.size, 16);
+            if (typeof w.size === 'string' && w.size !== 'GG' && w.size !== 'S' && w.size !== 'R' && isNaN(parsedWSize)) {
+                if (typeof writeLogLine === 'function') writeLogLine(`[Engine Error] [MgT2E World] generatePhysicals: string w.size "${w.size}" evaluated to NaN determining moon rules. Reverting to size 0.`);
+                parsedWSize = 0;
+            }
+            const numericSize = (typeof w.size === 'string' && w.size !== 'GG' && w.size !== 'S' && w.size !== 'R') ? parsedWSize : (Number(w.size) || 0);
+
+            let qRoll = 0;
+            let qMod = 0;
+            let dmDiceCount = 1;
+            let qLabel = 'Moon Quantity Roll';
+
+            const satData = MgT2EData.satellites.significantMoonQuantity;
+            let satRule = null;
+
+            if (w.type === 'Terrestrial Planet' || w.type === 'Mainworld') {
+                satRule = satData.find(r => r.type === 'Terrestrial' && numericSize >= r.minSize && numericSize <= r.maxSize);
+            } else {
+                // Map GS/GM/GL to SGG/MGG/LGG
+                let ggMap = { 'GS': 'SGG', 'GM': 'MGG', 'GL': 'LGG' };
+                satRule = satData.find(r => r.type === ggMap[w.ggType]);
+            }
+
+            let hillSphereDM = 0;
+            let hsPDLogged = null;
+            if (w.mass > 0 && w.diamKm > 0) {
+                let starMassSum = 0;
+                if (w.orbitType === 'P-Type') {
+                    for (let s of sys.stars) {
+                        let sOrb = (s.orbitId !== null && s.orbitId !== undefined) ? s.orbitId : 0;
+                        if (sOrb < w.orbitId) starMassSum += (s.mass || 0);
+                    }
+                    if (starMassSum === 0) starMassSum = sys.stars[0].mass || 1;
+                } else {
+                    let pIdx = (w.parentStarIdx !== undefined) ? w.parentStarIdx : 0;
+                    starMassSum = (sys.stars[pIdx] || sys.stars[0]).mass || 1;
+                }
+
+                let planetMassSolar = w.mass * 0.000003;
+                let hsAU = w.au * (1 - (w.eccentricity || 0)) * Math.pow(planetMassSolar / (3 * starMassSum), 1 / 3);
+                hsPDLogged = hsAU * 149597870.9 / w.diamKm;
+                tResult('Hill Sphere Formula', 'HS_AU = AU × (1 − ecc) × (M_planet / (3 × M_star))^(1/3)   →   PD = HS_AU × 149,597,870.9 / diam_km');
+                tResult('Hill Sphere Inputs', `AU=${w.au.toFixed(3)}, ecc=${(w.eccentricity || 0).toFixed(3)}, M_planet=${planetMassSolar.toFixed(6)} M☉, M_star=${starMassSum.toFixed(3)} M☉, diam=${w.diamKm} km`);
+                tResult('Hill Sphere (AU)', hsAU.toFixed(6));
+                tResult('Hill Sphere (Planetary Diameters)', hsPDLogged.toFixed(1));
+
+                if (hsPDLogged < 60) {
+                    hillSphereDM = -1;
+                    tResult('Hill Sphere DM', `${hillSphereDM} per die (Hill Sphere ${hsPDLogged.toFixed(1)} PD < 60 threshold)`);
+                } else {
+                    tResult('Hill Sphere DM', `0 (Hill Sphere ${hsPDLogged.toFixed(1)} PD ≥ 60 threshold)`);
+                }
+            } else {
+                tResult('Hill Sphere DM', 'Skipped (no mass/diameter)');
+            }
+
+            if (satRule && satRule.formula) {
+                let parts = satRule.formula.split('D');
+                dmDiceCount = parseInt(parts[0]);
+                let rawMod = parseInt(parts[1] || 0);
+
+                const hillDMTotal = hillSphereDM * dmDiceCount;
+                const hillDMLabel = hsPDLogged !== null
+                    ? `Hill Sphere DM (${hillSphereDM}/die × ${dmDiceCount} dice = ${hillDMTotal}, HS=${hsPDLogged.toFixed(1)} PD)`
+                    : 'Hill Sphere DM (skipped)';
+
+                if (dmDiceCount === 1) qRoll = tRoll1D(qLabel);
+                else if (dmDiceCount === 2) qRoll = tRoll2D(qLabel);
+                else if (dmDiceCount === 3) qRoll = tRoll3D(qLabel);
+                else qRoll = tRoll4D(qLabel);
+
+                qMod += rawMod;
+                tDM(`Formula modifier (${satRule.formula})`, rawMod);
+
+                if (hillDMTotal !== 0) {
+                    qMod += hillDMTotal;
+                    tDM(hillDMLabel, hillDMTotal);
+                }
+            }
+
+            let existingMoons = (w.moons || []).length;
+            let moonsToGenerate = Math.max(0, qRoll + qMod - existingMoons);
+
+            tResult('Moon Quantity Total', `Roll ${qRoll} + Mods ${qMod} = ${qRoll + qMod}${hsPDLogged !== null && hillSphereDM < 0 ? ` [Hill Sphere DM applied: HS=${hsPDLogged.toFixed(1)} PD]` : ''}`);
+
+            if (qRoll + qMod === 0 && existingMoons === 0) {
+                tResult('Result', 'No significant moons');
+            } else {
+                tResult('Additional Moons to Generate', moonsToGenerate);
+            }
+
+            for (let m = 0; m < moonsToGenerate; m++) {
+                let moonSize = '';
+                let r1 = tRoll1D(`Satellite ${m + existingMoons + 1} Size Basis`);
+                if (r1 <= 3) {
+                    moonSize = 'S';
+                    tResult(`Bracket 1-3`, 'Tiny (Size S)');
+                } else if (r1 <= 5) {
+                    let d3 = Math.ceil(tRoll1D('Bracket 4-5 (D3-1)') / 2);
+                    let ms = d3 - 1;
+                    if (ms === 0) moonSize = 'R'; else moonSize = ms;
+                    tResult(`Bracket 4-5`, ms === 0 ? 'Ring (Size R)' : `Moderate (Size ${moonSize})`);
+                } else {
+                    if (w.type === 'Terrestrial Planet' || w.type === 'Mainworld') {
+                        if (numericSize === 1) {
+                            moonSize = 'S';
+                        } else {
+                            let msRoll = tRoll1D(`Satellite ${m + 1} Size (MW/TP)`);
+                            let trySize = numericSize - 1 - msRoll;
+                            if (trySize < 0) moonSize = 'S';
+                            else if (trySize === 0) moonSize = 'R';
+                            else if (trySize === numericSize - 2) {
+                                let twinRoll = tRoll2D(`Satellite ${m + 1} Twin Chance`);
+                                if (twinRoll === 12) { tResult(`Satellite ${m + 1}`, 'Twin World'); moonSize = numericSize; }
+                                else if (twinRoll === 2) moonSize = trySize - 1;
+                                else moonSize = trySize;
+                                if (moonSize <= 0) moonSize = 'S';
+                            } else {
+                                moonSize = trySize;
+                            }
+                        }
+                    } else {
+                        let specialR = tRoll1D(`Satellite ${m + 1} GG Special Size (1D)`);
+                        if (specialR <= 3) {
+                            moonSize = tRoll1D(`Special Bracket 1-3 (1D)`);
+                        } else if (specialR <= 5) {
+                            let z = Math.max(0, tRoll2D(`Special Bracket 4-5 (2D-2)`) - 2);
+                            moonSize = z === 0 ? 'R' : z;
+                        } else {
+                            let giantMoon = tRoll2D(`Special Bracket 6 (2D+4)`) + 4;
+                            if (giantMoon >= 16) {
+                                let moonBody = { type: 'Gas Giant', orbitId: w.orbitId, parentStarIdx: w.parentStarIdx, orbitType: w.orbitType };
+                                let isGL = w.ggType === 'GL';
+                                let upgrade = isGL && tRoll2D('GL Parent Upgrade Check') === 12;
+                                tResult(`Satellite ${m + 1} Extreme Result`, upgrade ? 'Medium Gas Giant (GM)' : 'Small Gas Giant (GS)');
+                                sizeGasGiantBody(moonBody, upgrade ? 'GM' : 'GS');
+                                moonSize = moonBody.ggType;
+                                w.moons.push({ ...moonBody, isSpecialGG: true });
+                                continue;
+                            } else {
+                                moonSize = giantMoon;
+                            }
+                        }
+                    }
+                }
+                if (moonSize === 'R') {
+                    tResult(`Satellite ${m + 1}`, 'Ring System');
+                    w.rings.push({});
+                } else {
+                    tResult(`Satellite ${m + 1} Size`, moonSize);
+                    let moonObj = {
+                        size: moonSize,
+                        type: 'Satellite',
+                        worldHzco: w.worldHzco,
+                        orbitId: w.orbitId,
+                        parentStarIdx: w.parentStarIdx,
+                        orbitType: w.orbitType,
+                        uwpSecondary: `S${toEHex(moonSize)}00000-0`
+                    };
+                    calculateTerrestrialPhysical(moonObj, `Satellite ${m + 1}`, sys);
+                    w.moons.push(moonObj);
+                }
+            }
+
+            // 3. Hill Sphere & Roche Limit
+            if (w.mass > 0 && w.diamKm > 0) {
+                const _hsPlanetSolar = w.mass * 0.000003;
+                const _hsAU = w.au * (1 - (w.eccentricity || 0)) * Math.pow(_hsPlanetSolar / (3 * primary.mass), 1 / 3);
+                const _hsPDRaw = _hsAU * 149597870.9 / w.diamKm;
+                tResult('Hill Sphere Formula', 'HS_AU = AU × (1 − ecc) × (M_planet / (3 × M_star))^(1/3)   →   PD = HS_AU × 149,597,870.9 / diam_km');
+                tResult('Hill Sphere Inputs', `AU=${w.au.toFixed(3)}, ecc=${(w.eccentricity || 0).toFixed(3)}, M_planet=${_hsPlanetSolar.toFixed(6)} M☉, M_star=${primary.mass.toFixed(3)} M☉, diam=${w.diamKm} km`);
+                tResult('Hill Sphere (AU)', _hsAU.toFixed(6));
+                tResult('Hill Sphere (PD, pre-halving)', _hsPDRaw.toFixed(1));
+                let hillLimit = MgT2EMath.calculateHillSphereLimit(w.au, w.eccentricity, w.mass, primary.mass, w.diamKm);
+                w.hillSpanPd = hillLimit;
+                tResult(`${w.type} Hill Sphere Limit (Diameters/2)`, hillLimit);
+
+                if (hillLimit < 1.5) {
+                    // WBH Exception: Check for Protected Mainworld Moon
+                    let protectedMoon = w.moons.find(m => m.type === 'Mainworld' || m.isMoon);
+                    if (protectedMoon) {
+                        tSection('[HIGH-FIDELITY PHYSICS] Upscaling Gas Giant');
+                        tResult('Initial Margin', `${hillLimit.toFixed(2)} (CRITICAL FAIL)`);
+                        
+                        // Promotion Cycle: GS -> GM -> GL
+                        let currentType = w.ggType;
+                        if (currentType === 'GS') {
+                            tResult('Action', 'Promoting GS to GM');
+                            sizeGasGiantBody(w, 'GM');
+                        } else if (currentType === 'GM') {
+                            tResult('Action', 'Promoting GM to GL');
+                            sizeGasGiantBody(w, 'GL');
+                        } else {
+                            tResult('Action', 'Max Scale Reached (GL)');
+                            // Rule 0 fallback: Already GL, so we just manually anchor the moon
+                        }
+
+                        // Recalculate Hill Sphere Limit after upscaling
+                        hillLimit = MgT2EMath.calculateHillSphereLimit(w.au, w.eccentricity, w.mass, primary.mass, w.diamKm);
+                        w.hillSpanPd = hillLimit;
+                        tResult('Recalculated Hill Limit', hillLimit.toFixed(2));
+                    }
+
+                    // Fallback to existing protection logic
+                    let hasProtectedMoon = w.moons.some(m => m.type === 'Mainworld' || m.isMoon);
+                    if (!hasProtectedMoon && w.moons.length > 0) {
+                        tResult('Hill Sphere Wipe', 'Insignificant satellites destroyed');
+                        w.moons = [];
+                        w.rings.push({});
+                    } else if (hasProtectedMoon) {
+                        tResult('WBH Protection', 'Mainworld/Protected Moon maintained despite low Hill Sphere margin');
+                        w.moons = w.moons.filter(m => m.type === 'Mainworld' || m.isMoon);
+                    }
+                }
+                if (hillLimit < 0.5) {
+                    w.rings = []; // Rings destroyed
+                }
+
+                let numM = w.moons.length;
+                if (numM > 0) {
+                    let mor = Math.max(0, hillLimit - 2);
+                    if (mor > 200) mor = 200 + numM;
+
+                    let placementDMW = mor < 60 ? 1 : 0;
+                    
+                    // Temporary array to hold surviving moons
+                    let survivingMoons = [];
+
+                    for (let mn = 0; mn < numM; mn++) {
+                        // WBH Exception protection: If the moon already has a pre-defined orbit (like a demoted Mainworld), skip positioning
+                        if (w.moons[mn].pd !== undefined) {
+                            survivingMoons.push(w.moons[mn]);
+                            continue;
+                        }
+
+                        let locRoll = roll1D() + placementDMW;
+                        let pdTarget = 0;
+                        let locStr = '';
+                        if (locRoll <= 3) {
+                            pdTarget = ((roll2D() - 2) * mor / 60) + 2; locStr = 'Inner';
+                        } else if (locRoll <= 5) {
+                            pdTarget = ((roll2D() - 2) * mor / 30) + (mor / 6) + 3; locStr = 'Middle';
+                        } else {
+                            pdTarget = ((roll2D() - 2) * mor / 20) + (mor / 2) + 4; locStr = 'Outer';
+                        }
+                        
+                        // WBH Errata: If a moon is created above the HSML, then it is discarded.
+                        // Exception: mainworld/protected moons are anchored inside the Hill Sphere instead.
+                        const isProtectedMoon = (w.moons[mn].type === 'Mainworld' || w.moons[mn].isMoon);
+                        if (pdTarget > hillLimit) {
+                            if (!isProtectedMoon) {
+                                tResult('Moon Discarded', `Target orbit ${pdTarget.toFixed(2)} pd exceeds Hill Sphere Limit (${hillLimit})`);
+                                continue;
+                            }
+                            pdTarget = hillLimit * 0.9;
+                            tResult('WBH Protection', `Protected moon anchored at pd=${pdTarget.toFixed(2)} pd (Hill Sphere limit=${hillLimit.toFixed(2)})`);
+                        }
+
+                        w.moons[mn].pd = pdTarget;
+                        w.moons[mn].pos = locStr;
+
+                        let eMod = locStr === 'Inner' ? -1 : (locStr === 'Middle' ? 1 : 4);
+                        if (pdTarget > mor) eMod += 6;
+
+                        // determineMgT2EEccentricity is not exposed, so we just use a small random jitter for now if it's missing
+                        w.moons[mn].eccentricity = w.moons[mn].eccentricity !== undefined ? w.moons[mn].eccentricity : (roll2D() - 2) * 0.05;
+                        w.moons[mn].retrograde = (roll2D() + eMod >= 10);
+
+                        // Fallback handling if diamKm hasn't been instantiated yet (prevents NaN bugs)
+                        let safeDiam = w.diamKm || 1600;
+                        let moonKm = pdTarget * safeDiam;
+                        w.moons[mn].periodHrs = Math.sqrt(Math.pow(moonKm, 3) / w.mass) / 361730;
+                        
+                        survivingMoons.push(w.moons[mn]);
+                    }
+                    
+                    w.moons = survivingMoons;
+
+                    w.moons.sort((a, b) => a.pd - b.pd);
+                    for (let m = 1; m < w.moons.length; m++) {
+                        // WBH Roche Limit enforcement: The mathematical Roche Limit for identical density 
+                        // bodies is ~1.22 planetary diameters. Earlier we allowed 0.1 which allowed moons 
+                        // to sit almost touching, creating massive tidal friction loops.
+                        if ((w.moons[m].pd - w.moons[m - 1].pd) < 1.25) {
+                            w.moons[m].pd = w.moons[m - 1].pd + 1.25;
+                            // Recalculate period if pushed
+                            let safeDiam = w.diamKm || 1600;
+                            let moonKm = w.moons[m].pd * safeDiam;
+                            w.moons[m].periodHrs = Math.sqrt(Math.pow(moonKm, 3) / w.mass) / 361730;
+                        }
+                    }
+                    
+                    // Secondary Errata Pass: If pushing them apart violated the HSML, tear them apart
+                    // WBH Protection: Mainworld/protected moons (isMoon) are never shredded.
+                    let finalMoons = [];
+                    for (let m = 0; m < w.moons.length; m++) {
+                        const isProtectedMoon = (w.moons[m].type === 'Mainworld' || w.moons[m].isMoon);
+                        if (!isProtectedMoon && w.moons[m].pd > hillLimit) {
+                            tResult('Roche Shred', `Moon pushed to ${w.moons[m].pd.toFixed(2)} pd which exceeded HSML (${hillLimit}). Moon destroyed.`);
+                        } else {
+                            if (isProtectedMoon && w.moons[m].pd > hillLimit) {
+                                tResult('WBH Protection', `Mainworld/Protected Moon at pd ${w.moons[m].pd.toFixed(2)} exceeds HSML (${hillLimit}) but is shielded from destruction.`);
+                            }
+                            finalMoons.push(w.moons[m]);
+                        }
+                    }
+                    w.moons = finalMoons;
+                }
+
+                for (let r = 0; r < w.rings.length; r++) {
+                    w.rings[r].center = 0.4 + (roll2D() / 8);
+                    w.rings[r].span = (roll3D() / 100) + 0.07;
+                }
+            }
+        }
+
+        return sys;
+    }
+
+    // =====================================================================
+    // CHUNK 4: ATMOSPHERE & HYDROGRAPHICS (ATMOSPHERIC GENERATION)
+    // =====================================================================
+
+    /**
+     * Generate atmospheric properties and hydrographics for all worlds and moons.
+     * Handles temperature bands, runaway greenhouse, atmospheric codes, pressure,
+     * oxygen levels, taints, gas retention, and hydrographic percentages.
+     * 
+     * @param {Object} sys - System object with worlds array
+     * @param {Object|Object} options - Options object or Mainworld baseline data
+     * @returns {Object} Modified system object
+     */
+    function generateAtmospherics(sys, options = {}) {
+        let mainworldBase = null;
+        let targetWorlds = sys.worlds;
+
+        // Adaptive Signature: (sys, mainworldBase) or (sys, { targetWorlds, mainworldBase })
+        if (options && options.type === 'Mainworld') {
+            mainworldBase = options;
+        } else if (options) {
+            mainworldBase = options.mainworldBase;
+            targetWorlds = options.targetWorlds || sys.worlds;
+        }
+
+        let isBottomUp = (options && options.mode === 'bottom-up');
+
+        let processWorld = (w) => {
+            if (w.type === 'Empty' || w.type === 'Gas Giant' || w.type === 'Planetoid Belt') return;
+
+            tSection(`Atmosphere & Hydro: ${w.type} Orbit ${w.orbitId != null ? w.orbitId.toFixed(2) : '?'}`);
+            let tempBand = getTempBand(w.orbitId, w.worldHzco || sys.hzco);
+
+            // Preliminary Temperature Estimation
+            if (w.meanTempK === undefined) {
+                let pIdx = w.parentStarIdx !== undefined ? w.parentStarIdx : 0;
+                let lum = (sys.stars[pIdx] || sys.stars[0]).lum || 1.0;
+                if (w.orbitType === 'P-Type') {
+                    lum = sys.stars.reduce((s, star) => star.orbitId < w.orbitId ? s + (star.lum || 0) : s, 0);
+                }
+                w.meanTempK = MgT2EMath.calculateMeanTemperature(lum, w.au, 0.3, 0.1);
+            }
+
+            // Gas Retention Physics
+            let mathSize = w.size;
+            if (w.size === 'S' || w.size === 's') mathSize = 0.375;
+            else if (w.size === 'R' || w.size === 'r' || w.size === 'GG') mathSize = 0;
+            else if (typeof w.size === 'string') mathSize = fromEHex(w.size);
+            
+            w.diameterTerra = (w.diamKm || 0) / 12742;
+            let bodyMass = w.mass !== undefined ? w.mass : Math.pow((w.diamKm || 0) / 12742, 3);
+            w.maxEscapeValue = MgT2EMath.calculateMaxEscapeValue(bodyMass, w.diamKm || 0, w.meanTempK);
+            if (isNaN(w.maxEscapeValue)) {
+                if (trace.enabled) writeLogLine(`[Engine Error] [MgT2E World] generateAtmospherics: maxEscapeValue is NaN. Defaults applied. bodyMass: ${bodyMass}, diamKm: ${w.diamKm}, temp: ${w.meanTempK}, w.size: ${w.size}`);
+                w.maxEscapeValue = 0;
+            }
+            tResult('Max Escape Value', w.maxEscapeValue.toFixed(3));
+
+            // 1. Base Atmosphere Code
+            writeLogLine("--- ATMOSPHERE PHYSICS ---");
+            let isMainworldLocked = (w.type === 'Mainworld' && mainworldBase && mainworldBase.atm !== undefined);
+            let isAtmSeeded = !isMainworldLocked && Array.isArray(w._manualFields) && w._manualFields.includes('atmCode') && w.atmCode !== undefined;
+
+            if ((w.size === 'S' || w.size === 0 || w.size === 1) && !isMainworldLocked && !isAtmSeeded) {
+                tSkip('Size 0, 1, S forces Atmosphere 0');
+                w.atmCode = 0;
+                writeLogLine(`Base Generation: Size ${w.size} forces Atm 0`);
+            } else {
+                let baseRoll;
+                if (isMainworldLocked) {
+                    tResult('Mainworld Atmosphere Inherited', mainworldBase.atm);
+                    baseRoll = mainworldBase.atm;
+                    writeLogLine(`Base Generation: Inherited Atm ${baseRoll}`);
+                } else if (isAtmSeeded) {
+                    tResult('Seeded Atmosphere', w.atmCode);
+                    baseRoll = w.atmCode;
+                    writeLogLine(`Base Generation: Seeded Atm ${baseRoll}`);
+                } else {
+                    let baseRollRaw = tRoll2D('Atmosphere Roll');
+                    baseRoll = baseRollRaw - 7 + w.size;
+                    tDM('Size Mod', w.size - 7);
+
+                    let gravDM = 0;
+                    if (w.gravity != null) {
+                        if (w.gravity < 0.4) {
+                            gravDM = -2;
+                        } else if (w.gravity <= 0.5) {
+                            gravDM = -1;
+                        }
+                        if (gravDM !== 0) {
+                            tDM(`Gravity DM (${w.gravity.toFixed(3)}G < ${w.gravity < 0.4 ? '0.4' : '0.5'}G threshold)`, gravDM);
+                            baseRoll += gravDM;
+                            writeLogLine(`Base Generation: 2D (${baseRollRaw}) - 7 + Size (${w.size}) + Gravity DM (${gravDM}, gravity=${w.gravity.toFixed(3)}G) = Atm ${baseRoll}`);
+                        } else {
+                            tDM(`Gravity DM (${w.gravity.toFixed(3)}G > 0.5G threshold)`, 0);
+                            writeLogLine(`Base Generation: 2D (${baseRollRaw}) - 7 + Size (${w.size}) + Gravity DM (0, gravity=${w.gravity.toFixed(3)}G) = Atm ${baseRoll}`);
+                        }
+                    } else {
+                        writeLogLine(`Base Generation: 2D (${baseRollRaw}) - 7 + Size (${w.size}) [Gravity DM skipped: gravity null] = Atm ${baseRoll}`);
+                    }
+                }
+
+                // Refined Deviation Logic (Phase 1)
+                let diff = getEffectiveHzcoDeviation(w.orbitId, w.worldHzco || sys.hzco);
+                let hzco = w.worldHzco || sys.hzco;
+
+                // Flags for Phase 4 Checks
+                w._atmHazardFlag = false;
+                w._atmExtremeHeatFlag = false;
+
+                if (diff >= -1.00 && diff <= 1.00) {
+                    writeLogLine(`HZ Atmosphere: Deviation ${diff.toFixed(2)}, Table: Standard`);
+                    w.atmCode = Math.max(0, baseRoll);
+                } else if (diff < -1.00) {
+                    // Hot Atmospheres Table
+                    tSection('Non-Habitable Zone: Hot Atmospheres');
+                    writeLogLine(`Non-HZ Atmosphere: Deviation ${diff.toFixed(2)}, Table: Hot`);
+                    let bracketRoll = Math.max(0, Math.min(17, baseRoll));
+
+                    if (diff >= -2.0) {
+                        let bracket1 = MgT2EData.atmosphereExtended.hzDeviationTables.hotInner;
+                        let hazard1 = [false, false, true, false, true, false, false, true, false, true, "Check", false, false, false, false, false, false, false];
+                        w.atmCode = bracket1[bracketRoll];
+                        w._atmHazardFlag = hazard1[bracketRoll];
+                    } else {
+                        let bracket2 = MgT2EData.atmosphereExtended.hzDeviationTables.hotOuter;
+                        let hazard2 = [false, false, false, false, "Check", "Check", "Check", "Check", "Check", false, false, false, false, false, false, false, false, false];
+                        w.atmCode = bracket2[bracketRoll];
+                        w._atmHazardFlag = hazard2[bracketRoll];
+                        w._atmExtremeHeatFlag = (diff <= -3.0 && w.atmCode === 10);
+                        w._extremeHeatMod = (bracketRoll === 7 || bracketRoll === 8) ? 1 : 0;
+                    }
+                } else {
+                    // Cold Atmospheres Table
+                    tSection('Non-Habitable Zone: Cold Atmospheres');
+                    writeLogLine(`Non-HZ Atmosphere: Deviation ${diff.toFixed(2)}, Table: Cold`);
+                    let bracketRoll = Math.max(0, Math.min(17, baseRoll));
+
+                    if (diff <= 3.0) {
+                        let bracket3 = MgT2EData.atmosphereExtended.hzDeviationTables.coldInner;
+                        let hazard3 = [false, false, false, "Check", true, false, false, true, false, true, "Check", false, false, false, false, false, false, false];
+                        w.atmCode = bracket3[bracketRoll];
+                        w._atmHazardFlag = hazard3[bracketRoll];
+                    } else {
+                        let bracket4 = MgT2EData.atmosphereExtended.hzDeviationTables.coldOuter;
+                        let hazard4 = [false, false, false, "Check", true, false, false, true, false, true, "Check", false, false, false, false, false, false, false];
+                        w.atmCode = bracket4[bracketRoll];
+                        w._atmHazardFlag = hazard4[bracketRoll];
+                    }
+                }
+
+                let currentMaxAtm = isBottomUp ? 17 : 15;
+                if (w.atmCode > currentMaxAtm && w.atmCode !== 16 && w.atmCode !== 17) w.atmCode = currentMaxAtm;
+
+                // Edge Case: Extreme Heat Check
+                if (w._atmExtremeHeatFlag) {
+                    let heatRoll = tRoll1D('Extreme Heat Check') + w._extremeHeatMod;
+                    if (heatRoll === 1) { w.atmCode = 1; tResult('Extreme Heat', 'Code 1 (Trace)'); }
+                    else if (heatRoll >= 3 && heatRoll <= 5) { w.atmCode = 11; tResult('Extreme Heat', 'Code B (Corrosive)'); }
+                    else if (heatRoll >= 6) { w.atmCode = 12; tResult('Extreme Heat', 'Code C (Insidious)'); }
+                    else { tResult('Extreme Heat', 'Unchanged'); }
+                }
+
+                if (isMainworldLocked && w.atmCode !== mainworldBase.atm) {
+                    writeLogLine(`Expanded Method Simulation: Non-HZ conditions WOULD have forced Atmosphere to ${toEHex(w.atmCode)}`);
+                    w.atmCode = mainworldBase.atm;
+                } else if (isAtmSeeded && w.atmCode !== baseRoll) {
+                    writeLogLine(`Seeded UWP: Non-HZ conditions would have shifted Atm to ${toEHex(w.atmCode)}; overriding to seeded ${toEHex(baseRoll)}`);
+                    w.atmCode = baseRoll;
+                }
+            }
+
+            w.atmCode = Number(w.atmCode);
+            let finalMaxAtm = isBottomUp ? 17 : 15;
+            w.atmCode = Math.max(0, Math.min(finalMaxAtm, w.atmCode));
+            tResult('Final Atmosphere Code', toEHex(w.atmCode));
+
+            // 2. Runaway Greenhouse Check
+            // GATEWAY: MgT2E 2.4: Thermal Logic - RAW Gate (isBottomUp and meanTempK > 303)
+            if (isBottomUp && w.atmCode >= 2 && w.atmCode <= 15 && w.meanTempK > 303) {
+
+                // Base DM: +1 per Gyr
+                let rgDM = Math.ceil(sys.ageGyr || sys.age || 0);
+
+                // Precise Temperature DM: +1 for every 10 full degrees above 303K
+                let preciseDM = Math.floor((w.meanTempK - 303) / 10);
+                tDM('Precise Temp', preciseDM);
+                rgDM += preciseDM;
+
+                tSection('Runaway Greenhouse Check');
+                let rgBaseRoll = tRoll2D('Runaway Greenhouse Roll (12+)');
+                let rgTotal = rgBaseRoll + rgDM;
+
+                if (rgTotal >= 12) {
+                    tResult('Result', 'Runaway Greenhouse Triggered', 'MgT2E 2.4: Thermal Logic');
+                    writeLogLine(`Runaway Greenhouse Check: Rolled ${rgBaseRoll} + DM ${rgDM}. Result: Success`);
+                    w.runawayGreenhouse = true;
+                    tempBand = "Boiling";
+                    if (w.tempStatus) w.tempStatus = "Boiling";
+
+                    let isStandardRange = (w.atmCode >= 2 && w.atmCode <= 9) || w.atmCode === 13 || w.atmCode === 14;
+                    if (isStandardRange) {
+                        let oldCode = w.atmCode;
+                        let rRoll = tRoll1D('New Atmosphere Type');
+                        if (w.size >= 2 && w.size <= 5) { tDM('Size 2-5', -2); rRoll -= 2; }
+                        if ([2, 4, 7, 9].includes(w.atmCode)) { tDM('Tainted Atm', 1); rRoll += 1; }
+
+                        let newAtmCode;
+                        if (rRoll <= 1) newAtmCode = 10;
+                        else if (rRoll <= 4) newAtmCode = 11;
+                        else newAtmCode = 12;
+
+                        if (isMainworldLocked) {
+                            tResult('Runaway Shift', `Locked.`, 'MgT2E 2.4: Thermal Logic');
+                            writeLogLine(`Expanded Method Simulation: Runaway Greenhouse WOULD have shifted Atmosphere from ${toEHex(oldCode)} to ${toEHex(newAtmCode)}`);
+                        } else {
+                            w.atmCode = newAtmCode;
+                            tResult('New Atmosphere', toEHex(w.atmCode), 'MgT2E 2.4: Thermal Logic');
+                            writeLogLine(`Runaway Shift: Atm ${toEHex(oldCode)} -> ${toEHex(w.atmCode)}`);
+                        }
+                    }
+                } else {
+                    tResult('Result', 'Normal', 'MgT2E 2.4: Thermal Logic');
+                    writeLogLine(`Runaway Greenhouse Check: Rolled ${rgBaseRoll} + DM ${rgDM}. Result: Failure`);
+                }
+            }
+
+            if (w.gravity === undefined) {
+                w.gravity = (w.size === 0 || w.size === 'S') ? 0 : w.size * 0.125;
+            }
+            tResult('Gravity (G)', w.gravity.toFixed(3));
+
+            // 3. Seeded Atmospheric Pressure
+            if (w.atmCode >= 1 && w.atmCode <= 15) {
+                let seededFraction = rng();
+                if (sys.hexId) seededFraction = rng();
+
+                if (w.atmCode === 10) {
+                    // Exotic atmosphere: subtype roll determines pressure range
+                    tSection('Exotic Atmosphere Subtype');
+                    const _eDMs = MgT2EData.atmosphereExtended.exoticAtmosphereSubtypeDMs;
+                    const _hzco = w.worldHzco || sys.hzco || 0;
+                    let exoticDM = 0;
+                    if (w.size >= 2 && w.size <= 4)          { tDM('Size 2-4', _eDMs.size2to4);          exoticDM += _eDMs.size2to4; }
+                    if (_hzco > 0 && w.orbitId < (_hzco - 1)){ tDM('Inner Orbit', _eDMs.innerOrbit);       exoticDM += _eDMs.innerOrbit; }
+                    if (_hzco > 0 && w.orbitId > (_hzco + 2)){ tDM('Outer Orbit', _eDMs.outerOrbit);       exoticDM += _eDMs.outerOrbit; }
+                    if (w.runawayGreenhouse)                  { tDM('Runaway GH', _eDMs.runawayGreenhouse); exoticDM += _eDMs.runawayGreenhouse; }
+                    const exoticRoll = Math.max(2, Math.min(14, tRoll2D('Exotic Subtype Roll') + exoticDM));
+                    const exoticEntry = MgT2EData.atmosphereExtended.exoticAtmosphereSubtypes[exoticRoll];
+                    tResult('Exotic Subtype', exoticEntry.type, 'MgT2E 2.2: Exotic Atmosphere Subtype');
+                    w.exoticSubtype = exoticEntry.type;
+                    if (!isManual(w, 'totalPressureBar')) {
+                        w.totalPressureBar = exoticEntry.minP + (exoticEntry.spanP * seededFraction);
+                        w.pressureBar = w.totalPressureBar;
+                    }
+                    tResult('Total Pressure (Bar)', w.totalPressureBar.toFixed(2), 'MgT2E 2.2: Exotic Atmosphere Subtype');
+                    writeLogLine(`Exotic Pressure: ${w.totalPressureBar.toFixed(2)} bar (${exoticEntry.type}: Min ${exoticEntry.minP} + Span ${exoticEntry.spanP} * ${seededFraction.toFixed(3)})`);
+                } else if (w.atmCode === 11 || w.atmCode === 12) {
+                    // Corrosive/Insidious: subtype roll determines pressure range
+                    tSection('Corrosive/Insidious Atmosphere Subtype');
+                    const _ciDMs = MgT2EData.atmosphereExtended.corrosiveInsidiousDMs;
+                    const _hzco = w.worldHzco || sys.hzco || 0;
+                    let ciDM = 0;
+                    if (w.size >= 2 && w.size <= 4)           { tDM('Size 2-4',   _ciDMs.size2to4);          ciDM += _ciDMs.size2to4; }
+                    if (w.size >= 8)                           { tDM('Size 8+',    _ciDMs.size8Plus);          ciDM += _ciDMs.size8Plus; }
+                    if (_hzco > 0 && w.orbitId < (_hzco - 1)) { tDM('Inner Orbit', _ciDMs.innerOrbit);        ciDM += _ciDMs.innerOrbit; }
+                    if (_hzco > 0 && w.orbitId > (_hzco + 2)) { tDM('Outer Orbit', _ciDMs.outerOrbit);        ciDM += _ciDMs.outerOrbit; }
+                    if (w.atmCode === 12)                      { tDM('Insidious',   _ciDMs.insidiousC);        ciDM += _ciDMs.insidiousC; }
+                    if (w.runawayGreenhouse)                   { tDM('Runaway GH',  _ciDMs.runawayGreenhouse); ciDM += _ciDMs.runawayGreenhouse; }
+                    const ciRoll = Math.max(1, Math.min(14, tRoll2D('C/I Subtype Roll') + ciDM));
+                    const ciEntry = MgT2EData.atmosphereExtended.corrosiveInsidiousSubtypes[ciRoll];
+                    tResult('C/I Subtype', ciEntry.type, 'MgT2E 2.2: Corrosive/Insidious Atmosphere Subtype');
+                    w.exoticSubtype = ciEntry.type;
+                    if (!isManual(w, 'totalPressureBar')) {
+                        w.totalPressureBar = ciEntry.minP + (ciEntry.spanP * seededFraction);
+                        w.pressureBar = w.totalPressureBar;
+                    }
+                    tResult('Total Pressure (Bar)', w.totalPressureBar.toFixed(2), 'MgT2E 2.2: Corrosive/Insidious Atmosphere Subtype');
+                    writeLogLine(`C/I Pressure: ${w.totalPressureBar.toFixed(2)} bar (${ciEntry.type}: Min ${ciEntry.minP} + Span ${ciEntry.spanP} * ${seededFraction.toFixed(3)})`);
+                } else {
+                    let cdata = MgT2EData.atmosphereExtended.atmCodes[w.atmCode];
+                    if (!isManual(w, 'totalPressureBar')) {
+                        w.totalPressureBar = cdata.minP + (cdata.spanP * seededFraction);
+                        w.pressureBar = w.totalPressureBar;
+                    }
+                    tResult('Total Pressure (Bar)', w.totalPressureBar.toFixed(2), 'MgT2E 2.2: Atmospheric Chemistry');
+                    writeLogLine(`Surface Pressure: ${w.totalPressureBar.toFixed(2)} bar (Min ${cdata.minP} + Span ${cdata.spanP} * ${seededFraction.toFixed(3)})`);
+                }
+            } else if (w.atmCode === 0) {
+                if (!isManual(w, 'totalPressureBar')) { w.totalPressureBar = 0; w.pressureBar = 0; }
+                tResult('Total Pressure (Bar)', 'Trace/None', 'MgT2E 2.2: Atmospheric Chemistry');
+            }
+
+            // 4. Oxygen Fraction & ppo (Standard Atmospheres)
+            if ((w.atmCode >= 2 && w.atmCode <= 9) || w.atmCode === 13 || w.atmCode === 14) {
+                tSection('Composition & Scale Height');
+
+                let ageDM = 0;
+                let sysAge = sys.ageGyr || sys.age || 0;
+                if (sysAge > 4.0) ageDM = 1;
+                else if (sysAge >= 3.0 && sysAge <= 3.5) ageDM = -1;
+                else if (sysAge >= 2.0 && sysAge <= 2.99) ageDM = -2;
+                else if (sysAge < 2.0) ageDM = -4;
+
+                let o2Roll = tRoll1D('Oxygen Base');
+                let varRoll = tRoll2D('Oxygen Variance (2D-7)') - 7;
+                if (ageDM !== 0) tDM('Age DM', ageDM);
+
+                let oxygenFrac = ((o2Roll + ageDM) / 20) + (varRoll / 100);
+                if (oxygenFrac <= 0) {
+                    oxygenFrac = Math.max(0.01, (tRoll1D('Oxygen Minimum Reserve') * 0.01) + (Math.floor(rng() * 10) / 100));
+                }
+
+                w.oxygenFrac = oxygenFrac;
+                if (!isManual(w, 'oxygenFraction')) w.oxygenFraction = oxygenFrac;
+                w.ppoBar = w.oxygenFraction * w.totalPressureBar;
+                w.ppo = w.ppoBar;
+
+                let traceFrac = 0.003 + (rng() * 0.017);
+                let traceGasChoices = ["Argon", "Carbon Dioxide", "Neon"];
+                let traceGasName = traceGasChoices[Math.floor(rng() * traceGasChoices.length)];
+                let tracePressure = traceFrac * w.totalPressureBar;
+
+                let n2Frac = Math.max(0, 1.0 - w.oxygenFraction - traceFrac);
+
+                if (!isManual(w, 'taints')) {
+                    w.taints = w.taints || [];
+                    if (traceGasName === "Carbon Dioxide" && tracePressure > 0.015) {
+                        w.taints.push("High Carbon Dioxide");
+                        tResult('Taint', 'High Carbon Dioxide (Gas Mix)');
+                        writeLogLine(`Auto-Taint Triggered: Carbon Dioxide trace pressure ${tracePressure.toFixed(3)} bar > 0.015 limit.`);
+                    }
+                }
+
+                tResult('Oxygen Fraction', (w.oxygenFraction * 100).toFixed(1) + '%', 'MgT2E 2.2: Atmospheric Chemistry');
+                tResult('Trace Gas', `${traceGasName} ${(traceFrac * 100).toFixed(1)}%`, 'MgT2E 2.2: Atmospheric Chemistry');
+                tResult('ppo (Bar)', w.ppoBar.toFixed(3), 'MgT2E 2.2: Atmospheric Chemistry');
+                writeLogLine(`Composition: N2 ${(n2Frac * 100).toFixed(1)}% | O2 ${(w.oxygenFraction * 100).toFixed(1)}% | ${traceGasName} ${(traceFrac * 100).toFixed(1)}%`);
+                writeLogLine(`Oxygen Partial Pressure: ${w.ppoBar.toFixed(3)} bar`);
+
+                // UWP Auto-Taint Loopback
+                if (!isManual(w, 'taints')) w.taints = [];
+                let isLowO2 = w.ppoBar < 0.1;
+                let isHighO2 = w.ppoBar > 0.5;
+
+                if (!isManual(w, 'taints')) {
+                    if (isLowO2) { tResult('Taint', 'Low Oxygen'); w.taints.push("Low Oxygen"); }
+                    if (isHighO2) { tResult('Taint', 'High Oxygen'); w.taints.push("High Oxygen"); }
+                }
+
+                if (isLowO2 || isHighO2) {
+                    let needsFlip = (w.atmCode === 5 || w.atmCode === 6 || w.atmCode === 8);
+
+                    if (needsFlip) {
+                        if (isMainworldLocked) {
+                            tResult('Top-Down Gospel', 'Forcing Physics to match UWP Atmosphere');
+                            // Remove the taint
+                            if (!isManual(w, 'taints')) w.taints = w.taints.filter(t => t !== "Low Oxygen" && t !== "High Oxygen");
+
+                            // Adjust oxygen fraction to force ppo into safe range
+                            if (isLowO2) w.ppoBar = 0.10 + (rng() * 0.04);
+                            if (isHighO2) w.ppoBar = 0.49 - (rng() * 0.04);
+                            w.ppo = w.ppoBar;
+                            w.oxygenFraction = w.ppoBar / w.totalPressureBar;
+
+                            // If it pushes oxygen too high or pressure is too low, we adjust pressure instead
+                            if (w.oxygenFraction > 0.99 || w.totalPressureBar < 0.1) {
+                                w.oxygenFraction = 0.20 + (rng() * 0.10);
+                                w.totalPressureBar = w.ppoBar / w.oxygenFraction;
+                                w.pressureBar = w.totalPressureBar;
+                            }
+
+                            w.oxygenFrac = w.oxygenFraction;
+                            writeLogLine(`[PHYSICS ANOMALY] UWP Gospel: Forced ppo to ${w.ppoBar.toFixed(3)} and Pressure to ${w.totalPressureBar.toFixed(2)} to maintain Atm ${w.atmCode.toString(16).toUpperCase()} without taints.`);
+                        } else {
+                            if (w.atmCode === 5) {
+                                tResult('Auto-Taint Loopback', '5 -> 4');
+                                w.atmCode = 4;
+                            } else if (w.atmCode === 6) {
+                                tResult('Auto-Taint Loopback', '6 -> 7');
+                                w.atmCode = 7;
+                            } else if (w.atmCode === 8) {
+                                tResult('Auto-Taint Loopback', '8 -> 9');
+                                w.atmCode = 9;
+                            }
+                            writeLogLine(`Auto-Taint Triggered: ppo ${w.ppoBar.toFixed(3)} is outside safe limits. Atm changed to ${w.atmCode.toString(16).toUpperCase()}.`);
+                        }
+                    } else if (isMainworldLocked) {
+                        writeLogLine(`[PHYSICS VERIFIED] UWP Gospel: Tainted Atm ${w.atmCode.toString(16).toUpperCase()} correctly validated with unsafe ppo ${w.ppoBar.toFixed(3)}.`);
+                    }
+                }
+
+                // Generate Atmospheric Taints
+                let generateAtmosphericTaints = () => {
+                    let tRollRaw = tRoll2D('Taint Subtype Roll');
+                    let tRoll = tRollRaw;
+                    if (w.atmCode === 4) { tDM('Atm 4', -2); tRoll -= 2; }
+                    if (w.atmCode === 9) { tDM('Atm 9', 2); tRoll += 2; }
+                    let t = MgT2EData.atmosphereExtended.taintSubtypes[Math.max(2, Math.min(12, tRoll))];
+
+                    let typeRollStr = `Subtype Roll ${tRollRaw}`;
+                    if (w.atmCode === 4) typeRollStr += ` - Atm 4 DM (2) = ${tRoll}`;
+                    else if (w.atmCode === 9) typeRollStr += ` + Atm 9 DM (2) = ${tRoll}`;
+                    typeRollStr += ` -> ${t}`;
+
+                    // Temperature Precision for Sulphur
+                    if (t === "Sulphur Compounds" && w.meanTempK !== undefined && w.meanTempK < 273) {
+                        tResult('Taint Precision', 'Temp < 273K: Sulphur freezes to Particulates');
+                        t = "Particulates";
+                        typeRollStr += ` (Sulphur frozen to Particulates <273K)`;
+                    }
+
+                    if (t && !w.taints.includes(t)) {
+                        tResult('Atm Taint', t, 'MgT2E 2.2: Atmospheric Chemistry');
+                        w.taints.push(t);
+
+                        // ppo Retroactive Recalculation
+                        if (t === "Low Oxygen") {
+                            w.ppoBar = 0.10 - (tRoll1D('Retroactive Low ppo Roll') / 100);
+                            w.ppo = w.ppoBar;
+                            tResult('Retro ppoBar (L O2)', w.ppoBar.toFixed(3));
+                        } else if (t === "High Oxygen") {
+                            w.ppoBar = 0.50 + (tRoll1D('Retroactive High ppo Roll') / 10);
+                            w.ppo = w.ppoBar;
+                            tResult('Retro ppoBar (H O2)', w.ppoBar.toFixed(3));
+                        }
+                    }
+
+                    let sevRoll = tRoll2D('Taint Severity');
+                    let sevIdx = Math.max(1, Math.min(9, sevRoll));
+                    w.taintSeverity = MgT2EData.atmosphereExtended.taintSeverity[sevIdx];
+                    tResult('Taint Severity', w.taintSeverity, 'MgT2E 2.2: Atmospheric Chemistry');
+
+                    let sevRollStr = `Severity Roll ${sevRoll} -> ${w.taintSeverity}`;
+
+                    // Lethal Persistence Check
+                    let pRoll = tRoll2D('Taint Persistence');
+                    let pDM = 0;
+                    let pDMStr = "";
+                    if (sevIdx === 8 || sevIdx === 9) {
+                        let hasOxygenTaint = w.taints.includes("Low Oxygen") || w.taints.includes("High Oxygen");
+                        if (hasOxygenTaint) {
+                            tDM('Lethal L/H Oxygen', 6);
+                            pDM = 6;
+                            pDMStr = " + DM 6 (Lethal L/H O2)";
+                        } else {
+                            tDM('Lethal Taint', 4);
+                            pDM = 4;
+                            pDMStr = " + DM 4 (Lethal Taint)";
+                        }
+                    }
+                    w.taintPersistence = Math.max(2, pRoll + pDM);
+                    tResult('Taint Persistence', w.taintPersistence, 'MgT2E 2.2: Atmospheric Chemistry');
+
+                    let perRollStr = `Persistence Roll ${pRoll}${pDMStr} -> ${w.taintPersistence}`;
+                    let taintNum = w.taints.length;
+                    writeLogLine(`Taint ${taintNum}: ${typeRollStr}. ${sevRollStr}. ${perRollStr}.`);
+
+                    // Edge Case: Cascading Taints
+                    if (tRollRaw === 10) {
+                        writeLogLine(`Taint Cascade: Subtype roll was 10, triggering a second taint roll.`);
+                        generateAtmosphericTaints();
+                    }
+                };
+
+                // Edge Case: Irritant Check
+                if (!isManual(w, 'taints')) {
+                    if (w._atmHazardFlag || w._atmHazardFlag === "Check") {
+                        tResult('Hazard Flag', 'Irritant/Check Present');
+                        if (tRoll1D('Irritant Taint Roll') >= 4) {
+                            generateAtmosphericTaints();
+                        }
+                    } else if ([2, 4, 7, 9].includes(w.atmCode)) {
+                        generateAtmosphericTaints();
+                    }
+                }
+
+                // Advanced Scale Height
+                w.scaleHeight = MgT2EMath.calculateScaleHeight(w.gravity, w.meanTempK);
+                tResult('Scale Height (km)', w.scaleHeight.toFixed(2), 'MgT2E 2.2: Atmospheric Chemistry');
+                writeLogLine(`Scale Height: ${w.scaleHeight.toFixed(2)} km`);
+
+                // Code D/E Edge Cases
+                if (w.atmCode === 13) {
+                    let badRatioO2 = w.oxygenFraction > 0 ? w.ppoBar / 0.5 : 1;
+                    let badRatioN2 = (w.totalPressureBar - w.ppoBar) / 2.0;
+                    let badRatio = Math.max(badRatioO2, badRatioN2);
+                    if (badRatio > 1 && w.scaleHeight > 0) {
+                        w.safeAlt = Math.log(badRatio) * w.scaleHeight;
+                        tResult('Safe Altitude (km)', w.safeAlt.toFixed(2), 'MgT2E 2.2: Atmospheric Chemistry');
+                        writeLogLine(`Code D Minimum Safe Altitude: ${w.safeAlt.toFixed(2)} km (O2 Ratio: ${badRatioO2.toFixed(2)}, N2 Ratio: ${badRatioN2.toFixed(2)})`);
+
+                        let newPressure = w.totalPressureBar / Math.exp(w.safeAlt / w.scaleHeight);
+                        let newPpo = w.oxygenFraction * newPressure;
+                        if (newPpo < 0.1) {
+                            w.noSafeAltitude = true;
+                            tResult('No Safe Altitude', 'True');
+                            if (!isManual(w, 'taints') && tRoll1D('Safe Alt Taint Check') >= 4) {
+                                generateAtmosphericTaints();
+                            }
+                        }
+                    }
+                }
+                if (w.atmCode === 14 && w.ppoBar > 0) {
+                    let badRatio = 0.1 / w.ppoBar;
+                    if (badRatio > 1 && w.scaleHeight > 0) {
+                        w.safeAltBelowMean = Math.log(badRatio) * w.scaleHeight;
+                        tResult('Safe Depth (km)', w.safeAltBelowMean.toFixed(2), 'MgT2E 2.2: Atmospheric Chemistry');
+                        writeLogLine(`Code E Safe Depth: ${w.safeAltBelowMean.toFixed(2)} km below mean`);
+
+                        let newPressure = w.totalPressureBar * Math.exp(w.safeAltBelowMean / w.scaleHeight);
+                        let newN2 = (1 - w.oxygenFraction) * newPressure;
+                        if (newN2 > 2.0) {
+                            w.nitrogenNarcosisDepth = true;
+                            tResult('Nitrogen Narcosis', 'True');
+                            if (!isManual(w, 'taints') && tRoll1D('Narcosis Taint Check') >= 4) {
+                                generateAtmosphericTaints();
+                            }
+                        }
+                    }
+                }
+
+                // Store gas composition for display (parallel to exotic path which sets w.gases at selection time)
+                if (!isManual(w, 'gases')) {
+                    const _finalN2 = Math.max(0, 1.0 - w.oxygenFraction - traceFrac);
+                    const _gasMix = [
+                        { name: 'Nitrogen', pct: _finalN2 * 100 },
+                        { name: 'Oxygen',   pct: w.oxygenFraction * 100 },
+                        { name: traceGasName, pct: traceFrac * 100 }
+                    ];
+                    _gasMix.sort((a, b) => b.pct - a.pct);
+                    w.gases = _gasMix.map(g => `${g.name} ${g.pct.toFixed(1)}%`);
+                    tResult('Gas Composition', w.gases.join(', '), 'MgT2E 2.2: Atmospheric Chemistry');
+                }
+
+                // Integration & Profile String
+                w.atmProfile = `${toEHex(w.atmCode)}-${w.totalPressureBar.toFixed(2)}-${w.ppoBar.toFixed(3)}`;
+                tResult('Atm Profile', w.atmProfile, 'MgT2E 2.2: Atmospheric Chemistry');
+
+            } else if (w.atmCode >= 10 && w.atmCode <= 12) {
+                // Exotic Gas Retention (DPM)
+                tSection('Exotic Gas Retention (DPM)');
+                let massTerra = w.mass || 0.001;
+                let diamTerra = (w.diamKm || 0) / 12742 || 0.001;
+                w.maxEscapeValue = MgT2EMath.calculateMaxEscapeValue(massTerra, w.diamKm || 0, w.meanTempK);
+
+                const dpmGasData = MgT2EData.atmosphereExtended.gasRetentionData;
+
+                writeLogLine(`Max Escape Value: ${w.maxEscapeValue.toFixed(3)} (1000 * (${massTerra.toFixed(3)} / (${diamTerra.toFixed(2)} * ${w.meanTempK.toFixed(1)})))`);
+
+                let retainedGases = [];
+                if (!isManual(w, 'taints')) w.taints = [];
+
+                for (let g of dpmGasData) {
+                    if (g.weight > 0 && g.ev < w.maxEscapeValue && w.meanTempK > g.bp) {
+                        let gasObj = { name: g.name, weight: g.weight, taint: g.taint };
+
+                        // CO -> CO2 constraint
+                        if (g.name === "Carbon Monoxide" && w.hydroPercent > 0) {
+                            tResult('CO Constraint', 'Water present -> Carbon Dioxide');
+                            writeLogLine('Carbon Monoxide converted to Carbon Dioxide due to presence of H2O.');
+                            gasObj.name = "Carbon Dioxide";
+                        }
+                        retainedGases.push(gasObj);
+                    }
+                }
+
+                if (retainedGases.length === 0) {
+                    retainedGases.push({ name: w.maxEscapeValue > 0.2 ? "Heavy Gases" : "Trace Gases", weight: 100, taint: false });
+                }
+
+                // Aggregate duplicates by name before selection
+                let aggregatedMap = {};
+                for (let g of retainedGases) {
+                    if (!aggregatedMap[g.name]) aggregatedMap[g.name] = { weight: 0, taint: g.taint };
+                    aggregatedMap[g.name].weight += g.weight;
+                    aggregatedMap[g.name].taint = aggregatedMap[g.name].taint || g.taint;
+                }
+                let gasPool = Object.entries(aggregatedMap).map(([name, data]) => ({ name, weight: data.weight, taint: data.taint }));
+
+                tSection('Gas Selection');
+                tResult('Candidate Gases', gasPool.map(g => `${g.name} (wt ${g.weight})`).join(', '));
+
+                // Roll for target gas count
+                let countRoll = tRoll2D('Gas Count Roll (2d6)');
+                let targetCount;
+                if (countRoll <= 10) {
+                    targetCount = 2;
+                    tResult('Target Gas Count', targetCount, `Roll ${countRoll} (2–10) → 2 gases`);
+                } else if (countRoll === 11) {
+                    targetCount = 3;
+                    tResult('Target Gas Count', targetCount, `Roll 11 → 3 gases`);
+                } else {
+                    let bonusRoll = tRoll1D('Gas Count Bonus (1d6)');
+                    targetCount = bonusRoll <= 4 ? 4 : bonusRoll === 5 ? 5 : 6;
+                    tResult('Target Gas Count', targetCount, `Roll 12, bonus d6 ${bonusRoll} → ${targetCount} gases`);
+                }
+
+                // Cap at available pool size
+                let actualCount = Math.min(targetCount, gasPool.length);
+                if (actualCount < targetCount) {
+                    tResult('Gas Count Capped', actualCount, `Only ${gasPool.length} candidate(s) — using all`);
+                }
+
+                // Weighted selection without replacement
+                let pool = [...gasPool];
+                let selectedGases = [];
+                for (let i = 0; i < actualCount; i++) {
+                    let totalW = pool.reduce((s, g) => s + g.weight, 0);
+                    let rand = rng() * totalW;
+                    let cumulative = 0;
+                    let chosen = null;
+                    for (let j = 0; j < pool.length; j++) {
+                        cumulative += pool[j].weight;
+                        if (rand <= cumulative) { chosen = pool[j]; pool.splice(j, 1); break; }
+                    }
+                    if (!chosen) chosen = pool.pop(); // floating-point safety fallback
+                    selectedGases.push(chosen);
+                    tResult(`Draw ${i + 1}`, chosen.name, `rand ${rand.toFixed(2)} / pool total ${totalW.toFixed(0)} → weight ${chosen.weight}`);
+                }
+
+                // Prorate selected gases to 100% and assign taints for selected gases only
+                let totalSelected = selectedGases.reduce((s, g) => s + g.weight, 0);
+                let mixStrings = [];
+                for (let g of selectedGases) {
+                    let pct = (g.weight / totalSelected) * 100;
+                    mixStrings.push(`${g.name} ${pct.toFixed(1)}%`);
+                    if (!isManual(w, 'taints') && g.taint && !w.taints.includes(g.name)) {
+                        w.taints.push(g.name);
+                        tResult('Atm Taint', g.name, 'MgT2E 2.2: Atmospheric Chemistry');
+                    }
+                }
+
+                mixStrings.sort((a, b) => parseFloat(b.split(' ')[b.split(' ').length - 1]) - parseFloat(a.split(' ')[a.split(' ').length - 1]));
+
+                w.gases = mixStrings;
+                tResult('Gas Mix', w.gases.join(', '), 'MgT2E 2.2: Atmospheric Chemistry');
+                writeLogLine(`Final Composition: ${w.gases.join(' | ')}`);
+
+                w.atmProfile = `${toEHex(w.atmCode)}-${w.totalPressureBar.toFixed(2)}-0.000`;
+                tResult('Atm Profile', w.atmProfile, 'MgT2E 2.2: Atmospheric Chemistry');
+            } else if (w.atmCode === 15) {
+                // Unusual Atmosphere (Code F)
+                tSection('Unusual Atmosphere (Code F)');
+
+                let tens = tRoll1D('First Die (1-2)');
+                tens = (tens <= 3) ? 1 : 2;
+                let ones = tRoll1D('Second Die (1-6)');
+                let d26 = (tens * 10) + ones;
+
+                let subtypeData = MgT2EData.atmosphereExtended.unusualSubtypes[d26];
+                let subtypeName = subtypeData ? subtypeData.name : "Unusual";
+                let subtypeCode = subtypeData ? subtypeData.code : "F";
+
+                tResult('Unusual Subtype', `${d26} - ${subtypeName}`);
+                writeLogLine(`Code F Roll: D26 ${d26} -> Subtype ${subtypeName}`);
+
+                // Enforce Prerequisites
+                if (subtypeData && subtypeData.minPressure) {
+                    if (!isManual(w, 'totalPressureBar') && w.totalPressureBar < subtypeData.minPressure) {
+                        w.totalPressureBar = subtypeData.minPressure + (rng() * subtypeData.minPressure);
+                        tResult('Constraint', `${subtypeName} forces pressure ${subtypeData.minPressure}+ bar`);
+                    }
+                }
+                if (subtypeData && subtypeData.minGravity) {
+                    if (w.gravity <= subtypeData.minGravity) {
+                        w.gravity = subtypeData.minGravity + (rng() * 0.5);
+                        tResult('Constraint', `${subtypeName} forces Gravity > ${subtypeData.minGravity}`);
+                    }
+                }
+                if (subtypeData && subtypeData.minHydro) {
+                    w.hydroCode = subtypeData.minHydro;
+                    tResult('Constraint', `${subtypeName} forces Hydro ${subtypeData.minHydro}`);
+                }
+
+                w.pressureBar = w.totalPressureBar;
+                w.gases = [subtypeName];
+                w.atmProfile = `F-St${subtypeCode}`;
+                tResult('Atm Profile', w.atmProfile, 'MgT2E 2.2: Atmospheric Chemistry');
+            } else if (w.atmCode <= 1) {
+                w.atmProfile = `${toEHex(w.atmCode)}-None-0.000`;
+                tResult('Atm Profile', w.atmProfile, 'MgT2E 2.2: Atmospheric Chemistry');
+            }
+
+            // 6. Hydrographics
+            tSection('Hydrographics');
+            const _seedHydro = Array.isArray(w._manualFields) && w._manualFields.includes('hydroCode') && w.hydroCode !== undefined ? w.hydroCode : undefined;
+            w.hydroCode = 0;
+            if (w.type === 'Mainworld' && mainworldBase && mainworldBase.hydro !== undefined) {
+                tSkip('Mainworld Hydro Inherited');
+                w.hydroCode = mainworldBase.hydro;
+            } else if (_seedHydro !== undefined) {
+                tResult('Seeded Hydrographics', _seedHydro);
+                w.hydroCode = _seedHydro;
+            } else if (!['S', 0, 1].includes(w.size)) {
+                let hMod = 0;
+                const extremeAtmDM = MgT2EData.extremeAtmosphereHydroDM;
+                if (extremeAtmDM.triggerAtmospheres.includes(w.atmCode)) { tDM('Desert Atm', extremeAtmDM.modifier); hMod += extremeAtmDM.modifier; }
+                const thermalDMs = MgT2EData.rollModifiers.thermalHydro;
+                if (tempBand === "Hot" && w.atmCode !== 13) { tDM('Hot', thermalDMs.Hot); hMod += thermalDMs.Hot; }
+                if (tempBand === "Boiling" && w.atmCode !== 13) { tDM('Boiling', thermalDMs.Boiling); hMod += thermalDMs.Boiling; }
+
+                w.hydroCode = Math.max(0, Math.min(10, tRoll2D('Hydro Roll') - 7 + w.atmCode + hMod));
+                tDM('Atm Mod', w.atmCode);
+            }
+
+            const _hd10 = Math.floor(rng() * 10) + 1;
+            if (w.hydroCode === 0) {
+                w.hydroPercent = Math.max(0, -5 + _hd10);
+            } else if (w.hydroCode === 10) {
+                w.hydroPercent = (typeof w.size === 'number' && w.size > 9) ? 100 : Math.min(100, 95 + _hd10);
+            } else {
+                w.hydroPercent = (w.hydroCode * 10 - 5) + _hd10;
+            }
+            tResult('Final Hydro Code', toEHex(w.hydroCode), 'MgT2E 2.3: Hydrographics');
+            tResult('Hydro Percentage', w.hydroPercent + '%', 'MgT2E 2.3: Hydrographics');
+
+            let distRoll = Math.max(0, Math.min(10, tRoll2D('Surface Liquid Distribution (2D-2)') - 2));
+            w.surfaceDist = MGT2E_SURFACE_DISTS[distRoll];
+            w.liquidType = "Water";
+
+            // Ice Distinction (WBH RAW)
+            if (w.highTempK < 273 || w.atmCode === 0 || w.atmCode === 1) {
+                w.liquidType = "Ice";
+            }
+
+            // Exotic Liquids Selection (WBH RAW — Data-Driven Weighted Random)
+            if (w.atmCode >= 10 && w.atmCode <= 12 && w.hydroPercent > 0) {
+                const exoticTable = MgT2EData.atmosphereExtended.exoticLiquids;
+                const candidates = exoticTable.filter(liq => w.meanTempK >= liq.mp && w.meanTempK <= liq.bp);
+                if (candidates.length > 0) {
+                    const totalWeight = candidates.reduce((sum, liq) => sum + liq.abundance, 0);
+                    let roll = rng() * totalWeight;
+                    let winner = candidates[candidates.length - 1];
+                    for (const liq of candidates) {
+                        roll -= liq.abundance;
+                        if (roll <= 0) { winner = liq; break; }
+                    }
+                    w.liquidType = winner.name;
+                } else {
+                    w.liquidType = "Unknown Exotic Liquid";
+                }
+            }
+
+            w.tempBand = tempBand;
+            tResult('Surface Distribution', w.surfaceDist);
+            tResult('Liquid Type', w.liquidType, 'MgT2E 2.3: Hydrographics');
+
+            // Sync final physical codes back to UWP strings
+            let finalAtmChar = toEHex(w.atmCode);
+            let finalHydroChar = toEHex(w.hydroCode);
+
+            let updateUWPChar = (uwpStr, idx, char) => {
+                if (!uwpStr || uwpStr.length <= idx || uwpStr === '-') return uwpStr;
+                const chars = uwpStr.split('');
+                chars[idx] = char;
+                return chars.join('');
+            };
+
+            if (w.type === 'Mainworld' && mainworldBase && mainworldBase.uwp && !isMainworldLocked) {
+                mainworldBase.uwp = updateUWPChar(mainworldBase.uwp, 2, finalAtmChar);
+                mainworldBase.uwp = updateUWPChar(mainworldBase.uwp, 3, finalHydroChar);
+                mainworldBase.atm = w.atmCode;
+                mainworldBase.hydro = w.hydroCode;
+                w.atm = w.atmCode;
+                w.hydro = w.hydroCode;
+            } else if (w.uwpSecondary) {
+                w.uwpSecondary = updateUWPChar(w.uwpSecondary, 2, finalAtmChar);
+                w.uwpSecondary = updateUWPChar(w.uwpSecondary, 3, finalHydroChar);
+                w.atm = w.atmCode;
+                w.hydro = w.hydroCode;
+                w.uwpSecondaryAtm = w.atmCode;
+                w.uwpSecondaryHydro = w.hydroCode;
+            } else {
+                w.atm = w.atmCode;
+                w.hydro = w.hydroCode;
+            }
+        };
+
+        for (let i = 0; i < sys.worlds.length; i++) {
+            let w = sys.worlds[i];
+
+            // Physics Guards
+            if (w.size === 0 || w.size === 'R' || w.type === 'Empty') {
+                w.gravity = 0;
+                w.mass = 0;
+                w.escapeVel = 0;
+                w.orbitalVelSurface = 0;
+                continue;
+            }
+
+            // Tighten Floating-Point Precision
+            if (typeof w.size === 'number' && w.size > 0 && w.mass !== undefined) {
+                let mathSize = w.size === 'S' ? 0.375 : w.size;
+                w.escapeVel = MgT2EMath.calculateEscapeVelocity(w.mass, mathSize);
+                w.orbitalVelSurface = MgT2EMath.calculateOrbitalVelocity(w.escapeVel);
+            }
+
+            processWorld(w);
+
+            if (w.moons) {
+                for (let j = 0; j < w.moons.length; j++) {
+                    let m = w.moons[j];
+
+                // Apply guards to moons
+                if (m.size === 0 || m.size === 'R' || m.type === 'Empty') {
+                    m.gravity = 0;
+                    m.mass = 0;
+                    m.escapeVel = 0;
+                    m.orbitalVelSurface = 0;
+                    continue;
+                }
+
+                if (typeof m.size === 'number' && m.size > 0 && m.mass !== undefined) {
+                    let mathSize = m.size === 'S' ? 0.375 : m.size;
+                    m.escapeVel = MgT2EMath.calculateEscapeVelocity(m.mass, mathSize);
+                    m.orbitalVelSurface = MgT2EMath.calculateOrbitalVelocity(m.escapeVel);
+                }
+
+                let fauxMoon = Object.assign({}, m);
+                fauxMoon.orbitId = w.orbitId;
+                fauxMoon.au = w.au; // INHERIT AU FROM PARENT PLANET
+                fauxMoon.worldHzco = w.worldHzco;
+                fauxMoon.type = 'Satellite'; // Retain type for processWorld
+                processWorld(fauxMoon);
+
+                // Sync processed data back to moon record
+                let syncRes = Object.assign({}, fauxMoon);
+                syncRes.type = m.type; // Restore original type (preserves 'Mainworld' for lunar mainworlds)
+                w.moons[j] = syncRes;
+                }
+            }
+        }
+
+        return sys;
+    }
+
+    // =====================================================================
+    // CHUNK 5: ROTATIONAL DYNAMICS (TEMPERATURE & ROTATION)
+    // =====================================================================
+
+    /**
+     * Generate rotational dynamics for all worlds and moons.
+     * Handles sidereal day, axial tilt, solar day, tidal locking, mean temperature,
+     * and high/low temperature diurnals.
+     * 
+     * @param {Object} sys - System object with worlds array
+     * @param {Object|Object} options - Options object or Mainworld baseline data
+     * @returns {Object} Modified system object
+     */
+    function generateRotationalDynamics(sys, options = {}) {
+        let mainworldBase = null;
+        let targetWorlds = sys.worlds;
+
+        // Adaptive Signature: (sys, mainworldBase) or (sys, { targetWorlds, mainworldBase })
+        if (options && options.type === 'Mainworld') {
+            mainworldBase = options;
+        } else if (options) {
+            mainworldBase = options.mainworldBase;
+            targetWorlds = options.targetWorlds || sys.worlds;
+        }
+
+        let primary = sys.stars[0];
+        tSection('Temperature & Rotation');
+
+        let processBody = (w, parent, isMoon) => {
+            if (w.type === 'Empty') return;
+
+            if (w.type === 'Planetoid Belt' || w.size === 0 || w.size === 'R') {
+                w.siderealHours = null;
+                w.solarDayHours = null;
+                w.axialTilt = null;
+                w.tidallyLocked = false;
+
+                // Calculate only orbital mean temperature, skip diurnals
+                let hzco = w.worldHzco || sys.hzco;
+                w.albedo = getMgT2EAlbedo(w, hzco);
+                let srcLum = primary.lum || 1.0;
+                if (w.au > 0) {
+                    w.meanTempK = MgT2EMath.calculateMeanTemperature(srcLum, w.au, w.albedo, 0.1);
+                } else {
+                    w.meanTempK = 3;
+                }
+                w.highTempK = null;
+                w.lowTempK = null;
+                return;
+            } else {
+                tSection(`${isMoon ? 'Moon' : w.type} Orbit ${w.orbitId != null ? w.orbitId.toFixed(2) : '?'} Rotation`);
+
+                // 1. Sidereal Day
+                if (!isManual(w, 'siderealHours')) {
+                    let sRoll1 = tRoll2D('Base Sidereal Day Roll');
+                    let sRoll2 = tRoll1D('Sidereal Day Adjust');
+                    let sMult = (w.type === 'Gas Giant' || w.size === 0 || w.size === 'S') ? 2 : 4;
+                    tResult('Rotation Multiplier', sMult);
+                    let ageDm = Math.floor((sys.age || 0) / 2);
+                    w.siderealHours = ((sRoll1 - 2) * sMult) + 2 + sRoll2 + ageDm;
+
+                    // Safety: Ensure siderealHours is a finite number
+                    if (!Number.isFinite(w.siderealHours)) {
+                        console.error(`[MgT2E World Engine] Invalid siderealHours calculated for ${w.type}: ${w.siderealHours}. Age: ${sys.age}, sRoll1: ${sRoll1}, sRoll2: ${sRoll2}, ageDm: ${ageDm}`);
+                        w.siderealHours = 24.0; // Fallback to standard day
+                    }
+
+                    let extRoll = w.siderealHours;
+                    let extCount = 0;
+                    while (extRoll >= 40) {
+                        if (tRoll1D(`Extension ${++extCount} Roll (5+)`) >= 5) {
+                            let bonusRoll1 = tRoll2D(`Extension ${extCount} Base`);
+                            let bonusRoll2 = tRoll1D(`Extension ${extCount} Adjust`);
+                            let bonus = ((bonusRoll1 - 2) * sMult) + 2 + bonusRoll2 + ageDm;
+                            w.siderealHours += bonus;
+                            extRoll = bonus;
+                        } else {
+                            break;
+                        }
+                    }
+                    let minRoll = Math.floor(rng() * 60);
+                    let secRoll = Math.floor(rng() * 60);
+                    w.siderealHours += (minRoll / 60) + (secRoll / 3600);
+                    tResult('Fractional Adjust', `${minRoll}m ${secRoll}s`);
+                } else {
+                    tResult('Sidereal Hours (Preserved)', w.siderealHours.toFixed(4));
+                }
+                tResult('Sidereal Hours', w.siderealHours.toFixed(4));
+
+                // 2. Axial Tilt
+                tSection('Axial Tilt');
+                if (!isManual(w, 'axialTilt')) w.axialTilt = generateMgT2EAxialTilt();
+                tResult('Final Axial Tilt', w.axialTilt + '°');
+
+                // 3. Solar Day & Periods
+                // RAW: We must track two distinct periods:
+                // - Orbital Period (Month for moons, Year for planets) for Tidal Lock 
+                // - Star Year (Always period around star) for Solar Day
+                let orbitalPeriodHours = isMoon ? (w.periodHrs || 24) : (w.periodYears * 8760);
+                let starYearHours = isMoon ? (parent.periodYears * 8760 || 8760) : (w.periodYears * 8760);
+                
+                // Store yearHours for thermal logic but ensure it's the period around the star
+                w.yearHours = starYearHours;
+
+                let effectiveSidereal = w.siderealHours;
+                if (w.axialTilt > 90) {
+                    effectiveSidereal = -w.siderealHours;
+                }
+
+                if (Math.abs(w.siderealHours - starYearHours) < 0.001 && !isMoon) {
+                    w.solarDaysInYear = 0;
+                    if (!isManual(w, 'solarDayHours')) w.solarDayHours = Infinity;
+                    w.isTwilightZone = true;
+                    writeLogLine(`  Twilight Zone World (Tidally Locked to Sun): Sidereal equals Year exactly.`);
+                } else {
+                    w.solarDaysInYear = (starYearHours / effectiveSidereal) - 1;
+                    if (!isManual(w, 'solarDayHours')) {
+                        if (Math.abs(w.solarDaysInYear) > 0.0001) {
+                            w.solarDayHours = Math.abs(starYearHours / w.solarDaysInYear);
+                        } else {
+                            w.solarDayHours = Infinity;
+                        }
+                    }
+                    w.isTwilightZone = false;
+                }
+                tResult('Solar Day (Hours)', (w.solarDayHours === Infinity || w.solarDayHours > 999999) ? 'Infinity' : w.solarDayHours.toFixed(2));
+
+                // 4. Tidal Lock
+                if (!isManual(w, 'tidallyLocked')) {
+                    tSection('Tidal Lock Check');
+                    let dmResult = calculateTidalLockDMs(w, sys, parent, isMoon);
+                    let lockDM = dmResult.Total_DM;
+                    w.Selected_Case = dmResult.Selected_Case;
+                    tResult('Global DM', dmResult.Global_DM);
+                    tResult('Total Lock DM', lockDM);
+                    tResult('Dominant Force', dmResult.Selected_Case);
+
+                    // Pass the correct Driver Period (orbital period) to the lock logic
+                    executeTidalLockRoll(w, sys, lockDM, dmResult.Selected_Case, orbitalPeriodHours);
+                } else {
+                    tResult('Tidal Lock (Preserved)', w.tidallyLocked);
+                }
+            }
+
+            // 5. Mean Temperature
+            tSection('Mean Temperature');
+            if (!isManual(w, 'albedo')) {
+                w.albedo = getMgT2EAlbedo(w, w.worldHzco || sys.hzco);
+            }
+            tResult('Bond Albedo', w.albedo.toFixed(3), 'MgT2E 2.4: Thermal Logic');
+            let initialGF = 0.5 * Math.sqrt(w.totalPressureBar || w.pressureBar || 0);
+            const greenhouse = MgT2EData.thermalPhysics.greenhouse;
+
+            if (!isManual(w, 'greenhouseFactor')) {
+                let finalGF = 0;
+                if (w.atmCode === 0) {
+                    finalGF = 0;
+                } else if (greenhouse.additiveGroup.includes(w.atmCode)) {
+                    finalGF = initialGF + (tRoll3D('Greenhouse Factor Roll (3D*0.01)') * 0.01);
+                } else if (greenhouse.multiplierGroupA.includes(w.atmCode)) {
+                    let mult = tRoll1D('GF Multiplier (1D-1)') - 1;
+                    if (mult < 0.5) mult = 0.5;
+                    finalGF = initialGF * mult;
+                } else if (greenhouse.multiplierGroupB.includes(w.atmCode)) {
+                    let d1 = tRoll1D('GF Basis (1D)');
+                    if (d1 <= 5) {
+                        finalGF = initialGF * tRoll1D('GF Multiplier (1D)');
+                    } else {
+                        finalGF = initialGF * tRoll3D('GF Multiplier (3D)');
+                    }
+                } else {
+                    finalGF = initialGF;
+                }
+                w.greenhouseFactor = finalGF;
+            } else {
+                tResult('Greenhouse Factor (Preserved)', w.greenhouseFactor.toFixed(3));
+            }
+            tResult('GFactor', w.greenhouseFactor.toFixed(3), 'MgT2E 2.4: Thermal Logic');
+
+            let srcLum = primary.lum || 1.0;
+            let currentAu = w.au || (parent ? parent.au : 0);
+            if (!isManual(w, 'meanTempK')) {
+                w.meanTempK = currentAu > 0 ? MgT2EMath.calculateMeanTemperature(srcLum, currentAu, w.albedo, w.greenhouseFactor) : 3;
+            }
+            tResult('Mean Temp (K)', w.meanTempK.toFixed(1) + ' K', 'MgT2E 2.4: Thermal Logic');
+
+            // 6. High/Low Temperatures
+            tSection('Temp Diurnals');
+            w.highTempK = w.meanTempK;
+            w.lowTempK = w.meanTempK;
+            let tfactor = Math.abs(Math.sin((w.axialTilt || 0) * Math.PI / 180));
+            if (w.yearHours < (36.5 * 24)) { tSkip('Quick Year Adjust'); tfactor /= 2; }
+            if (w.yearHours > (2 * 8760)) { tSkip('Slow Year Adjust'); tfactor *= 1.5; }
+
+            let rfactor = w.solarDayHours <= 0 || w.solarDayHours === Infinity ? 1.0 : Math.sqrt(w.solarDayHours / 50);
+            // WBH RAW: Cap only applies if Solar Day > 2500 hours OR 1:1 Tidal Lock
+            if (w.solarDayHours > 2500) {
+                rfactor = 1.0;
+                if (typeof tSkip !== 'undefined') tSkip('Rotation Factor capped to 1.0 (Day > 2500 hrs)');
+            }
+            if (w.tidallyLocked) { 
+                rfactor = 1.0;
+                if (typeof tSkip !== 'undefined') tSkip('Rotation Factor capped to 1.0 (1:1 Tidal Lock)');
+            }
+
+            let gfactor = (10 - (w.hydroCode || 0)) / 20;
+            if (w.surfaceDist && w.surfaceDist.includes('Concentrated')) gfactor -= 0.1;
+            if (w.surfaceDist && w.surfaceDist.includes('Dispersed')) gfactor += 0.1;
+
+            let afactor = 1 + (w.pressureBar || 0);
+            let vfactor = Math.max(0, Math.min(1.0, tfactor + rfactor + gfactor));
+            let lumMod = vfactor / afactor;
+
+            let highLum = srcLum * (1 + lumMod);
+            let lowLum = srcLum * (1 - lumMod);
+            let nearAu = currentAu * (1 - (w.eccentricity || 0));
+            let farAu = currentAu * (1 + (w.eccentricity || 0));
+
+            if (nearAu > 0 && !isManual(w, 'highTempK')) w.highTempK = MgT2EMath.calculateMeanTemperature(highLum, nearAu, w.albedo, w.greenhouseFactor);
+            if (farAu > 0 && !isManual(w, 'lowTempK')) w.lowTempK = MgT2EMath.calculateMeanTemperature(lowLum, farAu, w.albedo, w.greenhouseFactor);
+            tResult('High Temp (K)', w.highTempK != null ? w.highTempK.toFixed(1) + ' K' : 'N/A', 'MgT2E 2.4: Thermal Logic');
+            tResult('Low Temp (K)', w.lowTempK != null ? w.lowTempK.toFixed(1) + ' K' : 'N/A', 'MgT2E 2.4: Thermal Logic');
+        };
+
+        for (let i = 0; i < targetWorlds.length; i++) {
+            let w = targetWorlds[i];
+            if (w.moons) {
+                for (let j = 0; j < w.moons.length; j++) {
+                    processBody(w.moons[j], w, true);
+                }
+            }
+            processBody(w, null, false);
+        }
+
+        return sys;
+    }
+
+    /**
+     * Helper: Generate axial tilt
+     */
+    function generateMgT2EAxialTilt() {
+        let roll = roll2D();
+        let tilt = 0;
+        if (roll <= 4) tilt = (roll1D() - 1) / 50;
+        else if (roll === 5) tilt = roll1D() / 5;
+        else if (roll === 6) tilt = roll1D();
+        else if (roll === 7) tilt = 6 + roll1D();
+        else if (roll <= 9) tilt = 5 + roll1D() * 5;
+        else {
+            let ex = roll1D();
+            if (ex <= 2) tilt = 10 + roll1D() * 10;
+            else if (ex === 3) tilt = 30 + roll1D() * 10;
+            else if (ex === 4) tilt = 90 + roll1D();
+            else if (ex === 5) tilt = 180 - roll1D();
+            else tilt = 120 + roll1D() * 10;
+        }
+        return tilt;
+    }
+
+    /**
+     * Helper: Get albedo for a world
+     */
+    function getMgT2EAlbedo(w, hzco) {
+        let albedo = 0;
+        const orbit = w.orbitId;
+        const thermalData = MgT2EData.thermalPhysics.albedo;
+
+        if (w.type === 'Gas Giant') {
+            const ggRange = thermalData.baseRanges.find(r => r.type === 'Gas Giant');
+            albedo = ggRange.base + (tRoll2D(`Base Albedo (${ggRange.label})`) * ggRange.rollMult);
+        } else {
+            // Find base range
+            let range = thermalData.baseRanges.find(r => r.maxHzOffset !== undefined && orbit <= hzco + r.maxHzOffset);
+            if (!range) range = thermalData.baseRanges.find(r => r.type === 'Icy Far'); // Fallback
+
+            albedo = range.base + ((tRoll2D(`Base Albedo (${range.label})`) - range.offset) * range.rollMult);
+
+            if (albedo <= thermalData.constraint.threshold) {
+                albedo -= ((tRoll1D(thermalData.constraint.rollTerm) - thermalData.constraint.offset) * thermalData.constraint.mult);
+            }
+        }
+
+        // Atmosphere Modifiers
+        const atmMod = thermalData.modifiers.atmosphere.find(m => m.codes.includes(w.atmCode));
+        if (atmMod) {
+            albedo += ((tRoll2D(`Albedo Mod (${atmMod.label})`) - atmMod.offset) * atmMod.rollMult);
+        }
+
+        // Hydrographic Modifiers
+        const hydroMod = thermalData.modifiers.hydrographic.find(m => w.hydroCode >= m.min && w.hydroCode <= m.max);
+        if (hydroMod) {
+            albedo += ((tRoll2D(`Albedo Mod (${hydroMod.label})`) - hydroMod.offset) * hydroMod.rollMult);
+        }
+
+        return Math.max(0.02, Math.min(0.98, albedo));
+    }
+
+    /**
+     * Helper: Calculate tidal lock DMs
+     */
+    function calculateTidalLockDMs(body, sys, parent, isMoon) {
+        const lockData = MgT2EData.rotationalDynamics.tidalLockDMs;
+        let globalDM = 0;
+
+        let bSize = body.size === 'GG' ? 10 : (typeof body.size === 'number' ? body.size : 0);
+        if (bSize >= 1) globalDM += Math.ceil(bSize / 3);
+
+        let ecc = body.eccentricity || 0;
+        if (ecc > 0.1) globalDM -= Math.floor(ecc * 10);
+
+        let tilt = body.axialTilt || 0;
+        if (tilt > 30) globalDM += lockData.global.tiltModerate;
+        if (tilt >= 60 && tilt <= 120) globalDM += lockData.global.tiltHigh;
+        if (tilt >= 80 && tilt <= 100) globalDM += lockData.global.tiltHigh;
+
+        let pressure = body.pressureBar || 0;
+        if (pressure > 2.5) globalDM += lockData.global.pressureHigh;
+
+        let age = sys.age || 0;
+        if (age < 1.0) globalDM += lockData.global.ageYoung;
+        else if (age >= 5.0 && age <= 10.0) globalDM += lockData.global.ageMid;
+        else if (age > 10.0) globalDM += lockData.global.ageOld;
+
+        let highestTotalDM = -9999;
+        let selectedCase = 'None';
+
+        if (isMoon && parent) {
+            const caseB = lockData.caseB_Moon;
+            let caseBDM = globalDM + caseB.base;
+            let pMass = parent.mass || 0;
+
+            let orbitPD = body.pd || 0;
+            if (orbitPD > 20) caseBDM -= Math.floor(orbitPD / 20);
+
+            if (body.retrograde) caseBDM += caseB.retrograde;
+
+            const threshold = caseB.parentMassThresholds.find(t => pMass >= t.m);
+            if (threshold) caseBDM += threshold.dm;
+
+            if (caseBDM > highestTotalDM) {
+                highestTotalDM = caseBDM;
+                selectedCase = 'Case B';
+            }
+            // RAW: Moons ONLY evaluate Case B. Exit now.
+            return { Global_DM: globalDM, Total_DM: highestTotalDM, Selected_Case: selectedCase };
+        }
+
+        if (!isMoon) {
+            const caseA = lockData.caseA_Planet;
+            let caseADM = globalDM + caseA.base;
+
+            let oDist = body.orbitId || 0;
+            if (oDist < 1.0) caseADM += caseA.distMid + Math.floor(10 * (1 - oDist));
+            else if (oDist >= 1.0 && oDist <= 2.0) caseADM += caseA.distMid;
+            else if (oDist > 2.0 && oDist <= 3.0) caseADM += caseA.distFar;
+            else if (oDist > 3.0) caseADM -= (Math.floor(oDist) * 2);
+
+            let starMassSum = 0;
+            let totalStarsOrbited = 0;
+            if (body.orbitType === 'P-Type') {
+                for (let s of sys.stars) {
+                    let sOrb = (s.orbitId !== null && s.orbitId !== undefined) ? s.orbitId : 0;
+                    if (sOrb < oDist) {
+                        starMassSum += (s.mass || 0);
+                        totalStarsOrbited++;
+                    }
+                }
+                if (totalStarsOrbited === 0) {
+                    starMassSum = sys.stars[0].mass || 1;
+                    totalStarsOrbited = 1;
+                }
+            } else {
+                let pIdx = (body.parentStarIdx !== undefined) ? body.parentStarIdx : 0;
+                starMassSum = (sys.stars[pIdx] || sys.stars[0]).mass || 1;
+                totalStarsOrbited = 1;
+            }
+
+            const starThreshold = caseA.starMassThresholds.find(t => starMassSum >= t.m);
+            if (starThreshold) caseADM += starThreshold.dm;
+
+            if (totalStarsOrbited > 1) caseADM -= totalStarsOrbited;
+
+            if (body.moons && body.moons.length > 0) {
+                let moonSizeSum = 0;
+                for (let m of body.moons) {
+                    let mSize = m.size === 'GG' ? 10 : (typeof m.size === 'number' ? m.size : 0);
+                    if (mSize >= 1) moonSizeSum += mSize;
+                }
+                caseADM -= moonSizeSum;
+            }
+
+            if (caseADM > highestTotalDM) {
+                highestTotalDM = caseADM;
+                selectedCase = 'Case A';
+            }
+        }
+
+        if (!isMoon && ['Terrestrial Planet', 'Mainworld'].includes(body.type)) {
+            if (body.moons && body.moons.length > 0) {
+                let lockedMoons = body.moons.filter(m => m.tidallyLocked === true);
+                if (lockedMoons.length > 0) {
+                    let totalSig = body.moons.filter(m => {
+                        let mSize = m.size === 'GG' ? 10 : (typeof m.size === 'number' ? m.size : 0);
+                        return mSize >= 1;
+                    }).length;
+
+                    for (let lm of lockedMoons) {
+                        const caseC = lockData.caseC_LockedMoons;
+                        let caseCDM = globalDM + caseC.base;
+                        let mSize = lm.size === 'GG' ? 10 : (typeof lm.size === 'number' ? lm.size : 0);
+                        caseCDM += mSize;
+
+                        let lmpd = lm.pd || 0;
+                        if (lmpd < 5) caseCDM += 5 + Math.ceil((5 - lmpd) * 5);
+                        else if (lmpd >= 5 && lmpd <= 10) caseCDM += caseC.pdNear;
+                        else if (lmpd > 10 && lmpd <= 20) caseCDM += caseC.pdMid;
+                        else if (lmpd > 20 && lmpd <= 40) caseCDM += caseC.pdFar;
+                        else if (lmpd > 60) caseCDM += caseC.pdExtreme;
+
+                        if (totalSig > 1) caseCDM -= (totalSig - 1) * 2;
+
+                        if (caseCDM > highestTotalDM) {
+                            highestTotalDM = caseCDM;
+                            selectedCase = 'Case C';
+                        }
+                    }
+                }
+            }
+        }
+
+        return { Global_DM: globalDM, Total_DM: highestTotalDM, Selected_Case: selectedCase };
+    }
+
+    /**
+     * Helper: Execute tidal lock roll
+     */
+    function executeTidalLockRoll(body, sys, totalDM, selectedCase, driverPeriodHours) {
+        let resultValue = 0;
+        let isMoon = selectedCase === 'Case B';
+        let isPlanetToStar = selectedCase === 'Case A';
+        
+        // Safety: fallback to yearHours if driverPeriod not passed
+        const lockPeriod = driverPeriodHours || body.yearHours || 8760;
+
+        if (totalDM <= -10) {
+            tResult('Tidal Lock Gate', 'No Effect (DM <= -10)');
+        } else if (totalDM >= 10) {
+            tResult('Tidal Lock Gate', 'Automatic 1:1 Lock');
+            resultValue = 12;
+        } else {
+            let r = tRoll2D('Tidal Lock Roll');
+            resultValue = r + totalDM;
+            tResult('Tidal Lock Result', resultValue);
+        }
+
+        let finalResult = resultValue;
+        body.tidallyLocked = false;
+
+        if (totalDM > -10) {
+            const resultsData = MgT2EData.rotationalDynamics.tidalLockResults;
+            if (resultValue >= 12) {
+                let breakRoll = tRoll2D('Lock Break Check (12 breaks entirely)');
+                if (breakRoll === 12) {
+                    let rerollResult = tRoll2D('Tidal Lock Reroll (0 DM)');
+
+                    let tempHrs = body.siderealHours;
+                    let broken = true;
+
+                    if (rerollResult <= 2) {
+                        tempHrs = body.siderealHours;
+                    } else if (rerollResult >= 3 && rerollResult <= 6) {
+                        tempHrs = body.siderealHours * resultsData.multipliers[rerollResult];
+                    } else if (rerollResult >= 7 && rerollResult <= 8) {
+                        let d = resultsData.progradeDays[rerollResult];
+                        tempHrs = 3.5 * d * 24;
+                    } else if (rerollResult >= 9 && rerollResult <= 10) {
+                        let d = resultsData.retrogradeDays[rerollResult];
+                        tempHrs = 3.5 * d * 24;
+                    } else if (rerollResult === 11) {
+                        tempHrs = lockPeriod * 0.66;
+                    } else if (rerollResult >= 12) {
+                        tempHrs = lockPeriod;
+                    }
+
+                    if (isMoon && tempHrs > body.yearHours) {
+                        tResult('Lock Break', 'Ignored (Rotation > Orbital Period for Moon)');
+                        broken = false;
+                    }
+
+                    if (broken) {
+                        tResult('Lock Break', `Broken! Using rerolled result ${rerollResult}`);
+                        finalResult = rerollResult;
+                    }
+                }
+            }
+
+            let appliedHrs = null;
+
+            if (finalResult <= 2) {
+                tResult('Status', 'No effect');
+            } else if (finalResult >= 3 && finalResult <= 6) {
+                let mult = resultsData.multipliers[finalResult];
+                appliedHrs = body.siderealHours * mult;
+                tResult('Status', `siderealHours * ${mult}`);
+            } else if (finalResult >= 7 && finalResult <= 8) {
+                let mRoll = tRoll1D('Prograde Days Roll');
+                let d = resultsData.progradeDays[finalResult];
+                appliedHrs = mRoll * d * 24;
+                tResult('Status', `Prograde: ${appliedHrs} hours`);
+            } else if (finalResult >= 9 && finalResult <= 10) {
+                let mRoll = tRoll1D('Retrograde Days Roll');
+                let d = resultsData.retrogradeDays[finalResult];
+                appliedHrs = mRoll * d * 24;
+                if (body.axialTilt < 90) {
+                    body.axialTilt = 180 - body.axialTilt;
+                    tResult('Retrograde Tilt', body.axialTilt.toFixed(1) + '°');
+                }
+                tResult('Status', `Retrograde: ${appliedHrs} hours`);
+            } else if (finalResult === 11) {
+                appliedHrs = lockPeriod * 0.66;
+                tResult('Status', '3:2 Resonance');
+                if (body.axialTilt > 3.0) {
+                    body.axialTilt = (tRoll2D('Resonance Tilt Jitter') - 2) / 10;
+                    tResult('Resonance Tilt Override', body.axialTilt.toFixed(1) + '°');
+                }
+            } else if (finalResult >= 12) {
+                appliedHrs = lockPeriod;
+                tResult('Status', '1:1 Lock');
+                body.tidallyLocked = true;
+                if (body.axialTilt > 3.0) {
+                    body.axialTilt = (tRoll2D('Locked Tilt Jitter') - 2) / 10;
+                    tResult('Locked Tilt Override', body.axialTilt.toFixed(1) + '°');
+                }
+                if (body.eccentricity > 0.1) {
+                    let currentOrbitType = body.orbitType || 'S-Type';
+                    let isPType = currentOrbitType === 'P-Type';
+                    body.eccentricity = determineMgT2EEccentricity(false, 0, sys.age, body.orbitId, false, isPType ? -2 : -2);
+                    tResult('Locked Ecc Override', body.eccentricity.toFixed(3));
+                }
+            }
+
+            if (appliedHrs !== null) {
+                body.siderealHours = appliedHrs;
+            }
+        }
+
+        if (body.tidallyLocked && finalResult >= 12) {
+            if (isPlanetToStar && !body.isMoon) {
+                body.isTwilightZone = true;
+                body.solarDayHours = Infinity;
+                writeLogLine(`  Twilight Zone World (1:1 Tidal Lock to Star)`);
+            } else if (isMoon) {
+                writeLogLine(`  Satellite Lock (1:1 Tidal Lock to Parent Planet)`);
+                body.isTwilightZone = false; // RAW: Moons cannot be Twilight Zone worlds
+            }
+        }
+
+        let effectiveSidereal = body.siderealHours;
+        if (body.axialTilt > 90) {
+            effectiveSidereal = -body.siderealHours;
+        }
+
+        if (Math.abs(body.siderealHours - body.yearHours) < 0.001) {
+            body.solarDaysInYear = 0;
+            body.solarDayHours = Infinity;
+            if (body.tidallyLocked && isPlanetToStar && !body.isMoon) {
+                body.isTwilightZone = true;
+            }
+        } else {
+            body.solarDaysInYear = (body.yearHours / effectiveSidereal) - 1;
+            if (Math.abs(body.solarDaysInYear) > 0.0001) {
+                body.solarDayHours = Math.abs(body.yearHours / body.solarDaysInYear);
+            } else {
+                body.solarDayHours = Infinity;
+            }
+            body.isTwilightZone = false;
+        }
+    }
+
+    /**
+     * Helper: Determine eccentricity (simplified for tidal lock context)
+     */
+    function determineMgT2EEccentricity(isStar, orbitsBeyondFirst, sysAgeGyr, orbitNum, isAsteroid, isPTypeOrDM) {
+        let roll = tRoll2D('Eccentricity Roll');
+        let dm = typeof isPTypeOrDM === 'number' ? isPTypeOrDM : (isPTypeOrDM ? 2 : 0);
+
+        if (sysAgeGyr > 1.0 && orbitNum < 1.0) { tDM('Old Inner System', -1); dm -= 1; }
+        if (isAsteroid) { tDM('Belt Body', -1); dm -= 1; }
+
+        let sumRoll = roll + dm;
+        let base = 0, fraction = 0;
+
+        if (sumRoll <= 5) {
+            base = -0.001;
+            fraction = tRoll1D('Ecc Jitter (Result <= 5)') / 10000;
+        }
+        else if (sumRoll <= 7) {
+            base = 0.000;
+            fraction = tRoll1D('Ecc Jitter (Result 6-7)') / 200;
+        }
+        else if (sumRoll <= 9) {
+            base = 0.030;
+            fraction = tRoll1D('Ecc Jitter (Result 8-9)') / 100;
+        }
+        else if (sumRoll === 10) {
+            base = 0.050;
+            fraction = tRoll1D('Ecc Jitter (Result 10)') / 20;
+        }
+        else if (sumRoll === 11) {
+            base = 0.050;
+            fraction = tRoll2D('Ecc Jitter (Result 11)') / 20;
+        }
+        else {
+            base = 0.300;
+            fraction = tRoll2D('Ecc Jitter (Result 12+)') / 20;
+        }
+
+        return Math.max(0, base + fraction);
+    }
+
+    // =====================================================================
+    // CHUNK 6: BIOSPHERICS (BIOMASS & RESOURCES)
+    // =====================================================================
+
+    /**
+     * Generate biospheric properties and resource ratings for all worlds and moons.
+     * Handles seismic stress, inherent heat, tidal amplitudes, tectonic plates,
+     * biomass rating, biocomplexity, biodiversity, compatibility, native sophonts,
+     * resource rating, and habitability score.
+     * 
+     * @param {Object} sys - System object with worlds array
+     * @param {Object|Object} options - Options object or Mainworld baseline data
+     * @returns {Object} Modified system object
+     */
+    function generateBiospherics(sys, options = {}) {
+        let mainworldBase = null;
+        let targetWorlds = sys.worlds;
+
+        // Adaptive Signature: (sys, mainworldBase) or (sys, { targetWorlds, mainworldBase })
+        if (options && options.type === 'Mainworld') {
+            mainworldBase = options;
+        } else if (options) {
+            mainworldBase = options.mainworldBase;
+            targetWorlds = options.targetWorlds || sys.worlds;
+        }
+
+        let isBottomUp = (options && options.mode === 'bottom-up');
+
+        let primary = sys.stars[0];
+        primary.massEarths = (primary.mass || 1.0) * 333000;
+        tSection('Biomass & Resources');
+
+        // WBH: Collect all solid bodies outside the habitable zone for the single collective life roll.
+        // Top-down: non-mainworld bodies outside HZ. Bottom-up: all bodies outside HZ.
+        let inhospitableWorlds = [];
+        let collectInhospitable = (list) => {
+            for (const w of list) {
+                if (w.type === 'Empty' || w.type === 'Gas Giant' || w.type === 'Planetoid Belt') continue;
+                if (w.size === 0 || w.size === 'R') continue;
+                const inHZ = w.tempBand === 'Temperate';
+                const isMainworld = w.type === 'Mainworld';
+                if (!inHZ && (isBottomUp || !isMainworld)) inhospitableWorlds.push(w);
+                if (w.moons) collectInhospitable(w.moons);
+            }
+        };
+        collectInhospitable(targetWorlds);
+
+        let collectiveLifeWorld = null;
+        if (inhospitableWorlds.length > 0) {
+            tSection('Collective Inhospitable Life Roll');
+            tResult('Inhospitable World Count', inhospitableWorlds.length);
+            let collectiveRoll = tRoll2D('2D Collective Roll');
+            if (collectiveRoll === 12) {
+                let idx = Math.floor(rng() * inhospitableWorlds.length);
+                collectiveLifeWorld = inhospitableWorlds[idx];
+                tResult('Collective Life', `Trace life on orbit ${collectiveLifeWorld.orbitId != null ? collectiveLifeWorld.orbitId.toFixed(2) : 'N/A'}`);
+            } else {
+                tResult('Collective Life', 'None');
+            }
+        }
+
+        let processBody = (w, parent, isMoon) => {
+            if (w.type === 'Empty') return;
+            w.isMoon = !!isMoon;
+            w.isSatellite = !!isMoon;
+            if (parent) w.parentType = parent.type;
+
+            let sizeValue = w.size === 'S' ? 0.375 : (typeof w.size === 'number' ? w.size : 0);
+            let wSize = w.size === 'S' ? 0 : (typeof w.size === 'number' ? w.size : 0);
+            let density = w.density || 1.0;
+            w.massEarths = w.mass || 0.0001;
+            w.distMkm = isMoon ? (w.pd * parent.diamKm / 1000000) : (w.au * 149.6);
+            w.periodDays = (w.yearHours || 8760) / 24;
+
+            let calculateTidalAmplitudes = (body, sys, parent, isMoon) => {
+                let sVal = body.size;
+                if (body.size === 'S' || body.size === 's') sVal = 0.375;
+                else if (body.size === 'R' || body.size === 'r' || body.size === 'GG') sVal = 0;
+                else if (typeof body.size === 'string') sVal = fromEHex(body.size);
+                
+                let total = 0;
+                const star = sys.stars[0];
+                const dist = isMoon ? (body.pd * parent.diamKm / 1000000) : (body.au * 149.6);
+
+                if (isMoon) {
+                    let StarOnMoonEffect = MgT2EMath.calculateTidalEffect(star.mass, sVal, body.au * 149.6);
+                    total += StarOnMoonEffect;
+
+                    if (!body.tidallyLocked) {
+                        // RAW WBH: Parent causes tides on moon ONLY if NOT tidally locked.
+                        // We use a safety floor of 10,000km parent diameter and 0.001 Mkm distance to prevent 
+                        // floating point "Inverse-Cube" bombs.
+                        let safetyParentDiam = Math.max(10000, parent.diamKm || 0);
+                        let safetyDist = Math.max(0.001, (body.pd * safetyParentDiam / 1000000));
+                        let PlanetEffect = MgT2EMath.calculateTidalEffect(parent.mass, sVal, safetyDist);
+                        total += PlanetEffect;
+                    }
+
+                    if (parent && parent.moons) {
+                        parent.moons.forEach(otherMoon => {
+                            if (otherMoon === body || otherMoon.size === 0 || otherMoon.size === 'R') return;
+                            let otherDistMkm = (otherMoon.pd * parent.diamKm) / 1000000;
+                            let Separation_Mkm = Math.abs(dist - otherDistMkm);
+                            if (Separation_Mkm > 0) {
+                                let MoonToMoonEffect = MgT2EMath.calculateTidalEffect(otherMoon.mass, sVal, Separation_Mkm);
+                                total += MoonToMoonEffect;
+                            }
+                        });
+                    }
+                } else {
+                    if (!body.tidallyLocked || body.Selected_Case !== 'Case A') {
+                        let StarEffect = MgT2EMath.calculateTidalEffect(star.mass, sVal, body.au * 149.6);
+                        total += StarEffect;
+                    }
+
+                    if (!body.tidallyLocked || body.Selected_Case !== 'Case C') {
+                        if (body.moons) {
+                            body.moons.forEach(moon => {
+                                if (moon.size === 0 || moon.size === 'R') return;
+                                let moonDistMkm = (moon.pd * body.diamKm) / 1000000;
+                                if (moonDistMkm > 0) {
+                                    let MoonEffect = MgT2EMath.calculateTidalEffect(moon.mass, sVal, moonDistMkm);
+                                    total += MoonEffect;
+                                }
+                            });
+                        }
+                    }
+                }
+                return parseFloat(total.toFixed(2));
+            };
+
+            w.totalTidalAmplitude = calculateTidalAmplitudes(w, sys, parent, isMoon);
+            tResult('Tidal Amplitude', w.totalTidalAmplitude.toFixed(2));
+
+            tSection('Inherent Heat & Seismology');
+            let inherentK = 0;
+
+            // RAW: WBH requires a minimum age floor of 0.01 Gyr to prevent divide-by-zero.
+            // Any system younger than 0.01 Gyr is classified as a forming protostar.
+            let sysAgeSafe = Math.max(0.01, sys.age || 0.01);
+
+            if (w.type === 'Gas Giant') {
+                // RAW: WBH Gas Giant Residual Heat = 80 × √(mass_earths) ÷ ⁴√(age_gyr)
+                inherentK = (80 * Math.sqrt(w.massEarths)) / Math.pow(sysAgeSafe, 0.25);
+                tResult('GG Inherent Heat', inherentK.toFixed(1) + ' K');
+            } else if (w.type !== 'Planetoid Belt' && w.size != 0 && w.size !== 'R') {
+                let dmResidual = 0;
+                if (isMoon) dmResidual += 1;
+                let numLargeMoons = w.moons ? w.moons.filter(m => m.size !== 'S' && m.size > 0).length : 0;
+                dmResidual += Math.min(12, numLargeMoons);
+                if (density > 1.0) dmResidual += 2;
+                if (density < 0.5) dmResidual -= 1;
+
+                let aBasis = sizeValue - sysAgeSafe + dmResidual;
+                let compA = aBasis < 1 ? 0 : Math.pow(aBasis, 2);
+
+                let compB_raw = Math.floor(w.totalTidalAmplitude / 10);
+                // Safety Cap: Tidal Stress (Comp B) for satellites/planets that are massive.
+                // In binary terrestrials, amplitudes can reach millions.
+                // We cap Comp B at 1,000 for physical sanity in the display.
+                let compB = Math.min(1000, compB_raw);
+
+                // Component C: Tidal Heat (Scenario 3)
+                // For moons, the tidal driver is the parent planet (e.g. the Gas Giant), not the star.
+                // Using primary.massEarths (star mass ~66,000 Earths) for a moon causes ~90,000x overflow.
+                let tidalDriverMass = isMoon ? (parent.mass || 220) : primary.massEarths;
+                let denom = (3000 * Math.pow(Math.max(0.001, w.distMkm), 5) * Math.max(0.001, w.periodDays) * (w.massEarths || 0.0001));
+                let compC_val = (Math.pow(tidalDriverMass, 2) * Math.pow(sizeValue, 5) * Math.pow(w.eccentricity || 0, 2)) / denom;
+                // House rule cap: RAW defines no maximum, but extreme configurations (superjovian GGs,
+                // hot-Jupiter orbits) produce compC in the hundreds of millions. Capped at 150 pending
+                // Requirements Agent guidance on WBH extreme tidal cases.
+                let compC = (compC_val < 1 || isNaN(compC_val)) ? 0 : Math.min(compC_val, 150);
+
+                w.seismicStress = Math.floor(compA + compB + compC);
+                inherentK = w.seismicStress;
+
+                tResult('Comp A (Residual)', compA.toFixed(2));
+                tResult('Comp B (Tidal Stress)', compB.toFixed(2));
+                tResult('Comp C (Tidal Heat)', compC.toFixed(2));
+                tResult('Total Seismic Stress', w.seismicStress);
+            }
+
+            let solarK = w.meanTempK || 3;
+            w.meanTempK = Math.pow(Math.pow(solarK, 4) + Math.pow(inherentK, 4), 0.25);
+            w.meanTempC = w.meanTempK - 273;
+            tResult('Final Mean Temp', w.meanTempK.toFixed(1) + ' K (' + w.meanTempC.toFixed(0) + '°C)');
+
+            let srcLum = primary.lum || 1.0;
+            let tfactor = Math.abs(Math.sin((w.axialTilt || 0) * Math.PI / 180));
+            if (w.yearHours < (36.5 * 24)) tfactor /= 2;
+            if (w.yearHours > (2 * 8760)) tfactor *= 1.5;
+
+            let rfactor = w.solarDayHours <= 0 || w.solarDayHours === Infinity ? 1.0 : Math.sqrt(w.solarDayHours / 50);
+            if (w.tidallyLocked) rfactor = 1.0;
+            if (rfactor > 1.0) rfactor = 1.0;
+
+            let gfactor = (10 - (w.hydroCode || 0)) / 20;
+            if (w.surfaceDist && w.surfaceDist.includes('Concentrated')) gfactor -= 0.1;
+            if (w.surfaceDist && w.surfaceDist.includes('Dispersed')) gfactor += 0.1;
+
+            let afactor = 1 + (w.pressureBar || 0);
+            let vfactor = Math.max(0, Math.min(1.0, tfactor + rfactor + gfactor));
+            let lumMod = vfactor / afactor;
+
+            let highLum = srcLum * (1 + lumMod);
+            let lowLum = srcLum * (1 - lumMod);
+            let nearAu = w.au * (1 - (w.eccentricity || 0));
+            let farAu = w.au * (1 + (w.eccentricity || 0));
+
+            if (nearAu > 0) w.highTempK = Math.pow(Math.pow(MgT2EMath.calculateMeanTemperature(highLum, nearAu, w.albedo, w.greenhouseFactor), 4) + Math.pow(inherentK, 4), 0.25);
+            if (farAu > 0) w.lowTempK = Math.pow(Math.pow(MgT2EMath.calculateMeanTemperature(lowLum, farAu, w.albedo, w.greenhouseFactor), 4) + Math.pow(inherentK, 4), 0.25);
+
+            tResult('Recalc High Temp', w.highTempK != null ? w.highTempK.toFixed(1) + ' K' : 'N/A');
+            tResult('Recalc Low Temp', w.lowTempK != null ? w.lowTempK.toFixed(1) + ' K' : 'N/A');
+
+            if (w.type === 'Gas Giant' || w.size === 'R') {
+                w.habitability = 0;
+                w.lifeProfile = "0000";
+                w.biomass = 0;
+                w.biocomplexity = 0;
+                w.biodiversity = 0;
+                w.compatibility = 0;
+                return;
+            }
+
+            if (w.type === 'Planetoid Belt' || w.size === 0) {
+                w.habitability = 0;
+                w.lifeProfile = "0000";
+                w.biomass = 0;
+                w.biocomplexity = 0;
+                w.biodiversity = 0;
+                w.compatibility = 0;
+                tSection('Resources (Belt)');
+                let bRDm = 0;
+                if (density > 1.12) { tDM('High Density', 2); bRDm += 2; }
+                if (density < 0.5)  { tDM('Low Density', -2); bRDm -= 2; }
+                w.resourceRating = Math.max(2, Math.min(12, tRoll2D('Resource Roll') - 7 + wSize + bRDm));
+                tResult('Resource Rating (Belt)', w.resourceRating);
+                return;
+            }
+
+            // WBH: Inhospitable worlds outside the HZ skip individual rolls. Only the single world
+            // chosen by the collective natural-12 roll receives a full biospherics evaluation.
+            const inHZ = w.tempBand === 'Temperate';
+            const isMainworld = w.type === 'Mainworld';
+            const isInhospitable = !inHZ && (isBottomUp || !isMainworld);
+            if (isInhospitable && w !== collectiveLifeWorld) {
+                w.habitability = 0;
+                w.lifeProfile = "0000";
+                w.biomass = 0;
+                w.biocomplexity = 0;
+                w.biodiversity = 0;
+                w.compatibility = 0;
+                w.tectonicPlates = 0;
+                w.plateInteraction = "None";
+                return;
+            }
+
+            tSection(`${isMoon ? 'Moon' : w.type} Orbit ${w.orbitId != null ? w.orbitId.toFixed(2) : 'N/A'} Biology/Sophonts`);
+
+            w.tectonicPlates = 0;
+            w.plateInteraction = "None";
+            if (w.seismicStress > 0 && w.hydroPercent >= 1) {
+                let pRoll = tRoll2D('Tectonic Plate Roll');
+                tDM('Size/Hydro Mod', sizeValue + w.hydroCode - 7);
+                let p = sizeValue + w.hydroCode - pRoll;
+                if (w.seismicStress >= 10 && w.seismicStress <= 100) { tDM('Stress 10+', 1); p += 1; }
+                else if (w.seismicStress > 100) { tDM('Stress 100+', 2); p += 2; }
+                if (p > 1) {
+                    w.tectonicPlates = p;
+                    w.plateInteraction = MGT2E_PLATE_INTERACTIONS[tRoll2D('Plate Interaction Roll')] || "None";
+                    tResult('Tectonic Plates', p);
+                    tResult('Interaction', w.plateInteraction);
+                }
+            }
+
+            tSection('Biomass Rating');
+            let biomassBase = 0;
+            if (sys.age >= 0.1) {
+                let bioRoll = tRoll2D('Biomass Roll');
+                let bDm = 0;
+                if (w.atmCode === 0) { tDM('Atm 0', -6); bDm -= 6; }
+                else if (w.atmCode === 1) { tDM('Atm 1', -4); bDm -= 4; }
+                else if ([2, 3, 14].includes(w.atmCode)) { tDM('Thin/Med Binary', -3); bDm -= 3; }
+                else if ([4, 5].includes(w.atmCode)) { tDM('Thin/Standard', -2); bDm -= 2; }
+                else if ([8, 9, 13].includes(w.atmCode)) { tDM('Dense/Thin Cloud', 2); bDm += 2; }
+                else if (w.atmCode === 10) { tDM('Exotic', -3); bDm -= 3; }
+                else if (w.atmCode === 11) { tDM('Exotic Corrosive', -5); bDm -= 5; }
+                else if (w.atmCode === 12) { tDM('Exotic Insid.', -7); bDm -= 7; }
+                else if (w.atmCode >= 15) { tDM('High exotic', -5); bDm -= 5; }
+
+                if (w.hydroCode === 0) { tDM('Desert', -4); bDm -= 4; }
+                else if (w.hydroCode >= 1 && w.hydroCode <= 3) { tDM('Dry', -2); bDm -= 2; }
+                else if (w.hydroCode >= 6 && w.hydroCode <= 8) { tDM('Wet', 1); bDm += 1; }
+                else if (w.hydroCode >= 9) { tDM('Water World', 2); bDm += 2; }
+
+                if (sys.age < 0.2) { tDM('Very Young', -6); bDm -= 6; }
+                else if (sys.age < 1) { tDM('Young', -2); bDm -= 2; }
+                else if (sys.age > 4) { tDM('Mature', 1); bDm += 1; }
+
+                if (w.highTempK > 353) { tDM('Hot High', -2); bDm -= 2; }
+                else if (w.highTempK < 273) { tDM('Cold High', -4); bDm -= 4; }
+
+                if (w.meanTempK > 353) { tDM('Hot Mean', -4); bDm -= 4; }
+                else if (w.meanTempK < 273) { tDM('Cold Mean', -2); bDm -= 2; }
+                else if (w.meanTempK >= 279 && w.meanTempK <= 303) { tDM('Temperate Mean', 2); bDm += 2; }
+
+                bDm = Math.max(-12, Math.min(4, bDm));
+                biomassBase = bioRoll + bDm;
+
+                if (biomassBase <= 0) biomassBase = 0;
+                if (w.taints && w.taints.includes("Biologic") && biomassBase === 0) {
+                    tResult('Biomass (Min)', 1);
+                    biomassBase = 1;
+                }
+
+                if (biomassBase >= 1 && [0, 1, 10, 11, 12, 15].includes(w.atmCode)) {
+                    let extremophileBonus = 0;
+                    if (w.atmCode === 0) extremophileBonus = 5;
+                    else if (w.atmCode === 1) extremophileBonus = 3;
+                    else if (w.atmCode === 10) extremophileBonus = 2;
+                    else if (w.atmCode === 11) extremophileBonus = 4;
+                    else if (w.atmCode === 12) extremophileBonus = 6;
+                    else if (w.atmCode >= 15) extremophileBonus = 4;
+                    tResult('Extremophile Bonus', extremophileBonus);
+                    biomassBase += extremophileBonus;
+                }
+            }
+            w.biomass = biomassBase;
+            tResult('Final Biomass', biomassBase);
+
+            tSection('Biocomplexity');
+            w.biocomplexity = 0;
+            if (w.biomass >= 1) {
+                let cDm = 0;
+                if (w.atmCode < 4 || w.atmCode > 9) { tDM('Harsh Atm', -2); cDm -= 2; }
+                if (w.taints && w.taints.includes("Low Oxygen")) { tDM('Low O2', -2); cDm -= 2; }
+                if (sys.age >= 3 && sys.age < 4) { tDM('Age 3-4', -2); cDm -= 2; }
+                else if (sys.age >= 2 && sys.age < 3) { tDM('Age 2-3', -4); cDm -= 4; }
+                else if (sys.age >= 1 && sys.age < 2) { tDM('Age 1-2', -8); cDm -= 8; }
+                else if (sys.age < 1) { tDM('Age <1', -10); cDm -= 10; }
+
+                let effBiomass = w.biomass >= 10 ? 9 : w.biomass;
+                w.biocomplexity = Math.max(1, tRoll2D('Biocomplexity Roll') - 7 + effBiomass + cDm);
+                tResult('Final Biocomplexity', w.biocomplexity);
+            }
+
+            tSection('Sophont Check');
+            w.nativeSophont = false;
+            w.extinctSophont = false;
+            if (w.biocomplexity >= 8) {
+                let effBiocomp = w.biocomplexity >= 10 ? 9 : w.biocomplexity;
+                if ((tRoll2D('Sophont Emergence Roll') + effBiocomp - 7) >= 13) {
+                    tResult('Sophont', 'Native Living');
+                    w.nativeSophont = true;
+                }
+
+                let exDm = sys.age > 5 ? 1 : 0;
+                if ((tRoll2D('Extinct Sophont Roll') + effBiocomp - 7 + exDm) >= 13) {
+                    tResult('Sophont', 'Extinct Relics');
+                    w.extinctSophont = true;
+                }
+            }
+
+            tSection('Biodiversity Rating');
+            w.biodiversity = 0;
+
+            if (w.biomass >= 1) {
+                let roll = tRoll2D('Biodiversity Roll');
+                let baseCalculationAvg = (w.biomass + w.biocomplexity) / 2;
+                let baseCalculationRounded = Math.ceil(baseCalculationAvg);
+                w.biodiversity = roll - 7 + baseCalculationRounded;
+
+                if (w.biodiversity < 1) {
+                    w.biodiversity = 1;
+                }
+
+                tResult('Biodiversity', w.biodiversity);
+            }
+
+            tSection('Compatibility Rating');
+            w.compatibility = 0;
+
+            if (w.biomass > 0) {
+                let compDm = 0;
+
+                if (w.atmCode === 12) {
+                    compDm -= 10;
+                } else if ([0, 1, 11, 16, 17].includes(w.atmCode)) {
+                    compDm -= 8;
+                } else if ([10, 15].includes(w.atmCode)) {
+                    compDm -= 6;
+                } else if ([2, 4, 7, 9].includes(w.atmCode) || (w.taints && w.taints.length > 0)) {
+                    compDm -= 2;
+                } else if ([13, 14].includes(w.atmCode)) {
+                    compDm -= 1;
+                } else if ([3, 5, 8].includes(w.atmCode)) {
+                    compDm += 1;
+                } else if (w.atmCode === 6) {
+                    compDm += 2;
+                }
+
+                if (sys.age > 8.0) {
+                    compDm -= 2;
+                }
+
+                let roll = tRoll2D('Compatibility Roll');
+                let baseTerm = w.biocomplexity / 2;
+                w.compatibility = Math.floor(roll - baseTerm + compDm);
+
+                if (w.compatibility <= 0) {
+                    w.compatibility = 0;
+                }
+
+                tResult('Compatibility', w.compatibility);
+            }
+
+            if (!isManual(w, 'lifeProfile')) {
+                w.lifeProfile = `${w.biomass.toString(16).toUpperCase()}${w.biocomplexity.toString(16).toUpperCase()}${w.biodiversity.toString(16).toUpperCase()}${w.compatibility.toString(16).toUpperCase()}`;
+                if (w.biomass === 0) w.lifeProfile = "0000";
+            }
+            tResult('Life Profile', w.lifeProfile);
+
+            tSection('Resources');
+            let rDm = 0;
+            if (density > 1.12) { tDM('High Density', 2); rDm += 2; }
+            if (density < 0.5) { tDM('Low Density', -2); rDm -= 2; }
+            if (w.biomass >= 3) { tDM('Biogenic Res', 2); rDm += 2; }
+            if (w.biodiversity >= 8 && w.biodiversity <= 10) { tDM('Biodiv 8-10', 1); rDm += 1; }
+            else if (w.biodiversity >= 11) { tDM('High Biodiv', 2); rDm += 2; }
+
+            if (w.compatibility >= 0 && w.compatibility <= 3) { tDM('Low Comp', -1); rDm -= 1; }
+            else if (w.compatibility >= 8) { tDM('High Comp', 2); rDm += 2; }
+
+            if (!isManual(w, 'resourceRating')) w.resourceRating = Math.max(2, Math.min(12, tRoll2D('Resource Roll') - 7 + wSize + rDm));
+            tResult('Resource Rating', w.resourceRating);
+
+            tSection('Habitability Score');
+            let hScore = 10;
+            if (wSize >= 0 && wSize <= 4) { tDM('Small', -1); hScore -= 1; }
+            if (wSize >= 9) { tDM('Large', 1); hScore += 1; }
+
+            if ([0, 1, 10].includes(w.atmCode)) hScore -= 8;
+            else if ([2, 14].includes(w.atmCode)) hScore -= 4;
+            else if ([3, 13].includes(w.atmCode)) hScore -= 3;
+            else if ([4, 9].includes(w.atmCode)) hScore -= 2;
+            else if ([5, 7, 8].includes(w.atmCode)) hScore -= 1;
+            else if (w.atmCode === 11) hScore -= 10;
+            else if (w.atmCode === 12 || w.atmCode >= 15) hScore -= 12;
+
+            if (w.taints && w.taints.includes("Low Oxygen")) hScore -= 2;
+
+            if (w.hydroCode === 0) hScore -= 4;
+            else if (w.hydroCode >= 1 && w.hydroCode <= 3) hScore -= 2;
+            else if (w.hydroCode === 9) hScore -= 1;
+            else if (w.hydroCode === 10) hScore -= 2;
+
+            if (w.tidallyLocked) hScore -= 2;
+
+            if (w.highTempK > 323) hScore -= 2;
+            if (w.highTempK < 279) hScore -= 2;
+            if (w.meanTempK > 323) hScore -= 4;
+            else if (w.meanTempK >= 304 && w.meanTempK <= 323) hScore -= 2;
+            else if (w.meanTempK < 273) hScore -= 2;
+
+            if (w.lowTempK < 200) hScore -= 2;
+
+            let grav = (w.gravity !== undefined) ? w.gravity : (w.size === 'S' ? 0.01 : w.size * 0.125);
+            if (grav < 0.2) hScore -= 4;
+            else if (grav >= 0.2 && grav < 0.4) hScore -= 2;
+            else if (grav >= 0.4 && grav < 0.7) hScore -= 1;
+            else if (grav >= 0.7 && grav <= 0.9) hScore += 1;
+            else if (grav >= 1.1 && grav < 1.4) hScore -= 1;
+            else if (grav >= 1.4 && grav <= 2.0) hScore -= 3;
+            else if (grav > 2.0) hScore -= 6;
+
+            if (!isManual(w, 'habitability')) w.habitability = Math.max(0, hScore);
+            tResult('Habitability Score', w.habitability);
+        };
+
+        for (let i = 0; i < targetWorlds.length; i++) {
+            let w = targetWorlds[i];
+            processBody(w, null, false);
+            if (w.moons) {
+                for (let j = 0; j < w.moons.length; j++) {
+                    processBody(w.moons[j], w, true);
+                }
+            }
+        }
+
+        return sys;
+    }
+
+    /**
+     * Evaluate candidates for Mainworld status based on World Builder's Handbook criteria.
+     * Eligible types: Terrestrial Planet, Planetoid Belt, Satellite. Gas Giants excluded.
+     * Primary Sort: Habitability (Descending)
+     * Tie-Breaker 1: Resource Rating (Descending)
+     * Tie-Breaker 2: Refuelling Advantage (Gas Giant moon preferred)
+     * Fallback: Size (Descending)
+     * Note: Planetoid Belts always have Habitability 0 and compete on Resource Rating alone.
+     *
+     * @param {Array} candidates - Array of candidate world objects
+     * @returns {Object|null} The winning Mainworld candidate
+     */
+    function evaluateMainworldCandidates(candidates) {
+        if (!candidates || candidates.length === 0) return null;
+
+        candidates.sort((a, b) => {
+            if (b.habitability !== a.habitability) return (b.habitability || 0) - (a.habitability || 0);
+            if (b.resourceRating !== a.resourceRating) return (b.resourceRating || 0) - (a.resourceRating || 0);
+            
+            // Priority 3: Refuelling Advantage (Gas Giant Presence in the same orbital slot)
+            const bGG = b.isMoonOfGG || b.parentType === 'Gas Giant';
+            const aGG = a.isMoonOfGG || a.parentType === 'Gas Giant';
+            if (bGG !== aGG) return bGG ? 1 : -1;
+
+            // Priority 4: Size (Last resort fallback)
+            return (b.size || 0) - (a.size || 0);
+        });
+
+        return candidates[0];
+    }
+
+    // =====================================================================
+    // EXPORTS
+    // =====================================================================
+
+
+
+
+
+
+
+export { generatePhysicals };
+export { generateAtmospherics };
+export { generateRotationalDynamics };
+export { generateBiospherics };
+export { evaluateMainworldCandidates };

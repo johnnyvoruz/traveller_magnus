@@ -1,0 +1,84 @@
+@font-face {
+  font-family: 'Orbitron';
+  src: url('/fonts/orbitron-latin-400-normal.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Orbitron';
+  src: url('/fonts/orbitron-latin-700-normal.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/inter-latin-400-normal.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/inter-latin-700-normal.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* field */
+  --bg-0: #0b0c10;        /* deepest: canvas backdrop */
+  --bg-1: #101820;        /* panels (legacy --atlas-bg) */
+  --bg-2: #0b1a1d;        /* inset wells, inputs */
+  --surface-1: #1f2833;   /* raised rows, cards */
+  --surface-2: #1c383e;   /* hover / selected rows */
+  --line-1: #324650;      /* hairlines */
+  --line-2: #415864;      /* stronger rules, borders */
+
+  /* signal */
+  --signal: #66fcf1;      /* primary teal: active, links, locator, numerics */
+  --signal-dim: #45a29e;  /* secondary teal: borders, idle controls, scroll thumb */
+  --signal-bright: #9afff2; /* hover / focus of signal */
+  --attention: #ffce73;   /* amber: focus-of-interest, warnings, trade focus */
+  --danger: #ff6b6b;      /* destructive; use rarely */
+
+  /* text */
+  --text-1: #d2e0e5;      /* body */
+  --text-2: #c5c6c7;      /* secondary */
+  --text-muted: #9faeb8;  /* captions, meta (legacy --atlas-muted) */
+  --text-faint: #8aa0ab;
+
+  /* type */
+  --font-display: 'Orbitron', sans-serif;   /* headings, sector names, timecodes */
+  --font-text: 'Inter', sans-serif;         /* everything else */
+  --font-data: ui-monospace, monospace;     /* UWP strings, hex ids, coordinates */
+  --tabular: tabular-nums;
+
+  /* space (4-based) */
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-6: 24px; --sp-8: 32px;
+
+  /* radius */
+  --r-1: 4px; --r-2: 6px; --r-3: 8px; --r-4: 12px; --r-pill: 999px;
+
+  /* motion */
+  --t-fast: 200ms;        /* hover, toggles */
+  --t-base: 300ms;        /* panel reveal, dissolve */
+  --t-slow: 450ms;        /* locator connect, camera short hop */
+  --t-long: 800ms;        /* scanner reveal, camera long flight */
+  --ease-out: cubic-bezier(.2,.8,.2,1);
+  --ease-in-out: cubic-bezier(.4,0,.2,1);
+
+  /* elevation: no shadows; depth comes from --bg steps and hairlines */
+}
+
+body {
+  margin: 0;
+  background: var(--bg-0);
+  color: var(--text-1);
+  font-family: var(--font-text);
+}

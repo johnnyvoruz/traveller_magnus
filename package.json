@@ -1,0 +1,20 @@
+{
+  "name": "traveller-voyage",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "test": "node --test \"tests/**/*.test.js\"",
+    "check": "node scripts/check_manifesto.js",
+    "rules:gen": "node scripts/gen_rules_esm.js",
+    "truth:local": "node tools/truth/build.js",
+    "dev:web": "npm --workspace apps/web run dev",
+    "dev:api": "npm --workspace apps/api run dev",
+    "build": "npm run rules:gen && npm --workspace packages/shared run build && npm --workspace apps/web run build",
+    "deploy": "npm run build && npm --workspace apps/api run deploy",
+    "xauth": "node scripts/xauth.js"
+  }
+}

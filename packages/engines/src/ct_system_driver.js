@@ -1,0 +1,107 @@
+import { generateSystemSkeleton, processBottomUpSocial, captureCTSatelliteCaps, trimCTSatellitesToSeededCaps } from './ct_bottomup_generator.js';
+import { generateTopDownSystem } from './ct_topdown_generator.js';
+import { auditCTSystem, runAndLog } from './ct_uwp_auditor.js';
+import { ORBIT_AU } from './ct_constants.js';
+import { writeLogLine } from './core/trace.js';
+import { applyCTOrbitalNames } from './core/names.js';
+// =====================================================================
+// CLASSIC TRAVELLER: SYSTEM ORCHESTRATOR
+// =====================================================================
+
+// Browser-safe imports
+var systemSkeletonGen, socialProcessor, topDownGen, auditor, auditRunAndLog, auConst;
+var captureSatCaps, trimSatCaps;
+
+systemSkeletonGen = generateSystemSkeleton;
+socialProcessor = processBottomUpSocial;
+topDownGen = generateTopDownSystem;
+auditor = auditCTSystem;
+auditRunAndLog = runAndLog;
+auConst = ORBIT_AU;
+captureSatCaps = captureCTSatelliteCaps;
+trimSatCaps = trimCTSatellitesToSeededCaps;
+
+
+/**
+ * Main entry point for Classic Traveller system generation.
+ * Supports both unbiased "Bottom-Up" and biased "Top-Down" modes.
+ *
+ * @param {Object} params - Configuration for generation.
+ * @param {string} params.mode - 'bottom-up' or 'top-down'.
+ * @param {Object} [params.mainworldUWP] - Required for 'top-down'.
+ * @param {Object} [params.primaryStar] - Optional for 'top-down'.
+ * @param {string} [params.hexId] - Seed or identification string.
+ * @param {Object} [params.seedSys=null] - Optional seed from the System Editor. When null,
+ *   generation is fully stochastic (all existing macro calls). When provided:
+ *   - seedSys.stars / seedSys.orbits are used instead of rolling
+ *   - seedSys._mainworldRef: _id of the body to designate as mainworld
+ *   - seedSys._allowAddBodies: controls whether skeleton placement is skipped
+ * @returns {Object} The generated system object.
+ */
+function generateSystem(params) {
+
+    const { mode, mainworldUWP, primaryStar, hexId, seedSys = null } = params;
+
+    let sys = null;
+    if (mode === 'top-down') {
+        if (!mainworldUWP) {
+            throw new Error("Top-Down generation requires a valid mainworldUWP object.");
+        }
+        sys = topDownGen(mainworldUWP, primaryStar);
+    }
+    else if (mode === 'bottom-up') {
+        const skeleton = systemSkeletonGen(hexId, seedSys);
+
+        // If seedSys designates a mainworld, find the body by _id and pre-set it so
+        // processBottomUpDesignation uses the Fixed Anchor path instead of electing.
+        if (seedSys && seedSys._mainworldRef && skeleton) {
+            const _findById = (id) => {
+                for (const slot of (skeleton.orbits || [])) {
+                    const w = slot.contents;
+                    if (w && w._id === id) return w;
+                    for (const m of (w && (w.satellites || w.moons)) || []) {
+                        if (m._id === id) return m;
+                    }
+                }
+                for (const w of (skeleton.capturedPlanets || [])) {
+                    if (w && w._id === id) return w;
+                }
+                return null;
+            };
+            const mw = _findById(seedSys._mainworldRef);
+            if (mw) skeleton.mainworld = mw;
+        }
+
+        // Snapshot each body's satellite count before social processing rolls moons, so a
+        // freshly-added body (0 satellites before this pass) can't come out of Preview/Fill &
+        // Save with dice-rolled moons the user never asked for — matches MgT2E's equivalent
+        // SeedRestoration capture/trim pair (see OW-10 in project_manifest.md). No-op (returns
+        // null) whenever the engine is allowed to add bodies or there's no seed at all.
+        const satCaps = captureSatCaps ? captureSatCaps(skeleton, seedSys) : null;
+
+        sys = socialProcessor(skeleton);
+
+        if (trimSatCaps) trimSatCaps(sys, seedSys, satCaps);
+    }
+
+    if (sys) {
+        if (hexId) sys.hexId = sys.hexId || hexId;
+        sys.audit = auditRunAndLog ? auditRunAndLog(sys, hexId) : auditor(sys);
+        if (typeof writeLogLine !== 'undefined') {
+            writeLogLine("=====================================================================");
+            writeLogLine("SYSTEM AUDIT RESULTS");
+            sys.audit.checks.forEach(c => writeLogLine(c));
+            if (sys.audit.errors.length > 0) {
+                sys.audit.errors.forEach(e => writeLogLine(`[ERROR] ${e}`));
+            }
+            writeLogLine("=====================================================================");
+        }
+        if (typeof applyCTOrbitalNames === 'function') applyCTOrbitalNames(sys);
+        return sys;
+    }
+
+    throw new Error(`Invalid generation mode: ${mode}. Use 'bottom-up' or 'top-down'.`);
+}
+
+// Export for both Node.js and Browser environments
+export { generateSystem };

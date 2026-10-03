@@ -1,0 +1,5 @@
+{
+  "packages/engines/src/aow_seed_bridge.js": {
+    "window.": "legacy data property named window on the AoW seed object; not the global"
+  }
+}

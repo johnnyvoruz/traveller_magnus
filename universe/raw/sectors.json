@@ -1,0 +1,5815 @@
+{
+  "milieu": "M1105",
+  "fetchedAt": "2026-10-03T06:11:07.636Z",
+  "canonicalTags": [
+    "OTU",
+    "ZCR"
+  ],
+  "nonCanonicalTags": [
+    "Apocryphal",
+    "Alternate",
+    "Unofficial"
+  ],
+  "sectors": [
+    {
+      "name": "Calidan",
+      "abbreviation": "Cali",
+      "x": 247,
+      "y": -248,
+      "tags": [
+        "Faraway",
+        "Unreviewed"
+      ],
+      "canonical": false,
+      "slug": "Calidan"
+    },
+    {
+      "name": "Rosalis Cluster",
+      "abbreviation": null,
+      "x": -200,
+      "y": -200,
+      "tags": [
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Rosalis_Cluster"
+    },
+    {
+      "name": "Fantana Spur",
+      "abbreviation": null,
+      "x": -199,
+      "y": -200,
+      "tags": [
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Fantana_Spur"
+    },
+    {
+      "name": "Lemon and Gold",
+      "abbreviation": null,
+      "x": -200,
+      "y": -199,
+      "tags": [
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Lemon_and_Gold"
+    },
+    {
+      "name": "Trans Dolovia",
+      "abbreviation": null,
+      "x": -199,
+      "y": -199,
+      "tags": [
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Trans_Dolovia"
+    },
+    {
+      "name": "Yejiariebr",
+      "abbreviation": null,
+      "x": -7,
+      "y": -175,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Yejiariebr"
+    },
+    {
+      "name": "Zhiejqrinzho",
+      "abbreviation": null,
+      "x": -7,
+      "y": -174,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Zhiejqrinzho"
+    },
+    {
+      "name": "Klajipl",
+      "abbreviation": null,
+      "x": -7,
+      "y": -173,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Klajipl"
+    },
+    {
+      "name": "Kazhekliepr",
+      "abbreviation": null,
+      "x": -7,
+      "y": -172,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Kazhekliepr"
+    },
+    {
+      "name": "Chiajavlazh",
+      "abbreviation": null,
+      "x": -7,
+      "y": -171,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Chiajavlazh"
+    },
+    {
+      "name": "Dliaprqriez",
+      "abbreviation": null,
+      "x": -7,
+      "y": -170,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Dliaprqriez"
+    },
+    {
+      "name": "Pranzaklbraz",
+      "abbreviation": null,
+      "x": -7,
+      "y": -169,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Pranzaklbraz"
+    },
+    {
+      "name": "Stienzarikl",
+      "abbreviation": null,
+      "x": -7,
+      "y": -168,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Stienzarikl"
+    },
+    {
+      "name": "Zdechrebrvle",
+      "abbreviation": null,
+      "x": -7,
+      "y": -167,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Zdechrebrvle"
+    },
+    {
+      "name": "Tlialiedla",
+      "abbreviation": null,
+      "x": -7,
+      "y": -166,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Tlialiedla"
+    },
+    {
+      "name": "Fraklbizh",
+      "abbreviation": null,
+      "x": -7,
+      "y": -165,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Fraklbizh"
+    },
+    {
+      "name": "Tliblnzheflets",
+      "abbreviation": null,
+      "x": -7,
+      "y": -164,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Tliblnzheflets"
+    },
+    {
+      "name": "Nzievi",
+      "abbreviation": null,
+      "x": -7,
+      "y": -163,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Nzievi"
+    },
+    {
+      "name": "Preiel",
+      "abbreviation": null,
+      "x": -7,
+      "y": -162,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Preiel"
+    },
+    {
+      "name": "Nezhatliebr",
+      "abbreviation": null,
+      "x": -7,
+      "y": -161,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Nezhatliebr"
+    },
+    {
+      "name": "Siantsaia",
+      "abbreviation": null,
+      "x": -7,
+      "y": -160,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Siantsaia"
+    },
+    {
+      "name": "Nchadla",
+      "abbreviation": null,
+      "x": -7,
+      "y": -159,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Nchadla"
+    },
+    {
+      "name": "Nchefrij",
+      "abbreviation": null,
+      "x": -7,
+      "y": -158,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Nchefrij"
+    },
+    {
+      "name": "Zdielbeppria",
+      "abbreviation": null,
+      "x": -7,
+      "y": -157,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Zdielbeppria"
+    },
+    {
+      "name": "Tavrbovliepl",
+      "abbreviation": null,
+      "x": -7,
+      "y": -156,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Tavrbovliepl"
+    },
+    {
+      "name": "Antsrish",
+      "abbreviation": null,
+      "x": -7,
+      "y": -155,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Antsrish"
+    },
+    {
+      "name": "Kepridlnchots",
+      "abbreviation": null,
+      "x": -7,
+      "y": -154,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Kepridlnchots"
+    },
+    {
+      "name": "Evred",
+      "abbreviation": null,
+      "x": -7,
+      "y": -153,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Evred"
+    },
+    {
+      "name": "Chtatiate",
+      "abbreviation": null,
+      "x": -7,
+      "y": -152,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Chtatiate"
+    },
+    {
+      "name": "Dliebriatia",
+      "abbreviation": null,
+      "x": -7,
+      "y": -151,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Dliebriatia"
+    },
+    {
+      "name": "Kliadli",
+      "abbreviation": null,
+      "x": -7,
+      "y": -150,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Kliadli"
+    },
+    {
+      "name": "Riadrazh",
+      "abbreviation": null,
+      "x": -7,
+      "y": -149,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Riadrazh"
+    },
+    {
+      "name": "Iekrqre",
+      "abbreviation": null,
+      "x": -7,
+      "y": -148,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Iekrqre"
+    },
+    {
+      "name": "Jiechnzhitsonj",
+      "abbreviation": null,
+      "x": -7,
+      "y": -147,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Jiechnzhitsonj"
+    },
+    {
+      "name": "Aplie",
+      "abbreviation": null,
+      "x": -7,
+      "y": -146,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Aplie"
+    },
+    {
+      "name": "Eble",
+      "abbreviation": null,
+      "x": -7,
+      "y": -145,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Eble"
+    },
+    {
+      "name": "Vlofrkla",
+      "abbreviation": null,
+      "x": -7,
+      "y": -144,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Vlofrkla"
+    },
+    {
+      "name": "Jdibrirvianj",
+      "abbreviation": null,
+      "x": -7,
+      "y": -143,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Jdibrirvianj"
+    },
+    {
+      "name": "Ijar",
+      "abbreviation": null,
+      "x": -7,
+      "y": -142,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Ijar"
+    },
+    {
+      "name": "Frajbriekrensh",
+      "abbreviation": null,
+      "x": -7,
+      "y": -141,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Frajbriekrensh"
+    },
+    {
+      "name": "Peklprozqratl",
+      "abbreviation": null,
+      "x": -7,
+      "y": -140,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Peklprozqratl"
+    },
+    {
+      "name": "Flaflzhevrients",
+      "abbreviation": null,
+      "x": -7,
+      "y": -139,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Flaflzhevrients"
+    },
+    {
+      "name": "Anshnzhins",
+      "abbreviation": null,
+      "x": -7,
+      "y": -138,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Anshnzhins"
+    },
+    {
+      "name": "Lotsar",
+      "abbreviation": null,
+      "x": -7,
+      "y": -137,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Lotsar"
+    },
+    {
+      "name": "Niabrefvronz",
+      "abbreviation": null,
+      "x": -7,
+      "y": -136,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Niabrefvronz"
+    },
+    {
+      "name": "Ienza",
+      "abbreviation": null,
+      "x": -7,
+      "y": -135,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Ienza"
+    },
+    {
+      "name": "Vravrzha",
+      "abbreviation": null,
+      "x": -7,
+      "y": -134,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Vravrzha"
+    },
+    {
+      "name": "Abresh",
+      "abbreviation": null,
+      "x": -7,
+      "y": -133,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Abresh"
+    },
+    {
+      "name": "Kernzhez'a",
+      "abbreviation": null,
+      "x": -7,
+      "y": -132,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Kernzhez_a"
+    },
+    {
+      "name": "Tlinchjiee",
+      "abbreviation": null,
+      "x": -7,
+      "y": -131,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Tlinchjiee"
+    },
+    {
+      "name": "Iate",
+      "abbreviation": null,
+      "x": -7,
+      "y": -130,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Iate"
+    },
+    {
+      "name": "Drachabre",
+      "abbreviation": null,
+      "x": -7,
+      "y": -129,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Drachabre"
+    },
+    {
+      "name": "Jdodiafldla",
+      "abbreviation": null,
+      "x": -7,
+      "y": -128,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Jdodiafldla"
+    },
+    {
+      "name": "Zii",
+      "abbreviation": null,
+      "x": -7,
+      "y": -127,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Zii"
+    },
+    {
+      "name": "Drierii",
+      "abbreviation": null,
+      "x": -7,
+      "y": -126,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Drierii"
+    },
+    {
+      "name": "Voblezitl",
+      "abbreviation": null,
+      "x": -7,
+      "y": -125,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Voblezitl"
+    },
+    {
+      "name": "Zhetsefr",
+      "abbreviation": null,
+      "x": -7,
+      "y": -124,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Zhetsefr"
+    },
+    {
+      "name": "Shiazhanche",
+      "abbreviation": null,
+      "x": -7,
+      "y": -123,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Shiazhanche"
+    },
+    {
+      "name": "Ploblvla",
+      "abbreviation": null,
+      "x": -7,
+      "y": -122,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Ploblvla"
+    },
+    {
+      "name": "Ezhebl",
+      "abbreviation": null,
+      "x": -7,
+      "y": -121,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Ezhebl"
+    },
+    {
+      "name": "Praklfrintsniadl",
+      "abbreviation": null,
+      "x": -7,
+      "y": -120,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Praklfrintsniadl"
+    },
+    {
+      "name": "Feflolents",
+      "abbreviation": null,
+      "x": -7,
+      "y": -119,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Feflolents"
+    },
+    {
+      "name": "Dlavvreplents",
+      "abbreviation": null,
+      "x": -7,
+      "y": -118,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Dlavvreplents"
+    },
+    {
+      "name": "Zietsebl",
+      "abbreviation": null,
+      "x": -7,
+      "y": -117,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Zietsebl"
+    },
+    {
+      "name": "Zhejnzhiikl",
+      "abbreviation": null,
+      "x": -7,
+      "y": -116,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Zhejnzhiikl"
+    },
+    {
+      "name": "Riafrtafrpriafr",
+      "abbreviation": null,
+      "x": -7,
+      "y": -115,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Riafrtafrpriafr"
+    },
+    {
+      "name": "Tlensbladrzhianzh",
+      "abbreviation": null,
+      "x": -7,
+      "y": -114,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Tlensbladrzhianzh"
+    },
+    {
+      "name": "Sheqraflal",
+      "abbreviation": null,
+      "x": -7,
+      "y": -113,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Sheqraflal"
+    },
+    {
+      "name": "Pliajenzh",
+      "abbreviation": null,
+      "x": -7,
+      "y": -112,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Pliajenzh"
+    },
+    {
+      "name": "Nseianzh",
+      "abbreviation": null,
+      "x": -7,
+      "y": -111,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Nseianzh"
+    },
+    {
+      "name": "Nzhajdibr",
+      "abbreviation": null,
+      "x": -7,
+      "y": -110,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Nzhajdibr"
+    },
+    {
+      "name": "Nzhiaapl",
+      "abbreviation": null,
+      "x": -7,
+      "y": -109,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Nzhiaapl"
+    },
+    {
+      "name": "Doklzots",
+      "abbreviation": null,
+      "x": -7,
+      "y": -108,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Doklzots"
+    },
+    {
+      "name": "Driklfetvipr",
+      "abbreviation": null,
+      "x": -7,
+      "y": -107,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Driklfetvipr"
+    },
+    {
+      "name": "Jdencheplia",
+      "abbreviation": null,
+      "x": -7,
+      "y": -106,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Jdencheplia"
+    },
+    {
+      "name": "Shenzhtsenzh",
+      "abbreviation": null,
+      "x": -7,
+      "y": -105,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Shenzhtsenzh"
+    },
+    {
+      "name": "Nialkridla",
+      "abbreviation": null,
+      "x": -7,
+      "y": -104,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Nialkridla"
+    },
+    {
+      "name": "Enchakl",
+      "abbreviation": null,
+      "x": -7,
+      "y": -103,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Enchakl"
+    },
+    {
+      "name": "Riekllezha",
+      "abbreviation": null,
+      "x": -7,
+      "y": -102,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Riekllezha"
+    },
+    {
+      "name": "Yikvrior",
+      "abbreviation": null,
+      "x": -7,
+      "y": -101,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Yikvrior"
+    },
+    {
+      "name": "Fretvlobrpriet",
+      "abbreviation": null,
+      "x": -7,
+      "y": -100,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Fretvlobrpriet"
+    },
+    {
+      "name": "Pliantiblbra",
+      "abbreviation": null,
+      "x": -7,
+      "y": -99,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Pliantiblbra"
+    },
+    {
+      "name": "Plablshashchesh",
+      "abbreviation": null,
+      "x": -7,
+      "y": -98,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Plablshashchesh"
+    },
+    {
+      "name": "Viashchieshiadl",
+      "abbreviation": null,
+      "x": -7,
+      "y": -97,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Viashchieshiadl"
+    },
+    {
+      "name": "Tlabraplzhied",
+      "abbreviation": null,
+      "x": -7,
+      "y": -96,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Tlabraplzhied"
+    },
+    {
+      "name": "Afdranz",
+      "abbreviation": null,
+      "x": -7,
+      "y": -95,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Afdranz"
+    },
+    {
+      "name": "Itsfiebl",
+      "abbreviation": null,
+      "x": -7,
+      "y": -94,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Itsfiebl"
+    },
+    {
+      "name": "Zhevreklnchi",
+      "abbreviation": null,
+      "x": -7,
+      "y": -93,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Zhevreklnchi"
+    },
+    {
+      "name": "Stiaklentsiefl",
+      "abbreviation": null,
+      "x": -7,
+      "y": -92,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Stiaklentsiefl"
+    },
+    {
+      "name": "Difralfler",
+      "abbreviation": null,
+      "x": -7,
+      "y": -91,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Difralfler"
+    },
+    {
+      "name": "Eie",
+      "abbreviation": null,
+      "x": -7,
+      "y": -90,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Eie"
+    },
+    {
+      "name": "Tselidl",
+      "abbreviation": null,
+      "x": -7,
+      "y": -89,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Tselidl"
+    },
+    {
+      "name": "Zhiatienjiaz",
+      "abbreviation": null,
+      "x": -7,
+      "y": -88,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Zhiatienjiaz"
+    },
+    {
+      "name": "Nili",
+      "abbreviation": null,
+      "x": -7,
+      "y": -87,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Nili"
+    },
+    {
+      "name": "Zenzhej",
+      "abbreviation": null,
+      "x": -7,
+      "y": -86,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Zenzhej"
+    },
+    {
+      "name": "Shiadldriadash",
+      "abbreviation": null,
+      "x": -7,
+      "y": -85,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Shiadldriadash"
+    },
+    {
+      "name": "Inshzish",
+      "abbreviation": null,
+      "x": -7,
+      "y": -84,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Inshzish"
+    },
+    {
+      "name": "Nshofref",
+      "abbreviation": null,
+      "x": -7,
+      "y": -83,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Nshofref"
+    },
+    {
+      "name": "Qrecha",
+      "abbreviation": null,
+      "x": -7,
+      "y": -82,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Qrecha"
+    },
+    {
+      "name": "Aed",
+      "abbreviation": null,
+      "x": -7,
+      "y": -81,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Aed"
+    },
+    {
+      "name": "Zdafeflzadr",
+      "abbreviation": null,
+      "x": -7,
+      "y": -80,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Zdafeflzadr"
+    },
+    {
+      "name": "Zdietablie",
+      "abbreviation": null,
+      "x": -7,
+      "y": -79,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Zdietablie"
+    },
+    {
+      "name": "Fiaftashe",
+      "abbreviation": null,
+      "x": -7,
+      "y": -78,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Fiaftashe"
+    },
+    {
+      "name": "Tlapltsia'o",
+      "abbreviation": null,
+      "x": -7,
+      "y": -77,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Tlapltsia_o"
+    },
+    {
+      "name": "Azaz",
+      "abbreviation": null,
+      "x": -7,
+      "y": -76,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Azaz"
+    },
+    {
+      "name": "Ichnzhipr",
+      "abbreviation": null,
+      "x": -7,
+      "y": -75,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Ichnzhipr"
+    },
+    {
+      "name": "Eblia",
+      "abbreviation": null,
+      "x": -7,
+      "y": -74,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Eblia"
+    },
+    {
+      "name": "Ze'shavrav",
+      "abbreviation": null,
+      "x": -7,
+      "y": -73,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Ze_shavrav"
+    },
+    {
+      "name": "Ravrazhe",
+      "abbreviation": null,
+      "x": -7,
+      "y": -72,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Ravrazhe"
+    },
+    {
+      "name": "Ablaz",
+      "abbreviation": null,
+      "x": -7,
+      "y": -71,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Ablaz"
+    },
+    {
+      "name": "Idekl",
+      "abbreviation": null,
+      "x": -7,
+      "y": -70,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Idekl"
+    },
+    {
+      "name": "Shiblbropli",
+      "abbreviation": null,
+      "x": -7,
+      "y": -69,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Shiblbropli"
+    },
+    {
+      "name": "Zdienzfiaia",
+      "abbreviation": null,
+      "x": -7,
+      "y": -68,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Zdienzfiaia"
+    },
+    {
+      "name": "Driebliepl",
+      "abbreviation": null,
+      "x": -7,
+      "y": -67,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Driebliepl"
+    },
+    {
+      "name": "Ntetszif",
+      "abbreviation": null,
+      "x": -7,
+      "y": -66,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Ntetszif"
+    },
+    {
+      "name": "Iebtladl",
+      "abbreviation": null,
+      "x": -7,
+      "y": -65,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Iebtladl"
+    },
+    {
+      "name": "Febiaiadl",
+      "abbreviation": null,
+      "x": -7,
+      "y": -64,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Febiaiadl"
+    },
+    {
+      "name": "Tenshlatsvo",
+      "abbreviation": null,
+      "x": -7,
+      "y": -63,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Tenshlatsvo"
+    },
+    {
+      "name": "Loplia",
+      "abbreviation": null,
+      "x": -7,
+      "y": -62,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Loplia"
+    },
+    {
+      "name": "Ijidl",
+      "abbreviation": null,
+      "x": -7,
+      "y": -61,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Ijidl"
+    },
+    {
+      "name": "Niechnchialbli",
+      "abbreviation": null,
+      "x": -7,
+      "y": -60,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Niechnchialbli"
+    },
+    {
+      "name": "Qlivinchezh",
+      "abbreviation": null,
+      "x": -7,
+      "y": -59,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Qlivinchezh"
+    },
+    {
+      "name": "Ee",
+      "abbreviation": null,
+      "x": -7,
+      "y": -58,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Ee"
+    },
+    {
+      "name": "Bliaazh",
+      "abbreviation": null,
+      "x": -7,
+      "y": -57,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Bliaazh"
+    },
+    {
+      "name": "Ekrbriansh",
+      "abbreviation": null,
+      "x": -7,
+      "y": -56,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Ekrbriansh"
+    },
+    {
+      "name": "Biaqrpraze",
+      "abbreviation": null,
+      "x": -7,
+      "y": -55,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Biaqrpraze"
+    },
+    {
+      "name": "Sieriatsklinzh",
+      "abbreviation": null,
+      "x": -7,
+      "y": -54,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Sieriatsklinzh"
+    },
+    {
+      "name": "Zentse",
+      "abbreviation": null,
+      "x": -7,
+      "y": -53,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Zentse"
+    },
+    {
+      "name": "Tledr",
+      "abbreviation": null,
+      "x": -7,
+      "y": -52,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Tledr"
+    },
+    {
+      "name": "Vietrienzhits",
+      "abbreviation": null,
+      "x": -7,
+      "y": -51,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Vietrienzhits"
+    },
+    {
+      "name": "Chtetaravl",
+      "abbreviation": null,
+      "x": -7,
+      "y": -50,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Chtetaravl"
+    },
+    {
+      "name": "Nzhenzie",
+      "abbreviation": null,
+      "x": -7,
+      "y": -49,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Nzhenzie"
+    },
+    {
+      "name": "Brelia",
+      "abbreviation": null,
+      "x": -7,
+      "y": -48,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Brelia"
+    },
+    {
+      "name": "Pivchavia",
+      "abbreviation": null,
+      "x": -7,
+      "y": -47,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Pivchavia"
+    },
+    {
+      "name": "Nzhernzhi",
+      "abbreviation": null,
+      "x": -7,
+      "y": -46,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Nzhernzhi"
+    },
+    {
+      "name": "Ianse",
+      "abbreviation": null,
+      "x": -7,
+      "y": -45,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Ianse"
+    },
+    {
+      "name": "Zhechinje",
+      "abbreviation": null,
+      "x": -7,
+      "y": -44,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Zhechinje"
+    },
+    {
+      "name": "Jdeblinsiqr",
+      "abbreviation": null,
+      "x": -7,
+      "y": -43,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Jdeblinsiqr"
+    },
+    {
+      "name": "Aviel",
+      "abbreviation": null,
+      "x": -7,
+      "y": -42,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Aviel"
+    },
+    {
+      "name": "Prashtsintsanch",
+      "abbreviation": null,
+      "x": -7,
+      "y": -41,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Prashtsintsanch"
+    },
+    {
+      "name": "Qrefrnzhariefl",
+      "abbreviation": null,
+      "x": -7,
+      "y": -40,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Qrefrnzhariefl"
+    },
+    {
+      "name": "Ieviash",
+      "abbreviation": null,
+      "x": -7,
+      "y": -39,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Ieviash"
+    },
+    {
+      "name": "Stotsshiflezh",
+      "abbreviation": null,
+      "x": -7,
+      "y": -38,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Stotsshiflezh"
+    },
+    {
+      "name": "Frizhkladlncha",
+      "abbreviation": null,
+      "x": -7,
+      "y": -37,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Frizhkladlncha"
+    },
+    {
+      "name": "Chtijashal",
+      "abbreviation": null,
+      "x": -7,
+      "y": -36,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Chtijashal"
+    },
+    {
+      "name": "Chetliashal",
+      "abbreviation": null,
+      "x": -7,
+      "y": -35,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Chetliashal"
+    },
+    {
+      "name": "Etlnchofr",
+      "abbreviation": null,
+      "x": -7,
+      "y": -34,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Etlnchofr"
+    },
+    {
+      "name": "Zabrziklezh",
+      "abbreviation": null,
+      "x": -7,
+      "y": -33,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Zabrziklezh"
+    },
+    {
+      "name": "Kozhdanzhinz",
+      "abbreviation": null,
+      "x": -7,
+      "y": -32,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Kozhdanzhinz"
+    },
+    {
+      "name": "Flablenti",
+      "abbreviation": null,
+      "x": -7,
+      "y": -31,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Flablenti"
+    },
+    {
+      "name": "Setjefrshiatl",
+      "abbreviation": null,
+      "x": -7,
+      "y": -30,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Setjefrshiatl"
+    },
+    {
+      "name": "Kiafldliezhjol",
+      "abbreviation": null,
+      "x": -7,
+      "y": -29,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Kiafldliezhjol"
+    },
+    {
+      "name": "Tsafrnchia",
+      "abbreviation": null,
+      "x": -7,
+      "y": -28,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Tsafrnchia"
+    },
+    {
+      "name": "Ienjaz",
+      "abbreviation": null,
+      "x": -7,
+      "y": -27,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Ienjaz"
+    },
+    {
+      "name": "Vedrabr",
+      "abbreviation": null,
+      "x": -7,
+      "y": -26,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Vedrabr"
+    },
+    {
+      "name": "Driaflfiazlats",
+      "abbreviation": null,
+      "x": -7,
+      "y": -25,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Driaflfiazlats"
+    },
+    {
+      "name": "Brianch",
+      "abbreviation": null,
+      "x": -7,
+      "y": -24,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Brianch"
+    },
+    {
+      "name": "Dilea",
+      "abbreviation": null,
+      "x": -7,
+      "y": -23,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Dilea"
+    },
+    {
+      "name": "Pofdriblnchitl",
+      "abbreviation": null,
+      "x": -7,
+      "y": -22,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Pofdriblnchitl"
+    },
+    {
+      "name": "Nevlieri",
+      "abbreviation": null,
+      "x": -7,
+      "y": -21,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Nevlieri"
+    },
+    {
+      "name": "Caesillian",
+      "abbreviation": "Caes",
+      "x": 0,
+      "y": -21,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Caesillian"
+    },
+    {
+      "name": "Markhab",
+      "abbreviation": null,
+      "x": -150,
+      "y": -20,
+      "tags": [
+        "Faraway",
+        "Farway"
+      ],
+      "canonical": false,
+      "slug": "Markhab"
+    },
+    {
+      "name": "Virgo",
+      "abbreviation": null,
+      "x": -148,
+      "y": -20,
+      "tags": [
+        "Faraway",
+        "Farway"
+      ],
+      "canonical": false,
+      "slug": "Virgo"
+    },
+    {
+      "name": "Sagittarius Cluster",
+      "abbreviation": null,
+      "x": -146,
+      "y": -20,
+      "tags": [
+        "Faraway",
+        "Farway"
+      ],
+      "canonical": false,
+      "slug": "Sagittarius_Cluster"
+    },
+    {
+      "name": "Solo 6",
+      "abbreviation": null,
+      "x": -144,
+      "y": -20,
+      "tags": [
+        "Faraway",
+        "Farway"
+      ],
+      "canonical": false,
+      "slug": "Solo_6"
+    },
+    {
+      "name": "Tatlnjaie",
+      "abbreviation": null,
+      "x": -7,
+      "y": -20,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Tatlnjaie"
+    },
+    {
+      "name": "Bliatsiebl",
+      "abbreviation": null,
+      "x": -7,
+      "y": -19,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Bliatsiebl"
+    },
+    {
+      "name": "Favkranish",
+      "abbreviation": null,
+      "x": -7,
+      "y": -18,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Favkranish"
+    },
+    {
+      "name": "Zhenzhbrivtlo",
+      "abbreviation": null,
+      "x": -7,
+      "y": -17,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Zhenzhbrivtlo"
+    },
+    {
+      "name": "Vikrvidrvria",
+      "abbreviation": null,
+      "x": -7,
+      "y": -16,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Vikrvidrvria"
+    },
+    {
+      "name": "Plontarbli",
+      "abbreviation": null,
+      "x": -7,
+      "y": -15,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Plontarbli"
+    },
+    {
+      "name": "Azhpliabl",
+      "abbreviation": null,
+      "x": -7,
+      "y": -14,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Azhpliabl"
+    },
+    {
+      "name": "Prinjobliedl",
+      "abbreviation": null,
+      "x": -7,
+      "y": -13,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Prinjobliedl"
+    },
+    {
+      "name": "Ia",
+      "abbreviation": null,
+      "x": -7,
+      "y": -12,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Ia"
+    },
+    {
+      "name": "Zietssha",
+      "abbreviation": null,
+      "x": -7,
+      "y": -11,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Zietssha"
+    },
+    {
+      "name": "Proanz",
+      "abbreviation": null,
+      "x": -7,
+      "y": -10,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Proanz"
+    },
+    {
+      "name": "Tsebntsiatldlants",
+      "abbreviation": null,
+      "x": -7,
+      "y": -9,
+      "tags": [
+        "ZCR"
+      ],
+      "canonical": true,
+      "slug": "Tsebntsiatldlants"
+    },
+    {
+      "name": "Chtierabl",
+      "abbreviation": "Chti",
+      "x": -7,
+      "y": -8,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Chtierabl"
+    },
+    {
+      "name": "Zhiensh",
+      "abbreviation": "Zhie",
+      "x": -7,
+      "y": -5,
+      "tags": [
+        "OTU",
+        "Unreviewed"
+      ],
+      "canonical": true,
+      "slug": "Zhiensh"
+    },
+    {
+      "name": "Datsatl",
+      "abbreviation": "Dats",
+      "x": -5,
+      "y": -5,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Datsatl"
+    },
+    {
+      "name": "Gakghang",
+      "abbreviation": "Gakg",
+      "x": -4,
+      "y": -5,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Gakghang"
+    },
+    {
+      "name": "Thaku Fung",
+      "abbreviation": "Thak",
+      "x": -3,
+      "y": -5,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Thaku_Fung"
+    },
+    {
+      "name": "Rzakki",
+      "abbreviation": "Rzak",
+      "x": -2,
+      "y": -5,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Rzakki"
+    },
+    {
+      "name": "Listanaya",
+      "abbreviation": "List",
+      "x": -1,
+      "y": -5,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Listanaya"
+    },
+    {
+      "name": "Veg Fergakh",
+      "abbreviation": "Vegf",
+      "x": 0,
+      "y": -5,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Veg_Fergakh"
+    },
+    {
+      "name": "Dfotseth",
+      "abbreviation": "Dfot",
+      "x": 1,
+      "y": -5,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Dfotseth"
+    },
+    {
+      "name": "Irugangog",
+      "abbreviation": "Irug",
+      "x": 2,
+      "y": -5,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Irugangog"
+    },
+    {
+      "name": "Finggvakhou",
+      "abbreviation": "Fing",
+      "x": 3,
+      "y": -5,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Finggvakhou"
+    },
+    {
+      "name": "Zortakh",
+      "abbreviation": "Zort",
+      "x": 4,
+      "y": -5,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Zortakh"
+    },
+    {
+      "name": "Spangele",
+      "abbreviation": "Span",
+      "x": 5,
+      "y": -5,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Spangele"
+    },
+    {
+      "name": "Nadir",
+      "abbreviation": "Nadi",
+      "x": 6,
+      "y": -5,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Nadir"
+    },
+    {
+      "name": "Harbinger",
+      "abbreviation": "Harb",
+      "x": 7,
+      "y": -5,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Harbinger"
+    },
+    {
+      "name": "Chit Botshti",
+      "abbreviation": "Chit",
+      "x": -5,
+      "y": -4,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Chit_Botshti"
+    },
+    {
+      "name": "Ghoekhnael",
+      "abbreviation": "Ghoe",
+      "x": -4,
+      "y": -4,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Ghoekhnael"
+    },
+    {
+      "name": "Ksinanirz",
+      "abbreviation": "Ksin",
+      "x": -3,
+      "y": -4,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Ksinanirz"
+    },
+    {
+      "name": "Zao Kfeng Ig Grilokh",
+      "abbreviation": "Zaok",
+      "x": -2,
+      "y": -4,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Zao_Kfeng_Ig_Grilokh"
+    },
+    {
+      "name": "Knaeleng",
+      "abbreviation": "Knae",
+      "x": -1,
+      "y": -4,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Knaeleng"
+    },
+    {
+      "name": "Kharrthon",
+      "abbreviation": "Khar",
+      "x": 0,
+      "y": -4,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Kharrthon"
+    },
+    {
+      "name": "Oeghz Vaerrghr",
+      "abbreviation": "Oegh",
+      "x": 1,
+      "y": -4,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Oeghz_Vaerrghr"
+    },
+    {
+      "name": "Kfazz Ghik",
+      "abbreviation": "Kfaz",
+      "x": 2,
+      "y": -4,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Kfazz_Ghik"
+    },
+    {
+      "name": "Angfutsag",
+      "abbreviation": "Angf",
+      "x": 3,
+      "y": -4,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Angfutsag"
+    },
+    {
+      "name": "Rfigh",
+      "abbreviation": "Rfig",
+      "x": 4,
+      "y": -4,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Rfigh"
+    },
+    {
+      "name": "Tar'G'kell'p",
+      "abbreviation": "Tarx",
+      "x": 5,
+      "y": -4,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Tar_G_kell_p"
+    },
+    {
+      "name": "Kteex!",
+      "abbreviation": "Ktee",
+      "x": 6,
+      "y": -4,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Kteex"
+    },
+    {
+      "name": "Koog",
+      "abbreviation": "Koog",
+      "x": 7,
+      "y": -4,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Koog"
+    },
+    {
+      "name": "Sidiadl",
+      "abbreviation": "Sidi",
+      "x": -8,
+      "y": -3,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Sidiadl"
+    },
+    {
+      "name": "Zdiedeiant",
+      "abbreviation": "Zdie",
+      "x": -7,
+      "y": -3,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Zdiedeiant"
+    },
+    {
+      "name": "Stiatlchepr",
+      "abbreviation": "Stia",
+      "x": -6,
+      "y": -3,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Stiatlchepr"
+    },
+    {
+      "name": "Itvikiastaf",
+      "abbreviation": "Itvi",
+      "x": -5,
+      "y": -3,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Itvikiastaf"
+    },
+    {
+      "name": "Knoellighz",
+      "abbreviation": "Knoe",
+      "x": -4,
+      "y": -3,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Knoellighz"
+    },
+    {
+      "name": "Dhuerorrg",
+      "abbreviation": "Dhue",
+      "x": -3,
+      "y": -3,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Dhuerorrg"
+    },
+    {
+      "name": "Ngathksirz",
+      "abbreviation": "Ngat",
+      "x": -2,
+      "y": -3,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Ngathksirz"
+    },
+    {
+      "name": "Fa Dzaets",
+      "abbreviation": "Fadz",
+      "x": -1,
+      "y": -3,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Fa_Dzaets"
+    },
+    {
+      "name": "Gzaekfueg",
+      "abbreviation": "Gzae",
+      "x": 0,
+      "y": -3,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Gzaekfueg"
+    },
+    {
+      "name": "Gashikan",
+      "abbreviation": "Gash",
+      "x": 1,
+      "y": -3,
+      "tags": [
+        "InReview",
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Gashikan"
+    },
+    {
+      "name": "Trenchans",
+      "abbreviation": "Tren",
+      "x": 2,
+      "y": -3,
+      "tags": [
+        "InReview",
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Trenchans"
+    },
+    {
+      "name": "Ktiin'gzat",
+      "abbreviation": "Ktii",
+      "x": 3,
+      "y": -3,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Ktiin_gzat"
+    },
+    {
+      "name": "Mugheen't",
+      "abbreviation": "Mugh",
+      "x": 4,
+      "y": -3,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Mugheen_t"
+    },
+    {
+      "name": "Grikr!ng",
+      "abbreviation": "Grik",
+      "x": 5,
+      "y": -3,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Grikr_ng"
+    },
+    {
+      "name": "Ukaarriit!!b",
+      "abbreviation": "Ukaa",
+      "x": 6,
+      "y": -3,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Ukaarriit_b"
+    },
+    {
+      "name": "Kring Noor",
+      "abbreviation": "Krin",
+      "x": 7,
+      "y": -3,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Kring_Noor"
+    },
+    {
+      "name": "Mbil!!gh",
+      "abbreviation": "Mbil",
+      "x": 8,
+      "y": -3,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Mbil_gh"
+    },
+    {
+      "name": "Pliabriebl",
+      "abbreviation": "Plia",
+      "x": -9,
+      "y": -2,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Pliabriebl"
+    },
+    {
+      "name": "Eiaplial",
+      "abbreviation": "Eiap",
+      "x": -8,
+      "y": -2,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Eiaplial"
+    },
+    {
+      "name": "Zhdant",
+      "abbreviation": "Zhda",
+      "x": -7,
+      "y": -2,
+      "tags": [
+        "InReview",
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Zhdant"
+    },
+    {
+      "name": "Tienspevnekr",
+      "abbreviation": "Tien",
+      "x": -6,
+      "y": -2,
+      "tags": [
+        "InReview",
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Tienspevnekr"
+    },
+    {
+      "name": "Ziafrplians",
+      "abbreviation": "Ziaf",
+      "x": -5,
+      "y": -2,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Ziafrplians"
+    },
+    {
+      "name": "Gvurrdon",
+      "abbreviation": "Gvur",
+      "x": -4,
+      "y": -2,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Gvurrdon"
+    },
+    {
+      "name": "Tuglikki",
+      "abbreviation": "Tugl",
+      "x": -3,
+      "y": -2,
+      "tags": [
+        "InReview",
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Tuglikki"
+    },
+    {
+      "name": "Provence",
+      "abbreviation": "Prov",
+      "x": -2,
+      "y": -2,
+      "tags": [
+        "InReview",
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Provence"
+    },
+    {
+      "name": "Windhorn",
+      "abbreviation": "Wind",
+      "x": -1,
+      "y": -2,
+      "tags": [
+        "InReview",
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Windhorn"
+    },
+    {
+      "name": "Meshan",
+      "abbreviation": "Mesh",
+      "x": 0,
+      "y": -2,
+      "tags": [
+        "InReview",
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Meshan"
+    },
+    {
+      "name": "Mendan",
+      "abbreviation": "Mend",
+      "x": 1,
+      "y": -2,
+      "tags": [
+        "InReview",
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Mendan"
+    },
+    {
+      "name": "Amdukan",
+      "abbreviation": "Amdu",
+      "x": 2,
+      "y": -2,
+      "tags": [
+        "InReview",
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Amdukan"
+    },
+    {
+      "name": "Arzul",
+      "abbreviation": "Arzu",
+      "x": 3,
+      "y": -2,
+      "tags": [
+        "InReview",
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Arzul"
+    },
+    {
+      "name": "Gn'hk'r",
+      "abbreviation": "Gnxh",
+      "x": 4,
+      "y": -2,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Gn_hk_r"
+    },
+    {
+      "name": "Gur",
+      "abbreviation": "Gur",
+      "x": 5,
+      "y": -2,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Gur"
+    },
+    {
+      "name": "Un'k!!k'ng",
+      "abbreviation": "Unxk",
+      "x": 6,
+      "y": -2,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Un_k_k_ng"
+    },
+    {
+      "name": "Xaagr",
+      "abbreviation": "Xaag",
+      "x": 7,
+      "y": -2,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Xaagr"
+    },
+    {
+      "name": "Tsadra",
+      "abbreviation": "Tsad",
+      "x": -8,
+      "y": -1,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Tsadra"
+    },
+    {
+      "name": "Yiklerzdanzh",
+      "abbreviation": "Yikl",
+      "x": -7,
+      "y": -1,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Yiklerzdanzh"
+    },
+    {
+      "name": "Far Frontiers",
+      "abbreviation": "Farf",
+      "x": -6,
+      "y": -1,
+      "tags": [
+        "InReview",
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Far_Frontiers"
+    },
+    {
+      "name": "Foreven",
+      "abbreviation": "Fore",
+      "x": -5,
+      "y": -1,
+      "tags": [
+        "OTU",
+        "Preserve"
+      ],
+      "canonical": true,
+      "slug": "Foreven"
+    },
+    {
+      "name": "Spinward Marches",
+      "abbreviation": "Spin",
+      "x": -4,
+      "y": -1,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Spinward_Marches"
+    },
+    {
+      "name": "Deneb",
+      "abbreviation": "Dene",
+      "x": -3,
+      "y": -1,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Deneb"
+    },
+    {
+      "name": "Corridor",
+      "abbreviation": "Corr",
+      "x": -2,
+      "y": -1,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Corridor"
+    },
+    {
+      "name": "Vland",
+      "abbreviation": "Vlan",
+      "x": -1,
+      "y": -1,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Vland"
+    },
+    {
+      "name": "Lishun",
+      "abbreviation": "Lish",
+      "x": 0,
+      "y": -1,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Lishun"
+    },
+    {
+      "name": "Antares",
+      "abbreviation": "Anta",
+      "x": 1,
+      "y": -1,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Antares"
+    },
+    {
+      "name": "Empty Quarter",
+      "abbreviation": "Empt",
+      "x": 2,
+      "y": -1,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Empty_Quarter"
+    },
+    {
+      "name": "Star's End",
+      "abbreviation": "Star",
+      "x": 3,
+      "y": -1,
+      "tags": [
+        "InReview",
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Star_s_End"
+    },
+    {
+      "name": "Gh!hken",
+      "abbreviation": "Ghxh",
+      "x": 4,
+      "y": -1,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Gh_hken"
+    },
+    {
+      "name": "Ruupiin",
+      "abbreviation": "Ruup",
+      "x": 5,
+      "y": -1,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Ruupiin"
+    },
+    {
+      "name": "Raakaan",
+      "abbreviation": "Raak",
+      "x": 6,
+      "y": -1,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Raakaan"
+    },
+    {
+      "name": "Uuk",
+      "abbreviation": "Uuk",
+      "x": 7,
+      "y": -1,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Uuk"
+    },
+    {
+      "name": "Yiklerdanzh (Meshan Saga)",
+      "abbreviation": "MSYK",
+      "x": 151,
+      "y": -1,
+      "tags": [
+        "Apocryphal",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Yiklerdanzh_Meshan_Saga"
+    },
+    {
+      "name": "Corridor (AABP)",
+      "abbreviation": "AABC",
+      "x": 156,
+      "y": -1,
+      "tags": [
+        "Apocryphal",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Corridor_AABP"
+    },
+    {
+      "name": "Chiep Zhez",
+      "abbreviation": "Chie",
+      "x": -9,
+      "y": 0,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Chiep_Zhez"
+    },
+    {
+      "name": "Astron",
+      "abbreviation": "Astr",
+      "x": -8,
+      "y": 0,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Astron"
+    },
+    {
+      "name": "Fulani",
+      "abbreviation": "Fula",
+      "x": -7,
+      "y": 0,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Fulani"
+    },
+    {
+      "name": "Vanguard Reaches",
+      "abbreviation": "Vang",
+      "x": -6,
+      "y": 0,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Vanguard_Reaches"
+    },
+    {
+      "name": "The Beyond",
+      "abbreviation": "Beyo",
+      "x": -5,
+      "y": 0,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "The_Beyond"
+    },
+    {
+      "name": "Trojan Reach",
+      "abbreviation": "Troj",
+      "x": -4,
+      "y": 0,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Trojan_Reach"
+    },
+    {
+      "name": "Reft",
+      "abbreviation": "Reft",
+      "x": -3,
+      "y": 0,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Reft"
+    },
+    {
+      "name": "Gushemege",
+      "abbreviation": "Gush",
+      "x": -2,
+      "y": 0,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Gushemege"
+    },
+    {
+      "name": "Dagudashaag",
+      "abbreviation": "Dagu",
+      "x": -1,
+      "y": 0,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Dagudashaag"
+    },
+    {
+      "name": "Core",
+      "abbreviation": "Core",
+      "x": 0,
+      "y": 0,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Core"
+    },
+    {
+      "name": "Fornast",
+      "abbreviation": "Forn",
+      "x": 1,
+      "y": 0,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Fornast"
+    },
+    {
+      "name": "Ley",
+      "abbreviation": "Ley",
+      "x": 2,
+      "y": 0,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Ley"
+    },
+    {
+      "name": "Gateway",
+      "abbreviation": "Gate",
+      "x": 3,
+      "y": 0,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Gateway"
+    },
+    {
+      "name": "Luretiir!girr",
+      "abbreviation": "Lure",
+      "x": 4,
+      "y": 0,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Luretiir_girr"
+    },
+    {
+      "name": "X'kug",
+      "abbreviation": "Xxku",
+      "x": 5,
+      "y": 0,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "X_kug"
+    },
+    {
+      "name": "Kilong",
+      "abbreviation": "Kilo",
+      "x": 6,
+      "y": 0,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Kilong"
+    },
+    {
+      "name": "Bar'kakr",
+      "abbreviation": "Barx",
+      "x": 7,
+      "y": 0,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Bar_kakr"
+    },
+    {
+      "name": "Vanguard Reaches (Paranoia Press 1991)",
+      "abbreviation": "VR91",
+      "x": 152,
+      "y": 0,
+      "tags": [
+        "Apocryphal",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Vanguard_Reaches_Paranoia_Press_1991"
+    },
+    {
+      "name": "The Beyond (Paranoia Press 1991)",
+      "abbreviation": "BE91",
+      "x": 153,
+      "y": 0,
+      "tags": [
+        "Apocryphal",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "The_Beyond_Paranoia_Press_1991"
+    },
+    {
+      "name": "Ley (Judges Guild)",
+      "abbreviation": "JGLe",
+      "x": 160,
+      "y": 0,
+      "tags": [
+        "Apocryphal",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Ley_Judges_Guild"
+    },
+    {
+      "name": "Maranatha-Alkahest (Judges Guild)",
+      "abbreviation": "JGMA",
+      "x": 161,
+      "y": 0,
+      "tags": [
+        "Apocryphal",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Maranatha_Alkahest_Judges_Guild"
+    },
+    {
+      "name": "Tagret",
+      "abbreviation": null,
+      "x": 163,
+      "y": 0,
+      "tags": [
+        "Apocryphal",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Tagret"
+    },
+    {
+      "name": "Unnamed",
+      "abbreviation": "Unna",
+      "x": -15,
+      "y": 1,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Unnamed_n15_1"
+    },
+    {
+      "name": "Unnamed",
+      "abbreviation": "Unn2",
+      "x": -14,
+      "y": 1,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Unnamed_n14_1"
+    },
+    {
+      "name": "Alila",
+      "abbreviation": "Alil",
+      "x": -13,
+      "y": 1,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Alila"
+    },
+    {
+      "name": "Gudala",
+      "abbreviation": "Guda",
+      "x": -12,
+      "y": 1,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Gudala"
+    },
+    {
+      "name": "Giskakii",
+      "abbreviation": "Gisk",
+      "x": -11,
+      "y": 1,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Giskakii"
+    },
+    {
+      "name": "Incognita Ulterior",
+      "abbreviation": "Inco",
+      "x": -10,
+      "y": 1,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Incognita_Ulterior"
+    },
+    {
+      "name": "Mavuzog",
+      "abbreviation": "Mavu",
+      "x": -9,
+      "y": 1,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Mavuzog"
+    },
+    {
+      "name": "Theta Borealis",
+      "abbreviation": "Thet",
+      "x": -8,
+      "y": 1,
+      "tags": [
+        "InReview",
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Theta_Borealis"
+    },
+    {
+      "name": "Theron",
+      "abbreviation": "Ther",
+      "x": -7,
+      "y": 1,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Theron"
+    },
+    {
+      "name": "Iphigenaia",
+      "abbreviation": "Iphi",
+      "x": -6,
+      "y": 1,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Iphigenaia"
+    },
+    {
+      "name": "Touchstone",
+      "abbreviation": "Touc",
+      "x": -5,
+      "y": 1,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Touchstone"
+    },
+    {
+      "name": "Riftspan Reaches",
+      "abbreviation": "Rift",
+      "x": -4,
+      "y": 1,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Riftspan_Reaches"
+    },
+    {
+      "name": "Verge",
+      "abbreviation": "Verg",
+      "x": -3,
+      "y": 1,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Verge"
+    },
+    {
+      "name": "Ilelish",
+      "abbreviation": "Ilel",
+      "x": -2,
+      "y": 1,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Ilelish"
+    },
+    {
+      "name": "Zarushagar",
+      "abbreviation": "Zaru",
+      "x": -1,
+      "y": 1,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Zarushagar"
+    },
+    {
+      "name": "Massilia",
+      "abbreviation": "Mass",
+      "x": 0,
+      "y": 1,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Massilia"
+    },
+    {
+      "name": "Delphi",
+      "abbreviation": "Delp",
+      "x": 1,
+      "y": 1,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Delphi"
+    },
+    {
+      "name": "Glimmerdrift Reaches",
+      "abbreviation": "Glim",
+      "x": 2,
+      "y": 1,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Glimmerdrift_Reaches"
+    },
+    {
+      "name": "Crucis Margin",
+      "abbreviation": "Cruc",
+      "x": 3,
+      "y": 1,
+      "tags": [
+        "InReview",
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Crucis_Margin"
+    },
+    {
+      "name": "Numbis",
+      "abbreviation": "Numb",
+      "x": 4,
+      "y": 1,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Numbis"
+    },
+    {
+      "name": "Gzirr!k'l",
+      "abbreviation": "Gzir",
+      "x": 5,
+      "y": 1,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Gzirr_k_l"
+    },
+    {
+      "name": "K'trekreer",
+      "abbreviation": "Kxtr",
+      "x": 6,
+      "y": 1,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "K_trekreer"
+    },
+    {
+      "name": "Nuughe",
+      "abbreviation": "Nuug",
+      "x": 7,
+      "y": 1,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Nuughe"
+    },
+    {
+      "name": "Glimmerdrift Reaches (Judges Guild)",
+      "abbreviation": "JGGR",
+      "x": 160,
+      "y": 1,
+      "tags": [
+        "Apocryphal",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Glimmerdrift_Reaches_Judges_Guild"
+    },
+    {
+      "name": "Crucis Margin (Judges Guild)",
+      "abbreviation": "JGCM",
+      "x": 161,
+      "y": 1,
+      "tags": [
+        "Apocryphal",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Crucis_Margin_Judges_Guild"
+    },
+    {
+      "name": "Coreward Shore",
+      "abbreviation": "Cor2",
+      "x": -21,
+      "y": 2,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Coreward_Shore"
+    },
+    {
+      "name": "Greenwald's Beach",
+      "abbreviation": "Gree",
+      "x": -20,
+      "y": 2,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Greenwald_s_Beach"
+    },
+    {
+      "name": "Narrow Transit",
+      "abbreviation": "Narr",
+      "x": -19,
+      "y": 2,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Narrow_Transit"
+    },
+    {
+      "name": "Sisyphus Ulterior",
+      "abbreviation": "Sisy",
+      "x": -18,
+      "y": 2,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Sisyphus_Ulterior"
+    },
+    {
+      "name": "Pytheus Interior",
+      "abbreviation": "Pyth",
+      "x": -17,
+      "y": 2,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Pytheus_Interior"
+    },
+    {
+      "name": "Idirda",
+      "abbreviation": "Idir",
+      "x": -16,
+      "y": 2,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Idirda"
+    },
+    {
+      "name": "Kaalin Ulterior",
+      "abbreviation": "Kaal",
+      "x": -15,
+      "y": 2,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Kaalin_Ulterior"
+    },
+    {
+      "name": "Unnamed",
+      "abbreviation": "Unn3",
+      "x": -14,
+      "y": 2,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Unnamed_n14_2"
+    },
+    {
+      "name": "Near Side of Yonder",
+      "abbreviation": "Near",
+      "x": -13,
+      "y": 2,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Near_Side_of_Yonder"
+    },
+    {
+      "name": "Deepnight",
+      "abbreviation": "Deep",
+      "x": -12,
+      "y": 2,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Deepnight"
+    },
+    {
+      "name": "Vilaakasii",
+      "abbreviation": "Vila",
+      "x": -11,
+      "y": 2,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Vilaakasii"
+    },
+    {
+      "name": "Incognita Citerior",
+      "abbreviation": "Inc2",
+      "x": -10,
+      "y": 2,
+      "tags": [
+        "OTU",
+        "Unreviewed"
+      ],
+      "canonical": true,
+      "slug": "Incognita_Citerior"
+    },
+    {
+      "name": "Harea",
+      "abbreviation": "Hare",
+      "x": -9,
+      "y": 2,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Harea"
+    },
+    {
+      "name": "Khaeaw",
+      "abbreviation": "Khae",
+      "x": -8,
+      "y": 2,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Khaeaw"
+    },
+    {
+      "name": "Faoheiroi'iyhao",
+      "abbreviation": "Faoh",
+      "x": -7,
+      "y": 2,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Faoheiroi_iyhao"
+    },
+    {
+      "name": "Ftaoiyekyu",
+      "abbreviation": "Ftao",
+      "x": -6,
+      "y": 2,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Ftaoiyekyu"
+    },
+    {
+      "name": "Afawahisa",
+      "abbreviation": "Afaw",
+      "x": -5,
+      "y": 2,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Afawahisa"
+    },
+    {
+      "name": "Hlakhoi",
+      "abbreviation": "Hlak",
+      "x": -4,
+      "y": 2,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Hlakhoi"
+    },
+    {
+      "name": "Ealiyasiyw",
+      "abbreviation": "Eali",
+      "x": -3,
+      "y": 2,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Ealiyasiyw"
+    },
+    {
+      "name": "Reaver's Deep",
+      "abbreviation": "Reav",
+      "x": -2,
+      "y": 2,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Reaver_s_Deep"
+    },
+    {
+      "name": "Daibei",
+      "abbreviation": "Daib",
+      "x": -1,
+      "y": 2,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Daibei"
+    },
+    {
+      "name": "Diaspora",
+      "abbreviation": "Dias",
+      "x": 0,
+      "y": 2,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Diaspora"
+    },
+    {
+      "name": "Old Expanses",
+      "abbreviation": "Olde",
+      "x": 1,
+      "y": 2,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Old_Expanses"
+    },
+    {
+      "name": "Hinterworlds",
+      "abbreviation": "Hint",
+      "x": 2,
+      "y": 2,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Hinterworlds"
+    },
+    {
+      "name": "Leonidae",
+      "abbreviation": "Leon",
+      "x": 3,
+      "y": 2,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Leonidae"
+    },
+    {
+      "name": "Extolian",
+      "abbreviation": "Exto",
+      "x": 4,
+      "y": 2,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Extolian"
+    },
+    {
+      "name": "Ricenden",
+      "abbreviation": "Rice",
+      "x": 5,
+      "y": 2,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Ricenden"
+    },
+    {
+      "name": "Blaskon",
+      "abbreviation": "Blas",
+      "x": 6,
+      "y": 2,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Blaskon"
+    },
+    {
+      "name": "Nooq",
+      "abbreviation": "Nooq",
+      "x": 7,
+      "y": 2,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Nooq"
+    },
+    {
+      "name": "Vanguard Reaches (Don McKinney 2015)",
+      "abbreviation": "VRDM",
+      "x": 152,
+      "y": 2,
+      "tags": [
+        "Apocryphal",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Vanguard_Reaches_Don_McKinney_2015"
+    },
+    {
+      "name": "The Beyond (Don McKinney 2015)",
+      "abbreviation": "BEDM",
+      "x": 153,
+      "y": 2,
+      "tags": [
+        "Apocryphal",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "The_Beyond_Don_McKinney_2015"
+    },
+    {
+      "name": "Central Bay",
+      "abbreviation": "Cen2",
+      "x": -21,
+      "y": 3,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Central_Bay"
+    },
+    {
+      "name": "Far Shore of Yonder",
+      "abbreviation": "Fars",
+      "x": -20,
+      "y": 3,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Far_Shore_of_Yonder"
+    },
+    {
+      "name": "Colaeus",
+      "abbreviation": "Cola",
+      "x": -19,
+      "y": 3,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Colaeus"
+    },
+    {
+      "name": "Sisyphus Citerior",
+      "abbreviation": "Sis2",
+      "x": -18,
+      "y": 3,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Sisyphus_Citerior"
+    },
+    {
+      "name": "Pytheas",
+      "abbreviation": "Pyt2",
+      "x": -17,
+      "y": 3,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Pytheas"
+    },
+    {
+      "name": "Diamond Scatter",
+      "abbreviation": "Diam",
+      "x": -16,
+      "y": 3,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Diamond_Scatter"
+    },
+    {
+      "name": "Kaalin Citerior",
+      "abbreviation": "Kaa2",
+      "x": -15,
+      "y": 3,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Kaalin_Citerior"
+    },
+    {
+      "name": "Unnamed",
+      "abbreviation": "Unn4",
+      "x": -14,
+      "y": 3,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Unnamed_n14_3"
+    },
+    {
+      "name": "First Prospect",
+      "abbreviation": "Firs",
+      "x": -13,
+      "y": 3,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "First_Prospect"
+    },
+    {
+      "name": "Few Stars",
+      "abbreviation": "Fews",
+      "x": -12,
+      "y": 3,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Few_Stars"
+    },
+    {
+      "name": "No Shore",
+      "abbreviation": "Nosh",
+      "x": -11,
+      "y": 3,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "No_Shore"
+    },
+    {
+      "name": "Big Empty",
+      "abbreviation": "Bige",
+      "x": -10,
+      "y": 3,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Big_Empty"
+    },
+    {
+      "name": "Tlyasea",
+      "abbreviation": "Tlya",
+      "x": -9,
+      "y": 3,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Tlyasea"
+    },
+    {
+      "name": "Hkakhaeaw",
+      "abbreviation": "Hkak",
+      "x": -8,
+      "y": 3,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Hkakhaeaw"
+    },
+    {
+      "name": "Esai'yo",
+      "abbreviation": "Esai",
+      "x": -7,
+      "y": 3,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Esai_yo"
+    },
+    {
+      "name": "Waroatahe",
+      "abbreviation": "Waro",
+      "x": -6,
+      "y": 3,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Waroatahe"
+    },
+    {
+      "name": "Karleaya",
+      "abbreviation": "Karl",
+      "x": -5,
+      "y": 3,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Karleaya"
+    },
+    {
+      "name": "Staihaia'yo",
+      "abbreviation": "Stai",
+      "x": -4,
+      "y": 3,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Staihaia_yo"
+    },
+    {
+      "name": "Iwahfuah",
+      "abbreviation": "Iwah",
+      "x": -3,
+      "y": 3,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Iwahfuah"
+    },
+    {
+      "name": "Dark Nebula",
+      "abbreviation": "Dark",
+      "x": -2,
+      "y": 3,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Dark_Nebula"
+    },
+    {
+      "name": "Magyar",
+      "abbreviation": "Magy",
+      "x": -1,
+      "y": 3,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Magyar"
+    },
+    {
+      "name": "Solomani Rim",
+      "abbreviation": "Solo",
+      "x": 0,
+      "y": 3,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Solomani_Rim"
+    },
+    {
+      "name": "Alpha Crucis",
+      "abbreviation": "Alph",
+      "x": 1,
+      "y": 3,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Alpha_Crucis"
+    },
+    {
+      "name": "Spica",
+      "abbreviation": "Spic",
+      "x": 2,
+      "y": 3,
+      "tags": [
+        "InReview",
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Spica"
+    },
+    {
+      "name": "Phlask",
+      "abbreviation": "Phla",
+      "x": 3,
+      "y": 3,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Phlask"
+    },
+    {
+      "name": "Centrax",
+      "abbreviation": "Cent",
+      "x": 4,
+      "y": 3,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Centrax"
+    },
+    {
+      "name": "Wrenton",
+      "abbreviation": "Wren",
+      "x": 5,
+      "y": 3,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Wrenton"
+    },
+    {
+      "name": "Folgore",
+      "abbreviation": "Folg",
+      "x": 6,
+      "y": 3,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Folgore"
+    },
+    {
+      "name": "Avereguar",
+      "abbreviation": "Aver",
+      "x": 7,
+      "y": 3,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Avereguar"
+    },
+    {
+      "name": "Kolire",
+      "abbreviation": "Koli",
+      "x": 8,
+      "y": 3,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Kolire"
+    },
+    {
+      "name": "Open Rift",
+      "abbreviation": "Open",
+      "x": -21,
+      "y": 4,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Open_Rift"
+    },
+    {
+      "name": "Last Prospect",
+      "abbreviation": "Last",
+      "x": -20,
+      "y": 4,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Last_Prospect"
+    },
+    {
+      "name": "Best Prospect",
+      "abbreviation": "Best",
+      "x": -19,
+      "y": 4,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Best_Prospect"
+    },
+    {
+      "name": "No Prospect",
+      "abbreviation": "Nopr",
+      "x": -18,
+      "y": 4,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "No_Prospect"
+    },
+    {
+      "name": "Black Night",
+      "abbreviation": "Blac",
+      "x": -17,
+      "y": 4,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Black_Night"
+    },
+    {
+      "name": "Few Glimmers",
+      "abbreviation": "Fewg",
+      "x": -16,
+      "y": 4,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Few_Glimmers"
+    },
+    {
+      "name": "Just Empty",
+      "abbreviation": "Just",
+      "x": -15,
+      "y": 4,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Just_Empty"
+    },
+    {
+      "name": "Unnamed",
+      "abbreviation": "Unn5",
+      "x": -14,
+      "y": 4,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Unnamed_n14_4"
+    },
+    {
+      "name": "Unnamed",
+      "abbreviation": "Unn6",
+      "x": -13,
+      "y": 4,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Unnamed_n13_4"
+    },
+    {
+      "name": "Yahehwe",
+      "abbreviation": "Yahe",
+      "x": -8,
+      "y": 4,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Yahehwe"
+    },
+    {
+      "name": "Kefiykhta",
+      "abbreviation": "Kefi",
+      "x": -7,
+      "y": 4,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Kefiykhta"
+    },
+    {
+      "name": "Heakhafaw",
+      "abbreviation": "Heak",
+      "x": -6,
+      "y": 4,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Heakhafaw"
+    },
+    {
+      "name": "Etakhasoa",
+      "abbreviation": "Etak",
+      "x": -5,
+      "y": 4,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Etakhasoa"
+    },
+    {
+      "name": "Aktifao",
+      "abbreviation": "Akti",
+      "x": -4,
+      "y": 4,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Aktifao"
+    },
+    {
+      "name": "Uistilrao",
+      "abbreviation": "Uist",
+      "x": -3,
+      "y": 4,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Uistilrao"
+    },
+    {
+      "name": "Ustral Quadrant",
+      "abbreviation": "Ustr",
+      "x": -2,
+      "y": 4,
+      "tags": [
+        "OTU",
+        "Official"
+      ],
+      "canonical": true,
+      "slug": "Ustral_Quadrant"
+    },
+    {
+      "name": "Canopus",
+      "abbreviation": "Cano",
+      "x": -1,
+      "y": 4,
+      "tags": [
+        "InReview",
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Canopus"
+    },
+    {
+      "name": "Aldebaran",
+      "abbreviation": "Alde",
+      "x": 0,
+      "y": 4,
+      "tags": [
+        "InReview",
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Aldebaran"
+    },
+    {
+      "name": "Neworld",
+      "abbreviation": "Newo",
+      "x": 1,
+      "y": 4,
+      "tags": [
+        "InReview",
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Neworld"
+    },
+    {
+      "name": "Langere",
+      "abbreviation": "Lang",
+      "x": 2,
+      "y": 4,
+      "tags": [
+        "InReview",
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Langere"
+    },
+    {
+      "name": "Drakken",
+      "abbreviation": "Drak",
+      "x": 3,
+      "y": 4,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Drakken"
+    },
+    {
+      "name": "Lorspane",
+      "abbreviation": "Lors",
+      "x": 4,
+      "y": 4,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Lorspane"
+    },
+    {
+      "name": "Porlock",
+      "abbreviation": "Porl",
+      "x": 5,
+      "y": 4,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Porlock"
+    },
+    {
+      "name": "Kidunal",
+      "abbreviation": "Kidu",
+      "x": 6,
+      "y": 4,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Kidunal"
+    },
+    {
+      "name": "Treece",
+      "abbreviation": "Tree",
+      "x": 7,
+      "y": 4,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Treece"
+    },
+    {
+      "name": "Genfert",
+      "abbreviation": "Genf",
+      "x": 8,
+      "y": 4,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Genfert"
+    },
+    {
+      "name": "Crossing",
+      "abbreviation": "Cros",
+      "x": -19,
+      "y": 5,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Crossing"
+    },
+    {
+      "name": "Far Shore",
+      "abbreviation": "Far2",
+      "x": -18,
+      "y": 5,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Far_Shore"
+    },
+    {
+      "name": "Far Shore 2",
+      "abbreviation": "Far3",
+      "x": -17,
+      "y": 5,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Far_Shore_2"
+    },
+    {
+      "name": "Ohieraoi",
+      "abbreviation": "Ohie",
+      "x": -8,
+      "y": 5,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Ohieraoi"
+    },
+    {
+      "name": "Fahreahluis",
+      "abbreviation": "Fahr",
+      "x": -7,
+      "y": 5,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Fahreahluis"
+    },
+    {
+      "name": "Hfiywitir",
+      "abbreviation": "Hfiy",
+      "x": -6,
+      "y": 5,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Hfiywitir"
+    },
+    {
+      "name": "Irlaftalea",
+      "abbreviation": "Irla",
+      "x": -5,
+      "y": 5,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Irlaftalea"
+    },
+    {
+      "name": "Teahloarifu",
+      "abbreviation": "Teah",
+      "x": -4,
+      "y": 5,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Teahloarifu"
+    },
+    {
+      "name": "Ahkiweahi'",
+      "abbreviation": "Ahki",
+      "x": -3,
+      "y": 5,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Ahkiweahi"
+    },
+    {
+      "name": "Banners",
+      "abbreviation": "Bann",
+      "x": -2,
+      "y": 5,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Banners"
+    },
+    {
+      "name": "Hanstone",
+      "abbreviation": "Hans",
+      "x": -1,
+      "y": 5,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Hanstone"
+    },
+    {
+      "name": "Malorn",
+      "abbreviation": "Malo",
+      "x": 0,
+      "y": 5,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Malorn"
+    },
+    {
+      "name": "Hadji",
+      "abbreviation": "Hadj",
+      "x": 1,
+      "y": 5,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Hadji"
+    },
+    {
+      "name": "Storr",
+      "abbreviation": "Stor",
+      "x": 2,
+      "y": 5,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Storr"
+    },
+    {
+      "name": "Mikhail",
+      "abbreviation": "Mikh",
+      "x": 3,
+      "y": 5,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Mikhail"
+    },
+    {
+      "name": "Darret",
+      "abbreviation": "Darr",
+      "x": 4,
+      "y": 5,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Darret"
+    },
+    {
+      "name": "Ataurre",
+      "abbreviation": "Atau",
+      "x": 5,
+      "y": 5,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Ataurre"
+    },
+    {
+      "name": "Katoonah",
+      "abbreviation": "Kato",
+      "x": 6,
+      "y": 5,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Katoonah"
+    },
+    {
+      "name": "Ahriman",
+      "abbreviation": "Ahri",
+      "x": -2,
+      "y": 6,
+      "tags": [
+        "OTU",
+        "Unofficial"
+      ],
+      "canonical": false,
+      "slug": "Ahriman"
+    },
+    {
+      "name": "Amderstun",
+      "abbreviation": "Amde",
+      "x": 0,
+      "y": 6,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Amderstun"
+    },
+    {
+      "name": "RimReach",
+      "abbreviation": "Rimr",
+      "x": 1,
+      "y": 6,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "RimReach"
+    },
+    {
+      "name": "Phlange",
+      "abbreviation": "Phl2",
+      "x": 2,
+      "y": 6,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Phlange"
+    },
+    {
+      "name": "Muarne",
+      "abbreviation": "Muar",
+      "x": 5,
+      "y": 6,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Muarne"
+    },
+    {
+      "name": "Lancask",
+      "abbreviation": "Lanc",
+      "x": 6,
+      "y": 6,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Lancask"
+    },
+    {
+      "name": "Lubbock",
+      "abbreviation": "Lubb",
+      "x": -1,
+      "y": 7,
+      "tags": [
+        "OTU",
+        "Unreviewed"
+      ],
+      "canonical": true,
+      "slug": "Lubbock"
+    },
+    {
+      "name": "Ruthless Veil",
+      "abbreviation": "Ruth",
+      "x": 0,
+      "y": 7,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Ruthless_Veil"
+    },
+    {
+      "name": "Nievoak",
+      "abbreviation": null,
+      "x": 6,
+      "y": 8,
+      "tags": [
+        "OrionOB1"
+      ],
+      "canonical": false,
+      "slug": "Nievoak"
+    },
+    {
+      "name": "Kruse",
+      "abbreviation": "Krus",
+      "x": 0,
+      "y": 9,
+      "tags": [
+        "OTU",
+        "Unreviewed"
+      ],
+      "canonical": true,
+      "slug": "Kruse"
+    },
+    {
+      "name": "Alnitak",
+      "abbreviation": null,
+      "x": 6,
+      "y": 9,
+      "tags": [
+        "OrionOB1"
+      ],
+      "canonical": false,
+      "slug": "Alnitak"
+    },
+    {
+      "name": "Mintaka",
+      "abbreviation": null,
+      "x": 6,
+      "y": 10,
+      "tags": [
+        "OrionOB1"
+      ],
+      "canonical": false,
+      "slug": "Mintaka"
+    },
+    {
+      "name": "Sigma Orionis",
+      "abbreviation": null,
+      "x": 5,
+      "y": 11,
+      "tags": [
+        "OrionOB1"
+      ],
+      "canonical": false,
+      "slug": "Sigma_Orionis"
+    },
+    {
+      "name": "Pi-4 Orionis",
+      "abbreviation": null,
+      "x": 6,
+      "y": 11,
+      "tags": [
+        "OrionOB1"
+      ],
+      "canonical": false,
+      "slug": "Pi_4_Orionis"
+    },
+    {
+      "name": "Joyce's Void",
+      "abbreviation": null,
+      "x": 8,
+      "y": 12,
+      "tags": [
+        "OrionOB1"
+      ],
+      "canonical": false,
+      "slug": "Joyce_s_Void"
+    },
+    {
+      "name": "Ebollan",
+      "abbreviation": "Ebol",
+      "x": 11,
+      "y": 12,
+      "tags": [
+        "OTU"
+      ],
+      "canonical": true,
+      "slug": "Ebollan"
+    },
+    {
+      "name": "Xuanzang",
+      "abbreviation": "Xuan",
+      "x": -2,
+      "y": 15,
+      "tags": [
+        "OTU",
+        "Unreviewed"
+      ],
+      "canonical": true,
+      "slug": "Xuanzang"
+    },
+    {
+      "name": "Reikan",
+      "abbreviation": null,
+      "x": 49,
+      "y": 24,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Reikan"
+    },
+    {
+      "name": "Ulund",
+      "abbreviation": null,
+      "x": 50,
+      "y": 24,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Ulund"
+    },
+    {
+      "name": "Navarre",
+      "abbreviation": null,
+      "x": 51,
+      "y": 24,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Navarre"
+    },
+    {
+      "name": "Leiden",
+      "abbreviation": null,
+      "x": 52,
+      "y": 24,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Leiden"
+    },
+    {
+      "name": "Mageera",
+      "abbreviation": null,
+      "x": 53,
+      "y": 24,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Mageera"
+    },
+    {
+      "name": "Elysium",
+      "abbreviation": null,
+      "x": 54,
+      "y": 24,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Elysium"
+    },
+    {
+      "name": "Coraline",
+      "abbreviation": null,
+      "x": 55,
+      "y": 24,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Coraline"
+    },
+    {
+      "name": "Wraith",
+      "abbreviation": null,
+      "x": 56,
+      "y": 24,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Wraith"
+    },
+    {
+      "name": "Amarada",
+      "abbreviation": null,
+      "x": 57,
+      "y": 24,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Amarada"
+    },
+    {
+      "name": "Suluru",
+      "abbreviation": null,
+      "x": 48,
+      "y": 25,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Suluru"
+    },
+    {
+      "name": "Hirada",
+      "abbreviation": null,
+      "x": 49,
+      "y": 25,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Hirada"
+    },
+    {
+      "name": "Coro",
+      "abbreviation": null,
+      "x": 50,
+      "y": 25,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Coro"
+    },
+    {
+      "name": "Palladian",
+      "abbreviation": null,
+      "x": 51,
+      "y": 25,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Palladian"
+    },
+    {
+      "name": "Forge",
+      "abbreviation": null,
+      "x": 52,
+      "y": 25,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Forge"
+    },
+    {
+      "name": "Garadin",
+      "abbreviation": null,
+      "x": 53,
+      "y": 25,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Garadin"
+    },
+    {
+      "name": "Median",
+      "abbreviation": null,
+      "x": 54,
+      "y": 25,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Median"
+    },
+    {
+      "name": "Tirell",
+      "abbreviation": null,
+      "x": 55,
+      "y": 25,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Tirell"
+    },
+    {
+      "name": "Serenity",
+      "abbreviation": null,
+      "x": 56,
+      "y": 25,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Serenity"
+    },
+    {
+      "name": "Perfection",
+      "abbreviation": null,
+      "x": 57,
+      "y": 25,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Perfection"
+    },
+    {
+      "name": "Ledge",
+      "abbreviation": null,
+      "x": 58,
+      "y": 25,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Ledge"
+    },
+    {
+      "name": "Remoran",
+      "abbreviation": null,
+      "x": 48,
+      "y": 26,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Remoran"
+    },
+    {
+      "name": "Archos",
+      "abbreviation": null,
+      "x": 49,
+      "y": 26,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Archos"
+    },
+    {
+      "name": "Mycene",
+      "abbreviation": null,
+      "x": 50,
+      "y": 26,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Mycene"
+    },
+    {
+      "name": "Celeste",
+      "abbreviation": null,
+      "x": 51,
+      "y": 26,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Celeste"
+    },
+    {
+      "name": "Phanic",
+      "abbreviation": null,
+      "x": 52,
+      "y": 26,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Phanic"
+    },
+    {
+      "name": "Burden",
+      "abbreviation": null,
+      "x": 53,
+      "y": 26,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Burden"
+    },
+    {
+      "name": "Omicus",
+      "abbreviation": null,
+      "x": 54,
+      "y": 26,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Omicus"
+    },
+    {
+      "name": "Hollow",
+      "abbreviation": null,
+      "x": 55,
+      "y": 26,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Hollow"
+    },
+    {
+      "name": "Shandara",
+      "abbreviation": null,
+      "x": 56,
+      "y": 26,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Shandara"
+    },
+    {
+      "name": "Range",
+      "abbreviation": null,
+      "x": 57,
+      "y": 26,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Range"
+    },
+    {
+      "name": "Tarchon",
+      "abbreviation": null,
+      "x": 58,
+      "y": 26,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Tarchon"
+    },
+    {
+      "name": "Revenant",
+      "abbreviation": null,
+      "x": 59,
+      "y": 26,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Revenant"
+    },
+    {
+      "name": "Magister",
+      "abbreviation": null,
+      "x": 48,
+      "y": 27,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Magister"
+    },
+    {
+      "name": "Jontell",
+      "abbreviation": null,
+      "x": 49,
+      "y": 27,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Jontell"
+    },
+    {
+      "name": "Lucent",
+      "abbreviation": null,
+      "x": 50,
+      "y": 27,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Lucent"
+    },
+    {
+      "name": "Murian",
+      "abbreviation": null,
+      "x": 51,
+      "y": 27,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Murian"
+    },
+    {
+      "name": "Fallow",
+      "abbreviation": null,
+      "x": 52,
+      "y": 27,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Fallow"
+    },
+    {
+      "name": "Extent",
+      "abbreviation": null,
+      "x": 53,
+      "y": 27,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Extent"
+    },
+    {
+      "name": "Shadow Rift",
+      "abbreviation": null,
+      "x": 54,
+      "y": 27,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Shadow_Rift"
+    },
+    {
+      "name": "Bourne",
+      "abbreviation": null,
+      "x": 55,
+      "y": 27,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Bourne"
+    },
+    {
+      "name": "Kataran",
+      "abbreviation": null,
+      "x": 56,
+      "y": 27,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Kataran"
+    },
+    {
+      "name": "Cauldron",
+      "abbreviation": null,
+      "x": 57,
+      "y": 27,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Cauldron"
+    },
+    {
+      "name": "Kalash",
+      "abbreviation": null,
+      "x": 58,
+      "y": 27,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Kalash"
+    },
+    {
+      "name": "Turoman",
+      "abbreviation": null,
+      "x": 59,
+      "y": 27,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Turoman"
+    },
+    {
+      "name": "Lon Beon",
+      "abbreviation": null,
+      "x": 48,
+      "y": 28,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Lon_Beon"
+    },
+    {
+      "name": "Thrax",
+      "abbreviation": null,
+      "x": 49,
+      "y": 28,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Thrax"
+    },
+    {
+      "name": "Kineda",
+      "abbreviation": null,
+      "x": 50,
+      "y": 28,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Kineda"
+    },
+    {
+      "name": "Orsen",
+      "abbreviation": null,
+      "x": 51,
+      "y": 28,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Orsen"
+    },
+    {
+      "name": "Divide",
+      "abbreviation": null,
+      "x": 52,
+      "y": 28,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Divide"
+    },
+    {
+      "name": "Halcyon",
+      "abbreviation": null,
+      "x": 53,
+      "y": 28,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Halcyon"
+    },
+    {
+      "name": "Far Home",
+      "abbreviation": null,
+      "x": 54,
+      "y": 28,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Far_Home"
+    },
+    {
+      "name": "Course",
+      "abbreviation": null,
+      "x": 55,
+      "y": 28,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Course"
+    },
+    {
+      "name": "Valiance",
+      "abbreviation": null,
+      "x": 56,
+      "y": 28,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Valiance"
+    },
+    {
+      "name": "Toller",
+      "abbreviation": null,
+      "x": 57,
+      "y": 28,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Toller"
+    },
+    {
+      "name": "Palatine",
+      "abbreviation": null,
+      "x": 58,
+      "y": 28,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Palatine"
+    },
+    {
+      "name": "Argent",
+      "abbreviation": null,
+      "x": 59,
+      "y": 28,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Argent"
+    },
+    {
+      "name": "Denison",
+      "abbreviation": null,
+      "x": 48,
+      "y": 29,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Denison"
+    },
+    {
+      "name": "Wayland",
+      "abbreviation": null,
+      "x": 49,
+      "y": 29,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Wayland"
+    },
+    {
+      "name": "Quell",
+      "abbreviation": null,
+      "x": 50,
+      "y": 29,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Quell"
+    },
+    {
+      "name": "Yearn",
+      "abbreviation": null,
+      "x": 51,
+      "y": 29,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Yearn"
+    },
+    {
+      "name": "Abyss",
+      "abbreviation": null,
+      "x": 52,
+      "y": 29,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Abyss"
+    },
+    {
+      "name": "Chasm",
+      "abbreviation": null,
+      "x": 53,
+      "y": 29,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Chasm"
+    },
+    {
+      "name": "Gulf",
+      "abbreviation": null,
+      "x": 54,
+      "y": 29,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Gulf"
+    },
+    {
+      "name": "Deep",
+      "abbreviation": null,
+      "x": 55,
+      "y": 29,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Deep"
+    },
+    {
+      "name": "Stand",
+      "abbreviation": null,
+      "x": 56,
+      "y": 29,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Stand"
+    },
+    {
+      "name": "Samardin",
+      "abbreviation": null,
+      "x": 57,
+      "y": 29,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Samardin"
+    },
+    {
+      "name": "Pestilent",
+      "abbreviation": null,
+      "x": 58,
+      "y": 29,
+      "tags": [
+        "DistantFringe",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Pestilent"
+    },
+    {
+      "name": "Alte Grenzen",
+      "abbreviation": null,
+      "x": 69,
+      "y": 59,
+      "tags": [
+        "Apocryphal",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Alte_Grenzen"
+    },
+    {
+      "name": "Dark Sea",
+      "abbreviation": null,
+      "x": 70,
+      "y": 59,
+      "tags": [
+        "Faraway",
+        "Farway"
+      ],
+      "canonical": false,
+      "slug": "Dark_Sea"
+    },
+    {
+      "name": "Matzen",
+      "abbreviation": null,
+      "x": -60,
+      "y": 60,
+      "tags": [
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Matzen"
+    },
+    {
+      "name": "Varan",
+      "abbreviation": null,
+      "x": 60,
+      "y": 60,
+      "tags": [
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Varan"
+    },
+    {
+      "name": "Rigel",
+      "abbreviation": null,
+      "x": 69,
+      "y": 60,
+      "tags": [
+        "Apocryphal",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Rigel"
+    },
+    {
+      "name": "Precipice",
+      "abbreviation": null,
+      "x": 70,
+      "y": 60,
+      "tags": [
+        "Apocryphal",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Precipice"
+    },
+    {
+      "name": "Morning Star",
+      "abbreviation": null,
+      "x": 72,
+      "y": 60,
+      "tags": [
+        "Apocryphal",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Morning_Star"
+    },
+    {
+      "name": "Ares",
+      "abbreviation": null,
+      "x": 74,
+      "y": 60,
+      "tags": [
+        "Apocryphal",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Ares"
+    },
+    {
+      "name": "Anniversary",
+      "abbreviation": "Anni",
+      "x": 70,
+      "y": 61,
+      "tags": [
+        "Apocryphal",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Anniversary"
+    },
+    {
+      "name": "Nowhere",
+      "abbreviation": null,
+      "x": 72,
+      "y": 61,
+      "tags": [
+        "Apocryphal",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Nowhere"
+    },
+    {
+      "name": "Outer Reaches",
+      "abbreviation": null,
+      "x": 60,
+      "y": 62,
+      "tags": [
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Outer_Reaches"
+    },
+    {
+      "name": "Marischal",
+      "abbreviation": null,
+      "x": 70,
+      "y": 62,
+      "tags": [
+        "Apocryphal",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Marischal"
+    },
+    {
+      "name": "Meshan (North Coast Roleplaying)",
+      "abbreviation": "MNCR",
+      "x": 75,
+      "y": 68,
+      "tags": [
+        "Apocryphal",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Meshan_North_Coast_Roleplaying"
+    },
+    {
+      "name": "Odessa",
+      "abbreviation": null,
+      "x": 66,
+      "y": 69,
+      "tags": [
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Odessa"
+    },
+    {
+      "name": "Foreven (Imperium Staple)",
+      "abbreviation": null,
+      "x": 70,
+      "y": 69,
+      "tags": [
+        "Apocryphal",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Foreven_Imperium_Staple"
+    },
+    {
+      "name": "Fulani (Terra Traveller Times)",
+      "abbreviation": "FTTT",
+      "x": 68,
+      "y": 70,
+      "tags": [
+        "Apocryphal",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Fulani_Terra_Traveller_Times"
+    },
+    {
+      "name": "The Beyond (Jeff Zeitlin)",
+      "abbreviation": "JZBe",
+      "x": 70,
+      "y": 70,
+      "tags": [
+        "Alternate",
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "The_Beyond_Jeff_Zeitlin"
+    },
+    {
+      "name": "Rim Worlds",
+      "abbreviation": null,
+      "x": 74,
+      "y": 76,
+      "tags": [
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Rim_Worlds"
+    },
+    {
+      "name": "Constance",
+      "abbreviation": null,
+      "x": 74,
+      "y": 77,
+      "tags": [
+        "Faraway"
+      ],
+      "canonical": false,
+      "slug": "Constance"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "name": "@voyage/generation",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@voyage/engines": "*",
+    "@voyage/shared": "*"
+  }
+}

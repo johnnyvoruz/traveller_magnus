@@ -1,0 +1,181 @@
+{
+  "audit": {
+    "checks": [
+      "[PASS] Mainworld Count: 1 detected.",
+      "[PASS] Pop Cap: Planetoid Belt pop is below Mainworld.",
+      "[PASS] TL Floor: Planetoid Belt meets environmental requirements.",
+      "[PASS] Pop Cap: Planetoid Belt pop is below Mainworld.",
+      "[PASS] Pop Cap: Terrestrial Planet pop is below Mainworld.",
+      "[PASS] TL Floor: Terrestrial Planet meets environmental requirements."
+    ],
+    "errors": [],
+    "pass": true
+  },
+  "capturedPlanets": [],
+  "gasGiant": false,
+  "hexId": "1-A-0104",
+  "hzco": null,
+  "mainworld": {
+    "atm": 0,
+    "axialTilt": 28,
+    "diamKm": 3200,
+    "distAU": 0.2,
+    "gasGiant": false,
+    "gov": 5,
+    "gravity": 0.25,
+    "hydro": 0,
+    "law": 3,
+    "mass": 0.0156,
+    "orbitalPeriod": 0.22792115291927592,
+    "pop": 5,
+    "rotationPeriod": "27h",
+    "size": 2,
+    "starport": "D",
+    "temperature": 222,
+    "tl": 8,
+    "tradeCodes": [
+      "Ni",
+      "Va"
+    ],
+    "type": "Mainworld",
+    "uwp": "D200553-8"
+  },
+  "nature": "Binary",
+  "orbits": [
+    {
+      "contents": {
+        "atm": 0,
+        "axialTilt": 28,
+        "diamKm": 3200,
+        "distAU": 0.2,
+        "gasGiant": false,
+        "gov": 5,
+        "gravity": 0.25,
+        "hydro": 0,
+        "law": 3,
+        "mass": 0.0156,
+        "orbitalPeriod": 0.22792115291927592,
+        "pop": 5,
+        "rotationPeriod": "27h",
+        "size": 2,
+        "starport": "D",
+        "temperature": 222,
+        "tl": 8,
+        "tradeCodes": [
+          "Ni",
+          "Va"
+        ],
+        "type": "Mainworld",
+        "uwp": "D200553-8"
+      },
+      "orbit": 0,
+      "zone": "O"
+    },
+    {
+      "contents": {
+        "diamKm": 0,
+        "distAU": 0.4,
+        "gov": 3,
+        "gravity": 0,
+        "law": 3,
+        "mass": 0,
+        "orbitalPeriod": 0.6446583712203043,
+        "pop": 4,
+        "size": 0,
+        "spaceport": "G",
+        "starport": "G",
+        "temperature": 100,
+        "tl": 7,
+        "tradeCodes": [
+          "Ni",
+          "As"
+        ],
+        "type": "Planetoid Belt",
+        "uwp": "G000433-7",
+        "uwpSecondary": "G000433-7"
+      },
+      "orbit": 1,
+      "zone": "O"
+    },
+    {
+      "contents": {
+        "diamKm": 0,
+        "distAU": 0.7,
+        "gov": 0,
+        "gravity": 0,
+        "law": 0,
+        "mass": 0,
+        "orbitalPeriod": 1.4924050144892729,
+        "pop": 0,
+        "size": 0,
+        "spaceport": "Y",
+        "starport": "Y",
+        "temperature": 100,
+        "tl": 0,
+        "type": "Planetoid Belt",
+        "uwp": "Y000000-0",
+        "uwpSecondary": "Y000000-0"
+      },
+      "orbit": 2,
+      "zone": "O"
+    },
+    {
+      "contents": {
+        "atm": 4,
+        "axialTilt": 4,
+        "diamKm": 8000,
+        "distAU": 1,
+        "gov": 3,
+        "gravity": 0.625,
+        "hydro": 3,
+        "law": 3,
+        "mass": 0.2441,
+        "orbitalPeriod": 2.548235957188128,
+        "pop": 3,
+        "rotationPeriod": "28h",
+        "size": 5,
+        "spaceport": "H",
+        "starport": "H",
+        "temperature": 103,
+        "tl": 7,
+        "tradeCodes": [
+          "Ni",
+          "Po"
+        ],
+        "type": "Terrestrial Planet",
+        "uwp": "H543333-7",
+        "uwpSecondary": "H543333-7"
+      },
+      "orbit": 3,
+      "zone": "O"
+    }
+  ],
+  "stars": [
+    {
+      "decimal": 0,
+      "diam": 0.439,
+      "luminosity": 0.011,
+      "mass": 0.154,
+      "maxOrbits": 3,
+      "name": "M0 VI",
+      "role": "Primary",
+      "size": "VI",
+      "specKey": "M0",
+      "type": "M"
+    },
+    {
+      "decimal": 5,
+      "diam": 0.01,
+      "luminosity": 1,
+      "mass": 1,
+      "maxOrbits": 1,
+      "name": "M5 D",
+      "orbit": 8,
+      "role": "Secondary",
+      "size": "D",
+      "specKey": "M5",
+      "type": "M"
+    }
+  ],
+  "state": "Complete"
+}

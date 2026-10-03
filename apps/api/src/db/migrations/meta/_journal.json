@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1791001189168,
+      "tag": "0000_hesitant_human_fly",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1791001789649,
+      "tag": "0001_cuddly_madame_hydra",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1791003733468,
+      "tag": "0002_productive_vulture",
+      "breakpoints": true
+    }
+  ]
+}
