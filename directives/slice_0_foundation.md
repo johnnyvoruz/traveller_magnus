@@ -853,8 +853,8 @@ point wrangler at the config (connected 2026-10-03, production branch `campaign`
 | Setting | Value |
 |---|---|
 | Build command | `npm ci && npm run build` |
-| Deploy command | `npx wrangler d1 migrations apply voyage --remote --config apps/api/wrangler.toml && npx wrangler deploy --config apps/api/wrangler.toml` |
-| Preview command | `npx wrangler versions upload --config apps/api/wrangler.toml` |
+| Deploy command | `npm run deploy:ci` (the root script runs the migrations then `wrangler deploy`, both with `--config apps/api/wrangler.toml`; the dashboard field wraps long commands into real line breaks, so it holds only the script name) |
+| Preview command | `npm run preview:ci` |
 
 Wrangler resolves `main`, the assets directory and `migrations_dir` relative to the config
 file, so nothing in `wrangler.toml` changes. `npm run build` at the root runs `rules:gen`, the

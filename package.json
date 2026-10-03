@@ -16,6 +16,8 @@
     "build": "npm run rules:gen && npm run names:gen && npm --workspace apps/web run build",
     "deploy": "npm run build && npm --workspace apps/api run deploy",
     "xauth": "node scripts/xauth.js",
-    "names:gen": "node scripts/gen_names_esm.js"
+    "names:gen": "node scripts/gen_names_esm.js",
+    "deploy:ci": "npx wrangler d1 migrations apply voyage --remote --config apps/api/wrangler.toml && npx wrangler deploy --config apps/api/wrangler.toml",
+    "preview:ci": "npx wrangler versions upload --config apps/api/wrangler.toml"
   }
 }
