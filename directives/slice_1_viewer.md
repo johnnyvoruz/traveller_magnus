@@ -14,7 +14,9 @@ copied from `packages/engines/src/core/hex.js` (it is already ESM and golden-tes
 | Part | What a visitor can do when it lands | Recipe |
 |---|---|---|
 | **A. Data path and map** | Open traveller.voyage, see the whole chart, drag and zoom smoothly down to one hex, see where every system is and what it is called, share the URL | below, in full |
-| **B. Chart detail and the dossier** | Read a hex like a chart (starport, world, bases, zones, routes, borders), search, select a world, read its dossier | outline, §B |
+| **B1. Chart symbols and the omnibox** | Read a hex like a chart (starport, world, bases, zones, gas giants), see routes and capital names, select a world, search from the omnibox | in full, §B1 |
+| **B2. Borders and polities** | See who owns what: borders, polity colours, regions (needs truth v3) | outline, §B |
+| **B3. The dossier and the shell** | Read a world's dossier in the one panel; rail, toasts, help, legend, design-system page | outline, §B |
 | **C. Orbit view** | Enter a system, see it in 2.5D, scrub time, line-up, planet imagery | outline, §C |
 
 ---
@@ -414,8 +416,16 @@ Above 2,400 px of rectangle width the name is still hidden. The measured widths 
 per name, so `measureText` runs once per sector, not once per frame.
 
 **Check (`tests/web/renderer.test.js`):** with a stub `measureText` that returns 12 px per
-character at 18 px, a 20-character name in a 110 px rectangle is drawn with a font size under
-18 and a measured width of at most 92.4 px; in a 40 px rectangle it is not drawn.
+character at 18 px (and scales in proportion to the font size): an **8-character** name
+(96 px at 18 px) in a 110 px rectangle is drawn once, with a font size of 18 × 92.4 / 96 =
+17.325 px and a measured width of at most 92.4 px; the same name in a 40 px rectangle is not
+drawn (it would need 6.3 px); a 20-character name (240 px) in a 110 px rectangle is not
+drawn (it would need 6.93 px); a 5-character name (60 px) in a 110 px rectangle is drawn at
+18 px unchanged.
+
+(The first version of this check used the 20-character name as the drawn example, which
+contradicts the 9 px floor. The implementer caught it and stopped; the rule stands and the
+example was wrong.)
 
 ### A1.12 Verification for part A
 
@@ -432,7 +442,275 @@ character at 18 px, a 20-character name in a 110 px rectangle is drawn with a fo
 - [ ] Report: every place the recipe could not be followed as written, and every question
       for Johnny
 
-## B. Chart detail and the dossier (outline; recipe written when part A reports)
+## B1. Chart symbols, routes, capital names, selection and the omnibox (Track W, with one Track B step)
+
+**Status:** WRITTEN 2026-10-03. Runs on truth v2 as released; no new truth version.
+**Evidence for every legacy rule below:** `legacy_map_inventory.md`. Re-read the cited legacy
+lines before implementing a step; if the code says something different from this recipe,
+stop and report.
+**Acceptance, on top of the tests:** the map stays as smooth as part A (Johnny, 2026-10-03).
+Steps B1.4, B1.5 and B1.6 each end with a frame-time note for the browser check.
+
+Legacy sizes are in legacy world units (hex size 50, one parsec = 75 units). Everything in
+this part is expressed in **parsecs**: a legacy world-unit number divided by 75. A size that
+the legacy code writes as `x / zoom` is a constant `x` screen pixels.
+
+### B1.1 Chart colours as tokens — `apps/web/src/design/tokens.css`, `apps/web/src/map/theme.ts`
+
+Add a `/* chart */` block to `:root`. The values are the legacy literals; the renderer still
+contains no colour.
+
+```css
+  --chart-world: #ffffff;        /* default world disc and chart text (renderer.js:1438, 1468) */
+  --chart-water: #46b4e8;        /* default wet-world rule (filter_engine.js:58) */
+  --chart-zone-amber: #FFBF00;   /* renderer.js:1415 */
+  --chart-zone-red: #FF0000;
+  --chart-grid: #1f2833;         /* renderer.js:1047 */
+  --chart-selected: #66fcf1;     /* inspected hex outline (renderer.js:2030) */
+  --chart-route-xboat: #016a01;  /* a route with no allegiance (core.js:137-150) */
+  --chart-route-other: #9faeb8;  /* an allegiance with no colour until truth v3 resolves stylesheets */
+```
+
+Then one token per entry of `OTU_DEFAULT_ROUTE_COLORS` (`js/otu_metadata_parser.js:33-56`),
+named `--chart-route-<code>` with the code lower-cased and spaces as hyphens
+(`--chart-route-im`, `--chart-route-core-route`), values copied exactly, named colours
+included. `readTheme` returns them as `chart` (the eight above) and
+`routeColours: Record<string, string>` keyed by the **original** code.
+
+**Check (`tests/web/theme.test.js`):** a stub style object with those properties produces a
+`routeColours` with 22 keys including `Im`, `ZhCo` and `Core Route`.
+
+### B1.2 Reading a UWP for display — `apps/web/src/map/uwp.ts` (new, pure)
+
+```ts
+export function worldIsBelt(uwp: string): boolean
+export function worldHasWater(uwp: string): boolean
+export function starport(uwp: string): string          // uwp[0] as written, '' if absent
+export function hasGasGiant(pbg: string): boolean       // third character is 1-9 or a letter
+export function baseMarks(bases: string): { naval: boolean; scout: boolean; text: string }
+```
+
+The first two are the legacy app's two default display rules and nothing more
+(`js/filter_engine.js:44-62`):
+- `worldIsBelt`: the size character (`uwp[1]`) is `0`. It decides the **shape**.
+- `worldHasWater`: the atmosphere character (`uwp[2]`) is one of `2 3 4 5 6 7 8 9 D E`
+  **and** the hydrographics character (`uwp[3]`) is one of `1 2 3 4 5 6 7 8 9 A`. It
+  decides the **colour**.
+- Any `?` in the character a rule reads makes that rule false.
+
+These are display rules copied from the legacy app, not Traveller rules. Do not add a case
+that is not in `filter_engine.js:44-62`.
+
+`baseMarks`: `naval` when the string contains `N`, `scout` when it contains `S`, `text` is
+the **whole** string when it contains any character other than `N` or `S`, else `''`
+(`js/renderer.js:1788-1815`).
+
+**Check (`tests/web/uwp.test.js`):** `A788899-C` → not a belt, water, starport `A`;
+`X000000-0` → belt, no water; `C8858??-4` → not a belt, water; `???????-?` → neither,
+starport `?`; `pbg` `703` → gas giant, `700` → none; bases `NS` → both, text `''`; `NW` →
+naval, text `NW`; `''` → nothing.
+
+### B1.3 Where each mark sits — `apps/web/src/map/glyphs.ts` (new, constants only)
+
+Offsets from the hex centre in parsecs, y down. Font sizes are in parsecs too: the drawn
+size in pixels is the constant times `ppp`, exactly as the legacy map's world-space fonts
+scale.
+
+| Constant | Value (legacy units / 75) | Legacy source |
+|---|---|---|
+| `NUMBER_Y` | -37.5 / 75, anchored centre / top | 1450 |
+| `PORT_Y` | -12 / 75, centre / bottom | 1459 |
+| `DISC_R` | 10 / 75 | 1409 |
+| `HALO_R` | 15 / 75, stroke 2.5 px, fill at 20% | 1419-1431 |
+| `UWP_Y` | +13 / 75, centre / top | 1707 |
+| `NAME_Y` | +37.5 / 75, centre / bottom | 1729 |
+| `GAS_X`, `GAS_Y`, `GAS_R` | +26 / 75, -9 / 75, 3.5 / 75 | `constants.js:229-238` |
+| ring: scale x, scale y, radius, stroke | 1.26, 0.385, 5.5 / 75, 2.5 px | same |
+| `NAVAL_X`, `NAVAL_Y`, outer, inner | -22 / 75, -9.9 / 75, 4.9 / 75, 2.205 / 75 | 1815; `constants.js:239-247` |
+| `SCOUT_X`, `SCOUT_Y`, `SCOUT_R` | -22 / 75, +6.3 / 75, 4.9 / 75 | 1788 |
+| `BASE_TEXT_X`, `BASE_TEXT_Y` | -20 / 75, 0, right / middle | 1804 |
+| `BELT_DOTS` | five circles of radius 2.5 / 75 at (-8,-2) (0,-5) (8,-2) (-5,5) (5,4), each / 75 | 1480-1483 |
+| `FONT_SMALL`, `FONT_NAME`, `FONT_PORT` | 10 / 75, 12 / 75, 18 / 75 | 1439-1441 |
+
+Naval star: six points, first point up. Scout triangle: apex at `(x, y - r)`, base corners
+at `(x ± r, y + 0.6 r)`.
+
+The hex number sits just inside the top edge of its own hex and the name just inside the
+bottom edge, with the hex outline between a name and the number of the hex below it. That
+fixes the "Hefry reads as 1910" confusion seen in part A.
+
+### B1.4 The chart layer — `apps/web/src/map/MapRenderer.ts`
+
+Replace part A's layers 3 and 6 at tier `hex`:
+
+- **`PPP_GRID` ≤ ppp < `PPP_NAMES`** (22.5 to 63.75): one filled disc of radius `DISC_R` per
+  world, `--chart-water` when `worldHasWater`, else `--chart-world`. Nothing else per hex.
+  (Legacy: `renderer.js:1308-1352`.)
+- **ppp ≥ `PPP_NAMES`**: every mark of B1.3, for every world of every loaded index in view.
+  Paint in passes, each pass one font and one fill style for the whole frame, never per
+  world: (1) zone halos, amber then red; (2) white discs; (3) blue discs; (4) belt dots,
+  white then blue; (5) gas giants and rings; (6) naval stars and scout triangles;
+  (7) hex numbers; (8) starport letters; (9) UWP lines; (10) base text; (11) names.
+  Hex numbers and UWP lines use `--font-data`; names and starport letters use `--font-text`
+  (starport bold). All chart text and marks are `--chart-world`.
+- The hex number is the four-digit `hhhh`. A world with an empty name still gets its gas
+  giant and base marks (the legacy nesting that hides them is an accident; inventory
+  finding 2).
+- The hex grid colour becomes `--chart-grid`; sector and subsector lines keep part A's
+  tokens.
+- A world whose index has not arrived keeps the overview point, as in part A.
+
+**Check (`tests/web/renderer.test.js`), with the recording context:** at ppp 80, a
+one-world index for `A788899-C`, bases `NS`, zone `A`, pbg `703`, trade codes `['Sa']`
+produces exactly one of each: amber halo, blue disc, gas giant with a ring, star, triangle,
+hex number text `1910`, starport text `A`, UWP text, name text; and no base text. The same
+world with name `''` still produces the gas giant, star and triangle. At ppp 40 it produces
+one disc and no text. `fillStyle` and `font` are each assigned at most once per pass.
+**Frame-time note for the browser check:** tier `hex` at ppp 80 over the Spinward Marches,
+dragging.
+
+### B1.5 Routes — `apps/web/src/map/route_lines.ts` (new, pure) and a renderer pass
+
+```ts
+export type RouteSegment = { x0: number; y0: number; x1: number; y1: number; colourKey: string; dash: 'solid' | 'dashed' | 'dotted' };
+export function routeSegments(index: SectorIndex): RouteSegment[]
+```
+
+For each record of `index.metadata.routes` (attributes exactly as the XML wrote them):
+- Ends: `Start` and `End` are `hhhh` in sector `(index.x + StartOffsetX, index.y +
+  StartOffsetY)` and `(index.x + EndOffsetX, index.y + EndOffsetY)`; a missing offset is 0.
+  The neighbouring sector's index is not needed, only its coordinates.
+- The line runs between the two hex centres and stops `20 / 75` parsec short of each; a
+  route whose centres are `40 / 75` parsec apart or less is dropped (`renderer.js:1143,
+  1168`).
+- `colourKey`: the record's own `Color` if it has one (prefixed `own:`), else its
+  `Allegiance` code, else `xboat`. `dash` from `Style`: `dashed`, `dotted`, anything else
+  solid (`renderer.js:745-750`). The XML `Type` is ignored, as in the legacy app.
+- Side-by-side spread: routes of one sector that share both ends are offset perpendicular
+  by `(i - (n - 1) / 2) * 5 / 75` parsec (`renderer.js:1163`). The legacy direction-bucket
+  spread for routes that share only one end is **not** carried into B1; say so in a comment.
+
+The renderer caches `routeSegments` per index (a `WeakMap` keyed by the index object) and,
+at **ppp ≥ `PPP_GRID`**, strokes them under the worlds: one path per colour and dash, width
+2 px, dashes `[8 / 75, 5 / 75]` and `[1.5 / 75, 3 / 75]` parsec. Colour: `own:` values as
+given; an allegiance found in `routeColours`; `xboat` → `--chart-route-xboat`; any other
+allegiance → `--chart-route-other`. Routes are not drawn below `PPP_GRID` in B1, because
+indexes are not loaded there; zoomed-out routes arrive with truth v3.
+
+**Check (`tests/web/route_lines.test.js`):** a route `Start 1910 End 2010` gives one segment
+whose ends are each `20 / 75` from a hex centre; `EndOffsetX: "1"` moves the far end 32
+columns; two routes with the same ends come out `5 / 75` apart; `Style="dashed"` → dashed;
+a route with `Allegiance="Im"` and no `Color` has `colourKey` `Im`.
+**Frame-time note:** the same drag as B1.4 with routes on.
+
+### B1.6 Capital names when zoomed out — `universe/far_labels.json`
+
+Import the JSON into the bundle (`resolveJsonModule`; add `server.fs.allow` for the repo
+root in `apps/web/vite.config.ts` so the dev server can read it). At tiers `galaxy` and
+`sector`, for each label whose sector is in the drawn layer and on screen: a 3 px dot in
+`--signal` at the hex centre and the `name` to its right in `--font-text`, 12 px,
+`--text-1`. Labels are tried in file order; a label whose text box overlaps one already
+placed this frame is skipped. Below ppp 1.2 draw none (a sector is under 40 px wide and
+nothing fits). The `code` and `canonical` fields in the file are ignored by the app.
+
+**Check (`tests/web/renderer.test.js`):** two labels in the same hex → one text drawn; a
+label in a sector outside the layer → none; ppp 1.0 → none.
+**Frame-time note:** the home view zoomed to ppp 3, dragging.
+
+### B1.7 Selecting a world — `MapView.vue`, `map/routes.ts` (targets), `MapRenderer`
+
+A click on a hex that holds a world (from the loaded index at tier `hex`, from the overview
+cell otherwise) selects it: `router.push('/s/<sector>/<hhhh>')` without moving the camera,
+and the renderer strokes that hex's outline in `--chart-selected`, 2.5 px
+(`renderer.js:2030-2032`). A click on an empty hex clears the selection (back to `/`,
+keeping the camera query). Opening `/s/<sector>/<hhhh>` cold selects and flies, as part A
+already does. The status line shows `Name · Sector hhhh · UWP` for the selection once its
+index has arrived. There is no panel yet; the dossier is part B3.
+
+### B1.8 Search ranking on the server — `apps/api/src/routes/truth.ts` (Track B)
+
+The legacy omnibox ranks an exact name first, then names that start with the query, then
+everything else, alphabetically within each (`js/input_init.js:497-524`). Make the API do
+the same so the top 50 are the right 50: `ORDER BY` a three-way `CASE` on `lower(ts.name)`
+against the lower-cased query (equal; then `LIKE query || '%'` with `%`, `_` and the escape
+character escaped), then `ts.name`. The `MATCH` clause and the released-only join stay.
+Gated test: with rows `Regina`, `Regis`, `Reginante` and `New Regina`, the query `regina`
+returns `Regina` first, and `reg` returns the three prefix names in alphabetical order
+before `New Regina`.
+
+### B1.9 The omnibox — `apps/web/src/search/omni.ts` (pure), `components/OmniBox.vue`
+
+Johnny, 2026-10-03: "the omnibox we had in the previous app was very important". It is a
+**field that is always visible** at the top centre of the map, as in the legacy app
+(`hex_map.html:1011-1024`, `js/input_init.js:417-570`), not a palette that has to be
+summoned. `design_reference.md` §3's "command palette" row is this component.
+
+`omni.ts`:
+
+```ts
+export type OmniResult =
+    | { kind: 'system'; name: string; detail: string; sector: string; hex: string }
+    | { kind: 'sector'; name: string; detail: string; sector: string }
+    | { kind: 'command'; name: string; detail: string; id: string };
+export function rankResults(query: string, results: OmniResult[]): OmniResult[]   // legacy order, at most 40
+export function sectorMatches(query: string, manifest: TruthManifest, layer: 'canonical' | 'all'): OmniResult[]
+export function systemResults(items: SearchItem[], manifest: TruthManifest): OmniResult[]
+```
+
+- Matching and ranking are the legacy ones: the query is trimmed, lower-cased and stripped
+  of accents; it is split on spaces and **every** word must appear; rank 0 exact name, 1
+  name starts with the query, 2 otherwise; then by name; cut at 40
+  (`input_init.js:490-526`).
+- Sources: **systems** from `GET /api/truth/search?q=&version=` (detail
+  `Sector Name hhhh · UWP`, in `--font-data`); **sectors** from the manifest, matched in the
+  browser (detail `Sector`); **commands** from the registry (B1.10), which today holds
+  "Home view" and "Account".
+- Requests: debounced by 100 ms (`input_init.js:540`), the previous request aborted with
+  `AbortController`, the last 20 queries cached in memory. An empty query shows commands
+  only. A failed request shows "Search is unavailable." in the popup's status line and keeps
+  the sector and command results.
+
+`OmniBox.vue`: a combobox with a listbox popup, the legacy ARIA shape (`role="combobox"`,
+`aria-expanded`, `aria-controls`, `aria-activedescendant`; rows `role="option"`). Arrow keys
+move, `Enter` opens the active row or the first, `Escape` closes the popup and a second
+`Escape` blurs. `/` and `Ctrl+K` focus it from anywhere on the map. Opening a system flies
+to it and selects it (B1.7); a sector fits it; a command runs. Rows: a kind badge, the name,
+the detail. Styling from tokens only: `--bg-1` field with a `--line-2` border and a
+`--signal` focus ring, popup rows hover `--surface-2`.
+
+The legacy omnibox also held the world filter pane. Filters are slice 2
+(`feature_inventory.md` K1); leave room on the right of the field and build nothing for it.
+
+**Check (`tests/web/omni.test.js`):** ranking of `Regina`, `Regis`, `New Regina` for
+`regina` and for `reg`; two words must both match; accents are ignored; the cut at 40;
+`sectorMatches('spin')` finds Spinward Marches and, on the canonical layer, no
+non-canonical sector.
+
+### B1.10 Shortcut and command registry — `apps/web/src/shell/registry.ts`
+
+```ts
+export function registerCommand(c: { id: string; name: string; keys?: string[]; run: () => void }): () => void
+export function commands(): readonly { id: string; name: string; keys?: string[]; run: () => void }[]
+export function handleKey(e: KeyboardEvent): boolean
+```
+
+One registry (manifesto, Simplicity). `MapView` registers "Home view" (`Home`) and
+"Account" (no key); `OmniBox` registers "Search" (`/`, `Ctrl+K`). `handleKey` ignores a key
+typed into an input unless that key is `Escape` or carries `Ctrl`. The generated help screen
+is part B3.
+
+### B1.11 Verification for B1
+
+- [ ] `npm test`, `npm run check`, `npm run typecheck`, `npm run build` green
+- [ ] Browser, against production: at Regina every mark of B1.3 is where the table says and
+      the name reads as belonging to its own hex; routes draw in the Spinward Marches; the
+      capital names show from the home view inward; clicking a world selects it and the URL
+      follows; the omnibox finds `Regina`, `reg`, `Spinward` and `Regina 191`
+- [ ] The three frame-time notes: no visible stutter, and the worst frame reported
+- [ ] Report: anything the legacy lines said that this recipe did not, and every question
+      for Johnny
+
+## B. What is left of part B after B1 (outline)
 
 - **Smoothness is an acceptance criterion** (Johnny, 2026-10-03: "it's so smooth, we want
   to keep that smoothness"). Part A at hex tier felt smooth on his machine with no pan cache.
@@ -445,16 +723,36 @@ character at 18 px, a 20-character name in a 110 px rectangle is drawn with a fo
   tight under the hex's top edge and the name tight under its own world symbol, following
   the legacy layout.
 
-- **Chart glyphs.** Replace the dot: starport letter, world disc, gas giant mark, base marks,
-  zone ring, allegiance tint, name styling. Every one of these is a Traveller chart
-  convention. The orchestrator reads `js/renderer.js:1032-2060` and writes down, per glyph,
-  the legacy rule, its line range and the index fields it needs, before any of it is
-  recipe. Anything the legacy rule reads that the v2 index entry does not carry is added to
-  the index by name (`data_model.md` §5), which means a new truth version: decide the full
-  list once.
-- **Stars.** 106,146 of 180,312 chart rows have no `stars` value. If the map draws stellar
-  colour, those come from the generated tree: one more index field, same new version.
-- **Routes and borders** from each index's `metadata`, batched per style.
+- **The legacy rules are written down**: `legacy_map_inventory.md` (2026-10-03). What it
+  settles:
+  - **B1, on truth v2 as released, no new version:** every per-world symbol. Hex number
+    (four digits, not the legacy slot id), starport letter, world disc (water, asteroid
+    belt, plain), travel-zone halo, UWP line, name, gas giant with the ringed variant, naval
+    star, scout triangle, other base codes as text. All of them need only `uwp`, `zone`,
+    `bases`, `tradeCodes`, `pbg` and `name`, which v2 has. Also on v2: sector and
+    subsector lines, subsector title pills, the far-zoom names from `universe/far_labels.json`,
+    and **routes** (straight segments with the legacy end gap and side-by-side spread;
+    colour from the route's own `Color`, else a built-in table by allegiance, else the
+    X-boat green).
+  - **B2, needs truth v3:** borders, polity fills, regions and their names. The legacy app
+    turns each border path into a set of hexes with a flood fill at import
+    (`js/borders.js:755-1132`); the viewer must not do that in the browser. It becomes a pure
+    function in `packages/`, proven against the legacy oracle like the engines, run by the
+    truth build, and the index gains the result (per border: name, colour, hex set or
+    outline loops) plus the three things v2 drops: stylesheet colours (resolved at build
+    time, 62 sectors have a stylesheet), the allegiance name table, and regions (206).
+    Trees do not change, so v3 reuses every object; only indexes, overview, manifest and
+    search rows are new.
+  - **Not copied from legacy:** the name-must-be-non-empty accident that hides gas giants
+    and bases; the procedural starfield; an unknown size digit (`?`) drawing as an asteroid
+    belt (it draws as the plain disc).
+  - **Things people expect on a Traveller chart that the legacy map never drew:** allegiance
+    per world, star symbols, capital or high-population name styling. None is in part B
+    unless Johnny asks; capitals are covered by the far-labels file.
+- **Colours.** The legacy symbols use literal colours (water `#46b4e8`, amber `#FFBF00`,
+  red `#FF0000`, X-boat green `#016a01`, grid `#1f2833`). Each becomes a named token in
+  `tokens.css` (`--chart-water`, `--chart-zone-amber`, ...) in the first B1 step; the
+  renderer still holds no literal colour.
 - **Selection, locator line, hover.** Click a hex → select → URL.
 - **Search** as the command palette over `GET /api/truth/search` (type-ahead exists).
 - **The one panel at three widths**, the dossier (mainworld, stellar, system tree, world map

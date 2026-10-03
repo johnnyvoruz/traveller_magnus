@@ -74,6 +74,38 @@
   --ease-in-out: cubic-bezier(.4,0,.2,1);
 
   /* elevation: no shadows; depth comes from --bg steps and hairlines */
+
+  /* chart */
+  --chart-world: #ffffff;        /* default world disc and chart text (renderer.js:1438, 1468) */
+  --chart-water: #46b4e8;        /* default wet-world rule (filter_engine.js:58) */
+  --chart-zone-amber: #FFBF00;   /* renderer.js:1415 */
+  --chart-zone-red: #FF0000;
+  --chart-grid: #1f2833;         /* renderer.js:1047 */
+  --chart-selected: #66fcf1;     /* inspected hex outline (renderer.js:2030) */
+  --chart-route-xboat: #016a01;  /* a route with no allegiance (core.js:137-150) */
+  --chart-route-other: #9faeb8;  /* an allegiance with no colour until truth v3 resolves stylesheets */
+  --chart-route-im: #048104;
+  --chart-route-socf: #048104;
+  --chart-route-zhco: lightblue;
+  --chart-route-as: yellow;
+  --chart-route-asxx: yellow;
+  --chart-route-hvfd: gray;
+  --chart-route-kk: gray;
+  --chart-route-kktw: gray;
+  --chart-route-jupr: lightgreen;
+  --chart-route-jaoz: lightblue;
+  --chart-route-jasi: lightblue;
+  --chart-route-jcok: lightblue;
+  --chart-route-jhhk: lightblue;
+  --chart-route-jlum: lightblue;
+  --chart-route-jmen: lightblue;
+  --chart-route-jpst: lightblue;
+  --chart-route-jrar: lightblue;
+  --chart-route-jukh: lightblue;
+  --chart-route-jvug: lightblue;
+  --chart-route-juhl: lightblue;
+  --chart-route-juru: lightblue;
+  --chart-route-core-route: purple;
 }
 
 body {

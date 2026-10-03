@@ -8,6 +8,12 @@ truth-local/
 # Truth-build inputs: TravellerMap chart data lives in the private bucket (inputs/<version>/), not in git. sectors.json is committed.
 universe/raw/*.tsv
 universe/raw/*.xml
+!universe/raw/Spinward_Marches.tsv
+!universe/raw/Spinward_Marches.xml
+!universe/raw/Caesillian.tsv
+!universe/raw/Caesillian.xml
+!universe/raw/Just_Empty.tsv
+!universe/raw/Just_Empty.xml
 universe/raw/_*.log
 universe/raw/.uploaded.*
 

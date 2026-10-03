@@ -19,6 +19,7 @@ Read in this order.
 | `feature_inventory.md` | every legacy feature with keep / wrap / rebuild / drop and its slice |
 | `slice_0_foundation.md` | the slice 0 recipe (legacy oracle, golden fixtures, monorepo, engines as ESM, parsers, generation package, Worker with Queues, truth v1 on the platform, CI) |
 | `slice_1_viewer.md` | the slice 1 recipe: part A (overview file, map data path, the rebuilt map renderer) in full; parts B and C as outlines |
+| `legacy_map_inventory.md` | what the legacy renderer draws, rule by rule with line references; the evidence for slice 1 part B |
 | `slice_N_*.md` | written just-in-time when slice N starts |
 
 ## Still current from before

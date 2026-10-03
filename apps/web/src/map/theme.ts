@@ -1,5 +1,23 @@
 /** Colours and fonts from tokens.css. No colour literal lives in this file. */
 
+export type ChartColours = {
+    world: string;
+    water: string;
+    zoneAmber: string;
+    zoneRed: string;
+    grid: string;
+    selected: string;
+    routeXboat: string;
+    routeOther: string;
+};
+
+/** Original allegiance codes from OTU_DEFAULT_ROUTE_COLORS. Keys of routeColours. */
+export const ROUTE_COLOUR_CODES = [
+    'Im', 'SoCf', 'ZhCo', 'As', 'AsXX', 'HvFd', 'Kk', 'KkTw', 'JuPr', 'JAOz',
+    'JAsi', 'JCoK', 'JHhk', 'JLum', 'JMen', 'JPSt', 'JRar', 'JUkh', 'JVug',
+    'JuHl', 'JuRu', 'Core Route',
+];
+
 export type MapTheme = {
     bg0: string;
     line1: string;
@@ -11,6 +29,8 @@ export type MapTheme = {
     fontDisplay: string;
     fontData: string;
     fontText: string;
+    chart: ChartColours;
+    routeColours: Record<string, string>;
 };
 
 /** Durations in seconds, read from the motion tokens. Callers own what they mean. */
@@ -18,6 +38,10 @@ export type MapMotion = { tBase: number; tSlow: number; tLong: number };
 
 function token(style: CSSStyleDeclaration, name: string): string {
     return style.getPropertyValue(name).trim();
+}
+
+function routeToken(code: string): string {
+    return '--chart-route-' + code.toLowerCase().replace(/ /g, '-');
 }
 
 function cssTime(raw: string): number {
@@ -40,7 +64,24 @@ export function readTheme(el: HTMLElement): MapTheme {
         fontDisplay: token(style, '--font-display'),
         fontData: token(style, '--font-data'),
         fontText: token(style, '--font-text'),
+        chart: {
+            world: token(style, '--chart-world'),
+            water: token(style, '--chart-water'),
+            zoneAmber: token(style, '--chart-zone-amber'),
+            zoneRed: token(style, '--chart-zone-red'),
+            grid: token(style, '--chart-grid'),
+            selected: token(style, '--chart-selected'),
+            routeXboat: token(style, '--chart-route-xboat'),
+            routeOther: token(style, '--chart-route-other'),
+        },
+        routeColours: routeColours(style),
     };
+}
+
+function routeColours(style: CSSStyleDeclaration): Record<string, string> {
+    const colours: Record<string, string> = {};
+    for (const code of ROUTE_COLOUR_CODES) colours[code] = token(style, routeToken(code));
+    return colours;
 }
 
 export function readMotion(el: HTMLElement): MapMotion {

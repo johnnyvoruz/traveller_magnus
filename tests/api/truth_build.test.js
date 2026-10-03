@@ -361,7 +361,11 @@ if (process.env.RUN_API_TESTS !== '1') {
             const versions = await fetch(`${base}/api/truth/versions`);
             const versionsBody = await versions.json();
             assert.equal(versions.status, 200, JSON.stringify(versionsBody));
-            assert.ok(versionsBody.data.some((item) => item.version === 'vtest' && item.state === 'released'));
+            const listed = versionsBody.data.find((item) => item.version === 'vtest');
+            assert.ok(listed);
+            assert.equal(listed.state, 'released');
+            assert.equal(listed.settings.generationPopMax, 20);
+            assert.deepEqual(listed.sectors, ['Fixture']);
             const absent = await fetch(`${base}/api/truth/search?q=${encodeURIComponent('Rhylanor')}&version=vtest`);
             const absentBody = await absent.json();
             assert.equal(absent.status, 200, JSON.stringify(absentBody));
@@ -503,6 +507,22 @@ if (process.env.RUN_API_TESTS !== '1') {
             assert.equal(releasedOnly.status, 200, JSON.stringify(releasedOnlyBody));
             assert.ok(releasedOnlyBody.data.items.some((item) => item.version === 'vtest' && item.name === 'Regina'));
             assert.equal(releasedOnlyBody.data.items.some((item) => item.version === 'vwide'), false);
+            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_systems WHERE version = 'vrank'"]);
+            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_versions WHERE version = 'vrank'"]);
+            runWrangler(['d1', 'execute', 'voyage', '--local', '--command',
+                "INSERT INTO truth_versions (version, engine_version, milieu, seed, settings, sectors, state, started_at, released_at, notes, manifest_hash, sectors_total, sectors_done, sectors_failed) VALUES ('vrank', '1.0.0', 'M1105', 'rank', '{}', '[]', 'released', '2026-10-03T00:00:00.000Z', '2026-10-03T00:00:00.000Z', NULL, NULL, 1, 1, '[]')"]);
+            for (const [hex, name] of [['1910', 'Regina'], ['1911', 'Regis'], ['1912', 'Reginante'], ['1913', 'New Regina']]) {
+                runWrangler(['d1', 'execute', 'voyage', '--local', '--command',
+                    `INSERT INTO truth_systems (version, sector_slug, hex, name, uwp, allegiance, zone, tree_hash, partial) VALUES ('vrank', 'Rank', '${hex}', '${name}', 'A788899-C', NULL, NULL, NULL, NULL)`]);
+            }
+            const rankedExact = await fetch(`${base}/api/truth/search?q=${encodeURIComponent('regina')}&version=vrank`);
+            const rankedExactBody = await rankedExact.json();
+            assert.equal(rankedExact.status, 200, JSON.stringify(rankedExactBody));
+            assert.equal(rankedExactBody.data.items[0].name, 'Regina');
+            const rankedPrefix = await fetch(`${base}/api/truth/search?q=${encodeURIComponent('reg')}&version=vrank`);
+            const rankedPrefixBody = await rankedPrefix.json();
+            assert.equal(rankedPrefix.status, 200, JSON.stringify(rankedPrefixBody));
+            assert.deepEqual(rankedPrefixBody.data.items.map((item) => item.name), ['Regina', 'Reginante', 'Regis', 'New Regina']);
         });
     });
 }

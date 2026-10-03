@@ -24,8 +24,8 @@ truth.get('/versions', async (c) => {
             engineVersion: row.engineVersion,
             milieu: row.milieu,
             seed: row.seed,
-            settings: row.settings,
-            sectors: row.sectors,
+            settings: JSON.parse(row.settings),
+            sectors: JSON.parse(row.sectors),
             state: row.state,
             startedAt: row.startedAt,
             releasedAt: row.releasedAt,
@@ -44,6 +44,10 @@ function ftsQuery(q: string): string | null {
     return tokens.map((token, index) => index === tokens.length - 1 ? `"${token}"*` : `"${token}"`).join(' ');
 }
 
+function likePrefix(query: string): string {
+    return `${query.toLowerCase().replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
+}
+
 truth.get('/search', async (c) => {
     const q = (c.req.query('q') ?? '').trim();
     const version = c.req.query('version') ?? '';
@@ -56,8 +60,12 @@ truth.get('/search', async (c) => {
          JOIN truth_systems ts ON ts.rowid = truth_systems_fts.rowid
          JOIN truth_versions tv ON tv.version = ts.version
          WHERE truth_systems_fts MATCH ? AND tv.state = 'released' AND (? = '' OR ts.version = ?)
-         ORDER BY rank
+         ORDER BY CASE
+             WHEN lower(ts.name) = ? THEN 0
+             WHEN lower(ts.name) LIKE ? ESCAPE '\\' THEN 1
+             ELSE 2
+         END, ts.name
          LIMIT 50`,
-    ).bind(match, version, version).all();
+    ).bind(match, version, version, q.toLowerCase(), likePrefix(q)).all();
     return ok(c, { items: result.results });
 });

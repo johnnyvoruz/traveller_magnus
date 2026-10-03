@@ -828,3 +828,90 @@ right (Regina's dot is in the hex numbered 1910, Hefry's in 1909), but each name
 above the next hex's number and reads as belonging to it. Logged for part B with smoothness
 as an explicit acceptance criterion. No pan cache is added (A1.11): smooth by eye on Johnny's
 machine, not measured in milliseconds. Still unchecked: `/account` sign-in.
+
+## 22. After the first look at the map (2026-10-03, evening)
+
+- `/account` on the local dev server answers "invalid origin" when signing in. Expected:
+  better-auth only trusts the production origin, and the dev server proxies to production.
+  **Verify sign-in on `https://traveller.voyage/account` after the push.**
+- Johnny is pushing part A1 (the map replaces the holding page at `/`).
+- **Agent A:** the A1.11b prompt (sector names fit their sector).
+- **Agent B:** a test gate. `.github/workflows/test.yml` per `slice_0_foundation.md` §13.2 plus
+  typecheck and build; the handful of chart files the tests read (`universe/raw/` is
+  gitignored) are un-ignored by exact name so a clean checkout can run `npm test`;
+  `/api/truth/versions` returns `settings` and `sectors` as JSON, not strings.
+  Decision by the orchestrator: those few chart files may be tracked. The whole chart is
+  already public on the CDN; the reason `universe/raw/` is ignored is its size (1,025 files).
+- **Orchestrator:** part B glyph inventory from `js/renderer.js:1032-2060`.
+
+## 23. Part B groundwork done (2026-10-03, late)
+
+`directives/legacy_map_inventory.md` records what `js/renderer.js` draws, rule by rule, from
+a read-only review agent's pass over the legacy code, spot-checked by the orchestrator
+(hex-number line, starport rule, default filter rules, gas giant and base constants). The
+agent's raw output file was empty afterwards, so that directive is the only copy.
+
+Conclusions, written into `slice_1_viewer.md` §B:
+- **B1 runs on truth v2:** every per-world symbol, sector and subsector lines, subsector
+  titles, far-zoom names, and routes. No new truth version.
+- **B2 needs truth v3:** borders, polity fills, regions. The border flood fill
+  (`js/borders.js:755-1132`) moves into `packages/` as a pure, oracle-tested function run by
+  the truth build; the index also gains stylesheet colours, the allegiance name table and
+  regions. Trees are unchanged, so every object is reused.
+- The legacy map never drew allegiance per world, star symbols or capital name styling.
+
+Next for the orchestrator: write the B1 recipe (tokens for chart colours first, then the
+glyph layer with the label layout fix, then routes, each measured for frame time).
+
+**2026-10-03 about 18:50Z.** Part A1 is live: `34e5373` deployed 18:41Z, `/`,
+`/s/Spinward_Marches/1910` and `/account` answer 200 and the bundle carries the map. Sign-in
+on production `/account` is still Johnny's to confirm. **Agent B's test gate is in and
+reviewed** (uncommitted): `.github/workflows/test.yml`; six chart files un-ignored by exact
+name (Spinward_Marches, Caesillian, Just_Empty, `.tsv` and `.xml`); `/api/truth/versions`
+returns `settings` and `sectors` parsed. B's gated suite 6 of 6. **`npm test` currently has
+one failure**, `a sector name scales to 84% of its rectangle...` in
+`tests/web/renderer.test.js`: that is Agent A's A1.11b work in progress, not B's. Do not push
+until A reports green; once the workflow is pushed, GitHub will run it on every push.
+
+**A1.11b: the orchestrator's check was wrong, not Agent A's code.** The example in the recipe
+(a 20-character name drawn in a 110 px rectangle) contradicted the rule's own 9 px floor; A
+implemented the rule, left the test red and stopped, which is exactly right. The recipe's
+check now uses an 8-character name for the drawn case and keeps the 20-character and 40 px
+cases as not drawn. A gets a one-step prompt to rewrite the test to the corrected check.
+
+## 24. B1 recipe written (2026-10-03, late)
+
+`slice_1_viewer.md` §B1, in full: chart colour tokens, UWP display helpers, the mark layout
+table (every number traced to a legacy line), the chart layer painted in batched passes,
+routes at hex tier, capital names from `universe/far_labels.json`, selecting a world, the
+**omnibox** (Johnny: "very important"; an always-visible field as in the legacy app, with the
+legacy matching and ranking), a small command registry, and one Track B step so the API
+ranks exact and prefix name matches first. Runs on truth v2. Part B is now three parts: B1
+(this), B2 borders and polities (needs truth v3), B3 dossier and shell.
+Deliberately left out of B1: subsector title pills, zoomed-out routes, the one-ended route
+spread, filters in the omnibox, the panel. Each is named in the recipe with where it goes.
+
+**B1.8 is in (Agent B, 2026-10-03), read and checked:** `/api/truth/search` orders exact name,
+then prefix, then the rest, alphabetically within each, with `LIKE` wildcards escaped; the
+`MATCH` clause, the released-only join and the limit are unchanged. Check and typecheck clean
+here; B reports the gated suite 6 of 6. **Not pushed.** Agent A is mid-B1 in `apps/web`, so a
+push of the whole tree now would deploy a half-built chart layer. Either wait for A's report,
+or commit only by path: `.github/`, `.gitignore`, the six `universe/raw` files,
+`apps/api/src/routes/truth.ts`, `tests/api/truth_build.test.js` and `directives/`.
+
+## 25. B1 is written; browser checks outstanding (2026-10-03, late)
+
+**Agent A reported B1.1-B1.7, B1.9, B1.10 done.** Checked here: `npm test` 72/67/5,
+`npm run check` clean with no new allowlist file, no global or literal colour in
+`apps/web/src` outside `platform/browser.ts` and `tokens.css`, 24 route colour tokens, the
+omnibox calls `fetch` bare (the part A bug cannot recur there). A followed the recipe over
+the legacy code in every case it listed, and listed each difference; all are the intended
+ones (four-digit hex numbers, marks on nameless worlds, `?` digits match no display rule).
+One clean-up A noted: the `home()` callback on the input API is now unused because the Home
+key goes through the command registry; remove it in the next web step.
+
+**Not verified (no browser for A or the orchestrator):** every mark's position at Regina,
+routes, capital names, selection and URL, the omnibox, and the three frame-time notes. The
+dev server (`VOYAGE_API=https://traveller.voyage npm run dev:web`, port 5173) is the way to
+look; it proxies search to production, which does not have B1.8's ranking until the next
+push. **Do not push `apps/web` before Johnny has looked.**

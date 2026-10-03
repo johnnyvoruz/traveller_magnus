@@ -3,12 +3,15 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { TruthManifest, TruthOverview } from '@voyage/shared';
 import { fit, flight, SHORT_HOP, toWorld, zoomAt, type Camera, type Viewport } from '../map/camera.ts';
-import { hexAt } from '../map/geometry.ts';
+import { formatHex, fromGlobal, hexAt, parseHex, SECTOR_ROWS } from '../map/geometry.ts';
 import { attachInput, type InputWhy } from '../map/input.ts';
 import { MapRenderer } from '../map/MapRenderer.ts';
 import { homeRect, targetFor } from '../map/routes.ts';
 import { readMotion, readTheme } from '../map/theme.ts';
+import { tierFor } from '../map/tiers.ts';
 import { TruthClient } from '../map/truth_client.ts';
+import OmniBox from '../components/OmniBox.vue';
+import { handleKey, registerCommand } from '../shell/registry.ts';
 import {
     cancelFrame,
     devicePixelRatio,
@@ -23,13 +26,20 @@ const route = useRoute();
 const router = useRouter();
 const canvasEl = ref<HTMLCanvasElement | null>(null);
 const status = ref('Loading the chart.');
+const versionRef = ref('');
+const manifestRef = ref<TruthManifest | null>(null);
 
 let cam: Camera = { x: 0, y: 0, ppp: 1 };
 let chart: TruthManifest | null = null;
+let overview: TruthOverview | null = null;
 let version = '';
 let overviewReady = false;
+let selected: { slug: string; hhhh: string } | null = null;
+let suppressFly = false;
 let renderer: MapRenderer | null = null;
 let detachInput: (() => void) | null = null;
+let unregisterHome: (() => void) | null = null;
+let unregisterAccount: (() => void) | null = null;
 let stopDpr: (() => void) | null = null;
 let observer: ResizeObserver | null = null;
 let raf = 0;
@@ -53,12 +63,33 @@ function viewport(): Viewport {
     return { width: el ? el.clientWidth : 0, height: el ? el.clientHeight : 0 };
 }
 
+function selectionLine(): string {
+    if (!selected || !chart || !version) return '';
+    const index = client.index(version, selected.slug);
+    if (!index) return '';
+    const row = index.hexes[selected.hhhh];
+    if (!row) return '';
+    let sectorName = selected.slug;
+    for (const sector of chart.sectors) if (sector.slug === selected.slug) sectorName = sector.name;
+    return row.name + ' · ' + sectorName + ' ' + selected.hhhh + ' · ' + row.uwp;
+}
+
 function showStatus(): void {
     if (fallbackNote) status.value = fallbackNote;
     else if (!version) status.value = 'Loading the chart.';
     else if (!overviewReady) status.value = 'Loading the overview.';
     else if (pendingIndexes.size > 0) status.value = 'Loading ' + pendingIndexes.size + ' sector indexes.';
-    else status.value = '';
+    else status.value = selectionLine();
+}
+
+function syncSelection(): void {
+    const parts = route.path.split('/').filter((part) => part.length > 0);
+    if (parts[0] === 's' && parts.length === 3) {
+        selected = { slug: decodeURIComponent(parts[1]), hhhh: decodeURIComponent(parts[2]) };
+    } else {
+        selected = null;
+    }
+    if (renderer) renderer.setSelection(selected);
 }
 
 function markDirty(): void {
@@ -163,6 +194,13 @@ function applyRoute(): void {
         return;
     }
     pendingApply = false;
+    syncSelection();
+    if (suppressFly) {
+        suppressFly = false;
+        showStatus();
+        markDirty();
+        return;
+    }
     const target = targetFor({ path: route.path }, chart);
     if (target.kind === 'unknown') {
         fallbackNote = target.message;
@@ -200,16 +238,18 @@ function onResize(): void {
 async function boot(): Promise<void> {
     try {
         version = await client.currentVersion();
+        versionRef.value = version;
         const manifestPromise = client.manifest(version);
         const overviewPromise = client.overview(version);
         const manifest = await manifestPromise;
         chart = manifest;
+        manifestRef.value = manifest;
         const empty: TruthOverview = { truthVersion: version, sectors: [] };
         if (renderer) renderer.setChart(manifest, empty, 'canonical');
         showStatus();
         applyRoute();
         markDirty();
-        const overview = await overviewPromise;
+        overview = await overviewPromise;
         overviewReady = true;
         if (renderer) renderer.setChart(manifest, overview, 'canonical');
         showStatus();
@@ -245,7 +285,26 @@ onMounted(() => {
         },
         click: (sx, sy) => {
             const world = toWorld(cam, viewport(), sx, sy);
-            hexAt(world.x, world.y);
+            const hit = hexAt(world.x, world.y);
+            const place = fromGlobal(hit.q, hit.r);
+            const hhhh = formatHex(place.col, place.row);
+            if (holdsWorld(place.sx, place.sy, hhhh)) {
+                const sector = chart ? chart.sectors.find((item) => item.x === place.sx && item.y === place.sy && item.canonical) : null;
+                if (!sector) return;
+                const path = '/s/' + encodeURIComponent(sector.slug) + '/' + hhhh;
+                if (route.path !== path) {
+                    suppressFly = true;
+                    void router.push({ path, query: route.query });
+                }
+                return;
+            }
+            if (route.path !== '/' && route.path !== '') {
+                suppressFly = true;
+                void router.push({
+                    path: '/',
+                    query: { x: cam.x.toFixed(3), y: cam.y.toFixed(3), z: cam.ppp.toFixed(3) },
+                });
+            }
         },
         home: () => {
             const rect = chart ? homeRect(chart) : null;
@@ -253,9 +312,49 @@ onMounted(() => {
             return rect && vp.width > 0 && vp.height > 0 ? fit(rect, vp, 0) : cam;
         },
     });
+    unregisterHome = registerCommand({
+        id: 'home',
+        name: 'Home view',
+        keys: ['Home'],
+        run: () => { goHome(); },
+    });
+    unregisterAccount = registerCommand({
+        id: 'account',
+        name: 'Account',
+        run: () => { void router.push('/account'); },
+    });
     el.focus();
     void boot();
 });
+
+function holdsWorld(sx: number, sy: number, hhhh: string): boolean {
+    if (!chart) return false;
+    const sector = chart.sectors.find((item) => item.x === sx && item.y === sy && item.canonical);
+    if (!sector) return false;
+    if (tierFor(cam.ppp) === 'hex' && version) {
+        const index = client.index(version, sector.slug);
+        if (index) return Object.prototype.hasOwnProperty.call(index.hexes, hhhh);
+    }
+    if (!overview) return false;
+    const cells = overview.sectors.find((item) => item.slug === sector.slug);
+    const local = parseHex(hhhh);
+    if (!cells || !local) return false;
+    return cells.cells.charAt((local.col - 1) * SECTOR_ROWS + (local.row - 1)) !== '.';
+}
+
+function goHome(): void {
+    const rect = chart ? homeRect(chart) : null;
+    const vp = viewport();
+    if (rect && vp.width > 0 && vp.height > 0) flyTo(fit(rect, vp, 0));
+    if (route.path !== '/' && route.path !== '') {
+        suppressFly = true;
+        void router.push({ path: '/' });
+    }
+}
+
+function onMapKey(event: KeyboardEvent): void {
+    handleKey(event);
+}
 
 watch(() => route.path, () => {
     sawQuery = false;
@@ -268,12 +367,15 @@ onBeforeUnmount(() => {
     if (detachInput) detachInput();
     if (stopDpr) stopDpr();
     if (observer) observer.disconnect();
+    if (unregisterHome) unregisterHome();
+    if (unregisterAccount) unregisterAccount();
 });
 </script>
 
 <template>
-  <div class="map">
+  <div class="map" @keydown="onMapKey">
     <canvas ref="canvasEl" tabindex="0"></canvas>
+    <OmniBox :version="versionRef" :manifest="manifestRef" />
     <p class="status" aria-live="polite">{{ status }}</p>
   </div>
 </template>

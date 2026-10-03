@@ -1,5 +1,5 @@
 import { cancelFrame, nextFrame, now, prefersReducedMotion } from '../platform/browser.ts';
-import { flight, panBy, SHORT_HOP, zoomAt, type Camera, type Viewport } from './camera.ts';
+import { panBy, zoomAt, type Camera, type Viewport } from './camera.ts';
 import { readMotion } from './theme.ts';
 
 /** Legacy wheel notch (js/canvas_input.js). deltaMode 0 reports about 100 CSS pixels per notch. */
@@ -11,8 +11,8 @@ const CLICK_PX = 4;
 export type InputWhy = 'drag' | 'wheel' | 'pinch' | 'key' | 'inertia';
 
 /**
- * home() is the home-view camera. The recipe's keyboard line flies there, and the
- * listed callbacks do not otherwise carry a target.
+ * home() is the home-view camera the view supplies. The Home key itself is the
+ * shell registry command, not a listener in this adapter.
  */
 export function attachInput(el: HTMLElement, api: {
     getCamera(): Camera;
@@ -54,32 +54,6 @@ export function attachInput(el: HTMLElement, api: {
         const x = (pts[0].x + pts[1].x) / 2;
         const y = (pts[0].y + pts[1].y) / 2;
         return { x, y, dist: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) };
-    }
-
-    function flyHome(): void {
-        cancelMotion();
-        const target = api.home();
-        if (prefersReducedMotion()) {
-            api.setCamera(target, 'key');
-            return;
-        }
-        const start = api.getCamera();
-        const dist = Math.hypot(target.x - start.x, target.y - start.y);
-        const motion = readMotion(el);
-        const dur = (dist <= SHORT_HOP ? motion.tSlow : motion.tLong) * 1000;
-        const t0 = now();
-        const gen = motionGen;
-        const step = () => {
-            if (gen !== motionGen) return;
-            const t = dur > 0 ? (now() - t0) / dur : 1;
-            if (t >= 1) {
-                api.setCamera(target, 'key');
-                return;
-            }
-            api.setCamera(flight(start, target, t), 'key');
-            motionFrame = nextFrame(step);
-        };
-        motionFrame = nextFrame(step);
     }
 
     function inertia(): void {
@@ -220,9 +194,6 @@ export function attachInput(el: HTMLElement, api: {
             event.preventDefault();
             cancelMotion();
             api.setCamera(zoomAt(cam, vp, midX, midY, 1 / 1.5), 'key');
-        } else if (event.key === 'Home') {
-            event.preventDefault();
-            flyHome();
         }
     }
 
