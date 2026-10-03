@@ -660,3 +660,72 @@ it stands. v1 is never released either way. Purging is Johnny's call.
 **v2 inputs:** `node tools/truth/upload_inputs.js v2` sends 1,025 files one wrangler call at a
 time (the best part of an hour); it writes only under `inputs/v2/` in the private bucket and
 can run while v1 is still building.
+
+## 18. The pivot to v2 (2026-10-03, 16:40-17:20Z): live state
+
+- **v1 abandoned at 370 of 512 sectors.** Johnny paused and purged `voyage-truth-build` at
+  16:40Z and resumed it after the deploy. `v1` stays `building` in `truth_versions` and is
+  never released; its rows, parts and objects are left in place.
+- **v2 code deployed** as `70e833c` at 16:41Z (A's format work, B's Worker changes, the
+  directive edits, `findings/`). The working tree was clean after that push.
+- **v2 inputs uploaded** by the orchestrator: 1,025 files under `inputs/v2/`, none failed.
+- **CORS on `voyage-public`** set by Johnny: `AllowedOrigins: ["*"]`, `GET`/`HEAD`,
+  `MaxAgeSeconds: 86400`. Verified: `Access-Control-Allow-Origin: *` on reads and preflight.
+  `*` because everything in that bucket is public by design and one header value is safe to
+  cache. `voyage-private` has no CORS policy and must not get one.
+- **Cache Rule** added by Johnny for `cdn.traveller.voyage` (eligible for cache; edge TTL from
+  the cache-control header, bypass if absent). Verified: an index and an extensionless object
+  go `MISS` then `HIT`; a missing file is `BYPASS`, so a 404 is never cached.
+- **v2 build started about 17:05Z** (`enqueued: 512`). Measured from the new per-slice log
+  line: 2.6 s a slice (v1: 12 s), every outcome `ok`, about 63 slices a minute, which is two
+  to three invocations at a time, not the six allowed. At 17:17Z: 41 done, none failed.
+  About 7,500 slices in all, so roughly two hours: expect completion near 19:05Z.
+- **When all 512 are `done`:** Johnny runs
+  `await (await fetch('/api/admin/truth/release/v2', { method: 'POST' })).json()`, then check
+  `https://cdn.traveller.voyage/truth/v2/manifest.json` and
+  `https://traveller.voyage/api/truth/search?q=Regi`. That closes slice 0; tick its
+  verification list honestly.
+- **Open after that:** the galaxy overview file and the slice 1 recipe (rebuilt renderer,
+  §16); CI and production from `main`; windowed sector feeding; why the queue does not reach
+  six concurrent invocations; replacing B's two typecheck shims (§15).
+
+## 19. Slice 1 recipe written (2026-10-03, while v2 builds)
+
+`directives/slice_1_viewer.md`: part A in full, parts B and C as outlines.
+- **A0, the overview file:** `truth/<v>/overview.json`, one 1,280-character string per sector
+  (first UWP character per occupied hex), built by `sectorOverview` in `packages/generation`
+  (Track A) and written at release (Track B). **v2 is released only after A0 is deployed**, so
+  its manifest carries `overviewHash`. The v2 build does not depend on it.
+- **A1, the map (Track W, `apps/web`):** geometry in parsecs, a pure camera, three tiers from
+  the legacy LOD constants, a truth client with a 32-index cache, the rebuilt `MapRenderer`,
+  Pointer Events input, routes with deep links. Today's holding page moves to `/account`
+  unchanged so Johnny can still sign in as admin.
+- **Measured for the recipe:** the 399 `canonical` sectors include the 167 `ZCR` ones, a single
+  column to `sy = -175`. Fitting "canonical" would open on a strip 8,822 parsecs tall, so the
+  opening view is the 233 `OTU` sectors (1,056 by 1,709 parsecs).
+- **Raised for Johnny in the recipe:** which worlds get a name when zoomed out (not in
+  `rules/`); how to show alternate sectors that share coordinates; phone and tablet layouts;
+  who takes Track W; the icon set.
+- Part B needs the orchestrator to read `js/renderer.js:1032-2060` and list every chart glyph
+  rule and the index fields it needs **before** the next truth version, so the index is
+  extended once.
+
+**A0.1-A0.4 are in (Agent A, 2026-10-03), read and checked:** `sectorOverview`,
+`SectorOverview`/`TruthOverview`, `overviewHash` on `TruthManifest`, the local build writes
+`overview.json`; `npm test` 49/44/5, check and typecheck clean. Measured 1,406-1,415 bytes a
+sector (about 720 KB for 512). **Until Agent B does A0.5 and it is deployed, the Worker's
+release fails safely:** `TruthManifest.parse` now requires `overviewHash`, which release does
+not yet supply, so it throws before any write. Do not run the v2 release before then.
+Uncommitted: `packages/generation/src/overview.ts`, `src/index.ts`,
+`packages/shared/src/index.ts`, `schemas/truth.ts`, `tools/truth/build.js`,
+`tests/generation/overview.test.js`, `directives/slice_1_viewer.md`, `README.md`,
+`data_model.md`, this file.
+
+**A0.5 is in (Agent B, 2026-10-03), read and checked:** release reads each sector index,
+validates it, builds the overview, writes `truth/<version>/overview.json` and then the
+manifest with `overviewHash`. `npm test` 49/44/5, check and typecheck clean here; B reports
+the gated suite 6 of 6. Release is N + 8 binding calls (520 for 512 sectors) and reads the
+indexes one after another, so **the v2 release request will take up to a minute**; that is
+expected. Uncommitted with A's files: `apps/api/src/routes/admin.ts`,
+`tests/api/truth_build.test.js`. **Safe to push while v2 builds:** it touches only the release
+route. Then, when all 512 are `done`, Johnny runs the v2 release.

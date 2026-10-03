@@ -5,7 +5,7 @@ export { Settings, Milieu, GeneratePreview, GenerateRequest, GenerateSector, Tru
 export { HexSummary, Derivation, TreeEnvelope } from './schemas/hex.ts';
 export type { HexState } from './schemas/hex.ts';
 export { OverlaySector, OverlayBase, Tombstone, OverlayDoc } from './schemas/overlay.ts';
-export { SectorHex, SectorIndex, TruthManifest } from './schemas/truth.ts';
+export { SectorHex, SectorIndex, TruthManifest, SectorOverview, TruthOverview } from './schemas/truth.ts';
 export { PackageHex, PackageManifest } from './schemas/package.ts';
 export { parseT5Tab } from './parsers/t5tab.ts';
 export type { HexRow } from './parsers/t5tab.ts';

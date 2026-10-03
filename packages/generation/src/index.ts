@@ -4,6 +4,8 @@ import {
 } from '@voyage/engines';
 import { parseT5Tab, parseMetadataXml, stable, sha256Hex } from '@voyage/shared';
 
+export { sectorOverview } from './overview.ts';
+
 // One pool for the Worker and the local truth build. Trim, keep non-empty, sort.
 const namePool = [];
 for (const name of SYSTEM_NAMES) {

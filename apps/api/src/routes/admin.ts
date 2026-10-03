@@ -1,7 +1,8 @@
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { Hono } from 'hono';
-import { sha256Hex, stable, TruthBuild, TruthManifest, TruthRetry } from '@voyage/shared';
+import { sectorOverview } from '@voyage/generation';
+import { SectorIndex, sha256Hex, stable, TruthBuild, TruthManifest, TruthOverview, TruthRetry } from '@voyage/shared';
 import { originAllowed, requireRole, ulid, type AppContext } from '../auth/session';
 import { auditLog, truthVersions } from '../db/schema';
 import type { AppEnv } from '../env';
@@ -224,6 +225,19 @@ admin.post('/truth/release/:version', async (c) => {
             indexHash: item.index_hash,
         });
     }
+    const overviews = [];
+    for (const sector of sectors) {
+        const indexObject = await c.env.PUBLIC_BUCKET.get(`truth/${version}/sectors/${sector.slug}/index.json`);
+        if (!indexObject) return fail(c, 409, 'conflict', `No sector index for ${sector.slug}.`, { slug: sector.slug });
+        const index = SectorIndex.parse(JSON.parse(await indexObject.text()));
+        overviews.push(sectorOverview(index));
+    }
+    const overview = TruthOverview.parse({ truthVersion: version, sectors: overviews });
+    const overviewBody = stable(overview);
+    const overviewHash = await sha256Hex(overviewBody);
+    await c.env.PUBLIC_BUCKET.put(`truth/${version}/overview.json`, overviewBody, {
+        httpMetadata: { contentType: 'application/json', cacheControl: 'public, max-age=31536000, immutable' },
+    });
     const releasedAt = new Date().toISOString();
     const manifest = TruthManifest.parse({
         truthVersion: version,
@@ -231,6 +245,7 @@ admin.post('/truth/release/:version', async (c) => {
         seed: row.seed,
         settings: JSON.parse(row.settings),
         engineVersion: row.engineVersion,
+        overviewHash,
         attribution: ATTRIBUTION,
         releasedAt,
         sectors,

@@ -7,7 +7,7 @@ import test from 'node:test';
 import { existsSync } from 'node:fs';
 import { TSV } from '../golden/cases.js';
 import { TRUTH_SEED, TRUTH_SETTINGS } from '../../tools/truth/settings.js';
-import { SectorIndex, TruthManifest } from '@voyage/shared';
+import { SectorIndex, TruthManifest, TruthOverview, sha256Hex } from '@voyage/shared';
 import { deadLetterConsumer } from '../../apps/api/src/jobs/dead_letter.ts';
 import { truthBuildConsumer } from '../../apps/api/src/jobs/truth_build.ts';
 import { adminCookie, runWrangler } from './session.js';
@@ -327,6 +327,19 @@ if (process.env.RUN_API_TESTS !== '1') {
             const manifestParsed = TruthManifest.safeParse(manifest);
             assert.equal(manifestParsed.success, true, JSON.stringify(manifestParsed.success ? null : manifestParsed.error.issues[0]));
             assert.equal(manifest.attribution, ATTRIBUTION);
+            const overviewFile = path.join(dir, 'overview.json');
+            runWrangler(['r2', 'object', 'get', 'voyage-public/truth/vtest/overview.json', '--file', overviewFile, '--local']);
+            const overviewText = readFileSync(overviewFile, 'utf8');
+            const overview = JSON.parse(overviewText);
+            const overviewParsed = TruthOverview.safeParse(overview);
+            assert.equal(overviewParsed.success, true, JSON.stringify(overviewParsed.success ? null : overviewParsed.error.issues[0]));
+            assert.equal(overview.sectors.length, 1);
+            assert.equal(overview.sectors[0].cells.length, 1280);
+            for (const hex of ['1910', '1911', '1912']) {
+                const at = (Number(hex.slice(0, 2)) - 1) * 40 + (Number(hex.slice(2, 4)) - 1);
+                assert.notEqual(overview.sectors[0].cells[at], '.');
+            }
+            assert.equal(manifest.overviewHash, await sha256Hex(overviewText));
             assert.equal(typeof manifest.releasedAt, 'string');
             assert.ok(manifest.releasedAt.length > 0);
             const fixture = manifest.sectors.find((item) => item.slug === 'Fixture');

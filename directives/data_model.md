@@ -146,6 +146,7 @@ Restore = snapshot the current state, then replace rows from the manifest in one
 
 ```
 truth/v<N>/manifest.json
+truth/v<N>/overview.json               one 1,280-character string per sector (from v2)
 truth/v<N>/sectors/<slug>/index.json
 objects/<hash>                         system trees, shared by every version that points at them
 ```
@@ -159,7 +160,8 @@ objects/<hash>                         system trees, shared by every version tha
   "releasedAt": "set by the release endpoint, absent from a local build so two builds hash alike",
   "sectors": [ { "slug": "Spinward_Marches", "name": "Spinward Marches", "x": -4, "y": -1,
                  "tags": ["Official", "OTU"], "canonical": true,
-                 "systems": 439, "built": 439, "partial": 0, "indexHash": "…" } ] }
+                 "systems": 439, "built": 439, "partial": 0, "indexHash": "…" } ],
+  "overviewHash": "…" }
 ```
 
 `sectors/<slug>/index.json`
@@ -173,6 +175,13 @@ objects/<hash>                         system trees, shared by every version tha
                        "partial": "partial" } },
   "metadata": { "routes": [], "borders": [], "names": {} }, "wiki": { "1910": { } } }
 ```
+
+`overview.json` (`{ truthVersion, sectors: [{ slug, name, x, y, tags, canonical, systems, cells }] }`)
+lets the map draw every system at far zoom without fetching 512 indexes. `cells` has one
+character per hex at position `(col - 1) * 40 + (row - 1)`: `.` for an empty hex, otherwise the
+first character of the chart UWP as written (a literal `.` there is stored as `?`). Measured:
+about 1.4 KB a sector, so roughly 720 KB for 512. It is written at release from the sector
+indexes by `sectorOverview` (`packages/generation`), and the manifest carries its hash.
 
 An index entry is the chart row and nothing else: the fields the map draws, each stored once.
 `stars` is the chart's Stars column as written. Truth v1 entries carried a `summary` that was a

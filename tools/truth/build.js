@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { stable, sha256Hex } from '@voyage/shared';
-import { buildSector } from '@voyage/generation';
+import { buildSector, sectorOverview } from '@voyage/generation';
 import { TRUTH_SEED, TRUTH_SETTINGS, TRUTH_MILIEU } from './settings.js';
 
 const version = process.argv[2];
@@ -36,6 +36,7 @@ let systems = 0;
 let builtTotal = 0;
 let partial = 0;
 const sectorCounts = [];
+const overviewSectors = [];
 const pinned = { seed: TRUTH_SEED, settings: TRUTH_SETTINGS, engineVersion };
 
 const only = process.env.TRUTH_SLUGS
@@ -89,13 +90,20 @@ for (const file of fs.readdirSync(rawDir).filter(name => name.endsWith('.tsv')).
             partial: sector.counts.partial,
             indexHash,
         });
+        overviewSectors.push(sectorOverview(sector.index));
         console.error(`${slug} systems=${sector.counts.systems} built=${sector.counts.built} partial=${sector.counts.partial}`);
         if (!metadataXml.includes(`Milieu="${TRUTH_MILIEU}"`)) failed.push(`${slug}: milieu is not ${TRUTH_MILIEU}`);
     } catch (err) {
+        if (typeof err.message === 'string' && err.message.startsWith('sectorOverview ')) throw err;
         failed.push(`${slug}: ${err.message}`);
         console.error(`${slug} FAILED ${err.message}`);
     }
 }
+
+const overviewJson = stable({ truthVersion: version, sectors: overviewSectors });
+const overviewHash = await sha256Hex(overviewJson);
+fs.mkdirSync(path.join(OUT, version), { recursive: true });
+fs.writeFileSync(path.join(OUT, version, 'overview.json'), overviewJson);
 
 const manifest = {
     truthVersion: version,
@@ -103,12 +111,12 @@ const manifest = {
     seed: TRUTH_SEED,
     settings: TRUTH_SETTINGS,
     engineVersion,
+    overviewHash,
     attribution: "Sector data from the Traveller Map (travellermap.com), used under Far Future Enterprises' Fair Use Policy. Traveller is a registered trademark of Far Future Enterprises.",
     sectors: sectors.map(({ slug, name, x, y, tags, canonical, systems, built, partial, indexHash }) => (
         { slug, name, x, y, tags, canonical, systems, built, partial, indexHash }
     )),
 };
-fs.mkdirSync(path.join(OUT, version), { recursive: true });
 fs.writeFileSync(path.join(OUT, version, 'manifest.json'), stable(manifest));
 
 const elapsed = Date.now() - started;

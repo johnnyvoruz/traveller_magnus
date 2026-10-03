@@ -46,6 +46,7 @@ export const TruthManifest = z.object({
     seed: z.string(),
     settings: Settings,
     engineVersion: z.string(),
+    overviewHash: z.string(),
     attribution: z.string(),
     releasedAt: z.string().optional(),
     sectors: z.array(z.object({
@@ -62,3 +63,17 @@ export const TruthManifest = z.object({
     }).strict()),
 }).strict();
 export type TruthManifest = z.infer<typeof TruthManifest>;
+
+/** data_model.md §5 overview.json: one entry per sector, one character per hex. */
+export const SectorOverview = z.object({
+    slug: z.string(), name: z.string(), x: z.number(), y: z.number(),
+    tags: z.array(z.string()), canonical: z.boolean(), systems: z.number(),
+    cells: z.string().length(1280),
+}).strict();
+export type SectorOverview = z.infer<typeof SectorOverview>;
+
+export const TruthOverview = z.object({
+    truthVersion: z.string(),
+    sectors: z.array(SectorOverview),
+}).strict();
+export type TruthOverview = z.infer<typeof TruthOverview>;
