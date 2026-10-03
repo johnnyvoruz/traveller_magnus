@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { MapRenderer } from '../../apps/web/src/map/MapRenderer.ts';
 import { DISC_R, GAS_R, HALO_R, RING_R, RING_SCALE_X, RING_SCALE_Y } from '../../apps/web/src/map/glyphs.ts';
-import { sectorRect } from '../../apps/web/src/map/geometry.ts';
+import { ROW_STEP, sectorRect } from '../../apps/web/src/map/geometry.ts';
 
 function cellsOf(hexes) {
     const cells = new Array(1280).fill('.');
@@ -206,7 +206,7 @@ test('tier hex draws discs below names and one pass of each full-detail mark', (
     assert.equal(closedLineCounts(calls).filter((count) => count === 11).length, 1);
     assert.equal(closedLineCounts(calls).filter((count) => count === 2).length, 1);
     assert.equal(styleSets(calls, 'fillStyle', theme.chart.world).length, 6);
-    assert.equal(calls.filter((call) => call[0] === 'set' && call[1] === 'font').length, 4);
+    assert.equal(calls.filter((call) => call[0] === 'set' && call[1] === 'font' && !String(call[2]).startsWith('600 ')).length, 4);
 
     calls.length = 0;
     renderer.setIndexSource(() => ({ hexes: { '1910': { ...row, name: '' } } }));
@@ -255,4 +255,21 @@ test('far labels draw one name per hex, stay inside the layer, and hide below pp
     renderer.setLabels([{ sector: 'On', hex: '0101', name: 'Alpha' }]);
     renderer.draw({ ...centreOf(0, 0), ppp: 1 });
     assert.equal(calls.filter((call) => call[0] === 'fillText').length, 0);
+});
+
+test('subsector titles name the sector from PPP_NAMES and are absent below it', () => {
+    const { canvas, calls } = recordingCanvas();
+    const renderer = new MapRenderer(canvas, theme);
+    renderer.setChart({
+        sectors: [{ slug: 'On', name: 'On Sector', x: 0, y: 0, canonical: true }],
+    }, { truthVersion: 'v2', sectors: [] }, 'canonical');
+    renderer.setIndexSource(() => ({ hexes: { '0101': { name: 'Alpha' } } }));
+    renderer.resize(240, 120, 1);
+    renderer.draw({ x: 4, y: 5 * ROW_STEP, ppp: 80 });
+    const titles = calls.filter((call) => call[0] === 'fillText' && String(call[1]).includes('On Sector') && String(call[1]).includes(' - '));
+    assert.equal(titles.length, 1);
+
+    calls.length = 0;
+    renderer.draw({ x: 4, y: 5 * ROW_STEP, ppp: 40 });
+    assert.equal(calls.filter((call) => call[0] === 'fillText' && String(call[1]).includes(' - ')).length, 0);
 });

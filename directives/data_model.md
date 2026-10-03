@@ -54,7 +54,7 @@ universes        (id PK, owner_id FK, name, slug, truth_version NULL, engine_ver
 truth_versions   (version PK, engine_version, milieu, seed, settings JSON, sectors JSON,   -- the exact build inputs
                   state ('building'|'released'|'withdrawn'), started_at, released_at NULL, notes,
                   manifest_hash NULL, sectors_total INT, sectors_done INT, sectors_failed JSON)
-truth_build_sectors (version, sector_slug, state ('building'|'done'|'failed'), systems INT, built INT, partial INT,
+truth_build_sectors (version, sector_slug, state ('queued'|'building'|'done'|'failed'), systems INT, built INT, partial INT,
                   index_hash NULL, error NULL, updated_at, PK(version, sector_slug))   -- sectors_done = COUNT(state='done')
 truth_systems    (version, sector_slug, hex, name, uwp, allegiance, zone, tree_hash NULL, partial NULL, PK(version, sector_slug, hex))
 truth_systems_fts  FTS5 virtual table over truth_systems(name, hex, uwp, sector_slug) content-synced by triggers
@@ -182,6 +182,15 @@ character per hex at position `(col - 1) * 40 + (row - 1)`: `.` for an empty hex
 first character of the chart UWP as written (a literal `.` there is stored as `?`). Measured:
 about 1.4 KB a sector, so roughly 720 KB for 512. It is written at release from the sector
 indexes by `sectorOverview` (`packages/generation`), and the manifest carries its hash.
+
+**Territories (from truth v3).** Each index carries `territories`: one entry per polity in the
+sector, `{ id, name, color, allegianceCodes, hexes }`, where `hexes` is the sorted list of
+`hhhh` the polity owns. They are computed at build time from the metadata XML's `<Border>`
+paths by `sectorTerritories` (`packages/generation/src/territories.ts`), a line-for-line port
+of the legacy flood fill that is held to the legacy code by twelve golden cases. The viewer
+draws outlines and fills from the hex lists and never runs the fill. `metadata.allegiances`
+(the XML's allegiance name table) arrives in the same version. Regions do not; they are a
+later version.
 
 An index entry is the chart row and nothing else: the fields the map draws, each stored once.
 `stars` is the chart's Stars column as written. Truth v1 entries carried a `summary` that was a

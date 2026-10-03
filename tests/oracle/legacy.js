@@ -10,7 +10,7 @@ export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 // io_manager.js is loaded only for parseT5Tab/parseXmlRouteGroups parity; macro_orchestrator.js only for
 // mgtBuildStage/_storeMgtBuild/_buildOneMgtHex parity. No renderer, no persistence, no UI files.
 export const FILES = [
-    'js/constants.js', 'js/core.js', 'js/seed_restoration.js',
+    'js/constants.js', 'js/core.js', 'js/borders.js', 'js/seed_restoration.js',
     'rules/ct_data.js', 'js/ct_constants.js', 'js/ct_stellar_engine.js', 'js/ct_physical_library.js',
     'js/ct_world_engine.js', 'js/ct_social_engine.js', 'js/ct_bottomup_generator.js',
     'js/ct_topdown_generator.js', 'js/ct_uwp_auditor.js', 'js/ct_system_driver.js',
@@ -33,7 +33,7 @@ function element() {
         classList: { add() {}, remove() {}, toggle() {}, contains() { return false; } },
         addEventListener() {}, removeEventListener() {}, appendChild(c) { return c; }, removeChild(c) { return c; },
         remove() {}, setAttribute() {}, getAttribute() { return null; }, removeAttribute() {},
-        querySelector() { return null; }, querySelectorAll() { return []; },
+        querySelector() { return element(); }, querySelectorAll() { return []; },
         getBoundingClientRect() { return { width: 0, height: 0, left: 0, top: 0, right: 0, bottom: 0 }; },
         focus() {}, blur() {}, click() {}, getContext() { return null; }
     };

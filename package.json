@@ -11,7 +11,7 @@
     "check": "node scripts/check_manifesto.js",
     "typecheck": "tsc --noEmit -p apps/api",
     "rules:gen": "node scripts/gen_rules_esm.js",
-    "truth:local": "node tools/truth/build.js v2",
+    "truth:local": "node tools/truth/build.js v3",
     "dev:web": "npm --workspace apps/web run dev",
     "dev:api": "npm --workspace apps/api run dev",
     "build": "npm run rules:gen && npm run names:gen && npm --workspace apps/web run build",

@@ -34,6 +34,17 @@ test('Spinward Marches index matches SectorIndex and stores each chart row once'
     assert.equal(parsed.systems, 439);
     assert.equal(parsed.built, 439);
     assert.equal(parsed.partial, 0);
+    assert.deepEqual(parsed.territories.map(territory => territory.hexes.length), [36, 60, 739, 52]);
+    const owned = new Set();
+    for (const territory of parsed.territories) {
+        for (const hex of territory.hexes) {
+            assert.match(hex, /^(0[1-9]|[12][0-9]|3[0-2])(0[1-9]|[1-3][0-9]|40)$/);
+            assert.equal(owned.has(hex), false, hex);
+            owned.add(hex);
+        }
+    }
+    assert.equal(owned.size, 887);
+    assert.ok(parsed.metadata.allegiances.length > 0);
     let treeBytes = 0;
     let largest = 0;
     for (const [hex, entry] of Object.entries(built.index.hexes)) {

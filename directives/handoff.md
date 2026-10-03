@@ -915,3 +915,130 @@ routes, capital names, selection and URL, the omnibox, and the three frame-time 
 dev server (`VOYAGE_API=https://traveller.voyage npm run dev:web`, port 5173) is the way to
 look; it proxies search to production, which does not have B1.8's ranking until the next
 push. **Do not push `apps/web` before Johnny has looked.**
+
+## 26. B1 is live and CI works (2026-10-03, about 19:30Z)
+
+- Johnny pushed `27383b8` ("bare metal"): the B1 chart layer and omnibox, B's test gate and
+  search ranking, the directives. Deployed 19:29Z; the live bundle is the B1 build and
+  `/api/truth/search?q=reg` returns prefix names in alphabetical order.
+- **The GitHub test workflow ran and passed** on that push (31 s). Note: `gh` in this folder
+  resolves to the upstream repository (`bartlebythecoder/traveller_magnus`); Johnny's is a
+  fork whose default branch is `campaign`. Always pass `-R johnnyvoruz/traveller_magnus`.
+- Johnny has not yet said what he saw in the browser for B1; ask before building on it.
+- **Next prompts handed over:** Agent A gets `slice_1_viewer.md` B1.12 (subsector titles,
+  and removing the unused `home()` callback). Agent B gets windowed sector feeding for the
+  v3 build (`architecture.md` §5 "Sectors are fed a few at a time"; a new `queued` state,
+  which needs a hand-written migration `0005` that rebuilds `truth_build_sectors` because
+  SQLite cannot alter a CHECK constraint).
+- **Orchestrator next:** read `js/borders.js:580-1154` and write the B2 recipe (borders and
+  polities as a pure build-time function, truth v3); then the B3 recipe (dossier and shell).
+
+## 27. B1 confirmed by Johnny; B2a recipe written (2026-10-03, late)
+
+- **B1 looks right** (Johnny's screenshot at Regina: starport letters, blue and white discs,
+  amber and red zone rings, gas giants, base marks, UWP lines, names inside their own hexes,
+  green routes, the teal selection outline, the omnibox, the status line). "Extremely
+  performant." B1's browser checks are met by eye; frame times were not measured in
+  milliseconds.
+- **Johnny wants direction, not only task status** (also saved as a memory): each report says
+  where the work sits in the plan, what a user gains, what comes next and the decisions
+  approaching.
+- **Next step chosen by Johnny: convert the legacy border code.** `slice_1_viewer.md` §B2a is
+  the recipe: a DOM stand-in so the oracle can run `importBordersFromXml`, six golden sectors
+  (Spinward Marches, Empty Quarter, Solomani Rim, Riftspan Reaches, Verge, Gvurrdon), a
+  mechanical port to `packages/generation/src/territories.ts`, and exact parity. Five more
+  metadata XML files get un-ignored for the fixtures. B2b (index carries territories, regions,
+  truth v3) and B2c (the viewer draws them) are outlines.
+- The port goes to whichever implementer is free of `packages/` conflicts: it touches
+  `packages/generation`, `packages/shared` (one parser field), `tests/golden`,
+  `tests/oracle`, `tests/generation`, `.gitignore`. Agent A is on B1.12 in `apps/web`; Agent
+  B is on windowed feeding in `apps/api`. Neither overlaps it.
+
+**B1.12 is in (Agent A, 2026-10-03), read and checked:** `map/titles.ts`, the title pass and
+the removal of `home()`; `npm test` 74/69/5 and `npm run check` clean here. A's reported test
+failure was Agent B's windowed-feeding work caught mid-edit (an import without `.ts`); it
+passes now. A listed six simplifications against the legacy titles (top inset only, plain
+subsector rectangle, fewer guarded hexes, vertically centred text); all are what the recipe
+asked for. **Unseen in a browser.** Uncommitted alongside B's unfinished work, which includes
+migration `0005`: **do not push the whole tree**; A's files are `apps/web/src/map/MapRenderer.ts`,
+`input.ts`, `titles.ts`, `views/MapView.vue`, `tests/web/renderer.test.js`,
+`tests/web/titles.test.js`. Agent A now takes B2a (the border port).
+
+**Windowed sector feeding is in (Agent B, 2026-10-03), read and checked:** migration
+`0005_truth_build_sectors_queued.sql` rebuilds the table with the `queued` state; the build
+route starts 12 sectors; `claimNext` (one `UPDATE ... RETURNING`) starts the next one after a
+finalize, after `markFailed`, and after a dead-letter that actually changed a row (so a
+sector failed by `markFailed` and then dead-lettered does not claim twice). B reports the
+gated suite 7 of 7; `npm test` 74/69/5 here. A duplicate final-slice delivery would claim one
+extra sector; harmless. Not pushed.
+
+**Assignment swap (Johnny pasted the B2a prompt to Agent B):** fine. **Agent B does B2a (the
+border port)** in `packages/`, `tests/golden`, `tests/oracle`, `tests/generation`,
+`.gitignore`. **Agent A is free** and gets a read-only inventory of the legacy world
+inspector (`js/system_inspector.js`) into `findings/legacy_inspector_inventory.md`, as
+groundwork for B3.
+
+**Johnny on the dossier (2026-10-03):** keep **everything** from the legacy inspector, with the
+design revamp (`design_reference.md`) applied. Recorded in `slice_1_viewer.md` §B. Read-only
+content lands in B3; editing controls wait for the Builder slice. B3's recipe waits on Agent
+A's inventory of `js/system_inspector.js`.
+
+## 28. B2a done and verified; B2b written (2026-10-03, late)
+
+- **B2a (Agent B): the legacy border code is ported with exact parity.**
+  `packages/generation/src/territories.ts` (488 lines), `tests/oracle/xml_dom.js`, twelve
+  golden cases over six sectors, five more metadata XML files tracked. Checked here:
+  `npm test` 102/97/5, check clean, the port references no legacy or DOM global. One oracle
+  stub changed (`element().querySelector` returns an element instead of null, so the legacy
+  `renderBorderWindow` can finish); every earlier golden case still matches its fixture.
+- **Legacy behaviour now visible, ported as it is** (decide in B2c, when it is on screen):
+  the stylesheet colour `lightblue` is not in the legacy colour table, so the Darrian
+  Confederation keeps the default red; any allegiance code starting `V`, `Kk` or `Zh` is
+  merged into one polity whatever its label; a group whose borders are all
+  `ShowLabel="false"` can end with zero hexes (Julian Protectorate in the Empty Quarter).
+- **B2b is written** (`slice_1_viewer.md`): the index gains `territories` and
+  `metadata.allegiances`; no Worker code change; truth **v3**. Regions are left for a later
+  version. Prompt handed to Johnny for Agent B.
+- Agent A wrote `findings/legacy_inspector_inventory.md` (the B3 groundwork); its report has
+  not been pasted yet.
+- **Unpushed and reviewed:** A's subsector titles, B's windowed feeding with migration `0005`,
+  B's border port, the directives. After B2b the whole tree goes out in one push.
+
+## 29. B2b in and verified; everything in the tree is ready to push (2026-10-03, late)
+
+- **B2b (Agent B):** the index carries `territories` (empty ones dropped) and
+  `metadata.allegiances`; `truth:local` builds `v3`. Checked here: `npm test` 103/98/5, check
+  and typecheck clean, `npm run build` succeeds. B reports the gated suite 7 of 7. Spinward
+  Marches index: 123,907 → 131,003 bytes.
+- **The whole working tree is reviewed and unpushed:** subsector titles (A), windowed
+  feeding with migration `0005` (B), the border port and its fixtures (B), B2b (B), the
+  inspector inventory (A, `findings/`), the directives. One push ships it all.
+- **v3 inputs:** `node tools/truth/upload_inputs.js v3` started by the orchestrator (1,025
+  files under `inputs/v3/`, about 20 minutes; resumable from its ledger).
+- **After the push:** confirm the deploy and that migration `0005` applied; when the upload
+  is done Johnny runs the build command with `version: 'v3'`; expect 12 sectors `building`
+  and 500 `queued` at the start, then steady completions; release `v3`
+  (`/api/admin/truth/release/v3`, up to a minute).
+- **Note:** `SectorIndex` now requires `territories` and `metadata.allegiances`, so the release
+  route can no longer validate a v2 index. v2 is already released, so nothing needs that.
+
+## 30. Re-plan: v3 waits, is batched, and will be derived instead of rebuilt (2026-10-03, late)
+
+- **Johnny does not want to re-run the truth for every change.** Decision
+  (`slice_1_viewer.md` §B2d): v3 is not built now. First three more truth changes are made
+  (regions; route colours resolved at build; polities in the overview), then a **derived
+  build** (B2d.4) makes v3 from v2's indexes without regenerating a tree: minutes instead of
+  an hour, allowed only when seed, settings and engine version match the source version.
+  From then on only an engine or input change needs a full build.
+- **Agent B re-ran its last prompt by accident;** the tree is intact (`npm test` 103/98/5,
+  check clean, same 23 changed files).
+- **v3 inputs are being uploaded** (457 of 1,025 at this note); harmless and wanted, since the
+  derived build reads the metadata XML from `inputs/v3/`.
+- **Nothing is pushed since `27383b8`.** The reviewed tree (titles, windowed feeding with
+  migration `0005`, the border port, B2b) can be pushed at any time; none of it starts a
+  build.
+- **Assignments:** Agent B → B2d.1 (regions port). Agent A → waits for the B3 dossier recipe,
+  which the orchestrator writes next from `findings/legacy_inspector_inventory.md` (A's
+  report received). B2c (drawing borders) moves after v3.
+- Johnny said he is losing track of who has what; every reply now ends with a three-line
+  board (A, B, Johnny).

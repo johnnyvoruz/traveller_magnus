@@ -14,6 +14,11 @@ universe/raw/*.xml
 !universe/raw/Caesillian.xml
 !universe/raw/Just_Empty.tsv
 !universe/raw/Just_Empty.xml
+!universe/raw/Empty_Quarter.xml
+!universe/raw/Solomani_Rim.xml
+!universe/raw/Riftspan_Reaches.xml
+!universe/raw/Verge.xml
+!universe/raw/Gvurrdon.xml
 universe/raw/_*.log
 universe/raw/.uploaded.*
 

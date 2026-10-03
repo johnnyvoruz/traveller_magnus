@@ -57,6 +57,7 @@ export type MetadataXml = {
     borders: Record<string, string>[];
     routes: Record<string, string>[];
     sectorLang: Record<string, string>;
+    stylesheet: string;
 };
 
 /** { routes, borders, names, allegiances } plus the sector name, coordinates and milieu. */
@@ -85,5 +86,6 @@ export function parseMetadataXml(text: string): MetadataXml {
         name, x: xText === '' ? null : Number(xText), y: yText === '' ? null : Number(yText),
         milieu: child(sector, 'DataFile')?.attrs.Milieu || '',
         names, allegiances, borders, routes, sectorLang,
+        stylesheet: child(sector, 'Stylesheet')?.text ?? '',
     };
 }

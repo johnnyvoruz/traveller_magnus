@@ -9,6 +9,7 @@ import type { AppEnv } from '../env';
 import { fail, ok } from '../http';
 
 const ATTRIBUTION = 'Sector data from the Traveller Map (travellermap.com), used under Far Future Enterprises\' Fair Use Policy. Traveller is a registered trademark of Far Future Enterprises.';
+const FEED = 12;
 
 export const admin = new Hono<AppEnv>();
 
@@ -71,11 +72,24 @@ admin.post('/truth/build', async (c) => {
     const now = new Date().toISOString();
     const sectorRows = slugs.map((slug) => c.env.DB.prepare(
         `INSERT INTO truth_build_sectors (version, sector_slug, state, systems, built, partial, index_hash, error, updated_at)
-         VALUES (?, ?, 'building', 0, 0, 0, NULL, NULL, ?)`,
+         VALUES (?, ?, 'queued', 0, 0, 0, NULL, NULL, ?)`,
     ).bind(input.version, slug, now));
     for (let i = 0; i < sectorRows.length; i += 50) await c.env.DB.batch(sectorRows.slice(i, i + 50));
+    const started = await c.env.DB.prepare(
+        `UPDATE truth_build_sectors
+         SET state = 'building', updated_at = ?
+         WHERE version = ? AND sector_slug IN (
+             SELECT sector_slug FROM truth_build_sectors
+             WHERE version = ? AND state = 'queued'
+             ORDER BY sector_slug
+             LIMIT ?
+         )
+         RETURNING sector_slug`,
+    ).bind(now, input.version, input.version, FEED).all<{ sector_slug: string }>();
     const pinned = { seed: input.seed, settings: input.settings, engineVersion: input.engineVersion };
-    const messages = slugs.map((slug) => ({ body: { version: input.version, slug, offset: 0, pinned } }));
+    const messages = started.results.map((row) => ({
+        body: { version: input.version, slug: row.sector_slug, offset: 0, pinned },
+    }));
     for (let i = 0; i < messages.length; i += 100) await c.env.TRUTH_QUEUE.sendBatch(messages.slice(i, i + 100));
     if (input.sectors === 'all') return ok(c, { version: input.version, enqueued: slugs.length }, 202);
     return ok(c, { version: input.version, sectors: slugs }, 202);
@@ -110,6 +124,7 @@ admin.get('/truth/builds/:version', async (c) => {
         sectorsTotal: row.sectorsTotal,
         sectorsDone: counts.done,
         sectorsFailed: counts.failed,
+        sectorsQueued: counts.queued,
         sectors,
     });
 });
@@ -294,14 +309,16 @@ async function progressBySlug(db: D1Database, version: string): Promise<Map<stri
     }]));
 }
 
-function countStates(progress: Map<string, SectorProgress>): { done: number; failed: number } {
+function countStates(progress: Map<string, SectorProgress>): { done: number; failed: number; queued: number } {
     let done = 0;
     let failed = 0;
+    let queued = 0;
     for (const item of progress.values()) {
         if (item.state === 'done') done += 1;
         else if (item.state === 'failed') failed += 1;
+        else if (item.state === 'queued') queued += 1;
     }
-    return { done, failed };
+    return { done, failed, queued };
 }
 
 function slugsFromCatalogue(raw: string): string[] {

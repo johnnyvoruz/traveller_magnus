@@ -4,7 +4,11 @@ import {
 } from '@voyage/engines';
 import { parseT5Tab, parseMetadataXml, stable, sha256Hex } from '@voyage/shared';
 
+import { sectorTerritories } from './territories.ts';
+
 export { sectorOverview } from './overview.ts';
+export { sectorTerritories };
+export type { BorderRecord, Territory } from './territories.ts';
 
 // One pool for the Worker and the local truth build. Trim, keep non-empty, sort.
 const namePool = [];
@@ -190,7 +194,19 @@ export function assembleSectorIndex(input: {
         built,
         partial,
         hexes: input.hexes,
-        metadata: { routes: meta?.routes ?? [], borders: meta?.borders ?? [], names: meta?.names ?? {} },
+        metadata: {
+            routes: meta?.routes ?? [],
+            borders: meta?.borders ?? [],
+            names: meta?.names ?? {},
+            allegiances: meta?.allegiances ?? [],
+        },
+        territories: meta
+            ? sectorTerritories({
+                borders: meta.borders,
+                allegiances: meta.allegiances,
+                stylesheet: meta.stylesheet,
+            }).filter(territory => territory.hexes.length > 0)
+            : [],
     };
 }
 

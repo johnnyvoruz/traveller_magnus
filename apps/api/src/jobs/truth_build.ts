@@ -58,6 +58,7 @@ async function buildSlice(env: Env, body: TruthMessage): Promise<void> {
         await env.TRUTH_QUEUE.send({ version, slug, offset: slice.nextOffset, pinned });
     } else {
         await finalize(env, version, slug);
+        await claimNext(env, version, pinned);
     }
     console.log(JSON.stringify({
         job: 'truth-build',
@@ -149,6 +150,23 @@ async function finalize(env: Env, version: string, slug: string): Promise<void> 
     await env.DB.batch(statements);
 }
 
+export async function claimNext(env: Env, version: string, pinned: Pinned): Promise<void> {
+    const claimed = await env.DB.prepare(
+        `UPDATE truth_build_sectors
+         SET state = 'building', updated_at = ?
+         WHERE version = ? AND sector_slug = (
+             SELECT sector_slug FROM truth_build_sectors
+             WHERE version = ? AND state = 'queued'
+             ORDER BY sector_slug
+             LIMIT 1
+         )
+         RETURNING sector_slug`,
+    ).bind(new Date().toISOString(), version, version).run<{ sector_slug: string }>();
+    const slug = claimed?.results?.[0]?.sector_slug;
+    if (!slug) return;
+    await env.TRUTH_QUEUE.send({ version, slug, offset: 0, pinned });
+}
+
 async function markFailed(env: Env, body: TruthMessage | undefined, err: unknown): Promise<void> {
     if (!body?.version || !body.slug) return;
     const message = err instanceof Error ? err.message : String(err);
@@ -159,6 +177,7 @@ async function markFailed(env: Env, body: TruthMessage | undefined, err: unknown
          ON CONFLICT(version, sector_slug) DO UPDATE SET
             state = 'failed', error = excluded.error, updated_at = excluded.updated_at`,
     ).bind(body.version, body.slug, message, now).run();
+    if (body.pinned) await claimNext(env, body.version, body.pinned);
 }
 
 function catalogueEntry(raw: string, slug: string): CatalogueEntry | undefined {

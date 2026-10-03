@@ -1,15 +1,17 @@
 import type { Env } from '../env';
+import { claimNext } from './truth_build.ts';
 
 const DEAD_ERROR = 'dead-lettered: the invocation died without throwing; see Workers Logs';
 
-type DeadBody = { version?: unknown; slug?: unknown; offset?: unknown };
+type Pinned = { seed: string; settings: Record<string, unknown>; engineVersion: string };
+type DeadBody = { version?: unknown; slug?: unknown; offset?: unknown; pinned?: unknown };
 
 export async function deadLetterConsumer(batch: MessageBatch, env: Env): Promise<void> {
     for (const message of batch.messages) {
         const body = message.body as DeadBody | undefined;
         if (body && typeof body.version === 'string' && typeof body.slug === 'string') {
             const now = new Date().toISOString();
-            await env.DB.prepare(
+            const written = await env.DB.prepare(
                 `INSERT INTO truth_build_sectors (version, sector_slug, state, systems, built, partial, index_hash, error, updated_at)
                  VALUES (?, ?, 'failed', 0, 0, 0, NULL, ?, ?)
                  ON CONFLICT(version, sector_slug) DO UPDATE SET
@@ -22,7 +24,31 @@ export async function deadLetterConsumer(batch: MessageBatch, env: Env): Promise
                 slug: body.slug,
                 offset: body.offset ?? null,
             }));
+            if ((written?.meta?.changes ?? 0) > 0) {
+                const pinned = readPinned(body.pinned) ?? await pinnedFromVersion(env, body.version);
+                if (pinned) await claimNext(env, body.version, pinned);
+            }
         }
         message.ack();
     }
+}
+
+function readPinned(value: unknown): Pinned | null {
+    if (!value || typeof value !== 'object') return null;
+    const pinned = value as { seed?: unknown; settings?: unknown; engineVersion?: unknown };
+    if (typeof pinned.seed !== 'string' || typeof pinned.engineVersion !== 'string') return null;
+    if (!pinned.settings || typeof pinned.settings !== 'object' || Array.isArray(pinned.settings)) return null;
+    return {
+        seed: pinned.seed,
+        settings: pinned.settings as Record<string, unknown>,
+        engineVersion: pinned.engineVersion,
+    };
+}
+
+async function pinnedFromVersion(env: Env, version: string): Promise<Pinned | null> {
+    const row = await env.DB.prepare(
+        `SELECT seed, settings, engine_version AS engineVersion FROM truth_versions WHERE version = ?`,
+    ).bind(version).first<{ seed: string; settings: string; engineVersion: string }>();
+    if (!row) return null;
+    return { seed: row.seed, settings: JSON.parse(row.settings) as Record<string, unknown>, engineVersion: row.engineVersion };
 }

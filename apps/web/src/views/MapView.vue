@@ -306,11 +306,6 @@ onMounted(() => {
                 });
             }
         },
-        home: () => {
-            const rect = chart ? homeRect(chart) : null;
-            const vp = viewport();
-            return rect && vp.width > 0 && vp.height > 0 ? fit(rect, vp, 0) : cam;
-        },
     });
     unregisterHome = registerCommand({
         id: 'home',

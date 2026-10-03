@@ -18,6 +18,12 @@ export const SectorHex = z.object({
 }).strict();
 export type SectorHex = z.infer<typeof SectorHex>;
 
+export const Territory = z.object({
+    id: z.number(), name: z.string(), color: z.string(),
+    allegianceCodes: z.array(z.string()), hexes: z.array(z.string()),
+}).strict();
+export type Territory = z.infer<typeof Territory>;
+
 /** data_model.md §5 sectors/<slug>/index.json */
 export const SectorIndex = z.object({
     slug: z.string(),
@@ -35,7 +41,9 @@ export const SectorIndex = z.object({
         routes: z.array(z.unknown()),
         borders: z.array(z.unknown()),
         names: z.record(z.string(), z.string()),
+        allegiances: z.array(z.object({ code: z.string(), name: z.string(), base: z.string().optional() }).strict()),
     }),
+    territories: z.array(Territory),
 }).strict();
 export type SectorIndex = z.infer<typeof SectorIndex>;
 

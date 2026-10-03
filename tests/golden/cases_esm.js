@@ -1,4 +1,8 @@
-import { parseT5Tab } from '@voyage/shared';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { parseT5Tab, parseMetadataXml } from '@voyage/shared';
+import { sectorTerritories } from '@voyage/generation';
 import { TRUTH_SETTINGS } from '../../tools/truth/settings.js';
 import { SYSTEM_NAMES } from '../../packages/engines/src/generated/names_data.js';
 import { loadLegacy } from '../oracle/legacy.js';
@@ -87,3 +91,18 @@ export const cases = {
     // ("1-C-1910" → "1910") before comparing. Values are not rewritten.
     parse_t5tab: () => Object.fromEntries(parseT5Tab(TSV))
 };
+
+const RAW = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../universe/raw');
+for (const slug of ['Spinward_Marches', 'Empty_Quarter', 'Solomani_Rim', 'Riftspan_Reaches', 'Verge', 'Gvurrdon']) {
+    const xml = fs.readFileSync(path.join(RAW, `${slug}.xml`), 'utf8');
+    cases[`borders_${slug}`] = () => {
+        const meta = parseMetadataXml(xml);
+        return {
+            territories: sectorTerritories({
+                borders: meta.borders,
+                allegiances: meta.allegiances,
+                stylesheet: meta.stylesheet,
+            }),
+        };
+    };
+}

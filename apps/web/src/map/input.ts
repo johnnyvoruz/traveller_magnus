@@ -10,16 +10,12 @@ const CLICK_PX = 4;
 
 export type InputWhy = 'drag' | 'wheel' | 'pinch' | 'key' | 'inertia';
 
-/**
- * home() is the home-view camera the view supplies. The Home key itself is the
- * shell registry command, not a listener in this adapter.
- */
+/** Pointer, wheel, pinch and inertia. The Home key is a shell registry command. */
 export function attachInput(el: HTMLElement, api: {
     getCamera(): Camera;
     getViewport(): Viewport;
     setCamera(cam: Camera, why: InputWhy): void;
     click(sx: number, sy: number): void;
-    home(): Camera;
 }): () => void {
     el.style.touchAction = 'none';
 

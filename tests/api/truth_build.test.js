@@ -133,7 +133,7 @@ if (process.env.RUN_API_TESTS !== '1') {
                 ack() {},
             }],
         }, finished.env);
-        assert.deepEqual(finished.calls, { get: 4, put: 3, list: 1, send: 0, batch: 1, run: 1 });
+        assert.deepEqual(finished.calls, { get: 4, put: 3, list: 1, send: 0, batch: 1, run: 2 });
     });
 
     test('dead letter marks a building sector failed and leaves done alone', async () => {
@@ -205,6 +205,86 @@ if (process.env.RUN_API_TESTS !== '1') {
         assert.equal(logged[1].slug, 'Finished');
     });
 
+    test('dead letter failure starts the next queued sector', async () => {
+        const db = new DatabaseSync(':memory:');
+        db.exec(`CREATE TABLE truth_build_sectors (
+            version text NOT NULL,
+            sector_slug text NOT NULL,
+            state text NOT NULL,
+            systems integer NOT NULL DEFAULT 0,
+            built integer NOT NULL DEFAULT 0,
+            partial integer NOT NULL DEFAULT 0,
+            index_hash text,
+            error text,
+            updated_at text NOT NULL,
+            PRIMARY KEY(version, sector_slug)
+        )`);
+        db.exec(`CREATE TABLE truth_versions (
+            version text PRIMARY KEY,
+            seed text NOT NULL,
+            settings text NOT NULL,
+            engine_version text NOT NULL
+        )`);
+        const insert = db.prepare(`INSERT INTO truth_build_sectors
+            (version, sector_slug, state, systems, built, partial, index_hash, error, updated_at)
+            VALUES (?, ?, ?, 0, 0, 0, NULL, NULL, ?)`);
+        insert.run('vdl', 'Current', 'building', '2020-01-01T00:00:00.000Z');
+        insert.run('vdl', 'Alpha', 'queued', '2020-01-01T00:00:00.000Z');
+        insert.run('vdl', 'Later', 'queued', '2020-01-01T00:00:00.000Z');
+        db.prepare(`INSERT INTO truth_versions (version, seed, settings, engine_version) VALUES ('vdl', 'from-row', '{"generationPopMax":20}', '1.0.0')`).run();
+        const sent = [];
+        const pinned = { seed: 'from-body', settings: { generationPopMax: 20 }, engineVersion: '1.0.0' };
+        const database = {
+            prepare(sql) {
+                return {
+                    bind(...args) {
+                        return {
+                            async run() {
+                                const statement = db.prepare(sql);
+                                if (/returning/i.test(sql)) {
+                                    const results = statement.all(...args);
+                                    return { results, meta: { changes: results.length } };
+                                }
+                                const info = statement.run(...args);
+                                return { results: [], meta: { changes: info.changes } };
+                            },
+                            async first() {
+                                return db.prepare(sql).get(...args);
+                            },
+                        };
+                    },
+                };
+            },
+        };
+        await deadLetterConsumer({
+            messages: [{
+                body: { version: 'vdl', slug: 'Current', offset: 0, pinned },
+                ack() {},
+            }],
+        }, { DB: database, TRUTH_QUEUE: { async send(body) { sent.push(body); } } });
+        assert.equal(db.prepare(`SELECT state FROM truth_build_sectors WHERE sector_slug = 'Current'`).get().state, 'failed');
+        assert.equal(db.prepare(`SELECT state FROM truth_build_sectors WHERE sector_slug = 'Alpha'`).get().state, 'building');
+        assert.equal(db.prepare(`SELECT state FROM truth_build_sectors WHERE sector_slug = 'Later'`).get().state, 'queued');
+        assert.equal(sent.length, 1);
+        assert.equal(sent[0].slug, 'Alpha');
+        assert.equal(sent[0].offset, 0);
+        assert.equal(sent[0].pinned.seed, 'from-body');
+        insert.run('vdl', 'Next', 'building', '2020-01-01T00:00:00.000Z');
+        await deadLetterConsumer({
+            messages: [{
+                body: { version: 'vdl', slug: 'Next', offset: 4 },
+                ack() {},
+            }],
+        }, { DB: database, TRUTH_QUEUE: { async send(body) { sent.push(body); } } });
+        assert.equal(db.prepare(`SELECT state FROM truth_build_sectors WHERE sector_slug = 'Later'`).get().state, 'building');
+        assert.equal(sent.length, 2);
+        assert.equal(sent[1].slug, 'Later');
+        assert.equal(sent[1].offset, 0);
+        assert.equal(sent[1].pinned.seed, 'from-row');
+        assert.equal(sent[1].pinned.settings.generationPopMax, 20);
+        assert.equal(sent[1].pinned.engineVersion, '1.0.0');
+    });
+
     test('truth build', { timeout: 600000 }, async () => {
         const dir = mkdtempSync(path.join(tmpdir(), 'voyage-truth-'));
         const tsv = path.join(dir, 'Fixture.tsv');
@@ -254,6 +334,8 @@ if (process.env.RUN_API_TESTS !== '1') {
             const indexFile = path.join(dir, 'index.json');
             runWrangler(['r2', 'object', 'get', 'voyage-public/truth/vtest/sectors/Fixture/index.json', '--file', indexFile, '--local']);
             const index = JSON.parse(readFileSync(indexFile, 'utf8'));
+            SectorIndex.parse(index);
+            assert.deepEqual(index.territories, []);
             assert.equal(index.name, 'Chart Fixture');
             assert.equal(index.x, 4);
             assert.equal(index.y, -1);
@@ -475,11 +557,14 @@ if (process.env.RUN_API_TESTS !== '1') {
             assert.equal(wideRecord[0].results[0].partial, 0);
             const staleAt = new Date(Date.now() - 11 * 60 * 1000).toISOString();
             const freshAt = new Date().toISOString();
-            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_build_sectors WHERE version = 'vwide' AND sector_slug IN ('Stale', 'Fresh')"]);
+            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_build_sectors WHERE version = 'vwide' AND sector_slug IN ('Stale', 'Fresh', 'Queued')"]);
             runWrangler(['d1', 'execute', 'voyage', '--local', '--command',
                 `INSERT INTO truth_build_sectors (version, sector_slug, state, systems, built, partial, index_hash, error, updated_at) VALUES ('vwide', 'Stale', 'building', 0, 0, 0, NULL, NULL, '${staleAt}')`]);
             runWrangler(['d1', 'execute', 'voyage', '--local', '--command',
                 `INSERT INTO truth_build_sectors (version, sector_slug, state, systems, built, partial, index_hash, error, updated_at) VALUES ('vwide', 'Fresh', 'building', 0, 0, 0, NULL, NULL, '${freshAt}')`]);
+            const queuedAt = '2020-01-01T00:00:00.000Z';
+            runWrangler(['d1', 'execute', 'voyage', '--local', '--command',
+                `INSERT INTO truth_build_sectors (version, sector_slug, state, systems, built, partial, index_hash, error, updated_at) VALUES ('vwide', 'Queued', 'queued', 0, 0, 0, NULL, NULL, '${queuedAt}')`]);
             const stalled = await fetch(`${base}/api/admin/truth/builds/vwide/retry`, {
                 method: 'POST',
                 headers: { 'content-type': 'application/json', cookie },
@@ -490,14 +575,17 @@ if (process.env.RUN_API_TESTS !== '1') {
             assert.equal(stalledBody.data.enqueued, 1);
             const picked = jsonFrom(runWrangler([
                 'd1', 'execute', 'voyage', '--local', '--command',
-                "SELECT sector_slug, state, updated_at FROM truth_build_sectors WHERE version = 'vwide' AND sector_slug IN ('Stale', 'Fresh') ORDER BY sector_slug",
+                "SELECT sector_slug, state, updated_at FROM truth_build_sectors WHERE version = 'vwide' AND sector_slug IN ('Stale', 'Fresh', 'Queued') ORDER BY sector_slug",
             ]));
             const fresh = picked[0].results.find((item) => item.sector_slug === 'Fresh');
             const stale = picked[0].results.find((item) => item.sector_slug === 'Stale');
+            const queued = picked[0].results.find((item) => item.sector_slug === 'Queued');
             assert.equal(fresh.updated_at, freshAt);
             assert.equal(fresh.state, 'building');
             assert.notEqual(stale.updated_at, staleAt);
             assert.equal(stale.state, 'building');
+            assert.equal(queued.state, 'queued');
+            assert.equal(queued.updated_at, queuedAt);
             const hidden = await fetch(`${base}/api/truth/search?q=${encodeURIComponent('Regi')}&version=vwide`);
             const hiddenBody = await hidden.json();
             assert.equal(hidden.status, 200, JSON.stringify(hiddenBody));
@@ -523,6 +611,57 @@ if (process.env.RUN_API_TESTS !== '1') {
             const rankedPrefixBody = await rankedPrefix.json();
             assert.equal(rankedPrefix.status, 200, JSON.stringify(rankedPrefixBody));
             assert.deepEqual(rankedPrefixBody.data.items.map((item) => item.name), ['Regina', 'Reginante', 'Regis', 'New Regina']);
+
+            const feedSlugs = Array.from({ length: 14 }, (_, index) => `S${String(index + 1).padStart(2, '0')}`);
+            const feedCatalogue = path.join(dir, 'feed-sectors.json');
+            writeFileSync(feedCatalogue, JSON.stringify({
+                milieu: 'M1105',
+                sectors: feedSlugs.map((slug, index) => ({ slug, name: slug, x: index, y: 0, tags: [], canonical: false })),
+            }));
+            runWrangler(['r2', 'object', 'put', 'voyage-private/inputs/vfeed/sectors.json', '--file', feedCatalogue, '--local']);
+            for (const slug of feedSlugs) {
+                runWrangler(['r2', 'object', 'put', `voyage-private/inputs/vfeed/${slug}.tsv`, '--file', tsv, '--local']);
+                runWrangler(['r2', 'object', 'put', `voyage-private/inputs/vfeed/${slug}.xml`, '--file', xml, '--local']);
+            }
+            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_systems WHERE version = 'vfeed'"]);
+            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_build_sectors WHERE version = 'vfeed'"]);
+            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_versions WHERE version = 'vfeed'"]);
+            const feedPosted = await fetch(`${base}/api/admin/truth/build`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json', cookie },
+                body: JSON.stringify({
+                    milieu: 'M1105',
+                    version: 'vfeed',
+                    engineVersion: '1.0.0',
+                    seed: TRUTH_SEED,
+                    settings: { ...TRUTH_SETTINGS },
+                    sectors: 'all',
+                }),
+            });
+            const feedPostedBody = await feedPosted.json();
+            assert.equal(feedPosted.status, 202, JSON.stringify(feedPostedBody));
+            assert.equal(feedPostedBody.data.enqueued, 14);
+            const feedEarly = await fetch(`${base}/api/admin/truth/builds/vfeed`, { headers: { cookie } });
+            const feedEarlyBody = await feedEarly.json();
+            assert.equal(feedEarly.status, 200, JSON.stringify(feedEarlyBody));
+            assert.equal(feedEarlyBody.data.sectors.filter((item) => item.state === 'building').length, 12, JSON.stringify(feedEarlyBody));
+            assert.equal(feedEarlyBody.data.sectors.filter((item) => item.state === 'queued').length, 2, JSON.stringify(feedEarlyBody));
+            assert.equal(feedEarlyBody.data.sectorsQueued, 2);
+            let feedBuild;
+            const feedDeadline = Date.now() + 180000;
+            while (Date.now() < feedDeadline) {
+                const response = await fetch(`${base}/api/admin/truth/builds/vfeed`, { headers: { cookie } });
+                feedBuild = await response.json();
+                assert.equal(response.status, 200, JSON.stringify(feedBuild));
+                const failed = feedBuild.data.sectors.find((item) => item.state === 'failed');
+                if (failed) throw new Error(JSON.stringify(feedBuild));
+                if (feedBuild.data.sectorsDone === 14) break;
+                await sleep(1000);
+            }
+            assert.equal(feedBuild.data.sectorsDone, 14, JSON.stringify(feedBuild));
+            assert.equal(feedBuild.data.sectorsQueued, 0);
+            assert.equal(feedBuild.data.sectorsFailed, 0);
+            for (const sector of feedBuild.data.sectors) assert.equal(sector.state, 'done', JSON.stringify(sector));
         });
     });
 }

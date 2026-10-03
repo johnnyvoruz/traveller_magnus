@@ -15,7 +15,7 @@ copied from `packages/engines/src/core/hex.js` (it is already ESM and golden-tes
 |---|---|---|
 | **A. Data path and map** | Open traveller.voyage, see the whole chart, drag and zoom smoothly down to one hex, see where every system is and what it is called, share the URL | below, in full |
 | **B1. Chart symbols and the omnibox** | Read a hex like a chart (starport, world, bases, zones, gas giants), see routes and capital names, select a world, search from the omnibox | in full, §B1 |
-| **B2. Borders and polities** | See who owns what: borders, polity colours, regions (needs truth v3) | outline, §B |
+| **B2. Borders and polities** | See who owns what: borders, polity colours, regions (needs truth v3) | B2a (the port) in full, §B2; B2b and B2c outlined |
 | **B3. The dossier and the shell** | Read a world's dossier in the one panel; rail, toasts, help, legend, design-system page | outline, §B |
 | **C. Orbit view** | Enter a system, see it in 2.5D, scrub time, line-up, planet imagery | outline, §C |
 
@@ -699,6 +699,47 @@ One registry (manifesto, Simplicity). `MapView` registers "Home view" (`Home`) a
 typed into an input unless that key is `Escape` or carries `Ctrl`. The generated help screen
 is part B3.
 
+### B1.12 Subsector titles — `apps/web/src/map/titles.ts` (new, pure) and a renderer pass
+
+Added 2026-10-03 after B1 shipped. At hex zoom nothing says where you are; the legacy map
+answers with a small title per subsector (`js/renderer.js:2080-2289`;
+`legacy_map_inventory.md` §3.5). Shown from `PPP_NAMES` up, in screen space, painted last.
+
+- **Text:** `Sector Name - Subsector Name`. The subsector letter is `A` + row × 4 + column
+  (columns of 8 hexes, rows of 10); its name is `index.metadata.names[letter]`, else
+  `Subsector <letter>`. No index yet for that sector → no title.
+- **Type:** `600 13px` in `--font-text`, shrunk to fit `visible width - 24` px and dropped
+  below 9 px. Pill padding `0.55` × font px left and right, `0.32` × font px top and bottom;
+  corner radius `min(0.3 × font px, pill height / 2)`. Pill fill `--bg-0` at 55%, text
+  `--signal` at 95%.
+- **Where:** the visible part of the subsector rectangle (in pixels), minus a top inset of
+  56 px for the omnibox. Skip the subsector if that part is under 56 px wide or 24 px tall.
+  Candidate positions run along the inside of that rectangle with a 4 px margin: the top
+  edge left to right, then the bottom edge, then down both sides, in steps of
+  `max(12, pill height)`.
+- **Cost of a candidate:** each world whose centre is within `0.8` hex sizes of the pill
+  counts 1; within `0.35` hex sizes counts 10 (hex size in pixels is `ppp / 1.5`). A pill
+  that overlaps another title already placed this frame, or the selected hex (radius one hex
+  size), is not allowed. The cheapest allowed candidate wins, the first one on a tie. If
+  none is allowed the title is omitted.
+
+```ts
+export type Box = { x: number; y: number; w: number; h: number };
+export function titleCandidates(visible: Box, pillW: number, pillH: number): { x: number; y: number }[]
+export function placeTitle(visible: Box, pillW: number, pillH: number,
+    worlds: { x: number; y: number }[], hexSizePx: number, blocked: Box[]): { x: number; y: number } | null
+```
+
+Also in this step: remove the unused `home()` callback from `attachInput`'s api (the Home
+key goes through the command registry since B1.10) and from `MapView`.
+
+**Check (`tests/web/titles.test.js`):** with no worlds the first candidate (top left) wins;
+a world under the top-left candidate moves the title along the top edge; a visible box 50 px
+wide gives no candidates; a blocked box over every candidate gives `null`; the candidate
+order is top edge, bottom edge, then sides. `tests/web/renderer.test.js`: at ppp 80 with one
+loaded index, one title text containing the sector name and ` - ` is drawn; at ppp 40, none.
+**Frame-time note:** the B1.4 drag again with titles on.
+
 ### B1.11 Verification for B1
 
 - [ ] `npm test`, `npm run check`, `npm run typecheck`, `npm run build` green
@@ -710,7 +751,265 @@ is part B3.
 - [ ] Report: anything the legacy lines said that this recipe did not, and every question
       for Johnny
 
+## B2. Borders and polities (truth v3)
+
+**Status:** B2a WRITTEN 2026-10-03 (the port, with parity). B2b (the truth build carries the
+result; v3) and B2c (the viewer draws it) are outlines, written when B2a reports.
+**Why a port and not a rewrite:** the legacy app turns a TravellerMap `<Border>` path into a
+set of hexes with a flood fill that has been tuned against real sectors for a long time
+(`js/borders.js:535-1154`). That knowledge is worth keeping exactly, like the engines. So it
+is converted the way the engines were: copied, made pure, and proven against the legacy code
+with golden fixtures. The viewer must never run it; the truth build does, once.
+
+### B2a. The port (Track A: `packages/`, `tests/golden`, `tests/oracle`, `tests/generation`)
+
+#### B2a.1 A DOM stand-in for the oracle — `tests/oracle/xml_dom.js` (new)
+
+The legacy function takes a DOM `<Borders>` element. The oracle has no DOM. Build the
+smallest stand-in that satisfies exactly what `importBordersFromXml` calls, from the tree
+`parseXmlElements` (`@voyage/shared`) already produces:
+
+```js
+export function bordersElementOf(xmlText)   // returns the <Borders> stand-in, or null
+```
+
+Each stand-in element has `getAttribute(name)` (the attribute or `null`), `textContent` (the
+element's text), `querySelectorAll('Border')` (direct `Border` children, as an array) and
+`ownerDocument`, whose `querySelector(sel)` answers exactly two shapes: `'Stylesheet'` and
+`` `Allegiance[Code="X"]` ``. Any other selector throws, so a call the stand-in does not
+cover is loud.
+
+Add `js/borders.js` to the oracle's file list **after** `js/core.js`. If loading it in the
+sandbox throws, stop and report the error and the line; do not edit `js/borders.js` and do
+not stub more than the missing global the error names.
+
+#### B2a.2 Golden fixtures from the legacy code — `tests/golden/cases.js`, `.gitignore`
+
+Six sectors, chosen because each exercises a different branch:
+
+| Sector XML | Borders | Why |
+|---|---|---|
+| `Spinward_Marches` | 7, 2 weak, stylesheet with 2 border rules | the reference sector |
+| `Empty_Quarter` | 7, 4 weak | umbrella borders overwritten by the polities inside them |
+| `Solomani_Rim` | 5, 1 weak | an enclosed polity inside a sector-spanning one |
+| `Riftspan_Reaches` | 2 | sparse waypoints; paths that close on sector edges |
+| `Verge` | 2 | a path that crosses a sector edge |
+| `Gvurrdon` | 14, stylesheet with 10 border rules | many codes starting `V` collapsing into one group |
+
+Un-ignore the five XML files that are not tracked yet, by exact name (`.gitignore`, one
+negation line each, as for Spinward Marches).
+
+One golden case per sector, `borders_<slug>`. Each runs in a **fresh** oracle context
+(the legacy function keeps global state): set `window.hexBorderAssignments = new Map()`,
+leave `window.borderDefinitions` unset, call
+`importBordersFromXml(bordersElementOf(xml), 1)`, then return
+
+```js
+{ territories: window.borderDefinitions
+      .filter(d => d.allegianceCodes && d.allegianceCodes.length)
+      .map(d => ({ id: d.id, name: d.name, color: d.color, allegianceCodes: d.allegianceCodes,
+                   hexes: [...window.hexBorderAssignments].filter(([, id]) => id === d.id)
+                              .map(([hexId]) => hexId.split('-').pop()).sort() })) }
+```
+
+Slot 1 is the sector at grid position (0, 0), so the last four characters of each legacy
+hex id are the sector-local `hhhh`. Write the fixtures with `UPDATE_GOLDEN=1` once and commit
+them. `legacy borders_* is deterministic` must pass before going on.
+
+#### B2a.3 The port — `packages/generation/src/territories.ts` (new)
+
+```ts
+export type BorderRecord = Record<string, string>;   // XML attributes as written, plus `path`
+export type Territory = { id: number; name: string; color: string; allegianceCodes: string[]; hexes: string[] };
+export function sectorTerritories(input: {
+    borders: BorderRecord[];
+    allegiances: { code: string; name: string }[];
+    stylesheet: string;                               // text of <Stylesheet>, '' when absent
+}): Territory[]
+```
+
+Copy `js/borders.js:574-1141` and `21-41` (`BORDER_COLOR_MAP`, `BORDER_COLOR_CYCLE`) into the
+new file and apply these rules, in order, and nothing else:
+
+1. `el.getAttribute('X')` → `rec.X` (missing → `''`, exactly where the legacy code writes
+   `|| ''`); `el.textContent` → `rec.path`. The `ShowLabel` read keeps its
+   `.toLowerCase() === 'false'` test.
+2. The stylesheet text is `input.stylesheet`; the regular expression is unchanged.
+3. `Allegiance[Code="X"]` lookup → the entry of `input.allegiances` with that code; its
+   `name` is the element text.
+4. The grid is one sector: `slotNum = 1`, `secMinQ = 0`, `secMaxQ = 31`, `secMinR = 0`,
+   `secMaxR = 39`. `_hexIdOf(code)` and `getHexCoords` collapse to
+   `q = col - 1`, `r = row - 1`; `_qrToHexId(q, r)` is the four-digit `hhhh`. Keep
+   `_hexNeighbors` and the cube-coordinate line drawing character for character.
+5. `window.hexBorderAssignments` → a local `Map<string, number>` keyed by `hhhh`.
+   `window.borderDefinitions` → a local array that **starts as the legacy default five
+   slots** (`getDefaultBorderDefinitions`, `js/borders.js:43-51`), so slot reuse, ids and
+   default colours come out exactly as in a fresh legacy session. `window.borderPaths` → a
+   local `Map` kept only because the free-slot test reads it.
+6. Delete what has no meaning without a UI: `assigned` / `skipped` bookkeeping,
+   `ensureFreeBorderSlot`, `renderBorderWindow`, `dbManager`.
+7. Return the definitions that have at least one allegiance code, each with its sorted
+   `hexes`, in definition order.
+
+No behaviour is improved, simplified or "fixed". If a legacy line looks wrong, port it as
+it is and list it in the report.
+
+Also in this step, `packages/shared/src/parsers/metadata_xml.ts`: `parseMetadataXml` returns
+one more field, `stylesheet: string` (the text of the `<Stylesheet>` element, `''` when
+absent). Nothing else in the parser changes; its existing tests stay green.
+
+Export `sectorTerritories`, `BorderRecord` and `Territory` from
+`packages/generation/src/index.ts`.
+
+#### B2a.4 Parity — `tests/golden/cases_esm.js`, `tests/generation/territories.test.js`
+
+For each of the six sectors: `sectorTerritories` fed from `parseMetadataXml` of the same XML
+must equal the legacy fixture **exactly** (ids, names, colours, allegiance codes, hex lists)
+once both are serialised with `stable`. Add the six `esm borders_*` cases beside the engine
+cases. A difference is reported with the first differing territory and hex; neither the
+port nor the fixture is adjusted toward the other.
+
+`tests/generation/territories.test.js` adds what a fixture does not say in words:
+- Spinward Marches: every `hhhh` in every territory is a valid hex (columns 01-32, rows
+  01-40) and no hex is in two territories.
+- Empty Quarter: at least one territory that the XML marks only with `ShowLabel="false"`
+  borders has fewer hexes than its path encloses, because a polity inside reclaimed them
+  (assert against the fixture's numbers once they exist; report the numbers).
+- An input with no borders returns `[]`.
+- The function is pure: two calls with the same input return equal output and the input is
+  not mutated.
+
+#### B2a.5 Verification for B2a
+
+- [ ] `npm test` green with six `legacy borders_*` and six `esm borders_*` cases
+- [ ] `npm run check` and `npm run typecheck` clean
+- [ ] Report: the territory names, colours and hex counts for Spinward Marches and Gvurrdon;
+      every legacy line ported "as is" that looked wrong; whether `js/borders.js` loaded in
+      the oracle without a new stub
+
+### B2b. The truth carries territories: truth v3 (Track A scope; written 2026-10-03)
+
+B2a reported and was checked: six `legacy borders_*` and six `esm borders_*` cases, exact
+parity. This step puts the result into the sector index. **The Worker needs no code change**:
+its finalize already builds the index with `assembleSectorIndex` and validates it with
+`SectorIndex`. Regions (`<Region>`, `js/borders.js:1171-1513`) are **not** in v3; they are a
+second port and a later truth version, taken as its own small step.
+
+#### B2b.1 `packages/shared/src/schemas/truth.ts`
+
+```ts
+export const Territory = z.object({
+    id: z.number(), name: z.string(), color: z.string(),
+    allegianceCodes: z.array(z.string()), hexes: z.array(z.string()),
+}).strict();
+```
+
+`SectorIndex` gains `territories: z.array(Territory)`, and its `metadata` gains
+`allegiances: z.array(z.object({ code: z.string(), name: z.string(), base: z.string().optional() }).strict())`.
+Export `Territory` from `src/index.ts`.
+
+#### B2b.2 `packages/generation/src/index.ts`, `assembleSectorIndex`
+
+Add to the returned index:
+- `territories`: `sectorTerritories({ borders: meta.borders, allegiances: meta.allegiances,
+  stylesheet: meta.stylesheet })` with the territories that have **no hexes removed** (the
+  port keeps them for parity; an empty territory has nothing to draw). `[]` when there is no
+  metadata XML.
+- `metadata.allegiances`: the parser's table as it is.
+
+Nothing else in the function changes. `sectorTerritories` itself is not touched.
+
+#### B2b.3 `tools/truth/build.js` and the root `package.json`
+
+`truth:local` becomes `node tools/truth/build.js v3`. No other change.
+
+#### B2b.4 Tests
+
+- `tests/generation/sector_index.test.js`: the Spinward Marches index passes
+  `SectorIndex.parse`; it has four territories whose hex counts are 36, 60, 739 and 52 (the
+  B2a report's numbers), 887 in all, every `hhhh` valid and none in two territories; its
+  `metadata.allegiances` is not empty.
+- `tests/generation/territories.test.js`: the Empty Quarter index (through
+  `assembleSectorIndex`) does not contain the zero-hex Julian Protectorate territory, while
+  `sectorTerritories` on the same input still returns it.
+- `tests/api/truth_build.test.js` (gated; this one file under `tests/api` may be edited):
+  the fixture sector's index has `territories` equal to `[]` and passes `SectorIndex.parse`.
+- Report the bytes of the Spinward Marches index before and after.
+
+#### B2b.5 v3 is not built yet (re-planned 2026-10-03)
+
+Johnny: "Are we gonna need to re-run the truth all the time? If so, let's get more truthy
+stuff done so we can just run it once." B2b is in the code; the v3 build waits for B2d.
+
+### B2d. One more round of truth changes, then v3 once
+
+Two answers to "do we re-run the truth all the time".
+
+**1. Gather what is known to be coming.** Everything below changes what the truth files
+hold, and all of it is needed by slice 1:
+
+| Item | What it adds | Why the viewer needs it |
+|---|---|---|
+| B2d.1 Regions | each index gains `regions`: name, colour, hex list, ported from `js/borders.js:1171-1513` like the borders | region fills and names (206 regions in the catalogue) |
+| B2d.2 Route colours | each route in the index gains its resolved colour (own `Color`, else the sector stylesheet's `route.CODE` rule, else the built-in table), ported from `js/otu_metadata_parser.js:33-95` | 62 sectors colour their routes by stylesheet; B1 falls back to grey for those |
+| B2d.3 Polities in the overview | the overview gains, per sector, its territory names and colours and one character per hex saying which territory owns it | polity colours and borders when zoomed out, where no index is loaded |
+
+**2. Make an index-only rebuild cheap (B2d.4).** A truth build spends its hour generating and
+writing 156,222 trees. None of the items above changes a tree. A **derived build** makes
+version N+1 from version N without the engines: per sector, read N's index, keep its
+`hexes` (chart rows and tree hashes) exactly, re-run only `assembleSectorIndex` with the
+current code and the metadata XML, write the new index and copy the search rows. One short
+invocation per sector, a few minutes for all 512, the same queue, states and release. It
+refuses unless seed, settings and engine version equal the source version's, because then
+the trees are provably the same. After this, changing what an index or the overview holds
+costs minutes, and a full build is needed only when the engines or the inputs change.
+
+Order: B2d.1, B2d.2, B2d.3 (packages, parity-tested where legacy code exists), then B2d.4
+(Worker). Then **v3 is derived from v2**, released, and B2c draws it. Each item gets its
+steps written here just before it is handed out; B2d.1 is first.
+
+#### B2d.1 Regions (same method as B2a)
+
+- `packages/shared/src/parsers/metadata_xml.ts`: `parseMetadataXml` also returns
+  `regions`: one record per `<Region>`, its attributes as written plus `path`, like
+  `borders`.
+- `tests/oracle/xml_dom.js`: `regionsElementOf(xmlText)`, the `<Regions>` stand-in, with
+  `querySelectorAll('Region')` and whatever else `importRegionsFromXml` calls and nothing
+  more.
+- Golden cases `regions_<slug>` for `Riftspan_Reaches` (3 regions) and two more sectors
+  chosen from the catalogue so that between them they cover a region that closes on a sector
+  edge and one that does not (name them in the report; un-ignore their XML by exact name).
+  The legacy function writes `state.cluster` only on hexes that exist in `hexStates`
+  (`js/borders.js:1337, 1486-1503`), so each case first fills `hexStates` with a state for
+  every one of the sector's 1,280 hexes in slot 1, then calls
+  `importRegionsFromXml(regionsElementOf(xml), 1)`, then returns
+  `{ regions: [{ name, color, hexes }] }` from `window.regionDefinitions` and the hexes whose
+  `cluster` is that name (four-digit `hhhh`, sorted). A region with no `Label` is skipped by
+  the legacy code and has no entry.
+- `packages/generation/src/regions.ts`: `sectorRegions({ regions })` returning
+  `{ name, color, hexes }[]`, ported from `js/borders.js:1171-1513` by the B2a.3 rules:
+  records for elements, one sector as slot 1, local maps for globals, UI and persistence
+  calls deleted, nothing improved. The filter rule the legacy function upserts is UI state
+  and is not ported; say so in a comment.
+- `assembleSectorIndex` adds `regions` (empty ones dropped); `SectorIndex` gains
+  `regions: z.array(z.object({ name, color, hexes }).strict())`.
+- Parity cases `esm regions_<slug>`; `tests/generation/regions.test.js` for validity (every
+  `hhhh` valid, purity, no regions → `[]`).
+
+### B2c. The viewer draws them (outline)
+
+Outline loops from each territory's hex set (`js/renderer.js:2297-2452`: sides whose
+neighbour is outside the set, chained, inset 10%), with territories of the same name joined
+across sector edges; fills at 20% (22% zoomed out); border names; zoomed-out polity shapes.
+Measured for frame time like every B1 layer.
+
 ## B. What is left of part B after B1 (outline)
+
+- **B3 keeps everything the legacy inspector shows** (Johnny, 2026-10-03: "I want to keep
+  everything from the inspector"), restyled to `design_reference.md` ("our UI design revamp
+  applied to it if possible"). Nothing is dropped for being awkward; a control that edits
+  data is kept in the inventory and built in the Builder slice, where saving exists. The B3
+  recipe is written from `findings/legacy_inspector_inventory.md`.
 
 - **Smoothness is an acceptance criterion** (Johnny, 2026-10-03: "it's so smooth, we want
   to keep that smoothness"). Part A at hex tier felt smooth on his machine with no pan cache.

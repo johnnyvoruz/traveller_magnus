@@ -1,4 +1,8 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { TRUTH_SETTINGS } from '../../tools/truth/settings.js';
+import { bordersElementOf } from '../oracle/xml_dom.js';
 
 export const TSV = [
     'Hex\tName\tUWP\tBases\tRemarks\tZone\tPBG\tAllegiance\tStars\t{Ix}\t(Ex)\t[Cx]\tNobility\tW\tRU',
@@ -49,6 +53,25 @@ export const cases = {
     aow_bottomup:         (ctx) => ctx.AoWBottomUpGenerator.generateAoWSystemBottomUp('1-A-0107'),
     parse_t5tab:          (ctx) => Object.fromEntries(ctx.parseT5Tab(TSV, '1'))
 };
+
+const RAW = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../universe/raw');
+for (const slug of ['Spinward_Marches', 'Empty_Quarter', 'Solomani_Rim', 'Riftspan_Reaches', 'Verge', 'Gvurrdon']) {
+    const xml = fs.readFileSync(path.join(RAW, `${slug}.xml`), 'utf8');
+    cases[`borders_${slug}`] = (ctx) => {
+        ctx.hexBorderAssignments = new Map();
+        delete ctx.borderDefinitions;
+        ctx.importBordersFromXml(bordersElementOf(xml), 1);
+        return {
+            territories: ctx.borderDefinitions
+                .filter(d => d.allegianceCodes && d.allegianceCodes.length)
+                .map(d => ({
+                    id: d.id, name: d.name, color: d.color, allegianceCodes: d.allegianceCodes,
+                    hexes: [...ctx.hexBorderAssignments].filter(([, id]) => id === d.id)
+                        .map(([hexId]) => hexId.split('-').pop()).sort(),
+                })),
+        };
+    };
+}
 
 // Not a case: the legacy metadata XML parser (io_manager.js:2279 parseXmlRouteGroups) needs a browser
 // DOMParser, which Node does not have. The new parser (§8) is verified against TravellerMap's documented

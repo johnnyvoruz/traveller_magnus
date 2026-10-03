@@ -13,6 +13,7 @@ import {
 import { routeSegments, type RouteSegment } from './route_lines.ts';
 import type { MapTheme } from './theme.ts';
 import { PPP_GRID, PPP_NAMES, tierFor, type Tier } from './tiers.ts';
+import { placeTitle, type Box } from './titles.ts';
 import { baseMarks, hasGasGiant, starport, worldHasWater, worldIsBelt } from './uwp.ts';
 
 const HEX_OUTLINE_CAP = 12000;
@@ -24,6 +25,16 @@ const POINT_PARSEC = 0.35;
 const FAR_LABEL_MIN_PPP = 1.2;
 const FAR_LABEL_FONT = 12;
 const FAR_LABEL_DOT = 3;
+const TITLE_FONT = 13;
+const TITLE_MIN_FONT = 9;
+const TITLE_TOP = 56;
+const TITLE_MIN_W = 56;
+const TITLE_MIN_H = 24;
+const TITLE_PAD_X = 0.55;
+const TITLE_PAD_Y = 0.32;
+const TITLE_RADIUS = 0.3;
+const TITLE_PILL_ALPHA = 0.55;
+const TITLE_TEXT_ALPHA = 0.95;
 
 type FarLabel = { sector: string; hex: string; name: string };
 type Selection = { slug: string; hhhh: string };
@@ -77,6 +88,18 @@ function markOf(sx: number, sy: number, hhhh: string, entry: SectorHex): Mark {
 
 function intersects(a: Rect, b: Rect): boolean {
     return a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0;
+}
+
+function subsectorName(index: SectorIndex, letter: string): string {
+    const names = index.metadata?.names;
+    const found = names ? names[letter] : undefined;
+    return found ? found : 'Subsector ' + letter;
+}
+
+function worldsNear(worlds: { x: number; y: number }[], visible: Box, reach: number): { x: number; y: number }[] {
+    const x1 = visible.x + visible.w + reach;
+    const y1 = visible.y + visible.h + reach;
+    return worlds.filter((world) => world.x > visible.x - reach && world.x < x1 && world.y > visible.y - reach && world.y < y1);
 }
 
 function visibleHexes(view: Rect): { q: number; r: number }[] {
@@ -176,6 +199,7 @@ export class MapRenderer {
         this.strokeRects(on, cam, vp, this.theme.line1);
         const waiting: DrawSector[] = [];
         const ready: { sector: DrawSector; index: SectorIndex }[] = [];
+        let marks: Mark[] = [];
         if (tier === 'hex') {
             for (const sector of on) {
                 const index = this.getIndex(sector.slug);
@@ -195,13 +219,14 @@ export class MapRenderer {
             const hexes = visibleHexes(view);
             if (hexes.length <= HEX_OUTLINE_CAP) this.hexOutlines(hexes, cam, vp);
             if (cam.ppp >= PPP_GRID) this.routes(ready, cam, vp);
-            const marks = this.marks(ready, cam, vp);
+            marks = this.marks(ready, cam, vp);
             if (cam.ppp >= PPP_NAMES) this.chartMarks(marks, cam.ppp);
             else this.chartDiscs(marks, cam.ppp);
         }
         this.sectorNames(on, cam, vp);
         if (tier !== 'hex' && cam.ppp >= FAR_LABEL_MIN_PPP) this.farLabels(on, cam, vp, view);
         this.selectionOutline(cam, vp);
+        if (tier === 'hex' && cam.ppp >= PPP_NAMES) this.subsectorTitles(ready, marks, cam, vp);
 
         return { tier, sectorsOnScreen: on.map((sector) => sector.slug), ms: now() - started };
     }
@@ -584,6 +609,105 @@ export class MapRenderer {
         }
         ctx.closePath();
         ctx.stroke();
+    }
+
+    /**
+     * One pill per subsector, in screen space, from PPP_NAMES up.
+     * The selected hex is blocked as the square of radius one hex size.
+     */
+    private subsectorTitles(
+        ready: { sector: DrawSector; index: SectorIndex }[],
+        marks: Mark[],
+        cam: Camera,
+        vp: Viewport,
+    ): void {
+        if (!ready.length) return;
+        const hexSizePx = cam.ppp / 1.5;
+        const worlds = marks.map((mark) => ({ x: mark.sx, y: mark.sy }));
+        const blocked: Box[] = [];
+        const guard = this.selectedGuard(cam, vp, hexSizePx);
+        if (guard) blocked.push(guard);
+        const ctx = this.ctx;
+        let drew = false;
+        for (const item of ready) {
+            for (let row = 0; row < 4; row++) {
+                for (let col = 0; col < 4; col++) {
+                    const visible = this.subsectorVisible(item.sector, col, row, cam, vp);
+                    if (!visible) continue;
+                    const letter = String.fromCharCode(65 + row * 4 + col);
+                    const label = item.sector.name + ' - ' + subsectorName(item.index, letter);
+                    let fontPx = TITLE_FONT;
+                    ctx.font = '600 ' + fontPx + 'px ' + this.theme.fontText;
+                    let textW = ctx.measureText(label).width;
+                    const room = visible.w - 24;
+                    if (room > 0 && textW > room) {
+                        fontPx *= room / textW;
+                        if (fontPx < TITLE_MIN_FONT) continue;
+                        ctx.font = '600 ' + fontPx + 'px ' + this.theme.fontText;
+                        textW = ctx.measureText(label).width;
+                    }
+                    const hPad = fontPx * TITLE_PAD_X;
+                    const vPad = fontPx * TITLE_PAD_Y;
+                    const pillW = textW + hPad * 2;
+                    const pillH = fontPx + vPad * 2;
+                    const spot = placeTitle(
+                        visible,
+                        pillW,
+                        pillH,
+                        worldsNear(worlds, visible, hexSizePx * 0.8),
+                        hexSizePx,
+                        blocked,
+                    );
+                    if (!spot) continue;
+                    blocked.push({ x: spot.x, y: spot.y, w: pillW, h: pillH });
+                    const radius = Math.min(fontPx * TITLE_RADIUS, pillH / 2);
+                    ctx.beginPath();
+                    ctx.roundRect(spot.x, spot.y, pillW, pillH, radius);
+                    ctx.globalAlpha = TITLE_PILL_ALPHA;
+                    ctx.fillStyle = this.theme.bg0;
+                    ctx.fill();
+                    ctx.globalAlpha = TITLE_TEXT_ALPHA;
+                    ctx.fillStyle = this.theme.signal;
+                    ctx.textAlign = 'left';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(label, spot.x + hPad, spot.y + pillH / 2);
+                    drew = true;
+                }
+            }
+        }
+        if (drew) ctx.globalAlpha = 1;
+    }
+
+    private subsectorVisible(sector: DrawSector, col: number, row: number, cam: Camera, vp: Viewport): Box | null {
+        const spanX = SECTOR_COLS / 4;
+        const spanY = (SECTOR_ROWS / 4) * ROW_STEP;
+        const x0 = sector.rect.x0 + col * spanX;
+        const y0 = sector.rect.y0 + row * spanY;
+        const topLeft = toScreen(cam, vp, x0, y0);
+        const bottomRight = toScreen(cam, vp, x0 + spanX, y0 + spanY);
+        const x = Math.max(topLeft.sx, 0);
+        const y = Math.max(topLeft.sy, TITLE_TOP);
+        const right = Math.min(bottomRight.sx, vp.width);
+        const bottom = Math.min(bottomRight.sy, vp.height);
+        const w = right - x;
+        const h = bottom - y;
+        if (w < TITLE_MIN_W || h < TITLE_MIN_H) return null;
+        return { x, y, w, h };
+    }
+
+    /** Axis-aligned square around the selected hex. Radius is one hex size. */
+    private selectedGuard(cam: Camera, vp: Viewport, hexSizePx: number): Box | null {
+        const selected = this.selected;
+        if (!selected) return null;
+        let sector: DrawSector | null = null;
+        for (const item of this.sectors) if (item.slug === selected.slug) sector = item;
+        if (!sector) return null;
+        const local = parseHex(selected.hhhh);
+        if (!local) return null;
+        const global = toGlobal(sector.x, sector.y, local.col, local.row);
+        const centre = hexCentre(global.q, global.r);
+        const screen = toScreen(cam, vp, centre.x, centre.y);
+        return { x: screen.sx - hexSizePx, y: screen.sy - hexSizePx, w: hexSizePx * 2, h: hexSizePx * 2 };
     }
 
     /** Width at 18 px, cached by name. */

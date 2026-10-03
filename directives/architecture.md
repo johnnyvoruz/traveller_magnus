@@ -155,6 +155,15 @@ whole sector or a whole catalogue:
   `truth_build_sectors`. Queues deliver at least once; every write here is a replace keyed by
   content or by `(version, slug[, offset])`, so a duplicate message repeats work and changes
   nothing.
+- **Sectors are fed a few at a time (from truth v3).** The build endpoint inserts every
+  sector as `queued` and starts only the first 12 (state `building`, one message each).
+  Whenever a sector ends (`done`, or `failed` by either path) the consumer claims the next
+  `queued` sector in one statement (`UPDATE ... WHERE sector_slug = (SELECT ... state =
+  'queued' ORDER BY sector_slug LIMIT 1) RETURNING sector_slug`) and enqueues it at offset
+  0, so about 12 sectors are in flight at any time and they finish in order. Same total
+  time as starting all 512 at once; progress is steady and a bad sector shows early. A
+  `queued` sector is never "stalled". If every sector in flight is lost, the retry route
+  restarts the stalled ones and the chain resumes.
 - **Progress is counted, never incremented.** `sectors_done` is `COUNT(*)` of
   `truth_build_sectors` rows in state `done` for the version, so a retried message cannot
   double count. The progress route and release read that table; neither reads one R2 object
