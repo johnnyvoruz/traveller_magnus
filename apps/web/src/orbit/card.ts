@@ -11,6 +11,7 @@ import type { HitKind, Plan, PlanMoon, PlanWorld } from './layout.ts';
 import { bodyAngle, starCompanionAU } from './maths.ts';
 import { seasonLine, SEASON_HELP, type SeasonLine } from './seasons.ts';
 import { rotationText } from './system.ts';
+import { todayTemp } from './today_temp.ts';
 
 type Bag = Record<string, any>;
 
@@ -59,7 +60,7 @@ function profile(lines: CardLine[], body: Bag, belt: boolean): void {
 const DAYLIGHT_HINT = 'Geometry only: the share of the solar day the star is above the horizon, from the axial tilt. No refraction, eclipses or terrain.';
 
 /** Diameter, rotation, mass, gravity and temperature: the block worlds and moons share. */
-function physical(lines: CardLine[], body: Bag, parent: Bag | null): void {
+function physical(lines: CardLine[], body: Bag, parent: Bag | null, angle: number): void {
     if (body.diamKm != null) lines.push({ label: 'Diameter', value: formatDisplayNumber(body.diamKm, 0, 'km'), gap: true });
     // 4325-4331.
     const rotation = rotationText(body);
@@ -77,6 +78,7 @@ function physical(lines: CardLine[], body: Bag, parent: Bag | null): void {
     if (body.mass != null) lines.push({ label: 'Mass', value: formatDisplayNumber(body.mass, 3, 'M⊕') });
     if (body.gravity != null) lines.push({ label: 'Gravity', value: formatDisplayNumber(body.gravity, 2, 'G') });
     temperature(lines, body);
+    today(lines, body, parent, angle);
 }
 
 /** §7.5: the band as the document names it, then the mean in both scales; the high and the low beneath. */
@@ -93,6 +95,32 @@ function temperature(lines: CardLine[], body: Bag): void {
     if (mean) add('Mean temp.', mean, kelvinNote('Mean', body.meanTempK));
     if (high) add('High temp.', high, kelvinNote('High', body.highTempK));
     if (low) add('Low temp.', low, kelvinNote('Low', body.lowTempK));
+}
+
+/**
+ * "Today's" temperature in each hemisphere (orbit/today_temp.ts; Johnny, A3). Left out, with
+ * no placeholder, without a mean, a tilt, a pressure or a year length, and for gas giants.
+ * A planet locked to its star waits on Johnny's choice and has no line yet.
+ */
+function today(lines: CardLine[], body: Bag, parent: Bag | null, angle: number): void {
+    if (body.type === 'Gas Giant' || body.size === 'R') return;
+    if (!parent && (body.tidallyLocked === true || body.isTwilightZone === true)) return;
+    const found = todayTemp({
+        meanTempK: num(body.meanTempK),
+        axialTilt: num(body.axialTilt),
+        pressureBar: num(body.pressureBar),
+        yearHours: num(body.yearHours),
+        angle,
+    });
+    if (!found) return;
+    const hint = 'Estimate for the season from: mean ' + formatTemp(body.meanTempK)
+        + ', axial tilt ' + formatDisplayNumber(body.axialTilt, 1) + '\u00B0'
+        + ', pressure ' + formatDisplayNumber(body.pressureBar, 2, 'bar')
+        + ', orbit angle ' + Math.round(found.phaseDeg) % 360 + '\u00B0 past the northern spring equinox'
+        + (parent ? ' (the parent planet\u2019s)' : '')
+        + '. Day and night, geography and orbital eccentricity are not included.';
+    lines.push({ label: 'Today, north (est.)', value: formatTemp(found.northK), gap: true, hint });
+    lines.push({ label: 'Today, south (est.)', value: formatTemp(found.southK), hint });
 }
 
 function starCard(body: Bag): BodyCardModel {
@@ -147,7 +175,7 @@ function worldCard(world: PlanWorld, days: number): BodyCardModel {
     if (w.au != null) lines.push({ label: 'Distance', value: formatDisplayNumber(w.au, 3, 'AU') });
     if (w.eccentricity != null) lines.push({ label: 'Eccentricity', value: formatDisplayNumber(w.eccentricity, 3) });
     profile(lines, w, false);
-    physical(lines, w, null);
+    physical(lines, w, null, bodyAngle(world.epoch, world.period, days));
     if (world.moons.length) lines.push({ label: 'Moons', value: String(world.moons.length), gap: true });
     const displayType = w.ggType ? w.type + ' ' + w.ggType : (w.worldType || w.type);
     return {
@@ -174,7 +202,7 @@ function moonCard(moon: PlanMoon, parent: PlanWorld, days: number): BodyCardMode
     const lines: CardLine[] = [];
     if (m.pd != null) lines.push({ label: 'Orbit', value: formatDisplayNumber(m.pd, 2, 'PD') + ' from parent' });
     profile(lines, m, false);
-    physical(lines, m, parent.body);
+    physical(lines, m, parent.body, bodyAngle(parent.epoch, parent.period, days));
     if (m.size != null) push(lines, 'Size', String(m.size));
     return {
         title: String(m.name || (moon.mainworld ? 'Mainworld (Moon)' : 'Moon')),

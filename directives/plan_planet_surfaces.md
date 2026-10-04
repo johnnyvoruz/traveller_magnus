@@ -5,6 +5,32 @@ Planning only; no implementation or browser measurements performed in P1.
 This is the P1 deliverable requested by Johnny, replacing the recipe's proposed
 `findings/surface_design.md` destination. It does not issue implementation work.
 
+## 0. Orchestrator acceptance (2026-10-04)
+
+**Accepted, with three amendments.** Where this section and the text below disagree, this
+section wins.
+
+1. **The no-WebGL fallback is not ported now (steps 6 and 7 are deferred).** Phones and
+   tablets are out of scope, so a desktop without WebGL2 is rare, and the legacy canvas disc
+   is a third renderer costing three sessions. Until Johnny says otherwise, a device without
+   WebGL2 gets the plain lit disc the orbit view already draws, and the surface map (V1, which
+   needs no WebGL) works everywhere. Question E8.
+2. **The vanilla disc bakes on the main thread first, as the legacy app does,** with the
+   legacy progressive schedule (first face at 32 px) and the plan's cold measurements. The
+   OffscreenCanvas GL worker of §8 is built only if those measurements show a task of 50 ms or
+   more. The CPU surface worker for the map stays as planned.
+3. **Owners are set here, not in §9:** step 1, Agent A; step 2, split: the Node oracle and
+   fixtures to Agent B, the dev browser parity harness to Agent C; steps 3 and 4, Agent C;
+   step 5, Agent D; steps 8 and 9, Agent B with one review by Agent F after step 9; step 10,
+   Agent C; step 11, Agent D. Agent F's remaining budget is kept for that review and for the
+   enhanced terrain (steps 13, 14, 16).
+
+Interim choices accepted as written: new full hex key and `TravellerMagnus` as the vanilla
+map seed (question E7); Agent D's corrected motion; vanilla as the default mode; no enhanced
+classes until the table in §7 is approved, which is asked at step 12, not before.
+
+P2 is accepted (handoff §51).
+
 ## 1. Authority, scope and evidence
 
 Read in the requested order: `recipe_planet_surfaces.md` (especially §0),

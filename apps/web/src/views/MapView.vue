@@ -684,8 +684,9 @@ onBeforeUnmount(() => {
 .map:has(.rail.is-expanded) {
   --rail-width: var(--rail-width-open);
 }
-/* The chart begins at the rail's edge, so the camera centres on what is visible. */
-.map canvas {
+/* The chart begins at the rail's edge, so the camera centres on what is visible. Only the
+   chart: the dossier draws canvases of its own inside this view. */
+.map > canvas {
   position: absolute;
   top: 0;
   left: var(--rail-width);
@@ -694,7 +695,7 @@ onBeforeUnmount(() => {
   display: block;
   touch-action: none;
 }
-.map canvas:focus {
+.map > canvas:focus {
   outline: 1px solid var(--signal);
   outline-offset: -1px;
 }

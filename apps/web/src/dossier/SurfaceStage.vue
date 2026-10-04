@@ -1,36 +1,187 @@
 <script setup lang="ts">
 /**
- * The surface-map lead of a dossier, until the real map exists: the legacy stage's 2:1 frame
- * and caption row (style.css .dossier-map-*), with the blank diamond the legacy scanner shows
- * while a map draws. One scanner pass on first render; nothing loops.
+ * The surface-map lead of a dossier (legacy worldMapLead, js/system_inspector.js:541-624):
+ * the 800×400 diamond sheet of a body, in the legacy stage's 2:1 frame with its caption row.
+ *
+ * The flow is the legacy one. The blank diamond is drawn at once; a beam sweeps down and
+ * back up while the surface worker paints; when the sheet is ready the pass in hand
+ * finishes, then the sheet fades in as the scan dissolves. A body seen before paints from
+ * the cache with no scan. Changing body cancels the request in flight, and a result that
+ * arrives late is never painted. Under reduced motion there is no beam: the blank, then the
+ * sheet.
+ *
+ * The sheet's pixels are the vanilla painter's (surface/vanilla/map.ts) and are put on the
+ * canvas untouched: nothing here tints, filters or blends them. Seeds are the service's
+ * business (surface/identity.ts, through surface/service.ts); this file passes the hex key,
+ * the dossier key and the body, and builds no seed.
  */
-import { useId } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import Icon from '../design/Icon.vue';
+import { prefersReducedMotion } from '../platform/browser.ts';
+import { CONTINENTAL_DEFINITION, COASTLINE_COMPLEXITY, canMapWorld, worldMapData } from '../surface/identity.ts';
+import { enhancedFlags, surfaceMode } from '../surface/preferences.ts';
+import { cancelSurface, requestMap } from '../surface/service.ts';
+import { drawMapOverlay, MAP_HEIGHT, MAP_WIDTH, renderDiamondBlank } from '../surface/vanilla/map.ts';
 
-defineProps<{ badge: string }>();
+export type SurfaceTarget = {
+    /** The full released hex key, `Spinward_Marches/1910`. */
+    hexKey: string;
+    dossierKey: string;
+    /** The body as the released document holds it. */
+    body: Record<string, unknown>;
+};
 
-const uid = useId();
-const DIAMOND = '0,0 80,133.2 160,0 240,133.2 320,0 400,133.2 480,0 560,133.2 640,0 720,133.2 800,0 '
-    + '800,266.8 720,400 640,266.8 560,400 480,266.8 400,400 320,266.8 240,400 160,266.8 80,400 0,266.8';
+const props = defineProps<{
+    badge: string;
+    /** The body to map, or null when there is none. A body the legacy rule rejects shows nothing. */
+    target: SurfaceTarget | null;
+}>();
+
+/** waiting: the worker is painting. ready: painted, the beam finishing its pass. revealing: fading in. full: shown. */
+type State = 'waiting' | 'ready' | 'revealing' | 'full';
+
+const sheetEl = ref<HTMLCanvasElement | null>(null);
+const blankEl = ref<HTMLCanvasElement | null>(null);
+const state = ref<State>('waiting');
+const beam = ref<'scan-down' | 'scan-up'>('scan-down');
+/** Flips each time a cached sheet arrives, so its fade runs again. */
+const arrival = ref<'' | 'arrive-a' | 'arrive-b'>('');
+/** Cold timings of the last sheet, for measuring: data attributes on the figure. */
+const timing = ref<{ sheet: string; worker: string; chunk: string; cached: string }>({ sheet: '', worker: '', chunk: '', cached: '' });
+
+const mappable = computed(() => props.target !== null && canMapWorld(props.target.body));
+const worldName = computed(() => {
+    const name = props.target ? props.target.body.name : '';
+    return typeof name === 'string' && name.trim() ? name.trim() : 'this world';
+});
+
+let token = 0;
+let requestId: string | null = null;
+let shown: SurfaceTarget | null = null;
+let lastArrival: 'arrive-a' | 'arrive-b' = 'arrive-b';
+
+/** The same body of the same hex: nothing to redo when the panel merely re-renders. */
+function same(a: SurfaceTarget | null, b: SurfaceTarget | null): boolean {
+    if (a === null || b === null) return a === b;
+    return a.hexKey === b.hexKey && a.dossierKey === b.dossierKey && a.body === b.body;
+}
+
+function drop(): void {
+    token += 1;
+    if (requestId) cancelSurface(requestId);
+    requestId = null;
+}
+
+function clearSheet(): void {
+    const canvas = sheetEl.value;
+    const ctx = canvas ? canvas.getContext('2d') : null;
+    if (ctx) ctx.clearRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
+}
+
+/** The vanilla pixels, then the vanilla overlay (hex grid and lobe edges), exactly as painted. */
+function paint(pixels: Uint8ClampedArray, body: Record<string, unknown>): boolean {
+    const canvas = sheetEl.value;
+    const ctx = canvas ? canvas.getContext('2d') : null;
+    if (!ctx) return false;
+    ctx.clearRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
+    ctx.putImageData(new ImageData(pixels as Uint8ClampedArray<ArrayBuffer>, MAP_WIDTH, MAP_HEIGHT), 0, 0);
+    drawMapOverlay(ctx, worldMapData(body));
+    return true;
+}
+
+function start(): void {
+    const target = props.target;
+    if (same(target, shown) && requestId !== null) return;
+    drop();
+    shown = target;
+    if (!target || !mappable.value) return;
+    const mine = token;
+    // Nothing of the last body may show under the new one.
+    clearSheet();
+    arrival.value = '';
+    if (blankEl.value) renderDiamondBlank(blankEl.value, worldMapData(target.body));
+    const ticket = requestMap({
+        mode: surfaceMode(),
+        hexKey: target.hexKey,
+        dossierKey: target.dossierKey,
+        body: target.body,
+        resolution: { width: MAP_WIDTH, height: MAP_HEIGHT },
+        options: { continentalDefinition: CONTINENTAL_DEFINITION, coastlineComplexity: COASTLINE_COMPLEXITY, flags: enhancedFlags() },
+    });
+    requestId = ticket.requestId;
+    if (ticket.status === 'sheet' && ticket.pixels) {
+        // Seen before: straight from the cache, no scan.
+        if (paint(ticket.pixels, target.body)) {
+            state.value = 'full';
+            lastArrival = lastArrival === 'arrive-a' ? 'arrive-b' : 'arrive-a';
+            arrival.value = lastArrival;
+            timing.value = { sheet: '0', worker: '', chunk: '0', cached: 'true' };
+        }
+        return;
+    }
+    state.value = 'waiting';
+    beam.value = 'scan-down';
+    void ticket.done.then((sheet) => {
+        // A late answer for a body the visitor has left is dropped here as well as in the service.
+        if (mine !== token || !sheet) return;
+        if (!paint(sheet.pixels, target.body)) return;
+        timing.value = {
+            sheet: sheet.sheetMs.toFixed(1),
+            worker: sheet.workerStartMs === null ? '' : sheet.workerStartMs.toFixed(1),
+            chunk: sheet.longestChunkMs.toFixed(1),
+            cached: String(sheet.fromCache),
+        };
+        // No beam to wait for under reduced motion: the sheet simply appears.
+        state.value = prefersReducedMotion() ? 'full' : 'ready';
+    });
+}
+
+/** One pass of the beam has ended: reveal a sheet that is ready, or turn round and sweep again. */
+function onBeamEnd(): void {
+    if (state.value === 'ready') {
+        state.value = 'revealing';
+        return;
+    }
+    if (state.value === 'waiting') beam.value = beam.value === 'scan-down' ? 'scan-up' : 'scan-down';
+}
+
+function onSheetEnd(): void {
+    if (state.value === 'revealing') state.value = 'full';
+}
+
+watch(() => props.target, start, { flush: 'post' });
+onMounted(start);
+onBeforeUnmount(drop);
 </script>
 
 <template>
-  <figure class="doss-map">
+  <figure
+    v-if="mappable"
+    class="doss-map"
+    :data-state="state"
+    :aria-busy="state === 'waiting' || state === 'ready' ? 'true' : undefined"
+    :data-sheet-ms="timing.sheet"
+    :data-worker-start-ms="timing.worker"
+    :data-longest-chunk-ms="timing.chunk"
+    :data-from-cache="timing.cached"
+  >
     <div class="doss-stage">
-      <svg class="doss-stage-blank" viewBox="0 0 800 400" preserveAspectRatio="none" aria-hidden="true" focusable="false">
-        <defs>
-          <pattern :id="uid + '-hex'" width="72" height="41.57" patternUnits="userSpaceOnUse">
-            <path class="doss-stage-hex" d="M0 20.78 12 0h24l12 20.78-12 20.79H12zM48 20.78h24" />
-          </pattern>
-          <clipPath :id="uid + '-diamond'">
-            <polygon :points="DIAMOND" />
-          </clipPath>
-        </defs>
-        <polygon class="doss-stage-field" :points="DIAMOND" />
-        <rect width="800" height="400" :fill="'url(#' + uid + '-hex)'" :clip-path="'url(#' + uid + '-diamond)'" />
-      </svg>
-      <div class="doss-scan" aria-hidden="true"><div class="doss-scan-beam"></div></div>
-      <p class="doss-stage-note">Surface map arrives with the orbit view.</p>
+      <canvas
+        ref="sheetEl"
+        class="doss-sheet"
+        :class="arrival"
+        :width="MAP_WIDTH"
+        :height="MAP_HEIGHT"
+        role="img"
+        :aria-label="'Surface map of ' + worldName"
+        @animationend="onSheetEnd"
+      />
+      <div v-show="state !== 'full'" class="doss-scan" aria-hidden="true">
+        <canvas ref="blankEl" class="doss-blank" :width="MAP_WIDTH" :height="MAP_HEIGHT" />
+        <div class="doss-scan-field">
+          <div class="doss-scan-beam" :class="beam" @animationend="onBeamEnd"></div>
+        </div>
+      </div>
     </div>
     <figcaption class="doss-map-caption">
       <p v-if="badge" class="ui-badge doss-badge"><Icon name="star" :size="10.5" /><span>{{ badge }}</span></p>
@@ -52,42 +203,69 @@ const DIAMOND = '0,0 80,133.2 160,0 240,133.2 320,0 400,133.2 480,0 560,133.2 64
   overflow: hidden;
 }
 
-.doss-stage-blank {
+/* The sheet: the vanilla painter's pixels, scaled to the frame and otherwise left alone. */
+.doss-sheet {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.doss-map:is([data-state="waiting"], [data-state="ready"]) .doss-sheet {
+  visibility: hidden;
+}
+
+.doss-map[data-state="revealing"] .doss-sheet {
+  animation: doss-sheet-in var(--t-long) var(--ease-scan) both;
+}
+
+/* A sheet from the cache: a short fade, run again for each body by swapping the name. */
+.doss-map[data-state="full"] .doss-sheet.arrive-a {
+  animation: doss-sheet-arrive-a var(--t-base) var(--ease-out) both;
+}
+
+.doss-map[data-state="full"] .doss-sheet.arrive-b {
+  animation: doss-sheet-arrive-b var(--t-base) var(--ease-out) both;
+}
+
+@keyframes doss-sheet-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes doss-sheet-arrive-a {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes doss-sheet-arrive-b {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* The scan sits over the frame until the sheet is in: the blank diamond, and the beam inside it. */
+.doss-scan {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transition: opacity var(--t-long) var(--ease-scan);
+}
+
+.doss-map[data-state="revealing"] .doss-scan {
+  opacity: 0;
+}
+
+.doss-blank {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
 }
 
-.doss-stage-field {
-  fill: var(--bg-0);
-}
-
-.doss-stage-hex {
-  fill: none;
-  stroke: var(--signal-dim);
-  stroke-width: 1;
-  opacity: 0.6;
-}
-
-.doss-stage-note {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  margin: 0;
-  padding: 0 var(--sp-6);
-  color: var(--text-muted);
-  font: 400 12px/1.4 var(--font-text);
-  text-align: center;
-}
-
-/* The legacy scanner field and beam (.map-scan-field, .map-scan-beam), one pass down. */
-.doss-scan {
+/* The field holds the diamond's outline still while the beam moves inside it (legacy .map-scan-field). */
+.doss-scan-field {
   position: absolute;
   inset: 0;
   overflow: hidden;
-  pointer-events: none;
   clip-path: polygon(0% 0%, 10% 33.3%, 20% 0%, 30% 33.3%, 40% 0%, 50% 33.3%, 60% 0%, 70% 33.3%, 80% 0%, 90% 33.3%, 100% 0%,
     100% 66.7%, 90% 100%, 80% 66.7%, 70% 100%, 60% 66.7%, 50% 100%, 40% 66.7%, 30% 100%, 20% 66.7%, 10% 100%, 0% 66.7%);
 }
@@ -105,14 +283,29 @@ const DIAMOND = '0,0 80,133.2 160,0 240,133.2 320,0 400,133.2 480,0 560,133.2 64
     var(--signal-bright) 49.85%, var(--signal) 50.1%,
     color-mix(in srgb, var(--signal) 32%, transparent) 50.7%,
     color-mix(in srgb, var(--signal) 8%, transparent) 54.5%, transparent 58%);
-  opacity: 0;
-  animation: doss-scan-down var(--t-scan) var(--ease-scan) 1 both;
+}
+
+/* One pass down, then one back up, until the sheet is ready (legacy --scan-cycle is two passes). */
+.doss-scan-beam.scan-down {
+  animation: doss-scan-down var(--t-scan) var(--ease-scan) forwards;
+}
+
+.doss-scan-beam.scan-up {
+  animation: doss-scan-up var(--t-scan) var(--ease-scan) forwards;
+}
+
+.doss-map:is([data-state="revealing"], [data-state="full"]) .doss-scan-beam {
+  animation-play-state: paused;
 }
 
 @keyframes doss-scan-down {
-  from { transform: translateY(0); opacity: 1; }
-  85% { opacity: 1; }
-  to { transform: translateY(50%); opacity: 0; }
+  from { transform: translateY(0); }
+  to { transform: translateY(50%); }
+}
+
+@keyframes doss-scan-up {
+  from { transform: translateY(50%); }
+  to { transform: translateY(0); }
 }
 
 .doss-map-caption {
@@ -132,9 +325,16 @@ const DIAMOND = '0,0 80,133.2 160,0 240,133.2 320,0 400,133.2 480,0 560,133.2 64
   white-space: nowrap;
 }
 
+/* Reduced motion: the blank, then the sheet. No beam, no fades. */
 @media (prefers-reduced-motion: reduce) {
-  .doss-scan {
+  .doss-scan-field {
     display: none;
+  }
+
+  .doss-sheet,
+  .doss-scan {
+    animation: none !important;
+    transition: none;
   }
 }
 </style>

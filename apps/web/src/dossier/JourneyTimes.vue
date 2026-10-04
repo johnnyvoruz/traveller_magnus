@@ -27,15 +27,19 @@ function parts(text: string): { figure: string; unit: string } {
 <style>
 /* The headline-fact tiles again (.doss-fact), six of them: three across, six when there is room. */
 .doss-journey {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   margin: 0;
 }
 
-.doss-body[data-span="half"] .doss-journey,
-.doss-body[data-span="full"] .doss-journey {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+.doss-journey .doss-journey-tile {
+  flex: 1 1 30%;
+}
+
+.doss-body[data-span="half"] .doss-journey .doss-journey-tile,
+.doss-body[data-span="full"] .doss-journey .doss-journey-tile {
+  flex-basis: 14%;
 }
 
 .doss-journey-tile {

@@ -111,3 +111,16 @@ export function bodyByKey(system: SystemDoc, key: string): { body: Record<string
     }
     return null;
 }
+
+/**
+ * The mainworld of a system document and its dossier key: the world or moon whose type is
+ * Mainworld (legacy mappedMainworld, js/system_inspector.js:877-885). Null when the document
+ * marks none.
+ */
+export function mainworldByKey(system: SystemDoc): { key: string; body: Record<string, any> } | null {
+    for (const key of bodyKeys(system)) {
+        const found = bodyByKey(system, key);
+        if (found && !found.star && found.body.type === 'Mainworld') return { key, body: found.body };
+    }
+    return null;
+}

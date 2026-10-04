@@ -153,6 +153,8 @@ const PAIRS = [
     ['--signal', '--row-active', TEXT, 'orbit view layout button, pressed'],
     ['--text-0', '--surface-2', TEXT, 'orbit view layer chip, checked'],
     ['--signal', '--surface-2', MARK, 'orbit view layer chip icon, checked'],
+    ['--daylight', '--night-sky', MARK, 'day and night strip: light against dark'],
+    ['--daylight', '--bg-1', MARK, 'day and night strip: light against the panel'],
     ['--text-1', '--orbit-space', SMALL, 'orbit picture: star names (11 px)'],
     ['--text-1', '--orbit-space', TEXT, 'orbit picture: line-up captions (12 px and up)'],
     ['--signal', '--orbit-space', SMALL, 'orbit picture: scan designations (10 px)'],

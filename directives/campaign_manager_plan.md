@@ -1427,6 +1427,33 @@ follows from it.
 Where it shows: wherever the stardate does (§7.1: the orrery header, the stardate dialog,
 the timeline's Now line), beside the `DDD-YYYY` form answered in §10 Q4.
 
+### 7.10 Delighter (note for later): the local-time tick on the day and night strip
+
+**From Johnny, 2026-10-03. Not started; recorded by Agent D.** The clock everywhere is
+standard time (24-hour days). A world's own day is whatever its rotation gives. The dossier's
+Day and night card already draws one local day as a strip of light and dark; this adds a
+**tick that sits at "now" on that strip** and moves as the clock runs, so the referee sees at
+a glance whether it is day or night there and how long until that changes, without the world's
+day being hand-waved to 24 hours.
+
+- The tick crosses the strip once per local day and loops at the next sunrise. Nothing counts
+  local days or keeps a local calendar; it is only a conversion from the standard clock.
+- Beside it, in standard units: "Day, sunset in 5.2 hours" or "Night, sunrise in 14 hours",
+  and the standard date and time of that next change.
+- Picking a point on the strip reads the other way: the standard date and time at which the
+  world next reaches that moment of its day.
+- On the 45° strip the same tick shows against that latitude's light and dark for the season.
+- A world locked to its star has no tick (the strip already says one face always has the star).
+- It runs on the same clock as the orbit view and the surface-map overlay (§7.4 and
+  `findings/orbit_view_design.md` §8d), so the three never disagree.
+
+What exists: the maths (`apps/web/src/orbit/daynight.ts`: `spinAngle`, `subsolarLongitude`,
+`dayFraction`) and the strip (`apps/web/src/dossier/DayNight.vue`). What it needs: the clock
+passed to the dossier (on the map page there is no clock yet), and one decision, shared with
+the map overlay: **which place on the world the tick is for**, since day and night depend on
+longitude. Agent D proposes the map's prime meridian until a place (the starport, a pinned
+hex) can be chosen.
+
 ---
 
 ## 8. Journal

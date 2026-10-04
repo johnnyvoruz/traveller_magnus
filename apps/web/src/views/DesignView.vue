@@ -86,6 +86,12 @@ const orbitShuttle = ref(0);
 const orbitPop = ref('');
 const orbitBody = ref<string | null>('w2m0');
 const orbitMoons = ref<string | null>(null);
+// A made-up body for the surface-map specimen: the stage maps whatever body it is given.
+const surfaceSample = {
+    hexKey: 'Design_Sector/0101',
+    dossierKey: 'w0',
+    body: { type: 'Terrestrial Planet', name: 'Specimen', uwp: 'B766777-9', size: 7, atmCode: 6, hydroCode: 6, tempBand: 'Temperate', meanTempK: 288 },
+};
 const orbitMode = ref<Mode>('orbits');
 const orbitLayers = ref<Layers>({ ...DEFAULT_LAYERS });
 // The docked body card, with sample values in the shapes orbit/card.ts produces.
@@ -261,7 +267,7 @@ function open(key: string): void {
           <h3>Fact tiles</h3>
           <FactTiles :facts="sample.facts" />
           <h3>Surface stage (placeholder)</h3>
-          <SurfaceStage :key="scanRun" badge="Mainworld · moon of Regina A-IV" />
+          <SurfaceStage :key="scanRun" badge="Mainworld · moon of Regina A-IV" :target="surfaceSample" />
           <div class="design-row">
             <button type="button" class="ui-btn" @click="scanRun += 1"><Icon name="retry" :size="13" />Replay scanner</button>
           </div>

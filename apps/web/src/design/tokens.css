@@ -153,6 +153,10 @@
   --glyph-light: #fff;
   --glyph-dark: #000;
 
+  /* the day and night strip in the dossier */
+  --daylight: #f2cf7a;           /* the lit part of a day */
+  --night-sky: #1c2b4d;          /* the dark part */
+
   /* orbit view picture (system_viewer.js; each value is the legacy dark-mode colour) */
   --orbit-space: #000000;        /* the stage behind the star field (3263) */
   --orbit-hz: #58d678;           /* habitable band, its edge and its label (3333) */

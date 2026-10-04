@@ -68,9 +68,8 @@ midwinter: 288 × (1 − 0.39 / 2)^0.25 = 273 K (0 °C). At the equinoxes: 288 K
 This is a new derived figure, not something the rules state, so it needs your yes. Approve
 it as written, change it, or say no.
 
-*Interim: left out.*
-
-**Answer:**
+**Answer (2026-10-04): approved as written.** Agent D builds it on the orbit card, labelled an
+estimate, with the inputs in the tooltip.
 
 ### A4. The date a visitor sees first
 
@@ -179,6 +178,42 @@ The orbit view reads Mongoose-generated systems only. Do Classic, T5, RTT and Ar
 Worlds systems get surfaces now, or with the Builder slice where those can be generated?
 
 *Interim: with the Builder slice.*
+
+**Answer:**
+
+### E7. The same continents as the old app?
+
+The planet pictures will be drawn by the old app's code, ported and proven identical. But the
+old app seeded each world's continents from values that lived on your device (its seed and the
+hex's position on that map), so a world will look like the same *kind* of world, not have the
+same coastlines you remember. Matching old coastlines exactly would need the old seed and map
+positions carried over. Is "same look, different coastlines" acceptable?
+
+*Interim: yes.*
+
+**Answer:**
+
+### E8. Planets on a computer without WebGL2
+
+The old app has a third, slower planet painter for computers whose browser cannot do WebGL.
+Porting it costs about three agent sessions. Phones and tablets are out of scope, so this
+is rare. Port it now, later, or never? Without it those computers see plain lit discs in the
+orbit view; the surface map in the dossier works everywhere.
+
+*Interim: later.*
+
+**Answer:**
+
+### E9. Ice caps on hot worlds (first enhancement)
+
+You spotted that the old map painter gives white poles to worlds over 100 °C and ignores
+hydrographics. That is the old code, copied faithfully (`js/planet_renderer.js:288-301`): the
+cap depends only on the temperature band, and even "Hot" gets a cap from about 80° latitude.
+Proposal for the enhanced mode, vanilla left alone: a cap is drawn only where the world's
+**low** temperature is below the freezing point of its surface liquid (273 K for water); its
+size grows with hydrographics; hydrographics 0 has none. Approve, change, or give your own rule.
+
+*Interim: vanilla as the old app drew it; no enhanced cap rule built.*
 
 **Answer:**
 

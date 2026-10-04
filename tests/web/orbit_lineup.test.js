@@ -11,8 +11,9 @@ import { lineupFit, startCamera } from '../../apps/web/src/orbit/camera.ts';
 import { cardFor } from '../../apps/web/src/orbit/card.ts';
 import { bodyByKey } from '../../apps/web/src/orbit/bodies.ts';
 import {
-    dayFraction, DAYLIGHT_LATITUDE, daylightFraction, dayNightFor, dayNightLines, spinAngle, subsolarLatitude,
-    subsolarLongitude, sunElevation, turningOf,
+    dayFraction, DAYLIGHT_LATITUDE, daylightFraction, dayNightFigure, dayNightFor, dayNightLines, hoursText, rulerFor,
+    spanText, standardText, yearFigure,
+    spinAngle, subsolarLatitude, subsolarLongitude, sunElevation, turningOf,
 } from '../../apps/web/src/orbit/daynight.ts';
 import { hitOf, layoutScene, moonOrbitRadius, planSystem } from '../../apps/web/src/orbit/layout.ts';
 import {
@@ -469,6 +470,72 @@ test('daylight: half the day at an equinox, and a range over the year that the t
     assert.equal(moon[0].value, '88 h');
     assert.equal(moon[2].label, 'At 45° (parent’s tilt)');
     assert.deepEqual(dayNightFor(null, null), []);
+});
+
+test('the day as a picture: a long day in units a person can hold, a ruler that stays readable', () => {
+    // A world's own day is in hours. A long one is also said in standard days (24 hours) or years (365 of them).
+    assert.equal(hoursText(19.6), '19.6 hours');
+    assert.equal(hoursText(1), '1 hour');
+    assert.equal(hoursText(4910.7), '4,911 hours');
+    assert.equal(standardText(19.6), null);
+    assert.equal(standardText(47.9), null);
+    assert.equal(standardText(48), '2 standard days');
+    assert.equal(standardText(1963.2), '81.8 standard days');
+    assert.equal(standardText(4910.7), '205 standard days');
+    assert.equal(standardText(2 * 365 * 24), '2 standard years');
+    assert.equal(standardText(40000 * 24), '110 standard years');
+    assert.equal(spanText(19.6), '19.6 hours');
+    assert.equal(spanText(2455.35), '102 standard days');
+    // The ruler: the finest mark that gives no more than 48 across the day.
+    assert.deepEqual(rulerFor(19.6), { everyHours: 1, label: '1 hour', count: 19.6 });
+    assert.deepEqual(rulerFor(48), { everyHours: 1, label: '1 hour', count: 48 });
+    assert.equal(rulerFor(49).label, '6 hours');
+    assert.equal(rulerFor(300).label, '1 standard day');
+    assert.equal(rulerFor(1963.2).label, '10 standard days');
+    assert.equal(rulerFor(4910.7).label, '10 standard days');
+    assert.equal(rulerFor(20000).label, '100 standard days');
+    assert.equal(rulerFor(200000).label, '1 standard year');
+
+    const figure = dayNightFigure({ siderealHours: 1669.6, solarDayHours: 4910.7, axialTilt: 0.6 }, null);
+    assert.equal(figure.span, '4,911 hours');
+    assert.equal(figure.standard, '205 standard days');
+    assert.equal(dayNightFigure({ solarDayHours: 19.6, axialTilt: 3 }, null).standard, null);
+    assert.deepEqual(figure.equator, { light: 4910.7 / 2, dark: 4910.7 / 2 });
+    assert.equal(figure.mid.latitude, 45);
+    close(figure.mid.longest + figure.mid.shortest, 4910.7);
+    assert.equal(figure.polarBeyond, 89.4);
+    assert.equal(figure.ruler.label, '10 standard days');
+    // A steep tilt: at 45° the light is all or nothing; the polar circle is at 20°.
+    const steep = dayNightFigure({ solarDayHours: 42.3, axialTilt: 70 }, null);
+    assert.deepEqual([steep.mid.shortest, steep.mid.longest, steep.polarBeyond], [0, 42.3, 20]);
+    // A backwards spin folds the tilt; a moon without a tilt takes its parent's, and says so.
+    const backwards = dayNightFigure({ solarDayHours: 600, axialTilt: 130 }, null);
+    assert.equal(backwards.retrograde, true);
+    assert.equal(backwards.polarBeyond, 40);
+    const moon = dayNightFigure({ solarDayHours: 88, tidallyLocked: true }, { axialTilt: 20 });
+    assert.equal(moon.locked, false);
+    assert.equal(moon.mid.derived, true);
+    assert.equal(dayNightFigure({ solarDayHours: 88 }, null).mid, null);
+    // A planet locked to its star: one side lit for ever. No solar day in the document: no picture.
+    assert.equal(dayNightFigure({ tidallyLocked: true, solarDayHours: 40 }, null).locked, true);
+    assert.equal(dayNightFigure({ siderealHours: 20 }, null), null);
+    assert.equal(dayNightFigure({ solarDayHours: 9e9 }, null), null);
+    assert.equal(dayNightFigure(null, null), null);
+});
+
+test('the year: standard days first, then standard years and the world’s own days', () => {
+    // Regina A-V: 166,639 hours round the star, 8,500.8 of its own days in that.
+    assert.deepEqual(yearFigure({ yearHours: 166639.38, solarDaysInYear: 8500.77 }), {
+        days: '6,943 standard days', years: '19 standard years', localDays: '8,501 local days',
+    });
+    // A short year stays in days; a year shorter than the world's own day says so.
+    assert.deepEqual(yearFigure({ yearHours: 2529.74, solarDaysInYear: 0.515 }), { days: '105 standard days', years: null, localDays: '0.5 local days' });
+    assert.deepEqual(yearFigure({ yearHours: 480 }), { days: '20 standard days', years: null, localDays: null });
+    // A backwards spin gives a negative count in the document; it is still that many days.
+    assert.equal(yearFigure({ yearHours: 4110.89, solarDaysInYear: -6.71 }).localDays, '6.7 local days');
+    assert.equal(yearFigure({ yearHours: 4110.89, solarDaysInYear: 0 }).localDays, null);
+    assert.equal(yearFigure({}), null);
+    assert.equal(yearFigure(null), null);
 });
 
 test('a body and its parent are found by the dossier’s key', () => {

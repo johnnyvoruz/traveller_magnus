@@ -26,6 +26,24 @@ if (import.meta.env.DEV || import.meta.env.MODE === 'preview') {
     router.addRoute({ path: '/design', name: 'design', component: () => import('./views/DesignView.vue') });
 }
 
+if (import.meta.env.DEV) {
+    router.addRoute({
+        path: '/dev/surface-parity',
+        name: 'surface-parity',
+        component: () => import('./dev/surface-parity/SurfaceParity.vue'),
+    });
+    router.addRoute({
+        path: '/dev/surface-sheet',
+        name: 'surface-sheet',
+        component: () => import('./dev/surface-sheet/SurfaceSheet.vue'),
+    });
+    router.addRoute({
+        path: '/dev/surface-parity/gl',
+        name: 'surface-parity-gl',
+        component: () => import('./dev/surface-parity/GlParity.vue'),
+    });
+}
+
 router.afterEach((to, from) => {
     if (to.path !== from.path && !to.hash) scrollToTop();
 });

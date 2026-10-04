@@ -6,7 +6,7 @@ import JourneyTimes from './JourneyTimes.vue';
 import SocioBlock from './SocioBlock.vue';
 import StatRows from './StatRows.vue';
 import StellarLines from './StellarLines.vue';
-import SurfaceStage from './SurfaceStage.vue';
+import SurfaceStage, { type SurfaceTarget } from './SurfaceStage.vue';
 import SystemTree from './SystemTree.vue';
 import UwpRibbon from './UwpRibbon.vue';
 
@@ -14,6 +14,8 @@ defineProps<{
     model: OverviewModel;
     span: PanelSpan;
     error: boolean;
+    /** The mainworld, whose surface map leads the overview, or null. */
+    surface?: SurfaceTarget | null;
     /** Offer Explore orbits (not when the panel already sits beside the orbit view). */
     orbitLink?: boolean;
 }>();
@@ -27,7 +29,7 @@ defineEmits<{
 
 <template>
   <div class="doss" :data-span="span">
-    <SurfaceStage :badge="model.mapBadge" />
+    <SurfaceStage :badge="model.mapBadge" :target="surface ?? null" />
     <div class="doss-identity">
       <div v-if="model.mainworldKey || (orbitLink && model.tree)" class="doss-actions">
         <button

@@ -1713,3 +1713,103 @@ come before P3. Questions E1 and E2 are closed.
 - **Everything local is pushable:** B's dossier temperatures and profile port, D's orbit work.
 - **Next for D:** wiring the surface renderers when V1 and V2 land; until then C2c delighters
   that need no surfaces. C5 (2.5D) is decided again after C4.
+
+## 53. The surfaces plan (P1) is accepted with amendments; vanilla build starts (2026-10-04)
+
+- **Agent F wrote `directives/plan_planet_surfaces.md`** (F is at about half its budget).
+  Accepted; the orchestrator's amendments are its §0 and win over the text below them:
+  the legacy no-WebGL canvas disc is **not** ported now (steps 6 and 7 deferred; question E8);
+  the vanilla disc bakes on the main thread first, as legacy does, and moves to a GL worker
+  only if cold measurements show a 50 ms task; owners are set in §0.
+- **Recorded deviation, awaiting Johnny (E7):** vanilla continents will not match what an old
+  device showed for the same world. The legacy map seed is `masterSeed-hexId-name`, where
+  `masterSeed` and `hexId` were per-device values; the new app uses `TravellerMagnus` and the
+  full hex key. The renderer is proven identical for identical inputs.
+- **In flight:** step 1 (identity, requests, preference, service skeleton), Agent A; step 2a
+  (Node map oracle and fixtures), Agent B; step 2b (dev browser parity harness), Agent C.
+  Then steps 3 and 4 (the vanilla map port), Agent C.
+- **The enhanced class table** (plan §7) goes to Johnny at step 12, when vanilla is on screen.
+- **Step 2b in (Agent C):** dev-only page `/dev/surface-parity` (legacy source served from disk
+  by `apps/web/surface-parity-dev.ts`, never in the build), headless driver
+  `node scripts/surface_parity.js` (Chrome; Edge not found at the standard paths). Legacy
+  against legacy: zero mismatches for Regina, Jewell, Efate. **Review gap:** zero mismatches
+  between two copies proves nothing if both canvases are blank or the compare is broken; C's
+  next step adds a not-blank assertion and a negative control (a different seed must
+  mismatch). C goes on to step 3 (the vanilla map pixels) without waiting; the Node fixture
+  test is added when B's oracle lands.
+- **Step 1 in (Agent A):** `surface/contracts.ts`, `identity.ts`, `preferences.ts`,
+  `service.ts`; identity tests equal the legacy functions in the oracle; the `surfaces`
+  command toggles and persists (seen in a browser). **For step 5 / 11 (Agent D):** the command
+  is already visible in the omnibox while enhanced draws nothing. Before vanilla surfaces
+  ship, the command is hidden (or dev-only) until an enhanced mode exists; a visitor must
+  never be able to switch to a mode that blanks the planets.
+- **Step 2a in (Agent B):** `tests/oracle/surface_map.js` runs the real `renderFlatMap` in a vm
+  with a recording canvas stand-in and five guarded in-memory insertions (renderer sha256 in
+  `tests/web/fixtures/surface/manifest.json`); 65 cases (41 maps, 24 exclusions). Accepted for
+  coverage. **Sent back for cost:** the fixtures are 8.35 MB and `npm test` went from 4.7 s to
+  28 s. B reduces traces and CDFs to digests plus short samples and runs the determinism
+  double-render on three cases only. Target: fixtures under 1 MB, the suite under about 15 s.
+- Findings worth keeping: the legacy flat map never reads the atmosphere limb colour; hydro 10
+  and 11 give the same sheet; print mode's white fill is overwritten by `putImageData`; a size 0
+  render draws separators and no hex grid.
+- **Steps 3 and 4 in (Agent C): the vanilla surface map is byte-identical to the legacy
+  renderer** in a real browser for 12 cases (Regina, Jewell, Efate, dry, ice, molten, hydro 0,
+  hydro A, exotic A, print, two slider settings), and against all 41 of B's Node fixtures. The
+  harness now asserts not-blank and has a negative control (a different seed gives 616,030
+  mismatched bytes). Files: `surface/vanilla/map_fields.ts`, `map_palette.ts`,
+  `map_projection.ts`, `map_grid.ts`, `map.ts`. `renderFlatMapPixels` takes **147 ms** for
+  Regina on the main thread, so it must run in the worker before it is wired to the dossier.
+- **Next:** Agent C, the surface worker, cache and `service.requestMap` for vanilla; then
+  Agent D wires the dossier (step 5). Agent A starts the GL parity harness (step 8a,
+  legacy against legacy) so the disc port has its proof waiting.
+- **Step 2a cost fix in (Agent B):** fixtures 686 KB (was 8.35 MB), full suite 15.9 s (was
+  28 s; 4.7 s before surfaces). One vm renders all 65 cases; a second checks three. Traces and
+  CDFs are digests plus samples; `diagnoseSurfaceCase` returns the full ones on demand.
+  The fixtures are now fit to commit. If the suite time becomes a nuisance, the next lever is
+  splitting the oracle test across files so `node --test` runs them in parallel.
+- **Johnny approved the "today's temperature" formula as written** (`questions_for_johnny.md`
+  A3): `mean x (1 + tiltPart x sin(orbit angle) / (1 + pressure)) ^ 0.25`, southern hemisphere
+  with the sign flipped, tilt part as the engine computes it
+  (`packages/engines/src/mgt2e_world_engine.js:1754-1788`). A derived presentation figure,
+  labelled an estimate. Agent D builds it on the orbit card.
+- **Map worker, cache and service in (Agent C):** `surface.worker.ts`, `cache.ts` (24 MiB, 16
+  sheets), `map_chunks.ts` (no-worker path, yields between tasks), `service.requestMap` with
+  generation tokens; enhanced falls back to vanilla. Regina cold in headless Chrome: worker
+  start 53 ms, sheet at 331 ms, no main-thread long task, overlay 3 ms. Worker output has the
+  same SHA-256 as the main-thread render for three fixtures. Dev page `dev/surface-sheet`.
+- **Next: step 5, Agent D wires the map into the dossier** (after the today's-temperature
+  task), and hides the `surfaces` command until an enhanced mode exists.
+- **Step 8a in (Agent A): the GL parity harness.** `/dev/surface-parity/gl` (dev only): two
+  realms run the unmodified `planet_gl.js` (three guarded in-memory anchors: statistics
+  readback, frozen `uTime`, a capture export; source sha256 recorded). Legacy against legacy is
+  byte-identical on Edge 154 / ANGLE D3D11 / Radeon RX 7900 XTX for statistics, both cubes at
+  32 and 128 (level 0), and the shaded tile, for ocean, dry, ice, gas and ringed worlds; the
+  negative control differs. Only `uTime` had to be frozen. Not read: other mip levels, cube
+  sizes 512/1024, sweep, casters, light mode.
+- **Next: Agent B ports the vanilla disc** (step 8: shaders, statistics, bake; then step 9:
+  shade, rings, casters) with that harness as the proof; Agent F reviews once after step 9.
+
+## 54. Overnight stop (2026-10-04, late): where to pick up
+
+- **Tree state at the stop (orchestrator ran them):** check clean, 401 pass / 0 fail / 5
+  skipped, build green, `dist` free of the parity harness and legacy source.
+- **Push point offered to Johnny:** everything except Agent D's in-flight files
+  (`orbit/card.ts`, `orbit/daynight.ts`, `orbit/today_temp.ts`, `dossier/DayNight.vue`,
+  `dossier/DossierBody.vue`, `DossierPanel.vue`, `FactTiles.vue`, `tests/web/orbit_lineup.test.js`,
+  `tests/web/orbit_today_temp.test.js`), which are unreviewed and unseen. Nothing visible
+  changes in production from this push except a "Surfaces: Vanilla" command in the omnibox
+  that does nothing harmful (enhanced falls back to vanilla; no surface is wired yet).
+- **In flight:** Agent D, today's temperature (approved formula), then step 5 (the vanilla map
+  in the dossier; prompt issued). Agent B, step 8 (vanilla disc: shaders, statistics, bake;
+  prompt issued, may not be started).
+- **Waiting:** B's step 9 (shade, rings, casters), then one Agent F review; step 10 (Agent C:
+  scheduling, caps, context loss); step 11 (Agent D: orbit wiring). Then step 12: Johnny sees
+  vanilla and decides on the enhanced class table (plan §7).
+- **Open with Johnny:** `questions_for_johnny.md` A1, A2, A4 to A6, A8 to A10, E3 to E8, B, C, D.
+- **Johnny, looking at the vanilla map:** ice caps on a world over 100 C, and hydrographics
+  ignored. Confirmed as legacy behaviour, ported as written (`js/planet_renderer.js:288-301`):
+  the polar overlay depends only on the temperature band (Hot: cap centre 88 degrees, fading
+  in from 80), is skipped only for molten, airless-dry rock and frozen-solid worlds, and never
+  reads hydrographics. Not a port bug. Recorded as the first enhancement candidate (question
+  E9): caps only where the low temperature is below the liquid's freezing point, sized by
+  hydrographics, none at hydro 0. Vanilla stays as is.

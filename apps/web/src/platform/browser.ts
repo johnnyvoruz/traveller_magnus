@@ -75,6 +75,24 @@ export function createCanvas(width: number, height: number): HTMLCanvasElement {
     return canvas;
 }
 
+/** WebGL2 for the orbit disc. Attributes are js/planet_gl.js:748-749. */
+export function webgl2Context(canvas: HTMLCanvasElement): WebGL2RenderingContext | null {
+    return canvas.getContext('webgl2', {
+        alpha: true,
+        premultipliedAlpha: true,
+        antialias: false,
+        depth: false,
+        stencil: false,
+        preserveDrawingBuffer: true,
+        powerPreference: 'high-performance',
+    });
+}
+
+/** Dev pages publish a JSON result for a headless driver. */
+export function publishAutomationResult(key: string, value: unknown): void {
+    (window as unknown as Record<string, unknown>)[key] = value;
+}
+
 /** Starts loading an image; done runs once it can be drawn. A failed load never calls done. */
 export function loadImage(src: string, done: () => void): HTMLImageElement {
     const image = new Image();
@@ -89,4 +107,29 @@ export function loadImage(src: string, done: () => void): HTMLImageElement {
  */
 export function startAlignmentWorker(): Worker {
     return new Worker(new URL('../orbit/alignment.worker.ts', import.meta.url), { type: 'module' });
+}
+
+/** The CPU surface worker (surface/surface.worker.ts). Throws where workers are not available. */
+export function startSurfaceWorker(): Worker {
+    return new Worker(new URL('../surface/surface.worker.ts', import.meta.url), { type: 'module' });
+}
+
+/** Runs fn as its own task. The returned function cancels it if it has not run. */
+export function afterTask(fn: () => void): () => void {
+    const handle = setTimeout(fn, 0);
+    return () => clearTimeout(handle);
+}
+
+/** Long-task entries during a cold paint. No-op where the observer is missing. */
+export function observeLongTasks(fn: (duration: number) => void): () => void {
+    if (typeof PerformanceObserver === 'undefined') return () => {};
+    try {
+        const observer = new PerformanceObserver((list) => {
+            for (const entry of list.getEntries()) fn(entry.duration);
+        });
+        observer.observe({ type: 'longtask', buffered: true });
+        return () => observer.disconnect();
+    } catch {
+        return () => {};
+    }
 }

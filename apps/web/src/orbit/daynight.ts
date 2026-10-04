@@ -178,3 +178,150 @@ export function dayNightFor(
         derived: own === null && fromParent !== null,
     });
 }
+
+// ---- The day as a picture: something to hold a 2,000-hour day against --------------------
+
+/** The clock's day and year, the yardsticks a long day is measured in (orbit/clock.ts). */
+const CLOCK_DAY_HOURS = 24;
+const CLOCK_YEAR_DAYS = 365;
+
+function grouped(value: number, decimals: number): string {
+    return String(Number(value.toFixed(decimals))).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+/** A length of time in hours: "19.6 hours", "4,911 hours". */
+export function hoursText(spanHours: number): string {
+    const text = grouped(spanHours, spanHours >= 100 ? 0 : 1);
+    return text + (text === '1' ? ' hour' : ' hours');
+}
+
+/**
+ * A long stretch of hours restated in the clock's units, so it can be held against a life
+ * lived in 24-hour days: "205 standard days", "13.4 standard years". Null under two days,
+ * where hours already say it. "Standard" here means the clock's day of 24 hours and its year
+ * of 365 of them (orbit/clock.ts); the word is this view's, not a rules term.
+ */
+export function standardText(spanHours: number): string | null {
+    if (spanHours < 2 * CLOCK_DAY_HOURS) return null;
+    const days = spanHours / CLOCK_DAY_HOURS;
+    if (days < 2 * CLOCK_YEAR_DAYS) return grouped(days, days >= 100 ? 0 : 1) + ' standard days';
+    const years = days / CLOCK_YEAR_DAYS;
+    return grouped(years, years >= 100 ? 0 : 1) + ' standard years';
+}
+
+/** The stretch in the unit a person would say it in: hours when short, standard days or years when long. */
+export function spanText(spanHours: number): string {
+    return standardText(spanHours) ?? hoursText(spanHours);
+}
+
+export type Ruler = {
+    /** Hours between marks. */
+    everyHours: number;
+    /** What one mark is, in words. */
+    label: string;
+    /** Marks across one solar day (not a whole number). */
+    count: number;
+};
+
+const RULER_STEPS: [number, string][] = [
+    [1, '1 hour'], [6, '6 hours'], [24, '1 standard day'], [240, '10 standard days'], [2400, '100 standard days'],
+    [CLOCK_YEAR_DAYS * 24, '1 standard year'], [CLOCK_YEAR_DAYS * 240, '10 standard years'], [CLOCK_YEAR_DAYS * 2400, '100 standard years'],
+];
+/** The most marks a strip carries before the next coarser step is used. */
+export const RULER_MAX_MARKS = 48;
+
+/** The finest step that puts no more than RULER_MAX_MARKS marks across a day of this length. */
+export function rulerFor(dayHours: number): Ruler {
+    for (const [every, label] of RULER_STEPS) {
+        if (dayHours / every <= RULER_MAX_MARKS) return { everyHours: every, label, count: dayHours / every };
+    }
+    const last = RULER_STEPS[RULER_STEPS.length - 1] as [number, string];
+    return { everyHours: last[0], label: last[1], count: dayHours / last[0] };
+}
+
+export type DayNightFigure = {
+    /** A planet locked to its star: one side is always lit, there is no cycle. */
+    locked: boolean;
+    /** The solar day in hours; 0 when locked. */
+    dayHours: number;
+    /** The solar day in hours, in words: "4,911 hours". */
+    span: string;
+    /** The same in 24-hour days or 365-day years, or null when hours already say it. */
+    standard: string | null;
+    /** The backwards spin: the star rises in the west. */
+    retrograde: boolean;
+    /** Light and dark at the equator, in hours: half and half all year. */
+    equator: { light: number; dark: number };
+    /** At DAYLIGHT_LATITUDE: the least and most daylight of the year, or null without a tilt. */
+    mid: { latitude: number; shortest: number; longest: number; derived: boolean } | null;
+    /** Polar day and night happen beyond this latitude; null without a tilt worth the name. */
+    polarBeyond: number | null;
+    ruler: Ruler;
+};
+
+/**
+ * The day and night cycle as numbers a picture can be drawn from, or null when the document
+ * gives no solar day. The same geometry as dayNightLines; the tilt follows Q1 (a moon
+ * without one takes its parent's).
+ */
+export function dayNightFigure(
+    body: Record<string, any> | null | undefined, parent: Record<string, any> | null | undefined,
+): DayNightFigure | null {
+    if (!body) return null;
+    const turning = turningOf(body, !!parent);
+    if (turning.lockedToStar) {
+        return { locked: true, dayHours: 0, span: '', standard: null, retrograde: false, equator: { light: 0, dark: 0 }, mid: null, polarBeyond: null, ruler: rulerFor(1) };
+    }
+    const day = turning.solarDayHours;
+    if (day === null || !(day < SOLAR_DAY_LIMIT_HOURS)) return null;
+    const own = typeof body.axialTilt === 'number' && Number.isFinite(body.axialTilt) ? body.axialTilt : null;
+    const fromParent = parent && typeof parent.axialTilt === 'number' && Number.isFinite(parent.axialTilt) ? parent.axialTilt : null;
+    const raw = own ?? fromParent;
+    const tilt = raw === null ? null : (raw > 90 ? 180 - raw : raw);
+    return {
+        locked: false,
+        dayHours: day,
+        span: hoursText(day),
+        standard: standardText(day),
+        retrograde: turning.retrograde,
+        equator: { light: day / 2, dark: day / 2 },
+        mid: tilt === null ? null : {
+            latitude: DAYLIGHT_LATITUDE,
+            shortest: daylightFraction(DAYLIGHT_LATITUDE, -tilt) * day,
+            longest: daylightFraction(DAYLIGHT_LATITUDE, tilt) * day,
+            derived: own === null,
+        },
+        polarBeyond: tilt !== null && tilt >= 0.05 ? Number((90 - tilt).toFixed(1)) : null,
+        ruler: rulerFor(day),
+    };
+}
+
+// ---- The year, said so it cannot be misread ------------------------------------------------
+
+export type YearFigure = {
+    /** The year in standard (24-hour) days: "6,943 standard days". */
+    days: string;
+    /** The same in standard years, when it is two or more: "19 standard years". Else null. */
+    years: string | null;
+    /** How many of the world's own days (sunrise to sunrise) fit in its year: "8,501 local days". Else null. */
+    localDays: string | null;
+};
+
+/**
+ * A body's year round its star, from the document's yearHours (a moon's is its planet's) and
+ * solarDaysInYear. Null when the document gives no year length. The tile used to read
+ * "19 yr", which says neither what a year is measured in nor how many days it holds.
+ */
+export function yearFigure(body: Record<string, any> | null | undefined): YearFigure | null {
+    if (!body) return null;
+    const hours = positive(body.yearHours);
+    if (hours === null) return null;
+    const days = hours / CLOCK_DAY_HOURS;
+    const years = days / CLOCK_YEAR_DAYS;
+    const local = typeof body.solarDaysInYear === 'number' && Number.isFinite(body.solarDaysInYear) ? Math.abs(body.solarDaysInYear) : null;
+    return {
+        days: grouped(days, days >= 100 ? 0 : 1) + ' standard days',
+        years: years >= 2 ? grouped(years, years >= 100 ? 0 : 1) + ' standard years' : null,
+        localDays: local !== null && local > 0 ? grouped(local, local >= 100 ? 0 : 1) + ' local days' : null,
+    };
+}
