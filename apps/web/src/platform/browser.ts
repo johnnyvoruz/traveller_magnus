@@ -82,3 +82,11 @@ export function loadImage(src: string, done: () => void): HTMLImageElement {
     image.src = src;
     return image;
 }
+
+/**
+ * A worker for the orbit view's line-up search (orbit/alignment.worker.ts). Throws where
+ * workers are not available; the caller then searches on the page.
+ */
+export function startAlignmentWorker(): Worker {
+    return new Worker(new URL('../orbit/alignment.worker.ts', import.meta.url), { type: 'module' });
+}

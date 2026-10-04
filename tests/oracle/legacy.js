@@ -25,7 +25,10 @@ export const FILES = [
     'rules/expectations_data.js', 'js/statistical_auditor.js',
     'js/macro_orchestrator.js', 'js/io_manager.js', 'js/otu_metadata_parser.js', 'names.js',
     // After universal_math.js (formatDisplayNumber) and rules/mgt2e_data.js (MgT2EData).
-    // hex_map.html loads planet_profile.js first; surfaceKind reads window.PlanetProfile only when called.
+    // hex_map.html loads planet_renderer.js, then planet_profile.js, before system_viewer.js.
+    // kind() reads PlanetRenderer.tempBandFromKelvin when tempBand is empty.
+    'js/planet_renderer.js',
+    'js/planet_profile.js',
     'js/system_viewer.js'
 ];
 

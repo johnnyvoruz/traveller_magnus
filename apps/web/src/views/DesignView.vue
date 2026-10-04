@@ -22,6 +22,8 @@ import UwpRibbon from '../dossier/UwpRibbon.vue';
 import OmniBox from '../components/OmniBox.vue';
 import BodyCard from '../orbit/BodyCard.vue';
 import BodyChips from '../orbit/BodyChips.vue';
+import LayerChips from '../orbit/LayerChips.vue';
+import { DEFAULT_LAYERS, type Layers, type Mode } from '../orbit/picture.ts';
 import type { BodyCardModel } from '../orbit/card.ts';
 import { bodyChips } from '../orbit/bodies.ts';
 import { REAL_TIME, skipHours, totalDays } from '../orbit/clock.ts';
@@ -84,7 +86,21 @@ const orbitShuttle = ref(0);
 const orbitPop = ref('');
 const orbitBody = ref<string | null>('w2m0');
 const orbitMoons = ref<string | null>(null);
+const orbitMode = ref<Mode>('orbits');
+const orbitLayers = ref<Layers>({ ...DEFAULT_LAYERS });
 // The docked body card, with sample values in the shapes orbit/card.ts produces.
+// The card of another body under the pointer, stacked under the pinned one.
+const orbitHoverCard: BodyCardModel = {
+    title: 'Regina A-IV',
+    sub: 'Gas Giant GL',
+    lines: [
+        { label: 'Distance', value: '3.306 AU' },
+        { label: 'Diameter', value: '128,000 km', gap: true },
+        { label: 'Moons', value: '6' },
+    ],
+    season: null,
+    seasonHelp: '',
+};
 const orbitCard: BodyCardModel = {
     title: 'Regina',
     sub: 'Mainworld Satellite',
@@ -93,10 +109,12 @@ const orbitCard: BodyCardModel = {
         { label: 'UWP', value: 'A788899-C', strong: true, gap: true },
         { label: 'Diameter', value: '11,169 km', gap: true },
         { label: 'Rotation', value: 'tidally locked' },
-        { label: 'Temperature', value: 'Frozen \u00B7 \u221284\u00B0C (\u2212118\u00B0F)', hint: 'Mean 190 K' },
+        { label: 'Climate', value: 'Frozen', gap: true },
+        { label: 'Mean temp.', value: '\u221284\u00B0C (\u2212118\u00B0F)', hint: 'Mean 190 K' },
     ],
     season: {
         text: 'Northern autumn, marked \u00B7 southern spring \u00B7 by Regina A-IV\u2019s year (1,984 days)',
+        lines: ['Northern autumn, marked', 'Southern spring', 'By Regina A-IV\u2019s year (1,984 days)'],
         orbit: '',
         inputs: 'tilt 25\u00B0 \u00B7 e 0 \u00B7 orbit angle 241\u00B0',
     },
@@ -284,7 +302,7 @@ function open(key: string): void {
     <section class="design-section">
       <h2 class="ui-heading">Orbit view shell</h2>
       <p class="design-note">
-        The nav bar with the edition badge, the time row, the docked body card and the body chips of
+        The nav bar with the edition badge, the time row, the layout and layer chips with the View popover, the docked body card and the body chips of
         <code>/s/:sector/:hex/orbit</code>. Buttons are <code>.orbit-btn</code> (base.css); the clock arithmetic is
         <code>orbit/clock.ts</code>; the card's contents are <code>orbit/card.ts</code> (temperatures through
         <code>design/units.ts</code>, the season line through <code>orbit/seasons.ts</code>). The picture's colours are the
@@ -316,8 +334,19 @@ function open(key: string): void {
           @shuttle="orbitShuttle = $event"
           @pop="orbitPop = $event ? 'scrub' : ''"
         />
+        <LayerChips
+          :mode="orbitMode"
+          :layers="orbitLayers"
+          :view-open="orbitPop === 'view'"
+          @mode="orbitMode = $event"
+          @layers="orbitLayers = $event"
+          @pop="orbitPop = $event ? 'view' : ''"
+        />
         <div class="design-orbit-stage">
-          <BodyCard :model="orbitCard" body-key="sample" />
+          <div class="orbit-cards">
+            <BodyCard :model="orbitCard" body-key="sample" closable />
+            <BodyCard :model="orbitHoverCard" body-key="hover-sample" :closable="false" under />
+          </div>
           <BodyChips
             :chips="orbitChips"
             :selected="orbitBody"
@@ -675,7 +704,7 @@ function open(key: string): void {
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  min-height: 330px;
+  min-height: 420px;
   background: var(--orbit-space);
 }
 

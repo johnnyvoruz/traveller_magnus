@@ -4,6 +4,7 @@
  * js/system_inspector.js. Components render these values and do not decide them.
  */
 import type { SectorHex, TreeEnvelope } from '@voyage/shared';
+import { formatTempFull } from '../design/units.ts';
 import { formatDisplayNumber, formatTradeCodes, formatUwpDigit, toEHex } from './labels.ts';
 
 export type HexBody = Record<string, unknown>;
@@ -256,11 +257,6 @@ function systemTitle(body: HexBody, hex: string): string {
 function num(value: unknown, decimals: number, unit = ''): string {
     if (value == null || value === '' || !Number.isFinite(Number(value))) return '';
     return formatDisplayNumber(Number(value), decimals, unit);
-}
-
-function celsius(kelvin: unknown): string {
-    const k = Number(kelvin);
-    return Number.isFinite(k) && k > 0 ? formatDisplayNumber(k - 273.15, 0) + ' \u00B0C' : '';
 }
 
 function siderealHours(body: Record<string, unknown>): number | null {
@@ -824,8 +820,8 @@ export function bodyModel(tree: TreeEnvelope, bodyKey: string): BodyModel | null
             ['Mass (M⊕)', body.massEarths ?? body.mass, 3],
             ['Composition', body.composition],
             ['Atmospheric pressure (bar)', body.totalPressureBar ?? body.pressureBar, 2],
-            ['High temperature (K)', body.highTempK, 0],
-            ['Low temperature (K)', body.lowTempK, 0],
+            ['High temperature', formatTempFull(body.highTempK)],
+            ['Low temperature', formatTempFull(body.lowTempK)],
             ['Temperature band', body.tempBand],
             ['Albedo', body.albedo, 2],
         ]);
@@ -856,7 +852,7 @@ export function bodyModel(tree: TreeEnvelope, bodyKey: string): BodyModel | null
         mapBadge: body.type === 'Mainworld' ? 'Mainworld' : '',
         facts: star
             ? factTiles([
-                { label: 'Temperature', value: num(body.temp, 0, 'K') },
+                { label: 'Temperature', value: formatTempFull(body.temp) },
                 { label: 'Luminosity', value: num(body.lum, 3, 'L☉') },
                 { label: 'Mass', value: num(body.mass, 3, 'M☉') },
                 { label: 'Diameter', value: num(body.diam, 3, 'D☉') },
@@ -864,7 +860,7 @@ export function bodyModel(tree: TreeEnvelope, bodyKey: string): BodyModel | null
             : factTiles([
                 { label: 'Diameter', value: num(body.diamKm, 0, 'km') },
                 { label: 'Gravity', value: num(body.gravity, 2, 'G') },
-                { label: 'Mean temp.', value: num(body.meanTempK, 0, 'K'), note: celsius(body.meanTempK) },
+                { label: 'Mean temp.', value: formatTempFull(body.meanTempK) },
                 { label: 'Day', value: rotationText(body) },
                 { label: 'Year', value: periodText(body) },
                 { label: 'Moons', value: moonCount ? String(moonCount) : '' },

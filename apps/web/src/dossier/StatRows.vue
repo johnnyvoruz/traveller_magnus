@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { tempLines } from '../design/units.ts';
 import type { StatRow } from './model.ts';
 
 defineProps<{ rows: StatRow[] }>();
@@ -18,6 +19,9 @@ defineProps<{ rows: StatRow[] }>();
         <dd class="ui-code doss-code" :class="{ 'is-solo': !row.name }">{{ row.code }}</dd>
         <dd v-if="row.name" class="doss-name">{{ row.name }}</dd>
       </template>
+      <dd v-else-if="tempLines(row.text)" class="doss-value doss-value-lines">
+        <span v-for="line in tempLines(row.text)" :key="line">{{ line }}</span>
+      </dd>
       <dd v-else class="doss-value">{{ row.text }}</dd>
     </div>
   </dl>
@@ -94,6 +98,16 @@ defineProps<{ rows: StatRow[] }>();
   font-variant-numeric: var(--tabular);
   line-height: 1.35;
   overflow-wrap: anywhere;
+}
+
+/* A value of several figures (a temperature in three scales): one per line, the first the headline. */
+.doss-value-lines span {
+  display: block;
+}
+
+.doss-value-lines span + span {
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
 .doss-chips {

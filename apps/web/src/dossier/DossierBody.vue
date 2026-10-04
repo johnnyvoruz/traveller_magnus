@@ -11,6 +11,8 @@ import UwpRibbon from './UwpRibbon.vue';
 defineProps<{
     model: BodyModel;
     span: PanelSpan;
+    /** The day and night cycle in words (orbit/daynight.ts), or nothing when the document gives no solar day. */
+    dayNight?: { label: string; value: string }[];
 }>();
 
 defineEmits<{ open: [key: string] }>();
@@ -27,6 +29,10 @@ function factsOf(link: BodyLink): string {
       <UwpRibbon v-if="model.ribbon" :ribbon="model.ribbon" />
       <FactTiles :facts="model.facts" />
       <JourneyTimes v-if="model.journey" :journey="model.journey" />
+      <section v-if="dayNight && dayNight.length" class="doss-section">
+        <h3 class="ui-heading" title="Geometry only: the share of the solar day the star is above the horizon, from the axial tilt. No refraction, eclipses or terrain.">Day and night</h3>
+        <StatRows :rows="dayNight.map((line) => ({ label: line.label, text: line.value }))" />
+      </section>
       <section v-for="block in model.mainSections" :key="block.heading" class="doss-section">
         <h3 class="ui-heading">{{ block.heading }}</h3>
         <StatRows :rows="block.rows" />

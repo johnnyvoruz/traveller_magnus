@@ -1,9 +1,10 @@
 <script setup lang="ts">
 /**
  * The orbit stage: the canvas, its pointer input, the docked body card and the Fit button.
- * It only binds. The scene is orbit/layout.ts, the camera orbit/camera.ts and orbit/stage.ts,
- * the paint orbit/OrbitRenderer.ts, the card orbit/card.ts. The view owns the clock and the
- * frame loop and calls paint() once a frame.
+ * It only binds. The layouts are orbit/layout.ts and orbit/lineup.ts, the move between them
+ * orbit/tween.ts, the camera orbit/camera.ts and orbit/stage.ts, the paint
+ * orbit/OrbitRenderer.ts, the card orbit/card.ts. The view owns the clock and the frame loop
+ * and calls paint() once a frame.
  */
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
 import Icon from '../design/Icon.vue';
@@ -16,6 +17,7 @@ import { DRAG_SLOP, wheelNotches } from './camera.ts';
 import { cardFor } from './card.ts';
 import { hitOf, planSystem, type HitKind, type Plan } from './layout.ts';
 import { OrbitRenderer } from './OrbitRenderer.ts';
+import type { Layers, Mode } from './picture.ts';
 import { OrbitStage } from './stage.ts';
 import { readOrbitMotion, readOrbitTheme, type OrbitMotion } from './theme.ts';
 
@@ -26,6 +28,10 @@ const props = defineProps<{
     hexKey: string;
     /** The selected body's dossier key, or null. */
     selected: string | null;
+    /** Orbits, Row or Column. */
+    mode: Mode;
+    /** The layer switches and the View popover's settings. */
+    layers: Layers;
 }>();
 
 const emit = defineEmits<{
@@ -38,7 +44,7 @@ const canvasEl = ref<HTMLCanvasElement | null>(null);
 const plan = shallowRef<Plan | null>(null);
 const stage = new OrbitStage();
 let renderer: OrbitRenderer | null = null;
-let motionTokens: OrbitMotion = { hop: 0, flight: 0 };
+let motionTokens: OrbitMotion = { hop: 0, flight: 0, lineup: 0 };
 let reduced = false;
 let reducedCheckedAt = 0;
 let stale = true;
@@ -55,9 +61,12 @@ let pointer: { x: number; y: number } | null = null;
 const dragging = ref(false);
 const fitted = ref(true);
 
-const cardTarget = computed((): { kind: HitKind; key: string } | null => {
-    if (hover.value) return hover.value;
-    if (!props.selected || !plan.value) return null;
+/** The selected body whose pinned card the visitor closed; it comes back on hover or with another selection. */
+const dismissed = ref<string | null>(null);
+
+/** The selected body's card: it stays put whatever the pointer does. */
+const pinnedTarget = computed((): { kind: HitKind; key: string } | null => {
+    if (!props.selected || !plan.value || dismissed.value === props.selected) return null;
     // The selected body's own kind decides its card (a belt's differs from a world's).
     const world = plan.value.worlds.find((w) => w.key === props.selected);
     if (world) return { kind: world.belt && !world.mainworldBelt ? 'belt' : 'world', key: world.key };
@@ -65,10 +74,21 @@ const cardTarget = computed((): { kind: HitKind; key: string } | null => {
     return { kind: 'moon', key: props.selected };
 });
 
-const card = computed(() => {
-    const target = cardTarget.value;
-    if (!target || !plan.value) return null;
-    return cardFor(plan.value, target.kind, target.key, cardDays.value);
+/** The body under the pointer, when it is not the one whose card is already pinned. */
+const hoverTarget = computed((): { kind: HitKind; key: string } | null => {
+    const over = hover.value;
+    if (!over) return null;
+    return pinnedTarget.value && pinnedTarget.value.key === over.key ? null : over;
+});
+
+const pinnedCard = computed(() => {
+    const target = pinnedTarget.value;
+    return target && plan.value ? cardFor(plan.value, target.kind, target.key, cardDays.value) : null;
+});
+
+const hoverCard = computed(() => {
+    const target = hoverTarget.value;
+    return target && plan.value ? cardFor(plan.value, target.kind, target.key, cardDays.value) : null;
 });
 
 function setHover(x: number, y: number): void {
@@ -154,7 +174,7 @@ function fit(): void {
 
 function applyMotion(): void {
     reduced = prefersReducedMotion();
-    stage.motion = reduced ? { hop: 0, flight: 0 } : motionTokens;
+    stage.motion = reduced ? { hop: 0, flight: 0, lineup: 0 } : motionTokens;
 }
 
 function resize(): void {
@@ -205,12 +225,12 @@ function paint(clockDays: number, time: number): void {
     // through everything that sweeps past.
     if (frame.changed && !frame.moving && pointer && !press) setHover(pointer.x, pointer.y);
     // The selection lock and a highport's lights run on the wall clock.
-    const selected = props.selected && hitOf(frame.scene, props.selected) ? props.selected : null;
-    const alive = !reduced && (selected !== null || current.worlds.some((w) => w.port !== null || w.moons.some((m) => m.port !== null)));
+    const selected = props.selected && hitOf(frame.picture, props.selected) ? props.selected : null;
+    const alive = !reduced && (selected !== null || stage.layers.scan || current.worlds.some((w) => w.port !== null || w.moons.some((m) => m.port !== null)));
     if (!frame.changed && !frame.moving && !alive && !stale) return;
     stale = false;
     const started = now();
-    renderer.draw(current, frame.scene, frame.view, { selected, days: clockDays, time, motion: !reduced });
+    renderer.draw(current, frame.picture, frame.view, { selected, days: clockDays, time, motion: !reduced, layers: stage.layers });
     const cost = now() - started;
     costSum += cost;
     costFrames += 1;
@@ -234,9 +254,32 @@ function loadPlan(): void {
 
 watch([() => props.system, () => props.hexKey], loadPlan);
 
+watch(() => props.mode, (mode) => {
+    applyMotion();
+    stage.setMode(mode, now());
+    hover.value = null;
+    stale = true;
+});
+
+watch(() => props.layers, (layers) => {
+    stage.setLayers(layers, now());
+    stale = true;
+}, { deep: true });
+
+/** js/system_viewer.js:2084-2092: the canvas says which layout it shows. */
+const canvasLabel = computed(() => {
+    const layout = props.mode === 'row'
+        ? 'Planets lined up horizontally, star on the left.'
+        : props.mode === 'column'
+            ? 'Planets lined up vertically, star at the top.'
+            : 'System orbits.';
+    return layout + ' Every body is also in the list below.';
+});
+
 // A body chosen elsewhere (a chip, the dossier) is followed; a body clicked here already is.
 watch(() => props.selected, (key) => {
     stale = true;
+    dismissed.value = null;
     if (!key) {
         stage.release();
         return;
@@ -257,6 +300,8 @@ onMounted(() => {
         artBase: import.meta.env.BASE_URL + 'starports/',
         stale: () => { stale = true; },
     });
+    stage.layers = { ...props.layers };
+    stage.mode = props.mode;
     loadPlan();
     resize();
     unsubscribe.push(observeSize(wrap, resize), onDevicePixelRatioChange(resize));
@@ -267,7 +312,7 @@ onBeforeUnmount(() => {
     renderer = null;
 });
 
-defineExpose({ paint });
+defineExpose({ paint, fit });
 </script>
 
 <template>
@@ -276,7 +321,7 @@ defineExpose({ paint });
       ref="canvasEl"
       class="orbit-canvas"
       :class="{ 'is-dragging': dragging, 'is-over': hover !== null && !dragging }"
-      aria-label="Orbit picture. Every body is also in the list below."
+      :aria-label="canvasLabel"
       @pointerdown="onDown"
       @pointermove="onMove"
       @pointerup="onUp"
@@ -285,7 +330,22 @@ defineExpose({ paint });
       @dblclick.prevent="onDouble"
       @wheel.prevent="onWheel"
     />
-    <BodyCard v-if="card && cardTarget" :model="card" :body-key="cardTarget.key" />
+    <div class="orbit-cards">
+      <BodyCard
+        v-if="pinnedCard && pinnedTarget"
+        :model="pinnedCard"
+        :body-key="pinnedTarget.key"
+        closable
+        @close="dismissed = selected"
+      />
+      <BodyCard
+        v-if="hoverCard && hoverTarget"
+        :model="hoverCard"
+        :body-key="hoverTarget.key"
+        :closable="false"
+        :under="pinnedCard !== null"
+      />
+    </div>
     <button
       type="button"
       class="orbit-btn orbit-fit"

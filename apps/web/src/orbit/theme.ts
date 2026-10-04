@@ -5,9 +5,6 @@
  */
 import type { Tone } from './layout.ts';
 
-/** js/system_viewer.js:72. The legacy default opacity of orbit paths. */
-export const ORBIT_OPACITY = 0.65;
-
 /** A star's paint (3414-3437): the disc colour, its corona stops and its rim. */
 export type StarPaint = { solid: string; glow: string; clear: string; rim: string };
 
@@ -35,10 +32,14 @@ export type OrbitTheme = {
     hzPill: string;
     jump: string;
     jumpText: string;
-    /** World and moon orbit paths (3226, 4547), and a companion's (2961). */
-    path: string;
-    companionPath: string;
-    pathWidth: number;
+    /** Orbit paths, drawn at the ring strength (3226, 4547, 2961). */
+    pathBase: string;
+    /** The habitable panel behind a body in a line-up (2623). */
+    hzPanel: string;
+    /** A belt's rocks in a line-up (2507). */
+    rock: string;
+    /** The scan sweep's wedge: clear, then its faint trailing edge (2114-2117). */
+    scanWedge: [string, string];
     tones: Record<Tone, string>;
     moon: string;
     ring: string;
@@ -63,10 +64,11 @@ export type OrbitTheme = {
     /** Seconds. */
     tLock: number;
     tPulse: number;
+    tSweep: number;
 };
 
-/** Milliseconds, for the stage's camera moves. */
-export type OrbitMotion = { hop: number; flight: number };
+/** Milliseconds, for the stage's camera moves and the move between layouts. */
+export type OrbitMotion = { hop: number; flight: number; lineup: number };
 
 /**
  * A token colour at an alpha, as an rgba() string. Reads #rgb, #rrggbb and #rrggbbaa (an
@@ -152,9 +154,10 @@ export function readOrbitTheme(el: HTMLElement): OrbitTheme {
         hzPill: withAlpha(token('--orbit-hz-pill'), 0.85),
         jump: withAlpha(token('--orbit-jump'), 0.95),
         jumpText: token('--orbit-jump-text'),
-        path: withAlpha(path, ORBIT_OPACITY * 0.40),
-        companionPath: withAlpha(path, ORBIT_OPACITY * 0.55),
-        pathWidth: 1 + ORBIT_OPACITY * 1.5,
+        pathBase: path,
+        hzPanel: withAlpha(hz, 0.2),
+        rock: token('--orbit-rock'),
+        scanWedge: [withAlpha(token('--signal'), 0), withAlpha(token('--signal'), 0.035)],
         tones: {
             gasLarge: token('--orbit-gas-large'),
             gasMedium: token('--orbit-gas-medium'),
@@ -183,19 +186,21 @@ export function readOrbitTheme(el: HTMLElement): OrbitTheme {
         portPort: lampPaint(token('--port-nav-port')),
         portStrobe: lampPaint(light),
         portShade: withAlpha(token('--port-shade'), 0.5),
-        portPath: withAlpha(token('--port-path'), 0.18 * ORBIT_OPACITY),
+        portPath: withAlpha(token('--port-path'), 0.18),
         fontText: token('--font-text'),
         fontCode: token('--font-code'),
         tLock: cssSeconds(token('--t-lock')),
         tPulse: cssSeconds(token('--t-pulse')),
+        tSweep: cssSeconds(token('--t-sweep')),
     };
 }
 
-/** The camera moves: a hop is --t-slow, a flight is --t-long (tokens.css names both for the camera). */
+/** The camera moves: a hop is --t-slow, a flight is --t-long (tokens.css names both for the camera); a layout change is --t-lineup. */
 export function readOrbitMotion(el: HTMLElement): OrbitMotion {
     const style = getComputedStyle(el);
     return {
         hop: cssSeconds(style.getPropertyValue('--t-slow')) * 1000,
         flight: cssSeconds(style.getPropertyValue('--t-long')) * 1000,
+        lineup: cssSeconds(style.getPropertyValue('--t-lineup')) * 1000,
     };
 }

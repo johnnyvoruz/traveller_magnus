@@ -6,7 +6,7 @@
  */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { celsiusOf, fahrenheitOf, formatTemp, kelvinNote, wholeDegrees } from '../../apps/web/src/design/units.ts';
+import { celsiusOf, fahrenheitOf, formatTemp, formatTempFull, kelvinNote, tempLines, wholeDegrees } from '../../apps/web/src/design/units.ts';
 import { cardFor } from '../../apps/web/src/orbit/card.ts';
 import {
     chaseAngle, HIGHPORT_ART, HIGHPORT_MAX_RATE, highportArt, highportOf, highportOrbitRadius,
@@ -41,6 +41,11 @@ test('temperatures: Celsius first, Fahrenheit from the unrounded Celsius, whole 
     assert.equal(fahrenheitOf(100), 212);
     assert.equal(wholeDegrees(-0.4), '0');
     assert.equal(wholeDegrees(-1234.5), '−1,234');
+    // A full temperature splits into its three figures for a tile or a row; other text does not.
+    assert.deepEqual(tempLines(formatTempFull(189)), ['−84 °C', '−119 °F', '189 K']);
+    assert.equal(tempLines('Gas Giant GL · Orbit 1.82 · 0.646 AU'), null);
+    assert.equal(tempLines('720 h, retrograde'), null);
+    assert.equal(tempLines(''), null);
     // Kelvin is for a tooltip only.
     assert.equal(kelvinNote('Mean', 288.4), 'Mean 288 K');
     assert.equal(kelvinNote('Mean', null), '');
@@ -104,7 +109,12 @@ test('seasons on a moon: the parent’s year and angle with the moon’s tilt, f
     assert.equal(derived.text, 'Northern autumn, severe · southern spring · tilt derived from Regina A-IV · by Regina A-IV’s year (1,984 days)');
     assert.ok(derived.inputs.includes('derived'));
     // Neither has one: the year only, no hemisphere text.
-    assert.deepEqual(seasonLine(moon({ tilt: null, parentTilt: null })), { text: 'Year: Regina A-IV’s year (1,984 days)', orbit: '', inputs: '' });
+    assert.deepEqual(seasonLine(moon({ tilt: null, parentTilt: null })), {
+        text: 'Year: Regina A-IV’s year (1,984 days)', lines: ['Year: Regina A-IV’s year (1,984 days)'], orbit: '', inputs: '',
+    });
+    // The same statements, one to a line, for the card.
+    assert.deepEqual(seasonLine(moon()).lines, ['Northern autumn, marked', 'Southern spring', 'By Regina A-IV’s year (1,984 days)']);
+    assert.deepEqual(seasonLine(moon({ tilt: 130 })).lines.slice(0, 3), ['Northern autumn, severe', 'Southern spring', 'Retrograde']);
     // Under three degrees.
     assert.equal(seasonLine(moon({ tilt: 0.4 })).text, 'Negligible seasons (tilt 0.4°) · by Regina A-IV’s year (1,984 days)');
     // A moon locked to its planet still has seasons: the flag is never read for a moon.
@@ -121,7 +131,7 @@ test('the card: the legacy lines for each kind, with temperatures in both scales
     assert.equal(star.title, 'M0 V');
     assert.equal(star.sub, 'Far');
     assert.deepEqual(text(star), [
-        'Type: M0 V', 'Temperature: 3,527°C (6,380°F)', 'Mass: 0.5 M☉', 'Diameter: 0.5 D☉',
+        'Type: M0 V', 'Surface temp.: 3,527°C (6,380°F)', 'Mass: 0.5 M☉', 'Diameter: 0.5 D☉',
         'Luminosity: 0.04 L☉', 'Separation: Far', 'Distance: ' + text(star)[6].slice('Distance: '.length),
     ]);
     assert.ok(text(star)[6].endsWith(' AU'));
@@ -131,12 +141,13 @@ test('the card: the legacy lines for each kind, with temperatures in both scales
     const world = cardFor(plan, 'world', 'w0', days);
     assert.equal(world.title, 'Test I');
     assert.equal(world.sub, 'Terrestrial Planet');
-    assert.ok(text(world).includes('Temperature: Temperate · 27°C (80°F)'));
-    assert.ok(text(world).includes('High: 47°C (116°F)'));
-    assert.ok(text(world).includes('Low: 7°C (44°F)'));
+    // One value to a line, no dots: the band, then the mean, the high and the low.
+    const temps = text(world).filter((line) => /temp\.|Climate/.test(line));
+    assert.deepEqual(temps, ['Climate: Temperate', 'Mean temp.: 27°C (80°F)', 'High temp.: 47°C (116°F)', 'Low temp.: 7°C (44°F)']);
+    assert.ok(!text(world).some((line) => line.includes('·')), 'no line runs two values together');
     assert.ok(text(world).includes('Distance: 0.5 AU'));
     assert.ok(!text(world).join(' ').includes(' K'), 'no kelvin on the card');
-    assert.equal(world.lines.find((line) => line.label === 'Temperature').hint, 'Mean 300 K');
+    assert.equal(world.lines.find((line) => line.label === 'Mean temp.').hint, 'Mean 300 K');
     assert.equal(world.lines.find((line) => line.label === 'UWP').strong, true);
     // The season is the one at the world's own orbit angle on the date.
     const angle = bodyAngle(plan.worlds[0].epoch, plan.worlds[0].period, days);
@@ -149,7 +160,8 @@ test('the card: the legacy lines for each kind, with temperatures in both scales
     assert.equal(giant.sub, 'Gas Giant GL');
     assert.ok(text(giant).includes('Moons: 3'));
     // No band in the document: the mean alone.
-    assert.ok(text(giant).includes('Temperature: −153°C (−244°F)'));
+    assert.ok(text(giant).includes('Mean temp.: −153°C (−244°F)'));
+    assert.ok(!text(giant).some((line) => line.startsWith('Climate')));
 
     const main = cardFor(plan, 'moon', 'w2m2', days);
     assert.equal(main.title, 'Test');

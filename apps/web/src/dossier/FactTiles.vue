@@ -1,7 +1,13 @@
 <script setup lang="ts">
+import { tempLines } from '../design/units.ts';
 import type { FactTile } from './model.ts';
 
 defineProps<{ facts: FactTile[] }>();
+
+/** A temperature's three figures stack: the first is the headline, the others sit under it. */
+function lines(fact: FactTile): string[] {
+    return tempLines(fact.value) ?? [fact.value];
+}
 </script>
 
 <template>
@@ -9,7 +15,8 @@ defineProps<{ facts: FactTile[] }>();
     <div v-for="fact in facts" :key="fact.label" class="doss-fact">
       <dt>{{ fact.label }}</dt>
       <dd>
-        {{ fact.value }}
+        {{ lines(fact)[0] }}
+        <small v-for="line in lines(fact).slice(1)" :key="line">{{ line }}</small>
         <small v-if="fact.note">{{ fact.note }}</small>
       </dd>
     </div>

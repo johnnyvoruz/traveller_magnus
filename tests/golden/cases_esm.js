@@ -6,8 +6,9 @@ import { sectorTerritories, sectorRegions, routeColour, routeStylesheetRules } f
 import { TRUTH_SETTINGS } from '../../tools/truth/settings.js';
 import { SYSTEM_NAMES } from '../../packages/engines/src/generated/names_data.js';
 import { loadLegacy } from '../oracle/legacy.js';
-import { TSV, ZEYCUDE_TSV, orbitTextOf } from './cases.js';
+import { TSV, ZEYCUDE_TSV, orbitTextOf, profileRows, PROFILE_EXTRAS } from './cases.js';
 import { normalizeSystem, rotationText, starColor, surfaceKind } from '../../apps/web/src/orbit/system.ts';
+import { halo, surfaceProfile } from '../../apps/web/src/surface/profile.ts';
 import {
     configure, setRandomSeed, setNamePool, hexStates, stripHexViewState,
     generateMgT2ESystemTopDown, generateMgT2ESystemBottomUp,
@@ -147,7 +148,16 @@ function orbitState(tsv, id) {
 }
 
 const portApi = { rotationText, starColor, surfaceKind };
+const profilePort = { kind: surfaceKind, of: surfaceProfile, halo };
 cases.orbit_normalize_1 = () => normalizeSystem(orbitState(TSV, '1-C-1910'));
 cases.orbit_text_1 = () => orbitTextOf(normalizeSystem(orbitState(TSV, '1-C-1910')), portApi);
 cases.orbit_normalize_2 = () => normalizeSystem(orbitState(ZEYCUDE_TSV, '1-A-0101'));
 cases.orbit_text_2 = () => orbitTextOf(normalizeSystem(orbitState(ZEYCUDE_TSV, '1-A-0101')), portApi);
+cases.profile_regina = () => profileRows(normalizeSystem(orbitState(TSV, '1-C-1910')), profilePort, '1910');
+cases.profile_zeycude = () => profileRows(normalizeSystem(orbitState(ZEYCUDE_TSV, '1-A-0101')), profilePort, '0101');
+cases.profile_extra = () => PROFILE_EXTRAS.map((row) => ({
+    key: row.key,
+    kind: surfaceKind(row.body),
+    halo: halo(row.body),
+    profile: surfaceProfile(row.body, row.id),
+}));

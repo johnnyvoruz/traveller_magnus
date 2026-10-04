@@ -30,6 +30,7 @@ const KEYS: [string, string][] = [
     ['Drag', 'move the view'],
     ['Click', 'select a body and follow it'],
     ['Double-click', 'frame a body and its moons; on empty space, fit the system'],
+    ['Line up', 'jump to the next time the planets sit on one line'],
 ];
 </script>
 

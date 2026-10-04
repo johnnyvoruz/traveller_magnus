@@ -123,7 +123,8 @@ test('pan, centre and the moves toward a zoom or a camera', () => {
 
 test('framing a body puts it at the centre with what orbits it inside the padding', () => {
     const fitted = fitCamera(plan, SIZE, 1000, startCamera(), false, false);
-    const cam = frameCamera(plan, SIZE, 1000, fitted, 'w2', false);
+    const hitsFor = (camera) => layoutScene(plan, viewOf(camera, SIZE, false), 1000).hits;
+    const cam = frameCamera(plan, SIZE, fitted, 'w2', hitsFor);
     assert.ok(cam);
     assert.equal(cam.atFit, false);
     const scene = layoutScene(plan, viewOf(cam, SIZE, false), 1000);
@@ -135,7 +136,7 @@ test('framing a body puts it at the centre with what orbits it inside the paddin
     assert.ok(box.bottom - box.top <= SIZE.h - FRAME_PAD * 2 + 4);
     // It zoomed in to do so, and never below the fit.
     assert.ok(cam.zoom > fitted.zoom);
-    assert.equal(frameCamera(plan, SIZE, 1000, fitted, 'w9', false), null);
+    assert.equal(frameCamera(plan, SIZE, fitted, 'w9', hitsFor), null);
 });
 
 test('an eased move lands exactly, even toward a target that moves', () => {
@@ -169,7 +170,7 @@ test('the stage: the fitted view refits as bodies move, and an unchanged frame i
     assert.equal(stage.fitted, true);
     const again = stage.tick(1000, 16);
     assert.equal(again.changed, false);
-    assert.equal(again.scene, first.scene);
+    assert.equal(again.picture, first.picture);
     // The clock moves: the companion moves, and the fit follows it.
     const later = stage.tick(1000 + 4000, 32);
     assert.equal(later.changed, true);
@@ -183,18 +184,18 @@ test('the stage: a click follows a body, a drag past the slop lets it go', () =>
     stage.setPlan(plan);
     stage.resize(1000, 800, 1000);
     const frame = stage.tick(1000, 0);
-    const world = hitOf(frame.scene, 'w0');
+    const world = hitOf(frame.picture, 'w0');
     assert.equal(stage.pick(world.cx, world.cy).key, 'w0');
     assert.equal(stage.pick(2, 2), null);
     // No motion tokens: the follow is the legacy cut.
     stage.follow('w0', 0);
     const followed = stage.tick(1000, 16);
-    close(hitOf(followed.scene, 'w0').cx, 500);
-    close(hitOf(followed.scene, 'w0').cy, 400);
+    close(hitOf(followed.picture, 'w0').cx, 500);
+    close(hitOf(followed.picture, 'w0').cy, 400);
     assert.equal(stage.fitted, false);
     // It stays centred as the clock runs.
     const later = stage.tick(1030, 32);
-    close(hitOf(later.scene, 'w0').cx, 500);
+    close(hitOf(later.picture, 'w0').cx, 500);
     // A press that has not passed the slop pans without letting go; past it, the follow ends.
     stage.drag(2, 0, false);
     assert.equal(stage.tracked, 'w0');
@@ -210,17 +211,17 @@ test('the stage: an eased follow glides to the body and lands on it', () => {
     stage.motion = { hop: 400, flight: 800 };
     stage.setPlan(plan);
     stage.resize(1000, 800, 1000);
-    const start = hitOf(stage.tick(1000, 0).scene, 'w0');
+    const start = hitOf(stage.tick(1000, 0).picture, 'w0');
     const gap = Math.hypot(start.cx - 500, start.cy - 400);
     stage.follow('w0', 0);
     const mid = stage.tick(1000, 200);
     assert.equal(mid.moving, true);
-    const midGap = Math.hypot(hitOf(mid.scene, 'w0').cx - 500, hitOf(mid.scene, 'w0').cy - 400);
+    const midGap = Math.hypot(hitOf(mid.picture, 'w0').cx - 500, hitOf(mid.picture, 'w0').cy - 400);
     close(midGap, gap * 0.5, 1e-6);
     const end = stage.tick(1000, 400);
     assert.equal(end.moving, false);
-    close(hitOf(end.scene, 'w0').cx, 500);
-    close(hitOf(end.scene, 'w0').cy, 400);
+    close(hitOf(end.picture, 'w0').cx, 500);
+    close(hitOf(end.picture, 'w0').cy, 400);
 });
 
 test('the stage: a double click frames, Fit returns, and zooming out to the floor fits', () => {
@@ -232,7 +233,7 @@ test('the stage: a double click frames, Fit returns, and zooming out to the floo
     assert.equal(stage.frame('w2', 1000, 0), true);
     const framed = stage.tick(1000, 16);
     assert.ok(stage.cam.zoom > fitZoom);
-    close(hitOf(framed.scene, 'w2').cx, 500);
+    close(hitOf(framed.picture, 'w2').cx, 500);
     assert.equal(stage.tracked, 'w2');
     assert.equal(stage.frame('w9', 1000, 16), false);
     assert.equal(stage.tracked, null);

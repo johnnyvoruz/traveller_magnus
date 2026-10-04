@@ -159,6 +159,69 @@ cases.orbit_text_1 = (ctx) => orbitTextOf(ctx.SystemViewer.normalizeSystem(built
 cases.orbit_normalize_2 = (ctx) => ctx.SystemViewer.normalizeSystem(builtState(ctx, ZEYCUDE_TSV, '1-A-0101'));
 cases.orbit_text_2 = (ctx) => orbitTextOf(ctx.SystemViewer.normalizeSystem(builtState(ctx, ZEYCUDE_TSV, '1-A-0101')), ctx.SystemViewer);
 
+// kind, of and halo for every non-empty body. The id is the hex and the dossier key.
+export function profileRows(sys, api, hex) {
+    const rows = [];
+    const one = (body, key) => {
+        const id = hex + '|' + key;
+        rows.push({ key, kind: api.kind(body), halo: api.halo(body), profile: api.of(body, id) });
+    };
+    (sys.stars || []).forEach((star, i) => one(star, 's' + i));
+    (sys.worlds || []).forEach((world, i) => {
+        if (!world || world.type === 'Empty') return;
+        one(world, 'w' + i);
+        (world.moons || []).forEach((moon, j) => {
+            if (!moon || moon.type === 'Empty') return;
+            one(moon, 'w' + i + 'm' + j);
+        });
+    });
+    return { hex, bodies: rows };
+}
+
+function profileApi(ctx) {
+    return {
+        kind: (body) => ctx.PlanetProfile.kind(body),
+        of: (body, id) => ctx.PlanetProfile.of(body, id),
+        halo: (body) => ctx.PlanetProfile.halo(body),
+    };
+}
+
+// The eight families the two systems do not all contain. Ice is the worldType
+// branch (the generated tree has no worldType). Ring is type Ring.
+export const PROFILE_EXTRAS = [
+    { key: 'hot', id: 'extra|hot', body: { type: 'Planet', name: 'Hot', meanTempK: 500, atmCode: 1, hydroCode: 0, uwp: 'A100000-8' } },
+    { key: 'exotic', id: 'extra|exotic', body: { type: 'Planet', name: 'Exotic', meanTempK: 300, atmCode: 10, hydroCode: 2, uwp: 'A1A2000-8' } },
+    { key: 'barren', id: 'extra|barren', body: { type: 'Planet', name: 'Barren', meanTempK: 280, atmCode: 0, hydroCode: 0, uwp: 'A100000-0' } },
+    { key: 'ocean', id: 'extra|ocean', body: { type: 'Planet', name: 'Ocean', meanTempK: 290, atmCode: 6, hydroCode: 10, uwp: 'A16A000-8' } },
+    { key: 'ice', id: 'extra|ice', body: { type: 'Planet', name: 'Ice', worldType: 'IceWorld', meanTempK: 80, atmCode: 1, hydroCode: 2, uwp: 'A112000-0' } },
+    { key: 'gas', id: 'extra|gas', body: { type: 'Gas Giant', name: 'Gas', ggType: 'GS', meanTempK: 80, composition: 'Mostly Ice' } },
+    { key: 'belt', id: 'extra|belt', body: { type: 'Planetoid Belt', name: 'Belt' } },
+    { key: 'ring', id: 'extra|ring', body: { type: 'Ring', name: 'Ring', size: 'R' } },
+    // meanTempK and no tempBand: one body per tempBandFromKelvin result.
+    // Frozen is the only band kind() reads, so it is given both gates.
+    { key: 'frozen-barren', id: 'extra|frozen-barren', body: { type: 'Planet', name: 'Frozen barren', meanTempK: 200, atmCode: 0, hydroCode: 0, uwp: 'A100000-0' } },
+    { key: 'frozen-atm', id: 'extra|frozen-atm', body: { type: 'Planet', name: 'Frozen atm', meanTempK: 229, atmCode: 1, hydroCode: 0, uwp: 'A110000-0' } },
+    { key: 'cold', id: 'extra|cold', body: { type: 'Planet', name: 'Cold', meanTempK: 250, atmCode: 1, hydroCode: 0, uwp: 'A110000-0' } },
+    { key: 'cool', id: 'extra|cool', body: { type: 'Planet', name: 'Cool', meanTempK: 278, atmCode: 1, hydroCode: 0, uwp: 'A110000-0' } },
+    { key: 'temperate', id: 'extra|temperate', body: { type: 'Planet', name: 'Temperate', meanTempK: 300, atmCode: 1, hydroCode: 0, uwp: 'A110000-0' } },
+    { key: 'warm', id: 'extra|warm', body: { type: 'Planet', name: 'Warm', meanTempK: 340, atmCode: 1, hydroCode: 0, uwp: 'A110000-0' } },
+    { key: 'hot-band', id: 'extra|hot-band', body: { type: 'Planet', name: 'Hot band', meanTempK: 400, atmCode: 1, hydroCode: 0, uwp: 'A110000-0' } },
+];
+
+cases.profile_regina = (ctx) => profileRows(
+    ctx.SystemViewer.normalizeSystem(builtState(ctx, TSV, '1-C-1910')), profileApi(ctx), '1910');
+cases.profile_zeycude = (ctx) => profileRows(
+    ctx.SystemViewer.normalizeSystem(builtState(ctx, ZEYCUDE_TSV, '1-A-0101')), profileApi(ctx), '0101');
+cases.profile_extra = (ctx) => {
+    const api = profileApi(ctx);
+    return PROFILE_EXTRAS.map((row) => ({
+        key: row.key,
+        kind: api.kind(row.body),
+        halo: api.halo(row.body),
+        profile: api.of(row.body, row.id),
+    }));
+};
+
 // Not a case: the legacy metadata XML parser (io_manager.js:2279 parseXmlRouteGroups) needs a browser
 // DOMParser, which Node does not have. The new parser (§8) is verified against TravellerMap's documented
 // schema and hand-counted values from universe/raw/Spinward_Marches.xml instead.

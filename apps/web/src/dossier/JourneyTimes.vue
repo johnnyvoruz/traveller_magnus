@@ -2,22 +2,30 @@
 import type { JourneyTime } from './model.ts';
 
 defineProps<{ journey: JourneyTime[] }>();
+
+/** "24.34h" as its figure and its unit, so the unit can sit small beside the number. */
+function parts(text: string): { figure: string; unit: string } {
+    const matched = /^([\d.,\u2212-]+)\s*([^\d\s].*)$/.exec(text.trim());
+    return matched ? { figure: matched[1] || text, unit: matched[2] || '' } : { figure: text, unit: '' };
+}
 </script>
 
 <template>
-  <section class="doss-section">
+  <section class="doss-section doss-journey-section">
     <h3 class="ui-heading">100D Jump Travel Times</h3>
     <dl class="doss-journey">
-      <div v-for="item in journey" :key="item.g">
-        <dt>{{ item.g }}G</dt>
-        <dd>{{ item.hours }}</dd>
+      <div v-for="item in journey" :key="item.g" class="doss-fact doss-journey-tile">
+        <dt><b>{{ item.g }}</b>G</dt>
+        <dd>
+          {{ parts(item.hours).figure }}<span v-if="parts(item.hours).unit" class="doss-journey-unit">{{ parts(item.hours).unit }}</span>
+        </dd>
       </div>
     </dl>
   </section>
 </template>
 
 <style>
-/* Six figures, three across, using the fact-tile type and the section heading. */
+/* The headline-fact tiles again (.doss-fact), six of them: three across, six when there is room. */
 .doss-journey {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -25,20 +33,38 @@ defineProps<{ journey: JourneyTime[] }>();
   margin: 0;
 }
 
-.doss-journey dt {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 10.5px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+.doss-body[data-span="half"] .doss-journey,
+.doss-body[data-span="full"] .doss-journey {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 
-.doss-journey dd {
-  margin: 2px 0 0;
-  color: var(--text-1);
-  font-size: 15px;
-  font-weight: 600;
-  font-variant-numeric: var(--tabular);
-  line-height: 1.3;
+.doss-journey-tile {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.doss-journey-tile dt {
+  flex: 0 0 auto;
+  color: var(--signal);
+  font: 700 11px/1.3 var(--font-code);
+  letter-spacing: 0.04em;
+}
+
+.doss-journey-tile dt b {
+  font-size: 14px;
+}
+
+.doss-journey-tile dd {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.doss-journey-unit {
+  margin-left: 3px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 400;
 }
 </style>

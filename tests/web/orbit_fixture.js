@@ -21,6 +21,7 @@ export function testBody() {
                 {
                     type: 'Terrestrial Planet', name: 'Test I', au: 0.5, orbitId: 1.5, diamKm: 8000, orbitType: 'S-Type', parentStarIdx: 0,
                     periodYears: 0.35, periodDays: 128, axialTilt: 20, eccentricity: 0.02, tidallyLocked: false,
+                    siderealHours: 30, solarDayHours: 30.3,
                     meanTempK: 300, highTempK: 320, lowTempK: 280, tempBand: 'Temperate', uwp: 'Y560000-0', moons: [], rings: [],
                 },
                 { type: 'Empty' },
@@ -63,6 +64,7 @@ export function recordingContext() {
         get(_target, prop) {
             if (prop === 'measureText') return (text) => ({ width: 6 * String(text).length });
             if (prop === 'createRadialGradient') return (...args) => gradient('radial', args);
+            if (prop === 'createConicGradient') return (...args) => gradient('conic', args);
             if (prop in state) return state[prop];
             return (...args) => { calls.push({ op: String(prop), args, fill: state.fillStyle, stroke: state.strokeStyle, alpha: state.globalAlpha }); };
         },

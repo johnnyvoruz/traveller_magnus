@@ -4,7 +4,8 @@
  * popover; js/system_viewer.js:1555-1601, 1732-1845). It holds no clock: it shows the days it
  * is given and asks the view to move them. The arithmetic is orbit/clock.ts.
  */
-import { ref, watch } from 'vue';
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { observeSize } from '../platform/browser.ts';
 import Icon from '../design/Icon.vue';
 import { formatDisplayNumber } from '../dossier/labels.ts';
 import {
@@ -119,10 +120,30 @@ function capture(event: PointerEvent): void {
     const target = event.target;
     if (target instanceof HTMLElement) target.setPointerCapture(event.pointerId);
 }
+
+/**
+ * The row holds the transport, the date fields, the speed and two popovers; below this width
+ * they do not fit on one line, so the popovers' buttons drop their labels (legacy does the
+ * same at a narrow window, style.css:2656).
+ */
+const COMPACT_BELOW = 1060;
+const rowEl = ref<HTMLElement | null>(null);
+const compact = ref(false);
+let stopWatching: (() => void) | null = null;
+
+onMounted(() => {
+    const row = rowEl.value;
+    if (!row) return;
+    const measure = (): void => { compact.value = row.clientWidth < COMPACT_BELOW; };
+    measure();
+    stopWatching = observeSize(row, measure);
+});
+
+onBeforeUnmount(() => { if (stopWatching) stopWatching(); });
 </script>
 
 <template>
-  <div class="orbit-time">
+  <div ref="rowEl" class="orbit-time">
     <div class="orbit-transport" role="group" aria-label="Transport">
       <button type="button" class="orbit-btn is-icon" aria-label="Skip back one hour" title="Skip back one hour" @click="$emit('skip', -1)">
         <Icon name="backward" :size="12" />
@@ -188,6 +209,7 @@ function capture(event: PointerEvent): void {
         :open="scrubOpen"
         icon="clock-rotate-left"
         label="Scrub"
+        :show-label="!compact"
         title="Scrub and shuttle through time"
         @toggle="$emit('pop', !scrubOpen)"
         @close="$emit('pop', false)"
@@ -242,6 +264,7 @@ function capture(event: PointerEvent): void {
         <p class="orbit-date" aria-live="off" :title="START_HELP">{{ dateText(days) }}</p>
         <time class="orbit-local-clock" title="Your computer’s local time, independent of simulation speed">Local time {{ localTime }}</time>
       </OrbitPopover>
+      <slot name="pops" :compact="compact" />
     </div>
   </div>
 </template>

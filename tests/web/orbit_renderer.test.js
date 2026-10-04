@@ -11,8 +11,11 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { backdropBox, backdropShift, paintBackdrop, rng, seedOf } from '../../apps/web/src/orbit/backdrop.ts';
 import { layoutScene, planSystem } from '../../apps/web/src/orbit/layout.ts';
+import { layoutLineup } from '../../apps/web/src/orbit/lineup.ts';
 import { OrbitRenderer } from '../../apps/web/src/orbit/OrbitRenderer.ts';
-import { cssSeconds, ORBIT_OPACITY, readOrbitMotion, readOrbitTheme, withAlpha } from '../../apps/web/src/orbit/theme.ts';
+import { DEFAULT_LAYERS, orbitPicture } from '../../apps/web/src/orbit/picture.ts';
+import { cssSeconds, readOrbitMotion, readOrbitTheme, withAlpha } from '../../apps/web/src/orbit/theme.ts';
+import { blendPictures, travelOrder } from '../../apps/web/src/orbit/tween.ts';
 import { HEX_KEY, recordingContext, testSystem } from './orbit_fixture.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -25,7 +28,7 @@ const theme = {
     field: ['f1', 'f2'], nebulae: [[['n1', 'n1c'], ['n2', 'n2c'], ['n3', 'n3c']]],
     hzEdge: 'hz-edge', hzMid: 'hz-mid', hzLine: 'hz-line', hzText: 'hz-text', hzPill: 'hz-pill',
     jump: 'jump', jumpText: 'jump-text',
-    path: 'path', companionPath: 'companion-path', pathWidth: 2,
+    pathBase: 'path', hzPanel: 'hz-panel', rock: 'rock', scanWedge: ['wedge-clear', 'wedge'],
     tones: { gasLarge: 'gas-large', gasMedium: 'gas-medium', gasSmall: 'gas-small', belt: 'belt', world: 'world' },
     moon: 'moon', ring: 'ring', beltBand: 'belt-band', night: 'night', shadow: ['sh1', 'sh2', 'sh3'],
     mainworld: 'mainworld', text: 'text', textMuted: 'muted', lock: 'lock', lockGlow: ['lock-glow', 'lock-clear'],
@@ -33,25 +36,47 @@ const theme = {
     port: { major: port('major'), minor: port('minor') },
     portStarboard: ['sb1', 'sb2', 'sb3'], portPort: ['pt1', 'pt2', 'pt3'], portStrobe: ['st1', 'st2', 'st3'],
     portShade: 'port-shade', portPath: 'port-path',
-    fontText: 'TextFont', fontCode: 'CodeFont', tLock: 0.65, tPulse: 2.4,
+    fontText: 'TextFont', fontCode: 'CodeFont', tLock: 0.65, tPulse: 2.4, tSweep: 8,
 };
 
 const deps = { makeCanvas: null, loadImage: null, artBase: '/starports/', stale() {} };
 const VIEW = { w: 1000, h: 800, zoom: 1, offX: 0, offY: 0, z: 1, linear: false };
 
-function drawn(state = {}, view = VIEW) {
-    const plan = planSystem(testSystem(), HEX_KEY);
-    const scene = layoutScene(plan, view, 1000);
+/** Paints a picture twice a second apart (so a selection lock has landed) and returns the second frame's calls. */
+function paintPicture(plan, picture, view, state = {}) {
     const { ctx, calls } = recordingContext();
     const renderer = new OrbitRenderer(ctx, theme, deps);
     renderer.resize(view.w, view.h, 1);
-    const full = { selected: null, days: 1000, time: 5000, motion: true, ...state };
-    // A frame a second earlier first, so the selection lock has landed in the frame that is read.
-    renderer.draw(plan, scene, view, { ...full, time: full.time - 1000 });
+    const full = { selected: null, days: 1000, time: 5000, motion: true, layers: DEFAULT_LAYERS, ...state };
+    renderer.draw(plan, picture, view, { ...full, time: full.time - 1000 });
     calls.length = 0;
-    renderer.draw(plan, scene, view, full);
+    renderer.draw(plan, picture, view, full);
+    return calls;
+}
+
+/** The orbits layout, painted. `layers` overrides the default switches. */
+function drawn(state = {}, view = VIEW, layers = {}) {
+    const plan = planSystem(testSystem(), HEX_KEY);
+    const switches = { ...DEFAULT_LAYERS, ...layers };
+    const laid = { ...view, moons: switches.moons, jump: switches.jump };
+    const scene = layoutScene(plan, laid, 1000);
+    const calls = paintPicture(plan, orbitPicture(plan, scene, switches, view.z), view, { ...state, layers: switches });
     return { calls, scene, plan };
 }
+
+/** A line-up, painted. */
+function lined(mode, layers = {}, state = {}) {
+    const plan = planSystem(testSystem(), HEX_KEY);
+    const switches = { ...DEFAULT_LAYERS, ...layers };
+    const picture = layoutLineup(plan, { ...VIEW, moons: switches.moons }, mode, 1000, switches);
+    return { calls: paintPicture(plan, picture, VIEW, { ...state, layers: switches }), picture, plan };
+}
+
+/** The index of the dash pattern call just before call `at`, or -1. */
+const dashBefore = (calls, at) => {
+    for (let i = at; i >= 0; i--) if (calls[i].op === 'setLineDash') return calls[i].args[0].join(',');
+    return '';
+};
 
 /** The index of the first call that matches, or -1. */
 const first = (calls, test) => calls.findIndex(test);
@@ -63,7 +88,8 @@ test('the legacy paint order: field, band, jump circles, companions, primary wor
     const field = first(calls, (c) => c.op === 'fillRect' && c.fill === 'space');
     const band = first(calls, (c) => c.op === 'fill' && isGradient(c.fill, 'hz-mid'));
     const jump = first(calls, (c) => c.op === 'stroke' && c.stroke === 'jump');
-    const companionOrbit = first(calls, (c) => c.op === 'stroke' && c.stroke === 'companion-path');
+    // A companion's orbit is the dashed [4, 6] stroke in the path colour.
+    const companionOrbit = calls.findIndex((c, i) => c.op === 'stroke' && c.stroke === 'path' && dashBefore(calls, i) === '4,6');
     const companionBand = last(calls, (c) => c.op === 'fill' && isGradient(c.fill, 'hz-mid'));
     const beltBand = first(calls, (c) => c.op === 'stroke' && c.stroke === 'belt-band');
     // The companion's set strokes a path too; this is the primary's, after its belt.
@@ -139,6 +165,98 @@ test('a body off the canvas is not painted, and its hit target stays', () => {
     assert.equal(far.scene.hits.length, near.scene.hits.length);
 });
 
+test('orbit paths are drawn at the ring strength, and the layer switches take things away', () => {
+    const base = drawn();
+    const pathStroke = base.calls.find((c) => c.op === 'stroke' && c.stroke === 'path' && dashBefore(base.calls, base.calls.indexOf(c)) !== '4,6');
+    assert.ok(Math.abs(pathStroke.alpha - 0.65 * 0.40) < 1e-9, 'a world orbit at 40% of the strength');
+    const strong = drawn({}, VIEW, { pathStrength: 1 });
+    assert.ok(strong.calls.some((c) => c.op === 'stroke' && c.stroke === 'path' && Math.abs(c.alpha - 0.40) < 1e-9));
+    assert.ok(strong.calls.some((c) => c.op === 'stroke' && c.stroke === 'path' && Math.abs(c.alpha - 0.55) < 1e-9), 'a companion orbit at 55%');
+
+    // Paths off: no orbit strokes; the belt is not a path and stays.
+    const noPaths = drawn({}, VIEW, { paths: false });
+    assert.ok(!noPaths.calls.some((c) => c.op === 'stroke' && c.stroke === 'path'));
+    assert.ok(noPaths.calls.some((c) => c.op === 'stroke' && c.stroke === 'belt-band'));
+    // Moons off: no moon discs, no rings, and no hit targets for them.
+    const noMoons = drawn({}, VIEW, { moons: false });
+    assert.ok(!noMoons.calls.some((c) => c.fill === 'moon') && !noMoons.calls.some((c) => c.stroke === 'ring'));
+    assert.ok(!noMoons.scene.hits.some((hit) => hit.kind === 'moon' || hit.kind === 'ring'));
+    // Habitable off, Jump limit off.
+    const noBand = drawn({}, VIEW, { habitable: false });
+    assert.ok(!noBand.calls.some((c) => c.op === 'fillText' && String(c.args[0]).startsWith('HABITABLE')));
+    assert.ok(!noBand.calls.some((c) => c.stroke === 'hz-line'));
+    const noJump = drawn({}, VIEW, { jump: false });
+    assert.ok(!noJump.calls.some((c) => c.stroke === 'jump') && noJump.scene.jumps.length === 0);
+    // Day / night off: no night halves. Mark off: no mainworld star and no name.
+    assert.ok(!drawn({}, VIEW, { dayNight: false }).calls.some((c) => c.fill === 'night'));
+    const noMark = drawn({}, VIEW, { markMainworld: false });
+    assert.ok(!noMark.calls.some((c) => c.fill === 'mainworld'));
+});
+
+test('a line-up paints its panel, arcs, rocks, bodies and captions, and none of the orbit labels', () => {
+    const { calls, picture } = lined('row');
+    const text = calls.filter((c) => c.op === 'fillText').map((c) => c.args[0]);
+    // Captions: every node, the companion with its separation; a name too long for its slot is shortened.
+    assert.ok(text.includes('G2 V') && text.includes('M0 V (Far)') && text.includes('Test Belt'));
+    assert.ok(!text.includes('100D jump') && !text.some((t) => String(t).startsWith('HABITABLE')));
+    assert.equal(picture.captions.length, 6);
+    // The panel behind the companion's world, which sits in that star's habitable zone.
+    const panel = first(calls, (c) => c.op === 'fill' && c.fill === 'hz-panel');
+    const arc = first(calls, (c) => c.op === 'stroke' && c.stroke === 'path');
+    const rock = first(calls, (c) => c.op === 'fill' && c.fill === 'rock');
+    const giant = first(calls, (c) => c.op === 'fill' && c.fill === 'gas-large');
+    const caption = first(calls, (c) => c.op === 'fillText');
+    for (const at of [panel, arc, rock, giant, caption]) assert.ok(at >= 0);
+    assert.ok(panel < arc && arc < rock && giant < caption);
+    assert.equal(calls.filter((c) => c.op === 'fill' && c.fill === 'rock').length, 72);
+    assert.ok(Math.abs(calls[arc].alpha - 0.65 * 0.55) < 1e-9, 'line-up arcs at 55% of the strength');
+    // The selection lock is drawn in a line-up, without the readout tag (orbits layout only).
+    const selected = lined('column', {}, { selected: 'w2', time: 100000 });
+    assert.ok(selected.calls.some((c) => c.op === 'stroke' && c.stroke === 'lock'));
+    assert.ok(!selected.calls.some((c) => c.op === 'fillText' && c.args[0] === 'TEST II'));
+    // A caption that does not fit falls back to the short name before it is cut.
+    const narrow = { ...picture, captions: [{ ...picture.captions[1], text: 'Test I of the long name', short: 'I', maxW: 20 }] };
+    const drawnNarrow = paintPicture(planSystem(testSystem(), HEX_KEY), narrow, VIEW);
+    assert.ok(drawnNarrow.some((c) => c.op === 'fillText' && c.args[0] === 'I'));
+});
+
+test('the scan view marks every world and moon, and sweeps round the primary in the orbits layout', () => {
+    const scanned = drawn({}, VIEW, { scan: true });
+    const plain = drawn();
+    const signalStrokes = (calls) => calls.filter((c) => c.op === 'stroke' && c.stroke === 'signal').length;
+    assert.ok(signalStrokes(scanned.calls) > signalStrokes(plain.calls) + 8);
+    // The sweep is a conic wedge over the whole canvas, then the leading edge.
+    assert.ok(scanned.calls.some((c) => c.op === 'fillRect' && c.fill && c.fill.kind === 'conic'));
+    // Designations: the short name of each world, in the orbits layout only.
+    const labels = scanned.calls.filter((c) => c.op === 'fillText').map((c) => c.args[0]);
+    assert.ok(labels.includes('II') && labels.includes('I'));
+    const row = lined('row', { scan: true });
+    assert.ok(!row.calls.some((c) => c.op === 'fillRect' && c.fill && c.fill.kind === 'conic'), 'no sweep in a line-up');
+    assert.ok(signalStrokes(row.calls) > 8);
+    // Reduced motion: marks, no sweep.
+    const still = drawn({ motion: false }, VIEW, { scan: true });
+    assert.ok(!still.calls.some((c) => c.op === 'fillRect' && c.fill && c.fill.kind === 'conic'));
+    assert.ok(signalStrokes(still.calls) > 8);
+});
+
+test('a picture part way between two layouts paints: fading bands, travelling bodies, arriving captions', () => {
+    const plan = planSystem(testSystem(), HEX_KEY);
+    const from = orbitPicture(plan, layoutScene(plan, VIEW, 1000), DEFAULT_LAYERS, 1);
+    const to = layoutLineup(plan, VIEW, 'row', 1000, DEFAULT_LAYERS);
+    const order = travelOrder(plan);
+    const early = blendPictures({ from, to, elapsed: 100, ms: 650, order, days: 1000, moonsShown: true });
+    const late = blendPictures({ from, to, elapsed: 700, ms: 650, order, days: 1000, moonsShown: true });
+    const earlyCalls = paintPicture(plan, early, VIEW);
+    const lateCalls = paintPicture(plan, late, VIEW);
+    assert.ok(earlyCalls.some((c) => c.fill === 'gas-large') && lateCalls.some((c) => c.fill === 'gas-large'));
+    // Early: the orbit's star name is still there and no caption has arrived.
+    assert.ok(earlyCalls.some((c) => c.op === 'fillText' && c.args[0] === 'G2 V' && c.alpha > 0 && c.alpha < 1));
+    assert.ok(!earlyCalls.some((c) => c.op === 'fillText' && c.args[0] === 'M0 V (Far)'));
+    // Late: captions are arriving, the habitable label has gone.
+    assert.ok(lateCalls.some((c) => c.op === 'fillText' && c.args[0] === 'M0 V (Far)'));
+    assert.ok(!lateCalls.some((c) => c.op === 'fillText' && String(c.args[0]).startsWith('HABITABLE')));
+});
+
 test('a token colour takes an alpha; other forms pass through', () => {
     assert.equal(withAlpha('#45a29e', 0.5), 'rgba(69, 162, 158, 0.5)');
     assert.equal(withAlpha('#fff', 0), 'rgba(255, 255, 255, 0)');
@@ -169,9 +287,10 @@ test('the theme reads every colour it needs from tokens.css', () => {
         assert.equal(read.space, '#000000');
         assert.equal(read.jump, 'rgba(120, 186, 255, 0.95)');
         assert.equal(read.hzMid, 'rgba(88, 214, 120, 0.28)');
-        assert.equal(read.path, withAlpha('#45a29e', ORBIT_OPACITY * 0.40));
-        assert.equal(read.companionPath, withAlpha('#45a29e', ORBIT_OPACITY * 0.55));
-        assert.equal(read.pathWidth, 1 + ORBIT_OPACITY * 1.5);
+        assert.equal(read.pathBase, '#45a29e');
+        assert.equal(read.hzPanel, 'rgba(88, 214, 120, 0.2)');
+        assert.equal(read.rock, '#e4e8ea');
+        assert.equal(read.scanWedge[1], 'rgba(102, 252, 241, 0.035)');
         assert.equal(read.tones.gasLarge, '#c8a97a');
         assert.equal(read.moon, '#6a7070');
         assert.equal(read.night, 'rgba(0, 5, 15, 0.72)');
@@ -185,10 +304,11 @@ test('the theme reads every colour it needs from tokens.css', () => {
         assert.equal(read.port.major.washLit[0], 'rgba(150, 236, 255, 0.34)');
         assert.equal(read.tLock, 0.65);
         assert.equal(read.tPulse, 2.4);
+        assert.equal(read.tSweep, 8);
         const flat = JSON.stringify(read);
         assert.ok(!flat.includes('""') && !flat.includes('NaN'), 'no token came back empty');
         const motion = readOrbitMotion({});
-        assert.deepEqual(motion, { hop: 450, flight: 800 });
+        assert.deepEqual(motion, { hop: 450, flight: 800, lineup: 650 });
     } finally {
         globalThis.getComputedStyle = previous;
     }

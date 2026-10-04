@@ -14,6 +14,10 @@ import { formatDisplayNumber } from '../dossier/labels.ts';
 import { overviewModel, pickSystem, type AllegianceName } from '../dossier/model.ts';
 import { TruthClient } from '../map/truth_client.ts';
 import BodyChips from '../orbit/BodyChips.vue';
+import LayerChips from '../orbit/LayerChips.vue';
+import { planSystem } from '../orbit/layout.ts';
+import LineupSearch from '../orbit/LineupSearch.vue';
+import { DEFAULT_LAYERS, type Layers, type Mode } from '../orbit/picture.ts';
 import { bodyChips, dossierPath, findChip, orbitPath, subsectorLetter } from '../orbit/bodies.ts';
 import {
     advance, DAY_SECONDS, formatLinkDate, scrubbed, skipHours, startDays, tickRate, REAL_TIME,
@@ -105,6 +109,9 @@ const system = computed(() => (tree.value && !treeError.value ? normalizeSystem(
 
 /** The hex key comes from the route; the model does not carry it. */
 const hexKey = computed(() => slug.value + '/' + hex.value);
+
+/** The system as the line-up search reads it: the same start angles and periods the picture draws with. */
+const searchPlan = computed(() => (system.value ? planSystem(system.value, hexKey.value) : null));
 
 /**
  * loading, ready, nodata (no document, or one with no bodies), unsupported (an edition the
@@ -251,6 +258,16 @@ function scrub(offset: number | null): void {
     setDays(scrubbed(scrubStart, offset));
 }
 
+/** js/system_viewer.js:1451-1457: a line-up found: stop the clock there and show it on the fitted orbits layout. */
+function showLineup(at: number): void {
+    shuttle.value = 0;
+    paused.value = true;
+    setDays(at);
+    writeLink();
+    if (mode.value !== 'orbits') mode.value = 'orbits';
+    else if (stageEl.value) stageEl.value.fit();
+}
+
 function shuttleTo(rate: number): void {
     const was = shuttle.value;
     if (rate) paused.value = true;
@@ -261,6 +278,9 @@ function shuttleTo(rate: number): void {
 // ---- Selection, popovers, leaving --------------------------------------------
 
 const dossierOpen = ref(true);
+/** The layout and the layer switches: this visit's, as legacy (1183-1186 resets them on open). */
+const mode = ref<Mode>('orbits');
+const layers = ref<Layers>({ ...DEFAULT_LAYERS });
 const panelWidth = ref(0);
 const openPop = ref('');
 const moonsOpen = ref<string | null>(null);
@@ -398,6 +418,27 @@ onBeforeUnmount(() => {
         @scrub="scrub"
         @shuttle="shuttleTo"
         @pop="setPop('scrub', $event)"
+      >
+        <template #pops="{ compact }">
+          <LineupSearch
+            :compact="compact"
+            v-if="state === 'ready' && searchPlan"
+            :plan="searchPlan"
+            :open="openPop === 'lineup'"
+            :now="() => days"
+            @pop="setPop('lineup', $event)"
+            @show="showLineup"
+          />
+        </template>
+      </TimeControls>
+      <LayerChips
+        v-if="state === 'ready' && system"
+        :mode="mode"
+        :layers="layers"
+        :view-open="openPop === 'view'"
+        @mode="mode = $event"
+        @layers="layers = $event"
+        @pop="setPop('view', $event)"
       />
       <div class="orbit-stage" :data-state="state">
         <OrbitCanvas
@@ -406,6 +447,8 @@ onBeforeUnmount(() => {
           :system="system"
           :hex-key="hexKey"
           :selected="selectedKey"
+          :mode="mode"
+          :layers="layers"
           @pick="pickBody"
         />
         <svg v-if="state !== 'ready'" class="orbit-blank" viewBox="0 0 800 800" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">

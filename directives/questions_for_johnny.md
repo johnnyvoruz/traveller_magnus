@@ -38,10 +38,35 @@ angle is zero, and the tooltip says so. Agree, or name another convention.
 
 **Answer:**
 
-### A3. "Today's" temperature
+### A3. "Today's" temperature: a formula to approve
 
-The delighter wants the average temperature adjusted for the current season, but no formula
-was given. Supply one, or the card shows the yearly average, high and low only.
+You asked for this if it can be calculated. It can, using only the engine's own terms.
+
+The engine works out a world's high and low temperature by raising or lowering the star's
+effective brightness by a "variance" made of three parts (`mgt2e_world_engine.js:1757-1786`):
+a **tilt** part (the sine of the axial tilt, halved for a very short year and raised by half
+for a very long one), a **rotation** part (day and night) and a **geography** part (how much
+land), all divided by `1 + pressure`. Temperature goes with the fourth root of brightness.
+
+Proposal: "today's" temperature uses the **tilt part only**, scaled by where the world is in
+its year:
+
+```
+today (northern) = mean × (1 + tiltPart × sin(orbit angle) / (1 + pressure)) ^ 0.25
+today (southern) = the same with the sign of sin flipped
+```
+
+The orbit angle is the one the orbit view already draws, with spring at angle 0 (your
+convention). Day and night, geography and the orbit's eccentricity are left out, so this is
+the hemisphere's average for the season, labelled as an estimate with the inputs in the
+tooltip.
+
+Worked example with made-up round numbers: mean 288 K (15 °C), tilt 23°, pressure 1 bar.
+Tilt part = sin 23° = 0.39. At midsummer: 288 × (1 + 0.39 / 2)^0.25 = 301 K (28 °C). At
+midwinter: 288 × (1 − 0.39 / 2)^0.25 = 273 K (0 °C). At the equinoxes: 288 K.
+
+This is a new derived figure, not something the rules state, so it needs your yes. Approve
+it as written, change it, or say no.
 
 *Interim: left out.*
 
@@ -76,10 +101,86 @@ first build has no switch.
 
 **Answer:**
 
+### A8. Daylight latitude
+
+The orbit card now shows hours of light at the equator and at 45° over the year. Is 45° the
+latitude you want quoted, or another?
+
+*Interim: 45°.*
+
+**Answer:**
+
+### A9. How small a tilt means "no seasons"
+
+Below some axial tilt the season line is dropped. 3° or 5°?
+
+*Interim: Agent D's current value.*
+
+**Answer:**
+
+### A10. Star temperatures
+
+Stars show their temperature in °C and °F like worlds. Keep that, or show stars in kelvin?
+
+*Interim: °C and °F.*
+
+**Answer:**
+
 ### A7. Highport art (answered)
 
 **Answered 2026-10-04: yes, the images are yours and ship.** The four highport paintings
 are copied to `apps/web/public/starports/`.
+
+---
+
+## E. Planet surfaces (from the surfaces recipe, `recipe_planet_surfaces.md` §9)
+
+E1 and E2 are answered. The others have interim answers.
+
+### E1 and E2. Hex terrain (answered)
+
+**Answered 2026-10-04:** copy what the old app does first ("vanilla"). Improvements to terrain
+and world appearance are welcome, as enhancements that can be switched off to return to
+vanilla. Recorded in `recipe_planet_surfaces.md` §0. Terrain stays a picture made in the
+browser, as in the old app; any terrain class table belongs to the enhanced mode and comes
+to you for approval when it is proposed.
+
+### E3. Where is longitude 0 on a world?
+
+The map and the turning disc need one answer. The old orbit view puts a world's prime
+meridian toward the right of the system at day 0. Keep that?
+
+*Interim: keep the old app's.*
+
+**Answer:**
+
+### E4. Effects with nothing in the data behind them
+
+Aurora would need a magnetic-field or stellar-activity value, which the generated systems do
+not carry. The same goes for volcanic plumes beyond what the geology fields say. Supply a
+rule or a field, or they stay out.
+
+*Interim: left out.*
+
+**Answer:**
+
+### E5. Vegetation that looks Terran
+
+`planet_rendering.md` has an open question: is `compatibility` the right field to decide how
+Earth-like a world's vegetation looks?
+
+*Interim: as that document has it.*
+
+**Answer:**
+
+### E6. Surfaces for other editions
+
+The orbit view reads Mongoose-generated systems only. Do Classic, T5, RTT and Architect of
+Worlds systems get surfaces now, or with the Builder slice where those can be generated?
+
+*Interim: with the Builder slice.*
+
+**Answer:**
 
 ---
 

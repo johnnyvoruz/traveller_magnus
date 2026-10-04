@@ -3,7 +3,7 @@
  * (s<i>, w<i>, w<i>m<j>; dossier/model.ts bodyKeys): this file defines no second scheme, it
  * groups the dossier's system-tree rows into chips.
  */
-import type { BodyGlyphData, TreeRow } from '../dossier/model.ts';
+import { bodyKeys, type BodyGlyphData, type SystemDoc, type TreeRow } from '../dossier/model.ts';
 
 export type BodyChip = {
     key: string;
@@ -87,4 +87,27 @@ export function subsectorLetter(hex: string): string {
     const row = Number(hex.slice(2, 4));
     if (!Number.isInteger(col) || !Number.isInteger(row) || col < 1 || col > 32 || row < 1 || row > 40) return '';
     return String.fromCharCode(65 + Math.floor((row - 1) / 10) * 4 + Math.floor((col - 1) / 8));
+}
+
+/**
+ * The document object behind a dossier key, and for a moon the world it orbits. The keys are
+ * taken from bodyKeys in its own order (stars, then each world followed by its moons, Empty
+ * slots skipped); nothing here rebuilds the scheme.
+ */
+export function bodyByKey(system: SystemDoc, key: string): { body: Record<string, any>; parent: Record<string, any> | null; star: boolean } | null {
+    const keys = bodyKeys(system);
+    let at = 0;
+    const isBody = (value: unknown): value is Record<string, any> => !!value && typeof value === 'object' && !Array.isArray(value);
+    for (const star of Array.isArray(system.stars) ? system.stars : []) {
+        if (keys[at++] === key && isBody(star)) return { body: star, parent: null, star: true };
+    }
+    for (const world of Array.isArray(system.worlds) ? system.worlds : []) {
+        if (!isBody(world) || world.type === 'Empty') continue;
+        if (keys[at++] === key) return { body: world, parent: null, star: false };
+        for (const moon of Array.isArray(world.moons) ? world.moons : []) {
+            if (!isBody(moon) || moon.type === 'Empty') continue;
+            if (keys[at++] === key) return { body: moon, parent: world, star: false };
+        }
+    }
+    return null;
 }

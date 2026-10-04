@@ -22,6 +22,8 @@ Read in this order.
 | `slice_0_foundation.md` | the slice 0 recipe (legacy oracle, golden fixtures, monorepo, engines as ESM, parsers, generation package, Worker with Queues, truth v1 on the platform, CI) |
 | `slice_1_viewer.md` | the slice 1 recipe: part A (overview file, map data path, the rebuilt map renderer) in full; parts B and C as outlines |
 | `legacy_map_inventory.md` | what the legacy renderer draws, rule by rule with line references; the evidence for slice 1 part B |
+| `recipe_planet_surfaces.md` | slice 1 part C4: one generated surface per world, shown as the dossier's hex map and as the lit disc in orbit; a brief written by Agent D, reviewed by Agent F, issued with step owners |
+| `planet_rendering.md` | the data-to-appearance specification for planets; kept true by the surfaces work |
 | `slice_N_*.md` | written just-in-time when slice N starts |
 
 ## Still current from before

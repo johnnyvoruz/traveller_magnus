@@ -1,13 +1,16 @@
 /**
- * Paints one orbit scene on a 2D canvas, in the legacy order (js/system_viewer.js
- * _paintOrrery, 2906-3016): star field, the primary's habitable band, the 100D jump circles,
- * each companion (its orbit, its band, its worlds), the primary's worlds, the stars on top,
- * the habitable labels, the selection lock. Where a body sits is layout.ts's business; this
- * file only draws what the scene says. Every colour comes from the theme.
+ * Paints one picture (orbit/picture.ts) on a 2D canvas. For the orbits layout the order is
+ * the legacy one (js/system_viewer.js _paintOrrery, 2906-3016): star field, the primary's
+ * habitable band, the 100D jump circles, each companion (its orbit, its band, its worlds),
+ * the primary's worlds, the stars on top, the habitable labels, the scan overlay, the
+ * selection lock. A line-up (_drawLineup, 2607-2668) and the move between two layouts are
+ * the same passes over a different picture. Where a body sits is the layout's business; this
+ * file only draws what the picture says. Every colour comes from the theme.
  *
  * Worlds are flat discs with a night half (the legacy fallback, 4226-4231) until planet
- * imagery lands; the scan overlay (3015) belongs to the line-up search and is not drawn.
+ * imagery lands.
  */
+import { shortLabel } from './bodies.ts';
 import { backdropBox, backdropShift, paintBackdrop, type BackdropBox } from './backdrop.ts';
 import {
     chaseAngle, highportArt, highportPlace, highportSize, spriteWidth, HIGHPORT_MIN_WORLD_PX,
@@ -15,10 +18,13 @@ import {
 } from './highport.ts';
 import {
     arcSpan, bodyOf, hitOf, mainworldMark, selectionLabel, MAX_RING_RADIUS,
-    type Band, type Hit, type JumpRing, type MoonAt, type Plan, type Scene, type StarAt, type View,
-    type WorldAt, type WorldSet,
+    type Hit, type MoonAt, type Plan, type View,
 } from './layout.ts';
 import { bodyAngle } from './maths.ts';
+import {
+    PATH_ALPHA_WORLD, type BandAt, type Caption, type JumpAt, type Layers, type Panel, type PathAt,
+    type Picture, type Rocks, type StarDraw, type WorldDraw,
+} from './picture.ts';
 import type { OrbitTheme, PortPaint } from './theme.ts';
 
 const TAU = Math.PI * 2;
@@ -42,6 +48,7 @@ export type DrawState = {
     time: number;
     /** False under reduced motion: no lock animation, no pulse, lights steady. */
     motion: boolean;
+    layers: Layers;
 };
 
 type Sprite = { lit: HTMLCanvasElement; dark: HTMLCanvasElement };
@@ -65,6 +72,10 @@ export class OrbitRenderer {
     private sprites = new Map<string, Sprite>();
     private lastTime = 0;
     private frameSeconds = 1 / 60;
+    private layers: Layers | null = null;
+    private pathWidth = 1;
+    private scanLabels = new Map<string, string>();
+    private scanPlan: Plan | null = null;
 
     constructor(ctx: CanvasRenderingContext2D, theme: OrbitTheme, deps: RendererDeps) {
         this.ctx = ctx;
@@ -78,9 +89,12 @@ export class OrbitRenderer {
         this.dpr = dpr;
     }
 
-    draw(plan: Plan, scene: Scene, view: View, state: DrawState): void {
+    draw(plan: Plan, picture: Picture, view: View, state: DrawState): void {
         const ctx = this.ctx;
-        this.z = view.z;
+        this.z = picture.z;
+        this.layers = state.layers;
+        // 3227: the stroke width follows the ring strength.
+        this.pathWidth = 1 + state.layers.pathStrength * 1.5;
         // js/system_viewer.js:2024-2026: a smoothed frame time, for the station's pace.
         if (this.lastTime) {
             const dt = Math.max(0.001, (state.time - this.lastTime) / 1000);
@@ -91,18 +105,19 @@ export class OrbitRenderer {
         ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
         ctx.clearRect(0, 0, this.w, this.h);
         this.starField(plan, view);
-        this.band(scene.band);
-        for (const ring of scene.jumps) this.jump(ring);
-        for (const companion of scene.companions) {
-            this.companionOrbit(companion.at);
-            if (companion.band) this.band(companion.band);
-            if (companion.set) this.worldSet(plan, companion.set, state);
+        for (const layer of picture.layers) {
+            for (const band of layer.bands) this.band(band);
+            for (const panel of layer.panels) this.panel(panel);
+            for (const ring of layer.jumps) this.jump(ring);
+            for (const path of layer.paths) this.path(path);
+            for (const rocks of layer.rocks) this.rocks(rocks);
+            for (const at of layer.worlds) this.world(plan, at, state);
         }
-        if (scene.primary) this.worldSet(plan, scene.primary, state);
-        for (const at of scene.stars) this.star(at);
-        this.bandLabel(scene.band);
-        for (const companion of scene.companions) if (companion.band) this.bandLabel(companion.band);
-        this.selection(plan, scene, state);
+        for (const at of picture.stars) this.star(at);
+        for (const layer of picture.layers) for (const band of layer.bands) this.bandLabel(band);
+        for (const caption of picture.captions) this.caption(caption);
+        if (state.layers.scan) this.scan(plan, picture, state);
+        this.selection(plan, picture, state);
     }
 
     // ---- Backdrop ------------------------------------------------------------------------
@@ -148,12 +163,12 @@ export class OrbitRenderer {
     }
 
     /** js/system_viewer.js:3338-3389. */
-    private band(band: Band): void {
+    private band(band: BandAt): void {
         const ctx = this.ctx;
         const theme = this.theme;
         const { cx, cy } = band;
         const outerR = band.outer;
-        if (outerR <= band.inner || band.inner < 0) return;
+        if (!(band.alpha > 0) || outerR <= band.inner || band.inner < 0) return;
         const inner = Math.max(0, band.inner);
         const span = arcSpan(cx, cy, outerR, this.w, this.h);
         const fromCentre = Math.hypot(cx - this.w / 2, cy - this.h / 2);
@@ -164,6 +179,7 @@ export class OrbitRenderer {
         grad.addColorStop(0.5, theme.hzMid);
         grad.addColorStop(1, theme.hzEdge);
         ctx.save();
+        ctx.globalAlpha = Math.min(1, band.alpha);
         ctx.fillStyle = grad;
         ctx.beginPath();
         if (!span) {
@@ -198,15 +214,16 @@ export class OrbitRenderer {
     }
 
     /** js/system_viewer.js:3390-3412. */
-    private bandLabel(band: Band): void {
+    private bandLabel(band: BandAt): void {
         const inner = Math.max(0, band.inner);
         const mid = (inner + band.outer) / 2;
-        if (!(band.outer - inner >= 9 && mid >= 40)) return;
+        if (!(band.alpha > 0) || !(band.outer - inner >= 9 && mid >= 40)) return;
         const y = band.cy - mid;
         if (this.offCanvas(band.cx, y, 200)) return;
         const ctx = this.ctx;
         const theme = this.theme;
         ctx.save();
+        ctx.globalAlpha = Math.min(1, band.alpha);
         ctx.font = '700 10px ' + theme.fontText;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -224,11 +241,29 @@ export class OrbitRenderer {
         ctx.restore();
     }
 
-    /** js/system_viewer.js:3123-3136. */
-    private jump(ring: JumpRing): void {
-        if (!(ring.r >= 6) || ring.r > MAX_RING_RADIUS) return;
+    /** js/system_viewer.js:2613-2631: the habitable panel behind a body in a line-up. */
+    private panel(panel: Panel): void {
+        if (!(panel.alpha > 0) || this.offCanvas(panel.x + panel.w / 2, panel.y + panel.h / 2, Math.max(panel.w, panel.h))) return;
         const ctx = this.ctx;
         ctx.save();
+        ctx.globalAlpha = Math.min(1, panel.alpha);
+        ctx.fillStyle = this.theme.hzPanel;
+        ctx.strokeStyle = this.theme.hzLine;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([7, 4]);
+        ctx.beginPath();
+        ctx.roundRect(panel.x, panel.y, panel.w, panel.h, panel.radius);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    /** js/system_viewer.js:3123-3136. */
+    private jump(ring: JumpAt): void {
+        if (!(ring.alpha > 0) || !(ring.r >= 6) || ring.r > MAX_RING_RADIUS) return;
+        const ctx = this.ctx;
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, ring.alpha);
         ctx.strokeStyle = this.theme.jump;
         ctx.lineWidth = 1.5;
         this.strokeVisible(ring.cx, ring.cy, ring.r, 1.5);
@@ -242,51 +277,91 @@ export class OrbitRenderer {
         ctx.restore();
     }
 
-    /** js/system_viewer.js:2959-2966. */
-    private companionOrbit(at: StarAt): void {
-        if (at.ringR > MAX_RING_RADIUS) return;
+    /**
+     * An orbit path: a world's ring (3221-3229), a companion's dashed orbit (2959-2966), a
+     * belt's band of dashes (4644-4652, its phase turning with the belt, 3205), or a
+     * line-up's arc behind the row (2634-2647).
+     */
+    private path(path: PathAt): void {
+        if (!(path.alpha > 0) || path.r < 2) return;
+        if (path.style !== 'solid' && path.r > MAX_RING_RADIUS) return;
         const ctx = this.ctx;
-        ctx.strokeStyle = this.theme.companionPath;
-        ctx.lineWidth = this.theme.pathWidth;
-        ctx.setLineDash([4, 6]);
-        this.strokeVisible(at.parentX, at.parentY, at.ringR, this.theme.pathWidth, 10);
+        const theme = this.theme;
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, path.alpha);
+        if (path.style === 'belt') {
+            const width = path.width || 5;
+            ctx.strokeStyle = theme.beltBand;
+            ctx.lineWidth = width;
+            ctx.setLineDash([3, 7]);
+            this.strokeVisible(path.cx, path.cy, path.r, width, 10, path.phase);
+        } else {
+            const width = path.width || this.pathWidth;
+            ctx.strokeStyle = theme.pathBase;
+            ctx.lineWidth = width;
+            if (path.style === 'dashed') {
+                ctx.setLineDash([4, 6]);
+                this.strokeVisible(path.cx, path.cy, path.r, width, 10);
+            } else {
+                this.strokeVisible(path.cx, path.cy, path.r, width);
+            }
+        }
         ctx.setLineDash([]);
+        ctx.restore();
+        // 3206-3214: a mainworld belt carries the mark and its name at the top of its ring.
+        if (path.main !== null && this.layers && this.layers.markMainworld) {
+            this.mainworldStar(path.cx, path.cy - path.r, 2, this.z);
+            if (path.main) this.name(path.main, path.cx, path.cy - path.r - 10, 11, path.alpha);
+        }
+    }
+
+    /** js/system_viewer.js:2504-2520: a belt in a line-up, as a band of rocks. */
+    private rocks(rocks: Rocks): void {
+        if (!(rocks.alpha > 0)) return;
+        const ctx = this.ctx;
+        ctx.save();
+        ctx.fillStyle = this.theme.rock;
+        for (const dot of rocks.dots) {
+            if (this.offCanvas(dot.x, dot.y, 4)) continue;
+            ctx.globalAlpha = Math.min(1, dot.alpha * rocks.alpha);
+            ctx.beginPath();
+            ctx.arc(dot.x, dot.y, dot.r, 0, TAU);
+            ctx.fill();
+        }
+        ctx.restore();
+        if (rocks.mark && this.layers && this.layers.markMainworld) this.mainworldStar(rocks.mark.x, rocks.mark.y, rocks.mark.r, this.z);
+    }
+
+    /** js/system_viewer.js:2538-2572: a line-up caption, fitted to its slot. */
+    private caption(caption: Caption): void {
+        if (!(caption.alpha > 0)) return;
+        const ctx = this.ctx;
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, caption.alpha);
+        ctx.font = '600 ' + caption.fontPx + 'px ' + this.theme.fontText;
+        ctx.fillStyle = caption.main ? this.theme.mainworld : this.theme.text;
+        let label = caption.text;
+        // Legacy cuts the full name; a row of "Regin…" says nothing, so the short name is tried first.
+        if (ctx.measureText(label).width > caption.maxW) label = caption.short;
+        if (ctx.measureText(label).width > caption.maxW) {
+            while (label.length > 1 && ctx.measureText(label + '\u2026').width > caption.maxW) label = label.slice(0, -1);
+            label = label.replace(/\s+$/, '') + '\u2026';
+        }
+        ctx.textAlign = caption.align;
+        ctx.textBaseline = caption.align === 'center' ? 'top' : 'middle';
+        ctx.fillText(label, caption.x, caption.y);
+        ctx.restore();
     }
 
     // ---- Worlds ----------------------------------------------------------------------------
 
-    /** js/system_viewer.js:3191-3236. */
-    private worldSet(plan: Plan, set: WorldSet, state: DrawState): void {
-        const ctx = this.ctx;
-        const theme = this.theme;
-        const { cx, cy } = set;
-        for (const belt of set.belts) {
-            // 4644-4652, with the dash phase turning with the belt (3205).
-            if (belt.r >= 2 && belt.r <= MAX_RING_RADIUS) {
-                ctx.save();
-                ctx.strokeStyle = theme.beltBand;
-                ctx.lineWidth = 5;
-                ctx.setLineDash([3, 7]);
-                this.strokeVisible(cx, cy, belt.r, 5, 10, -(belt.angle * belt.r));
-                ctx.setLineDash([]);
-                ctx.restore();
-            }
-            if (belt.world.mainworldBelt) {
-                this.mainworldStar(cx, cy - belt.r, 2);
-                if (belt.world.name) this.name(belt.world.name, cx, cy - belt.r - 10, 11);
-            }
-        }
-        ctx.strokeStyle = theme.path;
-        ctx.lineWidth = theme.pathWidth;
-        for (const r of set.orbits) if (r >= 2) this.strokeVisible(cx, cy, r, theme.pathWidth);
-        for (const at of set.bodies) this.world(plan, at, cx, cy, state);
-    }
-
     /** js/system_viewer.js:4532-4641. */
-    private world(plan: Plan, at: WorldAt, starX: number, starY: number, state: DrawState): void {
+    private world(plan: Plan, at: WorldDraw, state: DrawState): void {
         const ctx = this.ctx;
         const theme = this.theme;
+        const layers = state.layers;
         const w = at.world;
+        const { starX, starY } = at;
         let reach = at.r;
         for (const m of at.moons) reach = Math.max(reach, m.orbitR + m.r);
         for (const r of at.rings) reach = Math.max(reach, r);
@@ -296,41 +371,48 @@ export class OrbitRenderer {
             ? this.portAngle(w.key, bodyAngle(plan.portEpoch, w.portPeriod, state.days))
             : null;
         if (w.port && port !== null) this.highport(plan, w.port, at.x, at.y, at.r, port, starX, starY, false, state);
-        this.disc(at.x, at.y, at.r, theme.tones[w.tone], starX, starY);
+        this.disc(at.x, at.y, at.r, theme.tones[w.tone], starX, starY, layers.dayNight);
         if (w.port && port !== null) this.highport(plan, w.port, at.x, at.y, at.r, port, starX, starY, true, state);
 
-        ctx.strokeStyle = theme.path;
-        ctx.lineWidth = theme.pathWidth;
-        for (const m of at.moons) {
-            if (m.moon.ring || m.orbitR < 2) continue;
-            ctx.beginPath();
-            ctx.arc(at.x, at.y, m.orbitR, 0, TAU);
-            ctx.stroke();
+        // 4543-4554: the moons' paths, with the Paths layer.
+        if (layers.paths && layers.pathStrength > 0) {
+            ctx.save();
+            ctx.strokeStyle = theme.pathBase;
+            ctx.globalAlpha = Math.min(1, layers.pathStrength * PATH_ALPHA_WORLD);
+            ctx.lineWidth = this.pathWidth;
+            for (const m of at.moons) {
+                if (m.moon.ring || m.orbitR < 2) continue;
+                ctx.beginPath();
+                ctx.arc(at.x, at.y, m.orbitR, 0, TAU);
+                ctx.stroke();
+            }
+            ctx.restore();
         }
-        for (const m of at.moons) this.moon(plan, m, starX, starY, state);
+        for (const m of at.moons) this.moon(plan, m, at, state);
         for (const r of at.rings) this.staticRing(at.x, at.y, r);
 
-        if (w.mainworld) {
-            this.mainworldStar(at.x, at.y, at.r);
-            if (w.name) this.name(w.name, at.x, at.y - at.r - 8, 11);
+        if (w.mainworld && layers.markMainworld) {
+            this.mainworldStar(at.x, at.y, at.r, at.z);
+            if (w.name && at.label > 0) this.name(w.name, at.x, at.y - at.r - 8, 11, at.label);
         }
     }
 
-    private moon(plan: Plan, m: MoonAt, starX: number, starY: number, state: DrawState): void {
+    private moon(plan: Plan, m: MoonAt, parent: WorldDraw, state: DrawState): void {
         const moon = m.moon;
         if (moon.ring) {
             this.staticRing(m.x, m.y, m.orbitR);
             return;
         }
         const ctx = this.ctx;
+        const { starX, starY } = parent;
         const port = moon.port && m.r >= HIGHPORT_MIN_WORLD_PX
             ? this.portAngle(moon.key, bodyAngle(plan.portEpoch, moon.portPeriod, state.days))
             : null;
         if (moon.port && port !== null) this.highport(plan, moon.port, m.x, m.y, m.r, port, starX, starY, false, state);
-        this.disc(m.x, m.y, m.r, this.theme.moon, starX, starY);
+        this.disc(m.x, m.y, m.r, this.theme.moon, starX, starY, state.layers.dayNight);
         if (moon.port && port !== null) this.highport(plan, moon.port, m.x, m.y, m.r, port, starX, starY, true, state);
         // 4586-4603: the moon dims as it slides into its world's shadow.
-        const cover = this.eased(moon.key, m.cover, state);
+        const cover = state.layers.dayNight ? this.eased(moon.key, m.cover, state) : 0;
         if (cover > 0.02) {
             ctx.save();
             const wash = ctx.createRadialGradient(m.x, m.y, m.r * 0.15, m.x, m.y, m.r);
@@ -344,9 +426,9 @@ export class OrbitRenderer {
             ctx.fill();
             ctx.restore();
         }
-        if (moon.mainworld) {
-            this.mainworldStar(m.x, m.y, m.r);
-            if (moon.name) this.name(moon.name, m.x, m.y - m.r - 5, 10);
+        if (moon.mainworld && state.layers.markMainworld) {
+            this.mainworldStar(m.x, m.y, m.r, parent.z);
+            if (moon.name && parent.label > 0) this.name(moon.name, m.x, m.y - m.r - 5, 10, parent.label);
         }
     }
 
@@ -366,12 +448,13 @@ export class OrbitRenderer {
     }
 
     /** js/system_viewer.js:4226-4231 with 4201-4209: the flat disc and its night half. */
-    private disc(x: number, y: number, r: number, colour: string, starX: number, starY: number): void {
+    private disc(x: number, y: number, r: number, colour: string, starX: number, starY: number, night: boolean): void {
         const ctx = this.ctx;
         ctx.fillStyle = colour;
         ctx.beginPath();
         ctx.arc(x, y, r, 0, TAU);
         ctx.fill();
+        if (!night) return;
         const angle = Math.atan2(starY - y, starX - x) + Math.PI;
         ctx.fillStyle = this.theme.night;
         ctx.beginPath();
@@ -391,9 +474,9 @@ export class OrbitRenderer {
     }
 
     /** js/system_viewer.js:274-299. */
-    private mainworldStar(x: number, y: number, bodyR: number): void {
+    private mainworldStar(x: number, y: number, bodyR: number, z: number): void {
         const ctx = this.ctx;
-        const mark = mainworldMark(x, y, bodyR, this.z);
+        const mark = mainworldMark(x, y, bodyR, z);
         ctx.save();
         ctx.fillStyle = this.theme.mainworld;
         ctx.beginPath();
@@ -410,9 +493,10 @@ export class OrbitRenderer {
     }
 
     /** The mainworld's name (4607-4612, 4632-4637, 3208-3213). */
-    private name(text: string, x: number, y: number, px: number): void {
+    private name(text: string, x: number, y: number, px: number, alpha: number): void {
         const ctx = this.ctx;
         ctx.save();
+        ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
         ctx.fillStyle = this.theme.mainworld;
         ctx.font = px + 'px ' + this.theme.fontText;
         ctx.textAlign = 'center';
@@ -423,14 +507,14 @@ export class OrbitRenderer {
     // ---- Stars -----------------------------------------------------------------------------
 
     /** js/system_viewer.js:3414-3451. */
-    private star(at: StarAt): void {
+    private star(at: StarDraw): void {
         const ctx = this.ctx;
         const theme = this.theme;
         const { x, y, r } = at;
         const paint = theme.stars[String(at.star.body.sType || '')] || theme.starUnknown;
-        if (!this.offCanvas(x, y, r * 1.38 + 4)) {
+        if (!this.offCanvas(x, y, r * at.glow + 4)) {
             ctx.save();
-            const reach = r * 1.38;
+            const reach = r * at.glow;
             const glow = ctx.createRadialGradient(x, y, r * 0.2, x, y, reach);
             glow.addColorStop(0, paint.glow);
             glow.addColorStop(1, paint.clear);
@@ -449,8 +533,10 @@ export class OrbitRenderer {
             ctx.arc(x, y, r, 0, TAU);
             ctx.fill();
         }
-        if (this.offCanvas(x, y, r + 200)) return;
+        // 3441: the name and the separation belong to the orbits layout.
+        if (!(at.label > 0) || this.offCanvas(x, y, r + 200)) return;
         ctx.save();
+        ctx.globalAlpha = Math.min(1, at.label);
         ctx.fillStyle = theme.text;
         ctx.font = '11px ' + theme.fontText;
         ctx.textAlign = 'center';
@@ -600,8 +686,8 @@ export class OrbitRenderer {
     // ---- Selection -------------------------------------------------------------------------
 
     /** js/system_viewer.js:2199-2347: the lock on the selected body, and its tag. */
-    private selection(plan: Plan, scene: Scene, state: DrawState): void {
-        const hit: Hit | null = hitOf(scene, state.selected);
+    private selection(plan: Plan, picture: Picture, state: DrawState): void {
+        const hit: Hit | null = hitOf(picture, state.selected);
         if (!hit) {
             if (!state.selected) this.lockKey = null;
             return;
@@ -720,8 +806,8 @@ export class OrbitRenderer {
             ctx.lineTo(cx + Math.cos(a) * (R + 7), cy + Math.sin(a) * (R + 7));
         }
         ctx.stroke();
-        // The readout tag, up and to the right on a leader (left, near the edge).
-        if (k > 0.35) {
+        // The readout tag, up and to the right on a leader (left, near the edge); orbits layout only (2311).
+        if (k > 0.35 && picture.mode === 'orbits') {
             const [name, detail] = this.lockLabel;
             const show = Math.min(1, (k - 0.35) / 0.4);
             const nameFont = '700 11px ' + theme.fontCode;
@@ -770,6 +856,107 @@ export class OrbitRenderer {
         }
         ctx.restore();
         this.pulse(cx, cy, R, state);
+    }
+
+    /**
+     * js/system_viewer.js:2104-2185: the scan view. A slow sweep round the primary (orbits
+     * layout only), and on every world and moon a ring with four turning marks that
+     * brightens as the sweep passes; in the orbits layout, its designation on a short leader.
+     */
+    private scan(plan: Plan, picture: Picture, state: DrawState): void {
+        const ctx = this.ctx;
+        const theme = this.theme;
+        const now = state.motion ? state.time / 1000 : 0;
+        const period = theme.tSweep > 0 ? theme.tSweep : 8;
+        const sweep = ((now / period) % 1) * TAU;
+        const centre = picture.centre;
+        if (this.scanPlan !== plan) {
+            this.scanPlan = plan;
+            this.scanLabels.clear();
+        }
+        ctx.save();
+        ctx.strokeStyle = theme.signal;
+        ctx.fillStyle = theme.signal;
+        if (centre && state.motion) {
+            // The sweep: a soft wedge trailing a bright leading edge.
+            const trail = 0.7;
+            const wedge = ctx.createConicGradient(sweep - trail, centre.x, centre.y);
+            wedge.addColorStop(0, theme.scanWedge[0]);
+            wedge.addColorStop(trail / TAU, theme.scanWedge[1]);
+            wedge.addColorStop(trail / TAU + 0.0005, theme.scanWedge[0]);
+            wedge.addColorStop(1, theme.scanWedge[0]);
+            ctx.fillStyle = wedge;
+            ctx.fillRect(0, 0, this.w, this.h);
+            ctx.fillStyle = theme.signal;
+            const reach = Math.hypot(Math.max(centre.x, this.w - centre.x), Math.max(centre.y, this.h - centre.y));
+            ctx.globalAlpha = 0.22;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(centre.x, centre.y);
+            ctx.lineTo(centre.x + Math.cos(sweep) * reach, centre.y + Math.sin(sweep) * reach);
+            ctx.stroke();
+        }
+        ctx.font = '600 10px ' + theme.fontCode;
+        ctx.textBaseline = 'alphabetic';
+        for (const hit of picture.hits) {
+            if ((hit.kind !== 'world' && hit.kind !== 'moon') || hit.innerR !== undefined) continue;
+            const { cx, cy } = hit;
+            const visual = hit.visualR ?? hit.r;
+            if (cx < -40 || cy < -40 || cx > this.w + 40 || cy > this.h + 40) continue;
+            const moon = hit.kind === 'moon';
+            const body = bodyOf(plan, hit.key);
+            const main = !!body && body.type === 'Mainworld';
+            // Brighten as the sweep passes, then fade over a second or so.
+            let ping = 0;
+            if (centre && state.motion) {
+                const since = ((sweep - Math.atan2(cy - centre.y, cx - centre.x)) % TAU + TAU) % TAU;
+                ping = Math.exp(-since * 2.2);
+            }
+            const alpha = Math.min(1, (moon ? 0.42 : 0.68) + (main ? 0.2 : 0) + ping * 0.45);
+            // A moon too small to show detail gets a quiet ring, so a crowded moon system stays readable.
+            if (moon && visual < 2.5 && !main) {
+                ctx.globalAlpha = alpha * 0.55;
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.arc(cx, cy, 4 + ping * 2, 0, TAU);
+                ctx.stroke();
+                continue;
+            }
+            const R = Math.max(visual + 5, moon ? 7 : 9) + ping * 3;
+            ctx.globalAlpha = alpha * 0.32;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(cx, cy, R, 0, TAU);
+            ctx.stroke();
+            ctx.globalAlpha = alpha;
+            ctx.lineWidth = main ? 2 : 1.5;
+            const turn = now * (moon ? 0.5 : 0.3) + (cx * 0.013 + cy * 0.007);
+            for (let k = 0; k < 4; k++) {
+                const a = turn + k * Math.PI / 2;
+                ctx.beginPath();
+                ctx.arc(cx, cy, R + 3, a - 0.3, a + 0.3);
+                ctx.stroke();
+            }
+            if (picture.mode !== 'orbits' || (moon && R < 12)) continue;
+            // Designation up and to the right, on a short leader.
+            let label = this.scanLabels.get(hit.key);
+            if (label === undefined) {
+                label = body ? shortLabel(String(body.name || body.type || ''), plan.name) : '';
+                this.scanLabels.set(hit.key, label);
+            }
+            const corner = (R + 3) * Math.SQRT1_2;
+            const lx = cx + corner + 6;
+            const ly = cy - corner - 6;
+            ctx.lineWidth = 1;
+            ctx.globalAlpha = alpha * 0.55;
+            ctx.beginPath();
+            ctx.moveTo(cx + corner, cy - corner);
+            ctx.lineTo(lx - 2, ly + 3);
+            ctx.stroke();
+            ctx.globalAlpha = Math.min(1, alpha + 0.1);
+            ctx.fillText(label, lx, ly);
+        }
+        ctx.restore();
     }
 
     /** js/system_viewer.js:3021-3037. Two pings, a little apart, every beat. */

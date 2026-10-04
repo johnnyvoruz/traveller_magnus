@@ -9,7 +9,8 @@ import { readSpan, writeSpan, type PanelSpan } from '../shell/panel_state.ts';
 import BodyGlyph from './BodyGlyph.vue';
 import DossierBody from './DossierBody.vue';
 import DossierOverview from './DossierOverview.vue';
-import { dossierPath, orbitPath } from '../orbit/bodies.ts';
+import { bodyByKey, dossierPath, orbitPath } from '../orbit/bodies.ts';
+import { dayNightFor } from '../orbit/daynight.ts';
 import { bodyKeys, bodyModel, overviewModel, pickSystem, type AllegianceName } from './model.ts';
 
 const props = defineProps<{
@@ -59,6 +60,14 @@ const profile = computed(() => {
     const system = pickSystem(props.tree.body);
     if (!system || !bodyKeys(system).includes(props.bodyKey)) return null;
     return bodyModel(props.tree, props.bodyKey);
+});
+
+/** How long the day is on the body shown and how its daylight ranges over the year; stars have none. */
+const dayNight = computed(() => {
+    if (!props.tree || !props.bodyKey || props.error) return [];
+    const system = pickSystem(props.tree.body);
+    const found = system ? bodyByKey(system, props.bodyKey) : null;
+    return found && !found.star ? dayNightFor(found.body, found.parent) : [];
 });
 
 const title = computed(() => {
@@ -175,7 +184,7 @@ defineExpose({ remeasure: publish });
           <Icon name="solar-system" :size="13" />Orbits
         </button>
       </template>
-      <DossierBody v-if="profile" :model="profile" :span="span" @open="openKey" />
+      <DossierBody v-if="profile" :model="profile" :span="span" :day-night="dayNight" @open="openKey" />
       <DossierOverview v-else-if="overview" :model="overview" :span="span" :error="error" :orbit-link="!orbit" @open="openKey" @orbit="openOrbit(null)" @retry="$emit('retry')" />
       <p v-else-if="missing" class="doss-muted doss-pad">This hex has no world in the sector index.</p>
       <p v-else-if="pending" class="doss-muted doss-pad">Loading this sector.</p>

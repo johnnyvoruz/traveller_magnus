@@ -457,8 +457,15 @@ export function selectionLabel(body: Bag): [string, string] {
 
 // ---- The scene: one date, one camera -------------------------------------------------------
 
-/** The camera and canvas a scene is laid out for. z is zoomScale(). */
-export type View = { w: number; h: number; zoom: number; offX: number; offY: number; z: number; linear: boolean };
+/**
+ * The camera and canvas a scene is laid out for. z is zoomScale(). moons and jump are the
+ * Moons and Jump limit layers (legacy _hideMoons, _hideJumpLimit); both are shown when unset.
+ */
+export type View = {
+    w: number; h: number; zoom: number; offX: number; offY: number; z: number; linear: boolean;
+    moons?: boolean;
+    jump?: boolean;
+};
 
 export type StarAt = {
     star: PlanStar;
@@ -490,6 +497,9 @@ export type WorldAt = {
     moons: MoonAt[];
     /** Radii of the world.rings circles. */
     rings: number[];
+    /** Where its light comes from: the star it is drawn round. */
+    starX: number;
+    starY: number;
 };
 
 export type BeltAt = { world: PlanWorld; r: number; angle: number };
@@ -596,7 +606,45 @@ function subMaxAU(list: PlanWorld[]): number {
     return list.reduce((m, w) => Math.max(m, w.au), 0.01) * 1.2;
 }
 
-/** js/system_viewer.js:3191-3236 and 4532-4641: one star's worlds, and their hit targets. */
+/**
+ * js/system_viewer.js:4532-4641: a world at (px, py) drawn at zoom scale z, with its moons and
+ * rings round it and their hit targets, lit from (starX, starY). The orbits layout, the
+ * line-ups and the move between them all place a world through here, so its moons ride it.
+ */
+export function placeWorld(
+    w: PlanWorld, px: number, py: number, z: number, days: number, starX: number, starY: number,
+    hits: Hit[], moonsShown = true,
+): WorldAt {
+    const r = w.basePx * z;
+    const moons: MoonAt[] = [];
+    const rings: number[] = [];
+    if (moonsShown) {
+        for (const m of w.moons) {
+            if (m.ring) {
+                const dist = ringOrbitRadius(r, m.ringIndex, w.ringMoons);
+                moons.push({ moon: m, x: px, y: py, r: 0, orbitR: dist, cover: 0 });
+                hits.push({ kind: 'moon', key: m.key, cx: px, cy: py, r: dist + 3 * z, innerR: Math.max(0, dist - 3 * z) });
+                continue;
+            }
+            const dist = moonOrbitRadius(r, m.index, w.ringed, z);
+            const mAngle = bodyAngle(m.epoch, m.period, days);
+            const mx = px + dist * Math.cos(mAngle);
+            const my = py + dist * Math.sin(mAngle);
+            const moonR = m.basePx * z;
+            moons.push({ moon: m, x: mx, y: my, r: moonR, orbitR: dist, cover: shadowCover(mx, my, px, py, r, starX, starY) });
+            hits.push({ kind: 'moon', key: m.key, cx: mx, cy: my, r: Math.max(moonR + 6 * z, 9), visualR: moonR });
+        }
+        for (let ri = 0; ri < w.rings; ri++) {
+            const dist = ringOrbitRadius(r, ri, w.rings);
+            rings.push(dist);
+            hits.push({ kind: 'ring', key: w.key, cx: px, cy: py, r: dist + 3 * z, innerR: Math.max(0, dist - 3 * z) });
+        }
+    }
+    hits.push({ kind: 'world', key: w.key, cx: px, cy: py, r: Math.max(r + 9 * z, 14), visualR: r });
+    return { world: w, x: px, y: py, r, moons, rings, starX, starY };
+}
+
+/** js/system_viewer.js:3191-3236: one star's worlds, and their hit targets. */
 function layoutWorldSet(
     list: PlanWorld[], cx: number, cy: number, maxAU: number, maxPx: number, hole: number,
     view: View, days: number, hits: Hit[],
@@ -614,33 +662,7 @@ function layoutWorldSet(
         const orbitR = scaleR(w.au, maxAU, maxPx, hole, view.linear);
         set.orbits.push(orbitR);
         const angle = bodyAngle(w.epoch, w.period, days);
-        const px = cx + orbitR * Math.cos(angle);
-        const py = cy + orbitR * Math.sin(angle);
-        const r = w.basePx * z;
-        const moons: MoonAt[] = [];
-        for (const m of w.moons) {
-            if (m.ring) {
-                const dist = ringOrbitRadius(r, m.ringIndex, w.ringMoons);
-                moons.push({ moon: m, x: px, y: py, r: 0, orbitR: dist, cover: 0 });
-                hits.push({ kind: 'moon', key: m.key, cx: px, cy: py, r: dist + 3 * z, innerR: Math.max(0, dist - 3 * z) });
-                continue;
-            }
-            const dist = moonOrbitRadius(r, m.index, w.ringed, z);
-            const mAngle = bodyAngle(m.epoch, m.period, days);
-            const mx = px + dist * Math.cos(mAngle);
-            const my = py + dist * Math.sin(mAngle);
-            const moonR = m.basePx * z;
-            moons.push({ moon: m, x: mx, y: my, r: moonR, orbitR: dist, cover: shadowCover(mx, my, px, py, r, cx, cy) });
-            hits.push({ kind: 'moon', key: m.key, cx: mx, cy: my, r: Math.max(moonR + 6 * z, 9), visualR: moonR });
-        }
-        const rings: number[] = [];
-        for (let ri = 0; ri < w.rings; ri++) {
-            const dist = ringOrbitRadius(r, ri, w.rings);
-            rings.push(dist);
-            hits.push({ kind: 'ring', key: w.key, cx: px, cy: py, r: dist + 3 * z, innerR: Math.max(0, dist - 3 * z) });
-        }
-        set.bodies.push({ world: w, x: px, y: py, r, moons, rings });
-        hits.push({ kind: 'world', key: w.key, cx: px, cy: py, r: Math.max(r + 9 * z, 14), visualR: r });
+        set.bodies.push(placeWorld(w, cx + orbitR * Math.cos(angle), cy + orbitR * Math.sin(angle), z, days, cx, cy, hits, view.moons !== false));
     }
     return set;
 }
@@ -702,11 +724,11 @@ export function layoutScene(plan: Plan, view: View, days: number): Scene {
         ? layoutWorldSet(primaryList, originX, originY, plan.maxAU, maxPx, primaryHole, view, days, hits)
         : null;
 
-    // The jump circles, in the legacy queue order (2928-2948).
-    const first = frame.stars[0];
+    // The jump circles, in the legacy queue order (2928-2948). None with the layer off (2916).
+    const first = view.jump === false ? undefined : frame.stars[0];
     if (first) queue(originX, originY, visibleJumpRadius(scaleR(first.star.jumpAU, plan.maxAU, maxPx, primaryHole, view.linear), first.r), JUMP_LABEL);
-    if (primary) queueJumps(jumps, primary, plan.maxAU, maxPx, primaryHole, view);
-    for (const companion of companions) {
+    if (primary && view.jump !== false) queueJumps(jumps, primary, plan.maxAU, maxPx, primaryHole, view);
+    for (const companion of view.jump === false ? [] : companions) {
         const at = companion.at;
         const truePx = hundredDpx(at.star.au, at.star.jumpAU, plan.maxAU, maxPx, primaryHole, view.linear);
         queue(at.x, at.y, visibleJumpRadius(truePx, at.r), JUMP_LABEL);
@@ -743,7 +765,7 @@ export function sceneBounds(plan: Plan, view: View, days: number): Bounds {
     };
     const includeWorlds = (list: PlanWorld[], x: number, y: number, max: number, pixels: number, hole: number): void => {
         for (const w of list) {
-            const moonCount = w.moons.length + w.rings;
+            const moonCount = view.moons === false ? 0 : w.moons.length + w.rings;
             const local = (moonCount ? 20 + moonCount * 6 : 10) * z;
             const extent = Math.max(w.basePx * z + local, Math.min(180, w.name.length * 3.5));
             include(x, y, scaleR(w.au, max, pixels, hole, view.linear) + extent, w.name);
@@ -758,7 +780,7 @@ export function sceneBounds(plan: Plan, view: View, days: number): Bounds {
         }
     }
     includeWorlds(plan.sets[0] || [], originX, originY, plan.maxAU, maxPx, primaryHole);
-    const first = frame.stars[0];
+    const first = view.jump === false ? undefined : frame.stars[0];
     if (first) {
         const jumpR = scaleR(first.star.jumpAU, plan.maxAU, maxPx, primaryHole, view.linear);
         if (jumpR > 0 && jumpR < maxPx * 1.25) include(originX, originY, jumpR + 36, JUMP_LABEL);
@@ -768,13 +790,13 @@ export function sceneBounds(plan: Plan, view: View, days: number): Bounds {
 }
 
 /** The hit that stands for a body: never a world.rings circle, which only borrows the key. */
-export function hitOf(scene: Scene, key: string | null): Hit | null {
+export function hitOf(scene: { hits: Hit[] }, key: string | null): Hit | null {
     if (!key) return null;
     return scene.hits.find((hit) => hit.kind !== 'ring' && hit.key === key) || null;
 }
 
 /** js/system_viewer.js:4724-4731. The topmost hit under a point, or null. */
-export function hitAt(scene: Scene, x: number, y: number): Hit | null {
+export function hitAt(scene: { hits: Hit[] }, x: number, y: number): Hit | null {
     for (let i = scene.hits.length - 1; i >= 0; i--) {
         const hit = scene.hits[i] as Hit;
         const dist = Math.hypot(x - hit.cx, y - hit.cy);
@@ -784,7 +806,7 @@ export function hitAt(scene: Scene, x: number, y: number): Hit | null {
 }
 
 /** js/system_viewer.js:5262-5281. The box round a focus and what orbits it, from its hits. */
-export function localBounds(plan: Plan, scene: Scene, key: string): Bounds | null {
+export function localBounds(plan: Plan, scene: { hits: Hit[] }, key: string): Bounds | null {
     const local = localKeys(plan, key);
     const box: Bounds = { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity };
     let found = false;

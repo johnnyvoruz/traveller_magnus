@@ -1,8 +1,9 @@
 <script setup lang="ts">
 /**
- * The docked body card (legacy .sv-tip-docked, style.css:2590-2604): parked at the stage's
- * top left so it never covers the body it describes, with bracket corners. It shows the body
- * under the pointer, or the selected body when nothing is hovered. Contents are orbit/card.ts.
+ * A docked body card (legacy .sv-tip-docked, style.css:2590-2604): parked at the stage's
+ * top left so it never covers the body it describes, with bracket corners. The stage stacks
+ * up to two in `.orbit-cards`: the selected body's card, which stays put, and under it the
+ * card of another body under the pointer. Contents are orbit/card.ts.
  */
 import { ref, watch } from 'vue';
 import Icon from '../design/Icon.vue';
@@ -10,16 +11,30 @@ import type { BodyCardModel } from './card.ts';
 
 const props = defineProps<{
     model: BodyCardModel;
-    /** Changes when the card moves to another body: the dock animation runs again. */
+    /** The body shown. A pinned card docks again when it changes; a hover card just changes its words. */
     bodyKey: string;
+    /** The card is pinned to the selected body, so it can be closed; a hover card goes when the pointer leaves. */
+    closable: boolean;
+    /** The card sits under the pinned one: quieter, and no bracket corners. */
+    under?: boolean;
 }>();
+
+defineEmits<{ close: [] }>();
 
 const helpOpen = ref(false);
 watch(() => props.bodyKey, () => { helpOpen.value = false; });
 </script>
 
 <template>
-  <aside :key="bodyKey" class="orbit-body-card" aria-label="Body under the pointer">
+  <aside
+    :key="closable ? bodyKey : 'hover'"
+    class="orbit-body-card"
+    :class="{ 'is-closable': closable, 'is-under': under }"
+    :aria-label="closable ? 'Selected body' : 'Body under the pointer'"
+  >
+    <button v-if="closable" type="button" class="orbit-body-card-close" title="Close this card" aria-label="Close this card" @click="$emit('close')">
+      <Icon name="xmark" :size="12" />
+    </button>
     <h2 class="orbit-body-card-title">
       {{ model.title }}
       <span v-if="model.sub" class="orbit-body-card-sub">({{ model.sub }})</span>
@@ -32,7 +47,9 @@ watch(() => props.bodyKey, () => { helpOpen.value = false; });
     </dl>
     <div v-if="model.season" class="orbit-body-card-season">
       <p class="orbit-season-text">
-        <span>{{ model.season.text }}</span>
+        <span class="orbit-season-lines">
+          <span v-for="line in model.season.lines" :key="line">{{ line }}</span>
+        </span>
         <button
           type="button"
           class="orbit-season-help"
@@ -54,15 +71,30 @@ watch(() => props.bodyKey, () => { helpOpen.value = false; });
 </template>
 
 <style>
-.orbit-body-card {
+/* The stack at the stage's top left: the pinned card, and a hover card under it. */
+.orbit-cards {
   position: absolute;
   top: 18px;
   left: 18px;
   z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
   width: max-content;
-  min-width: 200px;
   max-width: min(310px, calc(100% - 36px));
+  max-height: calc(100% - 36px);
+  pointer-events: none;
+}
+
+.orbit-body-card {
+  position: relative;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  min-width: 200px;
+  max-width: 100%;
   padding: 10px 12px;
+  pointer-events: auto;
   border: 1px solid var(--signal-line);
   border-radius: var(--r-2);
   background: var(--chrome-glass);
@@ -97,6 +129,39 @@ watch(() => props.bodyKey, () => { helpOpen.value = false; });
   border-bottom-width: 2px;
 }
 
+/* The hover card under a pinned one: no brackets, a quieter edge, and it gives way when the stage is short. */
+.orbit-body-card.is-under {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  border-color: var(--line-2);
+  box-shadow: var(--shadow-chrome);
+  pointer-events: none;
+  animation-name: orbit-card-rise;
+  animation-duration: var(--t-fast);
+}
+
+.orbit-body-card.is-under::before,
+.orbit-body-card.is-under::after {
+  display: none;
+}
+
+.orbit-body-card.is-under .orbit-season-help {
+  display: none;
+}
+
+@keyframes orbit-card-rise {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 @keyframes orbit-card-dock {
   from {
     opacity: 0;
@@ -107,6 +172,42 @@ watch(() => props.bodyKey, () => { helpOpen.value = false; });
     opacity: 1;
     transform: none;
   }
+}
+
+.orbit-body-card.is-closable .orbit-body-card-title {
+  padding-right: 22px;
+}
+
+.orbit-body-card-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-2);
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.orbit-body-card-close:hover {
+  background: var(--surface-2);
+  color: var(--signal-bright);
+}
+
+.orbit-season-lines span {
+  display: block;
+}
+
+.orbit-season-lines span + span {
+  color: var(--text-1);
 }
 
 .orbit-body-card-title {

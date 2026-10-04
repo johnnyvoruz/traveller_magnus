@@ -31,8 +31,28 @@ export function formatTemp(kelvin: unknown): string {
     return wholeDegrees(celsius) + '°C (' + wholeDegrees(fahrenheitOf(celsius)) + '°F)';
 }
 
+/** §7.5 full style: `15 °C · 59 °F · 288 K`. Empty when the value is not a number. */
+export function formatTempFull(kelvin: unknown): string {
+    if (typeof kelvin !== 'number' || !Number.isFinite(kelvin)) return '';
+    const celsius = celsiusOf(kelvin);
+    return wholeDegrees(celsius) + ' °C · ' + wholeDegrees(fahrenheitOf(celsius)) + ' °F · ' + wholeDegrees(kelvin) + ' K';
+}
+
 /** `Mean 288 K`: the kelvin figure, for a tooltip only. */
 export function kelvinNote(label: string, kelvin: unknown): string {
     if (typeof kelvin !== 'number' || !Number.isFinite(kelvin)) return '';
     return label + ' ' + wholeDegrees(kelvin) + ' K';
+}
+
+/**
+ * A full temperature (`15 °C · 59 °F · 288 K`) as its three figures, one for each line of a
+ * tile or a row; null for any other text. The panels stack them instead of running them
+ * together with dots.
+ */
+export function tempLines(text: string): string[] | null {
+    const parts = text.split(' \u00B7 ');
+    if (parts.length !== 3) return null;
+    const [celsius, fahrenheit, kelvin] = parts as [string, string, string];
+    if (!celsius.endsWith('\u00B0C') || !fahrenheit.endsWith('\u00B0F') || !kelvin.endsWith(' K')) return null;
+    return [celsius, fahrenheit, kelvin];
 }

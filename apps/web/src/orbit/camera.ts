@@ -4,10 +4,7 @@
  * the state those functions closed over is the Camera value passed in and returned.
  * Pure: every function returns a new camera.
  */
-import {
-    hitOf, layoutScene, localBounds, sceneBounds, zoomScale,
-    type Hit, type Plan, type View,
-} from './layout.ts';
+import { hitOf, localBounds, sceneBounds, zoomScale, type Hit, type Plan, type View } from './layout.ts';
 
 /** js/system_viewer.js:44. */
 export const MAX_ZOOM = 5000;
@@ -45,10 +42,11 @@ export function startCamera(): Camera {
     return { zoom: 1, offX: 0, offY: 0, minZoom: 1, fitZoom: 1, fitOffX: 0, fitOffY: 0, atFit: true };
 }
 
-export function viewOf(cam: Camera, size: Size, linear: boolean): View {
+/** The view a camera gives. moons and jump are the Moons and Jump limit layers. */
+export function viewOf(cam: Camera, size: Size, linear: boolean, moons = true, jump = true): View {
     return {
         w: size.w, h: size.h, zoom: cam.zoom, offX: cam.offX, offY: cam.offY,
-        z: zoomScale(cam.zoom, cam.fitZoom, false), linear,
+        z: zoomScale(cam.zoom, cam.fitZoom, false), linear, moons, jump,
     };
 }
 
@@ -57,11 +55,13 @@ export function viewOf(cam: Camera, size: Size, linear: boolean): View {
  * it fills the canvas less FIT_INSET. With preserve, a view that is not the fitted view keeps
  * its zoom and pan relative to the new fit.
  */
-export function fitCamera(plan: Plan, size: Size, days: number, cam: Camera, preserve: boolean, linear: boolean): Camera {
+export function fitCamera(
+    plan: Plan, size: Size, days: number, cam: Camera, preserve: boolean, linear: boolean, moons = true, jump = true,
+): Camera {
     if (!(size.w > 0) || !(size.h > 0)) return cam;
     const width = Math.max(20, size.w - FIT_INSET);
     const height = Math.max(20, size.h - FIT_INSET);
-    const view: View = { w: size.w, h: size.h, zoom: cam.minZoom || 1, offX: 0, offY: 0, z: 1, linear };
+    const view: View = { w: size.w, h: size.h, zoom: cam.minZoom || 1, offX: 0, offY: 0, z: 1, linear, moons, jump };
     if (!plan.hasOrbits) view.zoom = 1;
     let lastSpan: number | null = null;
     for (let i = 0; i < 12; i++) {
@@ -91,6 +91,16 @@ export function fitCamera(plan: Plan, size: Size, days: number, cam: Camera, pre
 
 /** One wheel event never counts for more than this many notches. */
 export const WHEEL_MAX_NOTCHES = 4;
+
+/**
+ * js/system_viewer.js:5124-5137. A line-up is fitted at zoom 1 with no pan, and zooming out
+ * stops there. With preserve, a view that is not the fitted view keeps its zoom and pan.
+ */
+export function lineupFit(cam: Camera, preserve: boolean): Camera {
+    const next: Camera = { ...cam, minZoom: 1, fitZoom: 1, fitOffX: 0, fitOffY: 0 };
+    if (!preserve || cam.atFit) return { ...next, zoom: 1, offX: 0, offY: 0 };
+    return { ...next, zoom: Math.max(1, cam.zoom) };
+}
 
 /**
  * Wheel movement as notches: +1 is one notch toward the picture (zoom in). A mouse wheel
@@ -181,16 +191,18 @@ export function toward(cam: Camera, target: Camera, share: number): Camera {
 
 /**
  * js/system_viewer.js:5283-5322. The camera that frames a body and what orbits it inside the
- * canvas less FRAME_PAD, the body at the centre. Null when the body has no hit target.
+ * canvas less FRAME_PAD, the body at the centre. hitsFor lays the current layout out for a
+ * camera and returns its hit targets, so the same function frames a body on its orbit and in
+ * a line-up. Null when the body has no hit target.
  */
-export function frameCamera(plan: Plan, size: Size, days: number, cam: Camera, key: string, linear: boolean): Camera | null {
+export function frameCamera(plan: Plan, size: Size, cam: Camera, key: string, hitsFor: (cam: Camera) => Hit[]): Camera | null {
     const width = Math.max(20, size.w - FRAME_PAD * 2);
     const height = Math.max(20, size.h - FRAME_PAD * 2);
     const cx = size.w / 2;
     const cy = size.h / 2;
     let next: Camera = { ...cam, atFit: false };
     for (let i = 0; i < 12; i++) {
-        const box = localBounds(plan, layoutScene(plan, viewOf(next, size, linear), days), key);
+        const box = localBounds(plan, { hits: hitsFor(next) }, key);
         if (!box) return null;
         const bw = Math.max(1, box.right - box.left);
         const bh = Math.max(1, box.bottom - box.top);
@@ -200,7 +212,7 @@ export function frameCamera(plan: Plan, size: Size, days: number, cam: Camera, k
         const zoom = Math.max(next.minZoom, Math.min(MAX_ZOOM, next.zoom * ratio));
         next = zoomToward(next, zoom, 1);
     }
-    const hit = hitOf(layoutScene(plan, viewOf(next, size, linear), days), key);
+    const hit = hitOf({ hits: hitsFor(next) }, key);
     if (!hit) return null;
     return centreOn(next, hit, size);
 }

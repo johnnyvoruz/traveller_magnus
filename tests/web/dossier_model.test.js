@@ -7,7 +7,14 @@ import { fileURLToPath } from 'node:url';
 import { formatUwpDigit } from '@voyage/engines';
 import { buildSector } from '@voyage/generation';
 import { TRUTH_SEED, TRUTH_SETTINGS } from '../../tools/truth/settings.js';
-import { bodyKeys, bodyModel, overviewModel, pickSystem } from '../../apps/web/src/dossier/model.ts';
+import { celsiusOf, fahrenheitOf, formatTempFull, wholeDegrees } from '../../apps/web/src/design/units.ts';
+import { bodyKeys, bodyModel, overviewModel, pickSystem, rowFor } from '../../apps/web/src/dossier/model.ts';
+
+/** The same conversion the dossier uses: °C, then °F, then kelvin. */
+function fullTemp(kelvin) {
+    const celsius = celsiusOf(kelvin);
+    return wholeDegrees(celsius) + ' °C · ' + wholeDegrees(fahrenheitOf(celsius)) + ' °F · ' + wholeDegrees(kelvin) + ' K';
+}
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -22,6 +29,18 @@ function catalogue(slug) {
 function pinned() {
     return { seed: TRUTH_SEED, settings: TRUTH_SETTINGS, engineVersion };
 }
+
+test('formatTempFull is the §7.5 full style', () => {
+    assert.equal(formatTempFull(288), fullTemp(288));
+    assert.equal(formatTempFull(288), '15 °C · 59 °F · 288 K');
+    assert.equal(formatTempFull(189), fullTemp(189));
+    assert.equal(formatTempFull(0), fullTemp(0));
+    assert.equal(formatTempFull(6300), fullTemp(6300));
+    assert.equal(formatTempFull(null), '');
+    assert.equal(formatTempFull(undefined), '');
+    assert.equal(formatTempFull(Number.NaN), '');
+    assert.equal(formatTempFull('288'), '');
+});
 
 test('Regina overview and Caesillian 0914 partial follow the inspector', async () => {
     const marches = await buildSector({
@@ -94,6 +113,53 @@ test('Regina overview and Caesillian 0914 partial follow the inspector', async (
     assert.equal(mainBody.glyph.kind, mainRow.moon ? 'moon' : 'world');
     assert.deepEqual(mainRow.glyph, mainBody.glyph);
     assert.deepEqual(mainBody.journey, model.journey);
+
+    assert.equal(typeof host.meanTempK, 'number');
+    assert.equal(typeof host.highTempK, 'number');
+    assert.equal(typeof host.lowTempK, 'number');
+    const mean = mainBody.facts.find((fact) => fact.label === 'Mean temp.');
+    assert.ok(mean);
+    assert.equal(mean.value, fullTemp(host.meanTempK));
+    assert.equal(mean.value, formatTempFull(host.meanTempK));
+    assert.equal(mean.note, '');
+    const scales = mean.value.split(' · ');
+    assert.equal(scales.length, 3);
+    assert.match(scales[0], /°C$/);
+    assert.match(scales[1], /°F$/);
+    assert.match(scales[2], / K$/);
+    const physical = mainBody.sideSections.find((section) => section.heading === 'Physical');
+    assert.ok(physical);
+    const high = physical.rows.find((row) => row.label === 'High temperature');
+    const low = physical.rows.find((row) => row.label === 'Low temperature');
+    assert.ok(high);
+    assert.ok(low);
+    assert.equal(high.text, fullTemp(host.highTempK));
+    assert.equal(low.text, fullTemp(host.lowTempK));
+    assert.equal(physical.rows.some((row) => row.label.includes('(K)')), false);
+
+    assert.equal(typeof system.stars[0].temp, 'number');
+    const starTemp = starBody.facts.find((fact) => fact.label === 'Temperature');
+    assert.ok(starTemp);
+    assert.equal(starTemp.value, fullTemp(system.stars[0].temp));
+
+    const stripped = structuredClone(tree);
+    const strippedSystem = pickSystem(stripped.body);
+    const strippedHost = (strippedSystem.worlds || []).find((world) => world.type === 'Mainworld')
+        || (strippedSystem.worlds || []).flatMap((world) => world.moons || []).find((moon) => moon.type === 'Mainworld');
+    assert.ok(strippedHost);
+    delete strippedHost.highTempK;
+    delete strippedHost.lowTempK;
+    const strippedBody = bodyModel(stripped, mainRow.key);
+    assert.ok(strippedBody);
+    const strippedPhysical = strippedBody.sideSections.find((section) => section.heading === 'Physical');
+    const strippedLabels = strippedPhysical ? strippedPhysical.rows.map((row) => row.label) : [];
+    assert.equal(strippedLabels.includes('High temperature'), false);
+    assert.equal(strippedLabels.includes('Low temperature'), false);
+    const strippedMean = strippedBody.facts.find((fact) => fact.label === 'Mean temp.');
+    assert.ok(strippedMean);
+    assert.equal(strippedMean.value, fullTemp(host.meanTempK));
+    assert.equal(rowFor('High temperature', formatTempFull(null)), null);
+    assert.equal(rowFor('Low temperature', formatTempFull(undefined)), null);
 
     const firstBody = bodyModel(tree, keys[0]);
     const lastBody = bodyModel(tree, keys[keys.length - 1]);

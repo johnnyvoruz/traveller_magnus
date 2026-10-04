@@ -1610,3 +1610,106 @@ orchestrator on the current tree, including the gated Worker suite. Unpushed; pu
   rows still show K and °C only (model code, not D's).
 - **All of `apps/web` since the borders push is unpushed:** D's title follow-up, A's model,
   B's jump times, D's shell and picture. No agent is mid-task right now.
+
+**Johnny wants "today's" temperature if it can be calculated (2026-10-04).** The orchestrator
+read the engine step (`packages/engines/src/mgt2e_world_engine.js:1754-1788`, "Temp
+Diurnals"): high and low are `calculateMeanTemperature` at a luminosity raised or lowered by
+`lumMod = clamp(tfactor + rfactor + gfactor) / (1 + pressureBar)`, where `tfactor =
+|sin(tilt)|` (halved for a year under 36.5 days, times 1.5 for a year over two standard
+years), and temperature goes as luminosity to the 0.25. **Proposal put to Johnny
+(`questions_for_johnny.md` A3):** today's hemisphere mean = `meanTempK * (1 + tfactor *
+sin(orbit angle) / (1 + pressureBar)) ^ 0.25`, southern with the sign flipped; rotation,
+geography and eccentricity left out; labelled an estimate. It is a new derived figure built
+from the engine's own terms and needs his yes before Agent D builds it. **Agent B** gets the
+dossier temperatures: the existing formatter in `apps/web/src/design/units.ts` applied to
+the dossier model's mean, high and low rows.
+
+**Dossier temperatures are in (Agent B, 2026-10-04), checked:** `formatTempFull` in
+`design/units.ts` (`15 °C · 59 °F · 288 K`), used by the dossier's mean tile, high and low
+rows and the star temperature tile; the model's own Celsius helper is gone. Suite green.
+Not built from §7.5: the delta style and the one-decimal rounding near thresholds. Unseen in
+a browser; unpushed with Agent D's Row and Column work in flight.
+
+## 50. Agent F joins; the planet surfaces recipe is issued (2026-10-04)
+
+- **Agent F** is a higher-effort agent (OpenAI Codex) with a limited token budget. Johnny:
+  use it wisely, for complicated or highly specialised tasks. Give F inventories and plans to
+  read rather than raw legacy code, and the steps where a wrong design is expensive.
+- **`directives/recipe_planet_surfaces.md`** (slice 1 part C4) was written by Agent D at
+  Johnny's request: one deterministic surface per body, shown as the dossier's hex map and as
+  the lit disc in orbit, closing the legacy gap where the two came from different generators.
+- **F reviewed it; all four findings were right and are applied:** the parity check now
+  compares the real shader's output in a browser with the CPU reference (a TypeScript
+  transcription of the GLSL proves nothing), with one shared sea level; no main-thread task
+  over 50 ms, terrain sampled in a worker (a scan animation does not excuse blocking);
+  seasonal ice has one contract for both views, settled in P1; the harness is
+  `tests/oracle/legacy.js` (`CLAUDE.md` still names the wrong path, which is where the error
+  came from); P3 is gated on Q2.
+- **Also added by the orchestrator:** why surfaces are computed in the browser despite
+  `architecture.md` §10.1 (six million bodies cannot be files), and the conditions of that
+  exception.
+- **Step owners (§2a of the recipe):** P0 inventory, Agent A; P2 profile parity port, Agent B;
+  P1 plan, P3 terrain, P5 disc, Agent F; P4 hex map and P6 overlay, Agent C to F's plan;
+  wiring, look and delighters, Agent D. P0 and P2 start now.
+- **Blocking questions for Johnny** (`questions_for_johnny.md` section E): E1, is hex terrain
+  a picture or data; E2, the terrain classes.
+
+**Johnny on surfaces (2026-10-04):** copy the old app's handling of hex terrain; enhance where
+there is room, but so that the enhancements can be disabled and the app returns to vanilla.
+Recorded as `recipe_planet_surfaces.md` §0: vanilla is a parity port of the legacy surface map
+(`renderFlatMap`) and disc (`PlanetGL`), presentation made in the browser; the unified
+terrain, hex classes, archetypes and delighters are the enhanced mode, behind one per-device
+switch, never changing what vanilla draws. New steps V1 and V2 (the vanilla map and disc)
+come before P3. Questions E1 and E2 are closed.
+
+## 51. Surfaces P0 and P2 are in (2026-10-04)
+
+- **P0 (Agent A):** `findings/legacy_surface_inventory.md`. The legacy app has **three**
+  painters, not two: `planet_gl.js` (orbit cube maps), `planet_renderer.js` (the dossier sheet
+  and hemispheres) and a canvas fallback disc in `system_viewer.js` (`_paintWorldSteps`,
+  3670-3986). They use different seeds (GL: FNV-1a of `_surfaceId`, no `masterSeed`; map:
+  `hashString(masterSeed-imageSeed-ph|cn|oc)`), different noise, different sea-level clamps and
+  different inputs (the map palette reads four fields; the GL palette about a dozen more).
+  `PlanetProfile` feeds only the GL disc. The dossier projection is the diamond, N = 5, with a
+  screen-overlay hex grid that does not class terrain. So "vanilla" is two separate parity
+  ports (V1 map, V2 disc) that will not agree with each other, exactly as in the legacy app;
+  making them agree is the enhanced mode. Unknown in the code: where the 1600 and 1005 in the
+  hex column count come from.
+- **P2 (Agent B):** `apps/web/src/surface/profile.ts` ports `PlanetProfile.kind`, `.of` and
+  `.halo`; fixtures `profile_regina`, `profile_zeycude`, `profile_extra`; `surfaceKind` in
+  `orbit/system.ts` now returns the kind. 376 pass, build green.
+- **One parity gap found in review, sent back to B:** `planet_profile.js:59` falls back to
+  `PlanetRenderer.tempBandFromKelvin(kelvin)` when a body has no `tempBand`. In the legacy
+  browser that global always exists; the oracle did not load `planet_renderer.js`, so the
+  fixtures and the port have that branch closed. A cold body with `meanTempK` and no `tempBand`
+  would get a different kind from the legacy app. Fix: load `planet_renderer.js` in the oracle
+  (V1 needs it anyway), port `tempBandFromKelvin`, add fixture bodies for the branch.
+- **`npm run check` fails** on `apps/web/src/orbit/alignment.ts`: the checker matches the
+  word "window." at the end of a comment (line 119). Agent D's file; D rewords the comment.
+- **Gap closed (Agent B, same day):** `planet_renderer.js` loads in the oracle with no stub;
+  `tempBandFromKelvin` (1045-1052) is ported and used in `kind()`; seven fixture bodies with
+  `meanTempK` and no `tempBand` added to `profile_extra`. The band only changes the outcome
+  for Frozen (the 229 K, atmosphere 1 body is `ice`, and would have been `desert` before).
+  Regina, Zeycude and the orbit text fixtures are byte-identical. P2 is done.
+- **Next:** Agent F writes P1 (the plan) from the inventory, covering V1, V2, the switch and
+  the enhanced design.
+
+## 52. Orbit C2b, first delighters and C3 (line-up search) are in; ready to push (2026-10-04)
+
+- **Agent D:** C2b (Row and Column views, layer chips), the first C2c delighters and **C3,
+  the line-up search**, are built. The search is a parity port (the test runs the functions
+  from `js/system_viewer.js` beside the port and pins the answers in
+  `tests/web/fixtures/orbit_alignment.json`), runs in a web worker started through
+  `platform/browser.ts`, and can be cancelled. Also: a close button on the pinned body card,
+  temperatures one value per line, jump times restyled, and a new "Day and night" block on
+  the orbit card (solar day, hours of light at the equator and at 45 degrees, polar day and
+  night latitude). That block is plain geometry, not a rules figure; its tooltip says so.
+- **Orchestrator re-ran everything after D's last edits:** check clean, 376 pass, build green.
+- **Not exercised in a browser:** cancel mid-search, a search that hits the visit budget, the
+  no-worker fallback (all covered by tests), and a sector-wide timing run.
+- **Open with Johnny** (`questions_for_johnny.md` A5, A8 to A10): body chips; the tilt below
+  which a world has no seasons line (3 or 5 degrees); star temperatures in C and F; whether
+  45 degrees is the latitude to quote for daylight.
+- **Everything local is pushable:** B's dossier temperatures and profile port, D's orbit work.
+- **Next for D:** wiring the surface renderers when V1 and V2 land; until then C2c delighters
+  that need no surfaces. C5 (2.5D) is decided again after C4.

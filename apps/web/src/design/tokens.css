@@ -104,6 +104,8 @@
   --t-rail: 500ms;        /* rail expand and label fade */
   --t-lock: 650ms;        /* the selection lock landing on a body (system_viewer.js:2191) */
   --t-pulse: 2400ms;      /* one beat of the focus pulse round a selected body (system_viewer.js:3028) */
+  --t-lineup: 650ms;      /* bodies travelling between the orbits, row and column layouts (plan 7.8) */
+  --t-sweep: 8000ms;      /* one turn of the scan sweep (system_viewer.js:2099) */
 
   /* layout of the floating chrome (legacy #map-chrome and #system-inspector) */
   --chrome-inset: 10px;   /* viewport edge to chrome */
@@ -163,6 +165,7 @@
   --orbit-belt: #888888;         /* belt band, drawn at 33% (4648) */
   --orbit-world: #a0a0b0;
   --orbit-moon: #6a7070;         /* 4584 */
+  --orbit-rock: #e4e8ea;         /* a belt's rocks in a line-up (2507) */
   --orbit-ring: #c8ccd0;         /* static ring, drawn at 67% (3463) */
   --orbit-night: #00050f;        /* the night half of a flat disc, drawn at 72% (4204) */
   --orbit-shadow: #080c12;       /* a moon in its world's shadow (4595) */

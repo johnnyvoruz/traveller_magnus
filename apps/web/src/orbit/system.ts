@@ -4,6 +4,7 @@
  * return null until the Builder slice.
  */
 import { formatDisplayNumber } from '../dossier/labels.ts';
+import { surfaceKind as profileKind } from '../surface/profile.ts';
 import { orbitToAU } from './maths.ts';
 
 type Bag = Record<string, any>;
@@ -121,11 +122,8 @@ export function starColor(s: { sType?: string } | null | undefined): string | nu
 }
 
 /**
- * js/system_viewer.js:3533-3535.
- * The legacy function returns PlanetProfile.kind(body) when that page
- * global exists, and null otherwise. PlanetProfile arrives with slice 1
- * part C4. This slice does not load it, so the golden texts are null.
+ * js/system_viewer.js:3533-3535. PlanetProfile.kind, js/planet_profile.js:45-67.
  */
-export function surfaceKind(_body: unknown): string | null {
-    return null;
+export function surfaceKind(body: unknown): string | null {
+    return profileKind(body);
 }

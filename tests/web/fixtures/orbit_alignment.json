@@ -1,0 +1,891 @@
+{
+ "spread": {
+  "pair": [
+   [
+    76.86759687645183,
+    103.13240312354816
+   ],
+   [
+    56.76602626129991,
+    56.76602626129991
+   ],
+   [
+    34.13440626086546,
+    145.86559373913454
+   ]
+  ],
+  "three": [
+   [
+    85.94366926962347,
+    189.07607239317167
+   ],
+   [
+    69.78747200898938,
+    149.83176194235892
+   ],
+   [
+    71.144605553667,
+    115.70255447572457
+   ]
+  ],
+  "four": [
+   [
+    88.32675277906826,
+    189.07607239317167
+   ],
+   [
+    118.53693238068242,
+    241.4630676193176
+   ],
+   [
+    104.64755263042741,
+    220.350107106152
+   ]
+  ],
+  "six": [
+   [
+    103.13240312354816,
+    269.29016371148685
+   ],
+   [
+    118.53693238068242,
+    249.7874720089894
+   ],
+   [
+    113.81766033043975,
+    229.52021480616432
+   ]
+  ],
+  "resonant": [
+   [
+    114.59155902616465,
+    114.59155902616465
+   ],
+   [
+    40.2999779173351,
+    40.2999779173351
+   ],
+   [
+    48.06178489884704,
+    48.06178489884704
+   ]
+  ],
+  "fixed": [
+   [
+    68.7549354156988,
+    194.80565034447994
+   ],
+   [
+    68.7549354156988,
+    194.80565034447994
+   ],
+   [
+    68.75493541571441,
+    194.80565034448512
+   ]
+  ],
+  "retro": [
+   [
+    108.86198107485642,
+    108.86198107485643
+   ],
+   [
+    98.61816144326714,
+    136.47086568615072
+   ],
+   [
+    102.8931321912439,
+    129.54262800700707
+   ]
+  ]
+ },
+ "polish": {
+  "pair": {
+   "days": 403642.16644891934,
+   "spread": 0.000005482678224785238
+  },
+  "three": {
+   "days": 403439.1483303726,
+   "spread": 4.054728616126641
+  },
+  "four": {
+   "days": 403435.8401221112,
+   "spread": 12.381661735206915
+  },
+  "six": {
+   "days": 403385.5959554496,
+   "spread": 41.151011370464175
+  },
+  "resonant": {
+   "days": 403391.01690356305,
+   "spread": 19.09859588357926
+  },
+  "fixed": {
+   "days": 403350.9992574601,
+   "spread": 68.75493541571441
+  },
+  "retro": {
+   "days": 403512.32596172846,
+   "spread": 27.86974212439917
+  }
+ },
+ "earliest": {
+  "three": [
+   {
+    "hit": {
+     "days": 403727.5035741946,
+     "spread": 1.7517346774429106
+    },
+    "visits": 5,
+    "stopped": false
+   },
+   {
+    "hit": {
+     "days": 403439.148310906,
+     "spread": 4.0547178598233184
+    },
+    "visits": 3,
+    "stopped": false
+   },
+   {
+    "hit": {
+     "days": 403381.47725891776,
+     "spread": 30.783993437004657
+    },
+    "visits": 3,
+    "stopped": false
+   }
+  ],
+  "four": [
+   {
+    "hit": {
+     "days": 484178.62199483183,
+     "spread": 1.7517349284533037
+    },
+    "visits": 446,
+    "stopped": false
+   },
+   {
+    "hit": {
+     "days": 407304.6393773997,
+     "spread": 5.604190043082711
+    },
+    "visits": 34,
+    "stopped": false
+   },
+   {
+    "hit": {
+     "days": 403435.84010932344,
+     "spread": 12.381648110419848
+    },
+    "visits": 6,
+    "stopped": false
+   }
+  ],
+  "six": [
+   {
+    "hit": null,
+    "visits": 50692,
+    "stopped": false
+   },
+   {
+    "hit": {
+     "days": 689778.8987604389,
+     "spread": 9.57657061210354
+    },
+    "visits": 435,
+    "stopped": false
+   },
+   {
+    "hit": {
+     "days": 403739.2229032824,
+     "spread": 36.57778408111366
+    },
+    "visits": 14,
+    "stopped": false
+   }
+  ],
+  "resonant": [
+   {
+    "hit": null,
+    "visits": 199865,
+    "stopped": false
+   },
+   {
+    "hit": null,
+    "visits": 199865,
+    "stopped": false
+   },
+   {
+    "hit": {
+     "days": 403391.0169140465,
+     "spread": 19.09859330039809
+    },
+    "visits": 3,
+    "stopped": false
+   }
+  ],
+  "fixed": [
+   {
+    "hit": null,
+    "visits": 1,
+    "stopped": false
+   },
+   {
+    "hit": null,
+    "visits": 1,
+    "stopped": false
+   },
+   {
+    "hit": null,
+    "visits": 1,
+    "stopped": false
+   }
+  ],
+  "retro": [
+   {
+    "hit": {
+     "days": 403903.66524697316,
+     "spread": 1.518016132250618
+    },
+    "visits": 5,
+    "stopped": false
+   },
+   {
+    "hit": {
+     "days": 403903.66524568514,
+     "spread": 1.5180154430996324
+    },
+    "visits": 5,
+    "stopped": false
+   },
+   {
+    "hit": {
+     "days": 403512.32595914113,
+     "spread": 27.86974010288116
+    },
+    "visits": 3,
+    "stopped": false
+   }
+  ]
+ },
+ "pair": {
+  "next": {
+   "exact": true,
+   "recurrence": 390.1534090909091,
+   "best": {
+    "days": 403642.1664370356,
+    "spread": 5.903109488796287e-11
+   },
+   "next": {
+    "days": 404032.3198461265,
+    "spread": 5.1906652401484593e-11
+   }
+  },
+  "sameSide": {
+   "exact": true,
+   "recurrence": 780.3068181818182,
+   "best": {
+    "days": 403642.1664370356,
+    "spread": 5.903109488796287e-11
+   },
+   "next": {
+    "days": 404422.4732552174,
+    "spread": 1.8727105964457186e-11
+   }
+  }
+ },
+ "band": [
+  "out",
+  "out",
+  "out",
+  "out",
+  "out",
+  "cut",
+  "out",
+  "out",
+  "cut",
+  "cut",
+  "out",
+  "cut"
+ ],
+ "search": {
+  "pair": {
+   "bodies": 2,
+   "planetCount": 2,
+   "starCount": 0,
+   "names": [
+    "b",
+    "b"
+   ],
+   "horizonDays": 73000000,
+   "scannedDays": 73000000,
+   "truncated": false,
+   "startDays": 403326,
+   "matches": [
+    {
+     "days": 403642.1664370356,
+     "spread": 5.903109488796287e-11
+    },
+    {
+     "days": 404032.3198461265,
+     "spread": 5.1906652401484593e-11
+    }
+   ],
+   "constant": false,
+   "exact": true,
+   "recurrence": 390.1534090909091,
+   "best": {
+    "days": 403642.1664370356,
+    "spread": 5.903109488796287e-11
+   },
+   "next": {
+    "days": 404032.3198461265,
+    "spread": 5.1906652401484593e-11
+   }
+  },
+  "pair:sameSide": {
+   "bodies": 2,
+   "planetCount": 2,
+   "starCount": 0,
+   "names": [
+    "b",
+    "b"
+   ],
+   "horizonDays": 73000000,
+   "scannedDays": 73000000,
+   "truncated": false,
+   "startDays": 403326,
+   "matches": [
+    {
+     "days": 403642.1664370356,
+     "spread": 5.903109488796287e-11
+    },
+    {
+     "days": 404422.4732552174,
+     "spread": 1.8727105964457186e-11
+    }
+   ],
+   "constant": false,
+   "exact": true,
+   "recurrence": 780.3068181818182,
+   "best": {
+    "days": 403642.1664370356,
+    "spread": 5.903109488796287e-11
+   },
+   "next": {
+    "days": 404422.4732552174,
+    "spread": 1.8727105964457186e-11
+   }
+  },
+  "three": {
+   "bodies": 3,
+   "planetCount": 3,
+   "starCount": 0,
+   "names": [
+    "b",
+    "b",
+    "b"
+   ],
+   "horizonDays": 40000,
+   "scannedDays": 40000,
+   "truncated": false,
+   "startDays": 403326,
+   "matches": [
+    {
+     "days": 403727.5035747048,
+     "spread": 1.751735366252941
+    },
+    {
+     "days": 405515.30620521016,
+     "spread": 1.751735017817425
+    }
+   ],
+   "constant": false,
+   "exact": false,
+   "recurrence": null,
+   "best": {
+    "days": 403727.5035747048,
+    "spread": 1.751735366252941
+   },
+   "next": {
+    "days": 405515.30620521016,
+    "spread": 1.751735017817425
+   },
+   "tolerance": 2.101735366252941
+  },
+  "three:sameSide": {
+   "bodies": 3,
+   "planetCount": 3,
+   "starCount": 0,
+   "names": [
+    "b",
+    "b",
+    "b"
+   ],
+   "horizonDays": 40000,
+   "scannedDays": 40000,
+   "truncated": false,
+   "startDays": 403326,
+   "matches": [
+    {
+     "days": 405515.30620542343,
+     "spread": 1.7517348890009912
+    },
+    {
+     "days": 409090.91146872216,
+     "spread": 1.7517348038862945
+    }
+   ],
+   "constant": false,
+   "exact": false,
+   "recurrence": null,
+   "best": {
+    "days": 405515.30620542343,
+    "spread": 1.7517348890009912
+   },
+   "next": {
+    "days": 409090.91146872216,
+    "spread": 1.7517348038862945
+   },
+   "tolerance": 2.101734889000991
+  },
+  "four": {
+   "bodies": 4,
+   "planetCount": 4,
+   "starCount": 0,
+   "names": [
+    "b",
+    "b",
+    "b",
+    "b"
+   ],
+   "horizonDays": 73000000,
+   "scannedDays": 73000000,
+   "truncated": false,
+   "startDays": 403326,
+   "matches": [
+    {
+     "days": 484178.6219953433,
+     "spread": 1.751734619439771
+    },
+    {
+     "days": 625414.8204928668,
+     "spread": 1.8782301209802177
+    }
+   ],
+   "constant": false,
+   "exact": false,
+   "recurrence": null,
+   "best": {
+    "days": 484178.6219953433,
+    "spread": 1.751734619439771
+   },
+   "next": {
+    "days": 625414.8204928668,
+    "spread": 1.8782301209802177
+   },
+   "tolerance": 2.101734619439771
+  },
+  "four:sameSide": {
+   "bodies": 4,
+   "planetCount": 4,
+   "starCount": 0,
+   "names": [
+    "b",
+    "b",
+    "b",
+    "b"
+   ],
+   "horizonDays": 73000000,
+   "scannedDays": 73000000,
+   "truncated": false,
+   "startDays": 403326,
+   "matches": [
+    {
+     "days": 484178.6219943442,
+     "spread": 1.7517352228759784
+    },
+    {
+     "days": 766650.8390349292,
+     "spread": 2.1134355520132955
+    }
+   ],
+   "constant": false,
+   "exact": false,
+   "recurrence": null,
+   "best": {
+    "days": 484178.6219943442,
+    "spread": 1.7517352228759784
+   },
+   "next": {
+    "days": 766650.8390349292,
+    "spread": 2.1134355520132955
+   },
+   "tolerance": 2.1017352228759782
+  },
+  "six": {
+   "bodies": 6,
+   "planetCount": 6,
+   "starCount": 0,
+   "names": [
+    "b",
+    "b",
+    "b",
+    "b",
+    "b",
+    "b"
+   ],
+   "horizonDays": 73000000,
+   "scannedDays": 73000000,
+   "truncated": false,
+   "startDays": 403326,
+   "matches": [
+    {
+     "days": 27646263.347434673,
+     "spread": 3.1496506344985202
+    },
+    {
+     "days": 52017590.095158495,
+     "spread": 3.307023428641479
+    }
+   ],
+   "constant": false,
+   "exact": false,
+   "recurrence": null,
+   "best": {
+    "days": 27646263.347434673,
+    "spread": 3.1496506344985202
+   },
+   "next": {
+    "days": 52017590.095158495,
+    "spread": 3.307023428641479
+   },
+   "tolerance": 3.527608710638343
+  },
+  "six:sameSide": {
+   "bodies": 6,
+   "planetCount": 6,
+   "starCount": 0,
+   "names": [
+    "b",
+    "b",
+    "b",
+    "b",
+    "b",
+    "b"
+   ],
+   "horizonDays": 73000000,
+   "scannedDays": 73000000,
+   "truncated": false,
+   "startDays": 403326,
+   "matches": [
+    {
+     "days": 21380016.34617295,
+     "spread": 4.003552836492959
+    }
+   ],
+   "constant": false,
+   "exact": false,
+   "recurrence": null,
+   "best": {
+    "days": 21380016.34617295,
+    "spread": 4.003552836492959
+   },
+   "next": null,
+   "tolerance": 4.483979176872115
+  },
+  "resonant": {
+   "bodies": 3,
+   "planetCount": 3,
+   "starCount": 0,
+   "names": [
+    "b",
+    "b",
+    "b"
+   ],
+   "horizonDays": 6000,
+   "scannedDays": 6000,
+   "truncated": false,
+   "startDays": 403326,
+   "matches": [
+    {
+     "days": 403391.01691313606,
+     "spread": 19.098593524732532
+    },
+    {
+     "days": 404121.5169175557,
+     "spread": 19.098594641679423
+    }
+   ],
+   "constant": false,
+   "exact": false,
+   "recurrence": null,
+   "best": {
+    "days": 403391.01691313606,
+    "spread": 19.098593524732532
+   },
+   "next": {
+    "days": 404121.5169175557,
+    "spread": 19.098594641679423
+   },
+   "tolerance": 21.39042474770044
+  },
+  "resonant:sameSide": {
+   "bodies": 3,
+   "planetCount": 3,
+   "starCount": 0,
+   "names": [
+    "b",
+    "b",
+    "b"
+   ],
+   "horizonDays": 6000,
+   "scannedDays": 6000,
+   "truncated": false,
+   "startDays": 403326,
+   "matches": [
+    {
+     "days": 403391.01691313606,
+     "spread": 19.098593524732532
+    },
+    {
+     "days": 404852.0169175557,
+     "spread": 19.09859464169123
+    }
+   ],
+   "constant": false,
+   "exact": false,
+   "recurrence": null,
+   "best": {
+    "days": 403391.01691313606,
+    "spread": 19.098593524732532
+   },
+   "next": {
+    "days": 404852.0169175557,
+    "spread": 19.09859464169123
+   },
+   "tolerance": 21.39042474770044
+  },
+  "fixed": {
+   "bodies": 3,
+   "planetCount": 3,
+   "starCount": 0,
+   "names": [
+    "b",
+    "b",
+    "b"
+   ],
+   "horizonDays": 73000000,
+   "scannedDays": 73000000,
+   "truncated": false,
+   "startDays": 403326,
+   "matches": [],
+   "constant": true,
+   "exact": false,
+   "recurrence": null,
+   "best": {
+    "days": 403326,
+    "spread": 68.75493541571441
+   },
+   "next": null
+  },
+  "fixed:sameSide": {
+   "bodies": 3,
+   "planetCount": 3,
+   "starCount": 0,
+   "names": [
+    "b",
+    "b",
+    "b"
+   ],
+   "horizonDays": 73000000,
+   "scannedDays": 73000000,
+   "truncated": false,
+   "startDays": 403326,
+   "matches": [],
+   "constant": true,
+   "exact": false,
+   "recurrence": null,
+   "best": {
+    "days": 403326,
+    "spread": 194.80565034448512
+   },
+   "next": null
+  },
+  "retro": {
+   "bodies": 3,
+   "planetCount": 3,
+   "starCount": 0,
+   "names": [
+    "b",
+    "b",
+    "b"
+   ],
+   "horizonDays": 40000,
+   "scannedDays": 40000,
+   "truncated": false,
+   "startDays": 403326,
+   "matches": [
+    {
+     "days": 403903.6652437317,
+     "spread": 1.5180161128216527
+    },
+    {
+     "days": 410295.54024417745,
+     "spread": 1.5180157362590416
+    }
+   ],
+   "constant": false,
+   "exact": false,
+   "recurrence": null,
+   "best": {
+    "days": 403903.6652437317,
+    "spread": 1.5180161128216527
+   },
+   "next": {
+    "days": 410295.54024417745,
+    "spread": 1.5180157362590416
+   },
+   "tolerance": 1.8680161128216528
+  },
+  "retro:sameSide": {
+   "bodies": 3,
+   "planetCount": 3,
+   "starCount": 0,
+   "names": [
+    "b",
+    "b",
+    "b"
+   ],
+   "horizonDays": 40000,
+   "scannedDays": 40000,
+   "truncated": false,
+   "startDays": 403326,
+   "matches": [
+    {
+     "days": 403903.6652437289,
+     "spread": 1.5180161151926672
+    },
+    {
+     "days": 416687.4152441798,
+     "spread": 1.5180157342515772
+    }
+   ],
+   "constant": false,
+   "exact": false,
+   "recurrence": null,
+   "best": {
+    "days": 403903.6652437289,
+    "spread": 1.5180161151926672
+   },
+   "next": {
+    "days": 416687.4152441798,
+    "spread": 1.5180157342515772
+   },
+   "tolerance": 1.8680161151926673
+  },
+  "four:after": {
+   "bodies": 4,
+   "planetCount": 4,
+   "starCount": 0,
+   "names": [
+    "b",
+    "b",
+    "b",
+    "b"
+   ],
+   "horizonDays": 73000000,
+   "scannedDays": 73000000,
+   "truncated": false,
+   "startDays": 484178.6220069174,
+   "matches": [
+    {
+     "days": 625414.8204928668,
+     "spread": 1.8782301209802177
+    },
+    {
+     "days": 646868.7291326105,
+     "spread": 1.9220509406486876
+    }
+   ],
+   "constant": false,
+   "exact": false,
+   "recurrence": null,
+   "best": {
+    "days": 625414.8204928668,
+    "spread": 1.8782301209802177
+   },
+   "next": {
+    "days": 646868.7291326105,
+    "spread": 1.9220509406486876
+   },
+   "tolerance": 2.101734619439771
+  },
+  "four:horizon": {
+   "bodies": 6,
+   "planetCount": 6,
+   "starCount": 0,
+   "names": [
+    "b",
+    "b",
+    "b",
+    "b",
+    "b",
+    "b"
+   ],
+   "horizonDays": 5000,
+   "scannedDays": 5000,
+   "truncated": false,
+   "startDays": 403326,
+   "matches": [
+    {
+     "days": 403739.2229029267,
+     "spread": 36.57778440215163
+    },
+    {
+     "days": 406960.16211188876,
+     "spread": 38.535495099554176
+    }
+   ],
+   "constant": false,
+   "exact": false,
+   "recurrence": null,
+   "best": {
+    "days": 403739.2229029267,
+    "spread": 36.57778440215163
+   },
+   "next": {
+    "days": 406960.16211188876,
+    "spread": 38.535495099554176
+   },
+   "tolerance": 40.96711853040983
+  }
+ },
+ "words": [
+  "All 0 planets",
+  "The companion star",
+  "All 2 companion stars",
+  "The planet",
+  "The planet and the companion star",
+  "The planet and 2 companion stars",
+  "Both planets",
+  "Both planets and the companion star",
+  "Both planets and 2 companion stars",
+  "All 12 planets",
+  "All 12 planets and the companion star",
+  "All 12 planets and 2 companion stars",
+  "1 minutes later",
+  "72 minutes later",
+  "4.8 hours later",
+  "36 hours later",
+  "3 days later",
+  "25 days later",
+  "340 days later",
+  "1 year later",
+  "1 year later",
+  "1.4 years later",
+  "20 years later",
+  "200,000 years later"
+ ]
+}

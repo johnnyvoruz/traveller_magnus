@@ -6,6 +6,7 @@
  */
 import { formatTemp, kelvinNote } from '../design/units.ts';
 import { formatDisplayNumber, formatTradeCodes, formatUwpDigit } from '../dossier/labels.ts';
+import { dayNightFor } from './daynight.ts';
 import type { HitKind, Plan, PlanMoon, PlanWorld } from './layout.ts';
 import { bodyAngle, starCompanionAU } from './maths.ts';
 import { seasonLine, SEASON_HELP, type SeasonLine } from './seasons.ts';
@@ -55,13 +56,24 @@ function profile(lines: CardLine[], body: Bag, belt: boolean): void {
     if (body.travelZone && body.travelZone !== 'G') lines.push({ label: 'Zone', value: String(body.travelZone) });
 }
 
+const DAYLIGHT_HINT = 'Geometry only: the share of the solar day the star is above the horizon, from the axial tilt. No refraction, eclipses or terrain.';
+
 /** Diameter, rotation, mass, gravity and temperature: the block worlds and moons share. */
-function physical(lines: CardLine[], body: Bag): void {
+function physical(lines: CardLine[], body: Bag, parent: Bag | null): void {
     if (body.diamKm != null) lines.push({ label: 'Diameter', value: formatDisplayNumber(body.diamKm, 0, 'km'), gap: true });
     // 4325-4331.
     const rotation = rotationText(body);
     if (rotation === 'Tidally locked') lines.push({ label: 'Rotation', value: 'tidally locked' });
     else if (rotation) lines.push({ label: 'Sidereal day', value: rotation });
+    // The day and night cycle: the solar day, and how the daylight ranges over the year.
+    for (const line of dayNightFor(body, parent)) {
+        if (line.label === 'At the equator' || line.label === 'Polar day and night') continue;
+        const label = line.label === 'Solar day' || line.label === 'Day and night'
+            ? line.label
+            : 'Daylight ' + line.label.charAt(0).toLowerCase() + line.label.slice(1);
+        // The card is narrow: "9.5 h to 10.1 h", not the dossier's full sentence.
+        lines.push({ label, value: line.value.replace(' of light over the year', '').replace(' of light all year', ' all year'), hint: DAYLIGHT_HINT });
+    }
     if (body.mass != null) lines.push({ label: 'Mass', value: formatDisplayNumber(body.mass, 3, 'M⊕') });
     if (body.gravity != null) lines.push({ label: 'Gravity', value: formatDisplayNumber(body.gravity, 2, 'G') });
     temperature(lines, body);
@@ -70,21 +82,24 @@ function physical(lines: CardLine[], body: Bag): void {
 /** §7.5: the band as the document names it, then the mean in both scales; the high and the low beneath. */
 function temperature(lines: CardLine[], body: Bag): void {
     const mean = formatTemp(body.meanTempK);
-    if (mean) {
-        const band = typeof body.tempBand === 'string' && body.tempBand ? body.tempBand + ' · ' : '';
-        lines.push({ label: 'Temperature', value: band + mean, hint: kelvinNote('Mean', body.meanTempK) });
-    }
     const high = formatTemp(body.highTempK);
-    if (high) lines.push({ label: 'High', value: high, hint: kelvinNote('High', body.highTempK) });
     const low = formatTemp(body.lowTempK);
-    if (low) lines.push({ label: 'Low', value: low, hint: kelvinNote('Low', body.lowTempK) });
+    let first = true;
+    const add = (label: string, value: string, hint?: string): void => {
+        lines.push({ label, value, gap: first, hint });
+        first = false;
+    };
+    if (typeof body.tempBand === 'string' && body.tempBand && mean) add('Climate', body.tempBand);
+    if (mean) add('Mean temp.', mean, kelvinNote('Mean', body.meanTempK));
+    if (high) add('High temp.', high, kelvinNote('High', body.highTempK));
+    if (low) add('Low temp.', low, kelvinNote('Low', body.lowTempK));
 }
 
 function starCard(body: Bag): BodyCardModel {
     const lines: CardLine[] = [];
     lines.push({ label: 'Type', value: String(body.sType ?? '') + String(body.subType ?? '') + ' ' + String(body.sClass ?? '') });
     const temp = formatTemp(body.temp);
-    if (temp) lines.push({ label: 'Temperature', value: temp, hint: kelvinNote('Surface', body.temp) });
+    if (temp) lines.push({ label: 'Surface temp.', value: temp, hint: kelvinNote('Surface', body.temp) });
     if (body.mass != null) lines.push({ label: 'Mass', value: formatDisplayNumber(body.mass, 3, 'M☉') });
     if (body.diam != null) lines.push({ label: 'Diameter', value: formatDisplayNumber(body.diam, 3, 'D☉') });
     if (body.lum != null) lines.push({ label: 'Luminosity', value: formatDisplayNumber(body.lum, 3, 'L☉') });
@@ -132,7 +147,7 @@ function worldCard(world: PlanWorld, days: number): BodyCardModel {
     if (w.au != null) lines.push({ label: 'Distance', value: formatDisplayNumber(w.au, 3, 'AU') });
     if (w.eccentricity != null) lines.push({ label: 'Eccentricity', value: formatDisplayNumber(w.eccentricity, 3) });
     profile(lines, w, false);
-    physical(lines, w);
+    physical(lines, w, null);
     if (world.moons.length) lines.push({ label: 'Moons', value: String(world.moons.length), gap: true });
     const displayType = w.ggType ? w.type + ' ' + w.ggType : (w.worldType || w.type);
     return {
@@ -159,7 +174,7 @@ function moonCard(moon: PlanMoon, parent: PlanWorld, days: number): BodyCardMode
     const lines: CardLine[] = [];
     if (m.pd != null) lines.push({ label: 'Orbit', value: formatDisplayNumber(m.pd, 2, 'PD') + ' from parent' });
     profile(lines, m, false);
-    physical(lines, m);
+    physical(lines, m, parent.body);
     if (m.size != null) push(lines, 'Size', String(m.size));
     return {
         title: String(m.name || (moon.mainworld ? 'Mainworld (Moon)' : 'Moon')),

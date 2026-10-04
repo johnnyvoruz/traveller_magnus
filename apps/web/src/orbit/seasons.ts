@@ -51,6 +51,8 @@ export type SeasonInput = {
 
 export type SeasonLine = {
     text: string;
+    /** The same words as `text`, one statement to a line. */
+    lines: string[];
     /** A second line when the orbit itself drives a season, else empty. */
     orbit: string;
     /** The inputs, for the `?`: `tilt 23.4° · e 0.02 · orbit angle 147°`. */
@@ -105,7 +107,7 @@ export function seasonLine(input: SeasonInput): SeasonLine | null {
             derived = true;
         } else {
             // Neither the moon nor its parent has a tilt: the year only, no hemisphere text.
-            return { text: 'Year: ' + yearNote(input), orbit: '', inputs: '' };
+            return said(['Year: ' + yearNote(input)], '', '');
         }
     }
     if (tilt === null) return null;
@@ -117,10 +119,10 @@ export function seasonLine(input: SeasonInput): SeasonLine | null {
     const inputs = parts.join(' · ');
 
     if (!input.moon && input.lockedToStar) {
-        return { text: 'No seasons: one face always points at the star', orbit: '', inputs };
+        return said(['No seasons: one face always points at the star'], '', inputs);
     }
     const effective = effectiveTilt(tilt);
-    const tail = input.moon ? ' · by ' + yearNote(input) : '';
+    const tail = input.moon ? ['by ' + yearNote(input)] : [];
     let orbit = '';
     const e = input.eccentricity;
     if (finite(e) && e >= ORBIT_SEASON_ECCENTRICITY && e < 1) {
@@ -128,13 +130,21 @@ export function seasonLine(input: SeasonInput): SeasonLine | null {
         orbit = 'Orbit-driven: whole-world warm and cool seasons, flux ratio ' + ratio.toFixed(1);
     }
     if (effective < NEGLIGIBLE_TILT_DEG) {
-        return { text: 'Negligible seasons (tilt ' + degrees(tilt) + (derived ? ', derived' : '') + ')' + tail, orbit, inputs };
+        return said(['Negligible seasons (tilt ' + degrees(tilt) + (derived ? ', derived' : '') + ')', ...tail], orbit, inputs);
     }
     const quarter = Math.min(3, Math.floor(phase / 90));
-    const text = 'Northern ' + NORTH[quarter] + ', ' + seasonStrength(effective)
-        + ' · southern ' + SOUTH[quarter]
-        + (tilt > 90 ? ' · retrograde' : '')
-        + (derived ? ' · tilt derived from ' + (input.parentName || 'the parent') : '')
-        + tail;
-    return { text, orbit, inputs };
+    const statements = ['Northern ' + NORTH[quarter] + ', ' + seasonStrength(effective), 'southern ' + SOUTH[quarter]];
+    if (tilt > 90) statements.push('retrograde');
+    if (derived) statements.push('tilt derived from ' + (input.parentName || 'the parent'));
+    return said([...statements, ...tail], orbit, inputs);
+}
+
+/** The line, and the same statements one to a line, each beginning with a capital. */
+function said(statements: string[], orbit: string, inputs: string): SeasonLine {
+    return {
+        text: statements.join(' · '),
+        lines: statements.map((part) => part.charAt(0).toUpperCase() + part.slice(1)),
+        orbit,
+        inputs,
+    };
 }
