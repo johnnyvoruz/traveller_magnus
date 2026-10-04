@@ -1,7 +1,7 @@
 /**
  * Orbit-disc shader sources from js/planet_gl.js, character for character.
  * VERT 24-26. NOISE 31-114. FIELDS 118-165. STATS_FRAG 167-181. BAKE_FRAG 183-318.
- * The draw, ring and backdrop shaders are not part of this bake.
+ * DRAW_FRAG lives in gl_shade.ts (js/planet_gl.js:320-688). Backdrop is not ported.
  *
  * Simplex noise from webgl-noise by Ian McEwan and Stefan Gustavson
  * (Ashima Arts). MIT License, Copyright (C) 2011 Ashima Arts,

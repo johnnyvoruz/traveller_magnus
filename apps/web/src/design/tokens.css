@@ -159,10 +159,8 @@
 
   /* orbit view picture (system_viewer.js; each value is the legacy dark-mode colour) */
   --orbit-space: #000000;        /* the stage behind the star field (3263) */
-  --orbit-hz: #58d678;           /* habitable band, its edge and its label (3333) */
-  --orbit-hz-pill: #06120e;      /* habitable label pill, drawn at 85% (3399) */
+  --orbit-hz: #58d678;           /* habitable band and its edge (3333); its swatch in the legend */
   --orbit-jump: #78baff;         /* 100D jump circle, drawn at 95% (3126) */
-  --orbit-jump-text: #9ecbff;    /* its label (3131) */
   --orbit-gas-large: #c8a97a;    /* flat discs until planet imagery lands (264-271) */
   --orbit-gas-medium: #d4b98a;
   --orbit-gas-small: #e0cc9a;

@@ -213,11 +213,24 @@ function glExitProblems(summary) {
         if (!world.cube128 || world.cube128.mismatches !== 0) problems.push(world.id + ' cube128');
         if (!world.mip128 || world.mip128.mismatches !== 0) problems.push(world.id + ' mip1');
         if (world.id === 'Ocean' && (!world.cube512 || world.cube512.mismatches !== 0)) problems.push('Ocean cube512');
-        if (world.tile?.compared === false) {
-            // The shade pass is not compared in this bake step.
-        } else if (!world.tile || world.tile.mismatches !== 0 || world.tile.varied !== true || world.tile.alpha !== true) {
+        if (!world.tile || world.tile.compared !== true || world.tile.mismatches !== 0 || world.tile.varied !== true || world.tile.alpha !== true) {
             problems.push(world.id + ' tile');
         }
+    }
+    const shadeIds = [
+        'Ocean tilt 0', 'Ocean tilt 90', 'Ocean tilt 120', 'Ocean sweep 0', 'Ocean sweep 0.5',
+        'Ocean eclipse', 'Ocean light', 'Ocean radius 2.5', 'Ocean radius 1100',
+        'Ringed phase 0.75', 'Ringed phase 0',
+    ];
+    const shades = summary.shades || [];
+    const seenShade = new Set(shades.map((shade) => shade.id));
+    for (const id of shadeIds) if (!seenShade.has(id)) problems.push('missing shade ' + id);
+    for (const shade of shades) {
+        if (shade.problems?.length) problems.push(shade.id + ': ' + shade.problems.join(', '));
+        if (shade.mismatches !== 0 || shade.varied !== true || shade.alpha !== true) problems.push(shade.id + ' tile');
+    }
+    if (!summary.regina || summary.regina.error || !(summary.regina.bodies > 0) || typeof summary.regina.wallMs !== 'number') {
+        problems.push('regina batch');
     }
     const negative = summary.negativeControl;
     if (!negative || !(negative.againstOceanCube32Mismatches > 0)) problems.push('negative control matched');
@@ -236,9 +249,35 @@ if (!existsSync(viteBin)) {
     process.exit(2);
 }
 
+async function writeReginaShade() {
+    const { createRequire } = await import('node:module');
+    const { buildSector } = await import('@voyage/generation');
+    const { TRUTH_SEED, TRUTH_SETTINGS } = await import('../tools/truth/settings.js');
+    const { normalizeSystem } = await import('../apps/web/src/orbit/system.ts');
+    const require = createRequire(import.meta.url);
+    const engineVersion = require(path.join(root, 'packages/engines/package.json')).version;
+    const listed = JSON.parse(readFileSync(path.join(root, 'universe/raw/sectors.json'), 'utf8'))
+        .sectors.find((sector) => sector.slug === 'Spinward_Marches');
+    const marches = await buildSector({
+        slug: 'Spinward_Marches',
+        tsv: readFileSync(path.join(root, 'universe/raw/Spinward_Marches.tsv'), 'utf8'),
+        metadataXml: readFileSync(path.join(root, 'universe/raw/Spinward_Marches.xml'), 'utf8'),
+        pinned: { seed: TRUTH_SEED, settings: TRUTH_SETTINGS, engineVersion },
+        version: 'v2',
+        catalogue: { name: listed.name, x: listed.x, y: listed.y, tags: listed.tags, canonical: listed.canonical },
+    });
+    const regina = marches.index.hexes['1910'];
+    const tree = JSON.parse(marches.objects.get(regina.tree));
+    const system = normalizeSystem(tree.body);
+    if (!system) throw new Error('Regina did not normalise');
+    mkdirSync(path.join(root, '.tmp'), { recursive: true });
+    writeFileSync(path.join(root, '.tmp', 'regina-shade.json'), JSON.stringify({ hexId: '1910', system }));
+}
+
 let vite;
 let exitCode = 0;
 try {
+    await writeReginaShade();
     vite = spawn(process.execPath, [viteBin, '--port', String(pagePort), '--strictPort', '--host', '127.0.0.1'], {
         cwd: web,
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -356,10 +395,13 @@ try {
                 launch: glRun.launch,
             },
             worlds: (result.worlds ?? []).map(withoutImage),
+            shades: (result.shades ?? []).map(withoutImage),
+            regina: result.regina ?? null,
             negativeControl: withoutImage(result.negativeControl),
         };
         const glDiff = path.join(root, '.tmp', 'surface-parity-gl');
         for (const world of result.worlds ?? []) if (world.differenceImage) saveDifference(glDiff, world);
+        for (const shade of result.shades ?? []) if (shade.differenceImage) saveDifference(glDiff, shade);
         if (result.negativeControl?.differenceImage) saveDifference(glDiff, result.negativeControl);
         console.log(JSON.stringify(summary, null, 2));
         const problems = glExitProblems(summary);

@@ -11,6 +11,7 @@ import { attachSurfaceWorker } from '../../apps/web/src/surface/surface.worker.t
 import {
     configureSurfaceRuntime, disposeSurfaces, requestMap,
 } from '../../apps/web/src/surface/service.ts';
+import { renderEnhancedMapPixels } from '../../apps/web/src/surface/enhanced/map.ts';
 import { renderFlatMapPixels } from '../../apps/web/src/surface/vanilla/map.ts';
 
 const DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'surface');
@@ -256,12 +257,84 @@ describe('surface service', { concurrency: false }, () => {
             assert.equal(again.fromCache, true);
             assert.equal(sha256(again.pixels), row.rgbaDigest);
 
-            const enhanced = requestMap({ ...requestFrom(fixture('class-wet')), mode: 'enhanced' });
-            const vanilla = renderFlatMapPixels(paintInputs(fixture('class-wet')));
-            const enhancedSheet = await enhanced.done;
-            assert.ok(enhancedSheet);
-            assert.equal(enhancedSheet.mode, 'enhanced');
-            assert.equal(sha256(enhancedSheet.pixels), sha256(vanilla));
+        } finally {
+            disposeSurfaces();
+        }
+    });
+
+    test('enhanced is its own sheet, and vanilla is the same before and after it', { timeout: 120000 }, async () => {
+        configureSurfaceRuntime({ spawn: null });
+        try {
+            const row = fixture('class-wet');
+            const base = requestFrom(row);
+            // The body as a released document has it: the sea is decided from these fields.
+            const body = Object.freeze({ ...base.body, liquidType: 'Water', hydroPercent: 50, lowTempK: 280, highTempK: 300 });
+            const vanillaRequest = Object.freeze({ ...base, body });
+            const enhancedRequest = Object.freeze({ ...base, body, mode: 'enhanced' });
+
+            const before = await requestMap(vanillaRequest).done;
+            assert.ok(before);
+            assert.equal(before.mode, 'vanilla');
+            assert.equal(sha256(before.pixels), row.rgbaDigest);
+
+            const enhanced = await requestMap(enhancedRequest).done;
+            assert.ok(enhanced);
+            assert.equal(enhanced.mode, 'enhanced');
+            assert.equal(enhanced.fromCache, false, 'the vanilla sheet in the cache is not handed to enhanced');
+            assert.equal(enhanced.longestChunkMs < 50, true);
+            assert.notEqual(sha256(enhanced.pixels), row.rgbaDigest);
+            assert.equal(sha256(enhanced.pixels), sha256(renderEnhancedMapPixels({
+                ...paintInputs(row),
+                sea: { coverage: 0.5, liquid: 'Water', ice: { kind: 'none' } },
+            })));
+            assert.notEqual(enhanced.key, before.key);
+
+            // Back and forth: each mode's sheet comes back from its own cache entry, unchanged.
+            for (let round = 0; round < 2; round += 1) {
+                const vanillaAgain = requestMap(vanillaRequest);
+                assert.equal(vanillaAgain.status, 'sheet');
+                assert.equal(vanillaAgain.fromCache, true);
+                assert.equal(sha256(vanillaAgain.pixels), row.rgbaDigest);
+                const enhancedAgain = requestMap(enhancedRequest);
+                assert.equal(enhancedAgain.fromCache, true);
+                assert.equal(sha256(enhancedAgain.pixels), sha256(enhanced.pixels));
+            }
+
+            // And painted afresh after the switch, not only from the cache.
+            disposeSurfaces();
+            configureSurfaceRuntime({ spawn: null });
+            assert.ok(await requestMap(enhancedRequest).done);
+            const after = await requestMap(vanillaRequest).done;
+            assert.ok(after);
+            assert.equal(after.fromCache, false);
+            assert.equal(sha256(after.pixels), row.rgbaDigest);
+            assert.equal(sha256(after.pixels), sha256(renderFlatMapPixels(paintInputs(row))));
+        } finally {
+            disposeSurfaces();
+        }
+    });
+
+    test('an enhanced request sends the worker the sea beside the vanilla inputs', () => {
+        const sent = [];
+        configureSurfaceRuntime({
+            spawn: () => ({
+                postMessage(message) { sent.push(message); },
+                addEventListener() {},
+                terminate() {},
+            }),
+        });
+        try {
+            const base = requestFrom(fixture('class-wet'));
+            const body = { ...base.body, liquidType: 'Water', hydroPercent: 50, lowTempK: 280, highTempK: 300 };
+            requestMap({ ...base, body });
+            requestMap({ ...base, body, mode: 'enhanced' });
+            const maps = sent.filter((item) => item.op === 'map');
+            assert.equal(maps.length, 2);
+            assert.equal(maps[0].mode, 'vanilla');
+            assert.equal('enhanced' in maps[0], false);
+            assert.equal(maps[1].mode, 'enhanced');
+            assert.deepEqual(maps[1].enhanced, { ...maps[1].inputs, sea: { coverage: 0.5, liquid: 'Water', ice: { kind: 'none' } } });
+            assert.deepEqual(maps[1].inputs, maps[0].inputs);
         } finally {
             disposeSurfaces();
         }

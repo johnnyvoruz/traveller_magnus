@@ -76,7 +76,8 @@ export function surfaceKind(body: unknown): string | null {
     return 'desert';
 }
 
-const LIQUIDS: Record<string, { shallow: number[]; deep: number[]; frozen?: boolean }> = {
+/** Exported for surface/enhanced/map.ts, which takes its sea colours from here and adds none. */
+export const LIQUIDS: Record<string, { shallow: number[]; deep: number[]; frozen?: boolean }> = {
     'Water': { shallow: [52, 142, 164], deep: [10, 34, 86], frozen: false },
     'Ice': { shallow: [206, 224, 238], deep: [156, 190, 216], frozen: true },
     'Sulphuric Acid': { shallow: [198, 178, 92], deep: [112, 90, 36] },

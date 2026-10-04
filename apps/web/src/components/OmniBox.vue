@@ -10,7 +10,6 @@ import {
     type SearchItem,
 } from '../search/omni.ts';
 import { commands, registerCommand } from '../shell/registry.ts';
-import { SURFACE_COMMAND_ID } from '../surface/preferences.ts';
 import Icon from '../design/Icon.vue';
 
 const props = withDefaults(defineProps<{
@@ -39,9 +38,6 @@ function commandResults(): OmniResult[] {
     const out: OmniResult[] = [];
     for (const command of commands()) {
         if (command.id === 'search') continue;
-        // The Surfaces switch stays registered (surface/preferences.ts keeps the preference and
-        // its code) but is not listed: there is no enhanced mode to switch to yet.
-        if (command.id === SURFACE_COMMAND_ID) continue;
         out.push({ kind: 'command', name: command.name, detail: 'Command', id: command.id });
     }
     return out;

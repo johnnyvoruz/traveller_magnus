@@ -122,7 +122,10 @@ export type HighportAt = {
     /** On the far side of the world: drawn before the world, and hidden when the disc covers it. */
     behind: boolean;
     hidden: boolean;
-    /** In the world's shadow: the hull goes dark, the lights stay on. */
+    /**
+     * In the world's shadow, as legacy decides it: the hull goes dark, the lights stay on. The
+     * painter fades between the two with layout.ts shadowCover instead of switching on this.
+     */
     shaded: boolean;
 };
 

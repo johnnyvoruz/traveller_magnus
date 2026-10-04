@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /**
- * The orbit stage: the canvas, its pointer input, the docked body card and the Fit button.
+ * The orbit stage: the canvas, its pointer input, the docked body card, the legend and the
+ * Fit button.
  * It only binds. The layouts are orbit/layout.ts and orbit/lineup.ts, the move between them
  * orbit/tween.ts, the camera orbit/camera.ts and orbit/stage.ts, the paint
  * orbit/OrbitRenderer.ts, the card orbit/card.ts. The view owns the clock and the frame loop
@@ -16,7 +17,11 @@ import BodyCard from './BodyCard.vue';
 import { DRAG_SLOP, wheelNotches } from './camera.ts';
 import { cardFor } from './card.ts';
 import { hitOf, planSystem, type HitKind, type Plan } from './layout.ts';
-import { OrbitRenderer } from './OrbitRenderer.ts';
+import { legendFor, legendSignature, type LegendEntry } from './legend.ts';
+import OrbitLegend from './OrbitLegend.vue';
+import { onSurfaceMode, surfaceMode } from '../surface/preferences.ts';
+import { drawDisc, prepareDiscs } from '../surface/service.ts';
+import { OrbitRenderer, type DiscPainter } from './OrbitRenderer.ts';
 import type { Layers, Mode } from './picture.ts';
 import { OrbitStage } from './stage.ts';
 import { readOrbitMotion, readOrbitTheme, type OrbitMotion } from './theme.ts';
@@ -51,6 +56,19 @@ let stale = true;
 let days = 0;
 const unsubscribe: (() => void)[] = [];
 
+/**
+ * Shaded discs come from the surface service (directives/handoff.md §61): one batch a frame,
+ * then a tile per body. Whatever it answers short of a tile, the painter draws its flat disc.
+ * Both modes show the vanilla disc for now; the mode is sent so the service can tell them apart.
+ */
+let discMode = surfaceMode();
+const discs: DiscPainter = {
+    mode: () => discMode,
+    prepare: (batch) => prepareDiscs(batch).status,
+    // The painter's units are the context's own, as the service asks: the same for the centre and the radius.
+    draw: (ctx, key, x, y, r) => drawDisc(ctx, key, x, y, r),
+};
+
 // ---- Hover and the card ----------------------------------------------------------------
 
 const hover = ref<{ kind: HitKind; key: string } | null>(null);
@@ -60,6 +78,10 @@ let cardAt = 0;
 let pointer: { x: number; y: number } | null = null;
 const dragging = ref(false);
 const fitted = ref(true);
+
+/** What the marks on the picture mean; it changes with the layers and the layout, not every frame. */
+const legend = shallowRef<LegendEntry[]>([]);
+let legendIs = '';
 
 /** The selected body whose pinned card the visitor closed; it comes back on hover or with another selection. */
 const dismissed = ref<string | null>(null);
@@ -227,8 +249,15 @@ function paint(clockDays: number, time: number): void {
     // The selection lock and a highport's lights run on the wall clock.
     const selected = props.selected && hitOf(frame.picture, props.selected) ? props.selected : null;
     const alive = !reduced && (selected !== null || stage.layers.scan || current.worlds.some((w) => w.port !== null || w.moons.some((m) => m.port !== null)));
-    if (!frame.changed && !frame.moving && !alive && !stale) return;
+    // Shaded discs turn and their clouds drift, and tiles arrive a frame or more after they are asked for.
+    if (!frame.changed && !frame.moving && !alive && !renderer.discsBusy && !stale) return;
     stale = false;
+    const entries = legendFor(current, frame.picture, stage.layers);
+    const signature = legendSignature(entries);
+    if (signature !== legendIs) {
+        legendIs = signature;
+        legend.value = entries;
+    }
     const started = now();
     renderer.draw(current, frame.picture, frame.view, { selected, days: clockDays, time, motion: !reduced, layers: stage.layers });
     const cost = now() - started;
@@ -238,6 +267,7 @@ function paint(clockDays: number, time: number): void {
     if (time - costAt > 1000 && wrapEl.value) {
         wrapEl.value.dataset.drawMs = (costSum / costFrames).toFixed(2) + '/' + costWorst.toFixed(2);
         wrapEl.value.dataset.zoom = (stage.cam.zoom / (stage.cam.fitZoom || 1)).toFixed(1);
+        wrapEl.value.dataset.discs = renderer.discsReport;
         costSum = 0;
         costWorst = 0;
         costFrames = 0;
@@ -299,7 +329,12 @@ onMounted(() => {
         loadImage,
         artBase: import.meta.env.BASE_URL + 'starports/',
         stale: () => { stale = true; },
+        discs,
     });
+    unsubscribe.push(onSurfaceMode((mode) => {
+        discMode = mode;
+        stale = true;
+    }));
     stage.layers = { ...props.layers };
     stage.mode = props.mode;
     loadPlan();
@@ -346,6 +381,7 @@ defineExpose({ paint, fit });
         :under="pinnedCard !== null"
       />
     </div>
+    <OrbitLegend :entries="legend" />
     <button
       type="button"
       class="orbit-btn orbit-fit"

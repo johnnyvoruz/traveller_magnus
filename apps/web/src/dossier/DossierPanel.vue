@@ -78,9 +78,12 @@ const restated = computed(() => {
     const found = system ? bodyByKey(system, props.bodyKey) : null;
     const year = found && !found.star ? yearFigure(found.body) : null;
     if (!year) return undefined;
-    // The count leads; what it counts sits under it, so the tile stays one line wide.
-    const count = year.days.split(' ')[0] || year.days;
-    return { Year: { value: count, notes: ['standard days (24 h)', year.years, year.localDays].filter((note): note is string => note !== null) } };
+    // Each figure leads its row, with what it counts to its right: the year in standard days
+    // (and standard years), then in the world's own days.
+    const count = (text: string): string => text.split(' ')[0] || text;
+    const rows = [{ value: count(year.days), notes: ['standard days (24 h)', year.years].filter((note): note is string => note !== null) }];
+    if (year.localDays) rows.push({ value: count(year.localDays), notes: ['local days'] });
+    return { Year: rows };
 });
 
 /** The body whose surface the profile maps: the one shown, as the released document holds it. */

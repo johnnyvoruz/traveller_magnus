@@ -861,7 +861,9 @@ export function bodyModel(tree: TreeEnvelope, bodyKey: string): BodyModel | null
                 { label: 'Diameter', value: num(body.diamKm, 0, 'km') },
                 { label: 'Gravity', value: num(body.gravity, 2, 'G') },
                 { label: 'Mean temp.', value: formatTempFull(body.meanTempK) },
-                { label: 'Day', value: rotationText(body) },
+                // The spin against the stars, or "Tidally locked": not the sunrise-to-sunrise day, which
+                // the Day and night card gives. Relabelled from "Day" (ruled 2026-10-04, handoff §59).
+                { label: 'Rotation', value: rotationText(body) },
                 { label: 'Year', value: periodText(body) },
                 { label: 'Moons', value: moonCount ? String(moonCount) : '' },
             ]),

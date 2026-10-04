@@ -26,8 +26,8 @@ const theme = {
     space: 'space', spaceClear: 'space-clear', starCore: 'core',
     stars: { G: paint('star-g'), M: paint('star-m') }, starUnknown: paint('star-unknown'),
     field: ['f1', 'f2'], nebulae: [[['n1', 'n1c'], ['n2', 'n2c'], ['n3', 'n3c']]],
-    hzEdge: 'hz-edge', hzMid: 'hz-mid', hzLine: 'hz-line', hzText: 'hz-text', hzPill: 'hz-pill',
-    jump: 'jump', jumpText: 'jump-text',
+    hzEdge: 'hz-edge', hzMid: 'hz-mid', hzLine: 'hz-line',
+    jump: 'jump',
     pathBase: 'path', hzPanel: 'hz-panel', rock: 'rock', scanWedge: ['wedge-clear', 'wedge'],
     tones: { gasLarge: 'gas-large', gasMedium: 'gas-medium', gasSmall: 'gas-small', belt: 'belt', world: 'world' },
     moon: 'moon', ring: 'ring', beltBand: 'belt-band', night: 'night', shadow: ['sh1', 'sh2', 'sh3'],
@@ -40,6 +40,40 @@ const theme = {
 };
 
 const deps = { makeCanvas: null, loadImage: null, artBase: '/starports/', stale() {} };
+
+/** A stand-in for the surface service: it records the batches and the tiles asked for. */
+function fakeDiscs(status, has = () => true) {
+    const seen = { batches: [], draws: [] };
+    return {
+        seen,
+        painter: {
+            mode: () => 'enhanced',
+            prepare(batch) { seen.batches.push(batch); return status; },
+            draw(ctx, key, x, y, r) {
+                seen.draws.push({ key, x, y, r });
+                if (!has(key)) return false;
+                ctx.fillStyle = 'tile:' + key;
+                ctx.fillRect(x - r, y - r, r * 2, r * 2);
+                return true;
+            },
+        },
+    };
+}
+
+/** The orbits layout painted once with a disc painter. */
+function shadedFrame(status, has, layers = {}) {
+    const plan = planSystem(testSystem(), HEX_KEY);
+    const switches = { ...DEFAULT_LAYERS, ...layers };
+    const view = { ...VIEW, zoom: 3, z: 1.6 };
+    const scene = layoutScene(plan, { ...view, moons: switches.moons, jump: switches.jump }, 1000);
+    const picture = orbitPicture(plan, scene, switches, view.z);
+    const fake = status === null ? null : fakeDiscs(status, has);
+    const { ctx, calls } = recordingContext();
+    const renderer = new OrbitRenderer(ctx, theme, { ...deps, discs: fake ? fake.painter : null });
+    renderer.resize(view.w, view.h, 2);
+    renderer.draw(plan, picture, view, { selected: null, days: 1000, time: 5000, motion: true, layers: switches });
+    return { calls, seen: fake ? fake.seen : null, picture };
+}
 const VIEW = { w: 1000, h: 800, zoom: 1, offX: 0, offY: 0, z: 1, linear: false };
 
 /** Paints a picture twice a second apart (so a selection lock has landed) and returns the second frame's calls. */
@@ -83,7 +117,7 @@ const first = (calls, test) => calls.findIndex(test);
 const last = (calls, test) => calls.length - 1 - [...calls].reverse().findIndex(test);
 const isGradient = (value, stop) => value && typeof value === 'object' && value.stops.some((entry) => entry[1] === stop);
 
-test('the legacy paint order: field, band, jump circles, companions, primary worlds, stars, labels', () => {
+test('the legacy paint order: field, band, jump circles, companions, primary worlds, stars', () => {
     const { calls } = drawn();
     const field = first(calls, (c) => c.op === 'fillRect' && c.fill === 'space');
     const band = first(calls, (c) => c.op === 'fill' && isGradient(c.fill, 'hz-mid'));
@@ -98,8 +132,7 @@ test('the legacy paint order: field, band, jump circles, companions, primary wor
     const moon = first(calls, (c) => c.op === 'fill' && c.fill === 'moon');
     const starGlow = first(calls, (c) => c.op === 'fill' && isGradient(c.fill, 'star-g-glow'));
     const starName = first(calls, (c) => c.op === 'fillText' && c.args[0] === 'G2 V');
-    const bandLabel = first(calls, (c) => c.op === 'fillText' && c.args[0] === 'HABITABLE ZONE');
-    for (const at of [field, band, jump, companionOrbit, companionBand, beltBand, worldOrbit, giant, moon, starGlow, starName, bandLabel]) assert.ok(at >= 0);
+    for (const at of [field, band, jump, companionOrbit, companionBand, beltBand, worldOrbit, giant, moon, starGlow, starName]) assert.ok(at >= 0);
     assert.ok(field < band, 'the field is under the band');
     assert.ok(band < jump, 'the band is under the jump circles');
     assert.ok(jump < companionOrbit, 'jump circles come before the companion');
@@ -111,18 +144,18 @@ test('the legacy paint order: field, band, jump circles, companions, primary wor
     assert.ok(worldOrbit < giant, 'orbit paths before the bodies');
     assert.ok(giant < moon, 'a world before its moons');
     assert.ok(moon < starGlow, 'stars on top of every world');
-    assert.ok(starName < bandLabel, 'habitable labels after the stars');
+    assert.ok(starGlow < starName);
 });
 
-test('labels: star names, a companion’s separation, the mainworld’s name and mark, the 100D label', () => {
+test('labels: star names, a companion’s separation, the mainworld’s name and mark; the legend names the rest', () => {
     const { calls } = drawn();
     const text = calls.filter((c) => c.op === 'fillText').map((c) => c.args[0]);
     assert.ok(text.includes('G2 V') && text.includes('M0 V'));
     assert.ok(text.includes('Far'));
     assert.ok(text.includes('Test'), 'the mainworld moon is named');
     assert.ok(!text.includes('Test II') && !text.includes('Test I'), 'other worlds are not labelled');
-    assert.ok(text.includes('100D jump'));
-    assert.ok(text.includes('HABITABLE ZONE · M0 V'));
+    // The band and the jump circles are named in the legend (orbit/legend.ts), never across the picture.
+    assert.ok(!text.some((t) => String(t).startsWith('HABITABLE')) && !text.includes('100D jump'));
     // The mainworld mark and name use the mainworld colour.
     assert.ok(calls.some((c) => c.op === 'fillText' && c.args[0] === 'Test' && c.fill === 'mainworld'));
     assert.ok(calls.some((c) => c.op === 'fill' && c.fill === 'mainworld'));
@@ -136,6 +169,119 @@ test('flat discs carry a night half; rings are circles; no art is asked for with
     // The highport still shows its lights without the painting: the wash and a lamp.
     assert.ok(calls.some((c) => c.op === 'fillRect' && isGradient(c.fill, 'major-lit')));
     assert.ok(calls.some((c) => c.op === 'fill' && (c.fill === 'sb3' || c.fill === 'pt3')));
+});
+
+test('a highport fades into its world’s shadow as a moon does, and never snaps', () => {
+    // One pass of the station round its world, in steps far smaller than its period.
+    const dark = [];
+    for (let i = 0; i < 400; i++) {
+        const plan = planSystem(testSystem(), HEX_KEY);
+        const days = 1000 + i * 0.0005;
+        const scene = layoutScene(plan, { ...VIEW, moons: true, jump: true }, days);
+        const calls = paintPicture(plan, orbitPicture(plan, scene, DEFAULT_LAYERS, VIEW.z), VIEW, { days });
+        const lit = calls.filter((c) => c.op === 'fillRect' && isGradient(c.fill, 'major-lit'));
+        const shade = calls.filter((c) => c.op === 'fillRect' && isGradient(c.fill, 'major-dark'));
+        assert.ok(lit.length <= 1 && shade.length <= 1 && lit.length + shade.length >= 1);
+        const litA = lit.length ? lit[0].alpha : 0;
+        const darkA = shade.length ? shade[0].alpha : 0;
+        // The two washes share one breathing strength between them.
+        assert.ok(litA + darkA > 0.69 && litA + darkA <= 1.0001, 'lit ' + litA + ' dark ' + darkA);
+        dark.push(darkA / (litA + darkA));
+    }
+    assert.ok(dark.some((share) => share === 0), 'fully lit somewhere on its orbit');
+    assert.ok(dark.some((share) => share > 0.99), 'fully dark somewhere on its orbit');
+    assert.ok(dark.some((share) => share > 0.2 && share < 0.8), 'and part-way between');
+    // No step between two neighbouring moments is a snap.
+    let worst = 0;
+    for (let i = 1; i < dark.length; i++) worst = Math.max(worst, Math.abs(dark[i] - dark[i - 1]));
+    assert.ok(worst < 0.25, 'largest step ' + worst);
+});
+
+test('shaded discs: one batch a frame, a tile per body, and the flat disc wherever there is none', () => {
+    const flat = shadedFrame(null);
+    const ready = shadedFrame('ready');
+    // One batch for the frame, never one per body, carrying the mode, the time and every body.
+    assert.equal(ready.seen.batches.length, 1);
+    const batch = ready.seen.batches[0];
+    assert.equal(batch.mode, 'enhanced');
+    assert.equal(batch.timeSeconds, 5);
+    assert.ok(batch.discs.length >= 3);
+    assert.deepEqual(batch.discs.find((disc) => disc.key === 'w2').sun, [1, 1, 1]);
+    assert.equal(batch.discs.find((disc) => disc.key === 'w0').radiusPx, flat.picture.layers.flatMap((layer) => layer.worlds).find((at) => at.world.key === 'w0').r * 2);
+    // Each body of the batch is drawn once, where the painter puts its flat disc, at that radius.
+    assert.deepEqual(ready.seen.draws.map((draw) => draw.key).sort(), batch.discs.map((disc) => disc.key).sort());
+    const giant = flat.picture.layers.flatMap((layer) => layer.worlds).find((at) => at.world.key === 'w2');
+    assert.deepEqual(ready.seen.draws.find((draw) => draw.key === 'w2'), { key: 'w2', x: giant.x, y: giant.y, r: giant.r });
+    // A tile replaces the flat disc, its night half, the moon's shadow wash and the flat rings.
+    const tiles = ready.calls.filter((c) => c.op === 'fillRect' && String(c.fill).startsWith('tile:'));
+    assert.equal(tiles.length, batch.discs.length);
+    assert.ok(flat.calls.some((c) => c.op === 'fill' && c.fill === 'gas-large'));
+    assert.ok(!ready.calls.some((c) => c.op === 'fill' && c.fill === 'gas-large'));
+    assert.ok(flat.calls.some((c) => c.op === 'fill' && c.fill === 'night'));
+    assert.ok(flat.calls.filter((c) => c.op === 'stroke' && c.stroke === 'ring').length >= 2);
+    assert.ok(!ready.calls.some((c) => c.op === 'stroke' && c.stroke === 'ring'), 'the tile carries the rings');
+    // The highport, the mainworld's mark and the names are still painted over the tiles.
+    assert.ok(ready.calls.some((c) => c.op === 'fillRect' && isGradient(c.fill, 'major-lit')));
+    assert.ok(ready.calls.some((c) => c.op === 'fill' && c.fill === 'mainworld'));
+
+    // A tile the service does not hold: that body keeps its flat disc, its rings and its night half.
+    const partial = shadedFrame('ready', (key) => key !== 'w2');
+    assert.ok(partial.calls.some((c) => c.op === 'fill' && c.fill === 'gas-large'));
+    assert.ok(partial.calls.filter((c) => c.op === 'stroke' && c.stroke === 'ring').length >= 2);
+    assert.ok(partial.calls.some((c) => c.op === 'fillRect' && c.fill === 'tile:w0'));
+    assert.ok(!partial.calls.some((c) => c.op === 'fillRect' && c.fill === 'tile:w2'));
+
+    // Pending and unavailable: the batch is still sent once, nothing is drawn from it, and the
+    // frame is the flat one, call for call. No error is shown.
+    for (const status of ['pending', 'unavailable']) {
+        const waiting = shadedFrame(status);
+        assert.equal(waiting.seen.batches.length, 1, status);
+        assert.equal(waiting.seen.draws.length, 0, status);
+        assert.equal(JSON.stringify(waiting.calls), JSON.stringify(flat.calls), status);
+    }
+    // Day / night off: as legacy, no discs are asked for at all.
+    const off = shadedFrame('ready', () => true, { dayNight: false });
+    assert.equal(off.seen.batches.length, 0);
+    assert.equal(off.seen.draws.length, 0);
+});
+
+test('the discs ask for another frame while they are starting, arriving or moving, and not otherwise', () => {
+    const plan = planSystem(testSystem(), HEX_KEY);
+    const view = { ...VIEW, zoom: 3, z: 1.6 };
+    const picture = orbitPicture(plan, layoutScene(plan, { ...view, moons: true, jump: true }, 1000), DEFAULT_LAYERS, view.z);
+    const made = (status, has, layers = DEFAULT_LAYERS) => {
+        const fake = status === null ? null : fakeDiscs(status, has);
+        const renderer = new OrbitRenderer(recordingContext().ctx, theme, { ...deps, discs: fake ? fake.painter : null });
+        renderer.resize(view.w, view.h, 2);
+        let time = 5000;
+        const frame = (motion) => {
+            time += 16;
+            renderer.draw(plan, picture, view, { selected: null, days: 1000, time, motion, layers });
+            return renderer.discsBusy;
+        };
+        return frame;
+    };
+    // No service, an unavailable one, or Day / night off: never.
+    assert.equal(made(null)(true), false);
+    assert.equal(made('unavailable')(true), false);
+    assert.equal(made('ready', () => true, { ...DEFAULT_LAYERS, dayNight: false })(true), false);
+    // Starting up: yes, with or without motion.
+    assert.equal(made('pending')(false), true);
+    // Ready, with motion: the worlds turn, so every frame.
+    assert.equal(made('ready')(true), true);
+    // Ready, reduced motion, a tile missing: yes until it has arrived and some frames have passed.
+    let arrived = false;
+    const still = made('ready', () => arrived);
+    assert.equal(still(false), true);
+    arrived = true;
+    assert.equal(still(false), true, 'sharper tiles may still follow');
+    let frames = 1;
+    while (still(false) && frames < 1000) frames += 1;
+    assert.ok(frames > 60 && frames < 400, 'it settles after ' + frames + ' frames');
+    assert.equal(still(false), false);
+    // A tile that goes missing again starts the wait again.
+    arrived = false;
+    assert.equal(still(false), true);
 });
 
 test('the selection lock is painted last, in the lock colour, with the body’s tag', () => {
@@ -183,8 +329,8 @@ test('orbit paths are drawn at the ring strength, and the layer switches take th
     assert.ok(!noMoons.scene.hits.some((hit) => hit.kind === 'moon' || hit.kind === 'ring'));
     // Habitable off, Jump limit off.
     const noBand = drawn({}, VIEW, { habitable: false });
-    assert.ok(!noBand.calls.some((c) => c.op === 'fillText' && String(c.args[0]).startsWith('HABITABLE')));
-    assert.ok(!noBand.calls.some((c) => c.stroke === 'hz-line'));
+    assert.ok(!noBand.calls.some((c) => c.stroke === 'hz-line') && !noBand.calls.some((c) => isGradient(c.fill, 'hz-mid')));
+    assert.ok(drawn().calls.some((c) => c.stroke === 'hz-line'));
     const noJump = drawn({}, VIEW, { jump: false });
     assert.ok(!noJump.calls.some((c) => c.stroke === 'jump') && noJump.scene.jumps.length === 0);
     // Day / night off: no night halves. Mark off: no mainworld star and no name.
@@ -198,7 +344,6 @@ test('a line-up paints its panel, arcs, rocks, bodies and captions, and none of 
     const text = calls.filter((c) => c.op === 'fillText').map((c) => c.args[0]);
     // Captions: every node, the companion with its separation; a name too long for its slot is shortened.
     assert.ok(text.includes('G2 V') && text.includes('M0 V (Far)') && text.includes('Test Belt'));
-    assert.ok(!text.includes('100D jump') && !text.some((t) => String(t).startsWith('HABITABLE')));
     assert.equal(picture.captions.length, 6);
     // The panel behind the companion's world, which sits in that star's habitable zone.
     const panel = first(calls, (c) => c.op === 'fill' && c.fill === 'hz-panel');
@@ -252,9 +397,8 @@ test('a picture part way between two layouts paints: fading bands, travelling bo
     // Early: the orbit's star name is still there and no caption has arrived.
     assert.ok(earlyCalls.some((c) => c.op === 'fillText' && c.args[0] === 'G2 V' && c.alpha > 0 && c.alpha < 1));
     assert.ok(!earlyCalls.some((c) => c.op === 'fillText' && c.args[0] === 'M0 V (Far)'));
-    // Late: captions are arriving, the habitable label has gone.
+    // Late: captions are arriving.
     assert.ok(lateCalls.some((c) => c.op === 'fillText' && c.args[0] === 'M0 V (Far)'));
-    assert.ok(!lateCalls.some((c) => c.op === 'fillText' && String(c.args[0]).startsWith('HABITABLE')));
 });
 
 test('a token colour takes an alpha; other forms pass through', () => {

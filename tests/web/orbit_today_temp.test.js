@@ -60,6 +60,33 @@ test('the worked example Johnny approved: 301 K at midsummer, 273 K at midwinter
     close(summer.phaseDeg, 90);
 });
 
+test('the tilt term is the engine’s own lines, read from the engine file', () => {
+    // packages/engines/src/mgt2e_world_engine.js:1757-1759. The web app may not import the
+    // engines, so the copy in today_temp.ts is held to the lines themselves, lifted from the file.
+    const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+    const source = fs.readFileSync(path.join(ROOT, 'packages/engines/src/mgt2e_world_engine.js'), 'utf8').split(/\r?\n/);
+    const lines = source.slice(1756, 1759);
+    // If the engine moves or rewrites them, this says so instead of comparing something else.
+    assert.match(lines[0], /^\s*let tfactor = Math\.abs\(Math\.sin\(\(w\.axialTilt \|\| 0\) \* Math\.PI \/ 180\)\);\s*$/);
+    assert.match(lines[1], /^\s*if \(w\.yearHours < \(36\.5 \* 24\)\) \{ tSkip\('Quick Year Adjust'\); tfactor \/= 2; \}\s*$/);
+    assert.match(lines[2], /^\s*if \(w\.yearHours > \(2 \* 8760\)\) \{ tSkip\('Slow Year Adjust'\); tfactor \*= 1\.5; \}\s*$/);
+    const engine = new Function('w', 'tSkip', lines.join('\n') + '\nreturn tfactor;');
+    const skipped = [];
+    const tilts = [0, 0.4, 3, 23, 45, 70, 89.9, 90, 97, 130, 179, 180, null, undefined];
+    const years = [1, 100, 36.5 * 24 - 0.001, 36.5 * 24, 36.5 * 24 + 0.001, 2529.74, 8760, 2 * 8760, 2 * 8760 + 0.001, 50000, 166639.38];
+    let compared = 0;
+    for (const axialTilt of tilts) {
+        for (const yearHours of years) {
+            const theirs = engine({ axialTilt, yearHours }, (what) => skipped.push(what));
+            assert.equal(tiltPart(axialTilt, yearHours), theirs, 'tilt ' + axialTilt + ', year ' + yearHours);
+            compared += 1;
+        }
+    }
+    assert.equal(compared, tilts.length * years.length);
+    // Both of the engine's adjustments were reached by the grid.
+    assert.ok(skipped.includes('Quick Year Adjust') && skipped.includes('Slow Year Adjust'));
+});
+
 test('a missing input gives no estimate, and so does a swing the formula cannot take', () => {
     for (const missing of ['meanTempK', 'axialTilt', 'pressureBar', 'yearHours']) {
         assert.equal(todayTemp(earthlike({ [missing]: null })), null, missing);
@@ -71,6 +98,48 @@ test('a missing input gives no estimate, and so does a swing the formula cannot 
     // Tilt 90°, a long year, no air: 1 − 1.5 is negative under the root. No line, rather than a guess.
     assert.equal(todayTemp(earthlike({ axialTilt: 90, yearHours: 50000, pressureBar: 0, angle: 90 * RAD })), null);
     assert.ok(todayTemp(earthlike({ axialTilt: 90, yearHours: 50000, pressureBar: 0, angle: 0 })), 'at the equinox the swing is nothing');
+    // Ruled 2026-10-04: no line when the bracket is not positive. Nothing under the root counts:
+    // tilt 90°, a year of ordinary length, no air, at midsummer gives 1 − 1 for the winter side.
+    assert.equal(todayTemp(earthlike({ axialTilt: 90, yearHours: 8760, pressureBar: 0, angle: 90 * RAD })), null);
+    assert.equal(todayTemp(earthlike({ axialTilt: 90, yearHours: 8760, pressureBar: 0, angle: 270 * RAD })), null);
+    // Just inside, both hemispheres have an answer.
+    const edge = todayTemp(earthlike({ axialTilt: 90, yearHours: 8760, pressureBar: 0.01, angle: 90 * RAD }));
+    assert.ok(edge && edge.southK > 0 && edge.northK > edge.southK);
+});
+
+test('the card has no line for a planet locked to its star, and none where the formula has no answer', () => {
+    const days = 1000;
+    const lines = (body, kind = 'world', key = 'w0') => cardFor(planSystem(normalizeSystem(body), HEX_KEY), kind, key, days)
+        .lines.filter((line) => line.label.startsWith('Today'));
+    const withInputs = (over) => {
+        const body = testBody();
+        Object.assign(body.mgtSystem.worlds[0], { pressureBar: 1.2, yearHours: 3066 }, over);
+        return body;
+    };
+    // The same planet: free, it has both lines; locked to its star by either flag, it has none.
+    assert.equal(lines(withInputs({})).length, 2);
+    assert.equal(lines(withInputs({ tidallyLocked: true })).length, 0);
+    assert.equal(lines(withInputs({ isTwilightZone: true })).length, 0);
+    // A moon locked to its planet is not locked to the star: it keeps its lines.
+    const moonBody = testBody();
+    Object.assign(moonBody.mgtSystem.worlds[2].moons[2], { pressureBar: 0.9, yearHours: 11.2 * 8760, tidallyLocked: true });
+    assert.equal(lines(moonBody, 'moon', 'w2m2').length, 2);
+
+    // The bracket under the root not positive: tilt 90°, a year over two of 8,760 hours, no air.
+    // Away from the equinoxes there is no line for either hemisphere; nothing is clamped or shown blank.
+    const steep = withInputs({ axialTilt: 90, pressureBar: 0, yearHours: 50000 });
+    const plan = planSystem(normalizeSystem(steep), HEX_KEY);
+    let none = 0;
+    let some = 0;
+    for (let day = 0; day < 6000; day += 37) {
+        const found = cardFor(plan, 'world', 'w0', day).lines.filter((line) => line.label.startsWith('Today'));
+        assert.ok(found.length === 0 || found.length === 2);
+        const angle = bodyAngle(plan.worlds[0].epoch, plan.worlds[0].period, day);
+        const swing = 1.5 * Math.sin(seasonPhase(angle) * RAD);
+        assert.equal(found.length === 0, !(1 + swing > 0) || !(1 - swing > 0), 'day ' + day);
+        if (found.length) some += 1; else none += 1;
+    }
+    assert.ok(none > 0 && some > 0, none + ' without, ' + some + ' with');
 });
 
 test('the card: two lines under the temperatures, for worlds and moons that have the inputs', () => {

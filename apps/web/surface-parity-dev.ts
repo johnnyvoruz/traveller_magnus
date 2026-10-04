@@ -85,6 +85,17 @@ export function surfaceParityDev(): Plugin {
                         send(res, 'application/json; charset=utf-8', JSON.stringify(glSourceManifest()));
                         return;
                     }
+                    if (url === '/dev/surface-parity/gl/regina.json' || url === '/dev/surface-parity/gl/zeycude.json') {
+                        const name = url.endsWith('zeycude.json') ? 'zeycude-shade.json' : 'regina-shade.json';
+                        const file = path.join(repoRoot, '.tmp', name);
+                        if (!fs.existsSync(file)) {
+                            res.statusCode = 404;
+                            res.end(name + ' is missing');
+                            return;
+                        }
+                        send(res, 'application/json; charset=utf-8', fs.readFileSync(file));
+                        return;
+                    }
                 } catch (err) {
                     res.statusCode = 500;
                     res.end(err instanceof Error ? err.message : String(err));

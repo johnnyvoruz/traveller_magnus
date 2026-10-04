@@ -228,10 +228,8 @@ test('the surface service is unavailable for both modes', () => {
     const batch = prepareDiscs({ mode: 'enhanced', discs: [] });
     assert.equal(batch.status, 'unavailable');
     assert.equal(batch.mode, 'enhanced');
-    const disc = drawDisc({
-        mode: 'vanilla', hexKey: FULL_KEY, dossierKey: 'w0', body, kind: 'rock', pixels: 32,
-    });
-    assert.equal(disc.status, 'unavailable');
+    const disc = drawDisc({ drawImage() {} }, 'w0', 0, 0, 32);
+    assert.equal(disc, false);
     assert.equal(surfaceAvailable('vanilla'), true);
     assert.equal(surfaceAvailable('enhanced'), true);
     cancelSurface(map.requestId);

@@ -1449,10 +1449,14 @@ day being hand-waved to 24 hours.
 
 What exists: the maths (`apps/web/src/orbit/daynight.ts`: `spinAngle`, `subsolarLongitude`,
 `dayFraction`) and the strip (`apps/web/src/dossier/DayNight.vue`). What it needs: the clock
-passed to the dossier (on the map page there is no clock yet), and one decision, shared with
-the map overlay: **which place on the world the tick is for**, since day and night depend on
-longitude. Agent D proposes the map's prime meridian until a place (the starport, a pinned
-hex) can be chosen.
+passed to the dossier (on the map page there is no clock yet), and the place the tick is for,
+since day and night depend on longitude.
+
+**Decided by Johnny, 2026-10-04: the tick is for the starport; the map's prime meridian is the
+fallback** when a world has no starport or no place for it is known. Nothing in the released
+document says where on a world its starport stands, so until the surface map gives it a place
+every world uses the fallback. Where that place comes from is a question for the surface-map
+work, not to be guessed.
 
 ---
 

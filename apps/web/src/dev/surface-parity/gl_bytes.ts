@@ -8,6 +8,15 @@ export type ChannelCompare = {
     sum: number;
 };
 
+/**
+ * Handoff §59. A shaded tile may differ by a channel error of at most 1 on at most
+ * 8 pixels, because a legacy context differs from another legacy context by that much.
+ * Statistics, cube faces and mips are not covered here.
+ */
+export function shadeDriftAllowed(cmp: ChannelCompare): boolean {
+    return cmp.mismatches <= 8 && cmp.maxChannelError <= 1;
+}
+
 export function compareBytes(left: ArrayLike<number> | null, right: ArrayLike<number> | null): ChannelCompare {
     const leftLength = left?.length ?? 0;
     const rightLength = right?.length ?? 0;

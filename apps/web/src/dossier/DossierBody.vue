@@ -14,7 +14,7 @@ defineProps<{
     model: BodyModel;
     span: PanelSpan;
     /** Tiles the view restates, by label (the Year tile, said in standard days). */
-    restated?: Record<string, { value: string; notes: string[] }>;
+    restated?: Record<string, { value: string; notes: string[] }[]>;
     /** The body whose surface map leads the profile, or null. */
     surface?: SurfaceTarget | null;
     /** The day and night cycle (orbit/daynight.ts), or null when the document gives no solar day. */

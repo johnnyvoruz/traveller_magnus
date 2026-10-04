@@ -14,6 +14,14 @@ const DEFAULT_FLAGS: EnhancedFlags = {
     lightning: false,
 };
 
+const modeListeners = new Set<(mode: SurfaceMode) => void>();
+
+/** Calls back whenever the mode is set. Returns the function that stops it. */
+export function onSurfaceMode(listener: (mode: SurfaceMode) => void): () => void {
+    modeListeners.add(listener);
+    return () => { modeListeners.delete(listener); };
+}
+
 let sessionMode: SurfaceMode | null = null;
 let modeSessionOnly = false;
 let sessionFlags: EnhancedFlags = { ...DEFAULT_FLAGS };
@@ -64,6 +72,7 @@ export function setSurfaceMode(mode: SurfaceMode): void {
         modeSessionOnly = true;
     }
     refreshSurfaceCommand();
+    for (const listener of [...modeListeners]) listener(mode);
 }
 
 export function toggleSurfaceMode(): void {

@@ -75,8 +75,36 @@ export function createCanvas(width: number, height: number): HTMLCanvasElement {
     return canvas;
 }
 
+/** Something drawDisc can paint into. A 2D canvas context satisfies it. */
+export type ImageBlit = {
+    drawImage(image: CanvasImageSource, dx: number, dy: number, dw: number, dh: number): void;
+};
+
+/** Blit one image. The only drawImage the disc service uses. */
+export function blitImage(target: ImageBlit, image: CanvasImageSource, x: number, y: number, w: number, h: number): void {
+    target.drawImage(image, x, y, w, h);
+}
+
+/**
+ * Copy a rectangle out of a canvas into a canvas the caller can keep.
+ * Source x and y are top-left, matching drawImage. Null when there is no 2D context.
+ */
+export function copyCanvasRect(
+    source: CanvasImageSource,
+    sx: number,
+    sy: number,
+    sw: number,
+    sh: number,
+): HTMLCanvasElement | null {
+    const copy = createCanvas(Math.max(1, sw), Math.max(1, sh));
+    const ctx = copy.getContext('2d');
+    if (!ctx) return null;
+    ctx.drawImage(source, sx, sy, sw, sh, 0, 0, sw, sh);
+    return copy;
+}
+
 /** WebGL2 for the orbit disc. Attributes are js/planet_gl.js:748-749. */
-export function webgl2Context(canvas: HTMLCanvasElement): WebGL2RenderingContext | null {
+export function webgl2Context(canvas: HTMLCanvasElement | OffscreenCanvas): WebGL2RenderingContext | null {
     return canvas.getContext('webgl2', {
         alpha: true,
         premultipliedAlpha: true,
@@ -121,13 +149,13 @@ export function afterTask(fn: () => void): () => void {
 }
 
 /** Long-task entries during a cold paint. No-op where the observer is missing. */
-export function observeLongTasks(fn: (duration: number) => void): () => void {
+export function observeLongTasks(fn: (duration: number) => void, buffered = true): () => void {
     if (typeof PerformanceObserver === 'undefined') return () => {};
     try {
         const observer = new PerformanceObserver((list) => {
             for (const entry of list.getEntries()) fn(entry.duration);
         });
-        observer.observe({ type: 'longtask', buffered: true });
+        observer.observe({ type: 'longtask', buffered });
         return () => observer.disconnect();
     } catch {
         return () => {};

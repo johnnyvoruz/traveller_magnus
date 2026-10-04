@@ -10,16 +10,19 @@
  * arrives late is never painted. Under reduced motion there is no beam: the blank, then the
  * sheet.
  *
- * The sheet's pixels are the vanilla painter's (surface/vanilla/map.ts) and are put on the
- * canvas untouched: nothing here tints, filters or blends them. Seeds are the service's
- * business (surface/identity.ts, through surface/service.ts); this file passes the hex key,
- * the dossier key and the body, and builds no seed.
+ * The sheet's pixels are the painter's for the mode in force (surface/vanilla/map.ts, or
+ * surface/enhanced/map.ts) and are put on the canvas untouched: nothing here tints, filters
+ * or blends them. Seeds are the service's business (surface/identity.ts, through
+ * surface/service.ts); this file passes the hex key, the dossier key and the body, and
+ * builds no seed. The caption names the mode; switching it (the Surfaces command) repaints.
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import Icon from '../design/Icon.vue';
 import { prefersReducedMotion } from '../platform/browser.ts';
+import { sheetCaption } from '../surface/caption.ts';
+import type { SurfaceMode } from '../surface/contracts.ts';
 import { CONTINENTAL_DEFINITION, COASTLINE_COMPLEXITY, canMapWorld, worldMapData } from '../surface/identity.ts';
-import { enhancedFlags, surfaceMode } from '../surface/preferences.ts';
+import { enhancedFlags, onSurfaceMode, surfaceMode } from '../surface/preferences.ts';
 import { cancelSurface, requestMap } from '../surface/service.ts';
 import { drawMapOverlay, MAP_HEIGHT, MAP_WIDTH, renderDiamondBlank } from '../surface/vanilla/map.ts';
 
@@ -49,7 +52,11 @@ const arrival = ref<'' | 'arrive-a' | 'arrive-b'>('');
 /** Cold timings of the last sheet, for measuring: data attributes on the figure. */
 const timing = ref<{ sheet: string; worker: string; chunk: string; cached: string }>({ sheet: '', worker: '', chunk: '', cached: '' });
 
+/** The mode in force: the device's preference, followed while this is on screen. */
+const mode = ref<SurfaceMode>(surfaceMode());
 const mappable = computed(() => props.target !== null && canMapWorld(props.target.body));
+/** Which painter drew the sheet and, in enhanced, what its sea is; the reason is the tooltip. */
+const caption = computed(() => sheetCaption(mode.value, props.target ? props.target.body : null));
 const worldName = computed(() => {
     const name = props.target ? props.target.body.name : '';
     return typeof name === 'string' && name.trim() ? name.trim() : 'this world';
@@ -58,6 +65,8 @@ const worldName = computed(() => {
 let token = 0;
 let requestId: string | null = null;
 let shown: SurfaceTarget | null = null;
+let shownMode: SurfaceMode | null = null;
+let stopMode: (() => void) | null = null;
 let lastArrival: 'arrive-a' | 'arrive-b' = 'arrive-b';
 
 /** The same body of the same hex: nothing to redo when the panel merely re-renders. */
@@ -91,9 +100,10 @@ function paint(pixels: Uint8ClampedArray, body: Record<string, unknown>): boolea
 
 function start(): void {
     const target = props.target;
-    if (same(target, shown) && requestId !== null) return;
+    if (same(target, shown) && shownMode === mode.value && requestId !== null) return;
     drop();
     shown = target;
+    shownMode = mode.value;
     if (!target || !mappable.value) return;
     const mine = token;
     // Nothing of the last body may show under the new one.
@@ -101,7 +111,7 @@ function start(): void {
     arrival.value = '';
     if (blankEl.value) renderDiamondBlank(blankEl.value, worldMapData(target.body));
     const ticket = requestMap({
-        mode: surfaceMode(),
+        mode: mode.value,
         hexKey: target.hexKey,
         dossierKey: target.dossierKey,
         body: target.body,
@@ -150,8 +160,19 @@ function onSheetEnd(): void {
 }
 
 watch(() => props.target, start, { flush: 'post' });
-onMounted(start);
-onBeforeUnmount(drop);
+onMounted(() => {
+    mode.value = surfaceMode();
+    // The Surfaces command switches the mode for the device: the sheet in view is painted again.
+    stopMode = onSurfaceMode((next) => {
+        mode.value = next;
+        start();
+    });
+    start();
+});
+onBeforeUnmount(() => {
+    if (stopMode) stopMode();
+    drop();
+});
 </script>
 
 <template>
@@ -159,6 +180,7 @@ onBeforeUnmount(drop);
     v-if="mappable"
     class="doss-map"
     :data-state="state"
+    :data-mode="mode"
     :aria-busy="state === 'waiting' || state === 'ready' ? 'true' : undefined"
     :data-sheet-ms="timing.sheet"
     :data-worker-start-ms="timing.worker"
@@ -185,7 +207,7 @@ onBeforeUnmount(drop);
     </div>
     <figcaption class="doss-map-caption">
       <p v-if="badge" class="ui-badge doss-badge"><Icon name="star" :size="10.5" /><span>{{ badge }}</span></p>
-      <span class="doss-hint">Surface map</span>
+      <span class="doss-hint" :title="caption.title">Surface map · {{ caption.text }}</span>
     </figcaption>
   </figure>
 </template>
@@ -322,7 +344,7 @@ onBeforeUnmount(drop);
 .doss-hint {
   margin-left: auto;
   color: var(--text-muted);
-  white-space: nowrap;
+  text-align: right;
 }
 
 /* Reduced motion: the blank, then the sheet. No beam, no fades. */

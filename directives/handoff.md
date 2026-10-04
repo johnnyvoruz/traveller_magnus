@@ -1813,3 +1813,233 @@ come before P3. Questions E1 and E2 are closed.
   reads hydrographics. Not a port bug. Recorded as the first enhancement candidate (question
   E9): caps only where the low temperature is below the liquid's freezing point, sized by
   hydrographics, none at hydro 0. Vanilla stays as is.
+- **Johnny approved E9** (enhanced ice caps: only where the low temperature is below the
+  liquid's freezing point, sized by hydrographics, none at hydro 0). Enhanced mode only.
+- **Step 8 in (Agent B): the vanilla disc bake is byte-identical to legacy** (statistics,
+  thresholds, both cubes at 32 and 128, mip 1, cube 512) for ocean, dry, ice, gas and ringed
+  worlds on Edge / ANGLE D3D11 / RX 7900 XTX. Files: `surface/vanilla/gl_shaders.ts`,
+  `gl_stats.ts`, `gl_bake.ts`, `gl.ts`; fixture `tests/web/fixtures/surface_gl.json`.
+- **The 50 ms line is crossed, as §0 amendment 2 said to watch for:** the first bake on a cold
+  context blocks for **1,848 ms**; with shaders already compiled the same work is about 15 ms
+  (compile 11 ms, statistics 2 ms, six faces 2 to 3 ms at any size). So the cost is the
+  first shader compile, not the bake. **Decision:** compile without blocking
+  (`KHR_parallel_shader_compile`, polling for completion, started when the orbit view opens,
+  flat discs shown meanwhile), not an OffscreenCanvas worker. That is step 10 (Agent C),
+  measured cold; a worker is the fallback only if a task of 50 ms or more remains. The 428 ms
+  and 277 ms tasks in the parity pass are to be identified in the same step.
+- Ported as written, noted for the enhanced mode: the locked-world hot side uses the cube's
+  +X axis, not the star direction; eight reversed-edge `smoothstep` calls.
+
+## 55. Agent F's review of seas and ice on the map (2026-10-04, afternoon)
+
+- Johnny asked F for a deep dive after spotting ice caps on a world over 100 C. F's findings,
+  all in the legacy code as ported (`surface/vanilla/map_palette.ts`, `identity.ts`): caps come
+  from the temperature **label** (a label the code does not know, such as one outside its six
+  words, falls through to the temperate cap, the largest after cold and cool); `liquidType` is
+  ignored (seas are blue unless the atmosphere is exotic); `hydroPercent` is ignored when a
+  Hydro digit exists; a 5% minimum sea level. None of this is a port bug.
+- **Proposal recorded as question E10** (supersedes E9): coverage from `hydroPercent` then the
+  digit; substance from `liquidType`; freezing by that substance's melting point from
+  `rules/mgt2e_data.js:740`, with a latitude approximation bounded by the world's own high and
+  low; unknown liquid or missing temperatures draw no ice; locked worlds separately; no land
+  snow yet. Enhanced mode only.
+- F caught a wording error: the questions file said the E9 rule was "built". It is not;
+  `service.ts` still routes enhanced to vanilla. Corrected.
+- **Orchestrator's plan if Johnny approves E10:** build the rules as a pure tested module
+  (`surface/enhanced/seas.ts`: coverage, substance, frozen fraction and ice latitude; no
+  drawing) now, by a free agent; apply it first to the map over the vanilla continents as the
+  first visible enhancement; it carries over unchanged to the shared terrain later.
+- **Johnny approved E10** (seas and ice in the enhanced mode, with the latitude formula).
+  Agent A builds `apps/web/src/surface/enhanced/seas.ts` (pure rules, no drawing); melting
+  points are copied from `MgT2EData...exoticLiquids` (`rules/mgt2e_data.js:740`) with a test
+  that the copy equals the generated rules. Applying it to the map follows.
+
+## 56. Step 9 in: the vanilla disc shade matches legacy (2026-10-04)
+
+- **Agent B:** `surface/vanilla/gl_shade.ts`, `gl_plan.ts`, `gl.ts` (`renderBatch`, `tile`,
+  `axisBasis`; every program created in `linkDiscProgram`). Shaded tiles byte-identical to
+  legacy for 16 cases (five world kinds; tilt 0, 90, 120; sweep with 16 samples; an eclipse;
+  light mode; radius 2.5 and 1100; two ring phases) on Edge / ANGLE D3D11 / RX 7900 XTX.
+- **Open, for step 10 (Agent C):**
+  1. **An intermittent 1-level difference:** an earlier run of the same sources had one green
+     sample off by 1 on the ringed tile at (117, 83); not reproduced. Must be characterised by
+     repeated runs, port against legacy and legacy against legacy, before anyone calls the
+     shade proven or adds a tolerance.
+  2. **Cold start:** first step 2,196 ms, of which linking three programs is 1,219 ms (stats
+     319, bake 658, draw 242) and about 975 ms is unattributed. Fix: non-blocking compile.
+  3. **Warm first batch:** Regina's 20 bodies in one `renderBatch`, 56 ms, over the line;
+     spread across frames. Steady per-frame cost not yet measured.
+  4. An unidentified 324 ms task in the shade window.
+- **Agent F's review after step 9 is dropped** to save its budget: the proof is byte equality,
+  which a review cannot improve. F is kept for the enhanced shared terrain.
+
+## 57. Seas rules module in; it exposes odd generated data (2026-10-04)
+
+- **Agent A:** `surface/enhanced/liquids.ts` (the fifteen `exoticLiquids` rows, name and melting
+  point, tested equal to the generated rules) and `surface/enhanced/seas.ts` (`coverage`,
+  `substance`, `latitudeTempK`, `seaIce`), pure, no drawing, vanilla untouched. 422 pass.
+- **What the table over Regina and Zeycude shows, for Johnny (reported, nothing "fixed"):**
+  - **Regina's mainworld in truth v5 is an Ethane world with a low of 147 K** (about -126 C);
+    Zeycude's mainworld likewise (Ethane, low 122 K). The legacy painter hid this because it
+    ignores `liquidType` and paints blue seas.
+  - `liquidType` can contradict the temperatures: Regina A-X-c has Oxygen with a low of 541 K
+    (oxygen boils at 90 K in the same rules table); Regina A-I has Carbonic Acid at 398 K.
+  - Many bodies carry `liquidType: Ice` with hydrographics 0.
+  - One `Unknown Exotic Liquid` (no row in the table; drawn with no ice, as E10 says).
+  Agent B investigates read-only: where the engines set a mainworld's temperature and
+  `liquidType`, and whether the legacy app produces the same for Regina. Engine parity rule
+  applies: differences and oddities are reported to Johnny, never fixed.
+- **The dossier map (step 5) appears wired** (`dossier/SurfaceStage.vue` exists; tree green:
+  check clean, 422 pass, build good) but **the orchestrator has not seen Agent D's report** for
+  it or for today's temperature. Last push: `05b1297` (the subset).
+- **Next for Agent D:** the first visible enhancement: the enhanced map (vanilla continents,
+  seas and ice by `seas.ts`), which makes the `surfaces` switch do something.
+
+## 58. Agent B's investigation: the engines store physical data that contradicts the chart (2026-10-04)
+
+`findings/regina_liquid_temperature.md` (git-ignored, local). Nothing was changed. The ESM
+engines and the legacy app agree on all of it (parity holds), so these are **legacy engine
+behaviours carried over faithfully**, and they are in the released truth (the system trees
+of v5 are the v2 trees; v3 to v5 were derived builds that did not regenerate systems).
+
+- **The published UWP is not honoured on the mainworld's physical body.** Flesh passes
+  `t5Data`, which has no `type`, so the atmosphere and hydrographics locks in
+  `generateAtmospherics` (`mgt2e_world_engine.js:748-752, 790, 893-895, 1418-1420`) never run;
+  `Object.assign(mainworld, base)` then restores the chart `uwp`, `atm`, `hydro` but leaves the
+  rolled `atmCode`, `hydroCode`, `liquidType`. Regina: chart atmosphere 8, hydro 8; physical
+  atmCode 10, hydroCode 6, Ethane. Zeycude: chart atmosphere 3, atmCode 10, Ethane.
+- **Placement:** a chart with no `tempBand` counts as roll 7; Regina's baseline orbit lands in
+  a forbidden zone and is stored as 5; the `Sa` remark makes it a moon of a gas giant at
+  3.31 AU of an F7 V. Stored mean 189.6 K, band Frozen.
+- **Liquid is chosen once, from a preliminary mean** (albedo 0.3, greenhouse 0.1), before the
+  two later temperature writes, and never revisited (A-X-c: Oxygen chosen at 58.6 K, stored
+  541 K). The `Ice` rule reads `highTempK` before it exists and ignores `hydroPercent`.
+- **The three temperature passes disagree** on which star (`parentStarIdx` against `stars[0]`),
+  which AU (a moon built by the intercept has no `au`), the day-factor cap, and the 150 cap
+  on component C against an uncapped `seismicStress`.
+- **Scale, Spinward Marches, 439 mainworlds:** Water 266, Ice 64, Ethane 34, Carbonic Acid 23,
+  other exotics about 41, none 11; 41 with a mean below 200 K, 21 above 400 K; 30 with `Ice`
+  and hydrographics 0.
+- **Johnny's steer:** not partial to any one answer; wants it unified, standardised and
+  sensible (a Hydro 0 world at 500 degrees has no ice). **Orchestrator's proposal, awaiting
+  his yes** (`questions_for_johnny.md` section F): one engine correction pass, designed by
+  Agent F from B's findings and the `rules/` files, each change classed as a self-contradiction
+  in the code or a rules choice for Johnny, new golden fixtures with the legacy differences
+  recorded as deviations, then **one** truth rebuild (v6). Until then the enhanced map draws
+  what the data says and vanilla is unaffected.
+
+## 59. Dossier map, enhanced map, today's temperature and disc scheduling are in (2026-10-04)
+
+Orchestrator re-ran after both reports: check clean, 436 pass / 0 fail, build green, `dist`
+free of harness. Nothing is in flight; **everything is pushable.**
+
+- **Agent D, step 5:** `dossier/SurfaceStage.vue` shows the vanilla sheet (blank diamond, scan,
+  sheet, overlay; cache on return; cancel on body change). Cold: Regina 225 ms, no long task.
+  On screen the scaled sheet differs from legacy by at most 10 pixels on hex-line edges
+  (canvas antialiasing); terrain identical.
+- **Agent D, enhanced map:** `surface/enhanced/map.ts` (vanilla continents; sea level by
+  equal-area coverage, no 5% floor; sea colour by substance from `profile.ts`; ice on the sea
+  only, by `seas.ts`), dispatched by `service.requestMap`; the `surfaces` command is visible
+  again; caption names the mode and substance. Vanilla bytes unchanged across mode switches.
+  Open: E11 (three liquids with no colour source: seas not drawn), E12 (ice colour for a
+  frozen non-water sea), E13 (Unknown Exotic Liquid not drawn).
+- **Agent D, today's temperature:** on the orbit card. Orchestrator's rulings on D's three
+  stops: (1) the parity test may lift the engine's tilt lines (`mgt2e_world_engine.js:1757-1759`)
+  from the file, as the line-up test does; (2) a planet locked to its star gets no line (its
+  tilt term is about zero); (3) when the bracket under the root is not positive, no line. Also
+  approved: the dossier "Day" tile is relabelled "Rotation" (it is the sidereal spin, and
+  contradicted the sunrise-to-sunrise figure beside it).
+- **Agent C, step 10:** the one-level differences are the driver: legacy against legacy shows
+  the same pixels at the same rate over 30 runs (shade tiles only; cubes, mips and statistics
+  never differ). **Ruling:** the GL parity pass accepts, on shaded tiles only, a channel error
+  of at most 1 on at most 8 pixels; cubes, mips and statistics stay exact. Non-blocking compile
+  works; bakes are spread (8 ms a frame); the 320 MiB ledger and context loss/restore work.
+  **One stall remains: `gl.checkFramebufferStatus` on the first cube face of a fresh context,
+  about 900 ms** (Regina: first lit disc 1.9 s, steady frame 0.2 ms; a second system 11 ms).
+- **Next:** Agent C, step 10b: confirm what that call is waiting on, then move the vanilla
+  GL pipeline into an OffscreenCanvas worker returning tiles (the plan's fallback, now
+  earned). Agent D, step 11: discs in the orbit view through `prepareDiscs` / `drawDisc`,
+  which the worker move must not change.
+- **Still with Johnny:** F1 (engine correction pass and one truth rebuild), E11 to E13.
+
+## 60. An outside reviewer's suggestion on labels and liquids; the correction pass gets two tiers (2026-10-04)
+
+A one-off agent Johnny consulted (given `findings/tempband_trace.md`) proposes, and the
+orchestrator agrees with the shape of it:
+- `tempBand` means two things. Keep the early value as **`orbitalTempBand`** (it legitimately
+  feeds the hydrographics DMs) and add **`surfaceTempBand`**, derived from the final
+  `meanTempK` after the last temperature write. The UI shows the surface one as "Climate" and
+  the orbital one as "Orbital zone".
+- A final **reconciliation** step validates `liquidType` against the final temperatures and
+  `hydroPercent`, **without any new random draw**: keep the original choice when it is still
+  valid, replace it only when it is not.
+- Do **not** re-roll hydrographics: it is part of the UWP and feeds everything downstream.
+Not accepted as given: its kelvin breakpoints for the surface band (invented, as it says) and
+how a replacement liquid is picked. Both are ASK items for Johnny from the `rules/` files.
+
+**Consequence for the plan (still awaiting Johnny's yes on F1):**
+- **Tier 1, reconciliation:** a pure function of the stored tree (labels and liquid). No RNG,
+  so it can ship as a **derived** truth build like v3 to v5, not a regeneration, and as an
+  engine step for future generation. Fixes "Frozen at 120 C", "Oxygen at 541 K", "Ice with
+  hydrographics 0".
+- **Tier 2, generation fixes:** the chart atmosphere and hydrographics locked onto the
+  mainworld's physical body, placement, and one temperature calculation. Changes rolled
+  values, so it needs a full regeneration. Fixes Regina being a frozen ethane moon.
+
+## 61. Step 11 halted correctly: the disc calls were a skeleton (2026-10-04)
+
+Orchestrator's error: the step 11 prompt told Agent D to call `prepareDiscs` / `drawDisc` as
+if they carried a full request and painted; `DiscRequest` had only identity fields and
+`drawDisc` always returned false. D stopped and asked. **Ruling, the disc envelope:**
+- `DiscRequest` (plain, cloneable, in `surface/contracts.ts`): `key` (unique in the batch),
+  `hexKey`, `dossierKey`, `body` (the service derives `legacyDiscId` and the profile; the
+  caller never builds either), `radiusPx` (device pixels), `spin`, `cloudSpin`, `sweep`,
+  `samples`, `tiltDeg`, `light [x, y]`, `sun [r, g, b]`, `ring` (inner, outer, fill, phase,
+  detail) or null, `casters`, `lightMode`, optional `near`.
+- `DiscBatchRequest`: `mode`, `timeSeconds` (explicit animation time), `discs`.
+- `prepareDiscs(batch)`: submits this frame's batch, never blocks, returns
+  unavailable / pending / ready. With the worker, tiles arrive a frame or more later.
+- `drawDisc(ctx, key, cx, cy, radiusPx)`: draws the newest tile held for `key`, centred, scaled
+  if it was rendered for a different radius; false when there is none.
+- **Agent C owns both calls and the types** and writes them first, before the rest of the
+  worker move. **Agent D** builds the request side (`orbit/` batch builder, pure, tested) to
+  this envelope and wires `drawDisc` when C's contract is in `contracts.ts`.
+Also from D: rulings applied (tilt parity test, locked planets, non-positive bracket, "Day"
+tile is now "Rotation"); swatches for E11/E12 in `findings/ui_design_shots/` and written into
+the questions file. Pastes to and from agents are losing the middles of long lines: keep
+prompt lines under 80 characters.
+- **Disc contract final (Agent C):** `DiscRequest` / `DiscBatchRequest` as §61, no changes;
+  `prepareDiscs` returns `{ status, mode, requestId }` (`ready` means the frame was submitted,
+  not that every tile exists); `drawDisc(ctx, key, cx, cy, radiusPx)` paints the newest tile,
+  scaled, false when none; works on the main-thread baker today; a held tile still draws
+  after a context loss. `tests/web/surface_disc_contract.test.js`. C did not run the full
+  suite or the build at this stop. C continues with step 10b (the worker) behind the same
+  calls; D wires step 11.
+
+## 62. The engine correction plan is accepted (2026-10-04)
+
+`directives/plan_engine_corrections.md` (Agent F): 21 rows, 11 BUG, 4 RULE, 6 ASK. Accepted;
+the orchestrator's §0 sets versions (tier 1 derived = v6, tier 2 full regeneration = v7),
+owners, and that unresolved bodies are counted for Johnny rather than blocking silently.
+Johnny approved the direction by commissioning the design. The six ASK questions are
+`questions_for_johnny.md` F2 to F7. The rules files hold no table from kelvin to the five
+band names (they are orbit-deviation bands, `rules/mgt2e_data.js:24-29`), so F2 needs Johnny.
+F's estimate: tier 2 changes 80 to 100% of the 156,222 generated trees; RNG order cannot be
+preserved globally. **Started:** T1.1, Agent A (fixtures, ledger, Marches diagnostic) and
+Agent B (wider read-only scan of released trees).
+
+## 63. Step 11 in: shaded discs in the orbit view (2026-10-04)
+
+- **Agent D:** `orbit/disc_batch.ts` (pure batch builder), `OrbitRenderer` sends one batch a
+  frame and draws a tile per body, flat disc where there is none; discs only with the
+  Day / night layer on, as legacy. Regina 20 discs, Zeycude 11; steady frame about 1.4 ms;
+  no long task on scrub, zoom, Row or Column. The known first-context stall (about 1 s, once
+  per browser process) was seen once; Agent C's worker move is to remove it.
+- **Differences from the legacy request, recorded:** a moon locked to its planet turns once
+  per its own sidereal day and keeps its tilt (legacy pinned its face to the star). Noted by
+  D: Regina's sidereal day and its drawn orbit period round A-IV do not match, so its face
+  does not stay toward its planet; that is data, and belongs with the engine corrections.
+- **Not done:** a same-date, zoomed, pixel comparison with the legacy viewer in the app
+  (the renderer itself is proven on the parity page); no-WebGL2 device; fast shuttle speeds.
+- Orchestrator re-ran: check clean, 457 pass / 0 fail, build green, `dist` clean.
+  **Last push is still `05b1297`; 54 paths uncommitted.**

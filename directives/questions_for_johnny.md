@@ -8,78 +8,14 @@ Last updated: 2026-10-04.
 
 ---
 
-## A. The orbit view (from Agent D)
+## A. The orbit view and the dossier (from Agent D)
 
-The agent is building with the interim choice shown, so nothing is blocked; your answer
-replaces it.
+Rewritten 2026-10-04 so the open ones are together. Nothing here blocks the build: the agent
+is working with the interim choice shown, and your answer replaces it. Six are open (A5,
+A8 to A10, A15, A16). A11 to A14 were ruled on 2026-10-04 and are done; the earlier answered
+ones are listed at the end of this section.
 
-### A1. Seasons on a moon
-
-Regina is a moon of a gas giant, and its data says it is tidally locked. The delighter note
-says a locked world has "no seasons: one face always sunward", which is true of a planet
-locked to its star, not of a moon locked to its planet. For a moon, should the season line:
-
-- (a) use the parent planet's year with the moon's own tilt,
-- (b) say only that its year is its parent's, with no hemisphere claim, or
-- (c) not appear?
-
-*Interim: (c), moons show no season line.*
-
-**Answer:**
-
-### A2. Where spring starts
-
-The old orbit view has no closest-approach point: a body starts at a fixed angle and moves
-at a steady rate on a circle. The delighter note puts the northern spring equinox "at
-periapsis", which the data does not have. Proposal: spring equinox is where the drawn orbit
-angle is zero, and the tooltip says so. Agree, or name another convention.
-
-*Interim: the proposal.*
-
-**Answer:**
-
-### A3. "Today's" temperature: a formula to approve
-
-You asked for this if it can be calculated. It can, using only the engine's own terms.
-
-The engine works out a world's high and low temperature by raising or lowering the star's
-effective brightness by a "variance" made of three parts (`mgt2e_world_engine.js:1757-1786`):
-a **tilt** part (the sine of the axial tilt, halved for a very short year and raised by half
-for a very long one), a **rotation** part (day and night) and a **geography** part (how much
-land), all divided by `1 + pressure`. Temperature goes with the fourth root of brightness.
-
-Proposal: "today's" temperature uses the **tilt part only**, scaled by where the world is in
-its year:
-
-```
-today (northern) = mean × (1 + tiltPart × sin(orbit angle) / (1 + pressure)) ^ 0.25
-today (southern) = the same with the sign of sin flipped
-```
-
-The orbit angle is the one the orbit view already draws, with spring at angle 0 (your
-convention). Day and night, geography and the orbit's eccentricity are left out, so this is
-the hemisphere's average for the season, labelled as an estimate with the inputs in the
-tooltip.
-
-Worked example with made-up round numbers: mean 288 K (15 °C), tilt 23°, pressure 1 bar.
-Tilt part = sin 23° = 0.39. At midsummer: 288 × (1 + 0.39 / 2)^0.25 = 301 K (28 °C). At
-midwinter: 288 × (1 − 0.39 / 2)^0.25 = 273 K (0 °C). At the equinoxes: 288 K.
-
-This is a new derived figure, not something the rules state, so it needs your yes. Approve
-it as written, change it, or say no.
-
-**Answer (2026-10-04): approved as written.** Agent D builds it on the orbit card, labelled an
-estimate, with the inputs in the tooltip.
-
-### A4. The date a visitor sees first
-
-The old app opens on the campaign clock, or Year 0 Day 1 if there is none. The viewer has no
-campaign. Options: Year 0 Day 1, Year 1105 Day 1 (the year the chart data is for), or another
-date you name. A date in the link always wins.
-
-*Interim: Year 1105, Day 1.*
-
-**Answer:**
+### Open
 
 ### A5. Body chips
 
@@ -91,19 +27,10 @@ It is also how a keyboard user reaches every body. Keep it?
 
 **Answer:**
 
-### A6. Temperature scales
-
-Show both (°C first, then °F), or one, and which? There is no settings screen yet, so the
-first build has no switch.
-
-*Interim: both.*
-
-**Answer:**
-
 ### A8. Daylight latitude
 
-The orbit card now shows hours of light at the equator and at 45° over the year. Is 45° the
-latitude you want quoted, or another?
+The orbit card quotes hours of light at 45° latitude over the year, and the dossier's Day and
+night card draws its second strip for 45°. Is 45° the latitude you want, or another?
 
 *Interim: 45°.*
 
@@ -111,9 +38,11 @@ latitude you want quoted, or another?
 
 ### A9. How small a tilt means "no seasons"
 
-Below some axial tilt the season line is dropped. 3° or 5°?
+Your answer on moon seasons said a tilt under 3° reads "negligible seasons". The delighter
+note (`campaign_manager_plan.md` §7.4) hides the season label under 5°. Which one holds for
+every world: 3° or 5°?
 
-*Interim: Agent D's current value.*
+*Interim: 3°.*
 
 **Answer:**
 
@@ -124,11 +53,110 @@ Stars show their temperature in °C and °F like worlds. Keep that, or show star
 *Interim: °C and °F.*
 
 **Answer:**
+I feel like K is right for stars, because that's how we measure light bulbs 
 
-### A7. Highport art (answered)
 
-**Answered 2026-10-04: yes, the images are yours and ship.** The four highport paintings
-are copied to `apps/web/public/starports/`.
+### A11. Today's temperature on a planet locked to its star
+
+The approved formula (A3) swings the temperature with the season. A planet locked to its star
+has one face always sunward, and the engine leaves a locked world a tilt of 3° at most, so the
+formula would show nearly the mean on both hemispheres, which says nothing about its hot and
+cold faces. Should such a world show:
+
+- (a) no "today" lines,
+- (b) the formula's result anyway, or
+- (c) something else you name (for example its high on the day side and low on the night side)?
+
+*Interim: (a), no lines.*
+
+**Answer (2026-10-04, ruled in `handoff.md` §59): (a), no lines.** Built and tested.
+
+### A12. Today's temperature where the formula has no answer
+
+When the tilt part is larger than 1 + pressure (a strongly tilted world with almost no
+atmosphere), the winter side of the formula takes the fourth root of a negative number.
+Should that hemisphere show:
+
+- (a) no "today" line,
+- (b) the world's low temperature instead, or
+- (c) another floor you name?
+
+*Interim: (a), no line for that world.*
+
+**Answer (2026-10-04, ruled in `handoff.md` §59): (a).** When the bracket under the root is not positive there is no line. Built and tested.
+
+### A13. Proving the copied tilt term against the engine
+
+The brief said to stop if the engine does not expose the tilt term on its own. It does not:
+the term is worked out in the middle of a larger function
+(`packages/engines/src/mgt2e_world_engine.js:1757-1759`). The copy in
+`apps/web/src/orbit/today_temp.ts` is tested against hand-worked values, but not against the
+engine. Proposal: a test that reads those three lines out of the engine file and runs them
+beside the copy, the way the legacy parity tests do, with no change to the engine. Yes or no?
+
+*Interim: not written.*
+
+**Answer (2026-10-04, ruled in `handoff.md` §59): yes.** The test reads the three lines from the engine file and runs them beside the copy. Written; it passes.
+
+### A14. The "Day" tile beside the Day and night card
+
+The dossier's "Day" tile comes from the dossier model: it is the spin against the stars, or
+the words "Tidally locked". The Day and night card under it gives the day from one sunrise to
+the next. On Regina the tile says "Tidally locked" (to its planet) while the card says
+"24 hours", which reads as a contradiction though both are true. Choose:
+
+- (a) rename the tile "Rotation",
+- (b) drop the tile when the card is shown, or
+- (c) leave it.
+
+(a) and (b) change `dossier/model.ts`, which belongs to the dossier's owner, not Agent D.
+
+*Interim: (c), left as it is.*
+
+**Answer (2026-10-04, ruled in `handoff.md` §59): (a).** The tile is now labelled "Rotation".
+
+### A15. What to call the 24-hour day
+
+The dossier now says "standard days (24 h)" for the clock's day and "local days" for the
+world's own. "Standard day" is Agent D's wording. Keep it, or name the term you want
+("Imperial day", "galactic standard day", another)?
+
+*Interim: "standard days (24 h)".*
+
+**Answer:**
+
+### A16. Where a world's starport stands (for the local-time tick)
+
+You decided the local-time tick on the Day and night strip is for the starport, with the
+map's prime meridian as the fallback (`campaign_manager_plan.md` §7.10). Nothing in a released
+system says where on a world its starport is. Until something does, every world uses the
+fallback. How should a starport get its place?
+
+- (a) the referee pins it on the surface map,
+- (b) a rule you supply places it, or
+- (c) the prime meridian is the starport's longitude by definition.
+
+This goes with E3 (where longitude 0 is), which is also still open.
+
+*Interim: the fallback for every world.*
+
+**Answer:**
+
+### Answered
+
+- **A1. Seasons on a moon.** Answered 2026-10-03: `tidallyLocked` means locked to the body it
+  orbits; a moon takes its planet's year and orbit angle; under 3° of tilt it reads
+  "negligible seasons". Built.
+- **A2. Where spring starts.** Answered 2026-10-03: the northern spring equinox is at orbit
+  angle 0°, and the tooltip says so. Built.
+- **A3. "Today's" temperature.** Answered 2026-10-04: approved as written,
+  `mean × (1 ± tiltPart × sin(orbit angle) / (1 + pressure)) ^ 0.25`, labelled an estimate
+  with the inputs in the tooltip. Built on the orbit card. A11 to A13 are what it left open.
+- **A4. The date a visitor sees first.** Answered 2026-10-03: day 002 of 1105, and a link may
+  carry `?date=DDD-YYYY` and `&time=HHMM`. Built.
+- **A6. Temperature scales.** Answered 2026-10-03: `18°C (64°F)`, no kelvin on the card. Built.
+- **A7. Highport art.** Answered 2026-10-04: yes, the images are yours and ship. The four
+  paintings are in `apps/web/public/starports/`.
 
 ---
 
@@ -213,7 +241,162 @@ Proposal for the enhanced mode, vanilla left alone: a cap is drawn only where th
 **low** temperature is below the freezing point of its surface liquid (273 K for water); its
 size grows with hydrographics; hydrographics 0 has none. Approve, change, or give your own rule.
 
-*Interim: vanilla as the old app drew it; no enhanced cap rule built.*
+**Answer (2026-10-04): approved in principle. Not built yet.** Superseded by E10, which is the
+fuller version of the same idea after Agent F's review.
+
+### E10. Seas and ice in the enhanced mode (Agent F's proposal)
+
+Three separate decisions, each from data the world already carries; vanilla is untouched:
+
+1. **How much is covered:** the world's hydrographics percentage when it has one, else the
+   Hydro digit times 10%. No minimum sea. (A Hydro 0 world can carry 1 to 5%.)
+2. **What covers it:** the generated liquid (water, methane, ammonia, acid and so on), not a
+   guess from the atmosphere.
+3. **Where it is frozen:** by that liquid's own melting point from the rules table
+   (`rules/mgt2e_data.js:740`). Low temperature above melting: no ice. High temperature below
+   it: all of it frozen. In between: ice from the poles down, placed by a visual
+   approximation, `T(latitude) = mean + A x (1/3 - sin^2(latitude))`, with A limited so it
+   stays inside the world's own high and low. Unknown liquid, or missing temperatures: no ice
+   drawn. Worlds locked to their star are handled separately (ice on the far side), designed
+   when built. No extra snow on land for now.
+
+The latitude formula is a presentation approximation, not a rules figure. Approve, change, or
+say no.
+
+**Answer (2026-10-04): approved,** including the latitude formula. Enhanced mode only.
+
+### E11. Sea colours for three liquids (from Agent D, enhanced map)
+
+The enhanced map colours a sea by its liquid, using the colours the old app's planet profile
+already holds. Three liquids in the rules table have no colour there: **Fluorine,
+Hydrofluoric Acid and Hydrochloric Acid**. The old profile paints any liquid it does not
+know in one purple it calls "Unknown Exotic Liquid". Choose:
+
+- (a) use that purple for these three,
+- (b) supply a shallow and a deep colour for each, or
+- (c) leave their seas undrawn.
+
+*Interim: (c). Their basins are drawn as dry lowland and the caption says "not drawn".
+No Regina body has one of the three.*
+
+**Proposed for (b), for your yes** (shallows, then deeps, as red, green, blue), shown beside
+the twelve existing colours in `findings/ui_design_shots/surface_liquid_swatches.png`:
+
+| Liquid | Shallows | Deeps | Look |
+|---|---|---|---|
+| Fluorine | 222, 214, 138 | 136, 124, 52 | pale yellow |
+| Hydrofluoric Acid | 150, 178, 172 | 62, 92, 92 | colourless: a pale grey-teal |
+| Hydrochloric Acid | 186, 200, 150 | 96, 114, 70 | colourless to faintly yellow-green |
+
+Say "yes", or change any of them. Nothing is in the code until you do.
+
+**Answer:**
+
+### E12. The colour of a frozen sea that is not water (from Agent D, enhanced map)
+
+The only ice colours with a source are the old profile's for frozen water. The enhanced map
+uses them for every frozen sea, whatever the liquid (Regina A-VIII's frozen oxygen looks like
+water ice). Keep one ice colour for all, or supply colours for other ices?
+
+*Interim: water's ice colours for all.*
+
+**Two proposals, for your yes,** on the same sheet
+(`findings/ui_design_shots/surface_liquid_swatches.png`, columns 3 and 4):
+
+- **Option A, one neutral "frozen exotic" colour** for every frozen sea that is not water:
+  shallows 208, 210, 216; deeps 160, 164, 176 (a grey-white, against water ice's blue-white).
+- **Option B, each liquid's own colour, paled:** the shallows 70% of the way to 236, 240, 246
+  and the deeps 55% of the way to 176, 188, 204. Frozen oxygen stays faintly blue, frozen
+  chlorine faintly green, frozen ethane a warm grey.
+
+Water keeps its existing ice in both. Choose A, B, or keep water's ice for all.
+
+**Answer:**
+
+### E13. A liquid the data calls "Unknown Exotic Liquid" (from Agent D, enhanced map)
+
+Regina C-II-g has 26% cover of a liquid the generator named "Unknown Exotic Liquid". It is not
+in the rules table, so it has no melting point and the approved rules cannot say where it
+freezes. The old profile does hold a colour under that name. Draw such a sea in that colour
+with no ice, or leave it undrawn?
+
+*Interim: undrawn; the basin is dry lowland and the caption says so.*
+
+**Answer:**
+
+---
+
+## F. The generated worlds contradict their charts (one decision)
+
+Agent B found that the engines, old and new alike, store physical data for a mainworld that
+contradicts its published UWP: Regina (A788899) is stored as a frozen ethane moon at 190 K;
+about one mainworld in three in the Spinward Marches has a non-water liquid or an ice label
+that its numbers do not support. Details: handoff §58.
+
+### F1. Fix the engines, once, then rebuild the truth once?
+
+Proposal: (1) the principle "a world's stored physical data never contradicts its published
+UWP or itself"; (2) Agent F designs the corrections from the findings and the rules files,
+and brings you only the points where the rules files do not decide; (3) the new engines are
+allowed to differ from the old app, with each difference recorded; (4) one truth rebuild (v6)
+at the end.
+
+*Interim: nothing changes; the enhanced map draws what the data says.*
+
+**Answer:**
+
+### F2. What temperature makes a world "Frozen", "Cold", "Temperate", "Hot", "Boiling"?
+
+The rules files tie those five words to **orbit position** only. To show a Climate that
+matches the real temperature we need the temperatures. Your other agent quoted: Frozen at
+-51 °C and below, Cold up to 0 °C, Temperate up to 30 °C, Hot up to 80 °C, Boiling above.
+Confirm that table from your book, or give yours.
+
+*Interim: the dossier shows the temperature and an "Orbital zone"; no Climate word.*
+
+**Answer:**
+
+### F3. When a world's stored liquid is impossible at its real temperature
+
+(Example: "liquid oxygen" at 541 K.) Replace it with the most abundant liquid from your
+exotic-liquids table that *is* liquid at that temperature, or leave it marked unresolved?
+
+*Recommended: replace; unresolved only when nothing in the table fits.*
+
+**Answer:**
+
+### F4. What a liquid's name promises
+
+Liquid at the world's **mean** temperature (it may freeze or boil at the extremes, and we
+say so), or liquid across the whole low-to-high range?
+
+*Recommended: the mean, with freezing and boiling noted.*
+
+**Answer:**
+
+### F5. A charted world with no climate given
+
+Today the engine assumes "temperate roll 7" and then often cannot honour it. Instead: place
+the world in a legal orbit that suits its published atmosphere and hydrographics?
+
+*Recommended: yes.*
+
+**Answer:**
+
+### F6. When no legal orbit suits the chart
+
+List the system as unresolved for you to look at, or let the engine bend albedo and
+greenhouse to force a fit?
+
+*Recommended: list it; decide when we see how many there are.*
+
+**Answer:**
+
+### F7. The two internal-heat caps
+
+Keep the engine's existing caps (1000 and 150 on the two components, none on their sum)?
+
+*Recommended: keep.*
 
 **Answer:**
 

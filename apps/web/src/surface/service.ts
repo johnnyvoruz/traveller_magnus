@@ -1,16 +1,22 @@
 /**
- * Map requests. Vanilla paints in the surface worker. Enhanced paints that same
- * vanilla sheet until an enhanced painter exists: the mode switch must not leave
- * a visitor with a blank planet. The cache key still carries the requested mode.
+ * Map requests. Both sheets paint in the surface worker: 'vanilla' the legacy painter
+ * (vanilla/map.ts), 'enhanced' the enhanced one (enhanced/map.ts: the same continents, seas
+ * and sea ice from enhanced/seas.ts). The two are told apart here and nowhere in vanilla.
+ * The cache key carries the mode, the painter and, for enhanced, the sea it was asked to
+ * draw, so one mode's sheet is never handed to the other.
  * A reply whose generation is not the live one is dropped.
- * Discs stay unavailable.
+ * Discs compile on the first real batch. prepareDiscs submits one frame and returns.
+ * It does not wait for full detail. drawDisc paints the newest tile held for a key,
+ * or returns false so the caller keeps its flat disc. A tile can arrive a later frame.
  */
-import { afterTask, now, startSurfaceWorker } from '../platform/browser.ts';
+import { afterTask, blitImage, now, startSurfaceWorker } from '../platform/browser.ts';
 import { SheetCache } from './cache.ts';
 import type {
     DiscBatchRequest,
-    DiscRequest,
+    DiscContext,
     DrawingOptions,
+    EnhancedPaintInputs,
+    EnhancedSea,
     MapRequest,
     SurfaceMode,
     SurfaceReply,
@@ -24,11 +30,18 @@ import {
     diamondMapSpec,
     surfaceCacheKey,
 } from './identity.ts';
+import { createEnhancedMap, seaPlan } from './enhanced/map.ts';
 import { createChunkedMap } from './map_chunks.ts';
+import { clearDiscs, discHeld, rememberDisc, retainDiscs } from './disc_hold.ts';
+import { discShadeRequest } from './disc_shade.ts';
+import { createDiscBaker, type DiscBaker } from './vanilla/gl.ts';
+import { discDest } from './vanilla/gl_plan.ts';
 import { MAP_HEIGHT, MAP_WIDTH } from './vanilla/map.ts';
 
 const MAP_ALGORITHM = 'vanilla-diamond-1';
 const MAP_PALETTE = 'vanilla-legacy-1';
+const ENHANCED_ALGORITHM = 'enhanced-seas-1';
+const ENHANCED_PALETTE = 'enhanced-liquids-1';
 const MAP_REVISION = 'surface-map-1';
 const TASK_BUDGET_MS = 50;
 
@@ -72,6 +85,8 @@ type Live = {
     mode: SurfaceMode;
     key: string;
     inputs: VanillaPaintInputs;
+    /** The enhanced sheet's inputs; null for a vanilla request. */
+    enhanced: EnhancedPaintInputs | null;
     started: number;
     resolve: (sheet: MapSheet | null) => void;
     cancelTimer: (() => void) | null;
@@ -120,15 +135,16 @@ function drawingOptionsKey(options: DrawingOptions): string {
     return String(options.continentalDefinition) + ',' + String(options.coastlineComplexity);
 }
 
-function cacheKey(request: MapRequest): string {
+function cacheKey(request: MapRequest, sea: EnhancedSea | null): string {
     return surfaceCacheKey({
         hexKey: request.hexKey,
         dossierKey: request.dossierKey,
         revision: MAP_REVISION,
         mode: request.mode,
-        algorithm: MAP_ALGORITHM,
-        palette: MAP_PALETTE,
-        options: drawingOptionsKey(request.options),
+        algorithm: sea ? ENHANCED_ALGORITHM : MAP_ALGORITHM,
+        palette: sea ? ENHANCED_PALETTE : MAP_PALETTE,
+        // The enhanced sheet is also a picture of the sea it was told to draw.
+        options: drawingOptionsKey(request.options) + (sea ? ';' + JSON.stringify(sea) : ''),
         resolution: MAP_WIDTH + 'x' + MAP_HEIGHT,
     });
 }
@@ -230,7 +246,9 @@ function onWorkerMessage(event: { data: SurfaceWorkerReply }): void {
 }
 
 function paintOnPage(job: Live): void {
-    const chunk = createChunkedMap(job.inputs, now, budget());
+    const chunk = job.enhanced
+        ? createEnhancedMap(job.enhanced, now, budget())
+        : createChunkedMap(job.inputs, now, budget());
     const run = (): void => {
         if (live !== job) return;
         const done = chunk.step();
@@ -258,11 +276,12 @@ function unavailable(mode: SurfaceMode): MapTicket {
     };
 }
 
-function requestVanillaSheet(request: MapRequest): MapTicket {
+/** One sheet. `sea` is the enhanced sheet's sea; null asks for the vanilla sheet. */
+function requestSheet(request: MapRequest, sea: EnhancedSea | null): MapTicket {
     dropLive();
     const spec = diamondMapSpec(request.body, request.hexKey);
     if (!spec) return unavailable(request.mode);
-    const key = cacheKey(request);
+    const key = cacheKey(request, sea);
     const requestId = String(++sequence);
     const ticketGeneration = ++generation;
     const hit = cache.get(key);
@@ -293,6 +312,7 @@ function requestVanillaSheet(request: MapRequest): MapTicket {
         coastlineComplexity: request.options.coastlineComplexity,
         printMode: false,
     };
+    const enhanced: EnhancedPaintInputs | null = sea ? { ...inputs, sea } : null;
     let resolve: (sheet: MapSheet | null) => void = () => {};
     const done = new Promise<MapSheet | null>((settle) => { resolve = settle; });
     const job: Live = {
@@ -301,6 +321,7 @@ function requestVanillaSheet(request: MapRequest): MapTicket {
         mode: request.mode,
         key,
         inputs,
+        enhanced,
         started: now(),
         resolve,
         cancelTimer: null,
@@ -319,6 +340,7 @@ function requestVanillaSheet(request: MapRequest): MapTicket {
             mode: request.mode,
             generation: ticketGeneration,
             inputs,
+            ...(enhanced ? { enhanced } : {}),
         });
     }
     return {
@@ -332,20 +354,80 @@ function requestVanillaSheet(request: MapRequest): MapTicket {
 }
 
 export function requestMap(request: MapRequest): MapTicket {
-    // Enhanced terrain is not painted yet. Fall back to the vanilla sheet so the
-    // mode switch never leaves a visitor with a blank planet. The cache key still
-    // carries the requested mode, and a late result from an older generation is dropped.
-    return requestVanillaSheet(request);
+    switch (request.mode) {
+        case 'vanilla':
+            return requestSheet(request, null);
+        case 'enhanced':
+            // The sea is decided here, on the page, from the body; the painter gets plain data.
+            return requestSheet(request, seaPlan(request.body).sea);
+    }
+}
+
+let discBaker: DiscBaker | null = null;
+let discBroken = false;
+
+function openDiscs(): DiscBaker | null {
+    if (discBroken) return null;
+    if (discBaker) return discBaker;
+    try {
+        discBaker = createDiscBaker();
+        discBaker.pump();
+        return discBaker;
+    } catch {
+        if (discBaker) discBaker.dispose();
+        discBaker = null;
+        discBroken = true;
+        return null;
+    }
+}
+
+/** One frame. Copies any tile the baker produced. Does not loop until cubes finish. */
+function submitDiscs(baker: DiscBaker, request: DiscBatchRequest): void {
+    const shades = [];
+    const radius = new Map<string, number>();
+    for (const disc of request.discs) {
+        const shade = discShadeRequest(request.timeSeconds, disc);
+        if (!shade) continue;
+        shades.push(shade);
+        radius.set(disc.key, disc.radiusPx);
+    }
+    const produced = baker.renderBatch(shades);
+    for (const [key, tile] of produced) {
+        const image = baker.copyTile(key);
+        if (!image) continue;
+        rememberDisc(key, { image, size: tile.size, radiusPx: radius.get(key) ?? 0 });
+    }
 }
 
 export function prepareDiscs(request: DiscBatchRequest): SurfaceReply {
     const requestId = String(++sequence);
-    return { status: 'unavailable', mode: request.mode, requestId };
+    if (request.discs.length === 0) return { status: 'unavailable', mode: request.mode, requestId };
+    const shadeable = request.discs.some((disc) => discShadeRequest(request.timeSeconds, disc));
+    if (!shadeable) {
+        retainDiscs(new Set(request.discs.map((disc) => disc.key)));
+        return { status: 'ready', mode: request.mode, requestId };
+    }
+    const baker = openDiscs();
+    if (!baker) return { status: 'unavailable', mode: request.mode, requestId };
+    baker.pump();
+    if (baker.lost()) return { status: 'unavailable', mode: request.mode, requestId };
+    retainDiscs(new Set(request.discs.map((disc) => disc.key)));
+    if (!baker.ready()) return { status: 'pending', mode: request.mode, requestId };
+    submitDiscs(baker, request);
+    return { status: 'ready', mode: request.mode, requestId };
 }
 
-export function drawDisc(request: DiscRequest): SurfaceReply {
-    const requestId = String(++sequence);
-    return { status: 'unavailable', mode: request.mode, requestId };
+/**
+ * Paint the newest tile held for key, centred on (cx, cy).
+ * radiusPx may differ from the radius the tile was rendered for; the tile is scaled.
+ * False when no tile is held. A lost context does not hide a tile already held.
+ */
+export function drawDisc(ctx: DiscContext, key: string, cx: number, cy: number, radiusPx: number): boolean {
+    const held = discHeld(key);
+    if (!held) return false;
+    const dest = discDest(held.size, held.radiusPx, cx, cy, radiusPx);
+    blitImage(ctx, held.image, dest.x, dest.y, dest.w, dest.h);
+    return true;
 }
 
 export function cancelSurface(requestId: string): void {
@@ -357,7 +439,7 @@ export function surfaceAvailable(mode: SurfaceMode): boolean {
         case 'vanilla':
             return true;
         case 'enhanced':
-            // The sheet is the vanilla fallback, so the switch still has a picture.
+            // The enhanced map sheet (enhanced/map.ts). Discs paint when a tile is held.
             return true;
     }
 }
@@ -369,6 +451,10 @@ export function disposeSurfaces(): void {
         live = null;
         job.resolve(null);
     }
+    if (discBaker) discBaker.dispose();
+    discBaker = null;
+    discBroken = false;
+    clearDiscs();
     if (worker) worker.terminate();
     worker = null;
     workerStartMs = null;

@@ -2,10 +2,13 @@
 import { tempLines } from '../design/units.ts';
 import type { FactTile } from './model.ts';
 
+/** One line of a restated tile: a figure, and to its right what it counts, one note to a line. */
+export type FactRow = { value: string; notes: string[] };
+
 const props = defineProps<{
     facts: FactTile[];
-    /** A tile's words restated by the view, by its label: the headline, then one note to a line. */
-    restated?: Record<string, { value: string; notes: string[] }>;
+    /** A tile's words restated by the view, by its label: one row per figure. */
+    restated?: Record<string, FactRow[]>;
 }>();
 
 /** What a world is, before how its time runs: these three lead, the rest follow in a row of their own. */
@@ -20,9 +23,13 @@ function groups(facts: FactTile[]): FactTile[][] {
 
 /** A temperature's three figures stack: the first is the headline, the others sit under it. */
 function lines(fact: FactTile): string[] {
-    const again = props.restated ? props.restated[fact.label] : undefined;
-    if (again) return [again.value, ...again.notes];
     return tempLines(fact.value) ?? [fact.value];
+}
+
+/** The rows the view restated this tile as, or null for a tile shown as the model gives it. */
+function rows(fact: FactTile): FactRow[] | null {
+    const again = props.restated ? props.restated[fact.label] : undefined;
+    return again && again.length ? again : null;
 }
 </script>
 
@@ -31,7 +38,13 @@ function lines(fact: FactTile): string[] {
     <dl v-for="(group, index) in groups(facts)" :key="index" class="doss-facts" :class="{ 'is-grouped': groups(facts).length > 1 }">
       <div v-for="fact in group" :key="fact.label" class="doss-fact">
         <dt>{{ fact.label }}</dt>
-        <dd>
+        <dd v-if="rows(fact)" class="doss-fact-rows">
+          <span v-for="row in rows(fact)" :key="row.value + row.notes.join()" class="doss-fact-row">
+            <b>{{ row.value }}</b>
+            <span class="doss-fact-side"><small v-for="note in row.notes" :key="note">{{ note }}</small></span>
+          </span>
+        </dd>
+        <dd v-else>
           {{ lines(fact)[0] }}
           <small v-for="line in lines(fact).slice(1)" :key="line">{{ line }}</small>
           <small v-if="fact.note">{{ fact.note }}</small>
@@ -86,5 +99,35 @@ function lines(fact: FactTile): string[] {
   color: var(--text-muted);
   font-size: 11px;
   font-weight: 400;
+}
+
+/* A restated tile: each figure with what it counts to its right, the figure centred on its notes. */
+.doss-fact-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+/* A tile with rows needs the width for its words, so it takes a double share of its row. */
+.doss-facts.is-grouped .doss-fact:has(.doss-fact-rows) {
+  flex: 2 1 36%;
+}
+
+.doss-facts.is-grouped:has(.doss-fact-rows) .doss-fact:not(:has(.doss-fact-rows)) {
+  flex-basis: 22%;
+}
+
+.doss-fact-row + .doss-fact-row {
+  margin-top: 3px;
+}
+
+.doss-fact-row b {
+  flex: 0 0 auto;
+  font-weight: 600;
+}
+
+.doss-fact-side {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 </style>

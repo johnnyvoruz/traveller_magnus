@@ -78,7 +78,7 @@ export const facts: FactTile[] = [
     { label: 'Diameter', value: '11,169 km', note: '' },
     { label: 'Gravity', value: '0.83 G', note: '' },
     { label: 'Mean temp.', value: '190 K', note: '−84 °C' },
-    { label: 'Day', value: 'Tidally locked', note: '' },
+    { label: 'Rotation', value: 'Tidally locked', note: '' },
     { label: 'Year', value: '5.4 yr', note: '' },
 ];
 

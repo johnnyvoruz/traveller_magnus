@@ -3,7 +3,6 @@
  * two RGBA8 cubes. js/planet_gl.js:789-936 and 974-976. No shade pass.
  */
 import { now } from '../../platform/browser.ts';
-import { BAKE_FRAG, STATS_FRAG, VERT } from './gl_shaders.ts';
 import { STATS_BATCH, STATS_H, STATS_W, type StatsFields } from './gl_stats.ts';
 
 /** js/planet_gl.js:18 */
@@ -25,6 +24,38 @@ export function cubeSizeFor(radiusPx: number): number {
 /** js/planet_gl.js:907. Byte estimate for both RGBA8 cubes, mip chain included (the 4/3). */
 export function cubeBytes(size: number): number {
     return size * size * 6 * 4 * 2 * 4 / 3;
+}
+
+/** The statistics render target. RGBA8, one row per body in a batch. */
+export function statsTargetBytes(): number {
+    return STATS_W * STATS_H * STATS_BATCH * 4;
+}
+
+/** The shade atlas. RGBA8, no mip chain. */
+export function atlasBytes(width: number, height: number): number {
+    return Math.max(0, width) * Math.max(0, height) * 4;
+}
+
+/**
+ * Reserve `incoming` bytes before a texture is allocated.
+ * Evicts the least recently drawn worlds that are not from this frame.
+ * `ok` is false when the remainder still does not fit.
+ */
+export function reserve(
+    used: number,
+    incoming: number,
+    frame: number,
+    worlds: LedgerWorld[],
+    budget = MEMORY_BUDGET,
+): { ok: boolean; evict: string[] } {
+    const evict = evictIds(used + incoming, frame, worlds, budget);
+    let left = used + incoming;
+    const byId = new Map(worlds.map((world) => [world.id, world]));
+    for (const id of evict) {
+        const world = byId.get(id);
+        if (world) left -= world.bytes + world.jobBytes;
+    }
+    return { ok: left <= budget, evict };
 }
 
 /**
@@ -76,7 +107,9 @@ export type GpuInfo = {
     unmaskedRenderer: string;
 };
 
-type Prog = { prog: WebGLProgram; uniforms: Record<string, WebGLUniformLocation | null> };
+export type LinkedProgram = { prog: WebGLProgram; uniforms: Record<string, WebGLUniformLocation | null> };
+
+export type GpuSpan = { name: string; ms: number };
 
 type Aniso = { TEXTURE_MAX_ANISOTROPY_EXT: number; max: number };
 
@@ -87,25 +120,32 @@ function must<T>(value: T | null, what: string): T {
 
 const norm3 = (c: number[]): [number, number, number] => [(c[0] ?? 0) / 255, (c[1] ?? 0) / 255, (c[2] ?? 0) / 255];
 
-/** Compiles the statistics and bake programs and owns the cube textures. */
+/** Owns the cube textures. Programs are linked in gl.ts and passed to build. */
 export function attachBaker(gl: WebGL2RenderingContext): {
-    build: () => void;
+    build: (stats: LinkedProgram, bake: LinkedProgram) => void;
     memory: () => number;
     measure: (profiles: BakeProfile[]) => Uint8Array[];
     makeCube: (size: number) => GpuCube;
     dropCube: (cube: GpuCube) => void;
     bakeFace: (profile: BakeProfile, stats: BakeStats, cube: GpuCube, face: number) => void;
+    probeDraw: (profile: BakeProfile, stats: BakeStats, size: number, skipCheck: boolean) => void;
+    warmupPipeline: (profile: BakeProfile, stats: BakeStats) => void;
     finishCube: (cube: GpuCube) => void;
     readCube: (cube: GpuCube, level: number) => CubeFaces;
     sync: () => number;
     note: (ms: number) => void;
+    time: (name: string, fn: () => void) => number;
+    mark: (name: string, ms: number) => void;
+    takeSpans: () => GpuSpan[];
+    bindQuad: () => void;
     longestSliceMs: () => number;
     gpu: () => GpuInfo;
     disposeGpu: () => void;
 } {
     let memory = 0;
     let longest = 0;
-    let programs: { stats: Prog; bake: Prog } | null = null;
+    const spans: GpuSpan[] = [];
+    let programs: { stats: LinkedProgram; bake: LinkedProgram } | null = null;
     let anisotropy: Aniso | null = null;
     let statsTarget: { texture: WebGLTexture; fbo: WebGLFramebuffer } | null = null;
     let quad: WebGLBuffer | null = null;
@@ -115,48 +155,34 @@ export function attachBaker(gl: WebGL2RenderingContext): {
         if (ms > longest) longest = ms;
     }
 
-    function span(fn: () => void): number {
+    function time(name: string, fn: () => void): number {
         const started = now();
         fn();
         const dt = now() - started;
         note(dt);
+        spans.push({ name, ms: dt });
         return dt;
     }
 
-    function compile(type: number, source: string): WebGLShader {
-        const shader = must(gl.createShader(type), 'shader');
-        gl.shaderSource(shader, source);
-        gl.compileShader(shader);
-        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-            const log = gl.getShaderInfoLog(shader);
-            gl.deleteShader(shader);
-            throw new Error(log || 'shader compile failed');
-        }
-        return shader;
+    function takeSpans(): GpuSpan[] {
+        const out = spans.slice();
+        spans.length = 0;
+        return out;
     }
 
-    function program(fragment: string): Prog {
-        const prog = must(gl.createProgram(), 'program');
-        gl.attachShader(prog, compile(gl.VERTEX_SHADER, VERT));
-        gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, fragment));
-        gl.bindAttribLocation(prog, 0, 'aPos');
-        gl.linkProgram(prog);
-        if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog) || 'link failed');
-        const uniforms: Record<string, WebGLUniformLocation | null> = {};
-        const count = gl.getProgramParameter(prog, gl.ACTIVE_UNIFORMS) as number;
-        for (let i = 0; i < count; i++) {
-            const info = gl.getActiveUniform(prog, i);
-            if (!info) continue;
-            const name = info.name.replace(/\[0\]$/, '');
-            uniforms[name] = gl.getUniformLocation(prog, info.name);
-        }
-        return { prog, uniforms };
+    function mark(name: string, ms: number): void {
+        note(ms);
+        spans.push({ name, ms });
     }
 
-    function drawQuad(): void {
+    function bindQuad(): void {
         gl.bindBuffer(gl.ARRAY_BUFFER, quad);
         gl.enableVertexAttribArray(0);
         gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+    }
+
+    function drawQuad(): void {
+        bindQuad();
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     }
 
@@ -206,9 +232,13 @@ export function attachBaker(gl: WebGL2RenderingContext): {
         gl.uniform4f(u.uStorm ?? null, v[0] ?? 0, v[1] ?? 0, (v[2] ?? 0) * 0.6, 0.16);
     }
 
-    function build(): void {
+    function build(stats: LinkedProgram, bake: LinkedProgram): void {
+        if (programs) {
+            gl.deleteProgram(programs.stats.prog);
+            gl.deleteProgram(programs.bake.prog);
+        }
         memory = 0;
-        programs = { stats: program(STATS_FRAG), bake: program(BAKE_FRAG) };
+        programs = { stats, bake };
         const ext = gl.getExtension('EXT_texture_filter_anisotropic');
         anisotropy = ext
             ? {
@@ -221,23 +251,28 @@ export function attachBaker(gl: WebGL2RenderingContext): {
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
         gl.enableVertexAttribArray(0);
         gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-        const texture = must(gl.createTexture(), 'stats texture');
-        gl.bindTexture(gl.TEXTURE_2D, texture);
-        gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, STATS_W, STATS_H * STATS_BATCH);
-        const fbo = must(gl.createFramebuffer(), 'stats framebuffer');
-        gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
-        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
-        statsTarget = { texture, fbo };
-        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        time('stats target', () => {
+            const texture = must(gl.createTexture(), 'stats texture');
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+            gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, STATS_W, STATS_H * STATS_BATCH);
+            const fbo = must(gl.createFramebuffer(), 'stats framebuffer');
+            gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+            statsTarget = { texture, fbo };
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        });
         gl.disable(gl.BLEND);
-        const debug = gl.getExtension('WEBGL_debug_renderer_info');
-        gpuInfo = {
-            vendor: String(gl.getParameter(gl.VENDOR) || ''),
-            renderer: String(gl.getParameter(gl.RENDERER) || ''),
-            version: String(gl.getParameter(gl.VERSION) || ''),
-            unmaskedVendor: debug ? String(gl.getParameter(debug.UNMASKED_VENDOR_WEBGL) || '') : '',
-            unmaskedRenderer: debug ? String(gl.getParameter(debug.UNMASKED_RENDERER_WEBGL) || '') : '',
-        };
+        time('renderer string', () => {
+            const debug = gl.getExtension('WEBGL_debug_renderer_info');
+            gpuInfo = {
+                vendor: String(gl.getParameter(gl.VENDOR) || ''),
+                renderer: String(gl.getParameter(gl.RENDERER) || ''),
+                version: String(gl.getParameter(gl.VERSION) || ''),
+                unmaskedVendor: debug ? String(gl.getParameter(debug.UNMASKED_VENDOR_WEBGL) || '') : '',
+                unmaskedRenderer: debug ? String(gl.getParameter(debug.UNMASKED_RENDERER_WEBGL) || '') : '',
+            };
+        });
+        memory = statsTargetBytes();
     }
 
     function measure(profiles: BakeProfile[]): Uint8Array[] {
@@ -245,16 +280,18 @@ export function attachBaker(gl: WebGL2RenderingContext): {
         const { prog, uniforms: u } = programs.stats;
         gl.useProgram(prog);
         gl.bindFramebuffer(gl.FRAMEBUFFER, statsTarget.fbo);
-        for (let i = 0; i < profiles.length; i++) {
-            const profile = profiles[i];
-            if (!profile) continue;
-            gl.viewport(0, i * STATS_H, STATS_W, STATS_H);
-            setFields(u, profile);
-            gl.uniform1f(u.uRow ?? null, i * STATS_H);
-            drawQuad();
-        }
+        time('stats draw', () => {
+            for (let i = 0; i < profiles.length; i++) {
+                const profile = profiles[i];
+                if (!profile) continue;
+                gl.viewport(0, i * STATS_H, STATS_W, STATS_H);
+                setFields(u, profile);
+                gl.uniform1f(u.uRow ?? null, i * STATS_H);
+                drawQuad();
+            }
+        });
         const pixels = new Uint8Array(STATS_W * STATS_H * profiles.length * 4);
-        span(() => {
+        time('readPixels stats', () => {
             gl.readPixels(0, 0, STATS_W, STATS_H * profiles.length, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
         });
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -280,7 +317,53 @@ export function attachBaker(gl: WebGL2RenderingContext): {
         };
         const bytes = cubeBytes(size);
         memory += bytes;
-        return { size, a: make(), b: make(), fbo: must(gl.createFramebuffer(), 'cube framebuffer'), bytes };
+        let cube: GpuCube | null = null;
+        time('texStorage ' + size, () => {
+            cube = { size, a: make(), b: make(), fbo: must(gl.createFramebuffer(), 'cube framebuffer'), bytes };
+        });
+        if (!cube) throw new Error('cube');
+        return cube;
+    }
+
+    /**
+     * Times the first face with the completeness check omitted when skipCheck is set.
+     * Diagnostic only. The bake the parity page compares still goes through bakeFace.
+     */
+    function probeDraw(profile: BakeProfile, stats: BakeStats, size: number, skipCheck: boolean): void {
+        if (!programs) throw new Error('baker is not built');
+        const cube = makeCube(size);
+        const { prog, uniforms: u } = programs.bake;
+        gl.useProgram(prog);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, cube.fbo);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_CUBE_MAP_POSITIVE_X, cube.a, 0);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_CUBE_MAP_POSITIVE_X, cube.b, 0);
+        gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+        if (!skipCheck) {
+            let status = 0;
+            time('checkFramebuffer', () => {
+                status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+            });
+            if (status !== gl.FRAMEBUFFER_COMPLETE) throw new Error('probe framebuffer ' + status);
+        }
+        gl.viewport(0, 0, size, size);
+        setBake(u, profile, stats, size, 0);
+        time('drawArrays', () => drawQuad());
+        gl.readBuffer(gl.COLOR_ATTACHMENT0);
+        const pixels = new Uint8Array(size * size * 4);
+        time('readPixels', () => {
+            gl.readPixels(0, 0, size, size, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+        });
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.bindTexture(gl.TEXTURE_CUBE_MAP, cube.a);
+        time('generateMipmap', () => {
+            gl.generateMipmap(gl.TEXTURE_CUBE_MAP);
+        });
+        dropCube(cube);
+    }
+
+    /** One 1x1 bake draw and a read, so the driver's first wait happens here. */
+    function warmupPipeline(profile: BakeProfile, stats: BakeStats): void {
+        probeDraw(profile, stats, 1, false);
     }
 
     function dropCube(cube: GpuCube): void {
@@ -299,11 +382,14 @@ export function attachBaker(gl: WebGL2RenderingContext): {
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_CUBE_MAP_POSITIVE_X + face, cube.a, 0);
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_CUBE_MAP_POSITIVE_X + face, cube.b, 0);
         gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
-        const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+        let status = 0;
+        time('checkFramebuffer', () => {
+            status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+        });
         if (status !== gl.FRAMEBUFFER_COMPLETE) throw new Error('bake framebuffer ' + status);
         gl.viewport(0, 0, cube.size, cube.size);
         setBake(u, profile, stats, cube.size, face);
-        span(() => drawQuad());
+        time('bakeFace ' + cube.size, () => drawQuad());
     }
 
     /** js/planet_gl.js:927-936 */
@@ -311,7 +397,9 @@ export function attachBaker(gl: WebGL2RenderingContext): {
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         for (const texture of [cube.a, cube.b]) {
             gl.bindTexture(gl.TEXTURE_CUBE_MAP, texture);
-            gl.generateMipmap(gl.TEXTURE_CUBE_MAP);
+            time('generateMipmap ' + cube.size, () => {
+                gl.generateMipmap(gl.TEXTURE_CUBE_MAP);
+            });
         }
         if (cube.fbo) gl.deleteFramebuffer(cube.fbo);
         cube.fbo = null;
@@ -335,7 +423,9 @@ export function attachBaker(gl: WebGL2RenderingContext): {
                         throw new Error('read framebuffer ' + cube.size + ' ' + level + ' ' + layer + ' ' + face + ' ' + status);
                     }
                     const facePx = new Uint8Array(size * size * 4);
-                    span(() => gl.readPixels(0, 0, size, size, gl.RGBA, gl.UNSIGNED_BYTE, facePx));
+                    time('readPixels cube' + cube.size + ' mip' + level, () => {
+                        gl.readPixels(0, 0, size, size, gl.RGBA, gl.UNSIGNED_BYTE, facePx);
+                    });
                     out[layer].push(facePx);
                 }
             }
@@ -369,10 +459,16 @@ export function attachBaker(gl: WebGL2RenderingContext): {
         makeCube,
         dropCube,
         bakeFace,
+        probeDraw,
+        warmupPipeline,
         finishCube,
         readCube,
-        sync: () => span(() => gl.finish()),
+        sync: () => time('finish', () => gl.finish()),
         note,
+        time,
+        mark,
+        takeSpans,
+        bindQuad,
         longestSliceMs: () => longest,
         gpu: () => gpuInfo ?? { vendor: '', renderer: '', version: '', unmaskedVendor: '', unmaskedRenderer: '' },
         disposeGpu,

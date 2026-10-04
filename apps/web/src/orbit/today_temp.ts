@@ -5,7 +5,8 @@
  *   today (north) = meanTempK × (1 + tiltPart × sin(angle) / (1 + pressureBar)) ^ 0.25
  *   today (south) = the same with −sin(angle)
  *
- * tiltPart is the axial-tilt term of the engine's temperature variance, copied below. The
+ * tiltPart is the axial-tilt term of the engine's temperature variance, copied below and held
+ * to the engine's own lines by tests/web/orbit_today_temp.test.js. The
  * angle is the body's drawn orbit angle from the northern spring equinox (orbit/seasons.ts),
  * the parent planet's for a moon. Day and night, geography and the orbit's eccentricity are
  * left out, so this is a hemisphere's average for the season: an estimate, and labelled one.
@@ -51,10 +52,10 @@ function known(value: number | null): value is number {
 
 /**
  * The estimate for both hemispheres, or null when the document lacks an input. Null also
- * when the formula has no answer: the tilt term can exceed 1 + pressure (a tilt near 90°, a
- * long year, almost no air), which would put a negative number under the root. The engine
- * clamps its own variance at 1; whether to do that here is Johnny's to say, so until then
- * there is no line.
+ * when the formula has no answer: the tilt term can reach or exceed 1 + pressure (a tilt near
+ * 90°, a long year, almost no air), which leaves nothing, or less than nothing, under the
+ * root. Ruled 2026-10-04 (directives/handoff.md §59): when the bracket under the root is not
+ * positive, there is no line.
  */
 export function todayTemp(input: TodayInput): Today | null {
     const { meanTempK, axialTilt, pressureBar, yearHours } = input;
@@ -63,7 +64,7 @@ export function todayTemp(input: TodayInput): Today | null {
     const part = tiltPart(axialTilt, yearHours);
     const phaseDeg = seasonPhase(input.angle);
     const swing = part * Math.sin(phaseDeg * Math.PI / 180) / (1 + pressureBar);
-    if (1 + swing < 0 || 1 - swing < 0) return null;
+    if (!(1 + swing > 0) || !(1 - swing > 0)) return null;
     return {
         northK: meanTempK * Math.pow(1 + swing, 0.25),
         southK: meanTempK * Math.pow(1 - swing, 0.25),

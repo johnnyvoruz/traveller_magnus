@@ -28,10 +28,7 @@ export type OrbitTheme = {
     hzEdge: string;
     hzMid: string;
     hzLine: string;
-    hzText: string;
-    hzPill: string;
     jump: string;
-    jumpText: string;
     /** Orbit paths, drawn at the ring strength (3226, 4547, 2961). */
     pathBase: string;
     /** The habitable panel behind a body in a line-up (2623). */
@@ -150,10 +147,7 @@ export function readOrbitTheme(el: HTMLElement): OrbitTheme {
         hzEdge: withAlpha(hz, 0.16),
         hzMid: withAlpha(hz, 0.28),
         hzLine: withAlpha(hz, 0.8),
-        hzText: hz,
-        hzPill: withAlpha(token('--orbit-hz-pill'), 0.85),
         jump: withAlpha(token('--orbit-jump'), 0.95),
-        jumpText: token('--orbit-jump-text'),
         pathBase: path,
         hzPanel: withAlpha(hz, 0.2),
         rock: token('--orbit-rock'),

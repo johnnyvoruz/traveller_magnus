@@ -2,7 +2,7 @@
  * Paints one picture (orbit/picture.ts) on a 2D canvas. For the orbits layout the order is
  * the legacy one (js/system_viewer.js _paintOrrery, 2906-3016): star field, the primary's
  * habitable band, the 100D jump circles, each companion (its orbit, its band, its worlds),
- * the primary's worlds, the stars on top, the habitable labels, the scan overlay, the
+ * the primary's worlds, the stars on top, the scan overlay, the
  * selection lock. A line-up (_drawLineup, 2607-2668) and the move between two layouts are
  * the same passes over a different picture. Where a body sits is the layout's business; this
  * file only draws what the picture says. Every colour comes from the theme.
@@ -17,7 +17,7 @@ import {
     type Chase, type HighportArt, type Port,
 } from './highport.ts';
 import {
-    arcSpan, bodyOf, hitOf, mainworldMark, selectionLabel, MAX_RING_RADIUS,
+    arcSpan, bodyOf, hitOf, mainworldMark, selectionLabel, shadowCover, MAX_RING_RADIUS,
     type Hit, type MoonAt, type Plan, type View,
 } from './layout.ts';
 import { bodyAngle } from './maths.ts';
@@ -25,9 +25,28 @@ import {
     PATH_ALPHA_WORLD, type BandAt, type Caption, type JumpAt, type Layers, type Panel, type PathAt,
     type Picture, type Rocks, type StarDraw, type WorldDraw,
 } from './picture.ts';
+import { discBatch, sunColour, visualRate, type OrbitDiscBatch } from './disc_batch.ts';
 import type { OrbitTheme, PortPaint } from './theme.ts';
 
 const TAU = Math.PI * 2;
+/** About three seconds of frames: how long a still picture keeps painting after its last missing tile. */
+const SETTLE_FRAMES = 180;
+
+/**
+ * The surface service as the painter uses it (directives/handoff.md §61): one batch a frame,
+ * then a tile per body. The stage adapts the service's two calls to this; tests pass a fake.
+ */
+export type DiscPainter = {
+    /** The device's surface mode, sent with the batch. */
+    mode(): 'vanilla' | 'enhanced';
+    /** Submits this frame's batch. It never blocks. Only 'ready' means tiles may be drawn. */
+    prepare(batch: OrbitDiscBatch): 'unavailable' | 'pending' | 'ready';
+    /**
+     * Draws the tile held for a body, centred on (x, y) with radius r in the context's own
+     * units. False when there is none: the painter then draws its flat disc.
+     */
+    draw(ctx: CanvasRenderingContext2D, key: string, x: number, y: number, r: number): boolean;
+};
 
 export type RendererDeps = {
     /** An off-screen canvas of the given pixel size, or null where there is none (tests). */
@@ -38,6 +57,8 @@ export type RendererDeps = {
     artBase: string;
     /** Called when something loaded after a paint: the picture should be painted again. */
     stale: () => void;
+    /** Shaded discs. Absent, or answering anything but 'ready', the discs are the flat ones. */
+    discs?: DiscPainter | null;
 };
 
 export type DrawState = {
@@ -76,6 +97,24 @@ export class OrbitRenderer {
     private pathWidth = 1;
     private scanLabels = new Map<string, string>();
     private scanPlan: Plan | null = null;
+    /** The bodies of this frame's batch when the service is ready: key, and whether rings were asked for. */
+    private shaded: Map<string, boolean> | null = null;
+    private discStatus: 'unavailable' | 'pending' | 'ready' = 'unavailable';
+    private lastDays: number | null = null;
+    private rate = 0;
+    /** A body of this frame's batch had no tile yet. */
+    private missing = false;
+    /** Frames still to paint after the last missing tile, so sharper tiles can arrive on a still picture. */
+    private settling = 0;
+    /**
+     * True when the discs want another frame: the service is still starting, a tile has not
+     * arrived, sharper tiles may follow, or (with motion) the shaded worlds are turning and
+     * their clouds drifting. The stage keeps painting while this holds.
+     */
+    discsBusy = false;
+    /** For measuring: the service's last answer and how many tiles the last frame drew, as "ready:19". */
+    discsReport = 'none';
+    private tilesDrawn = 0;
 
     constructor(ctx: CanvasRenderingContext2D, theme: OrbitTheme, deps: RendererDeps) {
         this.ctx = ctx;
@@ -101,6 +140,7 @@ export class OrbitRenderer {
             this.frameSeconds += (Math.min(0.1, dt) - this.frameSeconds) * 0.25;
         }
         this.lastTime = state.time;
+        this.prepareDiscs(plan, picture, state);
 
         ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
         ctx.clearRect(0, 0, this.w, this.h);
@@ -114,10 +154,67 @@ export class OrbitRenderer {
             for (const at of layer.worlds) this.world(plan, at, state);
         }
         for (const at of picture.stars) this.star(at);
-        for (const layer of picture.layers) for (const band of layer.bands) this.bandLabel(band);
         for (const caption of picture.captions) this.caption(caption);
         if (state.layers.scan) this.scan(plan, picture, state);
         this.selection(plan, picture, state);
+        this.settleDiscs(state);
+    }
+
+    // ---- Shaded discs ---------------------------------------------------------------------
+
+    /**
+     * js/system_viewer.js:2672-2681: one batch for the whole frame, before anything is painted.
+     * As legacy, discs are shaded only with the Day / night layer on. Whatever the service
+     * answers short of 'ready', and whenever there is no service, the frame is the flat one.
+     */
+    private prepareDiscs(plan: Plan, picture: Picture, state: DrawState): void {
+        this.shaded = null;
+        this.missing = false;
+        this.tilesDrawn = 0;
+        this.discStatus = 'unavailable';
+        if (this.lastDays !== null) this.rate = visualRate(this.rate, state.days - this.lastDays, this.frameSeconds);
+        this.lastDays = state.days;
+        const painter = this.deps.discs;
+        if (!painter || !state.layers.dayNight) return;
+        const primary = plan.stars[0];
+        const paint = primary ? (this.theme.stars[String(primary.body.sType || '')] || this.theme.starUnknown) : this.theme.starUnknown;
+        const batch = discBatch(plan, picture, { width: this.w, height: this.h, dpr: this.dpr }, {
+            days: state.days, timeSeconds: state.time / 1000, rate: this.rate, frameSeconds: this.frameSeconds, motion: state.motion,
+        }, {
+            mode: painter.mode(), sun: sunColour(paint.solid), lightMode: false, moonsShown: state.layers.moons, selected: state.selected,
+        });
+        if (!batch.discs.length) return;
+        this.discStatus = painter.prepare(batch);
+        if (this.discStatus !== 'ready') return;
+        this.shaded = new Map(batch.discs.map((disc) => [disc.key, disc.ring !== null]));
+    }
+
+    /** After the frame: whether the discs want another one. */
+    private settleDiscs(state: DrawState): void {
+        this.discsReport = this.deps.discs ? this.discStatus + ':' + this.tilesDrawn : 'none';
+        if (this.discStatus === 'unavailable') {
+            this.settling = 0;
+            this.discsBusy = false;
+            return;
+        }
+        // 'ready' means the frame was submitted; a tile may come a frame or more later, and
+        // sharper ones after that. A still picture is painted for a while longer to take them.
+        if (this.discStatus === 'pending' || this.missing) this.settling = SETTLE_FRAMES;
+        else if (this.settling > 0) this.settling -= 1;
+        this.discsBusy = this.discStatus === 'pending' || this.settling > 0 || state.motion;
+    }
+
+    /** A body's shaded disc, when this frame's batch holds it and the service has its tile. */
+    private shadedDisc(key: string, x: number, y: number, r: number): boolean {
+        const painter = this.deps.discs;
+        if (!painter || !this.shaded || !this.shaded.has(key)) return false;
+        const ctx = this.ctx;
+        ctx.save();
+        const drawn = painter.draw(ctx, key, x, y, r);
+        ctx.restore();
+        if (drawn) this.tilesDrawn += 1;
+        else this.missing = true;
+        return drawn;
     }
 
     // ---- Backdrop ------------------------------------------------------------------------
@@ -213,34 +310,6 @@ export class OrbitRenderer {
         ctx.restore();
     }
 
-    /** js/system_viewer.js:3390-3412. */
-    private bandLabel(band: BandAt): void {
-        const inner = Math.max(0, band.inner);
-        const mid = (inner + band.outer) / 2;
-        if (!(band.alpha > 0) || !(band.outer - inner >= 9 && mid >= 40)) return;
-        const y = band.cy - mid;
-        if (this.offCanvas(band.cx, y, 200)) return;
-        const ctx = this.ctx;
-        const theme = this.theme;
-        ctx.save();
-        ctx.globalAlpha = Math.min(1, band.alpha);
-        ctx.font = '700 10px ' + theme.fontText;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.letterSpacing = '1.2px';
-        const width = ctx.measureText(band.label).width + 14;
-        ctx.fillStyle = theme.hzPill;
-        ctx.strokeStyle = theme.hzLine;
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.roundRect(band.cx - width / 2, y - 8, width, 16, 8);
-        ctx.fill();
-        ctx.stroke();
-        ctx.fillStyle = theme.hzText;
-        ctx.fillText(band.label, band.cx, y + 0.5);
-        ctx.restore();
-    }
-
     /** js/system_viewer.js:2613-2631: the habitable panel behind a body in a line-up. */
     private panel(panel: Panel): void {
         if (!(panel.alpha > 0) || this.offCanvas(panel.x + panel.w / 2, panel.y + panel.h / 2, Math.max(panel.w, panel.h))) return;
@@ -258,7 +327,7 @@ export class OrbitRenderer {
         ctx.restore();
     }
 
-    /** js/system_viewer.js:3123-3136. */
+    /** js/system_viewer.js:3123-3136, without its "100D jump" words: the legend names the circle. */
     private jump(ring: JumpAt): void {
         if (!(ring.alpha > 0) || !(ring.r >= 6) || ring.r > MAX_RING_RADIUS) return;
         const ctx = this.ctx;
@@ -267,13 +336,6 @@ export class OrbitRenderer {
         ctx.strokeStyle = this.theme.jump;
         ctx.lineWidth = 1.5;
         this.strokeVisible(ring.cx, ring.cy, ring.r, 1.5);
-        if (ring.label && ring.r >= 22 && ring.r < 2000 && !this.offCanvas(ring.cx, ring.cy - ring.r, 120)) {
-            ctx.font = '11px ' + this.theme.fontText;
-            ctx.fillStyle = this.theme.jumpText;
-            ctx.textAlign = 'left';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(ring.label, ring.cx + 4, ring.cy - ring.r - 2);
-        }
         ctx.restore();
     }
 
@@ -370,9 +432,13 @@ export class OrbitRenderer {
         const port = w.port && at.r >= HIGHPORT_MIN_WORLD_PX
             ? this.portAngle(w.key, bodyAngle(plan.portEpoch, w.portPeriod, state.days))
             : null;
-        if (w.port && port !== null) this.highport(plan, w.port, at.x, at.y, at.r, port, starX, starY, false, state);
-        this.disc(at.x, at.y, at.r, theme.tones[w.tone], starX, starY, layers.dayNight);
-        if (w.port && port !== null) this.highport(plan, w.port, at.x, at.y, at.r, port, starX, starY, true, state);
+        if (w.port && port !== null) this.highport(plan, w.port, w.key, at.x, at.y, at.r, port, starX, starY, false, state);
+        // 4218-4224: the shaded tile where there is one, else the flat disc and its night half.
+        const lit = this.shadedDisc(w.key, at.x, at.y, at.r);
+        if (!lit) this.disc(at.x, at.y, at.r, theme.tones[w.tone], starX, starY, layers.dayNight);
+        if (w.port && port !== null) this.highport(plan, w.port, w.key, at.x, at.y, at.r, port, starX, starY, true, state);
+        // 4538-4539: rings shaded with the disc replace the flat circles.
+        const litRings = lit && this.shaded !== null && this.shaded.get(w.key) === true;
 
         // 4543-4554: the moons' paths, with the Paths layer.
         if (layers.paths && layers.pathStrength > 0) {
@@ -388,8 +454,8 @@ export class OrbitRenderer {
             }
             ctx.restore();
         }
-        for (const m of at.moons) this.moon(plan, m, at, state);
-        for (const r of at.rings) this.staticRing(at.x, at.y, r);
+        for (const m of at.moons) this.moon(plan, m, at, state, litRings);
+        if (!litRings) for (const r of at.rings) this.staticRing(at.x, at.y, r);
 
         if (w.mainworld && layers.markMainworld) {
             this.mainworldStar(at.x, at.y, at.r, at.z);
@@ -397,10 +463,10 @@ export class OrbitRenderer {
         }
     }
 
-    private moon(plan: Plan, m: MoonAt, parent: WorldDraw, state: DrawState): void {
+    private moon(plan: Plan, m: MoonAt, parent: WorldDraw, state: DrawState, litRings: boolean): void {
         const moon = m.moon;
         if (moon.ring) {
-            this.staticRing(m.x, m.y, m.orbitR);
+            if (!litRings) this.staticRing(m.x, m.y, m.orbitR);
             return;
         }
         const ctx = this.ctx;
@@ -408,11 +474,13 @@ export class OrbitRenderer {
         const port = moon.port && m.r >= HIGHPORT_MIN_WORLD_PX
             ? this.portAngle(moon.key, bodyAngle(plan.portEpoch, moon.portPeriod, state.days))
             : null;
-        if (moon.port && port !== null) this.highport(plan, moon.port, m.x, m.y, m.r, port, starX, starY, false, state);
-        this.disc(m.x, m.y, m.r, this.theme.moon, starX, starY, state.layers.dayNight);
-        if (moon.port && port !== null) this.highport(plan, moon.port, m.x, m.y, m.r, port, starX, starY, true, state);
-        // 4586-4603: the moon dims as it slides into its world's shadow.
-        const cover = state.layers.dayNight ? this.eased(moon.key, m.cover, state) : 0;
+        if (moon.port && port !== null) this.highport(plan, moon.port, moon.key, m.x, m.y, m.r, port, starX, starY, false, state);
+        const lit = this.shadedDisc(moon.key, m.x, m.y, m.r);
+        if (!lit) this.disc(m.x, m.y, m.r, this.theme.moon, starX, starY, state.layers.dayNight);
+        if (moon.port && port !== null) this.highport(plan, moon.port, moon.key, m.x, m.y, m.r, port, starX, starY, true, state);
+        // 4586-4603: the moon dims as it slides into its world's shadow. A shaded disc carries its
+        // own eclipse (its casters), so the wash is for the flat disc only (4585).
+        const cover = state.layers.dayNight && !lit ? this.eased(moon.key, m.cover, state) : 0;
         if (cover > 0.02) {
             ctx.save();
             const wash = ctx.createRadialGradient(m.x, m.y, m.r * 0.15, m.x, m.y, m.r);
@@ -604,9 +672,13 @@ export class OrbitRenderer {
      * js/system_viewer.js:4418-4522. Drawn in two passes: the far half before the world, the
      * near half after. Without the planet renderer the station circles in the picture plane,
      * so it is always on the near pass (4424-4425).
+     *
+     * A departure from legacy, asked for by Johnny (2026-10-04): the legacy station snaps from
+     * lit to dark as it crosses its world's shadow line. Here it fades as a moon does, by the
+     * same shadowCover and the same short ease, the dark hull and wash laid over the lit ones.
      */
     private highport(
-        plan: Plan, port: Port, x: number, y: number, r: number, angle: number,
+        plan: Plan, port: Port, key: string, x: number, y: number, r: number, angle: number,
         starX: number, starY: number, front: boolean, state: DrawState,
     ): void {
         const place = highportPlace(x, y, r, angle, starX, starY);
@@ -625,15 +697,12 @@ export class OrbitRenderer {
         const lampR = Math.max(0.7, size * 0.075);
         ctx.save();
         ctx.translate(place.x, place.y);
+        // How deep in its world's shadow the station is: 0 lit, 1 dark, eased like a moon's.
+        const cover = this.eased('port:' + key, shadowCover(place.x, place.y, x, y, r, starX, starY), state);
         // Running lights: the whole station's wash, breathing slowly.
-        const stops = place.shaded ? paint.washDark : paint.washLit;
-        const wash = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 2.6);
-        wash.addColorStop(0, stops[0]);
-        wash.addColorStop(0.5, stops[1]);
-        wash.addColorStop(1, stops[2]);
-        ctx.globalAlpha = 0.85 + 0.15 * Math.sin(now * 1.3 + phase);
-        ctx.fillStyle = wash;
-        ctx.fillRect(-size * 2.6, -size * 2.6, size * 5.2, size * 5.2);
+        const breath = 0.85 + 0.15 * Math.sin(now * 1.3 + phase);
+        this.portWash(paint.washLit, size, breath * (1 - cover));
+        this.portWash(paint.washDark, size, breath * cover);
         ctx.globalAlpha = 1;
         // The station turns about its hub on the wall clock alone.
         ctx.rotate(now * 0.25 + phase);
@@ -643,7 +712,13 @@ export class OrbitRenderer {
             if (sprite) {
                 ctx.imageSmoothingEnabled = true;
                 ctx.imageSmoothingQuality = 'high';
-                ctx.drawImage(place.shaded ? sprite.dark : sprite.lit, ox - size, oy - sizeY, size * 2, sizeY * 2);
+                // The dark hull is the lit one shaded, so laid over it at the cover it fades without a seam.
+                if (cover < 0.995) ctx.drawImage(sprite.lit, ox - size, oy - sizeY, size * 2, sizeY * 2);
+                if (cover > 0.005) {
+                    ctx.globalAlpha = cover < 0.995 ? cover : 1;
+                    ctx.drawImage(sprite.dark, ox - size, oy - sizeY, size * 2, sizeY * 2);
+                    ctx.globalAlpha = 1;
+                }
             }
         }
         // The hub's own glow, pulsing, over the painted core.
@@ -666,6 +741,19 @@ export class OrbitRenderer {
         const flash = !now || cycle < 0.07 || (cycle > 0.18 && cycle < 0.25);
         if (flash) for (const [nx, ny] of art.strobe) this.lamp(nx * size + ox, ny * sizeY + oy, lampR, theme.portStrobe, true);
         ctx.restore();
+    }
+
+    /** The station's wash of running lights at one strength; nothing is painted for a share too faint to see. */
+    private portWash(stops: [string, string, string], size: number, alpha: number): void {
+        if (!(alpha > 0.004)) return;
+        const ctx = this.ctx;
+        const wash = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 2.6);
+        wash.addColorStop(0, stops[0]);
+        wash.addColorStop(0.5, stops[1]);
+        wash.addColorStop(1, stops[2]);
+        ctx.globalAlpha = Math.min(1, alpha);
+        ctx.fillStyle = wash;
+        ctx.fillRect(-size * 2.6, -size * 2.6, size * 5.2, size * 5.2);
     }
 
     /** js/system_viewer.js:4500-4508. */

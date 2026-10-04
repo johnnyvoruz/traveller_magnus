@@ -1,16 +1,19 @@
 /**
- * CPU vanilla sheets off the page thread.
+ * CPU sheets off the page thread: the vanilla sheet, and the enhanced one when the request
+ * carries its inputs.
  * One job runs. At most two wait. A newer map pushes an older waiting job out.
  * Cancel removes a waiting job and drops the running result when it finishes.
  * The RGBA buffer is transferred.
  */
 import {
     SURFACE_MESSAGE_VERSION,
+    type EnhancedPaintInputs,
     type SurfaceMode,
     type SurfaceWorkerMessage,
     type SurfaceWorkerReply,
     type VanillaPaintInputs,
 } from './contracts.ts';
+import { renderEnhancedMapPixels } from './enhanced/map.ts';
 import { MAP_HEIGHT, MAP_WIDTH, renderFlatMapPixels, type DiamondMapInputs } from './vanilla/map.ts';
 
 export type SurfacePort = {
@@ -23,6 +26,7 @@ type Job = {
     generation: number;
     mode: SurfaceMode;
     inputs: VanillaPaintInputs;
+    enhanced: EnhancedPaintInputs | null;
     cancelled: boolean;
 };
 
@@ -32,10 +36,12 @@ export function attachSurfaceWorker(
     port: SurfacePort,
     options?: {
         render?: (inputs: DiamondMapInputs) => Uint8ClampedArray;
+        renderEnhanced?: (inputs: EnhancedPaintInputs) => Uint8ClampedArray;
         schedule?: (fn: () => void) => void;
     },
 ): void {
     const render = options?.render ?? ((inputs: DiamondMapInputs) => renderFlatMapPixels(inputs));
+    const renderEnhanced = options?.renderEnhanced ?? ((inputs: EnhancedPaintInputs) => renderEnhancedMapPixels(inputs));
     const schedule = options?.schedule ?? ((fn: () => void) => { setTimeout(fn, 0); });
     const queued: Job[] = [];
     let active: Job | null = null;
@@ -76,7 +82,7 @@ export function attachSurfaceWorker(
         const job = queued.shift();
         if (!job) return;
         active = job;
-        const pixels = render(job.inputs);
+        const pixels = job.enhanced ? renderEnhanced(job.enhanced) : render(job.inputs);
         active = null;
         if (job.cancelled) {
             dropped(job);
@@ -111,6 +117,7 @@ export function attachSurfaceWorker(
             generation: message.generation,
             mode: message.mode,
             inputs: message.inputs,
+            enhanced: message.mode === 'enhanced' && message.enhanced ? message.enhanced : null,
             cancelled: false,
         });
         trim();

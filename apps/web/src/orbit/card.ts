@@ -100,7 +100,8 @@ function temperature(lines: CardLine[], body: Bag): void {
 /**
  * "Today's" temperature in each hemisphere (orbit/today_temp.ts; Johnny, A3). Left out, with
  * no placeholder, without a mean, a tilt, a pressure or a year length, and for gas giants.
- * A planet locked to its star waits on Johnny's choice and has no line yet.
+ * A planet locked to its star has no line (ruled 2026-10-04, directives/handoff.md §59): one face
+ * always has the star, and its tilt term is about nothing. A moon locked to its planet still has one.
  */
 function today(lines: CardLine[], body: Bag, parent: Bag | null, angle: number): void {
     if (body.type === 'Gas Giant' || body.size === 'R') return;

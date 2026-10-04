@@ -151,6 +151,23 @@ const CAPTURE_FN = [
     '            gl.pixelStorei(gl.PACK_ALIGNMENT, pack);',
     '        }',
     '    }',
+    '    function captureTile(key) {',
+    '        const placed = tiles.get(key);',
+    '        if (!placed) throw new Error(\'captureTile: missing tile \' + key);',
+    '        if (!gl) throw new Error(\'captureTile: no context\');',
+    '        const pack = gl.getParameter(gl.PACK_ALIGNMENT);',
+    '        const glY = canvas.height - placed.sy - placed.size;',
+    '        const tilePx = new Uint8Array(placed.size * placed.size * 4);',
+    '        try {',
+    '            gl.bindFramebuffer(gl.FRAMEBUFFER, null);',
+    '            gl.pixelStorei(gl.PACK_ALIGNMENT, 1);',
+    '            gl.finish();',
+    '            gl.readPixels(placed.sx, glY, placed.size, placed.size, gl.RGBA, gl.UNSIGNED_BYTE, tilePx);',
+    '            return { tile: tilePx, tileSize: placed.size };',
+    '        } finally {',
+    '            gl.pixelStorei(gl.PACK_ALIGNMENT, pack);',
+    '        }',
+    '    }',
     '',
 ].join('\n');
 
@@ -165,7 +182,7 @@ export function instrumentedPlanetGl(): string {
         src,
         RETURN_ANCHOR,
         'capture-return',
-        '    return { available, render, tile, clear, inspect, paintBackdrop, axisBasis, HALO, capture, ids: () => [...worlds.keys()],\n',
+        '    return { available, render, tile, clear, inspect, paintBackdrop, axisBasis, HALO, capture, captureTile, ids: () => [...worlds.keys()],\n',
     );
     return src;
 }
@@ -227,6 +244,21 @@ window.stepGl = function (radius) {
     window.PlanetGL.render([session.req]);
     var world = window.PlanetGL.world(session.id);
     return { pending: !!(world && world.job) };
+};
+window.renderGl = function (request) {
+    if (!session) throw new Error('GL session was not started');
+    if (typeof request.frozenTime === 'number') globalThis.__voyageGlTime = request.frozenTime;
+    session.key = request.key;
+    session.req = glRequest(session.profile, request);
+    window.PlanetGL.render([session.req]);
+    var world = window.PlanetGL.world(session.id);
+    var placed = window.PlanetGL.tile(request.key);
+    return { pending: !!(world && world.job), tileSize: placed ? placed.size : 0 };
+};
+window.readTileGl = function () {
+    if (!session) throw new Error('GL session was not started');
+    var shot = window.PlanetGL.captureTile(session.key);
+    return { pixels: shot.tile, size: shot.tileSize };
 };
 window.readGl = function () {
     if (!session) throw new Error('GL session was not started');
