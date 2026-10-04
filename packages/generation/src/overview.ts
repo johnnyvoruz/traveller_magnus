@@ -1,10 +1,11 @@
 import type { SectorIndex, SectorOverview } from '@voyage/shared';
+import { polityColour } from './polities.ts';
 
 /**
  * One character per hex. The character is the first character of the chart UWP.
  * A dot in that position is written as '?' so an empty hex stays '.'.
  */
-export function sectorOverview(index: SectorIndex): SectorOverview {
+export function sectorOverview(index: SectorIndex, colours: Record<string, string>): SectorOverview {
     if (index.territories.length > 36) {
         throw new Error(`sectorOverview ${index.slug}: more than 36 territories`);
     }
@@ -37,7 +38,7 @@ export function sectorOverview(index: SectorIndex): SectorOverview {
         canonical: index.canonical,
         systems: index.systems,
         cells: cells.join(''),
-        polities: index.territories.map(territory => ({ name: territory.name, color: territory.color })),
+        polities: index.territories.map(territory => ({ name: territory.name, color: polityColour(territory.name, colours) })),
         owners: owners.join(''),
     };
 }

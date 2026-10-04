@@ -11,7 +11,8 @@ import { toGlobal } from './geometry.ts';
 import { roundedLoops } from './polities.ts';
 
 export { sectorOverview } from './overview.ts';
-export { polityOutlines } from './polities.ts';
+export { polityColour, polityOutlines } from './polities.ts';
+export { BORDER_COLOR_CYCLE } from './territories.ts';
 export { outlineLoops } from './outline.ts';
 export { HEX_SIZE, hexCentre, hexCorners, toGlobal } from './geometry.ts';
 export { sectorTerritories };

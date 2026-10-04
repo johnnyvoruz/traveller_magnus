@@ -359,6 +359,39 @@ devices without WebGL2.
 | Changes PATCH of 50 rows, p95 | under 300 ms |
 | Main thread blocked by any task | under 50 ms |
 
+### 10.1 Why the map is fast, and the rule for everything built after it (2026-10-03)
+
+Measured on the released truth: a cold visit paints the chart in about 130 ms (Johnny, private
+window). It got there by moving work out of the browser, one step at a time, and each step
+is now a rule. **A builder's own universe gets the same treatment as the truth**; none of this
+is special to the charted universe.
+
+1. **The viewer downloads and draws. It does not derive.** Anything that can be computed
+   from stored data is computed when that data is written or published, and stored as a
+   file or a row. The first border layer computed 447 polity outlines in the browser on
+   every cold visit and took seconds; the same outlines built once at release take 104 ms
+   and ship as a 187 KB file.
+2. **One small file per zoom level, not many big ones.** The galaxy and sector views read
+   the overview (one character per hex) and the border file; a sector's full index is
+   fetched only when the view is zoomed into it. Never make the far view depend on per-item
+   fetches.
+3. **Immutable files, named by version or hash, cached for a year.** A second visit costs
+   nothing. Anything a builder publishes follows the same naming.
+4. **Derived data is rebuilt without regenerating its source.** A derived build makes a new
+   version's indexes, overview and border file from the previous version's hexes in under
+   three minutes; the hour-long generation runs only when engines or inputs change. For a
+   universe: an edit to one hex or one border recomputes the derived pieces of the sectors
+   it touches (overview cells, polity and region outlines), not the universe.
+5. **Draw in batches from cached paths.** One path per colour or per polity per frame, built
+   when the data arrives and reused; nothing is recomputed while panning; anything off screen
+   is skipped by its bounding box.
+6. **Measure in a private window before calling a layer done.** Warm reloads hide the cost.
+
+For slice 2 this means: when a builder generates systems, draws a route or assigns a border,
+the platform updates that universe's overview, outlines and search rows as part of the same
+write (in the universe's Durable Object or a queued job), and the map of that universe reads
+them exactly as the viewer reads the truth's. The slice 2 recipe starts from this section.
+
 ## 11. Capacity
 
 | Quantity | Estimate |

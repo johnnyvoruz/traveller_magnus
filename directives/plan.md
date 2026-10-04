@@ -99,6 +99,22 @@ The charted universe, read-only, for anyone. The product for the ten thousand.
   every route renders from a cold URL; Lighthouse shows no layout shift; every pointer
   interaction has a keyboard route; zero native dialogs; `npm run check` clean.
 
+### Direction on the truth and on builders' maps (Johnny, 2026-10-03)
+
+- **The truth is held steady.** Once v5 is released (one colour per polity), the truth stops
+  changing for look-and-feel reasons. **Only admin accounts edit the truth**, through the same
+  tools builders use on their own maps, and a truth edit becomes a new truth version.
+- **Border and route colours are set in the UI, per map**, with the create, edit and delete
+  controls the legacy app had for borders and routes. Neither exists in the new app yet; both
+  are Builder work. The hand-kept `universe/polity_colours.json` is only the truth's default
+  until an admin can set colours in the UI.
+- **A builder's map is either an overlay on the truth or a blank universe.** The overlay
+  stores only the differences from a pinned truth version; the blank universe has no truth
+  under it. Both are what this plan and `data_model.md` already describe (`truth_version`
+  pinned or null; the overlay document v3). Nobody's edits copy the truth.
+- The performance rules in `architecture.md` §10.1 apply to every builder's map: derived
+  files for a universe are rebuilt when it is edited, never in the visitor's browser.
+
 ### Slice 2 — Builder
 Accounts and universes. The product for the two hundred.
 - **User story:** I sign in with X, create "My Marches" pinned to truth v1, generate

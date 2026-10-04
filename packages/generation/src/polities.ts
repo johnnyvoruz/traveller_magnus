@@ -1,6 +1,8 @@
+import { hashString } from '@voyage/engines';
 import type { SectorOverview, TruthPolities } from '@voyage/shared';
 import { SECTOR_ROWS, toGlobal } from './geometry.ts';
 import { outlineLoops } from './outline.ts';
+import { BORDER_COLOR_CYCLE } from './territories.ts';
 
 function round3(n: number): number {
     return Number(n.toFixed(3));
@@ -11,12 +13,20 @@ export function roundedLoops(hexes: { q: number; r: number }[]): number[][] {
     return outlineLoops(hexes).map(loop => loop.points.map(round3));
 }
 
+/** Table colour, otherwise a stable index into the legacy border cycle. */
+export function polityColour(name: string, colours: Record<string, string>): string {
+    const listed = colours[name];
+    if (listed) return listed;
+    return BORDER_COLOR_CYCLE[hashString(name) % BORDER_COLOR_CYCLE.length];
+}
+
 /**
- * One outline per distinct name and colour over the canonical sectors.
+ * One outline per polity name over the canonical sectors.
  * Hexes are joined in world space. Largest hex count first, then name.
+ * Colour comes from the table, otherwise the legacy cycle.
  */
-export function polityOutlines(sectors: SectorOverview[]): TruthPolities['polities'] {
-    const groups = new Map<string, { name: string; color: string; hexes: { q: number; r: number }[] }>();
+export function polityOutlines(sectors: SectorOverview[], colours: Record<string, string>): TruthPolities['polities'] {
+    const groups = new Map<string, { name: string; hexes: { q: number; r: number }[] }>();
     for (const sector of sectors) {
         if (!sector.canonical) continue;
         for (let i = 0; i < sector.owners.length; i++) {
@@ -26,11 +36,10 @@ export function polityOutlines(sectors: SectorOverview[]): TruthPolities['politi
             if (!polity) throw new Error(`polityOutlines ${sector.slug}: owner ${owner} has no polity`);
             const col = Math.floor(i / SECTOR_ROWS) + 1;
             const row = (i % SECTOR_ROWS) + 1;
-            const key = `${polity.name}\0${polity.color}`;
-            let group = groups.get(key);
+            let group = groups.get(polity.name);
             if (!group) {
-                group = { name: polity.name, color: polity.color, hexes: [] };
-                groups.set(key, group);
+                group = { name: polity.name, hexes: [] };
+                groups.set(polity.name, group);
             }
             group.hexes.push(toGlobal(sector.x, sector.y, col, row));
         }
@@ -62,7 +71,7 @@ export function polityOutlines(sectors: SectorOverview[]): TruthPolities['politi
         }
         polities.push({
             name: group.name,
-            color: group.color,
+            color: polityColour(group.name, colours),
             hexes: unique.length,
             box: [minX, minY, maxX, maxY],
             loops,

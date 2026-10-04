@@ -1,0 +1,4 @@
+{
+  "note": "Colour for each polity name on the border file and the overview. Johnny owns this map: add a name to give that polity a colour. A name that is not listed takes a stable colour from the legacy border cycle. The colours object starts empty.",
+  "colours": {}
+}

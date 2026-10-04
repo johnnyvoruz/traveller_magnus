@@ -543,6 +543,41 @@ if (process.env.RUN_API_TESTS !== '1') {
         assert.equal(sent[0].from, 'vsource');
     });
 
+    test('a derived sector reads xml and the catalogue from the source version', async () => {
+        const pinned = { seed: TRUTH_SEED, settings: { ...TRUTH_SETTINGS }, engineVersion: '1.0.0' };
+        const xml = '<Sector><Name>Wide</Name><X>1</X><Y>2</Y></Sector>\n';
+        const catalogue = JSON.stringify({
+            sectors: [{ slug: 'Wide', name: 'Wide Chart', x: 3, y: 4, tags: ['OTU'], canonical: false }],
+        });
+        const hexes = {
+            '1910': {
+                tree: 'abc', type: 'SYSTEM_PRESENT', name: 'Regina', uwp: 'A788899-C',
+                allegiance: 'Im', zone: '', bases: '', tradeCodes: [], pbg: '100', ix: 1, partial: null,
+            },
+        };
+        const alone = bindingDouble({
+            'truth/vsource/sectors/Wide/index.json': JSON.stringify({ hexes }),
+            'inputs/vsource/Wide.xml': xml,
+            'inputs/vsource/sectors.json': catalogue,
+        });
+        await truthBuildConsumer({
+            messages: [{
+                body: { version: 'vplain', slug: 'Wide', from: 'vsource', pinned },
+                attempts: 1,
+                ack() {},
+            }],
+        }, alone.env);
+        assert.equal(alone.calls.get, 5);
+        assert.deepEqual(alone.puts, ['truth/vplain/sectors/Wide/index.json']);
+        const written = await alone.env.PUBLIC_BUCKET.get('truth/vplain/sectors/Wide/index.json');
+        const index = JSON.parse(await written.text());
+        assert.equal(index.name, 'Wide Chart');
+        assert.equal(index.x, 3);
+        assert.equal(index.y, 4);
+        assert.equal(index.canonical, false);
+        assert.deepEqual(index.hexes, hexes);
+    });
+
     test('truth build', { timeout: 600000 }, async () => {
         const dir = mkdtempSync(path.join(tmpdir(), 'voyage-truth-'));
         const tsv = path.join(dir, 'Fixture.tsv');
@@ -1048,6 +1083,137 @@ if (process.env.RUN_API_TESTS !== '1') {
             assert.equal(feedBuild.data.sectorsQueued, 0);
             assert.equal(feedBuild.data.sectorsFailed, 0);
             for (const sector of feedBuild.data.sectors) assert.equal(sector.state, 'done', JSON.stringify(sector));
+        });
+    });
+
+    test('a derive with no inputs of its own uses the source inputs', { timeout: 180000 }, async () => {
+        const dir = mkdtempSync(path.join(tmpdir(), 'voyage-derive-'));
+        await withDevServer(async (base) => {
+            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_systems WHERE version = 'vnoinputs'"]);
+            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_build_sectors WHERE version = 'vnoinputs'"]);
+            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_versions WHERE version = 'vnoinputs'"]);
+            const cookie = adminCookie();
+            const posted = await fetch(`${base}/api/admin/truth/build`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json', cookie },
+                body: JSON.stringify({
+                    milieu: 'M1105',
+                    version: 'vnoinputs',
+                    engineVersion: '1.0.0',
+                    seed: TRUTH_SEED,
+                    settings: { ...TRUTH_SETTINGS },
+                    sectors: 'all',
+                    from: 'vtest',
+                }),
+            });
+            const postedBody = await posted.json();
+            assert.equal(posted.status, 202, JSON.stringify(postedBody));
+            assert.equal(postedBody.data.enqueued, 1);
+            let build;
+            const deadline = Date.now() + 90000;
+            while (Date.now() < deadline) {
+                const response = await fetch(`${base}/api/admin/truth/builds/vnoinputs`, { headers: { cookie } });
+                build = await response.json();
+                assert.equal(response.status, 200, JSON.stringify(build));
+                const sector = build.data.sectors.find((item) => item.slug === 'Fixture');
+                if (sector && sector.state === 'failed') throw new Error(JSON.stringify(build));
+                if (build.data.sectorsDone === 1) break;
+                await sleep(1000);
+            }
+            assert.equal(build.data.sectorsDone, 1, JSON.stringify(build));
+            const sourceFile = path.join(dir, 'source-index.json');
+            const derivedFile = path.join(dir, 'derived-index.json');
+            runWrangler(['r2', 'object', 'get', 'voyage-public/truth/vtest/sectors/Fixture/index.json', '--file', sourceFile, '--local']);
+            runWrangler(['r2', 'object', 'get', 'voyage-public/truth/vnoinputs/sectors/Fixture/index.json', '--file', derivedFile, '--local']);
+            const source = JSON.parse(readFileSync(sourceFile, 'utf8'));
+            const derived = JSON.parse(readFileSync(derivedFile, 'utf8'));
+            assert.equal(derived.truthVersion, 'vnoinputs');
+            assert.equal(derived.name, 'Chart Fixture');
+            assert.equal(derived.canonical, true);
+            assert.deepEqual(derived.hexes, source.hexes);
+            const canonical = jsonFrom(runWrangler([
+                'd1', 'execute', 'voyage', '--local', '--command',
+                "SELECT canonical FROM truth_build_sectors WHERE version = 'vnoinputs' AND sector_slug = 'Fixture'",
+            ]));
+            assert.equal(Number(canonical[0].results[0].canonical), 1);
+        });
+    });
+
+    test('search uses the newest released version and the canonical layer', { timeout: 120000 }, async () => {
+        function clearVersion(version) {
+            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', `DELETE FROM truth_systems WHERE version = '${version}'`]);
+            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', `DELETE FROM truth_build_sectors WHERE version = '${version}'`]);
+            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', `DELETE FROM truth_versions WHERE version = '${version}'`]);
+        }
+        function insertVersion(version, releasedAt) {
+            runWrangler(['d1', 'execute', 'voyage', '--local', '--command',
+                `INSERT INTO truth_versions (version, engine_version, milieu, seed, settings, sectors, state, started_at, released_at, notes, manifest_hash, sectors_total, sectors_done, sectors_failed) VALUES ('${version}', '1.0.0', 'M1105', 'search', '{}', '[]', 'released', '${releasedAt}', '${releasedAt}', NULL, NULL, 1, 1, '[]')`]);
+        }
+        function insertSystem(version, slug, hex, name) {
+            runWrangler(['d1', 'execute', 'voyage', '--local', '--command',
+                `INSERT INTO truth_systems (version, sector_slug, hex, name, uwp, allegiance, zone, tree_hash, partial) VALUES ('${version}', '${slug}', '${hex}', '${name}', 'A788899-C', NULL, NULL, NULL, NULL)`]);
+        }
+        function insertSector(version, slug, canonical) {
+            const value = canonical === null ? 'NULL' : String(canonical);
+            runWrangler(['d1', 'execute', 'voyage', '--local', '--command',
+                `INSERT INTO truth_build_sectors (version, sector_slug, state, systems, built, partial, index_hash, error, updated_at, canonical) VALUES ('${version}', '${slug}', 'done', 1, 1, 0, NULL, NULL, '2020-01-01T00:00:00.000Z', ${value})`]);
+        }
+        await withDevServer(async (base) => {
+            const versions = ['voldsearch', 'vnewsearch', 'vlayer', 'vnullsearch'];
+            for (const version of versions) clearVersion(version);
+            try {
+            insertVersion('voldsearch', '2020-01-01T00:00:00.000Z');
+            insertSystem('voldsearch', 'Old', '1910', 'Sharedhaven');
+            insertSystem('voldsearch', 'Old', '1911', 'Oldhaven');
+            insertSector('voldsearch', 'Old', 1);
+            insertVersion('vnewsearch', '2099-01-01T00:00:00.000Z');
+            insertSystem('vnewsearch', 'New', '1910', 'Sharedhaven');
+            insertSystem('vnewsearch', 'New', '1911', 'Newhaven');
+            insertSector('vnewsearch', 'New', 1);
+            const shared = await fetch(`${base}/api/truth/search?q=${encodeURIComponent('Sharedhaven')}`);
+            const sharedBody = await shared.json();
+            assert.equal(shared.status, 200, JSON.stringify(sharedBody));
+            assert.equal(sharedBody.data.items.length, 1);
+            assert.equal(sharedBody.data.items[0].version, 'vnewsearch');
+            const oldOnly = await fetch(`${base}/api/truth/search?q=${encodeURIComponent('Oldhaven')}`);
+            const oldOnlyBody = await oldOnly.json();
+            assert.equal(oldOnly.status, 200, JSON.stringify(oldOnlyBody));
+            assert.equal(oldOnlyBody.data.items.length, 0);
+            const named = await fetch(`${base}/api/truth/search?q=${encodeURIComponent('Oldhaven')}&version=voldsearch`);
+            const namedBody = await named.json();
+            assert.equal(named.status, 200, JSON.stringify(namedBody));
+            assert.equal(namedBody.data.items.length, 1);
+            assert.equal(namedBody.data.items[0].version, 'voldsearch');
+
+            insertVersion('vlayer', '2021-01-01T00:00:00.000Z');
+            insertSector('vlayer', 'Canon', 1);
+            insertSector('vlayer', 'Alt', 0);
+            insertSystem('vlayer', 'Canon', '1910', 'Layermark');
+            insertSystem('vlayer', 'Alt', '1911', 'Layermark');
+            const canonical = await fetch(`${base}/api/truth/search?q=${encodeURIComponent('Layermark')}&version=vlayer&layer=canonical`);
+            const canonicalBody = await canonical.json();
+            assert.equal(canonical.status, 200, JSON.stringify(canonicalBody));
+            assert.deepEqual(canonicalBody.data.items.map((item) => item.sectorSlug), ['Canon']);
+            const all = await fetch(`${base}/api/truth/search?q=${encodeURIComponent('Layermark')}&version=vlayer&layer=all`);
+            const allBody = await all.json();
+            assert.equal(all.status, 200, JSON.stringify(allBody));
+            assert.deepEqual(allBody.data.items.map((item) => item.sectorSlug).sort(), ['Alt', 'Canon']);
+            const defaultLayer = await fetch(`${base}/api/truth/search?q=${encodeURIComponent('Layermark')}&version=vlayer`);
+            const defaultBody = await defaultLayer.json();
+            assert.equal(defaultLayer.status, 200, JSON.stringify(defaultBody));
+            assert.deepEqual(defaultBody.data.items.map((item) => item.sectorSlug), ['Canon']);
+
+            insertVersion('vnullsearch', '2022-01-01T00:00:00.000Z');
+            insertSector('vnullsearch', 'Blank', null);
+            insertSystem('vnullsearch', 'Blank', '1910', 'Nullhaven');
+            const legacy = await fetch(`${base}/api/truth/search?q=${encodeURIComponent('Nullhaven')}&version=vnullsearch&layer=canonical`);
+            const legacyBody = await legacy.json();
+            assert.equal(legacy.status, 200, JSON.stringify(legacyBody));
+            assert.equal(legacyBody.data.items.length, 1);
+            assert.equal(legacyBody.data.items[0].sectorSlug, 'Blank');
+            } finally {
+                for (const version of versions) clearVersion(version);
+            }
         });
     });
 }

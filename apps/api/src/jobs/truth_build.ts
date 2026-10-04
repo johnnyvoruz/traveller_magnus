@@ -107,11 +107,18 @@ async function finalize(env: Env, version: string, slug: string): Promise<void> 
     await publishSector(env, version, slug, hexes);
 }
 
+/** The new version's copy wins. A derived build falls back to inputs/<from>/. */
+async function privateInput(env: Env, version: string, from: string | undefined, name: string) {
+    const own = await env.PRIVATE_BUCKET.get(`inputs/${version}/${name}`);
+    if (own || !from) return own;
+    return env.PRIVATE_BUCKET.get(`inputs/${from}/${name}`);
+}
+
 /** Index write and search rows shared by a full build and a derived build. */
-async function publishSector(env: Env, version: string, slug: string, hexes: Record<string, Record<string, unknown>>): Promise<void> {
-    const xmlObject = await env.PRIVATE_BUCKET.get(`inputs/${version}/${slug}.xml`);
+async function publishSector(env: Env, version: string, slug: string, hexes: Record<string, Record<string, unknown>>, from?: string): Promise<void> {
+    const xmlObject = await privateInput(env, version, from, `${slug}.xml`);
     if (!xmlObject) throw new Error(`Sector metadata is missing for ${version}/${slug}.`);
-    const catalogueObject = await env.PRIVATE_BUCKET.get(`inputs/${version}/sectors.json`);
+    const catalogueObject = await privateInput(env, version, from, 'sectors.json');
     const catalogue = catalogueObject ? catalogueEntry(await catalogueObject.text(), slug) : undefined;
     const index = SectorIndex.parse(assembleSectorIndex({
         slug,
@@ -126,6 +133,7 @@ async function publishSector(env: Env, version: string, slug: string, hexes: Rec
         httpMetadata: { contentType: 'application/json', cacheControl: 'public, max-age=31536000, immutable' },
     });
     const now = new Date().toISOString();
+    const canonical = catalogue?.canonical === true ? 1 : 0;
     const statements: D1PreparedStatement[] = [
         env.DB.prepare('DELETE FROM truth_systems WHERE version = ? AND sector_slug = ?').bind(version, slug),
     ];
@@ -148,12 +156,13 @@ async function publishSector(env: Env, version: string, slug: string, hexes: Rec
         ).bind(...binds));
     }
     statements.push(env.DB.prepare(
-        `INSERT INTO truth_build_sectors (version, sector_slug, state, systems, built, partial, index_hash, error, updated_at)
-         VALUES (?, ?, 'done', ?, ?, ?, ?, NULL, ?)
+        `INSERT INTO truth_build_sectors (version, sector_slug, state, systems, built, partial, index_hash, error, updated_at, canonical)
+         VALUES (?, ?, 'done', ?, ?, ?, ?, NULL, ?, ?)
          ON CONFLICT(version, sector_slug) DO UPDATE SET
             state = 'done', systems = excluded.systems, built = excluded.built, partial = excluded.partial,
-            index_hash = excluded.index_hash, error = NULL, updated_at = excluded.updated_at`,
-    ).bind(version, slug, index.systems, index.built, index.partial, indexHash, now));
+            index_hash = excluded.index_hash, error = NULL, updated_at = excluded.updated_at,
+            canonical = excluded.canonical`,
+    ).bind(version, slug, index.systems, index.built, index.partial, indexHash, now, canonical));
     await env.DB.batch(statements);
 }
 
@@ -167,7 +176,7 @@ async function deriveSector(env: Env, body: TruthMessage): Promise<void> {
     if (!source.hexes || typeof source.hexes !== 'object' || Array.isArray(source.hexes)) {
         throw new Error(`Sector index for ${from}/${slug} has no hexes.`);
     }
-    await publishSector(env, version, slug, source.hexes as Record<string, Record<string, unknown>>);
+    await publishSector(env, version, slug, source.hexes as Record<string, Record<string, unknown>>, from);
     await claimNext(env, version, pinned, from);
     console.log(JSON.stringify({
         job: 'truth-derive',

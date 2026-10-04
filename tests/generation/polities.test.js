@@ -3,7 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { assembleSectorIndex, HEX_SIZE, hexCentre, hexCorners, outlineLoops, polityOutlines, sectorOverview, toGlobal } from '@voyage/generation';
+import { BORDER_COLOR_CYCLE, assembleSectorIndex, HEX_SIZE, hexCentre, hexCorners, outlineLoops, polityColour, polityOutlines, sectorOverview, toGlobal } from '@voyage/generation';
+import { hashString } from '@voyage/engines';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const RAW = path.join(ROOT, 'universe/raw');
@@ -20,7 +21,7 @@ function overviewOf(slug) {
     const index = assembleSectorIndex({
         slug, version: 'v4', metadataXml: xml, hexes: {}, catalogue: catalogueOf(slug),
     });
-    return { index, overview: sectorOverview(index) };
+    return { index, overview: sectorOverview(index, {}) };
 }
 
 function sectorWith(slug, x, canonical, hexes) {
@@ -81,7 +82,7 @@ function round3(n) {
 test('touching canonical polities join and a non-canonical sector adds nothing', () => {
     const left = sectorWith('Left', 0, true, ['3201']);
     const right = sectorWith('Right', 1, true, ['0101']);
-    const joined = polityOutlines([left, right]);
+    const joined = polityOutlines([left, right], {});
     assert.equal(joined.length, 1);
     assert.equal(joined[0].hexes, 2);
     assert.equal(joined[0].loops.length, 1);
@@ -95,13 +96,19 @@ test('touching canonical polities join and a non-canonical sector adds nothing',
 
     const other = sectorWith('Other', 1, true, ['0101']);
     other.polities = [{ name: 'Other', color: '#336699' }];
-    assert.equal(polityOutlines([left, other]).length, 2);
+    assert.equal(polityOutlines([left, other], {}).length, 2);
     const otherColour = sectorWith('Tint', 1, true, ['0101']);
     otherColour.polities = [{ name: 'Imperium', color: '#99aabb' }];
-    assert.equal(polityOutlines([left, otherColour]).length, 2);
+    const sameName = polityOutlines([left, otherColour], {});
+    assert.equal(sameName.length, 1);
+    assert.equal(sameName[0].hexes, 2);
+    assert.equal(sameName[0].loops.length, 1);
+    assert.ok(nearestSegment(sameName[0].loops, towardLeft.x, towardLeft.y) > 0.05);
+    assert.ok(nearestSegment(sameName[0].loops, towardRight.x, towardRight.y) > 0.05);
+    assert.equal(new Set(sameName.map(polity => polity.name)).size, sameName.length);
 
     const alternate = sectorWith('Alt', 2, false, ['0101', '0201', '0301']);
-    assert.deepEqual(polityOutlines([left, right, alternate]), joined);
+    assert.deepEqual(polityOutlines([left, right, alternate], {}), joined);
 
     for (const polity of joined) {
         for (const n of polity.box) assert.ok(places(n) <= 3, String(n));
@@ -111,12 +118,31 @@ test('touching canonical polities join and a non-canonical sector adds nothing',
 
 test('Spinward Marches alone gives four polities in hex-count order', () => {
     const { overview } = overviewOf('Spinward_Marches');
-    const polities = polityOutlines([overview]);
+    const polities = polityOutlines([overview], {});
     assert.deepEqual(polities.map(polity => polity.hexes), [739, 60, 52, 36]);
+    assert.equal(new Set(polities.map(polity => polity.name)).size, polities.length);
     for (const polity of polities) {
         for (const n of polity.box) assert.ok(places(n) <= 3);
         for (const loop of polity.loops) for (const n of loop) assert.ok(places(n) <= 3);
     }
+});
+
+test('a listed name takes the table colour and any other name takes the cycle', () => {
+    const left = sectorWith('Left', 0, true, ['0101']);
+    const far = sectorWith('Far', 3, true, ['0101']);
+    const table = { Imperium: '#112233' };
+    assert.equal(polityOutlines([left], table)[0].color, '#112233');
+    const first = polityOutlines([left], {});
+    const second = polityOutlines([far], {});
+    const again = polityOutlines([left], {});
+    const cycle = BORDER_COLOR_CYCLE[hashString('Imperium') % BORDER_COLOR_CYCLE.length];
+    assert.equal(first[0].color, cycle);
+    assert.equal(second[0].color, cycle);
+    assert.equal(again[0].color, cycle);
+    assert.equal(polityColour('Imperium', {}), cycle);
+    assert.equal(polityColour('Imperium', table), '#112233');
+    const names = polityOutlines([left, far], {}).map(polity => polity.name);
+    assert.equal(new Set(names).size, names.length);
 });
 
 test('regions of Riftspan Reaches carry loops', () => {

@@ -769,6 +769,21 @@ anchor changes only when the zoom step changes; a clamped pill's position is a c
 function of the pan (no step larger than the pan step). Browser check: drag slowly across
 the Spinward Marches at ppp 80 and at ppp 30: no pill jumps or resizes.
 
+### B1.12b Amendments from the B1.12a report (2026-10-03)
+
+Accepted as built: a new anchor within 2 px of the old one is the same spot (no cross-fade);
+"too small" means the visible part cannot hold the whole pill; a title seen for the first
+time fades in; scoring uses the worlds of the same sector; `theme.ts` has `tFast`.
+
+Two changes:
+- **Sticky only at the top.** A pill clamped to a side edge slides over whatever is there and
+  can cover a world's labels. A title sticks to the **top** edge only (under the omnibox),
+  where it reads as a header; when its anchor leaves by the left, right or bottom, it fades
+  out instead of sticking.
+- **The view drives the animation.** `MapRenderer.draw` returns `animating: boolean` while a
+  title fade is in progress, and `MapView`'s frame loop stays dirty while it is true. The
+  renderer no longer schedules its own frame.
+
 ### B1.11 Verification for B1
 
 - [ ] `npm test`, `npm run check`, `npm run typecheck`, `npm run build` green
@@ -1098,6 +1113,25 @@ it calls `assembleSectorIndex` as it is on the day, so whatever those add is pic
   and after). Deriving from an unreleased version is 409; with one setting changed is 409
   naming `settings`; a retry of a derived sector marked `failed` sends a message with `from`.
 
+#### B2d.5 Derived builds without re-uploading; search that returns what the map shows (Track C: `apps/api`, `tests/api`)
+
+- **Inputs come from the source version.** A derived build reads `<slug>.xml` and
+  `sectors.json` from `inputs/<from>/` when `inputs/<version>/` does not hold them, and the
+  build route's input check does the same. Deriving v3 and v4 each needed the same 1,025
+  files uploaded again, twenty minutes for nothing.
+- **Search defaults to the newest released version.** With no `version` parameter the
+  search uses the released version with the latest `released_at`; today it returns rows from
+  every released version.
+- **Search knows the layer.** Migration `0007` (hand-written): `ALTER TABLE truth_build_sectors
+  ADD COLUMN canonical integer;`. `publishSector` writes it from the catalogue entry (1 or 0).
+  `GET /api/truth/search` takes `layer=canonical` (the default) or `layer=all`; on
+  `canonical` it joins `truth_build_sectors` on version and sector and keeps rows whose
+  `canonical` is 1. A version built before this column (canonical is NULL everywhere) is
+  searched as `all`, so nothing disappears.
+- **Gated tests:** a derive whose new version has no inputs succeeds from the source's; a
+  search without a version returns only the newest released version's rows; with two sectors,
+  one canonical and one not, `layer=canonical` returns only the first and `layer=all` both.
+
 ### B2c.1 Outline geometry (written 2026-10-03; new files only, so it can run beside B3a)
 
 `apps/web/src/map/outline.ts` (new, pure) and `tests/web/outline.test.js`. Ported from
@@ -1343,6 +1377,41 @@ are ordered by `hexes`, largest first.
 Push both; Johnny derives **v4 from v3** (minutes) and releases it; the live viewer picks up
 `polities.json` by itself.
 
+### B2c.6 One polity, one colour (written 2026-10-03 after v4)
+
+Measured on the released v4 border file: 345 entries for 287 polity names. Twenty-two names
+are split across colours, the Third Imperium across seven (12,284 hexes red, 3,226 yellow,
+2,438 orange, ...), and the five largest polities are all the same red. Cause: the legacy
+border code hands out a default colour per import **slot**, and the port runs one sector at a
+time, so the first polity of every sector gets the first colour of the cycle. Joining by
+name **and** colour then splits one polity wherever its slot differed, and draws a border
+between the pieces.
+
+The legacy app never had a per-polity colour either (its colours depended on the order
+sectors were imported in a session), so there is nothing to port. This is ours to define,
+the same way the far-zoom labels are.
+
+- **Join by name only.** `polityOutlines` groups hexes by polity `name` across canonical
+  sectors. One entry, one outline, per name.
+- **Colour, in this order:**
+  1. `universe/polity_colours.json`, a hand-kept map from polity name to colour that Johnny
+     owns (`{ "note": "...", "colours": { "Third Imperium": "#..." } }`). It starts **empty**.
+  2. Otherwise a stable colour from the legacy cycle (`BORDER_COLOR_CYCLE`, 20 colours, already
+     copied in `territories.ts`): index = a hash of the name (`hashString` from
+     `@voyage/engines` core, the one the seeds use) modulo 20. The same name always gets the
+     same colour, in every version.
+- The per-sector `territories[].color` in each index is left exactly as the port produces it
+  (parity); the viewer does not draw from it. The overview's `polities[].color` uses the same
+  rule as the border file so the two agree.
+- `polityOutlines(sectors, colours)` takes the table as an argument; `tools/truth/build.js`
+  and the release route read the file (the Worker bundles the JSON at build time, as the web
+  app bundles `far_labels.json`).
+- **Check (`tests/generation/polities.test.js`):** two sectors whose territories share a name
+  but not a colour give **one** polity and no loop segment on the shared edge; a name in the
+  table takes the table's colour; a name not in it takes the same cycle colour on two runs
+  and in two different sectors; no two entries share a name. Report the number of polities
+  and how many distinct colours the catalogue ends up with.
+
 ### B2c. The viewer draws them (outline)
 
 Outline loops from each territory's hex set (`js/renderer.js:2297-2452`: sides whose
@@ -1549,6 +1618,30 @@ an unknown body key.
 - [ ] Report: every inventory item and where it now lives (built, slot left, or which later
       part), every legacy line that differed from the recipe, every question for Johnny
 
+### B3b.1 100D jump times (written 2026-10-03)
+
+Inventory item F. Checked on a released tree: every world of `mgtSystem.worlds` and the
+profile `mgt2eData` carry `journeyTimes`, six numbers for 1G to 6G (Regina:
+`[5.87, 4.15, 3.39, 2.94, 2.63, 2.4]`). The generation engines computed them; the viewer
+only shows them and runs no rules maths.
+
+- `dossier/model.ts`: `OverviewModel` and a world's `BodyModel` gain
+  `journey: { g: number; hours: string }[] | null`: the six values in order, each formatted as
+  the legacy block does (`js/hex_editor.js:73-87`: the number as stored, then `h`). Source:
+  the body's own `journeyTimes` for a body profile; for the overview, the mapped mainworld's
+  (inventory F, `journeyHost`), else `mgt2eData.journeyTimes`. Null when the array is absent,
+  not six long, or the body is a star, a belt or has no size.
+- `dossier/JourneyTimes.vue` (new): the title "100D Jump Travel Times" and the six figures in
+  a three-column grid, built from the design primitives in `design/base.css`; no new token
+  unless one is missing, in which case stop and report. Placed where the legacy inspector
+  puts it: after the identity rows in the overview, after the fact tiles in a body profile.
+- **Not in this step:** the "(Stellar Masked)" and "(Masking Available)" variants. They need
+  the masking maths, which is engine code; they come with a small Worker route or a tree
+  field, decided later.
+- **Check (`tests/web/dossier_model.test.js`):** Regina's overview has six entries labelled
+  1 to 6 whose hours equal the mainworld's `journeyTimes` in the generated tree; a star's
+  body model has `journey` null.
+
 ### B3b and B3c (outlines)
 
 - **B3b:** 100D jump times (the generated worlds carry a `journeyTimes` field; whether it
@@ -1615,7 +1708,104 @@ an unknown body key.
 - **Tests with a DOM** (component and cold-route tests) need a test DOM dependency; Agent B
   installs it when part B starts.
 
-## C. Orbit view (outline; recipe written when part B reports)
+## C. The orbit view
+
+**Status:** plan and C1 WRITTEN 2026-10-03. Evidence: `findings/legacy_orbit_inventory.md`.
+
+**What the legacy orbit view is:** a 2D canvas overlay (`js/system_viewer.js`, 5,420 lines).
+`architecture.md` §9 asks for a 2.5D WebGL view with a 2D canvas fallback over the same
+model. Since the legacy look is the bar (`design_reference.md` §0), the order is:
+
+| Step | What a visitor gets | Notes |
+|---|---|---|
+| **C1. The model** | nothing visible | the system the view draws and the maths, ported with parity |
+| **C2. The 2D orbit view** | enter a system, see it as the legacy app shows it, select bodies, scrub time | this **is** the fallback renderer of §9; Agent D owns the look from the start, against the legacy app |
+| **C3. Line-up search** | find the next alignment | the legacy algorithm, ported with parity |
+| **C4. Planet imagery** | the surface map in the dossier, textured discs in orbit | `planet_profile.js`, `planet_gl.js`, `planet_renderer.js`: "keep" in the feature inventory |
+| **C5. The 2.5D view** | tilt, rotate, real spheres | WebGL over the same model; needs Three.js; decided again when C2 is on screen |
+
+**Who builds it (Johnny, 2026-10-03):** Agent D is authorised to **implement** the orbit view,
+not only to style it, and to lean into the design delighters the project has been stepping
+towards (`campaign_manager_plan.md` §6 motion and chrome, §7.4 seasons, §7.5 temperatures
+people can feel, §7.6 living planets, §7.7 terrain archetypes and palettes, §7.8 the line-up
+transition). Agent A ports the model (C1) with parity; D builds C2 onward on top of it. D
+writes its own plan to `findings/orbit_view_design.md` first (what is built now, which
+delighters are in, what data each needs), and the orchestrator reviews the plan and each
+milestone. The rules do not relax for D: pure, tested model code; tokens for every colour
+and duration; no globals outside the browser adapter; no Traveller rule from memory; a
+frame budget of 16 ms measured in the browser.
+
+**Scope for the Viewer:** the truth is generated with the Mongoose 2e path, so every released
+tree has `mgtSystem`. C1 ports the MgT2E branch of the normaliser. The CT, T5, RTT and AoW
+branches arrive with the Builder, where those editions can be generated.
+
+### C1. The orbit model (Track W: `apps/web/src/orbit`, `tests/web`, `tests/golden`, `tests/oracle`)
+
+#### C1.1 The oracle can run the legacy viewer's exports
+
+Add `js/system_viewer.js` to the oracle's file list after the files it depends on. Its
+public object is `window.SystemViewer` (`system_viewer.js:5407-5420`). If the file will not
+load in the sandbox, stop and report the error and the line; stub at most the one global the
+error names.
+
+#### C1.2 Golden cases from the legacy exports — `tests/golden/cases.js`
+
+Using the legacy state the existing case `mgt2e_flesh_from_tsv` produces for
+Spinward Marches 1910 (and a second world of your choice with at least one gas giant with
+moons and a belt; name it in the report):
+
+- `orbit_normalize_<n>`: `SystemViewer.normalizeSystem(state)`.
+- `orbit_text_<n>`: for every star, world and moon of that normalised system, in order:
+  `rotationText(body)`, `starColor(star)` for stars, `surfaceKind(body)` for non-stars.
+
+Write the fixtures once with `UPDATE_GOLDEN=1`. `legacy orbit_* is deterministic` must pass
+before any ported code is written.
+
+#### C1.3 The port — `apps/web/src/orbit/system.ts`, `maths.ts`, `orbit_au.ts` (new)
+
+- `system.ts`: `detectSystem(body)` (the legacy order: `aowSystem`, `mgtSystem`, `ctSystem`,
+  `t5System`, `rttSystem`, first with `stars.length > 0`; `system_viewer.js:444-455`) and
+  `normalizeSystem(body)`, which implements the **MgT2E branch only** (`_normalizeMgT2E`,
+  460-482, with `_isSameWorld` and whatever it calls) and returns `null` for the other four
+  editions with a comment naming the Builder slice. `rotationText`, `starColor` and
+  `surfaceKind` ported beside it.
+- `maths.ts`: the pure functions of inventory §2, each ported character for character with
+  its constants and its legacy line range in a comment: `pxFromDiamKm`, `starBasePx`,
+  `worldBasePx`, `moonBasePx`, `orbitToAU`, `starCompanionAU`, `unitT`, `scaleR`,
+  `hashEpoch`, `keplerYears`, `worldPeriodYears`, `moonPeriodYears`, and the body angle at a
+  time (`epoch + 2π × elapsedYears / period`, `elapsedYears = totalDays / 365.25`). A legacy
+  function that reads closed-over state takes that state as an argument instead
+  (`linearScale`, the zoom scale); nothing else changes.
+- `orbit_au.ts`: the orbit-number-to-AU table. The viewer may not import the engines, so
+  copy `MgT2EData.stellar.orbitAu` from the generated rules, and add a test that imports the
+  engines' rules and asserts the copy is identical (the `labels.ts` pattern). The legacy
+  fallback table (`system_viewer.js:148-150`) is not used.
+- The epoch key uses the new hex key (`Spinward_Marches/1910`) where the legacy code used its
+  hex id. Positions therefore differ from the legacy app for the same world; that is the
+  same recorded deviation as the generation seeds (`slice_0_foundation.md`, deviations
+  table). Say so in a comment.
+
+#### C1.4 Parity and unit tests
+
+- `esm orbit_normalize_*` and `esm orbit_text_*`: the port equals the legacy fixtures
+  exactly, fed the same state.
+- `tests/web/orbit_maths.test.js`: each formula against values the test computes from the
+  inventory's stated formula (no number typed from memory): disc sizes and their clamps;
+  `scaleR` at `au = 0`, `maxAU` and between, log and linear; `hashEpoch` is in `[0, 2π)` and
+  stable; `keplerYears(1, 1) = 1`; a moon with `periodHrs` uses it; the angle advances by
+  `2π` over one period.
+- `tests/web/orbit_system.test.js`: for Regina's generated tree (built in the test as
+  `tests/web/dossier_model.test.js` does), `normalizeSystem` returns an edition of `MgT2E`, a
+  mainworld, and `hzAU`; a body with no `mgtSystem` returns null.
+
+#### C1.5 Verification for C1
+
+- [ ] `npm test`, `npm run check`, `npm run build` green
+- [ ] Report: whether `js/system_viewer.js` loaded in the oracle and what was stubbed; the
+      second world chosen; every legacy line ported as written that looked wrong; every field
+      the normalised system needs that Regina's generated tree did not have
+
+## C (old outline, superseded by the section above)
 
 `architecture.md` §9 and `design_reference.md` §7: the orrery model as a pure TS module
 copied from `js/system_viewer.js:237-400` with golden tests, the 2.5D WebGL renderer with the

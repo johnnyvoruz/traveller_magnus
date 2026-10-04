@@ -20,7 +20,7 @@ const BORDER_COLOR_MAP: Record<string, string> = {
     'black': '#333333',
 };
 
-const BORDER_COLOR_CYCLE = [
+export const BORDER_COLOR_CYCLE = [
     '#e63946', '#f4a261', '#e9c46a', '#2a9d8f', '#4cc9f0', '#7209b7', '#f72585', '#06d6a0',
     '#ffffff', '#ff6b35', '#b5e48c', '#0077b6', '#9d4edd', '#ffbe0b', '#d62828', '#52b788',
     '#c77dff', '#3a86ff', '#fb8500', '#a8dadc',

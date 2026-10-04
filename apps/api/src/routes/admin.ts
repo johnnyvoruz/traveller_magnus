@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { Hono } from 'hono';
 import { polityOutlines, sectorOverview } from '@voyage/generation';
+import polityColourFile from '../../../../universe/polity_colours.json' with { type: 'json' };
 import { SectorIndex, sha256Hex, stable, TruthBuild, TruthManifest, TruthOverview, TruthPolities, TruthRetry } from '@voyage/shared';
 import { originAllowed, requireRole, ulid, type AppContext } from '../auth/session';
 import { auditLog, truthVersions } from '../db/schema';
@@ -44,13 +45,17 @@ admin.post('/truth/build', async (c) => {
         if (!sourceSectors.length) return fail(c, 400, 'validation', 'Source truth version has no sectors.');
     }
     const keys = await inputKeys(c.env.PRIVATE_BUCKET, input.version);
-    const catalogueKey = `inputs/${input.version}/sectors.json`;
-    if (!keys.has(catalogueKey)) return fail(c, 404, 'not_found', 'Sector catalogue is missing.');
+    const sourceKeys = input.from ? await inputKeys(c.env.PRIVATE_BUCKET, input.from) : null;
+    const hasInput = (name: string): boolean => {
+        if (keys.has(`inputs/${input.version}/${name}`)) return true;
+        return !!input.from && !!sourceKeys && sourceKeys.has(`inputs/${input.from}/${name}`);
+    };
+    if (!hasInput('sectors.json')) return fail(c, 404, 'not_found', 'Sector catalogue is missing.');
     let slugs: string[];
     if (sourceSectors) {
         slugs = sourceSectors;
     } else if (input.sectors === 'all') {
-        const catalogue = await c.env.PRIVATE_BUCKET.get(catalogueKey);
+        const catalogue = await c.env.PRIVATE_BUCKET.get(`inputs/${input.version}/sectors.json`);
         if (!catalogue) return fail(c, 404, 'not_found', 'Sector catalogue is missing.');
         try {
             slugs = slugsFromCatalogue(await catalogue.text());
@@ -62,9 +67,13 @@ admin.post('/truth/build', async (c) => {
         slugs = input.sectors;
     }
     for (const slug of slugs) {
-        const tsv = `inputs/${input.version}/${slug}.tsv`;
-        const xml = `inputs/${input.version}/${slug}.xml`;
-        if (!keys.has(tsv) || !keys.has(xml)) return fail(c, 404, 'not_found', 'Sector inputs are missing.', { slug });
+        if (input.from) {
+            if (!hasInput(`${slug}.xml`)) return fail(c, 404, 'not_found', 'Sector inputs are missing.', { slug });
+        } else {
+            const tsv = `inputs/${input.version}/${slug}.tsv`;
+            const xml = `inputs/${input.version}/${slug}.xml`;
+            if (!keys.has(tsv) || !keys.has(xml)) return fail(c, 404, 'not_found', 'Sector inputs are missing.', { slug });
+        }
     }
     await db(c).insert(truthVersions).values({
         version: input.version,
@@ -266,7 +275,7 @@ admin.post('/truth/release/:version', async (c) => {
         const indexObject = await c.env.PUBLIC_BUCKET.get(`truth/${version}/sectors/${sector.slug}/index.json`);
         if (!indexObject) return fail(c, 409, 'conflict', `No sector index for ${sector.slug}.`, { slug: sector.slug });
         const index = SectorIndex.parse(JSON.parse(await indexObject.text()));
-        overviews.push(sectorOverview(index));
+        overviews.push(sectorOverview(index, polityColourFile.colours));
     }
     const overview = TruthOverview.parse({ truthVersion: version, sectors: overviews });
     const overviewBody = stable(overview);
@@ -275,7 +284,7 @@ admin.post('/truth/release/:version', async (c) => {
         httpMetadata: { contentType: 'application/json', cacheControl: 'public, max-age=31536000, immutable' },
     });
     const outlinesStarted = Date.now();
-    const polities = polityOutlines(overviews);
+    const polities = polityOutlines(overviews, polityColourFile.colours);
     const politiesMs = Date.now() - outlinesStarted;
     const politiesDoc = TruthPolities.parse({ truthVersion: version, polities });
     console.log(JSON.stringify({ polities: politiesDoc.polities.length, ms: politiesMs }));

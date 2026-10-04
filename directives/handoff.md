@@ -1393,3 +1393,128 @@ mention polities); its report has not been pasted yet. Agent D can start B1.12a 
   to be uploaded again.
 - **Then:** push → confirm deploy → Johnny derives `v4` from `v3` → release `v4` → borders
   come back on the live site, drawn from the file.
+
+## 43. Truth v4 released: borders are a file (2026-10-03, 23:39-23:45Z)
+
+- Pushed `62d34c5`; deployed 23:30Z. v4 inputs uploaded (1,025 files). Johnny's first
+  derive attempt ran before the upload finished and was refused cleanly ("Sector catalogue is
+  missing"); the second ran 23:39:20-23:41:58Z, all 512 `done`, none failed, totals
+  unchanged. **v4 released**, manifest hash `837ac280...85a7` (matches the CDN file).
+- **Verified:** manifest, overview and `polities.json` pass the strict schemas; both hashes in
+  the manifest match; `polities.json` is 752,455 bytes raw, **187 KB over the wire**, served
+  from the CDN cache; 345 entries, 45,902 loop points; `/api/health` reports v4. Region loops
+  are in the indexes.
+- **Defect found in the data, not in the code path:** polity colours. 287 names in 345
+  entries; 22 names are split across colours (Third Imperium across seven) and the five
+  largest polities are the same red. The legacy code assigns default colours per import slot
+  and the port runs per sector. Fix written as `slice_1_viewer.md` B2c.6: join by name, one
+  colour per polity from a hand-kept table (`universe/polity_colours.json`, empty to start)
+  or a stable hash into the legacy cycle. Needs a **v5** (derived).
+- **Also written, B2d.5:** derived builds read inputs from the source version (no re-upload),
+  search defaults to the newest released version, search takes the layer (migration `0007`).
+- **Assignments:** Agent B → B2c.6. Agent C → B2d.5. Agent D → B1.12a (title jitter). Then
+  push, derive v5 from v4 with no upload, release v5.
+
+## 44. Cold load is fast; the reasons are now a rule for the builder slices (2026-10-03, late)
+
+- **Johnny, private window on the live site with v4:** "Cold load is insanely fast at like
+  130 ms." He asked that the optimisations be written down so that builders' own universes
+  get them too. Recorded as `architecture.md` §10.1: the viewer downloads and draws and never
+  derives; one small file per zoom level; immutable versioned files; derived data rebuilt
+  without regenerating; batched cached paths; measure cold. Slice 2's recipe starts from it.
+- **Next big piece: the orbit view (slice 1 part C).** It also fills the dossier's surface-map
+  slot. The legacy sources are `js/system_viewer.js` (5,420 lines), `planet_profile.js` (312),
+  `planet_gl.js` (1,213), `planet_renderer.js` (1,388). First step: a read-only inventory by
+  Agent A into `findings/legacy_orbit_inventory.md`, then the recipe in parts (the orrery
+  model as a parity port; the shell and 2D renderer; the 2.5D WebGL renderer; planet imagery),
+  with Agent D on the look from the start.
+- In flight: Agent B (polity colours, B2c.6), Agent C (derive without upload, search, B2d.5),
+  Agent D (title jitter, B1.12a). Then v5.
+
+**B1.12a is in (Agent D, 2026-10-03), checked:** titles are anchored in map space and cached
+per zoom step; in D's browser drags no pill moved further than the pan step or changed size.
+`npm test` green. Two follow-ups written as `slice_1_viewer.md` B1.12b and handed back to D:
+titles stick only to the top edge (a side-clamped pill can cover a world's labels) and fade
+at the other edges; `draw` returns `animating` and `MapView`'s loop drives the fade instead
+of the renderer scheduling its own frame. Agents B (B2c.6) and C (B2d.5) had not started;
+their prompts were given to Johnny again.
+
+**B2c.6 is in (Agent B, 2026-10-03), checked:** polities join by name; colour comes from
+`universe/polity_colours.json` (empty) or `BORDER_COLOR_CYCLE[hashString(name) % 20]`; 287
+polities, 20 colours on the local catalogue; `truth:local` builds `v5`. `npm test` 232/227/5,
+check clean; B reports the gated suite 9 of 9. With the table empty the defaults are, for
+example: Third Imperium `#ffffff`, Zhodani Consulate `#fb8500`, Aslan Hierate `#9d4edd`,
+Solomani Confederation and Hive Federation both `#c77dff`, Vargr Extents and Two Thousand
+Worlds both `#b5e48c`. Johnny may want to set the major polities by hand before v5. Agents C
+(B2d.5) and D (B1.12b) are mid-work in the tree; push after both report, then derive v5 from
+v4 with no upload.
+
+**B1.12b is in (Agent D, 2026-10-03), checked:** titles stick only at the top and fade at the
+other edges; `draw` returns `animating` and the view's loop drives it; the top inset is 68 px
+(the legacy value; 56 tucked the title under the omnibox). `npm test` green, build succeeds.
+**Consequence D flagged:** fewer titles. A subsector whose anchor is off to the left or under
+the panel has no title even when it fills the view (at ppp 128 with the panel open, the
+Regina subsector is unlabelled). Orchestrator's suggestion, for Johnny to judge in the
+browser: keep the pills as they are and add a constant "Sector · Subsector" readout for the
+centre of the view in the status line, so the location is never lost.
+
+## 45. Direction from Johnny on truth and builders' maps; part C started (2026-10-03, late)
+
+- **Johnny:** border colours should be set through the UI, per map; the legacy app had CRUD
+  for borders and routes and the new one has neither yet; only admin accounts edit the truth;
+  hold the truth steady, and support each account's own version either as differences
+  overlaid on the truth or as a blank universe. Recorded in `plan.md` (before slice 2). This
+  matches the existing model (overlay document v3; `truth_version` pinned or null). The
+  polity colour file stays as the truth's default until the admin UI exists; **v5 goes ahead**
+  because it fixes the split polities, and after it the truth is left alone.
+- **Agent A's orbit inventory is in** (`findings/legacy_orbit_inventory.md`, 771 lines). The
+  legacy orbit view is a 2D canvas. Part C is planned as: C1 model (parity port, MgT2E
+  branch only, since the truth is Mongoose-generated), C2 the 2D view matching legacy with
+  Agent D on the look, C3 line-up, C4 planet imagery, C5 the 2.5D WebGL view decided again
+  once C2 is on screen. **C1 is written** and goes to Agent A.
+- **B3b.1 written** (100D jump times from the tree's `journeyTimes`; no rules maths in the
+  viewer) for Agent B.
+- **Agent D** gets a read-only look audit of the legacy orbit view (shell, chips, time
+  controls, tooltips) so C2's recipe has the look in it from the start.
+- Still in flight: Agent C on B2d.5. Then push and v5.
+
+**Johnny (2026-10-03): Agent D is authorised to implement the orbit view** and to lean into
+the design delighters (`campaign_manager_plan.md` §6, §7.4-§7.8). Recorded in
+`slice_1_viewer.md` part C. Split: Agent A ports the model (C1, parity); Agent D writes
+`findings/orbit_view_design.md` and builds C2 onward (shell, time controls, the view, the
+delighters), reporting at milestones; the orchestrator reviews the plan and each milestone.
+Agent B takes B3b.1 (jump times).
+
+**Agent D wrote `findings/orbit_view_design.md` and stopped** (the pasted brief reached it
+garbled, so it did not start the shell). Orchestrator's answers, sent back with the go-ahead:
+body keys are the dossier's (`s<i>`, `w<i>`, `w<i>m<j>`); D ports the layout helpers itself
+with tests in `apps/web/src/orbit/layout.ts`; the hex key comes from the route, not the
+model; D may edit `map/input.ts` and `MapView.vue` for the double-click entry; the dossier's
+base-path option waits until Agent B has finished jump times in that folder. Seven questions
+are Johnny's: seasons on a moon, the season convention, the "today's temperature" formula,
+the starting date, whether to keep body chips, the temperature scale default, and whether the
+highport art in `assets/starports/` may ship.
+
+## 46. B2d.5 in and verified; v5 is ready to derive (2026-10-04, early)
+
+- **Agent C:** a derived build reads `sectors.json` and each `<slug>.xml` from
+  `inputs/<from>/` when the new version has none (no TSV needed for a derive); search with no
+  `version` uses the newest released version; `layer=canonical` (default) or `all`, through a
+  new `truth_build_sectors.canonical` column (migration `0007`, written by `publishSector`).
+  A version whose `canonical` is all NULL is searched as `all`, so v2 to v4 behave as before.
+- **Verified by the orchestrator:** `npm test` 232/227/5, check and typecheck clean, gated
+  Worker suite 12 of 12, with B's colour change in the same tree.
+- **Push by path** (Agents A, B and D are mid-work in `apps/web`, and A in `tests/golden` and
+  `tests/oracle`): `apps/api packages tests/api tests/generation tools universe package.json
+  directives`. Carries migration `0007`.
+- **Then:** derive `v5` from `v4` (no upload this time), release `v5`. Polities become one
+  shape and one colour each (287, from the hash rule; `universe/polity_colours.json` is
+  empty). After v5 the truth is held steady (Johnny's direction, `plan.md`).
+- **Unpushed web work, complete but mixed with work in flight:** Agent D's title follow-up
+  (B1.12b). It goes out with the next web push.
+
+**B3b.1 is in (Agent B, 2026-10-04), checked:** the dossier overview and each world's body
+profile show the six stored 100D jump times (`journeyTimes` from the tree, no maths in the
+viewer); `JourneyTimes.vue` uses the existing primitives, no new token. Suite green. Unseen
+in a browser. The dossier folder is free again, so Agent D may add the base-path option it
+asked for.

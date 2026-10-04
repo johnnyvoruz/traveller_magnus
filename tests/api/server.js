@@ -77,7 +77,13 @@ export async function withDevServer(run) {
                 child.stderr.on('data', (chunk) => { output += chunk; });
                 writeFileSync(path.join(dir, 'pid'), String(child.pid));
                 writeFileSync(path.join(dir, 'log'), '');
-                const logTimer = setInterval(() => writeFileSync(path.join(dir, 'log'), output), 500);
+                const logTimer = setInterval(() => {
+                    try {
+                        writeFileSync(path.join(dir, 'log'), output);
+                    } catch (err) {
+                        if (!/ENOENT/.test(String(err))) throw err;
+                    }
+                }, 500);
                 child.on('exit', () => clearInterval(logTimer));
             }
             await sleep(500);

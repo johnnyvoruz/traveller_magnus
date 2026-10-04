@@ -43,6 +43,7 @@ export const truthBuildSectors = sqliteTable('truth_build_sectors', {
     indexHash: text('index_hash'),
     error: text('error'),
     updatedAt: text('updated_at').notNull(),
+    canonical: integer('canonical'),
 }, (t) => [
     primaryKey({ columns: [t.version, t.sectorSlug] }),
     check('truth_build_sectors_state_check', sql`${t.state} in ('queued', 'building', 'done', 'failed')`),

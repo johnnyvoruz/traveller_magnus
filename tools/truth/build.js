@@ -12,6 +12,7 @@ if (!/^v\d+$/.test(version || '')) {
 }
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const polityColours = JSON.parse(fs.readFileSync(path.join(ROOT, 'universe/polity_colours.json'), 'utf8')).colours;
 const engineVersion = JSON.parse(fs.readFileSync(path.join(ROOT, 'packages/engines/package.json'), 'utf8')).version;
 const OUT = path.join(ROOT, 'truth-local');
 
@@ -90,7 +91,7 @@ for (const file of fs.readdirSync(rawDir).filter(name => name.endsWith('.tsv')).
             partial: sector.counts.partial,
             indexHash,
         });
-        overviewSectors.push(sectorOverview(sector.index));
+        overviewSectors.push(sectorOverview(sector.index, polityColours));
         console.error(`${slug} systems=${sector.counts.systems} built=${sector.counts.built} partial=${sector.counts.partial}`);
         if (!metadataXml.includes(`Milieu="${TRUTH_MILIEU}"`)) failed.push(`${slug}: milieu is not ${TRUTH_MILIEU}`);
     } catch (err) {
@@ -106,7 +107,7 @@ fs.mkdirSync(path.join(OUT, version), { recursive: true });
 fs.writeFileSync(path.join(OUT, version, 'overview.json'), overviewJson);
 
 const politiesStarted = Date.now();
-const polities = polityOutlines(overviewSectors);
+const polities = polityOutlines(overviewSectors, polityColours);
 const politiesMs = Date.now() - politiesStarted;
 const politiesJson = stable(TruthPolities.parse({ truthVersion: version, polities }));
 const politiesHash = await sha256Hex(politiesJson);

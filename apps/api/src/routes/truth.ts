@@ -51,21 +51,47 @@ function likePrefix(query: string): string {
 truth.get('/search', async (c) => {
     const q = (c.req.query('q') ?? '').trim();
     const version = c.req.query('version') ?? '';
+    const layer = c.req.query('layer') === 'all' ? 'all' : 'canonical';
     const match = ftsQuery(q);
     if (!match) return ok(c, { items: [] });
+    // No version: the released row with the latest released_at.
+    // layer=canonical keeps canonical sectors, except a version whose canonical column is NULL everywhere (built before that column), which is searched as all.
     const result = await c.env.DB.prepare(
         `SELECT ts.version, ts.sector_slug AS sectorSlug, ts.hex, ts.name, ts.uwp,
                 ts.allegiance, ts.zone, ts.tree_hash AS treeHash
          FROM truth_systems_fts
          JOIN truth_systems ts ON ts.rowid = truth_systems_fts.rowid
          JOIN truth_versions tv ON tv.version = ts.version
-         WHERE truth_systems_fts MATCH ? AND tv.state = 'released' AND (? = '' OR ts.version = ?)
+         LEFT JOIN truth_build_sectors tbs
+           ON tbs.version = ts.version AND tbs.sector_slug = ts.sector_slug
+         WHERE truth_systems_fts MATCH ?
+           AND tv.state = 'released'
+           AND (
+             (? != '' AND ts.version = ?)
+             OR (
+               ? = ''
+               AND ts.version = (
+                 SELECT version FROM truth_versions
+                 WHERE state = 'released' AND released_at IS NOT NULL
+                 ORDER BY released_at DESC
+                 LIMIT 1
+               )
+             )
+           )
+           AND (
+             ? = 'all'
+             OR tbs.canonical = 1
+             OR NOT EXISTS (
+               SELECT 1 FROM truth_build_sectors marker
+               WHERE marker.version = ts.version AND marker.canonical IS NOT NULL
+             )
+           )
          ORDER BY CASE
              WHEN lower(ts.name) = ? THEN 0
              WHEN lower(ts.name) LIKE ? ESCAPE '\\' THEN 1
              ELSE 2
          END, ts.name
          LIMIT 50`,
-    ).bind(match, version, version, q.toLowerCase(), likePrefix(q)).all();
+    ).bind(match, version, version, version, layer, q.toLowerCase(), likePrefix(q)).all();
     return ok(c, { items: result.results });
 });
