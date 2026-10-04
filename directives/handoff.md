@@ -1518,3 +1518,70 @@ profile show the six stored 100D jump times (`journeyTimes` from the tree, no ma
 viewer); `JourneyTimes.vue` uses the existing primitives, no new token. Suite green. Unseen
 in a browser. The dossier folder is free again, so Agent D may add the base-path option it
 asked for.
+
+## 47. v5 derived; release refused once, cause found (2026-10-04, 00:30Z)
+
+- Pushed `39f45b9`; GitHub tests passed; deployed 00:28Z; migration `0007` applied. Johnny
+  derived v5 from v4 with no upload: 512 `done` in about 2.5 minutes, totals unchanged,
+  `canonical` filled (399 of 512).
+- **Release of v5 answered 409 "No catalogue entry for Calidan."** Cause: B2d.5 taught the
+  build route and `publishSector` to read inputs from the source version, but the **release**
+  route (`admin.ts`, about line 238) still reads `inputs/<version>/sectors.json` only, and a
+  derived version has no inputs of its own. Nothing was written; the refusal was clean.
+- **Done by the orchestrator to unblock:** uploaded the one file `inputs/v5/sectors.json`
+  (the same catalogue as v4's, verified identical to `universe/raw/sectors.json`). Johnny
+  reruns the release.
+- **Proper fix, for Agent C:** release reads the catalogue from `inputs/<version>/`, else from
+  `inputs/<derived_from>/`, following the chain of `derived_from` until one exists; gated
+  test: releasing a derived version that has no inputs of its own succeeds.
+
+**C1 is in (Agent A, 2026-10-04), checked:** `apps/web/src/orbit/system.ts`, `maths.ts`,
+`orbit_au.ts`; `js/system_viewer.js` loads in the oracle unstubbed; four golden orbit cases
+(Regina 1910 and Zeycude 0101) with exact parity; the AU table held to the generated rules by
+a test. Suite green, check clean. Ported as written and worth knowing for the view:
+`hashEpoch` can return a negative angle (range `[-π, π)`, not `[0, 2π)`; the recipe's range
+was wrong and the test follows the code); `surfaceKind` is null until `planet_profile.js` is
+ported (C4). Data facts for Agent D from Regina's generated tree: `hzAU` is computed from
+`hzco`; stars have no `orbitAU` or `periodYears`; moons have no `periodYears`; the mainworld
+moon lacks `periodHrs`, `orbitType`, `parentStarIdx` and `eccentricity`; `worldType` is
+absent; `travelZone` is absent on worlds and "Green" on the mainworld.
+
+**Orbit view shell is in (Agent D, 2026-10-04), checked:** route `/s/:sector/:hex/orbit`
+(lazy chunk), header, body chips, time controls over a pure tested `clock.ts`, the dossier
+beside the stage through a base-path option, entry from the dossier's Explore orbits and from
+a map double-click, Escape back. Suite 279/274/5, check clean, build succeeds. D measured
+8.3 ms median and 12.6 ms worst frame while shuttling at 365 days a second. D also fixed a
+type error left by B's jump-times change in `design/samples.ts`, and added 17 more icons
+(two Pro, not on screen yet). Next for D: the orbits picture on Agent A's model, which landed
+after D's report was written. Johnny's seven answers are still pending; D built with the
+interim choices.
+
+## 48. Truth v5 released; open questions gathered in one file (2026-10-04)
+
+- **v5 released** (manifest hash `8fab03d2...a10b`, matches the CDN). Verified: the manifest
+  and border file pass the strict schemas, the border file's hash is in the manifest,
+  **287 polities, 287 distinct names, 20 colours**, 613 KB raw; `/api/health` reports v5;
+  `/api/truth/search?q=Rigel` with no parameters now returns one result, from v5, on the
+  canonical layer (it was 50 mixed results). The truth is now held steady (Johnny's
+  direction).
+- **`directives/questions_for_johnny.md`** lists every open decision with an Answer line:
+  Agent D's seven orbit-view questions, five map questions, three app questions and four on
+  direction. When Johnny says the answers are in, read the file, record each decision in the
+  directive it belongs to, and remove it from the file.
+
+**Highport art (Johnny, 2026-10-04): the images are his and ship.** The orchestrator copied
+`assets/starports/highport-a.png`, `-b`, `-c`, `-e` (427 KB in all) to
+`apps/web/public/starports/`. The legacy use is `js/system_viewer.js:4340-4380`
+(`_HIGHPORT_ART`: file, crop, pivot, nav and strobe points per starport class; class D reuses
+E's art; sprites are downscaled once per on-screen size and cached). They are drawn in the
+orbit view, so Agent D picks them up when the picture reaches the mainworld's highport; the
+drawing rule also needs `starportProfile`, which the generated tree carries on few bodies
+(see C1's data notes). The other legacy images are `assets/splash_bg.png`,
+`splash_bg_v2.png` and `tim_photo.jpg`; none is used by the new app yet.
+
+**Release fix is in (Agent C, 2026-10-04), verified:** `apps/api/src/jobs/inputs.ts`
+(`resolveCatalogue`) is the one rule for "the inputs of this version or its source": it
+follows `derived_from` up to ten versions; the build route, `publishSector` and release all
+use it. Gated test derives from a derived version and releases it. Checked by the
+orchestrator on the current tree, including the gated Worker suite. Unpushed; push by path
+(`apps/api tests/api directives`) while Agent D is mid-work in `apps/web`.

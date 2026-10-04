@@ -9,6 +9,7 @@ Read in this order.
 
 | File | Holds |
 |---|---|
+| `questions_for_johnny.md` | every open decision that only Johnny can make, each with an Answer line to type into; the orchestrator reads it back and records the decisions |
 | `implementer_brief.md` | what a fresh implementer session reads first: the rules, the commands, what already exists, how to report |
 | `manifesto.md` | the rules every session obeys and their checks; decisions taken |
 | `plan.md` | what we are building, roles and protocol, the six slices, milestones |

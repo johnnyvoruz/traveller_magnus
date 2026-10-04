@@ -1,6 +1,7 @@
 import { assembleSectorIndex, buildSectorSlice, type CatalogueEntry } from '@voyage/generation';
 import { SectorIndex, sha256Hex, stable } from '@voyage/shared';
 import type { Env } from '../env';
+import { resolveCatalogue } from './inputs.ts';
 
 type Pinned = { seed: string; settings: Record<string, unknown>; engineVersion: string };
 type TruthMessage = { version: string; slug: string; offset?: number; from?: string; pinned: Pinned };
@@ -107,19 +108,12 @@ async function finalize(env: Env, version: string, slug: string): Promise<void> 
     await publishSector(env, version, slug, hexes);
 }
 
-/** The new version's copy wins. A derived build falls back to inputs/<from>/. */
-async function privateInput(env: Env, version: string, from: string | undefined, name: string) {
-    const own = await env.PRIVATE_BUCKET.get(`inputs/${version}/${name}`);
-    if (own || !from) return own;
-    return env.PRIVATE_BUCKET.get(`inputs/${from}/${name}`);
-}
-
 /** Index write and search rows shared by a full build and a derived build. */
 async function publishSector(env: Env, version: string, slug: string, hexes: Record<string, Record<string, unknown>>, from?: string): Promise<void> {
-    const xmlObject = await privateInput(env, version, from, `${slug}.xml`);
+    const resolved = await resolveCatalogue(env.DB, env.PRIVATE_BUCKET, version, from);
+    const xmlObject = await env.PRIVATE_BUCKET.get(`inputs/${resolved.version}/${slug}.xml`);
     if (!xmlObject) throw new Error(`Sector metadata is missing for ${version}/${slug}.`);
-    const catalogueObject = await privateInput(env, version, from, 'sectors.json');
-    const catalogue = catalogueObject ? catalogueEntry(await catalogueObject.text(), slug) : undefined;
+    const catalogue = catalogueEntry(resolved.text, slug);
     const index = SectorIndex.parse(assembleSectorIndex({
         slug,
         version,

@@ -567,7 +567,7 @@ if (process.env.RUN_API_TESTS !== '1') {
                 ack() {},
             }],
         }, alone.env);
-        assert.equal(alone.calls.get, 5);
+        assert.equal(alone.calls.get, 4);
         assert.deepEqual(alone.puts, ['truth/vplain/sectors/Wide/index.json']);
         const written = await alone.env.PUBLIC_BUCKET.get('truth/vplain/sectors/Wide/index.json');
         const index = JSON.parse(await written.text());
@@ -1136,6 +1136,82 @@ if (process.env.RUN_API_TESTS !== '1') {
                 "SELECT canonical FROM truth_build_sectors WHERE version = 'vnoinputs' AND sector_slug = 'Fixture'",
             ]));
             assert.equal(Number(canonical[0].results[0].canonical), 1);
+        });
+    });
+
+    test('a derive of a derived version releases with the source catalogue', { timeout: 180000 }, async () => {
+        const dir = mkdtempSync(path.join(tmpdir(), 'voyage-chain-'));
+        const versions = ['vchain1', 'vchain2'];
+        function clearVersion(version) {
+            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', `DELETE FROM truth_systems WHERE version = '${version}'`]);
+            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', `DELETE FROM truth_build_sectors WHERE version = '${version}'`]);
+            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', `DELETE FROM truth_versions WHERE version = '${version}'`]);
+        }
+        await withDevServer(async (base) => {
+            for (const version of versions) clearVersion(version);
+            try {
+                const cookie = adminCookie();
+                const shared = {
+                    milieu: 'M1105',
+                    engineVersion: '1.0.0',
+                    seed: TRUTH_SEED,
+                    settings: { ...TRUTH_SETTINGS },
+                    sectors: 'all',
+                };
+                async function derive(version, from) {
+                    const posted = await fetch(`${base}/api/admin/truth/build`, {
+                        method: 'POST',
+                        headers: { 'content-type': 'application/json', cookie },
+                        body: JSON.stringify({ ...shared, version, from }),
+                    });
+                    const postedBody = await posted.json();
+                    assert.equal(posted.status, 202, JSON.stringify(postedBody));
+                    assert.equal(postedBody.data.enqueued, 1);
+                    let build;
+                    const deadline = Date.now() + 60000;
+                    while (Date.now() < deadline) {
+                        const response = await fetch(`${base}/api/admin/truth/builds/${version}`, { headers: { cookie } });
+                        build = await response.json();
+                        assert.equal(response.status, 200, JSON.stringify(build));
+                        const sector = build.data.sectors.find((item) => item.slug === 'Fixture');
+                        if (sector && sector.state === 'failed') throw new Error(JSON.stringify(build));
+                        if (build.data.sectorsDone === 1) break;
+                        await sleep(1000);
+                    }
+                    assert.equal(build.data.sectorsDone, 1, JSON.stringify(build));
+                }
+                await derive('vchain1', 'vtest');
+                const releasedParent = await fetch(`${base}/api/admin/truth/release/vchain1`, {
+                    method: 'POST',
+                    headers: { cookie },
+                });
+                const releasedParentBody = await releasedParent.json();
+                assert.equal(releasedParent.status, 200, JSON.stringify(releasedParentBody));
+                await derive('vchain2', 'vchain1');
+                const released = await fetch(`${base}/api/admin/truth/release/vchain2`, {
+                    method: 'POST',
+                    headers: { cookie },
+                });
+                const releasedBody = await released.json();
+                assert.equal(released.status, 200, JSON.stringify(releasedBody));
+                const catalogueFile = path.join(dir, 'sectors.json');
+                const manifestFile = path.join(dir, 'manifest.json');
+                runWrangler(['r2', 'object', 'get', 'voyage-private/inputs/vtest/sectors.json', '--file', catalogueFile, '--local']);
+                runWrangler(['r2', 'object', 'get', 'voyage-public/truth/vchain2/manifest.json', '--file', manifestFile, '--local']);
+                const catalogue = JSON.parse(readFileSync(catalogueFile, 'utf8'));
+                const manifest = JSON.parse(readFileSync(manifestFile, 'utf8'));
+                assert.equal(manifest.truthVersion, 'vchain2');
+                assert.equal(manifest.sectors.length, catalogue.sectors.length);
+                for (const item of catalogue.sectors) {
+                    const listed = manifest.sectors.find((sector) => sector.slug === item.slug);
+                    assert.ok(listed, item.slug);
+                    assert.equal(listed.name, item.name);
+                    assert.equal(listed.x, item.x);
+                    assert.equal(listed.y, item.y);
+                }
+            } finally {
+                for (const version of versions) clearVersion(version);
+            }
         });
     });
 

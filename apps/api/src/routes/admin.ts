@@ -8,6 +8,7 @@ import { originAllowed, requireRole, ulid, type AppContext } from '../auth/sessi
 import { auditLog, truthVersions } from '../db/schema';
 import type { AppEnv } from '../env';
 import { fail, ok } from '../http';
+import { InputChainError, resolveCatalogue } from '../jobs/inputs';
 
 const ATTRIBUTION = 'Sector data from the Traveller Map (travellermap.com), used under Far Future Enterprises\' Fair Use Policy. Traveller is a registered trademark of Far Future Enterprises.';
 const FEED = 12;
@@ -44,21 +45,23 @@ admin.post('/truth/build', async (c) => {
         sourceSectors = parseStringArray(source.sectors);
         if (!sourceSectors.length) return fail(c, 400, 'validation', 'Source truth version has no sectors.');
     }
-    const keys = await inputKeys(c.env.PRIVATE_BUCKET, input.version);
-    const sourceKeys = input.from ? await inputKeys(c.env.PRIVATE_BUCKET, input.from) : null;
-    const hasInput = (name: string): boolean => {
-        if (keys.has(`inputs/${input.version}/${name}`)) return true;
-        return !!input.from && !!sourceKeys && sourceKeys.has(`inputs/${input.from}/${name}`);
-    };
-    if (!hasInput('sectors.json')) return fail(c, 404, 'not_found', 'Sector catalogue is missing.');
+    let resolved: { version: string; text: string };
+    try {
+        resolved = await resolveCatalogue(c.env.DB, c.env.PRIVATE_BUCKET, input.version, input.from);
+    } catch (err) {
+        if (err instanceof InputChainError) {
+            if (err.limited || input.from) return fail(c, 409, 'conflict', err.message);
+            return fail(c, 404, 'not_found', 'Sector catalogue is missing.');
+        }
+        throw err;
+    }
+    const keys = await inputKeys(c.env.PRIVATE_BUCKET, resolved.version);
     let slugs: string[];
     if (sourceSectors) {
         slugs = sourceSectors;
     } else if (input.sectors === 'all') {
-        const catalogue = await c.env.PRIVATE_BUCKET.get(`inputs/${input.version}/sectors.json`);
-        if (!catalogue) return fail(c, 404, 'not_found', 'Sector catalogue is missing.');
         try {
-            slugs = slugsFromCatalogue(await catalogue.text());
+            slugs = slugsFromCatalogue(resolved.text);
         } catch (err) {
             return fail(c, 400, 'validation', err instanceof Error ? err.message : 'Invalid sector catalogue.');
         }
@@ -67,11 +70,11 @@ admin.post('/truth/build', async (c) => {
         slugs = input.sectors;
     }
     for (const slug of slugs) {
+        const xml = `inputs/${resolved.version}/${slug}.xml`;
         if (input.from) {
-            if (!hasInput(`${slug}.xml`)) return fail(c, 404, 'not_found', 'Sector inputs are missing.', { slug });
+            if (!keys.has(xml)) return fail(c, 404, 'not_found', 'Sector inputs are missing.', { slug });
         } else {
-            const tsv = `inputs/${input.version}/${slug}.tsv`;
-            const xml = `inputs/${input.version}/${slug}.xml`;
+            const tsv = `inputs/${resolved.version}/${slug}.tsv`;
             if (!keys.has(tsv) || !keys.has(xml)) return fail(c, 404, 'not_found', 'Sector inputs are missing.', { slug });
         }
     }
@@ -235,20 +238,24 @@ admin.post('/truth/release/:version', async (c) => {
         `SELECT sector_slug, systems, built, partial, index_hash FROM truth_build_sectors WHERE version = ? AND state = 'done'`,
     ).bind(version).all<{ sector_slug: string; systems: number; built: number; partial: number; index_hash: string | null }>();
     const bySlug = new Map(recorded.results.map((item) => [item.sector_slug, item]));
-    const catalogue = await c.env.PRIVATE_BUCKET.get(`inputs/${version}/sectors.json`);
+    let catalogueText: string;
+    try {
+        catalogueText = (await resolveCatalogue(c.env.DB, c.env.PRIVATE_BUCKET, version, null)).text;
+    } catch (err) {
+        if (err instanceof InputChainError) return fail(c, 409, 'conflict', err.message);
+        throw err;
+    }
     const catalogueBySlug = new Map<string, { name: string; x: number; y: number; tags: string[]; canonical: boolean }>();
-    if (catalogue) {
-        const parsed = JSON.parse(await catalogue.text()) as { sectors?: Record<string, unknown>[] };
-        for (const item of parsed.sectors ?? []) {
-            if (typeof item.slug !== 'string' || typeof item.name !== 'string' || typeof item.x !== 'number' || typeof item.y !== 'number') continue;
-            catalogueBySlug.set(item.slug, {
-                name: item.name,
-                x: item.x,
-                y: item.y,
-                tags: Array.isArray(item.tags) ? item.tags.filter((tag): tag is string => typeof tag === 'string') : [],
-                canonical: item.canonical === true,
-            });
-        }
+    const parsed = JSON.parse(catalogueText) as { sectors?: Record<string, unknown>[] };
+    for (const item of parsed.sectors ?? []) {
+        if (typeof item.slug !== 'string' || typeof item.name !== 'string' || typeof item.x !== 'number' || typeof item.y !== 'number') continue;
+        catalogueBySlug.set(item.slug, {
+            name: item.name,
+            x: item.x,
+            y: item.y,
+            tags: Array.isArray(item.tags) ? item.tags.filter((tag): tag is string => typeof tag === 'string') : [],
+            canonical: item.canonical === true,
+        });
     }
     const sectorSlugs = parseStringArray(row.sectors);
     const sectors = [];

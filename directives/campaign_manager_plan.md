@@ -912,8 +912,10 @@ with one stated convention and one explicit approximation.
 **Model (`js/campaign_seasons.js`, pure functions, no DOM):**
 - *Orbital phase* `φ` = the body's true anomaly at the campaign date, taken from the same
   orbit solver the orrery uses (so the dot on the orrery and the season never disagree).
-- *Convention:* the northern vernal equinox sits at periapsis (`φ = 0`). It is a
-  convention, not a rule; it is stated in the tooltip and is one constant to change.
+- *Convention:* The northern spring equinox occurs at orbit angle 0° in the system frame,
+  measured along the direction of motion. For a moon, the parent planet's orbit angle is
+  used. This convention holds regardless of orbit eccentricity. (Johnny, 2026-10-03; it is
+  stated in the tooltip and is one constant.)
 - *Seasonal drive* `s = sin(φ) · sin(tilt)` for the northern hemisphere (negated for
   southern); the four labels come from `φ` quartered (spring → summer → autumn → winter
   north; the reverse south), **but** the label is only shown when `|sin(tilt)| ≥ sin(5°)`.
@@ -924,8 +926,10 @@ with one stated convention and one explicit approximation.
   second line says "orbit-driven: whole-world warm/cool season" with the flux ratio
   `((1+e)/(1−e))²` shown to one decimal — this is the *approximation* the referee accepted;
   it is flux geometry, not climate.
-- *Tidally locked* → "no seasons — one face always sunward"; the line names the solar-day
-  state instead (perpetual noon / twilight ring / night side).
+- *Tidally locked:* A world locked to its star has no day/night cycle and no seasons; one
+  face always points at the star. A moon locked to its parent planet has a day equal to its
+  orbital period and seasons set by the parent's year and the moon's effective axial tilt.
+  (Johnny, 2026-10-03.)
 - *Retrograde tilt* (> 90°) → computed with `180° − tilt`, labelled "retrograde".
 - *Temperature flavour* from `meanTempK` with the existing temperature band table in
   `rules/mgt2e_data.js` (`temperatureBands`) — the band label is displayed as-is, nothing is
