@@ -40,7 +40,7 @@ defineExpose({ element });
             <span v-if="$slots.glyph" class="panel-glyph"><slot name="glyph" /></span>
             <h1>{{ title }}</h1>
             <!-- The chip text is the hex chip of the legacy title row; the eyebrow slot is the breadcrumb. -->
-            <span v-if="chip && !$slots.eyebrow" class="panel-hex">{{ chip }}</span>
+            <span v-if="chip && !$slots.eyebrow" class="ui-hex">{{ chip }}</span>
           </div>
           <p v-if="meta" class="panel-meta">{{ meta }}</p>
         </div>
@@ -171,19 +171,6 @@ defineExpose({ element });
   font: 700 21px/1.2 var(--font-text);
   letter-spacing: -0.2px;
   overflow-wrap: anywhere;
-}
-
-.panel-hex {
-  flex: 0 0 auto;
-  padding: 1px 6px;
-  border: 1px solid var(--line-1);
-  border-radius: var(--r-1);
-  color: var(--text-muted);
-  font: 400 12px/1.4 var(--font-code);
-  letter-spacing: 0.5px;
-  white-space: nowrap;
-  font-variant-numeric: var(--tabular);
-  user-select: all;
 }
 
 .panel-eyebrow {

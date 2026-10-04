@@ -16,6 +16,8 @@ export function attachInput(el: HTMLElement, api: {
     getViewport(): Viewport;
     setCamera(cam: Camera, why: InputWhy): void;
     click(sx: number, sy: number): void;
+    /** A double click at a canvas point. Each of its two clicks has already been reported. */
+    doubleClick?(sx: number, sy: number): void;
 }): () => void {
     el.style.touchAction = 'none';
 
@@ -193,12 +195,19 @@ export function attachInput(el: HTMLElement, api: {
         }
     }
 
+    function onDouble(event: MouseEvent): void {
+        if (!api.doubleClick) return;
+        const point = local(event.clientX, event.clientY);
+        api.doubleClick(point.x, point.y);
+    }
+
     el.addEventListener('pointerdown', onDown);
     el.addEventListener('pointermove', onMove);
     el.addEventListener('pointerup', onUp);
     el.addEventListener('pointercancel', onUp);
     el.addEventListener('wheel', onWheel, { passive: false });
     el.addEventListener('keydown', onKey);
+    el.addEventListener('dblclick', onDouble);
 
     return () => {
         cancelMotion();
@@ -208,6 +217,7 @@ export function attachInput(el: HTMLElement, api: {
         el.removeEventListener('pointercancel', onUp);
         el.removeEventListener('wheel', onWheel);
         el.removeEventListener('keydown', onKey);
+        el.removeEventListener('dblclick', onDouble);
         el.style.touchAction = '';
     };
 }

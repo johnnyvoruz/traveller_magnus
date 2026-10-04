@@ -273,13 +273,14 @@ test('subsector titles name the sector from PPP_NAMES and are absent below it', 
         sectors: [{ slug: 'On', name: 'On Sector', x: 0, y: 0, canonical: true }],
     }, { truthVersion: 'v2', sectors: [] }, 'canonical');
     renderer.setIndexSource(() => ({ hexes: { '0101': { name: 'Alpha' } } }));
-    renderer.resize(240, 120, 1);
-    renderer.draw({ x: 4, y: 5 * ROW_STEP, ppp: 80 });
+    // B1.12b: a title shows where its anchor is in view, so the view holds the subsector's top-left.
+    renderer.resize(1200, 900, 1);
+    renderer.draw({ x: 2.5, y: 3, ppp: 80 });
     const titles = calls.filter((call) => call[0] === 'fillText' && String(call[1]).includes('On Sector') && String(call[1]).includes(' - '));
     assert.equal(titles.length, 1);
 
     calls.length = 0;
-    renderer.draw({ x: 4, y: 5 * ROW_STEP, ppp: 40 });
+    renderer.draw({ x: 2.5, y: 3, ppp: 40 });
     assert.equal(calls.filter((call) => call[0] === 'fillText' && String(call[1]).includes(' - ')).length, 0);
 });
 
@@ -320,6 +321,60 @@ test('a subsector title rides with the map while panning and keeps its size (B1.
     const mapX = (pill, ppp) => (pill[1] - 600) / ppp + 2.5;
     assert.ok(Math.abs(mapX(zoomed, 90) - mapX(pills[0], 80)) < 1e-9);
     assert.equal(zoomed[3], pills[0][3]);
+});
+
+test('a title whose anchor has left by the left edge is not drawn, and is never held at that edge (B1.12b)', () => {
+    const { canvas, calls } = recordingCanvas();
+    const renderer = new MapRenderer(canvas, theme);
+    renderer.setChart({
+        sectors: [{ slug: 'On', name: 'On Sector', x: 0, y: 0, canonical: true }],
+    }, { truthVersion: 'v2', sectors: [] }, 'canonical');
+    const index = { hexes: { '0101': { name: 'Alpha' } } };
+    renderer.setIndexSource(() => index);
+    renderer.resize(1200, 900, 1);
+    // Subsector A still fills the left of the view, but its top-left corner is off screen.
+    const drawn = renderer.draw({ x: 9, y: 3, ppp: 80 });
+    const labels = calls.filter((call) => call[0] === 'fillText' && String(call[1]).includes(' - ')).map((call) => String(call[1]));
+    assert.deepEqual(labels, ['On Sector - Subsector B']);
+    for (const pill of calls.filter((call) => call[0] === 'roundRect')) assert.ok(pill[1] > 100, 'no pill at the left edge');
+    // Without a fade duration nothing animates.
+    assert.equal(drawn.animating, false);
+});
+
+test('draw reports animating while a title fades in, then settles (B1.12b)', async () => {
+    const { canvas, calls } = recordingCanvas();
+    const renderer = new MapRenderer(canvas, { ...theme, tFast: 0.05 });
+    renderer.setChart({
+        sectors: [{ slug: 'On', name: 'On Sector', x: 0, y: 0, canonical: true }],
+    }, { truthVersion: 'v2', sectors: [] }, 'canonical');
+    const index = { hexes: { '0101': { name: 'Alpha' } } };
+    renderer.setIndexSource(() => index);
+    renderer.resize(1200, 900, 1);
+    const hadWindow = 'window' in globalThis;
+    const previous = globalThis.window;
+    globalThis.window = { matchMedia: () => ({ matches: false }) };
+    try {
+        const cam = { x: 2.5, y: 3, ppp: 80 };
+        // First sight: the title starts transparent and the renderer asks for more frames.
+        let drawn = renderer.draw(cam);
+        assert.equal(drawn.animating, true);
+        assert.equal(calls.filter((call) => call[0] === 'roundRect').length, 0);
+        let frames = 0;
+        while (drawn.animating && frames < 100) {
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            calls.length = 0;
+            drawn = renderer.draw(cam);
+            frames += 1;
+        }
+        assert.equal(drawn.animating, false);
+        assert.ok(frames >= 2, 'the fade took more than one frame');
+        assert.equal(calls.filter((call) => call[0] === 'roundRect').length, 1);
+        // Settled: a further draw is not animating either.
+        assert.equal(renderer.draw(cam).animating, false);
+    } finally {
+        if (hadWindow) globalThis.window = previous;
+        else delete globalThis.window;
+    }
 });
 
 /** Canvas ops with the style that was current when fill or stroke ran. */

@@ -2,6 +2,7 @@
 import type { PanelSpan } from '../shell/panel_state.ts';
 import type { OverviewModel } from './model.ts';
 import Icon from '../design/Icon.vue';
+import JourneyTimes from './JourneyTimes.vue';
 import SocioBlock from './SocioBlock.vue';
 import StatRows from './StatRows.vue';
 import StellarLines from './StellarLines.vue';
@@ -13,10 +14,13 @@ defineProps<{
     model: OverviewModel;
     span: PanelSpan;
     error: boolean;
+    /** Offer Explore orbits (not when the panel already sits beside the orbit view). */
+    orbitLink?: boolean;
 }>();
 
 defineEmits<{
     open: [key: string];
+    orbit: [];
     retry: [];
 }>();
 </script>
@@ -25,13 +29,23 @@ defineEmits<{
   <div class="doss" :data-span="span">
     <SurfaceStage :badge="model.mapBadge" />
     <div class="doss-identity">
-      <div v-if="model.mainworldKey" class="doss-actions">
-        <button type="button" class="ui-btn" @click="model.mainworldKey && $emit('open', model.mainworldKey)">
+      <div v-if="model.mainworldKey || (orbitLink && model.tree)" class="doss-actions">
+        <button
+          v-if="orbitLink && model.tree"
+          type="button"
+          class="ui-btn is-primary"
+          title="Open orbit view for this system (or double-click it on the map)"
+          @click="$emit('orbit')"
+        >
+          <Icon name="solar-system" :size="13" />Explore orbits
+        </button>
+        <button v-if="model.mainworldKey" type="button" class="ui-btn" @click="model.mainworldKey && $emit('open', model.mainworldKey)">
           <Icon name="earth-americas" :size="13" />Mainworld
         </button>
       </div>
       <UwpRibbon v-if="model.ribbon" :ribbon="model.ribbon" />
       <StatRows :rows="model.rows" />
+      <JourneyTimes v-if="model.journey" :journey="model.journey" />
       <p v-if="model.notice" class="doss-muted">{{ model.notice }}</p>
       <p v-if="error" class="doss-muted">This world's system could not be loaded.</p>
       <div v-if="error" class="doss-actions">

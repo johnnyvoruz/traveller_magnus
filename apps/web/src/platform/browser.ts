@@ -66,3 +66,19 @@ export function observeSize(element: Element, fn: () => void): () => void {
     observer.observe(element);
     return () => observer.disconnect();
 }
+
+/** An off-screen canvas of the given pixel size (the orbit view's backdrop and sprites). */
+export function createCanvas(width: number, height: number): HTMLCanvasElement {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    return canvas;
+}
+
+/** Starts loading an image; done runs once it can be drawn. A failed load never calls done. */
+export function loadImage(src: string, done: () => void): HTMLImageElement {
+    const image = new Image();
+    image.onload = () => done();
+    image.src = src;
+    return image;
+}

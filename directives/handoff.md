@@ -1585,3 +1585,28 @@ follows `derived_from` up to ten versions; the build route, `publishSector` and 
 use it. Gated test derives from a derived version and releases it. Checked by the
 orchestrator on the current tree, including the gated Worker suite. Unpushed; push by path
 (`apps/api tests/api directives`) while Agent D is mid-work in `apps/web`.
+
+## 49. The orbits picture works (Agent D, 2026-10-04)
+
+- **Pushed:** `125348d` (release reads inputs from the source version; directives).
+- **Agent D, C2a:** the system draws from Agent A's model and the clock in the legacy paint
+  order, with hit testing, a docked body card, wheel zoom, drag, click-to-follow,
+  double-click to frame, Fit, the edition badge, temperatures in both scales, season lines,
+  and the highport painting with nav lights. Checked here: `npm test` 342/337/5, check clean,
+  build succeeds (the orbit view is its own 70 kB chunk). D's frame measurements in headless
+  Chrome: paint cost under 1 ms a frame for Regina (41 bodies) and for the largest system in
+  the sector (63 bodies) at every zoom; not yet measured on a real display.
+- **Johnny answered some of D's questions to D directly;** D wrote them into
+  `campaign_manager_plan.md` §7.4 with his name: spring equinox at orbit angle 0; a moon
+  locked to its planet has seasons set by the parent's year and the moon's own tilt. The
+  questions file still shows them as open; ask Johnny which of A1-A6 he has answered so they
+  can be closed there.
+- **Stopped by D, correctly:** "today's" temperature. The tree's high and low come from an
+  engine step that mixes day and night swing, geography, pressure and eccentricity with
+  tilt, so a seasonal figure cannot be derived from them without new maths. Card shows mean,
+  high and low.
+- **For Johnny:** seasons hidden under 3° of tilt for every world (the plan said 5° for
+  planets); stars show °C and °F with kelvin in the tooltip; the dossier's own temperature
+  rows still show K and °C only (model code, not D's).
+- **All of `apps/web` since the borders push is unpushed:** D's title follow-up, A's model,
+  B's jump times, D's shell and picture. No agent is mid-task right now.

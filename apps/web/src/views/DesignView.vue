@@ -20,6 +20,13 @@ import SurfaceStage from '../dossier/SurfaceStage.vue';
 import SystemTree from '../dossier/SystemTree.vue';
 import UwpRibbon from '../dossier/UwpRibbon.vue';
 import OmniBox from '../components/OmniBox.vue';
+import BodyCard from '../orbit/BodyCard.vue';
+import BodyChips from '../orbit/BodyChips.vue';
+import type { BodyCardModel } from '../orbit/card.ts';
+import { bodyChips } from '../orbit/bodies.ts';
+import { REAL_TIME, skipHours, totalDays } from '../orbit/clock.ts';
+import OrbitHeader from '../orbit/OrbitHeader.vue';
+import TimeControls from '../orbit/TimeControls.vue';
 import Panel from '../shell/Panel.vue';
 import Rail from '../shell/Rail.vue';
 import type { BodyGlyphData } from '../dossier/model.ts';
@@ -67,6 +74,34 @@ const showBody = ref(false);
 const scanRun = ref(0);
 const opened = ref('');
 const railPanel = ref(true);
+
+// The orbit shell specimens hold a little state of their own so the controls respond.
+const orbitChips = bodyChips(sample.treeRows, 'Regina');
+const orbitDays = ref(totalDays(1105, 203) + 0.5);
+const orbitPaused = ref(true);
+const orbitSpeed = ref(REAL_TIME);
+const orbitShuttle = ref(0);
+const orbitPop = ref('');
+const orbitBody = ref<string | null>('w2m0');
+const orbitMoons = ref<string | null>(null);
+// The docked body card, with sample values in the shapes orbit/card.ts produces.
+const orbitCard: BodyCardModel = {
+    title: 'Regina',
+    sub: 'Mainworld Satellite',
+    lines: [
+        { label: 'Orbit', value: '10.66 PD from parent' },
+        { label: 'UWP', value: 'A788899-C', strong: true, gap: true },
+        { label: 'Diameter', value: '11,169 km', gap: true },
+        { label: 'Rotation', value: 'tidally locked' },
+        { label: 'Temperature', value: 'Frozen \u00B7 \u221284\u00B0C (\u2212118\u00B0F)', hint: 'Mean 190 K' },
+    ],
+    season: {
+        text: 'Northern autumn, marked \u00B7 southern spring \u00B7 by Regina A-IV\u2019s year (1,984 days)',
+        orbit: '',
+        inputs: 'tilt 25\u00B0 \u00B7 e 0 \u00B7 orbit angle 241\u00B0',
+    },
+    seasonHelp: 'Seasons are measured from a fixed reference: the northern spring equinox occurs when the world (or its parent planet, for a moon) is at orbit angle 0\u00B0 in the system view. This is a display convention, not canon data.',
+};
 
 function open(key: string): void {
     opened.value = key;
@@ -243,6 +278,54 @@ function open(key: string): void {
       </div>
       <div class="design-rail">
         <Rail :panel-open="railPanel" :search-open="false" />
+      </div>
+    </section>
+
+    <section class="design-section">
+      <h2 class="ui-heading">Orbit view shell</h2>
+      <p class="design-note">
+        The nav bar with the edition badge, the time row, the docked body card and the body chips of
+        <code>/s/:sector/:hex/orbit</code>. Buttons are <code>.orbit-btn</code> (base.css); the clock arithmetic is
+        <code>orbit/clock.ts</code>; the card's contents are <code>orbit/card.ts</code> (temperatures through
+        <code>design/units.ts</code>, the season line through <code>orbit/seasons.ts</code>). The picture's colours are the
+        <code>--orbit-*</code>, <code>--port-*</code> and <code>--nebula-*</code> tokens. One popover is open at a time.
+      </p>
+      <div class="design-orbit">
+        <OrbitHeader
+          title="Regina"
+          chip="1910"
+          place="Spinward Marches - Regina"
+          age="3.95 Gyr"
+          edition="MgT2E"
+          :keys-open="orbitPop === 'keys'"
+          @back="orbitPop = ''"
+          @keys="orbitPop = $event ? 'keys' : ''"
+        />
+        <TimeControls
+          :days="orbitDays"
+          :paused="orbitPaused"
+          :speed="orbitSpeed"
+          :shuttle="orbitShuttle"
+          local-time="14:03:22"
+          :scrub-open="orbitPop === 'scrub'"
+          @toggle="orbitPaused = !orbitPaused"
+          @skip="orbitDays = skipHours(orbitDays, $event)"
+          @days="orbitDays = $event"
+          @speed="orbitSpeed = $event"
+          @scrub="() => {}"
+          @shuttle="orbitShuttle = $event"
+          @pop="orbitPop = $event ? 'scrub' : ''"
+        />
+        <div class="design-orbit-stage">
+          <BodyCard :model="orbitCard" body-key="sample" />
+          <BodyChips
+            :chips="orbitChips"
+            :selected="orbitBody"
+            :moons-open="orbitMoons"
+            @select="orbitBody = orbitBody === $event ? null : $event; orbitMoons = null"
+            @moons="orbitMoons = $event"
+          />
+        </div>
       </div>
     </section>
 
@@ -574,6 +657,26 @@ function open(key: string): void {
 .design-icon b {
   color: var(--attention);
   font-weight: 700;
+}
+
+.design-orbit {
+  margin-top: var(--sp-3);
+  border: 1px solid var(--signal-dim);
+  border-radius: var(--r-4);
+  background: var(--bg-0);
+}
+
+.design-orbit > .orbit-nav {
+  border-radius: var(--r-4) var(--r-4) 0 0;
+}
+
+.design-orbit-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 330px;
+  background: var(--orbit-space);
 }
 
 .design-omni {

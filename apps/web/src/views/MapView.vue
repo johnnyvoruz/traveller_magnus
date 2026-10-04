@@ -14,6 +14,7 @@ import OmniBox from '../components/OmniBox.vue';
 import DossierPanel from '../dossier/DossierPanel.vue';
 import { bodyKeys, pickSystem, type AllegianceName } from '../dossier/model.ts';
 import { handleKey, registerCommand, systemPanel, type PanelWorld } from '../shell/registry.ts';
+import { orbitPath } from '../orbit/bodies.ts';
 import { escapeAction } from '../shell/panel_state.ts';
 import Rail from '../shell/Rail.vue';
 import {
@@ -345,6 +346,8 @@ function frame(): void {
     if (renderer) {
         const drawn = renderer.draw(cam);
         if (drawn.tier === 'hex' && version) requestIndexes(drawn.sectorsOnScreen);
+        // A title fade is in progress: keep drawing until the renderer says it has settled.
+        if (drawn.animating) dirty = true;
     }
     if (fly) dirty = true;
     if (dirty) raf = nextFrame(frame);
@@ -554,6 +557,20 @@ onMounted(() => {
                     query: { x: cam.x.toFixed(3), y: cam.y.toFixed(3), z: cam.ppp.toFixed(3) },
                 });
             }
+        },
+        // Legacy js/canvas_input.js:361-373: a double click on a system with orbit data enters its orbit view.
+        doubleClick: (sx, sy) => {
+            const world = toWorld(cam, viewport(), sx, sy);
+            const hit = hexAt(world.x, world.y);
+            const place = fromGlobal(hit.q, hit.r);
+            const hhhh = formatHex(place.col, place.row);
+            const sector = chart ? chart.sectors.find((item) => item.x === place.sx && item.y === place.sy && item.canonical) : null;
+            if (!sector || !version) return;
+            const index = client.index(version, sector.slug);
+            const entry = index ? index.hexes[hhhh] : null;
+            // No generated system (an incomplete survey, or the index is not in yet): stay on the map.
+            if (!entry || entry.tree === null) return;
+            void router.push(orbitPath(sector.slug, hhhh));
         },
     });
     unregisterHome = registerCommand({

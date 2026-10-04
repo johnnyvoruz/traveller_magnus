@@ -9,6 +9,7 @@ import { readSpan, writeSpan, type PanelSpan } from '../shell/panel_state.ts';
 import BodyGlyph from './BodyGlyph.vue';
 import DossierBody from './DossierBody.vue';
 import DossierOverview from './DossierOverview.vue';
+import { dossierPath, orbitPath } from '../orbit/bodies.ts';
 import { bodyKeys, bodyModel, overviewModel, pickSystem, type AllegianceName } from './model.ts';
 
 const props = defineProps<{
@@ -24,6 +25,8 @@ const props = defineProps<{
     pending: boolean;
     missing: boolean;
     allegiances: AllegianceName[];
+    /** The panel sits beside the orbit view: its links stay on the orbit route. */
+    orbit?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -97,16 +100,22 @@ function chooseSpan(next: PanelSpan): void {
     void nextTick(publish);
 }
 
-function overviewPath(): string {
-    return '/s/' + encodeURIComponent(props.slug) + '/' + props.hex;
+/** The system, or one body of it, on the route this panel is shown in. */
+function pathTo(key: string | null): string {
+    return props.orbit ? orbitPath(props.slug, props.hex, key) : dossierPath(props.slug, props.hex, key);
 }
 
 function openKey(key: string): void {
-    void router.push({ path: overviewPath() + '/b/' + encodeURIComponent(key), query: route.query });
+    void router.push({ path: pathTo(key), query: route.query });
 }
 
 function showOverview(): void {
-    void router.push({ path: overviewPath(), query: route.query });
+    void router.push({ path: pathTo(null), query: route.query });
+}
+
+/** Into the orbit view, on this body when one is open. The map's camera query stays behind. */
+function openOrbit(key: string | null): void {
+    void router.push(orbitPath(props.slug, props.hex, key));
 }
 
 watch(() => props.open, () => { void nextTick(publish); });
@@ -162,9 +171,12 @@ defineExpose({ remeasure: publish });
         >
           <Icon name="chevron-right" :size="13" />
         </button>
+        <button v-if="!orbit" type="button" class="ui-btn doss-orbits" title="Open the orbit view on this body" @click="openOrbit(bodyKey)">
+          <Icon name="solar-system" :size="13" />Orbits
+        </button>
       </template>
       <DossierBody v-if="profile" :model="profile" :span="span" @open="openKey" />
-      <DossierOverview v-else-if="overview" :model="overview" :span="span" :error="error" @open="openKey" @retry="$emit('retry')" />
+      <DossierOverview v-else-if="overview" :model="overview" :span="span" :error="error" :orbit-link="!orbit" @open="openKey" @orbit="openOrbit(null)" @retry="$emit('retry')" />
       <p v-else-if="missing" class="doss-muted doss-pad">This hex has no world in the sector index.</p>
       <p v-else-if="pending" class="doss-muted doss-pad">Loading this sector.</p>
     </Panel>
@@ -222,6 +234,10 @@ defineExpose({ remeasure: publish });
   font-size: 11.5px;
   font-variant-numeric: var(--tabular);
   white-space: nowrap;
+}
+
+.doss-orbits {
+  margin-left: auto;
 }
 
 .doss-actions {

@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { toScreen } from '../../apps/web/src/map/camera.ts';
 import { ROW_STEP } from '../../apps/web/src/map/geometry.ts';
 import {
-    boxesOverlap, clampTitle, fadeToward, placeTitle, stepScale, titleAnchor, titleCandidates, titleFits, zoomStep,
+    boxesOverlap, clampTitle, fadeToward, placeTitle, stepScale, titleAnchor, titleCandidates, titleInView, zoomStep,
 } from '../../apps/web/src/map/titles.ts';
 
 const visible = { x: 0, y: 0, w: 200, h: 80 };
@@ -67,7 +67,7 @@ test('panning in ten steps leaves the anchor where it is on the map: the pill mo
         assert.deepEqual(titleAnchor(subsector, zoomStep(cam.ppp), PILL_W, PILL_H, worlds), anchor);
         const at = toScreen(cam, vp, anchor.x, anchor.y);
         const home = toScreen(cam, vp, subsector.x, subsector.y);
-        const spot = clampTitle({ x: at.sx, y: at.sy }, PILL_W, PILL_H, { x: home.sx, y: home.sy, w: subsector.w * ppp, h: subsector.h * ppp }, wide);
+        const spot = clampTitle({ x: at.sx, y: at.sy }, PILL_H, { x: home.sx, y: home.sy, w: subsector.w * ppp, h: subsector.h * ppp }, wide);
         if (previous) {
             assert.ok(Math.abs((spot.x - previous.x) - (-0.25 * ppp)) < 1e-9);
             assert.ok(Math.abs((spot.y - previous.y) - (-0.1 * ppp)) < 1e-9);
@@ -99,7 +99,7 @@ test('the anchor keeps clear of the worlds of its own subsector and ignores dist
     assert.equal(titleAnchor({ x: 0, y: 0, w: 0.5, h: 0.1 }, 13, PILL_W, PILL_H, []), null);
 });
 
-test('a clamped pill is sticky at the edge and never moves further than the pan does', () => {
+test('a title is sticky at the top edge only and never moves further than the pan does (B1.12b)', () => {
     const ppp = 80;
     const bounds = { x: 300, y: 56, w: 900, h: 700 };
     const homeW = subsector.w * ppp;
@@ -108,41 +108,63 @@ test('a clamped pill is sticky at the edge and never moves further than the pan 
     let previous = null;
     let stuck = 0;
     let riding = 0;
-    // The subsector crosses the bounds from the right edge to beyond the left edge, one pixel a frame.
-    for (let homeX = bounds.x + bounds.w + 50; homeX > bounds.x - homeW - 50; homeX -= 1) {
-        const home = { x: homeX, y: 100, w: homeW, h: homeH };
-        const spot = clampTitle({ x: homeX + offset.x, y: home.y + offset.y }, PILL_W, PILL_H, home, bounds);
-        // Never outside its own subsector.
-        assert.ok(spot.x >= home.x + 4 && spot.x + PILL_W <= home.x + home.w - 4 + 1e-9);
-        if (previous) {
-            assert.ok(Math.abs(spot.x - previous.x) <= 1 + 1e-9, 'x moved further than the pan');
-            assert.ok(Math.abs(spot.y - previous.y) <= 1e-9, 'y moved without a vertical pan');
-        }
-        if (spot.x === bounds.x + 4) stuck += 1;
-        if (spot.x === homeX + offset.x) riding += 1;
+    let pushed = 0;
+    // The subsector crosses the bounds from below the bottom edge to above the top edge, one pixel a frame.
+    for (let homeY = bounds.y + bounds.h + 50; homeY > bounds.y - homeH - 50; homeY -= 1) {
+        const home = { x: 400, y: homeY, w: homeW, h: homeH };
+        const spot = clampTitle({ x: home.x + offset.x, y: homeY + offset.y }, PILL_H, home, bounds);
+        // Never outside its own subsector, and never moved sideways.
+        assert.ok(spot.y >= home.y + 4 - 1e-9 && spot.y + PILL_H <= home.y + home.h - 4 + 1e-9);
+        assert.equal(spot.x, home.x + offset.x);
+        if (previous) assert.ok(Math.abs(spot.y - previous.y) <= 1 + 1e-9, 'y moved further than the pan');
+        if (spot.y === bounds.y + 4) stuck += 1;
+        else if (spot.y === homeY + offset.y) riding += 1;
+        else pushed += 1;
+        // Below the bottom edge it is out of view, not held at the bottom.
+        if (homeY + offset.y + PILL_H > bounds.y + bounds.h - 4) assert.equal(titleInView(spot, PILL_W, PILL_H, bounds), false);
         previous = spot;
     }
     assert.ok(riding > 100, 'the pill rides with the map while its anchor is in view');
-    assert.ok(stuck > 100, 'the pill holds at the edge while its subsector still covers it');
-
-    // The same holds for a vertical pan.
-    previous = null;
-    for (let homeY = bounds.y + bounds.h + 50; homeY > bounds.y - homeH - 50; homeY -= 1) {
-        const home = { x: 400, y: homeY, w: homeW, h: homeH };
-        const spot = clampTitle({ x: home.x + offset.x, y: homeY + offset.y }, PILL_W, PILL_H, home, bounds);
-        if (previous) assert.ok(Math.abs(spot.y - previous.y) <= 1 + 1e-9, 'y moved further than the pan');
-        previous = spot;
-    }
+    assert.ok(stuck > 100, 'the pill holds at the top while its subsector still covers it');
+    assert.ok(pushed > 10, 'the bottom of its subsector pushes the pill out at the top');
+    assert.equal(titleInView(previous, PILL_W, PILL_H, bounds), false);
 });
 
-test('a title is shown only where the visible part of its subsector can hold it, and fades in steps', () => {
+test('a title whose anchor leaves by the left edge fades and never sits at the left edge (B1.12b)', () => {
+    const ppp = 80;
+    const bounds = { x: 300, y: 56, w: 900, h: 700 };
+    const home = (x) => ({ x, y: 100, w: subsector.w * ppp, h: subsector.h * ppp });
+    let alpha = 1;
+    let leftAt = null;
+    let goneAt = null;
+    // Pan left four pixels a frame: the anchor starts well inside and ends far past the left edge.
+    for (let homeX = 500; homeX > -200; homeX -= 4) {
+        const anchor = { x: homeX + 4, y: 104 };
+        const spot = clampTitle(anchor, PILL_H, home(homeX), bounds);
+        // The pill is exactly where its anchor is: it is never held at the left edge.
+        assert.deepEqual(spot, anchor);
+        const shown = titleInView(spot, PILL_W, PILL_H, bounds);
+        assert.equal(shown, spot.x >= bounds.x + 4);
+        alpha = fadeToward(alpha, shown ? 1 : 0, 0.125);
+        if (!shown && leftAt === null) leftAt = homeX;
+        if (alpha === 0 && goneAt === null) goneAt = homeX;
+    }
+    assert.ok(leftAt !== null && goneAt !== null);
+    // Eight frames at an eighth a frame: the fade is gradual, and it completes.
+    assert.equal((leftAt - goneAt) / 4, 7);
+    assert.equal(alpha, 0);
+    // The same on the right: a pill cut by the right edge is out of view.
+    assert.equal(titleInView({ x: bounds.x + bounds.w - PILL_W, y: 104 }, PILL_W, PILL_H, bounds), false);
+    assert.equal(titleInView({ x: bounds.x + bounds.w - PILL_W - 4, y: 104 }, PILL_W, PILL_H, bounds), true);
+});
+
+test('a title is shown only while the whole pill is in view, and fades in steps', () => {
     const bounds = { x: 0, y: 56, w: 1000, h: 700 };
-    assert.equal(titleFits(PILL_W, PILL_H, { x: 100, y: 100, w: 640, h: 900 }, bounds), true);
-    // A sliver narrower than the pill, entering from the right.
-    assert.equal(titleFits(PILL_W, PILL_H, { x: 940, y: 100, w: 640, h: 900 }, bounds), false);
-    assert.equal(titleFits(PILL_W, PILL_H, { x: 880, y: 100, w: 640, h: 900 }, bounds), true);
-    // A strip shorter than the pill, leaving at the top.
-    assert.equal(titleFits(PILL_W, PILL_H, { x: 100, y: -830, w: 640, h: 900 }, bounds), false);
+    assert.equal(titleInView({ x: 100, y: 100 }, PILL_W, PILL_H, bounds), true);
+    assert.equal(titleInView({ x: 3, y: 100 }, PILL_W, PILL_H, bounds), false);
+    assert.equal(titleInView({ x: 100, y: 59 }, PILL_W, PILL_H, bounds), false);
+    assert.equal(titleInView({ x: 100, y: 60 }, PILL_W, PILL_H, bounds), true);
+    assert.equal(titleInView({ x: 100, y: 740 }, PILL_W, PILL_H, bounds), false);
 
     assert.equal(boxesOverlap({ x: 0, y: 0, w: 10, h: 10 }, { x: 9, y: 9, w: 10, h: 10 }), true);
     assert.equal(boxesOverlap({ x: 0, y: 0, w: 10, h: 10 }, { x: 10, y: 0, w: 10, h: 10 }), false);

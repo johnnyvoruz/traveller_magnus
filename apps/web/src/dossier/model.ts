@@ -45,11 +45,13 @@ export type FactTile = { label: string; value: string; note: string };
 export type BodyLink = { key: string; name: string; facts: string[]; glyph: BodyGlyphData };
 export type StellarLine = { text: string; glyph: BodyGlyphData };
 export type Section = { heading: string; rows: StatRow[] };
+export type JourneyTime = { g: number; hours: string };
 
 export type OverviewModel = {
     header: { title: string; hexChip: string; place: string };
     ribbon: Ribbon | null;
     rows: StatRow[];
+    journey: JourneyTime[] | null;
     noOrbit: boolean;
     socio: { headline: string; rows: StatRow[] | null; empty: string | null } | null;
     stellar: { lines: StellarLine[] } | null;
@@ -68,6 +70,7 @@ export type BodyModel = {
     ribbon: Ribbon | null;
     mapBadge: string;
     facts: FactTile[];
+    journey: JourneyTime[] | null;
     mainSections: Section[];
     sideSections: Section[];
     moons: BodyLink[];
@@ -432,6 +435,46 @@ function keyFor(system: SystemDoc, target: Record<string, unknown>): string | nu
     return null;
 }
 
+function isBelt(body: Record<string, unknown>): boolean {
+    const type = text(body.type);
+    return type === 'Planetoid Belt' || type === 'Asteroid Belt' || text(body.worldType) === 'Belt';
+}
+
+/** hex_editor.js:25-26 skips a missing size and the R and S digits. */
+function jumpSize(body: Record<string, unknown>): boolean {
+    const size = body.size;
+    return size != null && size !== '' && size !== 'R' && size !== 'S';
+}
+
+/**
+ * Six stored journeyTimes, shown as the legacy block does: the number, then h.
+ * Null for a star, a belt, a body with no size, or an array that is not six numbers.
+ */
+function journeyFrom(body: Record<string, unknown> | null): JourneyTime[] | null {
+    if (!body || isStar(body) || isBelt(body) || body.type === 'Empty' || !jumpSize(body)) return null;
+    const times = body.journeyTimes;
+    if (!Array.isArray(times) || times.length !== 6) return null;
+    const journey: JourneyTime[] = [];
+    for (let i = 0; i < 6; i++) {
+        const hours = times[i];
+        if (typeof hours !== 'number' || !Number.isFinite(hours)) return null;
+        journey.push({ g: i + 1, hours: String(hours) + 'h' });
+    }
+    return journey;
+}
+
+/** Inventory F journeyHost: mapped mainworld, else the profile, when size and stars are set. */
+function overviewJourney(state: HexBody, system: SystemDoc | null, profile: Record<string, unknown>): JourneyTime[] | null {
+    const stars = system ? arr(system.stars) : [];
+    const mapped = mappedMainworld(system, {});
+    let host: Record<string, unknown> | null = null;
+    if (mapped && jumpSize(mapped) && stars.length) host = mapped;
+    else if (jumpSize(profile) && stars.length) host = profile;
+    const fromHost = journeyFrom(host);
+    if (fromHost) return fromHost;
+    return journeyFrom(rec(state.mgt2eData));
+}
+
 function mappedMainworld(system: SystemDoc | null, profile: Record<string, unknown>): Record<string, unknown> | null {
     if (system) {
         for (const item of arr(system.worlds)) {
@@ -667,6 +710,7 @@ export function overviewModel(input: {
         },
         ribbon: ribbonOf(uwp),
         rows: state && !partial ? identityRows(state, input.allegiances) : chartRows(input.entry, input.allegiances),
+        journey: state && !partial ? overviewJourney(state, system, profile) : null,
         noOrbit,
         socio: state && !partial ? socioBlock(state) : null,
         stellar: state && !partial && system && stellarLines(system).length ? { lines: stellarLines(system) } : null,
@@ -825,6 +869,7 @@ export function bodyModel(tree: TreeEnvelope, bodyKey: string): BodyModel | null
                 { label: 'Year', value: periodText(body) },
                 { label: 'Moons', value: moonCount ? String(moonCount) : '' },
             ]),
+        journey: journeyFrom(body),
         mainSections,
         sideSections,
         moons,

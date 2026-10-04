@@ -1,0 +1,340 @@
+<script setup lang="ts">
+/**
+ * The orbit stage: the canvas, its pointer input, the docked body card and the Fit button.
+ * It only binds. The scene is orbit/layout.ts, the camera orbit/camera.ts and orbit/stage.ts,
+ * the paint orbit/OrbitRenderer.ts, the card orbit/card.ts. The view owns the clock and the
+ * frame loop and calls paint() once a frame.
+ */
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
+import Icon from '../design/Icon.vue';
+import {
+    createCanvas, devicePixelRatio, loadImage, now, observeSize, onDevicePixelRatioChange,
+    prefersReducedMotion,
+} from '../platform/browser.ts';
+import BodyCard from './BodyCard.vue';
+import { DRAG_SLOP, wheelNotches } from './camera.ts';
+import { cardFor } from './card.ts';
+import { hitOf, planSystem, type HitKind, type Plan } from './layout.ts';
+import { OrbitRenderer } from './OrbitRenderer.ts';
+import { OrbitStage } from './stage.ts';
+import { readOrbitMotion, readOrbitTheme, type OrbitMotion } from './theme.ts';
+
+const props = defineProps<{
+    /** The normalised system (orbit/system.ts), or null while there is none. */
+    system: Record<string, any> | null;
+    /** The route's hex key, `Spinward_Marches/1910`: the model does not carry it. */
+    hexKey: string;
+    /** The selected body's dossier key, or null. */
+    selected: string | null;
+}>();
+
+const emit = defineEmits<{
+    /** A body was clicked on the canvas. */
+    pick: [key: string];
+}>();
+
+const wrapEl = ref<HTMLElement | null>(null);
+const canvasEl = ref<HTMLCanvasElement | null>(null);
+const plan = shallowRef<Plan | null>(null);
+const stage = new OrbitStage();
+let renderer: OrbitRenderer | null = null;
+let motionTokens: OrbitMotion = { hop: 0, flight: 0 };
+let reduced = false;
+let reducedCheckedAt = 0;
+let stale = true;
+let days = 0;
+const unsubscribe: (() => void)[] = [];
+
+// ---- Hover and the card ----------------------------------------------------------------
+
+const hover = ref<{ kind: HitKind; key: string } | null>(null);
+/** The date the card shows; it follows the clock a few times a second, not every frame. */
+const cardDays = ref(0);
+let cardAt = 0;
+let pointer: { x: number; y: number } | null = null;
+const dragging = ref(false);
+const fitted = ref(true);
+
+const cardTarget = computed((): { kind: HitKind; key: string } | null => {
+    if (hover.value) return hover.value;
+    if (!props.selected || !plan.value) return null;
+    // The selected body's own kind decides its card (a belt's differs from a world's).
+    const world = plan.value.worlds.find((w) => w.key === props.selected);
+    if (world) return { kind: world.belt && !world.mainworldBelt ? 'belt' : 'world', key: world.key };
+    if (plan.value.stars.some((s) => s.key === props.selected)) return { kind: 'star', key: props.selected };
+    return { kind: 'moon', key: props.selected };
+});
+
+const card = computed(() => {
+    const target = cardTarget.value;
+    if (!target || !plan.value) return null;
+    return cardFor(plan.value, target.kind, target.key, cardDays.value);
+});
+
+function setHover(x: number, y: number): void {
+    const hit = stage.pick(x, y);
+    const next = hit && hit.kind !== 'ring' ? { kind: hit.kind, key: hit.key } : null;
+    const was = hover.value;
+    if ((was && next && was.key === next.key && was.kind === next.kind) || (!was && !next)) return;
+    hover.value = next;
+}
+
+// ---- Pointer input ----------------------------------------------------------------------
+
+let press: { x: number; y: number; lastX: number; lastY: number; moved: boolean } | null = null;
+
+function local(event: MouseEvent): { x: number; y: number } {
+    const rect = (canvasEl.value as HTMLCanvasElement).getBoundingClientRect();
+    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+}
+
+function onDown(event: PointerEvent): void {
+    if (event.button !== 0 || !canvasEl.value) return;
+    canvasEl.value.setPointerCapture(event.pointerId);
+    press = { x: event.clientX, y: event.clientY, lastX: event.clientX, lastY: event.clientY, moved: false };
+    dragging.value = true;
+}
+
+function onMove(event: PointerEvent): void {
+    const at = local(event);
+    pointer = at;
+    if (!press) {
+        setHover(at.x, at.y);
+        return;
+    }
+    if (Math.hypot(event.clientX - press.x, event.clientY - press.y) > DRAG_SLOP) press.moved = true;
+    stage.drag(event.clientX - press.lastX, event.clientY - press.lastY, press.moved);
+    press.lastX = event.clientX;
+    press.lastY = event.clientY;
+    if (press.moved) hover.value = null;
+}
+
+function onUp(event: PointerEvent): void {
+    if (!press) return;
+    const moved = press.moved;
+    press = null;
+    dragging.value = false;
+    if (canvasEl.value && canvasEl.value.hasPointerCapture(event.pointerId)) canvasEl.value.releasePointerCapture(event.pointerId);
+    if (moved || event.type === 'pointercancel') return;
+    const at = local(event);
+    const hit = stage.pick(at.x, at.y);
+    if (!hit) {
+        stage.release();
+        return;
+    }
+    stage.follow(hit.key, now());
+    emit('pick', hit.key);
+}
+
+function onLeave(): void {
+    pointer = null;
+    if (!press) hover.value = null;
+}
+
+function onDouble(event: MouseEvent): void {
+    const at = local(event);
+    const hit = stage.pick(at.x, at.y);
+    if (!hit) {
+        stage.fit(now());
+        return;
+    }
+    if (stage.frame(hit.key, days, now())) emit('pick', hit.key);
+}
+
+function onWheel(event: WheelEvent): void {
+    const at = local(event);
+    stage.wheel(at.x, at.y, wheelNotches(event.deltaY, event.deltaMode), days, now());
+}
+
+function fit(): void {
+    stage.fit(now());
+}
+
+// ---- Size, theme, paint -------------------------------------------------------------------
+
+function applyMotion(): void {
+    reduced = prefersReducedMotion();
+    stage.motion = reduced ? { hop: 0, flight: 0 } : motionTokens;
+}
+
+function resize(): void {
+    const wrap = wrapEl.value;
+    const canvas = canvasEl.value;
+    if (!wrap || !canvas || !renderer) return;
+    const w = Math.max(1, Math.floor(wrap.clientWidth));
+    const h = Math.max(1, Math.floor(wrap.clientHeight));
+    const dpr = devicePixelRatio();
+    const pw = Math.round(w * dpr);
+    const ph = Math.round(h * dpr);
+    if (canvas.width !== pw || canvas.height !== ph) {
+        canvas.width = pw;
+        canvas.height = ph;
+    }
+    renderer.resize(w, h, dpr);
+    stage.resize(w, h, days);
+    stage.invalidate();
+    stale = true;
+}
+
+/**
+ * Frame cost, for the 16 ms budget: written once a second to data-draw-ms as "mean/worst",
+ * with the zoom relative to the fitted view in data-zoom.
+ */
+let costSum = 0;
+let costWorst = 0;
+let costFrames = 0;
+let costAt = 0;
+
+/** Called by the view once a frame with the clock's date and the wall time in milliseconds. */
+function paint(clockDays: number, time: number): void {
+    days = clockDays;
+    const current = plan.value;
+    if (!renderer || !current) return;
+    if (time - reducedCheckedAt > 1000) {
+        reducedCheckedAt = time;
+        applyMotion();
+    }
+    const frame = stage.tick(clockDays, time);
+    if (!frame) return;
+    if (fitted.value !== stage.fitted) fitted.value = stage.fitted;
+    if (time - cardAt > 200) {
+        cardAt = time;
+        if (cardDays.value !== clockDays) cardDays.value = clockDays;
+    }
+    // A body can move under a still pointer. Not while the camera flies: the card would flicker
+    // through everything that sweeps past.
+    if (frame.changed && !frame.moving && pointer && !press) setHover(pointer.x, pointer.y);
+    // The selection lock and a highport's lights run on the wall clock.
+    const selected = props.selected && hitOf(frame.scene, props.selected) ? props.selected : null;
+    const alive = !reduced && (selected !== null || current.worlds.some((w) => w.port !== null || w.moons.some((m) => m.port !== null)));
+    if (!frame.changed && !frame.moving && !alive && !stale) return;
+    stale = false;
+    const started = now();
+    renderer.draw(current, frame.scene, frame.view, { selected, days: clockDays, time, motion: !reduced });
+    const cost = now() - started;
+    costSum += cost;
+    costFrames += 1;
+    if (cost > costWorst) costWorst = cost;
+    if (time - costAt > 1000 && wrapEl.value) {
+        wrapEl.value.dataset.drawMs = (costSum / costFrames).toFixed(2) + '/' + costWorst.toFixed(2);
+        wrapEl.value.dataset.zoom = (stage.cam.zoom / (stage.cam.fitZoom || 1)).toFixed(1);
+        costSum = 0;
+        costWorst = 0;
+        costFrames = 0;
+        costAt = time;
+    }
+}
+
+function loadPlan(): void {
+    plan.value = props.system ? planSystem(props.system, props.hexKey) : null;
+    stage.setPlan(plan.value);
+    hover.value = null;
+    stale = true;
+}
+
+watch([() => props.system, () => props.hexKey], loadPlan);
+
+// A body chosen elsewhere (a chip, the dossier) is followed; a body clicked here already is.
+watch(() => props.selected, (key) => {
+    stale = true;
+    if (!key) {
+        stage.release();
+        return;
+    }
+    if (key !== stage.tracked) stage.follow(key, now());
+});
+
+onMounted(() => {
+    const wrap = wrapEl.value;
+    const canvas = canvasEl.value;
+    const ctx = canvas ? canvas.getContext('2d') : null;
+    if (!wrap || !canvas || !ctx) return;
+    motionTokens = readOrbitMotion(wrap);
+    applyMotion();
+    renderer = new OrbitRenderer(ctx, readOrbitTheme(wrap), {
+        makeCanvas: createCanvas,
+        loadImage,
+        artBase: import.meta.env.BASE_URL + 'starports/',
+        stale: () => { stale = true; },
+    });
+    loadPlan();
+    resize();
+    unsubscribe.push(observeSize(wrap, resize), onDevicePixelRatioChange(resize));
+});
+
+onBeforeUnmount(() => {
+    for (const off of unsubscribe) off();
+    renderer = null;
+});
+
+defineExpose({ paint });
+</script>
+
+<template>
+  <div ref="wrapEl" class="orbit-canvas-wrap">
+    <canvas
+      ref="canvasEl"
+      class="orbit-canvas"
+      :class="{ 'is-dragging': dragging, 'is-over': hover !== null && !dragging }"
+      aria-label="Orbit picture. Every body is also in the list below."
+      @pointerdown="onDown"
+      @pointermove="onMove"
+      @pointerup="onUp"
+      @pointercancel="onUp"
+      @pointerleave="onLeave"
+      @dblclick.prevent="onDouble"
+      @wheel.prevent="onWheel"
+    />
+    <BodyCard v-if="card && cardTarget" :model="card" :body-key="cardTarget.key" />
+    <button
+      type="button"
+      class="orbit-btn orbit-fit"
+      title="Fit the whole system (double-click empty space)"
+      :aria-pressed="fitted"
+      @click="fit"
+    >
+      <Icon name="expand" :size="13" />Fit
+    </button>
+  </div>
+</template>
+
+<style>
+.orbit-canvas-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--orbit-space);
+}
+
+.orbit-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: default;
+  touch-action: none;
+}
+
+.orbit-canvas.is-over {
+  cursor: pointer;
+}
+
+.orbit-canvas.is-dragging {
+  cursor: move;
+}
+
+.orbit-fit {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 2;
+  background: var(--chrome-glass);
+}
+
+.orbit-fit[aria-pressed="true"] {
+  border-color: var(--line-2);
+  color: var(--text-muted);
+}
+</style>

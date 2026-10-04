@@ -126,6 +126,39 @@ for (const slug of ['Spinward_Marches', 'Gvurrdon', 'Tuglikki']) {
     cases[`routes_${slug}`] = (ctx) => routeColoursOf(ctx, xml, slug);
 }
 
+// Spinward Marches 0101. Flesh from this row yields a gas giant with moons and a planetoid belt.
+export const ZEYCUDE_TSV = [
+    'Hex\tName\tUWP\tBases\tRemarks\tZone\tPBG\tAllegiance\tStars\t{Ix}\t(Ex)\t[Cx]\tNobility\tW\tRU',
+    '0101\tZeycude\tC430698-9\t\tDe Na Ni Po\t\t613\tZhIN\tK9 V\t{ -1 }\t(C53-1)\t[6559]\t\t8\t-180',
+].join('\n');
+
+function builtState(ctx, tsv, id) {
+    const rows = ctx.parseT5Tab(tsv, '1');
+    for (const [hexId, state] of rows) ctx.hexStates.set(hexId, state);
+    if (!ctx._buildOneMgtHex(id)) throw new Error('_buildOneMgtHex returned false for ' + id);
+    return ctx.stripHexViewState(ctx.hexStates.get(id));
+}
+
+// Stars, then each world, then that world's moons. starColor on stars; surfaceKind on the rest.
+export function orbitTextOf(sys, api) {
+    const rows = [];
+    for (const star of sys.stars || []) {
+        rows.push({ rotationText: api.rotationText(star), starColor: api.starColor(star) });
+    }
+    for (const world of sys.worlds || []) {
+        rows.push({ rotationText: api.rotationText(world), surfaceKind: api.surfaceKind(world) });
+        for (const moon of world.moons || []) {
+            rows.push({ rotationText: api.rotationText(moon), surfaceKind: api.surfaceKind(moon) });
+        }
+    }
+    return rows;
+}
+
+cases.orbit_normalize_1 = (ctx) => ctx.SystemViewer.normalizeSystem(builtState(ctx, TSV, '1-C-1910'));
+cases.orbit_text_1 = (ctx) => orbitTextOf(ctx.SystemViewer.normalizeSystem(builtState(ctx, TSV, '1-C-1910')), ctx.SystemViewer);
+cases.orbit_normalize_2 = (ctx) => ctx.SystemViewer.normalizeSystem(builtState(ctx, ZEYCUDE_TSV, '1-A-0101'));
+cases.orbit_text_2 = (ctx) => orbitTextOf(ctx.SystemViewer.normalizeSystem(builtState(ctx, ZEYCUDE_TSV, '1-A-0101')), ctx.SystemViewer);
+
 // Not a case: the legacy metadata XML parser (io_manager.js:2279 parseXmlRouteGroups) needs a browser
 // DOMParser, which Node does not have. The new parser (§8) is verified against TravellerMap's documented
 // schema and hand-counted values from universe/raw/Spinward_Marches.xml instead.

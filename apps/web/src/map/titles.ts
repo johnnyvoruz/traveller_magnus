@@ -95,7 +95,7 @@ export function placeTitle(
 /**
  * B1.12a. A title is placed once per subsector and zoom step, in map space, and then rides
  * with the map. The functions below are that decision and the two continuous adjustments
- * (sticky clamp, fade) the renderer applies each frame.
+ * (sticky at the top, fade) the renderer applies each frame.
  */
 
 /** Two steps per doubling of the zoom. Placement and font size are fixed within a step. */
@@ -135,36 +135,31 @@ export function titleAnchor(
     return { x: rect.x + spot.x / scale, y: rect.y + spot.y / scale };
 }
 
-function clamp(value: number, low: number, high: number): number {
-    return Math.min(Math.max(value, low), high);
-}
-
 /**
- * Sticky position in screen space. The pill stays inside `bounds` (the part of the canvas
- * titles may use) for as long as it can, and never leaves `home` (its own subsector on
- * screen): when the subsector slides out, its far edge pushes the pill out with it.
- * Each output coordinate is a clamp of the input, so it moves no further than the pan does.
+ * Sticky position in screen space (B1.12b). A title sticks to the top edge of `bounds` only,
+ * where it reads as a header. It never leaves `home` (its own subsector on screen): when the
+ * subsector slides up and out, its bottom edge pushes the pill out with it. Sideways and
+ * downward the pill simply rides with the map; it is never held at a side or bottom edge.
+ * y is a clamp of the input, so it moves no further than the pan does.
  */
 export function clampTitle(
     spot: { x: number; y: number },
-    pillW: number,
     pillH: number,
     home: Box,
     bounds: Box,
 ): { x: number; y: number } {
-    const inBoundsX = clamp(spot.x, bounds.x + MARGIN, bounds.x + bounds.w - pillW - MARGIN);
-    const inBoundsY = clamp(spot.y, bounds.y + MARGIN, bounds.y + bounds.h - pillH - MARGIN);
-    return {
-        x: clamp(inBoundsX, home.x + MARGIN, Math.max(home.x + MARGIN, home.x + home.w - pillW - MARGIN)),
-        y: clamp(inBoundsY, home.y + MARGIN, Math.max(home.y + MARGIN, home.y + home.h - pillH - MARGIN)),
-    };
+    const held = Math.max(spot.y, bounds.y + MARGIN);
+    const floor = Math.max(home.y + MARGIN, home.y + home.h - pillH - MARGIN);
+    return { x: spot.x, y: Math.min(held, floor) };
 }
 
-/** The part of `home` inside `bounds` is large enough to show the whole pill. */
-export function titleFits(pillW: number, pillH: number, home: Box, bounds: Box): boolean {
-    const w = Math.min(home.x + home.w, bounds.x + bounds.w) - Math.max(home.x, bounds.x);
-    const h = Math.min(home.y + home.h, bounds.y + bounds.h) - Math.max(home.y, bounds.y);
-    return w >= Math.max(MIN_W, pillW + MARGIN * 2) && h >= Math.max(MIN_H, pillH + MARGIN * 2);
+/**
+ * The whole pill is inside `bounds`. A pill that has left by the left, right or bottom edge,
+ * or been pushed out at the top, is not: it fades out, and is never moved back in.
+ */
+export function titleInView(spot: { x: number; y: number }, pillW: number, pillH: number, bounds: Box): boolean {
+    return spot.x >= bounds.x + MARGIN && spot.x + pillW <= bounds.x + bounds.w - MARGIN
+        && spot.y >= bounds.y + MARGIN && spot.y + pillH <= bounds.y + bounds.h - MARGIN;
 }
 
 /** True when two boxes overlap. Touching edges do not count. */

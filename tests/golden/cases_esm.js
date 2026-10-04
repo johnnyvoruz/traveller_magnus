@@ -6,7 +6,8 @@ import { sectorTerritories, sectorRegions, routeColour, routeStylesheetRules } f
 import { TRUTH_SETTINGS } from '../../tools/truth/settings.js';
 import { SYSTEM_NAMES } from '../../packages/engines/src/generated/names_data.js';
 import { loadLegacy } from '../oracle/legacy.js';
-import { TSV } from './cases.js';
+import { TSV, ZEYCUDE_TSV, orbitTextOf } from './cases.js';
+import { normalizeSystem, rotationText, starColor, surfaceKind } from '../../apps/web/src/orbit/system.ts';
 import {
     configure, setRandomSeed, setNamePool, hexStates, stripHexViewState,
     generateMgT2ESystemTopDown, generateMgT2ESystemBottomUp,
@@ -136,3 +137,17 @@ for (const slug of ['Spinward_Marches', 'Gvurrdon', 'Tuglikki']) {
         return { colours };
     };
 }
+
+function orbitState(tsv, id) {
+    prepare();
+    const rows = loadLegacy().parseT5Tab(tsv, '1');
+    const state = structuredClone(rows.get(id));
+    if (!buildOne(state, id)) throw new Error('buildOne returned false for ' + id);
+    return stripHexViewState(state);
+}
+
+const portApi = { rotationText, starColor, surfaceKind };
+cases.orbit_normalize_1 = () => normalizeSystem(orbitState(TSV, '1-C-1910'));
+cases.orbit_text_1 = () => orbitTextOf(normalizeSystem(orbitState(TSV, '1-C-1910')), portApi);
+cases.orbit_normalize_2 = () => normalizeSystem(orbitState(ZEYCUDE_TSV, '1-A-0101'));
+cases.orbit_text_2 = () => orbitTextOf(normalizeSystem(orbitState(ZEYCUDE_TSV, '1-A-0101')), portApi);

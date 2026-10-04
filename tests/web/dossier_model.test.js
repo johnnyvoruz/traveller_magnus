@@ -69,6 +69,15 @@ test('Regina overview and Caesillian 0914 partial follow the inspector', async (
     const starBody = bodyModel(tree, 's0');
     assert.ok(starBody);
     assert.deepEqual(starBody.glyph, starRow.glyph);
+    assert.equal(starBody.journey, null);
+
+    const host = (system.worlds || []).find((world) => world.type === 'Mainworld')
+        || (system.worlds || []).flatMap((world) => world.moons || []).find((moon) => moon.type === 'Mainworld');
+    assert.ok(host);
+    assert.ok(Array.isArray(host.journeyTimes));
+    assert.ok(model.journey);
+    assert.deepEqual(model.journey.map((item) => item.g), [1, 2, 3, 4, 5, 6]);
+    assert.deepEqual(model.journey.map((item) => item.hours), host.journeyTimes.map((hours) => String(hours) + 'h'));
 
     const gasRow = model.tree.rows.find((row) => row.glyph.kind === 'gasGiant');
     assert.ok(gasRow);
@@ -84,6 +93,7 @@ test('Regina overview and Caesillian 0914 partial follow the inspector', async (
     assert.equal(mainBody.glyph.star, '');
     assert.equal(mainBody.glyph.kind, mainRow.moon ? 'moon' : 'world');
     assert.deepEqual(mainRow.glyph, mainBody.glyph);
+    assert.deepEqual(mainBody.journey, model.journey);
 
     const firstBody = bodyModel(tree, keys[0]);
     const lastBody = bodyModel(tree, keys[keys.length - 1]);

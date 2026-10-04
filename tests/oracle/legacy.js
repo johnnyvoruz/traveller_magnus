@@ -23,7 +23,10 @@ export const FILES = [
     'rules/aow_data.js', 'js/aow_stellar_engine.js', 'js/aow_world_engine.js', 'js/aow_uwp_auditor.js',
     'js/aow_seed_bridge.js', 'js/aow_bottomup_generator.js',
     'rules/expectations_data.js', 'js/statistical_auditor.js',
-    'js/macro_orchestrator.js', 'js/io_manager.js', 'js/otu_metadata_parser.js', 'names.js'
+    'js/macro_orchestrator.js', 'js/io_manager.js', 'js/otu_metadata_parser.js', 'names.js',
+    // After universal_math.js (formatDisplayNumber) and rules/mgt2e_data.js (MgT2EData).
+    // hex_map.html loads planet_profile.js first; surfaceKind reads window.PlanetProfile only when called.
+    'js/system_viewer.js'
 ];
 
 function element() {

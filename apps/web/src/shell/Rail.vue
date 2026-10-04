@@ -24,6 +24,11 @@ function findCommand(id: string) {
     return commands().find((item) => item.id === id);
 }
 
+/** An item is offered only where its command exists (the orbit view has no search field). */
+function has(id: string): boolean {
+    return findCommand(id) !== undefined;
+}
+
 function canRun(id: string): boolean {
     const command = findCommand(id);
     if (!command) return false;
@@ -82,6 +87,7 @@ onMounted(() => {
           <span class="rail-label">System</span>
         </button>
         <button
+          v-if="has('search')"
           type="button"
           class="rail-item"
           aria-label="Search"
@@ -96,7 +102,7 @@ onMounted(() => {
       </div>
     </div>
     <div class="rail-group" role="group" aria-label="Account">
-      <button type="button" class="rail-item" aria-label="Account" title="Account" @click="run('account')">
+      <button v-if="has('account')" type="button" class="rail-item" aria-label="Account" title="Account" @click="run('account')">
         <Icon name="user" :size="20" />
         <span class="rail-label">Account</span>
       </button>

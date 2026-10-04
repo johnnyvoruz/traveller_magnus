@@ -1,6 +1,6 @@
 import type { SectorHex, SectorIndex, TruthManifest, TruthOverview, TruthPolities } from '@voyage/shared';
 import farLabels from '../../../../universe/far_labels.json' with { type: 'json' };
-import { nextFrame, now, prefersReducedMotion } from '../platform/browser.ts';
+import { now, prefersReducedMotion } from '../platform/browser.ts';
 import type { Camera, Viewport } from './camera.ts';
 import { toScreen, visibleRect } from './camera.ts';
 import { hexCentre, hexCorners, parseHex, ROW_STEP, sectorRect, SECTOR_COLS, SECTOR_ROWS, toGlobal, type Rect } from './geometry.ts';
@@ -14,7 +14,7 @@ import {
 import { routeSegments, type RouteSegment } from './route_lines.ts';
 import type { MapTheme } from './theme.ts';
 import { PPP_GRID, PPP_NAMES, tierFor, type Tier } from './tiers.ts';
-import { boxesOverlap, clampTitle, fadeToward, stepScale, titleAnchor, titleFits, zoomStep, type Box } from './titles.ts';
+import { boxesOverlap, clampTitle, fadeToward, stepScale, titleAnchor, titleInView, zoomStep, type Box } from './titles.ts';
 import { baseMarks, hasGasGiant, starport, worldHasWater, worldIsBelt } from './uwp.ts';
 
 const HEX_OUTLINE_CAP = 12000;
@@ -28,7 +28,8 @@ const FAR_LABEL_FONT = 12;
 const FAR_LABEL_DOT = 3;
 const TITLE_FONT = 13;
 const TITLE_MIN_FONT = 9;
-const TITLE_TOP = 56;
+/** Titles stay below the omnibox row: its bottom edge (14 + 48) plus 6, as legacy insetT does. */
+const TITLE_TOP = 68;
 const TITLE_PAD_X = 0.55;
 const TITLE_PAD_Y = 0.32;
 const TITLE_RADIUS = 0.3;
@@ -173,7 +174,6 @@ export class MapRenderer {
     /** World centres per index object, for title placement. */
     private readonly titleWorlds = new WeakMap<object, { x: number; y: number }[]>();
     private titleTime = 0;
-    private titleSeq = 0;
     private width = 0;
     private height = 0;
     private dpr = 1;
@@ -239,7 +239,8 @@ export class MapRenderer {
         this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     }
 
-    draw(cam: Camera): { tier: Tier; sectorsOnScreen: string[]; ms: number } {
+    /** `animating` is true while a title fade is in progress: the caller should draw again next frame. */
+    draw(cam: Camera): { tier: Tier; sectorsOnScreen: string[]; ms: number; animating: boolean } {
         const started = now();
         const tier = tierFor(cam.ppp);
         const vp: Viewport = { width: this.width, height: this.height };
@@ -291,9 +292,9 @@ export class MapRenderer {
         this.sectorNames(on, cam, vp);
         if (tier !== 'hex' && cam.ppp >= FAR_LABEL_MIN_PPP) this.farLabels(on, cam, vp, view);
         this.selectionOutline(cam, vp);
-        if (tier === 'hex' && cam.ppp >= PPP_NAMES) this.subsectorTitles(ready, marks, cam, vp);
+        const animating = tier === 'hex' && cam.ppp >= PPP_NAMES ? this.subsectorTitles(ready, marks, cam, vp) : false;
 
-        return { tier, sectorsOnScreen: on.map((sector) => sector.slug), ms: now() - started };
+        return { tier, sectorsOnScreen: on.map((sector) => sector.slug), ms: now() - started, animating };
     }
 
     private distance(sector: DrawSector, cam: Camera): number {
@@ -759,20 +760,20 @@ export class MapRenderer {
     /**
      * One pill per subsector, from PPP_NAMES up (B1.12a). Where a pill sits is decided once
      * per subsector and zoom step, in map space, and cached; while panning it rides with the
-     * map. Each frame only clamps it to the usable canvas (sticky) and fades it: out where it
-     * would cover the selected hex or the visible part of its subsector cannot hold it, and
-     * across a zoom step that picks a different spot.
+     * map. Each frame only holds it at the top edge (sticky, B1.12b) and fades it: out where it
+     * would cover the selected hex or is no longer wholly in view (it left by a side or the
+     * bottom, or its subsector pushed it out at the top), and across a zoom step that picks a
+     * different spot. Returns true while any fade is in progress.
      */
     private subsectorTitles(
         ready: { sector: DrawSector; index: SectorIndex }[],
         _marks: Mark[],
         cam: Camera,
         vp: Viewport,
-    ): void {
+    ): boolean {
         const time = now();
         const elapsed = time - this.titleTime;
         this.titleTime = time;
-        this.titleSeq += 1;
         const duration = this.theme.tFast * 1000;
         const instant = !(duration > 0) || prefersReducedMotion();
         const amount = instant ? 1 : elapsed / duration;
@@ -825,7 +826,7 @@ export class MapRenderer {
                         out.alpha = fadeToward(out.alpha, 0, amount);
                         if (out.alpha > 0) {
                             const at = toScreen(cam, vp, out.pill.x, out.pill.y);
-                            const spot = clampTitle({ x: at.sx, y: at.sy }, out.pill.w, out.pill.h, home, bounds);
+                            const spot = clampTitle({ x: at.sx, y: at.sy }, out.pill.h, home, bounds);
                             this.paintTitle(out.label, out.pill, spot, out.alpha);
                             drew = true;
                             moving = true;
@@ -837,9 +838,9 @@ export class MapRenderer {
                     const pill = state.pill;
                     if (!pill) continue;
                     const at = toScreen(cam, vp, pill.x, pill.y);
-                    const spot = clampTitle({ x: at.sx, y: at.sy }, pill.w, pill.h, home, bounds);
+                    const spot = clampTitle({ x: at.sx, y: at.sy }, pill.h, home, bounds);
                     const covers = guard !== null && boxesOverlap({ x: spot.x, y: spot.y, w: pill.w, h: pill.h }, guard);
-                    const target = !covers && titleFits(pill.w, pill.h, home, bounds) ? 1 : 0;
+                    const target = !covers && titleInView(spot, pill.w, pill.h, bounds) ? 1 : 0;
                     if (instant) {
                         state.alpha = target;
                         state.moving = false;
@@ -860,7 +861,7 @@ export class MapRenderer {
         }
         for (const key of this.titleStates.keys()) if (!live.has(key)) this.titleStates.delete(key);
         if (drew) this.ctx.globalAlpha = 1;
-        if (moving) this.requestTitleFrame(cam);
+        return moving;
     }
 
     /** Label size and anchor for one subsector at one zoom step. The font is fixed for the step. */
@@ -915,20 +916,6 @@ export class MapRenderer {
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
         ctx.fillText(label, spot.x + pill.fontPx * TITLE_PAD_X, spot.y + pill.h / 2);
-    }
-
-    /**
-     * A fade needs frames the view does not otherwise draw. One more draw is asked for, and
-     * dropped if the view has drawn in the meantime (the timeout lets the view's own frame
-     * callback, registered later, run first).
-     */
-    private requestTitleFrame(cam: Camera): void {
-        const seq = this.titleSeq;
-        nextFrame(() => {
-            setTimeout(() => {
-                if (this.titleSeq === seq) this.draw(cam);
-            }, 0);
-        });
     }
 
     /** Axis-aligned square around the selected hex. Radius is one hex size. */

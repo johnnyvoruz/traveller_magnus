@@ -48,6 +48,7 @@
   --row-active-line: #3d6868;
   --scroll-track: #0a1016;
   --control-line: #5b7886;   /* border of an interactive control: 3:1 on every panel and map field */
+  --stage-head: #12232a;     /* orbit view bars and popovers (legacy .sv-view-nav) */
   --rail-glass: #131c26f5;   /* the rail (legacy #app-nav) */
   --rail-hover: #263744;
   --rail-text: #afc1cc;
@@ -101,6 +102,8 @@
   --t-scan: 1200ms;       /* one scanner pass over the surface stage */
   --ease-scan: cubic-bezier(.45,0,.25,1);
   --t-rail: 500ms;        /* rail expand and label fade */
+  --t-lock: 650ms;        /* the selection lock landing on a body (system_viewer.js:2191) */
+  --t-pulse: 2400ms;      /* one beat of the focus pulse round a selected body (system_viewer.js:3028) */
 
   /* layout of the floating chrome (legacy #map-chrome and #system-inspector) */
   --chrome-inset: 10px;   /* viewport edge to chrome */
@@ -147,6 +150,46 @@
   --glyph-rock-mark: #6b7179;
   --glyph-light: #fff;
   --glyph-dark: #000;
+
+  /* orbit view picture (system_viewer.js; each value is the legacy dark-mode colour) */
+  --orbit-space: #000000;        /* the stage behind the star field (3263) */
+  --orbit-hz: #58d678;           /* habitable band, its edge and its label (3333) */
+  --orbit-hz-pill: #06120e;      /* habitable label pill, drawn at 85% (3399) */
+  --orbit-jump: #78baff;         /* 100D jump circle, drawn at 95% (3126) */
+  --orbit-jump-text: #9ecbff;    /* its label (3131) */
+  --orbit-gas-large: #c8a97a;    /* flat discs until planet imagery lands (264-271) */
+  --orbit-gas-medium: #d4b98a;
+  --orbit-gas-small: #e0cc9a;
+  --orbit-belt: #888888;         /* belt band, drawn at 33% (4648) */
+  --orbit-world: #a0a0b0;
+  --orbit-moon: #6a7070;         /* 4584 */
+  --orbit-ring: #c8ccd0;         /* static ring, drawn at 67% (3463) */
+  --orbit-night: #00050f;        /* the night half of a flat disc, drawn at 72% (4204) */
+  --orbit-shadow: #080c12;       /* a moon in its world's shadow (4595) */
+  --orbit-lock: #ffce73;         /* selection lock: ring, ticks, brackets, tag (2207) */
+  --orbit-tag: #080e12;          /* selection tag fill, drawn at 82% (2329) */
+  --port-light-major: #96ecff;   /* highport lights, class A and B (planet_profile.js:265) */
+  --port-light-minor: #ffe2aa;   /* highport lights, the other classes */
+  --port-hub: #fffae1;           /* hub glow (system_viewer.js:4495) */
+  --port-nav-starboard: #46ff8c; /* navigation light, starboard (4513) */
+  --port-nav-port: #ff4646;      /* navigation light, port */
+  --port-shade: #0a1224;         /* the hull in the world's shadow, laid on at 50% (4391) */
+  --port-path: #bef0ff;          /* the station's path (4437) */
+  --nebula-1-a: #2896aa;         /* backdrop glows: five palettes of three (3248-3254) */
+  --nebula-1-b: #aa3c96;
+  --nebula-1-c: #96aad2;
+  --nebula-2-a: #be6e32;
+  --nebula-2-b: #6e3caa;
+  --nebula-2-c: #c8aa8c;
+  --nebula-3-a: #28aa96;
+  --nebula-3-b: #3c6ebe;
+  --nebula-3-c: #a0c8c8;
+  --nebula-4-a: #aa3246;
+  --nebula-4-b: #3c50b4;
+  --nebula-4-c: #bea0aa;
+  --nebula-5-a: #968c3c;
+  --nebula-5-b: #288c96;
+  --nebula-5-c: #bebea0;
 
   /* chart */
   --chart-world: #ffffff;        /* default world disc and chart text (renderer.js:1438, 1468) */

@@ -3,6 +3,7 @@ import type { PanelSpan } from '../shell/panel_state.ts';
 import type { BodyLink, BodyModel } from './model.ts';
 import BodyRow from './BodyRow.vue';
 import FactTiles from './FactTiles.vue';
+import JourneyTimes from './JourneyTimes.vue';
 import StatRows from './StatRows.vue';
 import SurfaceStage from './SurfaceStage.vue';
 import UwpRibbon from './UwpRibbon.vue';
@@ -25,6 +26,7 @@ function factsOf(link: BodyLink): string {
       <SurfaceStage :badge="model.mapBadge" />
       <UwpRibbon v-if="model.ribbon" :ribbon="model.ribbon" />
       <FactTiles :facts="model.facts" />
+      <JourneyTimes v-if="model.journey" :journey="model.journey" />
       <section v-for="block in model.mainSections" :key="block.heading" class="doss-section">
         <h3 class="ui-heading">{{ block.heading }}</h3>
         <StatRows :rows="block.rows" />
