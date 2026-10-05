@@ -70,6 +70,13 @@ universesRoute.post('/', async (c) => {
     const parsed = UniverseCreate.safeParse(body);
     if (!parsed.success) return fail(c, 400, 'validation', 'Invalid request.', parsed.error.flatten());
     const input = parsed.data;
+    if (input.id) {
+        const existing = await database(c).select().from(universes).where(eq(universes.id, input.id)).get();
+        if (existing) {
+            if (existing.ownerId !== actor.id) return fail(c, 404, 'not_found', 'No such universe.');
+            return ok(c, present(existing), 200);
+        }
+    }
     if (input.truthVersion !== null) {
         const released = await c.env.DB.prepare(
             `SELECT version FROM truth_versions WHERE version = ? AND state = 'released'`,
@@ -81,9 +88,9 @@ universesRoute.post('/', async (c) => {
         isNull(universes.deletedAt),
     ));
     if (live.length >= LIVE_LIMIT) return fail(c, 400, 'too_large', 'Ten universes per account.');
-    const id = ulid();
+    const id = input.id ?? ulid();
     const now = new Date().toISOString();
-    await database(c).insert(universes).values({
+    const row: UniverseRow = {
         id,
         ownerId: actor.id,
         name: input.name,
@@ -98,16 +105,32 @@ universesRoute.post('/', async (c) => {
         hexOverrideCount: 0,
         objectBytes: 0,
         lastSnapshotAt: null,
-    }).run();
-    const stub = c.env.UNIVERSE.get(c.env.UNIVERSE.idFromName(id));
-    await stub.fetch(new Request('https://universe.internal/', {
-        headers: {
-            'x-voyage-user-id': actor.id,
-            'x-voyage-universe-id': id,
-        },
-    }));
-    const row = await database(c).select().from(universes).where(eq(universes.id, id)).get();
-    return ok(c, present(row!), 201);
+    };
+    try {
+        await database(c).insert(universes).values(row).run();
+    } catch (err) {
+        if (input.id) {
+            const winner = await database(c).select().from(universes).where(eq(universes.id, id)).get();
+            if (winner && winner.ownerId === actor.id) return ok(c, present(winner), 200);
+        }
+        throw err;
+    }
+    try {
+        const stub = c.env.UNIVERSE.get(c.env.UNIVERSE.idFromName(id));
+        await stub.fetch(new Request('https://universe.internal/', {
+            headers: {
+                'x-voyage-user-id': actor.id,
+                'x-voyage-universe-id': id,
+            },
+        }));
+    } catch (err) {
+        await database(c).delete(universes).where(and(
+            eq(universes.id, id),
+            eq(universes.ownerId, actor.id),
+        )).run();
+        throw err;
+    }
+    return ok(c, present(row), 201);
 });
 
 universesRoute.get('/:id', async (c) => {

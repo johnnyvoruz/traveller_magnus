@@ -1452,11 +1452,10 @@ What exists: the maths (`apps/web/src/orbit/daynight.ts`: `spinAngle`, `subsolar
 passed to the dossier (on the map page there is no clock yet), and the place the tick is for,
 since day and night depend on longitude.
 
-**Decided by Johnny, 2026-10-04: the tick is for the starport; the map's prime meridian is the
-fallback** when a world has no starport or no place for it is known. Nothing in the released
-document says where on a world its starport stands, so until the surface map gives it a place
-every world uses the fallback. Where that place comes from is a question for the surface-map
-work, not to be guessed.
+**Decided by Johnny, 2026-10-05 (A16): the starport stands on the prime meridian.** The
+local-time tick is the starport's time. The prime meridian is the starport's longitude by
+definition, so the tick is `dayFraction` at longitude 0. A referee pin on the surface map,
+once the map takes pins, overrides that place. Longitude 0 is the starport.
 
 ---
 

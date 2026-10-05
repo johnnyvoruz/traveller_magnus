@@ -154,6 +154,7 @@ export const CampaignSettings = z.object({
 export type CampaignSettings = z.infer<typeof CampaignSettings>;
 
 const Name = z.string().min(1).max(CAMPAIGN_LIMITS.name);
+const UniverseId = z.string().min(1).max(64).regex(/^[A-Za-z0-9_-]+$/);
 
 export const Universe = z.object({
     id: z.string().min(1),
@@ -174,6 +175,7 @@ export const Universe = z.object({
 export type Universe = z.infer<typeof Universe>;
 
 export const UniverseCreate = z.object({
+    id: UniverseId.optional(),
     name: Name,
     truthVersion: z.string().nullable(),
     editionDefault: z.string().min(1),

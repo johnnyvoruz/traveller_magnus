@@ -2418,3 +2418,38 @@ API and Durable Object have against `data_model.md` and `api.md`).
   re-issued through Johnny. **Pushable now:** D is between steps, A and C free.
 - **Next:** D, step 3 of its brief (the deck plan viewer on a vessel's record page), then K5d
   links. A wires B's client id into `campaign/store.ts` when B reports.
+
+## 83. Pushed `f43c3d5`; D's nine open questions answered on Johnny's instruction (2026-10-05)
+
+- **Pushed `f43c3d5`** (places, "1 week", toast). GitHub run green; the live bundle
+  `index-CXZpiMS6.js` is the same hash as the local build, holds "Your records here", and the
+  orbit chunk holds "1 week". K5c and "1 week" are in production.
+- **Johnny:** "answer the questions for D to the best of your ability; we're making a D&D
+  Beyond campaign manager but for Traveller, Mongoose 2e." None of the nine is a Traveller
+  rule (`rules/` says nothing about the calendar day or sea colours), so the orchestrator
+  answered them in `questions_for_johnny.md`, each marked as its own: A5 keep the chips;
+  A8 45°; A9 3° everywhere (the plan's 5° note is superseded); A10 stars in kelvin (Johnny's
+  own line); A15 keep "standard days (24 h)"; A16 and E3 the prime meridian is the starport's
+  longitude by definition, a referee pin overrides it later; E11 the three proposed colours;
+  E12 option B (each liquid's own colour, paled; water keeps its ice); E13 drawn in the old
+  profile's purple, never frozen, captioned "freezing point unknown".
+- **Prompt for Agent C** (free; owns `surface/`): build A10, E11, E12, E13, check A9 and the
+  A16 wording. D's screens are not touched beyond the star temperature's unit.
+
+## 84. Universe creation hardened (Agent B); the store sends the id next (2026-10-05)
+
+- **Agent B:** `POST /api/universes` returns the row it built, no `SELECT` after the insert;
+  `UniverseCreate.id` optional (1 to 64 of `A-Za-z0-9_-`), else a ULID; the same id posted
+  again by its owner answers 200 with the stored row (looked up before the truth-version and
+  cap checks, so a retry at the cap still succeeds); another account gets 404; a lost
+  primary-key race reads the winner; an unreleased version or an eleventh universe returns
+  before the insert; a Durable Object touch that throws deletes the row and rethrows.
+  `tests/api/universes.test.js` and `tests/shared/campaign.test.js` extended; `api.md`
+  updated. **Orchestrator re-ran the black-box file against `wrangler dev`: pass.** Diff read:
+  as reported.
+- **Noted, not blocking:** a client id of the owner's soft-deleted universe answers 200 with
+  the deleted row; the store mints a fresh id per create attempt, so it cannot happen by use.
+- **Pushable by path** (`apps/api`, `packages/shared`, `tests/api`, `tests/shared`,
+  `directives`); C and D are on other paths.
+- **Next, Agent A:** `campaign/store.ts` mints `uni_` + UUID before the create and resends
+  the same id on a retry; 200 is "already created".

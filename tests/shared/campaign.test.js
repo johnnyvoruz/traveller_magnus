@@ -109,6 +109,7 @@ test('each campaign schema accepts a good value', () => {
     assert.equal(Universe.safeParse(universe()).success, true);
     assert.equal(UniverseCreate.safeParse({ name: 'My campaign', truthVersion: 'v5', editionDefault: 'MgT2E' }).success, true);
     assert.equal(UniverseCreate.safeParse({ name: 'Blank chart', truthVersion: null, editionDefault: 'MgT2E' }).success, true);
+    assert.equal(UniverseCreate.safeParse({ id: 'uni_client_1', name: 'My campaign', truthVersion: null, editionDefault: 'MgT2E' }).success, true);
     assert.equal(UniverseUpdate.safeParse({ name: 'My campaign' }).success, true);
     assert.equal(CampaignAnchor.safeParse(null).success, true);
     assert.equal(CampaignAnchor.safeParse({ kind: 'system', hexKey: 'Spinward_Marches/1910' }).success, true);
@@ -134,6 +135,9 @@ test('each campaign schema accepts a good value', () => {
 test('schemas reject §0.10 breaches and a legacy hex id', () => {
     assert.equal(Universe.safeParse(universe({ name: 'n'.repeat(201) })).success, false);
     assert.equal(UniverseCreate.safeParse({ name: '', truthVersion: null, editionDefault: 'MgT2E' }).success, false);
+    assert.equal(UniverseCreate.safeParse({ id: '', name: 'My campaign', truthVersion: null, editionDefault: 'MgT2E' }).success, false);
+    assert.equal(UniverseCreate.safeParse({ id: 'has space', name: 'My campaign', truthVersion: null, editionDefault: 'MgT2E' }).success, false);
+    assert.equal(UniverseCreate.safeParse({ id: 'a/b', name: 'My campaign', truthVersion: null, editionDefault: 'MgT2E' }).success, false);
     assert.equal(UniverseUpdate.safeParse({ name: 'n'.repeat(201) }).success, false);
     assert.equal(CampaignAnchor.safeParse({ kind: 'system', hexKey: '1-A-0101' }).success, false);
     assert.equal(CampaignAnchor.safeParse({ kind: 'system', hexId: '1-A-0101' }).success, false);

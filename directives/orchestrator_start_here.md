@@ -104,13 +104,13 @@ campaign layer over the truth map; own maps later. X sign-in only.
   (handoff §82) and sit uncommitted across `workspace/`, `dossier/`, `orbit/`, `views/`.
   K5c leftovers (orbit-view locator, Locate on dossier rows, "At Regina" chip, sort) wait
   for K5e.
-- **Agent B:** hardening universe creation (no read-back, no orphan row on failure, an
-  optional client-made id so a retried create returns the same universe). Nothing on disk
-  as of §82; the prompt was re-issued. When B reports, Agent A must send that id from
-  `campaign/store.ts`.
-- **Agents A, C:** free. **Agent F:** parked.
-- **Last push:** `8e9ceb6` (directives only), green. Code after `5e78744` is local and
-  pushable: D is between steps.
+- **Agent B:** done (handoff §84): universe creation hardened, client-made id accepted.
+  Free.
+- **Agent A:** sending the client id from `campaign/store.ts` and resending it on retry.
+- **Agent C:** the answered questions A10, E11 to E13 (star kelvin, sea and ice colours),
+  prompt in handoff §83's session. **Agent F:** parked.
+- **Last push:** `f43c3d5` (places, "1 week", toast), deployed and green. Only the
+  directives' edits since are local.
 
 ## 7. Decisions Johnny has made that shape the next steps
 
@@ -143,8 +143,9 @@ campaign layer over the truth map; own maps later. X sign-in only.
 
 ## 9. Open with Johnny (`questions_for_johnny.md`)
 
-None blocks work. A1, A2, A4 to A6, A8 to A10 (orbit), E3 to E8, E11 to E13 (surfaces), F2
-(climate table), B1 to B5 (map), C1 to C3 (app; C3 is "deploy from main, preview from
+None blocks work. Section A and E3, E11 to E13 were answered by the orchestrator on
+2026-10-05 at Johnny's instruction (handoff §83; Agent C builds them). Still open: E4 to E8,
+F2 (climate table), B1 to B5 (map), C1 to C3 (app; C3 is "deploy from main, preview from
 campaign", worth raising after the broken deploy), D2 to D4. Four `CLAUDE.md` edits only he
 can make are listed in handoff §4 and the summary there (rule 6 wording, two command rows,
 the oracle path).

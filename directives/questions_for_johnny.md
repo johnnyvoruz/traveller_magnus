@@ -4,7 +4,7 @@ Open decisions that only you can make. Type your answer on the **Answer:** line 
 question, save the file, and tell the orchestrator "answers are in". A few words is enough.
 Leave a line blank to keep the interim choice shown under it.
 
-Last updated: 2026-10-04.
+Last updated: 2026-10-05 (A5, A8 to A10, A15, A16, E11 to E13 answered by the orchestrator on Johnny's instruction).
 
 ---
 
@@ -26,6 +26,7 @@ It is also how a keyboard user reaches every body. Keep it?
 *Interim: built.*
 
 **Answer:**
+Keep it. It is the keyboard path to every body and a referee's quickest way round a system at the table. (orchestrator, 2026-10-05, on Johnny's instruction to answer D's questions)
 
 ### A8. Daylight latitude
 
@@ -35,6 +36,7 @@ night card draws its second strip for 45°. Is 45° the latitude you want, or an
 *Interim: 45°.*
 
 **Answer:**
+45°: keep. A middle latitude is the honest single figure; the strip and the card say "at 45°". (orchestrator, 2026-10-05, on Johnny's instruction to answer D's questions)
 
 ### A9. How small a tilt means "no seasons"
 
@@ -45,6 +47,7 @@ every world: 3° or 5°?
 *Interim: 3°.*
 
 **Answer:**
+3°, Johnny's own figure from A1, for every world. The 5° note in campaign_manager_plan.md §7.4 is superseded. (orchestrator, 2026-10-05, on Johnny's instruction to answer D's questions)
 
 ### A10. Star temperatures
 
@@ -53,6 +56,7 @@ Stars show their temperature in °C and °F like worlds. Keep that, or show star
 *Interim: °C and °F.*
 
 **Answer:**
+Kelvin for stars, as Johnny wrote above: "5,800 K". Worlds stay °C (°F). (orchestrator, 2026-10-05, on Johnny's instruction to answer D's questions)
 I feel like K is right for stars, because that's how we measure light bulbs 
 
 
@@ -124,6 +128,7 @@ world's own. "Standard day" is Agent D's wording. Keep it, or name the term you 
 *Interim: "standard days (24 h)".*
 
 **Answer:**
+Keep "standard days (24 h)" and "local days". Nothing in rules/ names the calendar day; if Johnny later wants an in-setting name, it is one string. (orchestrator, 2026-10-05, on Johnny's instruction to answer D's questions)
 
 ### A16. Where a world's starport stands (for the local-time tick)
 
@@ -141,6 +146,7 @@ This goes with E3 (where longitude 0 is), which is also still open.
 *Interim: the fallback for every world.*
 
 **Answer:**
+(c) for now: the prime meridian is the starport's longitude by definition, so the local-time tick is the starport's. (a), a referee-placed pin on the surface map, becomes a campaign feature once the surface map takes pins; the pin then overrides (c). Settles E3 the same way: longitude 0 is the starport. (orchestrator, 2026-10-05, on Johnny's instruction to answer D's questions)
 
 ### Answered
 
@@ -291,6 +297,7 @@ the twelve existing colours in `findings/ui_design_shots/surface_liquid_swatches
 Say "yes", or change any of them. Nothing is in the code until you do.
 
 **Answer:**
+(b), the three proposed colours as drawn. A sea the data says is there is drawn. (orchestrator, 2026-10-05, on Johnny's instruction to answer D's questions)
 
 ### E12. The colour of a frozen sea that is not water (from Agent D, enhanced map)
 
@@ -312,6 +319,7 @@ water ice). Keep one ice colour for all, or supply colours for other ices?
 Water keeps its existing ice in both. Choose A, B, or keep water's ice for all.
 
 **Answer:**
+Option B: each liquid's own colour, paled by the stated amounts; water keeps its ice. A frozen chlorine sea should not look like water ice to a referee reading the map. (orchestrator, 2026-10-05, on Johnny's instruction to answer D's questions)
 
 ### E13. A liquid the data calls "Unknown Exotic Liquid" (from Agent D, enhanced map)
 
@@ -323,6 +331,7 @@ with no ice, or leave it undrawn?
 *Interim: undrawn; the basin is dry lowland and the caption says so.*
 
 **Answer:**
+Draw it in the old profile's colour (152,112,172 / 68,40,102), never frozen, and say "exotic liquid; freezing point unknown" in the caption. A 26% sea drawn as dry land contradicts the data. (orchestrator, 2026-10-05, on Johnny's instruction to answer D's questions)
 
 ---
 

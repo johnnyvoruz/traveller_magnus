@@ -6,6 +6,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { runWrangler } from './session.js';
+
+function jsonFrom(text) {
+    const start = text.indexOf('[');
+    const objectStart = text.indexOf('{');
+    const at = start === -1 ? objectStart : objectStart === -1 ? start : Math.min(start, objectStart);
+    if (at === -1) throw new Error(text);
+    return JSON.parse(text.slice(at));
+}
 import { withDevServer, wranglerBin } from './server.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -90,6 +98,8 @@ if (process.env.RUN_API_TESTS !== '1') {
             });
             assert.equal(foreign.status, 403);
             assert.equal(foreign.body.error.code, 'forbidden');
+            const afterForeign = await jsonFetch(`${base}/api/universes`, { headers: { cookie: owner } });
+            assert.deepEqual(afterForeign.body.data, []);
 
             const created = await jsonFetch(`${base}/api/universes`, {
                 method: 'POST',
@@ -128,6 +138,47 @@ VALUES ('${released}', '1.0.0', 'released', '2026-10-04T00:00:00.000Z', '2026-10
             });
             assert.equal(unreleased.status, 400);
             assert.equal(unreleased.body.error.code, 'validation');
+            const unreleasedRows = jsonFrom(runWrangler([
+                'd1', 'execute', 'voyage', '--local', '--json', '--command',
+                `SELECT COUNT(*) AS n FROM universes WHERE owner_id = 'k2a${stamp}' AND name = 'Unreleased'`,
+            ]));
+            assert.equal(Number(unreleasedRows[0].results[0].n), 0);
+
+            const clientId = `client_${stamp}`;
+            const clientMade = await jsonFetch(`${base}/api/universes`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ id: clientId, name: 'Client made', truthVersion: null, editionDefault: 'MgT2E' }),
+            });
+            assert.equal(clientMade.status, 201, JSON.stringify(clientMade.body));
+            assert.equal(clientMade.body.data.id, clientId);
+            assert.equal(clientMade.body.data.name, 'Client made');
+            const retried = await jsonFetch(`${base}/api/universes`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ id: clientId, name: 'A second name', truthVersion: null, editionDefault: 'MgT2E' }),
+            });
+            assert.equal(retried.status, 200, JSON.stringify(retried.body));
+            assert.equal(retried.body.data.id, clientId);
+            assert.equal(retried.body.data.name, 'Client made');
+            assert.equal(retried.body.data.createdAt, clientMade.body.data.createdAt);
+            const ownedRows = jsonFrom(runWrangler([
+                'd1', 'execute', 'voyage', '--local', '--json', '--command',
+                `SELECT COUNT(*) AS n FROM universes WHERE id = '${clientId}'`,
+            ]));
+            assert.equal(Number(ownedRows[0].results[0].n), 1);
+            const stolen = await jsonFetch(`${base}/api/universes`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json', cookie: other },
+                body: JSON.stringify({ id: clientId, name: 'Stolen', truthVersion: null, editionDefault: 'MgT2E' }),
+            });
+            assert.equal(stolen.status, 404);
+            assert.equal(stolen.body.error.code, 'not_found');
+            const stillOne = jsonFrom(runWrangler([
+                'd1', 'execute', 'voyage', '--local', '--json', '--command',
+                `SELECT COUNT(*) AS n FROM universes WHERE id = '${clientId}'`,
+            ]));
+            assert.equal(Number(stillOne[0].results[0].n), 1);
 
             const pinned = await jsonFetch(`${base}/api/universes`, {
                 method: 'POST',
@@ -144,7 +195,7 @@ VALUES ('${released}', '1.0.0', 'released', '2026-10-04T00:00:00.000Z', '2026-10
             });
             assert.equal(third.status, 201);
 
-            for (let n = 4; n <= 10; n += 1) {
+            for (let n = 5; n <= 10; n += 1) {
                 const extra = await jsonFetch(`${base}/api/universes`, {
                     method: 'POST',
                     headers,
@@ -161,6 +212,22 @@ VALUES ('${released}', '1.0.0', 'released', '2026-10-04T00:00:00.000Z', '2026-10
             assert.equal(eleventh.status, 400);
             assert.equal(eleventh.body.error.code, 'too_large');
             assert.equal(eleventh.body.error.message, 'Ten universes per account.');
+            const atCap = await jsonFetch(`${base}/api/universes`, { headers: { cookie: owner } });
+            assert.equal(atCap.body.data.length, 10);
+            const replayAtCap = await jsonFetch(`${base}/api/universes`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ id: clientId, name: 'A second name', truthVersion: null, editionDefault: 'MgT2E' }),
+            });
+            assert.equal(replayAtCap.status, 200, JSON.stringify(replayAtCap.body));
+            assert.equal(replayAtCap.body.data.id, clientId);
+            const stillTen = await jsonFetch(`${base}/api/universes`, { headers: { cookie: owner } });
+            assert.equal(stillTen.body.data.length, 10);
+            const eleventhRows = jsonFrom(runWrangler([
+                'd1', 'execute', 'voyage', '--local', '--json', '--command',
+                `SELECT COUNT(*) AS n FROM universes WHERE owner_id = 'k2a${stamp}' AND name = 'Eleventh'`,
+            ]));
+            assert.equal(Number(eleventhRows[0].results[0].n), 0);
 
             const renamed = await jsonFetch(`${base}/api/universes/${pinned.body.data.id}`, {
                 method: 'PATCH',
