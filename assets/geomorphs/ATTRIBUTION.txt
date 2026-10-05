@@ -1,0 +1,23 @@
+Geomorph images
+---------------
+The PNG files in this directory are deck-plan geomorphs by Robert Pearce /
+Pearce Design Studio and Eric B. Smith (ericbsmith42@gmail.com).
+They are licensed CC BY-NC 4.0 (Creative Commons Attribution-NonCommercial 4.0).
+
+These images were downloaded from the live Traveller Geomorph Shipyard
+hosted by Iván Sánchez Ortega:
+https://ivan.sanchezortega.es/geomorph-shipyard/
+
+The shipyard software is a separate work:
+https://gitlab.com/IvanSanchez/geomorph-shipyard
+GPL-3.0 applies to that software only. The geomorph images are not in that
+git repository and are not covered by the GPL.
+
+Mongoose Traveller fair-use / licensing notice:
+https://www.mongoosepublishing.com/pages/traveller-licensing
+
+Traveller.voyage is non-commercial (per Johnny).
+This copy does not grant any rights beyond those licenses.
+Do not claim extra rights, ownership, or a broader license than CC BY-NC 4.0
+for the images, GPL-3.0 for the shipyard software only, and the Mongoose
+Traveller fair-use notice above.

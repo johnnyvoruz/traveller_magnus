@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { CAMPAIGN_UNIVERSE_KEY, campaign, openCampaign, switchCampaign } from '../../apps/web/src/campaign/store.ts';
+import { CAMPAIGN_UNIVERSE_KEY, campaign, openCampaign, setCampaignDate, switchCampaign } from '../../apps/web/src/campaign/store.ts';
 import { commit, flushCampaign, lastError, newRecordId, pending, resetCampaign } from '../../apps/web/src/campaign/commit.ts';
 import { recordsAtHex } from '../../apps/web/src/campaign/index.ts';
 import { toasts } from '../../apps/web/src/shell/toast.ts';
@@ -76,8 +76,8 @@ function universeRow(over = {}) {
     };
 }
 
-function page(records, seq, done) {
-    return { records, links: [], settings: settings(), seq, done };
+function page(records, seq, done, clock = null) {
+    return { records, links: [], settings: settings(), clock, seq, done };
 }
 
 function harness(seed = []) {
@@ -142,6 +142,14 @@ function harness(seed = []) {
             const applied = (body.records || []).map((row) => ({
                 table: 'records', id: row.id, rev: row.rev + 1, seq: seq++,
             }));
+            if (body.clock) {
+                applied.push({
+                    table: 'clock',
+                    id: 'campaignTime',
+                    rev: body.clock.baseRev + 1,
+                    seq: seq++,
+                });
+            }
             return jsonResponse(200, { ok: true, data: { applied, conflicts: [] } });
         }
         throw new Error('unexpected ' + method + ' ' + target);
@@ -314,4 +322,68 @@ test('open uses the campaign this device used last', async () => {
     assert.equal(campaign.records[OTHER].name, 'From Beta');
     assert.equal(campaign.records[VESSEL], undefined);
     assert.equal(memory.get(CAMPAIGN_UNIVERSE_KEY), 'uni-b');
+});
+
+test('open keeps the clock from a later page', async () => {
+    memory.clear();
+    resetCampaign();
+    const box = harness();
+    const first = record({ id: VESSEL, name: 'Beowulf' });
+    const second = record({ id: PERSON, type: 'person', name: 'Voss', anchor: null });
+    box.server.pages['uni-1'] = [
+        { after: 0, body: page([first], 1, false, null) },
+        { after: 1, body: page([second], 2, true, { days: 15, rev: 2 }) },
+    ];
+    await open(box);
+    assert.deepEqual(campaign.clock, { days: 15, rev: 2 });
+});
+
+test('setCampaignDate sends the clock and keeps the first baseRev', async () => {
+    memory.clear();
+    resetCampaign();
+    const box = harness();
+    box.server.pages['uni-1'] = [{ after: 0, body: page([], 0, true) }];
+    await open(box);
+    assert.equal(campaign.clock, null);
+    setCampaignDate(10.5);
+    setCampaignDate(11.25);
+    assert.equal(campaign.clock.days, 11.25);
+    assert.equal(campaign.clock.rev, 0);
+    await flushCampaign();
+    assert.deepEqual(box.server.patches[0].body.clock, { days: 11.25, baseRev: 0 });
+    assert.deepEqual(campaign.clock, { days: 11.25, rev: 1 });
+    assert.equal(pending.value, false);
+});
+
+test('a clock conflict takes the server clock and raises one toast', async () => {
+    memory.clear();
+    resetCampaign();
+    const box = harness();
+    box.server.pages['uni-1'] = [{ after: 0, body: page([], 0, true, { days: 3, rev: 4 }) }];
+    await open(box);
+    setCampaignDate(9);
+    box.server.conflict = {
+        applied: [],
+        conflicts: [{ table: 'clock', id: 'campaignTime', current: { days: 3, rev: 4 } }],
+    };
+    await flushCampaign();
+    assert.deepEqual(campaign.clock, { days: 3, rev: 4 });
+    assert.equal(toasts.length, 1);
+    assert.equal(toasts[0].message, 'Saved changes conflicted with a newer copy. The server copy is now shown.');
+});
+
+test('a clock conflict with no stored date clears the local clock', async () => {
+    memory.clear();
+    resetCampaign();
+    const box = harness();
+    box.server.pages['uni-1'] = [{ after: 0, body: page([], 0, true) }];
+    await open(box);
+    setCampaignDate(9);
+    box.server.conflict = {
+        applied: [],
+        conflicts: [{ table: 'clock', id: 'campaignTime', current: null }],
+    };
+    await flushCampaign();
+    assert.equal(campaign.clock, null);
+    assert.equal(toasts.length, 1);
 });

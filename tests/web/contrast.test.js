@@ -215,6 +215,21 @@ const PAIRS = [
     ['--signal', '--row-active', MARK, 'account menu item icon under the pointer or focus'],
     ['--danger', '--panel-raised', MARK, 'error strip edge'],
     ['--attention', '--panel-raised', MARK, 'offline strip edge'],
+    // The record list, the record page and the toast (K5b)
+    ['--text-0', '--panel-raised', TEXT, 'record row name, first-run heading'],
+    ['--text-0', '--row-active', TEXT, 'record row name, selected'],
+    ['--text-muted', '--row-active', TEXT, 'record row type and place line, selected (12 px)'],
+    ['--text-muted', '--surface-1', TEXT, 'record row type and place line under the pointer (12 px)'],
+    ['--signal', ['--wash-faint', '--panel-raised'], MARK, 'record row type glyph'],
+    ['--signal', '--row-active', TEXT, 'type chip, chosen'],
+    ['--text-0', '--bg-2', TEXT, 'record search and tag field text'],
+    ['--text-muted', '--bg-2', TEXT, 'record search placeholder and icon'],
+    ['--signal', '--chrome-bg', MARK, 'Add menu type icons'],
+    ['--text-0', '--bg-1', TEXT, 'record name, tag under the pointer'],
+    ['--danger', '--bg-1', TEXT, 'Delete under the pointer, "Not saved" (12 px)'],
+    ['--danger', '--panel-raised', TEXT, 'Delete button under the pointer'],
+    ['--signal-dim', '--bg-1', MARK, 'toast edge, tag border under the pointer'],
+    ['--signal', '--bg-1', TEXT, 'toast action, "Saving" mark'],
 ];
 
 if (process.env.CONTRAST_REPORT) {

@@ -30,6 +30,7 @@ import { cancelFrame, nextFrame, now, pageOrigin } from '../platform/browser.ts'
 import Rail from '../shell/Rail.vue';
 import { loadSession } from '../account/session.ts';
 import AccountMenu from '../workspace/AccountMenu.vue';
+import ToastStrip from '../shell/ToastStrip.vue';
 import { handleKey, registerCommand } from '../shell/registry.ts';
 
 const route = useRoute();
@@ -394,6 +395,7 @@ onBeforeUnmount(() => {
   >
     <Rail ref="railEl" :panel-open="dossierOpen" :search-open="false" :account-open="accountOpen" />
     <AccountMenu :open="accountOpen" @close="closeAccount" @campaign="router.push('/campaign')" />
+    <ToastStrip />
     <DossierPanel
       orbit
       :open="dossierOpen"

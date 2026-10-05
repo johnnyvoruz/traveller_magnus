@@ -24,6 +24,7 @@ universe/raw/*.xml
 !universe/raw/Tuglikki.xml
 universe/raw/_*.log
 universe/raw/.uploaded.*
+tools/geomorphs/.uploaded.json
 
 # Local tooling and secrets (restored from the legacy ignore list)
 .env
@@ -45,3 +46,7 @@ venv/
 
 # Review notes, design audits and screenshots: working papers, kept local.
 findings/
+
+# Deck plan tiles (3,025 PNGs, 83 MB) live on the CDN under geomorphs/, not in git.
+# manifest.json, REBUILD.md and ATTRIBUTION.txt stay tracked.
+assets/geomorphs/**/*.png

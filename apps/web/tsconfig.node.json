@@ -19,5 +19,5 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["vite.config.ts", "surface-parity-dev.ts", "surface-parity-gl.ts"]
+  "include": ["vite.config.ts", "surface-parity-dev.ts", "surface-parity-gl.ts", "geomorph-dev.ts"]
 }

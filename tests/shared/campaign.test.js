@@ -7,6 +7,7 @@ import {
     CampaignAnchor,
     CampaignChanges,
     CampaignProvenance,
+    CampaignClock,
     CampaignLink,
     CampaignPage,
     CampaignRecord,
@@ -121,9 +122,13 @@ test('each campaign schema accepts a good value', () => {
     assert.equal(CampaignRecord.safeParse(record({ name: 'V'.repeat(CAMPAIGN_LIMITS.name), summary: 's'.repeat(CAMPAIGN_LIMITS.summary), details: 'd'.repeat(CAMPAIGN_LIMITS.details), tags: Array.from({ length: CAMPAIGN_LIMITS.tags }, () => 't'.repeat(CAMPAIGN_LIMITS.tag)) })).success, true);
     assert.equal(CampaignLink.safeParse(link()).success, true);
     assert.equal(CampaignSettings.safeParse(settings()).success, true);
+    assert.equal(CampaignClock.safeParse({ days: 403326.5, rev: 1 }).success, true);
+    assert.equal(CampaignClock.safeParse({ days: 0, rev: 0 }).success, true);
     assert.equal(CampaignChanges.safeParse({ records: [{ ...record(), baseRev: 0 }] }).success, true);
     assert.equal(CampaignChanges.safeParse({ records: [{ id: RECORD, baseRev: 1, deleted: true }] }).success, true);
-    assert.equal(CampaignPage.safeParse({ records: [record()], links: [link()], settings: settings(), seq: 1, done: true }).success, true);
+    assert.equal(CampaignChanges.safeParse({ clock: { days: 403326.5, baseRev: 0 } }).success, true);
+    assert.equal(CampaignPage.safeParse({ records: [record()], links: [link()], settings: settings(), clock: { days: 403326.5, rev: 1 }, seq: 1, done: true }).success, true);
+    assert.equal(CampaignPage.safeParse({ records: [], links: [], settings: settings(), clock: null, seq: 0, done: true }).success, true);
 });
 
 test('schemas reject §0.10 breaches and a legacy hex id', () => {
@@ -146,11 +151,19 @@ test('schemas reject §0.10 breaches and a legacy hex id', () => {
     assert.equal(CampaignSettings.safeParse(settings({ party: { vesselId: null, memberIds: [], anchor: { kind: 'system', hexKey: '1-A-0101' } } })).success, false);
     const tooMany = [];
     for (let i = 0; i < 201; i += 1) tooMany.push({ ...record({ id: idFor('cr', i) }), baseRev: 0 });
+    assert.equal(CampaignClock.safeParse({ days: -1, rev: 0 }).success, false);
+    assert.equal(CampaignClock.safeParse({ days: Number.POSITIVE_INFINITY, rev: 0 }).success, false);
+    assert.equal(CampaignClock.safeParse({ days: Number.NaN, rev: 0 }).success, false);
+    assert.equal(CampaignChanges.safeParse({ clock: { days: -0.25, baseRev: 0 } }).success, false);
     assert.equal(CampaignChanges.safeParse({ records: tooMany }).success, false);
+    const atCap = [];
+    for (let i = 0; i < CAMPAIGN_LIMITS.patchRows; i += 1) atCap.push({ ...record({ id: idFor('cr', i) }), baseRev: 0 });
+    assert.equal(CampaignChanges.safeParse({ records: atCap, clock: { days: 1, baseRev: 0 } }).success, false);
     const bulky = [];
     for (let i = 0; i < 80; i += 1) bulky.push({ ...record({ id: idFor('cr', i), details: 'd'.repeat(20_000) }), baseRev: 0 });
     assert.equal(CampaignChanges.safeParse({ records: bulky }).success, false);
-    assert.equal(CampaignPage.safeParse({ records: [record({ anchor: { kind: 'system', hexKey: '1-A-0101' } })], links: [], settings: settings(), seq: 0, done: true }).success, false);
+    assert.equal(CampaignPage.safeParse({ records: [record({ anchor: { kind: 'system', hexKey: '1-A-0101' } })], links: [], settings: settings(), clock: null, seq: 0, done: true }).success, false);
+    assert.equal(CampaignPage.safeParse({ records: [], links: [], settings: settings(), seq: 0, done: true }).success, false);
 });
 
 test('link vocabulary rows use only record types and match linkAllowed', () => {

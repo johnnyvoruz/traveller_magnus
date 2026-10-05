@@ -1,18 +1,30 @@
+// nodejs_compat provides this module at runtime. The API tsconfig types only the Workers runtime.
+// @ts-expect-error TS2591
+import { createHash } from 'node:crypto';
 import {
     CAMPAIGN_LIMITS,
     CampaignChanges,
     CampaignLink,
     CampaignRecord,
     type CampaignChangesResult,
+    type CampaignClock,
+    type CampaignLink as CampaignLinkRow,
     type CampaignPage,
+    type CampaignRecord as CampaignRecordRow,
     type CampaignSettings,
     type LinkChange,
     type RecordChange,
 } from '@voyage/shared';
 
-/** One statement per call. SELECT returns rows; other statements return none. */
+/**
+ * One statement per call. SELECT returns rows; other statements return none.
+ * `transaction` runs `fn` as one unit: the adapter commits when `fn` returns
+ * and rolls the unit back when `fn` throws. The Durable Object uses
+ * `storage.transactionSync`. Campaign code does not send transaction SQL.
+ */
 export interface Sql {
     exec(query: string, ...params: Array<string | number | null>): SqlRow[];
+    transaction<T>(fn: () => T): T;
 }
 
 export type SqlRow = Record<string, unknown>;
@@ -86,6 +98,14 @@ export function installCampaignSchema(sql: Sql): void {
         updated_at TEXT,
         payload TEXT
     )`);
+    sql.exec(`CREATE TABLE IF NOT EXISTS list_history (
+        kind TEXT NOT NULL,
+        rev INTEGER NOT NULL,
+        at TEXT,
+        action TEXT,
+        payload_hash TEXT,
+        PRIMARY KEY (kind, rev)
+    )`);
     sql.exec(`INSERT INTO meta (key, value) VALUES ('schemaVersion', '2') ON CONFLICT(key) DO UPDATE SET value = '2'`);
     sql.exec(`INSERT INTO meta (key, value) VALUES ('campaignSeq', '0') ON CONFLICT(key) DO NOTHING`);
 }
@@ -136,6 +156,12 @@ function readSettings(sql: Sql): CampaignSettings {
     const rows = sql.exec(`SELECT payload FROM lists WHERE kind = 'campaignSettings'`);
     if (!rows.length || rows[0].payload == null) return defaultSettings();
     return parseJson(rows[0].payload) as CampaignSettings;
+}
+
+function readClock(sql: Sql): CampaignClock | null {
+    const rows = sql.exec(`SELECT payload FROM lists WHERE kind = 'campaignTime'`);
+    if (!rows.length || rows[0].payload == null) return null;
+    return parseJson(rows[0].payload) as CampaignClock;
 }
 
 function recordFrom(row: SqlRow) {
@@ -258,6 +284,7 @@ export function readCampaign(sql: Sql, afterSeq: number, limit: number): Campaig
         records: page.filter((item) => item.table === 'records').map((item) => recordFrom(item.row)) as CampaignPage['records'],
         links: page.filter((item) => item.table === 'links').map((item) => linkFrom(item.row)) as CampaignPage['links'],
         settings: readSettings(sql),
+        clock: readClock(sql),
         seq,
         done,
     };
@@ -305,8 +332,7 @@ export function applyCampaignChanges(sql: Sql, changes: unknown, now: string): C
     const input = parsed.data;
     const applied: CampaignChangesResult['applied'] = [];
     const conflicts: CampaignChangesResult['conflicts'] = [];
-    sql.exec('BEGIN');
-    try {
+    return sql.transaction(() => {
         if (input.settings) {
             const stored = sql.exec(`SELECT rev, payload FROM lists WHERE kind = 'campaignSettings'`);
             const current = stored.length ? parseJson(stored[0].payload) as CampaignSettings : defaultSettings();
@@ -334,6 +360,43 @@ export function applyCampaignChanges(sql: Sql, changes: unknown, now: string): C
                     );
                 }
                 applied.push({ table: 'settings', id: 'campaignSettings', rev, seq });
+            }
+        }
+        if (input.clock) {
+            const stored = sql.exec(`SELECT rev, payload FROM lists WHERE kind = 'campaignTime'`);
+            const current = stored.length && stored[0].payload != null
+                ? parseJson(stored[0].payload) as CampaignClock
+                : null;
+            const storedRev = current ? current.rev : 0;
+            if (input.clock.baseRev !== storedRev) {
+                conflicts.push({ table: 'clock', id: 'campaignTime', current });
+            } else {
+                const rev = storedRev + 1;
+                const seq = nextSeq(sql);
+                const next: CampaignClock = { days: input.clock.days, rev };
+                const payload = JSON.stringify(next);
+                if (!stored.length) {
+                    sql.exec(
+                        `INSERT INTO lists (kind, rev, updated_at, payload) VALUES ('campaignTime', ?, ?, ?)`,
+                        rev,
+                        now,
+                        payload,
+                    );
+                } else {
+                    sql.exec(
+                        `UPDATE lists SET rev = ?, updated_at = ?, payload = ? WHERE kind = 'campaignTime'`,
+                        rev,
+                        now,
+                        payload,
+                    );
+                }
+                sql.exec(
+                    `INSERT INTO list_history (kind, rev, at, action, payload_hash) VALUES ('campaignTime', ?, ?, 'set', ?)`,
+                    rev,
+                    now,
+                    createHash('sha256').update(payload).digest('hex'),
+                );
+                applied.push({ table: 'clock', id: 'campaignTime', rev, seq });
             }
         }
         for (const change of input.records ?? []) {
@@ -374,7 +437,7 @@ export function applyCampaignChanges(sql: Sql, changes: unknown, now: string): C
                 continue;
             }
             if (change.baseRev !== Number(stored.rev)) {
-                conflicts.push({ table: 'records', id: change.id, current: recordFrom(stored) as CampaignChangesResult['conflicts'][number]['current'] });
+                conflicts.push({ table: 'records', id: change.id, current: recordFrom(stored) as CampaignRecordRow });
                 continue;
             }
             const rev = Number(stored.rev) + 1;
@@ -461,14 +524,14 @@ export function applyCampaignChanges(sql: Sql, changes: unknown, now: string): C
                 continue;
             }
             if (change.baseRev !== Number(stored.rev)) {
-                conflicts.push({ table: 'links', id: change.id, current: linkFrom(stored) as CampaignChangesResult['conflicts'][number]['current'] });
+                conflicts.push({ table: 'links', id: change.id, current: linkFrom(stored) as CampaignLinkRow });
                 continue;
             }
             const fromId = isFullLink(change) ? change.from : String(stored.from_id);
             const toId = isFullLink(change) ? change.to : String(stored.to_id);
             const kind = isFullLink(change) ? change.kind : String(stored.kind);
             if (!change.deleted && (!liveRecord(sql, fromId) || !liveRecord(sql, toId))) {
-                conflicts.push({ table: 'links', id: change.id, current: linkFrom(stored) as CampaignChangesResult['conflicts'][number]['current'] });
+                conflicts.push({ table: 'links', id: change.id, current: linkFrom(stored) as CampaignLinkRow });
                 continue;
             }
             if (!change.deleted && kind === 'member' && createsCycle(sql, change.id, fromId, toId)) {
@@ -510,10 +573,6 @@ export function applyCampaignChanges(sql: Sql, changes: unknown, now: string): C
             }
             applied.push({ table: 'links', id: change.id, rev, seq });
         }
-        sql.exec('COMMIT');
         return { applied, conflicts };
-    } catch (err) {
-        sql.exec('ROLLBACK');
-        throw err;
-    }
+    });
 }

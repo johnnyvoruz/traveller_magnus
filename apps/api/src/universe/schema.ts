@@ -187,6 +187,9 @@ export async function migrate(storage: DurableObjectStorage): Promise<void> {
         exec(query, ...params) {
             return storage.sql.exec(query, ...params).toArray() as SqlRow[];
         },
+        transaction(fn) {
+            return storage.transactionSync(fn);
+        },
     });
     drizzle(storage, { schema: doSchema });
     console.log(JSON.stringify({ event: 'UniverseDO migration', schemaVersion: 2 }));

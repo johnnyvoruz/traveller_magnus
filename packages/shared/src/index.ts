@@ -17,6 +17,8 @@ export {
     CampaignRecord,
     CampaignLink,
     CampaignSettings,
+    CampaignClock,
+    ClockChange,
     Universe,
     UniverseCreate,
     UniverseUpdate,
@@ -30,6 +32,10 @@ export {
     linkAllowed,
 } from './schemas/campaign.ts';
 export type { CampaignRecordType, CampaignLinkKind, SystemAnchor } from './schemas/campaign.ts';
+export { copyRecords } from './campaign_copy.ts';
+export type { CopyAnchorChange, CopiedRecord, CopyRecordsInput, CopyRecordsResult } from './campaign_copy.ts';
+export { DECK_PLAN_LIMITS, DeckPlan } from './schemas/deck_plan.ts';
+export type { DeckPlanPart } from './schemas/deck_plan.ts';
 export { parseT5Tab } from './parsers/t5tab.ts';
 export type { HexRow } from './parsers/t5tab.ts';
 export { parseXmlElements, parseMetadataXml } from './parsers/metadata_xml.ts';

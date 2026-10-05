@@ -9,6 +9,7 @@ import { session, signOut } from '../account/session.ts';
 import { resetCampaign } from '../campaign/commit.ts';
 import Icon from '../design/Icon.vue';
 import { accountLine, displayName, initials } from './account.ts';
+import { forgetDeleted } from './actions.ts';
 import SignInCard from './SignInCard.vue';
 
 const props = defineProps<{ open: boolean }>();
@@ -70,6 +71,7 @@ async function leave(): Promise<void> {
         await signOut();
         // The next person at this browser must not see this one's campaign.
         resetCampaign();
+        forgetDeleted();
     } finally {
         leaving.value = false;
         emit('close');

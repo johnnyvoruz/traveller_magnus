@@ -5,6 +5,7 @@ import {
     type CampaignLink,
     type CampaignRecord,
     type CampaignSettings,
+    type ClockChange,
     type LinkChange,
     type RecordChange,
     type SettingsChange,
@@ -25,6 +26,7 @@ const RETRY_CAP_MS = 30_000;
 const queuedRecords = new Map<string, RecordChange>();
 const queuedLinks = new Map<string, LinkChange>();
 let queuedSettings: SettingsChange | undefined;
+let queuedClock: ClockChange | undefined;
 let cancelTimer: (() => void) | null = null;
 let cancelRetry: (() => void) | null = null;
 let sending = false;
@@ -71,12 +73,17 @@ function applySettings(row: SettingsChange): void {
     campaign.settings = settings;
 }
 
+function applyClock(row: ClockChange): void {
+    if (campaign.clock) campaign.clock.days = row.days;
+    else campaign.clock = { days: row.days, rev: 0 };
+}
+
 function reindex(): void {
     rebuildCampaignIndex(campaign.records, campaign.links);
 }
 
 function queueHasRows(): boolean {
-    return queuedRecords.size > 0 || queuedLinks.size > 0 || queuedSettings != null;
+    return queuedRecords.size > 0 || queuedLinks.size > 0 || queuedSettings != null || queuedClock != null;
 }
 
 function scheduleFlush(): void {
@@ -104,11 +111,17 @@ function clearTimers(): void {
     cancelRetry = null;
 }
 
-function bodyOf(records: RecordChange[], links: LinkChange[], settings: SettingsChange | undefined): CampaignChanges {
+function bodyOf(
+    records: RecordChange[],
+    links: LinkChange[],
+    settings: SettingsChange | undefined,
+    clock: ClockChange | undefined,
+): CampaignChanges {
     const body: CampaignChanges = {};
     if (records.length) body.records = records;
     if (links.length) body.links = links;
     if (settings) body.settings = settings;
+    if (clock) body.clock = clock;
     return body;
 }
 
@@ -127,6 +140,12 @@ export function commit(changes: CampaignChanges): void {
         queuedSettings = queuedSettings
             ? { ...changes.settings, baseRev: queuedSettings.baseRev }
             : changes.settings;
+    }
+    if (changes.clock) {
+        applyClock(changes.clock);
+        queuedClock = queuedClock
+            ? { ...changes.clock, baseRev: queuedClock.baseRev }
+            : changes.clock;
     }
     reindex();
     pending.value = true;
@@ -150,46 +169,51 @@ export async function flushCampaign(): Promise<void> {
     const records = [...queuedRecords.values()];
     const links = [...queuedLinks.values()];
     const settings = queuedSettings;
+    const clock = queuedClock;
     queuedRecords.clear();
     queuedLinks.clear();
     queuedSettings = undefined;
+    queuedClock = undefined;
     sending = true;
     pending.value = true;
     try {
         const res = await apiFetch(transport.fetch, `/api/universes/${encodeURIComponent(campaign.universeId)}/campaign/changes`, {
             method: 'PATCH',
-            body: JSON.stringify(bodyOf(records, links, settings)),
+            body: JSON.stringify(bodyOf(records, links, settings, clock)),
         });
         if (!res.ok) throw new Error('offline');
         const result = CampaignChangesResult.parse((await res.json()).data);
         const handled = new Set<string>();
+        let settingsHandled = false;
+        let clockHandled = false;
         for (const item of result.applied) {
             handled.add(item.table + ':' + item.id);
             if (item.seq > campaign.seq) campaign.seq = item.seq;
             if (item.table === 'records' && campaign.records[item.id]) campaign.records[item.id].rev = item.rev;
             if (item.table === 'links' && campaign.links[item.id]) campaign.links[item.id].rev = item.rev;
             if (item.table === 'settings' && campaign.settings) campaign.settings.rev = item.rev;
+            if (item.table === 'settings') settingsHandled = true;
+            if (item.table === 'clock' && campaign.clock) campaign.clock.rev = item.rev;
+            if (item.table === 'clock') clockHandled = true;
         }
-        let settingsHandled = false;
         if (result.conflicts.length) {
             for (const item of result.conflicts) {
                 handled.add(item.table + ':' + item.id);
                 if (item.table === 'settings') settingsHandled = true;
+                if (item.table === 'clock') clockHandled = true;
                 if (item.table === 'records') campaign.records[item.id] = item.current as CampaignRecord;
                 if (item.table === 'links') campaign.links[item.id] = item.current as CampaignLink;
                 if (item.table === 'settings') campaign.settings = item.current as CampaignSettings;
+                if (item.table === 'clock') campaign.clock = item.current;
             }
             showToast('Saved changes conflicted with a newer copy. The server copy is now shown.');
         }
-        for (const item of result.applied) {
-            if (item.table === 'settings') settingsHandled = true;
-        }
-        restoreUnhandled(records, links, settings, handled, settingsHandled);
+        restoreUnhandled(records, links, settings, clock, handled, settingsHandled, clockHandled);
         attempt = 0;
         lastError.value = '';
         reindex();
     } catch {
-        restoreAll(records, links, settings);
+        restoreAll(records, links, settings, clock);
         lastError.value = 'offline';
         scheduleRetry();
     } finally {
@@ -198,18 +222,26 @@ export async function flushCampaign(): Promise<void> {
     }
 }
 
-function restoreAll(records: RecordChange[], links: LinkChange[], settings: SettingsChange | undefined): void {
+function restoreAll(
+    records: RecordChange[],
+    links: LinkChange[],
+    settings: SettingsChange | undefined,
+    clock: ClockChange | undefined,
+): void {
     for (const row of records) if (!queuedRecords.has(row.id)) queuedRecords.set(row.id, row);
     for (const row of links) if (!queuedLinks.has(row.id)) queuedLinks.set(row.id, row);
     if (settings && !queuedSettings) queuedSettings = settings;
+    if (clock && !queuedClock) queuedClock = clock;
 }
 
 function restoreUnhandled(
     records: RecordChange[],
     links: LinkChange[],
     settings: SettingsChange | undefined,
+    clock: ClockChange | undefined,
     handled: Set<string>,
     settingsHandled: boolean,
+    clockHandled: boolean,
 ): void {
     for (const row of records) {
         if (!handled.has('records:' + row.id) && !queuedRecords.has(row.id)) queuedRecords.set(row.id, row);
@@ -218,6 +250,7 @@ function restoreUnhandled(
         if (!handled.has('links:' + row.id) && !queuedLinks.has(row.id)) queuedLinks.set(row.id, row);
     }
     if (settings && !settingsHandled && !queuedSettings) queuedSettings = settings;
+    if (clock && !clockHandled && !queuedClock) queuedClock = clock;
 }
 
 export function resetCampaign(): void {
@@ -225,6 +258,7 @@ export function resetCampaign(): void {
     queuedRecords.clear();
     queuedLinks.clear();
     queuedSettings = undefined;
+    queuedClock = undefined;
     sending = false;
     attempt = 0;
     pending.value = false;

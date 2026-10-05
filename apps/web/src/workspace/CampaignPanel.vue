@@ -1,22 +1,30 @@
 <script setup lang="ts">
 /**
- * The Campaign panel (design §1 and §2). Signed out it says what signing in gives and offers
+ * The Campaign panel (design §1 to §3). Signed out it says what signing in gives and offers
  * the one button. Signed in it opens the campaign the first time it is shown (never before:
- * the viewer does not wait on it) and says where that stands; the record list arrives with
- * the next step (K5b).
+ * the viewer does not wait on it), then shows the record list, or one record, or at full
+ * width the list with the record beside it. Each has its own address, so Back works.
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import type { CampaignRecordType } from '@voyage/shared';
 import { session } from '../account/session.ts';
 import { campaign, openCampaign } from '../campaign/store.ts';
 import { isOnline, observeSize, onOnlineChange } from '../platform/browser.ts';
 import Panel from '../shell/Panel.vue';
 import { readSpan, writeSpan, type PanelSpan } from '../shell/panel_state.ts';
+import { createRecord, justCreated } from './actions.ts';
+import CampaignList from './CampaignList.vue';
+import { typeInfo } from './records.ts';
+import RecordPage from './RecordPage.vue';
 import SignInCard from './SignInCard.vue';
 
 const props = defineProps<{
     open: boolean;
     /** The truth version the map is showing: a new campaign is pinned to it. Empty until the chart has loaded. */
     truthVersion: string;
+    /** The record the address names, or null for the list. */
+    recordId: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -24,7 +32,10 @@ const emit = defineEmits<{
     width: [px: number];
 }>();
 
+const route = useRoute();
+const router = useRouter();
 const panel = ref<{ element: HTMLElement | null } | null>(null);
+const list = ref<{ focusSearch: () => void } | null>(null);
 const span = ref<PanelSpan>(readSpan());
 const online = ref(true);
 let stopSize: (() => void) | null = null;
@@ -40,10 +51,23 @@ const campaignName = computed(() => {
     const found = campaign.universes.find((item) => item.id === campaign.universeId);
     return found ? found.name : '';
 });
-const count = computed(() => {
-    let live = 0;
-    for (const record of Object.values(campaign.records)) if (!record.deleted) live += 1;
-    return live;
+
+/** What the panel shows: the store's status, or an error when the open itself threw. */
+const status = computed(() => {
+    if (!signedIn.value) return 'signed-out';
+    if (failed.value) return 'error';
+    return campaign.status === 'signed-out' ? 'loading' : campaign.status;
+});
+
+const shownRecord = computed(() => {
+    const found = props.recordId ? campaign.records[props.recordId] : null;
+    return found && !found.deleted ? found : null;
+});
+const title = computed(() => shownRecord.value && span.value !== 'full' ? shownRecord.value.name : 'Campaign');
+const eyebrow = computed(() => {
+    if (!signedIn.value) return '';
+    if (shownRecord.value && span.value !== 'full') return 'Campaign · ' + typeInfo(shownRecord.value.type).many;
+    return campaignName.value;
 });
 
 /** Opens the campaign once the panel is shown to a signed-in user and the chart's version is known. */
@@ -66,16 +90,32 @@ async function openNow(): Promise<void> {
     }
 }
 
-/** What the panel shows: the store's status, or an error when the open itself threw. */
-const status = computed(() => {
-    if (!signedIn.value) return 'signed-out';
-    if (failed.value) return 'error';
-    return campaign.status === 'signed-out' ? 'loading' : campaign.status;
-});
-
 function retry(): void {
     if (opening || !props.truthVersion) return;
     void openNow();
+}
+
+/** The list, or a record: the map's camera in the address stays as it is. */
+function go(id: string | null): void {
+    const path = id ? '/campaign/r/' + encodeURIComponent(id) : '/campaign';
+    if (route.path !== path) void router.push({ path, query: route.query });
+}
+
+function create(type: CampaignRecordType): void {
+    if (!online.value) return;
+    go(createRecord(type));
+}
+
+/** "/" goes to the list's search, unless a field is being typed in. */
+function onKey(event: KeyboardEvent): void {
+    if (event.key !== '/' || event.ctrlKey || event.metaKey || event.altKey) return;
+    const target = event.target as HTMLElement | null;
+    const tag = target ? target.tagName : '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if (!list.value) return;
+    event.preventDefault();
+    event.stopPropagation();
+    list.value.focusSearch();
 }
 
 function panelElement(): HTMLElement | null {
@@ -110,6 +150,28 @@ watch(() => [props.open, signedIn.value, props.truthVersion], () => {
 });
 watch(span, () => { void nextTick(() => { bindSize(); publish(); }); });
 
+/**
+ * Focus follows the view, so the keyboard is never left on something that has gone: into a
+ * record at its name, and back in the list on the row that was open (or the search).
+ */
+watch(() => props.recordId, (now, was) => {
+    if (!props.open) return;
+    void nextTick(() => {
+        const el = panelElement();
+        if (!el) return;
+        let target: HTMLElement | null = null;
+        if (now) {
+            // A record just made opens its own name field.
+            if (justCreated.value === now) return;
+            target = el.querySelector<HTMLElement>('.rec .edit.is-title .edit-view');
+        } else {
+            for (const row of el.querySelectorAll<HTMLElement>('.camp-row')) if (row.dataset.id === was) target = row;
+            if (!target) target = el.querySelector<HTMLElement>('.camp-search input, .camp-first .ui-btn');
+        }
+        if (target) target.focus();
+    });
+});
+
 onMounted(() => {
     online.value = isOnline();
     stopOnline = onOnlineChange((now) => { online.value = now; });
@@ -128,18 +190,19 @@ defineExpose({ remeasure: publish });
 </script>
 
 <template>
-  <div class="campaign-root">
+  <div class="campaign-root" @keydown="onKey">
     <Panel
       ref="panel"
       :open="open"
-      title="Campaign"
-      :meta="signedIn ? (campaignName ? campaignName + ' · private to you, on top of the released map' : 'Private to you, on top of the released map') : ''"
+      :title="title"
+      :meta="signedIn && !eyebrow ? 'Private to you, on top of the released map' : ''"
       chip=""
       :span="span"
       @close="$emit('close')"
       @span="chooseSpan"
     >
-      <div class="camp" :data-span="span" :data-status="status">
+      <template v-if="eyebrow" #eyebrow>{{ eyebrow }}</template>
+      <div class="camp" :data-span="span" :data-status="status" :data-view="recordId ? 'record' : 'list'">
         <SignInCard v-if="!signedIn" />
         <template v-else>
           <p v-if="!online" class="camp-strip" role="status">
@@ -152,10 +215,15 @@ defineExpose({ remeasure: publish });
           <ul v-else-if="status !== 'ready'" class="camp-skeleton" aria-label="Loading your campaign" aria-busy="true">
             <li v-for="n in 4" :key="n"><i></i><span><i></i><i></i><i></i></span></li>
           </ul>
-          <div v-else class="camp-empty">
-            <p v-if="count === 0">No records yet.</p>
-            <p v-else>{{ count }} {{ count === 1 ? 'record' : 'records' }} in this campaign.</p>
+          <div v-else-if="span === 'full'" class="camp-split">
+            <CampaignList ref="list" :selected="recordId" :read-only="!online" @open="go" @create="create" />
+            <div class="camp-detail">
+              <RecordPage v-if="recordId" :id="recordId" beside :read-only="!online" @back="go(null)" />
+              <p v-else class="camp-hint">Choose a record to read it here.</p>
+            </div>
           </div>
+          <RecordPage v-else-if="recordId" :id="recordId" :beside="false" :read-only="!online" @back="go(null)" />
+          <CampaignList v-else ref="list" :selected="null" :read-only="!online" @open="go" @create="create" />
         </template>
       </div>
     </Panel>
@@ -168,9 +236,52 @@ defineExpose({ remeasure: publish });
 }
 
 .camp {
-  padding: 18px 16px;
+  box-sizing: border-box;
+  min-height: 100%;
+  padding: 16px;
   color: var(--text-1);
   font: 400 14px/1.5 var(--font-text);
+}
+
+/* A record's page fills the panel, so its foot sits at the bottom. */
+.camp[data-view="record"]:not([data-span="full"]) {
+  display: flex;
+  flex-direction: column;
+}
+
+.camp[data-view="record"]:not([data-span="full"]) > .rec {
+  flex: 1 1 auto;
+}
+
+/* Full width: the list, and the record chosen beside it, each the panel's whole height. */
+.camp[data-span="full"] {
+  display: flex;
+  flex-direction: column;
+}
+
+.camp-split {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: minmax(360px, 460px) minmax(0, 1fr);
+  gap: 0 22px;
+}
+
+.camp-detail {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding-left: 22px;
+  border-left: 1px solid var(--line-1);
+}
+
+.camp-detail > .rec {
+  flex: 1 1 auto;
+}
+
+.camp-hint {
+  margin: 0;
+  padding: 22px 0;
+  color: var(--text-muted);
 }
 
 /* One strip above the content: amber for a state to know about, red for a failure. */
@@ -194,17 +305,6 @@ defineExpose({ remeasure: publish });
 
 .camp-strip span {
   flex: 1 1 auto;
-}
-
-.camp-empty {
-  padding: 22px 16px;
-  border: 1px dashed var(--line-2);
-  border-radius: var(--r-3);
-  color: var(--text-muted);
-}
-
-.camp-empty p {
-  margin: 0;
 }
 
 /* Rows of the list's own height while the campaign loads. */

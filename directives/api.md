@@ -66,8 +66,8 @@ edit), or `{ hexKey, rev, deleted: true }`. Response: `{ applied: [hexKey...], c
 
 | Method | Path | Auth | Purpose | Schema |
 |---|---|---|---|---|
-| GET | `/api/universes/:id/campaign?after=&limit=` | owner | **Built.** records and links with `seq` greater than `after`, tombstones included, ordered by `seq`. `limit` defaults to 1000 and is capped at 1000. `settings` is the current document. `done` is true when no later row remains. Journal is not in this slice. | — |
-| PATCH | `/api/universes/:id/campaign/changes` | owner | **Built.** batched records, links, and settings. `baseRev` must match the stored `rev` (0 creates). A mismatch returns the stored row in `conflicts`. Deleting a record tombstones its links in the same write. Tombstones are not purged; a restore sends the row with `deleted: false` and that `rev` as `baseRev`. 120 mutations a minute per universe. | `CampaignChanges` |
+| GET | `/api/universes/:id/campaign?after=&limit=` | owner | **Built.** records and links with `seq` greater than `after`, tombstones included, ordered by `seq`. `limit` defaults to 1000 and is capped at 1000. `settings` is the current document. `clock` is the campaign date (`{ days, rev }`) or null, on every page. `done` is true when no later row remains. Journal is not in this slice. | — |
+| PATCH | `/api/universes/:id/campaign/changes` | owner | **Built.** batched records, links, settings, and the clock. `baseRev` must match the stored `rev` (0 creates). A clock change is `{ days, baseRev }` and counts as one row; applied id `campaignTime`, table `clock`. A mismatch returns the stored row in `conflicts` (the stored clock, or null before the first set). Deleting a record tombstones its links in the same write. Tombstones are not purged; a restore sends the row with `deleted: false` and that `rev` as `baseRev`. 120 mutations a minute per universe. | `CampaignChanges` |
 | PUT | `/api/universes/:id/objects/:hash` | owner | images and thumbnails as objects | — |
 | GET | `/api/universes/:id/campaign/search?q=` | owner | **Deferred.** FTS over records is not built in this slice | — |
 

@@ -33,6 +33,10 @@ export type MapTheme = {
     fontText: string;
     /** --t-fast in seconds: the title fade. 0 when the token is absent, which means no fade. */
     tFast: number;
+    /** --orbit-tag. The party name sits on it in --signal. */
+    tag: string;
+    /** --t-pulse in seconds. One beat of the locator ring. */
+    tPulse: number;
     chart: ChartColours;
     routeColours: Record<string, string>;
 };
@@ -69,6 +73,8 @@ export function readTheme(el: HTMLElement): MapTheme {
         fontData: token(style, '--font-data'),
         fontText: token(style, '--font-text'),
         tFast: token(style, '--t-fast') === '' ? 0 : cssTime(token(style, '--t-fast')),
+        tag: token(style, '--orbit-tag'),
+        tPulse: token(style, '--t-pulse') === '' ? 0 : cssTime(token(style, '--t-pulse')),
         chart: {
             world: token(style, '--chart-world'),
             water: token(style, '--chart-water'),

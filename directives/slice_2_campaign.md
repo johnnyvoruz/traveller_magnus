@@ -213,8 +213,33 @@ only. D's five points for the orchestrator:
 
 ## K6 to K8 (outlines)
 
-- **K6. The clock.** List kind `campaignTime`; `DDD-YYYY` and hours; the orbit view reads it
-  when a campaign is open; the vessel's dated position log.
+- **K6. The clock (written in full 2026-10-04).** The campaign date is one number, `days`, the
+  same count the orbit view's clock already uses (`orbit/clock.ts`: `totalDays`, `splitDays`,
+  365-day display years, fractional for the time of day). No new calendar arithmetic.
+  - **Looking is not advancing.** Scrubbing time in the orbit view never changes the campaign
+    date. The date changes only by an explicit act: "Set as campaign date" in the orbit view,
+    or editing it in the campaign panel.
+  - **K6a (Agent B), shared and API.** `CampaignClock = { days, rev }` (`days` finite, at least
+    0); `CampaignChanges.clock?: { days, baseRev }`; `CampaignPage.clock` (null until first
+    set); `applied` gains table `clock`. Stored as list kind `campaignTime`, with a
+    `list_history` row per change so the date can be walked back. A stale `baseRev` is a
+    conflict carrying the stored clock.
+  - **K6b (Agent A), the store.** `campaign.clock`, `setCampaignDate(days)` through `commit`;
+    conflicts take the server's value and say so.
+  - **K6c (Agent D), the screens.** With a campaign open and no date in the link, the orbit
+    view opens on the campaign date and shows it as a mark on the time row; "Set as campaign
+    date" appears when the view's date differs; the campaign panel shows the date
+    (`DDD-YYYY`, the weekday names of `campaign_manager_plan.md` §7.9, day 001 "Holiday") and
+    edits it. Signed out, the orbit view is exactly as now.
+  - **"Advance 1 week" (Johnny, 2026-10-04).** A button in the orbit view's time controls that
+    moves the date on seven days, placed with the primary controls. Johnny: it is "way, way
+    more important than when the planets align", because a week is the typical time for a
+    jump. **The line-up search moves out of the time row into an overflow ("kebab") menu.**
+    Signed out, or with the view away from the campaign date, it moves the view only. With a
+    campaign open and the view on the campaign date, it advances the campaign date as well,
+    with undo by toast (the one case where a time control writes the date; orchestrator's
+    proposal, Johnny may overrule). The view part needs no campaign and is built first.
+  - **K6d, later:** the vessel's dated position log and the Jump button.
 - **K7. The journal.** `campaign_journal` (schema version 3, columns from the plan's §2.4),
   sessions and notes dated from the clock and anchored to the party.
 - **K8. The timeline.** Dated records and journal entries in one list; choosing a row focuses

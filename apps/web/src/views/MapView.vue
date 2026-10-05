@@ -2,7 +2,9 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { SectorHex, SectorIndex, TreeEnvelope, TruthManifest, TruthOverview } from '@voyage/shared';
+import { campaign } from '../campaign/store.ts';
 import { fit, flight, SHORT_HOP, toWorld, zoomAt, type Camera, type Viewport } from '../map/camera.ts';
+import { resolvePartyHex, standInSnapshot, type CampaignSnapshot } from '../map/campaign_layer.ts';
 import { formatHex, fromGlobal, hexAt, parseHex, SECTOR_ROWS } from '../map/geometry.ts';
 import { attachInput, type InputWhy } from '../map/input.ts';
 import { MapRenderer } from '../map/MapRenderer.ts';
@@ -17,12 +19,16 @@ import { handleKey, registerCommand, systemPanel, type PanelWorld } from '../she
 import { orbitPath } from '../orbit/bodies.ts';
 import { escapeAction } from '../shell/panel_state.ts';
 import Rail from '../shell/Rail.vue';
+import { dismissToast, toasts } from '../shell/toast.ts';
+import ToastStrip from '../shell/ToastStrip.vue';
 import AccountMenu from '../workspace/AccountMenu.vue';
 import CampaignPanel from '../workspace/CampaignPanel.vue';
-import { loadSession } from '../account/session.ts';
+import { loadSession, session } from '../account/session.ts';
 import {
     cancelFrame,
     devicePixelRatio,
+    storageGet,
+    storageSet,
     nextFrame,
     now,
     onDevicePixelRatioChange,
@@ -114,6 +120,23 @@ function showStatus(): void {
 const dossier = computed(() => dossierRoute(route.path));
 /** The Campaign panel has a route of its own, so Back closes it and a link can open it. */
 const campaignOpen = computed(() => route.path === '/campaign' || route.path.startsWith('/campaign/'));
+/** The record the address names: `/campaign/r/<id>`. */
+const campaignRecord = computed(() => {
+    const parts = route.path.split('/').filter((part) => part.length > 0);
+    return parts[0] === 'campaign' && parts[1] === 'r' && parts[2] ? decodeURIComponent(parts[2]) : null;
+});
+
+/** Set on this device once the Campaign panel has opened itself for a first sign-in (design J12). */
+const GREETED_KEY = 'voyage_campaign_greeted';
+
+/** A first sign-in lands on the home view: the Campaign panel opens once, and never again unasked. */
+function greet(): void {
+    if (!session.user || route.path !== '/') return;
+    if (storageGet(GREETED_KEY) === '1') return;
+    storageSet(GREETED_KEY, '1');
+    if (storageGet(GREETED_KEY) !== '1') return;
+    toggleCampaign();
+}
 
 function syncSelection(): void {
     const state = dossier.value;
@@ -336,8 +359,18 @@ function onEscape(): void {
         closeAccount();
         return;
     }
+    // Esc dismisses the newest toast before it closes anything.
+    if (toasts.length) {
+        dismissToast(toasts[toasts.length - 1].id);
+        return;
+    }
     if (campaignOpen.value) {
-        if (!omniOpen.value) closePanel();
+        if (omniOpen.value) return;
+        // A record returns to the list; the list closes the panel.
+        if (campaignRecord.value) {
+            suppressFly = true;
+            void router.push({ path: '/campaign', query: route.query });
+        } else closePanel();
         return;
     }
     const state = dossierRoute(route.path);
@@ -430,7 +463,11 @@ function scheduleQuery(): void {
         const y = cam.y.toFixed(3);
         const z = cam.ppp.toFixed(3);
         if (route.query.x === x && route.query.y === y && route.query.z === z) return;
-        void router.replace({ path: route.path, query: { x, y, z } });
+        // The dev stand-in is a query, and a pan must not close the layer it opened.
+        const standIn = route.query.campaignStandIn;
+        const query: Record<string, string | string[]> = { x, y, z };
+        if (typeof standIn === 'string' && standIn.length > 0) query.campaignStandIn = standIn;
+        void router.replace({ path: route.path, query });
     };
     queryFrame = nextFrame(tick);
 }
@@ -608,6 +645,10 @@ onMounted(() => {
             }
         },
         click: (sx, sy) => {
+            if (renderer && renderer.partyAt(sx, sy)) {
+                openParty();
+                return;
+            }
             const world = toWorld(cam, viewport(), sx, sy);
             const hit = hexAt(world.x, world.y);
             const place = fromGlobal(hit.q, hit.r);
@@ -632,6 +673,7 @@ onMounted(() => {
         },
         // Legacy js/canvas_input.js:361-373: a double click on a system with orbit data enters its orbit view.
         doubleClick: (sx, sy) => {
+            if (renderer && renderer.partyAt(sx, sy)) return;
             const world = toWorld(cam, viewport(), sx, sy);
             const hit = hexAt(world.x, world.y);
             const place = fromGlobal(hit.q, hit.r);
@@ -674,9 +716,54 @@ onMounted(() => {
         run: () => { runSystemPanel(); },
     });
     el.focus();
+    applyCampaign();
     void boot();
     nextFrame(() => { void loadSession(); });
 });
+
+watch(
+    () => [campaign.status, campaign.seq, route.query.campaignStandIn] as const,
+    () => { applyCampaign(); },
+);
+
+function applyCampaign(): void {
+    if (!renderer) return;
+    const standIn = devStandIn();
+    renderer.setCampaign(standIn ? standIn : snapshotFromStore());
+    markDirty();
+}
+
+function devStandIn(): CampaignSnapshot | null {
+    if (!import.meta.env.DEV) return null;
+    const raw = route.query.campaignStandIn;
+    const text = Array.isArray(raw) ? raw[0] : raw;
+    const count = Number(text);
+    if (!Number.isFinite(count) || count <= 0) return null;
+    return standInSnapshot(count, now());
+}
+
+function snapshotFromStore(): CampaignSnapshot | null {
+    if (campaign.status !== 'ready' || !campaign.settings) return null;
+    const party = campaign.settings.party;
+    const hexKey = resolvePartyHex(party, campaign.records);
+    const vessel = party.vesselId ? campaign.records[party.vesselId] : undefined;
+    const name = vessel && !vessel.deleted ? vessel.name : 'Party';
+    return {
+        party: hexKey ? { name, hexKey, focused: false } : null,
+        locate: null,
+        reducedMotion: prefersReducedMotion(),
+    };
+}
+
+function openParty(): void {
+    if (campaignOpen.value) return;
+    accountOpen.value = false;
+    suppressFly = true;
+    void router.push({
+        path: '/campaign',
+        query: { x: cam.x.toFixed(3), y: cam.y.toFixed(3), z: cam.ppp.toFixed(3) },
+    });
+}
 
 function holdsWorld(sx: number, sy: number, hhhh: string): boolean {
     if (!chart) return false;
@@ -711,6 +798,8 @@ watch(() => route.path, () => {
     sawQuery = false;
     applyRoute();
 });
+
+watch(() => session.user, () => { greet(); });
 
 onBeforeUnmount(() => {
     if (raf) cancelFrame(raf);
@@ -759,10 +848,12 @@ onBeforeUnmount(() => {
       ref="campaignEl"
       :open="campaignOpen"
       :truth-version="versionRef"
+      :record-id="campaignRecord"
       @close="closePanel"
       @width="onCampaignWidth"
     />
     <AccountMenu :open="accountOpen" @close="closeAccount" @campaign="openCampaignFromMenu" />
+    <ToastStrip />
     <p class="status ui-status" aria-live="polite">{{ status }}</p>
   </div>
 </template>

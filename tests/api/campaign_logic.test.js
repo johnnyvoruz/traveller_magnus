@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import { applyCampaignChanges, CampaignRefusal, installCampaignSchema, readCampaign } from '../../apps/api/src/universe/campaign.ts';
@@ -79,6 +80,17 @@ function open() {
             prepared.run(...params);
             return [];
         },
+        transaction(fn) {
+            db.exec('BEGIN');
+            try {
+                const result = fn();
+                db.exec('COMMIT');
+                return result;
+            } catch (err) {
+                db.exec('ROLLBACK');
+                throw err;
+            }
+        },
     };
     installCampaignSchema(sql);
     return { db, sql };
@@ -154,6 +166,59 @@ test('campaign changes create, conflict, tombstone, restore, and page', () => {
     assert.equal(second.done, true);
     const seen = new Set([...first.records, ...first.links, ...second.records, ...second.links].map((row) => row.id));
     assert.equal(seen.size, 4);
+});
+
+test('the campaign clock is set, edited, and a stale baseRev conflicts', () => {
+    const { db, sql } = open();
+    const empty = readCampaign(sql, 0, 10);
+    assert.equal(empty.clock, null);
+
+    const days = 403326.5;
+    const created = applyCampaignChanges(sql, { clock: { days, baseRev: 0 } }, NOW);
+    assert.deepEqual(created.conflicts, []);
+    assert.equal(created.applied.length, 1);
+    assert.deepEqual(created.applied[0], { table: 'clock', id: 'campaignTime', rev: 1, seq: created.applied[0].seq });
+    const page = readCampaign(sql, 999, 1);
+    assert.deepEqual(page.clock, { days, rev: 1 });
+    assert.equal(page.records.length, 0);
+
+    const edited = applyCampaignChanges(sql, { clock: { days: days + 7, baseRev: 1 } }, NOW);
+    assert.equal(edited.conflicts.length, 0);
+    assert.equal(edited.applied[0].rev, 2);
+    assert.equal(edited.applied[0].table, 'clock');
+    const moved = readCampaign(sql, 0, 10);
+    assert.deepEqual(moved.clock, { days: days + 7, rev: 2 });
+
+    const stale = applyCampaignChanges(sql, { clock: { days: 1, baseRev: 1 } }, NOW);
+    assert.equal(stale.applied.length, 0);
+    assert.equal(stale.conflicts.length, 1);
+    assert.equal(stale.conflicts[0].table, 'clock');
+    assert.equal(stale.conflicts[0].id, 'campaignTime');
+    assert.deepEqual(stale.conflicts[0].current, { days: days + 7, rev: 2 });
+    assert.deepEqual(readCampaign(sql, 0, 10).clock, { days: days + 7, rev: 2 });
+
+    const beforeAny = open();
+    const missing = applyCampaignChanges(beforeAny.sql, { clock: { days: 3, baseRev: 2 } }, NOW);
+    assert.equal(missing.applied.length, 0);
+    assert.deepEqual(missing.conflicts, [{ table: 'clock', id: 'campaignTime', current: null }]);
+    assert.equal(readCampaign(beforeAny.sql, 0, 10).clock, null);
+
+    const history = db.prepare(`SELECT kind, rev, at, action, payload_hash FROM list_history ORDER BY rev`).all();
+    assert.equal(history.length, 2);
+    assert.deepEqual(history.map((row) => row.rev), [1, 2]);
+    for (const row of history) {
+        assert.equal(row.kind, 'campaignTime');
+        assert.equal(row.at, NOW);
+        assert.equal(row.action, 'set');
+        const payload = db.prepare(`SELECT payload FROM lists WHERE kind = 'campaignTime'`).get();
+        const stored = JSON.parse(payload.payload);
+        if (row.rev === stored.rev) {
+            assert.equal(row.payload_hash, createHash('sha256').update(payload.payload).digest('hex'));
+        }
+    }
+    const firstPayload = JSON.stringify({ days, rev: 1 });
+    assert.equal(history[0].payload_hash, createHash('sha256').update(firstPayload).digest('hex'));
+    assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM list_history`).get().n, 2);
 });
 
 test('a member link that cycles an organization is refused', () => {

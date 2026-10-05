@@ -19,6 +19,7 @@ export const router = createRouter({
         { path: '/s/:sector/:hex/orbit', name: 'orbit', component: () => import('./views/OrbitView.vue') },
         { path: '/s/:sector/:hex/orbit/b/:body', name: 'orbit-body', component: () => import('./views/OrbitView.vue') },
         { path: '/campaign', name: 'campaign', component: MapView },
+        { path: '/campaign/r/:record', name: 'campaign-record', component: MapView },
         { path: '/account', name: 'account', component: Account },
     ],
 });
@@ -42,6 +43,11 @@ if (import.meta.env.DEV) {
         path: '/dev/surface-parity/gl',
         name: 'surface-parity-gl',
         component: () => import('./dev/surface-parity/GlParity.vue'),
+    });
+    router.addRoute({
+        path: '/dev/deck-plan',
+        name: 'deck-plan',
+        component: () => import('./dev/deck-plan/DeckPlanPage.vue'),
     });
 }
 

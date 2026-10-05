@@ -202,12 +202,26 @@ export type LinkChange = z.infer<typeof LinkChange>;
 export const SettingsChange = CampaignSettings.extend({ baseRev: BaseRev }).strict();
 export type SettingsChange = z.infer<typeof SettingsChange>;
 
+/** Orbit-clock day count. A fraction is the time of day. `rev` is the stored version. */
+export const CampaignClock = z.object({
+    days: z.number().finite().nonnegative(),
+    rev: Rev,
+}).strict();
+export type CampaignClock = z.infer<typeof CampaignClock>;
+
+export const ClockChange = z.object({
+    days: z.number().finite().nonnegative(),
+    baseRev: BaseRev,
+}).strict();
+export type ClockChange = z.infer<typeof ClockChange>;
+
 export const CampaignChanges = z.object({
     records: z.array(RecordChange).optional(),
     links: z.array(LinkChange).optional(),
     settings: SettingsChange.optional(),
+    clock: ClockChange.optional(),
 }).strict().superRefine((value, ctx) => {
-    const rows = (value.records?.length ?? 0) + (value.links?.length ?? 0) + (value.settings ? 1 : 0);
+    const rows = (value.records?.length ?? 0) + (value.links?.length ?? 0) + (value.settings ? 1 : 0) + (value.clock ? 1 : 0);
     if (rows > CAMPAIGN_LIMITS.patchRows) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'too_large', path: ['records'] });
     }
@@ -222,23 +236,27 @@ export const CampaignPage = z.object({
     records: z.array(CampaignRecord),
     links: z.array(CampaignLink),
     settings: CampaignSettings,
+    clock: CampaignClock.nullable(),
     seq: Rev,
     done: z.boolean(),
 }).strict();
 export type CampaignPage = z.infer<typeof CampaignPage>;
 
+const ChangeId = z.string().min(1);
+
 export const CampaignChangesResult = z.object({
     applied: z.array(z.object({
-        table: z.enum(['records', 'links', 'settings']),
-        id: z.string().min(1),
+        table: z.enum(['records', 'links', 'settings', 'clock']),
+        id: ChangeId,
         rev: Rev,
         seq: Rev,
     }).strict()),
-    conflicts: z.array(z.object({
-        table: z.enum(['records', 'links', 'settings']),
-        id: z.string().min(1),
-        current: z.union([CampaignRecord, CampaignLink, CampaignSettings]),
-    }).strict()),
+    conflicts: z.array(z.discriminatedUnion('table', [
+        z.object({ table: z.literal('records'), id: ChangeId, current: CampaignRecord }).strict(),
+        z.object({ table: z.literal('links'), id: ChangeId, current: CampaignLink }).strict(),
+        z.object({ table: z.literal('settings'), id: ChangeId, current: CampaignSettings }).strict(),
+        z.object({ table: z.literal('clock'), id: ChangeId, current: CampaignClock.nullable() }).strict(),
+    ])),
 }).strict();
 export type CampaignChangesResult = z.infer<typeof CampaignChangesResult>;
 

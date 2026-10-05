@@ -12,6 +12,7 @@ import {
     TERRITORY_FILL_ALPHA, TERRITORY_STROKE, UWP_Y,
 } from './glyphs.ts';
 import { routeSegments, type RouteSegment } from './route_lines.ts';
+import { drawCampaignLayer, partyContains, type CampaignSnapshot, type PartyMark } from './campaign_layer.ts';
 import type { MapTheme } from './theme.ts';
 import { PPP_GRID, PPP_NAMES, tierFor, type Tier } from './tiers.ts';
 import { boxesOverlap, clampTitle, fadeToward, stepScale, titleAnchor, titleInView, zoomStep, type Box } from './titles.ts';
@@ -177,6 +178,8 @@ export class MapRenderer {
     private width = 0;
     private height = 0;
     private dpr = 1;
+    private campaignSnapshot: CampaignSnapshot | null = null;
+    private partyMark: PartyMark | null = null;
 
     constructor(canvas: HTMLCanvasElement, theme: MapTheme) {
         const ctx = canvas.getContext('2d');
@@ -221,6 +224,20 @@ export class MapRenderer {
 
     setSelection(selection: Selection | null): void {
         this.selected = selection;
+    }
+
+    /** The campaign snapshot. Null draws nothing and does not fetch. */
+    setCampaign(snapshot: CampaignSnapshot | null): void {
+        this.campaignSnapshot = snapshot;
+        if (!snapshot) this.partyMark = null;
+    }
+
+    /**
+     * True when the point is on the party marker and not on the system glyph.
+     * A zoomed-out point shares its pixels with the system, so it is never a hit.
+     */
+    partyAt(sx: number, sy: number): boolean {
+        return this.partyMark ? partyContains(this.partyMark, sx, sy) : false;
     }
 
     /** Subsector titles start at this x when the panel covers the left of the map. */
@@ -292,9 +309,33 @@ export class MapRenderer {
         this.sectorNames(on, cam, vp);
         if (tier !== 'hex' && cam.ppp >= FAR_LABEL_MIN_PPP) this.farLabels(on, cam, vp, view);
         this.selectionOutline(cam, vp);
-        const animating = tier === 'hex' && cam.ppp >= PPP_NAMES ? this.subsectorTitles(ready, marks, cam, vp) : false;
+        let animating = tier === 'hex' && cam.ppp >= PPP_NAMES ? this.subsectorTitles(ready, marks, cam, vp) : false;
+        if (this.paintCampaign(cam, vp)) animating = true;
 
         return { tier, sectorsOnScreen: on.map((sector) => sector.slug), ms: now() - started, animating };
+    }
+
+    private paintCampaign(cam: Camera, vp: Viewport): boolean {
+        if (!this.campaignSnapshot) {
+            this.partyMark = null;
+            return false;
+        }
+        const frame = drawCampaignLayer(this.ctx, {
+            cam,
+            vp,
+            sectors: this.sectors,
+            snapshot: this.campaignSnapshot,
+            ink: {
+                signal: this.theme.signal,
+                tag: this.theme.tag ? this.theme.tag : this.theme.bg0,
+                bg: this.theme.bg0,
+                font: this.theme.fontText,
+                pulseMs: (this.theme.tPulse > 0 ? this.theme.tPulse : 2.4) * 1000,
+            },
+            nowMs: now(),
+        });
+        this.partyMark = frame.mark;
+        return frame.animating;
     }
 
     private distance(sector: DrawSector, cam: Camera): number {

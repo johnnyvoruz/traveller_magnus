@@ -1065,9 +1065,19 @@ if (process.env.RUN_API_TESTS !== '1') {
             const feedEarly = await fetch(`${base}/api/admin/truth/builds/vfeed`, { headers: { cookie } });
             const feedEarlyBody = await feedEarly.json();
             assert.equal(feedEarly.status, 200, JSON.stringify(feedEarlyBody));
-            assert.equal(feedEarlyBody.data.sectors.filter((item) => item.state === 'building').length, 12, JSON.stringify(feedEarlyBody));
-            assert.equal(feedEarlyBody.data.sectors.filter((item) => item.state === 'queued').length, 2, JSON.stringify(feedEarlyBody));
-            assert.equal(feedEarlyBody.data.sectorsQueued, 2);
+            assert.equal(feedEarlyBody.data.sectorsTotal, 14, JSON.stringify(feedEarlyBody));
+            assert.equal(feedEarlyBody.data.sectors.length, 14, JSON.stringify(feedEarlyBody));
+            const earlyStates = ['queued', 'building', 'done'];
+            for (const item of feedEarlyBody.data.sectors) {
+                assert.equal(earlyStates.includes(item.state), true, JSON.stringify(item));
+            }
+            const earlyQueued = feedEarlyBody.data.sectors.filter((item) => item.state === 'queued').length;
+            const earlyBuilding = feedEarlyBody.data.sectors.filter((item) => item.state === 'building').length;
+            const earlyDone = feedEarlyBody.data.sectors.filter((item) => item.state === 'done').length;
+            assert.equal(earlyQueued + earlyBuilding + earlyDone, 14, JSON.stringify(feedEarlyBody));
+            assert.equal(feedEarlyBody.data.sectorsQueued, earlyQueued, JSON.stringify(feedEarlyBody));
+            assert.equal(feedEarlyBody.data.sectorsDone, earlyDone, JSON.stringify(feedEarlyBody));
+            assert.equal(feedEarlyBody.data.sectorsFailed, 0, JSON.stringify(feedEarlyBody));
             let feedBuild;
             const feedDeadline = Date.now() + 180000;
             while (Date.now() < feedDeadline) {

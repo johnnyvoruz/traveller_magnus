@@ -26,6 +26,7 @@ export class UniverseDO extends DurableObject<Env> {
         const url = new URL(request.url);
         const sql: Sql = {
             exec: (query, ...params) => this.ctx.storage.sql.exec(query, ...params).toArray() as ReturnType<Sql['exec']>,
+            transaction: (fn) => this.ctx.storage.transactionSync(fn),
         };
         if (request.method === 'GET' && url.pathname === '/campaign') {
             const after = Number(url.searchParams.get('after') ?? '0');

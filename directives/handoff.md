@@ -2231,3 +2231,119 @@ API and Durable Object have against `data_model.md` and `api.md`).
 - **Rule for agents:** a test may not depend on a git-ignored folder, the machine's exact
   runtime version, or line endings. Agents see only local green; **the orchestrator checks
   the GitHub run after every push.**
+- **GitHub test run green on `5ea96d5`** (first green since `0a83fab`).
+- **Johnny signed in with X in production and the campaign panel opened "Your campaign"**: the
+  first real sign-in end to end, and the first universe created through the real Worker and
+  Durable Object. K2, K3, K4 and K5a work together in production.
+
+## 75. The map's campaign layer is in (2026-10-04)
+
+- **Agent C:** `map/campaign_layer.ts`, wired by `MapRenderer.setCampaign(snapshot)` and
+  `partyAt(sx, sy)`; `MapView.vue` feeds it from the real store. The party marker (teal ringed
+  chevron and name tag) at each tier, the hex outline, the locator line and pulse; the chart
+  dims only while a locate is active (checked in code). No record pins or count marks: the
+  design has none in this pass. A system glyph always wins the click; the ring and tag open
+  `/campaign`. Panning with a 2,000-record stand-in costs nothing measurable (p95 1.8 ms
+  against 2.1 ms without). The stand-in (`?campaignStandIn=`) is development-only (checked).
+  501 pass, check clean, build green.
+- Still owed: Agent A's end-to-end server proof (the report pasted was the earlier K1/K4 one);
+  Agent D's K5b (D has reported K5a three times and appears not to have the K5b prompt).
+- **Next while D builds screens:** Agent C, the deck plan renderer (K9, from
+  `assets/geomorphs/REBUILD.md`, pure placement plus a dev page). Agent B, the copy-between-
+  campaigns logic (K10, pure, in `packages/shared`).
+
+## 76. K10 logic in; K6 (the clock) written in full (2026-10-04)
+
+- **Agent B, K10 logic:** `packages/shared/src/campaign_copy.ts`, `copyRecords(...)` returns
+  batched `CampaignChanges` for the target campaign: new ids, `provenance` of mode `copy` on
+  records and links, links copied only when both ends are, anchors on uncopied records fall
+  back to the resolved system (listed), tombstones skipped. 506 pass. No route, no screen.
+- **K6 is written in full** in `slice_2_campaign.md`: the campaign date is the orbit clock's
+  `days` number; scrubbing never changes it ("looking is not advancing"); it changes only by
+  "Set as campaign date" or an edit in the panel. K6a shared and API, Agent B; K6b store,
+  Agent A after the end-to-end proof; K6c screens, Agent D after K5.
+
+## 77. K9 first part in: the deck plan renderer (2026-10-04)
+
+- **Agent C:** `packages/shared/src/schemas/deck_plan.ts` (`DeckPlan`, the shipyard's own
+  rejection rule, 2,000 parts), `apps/web/src/deckplan/place.ts` (pure `placeShip`: draw list
+  in array order, overlays after their base, missing codes skipped and reported, bounds) and
+  `draw.ts` (three-corner mapping, Y flipped, fitted, tiles cached); dev-only page
+  `/dev/deck-plan` reading tiles from `assets/geomorphs` by middleware; the credit line shown.
+  Written from `REBUILD.md`, not from the shipyard's source. 519 pass; `dist` has no tile.
+  The orchestrator looked at the screenshot: a four-part hand-built ship draws correctly
+  joined, with rotation, a mirrored tile and an overlay.
+- **Not proven:** agreement with the Geomorph Shipyard itself. That needs a real exported
+  JSON and the shipyard's picture of the same ship, from Johnny.
+- **Next (Agent C):** a plan stored on a vessel record and a view component for the record
+  page; a script that uploads the tiles to the public bucket, for Johnny to run.
+
+## 78. The end-to-end proof found a real fault: campaign writes fail in the Durable Object (2026-10-04)
+
+- **Agent A** wrote `tests/api/campaign.test.js` (black-box) and ran the whole suite with
+  `RUN_API_TESTS=1`. **`PATCH /api/universes/:id/campaign/changes` returns 500 on the real
+  Worker.** The Durable Object refuses SQL `BEGIN` ("use state.storage.transaction() or
+  transactionSync()"); `applyCampaignChanges` runs `sql.exec('BEGIN')`
+  (`apps/api/src/universe/campaign.ts:308`). It passed under `node:sqlite`, which allows it.
+  Reads work, which is why Johnny's production sign-in showed an empty campaign correctly.
+  **In production today every campaign write would fail;** no screen writes yet, so no user
+  has met it. A's store kept the row locally and reported offline, as designed.
+- **Lesson, now a rule:** logic proven on a stand-in is not proven. Every API step ends with
+  its black-box test run against `wrangler dev`.
+- **Fix (Agent B):** the SQL interface gains `transaction(fn)`; the Durable Object's adapter
+  uses `ctx.storage.transactionSync`, the Node test adapter uses BEGIN / COMMIT / ROLLBACK.
+  Then A's black-box file must pass in full.
+- **Also seen:** `tests/api/truth_build.test.js` has one timing-dependent assertion (expects 2
+  sectors still queued straight after the 202; the windowed feeder had moved on). A test
+  fault, not a product fault; B loosens it in the same session.
+- **Push of any screen that writes (K5b onward) is held until the fix is in and proven.**
+- **Johnny, 2026-10-04:** add an **"Advance 1 week"** button to the orbit view's time controls
+  (a week is the typical time for a jump), and demote the line-up search to an overflow menu.
+  Recorded in `slice_2_campaign.md` K6. The button itself needs no campaign, so Agent D builds
+  it with the next orbit touch; its tie to the campaign date comes with K6c.
+- **K6a (Agent B) reported before the transaction fix:** the clock as list kind `campaignTime`
+  with `rev`, conflicts and a `list_history` row (hash only, so the date cannot yet be walked
+  back from history). Accepted provisionally; proven only on the stand-in. Agent A adds the
+  clock cases to the black-box file once the fix lands.
+
+## 79. The transaction fault is fixed and proven on the real Worker (2026-10-04)
+
+- **Agent B:** the SQL interface has `transaction(fn)`; the Durable Object adapter calls
+  `ctx.storage.transactionSync`, also on `migrate()`; no BEGIN / COMMIT / ROLLBACK text is sent.
+  `tests/api/campaign.test.js` passes against `wrangler dev` in full: write, stale `baseRev`,
+  delete with the link tombstoned, restore, settings, the second account's 404, a foreign
+  Origin, paging, rows surviving a restart. The whole black-box suite passed serially (20).
+  The racy truth-build assertion now states what is always true. 545 pass.
+- **Open, not product faults as far as known:** (1) two earlier serial runs saw `POST
+  /api/admin/truth/build` or its retry answer 500 once, no stack captured, not reproduced;
+  (2) `campaign.test.js` kills whatever listens on port 8799, so the suite cannot run in
+  parallel. Agent A fixes (2), adds the clock cases, and tries to catch (1) with the log.
+
+## 80. K5b (records) and the deck plan on a vessel are in; pushable (2026-10-04)
+
+- **Agent D, K5b:** the record list (search, split Add, type chips with counts, first-run card,
+  empty states), the record page (edit in place, Enter saves, Esc reverts, Saving / Saved / Not
+  saved), delete with undo by toast and "Recently deleted", the panel opening once on a first
+  sign-in, keyboard throughout. **Exercised against the real local API** with a real session:
+  15 `PATCH` calls, each read back from the server (edit, four creates, delete as a tombstone,
+  restore, a conflict from a second request, reload). New `shell/ToastStrip.vue`; 14 contrast
+  pairs. Not exercised: a session expiring mid-edit, a screen reader, touch, other browsers.
+- **Agent C, K9 second part:** `deckplan/attach.ts` (`importDeckPlan`, `removeDeckPlan`, vessels
+  only, refusals with messages, the 1 MB limit checked before commit), `DeckPlanView.vue` (pan,
+  zoom, fit, skipped tiles listed, credit always visible), `tileUrl` (dev middleware, else
+  `<cdn>/geomorphs/`), `tools/geomorphs/upload.js` (dry run: 3,026 keys, 83 MB; a real run
+  lists the bucket through the Cloudflare API and skips what is there; **not run**). The
+  shared schema's `sheet` is `unknown`, so nothing was loosened. Agent D places the view.
+- **Orchestrator:** the dev proxy now sends the API's own Origin (`apps/web/vite.config.ts`),
+  because a local save through `npm run dev:web` was refused 403 by the origin check (D's
+  note). Re-ran: check clean, 545 pass / 0 fail, build green, `dist` has no tile or dev page.
+- **Open with D:** the toast sits over "All records" on a record page for several seconds;
+  D moves it clear in the next step.
+- **Deck plan tiles and git (Johnny asked, 2026-10-04):** the PNGs are now git-ignored
+  (`assets/geomorphs/**/*.png`); `manifest.json`, `REBUILD.md` and `ATTRIBUTION.txt` stay
+  tracked. They go to the public bucket under `geomorphs/` with
+  `node tools/geomorphs/upload.js` (Johnny runs it; resumable; dry run first).
+- **Deck plan tiles are on the CDN** (Johnny ran `tools/geomorphs/upload.js`, 2026-10-04): 3,026
+  objects, 82,954,362 bytes, no failures. Checked by the orchestrator:
+  `https://cdn.traveller.voyage/geomorphs/manifest.json` and the first and last tile answer 200
+  with the right content types.

@@ -116,8 +116,15 @@ Rules of the `hexes` table:
 - `lists.kind` ∈ `routes, routeDefinitions, autoRouteCounter, borderDefinitions,
   hexBorderAssignments, borderPaths, regionDefinitions, regionPaths, allegianceDefinitions,
   hexAllegianceAssignments, sectorNames, subsectorNames, sectorReview, campaignTime,
-  campaignSettings` — the overlay document keys, plus the party settings document, whole
-  payload per write.
+  campaignSettings` — the overlay document keys, plus the party settings document and the
+  campaign clock, whole payload per write.
+- `campaignTime` is the campaign clock (`CampaignClock`: `{ days, rev }`). `days` is the
+  orbit view's day count: finite, at least 0, and a fraction is the time of day. The row is
+  absent until the first set. A change sends `{ days, baseRev }` (`baseRev` 0 the first
+  time) and counts as one patch row. The stored `rev` starts at 1. A stale `baseRev` is a
+  conflict whose `current` is the stored clock, or null when none is stored. Each successful
+  change appends `list_history` (`kind` `campaignTime`, `rev`, `at`, `action` `set`,
+  `payload_hash` the sha256 of the payload JSON). The current payload stays on `lists`.
 - `hex_history` retention: last 50 revisions per hex and everything from the last 90 days;
   the weekly cron compacts older rows. Snapshots cover the long tail.
 - Schema version 2 stores campaign rows in the Durable Object. `campaign_records_fts`,
