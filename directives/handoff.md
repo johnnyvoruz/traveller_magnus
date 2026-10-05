@@ -1,5 +1,9 @@
 # Handoff — orchestrator notes, 2026-10-03
 
+> **New orchestrator session: read `orchestrator_start_here.md` first.** It is the state on
+> one page (2026-10-05). This file is the full log; sections 1 to 64 are history, and the
+> current leg starts at §65.
+
 Written by the outgoing orchestrator session for the next one; reviewed and corrected later
 the same day. Reading order is the one in `CLAUDE.md`: `manifesto.md` → `plan.md` → this file
 → `slice_0_foundation.md`; open `architecture.md`, `data_model.md` and `api.md` at the sections
@@ -2359,3 +2363,22 @@ API and Durable Object have against `data_model.md` and `api.md`).
   is still on the previous build: sign-in and the empty campaign panel, no records screens.
   The orchestrator had said production was unaffected and deployed; it had only checked a
   route that already existed. **After a push, check the Workers Build, not just a route.**
+- **Pushed `5e78744`; deployed and green.** The orchestrator confirmed the live bundle on
+  traveller.voyage contains the records screens, and the GitHub test run passed. Records
+  (K5b), the transaction fix and clock storage are in production. Awaiting Johnny's first real
+  save in production.
+
+## 81. First real save in production; the black-box suite shares one Worker; K6b in (2026-10-05)
+
+- **Johnny saved a record in production.** Sign-in, universe, Durable Object write, and the
+  browser store work end to end on traveller.voyage.
+- **Agent A:** `tests/api/server.js` starts one `wrangler dev` for every black-box file (port
+  8799); the restart-survival case uses its own Worker (18799, private state). Clock cases
+  pass on the Worker. **K6b:** `campaign.clock` and `setCampaignDate(days)` through `commit`;
+  a conflict takes the server's value and raises one toast; read back from a second process.
+  `truth_build.test.js` three times in a row with logs: no 500. 549 pass.
+- **One 500 in the parallel run:** `POST /api/universes` inserted the row, then its read-back
+  `select` failed inside the local D1 emulator ("internal error", miniflare). Most likely the
+  emulator under parallel load, but it exposes a real weakness: a create that succeeded can
+  answer 500, and a retry would make a second universe. **Agent B:** create returns the row
+  it built (no read-back), and a failed create must leave no row behind.
