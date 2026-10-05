@@ -2347,3 +2347,15 @@ API and Durable Object have against `data_model.md` and `api.md`).
   objects, 82,954,362 bytes, no failures. Checked by the orchestrator:
   `https://cdn.traveller.voyage/geomorphs/manifest.json` and the first and last tile answer 200
   with the right content types.
+- **Pushed `dfd00f4`** (campaign records, the transaction fix, clock storage, the deck plan
+  viewer). Production answers the campaign routes. The GitHub test run result is noted below.
+- **GitHub run on `dfd00f4` failed (2 files), a commit-timing fault, not a code fault:** the
+  commit caught Agent A's test files after A had updated them but before A's matching source
+  edits (`apps/web/src/campaign/store.ts`, `tests/api/server.js`) were on disk. The working
+  tree with those two files is green (549 pass). Fix: commit those two files.
+  **Rule:** push only at a moment when no agent is mid-step, or add by path for finished work.
+- **Correction: `dfd00f4` did not deploy.** The same missing file (`campaign/store.ts`, which
+  `commit.ts` now reads `campaign.clock` from) fails `vue-tsc` in Workers Builds, so production
+  is still on the previous build: sign-in and the empty campaign panel, no records screens.
+  The orchestrator had said production was unaffected and deployed; it had only checked a
+  route that already existed. **After a push, check the Workers Build, not just a route.**

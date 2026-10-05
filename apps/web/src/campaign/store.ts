@@ -2,13 +2,14 @@ import { reactive } from 'vue';
 import {
     CampaignPage,
     Universe,
+    type CampaignClock,
     type CampaignLink,
     type CampaignRecord,
     type CampaignSettings,
 } from '@voyage/shared';
 import { storageGet, storageSet } from '../platform/browser.ts';
 import { apiFetch } from '../platform/http.ts';
-import { flushCampaign, pending } from './commit.ts';
+import { commit, flushCampaign, pending } from './commit.ts';
 import { rebuildCampaignIndex } from './index.ts';
 
 type FetchLike = typeof fetch;
@@ -25,6 +26,7 @@ export const campaign = reactive({
     records: {} as Record<string, CampaignRecord>,
     links: {} as Record<string, CampaignLink>,
     settings: null as CampaignSettings | null,
+    clock: null as CampaignClock | null,
     seq: 0,
 });
 
@@ -45,6 +47,7 @@ function clearRows(): void {
     for (const key of Object.keys(campaign.records)) delete campaign.records[key];
     for (const key of Object.keys(campaign.links)) delete campaign.links[key];
     campaign.settings = null;
+    campaign.clock = null;
     campaign.seq = 0;
     campaign.universeId = null;
     rebuildCampaignIndex(campaign.records, campaign.links);
@@ -69,6 +72,7 @@ function replaceRows(
     records: Record<string, CampaignRecord>,
     links: Record<string, CampaignLink>,
     settings: CampaignSettings,
+    clock: CampaignClock | null,
     seq: number,
 ): void {
     for (const key of Object.keys(campaign.records)) delete campaign.records[key];
@@ -76,6 +80,7 @@ function replaceRows(
     Object.assign(campaign.records, records);
     Object.assign(campaign.links, links);
     campaign.settings = settings;
+    campaign.clock = clock;
     campaign.seq = seq;
     rebuildCampaignIndex(campaign.records, campaign.links);
 }
@@ -141,6 +146,7 @@ async function loadPages(universe: UniverseRow): Promise<void> {
     const records: Record<string, CampaignRecord> = {};
     const links: Record<string, CampaignLink> = {};
     let settings: CampaignSettings | null = null;
+    let clock: CampaignClock | null = null;
     let seq = 0;
     let after = 0;
     for (;;) {
@@ -160,6 +166,7 @@ async function loadPages(universe: UniverseRow): Promise<void> {
         for (const record of page.records) records[record.id] = record;
         for (const link of page.links) links[link.id] = link;
         settings = page.settings;
+        clock = page.clock;
         seq = page.seq;
         if (page.done) break;
         if (page.seq <= after) {
@@ -172,7 +179,7 @@ async function loadPages(universe: UniverseRow): Promise<void> {
         campaign.status = 'error';
         return;
     }
-    replaceRows(records, links, settings, seq);
+    replaceRows(records, links, settings, clock, seq);
     campaign.universeId = universe.id;
     campaign.status = 'ready';
     remember(universe.id);
@@ -214,6 +221,12 @@ export async function openCampaign(options: {
         universe = created;
     }
     await loadPages(universe);
+}
+
+/** Queues the campaign date. `days` is the orbit clock's day count. The server's rev wins. */
+export function setCampaignDate(days: number): void {
+    const baseRev = campaign.clock ? campaign.clock.rev : 0;
+    commit({ clock: { days, baseRev } });
 }
 
 /** Saves the open campaign, then loads `id`. A failed save leaves the open one in place. */
