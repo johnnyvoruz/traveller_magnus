@@ -242,6 +242,15 @@ const PAIRS = [
     ['--text-muted', '--stage-head', TEXT, 'More menu: the note under an item (12 px)'],
     ['--text-muted', '--row-active', TEXT, 'More menu: the note under an item, under the pointer or focus (12 px)'],
     ['--signal', '--stage-head', TEXT, 'More menu: the way back, the item icons'],
+    // Connections: the chips, the add steps and the record picker (K5d)
+    ['--text-0', '--panel-raised', TEXT, 'connection chip: the other record (12.5 px)'],
+    ['--text-1', '--panel-raised', TEXT, 'connection chip: the role (12.5 px)'],
+    ['--text-muted', '--panel-raised', TEXT, 'connection chip: an empty role, the remove mark; group headings on the page'],
+    ['--text-0', '--row-active', TEXT, 'connection chip under the pointer; a kind chosen'],
+    ['--text-muted', '--bg-1', TEXT, 'kind rows: the other record’s name (13 px); picker: a row’s detail (12 px)'],
+    ['--text-1', '--row-active', TEXT, 'kind row chosen: the name; picker row chosen: its detail (12 px)'],
+    ['--text-0', '--bg-2', TEXT, 'role fields and the picker’s search'],
+    ['--signal', '--panel-raised', MARK, 'connection chip icons'],
 ];
 
 if (process.env.CONTRAST_REPORT) {

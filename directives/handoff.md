@@ -2513,3 +2513,50 @@ API and Durable Object have against `data_model.md` and `api.md`).
 - **Push state:** D is mid-step in `workspace/` (`RecordPage.vue` already imports
   `LinksBlock`), so `workspace/` cannot go yet; VesselPlan rides with K5d. C's and A's
   finished work can go by path now.
+
+## 88. Pushed `ae35414` and `fba890f`; K5d (links) in and accepted (2026-10-05)
+
+- **Two pushes by Johnny.** `ae35414` used the earlier by-path command (which still included
+  `workspace/`) and so took D's `links.ts` and `RecordPage.vue` mid-step; by luck
+  `RecordPage.vue` did not yet import `LinksBlock`, so nothing referenced a missing file.
+  `fba890f` took the rest. Both GitHub runs green; live bundle `index-C8bCOGa-.js` holds the
+  three liquids, "Import a shipyard file", "Not in the tile catalogue" and the create body
+  with `id`. **The ship sheet PDFs went into git** with `ae35414` (Johnny had staged them).
+  Lesson for the orchestrator: when a by-path command is superseded, say so in one line;
+  Johnny may run the older one.
+- **Agent D, K5d:** Connections after Tags on every record page, grouped under the label
+  from this side (`CAMPAIGN_LINK_KINDS`); add by picking a record then a kind from what the
+  vocabulary allows between the two types, optional role, repeats refused; chip opens the
+  other record, role edited in place, remove with undo; "aboard" in the Where block picks a
+  vessel and saves `{kind:'record', id}`, the Where line leads with the vessel; deleting a
+  record names its connections in the toast and undo restores them on the server's revisions.
+  A Vue trap fixed on the way (a ref wraps its object, so identity comparison of the chosen
+  kind never matched; found in the browser, not by the unit tests). Read back from the real
+  local API end to end. New `workspace/links.ts`, `LinksBlock.vue`, `RecordPicker.vue`,
+  `tests/web/workspace_links.test.js`; 8 contrast pairs; seven `k5d_` screenshots.
+  **Orchestrator:** 585 pass / 0 fail, check clean, build green; `campaign/`, `surface/`,
+  `dossier/` untouched; `links.ts` reads the shared vocabulary. **Accepted.**
+- **Not built from the drawing:** "Also at Regina" at full width; since / until / notes /
+  visibility on links have no UI (as the slice says). Not exercised: a vessel aboard another
+  record (not offered), screen reader, touch, other browsers.
+- **Pushable now** (D between steps; B's inventory is read-only to `findings/`).
+- **Next, D:** K5e the party. The store already carries `settings` (party document) through
+  `commit.ts`, `locate` resolves anchor chains, and `MapRenderer.setCampaign` takes the
+  party: no A step is needed first.
+
+## 89. K13 part 1 in: the ship sheet's 312 fields inventoried (2026-10-05)
+
+- **The "campaign links" push did not happen:** HEAD is still `fba890f` and D's K5d files
+  are uncommitted on disk. Johnny said "pushed"; the command is repeated.
+- **Agent B, K13 part 1 (read-only):** `findings/ship_sheet_fields.json` (312 entries: name,
+  page, type, box in PDF user space with a lower-left origin, section) and
+  `findings/ship_sheet_fields.md`. 246 text widgets, 66 checkboxes (the critical-hit pips,
+  six each for eleven systems). Sections from the BebasNeue headings and the rotated tabs;
+  pages 792 by 612. Oddities kept verbatim: title "Ship SHeet", "Passenger Capactiy". Against
+  the plan's §5.3b image transcription only five names match (Class, Hull Points, Armour,
+  Bandwidth, Crew); the PDF has 307 names §5.3b lacks and §5.3b 34 the PDF lacks: §5.3b's
+  list is superseded by the PDF's. Checked: file parses, 312 entries, shape as reported.
+  **Accepted.**
+- **Part 2 is Johnny's.** Recommended: copy the JSON into `rules/` as
+  `mgt2e_ship_sheet_fields.json` (his folder; one command) so the app can consume it through
+  the generated wrapper; nothing in it is a rule, only labels and positions.

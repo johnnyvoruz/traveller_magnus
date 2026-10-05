@@ -3,10 +3,12 @@
  * Where a record is (design §3, "Where" and the anchor's steps; §4, the locator). Shown: the
  * place in words, Locate, Show in orbit and Change. Changing: the system is picked on the
  * map or in the omnibox (workspace/pick.ts), then optionally one of its worlds or moons; the
- * anchor stores the hex key, the dossier's body key and the body's name.
+ * anchor stores the hex key, the dossier's body key and the body's name. Or the record is
+ * aboard a vessel: its anchor names that record, and it is wherever the vessel is (K5d).
  */
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
+import type { CampaignRecord } from '@voyage/shared';
 import { campaign } from '../campaign/store.ts';
 import Icon from '../design/Icon.vue';
 import BodyRow from '../dossier/BodyRow.vue';
@@ -18,6 +20,7 @@ import { locating, startLocate, stopLocate } from './locate.ts';
 import { beginPick, endPick, type PickedSystem } from './pick.ts';
 import { placeSource, type SystemInfo } from './place_source.ts';
 import { bodyMatched, hexKeyOf, hexWords, liveById, parseHexKey, placeWords, resolvePlace, systemAnchor } from './places.ts';
+import RecordPicker from './RecordPicker.vue';
 
 const props = defineProps<{
     id: string;
@@ -28,6 +31,7 @@ const props = defineProps<{
 /** The map has to be seen (a pick, a locate): the panel gives way when it covers it. */
 const emit = defineEmits<{ map: [] }>();
 
+const route = useRoute();
 const router = useRouter();
 const rootEl = ref<HTMLElement | null>(null);
 const locateBtn = ref<HTMLElement | null>(null);
@@ -38,8 +42,19 @@ const record = computed(() => {
     return found && !found.deleted ? found : null;
 });
 const place = computed(() => (record.value ? resolvePlace(props.id, liveById(campaign.records)) : null));
-/** The record is somewhere because another record is: it is aboard or inside it. */
-const aboard = computed(() => !!record.value && !!record.value.anchor && record.value.anchor.kind === 'record');
+/** The vessel this record is aboard, when its anchor names a live record. */
+const host = computed((): CampaignRecord | null => {
+    const anchor = record.value ? record.value.anchor : null;
+    if (!anchor || anchor.kind !== 'record') return null;
+    const found = campaign.records[anchor.id];
+    return found && !found.deleted ? found : null;
+});
+/** The anchor names a record that is gone: the place cannot be said. */
+const hostGone = computed(() => !!record.value && !!record.value.anchor && record.value.anchor.kind === 'record' && !host.value);
+
+function openHost(): void {
+    if (host.value) void router.push({ path: '/campaign/r/' + encodeURIComponent(host.value.id), query: route.query });
+}
 const isLocating = computed(() => locating.recordId === props.id);
 
 // ---- A body anchor is checked against the system's own bodies -----------------
@@ -96,6 +111,8 @@ function showOrbit(): void {
 // ---- Changing the place --------------------------------------------------------
 
 const editing = ref(false);
+/** The vessel picker is open in place of the system steps. */
+const boarding = ref(false);
 const draft = ref<SystemInfo | null>(null);
 const rows = ref<TreeRow[]>([]);
 const rowsState = ref<'idle' | 'loading' | 'ready' | 'none'>('idle');
@@ -163,9 +180,25 @@ function startPick(): void {
     focusIn('.where-hint + .where-acts .ui-btn');
 }
 
+function board(): void {
+    if (pickingHere) {
+        pickingHere = false;
+        endPick();
+    }
+    boarding.value = true;
+}
+
+function boarded(vessel: CampaignRecord): void {
+    if (props.readOnly) return;
+    if (isLocating.value) stopLocate();
+    saveRecord(props.id, { anchor: { kind: 'record', id: vessel.id } });
+    close();
+}
+
 function open(): void {
     if (props.readOnly || !record.value) return;
     editing.value = true;
+    boarding.value = false;
     const anchor = record.value.anchor;
     const where = anchor && anchor.kind === 'system' ? parseHexKey(anchor.hexKey) : null;
     if (anchor && anchor.kind === 'system' && where) {
@@ -182,6 +215,7 @@ function close(): void {
         endPick();
     }
     rowsTicket += 1;
+    boarding.value = false;
     if (!editing.value) return;
     editing.value = false;
     void nextTick(() => { if (changeBtn.value) changeBtn.value.focus(); });
@@ -259,11 +293,16 @@ onBeforeUnmount(() => {
 
     <template v-if="!editing">
       <p class="where-line">
+        <button v-if="host" type="button" class="where-host" :title="'Open ' + host.name" @click="openHost">
+          <Icon name="shuttle-space" :size="13" />Aboard {{ host.name }}
+        </button>
         <template v-if="place">
-          <span class="where-place"><Icon name="location-dot" :size="13" />{{ words[0] }}</span>
+          <span v-if="host" class="where-sep" aria-hidden="true">›</span>
+          <span class="where-place" :class="{ 'is-via': host }"><Icon v-if="!host" name="location-dot" :size="13" />{{ words[0] }}</span>
           <span v-if="words[1]" class="where-sys">{{ words[1] }}</span>
-          <span v-if="aboard" class="where-sys">with another record</span>
         </template>
+        <span v-else-if="host" class="where-sys">which is nowhere in particular</span>
+        <span v-else-if="hostGone" class="where-none">Aboard a record that is gone</span>
         <span v-else class="where-none">Nowhere in particular</span>
       </p>
       <p v-if="place && !matched" class="where-note" role="status">
@@ -290,6 +329,16 @@ onBeforeUnmount(() => {
       </div>
       <p v-if="isLocating" class="where-sr" role="status">Located at {{ words[words.length - 1] }}, map centred.</p>
     </template>
+
+    <div v-else-if="boarding" class="where-edit">
+      <div class="where-step">
+        <h4>Aboard which vessel</h4>
+        <RecordPicker :exclude="id" :types="['vessel']" placeholder="Search your vessels" none="No vessels yet. Add the ship first." @pick="boarded" @cancel="close" />
+      </div>
+      <div class="where-foot">
+        <button type="button" class="ui-btn where-cancel" @click="close">Cancel</button>
+      </div>
+    </div>
 
     <div v-else class="where-edit">
       <div class="where-step">
@@ -350,6 +399,9 @@ onBeforeUnmount(() => {
           <Icon name="check" :size="12" />Set place
         </button>
         <button v-if="record.anchor" type="button" class="ui-btn where-nowhere" :disabled="readOnly" @click="clear">Nowhere in particular</button>
+        <button v-if="record.type !== 'vessel'" type="button" class="ui-btn where-board" :disabled="readOnly" @click="board">
+          <Icon name="shuttle-space" :size="12" />Aboard a vessel…
+        </button>
         <span class="rec-gap"></span>
         <button type="button" class="ui-btn where-cancel" @click="close">Cancel</button>
       </div>
@@ -383,6 +435,39 @@ onBeforeUnmount(() => {
 .where-sys {
   color: var(--text-muted);
   font: 400 13px/1.45 var(--font-text);
+}
+
+/* Aboard a vessel: the vessel leads, as a link, then where it is. */
+.where-host {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 0 -4px;
+  padding: 1px 6px 1px 4px;
+  border: 0;
+  border-radius: var(--r-1);
+  background: transparent;
+  color: var(--text-0);
+  font: 600 14.5px/1.45 var(--font-text);
+  cursor: pointer;
+}
+
+.where-host .ui-icon {
+  color: var(--signal);
+}
+
+.where-host:hover {
+  background: var(--row-active);
+  color: var(--signal);
+}
+
+.where-sep {
+  color: var(--text-muted);
+}
+
+.where-place.is-via {
+  color: var(--text-1);
+  font-weight: 500;
 }
 
 .where-none {

@@ -55,9 +55,9 @@ const rows = computed(() => {
     const live = liveById(campaign.records);
     return recordsHere(campaign.records, hexKey.value, props.bodyKey).map((record) => {
         const place = resolvePlace(record.id, live);
-        const aboard = !!record.anchor && record.anchor.kind === 'record';
+        const host = record.anchor && record.anchor.kind === 'record' ? live[record.anchor.id] : undefined;
         const where = place ? withinSystem(place, props.systemName) : '';
-        return { record, info: typeInfo(record.type), where: aboard ? where + ' · with another record' : where };
+        return { record, info: typeInfo(record.type), where: host ? where + ' · aboard ' + host.name : where };
     });
 });
 const title = computed(() => (props.bodyKey ? 'Your records on this world' : 'Your records here'));

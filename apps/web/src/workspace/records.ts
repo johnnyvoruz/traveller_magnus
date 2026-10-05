@@ -73,11 +73,14 @@ export function filterRecords(list: readonly CampaignRecord[], filter: { type: T
         .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
 
-/** The line under a row's summary: where the record's own anchor puts it. */
-export function placeLine(record: CampaignRecord): string {
+/** The line under a row's summary: where the record's own anchor puts it. With the records, "aboard" names the vessel. */
+export function placeLine(record: CampaignRecord, records?: Readonly<Record<string, CampaignRecord>>): string {
     const anchor = record.anchor;
     if (!anchor) return 'Nowhere in particular';
-    if (anchor.kind === 'record') return 'With another record';
+    if (anchor.kind === 'record') {
+        const host = records ? records[anchor.id] : undefined;
+        return host && !host.deleted ? 'Aboard ' + host.name : 'With another record';
+    }
     const hex = anchor.hexKey.replace(/_/g, ' ').replace('/', ' ');
     if (!anchor.locationLabel) return hex;
     // With no body the label is the system's name: said so, since a mainworld often shares it.

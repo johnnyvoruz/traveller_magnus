@@ -229,7 +229,7 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
             <span class="camp-row-text">
               <b>{{ record.name }}</b>
               <span v-if="record.summary" class="camp-row-sum">{{ record.summary }}</span>
-              <span class="camp-row-meta">{{ typeInfo(record.type).one }} · {{ placeLine(record) }}</span>
+              <span class="camp-row-meta">{{ typeInfo(record.type).one }} · {{ placeLine(record, campaign.records) }}</span>
               <span v-if="record.tags.length" class="camp-row-tags">
                 <span v-for="tag in record.tags" :key="tag" class="ui-chip">{{ tag }}</span>
               </span>

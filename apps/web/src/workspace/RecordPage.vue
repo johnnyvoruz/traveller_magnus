@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
  * One record (design §3): its name, type, place, summary, details and tags, each edited
- * where it stands, the saving mark, and Delete; a vessel also carries its deck plan (K9).
- * Its connections come with the next step (K5d).
+ * where it stands, its connections (K5d), the saving mark, and Delete; a vessel also carries
+ * its deck plan (K9).
  */
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { CAMPAIGN_LIMITS, type CampaignRecordType } from '@voyage/shared';
@@ -11,6 +11,7 @@ import { campaign } from '../campaign/store.ts';
 import Icon from '../design/Icon.vue';
 import { deleteRecord, justCreated, recentlyDeleted, restoreRecord, saveRecord } from './actions.ts';
 import EditableText from './EditableText.vue';
+import LinksBlock from './LinksBlock.vue';
 import { RECORD_TYPES, addTag, cleanDetails, cleanName, cleanSummary, placeLine, typeInfo } from './records.ts';
 import VesselPlan from './VesselPlan.vue';
 import WhereBlock from './WhereBlock.vue';
@@ -129,7 +130,7 @@ watch(() => props.id, () => {
               <option v-for="item in RECORD_TYPES" :key="item.type" :value="item.type">{{ item.one }}</option>
             </select>
           </label>
-          <span>· {{ placeLine(record) }}</span>
+          <span>· {{ placeLine(record, campaign.records) }}</span>
         </p>
       </div>
       <p class="rec-save" :class="'is-' + saveState" role="status">
@@ -198,6 +199,8 @@ watch(() => props.id, () => {
         </button>
       </div>
     </section>
+
+    <LinksBlock :id="id" :read-only="readOnly" />
 
     <VesselPlan v-if="record.type === 'vessel'" :id="id" :read-only="readOnly" />
 

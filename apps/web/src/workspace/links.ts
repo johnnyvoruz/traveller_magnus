@@ -56,6 +56,7 @@ export function connectionsOf(
     links: Readonly<Record<string, CampaignLink>>,
 ): Connection[] {
     const out: Connection[] = [];
+    if (!liveRecord(records, id)) return out;
     const seen = new Set<string>();
     const take = (linkId: string, outward: boolean): void => {
         if (seen.has(linkId)) return;

@@ -91,8 +91,8 @@ campaign layer over the truth map; own maps later. X sign-in only.
 | "1 week" | orbit time control, view only; line-up search in a kebab | done, not yet pushed |
 | K9 part 3 | the deck plan viewer on a vessel's record page | done, accepted §85, not yet pushed |
 | A/E answers | star kelvin, sea and ice colours (Agent C) | done §85; dossier star tile still owed |
-| **K5d** | links | **Agent D, in flight** |
-| K5e | the party | after K5d |
+| K5d | links | done, accepted §88, not yet pushed |
+| **K5e** | the party | **Agent D, in flight** |
 | K5f | several campaigns: create, name, switch, delete | after K5e |
 | K6c | clock screens | after K5 |
 | K7, K8 | journal, timeline | outlines only |
@@ -100,15 +100,13 @@ campaign layer over the truth map; own maps later. X sign-in only.
 
 ## 6. In flight right now
 
-- **Agent D:** K5d links (add, edit, remove from either end, vocabulary labels, "aboard").
-  K5c leftovers (orbit-view locator, Locate on dossier rows, "At Regina" chip, sort) wait
-  for K5e.
-- **Agent B:** K13 part 1, the ship sheet field inventory from the fillable PDF (read-only,
-  to `findings/`).
-- **Agents A, C:** free. **Agent F:** parked.
-- **Last push:** `6bf409a` (universe create), deployed and green. Local and finished: C's
-  colours and follow-ups, A's client id (§86), D's vessel deck plan (rides with K5d, since
-  `RecordPage.vue` is mid-step).
+- **Agent D:** K5e the party (members, the vessel, "Where are we", the marker at each tier,
+  the omnibox's record group and "New person here"). K5c/K5d leftovers (orbit-view locator,
+  Locate on dossier rows, "At Regina" / "Also at Regina" chips, sort) fold into it.
+- **Agents A, B, C:** free. **Agent F:** parked. K13 part 1 (the ship sheet inventory) is
+  in `findings/` (§89); part 2 waits on Johnny copying it into `rules/`.
+- **Last push:** `fba890f`, deployed and green. Local and finished: D's K5d (§88),
+  pushable with `git add -A` while D is between steps.
 
 ## 7. Decisions Johnny has made that shape the next steps
 
