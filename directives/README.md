@@ -24,6 +24,8 @@ Read in this order.
 | `legacy_map_inventory.md` | what the legacy renderer draws, rule by rule with line references; the evidence for slice 1 part B |
 | `recipe_planet_surfaces.md` | slice 1 part C4: one generated surface per world, shown as the dossier's hex map and as the lit disc in orbit; a brief written by Agent D, reviewed by Agent F, issued with step owners |
 | `planet_rendering.md` | the data-to-appearance specification for planets; kept true by the surfaces work |
+| `slice_2_campaign.md` | the current slice: optional sign-in and one private campaign per account over the released truth (records, places, links, the party), K1 to K5 issued |
+| `plan_engine_corrections.md` | parked: the 21 engine defects and the two-tier fix (reconcile labels, then regenerate); to be done before the Builder |
 | `slice_N_*.md` | written just-in-time when slice N starts |
 
 ## Still current from before

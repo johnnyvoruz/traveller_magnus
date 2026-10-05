@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import { createCanvas, nextFrame, now, observeLongTasks, publishAutomationResult } from '../../platform/browser.ts';
+import { blitImage, createCanvas, nextFrame, now, observeLongTasks, publishAutomationResult } from '../../platform/browser.ts';
 import { legacyDiscId } from '../../surface/identity.ts';
 import { surfaceKind, surfaceProfile } from '../../surface/profile.ts';
-import { cubeSizeFor, SIZES, type BakeProfile, type GpuSpan } from '../../surface/vanilla/gl_bake.ts';
-import { createDiscBaker, type DiscBaker, type DiscCapture, type PublicThresholds, type ShadeRequest } from '../../surface/vanilla/gl.ts';
+import { cubeSizeFor, MEMORY_BUDGET, SIZES, type BakeProfile, type GpuSpan } from '../../surface/vanilla/gl_bake.ts';
+import { createDiscBaker, type DiscCapture, type PublicThresholds, type ShadeRequest } from '../../surface/vanilla/gl.ts';
+import { DISC_DELIVERY, type DiscDelivery } from '../../surface/vanilla/gl_messages.ts';
+import { connectDiscPort, paintFrame, type DiscPort } from '../../surface/vanilla/gl_port.ts';
 import { moonBasePx, worldBasePx } from '../../orbit/maths.ts';
-import { anyByte, backendOf, compareBytes, copyBytes, hasAlpha, rgbaVaried, uniformZero, type ChannelCompare } from './gl_bytes.ts';
+import { anyByte, backendOf, compareBytes, copyBytes, hasAlpha, rgbaVaried, shadeDriftAllowed, uniformZero, type ChannelCompare } from './gl_bytes.ts';
 import { FROZEN_TIME, GL_CASES, GL_RING, NEGATIVE_CASE, STATS_BYTES, type GlCase, type GlRequest } from './gl_worlds.ts';
 
 const REALM = '/dev/surface-parity/gl/realm.html';
@@ -112,6 +114,8 @@ type ShadeReport = {
     varied: boolean;
     alpha: boolean;
     problems: string[];
+    /** Handoff §59. True when the tile differed and the difference was inside the allowance. */
+    allowedDrift: boolean;
     differenceImage?: string;
 };
 
@@ -156,6 +160,8 @@ type GlReport = {
     worlds: WorldReport[];
     negativeControl?: WorldReport;
     cold?: ColdReport;
+    /** Shaded tiles that passed only because of the handoff §59 allowance. */
+    drift?: { id: string; mismatches: number; maxChannelError: number }[];
 };
 
 const legacyFrame = ref<HTMLIFrameElement | null>(null);
@@ -339,7 +345,7 @@ function portShot(captured: DiscCapture, profileJson: string): GlShot {
     };
 }
 
-async function waitReady(baker: DiscBaker): Promise<void> {
+async function waitBaker(baker: { ready(): boolean; pump(): void; lost(): boolean }): Promise<void> {
     let guard = 0;
     while (!baker.ready()) {
         baker.pump();
@@ -350,8 +356,19 @@ async function waitReady(baker: DiscBaker): Promise<void> {
     }
 }
 
+async function waitReady(baker: DiscPort): Promise<void> {
+    let guard = 0;
+    while (!await baker.ready()) {
+        await baker.pump();
+        if (await baker.lost()) throw new Error('WebGL context lost');
+        guard += 1;
+        if (guard > 600) throw new Error('programs were not ready');
+        await frame();
+    }
+}
+
 async function renderPort(
-    baker: DiscBaker,
+    baker: DiscPort,
     item: GlCase,
     cold: { firstStepMs: number | null; drainMs: number | null },
     turns: SlowTurn[],
@@ -359,32 +376,32 @@ async function renderPort(
     const id = discId(item);
     const profile = profileFor(item, id);
     await waitReady(baker);
-    baker.clear();
+    await baker.clear();
     const radii = item.id === 'Ocean' ? [item.request.radius, RADIUS_512] : [item.request.radius];
     for (const radius of radii) {
         let guard = 0;
         for (;;) {
-            baker.takeSpans();
-            const ms = baker.step(profile, radius, item.request.frozenTime);
-            const spans = baker.takeSpans();
+            await baker.takeSpans();
+            const ms = await baker.step(profile, radius, item.request.frozenTime);
+            const spans = await baker.takeSpans();
             if (cold.firstStepMs == null) {
                 cold.firstStepMs = ms;
-                cold.drainMs = baker.sync();
-                baker.takeSpans();
+                cold.drainMs = await baker.sync();
+                await baker.takeSpans();
             }
             recordTurn(turns, 'step ' + item.id + ' r' + radius, ms, spans);
             guard += 1;
-            if (!baker.jobPending(profile.id)) break;
+            if (!await baker.jobPending(profile.id)) break;
             if (guard >= 12) throw new Error('port bake did not finish');
             await frame();
         }
     }
-    if (!baker.hasCube(id, 32) || !baker.hasCube(id, 128)) throw new Error('port cubes 32 and 128 were not finished');
-    if (item.id === 'Ocean' && !baker.hasCube(id, 512)) throw new Error('port cube 512 was not finished');
-    baker.takeSpans();
+    if (!await baker.hasCube(id, 32) || !await baker.hasCube(id, 128)) throw new Error('port cubes 32 and 128 were not finished');
+    if (item.id === 'Ocean' && !await baker.hasCube(id, 512)) throw new Error('port cube 512 was not finished');
+    await baker.takeSpans();
     const started = now();
-    const shot = baker.capture(id);
-    recordTurn(turns, 'capture ' + item.id, now() - started, baker.takeSpans());
+    const shot = await baker.capture(id);
+    recordTurn(turns, 'capture ' + item.id, now() - started, await baker.takeSpans());
     return portShot(shot, JSON.stringify(profile));
 }
 
@@ -536,7 +553,10 @@ function shadeRow(id: string, port: Uint8Array, legacy: Uint8Array, size: number
     const problems: string[] = [];
     const varied = rgbaVaried(port);
     const alpha = hasAlpha(port);
-    if (cmp.mismatches !== 0) problems.push('tile');
+    // Handoff §59. Statistics, cubes and mips stay exact. A shaded tile may differ by a
+    // channel error of at most 1 on at most 8 pixels, because legacy differs from itself.
+    const allowedDrift = cmp.mismatches !== 0 && shadeDriftAllowed(cmp);
+    if (cmp.mismatches !== 0 && !shadeDriftAllowed(cmp)) problems.push('tile');
     if (!varied) problems.push('tile blank');
     if (!alpha) problems.push('tile alpha');
     const row: ShadeReport = {
@@ -549,6 +569,7 @@ function shadeRow(id: string, port: Uint8Array, legacy: Uint8Array, size: number
         varied,
         alpha,
         problems,
+        allowedDrift,
     };
     if (cmp.mismatches !== 0) {
         const image = errorPng(port, legacy, size, size);
@@ -571,7 +592,7 @@ function asTile(row: ShadeReport): TileReport {
 }
 
 async function settleShade(
-    baker: DiscBaker,
+    baker: DiscPort,
     item: GlCase,
     request: GlRequest,
     turns: SlowTurn[],
@@ -581,25 +602,26 @@ async function settleShade(
     await waitReady(baker);
     let guard = 0;
     for (;;) {
-        baker.takeSpans();
+        await baker.takeSpans();
         const started = now();
-        baker.renderBatch([toShade(item, request)]);
+        await baker.renderBatch([toShade(item, request)]);
         const batchMs = now() - started;
-        recordTurn(turns, 'renderBatch ' + item.id + ' r' + request.radius, batchMs, baker.takeSpans());
-        const pendingPort = baker.jobPending(id);
+        recordTurn(turns, 'renderBatch ' + item.id + ' r' + request.radius, batchMs, await baker.takeSpans());
+        const pendingPort = await baker.jobPending(id);
         const legacyStarted = now();
         const legacyPending = realm.renderGl!(request).pending;
         recordTurn(turns, 'legacy renderGl ' + item.id + ' r' + request.radius, now() - legacyStarted, []);
         guard += 1;
         if (!pendingPort && !legacyPending) {
             const readStarted = now();
-            const port = baker.readTile(request.key);
-            recordTurn(turns, 'readTile ' + item.id + ' ' + (baker.tile(request.key)?.size ?? 0), now() - readStarted, baker.takeSpans());
+            const port = await baker.readTile(request.key);
+            const placedBefore = await baker.tile(request.key);
+            recordTurn(turns, 'readTile ' + item.id + ' ' + (placedBefore?.size ?? 0), now() - readStarted, await baker.takeSpans());
             const legacyReadStarted = now();
             const legacyShot = realm.readTileGl!();
             recordTurn(turns, 'legacy readTileGl ' + item.id, now() - legacyReadStarted, []);
             const legacyPx = copyBytes(legacyShot.pixels);
-            const placed = baker.tile(request.key);
+            const placed = await baker.tile(request.key);
             if (!port || !legacyPx || !placed) throw new Error('tile missing ' + item.id);
             if (placed.size !== legacyShot.size) throw new Error('tile size ' + placed.size + ' != ' + legacyShot.size);
             return { port, legacy: legacyPx, size: placed.size };
@@ -610,25 +632,25 @@ async function settleShade(
 }
 
 async function measureSizes(profile: BakeProfile): Promise<{ compileMs: number; statsMs: number; sizes: ColdReport['sizes']; longestSliceMs: number }> {
-    const baker = createDiscBaker();
+    const baker = connectDiscPort();
     try {
         await waitReady(baker);
-        const compileMs = baker.openMs();
-        const statsMs = baker.prepare(profile, FROZEN_TIME);
+        const compileMs = await baker.openMs();
+        const statsMs = await baker.prepare(profile, FROZEN_TIME);
         const sizes: ColdReport['sizes'] = [];
         for (const size of SIZES) {
             await frame();
-            const timed = baker.bakeSize(profile, size, FROZEN_TIME);
+            const timed = await baker.bakeSize(profile, size, FROZEN_TIME);
             sizes.push({ size, ms: timed.ms, maxFaceMs: timed.maxFaceMs });
-            baker.dropCubes(profile.id);
+            await baker.dropCubes(profile.id);
         }
-        return { compileMs, statsMs, sizes, longestSliceMs: baker.longestSliceMs() };
+        return { compileMs, statsMs, sizes, longestSliceMs: await baker.longestSliceMs() };
     } finally {
         baker.dispose();
     }
 }
 
-async function compareShade(baker: DiscBaker, item: GlCase, request: GlRequest, id: string, turns: SlowTurn[]): Promise<ShadeReport> {
+async function compareShade(baker: DiscPort, item: GlCase, request: GlRequest, id: string, turns: SlowTurn[]): Promise<ShadeReport> {
     const shot = await settleShade(baker, item, request, turns);
     return shadeRow(id, shot.port, shot.legacy, shot.size);
 }
@@ -685,15 +707,15 @@ async function timeRegina(longTasks: number[]): Promise<ReginaReport> {
         const moons = (world.moons as Record<string, unknown>[] | undefined) || [];
         for (const moon of moons) consider(moon, moonBasePx(moon as never));
     }
-    const fresh = createDiscBaker();
+    const fresh = connectDiscPort();
     try {
         await waitReady(fresh);
-        fresh.openMs();
-        fresh.takeSpans();
+        await fresh.openMs();
+        await fresh.takeSpans();
         const started = now();
-        fresh.renderBatch(requests);
+        await fresh.renderBatch(requests);
         const wallMs = now() - started;
-        const drainMs = fresh.sync();
+        const drainMs = await fresh.sync();
         return { bodies: requests.length, wallMs, drainMs, longTasksMs: longTasks.slice(mark), radiusModel: RADIUS_MODEL };
     } finally {
         fresh.dispose();
@@ -703,8 +725,9 @@ async function timeRegina(longTasks: number[]): Promise<ReginaReport> {
 async function run(): Promise<void> {
     const longTasks: number[] = [];
     const stopTasks = observeLongTasks((duration) => longTasks.push(duration));
-    const baker = createDiscBaker();
+    const baker = connectDiscPort();
     const coldMark = { firstStepMs: null as number | null, drainMs: null as number | null };
+    const drift: { id: string; mismatches: number; maxChannelError: number }[] = [];
     const worlds: WorldReport[] = [];
     const shades: ShadeReport[] = [];
     const parityTurns: SlowTurn[] = [];
@@ -733,6 +756,7 @@ async function run(): Promise<void> {
             if (item.id === 'Ocean') oceanCube = described.cube32;
             const shadeFrom = longTasks.length;
             const frozen = await compareShade(baker, item, item.request, item.id + ' frozen', shadeTurns);
+            if (frozen.allowedDrift) drift.push({ id: frozen.id, mismatches: frozen.mismatches, maxChannelError: frozen.maxChannelError });
             described.report.tile = asTile(frozen);
             for (const problem of frozen.problems) described.report.problems.push(problem);
             if (frozen.differenceImage) described.report.differenceImage = frozen.differenceImage;
@@ -748,11 +772,20 @@ async function run(): Promise<void> {
                     { id: 'Ocean radius 2.5', request: { ...item.request, radius: 2.5 } },
                     { id: 'Ocean radius 1100', request: { ...item.request, radius: 1100 } },
                 ];
-                for (const variant of variants) shades.push(await compareShade(baker, item, variant.request, variant.id, shadeTurns));
+                for (const variant of variants) {
+                    const row = await compareShade(baker, item, variant.request, variant.id, shadeTurns);
+                    shades.push(row);
+                    if (row.allowedDrift) drift.push({ id: row.id, mismatches: row.mismatches, maxChannelError: row.maxChannelError });
+                }
             }
             if (item.id === 'Ringed') {
-                shades.push(await compareShade(baker, item, { ...item.request, ring: { ...GL_RING, phase: 0.75 } }, 'Ringed phase 0.75', shadeTurns));
-                shades.push(await compareShade(baker, item, { ...item.request, ring: { ...GL_RING, phase: 0 } }, 'Ringed phase 0', shadeTurns));
+                for (const row of [
+                    await compareShade(baker, item, { ...item.request, ring: { ...GL_RING, phase: 0.75 } }, 'Ringed phase 0.75', shadeTurns),
+                    await compareShade(baker, item, { ...item.request, ring: { ...GL_RING, phase: 0 } }, 'Ringed phase 0', shadeTurns),
+                ]) {
+                    shades.push(row);
+                    if (row.allowedDrift) drift.push({ id: row.id, mismatches: row.mismatches, maxChannelError: row.maxChannelError });
+                }
             }
             shadeTasks.push(...longTasks.slice(shadeFrom));
             await frame();
@@ -786,7 +819,7 @@ async function run(): Promise<void> {
             compileMs: measured.compileMs,
             statsMs: measured.statsMs,
             sizes: measured.sizes,
-            longestSliceMs: Math.max(baker.longestSliceMs(), measured.longestSliceMs),
+            longestSliceMs: Math.max(await baker.longestSliceMs(), measured.longestSliceMs),
             parityLongTasksMs: parityTasks,
             shadeLongTasksMs: shadeTasks,
             sweepLongTasksMs,
@@ -809,6 +842,7 @@ async function run(): Promise<void> {
             negativeControl: negative.report,
             cold,
             regina,
+            drift,
         });
     } catch (err) {
         publish({
@@ -829,7 +863,7 @@ async function run(): Promise<void> {
                 compileMs: 0,
                 statsMs: 0,
                 sizes: [],
-                longestSliceMs: baker.longestSliceMs(),
+                longestSliceMs: await baker.longestSliceMs(),
                 parityLongTasksMs: [],
                 shadeLongTasksMs: [],
                 sweepLongTasksMs: [],
@@ -941,15 +975,15 @@ function loadRealm(frame: HTMLIFrameElement, token: string): Promise<RealmWindow
     });
 }
 
-async function shadeBaker(baker: DiscBaker, item: GlCase, request: GlRequest): Promise<{ pixels: Uint8Array; size: number }> {
+async function shadeBaker(baker: DiscPort, item: GlCase, request: GlRequest): Promise<{ pixels: Uint8Array; size: number }> {
     const id = discId(item);
     await waitReady(baker);
     let guard = 0;
     for (;;) {
-        baker.renderBatch([toShade(item, request)]);
-        if (!baker.jobPending(id)) {
-            const pixels = baker.readTile(request.key);
-            const placed = baker.tile(request.key);
+        await baker.renderBatch([toShade(item, request)]);
+        if (!await baker.jobPending(id)) {
+            const pixels = await baker.readTile(request.key);
+            const placed = await baker.tile(request.key);
             if (!pixels || !placed) throw new Error('tile missing ' + item.id);
             return { pixels, size: placed.size };
         }
@@ -1012,7 +1046,7 @@ async function characterise(runs: number, pairs: Array<'port' | 'legacy'>): Prom
                 if (!frameA || (pair === 'legacy' && !frameB)) throw new Error('realm frame missing');
                 const realmA = await loadRealm(frameA, pair + '-a-' + run);
                 const realmB = pair === 'legacy' && frameB ? await loadRealm(frameB, pair + '-b-' + run) : null;
-                const baker = pair === 'port' ? createDiscBaker() : null;
+                const baker = pair === 'port' ? connectDiscPort() : null;
                 const turns: SlowTurn[] = [];
                 try {
                     for (const item of [...GL_CASES, NEGATIVE_CASE]) {
@@ -1075,7 +1109,7 @@ async function probe(): Promise<void> {
     const tasks: { ms: number; at: string }[] = [];
     let phase = 'setup';
     const stop = observeLongTasks((duration) => tasks.push({ ms: duration, at: phase }));
-    const baker = createDiscBaker();
+    const baker = connectDiscPort();
     const ocean = GL_CASES[0];
     const ringed = GL_CASES.find((item) => item.id === 'Ringed');
     try {
@@ -1174,94 +1208,139 @@ async function shadeRequests(url: string): Promise<{ hexId: string; requests: Sh
     return { hexId, requests };
 }
 
-async function coldOne(url: string): Promise<Record<string, unknown>> {
+function p95(samples: number[]): number {
+    if (!samples.length) return 0;
+    const sorted = [...samples].sort((a, b) => a - b);
+    const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * 0.95) - 1));
+    return sorted[index] ?? 0;
+}
+
+async function steadyFrames(port: DiscPort, requests: ShadeRequest[], delivery: DiscDelivery, frames: number): Promise<{ samples: number[]; slow: GpuSpan[] }> {
+    const scratch = createCanvas(64, 64);
+    const ctx = scratch.getContext('2d');
+    if (!ctx) throw new Error('no 2d context');
+    const samples: number[] = [];
+    const slow: GpuSpan[] = [];
+    for (let index = 0; index < frames; index++) {
+        const clocked = requests.map((item) => ({ ...item, uTime: item.uTime + index * 0.016 }));
+        const result = await port.frame(clocked, delivery, (frame) => paintFrame(ctx, frame, blitImage));
+        samples.push(result.mainMs);
+        slow.push(...result.slow);
+    }
+    return { samples, slow };
+}
+
+async function deliveryTrial(requests: ShadeRequest[]): Promise<{ atlasP95: number; tilesP95: number; winner: DiscDelivery; slow: GpuSpan[] }> {
+    const port = connectDiscPort();
+    const scratch = createCanvas(64, 64);
+    const ctx = scratch.getContext('2d');
+    try {
+        if (!ctx) throw new Error('no 2d context');
+        for (let guard = 0; guard < 900 && !await port.ready(); guard++) {
+            await port.pump();
+            await frame();
+        }
+        if (!await port.ready()) throw new Error('programs were not ready');
+        const first = await port.frame(requests, 'tiles', (frame) => paintFrame(ctx, frame, blitImage));
+        const tiles = await steadyFrames(port, requests, 'tiles', 20);
+        const atlas = await steadyFrames(port, requests, 'atlas', 20);
+        const tilesP95 = p95(tiles.samples);
+        const atlasP95 = p95(atlas.samples);
+        const slow = [...first.slow, ...tiles.slow, ...atlas.slow];
+        return { atlasP95, tilesP95, winner: atlasP95 < tilesP95 ? 'atlas' : 'tiles', slow };
+    } finally {
+        port.dispose();
+    }
+}
+
+async function coldOne(url: string, delivery: DiscDelivery): Promise<Record<string, unknown>> {
     const tasks: ColdTasks = [];
     let call = 'setup';
     const stop = observeLongTasks((ms) => {
         if (ms >= 50) tasks.push({ ms, call });
     }, false);
-    const baker = createDiscBaker();
-    for (const span of baker.takeSpans()) {
-        if (span.ms >= 50) tasks.push({ ms: span.ms, call: span.name });
-    }
+    const port = connectDiscPort();
+    const scratch = createCanvas(64, 64);
+    const ctx = scratch.getContext('2d');
     try {
+        if (!ctx) throw new Error('no 2d context');
         const loaded = await shadeRequests(url);
         const requests = loaded.requests;
         const started = now();
         let firstLitMs: number | null = null;
         let fullMs: number | null = null;
+        const workerSlow: GpuSpan[] = [];
+        let memory = 0;
+        let fullMemory = 0;
+        let withinBudget = true;
         for (let guard = 0; guard < 900; guard++) {
-            call = baker.ready() ? 'renderBatch' : 'pump';
-            baker.pump();
-            for (const span of baker.takeSpans()) {
-                if (span.ms >= 50) tasks.push({ ms: span.ms, call: span.name });
-            }
-            if (baker.ready()) {
-                call = 'renderBatch';
-                baker.renderBatch(requests);
-                for (const span of baker.takeSpans()) {
-                    if (span.ms >= 50) tasks.push({ ms: span.ms, call: span.name });
-                }
-                if (firstLitMs == null && requests.some((item) => baker.tile(item.key))) firstLitMs = now() - started;
-                const full = requests.every((item) => baker.hasCube(item.profile.id, cubeSizeFor(item.radius)));
-                if (full) {
+            call = 'frame';
+            const result = await port.frame(requests, delivery, (frame) => paintFrame(ctx, frame, blitImage));
+            workerSlow.push(...result.slow);
+            memory = result.memory;
+            withinBudget = result.withinBudget;
+            if (result.failed) throw new Error('disc worker failed');
+            if (result.ready) {
+                if (firstLitMs == null && result.lit) firstLitMs = now() - started;
+                if (result.full) {
                     fullMs = now() - started;
+                    fullMemory = result.memory;
                     break;
                 }
             }
             await frame();
         }
-        call = 'steady renderBatch';
-        const clocked = requests.map((item) => ({ ...item, uTime: item.uTime + 1 }));
-        baker.takeSpans();
-        const steadyStarted = now();
-        baker.renderBatch(clocked);
-        const steadyMs = now() - steadyStarted;
-        for (const span of baker.takeSpans()) {
-            if (span.ms >= 50) tasks.push({ ms: span.ms, call: span.name });
-        }
+        call = 'steady';
+        const steady = await steadyFrames(port, requests, delivery, 40);
+        workerSlow.push(...steady.slow);
         call = 'context loss';
-        const lost = baker.loseForTest();
-        await frame();
-        const unavailable = baker.lost() && !baker.ready();
-        const restored = baker.restoreForTest();
+        const lost = await port.loseForTest();
+        let unavailable = false;
+        for (let guard = 0; guard < 30 && !unavailable; guard++) {
+            await frame();
+            unavailable = await port.lost() && !await port.ready();
+        }
+        const restored = await port.restoreForTest();
         let rebuilt = false;
-        for (let guard = 0; guard < 300 && !baker.ready(); guard++) {
+        for (let guard = 0; guard < 300 && !rebuilt; guard++) {
             call = 'restore pump';
-            baker.pump();
-            for (const span of baker.takeSpans()) {
-                if (span.ms >= 50) tasks.push({ ms: span.ms, call: span.name });
-            }
+            await port.pump();
+            rebuilt = await port.ready();
             await frame();
         }
-        rebuilt = baker.ready();
-        call = 'restore renderBatch';
+        let drew = false;
         if (rebuilt) {
-            for (let guard = 0; guard < 8 && !requests.some((item) => baker.tile(item.key)); guard++) {
-                baker.renderBatch(requests);
-                for (const span of baker.takeSpans()) {
-                    if (span.ms >= 50) tasks.push({ ms: span.ms, call: span.name });
-                }
+            for (let guard = 0; guard < 8 && !drew; guard++) {
+                call = 'restore frame';
+                const result = await port.frame(requests, delivery, (frame) => paintFrame(ctx, frame, blitImage));
+                workerSlow.push(...result.slow);
+                drew = result.lit;
                 await frame();
             }
         }
-        const drew = rebuilt && requests.some((item) => baker.tile(item.key));
+        const held = await port.memory();
         return {
             hexId: loaded.hexId,
             bodies: requests.length,
+            delivery,
             firstLitMs,
             fullMs,
-            steadyMs,
+            steadyP95: p95(steady.samples),
+            steadyFrames: steady.samples.length,
             tasks,
-            linkCosts: baker.costs(),
+            workerSlow,
+            memory: held || memory,
+            fullMemory,
+            budget: MEMORY_BUDGET,
+            withinBudget: withinBudget && (held || memory) <= MEMORY_BUDGET,
             loss: { lost, unavailable, restored, rebuilt, drew },
-            gpu: '',
+            linkCosts: await port.costs(),
         };
     } catch (err) {
         return { error: err instanceof Error ? err.message : String(err), tasks };
     } finally {
         stop();
-        baker.dispose();
+        port.dispose();
     }
 }
 
@@ -1277,7 +1356,7 @@ async function stallMeasure(): Promise<void> {
         let afterWarmup: { name: string; ms: number }[] = [];
         if (mode !== 'warm') {
             const freshSkip = createDiscBaker();
-            await waitReady(freshSkip);
+            await waitBaker(freshSkip);
             freshSkip.prepare(profile, FROZEN_TIME);
             statsSpans = freshSkip.takeSpans().filter((span) => span.ms >= 1);
             skipped = freshSkip.stallProbe(profile, 32, true);
@@ -1285,7 +1364,7 @@ async function stallMeasure(): Promise<void> {
         }
         if (mode !== 'skip') {
             const freshWarm = createDiscBaker();
-            await waitReady(freshWarm);
+            await waitBaker(freshWarm);
             freshWarm.prepare(profile, FROZEN_TIME);
             freshWarm.takeSpans();
             warmup = freshWarm.stallProbe(profile, 1, false);
@@ -1310,17 +1389,28 @@ async function stallMeasure(): Promise<void> {
 }
 
 async function coldMeasure(): Promise<void> {
-    const regina = await coldOne('/dev/surface-parity/gl/regina.json');
-    const zeycude = await coldOne('/dev/surface-parity/gl/zeycude.json');
+    const sample = await shadeRequests('/dev/surface-parity/gl/regina.json');
+    let trial: { atlasP95: number; tilesP95: number; winner: DiscDelivery } | { error: string };
+    try {
+        trial = await deliveryTrial(sample.requests);
+    } catch (err) {
+        trial = { error: err instanceof Error ? err.message : String(err) };
+    }
+    const winner: DiscDelivery = 'winner' in trial ? trial.winner : DISC_DELIVERY;
+    const regina = await coldOne('/dev/surface-parity/gl/regina.json', winner);
+    const zeycude = await coldOne('/dev/surface-parity/gl/zeycude.json', winner);
+    const failed = Boolean(regina.error || zeycude.error || ('error' in trial && trial.error));
     publishAutomationResult('__surfaceGlCold', {
-        status: regina.error || zeycude.error ? 'error' : 'done',
+        status: failed ? 'error' : 'done',
+        serviceDelivery: DISC_DELIVERY,
+        trial,
         regina,
         zeycude,
     });
     report.value = {
         ...report.value,
-        status: regina.error || zeycude.error ? 'error' : 'done',
-        message: String(regina.error || zeycude.error || 'cold measured'),
+        status: failed ? 'error' : 'done',
+        message: String(regina.error || zeycude.error || ('error' in trial ? trial.error : '') || 'cold measured'),
     };
 }
 

@@ -85,6 +85,17 @@ export function blitImage(target: ImageBlit, image: CanvasImageSource, x: number
     target.drawImage(image, x, y, w, h);
 }
 
+/** A tile cut out of an atlas bitmap. */
+export function sliceBitmap(image: ImageBitmap, sx: number, sy: number, sw: number, sh: number): Promise<ImageBitmap> {
+    return createImageBitmap(image, sx, sy, sw, sh);
+}
+
+/** Release a transferred bitmap. Other image sources are left alone. */
+export function closeBitmap(image: CanvasImageSource): void {
+    if (typeof ImageBitmap === 'undefined') return;
+    if (image instanceof ImageBitmap) image.close();
+}
+
 /**
  * Copy a rectangle out of a canvas into a canvas the caller can keep.
  * Source x and y are top-left, matching drawImage. Null when there is no 2D context.
@@ -140,6 +151,11 @@ export function startAlignmentWorker(): Worker {
 /** The CPU surface worker (surface/surface.worker.ts). Throws where workers are not available. */
 export function startSurfaceWorker(): Worker {
     return new Worker(new URL('../surface/surface.worker.ts', import.meta.url), { type: 'module' });
+}
+
+/** The vanilla disc worker. OffscreenCanvas WebGL2 lives in that file, not on the page. */
+export function startDiscWorker(): Worker {
+    return new Worker(new URL('../surface/vanilla/gl.worker.ts', import.meta.url), { type: 'module' });
 }
 
 /** Runs fn as its own task. The returned function cancels it if it has not run. */

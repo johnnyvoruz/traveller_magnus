@@ -484,24 +484,36 @@ and Tier 2 changes engine metadata as well. The 24,090 partial rows keep
 their published data. This is an upper-bound planning estimate, not a
 measured count of changed climates.
 
-For substantive Tier 2 physical changes, budget **roughly 125,000 to
-156,222 systems (80-100% of generated trees)**. This is a deliberately
-broad engineering estimate, not a statistical confidence interval: the
-broken flesh-base contract affects every chart-derived mainworld path,
-and temperature/liquid fixes affect other bodies too. Some random results
-already agree and may survive unchanged. B's 30/439 zero-coverage Ice
-mainworlds and the other Marches totals establish widespread defects but
-are not a representative universe-wide sample and do not determine that
-percentage. Do not extrapolate an exact count from Regina or Marches.
+The 80–100% planning band is replaced by a no-generation read of released
+v5 trees (`tools/truth/scan_environment.js`, results in
+`findings/environment_scan_v5.json`, 2026-10-04). Eight sectors, 3,198
+generated trees (3,198 mainworlds; 7 partial rows in Reft skipped):
+Spinward Marches, Vland, Core, Solomani Rim, Gvurrdon, Dark Nebula, Reft,
+and Empty Quarter. A mainworld contradiction is a chart/physical
+atmosphere mismatch, a chart/physical hydrographics mismatch, a
+`liquidType` outside its exotic-liquids melting-to-boiling window at
+`meanTempK`, Ice with `hydroPercent` 0, or `Unknown Exotic Liquid`.
 
-Replace this estimate before release with: a no-generation Tier 1 scan
-of all available stored trees; a paired old/new run of whole Marches;
-then a stratified sample across sectors, stellar multiplicity, lunar
-mainworlds, atmosphere/Hydro classes and partial status. Finally report
-exact counts from the full shadow build. Distinguish hashes changed only
-by metadata, label/liquid-only changes, mainworld physical changes,
-other-body changes and RNG-cascade changes. No implementation or such
-measurement was performed while writing this plan.
+**2,975 of 3,198 mainworlds (93.03%) have at least one contradiction.**
+**3,197 of 3,198 trees (99.97%)** have that mainworld contradiction or
+the same liquid flags on any body. The one clean tree is in Reft.
+Mainworlds: atmosphere differs 2,607, hydrographics differs 2,517, liquid
+out of range 656, Ice with hydrographics percent 0 is 290, Unknown Exotic
+Liquid 3, mean below 200 K is 281, mean above 400 K is 122, moon 733.
+All bodies (75,422, mainworlds included): liquid out of range 10,671, Ice
+with hydrographics percent 0 is 19,871, Unknown Exotic Liquid 3,105, mean
+below 200 K is 36,173, mean above 400 K is 13,218. Per-sector rows are in
+the results file. These are stored disagreements, not hash diffs. The
+full shadow build still has to separate metadata-only, label-only,
+mainworld physical, other-body, and RNG-cascade changes across all
+156,222 trees. Do not scale 3,198 up to 156,222.
+
+Still to do before release: a no-generation scan of all 156,222 stored
+trees; a paired old/new run of whole Marches; then the full shadow build.
+That build has to separate hashes changed only by metadata, label-only
+changes, mainworld physical changes, other-body changes, and RNG-cascade
+changes. The eight-sector scan above is the stratified sample. It is not
+those hash classes.
 
 ## 7. Proof and the deliberate break with legacy
 

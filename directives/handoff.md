@@ -2043,3 +2043,86 @@ Agent B (wider read-only scan of released trees).
   (the renderer itself is proven on the parity page); no-WebGL2 device; fast shuttle speeds.
 - Orchestrator re-ran: check clean, 457 pass / 0 fail, build green, `dist` clean.
   **Last push is still `05b1297`; 54 paths uncommitted.**
+
+## 64. Pushed `b1ae85a`; CI was red for a line-ending reason, fixed locally (2026-10-04)
+
+- Johnny pushed `b1ae85a` (dossier map, enhanced seas, orbit discs, today's temperature, the
+  engine correction plan). Workers Builds deploys regardless of the test workflow.
+- **The GitHub test run failed on `05b1297` and on `b1ae85a`:** `surface oracle ... matches
+  fixtures`, manifest digest. Cause: the checkout is CRLF on Windows and LF on CI
+  (`.gitattributes` `eol=lf`, `core.autocrlf true`), and the oracle hashed the legacy source
+  bytes as found. **Fix (orchestrator):** `tests/oracle/surface_map.js` `readText` normalises
+  CRLF to LF and the renderer digest is taken over that text; `manifest.json` refreshed (the
+  digest now equals `git show HEAD:js/planet_renderer.js | sha256sum`). No pixel, grid or
+  trace digest changed. Rule for agents: **a stored digest of a source file is taken over LF
+  text**, never raw bytes. Not yet pushed.
+
+## 65. Johnny closes this leg; next is the campaign layer (2026-10-04)
+
+**Direction (Johnny):** wrap up; rough in campaign features next, with optional login. First
+pass: everyone has their own campaign layer over the base truth map; their own maps later.
+Recorded in `plan.md` before Slice 2 and as the answer to question D1. He also answered
+**yes to F3 to F7**. F2 (kelvin table for the five climate words) is still open.
+
+**Engine corrections: measured, then parked.**
+- Agent A, T1.1: `tests/generation/environment_audit.js`, fixtures for Regina and Zeycude
+  under `tests/golden/fixtures/engine_corrections/`. Spinward Marches: 387 of 439 mainworlds
+  have chart digits that differ from the physical codes (B01/B03); 52 have a liquid name with
+  hydrographics 0; 915 bodies have a liquid outside its window at every temperature; 13
+  mainworlds sit on a forbidden-zone edge.
+- Agent B, eight sectors of released v5 (`tools/truth/scan_environment.js`,
+  `findings/environment_scan_v5.json`): **2,975 of 3,198 mainworlds (93%) carry at least one
+  contradiction**; 2,607 atmosphere mismatches, 2,517 hydrographics mismatches. So tier 2 is in
+  effect a rebuild of everything, as the plan estimated.
+- **Parked, not abandoned.** The plan, the audit and the scan stay. It must be done **before
+  the Builder**, because builders generate with these engines. A campaign is pinned to a
+  truth version, so a later v7 does not break campaigns made on v5; they migrate when offered
+  (`plan.md` slice 5). Nothing in tier 1 or tier 2 is in flight.
+
+**Surfaces: one item in flight, the rest parked.** Agent C's worker move (step 10b) finishes
+the leg. Parked: the enhanced shared terrain and enhanced disc (plan steps 12 to 18), the
+no-WebGL painter, P7 delighters, the 2.5D view, swatches E11/E12, and slice 1's B3b Trade
+Match and B3c (legend, help, settings).
+
+**Next leg, what exists already:** X sign-in through better-auth (Discord and Google when
+their secrets are set), `profile` table, `views/Account.vue`, a 14-line `UniverseDO.ts` with a
+drafted schema (`apps/api/src/universe/schema.ts`). The campaign design is
+`campaign_manager_plan.md` (1,652 lines, written for the legacy app's storage). The recipe
+`slice_2_campaign.md` is the orchestrator's next job; two read-only inventories feed it
+(Agent A: campaign plan and legacy campaign code mapped to the new stack; Agent B: what the
+API and Durable Object have against `data_model.md` and `api.md`).
+
+## 66. The campaign recipe is written; K1 and K2 are issued (2026-10-04)
+
+- **`directives/slice_2_campaign.md`** (orchestrator), from Agent A's inventory
+  (`findings/campaign_inventory.md`) and Agent B's gap report
+  (`findings/campaign_api_gaps.md`). Johnny: X sign-in only is fine.
+- Shape: signed out is the viewer unchanged; signed in gets one private universe pinned to
+  the released truth, campaign rows only. Records (nine types), anchors on the new hex key
+  and dossier body key, links from the plan's vocabulary, the party as a settings document.
+  The browser holds the campaign in memory and sends batched changes with per-row `rev`;
+  a per-universe `seq` gives "everything after N". Server FTS, images, journal, clock and
+  timeline are later steps (K6 to K8 outlined).
+- **Body anchors are stable only within one truth version**; recorded in the recipe §0.4 with
+  how a migration re-resolves them. This is why the parked engine rebuild stays safe.
+- **Owners:** K1 shared schemas, Agent A. K2 universes in D1 and the owner-checked forward,
+  then K3 the campaign in the Durable Object, Agent B. K4 the browser's session and campaign
+  store, Agent A after K1. K5 the screens, Agent D to its own design. Agent C joins after
+  the disc worker move.
+- **Johnny's part:** migration `0008_universes.sql` reaches production through `deploy:ci`
+  if Workers Builds runs it; to be confirmed when K2 reports.
+
+## 67. Step 10b in: the disc pipeline runs in a worker; the surfaces leg is closed (2026-10-04)
+
+- **Agent C:** the stall was the driver's first `readPixels` on a fresh context (about 850 ms
+  whichever call asks first). The whole vanilla GL pipeline now runs in an OffscreenCanvas
+  worker (`gl.worker`), with a 1x1 warm-up that takes that cost off the page; `prepareDiscs`
+  and `drawDisc` are unchanged; tiles come back as per-tile bitmaps (cheaper than an atlas:
+  p95 0.1 ms against 0.4 ms). Cold, Edge / ANGLE D3D11 / RX 7900 XTX: Regina first lit disc
+  49 ms, all 20 at full detail 202 ms; Zeycude 41 ms and 117 ms; **no main-thread task of
+  50 ms or more**; steady receive-and-draw p95 0.1 ms. Parity from the worker exact (no tile
+  needed the §59 allowance). Ledger about 6 MB of the 320 MiB cap. Context loss and restore
+  work from the worker.
+- **Surfaces as shipped:** vanilla map (dossier), enhanced map (seas and ice), vanilla discs
+  (orbit, worker), the `surfaces` switch. Parked: plan steps 12 to 18, the no-WebGL painter,
+  delighters, 2.5D, swatches E11/E12.

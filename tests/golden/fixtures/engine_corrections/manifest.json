@@ -1,0 +1,44 @@
+{
+  "regina": {
+    "hex": "Spinward_Marches/1910",
+    "file": "regina.json",
+    "seed": "TravellerMagnus",
+    "settings": {
+      "generationPopMax": 20,
+      "generationPopMod": 0,
+      "generationTlMax": 20,
+      "generationTlMod": 0,
+      "generationUseRealisticStellar": false,
+      "generationUseTlFloor": false,
+      "generationRttSettlement": 2,
+      "generationRttTL": 15,
+      "generationStarportMax": "A",
+      "generationStarportMod": 0,
+      "generationNoTravelZones": false,
+      "generationPopCheckFrequency": 100
+    },
+    "engineVersion": "1.0.0",
+    "sha256": "008c00902a7992a40caa1202f2cec0a736a6f1ffef28c92332599fdfdc02b1ae"
+  },
+  "zeycude": {
+    "hex": "Spinward_Marches/0101",
+    "file": "zeycude.json",
+    "seed": "TravellerMagnus",
+    "settings": {
+      "generationPopMax": 20,
+      "generationPopMod": 0,
+      "generationTlMax": 20,
+      "generationTlMod": 0,
+      "generationUseRealisticStellar": false,
+      "generationUseTlFloor": false,
+      "generationRttSettlement": 2,
+      "generationRttTL": 15,
+      "generationStarportMax": "A",
+      "generationStarportMod": 0,
+      "generationNoTravelZones": false,
+      "generationPopCheckFrequency": 100
+    },
+    "engineVersion": "1.0.0",
+    "sha256": "f2d127322cb7cb2b2c7cc7492b4af5af0a4816be80939409cbe9469d46ad8a79"
+  }
+}

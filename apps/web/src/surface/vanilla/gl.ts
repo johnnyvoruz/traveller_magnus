@@ -98,6 +98,9 @@ export type DiscBaker = {
     loseForTest: () => boolean;
     restoreForTest: () => boolean;
     stallProbe: (profile: BakeProfile, size: number, skipCheck: boolean) => GpuSpan[];
+    /** One 1x1 bake so the driver's first wait happens before a real face. */
+    warmup: (profile: BakeProfile) => GpuSpan[];
+    failed: () => boolean;
 };
 
 function publishThresholds(stats: WorldStats): PublicThresholds | null {
@@ -182,8 +185,20 @@ export function linkDiscProgram(gl: WebGL2RenderingContext, fragment: string): L
     return finishProgram(gl, beginProgram(gl, fragment, 'program'));
 }
 
-export function createDiscBaker(): DiscBaker {
-    let canvas: HTMLCanvasElement | null = null;
+export type DiscBakerHooks = {
+    onLost?: () => void;
+    onRestored?: () => void;
+};
+
+/**
+ * Page callers omit the canvas and get an HTMLCanvasElement.
+ * The disc worker passes its OffscreenCanvas. The page does not build one.
+ */
+export function createDiscBaker(
+    surface?: HTMLCanvasElement | OffscreenCanvas,
+    hooks?: DiscBakerHooks,
+): DiscBaker {
+    let canvas: HTMLCanvasElement | OffscreenCanvas | null = surface ?? null;
     let gl: WebGL2RenderingContext | null = null;
     let ops: ReturnType<typeof attachBaker> | null = null;
     let shade: ReturnType<typeof attachShade> | null = null;
@@ -212,6 +227,7 @@ export function createDiscBaker(): DiscBaker {
         blockingAt = 0;
         programState = 'idle';
         shade = null;
+        hooks?.onLost?.();
     }
 
     function mountPrograms(linked: LinkedProgram[]): void {
@@ -296,10 +312,11 @@ export function createDiscBaker(): DiscBaker {
             console.warn('[PlanetGL] Falling back to the canvas renderer:', err instanceof Error ? err.message : err);
             broken = true;
         }
+        hooks?.onRestored?.();
     }
 
     function setup(): void {
-        canvas = createCanvas(1024, 1024);
+        if (!canvas) canvas = createCanvas(1024, 1024);
         const contextStarted = now();
         gl = webgl2Context(canvas);
         const contextMs = now() - contextStarted;
@@ -307,8 +324,9 @@ export function createDiscBaker(): DiscBaker {
             broken = true;
             return;
         }
-        canvas.addEventListener('webglcontextlost', onLost);
-        canvas.addEventListener('webglcontextrestored', onRestored);
+        const target: EventTarget = canvas;
+        target.addEventListener('webglcontextlost', onLost);
+        target.addEventListener('webglcontextrestored', onRestored);
         loseExt = gl.getExtension('WEBGL_lose_context');
         try {
             ops = attachBaker(gl);
@@ -509,8 +527,9 @@ export function createDiscBaker(): DiscBaker {
         tiles = new Map();
         loseExt?.loseContext();
         if (canvas) {
-            canvas.removeEventListener('webglcontextlost', onLost);
-            canvas.removeEventListener('webglcontextrestored', onRestored);
+            const target: EventTarget = canvas;
+            target.removeEventListener('webglcontextlost', onLost);
+            target.removeEventListener('webglcontextrestored', onRestored);
         }
         gl = null;
         ops = null;
@@ -750,6 +769,18 @@ export function createDiscBaker(): DiscBaker {
             requireOps().probeDraw(world.profile, stats, size, skipCheck);
             return requireOps().takeSpans();
         },
+        warmup: (profile) => {
+            pump();
+            if (!ready()) return [];
+            requireOps().takeSpans();
+            const world = adopt(profile);
+            if (!world.stats) measureFresh([world]);
+            const stats = world.stats;
+            if (!stats) return requireOps().takeSpans();
+            requireOps().warmupPipeline(world.profile, stats);
+            return requireOps().takeSpans();
+        },
+        failed: () => broken || disposed,
         loseForTest: () => {
             if (!loseExt) return false;
             loseExt.loseContext();

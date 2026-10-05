@@ -5,6 +5,7 @@ import { discShadeRequest } from '../../apps/web/src/surface/disc_shade.ts';
 import { productionDiscId } from '../../apps/web/src/surface/identity.ts';
 import { disposeSurfaces, drawDisc, prepareDiscs } from '../../apps/web/src/surface/service.ts';
 import { discDest } from '../../apps/web/src/surface/vanilla/gl_plan.ts';
+import { shadeDriftAllowed } from '../../apps/web/src/dev/surface-parity/gl_bytes.ts';
 
 const HEX = 'Spinward_Marches/1910';
 
@@ -39,6 +40,17 @@ describe('disc contract', () => {
     after(() => {
         disposeSurfaces();
         clearDiscs();
+    });
+
+    test('handoff 59 allows a one-level shade drift on at most eight pixels', () => {
+        const exact = { mismatches: 0, maxChannelError: 0, meanChannelError: 0, length: 16, sum: 0 };
+        const allowed = { mismatches: 8, maxChannelError: 1, meanChannelError: 0.5, length: 16, sum: 8 };
+        const tooMany = { mismatches: 9, maxChannelError: 1, meanChannelError: 0.5, length: 16, sum: 9 };
+        const tooFar = { mismatches: 1, maxChannelError: 2, meanChannelError: 0.1, length: 16, sum: 2 };
+        assert.equal(shadeDriftAllowed(exact), true);
+        assert.equal(shadeDriftAllowed(allowed), true);
+        assert.equal(shadeDriftAllowed(tooMany), false);
+        assert.equal(shadeDriftAllowed(tooFar), false);
     });
 
     test('discDest centres the tile and scales it with the draw radius', () => {

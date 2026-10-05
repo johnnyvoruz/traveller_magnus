@@ -116,7 +116,8 @@ function extractFunction(src, name) {
 function readText(file) {
     let src = fs.readFileSync(file, 'utf8');
     if (src.charCodeAt(0) === 0xFEFF) src = src.slice(1);
-    return src;
+    // The checkout has CRLF on Windows and LF on CI; digests are taken over LF text.
+    return src.replace(/\r\n/g, '\n');
 }
 
 // Sample sites only. Colours and inverse coordinates come from the real loop.
@@ -229,7 +230,7 @@ function insertSample(src, insertions, id, comment, nextComment) {
 }
 
 export function sourceManifest() {
-    const rendererBytes = fs.readFileSync(RENDERER);
+    const rendererBytes = Buffer.from(readText(RENDERER), 'utf8');
     const coreSrc = readText(CORE);
     const prng = extractFunction(coreSrc, 'hashString') + '\n' + extractFunction(coreSrc, 'mulberry32');
     const editor = readText(HEX_EDITOR);

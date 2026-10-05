@@ -5,8 +5,8 @@
  * The cache key carries the mode, the painter and, for enhanced, the sea it was asked to
  * draw, so one mode's sheet is never handed to the other.
  * A reply whose generation is not the live one is dropped.
- * Discs compile on the first real batch. prepareDiscs submits one frame and returns.
- * It does not wait for full detail. drawDisc paints the newest tile held for a key,
+ * Discs compile in the disc worker. prepareDiscs posts one batch and returns.
+ * It does not wait for a tile. drawDisc paints the newest tile held for a key,
  * or returns false so the caller keeps its flat disc. A tile can arrive a later frame.
  */
 import { afterTask, blitImage, now, startSurfaceWorker } from '../platform/browser.ts';
@@ -32,9 +32,10 @@ import {
 } from './identity.ts';
 import { createEnhancedMap, seaPlan } from './enhanced/map.ts';
 import { createChunkedMap } from './map_chunks.ts';
-import { clearDiscs, discHeld, rememberDisc, retainDiscs } from './disc_hold.ts';
+import { openDiscLink, type DiscLink } from './disc_link.ts';
+import { clearDiscs, discHeld, retainDiscs } from './disc_hold.ts';
 import { discShadeRequest } from './disc_shade.ts';
-import { createDiscBaker, type DiscBaker } from './vanilla/gl.ts';
+import type { ShadeRequest } from './vanilla/gl_shade.ts';
 import { discDest } from './vanilla/gl_plan.ts';
 import { MAP_HEIGHT, MAP_WIDTH } from './vanilla/map.ts';
 
@@ -363,57 +364,41 @@ export function requestMap(request: MapRequest): MapTicket {
     }
 }
 
-let discBaker: DiscBaker | null = null;
+let discLink: DiscLink | null = null;
 let discBroken = false;
 
-function openDiscs(): DiscBaker | null {
+function openDiscs(): DiscLink | null {
     if (discBroken) return null;
-    if (discBaker) return discBaker;
+    if (discLink) return discLink;
     try {
-        discBaker = createDiscBaker();
-        discBaker.pump();
-        return discBaker;
+        discLink = openDiscLink();
+        return discLink;
     } catch {
-        if (discBaker) discBaker.dispose();
-        discBaker = null;
+        if (discLink) discLink.dispose();
+        discLink = null;
         discBroken = true;
         return null;
-    }
-}
-
-/** One frame. Copies any tile the baker produced. Does not loop until cubes finish. */
-function submitDiscs(baker: DiscBaker, request: DiscBatchRequest): void {
-    const shades = [];
-    const radius = new Map<string, number>();
-    for (const disc of request.discs) {
-        const shade = discShadeRequest(request.timeSeconds, disc);
-        if (!shade) continue;
-        shades.push(shade);
-        radius.set(disc.key, disc.radiusPx);
-    }
-    const produced = baker.renderBatch(shades);
-    for (const [key, tile] of produced) {
-        const image = baker.copyTile(key);
-        if (!image) continue;
-        rememberDisc(key, { image, size: tile.size, radiusPx: radius.get(key) ?? 0 });
     }
 }
 
 export function prepareDiscs(request: DiscBatchRequest): SurfaceReply {
     const requestId = String(++sequence);
     if (request.discs.length === 0) return { status: 'unavailable', mode: request.mode, requestId };
-    const shadeable = request.discs.some((disc) => discShadeRequest(request.timeSeconds, disc));
-    if (!shadeable) {
+    const shades: ShadeRequest[] = [];
+    for (const disc of request.discs) {
+        const shade = discShadeRequest(request.timeSeconds, disc);
+        if (shade) shades.push(shade);
+    }
+    if (shades.length === 0) {
         retainDiscs(new Set(request.discs.map((disc) => disc.key)));
         return { status: 'ready', mode: request.mode, requestId };
     }
-    const baker = openDiscs();
-    if (!baker) return { status: 'unavailable', mode: request.mode, requestId };
-    baker.pump();
-    if (baker.lost()) return { status: 'unavailable', mode: request.mode, requestId };
+    const link = openDiscs();
+    if (!link || link.failed()) return { status: 'unavailable', mode: request.mode, requestId };
+    if (link.lost()) return { status: 'unavailable', mode: request.mode, requestId };
+    link.submit(shades);
     retainDiscs(new Set(request.discs.map((disc) => disc.key)));
-    if (!baker.ready()) return { status: 'pending', mode: request.mode, requestId };
-    submitDiscs(baker, request);
+    if (!link.ready()) return { status: 'pending', mode: request.mode, requestId };
     return { status: 'ready', mode: request.mode, requestId };
 }
 
@@ -451,8 +436,8 @@ export function disposeSurfaces(): void {
         live = null;
         job.resolve(null);
     }
-    if (discBaker) discBaker.dispose();
-    discBaker = null;
+    if (discLink) discLink.dispose();
+    discLink = null;
     discBroken = false;
     clearDiscs();
     if (worker) worker.terminate();

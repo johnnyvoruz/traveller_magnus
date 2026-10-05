@@ -115,6 +115,19 @@ The charted universe, read-only, for anyone. The product for the ten thousand.
 - The performance rules in `architecture.md` §10.1 apply to every builder's map: derived
   files for a universe are rebuilt when it is edited, never in the visitor's browser.
 
+### Order changed by Johnny, 2026-10-04: campaign before the Builder
+
+"We should wrap up this leg and get actual campaign features roughed in next, to make this
+something people would want to use, including the optional login. Our first pass will be
+everyone has their own campaign layer for the base truth map, and then we can look at
+creating their own maps."
+
+So the next slice is **Campaign on the truth** (recipe: `slice_2_campaign.md`, to be written):
+optional sign-in; each account gets one private universe **pinned to the released truth with
+no map edits**, holding only campaign records (Slice 3 below, on the storage of Slice 2).
+Generation, hex and system editing, routes, borders and own maps stay in the Builder, which
+follows. The viewer stays fully usable signed out.
+
 ### Slice 2 — Builder
 Accounts and universes. The product for the two hundred.
 - **User story:** I sign in with X, create "My Marches" pinned to truth v1, generate

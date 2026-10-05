@@ -363,7 +363,7 @@ exotic-liquids table that *is* liquid at that temperature, or leave it marked un
 
 *Recommended: replace; unresolved only when nothing in the table fits.*
 
-**Answer:**
+**Answer (2026-10-04): yes, as recommended.**
 
 ### F4. What a liquid's name promises
 
@@ -372,7 +372,7 @@ say so), or liquid across the whole low-to-high range?
 
 *Recommended: the mean, with freezing and boiling noted.*
 
-**Answer:**
+**Answer (2026-10-04): yes, as recommended.**
 
 ### F5. A charted world with no climate given
 
@@ -381,7 +381,7 @@ the world in a legal orbit that suits its published atmosphere and hydrographics
 
 *Recommended: yes.*
 
-**Answer:**
+**Answer (2026-10-04): yes, as recommended.**
 
 ### F6. When no legal orbit suits the chart
 
@@ -390,7 +390,7 @@ greenhouse to force a fit?
 
 *Recommended: list it; decide when we see how many there are.*
 
-**Answer:**
+**Answer (2026-10-04): yes, as recommended.**
 
 ### F7. The two internal-heat caps
 
@@ -398,7 +398,7 @@ Keep the engine's existing caps (1000 and 150 on the two components, none on the
 
 *Recommended: keep.*
 
-**Answer:**
+**Answer (2026-10-04): yes, as recommended.**
 
 ---
 
@@ -499,7 +499,8 @@ tools do. Do you want that order, or Builder first as the plan has it?
 
 *Interim: the plan's order (Builder next).*
 
-**Answer:**
+**Answer (2026-10-04): campaign first.** Optional login; everyone signed in gets their own
+campaign layer over the base truth map; making their own maps (the Builder) comes after.
 
 ### D2. Sign-in providers
 
