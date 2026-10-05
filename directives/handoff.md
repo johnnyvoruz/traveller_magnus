@@ -2453,3 +2453,48 @@ API and Durable Object have against `data_model.md` and `api.md`).
   `directives`); C and D are on other paths.
 - **Next, Agent A:** `campaign/store.ts` mints `uni_` + UUID before the create and resends
   the same id on a retry; 200 is "already created".
+
+## 85. Pushed `6bf409a`; C's colours and D's deck plan on a vessel are in (2026-10-05)
+
+- **Pushed `6bf409a`** (universe create hardening). GitHub run green; the live bundle hash
+  changed (`index-B4WVsPTM.js`), so the Workers Build deployed. The route itself needs a
+  session to exercise; not re-proven in production.
+- **Agent C (A9, A10, A16, E11 to E13):** the three liquids' colours in `surface/profile.ts`
+  and `colourlessLiquids()` now empty; `paledSeaColours` for a frozen non-water sea (oxygen
+  205,220,239 / 128,153,194; chlorine 217,226,200 / 136,153,130; water keeps its ice; caps
+  blend to the same); "Unknown Exotic Liquid" drawn in the profile's purple, never frozen,
+  captioned "exotic liquid; freezing point unknown", no melting point invented; stars on the
+  orbit card in kelvin through `formatKelvin` (`design/units.ts`); `seasons.ts` already used
+  3°; `orbit/daynight.ts` and `campaign_manager_plan.md` §7.10 say the starport stands on
+  the prime meridian. No surface fixture digest changed. 569 pass.
+  **Left undone because the prompt forbade `dossier/`:** the dossier's star Temperature tile
+  (`dossier/model.ts` about line 855) still uses `formatTempFull`. C does it next.
+- **Agent D, K9 part 3:** `workspace/VesselPlan.vue` after Tags, vessels only, over C's
+  `deckplan/attach.ts` and `DeckPlanView.vue` unedited: import from the file chooser, a
+  refused file says why and keeps the old plan, viewer in a panel-width box, replace, remove
+  with undo by toast, both shut offline. Read back from the real local API with CDN tiles
+  (import, reload, bad replace kept, remove, undo, type change hides and keeps the sheet).
+  Six `k9_` screenshots. **Accepted.** Not proven: agreement with a real shipyard export (a
+  file and its picture are still needed from Johnny); a 2,000-part plan.
+  D's notes: the canvas is tainted by CDN tiles without `crossOrigin` (nothing needs pixels
+  yet); the skipped list shows bare codes with no sentence (C's viewer; small wording).
+- **D offered E11 to E13; told no: C has done them.**
+- **Orchestrator on the combined tree:** 570 pass / 0 fail, check clean, build green, `dist`
+  has only the CDN tile path.
+- **Next:** D on K5d (links). C: the dossier star tile and the skipped-codes sentence. Push
+  everything when A reports the client id.
+
+## 86. The store sends the client id (Agent A); accepted (2026-10-05)
+
+- **Agent A:** `campaign/store.ts` mints `uni_` + UUID (`newId` in `platform/browser.ts`)
+  before the create and keeps it as `pendingUniverseId` until the server answers 201 or 200;
+  a thrown request leaves the store in `error` and the next create posts the same id; 201
+  and 200 both clear the pending id and open that universe. Store test: the first POST
+  dropped, the retry answered 200, one id in both bodies, one universe open. 570 pass.
+  Diff read; as reported. Small smell, not worth a round trip: `newId('uni' as 'cr')` casts
+  past the id helper's prefix type; widen the type when `platform/browser.ts` is next touched.
+- With B's §84 this closes the "create answered 500, retry made a second universe" weakness.
+- **C's follow-up (§85) is on disk, unreported:** `dossier/model.ts`, `DeckPlanView.vue`,
+  `tests/web/dossier_model.test.js`. D has not begun K5d edits (`RecordPage.vue` unchanged
+  since step 3). Combined tree: 570 pass / 0 fail, check clean.
+- **Push after C reports**, everything at once.

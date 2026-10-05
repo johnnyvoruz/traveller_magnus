@@ -12,8 +12,9 @@
  *   equal-area samples of the height field. There is no minimum sea: coverage 0 or null is a
  *   world with no sea at all.
  * - The sea's colour is its substance's, from the liquid colours surface/profile.ts holds. A
- *   substance that is unknown, absent, or has no colour there is not drawn: its basin is dry
- *   lowland. No colour is invented here.
+ *   substance that is absent, or has no colour there, is not drawn: its basin is dry lowland.
+ *   "Unknown Exotic Liquid" is the one name outside the rules table that is drawn, in the
+ *   profile colour, and it is never frozen (E13). No colour is invented here.
  * - Ice is on the sea only, where seaIce says: none, all, or poleward of a latitude. There
  *   is no polar whitening and no snow on land.
  *
@@ -47,19 +48,46 @@ function rgb(c: number[]): RGB {
     return [c[0], c[1], c[2]];
 }
 
+/** The one liquid name outside the rules table that profile.ts still colours (E13). */
+export const UNKNOWN_EXOTIC_LIQUID = 'Unknown Exotic Liquid';
+
 /**
- * The colours surface/profile.ts holds for a liquid of the exotic liquids table: its shallows
- * and its deeps. Null for a name outside that table, and for one profile.ts has no colour for.
+ * The colours surface/profile.ts holds for a liquid of the exotic liquids table, and for
+ * Unknown Exotic Liquid: its shallows and its deeps. Null for any other name outside that
+ * table, and for one profile.ts has no colour for.
  */
 export function seaColours(name: string): SeaColours | null {
-    if (!liquidByName(name)) return null;
+    if (name !== UNKNOWN_EXOTIC_LIQUID && !liquidByName(name)) return null;
     if (!Object.prototype.hasOwnProperty.call(LIQUIDS, name)) return null;
     const row = LIQUIDS[name];
     return { shallow: rgb(row.shallow), deep: rgb(row.deep) };
 }
 
-/** A frozen sea: profile.ts's own Ice colours (its frozen water), whatever the substance. */
+/** Frozen water: profile.ts's own Ice colours. Other liquids use paledSeaColours. */
 export const ICE_COLOURS: SeaColours = { shallow: rgb(LIQUIDS['Ice'].shallow), deep: rgb(LIQUIDS['Ice'].deep) };
+
+const PALE_SHALLOW: RGB = [236, 240, 246];
+const PALE_DEEP: RGB = [176, 188, 204];
+
+function toward(from: RGB, to: RGB, share: number): RGB {
+    return [
+        Math.round(from[0] + (to[0] - from[0]) * share),
+        Math.round(from[1] + (to[1] - from[1]) * share),
+        Math.round(from[2] + (to[2] - from[2]) * share),
+    ];
+}
+
+/**
+ * A frozen sea that is not water (E12, option B): the liquid's own colour, paled.
+ * Shallows move 70% of the way to 236, 240, 246; deeps 55% of the way to 176, 188, 204.
+ * Water is not passed here; it keeps ICE_COLOURS.
+ */
+export function paledSeaColours(open: SeaColours): SeaColours {
+    return {
+        shallow: toward(open.shallow, PALE_SHALLOW, 0.7),
+        deep: toward(open.deep, PALE_DEEP, 0.55),
+    };
+}
 
 /** The liquids of the rules table that profile.ts holds no colour for. Their seas are not drawn. */
 export function colourlessLiquids(): string[] {
@@ -159,13 +187,16 @@ export function sheetPlan(sea: EnhancedSea, world: PaletteWorld, oceanRng: numbe
     const rank = seaRank(count, SEA_SAMPLES);
     const open = sheetPalette(base, land, rank, liquid);
     if (!liquid || count === 0) return { seaCount: 0, seaRank: 0, rowPalette: () => open };
-    const ice = sea.ice;
+    // Unknown Exotic Liquid has no melting point, so it is never frozen (E13).
+    const ice = sea.liquid === UNKNOWN_EXOTIC_LIQUID ? { kind: 'none' as const } : sea.ice;
+    // Water keeps profile.ts Ice. Every other frozen sea is its own liquid, paled (E12).
+    const frozenSea = sea.liquid === 'Water' ? ICE_COLOURS : paledSeaColours(liquid);
     if (ice.kind === 'all') {
-        const frozen = sheetPalette(base, land, rank, ICE_COLOURS);
+        const frozen = sheetPalette(base, land, rank, frozenSea);
         return { seaCount: count, seaRank: rank, rowPalette: () => frozen };
     }
     if (ice.kind === 'caps') {
-        const frozen = sheetPalette(base, land, rank, ICE_COLOURS);
+        const frozen = sheetPalette(base, land, rank, frozenSea);
         const edge = new Map<number, Palette>();
         const from = ice.fromLatDeg;
         return {
@@ -177,7 +208,7 @@ export function sheetPlan(sea: EnhancedSea, world: PaletteWorld, oceanRng: numbe
                 if (share >= 1) return frozen;
                 let made = edge.get(py);
                 if (!made) {
-                    made = sheetPalette(base, land, rank, mixColours(liquid, ICE_COLOURS, share));
+                    made = sheetPalette(base, land, rank, mixColours(liquid, frozenSea, share));
                     edge.set(py, made);
                 }
                 return made;
@@ -293,7 +324,11 @@ export function seaPlan(body: Readonly<Record<string, unknown>> | null | undefin
         ice = { kind: 'none', why: 'undecided: ' + (err instanceof Error ? err.message : String(err)) };
     }
     const named = body && typeof body.liquidType === 'string' ? body.liquidType : '';
-    const name = liquid ? liquid.name : null;
+    const unknownExotic = named === UNKNOWN_EXOTIC_LIQUID;
+    if (unknownExotic) {
+        ice = { kind: 'none', why: 'exotic liquid; freezing point unknown' };
+    }
+    const name = liquid ? liquid.name : (unknownExotic ? UNKNOWN_EXOTIC_LIQUID : null);
     return {
         sea: {
             coverage: cover,

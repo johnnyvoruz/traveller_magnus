@@ -56,7 +56,8 @@ function wrap180(degrees: number): number {
 
 /**
  * The longitude with the star overhead, in degrees from the prime meridian, positive in the
- * direction the world turns when it is not retrograde; in (−180, 180].
+ * direction the world turns when it is not retrograde; in (−180, 180]. The starport stands
+ * on the prime meridian: longitude 0 is the starport's longitude.
  */
 export function subsolarLongitude(turning: Turning, days: number, starAngle: number): number {
     return wrap180((starAngle - spinAngle(turning, days, starAngle)) * 180 / Math.PI);
@@ -86,6 +87,10 @@ export function sunElevation(latDeg: number, lonDeg: number, subLatDeg: number, 
 /**
  * The time of day at a longitude as a share of the solar day: 0 at midnight, 0.5 at noon.
  * Null on a world that keeps one face to its star.
+ *
+ * The Day and night strip's local-time tick is this share at the starport. The starport
+ * stands on the prime meridian, so the tick is dayFraction at longitude 0. A referee pin
+ * on the surface map, once the map takes pins, overrides that place.
  */
 export function dayFraction(turning: Turning, days: number, starAngle: number, lonDeg: number): number | null {
     if (turning.lockedToStar) return null;

@@ -91,6 +91,10 @@ export const LIQUIDS: Record<string, { shallow: number[]; deep: number[]; frozen
     'Oxygen': { shallow: [132, 172, 222], deep: [70, 110, 182] },
     'Chlorine': { shallow: [172, 192, 92], deep: [88, 110, 40] },
     'Sulphur Dioxide': { shallow: [192, 182, 150], deep: [110, 100, 80] },
+    // E11: a sea the data names is drawn. Shallows, then deeps.
+    'Fluorine': { shallow: [222, 214, 138], deep: [136, 124, 52] },
+    'Hydrofluoric Acid': { shallow: [150, 178, 172], deep: [62, 92, 92] },
+    'Hydrochloric Acid': { shallow: [186, 200, 150], deep: [96, 114, 70] },
     'Unknown Exotic Liquid': { shallow: [152, 112, 172], deep: [68, 40, 102] }
 };
 const ROCKS: Record<string, { low: number[]; high: number[] }> = {

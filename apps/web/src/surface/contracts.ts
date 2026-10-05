@@ -120,7 +120,8 @@ export type VanillaPaintInputs = {
 /**
  * The sea of an enhanced sheet, decided on the page by enhanced/seas.ts and sent as plain
  * data: the share of the sphere covered (null when the body gives none), the liquid's name
- * in the exotic liquids table (null when unknown or absent), and where it is frozen.
+ * in the exotic liquids table, or "Unknown Exotic Liquid" (null when absent or colourless),
+ * and where it is frozen. Unknown Exotic Liquid is never frozen.
  */
 export type EnhancedSea = {
     readonly coverage: number | null;

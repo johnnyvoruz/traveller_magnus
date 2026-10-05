@@ -15,7 +15,7 @@ import { SURFACE_MESSAGE_VERSION } from '../../apps/web/src/surface/contracts.ts
 import { EXOTIC_LIQUIDS } from '../../apps/web/src/surface/enhanced/liquids.ts';
 import {
     CAP_BLEND_DEG, ICE_COLOURS, SEA_SAMPLES, capShare, colourlessLiquids, createEnhancedMap, landStops,
-    renderEnhancedMapPixels, rowLatitude, seaColours, seaPlan, seaRank, seaSamples, sheetPlan,
+    paledSeaColours, renderEnhancedMapPixels, rowLatitude, seaColours, seaPlan, seaRank, seaSamples, sheetPlan,
 } from '../../apps/web/src/surface/enhanced/map.ts';
 import { LIQUIDS } from '../../apps/web/src/surface/profile.ts';
 import { attachSurfaceWorker } from '../../apps/web/src/surface/surface.worker.ts';
@@ -73,20 +73,43 @@ test('sea colours come from profile.ts, and from nowhere else', () => {
     assert.deepEqual(seaColours('Ethane'), { shallow: LIQUIDS['Ethane'].shallow, deep: LIQUIDS['Ethane'].deep });
     assert.deepEqual(seaColours('Water'), { shallow: [52, 142, 164], deep: [10, 34, 86] });
     assert.deepEqual(ICE_COLOURS, { shallow: LIQUIDS['Ice'].shallow, deep: LIQUIDS['Ice'].deep });
-    // A name outside the rules table has no sea colour, even where profile.ts has a fallback for it.
-    assert.equal(seaColours('Unknown Exotic Liquid'), null);
+    assert.deepEqual(seaColours('Fluorine'), { shallow: [222, 214, 138], deep: [136, 124, 52] });
+    assert.deepEqual(seaColours('Hydrofluoric Acid'), { shallow: [150, 178, 172], deep: [62, 92, 92] });
+    assert.deepEqual(seaColours('Hydrochloric Acid'), { shallow: [186, 200, 150], deep: [96, 114, 70] });
+    // Unknown Exotic Liquid is drawn in the profile colour. Any other name outside the table is not.
+    assert.deepEqual(seaColours('Unknown Exotic Liquid'), { shallow: [152, 112, 172], deep: [68, 40, 102] });
     assert.equal(seaColours('Ice'), null);
     assert.equal(seaColours(''), null);
-    // Every liquid of the table either has profile.ts's colours or is on the list of those without.
+    assert.equal(seaColours('Not a liquid'), null);
+    // Every liquid of the table has profile.ts's colours. The three that had none (E11) are drawn.
     const without = colourlessLiquids();
     for (const liquid of EXOTIC_LIQUIDS) {
         const colours = seaColours(liquid.name);
-        if (colours) assert.deepEqual(colours, { shallow: LIQUIDS[liquid.name].shallow, deep: LIQUIDS[liquid.name].deep }, liquid.name);
-        else assert.ok(without.includes(liquid.name), liquid.name);
+        assert.ok(colours, liquid.name);
+        assert.deepEqual(colours, { shallow: LIQUIDS[liquid.name].shallow, deep: LIQUIDS[liquid.name].deep }, liquid.name);
     }
-    // Reported to Johnny, 2026-10-04: three liquids of the rules table have no colour in
-    // profile.ts. Their seas are not drawn until a colour is supplied. This pins the list.
-    assert.deepEqual(without, ['Fluorine', 'Hydrofluoric Acid', 'Hydrochloric Acid']);
+    assert.deepEqual(without, []);
+});
+
+test('a frozen sea that is not water is its liquid paled; water keeps its ice', () => {
+    const oxygen = paledSeaColours(seaColours('Oxygen'));
+    const chlorine = paledSeaColours(seaColours('Chlorine'));
+    assert.deepEqual(oxygen, { shallow: [205, 220, 239], deep: [128, 153, 194] });
+    assert.deepEqual(chlorine, { shallow: [217, 226, 200], deep: [136, 153, 130] });
+    assert.notDeepEqual(oxygen, ICE_COLOURS);
+    assert.notDeepEqual(chlorine, ICE_COLOURS);
+    assert.notDeepEqual(chlorine, oxygen);
+    const world = WET.worldData;
+    const frozenChlorine = sheetPlan(sea(0.35, 'Chlorine', { kind: 'all' }), world, 0.5).rowPalette(0);
+    const frozenWater = sheetPlan(sea(0.35, 'Water', { kind: 'all' }), world, 0.5).rowPalette(0);
+    const openChlorine = sheetPlan(sea(0.35, 'Chlorine', { kind: 'none' }), world, 0.5).rowPalette(0);
+    assert.deepEqual(frozenChlorine.stops[0].c, chlorine.deep);
+    assert.deepEqual(frozenWater.stops[0].c, ICE_COLOURS.deep);
+    assert.notDeepEqual(frozenChlorine.stops[0].c, openChlorine.stops[0].c);
+    assert.notDeepEqual(frozenChlorine.stops[0].c, frozenWater.stops[0].c);
+    // Unknown Exotic Liquid stays the profile colour even when a caller marks it frozen.
+    const unknown = sheetPlan(sea(0.26, 'Unknown Exotic Liquid', { kind: 'all' }), world, 0.5).rowPalette(0);
+    assert.deepEqual(unknown.stops[0].c, [68, 40, 102]);
 });
 
 test('the sea covers the share of the sphere the body says, within one sample step', () => {
@@ -252,9 +275,9 @@ test('no cover, no liquid or no colour for it: the basin is dry lowland', () => 
     const dry = DRY();
     // Coverage 0 or null: no sea at all, not vanilla's 5% floor.
     assert.equal(sha256(renderEnhancedMapPixels(inputs(sea(null, 'Water')))), sha256(dry));
-    // An unknown or absent liquid, and one profile.ts has no colour for, are not drawn.
+    // An absent liquid is not drawn. Fluorine, which the data names, is.
     assert.equal(sha256(renderEnhancedMapPixels(inputs(sea(0.35, null)))), sha256(dry));
-    assert.equal(sha256(renderEnhancedMapPixels(inputs(sea(0.35, 'Fluorine', { kind: 'all' })))), sha256(dry));
+    assert.notEqual(sha256(renderEnhancedMapPixels(inputs(sea(0.35, 'Fluorine', { kind: 'all' })))), sha256(dry));
     // The dry sheet has no sea colour and no ice anywhere.
     const water = seaColours('Water');
     for (let i = 0; i < dry.length; i += 4) {
@@ -337,13 +360,16 @@ test('the sea of a body is decided by seas.ts, and the caption says what was dra
     assert.ok(capped.sea.ice.fromLatDeg > 0 && capped.sea.ice.fromLatDeg < 90);
     assert.match(sheetCaption('enhanced', { liquidType: 'Water', hydroPercent: 50, meanTempK: 280, lowTempK: 250, highTempK: 300 }).text, /^Enhanced · Water, ice from \d+°$/);
     const unknown = { liquidType: 'Unknown Exotic Liquid', hydroPercent: 26, meanTempK: 208, lowTempK: 174, highTempK: 265 };
-    assert.deepEqual(seaPlan(unknown).sea, { coverage: 0.26, liquid: null, ice: { kind: 'none' } });
-    assert.equal(seaPlan(unknown).drawn, false);
-    assert.equal(sheetCaption('enhanced', unknown).text, 'Enhanced · Unknown Exotic Liquid, not drawn');
+    assert.deepEqual(seaPlan(unknown).sea, { coverage: 0.26, liquid: 'Unknown Exotic Liquid', ice: { kind: 'none' } });
+    assert.equal(seaPlan(unknown).drawn, true);
+    assert.equal(seaPlan(unknown).why, 'exotic liquid; freezing point unknown');
+    assert.equal(sheetCaption('enhanced', unknown).text, 'Enhanced · Unknown Exotic Liquid, exotic liquid; freezing point unknown');
+    assert.match(sheetCaption('enhanced', unknown).title, /exotic liquid; freezing point unknown/);
     const fluorine = { liquidType: 'Fluorine', hydroPercent: 40, meanTempK: 70, lowTempK: 60, highTempK: 80 };
     assert.equal(seaPlan(fluorine).sea.liquid, 'Fluorine');
-    assert.equal(seaPlan(fluorine).drawn, false);
-    assert.equal(sheetCaption('enhanced', fluorine).text, 'Enhanced · Fluorine, not drawn');
+    assert.equal(seaPlan(fluorine).drawn, true);
+    assert.equal(seaPlan(fluorine).sea.ice.kind, 'none');
+    assert.equal(sheetCaption('enhanced', fluorine).text, 'Enhanced · Fluorine');
     assert.equal(sheetCaption('enhanced', { liquidType: 'Ice', hydroPercent: 0 }).text, 'Enhanced · no seas');
     assert.equal(sheetCaption('enhanced', null).text, 'Enhanced · no seas');
 });

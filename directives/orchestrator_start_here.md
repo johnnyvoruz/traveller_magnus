@@ -89,8 +89,9 @@ campaign layer over the truth map; own maps later. X sign-in only.
 | K9 parts 1, 2 | deck plan renderer, attach, `DeckPlanView.vue`, upload | done; not placed on a page |
 | K5c | places: anchor editor, locator, "records here" in the dossier | done, accepted §82, not yet pushed |
 | "1 week" | orbit time control, view only; line-up search in a kebab | done, not yet pushed |
-| K9 part 3 | the deck plan viewer on a vessel's record page | **Agent D, in flight** |
-| K5d | links | next for D |
+| K9 part 3 | the deck plan viewer on a vessel's record page | done, accepted §85, not yet pushed |
+| A/E answers | star kelvin, sea and ice colours (Agent C) | done §85; dossier star tile still owed |
+| **K5d** | links | **Agent D, in flight** |
 | K5e | the party | after K5d |
 | K5f | several campaigns: create, name, switch, delete | after K5e |
 | K6c | clock screens | after K5 |
@@ -99,18 +100,14 @@ campaign layer over the truth map; own maps later. X sign-in only.
 
 ## 6. In flight right now
 
-- **Agent D:** placing the deck plan viewer (`deckplan/DeckPlanView.vue`, `attach.ts`) on a
-  vessel's record page; reports after it. K5c, "1 week" and the toast fix are accepted
-  (handoff §82) and sit uncommitted across `workspace/`, `dossier/`, `orbit/`, `views/`.
+- **Agent D:** K5d links (add, edit, remove from either end, vocabulary labels, "aboard").
   K5c leftovers (orbit-view locator, Locate on dossier rows, "At Regina" chip, sort) wait
   for K5e.
-- **Agent B:** done (handoff §84): universe creation hardened, client-made id accepted.
-  Free.
-- **Agent A:** sending the client id from `campaign/store.ts` and resending it on retry.
-- **Agent C:** the answered questions A10, E11 to E13 (star kelvin, sea and ice colours),
-  prompt in handoff §83's session. **Agent F:** parked.
-- **Last push:** `f43c3d5` (places, "1 week", toast), deployed and green. Only the
-  directives' edits since are local.
+- **Agent C:** the dossier's star Temperature tile in kelvin; a sentence for the deck plan
+  viewer's skipped codes. On disk, unreported.
+- **Agents A, B:** free. **Agent F:** parked.
+- **Last push:** `6bf409a` (universe create), deployed and green. Local and finished: C's
+  colours, D's vessel deck plan, A's client id (§86). Push everything when C reports.
 
 ## 7. Decisions Johnny has made that shape the next steps
 

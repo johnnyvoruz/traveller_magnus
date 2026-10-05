@@ -4,7 +4,7 @@
  * line). Every value is a field of the document shown as it is; nothing is derived from a
  * rule. A ring has no card, as in the legacy view. Pure.
  */
-import { formatTemp, kelvinNote } from '../design/units.ts';
+import { formatKelvin, formatTemp, kelvinNote } from '../design/units.ts';
 import { formatDisplayNumber, formatTradeCodes, formatUwpDigit } from '../dossier/labels.ts';
 import { dayNightFor } from './daynight.ts';
 import type { HitKind, Plan, PlanMoon, PlanWorld } from './layout.ts';
@@ -127,8 +127,8 @@ function today(lines: CardLine[], body: Bag, parent: Bag | null, angle: number):
 function starCard(body: Bag): BodyCardModel {
     const lines: CardLine[] = [];
     lines.push({ label: 'Type', value: String(body.sType ?? '') + String(body.subType ?? '') + ' ' + String(body.sClass ?? '') });
-    const temp = formatTemp(body.temp);
-    if (temp) lines.push({ label: 'Surface temp.', value: temp, hint: kelvinNote('Surface', body.temp) });
+    const temp = formatKelvin(body.temp);
+    if (temp) lines.push({ label: 'Surface temp.', value: temp });
     if (body.mass != null) lines.push({ label: 'Mass', value: formatDisplayNumber(body.mass, 3, 'M☉') });
     if (body.diam != null) lines.push({ label: 'Diameter', value: formatDisplayNumber(body.diam, 3, 'D☉') });
     if (body.lum != null) lines.push({ label: 'Luminosity', value: formatDisplayNumber(body.lum, 3, 'L☉') });

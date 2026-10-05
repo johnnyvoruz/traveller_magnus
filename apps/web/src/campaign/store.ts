@@ -7,7 +7,7 @@ import {
     type CampaignRecord,
     type CampaignSettings,
 } from '@voyage/shared';
-import { storageGet, storageSet } from '../platform/browser.ts';
+import { newId, storageGet, storageSet } from '../platform/browser.ts';
 import { apiFetch } from '../platform/http.ts';
 import { commit, flushCampaign, pending } from './commit.ts';
 import { rebuildCampaignIndex } from './index.ts';
@@ -43,6 +43,14 @@ export const transport: { fetch: FetchLike; schedule: Schedule } = {
 /** Truth version passed to the last open. New campaigns pin to the same chart. */
 let pinnedTruth: string | null = null;
 
+/** Id sent with a create that has not yet answered 201 or 200. */
+let pendingUniverseId: string | null = null;
+
+function universeIdForCreate(): string {
+    if (!pendingUniverseId) pendingUniverseId = newId('uni' as 'cr');
+    return pendingUniverseId;
+}
+
 function clearRows(): void {
     for (const key of Object.keys(campaign.records)) delete campaign.records[key];
     for (const key of Object.keys(campaign.links)) delete campaign.links[key];
@@ -64,6 +72,7 @@ export function resetCampaignState(): void {
     campaign.universes = [];
     campaign.status = 'signed-out';
     pinnedTruth = null;
+    pendingUniverseId = null;
     transport.fetch = fetch;
     transport.schedule = defaultSchedule;
 }
@@ -116,22 +125,31 @@ export async function listCampaigns(): Promise<UniverseRow[]> {
 }
 
 async function postCampaign(name: string): Promise<UniverseRow | null> {
-    const created = await apiFetch(transport.fetch, '/api/universes', {
-        method: 'POST',
-        body: JSON.stringify({
-            name,
-            truthVersion: pinnedTruth,
-            editionDefault: 'MgT2E',
-        }),
-    });
+    const id = universeIdForCreate();
+    let created: Response;
+    try {
+        created = await apiFetch(transport.fetch, '/api/universes', {
+            method: 'POST',
+            body: JSON.stringify({
+                id,
+                name,
+                truthVersion: pinnedTruth,
+                editionDefault: 'MgT2E',
+            }),
+        });
+    } catch {
+        campaign.status = 'error';
+        return null;
+    }
     if (created.status === 401) {
         signOutLocal();
         return null;
     }
-    if (!created.ok) {
+    if (created.status !== 201 && created.status !== 200) {
         campaign.status = 'error';
         return null;
     }
+    pendingUniverseId = null;
     const universe = Universe.parse((await created.json()).data);
     const index = campaign.universes.findIndex((item) => item.id === universe.id);
     if (index >= 0) campaign.universes[index] = universe;

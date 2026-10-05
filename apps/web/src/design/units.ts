@@ -3,7 +3,8 @@
  * 2026-10-03, Q6): both scales, Celsius first, `18°C (64°F)`. Values are stored and computed
  * in kelvin or Celsius and converted to Fahrenheit only here, from the unrounded Celsius
  * figure; each figure is rounded to whole degrees on its own. Negative values carry a true
- * minus sign. Kelvin is not shown on a card; kelvinNote is for a tooltip.
+ * minus sign. Worlds stay on these two scales. A star's temperature is formatKelvin
+ * (`5,800 K`); kelvinNote is the kelvin figure for a world's tooltip.
  */
 
 export const KELVIN_AT_ZERO_C = 273.15;
@@ -38,7 +39,13 @@ export function formatTempFull(kelvin: unknown): string {
     return wholeDegrees(celsius) + ' °C · ' + wholeDegrees(fahrenheitOf(celsius)) + ' °F · ' + wholeDegrees(kelvin) + ' K';
 }
 
-/** `Mean 288 K`: the kelvin figure, for a tooltip only. */
+/** A star's temperature: `5,800 K`. Empty when the value is not a number. Worlds use formatTemp. */
+export function formatKelvin(kelvin: unknown): string {
+    if (typeof kelvin !== 'number' || !Number.isFinite(kelvin)) return '';
+    return wholeDegrees(kelvin) + ' K';
+}
+
+/** `Mean 288 K`: the kelvin figure, for a world's tooltip only. */
 export function kelvinNote(label: string, kelvin: unknown): string {
     if (typeof kelvin !== 'number' || !Number.isFinite(kelvin)) return '';
     return label + ' ' + wholeDegrees(kelvin) + ' K';

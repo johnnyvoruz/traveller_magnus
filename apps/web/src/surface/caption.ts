@@ -40,6 +40,12 @@ export function sheetCaption(mode: SurfaceMode, body: Readonly<Record<string, un
             title: 'Sea: ' + percent(sea.coverage) + ' of ' + sea.liquid + '. There is no colour for it yet, so its basins are drawn as dry lowland.',
         };
     }
+    if (sea.liquid === 'Unknown Exotic Liquid') {
+        return {
+            text: 'Enhanced · Unknown Exotic Liquid, exotic liquid; freezing point unknown',
+            title: 'Sea: ' + percent(sea.coverage) + ' of Unknown Exotic Liquid: exotic liquid; freezing point unknown. No ice is drawn.',
+        };
+    }
     const ice = sea.ice;
     const state = ice.kind === 'all' ? ', frozen'
         : ice.kind === 'caps' ? ', ice from ' + String(Math.round(ice.fromLatDeg)) + '°'

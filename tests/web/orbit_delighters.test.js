@@ -6,7 +6,7 @@
  */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { celsiusOf, fahrenheitOf, formatTemp, formatTempFull, kelvinNote, tempLines, wholeDegrees } from '../../apps/web/src/design/units.ts';
+import { celsiusOf, fahrenheitOf, formatKelvin, formatTemp, formatTempFull, kelvinNote, tempLines, wholeDegrees } from '../../apps/web/src/design/units.ts';
 import { cardFor } from '../../apps/web/src/orbit/card.ts';
 import {
     chaseAngle, HIGHPORT_ART, HIGHPORT_MAX_RATE, highportArt, highportOf, highportOrbitRadius,
@@ -37,6 +37,12 @@ test('temperatures: Celsius first, Fahrenheit from the unrounded Celsius, whole 
     assert.equal(formatTemp(undefined), '');
     assert.equal(formatTemp(Number.NaN), '');
     assert.equal(formatTemp('288'), '');
+    assert.equal(formatKelvin(5800), '5,800 K');
+    assert.equal(formatKelvin(3800), '3,800 K');
+    assert.equal(formatKelvin(0), '0 K');
+    assert.equal(formatKelvin(-12.4), '−12 K');
+    assert.equal(formatKelvin(null), '');
+    assert.equal(formatKelvin(Number.NaN), '');
     close(celsiusOf(273.15), 0);
     assert.equal(fahrenheitOf(100), 212);
     assert.equal(wholeDegrees(-0.4), '0');
@@ -121,7 +127,7 @@ test('seasons on a moon: the parent’s year and angle with the moon’s tilt, f
     assert.equal(seasonLine(moon({ lockedToStar: true })).text, seasonLine(moon()).text);
 });
 
-test('the card: the legacy lines for each kind, with temperatures in both scales and no kelvin', () => {
+test('the card: worlds in both scales with no kelvin, stars in kelvin', () => {
     const sys = testSystem();
     const plan = planSystem(sys, HEX_KEY);
     const days = 1000;
@@ -131,12 +137,13 @@ test('the card: the legacy lines for each kind, with temperatures in both scales
     assert.equal(star.title, 'M0 V');
     assert.equal(star.sub, 'Far');
     assert.deepEqual(text(star), [
-        'Type: M0 V', 'Surface temp.: 3,527°C (6,380°F)', 'Mass: 0.5 M☉', 'Diameter: 0.5 D☉',
+        'Type: M0 V', 'Surface temp.: 3,800 K', 'Mass: 0.5 M☉', 'Diameter: 0.5 D☉',
         'Luminosity: 0.04 L☉', 'Separation: Far', 'Distance: ' + text(star)[6].slice('Distance: '.length),
     ]);
     assert.ok(text(star)[6].endsWith(' AU'));
     assert.equal(star.season, null);
     assert.ok(!text(cardFor(plan, 'star', 's0', days)).some((line) => line.startsWith('Distance')));
+    assert.ok(text(cardFor(plan, 'star', 's0', days)).includes('Surface temp.: 5,800 K'));
 
     const world = cardFor(plan, 'world', 'w0', days);
     assert.equal(world.title, 'Test I');

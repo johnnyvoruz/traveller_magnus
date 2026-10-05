@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
  * One record (design §3): its name, type, place, summary, details and tags, each edited
- * where it stands, the saving mark, and Delete. Its connections come with the next step (K5d).
+ * where it stands, the saving mark, and Delete; a vessel also carries its deck plan (K9).
+ * Its connections come with the next step (K5d).
  */
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { CAMPAIGN_LIMITS, type CampaignRecordType } from '@voyage/shared';
@@ -11,6 +12,7 @@ import Icon from '../design/Icon.vue';
 import { deleteRecord, justCreated, recentlyDeleted, restoreRecord, saveRecord } from './actions.ts';
 import EditableText from './EditableText.vue';
 import { RECORD_TYPES, addTag, cleanDetails, cleanName, cleanSummary, placeLine, typeInfo } from './records.ts';
+import VesselPlan from './VesselPlan.vue';
 import WhereBlock from './WhereBlock.vue';
 
 const props = defineProps<{
@@ -196,6 +198,8 @@ watch(() => props.id, () => {
         </button>
       </div>
     </section>
+
+    <VesselPlan v-if="record.type === 'vessel'" :id="id" :read-only="readOnly" />
 
     <footer class="rec-foot">
       <button v-if="!beside" type="button" class="ui-btn" @click="emit('back')">

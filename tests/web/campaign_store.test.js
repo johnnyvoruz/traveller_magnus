@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { CAMPAIGN_UNIVERSE_KEY, campaign, openCampaign, setCampaignDate, switchCampaign } from '../../apps/web/src/campaign/store.ts';
+import { CAMPAIGN_UNIVERSE_KEY, campaign, createCampaign, openCampaign, setCampaignDate, switchCampaign } from '../../apps/web/src/campaign/store.ts';
 import { commit, flushCampaign, lastError, newRecordId, pending, resetCampaign } from '../../apps/web/src/campaign/commit.ts';
 import { recordsAtHex } from '../../apps/web/src/campaign/index.ts';
 import { toasts } from '../../apps/web/src/shell/toast.ts';
@@ -87,6 +87,7 @@ function harness(seed = []) {
         patches: [],
         pages: {},
         failPatch: false,
+        failPost: false,
         conflict: null,
     };
     const timers = [];
@@ -108,12 +109,27 @@ function harness(seed = []) {
         if (target === '/api/universes' && method === 'POST') {
             const body = JSON.parse(init.body);
             server.posts.push(body);
+            const prior = server.universes.find((row) => row.id === body.id);
+            if (server.failPost) {
+                server.failPost = false;
+                if (!prior && body.id) {
+                    server.universes.push(universeRow({
+                        id: body.id,
+                        name: body.name,
+                        truthVersion: body.truthVersion,
+                        editionDefault: body.editionDefault,
+                    }));
+                }
+                throw new Error('offline');
+            }
+            if (prior) return jsonResponse(200, { ok: true, data: prior });
             const row = universeRow({
-                id: 'uni-' + server.posts.length,
+                id: body.id,
                 name: body.name,
                 truthVersion: body.truthVersion,
                 editionDefault: body.editionDefault,
             });
+            if (row.id && server.pages['uni-1'] && !server.pages[row.id]) server.pages[row.id] = server.pages['uni-1'];
             server.universes.push(row);
             return jsonResponse(201, { ok: true, data: row });
         }
@@ -174,12 +190,11 @@ test('first open creates one campaign and a second open does not', async () => {
     await open(box);
     await open(box);
     assert.equal(box.server.posts.length, 1);
-    assert.deepEqual(box.server.posts[0], {
-        name: 'My campaign',
-        truthVersion: 'v5',
-        editionDefault: 'MgT2E',
-    });
-    assert.equal(campaign.universeId, 'uni-1');
+    assert.match(box.server.posts[0].id, /^uni_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    assert.equal(box.server.posts[0].name, 'My campaign');
+    assert.equal(box.server.posts[0].truthVersion, 'v5');
+    assert.equal(box.server.posts[0].editionDefault, 'MgT2E');
+    assert.equal(campaign.universeId, box.server.posts[0].id);
     assert.equal(campaign.status, 'ready');
 });
 
@@ -386,4 +401,23 @@ test('a clock conflict with no stored date clears the local clock', async () => 
     await flushCampaign();
     assert.equal(campaign.clock, null);
     assert.equal(toasts.length, 1);
+});
+
+test('a create retries the same id after a network failure and ends with one universe', async () => {
+    memory.clear();
+    resetCampaign();
+    const box = harness();
+    await open(box, 'missing');
+    box.server.failPost = true;
+    const first = await createCampaign('Retry game');
+    assert.equal(first, null);
+    assert.equal(campaign.status, 'error');
+    const second = await createCampaign('Retry game');
+    assert.equal(box.server.posts.length, 2);
+    assert.equal(box.server.posts[0].id, box.server.posts[1].id);
+    assert.match(box.server.posts[0].id, /^uni_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    assert.equal(campaign.universes.length, 1);
+    assert.equal(campaign.universeId, box.server.posts[0].id);
+    assert.equal(second && second.id, box.server.posts[0].id);
+    assert.equal(campaign.status, 'ready');
 });
