@@ -4,7 +4,7 @@
  * js/system_inspector.js. Components render these values and do not decide them.
  */
 import type { SectorHex, TreeEnvelope } from '@voyage/shared';
-import { formatTempFull } from '../design/units.ts';
+import { formatKelvin, formatTempFull } from '../design/units.ts';
 import { formatDisplayNumber, formatTradeCodes, formatUwpDigit, toEHex } from './labels.ts';
 
 export type HexBody = Record<string, unknown>;
@@ -852,7 +852,7 @@ export function bodyModel(tree: TreeEnvelope, bodyKey: string): BodyModel | null
         mapBadge: body.type === 'Mainworld' ? 'Mainworld' : '',
         facts: star
             ? factTiles([
-                { label: 'Temperature', value: formatTempFull(body.temp) },
+                { label: 'Temperature', value: formatKelvin(body.temp) },
                 { label: 'Luminosity', value: num(body.lum, 3, 'L☉') },
                 { label: 'Mass', value: num(body.mass, 3, 'M☉') },
                 { label: 'Diameter', value: num(body.diam, 3, 'D☉') },

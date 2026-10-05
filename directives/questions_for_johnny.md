@@ -411,6 +411,28 @@ Keep the engine's existing caps (1000 and 150 on the two components, none on the
 
 ---
 
+## G. Jumps (from K12, parked)
+
+### G1. The jump rules the app would need
+
+For the jump-plotting feature you described on 2026-10-05 (`slice_2_campaign.md` K12),
+nothing in `rules/` covers jump or in-system travel, so the app cannot build it yet. When
+you are ready, add a `rules/` file (any name) that states, from the Mongoose 2e books:
+
+1. the minimum distance from a body before a ship may jump, and how it is measured;
+2. the travel time for a ship at a given G rating over a distance (the formula, and whether
+   the ship turns over at the midpoint);
+3. how far a jump may reach, from the drive rating;
+4. whether the jump duration varies from the 168 hours you gave on 2026-10-02;
+5. anything about fuel the app should show or refuse on, or "nothing".
+
+No orchestrator will fill these in from memory. Not needed until the MVP steps are done.
+
+**Answer:**
+
+
+---
+
 ## B. The map
 
 ### B1. Two route colours are hard to see

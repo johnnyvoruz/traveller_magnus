@@ -229,6 +229,7 @@ watch(() => props.plan, () => { void load(); }, { immediate: true });
       @keydown="onKey"
     ></canvas>
     <ul v-if="skipped.length" class="skipped">
+      <li>Not in the tile catalogue:</li>
       <li v-for="(item, index) in skipped" :key="index">{{ item }}</li>
     </ul>
     <p class="credit">{{ credit }}</p>

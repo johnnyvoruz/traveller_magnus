@@ -2498,3 +2498,18 @@ API and Durable Object have against `data_model.md` and `api.md`).
   `tests/web/dossier_model.test.js`. D has not begun K5d edits (`RecordPage.vue` unchanged
   since step 3). Combined tree: 570 pass / 0 fail, check clean.
 - **Push after C reports**, everything at once.
+
+## 87. C's follow-ups in; the official ship sheet PDFs arrive (2026-10-05)
+
+- **Agent C:** the dossier star Temperature tile uses `formatKelvin` ("5,800 K"); the deck
+  plan viewer's skipped list leads with "Not in the tile catalogue:". Checked in the code.
+  **Accepted.** Tree: 586 pass / 0 fail (D's K5d tests are already in it), check clean.
+- **Johnny staged three PDFs under `assets/`:** `Ship Sheet 2026_fillable.pdf` (2 pages, 312
+  named form fields, read with pypdf), and print A4 / Letter versions. Character sheets are
+  announced, not yet on disk. Recorded as **K13** in `slice_2_campaign.md`: B inventories
+  the fields (read-only, to `findings/`), Johnny turns the list into `rules/`, D renders the
+  sheet after K5f. The plan's §5.3b transcription from an image is superseded by the PDF's
+  own field names.
+- **Push state:** D is mid-step in `workspace/` (`RecordPage.vue` already imports
+  `LinksBlock`), so `workspace/` cannot go yet; VesselPlan rides with K5d. C's and A's
+  finished work can go by path now.

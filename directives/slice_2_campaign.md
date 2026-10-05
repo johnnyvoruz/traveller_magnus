@@ -276,6 +276,43 @@ only. D's five points for the orchestrator:
   when two tables are open at once, deleting from the library, the vessel a shared person is
   aboard).
 
+- **K12. Plotting and flying jumps (Johnny, 2026-10-05; parked until the MVP steps above are
+  done).** "A ref or players plot and plan jumps on the Mongoose 2e rules. Plot a location,
+  set a speed of 1 to 6 G, and watch the ship's ping go to it in the orbit view; once outside
+  the minimum jump distance, with the next system marked, press Jump: the jump bubble
+  appears, fades, and appears at the destination a week later", tracking time and place in
+  the universe and in the orbit. Builds on K6 (the clock), K5e (the party and its vessel),
+  the plan's §5.3 position log and §5.3a Jump button, and the orbit view's clock.
+  - **What the app does on its own (geometry and display, no rules):** the destination picked
+    on the map; the hex ring while picking (`getHexDistance`); a target in the orbit view; the
+    ship marker moving along a straight flight at the chosen rating; the bubble animation;
+    position rows (`transit`, `jump`, `arrives`) written through the store; the orbit view
+    following the campaign date (K6c).
+  - **What must come from `rules/` before any of it is built (Zero-Assumption; nothing in
+    `rules/` covers jump or in-system travel today):** (1) the minimum distance from a body
+    before a jump; (2) the travel-time rule for a ship at a given G rating over a distance;
+    (3) how far a jump may reach, from the drive; (4) the jump duration (already supplied:
+    168 h, `settings.jumpHours`) and whether it varies; (5) anything about fuel the app
+    should show or refuse on. Johnny supplies these as a `rules/` file; recorded as question
+    G1 in `questions_for_johnny.md`. Until then the step has no owner.
+
+- **K13. Sheets from the official PDFs (Johnny, 2026-10-05).** Johnny added
+  `assets/Ship Sheet 2026_fillable.pdf` (two pages, **312 named form fields**), with print
+  A4 and Letter versions; character sheet PDFs are to follow. "We will want to create our
+  own versions of these for the campaign tools." These replace the image the plan's §5.3b
+  was transcribed from: the fillable PDF's field names and positions are the sheet's
+  structure, supplied, not inferred.
+  - **Part 1 (read-only inventory, Agent B):** extract every field (name, page, type, box,
+    group by its section) into `findings/ship_sheet_fields.json` and a short markdown, and
+    diff it against §5.3b's transcription. No meanings, no legal values, no derived numbers.
+  - **Part 2 (Johnny):** the field list becomes `rules/mgt2e_ship_sheet.js` (§5.3b), or he
+    says the findings file may be consumed as is through the generated ESM wrapper.
+  - **Part 3 (Agent D, after K5f):** the vessel record's Sheet section renders the fields in
+    the app's own look (§5.3b: chamfered panels, cyan tabs, rust-red tags), stored as
+    `sheet` against `mgt2e_ship_sheet@1`, plain fields, nothing computed. The deck plan
+    (K9) sits inside it. The character sheet follows the same three parts when its PDF
+    arrives.
+
 ## Verification for K1 to K5
 
 - [ ] `npm test`, `npm run check`, `npm run build` green; the API suite run at least once

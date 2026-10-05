@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { formatUwpDigit } from '@voyage/engines';
 import { buildSector } from '@voyage/generation';
 import { TRUTH_SEED, TRUTH_SETTINGS } from '../../tools/truth/settings.js';
-import { celsiusOf, fahrenheitOf, formatTempFull, wholeDegrees } from '../../apps/web/src/design/units.ts';
+import { celsiusOf, fahrenheitOf, formatKelvin, formatTempFull, wholeDegrees } from '../../apps/web/src/design/units.ts';
 import { bodyKeys, bodyModel, overviewModel, pickSystem, rowFor } from '../../apps/web/src/dossier/model.ts';
 
 /** The same conversion the dossier uses: °C, then °F, then kelvin. */
@@ -140,7 +140,7 @@ test('Regina overview and Caesillian 0914 partial follow the inspector', async (
     assert.equal(typeof system.stars[0].temp, 'number');
     const starTemp = starBody.facts.find((fact) => fact.label === 'Temperature');
     assert.ok(starTemp);
-    assert.equal(starTemp.value, fullTemp(system.stars[0].temp));
+    assert.equal(starTemp.value, formatKelvin(system.stars[0].temp));
 
     const stripped = structuredClone(tree);
     const strippedSystem = pickSystem(stripped.body);

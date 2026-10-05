@@ -103,11 +103,12 @@ campaign layer over the truth map; own maps later. X sign-in only.
 - **Agent D:** K5d links (add, edit, remove from either end, vocabulary labels, "aboard").
   K5c leftovers (orbit-view locator, Locate on dossier rows, "At Regina" chip, sort) wait
   for K5e.
-- **Agent C:** the dossier's star Temperature tile in kelvin; a sentence for the deck plan
-  viewer's skipped codes. On disk, unreported.
-- **Agents A, B:** free. **Agent F:** parked.
+- **Agent B:** K13 part 1, the ship sheet field inventory from the fillable PDF (read-only,
+  to `findings/`).
+- **Agents A, C:** free. **Agent F:** parked.
 - **Last push:** `6bf409a` (universe create), deployed and green. Local and finished: C's
-  colours, D's vessel deck plan, A's client id (§86). Push everything when C reports.
+  colours and follow-ups, A's client id (§86), D's vessel deck plan (rides with K5d, since
+  `RecordPage.vue` is mid-step).
 
 ## 7. Decisions Johnny has made that shape the next steps
 
@@ -134,8 +135,12 @@ campaign layer over the truth map; own maps later. X sign-in only.
   direction and answered F3 to F7; **F2 (the kelvin table for the five climate words) is
   open.** Must be done **before the Builder**. A campaign is pinned to its truth version, so
   parking is safe; body anchors re-resolve by name on migration.
+- **Jumps (K12, Johnny 2026-10-05):** plot a destination, fly to the jump point at 1 to 6 G
+  in the orbit view, press Jump, the bubble fades and reappears a week later. Parked behind
+  the MVP steps by Johnny's own wish. It cannot start until `rules/` holds the jump and
+  travel rules (question G1); nothing about them is to be taken from memory.
 - **Surfaces:** the enhanced shared terrain and enhanced disc, the no-WebGL painter, more
-  delighters, the 2.5D view, liquid swatches (E11, E12).
+  delighters, the 2.5D view.
 - **Viewer leftovers:** Trade Match, legend, help, settings.
 
 ## 9. Open with Johnny (`questions_for_johnny.md`)
