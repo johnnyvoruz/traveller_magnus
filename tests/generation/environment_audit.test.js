@@ -95,8 +95,11 @@ test('Hydro digit 0 with a positive percentage is not zero-coverage ice', () => 
     assert.ok(!ids(zeycudeMain).includes('B06'));
 });
 
-test('Spinward Marches truth-local v2: the 30 zero-coverage Ice mainworlds, and the row counts', () => {
-    const index = readJson(path.join(ROOT, 'truth-local/v2/sectors/Spinward_Marches/index.json'));
+// truth-local/ is a local build, not in git: CI has none, so the sector count is skipped there.
+const MARCHES_INDEX = path.join(ROOT, 'truth-local/v2/sectors/Spinward_Marches/index.json');
+
+test('Spinward Marches truth-local v2: the 30 zero-coverage Ice mainworlds, and the row counts', { skip: !fs.existsSync(MARCHES_INDEX) }, () => {
+    const index =readJson(path.join(ROOT, 'truth-local/v2/sectors/Spinward_Marches/index.json'));
     const reports = [];
     const ice = [];
     for (const [hex, entry] of Object.entries(index.hexes)) {

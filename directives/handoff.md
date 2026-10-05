@@ -2217,3 +2217,17 @@ API and Durable Object have against `data_model.md` and `api.md`).
   replies. Johnny is the one who can do it, in production, after the push.
 - Orchestrator re-ran: check clean, 495 pass / 0 fail, build green. Agents A and C have no
   in-flight files on disk yet. **Pushable now.**
+
+## 74. Pushed `123114b`; two more CI-only test failures fixed locally (2026-10-04)
+
+- Johnny pushed `123114b` (sign-in entry, universes, campaign storage, browser store).
+- The GitHub test run for `8d80bff` still failed, for two reasons that only show off this
+  machine, both fixed by the orchestrator and not yet pushed:
+  1. `tests/web/fixtures/surface/manifest.json` stored the exact Node version (v24.19.0 here,
+     v24.21.0 on CI). The oracle now stores the major version only; manifest refreshed. The
+     pixel digests already matched on CI.
+  2. `tests/generation/environment_audit.test.js` read `truth-local/v2`, which is a local
+     build and not in git. That one test now skips when the folder is absent.
+- **Rule for agents:** a test may not depend on a git-ignored folder, the machine's exact
+  runtime version, or line endings. Agents see only local green; **the orchestrator checks
+  the GitHub run after every push.**

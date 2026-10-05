@@ -250,7 +250,8 @@ export function sourceManifest() {
         probeSites: diamondProbeSites(),
         gridProbeIndices: GRID_PROBE_INDICES,
         floatByteOrder: endian,
-        node: process.version,
+        // Major only: CI and a developer's machine differ in the patch release.
+        node: process.version.split('.')[0],
         preOverlay: 'putImageData buffer before path strokes; strokes are commands only',
         projectionWy: 'sinLat passed to _continentHeight by the diamond loop',
     };
