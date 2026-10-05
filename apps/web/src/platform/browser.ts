@@ -158,6 +158,44 @@ export function startDiscWorker(): Worker {
     return new Worker(new URL('../surface/vanilla/gl.worker.ts', import.meta.url), { type: 'module' });
 }
 
+/** Campaign row id. `cr_` or `cl_` plus a UUID. The server accepts only that pattern. */
+export function newId(prefix: 'cr' | 'cl'): string {
+    return prefix + '_' + crypto.randomUUID();
+}
+
+/** Fires when the page is being hidden or unloaded. No-op where there is no document. */
+export function onPageHide(fn: () => void): () => void {
+    if (typeof document === 'undefined') return () => {};
+    const onHide = () => fn();
+    const onVisibility = () => {
+        if (document.visibilityState === 'hidden') fn();
+    };
+    document.addEventListener('pagehide', onHide);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+        document.removeEventListener('pagehide', onHide);
+        document.removeEventListener('visibilitychange', onVisibility);
+    };
+}
+
+/** False when the browser says it has no network. True where it cannot say. */
+export function isOnline(): boolean {
+    return typeof navigator === 'undefined' || navigator.onLine !== false;
+}
+
+/** Calls back when the browser goes on or off the network. Returns the function that stops it. */
+export function onOnlineChange(fn: (online: boolean) => void): () => void {
+    if (typeof addEventListener !== 'function') return () => {};
+    const up = () => fn(true);
+    const down = () => fn(false);
+    addEventListener('online', up);
+    addEventListener('offline', down);
+    return () => {
+        removeEventListener('online', up);
+        removeEventListener('offline', down);
+    };
+}
+
 /** Runs fn as its own task. The returned function cancels it if it has not run. */
 export function afterTask(fn: () => void): () => void {
     const handle = setTimeout(fn, 0);

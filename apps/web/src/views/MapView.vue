@@ -17,6 +17,9 @@ import { handleKey, registerCommand, systemPanel, type PanelWorld } from '../she
 import { orbitPath } from '../orbit/bodies.ts';
 import { escapeAction } from '../shell/panel_state.ts';
 import Rail from '../shell/Rail.vue';
+import AccountMenu from '../workspace/AccountMenu.vue';
+import CampaignPanel from '../workspace/CampaignPanel.vue';
+import { loadSession } from '../account/session.ts';
 import {
     cancelFrame,
     devicePixelRatio,
@@ -31,6 +34,10 @@ const route = useRoute();
 const router = useRouter();
 const canvasEl = ref<HTMLCanvasElement | null>(null);
 const dossierEl = ref<{ remeasure: () => void } | null>(null);
+const campaignEl = ref<{ remeasure: () => void } | null>(null);
+const railEl = ref<{ focusAccount: () => void } | null>(null);
+/** The account pop-up at the rail's foot. */
+const accountOpen = ref(false);
 const status = ref('Loading the chart.');
 const versionRef = ref('');
 const manifestRef = ref<TruthManifest | null>(null);
@@ -56,6 +63,9 @@ let unregisterHome: (() => void) | null = null;
 let unregisterAccount: (() => void) | null = null;
 let unregisterClose: (() => void) | null = null;
 let unregisterSystem: (() => void) | null = null;
+let unregisterCampaign: (() => void) | null = null;
+/** The camera has been put somewhere: a route with no place of its own leaves it there. */
+let placed = false;
 let stopDpr: (() => void) | null = null;
 let observer: ResizeObserver | null = null;
 let raf = 0;
@@ -102,6 +112,8 @@ function showStatus(): void {
 }
 
 const dossier = computed(() => dossierRoute(route.path));
+/** The Campaign panel has a route of its own, so Back closes it and a link can open it. */
+const campaignOpen = computed(() => route.path === '/campaign' || route.path.startsWith('/campaign/'));
 
 function syncSelection(): void {
     const state = dossier.value;
@@ -294,7 +306,40 @@ function closePanel(): void {
     });
 }
 
+/** The Campaign panel over the map where it stands; pressed again, it closes. */
+function toggleCampaign(): void {
+    accountOpen.value = false;
+    if (campaignOpen.value) {
+        closePanel();
+        return;
+    }
+    suppressFly = true;
+    void router.push({
+        path: '/campaign',
+        query: { x: cam.x.toFixed(3), y: cam.y.toFixed(3), z: cam.ppp.toFixed(3) },
+    });
+}
+
+function closeAccount(): void {
+    if (!accountOpen.value) return;
+    accountOpen.value = false;
+    if (railEl.value) railEl.value.focusAccount();
+}
+
+function openCampaignFromMenu(): void {
+    accountOpen.value = false;
+    if (!campaignOpen.value) toggleCampaign();
+}
+
 function onEscape(): void {
+    if (accountOpen.value) {
+        closeAccount();
+        return;
+    }
+    if (campaignOpen.value) {
+        if (!omniOpen.value) closePanel();
+        return;
+    }
     const state = dossierRoute(route.path);
     const panelOpen = state.kind !== 'closed';
     let bodyOpen = state.kind === 'body';
@@ -321,6 +366,11 @@ function onPanelWidth(px: number): void {
     if (map) map.style.setProperty('--panel-width', px + 'px');
     if (renderer) renderer.setWorkspaceLeft(px);
     markDirty();
+}
+
+/** Two panels share the map's left edge; only the open one sets how far the chart is covered. */
+function onCampaignWidth(px: number): void {
+    if (campaignOpen.value || dossier.value.kind === 'closed') onPanelWidth(px);
 }
 
 function markDirty(): void {
@@ -387,6 +437,7 @@ function scheduleQuery(): void {
 
 function flyTo(target: Camera): void {
     const el = canvasEl.value;
+    placed = true;
     if (!el || prefersReducedMotion()) {
         cam = target;
         markDirty();
@@ -437,6 +488,25 @@ function applyRoute(): void {
         markDirty();
         return;
     }
+    if (campaignOpen.value) {
+        // The Campaign panel has no place on the chart: the camera stays, or takes the link's, or the home view.
+        showStatus();
+        const linked = cameraFromQuery();
+        if (linked && !sawQuery) {
+            sawQuery = true;
+            fly = null;
+            cam = linked;
+            placed = true;
+        } else if (!placed) {
+            const home = homeRect(chart);
+            if (home) {
+                cam = fit(home, vp, 0);
+                placed = true;
+            }
+        }
+        markDirty();
+        return;
+    }
     const target = targetFor({ path: route.path }, chart);
     if (target.kind === 'unknown') {
         fallbackNote = target.message;
@@ -462,6 +532,7 @@ function applyRoute(): void {
         sawQuery = true;
         fly = null;
         cam = queried;
+        placed = true;
         markDirty();
         return;
     }
@@ -475,6 +546,7 @@ function onResize(): void {
     renderer.resize(el.clientWidth, el.clientHeight, devicePixelRatio());
     if (pendingApply) applyRoute();
     if (dossierEl.value) dossierEl.value.remeasure();
+    if (campaignEl.value) campaignEl.value.remeasure();
     markDirty();
 }
 
@@ -582,7 +654,12 @@ onMounted(() => {
     unregisterAccount = registerCommand({
         id: 'account',
         name: 'Account',
-        run: () => { void router.push('/account'); },
+        run: () => { accountOpen.value = !accountOpen.value; },
+    });
+    unregisterCampaign = registerCommand({
+        id: 'campaign',
+        name: 'Campaign',
+        run: () => { toggleCampaign(); },
     });
     unregisterClose = registerCommand({
         id: 'close-panel',
@@ -598,6 +675,7 @@ onMounted(() => {
     });
     el.focus();
     void boot();
+    nextFrame(() => { void loadSession(); });
 });
 
 function holdsWorld(sx: number, sy: number, hhhh: string): boolean {
@@ -644,13 +722,20 @@ onBeforeUnmount(() => {
     if (unregisterAccount) unregisterAccount();
     if (unregisterClose) unregisterClose();
     if (unregisterSystem) unregisterSystem();
+    if (unregisterCampaign) unregisterCampaign();
 });
 </script>
 
 <template>
   <div class="map" @keydown="onMapKey">
     <canvas ref="canvasEl" tabindex="0"></canvas>
-    <Rail :panel-open="dossier.kind !== 'closed'" :search-open="omniOpen" />
+    <Rail
+      ref="railEl"
+      :panel-open="dossier.kind !== 'closed'"
+      :search-open="omniOpen"
+      :campaign-open="campaignOpen"
+      :account-open="accountOpen"
+    />
     <OmniBox :version="versionRef" :manifest="manifestRef" @open="omniOpen = $event" />
     <DossierPanel
       ref="dossierEl"
@@ -670,6 +755,14 @@ onBeforeUnmount(() => {
       @retry="retryTree"
       @width="onPanelWidth"
     />
+    <CampaignPanel
+      ref="campaignEl"
+      :open="campaignOpen"
+      :truth-version="versionRef"
+      @close="closePanel"
+      @width="onCampaignWidth"
+    />
+    <AccountMenu :open="accountOpen" @close="closeAccount" @campaign="openCampaignFromMenu" />
     <p class="status ui-status" aria-live="polite">{{ status }}</p>
   </div>
 </template>

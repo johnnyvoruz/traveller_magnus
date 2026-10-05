@@ -203,6 +203,18 @@ const PAIRS = [
     ['--attention', '--bg-0', TEXT, 'account error line'],
     ['--bg-0', '--signal', TEXT, 'account primary button'],
     ['--signal-dim', '--bg-0', MARK, 'account button border'],
+    // The account pop-up and the Campaign panel's sign-in and loading states (K5a)
+    ['--text-0', '--chrome-bg', TEXT, 'account pop-up heading and name'],
+    ['--attention', '--chrome-bg', TEXT, 'sign-in error and offline line in the pop-up (12.5 px)'],
+    ['--attention', '--bg-1', TEXT, 'sign-in error and offline line in the Campaign panel (12.5 px)'],
+    ['--text-muted', '--bg-1', TEXT, 'Campaign panel fine print (12 px) and empty line'],
+    ['--signal', ['--wash', '--rail-glass', '--bg-0'], TEXT, 'initials on the rail (12 px bold)'],
+    ['--signal', ['--wash', '--chrome-bg'], TEXT, 'initials at the head of the account menu (14 px)'],
+    ['--signal-dim', '--chrome-bg', MARK, 'account pop-up border, initials ring'],
+    ['--text-1', '--row-active', TEXT, 'account menu item under the pointer or focus (14 px)'],
+    ['--signal', '--row-active', MARK, 'account menu item icon under the pointer or focus'],
+    ['--danger', '--panel-raised', MARK, 'error strip edge'],
+    ['--attention', '--panel-raised', MARK, 'offline strip edge'],
 ];
 
 if (process.env.CONTRAST_REPORT) {

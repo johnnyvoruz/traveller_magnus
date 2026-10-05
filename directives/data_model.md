@@ -96,12 +96,10 @@ jobs             (id PK, kind, state ('queued'|'running'|'done'|'failed'), total
                   failures JSON, created_at, finished_at NULL)
 
 campaign_records (id PK, type, kind, name, summary, details, tags JSON, anchor JSON,
-                  when_start INT, when_end INT, visibility, player_notes, sheet JSON, status JSON,
-                  primary_image_hash, images JSON, provenance JSON, rev INT, created_at, updated_at, deleted INT)
-campaign_records_fts  FTS5 over campaign_records(name, summary, details, tags)
-campaign_links   (id PK, from_id, to_id, relation, note, rev INT, updated_at, deleted INT)
-campaign_journal (id PK, when_day INT, visibility, body, record_ids JSON, rev INT, updated_at, deleted INT)
-campaign_assets  (hash PK, thumb_hash, mime, bytes INT, width INT, height INT, created_at)
+                  when_json JSON NULL, visibility, player_notes NULL, sheet JSON NULL, status JSON NULL,
+                  images JSON NULL, provenance JSON NULL, rev INT, seq INT, created_at, updated_at, deleted INT)
+campaign_links   (id PK, from_id, to_id, kind, role, link_order INT, since_json JSON NULL, until_json JSON NULL,
+                  notes, visibility, provenance JSON NULL, rev INT, seq INT, created_at, updated_at, deleted INT)
 ```
 
 Rules of the `hexes` table:
@@ -117,15 +115,23 @@ Rules of the `hexes` table:
   tree is read when a dossier or the orbit view opens.
 - `lists.kind` ∈ `routes, routeDefinitions, autoRouteCounter, borderDefinitions,
   hexBorderAssignments, borderPaths, regionDefinitions, regionPaths, allegianceDefinitions,
-  hexAllegianceAssignments, sectorNames, subsectorNames, sectorReview, campaignTime` — the
-  overlay document keys, whole payload per write.
+  hexAllegianceAssignments, sectorNames, subsectorNames, sectorReview, campaignTime,
+  campaignSettings` — the overlay document keys, plus the party settings document, whole
+  payload per write.
 - `hex_history` retention: last 50 revisions per hex and everything from the last 90 days;
   the weekly cron compacts older rows. Snapshots cover the long tail.
-- `campaign_*` mirrors `campaign_manager_plan.md` §2 (data model v2); `when_*` are stardate
-  day numbers (`year * 365 + day`).
+- Schema version 2 stores campaign rows in the Durable Object. `campaign_records_fts`,
+  `campaign_journal` and `campaign_assets` are not created yet.
+- `when_json` is the record's `when` object (`{ start: { year, day }, end? }`), or null.
+  `since_json` and `until_json` are the link's day objects. `link_order` is the link's `order`.
+- `seq` is one counter per universe (`meta.campaignSeq`), stamped on every campaign write.
+  Tombstones stay in this slice. A restore writes the row with `deleted` 0 and `baseRev`
+  equal to the stored `rev`. Deleting a record tombstones its links in that same write.
+- `provenance` is nullable JSON on records and links: null, or
+  `{ mode: 'copy' | 'shared', universeId, recordId, rev, at }` (`CampaignProvenance`).
 
-Indexes: `hexes(sector_slug)`, `hex_history(at)`, `campaign_records(type)`,
-`campaign_records(when_start)`, `jobs(state)`.
+Indexes: `hexes(sector_slug)`, `hex_history(at)`, `jobs(state)`, `campaign_records(seq)`,
+`campaign_records(type)`, `campaign_links(seq)`, `campaign_links(from_id)`, `campaign_links(to_id)`.
 
 ## 4. Snapshot manifest (object, kind `snapshot`)
 

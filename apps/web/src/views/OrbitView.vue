@@ -28,6 +28,8 @@ import { detectSystem, normalizeSystem } from '../orbit/system.ts';
 import TimeControls from '../orbit/TimeControls.vue';
 import { cancelFrame, nextFrame, now, pageOrigin } from '../platform/browser.ts';
 import Rail from '../shell/Rail.vue';
+import { loadSession } from '../account/session.ts';
+import AccountMenu from '../workspace/AccountMenu.vue';
 import { handleKey, registerCommand } from '../shell/registry.ts';
 
 const route = useRoute();
@@ -278,6 +280,15 @@ function shuttleTo(rate: number): void {
 // ---- Selection, popovers, leaving --------------------------------------------
 
 const dossierOpen = ref(true);
+/** The account pop-up at the rail's foot, as on the map. */
+const accountOpen = ref(false);
+const railEl = ref<{ focusAccount: () => void } | null>(null);
+
+function closeAccount(): void {
+    if (!accountOpen.value) return;
+    accountOpen.value = false;
+    if (railEl.value) railEl.value.focusAccount();
+}
 /** The layout and the layer switches: this visit's, as legacy (1183-1186 resets them on open). */
 const mode = ref<Mode>('orbits');
 const layers = ref<Layers>({ ...DEFAULT_LAYERS });
@@ -304,6 +315,10 @@ function backToMap(): void {
 
 /** Escape: a popover first, then the selected body, then back to the map. */
 function escape(): void {
+    if (accountOpen.value) {
+        closeAccount();
+        return;
+    }
     if (openPop.value || moonsOpen.value) {
         openPop.value = '';
         moonsOpen.value = null;
@@ -345,13 +360,16 @@ watch([slug, hex], () => {
 watch(entry, loadTree);
 
 onMounted(() => {
+    // A visit that starts in the orbit view still learns who is signed in, after its first frame.
+    nextFrame(() => { void loadSession(); });
     stopArrive = client.onArrive(() => { arrivals.value += 1; });
     unregister.push(
         registerCommand({ id: 'orbit-escape', name: 'Back', keys: ['Escape'], run: escape }),
         registerCommand({ id: 'orbit-play', name: 'Play or pause', keys: [' '], run: togglePlay }),
         registerCommand({ id: 'home', name: 'Return to map', run: backToMap }),
         registerCommand({ id: 'system-panel', name: 'System panel', run: () => { dossierOpen.value = !dossierOpen.value; } }),
-        registerCommand({ id: 'account', name: 'Account', run: () => { void router.push('/account'); } }),
+        registerCommand({ id: 'account', name: 'Account', run: () => { accountOpen.value = !accountOpen.value; } }),
+        registerCommand({ id: 'campaign', name: 'Campaign', run: () => { accountOpen.value = false; void router.push('/campaign'); } }),
     );
     lastFrame = now();
     raf = nextFrame(frame);
@@ -374,7 +392,8 @@ onBeforeUnmount(() => {
     :style="{ '--panel-width': panelWidth + 'px' }"
     @keydown="onKey"
   >
-    <Rail :panel-open="dossierOpen" :search-open="false" />
+    <Rail ref="railEl" :panel-open="dossierOpen" :search-open="false" :account-open="accountOpen" />
+    <AccountMenu :open="accountOpen" @close="closeAccount" @campaign="router.push('/campaign')" />
     <DossierPanel
       orbit
       :open="dossierOpen"

@@ -2126,3 +2126,94 @@ API and Durable Object have against `data_model.md` and `api.md`).
 - **Surfaces as shipped:** vanilla map (dossier), enhanced map (seas and ice), vanilla discs
   (orbit, worker), the `surfaces` switch. Parked: plan steps 12 to 18, the no-WebGL painter,
   delighters, 2.5D, swatches E11/E12.
+
+## 68. Pushed; deck plans from Geomorph Shipyard are planned for the ship sheet (2026-10-04)
+
+- Johnny pushed the worker move, the LF digest fix and the campaign recipe.
+- **`assets/geomorphs/` is Johnny's** (3,028 files, 87 MB, untracked): deck-plan tiles and
+  `REBUILD.md`, which specifies rebuilding a ship from the JSON the Geomorph Shipyard exports.
+  He wants it on the campaign's ship sheet. Recorded as **K9** in `slice_2_campaign.md` with
+  three things to settle first: tiles served from the CDN, not bundled; the images are
+  CC BY-NC 4.0 (credit shown, non-commercial only); the shipyard's code is GPL-3.0, so the
+  placement code is written from REBUILD.md, not copied from its source.
+
+## 69. Agent D's campaign design is accepted; Johnny wants many campaigns and a library (2026-10-04)
+
+- **`findings/campaign_workspace_design.md`** (20 mockups in `findings/ui_design_shots/campaign_*`).
+  All sixteen recommended choices adopted (X sign-in only); the orchestrator's rulings on D's
+  five points are in `slice_2_campaign.md` after K5.
+- **Johnny:** more than one campaign per account, and assets that move between them as easily
+  as possible, through a campaign asset manager: **instanced** (a snapshot copied in) or
+  **shared** (one character, and what happens in one game crosses to the other).
+  Recorded as K5f (several campaigns: create, switch, delete; cap raised to ten), K10 (copy
+  between campaigns, with provenance) and K11 (shared records held in an account library,
+  referenced by campaigns; needs its own design). **Asked of A and B now:** a nullable
+  `provenance` field on records and links, so K10 needs no migration.
+- D ran a read-only `git status`; noted, nothing changed.
+- **Orchestrator slip, same day:** a shell command with backticks inside double quotes ran
+  parts of its own text as commands. Checked: no file outside `directives/slice_2_campaign.md`
+  changed and nothing stray was created; the six mangled phrases in the recipe were repaired
+  by hand. Scripts with backticks go through the Write tool and `node`, as the summary says.
+
+## 70. K2 in: universes in the catalogue (2026-10-04)
+
+- **Agent B:** migration `0008_universes.sql` (hand-written), the Drizzle table,
+  `routes/universes.ts` (list, create, read, rename, soft delete), `universe/forward.ts`
+  (`ownedUniverse`: 404 for missing, deleted or not yours; Origin on mutations; forwards to the
+  Durable Object with `x-voyage-user-id` and `x-voyage-universe-id`). `api.md` marked.
+  `RUN_API_TESTS=1 node --test tests/api/universes.test.js` ran and passed; the rest of the
+  black-box suite was not run. 464 pass, check clean, build green.
+- **To change in K3's session:** the cap is ten universes, not three (K5f); `provenance` on
+  records and links. `catalogue_schemas.ts` holds a local zod fallback until Agent A's K1
+  exports are used; the fallback is removed once they are.
+- **Migration 0008 and production.** Workers Builds applies migrations only if its deploy
+  command is `npm run deploy:ci`; that dashboard field was never verified (handoff §4).
+  **Johnny applies 0008 by hand before the push that ships these routes**
+  (`npm --workspace apps/api run db:migrate`); applying twice is harmless.
+- **Migration 0008 applied to production D1 by Johnny** (2026-10-04, `db:migrate`, 3 commands).
+  The `universes` table exists; B's routes may ship.
+
+## 71. K1 and K4 in: shared campaign schemas and the browser's store (2026-10-04)
+
+- **Agent A, K1:** `packages/shared/src/schemas/campaign.ts`: `CAMPAIGN_LIMITS` (universes 10),
+  nine record types, twelve link kinds with labels and allowed pairs, `CampaignProvenance`
+  (required key, may be null), anchors on `<slug>/<hhhh>` with `s0` / `w3` / `w3m1` body keys,
+  `CampaignRecord`, `CampaignLink`, `CampaignSettings` (with its own `rev`), `Universe*`,
+  `CampaignChanges` / `CampaignPage` / `CampaignChangesResult`, `locate`, `linkAllowed`.
+- **Agent A, K4:** `account/session.ts` (the map calls `loadSession()` after first paint and
+  never waits), `campaign/store.ts` keyed by universe id (`openCampaign`, `switchCampaign`
+  which flushes first, list / create / rename / delete; remembered per device under
+  `voyage.campaign.universeId`), `campaign/index.ts`, `campaign/commit.ts`; new
+  `platform/http.ts` (`apiFetch`) and `shell/toast.ts`. 480 pass, check clean, build green.
+  Tested with an injected fetch only; not clicked in a browser.
+- **Still for Agent B (K3):** the route's cap is still 3; drop the fallback in
+  `catalogue_schemas.ts`.
+- **Next:** Agent C, the map's campaign layer (party marker, locator). Agent D, K5a and K5b.
+
+## 72. K3 in: the campaign in the Durable Object (2026-10-04)
+
+- **Agent B:** schema version 2 (`campaign_records`, `campaign_links`; version 1 upgrades in
+  place), `universe/campaign.ts` pure over an `exec(sql, ...params)` interface, `GET
+  /campaign?after=&limit=` and `PATCH /campaign/changes` through `ownedUniverse`, the 120 a
+  minute budget, settings (the party) as list kind `campaignSettings` with its own `rev`,
+  provenance, tombstones kept and restorable, the ancestor cycle refused, caps enforced, the
+  universe cap now ten, the schema fallback removed. `data_model.md` §3 and `api.md` corrected.
+  `tests/api/campaign_logic.test.js` under `node:sqlite`; 495 pass.
+- **Not yet proven:** the campaign routes through the real Worker and Durable Object. Only
+  `universes.test.js` ran black-box. Agent A writes `tests/api/campaign.test.js` (black-box,
+  `RUN_API_TESTS=1`) and runs the whole black-box suite once.
+- **Push is held** until Agent D reports K5a, so a half-wired sign-in entry does not ship.
+
+## 73. K5a in: sign-in and the campaign entry (2026-10-04)
+
+- **Agent D:** the Rail's foot button (Sign in / initials) with its pop-up and account menu;
+  the Campaign entry on the Rail and its own route `/campaign`; the signed-out panel (one
+  sentence and the X button); signed in, the panel opens the campaign the first time it is
+  shown, never before (loading rows, "No records yet", an error strip with Try again). The
+  old `/account` page is no longer linked. 11 contrast pairs added. Differences from the
+  drawing: no rename or party items in the menu yet (K5f, K5e); the first-run card moves to
+  K5b; the pop-up is opaque (the dossier showed through glass).
+- **Not exercised by anyone yet: a real sign-in with X, end to end.** D used supplied session
+  replies. Johnny is the one who can do it, in production, after the push.
+- Orchestrator re-ran: check clean, 495 pass / 0 fail, build green. Agents A and C have no
+  in-flight files on disk yet. **Pushable now.**

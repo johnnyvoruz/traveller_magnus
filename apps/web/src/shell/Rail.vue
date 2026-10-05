@@ -4,17 +4,33 @@
  * collapsed, labels when expanded, the active item marked. Expanded, it pushes the rest of the
  * shell aside (MapView sets --rail-width from its state). Every item runs a command from
  * the registry; the rail holds no behaviour of its own beyond expanding.
+ *
+ * The foot button is the account (findings/campaign_workspace_design.md §1): "Sign in" while
+ * signed out, the user's initials once signed in. It never waits on the session: until the
+ * session is known it is the signed-out button.
  */
-import { nextTick, onMounted, ref } from 'vue';
+import { computed, nextTick, onMounted, ref } from 'vue';
+import { session } from '../account/session.ts';
 import Icon from '../design/Icon.vue';
+import { displayName, initials } from '../workspace/account.ts';
 import { commands } from './registry.ts';
 
-defineProps<{
+withDefaults(defineProps<{
     /** The system panel is showing. */
     panelOpen: boolean;
     /** The omnibox list is showing. */
     searchOpen: boolean;
-}>();
+    /** The Campaign panel is showing. */
+    campaignOpen?: boolean;
+    /** The account pop-up is showing. */
+    accountOpen?: boolean;
+}>(), { campaignOpen: false, accountOpen: false });
+
+const accountButton = ref<HTMLButtonElement | null>(null);
+const mark = computed(() => initials(session.user));
+const who = computed(() => displayName(session.user));
+
+defineExpose({ focusAccount: () => { if (accountButton.value) accountButton.value.focus(); } });
 
 const expanded = ref(false);
 const ready = ref(0);
@@ -87,6 +103,18 @@ onMounted(() => {
           <span class="rail-label">System</span>
         </button>
         <button
+          v-if="has('campaign')"
+          type="button"
+          class="rail-item"
+          aria-label="Campaign"
+          title="Campaign"
+          :aria-expanded="campaignOpen ? 'true' : 'false'"
+          @click="run('campaign')"
+        >
+          <Icon name="book-sparkles" :size="20" />
+          <span class="rail-label">Campaign</span>
+        </button>
+        <button
           v-if="has('search')"
           type="button"
           class="rail-item"
@@ -102,9 +130,21 @@ onMounted(() => {
       </div>
     </div>
     <div class="rail-group" role="group" aria-label="Account">
-      <button v-if="has('account')" type="button" class="rail-item" aria-label="Account" title="Account" @click="run('account')">
-        <Icon name="user" :size="20" />
-        <span class="rail-label">Account</span>
+      <button
+        v-if="has('account')"
+        ref="accountButton"
+        type="button"
+        class="rail-item rail-account"
+        :aria-label="session.user ? 'Account: ' + who : 'Sign in'"
+        :title="session.user ? 'Account: ' + who : 'Sign in'"
+        aria-haspopup="true"
+        aria-controls="account-pop"
+        :aria-expanded="accountOpen ? 'true' : 'false'"
+        @click="run('account')"
+      >
+        <span v-if="session.user && mark" class="account-mark" aria-hidden="true">{{ mark }}</span>
+        <Icon v-else name="user" :size="20" />
+        <span class="rail-label">{{ session.user ? who : 'Sign in' }}</span>
       </button>
     </div>
   </nav>
@@ -212,10 +252,17 @@ onMounted(() => {
   color: var(--signal-bright);
 }
 
+/* The initials sit where the icon sits, so signing in does not move the button's contents. */
+.rail-account .account-mark {
+  margin: 0 -2px;
+}
+
 .rail-label {
   min-width: 0;
   text-align: left;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   opacity: 0;
   transition: opacity var(--t-rail) ease;
 }

@@ -7,6 +7,7 @@ import { me } from './routes/auth';
 import { generate } from './routes/generate';
 import { truth } from './routes/truth';
 import { admin } from './routes/admin';
+import { universesRoute } from './routes/universes';
 import { deadLetterConsumer } from './jobs/dead_letter';
 import { truthBuildConsumer } from './jobs/truth_build';
 import { fail } from './http';
@@ -20,6 +21,7 @@ app.get('/api/me', me);
 app.route('/api', generate);
 app.route('/api/truth', truth);
 app.route('/api/admin', admin);
+app.route('/api/universes', universesRoute);
 app.onError((err, c) => { console.error(JSON.stringify({ requestId: c.get('requestId'), err: String(err), stack: (err as Error).stack })); return fail(c, 500, 'internal', 'Something went wrong.', { requestId: c.get('requestId') }); });
 app.notFound((c) => c.req.path.startsWith('/api/') ? fail(c, 404, 'not_found', 'No such route.') : c.env.ASSETS.fetch(c.req.raw));
 

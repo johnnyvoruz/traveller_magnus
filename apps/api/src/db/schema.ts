@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { check, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { check, index, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { user } from './auth-schema';
 
 export { account, accountRelations, session, sessionRelations, user, userRelations, verification } from './auth-schema';
@@ -61,6 +61,25 @@ export const truthSystems = sqliteTable('truth_systems', {
     partial: text('partial'),
 }, (t) => [
     primaryKey({ columns: [t.version, t.sectorSlug, t.hex] }),
+]);
+
+export const universes = sqliteTable('universes', {
+    id: text('id').primaryKey(),
+    ownerId: text('owner_id').notNull().references(() => user.id),
+    name: text('name').notNull(),
+    slug: text('slug').notNull(),
+    truthVersion: text('truth_version'),
+    engineVersion: text('engine_version').notNull(),
+    editionDefault: text('edition_default').notNull(),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+    deletedAt: text('deleted_at'),
+    purgeAfter: text('purge_after'),
+    hexOverrideCount: integer('hex_override_count').notNull().default(0),
+    objectBytes: integer('object_bytes').notNull().default(0),
+    lastSnapshotAt: text('last_snapshot_at'),
+}, (t) => [
+    index('universes_owner_id').on(t.ownerId),
 ]);
 
 export const auditLog = sqliteTable('audit_log', {

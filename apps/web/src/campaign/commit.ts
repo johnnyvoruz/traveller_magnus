@@ -1,0 +1,236 @@
+import { ref } from 'vue';
+import {
+    CampaignChangesResult,
+    type CampaignChanges,
+    type CampaignLink,
+    type CampaignRecord,
+    type CampaignSettings,
+    type LinkChange,
+    type RecordChange,
+    type SettingsChange,
+} from '@voyage/shared';
+import { newId, onPageHide } from '../platform/browser.ts';
+import { apiFetch } from '../platform/http.ts';
+import { clearToasts, showToast } from '../shell/toast.ts';
+import { rebuildCampaignIndex } from './index.ts';
+import { campaign, resetCampaignState, transport } from './store.ts';
+
+/** True while a change is queued or being sent. With `lastError`, this is saving / saved / offline. */
+export const pending = ref(false);
+export const lastError = ref('');
+
+const FLUSH_MS = 800;
+const RETRY_CAP_MS = 30_000;
+
+const queuedRecords = new Map<string, RecordChange>();
+const queuedLinks = new Map<string, LinkChange>();
+let queuedSettings: SettingsChange | undefined;
+let cancelTimer: (() => void) | null = null;
+let cancelRetry: (() => void) | null = null;
+let sending = false;
+let attempt = 0;
+
+export function newRecordId(): string {
+    return newId('cr');
+}
+
+export function newLinkId(): string {
+    return newId('cl');
+}
+
+function rememberBase<T extends { id: string; baseRev: number }>(map: Map<string, T>, row: T): void {
+    const previous = map.get(row.id);
+    map.set(row.id, previous ? { ...row, baseRev: previous.baseRev } : row);
+}
+
+function applyRecord(row: RecordChange): void {
+    if (!('type' in row)) {
+        const existing = campaign.records[row.id];
+        if (existing) existing.deleted = true;
+        return;
+    }
+    const { baseRev, ...record } = row;
+    void baseRev;
+    campaign.records[record.id] = record;
+}
+
+function applyLink(row: LinkChange): void {
+    if (!('kind' in row)) {
+        const existing = campaign.links[row.id];
+        if (existing) existing.deleted = true;
+        return;
+    }
+    const { baseRev, ...link } = row;
+    void baseRev;
+    campaign.links[link.id] = link;
+}
+
+function applySettings(row: SettingsChange): void {
+    const { baseRev, ...settings } = row;
+    void baseRev;
+    campaign.settings = settings;
+}
+
+function reindex(): void {
+    rebuildCampaignIndex(campaign.records, campaign.links);
+}
+
+function queueHasRows(): boolean {
+    return queuedRecords.size > 0 || queuedLinks.size > 0 || queuedSettings != null;
+}
+
+function scheduleFlush(): void {
+    if (cancelTimer || sending) return;
+    cancelTimer = transport.schedule(() => {
+        cancelTimer = null;
+        void flushCampaign();
+    }, FLUSH_MS);
+}
+
+function scheduleRetry(): void {
+    if (cancelRetry) return;
+    const ms = Math.min(FLUSH_MS * 2 ** attempt, RETRY_CAP_MS);
+    attempt += 1;
+    cancelRetry = transport.schedule(() => {
+        cancelRetry = null;
+        void flushCampaign();
+    }, ms);
+}
+
+function clearTimers(): void {
+    if (cancelTimer) cancelTimer();
+    if (cancelRetry) cancelRetry();
+    cancelTimer = null;
+    cancelRetry = null;
+}
+
+function bodyOf(records: RecordChange[], links: LinkChange[], settings: SettingsChange | undefined): CampaignChanges {
+    const body: CampaignChanges = {};
+    if (records.length) body.records = records;
+    if (links.length) body.links = links;
+    if (settings) body.settings = settings;
+    return body;
+}
+
+/** Applies the change locally, queues it, and sends one PATCH at most every 800 ms. */
+export function commit(changes: CampaignChanges): void {
+    for (const row of changes.records ?? []) {
+        applyRecord(row);
+        rememberBase(queuedRecords, row);
+    }
+    for (const row of changes.links ?? []) {
+        applyLink(row);
+        rememberBase(queuedLinks, row);
+    }
+    if (changes.settings) {
+        applySettings(changes.settings);
+        queuedSettings = queuedSettings
+            ? { ...changes.settings, baseRev: queuedSettings.baseRev }
+            : changes.settings;
+    }
+    reindex();
+    pending.value = true;
+    scheduleFlush();
+}
+
+export async function flushCampaign(): Promise<void> {
+    if (sending) return;
+    if (cancelTimer) {
+        cancelTimer();
+        cancelTimer = null;
+    }
+    if (!queueHasRows()) {
+        pending.value = false;
+        return;
+    }
+    if (!campaign.universeId) {
+        lastError.value = 'offline';
+        return;
+    }
+    const records = [...queuedRecords.values()];
+    const links = [...queuedLinks.values()];
+    const settings = queuedSettings;
+    queuedRecords.clear();
+    queuedLinks.clear();
+    queuedSettings = undefined;
+    sending = true;
+    pending.value = true;
+    try {
+        const res = await apiFetch(transport.fetch, `/api/universes/${encodeURIComponent(campaign.universeId)}/campaign/changes`, {
+            method: 'PATCH',
+            body: JSON.stringify(bodyOf(records, links, settings)),
+        });
+        if (!res.ok) throw new Error('offline');
+        const result = CampaignChangesResult.parse((await res.json()).data);
+        const handled = new Set<string>();
+        for (const item of result.applied) {
+            handled.add(item.table + ':' + item.id);
+            if (item.seq > campaign.seq) campaign.seq = item.seq;
+            if (item.table === 'records' && campaign.records[item.id]) campaign.records[item.id].rev = item.rev;
+            if (item.table === 'links' && campaign.links[item.id]) campaign.links[item.id].rev = item.rev;
+            if (item.table === 'settings' && campaign.settings) campaign.settings.rev = item.rev;
+        }
+        let settingsHandled = false;
+        if (result.conflicts.length) {
+            for (const item of result.conflicts) {
+                handled.add(item.table + ':' + item.id);
+                if (item.table === 'settings') settingsHandled = true;
+                if (item.table === 'records') campaign.records[item.id] = item.current as CampaignRecord;
+                if (item.table === 'links') campaign.links[item.id] = item.current as CampaignLink;
+                if (item.table === 'settings') campaign.settings = item.current as CampaignSettings;
+            }
+            showToast('Saved changes conflicted with a newer copy. The server copy is now shown.');
+        }
+        for (const item of result.applied) {
+            if (item.table === 'settings') settingsHandled = true;
+        }
+        restoreUnhandled(records, links, settings, handled, settingsHandled);
+        attempt = 0;
+        lastError.value = '';
+        reindex();
+    } catch {
+        restoreAll(records, links, settings);
+        lastError.value = 'offline';
+        scheduleRetry();
+    } finally {
+        sending = false;
+        pending.value = queueHasRows();
+    }
+}
+
+function restoreAll(records: RecordChange[], links: LinkChange[], settings: SettingsChange | undefined): void {
+    for (const row of records) if (!queuedRecords.has(row.id)) queuedRecords.set(row.id, row);
+    for (const row of links) if (!queuedLinks.has(row.id)) queuedLinks.set(row.id, row);
+    if (settings && !queuedSettings) queuedSettings = settings;
+}
+
+function restoreUnhandled(
+    records: RecordChange[],
+    links: LinkChange[],
+    settings: SettingsChange | undefined,
+    handled: Set<string>,
+    settingsHandled: boolean,
+): void {
+    for (const row of records) {
+        if (!handled.has('records:' + row.id) && !queuedRecords.has(row.id)) queuedRecords.set(row.id, row);
+    }
+    for (const row of links) {
+        if (!handled.has('links:' + row.id) && !queuedLinks.has(row.id)) queuedLinks.set(row.id, row);
+    }
+    if (settings && !settingsHandled && !queuedSettings) queuedSettings = settings;
+}
+
+export function resetCampaign(): void {
+    clearTimers();
+    queuedRecords.clear();
+    queuedLinks.clear();
+    queuedSettings = undefined;
+    sending = false;
+    attempt = 0;
+    pending.value = false;
+    lastError.value = '';
+    clearToasts();
+    resetCampaignState();
+}
+
+onPageHide(() => { void flushCampaign(); });

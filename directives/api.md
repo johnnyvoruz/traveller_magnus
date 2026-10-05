@@ -34,11 +34,11 @@ players' views are read from `https://cdn.traveller.voyage`.
 
 | Method | Path | Auth | Purpose | Schema |
 |---|---|---|---|---|
-| GET | `/api/universes` | user | my universes | — |
-| POST | `/api/universes` | user | create `{ name, truthVersion | null, editionDefault, grid }`; `engineVersion` is the current one; creates the Durable Object | `UniverseCreate` |
-| GET | `/api/universes/:id` | owner | meta, sectors, lists (not hexes) | — |
-| PATCH | `/api/universes/:id` | owner | rename, settings, grid, sectors layout | `UniverseUpdate` |
-| DELETE | `/api/universes/:id` | owner | soft delete; purged after 30 days | — |
+| GET | `/api/universes` | user | **Built.** my universes, not deleted | — |
+| POST | `/api/universes` | user | **Built.** create `{ name, truthVersion \| null, editionDefault }`; `truthVersion` is a released version or null; an eleventh live universe is `too_large`; `engineVersion` is the current one; creates the Durable Object | `UniverseCreate` |
+| GET | `/api/universes/:id` | owner | **Built.** the catalogue row. Missing, deleted, or not yours is 404 | — |
+| PATCH | `/api/universes/:id` | owner | **Built.** rename (`name`) | `UniverseUpdate` |
+| DELETE | `/api/universes/:id` | owner | **Built.** soft delete; `purge_after` 30 days on | — |
 | GET | `/api/universes/:id/hexes?sector=` | owner | override rows for one sector | — |
 | GET | `/api/universes/:id/hexes/:hexKey` | owner | one row | — |
 | GET | `/api/universes/:id/objects/:hash` | owner | stream object | — |
@@ -66,10 +66,10 @@ edit), or `{ hexKey, rev, deleted: true }`. Response: `{ applied: [hexKey...], c
 
 | Method | Path | Auth | Purpose | Schema |
 |---|---|---|---|---|
-| GET | `/api/universes/:id/campaign` | owner | records, links, journal (paged) | — |
-| PATCH | `/api/universes/:id/campaign/changes` | owner | batched upserts with rev, tombstones | `CampaignChanges` |
+| GET | `/api/universes/:id/campaign?after=&limit=` | owner | **Built.** records and links with `seq` greater than `after`, tombstones included, ordered by `seq`. `limit` defaults to 1000 and is capped at 1000. `settings` is the current document. `done` is true when no later row remains. Journal is not in this slice. | — |
+| PATCH | `/api/universes/:id/campaign/changes` | owner | **Built.** batched records, links, and settings. `baseRev` must match the stored `rev` (0 creates). A mismatch returns the stored row in `conflicts`. Deleting a record tombstones its links in the same write. Tombstones are not purged; a restore sends the row with `deleted: false` and that `rev` as `baseRev`. 120 mutations a minute per universe. | `CampaignChanges` |
 | PUT | `/api/universes/:id/objects/:hash` | owner | images and thumbnails as objects | — |
-| GET | `/api/universes/:id/campaign/search?q=` | owner | FTS over records | — |
+| GET | `/api/universes/:id/campaign/search?q=` | owner | **Deferred.** FTS over records is not built in this slice | — |
 
 ## Slice 4 — sharing
 

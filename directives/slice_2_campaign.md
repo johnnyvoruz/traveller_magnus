@@ -61,7 +61,7 @@ spec is corrected in the same step that builds it.
    slice (`data_model.md` keeps them for the Builder's larger universes).
 10. **Limits:** 20,000 live records and 60,000 live links per universe; a `PATCH` carries at
     most 200 rows and 1 MB; `name` 200 characters, `summary` 500, `details` 20,000, 32 tags of
-    40 characters; three universes per account. Over a limit is `too_large` or `validation`,
+    40 characters; ten universes per account. Over a limit is `too_large` or `validation`,
     never a silent trim.
 11. **Authorisation.** The Worker checks the session and the D1 `universes.owner_id`, checks
     `Origin` on every mutation, then forwards to the Durable Object named by the universe id.
@@ -104,7 +104,7 @@ limit breach and a legacy-style hex id; `locate` handles a chain, a cycle and a 
   to 0007.
 - `apps/api/src/routes/universes.ts`, mounted at `/api/universes`:
   `GET /` (mine, not deleted), `POST /` (`UniverseCreate`; `truthVersion` must be a released
-  version or null; refuses a fourth), `GET /:id`, `PATCH /:id` (`UniverseUpdate`),
+  version or null; refuses an eleventh), `GET /:id`, `PATCH /:id` (`UniverseUpdate`),
   `DELETE /:id` (soft delete, `purge_after` 30 days on).
 - `apps/api/src/universe/forward.ts`: `ownedUniverse(c)` loads the row, answers 404 for a
   missing or deleted one and for one the caller does not own (never 403: do not reveal that
@@ -113,7 +113,7 @@ limit breach and a legacy-style hex id; `locate` handles a chain, a cycle and a 
 - Correct `api.md` (slice 2 rows that this slice builds are marked built; the rest untouched).
 
 **Check (`tests/api`, the black-box suite, `RUN_API_TESTS=1`):** signed out, every route is
-401; create then list; a second account gets 404 on the first one's universe; a fourth create
+401; create then list; a second account gets 404 on the first one's universe; an eleventh create
 is refused; delete hides it. Say in the report whether the suite ran.
 
 ## K3. The campaign in the Durable Object (Agent B, after K2) — `apps/api/src/universe`
@@ -192,6 +192,25 @@ Built in this order, each a visible step, each reported:
 a browser signed in and signed out, at 520 px, half and full; keyboard reach; reduced motion;
 the contrast test; screenshots beside the legacy campaign screens.
 
+- **K5f. More than one campaign (Johnny, 2026-10-04).** Create, name, switch and delete
+  campaigns from the account menu; the store is keyed by universe id and reloads on a switch;
+  the last one used opens on sign-in. Each is its own universe: nothing is shared between two
+  campaigns unless the Library (K10, K11) puts it there.
+
+### Rulings on Agent D's design (`findings/campaign_workspace_design.md`), 2026-10-04
+
+All sixteen of D's recommended choices (J1 to J16) are adopted as drawn, with J1 settled as X
+only. D's five points for the orchestrator:
+- **Body anchor:** §0.4. Store the dossier body key and the body's name as `locationLabel`;
+  when the key no longer matches, show the system and say the world could not be matched.
+- **Undo:** a delete is a tombstone, never purged in this slice. Undo sends the record and its
+  links back with `deleted: false` and the current `rev`. "Recently deleted" is the session's
+  own list.
+- **Map drawing:** the party marker and the locator are a new `map/campaign_layer.ts`, drawn
+  after the chart layers; it reads the campaign index and never fetches.
+- **Search:** the OmniBox's campaign group reads the in-memory word index (K4).
+- **Contrast pairs** go into `tests/web/contrast.test.js` with the screen that uses them.
+
 ## K6 to K8 (outlines)
 
 - **K6. The clock.** List kind `campaignTime`; `DDD-YYYY` and hours; the orbit view reads it
@@ -200,6 +219,37 @@ the contrast test; screenshots beside the legacy campaign screens.
   sessions and notes dated from the clock and anchored to the party.
 - **K8. The timeline.** Dated records and journal entries in one list; choosing a row focuses
   its place.
+
+- **K9. Deck plans on the ship sheet (Johnny, 2026-10-04).** A vessel record can carry a deck
+  plan imported from the JSON that the Geomorph Shipyard exports. The JSON is the ship: it is
+  validated and stored on the vessel record (`sheet.deckPlan`: `name`, `parts`), and the plan is
+  drawn in the browser from tile images, exactly as `assets/geomorphs/REBUILD.md` describes
+  (three-corner mapping, array order, overlays, mirrored tiles, missing tiles skipped). Later, a
+  builder of our own writes the same JSON. Before this is written in full:
+  - **Where the tiles live.** 3,028 files, 87 MB. They are served from the public CDN under
+    `geomorphs/`, with `manifest.json` beside them; they do not go into the web bundle, and
+    whether the PNGs are committed to git is Johnny's call (recommended: not).
+  - **Licences, from `assets/geomorphs/ATTRIBUTION.txt`.** The images are CC BY-NC 4.0 (Robert
+    Pearce and Eric B. Smith): credit shown wherever a plan is shown, and non-commercial use
+    only. The shipyard software is GPL-3.0: the placement code is written from REBUILD.md's
+    description and its own tests, not copied from the shipyard's source.
+  - A parity check: one exported JSON drawn by our code against the shipyard's own picture
+    export of the same ship.
+
+- **K10. The Library: copy between campaigns ("instanced").** Johnny: a referee with two games
+  wants to bring a character from one into the other. Pick records in one campaign, copy them
+  into another: new ids, links among the copied set kept, and
+  `provenance: { mode: 'copy', universeId, recordId, rev, at }` on each copy. The copy then
+  lives its own life. Places are copied with their anchors because both campaigns sit on the same truth.
+- **K11. The Library: shared records.** The same character in two games, where what happens in
+  one shows in the other. A record lives in exactly one store, so a shared record lives in an
+  **account library** (one more universe-shaped store per account) and each campaign holds a
+  reference to it. Proposed split, to confirm with Johnny when this is written: what the
+  character **is** (name, summary, details, tags, sheet, status) is shared; where they are and
+  who they know **in this game** (anchor, links, visibility) belongs to each campaign. A shared
+  record can be detached into a copy at any time. This needs its own design pass (conflicts
+  when two tables are open at once, deleting from the library, the vessel a shared person is
+  aboard).
 
 ## Verification for K1 to K5
 

@@ -1,5 +1,6 @@
 import { integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { drizzle } from 'drizzle-orm/durable-sqlite';
+import { installCampaignSchema, type SqlRow } from './campaign';
 
 export const meta = sqliteTable('meta', {
     key: text('key').primaryKey(),
@@ -182,7 +183,11 @@ export async function migrate(storage: DurableObjectStorage): Promise<void> {
         INSERT INTO hexes_fts(hexes_fts, rowid, name, hex_key, uwp) VALUES ('delete', old.rowid, old.name, old.hex_key, old.uwp);
         INSERT INTO hexes_fts(rowid, name, hex_key, uwp) VALUES (new.rowid, new.name, new.hex_key, new.uwp);
     END`);
-    sql.exec(`INSERT INTO meta (key, value) VALUES ('schemaVersion', '1') ON CONFLICT(key) DO NOTHING`);
+    installCampaignSchema({
+        exec(query, ...params) {
+            return storage.sql.exec(query, ...params).toArray() as SqlRow[];
+        },
+    });
     drizzle(storage, { schema: doSchema });
-    console.log(JSON.stringify({ event: 'UniverseDO migration', schemaVersion: 1 }));
+    console.log(JSON.stringify({ event: 'UniverseDO migration', schemaVersion: 2 }));
 }

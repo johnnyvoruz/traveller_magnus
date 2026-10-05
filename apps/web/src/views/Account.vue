@@ -1,61 +1,29 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
+import { loadSession, session, signIn, signOut } from '../account/session.ts';
 import { APP_VERSION } from '../version';
 
-type Me = { id: string; email: string | null; role: string; profile: { handle: string; displayName: string } | null };
-
-const me = ref<Me | null>(null);
 const busy = ref(false);
-const error = ref('');
 
-async function loadMe() {
-  try {
-    const res = await fetch('/api/me', { credentials: 'same-origin' });
-    if (res.ok) {
-      const body = await res.json();
-      me.value = body.data as Me;
-    } else {
-      me.value = null;
-    }
-  } catch {
-    me.value = null;
-  }
-}
-
-async function signIn() {
+async function onSignIn() {
   busy.value = true;
-  error.value = '';
   try {
-    const res = await fetch('/api/auth/sign-in/social', {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ provider: 'twitter', callbackURL: '/' }),
-    });
-    const body = await res.json();
-    if (res.ok && body.url) {
-      location.assign(body.url);
-      return;
-    }
-    error.value = body.message || body.error?.message || 'Sign-in is not available.';
-  } catch {
-    error.value = 'Sign-in is not available.';
+    await signIn();
   } finally {
     busy.value = false;
   }
 }
 
-async function signOut() {
+async function onSignOut() {
   busy.value = true;
   try {
-    await fetch('/api/auth/sign-out', { method: 'POST', credentials: 'same-origin' });
+    await signOut();
   } finally {
     busy.value = false;
-    await loadMe();
   }
 }
 
-onMounted(loadMe);
+onMounted(() => { void loadSession(); });
 </script>
 
 <template>
@@ -64,17 +32,17 @@ onMounted(loadMe);
     <p>A mapping engine and orbit engine for Traveller. Opening soon.</p>
 
     <section class="account">
-      <template v-if="me">
+      <template v-if="session.user">
         <p class="who">
-          Signed in as <span class="handle">{{ me.profile?.handle ?? me.id }}</span>
-          <span class="role">{{ me.role }}</span>
+          Signed in as <span class="handle">{{ session.user.profile?.handle ?? session.user.id }}</span>
+          <span class="role">{{ session.user.role }}</span>
         </p>
-        <button type="button" class="btn" :disabled="busy" @click="signOut">Sign out</button>
+        <button type="button" class="btn" :disabled="busy" @click="onSignOut">Sign out</button>
       </template>
       <template v-else>
-        <button type="button" class="btn btn-primary" :disabled="busy" @click="signIn">Sign in with X</button>
+        <button type="button" class="btn btn-primary" :disabled="busy" @click="onSignIn">Sign in with X</button>
       </template>
-      <p v-if="error" class="err">{{ error }}</p>
+      <p v-if="session.error" class="err">{{ session.error }}</p>
     </section>
 
     <p class="ver">{{ APP_VERSION }}</p>

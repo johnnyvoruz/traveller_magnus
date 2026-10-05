@@ -7,6 +7,29 @@ export type { HexState } from './schemas/hex.ts';
 export { OverlaySector, OverlayBase, Tombstone, OverlayDoc } from './schemas/overlay.ts';
 export { SectorHex, SectorIndex, Territory, TruthManifest, SectorOverview, TruthOverview, TruthPolities } from './schemas/truth.ts';
 export { PackageHex, PackageManifest } from './schemas/package.ts';
+export {
+    CAMPAIGN_LIMITS,
+    CAMPAIGN_RECORD_TYPES,
+    CAMPAIGN_LINK_KINDS,
+    CampaignLinkKindName,
+    CampaignAnchor,
+    CampaignProvenance,
+    CampaignRecord,
+    CampaignLink,
+    CampaignSettings,
+    Universe,
+    UniverseCreate,
+    UniverseUpdate,
+    RecordChange,
+    LinkChange,
+    SettingsChange,
+    CampaignChanges,
+    CampaignPage,
+    CampaignChangesResult,
+    locate,
+    linkAllowed,
+} from './schemas/campaign.ts';
+export type { CampaignRecordType, CampaignLinkKind, SystemAnchor } from './schemas/campaign.ts';
 export { parseT5Tab } from './parsers/t5tab.ts';
 export type { HexRow } from './parsers/t5tab.ts';
 export { parseXmlElements, parseMetadataXml } from './parsers/metadata_xml.ts';
