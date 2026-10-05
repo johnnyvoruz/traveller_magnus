@@ -11,7 +11,7 @@ import { formatDisplayNumber } from '../dossier/labels.ts';
 import {
     isRealTime, REAL_TIME, SCRUB_DAYS, SHUTTLE_DEFAULT_LIMIT, SHUTTLE_LIMITS, SPEED_SLIDER_MAX,
     dateText, shuttleRate, START_HELP, shuttleText, sliderFromSpeed, speedFactorText, speedFromSlider,
-    speedText, splitDays, timeFieldValue, withDay, withTime, withYear,
+    speedText, splitDays, timeFieldValue, WEEK_DAYS, withDay, withTime, withYear,
 } from './clock.ts';
 import OrbitPopover from './OrbitPopover.vue';
 
@@ -30,6 +30,8 @@ const props = defineProps<{
 const emit = defineEmits<{
     toggle: [];
     skip: [hours: number];
+    /** The "1 week" button: seven days on. */
+    week: [];
     /** A date typed into a field. */
     days: [days: number];
     speed: [daysPerSecond: number];
@@ -122,9 +124,9 @@ function capture(event: PointerEvent): void {
 }
 
 /**
- * The row holds the transport, the date fields, the speed and two popovers; below this width
- * they do not fit on one line, so the popovers' buttons drop their labels (legacy does the
- * same at a narrow window, style.css:2656).
+ * The row holds the transport, the date fields, the speed, Scrub and the More menu; below this
+ * width they do not fit on one line, so Scrub drops its label (legacy does the same at a
+ * narrow window, style.css:2656).
  */
 const COMPACT_BELOW = 1060;
 const rowEl = ref<HTMLElement | null>(null);
@@ -143,7 +145,7 @@ onBeforeUnmount(() => { if (stopWatching) stopWatching(); });
 </script>
 
 <template>
-  <div ref="rowEl" class="orbit-time">
+  <div ref="rowEl" class="orbit-time" :class="{ 'is-compact': compact }">
     <div class="orbit-transport" role="group" aria-label="Transport">
       <button type="button" class="orbit-btn is-icon" aria-label="Skip back one hour" title="Skip back one hour" @click="$emit('skip', -1)">
         <Icon name="backward" :size="12" />
@@ -160,6 +162,15 @@ onBeforeUnmount(() => { if (stopWatching) stopWatching(); });
       </button>
       <button type="button" class="orbit-btn is-icon" aria-label="Skip forward one hour" title="Skip forward one hour" @click="$emit('skip', 1)">
         <Icon name="forward" :size="12" />
+      </button>
+      <button
+        type="button"
+        class="orbit-btn orbit-week"
+        aria-label="Advance 1 week"
+        :title="'Advance 1 week: ' + WEEK_DAYS + ' days on, the same time of day'"
+        @click="$emit('week')"
+      >
+        <Icon name="forward-step" :size="12" />1 week
       </button>
     </div>
 
@@ -264,7 +275,7 @@ onBeforeUnmount(() => { if (stopWatching) stopWatching(); });
         <p class="orbit-date" aria-live="off" :title="START_HELP">{{ dateText(days) }}</p>
         <time class="orbit-local-clock" title="Your computer’s local time, independent of simulation speed">Local time {{ localTime }}</time>
       </OrbitPopover>
-      <slot name="pops" :compact="compact" />
+      <slot name="pops" />
     </div>
   </div>
 </template>
@@ -285,6 +296,12 @@ onBeforeUnmount(() => { if (stopWatching) stopWatching(); });
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+/* The week step is the one transport button with a word on it: it is the step a jump takes. */
+.orbit-btn.orbit-week {
+  height: 32px;
+  white-space: nowrap;
 }
 
 .orbit-timecode {
@@ -320,6 +337,14 @@ onBeforeUnmount(() => { if (stopWatching) stopWatching(); });
 .orbit-field.is-year input { width: 112px; }
 .orbit-field.is-day input { width: 60px; }
 .orbit-field.is-time input { width: 136px; }
+
+/* A narrow row gives up a little air so the week step still sits on the transport's line. */
+.orbit-time.is-compact {
+  column-gap: 10px;
+}
+
+.orbit-time.is-compact .orbit-field.is-year input { width: 92px; }
+.orbit-time.is-compact .orbit-field.is-time input { width: 128px; }
 
 .orbit-field input:focus-visible,
 .orbit-select:focus-visible {

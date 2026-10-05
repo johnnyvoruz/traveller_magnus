@@ -131,6 +131,14 @@ export function skipHours(days: number, hours: number): number {
     return days + hours * HOUR;
 }
 
+/** A week is seven days: the "1 week" button's step (slice_2_campaign.md K6, Johnny 2026-10-04). */
+export const WEEK_DAYS = 7;
+
+/** The same time of day, a whole number of weeks on (or back, for a negative count). */
+export function skipWeeks(days: number, weeks: number): number {
+    return days + weeks * WEEK_DAYS;
+}
+
 /** The scrub slider (1565-1569): an offset from where the drag began. */
 export function scrubbed(startDays: number, offsetDays: number): number {
     return startDays + offsetDays;

@@ -4,8 +4,11 @@
  * screen sends (create, edit, delete, restore). Pure: it runs under Node. The store, the queue
  * and the server are apps/web/src/campaign; nothing here touches them.
  */
-import { CAMPAIGN_LIMITS, CAMPAIGN_RECORD_TYPES, type CampaignRecord, type CampaignRecordType, type RecordChange } from '@voyage/shared';
+import {
+    CAMPAIGN_LIMITS, CAMPAIGN_RECORD_TYPES, type CampaignAnchor, type CampaignRecord, type CampaignRecordType, type RecordChange,
+} from '@voyage/shared';
 import type { FaIconName } from '../design/icons.ts';
+import { sameAnchor } from './places.ts';
 
 export type TypeInfo = {
     type: CampaignRecordType;
@@ -70,13 +73,15 @@ export function filterRecords(list: readonly CampaignRecord[], filter: { type: T
         .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
 
-/** The line under a row's summary: the type, and where the record is. Places arrive with the anchor editor (K5c). */
+/** The line under a row's summary: where the record's own anchor puts it. */
 export function placeLine(record: CampaignRecord): string {
     const anchor = record.anchor;
     if (!anchor) return 'Nowhere in particular';
     if (anchor.kind === 'record') return 'With another record';
     const hex = anchor.hexKey.replace(/_/g, ' ').replace('/', ' ');
-    return anchor.locationLabel ? hex + ' · ' + anchor.locationLabel : hex;
+    if (!anchor.locationLabel) return hex;
+    // With no body the label is the system's name: said so, since a mainworld often shares it.
+    return hex + ' · ' + anchor.locationLabel + (anchor.bodyKey ? '' : ' system');
 }
 
 /** A name as it may be stored: trimmed, single-spaced, cut to the limit. Empty when nothing is left. */
@@ -107,23 +112,25 @@ export function addTag(tags: readonly string[], text: string): string[] {
     return [...tags, tag];
 }
 
-/** A new record of a type, named so it can be seen in the list until the referee names it. */
-export function newRecord(type: CampaignRecordType, id: string, now: string): CampaignRecord {
+/** A new record of a type, named so it can be seen in the list until the referee names it. It may be made at a place. */
+export function newRecord(type: CampaignRecordType, id: string, now: string, anchor: CampaignAnchor = null): CampaignRecord {
     return {
         id, type, kind: '', name: 'New ' + typeInfo(type).one.toLowerCase(), summary: '', details: '', tags: [],
-        anchor: null, when: null, visibility: 'referee', playerNotes: null, sheet: null, status: null, images: null,
+        anchor, when: null, visibility: 'referee', playerNotes: null, sheet: null, status: null, images: null,
         provenance: null, rev: 0, createdAt: now, updatedAt: now, deleted: false,
     };
 }
 
-export type RecordPatch = Partial<Pick<CampaignRecord, 'type' | 'name' | 'summary' | 'details' | 'tags'>>;
+export type RecordPatch = Partial<Pick<CampaignRecord, 'type' | 'name' | 'summary' | 'details' | 'tags' | 'anchor'>>;
 
 /** True when the patch would change nothing: no change is sent for it. */
 export function unchanged(record: CampaignRecord, patch: RecordPatch): boolean {
     for (const key of Object.keys(patch) as (keyof RecordPatch)[]) {
         const next = patch[key];
         const have = record[key];
-        if (Array.isArray(next) && Array.isArray(have)) {
+        if (key === 'anchor') {
+            if (!sameAnchor(patch.anchor ?? null, record.anchor)) return false;
+        } else if (Array.isArray(next) && Array.isArray(have)) {
             if (next.length !== have.length || next.some((item, i) => item !== have[i])) return false;
         } else if (next !== have) return false;
     }

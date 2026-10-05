@@ -18,6 +18,8 @@ defineProps<{
     surface?: SurfaceTarget | null;
     /** Offer Explore orbits (not when the panel already sits beside the orbit view). */
     orbitLink?: boolean;
+    /** Campaign records per body key, shown as counts in the system tree. */
+    counts?: Record<string, number>;
 }>();
 
 defineEmits<{
@@ -60,7 +62,8 @@ defineEmits<{
           <StellarLines v-if="model.stellar" :lines="model.stellar.lines" />
         </SocioBlock>
       </div>
-      <SystemTree v-if="model.tree" :count="model.tree.count" :rows="model.tree.rows" @open="$emit('open', $event)" />
+      <slot name="records" />
+      <SystemTree v-if="model.tree" :count="model.tree.count" :rows="model.tree.rows" :counts="counts" @open="$emit('open', $event)" />
     </div>
   </div>
 </template>

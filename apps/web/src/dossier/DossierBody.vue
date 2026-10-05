@@ -42,6 +42,7 @@ function factsOf(link: BodyLink): string {
       </section>
     </div>
     <div class="doss-body-side">
+      <slot name="records" />
       <section v-for="block in model.sideSections" :key="block.heading" class="doss-section">
         <h3 class="ui-heading">{{ block.heading }}</h3>
         <StatRows :rows="block.rows" />

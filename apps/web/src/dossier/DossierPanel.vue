@@ -6,6 +6,11 @@ import { observeSize } from '../platform/browser.ts';
 import Icon from '../design/Icon.vue';
 import Panel from '../shell/Panel.vue';
 import { readSpan, writeSpan, type PanelSpan } from '../shell/panel_state.ts';
+import { session } from '../account/session.ts';
+import { campaign } from '../campaign/store.ts';
+import { retryCampaign } from '../workspace/opening.ts';
+import { bodyCounts, hexKeyOf } from '../workspace/places.ts';
+import RecordsHere from '../workspace/RecordsHere.vue';
 import BodyGlyph from './BodyGlyph.vue';
 import DossierBody from './DossierBody.vue';
 import DossierOverview from './DossierOverview.vue';
@@ -117,6 +122,11 @@ const meta = computed(() => {
 
 const chip = computed(() => overview.value && !profile.value ? overview.value.header.hexChip : '');
 
+/** The signed-in user's campaign records on each body of this system, for the tree's counts. */
+const recordCounts = computed(() => (session.user && campaign.status === 'ready' && props.slug && props.hex
+    ? bodyCounts(campaign.records, hexKeyOf(props.slug, props.hex))
+    : {}));
+
 function panelElement(): HTMLElement | null {
     return panel.value ? panel.value.element : null;
 }
@@ -217,8 +227,23 @@ defineExpose({ remeasure: publish });
           <Icon name="solar-system" :size="13" />Orbits
         </button>
       </template>
-      <DossierBody v-if="profile" :model="profile" :span="span" :day-night="dayNight" :restated="restated" :surface="bodySurface" @open="openKey" />
-      <DossierOverview v-else-if="overview" :model="overview" :span="span" :error="error" :orbit-link="!orbit" :surface="overviewSurface" @open="openKey" @orbit="openOrbit(null)" @retry="$emit('retry')" />
+      <DossierBody v-if="profile" :model="profile" :span="span" :day-night="dayNight" :restated="restated" :surface="bodySurface" @open="openKey">
+        <template #records>
+          <RecordsHere
+            :slug="slug"
+            :hex="hex"
+            :system-name="overview ? overview.header.title : ''"
+            :body-key="bodyKey"
+            :body-name="profile.title"
+            @retry="retryCampaign()"
+          />
+        </template>
+      </DossierBody>
+      <DossierOverview v-else-if="overview" :model="overview" :span="span" :error="error" :orbit-link="!orbit" :surface="overviewSurface" :counts="recordCounts" @open="openKey" @orbit="openOrbit(null)" @retry="$emit('retry')">
+        <template #records>
+          <RecordsHere :slug="slug" :hex="hex" :system-name="overview.header.title" :body-key="null" body-name="" @retry="retryCampaign()" />
+        </template>
+      </DossierOverview>
       <p v-else-if="missing" class="doss-muted doss-pad">This hex has no world in the sector index.</p>
       <p v-else-if="pending" class="doss-muted doss-pad">Loading this sector.</p>
     </Panel>

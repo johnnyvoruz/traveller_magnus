@@ -9,12 +9,13 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router';
 import type { CampaignRecordType } from '@voyage/shared';
 import { session } from '../account/session.ts';
-import { campaign, openCampaign } from '../campaign/store.ts';
+import { campaign } from '../campaign/store.ts';
 import { isOnline, observeSize, onOnlineChange } from '../platform/browser.ts';
 import Panel from '../shell/Panel.vue';
 import { readSpan, writeSpan, type PanelSpan } from '../shell/panel_state.ts';
 import { createRecord, justCreated } from './actions.ts';
 import CampaignList from './CampaignList.vue';
+import { ensureCampaign, openFailed, retryCampaign } from './opening.ts';
 import { typeInfo } from './records.ts';
 import RecordPage from './RecordPage.vue';
 import SignInCard from './SignInCard.vue';
@@ -41,9 +42,6 @@ const online = ref(true);
 let stopSize: (() => void) | null = null;
 let stopOnline: (() => void) | null = null;
 let sized: HTMLElement | null = null;
-let opening = false;
-/** openCampaign threw (a reply that did not parse): shown as the store's own error is. */
-const failed = ref(false);
 
 const signedIn = computed(() => session.user !== null);
 /** The open campaign's own name, once the store has listed it. */
@@ -55,7 +53,7 @@ const campaignName = computed(() => {
 /** What the panel shows: the store's status, or an error when the open itself threw. */
 const status = computed(() => {
     if (!signedIn.value) return 'signed-out';
-    if (failed.value) return 'error';
+    if (openFailed.value) return 'error';
     return campaign.status === 'signed-out' ? 'loading' : campaign.status;
 });
 
@@ -72,27 +70,19 @@ const eyebrow = computed(() => {
 
 /** Opens the campaign once the panel is shown to a signed-in user and the chart's version is known. */
 async function load(): Promise<void> {
-    if (opening || !props.open || !signedIn.value || !props.truthVersion) return;
-    if (campaign.status === 'ready' || campaign.status === 'loading') return;
-    if (failed.value || campaign.status === 'error') return;
-    await openNow();
-}
-
-async function openNow(): Promise<void> {
-    opening = true;
-    failed.value = false;
-    try {
-        await openCampaign({ fetch, truthVersion: props.truthVersion });
-    } catch {
-        failed.value = true;
-    } finally {
-        opening = false;
-    }
+    if (!props.open || !signedIn.value) return;
+    await ensureCampaign(props.truthVersion);
 }
 
 function retry(): void {
-    if (opening || !props.truthVersion) return;
-    void openNow();
+    void retryCampaign(props.truthVersion);
+}
+
+/** A pick or a locate needs the chart: at full width the panel steps down to a column (design J7). The choice is not kept. */
+function showMap(): void {
+    if (span.value !== 'full') return;
+    span.value = 'column';
+    void nextTick(publish);
 }
 
 /** The list, or a record: the map's camera in the address stays as it is. */
@@ -216,14 +206,14 @@ defineExpose({ remeasure: publish });
             <li v-for="n in 4" :key="n"><i></i><span><i></i><i></i><i></i></span></li>
           </ul>
           <div v-else-if="span === 'full'" class="camp-split">
-            <CampaignList ref="list" :selected="recordId" :read-only="!online" @open="go" @create="create" />
+            <CampaignList ref="list" :selected="recordId" :read-only="!online" @open="go" @create="create" @map="showMap" />
             <div class="camp-detail">
-              <RecordPage v-if="recordId" :id="recordId" beside :read-only="!online" @back="go(null)" />
+              <RecordPage v-if="recordId" :id="recordId" beside :read-only="!online" @back="go(null)" @map="showMap" />
               <p v-else class="camp-hint">Choose a record to read it here.</p>
             </div>
           </div>
-          <RecordPage v-else-if="recordId" :id="recordId" :beside="false" :read-only="!online" @back="go(null)" />
-          <CampaignList v-else ref="list" :selected="null" :read-only="!online" @open="go" @create="create" />
+          <RecordPage v-else-if="recordId" :id="recordId" :beside="false" :read-only="!online" @back="go(null)" @map="showMap" />
+          <CampaignList v-else ref="list" :selected="null" :read-only="!online" @open="go" @create="create" @map="showMap" />
         </template>
       </div>
     </Panel>

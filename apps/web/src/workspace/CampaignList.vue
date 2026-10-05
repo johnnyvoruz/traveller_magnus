@@ -10,6 +10,9 @@ import { CAMPAIGN_LIMITS, type CampaignRecordType } from '@voyage/shared';
 import { campaign, renameCampaign } from '../campaign/store.ts';
 import Icon from '../design/Icon.vue';
 import { deleteRecord, recentlyDeleted, restoreRecord } from './actions.ts';
+import AddButton from './AddButton.vue';
+import { locating, startLocate, stopLocate } from './locate.ts';
+import { liveById, resolvePlace, type Resolved } from './places.ts';
 import { RECORD_TYPES, filterRecords, liveRecords, placeLine, typeCounts, typeInfo, type TypeFilter } from './records.ts';
 
 const props = defineProps<{
@@ -22,20 +25,30 @@ const props = defineProps<{
 const emit = defineEmits<{
     open: [id: string];
     create: [type: CampaignRecordType];
+    /** The map has to be seen (a locate): the panel gives way when it covers it. */
+    map: [];
 }>();
 
 const query = ref('');
 const filter = ref<TypeFilter>('all');
-const addOpen = ref(false);
 const searchEl = ref<HTMLInputElement | null>(null);
 const listEl = ref<HTMLElement | null>(null);
-const addMenu = ref<HTMLElement | null>(null);
 const nameDraft = ref('');
 
 const all = computed(() => liveRecords(campaign.records));
 const counts = computed(() => typeCounts(all.value));
 const rows = computed(() => filterRecords(all.value, { type: filter.value, query: query.value }));
 const addType = computed((): CampaignRecordType => filter.value === 'all' ? 'person' : filter.value);
+/** Where each record shown is, for its Locate button; a record that is nowhere has none. */
+const places = computed(() => {
+    const live = liveById(campaign.records);
+    const found = new Map<string, Resolved>();
+    for (const record of rows.value) {
+        const place = resolvePlace(record.id, live);
+        if (place) found.set(record.id, place);
+    }
+    return found;
+});
 const first = computed(() => all.value.length === 0);
 const campaignName = computed(() => {
     const found = campaign.universes.find((item) => item.id === campaign.universeId);
@@ -43,16 +56,27 @@ const campaignName = computed(() => {
 });
 
 function add(type: CampaignRecordType): void {
-    addOpen.value = false;
     if (props.readOnly) return;
     emit('create', type);
 }
 
-function toggleAdd(): void {
-    addOpen.value = !addOpen.value;
-    if (addOpen.value) void nextTick(() => {
-        const item = addMenu.value ? addMenu.value.querySelector<HTMLElement>('[role="menuitem"]') : null;
-        if (item) item.focus();
+/** Locate: the map flies to the record's hex and the line runs from this row. Pressed again, it ends. */
+function locateRow(id: string): void {
+    const place = places.value.get(id);
+    if (!place) return;
+    if (locating.recordId === id) {
+        stopLocate();
+        return;
+    }
+    emit('map');
+    startLocate(id, place.hexKey, () => {
+        if (!listEl.value) return null;
+        for (const el of listEl.value.querySelectorAll<HTMLElement>('.camp-locate')) {
+            if (el.dataset.id !== id) continue;
+            const box = el.getBoundingClientRect();
+            return box.height > 0 ? box.top + box.height / 2 : null;
+        }
+        return null;
     });
 }
 
@@ -60,7 +84,7 @@ function rowButtons(): HTMLElement[] {
     return listEl.value ? Array.from(listEl.value.querySelectorAll<HTMLElement>('.camp-row')) : [];
 }
 
-/** Up and Down walk the rows; Delete deletes the row in focus and moves focus to its neighbour. */
+/** Up and Down walk the rows; L locates the row in focus; Delete deletes it and moves focus to its neighbour. */
 function onRowKey(event: KeyboardEvent, id: string): void {
     const buttons = rowButtons();
     const at = buttons.indexOf(event.currentTarget as HTMLElement);
@@ -70,6 +94,13 @@ function onRowKey(event: KeyboardEvent, id: string): void {
         event.stopPropagation();
         if (next) next.focus();
         else if (event.key === 'ArrowUp' && searchEl.value) searchEl.value.focus();
+        return;
+    }
+    if ((event.key === 'l' || event.key === 'L') && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        if (!places.value.has(id)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        locateRow(id);
         return;
     }
     if (event.key === 'Delete' && !props.readOnly) {
@@ -83,22 +114,6 @@ function onRowKey(event: KeyboardEvent, id: string): void {
             else if (searchEl.value) searchEl.value.focus();
         });
     }
-}
-
-function onMenuKey(event: KeyboardEvent): void {
-    const items = addMenu.value ? Array.from(addMenu.value.querySelectorAll<HTMLElement>('[role="menuitem"]')) : [];
-    const at = items.indexOf(event.target as HTMLElement);
-    if (event.key === 'Escape') {
-        event.preventDefault();
-        event.stopPropagation();
-        addOpen.value = false;
-        return;
-    }
-    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
-    event.preventDefault();
-    event.stopPropagation();
-    const next = items[(at + (event.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length];
-    if (next) next.focus();
 }
 
 /** Keys typed in the search field are the field's; Down goes into the list, Esc clears it first. */
@@ -179,29 +194,7 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
             @keydown="onSearchKey"
           >
         </label>
-        <div class="camp-add">
-          <button type="button" class="ui-btn is-primary camp-add-main" :disabled="readOnly" :title="'Add ' + typeInfo(addType).a" @click="add(addType)">
-            <Icon name="plus" :size="13" />Add
-          </button>
-          <button
-            type="button"
-            class="ui-btn is-primary camp-add-more"
-            aria-label="Add a record of another type"
-            title="Add a record of another type"
-            aria-haspopup="true"
-            :aria-expanded="addOpen ? 'true' : 'false'"
-            :disabled="readOnly"
-            @click="toggleAdd"
-          >
-            <Icon name="caret-down" :size="12" />
-          </button>
-          <div v-if="addOpen" class="camp-add-backdrop" @click="addOpen = false"></div>
-          <div v-if="addOpen" ref="addMenu" class="camp-add-menu" role="menu" aria-label="Add a record" @keydown="onMenuKey">
-            <button v-for="info in RECORD_TYPES" :key="info.type" type="button" role="menuitem" @click="add(info.type)">
-              <Icon :name="info.icon" :size="14" /><span>{{ info.one }}</span>
-            </button>
-          </div>
-        </div>
+        <AddButton :type="addType" :disabled="readOnly" @add="add" />
       </div>
 
       <div class="camp-types" role="radiogroup" aria-label="Type">
@@ -222,7 +215,7 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
       </div>
 
       <ul v-if="rows.length" ref="listEl" class="camp-rows" aria-label="Records">
-        <li v-for="record in rows" :key="record.id">
+        <li v-for="record in rows" :key="record.id" :class="{ 'has-locate': places.has(record.id) }">
           <button
             type="button"
             class="camp-row"
@@ -241,6 +234,18 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
                 <span v-for="tag in record.tags" :key="tag" class="ui-chip">{{ tag }}</span>
               </span>
             </span>
+          </button>
+          <button
+            v-if="places.has(record.id)"
+            type="button"
+            class="camp-locate"
+            :data-id="record.id"
+            :aria-pressed="locating.recordId === record.id ? 'true' : 'false'"
+            :aria-label="(locating.recordId === record.id ? 'Stop locating ' : 'Locate ') + record.name"
+            :title="locating.recordId === record.id ? 'Stop locating' : 'Show on the map (L)'"
+            @click="locateRow(record.id)"
+          >
+            <Icon name="location-crosshairs" :size="14" />
           </button>
         </li>
       </ul>
@@ -322,79 +327,6 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
   outline: none;
 }
 
-/* Add: the button adds the type in view; its caret offers the nine. */
-.camp-add {
-  position: relative;
-  display: flex;
-  flex: 0 0 auto;
-}
-
-.camp-add .ui-btn {
-  height: 36px;
-  font-size: 14px;
-}
-
-.camp-add-main {
-  border-radius: var(--r-2) 0 0 var(--r-2);
-}
-
-.camp-add-more {
-  padding: 0 9px;
-  border-left-color: var(--on-signal);
-  border-radius: 0 var(--r-2) var(--r-2) 0;
-}
-
-.camp-add-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 6;
-}
-
-.camp-add-menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  z-index: 7;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 190px;
-  padding: 6px;
-  border: 1px solid var(--signal-dim);
-  border-radius: var(--r-3);
-  background: var(--chrome-bg);
-  box-shadow: var(--shadow-pop);
-}
-
-.camp-add-menu button {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 0;
-  padding: 7px 10px;
-  border: 0;
-  border-radius: var(--r-2);
-  background: transparent;
-  color: var(--text-1);
-  font: 400 14px/1.4 var(--font-text);
-  text-align: left;
-  cursor: pointer;
-}
-
-.camp-add-menu button:hover,
-.camp-add-menu button:focus-visible {
-  background: var(--row-active);
-}
-
-.camp-add-menu button:focus-visible {
-  outline-offset: -2px;
-}
-
-.camp-add-menu .ui-icon {
-  flex: 0 0 16px;
-  color: var(--signal);
-}
-
 /* Type chips: one on at a time, each with its count. */
 .camp-types {
   display: flex;
@@ -452,8 +384,50 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
   background: var(--panel-raised);
 }
 
+.camp-rows li {
+  position: relative;
+}
+
 .camp-rows li + li {
   border-top: 1px solid var(--line-soft);
+}
+
+/* Locate sits at the row's right end, a button of its own beside the row's. */
+.camp-rows li.has-locate .camp-row {
+  padding-right: 52px;
+}
+
+.camp-locate {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin: -16px 0 0;
+  padding: 0;
+  border: 1px solid var(--control-line);
+  border-radius: var(--r-2);
+  background: var(--bg-1);
+  color: var(--signal);
+  cursor: pointer;
+  transition: border-color var(--t-fast) var(--ease-out), background var(--t-fast) var(--ease-out);
+}
+
+.camp-locate:hover {
+  border-color: var(--signal);
+}
+
+.camp-locate[aria-pressed="true"] {
+  border-color: var(--signal);
+  background: var(--row-active);
+}
+
+/* The row being located keeps a teal edge, as the legacy tracked row does. */
+.camp-rows li:has(.camp-locate[aria-pressed="true"]) .camp-row {
+  box-shadow: inset 3px 0 0 var(--signal);
 }
 
 .camp-row {

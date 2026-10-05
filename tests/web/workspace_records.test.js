@@ -71,6 +71,7 @@ test('the list: live records only, one type or all, narrowed by what is typed, b
 test('where a record is, in words', () => {
     assert.equal(placeLine(make(1, 'person', 'A')), 'Nowhere in particular');
     assert.equal(placeLine(make(1, 'person', 'A', { anchor: { kind: 'system', hexKey: 'Spinward_Marches/1910' } })), 'Spinward Marches 1910');
+    assert.equal(placeLine(make(1, 'person', 'A', { anchor: { kind: 'system', hexKey: 'Spinward_Marches/1910', locationLabel: 'Regina' } })), 'Spinward Marches 1910 · Regina system');
     assert.equal(placeLine(make(1, 'person', 'A', { anchor: { kind: 'system', hexKey: 'Spinward_Marches/1910', bodyKey: 'w4m1', locationLabel: 'Regina' } })), 'Spinward Marches 1910 · Regina');
     assert.equal(placeLine(make(1, 'person', 'A', { anchor: { kind: 'record', id: id(2) } })), 'With another record');
 });

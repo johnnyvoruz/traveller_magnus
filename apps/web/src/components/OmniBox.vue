@@ -10,6 +10,7 @@ import {
     type SearchItem,
 } from '../search/omni.ts';
 import { commands, registerCommand } from '../shell/registry.ts';
+import { offerSystem, picking } from '../workspace/pick.ts';
 import Icon from '../design/Icon.vue';
 
 const props = withDefaults(defineProps<{
@@ -118,7 +119,9 @@ function openResult(index: number): void {
     const result = results.value[index];
     if (!result) return;
     if (result.kind === 'system') {
-        void router.push('/s/' + encodeURIComponent(result.sector) + '/' + result.hex);
+        // A record's place is being picked: the system goes to it, and the map stays where it is.
+        if (offerSystem({ slug: result.sector, hex: result.hex, name: result.name })) query.value = '';
+        else void router.push('/s/' + encodeURIComponent(result.sector) + '/' + result.hex);
     } else if (result.kind === 'sector') {
         void router.push('/s/' + encodeURIComponent(result.sector));
     } else {
@@ -181,7 +184,7 @@ onBeforeUnmount(() => {
         v-model="query"
         type="text"
         role="combobox"
-        placeholder="Search"
+        :placeholder="picking ? 'Search for the system' : 'Search'"
         aria-label="Search"
         aria-autocomplete="list"
         :aria-expanded="open ? 'true' : 'false'"

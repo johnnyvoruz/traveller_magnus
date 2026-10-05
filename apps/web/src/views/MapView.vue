@@ -14,15 +14,20 @@ import { tierFor } from '../map/tiers.ts';
 import { TruthClient } from '../map/truth_client.ts';
 import OmniBox from '../components/OmniBox.vue';
 import DossierPanel from '../dossier/DossierPanel.vue';
-import { bodyKeys, pickSystem, type AllegianceName } from '../dossier/model.ts';
+import { bodyKeys, overviewModel, pickSystem, type AllegianceName, type TreeRow } from '../dossier/model.ts';
 import { handleKey, registerCommand, systemPanel, type PanelWorld } from '../shell/registry.ts';
 import { orbitPath } from '../orbit/bodies.ts';
 import { escapeAction } from '../shell/panel_state.ts';
 import Rail from '../shell/Rail.vue';
-import { dismissToast, toasts } from '../shell/toast.ts';
+import { dismissToast, showToast, toasts } from '../shell/toast.ts';
 import ToastStrip from '../shell/ToastStrip.vue';
 import AccountMenu from '../workspace/AccountMenu.vue';
 import CampaignPanel from '../workspace/CampaignPanel.vue';
+import { locateOriginY, locating, stopLocate } from '../workspace/locate.ts';
+import { ensureCampaign } from '../workspace/opening.ts';
+import { cancelPick, offerSystem, picking } from '../workspace/pick.ts';
+import { setPlaceSource, type SystemInfo } from '../workspace/place_source.ts';
+import { parseHexKey } from '../workspace/places.ts';
 import { loadSession, session } from '../account/session.ts';
 import {
     cancelFrame,
@@ -86,6 +91,10 @@ let treeGen = 0;
 let loadedHex = '';
 let lastPlace = '';
 const pendingIndexes = new Set<string>();
+/** The open panel's measured width, gutters included: the chart is clear to the right of it. */
+let panelPx = 0;
+/** When the camera reached the hex being located; null while it is on the way. */
+let locateArrived: number | null = null;
 
 const client = new TruthClient({
     cdnBase: import.meta.env.VITE_CDN_BASE || 'https://cdn.traveller.voyage',
@@ -364,6 +373,15 @@ function onEscape(): void {
         dismissToast(toasts[toasts.length - 1].id);
         return;
     }
+    // Then a place being picked, then a locate, each before the panel they belong to.
+    if (picking.value) {
+        cancelPick();
+        return;
+    }
+    if (locating.recordId) {
+        stopLocate();
+        return;
+    }
     if (campaignOpen.value) {
         if (omniOpen.value) return;
         // A record returns to the list; the list closes the panel.
@@ -394,9 +412,20 @@ function onEscape(): void {
     closePanel();
 }
 
+/** A toast needs this much of the chart beside the panel; with less it goes to the search row. */
+const TOAST_ROOM = 400;
+
 function onPanelWidth(px: number): void {
     const map = canvasEl.value ? canvasEl.value.parentElement : null;
-    if (map) map.style.setProperty('--panel-width', px + 'px');
+    if (map) {
+        map.style.setProperty('--panel-width', px + 'px');
+        const el = canvasEl.value;
+        const chart = el ? el.clientWidth - px : 0;
+        map.dataset.toasts = px > 0 && chart < TOAST_ROOM ? 'top' : 'side';
+    }
+    panelPx = px;
+    // The locator's line starts at the panel's edge, which has just moved.
+    if (locating.recordId) applyCampaign();
     if (renderer) renderer.setWorkspaceLeft(px);
     markDirty();
 }
@@ -418,6 +447,7 @@ function frame(): void {
         if (t >= 1) {
             cam = fly.to;
             fly = null;
+            arriveAtLocate();
         } else {
             cam = flight(fly.from, fly.to, t);
         }
@@ -639,6 +669,7 @@ onMounted(() => {
         setCamera: (next: Camera, why: InputWhy) => {
             fly = null;
             cam = next;
+            arriveAtLocate();
             if (why) {
                 markDirty();
                 scheduleQuery();
@@ -653,7 +684,22 @@ onMounted(() => {
             const hit = hexAt(world.x, world.y);
             const place = fromGlobal(hit.q, hit.r);
             const hhhh = formatHex(place.col, place.row);
-            if (holdsWorld(place.sx, place.sy, hhhh)) {
+            const onWorld = holdsWorld(place.sx, place.sy, hhhh);
+            // A record's place is being picked: a system clicked goes to it, and nothing else happens.
+            if (picking.value) {
+                const sector = onWorld && chart ? chart.sectors.find((item) => item.x === place.sx && item.y === place.sy && item.canonical) : null;
+                if (!sector) return;
+                const index = version ? client.index(version, sector.slug) : null;
+                const entry = index ? index.hexes[hhhh] : null;
+                offerSystem({ slug: sector.slug, hex: hhhh, name: entry ? entry.name : '' });
+                return;
+            }
+            // A click on the chart ends a locate; on empty space that is all it does.
+            if (locating.recordId) {
+                stopLocate();
+                if (!onWorld) return;
+            }
+            if (onWorld) {
                 const sector = chart ? chart.sectors.find((item) => item.x === place.sx && item.y === place.sy && item.canonical) : null;
                 if (!sector) return;
                 const path = '/s/' + encodeURIComponent(sector.slug) + '/' + hhhh;
@@ -716,6 +762,7 @@ onMounted(() => {
         run: () => { runSystemPanel(); },
     });
     el.focus();
+    setPlaceSource({ current: currentSystem, system: systemInfo, bodies: systemBodies });
     applyCampaign();
     void boot();
     nextFrame(() => { void loadSession(); });
@@ -750,9 +797,109 @@ function snapshotFromStore(): CampaignSnapshot | null {
     const name = vessel && !vessel.deleted ? vessel.name : 'Party';
     return {
         party: hexKey ? { name, hexKey, focused: false } : null,
-        locate: null,
+        locate: locateLine(),
         reducedMotion: prefersReducedMotion(),
     };
+}
+
+/** One inset: the panel's measured box is its card plus this gutter each side. */
+const PANEL_GUTTER = 10;
+
+/**
+ * The locator's line for the map's campaign layer: from the panel's edge, level with the
+ * control that asked, to the record's hex. The layer draws it; this only says where.
+ */
+function locateLine(): CampaignSnapshot['locate'] {
+    if (!locating.recordId || !locating.hexKey) return null;
+    const vp = viewport();
+    const y = Math.min(Math.max(locateOriginY(), 0), vp.height);
+    return { hexKey: locating.hexKey, fromX: Math.max(0, panelPx - PANEL_GUTTER), fromY: y, arrivedAt: locateArrived };
+}
+
+/** The camera has come to rest on the hex being located (or the visitor took it over): the ring's beat starts. */
+function arriveAtLocate(): void {
+    if (!locating.recordId || locateArrived !== null) return;
+    locateArrived = now();
+    applyCampaign();
+}
+
+/**
+ * A locate has started, ended or been asked for again: fly to the record's hex, centred in
+ * the chart the panel leaves clear, and hand the layer the line.
+ */
+function applyLocate(): void {
+    locateArrived = null;
+    if (!locating.recordId) {
+        applyCampaign();
+        return;
+    }
+    const place = parseHexKey(locating.hexKey);
+    const target = place && chart ? targetFor({ path: '/s/' + encodeURIComponent(place.slug) + '/' + place.hex }, chart) : null;
+    if (!target || target.kind !== 'camera') {
+        stopLocate();
+        showToast('That place is not on this chart.');
+        return;
+    }
+    const to = target.camera;
+    flyTo({ x: to.x - panelPx / (2 * to.ppp), y: to.y, ppp: to.ppp });
+    if (!fly) locateArrived = now();
+    applyCampaign();
+}
+
+// ---- What the record screens ask of the released map (workspace/place_source.ts) ----
+
+const INDEX_WAIT_MS = 15000;
+
+/** A sector's index, fetched when it is not held. Null when the sector is not on this chart or does not arrive. */
+function indexWhenReady(slug: string): Promise<SectorIndex | null> {
+    if (!version || !chart || !chart.sectors.some((item) => item.slug === slug)) return Promise.resolve(null);
+    const held = client.index(version, slug);
+    if (held) return Promise.resolve(held);
+    return new Promise((resolve) => {
+        let timer: ReturnType<typeof setTimeout> | null = null;
+        const stop = client.onArrive((arrived) => {
+            if (arrived !== slug) return;
+            stop();
+            if (timer !== null) clearTimeout(timer);
+            resolve(client.index(version, slug));
+        });
+        timer = setTimeout(() => {
+            stop();
+            resolve(client.index(version, slug));
+        }, INDEX_WAIT_MS);
+        client.want(version, [slug]);
+    });
+}
+
+async function systemInfo(slug: string, hex: string): Promise<SystemInfo | null> {
+    const index = await indexWhenReady(slug);
+    const entry = index ? index.hexes[hex] : null;
+    if (!index || !entry) return null;
+    return { slug, hex, name: entry.name || hex, sectorName: index.name };
+}
+
+async function systemBodies(slug: string, hex: string): Promise<TreeRow[] | null> {
+    const index = await indexWhenReady(slug);
+    const entry = index ? index.hexes[hex] : null;
+    if (!index || !entry || entry.tree === null) return null;
+    try {
+        const tree = client.treeNow(entry.tree) ?? await client.tree(entry.tree);
+        const model = overviewModel({ sectorName: index.name, subsectorName: subsectorName(index, hex), hex, entry, tree });
+        return model.tree ? model.tree.rows : null;
+    } catch {
+        return null;
+    }
+}
+
+/** The system selected on the map, or the last one opened this visit. */
+function currentSystem(): SystemInfo | null {
+    const world = panelWorld();
+    if (!world || !chart) return null;
+    const index = version ? client.index(version, world.slug) : null;
+    const entry = index ? index.hexes[world.hex] : null;
+    let sectorName = world.slug.replace(/_/g, ' ');
+    for (const sector of chart.sectors) if (sector.slug === world.slug) sectorName = sector.name;
+    return { slug: world.slug, hex: world.hex, name: entry ? entry.name : '', sectorName };
 }
 
 function openParty(): void {
@@ -796,10 +943,18 @@ function onMapKey(event: KeyboardEvent): void {
 
 watch(() => route.path, () => {
     sawQuery = false;
+    // A locate belongs to the page it was asked from.
+    if (locating.recordId) stopLocate();
     applyRoute();
 });
 
 watch(() => session.user, () => { greet(); });
+
+// Signed in, the campaign is asked for once the chart's version is known: the dossier's
+// "your records here" and the party's marker do not wait for the Campaign panel.
+watch(() => [session.user, versionRef.value] as const, () => { void ensureCampaign(versionRef.value); });
+
+watch(() => [locating.recordId, locating.hexKey, locating.turn] as const, () => { applyLocate(); });
 
 onBeforeUnmount(() => {
     if (raf) cancelFrame(raf);
@@ -812,6 +967,8 @@ onBeforeUnmount(() => {
     if (unregisterClose) unregisterClose();
     if (unregisterSystem) unregisterSystem();
     if (unregisterCampaign) unregisterCampaign();
+    setPlaceSource(null);
+    if (locating.recordId) stopLocate();
 });
 </script>
 
@@ -882,6 +1039,22 @@ onBeforeUnmount(() => {
 .map > canvas:focus {
   outline: 1px solid var(--signal);
   outline-offset: -1px;
+}
+/* A toast sits on the chart beside the panel, above the status line: it covers no control. */
+.map {
+  --toast-left: calc(var(--rail-width) + max(var(--chrome-inset), var(--panel-width, 0px)));
+  --toast-bottom: calc(var(--chrome-inset) + 44px);
+  --toast-max: min(460px, calc(100% - var(--rail-width) - max(var(--chrome-inset), var(--panel-width, 0px)) - var(--chrome-inset)));
+}
+/* The panel covers the chart: the toast goes to the search row, right of the search field. */
+.map[data-toasts="top"] {
+  --toast-top: var(--chrome-top);
+  --toast-right: var(--chrome-inset);
+  --toast-bottom: auto;
+  --toast-left: calc(var(--rail-width) + var(--chrome-inset) + 452px);
+  --toast-flow: row-reverse;
+  --toast-align: flex-start;
+  --toast-max: none;
 }
 .map .status {
   position: absolute;

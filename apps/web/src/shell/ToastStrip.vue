@@ -1,8 +1,12 @@
 <script setup lang="ts">
 /**
- * The toast strip (design_reference.md §3; campaign_manager_plan.md §6.3): at the lower left,
- * at most two, each with an optional action. A toast leaves after its time unless the pointer
- * is on it or focus is in it. It is a polite live region, so a screen reader hears it.
+ * The toast strip (design_reference.md §3; campaign_manager_plan.md §6.3): at most two, each
+ * with an optional action. A toast leaves after its time unless the pointer is on it or focus
+ * is in it. It is a polite live region, so a screen reader hears it.
+ *
+ * A toast covers the picture, never a control: each view says where through the --toast-*
+ * properties (the map: beside the panel at the chart's foot, or in the search row when the
+ * panel covers the chart; the orbit view: the picture's upper right).
  */
 import { onBeforeUnmount, watch } from 'vue';
 import Icon from '../design/Icon.vue';
@@ -73,21 +77,27 @@ onBeforeUnmount(() => {
 <style>
 .toasts {
   position: absolute;
-  left: calc(var(--rail-width) + var(--chrome-inset) + 16px);
-  bottom: 22px;
+  top: var(--toast-top, auto);
+  right: var(--toast-right, auto);
+  bottom: var(--toast-bottom, 22px);
+  left: var(--toast-left, calc(var(--rail-width) + var(--chrome-inset) + 16px));
   z-index: 10;
   display: flex;
-  flex-direction: column;
+  flex-direction: var(--toast-flow, column);
+  align-items: var(--toast-align, stretch);
   gap: 8px;
-  max-width: min(460px, calc(100vw - var(--rail-width) - 2 * var(--chrome-inset) - 32px));
+  max-width: var(--toast-max, min(460px, calc(100vw - var(--rail-width) - 2 * var(--chrome-inset) - 32px)));
   pointer-events: none;
   transition: left var(--t-rail) ease;
 }
 
 .toast {
   display: flex;
+  flex: 0 1 auto;
   align-items: center;
   gap: 12px;
+  box-sizing: border-box;
+  max-width: 460px;
   padding: 9px 8px 9px 14px;
   border: 1px solid var(--line-2);
   border-left: 3px solid var(--signal-dim);

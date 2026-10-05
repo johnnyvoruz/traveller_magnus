@@ -5,7 +5,7 @@
  * rest of the session from the list's "Recently deleted".
  */
 import { reactive, ref } from 'vue';
-import type { CampaignRecordType } from '@voyage/shared';
+import type { CampaignAnchor, CampaignRecordType } from '@voyage/shared';
 import { commit, newRecordId } from '../campaign/commit.ts';
 import { campaign } from '../campaign/store.ts';
 import { showToast } from '../shell/toast.ts';
@@ -23,9 +23,9 @@ function nowStamp(): string {
     return new Date().toISOString();
 }
 
-/** A new record of the type, in the store at once. Returns its id. */
-export function createRecord(type: CampaignRecordType): string {
-    const record = newRecord(type, newRecordId(), nowStamp());
+/** A new record of the type, in the store at once, at a place when one is given. Returns its id. */
+export function createRecord(type: CampaignRecordType, anchor: CampaignAnchor = null): string {
+    const record = newRecord(type, newRecordId(), nowStamp(), anchor);
     commit({ records: [created(record)] });
     justCreated.value = record.id;
     return record.id;

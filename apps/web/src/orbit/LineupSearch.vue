@@ -1,9 +1,9 @@
 <script setup lang="ts">
 /**
- * The Line up popover (legacy .sv-alignment, js/system_viewer.js:1459-1548): jump to the next
+ * The line-up search (legacy .sv-alignment, js/system_viewer.js:1459-1548): jump to the next
  * time the planets sit on one line through the star, then to the one after. It only binds:
  * the search is orbit/alignment.ts, run by orbit/alignment_runner.ts on a worker; the words
- * are alignmentReport.
+ * are alignmentReport. It is shown inside the time row's More menu (orbit/MoreMenu.vue).
  */
 import { onBeforeUnmount, ref, watch } from 'vue';
 import { formatDisplayNumber } from '../dossier/labels.ts';
@@ -13,19 +13,14 @@ import {
 } from './alignment.ts';
 import { AlignmentRunner } from './alignment_runner.ts';
 import type { Plan } from './layout.ts';
-import OrbitPopover from './OrbitPopover.vue';
 
 const props = defineProps<{
     plan: Plan | null;
-    open: boolean;
     /** The clock's date when a search starts. */
     now: () => number;
-    /** The row is narrow: the button shows its icon only. */
-    compact?: boolean;
 }>();
 
 const emit = defineEmits<{
-    pop: [open: boolean];
     /** Jump the clock to a line-up and show it on the orbits layout. */
     show: [days: number];
 }>();
@@ -74,11 +69,17 @@ async function search(startDays: number, shown: Lineup | null, matchSpread?: num
     }
 }
 
+/**
+ * The buttons are not disabled while a search runs: a disabled button drops the keyboard's
+ * focus out of the view, and Esc then reaches nothing. They say they are busy and ignore the press.
+ */
 function first(): void {
+    if (busy.value) return;
     void search(props.now() + 1 / 86400, null);
 }
 
 function next(): void {
+    if (busy.value) return;
     const upcoming = report.value ? report.value.upcoming : null;
     if (upcoming) void search(upcoming.days + 1 / 86400, upcoming, bar);
 }
@@ -93,42 +94,30 @@ onBeforeUnmount(() => runner.dispose());
 </script>
 
 <template>
-  <OrbitPopover
-    id="orbit-lineup"
-    :open="open"
-    icon="arrows-to-dot"
-    label="Line up"
-    :show-label="!compact"
-    title="Jump to the next time the planets sit on one line"
-    @toggle="emit('pop', !open)"
-    @close="emit('pop', false)"
-  >
-    <div class="orbit-lineup">
-      <p class="orbit-lineup-intro">
-        Jumps to the next time every planet sits on one line through the star. Companion stars are included. Moons,
-        belts, and rings are left out. The search follows these circular orbits and looks
-        {{ formatDisplayNumber(ALIGNMENT_HORIZON_YEARS, 0) }} years ahead.
-      </p>
-      <div class="orbit-lineup-controls">
-        <button type="button" class="orbit-btn orbit-lineup-go" :disabled="busy || !plan" @click="first">Line up the planets</button>
-        <button v-if="busy" type="button" class="orbit-btn" @click="cancel">Cancel</button>
-      </div>
-      <div class="orbit-lineup-results" role="status">
-        <p v-if="status">{{ status }}</p>
-        <template v-if="report">
-          <p v-if="report.date" class="orbit-lineup-date">{{ report.date }}</p>
-          <p v-for="line in report.lines" :key="line">{{ line }}</p>
-          <p v-for="note in report.notes" :key="note" class="orbit-lineup-note">{{ note }}</p>
-          <button v-if="report.upcoming" type="button" class="orbit-btn" :disabled="busy" @click="next">Show the next lineup</button>
-        </template>
-      </div>
+  <div class="orbit-lineup">
+    <p class="orbit-lineup-intro">
+      Jumps to the next time every planet sits on one line through the star. Companion stars are included. Moons,
+      belts, and rings are left out. The search follows these circular orbits and looks
+      {{ formatDisplayNumber(ALIGNMENT_HORIZON_YEARS, 0) }} years ahead.
+    </p>
+    <div class="orbit-lineup-controls">
+      <button type="button" class="orbit-btn orbit-lineup-go" :disabled="!plan" :aria-disabled="busy ? 'true' : undefined" @click="first">Find the next line-up</button>
+      <button v-if="busy" type="button" class="orbit-btn" @click="cancel">Cancel</button>
     </div>
-  </OrbitPopover>
+    <div class="orbit-lineup-results" role="status">
+      <p v-if="status">{{ status }}</p>
+      <template v-if="report">
+        <p v-if="report.date" class="orbit-lineup-date">{{ report.date }}</p>
+        <p v-for="line in report.lines" :key="line">{{ line }}</p>
+        <p v-for="note in report.notes" :key="note" class="orbit-lineup-note">{{ note }}</p>
+        <button v-if="report.upcoming" type="button" class="orbit-btn" :aria-disabled="busy ? 'true' : undefined" @click="next">Show the next lineup</button>
+      </template>
+    </div>
+  </div>
 </template>
 
 <style>
 .orbit-lineup {
-  width: min(320px, 70vw);
   color: var(--text-1);
   font: 400 12px/1.6 var(--font-text);
 }
@@ -157,7 +146,8 @@ onBeforeUnmount(() => runner.dispose());
   flex: 1 1 auto;
 }
 
-.orbit-lineup-go:disabled {
+.orbit-lineup .orbit-btn[aria-disabled="true"] {
+  opacity: 0.45;
   cursor: progress;
 }
 

@@ -1,8 +1,7 @@
 <script setup lang="ts">
 /**
- * One record (design §3): its name, type, summary, details and tags, each edited where it
- * stands, the saving mark, and Delete. Its place, its connections and its links come with
- * the next steps (K5c, K5d); a record made now is "nowhere in particular".
+ * One record (design §3): its name, type, place, summary, details and tags, each edited
+ * where it stands, the saving mark, and Delete. Its connections come with the next step (K5d).
  */
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { CAMPAIGN_LIMITS, type CampaignRecordType } from '@voyage/shared';
@@ -12,6 +11,7 @@ import Icon from '../design/Icon.vue';
 import { deleteRecord, justCreated, recentlyDeleted, restoreRecord, saveRecord } from './actions.ts';
 import EditableText from './EditableText.vue';
 import { RECORD_TYPES, addTag, cleanDetails, cleanName, cleanSummary, placeLine, typeInfo } from './records.ts';
+import WhereBlock from './WhereBlock.vue';
 
 const props = defineProps<{
     id: string;
@@ -21,7 +21,11 @@ const props = defineProps<{
     beside: boolean;
 }>();
 
-const emit = defineEmits<{ back: [] }>();
+const emit = defineEmits<{
+    back: [];
+    /** The map has to be seen (a pick, a locate): the panel gives way when it covers it. */
+    map: [];
+}>();
 
 const nameField = ref<{ edit: (select?: boolean) => void } | null>(null);
 const tagDraft = ref('');
@@ -132,6 +136,8 @@ watch(() => props.id, () => {
         <template v-else><Icon name="check" :size="12" />Saved</template>
       </p>
     </header>
+
+    <WhereBlock :id="id" :read-only="readOnly" @map="emit('map')" />
 
     <section>
       <h3 class="ui-heading">Summary</h3>

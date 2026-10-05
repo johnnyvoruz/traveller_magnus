@@ -8,7 +8,7 @@ import {
     advance, clockText, dateText, DAY_SECONDS, DEFAULT_START, DISPLAY_YEAR_DAYS, elapsedOrbitYears,
     FASTEST, formatLinkDate, HOUR, isRealTime, ORBIT_YEAR_DAYS, parseLinkDate, REAL_TIME,
     scrubbed, secondsOfDay, SHUTTLE_DEFAULT_LIMIT, SHUTTLE_LIMITS, shuttleRate, shuttleText,
-    skipHours, sliderFromSpeed, SPEED_SLIDER_MAX, speedFactorText, speedFromSlider, speedText,
+    skipHours, skipWeeks, WEEK_DAYS, sliderFromSpeed, SPEED_SLIDER_MAX, speedFactorText, speedFromSlider, speedText,
     splitDays, START_HELP, startDays, TICK_CAP_SECONDS, tickRate, timeFieldValue, totalDays, withDay,
     withTime, withYear,
 } from '../../apps/web/src/orbit/clock.ts';
@@ -124,6 +124,19 @@ test('skip is an hour, scrub is an offset from where the drag began', () => {
     close(skipHours(10, -1), 10 - 1 / 24);
     assert.equal(scrubbed(1000, -30), 970);
     assert.equal(scrubbed(1000, 12.5), 1012.5);
+});
+
+test('the week step is seven days on, the time of day kept, across a year end', () => {
+    assert.equal(WEEK_DAYS, 7);
+    assert.equal(skipWeeks(10, 1), 17);
+    assert.equal(skipWeeks(10.25, 1), 17.25);
+    assert.equal(skipWeeks(10, -1), 3);
+    // Day 362 of 1105 and a week: day 004 of 1106, at the same second.
+    const before = totalDays(1105, 362) + 0.5;
+    const after = splitDays(skipWeeks(before, 1));
+    assert.equal(after.year, 1106);
+    assert.equal(Math.floor(after.day), 4);
+    assert.equal(secondsOfDay(skipWeeks(before, 1)), secondsOfDay(before));
 });
 
 test('typed fields change one part of the date and keep the rest', () => {

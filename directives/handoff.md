@@ -2382,3 +2382,39 @@ API and Durable Object have against `data_model.md` and `api.md`).
   emulator under parallel load, but it exposes a real weakness: a create that succeeded can
   answer 500, and a retry would make a second universe. **Agent B:** create returns the row
   it built (no read-back), and a failed create must leave no row behind.
+
+## 82. K5c (places), "1 week" and the toast are in; accepted (2026-10-05)
+
+- **New orchestrator session** from `orchestrator_start_here.md`. Handover push `8e9ceb6`
+  (directives only) is green on GitHub; the live bundle is unchanged (records in, "1 week" not).
+- **Agent D, step 1:** the toast sits beside the panel above the status line (in the search row
+  at full width); **"1 week"** sits with the transport buttons, same time of day, view only
+  (`orbit/clock.ts` gains `WEEK_DAYS`, `skipWeeks`, nothing else changes); the line-up search
+  moved into a "More tools" kebab (`orbit/MoreMenu.vue`); a keyboard fault fixed on the way
+  (buttons disabled mid-search dropped focus, so Esc did nothing).
+- **Agent D, K5c:** the Where block on the record page (place in words, Locate, Show in orbit
+  for a body, change, clear); the system picked by map click, omnibox or "Use <selected>";
+  the body list from the system tree (arrow keys, "Nowhere in particular", Esc); Locate flies
+  the map and drives Agent C's layer through `MapRenderer.setCampaign` only; the dossier shows
+  "Your records here" / "on this world" with counts and "Add here"; the system tree counts
+  bodies with records; signed out, none of it appears. Saved and read back from the real local
+  API. New `workspace/{AddButton,RecordsHere,WhereBlock}.vue`, `locate.ts`, `opening.ts`,
+  `pick.ts`, `place_source.ts`, `places.ts`; `tests/web/workspace_places.test.js`; 10 contrast
+  pairs.
+- **D's calls, accepted:** (1) `workspace/opening.ts`: signed in, the campaign opens once the
+  map has painted and knows its truth version, so the dossier need not wait for the panel;
+  never signed out, never before first paint. (2) A whole-system anchor reads "Regina system".
+  (3) The design's free-text place label is dropped: `locationLabel` holds the body's name.
+  (4) Locate steps the full-width panel down to a column without saving that as the width.
+- **Orchestrator re-ran:** 568 pass / 0 fail / 7 skipped, check clean, typecheck clean, build
+  green. `campaign/` and `surface/` untouched (git status agrees).
+- **K5c leftovers, not built from the design:** no locator line or card in the orbit view (it
+  selects the body and its lock marks it); no Locate on dossier rows; no "At Regina" chip or
+  sort control on the list. Pick up with K5e (the party), when "Where are we" needs them.
+- **Not exercised:** a long flight at far zoom, a system with no generated bodies, the dossier
+  section's offline and load-error states, a screen reader, touch, browsers other than
+  headless Chrome. The unmatched-world message was forced by writing a bad body key.
+- **Agent B** has nothing on disk for the universe-creation hardening (§81); the prompt was
+  re-issued through Johnny. **Pushable now:** D is between steps, A and C free.
+- **Next:** D, step 3 of its brief (the deck plan viewer on a vessel's record page), then K5d
+  links. A wires B's client id into `campaign/store.ts` when B reports.

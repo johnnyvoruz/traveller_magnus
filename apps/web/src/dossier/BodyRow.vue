@@ -15,7 +15,9 @@ const props = withDefaults(defineProps<{
     tag?: string;
     uwp?: string;
     moon?: boolean;
-}>(), { tag: '', uwp: '', moon: false });
+    /** How many of the signed-in user's campaign records are on this body; 0 shows nothing. */
+    count?: number;
+}>(), { tag: '', uwp: '', moon: false, count: 0 });
 
 const lead = computed(() => props.facts[0] || '');
 const mainworld = computed(() => props.tag !== '' || lead.value.startsWith('Mainworld'));
@@ -30,6 +32,7 @@ const mainworld = computed(() => props.tag !== '' || lead.value.startsWith('Main
         <span>{{ lead }}</span><span v-if="facts.length > 1" class="doss-extra"> · {{ facts.slice(1).join(' · ') }}</span>
       </small>
     </span>
+    <span v-if="count" class="ui-count doss-row-count" :title="count === 1 ? 'One of your records is here' : count + ' of your records are here'">{{ count }}</span>
     <span v-if="tag" class="ui-tag">{{ tag }}</span>
     <span v-else-if="uwp" class="doss-row-uwp">{{ uwp }}</span>
   </button>
@@ -157,6 +160,14 @@ const mainworld = computed(() => props.tag !== '' || lead.value.startsWith('Main
   color: var(--text-muted);
   font-size: 11.5px;
   font-variant-numeric: var(--tabular);
+}
+
+.doss-row-count {
+  flex: 0 0 auto;
+  margin-left: 0;
+  background: var(--wash);
+  color: var(--signal);
+  font-weight: 700;
 }
 
 .doss-row-uwp {

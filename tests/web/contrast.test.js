@@ -230,6 +230,18 @@ const PAIRS = [
     ['--danger', '--panel-raised', TEXT, 'Delete button under the pointer'],
     ['--signal-dim', '--bg-1', MARK, 'toast edge, tag border under the pointer'],
     ['--signal', '--bg-1', TEXT, 'toast action, "Saving" mark'],
+    // Places: the Where block and its editor, Locate, and a dossier's "your records here" (K5c)
+    ['--text-muted', '--bg-1', TEXT, 'where: the system line, "Nowhere in particular" (13 px)'],
+    ['--text-1', '--row-active', SMALL, 'where: chosen body row, its detail line (11.5 px) and UWP'],
+    ['--signal', '--row-active', TEXT, 'Locating (pressed), on the record page and on a row'],
+    ['--control-line', '--panel-raised', MARK, 'Locate button border on a record row'],
+    ['--signal', '--bg-1', MARK, 'Locate icon on a record row'],
+    ['--text-muted', '--panel-raised', TEXT, 'where: hints and the picked system line (13 px); records here: row detail (12 px)'],
+    ['--signal', ['--wash', '--bg-1'], SMALL, 'system tree: count of records on a body (10.5 px)'],
+    // The orbit view's week step and More menu
+    ['--text-muted', '--stage-head', TEXT, 'More menu: the note under an item (12 px)'],
+    ['--text-muted', '--row-active', TEXT, 'More menu: the note under an item, under the pointer or focus (12 px)'],
+    ['--signal', '--stage-head', TEXT, 'More menu: the way back, the item icons'],
 ];
 
 if (process.env.CONTRAST_REPORT) {

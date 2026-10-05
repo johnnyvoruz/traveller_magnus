@@ -35,7 +35,7 @@ players' views are read from `https://cdn.traveller.voyage`.
 | Method | Path | Auth | Purpose | Schema |
 |---|---|---|---|---|
 | GET | `/api/universes` | user | **Built.** my universes, not deleted | — |
-| POST | `/api/universes` | user | **Built.** create `{ name, truthVersion \| null, editionDefault }`; `truthVersion` is a released version or null; an eleventh live universe is `too_large`; `engineVersion` is the current one; creates the Durable Object | `UniverseCreate` |
+| POST | `/api/universes` | user | **Built.** create `{ name, truthVersion \| null, editionDefault, id? }`. The response is the row just built. `truthVersion` is a released version or null. An eleventh live universe is `too_large`. `engineVersion` is the current one. Creates the Durable Object. A thrown failure after the insert deletes that row. The same caller posting the same `id` again gets that universe, `200`, and no second row. | `UniverseCreate` |
 | GET | `/api/universes/:id` | owner | **Built.** the catalogue row. Missing, deleted, or not yours is 404 | — |
 | PATCH | `/api/universes/:id` | owner | **Built.** rename (`name`) | `UniverseUpdate` |
 | DELETE | `/api/universes/:id` | owner | **Built.** soft delete; `purge_after` 30 days on | — |

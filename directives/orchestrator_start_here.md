@@ -87,7 +87,9 @@ campaign layer over the truth map; own maps later. X sign-in only.
 | K6a, K6b | clock in the API and the store | done, live, no screen yet |
 | K10 logic | `copyRecords` in `packages/shared` | done, no route or screen |
 | K9 parts 1, 2 | deck plan renderer, attach, `DeckPlanView.vue`, upload | done; not placed on a page |
-| **K5c** | places: anchor editor, locator, "records here" in the dossier | **Agent D, in flight** |
+| K5c | places: anchor editor, locator, "records here" in the dossier | done, accepted §82, not yet pushed |
+| "1 week" | orbit time control, view only; line-up search in a kebab | done, not yet pushed |
+| K9 part 3 | the deck plan viewer on a vessel's record page | **Agent D, in flight** |
 | K5d | links | next for D |
 | K5e | the party | after K5d |
 | K5f | several campaigns: create, name, switch, delete | after K5e |
@@ -97,15 +99,18 @@ campaign layer over the truth map; own maps later. X sign-in only.
 
 ## 6. In flight right now
 
-- **Agent D:** small fixes (the toast moved clear of navigation; **"Advance 1 week"** in the
-  orbit time controls with the line-up search moved to an overflow menu), then K5c, then
-  placing the deck plan viewer on a vessel's record page. D reports after K5c and again after
-  the viewer. D has uncommitted work across `workspace/`, `dossier/`, `orbit/`, `views/`.
+- **Agent D:** placing the deck plan viewer (`deckplan/DeckPlanView.vue`, `attach.ts`) on a
+  vessel's record page; reports after it. K5c, "1 week" and the toast fix are accepted
+  (handoff §82) and sit uncommitted across `workspace/`, `dossier/`, `orbit/`, `views/`.
+  K5c leftovers (orbit-view locator, Locate on dossier rows, "At Regina" chip, sort) wait
+  for K5e.
 - **Agent B:** hardening universe creation (no read-back, no orphan row on failure, an
-  optional client-made id so a retried create returns the same universe). When B reports,
-  Agent A must send that id from `campaign/store.ts`.
+  optional client-made id so a retried create returns the same universe). Nothing on disk
+  as of §82; the prompt was re-issued. When B reports, Agent A must send that id from
+  `campaign/store.ts`.
 - **Agents A, C:** free. **Agent F:** parked.
-- **Last push:** `5e78744`, deployed, GitHub run green. Everything after it is local.
+- **Last push:** `8e9ceb6` (directives only), green. Code after `5e78744` is local and
+  pushable: D is between steps.
 
 ## 7. Decisions Johnny has made that shape the next steps
 

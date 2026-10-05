@@ -17,10 +17,11 @@ import BodyChips from '../orbit/BodyChips.vue';
 import LayerChips from '../orbit/LayerChips.vue';
 import { planSystem } from '../orbit/layout.ts';
 import LineupSearch from '../orbit/LineupSearch.vue';
+import MoreMenu, { type MoreItem } from '../orbit/MoreMenu.vue';
 import { DEFAULT_LAYERS, type Layers, type Mode } from '../orbit/picture.ts';
 import { bodyChips, dossierPath, findChip, orbitPath, subsectorLetter } from '../orbit/bodies.ts';
 import {
-    advance, DAY_SECONDS, formatLinkDate, scrubbed, skipHours, startDays, tickRate, REAL_TIME,
+    advance, DAY_SECONDS, formatLinkDate, scrubbed, skipHours, skipWeeks, startDays, tickRate, REAL_TIME,
 } from '../orbit/clock.ts';
 import OrbitCanvas from '../orbit/OrbitCanvas.vue';
 import OrbitHeader from '../orbit/OrbitHeader.vue';
@@ -28,7 +29,8 @@ import { detectSystem, normalizeSystem } from '../orbit/system.ts';
 import TimeControls from '../orbit/TimeControls.vue';
 import { cancelFrame, nextFrame, now, pageOrigin } from '../platform/browser.ts';
 import Rail from '../shell/Rail.vue';
-import { loadSession } from '../account/session.ts';
+import { loadSession, session } from '../account/session.ts';
+import { ensureCampaign } from '../workspace/opening.ts';
 import AccountMenu from '../workspace/AccountMenu.vue';
 import ToastStrip from '../shell/ToastStrip.vue';
 import { handleKey, registerCommand } from '../shell/registry.ts';
@@ -243,6 +245,17 @@ function skip(hours: number): void {
     writeLink();
 }
 
+/**
+ * "1 week": the date moves seven days on and the clock stops there, as a skip does. It moves
+ * the view only; its tie to the campaign date comes with the campaign clock (K6c).
+ */
+function advanceWeek(): void {
+    shuttle.value = 0;
+    paused.value = true;
+    setDays(skipWeeks(days, 1));
+    writeLink();
+}
+
 function typedDays(next: number): void {
     setDays(next);
     writeLink();
@@ -296,6 +309,11 @@ const layers = ref<Layers>({ ...DEFAULT_LAYERS });
 const panelWidth = ref(0);
 const openPop = ref('');
 const moonsOpen = ref<string | null>(null);
+
+/** The time row's More menu: the tools this system has. */
+const moreItems = computed((): MoreItem[] => (state.value === 'ready' && searchPlan.value
+    ? [{ id: 'lineup', label: 'Line up the planets', icon: 'arrows-to-dot', note: 'Jump to the next time they sit on one line' }]
+    : []));
 
 function select(key: string): void {
     moonsOpen.value = null;
@@ -359,6 +377,9 @@ watch([slug, hex], () => {
     void load();
 });
 watch(entry, loadTree);
+// Signed in, the dossier beside the picture shows the campaign's records here: the campaign is
+// asked for once the session and the truth version are known, never before the first frame.
+watch(() => [session.user, version.value] as const, () => { void ensureCampaign(version.value); });
 
 onMounted(() => {
     // A visit that starts in the orbit view still learns who is signed in, after its first frame.
@@ -395,7 +416,6 @@ onBeforeUnmount(() => {
   >
     <Rail ref="railEl" :panel-open="dossierOpen" :search-open="false" :account-open="accountOpen" />
     <AccountMenu :open="accountOpen" @close="closeAccount" @campaign="router.push('/campaign')" />
-    <ToastStrip />
     <DossierPanel
       orbit
       :open="dossierOpen"
@@ -434,22 +454,19 @@ onBeforeUnmount(() => {
         :scrub-open="openPop === 'scrub'"
         @toggle="togglePlay"
         @skip="skip"
+        @week="advanceWeek"
         @days="typedDays"
         @speed="speed = $event"
         @scrub="scrub"
         @shuttle="shuttleTo"
         @pop="setPop('scrub', $event)"
       >
-        <template #pops="{ compact }">
-          <LineupSearch
-            :compact="compact"
-            v-if="state === 'ready' && searchPlan"
-            :plan="searchPlan"
-            :open="openPop === 'lineup'"
-            :now="() => days"
-            @pop="setPop('lineup', $event)"
-            @show="showLineup"
-          />
+        <template #pops>
+          <MoreMenu :open="openPop === 'more'" :items="moreItems" @pop="setPop('more', $event)">
+            <template #lineup>
+              <LineupSearch :plan="searchPlan" :now="() => days" @show="showLineup" />
+            </template>
+          </MoreMenu>
         </template>
       </TimeControls>
       <LayerChips
@@ -462,6 +479,7 @@ onBeforeUnmount(() => {
         @pop="setPop('view', $event)"
       />
       <div class="orbit-stage" :data-state="state">
+        <ToastStrip />
         <OrbitCanvas
           v-if="state === 'ready' && system"
           ref="stageEl"
@@ -561,6 +579,12 @@ onBeforeUnmount(() => {
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
+  /* A toast sits at the picture's upper right: the body card, the key, Fit and the body chips are elsewhere. */
+  --toast-top: 14px;
+  --toast-right: 14px;
+  --toast-bottom: auto;
+  --toast-left: auto;
+  --toast-max: min(460px, calc(100% - 28px));
 }
 
 .orbit-blank {

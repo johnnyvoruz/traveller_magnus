@@ -2,7 +2,12 @@
 import type { TreeRow } from './model.ts';
 import BodyRow from './BodyRow.vue';
 
-defineProps<{ count: number; rows: TreeRow[] }>();
+defineProps<{
+    count: number;
+    rows: TreeRow[];
+    /** Campaign records per body key, when someone is signed in. */
+    counts?: Record<string, number>;
+}>();
 defineEmits<{ open: [key: string] }>();
 </script>
 
@@ -19,6 +24,7 @@ defineEmits<{ open: [key: string] }>();
       :uwp="row.uwp"
       :moon="row.moon"
       :glyph="row.glyph"
+      :count="counts ? counts[row.key] ?? 0 : 0"
       @click="$emit('open', row.key)"
     />
   </section>
