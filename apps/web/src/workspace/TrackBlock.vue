@@ -6,11 +6,12 @@
  * is plotted. Both controls are commands first (track_rows.ts TRACK_COMMANDS).
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { campaign } from '../campaign/store.ts';
 import { trackOf } from '../campaign/track.ts';
 import Icon from '../design/Icon.vue';
 import { orbitPath } from '../orbit/bodies.ts';
+import { withQuery } from '../shell/pane.ts';
 import { registerCommand } from '../shell/registry.ts';
 import { liveById, parseHexKey, resolvePlace } from './places.ts';
 import { removeLastTrackLeg } from './track_actions.ts';
@@ -23,6 +24,7 @@ const props = defineProps<{
 }>();
 
 const router = useRouter();
+const route = useRoute();
 const rootEl = ref<HTMLElement | null>(null);
 /** The earlier legs are unfolded. */
 const all = ref(false);
@@ -57,7 +59,7 @@ function removeLast(): void {
 
 function openOrbit(): void {
     const at = system.value;
-    if (at) void router.push(orbitPath(at.slug, at.hex, at.bodyKey));
+    if (at) void router.push({ path: orbitPath(at.slug, at.hex, at.bodyKey), query: withQuery(route.query, {}) });
 }
 
 const RUN: Record<(typeof TRACK_COMMANDS)[number]['id'], { run: () => void; runnable: () => boolean }> = {

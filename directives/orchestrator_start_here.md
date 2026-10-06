@@ -149,7 +149,8 @@ file true: replace it, do not append to it.
 | T1.3a (B) | only bodies with a label, a percentage or a code above 0 need a liquid validated | accepted §142; in the push called for |
 | T1.4 (B) | the reconciliation as `generateHex`'s last step, behind an option absent by default | accepted §145; in the push called for |
 | **T1.6 (B)** | `prompts/b_engine_t1_6.md`: the derived build with the `reconcile-environment` transform, proven on the local Worker; no production command | **issued §145** |
-| **panes steps 2 to 4 (A)** | `prompts/a_panes_steps_2_4.md`: follow-up 17 built from A's own design while D is on paper | **issued §142**; D's queued fixes wait for its report |
+| panes steps 2 to 4 (A) | follow-up 17: `shell/PanelHost.vue`, `frame.ts`, the redirects, every push through `shell/pane.ts` | accepted §149; push called for (`findings/push/panes_files.txt`); **the signed-in pass is owed** |
+| **after the panes (D)** | `prompts/d_after_panes.md`: the signed-in browser pass over the panes, then items 6, 7, 9, 10 of the queued fixes | **issued §149**, after `d_fixes_now.md` |
 | **plot readout (C)** | `prompts/c_plot_readout.md`: AU from the primary and real distance from the selected ship | **issued §142** |
 | follow-up 14c (C) | Moons and Day/night radiate from the star, the teal fades, rings cross-fade | accepted §142; in the push called for; Johnny judges live |
 | follow-up 20 (city lights) | the port matches the legacy disc | with Johnny as G6 |
@@ -186,10 +187,10 @@ file true: replace it, do not append to it.
   `orbit/ships.ts`, `orbit/theme.ts`, `tests/web/orbit_renderer.test.js`,
   `tests/web/orbit_ships.test.js`), rehearsed in a scratch copy first. D holds on a
   paper-only step until then; after it, D gets `d_orbit_small_fixes.md` (seven items).
-- **Last push `729e74b`** (motion pass 3, the jump bubble, T1.3a), green. **Called for in
-  §148:** 17 files from `findings/push/dossier_readout_files.txt` (E's dossier split, B's
-  T1.4, C's readout), rehearsed; check `git log -1`. It must run before E or A edits those
-  files again.
+- **Last push `4c450c1`** (the dossier split, the readout, T1.4), green. **Called for in
+  §149:** A's panes, 18 files from `findings/push/panes_files.txt`; check `git log -1`.
+  Nobody has seen the signed-in campaign screens on the new panes: Johnny was asked for a
+  quick live look, and D's `d_after_panes.md` is the full pass.
 - **Open with Johnny:** only D's four design choices (§144), each with a standing default.
   G7 is answered: F designed the city lights; Enhanced is to be the default.
 - G5 was taken as the recommended option

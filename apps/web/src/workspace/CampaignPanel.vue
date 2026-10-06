@@ -7,6 +7,7 @@
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { addressPane, atPane, type Pane } from '../shell/pane.ts';
 import type { CampaignRecordType } from '@voyage/shared';
 import { session } from '../account/session.ts';
 import { campaign } from '../campaign/store.ts';
@@ -84,8 +85,13 @@ const partyLine = computed(() => (campaign.settings ? partyWords(campaign.settin
 
 /** The records tab, or the party's: each is an address, so Back works. */
 function showTab(tab: 'records' | 'party'): void {
-    const path = tab === 'party' ? '/campaign/party' : '/campaign';
-    if (route.path !== path) void router.push({ path, query: route.query });
+    pushPane(tab === 'party' ? { kind: 'party' } : { kind: 'campaign', record: null });
+}
+
+function pushPane(pane: Pane): void {
+    const now = addressPane(route.path, route.query).pane;
+    if (now.kind === pane.kind && (now.kind !== 'campaign' || pane.kind !== 'campaign' || now.record === pane.record)) return;
+    void router.push(atPane(route.path, route.query, pane));
 }
 
 function onTabKey(event: KeyboardEvent): void {
@@ -131,10 +137,9 @@ function showMap(): void {
     void nextTick(publish);
 }
 
-/** The list, or a record: the map's camera in the address stays as it is. */
+/** The list, or a record, on the view that is already open. */
 function go(id: string | null): void {
-    const path = id ? '/campaign/r/' + encodeURIComponent(id) : '/campaign';
-    if (route.path !== path) void router.push({ path, query: route.query });
+    pushPane({ kind: 'campaign', record: id });
 }
 
 function create(type: CampaignRecordType): void {

@@ -1,10 +1,13 @@
 /**
  * The pane address (findings/panes_swap_design.md, shape A). Pure.
  * The path names the view. The panel query names the pane.
- * The router does not use this yet: old addresses behave as they do now.
+ * paneOf still prefers a legacy /campaign path and ignores the query there.
+ * addressPane is what the screens read: a panel query wins.
+ * The router redirects those three paths with campaignRedirect.
  */
 
-export type Query = Record<string, string | string[] | null | undefined>;
+/** A router query. Values are strings on the wire; a writer may pass null to drop a key. */
+export type Query = Record<string, unknown>;
 
 export type PaneView =
     | { kind: 'home' }
@@ -36,7 +39,7 @@ export type Redirect = { path: string; query: Record<string, string> };
 
 const KEPT = ['panel', 'record', 'x', 'y', 'z', 'date', 'time', 'campaignStandIn'];
 
-function first(value: string | string[] | null | undefined): string | undefined {
+function first(value: unknown): string | undefined {
     const raw = Array.isArray(value) ? value[0] : value;
     if (typeof raw !== 'string' || raw.length === 0) return undefined;
     return raw;
@@ -100,7 +103,7 @@ function paneFromQuery(view: PaneView, query: Query): Pane {
     return dossierDefault(view) ? { kind: 'dossier' } : { kind: 'shut' };
 }
 
-/** The view and the pane an address names. */
+/** The view and the pane an address names. A legacy campaign path ignores the query. */
 export function paneOf(path: string, query: Query = {}): PaneAddress {
     const parts = partsOf(path);
     const legacy = campaignPane(parts);
@@ -109,9 +112,54 @@ export function paneOf(path: string, query: Query = {}): PaneAddress {
     return { view, pane: paneFromQuery(view, query) };
 }
 
-function text(value: string | string[] | null | undefined): string | undefined {
-    const raw = first(value);
-    return raw === undefined ? undefined : raw;
+/**
+ * The pane on screen. When the query names a panel, that wins, including on a
+ * legacy /campaign path (the view there is still home). Otherwise this is paneOf.
+ */
+export function addressPane(path: string, query: Query = {}): PaneAddress {
+    if (first(query.panel) !== undefined) {
+        const parts = partsOf(path);
+        const view = campaignPane(parts) ? { kind: 'home' as const } : viewOf(parts);
+        return { view, pane: paneFromQuery(view, query) };
+    }
+    return paneOf(path, query);
+}
+
+/** The query keys that name a pane. A dossier drops panel and record. */
+export function paneChanges(pane: Pane): Query {
+    if (pane.kind === 'shut') return { panel: 'closed', record: null };
+    if (pane.kind === 'dossier') return { panel: null, record: null };
+    if (pane.kind === 'party') return { panel: 'party', record: null };
+    return { panel: 'campaign', record: pane.record };
+}
+
+/** The current path with the pane written through withQuery. */
+export function atPane(path: string, query: Query, pane: Pane): { path: string; query: Record<string, string> } {
+    return { path, query: withQuery(query, paneChanges(pane)) };
+}
+
+/**
+ * One Escape step for the pane. Null when this pane has nothing to close.
+ * An orbit dossier with no body is left to the view, which returns to the map.
+ */
+export function escapePane(path: string, query: Query = {}): { path: string; query: Record<string, string> } | null {
+    const address = addressPane(path, query);
+    const pane = address.pane;
+    if (pane.kind === 'campaign' && pane.record) return atPane(path, query, { kind: 'campaign', record: null });
+    if (pane.kind === 'party' || pane.kind === 'campaign') return atPane(path, query, { kind: 'shut' });
+    if (pane.kind !== 'dossier') return null;
+    const view = address.view;
+    if (view.kind !== 'map' && view.kind !== 'orbit') return null;
+    if (view.body) {
+        const base = '/s/' + encodeURIComponent(view.sector) + '/' + view.hex;
+        return { path: view.kind === 'orbit' ? base + '/orbit' : base, query: withQuery(query, {}) };
+    }
+    if (view.kind === 'orbit') return null;
+    return atPane(path, query, { kind: 'shut' });
+}
+
+function text(value: unknown): string | undefined {
+    return first(value);
 }
 
 /**

@@ -18,6 +18,7 @@ import { campaign, createCampaign, deleteCampaign, renameCampaign, switchCampaig
 import { apiFetch } from '../platform/http.ts';
 import { saveBlob } from '../platform/browser.ts';
 import Icon from '../design/Icon.vue';
+import { addressPane, atPane } from '../shell/pane.ts';
 import { showToast } from '../shell/toast.ts';
 import { accountLine, displayName, initials } from './account.ts';
 import { forgetDeleted } from './actions.ts';
@@ -84,7 +85,15 @@ function back(): void {
 function changed(): void {
     forgetDeleted();
     stopLocate();
-    if (route.path.startsWith('/campaign/')) void router.push({ path: '/campaign', query: route.query });
+    const pane = addressPane(route.path, route.query).pane;
+    if (pane.kind === 'party' || (pane.kind === 'campaign' && pane.record)) {
+        void router.push(atPane(route.path, route.query, { kind: 'campaign', record: null }));
+    }
+}
+
+function openParty(): void {
+    const pane = addressPane(route.path, route.query).pane;
+    if (pane.kind !== 'party') void router.push(atPane(route.path, route.query, { kind: 'party' }));
 }
 
 async function run(work: () => Promise<void>, then: () => void): Promise<void> {
@@ -354,7 +363,7 @@ watch(() => props.open, (open) => {
           <Icon name="file-import" :size="15" /><span>Import into {{ openOne.name }}…</span><em v-if="!emptyCampaign">not empty</em>
         </button>
         <input ref="fileEl" class="vplan-file" type="file" accept="application/json,.json" tabindex="-1" aria-hidden="true" @change="onImportFile">
-        <button v-if="ready" type="button" role="menuitem" class="account-party" @click="router.push({ path: '/campaign/party', query: route.query }); $emit('close')">
+        <button v-if="ready" type="button" role="menuitem" class="account-party" @click="openParty(); $emit('close')">
           <Icon name="shuttle-space" :size="15" /><span>Go to the party</span>
         </button>
         <p v-if="trouble" class="account-trouble" role="alert">{{ trouble }}</p>

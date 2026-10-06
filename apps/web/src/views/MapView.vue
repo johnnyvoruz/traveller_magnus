@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { SectorHex, SectorIndex, TreeEnvelope, TruthManifest, TruthOverview } from '@voyage/shared';
 import { campaign } from '../campaign/store.ts';
@@ -15,9 +15,10 @@ import { tierFor } from '../map/tiers.ts';
 import { TruthClient } from '../map/truth_client.ts';
 import OmniBox from '../components/OmniBox.vue';
 import { bodyKeys, overviewModel, pickSystem, type AllegianceName, type TreeRow } from '../dossier/model.ts';
+import { askPaneEscape, setFrame } from '../shell/frame.ts';
+import { addressPane, atPane, withQuery } from '../shell/pane.ts';
 import { handleKey, registerCommand, systemPanel, type PanelWorld } from '../shell/registry.ts';
 import { orbitPath } from '../orbit/bodies.ts';
-import { escapeAction } from '../shell/panel_state.ts';
 import Rail from '../shell/Rail.vue';
 import { dismissToast, showToast, toasts } from '../shell/toast.ts';
 import ToastStrip from '../shell/ToastStrip.vue';
@@ -45,9 +46,7 @@ import {
 const route = useRoute();
 const router = useRouter();
 const canvasEl = ref<HTMLCanvasElement | null>(null);
-const dossierEl = ref<{ remeasure: () => void } | null>(null);
-const campaignEl = ref<{ remeasure: () => void } | null>(null);
-const railEl = ref<{ focusAccount: () => void } | null>(null);
+const railEl = ref<{ focusAccount: () => void; focusCampaign: () => void; focusSystem: () => void } | null>(null);
 /** The account pop-up at the rail's foot. */
 const accountOpen = ref(false);
 const status = ref('Loading the chart.');
@@ -128,29 +127,12 @@ function showStatus(): void {
 }
 
 const dossier = computed(() => dossierRoute(route.path));
-/** The Campaign panel has a route of its own, so Back closes it and a link can open it. */
-const campaignOpen = computed(() => route.path === '/campaign' || route.path.startsWith('/campaign/'));
-
-/** The dossier chunk loads the first time the panel opens, then stays mounted so it can close. */
-const dossierLive = ref(false);
-watch(() => dossierRoute(route.path).kind, (kind) => {
-    if (kind !== 'closed') dossierLive.value = true;
-}, { immediate: true });
-const DossierPanel = defineAsyncComponent(() => import('../dossier/DossierPanel.vue'));
-
-/** The campaign workspace chunk loads when a /campaign route is open, then stays mounted. */
-const campaignLive = ref(false);
-watch(campaignOpen, (open) => {
-    if (open) campaignLive.value = true;
-}, { immediate: true });
-const CampaignPanel = defineAsyncComponent(() => import('../workspace/CampaignPanel.vue'));
-/** The campaign tab the address names: the party at `/campaign/party`, else the records. */
-const campaignTab = computed((): 'records' | 'party' => (route.path === '/campaign/party' ? 'party' : 'records'));
-/** The record the address names: `/campaign/r/<id>`. */
-const campaignRecord = computed(() => {
-    const parts = route.path.split('/').filter((part) => part.length > 0);
-    return parts[0] === 'campaign' && parts[1] === 'r' && parts[2] ? decodeURIComponent(parts[2]) : null;
-});
+/** The pane the address names. A panel query wins over a legacy /campaign path. */
+const shownPane = computed(() => addressPane(route.path, route.query).pane);
+/** The Campaign panel is the campaign list, a record, or the party. */
+const campaignOpen = computed(() => shownPane.value.kind === 'campaign' || shownPane.value.kind === 'party');
+/** The dossier is open only when the pane is the dossier, not merely because the path names a hex. */
+const dossierShown = computed(() => shownPane.value.kind === 'dossier');
 
 /** Set on this device once the Campaign panel has opened itself for a first sign-in (design J12). */
 const GREETED_KEY = 'voyage_campaign_greeted';
@@ -161,7 +143,9 @@ function greet(): void {
     if (storageGet(GREETED_KEY) === '1') return;
     storageSet(GREETED_KEY, '1');
     if (storageGet(GREETED_KEY) !== '1') return;
-    toggleCampaign();
+    if (campaignOpen.value) return;
+    suppressFly = true;
+    void router.push(atPane(route.path, route.query, { kind: 'campaign', record: null }));
 }
 
 function syncSelection(): void {
@@ -333,40 +317,37 @@ function panelWorld(): PanelWorld | null {
     return remembered;
 }
 
+function cameraQuery(): { x: string; y: string; z: string } {
+    return { x: cam.x.toFixed(3), y: cam.y.toFixed(3), z: cam.ppp.toFixed(3) };
+}
+
 function runSystemPanel(): void {
-    const action = systemPanel({ panelOpen: dossier.value.kind !== 'closed', world: panelWorld() });
+    const action = systemPanel({ panelOpen: dossierShown.value, world: panelWorld() });
     if (!action.runnable) return;
     if (action.kind === 'close') {
         closePanel();
         return;
     }
+    suppressFly = true;
     void router.push({
         path: '/s/' + encodeURIComponent(action.slug) + '/' + action.hex,
-        query: route.query,
+        query: withQuery(route.query, { panel: null, record: null }),
     });
 }
 
+/** Closing writes panel=closed and leaves the path and the camera. */
 function closePanel(): void {
-    if (route.path === '/' || route.path === '') return;
+    if (shownPane.value.kind === 'shut') return;
     suppressFly = true;
-    void router.push({
-        path: '/',
-        query: { x: cam.x.toFixed(3), y: cam.y.toFixed(3), z: cam.ppp.toFixed(3) },
-    });
+    void router.push(atPane(route.path, route.query, { kind: 'shut' }));
 }
 
-/** The Campaign panel over the map where it stands; pressed again, it closes. */
+/** The Campaign panel over the view where it stands; pressed again, it closes. */
 function toggleCampaign(): void {
     accountOpen.value = false;
-    if (campaignOpen.value) {
-        closePanel();
-        return;
-    }
     suppressFly = true;
-    void router.push({
-        path: '/campaign',
-        query: { x: cam.x.toFixed(3), y: cam.y.toFixed(3), z: cam.ppp.toFixed(3) },
-    });
+    const next = campaignOpen.value ? { kind: 'shut' as const } : { kind: 'campaign' as const, record: null };
+    void router.push(atPane(route.path, route.query, next));
 }
 
 function closeAccount(): void {
@@ -384,11 +365,10 @@ function openCampaignFromMenu(): void {
 function openDateEditor(): void {
     editDateNext.value = true;
     accountOpen.value = false;
-    if (!campaignOpen.value) toggleCampaign();
-    else if (route.path !== '/campaign') {
-        suppressFly = true;
-        void router.push({ path: '/campaign', query: route.query });
-    }
+    const pane = shownPane.value;
+    if (pane.kind === 'campaign' && !pane.record) return;
+    suppressFly = true;
+    void router.push(atPane(route.path, route.query, { kind: 'campaign', record: null }));
 }
 
 function onEscape(): void {
@@ -410,57 +390,39 @@ function onEscape(): void {
         stopLocate();
         return;
     }
-    if (campaignOpen.value) {
-        if (omniOpen.value) return;
-        // A record or the party returns to the list; the list closes the panel.
-        if (campaignRecord.value || campaignTab.value === 'party') {
-            suppressFly = true;
-            void router.push({ path: '/campaign', query: route.query });
-        } else closePanel();
-        return;
-    }
+    if (omniOpen.value && (campaignOpen.value || dossierShown.value)) return;
     const state = dossierRoute(route.path);
-    const panelOpen = state.kind !== 'closed';
     let bodyOpen = state.kind === 'body';
     if (state.kind === 'body' && treeRef.value) {
         const system = pickSystem(treeRef.value.body);
         const keys = system ? bodyKeys(system) : [];
         if (!keys.includes(state.body)) bodyOpen = false;
     }
-    const action = escapeAction({ omniOpen: omniOpen.value, panelOpen, bodyOpen });
-    if (action === 'ignore') return;
-    if (action === 'overview' && state.kind === 'body') {
-        suppressFly = true;
-        void router.push({
-            path: '/s/' + encodeURIComponent(state.slug) + '/' + state.hex,
-            query: route.query,
-        });
+    if (dossierShown.value && state.kind === 'body' && !bodyOpen) {
+        closePanel();
         return;
     }
-    closePanel();
+    suppressFly = true;
+    if (askPaneEscape()) return;
+    suppressFly = false;
+    if (dossierShown.value) closePanel();
 }
 
 /** A toast needs this much of the chart beside the panel; with less it goes to the search row. */
 const TOAST_ROOM = 400;
 
-function onPanelWidth(px: number): void {
+/** The host reports the open pane's width. The chart clears it; a toast moves when the chart is narrow. */
+function setWidth(px: number): void {
     const map = canvasEl.value ? canvasEl.value.parentElement : null;
     if (map) {
-        map.style.setProperty('--panel-width', px + 'px');
         const el = canvasEl.value;
         const chart = el ? el.clientWidth - px : 0;
         map.dataset.toasts = px > 0 && chart < TOAST_ROOM ? 'top' : 'side';
     }
     panelPx = px;
-    // The locator's line starts at the panel's edge, which has just moved.
     if (locating.recordId) applyCampaign();
     if (renderer) renderer.setWorkspaceLeft(px);
     markDirty();
-}
-
-/** Two panels share the map's left edge; only the open one sets how far the chart is covered. */
-function onCampaignWidth(px: number): void {
-    if (campaignOpen.value || dossier.value.kind === 'closed') onPanelWidth(px);
 }
 
 function markDirty(): void {
@@ -521,11 +483,7 @@ function scheduleQuery(): void {
         const y = cam.y.toFixed(3);
         const z = cam.ppp.toFixed(3);
         if (route.query.x === x && route.query.y === y && route.query.z === z) return;
-        // The dev stand-in is a query, and a pan must not close the layer it opened.
-        const standIn = route.query.campaignStandIn;
-        const query: Record<string, string | string[]> = { x, y, z };
-        if (typeof standIn === 'string' && standIn.length > 0) query.campaignStandIn = standIn;
-        void router.replace({ path: route.path, query });
+        void router.replace({ path: route.path, query: withQuery(route.query, { x, y, z }) });
     };
     queryFrame = nextFrame(tick);
 }
@@ -583,8 +541,10 @@ function applyRoute(): void {
         markDirty();
         return;
     }
-    if (campaignOpen.value) {
-        // The Campaign panel has no place on the chart: the camera stays, or takes the link's, or the home view.
+    const legacyCampaign = route.path === '/campaign' || route.path.startsWith('/campaign/');
+    const home = route.path === '/' || route.path === '';
+    if (legacyCampaign || (campaignOpen.value && home)) {
+        // No hex on this path: the camera stays, or takes the link's, or the home view.
         showStatus();
         const linked = cameraFromQuery();
         if (linked && !sawQuery) {
@@ -640,8 +600,6 @@ function onResize(): void {
     if (!el || !renderer) return;
     renderer.resize(el.clientWidth, el.clientHeight, devicePixelRatio());
     if (pendingApply) applyRoute();
-    if (dossierEl.value) dossierEl.value.remeasure();
-    if (campaignEl.value) campaignEl.value.remeasure();
     markDirty();
 }
 
@@ -733,16 +691,13 @@ onMounted(() => {
                 const path = '/s/' + encodeURIComponent(sector.slug) + '/' + hhhh;
                 if (route.path !== path) {
                     suppressFly = true;
-                    void router.push({ path, query: route.query });
+                    void router.push({ path, query: withQuery(route.query, {}) });
                 }
                 return;
             }
             if (route.path !== '/' && route.path !== '') {
                 suppressFly = true;
-                void router.push({
-                    path: '/',
-                    query: { x: cam.x.toFixed(3), y: cam.y.toFixed(3), z: cam.ppp.toFixed(3) },
-                });
+                void router.push({ path: '/', query: withQuery(route.query, cameraQuery()) });
             }
         },
         // Legacy js/canvas_input.js:361-373: a double click on a system with orbit data enters its orbit view.
@@ -758,7 +713,7 @@ onMounted(() => {
             const entry = index ? index.hexes[hhhh] : null;
             // No generated system (an incomplete survey, or the index is not in yet): stay on the map.
             if (!entry || entry.tree === null) return;
-            void router.push(orbitPath(sector.slug, hhhh));
+            void router.push({ path: orbitPath(sector.slug, hhhh), query: withQuery(route.query, {}) });
         },
     });
     unregisterHome = registerCommand({
@@ -786,7 +741,7 @@ onMounted(() => {
     unregisterSystem = registerCommand({
         id: 'system-panel',
         name: 'System panel',
-        runnable: () => systemPanel({ panelOpen: dossier.value.kind !== 'closed', world: panelWorld() }).runnable,
+        runnable: () => systemPanel({ panelOpen: dossierShown.value, world: panelWorld() }).runnable,
         run: () => { runSystemPanel(); },
     });
     el.focus();
@@ -930,13 +885,10 @@ function currentSystem(): SystemInfo | null {
 
 /** The party's marker was pressed: the Party tab. */
 function openParty(): void {
-    if (route.path === '/campaign/party') return;
+    if (shownPane.value.kind === 'party') return;
     accountOpen.value = false;
     suppressFly = true;
-    void router.push({
-        path: '/campaign/party',
-        query: { x: cam.x.toFixed(3), y: cam.y.toFixed(3), z: cam.ppp.toFixed(3) },
-    });
+    void router.push(atPane(route.path, route.query, { kind: 'party' }));
 }
 
 function holdsWorld(sx: number, sy: number, hhhh: string): boolean {
@@ -960,13 +912,60 @@ function goHome(): void {
     if (rect && vp.width > 0 && vp.height > 0) flyTo(fit(rect, vp, 0));
     if (route.path !== '/' && route.path !== '') {
         suppressFly = true;
-        void router.push({ path: '/' });
+        void router.push({ path: '/', query: withQuery(route.query, {}) });
     }
 }
 
 function onMapKey(event: KeyboardEvent): void {
     handleKey(event);
 }
+
+/** The host paints the panes. This view only says what the dossier is showing. */
+function publishFrame(): void {
+    const state = dossier.value;
+    const placed = state.kind === 'closed' ? null : state;
+    setFrame({
+        kind: 'map',
+        panelTop: null,
+        truthVersion: versionRef.value,
+        setWidth,
+        retry: retryTree,
+        focusCampaign: () => { if (railEl.value) railEl.value.focusCampaign(); },
+        focusSystem: () => { if (railEl.value) railEl.value.focusSystem(); },
+        dossier: {
+            slug: placed ? placed.slug : '',
+            hex: placed ? placed.hex : '',
+            sectorName: dossierSectorName.value,
+            subsectorName: dossierSubsector.value,
+            entry: dossierEntry.value,
+            tree: treeRef.value,
+            bodyKey: dossierBody.value,
+            error: treeError.value,
+            pending: pendingSector.value,
+            missing: missingHex.value,
+            allegiances: dossierAllegiances.value,
+            orbit: false,
+        },
+    });
+}
+
+watch(
+    () => [
+        dossier.value,
+        dossierEntry.value,
+        dossierSectorName.value,
+        dossierSubsector.value,
+        dossierAllegiances.value,
+        dossierBody.value,
+        treeRef.value,
+        treeError.value,
+        pendingSector.value,
+        missingHex.value,
+        versionRef.value,
+    ] as const,
+    () => { publishFrame(); },
+    { immediate: true },
+);
 
 watch(() => route.path, () => {
     sawQuery = false;
@@ -995,6 +994,7 @@ onBeforeUnmount(() => {
     if (unregisterSystem) unregisterSystem();
     if (unregisterCampaign) unregisterCampaign();
     setPlaceSource(null);
+    setFrame(null);
     if (locating.recordId) stopLocate();
 });
 </script>
@@ -1004,42 +1004,13 @@ onBeforeUnmount(() => {
     <canvas ref="canvasEl" tabindex="0"></canvas>
     <Rail
       ref="railEl"
-      :panel-open="dossier.kind !== 'closed'"
+      :panel-open="dossierShown"
       :search-open="omniOpen"
       :campaign-open="campaignOpen"
       :account-open="accountOpen"
     />
     <OmniBox :version="versionRef" :manifest="manifestRef" @open="omniOpen = $event" />
     <StardateChip @open="openDateEditor" />
-    <DossierPanel
-      v-if="dossierLive"
-      ref="dossierEl"
-      :open="dossier.kind !== 'closed'"
-      :slug="dossier.kind === 'closed' ? '' : dossier.slug"
-      :hex="dossier.kind === 'closed' ? '' : dossier.hex"
-      :sector-name="dossierSectorName"
-      :subsector-name="dossierSubsector"
-      :entry="dossierEntry"
-      :tree="treeRef"
-      :body-key="dossierBody"
-      :error="treeError"
-      :pending="pendingSector"
-      :missing="missingHex"
-      :allegiances="dossierAllegiances"
-      @close="closePanel"
-      @retry="retryTree"
-      @width="onPanelWidth"
-    />
-    <CampaignPanel
-      v-if="campaignLive"
-      ref="campaignEl"
-      :open="campaignOpen"
-      :truth-version="versionRef"
-      :record-id="campaignRecord"
-      :tab="campaignTab"
-      @close="closePanel"
-      @width="onCampaignWidth"
-    />
     <AccountMenu :open="accountOpen" @close="closeAccount" @campaign="openCampaignFromMenu" />
     <ToastStrip />
     <p class="status ui-status" aria-live="polite">{{ status }}</p>
@@ -1051,10 +1022,6 @@ onBeforeUnmount(() => {
   position: fixed;
   inset: 0;
   background: var(--bg-0);
-}
-/* An expanded rail pushes the chart, the omnibox, the panel and the status pill; it covers nothing. */
-.map:has(.rail.is-expanded) {
-  --rail-width: var(--rail-width-open);
 }
 /* The chart begins at the rail's edge, so the camera centres on what is visible. Only the
    chart: the dossier draws canvases of its own inside this view. */

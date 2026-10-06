@@ -2,7 +2,7 @@
 /**
  * The icon rail (legacy #app-nav, hex_map.html 1320-1345, style.css 2030-2053): icons when
  * collapsed, labels when expanded, the active item marked. Expanded, it pushes the rest of the
- * shell aside (MapView sets --rail-width from its state). Every item runs a command from
+ * shell aside (.app sets --rail-width while the rail is expanded). Every item runs a command from
  * the registry; the rail holds no behaviour of its own beyond expanding.
  *
  * The foot button is the account (findings/campaign_workspace_design.md §1): "Sign in" while
@@ -27,10 +27,16 @@ withDefaults(defineProps<{
 }>(), { campaignOpen: false, accountOpen: false });
 
 const accountButton = ref<HTMLButtonElement | null>(null);
+const campaignButton = ref<HTMLButtonElement | null>(null);
+const systemButton = ref<HTMLButtonElement | null>(null);
 const mark = computed(() => initials(session.user));
 const who = computed(() => displayName(session.user));
 
-defineExpose({ focusAccount: () => { if (accountButton.value) accountButton.value.focus(); } });
+defineExpose({
+    focusAccount: () => { if (accountButton.value) accountButton.value.focus(); },
+    focusCampaign: () => { if (campaignButton.value) campaignButton.value.focus(); },
+    focusSystem: () => { if (systemButton.value) systemButton.value.focus(); },
+});
 
 const expanded = ref(false);
 const ready = ref(0);
@@ -91,6 +97,7 @@ onMounted(() => {
           <span class="rail-label">Map</span>
         </button>
         <button
+          ref="systemButton"
           type="button"
           class="rail-item"
           aria-label="System"
@@ -104,6 +111,7 @@ onMounted(() => {
         </button>
         <button
           v-if="has('campaign')"
+          ref="campaignButton"
           type="button"
           class="rail-item"
           aria-label="Campaign"

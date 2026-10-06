@@ -28,6 +28,16 @@ the planets' city lights). Still closed: everything else in `orbit/` but `card.t
 - If the design needs a token or a colour pair that does not exist, do not add it: build
   with what exists, and name what you need in your report.
 
+## One more, in your own file
+
+Agent A has rebuilt how the panes are addressed (`apps/web/src/shell/pane.ts`: `withQuery`
+keeps `panel`, `record`, the camera and the clock in the query). A found one push that does
+not go through it: in `dossier/DossierPanel.vue`, the push to the orbit view is
+`orbitPath(...)` with no query (about line 222), so opening the orbit view from the dossier
+drops the clock and the pane. Send it with `withQuery(route.query, {})`, as the two body
+pushes above it carry `route.query`. A test if the push is in a pure helper; otherwise say
+how you checked it.
+
 ## Check
 
 Tests for the lines (each from its field; the TWILIGHT ZONE line only when the dossier has

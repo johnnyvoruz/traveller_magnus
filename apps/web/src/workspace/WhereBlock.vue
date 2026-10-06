@@ -15,6 +15,7 @@ import Icon from '../design/Icon.vue';
 import BodyRow from '../dossier/BodyRow.vue';
 import type { TreeRow } from '../dossier/model.ts';
 import { orbitPath } from '../orbit/bodies.ts';
+import { atPane, withQuery } from '../shell/pane.ts';
 import { commands } from '../shell/registry.ts';
 import { locating, startLocate, stopLocate } from './locate.ts';
 import { beginPick, endPick, type PickedSystem } from './pick.ts';
@@ -70,7 +71,7 @@ const host = computed((): CampaignRecord | null => {
 const hostGone = computed(() => !!props.anchor && props.anchor.kind === 'record' && !host.value);
 
 function openHost(): void {
-    if (host.value) void router.push({ path: '/campaign/r/' + encodeURIComponent(host.value.id), query: route.query });
+    if (host.value) void router.push(atPane(route.path, route.query, { kind: 'campaign', record: host.value.id }));
 }
 const isLocating = computed(() => locating.recordId === props.locateId);
 
@@ -122,7 +123,7 @@ function showOrbit(): void {
     const at = place.value;
     const where = at ? parseHexKey(at.hexKey) : null;
     if (!at || !where) return;
-    void router.push(orbitPath(where.slug, where.hex, matched.value ? at.bodyKey : null));
+    void router.push({ path: orbitPath(where.slug, where.hex, matched.value ? at.bodyKey : null), query: withQuery(route.query, {}) });
 }
 
 // ---- Changing the place --------------------------------------------------------

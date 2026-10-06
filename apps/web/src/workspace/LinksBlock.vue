@@ -10,6 +10,7 @@ import { useRoute, useRouter } from 'vue-router';
 import type { CampaignRecord } from '@voyage/shared';
 import { campaign } from '../campaign/store.ts';
 import Icon from '../design/Icon.vue';
+import { atPane } from '../shell/pane.ts';
 import { addLink, removeLink, setLinkRole } from './actions.ts';
 import { alreadyLinked, connectionsOf, groupConnections, kindChoices, recordsAboard, ROLE_MAX, type KindChoice } from './links.ts';
 import RecordPicker from './RecordPicker.vue';
@@ -42,7 +43,7 @@ const info = (other: CampaignRecord) => typeInfo(other.type);
 
 /** A record's page is on this panel's route; the map's camera in the address stays. */
 function open(other: CampaignRecord): void {
-    void router.push({ path: '/campaign/r/' + encodeURIComponent(other.id), query: route.query });
+    void router.push(atPane(route.path, route.query, { kind: 'campaign', record: other.id }));
 }
 
 // ---- The role, edited where it stands ------------------------------------------

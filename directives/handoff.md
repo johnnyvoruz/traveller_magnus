@@ -4147,3 +4147,32 @@ Stop and report.
   had still not run (HEAD `729e74b`). Scratch copy of `HEAD` plus the 17: `vue-tsc` exit 0,
   build green, 809 tests, 798 pass, 0 fail, 11 skipped. A's panes (in flight in `App.vue`,
   `router.ts`, `shell/`, `views/`, `components/`, `workspace/`) are not in it.
+
+## 149. Pushed `4c450c1`; A's panes swap accepted, with the signed-in pass still owed (2026-10-06)
+
+- **`4c450c1`** (the dossier split, the readout in real units, the generation hook): GitHub
+  run green; `campaign` equals `origin/campaign`. C and E have their next pastes.
+- **Agent A, panes steps 2 to 4 (follow-up 17):** `shell/pane.ts` gains `addressPane` (a set
+  `panel` wins over a legacy path), `atPane`, `escapePane`; `shell/frame.ts` and
+  `shell/PanelHost.vue` (the only importer of the two panes, both kept mounted after first
+  open, focus by `focusTarget`, Esc by `escapePane`); `App.vue` is the full-viewport `.app`
+  round the router and the host; the views publish a frame and mount no pane; `router.ts`
+  loses the three campaign routes and `preloadCampaign`, gains the redirects and a
+  `beforeEach` preload; every address push in `workspace/` and `OmniBox.vue` goes through
+  the helpers. Entry 129,372 → 160,164 bytes (the host is in it; the panes stay chunks).
+  A's browser pass, signed out: every cold load of the address tables, the redirects with
+  Back not stopping on `/campaign`, **Campaign in orbit stays in orbit**, Back and Forward,
+  a pan and a scrub keep the pane, the dossier and Rail focus cases.
+  **Orchestrator:** the tree held only A's 18 files: 812 tests, 803 pass, 0 fail; check
+  clean; build green. `PanelHost.vue` and the helpers read. **Accepted.**
+- **Not seen by anyone: the signed-in screens.** A's `dev_make_admin.js` token answered 401,
+  so the campaign list, a record, the Party tab and their focus cases were never on screen.
+  The host passes `CampaignPanel` the same `record-id` and `tab` as before, from the
+  address; the risk is judged small. **Pushed on that basis**, with Johnny asked for a
+  one-minute signed-in look on the live site, and the full signed-in pass issued to D
+  (`prompts/d_after_panes.md`, with items 6, 7, 9 and 10 of the queued fixes).
+- **A's finding in E's file:** `dossier/DossierPanel.vue` pushes the orbit path with no
+  query (about line 222), dropping the clock and the pane. Added to
+  `prompts/e_daynight_locked.md`.
+- **The push:** by path from `findings/push/panes_files.txt` (A's 18), with `directives`.
+- **Next, A:** `prompts/a_ghosts.md`.

@@ -6,12 +6,12 @@
  * the body chips. All clock arithmetic is orbit/clock.ts and the picture is
  * orbit/OrbitCanvas.vue; this file holds the clock's number, the frame loop and the wiring.
  */
-import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { SectorHex, SectorIndex, TreeEnvelope } from '@voyage/shared';
 import Icon from '../design/Icon.vue';
 import { formatDisplayNumber } from '../dossier/labels.ts';
-import { overviewModel, pickSystem, type AllegianceName } from '../dossier/model.ts';
+import { overviewModel, pickSystem, type AllegianceName, type TreeRow } from '../dossier/model.ts';
 import { TruthClient } from '../map/truth_client.ts';
 import BodyChips from '../orbit/BodyChips.vue';
 import { LAYERS, LAYOUTS, ORBIT_COMMANDS, toggled, type DrawerId } from '../orbit/commands.ts';
@@ -28,7 +28,7 @@ import { formatDistance } from '../design/units.ts';
 import { realDistanceKm } from '../orbit/distance.ts';
 import { fieldHours, flightFuelWords, flightHours, hoursWords, jumpEstimateWords, rollWords, type JumpRoll } from '../orbit/estimates.ts';
 import { beginPick, endPick, type PickedSystem } from '../workspace/pick.ts';
-import { placeSource } from '../workspace/place_source.ts';
+import { placeSource, setPlaceSource, type SystemInfo } from '../workspace/place_source.ts';
 import Drawer from '../orbit/Drawer.vue';
 import { escapeStep, pressCloses, toggleDrawer, type DrawerState } from '../orbit/drawers.ts';
 import DrawerTabs from '../orbit/DrawerTabs.vue';
@@ -48,6 +48,8 @@ import { detectSystem, normalizeSystem } from '../orbit/system.ts';
 import TimeControls from '../orbit/TimeControls.vue';
 import { cancelFrame, nextFrame, now, observeSize, pageOrigin } from '../platform/browser.ts';
 import { nextTick } from 'vue';
+import { askPaneEscape, setFrame } from '../shell/frame.ts';
+import { addressPane, atPane, withQuery } from '../shell/pane.ts';
 import Rail from '../shell/Rail.vue';
 import { loadSession, session } from '../account/session.ts';
 import { campaign, setCampaignDate } from '../campaign/store.ts';
@@ -261,7 +263,8 @@ function frame(): void {
 
 /** The link carries the date whenever the visitor has set it; a running clock does not rewrite the link. */
 function writeLink(): void {
-    void router.replace({ path: route.path, query: { ...formatLinkDate(days) } });
+    const link = formatLinkDate(days);
+    void router.replace({ path: route.path, query: withQuery(route.query, { date: link.date, time: link.time ?? null }) });
 }
 
 function setDays(next: number): void {
@@ -575,7 +578,7 @@ function pickOnMap(): void {
         jumpReturnPath.value = null;
         if (back) void router.push(back);
     }, () => { jumpReturnPath.value = null; });
-    void router.push(dossierPath(slug.value, hex.value));
+    void router.push({ path: dossierPath(slug.value, hex.value), query: withQuery(route.query, {}) });
 }
 
 /**
@@ -624,16 +627,13 @@ function jump(): void {
 
 // ---- Selection, popovers, leaving --------------------------------------------
 
-const dossierOpen = ref(true);
-/** The dossier chunk loads when this panel is open. It starts open on the orbit route. */
-const dossierLive = ref(dossierOpen.value);
-watch(dossierOpen, (open) => {
-    if (open) dossierLive.value = true;
-});
-const DossierPanel = defineAsyncComponent(() => import('../dossier/DossierPanel.vue'));
+/** The pane the address names. Absent panel on an orbit path is the dossier. */
+const shownPane = computed(() => addressPane(route.path, route.query).pane);
+const dossierOpen = computed(() => shownPane.value.kind === 'dossier');
+const campaignOpen = computed(() => shownPane.value.kind === 'campaign' || shownPane.value.kind === 'party');
 /** The account pop-up at the rail's foot, as on the map. */
 const accountOpen = ref(false);
-const railEl = ref<{ focusAccount: () => void } | null>(null);
+const railEl = ref<{ focusAccount: () => void; focusCampaign: () => void; focusSystem: () => void } | null>(null);
 
 function closeAccount(): void {
     if (!accountOpen.value) return;
@@ -643,7 +643,6 @@ function closeAccount(): void {
 /** The layout and the layer switches: this visit's, as legacy (1183-1186 resets them on open). */
 const mode = ref<Mode>('orbits');
 const layers = ref<Layers>({ ...DEFAULT_LAYERS });
-const panelWidth = ref(0);
 const openPop = ref('');
 const moonsOpen = ref<string | null>(null);
 
@@ -670,19 +669,37 @@ function orbitCommand(id: string, run: () => void, runnable?: () => boolean): ()
 function select(key: string): void {
     moonsOpen.value = null;
     const next = selectedKey.value === key ? null : key;
-    void router.push({ path: orbitPath(slug.value, hex.value, next), query: route.query });
+    void router.push({ path: orbitPath(slug.value, hex.value, next), query: withQuery(route.query, {}) });
 }
 
 /** A body clicked on the picture: selected, never toggled off. */
 function pickBody(key: string): void {
     moonsOpen.value = null;
     if (selectedKey.value === key || !findChip(chips.value, key)) return;
-    void router.push({ path: orbitPath(slug.value, hex.value, key), query: route.query });
+    void router.push({ path: orbitPath(slug.value, hex.value, key), query: withQuery(route.query, {}) });
 }
 
 function backToMap(): void {
-    void router.push(dossierPath(slug.value, hex.value, selectedKey.value));
+    void router.push({
+        path: dossierPath(slug.value, hex.value, selectedKey.value),
+        query: withQuery(route.query, { panel: null, record: null }),
+    });
 }
+
+/** Campaign over this orbit; pressed again, the pane shuts. */
+function toggleCampaign(): void {
+    accountOpen.value = false;
+    const next = campaignOpen.value ? { kind: 'shut' as const } : { kind: 'campaign' as const, record: null };
+    void router.push(atPane(route.path, route.query, next));
+}
+
+/** System swaps to the dossier, or shuts it, and stays on this orbit. */
+function toggleSystem(): void {
+    const next = dossierOpen.value ? { kind: 'shut' as const } : { kind: 'dossier' as const };
+    void router.push(atPane(route.path, route.query, next));
+}
+
+
 
 // ---- The control drawers (follow-up 6) ------------------------------------------
 
@@ -745,8 +762,9 @@ function escape(): void {
         moonsOpen.value = null;
         return;
     }
+    if (askPaneEscape()) return;
     if (step === 'body') {
-        void router.push({ path: orbitPath(slug.value, hex.value), query: route.query });
+        void router.push({ path: orbitPath(slug.value, hex.value), query: withQuery(route.query, {}) });
         return;
     }
     backToMap();
@@ -826,13 +844,14 @@ onMounted(() => {
         orbitCommand('orbit-lineup', () => { openDrawer('time', () => { setPop('lineup', true); }); }, () => searchPlan.value !== null),
         orbitCommand('orbit-picture', () => { openDrawer('view'); }),
         registerCommand({ id: 'home', name: 'Return to map', run: backToMap }),
-        registerCommand({ id: 'system-panel', name: 'System panel', run: () => { dossierOpen.value = !dossierOpen.value; } }),
+        registerCommand({ id: 'system-panel', name: 'System panel', run: toggleSystem }),
         registerCommand({ id: 'account', name: 'Account', run: () => { accountOpen.value = !accountOpen.value; } }),
-        registerCommand({ id: 'campaign', name: 'Campaign', run: () => { accountOpen.value = false; void router.push('/campaign'); } }),
+        registerCommand({ id: 'campaign', name: 'Campaign', run: toggleCampaign }),
     );
     lastFrame = now();
     raf = nextFrame(frame);
     if (rootEl.value) rootEl.value.focus();
+    setPlaceSource({ current: currentSystem, system: systemInfo, bodies: systemBodies });
     if (flightEl.value) {
         const strip = flightEl.value;
         const measureStrip = (): void => { flightHeight.value = strip.offsetHeight; };
@@ -848,13 +867,81 @@ onMounted(() => {
     void load();
 });
 
+function publishFrame(): void {
+    setFrame({
+        kind: 'orbit',
+        panelTop: 'var(--chrome-inset)',
+        truthVersion: version.value,
+        setWidth: () => {},
+        retry,
+        focusCampaign: () => { if (railEl.value) railEl.value.focusCampaign(); },
+        focusSystem: () => { if (railEl.value) railEl.value.focusSystem(); },
+        dossier: {
+            slug: slug.value,
+            hex: hex.value,
+            sectorName: index.value ? index.value.name : '',
+            subsectorName: subsectorName.value,
+            entry: entry.value,
+            tree: tree.value,
+            bodyKey: selectedKey.value,
+            error: treeError.value,
+            pending: index.value === null,
+            missing: missing.value,
+            allegiances: allegiances.value,
+            orbit: true,
+        },
+    });
+}
+
+watch(
+    () => [
+        slug.value,
+        hex.value,
+        version.value,
+        index.value,
+        entry.value,
+        tree.value,
+        treeError.value,
+        selectedKey.value,
+        subsectorName.value,
+        missing.value,
+        allegiances.value,
+    ] as const,
+    () => { publishFrame(); },
+    { immediate: true },
+);
+
 onBeforeUnmount(() => {
     if (raf) cancelFrame(raf);
     if (stopArrive) stopArrive();
     if (stopStageSize) stopStageSize();
     if (stopFlightSize) stopFlightSize();
     for (const off of unregister) off();
+    setPlaceSource(null);
+    setFrame(null);
 });
+
+/** The system on screen, for a campaign pane asked from this orbit. */
+function currentSystem(): SystemInfo | null {
+    return {
+        slug: slug.value,
+        hex: hex.value,
+        name: entry.value ? entry.value.name : '',
+        sectorName: index.value ? index.value.name : slug.value.replace(/_/g, ' '),
+    };
+}
+
+async function systemInfo(nextSlug: string, nextHex: string): Promise<SystemInfo | null> {
+    if (nextSlug !== slug.value || nextHex !== hex.value || !index.value) return null;
+    const row = index.value.hexes[nextHex];
+    if (!row) return null;
+    return { slug: nextSlug, hex: nextHex, name: row.name || nextHex, sectorName: index.value.name };
+}
+
+async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[] | null> {
+    if (nextSlug !== slug.value || nextHex !== hex.value || !overview.value || !overview.value.tree) return null;
+    return overview.value.tree.rows;
+}
 </script>
 
 <template>
@@ -862,30 +949,10 @@ onBeforeUnmount(() => {
     ref="rootEl"
     class="orbit"
     tabindex="-1"
-    :style="{ '--panel-width': panelWidth + 'px' }"
     @keydown="onKey"
   >
-    <Rail ref="railEl" :panel-open="dossierOpen" :search-open="false" :account-open="accountOpen" />
-    <AccountMenu :open="accountOpen" @close="closeAccount" @campaign="router.push('/campaign')" />
-    <DossierPanel
-      v-if="dossierLive"
-      orbit
-      :open="dossierOpen"
-      :slug="slug"
-      :hex="hex"
-      :sector-name="index ? index.name : ''"
-      :subsector-name="subsectorName"
-      :entry="entry"
-      :tree="tree"
-      :body-key="selectedKey"
-      :error="treeError"
-      :pending="!index"
-      :missing="missing"
-      :allegiances="allegiances"
-      @close="dossierOpen = false"
-      @retry="retry"
-      @width="panelWidth = $event"
-    />
+    <Rail ref="railEl" :panel-open="dossierOpen" :search-open="false" :campaign-open="campaignOpen" :account-open="accountOpen" />
+    <AccountMenu :open="accountOpen" @close="closeAccount" @campaign="toggleCampaign" />
     <section class="orbit-card" aria-label="Orbit view">
       <OrbitHeader
         :title="title"
@@ -1101,13 +1168,6 @@ onBeforeUnmount(() => {
   inset: 0;
   background: var(--bg-0);
   outline: none;
-  /* No omnibox row here, so the dossier starts at the top inset (legacy: body.orrery-open). */
-  --panel-top: var(--chrome-inset);
-}
-
-/* An expanded rail pushes the dossier and the orbit card, as on the map. */
-.orbit:has(.rail.is-expanded) {
-  --rail-width: var(--rail-width-open);
 }
 
 .orbit-card {

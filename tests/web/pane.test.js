@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { campaignRedirect, focusTarget, paneOf, withQuery } from '../../apps/web/src/shell/pane.ts';
+import { addressPane, campaignRedirect, escapePane, focusTarget, paneChanges, paneOf, withQuery } from '../../apps/web/src/shell/pane.ts';
 
 const SECTOR = 'Spinward_Marches';
 const HEX = '1910';
@@ -129,6 +129,46 @@ test('a pan sets the camera and keeps the pane, the clock and the stand-in', () 
         time: '0800',
         campaignStandIn: '1',
     });
+});
+
+test('a panel query wins on a legacy campaign path, and paneOf does not', () => {
+    assert.deepEqual(paneOf('/campaign', { panel: 'closed' }).pane, LIST);
+    assert.deepEqual(addressPane('/campaign', { panel: 'closed' }), { view: HOME, pane: SHUT });
+    assert.deepEqual(addressPane('/campaign/party', { panel: 'campaign', record: 'beo%20wulf' }).pane, {
+        kind: 'campaign',
+        record: 'beo wulf',
+    });
+    assert.deepEqual(addressPane('/campaign'), paneOf('/campaign'));
+    assert.deepEqual(addressPane('/s/' + SECTOR + '/' + HEX + '/orbit', { panel: 'campaign' }).pane, LIST);
+});
+
+test('pane changes are the query the screens write', () => {
+    assert.deepEqual(paneChanges(SHUT), { panel: 'closed', record: null });
+    assert.deepEqual(paneChanges(DOSSIER), { panel: null, record: null });
+    assert.deepEqual(paneChanges(PARTY), { panel: 'party', record: null });
+    assert.deepEqual(paneChanges(LIST), { panel: 'campaign', record: null });
+    assert.deepEqual(paneChanges({ kind: 'campaign', record: 'beowulf' }), { panel: 'campaign', record: 'beowulf' });
+    const orbitPath = '/s/' + SECTOR + '/' + HEX + '/orbit';
+    const opened = withQuery({ date: '120', time: '0800', x: '1' }, paneChanges(LIST));
+    assert.deepEqual(addressPane(orbitPath, opened).pane, LIST);
+    assert.equal(addressPane(orbitPath, opened).view.kind, 'orbit');
+});
+
+test('escape steps the pane and leaves an orbit overview to the view', () => {
+    const hex = '/s/' + SECTOR + '/' + HEX;
+    const orbitPath = hex + '/orbit';
+    assert.deepEqual(escapePane(orbitPath, { panel: 'campaign', record: 'beowulf', date: '120' }), {
+        path: orbitPath,
+        query: { panel: 'campaign', date: '120' },
+    });
+    assert.deepEqual(escapePane(orbitPath, { panel: 'party', date: '120' }), {
+        path: orbitPath,
+        query: { panel: 'closed', date: '120' },
+    });
+    assert.deepEqual(escapePane(hex + '/b/' + BODY, { x: '1' }), { path: hex, query: { x: '1' } });
+    assert.deepEqual(escapePane(hex, { x: '1' }), { path: hex, query: { panel: 'closed', x: '1' } });
+    assert.equal(escapePane(orbitPath, { date: '120' }), null);
+    assert.equal(escapePane('/', { panel: 'closed' }), null);
 });
 
 test('focus stays on a cold load, and follows the pane table after that', () => {

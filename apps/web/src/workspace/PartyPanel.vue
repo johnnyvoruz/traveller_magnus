@@ -12,6 +12,7 @@ import { lastError, pending } from '../campaign/commit.ts';
 import { campaign } from '../campaign/store.ts';
 import { trackOf } from '../campaign/track.ts';
 import Icon from '../design/Icon.vue';
+import { atPane } from '../shell/pane.ts';
 import { saveParty, saveRecord } from './actions.ts';
 import { connectionsOf } from './links.ts';
 import { EMPTY_PARTY, isAboard, partyMembers, partyVessel, withAnchor, withMember, withoutMember, withVessel } from './party.ts';
@@ -83,7 +84,7 @@ const aboardRows = computed(() => rows.value.filter((row) => row.aboard));
 const ashoreRows = computed(() => rows.value.filter((row) => !row.aboard));
 
 function open(record: CampaignRecord): void {
-    void router.push({ path: '/campaign/r/' + encodeURIComponent(record.id), query: route.query });
+    void router.push(atPane(route.path, route.query, { kind: 'campaign', record: record.id }));
 }
 
 // ---- Choosing the ship and the people ---------------------------------------------

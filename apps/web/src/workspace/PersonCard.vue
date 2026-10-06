@@ -9,6 +9,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { campaign } from '../campaign/store.ts';
 import Icon from '../design/Icon.vue';
+import { atPane } from '../shell/pane.ts';
 import { imageUrl, primaryImage } from './images.ts';
 import { placeLine, typeInfo } from './records.ts';
 
@@ -34,7 +35,7 @@ function openRecord(): void {
     if (!record.value) return;
     const id = record.value.id;
     emit('close');
-    void router.push({ path: '/campaign/r/' + encodeURIComponent(id), query: route.query });
+    void router.push(atPane(route.path, route.query, { kind: 'campaign', record: id }));
 }
 
 function onKey(event: KeyboardEvent): void {

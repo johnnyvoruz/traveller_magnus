@@ -11,6 +11,7 @@ import type { CampaignRecordType } from '@voyage/shared';
 import { session } from '../account/session.ts';
 import { campaign } from '../campaign/store.ts';
 import Icon from '../design/Icon.vue';
+import { atPane } from '../shell/pane.ts';
 import { isOnline, onOnlineChange } from '../platform/browser.ts';
 import { createRecord } from './actions.ts';
 import AddButton from './AddButton.vue';
@@ -83,18 +84,9 @@ const rows = computed(() => {
 });
 const title = computed(() => (props.bodyKey ? 'Your records on this world' : 'Your records here'));
 
-/** A record's page is the Campaign panel's; from the orbit view its date does not go along. */
-function pathQuery(): Record<string, string | string[]> {
-    const query: Record<string, string | string[]> = {};
-    for (const key of ['x', 'y', 'z']) {
-        const value = route.query[key];
-        if (typeof value === 'string') query[key] = value;
-    }
-    return query;
-}
-
+/** A record opens in the campaign pane on this view, so the orbit clock stays in the address. */
 function open(id: string): void {
-    void router.push({ path: '/campaign/r/' + encodeURIComponent(id), query: pathQuery() });
+    void router.push(atPane(route.path, route.query, { kind: 'campaign', record: id }));
 }
 
 function add(type: CampaignRecordType): void {

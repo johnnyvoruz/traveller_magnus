@@ -9,6 +9,7 @@ import {
     type OmniResult,
     type SearchItem,
 } from '../search/omni.ts';
+import { atPane, withQuery } from '../shell/pane.ts';
 import { commands, registerCommand } from '../shell/registry.ts';
 import { session } from '../account/session.ts';
 import { campaign } from '../campaign/store.ts';
@@ -139,7 +140,7 @@ function makeHere(index: number, type: 'person' | 'place'): void {
     const result = results.value[index];
     if (!result || result.kind !== 'system' || !withCampaign.value) return;
     const id = createRecord(type, systemAnchor(hexKeyOf(result.sector, result.hex), result.name, null));
-    void router.push({ path: '/campaign/r/' + encodeURIComponent(id), query: route.query });
+    void router.push(atPane(route.path, route.query, { kind: 'campaign', record: id }));
     query.value = '';
     closePopup();
     inputEl.value?.blur();
@@ -168,14 +169,14 @@ function openResult(index: number): void {
         }
         // A record's place is being picked: the system goes to it, and the map stays where it is.
         if (offerSystem({ slug: result.sector, hex: result.hex, name: result.name })) query.value = '';
-        else void router.push('/s/' + encodeURIComponent(result.sector) + '/' + result.hex);
+        else void router.push({ path: '/s/' + encodeURIComponent(result.sector) + '/' + result.hex, query: withQuery(route.query, {}) });
     } else if (result.kind === 'record') {
-        void router.push({ path: '/campaign/r/' + encodeURIComponent(result.id), query: route.query });
+        void router.push(atPane(route.path, route.query, { kind: 'campaign', record: result.id }));
     } else if (result.kind === 'more') {
         handedQuery.value = result.query;
-        void router.push({ path: '/campaign', query: route.query });
+        void router.push(atPane(route.path, route.query, { kind: 'campaign', record: null }));
     } else if (result.kind === 'sector') {
-        void router.push('/s/' + encodeURIComponent(result.sector));
+        void router.push({ path: '/s/' + encodeURIComponent(result.sector), query: withQuery(route.query, {}) });
     } else {
         const command = commands().find((item) => item.id === result.id);
         if (command) command.run();
