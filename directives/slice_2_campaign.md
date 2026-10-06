@@ -406,6 +406,42 @@ only. D's five points for the orchestrator:
   3. **The layout choice as a split button (D):** Orbits / Row / Column becomes a split
      button whose face shows the selected view and whose arrow opens the three; same keys
      (1/2/3), same place on the picture.
+  4. **The stardate chip (D):** the text in `button.stardate` (the bold date and the weekday)
+     is not vertically aligned with its icon; align it.
+  5. **Scrub glitch (D):** scrubbing in the orbit view across the "current" tick (the
+     campaign mark on the track) makes something jump back and forth for a moment; find the
+     cause (a snap, a reset of the drag origin, or two writers of `days`) and remove it. The
+     manifesto's "graceful" rule: nothing pops.
+  6. **Controls into the top orbit nav, with drawers (D, design first):** Johnny would like
+     the controls to live in the orbit header and open as **control drawers** with a
+     graceful sci-fi micro-animation (tokens' motion only; none under reduced motion).
+     D proposes one layout with a mockup before building: which controls become drawers
+     (time, layers, view), what stays always visible (play, the date, the campaign mark),
+     and the keys.
+  7. **The day/night marker in real time (C):** no "Starport HH:MM" label. The tick becomes a
+     **heavy play marker**, about three times its present size, extending a few pixels past
+     the strip's top and bottom with rounded ends, in the strip's own tokens. It **moves with
+     the running orbit clock** (the dossier subscribes to the clock, not only to the link),
+     left to right and looping: a real-time translation of the universal time to the world's
+     local time. Clean, minimal, graceful.
+  8. **The ship sheet as a panel default (D):** remove "N of 312", the PDF file name, the
+     orange frame line and the page numbers; the sheet reads as part of the panel. Every
+     section collapses and expands (state kept per session). In any table that scrolls
+     sideways, the row's key column (the row number or the first field) stays frozen so the
+     user keeps context. Johnny: "love the custom scroll".
+  9. **Passengers and crew as people (D, "workshop it, do your best"):** in the Passengers and
+     Crew sections, a name field gets a **+** that offers "existing person" (the campaign's
+     people, picked as in K5d) or "new person" (created and linked), or the field is typed
+     as plain text, untracked. A picked person shows as a **pill** in the field; pressing the
+     pill opens that person in the app's one modal (a read-only card with "Open record").
+     The link is a `crew` or `passenger` connection (K5d vocabulary; `passenger` is added to
+     the shared table if absent, labels only), so both pages show it.
+
+- **K13 part 4. The character sheet (Johnny, 2026-10-05).** Person records get the same
+  treatment from a character sheet PDF, "with all our new design requirements": the field
+  inventory (B), the fields into `rules/` (Johnny), the sheet on the person page as a panel
+  default with collapsible sections, frozen keys on sideways scroll, pills for linked
+  records (D). **Waits on the PDF**, which is not in `assets/` yet.
 
 - **Deck plans on a light background (Johnny, 2026-10-05).** The Geomorph tiles are drawn
   for a light page. The viewer's canvas backdrop becomes a light "paper" token (added to

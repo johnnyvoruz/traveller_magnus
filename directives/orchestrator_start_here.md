@@ -112,14 +112,15 @@ campaign layer over the truth map; own maps later. X sign-in only.
 
 ## 6. In flight right now
 
-- **Agent D:** the full-screen deck plan and the layout split button (§112). Then K6d
-  screens (the ship list, the track, the Jump button).
+- **Agent D:** follow-ups step 1 (full-screen deck plan, split button, stardate alignment,
+  scrub glitch, sheet chrome and collapsible sections, frozen keys), then step 2
+  (passengers and crew as people with pills; the orbit drawers design), then K6d screens.
 - **Agent A:** free.
 - **Agent B:** free. The export route is in (§104); Export / Import buttons come with D's K15.
-- **Agent C:** crisp deck plan tiles at small scales (§112).
+- **Agent C:** the real-time day/night play marker (§114, item 7).
 - **Agent F:** parked. K13 parts 1 and 2 done (handoff 89 to 91); part 3 after K5f.
-- **Last push:** 7bcbd00. Local and finished: A's track, D's ship sheet (§113); C mid-step
-  in deckplan/.
+- **Last push:** c4d7e8b (track, sheet). Local and finished: C's crisp tiles (§115); D
+  mid-step.
 
 ## 7. Decisions Johnny has made that shape the next steps
 

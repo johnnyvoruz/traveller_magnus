@@ -35,6 +35,19 @@ export type TileUrlConfig = {
 };
 
 const cache = new Map<string, Promise<DeckImage | null>>();
+/** Full tile, then one half, then one quarter. Built once per image. */
+const pyramids = new WeakMap<object, { image: DeckImage; size: { w: number; h: number } }[]>();
+
+/**
+ * Which cached copy to draw. 0 is the tile itself. Under half scale, one
+ * pre-halved copy; under a quarter, the second. Scales 1, 0.4 and 0.2 are
+ * levels 0, 1 and 2.
+ */
+export function mipLevel(scale: number): number {
+    if (!(scale < 0.5)) return 0;
+    if (!(scale < 0.25)) return 1;
+    return 2;
+}
 
 function envConfig(): TileUrlConfig {
     const env = (import.meta as ImportMeta & { env?: { DEV?: boolean; VITE_CDN_BASE?: string } }).env;
@@ -109,6 +122,54 @@ function project(frame: DeckFrame, x: number, y: number): [number, number] {
     return [frame.panX + x * frame.scale, frame.panY - y * frame.scale];
 }
 
+function allocCanvas(width: number, height: number): HTMLCanvasElement | OffscreenCanvas | null {
+    if (typeof OffscreenCanvas === 'function') return new OffscreenCanvas(width, height);
+    if (typeof document !== 'undefined') {
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        return canvas;
+    }
+    return null;
+}
+
+/** One high-quality halving. Null where there is no canvas to keep the copy. */
+function halve(image: DeckImage, size: { w: number; h: number }): { image: DeckImage; size: { w: number; h: number } } | null {
+    const w = Math.max(1, Math.floor(size.w / 2));
+    const h = Math.max(1, Math.floor(size.h / 2));
+    if (w >= size.w && h >= size.h) return null;
+    const canvas = allocCanvas(w, h);
+    if (!canvas) return null;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(image, 0, 0, w, h);
+    return { image: canvas, size: { w, h } };
+}
+
+/** The tile and its two halved copies, made once and kept beside the image. */
+function pyramid(image: DeckImage, size: { w: number; h: number }): { image: DeckImage; size: { w: number; h: number } }[] {
+    const kept = pyramids.get(image);
+    if (kept) return kept;
+    const levels = [{ image, size }];
+    let current = levels[0]!;
+    for (let step = 0; step < 2; step += 1) {
+        const next = halve(current.image, current.size);
+        if (!next) break;
+        levels.push(next);
+        current = next;
+    }
+    pyramids.set(image, levels);
+    return levels;
+}
+
+/** The copy for this scale. The three corners still cover the same map quad. */
+function sourceFor(image: DeckImage, size: { w: number; h: number }, scale: number): { image: DeckImage; size: { w: number; h: number } } {
+    const levels = pyramid(image, size);
+    return levels[Math.min(mipLevel(scale), levels.length - 1)]!;
+}
+
 /**
  * One repeating fill of the square-base image, across the whole canvas.
  * 600 image pixels are 50 map units, so a grid line falls on every multiple
@@ -125,11 +186,12 @@ function drawSquareBase(
 ): void {
     const scale = frame.scale;
     if (!(scale > 0) || !(size.w > 0) || !(size.h > 0)) return;
-    const pattern = ctx.createPattern(image, 'repeat');
+    const source = sourceFor(image, size, scale);
+    const pattern = ctx.createPattern(source.image, 'repeat');
     if (!pattern) return;
     const span = SQUARE_BASE_SPAN;
-    const a = (span / size.w) * scale;
-    const d = (span / size.h) * scale;
+    const a = (span / source.size.w) * scale;
+    const d = (span / source.size.h) * scale;
     const e = frame.panX;
     const f = frame.panY - span * scale;
     ctx.save();
@@ -174,6 +236,8 @@ export async function drawDeck(
     const resolve = opts.resolve ?? tileUrl;
     const load = opts.load ?? loadImage;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     ctx.clearRect(0, 0, opts.width, opts.height);
     const bounds = placed.bounds;
     if (!bounds) return [];
@@ -203,8 +267,9 @@ export async function drawDeck(
         const topLeft = project(frame, item.tile.topLeft[0], item.tile.topLeft[1]);
         const topRight = project(frame, item.tile.topRight[0], item.tile.topRight[1]);
         const bottomLeft = project(frame, item.tile.bottomLeft[0], item.tile.bottomLeft[1]);
-        ctx.setTransform(...quadTransform(item.size, topLeft, topRight, bottomLeft));
-        ctx.drawImage(item.image, 0, 0, item.size.w, item.size.h);
+        const source = sourceFor(item.image, item.size, frame.scale);
+        ctx.setTransform(...quadTransform(source.size, topLeft, topRight, bottomLeft));
+        ctx.drawImage(source.image, 0, 0, source.size.w, source.size.h);
     }
     return skipped;
 }

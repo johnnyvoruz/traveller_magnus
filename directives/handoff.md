@@ -2949,3 +2949,30 @@ API and Durable Object have against `data_model.md` and `api.md`).
 - **Next, D:** the full-screen deck plan and the layout split button (§112), then K6d
   screens (the ship list, the track on the vessel page, the Jump button on
   `settings.jumpHours`, "Where are we" from the track).
+
+## 114. Pushed `c4d7e8b` (track, sheet); a batch of Johnny's feedback on the live app (2026-10-05)
+
+- Johnny's feedback after using production, recorded as follow-ups 4 to 9 and K13 part 4
+  in `slice_2_campaign.md`: the stardate chip's text alignment; a scrub glitch across the
+  campaign tick; controls into the orbit header as animated drawers (D designs first); the
+  day/night tick as a large play marker moving in real time with the clock, no label (C);
+  the ship sheet as a panel default (no counter, file name, frame or page numbers;
+  collapsible sections; frozen key columns on sideways scroll); passengers and crew as
+  people with a + picker, pills and a modal card; a character sheet for people when its
+  PDF arrives (none in `assets/` yet).
+- **Split into steps:** D step 1 (small fixes and the sheet chrome: items 1, 3, 4, 5, 8 and
+  the split button), D step 2 (item 9, then item 6's design), C next (item 7). K6d screens
+  after those.
+
+## 115. Crisp deck tiles at small scales (Agent C); accepted (2026-10-05)
+
+- **Agent C:** `drawDeck` sets `imageSmoothingEnabled` and `imageSmoothingQuality = 'high'`;
+  every tile and the grid keep a three-level pyramid (original, half, quarter, halved once
+  with the same quality); `mipLevel` picks by frame scale (under ½ → 1, under ¼ → 2); the
+  pattern matrix and the three-corner transform divide by the copy's size so the geometry
+  is unchanged; scale 1 uses the original and no fixture digest changed. Test for the three
+  levels. 673 pass. **Accepted.** The before/after shots are at scale 0.21 (a thumbnail of
+  a ship); Johnny judges the real effect in the viewer at a modest zoom-out.
+- Pushable by path: `apps/web/src/deckplan/draw.ts`, `tests/web/deck_plan.test.js`. D is
+  mid-step (`PlanModal.vue`, `time_row.ts`, `ShipSheet.vue`, `StardateChip.vue`, …).
+- **Next, C:** the real-time day/night play marker (§114 item 7).

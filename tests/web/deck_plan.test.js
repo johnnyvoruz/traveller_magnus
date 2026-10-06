@@ -4,7 +4,7 @@
  */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { drawDeck, fitFrame, SQUARE_BASE_PATH, tileUrl } from '../../apps/web/src/deckplan/draw.ts';
+import { drawDeck, fitFrame, mipLevel, SQUARE_BASE_PATH, tileUrl } from '../../apps/web/src/deckplan/draw.ts';
 import { placeShip } from '../../apps/web/src/deckplan/place.ts';
 import { DECK_PLAN_LIMITS, DeckPlan } from '@voyage/shared';
 import { recordingContext } from './orbit_fixture.js';
@@ -246,6 +246,12 @@ test('an explicit frame pans and zooms, and fit matches the unframed screen poin
     const [fitX, fitY] = screenOf(placed.bounds, width, height, tile.topLeft[0], tile.topLeft[1]);
     assert.ok(Math.abs(fitted.panX + tile.topLeft[0] * fitted.scale - fitX) < 1e-9);
     assert.ok(Math.abs(fitted.panY - tile.topLeft[1] * fitted.scale - fitY) < 1e-9);
+});
+
+test('the mip level for scales 1, 0.4 and 0.2 is 0, 1 and 2', () => {
+    assert.equal(mipLevel(1), 0);
+    assert.equal(mipLevel(0.4), 1);
+    assert.equal(mipLevel(0.2), 2);
 });
 
 test('tileUrl uses the dev middleware or the map CDN', () => {
