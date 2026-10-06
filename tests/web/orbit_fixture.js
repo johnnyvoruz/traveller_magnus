@@ -64,6 +64,7 @@ export function recordingContext() {
         get(_target, prop) {
             if (prop === 'measureText') return (text) => ({ width: 6 * String(text).length });
             if (prop === 'createRadialGradient') return (...args) => gradient('radial', args);
+            if (prop === 'createLinearGradient') return (...args) => gradient('linear', args);
             if (prop === 'createConicGradient') return (...args) => gradient('conic', args);
             if (prop in state) return state[prop];
             return (...args) => { calls.push({ op: String(prop), args, fill: state.fillStyle, stroke: state.strokeStyle, alpha: state.globalAlpha }); };

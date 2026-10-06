@@ -53,18 +53,53 @@ test('a mark with no body on this picture is left off, and a second track keeps 
     };
     const other = {
         id: 'liner', name: 'Liner', kind: 'traffic', shape: 'rectangle',
-        legs: [{ from: at('w0'), to: at('w3'), departs: 0, arrives: 10, mode: 'jump' }],
+        legs: [{ from: at('w0'), to: at('w0'), departs: 0, arrives: 10, mode: 'orbit' }],
     };
     const marks = placeShips([missing, other], bodiesAt, 5);
-    assert.equal(marks.length, 1);
-    assert.equal(marks[0].id, 'liner');
-    assert.equal(marks[0].shape, 'rectangle');
-    assert.equal(marks[0].kind, 'traffic');
-    assert.equal(marks[0].x, 50);
-    assert.equal(marks[0].y, 2.5);
+    assert.deepEqual(marks, [{ id: 'liner', name: 'Liner', kind: 'traffic', shape: 'rectangle', x: 0, y: 5 }]);
 
     assert.equal(plotText({ x: 100, y: 200, from: { x: 100, y: 230 } }), '100.0, 200.0  30.0');
     assert.equal(plotText({ x: 1.26, y: 2 }), '1.3, 2.0');
+});
+
+test('a jump reports the leave and the arrival, and is not a mark while it is under way', () => {
+    const leaving = {
+        id: 'out', name: 'Outbound', kind: 'traffic', shape: 'triangle',
+        legs: [
+            { from: at('w0'), to: at('w0'), departs: 0, arrives: 10, mode: 'orbit' },
+            { from: at('w0'), to: at('w9'), departs: 10, arrives: 20, mode: 'jump' },
+        ],
+    };
+    const reaching = {
+        id: 'in', name: 'Inbound', kind: 'vessel', shape: 'circle',
+        legs: [{ from: at('w9'), to: at('w3'), departs: 10, arrives: 20, mode: 'jump' }],
+    };
+    const ship = { id: 'out', name: 'Outbound', kind: 'traffic', shape: 'triangle' };
+
+    assert.deepEqual(placeShips([leaving], bodiesAt, 9), [{ ...ship, x: 0, y: 9 }]);
+    assert.deepEqual(placeShips([leaving], bodiesAt, 10), [{ ...ship, x: 0, y: 10, jump: 'out' }]);
+    assert.deepEqual(placeShips([leaving], bodiesAt, 15), [{ ...ship, x: 0, y: 15, jump: 'out' }]);
+    assert.deepEqual(placeShips([leaving], bodiesAt, 20), []);
+    assert.deepEqual(placeShips([leaving], bodiesAt, 21), []);
+
+    const inbound = { id: 'in', name: 'Inbound', kind: 'vessel', shape: 'circle' };
+    assert.deepEqual(placeShips([reaching], bodiesAt, 9), []);
+    assert.deepEqual(placeShips([reaching], bodiesAt, 10), [{ ...inbound, x: 100, y: 0, jump: 'in' }]);
+    assert.deepEqual(placeShips([reaching], bodiesAt, 15), [{ ...inbound, x: 100, y: 0, jump: 'in' }]);
+    assert.deepEqual(placeShips([reaching], bodiesAt, 20), [{ ...inbound, x: 100, y: 0 }]);
+    assert.deepEqual(placeShips([reaching], bodiesAt, 25), [{ ...inbound, x: 100, y: 0 }]);
+
+    // Both ends on this picture: still no mark along the line, then a normal mark at the arrival.
+    const local = {
+        id: 'liner', name: 'Liner', kind: 'traffic', shape: 'rectangle',
+        legs: [{ from: at('w0'), to: at('w3'), departs: 0, arrives: 10, mode: 'jump' }],
+    };
+    assert.deepEqual(placeShips([local], bodiesAt, 5), [
+        { id: 'liner', name: 'Liner', kind: 'traffic', shape: 'rectangle', x: 0, y: 5, jump: 'out' },
+    ]);
+    assert.deepEqual(placeShips([local], bodiesAt, 10), [
+        { id: 'liner', name: 'Liner', kind: 'traffic', shape: 'rectangle', x: 100, y: 0 },
+    ]);
 });
 
 test('the stand-in party sits halfway from the star to the furthest body', () => {
@@ -83,5 +118,18 @@ test('the stand-in party sits halfway from the star to the furthest body', () =>
     assert.equal(party.x, 50);
     assert.equal(party.y, 0);
     assert.equal(party.shape, 'triangle');
-    assert.deepEqual(marks.map((mark) => mark.shape), ['triangle', 'circle', 'square', 'rectangle']);
+    assert.deepEqual(marks.map((mark) => mark.shape), ['triangle', 'circle', 'square', 'rectangle', 'triangle', 'square']);
+
+    // Day 10 is the start of a 16-second loop. Outbound is still here; inbound is on the way.
+    const outbound = marks.find((mark) => mark.id === 'stand-jump-out');
+    const inbound = marks.find((mark) => mark.id === 'stand-jump-in');
+    assert.equal(outbound.jump, undefined);
+    assert.equal(inbound.jump, 'in');
+    const sec = 1 / 86400;
+    const left = standInMarks(hex, 10 + 4 * sec, picture).find((mark) => mark.id === 'stand-jump-out');
+    const beforeIn = standInMarks(hex, 10 + 5 * sec, picture).find((mark) => mark.id === 'stand-jump-in');
+    const arrived = standInMarks(hex, 10 + 7 * sec, picture).find((mark) => mark.id === 'stand-jump-in');
+    assert.equal(left.jump, 'out');
+    assert.equal(beforeIn.jump, 'in');
+    assert.equal(arrived.jump, undefined);
 });

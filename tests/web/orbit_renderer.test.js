@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { backdropBox, backdropShift, paintBackdrop, rng, seedOf } from '../../apps/web/src/orbit/backdrop.ts';
 import { layoutScene, planSystem } from '../../apps/web/src/orbit/layout.ts';
 import { layoutLineup } from '../../apps/web/src/orbit/lineup.ts';
-import { OrbitRenderer } from '../../apps/web/src/orbit/OrbitRenderer.ts';
+import { OrbitRenderer, TEAL_STEP, tealSweepAlpha, waveLocal } from '../../apps/web/src/orbit/OrbitRenderer.ts';
 import { DEFAULT_LAYERS, orbitPicture } from '../../apps/web/src/orbit/picture.ts';
 import { cssBezier, cssSeconds, easeOutAt, readOrbitMotion, readOrbitTheme, withAlpha } from '../../apps/web/src/orbit/theme.ts';
 import { blendPictures, travelOrder } from '../../apps/web/src/orbit/tween.ts';
@@ -452,6 +452,7 @@ test('the theme reads every colour it needs from tokens.css', () => {
         assert.equal(read.tBase, 0.3);
         assert.equal(read.tSlow, 0.45);
         assert.equal(read.tLong, 0.8);
+        assert.equal(read.attention, '#ffce73');
         assert.deepEqual(read.easeOut, [0.2, 0.8, 0.2, 1]);
         const flat = JSON.stringify(read);
         assert.ok(!flat.includes('""') && !flat.includes('NaN'), 'no token came back empty');
@@ -717,7 +718,8 @@ test('a layer toggle eases, and the settled frame matches one that never moved',
     assert.ok(carried);
     assert.ok(Math.abs(carried.args[0] - reached.args[0]) < 1e-6);
 
-    // Moons run over --t-long and are still going after --t-slow. Day/night finishes with --t-slow.
+    // Moons and day/night run for --t-long plus --t-slow: the front crosses, then the last body sweeps.
+    const gesture = tLong + tSlow;
     const moonOff = { ...DEFAULT_LAYERS, moons: false };
     const moonPic = pictureFor(moonOff);
     const moonRec = recordingContext();
@@ -731,7 +733,7 @@ test('a layer toggle eases, and the settled frame matches one that never moved',
     moonRec.calls.length = 0;
     drawAt(moons, moonPic, moonOff, 3000 + tSlow * 1000 * 0.45);
     assert.ok(moonRec.calls.some((c) => c.op === 'clip'));
-    drawAt(moons, moonPic, moonOff, 3000 + tLong * 1000 + 1);
+    drawAt(moons, moonPic, moonOff, 3000 + gesture * 1000 + 1);
     assert.equal(moons.layersBusy, false);
 
     const dayOff = { ...DEFAULT_LAYERS, dayNight: false };
@@ -742,5 +744,147 @@ test('a layer toggle eases, and the settled frame matches one that never moved',
     drawAt(day, dayPic, dayOff, 4000);
     assert.equal(day.layersBusy, true);
     drawAt(day, dayPic, dayOff, 4000 + tSlow * 1000 + 1);
+    assert.equal(day.layersBusy, true);
+    drawAt(day, dayPic, dayOff, 4000 + gesture * 1000 + 1);
     assert.equal(day.layersBusy, false);
+});
+
+test('teal sweep alpha starts and ends at nothing and never steps by more than TEAL_STEP', () => {
+    const steps = 27;
+    const across = [];
+    for (let i = 0; i <= steps; i++) across.push(tealSweepAlpha(i / steps));
+    assert.equal(across[0], 0);
+    assert.equal(across[steps], 0);
+    for (let i = 1; i < across.length; i++) {
+        const step = Math.abs(across[i] - across[i - 1]);
+        assert.ok(step <= TEAL_STEP + 1e-9, 'local step ' + step);
+    }
+    // The wave crosses linearly, one frame at a time. A hide is that line run backwards.
+    const travel = cssSeconds('800ms');
+    const sweep = cssSeconds('450ms');
+    const total = travel + sweep;
+    const frame = 1 / 60;
+    for (const distance of [0, 1]) {
+        for (const hide of [false, true]) {
+            const series = [];
+            for (let t = 0; t <= total + 1e-9; t += frame) {
+                const u = Math.min(1, t / total);
+                const share = hide ? 1 - u : u;
+                series.push(tealSweepAlpha(waveLocal(share, distance, travel, sweep)));
+            }
+            assert.equal(series[0], 0, (hide ? 'hide ' : 'reveal ') + distance + ' start');
+            assert.equal(series[series.length - 1], 0, (hide ? 'hide ' : 'reveal ') + distance + ' end');
+            for (let i = 1; i < series.length; i++) {
+                const step = Math.abs(series[i] - series[i - 1]);
+                assert.ok(step <= TEAL_STEP + 1e-9, (hide ? 'hide ' : 'reveal ') + distance + ' step ' + step);
+            }
+        }
+    }
+});
+
+test('a ship entering jump eases out, and the settled frame matches one that never ran', () => {
+    const tSlow = cssSeconds('450ms');
+    const tLong = cssSeconds('800ms');
+    const ease = cssBezier('cubic-bezier(.2,.8,.2,1)');
+    const motionTheme = { ...theme, attention: 'attention', tBase: cssSeconds('300ms'), tSlow, tLong, easeOut: ease };
+    const plan = planSystem(testSystem(), HEX_KEY);
+    const picture = orbitPicture(plan, layoutScene(plan, { ...VIEW, moons: true, jump: true }, 1000), DEFAULT_LAYERS, VIEW.z);
+    const here = { id: 'ship', name: 'Outbound', kind: 'traffic', shape: 'triangle', x: 120, y: 80 };
+    const leaving = { ...here, jump: 'out' };
+    const arrived = { ...here, x: 200, y: 90, name: 'Inbound' };
+    const drawShip = (renderer, time, days, ships, motion = true) => {
+        renderer.draw(plan, picture, VIEW, {
+            selected: null, days, time, motion, layers: DEFAULT_LAYERS, ships,
+        });
+    };
+    const attention = (calls) => calls.filter((c) => c.op === 'arc' && c.stroke === 'attention');
+
+    const { ctx, calls } = recordingContext();
+    const renderer = new OrbitRenderer(ctx, motionTheme, deps);
+    renderer.resize(VIEW.w, VIEW.h, 1);
+    drawShip(renderer, 1000, 10, [here]);
+    assert.equal(renderer.layersBusy, false);
+    calls.length = 0;
+    drawShip(renderer, 1500, 10, [here]);
+    assert.equal(renderer.layersBusy, false);
+    assert.equal(attention(calls).length, 0);
+
+    const t0 = 2000;
+    calls.length = 0;
+    drawShip(renderer, t0, 11, [leaving]);
+    assert.equal(renderer.layersBusy, true);
+    calls.length = 0;
+    drawShip(renderer, t0 + 0.2 * tLong * 1000, 11, [leaving]);
+    assert.equal(renderer.layersBusy, true);
+    assert.ok(attention(calls).length >= 2);
+    assert.ok(attention(calls).some((c) => c.alpha > 0.5));
+    assert.ok(calls.some((c) => c.op === 'fillText' && c.args[0] === 'Outbound' && c.alpha < 1));
+
+    const done = t0 + tLong * 1000 + 1;
+    calls.length = 0;
+    drawShip(renderer, done, 11, [leaving]);
+    assert.equal(renderer.layersBusy, false);
+    assert.equal(attention(calls).length, 0);
+    assert.ok(!calls.some((c) => c.op === 'fillText' && c.args[0] === 'Outbound'));
+    const settled = sig(calls);
+
+    const mid = t0 + 0.2 * tLong * 1000;
+    const freshRec = recordingContext();
+    const fresh = new OrbitRenderer(freshRec.ctx, motionTheme, deps);
+    fresh.resize(VIEW.w, VIEW.h, 1);
+    // Same clock as the run above, with the ship already gone, so the orrery matches and no bubble runs.
+    for (const [time, days] of [[1000, 10], [1500, 10], [t0, 11], [mid, 11]]) drawShip(fresh, time, days, [leaving]);
+    freshRec.calls.length = 0;
+    drawShip(fresh, done, 11, [leaving]);
+    assert.equal(fresh.layersBusy, false);
+    assert.deepEqual(sig(freshRec.calls), settled);
+
+    const stillRec = recordingContext();
+    const still = new OrbitRenderer(stillRec.ctx, motionTheme, deps);
+    still.resize(VIEW.w, VIEW.h, 1);
+    drawShip(still, 1000, 10, [here], false);
+    stillRec.calls.length = 0;
+    drawShip(still, 1000, 11, [leaving], false);
+    assert.equal(still.layersBusy, false);
+    const snapped = sig(stillRec.calls);
+    const plainRec = recordingContext();
+    const plain = new OrbitRenderer(plainRec.ctx, motionTheme, deps);
+    plain.resize(VIEW.w, VIEW.h, 1);
+    drawShip(plain, 1000, 10, [leaving], false);
+    plainRec.calls.length = 0;
+    drawShip(plain, 1000, 11, [leaving], false);
+    assert.deepEqual(sig(plainRec.calls), snapped);
+
+    // Arriving uses --t-slow. The settled arrival matches a picture that never ran.
+    const arriveAt = done + 50;
+    calls.length = 0;
+    drawShip(renderer, arriveAt, 12, [arrived]);
+    assert.equal(renderer.layersBusy, true);
+    calls.length = 0;
+    drawShip(renderer, arriveAt + 0.35 * tSlow * 1000, 12, [arrived]);
+    assert.equal(renderer.layersBusy, true);
+    assert.ok(attention(calls).length >= 2);
+    const arrivedDone = arriveAt + tSlow * 1000 + 1;
+    calls.length = 0;
+    drawShip(renderer, arrivedDone, 12, [arrived]);
+    assert.equal(renderer.layersBusy, false);
+    assert.equal(attention(calls).length, 0);
+    assert.ok(calls.some((c) => c.op === 'fillText' && c.args[0] === 'Inbound'));
+    const arrivedSettled = sig(calls);
+    const arriveMid = arriveAt + 0.35 * tSlow * 1000;
+    const arrivedRec = recordingContext();
+    const arrivedFresh = new OrbitRenderer(arrivedRec.ctx, motionTheme, deps);
+    arrivedFresh.resize(VIEW.w, VIEW.h, 1);
+    for (const [time, days] of [[1000, 10], [1500, 10], [t0, 11], [mid, 11], [done, 11], [arriveAt, 12], [arriveMid, 12]]) {
+        drawShip(arrivedFresh, time, days, [arrived]);
+    }
+    arrivedRec.calls.length = 0;
+    drawShip(arrivedFresh, arrivedDone, 12, [arrived]);
+    assert.equal(arrivedFresh.layersBusy, false);
+    assert.deepEqual(sig(arrivedRec.calls), arrivedSettled);
+
+    // A scrub back across the arrival plays the reverse and keeps the canvas painting.
+    calls.length = 0;
+    drawShip(renderer, arrivedDone, 11, [leaving]);
+    assert.equal(renderer.layersBusy, true);
 });

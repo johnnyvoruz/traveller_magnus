@@ -174,11 +174,10 @@ test('reconcile writes only the allowlist, keeps the input, and a second run cha
     const unknown = reconcileTree(low, environmentPolicy);
     assert.deepEqual(unknown.tree.body.mgtSystem.worlds[0].surfaceTempBand, { status: 'unknown' });
     assert.equal(unknown.tree.body.mgtSystem.worlds[0].orbitalTempBand.status, 'unknown');
-    assert.equal(unknown.diagnostics.length, 3);
-    assert.equal(unknown.tree.body.mgtSystem.worlds[0].liquidStatus.status, 'unknown');
-    assert.equal(unknown.tree.body.mgtSystem.worlds[0].liquidStatus.blocking, true);
+    assert.equal(unknown.diagnostics.length, 2);
+    assert.equal(unknown.tree.body.mgtSystem.worlds[0].liquidStatus, undefined);
     assert.equal(unknown.tree.body.mgtSystem.worlds[0].liquidType, undefined);
-    assert.deepEqual(unknown.diagnostics.map((item) => item.kind).sort(), ['hydro-invalid', 'orbital-unknown', 'surface-unknown']);
+    assert.deepEqual(unknown.diagnostics.map((item) => item.kind).sort(), ['orbital-unknown', 'surface-unknown']);
 
     const twice = reconcileTree(once.tree, environmentPolicy);
     assert.equal(stable(twice.tree), stable(once.tree));
@@ -219,12 +218,12 @@ test('Regina and Zeycude keep every field off the allowlist', () => {
                 assert.equal(body.liquidType, null);
                 assert.equal(body.liquidStatus.status, 'none');
             }
-            if (body.liquidStatus.outcome === 'ice-frozen') {
+            if (body.liquidStatus && body.liquidStatus.outcome === 'ice-frozen') {
                 assert.equal(body.liquidType, environmentPolicy.liquid.q3.iceLabel);
                 assert.equal(body.liquidStatus.phase, 'solid');
                 assert.equal(body.liquidStatus.substance, water.name);
                 assert.ok(source.highTempK < water.mp);
-            } else if (body.liquidStatus.status === 'known') {
+            } else if (body.liquidStatus && body.liquidStatus.status === 'known') {
                 const row = environmentPolicy.liquids.find((item) => item.name === body.liquidStatus.substance);
                 assert.ok(row);
                 assert.ok(source.meanTempK >= row.mp && source.meanTempK <= row.bp);
@@ -533,6 +532,66 @@ test('each liquid outcome row is one branch, and the limits are the table limits
     assert.throws(() => reconcileTree(treeWith({ hydroPercent: 0, liquidType: ice }), rejected), /accepted Q2 and Q3/);
 });
 
+test('a body with no percentage and no label is left alone unless either hydrographics code is above 0', () => {
+    function quiet(body) {
+        const source = treeWith(body);
+        const before = stable(source);
+        const once = reconcileTree(source, environmentPolicy);
+        const twice = reconcileTree(once.tree, environmentPolicy);
+        assert.equal(stable(source), before);
+        assert.equal(stable(twice.tree), stable(once.tree));
+        assert.equal(twice.changes.length, 0);
+        assert.equal(stable(strip(once.tree)), stable(strip(JSON.parse(before))));
+        assert.equal(once.changes.every((change) => RECONCILE_FIELDS.includes(change.field)), true);
+        assert.equal(once.changes.some((change) => change.field === 'liquidType' || change.field === 'liquidStatus'), false);
+        assert.equal(once.diagnostics.some((item) => item.kind === 'hydro-invalid' || item.kind === 'liquid-unresolved'), false);
+        return once.tree.body.mgtSystem.worlds[0];
+    }
+
+    const giant = quiet({ type: 'Gas Giant', name: 'Giant' });
+    assert.equal(giant.liquidStatus, undefined);
+    assert.equal(giant.liquidType, undefined);
+    assert.equal(giant.surfaceTempBand.status, 'unknown');
+
+    const belt = quiet({ type: 'Planetoid Belt', name: 'Belt', hydroCode: 0, hydro: 0 });
+    assert.equal(belt.liquidStatus, undefined);
+    assert.equal(belt.hydroCode, 0);
+    assert.equal(belt.hydro, 0);
+
+    const empty = quiet({ type: 'Empty', name: 'Empty' });
+    assert.equal(empty.liquidStatus, undefined);
+
+    const main = quiet({ type: 'Mainworld', name: 'Asteroid', hydroCode: 0, hydro: 0, uwp: 'D000300-9' });
+    assert.equal(main.liquidStatus, undefined);
+    assert.equal(main.uwp, 'D000300-9');
+
+    const storedNaN = { $num: 'NaN' };
+    const nanGiant = one({
+        type: 'Gas Giant',
+        name: 'Nan',
+        liquidType: 'Water',
+        hydroPercent: storedNaN,
+        hydroCode: 0,
+        hydro: 0,
+        uwp: 'YGG00000-0',
+    });
+    assert.equal(nanGiant.liquidType, 'Water');
+    assert.deepEqual(nanGiant.hydroPercent, storedNaN);
+    assert.equal(nanGiant.hydroCode, 0);
+    assert.equal(nanGiant.hydro, 0);
+    assert.equal(nanGiant.liquidStatus.status, 'unknown');
+    assert.equal(nanGiant.liquidStatus.blocking, true);
+    assert.equal(nanGiant.liquidStatus.outcome, 'hydro-invalid');
+
+    const chartOnly = one({ name: 'Chart', hydro: 4, hydroCode: 0 });
+    const generatedOnly = one({ name: 'Generated', hydro: 0, hydroCode: 4 });
+    assert.equal(chartOnly.liquidStatus.outcome, 'hydro-invalid');
+    assert.equal(chartOnly.liquidStatus.blocking, true);
+    assert.equal(generatedOnly.liquidStatus.outcome, 'hydro-invalid');
+    assert.equal(generatedOnly.hydro, 0);
+    assert.equal(generatedOnly.hydroCode, 4);
+});
+
 const MARCHES_INDEX = path.join(root, 'truth-local/v2/sectors/Spinward_Marches/index.json');
 
 test('Spinward Marches liquid reconciliation counts, in memory only', { skip: !existsSync(MARCHES_INDEX), timeout: 180000 }, () => {
@@ -543,9 +602,17 @@ test('Spinward Marches liquid reconciliation counts, in memory only', { skip: !e
     const outcomes = {};
     const unresolved = {};
     const kinds = {};
+    const codeSplit = {};
     let bodiesSeen = 0;
+    let validated = 0;
     let changedBodies = 0;
     let unresolvedBodies = 0;
+    const needs = (body) => {
+        const label = body.liquidType !== undefined && body.liquidType !== null;
+        const percent = Object.prototype.hasOwnProperty.call(body, 'hydroPercent');
+        const above = (value) => typeof value === 'number' && Number.isFinite(value) && value > 0;
+        return label || percent || above(body.hydro) || above(body.hydroCode);
+    };
     for (const entry of Object.values(index.hexes)) {
         if (!entry || !entry.tree) continue;
         const tree = JSON.parse(readFileSync(path.join(root, 'truth-local/objects', entry.tree), 'utf8'));
@@ -558,14 +625,29 @@ test('Spinward Marches liquid reconciliation counts, in memory only', { skip: !e
         assert.equal(afterBodies.length, beforeBodies.length);
         afterBodies.forEach((item, index) => {
             bodiesSeen += 1;
+            const source = beforeBodies[index].body;
+            const hydroCode = source.hydroCode;
+            const hydro = source.hydro;
+            if (typeof hydroCode === 'number' && Number.isFinite(hydroCode)
+                && typeof hydro === 'number' && Number.isFinite(hydro)
+                && hydroCode !== hydro) {
+                const type = source.type || 'unknown';
+                codeSplit[type] = (codeSplit[type] || 0) + 1;
+            }
             const status = item.body.liquidStatus;
+            if (!needs(source)) {
+                assert.equal(status, undefined);
+                assert.equal(item.body.liquidType, source.liquidType);
+                return;
+            }
+            validated += 1;
             assert.equal(typeof status.outcome, 'string');
             outcomes[status.outcome] = (outcomes[status.outcome] || 0) + 1;
             if (status.status === 'unresolved') {
                 unresolvedBodies += 1;
                 unresolved[status.outcome] = (unresolved[status.outcome] || 0) + 1;
             }
-            const beforeLiquid = beforeBodies[index].body.liquidType === undefined ? null : beforeBodies[index].body.liquidType;
+            const beforeLiquid = source.liquidType === undefined ? null : source.liquidType;
             const afterLiquid = item.body.liquidType === undefined ? null : item.body.liquidType;
             if (beforeLiquid !== afterLiquid) {
                 changedBodies += 1;
@@ -575,12 +657,14 @@ test('Spinward Marches liquid reconciliation counts, in memory only', { skip: !e
     }
     console.log('LIQUID_RECONCILE ' + JSON.stringify({
         bodiesSeen,
+        validated,
         changedBodies,
         changed,
         unresolvedBodies,
         unresolved,
         outcomes,
         kinds,
+        codeSplit,
         auditBefore: countAudit(beforeReports),
         auditAfter: countAudit(afterReports),
     }));

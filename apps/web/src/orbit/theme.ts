@@ -49,6 +49,8 @@ export type OrbitTheme = {
     lock: string;
     lockGlow: [string, string];
     signal: string;
+    /** Amber for a jump bubble, from --attention. */
+    attention: string;
     tag: string;
     port: { major: PortPaint; minor: PortPaint };
     portStarboard: [string, string, string];
@@ -68,11 +70,13 @@ export type OrbitTheme = {
      */
     tBase?: number;
     /**
-     * Bands, rings, paths and the day/night sweep, from --t-slow. Absent, those snap.
+     * Bands, rings, paths, one body's own sweep, and the jump-in bubble, from --t-slow.
+     * Absent, those snap.
      */
     tSlow?: number;
     /**
-     * The moon wireframe sweep, from --t-long. Absent, that toggle snaps.
+     * How long the moons and day/night front takes to cross a system, and the jump-out
+     * bubble, from --t-long. Absent, those snap. A body's sweep then takes --t-slow.
      */
     tLong?: number;
     /** --ease-out as four cubic-bezier controls. Absent, a toggle snaps. */
@@ -228,6 +232,7 @@ export function readOrbitTheme(el: HTMLElement): OrbitTheme {
         lock,
         lockGlow: [withAlpha(lock, 0.16), withAlpha(lock, 0)],
         signal: token('--signal'),
+        attention: token('--attention'),
         tag: withAlpha(token('--orbit-tag'), 0.82),
         port: {
             major: portPaint(token('--port-light-major'), hub),

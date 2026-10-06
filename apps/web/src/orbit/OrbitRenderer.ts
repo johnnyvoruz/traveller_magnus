@@ -27,11 +27,14 @@ import {
 } from './picture.ts';
 import { discBatch, sunColour, visualRate, type OrbitDiscBatch } from './disc_batch.ts';
 import { plotText, type PlotReadout, type ShipMark, type ShipShape } from './ships.ts';
-import { easeOutAt, type EaseOut, type OrbitTheme, type PortPaint } from './theme.ts';
+import { easeOutAt, withAlpha, type EaseOut, type OrbitTheme, type PortPaint } from './theme.ts';
 
 /** The layer switches that ease. Linear scale and ring strength stay where the slider put them. */
 type ToggleKey = 'habitable' | 'jump' | 'paths' | 'moons' | 'dayNight' | 'scan' | 'markMainworld';
 type LayerRun = { from: number; to: number; t0: number; seconds: number };
+type JumpPhase = 'mark' | 'out' | 'in';
+type BubbleRun = { from: number; to: number; t0: number; seconds: number; kind: 'out' | 'in'; mark: ShipMark };
+type BubblePaint = { id: string; kind: 'out' | 'in'; share: number; mark: ShipMark };
 type HeldLayer = { bands: BandAt[]; jumps: JumpAt[]; paths: PathAt[]; panels: Panel[] };
 const TOGGLE_KEYS: readonly ToggleKey[] = ['habitable', 'jump', 'paths', 'moons', 'dayNight', 'scan', 'markMainworld'];
 
@@ -53,6 +56,41 @@ const WIRE_TILT = 0.55;
  * narrow enough that the night side shows behind it before the wave leaves the disc.
  */
 const DAY_SWEEP_BAND = 0.42;
+/**
+ * The largest step of the teal sweep between two frames. The sweep is a sine, whose
+ * steepest slope is π. A body's own sweep lasts --t-slow, and a frame at 60fps is a
+ * 27th of that, so one frame moves the alpha by at most π/27 of full strength. A
+ * larger step would read as a pop.
+ */
+export const TEAL_STEP = Math.PI / 27;
+
+/** The teal sweep's strength. Zero at the start and the end, so a frame on either side shows none. */
+export function tealSweepAlpha(local: number): number {
+    if (!(local > 0) || local >= 1) return 0;
+    return Math.sin(Math.PI * local);
+}
+
+/**
+ * Where a body is in its own sweep. `share` is the gesture, 0 hidden and 1 revealed.
+ * The front takes the `--t-long` portion and reaches this body at `distance` (0 at the
+ * star, 1 at the farthest body). The sweep then takes the `--t-slow` portion.
+ */
+export function waveLocal(share: number, distance: number, travel: number, sweep: number): number {
+    const total = travel + sweep;
+    if (!(total > 0)) return share > 0 ? 1 : 0;
+    const start = distance * (travel / total);
+    const span = sweep / total;
+    if (!(span > 0)) return share >= 1 ? 1 : 0;
+    const local = (share - start) / span;
+    if (local <= 0) return 0;
+    if (local >= 1) return 1;
+    return local;
+}
+
+function smoothstep(t: number): number {
+    const u = Math.min(1, Math.max(0, t));
+    return u * u * (3 - 2 * u);
+}
 
 /**
  * The surface service as the painter uses it (directives/handoff.md §61): one batch a frame,
@@ -142,13 +180,19 @@ export class OrbitRenderer {
     discsReport = 'none';
     private tilesDrawn = 0;
     /**
-     * True while a layer toggle is between its two settled frames. The canvas keeps painting
-     * for that long; a settled frame leaves it false.
+     * True while a layer toggle or a jump bubble is between its two settled frames. The canvas
+     * keeps painting for that long; a settled frame leaves it false.
      */
     layersBusy = false;
     /** The switches of the previous frame. Null until the first paint, which never eases. */
     private seenLayers: Layers | null = null;
     private layerRuns = new Map<ToggleKey, LayerRun>();
+    /** Jump phase of each ship last frame. Null until the first paint, which never eases. */
+    private seenShips: Map<string, JumpPhase> | null = null;
+    private seenShipDays: number | null = null;
+    private bubbleRuns = new Map<string, BubbleRun>();
+    /** Bubbles to paint this frame. Empty on a settled frame. */
+    private bubbleFrame: BubblePaint[] = [];
     private habLive = false;
     private habShare = 1;
     private jumpLive = false;
@@ -164,6 +208,18 @@ export class OrbitRenderer {
      * the flat night, and a tile that arrives halfway cannot pop in under it.
      */
     private dayHold = false;
+    /** The day/night run started this frame, so dayHold is set once the discs have been asked. */
+    private dayArm = false;
+    /** Farthest body of each star this frame, keyed by the star's place. */
+    private starFar = new Map<string, { x: number; y: number; far: number }>();
+    private worldByKey = new Map<string, WorldDraw>();
+    /** Tiles present on the first paint are settled. A tile that arrives later fades. */
+    private tilePrimed = false;
+    private tileSeen = new Set<string>();
+    private tileRuns = new Map<string, number>();
+    /** Keys the day/night sweep itself is fading, so the settled frame does not fade them again. */
+    private tileSweep = new Set<string>();
+    private frameTime = 0;
     private scanLive = false;
     private scanShare = 1;
     private mainLive = false;
@@ -200,12 +256,15 @@ export class OrbitRenderer {
             this.frameSeconds += (Math.min(0.1, dt) - this.frameSeconds) * 0.25;
         }
         this.lastTime = state.time;
+        this.frameTime = state.time;
+        this.beginChannels(state);
+        this.indexStars(picture, state);
         this.prepareDiscs(plan, picture, state);
+        this.syncTiles(state);
 
         ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
         ctx.clearRect(0, 0, this.w, this.h);
         this.starField(plan, view);
-        this.beginChannels(state);
         for (const [index, layer] of picture.layers.entries()) {
             if (!this.habLive) {
                 for (const band of layer.bands) this.band(band);
@@ -232,6 +291,7 @@ export class OrbitRenderer {
             for (const rocks of layer.rocks) this.rocks(rocks);
             for (const at of layer.worlds) this.world(plan, at, state);
         }
+        this.waveFronts();
         for (const at of picture.stars) this.star(at);
         if (!this.mainLive) {
             for (const caption of picture.captions) this.caption(caption);
@@ -247,6 +307,7 @@ export class OrbitRenderer {
             this.scanFade = 1;
         }
         this.selection(plan, picture, state);
+        this.beginBubbles(state);
         this.ships(state.ships);
         this.plot(state.plot);
         this.settleDiscs(state);
@@ -257,8 +318,10 @@ export class OrbitRenderer {
      * Starts a toggle's run on the frame the switch changes, and drops it before the frame
      * where it has finished, so that frame is the settled one. The first paint only records
      * the switches. Reduced motion, or a theme without --ease-out, snaps. A channel whose
-     * own duration token is missing snaps on its own. Bands, rings, paths and day/night use
-     * --t-slow; the moon sweep uses --t-long; scan and the mainworld mark use --t-base.
+     * own duration token is missing snaps on its own. Bands, rings and paths use --t-slow.
+     * Moons and day/night run for --t-long plus --t-slow, linearly, so the last body's
+     * sweep really lasts --t-slow. Scan and the mainworld mark use --t-base. The other
+     * channels use --ease-out.
      */
     private beginChannels(state: DrawState): void {
         this.habLive = false;
@@ -296,7 +359,7 @@ export class OrbitRenderer {
             const prev = this.layerRuns.get(key);
             const from = prev ? this.runShare(prev, state.time, ease) : (layers[key] ? 0 : 1);
             this.layerRuns.set(key, { from, to: layers[key] ? 1 : 0, t0: state.time, seconds });
-            if (key === 'dayNight') this.dayHold = this.discStatus !== 'ready';
+            if (key === 'dayNight' && !prev) this.dayArm = true;
         }
         this.seenLayers = { ...layers };
         let dayRunning = false;
@@ -306,7 +369,12 @@ export class OrbitRenderer {
                 this.layerRuns.delete(key);
                 continue;
             }
-            const share = this.shareAt(run, Math.max(0, u), ease);
+            // Moons and day/night cross linearly. --ease-out would crush the first body's
+            // sweep into a few frames, and the teal would pop. A hide runs the same line backwards.
+            const paced = key === 'moons' || key === 'dayNight';
+            const share = paced
+                ? run.from + (run.to - run.from) * Math.min(1, Math.max(0, u))
+                : this.shareAt(run, Math.max(0, u), ease);
             this.layersBusy = true;
             if (key === 'habitable') { this.habLive = true; this.habShare = share; }
             else if (key === 'jump') { this.jumpLive = true; this.jumpShare = share; }
@@ -322,9 +390,13 @@ export class OrbitRenderer {
     /** Seconds for one channel, from its token. Null when that token is missing: the channel snaps. */
     private channelSeconds(key: ToggleKey): number | null {
         const theme = this.theme;
-        const raw = key === 'moons' ? theme.tLong
-            : (key === 'scan' || key === 'markMainworld') ? theme.tBase
-            : theme.tSlow;
+        if (key === 'moons' || key === 'dayNight') {
+            const travel = theme.tLong;
+            const sweep = theme.tSlow;
+            if (typeof travel === 'number' && travel > 0 && typeof sweep === 'number' && sweep > 0) return travel + sweep;
+            return null;
+        }
+        const raw = (key === 'scan' || key === 'markMainworld') ? theme.tBase : theme.tSlow;
         return typeof raw === 'number' && raw > 0 ? raw : null;
     }
 
@@ -402,29 +474,32 @@ export class OrbitRenderer {
     }
 
     /**
-     * A band of latitude and longitude lines in --signal, crossing each disc once. Bright at
-     * the wavefront and gone behind it. Quads under WIRE_GRID_MIN_PX smear, so those discs
-     * get the same sweep as one solid band.
+     * A band of latitude and longitude lines in --signal. One front leaves the star; a body's
+     * own sweep starts when the front reaches it and runs away from the star. Quads under
+     * WIRE_GRID_MIN_PX smear, so those discs get the same sweep as one soft band.
      */
     private wireframes(picture: Picture, state: DrawState): void {
-        const share = this.moonsShare;
-        if (!(share > 0) || share >= 1) return;
+        if (!(this.moonsShare > 0)) return;
         for (const layer of picture.layers) {
             for (const at of layer.worlds) {
                 if (!at.world.moons.some((moon) => !moon.ring)) continue;
-                this.globeWave(at.x, at.y, at.r, share);
+                const local = this.bodyLocal(this.moonsShare, this.reachOf(at.x, at.y, at.starX, at.starY));
+                this.globeWave(at.x, at.y, at.r, local, at.starX, at.starY);
                 const placed = this.moonsOf(at, state);
                 for (const moon of placed) {
                     if (moon.moon.ring || moon.r < WIRE_SWEEP_MIN_PX) continue;
-                    this.globeWave(moon.x, moon.y, moon.r, share);
+                    const moonLocal = this.bodyLocal(this.moonsShare, this.reachOf(moon.x, moon.y, at.starX, at.starY));
+                    this.globeWave(moon.x, moon.y, moon.r, moonLocal, at.starX, at.starY);
                 }
             }
         }
     }
 
-    /** One disc's wireframe, clipped to the disc. The wave runs from the left limb to the right. */
-    private globeWave(x: number, y: number, r: number, share: number): void {
-        if (r < WIRE_SWEEP_MIN_PX) return;
+    /** One disc's wireframe, clipped to the disc. The wave enters at the limb facing the star. */
+    private globeWave(x: number, y: number, r: number, local: number, starX: number, starY: number): void {
+        const env = tealSweepAlpha(local);
+        if (!(env > 0) || r < WIRE_SWEEP_MIN_PX) return;
+        const away = Math.atan2(y - starY, x - starX);
         const ctx = this.ctx;
         ctx.save();
         ctx.beginPath();
@@ -432,26 +507,28 @@ export class OrbitRenderer {
         ctx.clip();
         ctx.translate(x, y);
         if (r < WIRE_GRID_MIN_PX) {
-            const front = -r + share * 2 * r;
-            const width = Math.max(2, r * 0.62);
-            ctx.globalAlpha = 0.9;
-            ctx.fillStyle = this.theme.signal;
-            ctx.fillRect(front - width, -r, width, r * 2);
+            this.softBand(r, local, away);
             ctx.restore();
             return;
         }
         const rot = -0.5;
         const cos = Math.cos(rot);
         const sin = Math.sin(rot);
-        const buckets: number[][] = [[], [], [], []];
+        const ax = Math.cos(away);
+        const ay = Math.sin(away);
+        const bins = 16;
+        const buckets: number[][] = [];
+        for (let i = 0; i < bins; i++) buckets.push([]);
         const add = (x0: number, y0: number, x1: number, y1: number) => {
             const mx = (x0 + x1) / 2;
             const my = (y0 + y1) / 2;
-            const screen = mx * cos - my * sin;
-            const alpha = this.waveAlpha(screen, r, share);
-            if (alpha < 0.05) return;
-            const bin = Math.min(3, Math.floor(alpha * 4));
-            buckets[bin].push(x0, y0, x1, y1);
+            const sx = mx * cos - my * sin;
+            const sy = mx * sin + my * cos;
+            const along = sx * ax + sy * ay;
+            const alpha = this.waveAlpha(along, r, local);
+            if (alpha < 0.02) return;
+            const bin = Math.min(bins - 1, Math.floor(alpha * bins));
+            buckets[bin]?.push(x0, y0, x1, y1);
         };
         const ellipse = (cx: number, cy: number, rx: number, ry: number) => {
             const steps = 24;
@@ -483,20 +560,115 @@ export class OrbitRenderer {
                 ctx.moveTo(seg[k] ?? 0, seg[k + 1] ?? 0);
                 ctx.lineTo(seg[k + 2] ?? 0, seg[k + 3] ?? 0);
             }
-            ctx.globalAlpha = (bin + 1) / 4;
+            ctx.globalAlpha = (bin + 0.5) / bins;
             ctx.stroke();
         }
         ctx.restore();
     }
 
-    /** 1 at the wavefront, falling to 0 behind it. Ahead of the front nothing is drawn. */
-    private waveAlpha(x: number, r: number, share: number): number {
-        const front = -r + share * 2 * r;
-        const behind = front - x;
-        if (behind <= 0) return 0;
+    /** A soft --signal band along `away`, strong at the front and gone at both edges. */
+    private softBand(r: number, local: number, away: number): void {
+        const env = tealSweepAlpha(local);
+        if (!(env > 0)) return;
+        const front = -r + local * 2 * r;
+        const trail = front - Math.max(2, r * 0.62);
+        const c = Math.cos(away);
+        const s = Math.sin(away);
+        const ctx = this.ctx;
+        const grad = ctx.createLinearGradient(trail * c, trail * s, front * c, front * s);
+        grad.addColorStop(0, withAlpha(this.theme.signal, 0));
+        grad.addColorStop(0.5, withAlpha(this.theme.signal, env));
+        grad.addColorStop(1, withAlpha(this.theme.signal, 0));
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = grad;
+        ctx.fillRect(-r, -r, r * 2, r * 2);
+    }
+
+    /**
+     * Bright at the wavefront, fading in ahead of it and fading out behind it, and gone
+     * with the body's sweep. `along` grows away from the star.
+     */
+    private waveAlpha(along: number, r: number, local: number): number {
+        const env = tealSweepAlpha(local);
+        if (!(env > 0)) return 0;
+        const front = -r + local * 2 * r;
         const band = r * 0.7;
-        if (behind >= band) return 0;
-        return 1 - behind / band;
+        const behind = front - along;
+        const ahead = along - front;
+        let spatial = 0;
+        if (behind >= 0 && behind < band) spatial = 1 - behind / band;
+        else if (ahead >= 0 && ahead < band) spatial = 1 - ahead / band;
+        return spatial * env;
+    }
+
+    /** The gesture share of one body. `p` is 0 at its star and 1 at that star's farthest body. */
+    private bodyLocal(share: number, p: number): number {
+        const travel = this.theme.tLong;
+        const sweep = this.theme.tSlow;
+        if (typeof travel !== 'number' || typeof sweep !== 'number') return share > 0 ? 1 : 0;
+        return waveLocal(share, p, travel, sweep);
+    }
+
+    /** How far this body sits from its star, as a fraction of that star's farthest body. */
+    private reachOf(x: number, y: number, starX: number, starY: number): number {
+        const star = this.starFar.get(starX + ',' + starY);
+        if (!star || !(star.far > 0)) return 0;
+        return Math.min(1, Math.hypot(x - starX, y - starY) / star.far);
+    }
+
+    /** The stars on this picture, and how far their farthest body sits. */
+    private indexStars(picture: Picture, state: DrawState): void {
+        this.starFar.clear();
+        this.worldByKey.clear();
+        const touch = (x: number, y: number, starX: number, starY: number) => {
+            const id = starX + ',' + starY;
+            let star = this.starFar.get(id);
+            if (!star) {
+                star = { x: starX, y: starY, far: 0 };
+                this.starFar.set(id, star);
+            }
+            const d = Math.hypot(x - starX, y - starY);
+            if (d > star.far) star.far = d;
+        };
+        for (const layer of picture.layers) {
+            for (const at of layer.worlds) {
+                this.worldByKey.set(at.world.key, at);
+                touch(at.x, at.y, at.starX, at.starY);
+                for (const moon of this.moonsOf(at, state)) {
+                    if (moon.moon.ring) continue;
+                    touch(moon.x, moon.y, at.starX, at.starY);
+                }
+            }
+        }
+    }
+
+    /**
+     * One thin --signal ring leaving the star with the front, faint, and fainter as it
+     * travels. Gone at the star and gone again once the front has passed the last body.
+     */
+    private waveFronts(): void {
+        const paint = (share: number) => {
+            const travel = this.theme.tLong;
+            const sweep = this.theme.tSlow;
+            if (typeof travel !== 'number' || typeof sweep !== 'number' || !(travel > 0)) return;
+            const along = share / (travel / (travel + sweep));
+            if (!(along > 0) || along >= 1) return;
+            const alpha = tealSweepAlpha(along) * (1 - along * 0.65) * 0.35;
+            if (!(alpha > 0.015)) return;
+            const ctx = this.ctx;
+            ctx.save();
+            ctx.strokeStyle = this.theme.signal;
+            ctx.globalAlpha = alpha;
+            ctx.lineWidth = 1;
+            ctx.setLineDash([]);
+            for (const star of this.starFar.values()) {
+                if (!(star.far > 2)) continue;
+                this.strokeVisible(star.x, star.y, along * star.far, 1);
+            }
+            ctx.restore();
+        };
+        if (this.moonsLive) paint(this.moonsShare);
+        if (this.dayLive) paint(this.dayShare);
     }
 
     /**
@@ -547,18 +719,180 @@ export class OrbitRenderer {
         if (this.lastDays !== null) this.rate = visualRate(this.rate, state.days - this.lastDays, this.frameSeconds);
         this.lastDays = state.days;
         const painter = this.deps.discs;
-        if (!painter || !state.layers.dayNight) return;
+        // A hide still asks for the tiles, so the shaded rings can fade instead of vanishing.
+        const want = state.layers.dayNight || this.dayLive;
+        if (!painter || !want) {
+            this.latchDay();
+            return;
+        }
         const primary = plan.stars[0];
         const paint = primary ? (this.theme.stars[String(primary.body.sType || '')] || this.theme.starUnknown) : this.theme.starUnknown;
         const batch = discBatch(plan, picture, { width: this.w, height: this.h, dpr: this.dpr }, {
             days: state.days, timeSeconds: state.time / 1000, rate: this.rate, frameSeconds: this.frameSeconds, motion: state.motion,
         }, {
-            mode: painter.mode(), sun: sunColour(paint.solid), lightMode: false, moonsShown: state.layers.moons, selected: state.selected,
+            mode: painter.mode(), sun: sunColour(paint.solid), lightMode: false,
+            moonsShown: state.layers.moons || this.moonsLive, selected: state.selected,
         });
-        if (!batch.discs.length) return;
-        this.discStatus = painter.prepare(batch);
+        if (!batch.discs.length) {
+            this.latchDay();
+            return;
+        }
+        let discs = batch.discs;
+        let changed = false;
+        const scaled = discs.map((disc) => {
+            const next = this.scaleRing(disc);
+            if (next !== disc) changed = true;
+            return next;
+        });
+        if (changed) discs = scaled;
+        this.discStatus = painter.prepare(changed ? { ...batch, discs } : batch);
+        this.latchDay();
         if (this.discStatus !== 'ready') return;
-        this.shaded = new Map(batch.discs.map((disc) => [disc.key, disc.ring !== null]));
+        this.shaded = new Map(discs.map((disc) => [disc.key, disc.ring !== null]));
+    }
+
+    /** dayHold is the service's answer on the frame a day/night run starts, after the discs were asked. */
+    private latchDay(): void {
+        if (!this.dayArm) return;
+        this.dayHold = this.discStatus !== 'ready';
+        this.dayArm = false;
+    }
+
+    /**
+     * Scales a shaded ring's fill for this frame. A settled frame (fill already final) keeps
+     * the disc the batch built, so a first paint is unchanged.
+     */
+    private scaleRing<T extends { key: string; ring: { inner: number; outer: number; fill: number; phase: number; detail: number } | null }>(disc: T): T {
+        const ring = disc.ring;
+        if (!ring) return disc;
+        const amount = this.moonFactor(disc.key) * this.dayFactor(disc.key) * this.ringTile(disc.key);
+        if (!(amount < 1)) return disc;
+        return { ...disc, ring: { ...ring, fill: ring.fill * amount } };
+    }
+
+    /** While day/night is moving and the tiles were ready when it started, the sweep owns the fade. */
+    private ringTile(key: string): number {
+        if (this.dayLive && !this.dayHold) return 1;
+        return this.tileMix(key);
+    }
+
+    /** 0 at the star, 1 at that star's farthest body. A moon uses its world's reach. */
+    private bodyReach(key: string): number {
+        const at = this.worldByKey.get(key);
+        if (!at) return 0;
+        return this.reachOf(at.x, at.y, at.starX, at.starY);
+    }
+
+    private moonFactor(key: string): number {
+        return this.gestureFactor(this.moonsLive, this.moonsShare, this.layers?.moons === true, this.bodyReach(key));
+    }
+
+    private dayFactor(key: string): number {
+        return this.gestureFactor(this.dayLive, this.dayShare, this.layers?.dayNight === true, this.bodyReach(key));
+    }
+
+    /** A live channel eases with the body's own sweep. A settled switch is on or off. */
+    private gestureFactor(live: boolean, share: number, on: boolean, p: number): number {
+        if (!live) return on ? 1 : 0;
+        return smoothstep(this.bodyLocal(share, p));
+    }
+
+    /**
+     * Tiles on the first paint are already there, so they do not fade. A tile the day/night
+     * sweep reveals is marked once the sweep ends. Any other arrival fades over --t-base.
+     */
+    private syncTiles(state: DrawState): void {
+        const keys = this.shaded ? [...this.shaded.keys()] : [];
+        if (!this.tilePrimed) {
+            for (const key of keys) this.tileSeen.add(key);
+            this.tilePrimed = true;
+        } else if (this.dayLive && this.dayHold) {
+            // The sweep started on the flat night. A tile under it waits, then fades on its own.
+        } else if (this.dayLive) {
+            for (const key of keys) this.tileSweep.add(key);
+        } else {
+            for (const key of this.tileSweep) this.tileSeen.add(key);
+            this.tileSweep.clear();
+            const seconds = this.theme.tBase;
+            const canFade = state.motion && typeof seconds === 'number' && seconds > 0 && !!this.theme.easeOut;
+            for (const key of keys) {
+                if (this.tileSeen.has(key) || this.tileRuns.has(key)) continue;
+                if (!canFade) {
+                    this.tileSeen.add(key);
+                    continue;
+                }
+                this.tileRuns.set(key, this.frameTime);
+            }
+        }
+        const seconds = this.theme.tBase;
+        if (typeof seconds === 'number' && seconds > 0) {
+            for (const [key, started] of this.tileRuns) {
+                if ((this.frameTime - started) / 1000 / seconds >= 1) {
+                    this.tileRuns.delete(key);
+                    this.tileSeen.add(key);
+                }
+            }
+        } else if (this.tileRuns.size > 0) {
+            for (const key of this.tileRuns.keys()) this.tileSeen.add(key);
+            this.tileRuns.clear();
+        }
+        if (this.tileRuns.size > 0) this.layersBusy = true;
+    }
+
+    /** How much of a late tile is showing. 1 when it was here from the start or its fade has finished. */
+    private tileMix(key: string): number {
+        if (!this.tilePrimed || this.tileSeen.has(key)) return 1;
+        const started = this.tileRuns.get(key);
+        if (started === undefined) return this.tileSweep.has(key) ? 1 : 0;
+        const seconds = this.theme.tBase;
+        const ease = this.theme.easeOut;
+        if (typeof seconds !== 'number' || !(seconds > 0) || !ease) return 1;
+        const u = (this.frameTime - started) / 1000 / seconds;
+        if (u >= 1) return 1;
+        return easeOutAt(ease, Math.max(0, u));
+    }
+
+    /**
+     * Flat ring circles. Settled, they are on unless a shaded tile replaced them. While a
+     * toggle moves, they trade places with the shaded rings over that body's sweep.
+     */
+    private flatRingAlpha(key: string, lit: boolean): number {
+        const moons = this.moonFactor(key);
+        const anim = this.moonsLive || this.dayLive || this.tileRuns.has(key);
+        if (!anim) return lit ? 0 : moons;
+        if (this.shaded?.get(key) !== true || (this.dayLive && this.dayHold)) return moons;
+        return moons * (1 - this.dayFactor(key) * this.tileMix(key));
+    }
+
+    /** The flat circles. Alpha under 1 multiplies whatever the caller already faded. */
+    private flatRings(x: number, y: number, radii: readonly number[], alpha: number): void {
+        if (!(alpha > 0.004) || radii.length === 0) return;
+        if (alpha >= 1) {
+            for (const r of radii) this.staticRing(x, y, r);
+            return;
+        }
+        const ctx = this.ctx;
+        const current = ctx.globalAlpha;
+        ctx.save();
+        ctx.globalAlpha = (typeof current === 'number' ? current : 1) * alpha;
+        for (const r of radii) this.staticRing(x, y, r);
+        ctx.restore();
+    }
+
+    /**
+     * Ring radii for this world. A moons hide drops them from the picture; the stash still
+     * has the circles the fade draws.
+     */
+    private ringRadii(at: WorldDraw): readonly number[] {
+        if (at.rings.length > 0 || !this.moonsLive) return at.rings;
+        const picture = this.heldMoonPicture;
+        if (!picture) return at.rings;
+        for (const layer of picture.layers) {
+            for (const world of layer.worlds) {
+                if (world.world.key === at.world.key && world.rings.length > 0) return world.rings;
+            }
+        }
+        return at.rings;
     }
 
     /** After the frame: whether the discs want another one. */
@@ -831,8 +1165,8 @@ export class OrbitRenderer {
         // 4218-4224: the shaded tile where there is one, else the flat disc and its night half.
         const lit = this.paintDisc(w.key, at.x, at.y, at.r, theme.tones[w.tone], starX, starY, layers.dayNight);
         if (w.port && port !== null) this.highport(plan, w.port, w.key, at.x, at.y, at.r, port, starX, starY, true, state);
-        // 4538-4539: rings shaded with the disc replace the flat circles.
-        const litRings = lit && this.shaded !== null && this.shaded.get(w.key) === true;
+        // Rings shaded with the disc replace the flat circles, cross-faded while a toggle moves.
+        const flatA = this.flatRingAlpha(w.key, lit);
 
         const moonList = this.moonsOf(at, state);
         // 4543-4554: the moons' paths, with the Paths layer. A moons toggle brings each path
@@ -844,7 +1178,7 @@ export class OrbitRenderer {
                 ctx.lineWidth = this.pathWidth;
                 for (const m of moonList) {
                     if (m.moon.ring || m.orbitR < 2) continue;
-                    const cover = this.moonCover(Math.atan2(m.y - at.y, m.x - at.x));
+                    const cover = this.moonCover(m.x, m.y, starX, starY);
                     if (!(cover > 0)) continue;
                     ctx.globalAlpha = Math.min(1, layers.pathStrength * PATH_ALPHA_WORLD * cover);
                     ctx.beginPath();
@@ -865,7 +1199,7 @@ export class OrbitRenderer {
             ctx.lineWidth = this.pathWidth;
             for (const m of moonList) {
                 if (m.moon.ring || m.orbitR < 2) continue;
-                const cover = this.moonCover(Math.atan2(m.y - at.y, m.x - at.x));
+                const cover = this.moonCover(m.x, m.y, starX, starY);
                 if (!(cover > 0)) continue;
                 ctx.globalAlpha = Math.min(1, layers.pathStrength * PATH_ALPHA_WORLD * (share < 1 ? share : 1) * cover);
                 ctx.beginPath();
@@ -875,18 +1209,18 @@ export class OrbitRenderer {
             ctx.restore();
         }
         for (const m of moonList) {
-            const cover = this.moonCover(Math.atan2(m.y - at.y, m.x - at.x));
+            const cover = this.moonCover(m.x, m.y, starX, starY);
             if (!(cover > 0)) continue;
             if (cover < 1) {
                 ctx.save();
                 ctx.globalAlpha = cover;
-                this.moon(plan, m, at, state, litRings);
+                this.moon(plan, m, at, state, flatA);
                 ctx.restore();
             } else {
-                this.moon(plan, m, at, state, litRings);
+                this.moon(plan, m, at, state, flatA);
             }
         }
-        if (!litRings) for (const r of at.rings) this.staticRing(at.x, at.y, r);
+        this.flatRings(at.x, at.y, this.ringRadii(at), flatA);
 
         if (w.mainworld && !this.mainLive && layers.markMainworld) {
             this.mainworldStar(at.x, at.y, at.r, at.z);
@@ -905,10 +1239,10 @@ export class OrbitRenderer {
         }
     }
 
-    private moon(plan: Plan, m: MoonAt, parent: WorldDraw, state: DrawState, litRings: boolean): void {
+    private moon(plan: Plan, m: MoonAt, parent: WorldDraw, state: DrawState, flatA: number): void {
         const moon = m.moon;
         if (moon.ring) {
-            if (!litRings) this.staticRing(m.x, m.y, m.orbitR);
+            this.flatRings(m.x, m.y, [m.orbitR], flatA);
             return;
         }
         const ctx = this.ctx;
@@ -987,49 +1321,58 @@ export class OrbitRenderer {
     }
 
     /**
-     * How far this moon has arrived with the wireframe wave. 1 when moons are not toggling.
-     * The wave runs from the left limb to the right, and a hide is the same share run backwards.
+     * How far this moon has arrived with the wave that leaves its star. 1 when moons are
+     * not toggling. The sweep starts when the front reaches the moon and then stays.
      */
-    private moonCover(angle: number): number {
+    private moonCover(x: number, y: number, starX: number, starY: number): number {
         if (!this.moonsLive) return 1;
-        const along = (Math.cos(angle) + 1) / 2;
-        const span = 0.2;
-        const t = (this.moonsShare * (1 + span) - along) / span;
-        if (t <= 0) return 0;
-        if (t >= 1) return 1;
-        return t;
+        return smoothstep(this.bodyLocal(this.moonsShare, this.reachOf(x, y, starX, starY)));
     }
 
     /**
-     * The body's disc. During a day/night toggle a solid --signal fill sweeps from the lit
-     * limb to the night limb and the settled disc (the shaded tile, or the flat night) is
-     * uncovered behind it. Otherwise the shaded tile, or the flat disc and its night half.
-     * Returns whether a shaded tile was what the settled side showed.
+     * The body's disc. During a day/night toggle a soft --signal band sweeps from the lit
+     * limb to the night limb, starting when the front reaches this body, and the settled
+     * disc is uncovered behind it. A tile that arrives after that fades over --t-base.
+     * Returns whether a shaded tile was fully on.
      */
     private paintDisc(key: string, x: number, y: number, r: number, colour: string, starX: number, starY: number, night: boolean): boolean {
         if (this.dayLive) {
             this.daySweep(key, x, y, r, colour, starX, starY);
             return false;
         }
-        const lit = this.shadedDisc(key, x, y, r);
-        if (!lit) this.disc(x, y, r, colour, starX, starY, night);
-        return lit;
+        const tile = this.tileMix(key);
+        if (tile <= 0) {
+            this.disc(x, y, r, colour, starX, starY, night);
+            return false;
+        }
+        if (tile >= 1) {
+            const lit = this.shadedDisc(key, x, y, r);
+            if (!lit) this.disc(x, y, r, colour, starX, starY, night);
+            return lit;
+        }
+        this.disc(x, y, r, colour, starX, starY, night);
+        const ctx = this.ctx;
+        ctx.save();
+        ctx.globalAlpha = tile;
+        this.shadedDisc(key, x, y, r);
+        ctx.restore();
+        return false;
     }
 
-    /** Solid --signal, one pass from the lit limb across to the night limb. */
+    /** A soft --signal band, one pass from the lit limb across to the night limb. */
     private daySweep(key: string, x: number, y: number, r: number, colour: string, starX: number, starY: number): void {
         this.disc(x, y, r, colour, starX, starY, false);
-        const share = this.dayShare;
         if (!(r > 0)) return;
-        if (!(share > 0)) return;
-        if (share >= 1) {
+        const local = this.bodyLocal(this.dayShare, this.reachOf(x, y, starX, starY));
+        if (!(local > 0)) return;
+        const ang = Math.atan2(starY - y, starX - x);
+        const mid = Math.atan2(-Math.sin(ang), -Math.cos(ang));
+        if (local >= 1) {
             const settled = !this.dayHold && this.shadedDisc(key, x, y, r);
             if (!settled) this.disc(x, y, r, colour, starX, starY, true);
             return;
         }
-        const ang = Math.atan2(starY - y, starX - x);
-        const mid = Math.atan2(-Math.sin(ang), -Math.cos(ang));
-        const front = -r + share * 2 * r;
+        const front = -r + local * 2 * r;
         const ctx = this.ctx;
         ctx.save();
         ctx.beginPath();
@@ -1040,16 +1383,25 @@ export class OrbitRenderer {
             ctx.clip();
             const lit = !this.dayHold && this.shadedDisc(key, x, y, r);
             if (!lit) this.disc(x, y, r, colour, starX, starY, true);
+            const env = tealSweepAlpha(local);
             const back = front - Math.max(3, r * DAY_SWEEP_BAND);
-            ctx.save();
-            ctx.beginPath();
-            if (this.nightCap(ctx, x, y, r, mid, back)) {
-                ctx.clip();
-                ctx.globalAlpha = 1;
-                ctx.fillStyle = this.theme.signal;
-                ctx.fillRect(x - r - 1, y - r - 1, r * 2 + 2, r * 2 + 2);
+            if (env > 0) {
+                ctx.save();
+                ctx.beginPath();
+                if (this.nightCap(ctx, x, y, r, mid, back)) {
+                    ctx.clip();
+                    const c = Math.cos(mid);
+                    const s = Math.sin(mid);
+                    const grad = ctx.createLinearGradient(x + back * c, y + back * s, x + front * c, y + front * s);
+                    grad.addColorStop(0, withAlpha(this.theme.signal, 0));
+                    grad.addColorStop(0.5, withAlpha(this.theme.signal, env));
+                    grad.addColorStop(1, withAlpha(this.theme.signal, 0));
+                    ctx.globalAlpha = 1;
+                    ctx.fillStyle = grad;
+                    ctx.fillRect(x - r - 1, y - r - 1, r * 2 + 2, r * 2 + 2);
+                }
+                ctx.restore();
             }
-            ctx.restore();
         }
         ctx.restore();
     }
@@ -1632,41 +1984,184 @@ export class OrbitRenderer {
         ctx.restore();
     }
 
+    /**
+     * Starts a jump bubble on the frame the ship enters jump or arrives, and drops it before
+     * the frame where it has finished, so that frame is the settled one. The first paint only
+     * records the ships. Reduced motion, or a theme without --ease-out, snaps. Leaving takes
+     * --t-long; arriving takes --t-slow. A scrub back across the same moment reverses it.
+     */
+    private beginBubbles(state: DrawState): void {
+        this.bubbleFrame = [];
+        const ease = this.theme.easeOut;
+        const phases = new Map<string, { phase: JumpPhase; mark: ShipMark }>();
+        for (const mark of state.ships ?? []) phases.set(mark.id, { phase: mark.jump ?? 'mark', mark });
+        if (!state.motion || !ease) {
+            this.bubbleRuns.clear();
+            this.seenShips = new Map([...phases].map(([id, row]) => [id, row.phase]));
+            this.seenShipDays = state.days;
+            return;
+        }
+        if (!this.seenShips || this.seenShipDays === null) {
+            this.seenShips = new Map([...phases].map(([id, row]) => [id, row.phase]));
+            this.seenShipDays = state.days;
+            return;
+        }
+        const forward = state.days >= this.seenShipDays;
+        const seen = this.seenShips;
+        const ids = new Set<string>([...seen.keys(), ...phases.keys()]);
+        for (const id of ids) {
+            const prev: JumpPhase | 'absent' = seen.get(id) ?? 'absent';
+            const row = phases.get(id);
+            const cur: JumpPhase | 'absent' = row ? row.phase : 'absent';
+            if (prev === cur) continue;
+            const moment = this.bubbleMoment(prev, cur, forward);
+            if (!moment || !row && moment.to === 1) continue;
+            const mark = row ? row.mark : this.bubbleRuns.get(id)?.mark;
+            if (!mark) continue;
+            this.startBubble(id, moment.kind, moment.to, mark, state.time, ease);
+        }
+        this.seenShips = new Map([...phases].map(([id, row]) => [id, row.phase]));
+        this.seenShipDays = state.days;
+        for (const [id, run] of this.bubbleRuns) {
+            const u = (state.time - run.t0) / 1000 / run.seconds;
+            if (u >= 1) {
+                this.bubbleRuns.delete(id);
+                continue;
+            }
+            const live = phases.get(id);
+            if (live) run.mark = live.mark;
+            this.layersBusy = true;
+            this.bubbleFrame.push({
+                id, kind: run.kind, mark: run.mark,
+                share: this.shareAt(run, Math.max(0, u), ease),
+            });
+        }
+    }
+
+    /** Which bubble a phase change is, or null when nothing on the picture changed. */
+    private bubbleMoment(
+        prev: JumpPhase | 'absent',
+        cur: JumpPhase | 'absent',
+        forward: boolean,
+    ): { kind: 'out' | 'in'; to: number } | null {
+        if (cur === 'out' && (prev === 'mark' || prev === 'absent') && forward) return { kind: 'out', to: 1 };
+        if (prev === 'out' && cur === 'mark' && !forward) return { kind: 'out', to: 0 };
+        if (cur === 'mark' && prev === 'in' && forward) return { kind: 'in', to: 1 };
+        if (cur === 'mark' && prev === 'out' && forward) return { kind: 'in', to: 1 };
+        if (prev === 'mark' && cur === 'in' && !forward) return { kind: 'in', to: 0 };
+        if (prev === 'mark' && cur === 'out' && !forward) return { kind: 'in', to: 0 };
+        return null;
+    }
+
+    private bubbleSeconds(kind: 'out' | 'in'): number | null {
+        const raw = kind === 'out' ? this.theme.tLong : this.theme.tSlow;
+        return typeof raw === 'number' && raw > 0 ? raw : null;
+    }
+
+    private startBubble(
+        id: string,
+        kind: 'out' | 'in',
+        to: number,
+        mark: ShipMark,
+        now: number,
+        ease: EaseOut,
+    ): void {
+        const seconds = this.bubbleSeconds(kind);
+        if (seconds === null) return;
+        const prev = this.bubbleRuns.get(id);
+        const from = prev && prev.kind === kind ? this.runShare(prev, now, ease) : (to === 1 ? 0 : 1);
+        this.bubbleRuns.set(id, { from, to, t0: now, seconds, kind, mark });
+    }
+
     // ---- Ships -----------------------------------------------------------------------------
 
     /**
      * Sensor designators after the bodies. The shape is a fixed pixel wireframe,
-     * so a zoom that rebuilds the picture does not grow the stroke.
+     * so a zoom that rebuilds the picture does not grow the stroke. A jump report is
+     * not drawn; the bubble for that moment is drawn in its place while it runs.
      */
     private ships(marks: readonly ShipMark[] | undefined): void {
+        const bubbling = new Set<string>();
+        for (const bubble of this.bubbleFrame) {
+            bubbling.add(bubble.id);
+            this.paintBubble(bubble.mark, bubble.kind, bubble.share);
+        }
         if (!marks || marks.length === 0) return;
-        const ctx = this.ctx;
-        const theme = this.theme;
         for (const mark of marks) {
-            if (this.offCanvas(mark.x, mark.y, 40)) continue;
-            const colour = mark.kind === 'party' ? theme.signal : mark.kind === 'traffic' ? theme.textMuted : theme.text;
+            if (bubbling.has(mark.id) || mark.jump) continue;
+            this.paintDesignator(mark, 1, 1);
+        }
+    }
+
+    /** The leaving bubble swells and fades. The arriving bubble shows first, then yields the designator. */
+    private paintBubble(mark: ShipMark, kind: 'out' | 'in', share: number): void {
+        const s = Math.min(1, Math.max(0, share));
+        let designatorAlpha = 0;
+        let designatorScale = 1;
+        let bubbleAlpha = 0;
+        let bubbleRadius = 0;
+        if (kind === 'out') {
+            designatorAlpha = 1 - s;
+            designatorScale = 1 + s * 0.45;
+            bubbleAlpha = Math.sin(Math.PI * s);
+            bubbleRadius = 8 + s * 28;
+        } else {
+            const rise = s < 0.45 ? s / 0.45 : 1;
+            const fall = s < 0.45 ? 0 : (s - 0.45) / 0.55;
+            bubbleAlpha = rise * (1 - fall);
+            bubbleRadius = 36 - fall * 26;
+            designatorAlpha = fall;
+            designatorScale = 0.4 + fall * 0.6;
+        }
+        if (bubbleAlpha > 0 && !this.offCanvas(mark.x, mark.y, bubbleRadius + 4)) {
+            const ctx = this.ctx;
             ctx.save();
             ctx.translate(mark.x, mark.y);
-            if (typeof mark.heading === 'number') ctx.rotate(mark.heading);
-            ctx.strokeStyle = colour;
-            ctx.globalAlpha = 1;
+            ctx.strokeStyle = this.theme.attention;
             ctx.lineWidth = 1;
-            ctx.lineJoin = 'miter';
             ctx.lineCap = 'butt';
             ctx.setLineDash([]);
+            ctx.globalAlpha = bubbleAlpha;
             ctx.beginPath();
-            this.designator(mark.shape);
+            ctx.arc(0, 0, bubbleRadius, 0, TAU);
+            ctx.stroke();
+            ctx.globalAlpha = bubbleAlpha * 0.65;
+            ctx.beginPath();
+            ctx.arc(0, 0, bubbleRadius * 0.62, 0, TAU);
             ctx.stroke();
             ctx.restore();
-            ctx.save();
-            ctx.fillStyle = colour;
-            ctx.globalAlpha = 1;
-            ctx.font = '10px ' + theme.fontText;
-            ctx.textAlign = 'left';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(mark.name, mark.x + 12, mark.y);
-            ctx.restore();
         }
+        this.paintDesignator(mark, designatorAlpha, designatorScale);
+    }
+
+    /** One designator and its name. `alpha` 1 and `scale` 1 is the settled stroke. */
+    private paintDesignator(mark: ShipMark, alpha: number, scale: number): void {
+        if (!(alpha > 0) || this.offCanvas(mark.x, mark.y, 40)) return;
+        const ctx = this.ctx;
+        const theme = this.theme;
+        const colour = mark.kind === 'party' ? theme.signal : mark.kind === 'traffic' ? theme.textMuted : theme.text;
+        ctx.save();
+        ctx.translate(mark.x, mark.y);
+        if (scale !== 1) ctx.scale(scale, scale);
+        if (typeof mark.heading === 'number') ctx.rotate(mark.heading);
+        ctx.strokeStyle = colour;
+        ctx.globalAlpha = alpha;
+        ctx.lineWidth = 1;
+        ctx.lineJoin = 'miter';
+        ctx.lineCap = 'butt';
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        this.designator(mark.shape);
+        ctx.stroke();
+        ctx.restore();
+        ctx.save();
+        ctx.fillStyle = colour;
+        ctx.globalAlpha = alpha;
+        ctx.font = '10px ' + theme.fontText;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(mark.name, mark.x + 12, mark.y);
+        ctx.restore();
     }
 
     /** One closed wireframe. Drawn in a context already centred on the mark. */

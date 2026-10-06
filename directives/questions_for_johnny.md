@@ -529,6 +529,21 @@ for now, knowing we might change some stuff up" when he has the Cluster Truck su
 The orchestrator took the recommended option: over the assumed hull the line reads "more
 than the ship's tonnage". He may change it.
 
+### G6. The city lights on a planet's air (follow-up 20)
+
+Johnny saw "the city texture on the atmosphere layer and not the planet layer". Agent C
+found that our planet shader is the old app's, line for line (a test requires it): the
+night-side city lights are dimmed by cloud but not hidden (they keep 40% under full cloud),
+there is a city-coloured glow at the planet's edge, and the air halo round the night side
+carries the city colour too. Leave it as the old app draws it; or make ours differ: lights
+on the surface only, hidden by cloud, with no city colour in the edge glow or the halo?
+The second is the first deliberate difference from the old app's planet renderer and is
+recorded as one.
+
+*Recommended: the second, since he called it a bug. Interim: unchanged.*
+
+**Answer:**
+
 
 ---
 

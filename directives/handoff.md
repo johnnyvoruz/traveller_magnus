@@ -3951,3 +3951,41 @@ Stop and report.
   `DayNight.vue` and D's `contrast.test.js` are closed to E, which reports any pair or prop
   it needs. A's later panes step 3 touches where the panes are mounted, after E.
 - **A is free.** The part 2b recipe (a body's 100-diameter limit as a place) is still owed.
+
+## 142. Pushed `556b380` (part 2); B's T1.3a and C's third motion pass accepted; the city lights are the legacy's (2026-10-06)
+
+- **`556b380` verified:** GitHub run green; `campaign` equals `origin/campaign`. **In
+  production:** the flight estimate with both fuel lines, the rolled jump time, the Party tab
+  and marker from the track, the index following the track, `parsecsBetween`, the truth
+  proxy for local dev.
+- **Agent B, T1.3a (a new report, not an old one):** `needsLiquidValidation` is a label, a
+  stored percentage (number or not), or either code above 0; the rest get no liquid write.
+  Marches: 8,066 validated, 1,274 left alone, 2 blocking; unresolved 1,795 as before; 337
+  mainworlds with `hydro` and `hydroCode` different, beside the audit's B01 and B03 at 387.
+  Its test file 7 pass. **Accepted.**
+- **Agent C, follow-up 14c:** one front leaves each star over `--t-long` and each body's
+  sweep starts as it arrives, over `--t-slow`, entering at the limb facing its star; a hide
+  is the same line backwards; Moons and Day/night run linearly across the two tokens
+  (`--ease-out` crushed the inner sweep); teal alpha is a sine, zero at both ends, with a
+  tested step limit (`TEAL_STEP`, one 60 fps frame of a `--t-slow` sweep); a faint
+  `--signal` ring marks the front; flat and shaded rings trade over the body's sweep; a late
+  tile fades over `--t-base`; 8.5 ms frames at Regina. The mid frame shows the wireframes on
+  the gas giants. **Accepted;** Johnny judges it live.
+- **Agent C, the city lights (follow-up 20), diagnosed, nothing changed:** the legacy GL disc
+  does the same. `surface/vanilla/gl_shade.ts` paints the city colour into the surface by
+  day, the night lights under the clouds at `1 - cloud * 0.6`, a limb term, and the air halo
+  adds `uCityHaze` on the night-facing shell; `tests/web/surface_gl.test.js` requires the
+  shader source to equal `js/planet_gl.js`. A fix is a deliberate difference from the
+  legacy: **question G6 for Johnny.**
+- **Orchestrator on the tree** (only B's and C's eight files modified, so the tree is the
+  commit): 806 tests, 797 pass / 0 fail / 9 skipped; check clean; typecheck clean; build
+  green. **Push by path** from `findings/push/motion3_files.txt`, with `directives`.
+- **Issued:** `prompts/b_engine_t1_4.md` (the reconciliation as `generateHex`'s last step
+  behind an option that is absent by default, so no existing output or test changes; equality
+  with the standalone transform; schema support), `prompts/a_panes_steps_2_4.md` (A builds
+  the rest of its own panes design, step 2 included, while D is on paper; `dossier/` and the
+  card closed to it because E is in them), `prompts/c_plot_readout.md` (the plotting
+  readout in AU from the primary and real distance from the selected ship, through an
+  inverse of the picture's compression in `distance.ts`).
+- **D's order after its paper step:** A must have reported the panes steps first, because
+  D's queued fixes touch `OrbitView.vue` and `WhereBlock.vue`.

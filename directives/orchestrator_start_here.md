@@ -140,7 +140,12 @@ file true: replace it, do not append to it.
 | follow-up 14b (C) | a moon's real distance; Johnny's motion notes (hide reversed, slower, the wireframe wave, the solid teal sweep) | accepted §134; in the push called for; Johnny judges live |
 | panes step 1 (A) | `shell/pane.ts`, pure | accepted §134 |
 | engine corrections T1.3 (B) | liquids | accepted §134 with a correction |
-| **T1.3a (B)** | `prompts/b_engine_t1_3a.md`: only bodies with a label, a percentage or a code above 0 need a liquid validated | **issued §134** |
+| T1.3a (B) | only bodies with a label, a percentage or a code above 0 need a liquid validated | accepted §142; in the push called for |
+| **T1.4 (B)** | `prompts/b_engine_t1_4.md`: the reconciliation as `generateHex`'s last step, behind an option absent by default | **issued §142** |
+| **panes steps 2 to 4 (A)** | `prompts/a_panes_steps_2_4.md`: follow-up 17 built from A's own design while D is on paper | **issued §142**; D's queued fixes wait for its report |
+| **plot readout (C)** | `prompts/c_plot_readout.md`: AU from the primary and real distance from the selected ship | **issued §142** |
+| follow-up 14c (C) | Moons and Day/night radiate from the star, the teal fades, rings cross-fade | accepted §142; in the push called for; Johnny judges live |
+| follow-up 20 (city lights) | the port matches the legacy disc | with Johnny as G6 |
 | jump bubble (C) | `placeShips` reports a ship entering jump and arriving; the amber bubble out and in | accepted §138, local; rides with D's part 2 |
 | **follow-ups 14c and 20 (C)** | `prompts/c_toggle_motion_3.md`: Moons and Day/night radiate from the star, alpha fades on the teal, ring and late-tile cross-fades; the city lights diagnosed | **issued §135** (after the bubble if begun) |
 | **follow-up 19 (D)** | `prompts/d_orbit_small_fixes.md`: readout padding, "No ships here" on one line, the campaign mark out of the header | **issued §135**, after D reports part 2 |
@@ -174,7 +179,11 @@ file true: replace it, do not append to it.
   `orbit/ships.ts`, `orbit/theme.ts`, `tests/web/orbit_renderer.test.js`,
   `tests/web/orbit_ships.test.js`), rehearsed in a scratch copy first. D holds on a
   paper-only step until then; after it, D gets `d_orbit_small_fixes.md` (seven items).
-- **Nothing is open with Johnny on the ship MVP.** G5 was taken as the recommended option
+- **Last push `556b380`** (part 2), green and live. **Called for in §142:** B's T1.3a and
+  C's third motion pass, by path from `findings/push/motion3_files.txt`; check `git log -1`.
+- **Open with Johnny: G6**, the city lights (keep the old app's look, or lights on the
+  surface only as a recorded difference).
+- G5 was taken as the recommended option
   (§140). He expects a supplement ("Cluster Truck") to change travel rules later: keep the
   plotting rules easy and in `rules/`, so a change is an edit to a file.
 - `findings/rules_notes/mgt2e_drives.json` holds the drive tables he pasted, for vNext; it

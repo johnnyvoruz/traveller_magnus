@@ -328,6 +328,22 @@ function hydroKind(percent) {
     return 'positive';
 }
 
+/** Above 0 only when the engine stored a finite number. A non-number is not above 0. */
+function codeAboveZero(value) {
+    return finiteNumber(value) && value > 0;
+}
+
+/**
+ * A liquid is validated when a label is stored, hydroPercent is present
+ * (any stored value, including a non-number), or either hydrographics code
+ * is above 0. The two codes are not reconciled with each other.
+ */
+function needsLiquidValidation(body) {
+    const label = body.liquidType !== undefined && body.liquidType !== null;
+    const percent = Object.prototype.hasOwnProperty.call(body, 'hydroPercent');
+    return label || percent || codeAboveZero(body.hydro) || codeAboveZero(body.hydroCode);
+}
+
 /** The label captured once in provenance, so a corrected value is not classified again. */
 function provenanceLiquid(body) {
     const original = body.reconciliation && body.reconciliation.original;
@@ -395,6 +411,7 @@ function decideLiquid(body, policy, temps) {
 }
 
 function reconcileLiquid(body, policy, hex, path, diagnostics) {
+    if (!needsLiquidValidation(body)) return null;
     const temps = readTemps(body);
     if (hydroKind(body.hydroPercent) === 'positive' && rangeInverted(temps)) {
         diagnostics.push({ hex, path, field: 'temperature', kind: 'temperature-inverted', status: 'inverted' });
@@ -451,8 +468,8 @@ function reconcileList(list, systemHzco, hex, path, policy, changes, diagnostics
         const orbitalChanged = !same(body.orbitalTempBand, orbital);
         const reconciliationChanged = reconciliation !== body.reconciliation;
         const moonsChanged = moons !== body.moons;
-        const liquidTypeChanged = liquid.replace && !same(body.liquidType, liquid.liquidType);
-        const liquidStatusChanged = !same(body.liquidStatus, liquid.liquidStatus);
+        const liquidTypeChanged = !!(liquid && liquid.replace && !same(body.liquidType, liquid.liquidType));
+        const liquidStatusChanged = !!(liquid && !same(body.liquidStatus, liquid.liquidStatus));
         if (!surfaceChanged && !orbitalChanged && !reconciliationChanged && !moonsChanged
             && !liquidTypeChanged && !liquidStatusChanged) return body;
         changed = true;
