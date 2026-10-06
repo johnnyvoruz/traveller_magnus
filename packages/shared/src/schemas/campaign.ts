@@ -20,6 +20,8 @@ export const CAMPAIGN_LIMITS = {
     universes: 10,
     images: 12,
     caption: 200,
+    track: 500,
+    trackNote: 200,
 } as const;
 
 const HEX_KEY = /^[^/]+\/\d{4}$/;
@@ -112,6 +114,38 @@ export const CampaignImage = z.object({
 }).strict();
 export type CampaignImage = z.infer<typeof CampaignImage>;
 
+/** One dated leg of a vessel's track. Durations are the numbers on the leg. */
+export const TrackLeg = z.object({
+    from: CampaignAnchor,
+    to: CampaignAnchor,
+    departs: z.number().finite().nonnegative(),
+    arrives: z.number().finite().nonnegative(),
+    mode: z.enum(['docked', 'orbit', 'flight', 'jump']),
+    accelG: z.number().finite().min(1).max(6).optional(),
+    note: z.string().max(CAMPAIGN_LIMITS.trackNote).optional(),
+}).strict().superRefine((leg, ctx) => {
+    if (leg.arrives < leg.departs) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'arrives before departs', path: ['arrives'] });
+    }
+});
+export type TrackLeg = z.infer<typeof TrackLeg>;
+
+/** Legs in time order. Each departs at or after the previous arrives. */
+export const Track = z.array(TrackLeg).max(CAMPAIGN_LIMITS.track).superRefine((legs, ctx) => {
+    for (let i = 1; i < legs.length; i += 1) {
+        if (legs[i].departs < legs[i - 1].arrives) {
+            ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'out of time order', path: [i, 'departs'] });
+            return;
+        }
+    }
+});
+export type Track = z.infer<typeof Track>;
+
+/** `track`, when present, is a vessel's ordered legs. Other status keys stay free. */
+const RecordStatus = z.object({
+    track: Track.optional(),
+}).passthrough();
+
 export const CampaignRecord = z.object({
     id: z.string().regex(RECORD_ID),
     type: z.enum(CAMPAIGN_RECORD_TYPES),
@@ -125,7 +159,7 @@ export const CampaignRecord = z.object({
     visibility: Visibility,
     playerNotes: z.string().nullable(),
     sheet: z.unknown().nullable(),
-    status: z.unknown().nullable(),
+    status: RecordStatus.nullable(),
     images: z.array(CampaignImage).max(CAMPAIGN_LIMITS.images).nullable(),
     provenance: CampaignProvenance.nullable(),
     rev: Rev,

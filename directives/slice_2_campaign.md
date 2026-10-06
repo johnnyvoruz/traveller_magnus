@@ -370,6 +370,43 @@ only. D's five points for the orchestrator:
     the record change), tested with an injected fetch and a small PNG fixture. B, the two
     object routes and the quota, black-box tested on `wrangler dev`. D, the screens.
 
+- **K17. Shared ship feeds: follow an account, faction accounts (Johnny, 2026-10-05).** "A
+  shared data element for anyone using the default universe map in their campaign, so we
+  can see all the ships created by players; a way to 'follow' an account that shows the
+  ships in their campaign, so it does not spam; and pseudo accounts for the various
+  factions where we make NPC ship movements that people can subscribe to." Design, to be
+  written in full after K6d and K16:
+  1. **Publish is per vessel and opt-in.** A vessel's track is private unless its owner marks
+     it published (a flag on the record). Publishing is only possible on a universe pinned
+     to the released truth (same map for everyone).
+  2. **A feed is a file.** On each change to a published vessel (debounced), the Worker
+     writes `feeds/<accountId>/ships.json` to the public bucket: the account's display name,
+     the truth version, and each published vessel's name, class, image hash and track (legs
+     only, no notes). A D1 row points at the current hash. Readers fetch files from the CDN
+     and never reach into anyone's Durable Object.
+  3. **Follow is a row** (`follows`: follower, followed, since). The viewer loads the feeds
+     of the accounts the visitor follows and draws their ships on the map and in the orbit
+     view in a dimmer mark with the owner's name; a click opens a read-only card. Signed
+     out: nothing. Caps: published vessels per account, follows per account, publishes per
+     hour (anti-spam, with K2's budgets as the pattern).
+  4. **Faction accounts** are accounts with `kind: 'faction'`, created and owned by Johnny
+     (admin); their universes hold generated traffic (K16) and publish it; subscribing is
+     following. A faction's feed can be large; it is one file, cached, versioned by hash.
+  5. **Privacy:** only what is published leaves the account: vessel name, class, image,
+     legs. Records, people, notes and anchors other than the track never do.
+
+- **Deck plan and orbit follow-ups (Johnny, 2026-10-05, after seeing them live).**
+  1. **Full-screen deck plan (D):** an expand icon on the viewer opens the plan in the app's
+     one modal (the Lightbox pattern) at the window's size, with pan, zoom, fit, the credit
+     and Esc; "to see and pan in a much larger window".
+  2. **Fuzzy tiles when zoomed out (C):** the 600 px tiles are drawn at small scales with
+     the canvas's default (low) smoothing; set `imageSmoothingQuality = 'high'` and draw from
+     pre-halved copies (a two- or three-level mip per tile, made once) when the scale is
+     under one half, so lines stay crisp at every zoom.
+  3. **The layout choice as a split button (D):** Orbits / Row / Column becomes a split
+     button whose face shows the selected view and whose arrow opens the three; same keys
+     (1/2/3), same place on the picture.
+
 - **Deck plans on a light background (Johnny, 2026-10-05).** The Geomorph tiles are drawn
   for a light page. The viewer's canvas backdrop becomes a light "paper" token (added to
   `tokens.css`; no hex colour elsewhere), with the box, credit and controls staying in the

@@ -295,6 +295,14 @@ const PAIRS = [
     ['--text-2', '--stage-head', TEXT, 'the scrub’s end labels (11.5 px)'],
     ['--attention', '--stage-head', MARK, 'the campaign date on the scrub’s track'],
     ['--signal', '--bg-2', TEXT, 'the date readout'],
+    // The ship sheet (K13): the tabs, the value tags, the frame, the fields
+    ['--on-signal', '--signal', SMALL, 'sheet: a section tab (11 px)'],
+    ['--text-0', '--sheet-rust', TEXT, 'sheet: a value in its rust-red tag (13 px mono bold)'],
+    ['--sheet-frame', '--bg-1', MARK, 'sheet: the orange frame line'],
+    ['--sheet-rust-line', '--panel-raised', MARK, 'sheet: an empty value tag, its edge'],
+    ['--text-1', '--panel-raised', TEXT, 'sheet: a field label (12.5 px), a row heading'],
+    ['--text-muted', '--panel-raised', SMALL, 'sheet: a column heading (10.5 px), a page label'],
+    ['--text-0', '--bg-2', TEXT, 'sheet: a value in a table cell or a tall field'],
 ];
 
 if (process.env.CONTRAST_REPORT) {

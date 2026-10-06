@@ -68,8 +68,8 @@ not append to it.
   with undo. Johnny has signed in and saved a record in production.
 - **Storage:** the catalogue row is in D1 (`universes`, migration 0008 applied); a campaign's
   rows are in its own Durable Object (`campaign_records`, `campaign_links`, `lists` for the
-  party and the clock). Nothing in R2 for campaigns yet. **Export exists** (§104, a JSON file per campaign through the API; the menu button comes
-  with K15); import is A's next step. No server-side backups.
+  party and the clock). Nothing in R2 for campaigns yet. **Export and Import are in the account menu** (§104, §106, §111): a JSON file per
+  campaign, restored into an empty campaign. No server-side backups.
 - **Deck plan tiles** are on the CDN under `geomorphs/` (3,026 objects); the PNGs are
   git-ignored; `assets/geomorphs/manifest.json`, `REBUILD.md`, `ATTRIBUTION.txt` are tracked.
 
@@ -100,23 +100,26 @@ campaign layer over the truth map; own maps later. X sign-in only.
 | K14 | images on records: routes (B), browser encode and upload (A) | done, live; screens (D) after K6c |
 | deck plan light backdrop | a paper token for the viewer | Agent C, in flight |
 | K6c | clock screens, the date beside the search bar, the Rail | done, accepted §101, not yet pushed |
-| K14 screens | images on the record page, rows, results; gallery; lightbox | done, accepted §109, not yet pushed |
-| K15 | the orbit view as a showpiece | done, accepted §110, not yet pushed |
-| **K13 part 3** | the ship sheet on the vessel record | **Agent D, in flight** |
-| K6d data | the vessel track (dated legs on status), helpers | Agent A, in flight |
+| K14 screens | images on the record page, rows, results; gallery; lightbox | done, live |
+| K15 | the orbit view as a showpiece | done, live |
+| K13 part 3 | the ship sheet on the vessel record | done, accepted §113, not yet pushed |
+| K6d data | the vessel track (dated legs on status), helpers | done, accepted §113, not yet pushed |
+| **follow-ups** | full-screen deck plan, layout split button | **Agent D, in flight** |
+| K6d screens | ship list, track, Jump button | next for D |
+| K17 | shared ship feeds, follow, faction accounts | recorded; after K6d and K16 |
 | K7, K8 | journal, timeline | outlines only |
 | K10, K11 | copy between campaigns; shared records in an account library | K11 needs a design |
 
 ## 6. In flight right now
 
-- **Agent D:** K13 part 3, the ship sheet from `rules/mgt2e_ship_sheet_fields.json`. Then
-  K6d screens (the ship list, the track, the Jump button on settings.jumpHours).
-- **Agent A:** the vessel track schema and store helpers (K6d data).
+- **Agent D:** the full-screen deck plan and the layout split button (§112). Then K6d
+  screens (the ship list, the track, the Jump button).
+- **Agent A:** free.
 - **Agent B:** free. The export route is in (§104); Export / Import buttons come with D's K15.
-- **Agent C:** free. The starport tick is in (§108).
+- **Agent C:** crisp deck plan tiles at small scales (§112).
 - **Agent F:** parked. K13 parts 1 and 2 done (handoff 89 to 91); part 3 after K5f.
-- **Last push:** 94f256a (directives; the 8dbcc36 build failure stands until the next push).
-  Local and finished: D's K14 screens and K15 part 2; push everything with git add -A.
+- **Last push:** 7bcbd00. Local and finished: A's track, D's ship sheet (§113); C mid-step
+  in deckplan/.
 
 ## 7. Decisions Johnny has made that shape the next steps
 
@@ -146,6 +149,8 @@ campaign layer over the truth map; own maps later. X sign-in only.
   direction and answered F3 to F7; **F2 (the kelvin table for the five climate words) is
   open.** Must be done **before the Builder**. A campaign is pinned to its truth version, so
   parking is safe; body anchors re-resolve by name on migration.
+- **Shared ship feeds (K17, Johnny 2026-10-05):** publish a vessel, follow an account, faction
+  accounts with NPC traffic; feed files on the CDN, follows as rows. After K6d and K16.
 - **Jumps (K12, Johnny 2026-10-05):** many ships at once; each vessel's track is a data
   record (a black-box log of dated legs) that can be replayed and reused; generated ship
   traffic later (K16). Plot a destination, fly to the jump point at 1 to 6 G

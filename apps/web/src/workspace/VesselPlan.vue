@@ -80,7 +80,6 @@ function remove(): void {
 
 <template>
   <section v-if="record" class="vplan" :data-plan="plan ? 'yes' : 'no'">
-    <h3 class="ui-heading">Deck plan</h3>
     <input ref="fileEl" class="vplan-file" type="file" accept="application/json,.json" tabindex="-1" aria-hidden="true" @change="onFile">
     <template v-if="plan">
       <div class="vplan-view">

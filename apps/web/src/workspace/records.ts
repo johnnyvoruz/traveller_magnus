@@ -152,7 +152,7 @@ export function newRecord(type: CampaignRecordType, id: string, now: string, anc
     };
 }
 
-export type RecordPatch = Partial<Pick<CampaignRecord, 'type' | 'name' | 'summary' | 'details' | 'tags' | 'anchor' | 'images'>>;
+export type RecordPatch = Partial<Pick<CampaignRecord, 'type' | 'name' | 'summary' | 'details' | 'tags' | 'anchor' | 'images' | 'sheet'>>;
 
 /** True when the patch would change nothing: no change is sent for it. */
 export function unchanged(record: CampaignRecord, patch: RecordPatch): boolean {
@@ -163,6 +163,8 @@ export function unchanged(record: CampaignRecord, patch: RecordPatch): boolean {
             if (!sameAnchor(patch.anchor ?? null, record.anchor)) return false;
         } else if (key === 'images') {
             if (!sameImages(patch.images ?? null, record.images)) return false;
+        } else if (key === 'sheet') {
+            if (JSON.stringify(patch.sheet ?? null) !== JSON.stringify(record.sheet ?? null)) return false;
         } else if (Array.isArray(next) && Array.isArray(have)) {
             if (next.length !== have.length || next.some((item, i) => item !== have[i])) return false;
         } else if (next !== have) return false;

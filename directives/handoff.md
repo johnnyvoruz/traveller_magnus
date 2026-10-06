@@ -2905,3 +2905,47 @@ API and Durable Object have against `data_model.md` and `api.md`).
 - **Next:** D, K13 part 3 (the ship sheet from `rules/mgt2e_ship_sheet_fields.json`); A,
   the vessel track schema and store helpers (K6d data, K12 "Many ships" point 1) so D can
   draw the ship list and the Jump button after the sheet.
+
+## 111. Pushed `7bcbd00` (orbit showpiece, images, export/import); deployed; CI green again (2026-10-05)
+
+- GitHub run green (the `8dbcc36` failure is cured). Live bundle `index-CB1tmyM0.js` holds
+  "Make primary", "Export", "Import", "Starport"; the orbit chunk `OrbitView-BHqaXmRn.js`
+  holds the new row and the key. **In production:** the orbit showpiece, record images, the
+  starport tick, Export and Import in the account menu. The tree is clean but for
+  `directives/`.
+
+## 112. Johnny's feedback on the live deck plan and orbit view (2026-10-05)
+
+- Three asks, recorded under "Deck plan and orbit follow-ups" in `slice_2_campaign.md`:
+  a full-screen deck plan behind an expand icon (D, after the sheet); tiles fuzzy when
+  zoomed out (C, now: the canvas uses default low smoothing when it draws 600 px tiles
+  small; `imageSmoothingQuality = 'high'` plus pre-halved tile copies under half scale);
+  Orbits / Row / Column as a split button whose face shows the selected view (D, after the
+  sheet).
+
+## 113. The vessel track (A) and the ship sheet (D) are in and accepted; K17 shared ship feeds recorded (2026-10-05)
+
+- **Agent A:** `TrackLeg` / `Track` in `packages/shared` (modes docked / orbit / flight /
+  jump, `accelG` 1 to 6, note 200, 500 legs, time order enforced; `status.track` optional,
+  other status keys untouched); `campaign/track.ts`: `positionAt` (anchor, or `{ leg,
+  fraction }` mid-flight or mid-jump, null before the first departure), `appendLeg` /
+  `removeLastLeg` through commit with "Legs must stay in time order.", `whereAreWe` reading
+  the track when present. Tests on four dates and the refusals. **Accepted.**
+- **Agent D, K13 part 3:** `workspace/ship_sheet.ts`, `ShipSheet.vue` (own chunk): the 312
+  fields through the generated wrapper, the PDF's 16 sections in page order, numbered
+  series as tables, boxes 30 pt or taller as textareas, the PDF's spellings kept; chamfered
+  panels, cyan tabs, rust value tags, orange frame (three new tokens); edited in place and
+  stored as `sheet.fields { [name]: value }` with `sheet.schema`, beside `sheet.deckPlan`;
+  "5 of 312" counts filled fields; nothing computed. Read back from the real local API.
+  Seven `k13_` shots and the PDF's two pages rendered beside them. **Accepted.** The half
+  shot matches the plan's §5.3b look.
+- **Orchestrator:** 671 pass / 0 fail, check clean, build green on the combined tree.
+  C is mid-step in `deckplan/draw.ts`; push by path leaves `deckplan/` out.
+- **Johnny:** shared ship feeds, follow an account, faction pseudo-accounts with NPC
+  movements. Written as **K17** in `slice_2_campaign.md` with the mechanism: publish per
+  vessel (opt-in), a feed file per account in the public bucket (readers never touch a
+  Durable Object), follows as rows, faction accounts flagged and admin-owned, caps as the
+  anti-spam. After K6d and K16.
+- **Next, D:** the full-screen deck plan and the layout split button (§112), then K6d
+  screens (the ship list, the track on the vessel page, the Jump button on
+  `settings.jumpHours`, "Where are we" from the track).

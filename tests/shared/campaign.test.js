@@ -8,6 +8,8 @@ import {
     CampaignChanges,
     CampaignProvenance,
     CampaignImage,
+    Track,
+    TrackLeg,
     CampaignClock,
     CampaignLink,
     CampaignPage,
@@ -179,6 +181,39 @@ test('schemas reject §0.10 breaches and a legacy hex id', () => {
     assert.equal(CampaignChanges.safeParse({ records: bulky }).success, false);
     assert.equal(CampaignPage.safeParse({ records: [record({ anchor: { kind: 'system', hexKey: '1-A-0101' } })], links: [], settings: settings(), clock: null, seq: 0, done: true }).success, false);
     assert.equal(CampaignPage.safeParse({ records: [], links: [], settings: settings(), seq: 0, done: true }).success, false);
+});
+
+function leg(departs, arrives, over = {}) {
+    return {
+        from: { kind: 'system', hexKey: 'Spinward_Marches/1910' },
+        to: { kind: 'record', id: OTHER },
+        departs,
+        arrives,
+        mode: 'docked',
+        ...over,
+    };
+}
+
+test('a vessel track is ordered legs', () => {
+    const flight = leg(0, 10, { mode: 'flight', accelG: 1, note: 'n'.repeat(CAMPAIGN_LIMITS.trackNote) });
+    const jump = leg(10, 17, { mode: 'jump', accelG: 6 });
+    assert.equal(TrackLeg.safeParse(flight).success, true);
+    assert.equal(TrackLeg.safeParse(jump).success, true);
+    assert.equal(Track.safeParse([flight, jump]).success, true);
+    assert.equal(CampaignRecord.safeParse(record({ type: 'vessel', status: { track: [flight, jump] } })).success, true);
+    assert.equal(CampaignRecord.safeParse(record({ type: 'vessel', status: null })).success, true);
+    assert.equal(CampaignRecord.safeParse(record({ type: 'vessel', status: { cargo: [] } })).success, true);
+    const full = [];
+    for (let i = 0; i < CAMPAIGN_LIMITS.track; i += 1) full.push(leg(i, i));
+    assert.equal(Track.safeParse(full).success, true);
+    assert.equal(TrackLeg.safeParse(leg(0, 10, { accelG: 0 })).success, false);
+    assert.equal(TrackLeg.safeParse(leg(0, 10, { accelG: 7 })).success, false);
+    assert.equal(TrackLeg.safeParse(leg(0, 10, { note: 'n'.repeat(CAMPAIGN_LIMITS.trackNote + 1) })).success, false);
+    assert.equal(TrackLeg.safeParse(leg(5, 4)).success, false);
+    assert.equal(Track.safeParse([leg(0, 10), leg(9, 12)]).success, false);
+    assert.equal(CampaignRecord.safeParse(record({ type: 'vessel', status: { track: [leg(0, 10), leg(9, 12)] } })).success, false);
+    assert.equal(Track.safeParse(full.concat([leg(CAMPAIGN_LIMITS.track, CAMPAIGN_LIMITS.track)])).success, false);
+    assert.equal(CampaignRecord.safeParse(record({ type: 'person', status: { kept: true } })).success, true);
 });
 
 test('link vocabulary rows use only record types and match linkAllowed', () => {

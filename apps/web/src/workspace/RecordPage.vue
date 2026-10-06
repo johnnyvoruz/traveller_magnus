@@ -2,9 +2,9 @@
 /**
  * One record (design §3): its name, type, place, summary, details and tags, each edited
  * where it stands, its connections (K5d), the saving mark, and Delete; a vessel also carries
- * its deck plan (K9).
+ * its ship sheet (K13) with its deck plan (K9) inside.
  */
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, nextTick, onMounted, ref, watch } from 'vue';
 import { CAMPAIGN_LIMITS, type CampaignRecordType } from '@voyage/shared';
 import { flushCampaign, lastError, pending } from '../campaign/commit.ts';
 import { campaign } from '../campaign/store.ts';
@@ -32,6 +32,9 @@ const emit = defineEmits<{
     /** The map has to be seen (a pick, a locate): the panel gives way when it covers it. */
     map: [];
 }>();
+
+/** The ship sheet carries the PDF's 312 fields: loaded when a vessel's page first needs it. */
+const ShipSheet = defineAsyncComponent(() => import('./ShipSheet.vue'));
 
 const nameField = ref<{ edit: (select?: boolean) => void } | null>(null);
 const tagDraft = ref('');
@@ -220,7 +223,9 @@ watch(() => props.id, () => {
 
     <LinksBlock :id="id" :read-only="readOnly" />
 
-    <VesselPlan v-if="record.type === 'vessel'" :id="id" :read-only="readOnly" />
+    <ShipSheet v-if="record.type === 'vessel'" :id="id" :read-only="readOnly">
+      <VesselPlan :id="id" :read-only="readOnly" />
+    </ShipSheet>
 
     <footer class="rec-foot">
       <button v-if="!beside" type="button" class="ui-btn" @click="emit('back')">

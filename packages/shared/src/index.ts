@@ -15,6 +15,8 @@ export {
     CampaignAnchor,
     CampaignProvenance,
     CampaignImage,
+    TrackLeg,
+    Track,
     CampaignRecord,
     CampaignLink,
     CampaignSettings,
