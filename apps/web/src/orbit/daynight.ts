@@ -99,6 +99,35 @@ export function dayFraction(turning: Turning, days: number, starAngle: number, l
     return ((fraction % 1) + 1) % 1;
 }
 
+export type StarportTick = {
+    /** Share of the strip from the left: 0 at sunrise, 1 at the next sunrise. */
+    at: number;
+    /** Local time at the starport, hours and minutes of the world's own day. */
+    time: string;
+};
+
+/**
+ * The starport tick on the sunrise-to-sunrise strip. dayFraction is 0 at midnight and
+ * 0.5 at noon; the strip's left edge is sunrise, which on an even day is a quarter of
+ * a day before noon. Null when the world keeps one face to its star.
+ * The starport stands on the prime meridian, so this is dayFraction at longitude 0.
+ */
+export function starportTick(turning: Turning, days: number, starAngle: number): StarportTick | null {
+    const fraction = dayFraction(turning, days, starAngle, 0);
+    const day = turning.solarDayHours;
+    if (fraction === null || day === null) return null;
+    const at = (fraction - 0.25 + 1) % 1;
+    const dayMinutes = Math.max(1, Math.round(day * 60));
+    let minutes = Math.round(fraction * day * 60);
+    if (minutes >= dayMinutes) minutes = 0;
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    const hourText = hours >= 100
+        ? String(hours).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+        : String(hours).padStart(2, '0');
+    return { at, time: hourText + ':' + String(mins).padStart(2, '0') };
+}
+
 // ---- How long the day is, and how it changes over the year --------------------------------
 
 /** The latitude the daylight range is quoted for. A display choice, in one place. */

@@ -22,17 +22,25 @@ import UwpRibbon from '../dossier/UwpRibbon.vue';
 import OmniBox from '../components/OmniBox.vue';
 import BodyCard from '../orbit/BodyCard.vue';
 import BodyChips from '../orbit/BodyChips.vue';
-import LayerChips from '../orbit/LayerChips.vue';
+import LayerKey from '../orbit/LayerKey.vue';
+import LayoutCorner from '../orbit/LayoutCorner.vue';
 import { DEFAULT_LAYERS, type Layers, type Mode } from '../orbit/picture.ts';
 import type { BodyCardModel } from '../orbit/card.ts';
 import { bodyChips } from '../orbit/bodies.ts';
-import { REAL_TIME, skipHours, totalDays } from '../orbit/clock.ts';
+import { REAL_TIME, totalDays } from '../orbit/clock.ts';
+import { stardate } from '../workspace/stardate.ts';
+import { dayNightFigure, starportTick, turningOf } from '../orbit/daynight.ts';
 import OrbitHeader from '../orbit/OrbitHeader.vue';
 import TimeControls from '../orbit/TimeControls.vue';
 import Panel from '../shell/Panel.vue';
 import Rail from '../shell/Rail.vue';
 import type { BodyGlyphData } from '../dossier/model.ts';
 import type { PanelSpan } from '../shell/panel_state.ts';
+
+/** A sample day, so the body profile shows the strip. Not a measured world. */
+const SAMPLE_DAY = { solarDayHours: 24, siderealHours: 24, axialTilt: 23 };
+const sampleDay = dayNightFigure(SAMPLE_DAY, null);
+const sampleTick = starportTick(turningOf(SAMPLE_DAY, false), 0.25, 0);
 
 const COLOURS: { group: string; names: string[] }[] = [
     { group: 'Field', names: ['--bg-0', '--bg-1', '--bg-2', '--surface-1', '--surface-2', '--panel-raised', '--chrome-bg', '--chrome-glass', '--row-active', '--scroll-track', '--rail-glass', '--rail-hover'] },
@@ -331,24 +339,19 @@ function open(key: string): void {
           :speed="orbitSpeed"
           :shuttle="orbitShuttle"
           local-time="14:03:22"
-          :scrub-open="orbitPop === 'scrub'"
+          :date-open="orbitPop === 'date'"
+          :said="stardate(orbitDays)"
           @toggle="orbitPaused = !orbitPaused"
-          @skip="orbitDays = skipHours(orbitDays, $event)"
+          @week="orbitDays = orbitDays + 7"
           @days="orbitDays = $event"
           @speed="orbitSpeed = $event"
           @scrub="() => {}"
           @shuttle="orbitShuttle = $event"
-          @pop="orbitPop = $event ? 'scrub' : ''"
-        />
-        <LayerChips
-          :mode="orbitMode"
-          :layers="orbitLayers"
-          :view-open="orbitPop === 'view'"
-          @mode="orbitMode = $event"
-          @layers="orbitLayers = $event"
-          @pop="orbitPop = $event ? 'view' : ''"
+          @pop="orbitPop = $event ? 'date' : ''"
         />
         <div class="design-orbit-stage">
+          <LayoutCorner :mode="orbitMode" @mode="orbitMode = $event" />
+          <LayerKey :layers="orbitLayers" @layers="orbitLayers = $event" />
           <div class="orbit-cards">
             <BodyCard :model="orbitCard" body-key="sample" closable />
             <BodyCard :model="orbitHoverCard" body-key="hover-sample" :closable="false" under />
@@ -394,7 +397,7 @@ function open(key: string): void {
             <span class="doss-position">{{ sample.body.index }} / {{ sample.body.total }}</span>
             <button type="button" class="ui-btn is-icon" aria-label="Next body" title="Next"><Icon name="chevron-right" :size="13" /></button>
           </template>
-          <DossierBody v-if="showBody" :model="sample.body" :span="span" @open="open" />
+          <DossierBody v-if="showBody" :model="sample.body" :span="span" :day-night="sampleDay" :tick="sampleTick" @open="open" />
           <DossierOverview v-else :model="sample.overview" :span="span" :error="false" @open="showBody = true" />
         </Panel>
       </div>

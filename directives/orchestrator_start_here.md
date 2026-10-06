@@ -107,17 +107,17 @@ campaign layer over the truth map; own maps later. X sign-in only.
 
 ## 6. In flight right now
 
-- **Agent D:** K14 image screens built, report not yet relayed; K15 part 1 (the orbit
-  showpiece design) is written and waits on Johnny's rulings (handoff §105). Then K15
-  part 2, K13 part 3, K6d.
+- **Agent D:** K15 part 2, the orbit showpiece build (Johnny ruled yes to D1 to D12), with
+  Export / Import in the account menu and the K12 strip taking the selected ship from a
+  ship list. K14 image screens are built on disk, report not yet relayed. Then K13 part 3,
+  K6d (the vessel track).
 - **Agent A:** free. Export (B) and import (A) exist without screens; D wires both into
   the account menu with K15 part 2.
 - **Agent B:** free. The export route is in (§104); Export / Import buttons come with D's K15.
-- **Agent C:** the local-time tick on the Day and night strip (plan §7.10; A16: the prime
-  meridian).
+- **Agent C:** free. The starport tick is in (§108).
 - **Agent F:** parked. K13 parts 1 and 2 done (handoff 89 to 91); part 3 after K5f.
-- **Last push:** 2984e9f (paper and grid), deployed and green. Local and finished: A's
-  import; D's K14 screens (report not yet relayed).
+- **Last push:** e5bb73d (import), green. Local: D's K14 screens (unreported), C's tick
+  (in flight).
 
 ## 7. Decisions Johnny has made that shape the next steps
 
@@ -147,7 +147,9 @@ campaign layer over the truth map; own maps later. X sign-in only.
   direction and answered F3 to F7; **F2 (the kelvin table for the five climate words) is
   open.** Must be done **before the Builder**. A campaign is pinned to its truth version, so
   parking is safe; body anchors re-resolve by name on migration.
-- **Jumps (K12, Johnny 2026-10-05):** plot a destination, fly to the jump point at 1 to 6 G
+- **Jumps (K12, Johnny 2026-10-05):** many ships at once; each vessel's track is a data
+  record (a black-box log of dated legs) that can be replayed and reused; generated ship
+  traffic later (K16). Plot a destination, fly to the jump point at 1 to 6 G
   in the orbit view, press Jump, the bubble fades and reappears a week later. Parked behind
   the MVP steps by Johnny's own wish. It cannot start until `rules/` holds the jump and
   travel rules (question G1); nothing about them is to be taken from memory.

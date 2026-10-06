@@ -10,9 +10,15 @@
  * refraction, eclipses or terrain.
  */
 import { computed } from 'vue';
-import { spanText, type DayNightFigure } from '../orbit/daynight.ts';
+import { spanText, type DayNightFigure, type StarportTick } from '../orbit/daynight.ts';
 
-const props = defineProps<{ figure: DayNightFigure }>();
+const props = defineProps<{
+    figure: DayNightFigure;
+    /** Local time at the starport (longitude 0), or null when this world has no day. */
+    tick?: StarportTick | null;
+}>();
+
+const showTick = computed(() => !props.figure.locked && !!props.tick && Number.isFinite(props.tick.at));
 
 const NOTE = 'Geometry only: the share of the solar day the star is above the horizon, from the axial tilt. No refraction, eclipses or terrain.';
 
@@ -39,8 +45,9 @@ const uniform = computed(() => props.figure.mid !== null && mid.value === null);
 const summary = computed(() => {
     const f = props.figure;
     if (f.locked) return 'No day and night: one face always points at the star.';
+    const where = showTick.value && props.tick ? ' Starport, ' + props.tick.time + '.' : '';
     return 'One day lasts ' + f.span + (f.standard ? ', which is ' + f.standard : '') + ': '
-        + spanText(f.equator.light) + ' of light and ' + spanText(f.equator.dark) + ' of dark at the equator.';
+        + spanText(f.equator.light) + ' of light and ' + spanText(f.equator.dark) + ' of dark at the equator.' + where;
 });
 </script>
 
@@ -67,9 +74,11 @@ const summary = computed(() => {
           <span>Light {{ spanText(figure.equator.light) }}</span>
           <span>Dark {{ spanText(figure.equator.dark) }}</span>
         </div>
+        <p v-if="showTick && tick" class="doss-day-port" :style="{ '--at': String(tick.at) }"><span>Starport {{ tick.time }}</span></p>
         <div class="doss-day-strip" role="img" :aria-label="summary" :style="{ '--marks': figure.ruler.count }">
           <i class="doss-day-light" style="width: 50%"></i>
           <i class="doss-day-marks"></i>
+          <i v-if="showTick && tick" class="doss-day-now" :style="{ '--at': String(tick.at) }"></i>
         </div>
         <p class="doss-day-caption">{{ uniform ? 'The same all year, at every latitude short of the poles' : 'At the equator, all year' }}</p>
       </div>
@@ -78,6 +87,7 @@ const summary = computed(() => {
           <i class="doss-day-light" :style="{ width: mid.sure + '%' }"></i>
           <i class="doss-day-swing" :style="{ left: mid.sure + '%', width: mid.swing + '%' }"></i>
           <i class="doss-day-marks"></i>
+          <i v-if="showTick && tick" class="doss-day-now" :style="{ '--at': String(tick.at) }"></i>
         </div>
         <p class="doss-day-caption">{{ mid.label }}: {{ mid.text }}</p>
       </div>
@@ -214,6 +224,44 @@ const summary = computed(() => {
   width: 1px;
   height: 9px;
   background: var(--text-muted);
+}
+
+/* The starport, at longitude 0. The words ride the same share of the strip as the mark. */
+.doss-day-port {
+  position: relative;
+  height: 16px;
+  margin: 0 0 2px;
+}
+
+.doss-day-port span {
+  position: absolute;
+  top: 0;
+  left: calc(var(--at) * 100%);
+  color: var(--text-0);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: var(--tabular);
+  line-height: 16px;
+  white-space: nowrap;
+  transform: translateX(calc(var(--at) * -100%));
+  transition: left var(--t-fast) var(--ease-out), transform var(--t-fast) var(--ease-out);
+}
+
+.doss-day-strip .doss-day-now {
+  left: calc(var(--at) * 100%);
+  z-index: 1;
+  width: 1px;
+  background: var(--text-0);
+  box-shadow: 0 0 0 1px var(--bg-0);
+  transform: translateX(-50%);
+  transition: left var(--t-fast) var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .doss-day-port span,
+  .doss-day-strip .doss-day-now {
+    transition: none;
+  }
 }
 
 .doss-day-swatch {

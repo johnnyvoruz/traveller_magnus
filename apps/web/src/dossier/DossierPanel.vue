@@ -15,7 +15,10 @@ import BodyGlyph from './BodyGlyph.vue';
 import DossierBody from './DossierBody.vue';
 import DossierOverview from './DossierOverview.vue';
 import { bodyByKey, dossierPath, mainworldByKey, orbitPath } from '../orbit/bodies.ts';
-import { dayNightFigure, yearFigure } from '../orbit/daynight.ts';
+import { parseLinkDate, startDays } from '../orbit/clock.ts';
+import { dayNightFigure, starportTick, turningOf, yearFigure } from '../orbit/daynight.ts';
+import { planSystem } from '../orbit/layout.ts';
+import { bodyAngle } from '../orbit/maths.ts';
 import { bodyKeys, bodyModel, mainworldProfile, overviewModel, pickSystem, type AllegianceName } from './model.ts';
 import type { SurfaceTarget } from './SurfaceStage.vue';
 
@@ -74,6 +77,41 @@ const dayNight = computed(() => {
     const system = pickSystem(props.tree.body);
     const found = system ? bodyByKey(system, props.bodyKey) : null;
     return found && !found.star ? dayNightFigure(found.body, found.parent) : null;
+});
+
+/**
+ * The view's date: the link's date and time when it carries one, else the campaign date,
+ * else the clock's default (day 002 of 1105 at 0000). A fraction is the time of day.
+ */
+const clockDays = computed(() => {
+    const linked = parseLinkDate(route.query.date, route.query.time);
+    if (linked !== null) return linked;
+    const stored = campaign.clock ? campaign.clock.days : null;
+    if (stored !== null && Number.isFinite(stored)) return stored;
+    return startDays(null);
+});
+
+/**
+ * Direction from the body to the star it orbits. A world circles its star, so the star
+ * lies half a turn from the body's orbit angle. A moon is close to its world, so it
+ * takes that world's direction.
+ */
+function starDirection(system: Record<string, unknown>, hexKey: string, key: string, days: number): number {
+    const plan = planSystem(system as Record<string, any>, hexKey);
+    const world = plan.worlds.find((item) => item.key === key);
+    const host = world ?? plan.worlds.find((item) => item.moons.some((moon) => moon.key === key));
+    if (!host || !(host.period > 0)) return 0;
+    return bodyAngle(host.epoch, host.period, days) + Math.PI;
+}
+
+/** Local time at the starport (longitude 0) for the view's date. Hidden when there is no day. */
+const tick = computed(() => {
+    if (!dayNight.value || dayNight.value.locked || !props.tree || !props.bodyKey || props.error) return null;
+    const system = pickSystem(props.tree.body);
+    const found = system ? bodyByKey(system, props.bodyKey) : null;
+    if (!system || !found || found.star) return null;
+    const days = clockDays.value;
+    return starportTick(turningOf(found.body, !!found.parent), days, starDirection(system, props.tree.hexKey, props.bodyKey, days));
 });
 
 /** The Year tile said so it cannot be misread: standard days first, then standard years and the world's own days. */
@@ -227,7 +265,7 @@ defineExpose({ remeasure: publish });
           <Icon name="solar-system" :size="13" />Orbits
         </button>
       </template>
-      <DossierBody v-if="profile" :model="profile" :span="span" :day-night="dayNight" :restated="restated" :surface="bodySurface" @open="openKey">
+      <DossierBody v-if="profile" :model="profile" :span="span" :day-night="dayNight" :tick="tick" :restated="restated" :surface="bodySurface" @open="openKey">
         <template #records>
           <RecordsHere
             :slug="slug"

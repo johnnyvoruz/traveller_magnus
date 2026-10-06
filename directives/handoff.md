@@ -2824,3 +2824,34 @@ API and Durable Object have against `data_model.md` and `api.md`).
   target, a failed second batch. 641 pass. **Accepted.** No screen: Export and Import go
   into the account menu with K15 part 2 (D).
 - Pushable by path (`apps/web/src/campaign`, `tests/web/campaign_import.test.js`). A free.
+
+## 107. Pushed `e5bb73d` (import); Johnny rules yes to D1 to D12; ship tracks and traffic (2026-10-05)
+
+- GitHub run green. The import module has no screen yet, so the bundle shows nothing new.
+- **Johnny: yes to all twelve** of D's orbit showpiece decisions. K15 part 2 is go.
+- **Johnny on K12:** the orbit view will handle **many ship plots at once**; ship navigation
+  is a **data feed per ship** (a GPS / black-box record) so a route can be re-created,
+  re-used or re-traced; the engine will make many of these, so **ship traffic** (patrols
+  and the like) can be mocked up across a sector. Recorded under K12 in
+  `slice_2_campaign.md`: a vessel's **track** (dated legs on `status`, the plan's position
+  log widened) is the record; the orbit view draws any number of ships and the K15 strip
+  takes the *selected* ship from a ship list; generated traffic is **K16**, a derived file
+  per universe from the engines, after the G1 rules.
+- **D's part 2 prompt carries two amendments:** the K12 reservation assumes several ships
+  (a ship list, one strip for the selected one); Export and Import go into the account menu
+  (B's route, A's module).
+
+## 108. The starport tick is on the Day and night strip (Agent C); accepted (2026-10-05)
+
+- **Agent C:** `starportTick` in `orbit/daynight.ts`: local time at longitude 0 (A16) for the
+  view's date; a one-pixel mark with "Starport" and the local time on both strips of
+  `dossier/DayNight.vue`; hidden for a world locked to its star; no slide under reduced
+  motion; the dossier takes the date from the link, then the campaign clock, then day
+  002-1105. Test at noon (a quarter across, since the strip runs sunrise to sunrise) and at
+  18:00 (the light/dark edge), and the locked case, in `tests/web/orbit_lineup.test.js`.
+  Screenshot checked: the mark and label sit above the strip. 642 pass. **Accepted.**
+  Noted by C: a running orbit clock moves the tick only when the view writes the link
+  (pause, skip, scrub end); that is the dossier's existing behaviour.
+- Pushable by path: `apps/web/src/dossier`, `apps/web/src/orbit/daynight.ts`,
+  `apps/web/src/views/DesignView.vue`, `tests/web/orbit_lineup.test.js`. D is mid-step in
+  the rest of `orbit/` and `views/OrbitView.vue` (K15 part 2 has begun).

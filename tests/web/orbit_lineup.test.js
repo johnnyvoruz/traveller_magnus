@@ -12,6 +12,7 @@ import { cardFor } from '../../apps/web/src/orbit/card.ts';
 import { bodyByKey } from '../../apps/web/src/orbit/bodies.ts';
 import {
     dayFraction, DAYLIGHT_LATITUDE, daylightFraction, dayNightFigure, dayNightFor, dayNightLines, hoursText, rulerFor,
+    starportTick,
     spanText, standardText, yearFigure,
     spinAngle, subsolarLatitude, subsolarLongitude, sunElevation, turningOf,
 } from '../../apps/web/src/orbit/daynight.ts';
@@ -20,7 +21,7 @@ import {
     beltRocks, inHabitableZone, layoutLineup, lineupCaption, lineupMetrics, lineupNodes, lineupReach,
     lineupScreen, lineupSlot, lineupZoomScale,
 } from '../../apps/web/src/orbit/lineup.ts';
-import { starBasePx, worldBasePx } from '../../apps/web/src/orbit/maths.ts';
+import { bodyAngle, starBasePx, worldBasePx } from '../../apps/web/src/orbit/maths.ts';
 import { DEFAULT_LAYERS, orbitPicture } from '../../apps/web/src/orbit/picture.ts';
 import { OrbitStage } from '../../apps/web/src/orbit/stage.ts';
 import {
@@ -426,6 +427,26 @@ test('day and night: a world turns once a sidereal day, and the star’s overhea
     close(dayFraction(earthlike, 0, 0, -90), 0.25);
     close(dayFraction(earthlike, 0.25, 0, 0), 0.75);
     close(dayFraction(backwards, 0, 0, 90), 0.25);
+});
+
+test('the starport tick is local time at longitude 0, at two times of day', () => {
+    const day = turningOf({ siderealHours: 24, solarDayHours: 24, axialTilt: 23 }, false);
+    const noon = starportTick(day, 0, 0);
+    const evening = starportTick(day, 0.25, 0);
+    assert.ok(noon && evening);
+    // Noon is a quarter of the way from sunrise to the next sunrise. Six hours later is sunset.
+    close(noon.at, 0.25);
+    assert.equal(noon.time, '12:00');
+    close(evening.at, 0.5);
+    assert.equal(evening.time, '18:00');
+    assert.equal(starportTick(turningOf({ siderealHours: 24, solarDayHours: 24, tidallyLocked: true }, false), 1, 0), null);
+    // The strip uses the same direction to the star as the orbit picture: half a turn from the orbit angle.
+    const scene = layoutScene(plan, VIEW, 1000);
+    const at = scene.primary && scene.primary.bodies[0];
+    assert.ok(at);
+    const want = Math.atan2(at.starY - at.y, at.starX - at.x);
+    const got = bodyAngle(at.world.epoch, at.world.period, 1000) + Math.PI;
+    close(Math.atan2(Math.sin(got - want), Math.cos(got - want)), 0, 1e-9);
 });
 
 test('daylight: half the day at an equinox, and a range over the year that the tilt sets', () => {

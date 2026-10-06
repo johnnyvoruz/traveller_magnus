@@ -302,6 +302,27 @@ only. D's five points for the orchestrator:
     168 h, `settings.jumpHours`) and whether it varies; (5) anything about fuel the app
     should show or refuse on. Johnny supplies these as a `rules/` file; recorded as question
     G1 in `questions_for_johnny.md`. Until then the step has no owner.
+  - **Many ships, and the track as a record (Johnny, 2026-10-05).** "Orbit could be handling
+    multiple ship navigation plots; this will not be single-threaded. Attach ship nav as a
+    data / diary feed for the ship so the route can be re-created, re-used or re-traced:
+    a GPS record or black-box record for the ship. The engine will create many of these,
+    so we could mock up ship traffic: see what ships in the sector are doing, patrols and
+    whatnot." Consequences, recorded now so K15 and K6d build toward them:
+    1. **A track is data, not UI state.** Each vessel carries a **track**: an ordered list of
+       dated legs `{ from, to, departs, arrives, mode: 'flight' | 'jump' | 'docked' | 'orbit',
+       accelG?, note? }` on the vessel's `status` (the plan's §5.3 position log, widened).
+       The orbit view and the map draw a ship's place at any date from its track; a track
+       can be copied to another ship, replayed, or edited. The party's ship is one track
+       among many.
+    2. **The orbit view draws any number of ships.** D's K15 status strip is for the
+       *selected* ship; a ship list (the campaign's vessels in this system, then generated
+       traffic) picks which. K15 part 2 reserves for this: the strip takes a ship, not "the"
+       ship.
+    3. **Generated traffic (later, K16).** The engines produce tracks for ships that are not
+       records (patrols, traders, liners) from the universe's seed and the system's data,
+       as a derived file per universe (`architecture.md` §10.1), never in the browser.
+       Drawn as the same marks, dimmer; a referee can "take" one into a vessel record. Needs
+       the G1 rules and its own recipe.
 
 - **K13. Sheets from the official PDFs (Johnny, 2026-10-05).** Johnny added
   `assets/Ship Sheet 2026_fillable.pdf` (two pages, **312 named form fields**), with print

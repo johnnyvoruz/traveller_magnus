@@ -2,7 +2,7 @@
 import type { PanelSpan } from '../shell/panel_state.ts';
 import type { BodyLink, BodyModel } from './model.ts';
 import BodyRow from './BodyRow.vue';
-import type { DayNightFigure } from '../orbit/daynight.ts';
+import type { DayNightFigure, StarportTick } from '../orbit/daynight.ts';
 import DayNight from './DayNight.vue';
 import FactTiles from './FactTiles.vue';
 import JourneyTimes from './JourneyTimes.vue';
@@ -19,6 +19,8 @@ defineProps<{
     surface?: SurfaceTarget | null;
     /** The day and night cycle (orbit/daynight.ts), or null when the document gives no solar day. */
     dayNight?: DayNightFigure | null;
+    /** The starport's local time on that strip, or null when the world has no day. */
+    tick?: StarportTick | null;
 }>();
 
 defineEmits<{ open: [key: string] }>();
@@ -34,7 +36,7 @@ function factsOf(link: BodyLink): string {
       <SurfaceStage :badge="model.mapBadge" :target="surface ?? null" />
       <UwpRibbon v-if="model.ribbon" :ribbon="model.ribbon" />
       <FactTiles :facts="model.facts" :restated="restated" />
-      <DayNight v-if="dayNight" :figure="dayNight" />
+      <DayNight v-if="dayNight" :figure="dayNight" :tick="tick ?? null" />
       <JourneyTimes v-if="model.journey" :journey="model.journey" />
       <section v-for="block in model.mainSections" :key="block.heading" class="doss-section">
         <h3 class="ui-heading">{{ block.heading }}</h3>
