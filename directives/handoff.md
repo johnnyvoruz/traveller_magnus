@@ -2560,3 +2560,22 @@ API and Durable Object have against `data_model.md` and `api.md`).
 - **Part 2 is Johnny's.** Recommended: copy the JSON into `rules/` as
   `mgt2e_ship_sheet_fields.json` (his folder; one command) so the app can consume it through
   the generated wrapper; nothing in it is a rule, only labels and positions.
+
+## 90. Pushed `dfce0e8` (links); the sheet fields are in `rules/` (2026-10-05)
+
+- GitHub run green; live bundle `index-B7V9Fo0q.js` holds "Connections", "Aboard",
+  "Commanded by". K5d is in production.
+- **Johnny copied the inventory to `rules/mgt2e_ship_sheet_fields.json`** (untracked until
+  the next push). `scripts/gen_rules_esm.js` wraps only `.js` files, so before K13 part 3
+  Agent A extends it to emit a module per `.json` as well (`export default` the parsed
+  object), regenerates, and adds a test that the wrapper exports 312 fields. Not urgent.
+
+## 91. The rules wrapper takes `.json`; the ship sheet fields are importable (2026-10-05)
+
+- **Agent A:** `scripts/gen_rules_esm.js` (+12 lines) emits a module per `.json` in `rules/`
+  with the parsed object as default export; `mgt2e_ship_sheet_fields.js` generated; the five
+  existing wrappers byte-identical (SHA-256 listed in A's report);
+  `tests/generation/ship_sheet_fields.test.js` asserts 312 entries with the five keys.
+  Checked: import gives 312; 586 pass. The generated folder is git-ignored and CI runs
+  `rules:gen` before the tests, so nothing else is needed. **Accepted.**
+- D has begun K5e (`workspace/party.ts` on disk): push A's work by path only.

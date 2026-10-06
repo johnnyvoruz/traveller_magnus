@@ -103,10 +103,11 @@ campaign layer over the truth map; own maps later. X sign-in only.
 - **Agent D:** K5e the party (members, the vessel, "Where are we", the marker at each tier,
   the omnibox's record group and "New person here"). K5c/K5d leftovers (orbit-view locator,
   Locate on dossier rows, "At Regina" / "Also at Regina" chips, sort) fold into it.
-- **Agents A, B, C:** free. **Agent F:** parked. K13 part 1 (the ship sheet inventory) is
-  in `findings/` (§89); part 2 waits on Johnny copying it into `rules/`.
-- **Last push:** `fba890f`, deployed and green. Local and finished: D's K5d (§88),
-  pushable with `git add -A` while D is between steps.
+- **Agents A, B, C:** free. **Agent F:** parked. K13 parts 1 and 2 done: the ship sheet's
+  312 fields are in `rules/mgt2e_ship_sheet_fields.json` and importable through the
+  generated wrapper (§89 to §91). Part 3 (D renders the sheet) comes after K5f.
+- **Last push:** `dfce0e8` (links), deployed and green. Local: the directives' edits and
+  `rules/mgt2e_ship_sheet_fields.json` (Johnny's, untracked).
 
 ## 7. Decisions Johnny has made that shape the next steps
 

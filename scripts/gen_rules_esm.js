@@ -25,3 +25,15 @@ for (const file of fs.readdirSync(path.join(ROOT, 'rules')).filter(f => f.endsWi
     fs.writeFileSync(path.join(OUT, file), body);
     console.log(`${file}: ${[...names].join(', ')}`);
 }
+
+for (const file of fs.readdirSync(path.join(ROOT, 'rules')).filter(f => f.endsWith('.json'))) {
+    const parsed = JSON.parse(fs.readFileSync(path.join(ROOT, 'rules', file), 'utf8'));
+    const out = file.replace(/\.json$/, '.js');
+    const body = [
+        `// GENERATED from rules/${file} by scripts/gen_rules_esm.js — do not edit; rules/ is the source.`,
+        `export default ${JSON.stringify(parsed)};`,
+    ].join('\n');
+    fs.writeFileSync(path.join(OUT, out), body);
+    const entries = Array.isArray(parsed) ? parsed.length : (Array.isArray(parsed.fields) ? parsed.fields.length : 0);
+    console.log(`${out}: default (${entries} entries)`);
+}
