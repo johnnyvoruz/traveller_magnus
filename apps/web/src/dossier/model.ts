@@ -48,13 +48,34 @@ export type StellarLine = { text: string; glyph: BodyGlyphData };
 export type Section = { heading: string; rows: StatRow[] };
 export type JourneyTime = { g: number; hours: string };
 
+/** The one line that names the mainworld and opens it. The badge is the old map caption. */
+export type MainworldCallout = { name: string; badge: string };
+
+export type SocioBlockModel = { headline: string; rows: StatRow[] | null; empty: string | null };
+
 export type OverviewModel = {
-    header: { title: string; hexChip: string; place: string };
+    header: {
+        /** "Regina system", or the hex when the hex has no name. */
+        title: string;
+        /** The name without the " system" suffix. Empty when the hex has no name. Records use this. */
+        name?: string;
+        hexChip: string;
+        place: string;
+    };
     ribbon: Ribbon | null;
     rows: StatRow[];
     journey: JourneyTime[] | null;
+    /** Set when the jump times are on the mainworld page. Empty until then, including while the tree loads. */
+    journeyNote?: string;
+    /**
+     * The callout row and the jump-times line keep their height: before the tree arrives,
+     * and after it when the mainworld page is where those things went.
+     */
+    holdLead?: boolean;
+    /** The mainworld line. Null when that world cannot be opened, and while the tree is still loading. */
+    callout?: MainworldCallout | null;
     noOrbit: boolean;
-    socio: { headline: string; rows: StatRow[] | null; empty: string | null } | null;
+    socio: SocioBlockModel | null;
     stellar: { lines: StellarLine[] } | null;
     tree: { count: number; rows: TreeRow[] } | null;
     partial: boolean;
@@ -76,6 +97,8 @@ export type BodyModel = {
     sideSections: Section[];
     moons: BodyLink[];
     worlds: BodyLink[];
+    /** The long socioeconomics profile, on the mainworld only. Other bodies leave it unset. */
+    socio?: SocioBlockModel | null;
     glyph: BodyGlyphData;
     /** 1-based place in bodyKeys, the order previous and next walk. */
     index: number;
@@ -89,6 +112,7 @@ export type AllegianceName = { code: string; name: string };
 const PARTIAL_NOTICE = 'Incomplete survey: this world has unknown values, so no system has been generated.';
 const NO_ORBIT_NOTICE = 'Orbit data has not been generated.';
 const SOCIO_EMPTY = 'Mongoose socioeconomics have not been built for this world.';
+const JOURNEY_NOTE = '100D jump times are on the mainworld page.';
 const MARK = ' \u2014 ';
 const UWP_PARTS = ['Port', 'Size', 'Atm', 'Hyd', 'Pop', 'Gov', 'Law'];
 const UWP_RE = /^([A-HXY?])([0-9A-Z?])([0-9A-Z?])([0-9A-Z?])([0-9A-Z?])([0-9A-Z?])([0-9A-Z?])-([0-9A-Z?]+)$/i;
@@ -587,7 +611,7 @@ function socioHeadline(ms: Record<string, unknown> | null): string {
     return parts.join(' \u00B7 ');
 }
 
-function socioBlock(state: Record<string, unknown>): OverviewModel['socio'] {
+function socioBlock(state: Record<string, unknown>): SocioBlockModel {
     const ms = rec(state.mgtSocio);
     const headline = socioHeadline(ms);
     if (ms && ms.pValue !== undefined) {
@@ -621,11 +645,9 @@ function socioBlock(state: Record<string, unknown>): OverviewModel['socio'] {
     return { headline, rows: null, empty: SOCIO_EMPTY };
 }
 
-function identityRows(state: Record<string, unknown>, names: readonly AllegianceName[] | undefined): StatRow[] {
+/** The ten decoded UWP rows. Trade codes and travel zone fall back to the hex, as the system page did. */
+function decodedRows(state: Record<string, unknown>): StatRow[] {
     const world = mainworldProfile(state);
-    const system = pickSystem(state);
-    const code = text(state.allegiance) || text(world.allegiance);
-    const t5 = rec(state.t5Socio);
     return rowsOf([
         ['Starport', world.starport],
         ['Size', world.size],
@@ -637,6 +659,15 @@ function identityRows(state: Record<string, unknown>, names: readonly Allegiance
         ['Tech level', world.tl],
         ['Trade codes', world.tradeCodes || state.tradeCodes],
         ['Travel zone', state.travelZone || world.travelZone],
+    ]);
+}
+
+function identityRows(state: Record<string, unknown>, names: readonly AllegianceName[] | undefined, decoded: boolean): StatRow[] {
+    const world = mainworldProfile(state);
+    const system = pickSystem(state);
+    const code = text(state.allegiance) || text(world.allegiance);
+    const t5 = rec(state.t5Socio);
+    const chart = rowsOf([
         ['Allegiance', { code, name: allegianceName(code, names) }],
         ['Bases', basesValue(world, state)],
         ['Nobility', (t5 && t5.nobleCodes) || world.nobleCodes],
@@ -647,6 +678,7 @@ function identityRows(state: Record<string, unknown>, names: readonly Allegiance
         ['Age (Gyr)', system ? system.age : undefined],
         ['Edition', system ? system.edition : undefined],
     ]);
+    return decoded ? decodedRows(state).concat(chart) : chart;
 }
 
 function chartRows(entry: SectorHex, names: readonly AllegianceName[] | undefined): StatRow[] {
@@ -660,15 +692,15 @@ function chartRows(entry: SectorHex, names: readonly AllegianceName[] | undefine
     ]);
 }
 
-function mapBadge(title: string, system: SystemDoc | null, profile: Record<string, unknown>): { badge: string; key: string | null } {
+function mapBadge(title: string, system: SystemDoc | null, profile: Record<string, unknown>): { badge: string; key: string | null; name: string } {
     const mapped = mappedMainworld(system, profile);
-    if (!mapped) return { badge: 'Mainworld', key: null };
-    const name = text(mapped.name);
+    if (!mapped) return { badge: 'Mainworld', key: null, name: '' };
+    const name = text(mapped.name) || bodyName(mapped);
     const parent = system ? parentWorld(system, mapped) : null;
     const badge = parent
         ? 'Mainworld \u00B7 moon of ' + bodyName(parent)
         : (name && name !== title ? 'Mainworld \u00B7 ' + name : 'Mainworld');
-    return { badge, key: system ? keyFor(system, mapped) : null };
+    return { badge, key: system ? keyFor(system, mapped) : null, name };
 }
 
 function hexOf(tree: TreeEnvelope): string {
@@ -689,32 +721,46 @@ export function overviewModel(input: {
     const partial = input.entry.tree == null;
     const state = input.tree ? input.tree.body : null;
     const profile = state ? mainworldProfile(state) : {};
-    const title = state ? systemTitle(state, input.hex) : (text(input.entry.name) || input.hex);
+    const rawName = state ? (text(state.name) || text(profile.name)) : text(input.entry.name);
+    const bare = rawName || input.hex;
+    const title = rawName ? rawName + ' system' : bare;
     const system = state ? pickSystem(state) : null;
     const orbit = !!system && (arr(system.stars).length > 0 || arr(system.worlds).some((item) => {
         const world = rec(item);
         return !!world && world.type !== 'Empty';
     }));
     const noOrbit = !!input.tree && !partial && !orbit;
-    const lead = mapBadge(title, system, profile);
+    const lead = mapBadge(bare, system, profile);
+    const openMain = !!(state && !partial && lead.key);
+    const mapped = openMain ? mappedMainworld(system, profile) : null;
+    const onWorld = mapped ? journeyFrom(mapped) : null;
     const uwp = state ? (profile.uwp || state.uwp || input.entry.uwp) : input.entry.uwp;
+    const socioFull = state && !partial ? socioBlock(state) : null;
     return {
         header: {
             title,
+            name: rawName,
             hexChip: title === input.hex ? '' : input.hex,
             place: input.sectorName + ' - ' + input.subsectorName,
         },
         ribbon: ribbonOf(uwp),
-        rows: state && !partial ? identityRows(state, input.allegiances) : chartRows(input.entry, input.allegiances),
-        journey: state && !partial ? overviewJourney(state, system, profile) : null,
+        rows: state && !partial ? identityRows(state, input.allegiances, !openMain) : chartRows(input.entry, input.allegiances),
+        journey: state && !partial && !onWorld ? overviewJourney(state, system, profile) : null,
+        journeyNote: onWorld ? JOURNEY_NOTE : '',
+        holdLead: !partial && (!state || openMain),
+        callout: openMain ? { name: lead.name, badge: lead.badge } : null,
         noOrbit,
-        socio: state && !partial ? socioBlock(state) : null,
+        socio: socioFull ? {
+            headline: socioFull.headline,
+            rows: openMain ? null : socioFull.rows,
+            empty: openMain && socioFull.rows ? null : socioFull.empty,
+        } : null,
         stellar: state && !partial && system && stellarLines(system).length ? { lines: stellarLines(system) } : null,
         tree: state && !partial ? systemTree(system) : null,
         partial,
         notice: partial ? PARTIAL_NOTICE : (noOrbit ? NO_ORBIT_NOTICE : ''),
         mapBadge: lead.badge,
-        mainworldKey: state && !partial ? lead.key : null,
+        mainworldKey: openMain ? lead.key : null,
     };
 }
 
@@ -765,7 +811,8 @@ export function bodyModel(tree: TreeEnvelope, bodyKey: string): BodyModel | null
     const keys = bodyKeys(system);
     const at = keys.indexOf(bodyKey);
     const hex = hexOf(tree).replace(/-/g, '\u2011');
-    const title = systemTitle(tree.body, hex);
+    const bare = systemTitle(tree.body, hex);
+    const title = bare === hex ? bare : bare + ' system';
     const parent = parentWorld(system, body);
     const parentKey = parent ? keyFor(system, parent) : null;
     const moons = arr(body.moons).flatMap((item, index) => {
@@ -793,18 +840,21 @@ export function bodyModel(tree: TreeEnvelope, bodyKey: string): BodyModel | null
         ]);
         if (block) mainSections.push(block);
     } else {
-        const profile = section('World profile', [
-            ['Starport', body.starport],
-            ['Size', body.size],
-            ['Atmosphere', body.atm],
-            ['Hydrographics', body.hydro],
-            ['Population', body.pop],
-            ['Government', body.gov],
-            ['Law level', body.law],
-            ['Tech level', body.tl],
-            ['Trade codes', body.tradeCodes],
-            ['Travel zone', body.travelZone],
-        ]);
+        const profileRows = body.type === 'Mainworld'
+            ? decodedRows(tree.body)
+            : rowsOf([
+                ['Starport', body.starport],
+                ['Size', body.size],
+                ['Atmosphere', body.atm],
+                ['Hydrographics', body.hydro],
+                ['Population', body.pop],
+                ['Government', body.gov],
+                ['Law level', body.law],
+                ['Tech level', body.tl],
+                ['Trade codes', body.tradeCodes],
+                ['Travel zone', body.travelZone],
+            ]);
+        const profile = profileRows.length ? { heading: 'World profile', rows: profileRows } : null;
         if (profile) mainSections.push(profile);
         const orbit = section('Orbit', [
             ['Orbit', body.orbitId, 2],
@@ -843,11 +893,14 @@ export function bodyModel(tree: TreeEnvelope, bodyKey: string): BodyModel | null
         const moon = rec(item);
         return !!moon && moon.type !== 'Empty';
     }).length;
+    const socioFull = body.type === 'Mainworld' ? socioBlock(tree.body) : null;
     return {
         title: bodyName(body),
         crumbSystem: title,
-        crumbParent: parent && parentKey ? { key: parentKey, name: bodyName(parent).replace(title + ' ', '') } : null,
-        place: bodyPlace(system, body) + ' \u00B7 ' + hex,
+        crumbParent: parent && parentKey ? { key: parentKey, name: bodyName(parent).replace(bare + ' ', '') } : null,
+        place: body.type === 'Mainworld'
+            ? 'Mainworld of the ' + title + ' \u00B7 ' + hex
+            : bodyPlace(system, body) + ' \u00B7 ' + hex,
         ribbon: ribbonOf(body.uwp),
         mapBadge: body.type === 'Mainworld' ? 'Mainworld' : '',
         facts: star
@@ -872,6 +925,11 @@ export function bodyModel(tree: TreeEnvelope, bodyKey: string): BodyModel | null
         sideSections,
         moons,
         worlds,
+        socio: socioFull && socioFull.rows && socioFull.rows.length ? {
+            headline: socioFull.headline,
+            rows: socioFull.rows,
+            empty: null,
+        } : null,
         glyph: glyphData(body, found.starIndex != null ? 'stars' : (parent ? 'moons' : 'worlds')),
         index: at >= 0 ? at + 1 : 0,
         total: keys.length,

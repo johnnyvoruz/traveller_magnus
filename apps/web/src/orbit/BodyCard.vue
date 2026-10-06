@@ -5,11 +5,11 @@
  * up to two in `.orbit-cards`: the selected body's card, which stays put, and under it the
  * card of another body under the pointer. Contents are orbit/card.ts.
  */
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import Icon from '../design/Icon.vue';
 import type { BodyCardModel } from './card.ts';
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
     model: BodyCardModel;
     /** The body shown. A pinned card docks again when it changes; a hover card just changes its words. */
     bodyKey: string;
@@ -17,7 +17,21 @@ const props = defineProps<{
     closable: boolean;
     /** The card sits under the pinned one: quieter, and no bracket corners. */
     under?: boolean;
-}>();
+    /**
+     * The dossier is open on this same body, so the survey is already on that page.
+     * Absent, the card is unchanged. Nothing in this tree passes it yet.
+     */
+    surveyElsewhere?: boolean;
+}>(), {
+    under: false,
+    surveyElsewhere: false,
+});
+
+const shown = computed(() => {
+    if (!props.surveyElsewhere) return props.model.lines;
+    if (props.model.now) return props.model.now;
+    return props.model.lines.filter((line) => line.group === 'now');
+});
 
 defineEmits<{ close: [] }>();
 
@@ -40,7 +54,7 @@ watch(() => props.bodyKey, () => { helpOpen.value = false; });
       <span v-if="model.sub" class="orbit-body-card-sub">({{ model.sub }})</span>
     </h2>
     <dl class="orbit-body-card-lines">
-      <div v-for="line in model.lines" :key="line.label" :class="{ 'has-gap': line.gap }" :title="line.hint || undefined">
+      <div v-for="line in shown" :key="line.label" :class="{ 'has-gap': line.gap }" :title="line.hint || undefined">
         <dt>{{ line.label }}</dt>
         <dd :class="{ 'is-strong': line.strong }">{{ line.value }}</dd>
       </div>

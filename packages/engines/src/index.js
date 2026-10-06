@@ -24,6 +24,7 @@ export { auditCTSystem, runAndLog as runAndLogCT } from './ct_uwp_auditor.js';
 export { generatePhysicals as generatePhysicalsCT, generatePopulation, generateModularMainworld, finalizeMainworldSocial, finalizeSubordinateSocial as finalizeSubordinateSocialCT, generateTradeCodes, rollSystemSkeleton, generateSocial, rollGasGiantPresence } from './ct_world_engine.js';
 export { generateMgT2ESystemBottomUp } from './mgt2e_bottomup_generator.js';
 export { computeSystemCounts, profileOf, systemReady, buildStage, storeBuild, buildOne } from './mgt2e_build.js';
+export { reconcileTree } from './reconcile_environment.js';
 export { MgT2EMath } from './mgt2e_math.js';
 export { generateCoreSocial, generateExtendedSocioeconomics, finalizeSubordinateSocial as finalizeSubordinateSocialMgT2E, generateMainworldUWP } from './mgt2e_socio_engine.js';
 export { generateStellarSystem, generateSystemInventory, allocateOrbits, walkMgT2ESystem, logMgT2EBodyBiography, generateStarObject, getMAO, convertAuToOrbit } from './mgt2e_stellar_engine.js';

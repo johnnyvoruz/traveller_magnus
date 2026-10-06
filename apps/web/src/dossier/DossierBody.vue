@@ -6,6 +6,7 @@ import type { DayNightFigure, StarportTick } from '../orbit/daynight.ts';
 import DayNight from './DayNight.vue';
 import FactTiles from './FactTiles.vue';
 import JourneyTimes from './JourneyTimes.vue';
+import SocioBlock from './SocioBlock.vue';
 import StatRows from './StatRows.vue';
 import SurfaceStage, { type SurfaceTarget } from './SurfaceStage.vue';
 import UwpRibbon from './UwpRibbon.vue';
@@ -46,6 +47,13 @@ function factsOf(link: BodyLink): string {
         <h3 class="ui-heading">{{ block.heading }}</h3>
         <StatRows :rows="block.rows" />
       </section>
+      <SocioBlock
+        v-if="model.socio"
+        :headline="model.socio.headline"
+        :rows="model.socio.rows"
+        :empty="model.socio.empty"
+        :span="span"
+      />
     </div>
     <div class="doss-body-side">
       <slot name="records" />

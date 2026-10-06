@@ -542,7 +542,24 @@ recorded as one.
 
 *Recommended: the second, since he called it a bug. Interim: unchanged.*
 
-**Answer:**
+**Answer (2026-10-06): the second,** "but it needs to look sci-fi and incredible, beautiful,
+glowy, spectacular, it really needs to inspire awe and wonder and capture sci-fi city feel
+from space, like 'oh, I want to visit there or go there'". Orchestrator's ruling on how:
+vanilla stays the old app exactly (its test untouched); the new city lights are the
+**enhanced** disc, designed first (`prompts/city_lights_design.md`), then built by Agent C.
+
+### G7. Who designs the city lights, and is Enhanced the default?
+
+(1) The look he asked for is hard visual design. Agent F (high effort, limited budget,
+parked) is the one kept for that: use F for one paper-only design session, then Agent C
+builds? (2) Vanilla is the default look today and Enhanced is one command away. The new
+city lights live in Enhanced. Make Enhanced the default?
+
+*Recommended: yes to both.*
+
+**Answer (2026-10-06): yes to both.** Johnny gave Agent F `prompts/city_lights_design.md`,
+and Enhanced is to be the default look (a stored choice of Vanilla still honoured). Agent C
+flips the default as Part 0 of `prompts/c_ghosts.md`.
 
 
 ---

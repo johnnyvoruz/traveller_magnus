@@ -5,7 +5,10 @@
  */
 import type { CampaignAnchor } from '@voyage/shared';
 import { positionAt } from '../campaign/track.ts';
+import { formatDistance } from '../design/units.ts';
 import { DAY_SECONDS } from './clock.ts';
+import { placeAtPicture, type PictureLayout } from './distance.ts';
+import { AU_KM, type Plan, type View } from './layout.ts';
 import type { Picture } from './picture.ts';
 
 export type ShipKind = 'party' | 'vessel' | 'traffic';
@@ -57,8 +60,21 @@ export type PlotReadout = {
     /** Pointer, in picture units. */
     x: number;
     y: number;
-    /** The mark the distance is measured from. */
+    /** The mark the distance is measured from, in picture units. */
     from?: BodyPoint | null;
+};
+
+/**
+ * What the painter already knows, so the readout can speak in AU. The canvas still passes
+ * only the picture points above. Without this, the readout says nothing.
+ */
+export type PlotFrame = {
+    plan: Plan;
+    view: View;
+    mode: PictureLayout;
+    days: number;
+    /** Drawn centres. A point within BODY_SNAP_PX of one reads that body. */
+    bodies: readonly { key: string; x: number; y: number }[];
 };
 
 const sys = (hexKey: string, bodyKey: string): CampaignAnchor => ({ kind: 'system', hexKey, bodyKey });
@@ -102,12 +118,29 @@ export function placeShips(tracks: readonly ShipTrack[], bodiesAt: BodiesAt, day
     return marks;
 }
 
-/** One line: picture coordinates, then the distance from `from` when a mark was given. */
-export function plotText(plot: PlotReadout): string {
-    const line = plot.x.toFixed(1) + ', ' + plot.y.toFixed(1);
-    if (!plot.from) return line;
-    const distance = Math.hypot(plot.x - plot.from.x, plot.y - plot.from.y);
-    return line + '  ' + distance.toFixed(1);
+/** The primary distance, always in AU. Under a tenth is still AU; the ship clause is not. */
+function primaryAu(au: number): string {
+    if (!Number.isFinite(au) || au < 0) return '';
+    return (au >= 10 ? au.toFixed(1) : au.toFixed(2)) + ' AU';
+}
+
+/**
+ * One line: how far the pointer is from the primary, in AU. When a ship mark was given,
+ * the distance from that mark follows, in km under a tenth of an AU and in AU above.
+ * Empty when the picture has no place for the pointer. Picture coordinates are never written.
+ */
+export function plotText(plot: PlotReadout, frame?: PlotFrame | null): string {
+    if (!frame) return '';
+    const here = placeAtPicture({ x: plot.x, y: plot.y }, frame.view, frame.plan, frame.mode, frame.bodies, frame.days);
+    if (!here) return '';
+    const line = primaryAu(Math.hypot(here.x, here.y));
+    if (!line || !plot.from) return line;
+    const ship = placeAtPicture(plot.from, frame.view, frame.plan, frame.mode, frame.bodies, frame.days);
+    if (!ship) return line;
+    const km = Math.hypot(here.x - ship.x, here.y - ship.y) * AU_KM;
+    const leg = formatDistance(km, AU_KM);
+    if (!leg) return line;
+    return line + ' \u00B7 ship ' + leg;
 }
 
 type PictureBody = BodyPoint & { key: string; main: boolean };

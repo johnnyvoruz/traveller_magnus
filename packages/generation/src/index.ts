@@ -1,6 +1,7 @@
 import {
     configure, setRandomSeed, reseedForHex, buildOne, stripHexViewState, toEHex, placeCompanionOrbits,
     generateSystem, generateRTTSectorStep1, generateAoWSystemBottomUp, setNamePool, SYSTEM_NAMES,
+    reconcileTree,
 } from '@voyage/engines';
 import { parseT5Tab, parseMetadataXml, stable, sha256Hex } from '@voyage/shared';
 
@@ -33,6 +34,15 @@ setNamePool(namePool);
 export type Pinned = { seed: string; settings: Record<string, unknown>; engineVersion: string };
 export type Edition = 'MgT2E' | 'CT' | 'T5' | 'RTT' | 'AoW';
 
+/** environmentPolicy from reconcile_environment.js. Absent means generation is unchanged. */
+export type ReconciliationPolicy = {
+    version: string;
+    surfaceBands: readonly unknown[];
+    orbitBands: readonly unknown[];
+    liquid: object;
+    liquids: readonly unknown[];
+};
+
 export type GenerateHexInput = {
     hexKey: string;
     edition: Edition | string;
@@ -41,6 +51,7 @@ export type GenerateHexInput = {
     summary: Record<string, any>;
     pinned: Pinned;
     priorBody?: Record<string, any>;
+    policy?: ReconciliationPolicy;
 };
 
 /**
@@ -77,7 +88,7 @@ export function generateHex(input: GenerateHexInput) {
     } else {
         throw new Error(`unknown edition ${edition}`);
     }
-    return {
+    const envelope = {
         kind: 'tree' as const,
         engineVersion: pinned.engineVersion,
         derivation: {
@@ -90,6 +101,14 @@ export function generateHex(input: GenerateHexInput) {
         hexKey,
         body: stripHexViewState(state),
     };
+    if (!input.policy) return envelope;
+    const reconciled = reconcileTree(envelope, input.policy);
+    // Non-enumerable so the canonical tree bytes stay reconcileTree().tree.
+    // Callers read result.changes and result.diagnostics on the live object.
+    return Object.defineProperties(reconciled.tree, {
+        changes: { value: reconciled.changes, enumerable: false },
+        diagnostics: { value: reconciled.diagnostics, enumerable: false },
+    });
 }
 
 function zoneCode(travelZone: unknown): string {
@@ -134,13 +153,19 @@ function chartEntry(row: Record<string, any>, tree: string | null): Record<strin
     return entry;
 }
 
-async function rowEntry(slug: string, hhhh: string, row: Record<string, any>, pinned: Pinned): Promise<{
+async function rowEntry(
+    slug: string,
+    hhhh: string,
+    row: Record<string, any>,
+    pinned: Pinned,
+    policy?: ReconciliationPolicy,
+): Promise<{
     indexEntry: Record<string, unknown>;
     object: [string, string] | null;
 }> {
     if (row.partial != null) return { indexEntry: chartEntry(row, null), object: null };
     const envelope = generateHex({
-        hexKey: `${slug}/${hhhh}`, edition: 'MgT2E', mode: 'flesh', summary: row, pinned,
+        hexKey: `${slug}/${hhhh}`, edition: 'MgT2E', mode: 'flesh', summary: row, pinned, policy,
     });
     const json = stable(envelope);
     const hash = await sha256Hex(json);
@@ -154,6 +179,7 @@ export async function buildSectorSlice(input: {
     pinned: Pinned;
     offset: number;
     limit: number;
+    policy?: ReconciliationPolicy;
 }): Promise<{ rows: SectorSliceRow[]; objects: Map<string, string>; total: number; nextOffset: number | null }> {
     if (input.limit <= 0) throw new Error('buildSectorSlice limit must be positive');
     const present = presentRows(input.tsv);
@@ -161,7 +187,7 @@ export async function buildSectorSlice(input: {
     const rows: SectorSliceRow[] = [];
     const objects = new Map<string, string>();
     for (const [hhhh, row] of slice) {
-        const built = await rowEntry(input.slug, hhhh, row, input.pinned);
+        const built = await rowEntry(input.slug, hhhh, row, input.pinned, input.policy);
         rows.push({ hex: hhhh, indexEntry: built.indexEntry });
         if (built.object) objects.set(built.object[0], built.object[1]);
     }
@@ -244,6 +270,7 @@ export async function buildSector(input: {
     pinned: Pinned;
     version: string;
     catalogue?: CatalogueEntry;
+    policy?: ReconciliationPolicy;
 }) {
     if (typeof input.version !== 'string' || input.version === '') {
         throw new Error('buildSector: version is required');
@@ -254,7 +281,7 @@ export async function buildSector(input: {
     let total = 0;
     do {
         const slice = await buildSectorSlice({
-            slug: input.slug, tsv: input.tsv, pinned: input.pinned, offset, limit: 200,
+            slug: input.slug, tsv: input.tsv, pinned: input.pinned, offset, limit: 200, policy: input.policy,
         });
         total = slice.total;
         for (const row of slice.rows) hexes[row.hex] = row.indexEntry;

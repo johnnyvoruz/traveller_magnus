@@ -8,7 +8,9 @@ import { formatUwpDigit } from '@voyage/engines';
 import { buildSector } from '@voyage/generation';
 import { TRUTH_SEED, TRUTH_SETTINGS } from '../../tools/truth/settings.js';
 import { celsiusOf, fahrenheitOf, formatKelvin, formatTempFull, wholeDegrees } from '../../apps/web/src/design/units.ts';
-import { bodyKeys, bodyModel, overviewModel, pickSystem, rowFor } from '../../apps/web/src/dossier/model.ts';
+import { bodyKeys, bodyModel, mainworldProfile, overviewModel, pickSystem, rowFor } from '../../apps/web/src/dossier/model.ts';
+import { cardFor } from '../../apps/web/src/orbit/card.ts';
+import { planSystem } from '../../apps/web/src/orbit/layout.ts';
 
 /** The same conversion the dossier uses: °C, then °F, then kelvin. */
 function fullTemp(kelvin) {
@@ -63,13 +65,20 @@ test('Regina overview and Caesillian 0914 partial follow the inspector', async (
         tree,
         allegiances: marches.index.metadata.allegiances,
     });
-    assert.equal(model.header.title, 'Regina');
+    assert.equal(model.header.title, 'Regina system');
+    assert.equal(model.header.name, 'Regina');
+    assert.equal(model.header.place, 'Spinward Marches - Regina');
     assert.equal(model.ribbon.kind, 'cells');
     const digits = model.ribbon.cells.map((cell) => cell.digit);
     assert.equal(digits.slice(0, 7).join(' ') + ' ' + model.ribbon.dash + ' ' + digits[7], 'A 7 8 8 8 9 9 - C');
-    const starport = model.rows.find((row) => row.label === 'Starport');
-    assert.ok(starport);
-    assert.equal(starport.text, formatUwpDigit('starport', 'A'));
+    assert.equal(model.rows.some((row) => row.label === 'Starport'), false);
+    assert.ok(model.rows.some((row) => row.label === 'Allegiance'));
+    assert.ok(model.callout);
+    assert.equal(model.holdLead, true);
+    assert.equal(model.journey, null);
+    assert.equal(model.journeyNote, '100D jump times are on the mainworld page.');
+    assert.equal(model.socio.rows, null);
+    assert.ok(model.socio.headline);
     const system = pickSystem(tree.body);
     assert.ok(system);
     const worlds = (system.worlds || []).filter((world) => world.type !== 'Empty');
@@ -94,9 +103,7 @@ test('Regina overview and Caesillian 0914 partial follow the inspector', async (
         || (system.worlds || []).flatMap((world) => world.moons || []).find((moon) => moon.type === 'Mainworld');
     assert.ok(host);
     assert.ok(Array.isArray(host.journeyTimes));
-    assert.ok(model.journey);
-    assert.deepEqual(model.journey.map((item) => item.g), [1, 2, 3, 4, 5, 6]);
-    assert.deepEqual(model.journey.map((item) => item.hours), host.journeyTimes.map((hours) => String(hours) + 'h'));
+    assert.equal(model.journey, null);
 
     const gasRow = model.tree.rows.find((row) => row.glyph.kind === 'gasGiant');
     assert.ok(gasRow);
@@ -112,7 +119,27 @@ test('Regina overview and Caesillian 0914 partial follow the inspector', async (
     assert.equal(mainBody.glyph.star, '');
     assert.equal(mainBody.glyph.kind, mainRow.moon ? 'moon' : 'world');
     assert.deepEqual(mainRow.glyph, mainBody.glyph);
-    assert.deepEqual(mainBody.journey, model.journey);
+    assert.equal(mainBody.crumbSystem, 'Regina system');
+    assert.equal(mainBody.place, 'Mainworld of the Regina system · 1910');
+    assert.ok(mainBody.journey);
+    assert.deepEqual(mainBody.journey.map((item) => item.g), [1, 2, 3, 4, 5, 6]);
+    assert.deepEqual(mainBody.journey.map((item) => item.hours), host.journeyTimes.map((hours) => String(hours) + 'h'));
+    const starport = mainBody.mainSections.find((section) => section.heading === 'World profile');
+    assert.ok(starport);
+    const starportRow = starport.rows.find((row) => row.label === 'Starport');
+    assert.ok(starportRow);
+    assert.equal(starportRow.text, formatUwpDigit('starport', 'A'));
+    assert.ok(mainBody.socio);
+    assert.ok(mainBody.socio.rows.some((row) => row.label === 'Importance'));
+    assert.equal(gasBody.place.startsWith('Mainworld of the '), false);
+    assert.equal(gasBody.crumbSystem, 'Regina system');
+    const otherMoon = model.tree.rows.find((row) => row.moon && row.tag !== 'Mainworld');
+    assert.ok(otherMoon);
+    const moonBody = bodyModel(tree, otherMoon.key);
+    assert.ok(moonBody);
+    assert.equal(moonBody.place.startsWith('Mainworld of the '), false);
+    assert.equal(moonBody.socio, null);
+    assert.equal(moonBody.crumbSystem, 'Regina system');
 
     assert.equal(typeof host.meanTempK, 'number');
     assert.equal(typeof host.highTempK, 'number');
@@ -170,6 +197,129 @@ test('Regina overview and Caesillian 0914 partial follow the inspector', async (
     assert.equal(lastBody.index, keys.length);
     assert.equal(lastBody.total, keys.length);
 
+    const ten = ['Starport', 'Size', 'Atmosphere', 'Hydrographics', 'Population', 'Government', 'Law level', 'Tech level', 'Trade codes', 'Travel zone'];
+    function formerTen(state) {
+        const world = mainworldProfile(state);
+        return [
+            rowFor('Starport', world.starport),
+            rowFor('Size', world.size),
+            rowFor('Atmosphere', world.atm),
+            rowFor('Hydrographics', world.hydro),
+            rowFor('Population', world.pop ?? world.population),
+            rowFor('Government', world.gov ?? world.government),
+            rowFor('Law level', world.law),
+            rowFor('Tech level', world.tl),
+            rowFor('Trade codes', world.tradeCodes || state.tradeCodes),
+            rowFor('Travel zone', state.travelZone || world.travelZone),
+        ].filter(Boolean);
+    }
+    let opened = 0;
+    for (const [hex, entry] of Object.entries(marches.index.hexes)) {
+        if (!entry.tree) continue;
+        const doc = JSON.parse(marches.objects.get(entry.tree));
+        const page = overviewModel({
+            sectorName: 'Spinward Marches',
+            subsectorName: 'Regina',
+            hex,
+            entry,
+            tree: doc,
+            allegiances: marches.index.metadata.allegiances,
+        });
+        if (!page.mainworldKey) continue;
+        opened += 1;
+        for (const label of ten) assert.equal(page.rows.some((row) => row.label === label), false, hex + ' ' + label);
+        const worldPage = bodyModel(doc, page.mainworldKey);
+        assert.ok(worldPage, hex);
+        const profileSection = worldPage.mainSections.find((section) => section.heading === 'World profile');
+        const got = profileSection ? profileSection.rows : [];
+        const expected = formerTen(doc.body);
+        assert.deepEqual(got.map((row) => row.label + '\t' + row.text), expected.map((row) => row.label + '\t' + row.text), hex);
+        assert.equal(worldPage.crumbSystem, page.header.title, hex);
+        assert.equal(worldPage.place.startsWith('Mainworld of the '), true, hex);
+        if (worldPage.journey) {
+            assert.equal(page.journey, null, hex);
+            assert.equal(page.journeyNote, '100D jump times are on the mainworld page.', hex);
+        }
+        if (worldPage.socio) {
+            assert.ok(worldPage.socio.rows.length > 0, hex);
+            assert.equal(page.socio.rows, null, hex);
+        }
+    }
+    assert.ok(opened > 100);
+
+    const closed = structuredClone(tree);
+    const closedSystem = pickSystem(closed.body);
+    for (const world of closedSystem.worlds || []) {
+        if (world.type === 'Mainworld') world.type = 'Planet';
+        for (const moon of world.moons || []) if (moon.type === 'Mainworld') moon.type = 'Planet';
+    }
+    const closedModel = overviewModel({
+        sectorName: 'Spinward Marches',
+        subsectorName: 'Regina',
+        hex: '1910',
+        entry: regina,
+        tree: closed,
+        allegiances: marches.index.metadata.allegiances,
+    });
+    assert.equal(closedModel.mainworldKey, null);
+    assert.equal(closedModel.callout, null);
+    assert.equal(closedModel.holdLead, false);
+    assert.equal(closedModel.journeyNote, '');
+    assert.ok(closedModel.rows.some((row) => row.label === 'Starport'));
+    assert.ok(closedModel.journey);
+    assert.ok(closedModel.socio.rows);
+
+    const unnamed = structuredClone(tree);
+    unnamed.body.name = '';
+    delete mainworldProfile(unnamed.body).name;
+    const unnamedModel = overviewModel({
+        sectorName: 'Spinward Marches',
+        subsectorName: 'Regina',
+        hex: '1910',
+        entry: { ...regina, name: '' },
+        tree: unnamed,
+        allegiances: marches.index.metadata.allegiances,
+    });
+    assert.equal(unnamedModel.header.title, '1910');
+
+    const waiting = overviewModel({
+        sectorName: 'Spinward Marches',
+        subsectorName: 'Regina',
+        hex: '1910',
+        entry: regina,
+        tree: null,
+        allegiances: marches.index.metadata.allegiances,
+    });
+    assert.equal(waiting.partial, false);
+    assert.equal(waiting.holdLead, true);
+    assert.equal(waiting.callout, null);
+    assert.equal(waiting.journeyNote, '');
+    assert.equal(waiting.mainworldKey, null);
+
+    const plan = planSystem(system, 'Spinward_Marches/1910');
+    const mainCard = cardFor(plan, mainRow.moon ? 'moon' : 'world', mainRow.key, 10);
+    assert.ok(mainCard);
+    assert.ok(mainCard.now);
+    assert.ok(mainCard.survey);
+    assert.equal(mainCard.now.length + mainCard.survey.length, mainCard.lines.length);
+    assert.deepEqual(mainCard.now, mainCard.lines.filter((line) => line.group === 'now'));
+    assert.deepEqual(mainCard.survey, mainCard.lines.filter((line) => line.group === 'survey'));
+    const surveyNames = new Set(['UWP', 'Starport', 'Spaceport', 'TL', 'Codes', 'Zone', 'Diameter', 'Rotation', 'Sidereal day', 'Gravity', 'Climate', 'Mean temp.', 'High temp.', 'Low temp.']);
+    for (const line of mainCard.lines) {
+        if (surveyNames.has(line.label)) assert.equal(line.group, 'survey', line.label);
+        if (line.label === 'Orbit #' || line.label === 'Orbit' || line.label === 'Distance' || line.label.startsWith('Today,') || line.label.startsWith('Daylight ') || line.label === 'Solar day' || line.label === 'Day and night') {
+            assert.equal(line.group, 'now', line.label);
+        }
+    }
+    assert.ok(mainCard.survey.some((line) => line.label === 'UWP'));
+    assert.ok(mainCard.now.some((line) => line.label === 'Orbit #' || line.label === 'Orbit' || line.label === 'Distance'));
+    assert.equal(mainCard.lines.some((line) => /season/i.test(line.label)), false);
+    const gasCard = cardFor(plan, 'world', gasRow.key, 10);
+    assert.ok(gasCard);
+    assert.ok(gasCard.survey);
+    assert.ok(gasCard.survey.some((line) => line.label === 'Diameter' || line.label === 'Mean temp.' || line.label === 'UWP'));
+    assert.deepEqual(gasCard.now, gasCard.lines.filter((line) => line.group === 'now'));
+
     const caes = await buildSector({
         slug: 'Caesillian',
         tsv: fs.readFileSync(path.join(ROOT, 'universe/raw/Caesillian.tsv'), 'utf8'),
@@ -192,4 +342,13 @@ test('Regina overview and Caesillian 0914 partial follow the inspector', async (
     assert.ok(partialModel.ribbon);
     assert.equal(partialModel.socio, null);
     assert.equal(partialModel.tree, null);
+    assert.equal(partialModel.journey, null);
+    assert.equal(partialModel.journeyNote, '');
+    assert.equal(partialModel.holdLead, false);
+    assert.equal(partialModel.callout, null);
+    assert.equal(partialModel.mainworldKey, null);
+    assert.equal(partialModel.header.title, partial.name ? partial.name + ' system' : '0914');
+    const chartLabels = new Set(['Trade codes', 'Travel zone', 'Allegiance', 'Bases', 'PBG']);
+    for (const row of partialModel.rows) assert.ok(chartLabels.has(row.label), row.label);
+    assert.equal(partialModel.rows.some((row) => row.label === 'Starport'), false);
 });

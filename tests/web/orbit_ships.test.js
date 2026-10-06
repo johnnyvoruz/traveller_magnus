@@ -58,8 +58,8 @@ test('a mark with no body on this picture is left off, and a second track keeps 
     const marks = placeShips([missing, other], bodiesAt, 5);
     assert.deepEqual(marks, [{ id: 'liner', name: 'Liner', kind: 'traffic', shape: 'rectangle', x: 0, y: 5 }]);
 
-    assert.equal(plotText({ x: 100, y: 200, from: { x: 100, y: 230 } }), '100.0, 200.0  30.0');
-    assert.equal(plotText({ x: 1.26, y: 2 }), '1.3, 2.0');
+    assert.equal(plotText({ x: 100, y: 200, from: { x: 100, y: 230 } }), '');
+    assert.equal(plotText({ x: 1.26, y: 2 }), '');
 });
 
 test('a jump reports the leave and the arrival, and is not a mark while it is under way', () => {

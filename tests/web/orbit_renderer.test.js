@@ -575,19 +575,31 @@ test('one wireframe designator per shape, the same size at another zoom', () => 
 });
 
 test('the plotting overlay is hairlines and a readout, and only on that frame', () => {
-    const extra = extraCalls({ plot: { x: 100, y: 200, from: { x: 100, y: 230 } } });
+    const plan = planSystem(testSystem(), HEX_KEY);
+    const scene = layoutScene(plan, { ...VIEW, moons: DEFAULT_LAYERS.moons, jump: DEFAULT_LAYERS.jump }, 1000);
+    const world = scene.primary.bodies.find((at) => at.world.name === 'Test I');
+    const extra = extraCalls({ plot: { x: world.x, y: world.y } });
     const hair = extra.filter((c) => c.op === 'moveTo' || c.op === 'lineTo');
     assert.deepEqual(hair.map((c) => [c.op, ...c.args]), [
-        ['moveTo', 0, 200],
-        ['lineTo', 1000, 200],
-        ['moveTo', 100, 0],
-        ['lineTo', 100, 800],
+        ['moveTo', 0, world.y],
+        ['lineTo', 1000, world.y],
+        ['moveTo', world.x, 0],
+        ['lineTo', world.x, 800],
     ]);
     assert.equal(extra.find((c) => c.op === 'stroke').stroke, 'text');
     const readout = extra.find((c) => c.op === 'fillText');
-    assert.deepEqual(readout.args, ['100.0, 200.0  30.0', 108, 212]);
+    assert.equal(readout.args[0], '0.50 AU');
     assert.equal(readout.fill, 'text');
     assert.ok(!extra.some((c) => c.op === 'drawImage'));
+
+    const blank = extraCalls({ plot: { x: 100, y: 200, from: { x: 100, y: 230 } } });
+    assert.ok(blank.some((c) => c.op === 'moveTo'));
+    assert.ok(!blank.some((c) => c.op === 'fillText'));
+
+    const row = lined('row', {}, { plot: { x: 500, y: 400 } });
+    const plain = lined('row');
+    const words = (calls) => calls.filter((c) => c.op === 'fillText').map((c) => c.args[0]);
+    assert.deepEqual(words(row.calls), words(plain.calls));
 });
 
 /** Canvas ops and their arguments, ignoring leftover fill and stroke from a context that does not stack. */

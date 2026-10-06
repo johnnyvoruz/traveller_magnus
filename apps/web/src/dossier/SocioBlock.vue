@@ -26,7 +26,7 @@ watch(() => props.span, applySpan);
 
 <template>
   <div class="doss-socio-block">
-    <details ref="box" class="doss-socio-acc">
+    <details v-if="rows || empty" ref="box" class="doss-socio-acc">
       <summary>
         <span class="doss-socio-title">Socioeconomics</span>
         <span v-if="headline" class="doss-socio-line">{{ headline }}</span>
@@ -36,6 +36,10 @@ watch(() => props.span, applySpan);
         <p v-else-if="empty" class="doss-muted">{{ empty }}</p>
       </div>
     </details>
+    <p v-else class="doss-socio-stay">
+      <span class="doss-socio-title">Socioeconomics</span>
+      <span v-if="headline" class="doss-socio-line">{{ headline }}</span>
+    </p>
     <slot />
   </div>
 </template>
@@ -109,5 +113,17 @@ watch(() => props.span, applySpan);
 
 .doss-socio-detail > .doss-muted {
   margin: 0 0 6px;
+}
+
+/* The headline alone, once the profile rows live on the mainworld page. Same card, no control. */
+.doss-socio-stay {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 0 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--control-line);
+  border-radius: var(--r-3);
+  background: var(--panel-raised);
 }
 </style>

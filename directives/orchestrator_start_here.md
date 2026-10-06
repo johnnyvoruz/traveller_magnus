@@ -129,10 +129,16 @@ file true: replace it, do not append to it.
 | K12 picture | `orbit/ships.ts`, designators, plotting overlay (C) | done, live, fed by nothing yet |
 | ship MVP 1 | ship list, real marks, status strip, plotting mode, Jump (fixed 168 until part 2) | **done, live** (`c6b6841`) |
 | ship MVP 2 (D) | the measuring pass: the Track section, the rolled jump time, the flight estimate with both fuel lines, the Party tab and marker from the track | accepted §133 and §139, **local, not pushed**; the jump's parsecs line waits on A's hex distance |
-| **designs 18 and 21 (D)** | `prompts/d_design_15_18.md`: the Scouts terminal readout; **the holographic outlines of where bodies will be while plotting** (Johnny, §140); `findings/` only | **issued §139, changed §140 and §141** |
-| **follow-up 22 (E)** | `prompts/e_dossier_identities.md`: the system page and the world page get separate identities; the orbit card splits into "now" and "survey"; settles follow-up 15 | **issued §141** |
+| designs 18 and 21 (D) | `findings/daynight_locked_design.md`, `findings/plot_ghosts_design.md` | accepted §144; four choices stand at D's recommendation until Johnny answers |
+| **fixes now (D)** | `prompts/d_fixes_now.md`: items 1, 2, 3, 4, 5, 8 of the queued fixes and `settleFlight`, unwired | **issued §144**; items 6, 7, 9 and the ghost wiring after A's panes report |
+| **city lights (C)** | `findings/city_lights_design.md` (Agent F, accepted §148): five build steps. `prompts/c_city_lights_1.md`: Enhanced as the default look, then step 1 (the separate enhanced program) | **issued §148**; steps 2 to 5 one at a time, each with frames for Johnny |
+| **ghosts in the picture (A)** | `prompts/a_ghosts.md`, from D's note | **issued §148**, after A's panes report |
+| **locked world's card (E)** | `prompts/e_daynight_locked.md`, from D's note | **issued §148**, after T1.5 |
+| plot readout (C) | AU from the primary and real distance from the ship | accepted §148; in the push called for |
+| follow-up 22 (E) | the system page and the world page get separate identities; the orbit card's model splits into "now" and "survey"; settles follow-up 15 | accepted §146; in the push called for (`findings/push/dossier_files.txt`) |
+| **T1.5 (E)** | `prompts/e_climate_fields.md`: the world page and the orbit card read `surfaceTempBand`, `orbitalTempBand` and the liquid status when a body carries them | **issued §146** |
 | the index follows the track; hex distance (A) | `campaign/place.ts`, `map/geometry.ts` | accepted §141; in the push called for |
-| follow-up 21 build | ghosts, the flight line to the ghost, the estimate to the arrival place, the mark on the straight line (C, then D) | after D's design and C's third motion pass; recipe from D's note |
+| follow-up 21 wiring (D) | `settleFlight` wired, the `preview` prop fed, the browser pass over the ghosts | after A's panes report and C's ghosts; prompt not written |
 | **hex distance (A)** | `prompts/a_hex_distance.md`: `hexDistance`, `parsecsBetween` in `map/geometry.ts` | **issued §139**, after the index step |
 | small fixes (A) | `reactionFuelTons`, an empty track is no track, a dev proxy for the real chart (`VOYAGE_TRUTH_API`) | accepted §136, local |
 | **the index follows the track (A)** | `prompts/a_index_tracks.md`: where a record is at the campaign date, through its ship's track | **issued §136** |
@@ -141,7 +147,8 @@ file true: replace it, do not append to it.
 | panes step 1 (A) | `shell/pane.ts`, pure | accepted §134 |
 | engine corrections T1.3 (B) | liquids | accepted §134 with a correction |
 | T1.3a (B) | only bodies with a label, a percentage or a code above 0 need a liquid validated | accepted §142; in the push called for |
-| **T1.4 (B)** | `prompts/b_engine_t1_4.md`: the reconciliation as `generateHex`'s last step, behind an option absent by default | **issued §142** |
+| T1.4 (B) | the reconciliation as `generateHex`'s last step, behind an option absent by default | accepted §145; in the push called for |
+| **T1.6 (B)** | `prompts/b_engine_t1_6.md`: the derived build with the `reconcile-environment` transform, proven on the local Worker; no production command | **issued §145** |
 | **panes steps 2 to 4 (A)** | `prompts/a_panes_steps_2_4.md`: follow-up 17 built from A's own design while D is on paper | **issued §142**; D's queued fixes wait for its report |
 | **plot readout (C)** | `prompts/c_plot_readout.md`: AU from the primary and real distance from the selected ship | **issued §142** |
 | follow-up 14c (C) | Moons and Day/night radiate from the star, the teal fades, rings cross-fade | accepted §142; in the push called for; Johnny judges live |
@@ -179,10 +186,12 @@ file true: replace it, do not append to it.
   `orbit/ships.ts`, `orbit/theme.ts`, `tests/web/orbit_renderer.test.js`,
   `tests/web/orbit_ships.test.js`), rehearsed in a scratch copy first. D holds on a
   paper-only step until then; after it, D gets `d_orbit_small_fixes.md` (seven items).
-- **Last push `556b380`** (part 2), green and live. **Called for in §142:** B's T1.3a and
-  C's third motion pass, by path from `findings/push/motion3_files.txt`; check `git log -1`.
-- **Open with Johnny: G6**, the city lights (keep the old app's look, or lights on the
-  surface only as a recorded difference).
+- **Last push `729e74b`** (motion pass 3, the jump bubble, T1.3a), green. **Called for in
+  §148:** 17 files from `findings/push/dossier_readout_files.txt` (E's dossier split, B's
+  T1.4, C's readout), rehearsed; check `git log -1`. It must run before E or A edits those
+  files again.
+- **Open with Johnny:** only D's four design choices (§144), each with a standing default.
+  G7 is answered: F designed the city lights; Enhanced is to be the default.
 - G5 was taken as the recommended option
   (§140). He expects a supplement ("Cluster Truck") to change travel rules later: keep the
   plotting rules easy and in `rules/`, so a change is an edit to a file.

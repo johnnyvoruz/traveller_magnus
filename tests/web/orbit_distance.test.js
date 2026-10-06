@@ -3,8 +3,9 @@
  */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { realDistanceKm, realPositionAu } from '../../apps/web/src/orbit/distance.ts';
+import { BODY_SNAP_PX, picturePlaceAu, placeAtPicture, realDistanceKm, realPositionAu } from '../../apps/web/src/orbit/distance.ts';
 import { AU_KM, layoutScene } from '../../apps/web/src/orbit/layout.ts';
+import { plotText } from '../../apps/web/src/orbit/ships.ts';
 
 function star(key, index, extra = {}) {
     return {
@@ -160,4 +161,72 @@ test('the distance does not change with the view, because it never reads the pic
     assert.notEqual(fitted, linear);
     assert.equal(realDistanceKm(plan, 'w1', 'w2', 0), km);
     assert.equal(realDistanceKm(plan, 'w1', 'w2', 0), realDistanceKm(plan, 'w2', 'w1', 0));
+});
+
+test('a world\'s drawn point maps back to its real place, log and linear, at two zooms', () => {
+    const days = 100;
+    const inner = world('w1', 1, 0.7, { index: 0, body: { au: 1, diamKm: 8000 } });
+    const outer = world('w2', 3, 2.1, { index: 1, body: { au: 3, diamKm: 12000 } });
+    const plan = planOf(
+        [star('s0', 0, { body: { mass: 1, diamKm: 1400000 } })],
+        [inner, outer],
+    );
+    const same = (got, real) => got && Math.abs(got.x - real.x) < 1e-6 && Math.abs(got.y - real.y) < 1e-6;
+    const views = [
+        { w: 800, h: 600, offX: 0, offY: 0, zoom: 1, z: 1, linear: false, moons: true, jump: true },
+        { w: 800, h: 600, offX: 40, offY: -25, zoom: 2.4, z: 1.8, linear: false, moons: true, jump: true },
+        { w: 800, h: 600, offX: 0, offY: 0, zoom: 1, z: 1, linear: true, moons: true, jump: true },
+        { w: 800, h: 600, offX: -30, offY: 15, zoom: 2.4, z: 1.8, linear: true, moons: true, jump: true },
+    ];
+    for (const view of views) {
+        const scene = layoutScene(plan, view, days);
+        for (const key of ['w1', 'w2']) {
+            const at = scene.primary.bodies.find((body) => body.world.key === key);
+            const real = realPositionAu(plan, key, days);
+            const back = picturePlaceAu({ x: at.x, y: at.y }, view, plan, 'orbits');
+            assert.ok(same(back, real), key + ' ' + view.zoom + ' ' + view.linear);
+        }
+        const origin = { x: scene.originX, y: scene.originY };
+        assert.equal(picturePlaceAu(origin, view, plan, 'orbits'), null);
+        assert.equal(picturePlaceAu({ x: origin.x + 4000, y: origin.y }, view, plan, 'orbits'), null);
+        assert.equal(picturePlaceAu({ x: scene.primary.bodies[0].x, y: scene.primary.bodies[0].y }, view, plan, 'row'), null);
+        assert.equal(picturePlaceAu({ x: scene.primary.bodies[0].x, y: scene.primary.bodies[0].y }, view, plan, 'column'), null);
+        assert.equal(picturePlaceAu({ x: scene.primary.bodies[0].x, y: scene.primary.bodies[0].y }, view, plan, 'blend'), null);
+    }
+});
+
+test('a pointer within 14px of a body reads that body, and a moon\'s drawn point is not its picture radius', () => {
+    assert.equal(BODY_SNAP_PX, 14);
+    const days = 0;
+    const hosted = world('w1', 2, 0, {
+        body: { au: 2, diamKm: 12800 },
+        moons: [placedMoon('w1m0', 20, 0)],
+    });
+    const plan = planOf([star('s0', 0, { body: { mass: 1 } })], [hosted]);
+    const view = { w: 800, h: 600, offX: 0, offY: 0, zoom: 1, z: 1, linear: false, moons: true, jump: true };
+    const scene = layoutScene(plan, view, days);
+    const worldAt = scene.primary.bodies[0];
+    const moonAt = worldAt.moons[0];
+    const bodies = [
+        { key: 's0', x: scene.originX, y: scene.originY },
+        { key: 'w1', x: worldAt.x, y: worldAt.y },
+        { key: 'w1m0', x: moonAt.x, y: moonAt.y },
+    ];
+    const realMoon = realPositionAu(plan, 'w1m0', days);
+    const drawn = picturePlaceAu({ x: moonAt.x, y: moonAt.y }, view, plan, 'orbits');
+    assert.ok(drawn);
+    assert.ok(Math.hypot(drawn.x - realMoon.x, drawn.y - realMoon.y) > 0.01);
+    const snapped = placeAtPicture({ x: moonAt.x, y: moonAt.y }, view, plan, 'orbits', bodies, days);
+    assert.ok(Math.abs(snapped.x - realMoon.x) < 1e-9 && Math.abs(snapped.y - realMoon.y) < 1e-9);
+
+    const near = placeAtPicture({ x: worldAt.x, y: worldAt.y + 10 }, view, plan, 'orbits', bodies, days);
+    const realWorld = realPositionAu(plan, 'w1', days);
+    assert.ok(Math.abs(near.x - realWorld.x) < 1e-9 && Math.abs(near.y - realWorld.y) < 1e-9);
+
+    const frame = { plan, view, mode: 'orbits', days, bodies };
+    assert.equal(plotText({ x: worldAt.x, y: worldAt.y }), '');
+    assert.equal(plotText({ x: worldAt.x, y: worldAt.y }, frame), '2.00 AU');
+    assert.equal(plotText({ x: worldAt.x, y: worldAt.y, from: { x: moonAt.x, y: moonAt.y } }, frame), '2.00 AU \u00B7 ship 256,000 km');
+    assert.equal(plotText({ x: worldAt.x, y: worldAt.y }, { ...frame, mode: 'row' }), '');
+    assert.equal(plotText({ x: scene.originX + 18, y: scene.originY }, frame), '');
 });

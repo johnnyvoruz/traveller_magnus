@@ -24,16 +24,46 @@ export type CardLine = {
     gap?: boolean;
     /** Tooltip text for the line. */
     hint?: string;
+    /**
+     * now: orbit, distance, today's temperatures, daylight (the clock).
+     * survey: UWP, starport, tech, codes, zone, diameter, rotation, gravity, survey temperatures.
+     */
+    group?: 'now' | 'survey';
 };
 
 export type BodyCardModel = {
     title: string;
     /** The parenthesis after the title: the body's type or role. */
     sub: string;
+    /** Every line, in the order the card has always shown. */
     lines: CardLine[];
+    /** The clock: orbit, distance, today's temperatures, daylight. The season sits beside these. */
+    now?: CardLine[];
+    /** The survey the dossier already shows when it is open on this body. */
+    survey?: CardLine[];
     season: SeasonLine | null;
     seasonHelp: string;
 };
+
+function groupFor(label: string): 'now' | 'survey' {
+    if (label === 'Orbit #' || label === 'Orbit' || label === 'Distance') return 'now';
+    if (label.startsWith('Today,')) return 'now';
+    if (label === 'Solar day' || label === 'Day and night' || label.startsWith('Daylight ')) return 'now';
+    return 'survey';
+}
+
+function pack(model: { title: string; sub: string; lines: CardLine[]; season: SeasonLine | null; seasonHelp: string }): BodyCardModel {
+    const lines = model.lines.map((line) => ({ ...line, group: line.group ?? groupFor(line.label) }));
+    return {
+        title: model.title,
+        sub: model.sub,
+        lines,
+        now: lines.filter((line) => line.group === 'now'),
+        survey: lines.filter((line) => line.group === 'survey'),
+        season: model.season,
+        seasonHelp: model.seasonHelp,
+    };
+}
 
 function num(value: unknown): number | null {
     return typeof value === 'number' && Number.isFinite(value) ? value : null;
@@ -137,7 +167,7 @@ function starCard(body: Bag): BodyCardModel {
         const au = starCompanionAU(body);
         if (au != null) lines.push({ label: 'Distance', value: formatDisplayNumber(au, 3, 'AU') });
     }
-    return { title: String(body.name || ''), sub: String(body.role || 'Primary'), lines, season: null, seasonHelp: '' };
+    return pack({ title: String(body.name || ''), sub: String(body.role || 'Primary'), lines, season: null, seasonHelp: '' });
 }
 
 function worldSeason(world: PlanWorld, days: number): SeasonLine | null {
@@ -179,13 +209,13 @@ function worldCard(world: PlanWorld, days: number): BodyCardModel {
     physical(lines, w, null, bodyAngle(world.epoch, world.period, days));
     if (world.moons.length) lines.push({ label: 'Moons', value: String(world.moons.length), gap: true });
     const displayType = w.ggType ? w.type + ' ' + w.ggType : (w.worldType || w.type);
-    return {
+    return pack({
         title: String(w.name || w.type || ''),
         sub: w.name ? String(displayType || '') : '',
         lines,
         season: worldSeason(world, days),
         seasonHelp: SEASON_HELP,
-    };
+    });
 }
 
 function beltCard(world: PlanWorld): BodyCardModel {
@@ -195,7 +225,7 @@ function beltCard(world: PlanWorld): BodyCardModel {
     if (body.au != null) lines.push({ label: 'Distance', value: formatDisplayNumber(body.au, 3, 'AU') });
     profile(lines, body, true);
     if (body.resourceRating != null) lines.push({ label: 'Resource', value: String(body.resourceRating), gap: true });
-    return { title: String(body.name || ''), sub: 'Planetoid Belt', lines, season: null, seasonHelp: '' };
+    return pack({ title: String(body.name || ''), sub: 'Planetoid Belt', lines, season: null, seasonHelp: '' });
 }
 
 function moonCard(moon: PlanMoon, parent: PlanWorld, days: number): BodyCardModel {
@@ -205,13 +235,13 @@ function moonCard(moon: PlanMoon, parent: PlanWorld, days: number): BodyCardMode
     profile(lines, m, false);
     physical(lines, m, parent.body, bodyAngle(parent.epoch, parent.period, days));
     if (m.size != null) push(lines, 'Size', String(m.size));
-    return {
+    return pack({
         title: String(m.name || (moon.mainworld ? 'Mainworld (Moon)' : 'Moon')),
         sub: moon.mainworld ? 'Mainworld Satellite' : 'Satellite',
         lines,
         season: moonSeason(moon, parent, days),
         seasonHelp: SEASON_HELP,
-    };
+    });
 }
 
 /** The card for the body under the pointer, or null (a ring, or a key the plan does not hold). */

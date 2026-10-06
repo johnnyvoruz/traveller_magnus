@@ -26,7 +26,7 @@ import {
     type Picture, type Rocks, type StarDraw, type WorldDraw,
 } from './picture.ts';
 import { discBatch, sunColour, visualRate, type OrbitDiscBatch } from './disc_batch.ts';
-import { plotText, type PlotReadout, type ShipMark, type ShipShape } from './ships.ts';
+import { pictureBodies, plotText, type PlotReadout, type ShipMark, type ShipShape } from './ships.ts';
 import { easeOutAt, withAlpha, type EaseOut, type OrbitTheme, type PortPaint } from './theme.ts';
 
 /** The layer switches that ease. Linear scale and ring strength stay where the slider put them. */
@@ -309,7 +309,7 @@ export class OrbitRenderer {
         this.selection(plan, picture, state);
         this.beginBubbles(state);
         this.ships(state.ships);
-        this.plot(state.plot);
+        this.plot(state.plot, plan, picture, view, state.days);
         this.settleDiscs(state);
         this.keepHeld(picture, state.layers);
     }
@@ -2186,7 +2186,7 @@ export class OrbitRenderer {
     }
 
     /** Hairlines and a readout. This frame only: nothing is added to the picture. */
-    private plot(plot: PlotReadout | null | undefined): void {
+    private plot(plot: PlotReadout | null | undefined, plan: Plan, picture: Picture, view: View, days: number): void {
         if (!plot) return;
         const ctx = this.ctx;
         const theme = this.theme;
@@ -2202,13 +2202,19 @@ export class OrbitRenderer {
         ctx.moveTo(plot.x, 0);
         ctx.lineTo(plot.x, this.h);
         ctx.stroke();
-        const pastRight = plot.x + 8 > this.w - 120;
-        const pastBottom = plot.y + 12 > this.h - 16;
-        ctx.fillStyle = theme.text;
-        ctx.font = '10px ' + theme.fontCode;
-        ctx.textAlign = pastRight ? 'right' : 'left';
-        ctx.textBaseline = pastBottom ? 'bottom' : 'top';
-        ctx.fillText(plotText(plot), pastRight ? plot.x - 8 : plot.x + 8, pastBottom ? plot.y - 8 : plot.y + 12);
+        const text = plotText(plot, {
+            plan, view, mode: picture.mode, days, bodies: pictureBodies(picture),
+        });
+        if (text) {
+            ctx.fillStyle = theme.text;
+            ctx.font = '10px ' + theme.fontCode;
+            const width = ctx.measureText(text).width;
+            const pastRight = plot.x + 8 + width > this.w;
+            const pastBottom = plot.y + 12 > this.h - 16;
+            ctx.textAlign = pastRight ? 'right' : 'left';
+            ctx.textBaseline = pastBottom ? 'bottom' : 'top';
+            ctx.fillText(text, pastRight ? plot.x - 8 : plot.x + 8, pastBottom ? plot.y - 8 : plot.y + 12);
+        }
         ctx.restore();
     }
 }

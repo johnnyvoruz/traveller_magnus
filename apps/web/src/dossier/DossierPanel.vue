@@ -14,12 +14,12 @@ import RecordsHere from '../workspace/RecordsHere.vue';
 import BodyGlyph from './BodyGlyph.vue';
 import DossierBody from './DossierBody.vue';
 import DossierOverview from './DossierOverview.vue';
-import { bodyByKey, dossierPath, mainworldByKey, orbitPath } from '../orbit/bodies.ts';
+import { bodyByKey, dossierPath, orbitPath } from '../orbit/bodies.ts';
 import { parseLinkDate, startDays } from '../orbit/clock.ts';
 import { dayNightFigure, markerAt, starportTick, turningOf, yearFigure } from '../orbit/daynight.ts';
 import { planSystem, type Plan } from '../orbit/layout.ts';
 import { bodyAngle } from '../orbit/maths.ts';
-import { bodyKeys, bodyModel, mainworldProfile, overviewModel, pickSystem, type AllegianceName } from './model.ts';
+import { bodyKeys, bodyModel, overviewModel, pickSystem, type AllegianceName } from './model.ts';
 import type { SurfaceTarget } from './SurfaceStage.vue';
 
 const props = defineProps<{
@@ -160,15 +160,6 @@ const bodySurface = computed((): SurfaceTarget | null => {
     return found && !found.star ? { hexKey: props.tree.hexKey, dossierKey: props.bodyKey, body: found.body } : null;
 });
 
-/** The overview maps the mainworld (legacy mappedMainworld): the body typed Mainworld, else the hex's own profile. */
-const overviewSurface = computed((): SurfaceTarget | null => {
-    if (!props.tree || props.error) return null;
-    const system = pickSystem(props.tree.body);
-    const main = system ? mainworldByKey(system) : null;
-    if (main) return { hexKey: props.tree.hexKey, dossierKey: main.key, body: main.body };
-    return { hexKey: props.tree.hexKey, dossierKey: 'mainworld', body: mainworldProfile(props.tree.body) };
-});
-
 const title = computed(() => {
     if (profile.value) return profile.value.title;
     if (overview.value) return overview.value.header.title;
@@ -293,16 +284,16 @@ defineExpose({ remeasure: publish });
           <RecordsHere
             :slug="slug"
             :hex="hex"
-            :system-name="overview ? overview.header.title : ''"
+            :system-name="overview ? (overview.header.name || overview.header.title) : ''"
             :body-key="bodyKey"
             :body-name="profile.title"
             @retry="retryCampaign()"
           />
         </template>
       </DossierBody>
-      <DossierOverview v-else-if="overview" :model="overview" :span="span" :error="error" :orbit-link="!orbit" :surface="overviewSurface" :counts="recordCounts" @open="openKey" @orbit="openOrbit(null)" @retry="$emit('retry')">
+      <DossierOverview v-else-if="overview" :model="overview" :span="span" :error="error" :orbit-link="!orbit" :counts="recordCounts" @open="openKey" @orbit="openOrbit(null)" @retry="$emit('retry')">
         <template #records>
-          <RecordsHere :slug="slug" :hex="hex" :system-name="overview.header.title" :body-key="null" body-name="" @retry="retryCampaign()" />
+          <RecordsHere :slug="slug" :hex="hex" :system-name="overview.header.name || overview.header.title" :body-key="null" body-name="" @retry="retryCampaign()" />
         </template>
       </DossierOverview>
       <p v-else-if="missing" class="doss-muted doss-pad">This hex has no world in the sector index.</p>
@@ -404,13 +395,13 @@ defineExpose({ remeasure: publish });
   margin-top: 18px;
 }
 
-/* Half and full: the map leads the first column; the other columns run the full height. */
+/* Half and full: identity, socioeconomics and the tree, each the full height. The map stays on the world page. */
 .doss[data-span="half"],
 .doss[data-span="full"] {
   display: grid;
   align-items: stretch;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 14px 22px;
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0 22px;
   height: 100%;
   min-height: 0;
 }
@@ -423,23 +414,15 @@ defineExpose({ remeasure: publish });
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.15fr);
 }
 
-.doss[data-span="half"] .doss-map,
-.doss[data-span="full"] .doss-map {
-  grid-column: 1;
-  grid-row: 1;
-  width: 100%;
-  margin: 0;
-}
-
 .doss[data-span="half"] .doss-identity,
 .doss[data-span="full"] .doss-identity {
   grid-column: 1;
-  grid-row: 2;
+  grid-row: 1;
 }
 
 .doss[data-span="half"] .doss-side {
   grid-column: 2;
-  grid-row: 1 / span 2;
+  grid-row: 1;
 }
 
 .doss[data-span="full"] .doss-side {
@@ -448,12 +431,12 @@ defineExpose({ remeasure: publish });
 
 .doss[data-span="full"] .doss-socio {
   grid-column: 2;
-  grid-row: 1 / span 2;
+  grid-row: 1;
 }
 
 .doss[data-span="full"] .doss-tree {
   grid-column: 3;
-  grid-row: 1 / span 2;
+  grid-row: 1;
 }
 
 .doss[data-span="half"] .doss-identity,

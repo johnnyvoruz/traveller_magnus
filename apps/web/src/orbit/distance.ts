@@ -13,9 +13,13 @@
  * whose parent has no place, a belt (a ring, not a point), a companion whose body has neither
  * `orbitAU` nor `orbitId`, a world with no numeric `au`, and any pair whose places are not
  * in the same frame. The drawn period's `pd || 20` fallback is not a distance.
+ *
+ * The picture is the inverse of that, for the primary only. `layoutScene` draws a body at
+ * `scaleR` of its au, at its true angle about the primary. `picturePlaceAu` reads that back.
+ * It is null inside the star's hole, in a line-up or a blend, and past the scale.
  */
-import { AU_KM, type Plan, type PlanMoon, type PlanStar, type PlanWorld } from './layout.ts';
-import { bodyAngle } from './maths.ts';
+import { AU_KM, STAGE_MARGIN, orbitHole, type Plan, type PlanMoon, type PlanStar, type PlanWorld, type View } from './layout.ts';
+import { bodyAngle, scaleR } from './maths.ts';
 
 export type AuPoint = { x: number; y: number };
 
@@ -105,6 +109,85 @@ export function realPositionAu(plan: Plan, key: string, days: number): AuPoint |
     const found = locate(plan, key, days, []);
     if (!found.known || !found.place || found.place.frame !== 0) return null;
     return { x: found.place.x, y: found.place.y };
+}
+
+/**
+ * How close a pointer must be to a body's drawn centre, in picture pixels, to read that
+ * body's own place. A moon is drawn much farther out than its real orbit, so the inverse
+ * of the picture would be the wrong place; the body's place is used instead.
+ */
+export const BODY_SNAP_PX = 14;
+
+/** The layouts `picturePlaceAu` understands. Anything but the orbits layout has no single place. */
+export type PictureLayout = 'orbits' | 'row' | 'column' | 'blend';
+
+/** The primary's origin, scale and hole: the same figures `layoutScene` places worlds with. */
+function primaryScale(plan: Plan, view: View): { originX: number; originY: number; maxPx: number; holePx: number } | null {
+    const star = plan.stars[0];
+    if (!star || !(plan.maxAU > 0)) return null;
+    const baseMaxR = Math.max(10, Math.min(view.w, view.h) / 2 - STAGE_MARGIN);
+    return {
+        originX: view.w / 2 + view.offX,
+        originY: view.h / 2 + view.offY,
+        maxPx: baseMaxR * view.zoom,
+        holePx: orbitHole(star.basePx * view.z, view.z),
+    };
+}
+
+/**
+ * Where a picture point sits, in AU from the primary. Null when the picture has no single
+ * answer: a line-up or a blend, inside the star's hole, or beyond the scale (`scaleR` of
+ * `maxAU`). The angle is the picture's own angle about the primary.
+ */
+export function picturePlaceAu(
+    point: { x: number; y: number },
+    view: View,
+    plan: Plan,
+    layout: PictureLayout,
+): AuPoint | null {
+    if (layout !== 'orbits') return null;
+    const frame = primaryScale(plan, view);
+    if (!frame) return null;
+    const hole = scaleR(0, plan.maxAU, frame.maxPx, frame.holePx, view.linear);
+    const outer = scaleR(plan.maxAU, plan.maxAU, frame.maxPx, frame.holePx, view.linear);
+    const span = outer - hole;
+    if (!(span > 0)) return null;
+    const dx = point.x - frame.originX;
+    const dy = point.y - frame.originY;
+    const radius = Math.hypot(dx, dy);
+    if (radius < hole - 1e-6) return null;
+    let t = (radius - hole) / span;
+    if (t > 1 + 1e-6) return null;
+    if (t > 1) t = 1;
+    if (t < 0) t = 0;
+    const au = view.linear ? t * plan.maxAU : Math.pow(1 + plan.maxAU, t) - 1;
+    if (!Number.isFinite(au) || au < 0) return null;
+    if (!(radius > 0)) return { x: 0, y: 0 };
+    return { x: au * dx / radius, y: au * dy / radius };
+}
+
+/**
+ * The place a readout uses. A line-up has none. In the orbits layout, a body within
+ * `BODY_SNAP_PX` of the point is that body's own place (null when the plan has none, rather
+ * than the inverse). Anything else is `picturePlaceAu`.
+ */
+export function placeAtPicture(
+    point: { x: number; y: number },
+    view: View,
+    plan: Plan,
+    layout: PictureLayout,
+    bodies: readonly { key: string; x: number; y: number }[],
+    days: number,
+): AuPoint | null {
+    if (layout !== 'orbits') return null;
+    const limit = BODY_SNAP_PX * BODY_SNAP_PX;
+    let best: { key: string; d: number } | null = null;
+    for (const body of bodies) {
+        const d = (body.x - point.x) ** 2 + (body.y - point.y) ** 2;
+        if (d <= limit && (!best || d < best.d)) best = { key: body.key, d };
+    }
+    if (best) return realPositionAu(plan, best.key, days);
+    return picturePlaceAu(point, view, plan, layout);
 }
 
 /** Kilometres between two bodies at `days`, or null. The same known key is 0. */

@@ -66,6 +66,12 @@ Johnny, looking at the live orbit view:
    the same body. `BodyCard.vue`, `orbit/card.ts` and `dossier/` are Agent E's: do not edit
    them. **If the prop is not there when you reach this, skip the item and say so.**
 
+10. **The design page's samples.** Agent E has rebuilt the dossier (the system page is
+    "Regina system" with a mainworld callout and no decoded rows; the world page alone
+    decodes the UWP and carries the socioeconomics profile; the orbit card's model has
+    `now` and `survey` groups). `design/samples.ts` and `views/DesignView.vue` still show
+    the old overlap. Bring the samples in line with the pages as built.
+
 **Your four questions from part 2, ruled:** (1) the hex distance is item 7, and Agent A's
 `parsecsBetween(hexKeyA, hexKeyB, sectorAt)` is now in `map/geometry.ts`; a sector's grid
 position is `x` and `y` on `SectorOverview` (`TruthOverview.sectors`), so

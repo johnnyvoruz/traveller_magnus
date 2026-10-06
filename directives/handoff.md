@@ -3989,3 +3989,161 @@ Stop and report.
   inverse of the picture's compression in `distance.ts`).
 - **D's order after its paper step:** A must have reported the panes steps first, because
   D's queued fixes touch `OrbitView.vue` and `WhereBlock.vue`.
+
+## 143. Pushed `729e74b`; Johnny rules the city lights are to differ, and to be spectacular (2026-10-06)
+
+- **`729e74b`** (motion pass 3, the jump bubble, the liquids correction): `campaign` equals
+  `origin/campaign`; the GitHub run was in progress when checked. A, B and C have their
+  next pastes (`a_panes_steps_2_4.md`, `b_engine_t1_4.md`, `c_plot_readout.md`); D and E are
+  in flight.
+- **G6 answered: differ from the old app,** "but it needs to look sci-fi and incredible,
+  beautiful, glowy, spectacular, it really needs to inspire awe and wonder and capture
+  sci-fi city feel from space, like 'oh, I want to visit there or go there'".
+- **Ruling on how:** vanilla stays the legacy shader exactly (`surface_gl.test.js`
+  untouched); the new lights are the first piece of the **enhanced disc** (today the orbit
+  painter draws the vanilla GL disc in both modes; `surface/preferences.ts` defaults to
+  vanilla). Lights on the surface only, under the cloud, no city colour on the air shell or
+  the limb; driven by what drives them today (`cityLight` by tech level, the urban mask by
+  population); no new Traveller fact. **Design first, on paper:**
+  `prompts/city_lights_design.md` (the look in words and frames, the passes, the
+  parameters, C's steps, three choices at most).
+- **Two questions for Johnny (G7):** un-park Agent F for the design (recommended; it is the
+  hard visual design F is kept for; C builds); and make Enhanced the default look
+  (recommended; otherwise he will not see it without a command).
+
+## 144. D's two designs accepted: the Scout Survey readout and the ghosts (2026-10-06)
+
+- **Agent D, on paper** (`findings/` only; mockups drawn over the running screens):
+  - **Follow-up 18, `findings/daynight_locked_design.md`:** for a locked world the strip is
+    replaced by a "SCOUT SURVEY" readout in a `--bg-2` well with `--signal` mono values
+    (ROTATION: LOCKED, DAYSIDE: PERMANENT, NIGHTSIDE: PERMANENT, SOLAR DAY: NONE, TWILIGHT
+    ZONE: YES when the dossier has that row, YEAR), each line naming the field it reads;
+    types on once in about 440 ms, never under reduced motion, no blinking cursor. Two
+    alternatives (with a half-lit disc; one line). `fu18_column.png` looked at: it sits in
+    the panel as if it had always been there.
+  - **Follow-up 21, `findings/plot_ghosts_design.md`:** a ghost is a thin dashed outline of
+    a body at the previewed arrival with a dotted arc of its orbit leading to it; the
+    destination's is amber with a tag ("A-II · 148-1105 05:15"); the flight line runs from
+    the ship to the destination's ghost; the estimate settles to the ghost in about three
+    rounds (`settleFlight`, "roughly" if eight do not agree); a ship under way runs the
+    straight line from where it left to where the destination will be; one new canvas prop,
+    `preview: { toKey, departs, arrives }`; no new command, token or stored field; a
+    five-step order (C, D, C, C, D). **Both accepted as written.**
+  - D had begun follow-up 15 before the prompt changed; its `fu15_*` shots are superseded
+    by the approved analysis (Agent E).
+- **Four choices D raised for Johnny, each standing at D's recommendation until he answers:**
+  the readout alone; no High or Low temperature beside DAYSIDE and NIGHTSIDE (the dossier
+  does not say which side each belongs to, so placing them would be a rule); ghosts for the
+  destination and any world that will visibly move; amber for the destination's ghost with
+  the selection lock at half strength while a preview is open.
+- **Issued:** `prompts/d_fixes_now.md` (items 1, 2, 3, 4, 5 and 8 of the queued fixes, none
+  in A's or E's files, and `settleFlight` pure and unwired; items 6, 7 and 9 and the wiring
+  wait for A's panes report), `prompts/c_ghosts.md` (after the readout: the two-date
+  distance, the ghosts and flight line from a `preview` prop that is C's only edit to
+  `OrbitCanvas.vue`, `placeShips` on the straight line, and the locked-world card in
+  `DayNight.vue`).
+
+## 145. T1.4 (B) accepted; T1.6 issued (2026-10-06)
+
+- **Agent B, T1.4:** `generateHex` takes an optional `policy`; absent, it returns what it
+  did; present, it returns `reconcileTree(envelope, policy).tree` after every other write,
+  with `changes` and `diagnostics` as non-enumerable properties so the canonical bytes are
+  the tree's alone; `buildSector` and `buildSectorSlice` pass it through, off by default; no
+  caller switched on. `tests/generation/generate_hex_reconcile.test.js` covers the Regina
+  flesh, top-down bare and society-expand inputs and a bottom-up-mode call, with the input
+  deep-frozen and `Math.random` and `Date.now` throwing. No schema changed: `TreeEnvelope`
+  (`packages/shared/src/schemas/hex.ts`) types `body` as an open record and no truth or API
+  schema describes world bodies. Diff read; the generation tests 56 pass. **Accepted.**
+  Noted by B: MgT2E `generateHex` goes through `buildOne` and never calls
+  `generateMgT2ESystemBottomUp`.
+- **Issued, `prompts/b_engine_t1_6.md`:** the derived build (`apps/api/src/jobs/
+  truth_build.ts` `deriveSector`) gains a named transform, `reconcile-environment`: each
+  source tree through `reconcileTree`, a new object only when bytes change, provenance
+  recorded beside the source's (source version, transform, policy digest, rules digest), the
+  matching-provenance safeguard extended by name and not relaxed, a report beside the truth
+  files, resume and a no-op second run, the result staged and never released by the job.
+  Proven on the local Worker with the black-box suite; **no production command**; B writes
+  out, without running, what a v6 shadow build would need.
+- The D report pasted with this one was the paper-designs report again (§144).
+
+## 146. Agent E's dossier split accepted; a rehearsed by-path push of E's and B's work (2026-10-06)
+
+- **Agent E, follow-up 22:** the system page is "Regina system" (a nameless hex keeps its
+  hex): the UWP ribbon as the page's only UWP and a link to the mainworld, a one-line
+  callout with the old map-badge words and the Mainworld button in place of the lead map,
+  the chart rows without the ten decoded ones, "100D jump times are on the mainworld page.",
+  the socioeconomics headline as a card, the stellar lines and the tree. The world page
+  alone decodes the UWP and shows the map; the mainworld's place line is "Mainworld of the
+  Regina system · 1910" and it gains the socioeconomics rows; the same trade-code and
+  travel-zone fallbacks; a test over every Spinward Marches system whose mainworld opens
+  that each of the ten rows is on the mainworld's page with the same text. A partial hex
+  and a mainworld that cannot be opened keep today's rows. `cardFor` returns `now` and
+  `survey` beside the unchanged `lines`; `BodyCard.vue` takes an optional `surveyElsewhere`
+  that nothing passes yet. Only its eight files changed. The report followed the brief's
+  format with the checklist. `fu22_system_column.png` looked at: a system page that reads as
+  a system. **Accepted.** E's two notes go to D: the design page's samples (item 10 of the
+  queued fixes) and the prop (item 9).
+- **The push, by path, rehearsed:** `findings/push/dossier_files.txt` (E's eight files and
+  B's T1.4: `packages/engines/src/index.js`, `packages/generation/src/index.ts`,
+  `tests/generation/generate_hex_reconcile.test.js`). Left out, in flight: A's panes
+  (`shell/pane.ts`, `views/MapView.vue`, `tests/web/pane.test.js`, more to come) and C's
+  readout (`OrbitRenderer.ts`, `ships.ts`, `distance.ts`, three tests). Scratch copy of
+  `HEAD` plus those eleven files: `vue-tsc` exit 0, build green, the whole suite 807 tests,
+  796 pass, 0 fail, 11 skipped.
+- **Issued, `prompts/e_climate_fields.md` (T1.5, the plan gave it to D; E has the files):**
+  the world page and the orbit card show "Climate" from `surfaceTempBand` and "Orbital
+  zone" from `orbitalTempBand` when a body carries them, say "not classified" when the
+  status is unknown and never fall back to the old `tempBand` then, show a body without
+  the new fields exactly as today, and treat liquid statuses honestly; one pure function
+  used by both; no Kelvin table in the web app; tests run `reconcileTree` over the dossier's
+  fixtures.
+
+## 147. Johnny: F designs the city lights; Enhanced is the default look; the dossier push has not run (2026-10-06)
+
+- **G7 answered:** Agent F has `prompts/city_lights_design.md` (paper only;
+  `findings/city_lights_design.md` was already on disk when checked); **Enhanced becomes
+  the default look**, a stored choice of Vanilla still honoured. The flip is Part 0 of
+  `prompts/c_ghosts.md` (`surface/preferences.ts` is C's), with a test for each case.
+- **The push called for in §146 had not run:** HEAD was still `729e74b`. The eleven files of
+  `findings/push/dossier_files.txt` were compared with the rehearsed copy: identical, so
+  the same command is still the rehearsed commit. E's next step (T1.5) edits the same
+  dossier files, so **the push must run before E starts**, or be rehearsed again.
+- **On disk, in flight:** A's panes (`views/`, `components/OmniBox.vue`, eight `workspace/`
+  files, `shell/pane.ts`), C's readout. D's fixes not begun.
+
+## 148. F's city-lights design accepted; C's readout accepted; the work re-dealt so C can build the lights (2026-10-06)
+
+- **Agent F, `findings/city_lights_design.md`** (paper only; two SVG concept boards and
+  their generator): the look is core → district → connecting thread → darkness: warm-white
+  cores with restrained neon at high tech (Rhylanor), amber clusters at low tech (Pavabid),
+  a few points in the dark where few live (Cantrel); soft local glow through thin cloud and
+  none through thick; lights rising smoothly across the twilight band; the day side's built
+  ground matching the night's lights. The approach: a **separately linked enhanced program**
+  under `surface/enhanced/` (vanilla byte-identical, its test untouched); an enhanced-only
+  cube C baked in the worker from the existing urban mask (RGB city emission, A core
+  strength), box-averaged mips; per-frame terms that sample the ground at ground spin and
+  cloud at cloud spin, with cloud transmission, a night ramp and a limb gate; glow from two
+  broader mip levels of C, clipped to the disc; `uCityHaze` and the halo's city colour gone;
+  the downport under the same gates; static light in the first version; a parameter ledger
+  that keeps every `cityLight` value; a cost ledger with byte counts and the 50 ms line;
+  **five build steps, each ending in named frames of the same three worlds** at 002-1105.
+  No choices for Johnny. **Accepted as written.** GPU cost is unmeasured, as F says.
+- **Agent C, the plotting readout:** an inverse of the picture's compression in
+  `orbit/distance.ts`; the hairline reads AU from the primary and, with a ship, real
+  distance from it; blank inside the star's hole, in line-up layouts and past the scale; a
+  pointer within 14 px of a body reads that body's own place. Rehearsed green (below).
+  **Accepted.** Noted by C: a ship mid-flight is measured from the inverse of its picture
+  point; true AU would need its real place passed in (it comes with the ghosts' straight
+  line).
+- **The work re-dealt,** since the lights are a five-step job in C's own code:
+  **C** takes Enhanced-as-default and the city lights (`prompts/c_city_lights_1.md`: Part 0
+  and step 1 only); **A**, after its panes report, draws the ghosts in the renderer
+  (`prompts/a_ghosts.md`, from D's note); **E**, after T1.5, builds the locked world's card
+  (`prompts/e_daynight_locked.md`; `DayNight.vue` and `daynight.ts` pass to E for that
+  step). `prompts/c_ghosts.md` is overwritten with a "superseded" note that points each
+  agent to its own file.
+- **The push, widened and rehearsed again:** `findings/push/dossier_readout_files.txt`, 17
+  files: E's eight, B's three (T1.4), C's six (the readout). The earlier eleven-file push
+  had still not run (HEAD `729e74b`). Scratch copy of `HEAD` plus the 17: `vue-tsc` exit 0,
+  build green, 809 tests, 798 pass, 0 fail, 11 skipped. A's panes (in flight in `App.vue`,
+  `router.ts`, `shell/`, `views/`, `components/`, `workspace/`) are not in it.
