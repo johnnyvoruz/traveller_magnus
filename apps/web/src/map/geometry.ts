@@ -57,6 +57,49 @@ export function sectorRect(sx: number, sy: number): Rect {
     };
 }
 
+/**
+ * getHexDistance from packages/engines/src/core/hex.js.
+ * Copied, not imported: the viewer bundle does not import engines.
+ * Odd-q offset to cube, then the longest cube axis.
+ */
+export function hexDistance(a: { q: number; r: number }, b: { q: number; r: number }): number {
+    const x1 = a.q;
+    const z1 = a.r - (a.q - (a.q & 1)) / 2;
+    const y1 = -x1 - z1;
+    const x2 = b.q;
+    const z2 = b.r - (b.q - (b.q & 1)) / 2;
+    const y2 = -x2 - z2;
+    return Math.max(Math.abs(x1 - x2), Math.abs(y1 - y2), Math.abs(z1 - z2));
+}
+
+function globalOf(
+    hexKey: string,
+    sectorAt: (slug: string) => { sx: number; sy: number } | null,
+): { q: number; r: number } | null {
+    const slash = hexKey.indexOf('/');
+    if (slash <= 0 || slash !== hexKey.lastIndexOf('/')) return null;
+    const local = parseHex(hexKey.slice(slash + 1));
+    if (!local) return null;
+    const sector = sectorAt(hexKey.slice(0, slash));
+    if (!sector) return null;
+    return toGlobal(sector.sx, sector.sy, local.col, local.row);
+}
+
+/**
+ * Parsecs between two chart hexes. One hex is one parsec.
+ * `sectorAt` reads the sector grid position; null when the sector is unknown.
+ */
+export function parsecsBetween(
+    hexKeyA: string,
+    hexKeyB: string,
+    sectorAt: (slug: string) => { sx: number; sy: number } | null,
+): number | null {
+    const a = globalOf(hexKeyA, sectorAt);
+    const b = globalOf(hexKeyB, sectorAt);
+    if (!a || !b) return null;
+    return hexDistance(a, b);
+}
+
 /** Twelve numbers, flat-top: point to the right, then counterclockwise. */
 export function hexCorners(x: number, y: number): number[] {
     const out: number[] = [];

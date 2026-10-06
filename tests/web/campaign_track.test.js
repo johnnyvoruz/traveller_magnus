@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { campaign, transport } from '../../apps/web/src/campaign/store.ts';
 import { flushCampaign, resetCampaign } from '../../apps/web/src/campaign/commit.ts';
-import { appendLeg, positionAt, removeLastLeg, whereAreWe } from '../../apps/web/src/campaign/track.ts';
+import { appendLeg, positionAt, removeLastLeg, trackOf, whereAreWe } from '../../apps/web/src/campaign/track.ts';
 
 const VESSEL = 'cr_11111111-1111-1111-1111-111111111111';
 const STAMP = '2026-10-05T00:00:00.000Z';
@@ -90,10 +90,26 @@ test('positionAt at four dates, and Where are we follows the track', () => {
 
     const records = { [VESSEL]: vessel({ status: { track: legs } }) };
     const party = { vesselId: VESSEL, anchor: null };
+    assert.equal(positionAt(legs, 5), null);
+    assert.deepEqual(whereAreWe(party, records, 5), REGINA);
     assert.deepEqual(whereAreWe(party, records, 25), positionAt(legs, 25));
     const anchored = { [VESSEL]: vessel() };
     assert.deepEqual(whereAreWe(party, anchored, 25), REGINA);
     assert.equal(whereAreWe({ vesselId: null, anchor: JEWELL }, {}, 25), JEWELL);
+});
+
+test('a ship whose only leg was removed is at its anchor', async () => {
+    const box = harness();
+    install(box);
+    assert.equal(appendLeg(VESSEL, leg(10, 20, 'docked')).ok, true);
+    await flushCampaign();
+    assert.equal(removeLastLeg(VESSEL).ok, true);
+    await flushCampaign();
+    const ship = campaign.records[VESSEL];
+    assert.deepEqual(ship.status.track, []);
+    assert.equal(trackOf(ship), null);
+    assert.equal(positionAt([], 15), null);
+    assert.deepEqual(whereAreWe({ vesselId: VESSEL, anchor: null }, campaign.records, 15), REGINA);
 });
 
 test('a leg out of time order is refused', () => {

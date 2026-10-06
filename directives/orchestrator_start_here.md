@@ -19,7 +19,10 @@ file true: replace it, do not append to it.
   `OrbitRenderer.ts`, `dossier/DayNight.vue`). **Agent D** is the high-effort UI agent and
   owns every screen and the look (`workspace/`, `orbit/*.vue`, `views/`). **Agent F** is a
   higher-effort agent on a limited budget (about half spent): parked; use only for hard
-  design, never for routine work.
+  design, never for routine work. **Agent E** (medium effort, added 2026-10-06) takes
+  bounded screen work that D's queue cannot reach; its prompt file carries its own identity
+  and file list, written so it collides with nobody (first: the dossier pages and the orbit
+  card, `prompts/e_dossier_identities.md`).
 
 ## 2. How Johnny wants to be worked with
 
@@ -125,14 +128,22 @@ file true: replace it, do not append to it.
 | K6d data | the vessel track (`status.track`, `campaign/track.ts`) | done, live |
 | K12 picture | `orbit/ships.ts`, designators, plotting overlay (C) | done, live, fed by nothing yet |
 | ship MVP 1 | ship list, real marks, status strip, plotting mode, Jump (fixed 168 until part 2) | **done, live** (`c6b6841`) |
-| **ship MVP 2 (D)** | the measuring pass: step 4 (the Track section) accepted §133; steps 1 to 3 and the Party tab from the track resumed in `prompts/d_ship_mvp_2_resume.md` | **issued §133** |
-| **small fixes (A)** | `prompts/a_travel_2.md`: `reactionFuelTons`, an empty track is no track, a dev proxy for the real chart (`VOYAGE_TRUTH_API`) | **issued §133**, after panes step 1 |
+| ship MVP 2 (D) | the measuring pass: the Track section, the rolled jump time, the flight estimate with both fuel lines, the Party tab and marker from the track | accepted §133 and §139, **local, not pushed**; the jump's parsecs line waits on A's hex distance |
+| **designs 18 and 21 (D)** | `prompts/d_design_15_18.md`: the Scouts terminal readout; **the holographic outlines of where bodies will be while plotting** (Johnny, §140); `findings/` only | **issued §139, changed §140 and §141** |
+| **follow-up 22 (E)** | `prompts/e_dossier_identities.md`: the system page and the world page get separate identities; the orbit card splits into "now" and "survey"; settles follow-up 15 | **issued §141** |
+| the index follows the track; hex distance (A) | `campaign/place.ts`, `map/geometry.ts` | accepted §141; in the push called for |
+| follow-up 21 build | ghosts, the flight line to the ghost, the estimate to the arrival place, the mark on the straight line (C, then D) | after D's design and C's third motion pass; recipe from D's note |
+| **hex distance (A)** | `prompts/a_hex_distance.md`: `hexDistance`, `parsecsBetween` in `map/geometry.ts` | **issued §139**, after the index step |
+| small fixes (A) | `reactionFuelTons`, an empty track is no track, a dev proxy for the real chart (`VOYAGE_TRUTH_API`) | accepted §136, local |
+| **the index follows the track (A)** | `prompts/a_index_tracks.md`: where a record is at the campaign date, through its ship's track | **issued §136** |
 | real distance (C) | `orbit/distance.ts`, `keepHeld` | accepted §132, local |
 | follow-up 14b (C) | a moon's real distance; Johnny's motion notes (hide reversed, slower, the wireframe wave, the solid teal sweep) | accepted §134; in the push called for; Johnny judges live |
 | panes step 1 (A) | `shell/pane.ts`, pure | accepted §134 |
 | engine corrections T1.3 (B) | liquids | accepted §134 with a correction |
 | **T1.3a (B)** | `prompts/b_engine_t1_3a.md`: only bodies with a label, a percentage or a code above 0 need a liquid validated | **issued §134** |
-| **jump bubble (C)** | `prompts/c_jump_bubble.md` | **issued §134** |
+| jump bubble (C) | `placeShips` reports a ship entering jump and arriving; the amber bubble out and in | accepted §138, local; rides with D's part 2 |
+| **follow-ups 14c and 20 (C)** | `prompts/c_toggle_motion_3.md`: Moons and Day/night radiate from the star, alpha fades on the teal, ring and late-tile cross-fades; the city lights diagnosed | **issued §135** (after the bubble if begun) |
+| **follow-up 19 (D)** | `prompts/d_orbit_small_fixes.md`: readout padding, "No ships here" on one line, the campaign mark out of the header | **issued §135**, after D reports part 2 |
 | ship MVP 2b | a leg end in open space, arrival on the 100D circle, the jump bubble (A, C, then D) | after the measuring pass; recipe not written |
 | follow-up 14 | layer toggle micro-animations in the renderer | accepted §129; pushed by path with `findings/push/fu14_canvas.patch` (verify with `git log -1`); Johnny judges speed and the ring live |
 | travel module | `campaign/travel.ts` from `rules/mgt2e_space_travel.json` | accepted §132, local |
@@ -155,9 +166,19 @@ file true: replace it, do not append to it.
 - **Agent A:** `prompts/a_travel_2.md` (reaction fuel, the empty track, the truth proxy);
   steps 2 to 4 of the panes swap when D leaves `views/`.
 - **Agent B:** `prompts/b_engine_t1_3a.md`, then T1.4 and T1.6 (recipes not written).
-- **A whole-tree push was called for in §134** (everything accepted to that point, with the
-  `manoeuvre` rules copy in front), to run before those pastes go out. Check `git log -1`
-  and `grep -c manoeuvre rules/mgt2e_space_travel.json` before believing it ran.
+- **Last push: `af1ff99`** (§135), green and live: the second motion pass, the Track
+  section, travel, distance, the pane helper, the reconciliation module, the `manoeuvre`
+  rules. In flight on disk since: D (part 2) and A (`a_travel_2.md`).
+- **The next push (§139):** when A (the index step) and B (T1.3a) are reported and
+  accepted, by path, everything except C's five in-flight files (`orbit/OrbitRenderer.ts`,
+  `orbit/ships.ts`, `orbit/theme.ts`, `tests/web/orbit_renderer.test.js`,
+  `tests/web/orbit_ships.test.js`), rehearsed in a scratch copy first. D holds on a
+  paper-only step until then; after it, D gets `d_orbit_small_fixes.md` (seven items).
+- **Nothing is open with Johnny on the ship MVP.** G5 was taken as the recommended option
+  (§140). He expects a supplement ("Cluster Truck") to change travel rules later: keep the
+  plotting rules easy and in `rules/`, so a change is an edit to a file.
+- `findings/rules_notes/mgt2e_drives.json` holds the drive tables he pasted, for vNext; it
+  is not in `rules/` and nothing reads it.
 - **The orchestrator owes two recipes:** part 2b ("where a ship is") for A, and T1.4 / T1.6
   for B.
 - **Both new rules files are drafts in `findings/rules_drafts/`** until Johnny copies them

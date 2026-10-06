@@ -2,10 +2,10 @@
  * The ships in this system (K12 points 1, 2; K6d): which of the campaign's vessels are here
  * at the view's date, the party's first; each as the track the picture places
  * (orbit/ships.ts placeShips); the words of the status strip for the selected one; and the
- * legs the strip writes (a flight whose duration is typed, a jump of the campaign's hours).
+ * legs the strip writes (a flight and a jump, each of the hours its preview holds).
  * Where a ship is comes from campaign/track.ts positionAt; nothing here is a travel rule.
  */
-import { jumpHoursOf, type CampaignAnchor, type CampaignRecord, type CampaignSettings, type TrackLeg } from '@voyage/shared';
+import type { CampaignAnchor, CampaignRecord, TrackLeg } from '@voyage/shared';
 import { positionAt, trackOf, type TrackFix } from '../campaign/track.ts';
 import { HOUR } from './clock.ts';
 import type { ShipTrack } from './ships.ts';
@@ -119,10 +119,10 @@ export function flightLeg(from: CampaignAnchor, to: CampaignAnchor, departs: num
     return { from, to, departs, arrives: departs + hours * HOUR, mode: 'flight', accelG };
 }
 
-/** A jump leg: from where the ship is to the destination system, arriving the campaign's jump hours later. */
-export function jumpLeg(from: CampaignAnchor, to: CampaignAnchor, departs: number, settings: Pick<CampaignSettings, 'jumpHours'> | null): Leg | null {
-    if (!from || !to || !Number.isFinite(departs)) return null;
-    return { from, to, departs, arrives: departs + jumpHoursOf(settings) * HOUR, mode: 'jump' };
+/** A jump leg: from where the ship is to the destination system, arriving the given hours later (the roll, or what the referee typed). */
+export function jumpLeg(from: CampaignAnchor, to: CampaignAnchor, departs: number, hours: number): Leg | null {
+    if (!from || !to || !Number.isFinite(departs) || !Number.isFinite(hours) || hours <= 0) return null;
+    return { from, to, departs, arrives: departs + hours * HOUR, mode: 'jump' };
 }
 
 /** Where a new leg starts: the anchor the ship is at; under way, the end of the leg it is on. */

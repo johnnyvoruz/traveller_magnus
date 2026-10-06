@@ -294,6 +294,11 @@ const PAIRS = [
     ['--text-muted', '--panel-raised', TEXT, 'track: a resting leg\'s mode, the leg number, the dates, a note (12 px)'],
     ['--text-1', '--panel-raised', TEXT, 'track: a leg\'s origin, its G (12 px mono)'],
     ['--signal', '--bg-1', TEXT, 'track: "Show n earlier legs" (12.5 px)'],
+    // The measuring pass (K12 part 2): the estimates on the previews, the party under way
+    ['--text-muted', ['--chrome-glass', '--orbit-space'], TEXT, 'K12 previews: an estimate line, the fuel lines, "set by hand" (12 px)'],
+    ['--text-1', ['--chrome-glass', '--orbit-space'], TEXT, 'K12 jump preview: the roll beside its field (12 px mono)'],
+    ['--text-0', '--bg-1', TEXT, 'party: "In flight …" where the place would stand (20 px)'],
+    ['--attention', '--bg-1', TEXT, 'party: "In jump to …" where the place would stand (20 px)'],
     ['--text-muted', '--chrome-bg', SMALL, 'omnibox group labels (10.5 px)'],
     ['--text-1', '--bg-2', SMALL, 'omnibox "Person here" and "Place here" (11 px bold)'],
     ['--signal', '--bg-2', SMALL, 'omnibox "Person here" highlighted (11 px bold)'],

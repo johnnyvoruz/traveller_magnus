@@ -73,7 +73,7 @@ test('changing the party gives a new party; the settings change carries the whol
 });
 
 test('the omnibox group: whole words from the index, the last word as a start of a name, five at most', () => {
-    rebuildCampaignIndex(RECORDS, {});
+    rebuildCampaignIndex(RECORDS, {}, null);
     assert.deepEqual(matchingRecordIds('voss', RECORDS), [VOSS.id]);
     assert.deepEqual(matchingRecordIds('vos', RECORDS), [VOSS.id], 'the last word may be the start of a name');
     assert.deepEqual(matchingRecordIds('far', RECORDS).sort(), [SHIP.id, BAY.id].sort(), 'the summary counts for a whole word');
@@ -88,7 +88,7 @@ test('the omnibox group: whole words from the index, the last word as a start of
     ]);
     assert.equal(group.total, 2);
     const many = byId(Array.from({ length: 8 }, (_, i) => make(10 + i, 'note', 'Note ' + i)));
-    rebuildCampaignIndex(many, {});
+    rebuildCampaignIndex(many, {}, null);
     const capped = campaignMatches('note', many);
     assert.equal(capped.items.length, 5);
     assert.equal(capped.total, 8);

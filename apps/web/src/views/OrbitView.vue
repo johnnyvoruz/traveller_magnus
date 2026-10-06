@@ -22,7 +22,11 @@ import {
 import ShipStrip from '../orbit/ShipStrip.vue';
 import type { ShipTrack } from '../orbit/ships.ts';
 import { appendLeg, removeLastLeg, trackOf } from '../campaign/track.ts';
-import { jumpHoursOf, type CampaignAnchor } from '@voyage/shared';
+import type { CampaignAnchor } from '@voyage/shared';
+import { rollJumpHours } from '../campaign/travel.ts';
+import { formatDistance } from '../design/units.ts';
+import { realDistanceKm } from '../orbit/distance.ts';
+import { fieldHours, flightFuelWords, flightHours, hoursWords, jumpEstimateWords, rollWords, type JumpRoll } from '../orbit/estimates.ts';
 import { beginPick, endPick, type PickedSystem } from '../workspace/pick.ts';
 import { placeSource } from '../workspace/place_source.ts';
 import Drawer from '../orbit/Drawer.vue';
@@ -30,7 +34,7 @@ import { escapeStep, pressCloses, toggleDrawer, type DrawerState } from '../orbi
 import DrawerTabs from '../orbit/DrawerTabs.vue';
 import HeaderClock from '../orbit/HeaderClock.vue';
 import LayerKey from '../orbit/LayerKey.vue';
-import { planSystem } from '../orbit/layout.ts';
+import { AU_KM, planSystem } from '../orbit/layout.ts';
 import LineupSearch from '../orbit/LineupSearch.vue';
 import OrbitPopover from '../orbit/OrbitPopover.vue';
 import { DEFAULT_LAYERS, type Layers, type Mode } from '../orbit/picture.ts';
@@ -441,22 +445,65 @@ function sampleShip(): void {
 // Plotting a flight (2b): the mode, the destination pressed on the picture, the leg previewed, then written.
 const plotting = ref(false);
 const destinationKey = ref<string | null>(null);
-const plotHours = ref(10);
+/** The hours the referee typed over the estimate; null while the field follows the estimate. */
+const plotTyped = ref<number | null>(null);
+/** The hours field holds the referee's own entry (it may be empty), not the estimate. */
+const plotOwn = ref(false);
 const plotAccel = ref(2);
 const canPlot = computed(() => canSetDate.value && ships.value.length > 0 && state.value === 'ready');
+
+/**
+ * The flight's real distance at its departure (orbit/distance.ts; never measured on the
+ * picture), in kilometres: null where a place is not known, or the ship starts elsewhere.
+ */
+const plotKm = computed((): number | null => {
+    const plan = searchPlan.value;
+    const from = legStart(shipPosition.value);
+    if (!plotting.value || !destinationKey.value || !plan || !from || from.kind !== 'system' || from.hexKey !== hexKey.value || !from.bodyKey) return null;
+    return realDistanceKm(plan, from.bodyKey, destinationKey.value, earliestDeparture(shipPosition.value, shownDays.value));
+});
+/** The estimated hours at the chosen G (campaign/travel.ts), or null with no distance to cross. */
+const plotEstimate = computed(() => flightHours(plotKm.value, plotAccel.value));
+/** What the hours field holds: the referee's entry once typed, else the estimate. */
+const plotHours = computed((): number | null => {
+    if (plotOwn.value) return plotTyped.value;
+    return plotEstimate.value === null ? null : fieldHours(plotEstimate.value);
+});
+const plotWords = computed(() => {
+    if (!plotting.value || !destinationKey.value) return null;
+    return {
+        distance: plotKm.value === null ? '' : formatDistance(plotKm.value, AU_KM),
+        time: plotEstimate.value === null ? '' : hoursWords(plotEstimate.value),
+        fuel: flightFuelWords(plotAccel.value, plotHours.value),
+    };
+});
 
 const preview = computed(() => {
     if (!plotting.value || !destinationKey.value || !shipRecord.value) return null;
     const chip = findChip(chips.value, destinationKey.value);
     const to = bodyAnchor(hexKey.value, destinationKey.value, chip ? chip.name : undefined);
     const departs = earliestDeparture(shipPosition.value, shownDays.value);
-    return { toName: chip ? chip.name : destinationKey.value, leg: flightLeg(legStart(shipPosition.value), to, departs, plotHours.value, plotAccel.value) };
+    return { toName: chip ? chip.name : destinationKey.value, leg: flightLeg(legStart(shipPosition.value), to, departs, plotHours.value ?? Number.NaN, plotAccel.value) };
 });
 
 function setPlotting(on: boolean): void {
     if (on && !canPlot.value) return;
     plotting.value = on;
-    if (!on) destinationKey.value = null;
+    if (!on) {
+        destinationKey.value = null;
+        useEstimate();
+    }
+}
+
+function typeHours(hours: number | null): void {
+    plotOwn.value = true;
+    plotTyped.value = hours;
+}
+
+/** The hours field goes back to following the estimate. */
+function useEstimate(): void {
+    plotOwn.value = false;
+    plotTyped.value = null;
 }
 
 function setDestination(key: string): void {
@@ -485,6 +532,40 @@ const lastOpened = computed((): PickedSystem | null => {
     return { slug: current.slug, hex: current.hex, name: current.name };
 });
 
+/**
+ * The jump's duration (K12 ruling 2): rolled when a destination is marked, shown with its
+ * dice, rolled again on request; the referee may type over it, and then it is theirs.
+ */
+const jumpRoll = ref<JumpRoll | null>(null);
+const jumpTyped = ref<number | null>(null);
+const jumpOwn = ref(false);
+const jumpHours = computed((): number | null => (jumpOwn.value ? jumpTyped.value : jumpRoll.value ? jumpRoll.value.hours : null));
+
+function rollJump(): void {
+    if (!jumpTarget.value) return;
+    jumpRoll.value = rollJumpHours();
+    jumpOwn.value = false;
+    jumpTyped.value = null;
+}
+
+function typeJumpHours(hours: number | null): void {
+    jumpOwn.value = true;
+    jumpTyped.value = hours;
+}
+
+watch(jumpTarget, (target) => {
+    if (target) rollJump();
+    else jumpRoll.value = null;
+}, { immediate: true });
+
+/**
+ * The hexes between this system and the destination, for the parsecs and the fuel. Null
+ * until the map's owner supplies a hex distance between two hex keys: the web app has none
+ * (the engines' getHexDistance may not reach the browser), and a second is not written here.
+ */
+const jumpParsecs = computed((): number | null => null);
+const jumpEstimate = computed(() => (jumpTarget.value && jumpParsecs.value !== null ? jumpEstimateWords(jumpParsecs.value) : ''));
+
 function pickOnMap(): void {
     jumpReturnPath.value = route.fullPath;
     beginPick((system) => {
@@ -507,7 +588,7 @@ function jump(): void {
     const target = jumpTarget.value;
     const id = selectedShip.value;
     const position = shipPosition.value;
-    if (!target || !id || !position || shipOutside.value !== true || !shipRecord.value) return;
+    if (!target || !id || !position || shipOutside.value !== true || !shipRecord.value || jumpHours.value === null) return;
     const now = shownDays.value;
     if ('fraction' in position) {
         if (position.leg.mode !== 'flight') return;
@@ -530,7 +611,7 @@ function jump(): void {
         }
     }
     const to: CampaignAnchor = { kind: 'system', hexKey: target.slug + '/' + target.hex, locationLabel: target.name };
-    const leg = jumpLeg(legStart(position), to, now, campaign.settings);
+    const leg = jumpLeg(legStart(position), to, now, jumpHours.value ?? Number.NaN);
     if (!leg) return;
     const result = appendLeg(id, leg);
     if (!result.ok) {
@@ -739,7 +820,9 @@ onMounted(() => {
         orbitCommand('orbit-fit', () => { if (stageEl.value) stageEl.value.fit(); }, ready),
         orbitCommand('orbit-plot', () => { setPlotting(!plotting.value); }, () => canPlot.value),
         orbitCommand('orbit-add-leg', addLeg, () => preview.value !== null && preview.value.leg !== null),
-        orbitCommand('orbit-jump', jump, () => shipOutside.value === true && jumpTarget.value !== null && !!shipStatus.value && shipStatus.value.state !== 'jump'),
+        orbitCommand('orbit-plot-estimate', useEstimate, () => plotting.value && plotOwn.value && plotEstimate.value !== null),
+        orbitCommand('orbit-jump-roll', rollJump, () => jumpTarget.value !== null),
+        orbitCommand('orbit-jump', jump, () => shipOutside.value === true && jumpTarget.value !== null && jumpHours.value !== null && !!shipStatus.value && shipStatus.value.state !== 'jump'),
         orbitCommand('orbit-lineup', () => { openDrawer('time', () => { setPop('lineup', true); }); }, () => searchPlan.value !== null),
         orbitCommand('orbit-picture', () => { openDrawer('view'); }),
         registerCommand({ id: 'home', name: 'Return to map', run: backToMap }),
@@ -931,14 +1014,21 @@ onBeforeUnmount(() => {
             :plotting="plotting"
             :preview="preview"
             :hours="plotHours"
+            :hours-typed="plotOwn"
+            :estimate="plotWords"
             :accel-g="plotAccel"
             :jump-target="jumpTarget"
             :last-opened="lastOpened"
-            :jump-hours="jumpHoursOf(campaign.settings)"
+            :jump-hours="jumpHours"
+            :jump-roll="jumpRoll && !jumpOwn ? rollWords(jumpRoll) : ''"
+            :jump-estimate="jumpEstimate"
             :narrow="narrow"
             @select="selectedShip = $event"
             @plot="setPlotting"
-            @hours="plotHours = $event"
+            @hours="typeHours"
+            @use-estimate="useEstimate"
+            @jump-hours="typeJumpHours"
+            @roll-again="rollJump"
             @accel="plotAccel = $event"
             @add-leg="addLeg"
             @cancel-preview="destinationKey = null"

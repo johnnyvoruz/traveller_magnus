@@ -58,7 +58,7 @@ function clearRows(): void {
     campaign.clock = null;
     campaign.seq = 0;
     campaign.universeId = null;
-    rebuildCampaignIndex(campaign.records, campaign.links);
+    rebuildCampaignIndex(campaign.records, campaign.links, null);
 }
 
 function signOutLocal(): void {
@@ -91,7 +91,7 @@ function replaceRows(
     campaign.settings = settings;
     campaign.clock = clock;
     campaign.seq = seq;
-    rebuildCampaignIndex(campaign.records, campaign.links);
+    rebuildCampaignIndex(campaign.records, campaign.links, clock ? clock.days : null);
 }
 
 function remember(id: string): void {

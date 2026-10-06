@@ -190,9 +190,6 @@ export const CampaignLink = z.object({
 }).strict();
 export type CampaignLink = z.infer<typeof CampaignLink>;
 
-/** A jump of more than this many hours is a mistake, not a setting (about a year). */
-const JUMP_HOURS_MAX = 24 * 400;
-
 export const CampaignSettings = z.object({
     party: z.object({
         vesselId: z.string().regex(RECORD_ID).nullable(),
@@ -203,18 +200,9 @@ export const CampaignSettings = z.object({
     calendar: z.object({
         dateFormat: z.enum(['imperial', 'long']),
     }).strict(),
-    /** How long a jump takes, in hours (K12; Johnny: 168). Absent in settings stored before it: see jumpHoursOf. */
-    jumpHours: z.number().int().min(1).max(JUMP_HOURS_MAX).optional(),
     rev: Rev,
 }).strict();
 export type CampaignSettings = z.infer<typeof CampaignSettings>;
-
-/** The jump duration a campaign uses when its settings do not say: the number Johnny gave. */
-export const DEFAULT_JUMP_HOURS = 168;
-
-export function jumpHoursOf(settings: Pick<CampaignSettings, 'jumpHours'> | null | undefined): number {
-    return settings && settings.jumpHours !== undefined ? settings.jumpHours : DEFAULT_JUMP_HOURS;
-}
 
 const Name = z.string().min(1).max(CAMPAIGN_LIMITS.name);
 const UniverseId = z.string().min(1).max(64).regex(/^[A-Za-z0-9_-]+$/);
@@ -328,14 +316,35 @@ export type CampaignChangesResult = z.infer<typeof CampaignChangesResult>;
 export type SystemAnchor = Extract<CampaignAnchor, { kind: 'system' }>;
 
 /**
+ * One step of a locate walk. `follow` is the anchor to use instead of the record's own.
+ * `done` ends the walk with that value. Absent means the record's own anchor.
+ */
+export type LocateAt<T> = (
+    id: string,
+    record: { anchor: CampaignAnchor },
+) => { follow: CampaignAnchor } | { done: T } | undefined;
+
+/**
  * Follows `kind: 'record'` anchors to a system anchor.
  * Eight hops land on the eighth record. A system there is returned. A further hop is not taken.
  * A cycle or a missing id returns null.
+ * `at`, when passed, may replace one record's anchor or end the walk. Callers that pass none
+ * keep the walk above.
  */
 export function locate(
     id: string,
     recordsById: Readonly<Record<string, { anchor: CampaignAnchor } | undefined>>,
-): SystemAnchor | null {
+): SystemAnchor | null;
+export function locate<T>(
+    id: string,
+    recordsById: Readonly<Record<string, { anchor: CampaignAnchor } | undefined>>,
+    at: LocateAt<T>,
+): SystemAnchor | T | null;
+export function locate(
+    id: string,
+    recordsById: Readonly<Record<string, { anchor: CampaignAnchor } | undefined>>,
+    at?: LocateAt<unknown>,
+): SystemAnchor | unknown | null {
     const seen = new Set<string>();
     let cursor = id;
     for (let hop = 0; hop <= 8; hop += 1) {
@@ -343,7 +352,9 @@ export function locate(
         seen.add(cursor);
         const record = recordsById[cursor];
         if (!record) return null;
-        const anchor = record.anchor;
+        const directed = at?.(cursor, record);
+        if (directed && 'done' in directed) return directed.done;
+        const anchor = directed && 'follow' in directed ? directed.follow : record.anchor;
         if (anchor == null) return null;
         if (anchor.kind === 'system') return anchor;
         if (hop === 8) return null;

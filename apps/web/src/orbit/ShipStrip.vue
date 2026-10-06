@@ -3,10 +3,12 @@
  * The ships in this system and the status strip (K12 points 1, 2b, 5; K6d; the K15 reserved
  * place at the picture's upper right). The strip reads the selected ship's state from its
  * track and ends in Jump; under it the ship list (the party's first), and, while a flight
- * is being plotted, the leg preview; while a jump is being marked, the destination row.
+ * is being plotted, the leg preview with its estimate (distance, time, fuel); while a jump
+ * is being marked, the jump preview (parsecs, fuel, the rolled hours). Every figure is an
+ * estimate and says so; nothing warns and nothing refuses (K12, the measuring pass).
  * It writes nothing itself: the view owns the clock, the plotting mode and the track.
  */
-import { computed } from 'vue';
+import { computed, nextTick, ref } from 'vue';
 import type { CampaignRecord } from '@voyage/shared';
 import Icon from '../design/Icon.vue';
 import { ACCEL_CHOICES, whenWords, type Leg, type ShipState } from './ship_list.ts';
@@ -22,34 +24,57 @@ const props = defineProps<{
     plotting: boolean;
     /** The flight being plotted: the destination's name and the leg as it would be written. */
     preview: { toName: string; leg: Leg | null } | null;
-    hours: number;
+    /** The flight's hours as the field holds them: the estimate, or what was typed; null when neither. */
+    hours: number | null;
+    /** The hours are the referee's, not the estimate. */
+    hoursTyped: boolean;
+    /** The flight's estimate in words; `distance` is empty where it is not known. */
+    estimate: { distance: string; time: string; fuel: { manoeuvre: string; reaction: string } | null } | null;
     accelG: number;
     /** The jump's marked destination, and the system the map last opened, offered as one. */
     jumpTarget: PickedSystem | null;
     lastOpened: PickedSystem | null;
-    /** The campaign's jump duration, for the words. */
-    jumpHours: number;
+    /** The jump's hours as the field holds them: the roll, or what was typed; null when emptied. */
+    jumpHours: number | null;
+    /** The roll in words ("148 + 23 = 171 h"); empty once the referee has typed over it. */
+    jumpRoll: string;
+    /** "2 parsecs · about 20 tons · 100-ton hull assumed"; empty while the parsecs are not known. */
+    jumpEstimate: string;
     narrow: boolean;
 }>();
 
 const emit = defineEmits<{
     select: [id: string];
     plot: [on: boolean];
-    hours: [hours: number];
+    hours: [hours: number | null];
+    useEstimate: [];
     accel: [g: number];
     addLeg: [];
     cancelPreview: [];
     pickOnMap: [];
     useLast: [];
     clearTarget: [];
+    jumpHours: [hours: number | null];
+    rollAgain: [];
     jump: [];
 }>();
 
-const canJump = computed(() => props.outside === true && props.jumpTarget !== null && props.status !== null && props.status.state !== 'jump');
+const canJump = computed(() => props.outside === true && props.jumpTarget !== null && props.jumpHours !== null && props.status !== null && props.status.state !== 'jump');
 
-function onHours(event: Event): void {
+/** A field's number, or null when it is empty or not a duration. */
+function typedHours(event: Event): number | null {
     const target = event.target;
-    if (target instanceof HTMLInputElement) emit('hours', Number(target.value));
+    if (!(target instanceof HTMLInputElement) || target.value.trim() === '') return null;
+    const value = Number(target.value);
+    return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+const plotHoursEl = ref<HTMLInputElement | null>(null);
+
+/** Back to the estimate: the control goes with the typed hours, so focus moves to the field it filled. */
+function useEstimate(): void {
+    emit('useEstimate');
+    void nextTick(() => { if (plotHoursEl.value) plotHoursEl.value.focus(); });
 }
 
 /** The reason Jump is not yet possible, in a word or two. */
@@ -58,6 +83,7 @@ const jumpNote = computed(() => {
     if (props.status.state === 'jump') return 'In jump';
     if (props.outside !== true) return 'Inside a 100D limit';
     if (!props.jumpTarget) return 'No destination marked';
+    if (props.jumpHours === null) return 'No duration';
     return '';
 });
 </script>
@@ -101,10 +127,21 @@ const jumpNote = computed(() => {
     <p v-else class="orbit-ships-none">No ships here</p>
 
     <!-- Marking a jump: where to. -->
-    <div v-if="status && ships.length && status.state !== 'jump'" class="orbit-jump-to" role="group" aria-label="Jump destination">
+    <div v-if="status && ships.length && status.state !== 'jump'" class="orbit-jump-to" :class="{ 'is-marked': jumpTarget }" role="group" aria-label="Jump destination">
       <template v-if="jumpTarget">
-        <span class="orbit-jump-to-label"><Icon name="location-dot" :size="11" />Jump to <b>{{ jumpTarget.name }}</b> {{ jumpTarget.hex }}</span>
-        <button type="button" class="orbit-btn is-icon orbit-jump-clear" aria-label="Clear the destination" title="Clear the destination" @click="emit('clearTarget')"><Icon name="xmark" :size="11" /></button>
+        <div class="orbit-jump-head">
+          <span class="orbit-jump-to-label"><Icon name="location-dot" :size="11" />Jump to <b>{{ jumpTarget.name }}</b> {{ jumpTarget.hex }}</span>
+          <button type="button" class="orbit-btn is-icon orbit-jump-clear" aria-label="Clear the destination" title="Clear the destination" @click="emit('clearTarget')"><Icon name="xmark" :size="11" /></button>
+        </div>
+        <p v-if="jumpEstimate" class="orbit-est">Estimate: {{ jumpEstimate }}</p>
+        <div class="orbit-jump-time">
+          <label class="orbit-field is-hours">
+            <span>Hours</span>
+            <input type="number" min="1" step="1" required :value="jumpHours ?? ''" title="How long the jump lasts: the roll, or type your own" @input="emit('jumpHours', typedHours($event))" @keydown.stop>
+          </label>
+          <span class="orbit-roll" :class="{ 'is-typed': !jumpRoll }">{{ jumpRoll || 'set by hand' }}</span>
+          <button type="button" class="orbit-btn orbit-roll-again" data-command="orbit-jump-roll" title="Roll the jump’s duration again" @click="emit('rollAgain')"><Icon name="rotate-left" :size="11" />Roll again</button>
+        </div>
       </template>
       <template v-else>
         <span class="orbit-jump-to-label">Destination:</span>
@@ -118,15 +155,35 @@ const jumpNote = computed(() => {
       <p v-if="!preview" class="orbit-plot-hint"><Icon name="arrows-to-dot" :size="11" />Plotting: press a body on the picture to set the destination.</p>
       <template v-else>
         <p class="orbit-plot-line"><b>{{ preview.toName }}</b><span v-if="preview.leg"> · departs {{ whenWords(preview.leg.departs) }} · arrives {{ whenWords(preview.leg.arrives) }}</span></p>
+        <p v-if="estimate" class="orbit-est">
+          <template v-if="estimate.distance">Estimate: {{ estimate.distance }}<template v-if="estimate.time"> · {{ estimate.time }} at {{ accelG }} G</template></template>
+          <template v-else>Distance unknown: type the hours.</template>
+        </p>
         <div class="orbit-plot-fields">
           <label class="orbit-field is-hours">
             <span>Hours</span>
-            <input type="number" min="1" step="1" :value="hours" title="The flight’s duration, typed (no rule yet)" @input="onHours" @keydown.stop>
+            <input ref="plotHoursEl" type="number" min="0.1" step="0.1" required :value="hours ?? ''" :title="hoursTyped ? 'The flight’s duration, as typed' : 'The flight’s duration: the estimate, or type your own'" @input="emit('hours', typedHours($event))" @keydown.stop>
           </label>
+          <button
+            type="button"
+            class="orbit-btn is-icon orbit-use-estimate"
+            :class="{ 'is-off': !hoursTyped || !estimate || !estimate.time }"
+            data-command="orbit-plot-estimate"
+            :disabled="!hoursTyped || !estimate || !estimate.time"
+            aria-label="Return to the estimate"
+            title="Return to the estimate"
+            @click="useEstimate"
+          >
+            <Icon name="rotate-left" :size="11" />
+          </button>
           <div class="orbit-accel" role="radiogroup" aria-label="Acceleration">
             <button v-for="g in ACCEL_CHOICES" :key="g" type="button" class="orbit-accel-g" :class="{ 'is-on': g === accelG }" role="radio" :aria-checked="g === accelG ? 'true' : 'false'" :title="g + ' G'" @click="emit('accel', g)">{{ g }}<small>G</small></button>
           </div>
         </div>
+        <p v-if="estimate && estimate.fuel" class="orbit-est is-fuel">
+          <span v-if="estimate.fuel.manoeuvre">{{ estimate.fuel.manoeuvre }}</span>
+          <span>{{ estimate.fuel.reaction }}</span>
+        </p>
         <div class="orbit-plot-acts">
           <button type="button" class="orbit-btn is-primary orbit-add-leg" data-command="orbit-add-leg" :disabled="!preview.leg" @click="emit('addLeg')"><Icon name="check" :size="12" />Add leg</button>
           <button type="button" class="orbit-btn orbit-plot-cancel" @click="emit('cancelPreview')">Cancel</button>
@@ -319,10 +376,78 @@ const jumpNote = computed(() => {
   height: 26px;
 }
 
+/* A destination marked: the row becomes the jump's preview, a small card like the plot's. */
+.orbit-jump-to.is-marked {
+  flex-direction: column;
+  align-items: stretch;
+  width: min(384px, 100%);
+}
+
+/* Narrow: "Roll again" goes under the field before anything is squeezed. */
+.orbit-jump-time {
+  flex-wrap: wrap;
+}
+
+.orbit-jump-head,
+.orbit-jump-time {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.orbit-jump-head .orbit-jump-to-label {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* An estimate: quiet words, the figures as an instrument reads them. */
+.orbit-est {
+  margin: 0;
+  color: var(--text-muted);
+  font: 400 12px/1.4 var(--font-text);
+  font-variant-numeric: var(--tabular);
+}
+
+.orbit-est.is-fuel {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The roll beside its field: the width is held at its longest, so "Roll again" never moves under the pointer. */
+.orbit-roll {
+  flex: 1 1 auto;
+  min-width: 16ch;
+  color: var(--text-1);
+  font: 600 12px/1 var(--font-code);
+  font-variant-numeric: var(--tabular);
+  white-space: nowrap;
+}
+
+.orbit-roll.is-typed {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.orbit-btn.orbit-roll-again {
+  height: 28px;
+  font-size: 12px;
+}
+
+/* Back to the estimate: its place is held while there is nothing to go back to. */
+.orbit-btn.orbit-use-estimate {
+  width: 28px;
+  height: 28px;
+}
+
+.orbit-btn.orbit-use-estimate.is-off {
+  visibility: hidden;
+}
+
+/* One width, whatever the words say: a figure that changes must not move the controls under the pointer. */
 .orbit-plot-card {
   flex-direction: column;
   align-items: stretch;
-  min-width: min(300px, 100%);
+  width: min(360px, 100%);
 }
 
 .orbit-plot-hint,
@@ -332,6 +457,11 @@ const jumpNote = computed(() => {
   gap: 6px;
   margin: 0;
   color: var(--text-muted);
+}
+
+/* The leg in words runs on as one sentence; the card's width is fixed, so it wraps as text does. */
+.orbit-plot-line {
+  display: block;
 }
 
 .orbit-plot-line b {

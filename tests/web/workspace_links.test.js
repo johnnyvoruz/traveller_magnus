@@ -96,7 +96,7 @@ test('a record page reads its connections from the index, worded from its side, 
         newLink(lid(5), VOSS.id, GONE.id, { kind: 'ally', outward: true, label: '' }, '', STAMP),
         { ...newLink(lid(6), VOSS.id, GUILD.id, { kind: 'member', outward: true, label: '' }, '', STAMP), deleted: true },
     ]);
-    rebuildCampaignIndex(records, links);
+    rebuildCampaignIndex(records, links, null);
     const words = (id) => connectionsOf(id, records, links).map((c) => c.label + ' · ' + c.other.name + (c.link.role ? ' · ' + c.link.role : ''));
     assert.deepEqual(words(VOSS.id), ['Commands · Far Margin · Master', 'Contact · Broker Hana Sol', 'Patron · Canister for Hefry']);
     assert.deepEqual(words(SHIP.id), ['Crew · Broker Hana Sol · Purser', 'Commanded by · Captain Idris Voss · Master']);

@@ -63,3 +63,20 @@ export function tempLines(text: string): string[] | null {
     if (!celsius.endsWith('\u00B0C') || !fahrenheit.endsWith('\u00B0F') || !kelvin.endsWith(' K')) return null;
     return [celsius, fahrenheit, kelvin];
 }
+
+/** At or beyond this share of an astronomical unit a distance is said in AU; nearer, in kilometres. */
+const AU_FROM = 0.1;
+
+/**
+ * A distance in space: `384,000 km` (three significant figures), or `1.52 AU` from a tenth of
+ * an AU out. `auKm` is the length of the AU the caller's own model uses (orbit/layout.ts
+ * AU_KM): this file holds no astronomy. Empty when the value is not a distance.
+ */
+export function formatDistance(km: unknown, auKm: number): string {
+    if (typeof km !== 'number' || !Number.isFinite(km) || km < 0) return '';
+    const au = km / auKm;
+    if (au >= AU_FROM) return (au >= 10 ? au.toFixed(1) : au.toFixed(2)) + ' AU';
+    if (km < 1000) return wholeDegrees(km) + ' km';
+    const scale = Math.pow(10, Math.floor(Math.log10(km)) - 2);
+    return wholeDegrees(Math.round(km / scale) * scale) + ' km';
+}

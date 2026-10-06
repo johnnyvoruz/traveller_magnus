@@ -3,8 +3,10 @@ import { test } from 'node:test';
 import rules from '../../packages/engines/src/generated/rules/mgt2e_space_travel.js';
 import {
     ASSUMED_HULL_TONS,
+    MANOEUVRE_DRIVE_USES_FUEL,
     jumpFuelTons,
     jumpParsecsCounted,
+    reactionFuelTons,
     rollJumpHours,
     transitSeconds,
 } from '../../apps/web/src/campaign/travel.ts';
@@ -75,6 +77,21 @@ test('jump fuel is the hull fraction times the hull times the counted parsecs', 
         jumpFuelTons(ASSUMED_HULL_TONS, below),
         ASSUMED_HULL_TONS * fraction * rules.jump.minimumParsecsCounted,
     );
+});
+
+test('reaction fuel is the hull fraction per thrust per hour, and a manoeuvre drive burns none', () => {
+    const fraction = rules.manoeuvre.reactionDriveHullFractionPerThrustPerHour;
+    assert.equal(MANOEUVRE_DRIVE_USES_FUEL, rules.manoeuvre.manoeuvreDriveFuel !== 'none');
+    assert.equal(MANOEUVRE_DRIVE_USES_FUEL, false);
+    assert.equal(fraction * 4, 0.1);
+    assert.equal(reactionFuelTons(200, 4, 1), 200 * 0.1);
+    assert.equal(reactionFuelTons(ASSUMED_HULL_TONS, 2, 10), ASSUMED_HULL_TONS * fraction * 2 * 10);
+    assert.equal(reactionFuelTons(ASSUMED_HULL_TONS, 2, 0), 0);
+    for (const value of [-1, Number.NaN, Number.POSITIVE_INFINITY]) {
+        assert.throws(() => reactionFuelTons(value, 1, 1));
+        assert.throws(() => reactionFuelTons(1, value, 1));
+        assert.throws(() => reactionFuelTons(1, 1, value));
+    }
 });
 
 test('a jump roll is the base hours plus the faces from the supplied source', () => {

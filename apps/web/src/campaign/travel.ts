@@ -15,6 +15,10 @@ type SpaceTravel = {
     travel: {
         metresPerSecond2PerG: number;
     };
+    manoeuvre: {
+        manoeuvreDriveFuel: string;
+        reactionDriveHullFractionPerThrustPerHour: number;
+    };
 };
 
 const rules = generated as SpaceTravel;
@@ -48,6 +52,24 @@ export function jumpParsecsCounted(parsecs: number): number {
 /** Fuel in tons: the hull fraction per counted parsec. */
 export function jumpFuelTons(hullTons: number, parsecs: number): number {
     return rules.jump.fuelHullFractionPerParsec * hullTons * jumpParsecsCounted(parsecs);
+}
+
+/** A manoeuvre drive burns fuel only when the rules say it does. "none" does not. */
+export const MANOEUVRE_DRIVE_USES_FUEL = rules.manoeuvre.manoeuvreDriveFuel !== 'none';
+
+function assertFiniteNonNegative(name: string, value: number): void {
+    if (!Number.isFinite(value) || value < 0) {
+        throw new Error(name + ' must be finite and not negative.');
+    }
+}
+
+/** Reaction-drive fuel in tons. Zero hours burns nothing. */
+export function reactionFuelTons(hullTons: number, thrust: number, hours: number): number {
+    assertFiniteNonNegative('Hull', hullTons);
+    assertFiniteNonNegative('Thrust', thrust);
+    assertFiniteNonNegative('Hours', hours);
+    if (hours === 0) return 0;
+    return rules.manoeuvre.reactionDriveHullFractionPerThrustPerHour * hullTons * thrust * hours;
 }
 
 /**

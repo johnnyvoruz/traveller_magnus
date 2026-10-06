@@ -513,6 +513,22 @@ for 10 hours that is 50 tons. Is that the sum, and should both lines show?
 flown × the hours of the flight. The numbers go into `rules/mgt2e_space_travel.json` (a
 `manoeuvre` block); `reactionFuelTons` in `campaign/travel.ts` computes it.
 
+### G5. The reaction-drive figure on a long flight
+
+The flight estimate's reaction-drive line uses the sum Johnny confirmed (2.5% × hull × G ×
+hours) and assumes thrust all the way. On a long flight it passes the ship's own tonnage: a
+35 AU flight at 2 G reads "about 1,424 tons" for the assumed 100-ton hull. Leave the number
+as it is; or, when it is more than the hull, say "more than the ship's tonnage" in place of
+the number; or hide the reaction line for the MVP?
+
+*Recommended: the second. Interim: the number is shown as computed.*
+
+**Answer (2026-10-06): not picked.** Johnny pasted the book's drive tables (kept in
+`findings/rules_notes/mgt2e_drives.json`, not in `rules/`) and said "let's just keep it easy
+for now, knowing we might change some stuff up" when he has the Cluster Truck supplement.
+The orchestrator took the recommended option: over the assumed hull the line reads "more
+than the ship's tonnage". He may change it.
+
 
 ---
 

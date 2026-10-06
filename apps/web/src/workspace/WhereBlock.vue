@@ -41,7 +41,9 @@ const props = withDefaults(defineProps<{
     changeLabel?: string;
     /** The party's block: the place in larger type. */
     big?: boolean;
-}>(), { vesselChoice: false, exclude: '', none: 'Nowhere in particular', heading: 'Where', changeLabel: 'Change', big: false });
+    /** Under way (the party's ship on a flight or in jump): these words stand where the place would, and the anchor is the system it is in. */
+    underway?: { state: 'flight' | 'jump'; text: string } | null;
+}>(), { vesselChoice: false, exclude: '', none: 'Nowhere in particular', heading: 'Where', changeLabel: 'Change', big: false, underway: null });
 
 const emit = defineEmits<{
     /** The anchor chosen: a system, a body, a vessel, or null. */
@@ -311,7 +313,11 @@ onBeforeUnmount(() => {
         <button v-if="host" type="button" class="where-host" :title="'Open ' + host.name" @click="openHost">
           <Icon name="shuttle-space" :size="13" />Aboard {{ host.name }}
         </button>
-        <template v-if="place">
+        <template v-if="underway">
+          <span class="where-place where-underway" :class="'is-' + underway.state"><Icon name="shuttle-space" :size="13" />{{ underway.text }}</span>
+          <span v-if="place" class="where-sys">{{ words[words.length - 1] }}</span>
+        </template>
+        <template v-else-if="place">
           <span v-if="host" class="where-sep" aria-hidden="true">›</span>
           <span class="where-place" :class="{ 'is-via': host }"><Icon v-if="!host" name="location-dot" :size="13" />{{ words[0] }}</span>
           <span v-if="words[1]" class="where-sys">{{ words[1] }}</span>
@@ -445,6 +451,12 @@ onBeforeUnmount(() => {
 .where-place .ui-icon {
   align-self: center;
   color: var(--signal);
+}
+
+/* Under way: the strip's words, in the strip's colours (teal on a flight, amber in jump). */
+.where-underway.is-jump,
+.where-underway.is-jump .ui-icon {
+  color: var(--attention);
 }
 
 .where-sys {

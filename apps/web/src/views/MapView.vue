@@ -4,7 +4,8 @@ import { useRoute, useRouter } from 'vue-router';
 import type { SectorHex, SectorIndex, TreeEnvelope, TruthManifest, TruthOverview } from '@voyage/shared';
 import { campaign } from '../campaign/store.ts';
 import { fit, flight, SHORT_HOP, toWorld, zoomAt, type Camera, type Viewport } from '../map/camera.ts';
-import { resolvePartyHex, standInSnapshot, type CampaignSnapshot } from '../map/campaign_layer.ts';
+import { standInSnapshot, type CampaignSnapshot } from '../map/campaign_layer.ts';
+import { campaignDays, partyMarker } from '../workspace/party_where.ts';
 import { formatHex, fromGlobal, hexAt, parseHex, SECTOR_ROWS } from '../map/geometry.ts';
 import { attachInput, type InputWhy } from '../map/input.ts';
 import { MapRenderer } from '../map/MapRenderer.ts';
@@ -796,7 +797,7 @@ onMounted(() => {
 });
 
 watch(
-    () => [campaign.status, campaign.seq, route.query.campaignStandIn] as const,
+    () => [campaign.status, campaign.seq, campaign.clock ? campaign.clock.days : null, route.query.campaignStandIn] as const,
     () => { applyCampaign(); },
 );
 
@@ -818,12 +819,10 @@ function devStandIn(): CampaignSnapshot | null {
 
 function snapshotFromStore(): CampaignSnapshot | null {
     if (campaign.status !== 'ready' || !campaign.settings) return null;
-    const party = campaign.settings.party;
-    const hexKey = resolvePartyHex(party, campaign.records);
-    const vessel = party.vesselId ? campaign.records[party.vesselId] : undefined;
-    const name = vessel && !vessel.deleted ? vessel.name : 'Party';
+    // The party stands where its ship's track puts it at the campaign date (party_where.ts).
+    const mark = partyMarker(campaign.settings.party, campaign.records, campaignDays(campaign.clock));
     return {
-        party: hexKey ? { name, hexKey, focused: false } : null,
+        party: mark ? { name: mark.name, hexKey: mark.hexKey, focused: false } : null,
         locate: locateLine(),
         reducedMotion: prefersReducedMotion(),
     };

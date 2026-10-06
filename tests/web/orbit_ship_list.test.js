@@ -80,7 +80,7 @@ test('the strip\'s words follow the leg the ship is on, or has last finished', (
     assert.equal(whenWords(D0 + 0.5 + 7 / (24 * 60)), '134-1105 12:07');
 });
 
-test('a flight leg from a typed duration and a chosen G; a jump leg of the campaign\'s hours', () => {
+test('a flight leg from a typed duration and a chosen G; a jump leg of the hours its preview holds', () => {
     assert.deepEqual(ACCEL_CHOICES, [1, 2, 3, 4, 5, 6]);
     const leg = flightLeg(regina, aiv, D0, 10, 2);
     assert.deepEqual(leg, { from: regina, to: aiv, departs: D0, arrives: D0 + 10 * HOUR, mode: 'flight', accelG: 2 });
@@ -88,9 +88,11 @@ test('a flight leg from a typed duration and a chosen G; a jump leg of the campa
     assert.equal(flightLeg(regina, aiv, D0, Number.NaN, 2), null);
     assert.equal(flightLeg(regina, aiv, D0, 10, 7), null);
     assert.equal(flightLeg(null, aiv, D0, 10, 2), null);
-    assert.deepEqual(jumpLeg(aiv, feri, D0, null), { from: aiv, to: feri, departs: D0, arrives: D0 + 168 * HOUR, mode: 'jump' });
-    assert.deepEqual(jumpLeg(aiv, feri, D0, { jumpHours: 24 }).arrives, D0 + 1);
-    assert.equal(jumpLeg(aiv, null, D0, null), null);
+    assert.deepEqual(jumpLeg(aiv, feri, D0, 171), { from: aiv, to: feri, departs: D0, arrives: D0 + 171 * HOUR, mode: 'jump' });
+    assert.deepEqual(jumpLeg(aiv, feri, D0, 24).arrives, D0 + 1);
+    assert.equal(jumpLeg(aiv, null, D0, 171), null);
+    assert.equal(jumpLeg(aiv, feri, D0, 0), null);
+    assert.equal(jumpLeg(aiv, feri, D0, Number.NaN), null);
     assert.deepEqual(bodyAnchor(HERE, 'w2', 'A-IV'), aiv);
     assert.deepEqual(bodyAnchor(HERE, 'w2'), { kind: 'system', hexKey: HERE, bodyKey: 'w2' });
 });

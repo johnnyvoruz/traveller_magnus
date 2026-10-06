@@ -521,7 +521,46 @@ only. D's five points for the orchestrator:
       only if quads do not read); Day/night is one solid teal sweep from the lit limb to the
       terminator that covers the exchange of flat and shaded discs; no frame over 50 ms,
       measured.
-  15. **The pinned body card beside the open panel (D decides):** when the orbit view's
+  14c. **Johnny on the second motion pass (2026-10-06; Agent C,
+      `prompts/c_toggle_motion_3.md`).** "Toggle animations are okay, let's have the moon and
+      day night also radiate from the orbiting sun, and then add some fades to the teal,
+      because it just POPS on, so some transparency fades would really put the ux/ui motion
+      design polish that I'm looking for, also ring planets textures sorta POP in and out,
+      if we can fade those as well it would be nice." Rulings: one front leaves each star
+      over `--t-long` and each body's sweep starts as it arrives, running away from the star
+      over `--t-slow`; every teal element eases its alpha in and out and the solid band has
+      soft edges; the rings' and shaded discs' exchanges cross-fade; a hide is the reverse.
+  19. **The orbit header and the strip (Johnny, 2026-10-06; Agent D,
+      `prompts/d_orbit_small_fixes.md`).** The date readout needs more right padding; "No
+      ships here" must not wrap (centred, or its place long enough); the campaign mark
+      button beside the readout "does nothing? let's remove": it leaves the header, the
+      command and key C stay, the way back sits in the Time drawer when the view is off the
+      campaign date. This supersedes choice D2 of the drawers design.
+  20. **City lights on the wrong layer (Johnny, 2026-10-06; Agent C, diagnosis first).** "A
+      visual texture bug on the planets that the city texture is on the atmosphere layer and
+      not the planet layer." C reports what is drawn where and whether the legacy app does
+      the same; a port difference is fixed to match the legacy; legacy behaviour goes back
+      to Johnny as a choice (vanilla is the legacy look by rule).
+  21. **Where the bodies will be (Johnny, 2026-10-06; D designs, then C and D build).** "When
+      plotting courses, we're going to want to know where the planets will be at that time,
+      so as the time advances, we're going to make like holographic outlines of the
+      celestial bodies of where they would be at that time so the user can plot their
+      location correctly." Kept easy (a supplement he does not have yet may change the
+      rules): ghosts of the bodies at the previewed arrival; the preview's flight line to
+      the destination's ghost; the estimate measured to where the destination will be; a
+      ship under way drawn on the straight line from where it left to where the destination
+      will be at arrival. Design in `findings/plot_ghosts_design.md`.
+  22. **The system page and the world page get separate identities (Johnny, 2026-10-06;
+      Agent E, `prompts/e_dossier_identities.md`).** An analysis he approved
+      (`findings/dossier_identities_analysis.md`): the two sidebars open with the same
+      screenful (title, surface map, UWP ribbon, ten decoded rows, jump times) and the pinned
+      orbit card repeats the survey. The system page becomes "Regina system": the ribbon as
+      a link, a one-line mainworld callout, the chart and polity rows, the socioeconomics
+      headline, the stellar lines and the tree. The world page is the only one that decodes
+      the UWP and shows the map, and the mainworld's gains the socioeconomics profile.
+      The pinned card shows what the picture is doing now and leaves the survey to the
+      sidebar when it is open on the same body. **This settles follow-up 15.**
+  15. **The pinned body card beside the open panel (D decides; settled by 22):** when the orbit view's
       docked body card and the dossier panel for the same body are both open, two views of
       one thing show at once. Johnny sees pros and cons. D reviews `manifesto.md` (one
       panel system; connected, the relation shows on both; graceful, nothing pops) and

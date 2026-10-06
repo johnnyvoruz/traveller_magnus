@@ -1,4 +1,5 @@
-import { locate, type CampaignAnchor, type CampaignLink, type CampaignRecord } from '@voyage/shared';
+import type { CampaignLink, CampaignRecord } from '@voyage/shared';
+import { placeAt } from './place.ts';
 
 const byType = new Map<string, string[]>();
 const byTag = new Map<string, string[]>();
@@ -27,10 +28,14 @@ function tokens(record: CampaignRecord): string[] {
     return [...found];
 }
 
-/** Rebuilds every bag from the live rows. Tombstones stay in the store and drop out of the bags. */
+/**
+ * Rebuilds every bag from the live rows. Tombstones stay in the store and drop out of the bags.
+ * `days` is the campaign date. Null means the campaign has no date, and tracks are not read.
+ */
 export function rebuildCampaignIndex(
     records: Readonly<Record<string, CampaignRecord>>,
     links: Readonly<Record<string, CampaignLink>>,
+    days: number | null,
 ): void {
     byType.clear();
     byTag.clear();
@@ -39,7 +44,7 @@ export function rebuildCampaignIndex(
     fromId.clear();
     toId.clear();
     words.clear();
-    const live: Record<string, { anchor: CampaignAnchor }> = {};
+    const live: Record<string, CampaignRecord> = {};
     for (const record of Object.values(records)) {
         if (record.deleted) continue;
         live[record.id] = record;
@@ -49,10 +54,10 @@ export function rebuildCampaignIndex(
         fill(byType, record.type, record.id);
         for (const tag of record.tags) fill(byTag, tag.toLowerCase(), record.id);
         for (const word of tokens(record)) fill(words, word, record.id);
-        const place = locate(record.id, live);
-        if (!place) continue;
-        fill(byHex, place.hexKey, record.id);
-        if (place.bodyKey) fill(byBody, place.bodyKey, record.id);
+        const place = placeAt(record.id, live, days);
+        if (!place || place.kind === 'jump') continue;
+        fill(byHex, place.anchor.hexKey, record.id);
+        if (place.anchor.bodyKey) fill(byBody, place.anchor.bodyKey, record.id);
     }
     for (const link of Object.values(links)) {
         if (link.deleted) continue;
@@ -70,7 +75,7 @@ export function recordsWithTag(tag: string): readonly string[] {
     return byTag.get(tag.toLowerCase()) ?? [];
 }
 
-/** Live records whose anchor chain resolves to this released hex, including someone aboard a vessel there. */
+/** Live records at this hex on the date the index was built, including someone aboard a vessel there. A record in jump is not here. */
 export function recordsAtHex(hexKey: string): readonly string[] {
     return byHex.get(hexKey) ?? [];
 }

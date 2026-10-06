@@ -2,20 +2,24 @@
 /**
  * The Party tab (design §5): "Where are we" first, then the ship, then who is aboard, then
  * members who are not. The party is the settings document's `party` (slice §0.6), written
- * as one change; the party's place is the ship's, or its own anchor when there is no ship.
+ * as one change; the party's place is the ship's at the campaign date, from its track when it
+ * has one (party_where.ts), or the party's own anchor when there is no ship.
  */
 import { computed, nextTick, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { CampaignAnchor, CampaignRecord } from '@voyage/shared';
 import { lastError, pending } from '../campaign/commit.ts';
 import { campaign } from '../campaign/store.ts';
+import { trackOf } from '../campaign/track.ts';
 import Icon from '../design/Icon.vue';
 import { saveParty, saveRecord } from './actions.ts';
 import { connectionsOf } from './links.ts';
 import { EMPTY_PARTY, isAboard, partyMembers, partyVessel, withAnchor, withMember, withoutMember, withVessel } from './party.ts';
+import { campaignDays, partyWhere } from './party_where.ts';
 import { placeWords, resolvePlace, liveById } from './places.ts';
 import RecordPicker from './RecordPicker.vue';
 import { typeInfo } from './records.ts';
+import { dockShipAt } from './track_actions.ts';
 import WhereBlock from './WhereBlock.vue';
 
 const props = defineProps<{
@@ -35,12 +39,25 @@ const members = computed(() => partyMembers(party.value, campaign.records));
 const empty = computed(() => !vessel.value && !members.value.length && !party.value.anchor);
 const saveState = computed((): 'saving' | 'failed' | 'saved' => (lastError.value ? 'failed' : pending.value ? 'saving' : 'saved'));
 
-/** The anchor "Where are we" edits: the ship's own when there is a ship, else the party's. */
-const anchor = computed((): CampaignAnchor => (vessel.value ? vessel.value.anchor : party.value.anchor));
+/** "Where are we" at the campaign date: a place, or the ship's leg under way with the system it is in. */
+const days = computed(() => campaignDays(campaign.clock));
+const where = computed(() => {
+    void campaign.seq;
+    return partyWhere(party.value, campaign.records, days.value);
+});
 
+/**
+ * "Move the party". A ship with a track is docked at the place at the campaign date (one
+ * leg; the track may refuse, and says why); a ship without one has its anchor written; with
+ * no ship the party's own anchor.
+ */
 function moved(next: CampaignAnchor): void {
-    if (vessel.value) saveRecord(vessel.value.id, { anchor: next });
-    else saveParty(withAnchor(party.value, next));
+    if (!vessel.value) {
+        saveParty(withAnchor(party.value, next));
+        return;
+    }
+    if (trackOf(vessel.value)) dockShipAt(vessel.value.id, next, days.value);
+    else saveRecord(vessel.value.id, { anchor: next });
 }
 
 type Row = { record: CampaignRecord; role: string; aboard: boolean; where: string };
@@ -160,7 +177,8 @@ watch(() => campaign.universeId, () => { choosing.value = ''; });
         <WhereBlock
           heading="Where are we"
           big
-          :anchor="anchor"
+          :anchor="where.anchor"
+          :underway="where.underway"
           locate-id="party"
           :read-only="readOnly"
           :none="vessel ? vessel.name + ' is nowhere in particular yet' : 'Nowhere in particular'"

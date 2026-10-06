@@ -3749,3 +3749,205 @@ Stop and report.
 - **Next for the orchestrator:** the recipe for part 2b ("where a ship is": a leg end in
   open space and on a 100-diameter circle, the index reading tracks) for A; T1.4 and T1.6
   for B from plan sections 7 and 8.
+
+## 135. Pushed `af1ff99`; Johnny on the second motion pass, the header, the strip, the city lights (2026-10-06)
+
+- **`af1ff99` verified:** GitHub run green; `campaign` equals `origin/campaign`; the
+  `manoeuvre` block is in `rules/mgt2e_space_travel.json`; Johnny has seen the new toggles
+  live. **In production:** the second motion pass, the Track section on a vessel's page,
+  `travel.ts`, `distance.ts` (moons included), `shell/pane.ts`, the reconciliation module
+  (called by nothing).
+- **On disk, in flight:** D on part 2 (`orbit/estimates.ts`, `ShipStrip.vue`, `ship_list.ts`,
+  `OrbitView.vue`, `MapView.vue`, `workspace/party_where.ts`, `PartyPanel.vue`,
+  `WhereBlock.vue`, `design/units.ts`, `packages/shared` with `jumpHours` coming out); A on
+  `a_travel_2.md` (`campaign/track.ts`, `travel.ts`, `vite.config.ts`). Nothing yet from B
+  (T1.3a) or C (the bubble).
+- **Johnny, after the push:** the toggles are "okay". Moons and Day/night should **radiate
+  from the star**; the teal **pops on** and needs transparency fades; ringed planets'
+  textures pop in and out and should fade; the date readout needs more right padding; "No
+  ships here" wraps; a calendar-star icon "does nothing? let's remove"; and the city texture
+  sits on the atmosphere layer, not the planet. Recorded as follow-ups 14c, 19 and 20 in
+  `slice_2_campaign.md`.
+- **The icon:** `calendar-star` at 12 px is used twice in `orbit/HeaderClock.vue`: inside the
+  date readout (which opens the Time drawer) and as the **campaign mark button**
+  (`orbit-go-campaign`), which does nothing while the view is on the campaign date and is a
+  bare icon in the narrow form. Read as the second. Ruling: the button leaves the header;
+  the command and key C stay; the way back is in the Time drawer when the view is off the
+  date. Said to Johnny in one line so he can correct the reading.
+- **The city lights** are in the vanilla GL path (`surface/vanilla/gl_shaders.ts`: a city
+  colour in the surface shade and a `uCityHaze` term in the air; `profile.ts` `cityLight`).
+  Vanilla is the legacy look by rule, so C diagnoses first: a port difference is fixed to
+  match the legacy; legacy behaviour comes back to Johnny as a choice.
+- **Issued:** `prompts/c_toggle_motion_3.md` (the radiating front, the alpha fades with a
+  test, the ring and late-tile cross-fades, the city-light diagnosis; after the bubble if C
+  has begun it, before it if not), `prompts/d_orbit_small_fixes.md` (after D reports part 2).
+
+## 136. A's three small things accepted; the index is to follow the track (2026-10-06)
+
+- **Agent A, `a_travel_2.md`:** `reactionFuelTons(hullTons, thrust, hours)` and
+  `MANOEUVRE_DRIVE_USES_FUEL` in `campaign/travel.ts`, read from the `manoeuvre` block, the
+  book's own example in the test; `trackOf` answers null for an empty list, so `whereAreWe`
+  falls back to the anchor, the stored `[]` left alone; `apps/web/vite.config.ts` proxies
+  `/api/truth` to `VOYAGE_TRUTH_API` when it is set, ahead of `/api`, dev server only,
+  proven byte for byte both ways. Diffs read. **Accepted.** The command is in
+  `agent_d_brief.md` §4: `VOYAGE_TRUTH_API=https://traveller.voyage npm run dev:web`
+  (PowerShell: `$env:VOYAGE_TRUTH_API='https://traveller.voyage'; npm run dev:web`). Any
+  agent that needs a local browser on the real chart uses it.
+- **Issued, `prompts/a_index_tracks.md`:** one pure answer to "where is this record at this
+  date" (the `locate` walk, with a vessel's track consulted at the campaign date: anchor,
+  in the system mid-flight, at no hex mid-jump, the anchor before the first departure and
+  with no campaign date); `whereAreWe` agrees; `rebuildCampaignIndex` takes the date. It is
+  the index half of part 2b. A reads D's `workspace/party_where.ts` and reports any
+  disagreement without editing it.
+- **Part 2b's other half, not yet written:** a leg that ends at a body's 100-diameter limit
+  (a named place on the body's ring, drawn in picture space on the ring the layout already
+  makes) rather than a free point in space. A free heliocentric point was weighed and set
+  aside: marks are placed in the picture's compressed space and moons are drawn at
+  exaggerated orbits, so a real-space point would not land where the mark was drawn. To be
+  written as a recipe for A (the anchor), C (placement and distance) and D (the destination
+  choice in the plot card) once part 2 and the bubble are in.
+
+## 137. B stops T1.3a on a real split: `hydro` is the chart's digit, `hydroCode` the generated one (2026-10-06)
+
+- **Agent B stopped as told** ("if two fields disagree about the code, stop"): on 337
+  Spinward Marches mainworlds `hydro` equals the hydro digit of `uwp` (the chart) and
+  `hydroCode` equals that of `uwpSecondary` (the generated physical world), for example
+  Esalin 1004: `hydro` 5, `hydroCode` 10, UWP C565673-8, secondary C5AA673-8. No other body
+  type splits. This is the plan's B01 / B03 in two stored fields, Tier 2's to repair.
+- **Ruling (an implementation detail, not a Traveller rule):** for "does this body have a
+  liquid to validate", either code above 0 counts, beside a label or a stored percentage.
+  Tier 1 picks no winner and changes neither field. It alters no Marches answer (every
+  split has a percentage and a label). `prompts/b_engine_t1_3a_resume.md`.
+- **For Johnny's eye, no decision needed:** the eleven mainworlds with no percentage, both
+  codes 0 and no label are Bowman 1132, Caliburn 1430, Zaibon 1825, Glisten 2036, Shionthy
+  2306, Rhise 2317, Gandr 2425, Macene 2612, Robin 2637, Gitosy 2918, Patinir 3207 (UWP
+  size, atmosphere and hydrographics all 0, but for Rhise's size 1): nothing to validate.
+  Two bodies typed Gas Giant carry the label "Water" and a percentage stored as
+  `{"$num":"NaN"}`: Condaria A-II-b (0528) and Dawnworld A-VI-a (1531); they keep a blocking
+  diagnostic and go on Tier 2's list as a generation defect.
+
+## 138. The jump bubble (C) accepted (2026-10-06)
+
+- **Agent C, `c_jump_bubble.md`:** `placeShips` no longer draws a jump as a line to a body
+  that is not on the picture. While a jump is in progress the system it leaves gets a mark
+  with `jump: 'out'` at the point it left, and the system it reaches gets `jump: 'in'` at
+  `to` until arrival; every other mark omits the field, so `ShipMark[]` and D's callers
+  compile unchanged. The renderer runs two thin `--attention` rings over `--t-long` out and
+  `--t-slow` in, on the frame the clock or a scrub crosses the moment, reversed on a scrub
+  back, never on first paint, snapping under reduced motion; `OrbitCanvas.vue` untouched.
+  The dev stand-in gains Outbound and Inbound on a 16-second loop. The `ships.ts` diff read;
+  `orbit_ships` and `orbit_renderer` tests 24 pass; the mid frames show the amber rings with
+  the designator fading inside. **Accepted.**
+- **One thing for D, added to `prompts/d_orbit_small_fixes.md` as item 4:** a mark with
+  `jump` set is the bubble's, not a ship on the picture; `shipStatus`, `ship_marks.ts` and
+  the plotting "from" must pass over it.
+- **No push:** the bubble rides with D's part 2 (D is mid-step in files that import
+  `ships.ts`). **Next, C:** `prompts/c_toggle_motion_3.md` (Johnny's notes on the second
+  motion pass, and the city-light diagnosis).
+
+## 139. D's part 2 accepted but for one line; no push until A and B report; D on paper meanwhile (2026-10-06)
+
+- **Agent D, part 2 (resumed):** step 1, the jump time rolled (`jumpHours` and its helpers out
+  of `packages/shared`; the preview's Hours field from `rollJumpHours`, the roll shown,
+  Roll again, typed over stays); step 3, the flight estimate (`orbit/estimates.ts`: distance
+  from `realDistanceKm`, time from `transitSeconds`, the hours field following the G chooser
+  and the destination until typed over, a control back to the estimate, "Manoeuvre drive:
+  no fuel" and "Reaction drive: about N tons · 100-ton hull assumed"); the Party tab from
+  the track (`workspace/party_where.ts`: the place, or the strip's words mid-flight and
+  mid-jump; the marker in the leg's system on a flight and, D's call, held at the system the
+  ship left with an "in jump" tag; "Move the party" writing a docked leg with Undo, refused
+  in plain words under way or with a later leg). Exercised on the real chart through a
+  driver that answered `/api/truth/versions` with production's. **Orchestrator:** D's five
+  test files 28 pass, check clean, build green; `k12b_plot_estimate.png` shows the card with
+  the estimate, the G chooser and both fuel lines, in the view's look. **Accepted.**
+  D's one failing test was C's renderer file in mid-edit.
+- **Stopped, correctly: step 2** (the jump's parsecs and fuel). The browser has no hex
+  distance: `apps/web` may not import the engines (the checker), and `map/geometry.ts` has
+  `toGlobal` but nothing that measures. `prompts/a_hex_distance.md`: `hexDistance` ported
+  with a parity test against the engines' `getHexDistance`, and `parsecsBetween` over two
+  hex keys and the overview's sector positions. One hex is one parsec, from Johnny's text.
+- **D's questions:** (1) the hex distance, above. (2) **For Johnny, G5:** the reaction-drive
+  line reads "about 1,424 tons" for a 100-ton hull on a 35 AU flight at 2 G, because the sum
+  charges thrust for every hour. (3) Before a track's first departure: the anchor, already
+  in A's index step. (4) "Move the party" does not write the anchor when there is a track;
+  A's index step makes "Records here" follow the track.
+- **Why no push now:** A's index step is in flight and has already edited
+  `packages/shared` (a `LocateAt` hook on `locate`), the same two files D's `jumpHours`
+  removal changed; B is in `reconcile_environment.js`; C is in the renderer. D's part 2
+  cannot be split out by path. **Plan:** D gets a paper-only step now
+  (`prompts/d_design_15_18.md`: the decision on the docked body card, and the Scouts
+  terminal readout for a locked world, to `findings/` only), so the tree holds still; when A
+  and B have reported and are accepted, **push by path everything except C's five files**
+  (`orbit/OrbitRenderer.ts`, `orbit/ships.ts`, `orbit/theme.ts`,
+  `tests/web/orbit_renderer.test.js`, `tests/web/orbit_ships.test.js`), rehearsed first.
+  Then D gets `prompts/d_orbit_small_fixes.md`, which has grown to seven items (the readout
+  padding, "No ships here", the campaign mark out, jump marks passed over, the plot card's
+  title wrapping inside a name, the vessel's Where block from the track, the parsecs line).
+- D confessed one read-only `git status`; told again, no git.
+
+## 140. Johnny: drive tables, "keep it easy", and holographic outlines of where the bodies will be (2026-10-06)
+
+- **Asked how the reaction-drive line should read when it passes the hull (G5), Johnny
+  pasted the book's drive text instead:** the Thrust Potential tables (reaction drive
+  ratings 0 to 16 at 1% to 32% of hull, TL 7 to 12; manoeuvre drive ratings 0 to 11 at 0.5%
+  to 11%, TL 9 to 17; jump ratings 1 to 9 at 2.5% to 22.5% of hull plus 5 tons, TL 9 to 18),
+  MCr2 and MCr0.2 per ton, thrust adding together, reaction thrust uncompensated. None of it
+  is a fuel rule and none is used by the MVP. Kept, so it is not lost, in
+  `findings/rules_notes/mgt2e_drives.json` (**not** in `rules/`, read by nothing; out of
+  `rules_drafts/` so a wildcard copy cannot carry it in). He added: a supplement he does not
+  have yet ("Cluster Truck") has more rules, "so let's just keep it easy for now, knowing we
+  might change some stuff up".
+- **G5, taken as the recommended option** since he did not pick: over the assumed hull, the
+  line reads "Reaction drive: more than the ship's tonnage". Item 8 of
+  `prompts/d_orbit_small_fixes.md`. Told to Johnny as the orchestrator's pick.
+- **New, follow-up 21:** "when plotting courses, we're going to want to know where the
+  planets will be at that time … holographic outlines of the celestial bodies of where they
+  would be at that time so the user can plot their location correctly." What follows from
+  it, kept easy: ghosts at the previewed arrival; the preview's flight line to the
+  destination's ghost; the estimate measured to where the destination will be (a few rounds
+  of the same sum); a ship under way drawn on the straight line from where it left to where
+  the destination will be. **D designs it first**, as section 3 of the paper step
+  (`prompts/d_design_15_18.md`, not yet handed out when this was added): the look, what C
+  must draw and be given, what D wires. C builds after its third motion pass.
+- Johnny asked, before sending prompts, whether any needed updating: those two were.
+
+## 141. A's index and hex distance accepted; a rehearsed by-path push; Agent E joins for the dossier pages (2026-10-06)
+
+- **Agent A, the index follows the track** (report not pasted; read from disk):
+  `campaign/place.ts` `placeAt(id, records, days)` walks through `locate` with a new
+  `LocateAt` hook in `packages/shared` (callers that pass none keep the old walk): a vessel
+  with a track is placed by `positionAt` at the date; a flight is in the departure system at
+  no body; a jump is in no hex and says its two ends and its arrival; before the first
+  departure, and with no date, the anchor. `rebuildCampaignIndex` takes the campaign date at
+  its three call sites. `whereAreWe` answers the anchor before the first departure.
+  **Agent A, hex distance:** `hexDistance` (the engines' arithmetic, copied as `hexAt` was;
+  3,485 pairs equal to `getHexDistance`) and `parsecsBetween(hexKeyA, hexKeyB, sectorAt)` in
+  `map/geometry.ts`; Regina 1910 to Feri 2005 is 5. A sector's grid position is `x`, `y` on
+  `SectorOverview`. Code read. **Both accepted.**
+- **The push, by path, rehearsed.** 32 files listed in `findings/push/part2_files.txt`: D's
+  part 2, A's `a_travel_2`, index and hex-distance work. Left out: C's in-flight
+  `orbit/OrbitRenderer.ts`, `ships.ts`, `theme.ts`, `tests/web/orbit_renderer.test.js`,
+  `orbit_ships.test.js`, `orbit_fixture.js`; B's in-flight `reconcile_environment.js` and
+  its test. **Rehearsal in a scratch copy** (`git archive HEAD` plus exactly those 32 files):
+  `vue-tsc` exit 0, `vite build` green, the whole suite 802 tests, 791 pass, 0 fail, 11
+  skipped. `git add --dry-run --pathspec-from-file` lists the 32. Command given to Johnny:
+  `git add --pathspec-from-file=findings/push/part2_files.txt; git add directives; commit;
+  push`. Safe while A is idle and D is on paper; E's files are not in the list.
+- **Agent E (medium effort), offered by Johnny** for an analysis he approved of the two
+  sidebars (kept verbatim in `findings/dossier_identities_analysis.md`): follow-up 22.
+  `prompts/e_dossier_identities.md` is self-contained: who E is, what to read (the manifesto
+  checklist, traps and report format of `agent_d_brief.md` §3, §5, §6), **a closed file list**
+  (`dossier/` but for C's `DayNight.vue`; `orbit/card.ts`; `orbit/BodyCard.vue`;
+  `tests/web/dossier_model.test.js` and new tests), everything else forbidden by name, no
+  git, and the build: the system page ("Regina system", the ribbon as a link, a mainworld
+  callout in place of the lead map, the chart rows without the ten decoded ones, the
+  socioeconomics headline, a pointer to the jump times), the world page (the only decoder;
+  the same fallbacks for trade codes and zone; the mainworld's gains the socioeconomics
+  profile; a "nothing lost" test), the card split into "now" and "survey" behind an optional
+  `surveyElsewhere` prop that E does not wire. Partial hexes and a mainworld that cannot be
+  opened keep today's rows.
+- **No collisions by construction:** D's paper step lost its item on follow-up 15 (settled
+  by the analysis) and D's queued fixes gained item 9 (pass `surveyElsewhere`); C's
+  `DayNight.vue` and D's `contrast.test.js` are closed to E, which reports any pair or prop
+  it needs. A's later panes step 3 touches where the panes are mounted, after E.
+- **A is free.** The part 2b recipe (a body's 100-diameter limit as a place) is still owed.

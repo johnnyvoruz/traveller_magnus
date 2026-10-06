@@ -79,7 +79,7 @@ function applyClock(row: ClockChange): void {
 }
 
 function reindex(): void {
-    rebuildCampaignIndex(campaign.records, campaign.links);
+    rebuildCampaignIndex(campaign.records, campaign.links, campaign.clock ? campaign.clock.days : null);
 }
 
 function queueHasRows(): boolean {

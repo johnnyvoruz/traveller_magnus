@@ -2,7 +2,9 @@
  * A vessel's track: dated legs on status.track.
  * Durations are whatever the legs say. Nothing here is a travel rule.
  * "Where are we" reads the track when the ship's record has one, and the
- * ship's anchor otherwise. The party screen calls this; it is not edited here.
+ * ship's anchor otherwise. Before the first departure the ship answers from
+ * its anchor. An empty track is no track. The stored list is left as it is.
+ * The party screen calls this; it is not edited here.
  */
 import {
     CAMPAIGN_LIMITS,
@@ -43,13 +45,14 @@ type PartyLike = {
     anchor: CampaignAnchor;
 };
 
-/** The track on a vessel, when status.track is a valid list. */
+/** The track on a vessel, when status.track is a non-empty valid list. An empty list is no track. */
 export function trackOf(record: CampaignRecord): Leg[] | null {
     const status = record.status;
     if (!status || typeof status !== 'object' || Array.isArray(status)) return null;
     if (!Object.prototype.hasOwnProperty.call(status, 'track')) return null;
     const parsed = Track.safeParse((status as { track: unknown }).track);
-    return parsed.success ? parsed.data : null;
+    if (!parsed.success || parsed.data.length === 0) return null;
+    return parsed.data;
 }
 
 /**
@@ -94,7 +97,8 @@ function liveVessel(party: PartyLike, records: Readonly<Record<string, CampaignR
 /**
  * "Where are we" at `days`.
  * The party's ship answers from its track when it has one.
- * Otherwise the ship's anchor, as now. With no ship, the party's own anchor.
+ * Before the first departure, and when the track is empty, the ship answers
+ * from its own anchor. With no ship, the party's own anchor.
  */
 export function whereAreWe(
     party: PartyLike,
@@ -104,8 +108,8 @@ export function whereAreWe(
     const vessel = liveVessel(party, records);
     if (!vessel) return party.anchor;
     const track = trackOf(vessel);
-    if (track) return positionAt(track, days);
-    return vessel.anchor;
+    if (!track) return vessel.anchor;
+    return positionAt(track, days) ?? vessel.anchor;
 }
 
 function openVessel(recordId: string): CampaignRecord | TrackResult {

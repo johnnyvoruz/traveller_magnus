@@ -69,6 +69,8 @@ export const ORBIT_COMMANDS: readonly OrbitCommand[] = [
     { id: 'orbit-fit', name: 'Fit the system', keys: ['f'], help: 'fit the whole system' },
     { id: 'orbit-plot', name: 'Plotting mode', keys: ['p', 'P'], help: 'plotting on or off: the hairlines follow the pointer; press a body to set the selected ship’s destination' },
     { id: 'orbit-add-leg', name: 'Add the plotted leg', keys: [], help: 'in the plot card: writes the flight to the ship’s track' },
+    { id: 'orbit-plot-estimate', name: 'Return the flight’s hours to the estimate', keys: [], help: 'in the plot card: the hours follow the estimate again' },
+    { id: 'orbit-jump-roll', name: 'Roll the jump’s duration again', keys: [], help: 'in the jump preview: a new roll for the hours' },
     { id: 'orbit-jump', name: 'Jump', keys: [], help: 'in the status strip: the selected ship jumps to the marked system, once outside every 100D limit' },
     { id: 'orbit-lineup', name: 'Line up the planets', keys: [], help: 'in the Time drawer: the next time the planets sit on one line' },
     { id: 'orbit-picture', name: 'Picture: scale and ring strength', keys: [], help: 'in the View drawer' },
