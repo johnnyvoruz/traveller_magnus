@@ -100,8 +100,8 @@ campaign layer over the truth map; own maps later. X sign-in only.
 | K14 | images on records: routes (B), browser encode and upload (A) | done, live; screens (D) after K6c |
 | deck plan light backdrop | a paper token for the viewer | Agent C, in flight |
 | K6c | clock screens, the date beside the search bar, the Rail | done, accepted §101, not yet pushed |
-| **K14 screens** | images on the record page, rows, results; gallery; lightbox | **Agent D, in flight** |
-| K15 | the orbit view as a showpiece: design, Johnny rules, build | next for D |
+| K14 screens | images on the record page, rows, results; gallery; lightbox | done, accepted §109, not yet pushed |
+| **K15** | the orbit view as a showpiece: design ruled (yes to all), build | **Agent D, in flight** |
 | K7, K8 | journal, timeline | outlines only |
 | K10, K11 | copy between campaigns; shared records in an account library | K11 needs a design |
 
@@ -109,15 +109,15 @@ campaign layer over the truth map; own maps later. X sign-in only.
 
 - **Agent D:** K15 part 2, the orbit showpiece build (Johnny ruled yes to D1 to D12), with
   Export / Import in the account menu and the K12 strip taking the selected ship from a
-  ship list. K14 image screens are built on disk, report not yet relayed. Then K13 part 3,
+  ship list. Then K13 part 3,
   K6d (the vessel track).
 - **Agent A:** free. Export (B) and import (A) exist without screens; D wires both into
   the account menu with K15 part 2.
 - **Agent B:** free. The export route is in (§104); Export / Import buttons come with D's K15.
 - **Agent C:** free. The starport tick is in (§108).
 - **Agent F:** parked. K13 parts 1 and 2 done (handoff 89 to 91); part 3 after K5f.
-- **Last push:** e5bb73d (import), green. Local: D's K14 screens (unreported), C's tick
-  (in flight).
+- **Last push:** 8dbcc36 (starport tick). Local and finished: D's K14 screens (§109),
+  pushable by path.
 
 ## 7. Decisions Johnny has made that shape the next steps
 

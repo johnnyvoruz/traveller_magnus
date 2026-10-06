@@ -2855,3 +2855,28 @@ API and Durable Object have against `data_model.md` and `api.md`).
 - Pushable by path: `apps/web/src/dossier`, `apps/web/src/orbit/daynight.ts`,
   `apps/web/src/views/DesignView.vue`, `tests/web/orbit_lineup.test.js`. D is mid-step in
   the rest of `orbit/` and `views/OrbitView.vue` (K15 part 2 has begun).
+
+## 109. Pushed `8dbcc36` (starport tick); K14 image screens accepted from D's notes (2026-10-05)
+
+- Johnny's last D report was the K15 design again; no separate K14 screens report exists.
+  **Accepted from the evidence:** `findings/campaign_workspace_design.md` §9i (D's build
+  notes), eleven `k14_` screenshots, `tests/web/workspace_images.test.js` passing, the
+  record page shot showing the primary image at its head with the caption in place.
+  Built: `workspace/images.ts`, `gallery_state.ts`, `RecordGallery.vue` (hero and strip),
+  `Lightbox.vue`; thumbnails on list, dossier and omnibox rows; add by chooser, drop,
+  paste; remove with undo; "Make primary"; captions; the saving mark's words through
+  "Reading", "Uploading", "Saving", "Saved"; refusals before reading (not an image, over
+  8 MB, stricter than the server's cap by D's own note); the WebP refusal shown as given.
+  Seen against the real local API with a 3,000 px PNG and a 2,000 × 3,000 JPEG.
+  Not done: a progress bar, reordering beyond "Make primary", alt text apart from the
+  caption. **K14 is complete.**
+- Pushable by path (`workspace/`, `components/OmniBox.vue`, `search/omni.ts`, the two
+  tests); `design/icons.ts`, `platform/browser.ts` (`saveBlob`), `orbit/`, `OrbitView.vue`
+  are D's K15 part 2 in flight and stay out.
+- **The GitHub run on `8dbcc36` failed (build):** the orchestrator's by-path command named
+  `views/DesignView.vue`, which D had already edited for K15 (imports of the uncommitted
+  `LayerKey.vue` and `LayoutCorner.vue`). `vue-tsc` fails on CI; the Workers Build does not
+  deploy; production stays on the previous build. **Fix issued:** `git restore --staged
+  --source=8dbcc36~1` on that file (index only, the working copy untouched) in the same
+  commit as the K14 screens. **Rule for by-path pushes:** before naming a file another
+  agent shares, `git diff` it for that agent's imports.
