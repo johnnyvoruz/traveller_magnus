@@ -31,6 +31,11 @@ export type ViewFrame = {
     retry: () => void;
     focusCampaign: () => void;
     focusSystem: () => void;
+    /**
+     * The view's own key handler. The panes are not inside the view's element, so a key
+     * pressed in a pane never bubbles to it: the host hands it over here.
+     */
+    key: (event: KeyboardEvent) => void;
 };
 
 let current: ViewFrame | null = null;

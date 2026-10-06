@@ -71,7 +71,19 @@ watch(live, (view) => {
     else root.style.removeProperty('--panel-top');
 }, { immediate: true });
 
+/** A pane that is still arriving (its chunk, its campaign, its reveal) is asked again for this many frames. */
+const FOCUS_FRAMES = 240;
+
+/** A key pressed inside a pane goes to the view, as it did when the panes were the view's children. */
+function onPaneKey(event: KeyboardEvent): void {
+    const view = live.value;
+    if (view && view.kind !== 'none') view.key(event);
+}
+
 function focusSoon(target: FocusTarget): void {
+    const wanted = shown.value;
+    const held = document.activeElement;
+    let frames = 0;
     const once = (): boolean => {
         if (target === 'rail-campaign') {
             const view = live.value;
@@ -91,12 +103,18 @@ function focusSoon(target: FocusTarget): void {
         if (!el) return false;
         if (target === 'dossier-heading') el.tabIndex = -1;
         el.focus();
-        return true;
+        // A pane mid-reveal can refuse focus: it has landed only when the element holds it.
+        return document.activeElement === el;
     };
-    void nextTick(() => {
-        if (once()) return;
-        requestAnimationFrame(() => { if (!once()) requestAnimationFrame(once); });
-    });
+    const again = (): void => {
+        // The pane changed again, or the visitor has put focus somewhere: this move is over.
+        // (Focus that fell to the body because its element went with the old pane is not a move.)
+        const now = document.activeElement;
+        if (shown.value !== wanted || (now !== held && now !== document.body)) return;
+        frames += 1;
+        if (!once() && frames < FOCUS_FRAMES) requestAnimationFrame(again);
+    };
+    void nextTick(again);
 }
 
 watch(shown, (next, prev) => {
@@ -123,6 +141,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
+  <div class="pane-host" @keydown="onPaneKey">
   <DossierPanel
     v-if="active && dossierLive && live && live.dossier"
     :orbit="live.dossier.orbit || undefined"
@@ -151,4 +170,12 @@ onBeforeUnmount(() => {
     @close="closePane"
     @width="onCampaignWidth"
   />
+  </div>
 </template>
+
+<style>
+/* No box of its own: the panes are placed against .app, as before. */
+.pane-host {
+  display: contents;
+}
+</style>

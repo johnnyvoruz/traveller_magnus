@@ -61,6 +61,17 @@ export function hoursWords(hours: number): string {
 }
 
 /**
+ * The reaction drive's line. When the sum comes to more than the assumed hull itself, the
+ * figure says nothing useful, and the line says so in its place (the orchestrator's pick,
+ * 2026-10-06; Johnny may change it). Nothing warns: it is still an estimate beside a field.
+ */
+export function reactionFuelWords(accelG: number, hours: number): string {
+    const tons = reactionFuelTons(ASSUMED_HULL_TONS, accelG, hours);
+    if (tons > ASSUMED_HULL_TONS) return 'Reaction drive: more than the ship’s tonnage';
+    return 'Reaction drive: about ' + tonsWords(tons) + ' tons · ' + ASSUMED_HULL_TONS + '-ton hull assumed';
+}
+
+/**
  * The flight's two fuel lines: the app does not know which drive a ship has. The manoeuvre
  * line is said only while rules/ says that drive burns none.
  */
@@ -68,6 +79,6 @@ export function flightFuelWords(accelG: number, hours: number | null): { manoeuv
     if (hours === null || !Number.isFinite(hours) || hours <= 0) return null;
     return {
         manoeuvre: MANOEUVRE_DRIVE_USES_FUEL ? '' : 'Manoeuvre drive: no fuel',
-        reaction: 'Reaction drive: about ' + tonsWords(reactionFuelTons(ASSUMED_HULL_TONS, accelG, hours)) + ' tons · ' + ASSUMED_HULL_TONS + '-ton hull assumed',
+        reaction: reactionFuelWords(accelG, hours),
     };
 }

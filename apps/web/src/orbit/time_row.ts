@@ -26,8 +26,20 @@ export function setButtonState(state: { canSetDate: boolean; onCampaignDate: boo
     return state.scrubbing ? 'held' : 'absent';
 }
 
+/**
+ * "Go to the campaign date" (the Time drawer; the header's mark is gone, Johnny 2026-10-06):
+ * there when the campaign has a date and the view is off it, and, like Set, holding its
+ * place unseen while a scrub crosses the day.
+ */
+export function goButtonState(state: { hasCampaignDate: boolean; onCampaignDate: boolean; scrubbing: boolean }): SetButtonState {
+    if (!state.hasCampaignDate) return 'absent';
+    if (!state.onCampaignDate) return 'shown';
+    return state.scrubbing ? 'held' : 'absent';
+}
+
 /** The row's width-affecting controls, as a signature: it must not change while a scrub is under way. */
 export function rowSignature(state: { canSetDate: boolean; onCampaignDate: boolean; scrubbing: boolean; hasCampaignDate: boolean }): string {
     const set = setButtonState(state);
-    return [state.hasCampaignDate ? 'mark' : '', set === 'absent' ? '' : 'set'].filter(Boolean).join('+');
+    const go = goButtonState(state);
+    return [go === 'absent' ? '' : 'go', set === 'absent' ? '' : 'set'].filter(Boolean).join('+');
 }

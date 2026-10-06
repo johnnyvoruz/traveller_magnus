@@ -29,7 +29,8 @@ defineEmits<{
 <template>
   <div class="doss" :data-span="span">
     <div class="doss-identity">
-      <div v-if="orbitLink && model.tree" class="doss-actions">
+      <!-- With no mainworld callout to sit in, Explore orbits keeps its own row. -->
+      <div v-if="orbitLink && model.tree && !model.holdLead" class="doss-actions">
         <button
           type="button"
           class="ui-btn is-primary"
@@ -54,9 +55,20 @@ defineEmits<{
           <span class="doss-callout-name">{{ model.callout.name }}</span>
           <span class="doss-callout-words">{{ model.callout.badge }}</span>
         </p>
-        <button v-if="model.mainworldKey" type="button" class="ui-btn" @click="$emit('open', model.mainworldKey)">
-          <Icon name="earth-americas" :size="13" />Mainworld
-        </button>
+        <div v-if="model.mainworldKey || (orbitLink && model.tree)" class="doss-callout-actions">
+          <button v-if="model.mainworldKey" type="button" class="ui-btn" @click="$emit('open', model.mainworldKey)">
+            <Icon name="earth-americas" :size="13" />Mainworld
+          </button>
+          <button
+            v-if="orbitLink && model.tree"
+            type="button"
+            class="ui-btn is-primary"
+            title="Open orbit view for this system (or double-click it on the map)"
+            @click="$emit('orbit')"
+          >
+            <Icon name="solar-system" :size="13" />Explore orbits
+          </button>
+        </div>
       </div>
       <StatRows :rows="model.rows" />
       <p v-if="model.holdLead && !model.journey" class="doss-journey-note" :aria-hidden="model.journeyNote ? undefined : 'true'">
@@ -134,6 +146,13 @@ defineEmits<{
 
 .doss-callout-words {
   color: var(--text-muted);
+}
+
+/* Mainworld, then Explore orbits to its right. The pair wraps as one, never apart. */
+.doss-callout-actions {
+  display: flex;
+  flex: none;
+  gap: var(--sp-2);
 }
 
 /* The jump-times sentence. The row is there before the words are, so the rows under it do not move. */

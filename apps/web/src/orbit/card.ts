@@ -5,6 +5,7 @@
  * rule. A ring has no card, as in the legacy view. Pure.
  */
 import { formatKelvin, formatTemp, kelvinNote } from '../design/units.ts';
+import { climateDisplay } from '../dossier/model.ts';
 import { formatDisplayNumber, formatTradeCodes, formatUwpDigit } from '../dossier/labels.ts';
 import { dayNightFor } from './daynight.ts';
 import type { HitKind, Plan, PlanMoon, PlanWorld } from './layout.ts';
@@ -111,7 +112,7 @@ function physical(lines: CardLine[], body: Bag, parent: Bag | null, angle: numbe
     today(lines, body, parent, angle);
 }
 
-/** §7.5: the band as the document names it, then the mean in both scales; the high and the low beneath. */
+/** The reconciled climate word when the body has one, otherwise the stored band. Temperatures stay as they are. */
 function temperature(lines: CardLine[], body: Bag): void {
     const mean = formatTemp(body.meanTempK);
     const high = formatTemp(body.highTempK);
@@ -121,7 +122,9 @@ function temperature(lines: CardLine[], body: Bag): void {
         lines.push({ label, value, gap: first, hint });
         first = false;
     };
-    if (typeof body.tempBand === 'string' && body.tempBand && mean) add('Climate', body.tempBand);
+    const climate = climateDisplay(body);
+    if (climate.climate != null) add('Climate', climate.climate);
+    else if (typeof body.tempBand === 'string' && body.tempBand && mean) add('Climate', body.tempBand);
     if (mean) add('Mean temp.', mean, kelvinNote('Mean', body.meanTempK));
     if (high) add('High temp.', high, kelvinNote('High', body.highTempK));
     if (low) add('Low temp.', low, kelvinNote('Low', body.lowTempK));

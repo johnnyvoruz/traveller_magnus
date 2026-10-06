@@ -10,7 +10,7 @@ import {
 } from '../../apps/web/src/campaign/travel.ts';
 import { formatDistance } from '../../apps/web/src/design/units.ts';
 import {
-    fieldHours, flightFuelWords, flightHours, hoursWords, jumpEstimateWords, rollWords, tonsWords,
+    fieldHours, flightFuelWords, flightHours, hoursWords, jumpEstimateWords, reactionFuelWords, rollWords, tonsWords,
 } from '../../apps/web/src/orbit/estimates.ts';
 
 const AU = 149597870.7;
@@ -56,6 +56,18 @@ test('a flight shows both drives: the manoeuvre line from the rule, the reaction
     assert.equal(fuel.reaction, 'Reaction drive: about ' + tonsWords(reactionFuelTons(ASSUMED_HULL_TONS, 2, 10)) + ' tons · ' + ASSUMED_HULL_TONS + '-ton hull assumed');
     assert.equal(tonsWords(1234.4), '1,234');
     assert.equal(tonsWords(2.54), '2.5');
+});
+
+test('the reaction line gives way to words when the sum passes the assumed hull', () => {
+    // The hours at which the sum is the hull itself, worked from the function: no rule number here.
+    const perHour = reactionFuelTons(ASSUMED_HULL_TONS, 2, 1);
+    const at = ASSUMED_HULL_TONS / perHour;
+    assert.equal(reactionFuelTons(ASSUMED_HULL_TONS, 2, at), ASSUMED_HULL_TONS, 'the sum is exact at this point');
+    const figure = (hours) => 'Reaction drive: about ' + tonsWords(reactionFuelTons(ASSUMED_HULL_TONS, 2, hours)) + ' tons · ' + ASSUMED_HULL_TONS + '-ton hull assumed';
+    assert.equal(reactionFuelWords(2, at * 0.99), figure(at * 0.99), 'just under: the figure');
+    assert.equal(reactionFuelWords(2, at), figure(at), 'at the hull: still the figure');
+    assert.equal(reactionFuelWords(2, at * 1.01), 'Reaction drive: more than the ship’s tonnage', 'just over: the words');
+    assert.equal(flightFuelWords(2, at * 1.01).reaction, 'Reaction drive: more than the ship’s tonnage');
 });
 
 test('a distance reads in kilometres near and in AU from a tenth of one', () => {

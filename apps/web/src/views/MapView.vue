@@ -932,6 +932,7 @@ function publishFrame(): void {
         retry: retryTree,
         focusCampaign: () => { if (railEl.value) railEl.value.focusCampaign(); },
         focusSystem: () => { if (railEl.value) railEl.value.focusSystem(); },
+        key: onMapKey,
         dossier: {
             slug: placed ? placed.slug : '',
             hex: placed ? placed.hex : '',

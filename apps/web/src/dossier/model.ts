@@ -218,6 +218,31 @@ export function rowFor(label: string, value: unknown, decimals?: number): StatRo
     return { label, text: String(value) };
 }
 
+const NOT_CLASSIFIED = 'not classified';
+
+function bandWord(value: unknown): string {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+        const rec = value as { status?: unknown; band?: unknown };
+        if (rec.status === 'known' && typeof rec.band === 'string' && rec.band.trim() !== '') return rec.band;
+    }
+    return NOT_CLASSIFIED;
+}
+
+/**
+ * Climate and orbital zone from the reconciled fields. Both are null when the body
+ * has neither field, and the screen keeps the stored temperature band. A present
+ * field is shown as its word, or as "not classified": the screen never classifies.
+ */
+export function climateDisplay(body: Record<string, unknown>): { climate: string | null; zone: string | null } {
+    const surface = Object.prototype.hasOwnProperty.call(body, 'surfaceTempBand');
+    const orbital = Object.prototype.hasOwnProperty.call(body, 'orbitalTempBand');
+    if (!surface && !orbital) return { climate: null, zone: null };
+    return {
+        climate: bandWord(surface ? body.surfaceTempBand : undefined),
+        zone: bandWord(orbital ? body.orbitalTempBand : undefined),
+    };
+}
+
 function rowsOf(specs: ([string, unknown] | [string, unknown, number])[]): StatRow[] {
     const rows: StatRow[] = [];
     for (const spec of specs) {
@@ -866,13 +891,20 @@ export function bodyModel(tree: TreeEnvelope, bodyKey: string): BodyModel | null
             ['Tidally locked', body.tidallyLocked === true ? true : null],
             ['Twilight zone', body.isTwilightZone === true ? true : null],
         ]);
+        const climate = climateDisplay(body);
+        const bandRows: ([string, unknown] | [string, unknown, number])[] = climate.climate == null && climate.zone == null
+            ? [['Temperature band', body.tempBand]]
+            : [
+                ['Climate', climate.climate],
+                ['Orbital zone', climate.zone],
+            ];
         const physical = section('Physical', [
             ['Mass (M⊕)', body.massEarths ?? body.mass, 3],
             ['Composition', body.composition],
             ['Atmospheric pressure (bar)', body.totalPressureBar ?? body.pressureBar, 2],
             ['High temperature', formatTempFull(body.highTempK)],
             ['Low temperature', formatTempFull(body.lowTempK)],
-            ['Temperature band', body.tempBand],
+            ...bandRows,
             ['Albedo', body.albedo, 2],
         ]);
         const life = section('Life & resources', [

@@ -4176,3 +4176,105 @@ Stop and report.
   `prompts/e_daynight_locked.md`.
 - **The push:** by path from `findings/push/panes_files.txt` (A's 18), with `directives`.
 - **Next, A:** `prompts/a_ghosts.md`.
+
+## 150. Pushed `1168503` (the panes swap) (2026-10-06)
+
+- `campaign` equals `origin/campaign` at `1168503`. On disk since: only E's T1.5
+  (`dossier/DossierOverview.vue`, `dossier/model.ts`, `orbit/card.ts`). Nothing yet from A
+  (ghosts), B (T1.6), C (city lights step 1) or D (the six fixes).
+- The B report pasted at this point was T1.4 again (accepted §145, pushed in `4c450c1`).
+  B's next is still `prompts/b_engine_t1_6.md`.
+- Johnny was asked for a one-minute signed-in look at the live panes; no word yet.
+
+## 151. D was handed the second prompt without the first; one combined step, the signed-in pass first (2026-10-06)
+
+- D received `d_after_panes.md` but never `d_fixes_now.md`, read the tree, saw none of the
+  first prompt's work, and stopped with a question of order. Correct.
+- **Ruling (orchestrator; Johnny may overrule):** both in one session with one report,
+  `prompts/d_combined.md`: (1) the signed-in pass over the live panes, stopping at once on
+  anything badly wrong; (2) the six fixes and `settleFlight`; (3) items 6, 7, 9, 10. The
+  first prompt's restriction on A's files is lifted (the panes are pushed). `OrbitCanvas.vue`
+  is touched by A (the `preview` prop) and by D (fix 4) at once: D re-reads before each edit
+  and lists its lines.
+
+## 152. Johnny: the live panes are fine signed in; D's visible fixes go first (2026-10-06)
+
+- **Johnny on the live site, signed in: "all fine"** for the campaign list and a record,
+  the Party tab, and Campaign pressed in the orbit view staying in orbit. The signed-in gap
+  of §149 is closed for the screens; the focus cases and the signed-in cold loads are still
+  unseen and stay in D's queue, last.
+- He sent a screenshot of the orbit header and strip as they are live (the readout's text
+  against its right edge, the calendar-star button, "No ships here" on two lines): not yet
+  built, because D never had that prompt. Asked, he said to flip the order.
+- **`prompts/d_visible_first.md` replaces the order of `d_combined.md`:** Part 1 is items
+  1, 2, 3, 5 and 8 of the queued fixes (everything he can see), then **stop and report so
+  it can be pushed**; Part 2, on a second paste, is item 4, `settleFlight`, items 6, 7, 9,
+  10 and what is left of the signed-in pass.
+
+## 153. T1.5 (E) accepted (2026-10-06)
+
+- **Agent E, `e_climate_fields.md`:** `climateDisplay(body)` in `dossier/model.ts`, used by
+  the world page's Physical section and by `orbit/card.ts`: with either new field present
+  the page shows "Climate" and "Orbital zone" (the body's own words, or "not classified")
+  and drops "Temperature band"; without them the page and the card are byte for byte what
+  they were. The dossier files show no liquid at all today, so nothing was added for
+  `liquidStatus`. A source scan in the test rejects a Kelvin threshold, the climate-band
+  module or an engines import in the dossier and the card. Its test file 3 groups pass;
+  the function read. **Accepted.** Not seen on a screen (no reconciled world is released,
+  and a fixture screen needs a file that is not E's).
+- **E's question, recorded for C:** `surface/profile.ts` has `tempBandFromKelvin`, and
+  `surface/identity.ts` falls back to it; the plan says no renderer threshold stands in for
+  the classifier. The surfaces must read `surfaceTempBand` when a body has it. To be issued
+  to C before a v6 is built, after the city lights' first steps.
+- **On disk, in flight:** D has begun the signed-in pass (it was handed `d_combined.md`
+  before the flip) and is fixing the panes: `shell/PanelHost.vue` (a key pressed inside a
+  pane now goes to the view, as before the move; focus asked again while a pane is still
+  arriving), `shell/frame.ts`, one line each in the views. `dossier/DossierOverview.vue`
+  carries an indentation-only change nobody reported; E is asked about it in its next
+  prompt.
+- **Next, E:** `prompts/e_daynight_locked.md` (the Scout Survey card, the orbit push that
+  drops the query, the stray indentation).
+
+## 154. Johnny's own edit: Explore orbits beside the Mainworld button (2026-10-06)
+
+- The "stray indentation" in `dossier/DossierOverview.vue` (§153) was **Johnny's own edit**:
+  he had moved the Explore orbits block into the mainworld callout. He then asked the
+  orchestrator directly to put the button to the right of the Mainworld button. Done by the
+  orchestrator, on his instruction, in that one file: the two buttons are a pair in
+  `.doss-callout-actions` (Mainworld, then Explore orbits; they wrap together, tokens
+  only), and the button keeps its old row at the top when there is no callout
+  (`!model.holdLead`: a partial hex, or a mainworld that cannot be opened), so no system
+  loses it. Check clean, `vue-tsc` exit 0, the dossier test passes. Not looked at in a
+  browser.
+- `prompts/e_daynight_locked.md` now tells E to leave that file's template alone (it had
+  been told to "put the block back").
+
+## 155. D's Part 1 accepted with two panes fixes; a patch-snapshot push, rehearsed (2026-10-06)
+
+- **Agent D, Part 1 of `d_visible_first.md`:** the readout's right gap 2.4 px → 9.4 px
+  (narrow) and 13.4 → 14.4 (wide), the fixed-width rule kept; "No ships here" on one line
+  at every width, right-aligned like the column it hangs in; the campaign mark button out
+  of the header, the readout's calendar icon teal on the campaign date and amber off it,
+  "Go to DDD-YYYY" in the Time drawer beside "Set as campaign date" only when off the date,
+  key C kept, the held scrub still moving nothing; the plot card's title on one line with
+  the dates beneath, the card one width for every destination; "Reaction drive: more than
+  the ship's tonnage" above the assumed hull, tested either side. Three contrast pairs;
+  17 `fu19_*` shots. **Two panes fixes found signed in:** keys pressed inside a pane did
+  nothing (the panes are no longer inside the view's element, so the keydown never reached
+  it; the frame now carries a key handler), and the list search was not focused when the
+  campaign first opened (the host gave up after two frames; it now asks until the element
+  holds focus). **The first was live.** `fu19_header_off_date.png` and
+  `fu19_no_ships_column.png` looked at. **Accepted.**
+- D's `npm test` had three failures, all in A's `orbit_distance` and `orbit_ships` tests
+  (A mid-ghosts); D's own 279 pass.
+- **The push is a snapshot.** A, B and E are all mid-step, E in the same folder, so the
+  sixteen finished files were captured as `findings/push/visible_fixes.patch` (`git diff
+  HEAD`): D's twelve, E's T1.5 three (`dossier/model.ts`, `orbit/card.ts`, its test), and
+  `dossier/DossierOverview.vue` (Johnny's and the orchestrator's). Staged with `git apply
+  --cached`, it is immune to edits made after it was taken. `--check` passes. **Rehearsed:**
+  `git archive HEAD` plus the patch: `vue-tsc` exit 0, build green, 818 tests, 807 pass,
+  0 fail, 11 skipped.
+- **D's question for Johnny:** amber for the readout's calendar icon off the campaign date
+  (as built; it matches the amber campaign tick), or muted off the date and teal only on it.
+- **Issued, `prompts/d_part2_go.md`:** Part 2 as written, plus the strip's status being cut
+  ("Docked at Regi…") with room to spare.

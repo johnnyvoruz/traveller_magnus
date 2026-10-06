@@ -876,6 +876,7 @@ function publishFrame(): void {
         retry,
         focusCampaign: () => { if (railEl.value) railEl.value.focusCampaign(); },
         focusSystem: () => { if (railEl.value) railEl.value.focusSystem(); },
+        key: onKey,
         dossier: {
             slug: slug.value,
             hex: hex.value,
@@ -976,7 +977,6 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
             :narrow="compact"
             @toggle="togglePlay"
             @date="drawer === 'time' ? closeDrawer() : openDrawer('time', () => { if (timeEl) timeEl.focusDate(); })"
-            @go-campaign="goCampaign"
           />
         </template>
         <template #tools>
@@ -996,6 +996,7 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
             :campaign-date="campaignDate"
             :on-campaign-date="onCampaignDate"
             :can-set-date="canSetDate"
+            @go-campaign="goCampaign"
             @set-campaign="setAsCampaignDate"
             @week="advanceWeek"
             @days="typedDays"

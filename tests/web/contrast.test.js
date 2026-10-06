@@ -299,6 +299,10 @@ const PAIRS = [
     ['--text-1', ['--chrome-glass', '--orbit-space'], TEXT, 'K12 jump preview: the roll beside its field (12 px mono)'],
     ['--text-0', '--bg-1', TEXT, 'party: "In flight …" where the place would stand (20 px)'],
     ['--attention', '--bg-1', TEXT, 'party: "In jump to …" where the place would stand (20 px)'],
+    // The orbit header's readout says where the view stands against the campaign date (follow-up 19)
+    ['--signal', '--bg-2', MARK, 'orbit readout: the calendar, the view on the campaign date'],
+    ['--attention', '--bg-2', MARK, 'orbit readout: the calendar, the view off the campaign date'],
+    ['--text-muted', ['--chrome-glass', '--orbit-space'], TEXT, 'K12 plot card: the dates under the destination (12 px)'],
     ['--text-muted', '--chrome-bg', SMALL, 'omnibox group labels (10.5 px)'],
     ['--text-1', '--bg-2', SMALL, 'omnibox "Person here" and "Place here" (11 px bold)'],
     ['--signal', '--bg-2', SMALL, 'omnibox "Person here" highlighted (11 px bold)'],

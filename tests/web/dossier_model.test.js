@@ -6,9 +6,10 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { formatUwpDigit } from '@voyage/engines';
 import { buildSector } from '@voyage/generation';
+import { environmentPolicy, reconcileTree } from '../../packages/engines/src/reconcile_environment.js';
 import { TRUTH_SEED, TRUTH_SETTINGS } from '../../tools/truth/settings.js';
 import { celsiusOf, fahrenheitOf, formatKelvin, formatTempFull, wholeDegrees } from '../../apps/web/src/design/units.ts';
-import { bodyKeys, bodyModel, mainworldProfile, overviewModel, pickSystem, rowFor } from '../../apps/web/src/dossier/model.ts';
+import { bodyKeys, bodyModel, climateDisplay, mainworldProfile, overviewModel, pickSystem, rowFor } from '../../apps/web/src/dossier/model.ts';
 import { cardFor } from '../../apps/web/src/orbit/card.ts';
 import { planSystem } from '../../apps/web/src/orbit/layout.ts';
 
@@ -320,6 +321,148 @@ test('Regina overview and Caesillian 0914 partial follow the inspector', async (
     assert.ok(gasCard.survey.some((line) => line.label === 'Diameter' || line.label === 'Mean temp.' || line.label === 'UWP'));
     assert.deepEqual(gasCard.now, gasCard.lines.filter((line) => line.group === 'now'));
 
+    const legacyPage = JSON.stringify(mainBody);
+    const legacyCard = JSON.stringify(mainCard);
+    assert.equal(JSON.stringify(bodyModel(tree, mainRow.key)), legacyPage);
+    assert.equal(JSON.stringify(cardFor(plan, mainRow.moon ? 'moon' : 'world', mainRow.key, 10)), legacyCard);
+    const legacyRows = physicalRows(mainBody);
+    assert.equal(rowText(legacyRows, 'Temperature band'), String(host.tempBand));
+    assert.equal(rowText(legacyRows, 'Climate'), null);
+    assert.equal(rowText(legacyRows, 'Orbital zone'), null);
+    const legacyClimate = mainCard.lines.find((line) => line.label === 'Climate');
+    assert.ok(legacyClimate);
+    assert.equal(legacyClimate.value, String(host.tempBand));
+    assert.equal(mainCard.lines.some((line) => line.label === 'Orbital zone'), false);
+    assert.equal(rowText(legacyRows, 'High temperature'), fullTemp(host.highTempK));
+    assert.equal(rowText(legacyRows, 'Low temperature'), fullTemp(host.lowTempK));
+
+    const reconciled = reconcileTree(structuredClone(tree), environmentPolicy);
+    const mainRec = hostOf(reconciled.tree);
+    assert.equal(mainRec.body.surfaceTempBand.status, 'known');
+    assert.equal(mainRec.body.orbitalTempBand.status, 'known');
+    assert.equal(mainRec.key, mainRow.key);
+    const knownPage = bodyModel(reconciled.tree, mainRec.key);
+    const knownRows = physicalRows(knownPage);
+    assert.equal(rowText(knownRows, 'Climate'), mainRec.body.surfaceTempBand.band);
+    assert.equal(rowText(knownRows, 'Orbital zone'), mainRec.body.orbitalTempBand.band);
+    assert.equal(rowText(knownRows, 'Temperature band'), null);
+    assert.equal(rowText(knownRows, 'High temperature'), fullTemp(host.highTempK));
+    assert.equal(rowText(knownRows, 'Low temperature'), fullTemp(host.lowTempK));
+    const knownCard = cardOf(reconciled.tree, mainRec);
+    const knownClimate = knownCard.lines.find((line) => line.label === 'Climate');
+    assert.ok(knownClimate);
+    assert.equal(knownClimate.value, mainRec.body.surfaceTempBand.band);
+    assert.equal(knownCard.lines.some((line) => line.label === 'Orbital zone'), false);
+    assert.equal(knownCard.lines.find((line) => line.label === 'Mean temp.').value, mainCard.lines.find((line) => line.label === 'Mean temp.').value);
+    assert.equal(knownCard.lines.find((line) => line.label === 'High temp.').value, mainCard.lines.find((line) => line.label === 'High temp.').value);
+    assert.equal(knownCard.lines.find((line) => line.label === 'Low temp.').value, mainCard.lines.find((line) => line.label === 'Low temp.').value);
+
+    const surfaceRec = reconcileTree(withHost(tree, (body) => {
+        body.meanTempK = null;
+        body.tempBand = 'NOT-A-BAND';
+    }).doc, environmentPolicy);
+    const surfaceHost = hostOf(surfaceRec.tree);
+    assert.equal(surfaceHost.body.surfaceTempBand.status, 'unknown');
+    assert.equal(surfaceHost.body.orbitalTempBand.status, 'known');
+    assert.equal(surfaceHost.body.tempBand, 'NOT-A-BAND');
+    const surfaceRows = physicalRows(bodyModel(surfaceRec.tree, surfaceHost.key));
+    assert.equal(rowText(surfaceRows, 'Climate'), 'not classified');
+    assert.equal(rowText(surfaceRows, 'Orbital zone'), surfaceHost.body.orbitalTempBand.band);
+    assert.equal(rowText(surfaceRows, 'Temperature band'), null);
+    assert.equal(rowText(surfaceRows, 'High temperature'), fullTemp(host.highTempK));
+    const surfaceCard = cardOf(surfaceRec.tree, surfaceHost);
+    assert.equal(surfaceCard.lines.find((line) => line.label === 'Climate').value, 'not classified');
+    assert.equal(surfaceCard.lines.some((line) => line.value === 'NOT-A-BAND'), false);
+
+    const orbitRec = reconcileTree(withHost(tree, (body, system) => {
+        delete body.orbitId;
+        delete body.worldHzco;
+        delete system.hzco;
+        body.tempBand = 'NOT-A-BAND';
+    }).doc, environmentPolicy);
+    const orbitHost = hostOf(orbitRec.tree);
+    assert.equal(orbitHost.body.orbitalTempBand.status, 'unknown');
+    assert.equal(orbitHost.body.surfaceTempBand.status, 'known');
+    assert.equal(orbitHost.body.tempBand, 'NOT-A-BAND');
+    const orbitRows = physicalRows(bodyModel(orbitRec.tree, orbitHost.key));
+    assert.equal(rowText(orbitRows, 'Climate'), orbitHost.body.surfaceTempBand.band);
+    assert.equal(rowText(orbitRows, 'Orbital zone'), 'not classified');
+    assert.equal(rowText(orbitRows, 'Temperature band'), null);
+    assert.notEqual(rowText(orbitRows, 'Climate'), 'NOT-A-BAND');
+    assert.notEqual(rowText(orbitRows, 'Orbital zone'), 'NOT-A-BAND');
+    const orbitCard = cardOf(orbitRec.tree, orbitHost);
+    assert.equal(orbitCard.lines.find((line) => line.label === 'Climate').value, orbitHost.body.surfaceTempBand.band);
+
+    const bothRec = reconcileTree(withHost(tree, (body, system) => {
+        body.meanTempK = null;
+        delete body.orbitId;
+        delete body.worldHzco;
+        delete system.hzco;
+        body.tempBand = 'NOT-A-BAND';
+    }).doc, environmentPolicy);
+    const bothHost = hostOf(bothRec.tree);
+    assert.equal(bothHost.body.surfaceTempBand.status, 'unknown');
+    assert.equal(bothHost.body.orbitalTempBand.status, 'unknown');
+    const bothRows = physicalRows(bodyModel(bothRec.tree, bothHost.key));
+    assert.equal(rowText(bothRows, 'Climate'), 'not classified');
+    assert.equal(rowText(bothRows, 'Orbital zone'), 'not classified');
+    assert.equal(rowText(bothRows, 'Temperature band'), null);
+    const bothCard = cardOf(bothRec.tree, bothHost);
+    assert.equal(bothCard.lines.find((line) => line.label === 'Climate').value, 'not classified');
+    assert.equal(bothCard.lines.some((line) => line.value === 'NOT-A-BAND'), false);
+
+    const water = environmentPolicy.liquids.find((row) => row.name === environmentPolicy.liquid.q3.ordinarySubstance);
+    assert.ok(water);
+    const step = liquidStep(environmentPolicy.liquids);
+    const ordinary = ordinaryAtmosphere(environmentPolicy);
+    const vacuum = environmentPolicy.liquid.q3.vacuumAtmospheres[0];
+    const ice = environmentPolicy.liquid.q3.iceLabel;
+    const unknownLabel = environmentPolicy.liquid.q3.unknownLabel;
+    const midpoint = (water.mp + water.bp) / 2;
+    const liquidCases = [
+        { name: 'none', fields: { hydroPercent: 0, liquidType: unknownLabel, atmCode: ordinary, meanTempK: midpoint, lowTempK: midpoint, highTempK: midpoint }, status: 'none' },
+        { name: 'none-ice', fields: { hydroPercent: 0, liquidType: ice, atmCode: vacuum, meanTempK: midpoint, highTempK: midpoint }, status: 'none' },
+        { name: 'unknown', fields: { hydroPercent: Number.NaN, liquidType: water.name, atmCode: ordinary, meanTempK: midpoint }, status: 'unknown', forbid: [water.name] },
+        { name: 'unresolved', wipe: ['atmCode'], fields: { liquidType: water.name, hydroPercent: 40, meanTempK: midpoint }, status: 'unresolved', forbid: [water.name, 'unresolved'] },
+        { name: 'known-solid', fields: { liquidType: ice, hydroPercent: 20, atmCode: ordinary, meanTempK: water.mp - step, lowTempK: water.mp - step, highTempK: water.mp - step }, status: 'known', phase: 'solid', substance: water.name },
+        { name: 'known-notes', fields: { liquidType: water.name, hydroPercent: 40, atmCode: ordinary, meanTempK: midpoint, lowTempK: water.mp - step, highTempK: midpoint }, status: 'known', substance: water.name },
+    ];
+    for (const item of liquidCases) {
+        const made = withHost(tree, (body) => {
+            body.tempBand = 'NOT-A-BAND';
+            for (const key of item.wipe || []) delete body[key];
+            Object.assign(body, item.fields);
+        });
+        const result = reconcileTree(made.doc, environmentPolicy);
+        const found = hostOf(result.tree);
+        assert.equal(found.body.liquidStatus.status, item.status, item.name);
+        if (item.phase) assert.equal(found.body.liquidStatus.phase, item.phase, item.name);
+        if (item.substance) assert.equal(found.body.liquidStatus.substance, item.substance, item.name);
+        const page = bodyModel(result.tree, found.key);
+        const card = cardOf(result.tree, found);
+        const rows = physicalRows(page);
+        assert.equal(rowText(rows, 'Climate'), found.body.surfaceTempBand.status === 'known' ? found.body.surfaceTempBand.band : 'not classified', item.name);
+        assert.equal(rowText(rows, 'Orbital zone'), found.body.orbitalTempBand.status === 'known' ? found.body.orbitalTempBand.band : 'not classified', item.name);
+        assert.equal(rowText(rows, 'Temperature band'), null, item.name);
+        assert.notEqual(rowText(rows, 'Climate'), 'NOT-A-BAND', item.name);
+        assert.equal(card.lines.find((line) => line.label === 'Climate').value, rowText(rows, 'Climate'), item.name);
+        const phase = found.body.liquidStatus.phase;
+        const phaseWords = typeof phase === 'string' ? [phase] : phase && typeof phase === 'object' ? Object.values(phase) : [];
+        const forbid = ['unresolved', 'none', item.substance, found.body.liquidType].concat(item.forbid || [], phaseWords).filter((word) => typeof word === 'string' && word !== '');
+        assertNoLiquid(rows, card.lines, forbid, item.name);
+        if (item.fields.highTempK != null) assert.equal(rowText(rows, 'High temperature'), fullTemp(item.fields.highTempK), item.name);
+        if (item.fields.lowTempK != null) assert.equal(rowText(rows, 'Low temperature'), fullTemp(item.fields.lowTempK), item.name);
+    }
+    let bare = null;
+    walkBodies(pickSystem(reconciled.tree.body), (body, key, moon) => {
+        if (!bare && body.liquidStatus === undefined && body.surfaceTempBand && body.type !== 'Empty') bare = { body, key, moon };
+    });
+    assert.ok(bare);
+    const barePage = bodyModel(reconciled.tree, bare.key);
+    const bareCard = cardOf(reconciled.tree, bare);
+    assert.equal(bare.body.liquidStatus, undefined);
+    assertNoLiquid(physicalRows(barePage), bareCard ? bareCard.lines : [], [], 'no-liquid-field');
+
     const caes = await buildSector({
         slug: 'Caesillian',
         tsv: fs.readFileSync(path.join(ROOT, 'universe/raw/Caesillian.tsv'), 'utf8'),
@@ -351,4 +494,126 @@ test('Regina overview and Caesillian 0914 partial follow the inspector', async (
     const chartLabels = new Set(['Trade codes', 'Travel zone', 'Allegiance', 'Bases', 'PBG']);
     for (const row of partialModel.rows) assert.ok(chartLabels.has(row.label), row.label);
     assert.equal(partialModel.rows.some((row) => row.label === 'Starport'), false);
+});
+
+function walkBodies(system, visit) {
+    (system.worlds || []).forEach((world, index) => {
+        visit(world, 'w' + index, false);
+        (world.moons || []).forEach((moon, moonIndex) => visit(moon, 'w' + index + 'm' + moonIndex, true));
+    });
+}
+
+function hostOf(doc) {
+    const system = pickSystem(doc.body);
+    let found = null;
+    walkBodies(system, (body, key, moon) => {
+        if (!found && body.type === 'Mainworld') found = { body, key, moon, system };
+    });
+    assert.ok(found);
+    return found;
+}
+
+function withHost(source, mutate) {
+    const doc = structuredClone(source);
+    const host = hostOf(doc);
+    mutate(host.body, host.system);
+    return { doc, key: host.key, moon: host.moon };
+}
+
+function physicalRows(page) {
+    const section = page.sideSections.find((item) => item.heading === 'Physical');
+    return section ? section.rows : [];
+}
+
+function rowText(rows, label) {
+    const row = rows.find((item) => item.label === label);
+    return row ? row.text : null;
+}
+
+function cardOf(doc, found) {
+    const planned = planSystem(pickSystem(doc.body), 'Spinward_Marches/1910');
+    return cardFor(planned, found.moon ? 'moon' : 'world', found.key, 10);
+}
+
+function assertNoLiquid(rows, lines, words, name) {
+    for (const row of rows) assert.equal(/liquid|substance|phase/i.test(row.label), false, name + ' ' + row.label);
+    for (const line of lines) assert.equal(/liquid|substance|phase/i.test(line.label), false, name + ' ' + line.label);
+    const texts = rows.map((row) => row.text).concat(lines.map((line) => line.value));
+    for (const word of words) assert.equal(texts.some((text) => text === word), false, name + ' ' + word);
+}
+
+function liquidStep(rows) {
+    const points = [];
+    for (const row of rows) points.push(row.mp, row.bp);
+    points.sort((left, right) => left - right);
+    let gap = Infinity;
+    for (let index = 1; index < points.length; index += 1) {
+        if (points[index] > points[index - 1]) gap = Math.min(gap, points[index] - points[index - 1]);
+    }
+    return gap / 1000;
+}
+
+function ordinaryAtmosphere(policy) {
+    const blocked = new Set([...policy.liquid.q3.exoticAtmospheres, ...policy.liquid.q3.vacuumAtmospheres]);
+    let code = 2;
+    while (blocked.has(code)) code += 1;
+    return code;
+}
+
+test('climate words come only from the body', () => {
+    assert.deepEqual(climateDisplay({ tempBand: 'Boiling', meanTempK: 1 }), { climate: null, zone: null });
+    assert.deepEqual(
+        climateDisplay({
+            surfaceTempBand: { status: 'known', band: 'Made-up' },
+            orbitalTempBand: { status: 'known', band: 'Also-made-up' },
+            tempBand: 'Boiling',
+        }),
+        { climate: 'Made-up', zone: 'Also-made-up' },
+    );
+    assert.deepEqual(
+        climateDisplay({
+            surfaceTempBand: { status: 'unknown' },
+            orbitalTempBand: { status: 'unknown', missing: ['orbitId'] },
+            tempBand: 'Boiling',
+        }),
+        { climate: 'not classified', zone: 'not classified' },
+    );
+    assert.deepEqual(
+        climateDisplay({ surfaceTempBand: { status: 'known', band: '  ' }, orbitalTempBand: { status: 'known' } }),
+        { climate: 'not classified', zone: 'not classified' },
+    );
+    assert.deepEqual(
+        climateDisplay({ surfaceTempBand: { status: 'unknown', band: 'Boiling' } }),
+        { climate: 'not classified', zone: 'not classified' },
+    );
+    const files = [];
+    function collect(target) {
+        if (!fs.existsSync(target)) return;
+        const stat = fs.statSync(target);
+        if (stat.isFile()) {
+            files.push(target);
+            return;
+        }
+        for (const entry of fs.readdirSync(target, { withFileTypes: true })) {
+            collect(path.join(target, entry.name));
+        }
+    }
+    collect(path.join(ROOT, 'apps/web/src/dossier'));
+    collect(path.join(ROOT, 'apps/web/src/orbit/card.ts'));
+    collect(path.join(ROOT, 'apps/web/src/orbit/BodyCard.vue'));
+    const forbidden = [
+        /273\.15/,
+        /maxC/,
+        /mgt2e_climate_bands/,
+        /climate_bands/,
+        /tempBandFromKelvin/,
+        /exoticLiquids/,
+        /reconcile_environment/,
+        /@voyage\/engines/,
+    ];
+    assert.ok(files.length > 2);
+    for (const file of files) {
+        const source = fs.readFileSync(file, 'utf8');
+        for (const pattern of forbidden) assert.equal(pattern.test(source), false, file + ' ' + pattern);
+    }
 });

@@ -2,10 +2,11 @@
 /**
  * What the header always shows of the clock (follow-up 6; findings/orbit_drawers_design.md
  * §1): Play, the date readout (the view's date, weekday and time; pressed, it opens the Time
- * drawer on the date fields) and the campaign mark (the campaign's date; pressed, the view
- * goes to it; lit when the view is on it). The readout is as wide as its longest reading,
- * so a weekday's name never moves the header (orbit/time_row.ts). Narrow, the readout keeps
- * the date alone and the mark its icon.
+ * drawer on the date fields). The readout's calendar says, quietly, where the view stands
+ * against the campaign date: teal on it, amber off it, muted when there is none; the way
+ * back is in the Time drawer and on C (the header's own mark was removed, Johnny
+ * 2026-10-06). The readout is as wide as its longest reading, so a weekday's name never
+ * moves the header (orbit/time_row.ts). Narrow, the readout keeps the date alone.
  */
 import Icon from '../design/Icon.vue';
 import { READOUT_CHARS } from './time_row.ts';
@@ -24,7 +25,7 @@ defineProps<{
     narrow: boolean;
 }>();
 
-defineEmits<{ toggle: []; date: []; goCampaign: [] }>();
+defineEmits<{ toggle: []; date: [] }>();
 </script>
 
 <template>
@@ -43,30 +44,18 @@ defineEmits<{ toggle: []; date: []; goCampaign: [] }>();
     <button
       type="button"
       class="orbit-btn orbit-readout"
+      :class="{ 'is-on-campaign': campaignDate && onCampaignDate, 'is-off-campaign': campaignDate && !onCampaignDate }"
       data-command="orbit-date"
       :style="{ '--readout-chars': narrow ? 8 : READOUT_CHARS }"
       :aria-expanded="timeOpen ? 'true' : 'false'"
       aria-controls="orbit-drawer-time"
-      :aria-label="'The view’s date and time, ' + said.date + ' ' + said.weekday + ' ' + time + '. Press for the Time drawer'"
-      title="The view’s date and time; press to type one (T)"
+      :aria-label="'The view’s date and time, ' + said.date + ' ' + said.weekday + ' ' + time + (campaignDate ? (onCampaignDate ? ', the campaign date' : ', off the campaign date ' + campaignDate.date) : '') + '. Press for the Time drawer'"
+      :title="'The view’s date and time; press to type one (T)' + (campaignDate ? (onCampaignDate ? '. The view is on the campaign date' : '. The campaign date is ' + campaignDate.date + ' (C goes to it)') : '')"
       @click="$emit('date')"
     >
       <Icon name="calendar-star" :size="12" />
       <b>{{ said.date }}</b>
       <template v-if="!narrow"><span class="orbit-readout-sep">·</span><span>{{ said.weekday }}</span><span class="orbit-readout-sep">·</span><span class="orbit-readout-time">{{ time }}</span></template>
-    </button>
-    <button
-      v-if="campaignDate"
-      type="button"
-      class="orbit-btn orbit-campaign-mark"
-      data-command="orbit-go-campaign"
-      :class="{ 'is-on': onCampaignDate }"
-      :aria-pressed="onCampaignDate ? 'true' : 'false'"
-      :aria-label="'Campaign date ' + campaignDate.date + (onCampaignDate ? ', the view is on it' : '. Go to it')"
-      :title="onCampaignDate ? 'The view is on the campaign date' : 'Go to the campaign date, ' + campaignDate.date + ' (C)'"
-      @click="$emit('goCampaign')"
-    >
-      <Icon name="calendar-star" :size="12" /><b v-if="!narrow">{{ campaignDate.date }}</b>
     </button>
   </div>
 </template>
@@ -89,7 +78,8 @@ defineEmits<{ toggle: []; date: []; goCampaign: [] }>();
   box-sizing: border-box;
   justify-content: flex-start;
   gap: 6px;
-  width: calc(var(--readout-chars) * 1ch + 44px);
+  /* The allowance is the icon, the gaps and the same 14 px at each end of the longest reading (measured). */
+  width: calc(var(--readout-chars) * 1ch + 45px);
   height: 32px;
   border-color: var(--control-line);
   background: var(--bg-2);
@@ -114,36 +104,22 @@ defineEmits<{ toggle: []; date: []; goCampaign: [] }>();
   border-color: var(--signal);
 }
 
-/* The campaign mark: lit when the view is on the day. */
-.orbit-btn.orbit-campaign-mark {
-  height: 32px;
-  gap: 7px;
-  color: var(--text-1);
-  white-space: nowrap;
+/* Where the view stands against the campaign date: the calendar teal on it, amber off it. */
+.orbit-btn.orbit-readout.is-on-campaign .ui-icon {
+  color: var(--signal);
 }
 
-.orbit-btn.orbit-campaign-mark b {
-  color: var(--signal-bright);
-  font: 700 13px/1 var(--font-code);
-  font-variant-numeric: var(--tabular);
+.orbit-btn.orbit-readout.is-off-campaign .ui-icon {
+  color: var(--attention);
 }
 
-.orbit-btn.orbit-campaign-mark.is-on {
-  border-color: var(--signal);
-  background: var(--row-active);
-}
-
-/* Narrow: tighter, the readout the date alone with less padding, the mark its icon. */
+/* Narrow: tighter, the readout the date alone with less padding. */
 .orbit-clock.is-narrow {
   gap: 4px;
 }
 
 .orbit-clock.is-narrow .orbit-btn.orbit-readout {
-  width: calc(var(--readout-chars) * 1ch + 30px);
-  padding: 0 8px;
-}
-
-.orbit-clock.is-narrow .orbit-btn.orbit-campaign-mark {
+  width: calc(var(--readout-chars) * 1ch + 37px);
   padding: 0 8px;
 }
 

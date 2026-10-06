@@ -28,6 +28,14 @@ the planets' city lights). Still closed: everything else in `orbit/` but `card.t
 - If the design needs a token or a colour pair that does not exist, do not add it: build
   with what exists, and name what you need in your report.
 
+## A change in your folder that is not yours: leave it
+
+`dossier/DossierOverview.vue` was edited on 2026-10-06 by Johnny and the orchestrator:
+**"Explore orbits" now sits to the right of the Mainworld button**, inside the mainworld
+callout (`.doss-callout-actions`), and keeps its own row at the top only when there is no
+callout (`!model.holdLead`). Do not move it back and do not restyle it. If your own work
+touches that file, read it again first.
+
 ## One more, in your own file
 
 Agent A has rebuilt how the panes are addressed (`apps/web/src/shell/pane.ts`: `withQuery`

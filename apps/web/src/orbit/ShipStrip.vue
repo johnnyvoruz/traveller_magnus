@@ -154,7 +154,11 @@ const jumpNote = computed(() => {
     <div v-if="plotting" class="orbit-plot-card" role="group" aria-label="Plot a flight">
       <p v-if="!preview" class="orbit-plot-hint"><Icon name="arrows-to-dot" :size="11" />Plotting: press a body on the picture to set the destination.</p>
       <template v-else>
-        <p class="orbit-plot-line"><b>{{ preview.toName }}</b><span v-if="preview.leg"> · departs {{ whenWords(preview.leg.departs) }} · arrives {{ whenWords(preview.leg.arrives) }}</span></p>
+        <p class="orbit-plot-line" :title="preview.toName"><b>{{ preview.toName }}</b></p>
+        <p class="orbit-plot-when">
+          <template v-if="preview.leg">departs {{ whenWords(preview.leg.departs) }} · arrives {{ whenWords(preview.leg.arrives) }}</template>
+          <template v-else>No arrival until the hours are set</template>
+        </p>
         <p v-if="estimate" class="orbit-est">
           <template v-if="estimate.distance">Estimate: {{ estimate.distance }}<template v-if="estimate.time"> · {{ estimate.time }} at {{ accelG }} G</template></template>
           <template v-else>Distance unknown: type the hours.</template>
@@ -326,9 +330,12 @@ const jumpNote = computed(() => {
   clip-path: polygon(50% 0, 100% 100%, 0 100%);
 }
 
+/* One line at any width: it stands at the strip's right edge, where the strip's own row would be. */
 .orbit-ships-none {
+  flex: 0 0 auto;
   margin: 0;
   padding: 4px 10px;
+  white-space: nowrap;
   border: 1px dashed var(--line-2);
   border-radius: var(--r-pill);
   color: var(--text-muted);
@@ -380,7 +387,8 @@ const jumpNote = computed(() => {
 .orbit-jump-to.is-marked {
   flex-direction: column;
   align-items: stretch;
-  width: min(384px, 100%);
+  width: 384px;
+  max-width: 100%;
 }
 
 /* Narrow: "Roll again" goes under the field before anything is squeezed. */
@@ -447,7 +455,8 @@ const jumpNote = computed(() => {
 .orbit-plot-card {
   flex-direction: column;
   align-items: stretch;
-  width: min(360px, 100%);
+  width: 360px;
+  max-width: 100%;
 }
 
 .orbit-plot-hint,
@@ -459,9 +468,19 @@ const jumpNote = computed(() => {
   color: var(--text-muted);
 }
 
-/* The leg in words runs on as one sentence; the card's width is fixed, so it wraps as text does. */
+/* The destination's name is never broken: one line, cut with an ellipsis if it must be. The dates have the line beneath, always there, so nothing shifts when the destination or the hours change. */
 .orbit-plot-line {
   display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.orbit-plot-when {
+  margin: 0;
+  color: var(--text-muted);
+  font: 400 12px/1.4 var(--font-text);
+  font-variant-numeric: var(--tabular);
 }
 
 .orbit-plot-line b {
