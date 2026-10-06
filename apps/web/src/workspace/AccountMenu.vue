@@ -2,16 +2,21 @@
 /**
  * The pop-up at the rail's foot (design §1; K5f). Signed out it is the sign-in card; signed
  * in it is the account menu: who, the campaigns (open one, switch to another, make, rename,
- * delete), the party, sign out. It opens over the map and nothing waits on it; a click
- * anywhere else, or Esc, closes it and focus goes back to the rail's button. A delete asks
- * once, in a dialog of its own here (the server's delete is soft and cannot be undone).
+ * delete, export, import), the party, sign out. It opens over the map and nothing waits on
+ * it; a click anywhere else, or Esc, closes it and focus goes back to the rail's button. A
+ * delete asks once, in a dialog of its own here (the server's delete is soft and cannot be
+ * undone). Export saves the campaign's file; Import reads one into an open, empty campaign
+ * through campaign/import.ts, whose words are shown as given.
  */
 import { computed, nextTick, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { CAMPAIGN_LIMITS } from '@voyage/shared';
 import { session, signOut } from '../account/session.ts';
 import { resetCampaign } from '../campaign/commit.ts';
+import { importCampaign, parseExport } from '../campaign/import.ts';
 import { campaign, createCampaign, deleteCampaign, renameCampaign, switchCampaign } from '../campaign/store.ts';
+import { apiFetch } from '../platform/http.ts';
+import { saveBlob } from '../platform/browser.ts';
 import Icon from '../design/Icon.vue';
 import { showToast } from '../shell/toast.ts';
 import { accountLine, displayName, initials } from './account.ts';
@@ -50,6 +55,9 @@ const openOne = computed(() => campaign.universes.find((item) => item.id === cam
 const ready = computed(() => campaign.status === 'ready' || campaign.status === 'error');
 const full = computed(() => !canCreate(campaign.universes.length));
 const recordCount = computed(() => liveRecords(campaign.records).length);
+/** Import takes an open campaign with no records and no links (campaign/import.ts says so too). */
+const emptyCampaign = computed(() => Object.keys(campaign.records).length === 0 && Object.keys(campaign.links).length === 0);
+const fileEl = ref<HTMLInputElement | null>(null);
 const question = computed(() => (openOne.value ? deleteWords(openOne.value.name, recordCount.value) : ''));
 
 function focusField(): void {
@@ -141,6 +149,57 @@ function remove(): void {
         showToast('Deleted ' + target.name + '.');
         emit('close');
     });
+}
+
+/** The campaign's file, from the server, saved as it names it. */
+function exportCampaign(): void {
+    const target = openOne.value;
+    if (!target) return;
+    void run(async () => {
+        const res = await apiFetch(fetch, '/api/universes/' + encodeURIComponent(target.id) + '/campaign/export');
+        if (!res.ok) throw new Error('export ' + res.status);
+        const found = /filename="([^"]+)"/.exec(res.headers.get('content-disposition') || '');
+        saveBlob(await res.blob(), found ? found[1] : target.name + '.campaign.json');
+    }, () => {
+        showToast('Exported ' + target.name + '.');
+        emit('close');
+    });
+}
+
+function pickImport(): void {
+    if (busy.value || !openOne.value) return;
+    trouble.value = '';
+    if (fileEl.value) fileEl.value.click();
+}
+
+/** A file chosen for Import: parsed and brought in; the module's words are shown as given. */
+async function onImportFile(event: Event): Promise<void> {
+    const input = event.target;
+    if (!(input instanceof HTMLInputElement)) return;
+    const file = input.files && input.files[0];
+    input.value = '';
+    const target = openOne.value;
+    if (!file || !target || busy.value) return;
+    busy.value = true;
+    trouble.value = '';
+    try {
+        const parsed = parseExport(await file.text());
+        if (!parsed.ok) {
+            trouble.value = parsed.message;
+            return;
+        }
+        const result = await importCampaign(parsed.document, target.id);
+        if (!result.ok) {
+            trouble.value = result.message;
+            return;
+        }
+        showToast('Imported ' + result.landed + (result.landed === 1 ? ' row' : ' rows') + ' into ' + target.name + '.');
+        emit('close');
+    } catch {
+        trouble.value = 'That file could not be read.';
+    } finally {
+        busy.value = false;
+    }
 }
 
 function onFormKey(event: KeyboardEvent): void {
@@ -288,6 +347,13 @@ watch(() => props.open, (open) => {
         <button v-if="openOne" type="button" role="menuitem" class="account-delete" :disabled="busy" @click="begin('delete')">
           <Icon name="trash" :size="15" /><span>Delete {{ openOne.name }}</span>
         </button>
+        <button v-if="openOne" type="button" role="menuitem" class="account-export" :disabled="busy" @click="exportCampaign">
+          <Icon name="file-export" :size="15" /><span>Export {{ openOne.name }}</span>
+        </button>
+        <button v-if="openOne" type="button" role="menuitem" class="account-import" :disabled="busy || !emptyCampaign" :title="emptyCampaign ? 'Bring a campaign file into this empty campaign' : 'Import takes an empty campaign: make a new one first'" @click="pickImport">
+          <Icon name="file-import" :size="15" /><span>Import into {{ openOne.name }}…</span><em v-if="!emptyCampaign">not empty</em>
+        </button>
+        <input ref="fileEl" class="vplan-file" type="file" accept="application/json,.json" tabindex="-1" aria-hidden="true" @change="onImportFile">
         <button v-if="ready" type="button" role="menuitem" class="account-party" @click="router.push({ path: '/campaign/party', query: route.query }); $emit('close')">
           <Icon name="shuttle-space" :size="15" /><span>Go to the party</span>
         </button>

@@ -14,6 +14,7 @@ import Icon from '../design/Icon.vue';
 import { isOnline, onOnlineChange } from '../platform/browser.ts';
 import { createRecord } from './actions.ts';
 import AddButton from './AddButton.vue';
+import { thumbUrl } from './images.ts';
 import { locating, startLocate, stopLocate } from './locate.ts';
 import { openFailed } from './opening.ts';
 import { hexKeyOf, liveById, recordsHere, resolvePlace, systemAnchor, withinSystem } from './places.ts';
@@ -125,7 +126,8 @@ function add(type: CampaignRecordType): void {
     <ul v-else ref="listEl" class="here-rows">
       <li v-for="row in rows" :key="row.record.id" :class="{ 'has-locate': onMap }">
         <button type="button" class="here-row" :data-id="row.record.id" @click="open(row.record.id)">
-          <span class="here-glyph" aria-hidden="true"><Icon :name="row.info.icon" :size="13" /></span>
+          <img v-if="thumbUrl(campaign.universeId, row.record)" class="here-glyph is-thumb" :src="thumbUrl(campaign.universeId, row.record) || ''" alt="" loading="lazy">
+          <span v-else class="here-glyph" aria-hidden="true"><Icon :name="row.info.icon" :size="13" /></span>
           <span class="here-text">
             <b>{{ row.record.name }}</b>
             <small>{{ row.info.one }} · {{ row.where }}</small>
@@ -252,6 +254,10 @@ function add(type: CampaignRecordType): void {
 
 .here-row > .ui-icon {
   color: var(--text-muted);
+}
+
+.here-glyph.is-thumb {
+  object-fit: cover;
 }
 
 .here-glyph {

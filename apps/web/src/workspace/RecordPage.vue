@@ -11,7 +11,10 @@ import { campaign } from '../campaign/store.ts';
 import Icon from '../design/Icon.vue';
 import { deleteRecord, justCreated, recentlyDeleted, restoreRecord, saveRecord } from './actions.ts';
 import EditableText from './EditableText.vue';
+import { uploads } from './gallery_state.ts';
+import { uploadWords } from './images.ts';
 import LinksBlock from './LinksBlock.vue';
+import RecordGallery from './RecordGallery.vue';
 import { RECORD_TYPES, addTag, cleanDetails, cleanName, cleanSummary, placeLine, typeInfo } from './records.ts';
 import VesselPlan from './VesselPlan.vue';
 import WhereBlock from './WhereBlock.vue';
@@ -42,10 +45,13 @@ const record = computed(() => {
 /** The record is one of this session's deletes: it can be brought back from here. */
 const wasDeleted = computed(() => recentlyDeleted.some((item) => item.id === props.id));
 const info = computed(() => typeInfo(record.value ? record.value.type : 'person'));
+/** An image being read or sent counts as saving; one that failed, as not saved. */
+const upload = computed(() => uploads[props.id] ?? null);
 const saveState = computed((): 'saving' | 'failed' | 'saved' => {
-    if (lastError.value) return 'failed';
-    return pending.value ? 'saving' : 'saved';
+    if (lastError.value || (upload.value && upload.value.stage === 'failed')) return 'failed';
+    return pending.value || upload.value ? 'saving' : 'saved';
 });
+const saveWords = computed(() => (upload.value && upload.value.stage !== 'failed' ? uploadWords(upload.value) : 'Saving…'));
 
 function rename(text: string): void {
     const name = cleanName(text);
@@ -114,10 +120,12 @@ watch(() => props.id, () => {
 
 <template>
   <article v-if="record" class="rec" :data-save="saveState">
-    <div v-if="saveState === 'failed'" class="camp-strip is-error" role="alert">
+    <div v-if="saveState === 'failed' && lastError" class="camp-strip is-error" role="alert">
       <span>That change was not saved. Your text is still here.</span>
       <button type="button" class="ui-btn" @click="flushCampaign()">Try again</button>
     </div>
+
+    <RecordGallery :id="id" part="hero" :read-only="readOnly" />
 
     <header class="rec-ident">
       <span class="camp-glyph is-large" aria-hidden="true"><Icon :name="info.icon" :size="22" /></span>
@@ -134,7 +142,7 @@ watch(() => props.id, () => {
         </p>
       </div>
       <p class="rec-save" :class="'is-' + saveState" role="status">
-        <template v-if="saveState === 'saving'">Saving…</template>
+        <template v-if="saveState === 'saving'">{{ saveWords }}</template>
         <template v-else-if="saveState === 'failed'">Not saved</template>
         <template v-else><Icon name="check" :size="12" />Saved</template>
       </p>
@@ -207,6 +215,8 @@ watch(() => props.id, () => {
         </button>
       </div>
     </section>
+
+    <RecordGallery :id="id" part="strip" :read-only="readOnly" />
 
     <LinksBlock :id="id" :read-only="readOnly" />
 

@@ -14,20 +14,22 @@ import { formatDisplayNumber } from '../dossier/labels.ts';
 import { overviewModel, pickSystem, type AllegianceName } from '../dossier/model.ts';
 import { TruthClient } from '../map/truth_client.ts';
 import BodyChips from '../orbit/BodyChips.vue';
-import LayerChips from '../orbit/LayerChips.vue';
+import { LAYERS, LAYOUTS, ORBIT_COMMANDS, toggled } from '../orbit/commands.ts';
+import LayerKey from '../orbit/LayerKey.vue';
+import LayoutCorner from '../orbit/LayoutCorner.vue';
 import { planSystem } from '../orbit/layout.ts';
 import LineupSearch from '../orbit/LineupSearch.vue';
 import MoreMenu, { type MoreItem } from '../orbit/MoreMenu.vue';
 import { DEFAULT_LAYERS, type Layers, type Mode } from '../orbit/picture.ts';
 import { bodyChips, dossierPath, findChip, orbitPath, subsectorLetter } from '../orbit/bodies.ts';
 import {
-    advance, DAY_SECONDS, formatLinkDate, scrubbed, skipHours, skipWeeks, startDays, tickRate, REAL_TIME,
+    advance, DAY_SECONDS, formatLinkDate, scrubbed, skipWeeks, startDays, tickRate, REAL_TIME,
 } from '../orbit/clock.ts';
 import OrbitCanvas from '../orbit/OrbitCanvas.vue';
 import OrbitHeader from '../orbit/OrbitHeader.vue';
 import { detectSystem, normalizeSystem } from '../orbit/system.ts';
 import TimeControls from '../orbit/TimeControls.vue';
-import { cancelFrame, nextFrame, now, pageOrigin } from '../platform/browser.ts';
+import { cancelFrame, nextFrame, now, observeSize, pageOrigin } from '../platform/browser.ts';
 import Rail from '../shell/Rail.vue';
 import { loadSession, session } from '../account/session.ts';
 import { campaign, setCampaignDate } from '../campaign/store.ts';
@@ -36,12 +38,18 @@ import { ensureCampaign } from '../workspace/opening.ts';
 import { sameDay, stardate } from '../workspace/stardate.ts';
 import AccountMenu from '../workspace/AccountMenu.vue';
 import ToastStrip from '../shell/ToastStrip.vue';
-import { handleKey, registerCommand } from '../shell/registry.ts';
+import { commands, handleKey, registerCommand } from '../shell/registry.ts';
 
 const route = useRoute();
 const router = useRouter();
 const rootEl = ref<HTMLElement | null>(null);
 const stageEl = ref<InstanceType<typeof OrbitCanvas> | null>(null);
+const timeEl = ref<{ focusScrub: () => void; focusSpeed: () => void } | null>(null);
+const stageBox = ref<HTMLElement | null>(null);
+/** The stage is narrow (a small window beside the dossier): the key shows its marks alone. */
+const narrow = ref(false);
+let stopStageSize: (() => void) | null = null;
+const NARROW_BELOW = 620;
 
 const client = new TruthClient({
     cdnBase: import.meta.env.VITE_CDN_BASE || 'https://cdn.traveller.voyage',
@@ -241,14 +249,6 @@ function togglePlay(): void {
     if (paused.value) writeLink();
 }
 
-function skip(hours: number): void {
-    moved = true;
-    shuttle.value = 0;
-    paused.value = true;
-    setDays(skipHours(days, hours));
-    writeLink();
-}
-
 // ---- The campaign date (K6c): looking is not advancing -----------------------------
 
 /** Signed in with a campaign open: the time row shows the campaign date and can write it. */
@@ -379,10 +379,32 @@ const panelWidth = ref(0);
 const openPop = ref('');
 const moonsOpen = ref<string | null>(null);
 
-/** The time row's More menu: the tools this system has. */
-const moreItems = computed((): MoreItem[] => (state.value === 'ready' && searchPlan.value
-    ? [{ id: 'lineup', label: 'Line up the planets', icon: 'arrows-to-dot', note: 'Jump to the next time they sit on one line' }]
-    : []));
+/** The header's More tools: the picture's scale and ring strength, and the line-up search when the system has a plan. */
+const moreItems = computed((): MoreItem[] => [
+    ...(state.value === 'ready' && searchPlan.value
+        ? [{ id: 'lineup', label: 'Line up the planets', icon: 'arrows-to-dot' as const, note: 'Jump to the next time they sit on one line' }]
+        : []),
+    { id: 'picture', label: 'Picture', icon: 'sliders' as const, note: 'Linear scale, orbit ring strength' },
+]);
+
+/** The view's date in the campaign's form, for the readout. */
+const viewDate = computed(() => stardate(shownDays.value));
+
+function setLinear(event: Event): void {
+    layers.value = { ...layers.value, linear: (event.target as HTMLInputElement).checked };
+}
+
+function setStrength(event: Event): void {
+    const value = Number.parseFloat((event.target as HTMLInputElement).value);
+    if (Number.isFinite(value)) layers.value = { ...layers.value, pathStrength: value };
+}
+
+/** Every control on the view is a command first (orbit/commands.ts); the keys are the table's. */
+function orbitCommand(id: string, run: () => void, runnable?: () => boolean): () => void {
+    const spec = ORBIT_COMMANDS.find((item) => item.id === id);
+    if (!spec) throw new Error('orbit: no command ' + id);
+    return registerCommand({ id, name: spec.name, keys: [...spec.keys], run, ...(runnable ? { runnable } : {}) });
+}
 
 function select(key: string): void {
     moonsOpen.value = null;
@@ -435,6 +457,19 @@ function onKey(event: KeyboardEvent): void {
         const target = event.target;
         if (target instanceof HTMLElement && target.closest('button, a, summary, select, input, textarea')) return;
     }
+    // A slider is not a text field: a letter or digit pressed on it is still the view's key.
+    const target = event.target;
+    if (target instanceof HTMLInputElement && target.type === 'range' && event.key.length === 1 && !event.ctrlKey && !event.altKey && !event.metaKey) {
+        const command = ORBIT_COMMANDS.find((item) => item.keys.includes(event.key));
+        if (command) {
+            const registered = commands().find((item) => item.id === command.id);
+            if (registered && (!registered.runnable || registered.runnable())) {
+                event.preventDefault();
+                registered.run();
+            }
+            return;
+        }
+    }
     handleKey(event);
 }
 
@@ -454,9 +489,21 @@ onMounted(() => {
     // A visit that starts in the orbit view still learns who is signed in, after its first frame.
     nextFrame(() => { void loadSession(); });
     stopArrive = client.onArrive(() => { arrivals.value += 1; });
+    const ready = () => state.value === 'ready' && system.value !== null;
     unregister.push(
-        registerCommand({ id: 'orbit-escape', name: 'Back', keys: ['Escape'], run: escape }),
-        registerCommand({ id: 'orbit-play', name: 'Play or pause', keys: [' '], run: togglePlay }),
+        orbitCommand('orbit-escape', escape),
+        orbitCommand('orbit-play', togglePlay),
+        orbitCommand('orbit-week', advanceWeek),
+        orbitCommand('orbit-scrub', () => { if (timeEl.value) timeEl.value.focusScrub(); }),
+        orbitCommand('orbit-speed', () => { if (timeEl.value) timeEl.value.focusSpeed(); }),
+        orbitCommand('orbit-date', () => { setPop('date', openPop.value !== 'date'); }),
+        orbitCommand('orbit-go-campaign', goCampaign, () => campaignDate.value !== null),
+        orbitCommand('orbit-set-campaign', setAsCampaignDate, () => canSetDate.value),
+        ...LAYOUTS.map((item) => orbitCommand(item.id, () => { mode.value = item.mode; }, ready)),
+        ...LAYERS.map((item) => orbitCommand(item.id, () => { layers.value = toggled(layers.value, item.key); }, ready)),
+        orbitCommand('orbit-fit', () => { if (stageEl.value) stageEl.value.fit(); }, ready),
+        orbitCommand('orbit-lineup', () => { setPop('more', true); }, () => searchPlan.value !== null),
+        orbitCommand('orbit-picture', () => { setPop('more', true); }),
         registerCommand({ id: 'home', name: 'Return to map', run: backToMap }),
         registerCommand({ id: 'system-panel', name: 'System panel', run: () => { dossierOpen.value = !dossierOpen.value; } }),
         registerCommand({ id: 'account', name: 'Account', run: () => { accountOpen.value = !accountOpen.value; } }),
@@ -465,12 +512,19 @@ onMounted(() => {
     lastFrame = now();
     raf = nextFrame(frame);
     if (rootEl.value) rootEl.value.focus();
+    if (stageBox.value) {
+        const box = stageBox.value;
+        const measure = (): void => { narrow.value = box.clientWidth < NARROW_BELOW; };
+        measure();
+        stopStageSize = observeSize(box, measure);
+    }
     void load();
 });
 
 onBeforeUnmount(() => {
     if (raf) cancelFrame(raf);
     if (stopArrive) stopArrive();
+    if (stopStageSize) stopStageSize();
     for (const off of unregister) off();
 });
 </script>
@@ -513,46 +567,50 @@ onBeforeUnmount(() => {
         :keys-open="openPop === 'keys'"
         @back="backToMap"
         @keys="setPop('keys', $event)"
-      />
+      >
+        <template #tools>
+          <MoreMenu :open="openPop === 'more'" :items="moreItems" @pop="setPop('more', $event)">
+            <template #lineup>
+              <LineupSearch :plan="searchPlan" :now="() => days" @show="showLineup" />
+            </template>
+            <template #picture>
+              <label class="orbit-pop-check" title="Space orbits in proportion to their AU. The star’s drawn size still holds the innermost orbit outside the disc.">
+                <input type="checkbox" :checked="layers.linear" @change="setLinear">
+                <span>Linear scale (true AU spacing)</span>
+              </label>
+              <label class="orbit-pop-range">
+                <span>Orbit ring strength</span>
+                <input class="orbit-jog" type="range" min="0.1" max="1" step="0.05" :value="layers.pathStrength" @input="setStrength">
+              </label>
+            </template>
+          </MoreMenu>
+        </template>
+      </OrbitHeader>
       <TimeControls
+        ref="timeEl"
         :days="shownDays"
         :paused="paused"
         :speed="speed"
         :shuttle="shuttle"
         :local-time="localTime"
-        :scrub-open="openPop === 'scrub'"
+        :date-open="openPop === 'date'"
+        :said="viewDate"
         :campaign-date="campaignDate"
         :on-campaign-date="onCampaignDate"
         :can-set-date="canSetDate"
         @go-campaign="goCampaign"
         @set-campaign="setAsCampaignDate"
         @toggle="togglePlay"
-        @skip="skip"
         @week="advanceWeek"
         @days="typedDays"
         @speed="speed = $event"
         @scrub="scrub"
         @shuttle="shuttleTo"
-        @pop="setPop('scrub', $event)"
-      >
-        <template #pops>
-          <MoreMenu :open="openPop === 'more'" :items="moreItems" @pop="setPop('more', $event)">
-            <template #lineup>
-              <LineupSearch :plan="searchPlan" :now="() => days" @show="showLineup" />
-            </template>
-          </MoreMenu>
-        </template>
-      </TimeControls>
-      <LayerChips
-        v-if="state === 'ready' && system"
-        :mode="mode"
-        :layers="layers"
-        :view-open="openPop === 'view'"
-        @mode="mode = $event"
-        @layers="layers = $event"
-        @pop="setPop('view', $event)"
+        @pop="setPop('date', $event)"
       />
-      <div class="orbit-stage" :data-state="state">
+      <div ref="stageBox" class="orbit-stage" :class="{ 'is-narrow': narrow }" :data-state="state">
+        <!-- Reserved for K12 (slice §K12, "Many ships"): the flight status strip with Jump, and under it the ship list. Nothing is drawn until K6d. -->
+        <div class="orbit-flight" aria-hidden="true"></div>
         <ToastStrip />
         <OrbitCanvas
           v-if="state === 'ready' && system"
@@ -563,7 +621,12 @@ onBeforeUnmount(() => {
           :mode="mode"
           :layers="layers"
           @pick="pickBody"
-        />
+        >
+          <template #overlay>
+            <LayoutCorner :mode="mode" @mode="mode = $event" />
+            <LayerKey :layers="layers" @layers="layers = $event" />
+          </template>
+        </OrbitCanvas>
         <svg v-if="state !== 'ready'" class="orbit-blank" viewBox="0 0 800 800" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
           <circle v-for="r in [70, 130, 200, 280, 370]" :key="r" class="orbit-blank-ring" cx="400" cy="400" :r="r" />
         </svg>
@@ -653,12 +716,28 @@ onBeforeUnmount(() => {
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
-  /* A toast sits at the picture's upper right: the body card, the key, Fit and the body chips are elsewhere. */
-  --toast-top: 14px;
+  /* The space K12 will take at the picture's upper right (the flight strip, then the ship list): empty until K6d. */
+  --flight-strip-height: 0px;
+  /* A toast sits at the picture's upper right under the flight strip: the body card, the key, Fit and the body chips are elsewhere. */
+  --toast-top: calc(14px + var(--flight-strip-height));
   --toast-right: 14px;
   --toast-bottom: auto;
   --toast-left: auto;
   --toast-max: min(460px, calc(100% - 28px));
+}
+
+.orbit-flight {
+  position: absolute;
+  right: 14px;
+  top: 14px;
+  z-index: 3;
+  height: var(--flight-strip-height);
+  pointer-events: none;
+}
+
+/* The body card docks under the layout control at the upper left. */
+.orbit-stage .orbit-body-card {
+  top: 56px;
 }
 
 .orbit-blank {

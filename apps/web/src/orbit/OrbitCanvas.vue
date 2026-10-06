@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * The orbit stage: the canvas, its pointer input, the docked body card, the legend and the
+ * The orbit stage: the canvas, its pointer input, the docked body card and the
  * Fit button.
  * It only binds. The layouts are orbit/layout.ts and orbit/lineup.ts, the move between them
  * orbit/tween.ts, the camera orbit/camera.ts and orbit/stage.ts, the paint
@@ -17,8 +17,6 @@ import BodyCard from './BodyCard.vue';
 import { DRAG_SLOP, wheelNotches } from './camera.ts';
 import { cardFor } from './card.ts';
 import { hitOf, planSystem, type HitKind, type Plan } from './layout.ts';
-import { legendFor, legendSignature, type LegendEntry } from './legend.ts';
-import OrbitLegend from './OrbitLegend.vue';
 import { onSurfaceMode, surfaceMode } from '../surface/preferences.ts';
 import { drawDisc, prepareDiscs } from '../surface/service.ts';
 import { OrbitRenderer, type DiscPainter } from './OrbitRenderer.ts';
@@ -80,8 +78,6 @@ const dragging = ref(false);
 const fitted = ref(true);
 
 /** What the marks on the picture mean; it changes with the layers and the layout, not every frame. */
-const legend = shallowRef<LegendEntry[]>([]);
-let legendIs = '';
 
 /** The selected body whose pinned card the visitor closed; it comes back on hover or with another selection. */
 const dismissed = ref<string | null>(null);
@@ -252,12 +248,6 @@ function paint(clockDays: number, time: number): void {
     // Shaded discs turn and their clouds drift, and tiles arrive a frame or more after they are asked for.
     if (!frame.changed && !frame.moving && !alive && !renderer.discsBusy && !stale) return;
     stale = false;
-    const entries = legendFor(current, frame.picture, stage.layers);
-    const signature = legendSignature(entries);
-    if (signature !== legendIs) {
-        legendIs = signature;
-        legend.value = entries;
-    }
     const started = now();
     renderer.draw(current, frame.picture, frame.view, { selected, days: clockDays, time, motion: !reduced, layers: stage.layers });
     const cost = now() - started;
@@ -381,11 +371,13 @@ defineExpose({ paint, fit });
         :under="pinnedCard !== null"
       />
     </div>
-    <OrbitLegend :entries="legend" />
+    <!-- The layout control, the key and whatever else stands on the picture (views/OrbitView.vue). -->
+    <slot name="overlay" />
     <button
       type="button"
       class="orbit-btn orbit-fit"
-      title="Fit the whole system (double-click empty space)"
+      data-command="orbit-fit"
+      title="Fit the whole system (F, or double-click empty space)"
       :aria-pressed="fitted"
       @click="fit"
     >

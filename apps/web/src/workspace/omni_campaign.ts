@@ -5,9 +5,10 @@
  */
 import type { CampaignRecord } from '@voyage/shared';
 import { recordIdsForWord } from '../campaign/index.ts';
+import { thumbUrl } from './images.ts';
 import { placeLine, typeInfo } from './records.ts';
 
-export type CampaignMatch = { kind: 'record'; name: string; detail: string; id: string };
+export type CampaignMatch = { kind: 'record'; name: string; detail: string; id: string; thumb: string | null };
 
 export const CAMPAIGN_GROUP_CAP = 5;
 
@@ -40,6 +41,7 @@ export function campaignMatches(
     query: string,
     records: Readonly<Record<string, CampaignRecord>>,
     cap = CAMPAIGN_GROUP_CAP,
+    universeId: string | null = null,
 ): { items: CampaignMatch[]; total: number } {
     const ids = matchingRecordIds(query, records);
     const rows = ids.map((id) => records[id]).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));
@@ -49,6 +51,7 @@ export function campaignMatches(
             name: record.name,
             detail: typeInfo(record.type).one + ' · ' + placeLine(record, records),
             id: record.id,
+            thumb: thumbUrl(universeId, record),
         })),
         total: rows.length,
     };

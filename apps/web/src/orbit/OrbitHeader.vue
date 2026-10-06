@@ -1,10 +1,12 @@
 <script setup lang="ts">
 /**
  * The orbit view's nav bar (legacy .sv-view-nav, js/system_viewer.js:1630-1690): back to the
- * map, the system's identity, the edition badge, the keyboard and mouse help. Edit system is
- * a Builder control and is not here.
+ * map, the system's identity, the edition badge, More tools (a slot), and the keyboard and
+ * mouse help, whose table is the commands table itself (orbit/commands.ts). Edit system is a
+ * Builder control and is not here.
  */
 import Icon from '../design/Icon.vue';
+import { keyWords, MOUSE_HELP, ORBIT_COMMANDS } from './commands.ts';
 import OrbitPopover from './OrbitPopover.vue';
 
 defineProps<{
@@ -21,22 +23,18 @@ defineProps<{
 
 defineEmits<{ back: []; keys: [open: boolean] }>();
 
-/** The keys and mouse moves this view answers to. */
+/** The keys this view answers to, from the commands table, then the mouse. */
 const KEYS: [string, string][] = [
-    ['Space', 'play or pause'],
-    ['Esc', 'close, then leave the body, then back to the map'],
-    ['Tab', 'walk the body chips'],
-    ['Wheel', 'zoom toward the pointer'],
-    ['Drag', 'move the view'],
-    ['Click', 'select a body and follow it'],
-    ['Double-click', 'frame a body and its moons; on empty space, fit the system'],
-    ['Line up', 'jump to the next time the planets sit on one line'],
+    ...ORBIT_COMMANDS.filter((command) => command.keys.length).map((command): [string, string] => [
+        command.keys.map(keyWords).filter(Boolean).join(' / '), command.help,
+    ]),
+    ...MOUSE_HELP,
 ];
 </script>
 
 <template>
   <header class="orbit-nav">
-    <button type="button" class="orbit-btn orbit-back" title="Back to the map (Esc)" @click="$emit('back')">
+    <button type="button" class="orbit-btn orbit-back" data-command="orbit-escape" title="Back to the map (Esc)" @click="$emit('back')">
       <Icon name="arrow-left" :size="13" />Map
     </button>
     <div class="orbit-identity">
@@ -54,6 +52,7 @@ const KEYS: [string, string][] = [
       </p>
     </div>
     <div class="orbit-nav-tools">
+      <slot name="tools" />
       <OrbitPopover
         id="orbit-keys"
         :open="keysOpen"

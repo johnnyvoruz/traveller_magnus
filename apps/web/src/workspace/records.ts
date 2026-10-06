@@ -8,6 +8,7 @@ import {
     CAMPAIGN_LIMITS, CAMPAIGN_RECORD_TYPES, type CampaignAnchor, type CampaignRecord, type CampaignRecordType, type RecordChange,
 } from '@voyage/shared';
 import type { FaIconName } from '../design/icons.ts';
+import { sameImages } from './images.ts';
 import { liveById, resolvePlace, sameAnchor } from './places.ts';
 
 export type TypeInfo = {
@@ -151,7 +152,7 @@ export function newRecord(type: CampaignRecordType, id: string, now: string, anc
     };
 }
 
-export type RecordPatch = Partial<Pick<CampaignRecord, 'type' | 'name' | 'summary' | 'details' | 'tags' | 'anchor'>>;
+export type RecordPatch = Partial<Pick<CampaignRecord, 'type' | 'name' | 'summary' | 'details' | 'tags' | 'anchor' | 'images'>>;
 
 /** True when the patch would change nothing: no change is sent for it. */
 export function unchanged(record: CampaignRecord, patch: RecordPatch): boolean {
@@ -160,6 +161,8 @@ export function unchanged(record: CampaignRecord, patch: RecordPatch): boolean {
         const have = record[key];
         if (key === 'anchor') {
             if (!sameAnchor(patch.anchor ?? null, record.anchor)) return false;
+        } else if (key === 'images') {
+            if (!sameImages(patch.images ?? null, record.images)) return false;
         } else if (Array.isArray(next) && Array.isArray(have)) {
             if (next.length !== have.length || next.some((item, i) => item !== have[i])) return false;
         } else if (next !== have) return false;
@@ -174,7 +177,7 @@ export function created(record: CampaignRecord): RecordChange {
 
 /** The change that edits a record: the whole row with the patch, based on the revision held. */
 export function edited(record: CampaignRecord, patch: RecordPatch, now: string): RecordChange {
-    return { ...record, ...patch, tags: patch.tags ? [...patch.tags] : [...record.tags], updatedAt: now, deleted: false, baseRev: record.rev };
+    return { ...record, ...patch, tags: patch.tags ? [...patch.tags] : [...record.tags], images: patch.images !== undefined ? patch.images : record.images, updatedAt: now, deleted: false, baseRev: record.rev };
 }
 
 /** The change that deletes a record: a tombstone, never purged in this slice. */

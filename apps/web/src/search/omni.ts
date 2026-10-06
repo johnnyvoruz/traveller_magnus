@@ -5,7 +5,7 @@ export type OmniResult =
     | { kind: 'sector'; name: string; detail: string; sector: string }
     | { kind: 'command'; name: string; detail: string; id: string }
     /** A campaign record (the signed-in user's own), and the row that opens the list with every match. */
-    | { kind: 'record'; name: string; detail: string; id: string }
+    | { kind: 'record'; name: string; detail: string; id: string; thumb: string | null }
     | { kind: 'more'; name: string; detail: string; query: string };
 
 export type SearchItem = {

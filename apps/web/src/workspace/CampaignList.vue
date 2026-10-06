@@ -12,6 +12,7 @@ import Icon from '../design/Icon.vue';
 import { deleteRecord, recentlyDeleted, restoreRecord } from './actions.ts';
 import AddButton from './AddButton.vue';
 import { locating, startLocate, stopLocate } from './locate.ts';
+import { thumbUrl } from './images.ts';
 import { handedQuery, listSort } from './list_state.ts';
 import { placeSource } from './place_source.ts';
 import { hexKeyOf, hexWords, liveById, resolvePlace, type Resolved } from './places.ts';
@@ -273,7 +274,8 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
             @click="emit('open', record.id)"
             @keydown="onRowKey($event, record.id)"
           >
-            <span class="camp-glyph" aria-hidden="true"><Icon :name="typeInfo(record.type).icon" :size="16" /></span>
+            <img v-if="thumbUrl(campaign.universeId, record)" class="camp-glyph is-thumb" :src="thumbUrl(campaign.universeId, record) || ''" alt="" loading="lazy">
+            <span v-else class="camp-glyph" aria-hidden="true"><Icon :name="typeInfo(record.type).icon" :size="16" /></span>
             <span class="camp-row-text">
               <b>{{ record.name }}</b>
               <span v-if="record.summary" class="camp-row-sum">{{ record.summary }}</span>
@@ -605,6 +607,11 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
   border-radius: var(--r-2);
   background: var(--wash-faint);
   color: var(--signal);
+}
+
+.camp-glyph.is-thumb {
+  object-fit: cover;
+  background: var(--bg-0);
 }
 
 .camp-glyph.is-large {

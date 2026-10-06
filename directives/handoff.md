@@ -2880,3 +2880,28 @@ API and Durable Object have against `data_model.md` and `api.md`).
   --source=8dbcc36~1` on that file (index only, the working copy untouched) in the same
   commit as the K14 screens. **Rule for by-path pushes:** before naming a file another
   agent shares, `git diff` it for that agent's imports.
+
+## 110. K15 part 2 in and accepted: the orbit view is the showpiece (2026-10-05)
+
+- **Agent D:** `TimeControls.vue` rewritten (play, 1 week, scrub with shuttle at the ends and
+  the campaign date as an amber tick, real time + speed, one date readout pressed or T to
+  edit, the campaign mark, Set as campaign date; the ±1 h, the Scrub popover, the shuttle
+  slider, the View popover and the chip row gone); `LayoutCorner.vue` and `LayerKey.vue` on
+  the picture through a new overlay slot in `OrbitCanvas.vue` (the key is the toggle, off
+  entries dimmed and dashed; `LayerChips.vue` and `OrbitLegend.vue` deleted); More tools in
+  the header; `orbit/commands.ts` registers every control first and the Keys table is
+  generated from it, with a test that every command has a control and no key does two
+  things; the K12 strip's place reserved with `--flight-strip-height` (0 now), the ship
+  list to go beneath; **Export and Import in the account menu** (`saveBlob` in
+  `platform/browser.ts`; Import disabled when the campaign is not empty). Twelve
+  `orbit_showpiece_built_*` screenshots; exercised at column, half, full, 1,100 and 480 px,
+  signed out, reduced motion, every key. `DesignView.vue` updated for the deleted chips.
+  **Orchestrator:** 656 pass / 0 fail, check clean, build green on the combined tree; the
+  built view matches the ruled design. **Accepted.** The whole tree is pushable with
+  `git add -A`, which also cures the `8dbcc36` build failure (the imports now exist).
+- **Found:** the dossier's "100D jump travel times" come from `calculateBaseJourneyTimes`
+  in `packages/engines` (legacy `universal_math.js`, parity-tested): G1 (1) and (2) already
+  exist in copied code; Johnny confirms them rather than supplies them. Noted on G1.
+- **Next:** D, K13 part 3 (the ship sheet from `rules/mgt2e_ship_sheet_fields.json`); A,
+  the vessel track schema and store helpers (K6d data, K12 "Many ships" point 1) so D can
+  draw the ship list and the Jump button after the sheet.

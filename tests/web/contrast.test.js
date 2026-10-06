@@ -275,6 +275,26 @@ const PAIRS = [
     ['--text-0', '--bg-2', TEXT, 'the date field'],
     ['--text-1', '--surface-2', TEXT, 'orbit view: the campaign mark (13 px)'],
     ['--text-muted', '--surface-2', TEXT, 'orbit view: the weekday on the mark (13 px)'],
+    // Images: the gallery strip, its marks, the lightbox (K14)
+    ['--on-signal', '--signal', SMALL, 'the Primary tag on a thumbnail (9.5 px)'],
+    ['--text-0', '--chrome-bg', MARK, 'the marks on a thumbnail (make primary, remove)'],
+    ['--danger', '--chrome-bg', MARK, 'the remove mark under the pointer'],
+    ['--text-muted', '--bg-1', TEXT, 'the add tile, the hint under the strip (12.5 px), a caption'],
+    ['--text-0', '--bg-1', TEXT, 'lightbox: the count'],
+    ['--text-muted', '--bg-1', TEXT, 'lightbox: the size line (12.5 px)'],
+    ['--text-0', ['--chrome-glass', '--bg-0'], MARK, 'lightbox: the previous and next arrows'],
+    // The orbit showpiece: the key, the corner control, the scrub, the date readout (K15)
+    ['--text-1', ['--chrome-glass', '--orbit-space'], TEXT, 'key: an entry on (12 px)'],
+    ['--text-muted', ['--chrome-glass', '--orbit-space'], TEXT, 'key: an entry off (12 px); the corner control at rest'],
+    ['--orbit-ring', ['--chrome-glass', '--orbit-space'], MARK, 'key: the paths mark'],
+    ['--orbit-hz', ['--chrome-glass', '--orbit-space'], MARK, 'key: the habitable mark'],
+    ['--orbit-jump', ['--chrome-glass', '--orbit-space'], MARK, 'key: the jump limit mark'],
+    ['--daylight', ['--chrome-glass', '--orbit-space'], MARK, 'key: the day half of the day/night mark'],
+    ['--signal', ['--chrome-glass', '--orbit-space'], MARK, 'key: the scan box and the mainworld star; the corner control chosen'],
+    ['--signal', '--row-active', TEXT, 'the corner control, chosen'],
+    ['--text-2', '--stage-head', TEXT, 'the scrub’s end labels (11.5 px)'],
+    ['--attention', '--stage-head', MARK, 'the campaign date on the scrub’s track'],
+    ['--signal', '--bg-2', TEXT, 'the date readout'],
 ];
 
 if (process.env.CONTRAST_REPORT) {

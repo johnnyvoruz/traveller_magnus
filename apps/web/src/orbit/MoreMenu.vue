@@ -80,6 +80,7 @@ watch(() => props.items.map((item) => item.id).join(' '), () => {
           type="button"
           class="orbit-more-item"
           role="menuitem"
+          :data-command="'orbit-' + item.id"
           @click="choose(item.id)"
         >
           <Icon :name="item.icon" :size="14" />
@@ -180,5 +181,30 @@ watch(() => props.items.map((item) => item.id).join(' '), () => {
   margin: 0 0 6px;
   color: var(--text-0);
   font: 700 13px/1.4 var(--font-text);
+}
+
+/* A tool's rows: a checkbox with its words, a slider with its label. */
+.orbit-pop-check,
+.orbit-pop-range {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0;
+  color: var(--text-1);
+  font: 400 13px/1.4 var(--font-text);
+}
+
+.orbit-pop-check input {
+  margin: 0;
+  accent-color: var(--signal);
+}
+
+.orbit-pop-range span {
+  flex: 0 0 auto;
+}
+
+.orbit-pop-range .orbit-jog {
+  flex: 1 1 auto;
+  min-width: 120px;
 }
 </style>

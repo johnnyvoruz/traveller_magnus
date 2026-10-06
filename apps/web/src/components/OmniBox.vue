@@ -113,7 +113,7 @@ async function search(): Promise<void> {
     // The campaign group leads, at most five, then a row for the rest (design §6).
     const mine: OmniResult[] = [];
     if (withCampaign.value) {
-        const found = campaignMatches(text, campaign.records);
+        const found = campaignMatches(text, campaign.records, undefined, campaign.universeId);
         mine.push(...found.items);
         if (found.total > found.items.length) mine.push({ kind: 'more', name: 'All ' + found.total + ' matches', detail: 'Open the list with this search', query: text });
     }
@@ -274,6 +274,7 @@ onBeforeUnmount(() => {
             @click="action = 0; openResult(index)"
           >
             <span class="omni-line">
+              <img v-if="result.kind === 'record' && result.thumb" class="omni-thumb" :src="result.thumb" alt="" loading="lazy">
               <strong>{{ result.name }}</strong>
               <span class="omni-kind">{{ result.kind === 'record' ? 'yours' : result.kind === 'more' ? 'list' : result.kind }}</span>
             </span>
@@ -454,6 +455,18 @@ onBeforeUnmount(() => {
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
+}
+
+.omni-thumb {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 28px;
+  height: 28px;
+  margin: -4px 0;
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-1);
+  object-fit: cover;
+  background: var(--bg-0);
 }
 
 .omni-line strong {

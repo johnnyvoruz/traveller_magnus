@@ -430,7 +430,9 @@ No orchestrator will fill these in from memory. Not needed until the MVP steps a
 
 Note (2026-10-05): for (1), the orbit view already draws jump-limit circles at 100 diameters,
 copied from the legacy `js/system_viewer.js` (2916 to 2950). Say whether that is the rule to
-use for the minimum jump distance, or give another.
+use for the minimum jump distance, or give another. Likewise for (2): the dossier's "100D jump
+travel times" table (1G to 6G) comes from `calculateBaseJourneyTimes` in the engines, copied
+from the legacy `universal_math.js`. Confirm it as the travel-time rule, or give another.
 
 **Answer:**
 
