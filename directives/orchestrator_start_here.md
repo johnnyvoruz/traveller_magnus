@@ -101,21 +101,20 @@ campaign layer over the truth map; own maps later. X sign-in only.
 | deck plan light backdrop | a paper token for the viewer | Agent C, in flight |
 | K6c | clock screens, the date beside the search bar, the Rail | done, accepted §101, not yet pushed |
 | **K14 screens** | images on the record page, rows, results; gallery; lightbox | **Agent D, in flight** |
+| K15 | the orbit view as a showpiece: design, Johnny rules, build | next for D |
 | K7, K8 | journal, timeline | outlines only |
 | K10, K11 | copy between campaigns; shared records in an account library | K11 needs a design |
 
 ## 6. In flight right now
 
-- **Agent D:** the K14 image screens. Then K13 part 3 (the ship sheet), then K6d (the
-  position log and the Jump button on settings.jumpHours).
-- **Agent A:** the store status fix (§95, §97): a failed universe list / create / rename /
-  delete must not mark the open campaign as failed.
+- **Agent D:** the K14 image screens. Then K15 part 1 (the orbit view showpiece design,
+  Johnny rules on it), K15 part 2, K13 part 3 (the ship sheet), K6d.
+- **Agent A:** free.
 - **Agent B:** the campaign JSON export route (the first backup of campaign data).
 - **Agent C:** the shipyard grid under the deck plan; then the local-time tick on the Day
   and night strip (plan §7.10, A16 ruled: the prime meridian).
 - **Agent F:** parked. K13 parts 1 and 2 done (handoff 89 to 91); part 3 after K5f.
-- **Last push:** 5af0607 (object routes), deployed and green. A, C, D mid-step; B on the
-  campaign export.
+- **Last push:** 0e0d00d (clock screens, date chip), deployed and green. A, B, C, D mid-step.
 
 ## 7. Decisions Johnny has made that shape the next steps
 

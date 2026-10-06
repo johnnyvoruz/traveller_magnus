@@ -109,19 +109,15 @@ async function readList(): Promise<UniverseRow[] | null> {
         signOutLocal();
         return null;
     }
-    if (!listed.ok) {
-        campaign.status = 'error';
-        return null;
-    }
+    if (!listed.ok) return null;
     const universes = Universe.array().parse((await listed.json()).data);
     campaign.universes = universes;
     return universes;
 }
 
-/** The account's campaigns. A 401 signs the store out and returns an empty list. */
-export async function listCampaigns(): Promise<UniverseRow[]> {
-    const rows = await readList();
-    return rows ?? [];
+/** The account's campaigns. A 401 signs the store out. A failed list returns null. */
+export async function listCampaigns(): Promise<UniverseRow[] | null> {
+    return readList();
 }
 
 async function postCampaign(name: string): Promise<UniverseRow | null> {
@@ -138,17 +134,13 @@ async function postCampaign(name: string): Promise<UniverseRow | null> {
             }),
         });
     } catch {
-        campaign.status = 'error';
         return null;
     }
     if (created.status === 401) {
         signOutLocal();
         return null;
     }
-    if (created.status !== 201 && created.status !== 200) {
-        campaign.status = 'error';
-        return null;
-    }
+    if (created.status !== 201 && created.status !== 200) return null;
     pendingUniverseId = null;
     const universe = Universe.parse((await created.json()).data);
     const index = campaign.universes.findIndex((item) => item.id === universe.id);
@@ -220,7 +212,10 @@ export async function openCampaign(options: {
     pinnedTruth = options.truthVersion;
     campaign.status = 'loading';
     const universes = await readList();
-    if (!universes) return;
+    if (!universes) {
+        if (campaign.status === 'loading') campaign.status = 'error';
+        return;
+    }
     let universe = options.universeId
         ? universes.find((item) => item.id === options.universeId)
         : undefined;
@@ -235,7 +230,10 @@ export async function openCampaign(options: {
     if (!universe) universe = universes[0];
     if (!universe) {
         const created = await postCampaign('My campaign');
-        if (!created) return;
+        if (!created) {
+            if (campaign.status === 'loading') campaign.status = 'error';
+            return;
+        }
         universe = created;
     }
     await loadPages(universe);
@@ -281,10 +279,7 @@ export async function renameCampaign(id: string, name: string): Promise<void> {
         signOutLocal();
         return;
     }
-    if (!res.ok) {
-        campaign.status = 'error';
-        return;
-    }
+    if (!res.ok) throw new Error('The campaign could not be renamed.');
     const updated = Universe.parse((await res.json()).data);
     const index = campaign.universes.findIndex((item) => item.id === id);
     if (index >= 0) campaign.universes[index] = updated;
@@ -304,10 +299,7 @@ export async function deleteCampaign(id: string): Promise<void> {
         signOutLocal();
         return;
     }
-    if (!res.ok) {
-        campaign.status = 'error';
-        return;
-    }
+    if (!res.ok) throw new Error('The campaign could not be deleted.');
     campaign.universes = campaign.universes.filter((item) => item.id !== id);
     if (remembered() === id) storageSet(CAMPAIGN_UNIVERSE_KEY, '');
     if (campaign.universeId !== id) return;

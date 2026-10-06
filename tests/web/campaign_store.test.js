@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { CAMPAIGN_UNIVERSE_KEY, campaign, createCampaign, openCampaign, setCampaignDate, switchCampaign } from '../../apps/web/src/campaign/store.ts';
+import { CAMPAIGN_UNIVERSE_KEY, campaign, createCampaign, listCampaigns, openCampaign, setCampaignDate, switchCampaign } from '../../apps/web/src/campaign/store.ts';
 import { commit, flushCampaign, lastError, newRecordId, pending, resetCampaign } from '../../apps/web/src/campaign/commit.ts';
 import { recordsAtHex } from '../../apps/web/src/campaign/index.ts';
 import { toasts } from '../../apps/web/src/shell/toast.ts';
@@ -88,6 +88,7 @@ function harness(seed = []) {
         pages: {},
         failPatch: false,
         failPost: false,
+        failList: false,
         conflict: null,
     };
     const timers = [];
@@ -104,6 +105,10 @@ function harness(seed = []) {
             assert.equal(new Headers(init.headers).get('content-type'), 'application/json');
         }
         if (target === '/api/universes' && method === 'GET') {
+            if (server.failList) {
+                server.failList = false;
+                return jsonResponse(500, { ok: false, error: { code: 'internal', message: 'no' } });
+            }
             return jsonResponse(200, { ok: true, data: server.universes });
         }
         if (target === '/api/universes' && method === 'POST') {
@@ -420,4 +425,28 @@ test('a create retries the same id after a network failure and ends with one uni
     assert.equal(campaign.universeId, box.server.posts[0].id);
     assert.equal(second && second.id, box.server.posts[0].id);
     assert.equal(campaign.status, 'ready');
+});
+
+test('a failed create and a failed list leave the open campaign ready', async () => {
+    memory.clear();
+    resetCampaign();
+    const box = harness([universeRow({ id: 'uni-1', name: 'Alpha game' })]);
+    const row = record({ id: VESSEL, name: 'Beowulf' });
+    box.server.pages['uni-1'] = [{ after: 0, body: page([row], 1, true) }];
+    await open(box, 'uni-1');
+    assert.equal(campaign.status, 'ready');
+    assert.equal(campaign.records[VESSEL].name, 'Beowulf');
+    box.server.failPost = true;
+    const created = await createCampaign('Nope');
+    assert.equal(created, null);
+    assert.equal(campaign.status, 'ready');
+    assert.equal(campaign.universeId, 'uni-1');
+    assert.equal(campaign.records[VESSEL].name, 'Beowulf');
+    box.server.failList = true;
+    const listed = await listCampaigns();
+    assert.equal(listed, null);
+    assert.equal(campaign.status, 'ready');
+    assert.equal(campaign.universeId, 'uni-1');
+    assert.equal(campaign.records[VESSEL].name, 'Beowulf');
+    assert.equal(campaign.universes[0].name, 'Alpha game');
 });

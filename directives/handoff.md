@@ -2742,3 +2742,24 @@ API and Durable Object have against `data_model.md` and `api.md`).
   head of the record page and as thumbnails on rows and results, the gallery strip, add by
   chooser / drop / paste, remove with undo, "Make primary", captions, a lightbox, progress
   and failure in the saving mark's language. Then K13 part 3, the ship sheet.
+
+## 102. Pushed `0e0d00d` (clock screens); the orbit view showpiece pass is asked for (2026-10-05)
+
+- GitHub run green; live bundle `index-Di-t_pJu.js` holds the weekdays and the chip; the orbit
+  chunk holds "Set as campaign date". K6c is in production.
+- **Johnny:** make the orbit view a clean showpiece: drop the ±1 h controls (scrubbing covers
+  them), consider the layer toggles as a key at the bottom, the view choice (Orbits / Row /
+  Column) as a corner control like Google Maps or inside View; it must sing with
+  `manifesto.md`, because the starship plotting tools (K12) will live on this map. Written
+  as **K15** in `slice_2_campaign.md`: D designs first (with the K12 space reserved), Johnny
+  rules, then D builds. **Order for D:** finish the K14 image screens (in flight), then K15
+  part 1, then K13 part 3.
+
+## 103. The store no longer marks the open campaign failed on a catalogue error (Agent A) (2026-10-05)
+
+- **Agent A:** `listCampaigns` / `createCampaign` return null on failure, `renameCampaign` /
+  `deleteCampaign` throw with a message; `status` becomes `error` only while the open is
+  still `loading`; 401 still signs out. Tests: a failed create and a failed list leave
+  status `ready` and the rows intact. Diff read: as reported; 637 pass on the tree.
+  **Accepted.** D's K5f workaround in `AccountMenu` already shows the thrown message.
+- Pushable by path (`apps/web/src/campaign`, `tests/web/campaign_store.test.js`). A is free.

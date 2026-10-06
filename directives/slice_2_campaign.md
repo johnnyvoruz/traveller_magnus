@@ -354,6 +354,29 @@ only. D's five points for the orchestrator:
   `tokens.css`; no hex colour elsewhere), with the box, credit and controls staying in the
   app's dark look. Agent C.
 
+- **K15. The orbit view as a showpiece (Johnny, 2026-10-05; Agent D, design first).** "A
+  super clean UI; pare down the tools: the advance 1 h plus and minus is dumb, we'd use the
+  scrubbing tools for that anyway; move the toggles from the top to a key at the bottom?;
+  put the view choice (Orbits / Row / Column) as a button in the upper left of the orbit map
+  like Google Maps, or tuck it into the View button. It's got to sing with the rules of
+  `manifesto.md` to really be a showpiece, because we're going to put our other tools for
+  the starship plotting on this map later" (K12).
+  - **Part 1, the design (to `findings/orbit_showpiece_design.md`, mockups in
+    `findings/ui_design_shots/orbit_showpiece_*`):** every control in the view today, listed,
+    with keep / move / drop and the reason; the pared time row (no ±1 h; scrubbing, speed,
+    play, "1 week", the campaign mark and "Set as campaign date" stay); where the layer
+    toggles go (a key at the bottom that is also the toggle, or the View menu) and what the
+    key shows; the view choice as a corner control or inside View, with a recommendation;
+    **the space reserved for K12** (a destination target, a flight line, a range ring, a
+    Jump button, a status strip for "in flight / at the jump point / in jump") so nothing
+    moves again when it arrives; column, half and full; 520 px; keyboard reach for every
+    control; what the three manifesto checks (one panel system, tokens only, no chrome
+    before the command palette has the command) mean for each change. Johnny rules on the
+    design before part 2.
+  - **Part 2, the build:** to the ruled design; `orbit/` and `views/OrbitView.vue` only; the
+    engines and the disc pipeline untouched; the contrast test; screenshots beside the
+    current view.
+
 ## Verification for K1 to K5
 
 - [ ] `npm test`, `npm run check`, `npm run build` green; the API suite run at least once
