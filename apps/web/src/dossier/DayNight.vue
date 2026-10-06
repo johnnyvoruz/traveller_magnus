@@ -297,8 +297,9 @@ const summary = computed(() => {
   z-index: 1;
   width: 9px;
   border-radius: 999px;
-  background: var(--daylight);
-  box-shadow: 0 0 0 2px var(--night-sky);
+  background: var(--signal);
+  /* A light ring reads on the night; a dark ring reads on the yellow day. */
+  box-shadow: 0 0 0 1px var(--text-0), 0 0 0 3px var(--bg-0);
   transform: translateX(-50%);
   pointer-events: none;
 }

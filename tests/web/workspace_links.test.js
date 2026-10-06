@@ -47,11 +47,11 @@ test('each end has its own words, from the vocabulary', () => {
 test('the kinds two records may be joined by, worded from this side, each once', () => {
     const personToShip = kindChoices('person', 'vessel');
     assert.deepEqual(personToShip.map((c) => [c.kind, c.outward, c.label]), [
-        ['owns', true, 'Owns'], ['crew', true, 'Crew of'], ['commands', true, 'Commands'],
+        ['owns', true, 'Owns'], ['crew', true, 'Crew of'], ['passenger', true, 'Passenger on'], ['commands', true, 'Commands'],
     ]);
     const shipToPerson = kindChoices('vessel', 'person');
     assert.deepEqual(shipToPerson.map((c) => [c.kind, c.outward, c.label]), [
-        ['owns', false, 'Owned by'], ['crew', false, 'Crew'], ['commands', false, 'Commanded by'],
+        ['owns', false, 'Owned by'], ['crew', false, 'Crew'], ['passenger', false, 'Passengers'], ['commands', false, 'Commanded by'],
     ]);
     // A symmetric kind is offered once, outward.
     const allies = kindChoices('person', 'person').filter((c) => c.kind === 'ally');

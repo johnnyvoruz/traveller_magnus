@@ -35,7 +35,7 @@ export const CAMPAIGN_RECORD_TYPES = [
 export type CampaignRecordType = typeof CAMPAIGN_RECORD_TYPES[number];
 
 const LINK_KIND_NAMES = [
-    'member', 'owns', 'crew', 'commands', 'ally', 'rival', 'enemy', 'contact', 'patron', 'client', 'target', 'involved',
+    'member', 'owns', 'crew', 'passenger', 'commands', 'ally', 'rival', 'enemy', 'contact', 'patron', 'client', 'target', 'involved',
 ] as const;
 export const CampaignLinkKindName = z.enum(LINK_KIND_NAMES);
 export type CampaignLinkKindName = z.infer<typeof CampaignLinkKindName>;
@@ -56,6 +56,8 @@ export const CAMPAIGN_LINK_KINDS: readonly CampaignLinkKind[] = [
     { kind: 'member', fromTypes: ['person', 'organization', 'vessel'], toTypes: ['organization'], labelFrom: 'Member of', labelTo: 'Members', symmetric: false },
     { kind: 'owns', fromTypes: ['person', 'organization'], toTypes: ['vessel', 'item', 'place', 'business'], labelFrom: 'Owns', labelTo: 'Owned by', symmetric: false },
     { kind: 'crew', fromTypes: ['person'], toTypes: ['vessel'], labelFrom: 'Crew of', labelTo: 'Crew', symmetric: false },
+    // Slice 2 follow-up 9 (2026-10-05): the ship sheet's passengers as people. Labels only.
+    { kind: 'passenger', fromTypes: ['person'], toTypes: ['vessel'], labelFrom: 'Passenger on', labelTo: 'Passengers', symmetric: false },
     { kind: 'commands', fromTypes: ['person'], toTypes: ['vessel', 'organization'], labelFrom: 'Commands', labelTo: 'Commanded by', symmetric: false },
     { kind: 'ally', fromTypes: ['person', 'organization'], toTypes: ['person', 'organization'], labelFrom: 'Ally', labelTo: 'Ally', symmetric: true },
     { kind: 'rival', fromTypes: ['person', 'organization'], toTypes: ['person', 'organization'], labelFrom: 'Rival', labelTo: 'Rival', symmetric: true },

@@ -4,13 +4,20 @@
  * in its sections and page order, edited where they stand and stored as `sheet.fields`
  * under the PDF's own names. The look is the sheet's: chamfered panels, cyan section tabs,
  * rust-red value tags, a thin orange frame line, all tokens. Plain fields; nothing is
- * computed from one. The deck plan (K9) sits inside it, in the slot at the end.
+ * computed from one. The deck plan (K9) sits inside it, in the slot at the end. Passengers
+ * and crew can be people of the campaign (follow-up 9): a Passenger Name field holds one
+ * as a pill, with the record id beside the name in `sheet.fields`; the Crew box's people
+ * are the vessel's crew connections (sheet_people.ts).
  */
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
+import type { CampaignRecord } from '@voyage/shared';
 import { campaign } from '../campaign/store.ts';
 import Icon from '../design/Icon.vue';
 import { saveRecord } from './actions.ts';
 import { sheetFolded } from './list_state.ts';
+import PersonCard from './PersonCard.vue';
+import PersonField from './PersonField.vue';
+import { isPersonField, newPersonName, peopleOfKind, personOf, SECTION_KIND, withoutPerson, withPerson } from './sheet_people.ts';
 import {
     fieldsOf, isTall, sheetSections, sheetWithFields, valueOf, withValue, type Row, type SheetField, type Table,
 } from './ship_sheet.ts';
@@ -75,6 +82,27 @@ function save(field: SheetField, value: string | boolean): void {
     saveRecord(props.id, { sheet: sheetWithFields(record.value.sheet, next) });
 }
 
+// ---- Passengers and crew as people (follow-up 9) --------------------------------
+
+/** The person whose card is showing. */
+const shown = ref<CampaignRecord | null>(null);
+
+const crew = computed(() => peopleOfKind(campaign.links, campaign.records, props.id, SECTION_KIND.Crew));
+
+function personIn(field: SheetField): CampaignRecord | null {
+    return personOf(values.value, field, campaign.records);
+}
+
+function holdPerson(field: SheetField, person: CampaignRecord): void {
+    if (props.readOnly || !record.value) return;
+    saveRecord(props.id, { sheet: sheetWithFields(record.value.sheet, withPerson(values.value, field, person)) });
+}
+
+function releasePerson(field: SheetField): void {
+    if (props.readOnly || !record.value) return;
+    saveRecord(props.id, { sheet: sheetWithFields(record.value.sheet, withoutPerson(values.value, field)) });
+}
+
 function onText(field: SheetField, event: Event): void {
     const target = event.target;
     if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) save(field, target.value);
@@ -133,6 +161,17 @@ function columnHeadings(table: Table): string[] {
             </button>
           </h4>
           <div v-show="isOpen(section)" class="sheet-body">
+            <div v-if="section.name === 'Crew'" class="sheet-crew" role="group" aria-label="Crew, as people">
+              <span class="sheet-label">People</span>
+              <ul class="sheet-crew-list">
+                <li v-for="item in crew" :key="item.link.id">
+                  <PersonField :vessel-id="id" :person="item.person" :kind="SECTION_KIND.Crew" suggested="" :read-only="readOnly" label="the crew" @show="shown = $event" />
+                </li>
+                <li class="sheet-crew-add">
+                  <PersonField :vessel-id="id" :person="null" :kind="SECTION_KIND.Crew" suggested="" :read-only="readOnly" label="the crew" @show="shown = $event" />
+                </li>
+              </ul>
+            </div>
             <template v-for="(block, index) in section.blocks" :key="index">
               <div v-if="block.kind === 'row'" class="sheet-row">
                 <label v-for="cell in block.cells" :key="cell.field.name" class="sheet-field" :class="{ 'is-tall': isTall(cell.field), 'is-tick': cell.field.type === 'checkbox' }" :for="idOf(cell.field)">
@@ -180,9 +219,33 @@ function columnHeadings(table: Table): string[] {
                   <tbody>
                     <tr v-for="(cells, row) in block.cells" :key="row">
                       <th scope="row" class="sheet-th is-row">{{ rowHeading(block, row) }}</th>
-                      <td v-for="(field, column) in cells" :key="column">
+                      <td v-for="(field, column) in cells" :key="column" :class="{ 'is-person': field && isPersonField(field) }">
                         <template v-if="field">
+                          <PersonField
+                            v-if="isPersonField(field)"
+                            :vessel-id="id"
+                            :person="personIn(field)"
+                            :kind="SECTION_KIND.Passengers"
+                            :suggested="newPersonName(values, field)"
+                            :read-only="readOnly"
+                            :label="field.name"
+                            @hold="holdPerson(field, $event)"
+                            @release="releasePerson(field)"
+                            @show="shown = $event"
+                          >
+                            <input
+                              type="text"
+                              class="sheet-input"
+                              :aria-label="field.name"
+                              :title="field.name"
+                              :value="text(field)"
+                              :disabled="readOnly"
+                              @change="onText(field, $event)"
+                              @keydown="onKey"
+                            >
+                          </PersonField>
                           <input
+                            v-else-if="field.type === 'checkbox'"
                             v-if="field.type === 'checkbox'"
                             type="checkbox"
                             class="sheet-tick"
@@ -225,10 +288,47 @@ function columnHeadings(table: Table): string[] {
         </div>
       </section>
     </div>
+    <PersonCard v-if="shown" :id="shown.id" @close="shown = null" />
   </section>
 </template>
 
 <style>
+/* The crew as people: pills above the PDF's one text box, and a + to add one. */
+.sheet-crew {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.sheet-crew-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sheet-crew-list li {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.sheet-crew-add {
+  position: relative;
+}
+
+/* A passenger's name cell: the input and the +, or the pill. */
+.sheet-table td.is-person {
+  min-width: 190px;
+}
+
+.sheet-table td.is-person .pf {
+  display: flex;
+}
+
 /* The sheet reads as part of the panel: its panels stack with no frame of their own. */
 .sheet-frame {
   display: flex;

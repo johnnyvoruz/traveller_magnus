@@ -218,7 +218,7 @@ test('a vessel track is ordered legs', () => {
 
 test('link vocabulary rows use only record types and match linkAllowed', () => {
     assert.deepEqual(CAMPAIGN_LINK_KINDS.map((row) => row.kind), [
-        'member', 'owns', 'crew', 'commands', 'ally', 'rival', 'enemy', 'contact', 'patron', 'client', 'target', 'involved',
+        'member', 'owns', 'crew', 'passenger', 'commands', 'ally', 'rival', 'enemy', 'contact', 'patron', 'client', 'target', 'involved',
     ]);
     for (const row of CAMPAIGN_LINK_KINDS) {
         for (const type of [...row.fromTypes, ...row.toTypes]) {
@@ -233,6 +233,9 @@ test('link vocabulary rows use only record types and match linkAllowed', () => {
     assert.equal(linkAllowed('member', 'person', 'organization'), true);
     assert.equal(linkAllowed('member', 'person', 'person'), false);
     assert.equal(linkAllowed('crew', 'organization', 'vessel'), false);
+    assert.equal(linkAllowed('passenger', 'person', 'vessel'), true);
+    assert.equal(linkAllowed('passenger', 'vessel', 'person'), false);
+    assert.equal(linkAllowed('passenger', 'organization', 'vessel'), false);
     assert.equal(linkAllowed('target', 'job', 'vessel'), true);
     assert.equal(linkAllowed('target', 'person', 'job'), false);
     assert.equal(linkAllowed('involved', 'note', 'event'), true);

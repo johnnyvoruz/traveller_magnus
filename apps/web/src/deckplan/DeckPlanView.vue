@@ -293,9 +293,13 @@ watch(() => props.plan, () => { void load(); }, { immediate: true });
 }
 
 .credit {
-  padding: 8px 12px;
+  padding: 6px 12px;
   color: var(--text-1);
   background: var(--bg-1);
   border-top: 1px solid var(--line-1);
+  /* 10px is the smallest text in the shared UI (the tag). One line at every panel width. */
+  font-size: 10px;
+  line-height: 1.3;
+  white-space: nowrap;
 }
 </style>

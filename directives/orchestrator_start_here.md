@@ -104,8 +104,9 @@ campaign layer over the truth map; own maps later. X sign-in only.
 | K15 | the orbit view as a showpiece | done, live |
 | K13 part 3 | the ship sheet on the vessel record | done, accepted §113, not yet pushed |
 | K6d data | the vessel track (dated legs on status), helpers | done, accepted §113, not yet pushed |
-| follow-ups 1 | full-screen plan, split button, chip, scrub glitch, sheet as panel | done §117, not yet pushed |
-| **follow-ups 2** | passengers and crew as people; orbit drawers design | **Agent D, in flight** |
+| follow-ups 1 | full-screen plan, split button, chip, scrub glitch, sheet as panel | done, live |
+| follow-ups 2 | passengers and crew as people; orbit drawers design | done §120, not yet pushed; drawers await Johnny |
+| **follow-ups 3** | sheet x-scrolls, folding motion | **Agent D, next** |
 | K6d screens | ship list, track, Jump button | next for D |
 | K17 | shared ship feeds, follow, faction accounts | recorded; after K6d and K16 |
 | K7, K8 | journal, timeline | outlines only |
@@ -113,13 +114,14 @@ campaign layer over the truth map; own maps later. X sign-in only.
 
 ## 6. In flight right now
 
-- **Agent D:** follow-ups step 2 (passengers and crew as people with pills; then the orbit
-  drawers design, Johnny rules), then K6d screens (ship list, track, Jump button).
-- **Agent A:** free.
+- **Agent D:** step 3 (sheet x-scrolls, folding motion); then, proposed order, the ship MVP
+  (K6d screens + K12 designators and plotting mode) before step 4 (toggle motion, docked
+  card); the drawers build when Johnny rules D1 to D7 (§120).
+- **Agent A:** lazy-load the workspace and the dossier into their own chunks (§120).
 - **Agent B:** free. The export route is in (§104); Export / Import buttons come with D's K15.
 - **Agent C:** free.
 - **Agent F:** parked. K13 parts 1 and 2 done (handoff 89 to 91); part 3 after K5f.
-- **Last push:** 94e69a5 (crisp tiles). Local and finished: C's marker, D's step 1 (§117);
+- **Last push:** 6a705b4. Local and finished: C's credit and marker, D's step 2 (§120);
   push everything.
 
 ## 7. Decisions Johnny has made that shape the next steps

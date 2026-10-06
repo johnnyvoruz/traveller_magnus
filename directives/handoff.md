@@ -3014,3 +3014,54 @@ API and Durable Object have against `data_model.md` and `api.md`).
   Everything finished; **push with `git add -A`.**
 - **Next:** D step 2 (item 9 passengers and crew as people; then item 6's drawer design).
   C free.
+
+## 118. Pushed `6a705b4`; deployed; four more notes from the live app (2026-10-05)
+
+- GitHub run green; live bundle `index-CVdBAwdC.js` holds the plan modal. Johnny: the deck
+  plan is "nice and crisp now"; the thermometer "looking great".
+- **New follow-ups 10 to 13** in `slice_2_campaign.md`: the credit line smaller on one line
+  (C); the play marker in a teal that contrasts with day and night (C); stray few-pixel
+  x-scrolls in the sheet at column width (D); folded tabs' background to full width and a
+  graceful open/close motion instead of a snap (D). C has 10 and 11 now; D gets 12 and 13
+  as step 3 after the pills.
+
+## 119. Two more orbit notes from Johnny; waiting on C and D (2026-10-05)
+
+- **Follow-ups 14 and 15** in `slice_2_campaign.md`: the layer toggles get a micro-animation
+  (rings grow from their star and shrink back; a teal wireframe sphere fading as the
+  transition for moons and day/night; tokens' motion; instant under reduced motion; the
+  steady frame unchanged); and D decides, from the manifesto, what happens when the docked
+  body card and the dossier panel for the same body are both open, then builds it and
+  Johnny reviews. Both go to D after steps 2 and 3.
+
+## 120. C's credit and marker, D's step 2 accepted; the drawers design awaits Johnny; ship plotting notes (2026-10-05)
+
+- **Agent C:** the credit line at 10 px (the tag size, the smallest shared text; one line in
+  the column viewer and in the modal, down to a 360 px box); the marker in `--signal` teal
+  with two edge rings (`--text-0` on the night 11.9:1, `--bg-0` on the day 13:1), both pairs
+  and the 10 px pair in the contrast test. 696 pass. **Accepted.**
+- **Agent D, step 2, item 9:** `PersonField.vue` (the quiet + on each of the 16 Passenger
+  Name cells: Existing person through the K5d picker, or New person from the typed text),
+  pills, `PersonCard.vue` (the one modal on the body: image or mark, name, where, summary,
+  Open record, Esc), `passenger` added to the shared vocabulary ("Passenger on" /
+  "Passengers", person to vessel) with its test; stored as `"Passenger Name 3"` plus
+  `"Passenger Name 3 record"` in `sheet.fields`; taking a pill out keeps the typed name and
+  removes the link. Crew, whose PDF section is one box, got a People row of crew pills above
+  it with nothing stored in the sheet (the links are the record). Read back after a full
+  reload. 8 contrast pairs. **Accepted.**
+- **D confessed a `git stash` / `git stash pop`** to measure the main chunk; it round-tripped.
+  Rule stands (`CLAUDE.md` 6): no git; measure by building twice or ask the orchestrator.
+- **Main chunk 503.9 kB, 3.9 kB over the Vite warning.** Orchestrator's decision: not the
+  limit; Agent A lazy-loads the campaign workspace and the dossier into their own chunks
+  (the map is what loads first; both are reached by route or by click).
+- **Item 6, the drawers design** (`findings/orbit_drawers_design.md`, six mockups): the
+  header holds Play, the date readout, the campaign mark and three tabs (Time T / View Y /
+  Layers L); the time row, split button and key chips leave the picture; drawers open over
+  the picture with a clip-path reveal, a signal hairline and groups fading 40 ms apart;
+  none under reduced motion; Esc closes the drawer first. Seven choices D1 to D7.
+  **Orchestrator recommends yes to all seven**, with D3 (the key chips leave the picture
+  entirely) the one for Johnny to weigh: he liked the key; D's alternative keeps a small
+  read-only swatch legend bottom-left while a layer is on.
+- **Johnny on the ship MVP:** sensor designators as vector wireframes (triangle, circle,
+  square, rectangle, Homeworld-style) and a plotting toggle with pointer-tracking hairlines
+  and coordinates, 2D; fuel and time after. Recorded as K12 point 2b.

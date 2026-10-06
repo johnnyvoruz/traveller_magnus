@@ -318,6 +318,17 @@ only. D's five points for the orchestrator:
        *selected* ship; a ship list (the campaign's vessels in this system, then generated
        traffic) picks which. K15 part 2 reserves for this: the strip takes a ship, not "the"
        ship.
+    2b. **Sensor designators and the plotting mode (Johnny, 2026-10-05).** "A cool ship sensor
+       reading, rendered as a vector wireframe designator: a triangle, circle, square,
+       rectangle, like Homeworld's zoomed-out view." Each ship on the orbit view is drawn as
+       a thin wireframe designator in the view's tokens (shape by vessel class or kind, the
+       party's ship distinguished), with its name, not a sprite. **Plotting mode** is a
+       toggle (a key and a command): while on, horizontal and vertical hairlines and a
+       coordinate readout track the pointer over the picture (2D for now; the view's own
+       units, with the distance from the selected ship); a click sets the destination and
+       the leg is previewed before it is written to the track. Fuel and time rules come
+       after (G1); until then a leg's duration is typed or taken from the engines'
+       `calculateBaseJourneyTimes` once Johnny confirms it (G1 note).
     3. **Generated traffic (later, K16).** The engines produce tracks for ships that are not
        records (patrols, traders, liners) from the universe's seed and the system's data,
        as a derived file per universe (`architecture.md` §10.1), never in the browser.
@@ -436,6 +447,35 @@ only. D's five points for the orchestrator:
      pill opens that person in the app's one modal (a read-only card with "Open record").
      The link is a `crew` or `passenger` connection (K5d vocabulary; `passenger` is added to
      the shared table if absent, labels only), so both pages show it.
+
+  10. **The credit line (C):** "Deck geomorphs by Robert Pearce and Eric B. Smith, CC BY-NC
+      4.0." in smaller type so it sits on one line at every width (always shown; the licence
+      requires it).
+  11. **The marker's colour (C):** the play marker is the day's yellow; make it a teal (an
+      existing accent token) that contrasts with both the yellow day and the dark-blue night;
+      the contrast test gets both pairs.
+  12. **Stray sideways scrolls in the sheet at column width (D):** several tables show an
+      x-scroll of a few pixels that should not be there; size the tables to the column or let
+      them wrap, so a scroll appears only when a table is truly wider.
+  13. **The folding sections (D):** when folded, the tab's background stops short of the full
+      panel width; make it span. Open and close with the tokens' motion (a graceful sci-fi
+      reveal, not a snap); none under reduced motion. Johnny: "nice and crisp now" on the
+      deck plan, "looking great" on the thermometer.
+
+  14. **Layer toggles with motion (D, design and build):** Paths, Moons, Habitable, Jump
+      limit, Day/night, Scan snap on and off today. Johnny wants a micro-animation for each,
+      "smooth, elegant, sci-fi": the habitable band and the jump-limit rings grow out from
+      their star and shrink back; orbits likewise; moons and day/night could be drawn as a
+      teal wireframe sphere that fades in or out as the transition. Durations and easing
+      from the tokens' motion only; none under reduced motion (instant); the renderer's
+      steady-state frame unchanged (the parity shots still match once the motion ends).
+  15. **The pinned body card beside the open panel (D decides):** when the orbit view's
+      docked body card and the dossier panel for the same body are both open, two views of
+      one thing show at once. Johnny sees pros and cons. D reviews `manifesto.md` (one
+      panel system; connected, the relation shows on both; graceful, nothing pops) and
+      makes the design choice (for instance the card collapses to its title while the
+      panel shows that body, or the card becomes the panel's handle), records it in the
+      orbit design notes, and builds it. Johnny reviews the result.
 
 - **K13 part 4. The character sheet (Johnny, 2026-10-05).** Person records get the same
   treatment from a character sheet PDF, "with all our new design requirements": the field
