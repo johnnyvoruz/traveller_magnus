@@ -267,6 +267,14 @@ const PAIRS = [
     ['--attention', '--chrome-bg', TEXT, 'account menu: "That could not be done" (12.5 px)'],
     ['--danger', '--chrome-bg', MARK, 'account menu: the delete icon'],
     ['--bg-0', '--danger', TEXT, 'the Delete button on the red'],
+    // The campaign date: the chip beside the search bar, the panel line, the orbit view mark (K6c)
+    ['--text-0', OMNI_FIELD, TEXT, 'date chip: the date (16 px mono)'],
+    ['--text-muted', OMNI_FIELD, TEXT, 'date chip: the weekday (13 px); signed out, its icon'],
+    ['--text-1', OMNI_FIELD, TEXT, 'date chip signed out: the date; "No campaign date"'],
+    ['--signal', OMNI_FIELD, MARK, 'date chip: the icon'],
+    ['--text-0', '--bg-2', TEXT, 'the date field'],
+    ['--text-1', '--surface-2', TEXT, 'orbit view: the campaign mark (13 px)'],
+    ['--text-muted', '--surface-2', TEXT, 'orbit view: the weekday on the mark (13 px)'],
 ];
 
 if (process.env.CONTRAST_REPORT) {

@@ -97,24 +97,25 @@ campaign layer over the truth map; own maps later. X sign-in only.
 | K5d | links | done, accepted §88, not yet pushed |
 | K5e | the party | done, live |
 | K5f | several campaigns: create, name, switch, delete | done, live |
-| K14 | images on records: routes (B), browser encode and upload (A), screens (D after K5f) | A and B in flight |
+| K14 | images on records: routes (B), browser encode and upload (A) | done, live; screens (D) after K6c |
 | deck plan light backdrop | a paper token for the viewer | Agent C, in flight |
-| **K6c** | clock screens, the date beside the search bar, the Rail | **Agent D, in flight** |
+| K6c | clock screens, the date beside the search bar, the Rail | done, accepted §101, not yet pushed |
+| **K14 screens** | images on the record page, rows, results; gallery; lightbox | **Agent D, in flight** |
 | K7, K8 | journal, timeline | outlines only |
 | K10, K11 | copy between campaigns; shared records in an account library | K11 needs a design |
 
 ## 6. In flight right now
 
-- **Agent D:** K6c (clock screens, "1 week" writing the campaign date, the DDD-YYYY date
-  beside the search bar, the magnifying glass off the Rail). Then the K14 image screens,
-  then K13 part 3. D's store finding for A (§95) waits until A reports K14.
+- **Agent D:** the K14 image screens. Then K13 part 3 (the ship sheet), then K6d (the
+  position log and the Jump button on settings.jumpHours).
 - **Agent A:** the store status fix (§95, §97): a failed universe list / create / rename /
   delete must not mark the open campaign as failed.
-- **Agent B:** K14 object routes (PUT and GET /api/universes/:id/objects/:hash, quota).
-- **Agent C:** the deck plan viewer on a light paper token.
+- **Agent B:** the campaign JSON export route (the first backup of campaign data).
+- **Agent C:** the shipyard grid under the deck plan; then the local-time tick on the Day
+  and night strip (plan §7.10, A16 ruled: the prime meridian).
 - **Agent F:** parked. K13 parts 1 and 2 done (handoff 89 to 91); part 3 after K5f.
-- **Last push:** 2e5bcf5 (image schema, browser upload), deployed and green. B, C, D
-  mid-step; A on the store status fix.
+- **Last push:** 5af0607 (object routes), deployed and green. A, C, D mid-step; B on the
+  campaign export.
 
 ## 7. Decisions Johnny has made that shape the next steps
 

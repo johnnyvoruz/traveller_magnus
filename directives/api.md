@@ -70,6 +70,7 @@ edit), or `{ hexKey, rev, deleted: true }`. Response: `{ applied: [hexKey...], c
 | PATCH | `/api/universes/:id/campaign/changes` | owner | **Built.** batched records, links, settings, and the clock. `baseRev` must match the stored `rev` (0 creates). A clock change is `{ days, baseRev }` and counts as one row; applied id `campaignTime`, table `clock`. A mismatch returns the stored row in `conflicts` (the stored clock, or null before the first set). Deleting a record tombstones its links in the same write. Tombstones are not purged; a restore sends the row with `deleted: false` and that `rev` as `baseRev`. 120 mutations a minute per universe. | `CampaignChanges` |
 | PUT | `/api/universes/:id/objects/:hash` | owner | **Built.** the slice 2 object route: images and thumbnails, hash verified, 8 MB cap, 250 MB per universe | — |
 | GET | `/api/universes/:id/campaign/search?q=` | owner | **Deferred.** FTS over records is not built in this slice | — |
+| GET | `/api/universes/:id/campaign/export` | owner | **Built.** one JSON file `{ universe: { id, name, truthVersion }, exportedAt, records, links, settings, clock }`. The Worker joins `readCampaign` pages and keeps every live row; tombstones are omitted. `Content-Disposition: attachment`, file name `<campaign-name>-<DDD-YYYY>.json` for the UTC day of the export. Image files are not included; a record lists its images by the stored hash. Another account is 404. | — |
 
 ## Slice 4 — sharing
 

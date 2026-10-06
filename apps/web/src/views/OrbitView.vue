@@ -30,7 +30,10 @@ import TimeControls from '../orbit/TimeControls.vue';
 import { cancelFrame, nextFrame, now, pageOrigin } from '../platform/browser.ts';
 import Rail from '../shell/Rail.vue';
 import { loadSession, session } from '../account/session.ts';
+import { campaign, setCampaignDate } from '../campaign/store.ts';
+import { showToast } from '../shell/toast.ts';
 import { ensureCampaign } from '../workspace/opening.ts';
+import { sameDay, stardate } from '../workspace/stardate.ts';
 import AccountMenu from '../workspace/AccountMenu.vue';
 import ToastStrip from '../shell/ToastStrip.vue';
 import { handleKey, registerCommand } from '../shell/registry.ts';
@@ -239,24 +242,88 @@ function togglePlay(): void {
 }
 
 function skip(hours: number): void {
+    moved = true;
     shuttle.value = 0;
     paused.value = true;
     setDays(skipHours(days, hours));
     writeLink();
 }
 
-/**
- * "1 week": the date moves seven days on and the clock stops there, as a skip does. It moves
- * the view only; its tie to the campaign date comes with the campaign clock (K6c).
- */
-function advanceWeek(): void {
+// ---- The campaign date (K6c): looking is not advancing -----------------------------
+
+/** Signed in with a campaign open: the time row shows the campaign date and can write it. */
+const canSetDate = computed(() => session.user !== null && campaign.status === 'ready');
+const campaignDate = computed(() => {
+    if (!canSetDate.value || !campaign.clock) return null;
+    const said = stardate(campaign.clock.days);
+    return { date: said.date, weekday: said.weekday, days: campaign.clock.days };
+});
+const onCampaignDate = computed(() => !!campaignDate.value && sameDay(shownDays.value, campaignDate.value.days));
+/** The view has been moved by hand this visit: it no longer follows the campaign date when that arrives. */
+let moved = false;
+let openedOnCampaign = false;
+
+/** With no date in the link, the view opens on the campaign date, once it is known and before the clock is touched. */
+watch(campaignDate, (now) => {
+    if (!now || moved || openedOnCampaign || route.query.date !== undefined) return;
+    openedOnCampaign = true;
     shuttle.value = 0;
     paused.value = true;
-    setDays(skipWeeks(days, 1));
+    setDays(now.days);
+}, { immediate: true });
+
+function goCampaign(): void {
+    const now = campaignDate.value;
+    if (!now) return;
+    shuttle.value = 0;
+    paused.value = true;
+    setDays(now.days);
     writeLink();
 }
 
+/** "Set as campaign date": the view's date becomes the campaign's, with undo by toast. */
+function setAsCampaignDate(): void {
+    if (!canSetDate.value) return;
+    const before = campaign.clock ? campaign.clock.days : null;
+    const next = days;
+    setCampaignDate(next);
+    showToast('Campaign date set to ' + stardate(next).date + '.', before === null ? {} : {
+        action: { label: 'Undo', run: () => { setCampaignDate(before); } },
+    });
+}
+
+/**
+ * "1 week": the date moves seven days on and the clock stops there, as a skip does. It moves
+ * the view only, except with a campaign open and the view on the campaign date: then the
+ * campaign date advances a week too, with undo by toast (slice §K6, the orchestrator's
+ * proposal), since a week is the step a jump takes.
+ */
+function advanceWeek(): void {
+    moved = true;
+    shuttle.value = 0;
+    paused.value = true;
+    const writes = onCampaignDate.value && campaignDate.value !== null;
+    const before = campaignDate.value ? campaignDate.value.days : null;
+    const from = days;
+    setDays(skipWeeks(days, 1));
+    writeLink();
+    if (!writes || before === null) return;
+    const next = skipWeeks(before, 1);
+    setCampaignDate(next);
+    showToast('Campaign date advanced a week, to ' + stardate(next).date + '.', {
+        action: {
+            label: 'Undo',
+            run: () => {
+                setCampaignDate(before);
+                setDays(from);
+                writeLink();
+            },
+        },
+    });
+}
+
 function typedDays(next: number): void {
+    moved = true;
     setDays(next);
     writeLink();
 }
@@ -269,6 +336,7 @@ function scrub(offset: number | null): void {
         return;
     }
     if (scrubStart === null) scrubStart = days;
+    moved = true;
     shuttle.value = 0;
     paused.value = true;
     setDays(scrubbed(scrubStart, offset));
@@ -285,6 +353,7 @@ function showLineup(at: number): void {
 }
 
 function shuttleTo(rate: number): void {
+    if (rate) moved = true;
     const was = shuttle.value;
     if (rate) paused.value = true;
     shuttle.value = rate;
@@ -452,6 +521,11 @@ onBeforeUnmount(() => {
         :shuttle="shuttle"
         :local-time="localTime"
         :scrub-open="openPop === 'scrub'"
+        :campaign-date="campaignDate"
+        :on-campaign-date="onCampaignDate"
+        :can-set-date="canSetDate"
+        @go-campaign="goCampaign"
+        @set-campaign="setAsCampaignDate"
         @toggle="togglePlay"
         @skip="skip"
         @week="advanceWeek"

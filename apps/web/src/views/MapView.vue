@@ -23,6 +23,8 @@ import { dismissToast, showToast, toasts } from '../shell/toast.ts';
 import ToastStrip from '../shell/ToastStrip.vue';
 import AccountMenu from '../workspace/AccountMenu.vue';
 import CampaignPanel from '../workspace/CampaignPanel.vue';
+import { editDateNext } from '../workspace/list_state.ts';
+import StardateChip from '../workspace/StardateChip.vue';
 import { locateOriginY, locating, stopLocate } from '../workspace/locate.ts';
 import { ensureCampaign } from '../workspace/opening.ts';
 import { cancelPick, offerSystem, picking } from '../workspace/pick.ts';
@@ -363,6 +365,17 @@ function closeAccount(): void {
 function openCampaignFromMenu(): void {
     accountOpen.value = false;
     if (!campaignOpen.value) toggleCampaign();
+}
+
+/** The date beside the search bar: the Campaign panel, on its list, with the date's field open. */
+function openDateEditor(): void {
+    editDateNext.value = true;
+    accountOpen.value = false;
+    if (!campaignOpen.value) toggleCampaign();
+    else if (route.path !== '/campaign') {
+        suppressFly = true;
+        void router.push({ path: '/campaign', query: route.query });
+    }
 }
 
 function onEscape(): void {
@@ -986,6 +999,7 @@ onBeforeUnmount(() => {
       :account-open="accountOpen"
     />
     <OmniBox :version="versionRef" :manifest="manifestRef" @open="omniOpen = $event" />
+    <StardateChip @open="openDateEditor" />
     <DossierPanel
       ref="dossierEl"
       :open="dossier.kind !== 'closed'"
@@ -1055,7 +1069,7 @@ onBeforeUnmount(() => {
   --toast-top: var(--chrome-top);
   --toast-right: var(--chrome-inset);
   --toast-bottom: auto;
-  --toast-left: calc(var(--rail-width) + var(--chrome-inset) + 452px);
+  --toast-left: calc(var(--rail-width) + var(--chrome-inset) + 452px + 220px);
   --toast-flow: row-reverse;
   --toast-align: flex-start;
   --toast-max: none;

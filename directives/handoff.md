@@ -2710,3 +2710,35 @@ API and Durable Object have against `data_model.md` and `api.md`).
   suite on a quiet tree (no agent mid-step in `apps/api` or `packages/`), or accept the
   agent's own run plus a full read of the route, as here.
 - **Pushable by path:** `apps/api`, `tests/api`, `directives`.
+
+## 100. Pushed `5af0607` (object routes); deployed (2026-10-05)
+
+- GitHub run green; the live Worker answers 401 on a signed-out `PUT .../objects/<hash>`
+  (the old build had no route there). Bundle unchanged. K14 is live but for the screens.
+
+## 101. K6c in and accepted: the clock has screens; the date sits beside the search bar (2026-10-05)
+
+- **Agent D, K6c:** the campaign date under the panel's tabs ("120-1105 Senday", the plan's
+  §7.9 weekdays, day 001 "Holiday"), edited in place with a refusal message; the orbit view
+  opens on the campaign date when a campaign is open and the link carries none, marks the
+  time row, offers "Set as campaign date" off the day; "1 week" advances the campaign date
+  with the view when the view sits on it, undo by toast restores both; **the date chip
+  beside the search bar** (signed in: the campaign date with weekday, opens the panel's
+  editor; signed out: the orbit view's date, quieter; weekday dropped under 860 px, hidden
+  under 680 px); **the Search item is gone from the Rail**, `/` and Ctrl+K still focus the
+  field. A temporal-dead-zone fault fixed. Read back from the real local API (clock revs 1
+  to 5). New `workspace/stardate.ts`, `ClockLine.vue`, `StardateChip.vue`,
+  `tests/web/workspace_stardate.test.js`; 7 contrast pairs; eleven `k6c_` screenshots.
+  **Orchestrator:** 626 pass / 0 fail, check clean, build green; the weekday names match
+  the plan; D's files only where it said; looked at the half-width panel and the orbit row:
+  the chip and mark fit the look. **Accepted.** Noted by D, not changed: under 1,060 px the
+  orbit time row wraps and the speed control takes a second line.
+- **Johnny:** "the day / night tick marker feature isn't implemented; done, bug, or what?"
+  Neither: the local-time tick on the Day and night strip (plan §7.10) was waiting on A16
+  (where a starport stands), answered today: the prime meridian. It is now a small step for
+  Agent C after the grid (`orbit/daynight.ts` already carries the ruling; `dossier/DayNight.vue`
+  draws the strip).
+- **Next, D:** the K14 image screens (`slice_2_campaign.md` K14.5): the primary image at the
+  head of the record page and as thumbnails on rows and results, the gallery strip, add by
+  chooser / drop / paste, remove with undo, "Make primary", captions, a lightbox, progress
+  and failure in the saving mark's language. Then K13 part 3, the ship sheet.

@@ -16,6 +16,8 @@ import Panel from '../shell/Panel.vue';
 import { readSpan, writeSpan, type PanelSpan } from '../shell/panel_state.ts';
 import { createRecord, justCreated } from './actions.ts';
 import CampaignList from './CampaignList.vue';
+import ClockLine from './ClockLine.vue';
+import { editDateNext } from './list_state.ts';
 import PartyPanel from './PartyPanel.vue';
 import { partyWords } from './party.ts';
 import { ensureCampaign, openFailed, retryCampaign } from './opening.ts';
@@ -42,6 +44,8 @@ const route = useRoute();
 const router = useRouter();
 const panel = ref<{ element: HTMLElement | null } | null>(null);
 const list = ref<{ focusSearch: () => void } | null>(null);
+const clockLine = ref<{ edit: () => void } | null>(null);
+
 const span = ref<PanelSpan>(readSpan());
 const online = ref(true);
 let stopSize: (() => void) | null = null;
@@ -61,6 +65,13 @@ const status = computed(() => {
     if (openFailed.value) return 'error';
     return campaign.status === 'signed-out' ? 'loading' : campaign.status;
 });
+
+/** The date beside the search bar was pressed: the field opens as soon as the panel can show it. */
+watch(() => [editDateNext.value, status.value, props.recordId, props.open] as const, () => {
+    if (!editDateNext.value || !props.open || status.value !== 'ready' || props.recordId) return;
+    editDateNext.value = false;
+    void nextTick(() => { if (clockLine.value) clockLine.value.edit(); });
+}, { flush: 'post' });
 
 const shownRecord = computed(() => {
     const found = props.recordId ? campaign.records[props.recordId] : null;
@@ -238,6 +249,7 @@ defineExpose({ remeasure: publish });
               <Icon name="shuttle-space" :size="12" />Party <small>{{ partyLine }}</small>
             </button>
           </div>
+          <ClockLine v-if="status === 'ready' && (!recordId || span === 'full')" ref="clockLine" :read-only="!online" />
           <p v-if="!online" class="camp-strip" role="status">
             You are offline. This is what was loaded; changes wait until you are back.
           </p>

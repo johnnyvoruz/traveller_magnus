@@ -25,6 +25,12 @@ const props = defineProps<{
     /** The wall clock's text, already formatted. */
     localTime: string;
     scrubOpen: boolean;
+    /** The campaign date as the panel says it, when a campaign with a date is open; null otherwise. */
+    campaignDate?: { date: string; weekday: string; days: number } | null;
+    /** The view sits on the campaign date's day. */
+    onCampaignDate?: boolean;
+    /** Signed in with a campaign open: the view's date can be made the campaign's. */
+    canSetDate?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -32,6 +38,10 @@ const emit = defineEmits<{
     skip: [hours: number];
     /** The "1 week" button: seven days on. */
     week: [];
+    /** Jump the view to the campaign date. */
+    goCampaign: [];
+    /** Make the view's date the campaign's. */
+    setCampaign: [];
     /** A date typed into a field. */
     days: [days: number];
     speed: [daysPerSecond: number];
@@ -189,6 +199,23 @@ onBeforeUnmount(() => { if (stopWatching) stopWatching(); });
       </label>
     </div>
 
+    <div v-if="canSetDate" class="orbit-campaign" role="group" aria-label="Campaign date">
+      <button
+        v-if="campaignDate"
+        type="button"
+        class="orbit-btn orbit-campaign-mark"
+        :class="{ 'is-on': onCampaignDate }"
+        :aria-pressed="onCampaignDate ? 'true' : 'false'"
+        :title="onCampaignDate ? 'The view is on the campaign date' : 'Go to the campaign date, ' + campaignDate.date"
+        @click="$emit('goCampaign')"
+      >
+        <Icon name="calendar-star" :size="12" /><b>{{ campaignDate.date }}</b><span>{{ campaignDate.weekday }}</span>
+      </button>
+      <button v-if="!campaignDate || !onCampaignDate" type="button" class="orbit-btn orbit-campaign-set" title="Make this the campaign date" @click="$emit('setCampaign')">
+        <Icon name="check" :size="12" />Set as campaign date
+      </button>
+    </div>
+
     <div class="orbit-speed" title="Simulation speed: game time per real second">
       <button
         type="button"
@@ -296,6 +323,39 @@ onBeforeUnmount(() => { if (stopWatching) stopWatching(); });
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+/* The campaign date: a mark that jumps the view to it, and the one control that writes it. */
+.orbit-campaign {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.orbit-btn.orbit-campaign-mark {
+  height: 32px;
+  gap: 7px;
+  color: var(--text-1);
+}
+
+.orbit-btn.orbit-campaign-mark b {
+  color: var(--signal-bright);
+  font: 700 13px/1 var(--font-code);
+  font-variant-numeric: var(--tabular);
+}
+
+.orbit-btn.orbit-campaign-mark span {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.orbit-btn.orbit-campaign-mark.is-on {
+  border-color: var(--signal);
+  background: var(--row-active);
+}
+
+.orbit-btn.orbit-campaign-set {
+  height: 32px;
 }
 
 /* The week step is the one transport button with a word on it: it is the step a jump takes. */

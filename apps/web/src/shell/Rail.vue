@@ -114,19 +114,6 @@ onMounted(() => {
           <Icon name="book-sparkles" :size="20" />
           <span class="rail-label">Campaign</span>
         </button>
-        <button
-          v-if="has('search')"
-          type="button"
-          class="rail-item"
-          aria-label="Search"
-          :title="hint('search', 'Search')"
-          aria-controls="omni-list"
-          :aria-expanded="searchOpen ? 'true' : 'false'"
-          @click="run('search')"
-        >
-          <Icon name="search" :size="22" />
-          <span class="rail-label">Search</span>
-        </button>
       </div>
     </div>
     <div class="rail-group" role="group" aria-label="Account">

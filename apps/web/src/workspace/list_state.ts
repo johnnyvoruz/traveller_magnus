@@ -12,3 +12,6 @@ export type ListSort = 'name' | 'changed';
 
 /** The list's order: by name, or by what changed last. */
 export const listSort = ref<ListSort>('name');
+
+/** The date beside the search bar was pressed: the panel opens its date for editing when it is next ready. */
+export const editDateNext = ref(false);
