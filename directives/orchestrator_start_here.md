@@ -43,6 +43,9 @@ not append to it.
   Workers Build (ask Johnny for the log if a deploy is in doubt), and that the live bundle
   contains the new feature (fetch `https://traveller.voyage/`, find `assets/index-*.js`, grep
   it). A route answering proves nothing if it existed before.
+- **Black-box runs need a quiet tree.** `wrangler dev` rebuilds when `apps/api` or
+  `packages/*` change; an agent editing mid-run makes the test hang and time out (handoff
+  §99). Re-run only when nobody is mid-step there, or read the route in full instead.
 - **Stand-ins are not proof.** Every API step ends with its black-box test run against
   `wrangler dev` (`RUN_API_TESTS=1`). The Durable Object refuses SQL `BEGIN`; a `node:sqlite`
   stand-in accepted it and hid a total write failure (handoff §78).
@@ -105,12 +108,13 @@ campaign layer over the truth map; own maps later. X sign-in only.
 - **Agent D:** K6c (clock screens, "1 week" writing the campaign date, the DDD-YYYY date
   beside the search bar, the magnifying glass off the Rail). Then the K14 image screens,
   then K13 part 3. D's store finding for A (§95) waits until A reports K14.
-- **Agent A:** K14 schema (CampaignImage, images typed) and campaign/images.ts.
+- **Agent A:** the store status fix (§95, §97): a failed universe list / create / rename /
+  delete must not mark the open campaign as failed.
 - **Agent B:** K14 object routes (PUT and GET /api/universes/:id/objects/:hash, quota).
 - **Agent C:** the deck plan viewer on a light paper token.
 - **Agent F:** parked. K13 parts 1 and 2 done (handoff 89 to 91); part 3 after K5f.
-- **Last push:** 428a8ac (party, several campaigns), deployed and green. A, B, C, D all
-  mid-step; nothing finished is local.
+- **Last push:** 2e5bcf5 (image schema, browser upload), deployed and green. B, C, D
+  mid-step; A on the store status fix.
 
 ## 7. Decisions Johnny has made that shape the next steps
 

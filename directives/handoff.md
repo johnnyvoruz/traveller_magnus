@@ -2687,3 +2687,26 @@ API and Durable Object have against `data_model.md` and `api.md`).
   `store.ts`.
 - **Next, A:** D's finding (§95): a failed list / create / rename / delete must not set the
   open campaign's `status` to `error`.
+
+## 98. Pushed `2e5bcf5` (image schema and browser upload); deployed (2026-10-05)
+
+- GitHub run green; live bundle `index-BYf9i_vS.js` holds the typed schema; `campaign/images.ts`
+  is tree-shaken out until a screen imports it (expected).
+
+## 99. K14 object routes in (Agent B); accepted; a black-box hazard found (2026-10-05)
+
+- **Agent B:** `routes/objects.ts` mounted from `routes/universes.ts`: `PUT /:id/objects/:hash`
+  (64 lowercase hex, SHA-256 of the body, `RIFF....WEBP`, 8 MB by header and by body,
+  Origin, `head` first: 200 without writing; else quota 250 MB on `object_bytes`, `put` with
+  `image/webp`, the counter updated, the object deleted if the update fails, 201) and
+  `GET` (owner streams with stored type and `Cache-Control: private, immutable`; 404 for
+  others and for a missing hash). `tests/api/objects.test.js` passed on B's `wrangler dev`;
+  `api.md` rows marked built; `PRIVATE_BUCKET` was already bound. Route read in full by the
+  orchestrator. **Accepted.**
+- **Hazard:** the orchestrator's two re-runs of that file timed out (180 s). The shared
+  `wrangler dev` log shows "Reloading local server" three times during the run and then
+  `read ECONNRESET`: wrangler rebuilds when files it bundles change (`apps/api`,
+  `packages/*`), and other agents were editing at the time. **Rule:** run the black-box
+  suite on a quiet tree (no agent mid-step in `apps/api` or `packages/`), or accept the
+  agent's own run plus a full read of the route, as here.
+- **Pushable by path:** `apps/api`, `tests/api`, `directives`.
