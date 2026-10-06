@@ -2666,3 +2666,24 @@ API and Durable Object have against `data_model.md` and `api.md`).
 - **Next, D:** K6c in full (the clock screens, "1 week" writing the campaign date when the
   view sits on it, the `DDD-YYYY` date beside the search bar, the magnifying glass off the
   Rail).
+
+## 96. Pushed `428a8ac` (party, several campaigns); deployed (2026-10-05)
+
+- GitHub run green; live bundle `index-CaS_NCqW.js` holds "Where are we", "Your campaigns",
+  "New campaign", "Person here". **K5a to K5f are in production.** D has begun K6c
+  (`workspace/ClockLine.vue`, `StardateChip.vue`, `stardate.ts` on disk).
+
+## 97. K14 browser side in (Agent A); accepted (2026-10-05)
+
+- **Agent A:** `CampaignImage` (`hash`, `thumbHash` 64 lowercase hex, `width`, `height`,
+  `bytes`, `caption` 200), `CampaignRecord.images` typed, at most 12, first is primary;
+  `campaign/images.ts`: `prepareImage` (WebP, longest side 2048, quality 0.85, a 320 px
+  thumbnail, SHA-256 via `crypto.subtle`, a message when WebP cannot be encoded),
+  `uploadImage` (two PUTs, 200 and 201 succeed, `too_large` surfaces the server's message),
+  `addImage` commits only after both PUTs, `removeImage` / `makePrimary` / `setCaption`
+  through `commit`; the last removal sets `null`. Tests with an injected fetch and a stub
+  encoder. Diff read: as reported. 614 pass. **Accepted.** Pushable by path
+  (`packages/shared`, `apps/web/src/campaign`, its two tests) before A's next step touches
+  `store.ts`.
+- **Next, A:** D's finding (§95): a failed list / create / rename / delete must not set the
+  open campaign's `status` to `error`.

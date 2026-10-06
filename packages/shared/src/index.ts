@@ -14,6 +14,7 @@ export {
     CampaignLinkKindName,
     CampaignAnchor,
     CampaignProvenance,
+    CampaignImage,
     CampaignRecord,
     CampaignLink,
     CampaignSettings,

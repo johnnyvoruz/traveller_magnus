@@ -92,8 +92,8 @@ campaign layer over the truth map; own maps later. X sign-in only.
 | K9 part 3 | the deck plan viewer on a vessel's record page | done, accepted §85, not yet pushed |
 | A/E answers | star kelvin, sea and ice colours (Agent C) | done §85; dossier star tile still owed |
 | K5d | links | done, accepted §88, not yet pushed |
-| K5e | the party | done, accepted §92, not yet pushed |
-| K5f | several campaigns: create, name, switch, delete | done, accepted §95, not yet pushed |
+| K5e | the party | done, live |
+| K5f | several campaigns: create, name, switch, delete | done, live |
 | K14 | images on records: routes (B), browser encode and upload (A), screens (D after K5f) | A and B in flight |
 | deck plan light backdrop | a paper token for the viewer | Agent C, in flight |
 | **K6c** | clock screens, the date beside the search bar, the Rail | **Agent D, in flight** |
@@ -109,8 +109,8 @@ campaign layer over the truth map; own maps later. X sign-in only.
 - **Agent B:** K14 object routes (PUT and GET /api/universes/:id/objects/:hash, quota).
 - **Agent C:** the deck plan viewer on a light paper token.
 - **Agent F:** parked. K13 parts 1 and 2 done (handoff 89 to 91); part 3 after K5f.
-- **Last push:** 69db0a4, deployed and green. Local and finished: D K5e and K5f (§92, §95),
-  pushable by path.
+- **Last push:** 428a8ac (party, several campaigns), deployed and green. A, B, C, D all
+  mid-step; nothing finished is local.
 
 ## 7. Decisions Johnny has made that shape the next steps
 

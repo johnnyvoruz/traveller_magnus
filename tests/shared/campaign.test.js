@@ -7,6 +7,7 @@ import {
     CampaignAnchor,
     CampaignChanges,
     CampaignProvenance,
+    CampaignImage,
     CampaignClock,
     CampaignLink,
     CampaignPage,
@@ -130,6 +131,11 @@ test('each campaign schema accepts a good value', () => {
     assert.equal(CampaignChanges.safeParse({ clock: { days: 403326.5, baseRev: 0 } }).success, true);
     assert.equal(CampaignPage.safeParse({ records: [record()], links: [link()], settings: settings(), clock: { days: 403326.5, rev: 1 }, seq: 1, done: true }).success, true);
     assert.equal(CampaignPage.safeParse({ records: [], links: [], settings: settings(), clock: null, seq: 0, done: true }).success, true);
+    const image = { hash: 'a'.repeat(64), thumbHash: 'b'.repeat(64), width: 800, height: 600, bytes: 1200 };
+    assert.equal(CampaignImage.safeParse(image).success, true);
+    assert.equal(CampaignImage.safeParse({ ...image, caption: 'At Regina' }).success, true);
+    assert.equal(CampaignRecord.safeParse(record({ images: [image] })).success, true);
+    assert.equal(CampaignRecord.safeParse(record({ images: Array.from({ length: CAMPAIGN_LIMITS.images }, () => image) })).success, true);
 });
 
 test('schemas reject §0.10 breaches and a legacy hex id', () => {
@@ -146,6 +152,11 @@ test('schemas reject §0.10 breaches and a legacy hex id', () => {
     assert.equal(CampaignRecord.safeParse(record({ details: 'd'.repeat(20_001) })).success, false);
     assert.equal(CampaignRecord.safeParse(record({ tags: Array.from({ length: 33 }, () => 'tag') })).success, false);
     assert.equal(CampaignRecord.safeParse(record({ tags: ['t'.repeat(41)] })).success, false);
+    const image = { hash: 'a'.repeat(64), thumbHash: 'b'.repeat(64), width: 800, height: 600, bytes: 1200 };
+    assert.equal(CampaignImage.safeParse({ ...image, hash: 'abc' }).success, false);
+    assert.equal(CampaignImage.safeParse({ ...image, caption: 'c'.repeat(CAMPAIGN_LIMITS.caption + 1) }).success, false);
+    assert.equal(CampaignRecord.safeParse(record({ images: Array.from({ length: CAMPAIGN_LIMITS.images + 1 }, () => image) })).success, false);
+    assert.equal(CampaignRecord.safeParse(record({ images: {} })).success, false);
     assert.equal(CampaignRecord.safeParse(record({ anchor: { kind: 'system', hexKey: '1-C-1910' } })).success, false);
     const bare = record();
     delete bare.provenance;

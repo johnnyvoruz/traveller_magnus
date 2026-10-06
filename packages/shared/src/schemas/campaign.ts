@@ -18,6 +18,8 @@ export const CAMPAIGN_LIMITS = {
     tags: 32,
     tag: 40,
     universes: 10,
+    images: 12,
+    caption: 200,
 } as const;
 
 const HEX_KEY = /^[^/]+\/\d{4}$/;
@@ -97,6 +99,19 @@ export const CampaignProvenance = z.object({
 }).strict();
 export type CampaignProvenance = z.infer<typeof CampaignProvenance>;
 
+const IMAGE_HASH = /^[0-9a-f]{64}$/;
+
+/** A WebP object and its thumbnail. The asset id is the hash. */
+export const CampaignImage = z.object({
+    hash: z.string().regex(IMAGE_HASH),
+    thumbHash: z.string().regex(IMAGE_HASH),
+    width: z.number().int().positive(),
+    height: z.number().int().positive(),
+    bytes: z.number().int().nonnegative(),
+    caption: z.string().max(CAMPAIGN_LIMITS.caption).optional(),
+}).strict();
+export type CampaignImage = z.infer<typeof CampaignImage>;
+
 export const CampaignRecord = z.object({
     id: z.string().regex(RECORD_ID),
     type: z.enum(CAMPAIGN_RECORD_TYPES),
@@ -111,7 +126,7 @@ export const CampaignRecord = z.object({
     playerNotes: z.string().nullable(),
     sheet: z.unknown().nullable(),
     status: z.unknown().nullable(),
-    images: z.unknown().nullable(),
+    images: z.array(CampaignImage).max(CAMPAIGN_LIMITS.images).nullable(),
     provenance: CampaignProvenance.nullable(),
     rev: Rev,
     createdAt: Stamp,
