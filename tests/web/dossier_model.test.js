@@ -77,7 +77,7 @@ test('Regina overview and Caesillian 0914 partial follow the inspector', async (
     assert.ok(model.callout);
     assert.equal(model.holdLead, true);
     assert.equal(model.journey, null);
-    assert.equal(model.journeyNote, '100D jump times are on the mainworld page.');
+    assert.equal(model.journeyNote, '');
     assert.equal(model.socio.rows, null);
     assert.ok(model.socio.headline);
     const system = pickSystem(tree.body);
@@ -239,7 +239,7 @@ test('Regina overview and Caesillian 0914 partial follow the inspector', async (
         assert.equal(worldPage.place.startsWith('Mainworld of the '), true, hex);
         if (worldPage.journey) {
             assert.equal(page.journey, null, hex);
-            assert.equal(page.journeyNote, '100D jump times are on the mainworld page.', hex);
+            assert.equal(page.journeyNote, '', hex);
         }
         if (worldPage.socio) {
             assert.ok(worldPage.socio.rows.length > 0, hex);

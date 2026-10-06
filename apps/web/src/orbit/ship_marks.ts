@@ -40,3 +40,12 @@ export function shipStanding(mark: Pick<ShipMark, 'x' | 'y'>, rings: readonly Ju
     const within = ring ?? (onBody ? 'body' : null);
     return { x: mark.x, y: mark.y, outside: within === null, within };
 }
+
+/**
+ * A ship among the frame's marks. A mark with `jump` set is the renderer's bubble (where a
+ * ship left, or where it will arrive), not a ship on the picture: it is passed over, so a
+ * ship in jump is never measured against the 100D circles and never plotted from.
+ */
+export function shipMarkOf<M extends Pick<ShipMark, 'id' | 'jump'>>(marks: readonly M[], id: string): M | undefined {
+    return marks.find((mark) => mark.id === id && !mark.jump);
+}

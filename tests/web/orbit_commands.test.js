@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { DRAWERS, keyWords, LAYERS, LAYOUTS, ORBIT_COMMANDS, toggled } from '../../apps/web/src/orbit/commands.ts';
+import { DRAWERS, keyWords, LAYERS, LAYOUTS, LINEUP_SHOWN, ORBIT_COMMANDS, PARKED_COMMANDS, toggled } from '../../apps/web/src/orbit/commands.ts';
 import { DEFAULT_LAYERS } from '../../apps/web/src/orbit/picture.ts';
 
 const ORBIT_DIR = new URL('../../apps/web/src/orbit/', import.meta.url);
@@ -20,6 +20,7 @@ test('the keys: 1/2/3 the layout, 4 to 0 the layers, each key once', () => {
     assert.equal(new Set(keys).size, keys.length, 'no key does two things');
     assert.equal(keyWords(' '), 'Space');
     assert.equal(keyWords('C'), 'Shift+C');
+    assert.equal(keyWords('W'), 'Shift+W');
     assert.equal(keyWords('f'), 'F');
     assert.equal(keyWords('Escape'), 'Escape');
 });
@@ -38,7 +39,11 @@ test('every command is named by a control in orbit/ or the view (data-command)',
     }
     const missing = ORBIT_COMMANDS.filter((command) => !named.has(command.id)).map((command) => command.id);
     assert.deepEqual(missing, [], 'commands with no control: ' + missing.join(', '));
-    const extra = [...named].filter((id) => id.startsWith('orbit-') && !ORBIT_COMMANDS.some((command) => command.id === id));
+    // The one exception: a parked command keeps its (undrawn) control in the template until it comes back.
+    assert.equal(LINEUP_SHOWN, false);
+    assert.deepEqual(PARKED_COMMANDS.map((command) => command.id), ['orbit-lineup']);
+    assert.ok(!ORBIT_COMMANDS.some((command) => command.id === 'orbit-lineup'), 'a parked command is not in the Keys table');
+    const extra = [...named].filter((id) => id.startsWith('orbit-') && !ORBIT_COMMANDS.some((command) => command.id === id) && !PARKED_COMMANDS.some((command) => command.id === id));
     assert.deepEqual(extra, [], 'controls with no command: ' + extra.join(', '));
     void path;
 });

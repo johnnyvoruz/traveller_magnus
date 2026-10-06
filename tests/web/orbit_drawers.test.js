@@ -1,12 +1,12 @@
 /**
  * The orbit view's control drawers (slice 2 follow-up 6; findings/orbit_drawers_design.md):
  * three tabs with their keys, one drawer open at a time, Esc closes it first, a press on
- * the picture closes it, and the groups land one step apart only while opening.
+ * the picture leaves it open, and the groups land one step apart only while opening.
  */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DRAWERS, ORBIT_COMMANDS } from '../../apps/web/src/orbit/commands.ts';
-import { escapeStep, groupDelaySteps, pressCloses, toggleDrawer } from '../../apps/web/src/orbit/drawers.ts';
+import { closesDrawer, escapeStep, groupDelaySteps, toggleDrawer } from '../../apps/web/src/orbit/drawers.ts';
 
 test('three drawers, Time / View / Layers, on T, Y and L, each a command with that key', () => {
     assert.deepEqual(DRAWERS.map((d) => [d.id, d.label, d.key]), [['time', 'Time', 't'], ['view', 'View', 'y'], ['layers', 'Layers', 'l']]);
@@ -19,6 +19,7 @@ test('three drawers, Time / View / Layers, on T, Y and L, each a command with th
     const keyOf = (id) => ORBIT_COMMANDS.find((item) => item.id === id).keys[0];
     assert.equal(keyOf('orbit-play'), ' ');
     assert.equal(keyOf('orbit-week'), 'w');
+    assert.equal(keyOf('orbit-week-back'), 'W', 'Shift+W: the pair of W');
     assert.equal(keyOf('orbit-scrub'), 's');
     assert.equal(keyOf('orbit-speed'), 'v');
     assert.equal(keyOf('orbit-go-campaign'), 'c');
@@ -42,10 +43,11 @@ test('Escape closes the drawer before a popover, the body and the map', () => {
     assert.equal(escapeStep({ drawer: '', popover: false, body: false }), 'map');
 });
 
-test('a press on the picture closes the drawer; one on the drawer or the header does not', () => {
-    assert.equal(pressCloses({ inDrawer: false, inHeader: false }), true);
-    assert.equal(pressCloses({ inDrawer: true, inHeader: false }), false);
-    assert.equal(pressCloses({ inDrawer: false, inHeader: true }), false);
+test('a drawer closes by its own tab, by Escape and when another opens; a press on the picture leaves it', () => {
+    assert.equal(closesDrawer('own-tab'), true);
+    assert.equal(closesDrawer('escape'), true);
+    assert.equal(closesDrawer('other-drawer'), true);
+    assert.equal(closesDrawer('picture-press'), false);
 });
 
 test('the groups land one step apart while opening, together while closing', () => {

@@ -1,7 +1,9 @@
 /**
  * Disc worker messages. Plain data. The page posts requests. The worker posts tiles.
  * 'tiles' is one bitmap per disc. 'atlas' is one bitmap plus the tile rectangles.
+ * mode, version and generation travel with the watch and with the tiles.
  */
+import type { SurfaceMode } from '../contracts.ts';
 import type { BakeProfile, GpuSpan } from './gl_bake.ts';
 import type { ShadeRequest } from './gl_shade.ts';
 
@@ -39,6 +41,9 @@ export type WorkerTiles = {
     failed: boolean;
     slow: GpuSpan[];
     delivery: DiscDelivery;
+    mode: SurfaceMode;
+    version: string;
+    generation: number;
     tiles?: WorkerTile[];
     image?: ImageBitmap;
     table?: AtlasSlot[];
@@ -61,4 +66,7 @@ export type WatchRequest = {
     op: 'watch';
     requests: ShadeRequest[];
     delivery: DiscDelivery;
+    mode: SurfaceMode;
+    version: string;
+    generation: number;
 };

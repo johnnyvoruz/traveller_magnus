@@ -12,6 +12,7 @@ import { cardFor } from '../../apps/web/src/orbit/card.ts';
 import { bodyByKey } from '../../apps/web/src/orbit/bodies.ts';
 import {
     dayFraction, DAYLIGHT_LATITUDE, daylightFraction, dayNightFigure, dayNightFor, dayNightLines, hoursText, rulerFor,
+    scoutReadout,
     markerAt,
     starportTick,
     spanText, standardText, yearFigure,
@@ -23,6 +24,7 @@ import {
     lineupScreen, lineupSlot, lineupZoomScale,
 } from '../../apps/web/src/orbit/lineup.ts';
 import { bodyAngle, starBasePx, worldBasePx } from '../../apps/web/src/orbit/maths.ts';
+import { formatDisplayNumber } from '../../apps/web/src/dossier/labels.ts';
 import { DEFAULT_LAYERS, orbitPicture } from '../../apps/web/src/orbit/picture.ts';
 import { OrbitStage } from '../../apps/web/src/orbit/stage.ts';
 import {
@@ -544,12 +546,37 @@ test('the day as a picture: a long day in units a person can hold, a ruler that 
     const backwards = dayNightFigure({ solarDayHours: 600, axialTilt: 130 }, null);
     assert.equal(backwards.retrograde, true);
     assert.equal(backwards.polarBeyond, 40);
-    const moon = dayNightFigure({ solarDayHours: 88, tidallyLocked: true }, { axialTilt: 20 });
+    const moon = dayNightFigure({ solarDayHours: 88, tidallyLocked: true, isTwilightZone: true, periodDays: 5 }, { axialTilt: 20 });
     assert.equal(moon.locked, false);
+    assert.equal(moon.lockedFacts, null);
+    assert.equal(scoutReadout(moon), null);
     assert.equal(moon.mid.derived, true);
     assert.equal(dayNightFigure({ solarDayHours: 88 }, null).mid, null);
+    const turning = dayNightFigure({ solarDayHours: 24, axialTilt: 20 }, null);
+    assert.equal(turning.locked, false);
+    assert.equal(turning.lockedFacts, null);
+    assert.equal(turning.dayHours, 24);
+    assert.equal(scoutReadout(turning), null);
     // A planet locked to its star: one side lit for ever. No solar day in the document: no picture.
-    assert.equal(dayNightFigure({ tidallyLocked: true, solarDayHours: 40 }, null).locked, true);
+    const lockedPlain = dayNightFigure({ tidallyLocked: true, solarDayHours: 40 }, null);
+    assert.equal(lockedPlain.locked, true);
+    assert.deepEqual(lockedPlain.lockedFacts, { twilightZone: false, yearDays: null });
+    assert.deepEqual(scoutReadout(lockedPlain).map((line) => line.label + '\t' + line.value), [
+        'Rotation\tLocked', 'Dayside\tPermanent', 'Nightside\tPermanent', 'Solar day\tNone',
+    ]);
+    const lockedZone = dayNightFigure({ isTwilightZone: true, periodDays: 19.3 }, null);
+    assert.equal(lockedZone.lockedFacts.twilightZone, true);
+    assert.equal(lockedZone.lockedFacts.yearDays, 19.3);
+    const zoneLines = scoutReadout(lockedZone);
+    assert.equal(zoneLines.find((line) => line.label === 'Twilight zone').value, 'Yes');
+    assert.equal(zoneLines.find((line) => line.label === 'Year').value, formatDisplayNumber(19.3, 1) + ' standard days');
+    assert.equal(zoneLines.filter((line) => line.label === 'Twilight zone').length, 1);
+    const lockedYear = dayNightFigure({ tidallyLocked: true, periodDays: 10, isTwilightZone: false }, null);
+    assert.equal(scoutReadout(lockedYear).some((line) => line.label === 'Twilight zone'), false);
+    assert.equal(scoutReadout(lockedYear).find((line) => line.label === 'Year').value, formatDisplayNumber(10, 1) + ' standard days');
+    const lockedNoYear = dayNightFigure({ tidallyLocked: true, periodDays: Number.NaN }, null);
+    assert.equal(lockedNoYear.lockedFacts.yearDays, null);
+    assert.equal(scoutReadout(lockedNoYear).some((line) => line.label === 'Year'), false);
     assert.equal(dayNightFigure({ siderealHours: 20 }, null), null);
     assert.equal(dayNightFigure({ solarDayHours: 9e9 }, null), null);
     assert.equal(dayNightFigure(null, null), null);

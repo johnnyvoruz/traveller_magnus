@@ -41,7 +41,7 @@ function factsOf(link: BodyLink): string {
       <SurfaceStage :badge="model.mapBadge" :target="surface ?? null" />
       <UwpRibbon v-if="model.ribbon" :ribbon="model.ribbon" />
       <FactTiles :facts="model.facts" :restated="restated" />
-      <DayNight v-if="dayNight" :figure="dayNight" :tick="tick ?? null" :live="live === true" :place="place" />
+      <DayNight v-if="dayNight" :figure="dayNight" :name="model.title" :tick="tick ?? null" :live="live === true" :place="place" />
       <JourneyTimes v-if="model.journey" :journey="model.journey" />
       <section v-for="block in model.mainSections" :key="block.heading" class="doss-section">
         <h3 class="ui-heading">{{ block.heading }}</h3>

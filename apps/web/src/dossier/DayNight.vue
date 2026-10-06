@@ -10,12 +10,14 @@
  * refraction, eclipses or terrain.
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { markerMinute, spanText, type DayNightFigure, type StarportTick } from '../orbit/daynight.ts';
+import { markerMinute, scoutReadout, spanText, type DayNightFigure, type StarportTick } from '../orbit/daynight.ts';
 import { prefersReducedMotion } from '../platform/browser.ts';
 import { subscribeOrbitClock } from '../orbit/running.ts';
 
 const props = defineProps<{
     figure: DayNightFigure;
+    /** The body's name, in the scout readout's header. */
+    name?: string;
     /** Local time at the starport (longitude 0), or null when this world has no day. */
     tick?: StarportTick | null;
     /** While the orbit view's clock is running, follow it. Otherwise the tick prop is the place. */
@@ -104,20 +106,30 @@ const summary = computed(() => {
     return 'One day lasts ' + f.span + (f.standard ? ', which is ' + f.standard : '') + ': '
         + spanText(f.equator.light) + ' of light and ' + spanText(f.equator.dark) + ' of dark at the equator.';
 });
+
+/** The locked world's record. Empty for every other world, whose strip is unchanged. */
+const readout = computed(() => props.figure.locked ? scoutReadout(props.figure) ?? [] : []);
 </script>
 
 <template>
   <section class="doss-section doss-daynight">
     <h3 class="ui-heading" :title="NOTE">Day and night</h3>
-    <template v-if="figure.locked">
-      <p class="doss-day-lead"><b>No day and night</b><span>one face always points at the star</span></p>
-      <div class="doss-day-row">
-        <div class="doss-day-ends"><span>Day side</span><span>Night side</span></div>
-        <div class="doss-day-strip" role="img" :aria-label="summary">
-          <i class="doss-day-light" style="width: 50%"></i>
-        </div>
+    <div v-if="figure.locked" class="doss-scout" role="group" :aria-label="summary">
+      <div class="doss-scout-line doss-scout-head" style="--i: 0">
+        <span>Scout survey</span>
+        <span>{{ name }}</span>
       </div>
-    </template>
+      <dl>
+        <div v-for="(row, index) in readout" :key="row.label" class="doss-scout-line" :style="{ '--i': String(index + 1) }">
+          <dt>{{ row.label }}</dt>
+          <span class="doss-scout-leader" aria-hidden="true"></span>
+          <dd>{{ row.value }}</dd>
+        </div>
+      </dl>
+      <p class="doss-scout-line doss-scout-end" :style="{ '--i': String(readout.length + 1) }">
+        End of record <i class="doss-scout-cursor" aria-hidden="true"></i>
+      </p>
+    </div>
     <template v-else>
       <p class="doss-day-lead">
         <b>{{ figure.span }}</b>
@@ -308,5 +320,75 @@ const summary = computed(() => {
   width: 14px;
   height: 9px;
   border-radius: 2px;
+}
+
+/* The locked world's record. The lines are laid out at full height, then revealed. */
+.doss-scout {
+  max-width: 520px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-1);
+  border-left: 2px solid var(--signal-dim);
+  border-radius: var(--r-2);
+  background: var(--bg-2);
+  color: var(--text-muted);
+  font: 400 12px/1.75 var(--font-code);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-variant-numeric: var(--tabular);
+}
+
+.doss-scout dl {
+  margin: 0;
+}
+
+.doss-scout-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 8px;
+  clip-path: inset(0 100% 0 0);
+  animation: doss-scout-type var(--t-fast) steps(12) both;
+  animation-delay: calc(var(--i) * var(--t-stagger));
+}
+
+.doss-scout-head {
+  justify-content: space-between;
+  margin-bottom: 2px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.doss-scout-leader {
+  flex: 1 0 12px;
+  border-bottom: 1px dotted var(--line-2);
+}
+
+.doss-scout dd {
+  margin: 0 0 0 auto;
+  color: var(--signal);
+  font-weight: 700;
+}
+
+.doss-scout-end {
+  margin: 2px 0 0;
+}
+
+.doss-scout-cursor {
+  display: inline-block;
+  width: 7px;
+  height: 13px;
+  background: var(--signal);
+  vertical-align: -2px;
+}
+
+@keyframes doss-scout-type {
+  from { clip-path: inset(0 100% 0 0); }
+  to { clip-path: inset(0 0 0 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .doss-scout-line {
+    animation: none;
+    clip-path: none;
+  }
 }
 </style>

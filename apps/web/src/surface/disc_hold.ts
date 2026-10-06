@@ -1,14 +1,21 @@
 /**
  * Newest shaded tile for each disc key. A tile can arrive a frame after its batch.
  * drawDisc paints whatever is held. The next ready frame replaces a key's tile.
+ * A same-mode tile stays until a newer one is remembered, so a coarse disc
+ * remains while a finer one is in flight.
  */
 import { closeBitmap } from '../platform/browser.ts';
+import type { SurfaceMode } from './contracts.ts';
 
 export type HeldDisc = {
     readonly image: CanvasImageSource;
     readonly size: number;
     /** Device pixels the tile was rendered for. drawDisc scales from this. */
     readonly radiusPx: number;
+    /** Set by the disc worker. Absent on a tile a test stored directly. */
+    readonly mode?: SurfaceMode;
+    readonly version?: string;
+    readonly generation?: number;
 };
 
 const held = new Map<string, HeldDisc>();

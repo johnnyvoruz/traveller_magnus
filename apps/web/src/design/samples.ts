@@ -2,6 +2,10 @@
  * Sample view models for the design-system page only. The values are what the dossier showed
  * for Spinward Marches 1910 (Regina) on truth v2, copied as display text; nothing here is
  * computed and nothing here is a rules source. Rows marked "sample" exist to show a state.
+ * The two pages are as Agent E rebuilt them (findings/dossier_identities_analysis.md): the
+ * system page names the hex and what is in the system, with a mainworld callout and the
+ * socioeconomics headline alone; the world page is the only one that decodes the UWP, and
+ * the mainworld's carries the long socioeconomics profile.
  */
 import type { BodyGlyphData, BodyModel, FactTile, OverviewModel, Ribbon, StatRow, StellarLine, TreeRow } from '../dossier/model.ts';
 
@@ -33,6 +37,21 @@ export const identityRows: StatRow[] = [
     { label: 'PBG', text: '703' },
     { label: 'Age (Gyr)', text: '3.95' },
 ];
+
+/** The system page's rows: where the hex sits and what is in the system. No decoded UWP here. */
+export const systemRows: StatRow[] = [
+    { label: 'Allegiance', text: 'ImDd', code: 'ImDd', name: 'Third Imperium, Domain of Deneb' },
+    { label: 'Bases', text: 'NS' },
+    { label: 'Nobility', text: 'BcCeF' },
+    { label: 'PBG', text: '703' },
+    { label: 'Resource units', text: '6370' },
+    { label: 'Gas giants', text: '3' },
+    { label: 'Belts', text: '0' },
+    { label: 'Age (Gyr)', text: '3.95' },
+];
+
+/** The world page's decoded rows: the UWP said in words, the trade codes and the zone. */
+export const worldRows: StatRow[] = identityRows.slice(0, 6);
 
 export const zoneRows: StatRow[] = [
     { label: 'Travel zone', text: 'G', code: 'G', name: 'Green', zone: 'green' },
@@ -83,12 +102,14 @@ export const facts: FactTile[] = [
 ];
 
 export const overview: OverviewModel = {
-    header: { title: 'Regina', hexChip: '1910', place: 'Spinward Marches - Regina' },
+    header: { title: 'Regina system', name: 'Regina', hexChip: '1910', place: 'Spinward Marches - Regina' },
     ribbon,
-    rows: identityRows,
+    rows: systemRows,
     journey: null,
+    holdLead: true,
+    callout: { name: 'Regina', badge: 'Mainworld · moon of Regina A-IV' },
     noOrbit: false,
-    socio: { headline: socioHeadline, rows: socioRows, empty: null },
+    socio: { headline: socioHeadline, rows: null, empty: null },
     stellar: { lines: stellarLines },
     tree: { count: 7, rows: treeRows },
     partial: false,
@@ -106,7 +127,8 @@ export const body: BodyModel = {
     mapBadge: 'Mainworld',
     facts,
     journey: null,
-    mainSections: [{ heading: 'World profile', rows: identityRows.slice(0, 6) }],
+    mainSections: [{ heading: 'World profile', rows: worldRows }],
+    socio: { headline: socioHeadline, rows: socioRows, empty: null },
     sideSections: [{ heading: 'Orbit', rows: [{ label: 'Satellite orbit (PD)', text: '10.7' }, { label: 'Tidally locked', text: 'Yes' }] }],
     moons: [],
     worlds: [],

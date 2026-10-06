@@ -13,7 +13,7 @@ import {
     productionDiscId, productionMapSeeds, surfaceCacheKey, VANILLA_MASTER_SEED, worldMapData,
 } from '../../apps/web/src/surface/identity.ts';
 import {
-    enhancedFlags, setEnhancedFlags, setSurfaceMode, SURFACE_COMMAND_ID, surfaceMode,
+    enhancedFlags, resetSurfaceSession, setEnhancedFlags, setSurfaceMode, SURFACE_COMMAND_ID, surfaceMode,
 } from '../../apps/web/src/surface/preferences.ts';
 import {
     cancelSurface, disposeSurfaces, drawDisc, prepareDiscs, requestMap, surfaceAvailable,
@@ -169,7 +169,7 @@ test('seed strings and disc ids match the oracle for Regina and the map exclusio
     assert.equal(enhancedSeedKey('ab', 'w0'), '2:ab|2:w0');
 });
 
-test('the surface preference round-trips and falls back when storage throws', () => {
+test('enhanced is the default surface; a stored or session choice is honoured', () => {
     const memory = new Map();
     globalThis.localStorage = {
         getItem: (key) => (memory.has(key) ? memory.get(key) : null),
@@ -178,15 +178,29 @@ test('the surface preference round-trips and falls back when storage throws', ()
         clear: () => { memory.clear(); },
     };
 
-    setSurfaceMode('vanilla');
+    resetSurfaceSession();
+    memory.delete('voyage_surfaces');
+    assert.equal(surfaceMode(), 'enhanced');
+
+    resetSurfaceSession();
+    memory.set('voyage_surfaces', 'vanilla');
     assert.equal(surfaceMode(), 'vanilla');
     assert.equal(memory.get('voyage_surfaces'), 'vanilla');
+
+    resetSurfaceSession();
+    memory.set('voyage_surfaces', 'enhanced');
+    assert.equal(surfaceMode(), 'enhanced');
+    assert.equal(memory.get('voyage_surfaces'), 'enhanced');
+
+    resetSurfaceSession();
+    memory.delete('voyage_surfaces');
+    setSurfaceMode('vanilla');
+    assert.equal(surfaceMode(), 'vanilla');
     assert.deepEqual(enhancedFlags(), {
         seasonalIce: false, paletteVariants: false, movingClouds: false, lightning: false,
     });
     setSurfaceMode('enhanced');
     assert.equal(surfaceMode(), 'enhanced');
-    assert.equal(memory.get('voyage_surfaces'), 'enhanced');
 
     const command = commands().find((item) => item.id === SURFACE_COMMAND_ID);
     assert.ok(command);
@@ -197,12 +211,15 @@ test('the surface preference round-trips and falls back when storage throws', ()
     assert.equal(memory.get('voyage_surfaces'), 'vanilla');
 
     memory.set('voyage_surfaces', 'nope');
-    assert.equal(surfaceMode(), 'vanilla');
+    assert.equal(surfaceMode(), 'enhanced');
 
+    resetSurfaceSession();
     globalThis.localStorage = {
         getItem() { throw new Error('blocked'); },
         setItem() { throw new Error('blocked'); },
     };
+    assert.equal(surfaceMode(), 'enhanced');
+    assert.doesNotThrow(() => setSurfaceMode('vanilla'));
     assert.equal(surfaceMode(), 'vanilla');
     assert.doesNotThrow(() => setSurfaceMode('enhanced'));
     assert.equal(surfaceMode(), 'enhanced');

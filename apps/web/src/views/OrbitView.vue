@@ -6,15 +6,16 @@
  * the body chips. All clock arithmetic is orbit/clock.ts and the picture is
  * orbit/OrbitCanvas.vue; this file holds the clock's number, the frame loop and the wiring.
  */
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import type { SectorHex, SectorIndex, TreeEnvelope } from '@voyage/shared';
+import type { SectorHex, SectorIndex, TreeEnvelope, TruthOverview } from '@voyage/shared';
 import Icon from '../design/Icon.vue';
 import { formatDisplayNumber } from '../dossier/labels.ts';
 import { overviewModel, pickSystem, type AllegianceName, type TreeRow } from '../dossier/model.ts';
+import { parsecsBetween } from '../map/geometry.ts';
 import { TruthClient } from '../map/truth_client.ts';
 import BodyChips from '../orbit/BodyChips.vue';
-import { LAYERS, LAYOUTS, ORBIT_COMMANDS, toggled, type DrawerId } from '../orbit/commands.ts';
+import { LAYERS, LAYOUTS, LINEUP_SHOWN, ORBIT_COMMANDS, PARKED_COMMANDS, toggled, type DrawerId } from '../orbit/commands.ts';
 import { jumpReturnPath, jumpTarget } from '../orbit/jump_state.ts';
 import {
     bodyAnchor, earliestDeparture, flightLeg, jumpLeg, legStart, shipsHere, shipTrack, statusWords, vesselPosition,
@@ -30,7 +31,7 @@ import { fieldHours, flightFuelWords, flightHours, hoursWords, jumpEstimateWords
 import { beginPick, endPick, type PickedSystem } from '../workspace/pick.ts';
 import { placeSource, setPlaceSource, type SystemInfo } from '../workspace/place_source.ts';
 import Drawer from '../orbit/Drawer.vue';
-import { escapeStep, pressCloses, toggleDrawer, type DrawerState } from '../orbit/drawers.ts';
+import { escapeStep, toggleDrawer, type DrawerState } from '../orbit/drawers.ts';
 import DrawerTabs from '../orbit/DrawerTabs.vue';
 import HeaderClock from '../orbit/HeaderClock.vue';
 import LayerKey from '../orbit/LayerKey.vue';
@@ -329,18 +330,28 @@ function setAsCampaignDate(): void {
  * proposal), since a week is the step a jump takes.
  */
 function advanceWeek(): void {
+    stepWeek(1);
+}
+
+/** "Back 1 week": the mirror, so back undoes forward; it writes the campaign date by the same rule. Never before day zero. */
+function backWeek(): void {
+    if (skipWeeks(days, -1) < 0) return;
+    stepWeek(-1);
+}
+
+function stepWeek(weeks: 1 | -1): void {
     moved = true;
     shuttle.value = 0;
     paused.value = true;
-    const writes = onCampaignDate.value && campaignDate.value !== null;
     const before = campaignDate.value ? campaignDate.value.days : null;
+    const writes = onCampaignDate.value && before !== null && skipWeeks(before, weeks) >= 0;
     const from = days;
-    setDays(skipWeeks(days, 1));
+    setDays(skipWeeks(days, weeks));
     writeLink();
     if (!writes || before === null) return;
-    const next = skipWeeks(before, 1);
+    const next = skipWeeks(before, weeks);
     setCampaignDate(next);
-    showToast('Campaign date advanced a week, to ' + stardate(next).date + '.', {
+    showToast((weeks > 0 ? 'Campaign date advanced a week, to ' : 'Campaign date moved back a week, to ') + stardate(next).date + '.', {
         action: {
             label: 'Undo',
             run: () => {
@@ -561,12 +572,23 @@ watch(jumpTarget, (target) => {
     else jumpRoll.value = null;
 }, { immediate: true });
 
-/**
- * The hexes between this system and the destination, for the parsecs and the fuel. Null
- * until the map's owner supplies a hex distance between two hex keys: the web app has none
- * (the engines' getHexDistance may not reach the browser), and a second is not written here.
- */
-const jumpParsecs = computed((): number | null => null);
+/** The chart's sectors and their places on the grid (the truth overview), for the hexes between two systems. */
+const sectorGrid = shallowRef<TruthOverview | null>(null);
+watch(version, (now) => {
+    if (!now) return;
+    void client.overview(now).then((found) => { if (version.value === now) sectorGrid.value = found; }, () => { /* the estimate line stays hidden */ });
+}, { immediate: true });
+
+/** The hexes between this system and the destination (map/geometry.ts parsecsBetween), for the parsecs and the fuel; null until the chart's overview is in. */
+const jumpParsecs = computed((): number | null => {
+    const target = jumpTarget.value;
+    const grid = sectorGrid.value;
+    if (!target || !grid) return null;
+    return parsecsBetween(hexKey.value, target.slug + '/' + target.hex, (name) => {
+        const sector = grid.sectors.find((item) => item.slug === name);
+        return sector ? { sx: sector.x, sy: sector.y } : null;
+    });
+});
 const jumpEstimate = computed(() => (jumpTarget.value && jumpParsecs.value !== null ? jumpEstimateWords(jumpParsecs.value) : ''));
 
 function pickOnMap(): void {
@@ -679,10 +701,11 @@ function pickBody(key: string): void {
     void router.push({ path: orbitPath(slug.value, hex.value, key), query: withQuery(route.query, {}) });
 }
 
+/** Back to the map on the same system and body. The pane is kept exactly as it is: the campaign, a record, the party, the dossier, or shut. */
 function backToMap(): void {
     void router.push({
         path: dossierPath(slug.value, hex.value, selectedKey.value),
-        query: withQuery(route.query, { panel: null, record: null }),
+        query: withQuery(route.query, {}),
     });
 }
 
@@ -733,17 +756,6 @@ function closeDrawer(): void {
     drawer.value = '';
     if (openPop.value === 'lineup') openPop.value = '';
     void nextTick(() => { if (tabsEl.value) tabsEl.value.focusTab(was); });
-}
-
-/** A press on the picture closes the drawer; one on the drawer or the header does not. */
-function onStagePress(event: Event): void {
-    if (!drawer.value) return;
-    const target = event.target;
-    if (!(target instanceof Element)) return;
-    if (pressCloses({ inDrawer: !!target.closest('.orbit-drawer'), inHeader: !!target.closest('.orbit-nav') })) {
-        drawer.value = '';
-        if (openPop.value === 'lineup') openPop.value = '';
-    }
 }
 
 /** Escape: the drawer first, then a popover, then the selected body, then back to the map. */
@@ -823,6 +835,7 @@ onMounted(() => {
         orbitCommand('orbit-escape', escape),
         orbitCommand('orbit-play', togglePlay),
         orbitCommand('orbit-week', advanceWeek),
+        orbitCommand('orbit-week-back', backWeek, () => skipWeeks(shownDays.value, -1) >= 0),
         orbitCommand('orbit-scrub', () => { openDrawer('time', () => { if (timeEl.value) timeEl.value.focusScrub(); }); }),
         orbitCommand('orbit-speed', () => { openDrawer('time', () => { if (timeEl.value) timeEl.value.focusSpeed(); }); }),
         orbitCommand('orbit-date', () => {
@@ -841,7 +854,7 @@ onMounted(() => {
         orbitCommand('orbit-plot-estimate', useEstimate, () => plotting.value && plotOwn.value && plotEstimate.value !== null),
         orbitCommand('orbit-jump-roll', rollJump, () => jumpTarget.value !== null),
         orbitCommand('orbit-jump', jump, () => shipOutside.value === true && jumpTarget.value !== null && jumpHours.value !== null && !!shipStatus.value && shipStatus.value.state !== 'jump'),
-        orbitCommand('orbit-lineup', () => { openDrawer('time', () => { setPop('lineup', true); }); }, () => searchPlan.value !== null),
+        ...(LINEUP_SHOWN ? [registerCommand({ ...PARKED_COMMANDS[0], keys: [], run: () => { openDrawer('time', () => { setPop('lineup', true); }); }, runnable: () => searchPlan.value !== null })] : []),
         orbitCommand('orbit-picture', () => { openDrawer('view'); }),
         registerCommand({ id: 'home', name: 'Return to map', run: backToMap }),
         registerCommand({ id: 'system-panel', name: 'System panel', run: toggleSystem }),
@@ -976,6 +989,7 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
             :on-campaign-date="onCampaignDate"
             :narrow="compact"
             @toggle="togglePlay"
+            @go-campaign="goCampaign"
             @date="drawer === 'time' ? closeDrawer() : openDrawer('time', () => { if (timeEl) timeEl.focusDate(); })"
           />
         </template>
@@ -983,7 +997,7 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
           <DrawerTabs ref="tabsEl" :open="drawer" :narrow="compact" @toggle="toggleTab" />
         </template>
       </OrbitHeader>
-      <div ref="stageBox" class="orbit-stage" :class="{ 'is-narrow': narrow, 'is-plotting': plotting }" :style="{ '--drawer-height': drawerHeight + 'px', '--flight-strip-height': (flightHeight ? flightHeight + 8 : 0) + 'px' }" :data-state="state" :data-ship="shipOutside === null ? 'off' : (shipOutside ? 'outside' : 'inside')" :data-ship-at="shipAt" @pointerdown.capture="onStagePress">
+      <div ref="stageBox" class="orbit-stage" :class="{ 'is-narrow': narrow, 'is-plotting': plotting }" :style="{ '--drawer-height': drawerHeight + 'px', '--flight-strip-height': (flightHeight ? flightHeight + 8 : 0) + 'px' }" :data-state="state" :data-ship="shipOutside === null ? 'off' : (shipOutside ? 'outside' : 'inside')" :data-ship-at="shipAt">
         <!-- The three control drawers hang from the header over the picture; one open at a time. -->
         <Drawer id="time" :ref="drawerEls.time" :open="drawer === 'time'" @close="closeDrawer">
           <TimeControls
@@ -996,16 +1010,16 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
             :campaign-date="campaignDate"
             :on-campaign-date="onCampaignDate"
             :can-set-date="canSetDate"
-            @go-campaign="goCampaign"
             @set-campaign="setAsCampaignDate"
             @week="advanceWeek"
+            @week-back="backWeek"
             @days="typedDays"
             @speed="speed = $event"
             @scrub="scrub"
             @shuttle="shuttleTo"
           >
             <template #lineup>
-              <div v-if="searchPlan" class="orbit-lineup-pop" data-command="orbit-lineup">
+              <div v-if="LINEUP_SHOWN && searchPlan" class="orbit-lineup-pop" data-command="orbit-lineup">
                 <OrbitPopover
                   id="orbit-lineup"
                   :open="openPop === 'lineup'"
@@ -1118,6 +1132,7 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
           :tracks="tracks"
           :plotting="plotting"
           :plot-from="selectedShip"
+          :survey-elsewhere="dossierOpen && selectedKey !== null"
           @pick="pickBody"
           @plot="setDestination"
         />

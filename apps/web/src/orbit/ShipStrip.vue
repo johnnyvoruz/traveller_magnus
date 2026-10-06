@@ -93,7 +93,7 @@ const jumpNote = computed(() => {
     <!-- The strip: the selected ship's state, then Jump. -->
     <div v-if="status" class="orbit-strip" :class="'is-' + status.state" role="status" aria-live="polite">
       <span class="orbit-strip-dot" aria-hidden="true"></span>
-      <span class="orbit-strip-text">{{ status.text }}</span>
+      <span class="orbit-strip-text" :title="status.text">{{ status.text }}</span>
       <button
         type="button"
         class="orbit-btn orbit-jump"
@@ -204,7 +204,8 @@ const jumpNote = computed(() => {
   flex-direction: column;
   align-items: flex-end;
   gap: 6px;
-  max-width: min(420px, calc(100% - 28px));
+  /* The gutters are the place's own (.orbit-flight): taking them off again here cut the words with room to spare. */
+  max-width: min(420px, 100%);
   pointer-events: auto;
 }
 
@@ -543,7 +544,7 @@ const jumpNote = computed(() => {
 
 /* Narrow: the strip's words give way to the dot and Jump. */
 .orbit-ships.is-narrow {
-  max-width: calc(100% - 20px);
+  max-width: 100%;
 }
 
 .orbit-ships.is-narrow .orbit-strip {

@@ -49,6 +49,7 @@ watch(() => props.bodyKey, () => { helpOpen.value = false; });
     <button v-if="closable" type="button" class="orbit-body-card-close" title="Close this card" aria-label="Close this card" @click="$emit('close')">
       <Icon name="xmark" :size="12" />
     </button>
+    <div class="orbit-body-card-body">
     <h2 class="orbit-body-card-title">
       {{ model.title }}
       <span v-if="model.sub" class="orbit-body-card-sub">({{ model.sub }})</span>
@@ -81,14 +82,18 @@ watch(() => props.bodyKey, () => { helpOpen.value = false; });
         <span v-if="model.season.inputs" class="orbit-season-inputs">{{ model.season.inputs }}</span>
       </p>
     </div>
+    </div>
   </aside>
 </template>
 
 <style>
-/* The stack at the stage's top left: the pinned card, and a hover card under it. */
+/* The stack at the stage's top left: the pinned card, and a hover card under it.
+   An open drawer publishes --drawer-height on .orbit-stage; the stack keeps the same 18px gap under it.
+   The view also shifts each card down 56px (.orbit-stage .orbit-body-card), so the stack's box ends 56px sooner and the painted card still finishes 18px above the picture's bottom. */
 .orbit-cards {
   position: absolute;
-  top: 18px;
+  top: calc(18px + var(--drawer-height, 0px));
+  bottom: calc(18px + 56px);
   left: 18px;
   z-index: 2;
   display: flex;
@@ -97,12 +102,19 @@ watch(() => props.bodyKey, () => { helpOpen.value = false; });
   gap: 8px;
   width: max-content;
   max-width: min(310px, calc(100% - 36px));
-  max-height: calc(100% - 36px);
   pointer-events: none;
+  transition: top var(--t-base) var(--ease-out);
+}
+
+/* Closing sets the variable to 0px at once; the card climbs with the shelf's close. */
+.orbit-stage[style*="--drawer-height: 0px"] .orbit-cards {
+  transition: top var(--t-fast) var(--ease-out);
 }
 
 .orbit-body-card {
   position: relative;
+  display: flex;
+  flex-direction: column;
   flex: 0 0 auto;
   box-sizing: border-box;
   min-width: 200px;
@@ -116,6 +128,21 @@ watch(() => props.bodyKey, () => { helpOpen.value = false; });
   color: var(--text-1);
   font: 400 12px/1.5 var(--font-text);
   animation: orbit-card-dock var(--t-rail) ease-out;
+}
+
+/* The pinned card stops at the picture and its words scroll. The hover card does not. */
+.orbit-body-card.is-closable {
+  min-height: 0;
+  max-height: 100%;
+}
+
+.orbit-body-card-body {
+  min-height: 0;
+}
+
+.orbit-body-card.is-closable .orbit-body-card-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
 }
 
 /* The bracket corners. */
@@ -153,6 +180,10 @@ watch(() => props.bodyKey, () => { helpOpen.value = false; });
   pointer-events: none;
   animation-name: orbit-card-rise;
   animation-duration: var(--t-fast);
+}
+
+.orbit-body-card.is-under .orbit-body-card-body {
+  overflow: hidden;
 }
 
 .orbit-body-card.is-under::before,
@@ -326,6 +357,11 @@ watch(() => props.bodyKey, () => { helpOpen.value = false; });
 @media (prefers-reduced-motion: reduce) {
   .orbit-body-card {
     animation: none;
+  }
+
+  .orbit-cards,
+  .orbit-stage[style*="--drawer-height: 0px"] .orbit-cards {
+    transition: none;
   }
 }
 </style>

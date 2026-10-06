@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed, ref } from 'vue';
 import type { PanelSpan } from '../shell/panel_state.ts';
 import type { OverviewModel } from './model.ts';
 import Icon from '../design/Icon.vue';
@@ -8,8 +9,9 @@ import StatRows from './StatRows.vue';
 import StellarLines from './StellarLines.vue';
 import SystemTree from './SystemTree.vue';
 import UwpRibbon from './UwpRibbon.vue';
+import { locating, startLocate, stopLocate, systemSubject } from '../workspace/locate.ts';
 
-defineProps<{
+const props = defineProps<{
     model: OverviewModel;
     span: PanelSpan;
     error: boolean;
@@ -17,6 +19,8 @@ defineProps<{
     orbitLink?: boolean;
     /** Campaign records per body key, shown as counts in the system tree. */
     counts?: Record<string, number>;
+    /** This system's key, "slug/hhhh". Locate is offered only beside the map. */
+    hexKey?: string;
 }>();
 
 defineEmits<{
@@ -24,20 +28,53 @@ defineEmits<{
     orbit: [];
     retry: [];
 }>();
+
+const locateBtn = ref<HTMLButtonElement | null>(null);
+const locateSubject = computed(() => (props.hexKey ? systemSubject(props.hexKey) : ''));
+const isLocating = computed(() => locateSubject.value !== '' && locating.recordId === locateSubject.value);
+
+/** The line starts level with this button, as the record pages measure theirs. */
+function originY(): number | null {
+    const el = locateBtn.value;
+    if (!el) return null;
+    const box = el.getBoundingClientRect();
+    return box.height > 0 ? box.top + box.height / 2 : null;
+}
+
+function toggleLocate(): void {
+    if (!props.hexKey) return;
+    if (isLocating.value) {
+        stopLocate();
+        return;
+    }
+    startLocate(systemSubject(props.hexKey), props.hexKey, originY);
+}
 </script>
 
 <template>
   <div class="doss" :data-span="span">
     <div class="doss-identity">
-      <!-- With no mainworld callout to sit in, Explore orbits keeps its own row. -->
-      <div v-if="orbitLink && model.tree && !model.holdLead" class="doss-actions">
+      <!-- With no mainworld callout to sit in, Explore orbits keeps its own row. Locate is already there while the tree loads. -->
+      <div v-if="orbitLink && hexKey && !model.holdLead" class="doss-actions">
         <button
+          v-if="model.tree"
           type="button"
           class="ui-btn is-primary"
           title="Open orbit view for this system (or double-click it on the map)"
           @click="$emit('orbit')"
         >
           <Icon name="solar-system" :size="13" />Explore orbits
+        </button>
+        <button
+          ref="locateBtn"
+          type="button"
+          class="ui-btn"
+          data-command="locate-system"
+          :aria-pressed="isLocating ? 'true' : 'false'"
+          :title="isLocating ? 'Stop locating' : 'Show this system on the map'"
+          @click="toggleLocate"
+        >
+          <Icon name="location-crosshairs" :size="13" />{{ isLocating ? 'Locating' : 'Locate' }}
         </button>
       </div>
       <button
@@ -55,7 +92,7 @@ defineEmits<{
           <span class="doss-callout-name">{{ model.callout.name }}</span>
           <span class="doss-callout-words">{{ model.callout.badge }}</span>
         </p>
-        <div v-if="model.mainworldKey || (orbitLink && model.tree)" class="doss-callout-actions">
+        <div v-if="model.mainworldKey || (orbitLink && hexKey)" class="doss-callout-actions">
           <button v-if="model.mainworldKey" type="button" class="ui-btn" @click="$emit('open', model.mainworldKey)">
             <Icon name="earth-americas" :size="13" />Mainworld
           </button>
@@ -68,19 +105,21 @@ defineEmits<{
           >
             <Icon name="solar-system" :size="13" />Explore orbits
           </button>
+          <button
+            v-if="orbitLink && hexKey"
+            ref="locateBtn"
+            type="button"
+            class="ui-btn"
+            data-command="locate-system"
+            :aria-pressed="isLocating ? 'true' : 'false'"
+            :title="isLocating ? 'Stop locating' : 'Show this system on the map'"
+            @click="toggleLocate"
+          >
+            <Icon name="location-crosshairs" :size="13" />{{ isLocating ? 'Locating' : 'Locate' }}
+          </button>
         </div>
       </div>
       <StatRows :rows="model.rows" />
-      <p v-if="model.holdLead && !model.journey" class="doss-journey-note" :aria-hidden="model.journeyNote ? undefined : 'true'">
-        <button
-          v-if="model.journeyNote && model.mainworldKey"
-          type="button"
-          class="doss-quiet"
-          @click="$emit('open', model.mainworldKey)"
-        >
-          {{ model.journeyNote }}
-        </button>
-      </p>
       <JourneyTimes v-if="model.journey" :journey="model.journey" />
       <p v-if="model.notice" class="doss-muted">{{ model.notice }}</p>
       <p v-if="error" class="doss-muted">This world's system could not be loaded.</p>
@@ -148,33 +187,15 @@ defineEmits<{
   color: var(--text-muted);
 }
 
-/* Mainworld, then Explore orbits to its right. The pair wraps as one, never apart. */
+/* Mainworld, then Explore orbits, then Locate. They stay one set and wrap inside it when the column is narrow. */
 .doss-callout-actions {
   display: flex;
-  flex: none;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
   gap: var(--sp-2);
+  min-width: 0;
+  max-width: 100%;
 }
 
-/* The jump-times sentence. The row is there before the words are, so the rows under it do not move. */
-.doss-journey-note {
-  min-height: 1.5em;
-  margin: var(--sp-2) 0 0;
-}
 
-.doss-quiet {
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--text-muted);
-  font: 400 13px/1.5 var(--font-text);
-  text-align: left;
-  cursor: pointer;
-}
-
-.doss-quiet:hover {
-  color: var(--text-1);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
 </style>

@@ -43,7 +43,11 @@ function flagsFrom(raw: string | null): EnhancedFlags | null {
     }
 }
 
-/** vanilla unless a stored or session choice says enhanced. A blocked store keeps the session choice. */
+/**
+ * Enhanced until a stored choice says vanilla or enhanced.
+ * A blocked store keeps the session choice. With no session choice it is enhanced.
+ * An empty or unrecognised stored value is not a choice.
+ */
 export function surfaceMode(): SurfaceMode {
     if (modeSessionOnly && sessionMode) return sessionMode;
     let raw: string | null = null;
@@ -51,16 +55,21 @@ export function surfaceMode(): SurfaceMode {
         raw = storageGet(MODE_KEY);
     } catch {
         modeSessionOnly = true;
-        return sessionMode ?? 'vanilla';
+        return sessionMode ?? 'enhanced';
     }
     if (raw === 'vanilla' || raw === 'enhanced') {
         sessionMode = raw;
         modeSessionOnly = false;
         return raw;
     }
-    if (modeSessionOnly && sessionMode) return sessionMode;
-    sessionMode = 'vanilla';
-    return 'vanilla';
+    sessionMode = 'enhanced';
+    return 'enhanced';
+}
+
+/** Forget the in-memory choice. The next read comes from storage, or enhanced when that is empty. */
+export function resetSurfaceSession(): void {
+    sessionMode = null;
+    modeSessionOnly = false;
 }
 
 export function setSurfaceMode(mode: SurfaceMode): void {
@@ -123,7 +132,7 @@ function modeLabel(mode: SurfaceMode): string {
 
 const surfaceCommand: Command = {
     id: SURFACE_COMMAND_ID,
-    name: 'Surfaces: Vanilla',
+    name: 'Surfaces: Enhanced',
     run: toggleSurfaceMode,
 };
 

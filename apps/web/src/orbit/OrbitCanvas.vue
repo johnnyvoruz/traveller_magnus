@@ -24,7 +24,8 @@ import { OrbitRenderer, type DiscPainter, type FlightPreview } from './OrbitRend
 import type { Layers, Mode, Picture } from './picture.ts';
 import { OrbitStage } from './stage.ts';
 import { publishOrbitClock } from './running.ts';
-import { bodiesAtOf, shipStanding, type ShipStanding } from './ship_marks.ts';
+import { bodiesAtOf, shipMarkOf, shipStanding, type ShipStanding } from './ship_marks.ts';
+import { pictureOfAu, type PictureLayout } from './distance.ts';
 import { pictureBodies, placeShips, standInMarks, type PlotReadout, type ShipMark, type ShipTrack } from './ships.ts';
 import { readOrbitMotion, readOrbitTheme, type OrbitMotion } from './theme.ts';
 
@@ -50,6 +51,8 @@ const props = defineProps<{
     plotFrom?: string | null;
     /** The flight being previewed, or null. Omitted, the dev stand-in may show one. */
     preview?: FlightPreview | null;
+    /** The dossier is open on the selected body: the pinned card leaves the survey to it (BodyCard surveyElsewhere). */
+    surveyElsewhere?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -213,10 +216,23 @@ function queryText(name: string): string {
     return typeof text === 'string' ? text : '';
 }
 
+/** `?point=x,y` is a stand-in target in AU from the primary. Absent, the body ghost stays. */
+function standPoint(): { x: number; y: number } | null {
+    const text = queryText('point');
+    if (!text) return null;
+    const parts = text.split(',');
+    const x = Number(parts[0]);
+    const y = Number(parts[1]);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    return { x, y };
+}
+
 /** The view's preview when one was passed, including null. Otherwise the dev stand-in's. */
 function standPreview(clockDays: number): FlightPreview | null {
     if (props.preview !== undefined) return props.preview;
     if (standInCount() <= 0) return null;
+    const point = standPoint();
+    if (point) return { point, departs: clockDays, arrives: clockDays + 1 };
     const current = plan.value;
     if (!current) return null;
     const ghost = queryText('ghost');
@@ -269,24 +285,34 @@ function picturePlace(view: View, key: string, at: number): { x: number; y: numb
     return null;
 }
 
+/** A real AU point on this picture. The orbits layout only; the frame's view is the one just painted. */
+function auOnPicture(view: View, mode: Picture['mode'], au: { x: number; y: number }): { x: number; y: number } | null {
+    const current = plan.value;
+    if (!current) return null;
+    const layout: PictureLayout = mode === 'row' || mode === 'column' || mode === 'blend' ? mode : 'orbits';
+    return pictureOfAu(au, view, current, layout);
+}
+
 function marksFor(picture: Picture, clockDays: number): readonly ShipMark[] | undefined {
+    const view = lastFrame ? lastFrame.view : null;
+    const placeAu = view ? (au: { x: number; y: number }) => auOnPicture(view, picture.mode, au) : undefined;
     if (props.tracks) {
-        lastMarks = placeShips(props.tracks, bodiesAtOf(props.hexKey, pictureBodies(picture)), clockDays);
+        lastMarks = placeShips(props.tracks, bodiesAtOf(props.hexKey, pictureBodies(picture)), clockDays, placeAu);
         return lastMarks;
     }
     if (props.ships) return props.ships;
     if (standInCount() <= 0) return undefined;
     const flight = standFlight();
-    const last = lastFrame;
-    if (flight && last) return standInMarks(props.hexKey, clockDays, picture, (key, at) => picturePlace(last.view, key, at), flight);
-    return standInMarks(props.hexKey, clockDays, picture);
+    if (!view) return standInMarks(props.hexKey, clockDays, picture);
+    const places = flight ? (key: string, at: number) => picturePlace(view, key, at) : undefined;
+    return standInMarks(props.hexKey, clockDays, picture, places, flight ?? undefined, placeAu);
 }
 
 function plotFor(marks: readonly ShipMark[] | undefined): PlotReadout | null | undefined {
     if (props.plot !== undefined) return props.plot;
     if (props.plotting) {
         if (!pointer) return undefined;
-        const from = marks && props.plotFrom ? marks.find((mark) => mark.id === props.plotFrom) : undefined;
+        const from = marks && props.plotFrom ? shipMarkOf(marks, props.plotFrom) : undefined;
         return { x: pointer.x, y: pointer.y, from: from ? { x: from.x, y: from.y } : null };
     }
     if (standInCount() <= 0 || !pointer) return undefined;
@@ -300,7 +326,7 @@ function plotFor(marks: readonly ShipMark[] | undefined): PlotReadout | null | u
  * Null when the ship is not on the picture.
  */
 function shipStatus(id: string): ShipStanding | null {
-    const mark = lastMarks.find((item) => item.id === id);
+    const mark = shipMarkOf(lastMarks, id);
     const current = plan.value;
     const last = lastFrame;
     if (!mark || !current || !last) return null;
@@ -436,7 +462,7 @@ watch(() => props.layers, (layers) => {
     stale = true;
 }, { deep: true });
 
-watch(() => [route.query.campaignStandIn, route.query.ghost, route.query.line, props.ships, props.plot, props.tracks, props.plotting, props.plotFrom, props.preview] as const, () => { stale = true; });
+watch(() => [route.query.campaignStandIn, route.query.ghost, route.query.line, route.query.point, props.ships, props.plot, props.tracks, props.plotting, props.plotFrom, props.preview] as const, () => { stale = true; });
 
 /** js/system_viewer.js:2084-2092: the canvas says which layout it shows. */
 const canvasLabel = computed(() => {
@@ -512,6 +538,7 @@ defineExpose({ paint, fit, shipStatus });
         v-if="pinnedCard && pinnedTarget"
         :model="pinnedCard"
         :body-key="pinnedTarget.key"
+        :survey-elsewhere="surveyElsewhere === true"
         closable
         @close="dismissed = selected"
       />

@@ -2,14 +2,16 @@
 /**
  * What the header always shows of the clock (follow-up 6; findings/orbit_drawers_design.md
  * §1): Play, the date readout (the view's date, weekday and time; pressed, it opens the Time
- * drawer on the date fields). The readout's calendar says, quietly, where the view stands
- * against the campaign date: teal on it, amber off it, muted when there is none; the way
- * back is in the Time drawer and on C (the header's own mark was removed, Johnny
- * 2026-10-06). The readout is as wide as its longest reading, so a weekday's name never
- * moves the header (orbit/time_row.ts). Narrow, the readout keeps the date alone.
+ * drawer on the date fields), and before Play the reset (Johnny, 2026-10-06): one button
+ * that brings the view back to the campaign date. Off the date it is the live control, its
+ * icon amber; on the date it is quiet and disabled and says so; with no campaign date it is
+ * not there (orbit/time_row.ts resetState). The readout's calendar is teal while the view is
+ * on the campaign date and quiet otherwise: the amber is the reset's. The readout is as
+ * wide as its longest reading, so a weekday's name never moves the header. Narrow, the
+ * readout keeps the date alone.
  */
 import Icon from '../design/Icon.vue';
-import { READOUT_CHARS } from './time_row.ts';
+import { READOUT_CHARS, resetState } from './time_row.ts';
 
 defineProps<{
     paused: boolean;
@@ -25,11 +27,29 @@ defineProps<{
     narrow: boolean;
 }>();
 
-defineEmits<{ toggle: []; date: [] }>();
+const emit = defineEmits<{ toggle: []; date: []; goCampaign: [] }>();
+
+/** The reset does nothing on the campaign date: it is disabled there, and still holds focus and its place. */
+function reset(on: boolean): void {
+    if (!on) emit('goCampaign');
+}
 </script>
 
 <template>
   <div class="orbit-clock" :class="{ 'is-narrow': narrow }" role="group" aria-label="Clock">
+    <button
+      v-if="campaignDate"
+      type="button"
+      class="orbit-btn is-icon orbit-reset"
+      :class="'is-' + resetState({ hasCampaignDate: true, onCampaignDate })"
+      data-command="orbit-go-campaign"
+      :aria-disabled="onCampaignDate ? 'true' : 'false'"
+      :aria-label="onCampaignDate ? 'The view is on the campaign date, ' + campaignDate.date : 'Return the view to the campaign date, ' + campaignDate.date"
+      :title="onCampaignDate ? 'The view is on the campaign date, ' + campaignDate.date : 'Back to the campaign date, ' + campaignDate.date + ' (C)'"
+      @click="reset(onCampaignDate)"
+    >
+      <Icon name="rotate-left" :size="13" />
+    </button>
     <button
       type="button"
       class="orbit-btn is-icon orbit-play"
@@ -44,13 +64,13 @@ defineEmits<{ toggle: []; date: [] }>();
     <button
       type="button"
       class="orbit-btn orbit-readout"
-      :class="{ 'is-on-campaign': campaignDate && onCampaignDate, 'is-off-campaign': campaignDate && !onCampaignDate }"
+      :class="{ 'is-on-campaign': campaignDate && onCampaignDate }"
       data-command="orbit-date"
       :style="{ '--readout-chars': narrow ? 8 : READOUT_CHARS }"
       :aria-expanded="timeOpen ? 'true' : 'false'"
       aria-controls="orbit-drawer-time"
       :aria-label="'The view’s date and time, ' + said.date + ' ' + said.weekday + ' ' + time + (campaignDate ? (onCampaignDate ? ', the campaign date' : ', off the campaign date ' + campaignDate.date) : '') + '. Press for the Time drawer'"
-      :title="'The view’s date and time; press to type one (T)' + (campaignDate ? (onCampaignDate ? '. The view is on the campaign date' : '. The campaign date is ' + campaignDate.date + ' (C goes to it)') : '')"
+      :title="'The view’s date and time; press to type one (T)' + (campaignDate ? (onCampaignDate ? '. The view is on the campaign date' : '. The campaign date is ' + campaignDate.date) : '')"
       @click="$emit('date')"
     >
       <Icon name="calendar-star" :size="12" />
@@ -104,13 +124,35 @@ defineEmits<{ toggle: []; date: [] }>();
   border-color: var(--signal);
 }
 
-/* Where the view stands against the campaign date: the calendar teal on it, amber off it. */
+/* On the campaign date the readout's calendar is teal; off it, quiet: the amber belongs to the reset. */
 .orbit-btn.orbit-readout.is-on-campaign .ui-icon {
   color: var(--signal);
 }
 
-.orbit-btn.orbit-readout.is-off-campaign .ui-icon {
+/* The reset: the size of Play, before it. Live, its icon is the one amber thing in the header. */
+.orbit-btn.orbit-reset {
+  width: 34px;
+  height: 34px;
+}
+
+.orbit-btn.orbit-reset.is-live .ui-icon {
   color: var(--attention);
+}
+
+.orbit-btn.orbit-reset.is-live:hover {
+  border-color: var(--attention);
+}
+
+/* Quiet: no edge, a muted icon, no hand. It keeps its place and its focus. */
+.orbit-btn.orbit-reset.is-quiet {
+  border-color: transparent;
+  background: transparent;
+  cursor: default;
+}
+
+.orbit-btn.orbit-reset.is-quiet .ui-icon {
+  color: var(--text-muted);
+  opacity: 0.6;
 }
 
 /* Narrow: tighter, the readout the date alone with less padding. */
@@ -123,7 +165,8 @@ defineEmits<{ toggle: []; date: [] }>();
   padding: 0 8px;
 }
 
-.orbit-clock.is-narrow .orbit-btn.orbit-play {
+.orbit-clock.is-narrow .orbit-btn.orbit-play,
+.orbit-clock.is-narrow .orbit-btn.orbit-reset {
   width: 30px;
   height: 30px;
 }

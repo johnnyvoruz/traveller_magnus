@@ -5,23 +5,28 @@
  */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { goButtonState, rowSignature, setButtonState } from '../../apps/web/src/orbit/time_row.ts';
+import { headerSignature, resetState, rowSignature, setButtonState } from '../../apps/web/src/orbit/time_row.ts';
 
 test('the glitch: crossing the campaign day during a scrub used to add and remove a button beside the slider', () => {
     // A scrub from two days before the campaign date to two days after, a day at a time.
     const path = [false, false, true, false, false];
     const was = path.map((onCampaignDate) => rowSignature({ canSetDate: true, hasCampaignDate: true, onCampaignDate, scrubbing: false }));
-    assert.deepEqual(was, ['go+set', 'go+set', '', 'go+set', 'go+set'], 'at rest the buttons come and go with the day: that is what reflowed the row mid-drag');
+    assert.deepEqual(was, ['set', 'set', '', 'set', 'set'], 'at rest the button comes and goes with the day: that is what reflowed the row mid-drag');
     const now = path.map((onCampaignDate) => rowSignature({ canSetDate: true, hasCampaignDate: true, onCampaignDate, scrubbing: true }));
     assert.deepEqual(new Set(now).size, 1, 'while scrubbing, the row keeps one shape across the crossing');
-    assert.equal(now[2], 'go+set');
+    assert.equal(now[2], 'set');
 });
 
-test('the way back to the campaign date: shown off the day, held while a scrub crosses it, absent with no campaign date', () => {
-    assert.equal(goButtonState({ hasCampaignDate: true, onCampaignDate: false, scrubbing: false }), 'shown');
-    assert.equal(goButtonState({ hasCampaignDate: true, onCampaignDate: true, scrubbing: true }), 'held');
-    assert.equal(goButtonState({ hasCampaignDate: true, onCampaignDate: true, scrubbing: false }), 'absent');
-    assert.equal(goButtonState({ hasCampaignDate: false, onCampaignDate: false, scrubbing: true }), 'absent');
+test('the reset before Play: live off the campaign date, quiet on it, absent with none; the header keeps one shape', () => {
+    assert.equal(resetState({ hasCampaignDate: true, onCampaignDate: false }), 'live');
+    assert.equal(resetState({ hasCampaignDate: true, onCampaignDate: true }), 'quiet');
+    assert.equal(resetState({ hasCampaignDate: false, onCampaignDate: false }), 'absent');
+    // A scrub across the campaign date, at rest and held: the header's controls never change.
+    const shapes = [];
+    for (const scrubbing of [false, true]) for (const onCampaignDate of [false, false, true, false]) shapes.push(headerSignature({ hasCampaignDate: true, onCampaignDate, scrubbing }));
+    assert.deepEqual(new Set(shapes).size, 1);
+    assert.equal(shapes[0], 'reset+play+readout');
+    assert.equal(headerSignature({ hasCampaignDate: false, onCampaignDate: false, scrubbing: false }), 'play+readout', 'no campaign: no reset, and its place is not held');
 });
 
 test('the button is shown off the day, held unseen on the day while scrubbing, absent otherwise', () => {

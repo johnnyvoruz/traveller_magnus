@@ -26,6 +26,7 @@ import {
     type Picture, type Rocks, type StarDraw, type WorldDraw,
 } from './picture.ts';
 import { discBatch, sunColour, visualRate, type OrbitDiscBatch } from './disc_batch.ts';
+import { pictureOfAu, pointWords } from './distance.ts';
 import { pictureBodies, plotText, type PlotReadout, type ShipMark, type ShipShape } from './ships.ts';
 import { whenWords } from './ship_list.ts';
 import { cssSeconds, easeOutAt, withAlpha, type EaseOut, type OrbitTheme, type PortPaint } from './theme.ts';
@@ -156,9 +157,14 @@ export type DrawState = {
     preview?: FlightPreview | null;
 };
 
-/** Dates and a destination. The picture places every ghost from these. `tag` is the label when the view has one. */
+/**
+ * Dates and a destination. A body (`toKey`) ghosts the bodies that move.
+ * A point is a target, not a ghost: a point does not move. `tag` is the label when the view has one.
+ */
 export type FlightPreview = {
-    toKey: string;
+    toKey?: string;
+    /** AU from the primary, in the frame realPositionAu answers in. */
+    point?: { x: number; y: number };
     departs: number;
     arrives: number;
     tag?: string;
@@ -353,7 +359,7 @@ export class OrbitRenderer {
         this.selection(plan, picture, state);
         const ghostAt = this.paintGhosts(plan, picture, view, state);
         this.beginBubbles(state);
-        this.ships(state.ships);
+        this.ships(state.ships, picture.hits);
         this.plot(state.plot, plan, picture, view, state.days, ghostAt, state.ships);
         this.settleDiscs(state);
         this.keepHeld(picture, state.layers);
@@ -2126,7 +2132,7 @@ export class OrbitRenderer {
      * so a zoom that rebuilds the picture does not grow the stroke. A jump report is
      * not drawn; the bubble for that moment is drawn in its place while it runs.
      */
-    private ships(marks: readonly ShipMark[] | undefined): void {
+    private ships(marks: readonly ShipMark[] | undefined, hits: readonly Hit[]): void {
         const bubbling = new Set<string>();
         for (const bubble of this.bubbleFrame) {
             bubbling.add(bubble.id);
@@ -2135,8 +2141,45 @@ export class OrbitRenderer {
         if (!marks || marks.length === 0) return;
         for (const mark of marks) {
             if (bubbling.has(mark.id) || mark.jump) continue;
-            this.paintDesignator(mark, 1, 1);
+            const at = this.beside(mark, marks, hits);
+            this.paintDesignator(at === mark ? mark : { ...mark, x: at.x, y: at.y }, 1, 1);
         }
+    }
+
+    /**
+     * A docked or orbiting ship is drawn down and to the right of the body's centre,
+     * one disc-radius plus 16 px clear of the name above the disc, and further ships
+     * at that body step 20 px along that same diagonal in id order.
+     * A mark within 1.5 px of a star, world, or moon counts. A ship under way, and a
+     * jump, stay on the mark. The stored mark is not moved.
+     */
+    private beside(mark: ShipMark, marks: readonly ShipMark[], hits: readonly Hit[]): { x: number; y: number } {
+        if (typeof mark.heading === 'number') return mark;
+        const limit = 1.5;
+        let hit: Hit | null = null;
+        let best = limit * limit;
+        for (const item of hits) {
+            if (item.kind !== 'star' && item.kind !== 'world' && item.kind !== 'moon') continue;
+            const d = (mark.x - item.cx) ** 2 + (mark.y - item.cy) ** 2;
+            if (d <= best) {
+                best = d;
+                hit = item;
+            }
+        }
+        if (!hit) return mark;
+        const centre = hit;
+        const crowd = marks.filter((other) => {
+            if (other.jump || typeof other.heading === 'number') return false;
+            return (other.x - centre.cx) ** 2 + (other.y - centre.cy) ** 2 <= limit * limit;
+        });
+        crowd.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+        const index = Math.max(0, crowd.findIndex((item) => item.id === mark.id));
+        const radius = (centre.visualR ?? centre.r) + 16 + index * 20;
+        const angle = Math.PI / 4;
+        return {
+            x: centre.cx + radius * Math.cos(angle),
+            y: centre.cy + radius * Math.sin(angle),
+        };
     }
 
     /** The leaving bubble swells and fades. The arriving bubble shows first, then yields the designator. */
@@ -2242,7 +2285,7 @@ export class OrbitRenderer {
     private beginGhosts(state: DrawState): void {
         const preview = this.livePreview(state);
         const span = preview ? preview.arrives - preview.departs : 0;
-        const key = preview ? preview.toKey : '';
+        const key = preview ? (preview.toKey || this.pointKey(preview.point)) : '';
         const ease = this.theme.easeOut;
         this.ghostShare = preview ? 1 : 0;
         this.ghostKind = preview ? 'show' : 'out';
@@ -2290,9 +2333,15 @@ export class OrbitRenderer {
         this.lockDim = preview || this.ghostShare > 0 ? 0.5 : 1;
     }
 
+    private pointKey(point: { x: number; y: number } | undefined): string {
+        if (!point) return '';
+        return 'point:' + point.x + ',' + point.y;
+    }
+
     private livePreview(state: DrawState): FlightPreview | null {
         const preview = state.preview;
-        if (!preview || !(preview.arrives > preview.departs) || !preview.toKey) return null;
+        if (!preview || !(preview.arrives > preview.departs)) return null;
+        if (!preview.toKey && !preview.point) return null;
         return preview;
     }
 
@@ -2327,11 +2376,35 @@ export class OrbitRenderer {
             if (!(this.ghostShare > 0)) this.ghostLast = [];
             return null;
         }
-        const specs = this.ghostSpecs(plan, view, state.days, preview);
+        const specs = preview.toKey ? this.ghostSpecs(plan, view, state.days, preview) : [];
         const drawn = this.drawGhosts(specs, this.ghostKind);
         this.ghostLast = drawn;
         const dest = drawn.find((spec) => spec.dest);
-        return dest ? dest.then : null;
+        if (dest) return dest.then;
+        if (preview.point) return this.paintPointTarget(plan, view, state.days, preview);
+        return null;
+    }
+
+    /** A small target at a point, in the destination's style. A point needs no ghost. */
+    private paintPointTarget(plan: Plan, view: View, days: number, preview: FlightPreview): GhostSpot | null {
+        if (!preview.point) return null;
+        const at = pictureOfAu(preview.point, view, plan, 'orbits');
+        if (!at) return null;
+        const label = preview.tag || pointWords(plan, preview.point, days);
+        const spec: GhostSpec = {
+            key: 'point',
+            dest: true,
+            label,
+            now: at,
+            then: at,
+            r: 8,
+            cx: at.x,
+            cy: at.y,
+            sweep: 0,
+        };
+        this.strokeGhost(spec, spec, 'show', 1);
+        if (label) this.ghostTag(spec, 1);
+        return at;
     }
 
     private ghostSpecs(plan: Plan, view: View, days: number, preview: FlightPreview): GhostSpec[] {

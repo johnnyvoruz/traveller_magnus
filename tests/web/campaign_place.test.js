@@ -118,3 +118,32 @@ test('with no campaign date, an emptied track, or a cycle, the place is the anch
     rebuildCampaignIndex(cycle, {}, 15);
     assert.deepEqual(recordsAtHex(REGINA.hexKey), []);
 });
+
+const POINT = { kind: 'system', hexKey: 'Spinward_Marches/1910', point: { x: 1.2, y: 0.8 }, locationLabel: '1.44 AU' };
+
+test('a record at a point is in that system and at no body', () => {
+    const ship = row({ anchor: POINT, status: null });
+    const person = row({
+        id: PERSON,
+        type: 'person',
+        name: 'Voss',
+        anchor: { kind: 'record', id: VESSEL },
+        status: null,
+    });
+    const records = { [VESSEL]: ship, [PERSON]: person };
+    assert.deepEqual(placeAt(VESSEL, records, 10), { kind: 'here', anchor: POINT });
+    assert.deepEqual(placeAt(PERSON, records, null), { kind: 'here', anchor: POINT });
+    assert.deepEqual(whereAreWe({ vesselId: VESSEL, anchor: null }, records, 10), POINT);
+    assert.deepEqual(whereAreWe({ vesselId: null, anchor: POINT }, {}, 10), POINT);
+    rebuildCampaignIndex(records, {}, 10);
+    assert.deepEqual(recordsAtHex(POINT.hexKey), [VESSEL, PERSON]);
+    assert.deepEqual(recordsAtBody('w0'), []);
+
+    const orbit = [{ from: POINT, to: POINT, departs: 0, arrives: 20, mode: 'orbit' }];
+    const moving = { [VESSEL]: row({ anchor: REGINA, status: { track: orbit } }), [PERSON]: person };
+    assert.deepEqual(placeAt(PERSON, moving, 10), { kind: 'here', anchor: POINT });
+    assert.deepEqual(whereAreWe({ vesselId: VESSEL, anchor: null }, moving, 10), POINT);
+    rebuildCampaignIndex(moving, {}, 10);
+    assert.deepEqual(recordsAtHex(POINT.hexKey), [VESSEL, PERSON]);
+    assert.deepEqual(recordsAtBody(REGINA.bodyKey), []);
+});

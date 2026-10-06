@@ -574,6 +574,39 @@ test('one wireframe designator per shape, the same size at another zoom', () => 
     assert.deepEqual(local(wide), local(extra));
 });
 
+test('a ship on a body is drawn beside it, and a second ship steps along the same diagonal', () => {
+    const plan = planSystem(testSystem(), HEX_KEY);
+    const scene = layoutScene(plan, { ...VIEW, moons: DEFAULT_LAYERS.moons, jump: DEFAULT_LAYERS.jump }, 1000);
+    const picture = orbitPicture(plan, scene, DEFAULT_LAYERS, VIEW.z);
+    const world = scene.primary.bodies.find((at) => at.world.name === 'Test I');
+    const hit = picture.hits.find((item) => item.kind === 'world' && item.key === world.world.key);
+    assert.ok(hit);
+    const marks = [
+        { id: 'b', name: 'Courier', kind: 'vessel', shape: 'circle', x: hit.cx, y: hit.cy },
+        { id: 'a', name: 'Liner', kind: 'traffic', shape: 'rectangle', x: hit.cx, y: hit.cy },
+        { id: 'f', name: 'Far Margin', kind: 'party', shape: 'triangle', x: hit.cx, y: hit.cy, heading: 0.4 },
+    ];
+    const extra = extraCalls({ ships: marks });
+    const radius = (hit.visualR ?? hit.r) + 16;
+    const angle = Math.PI / 4;
+    const at = (index) => ({
+        x: hit.cx + (radius + index * 20) * Math.cos(angle),
+        y: hit.cy + (radius + index * 20) * Math.sin(angle),
+    });
+    const liner = at(0);
+    const courier = at(1);
+    const text = extra.filter((c) => c.op === 'fillText').map((c) => c.args);
+    assert.deepEqual(text, [
+        ['Courier', courier.x + 12, courier.y],
+        ['Liner', liner.x + 12, liner.y],
+        ['Far Margin', hit.cx + 12, hit.cy],
+    ]);
+    const gap = Math.hypot(courier.x - liner.x, courier.y - liner.y);
+    assert.ok(Math.abs(gap - 20) < 1e-9);
+    const flight = extra.find((c) => c.op === 'translate' && c.args[0] === hit.cx && c.args[1] === hit.cy);
+    assert.ok(flight);
+});
+
 test('the plotting overlay is hairlines and a readout, and only on that frame', () => {
     const plan = planSystem(testSystem(), HEX_KEY);
     const scene = layoutScene(plan, { ...VIEW, moons: DEFAULT_LAYERS.moons, jump: DEFAULT_LAYERS.jump }, 1000);

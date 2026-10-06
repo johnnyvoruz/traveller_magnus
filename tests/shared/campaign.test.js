@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
     CAMPAIGN_LIMITS,
+    POINT_AU_LIMIT,
     CAMPAIGN_LINK_KINDS,
     CAMPAIGN_RECORD_TYPES,
     CampaignAnchor,
@@ -138,6 +139,24 @@ test('each campaign schema accepts a good value', () => {
     assert.equal(CampaignImage.safeParse({ ...image, caption: 'At Regina' }).success, true);
     assert.equal(CampaignRecord.safeParse(record({ images: [image] })).success, true);
     assert.equal(CampaignRecord.safeParse(record({ images: Array.from({ length: CAMPAIGN_LIMITS.images }, () => image) })).success, true);
+});
+
+test('a system point is a place, and it is not a body', () => {
+    const point = { kind: 'system', hexKey: 'Spinward_Marches/1910', point: { x: 1.2, y: 0.8 }, locationLabel: '1.44 AU' };
+    assert.equal(POINT_AU_LIMIT, 1_000_000);
+    assert.equal(CampaignAnchor.safeParse(point).success, true);
+    assert.equal(CampaignAnchor.safeParse({ kind: 'system', hexKey: 'Spinward_Marches/1910', point: { x: -POINT_AU_LIMIT, y: POINT_AU_LIMIT } }).success, true);
+    assert.equal(CampaignRecord.safeParse(record({ anchor: point })).success, true);
+    assert.equal(CampaignSettings.safeParse(settings({ party: { vesselId: null, memberIds: [], anchor: point } })).success, true);
+    const legFrom = leg(0, 1, { from: point, to: { kind: 'system', hexKey: 'Spinward_Marches/1910', bodyKey: 'w0' }, mode: 'flight' });
+    assert.equal(TrackLeg.safeParse(legFrom).success, true);
+    assert.equal(CampaignAnchor.safeParse({ kind: 'system', hexKey: 'Spinward_Marches/1910', bodyKey: 'w0', point: { x: 1, y: 2 } }).success, false);
+    const both = CampaignAnchor.safeParse({ kind: 'system', hexKey: 'Spinward_Marches/1910', bodyKey: 'w0', point: { x: 1, y: 2 } });
+    assert.equal(both.success, false);
+    assert.equal(both.error.issues.some((issue) => issue.message === 'a point is not a body'), true);
+    assert.equal(CampaignAnchor.safeParse({ kind: 'system', hexKey: 'Spinward_Marches/1910', point: { x: POINT_AU_LIMIT + 1, y: 0 } }).success, false);
+    assert.equal(CampaignAnchor.safeParse({ kind: 'system', hexKey: 'Spinward_Marches/1910', point: { x: Number.POSITIVE_INFINITY, y: 0 } }).success, false);
+    assert.equal(CampaignAnchor.safeParse({ kind: 'system', hexKey: 'Spinward_Marches/1910', point: { x: 1 } }).success, false);
 });
 
 test('schemas reject §0.10 breaches and a legacy hex id', () => {

@@ -6,7 +6,7 @@
  * one docked leg at the campaign date. Pure: it runs under Node. Nothing here is a rule.
  */
 import type { CampaignAnchor, CampaignClock, CampaignRecord, TrackLeg } from '@voyage/shared';
-import { whereAreWe } from '../campaign/track.ts';
+import { positionAt, trackOf, whereAreWe, type TrackFix } from '../campaign/track.ts';
 import { DEFAULT_START, totalDays } from '../orbit/clock.ts';
 import { statusWords, whenWords } from '../orbit/ship_list.ts';
 import { partyVessel, resolveAnchor, type Party } from './party.ts';
@@ -33,13 +33,25 @@ function standing(leg: TrackLeg): CampaignAnchor {
     return leg.mode === 'jump' ? leg.from : leg.to;
 }
 
-export function partyWhere(party: Party, records: Readonly<Record<string, CampaignRecord>>, days: number): PartyWhere {
-    const at = whereAreWe(party, records, days);
+function whereOf(at: CampaignAnchor | TrackFix | null, vessel: CampaignRecord | null, records: Readonly<Record<string, CampaignRecord>>, days: number): PartyWhere {
     if (!at || !('fraction' in at)) return { anchor: at, underway: null };
-    const vessel = partyVessel(party, records);
     const words = vessel ? statusWords(vessel, days, (anchor) => anchorName(anchor, records)) : null;
     const state = at.leg.mode === 'jump' ? 'jump' : 'flight';
     return { anchor: standing(at.leg), underway: { state, text: words ? words.text : '' } };
+}
+
+export function partyWhere(party: Party, records: Readonly<Record<string, CampaignRecord>>, days: number): PartyWhere {
+    return whereOf(whereAreWe(party, records, days), partyVessel(party, records), records, days);
+}
+
+/**
+ * Where one vessel is at the date, by the same rule as the party's ship (campaign/track.ts
+ * whereAreWe): its track's answer, or its anchor with no track and before the first departure.
+ */
+export function vesselWhere(vessel: CampaignRecord, records: Readonly<Record<string, CampaignRecord>>, days: number): PartyWhere {
+    const track = trackOf(vessel);
+    const at = track ? positionAt(track, days) ?? vessel.anchor : vessel.anchor;
+    return whereOf(at, vessel, records, days);
 }
 
 /** The party's marker on the map: the hex it stands on and its tag, or null when it is nowhere. */

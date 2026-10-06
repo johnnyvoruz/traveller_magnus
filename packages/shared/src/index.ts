@@ -9,6 +9,7 @@ export { SectorHex, SectorIndex, Territory, TruthManifest, SectorOverview, Truth
 export { PackageHex, PackageManifest } from './schemas/package.ts';
 export {
     CAMPAIGN_LIMITS,
+    POINT_AU_LIMIT,
     CAMPAIGN_RECORD_TYPES,
     CAMPAIGN_LINK_KINDS,
     CampaignLinkKindName,

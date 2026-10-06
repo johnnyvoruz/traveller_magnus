@@ -26,20 +26,27 @@ export function setButtonState(state: { canSetDate: boolean; onCampaignDate: boo
     return state.scrubbing ? 'held' : 'absent';
 }
 
+export type ResetState = 'live' | 'quiet' | 'absent';
+
 /**
- * "Go to the campaign date" (the Time drawer; the header's mark is gone, Johnny 2026-10-06):
- * there when the campaign has a date and the view is off it, and, like Set, holding its
- * place unseen while a scrub crosses the day.
+ * The header's reset button, before Play (Johnny, 2026-10-06): it brings the view back to
+ * the campaign date. Off the date it is the live control; on the date it is quiet and
+ * disabled, and says so; with no campaign date it is not there. Its place does not depend
+ * on which of the two it is, so the header never moves when the view leaves or reaches the
+ * date, or under a scrub.
  */
-export function goButtonState(state: { hasCampaignDate: boolean; onCampaignDate: boolean; scrubbing: boolean }): SetButtonState {
+export function resetState(state: { hasCampaignDate: boolean; onCampaignDate: boolean }): ResetState {
     if (!state.hasCampaignDate) return 'absent';
-    if (!state.onCampaignDate) return 'shown';
-    return state.scrubbing ? 'held' : 'absent';
+    return state.onCampaignDate ? 'quiet' : 'live';
+}
+
+/** The header clock's width-affecting controls, as a signature: the reset holds its place in both its states. */
+export function headerSignature(state: { hasCampaignDate: boolean; onCampaignDate: boolean; scrubbing: boolean }): string {
+    return resetState(state) === 'absent' ? 'play+readout' : 'reset+play+readout';
 }
 
 /** The row's width-affecting controls, as a signature: it must not change while a scrub is under way. */
 export function rowSignature(state: { canSetDate: boolean; onCampaignDate: boolean; scrubbing: boolean; hasCampaignDate: boolean }): string {
     const set = setButtonState(state);
-    const go = goButtonState(state);
-    return [go === 'absent' ? '' : 'go', set === 'absent' ? '' : 'set'].filter(Boolean).join('+');
+    return set === 'absent' ? '' : 'set';
 }

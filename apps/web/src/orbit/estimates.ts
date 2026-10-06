@@ -46,6 +46,41 @@ export function flightHours(distanceKm: number | null, accelG: number): number |
     return transitSeconds(distanceKm, accelG) / HOUR_SECONDS;
 }
 
+/** The settling sum stops when two rounds agree within this (a minute, in hours), or after SETTLE_ROUNDS. */
+const SETTLE_WITHIN_HOURS = 1 / 60;
+export const SETTLE_ROUNDS = 8;
+
+export type SettledFlight = {
+    hours: number;
+    /** departs plus the hours, in days. */
+    arrives: number;
+    /** The distance to where the destination will be at that arrival. */
+    km: number;
+    /** False when the rounds never agreed: the figures are the last round's, and the card says "roughly". */
+    settled: boolean;
+};
+
+/**
+ * A flight measured to where its destination will be (findings/plot_ghosts_design.md §2.3).
+ * `distanceAt(arrives)` is the caller's distance from where the ship is at departure to the
+ * destination's place at that date. The arrival depends on the distance, so the sum is run
+ * again with its own answer until two rounds agree. Null where there is no distance to cross.
+ */
+export function settleFlight(distanceAt: (arrives: number) => number | null, accelG: number, departs: number): SettledFlight | null {
+    let arrives = departs;
+    let last = null as SettledFlight | null;
+    for (let round = 0; round < SETTLE_ROUNDS; round += 1) {
+        const km = distanceAt(arrives);
+        const hours = flightHours(km, accelG);
+        if (km === null || hours === null) return round === 0 ? null : last;
+        const agreed: boolean = last !== null && Math.abs(hours - last.hours) < SETTLE_WITHIN_HOURS;
+        arrives = departs + hours * HOUR;
+        last = { hours, arrives, km, settled: agreed };
+        if (agreed) return last;
+    }
+    return last;
+}
+
 /** The estimate as the hours field holds it: to a tenth of an hour, and never nothing. */
 export function fieldHours(hours: number): number {
     return Math.max(0.1, Math.round(hours * 10) / 10);

@@ -113,6 +113,8 @@ const orbitMode = ref<Mode>('orbits');
 const orbitLayers = ref<Layers>({ ...DEFAULT_LAYERS });
 // The docked body card, with sample values in the shapes orbit/card.ts produces.
 // The card of another body under the pointer, stacked under the pinned one.
+/** The dossier is "open on the same body": the pinned card leaves the survey to it. */
+const orbitSurveyElsewhere = ref(false);
 const orbitHoverCard: BodyCardModel = {
     title: 'Regina A-IV',
     sub: 'Gas Giant GL',
@@ -124,17 +126,29 @@ const orbitHoverCard: BodyCardModel = {
     season: null,
     seasonHelp: '',
 };
+// The lines carry their group, as orbit/card.ts packs them: "now" is what the picture is doing
+// (orbit, distance, today's temperatures, daylight); "survey" is what the dossier's world page
+// already shows. With the dossier open on the same body the card keeps "now" alone.
+const orbitNow: BodyCardModel['lines'] = [
+    { label: 'Orbit', value: '10.66 PD from parent', group: 'now' },
+    { label: 'Solar day', value: '24 h', group: 'now' },
+    { label: 'Daylight at 45\u00B0', value: '12 h all year', group: 'now' },
+    { label: 'Today, north (est.)', value: '\u221284\u00B0C (\u2212119\u00B0F)', gap: true, group: 'now' },
+    { label: 'Today, south (est.)', value: '\u221283\u00B0C (\u2212118\u00B0F)', group: 'now' },
+];
+const orbitSurvey: BodyCardModel['lines'] = [
+    { label: 'UWP', value: 'A788899-C', strong: true, gap: true, group: 'survey' },
+    { label: 'Diameter', value: '11,169 km', gap: true, group: 'survey' },
+    { label: 'Rotation', value: 'tidally locked', group: 'survey' },
+    { label: 'Climate', value: 'Frozen', gap: true, group: 'survey' },
+    { label: 'Mean temp.', value: '\u221284\u00B0C (\u2212118\u00B0F)', hint: 'Mean 190 K', group: 'survey' },
+];
 const orbitCard: BodyCardModel = {
     title: 'Regina',
     sub: 'Mainworld Satellite',
-    lines: [
-        { label: 'Orbit', value: '10.66 PD from parent' },
-        { label: 'UWP', value: 'A788899-C', strong: true, gap: true },
-        { label: 'Diameter', value: '11,169 km', gap: true },
-        { label: 'Rotation', value: 'tidally locked' },
-        { label: 'Climate', value: 'Frozen', gap: true },
-        { label: 'Mean temp.', value: '\u221284\u00B0C (\u2212118\u00B0F)', hint: 'Mean 190 K' },
-    ],
+    lines: [orbitNow[0], ...orbitSurvey.slice(0, 3), orbitNow[1], orbitNow[2], ...orbitSurvey.slice(3), orbitNow[3], orbitNow[4]],
+    now: orbitNow,
+    survey: orbitSurvey,
     season: {
         text: 'Northern autumn, marked \u00B7 southern spring \u00B7 by Regina A-IV\u2019s year (1,984 days)',
         lines: ['Northern autumn, marked', 'Southern spring', 'By Regina A-IV\u2019s year (1,984 days)'],
@@ -373,6 +387,7 @@ function open(key: string): void {
               :can-set-date="true"
               @set-campaign="() => {}"
               @week="orbitDays = orbitDays + 7"
+              @week-back="orbitDays = Math.max(0, orbitDays - 7)"
               @days="orbitDays = $event"
               @speed="orbitSpeed = $event"
               @scrub="() => {}"
@@ -381,12 +396,13 @@ function open(key: string): void {
           </Drawer>
           <Drawer id="view" :open="orbitDrawer === 'view'" @close="orbitDrawer = ''">
             <span class="design-note orbit-drawer-group" style="--i: 0">The View drawer: the layout radios, Fit, the picture controls (live on the orbit view). Layout now: {{ orbitMode }}.</span>
+            <label class="design-note orbit-drawer-group" style="--i: 1"><input v-model="orbitSurveyElsewhere" type="checkbox"> The dossier is open on the pinned body (the card keeps what the picture is doing now)</label>
           </Drawer>
           <Drawer id="layers" :open="orbitDrawer === 'layers'" @close="orbitDrawer = ''">
             <LayerKey :layers="orbitLayers" @layers="orbitLayers = $event" />
           </Drawer>
           <div class="orbit-cards">
-            <BodyCard :model="orbitCard" body-key="sample" closable />
+            <BodyCard :model="orbitCard" body-key="sample" closable :survey-elsewhere="orbitSurveyElsewhere" />
             <BodyCard :model="orbitHoverCard" body-key="hover-sample" :closable="false" under />
           </div>
           <BodyChips
@@ -431,7 +447,7 @@ function open(key: string): void {
             <button type="button" class="ui-btn is-icon" aria-label="Next body" title="Next"><Icon name="chevron-right" :size="13" /></button>
           </template>
           <DossierBody v-if="showBody" :model="sample.body" :span="span" :day-night="sampleDay" :tick="sampleTick" live :place="placeSample" @open="open" />
-          <DossierOverview v-else :model="sample.overview" :span="span" :error="false" @open="showBody = true" />
+          <DossierOverview v-else :model="sample.overview" :span="span" :error="false" orbit-link @open="showBody = true" />
         </Panel>
       </div>
       <h3 class="design-sub">States inside the panel</h3>

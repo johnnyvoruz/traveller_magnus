@@ -301,7 +301,9 @@ const PAIRS = [
     ['--attention', '--bg-1', TEXT, 'party: "In jump to …" where the place would stand (20 px)'],
     // The orbit header's readout says where the view stands against the campaign date (follow-up 19)
     ['--signal', '--bg-2', MARK, 'orbit readout: the calendar, the view on the campaign date'],
-    ['--attention', '--bg-2', MARK, 'orbit readout: the calendar, the view off the campaign date'],
+    // The reset before Play (Johnny, 2026-10-06): live off the campaign date, quiet (disabled) on it
+    ['--attention', ['--chrome-glass', '--orbit-space'], MARK, 'orbit header: the reset, live (its icon)'],
+    ['--text-muted', ['--chrome-glass', '--orbit-space'], MARK, 'orbit header: the reset, quiet, before its 60% (a disabled control)'],
     ['--text-muted', ['--chrome-glass', '--orbit-space'], TEXT, 'K12 plot card: the dates under the destination (12 px)'],
     ['--text-muted', '--chrome-bg', SMALL, 'omnibox group labels (10.5 px)'],
     ['--text-1', '--bg-2', SMALL, 'omnibox "Person here" and "Place here" (11 px bold)'],

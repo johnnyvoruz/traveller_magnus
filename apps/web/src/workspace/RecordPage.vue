@@ -5,17 +5,20 @@
  * its track (K12) and its ship sheet (K13) with its deck plan (K9) inside.
  */
 import { computed, defineAsyncComponent, nextTick, onMounted, ref, watch } from 'vue';
-import { CAMPAIGN_LIMITS, type CampaignRecordType } from '@voyage/shared';
+import { CAMPAIGN_LIMITS, type CampaignAnchor, type CampaignRecordType } from '@voyage/shared';
 import { flushCampaign, lastError, pending } from '../campaign/commit.ts';
 import { campaign } from '../campaign/store.ts';
+import { trackOf } from '../campaign/track.ts';
 import Icon from '../design/Icon.vue';
 import { deleteRecord, justCreated, recentlyDeleted, restoreRecord, saveRecord } from './actions.ts';
 import EditableText from './EditableText.vue';
 import { uploads } from './gallery_state.ts';
 import { uploadWords } from './images.ts';
 import LinksBlock from './LinksBlock.vue';
+import { campaignDays, vesselWhere } from './party_where.ts';
 import RecordGallery from './RecordGallery.vue';
 import { RECORD_TYPES, addTag, cleanDetails, cleanName, cleanSummary, placeLine, typeInfo } from './records.ts';
+import { dockShipAt } from './track_actions.ts';
 import TrackBlock from './TrackBlock.vue';
 import VesselPlan from './VesselPlan.vue';
 import WhereBlock from './WhereBlock.vue';
@@ -56,6 +59,26 @@ const saveState = computed((): 'saving' | 'failed' | 'saved' => {
     return pending.value || upload.value ? 'saving' : 'saved';
 });
 const saveWords = computed(() => (upload.value && upload.value.stage !== 'failed' ? uploadWords(upload.value) : 'Saving…'));
+
+/**
+ * Where it is. A vessel with a track is where its track puts it at the campaign date, in the
+ * Party tab's own words, and its place is changed as "Move the party" changes it: one docked
+ * leg (the track may refuse, and says why). Anything else is at its anchor, as before.
+ */
+const where = computed(() => {
+    const now = record.value;
+    if (!now) return { anchor: null, underway: null };
+    if (now.type !== 'vessel') return { anchor: now.anchor, underway: null };
+    void campaign.seq;
+    return vesselWhere(now, campaign.records, campaignDays(campaign.clock));
+});
+
+function place(next: CampaignAnchor): void {
+    const now = record.value;
+    if (!now) return;
+    if (now.type === 'vessel' && trackOf(now)) dockShipAt(props.id, next, campaignDays(campaign.clock));
+    else saveRecord(props.id, { anchor: next });
+}
 
 function rename(text: string): void {
     const name = cleanName(text);
@@ -153,12 +176,13 @@ watch(() => props.id, () => {
     </header>
 
     <WhereBlock
-      :anchor="record.anchor"
+      :anchor="where.anchor"
+      :underway="where.underway"
       :locate-id="id"
       :read-only="readOnly"
       :vessel-choice="record.type !== 'vessel'"
       :exclude="id"
-      @save="saveRecord(id, { anchor: $event })"
+      @save="place"
       @map="emit('map')"
     />
 

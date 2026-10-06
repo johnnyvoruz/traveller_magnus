@@ -6,7 +6,7 @@
 import type { CampaignAnchor } from '@voyage/shared';
 import { positionAt } from '../campaign/track.ts';
 import { formatDistance } from '../design/units.ts';
-import { DAY_SECONDS } from './clock.ts';
+import { DAY_SECONDS, totalDays } from './clock.ts';
 import { placeAtPicture, type PictureLayout } from './distance.ts';
 import { AU_KM, type Plan, type View } from './layout.ts';
 import type { Picture } from './picture.ts';
@@ -80,16 +80,39 @@ export type PlotFrame = {
 const sys = (hexKey: string, bodyKey: string): CampaignAnchor => ({ kind: 'system', hexKey, bodyKey });
 
 /**
- * Where each track's ship is at `days`.
- * An anchor sits on that body. A flight in progress is the straight line from where
- * `from` was at `departs` to where `to` will be at `arrives`, by the leg's fraction.
- * Both ends are fixed moments, so the line does not bend. A jump in progress is not
- * a mark: the system it leaves reports the point it left, and the system it
- * reaches reports the point it will arrive at. At and after arrival it is a
- * normal mark at `to`. `bodiesAt` is asked at the frame's date for an anchor or a
- * jump, and at the leg's two dates for a flight.
+/**
+ * Where an AU point is drawn on this frame. A point does not move, so the date is not asked.
+ * Null when this picture has no place for it.
  */
-export function placeShips(tracks: readonly ShipTrack[], bodiesAt: BodiesAt, days: number): ShipMark[] {
+export type PictureOf = (au: { x: number; y: number }) => BodyPoint | null;
+
+/** A system point is not a body. `bodiesAt` is not asked for one. */
+function openPoint(anchor: CampaignAnchor): { x: number; y: number } | null {
+    if (!anchor || anchor.kind !== 'system' || !anchor.point || anchor.bodyKey) return null;
+    return anchor.point;
+}
+
+function drawnAnchor(anchor: CampaignAnchor, atDays: number, bodiesAt: BodiesAt, pictureOf?: PictureOf): BodyPoint | null {
+    const point = openPoint(anchor);
+    if (point) return pictureOf ? pictureOf(point) : null;
+    return bodiesAt(anchor, atDays);
+}
+
+/**
+ * Where each track's ship is at `days`.
+ * An anchor sits on that body, or on its point when the anchor has one.
+ * A flight in progress is the straight line from where `from` was at `departs` to where
+ * `to` will be at `arrives`, by the leg's fraction. A point does not move, so that end
+ * is the same picture place at either date. Both ends are fixed moments, so the line
+ * does not bend. A jump in progress is not a mark: the system it leaves reports the
+ * place it left, and the system it reaches reports the place it will arrive at. At and
+ * after arrival it is a normal mark at `to`. `bodiesAt` is asked at the frame's date
+ * for an anchor or a jump, and at the leg's two dates for a flight. A point is placed
+ * by `pictureOf` and `bodiesAt` is not asked.
+ */
+export function placeShips(
+    tracks: readonly ShipTrack[], bodiesAt: BodiesAt, days: number, pictureOf?: PictureOf,
+): ShipMark[] {
     const marks: ShipMark[] = [];
     for (const track of tracks) {
         const at = positionAt(track.legs, days);
@@ -97,8 +120,8 @@ export function placeShips(tracks: readonly ShipTrack[], bodiesAt: BodiesAt, day
         const base = { id: track.id, name: track.name, kind: track.kind, shape: track.shape };
         if ('fraction' in at) {
             const flight = at.leg.mode === 'flight';
-            const from = bodiesAt(at.leg.from, flight ? at.leg.departs : days);
-            const to = bodiesAt(at.leg.to, flight ? at.leg.arrives : days);
+            const from = drawnAnchor(at.leg.from, flight ? at.leg.departs : days, bodiesAt, pictureOf);
+            const to = drawnAnchor(at.leg.to, flight ? at.leg.arrives : days, bodiesAt, pictureOf);
             if (at.leg.mode === 'jump') {
                 if (from) marks.push({ ...base, x: from.x, y: from.y, jump: 'out' });
                 else if (to) marks.push({ ...base, x: to.x, y: to.y, jump: 'in' });
@@ -114,7 +137,7 @@ export function placeShips(tracks: readonly ShipTrack[], bodiesAt: BodiesAt, day
             marks.push(mark);
             continue;
         }
-        const point = bodiesAt(at, days);
+        const point = drawnAnchor(at, days, bodiesAt, pictureOf);
         if (!point) continue;
         marks.push({ ...base, x: point.x, y: point.y });
     }
@@ -195,7 +218,12 @@ export type StandPlaces = (key: string, days: number) => BodyPoint | null;
  * stays halfway across a one-day leg centred on `days`.
  */
 export function standInMarks(
-    hexKey: string, days: number, picture: Picture, places?: StandPlaces, flight?: { departs: number; arrives: number },
+    hexKey: string,
+    days: number,
+    picture: Picture,
+    places?: StandPlaces,
+    flight?: { departs: number; arrives: number },
+    pictureOf?: PictureOf,
 ): ShipMark[] {
     const bodies = pictureBodies(picture);
     if (bodies.length === 0) return [];
@@ -211,7 +239,6 @@ export function standInMarks(
     const rest = bodies.filter((body) => body.key !== far.key && body.key !== star.key);
     const dock = rest[0] ?? far;
     const patrol = rest[1] ?? dock;
-    const linerFrom = rest[2] ?? patrol;
     const bodiesAt: BodiesAt = (anchor, atDays) => {
         if (!anchor || anchor.kind !== 'system' || anchor.hexKey !== hexKey || !anchor.bodyKey) return null;
         if (places) {
@@ -276,9 +303,36 @@ export function standInMarks(
         },
         {
             id: 'stand-rect', name: 'Liner', kind: 'traffic', shape: 'rectangle',
-            legs: [{ from: sys(hexKey, linerFrom.key), to: sys(hexKey, linerFrom.key), departs: heldFrom, arrives: heldTo, mode: 'docked' }],
+            // Beside Courier, so two ships at one body can be seen.
+            legs: [{ from: sys(hexKey, dock.key), to: sys(hexKey, dock.key), departs: heldFrom, arrives: heldTo, mode: 'docked' }],
         },
         { id: 'stand-jump-out', name: 'Outbound', kind: 'traffic', shape: 'triangle', legs: outbound },
         { id: 'stand-jump-in', name: 'Inbound', kind: 'traffic', shape: 'square', legs: inbound },
-    ], bodiesAt, days);
+        surveyor(hexKey, dock.key, off),
+    ], bodiesAt, days, pictureOf);
+}
+
+/**
+ * Dev stand-in that flies from a body to a fixed point, holds there, jumps from the
+ * point, and flies back. The point does not move. The dates sit on 137-1105, so a
+ * picture at day 10 does not gain a ship.
+ */
+function surveyor(hexKey: string, bodyKey: string, away: CampaignAnchor): ShipTrack {
+    const day = totalDays(1105, 137);
+    const open: CampaignAnchor = { kind: 'system', hexKey, point: { x: 1.2, y: 0.8 } };
+    const home = sys(hexKey, bodyKey);
+    // Noon on 138-1105, then 30 seconds, so a link at 1200 is still holding when the page paints.
+    const leave = day + 1.5 + 30 / 86400;
+    const back = leave + 0.2;
+    return {
+        id: 'stand-surveyor', name: 'Surveyor', kind: 'vessel', shape: 'triangle',
+        legs: [
+            { from: home, to: open, departs: day, arrives: day + 1, mode: 'flight' },
+            { from: open, to: open, departs: day + 1, arrives: leave, mode: 'orbit' },
+            { from: open, to: away, departs: leave, arrives: back, mode: 'jump' },
+            { from: away, to: open, departs: back, arrives: back + 0.2, mode: 'jump' },
+            { from: open, to: open, departs: back + 0.2, arrives: day + 2, mode: 'orbit' },
+            { from: open, to: home, departs: day + 2, arrives: day + 3, mode: 'flight' },
+        ],
+    };
 }

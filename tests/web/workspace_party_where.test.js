@@ -107,3 +107,13 @@ test('"Move the party" on a ship with a track, against the store: accepted, undo
     resetCampaign();
     clearToasts();
 });
+
+test('a vessel\'s own Where follows its track as the party\'s does, and its anchor with none', async () => {
+    const { vesselWhere } = await import('../../apps/web/src/workspace/party_where.ts');
+    const records = { [SHIP_ID]: ship() };
+    assert.deepEqual(vesselWhere(ship(), records, D0 + 0.5), partyWhere(PARTY, records, D0 + 0.5));
+    assert.deepEqual(vesselWhere(ship(), records, D0 + 5), partyWhere(PARTY, records, D0 + 5));
+    assert.deepEqual(vesselWhere(ship(), records, D0 + 9), { anchor: FERI_SYSTEM, underway: null });
+    assert.deepEqual(vesselWhere(ship(), records, D0 - 3), { anchor: A1, underway: null }, 'before the first departure it is at its anchor');
+    assert.deepEqual(vesselWhere(ship({ status: null }), records, D0 + 5), { anchor: A1, underway: null });
+});

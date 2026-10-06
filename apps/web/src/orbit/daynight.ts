@@ -1,3 +1,5 @@
+import { formatDisplayNumber } from '../dossier/labels.ts';
+
 /**
  * Day and night: how a world turns under its star, from fields the document already carries
  * (`siderealHours`, `solarDayHours`, `axialTilt`, `tidallyLocked`, `isTwilightZone`). The
@@ -292,9 +294,20 @@ export function rulerFor(dayHours: number): Ruler {
     return { everyHours: last[0], label: last[1], count: dayHours / last[0] };
 }
 
+export type LockedFacts = {
+    /** The body's isTwilightZone flag. The twilight line is shown only when this is true. */
+    twilightZone: boolean;
+    /** The body's periodDays when it is a finite number. The year line is left out when null. */
+    yearDays: number | null;
+};
+
+export type ScoutLine = { label: string; value: string };
+
 export type DayNightFigure = {
     /** A planet locked to its star: one side is always lit, there is no cycle. */
     locked: boolean;
+    /** The readout's two extra facts. Null for every figure that is not locked to its star. */
+    lockedFacts: LockedFacts | null;
     /** The solar day in hours; 0 when locked. */
     dayHours: number;
     /** The solar day in hours, in words: "4,911 hours". */
@@ -323,7 +336,12 @@ export function dayNightFigure(
     if (!body) return null;
     const turning = turningOf(body, !!parent);
     if (turning.lockedToStar) {
-        return { locked: true, dayHours: 0, span: '', standard: null, retrograde: false, equator: { light: 0, dark: 0 }, mid: null, polarBeyond: null, ruler: rulerFor(1) };
+        const yearDays = typeof body.periodDays === 'number' && Number.isFinite(body.periodDays) ? body.periodDays : null;
+        return {
+            locked: true,
+            lockedFacts: { twilightZone: body.isTwilightZone === true, yearDays },
+            dayHours: 0, span: '', standard: null, retrograde: false, equator: { light: 0, dark: 0 }, mid: null, polarBeyond: null, ruler: rulerFor(1),
+        };
     }
     const day = turning.solarDayHours;
     if (day === null || !(day < SOLAR_DAY_LIMIT_HOURS)) return null;
@@ -333,6 +351,7 @@ export function dayNightFigure(
     const tilt = raw === null ? null : (raw > 90 ? 180 - raw : raw);
     return {
         locked: false,
+        lockedFacts: null,
         dayHours: day,
         span: hoursText(day),
         standard: standardText(day),
@@ -347,6 +366,25 @@ export function dayNightFigure(
         polarBeyond: tilt !== null && tilt >= 0.05 ? Number((90 - tilt).toFixed(1)) : null,
         ruler: rulerFor(day),
     };
+}
+
+/**
+ * The locked world's scout readout, in display order. Null when the figure is not locked.
+ * Twilight and year are left out unless the figure carries them. The words are mixed case;
+ * the card sets them in capitals.
+ */
+export function scoutReadout(figure: DayNightFigure): ScoutLine[] | null {
+    if (!figure.locked || !figure.lockedFacts) return null;
+    const facts = figure.lockedFacts;
+    const lines: ScoutLine[] = [
+        { label: 'Rotation', value: 'Locked' },
+        { label: 'Dayside', value: 'Permanent' },
+        { label: 'Nightside', value: 'Permanent' },
+        { label: 'Solar day', value: 'None' },
+    ];
+    if (facts.twilightZone) lines.push({ label: 'Twilight zone', value: 'Yes' });
+    if (facts.yearDays !== null) lines.push({ label: 'Year', value: formatDisplayNumber(facts.yearDays, 1) + ' standard days' });
+    return lines;
 }
 
 // ---- The year, said so it cannot be misread ------------------------------------------------

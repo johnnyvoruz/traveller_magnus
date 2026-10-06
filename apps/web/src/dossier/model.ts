@@ -65,7 +65,7 @@ export type OverviewModel = {
     ribbon: Ribbon | null;
     rows: StatRow[];
     journey: JourneyTime[] | null;
-    /** Set when the jump times are on the mainworld page. Empty until then, including while the tree loads. */
+    /** Unused. The system page does not point at the mainworld's jump times. */
     journeyNote?: string;
     /**
      * The callout row and the jump-times line keep their height: before the tree arrives,
@@ -112,7 +112,6 @@ export type AllegianceName = { code: string; name: string };
 const PARTIAL_NOTICE = 'Incomplete survey: this world has unknown values, so no system has been generated.';
 const NO_ORBIT_NOTICE = 'Orbit data has not been generated.';
 const SOCIO_EMPTY = 'Mongoose socioeconomics have not been built for this world.';
-const JOURNEY_NOTE = '100D jump times are on the mainworld page.';
 const MARK = ' \u2014 ';
 const UWP_PARTS = ['Port', 'Size', 'Atm', 'Hyd', 'Pop', 'Gov', 'Law'];
 const UWP_RE = /^([A-HXY?])([0-9A-Z?])([0-9A-Z?])([0-9A-Z?])([0-9A-Z?])([0-9A-Z?])([0-9A-Z?])-([0-9A-Z?]+)$/i;
@@ -771,7 +770,7 @@ export function overviewModel(input: {
         ribbon: ribbonOf(uwp),
         rows: state && !partial ? identityRows(state, input.allegiances, !openMain) : chartRows(input.entry, input.allegiances),
         journey: state && !partial && !onWorld ? overviewJourney(state, system, profile) : null,
-        journeyNote: onWorld ? JOURNEY_NOTE : '',
+        journeyNote: '',
         holdLead: !partial && (!state || openMain),
         callout: openMain ? { name: lead.name, badge: lead.badge } : null,
         noOrbit,

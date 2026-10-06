@@ -357,3 +357,27 @@ test('batches past the patch row and byte limits, records before links', () => {
     }
     assert.equal(fatCount, 60);
 });
+
+test('a copied system anchor keeps its point', () => {
+    const source = record({
+        id: PLACE,
+        type: 'place',
+        name: 'Waypoint',
+        anchor: { kind: 'system', hexKey: 'Spinward_Marches/1910', point: { x: 1.2, y: -0.4 }, locationLabel: '1.26 AU' },
+    });
+    const result = copyRecords({
+        records: [source],
+        links: [],
+        ids: [PLACE],
+        fromUniverseId: FROM,
+        now: NOW,
+        newId: queue(['cr_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa']),
+    });
+    const { records } = rows(result);
+    assert.deepEqual(records[0].anchor, {
+        kind: 'system',
+        hexKey: 'Spinward_Marches/1910',
+        point: { x: 1.2, y: -0.4 },
+        locationLabel: '1.26 AU',
+    });
+});

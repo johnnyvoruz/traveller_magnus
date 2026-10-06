@@ -15,10 +15,15 @@
  * in the same frame. The drawn period's `pd || 20` fallback is not a distance.
  *
  * The picture is the inverse of that, for the primary only. `layoutScene` draws a body at
- * `scaleR` of its au, at its true angle about the primary. `picturePlaceAu` reads that back.
- * It is null inside the star's hole, in a line-up or a blend, and past the scale.
+ * `scaleR` of its au, at its true angle about the primary. `picturePlaceAu` reads that back:
+ * null inside the star's hole, in a line-up or a blend, and past the scale. `pictureOfAu`
+ * is the forward map, for the orbits layout only.
+ *
+ * A place at either end of a distance is a body key or a point. A point's real place is
+ * itself, in the primary's frame, at any date.
  */
 import { AU_KM, STAGE_MARGIN, orbitHole, type Plan, type PlanMoon, type PlanStar, type PlanWorld, type View } from './layout.ts';
+import { shortLabel } from './bodies.ts';
 import { bodyAngle, scaleR } from './maths.ts';
 
 export type AuPoint = { x: number; y: number };
@@ -190,26 +195,107 @@ export function placeAtPicture(
     return picturePlaceAu(point, view, plan, layout);
 }
 
+/** A body key, or a point in AU from the primary. */
+export type PlaceEnd = string | AuPoint;
+
+function pointPlace(end: AuPoint): { known: true; place: Place | null } | { known: false } {
+    if (!finite(end.x) || !finite(end.y)) return { known: false };
+    return { known: true, place: { x: end.x, y: end.y, frame: 0 } };
+}
+
+function endPlace(plan: Plan, end: PlaceEnd, days: number): { known: true; place: Place | null } | { known: false } {
+    if (typeof end !== 'string') return pointPlace(end);
+    return locate(plan, end, days, []);
+}
+
 /**
- * Kilometres between two bodies, each at its own date, or null. The same known key on one
- * date is 0. Two worlds of an unplaced companion still compare: each place keeps that
- * companion's frame, which `realPositionAu` (primary frame only) would drop.
+ * Where a real AU point is drawn. The orbits layout only: the same origin, hole and
+ * `scaleR` as `layoutScene`. The origin is the primary. Any other layout has no single place.
+ */
+export function pictureOfAu(au: AuPoint, view: View, plan: Plan, layout: PictureLayout): AuPoint | null {
+    if (layout !== 'orbits') return null;
+    if (!finite(au.x) || !finite(au.y)) return null;
+    const frame = primaryScale(plan, view);
+    if (!frame) return null;
+    const mag = Math.hypot(au.x, au.y);
+    if (!(mag > 0)) return { x: frame.originX, y: frame.originY };
+    const radius = scaleR(mag, plan.maxAU, frame.maxPx, frame.holePx, view.linear);
+    return {
+        x: frame.originX + (radius * au.x) / mag,
+        y: frame.originY + (radius * au.y) / mag,
+    };
+}
+
+/**
+ * How close a point must be to a body's real place before the label names that body.
+ * Wider than a planet, narrower than the gap between neighbouring orbits, so "near"
+ * names the body a point sits by.
+ */
+export const NEAR_BODY_AU = 0.05;
+
+function auWords(au: number): string {
+    if (!Number.isFinite(au) || au < 0) return '';
+    return (au >= 10 ? au.toFixed(1) : au.toFixed(2)) + ' AU';
+}
+
+/**
+ * Words for a point, from the plan and the point. No picture.
+ * The distance from the primary, and the nearest body when one is within `NEAR_BODY_AU`,
+ * with that gap. `days` is required because bodies move; the point itself does not.
+ * Names are the plan's own names, shortened the way the body list shortens them.
+ */
+export function pointWords(plan: Plan, point: AuPoint, days: number): string {
+    if (!finite(point.x) || !finite(point.y)) return '';
+    const line = auWords(Math.hypot(point.x, point.y));
+    if (!line) return '';
+    const named: { key: string; name: string }[] = [];
+    for (const star of plan.stars) named.push({ key: star.key, name: star.name });
+    for (const world of plan.worlds) {
+        if (world.belt) continue;
+        named.push({ key: world.key, name: world.name });
+        for (const moon of world.moons) {
+            if (moon.ring) continue;
+            named.push({ key: moon.key, name: moon.name });
+        }
+    }
+    let bestName: string | null = null;
+    let bestGap = Number.POSITIVE_INFINITY;
+    for (const body of named) {
+        const at = realPositionAu(plan, body.key, days);
+        if (!at) continue;
+        const gap = Math.hypot(at.x - point.x, at.y - point.y);
+        if (gap < bestGap) {
+            bestGap = gap;
+            bestName = body.name;
+        }
+    }
+    if (bestName === null || bestGap > NEAR_BODY_AU) return line;
+    const gap = auWords(bestGap);
+    if (!gap) return line;
+    return line + ' \u00B7 near ' + shortLabel(bestName, plan.name) + ' \u00B7 ' + gap;
+}
+
+/**
+ * Kilometres between two places, each at its own date, or null. Each end is a body key
+ * or a point. A point is itself, in the primary's frame, at any date. The same known key
+ * on one date is 0. Two worlds of an unplaced companion still compare: each place keeps
+ * that companion's frame, which `realPositionAu` (primary frame only) would drop.
  */
 export function realDistanceKmBetween(
-    plan: Plan, fromKey: string, fromDays: number, toKey: string, toDays: number,
+    plan: Plan, fromEnd: PlaceEnd, fromDays: number, toEnd: PlaceEnd, toDays: number,
 ): number | null {
-    if (fromKey === toKey && fromDays === toDays) {
-        const found = locate(plan, fromKey, fromDays, []);
+    if (typeof fromEnd === 'string' && typeof toEnd === 'string' && fromEnd === toEnd && fromDays === toDays) {
+        const found = locate(plan, fromEnd, fromDays, []);
         return found.known ? 0 : null;
     }
-    const from = locate(plan, fromKey, fromDays, []);
-    const to = locate(plan, toKey, toDays, []);
+    const from = endPlace(plan, fromEnd, fromDays);
+    const to = endPlace(plan, toEnd, toDays);
     if (!from.known || !to.known || !from.place || !to.place) return null;
     if (from.place.frame !== to.place.frame) return null;
     return Math.hypot(from.place.x - to.place.x, from.place.y - to.place.y) * AU_KM;
 }
 
-/** Kilometres between two bodies at `days`, or null. The same known key is 0. */
-export function realDistanceKm(plan: Plan, fromKey: string, toKey: string, days: number): number | null {
-    return realDistanceKmBetween(plan, fromKey, days, toKey, days);
+/** Kilometres between two places at `days`, or null. The same known key is 0. */
+export function realDistanceKm(plan: Plan, fromEnd: PlaceEnd, toEnd: PlaceEnd, days: number): number | null {
+    return realDistanceKmBetween(plan, fromEnd, days, toEnd, days);
 }

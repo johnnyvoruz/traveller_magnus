@@ -1,7 +1,8 @@
 /**
  * The header's control drawers (slice 2 follow-up 6; findings/orbit_drawers_design.md):
- * one open at a time, its tab pressed again closes it, Esc closes it before anything else,
- * a press on the picture closes it. Pure; the shelf itself is orbit/Drawer.vue.
+ * one open at a time, its tab pressed again closes it, Esc closes it before anything else.
+ * A press on the picture leaves it as it is (Johnny, 2026-10-06: he works with a drawer open
+ * and the picture under it). Pure; the shelf itself is orbit/Drawer.vue.
  */
 import type { DrawerId } from './commands.ts';
 
@@ -20,9 +21,11 @@ export function escapeStep(state: { drawer: DrawerState; popover: boolean; body:
     return 'map';
 }
 
-/** A press lands: on the picture it shuts the drawer; on the drawer, its tabs or the header's own controls it does not. */
-export function pressCloses(where: { inDrawer: boolean; inHeader: boolean }): boolean {
-    return !where.inDrawer && !where.inHeader;
+/** What may close a drawer: its own tab, Escape, or another drawer opening. A press on the picture, a body or a card never does. */
+export type DrawerCloser = 'own-tab' | 'escape' | 'other-drawer' | 'picture-press';
+
+export function closesDrawer(by: DrawerCloser): boolean {
+    return by !== 'picture-press';
 }
 
 /** The groups of an opening drawer land one step apart; closing has no stagger. */

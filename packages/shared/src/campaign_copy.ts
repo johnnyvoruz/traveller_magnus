@@ -55,6 +55,7 @@ type LiveLink = Extract<LinkChange, { kind: string }>;
 function copySystem(anchor: SystemAnchor): SystemAnchor {
     const copy: SystemAnchor = { kind: 'system', hexKey: anchor.hexKey };
     if (anchor.bodyKey !== undefined) copy.bodyKey = anchor.bodyKey;
+    if (anchor.point !== undefined) copy.point = { x: anchor.point.x, y: anchor.point.y };
     if (anchor.locationLabel !== undefined) copy.locationLabel = anchor.locationLabel;
     return copy;
 }

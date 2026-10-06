@@ -27,7 +27,7 @@ import { attachShade, DRAW_FRAG, shadePort, type ShadeDraw, type ShadeRequest } 
 import { BAKE_FRAG, STATS_FRAG, VERT } from './gl_shaders.ts';
 import { gasStats, STATS_BATCH, thresholdsFromStats, type DecodedThresholds } from './gl_stats.ts';
 
-export type { BakeProfile, CubeFaces, GpuInfo, GpuSpan, ShadeRequest };
+export type { BakeProfile, CubeFaces, GpuInfo, GpuSpan, LinkedProgram, ShadeRequest };
 
 export type PublicThresholds = {
     sea: number;
@@ -101,6 +101,13 @@ export type DiscBaker = {
     /** One 1x1 bake so the driver's first wait happens before a real face. */
     warmup: (profile: BakeProfile) => GpuSpan[];
     failed: () => boolean;
+    /** The context the disc worker uses to link a draw program. Null before setup. */
+    gl: () => WebGL2RenderingContext | null;
+    /**
+     * Install a draw program linked by the caller. The previous draw program
+     * is deleted. Bake programs and cubes are left as they are.
+     */
+    bindDraw: (program: LinkedProgram) => void;
 };
 
 function publishThresholds(stats: WorldStats): PublicThresholds | null {
@@ -347,6 +354,12 @@ export function createDiscBaker(
 
     function ready(): boolean {
         return !disposed && !broken && !lost && programState === 'ready' && !!shade;
+    }
+
+    function bindDraw(program: LinkedProgram): void {
+        if (!gl || !ops) return;
+        if (!shade) shade = attachShade(gl, program, () => ops?.bindQuad());
+        else shade.use(program);
     }
 
     function available(): boolean {
@@ -781,6 +794,8 @@ export function createDiscBaker(
             return requireOps().takeSpans();
         },
         failed: () => broken || disposed,
+        gl: () => gl,
+        bindDraw,
         loseForTest: () => {
             if (!loseExt) return false;
             loseExt.loseContext();

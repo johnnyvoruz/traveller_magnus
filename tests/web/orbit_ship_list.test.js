@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { HOUR } from '../../apps/web/src/orbit/clock.ts';
-import { bodiesAtOf, shipStanding } from '../../apps/web/src/orbit/ship_marks.ts';
+import { bodiesAtOf, shipStanding, shipMarkOf } from '../../apps/web/src/orbit/ship_marks.ts';
 import {
     ACCEL_CHOICES, bodyAnchor, earliestDeparture, flightLeg, inSystem, jumpLeg, legAt, legStart, shipsHere, shipTrack, statusWords, vesselPosition, whenWords,
 } from '../../apps/web/src/orbit/ship_list.ts';
@@ -130,4 +130,18 @@ test('a mark is outside when it lies beyond every 100D circle and on no body', (
     assert.deepEqual(shipStanding({ x: 70, y: 0 }, rings, bodies), { x: 70, y: 0, outside: true, within: null });
     assert.deepEqual(shipStanding({ x: 30, y: 30 }, rings, bodies).within, rings[0]);
     assert.equal(shipStanding({ x: 300, y: 300 }, rings, bodies).within, 'body');
+});
+
+test('a mark that is a jump bubble is not a ship on the picture', () => {
+    const marks = [
+        { id: 'far', x: 10, y: 10, jump: 'out' },
+        { id: 'blue', x: 20, y: 20 },
+        { id: 'in', x: 30, y: 30, jump: 'in' },
+    ];
+    assert.equal(shipMarkOf(marks, 'far'), undefined, 'leaving: nothing to measure or plot from');
+    assert.equal(shipMarkOf(marks, 'in'), undefined, 'arriving: the same');
+    assert.deepEqual(shipMarkOf(marks, 'blue'), { id: 'blue', x: 20, y: 20 });
+    assert.equal(shipMarkOf(marks, 'nobody'), undefined);
+    // A ship drawn both ways (the bubble first) is found as the ship.
+    assert.deepEqual(shipMarkOf([{ id: 'far', x: 1, y: 1, jump: 'in' }, { id: 'far', x: 2, y: 2 }], 'far'), { id: 'far', x: 2, y: 2 });
 });

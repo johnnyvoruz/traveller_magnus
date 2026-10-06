@@ -10,7 +10,7 @@ import {
 } from '../../apps/web/src/campaign/travel.ts';
 import { formatDistance } from '../../apps/web/src/design/units.ts';
 import {
-    fieldHours, flightFuelWords, flightHours, hoursWords, jumpEstimateWords, reactionFuelWords, rollWords, tonsWords,
+    SETTLE_ROUNDS, fieldHours, flightFuelWords, flightHours, hoursWords, jumpEstimateWords, reactionFuelWords, rollWords, settleFlight, tonsWords,
 } from '../../apps/web/src/orbit/estimates.ts';
 
 const AU = 149597870.7;
@@ -80,4 +80,38 @@ test('a distance reads in kilometres near and in AU from a tenth of one', () => 
     assert.equal(formatDistance(AU * 30.07, AU), '30.1 AU');
     assert.equal(formatDistance(null, AU), '');
     assert.equal(formatDistance(-1, AU), '');
+});
+
+test('the settling sum: a still target, a moving one that converges, one that never agrees, and no distance', () => {
+    const D0 = 1000;
+    // A still target: the second round agrees with the first.
+    let asked = 0;
+    const still = settleFlight(() => { asked += 1; return 400000; }, 2, D0);
+    assert.equal(asked, 2);
+    assert.equal(still.settled, true);
+    assert.equal(still.hours, flightHours(400000, 2));
+    assert.equal(still.arrives, D0 + still.hours / 24);
+    assert.equal(still.km, 400000);
+
+    // A target drifting away slowly: each round is closer to the answer, and it settles inside the limit.
+    let rounds = 0;
+    const moving = settleFlight((arrives) => { rounds += 1; return 4000000000 + (arrives - D0) * 3000000; }, 2, D0);
+    assert.equal(moving.settled, true);
+    assert.ok(rounds > 2 && rounds <= SETTLE_ROUNDS, 'it took ' + rounds + ' rounds');
+    assert.ok(Math.abs(flightHours(4000000000 + (moving.arrives - D0) * 3000000, 2) - moving.hours) < 1 / 60, 'the answer is its own arrival');
+
+    // A target that swings between two places never agrees: eight rounds, the last one kept, not settled.
+    let flips = 0;
+    const never = settleFlight(() => { flips += 1; return flips % 2 ? 400000 : 40000000; }, 2, D0);
+    assert.equal(flips, SETTLE_ROUNDS);
+    assert.equal(never.settled, false);
+    assert.equal(never.km, 40000000);
+
+    // No distance: nothing to settle. A distance that is lost part way keeps the last round.
+    assert.equal(settleFlight(() => null, 2, D0), null);
+    assert.equal(settleFlight(() => 0, 2, D0), null);
+    let once = 0;
+    const lost = settleFlight(() => { once += 1; return once === 1 ? 400000 : null; }, 2, D0);
+    assert.equal(lost.km, 400000);
+    assert.equal(lost.settled, false);
 });

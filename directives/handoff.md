@@ -4449,3 +4449,108 @@ Stop and report.
 - **Asked of Johnny:** whether to run the v6 shadow build (staged, not released) once this
   Worker is deployed.
 - **Next:** A, `prompts/a_points.md`. D after Part 2, `prompts/d_ghost_wiring.md`.
+
+## 166. Pushed `6fc2d60`; deployed; Johnny says go to the v6 shadow build (2026-10-06)
+
+- **`6fc2d60`** (the ghosts in the renderer; the derived build with the reconcile
+  transform): `campaign` equals `origin/campaign`; **the live entry is `index-BF4-gY3d.js`,
+  the same file the orchestrator's rehearsal built from this commit**, so the new site and
+  Worker are deployed (the GitHub test run was still in progress when checked). A has
+  `prompts/a_points.md`.
+- **Johnny: "go"** to the v6 shadow build (staged, not released).
+- **Why the deploy check mattered:** the previous `TruthBuild` schema was not strict, so the
+  old Worker would have ignored `transform` and made a plain copy named v6, and there is no
+  admin route to delete a version.
+- **The command given to Johnny** (browser console on traveller.voyage, signed in as
+  admin): it reads v5's own row from `/api/truth/versions` (milieu M1105, seed
+  TravellerMagnus, engine 1.0.0, the twelve settings, checked against production) and posts
+  `/api/admin/truth/build` with `version: 'v6'`, `sectors: 'all'`, `from: 'v5'`,
+  `transform: 'reconcile-environment'`; expected answer `{ version: 'v6', enqueued: 512 }`.
+  Progress: `GET /api/admin/truth/builds/v6` (state, sectorsDone of 512, failed, queued);
+  retry: `POST .../builds/v6/retry`. **No release.** The orchestrator confirms the
+  transform took by fetching `https://cdn.traveller.voyage/truth/v6/reconciliation.json`.
+- **`prompts/b_engine_t1_7.md`** (to hand out when the build has finished): read-only
+  evidence from the CDN: the provenance and the 512 reports summed; the section 7.3
+  invariants over every Spinward Marches tree beside v5's, and over the eight sectors of
+  B's earlier scan; v5 untouched; `findings/v6_shadow_evidence.md` for Johnny in plain
+  words, with the unresolved worlds by kind and twenty named examples.
+- **Before any release of v6:** the surfaces must read `surfaceTempBand`
+  (`surface/profile.ts` `tempBandFromKelvin`, C's); Johnny rules on the unresolved counts.
+
+## 167. The v6 build request was refused cleanly: a leftover catalogue file in `inputs/v5/` (2026-10-06)
+
+- Johnny ran the v6 command: **404 "Sector inputs are missing." `{ slug: "Calidan" }`.**
+  Calidan is the first sector in v5's list, so every sector's XML was "missing". The check
+  runs before the insert: **no v6 row, nothing queued, nothing written** (the CDN still
+  answers 404 for `truth/v6/reconciliation.json`).
+- **Cause:** `resolveCatalogue` takes the first version in the chain whose
+  `inputs/<version>/sectors.json` exists. On 2026-10-04 (§47) the orchestrator of the day
+  uploaded exactly that one file to `inputs/v5/` to unblock v5's release, before the
+  release route learned to walk the chain (§48). v5 has no other inputs (the upload ledgers
+  in `universe/raw/` stop at v4). So the chain now stops at v5, and the route lists
+  `inputs/v5/`, finds only the catalogue, and refuses. v5's own derive from v4 passed
+  because the file was not there yet.
+- **Fix given to Johnny (his command, production):** delete the leftover,
+  `wrangler r2 object delete voyage-private/inputs/v5/sectors.json --remote`, so the chain
+  runs v6 → v5 → v4, whose inputs are complete; then the same console command. The file is
+  a byte copy of `universe/raw/sectors.json`, so the undo is one `put`. Nothing a visitor
+  uses reads it: only the admin build, derive and release paths do.
+- **Hardening owed (B, small, not blocking):** `resolveCatalogue` should pass over a
+  directory that holds a catalogue but none of the sector files it lists; and there is no
+  admin route to remove a version stuck in `building`.
+
+## 168. A's places, C's step 1, D's Part 2 and E's two steps accepted; whole-tree push; v6 is building (2026-10-06)
+
+- **Every agent was between steps** (B waiting on v6), 60 files on disk. **Orchestrator on
+  the whole tree:** 840 tests, 831 pass, 0 fail, 9 skipped; check clean; typecheck clean;
+  build green. **Push: `git add -A`**, before any new paste is handed out.
+- **Agent A, places in open space:** a system anchor's `point: { x, y }` (finite,
+  `POINT_AU_LIMIT` 1,000,000 AU, never with a `bodyKey`); `placeAt`, `whereAreWe` and the
+  index needed no change; either end of the distance functions is a body key or a point;
+  `pictureOfAu` round-trips with the readout's inverse; `pointWords(plan, point, days)`;
+  a ship at a point drawn there, a flight to it on the straight line, a jump bubble at it;
+  a docked or orbiting ship drawn down and to the right of its body, clear of the disc and
+  name, further ships stepping 20 px along that diagonal in id order; a stand-in Surveyor
+  flying body → point → jump. The Worker validates with the shared schema and reads no
+  campaign `bodyKey`. **Accepted.** For D: `bodiesAtOf` still ignores the date, and a
+  system anchor with no `bodyKey` becomes the mainworld there.
+- **Agent C, Enhanced as default and city lights step 1:** a visitor with nothing stored
+  gets `enhanced`; stored `vanilla` honoured; five cases tested. The enhanced draw program
+  is separately linked from the vanilla `DRAW_FRAG` string in `surface/enhanced/`; mode,
+  version (`enhanced-cities-1`) and a generation epoch travel on the worker request and
+  result; stale results close their bitmaps; a mode change drops the other mode's tiles;
+  `tests/web/surface_gl.test.js` untouched; first and last vanilla buffers at Regina match
+  byte for byte; 8.5 ms through a switch. The three review worlds pinned in
+  `findings/city_design_s1_manifest.json`. **Accepted.** Noted: `scripts/surface_parity.js`
+  exited 1 twice on one shade tile off by one channel on one pixel, a different case each
+  run; whether that predates the step is not known.
+- **Agent D, Part 2, every item:** the reset button before Play (amber and live off the
+  campaign date, disabled and quiet on it, absent with no campaign; nothing in the header
+  moves); "Back 1 week" (Shift+W) writing the campaign date as "1 week" does; Line up
+  parked with one named exception in the commands test; a press on the picture leaves the
+  drawer open; the pane survives every way between the map and the orbit view; "Locate
+  this system" (L on the map) for anyone, signed out included; the strip's status no
+  longer cut; a ship in jump not measured or plotted from; `settleFlight` built, unwired;
+  the vessel's Where block from the track; "Estimate: 5 parsecs · about 50 tons · 100-ton
+  hull assumed" for Regina to Feri; `surveyElsewhere` passed; the design page's samples;
+  the rest of the signed-in pass, nothing further broken. `fu19b_header_off_date.png`
+  looked at. **Accepted.** D's two questions, ruled by the orchestrator: the system title
+  giving way in the 520 px header ("Regi…") is acceptable; L stays map-only, since it opens
+  Layers in the orbit view.
+- **Agent E, the locked world's card** (report not pasted; read from disk,
+  `fu18_built_column.png`): the SCOUT SURVEY readout as designed. **Accepted.**
+  **Agent E, the card under the drawer, and Locate:** the Locate button beside Explore
+  orbits, calling `startLocate('hex:' + hexKey, ...)`: accepted. The card follows
+  `--drawer-height` with the drawer's tokens: accepted in mechanism, **wrong in distance**:
+  it keeps 74 px (18 plus a 56 px shift `views/OrbitView.vue` puts on every card, left over
+  from a control the drawers removed), so there is a band of empty picture above it, closed
+  and open. `prompts/e_card_gap.md`: 18 px in both cases; E may edit that one CSS rule.
+- **v6 is building.** Johnny deleted the leftover catalogue and ran the command again:
+  `truth/v6/reconciliation.json` is on the CDN with `transform: "reconcile-environment"`,
+  policy digest `41839266…7efc6`; the running total listed two sectors (Abyss, Alnitak, 46
+  bodies) when read. Note for T1.7: the reports are rewritten under one key; read them
+  past the CDN's cache.
+- **Issued:** `prompts/a_vessels_on_map.md` (follow-up 27), `prompts/e_card_gap.md`,
+  `prompts/d_ghost_wiring.md` widened (the ghosts wired, `bodiesAtOf` for a date and a
+  point, the plotting click on empty space, the words, Jump from a point replacing the cut
+  flight), and for C the waiting `prompts/c_toggle_motion_4.md`.

@@ -1,0 +1,1406 @@
+A universe needs to be created for Travellers to explore
+and find adventure. Many referees use published
+universes to save themselves a great deal of time, such
+as Charted Space or 2300AD.
+However, some referees will prefer to create their own
+universes. This chapter will show you how.
+SECTORS AND SUBSECTORS
+A universe is mapped in convenient segments, called
+subsectors. Each subsector is an area of hexagonal
+cells measuring eight hexes by 10 hexes. Since the
+recommended scale is one parsec (equal to 3.26
+light years) per hex, the subsector covers an area 10
+parsecs by eight parsecs.
+Sixteen subsectors (arranged in four rows of four
+subsectors each) form a sector, about the largest size
+practical for a continuing Traveller campaign.
+Mapping subsectors consists of two sequences: star
+mapping and world design. Star mapping examines
+each hexagon in the subsector grid and determines
+if there is a star system present. It also determines
+the presence or absence of starports, bases and fuel
+for starships. All of this information is coded onto the
+subsector hexes and serves as a guide to the referee
+and Travellers during interstellar travel. World design
+examines the single most important world in each
+system and determines basic characteristics for it. This
+information is retained for use during adventures on the
+world’s surface.
+Note that not all universes will require the creation of a
+subsector or sector. Indeed, entire campaigns can be
+set in just one star system or on a single world, or even
+within a single city.
+STAR MAPPING
+In order to create a subsector, the referee uses
+a blank subsector map and dice to determine the
+presence of systems, starports and bases. Reading
+World Profiles on page 248 shows the coding and
+placement of information about worlds within a
+subsector. This format should be used to allow
+Travellers and referees to note information that
+would normally be available to them. The referee
+may elect to omit some information and only allow it
+to be inserted after the Travellers have determined it
+for themselves.
+World Occurrence: There is a basic one-half chance
+that one world (and its attendant stellar system) will be
+in a hex on a subsector or sector map. Systematically
+check each hex, throwing 1D and marking the hex with
+a circle if the result is a 4, 5 or 6. This indicates that a
+world of note or interest is present; otherwise, leave the
+hex blank.
+The referee may elect to alter the normal chances of
+worlds, making them more frequent or less frequent
+to correspond to specific regions of the galaxy. A 50%
+density (no DM) is appropriate for the most areas. Apply
+DM-2 for rift (all but empty) sectors, DM-1 for sparse
+sectors and DM+1 for densely populated sectors.
+Starport Type: Many worlds have starports, their
+presence being essential to interstellar trade and
+commerce. See Starports, page 257.
+Bases: Stellar systems may have bases for military
+forces, the navy, the scouts or other arms of interstellar
+government. See Bases, page 259.
+Bases will also help determine political boundaries in
+the sector. An interstellar government will place bases
+along its borders to guard against aggression from
+rival states or to control local systems. The presence
+of multiple bases within a few parsecs might indicate a
+contested border or a mighty stronghold.
+Gas Giants: A star system may have one or more gas
+giant planets (similar to Jupiter or Saturn). The presence
+of a gas giant allows streamlined starships to refuel by
+skimming; this eliminates fuel cost for the vessel and
+increases profit. It also allows refuelling at systems that
+do not have starports. Refuelling in this fashion requires
+1D days to travel to the gas giant and commence
+refuelling. Fuel gained by skimming is unrefined.
+Gas giants are relatively common. Roll 10+ for a gas giant
+not to be present in the system. If one is present, mark the
+system hex in accordance with the world format.
+
+GALACTIC DIRECTIONS
+North, south, east and west are insufficient
+terms for referring to directions within the galaxy.
+Instead, the following conventions have achieved
+widespread acceptance when referring to direction:
+Coreward – toward the galactic core; Rimward –
+toward the rim of the galaxy; Spinward – towards
+the direction the galaxy is rotating (or spinning);
+Trailing – opposite the spin of the galaxy.
+
+System Name: Each system is generally named for the
+primary world within. This name should be decided upon
+by the referee and placed in the hex for identification.
+Travel Zones: Most worlds are assumed to be civilised
+or at least amenable to Travellers and visitors. Some,
+however, are caught in the throes of war, plagued by
+disease or simply not ready for interstellar visitors.
+Such worlds are classified by Travel Zones to denote
+such status. In most cases, the referee should indicate
+Travel Zones based on the information available. Two
+such zone types exist; Amber and Red.
+Amber Zones indicate that Travellers should exercise
+caution when visiting such worlds. The Amber
+code may mean that the citizens of the world are
+xenophobic, that the political situation is chaotic or that
+some other danger exists within the system.
+
+System Name: Each system is generally named for the
+primary world within. This name should be decided upon
+by the referee and placed in the hex for identification.
+Travel Zones: Most worlds are assumed to be civilised
+or at least amenable to Travellers and visitors. Some,
+however, are caught in the throes of war, plagued by
+disease or simply not ready for interstellar visitors.
+Such worlds are classified by Travel Zones to denote
+such status. In most cases, the referee should indicate
+Travel Zones based on the information available. Two
+such zone types exist; Amber and Red.
+Amber Zones indicate that Travellers should exercise
+caution when visiting such worlds. The Amber
+code may mean that the citizens of the world are
+xenophobic, that the political situation is chaotic or that
+some other danger exists within the system.
+
+Communications routes should be carefully drawn
+so as to avoid making all parts of the subsector
+accessible; a subsector should have some areas
+as backwaters for exploration and adventure.
+Communications routes are drawn as single lines
+connecting hexes on the subsector grid.
+Trade Routes: Trade routes link worlds that have
+strong commercial ties. Consult the Trade Routes table
+– if any pair of worlds matching the two columns are
+within four parsecs of each other and there is a jump-1
+or jump-2 route between them, then mark a trade route
+connecting those two worlds.
+Trade Routes
+First World Second World
+Industrial
+High Tech
+
+Asteroid
+Desert
+Ice-Capped
+Non-Industrial
+
+High Population
+Rich
+
+Agricultural
+Garden
+Waterworld
+The subsector or sector map, once generated, shows
+the distribution of star systems in space and their
+relationships to each other in terms of relative distance
+and commercial space-lane connections.
+
+READING WORLD PROFILES
+Traveller describes planets using a single line
+of hexadecimal code. Hexadecimal codes
+use base 16 notation; digits 0 through 9 are
+represented by common numbers; digits 10 to 15
+are represented by letters A through F. A is equal
+to 10, B equal to 11 and so on – the highest
+digit will F, equal to 15. In some unusual cases,
+further sequences of letters can also be used,
+such as using G as a digit to describe TL16.
+Once you get used to this method of laying out
+the characteristics of a planet, it becomes easy to
+decipher during play. This is an example world:
+Cogri 0101 CA6A643-9 N Ri Wa A
+The first component is the name : Cogri
+The second component (the four digit number) is
+ its hex location on a sector map. : 0101
+The next string of digits denote, in order:
+• Starport quality : C
+• Size : A
+• Atmosphere type : 6
+• Hydrographic percentage : A
+• Population : 6
+• Government type : 4
+• Law Level : 3
+• Tech Level : 9
+The next component marks any bases present
+on the world – examples include N for Naval
+Base and S for Scout Base. : N
+This is followed by any Trade codes for the
+planet. Cogri is a rich waterworld : RI WA
+The Travel Zone for the system is last; A = Amber
+Zone, R = Red Zone. If no code is given then the
+world is either unclassified or a Green Zone : A
+
+WORLD CREATION
+The term world refers to the various bodies contained
+in a stellar system; it encompasses planets, satellites
+and asteroid belts. For example, the single most
+important world in a system may not be a planet at all
+but a satellite of a gas giant or maybe a planetoid within
+an asteroid belt.
+The worlds contained in star systems on the subsector
+map may be further classified in terms of their gross
+physical characteristics and their effects on persons
+living on them or travelling to them. These codes
+indicate specific facts about a world through the use of
+a numeric code.
+This world creation process applies only to the single
+most important and most travelled world in a star
+system; additional planets in a system can be created
+by the referee as necessary.
+The basic planetary codes are Size, Atmosphere,
+Hydrographics, Population, Government, Law Level,
+Technology Level, Starport and Bases, and are
+generated using 2D each, with DMs applied based
+upon the results of other codes. These codes establish
+the basic identity of a world, as shown in Reading
+World Profiles. Additional information can be created
+and should be, to more fully describe a world.
+When creating worlds, a subsector table containing
+world name, location, profiles and other basic data
+should be compiled. This should be available to
+Travellers who journey through the subsector and
+is assumed to be routinely available information. In
+addition, the referee should create other information
+that may be pertinent. This may include details of
+other planets in the star system, radiation emissions
+from the star, types of terrain present on the planetary
+surface, unique encounter tables, data on flora
+and fauna, industrial or agricultural capacity, social
+structure and government, and possibly actual maps
+of the planetary surface.
+Creating an entire universe is a fun process and can be
+as detailed as you like!
+
+CHARTED SPACE: ROUTES AND JUMPS
+In the Charted Space universe, communication
+and trade routes are classified by the type of jump
+drive necessary to travel them. This is simply
+because of refuelling issues – few starships carry
+enough fuel to make multiple jumps in succession,
+so they must make sure to jump only to systems
+where they can refuel; either to a starport or a
+system with a gas giant or water-bearing worlds
+where unrefined fuel can be skimmed.
+A jump-1 route has a starport or gas giant in every
+hex, a jump-2 route has at least one one-hex ‘gap’
+between refuelling points (either an empty hex
+or one without a starport or gas giant), while a
+jump-3 route has at least one two-hex gap and so
+on. In this way, a ship’s captain will know that any
+route classified at less than or equal to their ship’s
+jump capability can be travelled with no risk of
+becoming stranded in deep space.
+
+SIZE
+The Size code for worlds ranges from 0 to 10 and is
+determined by rolling 2D-2. Size measures a world’s
+diameter in thousands of kilometres and the bigger
+a planet, the higher its gravity. The values for gravity
+in the Size table assume that the world has a density
+similar to that of Earth. Worlds like gas giants have
+a lower gravity than their size would indicate, while
+extremely dense worlds would have a higher gravity.
+Intelligent species (sophonts) are unlikely to evolve
+naturally on worlds smaller than Size 4 or 5. Larger
+planets tend to imply larger populations, as there is
+more room for expansion.
+
+Size
+Size Diameter Example
+
+Surface
+Gravity (Gs)
+
+0 Less than
+1,000km
+
+Asteroid,
+orbital
+complex
+
+Negligible
+
+1 1,600km Triton 0.05
+2 3,200km Luna,
+Europa
+
+0.15
+
+3 4,800km Mercury,
+Ganymede
+
+0.25
+4 6,400km Mars 0.35
+5 8,000km 0.45
+6 9,600km 0.7
+7 11,200km 0.9
+8 12,800km Earth 1.0
+9 14,400km 1.25
+10 (A) 16,000km 1.4
+Worlds of Size 1 or less are asteroids, planetoids,
+orbital complexes, space stations and other small
+satellites, and much too small to retain a breathable
+atmosphere. They are uninhabitable by most forms of
+life without technological support.
+
+Atmosphere
+Atmosphere Composition Examples Pressure Survival Gear Required
+0 None Moon 0.00 Vacc Suit
+1 Trace Mars 0.001 to 0.09 Vacc Suit
+2 Very Thin, Tainted 0.1 to 0.42 Respirator, Filter
+3 Very Thin 0.1 to 0.42 Respirator
+4 Thin, Tainted 0.43 to 0.7 Filter
+5 Thin 0.43 to 0.7
+6 Standard Earth 0.71-1.49
+7 Standard, Tainted 0.71-1.49 Filter
+8 Dense 1.5 to 2.49
+9 Dense, tainted 1.5 to 2.49 Filter
+10 (A) Exotic Varies Air Supply
+11 (B) Corrosive Venus Varies Vacc Suit
+12 (C) Insidious Varies Vacc Suit
+13 (D) Very Dense 2.5+
+14 (E) Low 0.5 or less
+15 (F) Unusual Varies Varies
+
+
+
+HIGH & LOW GRAVITY WORLDS
+Worlds where the gravity is 0.7G or less (Size 6
+or less) are low gravity worlds. Common features
+include improbable-looking rock formations, thin
+and spindly life forms and flying as a common form
+of locomotion (assuming the atmosphere is thick
+enough to support flyers). The effect on Travellers is
+detailed on page 80.
+High-gravity worlds have a gravity of 1.4G or more.
+They tend to be extremely dense worlds; common
+features include wide rocky plains, squat, muscular
+creatures and plant life that spreads out like lichen
+instead of growing up. Crawling, burrowing or
+swimming are the most common forms of locomotion.
+The effect on Travellers is detailed on page 80.
+ATMOSPHERE
+The Atmosphere code measures the type of
+atmosphere present. A planet’s Atmosphere is
+generated by rolling 2D-7 and adding the planet’s Size.
+Consult the Atmosphere table for specifics.
+ATMOSPHERE TYPES
+Tainted: Tainted atmospheres contain some element
+harmful to humans, such as an unusually high
+proportion of carbon dioxide. A Traveller who breathes
+a tainted atmosphere without a filter will suffer 1D
+damage every few minutes (or potentially hours,
+depending on the level of taint), in addition to any
+other effects.
+
+Exotic: An exotic atmosphere is unbreathable by
+humans but not otherwise hazardous. A Traveller
+needs an air supply to breath in an exotic atmosphere
+without suffocating.
+Corrosive: Corrosive atmospheres are highly
+dangerous. A Traveller who breathes in a corrosive
+atmosphere will suffer 1D damage each round.
+Insidious: An insidious atmosphere is like a corrosive
+one but is so potent that it attacks equipment as well.
+The chief danger in an insidious atmosphere is that
+the toxic gases will destroy the seals and filters on the
+Traveller’s protective gear. An insidious atmosphere
+worms its way past protection after 2D hours on
+average, although vigilant maintenance or advanced
+protective gear can prolong survival times.
+Very Dense: These worlds have thick N2/O2
+atmospheres but their mean surface pressure is too
+high to support unprotected human life (high pressure
+nitrogen and oxygen are deadly to humans). However,
+pressure naturally decreases with increasing altitude, so
+if there are highlands at the right altitude the pressure
+may drop enough to support human life. Alternatively,
+there may not be any topography high enough for
+humans to inhabit, necessitating floating gravitic or
+dirigible habitats or sealed habitats on the surface.
+Low: The opposite of a Very Dense atmosphere, these
+massive worlds have thin N2/O2 atmospheres that
+settle in the lowlands and depressions and are only
+breathable there – the pressure drops off so rapidly
+with altitude that the highest topographic points of the
+surface may be close to vacuum.
+Unusual: An Unusual atmosphere is a catchall term
+for an atmosphere that behaves in a strange manner.
+Examples include ellipsoidal atmospheres, which are
+thin at the poles and dense at the equator; Panthalassic
+worlds composed of a rocky core surrounded by
+a water layer hundreds of kilometres thick; worlds
+wracked by storms so intense that local air pressure
+changes from dense to thin depending on the current
+weather and other planets with unusual and hazardous
+atmospheric conditions.
+
+WORLD TEMPERATURE
+A planet’s surface temperature is primarily
+dependent on its distance from its primary
+star (how much solar radiation it receives)
+and how thick its atmosphere is (how much of
+this heat it can retain). The habitable zone is
+the area around a star most conducive to the
+development of Earth-like, habitable worlds and
+it is assumed that most colonised worlds will be
+in this habitable zone. Roll 2D for the planet’s
+temperature, applying the DMs listed below for
+the Temperature table:
+Atmosphere 0 or 1: No modifiers, but
+temperature swings from roasting during the day
+to frozen at night.
+Atmosphere 2 or 3: DM-2
+Atmosphere 4, 5 or E:  DM-1
+Atmosphere 6 or 7: DM+0
+Atmosphere 8 or 9: DM+1
+Atmosphere A, D or F: DM+2
+Atmosphere B or C: DM+6
+Optionally, the referee may also choose to
+impose one of the following:
+Hot edge of Habitable Zone: DM+4
+Cold edge of Habitable Zone: DM-4
+Temperature
+2D Type
+
+Average
+Temperature Description
+
+2 or
+less
+
+Frozen -51º or
+less
+
+Frozen world. No
+liquid water, very
+dry atmosphere.
+3–4 Cold -51º to 0º Icy world. Little
+liquid water,
+extensive ice caps,
+few clouds.
+5–9 Temperate 0º to 30º Temperate world.
+Earth-like. Liquid
+& vaporised water
+are common,
+moderate ice caps.
+10–
+11
+
+Hot 31º to 80º Hot world. Small or
+no ice caps, little
+liquid water. Most
+water in the form of
+clouds.
+
+12 or
+more
+
+Boiling 81º+ Boiling world. No
+ice caps, little liquid
+water.
+
+HYDROGRAPHICS
+The Hydrographic code measures the amount of
+surface liquid and hence the amount of dry land on the
+world. Hydrographic percentage goes from 0 to 10,
+measuring the surface liquid in increments of 10%. For
+normal worlds, this will be water; on other worlds with
+corrosive or exotic atmospheres, it could be a corrosive
+or exotic liquid like ammonia or methane.
+Hydrographic code is obtained by rolling 2D-7 and
+adding the planet’s Atmosphere. Some Atmospheres
+use the modifier below:
+Size 0 or 1: Hydrographic 0
+Atmosphere 0, 1, A-F: DM-4
+If the planet’s Atmosphere is not D or Panthalassic F (and
+thick enough to retain water under extreme circumstances),
+then you can also apply DMs for temperature:
+Hot Temperature: DM-2
+Boiling Temperature: DM-6
+Hydrographics
+Hydrographics
+
+Hydrographic
+Percentage Description
+0 0%–5% Desert world
+1 6%–15% Dry world
+2 16%–25% A few small seas
+3 26%–35% Small seas and
+oceans
+4 36%–45% Wet world
+5 46%–55% A large ocean
+6 56%–65% Large oceans
+7 66%–75% Earth-like world
+8 76%–85% Only a few islands
+and archipelagos
+9 86%–95% Almost entirely water
+10 (A) 96%–100% Waterworld
+
+Population
+Population Inhabitants Range Description
+0 None 0 —
+1 Few 1+ A tiny farmstead or a single family
+2 Hundreds 100+ A village
+3 Thousands 1,000+ —
+4 Tens of thousands 10,000+ Small town
+5 Hundreds of thousands 100,000+ Average city
+6 Millions 1,000,000+ —
+7 Tens of millions 10,000,000+ Large city
+8 Hundreds of millions 100,000,000+ —
+9 Billions 1,000,000,000+ Present day Earth
+10 (A) Tens of billions 10,000,000,000+ —
+11 (B) Hundreds of billions 100,000,000,000+ Incredibly crowded world
+12 (C) Trillions 1,000,000,000,000+ World-city
+
+POPULATION
+The Population code measures the planet’s intelligent
+population. The Population code can be generalised as
+the number of zeroes following a one, so Population 6
+indicates a population in the millions (1,000,000).
+Population is generated with 2D–2. However, the
+referee may like to introduce extremely high population
+worlds (Population B or C) at their discretion.
+
+LOW-POPULATION WORLDS
+Planets with Population 3 or less are very small colonies
+and may differ considerably from the descriptions in
+the rest of this chapter. A world with Population 1 can
+change its Government code with an argument over
+dinner and is unlikely to bother with a worldwide network
+of communications satellites even at TL15.
+If a world has Population 0, it is uninhabited and so has
+a Government, Law Level and Technology Level of 0.
+GOVERNMENT
+The Government code indicates a range of possible
+ruling systems, determined by rolling 2D–7 and adding
+the planet’s Population code.
+The Common Contraband column on the Government
+table determines goods such a government is likely to
+restrict but should not be taken as a universal rule.
+
+ Government
+ Government Government Type Description Examples
+
+ Example
+ Contraband
+
+ 0 None No government structure. In many cases,
+ family bonds predominate.
+
+ Family, clan, anarchy None
+
+ 1 Company/
+ Corporation
+
+ Ruling functions are assumed by a company
+ managerial elite and most citizenry are
+ company employees or dependants.
+
+ Corporate outpost,
+ asteroid mine, feudal
+ domain
+
+ Weapons, Drugs,
+ Travellers
+
+ 2 Participating
+ Democracy
+
+ Ruling functions are reached by the advice
+ and consent of the citizenry directly.
+
+ Collective, tribal council,
+ comm-linked consensus
+
+ Drugs
+
+ 3 Self-Perpetuating
+ Oligarchy
+
+ Ruling functions are performed by a
+ restricted minority, with little or no input
+ from the mass of citizenry.
+
+ Plutocracy, hereditary
+ ruling caste
+
+ Technology,
+ Weapons,
+ Travellers
+
+ 4 Representative
+ Democracy
+
+ Ruling functions are performed by
+ elected representatives.
+
+ Republic, democracy Drugs, Weapons,
+ Psionics
+
+ 5 Feudal
+ Technocracy
+
+ Ruling functions are performed by specific
+ individuals for persons who agree to be
+ ruled by them. Relationships are based on
+ the performance of technical activities that
+ are mutually beneficial.
+
+ Those with access to
+ advanced technology
+ tend to have higher
+ social status
+
+ Technology,
+ Weapons,
+ Computers
+
+ 6 Captive
+ Government
+
+ Ruling functions are performed by an
+ imposed leadership answerable to an
+ outside group.
+
+ A colony or conquered
+ area
+
+ Weapons,
+ Technology,
+ Travellers
+
+ 7 Balkanisation No central authority exists; rival
+ governments complete for control. Law
+ level refers to the government nearest
+ the starport.
+
+ Multiple governments,
+ civil war
+
+ Varies
+
+ 8 Civil Service
+ Bureaucracy
+
+ Ruling functions are performed by
+ government agencies employing
+ individuals selected for their expertise.
+
+ Technocracy,
+ Communism
+
+ Drugs, Weapons
+
+ 9 Impersonal
+ Bureaucracy
+
+ Ruling functions are performed by
+ agencies that have become insulated from
+ the governed citizens.
+
+ Entrenched castes of
+ bureaucrats, decaying
+ empire
+
+ Technology,
+ Weapons, Drugs,
+ Travellers,
+ Psionics
+
+ 10 (A) Charismatic
+ Dictator
+
+ Ruling functions are performed by
+ agencies directed by a single leader who
+ enjoys the overwhelming confidence of
+ the citizens.
+
+ Revolutionary leader,
+ messiah, emperor
+
+ None
+
+ 11 (B) Non-Charismatic
+ Leader
+
+ A previous charismatic dictator has been
+ replaced by a leader through normal
+ channels.
+
+ Military dictatorship,
+ hereditary kingship
+
+ Weapons,
+ Technology,
+ Computers
+
+ 12 (C) Charismatic
+ Oligarchy
+
+ Ruling functions are performed by a select
+ group of members of an organisation
+ or class that enjoys the overwhelming
+ confidence of the citizenry.
+
+ Junta, revolutionary
+ council
+
+ Weapons
+
+ 13 (D) Religious
+ Dictatorship
+
+ Ruling functions are performed by a
+ religious organisation without regard to the
+ specific individual needs of the citizenry.
+
+ Cult, transcendent
+ philosophy, psionic
+ group mind
+
+ Varies
+
+ 14 (E) Religious
+ Autocracy
+
+ Government by a single religious leader
+ having absolute power over the citizenry.
+
+ Messiah Varies
+
+ 15 (F) Totalitarian
+ Oligarchy
+
+ Government by an all-powerful minority
+ which maintains absolute control through
+ widespread coercion and oppression.
+
+ World church, ruthless
+ corporation
+
+ Varies
+
+ RIVALS, FACTIONS, CONNECTIONS & COLONIES
+ The Government code determines the dominant
+ government type on that planet but there are usually
+ other factions such rival political parties, cultural
+ groups, religions, rebels and so forth who oppose
+ the government. Conflicts on a planet can involve the
+ Travellers; they might be hired to smuggle weapons
+ to a rebel group or be asked to investigate a political
+ scandal involving a government leader.
+ Roll D3 to determine how many factions there are on
+ the planet, with DM+1 if the Government is 0 or 7,
+ and DM-1 if the Government is 10 or more. In cases
+ where the faction code is the same as the current
+ Government code (or similar, such as two democracies
+ or two dictatorships), then it is a splinter faction within
+ the ruling government. In cases where it is radically
+ different (anarchists against a bureaucracy), then the
+ faction is a rebel group or movement.
+ For each faction, use the Government table again to
+ determine what form it takes. Then roll 2D on the Factions
+ table below to determine the strength of each faction.
+ On a balkanised world there may be dozens or even
+ hundreds of governments but they are generally divided
+ into factions with a common ideology or identity.
+ Factions
+ 2D Relative Strength
+ 2–3 Obscure group – few have heard of them, no
+ popular support
+ 4–5 Fringe group – few supporters
+ 6–7 Minor group – some supporters
+ 8–9 Notable group – significant support, well
+ known
+ 10–11 Significant – nearly as powerful as
+ government
+ 12 Overwhelming popular support – more
+ powerful than government
+ CULTURAL DIFFERENCES
+ While colonies trace their heritage back to their mother
+ worlds and patron governments and from then onto the
+ ancient homeworlds of the species, every world has
+ a measure of unique cultural drift. Spacefarers may
+ run into bizarre customs or beliefs on different worlds.
+ The referee should either decide how a culture has
+ developed over the centuries or roll on the Cultural
+ Differences table (or better yet, both – a combination
+ of reasoned extrapolation and random strangeness
+ produces a nicely organic-feeling culture).
+
+ Cultural Differences
+ D66 Culture
+ 11 Sexist – one gender is considered subservient or
+ inferior to the other.
+ 12 Religious – culture is heavily influenced by a
+ religion or belief systems, possibly one unique to
+ this world.
+ 13 Artistic – art and culture are highly prized.
+ Aesthetic design is important in all artefacts
+ produced on world.
+ 14 Ritualised – social interaction and trade is
+ highly formalised. Politeness and adherence to
+ traditional forms is considered very important.
+ 15 Conservative – the culture resists change and
+ outside influences.
+ 16 Xenophobic – the culture distrusts outsiders
+ and alien influences. Offworlders will face
+ considerable prejudice.
+ 21 Taboo – a particular topic is forbidden and cannot
+ be discussed. Travellers who unwittingly mention
+ this topic will be ostracised.
+ 22 Deceptive – trickery and equivocation are considered
+ acceptable. Honesty is a sign of weakness.
+ 23 Liberal – the culture welcomes change and
+ offworld influence. Travellers who bring new and
+ strange ideas will be welcomed.
+ 24 Honourable – one’s word is one’s bond in the
+ culture. Lying is both rare and despised.
+ 25 Influenced – the culture is heavily influenced by
+ another, neighbouring world. Roll again for a cultural
+ quirk that has been inherited from the culture.
+ 26 Fusion – the culture is a merger of two distinct
+ cultures. Roll again twice to determine the quirks
+ inherited from these cultures. If the quirks are
+ incompatible, then the culture is likely divided.
+ 31 Barbaric – physical strength and combat prowess
+ are highly valued in the culture. Travellers may
+ be challenged to a fight or dismissed if they seem
+ incapable of defending themselves. Sports tend
+ towards the bloody and violent.
+ 32 Remnant – the culture is a surviving remnant of a
+ once-great and vibrant civilisation, clinging to its
+ former glory. The world is filled with crumbling ruins
+ and every story revolves around the good old days.
+ 33 Degenerate – the culture is falling apart and
+ is on the brink of war or economic collapse.
+ Violent protests are common and the social
+ order is decaying.
+ 34 Progressive – the culture is expanding and
+ vibrant. Fortunes are being made in trade; science
+ is forging bravely ahead.
+ 35 Recovering – a recent trauma, such as a plague,
+ war, disaster or despotic regime has left scars on
+ the culture.
+
+36 Nexus – members of many different cultures and
+species visit here.
+41 Tourist Attraction – some aspect of the culture or the
+planet draws visitors from all over civilised space.
+42 Violent – physical conflict is common, taking the
+form of duels, brawls or other contests. Trial by
+combat is a part of their judicial system.
+43 Peaceful – physical conflict is almost unheard-
+of. The culture produces few soldiers and
+diplomacy reigns supreme. Forceful Travellers
+will be ostracised.
+44 Obsessed – everyone is obsessed with or
+addicted to a substance, personality, act or
+item. This monomania pervades every aspect of
+the culture.
+45 Fashion – fine clothing and decoration are
+considered vitally important in the culture.
+Underdressed Travellers have no standing here.
+46 At war – the culture is at war, either with
+another planet or polity, or is troubled by
+terrorists or rebels.
+51 Unusual Custom: Offworlders – space travellers
+hold a unique position in the culture’s mythology
+or beliefs and travellers will be expected to live up
+to these myths.
+52 Unusual Custom: Starport – the planet’s starport
+is more than a commercial centre; it might be a
+religious temple or be seen as highly controversial
+and surrounded by protestors.
+53 Unusual Custom: Media – news agencies and
+telecommunications channels are especially strange
+here. Getting accurate information may be difficult.
+54 Unusual Customs: Technology – the culture
+interacts with technology in an unusual way.
+Telecommunications might be banned, robots
+might have civil rights or cyborgs might be property.
+55 Unusual Customs: Lifecycle – there might be a
+mandatory age of termination or anagathics might
+be widely used. Family units might be different,
+with children being raised by the state or banned
+in favour of cloning.
+56 Unusual Customs: Social Standings – the culture
+has a distinct caste system. Travellers of a low
+social standing who do not behave appropriately
+will face punishment.
+61 Unusual Customs: Trade – the culture has an odd
+attitude towards some aspect of commerce, which
+may interfere with trade at the spaceport. For
+example, merchants might expect a gift as part
+of a deal or some goods may only be handled by
+certain families.
+62 Unusual Customs: Nobility – those of high social
+standing have a strange custom associated with
+them; perhaps nobles are blinded, must live in
+gilded cages or only serve for a single year before
+being exiled.
+63 Unusual Customs: Sex – the culture has an
+unusual attitude towards intercourse and
+reproduction. Perhaps cloning is used instead or
+sex is used to seal commercial deals.
+64 Unusual Customs: Eating – food and drink
+occupies an unusual place in the culture. Perhaps
+eating is a private affair or banquets and formal
+dinners are seen as the highest form of politeness.
+65 Unusual Customs: Travel – Travellers may be
+distrusted or feted, or perhaps the culture frowns
+on those who leave their homes.
+66 Unusual Custom: Conspiracy – something strange
+is going on. The government is being subverted
+by another group or agency.
+
+LAW LEVEL
+The Law Level of a planet represents the relative force
+of law extant on the world. A high Law Level indicates
+that visitors to the world will have their activities curtailed.
+Law Level determines two things in particular – what it
+is illegal for Travellers to possess on the world and the
+likelihood the Travellers will run afoul of the law.
+Law Level is determined by rolling 2D–7 and adding the
+Government code.
+BANNED GOODS
+Different governments ban different goods. A Traveller
+might be able to carry their laser rifle slung over their
+shoulder on one world and be arrested for carrying a
+simple knife on the next planet over. An alien might enjoy
+full rights on one world and be treated as an animal on
+another. Banned goods are important for smuggling.
+As far as Travellers are concerned, the most common
+restriction a government imposes is on the possession
+of weapons and this is reflected on the Law Level table.
+However, the referee might consider the stance of a
+government for all of the following:
+Weapons: A government that bans weapons begins
+with restricting weapons of terror and mass destruction,
+then moves onto personal weapons. Governments
+will also often ban armour, with a view that an overly
+militarised appearance simply attracts trouble.
+
+Drugs: A government that bans drugs begins with
+narcotics but at higher Law Levels, medicinal and
+anagathic drugs may also be banned.
+Information: A government that seeks to control
+information begins by restricting the use of computers
+and computer programs, especially information-retrieval
+and information-control. At higher Law Levels, bringing
+data from offworld or even communicating with natives
+can be forbidden.
+Technology: A government that bans technology
+seeks to shield its citizens from the influence of
+advanced technology.
+Travellers: A ban on Travellers restricts the ability
+of outsiders to visit the world, confining them to the
+starport or forbidding landing entirely.
+Psionics: Restrictions on psionics are common and
+most worlds ban psionics as a matter of course. On
+other worlds, psionics may be technically legal but
+there is such prejudice against it that most psionic
+users hide their abilities.
+
+Law Level
+Law
+Level Weapons Banned Armour
+0 No restrictions – heavy armour and a
+handy weapon recommended…
+1 Poison gas, explosives,
+undetectable weapons,
+WMD
+
+Battle dress
+
+2 Portable energy and laser
+weapons
+
+Combat
+armour
+3 Military weapons Flak
+4 Light assault weapons and
+submachine guns
+
+Cloth
+
+5 Personal concealable
+weapons
+
+Mesh
+
+6 All firearms except
+shotguns & stunners;
+carrying weapons
+discouraged
+7 Shotguns
+8 All bladed weapons,
+stunners
+
+All visible
+armour
+9+ All weapons All armour
+
+THE LAW & TRAVELLERS
+A planet’s Law Level can be used to determine the
+Travellers’ interactions with the law. In each of the
+following situations, roll 2D, add the listed modifiers and
+if the total is equal to or lower than the planet’s Law
+Level, the Travellers are investigated or challenged by
+agents of planetary law enforcement.
+Situation DM Response
+First approach to a planet +0 Check
+Offworlders wandering the
+streets of a city (once per day)
+
++0 Check
+
+Offworlders acting
+suspiciously
+
+-1 Check
+Bar fight -1 Apprehended
+Shots fired -2 Apprehended
+Breaking and entering -2 Investigate
+Firefight involving armoured
+Travellers and military
+weapons
+
+-4 Apprehended
+
+Murder and carnage -4 Investigate
+Check: This result means the Travellers’ travel
+documents and identities are checked, either by a
+police officer or guard, or electronically by querying the
+Travellers’ comms. A successful Admin or Streetwise
+check can allay suspicion but if it is failed, the planetary
+authorities move on to Investigation.
+Investigate: This results in a detective or bureaucrat
+probing deeper into the Travellers’ backgrounds. If the
+Travellers have a ship, it will be searched. They may
+be followed or have their communications tapped. They
+may also be questioned closely.
+Apprehended: The police show up ready for a fight.
+Their response will generally be proportional to the threat
+posed by the Travellers; if the Travellers are just making
+trouble in a bar, then most police forces will use batons,
+stunners, tranq gas and other non-lethal weapons. On
+the other hand, if the Travellers are in battle dress and
+firing PGHPs at the palace of the planetary duke, then
+the police will show up with the best weapons and armour
+available at the planet’s Tech Level (or even a few levels
+higher), possibly with the army not far behind them.
+Travellers arrested for a crime will face punishment,
+determined by rolling 2D+DMs on the Sentencing table.
+For crimes involving smuggling banned goods, the DM
+is equal to the difference between the planet’s Law
+Level and the banned goods in question (for example,
+laser weapons are banned at Law Level 2, so a
+Traveller found with a laser weapon on a Law Level 6
+world would have DM+4 on the Sentencing table).
+
+Other crimes have a set DM.
+Crime DM
+False Identity Law Level -5
+Destruction of Property Law Level -3
+Assault Law Level -2
+Manslaughter Law Level -1
+Murder Law Level +0
+A Traveller with the Advocate skill may attempt to
+reduce the severity of sentencing by making a check. If
+successful, reduce the Sentencing DM by the Effect of
+the check.
+Sentencing
+2D+DM Sentence
+0 or less Dismissed or trivial
+1–2 Fine of 1D x Cr1000 (per ton of
+contraband)
+3–4 Fine of 2D x Cr5000 (per ton of
+contraband)
+5–6 Exile or a fine of 2D x Cr10000 (per ton
+of contraband)
+7–8 Imprisonment for 1D months or exile
+or fine of 2D x Cr20000 (per ton of
+contraband)
+9–10 Imprisonment for 1D years or exile
+11–12 Imprisonment for 2D years or exile
+13–14 Life imprisonment
+15 or more Death
+A result of Exile means the Traveller must leave the
+planet immediately and never return.
+
+STARPORT
+Starports are the arteries of interstellar commerce.
+These ports for spacefaring craft range in size from
+a landing field with a rudimentary radio beacon and
+hydrogen fuel still, to city-sized edifices where tens of
+thousands of ships land daily. Many planets have only
+a downport, a landing zone on the ground accessible
+only by entering the atmosphere. Ships that cannot land
+at a downport are serviced by a fleet of shuttles and
+other smaller vessels. Worlds advanced or rich enough
+may possess a highport, an orbiting starport. Some
+are equipped with space elevators or even gravitic lifts
+connecting highport to downport.
+Starports are classed from A to E. To determine the
+level of a starport on a planet, roll 2D and apply these
+DMs to the Starport Class table:
+DM+1 if the planet’s Population is 8–9
+DM+2 if the planet’s Population is 10+
+DM–1 if the planet’s Population is 3–4
+DM–2 if the planet’s Population is 2–
+Starport Class
+2D+DM Starport Class
+2 or less X
+3 E
+4 E
+5 D
+6 D
+7 C
+8 C
+9 B
+10 B
+11+ A
+
+Starport Facilities
+Class Quality Berthing Cost Fuel Facilities Bases
+A Excellent 1D x Cr1000 Refined Shipyard (all)
+Repair
+Highport 6+
+
+Military 8+
+Naval 8+
+Scout 10+
+
+B Good 1D x Cr500 Refined Shipyard (spacecraft)
+Repair
+Highport 8+
+
+Military 8+
+Naval 8+
+Scout 9+
+
+C Routine 1D x Cr100 Unrefined Shipyard (small craft)
+Repair
+Highport 10+
+
+Military 10+
+Scout 9+
+
+D Poor 1D x Cr10 Unrefined Limited Repair
+Highport 12+
+
+Scout 8+
+Corsair 12+
+E Frontier 0 None None Corsair 10+
+X No Starport 0 None None Corsair 10+
+
+Quality: This determines both the condition of the port
+itself and the level of competence of the staff. Quality
+may vary – it is possible to find a Class D port run by
+expert engineers or a Class A that has succumbed
+to decay. Some worlds have entirely inappropriate
+starports; a world that was once a centre of commerce
+but has now been bypassed by new trade routes, might
+have a cavernous port capable of handling thousands
+of freighters now almost abandoned.
+A frontier installation is just a bare spot of bedrock,
+marked with a beacon, and is a starport in the most
+technical sense only.
+Berthing Cost: This is the price paid by any ship that
+wants to land or dock at the starport and is due weekly.
+Prices can vary wildly between starports but tend to
+remain stable at each (roll once for each starport and
+record it for future reference).
+Fuel: This refers to the fuel available for purchase –
+either refined or unrefined. Refined fuel costs Cr500 per
+ton; unrefined fuel costs Cr100 per ton but is risky to
+use when jumping. Bases have their own fuel-refining
+ability – see Bases on page 259.
+Facilities: These are the starport’s repair and
+construction ability. A shipyard allows for the construction
+of new vessels. A shipyard capable of building all types
+of ships can construct small craft (less than 100 tons),
+spacecraft (100 to 5,000 tons) and capital ships (more
+than 5,000 tons). However only a Class A starport can
+construct jump-capable spacecraft.
+Repair facilities allow a damaged ship to be repaired and
+have plenty of spare parts for most common systems.
+Limited repair facilities can only fix Hull damage.
+Use the following modifiers when determining whether
+a highport is present: DM+1 if TL9–11, DM+2 if TL 12+,
+DM+1 if Population 9+, DM–1 if Population 6–
+Use the following modifiers when determining whether
+a corsair base is present: DM+2 if Law Level 0, DM–2 if
+Law Level 2+.
+Bases: This lists what sort of bases may be present.
+Roll 2D for each base type listed; for more details, see
+Bases on page 259.
+
+CHARTED SPACE: STARPORTS AND THE LAW
+Technically, a starport is Imperial territory
+and not under the jurisdiction of the planetary
+government. The local government may share in
+the construction costs, running costs and profits
+of the starport but the port is extraterritorial and
+run by an Imperium-appointed governor. This
+means that Travellers can carry locally illegal
+goods onto a planet so long as they do not leave
+the starport. It also means that criminals and
+refugees often claim sanctuary in a starport and
+that a starport’s Tech Level may be considerably
+higher than that of the rest of the planet.
+Starports operate according to Imperial Law
+(equivalent to Law Level 1 for most items and
+forbidding all use of psionics).
+However, Travellers should be aware that not
+every world honours this approach and paranoid
+governments have been known to forcibly board
+and inspect ships to root out what they see as
+unpleasant influences.
+
+TECH LEVEL
+The Tech Level of the planet is determined by rolling 1D
+and adding DMs from the Tech Level table.
+The Tech Level measures the average technology
+presence on the planet and gives an idea of local
+production and repair capability. Trade with offworlders
+may bring in advanced technology; on average, a rich
+individual can afford technology two or more levels
+higher than the planetary average. The government
+may also have access to higher-technology items.
+A planet’s technology may be one or more levels
+higher or lower in a particular field, such as Medicine,
+Communications, Weaponry, Ship Construction, Power
+Generation, Computers and so forth.
+COMMUNICATIONS
+If the planet is below Tech Level 3, then there will be
+no telecommunication system whatsoever except for
+whatever facilities the starport offers. If it is between
+TL4 and TL6, then it has radio and telephone
+communications between major cities at least but no satellite facilities. From TL7 onwards, the planet
+has a progressively more advanced communications
+grid. At TL9, it is accessible from every point of the
+surface (communications satellites become cheap
+and easy to deploy).
+
+Tech Level
+Score Starport Size Atmosphere Hydrographics Population Government
+0 +2 +1 +1 +1
+1 +2 +1 +1
+2 +1 +1 +1
+3 +1 +1 +1
+4 +1 +1
+5 +1 +1
+6
+7 +2
+8 +1
+9 +1 +2
+10 (A) +6 +1 +2 +4
+11 (B) +4 +1
+12 (C) +2 +1
+13 (D) +1 –2
+14 (E) +1 –2
+15 (F) +1
+X -4
+
+ENVIRONMENTAL LIMITS
+Certain Atmospheres require a minimal Tech Level.
+A world can have a Tech Level lower than this limit
+but the population cannot maintain or repair their life
+support systems and are likely doomed.
+Tech Level and Environment
+Atmosphere Minimum Tech Level
+0 or 1 8
+2 or 3 5
+4, 7 or 9 3
+10 (A) 8
+11 (B) 9
+12 (C) 10
+13 or 14 (D or E) 5
+15 (F) 8
+
+BASES
+In addition to the basic facilities at a starport, there may
+be one or more special bases at the starport or nearby
+in the system. These are the common types of bases
+but others are also possible, such as prison facilities,
+naval shipyards, alien embassies or consulates and
+other secret operations. Some are specific to the
+Charted Space universe but their equivalents could be
+found almost anywhere.
+Corsair Base (C): Popularised by Vargr, corsair bases
+do not have the full range of facilities as naval bases
+but provide enough to refuel and maintain corsair ships.
+A corsair base is often the main staging point from
+which raids are conducted.
+Depot (D): Used by the Imperium’s sector fleets, a
+depot is a massive naval base, often consuming an
+entire star system. It can support a sizeable fraction
+of a sector fleet’s ships at once, offering building,
+repairing, rearming and experimental facilities. As well
+as servicing ships, depots also have command and
+control facilities, academies and mothballed ships.
+Military Base (M): These are planetary facilities for
+the support, maintenance, repair and refit of ground
+vehicles and troops.
+Naval (N): A naval base is a supply depot, refuelling
+station, repair yard or fortress of either the Imperial Navy
+or the local sector navy. Naval vessels can obtain refined
+fuel and supplies here. Naval bases are always guarded
+by armed vessels and fixed defence. Ex-Naval Travellers
+may meet Contacts or Allies here and mercenary
+Travellers can try to pick up work. Naval bases also have
+an advanced hospital, although it is normally available
+only to naval personnel. Travellers may also be able to
+purchase navy-surplus weapons here.
+
+Scout (S): A scout base offers refined fuel and supplies
+to scout ships (including retired scout ships obtained by
+retired scouts). They are also an excellent place to pick
+up rumours and news.
+Way Station (W): A large Imperial Interstellar
+Scout Service installation dedicated to the x-boat
+communication network and servicing scout ships.
+TRAVEL CODES
+There are two travel codes in the Charted Space
+universe – Amber and Red – although other universes
+may have equivalent classifications. An Amber world
+has been deemed dangerous by the Imperium and
+Travellers are warned to be on their guard. Amber
+worlds are often undergoing upheaval or revolution, or
+else are naturally hazardous environments.
+Red worlds are interdicted and travel to them is
+forbidden. A world might be Red because the Imperium
+wishes to preserve it or because the world is too
+dangerous to allow visitors. Interdictions are enforced
+by the Imperial Navy.
+A world with Atmosphere 10+, a Government 0, 7 or
+10 and Law Level 0 or 9+ should be considered for
+Amber status. Red codes are applied at the discretion
+of the referee.
+
+Trade Codes
+Classification Code Planet Size Atmosphere Hydro Population Government Law Level Tech Level
+Agricultural Ag 4–9 4–8 5–7
+Asteroid As 0 0 0
+Barren Ba 0 0 0
+Desert De 2–9 0
+Fluid Oceans Fl 10+ 1+
+Garden Ga 6–8 5,6,8 5–7
+High Population Hi 9+
+High Tech Ht 12+
+Ice-Capped Ic 0–1 1+
+Industrial In 0–2, 4, 7,
+9–12
+
+9+
+Low Population Lo 1–3
+Low Tech Lt 1+ 5–
+Non-Agricultural Na 0–3 0–3 6+
+Non-Industrial Ni 4–6
+Poor Po 2–5 0–3
+Rich Ri 6,8 6–8 4–9
+Vacuum Va 0
+Waterworld Wa 3–9, 13+ 10+
+
+TRADE CODES
+Trade codes designate particular types of worlds and
+the types of goods likely to be found there. If a world
+meets all requirements listed for one or more Trade
+codes, it gains those classifications. Trade codes are
+used extensively in the Trade chapter.
+Agricultural (Ag): Dedicated to farming and food
+production. Often, they are divided into vast semi-
+feudal estates.
+Asteroids (As): Usually mining colonies but can also
+be orbital factories or colonies.
+Barren (Ba): Uncolonised and empty.
+Desert (De): Dry and barely habitable.
+Fluid Oceans (Fl): Worlds where the surface liquid is
+something other than water and so are incompatible
+with Earth-derived life.
+Garden (Ga): Worlds that are Earth-like.
+High Population (Hi): A population in the billions.
+High Tech (Ht): Among the most technologically
+advanced in Charted Space.
+Ice-Capped (Ic): Worlds that have most of their surface
+liquid frozen in polar ice caps and are cold and dry.
+Industrial (In): Dominated by factories and cities.
+Low Population (Lo): A population of only a few
+thousand or less.
+Low Tech (Lt): Pre-industrial and cannot produce
+advanced goods.
+Non-Agricultural (Na): Too dry or barren to support
+their populations using conventional food production.
+Non-Industrial (Ni): Too low in population to maintain
+an extensive industrial base.
+Poor (Po): Lacking resources, viable land or sufficient
+population to be anything other than marginal colonies.
+Rich (Ri): Blessed with a stable government and viable
+biosphere, making them economic powerhouses.
+Vacuum (Va): No atmosphere.
+Water World (Wa): Almost entirely water-ocean across
+their surface.

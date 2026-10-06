@@ -190,10 +190,17 @@ file true: replace it, do not append to it.
   `orbit/ships.ts`, `orbit/theme.ts`, `tests/web/orbit_renderer.test.js`,
   `tests/web/orbit_ships.test.js`), rehearsed in a scratch copy first. D holds on a
   paper-only step until then; after it, D gets `d_orbit_small_fixes.md` (seven items).
-- **Last push `4c450c1`** (the dossier split, the readout, T1.4), green. **Called for in
-  §149:** A's panes, 18 files from `findings/push/panes_files.txt`; check `git log -1`.
-  Nobody has seen the signed-in campaign screens on the new panes: Johnny was asked for a
-  quick live look, and D's `d_after_panes.md` is the full pass.
+- **Last push `6fc2d60`** (the ghosts, the reconcile transform), green and live. **Called
+  for in §168:** the whole tree (`git add -A`): places in open space, Enhanced as default
+  and city lights step 1, D's Part 2, the Scout Survey card, the card under the drawer,
+  Locate. Check `git log -1`.
+- **v6 is building** (staged, never released by the job): started 2026-10-06 after one
+  leftover file was deleted (§167). When every sector is done, B gets
+  `prompts/b_engine_t1_7.md`. Before any release: the surfaces must read `surfaceTempBand`
+  (C), and Johnny rules on the unresolved counts.
+- **Next pastes after that push:** A `a_vessels_on_map.md`; C `c_toggle_motion_4.md`, then
+  city lights step 2 (not written); D `d_ghost_wiring.md` (the ghosts wired, then places in
+  open space); E `e_card_gap.md`.
 - **Open with Johnny:** only D's four design choices (§144), each with a standing default.
   G7 is answered: F designed the city lights; Enhanced is to be the default.
 - G5 was taken as the recommended option

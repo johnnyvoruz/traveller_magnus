@@ -25,7 +25,7 @@ import ToastStrip from '../shell/ToastStrip.vue';
 import AccountMenu from '../workspace/AccountMenu.vue';
 import { editDateNext } from '../workspace/list_state.ts';
 import StardateChip from '../workspace/StardateChip.vue';
-import { locateOriginY, locating, stopLocate } from '../workspace/locate.ts';
+import { locateOriginY, locating, startLocate, stopLocate, systemSubject } from '../workspace/locate.ts';
 import { ensureCampaign } from '../workspace/opening.ts';
 import { cancelPick, offerSystem, picking } from '../workspace/pick.ts';
 import { setPlaceSource, type SystemInfo } from '../workspace/place_source.ts';
@@ -75,6 +75,7 @@ let unregisterAccount: (() => void) | null = null;
 let unregisterClose: (() => void) | null = null;
 let unregisterSystem: (() => void) | null = null;
 let unregisterCampaign: (() => void) | null = null;
+let unregisterLocate: (() => void) | null = null;
 /** The camera has been put somewhere: a route with no place of its own leaves it there. */
 let placed = false;
 let stopDpr: (() => void) | null = null;
@@ -738,6 +739,13 @@ onMounted(() => {
         keys: ['Escape'],
         run: () => { onEscape(); },
     });
+    unregisterLocate = registerCommand({
+        id: 'locate-system',
+        name: 'Locate this system',
+        keys: ['l'],
+        runnable: () => panelWorld() !== null,
+        run: () => { locateSystem(); },
+    });
     unregisterSystem = registerCommand({
         id: 'system-panel',
         name: 'System panel',
@@ -773,9 +781,11 @@ function devStandIn(): CampaignSnapshot | null {
 }
 
 function snapshotFromStore(): CampaignSnapshot | null {
-    if (campaign.status !== 'ready' || !campaign.settings) return null;
+    const open = campaign.status === 'ready' && campaign.settings !== null;
+    // A system can be located by anyone: the line is handed over with no campaign open, and signed out.
+    if (!open && !locating.recordId) return null;
     // The party stands where its ship's track puts it at the campaign date (party_where.ts).
-    const mark = partyMarker(campaign.settings.party, campaign.records, campaignDays(campaign.clock));
+    const mark = open && campaign.settings ? partyMarker(campaign.settings.party, campaign.records, campaignDays(campaign.clock)) : null;
     return {
         party: mark ? { name: mark.name, hexKey: mark.hexKey, focused: false } : null,
         locate: locateLine(),
@@ -881,6 +891,29 @@ function currentSystem(): SystemInfo | null {
     let sectorName = world.slug.replace(/_/g, ' ');
     for (const sector of chart.sectors) if (sector.slug === world.slug) sectorName = sector.name;
     return { slug: world.slug, hex: world.hex, name: entry ? entry.name : '', sectorName };
+}
+
+/**
+ * "Locate this system": the tracking line, the flight and the ring, for the system the panel
+ * shows or last showed. Asked again while it runs, it stops. The line starts level with the
+ * control that asked (the dossier's Locate button names this command), or with the panel's
+ * heading when the command came from the keyboard.
+ */
+function locateSystem(): void {
+    const world = panelWorld();
+    if (!world) return;
+    const hexKey = world.slug + '/' + world.hex;
+    const subject = systemSubject(hexKey);
+    if (locating.recordId === subject) {
+        stopLocate();
+        return;
+    }
+    startLocate(subject, hexKey, () => {
+        const el = document.querySelector('.panel.is-open [data-command="locate-system"], .dossier-root .panel.is-open h1');
+        if (!el) return null;
+        const box = el.getBoundingClientRect();
+        return box.height > 0 ? box.top + box.height / 2 : null;
+    });
 }
 
 /** The party's marker was pressed: the Party tab. */
@@ -994,6 +1027,7 @@ onBeforeUnmount(() => {
     if (unregisterClose) unregisterClose();
     if (unregisterSystem) unregisterSystem();
     if (unregisterCampaign) unregisterCampaign();
+    if (unregisterLocate) unregisterLocate();
     setPlaceSource(null);
     setFrame(null);
     if (locating.recordId) stopLocate();

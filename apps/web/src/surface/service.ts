@@ -5,7 +5,8 @@
  * The cache key carries the mode, the painter and, for enhanced, the sea it was asked to
  * draw, so one mode's sheet is never handed to the other.
  * A reply whose generation is not the live one is dropped.
- * Discs compile in the disc worker. prepareDiscs posts one batch and returns.
+ * Discs compile in the disc worker. prepareDiscs posts the batch with its mode,
+ * renderer version and generation, and returns.
  * It does not wait for a tile. drawDisc paints the newest tile held for a key,
  * or returns false so the caller keeps its flat disc. A tile can arrive a later frame.
  */
@@ -35,7 +36,10 @@ import { createChunkedMap } from './map_chunks.ts';
 import { openDiscLink, type DiscLink } from './disc_link.ts';
 import { clearDiscs, discHeld, retainDiscs } from './disc_hold.ts';
 import { discShadeRequest } from './disc_shade.ts';
+import { discRendererVersion } from './enhanced/bake.ts';
+import type { DiscEnvelope } from './enhanced/delivery.ts';
 import type { ShadeRequest } from './vanilla/gl_shade.ts';
+import { cubeSizeFor } from './vanilla/gl_bake.ts';
 import { discDest } from './vanilla/gl_plan.ts';
 import { MAP_HEIGHT, MAP_WIDTH } from './vanilla/map.ts';
 
@@ -366,6 +370,9 @@ export function requestMap(request: MapRequest): MapTicket {
 
 let discLink: DiscLink | null = null;
 let discBroken = false;
+let discMode: SurfaceMode | null = null;
+let discGeneration = 0;
+let discEpoch = '';
 
 function openDiscs(): DiscLink | null {
     if (discBroken) return null;
@@ -381,6 +388,29 @@ function openDiscs(): DiscLink | null {
     }
 }
 
+/**
+ * Generation changes when the mode or the cube size of a disc changes.
+ * A spin resubmit keeps the generation so the tile already held stays up.
+ * The worker still drops an older in-flight bitmap when a newer watch is queued.
+ */
+function discEpochOf(request: DiscBatchRequest): string {
+    const rows = request.discs.map((disc) => disc.key + ':' + String(cubeSizeFor(disc.radiusPx)));
+    rows.sort();
+    return request.mode + '|' + rows.join(',');
+}
+
+function advanceDiscs(request: DiscBatchRequest): DiscEnvelope {
+    const epoch = discEpochOf(request);
+    const modeChanged = discMode !== null && discMode !== request.mode;
+    if (discMode === null || modeChanged || epoch !== discEpoch) {
+        discGeneration += 1;
+        discEpoch = epoch;
+    }
+    if (modeChanged) clearDiscs();
+    discMode = request.mode;
+    return { mode: request.mode, version: discRendererVersion(request.mode), generation: discGeneration };
+}
+
 export function prepareDiscs(request: DiscBatchRequest): SurfaceReply {
     const requestId = String(++sequence);
     if (request.discs.length === 0) return { status: 'unavailable', mode: request.mode, requestId };
@@ -389,15 +419,19 @@ export function prepareDiscs(request: DiscBatchRequest): SurfaceReply {
         const shade = discShadeRequest(request.timeSeconds, disc);
         if (shade) shades.push(shade);
     }
+    const envelope = advanceDiscs(request);
+    const frameKeys = new Set(request.discs.map((disc) => disc.key));
     if (shades.length === 0) {
-        retainDiscs(new Set(request.discs.map((disc) => disc.key)));
+        discLink?.note(envelope, frameKeys);
+        retainDiscs(frameKeys);
         return { status: 'ready', mode: request.mode, requestId };
     }
     const link = openDiscs();
+    if (link) link.note(envelope, frameKeys);
     if (!link || link.failed()) return { status: 'unavailable', mode: request.mode, requestId };
     if (link.lost()) return { status: 'unavailable', mode: request.mode, requestId };
     link.submit(shades);
-    retainDiscs(new Set(request.discs.map((disc) => disc.key)));
+    retainDiscs(frameKeys);
     if (!link.ready()) return { status: 'pending', mode: request.mode, requestId };
     return { status: 'ready', mode: request.mode, requestId };
 }
@@ -410,6 +444,7 @@ export function prepareDiscs(request: DiscBatchRequest): SurfaceReply {
 export function drawDisc(ctx: DiscContext, key: string, cx: number, cy: number, radiusPx: number): boolean {
     const held = discHeld(key);
     if (!held) return false;
+    if (held.mode && discMode && held.mode !== discMode) return false;
     const dest = discDest(held.size, held.radiusPx, cx, cy, radiusPx);
     blitImage(ctx, held.image, dest.x, dest.y, dest.w, dest.h);
     return true;
@@ -439,6 +474,9 @@ export function disposeSurfaces(): void {
     if (discLink) discLink.dispose();
     discLink = null;
     discBroken = false;
+    discMode = null;
+    discGeneration = 0;
+    discEpoch = '';
     clearDiscs();
     if (worker) worker.terminate();
     worker = null;

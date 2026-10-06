@@ -2,6 +2,8 @@
  * Vanilla disc GL off the page thread. The canvas here is an OffscreenCanvas.
  * The page posts batches and receives tiles. It does not create this canvas.
  */
+import { watchSuperseded } from '../enhanced/delivery.ts';
+import { mountDiscProgram, resetDiscProgram } from '../enhanced/session.ts';
 import { cubeSizeFor, MEMORY_BUDGET, type BakeProfile, type CubeFaces, type GpuSpan } from './gl_bake.ts';
 import { createDiscBaker, type DiscBaker, type DiscCapture } from './gl.ts';
 import type { AtlasSlot, DiscDelivery, RpcRequest, WatchRequest, WorkerTile } from './gl_messages.ts';
@@ -32,6 +34,7 @@ function session(): DiscBaker {
     baker = createDiscBaker(canvas, {
         onLost: () => {
             warmed = false;
+            resetDiscProgram();
             post({ op: 'state', ready: false, lost: true, failed: false });
         },
         onRestored: () => {
@@ -79,16 +82,25 @@ function slowOf(spans: GpuSpan[]): GpuSpan[] {
     return spans.filter((span) => span.ms >= 50);
 }
 
+function closeImage(image: ImageBitmap | undefined): void {
+    image?.close();
+}
+
 async function pack(
     delivery: DiscDelivery,
     tiles: Map<string, { sx: number; sy: number; size: number }>,
     requests: ShadeRequest[],
-): Promise<{ payload: { delivery: DiscDelivery; tiles?: WorkerTile[]; image?: ImageBitmap; table?: AtlasSlot[] }; transfer: Transferable[] }> {
+    stillCurrent: () => boolean,
+): Promise<{ payload: { delivery: DiscDelivery; tiles?: WorkerTile[]; image?: ImageBitmap; table?: AtlasSlot[] }; transfer: Transferable[] } | null> {
     const surface = canvas;
-    if (!surface) return { payload: { delivery }, transfer: [] };
+    if (!surface || !stillCurrent()) return null;
     const radius = new Map(requests.map((item) => [item.key, item.radius]));
     if (delivery === 'atlas') {
         const image = surface.transferToImageBitmap();
+        if (!stillCurrent()) {
+            closeImage(image);
+            return null;
+        }
         const table: AtlasSlot[] = [];
         for (const [key, tile] of tiles) {
             table.push({ key, sx: tile.sx, sy: tile.sy, size: tile.size, radiusPx: radius.get(key) ?? 0 });
@@ -99,13 +111,23 @@ async function pack(
     const transfer: Transferable[] = [];
     for (const [key, tile] of tiles) {
         const image = await createImageBitmap(surface, tile.sx, tile.sy, tile.size, tile.size);
+        if (!stillCurrent()) {
+            closeImage(image);
+            for (const held of packed) closeImage(held.image);
+            return null;
+        }
         packed.push({ key, size: tile.size, radiusPx: radius.get(key) ?? 0, image });
         transfer.push(image);
     }
     return { payload: { delivery, tiles: packed }, transfer };
 }
 
+function stillCurrent(job: WatchRequest): boolean {
+    return !watchSuperseded(watch, job);
+}
+
 async function runWatch(job: WatchRequest): Promise<void> {
+    if (!stillCurrent(job)) return;
     const target = session();
     target.pump();
     const flag = stateOf(target);
@@ -113,6 +135,7 @@ async function runWatch(job: WatchRequest): Promise<void> {
         post({ op: 'state', ...flag });
         if (flag.failed || flag.lost) return;
         await wait(16);
+        if (!stillCurrent(job)) return;
         if (!watch) watch = job;
         enqueue(async () => {
             const next = watch;
@@ -121,16 +144,29 @@ async function runWatch(job: WatchRequest): Promise<void> {
         });
         return;
     }
+    mountDiscProgram(target, job.mode, job.version);
+    if (!stillCurrent(job)) return;
     post({ op: 'state', ...flag });
     const spans = job.requests[0] ? warm(job.requests[0].profile) : [];
     target.takeSpans();
     const tiles = target.renderBatch(job.requests);
     spans.push(...target.takeSpans());
-    const packed = await pack(job.delivery, tiles, job.requests);
+    if (!stillCurrent(job)) return;
+    const packed = await pack(job.delivery, tiles, job.requests, () => stillCurrent(job));
+    if (!packed || !stillCurrent(job)) {
+        if (packed) {
+            for (const tile of packed.payload.tiles ?? []) closeImage(tile.image);
+            closeImage(packed.payload.image);
+        }
+        return;
+    }
     post({
         op: 'tiles',
         ...stateOf(target),
         slow: slowOf(spans),
+        mode: job.mode,
+        version: job.version,
+        generation: job.generation,
         ...packed.payload,
     }, packed.transfer);
 }
@@ -256,6 +292,7 @@ async function rpc(message: RpcRequest): Promise<void> {
             baker = null;
             canvas = null;
             warmed = false;
+            resetDiscProgram();
             post({ id, ok: true, result: true });
             return;
         case 'frame': {
@@ -282,7 +319,8 @@ async function rpc(message: RpcRequest): Promise<void> {
             target.takeSpans();
             const tiles = target.renderBatch(requests);
             spans.push(...target.takeSpans());
-            const packed = await pack(message.delivery ?? 'tiles', tiles, requests);
+            const packed = await pack(message.delivery ?? 'tiles', tiles, requests, () => true)
+                ?? { payload: { delivery: message.delivery ?? 'tiles' as const }, transfer: [] as Transferable[] };
             const full = requests.every((item) => target.hasCube(item.profile.id, cubeSizeFor(item.radius)));
             const lit = requests.some((item) => tiles.has(item.key));
             const memory = target.memory();

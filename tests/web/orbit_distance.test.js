@@ -3,7 +3,7 @@
  */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { BODY_SNAP_PX, picturePlaceAu, placeAtPicture, realDistanceKm, realDistanceKmBetween, realPositionAu } from '../../apps/web/src/orbit/distance.ts';
+import { BODY_SNAP_PX, NEAR_BODY_AU, pictureOfAu, picturePlaceAu, placeAtPicture, pointWords, realDistanceKm, realDistanceKmBetween, realPositionAu } from '../../apps/web/src/orbit/distance.ts';
 import { AU_KM, layoutScene } from '../../apps/web/src/orbit/layout.ts';
 import { plotText } from '../../apps/web/src/orbit/ships.ts';
 
@@ -252,4 +252,66 @@ test('a pointer within 14px of a body reads that body, and a moon\'s drawn point
     assert.equal(plotText({ x: worldAt.x, y: worldAt.y, from: { x: moonAt.x, y: moonAt.y } }, frame), '2.00 AU \u00B7 ship 256,000 km');
     assert.equal(plotText({ x: worldAt.x, y: worldAt.y }, { ...frame, mode: 'row' }), '');
     assert.equal(plotText({ x: scene.originX + 18, y: scene.originY }, frame), '');
+});
+
+test('a place is a body or a point, and a point is itself at any date', () => {
+    const inner = world('w1', 1, 0, { index: 0 });
+    const outer = world('w2', 3, 0, { index: 1 });
+    const plan = planOf([star('s0', 0, { body: { mass: 1 } })], [inner, outer]);
+    const point = { x: 1.2, y: 0.8 };
+    const km = Math.hypot(1.2, 0.8) * AU_KM;
+    assert.ok(near(realDistanceKmBetween(plan, point, 0, { x: 0, y: 0 }, 40), km));
+    assert.equal(realDistanceKmBetween(plan, point, 0, { x: 1.2, y: 0.8 }, 90), 0);
+    assert.equal(realDistanceKm(plan, point, point, 3), 0);
+    assert.ok(near(realDistanceKmBetween(plan, 'w1', 0, point, 12), Math.hypot(0.2, 0.8) * AU_KM));
+    assert.equal(realDistanceKmBetween(plan, { x: Number.NaN, y: 1 }, 0, point, 0), null);
+    const unplaced = planOf(
+        [star('s0', 0, { body: { mass: 1 } }), star('s1', 1, { parent: 0, au: 2, body: {} })],
+        [world('w9', 0.4, 0, { index: 0, star: 1, body: { au: 0.4 } })],
+    );
+    assert.equal(realDistanceKmBetween(unplaced, { x: 1, y: 0 }, 0, 'w9', 0), null);
+});
+
+test('a picture point round-trips through AU, log and linear, at two zooms', () => {
+    const days = 100;
+    const inner = world('w1', 1, 0.7, { index: 0, body: { au: 1, diamKm: 8000 } });
+    const outer = world('w2', 3, 2.1, { index: 1, body: { au: 3, diamKm: 12000 } });
+    const plan = planOf(
+        [star('s0', 0, { body: { mass: 1, diamKm: 1400000 } })],
+        [inner, outer],
+    );
+    const views = [
+        { w: 800, h: 600, offX: 0, offY: 0, zoom: 1, z: 1, linear: false, moons: true, jump: true },
+        { w: 800, h: 600, offX: 40, offY: -25, zoom: 2.4, z: 1.8, linear: false, moons: true, jump: true },
+        { w: 800, h: 600, offX: 0, offY: 0, zoom: 1, z: 1, linear: true, moons: true, jump: true },
+        { w: 800, h: 600, offX: -30, offY: 15, zoom: 2.4, z: 1.8, linear: true, moons: true, jump: true },
+    ];
+    for (const view of views) {
+        const scene = layoutScene(plan, view, days);
+        for (const key of ['w1', 'w2']) {
+            const at = scene.primary.bodies.find((body) => body.world.key === key);
+            const au = picturePlaceAu({ x: at.x, y: at.y }, view, plan, 'orbits');
+            const back = pictureOfAu(au, view, plan, 'orbits');
+            assert.ok(back);
+            assert.ok(Math.abs(back.x - at.x) < 1e-6 && Math.abs(back.y - at.y) < 1e-6, key + ' ' + view.zoom + ' ' + view.linear);
+            const forward = pictureOfAu(realPositionAu(plan, key, days), view, plan, 'orbits');
+            assert.ok(Math.abs(forward.x - at.x) < 1e-6 && Math.abs(forward.y - at.y) < 1e-6);
+        }
+        assert.equal(pictureOfAu({ x: 1, y: 0 }, view, plan, 'row'), null);
+        assert.equal(pictureOfAu({ x: Number.NaN, y: 0 }, view, plan, 'orbits'), null);
+    }
+});
+
+test('a point is worded from the plan and the date, and names a body only when it is close', () => {
+    assert.equal(NEAR_BODY_AU, 0.05);
+    const hosted = world('w1', 1, 0, { index: 0 });
+    hosted.name = 'Regina A-II';
+    const belt = world('w2', 2, 0, { index: 1, belt: true });
+    const plan = planOf([star('s0', 0, { body: { mass: 1 } })], [hosted, belt]);
+    plan.name = 'Regina';
+    assert.equal(pointWords(plan, { x: 1.02, y: 0 }, 0), '1.02 AU \u00B7 near A-II \u00B7 0.02 AU');
+    assert.equal(pointWords(plan, { x: 2, y: 0 }, 0), '2.00 AU');
+    assert.equal(pointWords(plan, { x: 12, y: 5 }, 0), '13.0 AU');
+    const half = 0.5 * 365.25;
+    assert.equal(pointWords(plan, { x: 1.02, y: 0 }, half), '1.02 AU');
 });

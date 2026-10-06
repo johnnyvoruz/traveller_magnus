@@ -20,7 +20,7 @@ export type OrbitCommand = {
 /** The header's three control drawers (slice 2 follow-up 6; findings/orbit_drawers_design.md). */
 export type DrawerId = 'time' | 'view' | 'layers';
 export const DRAWERS: readonly { id: DrawerId; command: string; label: string; key: string; icon: 'clock' | 'bullseye' | 'layer-group'; help: string }[] = [
-    { id: 'time', command: 'orbit-date', label: 'Time', key: 't', icon: 'clock', help: 'the Time drawer: the date fields, 1 week, the scrub, the speed, Set as campaign date, Line up' },
+    { id: 'time', command: 'orbit-date', label: 'Time', key: 't', icon: 'clock', help: 'the Time drawer: the date fields, back 1 week and 1 week, the scrub, the speed, Set as campaign date' },
     { id: 'view', command: 'orbit-drawer-view', label: 'View', key: 'y', icon: 'bullseye', help: 'the View drawer: the layout, Fit, the picture’s scale and ring strength' },
     { id: 'layers', command: 'orbit-drawer-layers', label: 'Layers', key: 'l', icon: 'layer-group', help: 'the Layers drawer: show or hide each layer' },
 ];
@@ -56,13 +56,14 @@ export const LAYERS: readonly { key: LayerToggle; id: string; label: string; hot
 /** The commands in the order the Keys popover lists them. */
 export const ORBIT_COMMANDS: readonly OrbitCommand[] = [
     { id: 'orbit-play', name: 'Play or pause', keys: [' '], help: 'play or pause' },
-    { id: 'orbit-week', name: 'Advance 1 week', keys: ['w', 'W'], help: 'a week on (and the campaign date, when the view is on it)' },
+    { id: 'orbit-week', name: 'Advance 1 week', keys: ['w'], help: 'a week on (and the campaign date, when the view is on it)' },
+    { id: 'orbit-week-back', name: 'Back 1 week', keys: ['W'], help: 'a week back (and the campaign date, when the view is on it)' },
     { id: 'orbit-scrub', name: 'Scrub time', keys: ['s'], help: 'to the scrub (in the Time drawer): Left and Right a day, Shift an hour, hold an end to shuttle' },
     { id: 'orbit-speed', name: 'Simulation speed', keys: ['v'], help: 'to the speed slider (in the Time drawer); Left and Right change it' },
     { id: 'orbit-date', name: 'Time drawer', keys: ['t', 'T'], help: DRAWERS[0].help },
     { id: 'orbit-drawer-view', name: 'View drawer', keys: ['y', 'Y'], help: DRAWERS[1].help },
     { id: 'orbit-drawer-layers', name: 'Layers drawer', keys: ['l', 'L'], help: DRAWERS[2].help },
-    { id: 'orbit-go-campaign', name: 'Go to the campaign date', keys: ['c'], help: 'the view to the campaign date' },
+    { id: 'orbit-go-campaign', name: 'Back to the campaign date', keys: ['c'], help: 'the view back to the campaign date (the reset before Play)' },
     { id: 'orbit-set-campaign', name: 'Set as campaign date', keys: ['C'], help: 'the campaign date to the view’s' },
     ...LAYOUTS.map((item) => ({ id: item.id, name: 'Layout: ' + item.label, keys: [item.key], help: 'the ' + item.label.toLowerCase() + ' layout' })),
     ...LAYERS.map((item) => ({ id: item.id, name: 'Show or hide: ' + item.label, keys: [item.hotkey], help: item.label.toLowerCase() + ' on or off' })),
@@ -72,10 +73,19 @@ export const ORBIT_COMMANDS: readonly OrbitCommand[] = [
     { id: 'orbit-plot-estimate', name: 'Return the flight’s hours to the estimate', keys: [], help: 'in the plot card: the hours follow the estimate again' },
     { id: 'orbit-jump-roll', name: 'Roll the jump’s duration again', keys: [], help: 'in the jump preview: a new roll for the hours' },
     { id: 'orbit-jump', name: 'Jump', keys: [], help: 'in the status strip: the selected ship jumps to the marked system, once outside every 100D limit' },
-    { id: 'orbit-lineup', name: 'Line up the planets', keys: [], help: 'in the Time drawer: the next time the planets sit on one line' },
     { id: 'orbit-picture', name: 'Picture: scale and ring strength', keys: [], help: 'in the View drawer' },
     { id: 'orbit-escape', name: 'Back', keys: ['Escape'], help: 'close the drawer, then a popover, then leave the body, then back to the map' },
 ];
+
+/**
+ * Parked (Johnny, 2026-10-06: "hide the line up button for now"). The search, its worker and
+ * its tests stay; the control is not drawn, so the command is not registered and is not in
+ * the Keys table. To bring it back: move this entry into ORBIT_COMMANDS and set LINEUP_SHOWN.
+ */
+export const PARKED_COMMANDS: readonly OrbitCommand[] = [
+    { id: 'orbit-lineup', name: 'Line up the planets', keys: [], help: 'in the Time drawer: the next time the planets sit on one line' },
+];
+export const LINEUP_SHOWN = false;
 
 /** What the mouse does, for the Keys popover; not commands. */
 export const MOUSE_HELP: readonly [string, string][] = [
@@ -90,7 +100,8 @@ export const MOUSE_HELP: readonly [string, string][] = [
 export function keyWords(spec: string): string {
     if (spec === ' ') return 'Space';
     if (spec === 'C') return 'Shift+C';
-    if (spec === 'W' || spec === 'T' || spec === 'Y' || spec === 'L' || spec === 'P') return '';
+    if (spec === 'W') return 'Shift+W';
+    if (spec === 'T' || spec === 'Y' || spec === 'L' || spec === 'P') return '';
     return spec.length === 1 ? spec.toUpperCase() : spec;
 }
 

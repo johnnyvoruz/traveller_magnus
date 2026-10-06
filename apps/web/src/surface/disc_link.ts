@@ -1,16 +1,20 @@
 /**
  * Page side of the disc worker. prepareDiscs posts a batch and returns.
  * Tiles arrive on a later message. drawDisc paints whatever is already held.
+ * A result whose mode, version or generation is no longer current is closed
+ * and does not enter disc_hold. The atlas path checks again after every slice.
  */
-import { closeBitmap, sliceBitmap, startDiscWorker } from '../platform/browser.ts';
-import { rememberDisc } from './disc_hold.ts';
+import { startDiscWorker } from '../platform/browser.ts';
 import { DISC_DELIVERY, type WorkerState, type WorkerTiles } from './vanilla/gl_messages.ts';
 import type { ShadeRequest } from './vanilla/gl_shade.ts';
+import { settleDiscDelivery, type DiscEnvelope } from './enhanced/delivery.ts';
 
 export type DiscLink = {
     ready(): boolean;
     lost(): boolean;
     failed(): boolean;
+    /** The envelope a later tile must match. Keys still in the frame may be remembered. */
+    note(envelope: DiscEnvelope, keys: ReadonlySet<string>): void;
     submit(requests: readonly ShadeRequest[]): void;
     dispose(): void;
 };
@@ -22,6 +26,8 @@ export function openDiscLink(): DiscLink {
     let isReady = false;
     let isLost = false;
     let isFailed = false;
+    let live: DiscEnvelope | null = null;
+    let keys = new Set<string>();
     const accept = (data: Incoming): void => {
         if (data.op === 'state' || data.op === 'tiles') {
             isReady = data.ready;
@@ -29,7 +35,7 @@ export function openDiscLink(): DiscLink {
             isFailed = data.failed;
         }
         if (data.op !== 'tiles') return;
-        void hold(data);
+        void settleDiscDelivery(data, () => live, () => keys);
     };
     worker.addEventListener('message', (event: MessageEvent<Incoming>) => {
         if (event.data) accept(event.data);
@@ -42,30 +48,23 @@ export function openDiscLink(): DiscLink {
         ready: () => isReady && !isLost && !isFailed,
         lost: () => isLost,
         failed: () => isFailed,
+        note(envelope, nextKeys) {
+            live = envelope;
+            keys = new Set(nextKeys);
+        },
         submit(requests) {
-            worker.postMessage({ op: 'watch', requests, delivery: DISC_DELIVERY });
+            if (!live) return;
+            worker.postMessage({
+                op: 'watch',
+                requests,
+                delivery: DISC_DELIVERY,
+                mode: live.mode,
+                version: live.version,
+                generation: live.generation,
+            });
         },
         dispose() {
             worker.terminate();
         },
     };
-}
-
-async function hold(data: WorkerTiles): Promise<void> {
-    if (data.delivery === 'tiles') {
-        for (const tile of data.tiles ?? []) {
-            rememberDisc(tile.key, { image: tile.image, size: tile.size, radiusPx: tile.radiusPx });
-        }
-        return;
-    }
-    const atlas = data.image;
-    if (!atlas) return;
-    try {
-        for (const slot of data.table ?? []) {
-            const image = await sliceBitmap(atlas, slot.sx, slot.sy, slot.size, slot.size);
-            rememberDisc(slot.key, { image, size: slot.size, radiusPx: slot.radiusPx });
-        }
-    } finally {
-        closeBitmap(atlas);
-    }
 }

@@ -24,6 +24,13 @@ export const CAMPAIGN_LIMITS = {
     trackNote: 200,
 } as const;
 
+/**
+ * Sanity limit on a system point, in AU from the primary.
+ * A million AU is about sixteen light-years: past any orbit this picture places,
+ * and short of a jump. A runaway number is refused. A real in-system point is not.
+ */
+export const POINT_AU_LIMIT = 1_000_000;
+
 const HEX_KEY = /^[^/]+\/\d{4}$/;
 const BODY_KEY = /^(?:s\d+|w\d+(?:m\d+)?)$/;
 const RECORD_ID = /^cr_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -74,12 +81,26 @@ const Day = z.object({
     day: z.number().int().min(1).max(365),
 }).strict();
 
+const AuCoord = z.number().finite().min(-POINT_AU_LIMIT).max(POINT_AU_LIMIT);
+
+/** AU from the primary, in the frame realPositionAu answers in. */
+const SystemPoint = z.object({
+    x: AuCoord,
+    y: AuCoord,
+}).strict();
+
 const SystemAnchor = z.object({
     kind: z.literal('system'),
     hexKey: z.string().regex(HEX_KEY),
     bodyKey: z.string().regex(BODY_KEY).optional(),
+    /** A place in open space. Not given with a bodyKey: a point is not a body. */
+    point: SystemPoint.optional(),
     locationLabel: z.string().optional(),
-}).strict();
+}).strict().superRefine((anchor, ctx) => {
+    if (anchor.point !== undefined && anchor.bodyKey !== undefined) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'a point is not a body', path: ['point'] });
+    }
+});
 
 const RecordAnchor = z.object({
     kind: z.literal('record'),

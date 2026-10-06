@@ -126,6 +126,49 @@ test('a jump reports the leave and the arrival, and is not a mark while it is un
     ]);
 });
 
+test('a point is drawn at its picture, and a flight or a jump uses that place', () => {
+    const open = { kind: 'system', hexKey: hex, point: { x: 1.2, y: 0.8 } };
+    const body = { kind: 'system', hexKey: hex, bodyKey: 'w0' };
+    const away = { kind: 'system', hexKey: 'Other/0000', bodyKey: 'w0' };
+    const pictureOf = (au) => ({ x: au.x * 10, y: au.y * 10 });
+    let asked = 0;
+    const bodiesAt = (anchor) => {
+        asked += 1;
+        if (anchor && anchor.bodyKey === 'w0' && anchor.hexKey === hex) return { x: 0, y: 0 };
+        return null;
+    };
+    const held = {
+        id: 'survey', name: 'Surveyor', kind: 'vessel', shape: 'circle',
+        legs: [{ from: open, to: open, departs: 0, arrives: 10, mode: 'orbit' }],
+    };
+    assert.deepEqual(placeShips([held], bodiesAt, 1, pictureOf), [
+        { id: 'survey', name: 'Surveyor', kind: 'vessel', shape: 'circle', x: 12, y: 8 },
+    ]);
+    assert.deepEqual(placeShips([held], bodiesAt, 9, pictureOf), [
+        { id: 'survey', name: 'Surveyor', kind: 'vessel', shape: 'circle', x: 12, y: 8 },
+    ]);
+    assert.equal(asked, 0);
+    assert.deepEqual(placeShips([held], bodiesAt, 5), []);
+
+    const flight = {
+        ...held,
+        legs: [{ from: body, to: open, departs: 0, arrives: 10, mode: 'flight' }],
+    };
+    const mid = placeShips([flight], bodiesAt, 5, pictureOf)[0];
+    assert.equal(mid.x, 6);
+    assert.equal(mid.y, 4);
+    assert.ok(typeof mid.heading === 'number');
+
+    const jump = {
+        ...held,
+        legs: [{ from: open, to: away, departs: 0, arrives: 10, mode: 'jump' }],
+    };
+    const bubble = placeShips([jump], bodiesAt, 5, pictureOf)[0];
+    assert.equal(bubble.jump, 'out');
+    assert.equal(bubble.x, 12);
+    assert.equal(bubble.y, 8);
+});
+
 test('the stand-in party sits halfway from the star to the furthest body', () => {
     const picture = {
         stars: [{ star: { key: 's0' }, x: 0, y: 0 }],

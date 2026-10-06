@@ -1,9 +1,9 @@
 <script setup lang="ts">
 /**
  * The Time drawer's controls (findings/orbit_drawers_design.md §2; before follow-up 6 this
- * was the time row): 1 week, the scrub (its ends shuttle when held; the campaign date marked
+ * was the time row): back 1 week and 1 week, the scrub (its ends shuttle when held; the campaign date marked
  * on its track), the speed, the date fields, Set as campaign date, and the line-up search in
- * a slot, with the way back to the campaign date beside Set. Play and the date readout are the header's (HeaderClock.vue).
+ * a slot (parked for now). Play, the reset and the date readout are the header's (HeaderClock.vue).
  * It holds no clock: it shows the days it is given and asks the view to move them. The
  * arithmetic is orbit/clock.ts. Every control names its command (orbit/commands.ts).
  */
@@ -13,7 +13,7 @@ import {
     dateText, HOUR, isRealTime, REAL_TIME, SCRUB_DAYS, SHUTTLE_DEFAULT_LIMIT, SPEED_SLIDER_MAX, START_HELP,
     sliderFromSpeed, speedFactorText, speedFromSlider, speedText, splitDays, timeFieldValue, WEEK_DAYS, withDay, withTime, withYear,
 } from './clock.ts';
-import { goButtonState, setButtonState } from './time_row.ts';
+import { setButtonState } from './time_row.ts';
 
 const props = defineProps<{
     days: number;
@@ -43,7 +43,8 @@ const emit = defineEmits<{
     scrub: [offset: number | null];
     shuttle: [rate: number];
     setCampaign: [];
-    goCampaign: [];
+    /** The "Back 1 week" button: seven days back. */
+    weekBack: [];
 }>();
 
 const yearText = ref('');
@@ -101,8 +102,8 @@ function releaseScrub(): void {
 /** "Set as campaign date": shown off the day; on the day it holds its place unseen while a scrub runs (orbit/time_row.ts). */
 const setState = computed(() => setButtonState({ canSetDate: !!props.canSetDate, onCampaignDate: !!props.onCampaignDate, scrubbing: scrubbing.value }));
 
-/** "Go to the campaign date": the same rule, so the pair comes and goes together and never under a scrub. */
-const goState = computed(() => goButtonState({ hasCampaignDate: !!props.campaignDate, onCampaignDate: !!props.onCampaignDate, scrubbing: scrubbing.value }));
+/** A week back would be before day zero: the button is disabled there, not clamped. */
+const canWeekBack = computed(() => props.days - WEEK_DAYS >= 0);
 
 /** Left and Right move a day; with Shift, an hour. Home and End go to the ends. The scrub springs back on key-up. */
 function onScrubKey(event: KeyboardEvent): void {
@@ -177,13 +178,24 @@ defineExpose({
     <div class="orbit-transport orbit-drawer-group" style="--i: 0" role="group" aria-label="Transport">
       <button
         type="button"
+        class="orbit-btn orbit-week is-back"
+        data-command="orbit-week-back"
+        aria-label="Back 1 week"
+        :disabled="!canWeekBack"
+        :title="canWeekBack ? 'Back 1 week: ' + WEEK_DAYS + ' days back, the same time of day (Shift+W)' : 'The clock cannot go back before its first day'"
+        @click="$emit('weekBack')"
+      >
+        <Icon name="forward-step" :size="12" />1 week
+      </button>
+      <button
+        type="button"
         class="orbit-btn orbit-week"
         data-command="orbit-week"
         aria-label="Advance 1 week"
         :title="'Advance 1 week: ' + WEEK_DAYS + ' days on, the same time of day (W)'"
         @click="$emit('week')"
       >
-        <Icon name="forward-step" :size="12" />1 week
+        1 week<Icon name="forward-step" :size="12" />
       </button>
       <slot name="lineup" />
     </div>
@@ -278,20 +290,7 @@ defineExpose({
       <time class="orbit-local-clock" title="Your computer’s local time, independent of simulation speed">Local {{ localTime }}</time>
     </div>
 
-    <div v-if="canSetDate || campaignDate" class="orbit-campaign orbit-drawer-group" style="--i: 4" role="group" aria-label="Campaign date">
-      <button
-        v-if="goState !== 'absent' && campaignDate"
-        type="button"
-        class="orbit-btn orbit-campaign-go"
-        :class="{ 'is-held': goState === 'held' }"
-        data-command="orbit-go-campaign"
-        :aria-hidden="goState === 'held' ? 'true' : undefined"
-        :tabindex="goState === 'held' ? -1 : undefined"
-        :title="'Go to the campaign date, ' + campaignDate.date + ' (C)'"
-        @click="$emit('goCampaign')"
-      >
-        <Icon name="calendar-star" :size="12" />Go to {{ campaignDate.date }}
-      </button>
+    <div v-if="canSetDate" class="orbit-campaign orbit-drawer-group" style="--i: 4" role="group" aria-label="Campaign date">
       <button
         v-if="setState !== 'absent'"
         type="button"
@@ -305,7 +304,7 @@ defineExpose({
       >
         <Icon name="check" :size="12" />Set as campaign date
       </button>
-      <span v-else-if="goState === 'absent'" class="orbit-campaign-on" :title="campaignDate ? 'The view is on the campaign date, ' + campaignDate.date : ''"><Icon name="calendar-star" :size="12" />On the campaign date</span>
+      <span v-else class="orbit-campaign-on" :title="campaignDate ? 'The view is on the campaign date, ' + campaignDate.date : ''"><Icon name="calendar-star" :size="12" />On the campaign date</span>
     </div>
   </div>
 </template>
@@ -325,6 +324,11 @@ defineExpose({
 .orbit-btn.orbit-week {
   height: 32px;
   white-space: nowrap;
+}
+
+/* Back is the same mark, turned round. */
+.orbit-btn.orbit-week.is-back .ui-icon {
+  transform: scaleX(-1);
 }
 
 /* The scrub takes the row's spare width; its ends are the shuttle. */
@@ -444,8 +448,7 @@ defineExpose({
   gap: 6px;
 }
 
-.orbit-btn.orbit-campaign-set,
-.orbit-btn.orbit-campaign-go {
+.orbit-btn.orbit-campaign-set {
   height: 32px;
   white-space: nowrap;
 }
@@ -460,8 +463,7 @@ defineExpose({
 }
 
 /* Held: the place is kept, the button is not seen, so a scrub never reflows the row under the pointer. */
-.orbit-btn.orbit-campaign-set.is-held,
-.orbit-btn.orbit-campaign-go.is-held {
+.orbit-btn.orbit-campaign-set.is-held {
   visibility: hidden;
   pointer-events: none;
 }

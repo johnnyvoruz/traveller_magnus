@@ -15,6 +15,7 @@ import BodyGlyph from './BodyGlyph.vue';
 import DossierBody from './DossierBody.vue';
 import DossierOverview from './DossierOverview.vue';
 import { bodyByKey, dossierPath, orbitPath } from '../orbit/bodies.ts';
+import { orbitOpenLocation } from './orbit_open.ts';
 import { parseLinkDate, startDays } from '../orbit/clock.ts';
 import { dayNightFigure, markerAt, starportTick, turningOf, yearFigure } from '../orbit/daynight.ts';
 import { planSystem, type Plan } from '../orbit/layout.ts';
@@ -217,9 +218,9 @@ function showOverview(): void {
     void router.push({ path: pathTo(null), query: route.query });
 }
 
-/** Into the orbit view, on this body when one is open. The map's camera query stays behind. */
+/** Into the orbit view, on this body when one is open. The pane, the camera and the clock stay. */
 function openOrbit(key: string | null): void {
-    void router.push(orbitPath(props.slug, props.hex, key));
+    void router.push(orbitOpenLocation(props.slug, props.hex, key, route.query));
 }
 
 watch(() => props.open, () => { void nextTick(publish); });
@@ -291,7 +292,7 @@ defineExpose({ remeasure: publish });
           />
         </template>
       </DossierBody>
-      <DossierOverview v-else-if="overview" :model="overview" :span="span" :error="error" :orbit-link="!orbit" :counts="recordCounts" @open="openKey" @orbit="openOrbit(null)" @retry="$emit('retry')">
+      <DossierOverview v-else-if="overview" :model="overview" :span="span" :error="error" :orbit-link="!orbit" :hex-key="hexKeyOf(props.slug, props.hex)" :counts="recordCounts" @open="openKey" @orbit="openOrbit(null)" @retry="$emit('retry')">
         <template #records>
           <RecordsHere :slug="slug" :hex="hex" :system-name="overview.header.name || overview.header.title" :body-key="null" body-name="" @retry="retryCampaign()" />
         </template>
