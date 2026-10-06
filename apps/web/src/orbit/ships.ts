@@ -81,11 +81,13 @@ const sys = (hexKey: string, bodyKey: string): CampaignAnchor => ({ kind: 'syste
 
 /**
  * Where each track's ship is at `days`.
- * An anchor sits on that body. A flight in progress is the straight line between
- * the two bodies at that date, by the leg's fraction. A jump in progress is not
+ * An anchor sits on that body. A flight in progress is the straight line from where
+ * `from` was at `departs` to where `to` will be at `arrives`, by the leg's fraction.
+ * Both ends are fixed moments, so the line does not bend. A jump in progress is not
  * a mark: the system it leaves reports the point it left, and the system it
  * reaches reports the point it will arrive at. At and after arrival it is a
- * normal mark at `to`.
+ * normal mark at `to`. `bodiesAt` is asked at the frame's date for an anchor or a
+ * jump, and at the leg's two dates for a flight.
  */
 export function placeShips(tracks: readonly ShipTrack[], bodiesAt: BodiesAt, days: number): ShipMark[] {
     const marks: ShipMark[] = [];
@@ -94,8 +96,9 @@ export function placeShips(tracks: readonly ShipTrack[], bodiesAt: BodiesAt, day
         if (!at) continue;
         const base = { id: track.id, name: track.name, kind: track.kind, shape: track.shape };
         if ('fraction' in at) {
-            const from = bodiesAt(at.leg.from, days);
-            const to = bodiesAt(at.leg.to, days);
+            const flight = at.leg.mode === 'flight';
+            const from = bodiesAt(at.leg.from, flight ? at.leg.departs : days);
+            const to = bodiesAt(at.leg.to, flight ? at.leg.arrives : days);
             if (at.leg.mode === 'jump') {
                 if (from) marks.push({ ...base, x: from.x, y: from.y, jump: 'out' });
                 else if (to) marks.push({ ...base, x: to.x, y: to.y, jump: 'in' });
@@ -182,7 +185,18 @@ const STAND_IN_FAR = 15;
  * body. The jump pair is dated on a wall-clock loop, so a running clock crosses
  * both moments a few seconds apart.
  */
-export function standInMarks(hexKey: string, days: number, picture: Picture): ShipMark[] {
+/** A body's picture place at a date. Used by the dev stand-in when a flight must not bend. */
+export type StandPlaces = (key: string, days: number) => BodyPoint | null;
+
+/**
+ * Dev stand-in marks. `places`, when given, answers a body at the date `bodiesAt` is asked,
+ * so a flight runs from departure to arrival. Without it, every anchor is the picture's
+ * present place. `flight`, when given, is the party's fixed window; otherwise the party
+ * stays halfway across a one-day leg centred on `days`.
+ */
+export function standInMarks(
+    hexKey: string, days: number, picture: Picture, places?: StandPlaces, flight?: { departs: number; arrives: number },
+): ShipMark[] {
     const bodies = pictureBodies(picture);
     if (bodies.length === 0) return [];
     const byKey = new Map(bodies.map((body) => [body.key, body]));
@@ -198,12 +212,18 @@ export function standInMarks(hexKey: string, days: number, picture: Picture): Sh
     const dock = rest[0] ?? far;
     const patrol = rest[1] ?? dock;
     const linerFrom = rest[2] ?? patrol;
-    const bodiesAt: BodiesAt = (anchor) => {
+    const bodiesAt: BodiesAt = (anchor, atDays) => {
         if (!anchor || anchor.kind !== 'system' || anchor.hexKey !== hexKey || !anchor.bodyKey) return null;
+        if (places) {
+            const at = places(anchor.bodyKey, atDays);
+            if (at) return at;
+        }
         const body = byKey.get(anchor.bodyKey);
         return body ? { x: body.x, y: body.y } : null;
     };
     const span = 1;
+    const partyFrom = flight ? flight.departs : days - span;
+    const partyTo = flight ? flight.arrives : days + span;
     const heldFrom = Math.min(0, days);
     const heldTo = Math.max(days, 0) + span;
     const off = sys(hexKey + '/jump', 'off');
@@ -244,7 +264,7 @@ export function standInMarks(hexKey: string, days: number, picture: Picture): Sh
     return placeShips([
         {
             id: 'stand-party', name: 'Far Margin', kind: 'party', shape: 'triangle',
-            legs: [{ from: sys(hexKey, star.key), to: sys(hexKey, far.key), departs: days - span, arrives: days + span, mode: 'flight' }],
+            legs: [{ from: sys(hexKey, star.key), to: sys(hexKey, far.key), departs: partyFrom, arrives: partyTo, mode: 'flight' }],
         },
         {
             id: 'stand-vessel', name: 'Courier', kind: 'vessel', shape: 'circle',

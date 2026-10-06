@@ -530,6 +530,15 @@ only. D's five points for the orchestrator:
       over `--t-long` and each body's sweep starts as it arrives, running away from the star
       over `--t-slow`; every teal element eases its alpha in and out and the solid band has
       soft edges; the rings' and shaded discs' exchanges cross-fade; a hide is the reverse.
+  14d. **Johnny on the third motion pass (2026-10-06; Agent C,
+      `prompts/c_toggle_motion_4.md`).** "When I click moons, the moon animate on is
+      incredible, but when I click moons off, the texture vanishes immediately and it
+      doesn't have the same effect, also the animation is so good, we should use it again
+      for the day/night, also the moons is incorrectly removing the shadow / shadow casting
+      effects from the planets, we want to keep those." Rulings: a Moons hide keeps the
+      moons and their shaded tiles until the wave has run back; Day/night uses the same
+      wireframe wave (the solid teal band goes); the Moons switch never changes how a
+      planet is lit or shadowed.
   19. **The orbit header and the strip (Johnny, 2026-10-06; Agent D,
       `prompts/d_orbit_small_fixes.md`).** The date readout needs more right padding; "No
       ships here" must not wrap (centred, or its place long enough); the campaign mark
@@ -560,6 +569,30 @@ only. D's five points for the orchestrator:
       the UWP and shows the map, and the mainworld's gains the socioeconomics profile.
       The pinned card shows what the picture is doing now and leaves the survey to the
       sidebar when it is open on the same body. **This settles follow-up 15.**
+  23. **Places that are not planets (Johnny, 2026-10-06).** "Right now we can only attach a
+      ship to a planet, I want to see it on the map and I want to plot points in-system and
+      watch it fly around." A system anchor may carry `point: { x, y }` in AU from the
+      primary; a ship there is drawn there, a flight to it runs the straight line, a jump
+      can leave from it; a docked ship is drawn beside its body, not on its disc. Agent A
+      builds the data, geometry and drawing (`prompts/a_points.md`); Agent D the plotting
+      click on empty space, the words, the 100D test and Jump from a point. This replaces
+      the "cut the flight to jump" interim of part 1.
+  24. **Time controls (Johnny, 2026-10-06; Agent D, `prompts/d_part2_go.md`).** The way back
+      to the campaign date is a reset button immediately before Play (disabled on the date,
+      live off it, holding its place); "Back 1 week" mirrors "1 week" and, on the campaign
+      date, rewinds it too (Johnny: yes); the Line up control is hidden for now.
+  25. **The orbit view's info card sits under the drawer (Johnny, 2026-10-06; Agent E,
+      `prompts/e_card_under_drawer.md`).** "Have the info card in the orbit view stick to
+      whatever the shortest values is to the drawer, if there's no drawer it should fill the
+      space, and if the drawer is larger, it should push the card down." And, for Agent D
+      in `prompts/d_part2_go.md`: a click on the picture must not close the open drawer.
+  26. **"Locate" on the system page (Johnny, 2026-10-06).** A button beside Explore orbits
+      that flies the map back to the system with the locator's line and ring, for any
+      visitor. D: the locator for a system and with no campaign (`prompts/d_part2_go.md`);
+      E: the button (`prompts/e_card_under_drawer.md`).
+  27. **Every vessel on the sector map (Johnny, 2026-10-06: yes).** Today only the party's
+      marker is drawn on the hex map. Each vessel is marked at its hex at the campaign date
+      (from its track), the party's distinguished. After the open-space work (23).
   15. **The pinned body card beside the open panel (D decides; settled by 22):** when the orbit view's
       docked body card and the dossier panel for the same body are both open, two views of
       one thing show at once. Johnny sees pros and cons. D reviews `manifesto.md` (one

@@ -4278,3 +4278,174 @@ Stop and report.
   (as built; it matches the amber campaign tick), or muted off the date and teal only on it.
 - **Issued, `prompts/d_part2_go.md`:** Part 2 as written, plus the strip's status being cut
   ("Docked at Regi…") with room to spare.
+
+## 156. Pushed `a000ed8`; Johnny wants the way back to the campaign date as a reset button before Play (2026-10-06)
+
+- **`a000ed8`** (the header and strip fixes, the panes key and focus fixes, the Climate
+  rows, Explore orbits beside the Mainworld button): `campaign` equals `origin/campaign`.
+- **Johnny, on where Part 1 put "go to the campaign date" (the Time drawer):** "let's move
+  it to before the play button and have it be like a reset button and it will bring view
+  back to campaign date." This also answers the amber-or-quiet question about the readout's
+  icon by replacing it: the button is the signal.
+- **Added to `prompts/d_part2_go.md`, first** (D had not been handed it): one reset button
+  immediately before Play, `orbit-go-campaign` and key C; disabled and quiet on the date,
+  live off it, holding its place in both states and under a held scrub, absent with no
+  campaign; the Time drawer's "Go to" control removed (one control per command); D decides
+  whether the readout's icon keeps its amber and says why. This supersedes item 3's
+  placement from §155.
+
+## 157. Johnny: a "back 1 week" button; the Line up control hidden for now (2026-10-06)
+
+- "We should also have back one 1 week button and then we can hide the line up button for
+  now." Added to `prompts/d_part2_go.md` (D had still not been handed it): "Back 1 week" as
+  the mirror of "1 week" in the Time drawer, its own command and key, disabled before day
+  zero; **orchestrator's ruling:** on the campaign date it moves the campaign date back
+  too, with the same undo toast, so back undoes forward; the Line up control leaves the
+  drawer, its code and tests staying, the registry kept honest.
+- **On disk, all in flight:** A (ghosts: `OrbitRenderer.ts`, `ships.ts`, `distance.ts`,
+  `OrbitCanvas.vue`), B (T1.6: `apps/api/src/jobs/`, `reconcile_transform.ts`,
+  `tests/generation/reconcile_derived.test.js`), C (Enhanced default and city lights step
+  1: `surface/preferences.ts`, `service.ts`, `disc_hold.ts`, `disc_link.ts`,
+  `surface/vanilla/gl*.ts`, `surface/enhanced/{bake,delivery,draw,session}.ts`), E (the
+  Scout Survey card: `dossier/DayNight.vue`, `orbit/daynight.ts`, `DossierPanel.vue`,
+  `dossier/orbit_open.ts`). D not yet started.
+
+## 158. Johnny: yes to back-one-week rewinding; ships need places that are not planets (2026-10-06)
+
+- **Yes:** "Back 1 week" moves the campaign date back too when the view is on it (already
+  in `prompts/d_part2_go.md`).
+- **"Right now we can only attach a ship to a planet, I want to see it on the map and I
+  want to plot points in-system and watch it fly around."** This is the leg end in open
+  space that §136 set aside in favour of a body's jump limit; Johnny has now asked for it
+  outright, and the objection then (no way from a picture point to a real place) is gone:
+  C's readout gave `orbit/distance.ts` the inverse of the picture's compression.
+  **Ruling:** a system anchor may carry `point: { x, y }` in AU from the primary; it is a
+  place like any other (a record's anchor, a leg's end); a ship there is drawn there; a
+  flight to it runs the straight line; a jump can leave from it, which ends the "cut the
+  flight" interim of §130 once D wires it. Also: a docked ship is drawn beside its body,
+  not on its disc, so it can be seen.
+- **`prompts/a_points.md`** (after the ghosts): the anchor in `packages/shared`, the place
+  and index checks, places as body-or-point in `distance.ts` with the forward mapping and a
+  round-trip test, `placeShips` and the renderer, docked ships beside the body, a stand-in
+  ship that flies body → point → body. D's half (the click on empty space in plotting
+  mode, the card and strip words, the 100D test for a ship at a point, Jump from a point)
+  is to be written when A reports.
+- **Asked of Johnny:** whether "see it on the map" also means every vessel marked on the
+  sector map (today only the party's marker is there).
+
+## 159. Johnny on the third motion pass, live: Moons off, Day/night, lost shadows (2026-10-06)
+
+- "When I click moons, the moon animate on is incredible, but when I click moons off, the
+  texture vanishes immediately and it doesn't have the same effect, also the animation is
+  so good, we should use it again for the day/night, also the moons is incorrectly removing
+  the shadow / shadow casting effects from the planets, we want to keep those."
+- **Read of the cause, from the code:** `settleDiscs` gives the batch `moonsShown:
+  state.layers.moons`, so the moons leave the batch on the first frame of a hide and their
+  shaded tiles go with them, while the wave runs back over held outlines; and the same flag
+  reaches the planets' shading. C to confirm and say exactly what is dropped.
+- **`prompts/c_toggle_motion_4.md`** (after city lights step 1, before step 2): the moons
+  stay in the batch, tiles held, for the whole of a hide; Day/night uses the Moons
+  wireframe wave in place of the solid teal band (this reverses his earlier "a solid teal
+  micro-animation": the wave is better); a planet is lit and shadowed identically with
+  Moons on and off, with a test. C and A are both in `OrbitRenderer.ts`: C edits the
+  toggle code and the disc calls only, re-reading before each edit.
+- Recorded as follow-up 14d.
+
+## 160. Johnny: a click on the picture must not close the open drawer (2026-10-06)
+
+- "When I click on the map, it's hiding whatever the active drawer was, I don't want that."
+  `views/OrbitView.vue` `onStagePress` closes the drawer on a press on the picture
+  (`pressCloses`, `orbit/drawers.ts`; D's own drawers design). Reversed: a drawer closes by
+  its tab, by Esc, and when another opens. Added to `prompts/d_part2_go.md`; D had still
+  not started (no D file modified), so the one paste carries it. Follow-up 24 widened.
+
+## 161. Johnny: the orbit view's info card sits under the open drawer (2026-10-06)
+
+- "Have the info card in the orbit view stick to whatever the shortest values is to the
+  drawer, if there's no drawer it should fill the space, and if the drawer is larger, it
+  should push the card down." The pinned body card is `position: absolute; top: 18px` in
+  `orbit/BodyCard.vue`; the view already publishes `--drawer-height` on `.orbit-stage`
+  (the toasts use it). **`prompts/e_card_under_drawer.md`** (E owns `BodyCard.vue`; after
+  the Scout Survey card): the card's top follows the drawer's bottom edge, its height
+  shrinks to match, it moves with the drawer's own tokens, nothing jumps on open, close or
+  swap. Follow-up 25.
+
+## 162. Johnny: the open sidebar must survive going back to the map (2026-10-06)
+
+- "Whatever sidebar is active, keep that active when I transition back from the orbit view
+  to the universe view, if I have campaign open it closes when it shouldn't." Cause found:
+  `backToMap` in `views/OrbitView.vue` pushes with `withQuery(route.query, { panel: null,
+  record: null })`, discarding the pane by design (A's panes step). Map to orbit already
+  keeps the query. Added to `prompts/d_part2_go.md` (D had still not started): the pane is
+  kept across the two views in both directions, every way across checked.
+- `d_part2_go.md` now opens with five things from Johnny today: the reset button before
+  Play, "Back 1 week", Line up hidden, the drawer staying open on a press on the picture,
+  the pane kept across views; then Part 2 of `d_visible_first.md`.
+
+## 163. Johnny: a "Locate" button on the system page (2026-10-06)
+
+- "On the system right pane, I can easily move the map and lose the system, add a button
+  next to explore orbits that will do our badass tracking effect and recenter the view to
+  the active system. 'Locate' button."
+- The effect is the locator (`workspace/locate.ts`, `map/campaign_layer.ts`, the flight in
+  `MapView.vue`), today for a campaign record only: `snapshotFromStore()` hands the layer
+  nothing unless a campaign is open, so signed out there is no locator.
+- **Split by owner, one contract** (`startLocate('hex:' + hexKey, hexKey, from)`):
+  **D** (`prompts/d_part2_go.md`): a subject that is not a record, the line and flight
+  with no campaign and signed out, a command; **E** (`prompts/e_card_under_drawer.md`,
+  second item): the button beside Explore orbits in `DossierOverview.vue`, importing
+  `startLocate`, reading "Locating" while it runs. Follow-up 26.
+- `d_part2_go.md` now opens with six things from Johnny today. D had still not started.
+
+## 164. Johnny: every vessel on the sector map; D has its prompt (2026-10-06)
+
+- D was handed `prompts/d_part2_go.md` (six things from Johnny, then Part 2).
+- **Yes:** every vessel is to be marked on the sector hex map at its hex, not only the
+  party's ship. Follow-up 27, a small follow-on after the open-space work: the place comes
+  from `placeAt` at the campaign date (a ship in jump is at no hex: D's "in jump" tag at
+  the system it left is the precedent); the party's mark stays distinguished; the marks are
+  the campaign layer's (`map/campaign_layer.ts`), fed by `MapView.vue`. Prompt not written;
+  to be issued when A reports `a_points.md` (A or D, whoever is free in those files).
+
+## 165. A's ghosts and B's T1.6 accepted; a snapshot push, rehearsed with the Worker typecheck (2026-10-06)
+
+- **Agent A, the ghosts:** `realDistanceKmBetween(plan, fromKey, fromDays, toKey, toDays)`
+  (`realDistanceKm` is it with one date twice); the renderer draws D's option 1 from a
+  `preview` (`{ toKey, departs, arrives, tag? }`): a destination ghost in `--orbit-lock`
+  with its tag, ghosts for worlds that will visibly move, dotted arcs, the dashed flight
+  line to the ghost that was drawn, the selection lock at half strength, fades over
+  `--t-base` and slides over `--t-fast`, nothing on first paint; `placeShips` runs a flight
+  as `lerp(place(from, departs), place(to, arrives), fraction)`. `OrbitCanvas.vue`: the
+  `preview` prop, its hand-off and a dev stand-in, lines listed. 1.5 ms frames at Regina.
+  `k21_ghosts_days.png` looked at. **Accepted.**
+  **A's finding for D:** `bodiesAtOf` (`orbit/ship_marks.ts`, D's) ignores its date, so a
+  real track still samples the frame's picture; the straight line is true only in the
+  stand-in until D makes it answer for a date. In `prompts/d_ghost_wiring.md`.
+- **Agent B, T1.6:** the derived build takes `transform: "reconcile-environment"` (schema in
+  `packages/shared/src/schemas/generate.ts`; any other name, or a transform without `from`,
+  refused): each source tree read, `reconcileTree` with `environmentPolicy`, a new
+  `objects/<hash>` only when the canonical bytes change; provenance beside the generation
+  row in `truth/<version>/reconciliation.json` (source, transform, policy digest, a digest
+  of the tables bundled in the policy, the carried engine version); per-sector and total
+  reports under `truth/<version>/reconciliation/`; resume keyed by source version, source
+  index hash and policy digest; the version left building, never released by the job; with
+  no transform the derive is what it was. **B's black-box run on its own `wrangler dev`:**
+  `tests/api/truth_build.test.js` 11 pass in about 191 s. New
+  `apps/api/src/jobs/reconcile_transform.ts`, `tests/generation/reconcile_derived.test.js`.
+  **Accepted** on that run and the structure read; the orchestrator did not re-run the
+  black-box file (the tree is not quiet).
+  B's notes: the job writes no manifest (release does); the rules digest is of the bundled
+  tables, the Worker having no `rules/`; no new D1 column; `TruthManifest` left strict, so
+  the record is a sidecar. **A v6 shadow build is only valid once this Worker is live**;
+  B wrote the admin commands out without running them; its estimate for 512 sectors is 15
+  to 30 minutes, "plan on under an hour".
+- B's one failing test (`surface_identity.test.js`, an unrecognised stored value now reads
+  as enhanced) is C's Enhanced-default step in mid-edit.
+- **The push, a snapshot:** `findings/push/ghosts_t16.patch` (13 tracked files: A's seven,
+  B's six) by `git apply --cached`, plus B's two new files by path. **Rehearsed:** `git
+  archive HEAD` plus the patch and the two files: web `vue-tsc` exit 0, build green, the
+  Worker's `tsc -p apps/api` exit 0, 823 tests, 812 pass, 0 fail, 11 skipped. (A first
+  attempt failed in the orchestrator's own linking of the scratch copy, not in the code.)
+- **Asked of Johnny:** whether to run the v6 shadow build (staged, not released) once this
+  Worker is deployed.
+- **Next:** A, `prompts/a_points.md`. D after Part 2, `prompts/d_ghost_wiring.md`.

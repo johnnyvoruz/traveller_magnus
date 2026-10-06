@@ -3,7 +3,7 @@
  */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { BODY_SNAP_PX, picturePlaceAu, placeAtPicture, realDistanceKm, realPositionAu } from '../../apps/web/src/orbit/distance.ts';
+import { BODY_SNAP_PX, picturePlaceAu, placeAtPicture, realDistanceKm, realDistanceKmBetween, realPositionAu } from '../../apps/web/src/orbit/distance.ts';
 import { AU_KM, layoutScene } from '../../apps/web/src/orbit/layout.ts';
 import { plotText } from '../../apps/web/src/orbit/ships.ts';
 
@@ -140,6 +140,29 @@ test('a companion that carries an orbit id sits on that orbit', () => {
     assert.deepEqual(realPositionAu(plan, 's1', 0), { x: 1.6, y: 0 });
     assert.ok(near(realDistanceKm(plan, 's0', 's1', 0), 1.6 * AU_KM));
     assert.ok(near(realDistanceKm(plan, 'w1', 's1', 0), 0.6 * AU_KM));
+});
+
+test('realDistanceKmBetween takes each body at its own date', () => {
+    const inner = world('w1', 1, 0, { index: 0 });
+    const outer = world('w2', 3, 0, { index: 1 });
+    const plan = planOf([star('s0', 0, { body: { mass: 1 } })], [inner, outer]);
+    const half = 365.25 / 2;
+    assert.ok(near(realDistanceKmBetween(plan, 'w1', 0, 'w2', 0), realDistanceKm(plan, 'w1', 'w2', 0)));
+    // Day 0 puts both at angle 0. Half a year (period 1) puts the outer world at angle π.
+    assert.ok(near(realDistanceKmBetween(plan, 'w1', 0, 'w2', half), 4 * AU_KM));
+    assert.ok(near(realDistanceKmBetween(plan, 'w2', 0, 'w2', half), 6 * AU_KM));
+    assert.equal(realDistanceKmBetween(plan, 'w2', half, 'w2', half), 0);
+    assert.equal(realDistanceKmBetween(plan, 'nope', 0, 'w2', half), null);
+
+    const lost = star('s1', 1, { body: { mass: 0.4 }, separation: 'Far' });
+    const nearWorld = world('w9', 0.4, 0, { index: 0, star: 1 });
+    const farWorld = world('w8', 1.4, Math.PI, { index: 1, star: 1 });
+    const unplaced = planOf([star('s0', 0, { body: { mass: 1 } }), lost], [nearWorld, farWorld]);
+    assert.equal(realPositionAu(unplaced, 'w9', 0), null);
+    assert.equal(realPositionAu(unplaced, 'w8', half), null);
+    assert.ok(near(realDistanceKmBetween(unplaced, 'w9', 0, 'w8', 0), 1.8 * AU_KM));
+    // Half a year brings the outer companion world back to angle 0, 1 AU from the inner one at day 0.
+    assert.ok(near(realDistanceKmBetween(unplaced, 'w9', 0, 'w8', half), 1 * AU_KM));
 });
 
 test('the distance does not change with the view, because it never reads the picture', () => {

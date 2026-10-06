@@ -7,7 +7,9 @@ import test from 'node:test';
 import { existsSync } from 'node:fs';
 import { TSV } from '../golden/cases.js';
 import { TRUTH_SEED, TRUTH_SETTINGS } from '../../tools/truth/settings.js';
-import { SectorIndex, TruthManifest, TruthOverview, TruthPolities, sha256Hex } from '@voyage/shared';
+import { SectorIndex, TruthManifest, TruthOverview, TruthPolities, sha256Hex, stable } from '@voyage/shared';
+import { reconcileTree, environmentPolicy } from '@voyage/engines';
+import { emptyReport, mergeReports, provenanceDocument, reconciliationDigests, reportForTree } from '../../apps/api/src/jobs/reconcile_transform.ts';
 import { deadLetterConsumer } from '../../apps/api/src/jobs/dead_letter.ts';
 import { truthBuildConsumer } from '../../apps/api/src/jobs/truth_build.ts';
 import { adminCookie, runWrangler } from './session.js';
@@ -48,6 +50,13 @@ function wideTsv(count) {
         rows.push(cells.join('\t'));
     }
     return rows.join('\n');
+}
+
+function chartRow(tree, partial) {
+    return {
+        tree, type: 'SYSTEM_PRESENT', name: 'World', uwp: 'A788899-C',
+        allegiance: 'Im', zone: '', bases: '', tradeCodes: [], pbg: '100', ix: 1, partial,
+    };
 }
 
 function bindingDouble(files) {
@@ -578,6 +587,166 @@ if (process.env.RUN_API_TESTS !== '1') {
         assert.deepEqual(index.hexes, hexes);
     });
 
+    test('reconcile transform reuses an unchanged object and resumes a slice', async () => {
+        const pinned = { seed: TRUTH_SEED, settings: { ...TRUTH_SETTINGS }, engineVersion: '1.0.0' };
+        const live = await reconciliationDigests();
+        const provenance = stable(await provenanceDocument('vsource', '1.0.0'));
+        const xml = '<Sector><Name>Wide</Name><X>1</X><Y>2</Y></Sector>\n';
+        const catalogue = JSON.stringify({
+            sectors: [{ slug: 'Wide', name: 'Wide Chart', x: 3, y: 4, tags: ['OTU'], canonical: true }],
+        });
+        const bare = stable({ kind: 'tree', engineVersion: '1.0.0', hexKey: '0101', body: { name: 'Bare' } });
+        const bareHash = await sha256Hex(bare);
+        const world = stable({
+            kind: 'tree',
+            engineVersion: '1.0.0',
+            hexKey: '0103',
+            body: {
+                mgtSystem: {
+                    hzco: 2,
+                    worlds: [{
+                        orbitId: 2, meanTempK: 280, lowTempK: 270, highTempK: 290,
+                        atmCode: 5, hydroPercent: 40, hydro: 4, hydroCode: 4, liquidType: 'Water',
+                    }],
+                },
+            },
+        });
+        const worldHash = await sha256Hex(world);
+        const source = {
+            systems: 3,
+            built: 2,
+            partial: 1,
+            hexes: {
+                '0101': chartRow(bareHash, null),
+                '0102': chartRow(null, 'full'),
+                '0103': chartRow(worldHash, null),
+            },
+        };
+        const files = {
+            'truth/vsource/sectors/Wide/index.json': JSON.stringify(source),
+            'truth/vreconcile/reconciliation.json': provenance,
+            'inputs/vreconcile/Wide.xml': xml,
+            'inputs/vreconcile/sectors.json': catalogue,
+            [`objects/${bareHash}`]: bare,
+            [`objects/${worldHash}`]: world,
+        };
+        const rejected = bindingDouble(files);
+        await assert.rejects(() => truthBuildConsumer({
+            messages: [{
+                body: {
+                    version: 'vreconcile', slug: 'Wide', from: 'vsource', pinned,
+                    transform: 'reconcile-environment', policyDigest: 'f'.repeat(64),
+                },
+                attempts: 1,
+                ack() {},
+            }],
+        }, rejected.env));
+        assert.deepEqual(rejected.puts, []);
+        const alone = bindingDouble(files);
+        await truthBuildConsumer({
+            messages: [{
+                body: {
+                    version: 'vreconcile', slug: 'Wide', from: 'vsource', pinned,
+                    transform: 'reconcile-environment', policyDigest: live.policyDigest,
+                },
+                attempts: 1,
+                ack() {},
+            }],
+        }, alone.env);
+        assert.equal(alone.puts.includes(`objects/${bareHash}`), false);
+        const written = JSON.parse(await (await alone.env.PUBLIC_BUCKET.get('truth/vreconcile/sectors/Wide/index.json')).text());
+        assert.equal(written.hexes['0101'].tree, bareHash);
+        assert.equal(written.hexes['0102'].tree, null);
+        assert.equal(written.hexes['0102'].partial, 'full');
+        assert.notEqual(written.hexes['0103'].tree, worldHash);
+        assert.equal(written.systems, 3);
+        assert.equal(written.built, 2);
+        assert.equal(written.partial, 1);
+        assert.equal(alone.puts.includes(`objects/${written.hexes['0103'].tree}`), true);
+        const sourceAfter = await alone.env.PUBLIC_BUCKET.get('truth/vsource/sectors/Wide/index.json');
+        assert.equal(await sourceAfter.text(), JSON.stringify(source));
+        const putsAfter = alone.puts.length;
+        await truthBuildConsumer({
+            messages: [{
+                body: {
+                    version: 'vreconcile', slug: 'Wide', offset: 0, from: 'vsource', pinned,
+                    transform: 'reconcile-environment', policyDigest: live.policyDigest,
+                },
+                attempts: 1,
+                ack() {},
+            }],
+        }, alone.env);
+        assert.equal(alone.puts.length, putsAfter);
+        const many = {};
+        const manyFiles = {
+            'truth/vslice/reconciliation.json': stable(await provenanceDocument('vsource', '1.0.0')),
+            'inputs/vslice/Wide.xml': xml,
+            'inputs/vslice/sectors.json': catalogue,
+        };
+        for (let i = 0; i < 26; i += 1) {
+            const hex = String(i + 1).padStart(4, '0');
+            const tree = stable({
+                kind: 'tree',
+                engineVersion: '1.0.0',
+                hexKey: hex,
+                body: {
+                    mgtSystem: {
+                        hzco: 2,
+                        worlds: [{
+                            name: hex, orbitId: 2, meanTempK: 280, lowTempK: 270, highTempK: 290,
+                            atmCode: 5, hydroPercent: 40, hydro: 4, hydroCode: 4, liquidType: 'Water',
+                        }],
+                    },
+                },
+            });
+            const hash = await sha256Hex(tree);
+            many[hex] = chartRow(hash, null);
+            manyFiles[`objects/${hash}`] = tree;
+        }
+        manyFiles['truth/vsource/sectors/Wide/index.json'] = JSON.stringify({ systems: 26, built: 26, partial: 0, hexes: many });
+        const sliced = bindingDouble(manyFiles);
+        await truthBuildConsumer({
+            messages: [{
+                body: {
+                    version: 'vslice', slug: 'Wide', offset: 0, from: 'vsource', pinned,
+                    transform: 'reconcile-environment', policyDigest: live.policyDigest,
+                },
+                attempts: 1,
+                ack() {},
+            }],
+        }, sliced.env);
+        assert.equal(sliced.sent.length, 1);
+        assert.equal(sliced.sent[0].offset, 25);
+        assert.equal(sliced.sent[0].transform, 'reconcile-environment');
+        assert.equal(sliced.sent[0].policyDigest, live.policyDigest);
+        assert.equal(sliced.puts.includes('truth/vslice/sectors/Wide/index.json'), false);
+        const objectPuts = sliced.puts.filter((key) => key.startsWith('objects/'));
+        assert.equal(objectPuts.length, 25);
+        await truthBuildConsumer({
+            messages: [{
+                body: sliced.sent[0],
+                attempts: 1,
+                ack() {},
+            }],
+        }, sliced.env);
+        assert.equal(sliced.puts.includes('truth/vslice/sectors/Wide/index.json'), true);
+        const finished = JSON.parse(await (await sliced.env.PUBLIC_BUCKET.get('truth/vslice/sectors/Wide/index.json')).text());
+        assert.equal(Object.keys(finished.hexes).length, 26);
+        const putsAtFinish = sliced.puts.length;
+        await truthBuildConsumer({
+            messages: [{
+                body: {
+                    version: 'vslice', slug: 'Wide', offset: 0, from: 'vsource', pinned,
+                    transform: 'reconcile-environment', policyDigest: live.policyDigest,
+                },
+                attempts: 1,
+                ack() {},
+            }],
+        }, sliced.env);
+        assert.equal(sliced.puts.length, putsAtFinish);
+        assert.equal(await (await sliced.env.PUBLIC_BUCKET.get('truth/vsource/sectors/Wide/index.json')).text(), manyFiles['truth/vsource/sectors/Wide/index.json']);
+    });
+
     test('truth build', { timeout: 600000 }, async () => {
         const dir = mkdtempSync(path.join(tmpdir(), 'voyage-truth-'));
         const tsv = path.join(dir, 'Fixture.tsv');
@@ -874,6 +1043,184 @@ if (process.env.RUN_API_TESTS !== '1') {
             const retryLogs = traceMessages('truth-derive').slice(derivedLogsBefore);
             assert.ok(retryLogs.some((line) => line.includes('vtest')), JSON.stringify(retryLogs));
             assert.deepEqual(objectKeys(), objectsBefore);
+
+            const sourceIndexBytes = readFileSync(indexFile, 'utf8');
+            const sourceRowBefore = jsonFrom(runWrangler([
+                'd1', 'execute', 'voyage', '--local', '--command',
+                "SELECT state, engine_version, seed, derived_from, manifest_hash FROM truth_versions WHERE version = 'vtest'",
+            ]));
+            const transformMissingFrom = await fetch(`${base}/api/admin/truth/build`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json', cookie },
+                body: JSON.stringify({
+                    milieu: 'M1105',
+                    version: 'vreconcilebad',
+                    engineVersion: '1.0.0',
+                    seed: TRUTH_SEED,
+                    settings: { ...TRUTH_SETTINGS },
+                    sectors: 'all',
+                    transform: 'reconcile-environment',
+                }),
+            });
+            assert.equal(transformMissingFrom.status, 400, JSON.stringify(await transformMissingFrom.json()));
+            const transformMismatch = await fetch(`${base}/api/admin/truth/build`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json', cookie },
+                body: JSON.stringify({
+                    milieu: 'M1105',
+                    version: 'vreconcilebad',
+                    engineVersion: '9.9.9',
+                    seed: TRUTH_SEED,
+                    settings: { ...TRUTH_SETTINGS },
+                    sectors: 'all',
+                    from: 'vtest',
+                    transform: 'reconcile-environment',
+                }),
+            });
+            assert.equal(transformMismatch.status, 409, JSON.stringify(await transformMismatch.json()));
+            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_systems WHERE version = 'vreconcile'"]);
+            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_build_sectors WHERE version = 'vreconcile'"]);
+            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_versions WHERE version = 'vreconcile'"]);
+            const reconcilePosted = await fetch(`${base}/api/admin/truth/build`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json', cookie },
+                body: JSON.stringify({
+                    milieu: 'M1105',
+                    version: 'vreconcile',
+                    engineVersion: '1.0.0',
+                    seed: TRUTH_SEED,
+                    settings: { ...TRUTH_SETTINGS },
+                    sectors: 'all',
+                    from: 'vtest',
+                    transform: 'reconcile-environment',
+                }),
+            });
+            const reconcilePostedBody = await reconcilePosted.json();
+            assert.equal(reconcilePosted.status, 202, JSON.stringify(reconcilePostedBody));
+            let reconcileBuild;
+            const reconcileDeadline = Date.now() + 90000;
+            while (Date.now() < reconcileDeadline) {
+                const response = await fetch(`${base}/api/admin/truth/builds/vreconcile`, { headers: { cookie } });
+                reconcileBuild = await response.json();
+                assert.equal(response.status, 200, JSON.stringify(reconcileBuild));
+                const sector = reconcileBuild.data.sectors.find((item) => item.slug === 'Fixture');
+                if (sector && sector.state === 'failed') throw new Error(JSON.stringify(reconcileBuild));
+                if (reconcileBuild.data.sectorsDone === 1) break;
+                await sleep(1000);
+            }
+            assert.equal(reconcileBuild.data.sectorsDone, 1, JSON.stringify(reconcileBuild));
+            assert.equal(reconcileBuild.data.state, 'building');
+            assert.equal(reconcileBuild.data.engineVersion, '1.0.0');
+            const reconcileIndexFile = path.join(dir, 'reconcile-index.json');
+            runWrangler(['r2', 'object', 'get', 'voyage-public/truth/vreconcile/sectors/Fixture/index.json', '--file', reconcileIndexFile, '--local']);
+            const reconcileIndexText = readFileSync(reconcileIndexFile, 'utf8');
+            const reconcileIndex = JSON.parse(reconcileIndexText);
+            SectorIndex.parse(reconcileIndex);
+            const sourceAgainFile = path.join(dir, 'source-again.json');
+            runWrangler(['r2', 'object', 'get', 'voyage-public/truth/vtest/sectors/Fixture/index.json', '--file', sourceAgainFile, '--local']);
+            assert.equal(readFileSync(sourceAgainFile, 'utf8'), sourceIndexBytes);
+            const sourceRowAfter = jsonFrom(runWrangler([
+                'd1', 'execute', 'voyage', '--local', '--command',
+                "SELECT state, engine_version, seed, derived_from, manifest_hash FROM truth_versions WHERE version = 'vtest'",
+            ]));
+            assert.deepEqual(sourceRowAfter, sourceRowBefore);
+            const reconcileRow = jsonFrom(runWrangler([
+                'd1', 'execute', 'voyage', '--local', '--command',
+                "SELECT state, engine_version, seed, derived_from FROM truth_versions WHERE version = 'vreconcile'",
+            ]));
+            assert.equal(reconcileRow[0].results[0].state, 'building');
+            assert.equal(reconcileRow[0].results[0].engine_version, '1.0.0');
+            assert.equal(reconcileRow[0].results[0].seed, TRUTH_SEED);
+            assert.equal(reconcileRow[0].results[0].derived_from, 'vtest');
+            const provenanceFile = path.join(dir, 'reconciliation.json');
+            runWrangler(['r2', 'object', 'get', 'voyage-public/truth/vreconcile/reconciliation.json', '--file', provenanceFile, '--local']);
+            const provenance = JSON.parse(readFileSync(provenanceFile, 'utf8'));
+            const live = await reconciliationDigests();
+            assert.equal(provenance.transform, 'reconcile-environment');
+            assert.equal(provenance.from, 'vtest');
+            assert.equal(provenance.policyDigest, live.policyDigest);
+            assert.equal(provenance.rulesDigest, live.rulesDigest);
+            assert.equal(provenance.engineVersion, '1.0.0');
+            assert.equal(provenance.generationProvenance, 'carried');
+            const sectorReportFile = path.join(dir, 'reconcile-sector.json');
+            runWrangler(['r2', 'object', 'get', 'voyage-public/truth/vreconcile/reconciliation/sectors/Fixture.json', '--file', sectorReportFile, '--local']);
+            const sectorReportText = readFileSync(sectorReportFile, 'utf8');
+            const sectorReport = JSON.parse(sectorReportText);
+            const totalReportFile = path.join(dir, 'reconcile-report.json');
+            runWrangler(['r2', 'object', 'get', 'voyage-public/truth/vreconcile/reconciliation/report.json', '--file', totalReportFile, '--local']);
+            const totalReport = JSON.parse(readFileSync(totalReportFile, 'utf8'));
+            const expected = emptyReport();
+            const sourceIndex = JSON.parse(sourceIndexBytes);
+            for (const [hex, row] of Object.entries(sourceIndex.hexes)) {
+                const next = reconcileIndex.hexes[hex];
+                const left = { ...row };
+                const right = { ...next };
+                delete left.tree;
+                delete right.tree;
+                assert.deepEqual(right, left);
+                if (typeof row.tree !== 'string') {
+                    assert.equal(next.tree, row.tree);
+                    continue;
+                }
+                const objectFile = path.join(dir, `source-object-${hex}.json`);
+                runWrangler(['r2', 'object', 'get', `voyage-public/objects/${row.tree}`, '--file', objectFile, '--local']);
+                const canonical = readFileSync(objectFile, 'utf8');
+                const result = reconcileTree(JSON.parse(canonical), environmentPolicy);
+                const reconciled = stable(result.tree);
+                if (reconciled === canonical) assert.equal(next.tree, row.tree);
+                else assert.equal(next.tree, await sha256Hex(reconciled));
+                const objectCheck = path.join(dir, `reconciled-object-${hex}.json`);
+                runWrangler(['r2', 'object', 'get', `voyage-public/objects/${next.tree}`, '--file', objectCheck, '--local']);
+                mergeReports(expected, reportForTree(hex, result));
+            }
+            assert.equal(reconcileIndex.systems, sourceIndex.systems);
+            assert.equal(reconcileIndex.built, sourceIndex.built);
+            assert.equal(reconcileIndex.partial, sourceIndex.partial);
+            assert.deepEqual(sectorReport.changedByField, expected.changedByField);
+            assert.deepEqual(sectorReport.liquidOutcomes, expected.liquidOutcomes);
+            assert.deepEqual(sectorReport.diagnosticsByKind, expected.diagnosticsByKind);
+            assert.deepEqual(sectorReport.unresolved, expected.unresolved);
+            assert.deepEqual(sectorReport.blocking, expected.blocking);
+            assert.equal(sectorReport.bodiesSeen, expected.bodiesSeen);
+            assert.equal(sectorReport.bodiesChanged, expected.bodiesChanged);
+            assert.equal(totalReport.bodiesSeen, expected.bodiesSeen);
+            assert.deepEqual(totalReport.liquidOutcomes, expected.liquidOutcomes);
+            assert.deepEqual(totalReport.sectors, ['Fixture']);
+            const reconcileObjects = objectKeys();
+            const reconcileLogsBefore = traceMessages('truth-derive').length;
+            const reconcileRetried = await fetch(`${base}/api/admin/truth/builds/vreconcile/retry`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json', cookie },
+                body: JSON.stringify({ sectors: ['Fixture'] }),
+            });
+            const reconcileRetriedBody = await reconcileRetried.json();
+            assert.equal(reconcileRetried.status, 202, JSON.stringify(reconcileRetriedBody));
+            let reconcileAgain;
+            const reconcileRetryDeadline = Date.now() + 90000;
+            while (Date.now() < reconcileRetryDeadline) {
+                const logged = traceMessages('truth-derive');
+                const response = await fetch(`${base}/api/admin/truth/builds/vreconcile`, { headers: { cookie } });
+                reconcileAgain = await response.json();
+                const sector = reconcileAgain.data.sectors.find((item) => item.slug === 'Fixture');
+                if (sector && sector.state === 'failed') throw new Error(JSON.stringify(reconcileAgain));
+                if (reconcileAgain.data.sectorsDone === 1 && sector && sector.state === 'done' && logged.length > reconcileLogsBefore) break;
+                await sleep(1000);
+            }
+            assert.equal(reconcileAgain.data.state, 'building');
+            const reconcileIndexAgain = path.join(dir, 'reconcile-index-again.json');
+            runWrangler(['r2', 'object', 'get', 'voyage-public/truth/vreconcile/sectors/Fixture/index.json', '--file', reconcileIndexAgain, '--local']);
+            assert.equal(readFileSync(reconcileIndexAgain, 'utf8'), reconcileIndexText);
+            const sectorReportAgain = path.join(dir, 'reconcile-sector-again.json');
+            runWrangler(['r2', 'object', 'get', 'voyage-public/truth/vreconcile/reconciliation/sectors/Fixture.json', '--file', sectorReportAgain, '--local']);
+            assert.equal(readFileSync(sectorReportAgain, 'utf8'), sectorReportText);
+            assert.deepEqual(objectKeys(), reconcileObjects);
+            runWrangler(['r2', 'object', 'get', 'voyage-public/truth/vtest/sectors/Fixture/index.json', '--file', sourceAgainFile, '--local']);
+            assert.equal(readFileSync(sourceAgainFile, 'utf8'), sourceIndexBytes);
+            const sourceRowFinal = jsonFrom(runWrangler([
+                'd1', 'execute', 'voyage', '--local', '--command',
+                "SELECT state, engine_version, seed, derived_from, manifest_hash FROM truth_versions WHERE version = 'vtest'",
+            ]));
+            assert.deepEqual(sourceRowFinal, sourceRowBefore);
 
             const wideTsvFile = path.join(dir, 'Wide.tsv');
             const wideXmlFile = path.join(dir, 'Wide.xml');

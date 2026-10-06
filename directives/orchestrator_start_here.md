@@ -131,8 +131,11 @@ file true: replace it, do not append to it.
 | ship MVP 2 (D) | the measuring pass: the Track section, the rolled jump time, the flight estimate with both fuel lines, the Party tab and marker from the track | accepted §133 and §139, **local, not pushed**; the jump's parsecs line waits on A's hex distance |
 | designs 18 and 21 (D) | `findings/daynight_locked_design.md`, `findings/plot_ghosts_design.md` | accepted §144; four choices stand at D's recommendation until Johnny answers |
 | **fixes now (D)** | `prompts/d_fixes_now.md`: items 1, 2, 3, 4, 5, 8 of the queued fixes and `settleFlight`, unwired | **issued §144**; items 6, 7, 9 and the ghost wiring after A's panes report |
-| **city lights (C)** | `findings/city_lights_design.md` (Agent F, accepted §148): five build steps. `prompts/c_city_lights_1.md`: Enhanced as the default look, then step 1 (the separate enhanced program) | **issued §148**; steps 2 to 5 one at a time, each with frames for Johnny |
-| **ghosts in the picture (A)** | `prompts/a_ghosts.md`, from D's note | **issued §148**, after A's panes report |
+| **city lights (C)** | `findings/city_lights_design.md` (Agent F, accepted §148): five build steps. `prompts/c_city_lights_1.md`: Enhanced as the default look, then step 1 (the separate enhanced program) | **issued §148**, in flight; steps 2 to 5 one at a time, each with frames for Johnny |
+| **follow-up 14d (C)** | `prompts/c_toggle_motion_4.md`: Moons off keeps its textures until the wave has run back; Day/night uses the Moons wave; the Moons switch never touches a planet's shadows | **issued §159**, between city lights steps 1 and 2 |
+| **ghosts in the picture (A)** | `prompts/a_ghosts.md`, from D's note | **issued §148**; in flight |
+| **places that are not planets (A, then D)** | `prompts/a_points.md`: a system anchor with `point: { x, y }` in AU, drawn, flown to, jumped from; docked ships beside their body. D's half (the plotting click on empty space, the words, Jump from a point) not yet written | **issued §158**, after the ghosts |
+| **time controls (D)** | `prompts/d_part2_go.md`: a reset button before Play, "Back 1 week", Line up hidden; then Part 2 of `d_visible_first.md` | **issued §155 to §157** |
 | **locked world's card (E)** | `prompts/e_daynight_locked.md`, from D's note | **issued §148**, after T1.5 |
 | plot readout (C) | AU from the primary and real distance from the ship | accepted §148; in the push called for |
 | follow-up 22 (E) | the system page and the world page get separate identities; the orbit card's model splits into "now" and "survey"; settles follow-up 15 | accepted §146; in the push called for (`findings/push/dossier_files.txt`) |

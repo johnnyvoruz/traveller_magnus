@@ -17,8 +17,8 @@ import {
     type Chase, type HighportArt, type Port,
 } from './highport.ts';
 import {
-    arcSpan, bodyOf, hitOf, mainworldMark, placeWorld, selectionLabel, shadowCover, MAX_RING_RADIUS,
-    type Hit, type MoonAt, type Plan, type View,
+    arcSpan, bodyOf, hitOf, layoutScene, mainworldMark, placeWorld, selectionLabel, shadowCover, MAX_RING_RADIUS,
+    type Hit, type MoonAt, type Plan, type Scene, type View, type WorldSet,
 } from './layout.ts';
 import { bodyAngle } from './maths.ts';
 import {
@@ -27,7 +27,8 @@ import {
 } from './picture.ts';
 import { discBatch, sunColour, visualRate, type OrbitDiscBatch } from './disc_batch.ts';
 import { pictureBodies, plotText, type PlotReadout, type ShipMark, type ShipShape } from './ships.ts';
-import { easeOutAt, withAlpha, type EaseOut, type OrbitTheme, type PortPaint } from './theme.ts';
+import { whenWords } from './ship_list.ts';
+import { cssSeconds, easeOutAt, withAlpha, type EaseOut, type OrbitTheme, type PortPaint } from './theme.ts';
 
 /** The layer switches that ease. Linear scale and ring strength stay where the slider put them. */
 type ToggleKey = 'habitable' | 'jump' | 'paths' | 'moons' | 'dayNight' | 'scan' | 'markMainworld';
@@ -35,6 +36,20 @@ type LayerRun = { from: number; to: number; t0: number; seconds: number };
 type JumpPhase = 'mark' | 'out' | 'in';
 type BubbleRun = { from: number; to: number; t0: number; seconds: number; kind: 'out' | 'in'; mark: ShipMark };
 type BubblePaint = { id: string; kind: 'out' | 'in'; share: number; mark: ShipMark };
+type GhostRun = { from: number; to: number; t0: number; seconds: number; kind: 'in' | 'move' | 'out' };
+type GhostSpot = { x: number; y: number };
+type GhostSpec = {
+    key: string;
+    dest: boolean;
+    label: string;
+    now: GhostSpot;
+    then: GhostSpot;
+    r: number;
+    cx: number;
+    cy: number;
+    /** Signed sweep along the orbit, radians. An arc is drawn only while this stays within half a turn. */
+    sweep: number;
+};
 type HeldLayer = { bands: BandAt[]; jumps: JumpAt[]; paths: PathAt[]; panels: Panel[] };
 const TOGGLE_KEYS: readonly ToggleKey[] = ['habitable', 'jump', 'paths', 'moons', 'dayNight', 'scan', 'markMainworld'];
 
@@ -134,6 +149,19 @@ export type DrawState = {
     ships?: readonly ShipMark[];
     /** Plotting hairlines for this frame only. Omitted or null, the overlay is off. */
     plot?: PlotReadout | null;
+    /**
+     * The flight being previewed, or null. Ghosts stand at `arrives`; the flight line
+     * runs from the ship's mark to the destination's ghost. Omitted, the picture is today's.
+     */
+    preview?: FlightPreview | null;
+};
+
+/** Dates and a destination. The picture places every ghost from these. `tag` is the label when the view has one. */
+export type FlightPreview = {
+    toKey: string;
+    departs: number;
+    arrives: number;
+    tag?: string;
 };
 
 type Sprite = { lit: HTMLCanvasElement; dark: HTMLCanvasElement };
@@ -193,6 +221,21 @@ export class OrbitRenderer {
     private bubbleRuns = new Map<string, BubbleRun>();
     /** Bubbles to paint this frame. Empty on a settled frame. */
     private bubbleFrame: BubblePaint[] = [];
+    /** 0.5 while a preview is up, so the selection lock is not a second amber ring. */
+    private lockDim = 1;
+    /** False until the first paint, which draws ghosts settled and does not ease. */
+    private ghostReady = false;
+    private ghostKey = '';
+    private ghostSpan = 0;
+    private ghostRun: GhostRun | null = null;
+    /** 0 hides, 1 is settled. An arrive opens along the arc; a move slides; a leave fades. */
+    private ghostShare = 1;
+    private ghostKind: 'in' | 'move' | 'out' | 'show' = 'show';
+    /** Where each ghost was drawn last frame, so a new slide starts from there. */
+    private ghostLatch = new Map<string, GhostSpot>();
+    private ghostLast: GhostSpec[] = [];
+    /** --t-fast from the canvas, read once. Null when the token is missing: the slide snaps. */
+    private fastSecondsCache: number | null | undefined = undefined;
     private habLive = false;
     private habShare = 1;
     private jumpLive = false;
@@ -258,6 +301,7 @@ export class OrbitRenderer {
         this.lastTime = state.time;
         this.frameTime = state.time;
         this.beginChannels(state);
+        this.beginGhosts(state);
         this.indexStars(picture, state);
         this.prepareDiscs(plan, picture, state);
         this.syncTiles(state);
@@ -307,9 +351,10 @@ export class OrbitRenderer {
             this.scanFade = 1;
         }
         this.selection(plan, picture, state);
+        const ghostAt = this.paintGhosts(plan, picture, view, state);
         this.beginBubbles(state);
         this.ships(state.ships);
-        this.plot(state.plot, plan, picture, view, state.days);
+        this.plot(state.plot, plan, picture, view, state.days, ghostAt, state.ships);
         this.settleDiscs(state);
         this.keepHeld(picture, state.layers);
     }
@@ -1700,6 +1745,7 @@ export class OrbitRenderer {
         const ctx = this.ctx;
         const theme = this.theme;
         const now = state.time;
+        const dim = this.lockDim;
         if (this.lockKey !== hit.key) {
             this.lockKey = hit.key;
             this.lockStart = now;
@@ -1721,7 +1767,7 @@ export class OrbitRenderer {
             const mid = (hit.r + hit.innerR) / 2;
             let angle = -Math.PI / 2;
             if (cy - mid < -20) angle = Math.atan2(this.h / 2 - cy, this.w / 2 - cx);
-            ctx.globalAlpha = 0.55 * easeOut;
+            ctx.globalAlpha = 0.55 * easeOut * dim;
             ctx.lineWidth = 1;
             if (hit.innerR > 2) this.strokeVisible(cx, cy, hit.innerR, 1);
             if (hit.r > 2) this.strokeVisible(cx, cy, hit.r, 1);
@@ -1737,14 +1783,14 @@ export class OrbitRenderer {
         const glow = ctx.createRadialGradient(cx, cy, R * 0.9, cx, cy, R + 22);
         glow.addColorStop(0, theme.lockGlow[0]);
         glow.addColorStop(1, theme.lockGlow[1]);
-        ctx.globalAlpha = easeOut;
+        ctx.globalAlpha = easeOut * dim;
         ctx.fillStyle = glow;
         ctx.beginPath();
         ctx.arc(cx, cy, R + 22, 0, TAU);
         ctx.arc(cx, cy, R * 0.9, 0, TAU, true);
         ctx.fill();
         // The ring draws itself on.
-        ctx.globalAlpha = 0.95;
+        ctx.globalAlpha = 0.95 * dim;
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.arc(cx, cy, R, -Math.PI / 2, -Math.PI / 2 + TAU * easeOut);
@@ -1753,7 +1799,7 @@ export class OrbitRenderer {
         const scaleR = R + 8;
         const turn = time * 0.12;
         ctx.lineWidth = 1;
-        ctx.globalAlpha = 0.5 * easeOut;
+        ctx.globalAlpha = 0.5 * easeOut * dim;
         ctx.beginPath();
         for (let i = 0; i < 72; i++) {
             const a = turn + i * Math.PI / 36;
@@ -1767,7 +1813,7 @@ export class OrbitRenderer {
         // Three counter-rotating arcs further out.
         const arcR = R + 17;
         ctx.strokeStyle = theme.signal;
-        ctx.globalAlpha = 0.55 * easeOut;
+        ctx.globalAlpha = 0.55 * easeOut * dim;
         ctx.lineWidth = 1.5;
         for (let i = 0; i < 3; i++) {
             const a = -time * 0.35 + i * TAU / 3;
@@ -1781,7 +1827,7 @@ export class OrbitRenderer {
         const spin = (1 - easeOut) * Math.PI / 2;
         const arm = Math.max(5, Math.min(12, R * 0.35));
         ctx.strokeStyle = theme.lock;
-        ctx.globalAlpha = Math.min(1, 0.2 + easeOut);
+        ctx.globalAlpha = Math.min(1, 0.2 + easeOut) * dim;
         ctx.lineWidth = 2;
         ctx.lineCap = 'square';
         for (let i = 0; i < 4; i++) {
@@ -1802,7 +1848,7 @@ export class OrbitRenderer {
         }
         ctx.lineCap = 'butt';
         // Cardinal notches pointing in.
-        ctx.globalAlpha = 0.8 * easeOut;
+        ctx.globalAlpha = 0.8 * easeOut * dim;
         ctx.lineWidth = 1.5;
         ctx.beginPath();
         for (let i = 0; i < 4; i++) {
@@ -1832,21 +1878,21 @@ export class OrbitRenderer {
             const ky = ey - 14;
             const tx = flip ? kx - 8 - w : kx + 8;
             const ty = ky - h / 2;
-            ctx.globalAlpha = show * 0.75;
+            ctx.globalAlpha = show * 0.75 * dim;
             ctx.lineWidth = 1;
             ctx.beginPath();
             ctx.moveTo(ex, ey);
             ctx.lineTo(kx, ky);
             ctx.lineTo(kx + dir * 8, ky);
             ctx.stroke();
-            ctx.globalAlpha = show;
+            ctx.globalAlpha = show * dim;
             ctx.fillStyle = theme.tag;
             ctx.beginPath();
             ctx.roundRect(tx, ty, w, h, 3);
             ctx.fill();
-            ctx.globalAlpha = show * 0.8;
+            ctx.globalAlpha = show * 0.8 * dim;
             ctx.stroke();
-            ctx.globalAlpha = show;
+            ctx.globalAlpha = show * dim;
             ctx.fillStyle = theme.lock;
             ctx.fillRect(flip ? tx + w - 3 : tx, ty, 3, h);
             ctx.textBaseline = 'alphabetic';
@@ -1855,7 +1901,7 @@ export class OrbitRenderer {
             if (detail) {
                 ctx.font = detailFont;
                 ctx.fillStyle = theme.signal;
-                ctx.globalAlpha = show * 0.95;
+                ctx.globalAlpha = show * 0.95 * dim;
                 ctx.fillText(detail, tx + 8, ty + 28);
             }
         }
@@ -1975,7 +2021,7 @@ export class OrbitRenderer {
             const t = ((state.time / beat) + 1 - offset) % 1;
             if (t > 0.6) continue;
             const ease = 1 - Math.pow(1 - t / 0.6, 3);
-            ctx.globalAlpha = (1 - ease) * (offset ? 0.35 : 0.6);
+            ctx.globalAlpha = (1 - ease) * (offset ? 0.35 : 0.6) * this.lockDim;
             ctx.lineWidth = offset ? 1 : 1.5;
             ctx.beginPath();
             ctx.arc(cx, cy, baseR + 4 + ease * (baseR * 0.8 + 26), 0, TAU);
@@ -2185,8 +2231,293 @@ export class OrbitRenderer {
         ctx.rect(-9, -4, 18, 8);
     }
 
-    /** Hairlines and a readout. This frame only: nothing is added to the picture. */
-    private plot(plot: PlotReadout | null | undefined, plan: Plan, picture: Picture, view: View, days: number): void {
+    /**
+     * Ghosts of where the bodies will be (findings/plot_ghosts_design.md §2, §3).
+     * A run starts on the frame the preview changes. The first paint only records it.
+     * Reduced motion, or a missing duration, snaps. Arrive takes --t-base and opens
+     * along the arc. A change of hours slides over --t-fast. Leaving fades over --t-fast.
+     * The clock moving both dates together does not start a run: the ghosts just stand
+     * where the new dates put them.
+     */
+    private beginGhosts(state: DrawState): void {
+        const preview = this.livePreview(state);
+        const span = preview ? preview.arrives - preview.departs : 0;
+        const key = preview ? preview.toKey : '';
+        const ease = this.theme.easeOut;
+        this.ghostShare = preview ? 1 : 0;
+        this.ghostKind = preview ? 'show' : 'out';
+        if (!state.motion || !ease) {
+            this.ghostRun = null;
+            this.ghostReady = true;
+            this.ghostKey = key;
+            this.ghostSpan = span;
+            this.lockDim = preview ? 0.5 : 1;
+            return;
+        }
+        if (!this.ghostReady) {
+            this.ghostReady = true;
+            this.ghostKey = key;
+            this.ghostSpan = span;
+            this.lockDim = preview ? 0.5 : 1;
+            return;
+        }
+        const same = key === this.ghostKey && Math.abs(span - this.ghostSpan) < 1e-9;
+        if (!same) {
+            const kind: 'in' | 'move' | 'out' = !preview ? 'out' : (this.ghostKey && key === this.ghostKey ? 'move' : 'in');
+            const seconds = kind === 'in' ? this.baseSeconds() : this.fastSeconds();
+            if (kind === 'move') this.ghostLatch = new Map(this.ghostLast.map((spec) => [spec.key, { x: spec.then.x, y: spec.then.y }]));
+            if (seconds) {
+                const from = this.ghostRun ? this.runShare(this.ghostRun, state.time, ease) : (kind === 'out' ? 1 : 0);
+                this.ghostRun = { from, to: kind === 'out' ? 0 : 1, t0: state.time, seconds, kind };
+            } else {
+                this.ghostRun = null;
+            }
+            this.ghostKey = key;
+            this.ghostSpan = span;
+        }
+        if (this.ghostRun) {
+            const u = (state.time - this.ghostRun.t0) / 1000 / this.ghostRun.seconds;
+            if (u >= 1) {
+                this.ghostShare = this.ghostRun.to;
+                this.ghostKind = this.ghostRun.kind === 'out' ? 'out' : 'show';
+                this.ghostRun = null;
+            } else {
+                this.ghostShare = this.shareAt(this.ghostRun, Math.max(0, u), ease);
+                this.ghostKind = this.ghostRun.kind;
+                this.layersBusy = true;
+            }
+        }
+        this.lockDim = preview || this.ghostShare > 0 ? 0.5 : 1;
+    }
+
+    private livePreview(state: DrawState): FlightPreview | null {
+        const preview = state.preview;
+        if (!preview || !(preview.arrives > preview.departs) || !preview.toKey) return null;
+        return preview;
+    }
+
+    private baseSeconds(): number | null {
+        const raw = this.theme.tBase;
+        return typeof raw === 'number' && raw > 0 ? raw : null;
+    }
+
+    /** --t-fast, from the canvas. Null in a test theme or when the token is missing. */
+    private fastSeconds(): number | null {
+        if (this.fastSecondsCache !== undefined) return this.fastSecondsCache;
+        let seconds: number | null = null;
+        const canvas = this.ctx.canvas;
+        if (canvas && typeof getComputedStyle === 'function') {
+            try {
+                const n = cssSeconds(getComputedStyle(canvas).getPropertyValue('--t-fast'));
+                if (n > 0) seconds = n;
+            } catch {
+                seconds = null;
+            }
+        }
+        this.fastSecondsCache = seconds;
+        return seconds;
+    }
+
+    /** The destination ghost's drawn centre, for the flight line. Null when nothing is previewed. */
+    private paintGhosts(plan: Plan, picture: Picture, view: View, state: DrawState): GhostSpot | null {
+        if (picture.mode !== 'orbits') return null;
+        const preview = this.livePreview(state);
+        if (!preview) {
+            if (this.ghostLast.length > 0 && this.ghostShare > 0) this.drawGhosts(this.ghostLast, 'out');
+            if (!(this.ghostShare > 0)) this.ghostLast = [];
+            return null;
+        }
+        const specs = this.ghostSpecs(plan, view, state.days, preview);
+        const drawn = this.drawGhosts(specs, this.ghostKind);
+        this.ghostLast = drawn;
+        const dest = drawn.find((spec) => spec.dest);
+        return dest ? dest.then : null;
+    }
+
+    private ghostSpecs(plan: Plan, view: View, days: number, preview: FlightPreview): GhostSpec[] {
+        const now = this.ghostBodies(layoutScene(plan, view, days));
+        const then = this.ghostBodies(layoutScene(plan, view, preview.arrives));
+        const specs: GhostSpec[] = [];
+        for (const future of then.values()) {
+            const present = now.get(future.key);
+            if (!present) continue;
+            const dest = future.key === preview.toKey;
+            if (!dest && future.kind !== 'world') continue;
+            if (dest && future.kind !== 'world' && future.kind !== 'moon') continue;
+            const moved = Math.hypot(present.x - future.x, present.y - future.y);
+            if (!dest && moved < Math.max(8, 1.5 * present.r)) continue;
+            const sweep = future.period > 0 ? bodyAngle(future.epoch, future.period, preview.arrives) - bodyAngle(future.epoch, future.period, preview.departs) : 0;
+            const label = dest
+                ? (preview.tag || shortLabel(future.name, plan.name) + ' \u00B7 ' + whenWords(preview.arrives))
+                : '';
+            specs.push({
+                key: future.key,
+                dest,
+                label,
+                now: { x: present.x, y: present.y },
+                then: { x: future.x, y: future.y },
+                r: Math.max(5, future.r + 2.5),
+                cx: future.cx,
+                cy: future.cy,
+                sweep: Number.isFinite(sweep) ? sweep : 0,
+            });
+        }
+        return specs;
+    }
+
+    /** Worlds, and moons. A belt is not a point. The centre is the orbit the body is drawn on. */
+    private ghostBodies(scene: Scene): Map<string, { key: string; kind: 'world' | 'moon'; name: string; x: number; y: number; r: number; cx: number; cy: number; epoch: number; period: number }> {
+        const out = new Map<string, { key: string; kind: 'world' | 'moon'; name: string; x: number; y: number; r: number; cx: number; cy: number; epoch: number; period: number }>();
+        const take = (set: WorldSet | null): void => {
+            if (!set) return;
+            for (const at of set.bodies) {
+                if (at.world.belt) continue;
+                out.set(at.world.key, {
+                    key: at.world.key, kind: 'world', name: at.world.name,
+                    x: at.x, y: at.y, r: at.r, cx: set.cx, cy: set.cy,
+                    epoch: at.world.epoch, period: at.world.period,
+                });
+                for (const moon of at.moons) {
+                    if (moon.moon.ring || !(moon.r > 0)) continue;
+                    out.set(moon.moon.key, {
+                        key: moon.moon.key, kind: 'moon', name: moon.moon.name,
+                        x: moon.x, y: moon.y, r: moon.r, cx: at.x, cy: at.y,
+                        epoch: moon.moon.epoch, period: moon.moon.period,
+                    });
+                }
+            }
+        };
+        take(scene.primary);
+        for (const companion of scene.companions) take(companion.set);
+        return out;
+    }
+
+    /** Draws each ghost and returns the specs with `then` set to the place actually drawn. */
+    private drawGhosts(specs: readonly GhostSpec[], kind: 'in' | 'move' | 'out' | 'show'): GhostSpec[] {
+        const drawn: GhostSpec[] = [];
+        let dest: GhostSpec | null = null;
+        for (const spec of specs) {
+            const at = this.ghostAt(spec, kind);
+            const placed: GhostSpec = { ...spec, then: at };
+            drawn.push(placed);
+            const alpha = (spec.dest ? 1 : 0.62) * (kind === 'show' || kind === 'move' ? 1 : this.ghostShare);
+            if (!(alpha > 0)) continue;
+            this.strokeGhost(placed, spec, kind, alpha);
+            if (spec.dest) dest = placed;
+        }
+        if (dest && dest.label && (kind === 'show' || kind === 'move' || this.ghostShare > 0.35)) this.ghostTag(dest, kind === 'show' || kind === 'move' ? 1 : this.ghostShare);
+        return drawn;
+    }
+
+    /** Where this ghost is drawn. An arrive opens along the arc. A move slides from where it was. Past half a turn, it does not take the short way. */
+    private ghostAt(spec: GhostSpec, kind: 'in' | 'move' | 'out' | 'show'): GhostSpot {
+        if (kind === 'out' || kind === 'show' || this.ghostShare >= 1) return spec.then;
+        if (kind === 'move') {
+            const from = this.ghostLatch.get(spec.key) ?? spec.now;
+            return this.alongOrbit(from, spec.then, spec.cx, spec.cy, this.ghostShare);
+        }
+        if (Math.abs(spec.sweep) > Math.PI) return spec.then;
+        return this.alongOrbit(spec.now, spec.then, spec.cx, spec.cy, this.ghostShare);
+    }
+
+    private alongOrbit(from: GhostSpot, to: GhostSpot, cx: number, cy: number, share: number): GhostSpot {
+        const r0 = Math.hypot(from.x - cx, from.y - cy);
+        const r1 = Math.hypot(to.x - cx, to.y - cy);
+        if (!(r0 > 0) || !(r1 > 0)) return { x: from.x + (to.x - from.x) * share, y: from.y + (to.y - from.y) * share };
+        let sweep = Math.atan2(to.y - cy, to.x - cx) - Math.atan2(from.y - cy, from.x - cx);
+        while (sweep > Math.PI) sweep -= TAU;
+        while (sweep < -Math.PI) sweep += TAU;
+        const angle = Math.atan2(from.y - cy, from.x - cx) + sweep * share;
+        const radius = r0 + (r1 - r0) * share;
+        return { x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) };
+    }
+
+    private strokeGhost(drawn: GhostSpec, spec: GhostSpec, kind: 'in' | 'move' | 'out' | 'show', alpha: number): void {
+        const ctx = this.ctx;
+        const theme = this.theme;
+        const colour = spec.dest ? theme.lock : withAlpha(theme.signal, 0.62);
+        const x = drawn.then.x;
+        const y = drawn.then.y;
+        if (this.offCanvas(x, y, drawn.r + 24)) return;
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.strokeStyle = colour;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'miter';
+        const arc = Math.abs(spec.sweep) <= Math.PI && Math.abs(spec.sweep) > 1e-3;
+        if (arc && kind !== 'out') {
+            const end = kind === 'in' ? this.ghostShare : 1;
+            if (end > 0) {
+                ctx.lineWidth = 1;
+                ctx.setLineDash([1, 5]);
+                ctx.beginPath();
+                const a0 = Math.atan2(spec.now.y - spec.cy, spec.now.x - spec.cx);
+                const radius = Math.hypot(spec.then.x - spec.cx, spec.then.y - spec.cy);
+                if (radius > 0) {
+                    ctx.arc(spec.cx, spec.cy, radius, a0, a0 + spec.sweep * end, spec.sweep < 0);
+                    ctx.stroke();
+                }
+            }
+        }
+        ctx.lineWidth = spec.dest ? 1.5 : 1;
+        ctx.setLineDash(spec.dest ? [] : [3, 3]);
+        ctx.beginPath();
+        ctx.arc(x, y, drawn.r, 0, TAU);
+        ctx.stroke();
+        const tick = spec.dest ? 5 : 3;
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        for (let i = 0; i < 4; i++) {
+            const a = i * Math.PI / 2;
+            ctx.moveTo(x + Math.cos(a) * (drawn.r + 2), y + Math.sin(a) * (drawn.r + 2));
+            ctx.lineTo(x + Math.cos(a) * (drawn.r + 2 + tick), y + Math.sin(a) * (drawn.r + 2 + tick));
+        }
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    /** The destination's tag: the selection tag's fill, 11px mono, the short name and the arrival. */
+    private ghostTag(spec: GhostSpec, alpha: number): void {
+        const ctx = this.ctx;
+        const theme = this.theme;
+        const text = spec.label;
+        ctx.save();
+        ctx.font = '700 11px ' + theme.fontCode;
+        const width = ctx.measureText(text).width + 16;
+        const height = 20;
+        const corner = spec.r * Math.SQRT1_2;
+        const flip = spec.then.x + corner + 22 + width > this.w - 8;
+        const dir = flip ? -1 : 1;
+        const tx = spec.then.x + dir * (spec.r + 12);
+        const ty = spec.then.y - spec.r - 8 - height;
+        const left = flip ? tx - width : tx;
+        ctx.globalAlpha = alpha * 0.7;
+        ctx.strokeStyle = theme.lock;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(spec.then.x + dir * corner, spec.then.y - corner);
+        ctx.lineTo(left + (flip ? width : 0), ty + height);
+        ctx.stroke();
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = theme.tag;
+        ctx.beginPath();
+        ctx.roundRect(left, ty, width, height, 3);
+        ctx.fill();
+        ctx.fillStyle = theme.lock;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, left + 8, ty + height / 2);
+        ctx.restore();
+    }
+
+    /** Hairlines and a readout. This frame only: nothing is added to the picture. A destination replaces the ship-to-pointer line with the line to its ghost. */
+    private plot(
+        plot: PlotReadout | null | undefined, plan: Plan, picture: Picture, view: View, days: number,
+        ghostAt: GhostSpot | null, ships: readonly ShipMark[] | undefined,
+    ): void {
+        const from = plot && plot.from ? plot.from : this.partyMark(ships);
+        if (ghostAt && from) this.flightLine(from, ghostAt);
         if (!plot) return;
         const ctx = this.ctx;
         const theme = this.theme;
@@ -2215,6 +2546,29 @@ export class OrbitRenderer {
             ctx.textBaseline = pastBottom ? 'bottom' : 'top';
             ctx.fillText(text, pastRight ? plot.x - 8 : plot.x + 8, pastBottom ? plot.y - 8 : plot.y + 12);
         }
+        ctx.restore();
+    }
+
+    /** The party's mark, when the plotting overlay has not named a ship. */
+    private partyMark(ships: readonly ShipMark[] | undefined): GhostSpot | null {
+        if (!ships) return null;
+        const party = ships.find((mark) => mark.kind === 'party' && !mark.jump);
+        return party ? { x: party.x, y: party.y } : null;
+    }
+
+    /** Dashed 7-4, from the ship to where the destination will be. */
+    private flightLine(from: GhostSpot, to: GhostSpot): void {
+        const ctx = this.ctx;
+        ctx.save();
+        ctx.strokeStyle = this.theme.signal;
+        ctx.globalAlpha = 1;
+        ctx.lineWidth = 1.25;
+        ctx.lineCap = 'butt';
+        ctx.setLineDash([7, 4]);
+        ctx.beginPath();
+        ctx.moveTo(from.x, from.y);
+        ctx.lineTo(to.x, to.y);
+        ctx.stroke();
         ctx.restore();
     }
 }

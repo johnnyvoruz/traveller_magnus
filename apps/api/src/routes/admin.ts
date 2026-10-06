@@ -9,6 +9,7 @@ import { auditLog, truthVersions } from '../db/schema';
 import type { AppEnv } from '../env';
 import { fail, ok } from '../http';
 import { InputChainError, resolveCatalogue } from '../jobs/inputs';
+import { provenanceDocument } from '../jobs/reconcile_transform';
 
 const ATTRIBUTION = 'Sector data from the Traveller Map (travellermap.com), used under Far Future Enterprises\' Fair Use Policy. Traveller is a registered trademark of Far Future Enterprises.';
 const FEED = 12;
@@ -113,9 +114,24 @@ admin.post('/truth/build', async (c) => {
          RETURNING sector_slug`,
     ).bind(now, input.version, input.version, FEED).all<{ sector_slug: string }>();
     const pinned = { seed: input.seed, settings: input.settings, engineVersion: input.engineVersion };
+    let policyDigest: string | undefined;
+    if (input.transform) {
+        if (!input.from) throw new Error('transform requires from.');
+        const provenance = await provenanceDocument(input.from, input.engineVersion);
+        policyDigest = String(provenance.policyDigest);
+        await c.env.PUBLIC_BUCKET.put(`truth/${input.version}/reconciliation.json`, stable(provenance), {
+            httpMetadata: { contentType: 'application/json', cacheControl: 'public, max-age=31536000, immutable' },
+        });
+    }
     const messages = started.results.map((row) => ({
         body: input.from
-            ? { version: input.version, slug: row.sector_slug, from: input.from, pinned }
+            ? {
+                version: input.version,
+                slug: row.sector_slug,
+                from: input.from,
+                pinned,
+                ...(input.transform && policyDigest ? { transform: input.transform, policyDigest } : {}),
+            }
             : { version: input.version, slug: row.sector_slug, offset: 0, pinned },
     }));
     for (let i = 0; i < messages.length; i += 100) await c.env.TRUTH_QUEUE.sendBatch(messages.slice(i, i + 100));
@@ -204,9 +220,19 @@ admin.post('/truth/builds/:version/retry', async (c) => {
         engineVersion: row.engineVersion,
     };
     const from = row.derivedFrom || undefined;
+    let reconcileFields: { transform: string; policyDigest: string } | undefined;
+    if (from) {
+        const side = await c.env.PUBLIC_BUCKET.get(`truth/${version}/reconciliation.json`);
+        if (side) {
+            const recorded = JSON.parse(await side.text()) as { transform?: unknown; policyDigest?: unknown };
+            if (recorded.transform === 'reconcile-environment' && typeof recorded.policyDigest === 'string') {
+                reconcileFields = { transform: recorded.transform, policyDigest: recorded.policyDigest };
+            }
+        }
+    }
     const messages = targets.map((slug) => ({
         body: from
-            ? { version, slug, offset: 0, from, pinned }
+            ? { version, slug, offset: 0, from, pinned, ...(reconcileFields ?? {}) }
             : { version, slug, offset: 0, pinned },
     }));
     for (let i = 0; i < messages.length; i += 100) await c.env.TRUTH_QUEUE.sendBatch(messages.slice(i, i + 100));

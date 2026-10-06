@@ -17,10 +17,10 @@ import {
 import BodyCard from './BodyCard.vue';
 import { DRAG_SLOP, wheelNotches } from './camera.ts';
 import { cardFor } from './card.ts';
-import { hitOf, layoutScene, planSystem, type HitKind, type Plan, type View } from './layout.ts';
+import { hitOf, layoutScene, planSystem, type HitKind, type Plan, type Scene, type View } from './layout.ts';
 import { onSurfaceMode, surfaceMode } from '../surface/preferences.ts';
 import { drawDisc, prepareDiscs } from '../surface/service.ts';
-import { OrbitRenderer, type DiscPainter } from './OrbitRenderer.ts';
+import { OrbitRenderer, type DiscPainter, type FlightPreview } from './OrbitRenderer.ts';
 import type { Layers, Mode, Picture } from './picture.ts';
 import { OrbitStage } from './stage.ts';
 import { publishOrbitClock } from './running.ts';
@@ -48,6 +48,8 @@ const props = defineProps<{
     /** Plotting mode (K12 2b): the hairlines follow the pointer, measured from the ship `plotFrom`; a body clicked is a destination, not a selection. */
     plotting?: boolean;
     plotFrom?: string | null;
+    /** The flight being previewed, or null. Omitted, the dev stand-in may show one. */
+    preview?: FlightPreview | null;
 }>();
 
 const emit = defineEmits<{
@@ -205,6 +207,68 @@ function standInCount(): number {
 let lastMarks: readonly ShipMark[] = [];
 let lastFrame: { picture: Picture; view: View } | null = null;
 
+function queryText(name: string): string {
+    const raw = route.query[name];
+    const text = Array.isArray(raw) ? raw[0] : raw;
+    return typeof text === 'string' ? text : '';
+}
+
+/** The view's preview when one was passed, including null. Otherwise the dev stand-in's. */
+function standPreview(clockDays: number): FlightPreview | null {
+    if (props.preview !== undefined) return props.preview;
+    if (standInCount() <= 0) return null;
+    const current = plan.value;
+    if (!current) return null;
+    const ghost = queryText('ghost');
+    let toKey = '';
+    let hours = 11 * 24;
+    if (ghost) {
+        const parts = ghost.split(',');
+        toKey = parts[0] || '';
+        const parsed = Number(parts[1]);
+        if (parsed > 0) hours = parsed;
+    }
+    if (!toKey) {
+        const named = current.worlds.find((world) => world.name.endsWith('A-II') && !world.belt);
+        const fallback = current.worlds.find((world) => !world.belt);
+        toKey = named ? named.key : (fallback ? fallback.key : '');
+    }
+    if (!toKey) return null;
+    return { toKey, departs: clockDays, arrives: clockDays + hours / 24 };
+}
+
+/** `?line=departs,arrives` fixes the stand-in party's flight. Absent, the party stays halfway. */
+function standFlight(): { departs: number; arrives: number } | null {
+    const line = queryText('line');
+    if (!line) return null;
+    const parts = line.split(',');
+    const departs = Number(parts[0]);
+    const arrives = Number(parts[1]);
+    if (!(arrives > departs)) return null;
+    return { departs, arrives };
+}
+
+/** A body's place on a layout of this view at `at`. The campaign's bodiesAtOf is not asked. */
+function picturePlace(view: View, key: string, at: number): { x: number; y: number } | null {
+    const current = plan.value;
+    if (!current) return null;
+    const scene: Scene = layoutScene(current, view, at);
+    for (const star of scene.stars) {
+        if (star.star.key === key) return { x: star.x, y: star.y };
+    }
+    const sets = [scene.primary, ...scene.companions.map((companion) => companion.set)];
+    for (const set of sets) {
+        if (!set) continue;
+        for (const body of set.bodies) {
+            if (body.world.key === key) return { x: body.x, y: body.y };
+            for (const moon of body.moons) {
+                if (moon.moon.key === key) return { x: moon.x, y: moon.y };
+            }
+        }
+    }
+    return null;
+}
+
 function marksFor(picture: Picture, clockDays: number): readonly ShipMark[] | undefined {
     if (props.tracks) {
         lastMarks = placeShips(props.tracks, bodiesAtOf(props.hexKey, pictureBodies(picture)), clockDays);
@@ -212,6 +276,9 @@ function marksFor(picture: Picture, clockDays: number): readonly ShipMark[] | un
     }
     if (props.ships) return props.ships;
     if (standInCount() <= 0) return undefined;
+    const flight = standFlight();
+    const last = lastFrame;
+    if (flight && last) return standInMarks(props.hexKey, clockDays, picture, (key, at) => picturePlace(last.view, key, at), flight);
     return standInMarks(props.hexKey, clockDays, picture);
 }
 
@@ -326,10 +393,12 @@ function paint(clockDays: number, time: number): void {
     const started = now();
     const ships = marksFor(frame.picture, clockDays);
     const plot = plotFor(ships);
+    const preview = standPreview(clockDays);
     renderer.draw(current, frame.picture, frame.view, {
         selected, days: clockDays, time, motion: !reduced, layers: stage.layers,
         ...(ships && ships.length > 0 ? { ships } : {}),
         ...(plot ? { plot } : {}),
+        ...(preview ? { preview } : {}),
     });
     const cost = now() - started;
     costSum += cost;
@@ -367,7 +436,7 @@ watch(() => props.layers, (layers) => {
     stale = true;
 }, { deep: true });
 
-watch(() => [route.query.campaignStandIn, props.ships, props.plot, props.tracks, props.plotting, props.plotFrom] as const, () => { stale = true; });
+watch(() => [route.query.campaignStandIn, route.query.ghost, route.query.line, props.ships, props.plot, props.tracks, props.plotting, props.plotFrom, props.preview] as const, () => { stale = true; });
 
 /** js/system_viewer.js:2084-2092: the canvas says which layout it shows. */
 const canvasLabel = computed(() => {

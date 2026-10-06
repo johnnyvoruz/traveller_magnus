@@ -190,13 +190,26 @@ export function placeAtPicture(
     return picturePlaceAu(point, view, plan, layout);
 }
 
-/** Kilometres between two bodies at `days`, or null. The same known key is 0. */
-export function realDistanceKm(plan: Plan, fromKey: string, toKey: string, days: number): number | null {
-    const memo: (Place | undefined)[] = [];
-    if (fromKey === toKey) return locate(plan, fromKey, days, memo).known ? 0 : null;
-    const from = locate(plan, fromKey, days, memo);
-    const to = locate(plan, toKey, days, memo);
+/**
+ * Kilometres between two bodies, each at its own date, or null. The same known key on one
+ * date is 0. Two worlds of an unplaced companion still compare: each place keeps that
+ * companion's frame, which `realPositionAu` (primary frame only) would drop.
+ */
+export function realDistanceKmBetween(
+    plan: Plan, fromKey: string, fromDays: number, toKey: string, toDays: number,
+): number | null {
+    if (fromKey === toKey && fromDays === toDays) {
+        const found = locate(plan, fromKey, fromDays, []);
+        return found.known ? 0 : null;
+    }
+    const from = locate(plan, fromKey, fromDays, []);
+    const to = locate(plan, toKey, toDays, []);
     if (!from.known || !to.known || !from.place || !to.place) return null;
     if (from.place.frame !== to.place.frame) return null;
     return Math.hypot(from.place.x - to.place.x, from.place.y - to.place.y) * AU_KM;
+}
+
+/** Kilometres between two bodies at `days`, or null. The same known key is 0. */
+export function realDistanceKm(plan: Plan, fromKey: string, toKey: string, days: number): number | null {
+    return realDistanceKmBetween(plan, fromKey, days, toKey, days);
 }

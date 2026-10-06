@@ -900,3 +900,73 @@ test('a ship entering jump eases out, and the settled frame matches one that nev
     drawShip(renderer, arrivedDone, 11, [leaving]);
     assert.equal(renderer.layersBusy, true);
 });
+
+const dashOf = (calls, at) => dashBefore(calls, at);
+const said = (calls) => calls.filter((call) => call.op === 'fillText').map((call) => call.args[0]);
+
+test('a preview draws the destination ghost and its arc, and a picture without one does not', () => {
+    const plan = planSystem(testSystem(), HEX_KEY);
+    const dest = plan.worlds.find((world) => world.name === 'Test I');
+    const days = 1000;
+    const preview = { toKey: dest.key, departs: days, arrives: days + 20, tag: 'I · 148-1105 05:15' };
+    const plain = drawn();
+    assert.equal(plain.calls.some((call) => call.op === 'setLineDash' && call.args[0].join(',') === '1,5'), false);
+    assert.equal(plain.calls.some((call) => call.op === 'setLineDash' && call.args[0].join(',') === '3,3'), false);
+    assert.equal(plain.calls.some((call) => call.op === 'stroke' && call.stroke === 'lock'), false);
+
+    const shown = drawn({ preview });
+    assert.ok(said(shown.calls).includes('I · 148-1105 05:15'));
+    assert.ok(shown.calls.some((call) => call.op === 'setLineDash' && call.args[0].join(',') === '1,5'));
+    const ring = shown.calls.findIndex((call, index) => call.op === 'stroke' && call.stroke === 'lock' && dashOf(shown.calls, index) === '');
+    assert.ok(ring >= 0);
+
+    const party = [{ id: 'stand-party', name: 'Far Margin', kind: 'party', shape: 'triangle', x: 40, y: 50 }];
+    const lined = drawn({ preview, ships: party });
+    const flight = lined.calls.findIndex((call, index) => call.op === 'stroke' && call.stroke === 'signal' && dashOf(lined.calls, index) === '7,4');
+    assert.ok(flight >= 0);
+    const unlined = drawn({ ships: party });
+    assert.equal(unlined.calls.some((call, index) => call.op === 'stroke' && call.stroke === 'signal' && dashOf(unlined.calls, index) === '7,4'), false);
+
+    const locked = drawn({ selected: dest.key });
+    const dimmed = drawn({ selected: dest.key, preview });
+    const lockAlpha = (calls) => calls.filter((call) => call.op === 'stroke' && call.stroke === 'lock').map((call) => call.alpha);
+    assert.ok(lockAlpha(locked.calls).some((alpha) => Math.abs(alpha - 0.95) < 1e-9));
+    assert.ok(lockAlpha(dimmed.calls).some((alpha) => Math.abs(alpha - 0.475) < 1e-9));
+});
+
+test('the first preview paint is settled, and a new destination starts a run', () => {
+    const tBase = cssSeconds('300ms');
+    const ease = cssBezier('cubic-bezier(.2,.8,.2,1)');
+    const motionTheme = { ...theme, tBase, tSlow: cssSeconds('450ms'), tLong: cssSeconds('800ms'), easeOut: ease };
+    const plan = planSystem(testSystem(), HEX_KEY);
+    const scene = layoutScene(plan, { ...VIEW, moons: true, jump: true }, 1000);
+    const picture = orbitPicture(plan, scene, DEFAULT_LAYERS, VIEW.z);
+    const dest = plan.worlds.find((world) => world.name === 'Test I');
+    const other = plan.worlds.find((world) => world.name === 'Test II');
+    const preview = { toKey: dest.key, departs: 1000, arrives: 1020, tag: 'there' };
+    const { ctx, calls } = recordingContext();
+    const renderer = new OrbitRenderer(ctx, motionTheme, deps);
+    renderer.resize(VIEW.w, VIEW.h, 1);
+    const drawAt = (time, state) => {
+        calls.length = 0;
+        renderer.draw(plan, picture, VIEW, { selected: null, days: 1000, time, motion: true, layers: DEFAULT_LAYERS, ...state });
+    };
+    drawAt(5000, { preview });
+    assert.equal(renderer.layersBusy, false);
+    assert.ok(said(calls).includes('there'));
+    drawAt(5001, { preview: { ...preview, toKey: other.key, tag: 'next' } });
+    assert.equal(renderer.layersBusy, true);
+    assert.equal(said(calls).includes('next'), false);
+    drawAt(5001 + tBase * 1000 + 5, { preview: { ...preview, toKey: other.key, tag: 'next' } });
+    assert.equal(renderer.layersBusy, false);
+    assert.ok(said(calls).includes('next'));
+    drawAt(9000, { preview: { toKey: other.key, departs: 1001, arrives: 1021, tag: 'next' } });
+    assert.equal(renderer.layersBusy, false);
+    const still = recordingContext();
+    const snapped = new OrbitRenderer(still.ctx, motionTheme, deps);
+    snapped.resize(VIEW.w, VIEW.h, 1);
+    snapped.draw(plan, picture, VIEW, { selected: null, days: 1000, time: 1000, motion: false, layers: DEFAULT_LAYERS });
+    snapped.draw(plan, picture, VIEW, { selected: null, days: 1000, time: 1001, motion: false, layers: DEFAULT_LAYERS, preview });
+    assert.equal(snapped.layersBusy, false);
+    assert.ok(said(still.calls).includes('there'));
+});

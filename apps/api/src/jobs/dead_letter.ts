@@ -4,7 +4,10 @@ import { claimNext } from './truth_build.ts';
 const DEAD_ERROR = 'dead-lettered: the invocation died without throwing; see Workers Logs';
 
 type Pinned = { seed: string; settings: Record<string, unknown>; engineVersion: string };
-type DeadBody = { version?: unknown; slug?: unknown; offset?: unknown; pinned?: unknown; from?: unknown };
+type DeadBody = {
+    version?: unknown; slug?: unknown; offset?: unknown; pinned?: unknown; from?: unknown;
+    transform?: unknown; policyDigest?: unknown;
+};
 
 export async function deadLetterConsumer(batch: MessageBatch, env: Env): Promise<void> {
     for (const message of batch.messages) {
@@ -28,7 +31,7 @@ export async function deadLetterConsumer(batch: MessageBatch, env: Env): Promise
                 const pinned = readPinned(body.pinned) ?? await pinnedFromVersion(env, body.version);
                 if (pinned) {
                     const from = readFrom(body.from) ?? await derivedFromVersion(env, body.version);
-                    await claimNext(env, body.version, pinned, from);
+                    await claimNext(env, body.version, pinned, from, readReconcile(body));
                 }
             }
         }
@@ -38,6 +41,12 @@ export async function deadLetterConsumer(batch: MessageBatch, env: Env): Promise
 
 function readFrom(value: unknown): string | undefined {
     return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function readReconcile(body: DeadBody): { name: string; policyDigest: string } | undefined {
+    if (body.transform !== 'reconcile-environment') return undefined;
+    if (typeof body.policyDigest !== 'string' || body.policyDigest.length === 0) return undefined;
+    return { name: body.transform, policyDigest: body.policyDigest };
 }
 
 async function derivedFromVersion(env: Env, version: string): Promise<string | undefined> {

@@ -1,6 +1,6 @@
 /**
  * Ship marks (apps/web/src/orbit/ships.ts). Three dates: before the track,
- * on an anchor, and halfway along a flight. Bodies are asked for at that date.
+ * on an anchor, and halfway along a flight. A flight asks for its two dates.
  */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
@@ -39,11 +39,35 @@ test('placeShips on three dates: before departure, on the body, and halfway', ()
     assert.equal(mid.length, 1);
     assert.equal(mid[0].id, 'ship');
     assert.equal(mid[0].x, 50);
-    assert.equal(mid[0].y, 12.5);
-    assert.ok(Math.abs(mid[0].heading - Math.atan2(-25, 100)) < 1e-12);
+    assert.equal(mid[0].y, 10);
+    assert.ok(Math.abs(mid[0].heading - Math.atan2(-20, 100)) < 1e-12);
 
     const arrived = placeShips([track], bodiesAt, 40);
     assert.deepEqual(arrived, [{ id: 'ship', name: 'Far Margin', kind: 'party', shape: 'triangle', x: 100, y: 0 }]);
+});
+
+test('a flight runs from where it left to where it will arrive, on one straight line', () => {
+    function moving(anchor, days) {
+        if (!anchor || anchor.kind !== 'system') return null;
+        if (anchor.bodyKey === 'w0') return { x: 0, y: days };
+        if (anchor.bodyKey === 'w4') return { x: days * 2, y: 10 };
+        return null;
+    }
+    const flight = {
+        id: 'ship', name: 'Far Margin', kind: 'party', shape: 'triangle',
+        legs: [{ from: at('w0'), to: at('w4'), departs: 10, arrives: 20, mode: 'flight' }],
+    };
+    const start = placeShips([flight], moving, 10)[0];
+    const mid = placeShips([flight], moving, 15)[0];
+    const almost = placeShips([flight], moving, 10 + 0.999 * 10)[0];
+    const end = placeShips([flight], moving, 20)[0];
+    assert.deepEqual({ x: start.x, y: start.y }, { x: 0, y: 10 });
+    assert.deepEqual({ x: mid.x, y: mid.y }, { x: 20, y: 10 });
+    assert.ok(Math.abs(almost.x - 39.96) < 1e-9);
+    assert.equal(almost.y, 10);
+    assert.deepEqual({ x: end.x, y: end.y }, { x: 40, y: 10 });
+    const cross = (mid.x - start.x) * (almost.y - start.y) - (mid.y - start.y) * (almost.x - start.x);
+    assert.ok(Math.abs(cross) < 1e-9);
 });
 
 test('a mark with no body on this picture is left off, and a second track keeps its shape', () => {
