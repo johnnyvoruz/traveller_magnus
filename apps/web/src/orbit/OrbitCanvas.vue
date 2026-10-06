@@ -8,6 +8,7 @@
  * and calls paint() once a frame.
  */
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import Icon from '../design/Icon.vue';
 import {
     createCanvas, devicePixelRatio, loadImage, now, observeSize, onDevicePixelRatioChange,
@@ -20,9 +21,10 @@ import { hitOf, planSystem, type HitKind, type Plan } from './layout.ts';
 import { onSurfaceMode, surfaceMode } from '../surface/preferences.ts';
 import { drawDisc, prepareDiscs } from '../surface/service.ts';
 import { OrbitRenderer, type DiscPainter } from './OrbitRenderer.ts';
-import type { Layers, Mode } from './picture.ts';
+import type { Layers, Mode, Picture } from './picture.ts';
 import { OrbitStage } from './stage.ts';
 import { publishOrbitClock } from './running.ts';
+import { standInMarks, type PlotReadout, type ShipMark } from './ships.ts';
 import { readOrbitMotion, readOrbitTheme, type OrbitMotion } from './theme.ts';
 
 const props = defineProps<{
@@ -36,6 +38,10 @@ const props = defineProps<{
     mode: Mode;
     /** The layer switches and the View popover's settings. */
     layers: Layers;
+    /** Marks from the campaign. Omitted, a dev stand-in may fill them. */
+    ships?: readonly ShipMark[] | null;
+    /** Plotting overlay. Omitted, it stays off except under the dev stand-in. */
+    plot?: PlotReadout | null;
 }>();
 
 const emit = defineEmits<{
@@ -43,6 +49,7 @@ const emit = defineEmits<{
     pick: [key: string];
 }>();
 
+const route = useRoute();
 const wrapEl = ref<HTMLElement | null>(null);
 const canvasEl = ref<HTMLCanvasElement | null>(null);
 const plan = shallowRef<Plan | null>(null);
@@ -137,6 +144,7 @@ function onDown(event: PointerEvent): void {
 function onMove(event: PointerEvent): void {
     const at = local(event);
     pointer = at;
+    if (standInCount() > 0) stale = true;
     if (!press) {
         setHover(at.x, at.y);
         return;
@@ -167,7 +175,30 @@ function onUp(event: PointerEvent): void {
 
 function onLeave(): void {
     pointer = null;
+    if (standInCount() > 0) stale = true;
     if (!press) hover.value = null;
+}
+
+/** The same dev switch as the map: `?campaignStandIn=` a positive count. Off in a build. */
+function standInCount(): number {
+    if (!import.meta.env.DEV) return 0;
+    const raw = route.query.campaignStandIn;
+    const text = Array.isArray(raw) ? raw[0] : raw;
+    const count = Number(text);
+    return Number.isFinite(count) && count > 0 ? count : 0;
+}
+
+function marksFor(picture: Picture, clockDays: number): readonly ShipMark[] | undefined {
+    if (props.ships) return props.ships;
+    if (standInCount() <= 0) return undefined;
+    return standInMarks(props.hexKey, clockDays, picture);
+}
+
+function plotFor(marks: readonly ShipMark[] | undefined): PlotReadout | null | undefined {
+    if (props.plot !== undefined) return props.plot;
+    if (standInCount() <= 0 || !pointer) return undefined;
+    const party = marks ? marks.find((mark) => mark.kind === 'party') : undefined;
+    return { x: pointer.x, y: pointer.y, from: party ? { x: party.x, y: party.y } : null };
 }
 
 function onDouble(event: MouseEvent): void {
@@ -252,7 +283,13 @@ function paint(clockDays: number, time: number): void {
     if (!frame.changed && !frame.moving && !alive && !renderer.discsBusy && !stale) return;
     stale = false;
     const started = now();
-    renderer.draw(current, frame.picture, frame.view, { selected, days: clockDays, time, motion: !reduced, layers: stage.layers });
+    const ships = marksFor(frame.picture, clockDays);
+    const plot = plotFor(ships);
+    renderer.draw(current, frame.picture, frame.view, {
+        selected, days: clockDays, time, motion: !reduced, layers: stage.layers,
+        ...(ships && ships.length > 0 ? { ships } : {}),
+        ...(plot ? { plot } : {}),
+    });
     const cost = now() - started;
     costSum += cost;
     costFrames += 1;
@@ -288,6 +325,8 @@ watch(() => props.layers, (layers) => {
     stage.setLayers(layers, now());
     stale = true;
 }, { deep: true });
+
+watch(() => [route.query.campaignStandIn, props.ships, props.plot] as const, () => { stale = true; });
 
 /** js/system_viewer.js:2084-2092: the canvas says which layout it shows. */
 const canvasLabel = computed(() => {

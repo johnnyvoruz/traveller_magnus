@@ -492,3 +492,95 @@ test('the backdrop is seeded by the hex: the same sky every time, a different on
     const count = arcs(one).length;
     assert.ok(count > 100 && count <= Math.round(1120 * 896 / 800) + Math.round(1120 * 896 / 60000));
 });
+
+/** One fresh frame, so a previous frame's canvas state cannot leak into the recording. */
+function frameCalls(state = {}, view = VIEW) {
+    const plan = planSystem(testSystem(), HEX_KEY);
+    const laid = { ...view, moons: DEFAULT_LAYERS.moons, jump: DEFAULT_LAYERS.jump };
+    const scene = layoutScene(plan, laid, 1000);
+    const { ctx, calls } = recordingContext();
+    const renderer = new OrbitRenderer(ctx, theme, deps);
+    renderer.resize(view.w, view.h, 1);
+    renderer.draw(plan, orbitPicture(plan, scene, DEFAULT_LAYERS, view.z), view, {
+        selected: null, days: 1000, time: 5000, motion: true, layers: DEFAULT_LAYERS, ...state,
+    });
+    return calls;
+}
+
+/** The calls added after a steady frame. */
+function extraCalls(state, view = VIEW) {
+    const base = frameCalls({}, view);
+    const next = frameCalls(state, view);
+    assert.equal(JSON.stringify(next.slice(0, base.length)), JSON.stringify(base));
+    return next.slice(base.length);
+}
+
+test('the steady frame with the ship layer off is unchanged', () => {
+    const base = drawn();
+    const off = drawn({ ships: [], plot: null });
+    assert.equal(JSON.stringify(off.calls), JSON.stringify(base.calls));
+    assert.equal(JSON.stringify(frameCalls()), JSON.stringify(frameCalls({ ships: [], plot: null })));
+});
+
+test('one wireframe designator per shape, the same size at another zoom', () => {
+    const marks = [
+        { id: 'a', name: 'Far Margin', kind: 'party', shape: 'triangle', x: 120, y: 80, heading: 0.5 },
+        { id: 'b', name: 'Courier', kind: 'vessel', shape: 'circle', x: 180, y: 80 },
+        { id: 'c', name: 'Patrol', kind: 'traffic', shape: 'square', x: 240, y: 80 },
+        { id: 'd', name: 'Liner', kind: 'traffic', shape: 'rectangle', x: 300, y: 80, heading: 1 },
+    ];
+    const extra = extraCalls({ ships: marks });
+    assert.ok(!extra.some((c) => c.op === 'drawImage'));
+    assert.ok(!extra.some((c) => c.op === 'fill'));
+    const strokes = extra.filter((c) => c.op === 'stroke');
+    assert.deepEqual(strokes.map((c) => c.stroke), ['signal', 'text', 'muted', 'muted']);
+    const text = extra.filter((c) => c.op === 'fillText');
+    assert.deepEqual(text.map((c) => c.args), [
+        ['Far Margin', 132, 80],
+        ['Courier', 192, 80],
+        ['Patrol', 252, 80],
+        ['Liner', 312, 80],
+    ]);
+    assert.deepEqual(text.map((c) => c.fill), ['signal', 'text', 'muted', 'muted']);
+
+    const path = (shape) => {
+        const start = extra.findIndex((c) => c.op === 'translate' && c.args[0] === marks.find((m) => m.shape === shape).x);
+        const end = extra.findIndex((c, i) => i > start && c.op === 'restore');
+        return extra.slice(start, end).filter((c) => c.op === 'moveTo' || c.op === 'lineTo' || c.op === 'arc' || c.op === 'rect' || c.op === 'closePath' || c.op === 'rotate');
+    };
+    assert.deepEqual(path('triangle').map((c) => [c.op, ...c.args]), [
+        ['rotate', 0.5],
+        ['moveTo', 8, 0],
+        ['lineTo', -6, 5],
+        ['lineTo', -6, -5],
+        ['closePath'],
+    ]);
+    assert.deepEqual(path('circle').filter((c) => c.op === 'arc').map((c) => c.args.slice(0, 3)), [[0, 0, 6]]);
+    assert.deepEqual(path('square').filter((c) => c.op === 'rect').map((c) => c.args), [[-5, -5, 10, 10]]);
+    assert.deepEqual(path('rectangle').map((c) => [c.op, ...c.args]).filter((row) => row[0] === 'rect' || row[0] === 'rotate'), [
+        ['rotate', 1],
+        ['rect', -9, -4, 18, 8],
+    ]);
+
+    const wideView = { ...VIEW, z: 4, zoom: 6 };
+    const wide = extraCalls({ ships: marks }, wideView);
+    const local = (calls) => calls.filter((c) => c.op === 'moveTo' || c.op === 'lineTo' || c.op === 'rect' || c.op === 'arc').map((c) => [c.op, ...c.args]);
+    // A larger picture.z does not change the designator's own pixels.
+    assert.deepEqual(local(wide), local(extra));
+});
+
+test('the plotting overlay is hairlines and a readout, and only on that frame', () => {
+    const extra = extraCalls({ plot: { x: 100, y: 200, from: { x: 100, y: 230 } } });
+    const hair = extra.filter((c) => c.op === 'moveTo' || c.op === 'lineTo');
+    assert.deepEqual(hair.map((c) => [c.op, ...c.args]), [
+        ['moveTo', 0, 200],
+        ['lineTo', 1000, 200],
+        ['moveTo', 100, 0],
+        ['lineTo', 100, 800],
+    ]);
+    assert.equal(extra.find((c) => c.op === 'stroke').stroke, 'text');
+    const readout = extra.find((c) => c.op === 'fillText');
+    assert.deepEqual(readout.args, ['100.0, 200.0  30.0', 108, 212]);
+    assert.equal(readout.fill, 'text');
+    assert.ok(!extra.some((c) => c.op === 'drawImage'));
+});

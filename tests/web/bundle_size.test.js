@@ -9,8 +9,11 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 /** Vite prints chunk sizes in kB of 1000 bytes. The warning line is 500 of those. */
 const MAIN_LIMIT = 450_000;
 
-test('the main chunk in dist is under 450 kB', () => {
-    const htmlPath = path.join(root, 'apps/web/dist/index.html');
+const htmlPath = path.join(root, 'apps/web/dist/index.html');
+
+// dist is git-ignored and CI runs the tests before the build, so the check skips without it
+// (handoff §74: a test may not depend on a git-ignored folder).
+test('the main chunk in dist is under 450 kB', { skip: fs.existsSync(htmlPath) ? false : 'apps/web/dist is absent' }, () => {
     const html = fs.readFileSync(htmlPath, 'utf8');
     const match = html.match(/assets\/(index-[^"]+\.js)/);
     assert.ok(match, 'dist/index.html names the main chunk');

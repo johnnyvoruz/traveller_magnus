@@ -26,6 +26,7 @@ import {
     type Picture, type Rocks, type StarDraw, type WorldDraw,
 } from './picture.ts';
 import { discBatch, sunColour, visualRate, type OrbitDiscBatch } from './disc_batch.ts';
+import { plotText, type PlotReadout, type ShipMark, type ShipShape } from './ships.ts';
 import type { OrbitTheme, PortPaint } from './theme.ts';
 
 const TAU = Math.PI * 2;
@@ -70,6 +71,10 @@ export type DrawState = {
     /** False under reduced motion: no lock animation, no pulse, lights steady. */
     motion: boolean;
     layers: Layers;
+    /** Ship designators. Omitted, the frame is the one without them. */
+    ships?: readonly ShipMark[];
+    /** Plotting hairlines for this frame only. Omitted or null, the overlay is off. */
+    plot?: PlotReadout | null;
 };
 
 type Sprite = { lit: HTMLCanvasElement; dark: HTMLCanvasElement };
@@ -157,6 +162,8 @@ export class OrbitRenderer {
         for (const caption of picture.captions) this.caption(caption);
         if (state.layers.scan) this.scan(plan, picture, state);
         this.selection(plan, picture, state);
+        this.ships(state.ships);
+        this.plot(state.plot);
         this.settleDiscs(state);
     }
 
@@ -1064,6 +1071,91 @@ export class OrbitRenderer {
             ctx.arc(cx, cy, baseR + 4 + ease * (baseR * 0.8 + 26), 0, TAU);
             ctx.stroke();
         }
+        ctx.restore();
+    }
+
+    // ---- Ships -----------------------------------------------------------------------------
+
+    /**
+     * Sensor designators after the bodies. The shape is a fixed pixel wireframe,
+     * so a zoom that rebuilds the picture does not grow the stroke.
+     */
+    private ships(marks: readonly ShipMark[] | undefined): void {
+        if (!marks || marks.length === 0) return;
+        const ctx = this.ctx;
+        const theme = this.theme;
+        for (const mark of marks) {
+            if (this.offCanvas(mark.x, mark.y, 40)) continue;
+            const colour = mark.kind === 'party' ? theme.signal : mark.kind === 'traffic' ? theme.textMuted : theme.text;
+            ctx.save();
+            ctx.translate(mark.x, mark.y);
+            if (typeof mark.heading === 'number') ctx.rotate(mark.heading);
+            ctx.strokeStyle = colour;
+            ctx.globalAlpha = 1;
+            ctx.lineWidth = 1;
+            ctx.lineJoin = 'miter';
+            ctx.lineCap = 'butt';
+            ctx.setLineDash([]);
+            ctx.beginPath();
+            this.designator(mark.shape);
+            ctx.stroke();
+            ctx.restore();
+            ctx.save();
+            ctx.fillStyle = colour;
+            ctx.globalAlpha = 1;
+            ctx.font = '10px ' + theme.fontText;
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(mark.name, mark.x + 12, mark.y);
+            ctx.restore();
+        }
+    }
+
+    /** One closed wireframe. Drawn in a context already centred on the mark. */
+    private designator(shape: ShipShape): void {
+        const ctx = this.ctx;
+        if (shape === 'triangle') {
+            ctx.moveTo(8, 0);
+            ctx.lineTo(-6, 5);
+            ctx.lineTo(-6, -5);
+            ctx.closePath();
+            return;
+        }
+        if (shape === 'circle') {
+            ctx.arc(0, 0, 6, 0, TAU);
+            return;
+        }
+        if (shape === 'square') {
+            ctx.rect(-5, -5, 10, 10);
+            return;
+        }
+        ctx.rect(-9, -4, 18, 8);
+    }
+
+    /** Hairlines and a readout. This frame only: nothing is added to the picture. */
+    private plot(plot: PlotReadout | null | undefined): void {
+        if (!plot) return;
+        const ctx = this.ctx;
+        const theme = this.theme;
+        ctx.save();
+        ctx.strokeStyle = theme.text;
+        ctx.globalAlpha = 1;
+        ctx.lineWidth = 1;
+        ctx.lineCap = 'butt';
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(0, plot.y);
+        ctx.lineTo(this.w, plot.y);
+        ctx.moveTo(plot.x, 0);
+        ctx.lineTo(plot.x, this.h);
+        ctx.stroke();
+        const pastRight = plot.x + 8 > this.w - 120;
+        const pastBottom = plot.y + 12 > this.h - 16;
+        ctx.fillStyle = theme.text;
+        ctx.font = '10px ' + theme.fontCode;
+        ctx.textAlign = pastRight ? 'right' : 'left';
+        ctx.textBaseline = pastBottom ? 'bottom' : 'top';
+        ctx.fillText(plotText(plot), pastRight ? plot.x - 8 : plot.x + 8, pastBottom ? plot.y - 8 : plot.y + 12);
         ctx.restore();
     }
 }

@@ -3105,3 +3105,21 @@ API and Durable Object have against `data_model.md` and `api.md`).
   earlier run saw 2 failures from C's files mid-edit). C is mid-step in `orbit/`
   (`ships.ts`, `OrbitRenderer.ts`, `OrbitCanvas.vue`): push D's and A's by path.
 - **Next, D:** the drawers build (D1 to D7 ruled yes).
+
+## 123. The run on `d6c0d7a` failed (size test needs dist); fixed; C's ship layer accepted (2026-10-05)
+
+- **Failure:** `tests/web/bundle_size.test.js` reads `apps/web/dist/index.html`; CI runs
+  `npm test` before `npm run build`, so ENOENT. The orchestrator made it skip when `dist` is
+  absent (§74 rule), proven with a copy pointed at an empty folder. Production unaffected.
+- **Agent C, the ship picture (K12 points 1, 2, 2b):** `orbit/ships.ts` (`placeShips` over
+  `positionAt`: none before the first departure, on the body while docked or after arrival,
+  the straight line by fraction mid-leg with a heading; off-picture bodies skipped); the
+  painter draws the marks after the bodies as one-pixel wireframes of fixed screen size
+  (triangle, circle, square, rectangle; party `--signal`, vessels `--text-1`, traffic
+  `--text-muted`; name to the right; no sprite); the plotting overlay draws hairlines and a
+  coordinate and distance readout only for a frame given a pointer; `?campaignStandIn=`
+  shows four stand-in ships in a dev build only; steady frame matches the parity shots.
+  708 pass. **Accepted.** D passes real marks through OrbitCanvas's `ships` and `plot`
+  props in the ship MVP step.
+- D is mid-step on the drawers (`Drawer.vue`, `DrawerTabs.vue`, `HeaderClock.vue`,
+  `drawers.ts`, …). Push C's files and the test fix by path.

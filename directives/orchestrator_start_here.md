@@ -119,11 +119,10 @@ campaign layer over the truth map; own maps later. X sign-in only.
   follow-ups 14 and 15.
 - **Agent A:** free.
 - **Agent B:** free. The export route is in (§104); Export / Import buttons come with D's K15.
-- **Agent C:** the ship designators layer and plotting overlay in the orbit renderer
-  (K12 points 1, 2, 2b; §121).
+- **Agent C:** free. The ship layer is in (§123).
 - **Agent F:** parked. K13 parts 1 and 2 done (handoff 89 to 91); part 3 after K5f.
-- **Last push:** e53097a. Local and finished: D's step 3, A's chunk split (§122); C
-  mid-step in orbit/.
+- **Last push:** d6c0d7a (its run failed on the size test; fixed locally, §123). Local and
+  finished: C's ship layer and the test fix; D mid-step on the drawers.
 
 ## 7. Decisions Johnny has made that shape the next steps
 
