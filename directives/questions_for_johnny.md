@@ -363,7 +363,12 @@ Confirm that table from your book, or give yours.
 
 *Interim: the dossier shows the temperature and an "Orbital zone"; no Climate word.*
 
-**Answer:**
+**Answer (2026-10-06): "make it an easy array we can edit later, let's just go with these
+for now."** The quoted table is adopted as provisional: Frozen to -51 °C, Cold to 0 °C,
+Temperate to 30 °C, Hot to 80 °C, Boiling above; each band includes its upper limit. It
+lives in `rules/mgt2e_climate_bands.json` (typed by the orchestrator into
+`findings/rules_drafts/`, copied into `rules/` by Johnny), a plain array he can edit; no
+band number is written in code.
 
 ### F3. When a world's stored liquid is impossible at its real temperature
 
@@ -433,6 +438,59 @@ copied from the legacy `js/system_viewer.js` (2916 to 2950). Say whether that is
 use for the minimum jump distance, or give another. Likewise for (2): the dossier's "100D jump
 travel times" table (1G to 6G) comes from `calculateBaseJourneyTimes` in the engines, copied
 from the legacy `universal_math.js`. Confirm it as the travel-time rule, or give another.
+
+**Answer (2026-10-06), with the book's text pasted by Johnny (Fuel, Jump Travel, Travel
+Times, Travel Calculations, Transit Times, Common Distances for Traders):**
+1. **Yes:** 100 diameters, as the copied code has it (the world's, and the star's where it
+   is larger).
+2. **Confirmed by the book:** Time = 2 × √(Distance ÷ Acceleration), metres and seconds,
+   from rest, accelerating to the midpoint and decelerating to rest, 1 G about 10 m/s².
+   That is what `calculateBaseJourneyTimes` computes. The book's Transit Times table
+   differs from its own formula by more than rounding in 11 of 90 cells (largest: 100,000 km
+   at 6G, table 42 minutes, formula 43.03); the book calls the table a summary of the
+   formulae, so the app computes from the formula and the table is kept as reference.
+3. A jump carries a number of parsecs equal to the jump number; a jump of less than one
+   parsec counts as jump-1.
+4. **148 + 6D hours** in jumpspace, whatever the distance. This supersedes the fixed 168
+   of 2026-10-02.
+5. Fuel: 10% of hull tonnage per parsec jumped. Refined Cr500 a ton, unrefined Cr100 a
+   ton; refuelling takes 1D hours. An accurate jump arrives outside or on the verge of the
+   100-diameter limit of the target world.
+
+The numbers live in `rules/mgt2e_space_travel.json` (typed by the orchestrator into
+`findings/rules_drafts/`, copied in by Johnny). Astrogation checks, inaccurate jumps and the
+danger of unrefined fuel are named in the text and not supplied: not built.
+
+### G2. Which ship sheet fields hold the three numbers a jump needs?
+
+The official sheet's Ship Data File has Name, Class, Configuration, **Size**, Hull Options,
+Armour, Hull Points; Drives has Reaction Drive Output, **Manoeuvre Drive Output**, **Jump
+Drive Output**, **Fuel Capacity**, and cost and power fields. To show "this jump needs 40
+tons" and to warn "beyond this ship's drive", the app needs the hull's tonnage, the jump
+number and the thrust in G. Is the tonnage "Size", the jump number "Jump Drive Output" and
+the thrust "Manoeuvre Drive Output", each written as a plain number?
+
+*Recommended: yes to all three. Interim: the jump preview shows the parsecs and the fuel
+as a share of the hull ("2 parsecs, 20% of hull"), with no warning.*
+
+**Answer (2026-10-06): not for the MVP.** "For MVP we won't actually deduct fuel numbers
+from a ship, but I'd like to maybe put estimated numbers of time / distance / fuel
+measurements when plotting a course for a ship. If it needs data to be calculated due to
+mass, we can just set mass at 100 tons for now just for MVP and then I'll figure out what on
+the ship fields would actually be used for calculations. The MVP design will essentially let
+anything go, it's just measuring and then for vNext we will tie in ship logic to plotting
+warnings / refueling." So: the plotting previews show estimates of distance, time and fuel;
+the hull is assumed to be 100 tons and the screen says so; no ship field is read, nothing is
+deducted, nothing warns or refuses. Which sheet fields feed the sums is Johnny's to decide
+for vNext.
+
+### G3. Does a flight inside a system use fuel?
+
+The text pasted on 2026-10-06 gives a fuel cost for jumps only (10% of hull tonnage per
+parsec). Does the book give a fuel cost for manoeuvring from one body to another? If so,
+the rule is needed; if not, a flight shows distance and time and no fuel.
+
+*Interim: a flight shows distance and time only; fuel appears on jumps only.*
 
 **Answer:**
 

@@ -280,7 +280,7 @@ function paint(clockDays: number, time: number): void {
     const selected = props.selected && hitOf(frame.picture, props.selected) ? props.selected : null;
     const alive = !reduced && (selected !== null || stage.layers.scan || current.worlds.some((w) => w.port !== null || w.moons.some((m) => m.port !== null)));
     // Shaded discs turn and their clouds drift, and tiles arrive a frame or more after they are asked for.
-    if (!frame.changed && !frame.moving && !alive && !renderer.discsBusy && !stale) return;
+    if (!frame.changed && !frame.moving && !alive && !renderer.discsBusy && !renderer.layersBusy && !stale) return;
     stale = false;
     const started = now();
     const ships = marksFor(frame.picture, clockDays);

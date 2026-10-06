@@ -302,6 +302,36 @@ only. D's five points for the orchestrator:
     168 h, `settings.jumpHours`) and whether it varies; (5) anything about fuel the app
     should show or refuse on. Johnny supplies these as a `rules/` file; recorded as question
     G1 in `questions_for_johnny.md`. Until then the step has no owner.
+  - **Rules supplied (Johnny, 2026-10-06; G1 answered).** The book's text for fuel, jump
+    travel and travel times; the numbers are `rules/mgt2e_space_travel.json`, read through
+    the generated wrapper, none written in code. What the app does with them
+    (orchestrator's rulings; Johnny may overrule):
+    1. **One module computes:** `apps/web/src/campaign/travel.ts` (Agent A):
+       `transitSeconds(distanceKm, accelG)` from the formula (the Transit Times table is
+       reference; 11 of its 90 cells differ from the formula by more than rounding and are
+       listed in the test, never "fixed"), `jumpParsecsCounted`, `jumpFuelTons`,
+       `rollJumpHours`, and `ASSUMED_HULL_TONS = 100` (Johnny's stand-in, below). The
+       book's D is the engines' six-sided die (`roll1D` in `core/rng.js`); a campaign roll
+       is not seeded. Reach, refuelling and the fuel prices are in the rules file and are
+       not coded until vNext uses them.
+    2. **Jump lasts 148 + 6D hours.** The app rolls it when the jump is plotted, shows the
+       dice ("148 + 23 = 171 h"), offers "Roll again", and the referee may type over it.
+       **`settings.jumpHours` is withdrawn** (it was never pushed); the fixed 168 of
+       2026-10-02 is superseded.
+    3. **The MVP measures and lets anything go (Johnny, 2026-10-06, answering G2).** While
+       plotting a course the preview shows **estimates**: a flight's distance and time at
+       the chosen G; a jump's parsecs (`getHexDistance`, at least 1), its rolled time and
+       its fuel. The fuel sum takes the hull as **100 tons** (Johnny's stand-in "just for
+       MVP"), and the screen says so ("about 20 tons for a 100-ton hull"). Nothing is
+       deducted from a ship, no ship field is read, nothing warns or refuses. **vNext**
+       ties the ship's own fields to the sums, then warnings and refuelling; which fields,
+       Johnny decides. A flight shows no fuel: the text supplied prices jumps only (G3).
+    4. **Flight legs:** the duration is filled from `transitSeconds` over the distance
+       between the two places at departure and the chosen G; still editable. Part 2.
+    5. **Arrival:** the ship comes out on the 100-diameter circle of the destination's
+       mainworld. Part 2, with the bubble.
+    6. Not supplied, not built: Astrogation checks, inaccurate jumps, the danger of
+       unrefined fuel, current fuel aboard.
   - **Many ships, and the track as a record (Johnny, 2026-10-05).** "Orbit could be handling
     multiple ship navigation plots; this will not be single-threaded. Attach ship nav as a
     data / diary feed for the ship so the route can be re-created, re-used or re-traced:
@@ -494,6 +524,16 @@ only. D's five points for the orchestrator:
       the address says, e.g. `/orbit/<sector>/<hex>?panel=campaign/...` or a nested route).
       D designs the address shape with A (A owns the router and the chunks); the back
       button and cold load of every address keep working (manifesto: connected).
+
+  18. **The locked-world Day and night card (Johnny, 2026-10-05):** for a world that keeps one
+      face to its star, the card today reads "No day and night · one face always points at
+      the star" over an empty "Day side / Night side" strip. Hide the strip and the marker
+      for such a world, and present the fact as a short **sci-fi computer-terminal readout
+      "from the Scouts"**: a monospace block in the tokens (the `--signal` on `--bg-2`
+      terminal look the design page already has, or one made for it), a few lines such as
+      "ROTATION: LOCKED", "DAYSIDE: PERMANENT", "NIGHTSIDE: PERMANENT", with the values
+      the dossier already holds (no new facts); the words are a display choice, not a rule.
+      Reduced motion: no type-on effect. D designs it; C's `DayNight.vue` carries it.
 
 - **K13 part 4. The character sheet (Johnny, 2026-10-05).** Person records get the same
   treatment from a character sheet PDF, "with all our new design requirements": the field

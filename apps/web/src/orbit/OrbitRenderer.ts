@@ -27,7 +27,13 @@ import {
 } from './picture.ts';
 import { discBatch, sunColour, visualRate, type OrbitDiscBatch } from './disc_batch.ts';
 import { plotText, type PlotReadout, type ShipMark, type ShipShape } from './ships.ts';
-import type { OrbitTheme, PortPaint } from './theme.ts';
+import { easeOutAt, type EaseOut, type OrbitTheme, type PortPaint } from './theme.ts';
+
+/** The layer switches that ease. Linear scale and ring strength stay where the slider put them. */
+type ToggleKey = 'habitable' | 'jump' | 'paths' | 'moons' | 'dayNight' | 'scan' | 'markMainworld';
+type LayerRun = { from: number; to: number; t0: number };
+type HeldLayer = { bands: BandAt[]; jumps: JumpAt[]; paths: PathAt[]; panels: Panel[] };
+const TOGGLE_KEYS: readonly ToggleKey[] = ['habitable', 'jump', 'paths', 'moons', 'dayNight', 'scan', 'markMainworld'];
 
 const TAU = Math.PI * 2;
 /** About three seconds of frames: how long a still picture keeps painting after its last missing tile. */
@@ -120,6 +126,32 @@ export class OrbitRenderer {
     /** For measuring: the service's last answer and how many tiles the last frame drew, as "ready:19". */
     discsReport = 'none';
     private tilesDrawn = 0;
+    /**
+     * True while a layer toggle is between its two settled frames. The canvas keeps painting
+     * for that long; a settled frame leaves it false.
+     */
+    layersBusy = false;
+    /** The switches of the previous frame. Null until the first paint, which never eases. */
+    private seenLayers: Layers | null = null;
+    private layerRuns = new Map<ToggleKey, LayerRun>();
+    private habLive = false;
+    private habShare = 1;
+    private jumpLive = false;
+    private jumpShare = 1;
+    private pathsLive = false;
+    private pathsShare = 1;
+    private moonsPulse = 0;
+    private dayPulse = 0;
+    private scanLive = false;
+    private scanShare = 1;
+    private mainLive = false;
+    private mainShare = 1;
+    /** Multiplies the scan overlay. 1 on a settled frame, so those alphas stay as written. */
+    private scanFade = 1;
+    private heldMode: Picture['mode'] | null = null;
+    private heldLayers: HeldLayer[] = [];
+    private heldMoons: { x: number; y: number; r: number }[] = [];
+    private heldMainKeys = new Set<string>();
 
     constructor(ctx: CanvasRenderingContext2D, theme: OrbitTheme, deps: RendererDeps) {
         this.ctx = ctx;
@@ -150,21 +182,246 @@ export class OrbitRenderer {
         ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
         ctx.clearRect(0, 0, this.w, this.h);
         this.starField(plan, view);
-        for (const layer of picture.layers) {
-            for (const band of layer.bands) this.band(band);
-            for (const panel of layer.panels) this.panel(panel);
-            for (const ring of layer.jumps) this.jump(ring);
-            for (const path of layer.paths) this.path(path);
+        this.beginChannels(state);
+        for (const [index, layer] of picture.layers.entries()) {
+            if (!this.habLive) {
+                for (const band of layer.bands) this.band(band);
+                for (const panel of layer.panels) this.panel(panel);
+            } else {
+                const held = this.heldLayers[index];
+                const bands = layer.bands.length > 0 ? layer.bands : (held ? held.bands : []);
+                for (const band of bands) this.grow(band.cx, band.cy, this.habShare, () => this.band(band));
+                const panels = layer.panels.length > 0 ? layer.panels : (held ? held.panels : []);
+                for (const panel of panels) this.growPanel(panel);
+            }
+            if (!this.jumpLive) {
+                for (const ring of layer.jumps) this.jump(ring);
+            } else {
+                const held = this.heldLayers[index];
+                const rings = layer.jumps.length > 0 ? layer.jumps : (held ? held.jumps : []);
+                for (const ring of rings) this.grow(ring.cx, ring.cy, this.jumpShare, () => this.jump(ring));
+            }
+            if (!this.pathsLive) {
+                for (const path of layer.paths) this.path(path);
+            } else {
+                this.pathsOf(layer.paths, index);
+            }
             for (const rocks of layer.rocks) this.rocks(rocks);
             for (const at of layer.worlds) this.world(plan, at, state);
         }
         for (const at of picture.stars) this.star(at);
-        for (const caption of picture.captions) this.caption(caption);
-        if (state.layers.scan) this.scan(plan, picture, state);
+        if (!this.mainLive) {
+            for (const caption of picture.captions) this.caption(caption);
+        } else {
+            for (const caption of picture.captions) this.captionOf(caption);
+        }
+        if (Math.max(this.moonsPulse, this.dayPulse) > 0.001) this.wireframes(picture);
+        if (!this.scanLive) {
+            if (state.layers.scan) this.scan(plan, picture, state);
+        } else if (this.scanShare > 0) {
+            this.scanFade = this.scanShare >= 1 ? 1 : this.scanShare;
+            this.scan(plan, picture, state);
+            this.scanFade = 1;
+        }
         this.selection(plan, picture, state);
         this.ships(state.ships);
         this.plot(state.plot);
         this.settleDiscs(state);
+        this.keepHeld(picture, state.layers);
+    }
+
+    /**
+     * Starts a toggle's run on the frame the switch changes, and drops it before the frame
+     * where it has finished, so that frame is the settled one. The first paint only records
+     * the switches. Reduced motion, or a theme without --t-base and --ease-out, snaps.
+     */
+    private beginChannels(state: DrawState): void {
+        this.habLive = false;
+        this.habShare = 1;
+        this.jumpLive = false;
+        this.jumpShare = 1;
+        this.pathsLive = false;
+        this.pathsShare = 1;
+        this.moonsPulse = 0;
+        this.dayPulse = 0;
+        this.scanLive = false;
+        this.scanShare = 1;
+        this.mainLive = false;
+        this.mainShare = 1;
+        this.scanFade = 1;
+        this.layersBusy = false;
+        const layers = state.layers;
+        const ease = this.theme.easeOut;
+        const tBase = this.theme.tBase;
+        if (!state.motion || !(typeof tBase === 'number' && tBase > 0) || !ease) {
+            this.layerRuns.clear();
+            this.seenLayers = { ...layers };
+            return;
+        }
+        if (!this.seenLayers) {
+            this.seenLayers = { ...layers };
+            return;
+        }
+        for (const key of TOGGLE_KEYS) {
+            if (layers[key] === this.seenLayers[key]) continue;
+            const prev = this.layerRuns.get(key);
+            const from = prev ? this.runShare(prev, state.time, tBase, ease) : (layers[key] ? 0 : 1);
+            this.layerRuns.set(key, { from, to: layers[key] ? 1 : 0, t0: state.time });
+        }
+        this.seenLayers = { ...layers };
+        for (const [key, run] of this.layerRuns) {
+            const u = (state.time - run.t0) / 1000 / tBase;
+            if (u >= 1) {
+                this.layerRuns.delete(key);
+                continue;
+            }
+            const eased = easeOutAt(ease, Math.max(0, u));
+            const share = run.from + (run.to - run.from) * eased;
+            const pulse = Math.sin(Math.PI * eased);
+            this.layersBusy = true;
+            if (key === 'habitable') { this.habLive = true; this.habShare = share; }
+            else if (key === 'jump') { this.jumpLive = true; this.jumpShare = share; }
+            else if (key === 'paths') { this.pathsLive = true; this.pathsShare = share; }
+            else if (key === 'moons') this.moonsPulse = pulse;
+            else if (key === 'dayNight') this.dayPulse = pulse;
+            else if (key === 'scan') { this.scanLive = true; this.scanShare = share; }
+            else { this.mainLive = true; this.mainShare = share; }
+        }
+    }
+
+    private runShare(run: LayerRun, now: number, tBase: number, ease: EaseOut): number {
+        const u = (now - run.t0) / 1000 / tBase;
+        if (u >= 1) return run.to;
+        const eased = easeOutAt(ease, Math.max(0, u));
+        return run.from + (run.to - run.from) * eased;
+    }
+
+    /** Scale about a centre while a ring is between its endpoints. At rest, draw it as written. */
+    private grow(cx: number, cy: number, share: number, draw: () => void): void {
+        if (!(share > 0)) return;
+        if (share >= 1) {
+            draw();
+            return;
+        }
+        const ctx = this.ctx;
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(share, share);
+        ctx.translate(-cx, -cy);
+        draw();
+        ctx.restore();
+    }
+
+    /** A line-up habitable panel grows from its own centre and fades. It has no star to leave. */
+    private growPanel(panel: Panel): void {
+        const share = this.habShare;
+        if (!(share > 0)) return;
+        if (share >= 1) {
+            this.panel(panel);
+            return;
+        }
+        this.grow(panel.x + panel.w / 2, panel.y + panel.h / 2, share, () => {
+            this.panel({ ...panel, alpha: panel.alpha * share });
+        });
+    }
+
+    /** Belts stay put. World and companion orbits grow from their primary and fade. */
+    private pathsOf(paths: readonly PathAt[], index: number): void {
+        for (const path of paths) if (path.style === 'belt') this.path(path);
+        const live = paths.some((path) => path.style !== 'belt')
+            ? paths.filter((path) => path.style !== 'belt')
+            : (this.heldLayers[index] ? this.heldLayers[index].paths : []);
+        const share = this.pathsShare;
+        for (const path of live) {
+            if (!(share > 0)) continue;
+            if (share >= 1) this.path(path);
+            else this.grow(path.cx, path.cy, share, () => this.path({ ...path, alpha: path.alpha * share }));
+        }
+    }
+
+    private captionOf(caption: Caption): void {
+        const fadingOff = this.mainShare >= 1 && this.layers !== null && !this.layers.markMainworld && this.heldMainKeys.has(caption.key);
+        if (this.mainShare >= 1) {
+            this.caption(fadingOff ? { ...caption, main: true } : caption);
+            return;
+        }
+        if (this.mainShare > 0 && (caption.main || this.heldMainKeys.has(caption.key))) {
+            this.caption({ ...caption, main: true, alpha: caption.alpha * this.mainShare });
+            return;
+        }
+        this.caption(caption);
+    }
+
+    /** One --signal stroke over each world and moon. Gone at both ends of the toggle. */
+    private wireframes(picture: Picture): void {
+        const pulse = Math.max(this.moonsPulse, this.dayPulse);
+        if (!(pulse > 0.001)) return;
+        const ctx = this.ctx;
+        ctx.save();
+        ctx.strokeStyle = this.theme.signal;
+        ctx.globalAlpha = Math.min(1, pulse);
+        ctx.lineWidth = 1;
+        ctx.setLineDash([]);
+        const ring = (x: number, y: number, r: number) => {
+            ctx.beginPath();
+            ctx.arc(x, y, Math.max(r + 4, 8), 0, TAU);
+            ctx.stroke();
+        };
+        let moons = 0;
+        for (const layer of picture.layers) {
+            for (const at of layer.worlds) {
+                ring(at.x, at.y, at.r);
+                for (const moon of at.moons) {
+                    if (moon.moon.ring) continue;
+                    moons += 1;
+                    ring(moon.x, moon.y, moon.r);
+                }
+            }
+        }
+        if (moons === 0 && this.moonsPulse > 0.001) {
+            for (const moon of this.heldMoons) ring(moon.x, moon.y, moon.r);
+        }
+        ctx.restore();
+    }
+
+    /** Remember the geometry a shrink will need. A live channel does not overwrite its stash. */
+    private keepHeld(picture: Picture, layers: Layers): void {
+        if (picture.mode !== this.heldMode) {
+            this.heldMode = picture.mode;
+            this.heldLayers = [];
+            this.heldMoons = [];
+            this.heldMainKeys = new Set();
+        }
+        while (this.heldLayers.length < picture.layers.length) {
+            this.heldLayers.push({ bands: [], jumps: [], paths: [], panels: [] });
+        }
+        if (this.heldLayers.length > picture.layers.length) this.heldLayers.length = picture.layers.length;
+        picture.layers.forEach((layer, i) => {
+            const held = this.heldLayers[i];
+            if (!held) return;
+            if (!this.habLive && layers.habitable) {
+                held.bands = layer.bands.map((band) => ({ ...band }));
+                held.panels = layer.panels.map((panel) => ({ ...panel }));
+            }
+            if (!this.jumpLive && layers.jump) held.jumps = layer.jumps.map((ring) => ({ ...ring }));
+            if (!this.pathsLive && layers.paths) {
+                held.paths = layer.paths.filter((path) => path.style !== 'belt').map((path) => ({ ...path }));
+            }
+        });
+        if (!(this.moonsPulse > 0) && layers.moons) {
+            const moons: { x: number; y: number; r: number }[] = [];
+            for (const layer of picture.layers) {
+                for (const at of layer.worlds) {
+                    for (const moon of at.moons) {
+                        if (!moon.moon.ring) moons.push({ x: moon.x, y: moon.y, r: moon.r });
+                    }
+                }
+            }
+            this.heldMoons = moons;
+        }
+        if (!this.mainLive && layers.markMainworld) {
+            this.heldMainKeys = new Set(picture.captions.filter((caption) => caption.main).map((caption) => caption.key));
+        }
     }
 
     // ---- Shaded discs ---------------------------------------------------------------------
@@ -378,9 +635,21 @@ export class OrbitRenderer {
         ctx.setLineDash([]);
         ctx.restore();
         // 3206-3214: a mainworld belt carries the mark and its name at the top of its ring.
-        if (path.main !== null && this.layers && this.layers.markMainworld) {
+        if (path.main !== null && this.layers && !this.mainLive && this.layers.markMainworld) {
             this.mainworldStar(path.cx, path.cy - path.r, 2, this.z);
             if (path.main) this.name(path.main, path.cx, path.cy - path.r - 10, 11, path.alpha);
+        } else if (path.main !== null && this.layers && this.mainLive && this.mainShare > 0) {
+            if (this.mainShare >= 1) {
+                this.mainworldStar(path.cx, path.cy - path.r, 2, this.z);
+                if (path.main) this.name(path.main, path.cx, path.cy - path.r - 10, 11, path.alpha);
+            } else {
+                const mark = this.ctx;
+                mark.save();
+                mark.globalAlpha = this.mainShare;
+                this.mainworldStar(path.cx, path.cy - path.r, 2, this.z);
+                mark.restore();
+                if (path.main) this.name(path.main, path.cx, path.cy - path.r - 10, 11, path.alpha * this.mainShare);
+            }
         }
     }
 
@@ -398,7 +667,18 @@ export class OrbitRenderer {
             ctx.fill();
         }
         ctx.restore();
-        if (rocks.mark && this.layers && this.layers.markMainworld) this.mainworldStar(rocks.mark.x, rocks.mark.y, rocks.mark.r, this.z);
+        if (rocks.mark && this.layers && !this.mainLive && this.layers.markMainworld) {
+            this.mainworldStar(rocks.mark.x, rocks.mark.y, rocks.mark.r, this.z);
+        } else if (rocks.mark && this.layers && this.mainLive && this.mainShare > 0) {
+            if (this.mainShare >= 1) {
+                this.mainworldStar(rocks.mark.x, rocks.mark.y, rocks.mark.r, this.z);
+            } else {
+                ctx.save();
+                ctx.globalAlpha = this.mainShare;
+                this.mainworldStar(rocks.mark.x, rocks.mark.y, rocks.mark.r, this.z);
+                ctx.restore();
+            }
+        }
     }
 
     /** js/system_viewer.js:2538-2572: a line-up caption, fitted to its slot. */
@@ -448,10 +728,30 @@ export class OrbitRenderer {
         const litRings = lit && this.shaded !== null && this.shaded.get(w.key) === true;
 
         // 4543-4554: the moons' paths, with the Paths layer.
-        if (layers.paths && layers.pathStrength > 0) {
+        if (!this.pathsLive) {
+            if (layers.paths && layers.pathStrength > 0) {
+                ctx.save();
+                ctx.strokeStyle = theme.pathBase;
+                ctx.globalAlpha = Math.min(1, layers.pathStrength * PATH_ALPHA_WORLD);
+                ctx.lineWidth = this.pathWidth;
+                for (const m of at.moons) {
+                    if (m.moon.ring || m.orbitR < 2) continue;
+                    ctx.beginPath();
+                    ctx.arc(at.x, at.y, m.orbitR, 0, TAU);
+                    ctx.stroke();
+                }
+                ctx.restore();
+            }
+        } else if (this.pathsShare > 0 && layers.pathStrength > 0) {
+            const share = this.pathsShare;
             ctx.save();
+            if (share < 1) {
+                ctx.translate(at.x, at.y);
+                ctx.scale(share, share);
+                ctx.translate(-at.x, -at.y);
+            }
             ctx.strokeStyle = theme.pathBase;
-            ctx.globalAlpha = Math.min(1, layers.pathStrength * PATH_ALPHA_WORLD);
+            ctx.globalAlpha = Math.min(1, layers.pathStrength * PATH_ALPHA_WORLD * (share < 1 ? share : 1));
             ctx.lineWidth = this.pathWidth;
             for (const m of at.moons) {
                 if (m.moon.ring || m.orbitR < 2) continue;
@@ -464,9 +764,20 @@ export class OrbitRenderer {
         for (const m of at.moons) this.moon(plan, m, at, state, litRings);
         if (!litRings) for (const r of at.rings) this.staticRing(at.x, at.y, r);
 
-        if (w.mainworld && layers.markMainworld) {
+        if (w.mainworld && !this.mainLive && layers.markMainworld) {
             this.mainworldStar(at.x, at.y, at.r, at.z);
             if (w.name && at.label > 0) this.name(w.name, at.x, at.y - at.r - 8, 11, at.label);
+        } else if (w.mainworld && this.mainLive && this.mainShare > 0) {
+            if (this.mainShare >= 1) {
+                this.mainworldStar(at.x, at.y, at.r, at.z);
+                if (w.name && at.label > 0) this.name(w.name, at.x, at.y - at.r - 8, 11, at.label);
+            } else {
+                ctx.save();
+                ctx.globalAlpha = this.mainShare;
+                this.mainworldStar(at.x, at.y, at.r, at.z);
+                ctx.restore();
+                if (w.name && at.label > 0) this.name(w.name, at.x, at.y - at.r - 8, 11, at.label * this.mainShare);
+            }
         }
     }
 
@@ -501,9 +812,20 @@ export class OrbitRenderer {
             ctx.fill();
             ctx.restore();
         }
-        if (moon.mainworld && state.layers.markMainworld) {
+        if (moon.mainworld && !this.mainLive && state.layers.markMainworld) {
             this.mainworldStar(m.x, m.y, m.r, parent.z);
             if (moon.name && parent.label > 0) this.name(moon.name, m.x, m.y - m.r - 5, 10, parent.label);
+        } else if (moon.mainworld && this.mainLive && this.mainShare > 0) {
+            if (this.mainShare >= 1) {
+                this.mainworldStar(m.x, m.y, m.r, parent.z);
+                if (moon.name && parent.label > 0) this.name(moon.name, m.x, m.y - m.r - 5, 10, parent.label);
+            } else {
+                ctx.save();
+                ctx.globalAlpha = this.mainShare;
+                this.mainworldStar(m.x, m.y, m.r, parent.z);
+                ctx.restore();
+                if (moon.name && parent.label > 0) this.name(moon.name, m.x, m.y - m.r - 5, 10, parent.label * this.mainShare);
+            }
         }
     }
 
@@ -984,7 +1306,7 @@ export class OrbitRenderer {
             ctx.fillRect(0, 0, this.w, this.h);
             ctx.fillStyle = theme.signal;
             const reach = Math.hypot(Math.max(centre.x, this.w - centre.x), Math.max(centre.y, this.h - centre.y));
-            ctx.globalAlpha = 0.22;
+            ctx.globalAlpha = 0.22 * this.scanFade;
             ctx.lineWidth = 1;
             ctx.beginPath();
             ctx.moveTo(centre.x, centre.y);
@@ -1010,7 +1332,7 @@ export class OrbitRenderer {
             const alpha = Math.min(1, (moon ? 0.42 : 0.68) + (main ? 0.2 : 0) + ping * 0.45);
             // A moon too small to show detail gets a quiet ring, so a crowded moon system stays readable.
             if (moon && visual < 2.5 && !main) {
-                ctx.globalAlpha = alpha * 0.55;
+                ctx.globalAlpha = alpha * 0.55 * this.scanFade;
                 ctx.lineWidth = 1;
                 ctx.beginPath();
                 ctx.arc(cx, cy, 4 + ping * 2, 0, TAU);
@@ -1018,12 +1340,12 @@ export class OrbitRenderer {
                 continue;
             }
             const R = Math.max(visual + 5, moon ? 7 : 9) + ping * 3;
-            ctx.globalAlpha = alpha * 0.32;
+            ctx.globalAlpha = alpha * 0.32 * this.scanFade;
             ctx.lineWidth = 1;
             ctx.beginPath();
             ctx.arc(cx, cy, R, 0, TAU);
             ctx.stroke();
-            ctx.globalAlpha = alpha;
+            ctx.globalAlpha = alpha * this.scanFade;
             ctx.lineWidth = main ? 2 : 1.5;
             const turn = now * (moon ? 0.5 : 0.3) + (cx * 0.013 + cy * 0.007);
             for (let k = 0; k < 4; k++) {
@@ -1043,12 +1365,12 @@ export class OrbitRenderer {
             const lx = cx + corner + 6;
             const ly = cy - corner - 6;
             ctx.lineWidth = 1;
-            ctx.globalAlpha = alpha * 0.55;
+            ctx.globalAlpha = alpha * 0.55 * this.scanFade;
             ctx.beginPath();
             ctx.moveTo(cx + corner, cy - corner);
             ctx.lineTo(lx - 2, ly + 3);
             ctx.stroke();
-            ctx.globalAlpha = Math.min(1, alpha + 0.1);
+            ctx.globalAlpha = Math.min(1, alpha + 0.1) * this.scanFade;
             ctx.fillText(label, lx, ly);
         }
         ctx.restore();

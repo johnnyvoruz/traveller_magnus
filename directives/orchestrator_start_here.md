@@ -1,9 +1,10 @@
 # Orchestrator: start here
 
-Written 2026-10-05 by the outgoing orchestrator session for the next one. `handoff.md` is the
-full log (81 numbered sections, newest last); this file is the state on one page. Read this,
-then `handoff.md` §65 onward, then `slice_2_campaign.md`. Keep this file true: replace it, do
-not append to it.
+Rewritten 2026-10-06 (early, after Johnny's day of 2026-10-05) by the outgoing orchestrator
+session for the next one. `handoff.md` is the full log (126 numbered sections, newest last);
+this file is the state on one page. Read this, then `handoff.md` §82 onward, then
+`slice_2_campaign.md` (the recipe, with Johnny's follow-ups 1 to 18 near its end). Keep this
+file true: replace it, do not append to it.
 
 ## 1. Who is who
 
@@ -13,10 +14,12 @@ not append to it.
 - **You** are the orchestrator: review each report critically, verify cheap claims against the
   code, fix the spec first, write the next prompt, keep `directives/` true.
 - **Agents A, B, C** are implementers of equal standing. By habit: **A** shared schemas,
-  browser logic, tests; **B** the Worker and Durable Object (`apps/api`); **C** renderers and
-  self-contained modules. **Agent D** is the high-effort UI agent and owns every screen and
-  the look. **Agent F** is a higher-effort agent on a limited budget (about half spent):
-  parked; use only for hard design, never for routine work.
+  browser logic, the router and chunks, tests; **B** the Worker and Durable Object
+  (`apps/api`); **C** renderers and self-contained modules (`deckplan/`, `surface/`,
+  `OrbitRenderer.ts`, `dossier/DayNight.vue`). **Agent D** is the high-effort UI agent and
+  owns every screen and the look (`workspace/`, `orbit/*.vue`, `views/`). **Agent F** is a
+  higher-effort agent on a limited budget (about half spent): parked; use only for hard
+  design, never for routine work.
 
 ## 2. How Johnny wants to be worked with
 
@@ -24,152 +27,168 @@ not append to it.
 - End every reply with a **Board**: one line per agent and one for him.
 - Decide and record; ask him only what only he can answer. He does not want lists of
   technical questions. When he must choose, give the recommended option first.
-- Production-grade, no band-aids. The legacy look is the bar for every screen.
+- **Spell every question for him out in the chat** (his ask, 2026-10-06): under "Questions
+  for Johnny", numbered, in plain words with the facts he needs (what the code does today,
+  the proposed value) and what the answer unlocks, each answerable in a word or a line.
+  Never "F2 is open" or "see `questions_for_johnny.md`"; he does not go and read the file.
+  Write his answer into that file afterwards.
+- Production-grade, no band-aids. The legacy look is the bar for every screen; he now also
+  judges the live app himself and sends feedback with screenshots. Record each item as a
+  numbered follow-up in `slice_2_campaign.md`, assign it by owner, and say when it is queued.
 - He often pastes an old report by mistake, or forgets to hand out a prompt. Check each
-  report against what you already accepted; if it is old, say so and repeat the missing
-  prompt in full.
+  report against what you already accepted; if it is old, say so. **Check `git status`
+  before assuming an agent has started:** twice on 2026-10-05 an agent had nothing on disk
+  because its prompt was never handed out. Repeat a missing prompt in full.
+- He sometimes says "pushed" when the command did not run (three times on 2026-10-05).
+  **Verify with `git log -1`** and ask him to confirm the commit message.
 - Long lines lose their middles when pasted into agents' terminals. **Keep prompt lines under
   about 60 characters**, in a code block, ending in "Stop and report".
+- When a prompt is superseded, say so in one line; he may otherwise run the older one.
 
 ## 3. Rules you must keep (beyond `CLAUDE.md`)
 
-- **Git and production are Johnny's.** `CLAUDE.md` rule 6 stands. Give him exact commands with
-  forward slashes (`cd D:/webstorm/traveller_magnus; ...`). A push to `campaign` deploys.
+- **Git and production are Johnny's.** `CLAUDE.md` rule 6 stands (an agent confessed a
+  `git stash` round-trip on 2026-10-05; restated). Give him exact commands with forward
+  slashes (`cd D:/webstorm/traveller_magnus; ...`). A push to `campaign` deploys.
 - **Call for a push only when no agent is mid-step**, or give a command that adds finished
-  work by path. A commit that caught an agent mid-step broke both the tests and the deploy
-  on 2026-10-05 (handoff §80, §81).
+  work by path. **Before naming a shared file in a by-path push, `git diff` it for another
+  agent's imports** (handoff §109: a by-path push took `DesignView.vue` with D's imports of
+  uncommitted files and broke CI). A full push is `git add -A` when everyone is between steps.
 - **After every push, check three things yourself:** the GitHub test run
-  (`gh run list -R johnnyvoruz/traveller_magnus`; the repo is a fork, always pass `-R`), the
-  Workers Build (ask Johnny for the log if a deploy is in doubt), and that the live bundle
-  contains the new feature (fetch `https://traveller.voyage/`, find `assets/index-*.js`, grep
-  it). A route answering proves nothing if it existed before.
+  (`gh run list -R johnnyvoruz/traveller_magnus`; the repo is a fork, always pass `-R`; use
+  `gh run watch <id> --exit-status`), the Workers Build (the live bundle hash changes within
+  one to three minutes; poll with an `until` loop, do not declare a failed deploy early), and
+  that the live bundle contains the new feature (fetch `https://traveller.voyage/`, find
+  `assets/index-*.js`; features in the orbit view are in `assets/OrbitView-*.js`, the campaign
+  panel in `assets/CampaignPanel-*.js`; minified strings may be in backticks). A route
+  answering proves nothing if it existed before; a signed-out 401 on a new route does.
+- **CI runs `npm test` before `npm run build`:** a test may not read `apps/web/dist`
+  (handoff §123: skip when absent). Tests may not depend on a git-ignored folder, the exact
+  Node version, or line endings (CRLF here, LF on CI).
 - **Black-box runs need a quiet tree.** `wrangler dev` rebuilds when `apps/api` or
   `packages/*` change; an agent editing mid-run makes the test hang and time out (handoff
   §99). Re-run only when nobody is mid-step there, or read the route in full instead.
 - **Stand-ins are not proof.** Every API step ends with its black-box test run against
-  `wrangler dev` (`RUN_API_TESTS=1`). The Durable Object refuses SQL `BEGIN`; a `node:sqlite`
-  stand-in accepted it and hid a total write failure (handoff §78).
-- **Tests may not depend on** a git-ignored folder, the exact Node version, or line endings
-  (the checkout is CRLF here and LF on CI). Stored digests of source files are taken over
-  LF text.
-- **Shell:** never put backticks inside a double-quoted shell string; it runs them. Write
-  scripts with the Write tool and run them with `node`, or use a quoted heredoc.
+  `wrangler dev` (`RUN_API_TESTS=1`). The Durable Object refuses SQL `BEGIN` (handoff §78).
+- **Shell:** never put backticks inside a double-quoted shell string; it runs them (it bit
+  this session too, §105). Write scripts with the Write tool and run them with `node`, or use
+  a quoted heredoc. Never re-run a one-off script that appends to a directive (it duplicated
+  nine answers once; caught and repaired).
 - **Never** edit `rules/`, `js/`, `hex_map.html`, `style.css`. No Traveller rule from memory.
-- `findings/` is git-ignored and local: inventories, designs, screenshots.
+  Where a number already exists in copied engine code (the 100-diameter jump circles,
+  `calculateBaseJourneyTimes`), say so and ask Johnny to confirm it, do not re-derive it.
+- `findings/` is git-ignored and local: inventories, designs, screenshots, agents' build
+  notes (`findings/campaign_workspace_design.md` §9a onward is D's own report of each step;
+  read it when a D report is missing).
 
-## 4. Where the product is (production, traveller.voyage)
+## 4. Where the product is (production, traveller.voyage, last push `57510d2`)
 
 - **Truth v5** released: 512 sectors, 180,312 systems. Held steady.
-- **Viewer:** map, omnibox, dossier, orbit view with shaded planet discs (WebGL in a worker),
-  line-up search, day and night, today's temperature, the surface map in the dossier with a
-  vanilla / enhanced switch (enhanced: seas and ice from the data).
-- **Campaign (live since 2026-10-05, commit `5e78744`):** sign in with X; one private campaign
-  per account created on first use; records (nine types) with create, edit in place, delete
-  with undo. Johnny has signed in and saved a record in production.
-- **Storage:** the catalogue row is in D1 (`universes`, migration 0008 applied); a campaign's
-  rows are in its own Durable Object (`campaign_records`, `campaign_links`, `lists` for the
-  party and the clock). Nothing in R2 for campaigns yet. **Export and Import are in the account menu** (§104, §106, §111): a JSON file per
-  campaign, restored into an empty campaign. No server-side backups.
-- **Deck plan tiles** are on the CDN under `geomorphs/` (3,026 objects); the PNGs are
-  git-ignored; `assets/geomorphs/manifest.json`, `REBUILD.md`, `ATTRIBUTION.txt` are tracked.
+- **Viewer:** map, omnibox with the campaign group, dossier (star temperatures in kelvin,
+  "100D jump travel times" from the engines, the Day and night strip with a teal play marker
+  moving in real time with the orbit clock, surface maps vanilla / enhanced with the three
+  new liquid colours and paled non-water ice), **the orbit view as a showpiece**: one header
+  with Play, the date readout, the campaign mark and three drawers (Time / View / Layers)
+  that reveal over the picture; the layer key is the toggle; a ships layer with wireframe
+  designators and a plotting overlay (drawn only when fed; stand-ins in dev builds).
+- **Campaign (live):** sign in with X; several campaigns per account (create, rename, switch,
+  delete from the account menu, cap ten); records of nine types with create, edit in place,
+  delete with undo; places (anchor editor, locator, "records here" in the dossier); links
+  (the shared vocabulary, "aboard", `passenger`); the party (ship, members, "Where are we",
+  the marker on the map); the clock (campaign date in the panel, beside the search bar as a
+  chip, in the orbit view with "Set as campaign date" and "1 week" advancing it with undo);
+  images on records (primary image, gallery, lightbox; WebP objects in R2 by hash);
+  the vessel's **ship sheet** from the official PDF's 312 fields (as a panel default,
+  folding sections, frozen key columns, passengers and crew as people with pills and a
+  person card) with the **deck plan** inside it (shipyard JSON, CDN tiles on paper with the
+  shipyard grid, crisp at every zoom, full-screen modal, credit always shown); **Export and
+  Import** in the account menu (one JSON file per campaign, restored into an empty one).
+- **Storage:** D1 holds `universes` (with `object_bytes`); a campaign's rows live in its own
+  Durable Object; images in the private bucket `u/<universeId>/objects/<hash>` (250 MB per
+  universe, orchestrator's number). No server-side backups; the export file is the backup.
+- **Rules files added by Johnny:** `rules/mgt2e_ship_sheet_fields.json` (wrapped by
+  `scripts/gen_rules_esm.js`, which now takes `.json`). The three ship sheet PDFs are in
+  `assets/`. No character sheet PDF yet.
+- **Main entry chunk 153 kB** since A's split (campaign panel, dossier, layout and icons are
+  lazy chunks); a test pins it under 450 kB.
 
 ## 5. The current slice: campaign on the truth (`slice_2_campaign.md`)
 
-Johnny, 2026-10-04: campaign features before the Builder; optional login; everyone gets a
-campaign layer over the truth map; own maps later. X sign-in only.
-
 | Step | What | State |
 |---|---|---|
-| K1 | shared schemas (`packages/shared/src/schemas/campaign.ts`) | done, live |
-| K2 | universes in D1, owner-checked forward | done, live |
-| K3 | campaign in the Durable Object | done, live (after the transaction fix) |
-| K4 | browser session and campaign store | done, live |
-| K5a | sign-in entry, campaign panel | done, live |
-| K5b | records: list, page, edit, delete, undo | done, live |
-| map layer | party marker and locator (`map/campaign_layer.ts`) | done, live, nothing sets a party yet |
-| K6a, K6b | clock in the API and the store | done, live, no screen yet |
-| K10 logic | `copyRecords` in `packages/shared` | done, no route or screen |
-| K9 parts 1, 2 | deck plan renderer, attach, `DeckPlanView.vue`, upload | done; not placed on a page |
-| K5c | places: anchor editor, locator, "records here" in the dossier | done, accepted §82, not yet pushed |
-| "1 week" | orbit time control, view only; line-up search in a kebab | done, not yet pushed |
-| K9 part 3 | the deck plan viewer on a vessel's record page | done, accepted §85, not yet pushed |
-| A/E answers | star kelvin, sea and ice colours (Agent C) | done §85; dossier star tile still owed |
-| K5d | links | done, accepted §88, not yet pushed |
-| K5e | the party | done, live |
-| K5f | several campaigns: create, name, switch, delete | done, live |
-| K14 | images on records: routes (B), browser encode and upload (A) | done, live; screens (D) after K6c |
-| deck plan light backdrop | a paper token for the viewer | Agent C, in flight |
-| K6c | clock screens, the date beside the search bar, the Rail | done, accepted §101, not yet pushed |
-| K14 screens | images on the record page, rows, results; gallery; lightbox | done, live |
-| K15 | the orbit view as a showpiece | done, live |
-| K13 part 3 | the ship sheet on the vessel record | done, accepted §113, not yet pushed |
-| K6d data | the vessel track (dated legs on status), helpers | done, accepted §113, not yet pushed |
-| follow-ups 1 | full-screen plan, split button, chip, scrub glitch, sheet as panel | done, live |
-| follow-ups 2 | passengers and crew as people; orbit drawers design | done, live; drawers ruled yes to all |
-| follow-ups 3 | sheet x-scrolls, folding motion, the + menus | done §122, not yet pushed |
-| drawers | orbit controls in the header as drawers (follow-up 6) | done §124, not yet pushed |
-| **ship MVP 1** | ship list, marks from tracks, strip, plotting, Jump | **Agent D, in flight** |
-| K6d screens | ship list, track, Jump button | next for D |
-| K17 | shared ship feeds, follow, faction accounts | recorded; after K6d and K16 |
+| K1 to K5f, K6a to K6c, K9, K13 parts 1 to 3, K14, K15, follow-ups 1 to 13 and 16, the drawers | the campaign MVP, the sheet, images, the orbit showpiece | **done, live** |
+| K6d data | the vessel track (`status.track`, `campaign/track.ts`) | done, live |
+| K12 picture | `orbit/ships.ts`, designators, plotting overlay (C) | done, live, fed by nothing yet |
+| **ship MVP 1** | ship list, real marks, status strip, plotting mode, Jump (148 + 6D rolled, amended §128; `settings.jumpHours` withdrawn) | **Agent D, in flight** |
+| follow-up 14 | layer toggle micro-animations in the renderer | accepted §129; pushed by path with `findings/push/fu14_canvas.patch` (verify with `git log -1`); Johnny judges speed and the ring live |
+| **travel module** | `campaign/travel.ts` from `rules/mgt2e_space_travel.json` | **Agent A, issued §129 (replaces §128's)** |
+| **engine corrections T1.2** | `reconcile_environment.js`, the climate classifier from `rules/mgt2e_climate_bands.json` | **Agent B, issued §128** |
+| ship MVP 2 | **the measuring pass** (Johnny, §129): estimates of distance, time and fuel in the plotting previews, hull taken as 100 tons and labelled, no warnings; the track on the vessel page; the jump bubble; arrival on the 100D circle | next for D |
+| ship MVP 3 (follow-up 17) | panes swap over either view; design accepted (shape A, `findings/panes_swap_design.md`): four steps A, D, A, A | after part 2; A's step 1 any time |
+| follow-up 15 | the docked body card beside the open panel: D decides from the manifesto | after the ship MVP |
+| follow-up 18 | locked-world Day and night card as a Scouts terminal readout | D, after the ship MVP |
+| K13 part 4 | the character sheet | waits on Johnny's PDF |
+| K16 | generated ship traffic | after G1 |
+| K17 | shared ship feeds, follow, faction accounts | after K6d and K16 |
 | K7, K8 | journal, timeline | outlines only |
-| K10, K11 | copy between campaigns; shared records in an account library | K11 needs a design |
+| K10, K11 | copy between campaigns (logic exists); shared records library | K11 needs a design |
+| passkeys | better-auth plugin | `plan.md` "After 5", back of the line |
 
 ## 6. In flight right now
 
-- **Agent D:** the ship MVP part 1 (over C's layer), then part 2 (track on the vessel page,
-  jump bubble), then part 3 with A (panes swap, follow-up 17), then follow-ups 14, 15.
-- **Agent A:** free.
-- **Agent B:** free. The export route is in (§104); Export / Import buttons come with D's K15.
-- **Agent C:** free. The ship layer is in (§123).
-- **Agent F:** parked. K13 parts 1 and 2 done (handoff 89 to 91); part 3 after K5f.
-- **Last push:** 3b7bcd2 (ship layer), green. Local and finished: D's drawers (§124);
-  push everything.
+- **Agent D:** the ship MVP part 1 (prompt in handoff §124's session, repeated in full in
+  §126). Reports after it.
+- **Agent C:** follow-up 14, the toggle micro-animations in `OrbitRenderer.ts` (prompt in
+  §126). Does not touch D's files.
+- **Agent D** also has an amendment to step 5 (handoff §128): the jump time is rolled, and
+  `jumpHours` comes back out of `packages/shared`.
+- **Agent A:** `campaign/travel.ts` (prompt in §128). Its panes design is accepted; step 1
+  (`shell/pane.ts`, pure) is next for A, the rest when D leaves `views/`.
+- **Agent B:** engine corrections T1.2 (prompt in §128), then T1.3 (liquids).
+- **Both new rules files are drafts in `findings/rules_drafts/`** until Johnny copies them
+  into `rules/` and runs `npm run rules:gen`. Check `ls rules/` before accepting A's or
+  B's report.
+- **Agent F:** parked.
+- **Last push:** `57510d2` (drawers), deployed and green. Nothing finished is local except
+  `directives/`.
 
 ## 7. Decisions Johnny has made that shape the next steps
 
-- **"Advance 1 week"** matters more than the line-up search (a week is the typical jump).
-  Orchestrator's proposal, not yet confirmed by him: it moves the view only, except when a
-  campaign is open and the view sits on the campaign date, when it advances that date too,
-  with undo. Otherwise "looking is not advancing": scrubbing never changes the campaign date.
-- **Several campaigns per account** (cap ten), and assets moving between them: **instanced**
-  (a copy with provenance, K10) or **shared** (K11). Proposed split for shared, to confirm
-  when written: what a character is (name, text, sheet, status) is shared; where they are and
-  who they know (anchor, links) is per campaign.
-- **Deck plans** from Geomorph Shipyard JSON on the ship sheet. Images are CC BY-NC 4.0 (credit
-  always shown; non-commercial only). The shipyard's code is GPL-3.0: ours is written from
-  `REBUILD.md`, never from its source. A real exported ship and its picture, from Johnny, are
-  still needed to prove agreement with the shipyard.
-- All sixteen of D's design choices are adopted (`findings/campaign_workspace_design.md`).
-- **After the campaign MVP comes the Builder** (Johnny, 2026-10-05, recorded in `plan.md`):
-  own universe as an overlay on the truth, generate systems and sectors with names and
-  rollups, Mongoose 2e and T5 both. The engine corrections gate it; F2 is still open.
+- **Ship MVP first**, then the motion items (14 moved to C in parallel), then the docked
+  card (15), the terminal card (18), the panes swap (17).
+- **Many ships at once; a vessel's track is a black-box record** of dated legs, replayable
+  and reusable; generated traffic later (K16); shared feeds and faction accounts (K17).
+- **Sensor designators** are vector wireframes (Homeworld-style); **plotting mode** is a
+  toggle with pointer-tracking hairlines and coordinates, 2D; fuel and time rules after.
+- **The orbit view's chrome:** yes to all twelve K15 choices and all seven drawer choices.
+- **After the campaign MVP comes the Builder** (`plan.md`): own universe as an overlay on
+  the truth, generation with names and rollups, Mongoose 2e and T5 (both already in
+  `packages/generation`). The engine corrections gate it; F2 is still open.
+- All sixteen of D's campaign design choices are adopted; D's own design notes are the
+  record of each built step.
+- **Jump and travel rules (2026-10-06):** 100 diameters; Time = 2 × √(Distance ÷
+  Acceleration); a jump is 148 + 6D hours, rolled by the app and editable; reach is the
+  jump number in parsecs; fuel 10% of hull per parsec. The app shows and warns, never
+  refuses (orchestrator's ruling). The climate table is provisional and editable.
 
 ## 8. Parked, with everything written down
 
-- **Engine corrections (`plan_engine_corrections.md`).** The engines, legacy and new alike,
-  store physical data that contradicts the chart: 93% of mainworlds in an eight-sector scan
-  (Regina is stored as a frozen ethane moon). Two tiers: reconcile labels and liquids as a
-  derived build (v6), then fix generation and regenerate everything (v7). Johnny approved the
-  direction and answered F3 to F7; **F2 (the kelvin table for the five climate words) is
-  open.** Must be done **before the Builder**. A campaign is pinned to its truth version, so
-  parking is safe; body anchors re-resolve by name on migration.
-- **Shared ship feeds (K17, Johnny 2026-10-05):** publish a vessel, follow an account, faction
-  accounts with NPC traffic; feed files on the CDN, follows as rows. After K6d and K16.
-- **Jumps (K12, Johnny 2026-10-05):** many ships at once; each vessel's track is a data
-  record (a black-box log of dated legs) that can be replayed and reused; generated ship
-  traffic later (K16). Plot a destination, fly to the jump point at 1 to 6 G
-  in the orbit view, press Jump, the bubble fades and reappears a week later. Parked behind
-  the MVP steps by Johnny's own wish. It cannot start until `rules/` holds the jump and
-  travel rules (question G1); nothing about them is to be taken from memory.
-- **Surfaces:** the enhanced shared terrain and enhanced disc, the no-WebGL painter, more
-  delighters, the 2.5D view.
+- **Engine corrections (`plan_engine_corrections.md`): restarted 2026-10-06.** 93% of
+  mainworlds contradict their charts; two tiers (v6 derived labels, v7 regenerate). F2 is
+  answered (a provisional, editable array in `rules/`); T1.1 done, T1.2 with B, then T1.3
+  to T1.7. No v6 build or release without Johnny's word.
+- **K12 rules (G1): answered 2026-10-06** from the book (`slice_2_campaign.md` K12, "Rules
+  supplied"). Not supplied, not built: Astrogation checks, inaccurate jumps, unrefined
+  fuel's danger, current fuel aboard.
+- **Surfaces:** enhanced shared terrain and disc, the no-WebGL painter, delighters, 2.5D.
 - **Viewer leftovers:** Trade Match, legend, help, settings.
+- A real Geomorph Shipyard export and its picture, from Johnny, to prove deck plan parity.
 
 ## 9. Open with Johnny (`questions_for_johnny.md`)
 
-None blocks work. Section A and E3, E11 to E13 were answered by the orchestrator on
-2026-10-05 at Johnny's instruction (handoff §83; Agent C builds them). Still open: E4 to E8,
-F2 (climate table), B1 to B5 (map), C1 to C3 (app; C3 is "deploy from main, preview from
-campaign", worth raising after the broken deploy), D2 to D4. Four `CLAUDE.md` edits only he
-can make are listed in handoff §4 and the summary there (rule 6 wording, two command rows,
-the oracle path).
+None blocks work. F2, G1 and G2 were answered on 2026-10-06 (G2: the MVP only measures; a
+100-ton hull is assumed; ship fields and warnings are vNext). **Open now:** G3, whether a
+flight inside a system uses fuel (the text prices jumps only); and Johnny's eye on the live
+toggle motion (speed, and the one-ring "wireframe"). Also open: E4 to E8, B1 to B5 (map), C1 to C3 (app; C3 is "deploy from
+main, preview from campaign"), D2 to D4. Four `CLAUDE.md` edits only he can make are listed
+in handoff §4. Put each to him in full in the chat when its turn comes (§2).

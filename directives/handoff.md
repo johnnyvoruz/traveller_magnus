@@ -3147,3 +3147,428 @@ API and Durable Object have against `data_model.md` and `api.md`).
   status strip for the selected ship, the plotting toggle, the leg preview and write, the
   Jump button on `settings.jumpHours`); part 2 (the track on the vessel page, the jump
   bubble with C); part 3 with A (follow-up 17, panes swap over either view).
+
+## 125. Pushed `57510d2` (drawers); deployed (2026-10-05)
+
+- GitHub run green; live entry `index-DxgObqNt.js` is 152,971 bytes (A's split is live), the
+  campaign panel is its own chunk, the orbit chunk `OrbitView-CtFISkJy.js` holds the
+  drawers. **In production:** the drawers, the ship layer (no real ships until D's part 1),
+  the sheet fixes, the floating menus, the lazy chunks.
+- **Johnny:** "I don't see the micro animations I wanted." Follow-up 14 (the layer toggles)
+  was queued behind the ship MVP; it is renderer work and D's part 1 does not touch
+  `OrbitRenderer.ts`, so it goes to **Agent C now**, in parallel.
+- **Follow-up 18 (Johnny):** the locked-world Day and night card ("No day and night · one
+  face always points at the star" over an empty Day side / Night side strip) becomes a
+  short sci-fi terminal readout "from the Scouts" and the strip is hidden. D designs with
+  the existing terminal look; no new facts, only the dossier's own values.
+
+## 126. Session close (2026-10-06, early): state at handover and the two prompts in flight
+
+- Johnny stepped away to sleep; this session ends and a new orchestrator starts from
+  `orchestrator_start_here.md` (rewritten in full). Production is on `57510d2`, green and
+  deployed. Nothing finished is local except `directives/`; the handover edits go out with
+  the next push.
+- **In flight:** D on the ship MVP part 1; C on follow-up 14. Both prompts, verbatim, so the
+  next orchestrator can check reports against them and repeat them if they were never
+  handed out (`git status` tells: D's work appears under `orbit/*.vue`, `views/OrbitView.vue`,
+  `workspace/`; C's under `orbit/OrbitRenderer.ts`, `tests/web/orbit_renderer.test.js`).
+
+Agent D, ship MVP part 1:
+
+```
+Agent D. The drawers are accepted. Next: the
+ship MVP, part 1, slice_2_campaign.md K6d and
+K12 points 1, 2, 2b. Agent C's layer is in:
+OrbitCanvas takes ships (ShipMark[] from
+orbit/ships.ts placeShips over campaign/
+track.ts positionAt) and plot (a pointer, or
+null). Build, campaign open:
+1. Ship list: the campaign's vessels whose
+   track or anchor puts them in this system,
+   under the strip's reserved place; the
+   party's ship first; pressing one selects it
+   (--signal designator); empty: "No ships
+   here".
+2. Real marks: feed placeShips with the
+   vessels' tracks at the view's date; the
+   stand-in stays dev-only.
+3. The status strip for the selected ship:
+   Docked at X / In orbit / In flight X -> Y,
+   arrives DDD-YYYY / In jump, arrives ...,
+   from positionAt; Jump at its end.
+4. Plotting mode: a command and key (P), a
+   toggle in the View drawer; while on, pass
+   the pointer to plot; a click on a body sets
+   the destination, shows a leg preview (from,
+   to, departs = the view's date, arrives =
+   departs + a typed duration in hours, mode
+   flight, accelG from a 1-6 chooser) and
+   "Add leg" writes it through appendLeg.
+   Durations are typed in this step; no rule.
+5. Jump: enabled when the selected ship's
+   position lies outside every 100D circle
+   (orbit/layout.ts has them) and a destination
+   system is marked (pick it as the anchor
+   editor does: map, omnibox, or "Use <last
+   opened>"); writes a jump leg arriving
+   settings.jumpHours later. Add jumpHours
+   (default 168, the number Johnny gave) to
+   CampaignSettings in packages/shared with a
+   test. Signed out: none of this appears.
+Exercise against the real local API with a
+vessel at Regina: select, plot a flight to
+Regina A-IV, see the mark move with the
+scrub, jump to another system. Column, half,
+full; keyboard; reduced motion; contrast
+pairs; screenshots.
+Do not touch OrbitRenderer.ts, orbit/ships.ts,
+campaign/track.ts (ask if a helper is missing),
+surface/, deckplan/. Stop and report.
+```
+
+Agent C, follow-up 14:
+
+```
+Agent C. Johnny's follow-up 14 (slice_2_
+campaign.md): the layer toggles snap. Give
+each a micro-animation in OrbitRenderer.ts,
+"smooth, elegant, sci-fi":
+- Habitable band and the 100D jump rings: grow
+  out from their star when turned on, shrink
+  back into it when off.
+- Orbits: the same, from their primary.
+- Moons and Day/night: a thin teal wireframe
+  sphere (--signal, one stroke) drawn over
+  each body, fading in as the layer appears
+  and out as it goes.
+- Scan, Paths, Mainworld: a fade.
+Durations and easing from the tokens' motion
+only (--t-base, --ease-out); the renderer
+reads them from the computed style, no
+literal ms. Reduced motion: instant. The
+steady frame once the motion ends is
+byte-identical to today (the parity shots
+still match); the motion runs only on a
+toggle, never on load. A test that a toggle
+schedules a transition and that the final
+frame equals the untransitioned one.
+Three frames of one toggle to
+findings/ui_design_shots/.
+Do not touch OrbitCanvas.vue's props, views/,
+TimeControls, the drawers, orbit/ships.ts.
+Stop and report.
+```
+
+- **After those reports:** D part 2 (the track on the vessel page: the legs listed, remove
+  the last, "Where are we" from the track; the jump bubble appearing and fading, with C if
+  the renderer is needed), then part 3 with A (follow-up 17), then 15 and 18. C: free after
+  14 unless part 2 needs the bubble in the renderer.
+
+## 127. New orchestrator session; the day's plan (2026-10-06, morning)
+
+- **New session** from `orchestrator_start_here.md`. HEAD `57510d2` equals `origin/campaign`;
+  only `directives/` is modified. At 09:20 local neither D nor C had a file on disk (the §126
+  prompts had not been handed out); repeated in full; **Johnny handed both out about 09:30.**
+- **Plan for the day, in order:** (1) C's follow-up 14 reports first (smaller): review, push
+  by path with `directives/`, Johnny sees the toggle motion live. (2) D's ship MVP part 1:
+  review, the shared test for `jumpHours`, push; real ships on the orbit view. (3) D part 2
+  (the track on the vessel page, the jump bubble, with C if the renderer is needed).
+  (4) D part 3 with A (follow-up 17). Follow-ups 15 and 18 after.
+- **Agent A, issued now (read-only):** `findings/panes_swap_design.md`, the address shape for
+  follow-up 17 (today `/campaign`, `/campaign/r/:record`, `/campaign/party` render `MapView`
+  in `router.ts`), the Panel host's move to the shell, back button and cold load, chunks,
+  files by owner and the order of steps; so part 3 starts from a ruled shape. No edits in
+  `apps/` or `packages/` while D is mid-step. The prompt, verbatim:
+
+```
+Agent A. Read-only design, no code. Johnny's
+follow-up 17 (slice_2_campaign.md): pressing
+Campaign in the orbit view routes to the map.
+It must not: the campaign and dossier panes
+swap in the one panel, over whichever view
+the address names. Today router.ts gives
+/campaign, /campaign/r/:record and
+/campaign/party to MapView. You own the
+router and the chunks; propose the address
+shape. Write findings/panes_swap_design.md:
+1. Two or three address shapes (a query on
+   the view's route, nested routes, other),
+   one recommended, with every address of
+   today mapped to its new form.
+2. Where the Panel host moves (the shell),
+   and what MapView and OrbitView give up.
+3. Back button, cold load of every address,
+   old links (redirects), focus on a swap.
+4. Chunks: the entry stays under 450 kB;
+   which chunk each pane loads, from which
+   view.
+5. Files touched, by owner (yours, D's), and
+   the order of steps so the tree is green
+   after each.
+6. What the tests pin.
+Agent D is mid-step in orbit/ and views/:
+edit nothing in apps/ or packages/. Stop and
+report.
+```
+
+- **Agent B: held.** Nothing B-shaped is unblocked that a screen would use this week; the
+  engine corrections (tier v6) start the hour F2 is answered. F2 is a confirmation: the
+  table already quoted in `questions_for_johnny.md` (Frozen to -51 °C, Cold to 0 °C,
+  Temperate to 30 °C, Hot to 80 °C, Boiling above), or Johnny's own.
+
+## 128. Johnny answers F2 and G1; the engine corrections restart; the jump rules are real (2026-10-06)
+
+- **Standing rule from Johnny:** every question for him is spelled out in full in the chat
+  (start-here §2). Five were; he answered all five the same hour.
+- **F2 answered:** "make it an easy array we can edit later, let's just go with these for
+  now": Frozen to -51 °C, Cold to 0 °C, Temperate to 30 °C, Hot to 80 °C, Boiling above.
+  Provisional, in `rules/mgt2e_climate_bands.json`. **The engine corrections are no longer
+  parked.** T1.1 was done on 2026-10-04 (§65); **Agent B takes T1.2** (the plan names A; A is
+  on the router): `packages/engines/src/reconcile_environment.js`, the surface classifier
+  from the rules array, the orbital band reconstructed, provenance, idempotence. T1.3
+  (liquids; F3 to F7 were answered yes) follows. A v6 build still needs Johnny's word.
+- **G1 answered** with the book's text (fuel, jump travel, travel times, the Transit Times
+  table): 100 diameters yes; Time = 2 × √(Distance ÷ Acceleration), which is what
+  `calculateBaseJourneyTimes` already computes; a jump is 148 + 6D hours (the fixed 168 is
+  superseded); reach is the jump number in parsecs; fuel is 10% of hull per parsec. The
+  numbers are `rules/mgt2e_space_travel.json`. Checked by the orchestrator: the pasted table
+  against the formula differs by more than rounding in 11 of 90 cells (at most one unit);
+  the book calls the table a summary of the formulae, so the app computes.
+- **Both rules files are drafts in `findings/rules_drafts/`** (git-ignored), typed from
+  Johnny's words; he copies them into `rules/` and runs `npm run rules:gen`. Nothing reads
+  them until he has.
+- **Orchestrator's rulings on the jump rules** (`slice_2_campaign.md` K12, "Rules
+  supplied"): one module computes (`campaign/travel.ts`, Agent A); the app rolls 148 + 6D
+  and shows the dice, the referee may type over it; **`settings.jumpHours` is withdrawn**
+  (D had added it on disk, optional with a default of 168; never pushed); the app shows
+  and warns and never refuses a jump; flight durations filled from the formula and the
+  arrival on the 100-diameter circle come with part 2.
+- **New question G2:** which sheet fields hold hull tonnage, jump number and thrust
+  (`Size`, `Jump Drive Output`, `Manoeuvre Drive Output`?). Until answered the preview
+  shows parsecs and fuel as a share of the hull, with no warning.
+- **Agent A's panes design is in** (`findings/panes_swap_design.md`, 377 lines): **accepted,
+  shape A.** The path names the view; a `panel` query (`campaign`, `party`, `closed`; absent
+  means the dossier on a hex or orbit path) and `record` name the pane; the three
+  `/campaign` paths become redirects onto `/`; one `shell/PanelHost.vue` in `App.vue` is
+  the only mount of the two panes, fed by a frame each view publishes; closing writes
+  `panel=closed` and keeps the place; pane changes push, pans and the clock replace
+  through one helper (`shell/pane.ts`). Four steps (A, D, A, A), each green; step 1 is
+  pure and can start when A is free; step 2 waits for D to leave `views/`. This is ship
+  MVP part 3.
+- **On disk at this point:** C in `orbit/OrbitRenderer.ts`, `theme.ts` and its test; D in
+  `orbit/` (`ShipStrip.vue`, `ship_list.ts`, `ship_marks.ts`, `jump_state.ts`,
+  `commands.ts`), `views/OrbitView.vue`, `packages/shared` and their tests. No push yet.
+
+Agent D, amendment to part 1, step 5:
+
+```
+Agent D, amendment to step 5 of the ship MVP
+part 1. Johnny gave the rule: a jump lasts
+148 + 6D hours, not a fixed 168. So:
+- Take jumpHours, DEFAULT_JUMP_HOURS and
+  jumpHoursOf back out of packages/shared
+  and its test. Nothing about the jump
+  time is stored in settings.
+- The Jump preview has an hours field.
+  Fill it from rollJumpHours() in
+  campaign/travel.ts (Agent A is writing
+  it now; it returns { hours, dice }),
+  show the roll beside it ("148 + 23"),
+  give a "Roll again" button, and let the
+  referee type over it. The leg arrives
+  that many hours after it departs.
+- If travel.ts is not on disk when you
+  get there, leave the field empty and
+  required, and say so in the report.
+  Write no 148, 168 or dice in your code.
+Steps 1 to 4 as issued. Carry on, then
+stop and report.
+```
+
+Agent A, the travel module:
+
+```
+Agent A. The panes design is accepted:
+shape A, the panel query. Its steps start
+when Agent D is out of views/. Next, a
+small one, now. Johnny supplied the space
+travel rules: rules/mgt2e_space_travel.json.
+Run npm run rules:gen, then write
+apps/web/src/campaign/travel.ts: pure, every
+number read from the generated module, none
+written in code.
+- transitSeconds(distanceKm, accelG): the
+  file's formula, 2 x sqrt(metres / (G x
+  metresPerSecond2PerG)). A distance or G
+  that is not finite and positive throws.
+- jumpParsecsCounted(parsecs): never under
+  jump.minimumParsecsCounted.
+- jumpFuelFraction(parsecs) and
+  jumpFuelTons(hullTons, parsecs), from
+  jump.fuelHullFractionPerParsec.
+- jumpWithinReach(jumpNumber, parsecs),
+  from jump.parsecsPerJumpNumber.
+- rollJumpHours(random) -> { hours, dice }:
+  jump.durationHours.base plus that many
+  six-sided dice (the book's D is roll1D
+  in core/rng.js); dice is the array of
+  faces. refuelHours(random) the same way.
+  random is a function returning [0, 1);
+  its default is a new randomUnit() in
+  platform/browser.ts, not the engines'
+  seeded rng.
+tests/web/campaign_travel.test.js: each
+function; both rolls with a fixed source;
+and every cell of transitTimes against
+transitSeconds, to the precision printed.
+Eleven cells are known to differ by more
+than rounding (for example 100,000 km at
+6G: table 42 minutes, formula 43.03). List
+them in the test as data, with both
+values, and assert the list is exactly
+those; do not bend the formula or the
+table.
+Do not touch track.ts, orbit/, workspace/,
+views/ (Agent D is mid-step) or packages/.
+Stop and report.
+```
+
+Agent B, engine corrections T1.2:
+
+```
+Agent B. The engine corrections restart:
+Johnny answered F2. Read
+plan_engine_corrections.md sections 0, 1,
+3.1, 3.2, 3.4 and 7.1, and handoff section
+65 (T1.1 is done: tests/generation/
+environment_audit.js and the fixtures in
+tests/golden/fixtures/engine_corrections/).
+You take T1.2 (the plan names A; A is on
+the router). The climate table is
+rules/mgt2e_climate_bands.json; run
+npm run rules:gen. Five bands in Celsius,
+each up to and including its maxC, the
+last open. Build:
+1. packages/engines/src/
+   reconcile_environment.js: a pure
+   reconcileTree(tree, policy) returning
+   { tree, changes, diagnostics }. No RNG,
+   no clock, the input never mutated. A
+   new file; no copied engine is edited.
+2. The policy: a frozen object made from
+   the generated rules module (the limits
+   in kelvin, C + 273.15) with a version
+   string. No band number written in code.
+3. surfaceTempBand from a valid final
+   meanTempK only. Missing or non-finite
+   is an explicit unknown status. No
+   default temperature.
+4. orbitalTempBand reconstructed as 3.2
+   says, provenance "reconstructed";
+   unknown with a diagnostic when the
+   inputs are missing. tempBand stays as
+   the legacy alias.
+5. The original values kept once in
+   provenance; a second run changes no
+   bytes. Only the 3.1 allowlist is
+   written. Liquids are T1.3, not now.
+Tests: just below, at and just above each
+limit; idempotence; the input unchanged;
+the Regina and Zeycude fixtures; every
+field off the allowlist byte-identical.
+npm test and npm run check green; the
+golden parity tests untouched.
+If the plan and the code disagree, or a
+rule is missing, stop and ask; do not
+improvise. Do not touch rules/, js/,
+apps/ or any copied engine. Stop and
+report.
+```
+
+## 129. Follow-up 14 (C) accepted and pushable by a rehearsed command; the MVP measures (2026-10-06)
+
+- **Nothing from §128's list was on disk when the next reports came:** the two rules files
+  were not yet in `rules/`, no `travel.ts`, no `reconcile_environment.js`, `jumpHours` still
+  in `packages/shared`. The list was re-issued whole, with A's prompt changed (below).
+- **Agent A's panes report:** as the file read in §128. Accepted, shape A.
+- **Agent C, follow-up 14:** `OrbitRenderer.ts` (+362), `theme.ts` (`tBase`, `easeOut`,
+  `cssBezier`, `easeOutAt`), one line in `OrbitCanvas.vue` (`layersBusy` keeps the canvas
+  painting), one test. Habitable bands and 100D rings scale out of their star and back;
+  orbit paths the same from their primary, fading; line-up panels from their own centre;
+  Scan, Paths, Mainworld fade; Moons and Day/night flash one `--signal` ring over each
+  world and moon while the discs themselves switch at once. Length `--t-base` (300 ms),
+  curve `--ease-out`, both from the computed style; no literal; reduced motion and the
+  first paint snap; a finished run is dropped before its frame is drawn, so the settled
+  frame is the ordinary path. Diff read in full; C's test file 19 pass; check clean; the mid
+  frame shows the band part-way out at Regina. **Accepted.**
+  Two things for Johnny's eye once live, not defects: 300 ms may read as quick
+  (`--t-slow` 450 and `--t-long` 800 exist); the "wireframe sphere" is one circle, not a
+  sphere with meridians. One small thing for C's next visit: `keepHeld` copies every band,
+  ring and path object on every frame; hold the references instead.
+- **The push, by path, with a shared file.** `OrbitCanvas.vue` also carries D's in-flight
+  part 1 (imports of the untracked `ship_marks.ts`), so it cannot be named (§109's trap).
+  The orchestrator wrote `findings/push/fu14_canvas.patch`, the one `layersBusy` line against
+  the committed file, to be staged with `git apply --cached` (index only; D's working copy
+  untouched). `git apply --cached --check` passes. **Rehearsed in a scratch copy:** `git
+  archive HEAD` plus C's three files plus that line: `vue-tsc` exit 0, `vite build` green
+  (entry 152.97 kB), the renderer test 19 pass. The two draft rules files were run through
+  `gen_rules_esm.js` there too: both wrap and import. `rules` is named in the push so the
+  new files ride along once copied.
+- **Johnny answers G2: the MVP measures and lets anything go.** Estimates of distance, time
+  and fuel while plotting; the hull taken as 100 tons "just for MVP" and labelled; nothing
+  deducted, no ship field read, no warning or refusal; vNext ties the ship's fields to
+  plotting warnings and refuelling, fields to be chosen by him. `slice_2_campaign.md` K12
+  "Rules supplied" point 3 rewritten; `travel.ts` loses `jumpWithinReach`, `refuelHours`,
+  `jumpFuelFraction` and gains `ASSUMED_HULL_TONS`. The estimates are **ship MVP part 2**.
+- **New question G3:** does a flight inside a system use fuel? The text prices jumps only.
+- **Prompts:** D's amendment as in §128, unchanged. B's as in §128 with one line added
+  ("If rules/mgt2e_climate_bands.json is absent, stop and say so."). A's replaced:
+
+```
+Agent A. This replaces any earlier travel
+prompt. The panes design is accepted: shape
+A, the panel query; its steps start when
+Agent D is out of views/. Now, a small one.
+Johnny supplied the space travel rules:
+rules/mgt2e_space_travel.json. If it is
+absent, stop and say so. Run
+npm run rules:gen, then write
+apps/web/src/campaign/travel.ts: pure, every
+rule number read from the generated module.
+- transitSeconds(distanceKm, accelG): the
+  file's formula, 2 x sqrt(metres / (G x
+  metresPerSecond2PerG)). A distance or G
+  that is not finite and positive throws.
+- jumpParsecsCounted(parsecs): never under
+  jump.minimumParsecsCounted.
+- jumpFuelTons(hullTons, parsecs): from
+  jump.fuelHullFractionPerParsec and the
+  counted parsecs.
+- ASSUMED_HULL_TONS = 100, exported, with
+  the comment: Johnny, 2026-10-06, a
+  stand-in for the MVP until a ship's own
+  fields are read. The one number in the
+  file that is not from rules/.
+- rollJumpHours(random) -> { hours, dice }:
+  jump.durationHours.base plus that many
+  six-sided dice (the book's D is roll1D
+  in core/rng.js); dice is the array of
+  faces. random is a function returning
+  [0, 1); its default is a new
+  randomUnit() in platform/browser.ts,
+  not the engines' seeded rng.
+tests/web/campaign_travel.test.js: each
+function; the roll with a fixed source;
+and every cell of transitTimes against
+transitSeconds, to the precision printed.
+Eleven cells are known to differ by more
+than rounding (for example 100,000 km at
+6G: table 42 minutes, formula 43.03). List
+them in the test as data, with both
+values, and assert the list is exactly
+those; do not bend the formula or the
+table.
+Do not touch track.ts, orbit/, workspace/,
+views/ (Agent D is mid-step) or packages/.
+Stop and report.
+```

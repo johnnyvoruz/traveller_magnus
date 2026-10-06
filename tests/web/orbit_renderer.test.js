@@ -14,7 +14,7 @@ import { layoutScene, planSystem } from '../../apps/web/src/orbit/layout.ts';
 import { layoutLineup } from '../../apps/web/src/orbit/lineup.ts';
 import { OrbitRenderer } from '../../apps/web/src/orbit/OrbitRenderer.ts';
 import { DEFAULT_LAYERS, orbitPicture } from '../../apps/web/src/orbit/picture.ts';
-import { cssSeconds, readOrbitMotion, readOrbitTheme, withAlpha } from '../../apps/web/src/orbit/theme.ts';
+import { cssBezier, cssSeconds, easeOutAt, readOrbitMotion, readOrbitTheme, withAlpha } from '../../apps/web/src/orbit/theme.ts';
 import { blendPictures, travelOrder } from '../../apps/web/src/orbit/tween.ts';
 import { HEX_KEY, recordingContext, testSystem } from './orbit_fixture.js';
 
@@ -449,6 +449,8 @@ test('the theme reads every colour it needs from tokens.css', () => {
         assert.equal(read.tLock, 0.65);
         assert.equal(read.tPulse, 2.4);
         assert.equal(read.tSweep, 8);
+        assert.equal(read.tBase, 0.3);
+        assert.deepEqual(read.easeOut, [0.2, 0.8, 0.2, 1]);
         const flat = JSON.stringify(read);
         assert.ok(!flat.includes('""') && !flat.includes('NaN'), 'no token came back empty');
         const motion = readOrbitMotion({});
@@ -583,4 +585,91 @@ test('the plotting overlay is hairlines and a readout, and only on that frame', 
     assert.deepEqual(readout.args, ['100.0, 200.0  30.0', 108, 212]);
     assert.equal(readout.fill, 'text');
     assert.ok(!extra.some((c) => c.op === 'drawImage'));
+});
+
+/** Canvas ops and their arguments, ignoring leftover fill and stroke from a context that does not stack. */
+const sig = (calls) => calls.map((c) => c.op + JSON.stringify(c.args));
+
+test('a layer toggle eases, and the settled frame matches one that never moved', () => {
+    const tBase = cssSeconds('300ms');
+    const ease = cssBezier('cubic-bezier(.2,.8,.2,1)');
+    assert.ok(ease);
+    assert.equal(easeOutAt(ease, 0), 0);
+    assert.equal(easeOutAt(ease, 1), 1);
+    assert.ok(easeOutAt(ease, 0.5) > 0.5);
+    const motionTheme = { ...theme, tBase, easeOut: ease };
+    const plan = planSystem(testSystem(), HEX_KEY);
+    const onLayers = { ...DEFAULT_LAYERS };
+    const offLayers = { ...DEFAULT_LAYERS, habitable: false };
+    const pictureFor = (layers) => {
+        const scene = layoutScene(plan, { ...VIEW, moons: layers.moons, jump: layers.jump }, 1000);
+        return orbitPicture(plan, scene, layers, VIEW.z);
+    };
+    const on = pictureFor(onLayers);
+    const off = pictureFor(offLayers);
+    const drawAt = (renderer, picture, layers, time, motion = true) => {
+        renderer.draw(plan, picture, VIEW, { selected: null, days: 1000, time, motion, layers });
+    };
+
+    const { ctx, calls } = recordingContext();
+    const renderer = new OrbitRenderer(ctx, motionTheme, deps);
+    renderer.resize(VIEW.w, VIEW.h, 1);
+    drawAt(renderer, on, onLayers, 1000);
+    assert.equal(renderer.layersBusy, false);
+    assert.ok(!calls.some((c) => c.op === 'scale'));
+    calls.length = 0;
+    drawAt(renderer, on, onLayers, 2000);
+    assert.equal(renderer.layersBusy, false);
+    assert.ok(!calls.some((c) => c.op === 'scale'));
+
+    calls.length = 0;
+    drawAt(renderer, off, offLayers, 2000);
+    assert.equal(renderer.layersBusy, true);
+    const mid = 2000 + tBase * 1000 * 0.5;
+    calls.length = 0;
+    drawAt(renderer, off, offLayers, mid);
+    assert.equal(renderer.layersBusy, true);
+    assert.ok(calls.some((c) => c.op === 'scale'));
+
+    const done = 2000 + tBase * 1000 + 1;
+    calls.length = 0;
+    drawAt(renderer, off, offLayers, done);
+    assert.equal(renderer.layersBusy, false);
+    assert.ok(!calls.some((c) => c.op === 'scale'));
+    const settled = sig(calls);
+
+    const freshRec = recordingContext();
+    const fresh = new OrbitRenderer(freshRec.ctx, motionTheme, deps);
+    fresh.resize(VIEW.w, VIEW.h, 1);
+    for (const time of [1000, 2000, 2000, mid, done]) {
+        freshRec.calls.length = 0;
+        drawAt(fresh, off, offLayers, time);
+    }
+    assert.equal(fresh.layersBusy, false);
+    assert.deepEqual(sig(freshRec.calls), settled);
+
+    const loadRec = recordingContext();
+    const load = new OrbitRenderer(loadRec.ctx, motionTheme, deps);
+    load.resize(VIEW.w, VIEW.h, 1);
+    drawAt(load, off, offLayers, 1000);
+    loadRec.calls.length = 0;
+    drawAt(load, off, offLayers, 2000);
+    assert.equal(load.layersBusy, false);
+    assert.ok(!loadRec.calls.some((c) => c.op === 'scale'));
+
+    const stillRec = recordingContext();
+    const still = new OrbitRenderer(stillRec.ctx, motionTheme, deps);
+    still.resize(VIEW.w, VIEW.h, 1);
+    drawAt(still, on, onLayers, 1000, false);
+    stillRec.calls.length = 0;
+    drawAt(still, off, offLayers, 1000, false);
+    assert.equal(still.layersBusy, false);
+    const snapped = sig(stillRec.calls);
+    const plainRec = recordingContext();
+    const plain = new OrbitRenderer(plainRec.ctx, motionTheme, deps);
+    plain.resize(VIEW.w, VIEW.h, 1);
+    drawAt(plain, off, offLayers, 1000, false);
+    plainRec.calls.length = 0;
+    drawAt(plain, off, offLayers, 1000, false);
+    assert.deepEqual(sig(plainRec.calls), snapped);
 });

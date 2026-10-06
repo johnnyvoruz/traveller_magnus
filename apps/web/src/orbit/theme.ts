@@ -62,7 +62,17 @@ export type OrbitTheme = {
     tLock: number;
     tPulse: number;
     tSweep: number;
+    /**
+     * Layer-toggle length in seconds, from --t-base. Absent (a test theme, a missing token),
+     * a toggle snaps.
+     */
+    tBase?: number;
+    /** --ease-out as four cubic-bezier controls. Absent, a toggle snaps. */
+    easeOut?: EaseOut | null;
 };
+
+/** The four controls of a CSS cubic-bezier(). */
+export type EaseOut = readonly [number, number, number, number];
 
 /** Milliseconds, for the stage's camera moves and the move between layouts. */
 export type OrbitMotion = { hop: number; flight: number; lineup: number };
@@ -92,6 +102,45 @@ export function cssSeconds(raw: string): number {
     if (value.endsWith('ms')) return Number(value.slice(0, -2)) / 1000;
     if (value.endsWith('s')) return Number(value.slice(0, -1));
     return 0;
+}
+
+/** `cubic-bezier(x1, y1, x2, y2)`, including controls written `.2` with no leading zero. */
+export function cssBezier(raw: string): EaseOut | null {
+    const match = raw.trim().match(/^cubic-bezier\(\s*([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\s*\)$/);
+    if (!match) return null;
+    const x1 = Number(match[1]);
+    const y1 = Number(match[2]);
+    const x2 = Number(match[3]);
+    const y2 = Number(match[4]);
+    if (![x1, y1, x2, y2].every(Number.isFinite)) return null;
+    return [x1, y1, x2, y2];
+}
+
+/**
+ * The y of a cubic-bezier at time t. Endpoints are 0 and 1. The controls come from the token
+ * (cssBezier); this only evaluates them.
+ */
+export function easeOutAt(curve: EaseOut, t: number): number {
+    if (t <= 0) return 0;
+    if (t >= 1) return 1;
+    const [x1, y1, x2, y2] = curve;
+    const cx = 3 * x1;
+    const bx = 3 * (x2 - x1) - cx;
+    const ax = 1 - cx - bx;
+    const cy = 3 * y1;
+    const by = 3 * (y2 - y1) - cy;
+    const ay = 1 - cy - by;
+    const sampleX = (s: number) => ((ax * s + bx) * s + cx) * s;
+    const sampleY = (s: number) => ((ay * s + by) * s + cy) * s;
+    const sampleDX = (s: number) => (3 * ax * s + 2 * bx) * s + cx;
+    let s = t;
+    for (let i = 0; i < 6; i++) {
+        const dx = sampleX(s) - t;
+        const deriv = sampleDX(s);
+        if (Math.abs(dx) < 1e-6 || Math.abs(deriv) < 1e-6) break;
+        s -= dx / deriv;
+    }
+    return sampleY(Math.min(1, Math.max(0, s)));
 }
 
 const STAR_TYPES = ['O', 'B', 'A', 'F', 'G', 'K', 'M', 'D', 'BD'];
@@ -186,6 +235,8 @@ export function readOrbitTheme(el: HTMLElement): OrbitTheme {
         tLock: cssSeconds(token('--t-lock')),
         tPulse: cssSeconds(token('--t-pulse')),
         tSweep: cssSeconds(token('--t-sweep')),
+        tBase: cssSeconds(token('--t-base')),
+        easeOut: cssBezier(token('--ease-out')),
     };
 }
 
