@@ -492,7 +492,26 @@ the rule is needed; if not, a flight shows distance and time and no fuel.
 
 *Interim: a flight shows distance and time only; fuel appears on jumps only.*
 
-**Answer:**
+**Answer (2026-10-06):** "I think there might be inner-system fuel rules in a supplement I
+don't have, this is the only rule I can find that might be relevant", with the book's text:
+**manoeuvre drives do not require fuel; reaction drives do**, at 2.5% of the ship's total
+tonnage per Thrust per hour (a Thrust 4 ship needs 10% of its tonnage per hour of use); a
+Reaction 0 drive needs 0.25 tons per hour of Thrust; there are 10 combat rounds in an hour.
+So a manoeuvre-drive flight uses no fuel. Not yet in `rules/` and not yet built: see G4.
+
+### G4. Should the flight estimate show a reaction drive's fuel, and is this the sum?
+
+The MVP does not know which drive a ship has. The flight preview could show both lines:
+"Manoeuvre drive: no fuel" and "Reaction drive: about N tons". The orchestrator reads the
+rule as: fuel = 2.5% × hull tonnage × the G flown × the hours of the flight (a flight
+thrusts the whole way, to the midpoint and back down). For the assumed 100-ton hull at 2 G
+for 10 hours that is 50 tons. Is that the sum, and should both lines show?
+
+*Recommended: yes to both. Interim: a flight shows distance and time and no fuel line.*
+
+**Answer (2026-10-06): yes.** Both lines show, and the sum is 2.5% × hull tonnage × the G
+flown × the hours of the flight. The numbers go into `rules/mgt2e_space_travel.json` (a
+`manoeuvre` block); `reactionFuelTons` in `campaign/travel.ts` computes it.
 
 
 ---

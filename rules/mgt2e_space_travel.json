@@ -17,6 +17,14 @@
     "formula": "seconds = 2 * sqrt(metres / (G * metresPerSecond2PerG))",
     "assumes": "from rest, continuous acceleration to the midpoint, then deceleration to rest"
   },
+  "manoeuvre": {
+    "note": "From the Manoeuvring text Johnny pasted on 2026-10-06: manoeuvre drives do not require fuel; reaction drives need 2.5% of the ship's total tonnage per Thrust per hour; a Reaction 0 drive needs 0.25 tons per hour of Thrust; 10 combat rounds in an hour. The formula is the reading Johnny confirmed the same day.",
+    "manoeuvreDriveFuel": "none",
+    "reactionDriveHullFractionPerThrustPerHour": 0.025,
+    "reactionDriveFormula": "tons = reactionDriveHullFractionPerThrustPerHour * hullTons * thrust * hours",
+    "reactionZeroTonsPerHourOfThrust": 0.25,
+    "combatRoundsPerHour": 10
+  },
   "transitTimes": {
     "columnsG": [1, 2, 3, 4, 5, 6],
     "rows": [

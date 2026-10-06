@@ -124,13 +124,19 @@ file true: replace it, do not append to it.
 | K1 to K5f, K6a to K6c, K9, K13 parts 1 to 3, K14, K15, follow-ups 1 to 13 and 16, the drawers | the campaign MVP, the sheet, images, the orbit showpiece | **done, live** |
 | K6d data | the vessel track (`status.track`, `campaign/track.ts`) | done, live |
 | K12 picture | `orbit/ships.ts`, designators, plotting overlay (C) | done, live, fed by nothing yet |
-| ship MVP 1 | ship list, real marks, status strip, plotting mode, Jump (fixed 168 until part 2) | accepted §130; push called for (verify with `git log -1`) |
-| **ship MVP 2 (D)** | `prompts/d_ship_mvp_2.md`: the measuring pass, on a fresh D session | **issued §130**; needs A's `travel.ts` and C's `distance.ts` |
-| **real distance (C)** | `prompts/c_distance.md`: `orbit/distance.ts`, `keepHeld` | **issued §130** |
+| ship MVP 1 | ship list, real marks, status strip, plotting mode, Jump (fixed 168 until part 2) | **done, live** (`c6b6841`) |
+| **ship MVP 2 (D)** | the measuring pass: step 4 (the Track section) accepted §133; steps 1 to 3 and the Party tab from the track resumed in `prompts/d_ship_mvp_2_resume.md` | **issued §133** |
+| **small fixes (A)** | `prompts/a_travel_2.md`: `reactionFuelTons`, an empty track is no track, a dev proxy for the real chart (`VOYAGE_TRUTH_API`) | **issued §133**, after panes step 1 |
+| real distance (C) | `orbit/distance.ts`, `keepHeld` | accepted §132, local |
+| follow-up 14b (C) | a moon's real distance; Johnny's motion notes (hide reversed, slower, the wireframe wave, the solid teal sweep) | accepted §134; in the push called for; Johnny judges live |
+| panes step 1 (A) | `shell/pane.ts`, pure | accepted §134 |
+| engine corrections T1.3 (B) | liquids | accepted §134 with a correction |
+| **T1.3a (B)** | `prompts/b_engine_t1_3a.md`: only bodies with a label, a percentage or a code above 0 need a liquid validated | **issued §134** |
+| **jump bubble (C)** | `prompts/c_jump_bubble.md` | **issued §134** |
 | ship MVP 2b | a leg end in open space, arrival on the 100D circle, the jump bubble (A, C, then D) | after the measuring pass; recipe not written |
 | follow-up 14 | layer toggle micro-animations in the renderer | accepted §129; pushed by path with `findings/push/fu14_canvas.patch` (verify with `git log -1`); Johnny judges speed and the ring live |
-| **travel module** | `prompts/a_travel.md`: `campaign/travel.ts` from `rules/mgt2e_space_travel.json` | **Agent A, issued §130** |
-| **engine corrections T1.2** | `prompts/b_engine_t1_2.md`: `reconcile_environment.js`, the climate classifier from `rules/mgt2e_climate_bands.json` | **Agent B, issued §130** |
+| travel module | `campaign/travel.ts` from `rules/mgt2e_space_travel.json` | accepted §132, local |
+| engine corrections T1.2 | `reconcile_environment.js`, the climate classifier from `rules/mgt2e_climate_bands.json` | accepted §132, local |
 | ship MVP 3 (follow-up 17) | panes swap over either view; design accepted (shape A, `findings/panes_swap_design.md`): four steps A, D, A, A | after part 2; A's step 1 any time |
 | follow-up 15 | the docked body card beside the open panel: D decides from the manifesto | after the ship MVP |
 | follow-up 18 | locked-world Day and night card as a Scouts terminal readout | D, after the ship MVP |
@@ -145,17 +151,21 @@ file true: replace it, do not append to it.
 
 - **Agent D (a fresh session, reset 2026-10-06):** ship MVP part 2, the measuring pass
   (`prompts/d_ship_mvp_2.md`), after reading `agent_d_brief.md`.
-- **Agent C:** `prompts/c_distance.md` (the real distance D's flight estimate needs).
-- **Agent A:** `prompts/a_travel.md`. Its panes design is accepted; step 1 (`shell/pane.ts`,
-  pure) is next for A, the rest when D leaves `views/`.
-- **Agent B:** `prompts/b_engine_t1_2.md`, then T1.3 (liquids).
+- **Agent C:** `prompts/c_jump_bubble.md`.
+- **Agent A:** `prompts/a_travel_2.md` (reaction fuel, the empty track, the truth proxy);
+  steps 2 to 4 of the panes swap when D leaves `views/`.
+- **Agent B:** `prompts/b_engine_t1_3a.md`, then T1.4 and T1.6 (recipes not written).
+- **A whole-tree push was called for in §134** (everything accepted to that point, with the
+  `manoeuvre` rules copy in front), to run before those pastes go out. Check `git log -1`
+  and `grep -c manoeuvre rules/mgt2e_space_travel.json` before believing it ran.
+- **The orchestrator owes two recipes:** part 2b ("where a ship is") for A, and T1.4 / T1.6
+  for B.
 - **Both new rules files are drafts in `findings/rules_drafts/`** until Johnny copies them
   into `rules/` and runs `npm run rules:gen`. Check `ls rules/` before accepting A's or
   B's report.
 - **Agent F:** parked.
-- **Last push:** `61d73b6` (toggle motion), deployed and green. Local and finished: D's
-  ship MVP part 1 and `directives/`; a whole-tree push was called for in §130 with the
-  rules copy in front. Check `git log -1` and `ls rules/` before believing it ran.
+- **Last push:** `c6b6841` (ship MVP part 1, the two rules files, the D brief and the
+  prompt files), deployed and green (§131). Nothing finished is local except `directives/`.
 
 ## 7. Decisions Johnny has made that shape the next steps
 
@@ -192,8 +202,11 @@ file true: replace it, do not append to it.
 ## 9. Open with Johnny (`questions_for_johnny.md`)
 
 None blocks work. F2, G1 and G2 were answered on 2026-10-06 (G2: the MVP only measures; a
-100-ton hull is assumed; ship fields and warnings are vNext). **Open now:** G3, whether a
-flight inside a system uses fuel (the text prices jumps only); and Johnny's eye on the live
-toggle motion (speed, and the one-ring "wireframe"). Also open: E4 to E8, B1 to B5 (map), C1 to C3 (app; C3 is "deploy from
+100-ton hull is assumed; ship fields and warnings are vNext) and G3 (manoeuvre drives use no
+fuel; reaction drives 2.5% of tonnage per Thrust per hour) and G4 (yes: both fuel lines on
+a flight; the sum is 2.5% × hull × G × hours). **Nothing is open with him on the ship MVP.**
+The updated rules draft (`findings/rules_drafts/mgt2e_space_travel.json`, a `manoeuvre`
+block) must be copied over `rules/` by him; check `grep manoeuvre rules/mgt2e_space_travel.json`.
+Also open: E4 to E8, B1 to B5 (map), C1 to C3 (app; C3 is "deploy from
 main, preview from campaign"), D2 to D4. Four `CLAUDE.md` edits only he can make are listed
 in handoff §4. Put each to him in full in the chat when its turn comes (§2).

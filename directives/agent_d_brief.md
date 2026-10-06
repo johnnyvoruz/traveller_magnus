@@ -92,8 +92,14 @@ screen is not done until every line below is true. Say so line by line in your r
 - **Exercise it for real:** a browser against the real local API (`npm run dev:api`,
   `npm run dev:web`), signed in and signed out. A unit test or a stand-in is not proof of a
   screen. `node scripts/dev_make_admin.js` makes a local `dev-admin` session to sign in
-  with (read the script; it touches local wrangler state only). Stop your browser and your
-  Vite when you finish. Local test data: the campaign "Spinward Run" and its vessel
+  with (read the script; it touches local wrangler state only). **To see the real chart
+  locally:** the local API's newest released truth is `vtest`, which the public CDN does not
+  hold, so a system never loads; have your browser driver answer `GET /api/truth/versions`
+  with production's (`https://traveller.voyage/api/truth/versions`) and send every other
+  `/api` call to the local API (a dev proxy for this is on its way; the orchestrator will
+  put the command here). Use the existing campaign; a local create is refused for a truth
+  version the local API does not know. Run your own Vite on your own port, and stop it and
+  your browser when you finish. Local test data: the campaign "Spinward Run" and its vessel
   "Far Margin"; put back what you change.
 - **Write the step into your notes** (the next free section of the area's findings file):
   what was built, each decision and why, what was measured. It is the record when a report

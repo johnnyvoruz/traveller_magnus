@@ -450,6 +450,8 @@ test('the theme reads every colour it needs from tokens.css', () => {
         assert.equal(read.tPulse, 2.4);
         assert.equal(read.tSweep, 8);
         assert.equal(read.tBase, 0.3);
+        assert.equal(read.tSlow, 0.45);
+        assert.equal(read.tLong, 0.8);
         assert.deepEqual(read.easeOut, [0.2, 0.8, 0.2, 1]);
         const flat = JSON.stringify(read);
         assert.ok(!flat.includes('""') && !flat.includes('NaN'), 'no token came back empty');
@@ -592,12 +594,14 @@ const sig = (calls) => calls.map((c) => c.op + JSON.stringify(c.args));
 
 test('a layer toggle eases, and the settled frame matches one that never moved', () => {
     const tBase = cssSeconds('300ms');
+    const tSlow = cssSeconds('450ms');
+    const tLong = cssSeconds('800ms');
     const ease = cssBezier('cubic-bezier(.2,.8,.2,1)');
     assert.ok(ease);
     assert.equal(easeOutAt(ease, 0), 0);
     assert.equal(easeOutAt(ease, 1), 1);
     assert.ok(easeOutAt(ease, 0.5) > 0.5);
-    const motionTheme = { ...theme, tBase, easeOut: ease };
+    const motionTheme = { ...theme, tBase, tSlow, tLong, easeOut: ease };
     const plan = planSystem(testSystem(), HEX_KEY);
     const onLayers = { ...DEFAULT_LAYERS };
     const offLayers = { ...DEFAULT_LAYERS, habitable: false };
@@ -625,13 +629,13 @@ test('a layer toggle eases, and the settled frame matches one that never moved',
     calls.length = 0;
     drawAt(renderer, off, offLayers, 2000);
     assert.equal(renderer.layersBusy, true);
-    const mid = 2000 + tBase * 1000 * 0.5;
+    const mid = 2000 + tSlow * 1000 * 0.5;
     calls.length = 0;
     drawAt(renderer, off, offLayers, mid);
     assert.equal(renderer.layersBusy, true);
     assert.ok(calls.some((c) => c.op === 'scale'));
 
-    const done = 2000 + tBase * 1000 + 1;
+    const done = 2000 + tSlow * 1000 + 1;
     calls.length = 0;
     drawAt(renderer, off, offLayers, done);
     assert.equal(renderer.layersBusy, false);
@@ -672,4 +676,71 @@ test('a layer toggle eases, and the settled frame matches one that never moved',
     plainRec.calls.length = 0;
     drawAt(plain, off, offLayers, 1000, false);
     assert.deepEqual(sig(plainRec.calls), snapped);
+
+    // A hide is the reveal played backwards. Bands use --t-slow.
+    const scaleAt = (hiding, u) => {
+        const rec = recordingContext();
+        const painter = new OrbitRenderer(rec.ctx, motionTheme, deps);
+        painter.resize(VIEW.w, VIEW.h, 1);
+        drawAt(painter, hiding ? on : off, hiding ? onLayers : offLayers, 1000);
+        const t0 = 8000;
+        drawAt(painter, hiding ? off : on, hiding ? offLayers : onLayers, t0);
+        rec.calls.length = 0;
+        drawAt(painter, hiding ? off : on, hiding ? offLayers : onLayers, t0 + u * tSlow * 1000);
+        const scale = rec.calls.find((c) => c.op === 'scale');
+        assert.ok(scale, (hiding ? 'hide ' : 'reveal ') + u);
+        return scale.args[0];
+    };
+    for (const u of [0.25, 0.5, 0.75]) {
+        const hide = scaleAt(true, u);
+        const reveal = scaleAt(false, 1 - u);
+        assert.ok(Math.abs(hide - reveal) < 1e-6, u + ' hide ' + hide + ' reveal ' + reveal);
+    }
+    const quarter = scaleAt(true, 0.25);
+    assert.ok(quarter > 0.5, 'a quarter of the way into a hide the ring is ' + quarter);
+
+    // A reverse in the middle keeps the size it had reached.
+    const revRec = recordingContext();
+    const rev = new OrbitRenderer(revRec.ctx, motionTheme, deps);
+    rev.resize(VIEW.w, VIEW.h, 1);
+    drawAt(rev, off, offLayers, 1000);
+    const rev0 = 9000;
+    const revAt = rev0 + 0.4 * tSlow * 1000;
+    drawAt(rev, on, onLayers, rev0);
+    revRec.calls.length = 0;
+    drawAt(rev, on, onLayers, revAt);
+    const reached = revRec.calls.find((c) => c.op === 'scale');
+    assert.ok(reached);
+    revRec.calls.length = 0;
+    drawAt(rev, off, offLayers, revAt);
+    const carried = revRec.calls.find((c) => c.op === 'scale');
+    assert.ok(carried);
+    assert.ok(Math.abs(carried.args[0] - reached.args[0]) < 1e-6);
+
+    // Moons run over --t-long and are still going after --t-slow. Day/night finishes with --t-slow.
+    const moonOff = { ...DEFAULT_LAYERS, moons: false };
+    const moonPic = pictureFor(moonOff);
+    const moonRec = recordingContext();
+    const moons = new OrbitRenderer(moonRec.ctx, motionTheme, deps);
+    moons.resize(VIEW.w, VIEW.h, 1);
+    drawAt(moons, on, onLayers, 1000);
+    drawAt(moons, moonPic, moonOff, 3000);
+    assert.equal(moons.layersBusy, true);
+    drawAt(moons, moonPic, moonOff, 3000 + tSlow * 1000);
+    assert.equal(moons.layersBusy, true);
+    moonRec.calls.length = 0;
+    drawAt(moons, moonPic, moonOff, 3000 + tSlow * 1000 * 0.45);
+    assert.ok(moonRec.calls.some((c) => c.op === 'clip'));
+    drawAt(moons, moonPic, moonOff, 3000 + tLong * 1000 + 1);
+    assert.equal(moons.layersBusy, false);
+
+    const dayOff = { ...DEFAULT_LAYERS, dayNight: false };
+    const dayPic = pictureFor(dayOff);
+    const day = new OrbitRenderer(recordingContext().ctx, motionTheme, deps);
+    day.resize(VIEW.w, VIEW.h, 1);
+    drawAt(day, on, onLayers, 1000);
+    drawAt(day, dayPic, dayOff, 4000);
+    assert.equal(day.layersBusy, true);
+    drawAt(day, dayPic, dayOff, 4000 + tSlow * 1000 + 1);
+    assert.equal(day.layersBusy, false);
 });

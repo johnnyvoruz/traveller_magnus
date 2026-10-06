@@ -288,6 +288,12 @@ const PAIRS = [
     ['--signal', '--bg-1', TEXT, 'the tab chosen, its count'],
     ['--text-0', '--panel-raised', TEXT, 'party: the ship, a member'],
     ['--text-muted', '--panel-raised', TEXT, 'party: a member role or place (12 px)'],
+    // The track on a vessel's page (K12)
+    ['--signal', '--panel-raised', TEXT, 'track: a flight leg\'s mode (12 px bold)'],
+    ['--attention', '--panel-raised', TEXT, 'track: a jump leg\'s mode (12 px bold)'],
+    ['--text-muted', '--panel-raised', TEXT, 'track: a resting leg\'s mode, the leg number, the dates, a note (12 px)'],
+    ['--text-1', '--panel-raised', TEXT, 'track: a leg\'s origin, its G (12 px mono)'],
+    ['--signal', '--bg-1', TEXT, 'track: "Show n earlier legs" (12.5 px)'],
     ['--text-muted', '--chrome-bg', SMALL, 'omnibox group labels (10.5 px)'],
     ['--text-1', '--bg-2', SMALL, 'omnibox "Person here" and "Place here" (11 px bold)'],
     ['--signal', '--bg-2', SMALL, 'omnibox "Person here" highlighted (11 px bold)'],

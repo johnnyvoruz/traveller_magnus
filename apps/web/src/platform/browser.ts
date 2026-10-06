@@ -163,6 +163,11 @@ export function newId(prefix: 'cr' | 'cl'): string {
     return prefix + '_' + crypto.randomUUID();
 }
 
+/** A number in [0, 1). The platform's own draw, not a seeded generator. */
+export function randomUnit(): number {
+    return Math.random();
+}
+
 /** Fires when the page is being hidden or unloaded. No-op where there is no document. */
 export function onPageHide(fn: () => void): () => void {
     if (typeof document === 'undefined') return () => {};

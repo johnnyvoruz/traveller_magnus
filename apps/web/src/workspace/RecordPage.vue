@@ -2,7 +2,7 @@
 /**
  * One record (design §3): its name, type, place, summary, details and tags, each edited
  * where it stands, its connections (K5d), the saving mark, and Delete; a vessel also carries
- * its ship sheet (K13) with its deck plan (K9) inside.
+ * its track (K12) and its ship sheet (K13) with its deck plan (K9) inside.
  */
 import { computed, defineAsyncComponent, nextTick, onMounted, ref, watch } from 'vue';
 import { CAMPAIGN_LIMITS, type CampaignRecordType } from '@voyage/shared';
@@ -16,6 +16,7 @@ import { uploadWords } from './images.ts';
 import LinksBlock from './LinksBlock.vue';
 import RecordGallery from './RecordGallery.vue';
 import { RECORD_TYPES, addTag, cleanDetails, cleanName, cleanSummary, placeLine, typeInfo } from './records.ts';
+import TrackBlock from './TrackBlock.vue';
 import VesselPlan from './VesselPlan.vue';
 import WhereBlock from './WhereBlock.vue';
 
@@ -222,6 +223,8 @@ watch(() => props.id, () => {
     <RecordGallery :id="id" part="strip" :read-only="readOnly" />
 
     <LinksBlock :id="id" :read-only="readOnly" />
+
+    <TrackBlock v-if="record.type === 'vessel'" :id="id" :read-only="readOnly" />
 
     <ShipSheet v-if="record.type === 'vessel'" :id="id" :read-only="readOnly">
       <VesselPlan :id="id" :read-only="readOnly" />

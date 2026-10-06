@@ -3615,3 +3615,137 @@ Stop and report.
   `keepHeld` without per-frame copies).
 - **Push called for:** the whole tree (`git add -A`) with the rules copy in front; every
   agent is between steps.
+
+## 131. Pushed `c6b6841` (ship MVP part 1, the two rules files, the brief and prompts); deployed (2026-10-06)
+
+- GitHub run green; live entry `index-BK15Vpn0.js` (the same hash as the local build), orbit
+  chunk `OrbitView-8S6JQn58.js` holds "No ships here". **Real ships, the status strip,
+  plotting and Jump are in production** (Jump a fixed 168 h until part 2).
+  `rules/mgt2e_climate_bands.json` and `rules/mgt2e_space_travel.json` are committed and
+  their wrappers generated locally.
+- **A and B each reported a stop, "the rules file is absent":** both were handed the earlier
+  prompt before the copy had run, and both stopped as told, with nothing written. Old
+  reports now; the files are in place. Each needs only its paste for
+  `prompts/a_travel.md` and `prompts/b_engine_t1_2.md`.
+- **The fresh Agent D has started** part 2 on the step that needs nobody else:
+  `workspace/TrackBlock.vue`, `track_actions.ts`, `track_rows.ts`, `RecordPage.vue`.
+  It will stop at the previews if `campaign/travel.ts` (A) and `orbit/distance.ts` (C) are
+  not on disk by then: A and C go out now.
+
+## 132. A's travel module, B's T1.2 and C's distance accepted; Johnny on the toggle motion and in-system fuel (2026-10-06)
+
+- **Agent A, `campaign/travel.ts`:** as `prompts/a_travel.md`; every rule number from the
+  generated wrapper; `ASSUMED_HULL_TONS = 100`; `rollJumpHours` with an injected source,
+  default `randomUnit()` in `platform/browser.ts`; the Transit Times test lists exactly the
+  eleven cells the orchestrator had found (79 of 90 match). File read in full. **Accepted.**
+- **Agent B, T1.2, `packages/engines/src/reconcile_environment.js`:** `environmentPolicyFrom`
+  freezes the climate bands (maxC + 273.15; the last open; must rise) and the orbit table,
+  and the version string is their JSON, so an edit to the rules file changes it;
+  `surfaceTempBand` from a finite `meanTempK`, limits inclusive; `orbitalTempBand` from
+  `orbitId` and the effective HZCO with the engine's own classifier (checked line by line
+  against `getTempBand` and `toScale`, `mgt2e_world_engine.js:217-245`: identical),
+  provenance "reconstructed", unknown with the missing inputs named; the original `tempBand`
+  kept once; only three fields written; unchanged objects reused. File read in full.
+  **Accepted.** Not yet called from generation (T1.4).
+- **Agent C, `orbit/distance.ts`:** `realDistanceKm` and `realPositionAu` from the plan's
+  `au` and the layout's `bodyAngle`, never the picture; null for a moon, a belt, a companion
+  with no orbit of its own, a world with no numeric `au`, and pairs in different frames;
+  `keepHeld` keeps references (each picture builds new objects). File read in full.
+  **Accepted.** **The moon gap matters:** the mainworld is often a moon (Regina). The engines
+  already compute a moon's orbit as `pd * parent.diamKm` (`mgt2e_world_engine.js:698, 2258,
+  2269`), so C adds it next from that, with null where either number is absent.
+- **Orchestrator on the combined tree (D mid-step):** 758 pass / 0 fail / 9 skipped, check
+  clean, typecheck clean, build green.
+- **Johnny on the live toggles:** the path reveal is right but a little fast; **hiding
+  vanishes at once** and must be the reveal reversed; the moon ring is "super lame and
+  stuttery": he wants **a wave of teal wireframe sweeping over the planet** (triangles or
+  quads; two reference pictures saved as `findings/ui_design_shots/ref_fu14_wireframe_a.png`
+  and `_b.png`); Day/night can be **a solid teal micro-animation**. Cause of the vanish,
+  found by reading: a hide runs the shrink through `--ease-out`, so the ring is a quarter of
+  its size and alpha within the first fifth of 300 ms. Recorded as follow-up 14b in
+  `slice_2_campaign.md` with the rulings; `prompts/c_toggle_motion_2.md` (moon distance
+  first, then the motion). D was not put in the loop: Johnny's direction was specific.
+- **Johnny on in-system fuel (G3 answered):** manoeuvre drives need none; reaction drives
+  need 2.5% of tonnage per Thrust per hour. New question G4: show a reaction-drive line in
+  the flight estimate, and is the sum 2.5% × hull × G × hours? Until answered, a flight
+  shows no fuel line; nothing is added to `rules/` or `travel.ts`.
+- **Issued:** `prompts/c_toggle_motion_2.md`, `prompts/a_pane_step1.md` (A's design step 1,
+  pure, touches nothing of D's), `prompts/b_engine_t1_3.md` (liquids, on Johnny's yes to F3
+  and F4, with the Marches counts before and after).
+- **No push called for:** nothing here shows on screen until D's part 2 uses it; the next
+  push is by path when C's motion lands, or the whole tree when D reports.
+
+## 133. D's part 2: the Track section accepted, steps 1 to 3 resumed; G4 yes; the local chart problem (2026-10-06)
+
+- **Agent D (the fresh session) stopped correctly:** `travel.ts` and `distance.ts` were not
+  yet on disk when it looked, so it built what needed neither. **Step 4, accepted:**
+  `workspace/TrackBlock.vue`, `track_rows.ts`, `track_actions.ts`, one line in
+  `RecordPage.vue`, five contrast pairs, `tests/web/workspace_track.test.js`: a "Track"
+  section on a vessel's page between Connections and the sheet, a leg as two lines (number,
+  mode in the strip's colour, from → to, G; the two dates in mono), a fold past eight legs,
+  "Remove last leg" with Undo by toast, an empty state that opens the orbit view; two
+  commands registered first. The column screenshot reads as part of the panel. Its report
+  followed the brief's format, manifesto checklist included: the brief works.
+- **D's two findings, ruled** (`prompts/d_ship_mvp_2_resume.md`): (1) the Party tab's "Where
+  are we" and the party's marker read the vessel's anchor, never the track (`whereAreWe` in
+  `track.ts` was called from nowhere): they now answer from the track at the campaign date,
+  in the strip's own words on a flight or a jump; the marker in a jump is D's design call;
+  "Move the party" on a ship with a track writes one docked leg at the campaign date and
+  says why when refused. (2) An emptied track is `[]` and `whereAreWe` answered null: **an
+  empty track is no track** (Agent A, `prompts/a_travel_2.md`).
+- **Still anchor-only, known:** the campaign index ("records here", people aboard a ship)
+  resolves anchors and ignores tracks. It joins the open-space leg end as part 2b: one step
+  on "where a ship is" (A), then C's drawing and D's wiring.
+- **Johnny: yes to G4.** The flight estimate shows "Manoeuvre drive: no fuel" and "Reaction
+  drive: about N tons", N = 2.5% × hull × G × hours. The numbers are added to the draft
+  `findings/rules_drafts/mgt2e_space_travel.json` (a `manoeuvre` block) for Johnny to copy
+  over `rules/`; A adds `reactionFuelTons`; D shows the lines when it exists.
+- **Why a fresh agent cannot see a system locally:** the local API's newest released truth
+  is `vtest` (probed: `localhost:8787/api/truth/versions`), and the web asks the public CDN
+  for its manifest, a 404. The Vite on 5173 proxies to an API that answers with
+  production's versions, so it shows the chart but not a local session. The earlier D left
+  no note of how it got both. **Now:** D's driver answers `GET /api/truth/versions` with
+  production's; **next:** A adds a dev-only proxy rule (`VOYAGE_TRUTH_API`) in
+  `vite.config.ts`, and the command goes into the agents' briefs.
+- **Issued:** `prompts/d_ship_mvp_2_resume.md`, `prompts/a_travel_2.md` (reaction fuel, the
+  empty track, the truth proxy; after `a_pane_step1.md`).
+
+## 134. A's pane helper, B's T1.3 and C's motion pass accepted; a whole-tree push called for (2026-10-06)
+
+- **State when the reports came:** the `manoeuvre` copy had not been run, D's resume and
+  A's `a_travel_2.md` had not been handed out, and the D report pasted was the earlier one
+  again (§133). So every agent was between steps: the tree was quiet. **Orchestrator on it:**
+  779 tests, 770 pass / 0 fail / 9 skipped; check clean; typecheck clean; build green.
+- **Agent A, panes step 1:** `shell/pane.ts` (`paneOf`, `withQuery`, `campaignRedirect`,
+  `focusTarget`), pure, called by nothing yet; `tests/web/pane.test.js` pins the design's
+  section 6. **Accepted.**
+- **Agent C, moon distance and follow-up 14b:** a moon is placed at `pd * parent.diamKm`
+  (null without either number); a hide is the reveal at `1 - u`, tested, with the stash
+  keeping geometry for the shrink; bands, rings and paths over `--t-slow`; Moons a
+  latitude-longitude wireframe in `--signal` under a wavefront crossing each disc over
+  `--t-long`, the moons arriving as it passes (a solid band under 20 px across, nothing under
+  8); Day/night a solid `--signal` sweep from the lit limb, covering the exchange of flat and
+  shaded discs; frame gaps at Regina 10.7 ms (Moons) and 39.7 ms once (Day/night), none over
+  50. The mid frames show the wireframe wave on the gas giant and the teal band on the
+  disc. **Accepted**; whether it sings is Johnny's eye on the live site.
+- **Agent B, T1.3:** liquids reconciled by the Q2 and Q3 picks from the generated
+  `exoticLiquids` table; Marches, 9,340 bodies: 3,714 labels changed (2,555 of them
+  zero-coverage bodies losing a label), B04 915 → 422, B06 → 0, **1,795 unresolved** (859 Ice
+  that thaws with no eligible liquid, 593 known liquids outside their window with no
+  replacement, 343 unknown exotics cleared). **Accepted with one correction, found by the
+  orchestrator's own run:** of the 1,276 `hydro-invalid` blocking bodies, 701 are gas giants,
+  444 belts and 118 empty orbits with no percentage and no label (nothing to validate), 11
+  are mainworlds with no percentage, code 0 and no label, and 2 are gas giants with a label
+  and a NaN percentage. `prompts/b_engine_t1_3a.md`: a body needs its liquid validated only
+  when it has a label, a percentage (valid or not) or a code above 0; the rest get no liquid
+  write. B's "1 fail" was C's renderer test in mid-edit.
+- **Push called for, whole tree, with the `manoeuvre` rules copy in front**, before any
+  paste is handed out. It carries C's motion, D's Track section, A's travel and pane
+  modules, C's distance, B's reconciliation (called by nothing yet).
+- **Issued for after the push:** `d_ship_mvp_2_resume.md` and `a_travel_2.md` (as §133),
+  `b_engine_t1_3a.md`, `c_jump_bubble.md` (new: `placeShips` reports a ship entering jump
+  and arriving, and the renderer draws the bubble out and in, amber, tokens' motion, the
+  toggles' rules; the stand-in shows both).
+- **Next for the orchestrator:** the recipe for part 2b ("where a ship is": a leg end in
+  open space and on a 100-diameter circle, the index reading tracks) for A; T1.4 and T1.6
+  for B from plan sections 7 and 8.

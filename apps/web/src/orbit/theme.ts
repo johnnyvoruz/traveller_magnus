@@ -63,10 +63,18 @@ export type OrbitTheme = {
     tPulse: number;
     tSweep: number;
     /**
-     * Layer-toggle length in seconds, from --t-base. Absent (a test theme, a missing token),
-     * a toggle snaps.
+     * Scan and mainworld toggle length in seconds, from --t-base. Absent (a test theme, a
+     * missing token), that toggle snaps.
      */
     tBase?: number;
+    /**
+     * Bands, rings, paths and the day/night sweep, from --t-slow. Absent, those snap.
+     */
+    tSlow?: number;
+    /**
+     * The moon wireframe sweep, from --t-long. Absent, that toggle snaps.
+     */
+    tLong?: number;
     /** --ease-out as four cubic-bezier controls. Absent, a toggle snaps. */
     easeOut?: EaseOut | null;
 };
@@ -236,6 +244,8 @@ export function readOrbitTheme(el: HTMLElement): OrbitTheme {
         tPulse: cssSeconds(token('--t-pulse')),
         tSweep: cssSeconds(token('--t-sweep')),
         tBase: cssSeconds(token('--t-base')),
+        tSlow: cssSeconds(token('--t-slow')),
+        tLong: cssSeconds(token('--t-long')),
         easeOut: cssBezier(token('--ease-out')),
     };
 }

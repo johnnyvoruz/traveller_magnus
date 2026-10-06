@@ -325,7 +325,15 @@ only. D's five points for the orchestrator:
        MVP"), and the screen says so ("about 20 tons for a 100-ton hull"). Nothing is
        deducted from a ship, no ship field is read, nothing warns or refuses. **vNext**
        ties the ship's own fields to the sums, then warnings and refuelling; which fields,
-       Johnny decides. A flight shows no fuel: the text supplied prices jumps only (G3).
+       Johnny decides. **A flight's fuel (G3 and G4, answered 2026-10-06):** a manoeuvre
+       drive uses none; a reaction drive uses 2.5% of the tonnage per Thrust per hour. The
+       app does not know the drive, so the flight preview shows both lines: "Manoeuvre
+       drive: no fuel" and "Reaction drive: about N tons" for the assumed hull, the G flown
+       and the hours of the flight (`reactionFuelTons`).
+    3b. **"Where are we" is the track's answer (2026-10-06, from D's finding).** The Party
+       tab and the party's marker read `whereAreWe` at the campaign date; "Move the party"
+       on a ship with a track writes a docked leg; an empty track is no track. The campaign
+       index ("records here", people aboard) still resolves anchors only: part 2b.
     4. **Flight legs:** the duration is filled from `transitSeconds` over the distance
        between the two places at departure and the chosen G; still editable. Part 2.
     5. **Arrival:** the ship comes out on the 100-diameter circle of the destination's
@@ -499,6 +507,20 @@ only. D's five points for the orchestrator:
       teal wireframe sphere that fades in or out as the transition. Durations and easing
       from the tokens' motion only; none under reduced motion (instant); the renderer's
       steady-state frame unchanged (the parity shots still match once the motion ends).
+  14b. **Johnny on the live toggle motion (2026-10-06; Agent C,
+      `prompts/c_toggle_motion_2.md`).** "The path animation reveal is correct (a little
+      fast), but when you hide it, it just instantly vanishes, I want to reverse the reveal
+      animation. The moon animation is super lame and stuttery, I want a wave of teal
+      wireframe to sweep over the planet, either triangles or quads, and for day / night, it
+      can just be a solid teal sci-fi microanimation." His two reference pictures are
+      `findings/ui_design_shots/ref_fu14_wireframe_{a,b}.png`. Rulings: a hide is the reveal
+      played backwards (the cause of "vanishes": the shrink ran through `--ease-out`, so most
+      of it was over in the first fifth); rings and paths over `--t-slow`; Moons is a
+      latitude-longitude wireframe globe in `--signal` shown as a wave crossing each world
+      that has moons, the moons arriving with it, over `--t-long` (quads chosen; triangles
+      only if quads do not read); Day/night is one solid teal sweep from the lit limb to the
+      terminator that covers the exchange of flat and shaded discs; no frame over 50 ms,
+      measured.
   15. **The pinned body card beside the open panel (D decides):** when the orbit view's
       docked body card and the dossier panel for the same body are both open, two views of
       one thing show at once. Johnny sees pros and cons. D reviews `manifesto.md` (one
