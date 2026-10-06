@@ -107,15 +107,16 @@ campaign layer over the truth map; own maps later. X sign-in only.
 
 ## 6. In flight right now
 
-- **Agent D:** the K14 image screens. Then K15 part 1 (the orbit view showpiece design,
-  Johnny rules on it), K15 part 2, K13 part 3 (the ship sheet), K6d.
+- **Agent D:** K14 image screens built, report not yet relayed; K15 part 1 (the orbit
+  showpiece design) is written and waits on Johnny's rulings (handoff §105). Then K15
+  part 2, K13 part 3, K6d.
 - **Agent A:** campaign import in the browser (the restore half of the backup story).
 - **Agent B:** free. The export route is in (§104); Export / Import buttons come with D's K15.
-- **Agent C:** the shipyard grid under the deck plan; then the local-time tick on the Day
-  and night strip (plan §7.10, A16 ruled: the prime meridian).
+- **Agent C:** the local-time tick on the Day and night strip (plan §7.10; A16: the prime
+  meridian).
 - **Agent F:** parked. K13 parts 1 and 2 done (handoff 89 to 91); part 3 after K5f.
-- **Last push:** 3f1b07f (store fix), deployed and green. Local and finished: B's export
-  (push by path: apps/api, tests/api).
+- **Last push:** 2f861ab (export), deployed and green. Local and finished: C's grid;
+  D's K14 screens (unreported).
 
 ## 7. Decisions Johnny has made that shape the next steps
 

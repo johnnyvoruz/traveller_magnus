@@ -8,6 +8,9 @@ import type { PlacedShip, PlacedTile, ShipBounds } from './place.ts';
 
 export const DECK_PAD = 16;
 export const GEOMORPH_BASE = '/dev/geomorphs';
+/** The shipyard map tile. Not a part. One copy is 10 squares, 50 map units. */
+export const SQUARE_BASE_PATH = 'Square Base (10x10).png';
+const SQUARE_BASE_SPAN = 50;
 
 const CDN_DEFAULT = 'https://cdn.traveller.voyage';
 
@@ -106,6 +109,40 @@ function project(frame: DeckFrame, x: number, y: number): [number, number] {
     return [frame.panX + x * frame.scale, frame.panY - y * frame.scale];
 }
 
+/**
+ * One repeating fill of the square-base image, across the whole canvas.
+ * 600 image pixels are 50 map units, so a grid line falls on every multiple
+ * of 5, including map 0. Image top is the higher map Y, the same way as a part.
+ * One fill, not a stamp per cell: the main thread does not repaint a tile per square.
+ */
+function drawSquareBase(
+    ctx: CanvasRenderingContext2D,
+    image: DeckImage,
+    size: { w: number; h: number },
+    frame: DeckFrame,
+    width: number,
+    height: number,
+): void {
+    const scale = frame.scale;
+    if (!(scale > 0) || !(size.w > 0) || !(size.h > 0)) return;
+    const pattern = ctx.createPattern(image, 'repeat');
+    if (!pattern) return;
+    const span = SQUARE_BASE_SPAN;
+    const a = (span / size.w) * scale;
+    const d = (span / size.h) * scale;
+    const e = frame.panX;
+    const f = frame.panY - span * scale;
+    ctx.save();
+    ctx.setTransform(a, 0, 0, d, e, f);
+    ctx.fillStyle = pattern;
+    const left = (0 - e) / a;
+    const right = (width - e) / a;
+    const top = (0 - f) / d;
+    const bottom = (height - f) / d;
+    ctx.fillRect(Math.min(left, right), Math.min(top, bottom), Math.abs(right - left), Math.abs(bottom - top));
+    ctx.restore();
+}
+
 function quadTransform(size: { w: number; h: number }, topLeft: [number, number], topRight: [number, number], bottomLeft: [number, number]): [number, number, number, number, number, number] {
     return [
         (topRight[0] - topLeft[0]) / size.w,
@@ -143,11 +180,17 @@ export async function drawDeck(
     const frame = opts.frame ?? fitFrame(bounds, opts.width, opts.height);
     if (!frame) return [];
     const skipped: string[] = [];
-    const loaded = await Promise.all(placed.tiles.map(async (tile) => {
-        const image = await remember(resolve(tile.path), load);
-        return { tile, image, size: image ? imageSize(image) : null };
-    }));
+    const baseUrl = resolve(SQUARE_BASE_PATH);
+    const [baseImage, ...loaded] = await Promise.all([
+        remember(baseUrl, load),
+        ...placed.tiles.map(async (tile) => {
+            const image = await remember(resolve(tile.path), load);
+            return { tile, image, size: image ? imageSize(image) : null };
+        }),
+    ]);
     if (opts.isCurrent && !opts.isCurrent()) return skipped;
+    const baseSize = baseImage ? imageSize(baseImage) : null;
+    if (baseImage && baseSize) drawSquareBase(ctx, baseImage, baseSize, frame, opts.width, opts.height);
     const ready: { tile: PlacedTile; image: DeckImage; size: { w: number; h: number } }[] = [];
     for (const item of loaded) {
         if (!item.image || !item.size) {
@@ -156,7 +199,6 @@ export async function drawDeck(
         }
         ready.push({ tile: item.tile, image: item.image, size: item.size });
     }
-    if (opts.isCurrent && !opts.isCurrent()) return skipped;
     for (const item of ready) {
         const topLeft = project(frame, item.tile.topLeft[0], item.tile.topLeft[1]);
         const topRight = project(frame, item.tile.topRight[0], item.tile.topRight[1]);

@@ -272,7 +272,7 @@ watch(() => props.plan, () => { void load(); }, { immediate: true });
   flex: 1;
   width: 100%;
   min-height: 0;
-  background: var(--bg-0);
+  background: var(--paper);
   touch-action: none;
   cursor: grab;
 }

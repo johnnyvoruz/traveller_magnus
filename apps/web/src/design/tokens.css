@@ -35,6 +35,7 @@
 :root {
   /* field */
   --bg-0: #0b0c10;        /* deepest: canvas backdrop */
+  --paper: #f4efe4;       /* deck-plan sheet only: geomorphs are drawn for a light page. No dark override in this file. */
   --bg-1: #101820;        /* panels (legacy --atlas-bg) */
   --bg-2: #0b1a1d;        /* inset wells, inputs */
   --surface-1: #1f2833;   /* raised rows, cards */

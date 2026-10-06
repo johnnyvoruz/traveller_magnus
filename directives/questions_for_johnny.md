@@ -428,6 +428,10 @@ you are ready, add a `rules/` file (any name) that states, from the Mongoose 2e 
 
 No orchestrator will fill these in from memory. Not needed until the MVP steps are done.
 
+Note (2026-10-05): for (1), the orbit view already draws jump-limit circles at 100 diameters,
+copied from the legacy `js/system_viewer.js` (2916 to 2950). Say whether that is the rule to
+use for the minimum jump distance, or give another.
+
 **Answer:**
 
 

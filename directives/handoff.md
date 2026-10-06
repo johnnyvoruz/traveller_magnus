@@ -2785,3 +2785,27 @@ API and Durable Object have against `data_model.md` and `api.md`).
   is empty) through `commit` in batches that respect the PATCH limits (200 rows, 1 MB),
   keeping ids; images by hash are kept on the rows (the objects, if any, are still in the
   bucket for the same account). D wires Export and Import into the account menu with K15.
+
+## 105. Pushed `2f861ab` (export); the grid is in; the orbit showpiece design is ready for Johnny (2026-10-05)
+
+- GitHub run green; signed-out `GET …/campaign/export` answers 401 on production.
+- **Agent C, the grid:** `drawSquareBase` fills one repeat pattern of `Square Base (10x10).png`
+  (600 px = 50 map units, so a line on every multiple of 5 including 0) under the parts with
+  the ship's pan and zoom; a missing tile draws nothing and stays off the skipped list; no
+  new colour. `deck_plan_grid.png` shows the squares lining up with the hull. 641 pass on
+  the tree. **Accepted.** Pushable by path (`deckplan/`, `design/tokens.css`,
+  `tests/web/deck_plan.test.js`).
+- **Agent D, K15 part 1:** `findings/orbit_showpiece_design.md`, ten mockups. 21 controls
+  inventoried; the picture starts under one time row (play, 1 week, scrub ±30 d with the
+  campaign date marked, speed, one date readout pressed to type, the mark, Set as campaign
+  date); the key at the foot is the toggle, off entries dimmed; the layout choice upper
+  left; More tools to the header; the K12 strip upper right with Jump at its end, flight
+  line, target and range ring in amber (`--attention`, no new token); 1/2/3 the layout, 4 to
+  0 the layers; every control a `registerCommand` entry first. Twelve decisions D1 to D12
+  in §8, each with a recommendation. The "100D" mark is the view's existing jump-limit
+  circle (legacy `system_viewer.js:2916-2950`), not a rule from memory. **Orchestrator:
+  recommends yes to all twelve as recommended.** Part 2 waits on Johnny.
+- **Missing:** D's K14 image screens report. The files and eleven `k14_` screenshots are on
+  disk; Johnny asked to paste it.
+- **Next, C:** the local-time tick on the Day and night strip (plan §7.10; A16: the prime
+  meridian).
