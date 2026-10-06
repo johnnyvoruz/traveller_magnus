@@ -33,6 +33,8 @@ export {
     CampaignChangesResult,
     locate,
     linkAllowed,
+    DEFAULT_JUMP_HOURS,
+    jumpHoursOf,
 } from './schemas/campaign.ts';
 export type { CampaignRecordType, CampaignLinkKind, SystemAnchor } from './schemas/campaign.ts';
 export { copyRecords } from './campaign_copy.ts';

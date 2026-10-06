@@ -1,0 +1,11 @@
+{
+  "note": "Climate word by mean surface temperature. Provisional: Johnny, 2026-10-06, 'let's just go with these for now'. Edit the numbers freely; keep the bands in rising order. Each band runs up to and including its maxC; the last band has no upper limit (null).",
+  "unit": "C",
+  "bands": [
+    { "word": "Frozen", "maxC": -51 },
+    { "word": "Cold", "maxC": 0 },
+    { "word": "Temperate", "maxC": 30 },
+    { "word": "Hot", "maxC": 80 },
+    { "word": "Boiling", "maxC": null }
+  ]
+}

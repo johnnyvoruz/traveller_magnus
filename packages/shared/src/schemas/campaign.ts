@@ -190,6 +190,9 @@ export const CampaignLink = z.object({
 }).strict();
 export type CampaignLink = z.infer<typeof CampaignLink>;
 
+/** A jump of more than this many hours is a mistake, not a setting (about a year). */
+const JUMP_HOURS_MAX = 24 * 400;
+
 export const CampaignSettings = z.object({
     party: z.object({
         vesselId: z.string().regex(RECORD_ID).nullable(),
@@ -200,9 +203,18 @@ export const CampaignSettings = z.object({
     calendar: z.object({
         dateFormat: z.enum(['imperial', 'long']),
     }).strict(),
+    /** How long a jump takes, in hours (K12; Johnny: 168). Absent in settings stored before it: see jumpHoursOf. */
+    jumpHours: z.number().int().min(1).max(JUMP_HOURS_MAX).optional(),
     rev: Rev,
 }).strict();
 export type CampaignSettings = z.infer<typeof CampaignSettings>;
+
+/** The jump duration a campaign uses when its settings do not say: the number Johnny gave. */
+export const DEFAULT_JUMP_HOURS = 168;
+
+export function jumpHoursOf(settings: Pick<CampaignSettings, 'jumpHours'> | null | undefined): number {
+    return settings && settings.jumpHours !== undefined ? settings.jumpHours : DEFAULT_JUMP_HOURS;
+}
 
 const Name = z.string().min(1).max(CAMPAIGN_LIMITS.name);
 const UniverseId = z.string().min(1).max(64).regex(/^[A-Za-z0-9_-]+$/);

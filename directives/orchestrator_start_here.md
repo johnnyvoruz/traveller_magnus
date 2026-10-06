@@ -41,8 +41,13 @@ file true: replace it, do not append to it.
   because its prompt was never handed out. Repeat a missing prompt in full.
 - He sometimes says "pushed" when the command did not run (three times on 2026-10-05).
   **Verify with `git log -1`** and ask him to confirm the commit message.
-- Long lines lose their middles when pasted into agents' terminals. **Keep prompt lines under
-  about 60 characters**, in a code block, ending in "Stop and report".
+- **Prompts are files in `directives/prompts/` (since 2026-10-06, handoff §130).** Write the
+  prompt there, ending in "Stop and report", and give Johnny a three-line paste that names
+  the agent and the file. Long pastes lost their middles in agents' terminals; if text must
+  be pasted, keep lines under about 60 characters, in a code block.
+- **Agent D is the lead design agent and has a standing brief,
+  `directives/agent_d_brief.md`**; every D prompt says to read it first. Keep it current
+  (ownership table, traps). A reset of D needs only the brief and the prompt file.
 - When a prompt is superseded, say so in one line; he may otherwise run the older one.
 
 ## 3. Rules you must keep (beyond `CLAUDE.md`)
@@ -119,11 +124,13 @@ file true: replace it, do not append to it.
 | K1 to K5f, K6a to K6c, K9, K13 parts 1 to 3, K14, K15, follow-ups 1 to 13 and 16, the drawers | the campaign MVP, the sheet, images, the orbit showpiece | **done, live** |
 | K6d data | the vessel track (`status.track`, `campaign/track.ts`) | done, live |
 | K12 picture | `orbit/ships.ts`, designators, plotting overlay (C) | done, live, fed by nothing yet |
-| **ship MVP 1** | ship list, real marks, status strip, plotting mode, Jump (148 + 6D rolled, amended §128; `settings.jumpHours` withdrawn) | **Agent D, in flight** |
+| ship MVP 1 | ship list, real marks, status strip, plotting mode, Jump (fixed 168 until part 2) | accepted §130; push called for (verify with `git log -1`) |
+| **ship MVP 2 (D)** | `prompts/d_ship_mvp_2.md`: the measuring pass, on a fresh D session | **issued §130**; needs A's `travel.ts` and C's `distance.ts` |
+| **real distance (C)** | `prompts/c_distance.md`: `orbit/distance.ts`, `keepHeld` | **issued §130** |
+| ship MVP 2b | a leg end in open space, arrival on the 100D circle, the jump bubble (A, C, then D) | after the measuring pass; recipe not written |
 | follow-up 14 | layer toggle micro-animations in the renderer | accepted §129; pushed by path with `findings/push/fu14_canvas.patch` (verify with `git log -1`); Johnny judges speed and the ring live |
-| **travel module** | `campaign/travel.ts` from `rules/mgt2e_space_travel.json` | **Agent A, issued §129 (replaces §128's)** |
-| **engine corrections T1.2** | `reconcile_environment.js`, the climate classifier from `rules/mgt2e_climate_bands.json` | **Agent B, issued §128** |
-| ship MVP 2 | **the measuring pass** (Johnny, §129): estimates of distance, time and fuel in the plotting previews, hull taken as 100 tons and labelled, no warnings; the track on the vessel page; the jump bubble; arrival on the 100D circle | next for D |
+| **travel module** | `prompts/a_travel.md`: `campaign/travel.ts` from `rules/mgt2e_space_travel.json` | **Agent A, issued §130** |
+| **engine corrections T1.2** | `prompts/b_engine_t1_2.md`: `reconcile_environment.js`, the climate classifier from `rules/mgt2e_climate_bands.json` | **Agent B, issued §130** |
 | ship MVP 3 (follow-up 17) | panes swap over either view; design accepted (shape A, `findings/panes_swap_design.md`): four steps A, D, A, A | after part 2; A's step 1 any time |
 | follow-up 15 | the docked body card beside the open panel: D decides from the manifesto | after the ship MVP |
 | follow-up 18 | locked-world Day and night card as a Scouts terminal readout | D, after the ship MVP |
@@ -136,21 +143,19 @@ file true: replace it, do not append to it.
 
 ## 6. In flight right now
 
-- **Agent D:** the ship MVP part 1 (prompt in handoff §124's session, repeated in full in
-  §126). Reports after it.
-- **Agent C:** follow-up 14, the toggle micro-animations in `OrbitRenderer.ts` (prompt in
-  §126). Does not touch D's files.
-- **Agent D** also has an amendment to step 5 (handoff §128): the jump time is rolled, and
-  `jumpHours` comes back out of `packages/shared`.
-- **Agent A:** `campaign/travel.ts` (prompt in §128). Its panes design is accepted; step 1
-  (`shell/pane.ts`, pure) is next for A, the rest when D leaves `views/`.
-- **Agent B:** engine corrections T1.2 (prompt in §128), then T1.3 (liquids).
+- **Agent D (a fresh session, reset 2026-10-06):** ship MVP part 2, the measuring pass
+  (`prompts/d_ship_mvp_2.md`), after reading `agent_d_brief.md`.
+- **Agent C:** `prompts/c_distance.md` (the real distance D's flight estimate needs).
+- **Agent A:** `prompts/a_travel.md`. Its panes design is accepted; step 1 (`shell/pane.ts`,
+  pure) is next for A, the rest when D leaves `views/`.
+- **Agent B:** `prompts/b_engine_t1_2.md`, then T1.3 (liquids).
 - **Both new rules files are drafts in `findings/rules_drafts/`** until Johnny copies them
   into `rules/` and runs `npm run rules:gen`. Check `ls rules/` before accepting A's or
   B's report.
 - **Agent F:** parked.
-- **Last push:** `57510d2` (drawers), deployed and green. Nothing finished is local except
-  `directives/`.
+- **Last push:** `61d73b6` (toggle motion), deployed and green. Local and finished: D's
+  ship MVP part 1 and `directives/`; a whole-tree push was called for in §130 with the
+  rules copy in front. Check `git log -1` and `ls rules/` before believing it ran.
 
 ## 7. Decisions Johnny has made that shape the next steps
 

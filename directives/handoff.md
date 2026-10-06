@@ -3572,3 +3572,46 @@ Do not touch track.ts, orbit/, workspace/,
 views/ (Agent D is mid-step) or packages/.
 Stop and report.
 ```
+
+## 130. Pushed `61d73b6` (toggle motion); ship MVP part 1 (D) accepted; D reset with a standing brief; prompts become files (2026-10-06)
+
+- **`61d73b6` verified:** GitHub run green; the commit holds C's three files and the one
+  `layersBusy` line of `OrbitCanvas.vue` (the patch staged as rehearsed); live entry
+  `index-DeDBifJL.js`, orbit chunk `OrbitView-CCfO2AGS.js` holds `layersBusy`. **The toggle
+  motion is in production.** The two rules files were **not** in that push: the copy
+  command had not been run; `rules/` still lacks them.
+- **Agent D, ship MVP part 1 (report pasted after the fact; notes in
+  `findings/orbit_view_design.md` §8q):** `orbit/ship_list.ts` and `ship_marks.ts` (pure,
+  8 tests), `ShipStrip.vue` (the ship list, the status strip, the destination row, the plot
+  card), `jump_state.ts`, the wiring in `views/OrbitView.vue`; `OrbitCanvas.vue` gained
+  `tracks`, `plotting` / `plotFrom`, a `plot` emit and `shipStatus()`; commands `orbit-plot`
+  (P), add leg, jump; 8 contrast pairs. Exercised end to end against the real local API
+  (list, select, plot a flight, the mark moves with the scrub, destination picked on the
+  map, Jump lit outside the 100D rings, in jump). **Orchestrator on the tree:** 735 pass /
+  0 fail / 9 skipped, check clean, typecheck clean, build green. **Accepted.**
+  Built before the rules arrived: durations typed, the jump a fixed `jumpHours` (optional in
+  `CampaignSettings`, default 168, stored by no screen). Part 2 takes it out again.
+- **D's flag, accepted as interim:** a leg ends on a body, so a ship is outside every 100D
+  ring only while under way; Jump from mid-flight cuts the flight ("Cut short to jump.") and
+  the jump departs from the flight's destination anchor, so the mark steps to that body.
+  **Ruling:** a leg end must be able to be a place in open space (the ship's true position,
+  or a body's 100-diameter limit as a destination), so the jump leaves from where the ship
+  is and arrives on the target's limit. A (the anchor in `packages/shared`, `track.ts`) and
+  C (`placeShips`, the bubble) change the model after the measuring pass; D wires it. This
+  is ship MVP part 2b.
+- **Johnny resets Agent D** and asks for a prompt that gives it identity, scope and the
+  manifesto. Written: **`directives/agent_d_brief.md`**, the standing brief (who D is, the
+  ownership table, the manifesto as a nine-line checklist for every piece of UI, the
+  reading list with D's own notes, the working method, the traps this role has hit, the
+  report format). Every fresh D session reads it after `CLAUDE.md` and the manifesto.
+- **Prompts are now files in `directives/prompts/`,** and Johnny pastes three lines that
+  name one. It ends the lost-middle problem of long pastes and the repeating of prompts in
+  chat. Issued: `d_ship_mvp_2.md` (the measuring pass: the rolled jump time and `jumpHours`
+  out; the jump estimate in parsecs and fuel for an assumed 100-ton hull; the flight
+  estimate of distance and time that fills the hours field; the track on the vessel page;
+  commands first; nothing warns or refuses), `a_travel.md` (as §129), `b_engine_t1_2.md`
+  (as §128 with the absent-file stop), `c_distance.md` (new: `orbit/distance.ts`
+  `realDistanceKm` from the plan's real orbit data, null where the plan holds none; and
+  `keepHeld` without per-frame copies).
+- **Push called for:** the whole tree (`git add -A`) with the rules copy in front; every
+  agent is between steps.

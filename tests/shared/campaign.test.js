@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {
     CAMPAIGN_LIMITS,
     CAMPAIGN_LINK_KINDS,
+    DEFAULT_JUMP_HOURS,
+    jumpHoursOf,
     CAMPAIGN_RECORD_TYPES,
     CampaignAnchor,
     CampaignChanges,
@@ -166,6 +168,15 @@ test('schemas reject §0.10 breaches and a legacy hex id', () => {
     assert.equal(CampaignRecord.safeParse(record({ provenance: { mode: 'campaign', universeId: 'uni-9', recordId: OTHER, rev: 1, at: STAMP } })).success, false);
     assert.equal(CampaignLink.safeParse(link({ provenance: { mode: 'copy', universeId: '', recordId: OTHER, rev: 1, at: STAMP } })).success, false);
     assert.equal(CampaignSettings.safeParse(settings({ party: { vesselId: null, memberIds: [], anchor: { kind: 'system', hexKey: '1-A-0101' } } })).success, false);
+    // The jump duration (K12): optional in stored settings, 168 h unless the campaign says otherwise, whole hours within reason.
+    assert.equal(jumpHoursOf(settings()), DEFAULT_JUMP_HOURS);
+    assert.equal(DEFAULT_JUMP_HOURS, 168);
+    assert.equal(jumpHoursOf(null), 168);
+    assert.equal(jumpHoursOf(settings({ jumpHours: 200 })), 200);
+    assert.equal(CampaignSettings.safeParse(settings({ jumpHours: 200 })).success, true);
+    assert.equal(CampaignSettings.safeParse(settings({ jumpHours: 0 })).success, false);
+    assert.equal(CampaignSettings.safeParse(settings({ jumpHours: 1.5 })).success, false);
+    assert.equal(CampaignSettings.safeParse(settings({ jumpHours: 24 * 401 })).success, false);
     const tooMany = [];
     for (let i = 0; i < 201; i += 1) tooMany.push({ ...record({ id: idFor('cr', i) }), baseRev: 0 });
     assert.equal(CampaignClock.safeParse({ days: -1, rev: 0 }).success, false);

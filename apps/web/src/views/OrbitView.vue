@@ -15,6 +15,16 @@ import { overviewModel, pickSystem, type AllegianceName } from '../dossier/model
 import { TruthClient } from '../map/truth_client.ts';
 import BodyChips from '../orbit/BodyChips.vue';
 import { LAYERS, LAYOUTS, ORBIT_COMMANDS, toggled, type DrawerId } from '../orbit/commands.ts';
+import { jumpReturnPath, jumpTarget } from '../orbit/jump_state.ts';
+import {
+    bodyAnchor, earliestDeparture, flightLeg, jumpLeg, legStart, shipsHere, shipTrack, statusWords, vesselPosition,
+} from '../orbit/ship_list.ts';
+import ShipStrip from '../orbit/ShipStrip.vue';
+import type { ShipTrack } from '../orbit/ships.ts';
+import { appendLeg, removeLastLeg, trackOf } from '../campaign/track.ts';
+import { jumpHoursOf, type CampaignAnchor } from '@voyage/shared';
+import { beginPick, endPick, type PickedSystem } from '../workspace/pick.ts';
+import { placeSource } from '../workspace/place_source.ts';
 import Drawer from '../orbit/Drawer.vue';
 import { escapeStep, pressCloses, toggleDrawer, type DrawerState } from '../orbit/drawers.ts';
 import DrawerTabs from '../orbit/DrawerTabs.vue';
@@ -48,6 +58,10 @@ const route = useRoute();
 const router = useRouter();
 const rootEl = ref<HTMLElement | null>(null);
 const stageEl = ref<InstanceType<typeof OrbitCanvas> | null>(null);
+const flightEl = ref<HTMLElement | null>(null);
+/** The strip's height, so toasts stack under it. */
+const flightHeight = ref(0);
+let stopFlightSize: (() => void) | null = null;
 const timeEl = ref<{ focusScrub: () => void; focusSpeed: () => void; focusDate: () => void } | null>(null);
 const tabsEl = ref<{ focusTab: (id: DrawerId) => void } | null>(null);
 const stageBox = ref<HTMLElement | null>(null);
@@ -233,6 +247,7 @@ function frame(): void {
     }
     lastFrame = time;
     if (stageEl.value) stageEl.value.paint(days, time);
+    sampleShip();
     const wall = Math.floor(Date.now() / 1000);
     if (wall !== wallSecond) {
         wallSecond = wall;
@@ -366,6 +381,164 @@ function shuttleTo(rate: number): void {
     if (rate) paused.value = true;
     shuttle.value = rate;
     if (!rate && was) writeLink();
+}
+
+// ---- The ships (K12 points 1, 2, 2b, 5; K6d): the list, the strip, the plot, the jump ----
+
+const partyVesselId = computed(() => (campaign.settings ? campaign.settings.party.vesselId : null));
+/** The campaign's vessels in this system at the view's date, the party's first. Signed out: none. */
+const ships = computed(() => (canSetDate.value ? shipsHere(campaign.records, partyVesselId.value, hexKey.value, shownDays.value) : []));
+/** Their tracks, for the picture to place (orbit/ships.ts placeShips inside the canvas). Null signed out, so the dev stand-in can still show. */
+const tracks = computed((): ShipTrack[] | null => {
+    if (!canSetDate.value) return null;
+    const out: ShipTrack[] = [];
+    for (const ship of ships.value) {
+        const track = shipTrack(ship, partyVesselId.value);
+        if (track) out.push(track);
+    }
+    return out;
+});
+const selectedShip = ref<string | null>(null);
+watch(ships, (list) => {
+    if (!list.some((ship) => ship.id === selectedShip.value)) selectedShip.value = list.length ? list[0].id : null;
+}, { immediate: true });
+const shipRecord = computed(() => (selectedShip.value ? campaign.records[selectedShip.value] ?? null : null));
+const shipPosition = computed(() => (shipRecord.value ? vesselPosition(shipRecord.value, shownDays.value) : null));
+
+/** An anchor's name for the strip: its label, its body's chip name, this system's name, or the hex. */
+function anchorName(anchor: CampaignAnchor): string {
+    if (!anchor) return 'nowhere';
+    if (anchor.kind === 'record') {
+        const found = campaign.records[anchor.id];
+        return found ? found.name : 'a record';
+    }
+    if (anchor.locationLabel) return anchor.locationLabel;
+    if (anchor.bodyKey) {
+        const chip = anchor.hexKey === hexKey.value ? findChip(chips.value, anchor.bodyKey) : null;
+        if (chip) return chip.name;
+    }
+    return anchor.hexKey === hexKey.value ? title.value : anchor.hexKey.split('/')[1] ?? anchor.hexKey;
+}
+
+const shipStatus = computed(() => (shipRecord.value ? statusWords(shipRecord.value, shownDays.value, anchorName) : null));
+/** Whether the selected ship's mark lies outside every 100D circle, and where it is, asked of the canvas every few frames. */
+const shipOutside = ref<boolean | null>(null);
+const shipAt = ref('');
+let sampleAt = 0;
+
+function sampleShip(): void {
+    sampleAt += 1;
+    if (sampleAt % 12 !== 0) return;
+    const id = selectedShip.value;
+    const standing = id && stageEl.value ? stageEl.value.shipStatus(id) : null;
+    const next = standing ? standing.outside : null;
+    if (next !== shipOutside.value) shipOutside.value = next;
+    const within = standing && standing.within ? (standing.within === 'body' ? ' on a body' : ' in ' + Math.round(standing.within.cx) + ',' + Math.round(standing.within.cy) + ' r' + Math.round(standing.within.r) + (standing.within.label ? ' ' + standing.within.label : '')) : '';
+    const at = standing ? Math.round(standing.x) + ',' + Math.round(standing.y) + within : '';
+    if (at !== shipAt.value) shipAt.value = at;
+}
+
+// Plotting a flight (2b): the mode, the destination pressed on the picture, the leg previewed, then written.
+const plotting = ref(false);
+const destinationKey = ref<string | null>(null);
+const plotHours = ref(10);
+const plotAccel = ref(2);
+const canPlot = computed(() => canSetDate.value && ships.value.length > 0 && state.value === 'ready');
+
+const preview = computed(() => {
+    if (!plotting.value || !destinationKey.value || !shipRecord.value) return null;
+    const chip = findChip(chips.value, destinationKey.value);
+    const to = bodyAnchor(hexKey.value, destinationKey.value, chip ? chip.name : undefined);
+    const departs = earliestDeparture(shipPosition.value, shownDays.value);
+    return { toName: chip ? chip.name : destinationKey.value, leg: flightLeg(legStart(shipPosition.value), to, departs, plotHours.value, plotAccel.value) };
+});
+
+function setPlotting(on: boolean): void {
+    if (on && !canPlot.value) return;
+    plotting.value = on;
+    if (!on) destinationKey.value = null;
+}
+
+function setDestination(key: string): void {
+    if (!plotting.value || !findChip(chips.value, key)) return;
+    destinationKey.value = key;
+}
+
+function addLeg(): void {
+    const leg = preview.value ? preview.value.leg : null;
+    const id = selectedShip.value;
+    if (!leg || !id) return;
+    const result = appendLeg(id, leg);
+    if (!result.ok) {
+        showToast(result.message);
+        return;
+    }
+    showToast('Leg added: ' + anchorName(leg.from) + ' → ' + anchorName(leg.to) + '.');
+    setPlotting(false);
+}
+
+// Jumping (5): a destination system marked on the map, then Jump from outside every limit.
+const lastOpened = computed((): PickedSystem | null => {
+    const source = placeSource();
+    const current = source ? source.current() : null;
+    if (!current || (current.slug === slug.value && current.hex === hex.value)) return null;
+    return { slug: current.slug, hex: current.hex, name: current.name };
+});
+
+function pickOnMap(): void {
+    jumpReturnPath.value = route.fullPath;
+    beginPick((system) => {
+        jumpTarget.value = system;
+        endPick();
+        const back = jumpReturnPath.value;
+        jumpReturnPath.value = null;
+        if (back) void router.push(back);
+    }, () => { jumpReturnPath.value = null; });
+    void router.push(dossierPath(slug.value, hex.value));
+}
+
+/**
+ * Jump. A ship is outside every 100D circle only under way between bodies, since a leg ends
+ * on a body: so a jump from mid-flight cuts that flight at the jump's moment (the leg is
+ * rewritten to arrive now, noted), and the jump departs from the flight's destination
+ * anchor, the nearest a body-anchored leg can say. A later-planned leg blocks the cut.
+ */
+function jump(): void {
+    const target = jumpTarget.value;
+    const id = selectedShip.value;
+    const position = shipPosition.value;
+    if (!target || !id || !position || shipOutside.value !== true || !shipRecord.value) return;
+    const now = shownDays.value;
+    if ('fraction' in position) {
+        if (position.leg.mode !== 'flight') return;
+        const track = trackOf(shipRecord.value) ?? [];
+        const last = track[track.length - 1];
+        if (!last || last.departs !== position.leg.departs || last.arrives !== position.leg.arrives) {
+            showToast('The ship has a later leg planned; remove it before jumping.');
+            return;
+        }
+        const cut = { ...position.leg, arrives: now, note: (position.leg.note ? position.leg.note + ' ' : '') + 'Cut short to jump.' };
+        const removed = removeLastLeg(id);
+        if (!removed.ok) {
+            showToast(removed.message);
+            return;
+        }
+        const shortened = appendLeg(id, cut);
+        if (!shortened.ok) {
+            showToast(shortened.message);
+            return;
+        }
+    }
+    const to: CampaignAnchor = { kind: 'system', hexKey: target.slug + '/' + target.hex, locationLabel: target.name };
+    const leg = jumpLeg(legStart(position), to, now, campaign.settings);
+    if (!leg) return;
+    const result = appendLeg(id, leg);
+    if (!result.ok) {
+        showToast(result.message);
+        return;
+    }
+    showToast('Jump to ' + target.name + ': arrives ' + stardate(leg.arrives).date + '.');
+    jumpTarget.value = null;
 }
 
 // ---- Selection, popovers, leaving --------------------------------------------
@@ -564,6 +737,9 @@ onMounted(() => {
         ...LAYOUTS.map((item) => orbitCommand(item.id, () => { mode.value = item.mode; }, ready)),
         ...LAYERS.map((item) => orbitCommand(item.id, () => { layers.value = toggled(layers.value, item.key); }, ready)),
         orbitCommand('orbit-fit', () => { if (stageEl.value) stageEl.value.fit(); }, ready),
+        orbitCommand('orbit-plot', () => { setPlotting(!plotting.value); }, () => canPlot.value),
+        orbitCommand('orbit-add-leg', addLeg, () => preview.value !== null && preview.value.leg !== null),
+        orbitCommand('orbit-jump', jump, () => shipOutside.value === true && jumpTarget.value !== null && !!shipStatus.value && shipStatus.value.state !== 'jump'),
         orbitCommand('orbit-lineup', () => { openDrawer('time', () => { setPop('lineup', true); }); }, () => searchPlan.value !== null),
         orbitCommand('orbit-picture', () => { openDrawer('view'); }),
         registerCommand({ id: 'home', name: 'Return to map', run: backToMap }),
@@ -574,6 +750,12 @@ onMounted(() => {
     lastFrame = now();
     raf = nextFrame(frame);
     if (rootEl.value) rootEl.value.focus();
+    if (flightEl.value) {
+        const strip = flightEl.value;
+        const measureStrip = (): void => { flightHeight.value = strip.offsetHeight; };
+        measureStrip();
+        stopFlightSize = observeSize(strip, measureStrip);
+    }
     if (stageBox.value) {
         const box = stageBox.value;
         const measure = (): void => { narrow.value = box.clientWidth < NARROW_BELOW; compact.value = box.clientWidth < COMPACT_BELOW; void nextTick(measureDrawer); };
@@ -587,6 +769,7 @@ onBeforeUnmount(() => {
     if (raf) cancelFrame(raf);
     if (stopArrive) stopArrive();
     if (stopStageSize) stopStageSize();
+    if (stopFlightSize) stopFlightSize();
     for (const off of unregister) off();
 });
 </script>
@@ -650,7 +833,7 @@ onBeforeUnmount(() => {
           <DrawerTabs ref="tabsEl" :open="drawer" :narrow="compact" @toggle="toggleTab" />
         </template>
       </OrbitHeader>
-      <div ref="stageBox" class="orbit-stage" :class="{ 'is-narrow': narrow }" :style="{ '--drawer-height': drawerHeight + 'px' }" :data-state="state" @pointerdown.capture="onStagePress">
+      <div ref="stageBox" class="orbit-stage" :class="{ 'is-narrow': narrow, 'is-plotting': plotting }" :style="{ '--drawer-height': drawerHeight + 'px', '--flight-strip-height': (flightHeight ? flightHeight + 8 : 0) + 'px' }" :data-state="state" :data-ship="shipOutside === null ? 'off' : (shipOutside ? 'outside' : 'inside')" :data-ship-at="shipAt" @pointerdown.capture="onStagePress">
         <!-- The three control drawers hang from the header over the picture; one open at a time. -->
         <Drawer id="time" :ref="drawerEls.time" :open="drawer === 'time'" @close="closeDrawer">
           <TimeControls
@@ -708,6 +891,20 @@ onBeforeUnmount(() => {
           <button type="button" class="orbit-btn orbit-drawer-group orbit-fit-btn" style="--i: 1" data-command="orbit-fit" title="Fit the whole system (F)" @click="stageEl && stageEl.fit()">
             <Icon name="expand" :size="12" />Fit<kbd aria-hidden="true">F</kbd>
           </button>
+          <button
+            v-if="canSetDate"
+            type="button"
+            class="orbit-btn orbit-drawer-group orbit-plot-btn"
+            style="--i: 3"
+            :class="{ 'is-on': plotting }"
+            data-command="orbit-plot"
+            :aria-pressed="plotting ? 'true' : 'false'"
+            :disabled="!canPlot"
+            :title="canPlot ? 'Plotting mode: press a body to set the selected ship’s destination (P)' : 'Plotting needs a ship in this system'"
+            @click="setPlotting(!plotting)"
+          >
+            <Icon name="arrows-to-dot" :size="12" />Plotting<kbd aria-hidden="true">P</kbd>
+          </button>
           <div class="orbit-picture-group orbit-drawer-group" style="--i: 2" role="group" aria-label="Picture" data-command="orbit-picture">
             <label class="orbit-pop-check" title="Space orbits in proportion to their AU. The star’s drawn size still holds the innermost orbit outside the disc.">
               <input type="checkbox" :checked="layers.linear" @change="setLinear">
@@ -722,8 +919,35 @@ onBeforeUnmount(() => {
         <Drawer id="layers" :ref="drawerEls.layers" :open="drawer === 'layers'" @close="closeDrawer">
           <LayerKey :layers="layers" @layers="layers = $event" />
         </Drawer>
-        <!-- Reserved for K12 (slice §K12, "Many ships"): the flight status strip with Jump, and under it the ship list. Nothing is drawn until K6d. -->
-        <div class="orbit-flight" aria-hidden="true"></div>
+        <!-- The K12 place: the status strip with Jump, the ship list under it, the plot card and the jump destination. Signed in with a campaign only. -->
+        <div ref="flightEl" class="orbit-flight">
+          <ShipStrip
+            v-if="canSetDate && state === 'ready'"
+            :ships="ships"
+            :selected="selectedShip"
+            :party-vessel-id="partyVesselId"
+            :status="shipStatus"
+            :outside="shipOutside"
+            :plotting="plotting"
+            :preview="preview"
+            :hours="plotHours"
+            :accel-g="plotAccel"
+            :jump-target="jumpTarget"
+            :last-opened="lastOpened"
+            :jump-hours="jumpHoursOf(campaign.settings)"
+            :narrow="narrow"
+            @select="selectedShip = $event"
+            @plot="setPlotting"
+            @hours="plotHours = $event"
+            @accel="plotAccel = $event"
+            @add-leg="addLeg"
+            @cancel-preview="destinationKey = null"
+            @pick-on-map="pickOnMap"
+            @use-last="jumpTarget = lastOpened"
+            @clear-target="jumpTarget = null"
+            @jump="jump"
+          />
+        </div>
         <ToastStrip />
         <OrbitCanvas
           v-if="state === 'ready' && system"
@@ -733,7 +957,11 @@ onBeforeUnmount(() => {
           :selected="selectedKey"
           :mode="mode"
           :layers="layers"
+          :tracks="tracks"
+          :plotting="plotting"
+          :plot-from="selectedShip"
           @pick="pickBody"
+          @plot="setDestination"
         />
         <svg v-if="state !== 'ready'" class="orbit-blank" viewBox="0 0 800 800" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
           <circle v-for="r in [70, 130, 200, 280, 370]" :key="r" class="orbit-blank-ring" cx="400" cy="400" :r="r" />
@@ -904,8 +1132,31 @@ onBeforeUnmount(() => {
   right: 14px;
   top: 14px;
   z-index: 3;
-  height: var(--flight-strip-height);
+  max-width: calc(100% - 28px);
   pointer-events: none;
+}
+
+.orbit-btn.orbit-plot-btn {
+  height: 32px;
+  gap: 7px;
+}
+
+.orbit-btn.orbit-plot-btn.is-on {
+  border-color: var(--attention);
+  color: var(--attention);
+}
+
+.orbit-plot-btn kbd {
+  padding: 0 4px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-1);
+  color: var(--text-muted);
+  font: 500 10px/1.3 var(--font-code);
+}
+
+/* Plotting: the pointer is a crosshair over the picture. */
+.orbit-stage.is-plotting .orbit-canvas {
+  cursor: crosshair;
 }
 
 /* The body card docks under the layout control at the upper left. */

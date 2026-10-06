@@ -67,6 +67,9 @@ export const ORBIT_COMMANDS: readonly OrbitCommand[] = [
     ...LAYOUTS.map((item) => ({ id: item.id, name: 'Layout: ' + item.label, keys: [item.key], help: 'the ' + item.label.toLowerCase() + ' layout' })),
     ...LAYERS.map((item) => ({ id: item.id, name: 'Show or hide: ' + item.label, keys: [item.hotkey], help: item.label.toLowerCase() + ' on or off' })),
     { id: 'orbit-fit', name: 'Fit the system', keys: ['f'], help: 'fit the whole system' },
+    { id: 'orbit-plot', name: 'Plotting mode', keys: ['p', 'P'], help: 'plotting on or off: the hairlines follow the pointer; press a body to set the selected ship’s destination' },
+    { id: 'orbit-add-leg', name: 'Add the plotted leg', keys: [], help: 'in the plot card: writes the flight to the ship’s track' },
+    { id: 'orbit-jump', name: 'Jump', keys: [], help: 'in the status strip: the selected ship jumps to the marked system, once outside every 100D limit' },
     { id: 'orbit-lineup', name: 'Line up the planets', keys: [], help: 'in the Time drawer: the next time the planets sit on one line' },
     { id: 'orbit-picture', name: 'Picture: scale and ring strength', keys: [], help: 'in the View drawer' },
     { id: 'orbit-escape', name: 'Back', keys: ['Escape'], help: 'close the drawer, then a popover, then leave the body, then back to the map' },
@@ -85,7 +88,7 @@ export const MOUSE_HELP: readonly [string, string][] = [
 export function keyWords(spec: string): string {
     if (spec === ' ') return 'Space';
     if (spec === 'C') return 'Shift+C';
-    if (spec === 'W' || spec === 'T' || spec === 'Y' || spec === 'L') return '';
+    if (spec === 'W' || spec === 'T' || spec === 'Y' || spec === 'L' || spec === 'P') return '';
     return spec.length === 1 ? spec.toUpperCase() : spec;
 }
 

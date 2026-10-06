@@ -17,14 +17,15 @@ import {
 import BodyCard from './BodyCard.vue';
 import { DRAG_SLOP, wheelNotches } from './camera.ts';
 import { cardFor } from './card.ts';
-import { hitOf, planSystem, type HitKind, type Plan } from './layout.ts';
+import { hitOf, layoutScene, planSystem, type HitKind, type Plan, type View } from './layout.ts';
 import { onSurfaceMode, surfaceMode } from '../surface/preferences.ts';
 import { drawDisc, prepareDiscs } from '../surface/service.ts';
 import { OrbitRenderer, type DiscPainter } from './OrbitRenderer.ts';
 import type { Layers, Mode, Picture } from './picture.ts';
 import { OrbitStage } from './stage.ts';
 import { publishOrbitClock } from './running.ts';
-import { standInMarks, type PlotReadout, type ShipMark } from './ships.ts';
+import { bodiesAtOf, shipStanding, type ShipStanding } from './ship_marks.ts';
+import { pictureBodies, placeShips, standInMarks, type PlotReadout, type ShipMark, type ShipTrack } from './ships.ts';
 import { readOrbitMotion, readOrbitTheme, type OrbitMotion } from './theme.ts';
 
 const props = defineProps<{
@@ -40,13 +41,20 @@ const props = defineProps<{
     layers: Layers;
     /** Marks from the campaign. Omitted, a dev stand-in may fill them. */
     ships?: readonly ShipMark[] | null;
+    /** The campaign's vessels here as tracks (orbit/ship_list.ts): placed on each frame's picture by placeShips. Takes precedence over `ships`. */
+    tracks?: readonly ShipTrack[] | null;
     /** Plotting overlay. Omitted, it stays off except under the dev stand-in. */
     plot?: PlotReadout | null;
+    /** Plotting mode (K12 2b): the hairlines follow the pointer, measured from the ship `plotFrom`; a body clicked is a destination, not a selection. */
+    plotting?: boolean;
+    plotFrom?: string | null;
 }>();
 
 const emit = defineEmits<{
     /** A body was clicked on the canvas. */
     pick: [key: string];
+    /** In plotting mode, a body was clicked: the destination. */
+    plot: [key: string];
 }>();
 
 const route = useRoute();
@@ -144,7 +152,7 @@ function onDown(event: PointerEvent): void {
 function onMove(event: PointerEvent): void {
     const at = local(event);
     pointer = at;
-    if (standInCount() > 0) stale = true;
+    if (standInCount() > 0 || props.plotting) stale = true;
     if (!press) {
         setHover(at.x, at.y);
         return;
@@ -165,6 +173,11 @@ function onUp(event: PointerEvent): void {
     if (moved || event.type === 'pointercancel') return;
     const at = local(event);
     const hit = stage.pick(at.x, at.y);
+    // Plotting: a body is a destination, and the camera stays where it is.
+    if (props.plotting) {
+        if (hit) emit('plot', hit.key);
+        return;
+    }
     if (!hit) {
         stage.release();
         return;
@@ -175,7 +188,7 @@ function onUp(event: PointerEvent): void {
 
 function onLeave(): void {
     pointer = null;
-    if (standInCount() > 0) stale = true;
+    if (standInCount() > 0 || props.plotting) stale = true;
     if (!press) hover.value = null;
 }
 
@@ -188,7 +201,15 @@ function standInCount(): number {
     return Number.isFinite(count) && count > 0 ? count : 0;
 }
 
+/** The last frame, and its marks, for the strip's questions (shipStatus). */
+let lastMarks: readonly ShipMark[] = [];
+let lastFrame: { picture: Picture; view: View } | null = null;
+
 function marksFor(picture: Picture, clockDays: number): readonly ShipMark[] | undefined {
+    if (props.tracks) {
+        lastMarks = placeShips(props.tracks, bodiesAtOf(props.hexKey, pictureBodies(picture)), clockDays);
+        return lastMarks;
+    }
     if (props.ships) return props.ships;
     if (standInCount() <= 0) return undefined;
     return standInMarks(props.hexKey, clockDays, picture);
@@ -196,9 +217,28 @@ function marksFor(picture: Picture, clockDays: number): readonly ShipMark[] | un
 
 function plotFor(marks: readonly ShipMark[] | undefined): PlotReadout | null | undefined {
     if (props.plot !== undefined) return props.plot;
+    if (props.plotting) {
+        if (!pointer) return undefined;
+        const from = marks && props.plotFrom ? marks.find((mark) => mark.id === props.plotFrom) : undefined;
+        return { x: pointer.x, y: pointer.y, from: from ? { x: from.x, y: from.y } : null };
+    }
     if (standInCount() <= 0 || !pointer) return undefined;
     const party = marks ? marks.find((mark) => mark.kind === 'party') : undefined;
     return { x: pointer.x, y: pointer.y, from: party ? { x: party.x, y: party.y } : null };
+}
+
+/**
+ * Where a ship's mark stands on the last frame, and whether it lies outside every 100D
+ * circle (orbit/layout.ts lays them out for the frame's view, whatever the Jump layer shows).
+ * Null when the ship is not on the picture.
+ */
+function shipStatus(id: string): ShipStanding | null {
+    const mark = lastMarks.find((item) => item.id === id);
+    const current = plan.value;
+    const last = lastFrame;
+    if (!mark || !current || !last) return null;
+    const scene = layoutScene(current, last.view, days);
+    return shipStanding(mark, scene.jumps, pictureBodies(last.picture));
 }
 
 function onDouble(event: MouseEvent): void {
@@ -268,6 +308,7 @@ function paint(clockDays: number, time: number): void {
     }
     const frame = stage.tick(clockDays, time);
     if (!frame) return;
+    lastFrame = frame;
     if (fitted.value !== stage.fitted) fitted.value = stage.fitted;
     if (time - cardAt > 200) {
         cardAt = time;
@@ -326,7 +367,7 @@ watch(() => props.layers, (layers) => {
     stale = true;
 }, { deep: true });
 
-watch(() => [route.query.campaignStandIn, props.ships, props.plot] as const, () => { stale = true; });
+watch(() => [route.query.campaignStandIn, props.ships, props.plot, props.tracks, props.plotting, props.plotFrom] as const, () => { stale = true; });
 
 /** js/system_viewer.js:2084-2092: the canvas says which layout it shows. */
 const canvasLabel = computed(() => {
@@ -379,7 +420,7 @@ onBeforeUnmount(() => {
     renderer = null;
 });
 
-defineExpose({ paint, fit });
+defineExpose({ paint, fit, shipStatus });
 </script>
 
 <template>

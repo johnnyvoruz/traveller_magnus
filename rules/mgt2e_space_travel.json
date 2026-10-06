@@ -1,0 +1,48 @@
+{
+  "note": "Space travel numbers from the Mongoose Traveller 2e text Johnny pasted on 2026-10-06 (Fuel, Jump Travel, Travel Times, Travel Calculations, Transit Times, Common Distances for Traders). Numbers and tables only, typed in by the orchestrator for Johnny to check and copy into rules/. 'dice' counts the book's D. The 1 AU row's 2G cell was pasted without a unit and is held in its row's unit like the rest.",
+  "fuel": {
+    "refinedCrPerTon": 500,
+    "unrefinedCrPerTon": 100,
+    "refuelHours": { "base": 0, "dice": 1 }
+  },
+  "jump": {
+    "fuelHullFractionPerParsec": 0.1,
+    "parsecsPerJumpNumber": 1,
+    "minimumParsecsCounted": 1,
+    "durationHours": { "base": 148, "dice": 6 },
+    "limitDiameters": 100
+  },
+  "travel": {
+    "metresPerSecond2PerG": 10,
+    "formula": "seconds = 2 * sqrt(metres / (G * metresPerSecond2PerG))",
+    "assumes": "from rest, continuous acceleration to the midpoint, then deceleration to rest"
+  },
+  "transitTimes": {
+    "columnsG": [1, 2, 3, 4, 5, 6],
+    "rows": [
+      { "distanceKm": 1000, "unit": "seconds", "times": [633, 447, 365, 316, 283, 258] },
+      { "distanceKm": 10000, "unit": "seconds", "times": [2000, 1414, 1155, 1000, 894, 816] },
+      { "distanceKm": 100000, "unit": "minutes", "times": [105, 74, 61, 53, 47, 42] },
+      { "distanceKm": 300000, "label": "1 light second", "unit": "minutes", "times": [183, 129, 105, 91, 82, 74] },
+      { "distanceKm": 400000, "unit": "minutes", "times": [211, 149, 122, 106, 94, 86] },
+      { "distanceKm": 1000000, "unit": "minutes", "times": [333, 236, 192, 167, 149, 136] },
+      { "distanceKm": 10000000, "unit": "hours", "times": [17.6, 12.4, 10.1, 8.8, 7.9, 7.2] },
+      { "distanceKm": 30000000, "unit": "hours", "times": [30.42, 21.5, 17.5, 15.2, 13.6, 12.4] },
+      { "distanceKm": 45000000, "unit": "hours", "times": [37.3, 26.4, 21.5, 18.6, 16.7, 15.2] },
+      { "distanceKm": 100000000, "unit": "hours", "times": [55.6, 39.3, 32.1, 27.8, 24.8, 22.7] },
+      { "distanceKm": 150000000, "label": "1 AU", "unit": "hours", "times": [68, 48.11, 39.2, 34, 30.3, 27.8] },
+      { "distanceKm": 255000000, "unit": "hours", "times": [88.7, 62.7, 51.2, 44.4, 39.7, 36.2] },
+      { "distanceKm": 600000000, "unit": "hours", "times": [136.1, 96.2, 78.6, 68.0, 60.9, 55.6] },
+      { "distanceKm": 900000000, "unit": "hours", "times": [166.7, 117.9, 96.2, 83.4, 74.5, 68.0] },
+      { "distanceKm": 1000000000, "unit": "days", "times": [7.3, 5.2, 4.2, 3.7, 3.3, 2.9] }
+    ]
+  },
+  "commonDistances": [
+    { "name": "World Surface to Orbit", "distanceKm": 10000, "unit": "seconds", "timeAt1G": 2000, "timeAt2G": 1414 },
+    { "name": "Orbiting Satellite", "distanceKm": 400000, "unit": "minutes", "timeAt1G": 211, "timeAt2G": 149 },
+    { "name": "Close Neighbour World", "distanceKm": 45000000, "unit": "hours", "timeAt1G": 37.3, "timeAt2G": 26.4 },
+    { "name": "Far Neighbour World", "distanceKm": 255000000, "unit": "hours", "timeAt1G": 88.7, "timeAt2G": 62.7 },
+    { "name": "Close Gas Giant", "distanceKm": 600000000, "unit": "hours", "timeAt1G": 136.1, "timeAt2G": 96.2 },
+    { "name": "Far Gas Giant", "distanceKm": 900000000, "unit": "hours", "timeAt1G": 166.7, "timeAt2G": 117.9 }
+  ]
+}
