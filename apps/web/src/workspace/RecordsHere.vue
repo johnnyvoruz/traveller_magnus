@@ -14,6 +14,7 @@ import Icon from '../design/Icon.vue';
 import { isOnline, onOnlineChange } from '../platform/browser.ts';
 import { createRecord } from './actions.ts';
 import AddButton from './AddButton.vue';
+import { locating, startLocate, stopLocate } from './locate.ts';
 import { openFailed } from './opening.ts';
 import { hexKeyOf, liveById, recordsHere, resolvePlace, systemAnchor, withinSystem } from './places.ts';
 import { typeInfo } from './records.ts';
@@ -45,6 +46,25 @@ onMounted(() => {
 onBeforeUnmount(() => { if (stopOnline) stopOnline(); });
 
 const hexKey = computed(() => hexKeyOf(props.slug, props.hex));
+/** Locate draws on the map; beside the orbit view there is none. */
+const onMap = computed(() => !route.path.includes('/orbit'));
+const listEl = ref<HTMLElement | null>(null);
+
+function locate(id: string): void {
+    if (locating.recordId === id) {
+        stopLocate();
+        return;
+    }
+    startLocate(id, hexKey.value, () => {
+        if (!listEl.value) return null;
+        for (const el of listEl.value.querySelectorAll<HTMLElement>('.here-locate')) {
+            if (el.dataset.id !== id) continue;
+            const box = el.getBoundingClientRect();
+            return box.height > 0 ? box.top + box.height / 2 : null;
+        }
+        return null;
+    });
+}
 const state = computed(() => {
     if (!session.user) return 'hidden';
     if (openFailed.value || campaign.status === 'error') return 'error';
@@ -102,8 +122,8 @@ function add(type: CampaignRecordType): void {
       <button type="button" class="ui-btn" @click="emit('retry')">Try again</button>
     </p>
     <p v-else-if="!rows.length" class="here-note">Nothing of yours here yet.</p>
-    <ul v-else class="here-rows">
-      <li v-for="row in rows" :key="row.record.id">
+    <ul v-else ref="listEl" class="here-rows">
+      <li v-for="row in rows" :key="row.record.id" :class="{ 'has-locate': onMap }">
         <button type="button" class="here-row" :data-id="row.record.id" @click="open(row.record.id)">
           <span class="here-glyph" aria-hidden="true"><Icon :name="row.info.icon" :size="13" /></span>
           <span class="here-text">
@@ -111,6 +131,18 @@ function add(type: CampaignRecordType): void {
             <small>{{ row.info.one }} · {{ row.where }}</small>
           </span>
           <Icon name="chevron-right" :size="11" />
+        </button>
+        <button
+          v-if="onMap"
+          type="button"
+          class="here-locate"
+          :data-id="row.record.id"
+          :aria-pressed="locating.recordId === row.record.id ? 'true' : 'false'"
+          :aria-label="(locating.recordId === row.record.id ? 'Stop locating ' : 'Locate ') + row.record.name"
+          :title="locating.recordId === row.record.id ? 'Stop locating' : 'Show on the map'"
+          @click="locate(row.record.id)"
+        >
+          <Icon name="location-crosshairs" :size="13" />
         </button>
       </li>
     </ul>
@@ -155,8 +187,43 @@ function add(type: CampaignRecordType): void {
   background: var(--panel-raised);
 }
 
+.here-rows li {
+  position: relative;
+}
+
 .here-rows li + li {
   border-top: 1px solid var(--line-soft);
+}
+
+.here-rows li.has-locate .here-row {
+  padding-right: 46px;
+}
+
+.here-locate {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin: -14px 0 0;
+  padding: 0;
+  border: 1px solid var(--control-line);
+  border-radius: var(--r-2);
+  background: var(--bg-1);
+  color: var(--signal);
+  cursor: pointer;
+}
+
+.here-locate:hover,
+.here-locate[aria-pressed="true"] {
+  border-color: var(--signal);
+}
+
+.here-locate[aria-pressed="true"] {
+  background: var(--row-active);
 }
 
 .here-row {

@@ -92,22 +92,25 @@ campaign layer over the truth map; own maps later. X sign-in only.
 | K9 part 3 | the deck plan viewer on a vessel's record page | done, accepted §85, not yet pushed |
 | A/E answers | star kelvin, sea and ice colours (Agent C) | done §85; dossier star tile still owed |
 | K5d | links | done, accepted §88, not yet pushed |
-| **K5e** | the party | **Agent D, in flight** |
-| K5f | several campaigns: create, name, switch, delete | after K5e |
-| K6c | clock screens | after K5 |
+| K5e | the party | done, accepted §92, not yet pushed |
+| K5f | several campaigns: create, name, switch, delete | done, accepted §95, not yet pushed |
+| K14 | images on records: routes (B), browser encode and upload (A), screens (D after K5f) | A and B in flight |
+| deck plan light backdrop | a paper token for the viewer | Agent C, in flight |
+| **K6c** | clock screens, the date beside the search bar, the Rail | **Agent D, in flight** |
 | K7, K8 | journal, timeline | outlines only |
 | K10, K11 | copy between campaigns; shared records in an account library | K11 needs a design |
 
 ## 6. In flight right now
 
-- **Agent D:** K5e the party (members, the vessel, "Where are we", the marker at each tier,
-  the omnibox's record group and "New person here"). K5c/K5d leftovers (orbit-view locator,
-  Locate on dossier rows, "At Regina" / "Also at Regina" chips, sort) fold into it.
-- **Agents A, B, C:** free. **Agent F:** parked. K13 parts 1 and 2 done: the ship sheet's
-  312 fields are in `rules/mgt2e_ship_sheet_fields.json` and importable through the
-  generated wrapper (§89 to §91). Part 3 (D renders the sheet) comes after K5f.
-- **Last push:** `dfce0e8` (links), deployed and green. Local: the directives' edits and
-  `rules/mgt2e_ship_sheet_fields.json` (Johnny's, untracked).
+- **Agent D:** K6c (clock screens, "1 week" writing the campaign date, the DDD-YYYY date
+  beside the search bar, the magnifying glass off the Rail). Then the K14 image screens,
+  then K13 part 3. D's store finding for A (§95) waits until A reports K14.
+- **Agent A:** K14 schema (CampaignImage, images typed) and campaign/images.ts.
+- **Agent B:** K14 object routes (PUT and GET /api/universes/:id/objects/:hash, quota).
+- **Agent C:** the deck plan viewer on a light paper token.
+- **Agent F:** parked. K13 parts 1 and 2 done (handoff 89 to 91); part 3 after K5f.
+- **Last push:** 69db0a4, deployed and green. Local and finished: D K5e and K5f (§92, §95),
+  pushable by path.
 
 ## 7. Decisions Johnny has made that shape the next steps
 
@@ -124,6 +127,9 @@ campaign layer over the truth map; own maps later. X sign-in only.
   `REBUILD.md`, never from its source. A real exported ship and its picture, from Johnny, are
   still needed to prove agreement with the shipyard.
 - All sixteen of D's design choices are adopted (`findings/campaign_workspace_design.md`).
+- **After the campaign MVP comes the Builder** (Johnny, 2026-10-05, recorded in `plan.md`):
+  own universe as an overlay on the truth, generate systems and sectors with names and
+  rollups, Mongoose 2e and T5 both. The engine corrections gate it; F2 is still open.
 
 ## 8. Parked, with everything written down
 

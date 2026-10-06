@@ -11,6 +11,7 @@ import { commit, newLinkId, newRecordId } from '../campaign/commit.ts';
 import { campaign } from '../campaign/store.ts';
 import { showToast } from '../shell/toast.ts';
 import { cleanRole, createdLink, editedLink, linksTouching, newLink, removedLink, restoredLink, type KindChoice } from './links.ts';
+import { partyChange, sameParty, type Party } from './party.ts';
 import { created, edited, newRecord, removed, restored, unchanged, type RecordPatch } from './records.ts';
 
 /** The record just created: its page opens with the name ready to be typed over. */
@@ -112,4 +113,12 @@ export function restoreLink(linkId: string): boolean {
 export function forgetDeleted(): void {
     recentlyDeleted.splice(0, recentlyDeleted.length);
     justCreated.value = null;
+}
+
+/** The party as a whole (the settings document's party), in the store at once. Nothing is sent when it is the same. */
+export function saveParty(party: Party): boolean {
+    const settings = campaign.settings;
+    if (!settings || sameParty(settings.party, party)) return false;
+    commit({ settings: partyChange(settings, party) });
+    return true;
 }

@@ -11,10 +11,13 @@ import type { CampaignRecordType } from '@voyage/shared';
 import { session } from '../account/session.ts';
 import { campaign } from '../campaign/store.ts';
 import { isOnline, observeSize, onOnlineChange } from '../platform/browser.ts';
+import Icon from '../design/Icon.vue';
 import Panel from '../shell/Panel.vue';
 import { readSpan, writeSpan, type PanelSpan } from '../shell/panel_state.ts';
 import { createRecord, justCreated } from './actions.ts';
 import CampaignList from './CampaignList.vue';
+import PartyPanel from './PartyPanel.vue';
+import { partyWords } from './party.ts';
 import { ensureCampaign, openFailed, retryCampaign } from './opening.ts';
 import { typeInfo } from './records.ts';
 import RecordPage from './RecordPage.vue';
@@ -26,6 +29,8 @@ const props = defineProps<{
     truthVersion: string;
     /** The record the address names, or null for the list. */
     recordId: string | null;
+    /** The tab the address names: the records, or the party. */
+    tab: 'records' | 'party';
 }>();
 
 const emit = defineEmits<{
@@ -62,6 +67,36 @@ const shownRecord = computed(() => {
     return found && !found.deleted ? found : null;
 });
 const title = computed(() => shownRecord.value && span.value !== 'full' ? shownRecord.value.name : 'Campaign');
+/** The tabs' counts and words. */
+const recordCount = computed(() => Object.values(campaign.records).filter((record) => !record.deleted).length);
+const partyLine = computed(() => (campaign.settings ? partyWords(campaign.settings.party, campaign.records) : ''));
+
+/** The records tab, or the party's: each is an address, so Back works. */
+function showTab(tab: 'records' | 'party'): void {
+    const path = tab === 'party' ? '/campaign/party' : '/campaign';
+    if (route.path !== path) void router.push({ path, query: route.query });
+}
+
+function onTabKey(event: KeyboardEvent): void {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.preventDefault();
+    event.stopPropagation();
+    const next = props.tab === 'party' ? 'records' : 'party';
+    focusTab = true;
+    showTab(next);
+}
+
+/** The keyboard moved between the tabs: focus follows once the address has changed. */
+let focusTab = false;
+watch(() => props.tab, () => {
+    if (!focusTab) return;
+    focusTab = false;
+    void nextTick(() => {
+        const el = panelElement();
+        const tab = el ? el.querySelector<HTMLElement>('.camp-tab[aria-selected="true"]') : null;
+        if (tab) tab.focus();
+    });
+});
 const eyebrow = computed(() => {
     if (!signedIn.value) return '';
     if (shownRecord.value && span.value !== 'full') return 'Campaign · ' + typeInfo(shownRecord.value.type).many;
@@ -192,9 +227,17 @@ defineExpose({ remeasure: publish });
       @span="chooseSpan"
     >
       <template v-if="eyebrow" #eyebrow>{{ eyebrow }}</template>
-      <div class="camp" :data-span="span" :data-status="status" :data-view="recordId ? 'record' : 'list'">
+      <div class="camp" :data-span="span" :data-status="status" :data-view="recordId ? 'record' : tab === 'party' ? 'party' : 'list'">
         <SignInCard v-if="!signedIn" />
         <template v-else>
+          <div v-if="status === 'ready' && (!recordId || span === 'full')" class="camp-tabs" role="tablist" aria-label="Campaign">
+            <button type="button" role="tab" class="camp-tab" :aria-selected="tab === 'records' ? 'true' : 'false'" :tabindex="tab === 'records' ? 0 : -1" @click="showTab('records')" @keydown="onTabKey">
+              <Icon name="book-sparkles" :size="12" />Records <b>{{ recordCount }}</b>
+            </button>
+            <button type="button" role="tab" class="camp-tab" :aria-selected="tab === 'party' ? 'true' : 'false'" :tabindex="tab === 'party' ? 0 : -1" @click="showTab('party')" @keydown="onTabKey">
+              <Icon name="shuttle-space" :size="12" />Party <small>{{ partyLine }}</small>
+            </button>
+          </div>
           <p v-if="!online" class="camp-strip" role="status">
             You are offline. This is what was loaded; changes wait until you are back.
           </p>
@@ -205,6 +248,7 @@ defineExpose({ remeasure: publish });
           <ul v-else-if="status !== 'ready'" class="camp-skeleton" aria-label="Loading your campaign" aria-busy="true">
             <li v-for="n in 4" :key="n"><i></i><span><i></i><i></i><i></i></span></li>
           </ul>
+          <PartyPanel v-else-if="tab === 'party' && !recordId" :read-only="!online" @map="showMap" />
           <div v-else-if="span === 'full'" class="camp-split">
             <CampaignList ref="list" :selected="recordId" :read-only="!online" @open="go" @create="create" @map="showMap" />
             <div class="camp-detail">
@@ -231,6 +275,55 @@ defineExpose({ remeasure: publish });
   padding: 16px;
   color: var(--text-1);
   font: 400 14px/1.5 var(--font-text);
+}
+
+/* Two tabs under the header: the records and the party (design J3). */
+.camp-tabs {
+  display: flex;
+  gap: 6px;
+  margin: -4px 0 12px;
+  border-bottom: 1px solid var(--line-1);
+}
+
+.camp-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 -1px;
+  padding: 6px 10px 8px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font: 600 13px/1.3 var(--font-text);
+  cursor: pointer;
+}
+
+.camp-tab b {
+  color: var(--text-muted);
+  font: 700 11.5px/1 var(--font-code);
+}
+
+.camp-tab small {
+  max-width: 180px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font: 400 12px/1.3 var(--font-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.camp-tab:hover {
+  color: var(--text-1);
+}
+
+.camp-tab[aria-selected="true"] {
+  border-bottom-color: var(--signal);
+  color: var(--signal);
+}
+
+.camp-tab[aria-selected="true"] b {
+  color: var(--signal);
 }
 
 /* A record's page fills the panel, so its foot sits at the bottom. */

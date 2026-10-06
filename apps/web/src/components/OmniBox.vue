@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import type { TruthManifest } from '@voyage/shared';
 import {
     rankResults,
@@ -10,7 +10,13 @@ import {
     type SearchItem,
 } from '../search/omni.ts';
 import { commands, registerCommand } from '../shell/registry.ts';
+import { session } from '../account/session.ts';
+import { campaign } from '../campaign/store.ts';
+import { createRecord } from '../workspace/actions.ts';
+import { handedQuery } from '../workspace/list_state.ts';
+import { campaignMatches } from '../workspace/omni_campaign.ts';
 import { offerSystem, picking } from '../workspace/pick.ts';
+import { hexKeyOf, systemAnchor } from '../workspace/places.ts';
 import Icon from '../design/Icon.vue';
 
 const props = withDefaults(defineProps<{
@@ -21,6 +27,7 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{ open: [open: boolean] }>();
 
+const route = useRoute();
 const router = useRouter();
 const inputEl = ref<HTMLInputElement | null>(null);
 const query = ref('');
@@ -28,6 +35,11 @@ const open = ref(false);
 const active = ref(-1);
 const results = ref<OmniResult[]>([]);
 const note = ref('');
+/** On a system row, signed in: 0 opens it, 1 makes a person there, 2 a place there (Left and Right move). */
+const action = ref(0);
+
+/** The campaign's own records are offered once the campaign is in memory. */
+const withCampaign = computed(() => session.user !== null && campaign.status === 'ready');
 
 let timer = 0;
 let controller: AbortController | null = null;
@@ -97,9 +109,40 @@ async function search(): Promise<void> {
     }
     if (ticket !== generation) return;
     note.value = failed ? 'Search is unavailable.' : '';
-    results.value = rankResults(text, [...systems, ...sectors, ...localCommands]);
+    const worlds = rankResults(text, [...systems, ...sectors, ...localCommands]);
+    // The campaign group leads, at most five, then a row for the rest (design §6).
+    const mine: OmniResult[] = [];
+    if (withCampaign.value) {
+        const found = campaignMatches(text, campaign.records);
+        mine.push(...found.items);
+        if (found.total > found.items.length) mine.push({ kind: 'more', name: 'All ' + found.total + ' matches', detail: 'Open the list with this search', query: text });
+    }
+    results.value = [...mine, ...worlds];
     active.value = -1;
+    action.value = 0;
     open.value = true;
+}
+
+/** Where a group begins: the campaign's rows, then the worlds. */
+function groupBefore(index: number): string {
+    const result = results.value[index];
+    const before = index > 0 ? results.value[index - 1] : null;
+    const mine = (item: OmniResult | null): boolean => !!item && (item.kind === 'record' || item.kind === 'more');
+    if (!result) return '';
+    if (mine(result)) return index === 0 ? 'Your campaign' : '';
+    if (before && mine(before)) return 'The chart';
+    return '';
+}
+
+/** A record made at the system of a row, opened with its name ready to type. */
+function makeHere(index: number, type: 'person' | 'place'): void {
+    const result = results.value[index];
+    if (!result || result.kind !== 'system' || !withCampaign.value) return;
+    const id = createRecord(type, systemAnchor(hexKeyOf(result.sector, result.hex), result.name, null));
+    void router.push({ path: '/campaign/r/' + encodeURIComponent(id), query: route.query });
+    query.value = '';
+    closePopup();
+    inputEl.value?.blur();
 }
 
 function schedule(): void {
@@ -119,9 +162,18 @@ function openResult(index: number): void {
     const result = results.value[index];
     if (!result) return;
     if (result.kind === 'system') {
+        if (action.value === 1 || action.value === 2) {
+            makeHere(index, action.value === 1 ? 'person' : 'place');
+            return;
+        }
         // A record's place is being picked: the system goes to it, and the map stays where it is.
         if (offerSystem({ slug: result.sector, hex: result.hex, name: result.name })) query.value = '';
         else void router.push('/s/' + encodeURIComponent(result.sector) + '/' + result.hex);
+    } else if (result.kind === 'record') {
+        void router.push({ path: '/campaign/r/' + encodeURIComponent(result.id), query: route.query });
+    } else if (result.kind === 'more') {
+        handedQuery.value = result.query;
+        void router.push({ path: '/campaign', query: route.query });
     } else if (result.kind === 'sector') {
         void router.push('/s/' + encodeURIComponent(result.sector));
     } else {
@@ -148,6 +200,16 @@ function onKeydown(event: KeyboardEvent): void {
         const step = event.key === 'ArrowDown' ? 1 : -1;
         const next = active.value < 0 && step < 0 ? results.value.length - 1 : active.value + step;
         active.value = (next + results.value.length) % results.value.length;
+        action.value = 0;
+        return;
+    }
+    // On a system row, Right and Left move between opening it and making a person or a place there.
+    if ((event.key === 'ArrowRight' || event.key === 'ArrowLeft') && open.value && withCampaign.value) {
+        const current = results.value[active.value];
+        if (!current || current.kind !== 'system') return;
+        event.preventDefault();
+        event.stopPropagation();
+        action.value = (action.value + (event.key === 'ArrowRight' ? 1 : 2)) % 3;
         return;
     }
     if (event.key === 'Enter') {
@@ -201,21 +263,31 @@ onBeforeUnmount(() => {
     <div v-show="open" class="omni-popup">
       <p class="omni-note" role="status">{{ note }}</p>
       <div id="omni-list" role="listbox" aria-label="Search results">
-        <div
-          v-for="(result, index) in results"
-          :id="'omni-opt-' + index"
-          :key="result.kind + result.name + index"
-          role="option"
-          :aria-selected="index === active ? 'true' : 'false'"
-          @mousedown.prevent
-          @click="openResult(index)"
-        >
-          <span class="omni-line">
-            <strong>{{ result.name }}</strong>
-            <span class="omni-kind">{{ result.kind }}</span>
-          </span>
-          <span class="omni-detail">{{ result.detail }}</span>
-        </div>
+        <template v-for="(result, index) in results" :key="result.kind + result.name + index">
+          <div v-if="groupBefore(index)" class="omni-group" role="presentation">{{ groupBefore(index) }}</div>
+          <div
+            :id="'omni-opt-' + index"
+            role="option"
+            :class="{ 'is-mine': result.kind === 'record' || result.kind === 'more' }"
+            :aria-selected="index === active ? 'true' : 'false'"
+            @mousedown.prevent
+            @click="action = 0; openResult(index)"
+          >
+            <span class="omni-line">
+              <strong>{{ result.name }}</strong>
+              <span class="omni-kind">{{ result.kind === 'record' ? 'yours' : result.kind === 'more' ? 'list' : result.kind }}</span>
+            </span>
+            <span class="omni-detail">{{ result.detail }}</span>
+            <span v-if="result.kind === 'system' && withCampaign" class="omni-new" aria-label="Make a record here">
+              <button type="button" class="omni-new-btn" :class="{ 'is-on': index === active && action === 1 }" tabindex="-1" @mousedown.prevent @click.stop="makeHere(index, 'person')">
+                <Icon name="plus" :size="10" />Person here
+              </button>
+              <button type="button" class="omni-new-btn" :class="{ 'is-on': index === active && action === 2 }" tabindex="-1" @mousedown.prevent @click.stop="makeHere(index, 'place')">
+                <Icon name="plus" :size="10" />Place here
+              </button>
+            </span>
+          </div>
+        </template>
       </div>
     </div>
   </div>
@@ -331,6 +403,50 @@ onBeforeUnmount(() => {
 .omni-popup [role="option"][aria-selected="true"] .omni-kind,
 .omni-popup [role="option"][aria-selected="true"] .omni-detail {
   color: var(--text-1);
+}
+
+/* Group labels between the campaign's rows and the chart's. */
+.omni-group {
+  padding: 8px 14px 2px;
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.omni-group + [role="option"] {
+  padding-top: 8px;
+}
+
+/* On a system row, signed in: make a person or a place there. Right and Left reach them. */
+.omni-new {
+  display: flex;
+  gap: 6px;
+}
+
+.omni-new-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 2px 8px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-pill);
+  background: var(--bg-2);
+  color: var(--text-1);
+  font: 600 11px/1.4 var(--font-text);
+  cursor: pointer;
+}
+
+.omni-new-btn .ui-icon {
+  color: var(--signal);
+}
+
+.omni-new-btn:hover,
+.omni-new-btn.is-on {
+  border-color: var(--signal);
+  color: var(--signal);
 }
 
 .omni-line {

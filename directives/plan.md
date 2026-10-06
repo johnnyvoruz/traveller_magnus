@@ -128,6 +128,25 @@ no map edits**, holding only campaign records (Slice 3 below, on the storage of 
 Generation, hex and system editing, routes, borders and own maps stay in the Builder, which
 follows. The viewer stays fully usable signed out.
 
+### Direction on the Builder (Johnny, 2026-10-05)
+
+"Then we will start to want to establish the universe customization features, where I can
+essentially make my own universe clone and then start generating systems and sectors. We will
+need things like sector names / subsector names / system names and system rollups that happen
+from the previous app. I think we need both Traveller 2e Mongoose and Traveller 5th edition
+for full system generation tools."
+
+What this means against the slice below: the "universe clone" is the overlay-on-truth mode
+(§"Direction on the truth", 2026-10-03: differences from a pinned truth, nothing copied);
+sector, subsector and system naming comes from `packages/engines/src/core/names.js` and the
+legacy name pools (`feature_inventory.md`); the "system rollups" are the legacy
+`system_driver.js` top-down and bottom-up paths, already in `packages/generation`
+(`generateHex` runs all five editions: MgT2E, CT, T5, RTT, AoW, so Mongoose 2e and T5 are
+both there). **The engine corrections (`plan_engine_corrections.md`) must land before the
+Builder generates anything for users**, as decided on 2026-10-04; F2 (the climate table) is
+the one answer still open for it. The Builder starts when the campaign MVP steps in
+`slice_2_campaign.md` are done.
+
 ### Slice 2 — Builder
 Accounts and universes. The product for the two hundred.
 - **User story:** I sign in with X, create "My Marches" pinned to truth v1, generate

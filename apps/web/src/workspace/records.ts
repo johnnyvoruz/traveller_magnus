@@ -8,7 +8,7 @@ import {
     CAMPAIGN_LIMITS, CAMPAIGN_RECORD_TYPES, type CampaignAnchor, type CampaignRecord, type CampaignRecordType, type RecordChange,
 } from '@voyage/shared';
 import type { FaIconName } from '../design/icons.ts';
-import { sameAnchor } from './places.ts';
+import { liveById, resolvePlace, sameAnchor } from './places.ts';
 
 export type TypeInfo = {
     type: CampaignRecordType;
@@ -66,11 +66,38 @@ export function matches(record: CampaignRecord, query: string): boolean {
     return words.every((word) => hay.includes(word));
 }
 
-/** The list as shown: one type or all, narrowed by what is typed, by name and then by id so the order holds. */
-export function filterRecords(list: readonly CampaignRecord[], filter: { type: TypeFilter; query: string }): CampaignRecord[] {
-    return list
-        .filter((record) => (filter.type === 'all' || record.type === filter.type) && matches(record, filter.query))
-        .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+export type ListFilter = {
+    type: TypeFilter;
+    query: string;
+    /** Only records whose place resolves to this hex (the "At Regina 1910" chip); every record when empty. */
+    hexKey?: string;
+    /** By name (the default), or by what changed last. */
+    sort?: 'name' | 'changed';
+};
+
+function byName(a: CampaignRecord, b: CampaignRecord): number {
+    return a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+}
+
+/**
+ * The list as shown: one type or all, at one system or anywhere, narrowed by what is typed;
+ * by name and then by id so the order holds, or by what changed last. `records` (all of
+ * them, for the chains "aboard" makes) is needed only with `hexKey`.
+ */
+export function filterRecords(
+    list: readonly CampaignRecord[],
+    filter: ListFilter,
+    records?: Readonly<Record<string, CampaignRecord>>,
+): CampaignRecord[] {
+    const live = filter.hexKey && records ? liveById(records) : null;
+    const here = (record: CampaignRecord): boolean => {
+        if (!filter.hexKey) return true;
+        const place = live ? resolvePlace(record.id, live) : (record.anchor && record.anchor.kind === 'system' ? { hexKey: record.anchor.hexKey } : null);
+        return !!place && place.hexKey === filter.hexKey;
+    };
+    const out = list.filter((record) => (filter.type === 'all' || record.type === filter.type) && here(record) && matches(record, filter.query));
+    if (filter.sort === 'changed') return out.sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : byName(a, b)));
+    return out.sort(byName);
 }
 
 /** The line under a row's summary: where the record's own anchor puts it. With the records, "aboard" names the vessel. */

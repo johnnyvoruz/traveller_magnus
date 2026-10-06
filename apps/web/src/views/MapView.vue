@@ -129,6 +129,8 @@ function showStatus(): void {
 const dossier = computed(() => dossierRoute(route.path));
 /** The Campaign panel has a route of its own, so Back closes it and a link can open it. */
 const campaignOpen = computed(() => route.path === '/campaign' || route.path.startsWith('/campaign/'));
+/** The campaign tab the address names: the party at `/campaign/party`, else the records. */
+const campaignTab = computed((): 'records' | 'party' => (route.path === '/campaign/party' ? 'party' : 'records'));
 /** The record the address names: `/campaign/r/<id>`. */
 const campaignRecord = computed(() => {
     const parts = route.path.split('/').filter((part) => part.length > 0);
@@ -384,8 +386,8 @@ function onEscape(): void {
     }
     if (campaignOpen.value) {
         if (omniOpen.value) return;
-        // A record returns to the list; the list closes the panel.
-        if (campaignRecord.value) {
+        // A record or the party returns to the list; the list closes the panel.
+        if (campaignRecord.value || campaignTab.value === 'party') {
             suppressFly = true;
             void router.push({ path: '/campaign', query: route.query });
         } else closePanel();
@@ -902,12 +904,13 @@ function currentSystem(): SystemInfo | null {
     return { slug: world.slug, hex: world.hex, name: entry ? entry.name : '', sectorName };
 }
 
+/** The party's marker was pressed: the Party tab. */
 function openParty(): void {
-    if (campaignOpen.value) return;
+    if (route.path === '/campaign/party') return;
     accountOpen.value = false;
     suppressFly = true;
     void router.push({
-        path: '/campaign',
+        path: '/campaign/party',
         query: { x: cam.x.toFixed(3), y: cam.y.toFixed(3), z: cam.ppp.toFixed(3) },
     });
 }
@@ -1006,6 +1009,7 @@ onBeforeUnmount(() => {
       :open="campaignOpen"
       :truth-version="versionRef"
       :record-id="campaignRecord"
+      :tab="campaignTab"
       @close="closePanel"
       @width="onCampaignWidth"
     />

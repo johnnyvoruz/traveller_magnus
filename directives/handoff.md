@@ -2579,3 +2579,90 @@ API and Durable Object have against `data_model.md` and `api.md`).
   Checked: import gives 312; 586 pass. The generated folder is git-ignored and CI runs
   `rules:gen` before the tests, so nothing else is needed. **Accepted.**
 - D has begun K5e (`workspace/party.ts` on disk): push A's work by path only.
+
+## 92. Pushed `69db0a4`; K5e (the party) accepted; images and the light deck plan asked for (2026-10-05)
+
+- **Pushed `69db0a4`** (rules wrapper, ship sheet fields). GitHub run green. Nothing in the
+  bundle changes until a screen reads the fields.
+- **Agent D, K5e:** the Party tab (`/campaign/party`): the ship from the vessels, members
+  from a picker, "Not aboard" with "Put aboard"; "Where are we" in large type with Locate,
+  Show in orbit and "Move the party" (moves the ship's anchor, or the party's own); Agent C's
+  marker shows the ship's name and opens the Party tab; the omnibox's "Your campaign" group
+  from the word index (five, then "All N matches") and "Person here" / "Place here" on chart
+  rows; the "At Regina 1910" chip and an order control on the list; Locate on dossier rows.
+  `WhereBlock` now edits any anchor. Every edit is one settings change through `commit`.
+  Read back from the real local API. A focus fault fixed (focus now follows the route change).
+  New `workspace/party.ts`, `PartyPanel.vue`, `omni_campaign.ts`, `list_state.ts`,
+  `tests/web/workspace_party.test.js`; also `router.ts`, `search/omni.ts`, `OmniBox.vue`,
+  `MapView.vue`; 7 contrast pairs; ten `k5e_` screenshots.
+  **Orchestrator:** 598 pass / 0 fail, check clean, build green; `campaign/`, `surface/`,
+  `map/` untouched. **Accepted.** Not built, by the schema: the ship's state and the dated
+  position log (K6d). Not exercised: "All N matches" in a browser, hover names at the
+  subsector tier, screen reader.
+- **Johnny, two asks:** (1) the deck plan tiles are meant for a light background, not black;
+  (2) every record gets a primary image and further images. Written as **K14** (images; the
+  specs already held the object routes and the `images` column; decisions: first entry is
+  primary, 12 per record, browser encodes WebP and thumbnails and hashes, Worker verifies and
+  keeps `objectBytes`, quota 250 MB per universe as the orchestrator's number) and a light
+  "paper" token for the deck plan viewer (Agent C), both in `slice_2_campaign.md`.
+- **Issued:** C the light backdrop; B the object routes; A the schema and `campaign/images.ts`;
+  D K5f (several campaigns), then the image screens.
+- **Pushable now** (D between steps; A, B, C have nothing on disk yet).
+
+## 93. Direction: the Builder after the campaign MVP; the date beside the search bar (2026-10-05)
+
+- **Johnny:** after the campaign, universe customisation: "make my own universe clone and
+  start generating systems and sectors", with sector, subsector and system names and the
+  system rollups from the old app, and both Mongoose 2e and T5 for full generation.
+  Recorded in `plan.md` before the Builder slice with what already exists: the overlay mode
+  is the clone; `core/names.js` has the pools; `packages/generation` runs all five editions
+  (T5 included: `t5_*` are in `packages/engines`). The engine corrections stay the gate
+  before the Builder generates for users (F2 open).
+- **Johnny, two UI asks:** remove the magnifying glass from the Rail; a clear `DDD-YYYY`
+  date beside the search bar, designed by D. Folded into K6c in `slice_2_campaign.md` with a
+  ruling (campaign date signed in, the orbit view's date signed out; D may propose better).
+- **D's order from here:** K5f, then K6c (with the date and the Rail change), then the K14
+  image screens, then K13 part 3 (the ship sheet). A, B, C as issued in §92.
+
+## 94. The "campaign party" push did not land; the deck plan paper is in; the grid is next (2026-10-05)
+
+- **HEAD is still `69db0a4`.** Johnny said "pushed" twice for K5e; the commit never happened
+  (`git status` shows K5e and all four agents' files uncommitted). Now every agent is
+  mid-step (A `campaign/images.ts`, B `routes/objects.ts`, C the viewer, D K5f in
+  `workspace/`), and D's K5f touches `CampaignPanel.vue`, which K5e also changed, so K5e
+  cannot be split out by path. **No push until D reports K5f;** then D's whole lot goes.
+- **Agent C, paper backdrop:** `--paper: #f4efe4` in `tokens.css` (deck plan only, no dark
+  override), `DeckPlanView.vue` uses it; `deck_plan_paper.png` shows the ship on warm paper
+  with the bar, credit and skipped list in the dark look. **Accepted.**
+- **C's finding (`findings/deck_plan_grid.md`):** the shipyard draws its ship over a repeating
+  `Square Base (10x10).png` (600 px, ten 5-unit squares, so 50 map units a copy), which the
+  manifest already holds as the map tile, not a part. Our viewer stamps parts on bare paper.
+  Fix: repeat that tile under the parts on 50-unit corners with the ship's pan and zoom; if
+  the tile is missing, draw nothing in its place; two draw tests that count part images
+  change. C has the prompt.
+
+## 95. K5f (several campaigns) in and accepted; the campaign screens of slice 2 are complete (2026-10-05)
+
+- **Agent D, K5f:** the account menu lists "Your campaigns" with the open one marked, "New
+  campaign…" (name offered, disabled at ten), "Rename", "Delete" (our own dialog, one red
+  button, no native dialog, no undo, "Its 7 records go with it"), "Go to the party", Sign
+  out; keyboard throughout; after a switch, create or delete the old campaign's session
+  state is let go and the last one used opens on the next visit. Through the store's list /
+  create / rename / switchCampaign / deleteCampaign. Read back from the real local API.
+  New `workspace/campaigns.ts`, `tests/web/workspace_campaigns.test.js`; `AccountMenu.vue`
+  changed; seven `k5f_` screenshots. **Orchestrator:** 614 pass / 0 fail, check clean, build
+  green on the combined tree; `campaign/`, `surface/`, `map/`, `deckplan/` untouched by D.
+  **Accepted. K5a to K5f are all built.**
+- **D's findings:** (1) a setup function named `open` beside the `open` prop kept the pop-up
+  from closing; fixed. (2) **For Agent A, after K14:** a failed list / create / rename /
+  delete makes the store mark the whole open campaign `error`, so the panel said the
+  campaign could not be loaded over a campaign that was fine; the menu works around it,
+  but the store should not change `status` for a list call. (3) Local only: a create fails
+  when the chart's truth is production's and the local API knows only `vtest`.
+- D's local test campaign "The Spinward Run" was soft-deleted by an early driver run (local
+  wrangler state only).
+- **Push by path now:** D's files (`workspace/`, `components/`, `router.ts`, `search/`,
+  `views/`, its three tests, `directives`); A, B, C stay out.
+- **Next, D:** K6c in full (the clock screens, "1 week" writing the campaign date when the
+  view sits on it, the `DDD-YYYY` date beside the search bar, the magnifying glass off the
+  Rail).

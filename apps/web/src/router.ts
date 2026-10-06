@@ -20,6 +20,7 @@ export const router = createRouter({
         { path: '/s/:sector/:hex/orbit/b/:body', name: 'orbit-body', component: () => import('./views/OrbitView.vue') },
         { path: '/campaign', name: 'campaign', component: MapView },
         { path: '/campaign/r/:record', name: 'campaign-record', component: MapView },
+        { path: '/campaign/party', name: 'campaign-party', component: MapView },
         { path: '/account', name: 'account', component: Account },
     ],
 });

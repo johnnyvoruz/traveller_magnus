@@ -5,14 +5,16 @@
  * campaign from the store and asks the panel to open or create; it changes nothing itself
  * but a delete and a restore.
  */
-import { computed, nextTick, ref } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { CAMPAIGN_LIMITS, type CampaignRecordType } from '@voyage/shared';
 import { campaign, renameCampaign } from '../campaign/store.ts';
 import Icon from '../design/Icon.vue';
 import { deleteRecord, recentlyDeleted, restoreRecord } from './actions.ts';
 import AddButton from './AddButton.vue';
 import { locating, startLocate, stopLocate } from './locate.ts';
-import { liveById, resolvePlace, type Resolved } from './places.ts';
+import { handedQuery, listSort } from './list_state.ts';
+import { placeSource } from './place_source.ts';
+import { hexKeyOf, hexWords, liveById, resolvePlace, type Resolved } from './places.ts';
 import { RECORD_TYPES, filterRecords, liveRecords, placeLine, typeCounts, typeInfo, type TypeFilter } from './records.ts';
 
 const props = defineProps<{
@@ -37,7 +39,35 @@ const nameDraft = ref('');
 
 const all = computed(() => liveRecords(campaign.records));
 const counts = computed(() => typeCounts(all.value));
-const rows = computed(() => filterRecords(all.value, { type: filter.value, query: query.value }));
+/** The system selected or last opened on the map, for the "At Regina 1910" chip (design J6). */
+const here = ref<{ hexKey: string; label: string } | null>(null);
+const atHere = ref(false);
+const rows = computed(() => filterRecords(
+    all.value,
+    { type: filter.value, query: query.value, hexKey: atHere.value && here.value ? here.value.hexKey : undefined, sort: listSort.value },
+    campaign.records,
+));
+
+function readHere(): void {
+    const source = placeSource();
+    const now = source ? source.current() : null;
+    here.value = now ? { hexKey: hexKeyOf(now.slug, now.hex), label: 'At ' + (now.name ? now.name + ' ' + now.hex : hexWords(hexKeyOf(now.slug, now.hex))) } : null;
+    if (!here.value) atHere.value = false;
+}
+
+onMounted(() => {
+    readHere();
+    // A search handed over by the omnibox ("All 12 matches") is applied once.
+    if (handedQuery.value) {
+        query.value = handedQuery.value;
+        handedQuery.value = '';
+    }
+});
+watch(handedQuery, (text) => {
+    if (!text) return;
+    query.value = text;
+    handedQuery.value = '';
+});
 const addType = computed((): CampaignRecordType => filter.value === 'all' ? 'person' : filter.value);
 /** Where each record shown is, for its Locate button; a record that is nowhere has none. */
 const places = computed(() => {
@@ -198,6 +228,17 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
       </div>
 
       <div class="camp-types" role="radiogroup" aria-label="Type">
+        <button
+          v-if="here"
+          type="button"
+          role="checkbox"
+          class="camp-type camp-here"
+          :aria-checked="atHere ? 'true' : 'false'"
+          :title="atHere ? 'Every record, wherever it is' : 'Only the records at this system'"
+          @click="atHere = !atHere"
+        >
+          <Icon name="location-dot" :size="11" />{{ here.label }}
+        </button>
         <button type="button" role="radio" class="camp-type" :aria-checked="filter === 'all' ? 'true' : 'false'" @click="filter = 'all'">
           All <b>{{ counts.all }}</b>
         </button>
@@ -212,6 +253,13 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
         >
           <Icon :name="info.icon" :size="11" />{{ info.many }} <b>{{ counts[info.type] }}</b>
         </button>
+        <label class="camp-sort">
+          <span class="rec-sr">Order</span>
+          <select v-model="listSort" title="The list's order" @keydown.stop>
+            <option value="name">By name</option>
+            <option value="changed">Recently changed</option>
+          </select>
+        </label>
       </div>
 
       <ul v-if="rows.length" ref="listEl" class="camp-rows" aria-label="Records">
@@ -250,8 +298,12 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
         </li>
       </ul>
       <div v-else-if="query" class="camp-empty">
-        <p>No records match “{{ query }}”.</p>
+        <p>No records match “{{ query }}”{{ atHere && here ? ' ' + here.label.replace(/^At/, 'at') : '' }}.</p>
         <button type="button" class="ui-btn" @click="query = ''">Clear the search</button>
+      </div>
+      <div v-else-if="atHere && here" class="camp-empty">
+        <p>Nothing of yours {{ here.label.replace(/^At/, 'at') }}.</p>
+        <button type="button" class="ui-btn" @click="atHere = false">Show every record</button>
       </div>
       <div v-else class="camp-empty">
         <p>No {{ typeInfo(addType).many.toLowerCase() }} yet.</p>
@@ -370,6 +422,46 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
 
 .camp-type[aria-checked="true"] b,
 .camp-type[aria-checked="true"] .ui-icon {
+  color: var(--signal);
+}
+
+/* The order, at the chips' right. */
+.camp-sort {
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+}
+
+.camp-sort select {
+  margin: 0;
+  padding: 3px 6px;
+  border: 1px solid transparent;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--text-muted);
+  font: 400 12.5px/1.35 var(--font-text);
+  cursor: pointer;
+}
+
+.camp-sort select:hover,
+.camp-sort select:focus-visible {
+  border-color: var(--line-1);
+  background: var(--panel-raised);
+  color: var(--text-1);
+}
+
+.camp-sort option {
+  background: var(--bg-1);
+  color: var(--text-1);
+}
+
+.camp-type.camp-here[aria-checked="true"] {
+  border-color: var(--signal-dim);
+  background: var(--row-active);
+  color: var(--signal);
+}
+
+.camp-type.camp-here[aria-checked="true"] .ui-icon {
   color: var(--signal);
 }
 

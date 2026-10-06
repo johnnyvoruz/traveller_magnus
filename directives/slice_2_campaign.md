@@ -231,6 +231,13 @@ only. D's five points for the orchestrator:
     date" appears when the view's date differs; the campaign panel shows the date
     (`DDD-YYYY`, the weekday names of `campaign_manager_plan.md` §7.9, day 001 "Holiday") and
     edits it. Signed out, the orbit view is exactly as now.
+  - **The date beside the search bar, and the Rail (Johnny, 2026-10-05).** "A clear
+    `DDD-YYYY` date next to the search bar", designed by Agent D so it fits the look. Ruling
+    until D's design says otherwise: signed in, it is the campaign date and opens the clock
+    editor; signed out, it is the date the orbit view is showing, quieter. It is built with
+    K6c. Also: **the magnifying-glass entry leaves the Rail** (the search field is already
+    on the page); D keeps keyboard reach to the field and checks the narrow layout, where
+    the Rail button may be what opens the field today.
   - **"Advance 1 week" (Johnny, 2026-10-04).** A button in the orbit view's time controls that
     moves the date on seven days, placed with the primary controls. Johnny: it is "way, way
     more important than when the planets align", because a week is the typical time for a
@@ -312,6 +319,40 @@ only. D's five points for the orchestrator:
     `sheet` against `mgt2e_ship_sheet@1`, plain fields, nothing computed. The deck plan
     (K9) sits inside it. The character sheet follows the same three parts when its PDF
     arrives.
+
+- **K14. Images on records (Johnny, 2026-10-05): a primary image and further images on every
+  record.** The specs already hold the storage: `data_model.md` §1 (images are objects in
+  the private bucket under `u/<universeId>/objects/<hash>`, `image/webp`, the asset id is the
+  hash), `api.md` (`PUT` and `GET /api/universes/:id/objects/:hash`, hash verified, 8 MB cap),
+  and the record's nullable `images` column. Decisions for this step:
+  1. **Shape.** `images: CampaignImage[] | null`, `CampaignImage = { hash, thumbHash, width,
+     height, bytes, caption?: string (200) }`. **The first entry is the primary image**; order
+     is the gallery order. At most 12 per record. The row's `rev` covers it like any field.
+  2. **The browser does the work.** It decodes the chosen file, re-encodes to WebP (longest
+     side at most 2048 px, quality 0.85), makes a 320 px thumbnail the same way, hashes both
+     with SHA-256 (`crypto.subtle`), `PUT`s both (a `PUT` of a hash the bucket already holds
+     answers 200 without writing), then commits the record change. A browser that cannot
+     encode WebP is told so; nothing is uploaded as another type.
+  3. **The Worker** verifies the hash of the body it received, sniffs the WebP header, caps
+     8 MB, checks `Origin`, and keeps `universes.objectBytes` current. **Quota 250 MB per
+     universe** (orchestrator's number; Johnny may change it); over it is `too_large`.
+     `GET` streams the object to its owner with `Cache-Control: private, immutable`.
+  4. **Removing** an image removes its entry; the object stays until the sweep in
+     `data_model.md` §1 exists (not this step). Deleting a record leaves its images listed on
+     the tombstone, so undo brings them back.
+  5. **Screens (Agent D, after K5f):** the primary image at the head of the record page and
+     as a thumbnail on list rows, "records here" rows and omnibox results; a gallery strip
+     with add (file chooser, drop, paste), remove with undo, "Make primary", caption in
+     place; a lightbox with keyboard reach; upload progress and failure in the saving mark's
+     language. Sheets and deck plans are not images.
+  - **Owners:** A, shared schema and `campaign/images.ts` (encode, thumbnail, hash, upload,
+    the record change), tested with an injected fetch and a small PNG fixture. B, the two
+    object routes and the quota, black-box tested on `wrangler dev`. D, the screens.
+
+- **Deck plans on a light background (Johnny, 2026-10-05).** The Geomorph tiles are drawn
+  for a light page. The viewer's canvas backdrop becomes a light "paper" token (added to
+  `tokens.css`; no hex colour elsewhere), with the box, credit and controls staying in the
+  app's dark look. Agent C.
 
 ## Verification for K1 to K5
 

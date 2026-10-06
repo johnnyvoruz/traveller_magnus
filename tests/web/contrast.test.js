@@ -100,6 +100,7 @@ const PAIRS = [
     ['--signal-dim', '--surface-1', MARK, 'panel close icon'],
     // Dossier
     ['--text-1', '--bg-1', TEXT, 'dossier text, row names, values, body position'],
+    ['--text-1', '--bg-1', TEXT, 'deck plan credit (14 px) on the panel, not the paper sheet'],
     ['--text-muted', '--bg-1', SMALL, 'row labels, detail lines (11.5 px), row UWP, section headings, hints'],
     ['--signal', '--bg-1', TEXT, 'unparsed UWP line'],
     ['--signal', ['--wash-faint', '--bg-1'], TEXT, 'UWP ribbon digits'],
@@ -251,6 +252,21 @@ const PAIRS = [
     ['--text-1', '--row-active', TEXT, 'kind row chosen: the name; picker row chosen: its detail (12 px)'],
     ['--text-0', '--bg-2', TEXT, 'role fields and the picker’s search'],
     ['--signal', '--panel-raised', MARK, 'connection chip icons'],
+    // The party tab, the campaign group in the omnibox, the list's chip and order (K5e)
+    ['--text-muted', '--bg-1', TEXT, 'tabs at rest (13 px), the party line beside Party (12 px), the order control'],
+    ['--signal', '--bg-1', TEXT, 'the tab chosen, its count'],
+    ['--text-0', '--panel-raised', TEXT, 'party: the ship, a member'],
+    ['--text-muted', '--panel-raised', TEXT, 'party: a member role or place (12 px)'],
+    ['--text-muted', '--chrome-bg', SMALL, 'omnibox group labels (10.5 px)'],
+    ['--text-1', '--bg-2', SMALL, 'omnibox "Person here" and "Place here" (11 px bold)'],
+    ['--signal', '--bg-2', SMALL, 'omnibox "Person here" highlighted (11 px bold)'],
+    // Several campaigns: the account menu's list, forms and the delete question (K5f)
+    ['--text-muted', '--chrome-bg', SMALL, 'account menu: "Your campaigns" (10.5 px), a campaign not open: its icon'],
+    ['--text-0', '--chrome-bg', TEXT, 'account menu: the open campaign, the delete question'],
+    ['--text-1', '--chrome-bg', TEXT, 'account menu: field labels (12.5 px)'],
+    ['--attention', '--chrome-bg', TEXT, 'account menu: "That could not be done" (12.5 px)'],
+    ['--danger', '--chrome-bg', MARK, 'account menu: the delete icon'],
+    ['--bg-0', '--danger', TEXT, 'the Delete button on the red'],
 ];
 
 if (process.env.CONTRAST_REPORT) {

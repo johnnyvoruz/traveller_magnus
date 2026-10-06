@@ -1,0 +1,14 @@
+/**
+ * What the record list is asked to show next: the search the omnibox hands over with "All N
+ * matches", and the sort the referee last chose. The list reads and clears the search when
+ * it is shown.
+ */
+import { ref } from 'vue';
+
+/** A search to apply when the list is next shown; empty when none. */
+export const handedQuery = ref('');
+
+export type ListSort = 'name' | 'changed';
+
+/** The list's order: by name, or by what changed last. */
+export const listSort = ref<ListSort>('name');

@@ -41,8 +41,8 @@ players' views are read from `https://cdn.traveller.voyage`.
 | DELETE | `/api/universes/:id` | owner | **Built.** soft delete; `purge_after` 30 days on | — |
 | GET | `/api/universes/:id/hexes?sector=` | owner | override rows for one sector | — |
 | GET | `/api/universes/:id/hexes/:hexKey` | owner | one row | — |
-| GET | `/api/universes/:id/objects/:hash` | owner | stream object | — |
-| PUT | `/api/universes/:id/objects/:hash` | owner | image upload only (`image/webp`); hash verified; 8 MB cap | — |
+| GET | `/api/universes/:id/objects/:hash` | owner | **Built.** streams the private object to its owner with the stored type and `Cache-Control: private, immutable`. Another account, a missing universe, or a missing hash is 404 | — |
+| PUT | `/api/universes/:id/objects/:hash` | owner | **Built.** body is the image. `:hash` is 64 lowercase hex and the SHA-256 of the body. The body starts `RIFF....WEBP` and is at most 8 MB. Origin is checked. Key `u/<universeId>/objects/<hash>` in the private bucket. An existing key is 200 and is not written. A new key is 201 and its length is added to `object_bytes`. Over 250 MB per universe is `too_large` | — |
 | POST | `/api/universes/:id/generate` | owner | `{ hexKeys[], edition, mode, stage? }`; ≤ 64 keys runs inline and returns rows; more returns 202 with a job | `GenerateRequest` |
 | POST | `/api/universes/:id/generate/sector` | owner | `{ sectorSlug, density, edition, mode }` → 202 job (populate then generate) | `GenerateSector` |
 | GET | `/api/universes/:id/jobs/:jobId` | owner | job state, counts, failures by hex key | — |
@@ -68,7 +68,7 @@ edit), or `{ hexKey, rev, deleted: true }`. Response: `{ applied: [hexKey...], c
 |---|---|---|---|---|
 | GET | `/api/universes/:id/campaign?after=&limit=` | owner | **Built.** records and links with `seq` greater than `after`, tombstones included, ordered by `seq`. `limit` defaults to 1000 and is capped at 1000. `settings` is the current document. `clock` is the campaign date (`{ days, rev }`) or null, on every page. `done` is true when no later row remains. Journal is not in this slice. | — |
 | PATCH | `/api/universes/:id/campaign/changes` | owner | **Built.** batched records, links, settings, and the clock. `baseRev` must match the stored `rev` (0 creates). A clock change is `{ days, baseRev }` and counts as one row; applied id `campaignTime`, table `clock`. A mismatch returns the stored row in `conflicts` (the stored clock, or null before the first set). Deleting a record tombstones its links in the same write. Tombstones are not purged; a restore sends the row with `deleted: false` and that `rev` as `baseRev`. 120 mutations a minute per universe. | `CampaignChanges` |
-| PUT | `/api/universes/:id/objects/:hash` | owner | images and thumbnails as objects | — |
+| PUT | `/api/universes/:id/objects/:hash` | owner | **Built.** the slice 2 object route: images and thumbnails, hash verified, 8 MB cap, 250 MB per universe | — |
 | GET | `/api/universes/:id/campaign/search?q=` | owner | **Deferred.** FTS over records is not built in this slice | — |
 
 ## Slice 4 — sharing

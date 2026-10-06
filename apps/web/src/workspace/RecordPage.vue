@@ -140,7 +140,15 @@ watch(() => props.id, () => {
       </p>
     </header>
 
-    <WhereBlock :id="id" :read-only="readOnly" @map="emit('map')" />
+    <WhereBlock
+      :anchor="record.anchor"
+      :locate-id="id"
+      :read-only="readOnly"
+      :vessel-choice="record.type !== 'vessel'"
+      :exclude="id"
+      @save="saveRecord(id, { anchor: $event })"
+      @map="emit('map')"
+    />
 
     <section>
       <h3 class="ui-heading">Summary</h3>
