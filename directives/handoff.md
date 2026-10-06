@@ -3065,3 +3065,43 @@ API and Durable Object have against `data_model.md` and `api.md`).
 - **Johnny on the ship MVP:** sensor designators as vector wireframes (triangle, circle,
   square, rectangle, Homeworld-style) and a plotting toggle with pointer-tracking hairlines
   and coordinates, 2D; fuel and time after. Recorded as K12 point 2b.
+- **Follow-up 16 (Johnny, screenshot):** the passenger + wraps under its field in a narrow
+  cell and its menu opens in the flow, shifting the rows. Added to D's step 3.
+- **Also (Johnny, screenshot):** the Crew People row's + menu is clipped by the section's
+  overflow, only a sliver shows. Same fix: the menu floats above and is never clipped.
+
+## 121. Pushed `e53097a`; Johnny rules yes to D1 to D7 and ship MVP first; prompts re-issued (2026-10-05)
+
+- GitHub run green; live bundle `index-CiVJbv_3.js`. Passengers and crew as people, the
+  teal marker and the credit line are in production.
+- **Johnny:** yes to all seven drawer choices; the ship MVP before the toggle motion and
+  the docked card. Orchestrator's order: D step 3 → the drawers build (approved; it sets
+  the header where the ship list and strip will live) → the ship MVP (K6d screens, K12
+  designators and plotting) → follow-ups 14, 15.
+- A and D had nothing on disk: the chunk-split and step 3 prompts were never handed out;
+  re-issued in full. **C** starts the ship MVP's renderer half now (`orbit/ships.ts`,
+  the designators layer, the plotting overlay, stand-in ships), so D wires it after the
+  drawers.
+
+## 122. Step 3 (D) and the chunk split (A) accepted (2026-10-05)
+
+- **Agent D, step 3:** the few-pixel x-scroll was `margin: 0 -4px` on tables that filled the
+  wrap (every table 450/454); now `width: 100%` with cell gutters, and only Ammunition
+  scrolls at column (450/519, six columns); folded tabs span the full width (the bar is the
+  switch, the filled count at the right), the body in a grid row `0fr → 1fr` with opacity
+  over `--t-base --ease-out`, inert when folded, none under reduced motion; the + sits
+  inside the field's box at its right edge, and the menu, picker and new-name form are one
+  fixed box on the body placed by pure `workspace/pop_place.ts` (closes on scroll, resize,
+  outside press, Esc); row heights identical with it open (browser-measured; the Node test
+  pins the placement rule). 3 contrast pairs; seven shots. **Accepted.** No git this time.
+- **Agent A, chunk split:** main entry 503,911 → 152,971 bytes; `CampaignPanel`,
+  `DossierPanel`, `BodyRow`, `BodyGlyph`, `layout` and `Icon` are chunks; the campaign and
+  dossier panels load through `defineAsyncComponent` on first open and stay mounted;
+  `router.ts` `beforeEnter` starts the campaign import; `OrbitView.vue` imports the dossier
+  dynamically too (a static import would have put it in the orbit chunk); `vite.config.ts`
+  untouched; `tests/web/bundle_size.test.js` pins the entry under 450,000 bytes. Cold load
+  is entry + the preloaded Icon chunk = 345 kB. **Accepted.**
+- **Orchestrator:** 707 pass / 0 fail, check clean, build green on the combined tree (an
+  earlier run saw 2 failures from C's files mid-edit). C is mid-step in `orbit/`
+  (`ships.ts`, `OrbitRenderer.ts`, `OrbitCanvas.vue`): push D's and A's by path.
+- **Next, D:** the drawers build (D1 to D7 ruled yes).

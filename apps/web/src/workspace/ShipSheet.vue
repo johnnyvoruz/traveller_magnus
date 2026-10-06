@@ -157,10 +157,13 @@ function columnHeadings(table: Table): string[] {
         <section class="sheet-panel" :class="{ 'is-closed': !isOpen(section) }" :aria-label="section.name">
           <h4 class="sheet-tab-row">
             <button type="button" class="sheet-tab" :aria-expanded="isOpen(section) ? 'true' : 'false'" :title="(isOpen(section) ? 'Collapse ' : 'Expand ') + section.name" @click="toggleSection(section)">
-              <Icon name="caret-down" :size="10" /><span>{{ section.name }}</span><em v-if="!isOpen(section) && filledIn(section)">{{ filledIn(section) }}</em>
+              <span class="sheet-tab-chip"><Icon name="caret-down" :size="10" /><span>{{ section.name }}</span></span>
+              <em v-if="!isOpen(section) && filledIn(section)">{{ filledIn(section) }}</em>
             </button>
           </h4>
-          <div v-show="isOpen(section)" class="sheet-body">
+          <div class="sheet-fold" :class="{ 'is-open': isOpen(section) }" :inert="!isOpen(section)">
+          <div class="sheet-fold-in">
+          <div class="sheet-body">
             <div v-if="section.name === 'Crew'" class="sheet-crew" role="group" aria-label="Crew, as people">
               <span class="sheet-label">People</span>
               <ul class="sheet-crew-list">
@@ -229,6 +232,7 @@ function columnHeadings(table: Table): string[] {
                             :suggested="newPersonName(values, field)"
                             :read-only="readOnly"
                             :label="field.name"
+                            in-field
                             @hold="holdPerson(field, $event)"
                             @release="releasePerson(field)"
                             @show="shown = $event"
@@ -275,16 +279,22 @@ function columnHeadings(table: Table): string[] {
               </div>
             </template>
           </div>
+          </div>
+          </div>
         </section>
       </template>
       <section class="sheet-panel sheet-plan" :class="{ 'is-closed': !isOpen({ page: 0, name: 'Deck plan' }) }" aria-label="Deck plan">
         <h4 class="sheet-tab-row">
           <button type="button" class="sheet-tab" :aria-expanded="isOpen({ page: 0, name: 'Deck plan' }) ? 'true' : 'false'" title="Collapse or expand the deck plan" @click="toggleSection({ page: 0, name: 'Deck plan' })">
-            <Icon name="caret-down" :size="10" /><span>Deck plan</span>
+            <span class="sheet-tab-chip"><Icon name="caret-down" :size="10" /><span>Deck plan</span></span>
           </button>
         </h4>
-        <div v-show="isOpen({ page: 0, name: 'Deck plan' })" class="sheet-body">
+        <div class="sheet-fold" :class="{ 'is-open': isOpen({ page: 0, name: 'Deck plan' }) }" :inert="!isOpen({ page: 0, name: 'Deck plan' })">
+        <div class="sheet-fold-in">
+        <div class="sheet-body">
           <slot />
+        </div>
+        </div>
         </div>
       </section>
     </div>
@@ -320,9 +330,9 @@ function columnHeadings(table: Table): string[] {
   position: relative;
 }
 
-/* A passenger's name cell: the input and the +, or the pill. */
+/* A passenger's name cell: the input with the + in its box, or the pill. */
 .sheet-table td.is-person {
-  min-width: 190px;
+  min-width: 150px;
 }
 
 .sheet-table td.is-person .pf {
@@ -336,7 +346,7 @@ function columnHeadings(table: Table): string[] {
   gap: 10px;
 }
 
-/* A panel with chamfered corners, and its cyan tab at the top left. */
+/* A panel with chamfered corners, and its cyan tab at the top left. Folded, it is the tab's bar alone, the full panel width. */
 .sheet-panel {
   position: relative;
   padding: 0;
@@ -348,25 +358,36 @@ function columnHeadings(table: Table): string[] {
   margin: 0;
 }
 
-/* The tab is the section's switch: pressed, the section folds or opens; the caret says which. */
+/* The tab is the section's switch, the whole width of the panel: pressed, the section folds or opens; the caret says which. */
 .sheet-tab {
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
+  width: 100%;
   margin: 0;
-  padding: 4px 16px 4px 12px;
+  padding: 0 12px 0 0;
   border: 0;
-  background: var(--signal);
+  background: transparent;
   color: var(--on-signal);
   font: 700 11px/1.5 var(--font-text);
   letter-spacing: 0.08em;
+  text-align: left;
   text-transform: uppercase;
   cursor: pointer;
+}
+
+.sheet-tab-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 16px 4px 12px;
+  background: var(--signal);
   clip-path: polygon(0 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
 }
 
 .sheet-tab .ui-icon {
-  transition: transform var(--t-fast) var(--ease-out);
+  transition: transform var(--t-base) var(--ease-out);
 }
 
 .sheet-panel.is-closed .sheet-tab .ui-icon {
@@ -374,24 +395,44 @@ function columnHeadings(table: Table): string[] {
 }
 
 .sheet-tab em {
-  padding: 0 6px;
+  padding: 0 7px;
   border-radius: var(--r-pill);
-  background: var(--on-signal);
-  color: var(--signal);
-  font: 700 10px/1.5 var(--font-code);
+  background: var(--signal);
+  color: var(--on-signal);
+  font: 700 10px/1.6 var(--font-code);
   letter-spacing: 0;
 }
 
-.sheet-tab:focus-visible {
-  outline-offset: 2px;
+.sheet-tab:hover .sheet-tab-chip,
+.sheet-tab:focus-visible .sheet-tab-chip {
+  background: var(--signal-bright);
 }
 
-.sheet-panel.is-closed {
-  background: transparent;
+.sheet-tab:focus-visible {
+  outline-offset: -2px;
+}
+
+/* The fold: the body's height and opacity run together over --t-base, a reveal, never a snap. */
+.sheet-fold {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows var(--t-base) var(--ease-out), opacity var(--t-base) var(--ease-out);
+}
+
+.sheet-fold.is-open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.sheet-fold-in {
+  min-height: 0;
+  overflow: hidden;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .sheet-tab .ui-icon {
+  .sheet-tab .ui-icon,
+  .sheet-fold {
     transition: none;
   }
 }
@@ -482,19 +523,35 @@ function columnHeadings(table: Table): string[] {
   accent-color: var(--signal);
 }
 
-/* Tables: a numbered series across the page; the critical hits as ticks. */
+/* Tables: a numbered series across the page; the critical hits as ticks. A table is the column's width, and wider only when its cells cannot fit; only then does it scroll. */
 .sheet-table-wrap {
   overflow-x: auto;
 }
 
 .sheet-table {
+  width: 100%;
   border-collapse: separate;
-  border-spacing: 4px 3px;
-  margin: 0 -4px;
+  border-spacing: 0;
+  margin: 0;
+}
+
+.sheet-table.is-ticks {
+  width: auto;
+}
+
+.sheet-table th + th,
+.sheet-table th + td,
+.sheet-table td + td {
+  padding-left: 4px;
+}
+
+.sheet-table tbody th,
+.sheet-table tbody td {
+  padding-bottom: 3px;
 }
 
 .sheet-th {
-  padding: 2px 4px;
+  padding: 2px 0;
   color: var(--text-muted);
   font: 700 10.5px/1.4 var(--font-text);
   letter-spacing: 0.06em;
@@ -518,12 +575,12 @@ function columnHeadings(table: Table): string[] {
 }
 
 .sheet-table td {
-  padding: 0;
   min-width: 72px;
 }
 
 .sheet-table.is-ticks td {
   min-width: 0;
+  padding-left: 4px;
   text-align: center;
 }
 

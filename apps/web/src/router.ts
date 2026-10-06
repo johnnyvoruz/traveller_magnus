@@ -3,6 +3,11 @@ import { scrollToTop } from './platform/browser.ts';
 import Account from './views/Account.vue';
 import MapView from './views/MapView.vue';
 
+/** Starts the campaign workspace chunk. The panel host renders the same module once the route is open. */
+function preloadCampaign(): void {
+    void import('./workspace/CampaignPanel.vue');
+}
+
 export const router = createRouter({
     history: createWebHistory(),
     scrollBehavior(to, from, saved) {
@@ -18,9 +23,9 @@ export const router = createRouter({
         { path: '/s/:sector/:hex/b/:body', name: 'body', component: MapView },
         { path: '/s/:sector/:hex/orbit', name: 'orbit', component: () => import('./views/OrbitView.vue') },
         { path: '/s/:sector/:hex/orbit/b/:body', name: 'orbit-body', component: () => import('./views/OrbitView.vue') },
-        { path: '/campaign', name: 'campaign', component: MapView },
-        { path: '/campaign/r/:record', name: 'campaign-record', component: MapView },
-        { path: '/campaign/party', name: 'campaign-party', component: MapView },
+        { path: '/campaign', name: 'campaign', component: MapView, beforeEnter: preloadCampaign },
+        { path: '/campaign/r/:record', name: 'campaign-record', component: MapView, beforeEnter: preloadCampaign },
+        { path: '/campaign/party', name: 'campaign-party', component: MapView, beforeEnter: preloadCampaign },
         { path: '/account', name: 'account', component: Account },
     ],
 });

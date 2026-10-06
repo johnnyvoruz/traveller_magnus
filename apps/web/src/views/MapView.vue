@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { SectorHex, SectorIndex, TreeEnvelope, TruthManifest, TruthOverview } from '@voyage/shared';
 import { campaign } from '../campaign/store.ts';
@@ -13,7 +13,6 @@ import { readMotion, readTheme } from '../map/theme.ts';
 import { tierFor } from '../map/tiers.ts';
 import { TruthClient } from '../map/truth_client.ts';
 import OmniBox from '../components/OmniBox.vue';
-import DossierPanel from '../dossier/DossierPanel.vue';
 import { bodyKeys, overviewModel, pickSystem, type AllegianceName, type TreeRow } from '../dossier/model.ts';
 import { handleKey, registerCommand, systemPanel, type PanelWorld } from '../shell/registry.ts';
 import { orbitPath } from '../orbit/bodies.ts';
@@ -22,7 +21,6 @@ import Rail from '../shell/Rail.vue';
 import { dismissToast, showToast, toasts } from '../shell/toast.ts';
 import ToastStrip from '../shell/ToastStrip.vue';
 import AccountMenu from '../workspace/AccountMenu.vue';
-import CampaignPanel from '../workspace/CampaignPanel.vue';
 import { editDateNext } from '../workspace/list_state.ts';
 import StardateChip from '../workspace/StardateChip.vue';
 import { locateOriginY, locating, stopLocate } from '../workspace/locate.ts';
@@ -131,6 +129,20 @@ function showStatus(): void {
 const dossier = computed(() => dossierRoute(route.path));
 /** The Campaign panel has a route of its own, so Back closes it and a link can open it. */
 const campaignOpen = computed(() => route.path === '/campaign' || route.path.startsWith('/campaign/'));
+
+/** The dossier chunk loads the first time the panel opens, then stays mounted so it can close. */
+const dossierLive = ref(false);
+watch(() => dossierRoute(route.path).kind, (kind) => {
+    if (kind !== 'closed') dossierLive.value = true;
+}, { immediate: true });
+const DossierPanel = defineAsyncComponent(() => import('../dossier/DossierPanel.vue'));
+
+/** The campaign workspace chunk loads when a /campaign route is open, then stays mounted. */
+const campaignLive = ref(false);
+watch(campaignOpen, (open) => {
+    if (open) campaignLive.value = true;
+}, { immediate: true });
+const CampaignPanel = defineAsyncComponent(() => import('../workspace/CampaignPanel.vue'));
 /** The campaign tab the address names: the party at `/campaign/party`, else the records. */
 const campaignTab = computed((): 'records' | 'party' => (route.path === '/campaign/party' ? 'party' : 'records'));
 /** The record the address names: `/campaign/r/<id>`. */
@@ -1001,6 +1013,7 @@ onBeforeUnmount(() => {
     <OmniBox :version="versionRef" :manifest="manifestRef" @open="omniOpen = $event" />
     <StardateChip @open="openDateEditor" />
     <DossierPanel
+      v-if="dossierLive"
       ref="dossierEl"
       :open="dossier.kind !== 'closed'"
       :slug="dossier.kind === 'closed' ? '' : dossier.slug"
@@ -1019,6 +1032,7 @@ onBeforeUnmount(() => {
       @width="onPanelWidth"
     />
     <CampaignPanel
+      v-if="campaignLive"
       ref="campaignEl"
       :open="campaignOpen"
       :truth-version="versionRef"

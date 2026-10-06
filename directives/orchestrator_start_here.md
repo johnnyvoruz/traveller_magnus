@@ -105,8 +105,9 @@ campaign layer over the truth map; own maps later. X sign-in only.
 | K13 part 3 | the ship sheet on the vessel record | done, accepted §113, not yet pushed |
 | K6d data | the vessel track (dated legs on status), helpers | done, accepted §113, not yet pushed |
 | follow-ups 1 | full-screen plan, split button, chip, scrub glitch, sheet as panel | done, live |
-| follow-ups 2 | passengers and crew as people; orbit drawers design | done §120, not yet pushed; drawers await Johnny |
-| **follow-ups 3** | sheet x-scrolls, folding motion | **Agent D, next** |
+| follow-ups 2 | passengers and crew as people; orbit drawers design | done, live; drawers ruled yes to all |
+| follow-ups 3 | sheet x-scrolls, folding motion, the + menus | done §122, not yet pushed |
+| **drawers** | orbit controls in the header as drawers (follow-up 6) | **Agent D, in flight** |
 | K6d screens | ship list, track, Jump button | next for D |
 | K17 | shared ship feeds, follow, faction accounts | recorded; after K6d and K16 |
 | K7, K8 | journal, timeline | outlines only |
@@ -114,15 +115,15 @@ campaign layer over the truth map; own maps later. X sign-in only.
 
 ## 6. In flight right now
 
-- **Agent D:** step 3 (sheet x-scrolls, folding motion); then, proposed order, the ship MVP
-  (K6d screens + K12 designators and plotting mode) before step 4 (toggle motion, docked
-  card); the drawers build when Johnny rules D1 to D7 (§120).
-- **Agent A:** lazy-load the workspace and the dossier into their own chunks (§120).
+- **Agent D:** the drawers build (D1 to D7 ruled yes), then the ship MVP (K6d screens over C's layer), then
+  follow-ups 14 and 15.
+- **Agent A:** free.
 - **Agent B:** free. The export route is in (§104); Export / Import buttons come with D's K15.
-- **Agent C:** free.
+- **Agent C:** the ship designators layer and plotting overlay in the orbit renderer
+  (K12 points 1, 2, 2b; §121).
 - **Agent F:** parked. K13 parts 1 and 2 done (handoff 89 to 91); part 3 after K5f.
-- **Last push:** 6a705b4. Local and finished: C's credit and marker, D's step 2 (§120);
-  push everything.
+- **Last push:** e53097a. Local and finished: D's step 3, A's chunk split (§122); C
+  mid-step in orbit/.
 
 ## 7. Decisions Johnny has made that shape the next steps
 

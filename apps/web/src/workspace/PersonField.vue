@@ -7,12 +7,16 @@
  * The link to the vessel (crew or passenger) is made and removed with the pill, so both
  * record pages show it. The pill's data lives with the sheet (sheet_people.ts); for the
  * Crew box, which the PDF has as one text field, the pills are the vessel's crew links.
+ * The + sits inside the field's box at its right edge (follow-up 16), and whatever it opens
+ * (the two choices, the picker, the new name) floats on the body, placed by pop_place.ts,
+ * so no row of the table moves.
  */
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import type { CampaignRecord } from '@voyage/shared';
 import { campaign } from '../campaign/store.ts';
 import Icon from '../design/Icon.vue';
 import { addLink, createRecord, justCreated, removeLink, saveRecord } from './actions.ts';
+import { placePop } from './pop_place.ts';
 import { linkBetween } from './sheet_people.ts';
 import { cleanName } from './records.ts';
 import RecordPicker from './RecordPicker.vue';
@@ -29,6 +33,8 @@ const props = defineProps<{
     readOnly: boolean;
     /** The + button's accessible name says which berth. */
     label: string;
+    /** The + sits inside the slotted field's box; without a field it stands alone. */
+    inField?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -47,31 +53,68 @@ const plusBtn = ref<HTMLElement | null>(null);
 const menuEl = ref<HTMLElement | null>(null);
 const nameEl = ref<HTMLInputElement | null>(null);
 const pillBtn = ref<HTMLElement | null>(null);
+const popEl = ref<HTMLElement | null>(null);
+const popStyle = ref<{ left: string; top: string }>({ left: '0px', top: '0px' });
+
+/** Puts the floating box under the +, inside the window; above it when there is no room. */
+function place(): void {
+    const anchor = plusBtn.value ? plusBtn.value.closest<HTMLElement>('.pf') : null;
+    const pop = popEl.value;
+    if (!anchor || !pop) return;
+    const at = placePop(anchor.getBoundingClientRect(), { width: pop.offsetWidth, height: pop.offsetHeight }, { width: document.documentElement.clientWidth, height: document.documentElement.clientHeight });
+    popStyle.value = { left: at.left + 'px', top: at.top + 'px' };
+}
+
+function onOutside(event: Event): void {
+    const target = event.target;
+    if (!(target instanceof Node)) return;
+    if (popEl.value && popEl.value.contains(target)) return;
+    if (plusBtn.value && plusBtn.value.contains(target)) return;
+    close(false);
+}
+
+/** A scroll anywhere, or a resize, shuts the box: a fixed box must not drift from its +. */
+function onMove(event?: Event): void {
+    if (event && event.target instanceof Node && popEl.value && popEl.value.contains(event.target)) return;
+    close(false);
+}
+
+function listen(on: boolean): void {
+    const method = on ? 'addEventListener' : 'removeEventListener';
+    document[method]('pointerdown', onOutside, true);
+    document[method]('scroll', onMove, true);
+    document.defaultView?.[method]('resize', onMove);
+}
 
 const canMake = computed(() => cleanName(name.value).length > 0);
 
 function openMenu(): void {
     if (props.readOnly) return;
     step.value = 'menu';
+    listen(true);
     void nextTick(() => {
+        place();
         const first = menuEl.value ? menuEl.value.querySelector<HTMLElement>('button') : null;
         if (first) first.focus();
     });
 }
 
 function close(back = true): void {
+    if (step.value === 'closed') return;
     step.value = 'closed';
+    listen(false);
     if (back) void nextTick(() => { if (plusBtn.value) plusBtn.value.focus(); });
 }
 
 function chooseExisting(): void {
     step.value = 'existing';
+    void nextTick(place);
 }
 
 function chooseNew(): void {
     name.value = props.suggested;
     step.value = 'new';
-    void nextTick(() => { if (nameEl.value) { nameEl.value.focus(); nameEl.value.select(); } });
+    void nextTick(() => { place(); if (nameEl.value) { nameEl.value.focus(); nameEl.value.select(); } });
 }
 
 /** Joins the person to the vessel unless they already are, then hands them to the field. */
@@ -80,7 +123,7 @@ function take(person: CampaignRecord): void {
         addLink(props.vesselId, person.id, { kind: props.kind, outward: false, label: props.kind }, '');
     }
     emit('hold', person);
-    step.value = 'closed';
+    close(false);
     // The + gives way to the pill: focus goes to the pill's name.
     void nextTick(() => { if (pillBtn.value) pillBtn.value.focus(); });
 }
@@ -137,10 +180,11 @@ function onNameKey(event: KeyboardEvent): void {
 }
 
 watch(() => props.readOnly, (now) => { if (now) close(false); });
+onBeforeUnmount(() => listen(false));
 </script>
 
 <template>
-  <span class="pf" :class="{ 'is-held': person !== null, 'is-open': step !== 'closed' }">
+  <span class="pf" :class="{ 'is-held': person !== null, 'is-open': step !== 'closed', 'is-field': inField }">
     <template v-if="person">
       <span class="lnk-chip pf-pill">
         <button ref="pillBtn" type="button" class="lnk-open pf-name" :title="'See ' + person.name" @click="emit('show', person)">
@@ -165,18 +209,23 @@ watch(() => props.readOnly, (now) => { if (now) close(false); });
       >
         <Icon name="plus" :size="11" />
       </button>
-      <div v-if="step === 'menu'" ref="menuEl" class="pf-menu" role="menu" :aria-label="'Add a person to ' + label" @keydown="onMenuKey">
-        <button type="button" role="menuitem" @click="chooseExisting"><Icon name="user" :size="12" />Existing person</button>
-        <button type="button" role="menuitem" @click="chooseNew"><Icon name="plus" :size="12" />New person</button>
-      </div>
-      <div v-else-if="step === 'existing'" class="pf-pick">
-        <RecordPicker :exclude="vesselId" :types="['person']" placeholder="Search your people" none="No people yet. Make one." @pick="picked" @cancel="close()" />
-      </div>
-      <div v-else-if="step === 'new'" class="pf-new" @keydown="onNameKey">
-        <input ref="nameEl" v-model="name" type="text" class="sheet-input pf-new-name" placeholder="The person's name" aria-label="The new person's name" maxlength="120">
-        <button type="button" class="ui-btn is-primary pf-make" :disabled="!canMake" @click="make">Create and add</button>
-        <button type="button" class="ui-btn pf-cancel" @click="close()">Cancel</button>
-      </div>
+      <!-- On the body, fixed, placed under the +: nothing in the table moves when it opens. -->
+      <Teleport v-if="step !== 'closed'" to="body">
+        <div ref="popEl" class="pf-pop" :class="'is-' + step" :style="popStyle" :aria-label="'Add a person to ' + label">
+          <div v-if="step === 'menu'" ref="menuEl" class="pf-menu" role="menu" :aria-label="'Add a person to ' + label" @keydown="onMenuKey">
+            <button type="button" role="menuitem" @click="chooseExisting"><Icon name="user" :size="12" />Existing person</button>
+            <button type="button" role="menuitem" @click="chooseNew"><Icon name="plus" :size="12" />New person</button>
+          </div>
+          <div v-else-if="step === 'existing'" class="pf-pick">
+            <RecordPicker :exclude="vesselId" :types="['person']" placeholder="Search your people" none="No people yet. Make one." @pick="picked" @cancel="close()" />
+          </div>
+          <div v-else-if="step === 'new'" class="pf-new" @keydown="onNameKey">
+            <input ref="nameEl" v-model="name" type="text" class="sheet-input pf-new-name" placeholder="The person's name" aria-label="The new person's name" maxlength="120">
+            <button type="button" class="ui-btn is-primary pf-make" :disabled="!canMake" @click="make">Create and add</button>
+            <button type="button" class="ui-btn pf-cancel" @click="close()">Cancel</button>
+          </div>
+        </div>
+      </Teleport>
     </template>
   </span>
 </template>
@@ -212,6 +261,24 @@ watch(() => props.readOnly, (now) => { if (now) close(false); });
   color: var(--signal);
 }
 
+/* Inside a field: the + sits in the box at its right edge, so it never wraps under the field. */
+.pf.is-field {
+  gap: 0;
+}
+
+.pf.is-field > .sheet-input {
+  padding-right: 26px;
+}
+
+.pf.is-field > .pf-plus {
+  position: absolute;
+  top: 50%;
+  right: 2px;
+  width: 22px;
+  height: 22px;
+  transform: translateY(-50%);
+}
+
 /* The pill in the field's place: the name opens the card, the mark lets go. */
 .pf-pill {
   max-width: 100%;
@@ -224,20 +291,29 @@ watch(() => props.readOnly, (now) => { if (now) close(false); });
   white-space: nowrap;
 }
 
-/* The two choices, under the +. */
-.pf-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
-  z-index: 5;
-  display: flex;
-  flex-direction: column;
+/* The floating box: on the body, placed by pop_place.ts. The two choices, the picker, or the new name. */
+.pf-pop {
+  position: fixed;
+  z-index: 30;
+  box-sizing: border-box;
   min-width: 170px;
+  max-width: calc(100vw - 16px);
   padding: 4px;
   border: 1px solid var(--line-1);
   border-radius: var(--r-2);
   background: var(--chrome-bg);
   box-shadow: var(--shadow-pop);
+}
+
+.pf-pop.is-existing,
+.pf-pop.is-new {
+  width: 320px;
+  padding: 8px;
+}
+
+.pf-menu {
+  display: flex;
+  flex-direction: column;
 }
 
 .pf-menu button {
@@ -266,13 +342,6 @@ watch(() => props.readOnly, (now) => { if (now) close(false); });
   outline: none;
 }
 
-/* The picker and the new-name form take the field's whole row. */
-.pf-pick,
-.pf-new {
-  flex: 1 1 100%;
-  min-width: 0;
-}
-
 .pf-new {
   display: flex;
   flex-wrap: wrap;
@@ -282,9 +351,5 @@ watch(() => props.readOnly, (now) => { if (now) close(false); });
 .pf-new-name {
   flex: 1 1 160px;
   min-width: 0;
-}
-
-.pf.is-open {
-  flex-wrap: wrap;
 }
 </style>

@@ -5,11 +5,10 @@
  * picture and the body chips. All clock arithmetic is orbit/clock.ts and the picture is
  * orbit/OrbitCanvas.vue; this file holds the clock's number, the frame loop and the wiring.
  */
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { SectorHex, SectorIndex, TreeEnvelope } from '@voyage/shared';
 import Icon from '../design/Icon.vue';
-import DossierPanel from '../dossier/DossierPanel.vue';
 import { formatDisplayNumber } from '../dossier/labels.ts';
 import { overviewModel, pickSystem, type AllegianceName } from '../dossier/model.ts';
 import { TruthClient } from '../map/truth_client.ts';
@@ -363,6 +362,12 @@ function shuttleTo(rate: number): void {
 // ---- Selection, popovers, leaving --------------------------------------------
 
 const dossierOpen = ref(true);
+/** The dossier chunk loads when this panel is open. It starts open on the orbit route. */
+const dossierLive = ref(dossierOpen.value);
+watch(dossierOpen, (open) => {
+    if (open) dossierLive.value = true;
+});
+const DossierPanel = defineAsyncComponent(() => import('../dossier/DossierPanel.vue'));
 /** The account pop-up at the rail's foot, as on the map. */
 const accountOpen = ref(false);
 const railEl = ref<{ focusAccount: () => void } | null>(null);
@@ -540,6 +545,7 @@ onBeforeUnmount(() => {
     <Rail ref="railEl" :panel-open="dossierOpen" :search-open="false" :account-open="accountOpen" />
     <AccountMenu :open="accountOpen" @close="closeAccount" @campaign="router.push('/campaign')" />
     <DossierPanel
+      v-if="dossierLive"
       orbit
       :open="dossierOpen"
       :slug="slug"

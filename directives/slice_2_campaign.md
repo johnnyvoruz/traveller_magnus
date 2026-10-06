@@ -477,6 +477,14 @@ only. D's five points for the orchestrator:
       panel shows that body, or the card becomes the panel's handle), records it in the
       orbit design notes, and builds it. Johnny reviews the result.
 
+  16. **The passenger + shifts the layout (D):** in a narrow cell the + wraps under its field
+      and its menu opens in the flow, pushing the rows below. The + sits inside the field's
+      box at its right edge (never wrapping), and the menu floats over the table (absolute
+      or teleported, as the other menus) so nothing moves when it opens. **Same for the
+      Crew People row's +:** its menu is clipped by the section's overflow (only a sliver
+      shows); the menu must float above the section, never be clipped, and open upward when
+      there is no room below.
+
 - **K13 part 4. The character sheet (Johnny, 2026-10-05).** Person records get the same
   treatment from a character sheet PDF, "with all our new design requirements": the field
   inventory (B), the fields into `rules/` (Johnny), the sheet on the person page as a panel
