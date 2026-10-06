@@ -97,6 +97,7 @@
 
   /* motion */
   --t-fast: 200ms;        /* hover, toggles */
+  --t-stagger: 40ms;      /* one step between the groups of an opening drawer (orbit) */
   --t-base: 300ms;        /* panel reveal, dissolve */
   --t-slow: 450ms;        /* locator connect, camera short hop */
   --t-long: 800ms;        /* scanner reveal, camera long flight */

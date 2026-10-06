@@ -485,6 +485,16 @@ only. D's five points for the orchestrator:
       shows); the menu must float above the section, never be clipped, and open upward when
       there is no room below.
 
+  17. **Panes swap, views stay (Johnny, 2026-10-05):** in the orbit view, pressing Campaign on
+      the Rail routes to the map. It must not: the campaign panel (and any record page)
+      opens over whichever view is showing, and the panes swap each other out (dossier ↔
+      campaign) in the one panel system. The `/campaign` routes today render `MapView`;
+      the panel becomes view-independent (the Panel host lives in the shell, the campaign
+      and dossier panes are children of it, and the view under it is the map or the orbit as
+      the address says, e.g. `/orbit/<sector>/<hex>?panel=campaign/...` or a nested route).
+      D designs the address shape with A (A owns the router and the chunks); the back
+      button and cold load of every address keep working (manifesto: connected).
+
 - **K13 part 4. The character sheet (Johnny, 2026-10-05).** Person records get the same
   treatment from a character sheet PDF, "with all our new design requirements": the field
   inventory (B), the fields into `rules/` (Johnny), the sheet on the person page as a panel

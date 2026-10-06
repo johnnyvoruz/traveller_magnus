@@ -1,9 +1,10 @@
 <script setup lang="ts">
 /**
- * The key at the picture's foot, which is the toggle (showpiece D1): one chip per layer
- * with its own mark, pressed to show or hide it. An entry that is off stays listed, dimmed
- * and dashed, so the key never says less than the picture draws. Keys 4 to 0 from the
- * keyboard. It replaces the chip row above the picture and the legend that stood here.
+ * The key, which is the toggle (showpiece D1): one chip per layer with its own mark, pressed
+ * to show or hide it. An entry that is off stays listed, dimmed and dashed, so the key never
+ * says less than the picture draws. Keys 4 to 0 from the keyboard, shown on the chips. Since
+ * follow-up 6 it lives in the Layers drawer (findings/orbit_drawers_design.md §2), not at
+ * the picture's foot.
  */
 import { LAYERS, toggled } from './commands.ts';
 import Icon from '../design/Icon.vue';
@@ -18,7 +19,7 @@ function flip(key: (typeof LAYERS)[number]['key']): void {
 </script>
 
 <template>
-  <div class="orbit-key" role="group" aria-label="Key: press an entry to show or hide it">
+  <div class="orbit-key orbit-drawer-group" style="--i: 0" role="group" aria-label="Key: press an entry to show or hide it">
     <button
       v-for="item in LAYERS"
       :key="item.key"
@@ -34,20 +35,16 @@ function flip(key: (typeof LAYERS)[number]['key']): void {
         <Icon v-if="item.key === 'markMainworld'" name="star" :size="11" />
       </span>
       <span class="orbit-key-word">{{ item.label }}</span>
+      <kbd aria-hidden="true">{{ item.hotkey }}</kbd>
     </button>
   </div>
 </template>
 
 <style>
 .orbit-key {
-  position: absolute;
-  left: 14px;
-  bottom: 14px;
-  z-index: 3;
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  max-width: calc(100% - 120px);
 }
 
 .orbit-key-item {
@@ -141,13 +138,12 @@ function flip(key: (typeof LAYERS)[number]['key']): void {
   border-radius: 2px;
 }
 
-/* A narrow stage: the marks alone, the words in the title. */
-.orbit-stage.is-narrow .orbit-key-word {
-  display: none;
-}
-
-.orbit-stage.is-narrow .orbit-key-item {
-  padding: 0 8px;
+.orbit-key-item kbd {
+  padding: 0 4px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-1);
+  color: var(--text-muted);
+  font: 500 10px/1.3 var(--font-code);
 }
 
 @media (prefers-reduced-motion: reduce) {

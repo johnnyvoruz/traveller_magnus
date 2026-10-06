@@ -3123,3 +3123,27 @@ API and Durable Object have against `data_model.md` and `api.md`).
   props in the ship MVP step.
 - D is mid-step on the drawers (`Drawer.vue`, `DrawerTabs.vue`, `HeaderClock.vue`,
   `drawers.ts`, …). Push C's files and the test fix by path.
+- **Follow-up 17 (Johnny):** Campaign pressed in the orbit view routes to the map; panes
+  must swap over the current view instead. The panel becomes view-independent; D and A
+  settle the address shape. After the drawers and the ship MVP, or with the ship MVP if the
+  orbit view needs the campaign pane for the ship list.
+
+## 124. Pushed `3b7bcd2` (ship layer); the drawers are in and accepted (2026-10-05)
+
+- GitHub run green on `3b7bcd2`; CI clean again.
+- **Agent D, follow-up 6:** the header at rest is Play · the readout · the campaign mark ·
+  Time (T) / View (Y) / Layers (L) · Keys; `Drawer.vue` (clip-path reveal over `--t-base`,
+  the signal hairline, groups fading 40 ms apart by a new `--t-stagger` token; closing at
+  `--t-fast`; `visibility: hidden` + inert when closed; none under reduced motion),
+  `DrawerTabs.vue`, `HeaderClock.vue`, pure `orbit/drawers.ts` with tests; Time holds
+  1 week, Line up, scrub, speed, the date fields and Set as campaign date; View the layout
+  radios, Fit, Linear scale, Ring strength; Layers the seven chips; Esc closes drawer, then
+  popover, then body, then back to the map; compact under 1,180 px, narrow under 620; a
+  toast sits under an open drawer. `LayoutCorner.vue` and `MoreMenu.vue` deleted; every
+  control still a command with the test; 11 contrast pairs. C's three files untouched.
+  **Orchestrator:** 718 pass / 0 fail, check clean, build green, no chunk warning.
+  **Accepted.** Pushable with `git add -A` (everyone between steps).
+- **Next, D: the ship MVP, part 1** (the ship list and real marks through C's props, the
+  status strip for the selected ship, the plotting toggle, the leg preview and write, the
+  Jump button on `settings.jumpHours`); part 2 (the track on the vessel page, the jump
+  bubble with C); part 3 with A (follow-up 17, panes swap over either view).

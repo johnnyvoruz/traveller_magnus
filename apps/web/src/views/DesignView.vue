@@ -22,12 +22,15 @@ import UwpRibbon from '../dossier/UwpRibbon.vue';
 import OmniBox from '../components/OmniBox.vue';
 import BodyCard from '../orbit/BodyCard.vue';
 import BodyChips from '../orbit/BodyChips.vue';
+import Drawer from '../orbit/Drawer.vue';
+import { toggleDrawer, type DrawerState } from '../orbit/drawers.ts';
+import DrawerTabs from '../orbit/DrawerTabs.vue';
+import HeaderClock from '../orbit/HeaderClock.vue';
 import LayerKey from '../orbit/LayerKey.vue';
-import LayoutCorner from '../orbit/LayoutCorner.vue';
 import { DEFAULT_LAYERS, type Layers, type Mode } from '../orbit/picture.ts';
 import type { BodyCardModel } from '../orbit/card.ts';
 import { bodyChips } from '../orbit/bodies.ts';
-import { REAL_TIME, totalDays } from '../orbit/clock.ts';
+import { REAL_TIME, timeFieldValue, totalDays } from '../orbit/clock.ts';
 import { stardate } from '../workspace/stardate.ts';
 import { dayNightFigure, markerAt, starportTick, turningOf } from '../orbit/daynight.ts';
 import OrbitHeader from '../orbit/OrbitHeader.vue';
@@ -97,6 +100,7 @@ const orbitPaused = ref(true);
 const orbitSpeed = ref(REAL_TIME);
 const orbitShuttle = ref(0);
 const orbitPop = ref('');
+const orbitDrawer = ref<DrawerState>('time');
 const orbitBody = ref<string | null>('w2m0');
 const orbitMoons = ref<string | null>(null);
 // A made-up body for the surface-map specimen: the stage maps whatever body it is given.
@@ -337,26 +341,50 @@ function open(key: string): void {
           :keys-open="orbitPop === 'keys'"
           @back="orbitPop = ''"
           @keys="orbitPop = $event ? 'keys' : ''"
-        />
-        <TimeControls
-          :days="orbitDays"
-          :paused="orbitPaused"
-          :speed="orbitSpeed"
-          :shuttle="orbitShuttle"
-          local-time="14:03:22"
-          :date-open="orbitPop === 'date'"
-          :said="stardate(orbitDays)"
-          @toggle="orbitPaused = !orbitPaused"
-          @week="orbitDays = orbitDays + 7"
-          @days="orbitDays = $event"
-          @speed="orbitSpeed = $event"
-          @scrub="() => {}"
-          @shuttle="orbitShuttle = $event"
-          @pop="orbitPop = $event ? 'date' : ''"
-        />
+        >
+          <template #clock>
+            <HeaderClock
+              :paused="orbitPaused"
+              :said="stardate(orbitDays)"
+              :time="timeFieldValue(orbitDays)"
+              :time-open="orbitDrawer === 'time'"
+              :campaign-date="{ ...stardate(orbitDays), days: orbitDays }"
+              :on-campaign-date="true"
+              :narrow="false"
+              @toggle="orbitPaused = !orbitPaused"
+              @date="orbitDrawer = toggleDrawer(orbitDrawer, 'time')"
+              @go-campaign="() => {}"
+            />
+          </template>
+          <template #tools>
+            <DrawerTabs :open="orbitDrawer" :narrow="false" @toggle="orbitDrawer = toggleDrawer(orbitDrawer, $event)" />
+          </template>
+        </OrbitHeader>
         <div class="design-orbit-stage">
-          <LayoutCorner :mode="orbitMode" @mode="orbitMode = $event" />
-          <LayerKey :layers="orbitLayers" @layers="orbitLayers = $event" />
+          <Drawer id="time" :open="orbitDrawer === 'time'" @close="orbitDrawer = ''">
+            <TimeControls
+              :days="orbitDays"
+              :paused="orbitPaused"
+              :speed="orbitSpeed"
+              :shuttle="orbitShuttle"
+              local-time="14:03:22"
+              :campaign-date="{ ...stardate(orbitDays), days: orbitDays }"
+              :on-campaign-date="true"
+              :can-set-date="true"
+              @set-campaign="() => {}"
+              @week="orbitDays = orbitDays + 7"
+              @days="orbitDays = $event"
+              @speed="orbitSpeed = $event"
+              @scrub="() => {}"
+              @shuttle="orbitShuttle = $event"
+            />
+          </Drawer>
+          <Drawer id="view" :open="orbitDrawer === 'view'" @close="orbitDrawer = ''">
+            <span class="design-note orbit-drawer-group" style="--i: 0">The View drawer: the layout radios, Fit, the picture controls (live on the orbit view). Layout now: {{ orbitMode }}.</span>
+          </Drawer>
+          <Drawer id="layers" :open="orbitDrawer === 'layers'" @close="orbitDrawer = ''">
+            <LayerKey :layers="orbitLayers" @layers="orbitLayers = $event" />
+          </Drawer>
           <div class="orbit-cards">
             <BodyCard :model="orbitCard" body-key="sample" closable />
             <BodyCard :model="orbitHoverCard" body-key="hover-sample" :closable="false" under />

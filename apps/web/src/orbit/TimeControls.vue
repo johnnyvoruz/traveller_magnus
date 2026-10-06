@@ -1,20 +1,19 @@
 <script setup lang="ts">
 /**
- * The orbit view's time row, pared (findings/orbit_showpiece_design.md §2): play, 1 week,
- * the scrub (its ends shuttle when held; the campaign date marked on its track), the speed,
- * one date readout that opens the date fields, the campaign mark and Set as campaign date.
+ * The Time drawer's controls (findings/orbit_drawers_design.md §2; before follow-up 6 this
+ * was the time row): 1 week, the scrub (its ends shuttle when held; the campaign date marked
+ * on its track), the speed, the date fields, Set as campaign date, and the line-up search in
+ * a slot. Play, the date readout and the campaign mark are the header's (HeaderClock.vue).
  * It holds no clock: it shows the days it is given and asks the view to move them. The
  * arithmetic is orbit/clock.ts. Every control names its command (orbit/commands.ts).
  */
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import Icon from '../design/Icon.vue';
-import { formatDisplayNumber } from '../dossier/labels.ts';
 import {
     dateText, HOUR, isRealTime, REAL_TIME, SCRUB_DAYS, SHUTTLE_DEFAULT_LIMIT, SPEED_SLIDER_MAX, START_HELP,
     sliderFromSpeed, speedFactorText, speedFromSlider, speedText, splitDays, timeFieldValue, WEEK_DAYS, withDay, withTime, withYear,
 } from './clock.ts';
-import OrbitPopover from './OrbitPopover.vue';
-import { READOUT_CHARS, setButtonState } from './time_row.ts';
+import { setButtonState } from './time_row.ts';
 
 const props = defineProps<{
     days: number;
@@ -25,16 +24,12 @@ const props = defineProps<{
     shuttle: number;
     /** The wall clock's text, already formatted. */
     localTime: string;
-    /** The date fields are open under the readout. */
-    dateOpen: boolean;
     /** The campaign date as the panel says it, when a campaign with a date is open; null otherwise. */
     campaignDate?: { date: string; weekday: string; days: number } | null;
     /** The view sits on the campaign date's day. */
     onCampaignDate?: boolean;
     /** Signed in with a campaign open: the view's date can be made the campaign's. */
     canSetDate?: boolean;
-    /** The view's date in the campaign's form: "120-1105", "Senday". */
-    said: { date: string; weekday: string };
 }>();
 
 const emit = defineEmits<{
@@ -47,8 +42,6 @@ const emit = defineEmits<{
     /** Offset in days from where the drag began; null when the slider is released. */
     scrub: [offset: number | null];
     shuttle: [rate: number];
-    pop: [open: boolean];
-    goCampaign: [];
     setCampaign: [];
 }>();
 
@@ -62,6 +55,7 @@ const scrubValue = ref(0);
 const scrubbing = ref(false);
 const scrubEl = ref<HTMLInputElement | null>(null);
 const speedEl = ref<HTMLInputElement | null>(null);
+const yearEl = ref<HTMLInputElement | null>(null);
 
 function syncFields(): void {
     const parts = splitDays(props.days);
@@ -170,23 +164,13 @@ onBeforeUnmount(stopHold);
 defineExpose({
     focusScrub: () => { if (scrubEl.value) scrubEl.value.focus(); },
     focusSpeed: () => { if (speedEl.value) speedEl.value.focus(); },
+    focusDate: () => { if (yearEl.value) yearEl.value.focus(); },
 });
 </script>
 
 <template>
   <div class="orbit-time">
-    <div class="orbit-transport" role="group" aria-label="Transport">
-      <button
-        type="button"
-        class="orbit-btn is-icon orbit-play"
-        data-command="orbit-play"
-        :aria-label="paused ? 'Play simulation' : 'Pause simulation'"
-        :aria-pressed="paused ? 'false' : 'true'"
-        title="Play / pause (Space)"
-        @click="$emit('toggle')"
-      >
-        <Icon :name="paused ? 'play' : 'pause'" :size="13" />
-      </button>
+    <div class="orbit-transport orbit-drawer-group" style="--i: 0" role="group" aria-label="Transport">
       <button
         type="button"
         class="orbit-btn orbit-week"
@@ -197,9 +181,10 @@ defineExpose({
       >
         <Icon name="forward-step" :size="12" />1 week
       </button>
+      <slot name="lineup" />
     </div>
 
-    <div class="orbit-scrub" title="Drag up to 30 days backward or forward; it springs back on release. Hold an end to shuttle.">
+    <div class="orbit-scrub orbit-drawer-group" style="--i: 1" title="Drag up to 30 days backward or forward; it springs back on release. Hold an end to shuttle.">
       <button
         type="button"
         class="orbit-scrub-end"
@@ -246,7 +231,7 @@ defineExpose({
       >+{{ SCRUB_DAYS }} d</button>
     </div>
 
-    <div class="orbit-speed" title="Simulation speed: game time per real second">
+    <div class="orbit-speed orbit-drawer-group" style="--i: 2" title="Simulation speed: game time per real second">
       <button
         type="button"
         class="orbit-btn is-icon orbit-speed-reset"
@@ -273,49 +258,23 @@ defineExpose({
       <output class="orbit-speed-value" :title="speedFactorText(speed)">{{ speedText(speed) }}</output>
     </div>
 
-    <div class="orbit-date-pop" data-command="orbit-date" :style="{ '--readout-chars': READOUT_CHARS }">
-      <OrbitPopover
-        id="orbit-date"
-        :open="dateOpen"
-        icon="calendar-star"
-        :label="said.date + ' · ' + said.weekday + ' · ' + timeText"
-        title="The view’s date and time; press to type one (T)"
-        start
-        @toggle="$emit('pop', !dateOpen)"
-        @close="$emit('pop', false)"
-      >
-        <div class="orbit-timecode">
-          <label class="orbit-field is-year">
-            <span>Year</span>
-            <input type="number" step="1" title="Year" :value="yearText" @focus="editing = 'year'" @blur="editing = ''" @change="commitYear">
-          </label>
-          <label class="orbit-field is-day">
-            <span>Day</span>
-            <input type="number" min="1" max="365" step="1" title="Day of the year" :value="dayText" @focus="editing = 'day'" @blur="editing = ''" @change="commitDay">
-          </label>
-          <label class="orbit-field is-time">
-            <span>Time</span>
-            <input type="time" step="1" title="Time of day" aria-label="Simulation time" :value="timeText" @focus="editing = 'time'" @blur="editing = ''" @change="commitTime">
-          </label>
-        </div>
-        <p class="orbit-date" aria-live="off" :title="START_HELP">{{ dateText(days) }}</p>
-        <time class="orbit-local-clock" title="Your computer’s local time, independent of simulation speed">Local time {{ localTime }}</time>
-      </OrbitPopover>
+    <div class="orbit-timecode orbit-drawer-group" style="--i: 3" role="group" aria-label="The view’s date and time" :title="START_HELP">
+      <label class="orbit-field is-year">
+        <span>Year</span>
+        <input ref="yearEl" type="number" step="1" title="Year" :value="yearText" @focus="editing = 'year'" @blur="editing = ''" @change="commitYear">
+      </label>
+      <label class="orbit-field is-day">
+        <span>Day</span>
+        <input type="number" min="1" max="365" step="1" title="Day of the year" :value="dayText" @focus="editing = 'day'" @blur="editing = ''" @change="commitDay">
+      </label>
+      <label class="orbit-field is-time">
+        <span>Time</span>
+        <input type="time" step="1" title="Time of day" aria-label="Simulation time" :value="timeText" @focus="editing = 'time'" @blur="editing = ''" @change="commitTime">
+      </label>
+      <time class="orbit-local-clock" title="Your computer’s local time, independent of simulation speed">Local {{ localTime }}</time>
     </div>
 
-    <div v-if="canSetDate" class="orbit-campaign" role="group" aria-label="Campaign date">
-      <button
-        v-if="campaignDate"
-        type="button"
-        class="orbit-btn orbit-campaign-mark"
-        data-command="orbit-go-campaign"
-        :class="{ 'is-on': onCampaignDate }"
-        :aria-pressed="onCampaignDate ? 'true' : 'false'"
-        :title="onCampaignDate ? 'The view is on the campaign date' : 'Go to the campaign date, ' + campaignDate.date + ' (C)'"
-        @click="$emit('goCampaign')"
-      >
-        <Icon name="calendar-star" :size="12" /><b>{{ campaignDate.date }}</b><span>{{ campaignDate.weekday }}</span>
-      </button>
+    <div v-if="canSetDate" class="orbit-campaign orbit-drawer-group" style="--i: 4" role="group" aria-label="Campaign date">
       <button
         v-if="setState !== 'absent'"
         type="button"
@@ -329,21 +288,15 @@ defineExpose({
       >
         <Icon name="check" :size="12" />Set as campaign date
       </button>
+      <span v-else class="orbit-campaign-on" :title="campaignDate ? 'The view is on the campaign date, ' + campaignDate.date : ''"><Icon name="calendar-star" :size="12" />On the campaign date</span>
     </div>
-    <span class="orbit-shuttle-rate" aria-live="polite">{{ shuttle ? formatDisplayNumber(Math.abs(shuttle), 0) + ' d/s ' + (shuttle < 0 ? 'back' : 'on') : '' }}</span>
   </div>
 </template>
 
 <style>
+/* The drawer's body lays the groups out; this is a row of them that wraps. */
 .orbit-time {
-  display: flex;
-  flex: 0 0 auto;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 14px;
-  padding: 8px 14px;
-  background: var(--stage-head);
-  border-bottom: 1px solid var(--line-1);
+  display: contents;
 }
 
 .orbit-transport {
@@ -443,7 +396,7 @@ defineExpose({
 
 .orbit-field.is-year input { width: 92px; }
 .orbit-field.is-day input { width: 60px; }
-.orbit-field.is-time input { width: 128px; }
+.orbit-field.is-time input { width: 150px; }
 
 .orbit-field input:focus-visible {
   outline-offset: 1px;
@@ -467,55 +420,24 @@ defineExpose({
   font-variant-numeric: var(--tabular);
 }
 
-/* The date readout: the campaign's form, in the field's look. Its width is its longest reading's, so a weekday's name never reflows the row. */
-.orbit-date-pop .orbit-pop-btn {
-  box-sizing: border-box;
-  width: calc(var(--readout-chars) * 1ch + 50px);
-  justify-content: flex-start;
-  height: 32px;
-  border-color: var(--control-line);
-  background: var(--bg-2);
-  color: var(--signal);
-  font: 700 13px/1 var(--font-code);
-  font-variant-numeric: var(--tabular);
-  letter-spacing: 0.02em;
-}
-
-.orbit-date-pop .orbit-pop-btn .ui-icon {
-  color: var(--text-muted);
-}
-
-/* The campaign date: a mark that jumps the view to it, and the one control that writes it. */
+/* The one control that writes the campaign date; on the day, a quiet note in its place. */
 .orbit-campaign {
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-.orbit-btn.orbit-campaign-mark {
-  height: 32px;
-  gap: 7px;
-  color: var(--text-1);
-}
-
-.orbit-btn.orbit-campaign-mark b {
-  color: var(--signal-bright);
-  font: 700 13px/1 var(--font-code);
-  font-variant-numeric: var(--tabular);
-}
-
-.orbit-btn.orbit-campaign-mark span {
-  color: var(--text-muted);
-  font-weight: 400;
-}
-
-.orbit-btn.orbit-campaign-mark.is-on {
-  border-color: var(--signal);
-  background: var(--row-active);
-}
-
 .orbit-btn.orbit-campaign-set {
   height: 32px;
+}
+
+.orbit-campaign-on {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font: 400 12px/1 var(--font-text);
+  white-space: nowrap;
 }
 
 /* Held: the place is kept, the button is not seen, so a scrub never reflows the row under the pointer. */
@@ -577,20 +499,10 @@ defineExpose({
   display: none;
 }
 
-.orbit-pop-panel .orbit-date {
-  margin: 12px 0 0;
-  padding-top: 10px;
-  border-top: 1px solid var(--line-1);
-  color: var(--text-1);
-  font: 700 13px/1.4 var(--font-code);
-  font-variant-numeric: var(--tabular);
-}
-
 .orbit-local-clock {
-  display: block;
-  padding-top: 6px;
   color: var(--text-muted);
   font-size: 12px;
   font-variant-numeric: var(--tabular);
+  white-space: nowrap;
 }
 </style>

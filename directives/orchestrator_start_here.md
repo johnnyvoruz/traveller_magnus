@@ -107,7 +107,8 @@ campaign layer over the truth map; own maps later. X sign-in only.
 | follow-ups 1 | full-screen plan, split button, chip, scrub glitch, sheet as panel | done, live |
 | follow-ups 2 | passengers and crew as people; orbit drawers design | done, live; drawers ruled yes to all |
 | follow-ups 3 | sheet x-scrolls, folding motion, the + menus | done §122, not yet pushed |
-| **drawers** | orbit controls in the header as drawers (follow-up 6) | **Agent D, in flight** |
+| drawers | orbit controls in the header as drawers (follow-up 6) | done §124, not yet pushed |
+| **ship MVP 1** | ship list, marks from tracks, strip, plotting, Jump | **Agent D, in flight** |
 | K6d screens | ship list, track, Jump button | next for D |
 | K17 | shared ship feeds, follow, faction accounts | recorded; after K6d and K16 |
 | K7, K8 | journal, timeline | outlines only |
@@ -115,14 +116,14 @@ campaign layer over the truth map; own maps later. X sign-in only.
 
 ## 6. In flight right now
 
-- **Agent D:** the drawers build (D1 to D7 ruled yes), then the ship MVP (K6d screens over C's layer), then
-  follow-ups 14 and 15.
+- **Agent D:** the ship MVP part 1 (over C's layer), then part 2 (track on the vessel page,
+  jump bubble), then part 3 with A (panes swap, follow-up 17), then follow-ups 14, 15.
 - **Agent A:** free.
 - **Agent B:** free. The export route is in (§104); Export / Import buttons come with D's K15.
 - **Agent C:** free. The ship layer is in (§123).
 - **Agent F:** parked. K13 parts 1 and 2 done (handoff 89 to 91); part 3 after K5f.
-- **Last push:** d6c0d7a (its run failed on the size test; fixed locally, §123). Local and
-  finished: C's ship layer and the test fix; D mid-step on the drawers.
+- **Last push:** 3b7bcd2 (ship layer), green. Local and finished: D's drawers (§124);
+  push everything.
 
 ## 7. Decisions Johnny has made that shape the next steps
 

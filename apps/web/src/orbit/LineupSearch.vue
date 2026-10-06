@@ -3,7 +3,7 @@
  * The line-up search (legacy .sv-alignment, js/system_viewer.js:1459-1548): jump to the next
  * time the planets sit on one line through the star, then to the one after. It only binds:
  * the search is orbit/alignment.ts, run by orbit/alignment_runner.ts on a worker; the words
- * are alignmentReport. It is shown inside the time row's More menu (orbit/MoreMenu.vue).
+ * are alignmentReport. It is shown from the Time drawer's Line up popover (views/OrbitView.vue).
  */
 import { onBeforeUnmount, ref, watch } from 'vue';
 import { formatDisplayNumber } from '../dossier/labels.ts';

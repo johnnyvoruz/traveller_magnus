@@ -17,6 +17,14 @@ export type OrbitCommand = {
     help: string;
 };
 
+/** The header's three control drawers (slice 2 follow-up 6; findings/orbit_drawers_design.md). */
+export type DrawerId = 'time' | 'view' | 'layers';
+export const DRAWERS: readonly { id: DrawerId; command: string; label: string; key: string; icon: 'clock' | 'bullseye' | 'layer-group'; help: string }[] = [
+    { id: 'time', command: 'orbit-date', label: 'Time', key: 't', icon: 'clock', help: 'the Time drawer: the date fields, 1 week, the scrub, the speed, Set as campaign date, Line up' },
+    { id: 'view', command: 'orbit-drawer-view', label: 'View', key: 'y', icon: 'bullseye', help: 'the View drawer: the layout, Fit, the picture’s scale and ring strength' },
+    { id: 'layers', command: 'orbit-drawer-layers', label: 'Layers', key: 'l', icon: 'layer-group', help: 'the Layers drawer: show or hide each layer' },
+];
+
 export const LAYOUTS: readonly { mode: Mode; id: string; label: string; key: string }[] = [
     { mode: 'orbits', id: 'orbit-layout-orbits', label: 'Orbits', key: '1' },
     { mode: 'row', id: 'orbit-layout-row', label: 'Row', key: '2' },
@@ -49,17 +57,19 @@ export const LAYERS: readonly { key: LayerToggle; id: string; label: string; hot
 export const ORBIT_COMMANDS: readonly OrbitCommand[] = [
     { id: 'orbit-play', name: 'Play or pause', keys: [' '], help: 'play or pause' },
     { id: 'orbit-week', name: 'Advance 1 week', keys: ['w', 'W'], help: 'a week on (and the campaign date, when the view is on it)' },
-    { id: 'orbit-scrub', name: 'Scrub time', keys: ['s'], help: 'to the scrub: Left and Right a day, Shift an hour, hold an end to shuttle' },
-    { id: 'orbit-speed', name: 'Simulation speed', keys: ['v'], help: 'to the speed slider; Left and Right change it' },
-    { id: 'orbit-date', name: 'Set the date', keys: ['t'], help: 'the date fields' },
+    { id: 'orbit-scrub', name: 'Scrub time', keys: ['s'], help: 'to the scrub (in the Time drawer): Left and Right a day, Shift an hour, hold an end to shuttle' },
+    { id: 'orbit-speed', name: 'Simulation speed', keys: ['v'], help: 'to the speed slider (in the Time drawer); Left and Right change it' },
+    { id: 'orbit-date', name: 'Time drawer', keys: ['t', 'T'], help: DRAWERS[0].help },
+    { id: 'orbit-drawer-view', name: 'View drawer', keys: ['y', 'Y'], help: DRAWERS[1].help },
+    { id: 'orbit-drawer-layers', name: 'Layers drawer', keys: ['l', 'L'], help: DRAWERS[2].help },
     { id: 'orbit-go-campaign', name: 'Go to the campaign date', keys: ['c'], help: 'the view to the campaign date' },
     { id: 'orbit-set-campaign', name: 'Set as campaign date', keys: ['C'], help: 'the campaign date to the view’s' },
     ...LAYOUTS.map((item) => ({ id: item.id, name: 'Layout: ' + item.label, keys: [item.key], help: 'the ' + item.label.toLowerCase() + ' layout' })),
     ...LAYERS.map((item) => ({ id: item.id, name: 'Show or hide: ' + item.label, keys: [item.hotkey], help: item.label.toLowerCase() + ' on or off' })),
     { id: 'orbit-fit', name: 'Fit the system', keys: ['f'], help: 'fit the whole system' },
-    { id: 'orbit-lineup', name: 'Line up the planets', keys: [], help: 'in More tools: the next time the planets sit on one line' },
-    { id: 'orbit-picture', name: 'Picture: scale and ring strength', keys: [], help: 'in More tools' },
-    { id: 'orbit-escape', name: 'Back', keys: ['Escape'], help: 'close, then leave the body, then back to the map' },
+    { id: 'orbit-lineup', name: 'Line up the planets', keys: [], help: 'in the Time drawer: the next time the planets sit on one line' },
+    { id: 'orbit-picture', name: 'Picture: scale and ring strength', keys: [], help: 'in the View drawer' },
+    { id: 'orbit-escape', name: 'Back', keys: ['Escape'], help: 'close the drawer, then a popover, then leave the body, then back to the map' },
 ];
 
 /** What the mouse does, for the Keys popover; not commands. */
@@ -75,7 +85,7 @@ export const MOUSE_HELP: readonly [string, string][] = [
 export function keyWords(spec: string): string {
     if (spec === ' ') return 'Space';
     if (spec === 'C') return 'Shift+C';
-    if (spec === 'W') return '';
+    if (spec === 'W' || spec === 'T' || spec === 'Y' || spec === 'L') return '';
     return spec.length === 1 ? spec.toUpperCase() : spec;
 }
 
