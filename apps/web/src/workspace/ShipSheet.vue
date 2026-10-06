@@ -8,9 +8,11 @@
  */
 import { computed } from 'vue';
 import { campaign } from '../campaign/store.ts';
+import Icon from '../design/Icon.vue';
 import { saveRecord } from './actions.ts';
+import { sheetFolded } from './list_state.ts';
 import {
-    fieldsOf, filledCount, isTall, SHEET_RULES, sheetSections, sheetWithFields, valueOf, withValue, type SheetField, type Table,
+    fieldsOf, isTall, sheetSections, sheetWithFields, valueOf, withValue, type Row, type SheetField, type Table,
 } from './ship_sheet.ts';
 
 const props = defineProps<{
@@ -25,8 +27,33 @@ const record = computed(() => {
 });
 const values = computed(() => (record.value ? fieldsOf(record.value.sheet) : null));
 const sections = sheetSections();
-const total = SHEET_RULES.fields.length;
-const filled = computed(() => filledCount(values.value));
+
+/** Which sections are folded, kept for the session (follow-up 8): all open until one is folded. */
+const closed = sheetFolded;
+
+function keyOf(section: { page: number; name: string }): string {
+    return section.page + ' ' + section.name;
+}
+
+function isOpen(section: { page: number; name: string }): boolean {
+    return !closed[keyOf(section)];
+}
+
+function toggleSection(section: { page: number; name: string }): void {
+    closed[keyOf(section)] = !closed[keyOf(section)];
+}
+
+/** How many fields in a section hold a value, for its tab while it is closed. */
+function filledIn(section: { blocks: (Row | Table)[] }): number {
+    const held = values.value;
+    if (!held) return 0;
+    let count = 0;
+    for (const block of section.blocks) {
+        const fields = block.kind === 'row' ? block.cells.map((c) => c.field) : block.cells.flat();
+        for (const field of fields) if (field && field.name in held) count += 1;
+    }
+    return count;
+}
 
 /** The input's id, from the PDF's name, so its label can point at it. */
 function idOf(field: SheetField): string {
@@ -95,15 +122,17 @@ function columnHeadings(table: Table): string[] {
 </script>
 
 <template>
-  <section v-if="record" class="sheet" :data-filled="filled">
-    <h3 class="ui-heading">Sheet <span class="ui-count">{{ filled }} of {{ total }}</span></h3>
-    <p class="sheet-source">{{ SHEET_RULES.source.replace(/^assets\//, '') }} · the fields as the PDF names them</p>
+  <section v-if="record" class="sheet">
+    <h3 class="ui-heading">Sheet</h3>
     <div class="sheet-frame">
-      <template v-for="(section, at) in sections" :key="section.page + ' ' + section.name">
-        <p v-if="at === 0 || sections[at - 1].page !== section.page" class="sheet-page">Page {{ section.page }}</p>
-        <section class="sheet-panel" :aria-label="section.name">
-          <h4 class="sheet-tab">{{ section.name }}</h4>
-          <div class="sheet-body">
+      <template v-for="section in sections" :key="section.page + ' ' + section.name">
+        <section class="sheet-panel" :class="{ 'is-closed': !isOpen(section) }" :aria-label="section.name">
+          <h4 class="sheet-tab-row">
+            <button type="button" class="sheet-tab" :aria-expanded="isOpen(section) ? 'true' : 'false'" :title="(isOpen(section) ? 'Collapse ' : 'Expand ') + section.name" @click="toggleSection(section)">
+              <Icon name="caret-down" :size="10" /><span>{{ section.name }}</span><em v-if="!isOpen(section) && filledIn(section)">{{ filledIn(section) }}</em>
+            </button>
+          </h4>
+          <div v-show="isOpen(section)" class="sheet-body">
             <template v-for="(block, index) in section.blocks" :key="index">
               <div v-if="block.kind === 'row'" class="sheet-row">
                 <label v-for="cell in block.cells" :key="cell.field.name" class="sheet-field" :class="{ 'is-tall': isTall(cell.field), 'is-tick': cell.field.type === 'checkbox' }" :for="idOf(cell.field)">
@@ -185,9 +214,13 @@ function columnHeadings(table: Table): string[] {
           </div>
         </section>
       </template>
-      <section class="sheet-panel sheet-plan" aria-label="Deck plan">
-        <h4 class="sheet-tab">Deck plan</h4>
-        <div class="sheet-body">
+      <section class="sheet-panel sheet-plan" :class="{ 'is-closed': !isOpen({ page: 0, name: 'Deck plan' }) }" aria-label="Deck plan">
+        <h4 class="sheet-tab-row">
+          <button type="button" class="sheet-tab" :aria-expanded="isOpen({ page: 0, name: 'Deck plan' }) ? 'true' : 'false'" title="Collapse or expand the deck plan" @click="toggleSection({ page: 0, name: 'Deck plan' })">
+            <Icon name="caret-down" :size="10" /><span>Deck plan</span>
+          </button>
+        </h4>
+        <div v-show="isOpen({ page: 0, name: 'Deck plan' })" class="sheet-body">
           <slot />
         </div>
       </section>
@@ -196,28 +229,11 @@ function columnHeadings(table: Table): string[] {
 </template>
 
 <style>
-.sheet-source {
-  margin: -4px 0 10px;
-  color: var(--text-muted);
-  font: 400 12px/1.4 var(--font-text);
-}
-
-/* The thin orange frame line round the whole sheet. */
+/* The sheet reads as part of the panel: its panels stack with no frame of their own. */
 .sheet-frame {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 12px;
-  border: 1px solid var(--sheet-frame);
-  border-radius: var(--r-1);
-}
-
-.sheet-page {
-  margin: 4px 0 -4px;
-  color: var(--text-muted);
-  font: 700 10.5px/1.4 var(--font-text);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  gap: 10px;
 }
 
 /* A panel with chamfered corners, and its cyan tab at the top left. */
@@ -228,16 +244,56 @@ function columnHeadings(table: Table): string[] {
   clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
 }
 
-.sheet-tab {
-  display: inline-block;
+.sheet-tab-row {
   margin: 0;
-  padding: 4px 14px 4px 16px;
+}
+
+/* The tab is the section's switch: pressed, the section folds or opens; the caret says which. */
+.sheet-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 4px 16px 4px 12px;
+  border: 0;
   background: var(--signal);
   color: var(--on-signal);
   font: 700 11px/1.5 var(--font-text);
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  cursor: pointer;
   clip-path: polygon(0 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+}
+
+.sheet-tab .ui-icon {
+  transition: transform var(--t-fast) var(--ease-out);
+}
+
+.sheet-panel.is-closed .sheet-tab .ui-icon {
+  transform: rotate(-90deg);
+}
+
+.sheet-tab em {
+  padding: 0 6px;
+  border-radius: var(--r-pill);
+  background: var(--on-signal);
+  color: var(--signal);
+  font: 700 10px/1.5 var(--font-code);
+  letter-spacing: 0;
+}
+
+.sheet-tab:focus-visible {
+  outline-offset: 2px;
+}
+
+.sheet-panel.is-closed {
+  background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet-tab .ui-icon {
+    transition: none;
+  }
 }
 
 .sheet-body {
@@ -347,9 +403,18 @@ function columnHeadings(table: Table): string[] {
   white-space: nowrap;
 }
 
+/* The row's key column stays while the table scrolls sideways, so the row keeps its context. */
 .sheet-th.is-row {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--panel-raised);
   color: var(--text-1);
   font-variant-numeric: var(--tabular);
+}
+
+.sheet-table tbody .sheet-th.is-row {
+  padding-right: 8px;
 }
 
 .sheet-table td {

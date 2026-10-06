@@ -67,6 +67,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
+  <!-- On the body: the panel's transform would otherwise make it the containing block of this fixed box. -->
+  <Teleport to="body">
   <div class="lightbox" role="dialog" aria-modal="true" :aria-label="image && image.caption ? image.caption : name" @keydown="onKey">
     <div class="lightbox-scrim" @click="emit('close')"></div>
     <div class="lightbox-card">
@@ -99,6 +101,7 @@ onBeforeUnmount(() => {
       </div>
     </div>
   </div>
+  </Teleport>
 </template>
 
 <style>

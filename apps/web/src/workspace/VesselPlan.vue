@@ -12,6 +12,7 @@ import { importDeckPlan, removeDeckPlan } from '../deckplan/attach.ts';
 import DeckPlanView from '../deckplan/DeckPlanView.vue';
 import Icon from '../design/Icon.vue';
 import { showToast } from '../shell/toast.ts';
+import PlanModal from './PlanModal.vue';
 
 const props = defineProps<{
     id: string;
@@ -20,6 +21,8 @@ const props = defineProps<{
 }>();
 
 const fileEl = ref<HTMLInputElement | null>(null);
+/** The plan at the window's size (follow-up 1). */
+const large = ref(false);
 /** Why the last file was refused, shown until the next try. */
 const refused = ref('');
 const busy = ref(false);
@@ -84,7 +87,11 @@ function remove(): void {
     <template v-if="plan">
       <div class="vplan-view">
         <DeckPlanView :plan="plan" />
+        <button type="button" class="ui-btn is-icon vplan-expand" aria-label="See the plan at full size" title="Full size (Esc to leave)" @click="large = true">
+          <Icon name="up-right-and-down-left-from-center" :size="13" />
+        </button>
       </div>
+      <PlanModal v-if="large" :plan="plan" :name="record.name" @close="large = false" />
       <div class="vplan-acts">
         <button type="button" class="ui-btn vplan-replace" :disabled="readOnly || busy" @click="pick">
           <Icon name="file-import" :size="13" />Replace
@@ -115,10 +122,20 @@ function remove(): void {
 
 /* The plan is drawn in a box of the panel's width; the viewer fills it. */
 .vplan-view {
+  position: relative;
   height: clamp(300px, 46vh, 560px);
   overflow: hidden;
   border: 1px solid var(--line-1);
   border-radius: var(--r-3);
+}
+
+/* The way to the window-sized plan, at the box's upper right, over the viewer's own bar. */
+.vplan-expand {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
+  background: var(--chrome-glass);
 }
 
 .vplan-acts {

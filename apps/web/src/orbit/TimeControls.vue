@@ -6,7 +6,7 @@
  * It holds no clock: it shows the days it is given and asks the view to move them. The
  * arithmetic is orbit/clock.ts. Every control names its command (orbit/commands.ts).
  */
-import { onBeforeUnmount, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import Icon from '../design/Icon.vue';
 import { formatDisplayNumber } from '../dossier/labels.ts';
 import {
@@ -14,6 +14,7 @@ import {
     sliderFromSpeed, speedFactorText, speedFromSlider, speedText, splitDays, timeFieldValue, WEEK_DAYS, withDay, withTime, withYear,
 } from './clock.ts';
 import OrbitPopover from './OrbitPopover.vue';
+import { READOUT_CHARS, setButtonState } from './time_row.ts';
 
 const props = defineProps<{
     days: number;
@@ -57,6 +58,8 @@ const timeText = ref('');
 const editing = ref('');
 const speedSlider = ref(0);
 const scrubValue = ref(0);
+/** A scrub is under way (from the first move to the release): the row must not reflow meanwhile. */
+const scrubbing = ref(false);
 const scrubEl = ref<HTMLInputElement | null>(null);
 const speedEl = ref<HTMLInputElement | null>(null);
 
@@ -88,15 +91,20 @@ function onSpeed(event: Event): void {
 // ---- The scrub: drag, or step by key; its ends shuttle while held ---------------------
 
 function onScrub(event: Event): void {
+    scrubbing.value = true;
     scrubValue.value = Number(text(event));
     emit('scrub', scrubValue.value);
 }
 
 function releaseScrub(): void {
+    scrubbing.value = false;
     if (scrubValue.value === 0) return;
     scrubValue.value = 0;
     emit('scrub', null);
 }
+
+/** "Set as campaign date": shown off the day; on the day it holds its place unseen while a scrub runs (orbit/time_row.ts). */
+const setState = computed(() => setButtonState({ canSetDate: !!props.canSetDate, onCampaignDate: !!props.onCampaignDate, scrubbing: scrubbing.value }));
 
 /** Left and Right move a day; with Shift, an hour. Home and End go to the ends. The scrub springs back on key-up. */
 function onScrubKey(event: KeyboardEvent): void {
@@ -107,6 +115,7 @@ function onScrubKey(event: KeyboardEvent): void {
     const by = event.shiftKey ? HOUR : 1;
     let next = event.key === 'Home' ? -SCRUB_DAYS : event.key === 'End' ? SCRUB_DAYS : scrubValue.value + step * by;
     next = Math.max(-SCRUB_DAYS, Math.min(SCRUB_DAYS, next));
+    scrubbing.value = true;
     scrubValue.value = next;
     emit('scrub', next);
 }
@@ -264,7 +273,7 @@ defineExpose({
       <output class="orbit-speed-value" :title="speedFactorText(speed)">{{ speedText(speed) }}</output>
     </div>
 
-    <div class="orbit-date-pop" data-command="orbit-date">
+    <div class="orbit-date-pop" data-command="orbit-date" :style="{ '--readout-chars': READOUT_CHARS }">
       <OrbitPopover
         id="orbit-date"
         :open="dateOpen"
@@ -307,7 +316,17 @@ defineExpose({
       >
         <Icon name="calendar-star" :size="12" /><b>{{ campaignDate.date }}</b><span>{{ campaignDate.weekday }}</span>
       </button>
-      <button v-if="!campaignDate || !onCampaignDate" type="button" class="orbit-btn orbit-campaign-set" data-command="orbit-set-campaign" title="Make this the campaign date (Shift+C)" @click="$emit('setCampaign')">
+      <button
+        v-if="setState !== 'absent'"
+        type="button"
+        class="orbit-btn orbit-campaign-set"
+        :class="{ 'is-held': setState === 'held' }"
+        data-command="orbit-set-campaign"
+        :aria-hidden="setState === 'held' ? 'true' : undefined"
+        :tabindex="setState === 'held' ? -1 : undefined"
+        title="Make this the campaign date (Shift+C)"
+        @click="$emit('setCampaign')"
+      >
         <Icon name="check" :size="12" />Set as campaign date
       </button>
     </div>
@@ -448,8 +467,11 @@ defineExpose({
   font-variant-numeric: var(--tabular);
 }
 
-/* The date readout: the campaign's form, in the field's look. */
+/* The date readout: the campaign's form, in the field's look. Its width is its longest reading's, so a weekday's name never reflows the row. */
 .orbit-date-pop .orbit-pop-btn {
+  box-sizing: border-box;
+  width: calc(var(--readout-chars) * 1ch + 50px);
+  justify-content: flex-start;
   height: 32px;
   border-color: var(--control-line);
   background: var(--bg-2);
@@ -494,6 +516,12 @@ defineExpose({
 
 .orbit-btn.orbit-campaign-set {
   height: 32px;
+}
+
+/* Held: the place is kept, the button is not seen, so a scrub never reflows the row under the pointer. */
+.orbit-btn.orbit-campaign-set.is-held {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 /* Legacy .sv-jog: a hairline track and a teal thumb. */

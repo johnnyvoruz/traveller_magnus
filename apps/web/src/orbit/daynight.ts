@@ -128,6 +128,25 @@ export function starportTick(turning: Turning, days: number, starAngle: number):
     return { at, time: hourText + ':' + String(mins).padStart(2, '0') };
 }
 
+/**
+ * Where the play marker sits on the sunrise-to-sunrise strip. The same share as
+ * the starport tick: 0 at sunrise, 1 at the next sunrise. Null when there is no day.
+ */
+export function markerAt(turning: Turning, days: number, starAngle: number): number | null {
+    const tick = starportTick(turning, days, starAngle);
+    return tick ? tick.at : null;
+}
+
+/**
+ * Reduced motion: the marker holds one place for a minute of this world's day,
+ * then steps. `at` is the continuous share from markerAt.
+ */
+export function markerMinute(at: number, solarDayHours: number): number {
+    const minutes = Math.max(1, Math.round(solarDayHours * 60));
+    const share = ((at % 1) + 1) % 1;
+    return Math.floor(share * minutes + 1e-9) / minutes;
+}
+
 // ---- How long the day is, and how it changes over the year --------------------------------
 
 /** The latitude the daylight range is quoted for. A display choice, in one place. */

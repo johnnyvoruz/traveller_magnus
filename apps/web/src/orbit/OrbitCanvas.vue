@@ -22,6 +22,7 @@ import { drawDisc, prepareDiscs } from '../surface/service.ts';
 import { OrbitRenderer, type DiscPainter } from './OrbitRenderer.ts';
 import type { Layers, Mode } from './picture.ts';
 import { OrbitStage } from './stage.ts';
+import { publishOrbitClock } from './running.ts';
 import { readOrbitMotion, readOrbitTheme, type OrbitMotion } from './theme.ts';
 
 const props = defineProps<{
@@ -226,6 +227,8 @@ let costAt = 0;
 /** Called by the view once a frame with the clock's date and the wall time in milliseconds. */
 function paint(clockDays: number, time: number): void {
     days = clockDays;
+    // OrbitView calls this once a frame with the running clock. The dossier hears it here.
+    publishOrbitClock(clockDays);
     const current = plan.value;
     if (!renderer || !current) return;
     if (time - reducedCheckedAt > 1000) {

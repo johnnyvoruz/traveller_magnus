@@ -51,7 +51,7 @@ const said = computed(() => {
   left: calc(var(--rail-width) + var(--chrome-inset) + min(440px, calc(100% - var(--rail-width) - 2 * var(--chrome-inset))) + 12px);
   z-index: 4;
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
   box-sizing: border-box;
   height: var(--chrome-height);
@@ -68,8 +68,13 @@ const said = computed(() => {
 }
 
 .stardate > .ui-icon {
-  align-self: center;
   color: var(--signal);
+}
+
+.stardate b,
+.stardate span {
+  display: inline-block;
+  line-height: 1;
 }
 
 .stardate b {

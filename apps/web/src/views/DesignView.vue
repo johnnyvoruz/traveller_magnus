@@ -29,7 +29,7 @@ import type { BodyCardModel } from '../orbit/card.ts';
 import { bodyChips } from '../orbit/bodies.ts';
 import { REAL_TIME, totalDays } from '../orbit/clock.ts';
 import { stardate } from '../workspace/stardate.ts';
-import { dayNightFigure, starportTick, turningOf } from '../orbit/daynight.ts';
+import { dayNightFigure, markerAt, starportTick, turningOf } from '../orbit/daynight.ts';
 import OrbitHeader from '../orbit/OrbitHeader.vue';
 import TimeControls from '../orbit/TimeControls.vue';
 import Panel from '../shell/Panel.vue';
@@ -40,7 +40,12 @@ import type { PanelSpan } from '../shell/panel_state.ts';
 /** A sample day, so the body profile shows the strip. Not a measured world. */
 const SAMPLE_DAY = { solarDayHours: 24, siderealHours: 24, axialTilt: 23 };
 const sampleDay = dayNightFigure(SAMPLE_DAY, null);
-const sampleTick = starportTick(turningOf(SAMPLE_DAY, false), 0.25, 0);
+const sampleTurn = turningOf(SAMPLE_DAY, false);
+const sampleTick = starportTick(sampleTurn, 0.25, 0);
+/** The same subscription the orbit dossier uses. Nothing publishes on this page until a clock does. */
+function placeSample(days: number): number | null {
+    return markerAt(sampleTurn, days, 0);
+}
 
 const COLOURS: { group: string; names: string[] }[] = [
     { group: 'Field', names: ['--bg-0', '--bg-1', '--bg-2', '--surface-1', '--surface-2', '--panel-raised', '--chrome-bg', '--chrome-glass', '--row-active', '--scroll-track', '--rail-glass', '--rail-hover'] },
@@ -397,7 +402,7 @@ function open(key: string): void {
             <span class="doss-position">{{ sample.body.index }} / {{ sample.body.total }}</span>
             <button type="button" class="ui-btn is-icon" aria-label="Next body" title="Next"><Icon name="chevron-right" :size="13" /></button>
           </template>
-          <DossierBody v-if="showBody" :model="sample.body" :span="span" :day-night="sampleDay" :tick="sampleTick" @open="open" />
+          <DossierBody v-if="showBody" :model="sample.body" :span="span" :day-night="sampleDay" :tick="sampleTick" live :place="placeSample" @open="open" />
           <DossierOverview v-else :model="sample.overview" :span="span" :error="false" @open="showBody = true" />
         </Panel>
       </div>

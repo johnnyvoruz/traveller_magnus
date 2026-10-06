@@ -3,7 +3,7 @@
  * matches", and the sort the referee last chose. The list reads and clears the search when
  * it is shown.
  */
-import { ref } from 'vue';
+import { reactive, ref } from 'vue';
 
 /** A search to apply when the list is next shown; empty when none. */
 export const handedQuery = ref('');
@@ -15,3 +15,6 @@ export const listSort = ref<ListSort>('name');
 
 /** The date beside the search bar was pressed: the panel opens its date for editing when it is next ready. */
 export const editDateNext = ref(false);
+
+/** The ship sheet's sections folded by the referee, by section key, kept for the session. */
+export const sheetFolded = reactive<Record<string, boolean>>({});

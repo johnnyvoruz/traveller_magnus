@@ -209,6 +209,14 @@ The shared universe grows.
 Relocation of packages; Obsidian export; live co-editing with Durable Objects; player
 accounts and journals.
 
+- **Passkeys (Johnny, 2026-10-05; back of the line).** Someone suggested passkeys for
+  people who do not want an OAuth account. Sign-in stays X, with Discord and Google when
+  their secrets are set. When this is reached: better-auth's `passkey` plugin
+  (`architecture.md` already names it as the route), a migration for its table, "Add a
+  passkey" in the account menu for a signed-in user and "Sign in with a passkey" on the
+  sign-in card. No custom security code. A passkey-only account has no OAuth identity, so
+  the account's recovery story must be decided with Johnny before it ships.
+
 ## 5. Order and milestones
 
 | Milestone | Visible result |

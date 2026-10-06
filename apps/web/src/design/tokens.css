@@ -64,7 +64,6 @@
   --danger: #ff6b6b;      /* destructive; use rarely */
   --sheet-rust: #b8432a;  /* the ship sheet's rust-red value tags (plan §5.3b) */
   --sheet-rust-line: #e8673f; /* the tag's edge, light enough to read as a control */
-  --sheet-frame: #d98a2b; /* the ship sheet's thin orange frame line (plan §5.3b) */
   --signal-active: #79fff0;  /* text of the selected option */
   --on-signal: var(--bg-2);  /* text on a filled teal control */
   --wash-faint: color-mix(in srgb, var(--signal) 8%, transparent);   /* ribbon cell, mainworld row */

@@ -2976,3 +2976,41 @@ API and Durable Object have against `data_model.md` and `api.md`).
 - Pushable by path: `apps/web/src/deckplan/draw.ts`, `tests/web/deck_plan.test.js`. D is
   mid-step (`PlanModal.vue`, `time_row.ts`, `ShipSheet.vue`, `StardateChip.vue`, …).
 - **Next, C:** the real-time day/night play marker (§114 item 7).
+
+## 116. Passkeys recorded at the back of the line (2026-10-05)
+
+- Johnny: a suggestion from online, passkeys for people who do not want OAuth; sign-in
+  stays X (Discord and Google when configured). Recorded in `plan.md` "After 5": the
+  better-auth `passkey` plugin (architecture.md already names it), its migration, "Add a
+  passkey" in the account menu, "Sign in with a passkey" on the card; the recovery story
+  for a passkey-only account to be decided with Johnny first.
+
+## 117. Pushed `94e69a5` (crisp tiles); the real-time marker (C) and follow-ups step 1 (D) accepted (2026-10-05)
+
+- GitHub run on `94e69a5` noted below.
+- **Agent C, item 7:** the Day and night tick is a 9 px rounded play marker in `--daylight`
+  with a `--night-sky` edge, 4 px past the 22 px strip top and bottom, on both strips; no
+  label; `orbit/running.ts` publishes the clock from `OrbitCanvas.paint` each frame (three
+  lines) and the dossier subscribes while on the orbit view (the map dossier keeps link,
+  then campaign clock, then 002-1105); `markerAt` = `starportTick`'s share, wrapping at the
+  next sunrise; reduced motion steps once a world-minute. Test at two clock values and the
+  locked case. Four shots and a GIF from the design page (the local truth has no orbit
+  system). **Accepted.** The shot shows the marker reading as a heavy rounded bar.
+- **Agent D, follow-ups step 1:** `PlanModal.vue` (the deck plan full-screen in the lightbox
+  pattern, DeckPlanView wrapped unchanged, Esc and scrim, focus returns); the layout split
+  button (face = current view, arrow opens a radio menu, keys 1/2/3 kept); the stardate chip
+  centred; **the scrub glitch found and fixed:** two reflows of the time row under the
+  pointer (the Set-as-campaign-date button appearing and the readout widening with the
+  weekday's name) changed the slider's width mid-drag, so the pointer read another value;
+  now the button holds its space and the readout is fixed at its longest, with a test that
+  reproduced it first (`orbit/time_row.ts`, `tests/web/orbit_time_row.test.js`); the sheet
+  as a panel default (count, file name, frame, page numbers gone; every section a folding
+  tab with the filled count when folded, kept for the session; sticky key columns; custom
+  scroll kept); **extra defect fixed:** the panel's transform made it the containing block
+  of `position: fixed`, so the K14 lightbox opened inside the column; both modals now
+  `<Teleport to="body">`. 6 contrast pairs; eleven `fu_` shots. **Accepted**; the half-width
+  sheet shot reads as part of the panel.
+- **Orchestrator:** 680 pass / 0 fail, check clean, build green on the combined tree.
+  Everything finished; **push with `git add -A`.**
+- **Next:** D step 2 (item 9 passengers and crew as people; then item 6's drawer design).
+  C free.

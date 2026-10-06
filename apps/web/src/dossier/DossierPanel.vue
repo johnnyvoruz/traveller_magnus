@@ -16,8 +16,8 @@ import DossierBody from './DossierBody.vue';
 import DossierOverview from './DossierOverview.vue';
 import { bodyByKey, dossierPath, mainworldByKey, orbitPath } from '../orbit/bodies.ts';
 import { parseLinkDate, startDays } from '../orbit/clock.ts';
-import { dayNightFigure, starportTick, turningOf, yearFigure } from '../orbit/daynight.ts';
-import { planSystem } from '../orbit/layout.ts';
+import { dayNightFigure, markerAt, starportTick, turningOf, yearFigure } from '../orbit/daynight.ts';
+import { planSystem, type Plan } from '../orbit/layout.ts';
 import { bodyAngle } from '../orbit/maths.ts';
 import { bodyKeys, bodyModel, mainworldProfile, overviewModel, pickSystem, type AllegianceName } from './model.ts';
 import type { SurfaceTarget } from './SurfaceStage.vue';
@@ -102,6 +102,29 @@ function starDirection(system: Record<string, unknown>, hexKey: string, key: str
     const host = world ?? plan.worlds.find((item) => item.moons.some((moon) => moon.key === key));
     if (!host || !(host.period > 0)) return 0;
     return bodyAngle(host.epoch, host.period, days) + Math.PI;
+}
+
+/** The orbit picture's plan, kept so a running clock does not lay the system out every frame. */
+let aimed: { system: Record<string, unknown>; hexKey: string; plan: Plan } | null = null;
+
+/**
+ * The marker's share of the strip at one clock value. OrbitCanvas publishes that value
+ * each frame from the paint() OrbitView already calls; DayNight subscribes while this
+ * panel sits on the orbit view.
+ */
+function placeOnStrip(days: number): number | null {
+    if (!props.tree || !props.bodyKey || props.error) return null;
+    const system = pickSystem(props.tree.body);
+    const found = system ? bodyByKey(system, props.bodyKey) : null;
+    if (!system || !found || found.star) return null;
+    if (!aimed || aimed.system !== system || aimed.hexKey !== props.tree.hexKey) {
+        aimed = { system, hexKey: props.tree.hexKey, plan: planSystem(system as Record<string, any>, props.tree.hexKey) };
+    }
+    const key = props.bodyKey;
+    const world = aimed.plan.worlds.find((item) => item.key === key);
+    const host = world ?? aimed.plan.worlds.find((item) => item.moons.some((moon) => moon.key === key));
+    const angle = host && host.period > 0 ? bodyAngle(host.epoch, host.period, days) + Math.PI : 0;
+    return markerAt(turningOf(found.body, !!found.parent), days, angle);
 }
 
 /** Local time at the starport (longitude 0) for the view's date. Hidden when there is no day. */
@@ -265,7 +288,7 @@ defineExpose({ remeasure: publish });
           <Icon name="solar-system" :size="13" />Orbits
         </button>
       </template>
-      <DossierBody v-if="profile" :model="profile" :span="span" :day-night="dayNight" :tick="tick" :restated="restated" :surface="bodySurface" @open="openKey">
+      <DossierBody v-if="profile" :model="profile" :span="span" :day-night="dayNight" :tick="tick" :live="orbit === true" :place="placeOnStrip" :restated="restated" :surface="bodySurface" @open="openKey">
         <template #records>
           <RecordsHere
             :slug="slug"

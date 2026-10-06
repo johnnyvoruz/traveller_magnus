@@ -9,16 +9,72 @@
  * orbit/daynight.ts dayNightFigure: geometry from the solar day and the axial tilt, with no
  * refraction, eclipses or terrain.
  */
-import { computed } from 'vue';
-import { spanText, type DayNightFigure, type StarportTick } from '../orbit/daynight.ts';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { markerMinute, spanText, type DayNightFigure, type StarportTick } from '../orbit/daynight.ts';
+import { prefersReducedMotion } from '../platform/browser.ts';
+import { subscribeOrbitClock } from '../orbit/running.ts';
 
 const props = defineProps<{
     figure: DayNightFigure;
     /** Local time at the starport (longitude 0), or null when this world has no day. */
     tick?: StarportTick | null;
+    /** While the orbit view's clock is running, follow it. Otherwise the tick prop is the place. */
+    live?: boolean;
+    /** The marker's share of the strip for a clock value. Used only while live. */
+    place?: (days: number) => number | null;
 }>();
 
 const showTick = computed(() => !props.figure.locked && !!props.tick && Number.isFinite(props.tick.at));
+
+/** Share of the strip, 0 at sunrise. The marker loops because the share wraps. */
+const share = ref(0);
+let stopClock: (() => void) | null = null;
+let heldMinute = -1;
+let heardClock = false;
+
+function shownShare(at: number): number {
+    if (!prefersReducedMotion() || !(props.figure.dayHours > 0)) {
+        heldMinute = -1;
+        return at;
+    }
+    const minutes = Math.max(1, Math.round(props.figure.dayHours * 60));
+    const step = Math.floor((((at % 1) + 1) % 1) * minutes + 1e-9);
+    if (step === heldMinute) return share.value;
+    heldMinute = step;
+    return markerMinute(at, props.figure.dayHours);
+}
+
+function put(at: number): void {
+    if (!Number.isFinite(at)) return;
+    const next = shownShare(at);
+    if (next !== share.value) share.value = next;
+}
+
+function follow(days: number): void {
+    if (!props.place) return;
+    const at = props.place(days);
+    if (at === null) return;
+    heardClock = true;
+    put(at);
+}
+
+function bindClock(): void {
+    if (stopClock) stopClock();
+    stopClock = null;
+    heldMinute = -1;
+    heardClock = false;
+    if (props.live && props.place && showTick.value) stopClock = subscribeOrbitClock(follow);
+}
+
+watch(() => props.tick?.at, (at) => {
+    if (props.live && heardClock) return;
+    if (at !== undefined && Number.isFinite(at)) put(at);
+}, { immediate: true });
+
+watch(() => [props.live, showTick.value] as const, bindClock);
+
+onMounted(bindClock);
+onBeforeUnmount(() => { if (stopClock) stopClock(); });
 
 const NOTE = 'Geometry only: the share of the solar day the star is above the horizon, from the axial tilt. No refraction, eclipses or terrain.';
 
@@ -45,9 +101,8 @@ const uniform = computed(() => props.figure.mid !== null && mid.value === null);
 const summary = computed(() => {
     const f = props.figure;
     if (f.locked) return 'No day and night: one face always points at the star.';
-    const where = showTick.value && props.tick ? ' Starport, ' + props.tick.time + '.' : '';
     return 'One day lasts ' + f.span + (f.standard ? ', which is ' + f.standard : '') + ': '
-        + spanText(f.equator.light) + ' of light and ' + spanText(f.equator.dark) + ' of dark at the equator.' + where;
+        + spanText(f.equator.light) + ' of light and ' + spanText(f.equator.dark) + ' of dark at the equator.';
 });
 </script>
 
@@ -74,20 +129,23 @@ const summary = computed(() => {
           <span>Light {{ spanText(figure.equator.light) }}</span>
           <span>Dark {{ spanText(figure.equator.dark) }}</span>
         </div>
-        <p v-if="showTick && tick" class="doss-day-port" :style="{ '--at': String(tick.at) }"><span>Starport {{ tick.time }}</span></p>
-        <div class="doss-day-strip" role="img" :aria-label="summary" :style="{ '--marks': figure.ruler.count }">
-          <i class="doss-day-light" style="width: 50%"></i>
-          <i class="doss-day-marks"></i>
-          <i v-if="showTick && tick" class="doss-day-now" :style="{ '--at': String(tick.at) }"></i>
+        <div class="doss-day-track">
+          <div class="doss-day-strip" role="img" :aria-label="summary" :style="{ '--marks': figure.ruler.count }">
+            <i class="doss-day-light" style="width: 50%"></i>
+            <i class="doss-day-marks"></i>
+          </div>
+          <i v-if="showTick" class="doss-day-now" :style="{ '--at': String(share) }"></i>
         </div>
         <p class="doss-day-caption">{{ uniform ? 'The same all year, at every latitude short of the poles' : 'At the equator, all year' }}</p>
       </div>
       <div v-if="mid" class="doss-day-row">
-        <div class="doss-day-strip" role="img" :aria-label="mid.label + ': ' + mid.text" :style="{ '--marks': figure.ruler.count }">
-          <i class="doss-day-light" :style="{ width: mid.sure + '%' }"></i>
-          <i class="doss-day-swing" :style="{ left: mid.sure + '%', width: mid.swing + '%' }"></i>
-          <i class="doss-day-marks"></i>
-          <i v-if="showTick && tick" class="doss-day-now" :style="{ '--at': String(tick.at) }"></i>
+        <div class="doss-day-track">
+          <div class="doss-day-strip" role="img" :aria-label="mid.label + ': ' + mid.text" :style="{ '--marks': figure.ruler.count }">
+            <i class="doss-day-light" :style="{ width: mid.sure + '%' }"></i>
+            <i class="doss-day-swing" :style="{ left: mid.sure + '%', width: mid.swing + '%' }"></i>
+            <i class="doss-day-marks"></i>
+          </div>
+          <i v-if="showTick" class="doss-day-now" :style="{ '--at': String(share) }"></i>
         </div>
         <p class="doss-day-caption">{{ mid.label }}: {{ mid.text }}</p>
       </div>
@@ -226,42 +284,23 @@ const summary = computed(() => {
   background: var(--text-muted);
 }
 
-/* The starport, at longitude 0. The words ride the same share of the strip as the mark. */
-.doss-day-port {
+/* The play marker sits on the strip and hangs a few pixels past it. The strip clips its fill. */
+.doss-day-track {
   position: relative;
-  height: 16px;
-  margin: 0 0 2px;
 }
 
-.doss-day-port span {
+.doss-day-now {
   position: absolute;
-  top: 0;
-  left: calc(var(--at) * 100%);
-  color: var(--text-0);
-  font-size: 12px;
-  font-weight: 600;
-  font-variant-numeric: var(--tabular);
-  line-height: 16px;
-  white-space: nowrap;
-  transform: translateX(calc(var(--at) * -100%));
-  transition: left var(--t-fast) var(--ease-out), transform var(--t-fast) var(--ease-out);
-}
-
-.doss-day-strip .doss-day-now {
+  top: -4px;
+  bottom: -4px;
   left: calc(var(--at) * 100%);
   z-index: 1;
-  width: 1px;
-  background: var(--text-0);
-  box-shadow: 0 0 0 1px var(--bg-0);
+  width: 9px;
+  border-radius: 999px;
+  background: var(--daylight);
+  box-shadow: 0 0 0 2px var(--night-sky);
   transform: translateX(-50%);
-  transition: left var(--t-fast) var(--ease-out);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .doss-day-port span,
-  .doss-day-strip .doss-day-now {
-    transition: none;
-  }
+  pointer-events: none;
 }
 
 .doss-day-swatch {

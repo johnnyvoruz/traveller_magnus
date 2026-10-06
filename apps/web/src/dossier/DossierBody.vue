@@ -21,6 +21,10 @@ defineProps<{
     dayNight?: DayNightFigure | null;
     /** The starport's local time on that strip, or null when the world has no day. */
     tick?: StarportTick | null;
+    /** Follow the running orbit clock. The map's dossier leaves this off and uses the tick. */
+    live?: boolean;
+    /** Marker share for one clock value. Used while live. */
+    place?: (days: number) => number | null;
 }>();
 
 defineEmits<{ open: [key: string] }>();
@@ -36,7 +40,7 @@ function factsOf(link: BodyLink): string {
       <SurfaceStage :badge="model.mapBadge" :target="surface ?? null" />
       <UwpRibbon v-if="model.ribbon" :ribbon="model.ribbon" />
       <FactTiles :facts="model.facts" :restated="restated" />
-      <DayNight v-if="dayNight" :figure="dayNight" :tick="tick ?? null" />
+      <DayNight v-if="dayNight" :figure="dayNight" :tick="tick ?? null" :live="live === true" :place="place" />
       <JourneyTimes v-if="model.journey" :journey="model.journey" />
       <section v-for="block in model.mainSections" :key="block.heading" class="doss-section">
         <h3 class="ui-heading">{{ block.heading }}</h3>

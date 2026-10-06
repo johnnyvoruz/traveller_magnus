@@ -104,7 +104,8 @@ campaign layer over the truth map; own maps later. X sign-in only.
 | K15 | the orbit view as a showpiece | done, live |
 | K13 part 3 | the ship sheet on the vessel record | done, accepted §113, not yet pushed |
 | K6d data | the vessel track (dated legs on status), helpers | done, accepted §113, not yet pushed |
-| **follow-ups** | full-screen deck plan, layout split button | **Agent D, in flight** |
+| follow-ups 1 | full-screen plan, split button, chip, scrub glitch, sheet as panel | done §117, not yet pushed |
+| **follow-ups 2** | passengers and crew as people; orbit drawers design | **Agent D, in flight** |
 | K6d screens | ship list, track, Jump button | next for D |
 | K17 | shared ship feeds, follow, faction accounts | recorded; after K6d and K16 |
 | K7, K8 | journal, timeline | outlines only |
@@ -112,15 +113,14 @@ campaign layer over the truth map; own maps later. X sign-in only.
 
 ## 6. In flight right now
 
-- **Agent D:** follow-ups step 1 (full-screen deck plan, split button, stardate alignment,
-  scrub glitch, sheet chrome and collapsible sections, frozen keys), then step 2
-  (passengers and crew as people with pills; the orbit drawers design), then K6d screens.
+- **Agent D:** follow-ups step 2 (passengers and crew as people with pills; then the orbit
+  drawers design, Johnny rules), then K6d screens (ship list, track, Jump button).
 - **Agent A:** free.
 - **Agent B:** free. The export route is in (§104); Export / Import buttons come with D's K15.
-- **Agent C:** the real-time day/night play marker (§114, item 7).
+- **Agent C:** free.
 - **Agent F:** parked. K13 parts 1 and 2 done (handoff 89 to 91); part 3 after K5f.
-- **Last push:** c4d7e8b (track, sheet). Local and finished: C's crisp tiles (§115); D
-  mid-step.
+- **Last push:** 94e69a5 (crisp tiles). Local and finished: C's marker, D's step 1 (§117);
+  push everything.
 
 ## 7. Decisions Johnny has made that shape the next steps
 

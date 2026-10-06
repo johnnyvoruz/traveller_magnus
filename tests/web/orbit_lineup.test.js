@@ -12,6 +12,7 @@ import { cardFor } from '../../apps/web/src/orbit/card.ts';
 import { bodyByKey } from '../../apps/web/src/orbit/bodies.ts';
 import {
     dayFraction, DAYLIGHT_LATITUDE, daylightFraction, dayNightFigure, dayNightFor, dayNightLines, hoursText, rulerFor,
+    markerAt,
     starportTick,
     spanText, standardText, yearFigure,
     spinAngle, subsolarLatitude, subsolarLongitude, sunElevation, turningOf,
@@ -447,6 +448,16 @@ test('the starport tick is local time at longitude 0, at two times of day', () =
     const want = Math.atan2(at.starY - at.y, at.starX - at.x);
     const got = bodyAngle(at.world.epoch, at.world.period, 1000) + Math.PI;
     close(Math.atan2(Math.sin(got - want), Math.cos(got - want)), 0, 1e-9);
+});
+
+test('the play marker sits on the starport tick at two clock values', () => {
+    const day = turningOf({ siderealHours: 24, solarDayHours: 24, axialTilt: 23 }, false);
+    for (const days of [0, 0.25]) {
+        const tick = starportTick(day, days, 0);
+        assert.ok(tick);
+        close(markerAt(day, days, 0), tick.at);
+    }
+    assert.equal(markerAt(turningOf({ siderealHours: 24, solarDayHours: 24, tidallyLocked: true }, false), 1, 0), null);
 });
 
 test('daylight: half the day at an equinox, and a range over the year that the tilt sets', () => {
