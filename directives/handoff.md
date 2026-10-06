@@ -2763,3 +2763,25 @@ API and Durable Object have against `data_model.md` and `api.md`).
   status `ready` and the rows intact. Diff read: as reported; 637 pass on the tree.
   **Accepted.** D's K5f workaround in `AccountMenu` already shows the thrown message.
 - Pushable by path (`apps/web/src/campaign`, `tests/web/campaign_store.test.js`). A is free.
+
+## 104. Pushed `3f1b07f` (store fix); campaign export in (Agent B); accepted (2026-10-05)
+
+- GitHub run green; live bundle `index-irmFZBnU.js` (the Workers Build took about three
+  minutes this time; the orchestrator polled instead of declaring a failed deploy).
+- **Agent B:** `GET /api/universes/:id/campaign/export` (`routes/campaign_export.ts`): walks
+  `readCampaign` pages (after / 1000) until `done`, 500 if a page does not advance, keeps rows
+  with `deleted !== true`, current `settings` and `clock`, `{ universe { id, name,
+  truthVersion }, exportedAt, records, links, settings, clock }`, `Content-Disposition:
+  attachment; filename="<name>-<DDD-YYYY>.json"` (UTC day of year; control characters,
+  quotes and slashes stripped from the name). Images stay as hashes on the rows. Black-box
+  test on `wrangler dev`: three writes, the export holds the live place with its image hash
+  and neither the deleted place nor its tombstoned link; other account 404. `api.md` marked.
+  **Accepted** (route read in full). Note for later: a non-Latin campaign name needs RFC
+  5987 encoding in that header.
+- B saw `tests/web/surface_service.test.js` fail once under load (`longestChunkMs < 50`) and
+  pass alone and on rerun: a timing assertion, not this change. Watch it.
+- **Next, A:** the import counterpart in the browser (`campaign/import.ts`): parse and
+  validate the export document, restore into a new empty campaign (or the open one when it
+  is empty) through `commit` in batches that respect the PATCH limits (200 rows, 1 MB),
+  keeping ids; images by hash are kept on the rows (the objects, if any, are still in the
+  bucket for the same account). D wires Export and Import into the account menu with K15.

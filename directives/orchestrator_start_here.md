@@ -68,8 +68,8 @@ not append to it.
   with undo. Johnny has signed in and saved a record in production.
 - **Storage:** the catalogue row is in D1 (`universes`, migration 0008 applied); a campaign's
   rows are in its own Durable Object (`campaign_records`, `campaign_links`, `lists` for the
-  party and the clock). Nothing in R2 for campaigns yet. **No backups or export of campaign
-  data exist**; Johnny has been told; worth a step soon.
+  party and the clock). Nothing in R2 for campaigns yet. **Export exists** (§104, a JSON file per campaign through the API; the menu button comes
+  with K15); import is A's next step. No server-side backups.
 - **Deck plan tiles** are on the CDN under `geomorphs/` (3,026 objects); the PNGs are
   git-ignored; `assets/geomorphs/manifest.json`, `REBUILD.md`, `ATTRIBUTION.txt` are tracked.
 
@@ -109,12 +109,13 @@ campaign layer over the truth map; own maps later. X sign-in only.
 
 - **Agent D:** the K14 image screens. Then K15 part 1 (the orbit view showpiece design,
   Johnny rules on it), K15 part 2, K13 part 3 (the ship sheet), K6d.
-- **Agent A:** free.
-- **Agent B:** the campaign JSON export route (the first backup of campaign data).
+- **Agent A:** campaign import in the browser (the restore half of the backup story).
+- **Agent B:** free. The export route is in (§104); Export / Import buttons come with D's K15.
 - **Agent C:** the shipyard grid under the deck plan; then the local-time tick on the Day
   and night strip (plan §7.10, A16 ruled: the prime meridian).
 - **Agent F:** parked. K13 parts 1 and 2 done (handoff 89 to 91); part 3 after K5f.
-- **Last push:** 0e0d00d (clock screens, date chip), deployed and green. A, B, C, D mid-step.
+- **Last push:** 3f1b07f (store fix), deployed and green. Local and finished: B's export
+  (push by path: apps/api, tests/api).
 
 ## 7. Decisions Johnny has made that shape the next steps
 
