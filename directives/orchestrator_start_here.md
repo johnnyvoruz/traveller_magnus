@@ -110,13 +110,14 @@ campaign layer over the truth map; own maps later. X sign-in only.
 - **Agent D:** K14 image screens built, report not yet relayed; K15 part 1 (the orbit
   showpiece design) is written and waits on Johnny's rulings (handoff §105). Then K15
   part 2, K13 part 3, K6d.
-- **Agent A:** campaign import in the browser (the restore half of the backup story).
+- **Agent A:** free. Export (B) and import (A) exist without screens; D wires both into
+  the account menu with K15 part 2.
 - **Agent B:** free. The export route is in (§104); Export / Import buttons come with D's K15.
 - **Agent C:** the local-time tick on the Day and night strip (plan §7.10; A16: the prime
   meridian).
 - **Agent F:** parked. K13 parts 1 and 2 done (handoff 89 to 91); part 3 after K5f.
-- **Last push:** 2f861ab (export), deployed and green. Local and finished: C's grid;
-  D's K14 screens (unreported).
+- **Last push:** 2984e9f (paper and grid), deployed and green. Local and finished: A's
+  import; D's K14 screens (report not yet relayed).
 
 ## 7. Decisions Johnny has made that shape the next steps
 

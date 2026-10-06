@@ -2809,3 +2809,18 @@ API and Durable Object have against `data_model.md` and `api.md`).
   disk; Johnny asked to paste it.
 - **Next, C:** the local-time tick on the Day and night strip (plan §7.10; A16: the prime
   meridian).
+
+## 106. Pushed `2984e9f` (paper and grid); campaign import in (Agent A); accepted (2026-10-05)
+
+- GitHub run green; live bundle `index-Cxg2CW6s.js` holds the "Square Base" tile code. The
+  deck plan draws on paper with the shipyard grid in production.
+- **Agent A, import:** `campaign/import.ts`: `parseExport` (shared schemas, one message for
+  the first fault, "The file is not JSON."), `importCampaign` into the open campaign only
+  when it has no records and no links ("That campaign is not open." / "… not empty."), ids
+  and image hashes kept, `baseRev` 0 for rows, the open campaign's revision for settings and
+  clock; records, links, settings, clock in that order, each batch within 200 rows and 1 MB
+  and flushed before the next; the first failed batch stops it and reports the rows landed.
+  Tests: 250 records and 200 links in three PATCHes in order, a bad document, a non-empty
+  target, a failed second batch. 641 pass. **Accepted.** No screen: Export and Import go
+  into the account menu with K15 part 2 (D).
+- Pushable by path (`apps/web/src/campaign`, `tests/web/campaign_import.test.js`). A free.
