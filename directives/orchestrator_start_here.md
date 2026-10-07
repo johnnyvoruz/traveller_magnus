@@ -198,9 +198,13 @@ file true: replace it, do not append to it.
   leftover file was deleted (§167). When every sector is done, B gets
   `prompts/b_engine_t1_7.md`. Before any release: the surfaces must read `surfaceTempBand`
   (C), and Johnny rules on the unresolved counts.
-- **Next pastes after that push:** A `a_vessels_on_map.md`; C `c_toggle_motion_4.md`, then
-  city lights step 2 (not written); D `d_ghost_wiring.md` (the ghosts wired, then places in
-  open space); E `e_card_gap.md`.
+- **That push ran: `703041d`, green.** **The stack by agent (§169), in order:**
+  A `a_course_preview.md`, then `a_vessels_on_map.md`; D `d_ghost_wiring.md`, then
+  `d_waypoints.md` (follow-up 28: select on the picture, the docked tag, a course of
+  waypoints, Play and the speed steps); C `c_toggle_motion_4.md`, then city lights steps 2
+  to 5 (step 2 not written), then the surfaces reading `surfaceTempBand`; E
+  `e_card_gap.md`; B `b_engine_t1_7.md` when v6 finishes. Slingshots and the ship's own
+  numbers are backlog in `plan.md` "After 5".
 - **Open with Johnny:** only D's four design choices (§144), each with a standing default.
   G7 is answered: F designed the city lights; Enhanced is to be the default.
 - G5 was taken as the recommended option

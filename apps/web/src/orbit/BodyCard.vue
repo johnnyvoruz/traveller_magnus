@@ -88,12 +88,11 @@ watch(() => props.bodyKey, () => { helpOpen.value = false; });
 
 <style>
 /* The stack at the stage's top left: the pinned card, and a hover card under it.
-   An open drawer publishes --drawer-height on .orbit-stage; the stack keeps the same 18px gap under it.
-   The view also shifts each card down 56px (.orbit-stage .orbit-body-card), so the stack's box ends 56px sooner and the painted card still finishes 18px above the picture's bottom. */
+   An open drawer publishes --drawer-height on .orbit-stage; the stack keeps an 18px gap under it and above the picture's bottom. */
 .orbit-cards {
   position: absolute;
   top: calc(18px + var(--drawer-height, 0px));
-  bottom: calc(18px + 56px);
+  bottom: 18px;
   left: 18px;
   z-index: 2;
   display: flex;

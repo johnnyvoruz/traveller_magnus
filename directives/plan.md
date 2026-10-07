@@ -217,6 +217,19 @@ accounts and journals.
   sign-in card. No custom security code. A passkey-only account has no OAuth identity, so
   the account's recovery story must be decided with Johnny before it ships.
 
+- **Ship navigation backlog (Johnny, 2026-10-06; after the full campaign MVP).**
+  1. **Slingshots.** "Figure out how slingshotting would work around planets": a course
+     that passes a body and gains from it, in place of a stop. The MVP's legs are each flown
+     from rest to rest, because that is the only travel rule supplied (`rules/
+     mgt2e_space_travel.json`). Needs a rule from Johnny before any design.
+  2. **The ship's own numbers.** Hull tonnage, thrust and jump rating read from the ship
+     (which sheet fields is Johnny's to say), then warnings, refuelling and fuel deducted.
+     The MVP measures with an assumed 100-ton hull and refuses nothing.
+  3. **The rules of the supplement he does not yet have** ("Cluster Truck"), which may
+     change the travel sums. Every number sits in the rules file so that this is an edit.
+  4. Astrogation checks, inaccurate jumps, unrefined fuel: named in the book's text, not
+     supplied.
+
 ## 5. Order and milestones
 
 | Milestone | Visible result |

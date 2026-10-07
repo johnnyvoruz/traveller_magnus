@@ -68,7 +68,7 @@ export const ORBIT_COMMANDS: readonly OrbitCommand[] = [
     ...LAYOUTS.map((item) => ({ id: item.id, name: 'Layout: ' + item.label, keys: [item.key], help: 'the ' + item.label.toLowerCase() + ' layout' })),
     ...LAYERS.map((item) => ({ id: item.id, name: 'Show or hide: ' + item.label, keys: [item.hotkey], help: item.label.toLowerCase() + ' on or off' })),
     { id: 'orbit-fit', name: 'Fit the system', keys: ['f'], help: 'fit the whole system' },
-    { id: 'orbit-plot', name: 'Plotting mode', keys: ['p', 'P'], help: 'plotting on or off: the hairlines follow the pointer; press a body to set the selected ship’s destination' },
+    { id: 'orbit-plot', name: 'Plotting mode', keys: ['p', 'P'], help: 'plotting on or off: the hairlines follow the pointer; press a body, or empty space for a point, to set the selected ship’s destination' },
     { id: 'orbit-add-leg', name: 'Add the plotted leg', keys: [], help: 'in the plot card: writes the flight to the ship’s track' },
     { id: 'orbit-plot-estimate', name: 'Return the flight’s hours to the estimate', keys: [], help: 'in the plot card: the hours follow the estimate again' },
     { id: 'orbit-jump-roll', name: 'Roll the jump’s duration again', keys: [], help: 'in the jump preview: a new roll for the hours' },

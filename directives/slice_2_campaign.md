@@ -593,6 +593,19 @@ only. D's five points for the orchestrator:
   27. **Every vessel on the sector map (Johnny, 2026-10-06: yes).** Today only the party's
       marker is drawn on the hex map. Each vessel is marked at its hex at the campaign date
       (from its track), the party's distinguished. After the open-space work (23).
+  28. **Course plotting like an RTS (Johnny, 2026-10-06).** "We would want to support
+      in-system waypoints … Think Homeworld RTS where the user can control units and set
+      waypoints, click play, speed up or down time and watch the ship signal fly to the
+      location. If a ship is docked on a planet, I want a Sci-fi tag to pop out to indicate
+      the ship is on the planet and the user can click on the tag to select the ship."
+      Three things: a ship is selected by a press on its mark or its tag; a docked ship has
+      a tag that pops out from its body (an HTML control, pressable and reachable); plotting
+      builds a **course** of waypoints (bodies or points) written as consecutive legs, each
+      flown from rest to rest (the one rule supplied), then Play and the speed steps. Agent
+      A draws a course in the picture and gives D the hit test and the docked place
+      (`prompts/a_course_preview.md`); Agent D builds the controls
+      (`prompts/d_waypoints.md`, after `d_ghost_wiring.md`). **Slingshots round a planet are
+      backlog, after the full MVP** (`plan.md`, "After 5", ship navigation backlog).
   15. **The pinned body card beside the open panel (D decides; settled by 22):** when the orbit view's
       docked body card and the dossier panel for the same body are both open, two views of
       one thing show at once. Johnny sees pros and cons. D reviews `manifesto.md` (one

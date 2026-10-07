@@ -46,6 +46,8 @@ test('a flight estimate: hours from the distance and the G; none without a dista
     assert.equal(hoursWords(47.9), 'about 47.9 h');
     assert.equal(hoursWords(77.2), 'about 3 d 5 h');
     assert.equal(hoursWords(72), 'about 3 d');
+    assert.equal(hoursWords(77.2, false), 'roughly 3 d 5 h', 'the settling sum did not agree');
+    assert.equal(hoursWords(4.26, false), 'roughly 4.3 h');
 });
 
 test('a flight shows both drives: the manoeuvre line from the rule, the reaction figure from the function', () => {

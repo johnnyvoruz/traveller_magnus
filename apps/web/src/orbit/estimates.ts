@@ -86,13 +86,14 @@ export function fieldHours(hours: number): number {
     return Math.max(0.1, Math.round(hours * 10) / 10);
 }
 
-/** "about 4.3 h" under two days, "about 3 d 5 h" from there. */
-export function hoursWords(hours: number): string {
-    if (hours < 2 * DAY_HOURS) return 'about ' + fieldHours(hours) + ' h';
+/** "about 4.3 h" under two days, "about 3 d 5 h" from there; "roughly" when the settling sum did not agree. */
+export function hoursWords(hours: number, settled = true): string {
+    const lead = settled ? 'about ' : 'roughly ';
+    if (hours < 2 * DAY_HOURS) return lead + fieldHours(hours) + ' h';
     const whole = Math.round(hours);
     const days = Math.floor(whole / DAY_HOURS);
     const rest = whole - days * DAY_HOURS;
-    return 'about ' + grouped(days) + ' d' + (rest ? ' ' + rest + ' h' : '');
+    return lead + grouped(days) + ' d' + (rest ? ' ' + rest + ' h' : '');
 }
 
 /**

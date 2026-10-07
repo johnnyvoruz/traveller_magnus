@@ -65,7 +65,43 @@ export function shipTrack(record: CampaignRecord, partyVesselId: string | null):
     };
 }
 
-export type ShipState = 'docked' | 'orbit' | 'flight' | 'jump' | 'none';
+export type ShipState = 'docked' | 'orbit' | 'hold' | 'flight' | 'jump' | 'none';
+
+/** A place in open space: a system anchor that carries a point and names no body. */
+export function isPoint(anchor: CampaignAnchor): boolean {
+    return !!anchor && anchor.kind === 'system' && !!anchor.point && !anchor.bodyKey;
+}
+
+/** The anchor of a point in this system, its words kept beside it so any screen can say it without the chart. */
+export function pointAnchor(hexKey: string, point: { x: number; y: number }, label: string): CampaignAnchor {
+    return label ? { kind: 'system', hexKey, point: { x: point.x, y: point.y }, locationLabel: label } : { kind: 'system', hexKey, point: { x: point.x, y: point.y } };
+}
+
+/** A ship at rest at an anchor: holding at a point, or docked at a body. */
+function atRest(anchor: CampaignAnchor, name: (anchor: CampaignAnchor) => string): { state: ShipState; text: string } {
+    if (isPoint(anchor)) return { state: 'hold', text: 'Holding at ' + name(anchor) };
+    return { state: 'docked', text: 'Docked at ' + name(anchor) };
+}
+
+/**
+ * Whether Jump is offered (K12 point 5, as ruled 2026-10-06): only for a ship **at rest
+ * outside every 100D circle**, which is a ship holding at a point in open space; the jump
+ * leaves from that point. A ship at a body is inside that body's limit however the mark is
+ * drawn; a ship under way is told how to get there. `outside` is the picture's answer for
+ * the mark (null when it is not on the picture). The words are the strip's; no rule is here
+ * beyond "outside every circle".
+ */
+export function jumpStanding(position: CampaignAnchor | TrackFix | null, outside: boolean | null): { can: boolean; note: string } {
+    if (!position) return { can: false, note: 'The ship has no position' };
+    if ('fraction' in position) {
+        if (position.leg.mode === 'jump') return { can: false, note: 'In jump' };
+        return { can: false, note: 'Under way. To jump, plot a point past the 100D limit and hold there.' };
+    }
+    if (!isPoint(position)) return { can: false, note: 'At a body, inside its 100D limit. To jump, plot a point past the limit and hold there.' };
+    if (outside === true) return { can: true, note: '' };
+    if (outside === false) return { can: false, note: 'Holding inside a 100D limit. To jump, plot a point past it.' };
+    return { can: false, note: 'The ship is not on this picture' };
+}
 
 /** The leg a ship is on or has last finished at the date, or null before its first. */
 export function legAt(track: readonly Leg[], days: number): Leg | null {
@@ -86,7 +122,7 @@ export function statusWords(
     const track = trackOf(record);
     const leg = track ? legAt(track, days) : null;
     if (!leg) {
-        if (record.anchor) return { state: 'docked', text: 'Docked at ' + name(record.anchor) };
+        if (record.anchor) return atRest(record.anchor, name);
         return { state: 'none', text: 'No position' };
     }
     const moving = leg.mode === 'flight' || leg.mode === 'jump';
@@ -95,8 +131,8 @@ export function statusWords(
         return { state: 'flight', text: 'In flight ' + name(leg.from) + ' → ' + name(leg.to) + ', arrives ' + whenWords(leg.arrives) + (leg.accelG ? ' · ' + leg.accelG + ' G' : '') };
     }
     if (underWay) return { state: 'jump', text: 'In jump to ' + name(leg.to) + ', arrives ' + whenWords(leg.arrives) };
-    if (leg.mode === 'orbit') return { state: 'orbit', text: 'In orbit at ' + name(leg.to) };
-    return { state: 'docked', text: 'Docked at ' + name(leg.to) };
+    if (leg.mode === 'orbit' && !isPoint(leg.to)) return { state: 'orbit', text: 'In orbit at ' + name(leg.to) };
+    return atRest(leg.to, name);
 }
 
 /** "DDD-YYYY HH:MM" */

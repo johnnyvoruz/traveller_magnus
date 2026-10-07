@@ -18,16 +18,16 @@ import BodyChips from '../orbit/BodyChips.vue';
 import { LAYERS, LAYOUTS, LINEUP_SHOWN, ORBIT_COMMANDS, PARKED_COMMANDS, toggled, type DrawerId } from '../orbit/commands.ts';
 import { jumpReturnPath, jumpTarget } from '../orbit/jump_state.ts';
 import {
-    bodyAnchor, earliestDeparture, flightLeg, jumpLeg, legStart, shipsHere, shipTrack, statusWords, vesselPosition,
+    bodyAnchor, earliestDeparture, flightLeg, jumpLeg, jumpStanding, legStart, pointAnchor, shipsHere, shipTrack, statusWords, vesselPosition, whenWords,
 } from '../orbit/ship_list.ts';
 import ShipStrip from '../orbit/ShipStrip.vue';
 import type { ShipTrack } from '../orbit/ships.ts';
-import { appendLeg, removeLastLeg, trackOf } from '../campaign/track.ts';
+import { appendLeg } from '../campaign/track.ts';
 import type { CampaignAnchor } from '@voyage/shared';
 import { rollJumpHours } from '../campaign/travel.ts';
 import { formatDistance } from '../design/units.ts';
-import { realDistanceKm } from '../orbit/distance.ts';
-import { fieldHours, flightFuelWords, flightHours, hoursWords, jumpEstimateWords, rollWords, type JumpRoll } from '../orbit/estimates.ts';
+import { pointWords, realDistanceKmBetween, type PlaceEnd } from '../orbit/distance.ts';
+import { fieldHours, flightFuelWords, hoursWords, jumpEstimateWords, rollWords, settleFlight, type JumpRoll } from '../orbit/estimates.ts';
 import { beginPick, endPick, type PickedSystem } from '../workspace/pick.ts';
 import { placeSource, setPlaceSource, type SystemInfo } from '../workspace/place_source.ts';
 import Drawer from '../orbit/Drawer.vue';
@@ -39,9 +39,9 @@ import { AU_KM, planSystem } from '../orbit/layout.ts';
 import LineupSearch from '../orbit/LineupSearch.vue';
 import OrbitPopover from '../orbit/OrbitPopover.vue';
 import { DEFAULT_LAYERS, type Layers, type Mode } from '../orbit/picture.ts';
-import { bodyChips, dossierPath, findChip, orbitPath, subsectorLetter } from '../orbit/bodies.ts';
+import { bodyChips, dossierPath, findChip, orbitPath, shortLabel, subsectorLetter } from '../orbit/bodies.ts';
 import {
-    advance, DAY_SECONDS, formatLinkDate, scrubbed, skipWeeks, startDays, tickRate, timeFieldValue, REAL_TIME,
+    advance, DAY_SECONDS, formatLinkDate, HOUR, scrubbed, skipWeeks, startDays, tickRate, timeFieldValue, REAL_TIME,
 } from '../orbit/clock.ts';
 import OrbitCanvas from '../orbit/OrbitCanvas.vue';
 import OrbitHeader from '../orbit/OrbitHeader.vue';
@@ -431,6 +431,10 @@ function anchorName(anchor: CampaignAnchor): string {
         return found ? found.name : 'a record';
     }
     if (anchor.locationLabel) return anchor.locationLabel;
+    if (anchor.point && !anchor.bodyKey) {
+        const plan = anchor.hexKey === hexKey.value ? searchPlan.value : null;
+        return (plan ? pointWords(plan, anchor.point, shownDays.value) : '') || 'a point in open space';
+    }
     if (anchor.bodyKey) {
         const chip = anchor.hexKey === hexKey.value ? findChip(chips.value, anchor.bodyKey) : null;
         if (chip) return chip.name;
@@ -458,7 +462,9 @@ function sampleShip(): void {
 
 // Plotting a flight (2b): the mode, the destination pressed on the picture, the leg previewed, then written.
 const plotting = ref(false);
+/** The destination: a body pressed on the picture, or a point of empty picture (in AU from the primary). One or neither. */
 const destinationKey = ref<string | null>(null);
+const destinationPoint = ref<{ x: number; y: number } | null>(null);
 /** The hours the referee typed over the estimate; null while the field follows the estimate. */
 const plotTyped = ref<number | null>(null);
 /** The hours field holds the referee's own entry (it may be empty), not the estimate. */
@@ -466,38 +472,92 @@ const plotOwn = ref(false);
 const plotAccel = ref(2);
 const canPlot = computed(() => canSetDate.value && ships.value.length > 0 && state.value === 'ready');
 
-/**
- * The flight's real distance at its departure (orbit/distance.ts; never measured on the
- * picture), in kilometres: null where a place is not known, or the ship starts elsewhere.
- */
-const plotKm = computed((): number | null => {
-    const plan = searchPlan.value;
-    const from = legStart(shipPosition.value);
-    if (!plotting.value || !destinationKey.value || !plan || !from || from.kind !== 'system' || from.hexKey !== hexKey.value || !from.bodyKey) return null;
-    return realDistanceKm(plan, from.bodyKey, destinationKey.value, earliestDeparture(shipPosition.value, shownDays.value));
+/** An anchor of this system as an end of the distance sum: its body, or its point; null for anywhere else. */
+function endOf(anchor: CampaignAnchor): PlaceEnd | null {
+    if (!anchor || anchor.kind !== 'system' || anchor.hexKey !== hexKey.value) return null;
+    if (anchor.bodyKey) return anchor.bodyKey;
+    return anchor.point ? { x: anchor.point.x, y: anchor.point.y } : null;
+}
+
+/** The flight being plotted: where from, where to, and when it would leave. Null with no destination. */
+const plotEnds = computed(() => {
+    if (!plotting.value || !shipRecord.value) return null;
+    const to: PlaceEnd | null = destinationKey.value ?? destinationPoint.value;
+    if (to === null) return null;
+    return { from: endOf(legStart(shipPosition.value)), to, departs: earliestDeparture(shipPosition.value, shownDays.value) };
 });
-/** The estimated hours at the chosen G (campaign/travel.ts), or null with no distance to cross. */
-const plotEstimate = computed(() => flightHours(plotKm.value, plotAccel.value));
-/** What the hours field holds: the referee's entry once typed, else the estimate. */
+
+/**
+ * The estimate, measured to where the destination will be at arrival
+ * (findings/plot_ghosts_design.md §2.3): the distance from the ship's place at departure to
+ * the destination's place at arrival, run until two rounds agree (orbit/estimates.ts
+ * settleFlight over orbit/distance.ts realDistanceKmBetween; never measured on the picture).
+ * A point does not move, so it settles at once. Null where a place is not known.
+ */
+const plotSettled = computed(() => {
+    const plan = searchPlan.value;
+    const ends = plotEnds.value;
+    if (!plan || !ends || ends.from === null) return null;
+    const from = ends.from;
+    return settleFlight((arrives) => realDistanceKmBetween(plan, from, ends.departs, ends.to, arrives), plotAccel.value, ends.departs);
+});
+/** The same body, with nothing to cross: the distance is known and there is no time to estimate. */
+const plotNoDistance = computed(() => {
+    const plan = searchPlan.value;
+    const ends = plotEnds.value;
+    if (!plan || !ends || ends.from === null || plotSettled.value) return false;
+    return realDistanceKmBetween(plan, ends.from, ends.departs, ends.to, ends.departs) === 0;
+});
+/** What the hours field holds: the referee's entry once typed, else the settled estimate. */
 const plotHours = computed((): number | null => {
     if (plotOwn.value) return plotTyped.value;
-    return plotEstimate.value === null ? null : fieldHours(plotEstimate.value);
+    return plotSettled.value === null ? null : fieldHours(plotSettled.value.hours);
+});
+/** The destination in words: the body's name, or the point as orbit/distance.ts words it at departure. */
+const plotName = computed(() => {
+    const ends = plotEnds.value;
+    if (!ends) return '';
+    if (typeof ends.to === 'string') {
+        const chip = findChip(chips.value, ends.to);
+        return chip ? chip.name : ends.to;
+    }
+    const plan = searchPlan.value;
+    return (plan ? pointWords(plan, ends.to, ends.departs) : '') || 'A point in open space';
 });
 const plotWords = computed(() => {
-    if (!plotting.value || !destinationKey.value) return null;
+    const ends = plotEnds.value;
+    if (!ends) return null;
+    const settled = plotSettled.value;
     return {
-        distance: plotKm.value === null ? '' : formatDistance(plotKm.value, AU_KM),
-        time: plotEstimate.value === null ? '' : hoursWords(plotEstimate.value),
+        distance: settled ? formatDistance(settled.km, AU_KM) : (plotNoDistance.value ? formatDistance(0, AU_KM) : ''),
+        time: settled ? hoursWords(settled.hours, settled.settled) : '',
         fuel: flightFuelWords(plotAccel.value, plotHours.value),
+        title: settled && typeof ends.to === 'string' ? 'Measured to where ' + plotName.value + ' will be at ' + whenWords(settled.arrives) + '.' : '',
     };
 });
 
 const preview = computed(() => {
-    if (!plotting.value || !destinationKey.value || !shipRecord.value) return null;
-    const chip = findChip(chips.value, destinationKey.value);
-    const to = bodyAnchor(hexKey.value, destinationKey.value, chip ? chip.name : undefined);
-    const departs = earliestDeparture(shipPosition.value, shownDays.value);
-    return { toName: chip ? chip.name : destinationKey.value, leg: flightLeg(legStart(shipPosition.value), to, departs, plotHours.value ?? Number.NaN, plotAccel.value) };
+    const ends = plotEnds.value;
+    if (!ends) return null;
+    const to = typeof ends.to === 'string'
+        ? bodyAnchor(hexKey.value, ends.to, plotName.value)
+        : pointAnchor(hexKey.value, ends.to, plotName.value);
+    return { toName: plotName.value, leg: flightLeg(legStart(shipPosition.value), to, ends.departs, plotHours.value ?? Number.NaN, plotAccel.value) };
+});
+
+/**
+ * What the picture is told of the flight being plotted (the renderer places everything from
+ * dates and a key or a point): the ghosts stand at departure plus the hours **in the field**,
+ * whoever set them. Null with no destination or no hours.
+ */
+const flightPreview = computed(() => {
+    const ends = plotEnds.value;
+    const hours = plotHours.value;
+    if (!ends || hours === null || !(hours > 0)) return null;
+    const arrives = ends.departs + hours * HOUR;
+    if (typeof ends.to !== 'string') return { point: ends.to, departs: ends.departs, arrives };
+    const plan = searchPlan.value;
+    return { toKey: ends.to, departs: ends.departs, arrives, tag: shortLabel(plotName.value, plan ? plan.name : '') + ' \u00B7 ' + whenWords(arrives) };
 });
 
 function setPlotting(on: boolean): void {
@@ -505,6 +565,7 @@ function setPlotting(on: boolean): void {
     plotting.value = on;
     if (!on) {
         destinationKey.value = null;
+        destinationPoint.value = null;
         useEstimate();
     }
 }
@@ -522,7 +583,20 @@ function useEstimate(): void {
 
 function setDestination(key: string): void {
     if (!plotting.value || !findChip(chips.value, key)) return;
+    destinationPoint.value = null;
     destinationKey.value = key;
+}
+
+/** A press on empty picture while plotting: that point is the destination. */
+function setDestinationPoint(point: { x: number; y: number }): void {
+    if (!plotting.value) return;
+    destinationKey.value = null;
+    destinationPoint.value = { x: point.x, y: point.y };
+}
+
+function clearDestination(): void {
+    destinationKey.value = null;
+    destinationPoint.value = null;
 }
 
 function addLeg(): void {
@@ -603,38 +677,20 @@ function pickOnMap(): void {
     void router.push({ path: dossierPath(slug.value, hex.value), query: withQuery(route.query, {}) });
 }
 
+/** Whether the selected ship may jump from where it is: at rest at a point outside every 100D circle (ship_list.ts jumpStanding). */
+const standing = computed(() => jumpStanding(shipPosition.value, shipOutside.value));
+
 /**
- * Jump. A ship is outside every 100D circle only under way between bodies, since a leg ends
- * on a body: so a jump from mid-flight cuts that flight at the jump's moment (the leg is
- * rewritten to arrive now, noted), and the jump departs from the flight's destination
- * anchor, the nearest a body-anchored leg can say. A later-planned leg blocks the cut.
+ * Jump, from where the ship is: it holds at a point outside every 100D circle, and the jump
+ * leg's `from` is that point. (The part 1 interim, which cut a flight short and stepped to
+ * its destination body, is gone; a track that already has a cut flight keeps it as written.)
  */
 function jump(): void {
     const target = jumpTarget.value;
     const id = selectedShip.value;
     const position = shipPosition.value;
-    if (!target || !id || !position || shipOutside.value !== true || !shipRecord.value || jumpHours.value === null) return;
+    if (!target || !id || !position || 'fraction' in position || !standing.value.can || jumpHours.value === null) return;
     const now = shownDays.value;
-    if ('fraction' in position) {
-        if (position.leg.mode !== 'flight') return;
-        const track = trackOf(shipRecord.value) ?? [];
-        const last = track[track.length - 1];
-        if (!last || last.departs !== position.leg.departs || last.arrives !== position.leg.arrives) {
-            showToast('The ship has a later leg planned; remove it before jumping.');
-            return;
-        }
-        const cut = { ...position.leg, arrives: now, note: (position.leg.note ? position.leg.note + ' ' : '') + 'Cut short to jump.' };
-        const removed = removeLastLeg(id);
-        if (!removed.ok) {
-            showToast(removed.message);
-            return;
-        }
-        const shortened = appendLeg(id, cut);
-        if (!shortened.ok) {
-            showToast(shortened.message);
-            return;
-        }
-    }
     const to: CampaignAnchor = { kind: 'system', hexKey: target.slug + '/' + target.hex, locationLabel: target.name };
     const leg = jumpLeg(legStart(position), to, now, jumpHours.value ?? Number.NaN);
     if (!leg) return;
@@ -851,9 +907,9 @@ onMounted(() => {
         orbitCommand('orbit-fit', () => { if (stageEl.value) stageEl.value.fit(); }, ready),
         orbitCommand('orbit-plot', () => { setPlotting(!plotting.value); }, () => canPlot.value),
         orbitCommand('orbit-add-leg', addLeg, () => preview.value !== null && preview.value.leg !== null),
-        orbitCommand('orbit-plot-estimate', useEstimate, () => plotting.value && plotOwn.value && plotEstimate.value !== null),
+        orbitCommand('orbit-plot-estimate', useEstimate, () => plotting.value && plotOwn.value && plotSettled.value !== null),
         orbitCommand('orbit-jump-roll', rollJump, () => jumpTarget.value !== null),
-        orbitCommand('orbit-jump', jump, () => shipOutside.value === true && jumpTarget.value !== null && jumpHours.value !== null && !!shipStatus.value && shipStatus.value.state !== 'jump'),
+        orbitCommand('orbit-jump', jump, () => standing.value.can && jumpTarget.value !== null && jumpHours.value !== null),
         ...(LINEUP_SHOWN ? [registerCommand({ ...PARKED_COMMANDS[0], keys: [], run: () => { openDrawer('time', () => { setPop('lineup', true); }); }, runnable: () => searchPlan.value !== null })] : []),
         orbitCommand('orbit-picture', () => { openDrawer('view'); }),
         registerCommand({ id: 'home', name: 'Return to map', run: backToMap }),
@@ -1092,7 +1148,7 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
             :selected="selectedShip"
             :party-vessel-id="partyVesselId"
             :status="shipStatus"
-            :outside="shipOutside"
+            :standing="standing"
             :plotting="plotting"
             :preview="preview"
             :hours="plotHours"
@@ -1113,7 +1169,7 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
             @roll-again="rollJump"
             @accel="plotAccel = $event"
             @add-leg="addLeg"
-            @cancel-preview="destinationKey = null"
+            @cancel-preview="clearDestination"
             @pick-on-map="pickOnMap"
             @use-last="jumpTarget = lastOpened"
             @clear-target="jumpTarget = null"
@@ -1134,7 +1190,9 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
           :plot-from="selectedShip"
           :survey-elsewhere="dossierOpen && selectedKey !== null"
           @pick="pickBody"
+          :preview="flightPreview"
           @plot="setDestination"
+          @plot-point="setDestinationPoint"
         />
         <svg v-if="state !== 'ready'" class="orbit-blank" viewBox="0 0 800 800" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
           <circle v-for="r in [70, 130, 200, 280, 370]" :key="r" class="orbit-blank-ring" cx="400" cy="400" :r="r" />
@@ -1323,11 +1381,6 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
 /* Plotting: the pointer is a crosshair over the picture. */
 .orbit-stage.is-plotting .orbit-canvas {
   cursor: crosshair;
-}
-
-/* The body card docks under the layout control at the upper left. */
-.orbit-stage .orbit-body-card {
-  top: 56px;
 }
 
 .orbit-blank {

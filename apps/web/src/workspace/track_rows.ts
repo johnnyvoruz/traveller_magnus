@@ -42,6 +42,10 @@ export const TRACK_SHOWN = 8;
 
 /** An end of a leg in words: the body or the system, as the Where block says a place. */
 export function anchorName(anchor: CampaignAnchor, records: Readonly<Record<string, CampaignRecord>>): string {
+    // A point in open space: its own words, written when the leg was plotted. It is not a body and not "the system".
+    if (anchor && anchor.kind === 'system' && anchor.point && !anchor.bodyKey) {
+        return anchor.locationLabel || (Math.hypot(anchor.point.x, anchor.point.y).toFixed(2) + ' AU out, in open space');
+    }
     const place = resolveAnchor(anchor, records);
     return place ? placeWords(place)[0] : 'Nowhere';
 }

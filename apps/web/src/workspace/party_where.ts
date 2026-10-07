@@ -8,7 +8,7 @@
 import type { CampaignAnchor, CampaignClock, CampaignRecord, TrackLeg } from '@voyage/shared';
 import { positionAt, trackOf, whereAreWe, type TrackFix } from '../campaign/track.ts';
 import { DEFAULT_START, totalDays } from '../orbit/clock.ts';
-import { statusWords, whenWords } from '../orbit/ship_list.ts';
+import { isPoint, statusWords, whenWords } from '../orbit/ship_list.ts';
 import { partyVessel, resolveAnchor, type Party } from './party.ts';
 import { anchorName } from './track_rows.ts';
 
@@ -20,8 +20,8 @@ export function campaignDays(clock: Pick<CampaignClock, 'days'> | null): number 
 export type PartyWhere = {
     /** The place to say, to locate and to show in orbit: where the party is, or the system it is under way in. */
     anchor: CampaignAnchor;
-    /** Under way: the strip's words, and which kind of leg. Null at a place. */
-    underway: { state: 'flight' | 'jump'; text: string } | null;
+    /** Under way, or holding at a point in open space: the strip's words, and which. Null at a body or a system. */
+    underway: { state: 'flight' | 'jump' | 'hold'; text: string } | null;
 };
 
 /**
@@ -34,7 +34,11 @@ function standing(leg: TrackLeg): CampaignAnchor {
 }
 
 function whereOf(at: CampaignAnchor | TrackFix | null, vessel: CampaignRecord | null, records: Readonly<Record<string, CampaignRecord>>, days: number): PartyWhere {
-    if (!at || !('fraction' in at)) return { anchor: at, underway: null };
+    if (!at) return { anchor: at, underway: null };
+    if (!('fraction' in at)) {
+        // A point is not a place the Where block can word ("… system"): the strip's words stand for it.
+        return isPoint(at) ? { anchor: at, underway: { state: 'hold', text: 'Holding at ' + anchorName(at, records) } } : { anchor: at, underway: null };
+    }
     const words = vessel ? statusWords(vessel, days, (anchor) => anchorName(anchor, records)) : null;
     const state = at.leg.mode === 'jump' ? 'jump' : 'flight';
     return { anchor: standing(at.leg), underway: { state, text: words ? words.text : '' } };

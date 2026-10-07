@@ -1,8 +1,20 @@
 # Agent A — every vessel on the sector map
 
-Issued 2026-10-06 by the orchestrator. Places in open space are **accepted and pushed**
-(the anchor's `point`, places as body-or-point, `pictureOfAu`, `pointWords`, ships beside
-their body, the stand-in).
+Issued 2026-10-06 by the orchestrator. **Do this after `a_course_preview.md` is reported.**
+Places in open space are accepted and pushed (the anchor's `point`, places as
+body-or-point, `pictureOfAu`, `pointWords`, ships beside their body, the stand-in).
+
+## First, two small things from Agent D's use of your points
+
+- **`pointWords` names a body always.** Within 0.05 AU it says "near A-II"; further out it
+  gives only the distance from the primary, and "Holding at 26.9 AU" does not tell a
+  referee where the ship is. Beyond the near distance, add the nearest body and how far it
+  is ("26.9 AU · 3.1 AU from A-X", in the readout's number form). Still no invented names;
+  a system with no bodies keeps the bare distance. Tests for near, far and none.
+- **The hairline readout and a ship's name.** In `findings/ui_design_shots/
+  k21_wired_point.png` the readout is drawn through the selected ship's name when the
+  pointer is near the ship. Keep the readout clear of the marks' names (move it to the
+  pointer's other side when it would collide). A test of the placement rule.
 
 ## Why
 

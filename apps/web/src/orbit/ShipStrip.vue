@@ -19,8 +19,8 @@ const props = defineProps<{
     selected: string | null;
     partyVesselId: string | null;
     status: { state: ShipState; text: string } | null;
-    /** The selected ship's mark lies outside every 100D circle (null: not on the picture). */
-    outside: boolean | null;
+    /** Whether the selected ship may jump from where it is, and the words when it may not (ship_list.ts jumpStanding). */
+    standing: { can: boolean; note: string };
     plotting: boolean;
     /** The flight being plotted: the destination's name and the leg as it would be written. */
     preview: { toName: string; leg: Leg | null } | null;
@@ -29,7 +29,7 @@ const props = defineProps<{
     /** The hours are the referee's, not the estimate. */
     hoursTyped: boolean;
     /** The flight's estimate in words; `distance` is empty where it is not known. */
-    estimate: { distance: string; time: string; fuel: { manoeuvre: string; reaction: string } | null } | null;
+    estimate: { distance: string; time: string; fuel: { manoeuvre: string; reaction: string } | null; title: string } | null;
     accelG: number;
     /** The jump's marked destination, and the system the map last opened, offered as one. */
     jumpTarget: PickedSystem | null;
@@ -59,7 +59,7 @@ const emit = defineEmits<{
     jump: [];
 }>();
 
-const canJump = computed(() => props.outside === true && props.jumpTarget !== null && props.jumpHours !== null && props.status !== null && props.status.state !== 'jump');
+const canJump = computed(() => props.standing.can && props.jumpTarget !== null && props.jumpHours !== null && props.status !== null && props.status.state !== 'jump');
 
 /** A field's number, or null when it is empty or not a duration. */
 function typedHours(event: Event): number | null {
@@ -81,7 +81,7 @@ function useEstimate(): void {
 const jumpNote = computed(() => {
     if (!props.status) return '';
     if (props.status.state === 'jump') return 'In jump';
-    if (props.outside !== true) return 'Inside a 100D limit';
+    if (!props.standing.can) return props.standing.note;
     if (!props.jumpTarget) return 'No destination marked';
     if (props.jumpHours === null) return 'No duration';
     return '';
@@ -134,6 +134,7 @@ const jumpNote = computed(() => {
           <button type="button" class="orbit-btn is-icon orbit-jump-clear" aria-label="Clear the destination" title="Clear the destination" @click="emit('clearTarget')"><Icon name="xmark" :size="11" /></button>
         </div>
         <p v-if="jumpEstimate" class="orbit-est">Estimate: {{ jumpEstimate }}</p>
+        <p v-if="!standing.can && standing.note" class="orbit-est orbit-jump-how">{{ standing.note }}</p>
         <div class="orbit-jump-time">
           <label class="orbit-field is-hours">
             <span>Hours</span>
@@ -152,14 +153,14 @@ const jumpNote = computed(() => {
 
     <!-- Plotting a flight: the leg before it is written. -->
     <div v-if="plotting" class="orbit-plot-card" role="group" aria-label="Plot a flight">
-      <p v-if="!preview" class="orbit-plot-hint"><Icon name="arrows-to-dot" :size="11" />Plotting: press a body on the picture to set the destination.</p>
+      <p v-if="!preview" class="orbit-plot-hint"><Icon name="arrows-to-dot" :size="11" />Plotting: press a body, or empty space for a point, to set the destination.</p>
       <template v-else>
         <p class="orbit-plot-line" :title="preview.toName"><b>{{ preview.toName }}</b></p>
         <p class="orbit-plot-when">
           <template v-if="preview.leg">departs {{ whenWords(preview.leg.departs) }} · arrives {{ whenWords(preview.leg.arrives) }}</template>
           <template v-else>No arrival until the hours are set</template>
         </p>
-        <p v-if="estimate" class="orbit-est">
+        <p v-if="estimate" class="orbit-est" :title="estimate.title || undefined">
           <template v-if="estimate.distance">Estimate: {{ estimate.distance }}<template v-if="estimate.time"> · {{ estimate.time }} at {{ accelG }} G</template></template>
           <template v-else>Distance unknown: type the hours.</template>
         </p>
@@ -415,6 +416,11 @@ const jumpNote = computed(() => {
   color: var(--text-muted);
   font: 400 12px/1.4 var(--font-text);
   font-variant-numeric: var(--tabular);
+}
+
+/* How to get to where a jump is possible: the same quiet words, a little apart. */
+.orbit-jump-how {
+  color: var(--text-1);
 }
 
 .orbit-est.is-fuel {

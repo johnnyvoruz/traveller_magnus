@@ -4554,3 +4554,67 @@ Stop and report.
   `prompts/d_ghost_wiring.md` widened (the ghosts wired, `bodiesAtOf` for a date and a
   point, the plotting click on empty space, the words, Jump from a point replacing the cut
   flight), and for C the waiting `prompts/c_toggle_motion_4.md`.
+
+## 169. Pushed `703041d`; Johnny on course plotting: waypoints, the docked tag, slingshots to the backlog (2026-10-06)
+
+- **`703041d`** (places in open space, Enhanced as default, the header and time controls,
+  Locate, the Scout Survey card): GitHub run green; `campaign` equals `origin/campaign`;
+  the tree clean but for `directives/`. **None of §168's four pastes had been handed out:**
+  Johnny held them and asked to be told when to redistribute.
+- **His direction:** in-system **waypoints**; "think Homeworld RTS": control units, set
+  waypoints, press Play, speed time up or down, watch the ship's signal fly; **a sci-fi tag
+  that pops out of a planet when a ship is docked there, pressable to select the ship**;
+  and a **backlog** item after the full MVP: how slingshotting round planets would work.
+- **Filed:** follow-up 28 in `slice_2_campaign.md`; a "ship navigation backlog" in
+  `plan.md` under "After 5" (slingshots, needing a rule from Johnny; the ship's own numbers
+  with warnings and refuelling; the supplement's rules; astrogation and unrefined fuel).
+- **Ruling:** each leg of a course is flown from rest to rest, because the travel rule
+  supplied assumes it; a waypoint is therefore a stop, and a fly-by is the slingshot
+  backlog. The card says so once.
+- **The stack, by agent, in order:**
+  - **A:** `a_course_preview.md` (the renderer's preview takes a list of legs; waypoints
+    numbered, each body's ghost at its own arrival; a hit test for ship marks and the
+    docked place as pure functions; a flag so the renderer does not draw a ship D's tag
+    stands for), **moved ahead of** `a_vessels_on_map.md` because D waits on it.
+  - **D:** `d_ghost_wiring.md` (the ghosts wired; `bodiesAtOf` for a date and a point; the
+    plotting click on empty space; Jump from a point), then **`d_waypoints.md`** (select on
+    the picture, the docked tag, the course of waypoints, Play and the speed steps; a short
+    design note in the same step).
+  - **C:** `c_toggle_motion_4.md`, then city lights steps 2 to 5 (step 2's prompt not
+    written), then the surfaces reading `surfaceTempBand` before any v6 release.
+  - **E:** `e_card_gap.md`. Nothing queued behind it.
+  - **B:** `b_engine_t1_7.md` when v6 has finished; then the small inputs hardening (§167).
+- **v6 progress, read from the CDN's running report past its cache:** 18 sectors, 88,157
+  bodies seen, 17,140 unresolved, 32 blocking, about twenty-five minutes in. B's "under an
+  hour" looks optimistic; Johnny's progress command gives the true count.
+
+## 170. D's ghost wiring and open-space plotting accepted; a snapshot push with E's card fix (2026-10-06)
+
+- The four pastes of §169 went out (A course preview, C motion 4, D ghost wiring, E card
+  gap).
+- **Agent D, `d_ghost_wiring.md`, all nine items:** `settleFlight` wired, so the plot
+  card measures to where the destination will be (Regina A-X to A-II: 31.4 AU, about 11 d
+  5 h at 2 G; "roughly" when the sum does not settle); the `preview` fed for a body (key,
+  dates, tag) and for a point; `bodiesAtOf` answers a body at a date and a point's place,
+  with one layout cached per date until the view or the system changes; a bare system
+  anchor kept as the mainworld; **a press on empty picture sets a point**, estimated and
+  written as a leg with its words; "Holding at 26.9 AU" on the strip, the Party tab, the
+  Where block and the Track section; **Jump offered only at rest at a point outside every
+  100D ring, the jump leg starting at the point; the "cut the flight" interim removed**
+  (a track that already holds a cut flight is left as it is); worst frame 2.2 ms with a
+  preview open. `k21_wired_point.png` looked at. **Accepted.**
+- **D's three questions, ruled by the orchestrator** (in `prompts/d_waypoints.md` and
+  `prompts/a_vessels_on_map.md`): a press within the snap distance of a body is that body,
+  not a point at its present place; the leg's arrival is the settled figure unless the
+  hours were typed; `pointWords` names the nearest body always (A). Also seen: the
+  hairline readout drawn through a ship's name (A).
+- **Agent E, `e_card_gap.md`** (no report yet; read from disk): the 56 px rule gone from
+  `views/OrbitView.vue`, `BodyCard.vue`'s bottom back to 18 px. Complete and coherent, so
+  it rides in this push.
+- **The push, a snapshot:** `findings/push/plot_points.patch`, 14 files (D's eleven with
+  its lines of `OrbitCanvas.vue`, which A had not yet touched; `BodyCard.vue`; `OrbitView.vue`
+  carrying both D's work and E's rule). C's in-flight `OrbitRenderer.ts`, `disc_batch.ts`
+  and their tests are left out. **Rehearsed:** `git archive HEAD` plus the patch: `vue-tsc`
+  exit 0, build green, 843 tests, 832 pass, 0 fail, 11 skipped.
+- **Next, D:** `prompts/d_waypoints.md` (A's hit test and course preview may not be there
+  yet; the prompt says what to do then).

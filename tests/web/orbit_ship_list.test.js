@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { HOUR } from '../../apps/web/src/orbit/clock.ts';
-import { bodiesAtOf, shipStanding, shipMarkOf } from '../../apps/web/src/orbit/ship_marks.ts';
+import { bodiesAtOf, datedBodies, DATED_LAYOUTS, shipStanding, shipMarkOf } from '../../apps/web/src/orbit/ship_marks.ts';
 import {
     ACCEL_CHOICES, bodyAnchor, earliestDeparture, flightLeg, inSystem, jumpLeg, legAt, legStart, shipsHere, shipTrack, statusWords, vesselPosition, whenWords,
 } from '../../apps/web/src/orbit/ship_list.ts';
@@ -106,9 +106,40 @@ test('a new leg starts where the ship is, or at the end of the leg under way, no
     assert.equal(earliestDeparture({ leg: FLIGHT, fraction: 1 }, D0 + 20 * HOUR), D0 + 20 * HOUR);
 });
 
+test('an anchor is its body at the date asked, a point is its own place, and the layouts are kept', () => {
+    // The body w2 goes round: ten units along x for every day.
+    let laidOut = 0;
+    const layout = (days) => { laidOut += 1; return [{ key: 's0', x: 0, y: 0, main: false }, { key: 'w2', x: days * 10, y: 0, main: false }, { key: 'w2m0', x: days * 10 + 5, y: 5, main: true }]; };
+    const dated = datedBodies(layout);
+    const frameDays = 3;
+    const frame = layout(frameDays);
+    laidOut = 0;
+    const at = bodiesAtOf(HERE, (days) => (days === frameDays ? frame : dated.on('view-a', days)), (au) => ({ x: au.x * 100, y: au.y * 100 }));
+    assert.deepEqual(at(aiv, frameDays), { x: 30, y: 0 });
+    assert.equal(laidOut, 0, 'the frame\'s own date is the picture already drawn');
+    assert.deepEqual(at(aiv, 1), { x: 10, y: 0 }, 'where it was at departure');
+    assert.deepEqual(at(aiv, 9), { x: 90, y: 0 }, 'where it will be at arrival');
+    assert.deepEqual(at({ kind: 'system', hexKey: HERE }, 9), { x: 95, y: 5 }, 'the system alone is its mainworld, at that date');
+    assert.deepEqual(at(aiv, 1), { x: 10, y: 0 });
+    assert.deepEqual(at(aiv, 9), { x: 90, y: 0 });
+    assert.equal(laidOut, 2, 'two dates, each laid out once however often they are asked');
+    // A point in open space is the picture of its AU, whatever the date; it is not a body.
+    const hold = { kind: 'system', hexKey: HERE, point: { x: 1.5, y: -0.5 }, locationLabel: '1.58 AU' };
+    assert.deepEqual(at(hold, 1), { x: 150, y: -50 });
+    assert.deepEqual(at(hold, 9), { x: 150, y: -50 });
+    assert.equal(laidOut, 2, 'a point asks for no layout');
+    assert.equal(bodiesAtOf(HERE, () => frame)(hold, 1), null, 'with no picture for a point there is no place');
+    // The camera moves: the kept layouts go.
+    dated.on('view-b', 1);
+    assert.equal(laidOut, 3);
+    assert.equal(dated.size(), 1);
+    for (let day = 100; day < 100 + DATED_LAYOUTS + 4; day += 1) dated.on('view-b', day);
+    assert.equal(dated.size(), DATED_LAYOUTS, 'never more than the limit');
+});
+
 test('an anchor on this picture is its body, or the mainworld; another system is not here', () => {
     const bodies = [{ key: 's0', x: 0, y: 0, main: false }, { key: 'w2', x: 100, y: 0, main: false }, { key: 'w2m0', x: 110, y: 5, main: true }];
-    const at = bodiesAtOf(HERE, bodies);
+    const at = bodiesAtOf(HERE, () => bodies);
     assert.deepEqual(at(regina, 0), { x: 110, y: 5 });
     assert.deepEqual(at(aiv, 0), { x: 100, y: 0 });
     assert.deepEqual(at({ kind: 'system', hexKey: HERE }, 0), { x: 110, y: 5 }, 'the system alone is its mainworld');
@@ -144,4 +175,34 @@ test('a mark that is a jump bubble is not a ship on the picture', () => {
     assert.equal(shipMarkOf(marks, 'nobody'), undefined);
     // A ship drawn both ways (the bubble first) is found as the ship.
     assert.deepEqual(shipMarkOf([{ id: 'far', x: 1, y: 1, jump: 'in' }, { id: 'far', x: 2, y: 2 }], 'far'), { id: 'far', x: 2, y: 2 });
+});
+
+test('a ship at a point in open space: holding there, in its own words, and Jump only from rest outside the rings', async () => {
+    const { isPoint, jumpStanding, pointAnchor } = await import('../../apps/web/src/orbit/ship_list.ts');
+    const hold = pointAnchor(HERE, { x: 1.02, y: 0.1 }, '1.02 AU · near A-II · 0.02 AU');
+    assert.deepEqual(hold, { kind: 'system', hexKey: HERE, point: { x: 1.02, y: 0.1 }, locationLabel: '1.02 AU · near A-II · 0.02 AU' });
+    assert.deepEqual(pointAnchor(HERE, { x: 1, y: 0 }, ''), { kind: 'system', hexKey: HERE, point: { x: 1, y: 0 } });
+    assert.equal(isPoint(hold), true);
+    assert.equal(isPoint(aiv), false);
+    assert.equal(isPoint({ kind: 'system', hexKey: HERE }), false, 'a bare system is not a point');
+    assert.equal(isPoint(null), false);
+    const name = (anchor) => anchor.locationLabel || 'somewhere';
+    const flight = { from: aiv, to: hold, departs: 10, arrives: 11, mode: 'flight', accelG: 2 };
+    const ship = { ...newRecord('vessel', 'cr_00000009-0000-4000-8000-000000000000', NOW), name: 'Far Margin', anchor: aiv, status: { track: [flight] } };
+    assert.match(statusWords(ship, 10.5, name).text, /^In flight A-IV → 1\.02 AU · near A-II · 0\.02 AU, arrives /);
+    assert.deepEqual(statusWords(ship, 12, name), { state: 'hold', text: 'Holding at 1.02 AU · near A-II · 0.02 AU' });
+    assert.deepEqual(statusWords({ ...ship, anchor: hold, status: null }, 12, name), { state: 'hold', text: 'Holding at 1.02 AU · near A-II · 0.02 AU' });
+    // Jump is offered only at rest at a point, outside every ring.
+    assert.deepEqual(jumpStanding(hold, true), { can: true, note: '' });
+    assert.equal(jumpStanding(hold, false).can, false);
+    assert.match(jumpStanding(hold, false).note, /inside a 100D limit/);
+    assert.equal(jumpStanding(hold, null).can, false);
+    assert.equal(jumpStanding(aiv, true).can, false, 'a ship at a body is inside its limit however the mark is drawn');
+    assert.match(jumpStanding(aiv, true).note, /plot a point past the limit and hold there/);
+    assert.equal(jumpStanding({ leg: flight, fraction: 0.5 }, true).can, false);
+    assert.match(jumpStanding({ leg: flight, fraction: 0.5 }, true).note, /^Under way\. To jump, plot a point past the 100D limit and hold there\.$/);
+    assert.equal(jumpStanding({ leg: { ...flight, mode: 'jump' }, fraction: 0.5 }, true).note, 'In jump');
+    assert.equal(jumpStanding(null, true).can, false);
+    // The jump leaves from the point.
+    assert.deepEqual(jumpLeg(hold, feri, 12, 160).from, hold);
 });

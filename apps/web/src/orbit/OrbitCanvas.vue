@@ -24,8 +24,8 @@ import { OrbitRenderer, type DiscPainter, type FlightPreview } from './OrbitRend
 import type { Layers, Mode, Picture } from './picture.ts';
 import { OrbitStage } from './stage.ts';
 import { publishOrbitClock } from './running.ts';
-import { bodiesAtOf, shipMarkOf, shipStanding, type ShipStanding } from './ship_marks.ts';
-import { pictureOfAu, type PictureLayout } from './distance.ts';
+import { bodiesAtOf, datedBodies, sceneBodies, shipMarkOf, shipStanding, type ShipStanding } from './ship_marks.ts';
+import { pictureOfAu, placeAtPicture, type PictureLayout } from './distance.ts';
 import { pictureBodies, placeShips, standInMarks, type PlotReadout, type ShipMark, type ShipTrack } from './ships.ts';
 import { readOrbitMotion, readOrbitTheme, type OrbitMotion } from './theme.ts';
 
@@ -60,6 +60,8 @@ const emit = defineEmits<{
     pick: [key: string];
     /** In plotting mode, a body was clicked: the destination. */
     plot: [key: string];
+    /** In plotting mode, empty picture was clicked: that point, in AU from the primary (the readout's inverse). */
+    plotPoint: [au: { x: number; y: number }];
 }>();
 
 const route = useRoute();
@@ -181,6 +183,10 @@ function onUp(event: PointerEvent): void {
     // Plotting: a body is a destination, and the camera stays where it is.
     if (props.plotting) {
         if (hit) emit('plot', hit.key);
+        else {
+            const au = pointUnder(at);
+            if (au) emit('plotPoint', au);
+        }
         return;
     }
     if (!hit) {
@@ -293,11 +299,38 @@ function auOnPicture(view: View, mode: Picture['mode'], au: { x: number; y: numb
     return pictureOfAu(au, view, current, layout);
 }
 
+/**
+ * The bodies at a flight's own dates (ship_marks.ts datedBodies): a layout of the frame's
+ * view at that date, the call the renderer makes for the ghosts. Kept until the view or the
+ * system changes; the frame's own date is the picture already drawn.
+ */
+const dated = datedBodies((at) => {
+    const current = plan.value;
+    const last = lastFrame;
+    return current && last ? sceneBodies(layoutScene(current, last.view, at)) : [];
+});
+let planTurn = 0;
+
+/** The point under a press on empty picture, in AU from the primary; null where the readout is blank. */
+function pointUnder(at: { x: number; y: number }): { x: number; y: number } | null {
+    const current = plan.value;
+    const last = lastFrame;
+    if (!current || !last) return null;
+    const mode = last.picture.mode;
+    const layout: PictureLayout = mode === 'row' || mode === 'column' || mode === 'blend' ? mode : 'orbits';
+    return placeAtPicture(at, last.view, current, layout, pictureBodies(last.picture), days);
+}
+
 function marksFor(picture: Picture, clockDays: number): readonly ShipMark[] | undefined {
     const view = lastFrame ? lastFrame.view : null;
     const placeAu = view ? (au: { x: number; y: number }) => auOnPicture(view, picture.mode, au) : undefined;
     if (props.tracks) {
-        lastMarks = placeShips(props.tracks, bodiesAtOf(props.hexKey, pictureBodies(picture)), clockDays, placeAu);
+        const here = pictureBodies(picture);
+        // A line-up has no place for another date: there the frame's own picture answers, as before.
+        const orbits = picture.mode !== 'row' && picture.mode !== 'column' && picture.mode !== 'blend';
+        const signature = view && orbits ? planTurn + '|' + JSON.stringify(view) : '';
+        const bodiesOn = (at: number) => (at === clockDays || !signature ? here : dated.on(signature, at));
+        lastMarks = placeShips(props.tracks, bodiesAtOf(props.hexKey, bodiesOn, placeAu), clockDays, placeAu);
         return lastMarks;
     }
     if (props.ships) return props.ships;
@@ -443,6 +476,7 @@ function paint(clockDays: number, time: number): void {
 
 function loadPlan(): void {
     plan.value = props.system ? planSystem(props.system, props.hexKey) : null;
+    planTurn += 1;
     stage.setPlan(plan.value);
     hover.value = null;
     stale = true;

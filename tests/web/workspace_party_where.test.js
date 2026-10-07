@@ -117,3 +117,19 @@ test('a vessel\'s own Where follows its track as the party\'s does, and its anch
     assert.deepEqual(vesselWhere(ship(), records, D0 - 3), { anchor: A1, underway: null }, 'before the first departure it is at its anchor');
     assert.deepEqual(vesselWhere(ship({ status: null }), records, D0 + 5), { anchor: A1, underway: null });
 });
+
+test('a ship holding at a point: the Party tab, the vessel page and the Track section say so in the leg\'s own words', async () => {
+    const { vesselWhere } = await import('../../apps/web/src/workspace/party_where.ts');
+    const { anchorName, trackRows } = await import('../../apps/web/src/workspace/track_rows.ts');
+    const HOLD = { kind: 'system', hexKey: REGINA, point: { x: 1.02, y: 0.1 }, locationLabel: '1.02 AU · near A-II · 0.02 AU' };
+    const legs = [{ from: A1, to: HOLD, departs: D0, arrives: D0 + 1, mode: 'flight', accelG: 2 }];
+    const records = { [SHIP_ID]: ship({ status: { track: legs } }) };
+    const held = { anchor: HOLD, underway: { state: 'hold', text: 'Holding at 1.02 AU · near A-II · 0.02 AU' } };
+    assert.deepEqual(partyWhere(PARTY, records, D0 + 2), held);
+    assert.deepEqual(vesselWhere(records[SHIP_ID], records, D0 + 2), held);
+    assert.deepEqual(partyMarker(PARTY, records, D0 + 2), { hexKey: REGINA, name: 'Far Margin' }, 'still here on the map');
+    assert.equal(anchorName(HOLD, records), '1.02 AU · near A-II · 0.02 AU', 'not "… system"');
+    assert.equal(anchorName({ kind: 'system', hexKey: REGINA, point: { x: 3, y: 4 } }, records), '5.00 AU out, in open space');
+    const rows = trackRows(legs, records);
+    assert.deepEqual([rows[0].from, rows[0].to], ['Regina A-I', '1.02 AU · near A-II · 0.02 AU']);
+});

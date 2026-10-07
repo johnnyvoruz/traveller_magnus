@@ -43,7 +43,7 @@ const props = withDefaults(defineProps<{
     /** The party's block: the place in larger type. */
     big?: boolean;
     /** Under way (the party's ship on a flight or in jump): these words stand where the place would, and the anchor is the system it is in. */
-    underway?: { state: 'flight' | 'jump'; text: string } | null;
+    underway?: { state: 'flight' | 'jump' | 'hold'; text: string } | null;
 }>(), { vesselChoice: false, exclude: '', none: 'Nowhere in particular', heading: 'Where', changeLabel: 'Change', big: false, underway: null });
 
 const emit = defineEmits<{
