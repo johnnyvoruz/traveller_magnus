@@ -198,7 +198,14 @@ file true: replace it, do not append to it.
   leftover file was deleted (§167). When every sector is done, B gets
   `prompts/b_engine_t1_7.md`. Before any release: the surfaces must read `surfaceTempBand`
   (C), and Johnny rules on the unresolved counts.
-- **That push ran: `703041d`, green.** **The stack by agent (§169), in order:**
+- **Last push `c7d4772`** (Moons off reversed, the Day/night wave, the course drawing),
+  green and live. **Called for in §176:** a hunk-level snapshot (`rts_main.patch`,
+  `rts_renderer_a_only.patch`, five new files): vessels on the sector map, waypoints,
+  ship tags like the planet's, the liquid row, the ribbon. Check `git log -1`.
+  **Then:** D `d_nav_console.md`; C is mid `c_city_lights_2.md` (the ring pop Johnny
+  confirmed, the corrected climate, city lights step 2); A and E are free (the journal, K7,
+  is next and has no recipe yet); B waits for v6 (`b_engine_t1_7.md`).
+- **Earlier: `703041d`, green.** **The stack by agent (§169), in order:**
   A `a_course_preview.md`, then `a_vessels_on_map.md`; D `d_ghost_wiring.md`, then
   `d_waypoints.md` (follow-up 28: select on the picture, the docked tag, a course of
   waypoints, Play and the speed steps); C `c_toggle_motion_4.md`, then city lights steps 2

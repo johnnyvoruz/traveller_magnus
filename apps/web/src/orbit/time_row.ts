@@ -9,6 +9,24 @@
  * button keeps its place, unseen, until the scrub is released, and the readout is as wide
  * as its longest reading. Pure.
  */
+import { FASTEST, REAL_TIME, SPEED_SLIDER_MAX, sliderFromSpeed, speedFromSlider } from './clock.ts';
+
+
+/** The speed's steps from the keyboard: this many from real time to the fastest. */
+export const SPEED_STEPS = 10;
+
+/**
+ * One step faster or slower (the keys of orbit-faster and orbit-slower, and the two buttons
+ * by the slider): a tenth of the slider's travel, which is a tenth of the way from real
+ * time to the fastest on its own scale. It stops at each end.
+ */
+export function stepSpeed(daysPerSecond: number, direction: 1 | -1): number {
+    const step = SPEED_SLIDER_MAX / SPEED_STEPS;
+    const at = Math.round(sliderFromSpeed(daysPerSecond) / step) + direction;
+    if (at <= 0) return REAL_TIME;
+    if (at >= SPEED_STEPS) return FASTEST;
+    return speedFromSlider(at * step);
+}
 
 /** The readout's longest reading, "DDD-YYYY · Thirday · HH:MM:SS", in characters of its mono face; the button is this wide. */
 export const READOUT_CHARS = 'DDD-YYYY · Thirday · HH:MM:SS'.length;

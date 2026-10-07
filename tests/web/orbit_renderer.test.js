@@ -1268,3 +1268,37 @@ test('dockTag leaves a docked designator undrawn', () => {
     assert.ok(shown.some((call) => call.op === 'fillText' && call.args[0] === 'Courier'));
     assert.ok(shown.some((call) => call.op === 'fillText' && call.args[0] === 'Liner'));
 });
+
+test('shipTags draws every designator and no name, and off leaves the names', () => {
+    const plan = planSystem(testSystem(), HEX_KEY);
+    const scene = layoutScene(plan, { ...VIEW, moons: DEFAULT_LAYERS.moons, jump: DEFAULT_LAYERS.jump }, 1000);
+    const picture = orbitPicture(plan, scene, DEFAULT_LAYERS, VIEW.z);
+    const world = scene.primary.bodies.find((at) => at.world.name === 'Test I');
+    const hit = picture.hits.find((item) => item.kind === 'world' && item.key === world.world.key);
+    const marks = [
+        { id: 'b', name: 'Courier', kind: 'vessel', shape: 'circle', x: hit.cx, y: hit.cy },
+        { id: 'a', name: 'Liner', kind: 'traffic', shape: 'rectangle', x: hit.cx, y: hit.cy },
+        { id: 'f', name: 'Far Margin', kind: 'party', shape: 'triangle', x: hit.cx + 80, y: hit.cy, heading: 0.4 },
+    ];
+    const names = (calls) => calls.filter((call) => call.op === 'fillText').map((call) => call.args[0]);
+    const off = extraCalls({ ships: marks });
+    assert.ok(names(off).includes('Courier'));
+    assert.ok(names(off).includes('Liner'));
+    assert.ok(names(off).includes('Far Margin'));
+    const radius = (hit.visualR ?? hit.r) + 16;
+    const angle = Math.PI / 4;
+    const beside = (index) => ({
+        x: hit.cx + (radius + index * 20) * Math.cos(angle),
+        y: hit.cy + (radius + index * 20) * Math.sin(angle),
+    });
+    const on = extraCalls({ ships: marks, shipTags: true, dockTag: true });
+    assert.equal(names(on).includes('Courier'), false);
+    assert.equal(names(on).includes('Liner'), false);
+    assert.equal(names(on).includes('Far Margin'), false);
+    const moved = on.filter((call) => call.op === 'translate').map((call) => call.args);
+    const liner = beside(0);
+    const courier = beside(1);
+    assert.ok(moved.some((args) => args[0] === liner.x && args[1] === liner.y));
+    assert.ok(moved.some((args) => args[0] === courier.x && args[1] === courier.y));
+    assert.ok(moved.some((args) => args[0] === hit.cx + 80 && args[1] === hit.cy));
+});

@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { BODY_SNAP_PX } from '../../apps/web/src/orbit/distance.ts';
-import { dockedBeside, placeShips, plotText, shipAt, standInMarks } from '../../apps/web/src/orbit/ships.ts';
+import { dockedBeside, placeShips, plotText, readoutPlace, shipAt, standInMarks } from '../../apps/web/src/orbit/ships.ts';
 
 const hex = 'Test_Sector/0101';
 const at = (bodyKey) => ({ kind: 'system', hexKey: hex, bodyKey });
@@ -228,4 +228,19 @@ test('dockedBeside places one, two and four ships along the diagonal', () => {
     assert.deepEqual(dockedBeside(body, radius, 3), at(3));
     const step = Math.hypot(at(1).x - at(0).x, at(1).y - at(0).y);
     assert.ok(Math.abs(step - 20) < 1e-9);
+});
+
+test('the hairline readout moves to the pointer\'s other side when it would cross a name', () => {
+    const canvas = { w: 1000, h: 800 };
+    const text = { w: 60, h: 10 };
+    const clear = readoutPlace({ x: 100, y: 100 }, text, canvas, [{ x: 400, y: 400, w: 48, h: 10 }]);
+    assert.deepEqual(clear, { x: 108, y: 112, align: 'left', baseline: 'top' });
+    const blocked = readoutPlace({ x: 100, y: 100 }, text, canvas, [{ x: 108, y: 112, w: 48, h: 10 }]);
+    assert.equal(blocked.align, 'right');
+    assert.equal(blocked.x, 92);
+    assert.equal(blocked.y, 112);
+    assert.ok(blocked.x - text.w < 108, 'the flipped box sits on the other side of the pointer');
+    const edge = readoutPlace({ x: 980, y: 100 }, text, canvas, []);
+    assert.equal(edge.align, 'right');
+    assert.equal(edge.x, 972);
 });

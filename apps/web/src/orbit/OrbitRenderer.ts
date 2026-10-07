@@ -27,7 +27,7 @@ import {
 } from './picture.ts';
 import { discBatch, sunColour, visualRate, type OrbitDiscBatch } from './disc_batch.ts';
 import { pictureOfAu, pointWords } from './distance.ts';
-import { dockedBeside, pictureBodies, plotText, type PlotReadout, type ShipMark, type ShipShape } from './ships.ts';
+import { dockedBeside, pictureBodies, plotText, readoutPlace, type PlotReadout, type ShipMark, type ShipShape } from './ships.ts';
 import { whenWords } from './ship_list.ts';
 import { cssSeconds, easeOutAt, withAlpha, type EaseOut, type OrbitTheme, type PortPaint } from './theme.ts';
 
@@ -174,6 +174,11 @@ export type DrawState = {
      * for it. Omitted, the designator is drawn.
      */
     dockTag?: boolean;
+    /**
+     * D's tags name every ship. Every designator is drawn, including one beside a body,
+     * and no ship name is. Omitted, names are drawn and `dockTag` still hides a docked designator.
+     */
+    shipTags?: boolean;
 };
 
 /**
@@ -385,6 +390,7 @@ export class OrbitRenderer {
         this.selection(plan, picture, state);
         const ghostAt = this.paintGhosts(plan, picture, view, state);
         this.beginBubbles(state);
+        this.shipTags = state.shipTags === true;
         this.ships(state.ships, picture.hits, state.dockTag === true);
         this.plot(state.plot, plan, picture, view, state.days, ghostAt, state.ships);
         this.settleDiscs(state);
@@ -2179,6 +2185,9 @@ export class OrbitRenderer {
      * so a zoom that rebuilds the picture does not grow the stroke. A jump report is
      * not drawn; the bubble for that moment is drawn in its place while it runs.
      */
+    /** True for this frame when D's tags name the ships, so the canvas draws no name. */
+    private shipTags = false;
+
     private ships(marks: readonly ShipMark[] | undefined, hits: readonly Hit[], dockTag: boolean): void {
         const bubbling = new Set<string>();
         for (const bubble of this.bubbleFrame) {
@@ -2189,7 +2198,7 @@ export class OrbitRenderer {
         for (const mark of marks) {
             if (bubbling.has(mark.id) || mark.jump) continue;
             const at = this.beside(mark, marks, hits);
-            if (dockTag && at !== mark) continue;
+            if (!this.shipTags && dockTag && at !== mark) continue;
             this.paintDesignator(at === mark ? mark : { ...mark, x: at.x, y: at.y }, 1, 1);
         }
     }
@@ -2286,6 +2295,7 @@ export class OrbitRenderer {
         this.designator(mark.shape);
         ctx.stroke();
         ctx.restore();
+        if (this.shipTags) return;
         ctx.save();
         ctx.fillStyle = colour;
         ctx.globalAlpha = alpha;
@@ -2790,13 +2800,18 @@ export class OrbitRenderer {
         });
         if (text) {
             ctx.fillStyle = theme.text;
+            const nameH = 10;
+            ctx.font = '10px ' + theme.fontText;
+            const names = this.shipTags ? [] : (ships ?? []).map((mark) => {
+                const w = ctx.measureText(mark.name).width;
+                return { x: mark.x + 12, y: mark.y - nameH / 2, w, h: nameH };
+            });
             ctx.font = '10px ' + theme.fontCode;
             const width = ctx.measureText(text).width;
-            const pastRight = plot.x + 8 + width > this.w;
-            const pastBottom = plot.y + 12 > this.h - 16;
-            ctx.textAlign = pastRight ? 'right' : 'left';
-            ctx.textBaseline = pastBottom ? 'bottom' : 'top';
-            ctx.fillText(text, pastRight ? plot.x - 8 : plot.x + 8, pastBottom ? plot.y - 8 : plot.y + 12);
+            const at = readoutPlace(plot, { w: width, h: nameH }, { w: this.w, h: this.h }, names);
+            ctx.textAlign = at.align;
+            ctx.textBaseline = at.baseline;
+            ctx.fillText(text, at.x, at.y);
         }
         ctx.restore();
     }

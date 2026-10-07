@@ -302,7 +302,7 @@ test('a picture point round-trips through AU, log and linear, at two zooms', () 
     }
 });
 
-test('a point is worded from the plan and the date, and names a body only when it is close', () => {
+test('a point is worded from the plan and the date, near, far, and with no body', () => {
     assert.equal(NEAR_BODY_AU, 0.05);
     const hosted = world('w1', 1, 0, { index: 0 });
     hosted.name = 'Regina A-II';
@@ -310,8 +310,11 @@ test('a point is worded from the plan and the date, and names a body only when i
     const plan = planOf([star('s0', 0, { body: { mass: 1 } })], [hosted, belt]);
     plan.name = 'Regina';
     assert.equal(pointWords(plan, { x: 1.02, y: 0 }, 0), '1.02 AU \u00B7 near A-II \u00B7 0.02 AU');
-    assert.equal(pointWords(plan, { x: 2, y: 0 }, 0), '2.00 AU');
-    assert.equal(pointWords(plan, { x: 12, y: 5 }, 0), '13.0 AU');
+    assert.equal(pointWords(plan, { x: 2, y: 0 }, 0), '2.00 AU \u00B7 1.00 AU from A-II');
+    assert.equal(pointWords(plan, { x: 12, y: 5 }, 0), '13.0 AU \u00B7 12.1 AU from A-II');
     const half = 0.5 * 365.25;
-    assert.equal(pointWords(plan, { x: 1.02, y: 0 }, half), '1.02 AU');
+    assert.equal(pointWords(plan, { x: 1.02, y: 0 }, half), '1.02 AU \u00B7 1.02 AU from s0');
+    const empty = planOf([], [world('w9', 2, 0, { index: 0, belt: true, star: -1 })]);
+    assert.equal(pointWords(empty, { x: 2, y: 0 }, 0), '2.00 AU');
+    assert.equal(pointWords(empty, { x: 26.9, y: 0 }, 0), '26.9 AU');
 });

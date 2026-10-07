@@ -12,7 +12,7 @@ import {
     TERRITORY_FILL_ALPHA, TERRITORY_STROKE, UWP_Y,
 } from './glyphs.ts';
 import { routeSegments, type RouteSegment } from './route_lines.ts';
-import { drawCampaignLayer, partyContains, type CampaignSnapshot, type PartyMark } from './campaign_layer.ts';
+import { drawCampaignLayer, partyContains, vesselContains, type CampaignSnapshot, type PartyMark, type VesselHit } from './campaign_layer.ts';
 import type { MapTheme } from './theme.ts';
 import { PPP_GRID, PPP_NAMES, tierFor, type Tier } from './tiers.ts';
 import { boxesOverlap, clampTitle, fadeToward, stepScale, titleAnchor, titleInView, zoomStep, type Box } from './titles.ts';
@@ -180,6 +180,7 @@ export class MapRenderer {
     private dpr = 1;
     private campaignSnapshot: CampaignSnapshot | null = null;
     private partyMark: PartyMark | null = null;
+    private vesselMarks: VesselHit[] = [];
 
     constructor(canvas: HTMLCanvasElement, theme: MapTheme) {
         const ctx = canvas.getContext('2d');
@@ -229,7 +230,10 @@ export class MapRenderer {
     /** The campaign snapshot. Null draws nothing and does not fetch. */
     setCampaign(snapshot: CampaignSnapshot | null): void {
         this.campaignSnapshot = snapshot;
-        if (!snapshot) this.partyMark = null;
+        if (!snapshot) {
+            this.partyMark = null;
+            this.vesselMarks = [];
+        }
     }
 
     /**
@@ -238,6 +242,15 @@ export class MapRenderer {
      */
     partyAt(sx: number, sy: number): boolean {
         return this.partyMark ? partyContains(this.partyMark, sx, sy) : false;
+    }
+
+    /** The vessel under the point, or null. The system glyph and a zoomed-out point are not a hit. */
+    vesselAt(sx: number, sy: number): string | null {
+        for (let i = this.vesselMarks.length - 1; i >= 0; i -= 1) {
+            const hit = this.vesselMarks[i];
+            if (vesselContains(hit, sx, sy)) return hit.id;
+        }
+        return null;
     }
 
     /** Subsector titles start at this x when the panel covers the left of the map. */
@@ -318,6 +331,7 @@ export class MapRenderer {
     private paintCampaign(cam: Camera, vp: Viewport): boolean {
         if (!this.campaignSnapshot) {
             this.partyMark = null;
+            this.vesselMarks = [];
             return false;
         }
         const frame = drawCampaignLayer(this.ctx, {
@@ -335,6 +349,7 @@ export class MapRenderer {
             nowMs: now(),
         });
         this.partyMark = frame.mark;
+        this.vesselMarks = frame.vessels;
         return frame.animating;
     }
 

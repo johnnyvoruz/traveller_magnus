@@ -60,6 +60,8 @@ export const ORBIT_COMMANDS: readonly OrbitCommand[] = [
     { id: 'orbit-week-back', name: 'Back 1 week', keys: ['W'], help: 'a week back (and the campaign date, when the view is on it)' },
     { id: 'orbit-scrub', name: 'Scrub time', keys: ['s'], help: 'to the scrub (in the Time drawer): Left and Right a day, Shift an hour, hold an end to shuttle' },
     { id: 'orbit-speed', name: 'Simulation speed', keys: ['v'], help: 'to the speed slider (in the Time drawer); Left and Right change it' },
+    { id: 'orbit-slower', name: 'Slower', keys: ['['], help: 'the clock a step slower' },
+    { id: 'orbit-faster', name: 'Faster', keys: [']'], help: 'the clock a step faster' },
     { id: 'orbit-date', name: 'Time drawer', keys: ['t', 'T'], help: DRAWERS[0].help },
     { id: 'orbit-drawer-view', name: 'View drawer', keys: ['y', 'Y'], help: DRAWERS[1].help },
     { id: 'orbit-drawer-layers', name: 'Layers drawer', keys: ['l', 'L'], help: DRAWERS[2].help },
@@ -69,8 +71,11 @@ export const ORBIT_COMMANDS: readonly OrbitCommand[] = [
     ...LAYERS.map((item) => ({ id: item.id, name: 'Show or hide: ' + item.label, keys: [item.hotkey], help: item.label.toLowerCase() + ' on or off' })),
     { id: 'orbit-fit', name: 'Fit the system', keys: ['f'], help: 'fit the whole system' },
     { id: 'orbit-plot', name: 'Plotting mode', keys: ['p', 'P'], help: 'plotting on or off: the hairlines follow the pointer; press a body, or empty space for a point, to set the selected ship’s destination' },
-    { id: 'orbit-add-leg', name: 'Add the plotted leg', keys: [], help: 'in the plot card: writes the flight to the ship’s track' },
-    { id: 'orbit-plot-estimate', name: 'Return the flight’s hours to the estimate', keys: [], help: 'in the plot card: the hours follow the estimate again' },
+    { id: 'orbit-ship-next', name: 'Select the next ship', keys: ['n', 'N'], help: 'the next ship in this system (a ship’s tag or its mark on the picture selects it too)' },
+    { id: 'orbit-add-leg', name: 'Add the plotted course', keys: [], help: 'in the plot card: writes the course’s legs to the ship’s track, and puts the clock on its departure' },
+    { id: 'orbit-course-undo', name: 'Remove the last waypoint', keys: [], help: 'in the plot card, and on Escape while plotting' },
+    { id: 'orbit-course-clear', name: 'Clear the course', keys: [], help: 'in the plot card: every waypoint goes' },
+    { id: 'orbit-plot-estimate', name: 'Return the course’s hours to the estimates', keys: [], help: 'in the plot card: every leg’s hours follow its estimate again' },
     { id: 'orbit-jump-roll', name: 'Roll the jump’s duration again', keys: [], help: 'in the jump preview: a new roll for the hours' },
     { id: 'orbit-jump', name: 'Jump', keys: [], help: 'in the status strip: the selected ship jumps to the marked system, once outside every 100D limit' },
     { id: 'orbit-picture', name: 'Picture: scale and ring strength', keys: [], help: 'in the View drawer' },
@@ -101,7 +106,7 @@ export function keyWords(spec: string): string {
     if (spec === ' ') return 'Space';
     if (spec === 'C') return 'Shift+C';
     if (spec === 'W') return 'Shift+W';
-    if (spec === 'T' || spec === 'Y' || spec === 'L' || spec === 'P') return '';
+    if (spec === 'T' || spec === 'Y' || spec === 'L' || spec === 'P' || spec === 'N') return '';
     return spec.length === 1 ? spec.toUpperCase() : spec;
 }
 

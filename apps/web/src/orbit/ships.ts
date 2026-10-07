@@ -193,6 +193,56 @@ function primaryAu(au: number): string {
  * the distance from that mark follows, in km under a tenth of an AU and in AU above.
  * Empty when the picture has no place for the pointer. Picture coordinates are never written.
  */
+export type ReadoutBox = { x: number; y: number; w: number; h: number };
+
+export type ReadoutPlace = {
+    x: number;
+    y: number;
+    align: 'left' | 'right';
+    baseline: 'top' | 'bottom';
+};
+
+const READOUT_X = 8;
+const READOUT_BELOW = 12;
+const READOUT_ABOVE = 8;
+
+function boxesOverlap(a: ReadoutBox, b: ReadoutBox): boolean {
+    return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+}
+
+/**
+ * Where the hairline readout is drawn. Right and below the pointer, flipped to stay
+ * on the canvas. When that box would cross a mark's name, it moves to the pointer's
+ * other side. `names` are the name boxes already painted, in picture pixels.
+ */
+export function readoutPlace(
+    plot: { x: number; y: number },
+    text: { w: number; h: number },
+    canvas: { w: number; h: number },
+    names: readonly ReadoutBox[],
+): ReadoutPlace {
+    const boxAt = (right: boolean, below: boolean): ReadoutBox => ({
+        x: right ? plot.x + READOUT_X : plot.x - READOUT_X - text.w,
+        y: below ? plot.y + READOUT_BELOW : plot.y - READOUT_ABOVE - text.h,
+        w: text.w,
+        h: text.h,
+    });
+    const hits = (box: ReadoutBox) => names.some((name) => boxesOverlap(box, name));
+    let right = !(plot.x + READOUT_X + text.w > canvas.w);
+    let below = !(plot.y + READOUT_BELOW > canvas.h - 16);
+    if (hits(boxAt(right, below))) {
+        if (!hits(boxAt(!right, below))) right = !right;
+        else if (!hits(boxAt(right, !below))) below = !below;
+        else right = !right;
+    }
+    return {
+        x: right ? plot.x + READOUT_X : plot.x - READOUT_X,
+        y: below ? plot.y + READOUT_BELOW : plot.y - READOUT_ABOVE,
+        align: right ? 'left' : 'right',
+        baseline: below ? 'top' : 'bottom',
+    };
+}
+
 export function plotText(plot: PlotReadout, frame?: PlotFrame | null): string {
     if (!frame) return '';
     const here = placeAtPicture({ x: plot.x, y: plot.y }, frame.view, frame.plan, frame.mode, frame.bodies, frame.days);

@@ -5,6 +5,31 @@ Issued 2026-10-06 by the orchestrator. The fourth motion pass is **accepted and 
 planet's shade request the same with Moons on and off; your account of what `moonsShown`
 was dropping is in the log). Johnny judges it live.
 
+## Before anything: two things Johnny saw, to check on the deployed build
+
+Minutes after pushing your fourth pass, and almost certainly while the build before it was
+still the live one, Johnny reported: *"Moons on, click to remove, the textures still vanish
+immediately. When we toggle Day / Night back on, the rings on a planet pop in, they should
+fade in."* Your fourth pass is live now (`c7d4772`; the live orbit chunk is
+`OrbitView-GbU36niV.js`).
+
+- Open `https://traveller.voyage` itself (not your dev server), a ringed gas giant with
+  moons at Regina (C-II), Enhanced, and do exactly those two things: Moons off; then
+  Day/night off and on again. Record each as a GIF beside the same on your dev build.
+- **If either still shows on the live build, it is first in this step:** the moons'
+  textures stay until the returning wave has passed them; and a planet's rings never pop,
+  in either direction of either switch: they cross-fade with the body's own sweep, and a
+  ring whose tile arrives late fades up over `--t-base`. Say what differed between your
+  dev frames and the live site (a production-only path, the default mode, device pixel
+  ratio, a tile arriving later over the network) and add a test that would have caught it.
+- If neither shows on the live build, say so with the two GIFs, and go on.
+- **Update, from Johnny after a hard refresh on your fourth pass:** *"the moons animation
+  is fixed now, the rings still pop in the day/night toggle."* So the Moons half is
+  confirmed done, and **the rings popping when Day/night is switched is confirmed still
+  there on the live build: fix it first.** Reproduce it on `https://traveller.voyage` at a
+  ringed planet (off and on again), find why your dev frames did not show it, and make the
+  rings cross-fade with the body's sweep in both directions.
+
 ## Part 0, small, and it gates the next truth release
 
 A corrected truth version (v6) is being built now. Every world in it carries the fields

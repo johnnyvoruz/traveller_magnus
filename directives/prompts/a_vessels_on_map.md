@@ -16,6 +16,16 @@ body-or-point, `pictureOfAu`, `pointWords`, ships beside their body, the stand-i
   pointer is near the ship. Keep the readout clear of the marks' names (move it to the
   pointer's other side when it would collide). A test of the placement rule.
 
+- **A switch for the ships' names (added 2026-10-06, after you began; do it whenever you
+  reach it in this step).** Johnny wants every ship's label to be a boxed tag like the
+  planet's selection tag; Agent D is building those as controls over the picture
+  (`orbit/ShipTags.vue`). Your `dockTag` stops the renderer drawing a docked ship's
+  designator. Widen it, or add a second switch (say which): when D's tags are on, the
+  renderer draws **no name** for any ship (docked, holding, under way), and keeps every
+  designator, including a docked ship's, since D's tag now names it rather than replaces
+  it. Default off, so the picture is unchanged until D sets it. A test for each state.
+  Your line in `OrbitCanvas.vue` listed.
+
 ## Why
 
 Johnny: *"I want to see it on the map."* Asked whether that includes the sector map, he said

@@ -606,6 +606,13 @@ only. D's five points for the orchestrator:
       (`prompts/a_course_preview.md`); Agent D builds the controls
       (`prompts/d_waypoints.md`, after `d_ghost_wiring.md`). **Slingshots round a planet are
       backlog, after the full MVP** (`plan.md`, "After 5", ship navigation backlog).
+  29. **The nav console (Johnny, 2026-10-06; Agent D, `prompts/d_nav_console.md`).** "Let's
+      really take this modal / popup and make it look like a sci-fi ship UI. Also when I
+      select the ship it should automatically go into plotting mode, and then when in
+      plotting mode, it should have me select the velocity so that when I move the plotter
+      around, we see the planet ghosts move." Selecting a ship starts plotting; thrust is
+      chosen first; the preview and the ghosts follow the pointer; the plot card is
+      redesigned as a ship's instrument from the view's own language. After follow-up 28.
   15. **The pinned body card beside the open panel (D decides; settled by 22):** when the orbit view's
       docked body card and the dossier panel for the same body are both open, two views of
       one thing show at once. Johnny sees pros and cons. D reviews `manifesto.md` (one

@@ -242,6 +242,45 @@ export function climateDisplay(body: Record<string, unknown>): { climate: string
     };
 }
 
+const PHASE_ENDS = ['low', 'mean', 'high'] as const;
+
+/** The phase note in the order the correction writes it. A liquid end is not a note. */
+function phaseWords(phase: unknown): string | null {
+    if (phase === 'solid') return 'frozen';
+    if (phase === 'gas') return 'boils';
+    if (!phase || typeof phase !== 'object' || Array.isArray(phase)) return null;
+    const record = phase as Record<string, unknown>;
+    const parts: string[] = [];
+    for (const end of PHASE_ENDS) {
+        const value = record[end];
+        if (value === 'solid') parts.push('frozen at the ' + end);
+        else if (value === 'gas') parts.push('boils at the ' + end);
+    }
+    return parts.length ? parts.join(', ') : null;
+}
+
+/**
+ * Surface liquid from the body's own liquidStatus. Null when that field is
+ * absent, so a chart without the correction is unchanged. The name and the
+ * phase note are the fields the correction stored. Nothing is classified here.
+ */
+export function liquidDisplay(body: Record<string, unknown>): string | null {
+    if (!Object.prototype.hasOwnProperty.call(body, 'liquidStatus')) return null;
+    const status = body.liquidStatus;
+    if (!status || typeof status !== 'object' || Array.isArray(status)) return null;
+    const record = status as { status?: unknown; substance?: unknown; phase?: unknown };
+    if (record.status === 'none') return 'None';
+    if (record.status === 'unknown') return 'Not classified';
+    if (record.status === 'unresolved') return 'Unresolved. No listed liquid fits this world\'s temperature.';
+    if (record.status !== 'known') return null;
+    const name = typeof record.substance === 'string' ? record.substance.trim() : '';
+    const phase = phaseWords(record.phase);
+    if (name && phase) return name + ', ' + phase + '.';
+    if (name) return name;
+    if (!phase) return null;
+    return phase.charAt(0).toUpperCase() + phase.slice(1) + '.';
+}
+
 function rowsOf(specs: ([string, unknown] | [string, unknown, number])[]): StatRow[] {
     const rows: StatRow[] = [];
     for (const spec of specs) {
@@ -897,6 +936,8 @@ export function bodyModel(tree: TreeEnvelope, bodyKey: string): BodyModel | null
                 ['Climate', climate.climate],
                 ['Orbital zone', climate.zone],
             ];
+        const liquidText = liquidDisplay(body);
+        const liquidRow: [string, unknown][] = liquidText ? [['Surface liquid', liquidText]] : [];
         const physical = section('Physical', [
             ['Mass (M⊕)', body.massEarths ?? body.mass, 3],
             ['Composition', body.composition],
@@ -904,6 +945,7 @@ export function bodyModel(tree: TreeEnvelope, bodyKey: string): BodyModel | null
             ['High temperature', formatTempFull(body.highTempK)],
             ['Low temperature', formatTempFull(body.lowTempK)],
             ...bandRows,
+            ...liquidRow,
             ['Albedo', body.albedo, 2],
         ]);
         const life = section('Life & resources', [

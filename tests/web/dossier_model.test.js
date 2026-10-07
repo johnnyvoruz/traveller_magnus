@@ -9,7 +9,7 @@ import { buildSector } from '@voyage/generation';
 import { environmentPolicy, reconcileTree } from '../../packages/engines/src/reconcile_environment.js';
 import { TRUTH_SEED, TRUTH_SETTINGS } from '../../tools/truth/settings.js';
 import { celsiusOf, fahrenheitOf, formatKelvin, formatTempFull, wholeDegrees } from '../../apps/web/src/design/units.ts';
-import { bodyKeys, bodyModel, climateDisplay, mainworldProfile, overviewModel, pickSystem, rowFor } from '../../apps/web/src/dossier/model.ts';
+import { bodyKeys, bodyModel, climateDisplay, liquidDisplay, mainworldProfile, overviewModel, pickSystem, rowFor } from '../../apps/web/src/dossier/model.ts';
 import { cardFor } from '../../apps/web/src/orbit/card.ts';
 import { planSystem } from '../../apps/web/src/orbit/layout.ts';
 
@@ -420,12 +420,14 @@ test('Regina overview and Caesillian 0914 partial follow the inspector', async (
     const unknownLabel = environmentPolicy.liquid.q3.unknownLabel;
     const midpoint = (water.mp + water.bp) / 2;
     const liquidCases = [
-        { name: 'none', fields: { hydroPercent: 0, liquidType: unknownLabel, atmCode: ordinary, meanTempK: midpoint, lowTempK: midpoint, highTempK: midpoint }, status: 'none' },
-        { name: 'none-ice', fields: { hydroPercent: 0, liquidType: ice, atmCode: vacuum, meanTempK: midpoint, highTempK: midpoint }, status: 'none' },
-        { name: 'unknown', fields: { hydroPercent: Number.NaN, liquidType: water.name, atmCode: ordinary, meanTempK: midpoint }, status: 'unknown', forbid: [water.name] },
-        { name: 'unresolved', wipe: ['atmCode'], fields: { liquidType: water.name, hydroPercent: 40, meanTempK: midpoint }, status: 'unresolved', forbid: [water.name, 'unresolved'] },
-        { name: 'known-solid', fields: { liquidType: ice, hydroPercent: 20, atmCode: ordinary, meanTempK: water.mp - step, lowTempK: water.mp - step, highTempK: water.mp - step }, status: 'known', phase: 'solid', substance: water.name },
-        { name: 'known-notes', fields: { liquidType: water.name, hydroPercent: 40, atmCode: ordinary, meanTempK: midpoint, lowTempK: water.mp - step, highTempK: midpoint }, status: 'known', substance: water.name },
+        { name: 'none', fields: { hydroPercent: 0, liquidType: unknownLabel, atmCode: ordinary, meanTempK: midpoint, lowTempK: midpoint, highTempK: midpoint }, status: 'none', text: 'None', absent: [unknownLabel, 'dry'] },
+        { name: 'none-ice', fields: { hydroPercent: 0, liquidType: ice, atmCode: vacuum, meanTempK: midpoint, highTempK: midpoint }, status: 'none', text: 'None', absent: [ice, 'dry'] },
+        { name: 'unknown', fields: { hydroPercent: Number.NaN, liquidType: water.name, atmCode: ordinary, meanTempK: midpoint }, status: 'unknown', text: 'Not classified', absent: [water.name] },
+        { name: 'unresolved', wipe: ['atmCode'], fields: { liquidType: water.name, hydroPercent: 40, meanTempK: midpoint }, status: 'unresolved', text: 'Unresolved. No listed liquid fits this world\'s temperature.', absent: [water.name, 'dry', 'None'] },
+        { name: 'known-solid', fields: { liquidType: ice, hydroPercent: 20, atmCode: ordinary, meanTempK: water.mp - step, lowTempK: water.mp - step, highTempK: water.mp - step }, status: 'known', phase: 'solid', substance: water.name, text: water.name + ', frozen.' },
+        { name: 'known-notes', fields: { liquidType: water.name, hydroPercent: 40, atmCode: ordinary, meanTempK: midpoint, lowTempK: water.mp - step, highTempK: midpoint }, status: 'known', substance: water.name, text: water.name + ', frozen at the low.' },
+        { name: 'known-ends', fields: { liquidType: water.name, hydroPercent: 40, atmCode: ordinary, meanTempK: midpoint, lowTempK: water.mp - step, highTempK: water.bp + step }, status: 'known', substance: water.name, text: water.name + ', frozen at the low, boils at the high.' },
+        { name: 'known-open', fields: { liquidType: water.name, hydroPercent: 40, atmCode: ordinary, meanTempK: midpoint, lowTempK: midpoint, highTempK: midpoint }, status: 'known', substance: water.name, text: water.name },
     ];
     for (const item of liquidCases) {
         const made = withHost(tree, (body) => {
@@ -438,6 +440,12 @@ test('Regina overview and Caesillian 0914 partial follow the inspector', async (
         assert.equal(found.body.liquidStatus.status, item.status, item.name);
         if (item.phase) assert.equal(found.body.liquidStatus.phase, item.phase, item.name);
         if (item.substance) assert.equal(found.body.liquidStatus.substance, item.substance, item.name);
+        if (item.name === 'known-notes') assert.equal(found.body.liquidStatus.phase.low, 'solid', item.name);
+        if (item.name === 'known-ends') {
+            assert.equal(found.body.liquidStatus.phase.low, 'solid', item.name);
+            assert.equal(found.body.liquidStatus.phase.high, 'gas', item.name);
+        }
+        if (item.name === 'known-open') assert.equal(found.body.liquidStatus.phase, undefined, item.name);
         const page = bodyModel(result.tree, found.key);
         const card = cardOf(result.tree, found);
         const rows = physicalRows(page);
@@ -446,10 +454,21 @@ test('Regina overview and Caesillian 0914 partial follow the inspector', async (
         assert.equal(rowText(rows, 'Temperature band'), null, item.name);
         assert.notEqual(rowText(rows, 'Climate'), 'NOT-A-BAND', item.name);
         assert.equal(card.lines.find((line) => line.label === 'Climate').value, rowText(rows, 'Climate'), item.name);
-        const phase = found.body.liquidStatus.phase;
-        const phaseWords = typeof phase === 'string' ? [phase] : phase && typeof phase === 'object' ? Object.values(phase) : [];
-        const forbid = ['unresolved', 'none', item.substance, found.body.liquidType].concat(item.forbid || [], phaseWords).filter((word) => typeof word === 'string' && word !== '');
-        assertNoLiquid(rows, card.lines, forbid, item.name);
+        assert.equal(liquidDisplay(found.body), item.text, item.name);
+        assert.equal(rowText(rows, 'Surface liquid'), item.text, item.name);
+        const labels = rows.map((row) => row.label);
+        const liquidAt = labels.indexOf('Surface liquid');
+        const lowAt = labels.indexOf('Low temperature');
+        const albedoAt = labels.indexOf('Albedo');
+        if (lowAt !== -1) assert.ok(liquidAt > lowAt, item.name);
+        if (albedoAt !== -1) assert.ok(liquidAt < albedoAt, item.name);
+        for (const word of item.absent || []) {
+            assert.equal(item.text.includes(word), false, item.name + ' shows ' + word);
+        }
+        if (typeof found.body.liquidType === 'string' && found.body.liquidType !== found.body.liquidStatus.substance) {
+            assert.equal(item.text.includes(found.body.liquidType), false, item.name + ' old label');
+        }
+        assertCardHasNoLiquid(card.lines, [item.text, found.body.liquidStatus.substance], item.name);
         if (item.fields.highTempK != null) assert.equal(rowText(rows, 'High temperature'), fullTemp(item.fields.highTempK), item.name);
         if (item.fields.lowTempK != null) assert.equal(rowText(rows, 'Low temperature'), fullTemp(item.fields.lowTempK), item.name);
     }
@@ -461,6 +480,8 @@ test('Regina overview and Caesillian 0914 partial follow the inspector', async (
     const barePage = bodyModel(reconciled.tree, bare.key);
     const bareCard = cardOf(reconciled.tree, bare);
     assert.equal(bare.body.liquidStatus, undefined);
+    assert.equal(liquidDisplay(bare.body), null);
+    assert.equal(rowText(physicalRows(barePage), 'Surface liquid'), null);
     assertNoLiquid(physicalRows(barePage), bareCard ? bareCard.lines : [], [], 'no-liquid-field');
 
     const caes = await buildSector({
@@ -542,6 +563,15 @@ function assertNoLiquid(rows, lines, words, name) {
     for (const word of words) assert.equal(texts.some((text) => text === word), false, name + ' ' + word);
 }
 
+function assertCardHasNoLiquid(lines, words, name) {
+    for (const line of lines) assert.equal(/liquid|substance|phase/i.test(line.label), false, name + ' ' + line.label);
+    const blob = lines.map((line) => line.label + '\n' + line.value).join('\n');
+    for (const word of words) {
+        if (typeof word !== 'string' || word === '') continue;
+        assert.equal(blob.includes(word), false, name + ' card has ' + word);
+    }
+}
+
 function liquidStep(rows) {
     const points = [];
     for (const row of rows) points.push(row.mp, row.bp);
@@ -586,6 +616,27 @@ test('climate words come only from the body', () => {
         climateDisplay({ surfaceTempBand: { status: 'unknown', band: 'Boiling' } }),
         { climate: 'not classified', zone: 'not classified' },
     );
+    assert.equal(liquidDisplay({ tempBand: 'Boiling' }), null);
+    assert.equal(liquidDisplay({ liquidType: 'Old label' }), null);
+    assert.equal(liquidDisplay({ liquidStatus: { status: 'none', outcome: 'zero' } }), 'None');
+    assert.equal(liquidDisplay({ liquidStatus: { status: 'unknown', outcome: 'hydro-invalid', substance: 'Old label' } }), 'Not classified');
+    assert.equal(
+        liquidDisplay({ liquidStatus: { status: 'unresolved', outcome: 'missing' }, liquidType: 'Old label' }),
+        'Unresolved. No listed liquid fits this world\'s temperature.',
+    );
+    assert.equal(
+        liquidDisplay({ liquidStatus: { status: 'known', substance: 'Made-up', phase: { low: 'solid', high: 'gas' } } }),
+        'Made-up, frozen at the low, boils at the high.',
+    );
+    assert.equal(liquidDisplay({ liquidStatus: { status: 'known', substance: 'Made-up', phase: 'solid' } }), 'Made-up, frozen.');
+    assert.equal(liquidDisplay({ liquidStatus: { status: 'known', substance: 'Made-up', phase: 'gas' } }), 'Made-up, boils.');
+    assert.equal(
+        liquidDisplay({ liquidStatus: { status: 'known', substance: 'Made-up', phase: { mean: 'solid' } } }),
+        'Made-up, frozen at the mean.',
+    );
+    assert.equal(liquidDisplay({ liquidStatus: { status: 'known', substance: 'Made-up' } }), 'Made-up');
+    assert.equal(liquidDisplay({ liquidStatus: { status: 'known', phase: 'solid' } }), 'Frozen.');
+    assert.equal(liquidDisplay({ liquidStatus: { status: 'known' } }), null);
     const files = [];
     function collect(target) {
         if (!fs.existsSync(target)) return;

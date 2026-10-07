@@ -5,6 +5,7 @@ import type { SectorHex, SectorIndex, TreeEnvelope, TruthManifest, TruthOverview
 import { campaign } from '../campaign/store.ts';
 import { fit, flight, SHORT_HOP, toWorld, zoomAt, type Camera, type Viewport } from '../map/camera.ts';
 import { standInSnapshot, type CampaignSnapshot } from '../map/campaign_layer.ts';
+import { vesselsOnMap } from '../map/vessel_marks.ts';
 import { campaignDays, partyMarker } from '../workspace/party_where.ts';
 import { formatHex, fromGlobal, hexAt, parseHex, SECTOR_ROWS } from '../map/geometry.ts';
 import { attachInput, type InputWhy } from '../map/input.ts';
@@ -449,6 +450,8 @@ function frame(): void {
     dirty = false;
     if (renderer) {
         const drawn = renderer.draw(cam);
+        const el = canvasEl.value;
+        if (el) el.dataset.drawMs = drawn.ms.toFixed(2);
         if (drawn.tier === 'hex' && version) requestIndexes(drawn.sectorsOnScreen);
         // A title fade is in progress: keep drawing until the renderer says it has settled.
         if (drawn.animating) dirty = true;
@@ -667,6 +670,11 @@ onMounted(() => {
                 openParty();
                 return;
             }
+            const vesselId = renderer ? renderer.vesselAt(sx, sy) : null;
+            if (vesselId) {
+                openVessel(vesselId);
+                return;
+            }
             const world = toWorld(cam, viewport(), sx, sy);
             const hit = hexAt(world.x, world.y);
             const place = fromGlobal(hit.q, hit.r);
@@ -703,7 +711,7 @@ onMounted(() => {
         },
         // Legacy js/canvas_input.js:361-373: a double click on a system with orbit data enters its orbit view.
         doubleClick: (sx, sy) => {
-            if (renderer && renderer.partyAt(sx, sy)) return;
+            if (renderer && (renderer.partyAt(sx, sy) || renderer.vesselAt(sx, sy))) return;
             const world = toWorld(cam, viewport(), sx, sy);
             const hit = hexAt(world.x, world.y);
             const place = fromGlobal(hit.q, hit.r);
@@ -785,11 +793,13 @@ function snapshotFromStore(): CampaignSnapshot | null {
     // A system can be located by anyone: the line is handed over with no campaign open, and signed out.
     if (!open && !locating.recordId) return null;
     // The party stands where its ship's track puts it at the campaign date (party_where.ts).
-    const mark = open && campaign.settings ? partyMarker(campaign.settings.party, campaign.records, campaignDays(campaign.clock)) : null;
+    const days = campaignDays(campaign.clock);
+    const mark = open && campaign.settings ? partyMarker(campaign.settings.party, campaign.records, days) : null;
     return {
         party: mark ? { name: mark.name, hexKey: mark.hexKey, focused: false } : null,
         locate: locateLine(),
         reducedMotion: prefersReducedMotion(),
+        vessels: open && campaign.settings ? vesselsOnMap(campaign.records, campaign.settings.party, days) : [],
     };
 }
 
@@ -922,6 +932,13 @@ function openParty(): void {
     accountOpen.value = false;
     suppressFly = true;
     void router.push(atPane(route.path, route.query, { kind: 'party' }));
+}
+
+/** A vessel's mark was pressed: that record in the campaign pane. */
+function openVessel(id: string): void {
+    accountOpen.value = false;
+    suppressFly = true;
+    void router.push(atPane(route.path, route.query, { kind: 'campaign', record: id }));
 }
 
 function holdsWorld(sx: number, sy: number, hhhh: string): boolean {

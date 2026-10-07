@@ -6,8 +6,8 @@
  * laid out. Geometry only; no rule says when a ship may jump beyond "outside every circle".
  */
 import type { CampaignAnchor } from '@voyage/shared';
-import type { JumpRing, Scene } from './layout.ts';
-import type { BodiesAt, BodyPoint, PictureOf, ShipMark } from './ships.ts';
+import type { Hit, JumpRing, Scene } from './layout.ts';
+import { dockedBeside, type BodiesAt, type BodyPoint, type PictureOf, type ShipMark } from './ships.ts';
 
 export type PictureBodyPoint = BodyPoint & { key: string; main: boolean };
 
@@ -110,4 +110,92 @@ export function shipStanding(mark: Pick<ShipMark, 'x' | 'y'>, rings: readonly Ju
  */
 export function shipMarkOf<M extends Pick<ShipMark, 'id' | 'jump'>>(marks: readonly M[], id: string): M | undefined {
     return marks.find((mark) => mark.id === id && !mark.jump);
+}
+
+/** How many tags stand at one body before the rest are counted in one more ("+3"). */
+export const TAGS_SHOWN = 4;
+/** The tag's box, as the planet's selection tag is drawn (OrbitRenderer: 34 px for two lines). */
+export const TAG_HEIGHT = 34;
+/** One tag under another: a tag's height and a little air. */
+export const TAG_STEP = TAG_HEIGHT + 4;
+/** The leader, as the planet's: out from the mark's corner 14 px on the diagonal, then 8 px level into the tag. (With the tags on, the renderer draws no small name beside the mark: Agent A's `shipTags` switch.) */
+export const TAG_CORNER = 5;
+export const TAG_LEAD = 14;
+export const TAG_RUN = 8;
+
+export type ShipTag = Pick<ShipMark, 'id' | 'name' | 'kind' | 'shape'> & {
+    /** The ship's designator on the picture: where the leader starts. */
+    markX: number;
+    markY: number;
+    /** The leader's knee, and so the tag's height on the picture. */
+    kneeX: number;
+    kneeY: number;
+    /** The tag's left edge (its middle is at kneeY). */
+    x: number;
+    /** Docked at, or in orbit round, this body; null under way or holding at a point. */
+    bodyKey: string | null;
+};
+
+export type TagsMore = { bodyKey: string; count: number; x: number; kneeX: number; kneeY: number; markX: number; markY: number };
+
+/**
+ * Where every ship's tag stands (Johnny, 2026-10-06: "I want the ship tag to look like the
+ * planet select tag … it's nearly impossible to see right now"). Every ship on the picture
+ * has one; a jump's report is not a ship and has none.
+ *
+ * A ship at a body (a mark with no heading within ON_BODY_PX of a star, world or moon, the
+ * renderer's own test) has its designator where the renderer draws it (orbit/ships.ts
+ * dockedBeside, in id order), and the tag's leader starts there. Any other ship's leader
+ * starts at its mark. **The rule that keeps tags apart:** a planet's selection tag goes up
+ * and to the right of the planet; a ship's tag always hangs **down and to the right** of
+ * its mark, and never changes side, so it does not flip while the ship moves and cannot
+ * meet the tag of the body it is at. Ships at one body stack straight down from the first
+ * tag, each on its own leader; past TAGS_SHOWN the rest are one count, unless that body's
+ * stack is opened.
+ */
+export function shipTags(marks: readonly ShipMark[], hits: readonly Hit[], opened: ReadonlySet<string> = new Set()): { tags: ShipTag[]; more: TagsMore[] } {
+    const bodies = hits.filter((hit) => hit.kind === 'star' || hit.kind === 'world' || hit.kind === 'moon');
+    const at = new Map<string, { hit: Hit; ships: ShipMark[] }>();
+    const tags: ShipTag[] = [];
+    const more: TagsMore[] = [];
+    const knee = (x: number, y: number): { kneeX: number; kneeY: number; x: number } => ({ kneeX: x + TAG_CORNER + TAG_LEAD, kneeY: y + TAG_CORNER + TAG_LEAD, x: x + TAG_CORNER + TAG_LEAD + TAG_RUN });
+    for (const mark of marks) {
+        if (mark.jump) continue;
+        let found: Hit | null = null;
+        if (typeof mark.heading !== 'number') {
+            let best = ON_BODY_PX * ON_BODY_PX;
+            for (const hit of bodies) {
+                const d = (mark.x - hit.cx) ** 2 + (mark.y - hit.cy) ** 2;
+                if (d <= best) {
+                    best = d;
+                    found = hit;
+                }
+            }
+        }
+        if (!found) {
+            tags.push({ id: mark.id, name: mark.name, kind: mark.kind, shape: mark.shape, markX: mark.x, markY: mark.y, ...knee(mark.x, mark.y), bodyKey: null });
+            continue;
+        }
+        const group = at.get(found.key);
+        if (group) group.ships.push(mark);
+        else at.set(found.key, { hit: found, ships: [mark] });
+    }
+    for (const [bodyKey, group] of at) {
+        const ships = group.ships.slice().sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+        const radius = group.hit.visualR ?? group.hit.r;
+        const first = dockedBeside({ x: group.hit.cx, y: group.hit.cy }, radius, 0);
+        const top = knee(first.x, first.y);
+        const all = opened.has(bodyKey) || ships.length <= TAGS_SHOWN;
+        const shown = all ? ships.length : TAGS_SHOWN;
+        for (let i = 0; i < shown; i += 1) {
+            const ship = ships[i];
+            const beside = dockedBeside({ x: group.hit.cx, y: group.hit.cy }, radius, i);
+            tags.push({ id: ship.id, name: ship.name, kind: ship.kind, shape: ship.shape, markX: beside.x, markY: beside.y, kneeX: top.kneeX, kneeY: top.kneeY + i * TAG_STEP, x: top.x, bodyKey });
+        }
+        if (!all) {
+            const beside = dockedBeside({ x: group.hit.cx, y: group.hit.cy }, radius, shown);
+            more.push({ bodyKey, count: ships.length - shown, x: top.x, kneeX: top.kneeX, kneeY: top.kneeY + shown * TAG_STEP, markX: beside.x, markY: beside.y });
+        }
+    }
+    return { tags, more };
 }

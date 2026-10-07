@@ -4658,3 +4658,103 @@ Stop and report.
   design's step 2, the lights under the weather), `prompts/e_liquid_row.md` (a surface
   liquid row on the world page when a body carries `liquidStatus`; the ribbon at half
   width). A's next is `prompts/a_vessels_on_map.md`.
+
+## 172. Pushed `c7d4772`; Johnny's two animation notes arrived before it was live (2026-10-06)
+
+- **`c7d4772`** (Moons off reversed, the Day/night wave, shadows kept; the course drawing):
+  GitHub run green; the live entry became `index-bBQhfttU.js` and the orbit chunk
+  `OrbitView-GbU36niV.js`, the files the rehearsal built, about two minutes after the
+  commit. A has `prompts/a_vessels_on_map.md`.
+- **Johnny, in the same minute as the push:** "Moons on, click to remove, the textures
+  still vanish immediately. When we toggle Day / Night back on, the rings on a planet pop
+  in, they should fade in." When he wrote it the live site was still the build before
+  (`index-7ommFa7T.js`), so both are most likely the old behaviour the fourth pass
+  replaces. He was asked to look again after a hard refresh.
+- **In case either survives:** `prompts/c_city_lights_2.md` (not yet handed out) now opens
+  with a check of exactly those two things on the deployed site, and the fix if they show.
+
+## 173. Johnny: the plot card as a ship's nav console; select starts plotting; the plotter is live (2026-10-06)
+
+- With a screenshot of the live plot card (saved as
+  `findings/ui_design_shots/ref_plot_card_today.png`): "Let's really take this modal /
+  popup and make it look like a sci-fi ship UI. Also when I select the ship it should
+  automatically go into plotting mode, and then when in plotting mode, it should have me
+  select the velocity so that when I move the plotter around, we see the planet ghosts
+  move."
+- **`prompts/d_nav_console.md`** (after `d_waypoints.md`, which D is in the middle of):
+  selecting a ship starts plotting for it, with one obvious way out; thrust chosen first
+  (the last used for that ship, none assumed the first time); the preview follows the
+  pointer, so the ghosts move as it sweeps, one settle per frame; the card redesigned as
+  an instrument from the view's own language (the amber tag, the Scout Survey readout, the
+  ship sheet's chamfered panels), with a short design note and mockups in the same step.
+  Follow-up 29.
+
+## 174. Johnny, after a hard refresh: Moons off is fixed; the rings still pop on Day/night (2026-10-06)
+
+- "You're right about the moons animation is fixed now, the rings still pop in the
+  day/night toggle." Follow-up 14d's first and third parts are confirmed on the live site;
+  the rings popping in when Day/night is switched is a live defect of the fourth pass.
+- `prompts/c_city_lights_2.md` already opened with a check of both on the deployed build;
+  it now says the rings are confirmed and come first.
+
+## 175. Johnny: a ship's tag is to look like the planet's selection tag (2026-10-06)
+
+- With a screenshot (`findings/ui_design_shots/ref_ship_tag_like_planet_tag.png`: a
+  planet's amber tag beside a ship drawn as a small grey circle and "New vessel" in small
+  grey type): "I want the ship tag to look like the planet select tag like we have here;
+  it's nearly impossible to see right now."
+- **Ruling:** one tag for every ship on the picture (docked, in orbit, holding at a point,
+  under way), built exactly as the planet's selection tag (`--orbit-tag` box, the same
+  type and leader), two lines (name; the strip's short state), a pressable control that
+  selects the ship; the designator stays as the mark. The selected ship's is the amber one.
+- **`prompts/d_ship_tag_look.md`:** an addition to `d_waypoints.md`, handed to D in
+  mid-step because it changes the tag D is building now (`orbit/ShipTags.vue` is already on
+  disk). **`prompts/a_vessels_on_map.md`** gains a bullet: a switch so the renderer draws
+  no ship names when D's tags are on, and keeps every designator.
+
+## 176. A's vessels on the map, D's waypoints and ship tags, E's liquid row and ribbon accepted; a hunk-level snapshot push (2026-10-06)
+
+- **Agent A, `a_vessels_on_map.md`:** `map/vessel_marks.ts` `vesselsOnMap` (pure, tested);
+  `map/campaign_layer.ts` draws the other vessels quieter than the party, stacked to the
+  left of the hex, three shown and "+n" beyond, names only at the names tier, a dot at the
+  point tier; a press opens the vessel's record through `shell/pane.ts`
+  (`MapRenderer.ts` keeps the hits); `pointWords` names the nearest body always; the
+  hairline readout placed clear of ships' names (`readoutPlace`); **`DrawState.shipTags`**:
+  no ship name drawn, every designator kept. 2.9 ms while panning. **Accepted.**
+  `fu27_map_vessels_system.png`: the liner's mark and name sit hard against Regina's own
+  glyphs and are hard to read; left for Johnny's eye.
+  **A's finding:** `placeAt` (the index) puts a flight in the system it left and gives a
+  jump no hex; D's `vesselWhere` (the party marker) puts a flight in the system being
+  crossed and holds a jump at the system it left with "in jump". The map's vessel marks
+  follow `vesselWhere`, so marks and the party marker agree; the index does not list a
+  ship in jump anywhere. Left as it is: a record aboard a ship in jump is not "here".
+- **Agent D, `d_waypoints.md` with `d_ship_tag_look.md`** (the first report was not pasted;
+  read from `findings/orbit_view_design.md` §8w): `orbit/course.ts` (pure, tested);
+  plotting builds a course, each press a waypoint (a body, or a point; a press beside a
+  body is the body); the card lists the legs and totals ("Course, 3 legs: 50.0 AU · about
+  23 d 9 h at 2 G · arrives 160-1105 08:55"), one G for the course, a leg's hours typeable;
+  "Add course" writes the legs end to end with one Undo, puts the clock on the departure
+  and focus on Play; `[` and `]` step the speed, N steps through the ships; the strip counts
+  down to the next waypoint. **`orbit/ShipTags.vue`: every ship has the planet's own tag**
+  (plate, edge, bar, 11 px mono capitals, a second line with the strip's short state, the
+  same leader), amber when selected, teal for the party's ship, white for others, each a
+  button in the Tab order; tags hang down and right of their mark, a planet's goes up and
+  right; several at one body stack. `fu28_tag_planet_selected.png` looked at: a ship now
+  reads as clearly as a selected planet. **Accepted.** D's questions, ruled: tags of ships
+  passing each other may overlap for the moment they pass; the 220 px cap on the second
+  line stands; the speed toast that replaces itself stands; a tag over a neighbour's label
+  at 520 px is accepted.
+- **Agent E, `e_liquid_row.md`:** `liquidDisplay` gives the world page one "Surface liquid"
+  row only when a body carries `liquidStatus` (None; Not classified; "Unresolved. No listed
+  liquid fits this world's temperature."; the substance with its phase note); the UWP
+  ribbon's captions stay inside their cells (tracking 0, gap 2 px, a cell no narrower than
+  its caption, the row wrapping when eight do not fit). **Accepted.**
+- **The push.** C is mid-step in `surface/` and in the ring code of `OrbitRenderer.ts`,
+  the file that also holds A's `shipTags` lines. **A hunk-level snapshot:**
+  `findings/push/rts_main.patch` (20 tracked files), `findings/push/rts_renderer_a_only.patch`
+  (7 of the renderer's 11 pending hunks: the import, `DrawState.shipTags`, the ships and
+  readout code; C's four ring hunks left out), and five new files by path. **Rehearsed:**
+  `git archive HEAD` plus both patches and the files: `vue-tsc` exit 0, build green, 867
+  tests, 856 pass, 0 fail, 11 skipped.
+- **Next:** D, `prompts/d_nav_console.md`. E and A have nothing queued; the journal (K7) is
+  the next campaign piece and its recipe is not written.

@@ -10,10 +10,10 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import Icon from '../design/Icon.vue';
 import {
-    dateText, HOUR, isRealTime, REAL_TIME, SCRUB_DAYS, SHUTTLE_DEFAULT_LIMIT, SPEED_SLIDER_MAX, START_HELP,
+    dateText, FASTEST, HOUR, isRealTime, REAL_TIME, SCRUB_DAYS, SHUTTLE_DEFAULT_LIMIT, SPEED_SLIDER_MAX, START_HELP,
     sliderFromSpeed, speedFactorText, speedFromSlider, speedText, splitDays, timeFieldValue, WEEK_DAYS, withDay, withTime, withYear,
 } from './clock.ts';
-import { setButtonState } from './time_row.ts';
+import { setButtonState, stepSpeed } from './time_row.ts';
 
 const props = defineProps<{
     days: number;
@@ -258,6 +258,9 @@ defineExpose({
       >
         <Icon name="clock" :size="13" />
       </button>
+      <button type="button" class="orbit-btn is-icon orbit-speed-step" data-command="orbit-slower" aria-label="Slower" title="Slower ([)" :disabled="speed <= REAL_TIME" @click="$emit('speed', stepSpeed(speed, -1))">
+        <b aria-hidden="true">−</b>
+      </button>
       <input
         ref="speedEl"
         class="orbit-jog"
@@ -271,6 +274,9 @@ defineExpose({
         :value="speedSlider"
         @input="onSpeed"
       >
+      <button type="button" class="orbit-btn is-icon orbit-speed-step" data-command="orbit-faster" aria-label="Faster" title="Faster (])" :disabled="speed >= FASTEST" @click="$emit('speed', stepSpeed(speed, 1))">
+        <b aria-hidden="true">+</b>
+      </button>
       <output class="orbit-speed-value" :title="speedFactorText(speed)">{{ speedText(speed) }}</output>
     </div>
 
@@ -319,6 +325,12 @@ defineExpose({
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.orbit-btn.orbit-speed-step {
+  width: 24px;
+  height: 24px;
+  font: 700 13px/1 var(--font-code);
 }
 
 .orbit-btn.orbit-week {

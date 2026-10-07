@@ -18,16 +18,18 @@ import BodyChips from '../orbit/BodyChips.vue';
 import { LAYERS, LAYOUTS, LINEUP_SHOWN, ORBIT_COMMANDS, PARKED_COMMANDS, toggled, type DrawerId } from '../orbit/commands.ts';
 import { jumpReturnPath, jumpTarget } from '../orbit/jump_state.ts';
 import {
-    bodyAnchor, earliestDeparture, flightLeg, jumpLeg, jumpStanding, legStart, pointAnchor, shipsHere, shipTrack, statusWords, vesselPosition, whenWords,
+    bodyAnchor, earliestDeparture, jumpLeg, jumpStanding, legAt, legStart, pointAnchor, shipsHere, shipTrack, statusWords, vesselPosition, whenWords,
 } from '../orbit/ship_list.ts';
 import ShipStrip from '../orbit/ShipStrip.vue';
 import type { ShipTrack } from '../orbit/ships.ts';
-import { appendLeg } from '../campaign/track.ts';
+import { appendLeg, removeLastLeg, trackOf } from '../campaign/track.ts';
 import type { CampaignAnchor } from '@voyage/shared';
 import { rollJumpHours } from '../campaign/travel.ts';
 import { formatDistance } from '../design/units.ts';
 import { pointWords, realDistanceKmBetween, type PlaceEnd } from '../orbit/distance.ts';
-import { fieldHours, flightFuelWords, hoursWords, jumpEstimateWords, rollWords, settleFlight, type JumpRoll } from '../orbit/estimates.ts';
+import { courseLegs, coursePreview, courseReady, courseTotals, planCourse, tagWords, underwayWords, type Waypoint } from '../orbit/course.ts';
+import { flightFuelWords, hoursWords, jumpEstimateWords, rollWords, type JumpRoll } from '../orbit/estimates.ts';
+import { stepSpeed } from '../orbit/time_row.ts';
 import { beginPick, endPick, type PickedSystem } from '../workspace/pick.ts';
 import { placeSource, setPlaceSource, type SystemInfo } from '../workspace/place_source.ts';
 import Drawer from '../orbit/Drawer.vue';
@@ -41,7 +43,7 @@ import OrbitPopover from '../orbit/OrbitPopover.vue';
 import { DEFAULT_LAYERS, type Layers, type Mode } from '../orbit/picture.ts';
 import { bodyChips, dossierPath, findChip, orbitPath, shortLabel, subsectorLetter } from '../orbit/bodies.ts';
 import {
-    advance, DAY_SECONDS, formatLinkDate, HOUR, scrubbed, skipWeeks, startDays, tickRate, timeFieldValue, REAL_TIME,
+    advance, DAY_SECONDS, formatLinkDate, scrubbed, speedText, skipWeeks, startDays, tickRate, timeFieldValue, REAL_TIME,
 } from '../orbit/clock.ts';
 import OrbitCanvas from '../orbit/OrbitCanvas.vue';
 import OrbitHeader from '../orbit/OrbitHeader.vue';
@@ -54,7 +56,7 @@ import { addressPane, atPane, withQuery } from '../shell/pane.ts';
 import Rail from '../shell/Rail.vue';
 import { loadSession, session } from '../account/session.ts';
 import { campaign, setCampaignDate } from '../campaign/store.ts';
-import { showToast } from '../shell/toast.ts';
+import { dismissToast, showToast } from '../shell/toast.ts';
 import { ensureCampaign } from '../workspace/opening.ts';
 import { sameDay, stardate } from '../workspace/stardate.ts';
 import AccountMenu from '../workspace/AccountMenu.vue';
@@ -442,7 +444,29 @@ function anchorName(anchor: CampaignAnchor): string {
     return anchor.hexKey === hexKey.value ? title.value : anchor.hexKey.split('/')[1] ?? anchor.hexKey;
 }
 
-const shipStatus = computed(() => (shipRecord.value ? statusWords(shipRecord.value, shownDays.value, anchorName) : null));
+const shipStatus = computed(() => {
+    const record = shipRecord.value;
+    if (!record) return null;
+    const said = statusWords(record, shownDays.value, anchorName);
+    if (said.state !== 'flight') return said;
+    // Under way the strip names the next waypoint and counts down to it.
+    const legs = trackOf(record);
+    const leg = legs ? legAt(legs, shownDays.value) : null;
+    return leg ? { state: said.state, text: underwayWords(leg, shownDays.value, anchorName) } : said;
+});
+/** Each ship's state in short words, for its tag on the picture (the names shortened as the body list shortens them). */
+const shipNotes = computed((): Record<string, string> => {
+    const out: Record<string, string> = {};
+    const plan = searchPlan.value;
+    const short = (anchor: CampaignAnchor): string => shortLabel(anchorName(anchor), plan ? plan.name : '');
+    for (const ship of ships.value) {
+        const said = statusWords(ship, shownDays.value, anchorName);
+        const legs = trackOf(ship);
+        out[ship.id] = tagWords(said.state, legs ? legAt(legs, shownDays.value) : null, shownDays.value, short);
+    }
+    return out;
+});
+
 /** Whether the selected ship's mark lies outside every 100D circle, and where it is, asked of the canvas every few frames. */
 const shipOutside = ref<boolean | null>(null);
 const shipAt = ref('');
@@ -462,13 +486,9 @@ function sampleShip(): void {
 
 // Plotting a flight (2b): the mode, the destination pressed on the picture, the leg previewed, then written.
 const plotting = ref(false);
-/** The destination: a body pressed on the picture, or a point of empty picture (in AU from the primary). One or neither. */
-const destinationKey = ref<string | null>(null);
-const destinationPoint = ref<{ x: number; y: number } | null>(null);
-/** The hours the referee typed over the estimate; null while the field follows the estimate. */
-const plotTyped = ref<number | null>(null);
-/** The hours field holds the referee's own entry (it may be empty), not the estimate. */
-const plotOwn = ref(false);
+/** The course being plotted: the waypoints in the order they were pressed (orbit/course.ts). */
+const waypoints = ref<Waypoint[]>([]);
+/** One G for the course. */
 const plotAccel = ref(2);
 const canPlot = computed(() => canSetDate.value && ships.value.length > 0 && state.value === 'ready');
 
@@ -479,137 +499,183 @@ function endOf(anchor: CampaignAnchor): PlaceEnd | null {
     return anchor.point ? { x: anchor.point.x, y: anchor.point.y } : null;
 }
 
-/** The flight being plotted: where from, where to, and when it would leave. Null with no destination. */
-const plotEnds = computed(() => {
-    if (!plotting.value || !shipRecord.value) return null;
-    const to: PlaceEnd | null = destinationKey.value ?? destinationPoint.value;
-    if (to === null) return null;
-    return { from: endOf(legStart(shipPosition.value)), to, departs: earliestDeparture(shipPosition.value, shownDays.value) };
+/**
+ * The course as legs: each leaves when the one before arrives and is measured to where its
+ * destination will be at its own arrival (orbit/course.ts planCourse, over
+ * orbit/distance.ts realDistanceKmBetween; never measured on the picture).
+ */
+const planned = computed(() => {
+    const plan = searchPlan.value;
+    if (!plotting.value || !shipRecord.value || !waypoints.value.length) return [];
+    const from = legStart(shipPosition.value);
+    const start = { anchor: from, end: endOf(from), departs: earliestDeparture(shipPosition.value, shownDays.value) };
+    return planCourse(start, waypoints.value, plotAccel.value, (a, aDays, b, bDays) => (plan ? realDistanceKmBetween(plan, a, aDays, b, bDays) : null));
 });
 
-/**
- * The estimate, measured to where the destination will be at arrival
- * (findings/plot_ghosts_design.md §2.3): the distance from the ship's place at departure to
- * the destination's place at arrival, run until two rounds agree (orbit/estimates.ts
- * settleFlight over orbit/distance.ts realDistanceKmBetween; never measured on the picture).
- * A point does not move, so it settles at once. Null where a place is not known.
- */
-const plotSettled = computed(() => {
+/** The course in the card's words. */
+const course = computed(() => {
+    const legs = planned.value;
+    if (!legs.length) return null;
     const plan = searchPlan.value;
-    const ends = plotEnds.value;
-    if (!plan || !ends || ends.from === null) return null;
-    const from = ends.from;
-    return settleFlight((arrives) => realDistanceKmBetween(plan, from, ends.departs, ends.to, arrives), plotAccel.value, ends.departs);
-});
-/** The same body, with nothing to cross: the distance is known and there is no time to estimate. */
-const plotNoDistance = computed(() => {
-    const plan = searchPlan.value;
-    const ends = plotEnds.value;
-    if (!plan || !ends || ends.from === null || plotSettled.value) return false;
-    return realDistanceKmBetween(plan, ends.from, ends.departs, ends.to, ends.departs) === 0;
-});
-/** What the hours field holds: the referee's entry once typed, else the settled estimate. */
-const plotHours = computed((): number | null => {
-    if (plotOwn.value) return plotTyped.value;
-    return plotSettled.value === null ? null : fieldHours(plotSettled.value.hours);
-});
-/** The destination in words: the body's name, or the point as orbit/distance.ts words it at departure. */
-const plotName = computed(() => {
-    const ends = plotEnds.value;
-    if (!ends) return '';
-    if (typeof ends.to === 'string') {
-        const chip = findChip(chips.value, ends.to);
-        return chip ? chip.name : ends.to;
-    }
-    const plan = searchPlan.value;
-    return (plan ? pointWords(plan, ends.to, ends.departs) : '') || 'A point in open space';
-});
-const plotWords = computed(() => {
-    const ends = plotEnds.value;
-    if (!ends) return null;
-    const settled = plotSettled.value;
+    const rows = legs.map((leg) => {
+        let estimate = '';
+        if (leg.departs === null) estimate = 'Waiting on the hours of the leg before';
+        else if (leg.settled) estimate = formatDistance(leg.settled.km, AU_KM) + ' \u00B7 ' + hoursWords(leg.settled.hours, leg.settled.settled);
+        else estimate = 'Distance unknown: type the hours';
+        const body = typeof leg.waypoint.to === 'string';
+        return {
+            n: leg.n,
+            name: leg.waypoint.name,
+            hours: leg.shown,
+            typed: leg.waypoint.own,
+            estimate,
+            arrives: leg.arrives === null ? '' : 'arrives ' + whenWords(leg.arrives),
+            title: leg.settled && body ? 'Measured to where ' + leg.waypoint.name + ' will be at ' + whenWords(leg.settled.arrives) + '.' : '',
+        };
+    });
+    const totals = courseTotals(legs);
+    const words = [
+        totals.km === null ? '' : formatDistance(totals.km, AU_KM),
+        totals.hours === null ? '' : hoursWords(totals.hours, totals.settled) + ' at ' + plotAccel.value + ' G',
+        totals.arrives === null ? '' : 'arrives ' + whenWords(totals.arrives),
+    ].filter(Boolean).join(' \u00B7 ');
+    const count = legs.length === 1 ? '1 leg' : legs.length + ' legs';
     return {
-        distance: settled ? formatDistance(settled.km, AU_KM) : (plotNoDistance.value ? formatDistance(0, AU_KM) : ''),
-        time: settled ? hoursWords(settled.hours, settled.settled) : '',
-        fuel: flightFuelWords(plotAccel.value, plotHours.value),
-        title: settled && typeof ends.to === 'string' ? 'Measured to where ' + plotName.value + ' will be at ' + whenWords(settled.arrives) + '.' : '',
+        rows,
+        total: 'Course, ' + count + (words ? ': ' + words : ': some legs still need their hours'),
+        fuel: flightFuelWords(plotAccel.value, totals.hours),
+        ready: courseReady(legs),
+        typed: waypoints.value.some((item) => item.own),
+        plan: plan !== null,
     };
 });
 
-const preview = computed(() => {
-    const ends = plotEnds.value;
-    if (!ends) return null;
-    const to = typeof ends.to === 'string'
-        ? bodyAnchor(hexKey.value, ends.to, plotName.value)
-        : pointAnchor(hexKey.value, ends.to, plotName.value);
-    return { toName: plotName.value, leg: flightLeg(legStart(shipPosition.value), to, ends.departs, plotHours.value ?? Number.NaN, plotAccel.value) };
-});
-
 /**
- * What the picture is told of the flight being plotted (the renderer places everything from
- * dates and a key or a point): the ghosts stand at departure plus the hours **in the field**,
- * whoever set them. Null with no destination or no hours.
+ * What the picture is told of the course (the renderer places everything from dates and a
+ * key or a point): every dated leg, the last carrying the arrival tag. Null with no waypoint.
  */
 const flightPreview = computed(() => {
-    const ends = plotEnds.value;
-    const hours = plotHours.value;
-    if (!ends || hours === null || !(hours > 0)) return null;
-    const arrives = ends.departs + hours * HOUR;
-    if (typeof ends.to !== 'string') return { point: ends.to, departs: ends.departs, arrives };
     const plan = searchPlan.value;
-    return { toKey: ends.to, departs: ends.departs, arrives, tag: shortLabel(plotName.value, plan ? plan.name : '') + ' \u00B7 ' + whenWords(arrives) };
+    const legs = coursePreview(planned.value, (leg) => shortLabel(leg.waypoint.name, plan ? plan.name : '') + (leg.arrives === null ? '' : ' \u00B7 ' + whenWords(leg.arrives)));
+    return legs.length ? legs : null;
 });
 
 function setPlotting(on: boolean): void {
     if (on && !canPlot.value) return;
     plotting.value = on;
-    if (!on) {
-        destinationKey.value = null;
-        destinationPoint.value = null;
-        useEstimate();
-    }
+    if (!on) waypoints.value = [];
 }
 
-function typeHours(hours: number | null): void {
-    plotOwn.value = true;
-    plotTyped.value = hours;
+function typeLegHours(index: number, hours: number | null): void {
+    waypoints.value = waypoints.value.map((item, at) => (at === index ? { ...item, own: true, typed: hours } : item));
 }
 
-/** The hours field goes back to following the estimate. */
+/** Every leg's hours go back to following its estimate. */
 function useEstimate(): void {
-    plotOwn.value = false;
-    plotTyped.value = null;
+    waypoints.value = waypoints.value.map((item) => ({ ...item, own: false, typed: null }));
 }
 
+/** The place the next leg would start from: the last waypoint, or where the ship is. */
+function courseEnd(): PlaceEnd | null {
+    const last = waypoints.value[waypoints.value.length - 1];
+    return last ? last.to : endOf(legStart(shipPosition.value));
+}
+
+function addWaypoint(next: Waypoint): void {
+    waypoints.value = [...waypoints.value, next];
+}
+
+/** A body pressed while plotting: the next waypoint. The body the course already stands on is not a leg. */
 function setDestination(key: string): void {
-    if (!plotting.value || !findChip(chips.value, key)) return;
-    destinationPoint.value = null;
-    destinationKey.value = key;
+    const chip = plotting.value ? findChip(chips.value, key) : null;
+    if (!chip || courseEnd() === key) return;
+    addWaypoint({ to: key, name: chip.name, anchor: bodyAnchor(hexKey.value, key, chip.name), typed: null, own: false });
 }
 
-/** A press on empty picture while plotting: that point is the destination. */
+/** A press on empty picture while plotting: that point is the next waypoint. */
 function setDestinationPoint(point: { x: number; y: number }): void {
     if (!plotting.value) return;
-    destinationKey.value = null;
-    destinationPoint.value = { x: point.x, y: point.y };
+    const plan = searchPlan.value;
+    const name = (plan ? pointWords(plan, point, shownDays.value) : '') || 'A point in open space';
+    addWaypoint({ to: { x: point.x, y: point.y }, name, anchor: pointAnchor(hexKey.value, point, name), typed: null, own: false });
 }
 
-function clearDestination(): void {
-    destinationKey.value = null;
-    destinationPoint.value = null;
+function removeLastWaypoint(): void {
+    if (waypoints.value.length) waypoints.value = waypoints.value.slice(0, -1);
 }
 
-function addLeg(): void {
-    const leg = preview.value ? preview.value.leg : null;
+function clearCourse(): void {
+    waypoints.value = [];
+}
+
+/** A speed step's toast is a glance, not a notice. */
+const SPEED_TOAST_MS = 1500;
+let speedToast: number | null = null;
+
+/** The speed, a step at a time from the keyboard; the toast says where it is, since the slider may be out of sight. */
+function nudgeSpeed(direction: 1 | -1): void {
+    const next = stepSpeed(speed.value, direction);
+    if (next === speed.value) return;
+    speed.value = next;
+    // One speed toast at a time: a run of steps must not push a toast with an Undo off the strip.
+    if (speedToast !== null) dismissToast(speedToast);
+    speedToast = showToast('Speed: ' + speedText(next) + '.', { ms: SPEED_TOAST_MS });
+}
+
+/** The next ship in this system, round and round: the keyboard's way to what a tag or a mark selects. */
+function nextShip(): void {
+    const list = ships.value;
+    if (!list.length) return;
+    const at = list.findIndex((ship) => ship.id === selectedShip.value);
+    selectedShip.value = list[(at + 1) % list.length].id;
+}
+
+/**
+ * "Add course": the legs are written in order, each departing when the one before arrives;
+ * one toast, and its Undo takes them all back. Then the view is ready to play: plotting is
+ * off, the clock stands on the course's departure, and Play is one press.
+ */
+function addCourse(): void {
+    const legs = courseLegs(planned.value, plotAccel.value);
     const id = selectedShip.value;
-    if (!leg || !id) return;
-    const result = appendLeg(id, leg);
-    if (!result.ok) {
-        showToast(result.message);
-        return;
+    if (!legs || !id) return;
+    let written = 0;
+    for (const leg of legs) {
+        const result = appendLeg(id, leg);
+        if (!result.ok) {
+            for (let i = 0; i < written; i += 1) removeLastLeg(id);
+            showToast(result.message);
+            return;
+        }
+        written += 1;
     }
-    showToast('Leg added: ' + anchorName(leg.from) + ' → ' + anchorName(leg.to) + '.');
+    const count = written;
+    const first = legs[0];
+    const last = legs[legs.length - 1];
+    showToast((count === 1 ? 'Leg added: ' : 'Course added, ' + count + ' legs: ') + anchorName(first.from) + ' \u2192 ' + anchorName(last.to) + ', arriving ' + whenWords(last.arrives) + '.', {
+        action: {
+            label: 'Undo',
+            run: () => {
+                for (let i = 0; i < count; i += 1) {
+                    const back = removeLastLeg(id);
+                    if (!back.ok) {
+                        showToast(back.message);
+                        return;
+                    }
+                }
+            },
+        },
+    });
     setPlotting(false);
+    moved = true;
+    shuttle.value = 0;
+    paused.value = true;
+    setDays(first.departs);
+    writeLink();
+    void nextTick(() => {
+        const play = rootEl.value ? rootEl.value.querySelector<HTMLElement>('[data-command="orbit-play"]') : null;
+        if (play) play.focus();
+    });
 }
 
 // Jumping (5): a destination system marked on the map, then Jump from outside every limit.
@@ -820,6 +886,12 @@ function escape(): void {
         closeAccount();
         return;
     }
+    // Plotting: the last waypoint goes, one press at a time; with none left, plotting itself.
+    if (plotting.value) {
+        if (waypoints.value.length) removeLastWaypoint();
+        else setPlotting(false);
+        return;
+    }
     const step = escapeStep({ drawer: drawer.value, popover: !!openPop.value || moonsOpen.value !== null, body: selectedKey.value !== null });
     if (step === 'drawer') {
         closeDrawer();
@@ -906,8 +978,13 @@ onMounted(() => {
         ...LAYERS.map((item) => orbitCommand(item.id, () => { layers.value = toggled(layers.value, item.key); }, ready)),
         orbitCommand('orbit-fit', () => { if (stageEl.value) stageEl.value.fit(); }, ready),
         orbitCommand('orbit-plot', () => { setPlotting(!plotting.value); }, () => canPlot.value),
-        orbitCommand('orbit-add-leg', addLeg, () => preview.value !== null && preview.value.leg !== null),
-        orbitCommand('orbit-plot-estimate', useEstimate, () => plotting.value && plotOwn.value && plotSettled.value !== null),
+        orbitCommand('orbit-add-leg', addCourse, () => !!course.value && course.value.ready),
+        orbitCommand('orbit-course-undo', removeLastWaypoint, () => plotting.value && waypoints.value.length > 0),
+        orbitCommand('orbit-course-clear', clearCourse, () => plotting.value && waypoints.value.length > 0),
+        orbitCommand('orbit-ship-next', nextShip, () => ships.value.length > 1),
+        orbitCommand('orbit-slower', () => { nudgeSpeed(-1); }),
+        orbitCommand('orbit-faster', () => { nudgeSpeed(1); }),
+        orbitCommand('orbit-plot-estimate', useEstimate, () => plotting.value && waypoints.value.some((item) => item.own)),
         orbitCommand('orbit-jump-roll', rollJump, () => jumpTarget.value !== null),
         orbitCommand('orbit-jump', jump, () => standing.value.can && jumpTarget.value !== null && jumpHours.value !== null),
         ...(LINEUP_SHOWN ? [registerCommand({ ...PARKED_COMMANDS[0], keys: [], run: () => { openDrawer('time', () => { setPop('lineup', true); }); }, runnable: () => searchPlan.value !== null })] : []),
@@ -1150,10 +1227,7 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
             :status="shipStatus"
             :standing="standing"
             :plotting="plotting"
-            :preview="preview"
-            :hours="plotHours"
-            :hours-typed="plotOwn"
-            :estimate="plotWords"
+            :course="course"
             :accel-g="plotAccel"
             :jump-target="jumpTarget"
             :last-opened="lastOpened"
@@ -1163,13 +1237,14 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
             :narrow="narrow"
             @select="selectedShip = $event"
             @plot="setPlotting"
-            @hours="typeHours"
+            @leg-hours="typeLegHours"
+            @remove-last="removeLastWaypoint"
             @use-estimate="useEstimate"
             @jump-hours="typeJumpHours"
             @roll-again="rollJump"
             @accel="plotAccel = $event"
-            @add-leg="addLeg"
-            @cancel-preview="clearDestination"
+            @add-course="addCourse"
+            @clear-course="clearCourse"
             @pick-on-map="pickOnMap"
             @use-last="jumpTarget = lastOpened"
             @clear-target="jumpTarget = null"
@@ -1189,6 +1264,9 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
           :plotting="plotting"
           :plot-from="selectedShip"
           :survey-elsewhere="dossierOpen && selectedKey !== null"
+          :ship-tags="tracks !== null"
+          :ship-notes="shipNotes"
+          @ship="selectedShip = $event"
           @pick="pickBody"
           :preview="flightPreview"
           @plot="setDestination"

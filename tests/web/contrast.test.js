@@ -304,6 +304,15 @@ const PAIRS = [
     // The reset before Play (Johnny, 2026-10-06): live off the campaign date, quiet (disabled) on it
     ['--attention', ['--chrome-glass', '--orbit-space'], MARK, 'orbit header: the reset, live (its icon)'],
     ['--text-muted', ['--chrome-glass', '--orbit-space'], MARK, 'orbit header: the reset, quiet, before its 60% (a disabled control)'],
+    // The ships' tags, drawn as the planet's selection tag, and the course card (follow-up 28)
+    ['--orbit-lock', ['--orbit-tag', '--orbit-space'], SMALL, 'ship tag, selected: the name (11 px bold mono), as the planet tag has it'],
+    ['--signal', ['--orbit-tag', '--orbit-space'], SMALL, 'ship tag, selected: the state (10 px mono); the party ship unselected: its name (11 px)'],
+    ['--text-0', ['--orbit-tag', '--orbit-space'], SMALL, 'ship tag, another ship unselected: its name (11 px bold mono)'],
+    ['--text-1', ['--orbit-tag', '--orbit-space'], SMALL, 'ship tag, unselected: the state (10 px mono)'],
+    ['--orbit-lock', '--orbit-space', MARK, 'ship tag, selected: its edge, bar and leader'],
+    ['--signal', '--orbit-space', MARK, 'ship tag, the party ship: its edge, bar and leader'],
+    ['--text-1', '--orbit-space', MARK, 'ship tag, another ship: its leader'],
+    ['--attention', ['--chrome-glass', '--orbit-space'], TEXT, 'course card: the number of a waypoint (12 px mono)'],
     ['--text-muted', ['--chrome-glass', '--orbit-space'], TEXT, 'K12 plot card: the dates under the destination (12 px)'],
     ['--text-muted', '--chrome-bg', SMALL, 'omnibox group labels (10.5 px)'],
     ['--text-1', '--bg-2', SMALL, 'omnibox "Person here" and "Place here" (11 px bold)'],

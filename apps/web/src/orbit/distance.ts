@@ -240,8 +240,9 @@ function auWords(au: number): string {
 
 /**
  * Words for a point, from the plan and the point. No picture.
- * The distance from the primary, and the nearest body when one is within `NEAR_BODY_AU`,
- * with that gap. `days` is required because bodies move; the point itself does not.
+ * The distance from the primary, then the nearest body: "near" within `NEAR_BODY_AU`,
+ * and how far it is beyond that. A system with no placeable body keeps the bare distance.
+ * `days` is required because bodies move; the point itself does not.
  * Names are the plan's own names, shortened the way the body list shortens them.
  */
 export function pointWords(plan: Plan, point: AuPoint, days: number): string {
@@ -269,10 +270,12 @@ export function pointWords(plan: Plan, point: AuPoint, days: number): string {
             bestName = body.name;
         }
     }
-    if (bestName === null || bestGap > NEAR_BODY_AU) return line;
+    if (bestName === null) return line;
     const gap = auWords(bestGap);
     if (!gap) return line;
-    return line + ' \u00B7 near ' + shortLabel(bestName, plan.name) + ' \u00B7 ' + gap;
+    const short = shortLabel(bestName, plan.name);
+    if (bestGap <= NEAR_BODY_AU) return line + ' \u00B7 near ' + short + ' \u00B7 ' + gap;
+    return line + ' \u00B7 ' + gap + ' from ' + short;
 }
 
 /**

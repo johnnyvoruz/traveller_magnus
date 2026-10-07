@@ -3,7 +3,8 @@
  * The ships in this system and the status strip (K12 points 1, 2b, 5; K6d; the K15 reserved
  * place at the picture's upper right). The strip reads the selected ship's state from its
  * track and ends in Jump; under it the ship list (the party's first), and, while a flight
- * is being plotted, the leg preview with its estimate (distance, time, fuel); while a jump
+ * is being plotted, the course (each waypoint's leg with its estimate, the totals, the
+ * fuel, one G for the course; follow-up 28); while a jump
  * is being marked, the jump preview (parsecs, fuel, the rolled hours). Every figure is an
  * estimate and says so; nothing warns and nothing refuses (K12, the measuring pass).
  * It writes nothing itself: the view owns the clock, the plotting mode and the track.
@@ -11,8 +12,22 @@
 import { computed, nextTick, ref } from 'vue';
 import type { CampaignRecord } from '@voyage/shared';
 import Icon from '../design/Icon.vue';
-import { ACCEL_CHOICES, whenWords, type Leg, type ShipState } from './ship_list.ts';
+import { ACCEL_CHOICES, type ShipState } from './ship_list.ts';
 import type { PickedSystem } from '../workspace/pick.ts';
+
+/** One leg of the course, in words. */
+export type CourseRow = {
+    n: number;
+    name: string;
+    /** What the hours field shows: the estimate to a tenth, or what was typed; null when neither. */
+    hours: number | null;
+    typed: boolean;
+    /** "31.4 AU · about 11 d 5 h", "Distance unknown: type the hours", "Waiting on the leg before". */
+    estimate: string;
+    /** "arrives 148-1105 05:15", or empty. */
+    arrives: string;
+    title: string;
+};
 
 const props = defineProps<{
     ships: readonly CampaignRecord[];
@@ -22,14 +37,16 @@ const props = defineProps<{
     /** Whether the selected ship may jump from where it is, and the words when it may not (ship_list.ts jumpStanding). */
     standing: { can: boolean; note: string };
     plotting: boolean;
-    /** The flight being plotted: the destination's name and the leg as it would be written. */
-    preview: { toName: string; leg: Leg | null } | null;
-    /** The flight's hours as the field holds them: the estimate, or what was typed; null when neither. */
-    hours: number | null;
-    /** The hours are the referee's, not the estimate. */
-    hoursTyped: boolean;
-    /** The flight's estimate in words; `distance` is empty where it is not known. */
-    estimate: { distance: string; time: string; fuel: { manoeuvre: string; reaction: string } | null; title: string } | null;
+    /** The course being plotted: its legs in words, its totals, and whether it can be written. Null with no waypoint yet. */
+    course: {
+        rows: readonly CourseRow[];
+        /** "62.1 AU · about 20 d 3 h at 2 G · arrives 157-1105 03:00", or what is missing. */
+        total: string;
+        fuel: { manoeuvre: string; reaction: string } | null;
+        ready: boolean;
+        /** A leg's hours are the referee's: the way back to the estimates is offered. */
+        typed: boolean;
+    } | null;
     accelG: number;
     /** The jump's marked destination, and the system the map last opened, offered as one. */
     jumpTarget: PickedSystem | null;
@@ -46,11 +63,13 @@ const props = defineProps<{
 const emit = defineEmits<{
     select: [id: string];
     plot: [on: boolean];
-    hours: [hours: number | null];
+    /** A leg's hours typed (or emptied): its place in the course from 0. */
+    legHours: [index: number, hours: number | null];
     useEstimate: [];
     accel: [g: number];
-    addLeg: [];
-    cancelPreview: [];
+    addCourse: [];
+    removeLast: [];
+    clearCourse: [];
     pickOnMap: [];
     useLast: [];
     clearTarget: [];
@@ -69,12 +88,15 @@ function typedHours(event: Event): number | null {
     return Number.isFinite(value) && value > 0 ? value : null;
 }
 
-const plotHoursEl = ref<HTMLInputElement | null>(null);
+const courseEl = ref<HTMLElement | null>(null);
 
-/** Back to the estimate: the control goes with the typed hours, so focus moves to the field it filled. */
+/** Back to the estimates: the control goes with the typed hours, so focus moves to the first field it filled. */
 function useEstimate(): void {
     emit('useEstimate');
-    void nextTick(() => { if (plotHoursEl.value) plotHoursEl.value.focus(); });
+    void nextTick(() => {
+        const el = courseEl.value ? courseEl.value.querySelector<HTMLInputElement>('input') : null;
+        if (el) el.focus();
+    });
 }
 
 /** The reason Jump is not yet possible, in a word or two. */
@@ -108,7 +130,7 @@ const jumpNote = computed(() => {
     </div>
 
     <!-- The ship list, the party's first. -->
-    <ul v-if="ships.length" class="orbit-ship-list" role="listbox" aria-label="Ships in this system">
+    <ul v-if="ships.length" class="orbit-ship-list" role="listbox" aria-label="Ships in this system" data-command="orbit-ship-next">
       <li v-for="ship in ships" :key="ship.id">
         <button
           type="button"
@@ -151,47 +173,49 @@ const jumpNote = computed(() => {
       </template>
     </div>
 
-    <!-- Plotting a flight: the leg before it is written. -->
-    <div v-if="plotting" class="orbit-plot-card" role="group" aria-label="Plot a flight">
-      <p v-if="!preview" class="orbit-plot-hint"><Icon name="arrows-to-dot" :size="11" />Plotting: press a body, or empty space for a point, to set the destination.</p>
+    <!-- Plotting a course: the waypoints in order, before they are written. -->
+    <div v-if="plotting" class="orbit-plot-card" role="group" aria-label="Plot a course">
+      <p v-if="!course" class="orbit-plot-hint"><Icon name="arrows-to-dot" :size="11" />Plotting: press a body, or empty space for a point. Each press adds a waypoint.</p>
       <template v-else>
-        <p class="orbit-plot-line" :title="preview.toName"><b>{{ preview.toName }}</b></p>
-        <p class="orbit-plot-when">
-          <template v-if="preview.leg">departs {{ whenWords(preview.leg.departs) }} · arrives {{ whenWords(preview.leg.arrives) }}</template>
-          <template v-else>No arrival until the hours are set</template>
-        </p>
-        <p v-if="estimate" class="orbit-est" :title="estimate.title || undefined">
-          <template v-if="estimate.distance">Estimate: {{ estimate.distance }}<template v-if="estimate.time"> · {{ estimate.time }} at {{ accelG }} G</template></template>
-          <template v-else>Distance unknown: type the hours.</template>
-        </p>
+        <ol ref="courseEl" class="orbit-course">
+          <li v-for="(row, index) in course.rows" :key="row.n" class="orbit-course-leg" :title="row.title || undefined">
+            <span class="orbit-course-n" aria-hidden="true">{{ row.n }}</span>
+            <b class="orbit-course-name" :title="row.name">{{ row.name }}</b>
+            <label class="orbit-field is-hours">
+              <span class="orbit-course-sr">Hours for leg {{ row.n }}</span>
+              <input type="number" min="0.1" step="0.1" required :value="row.hours ?? ''" :title="row.typed ? 'This leg’s hours, as typed' : 'This leg’s hours: the estimate, or type your own'" @input="emit('legHours', index, typedHours($event))" @keydown.stop>
+              <span aria-hidden="true">h</span>
+            </label>
+            <span class="orbit-course-meta">{{ row.estimate }}<template v-if="row.arrives"> · {{ row.arrives }}</template></span>
+          </li>
+        </ol>
+        <p class="orbit-est orbit-course-total">{{ course.total }}</p>
         <div class="orbit-plot-fields">
-          <label class="orbit-field is-hours">
-            <span>Hours</span>
-            <input ref="plotHoursEl" type="number" min="0.1" step="0.1" required :value="hours ?? ''" :title="hoursTyped ? 'The flight’s duration, as typed' : 'The flight’s duration: the estimate, or type your own'" @input="emit('hours', typedHours($event))" @keydown.stop>
-          </label>
+          <div class="orbit-accel" role="radiogroup" aria-label="Acceleration for the course">
+            <button v-for="g in ACCEL_CHOICES" :key="g" type="button" class="orbit-accel-g" :class="{ 'is-on': g === accelG }" role="radio" :aria-checked="g === accelG ? 'true' : 'false'" :title="g + ' G'" @click="emit('accel', g)">{{ g }}<small>G</small></button>
+          </div>
           <button
             type="button"
             class="orbit-btn is-icon orbit-use-estimate"
-            :class="{ 'is-off': !hoursTyped || !estimate || !estimate.time }"
+            :class="{ 'is-off': !course.typed }"
             data-command="orbit-plot-estimate"
-            :disabled="!hoursTyped || !estimate || !estimate.time"
-            aria-label="Return to the estimate"
-            title="Return to the estimate"
+            :disabled="!course.typed"
+            aria-label="Return every leg’s hours to its estimate"
+            title="Return to the estimates"
             @click="useEstimate"
           >
             <Icon name="rotate-left" :size="11" />
           </button>
-          <div class="orbit-accel" role="radiogroup" aria-label="Acceleration">
-            <button v-for="g in ACCEL_CHOICES" :key="g" type="button" class="orbit-accel-g" :class="{ 'is-on': g === accelG }" role="radio" :aria-checked="g === accelG ? 'true' : 'false'" :title="g + ' G'" @click="emit('accel', g)">{{ g }}<small>G</small></button>
-          </div>
         </div>
-        <p v-if="estimate && estimate.fuel" class="orbit-est is-fuel">
-          <span v-if="estimate.fuel.manoeuvre">{{ estimate.fuel.manoeuvre }}</span>
-          <span>{{ estimate.fuel.reaction }}</span>
+        <p v-if="course.fuel" class="orbit-est is-fuel">
+          <span v-if="course.fuel.manoeuvre">{{ course.fuel.manoeuvre }}</span>
+          <span>{{ course.fuel.reaction }}</span>
         </p>
+        <p class="orbit-est orbit-course-rule">Each leg is flown from rest to rest.</p>
         <div class="orbit-plot-acts">
-          <button type="button" class="orbit-btn is-primary orbit-add-leg" data-command="orbit-add-leg" :disabled="!preview.leg" @click="emit('addLeg')"><Icon name="check" :size="12" />Add leg</button>
-          <button type="button" class="orbit-btn orbit-plot-cancel" @click="emit('cancelPreview')">Cancel</button>
+          <button type="button" class="orbit-btn is-primary orbit-add-leg" data-command="orbit-add-leg" :disabled="!course.ready" @click="emit('addCourse')"><Icon name="check" :size="12" />Add course</button>
+          <button type="button" class="orbit-btn orbit-course-undo" data-command="orbit-course-undo" title="Remove the last waypoint (Esc)" @click="emit('removeLast')"><Icon name="rotate-left" :size="12" />Last</button>
+          <button type="button" class="orbit-btn orbit-plot-cancel" data-command="orbit-course-clear" title="Clear the whole course" @click="emit('clearCourse')">Clear</button>
         </div>
       </template>
     </div>
@@ -475,19 +499,74 @@ const jumpNote = computed(() => {
   color: var(--text-muted);
 }
 
-/* The destination's name is never broken: one line, cut with an ellipsis if it must be. The dates have the line beneath, always there, so nothing shifts when the destination or the hours change. */
-.orbit-plot-line {
-  display: block;
+/* The course: a leg is two lines, its number, name and hours, then its estimate and arrival. The list scrolls past five. */
+.orbit-course {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 236px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.orbit-course-leg {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1px 8px;
+}
+
+.orbit-course-n {
+  color: var(--attention);
+  font: 700 12px/1 var(--font-code);
+  text-align: center;
+}
+
+.orbit-course-name {
+  min-width: 0;
   overflow: hidden;
+  color: var(--text-0);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.orbit-plot-when {
-  margin: 0;
+.orbit-course-leg .orbit-field.is-hours {
+  gap: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.orbit-course-leg .orbit-field.is-hours input {
+  width: 84px;
+  height: 26px;
+}
+
+.orbit-course-meta {
+  grid-column: 2 / -1;
   color: var(--text-muted);
   font: 400 12px/1.4 var(--font-text);
   font-variant-numeric: var(--tabular);
+}
+
+.orbit-course-total {
+  padding-top: 6px;
+  border-top: 1px solid var(--line-soft);
+  color: var(--text-1);
+}
+
+.orbit-course-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.orbit-btn.orbit-course-undo {
+  height: 28px;
+  font-size: 12px;
 }
 
 .orbit-plot-line b {

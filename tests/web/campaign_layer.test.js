@@ -12,6 +12,8 @@ import {
     partyContains,
     resolvePartyHex,
     standInSnapshot,
+    vesselContains,
+    VESSELS_PER_HEX,
 } from '../../apps/web/src/map/campaign_layer.ts';
 import { DISC_R } from '../../apps/web/src/map/glyphs.ts';
 import { hexCentre, toGlobal } from '../../apps/web/src/map/geometry.ts';
@@ -193,4 +195,68 @@ test('the renderer draws the marker only from the snapshot', () => {
     const at = screenOf(80);
     assert.equal(renderer.partyAt(at.sx, at.sy), false);
     assert.equal(renderer.partyAt(at.sx + 30, at.sy), true);
+});
+
+const vesselId = (n) => 'cr_' + String(n).padStart(8, '0') + '-0000-4000-8000-000000000000';
+
+function vessel(n, name, extra = {}) {
+    return { id: vesselId(n), name, hexKey: HEX, party: false, inJump: false, ...extra };
+}
+
+test('two vessels at one hex both show, and five show three plus a count', () => {
+    assert.equal(VESSELS_PER_HEX, 3);
+    const shared = paint({
+        party: { name: 'Far Margin', hexKey: HEX, focused: false },
+        locate: null,
+        reducedMotion: false,
+        vessels: [
+            vessel(1, 'Far Margin', { party: true }),
+            vessel(3, 'Liner', { inJump: true }),
+            vessel(2, 'Courier'),
+        ],
+    }, 80, 0);
+    assert.deepEqual(texts(shared.calls), ['COURIER', 'LINER · IN JUMP', 'FAR MARGIN']);
+    const discs = shared.calls.filter((call) => call.op === 'arc' && call.args[2] === 6);
+    assert.equal(discs.length, 2);
+    const gap = Math.hypot(discs[0].args[0] - discs[1].args[0], discs[0].args[1] - discs[1].args[1]);
+    assert.ok(gap >= 12);
+    assert.equal(shared.frame.vessels.length, 2);
+    assert.deepEqual(shared.frame.vessels.map((hit) => hit.id), [vesselId(2), vesselId(3)]);
+    const hit = shared.frame.vessels[0];
+    assert.equal(vesselContains(hit, hit.cx, hit.cy), true);
+    assert.equal(vesselContains(hit, hit.tag.x + 2, hit.tag.y + 2), true);
+    assert.equal(vesselContains(hit, hit.worldX, hit.worldY), false);
+    assert.equal(shared.calls.some((call) => call.op === 'lineTo' && call.fill === 'signal'), true);
+
+    const five = paint({
+        party: null,
+        locate: null,
+        reducedMotion: true,
+        vessels: [1, 2, 3, 4, 5].map((n) => vessel(n, 'Ship ' + n)),
+    }, 80, 0);
+    assert.deepEqual(texts(five.calls), ['SHIP 1', 'SHIP 2', 'SHIP 3', '+2']);
+    assert.equal(five.frame.vessels.length, 3);
+    assert.equal(five.frame.animating, false);
+    const quiet = five.calls.filter((call) => call.op === 'arc' && call.args[2] === 6);
+    assert.equal(quiet.length, 3);
+    assert.ok(quiet.every((call) => call.fill === 'tag' && call.alpha === 0.45));
+
+    const chevron = paint({
+        party: null,
+        locate: null,
+        reducedMotion: false,
+        vessels: [vessel(1, 'Courier'), vessel(2, 'Liner')],
+    }, 30, 0);
+    assert.equal(texts(chevron.calls).length, 0);
+    assert.equal(chevron.frame.vessels.length, 2);
+
+    const point = paint({
+        party: null,
+        locate: null,
+        reducedMotion: false,
+        vessels: [1, 2, 3, 4, 5].map((n) => vessel(n, 'Ship ' + n)),
+    }, 4, 0);
+    assert.equal(texts(point.calls).length, 0);
+    assert.equal(point.frame.vessels.length, 1);
+    assert.equal(vesselContains(point.frame.vessels[0], point.frame.vessels[0].cx, point.frame.vessels[0].cy), false);
 });

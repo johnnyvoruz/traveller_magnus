@@ -24,9 +24,10 @@ import { OrbitRenderer, type DiscPainter, type FlightPreview } from './OrbitRend
 import type { Layers, Mode, Picture } from './picture.ts';
 import { OrbitStage } from './stage.ts';
 import { publishOrbitClock } from './running.ts';
-import { bodiesAtOf, datedBodies, sceneBodies, shipMarkOf, shipStanding, type ShipStanding } from './ship_marks.ts';
-import { pictureOfAu, placeAtPicture, type PictureLayout } from './distance.ts';
-import { pictureBodies, placeShips, standInMarks, type PlotReadout, type ShipMark, type ShipTrack } from './ships.ts';
+import { bodiesAtOf, datedBodies, sceneBodies, shipMarkOf, shipStanding, shipTags as tagsFor, type ShipStanding, type ShipTag, type TagsMore } from './ship_marks.ts';
+import { BODY_SNAP_PX, pictureOfAu, placeAtPicture, type PictureLayout } from './distance.ts';
+import { pictureBodies, placeShips, shipAt, standInMarks, type PlotReadout, type ShipMark, type ShipTrack } from './ships.ts';
+import ShipTags from './ShipTags.vue';
 import { readOrbitMotion, readOrbitTheme, type OrbitMotion } from './theme.ts';
 
 const props = defineProps<{
@@ -49,10 +50,16 @@ const props = defineProps<{
     /** Plotting mode (K12 2b): the hairlines follow the pointer, measured from the ship `plotFrom`; a body clicked is a destination, not a selection. */
     plotting?: boolean;
     plotFrom?: string | null;
-    /** The flight being previewed, or null. Omitted, the dev stand-in may show one. */
+    /** The flight being previewed, one leg or a course, or null. Omitted, the dev stand-in may show one. */
     preview?: FlightPreview | null;
+    /** When set, a ship drawn beside a body is not given a designator. */
+    dockTag?: boolean;
     /** The dossier is open on the selected body: the pinned card leaves the survey to it (BodyCard surveyElsewhere). */
     surveyElsewhere?: boolean;
+    /** Every ship on the picture gets a tag (ShipTags.vue) that selects it; the designators stay. */
+    shipTags?: boolean;
+    /** Each ship's state in the strip's short words, by id: the tag's second line. */
+    shipNotes?: Record<string, string>;
 }>();
 
 const emit = defineEmits<{
@@ -62,6 +69,8 @@ const emit = defineEmits<{
     plot: [key: string];
     /** In plotting mode, empty picture was clicked: that point, in AU from the primary (the readout's inverse). */
     plotPoint: [au: { x: number; y: number }];
+    /** A ship was pressed, on the picture or by its tag: select it. */
+    ship: [id: string];
 }>();
 
 const route = useRoute();
@@ -182,11 +191,19 @@ function onUp(event: PointerEvent): void {
     const hit = stage.pick(at.x, at.y);
     // Plotting: a body is a destination, and the camera stays where it is.
     if (props.plotting) {
-        if (hit) emit('plot', hit.key);
+        // A press just beside a body is that body (ruled 2026-10-06): a point is only ever set in open picture.
+        const body = hit ? hit.key : bodyBeside(at);
+        if (body) emit('plot', body);
         else {
             const au = pointUnder(at);
             if (au) emit('plotPoint', au);
         }
+        return;
+    }
+    // A ship's designator on the picture selects that ship, as its tag does.
+    const ship = props.shipTags ? shipAt(tagMarks, at) : null;
+    if (ship) {
+        emit('ship', ship);
         return;
     }
     if (!hit) {
@@ -233,10 +250,15 @@ function standPoint(): { x: number; y: number } | null {
     return { x, y };
 }
 
-/** The view's preview when one was passed, including null. Otherwise the dev stand-in's. */
+/**
+ * A preview the view passed. Null is what the view passes while nothing is being
+ * plotted, so the dev stand-in still shows its course. A leg or a course replaces it.
+ */
 function standPreview(clockDays: number): FlightPreview | null {
-    if (props.preview !== undefined) return props.preview;
+    if (props.preview) return props.preview;
     if (standInCount() <= 0) return null;
+    const course = queryText('course');
+    if (course || (!queryText('point') && !queryText('ghost'))) return standCourse(clockDays, course || '3');
     const point = standPoint();
     if (point) return { point, departs: clockDays, arrives: clockDays + 1 };
     const current = plan.value;
@@ -257,6 +279,39 @@ function standPreview(clockDays: number): FlightPreview | null {
     }
     if (!toKey) return null;
     return { toKey, departs: clockDays, arrives: clockDays + hours / 24 };
+}
+
+/**
+ * Dev stand-in course. `?course=2` is two bodies, `point` is a point then a body,
+ * `4` is four legs, and anything else is body, point, body.
+ */
+function standCourse(clockDays: number, mode: string): FlightPreview | null {
+    const current = plan.value;
+    if (!current) return null;
+    const worlds = current.worlds.filter((world) => !world.belt);
+    const main = worlds.find((world) => world.mainworld) ?? worlds[0];
+    if (!main) return null;
+    const named = worlds.find((world) => world.key !== main.key && world.name.endsWith('A-II'));
+    const second = named ?? worlds.find((world) => world.key !== main.key) ?? main;
+    const third = worlds.find((world) => world.key !== main.key && world.key !== second.key) ?? second;
+    const point = { x: 1.2, y: 0.8 };
+    const hop = 11;
+    const leg = (end: { toKey?: string; point?: { x: number; y: number } }, index: number) => ({
+        ...end,
+        departs: clockDays + index * hop,
+        arrives: clockDays + (index + 1) * hop,
+    });
+    if (mode === '2') return [leg({ toKey: main.key }, 0), leg({ toKey: second.key }, 1)];
+    if (mode === 'point') return [leg({ point }, 0), leg({ toKey: main.key }, 1)];
+    if (mode === '4') {
+        return [
+            leg({ toKey: main.key }, 0),
+            leg({ point }, 1),
+            leg({ toKey: second.key }, 2),
+            leg({ toKey: third.key }, 3),
+        ];
+    }
+    return [leg({ toKey: main.key }, 0), leg({ point }, 1), leg({ toKey: second.key }, 2)];
 }
 
 /** `?line=departs,arrives` fixes the stand-in party's flight. Absent, the party stays halfway. */
@@ -310,6 +365,54 @@ const dated = datedBodies((at) => {
     return current && last ? sceneBodies(layoutScene(current, last.view, at)) : [];
 });
 let planTurn = 0;
+
+/** The body within the readout's snap of a press that missed it, or null: the readout reads that body there, so the press means it. */
+function bodyBeside(at: { x: number; y: number }): string | null {
+    const last = lastFrame;
+    if (!last || last.picture.mode !== 'orbits') return null;
+    let best: string | null = null;
+    let bestD = BODY_SNAP_PX * BODY_SNAP_PX;
+    for (const body of pictureBodies(last.picture)) {
+        const d = (body.x - at.x) ** 2 + (body.y - at.y) ** 2;
+        if (d <= bestD) {
+            bestD = d;
+            best = body.key;
+        }
+    }
+    return best;
+}
+
+/**
+ * The ships' tags (ShipTags.vue), placed from the frame just drawn. They are reassigned
+ * only when a place or a name changes, to half a pixel, so a still picture costs nothing.
+ */
+const shipTagList = shallowRef<{ tags: ShipTag[]; more: TagsMore[] }>({ tags: [], more: [] });
+const tagBox = shallowRef({ w: 0, h: 0 });
+/** The bodies whose stack of tags has been opened past the first few. */
+const openedStacks = ref<Set<string>>(new Set());
+/** Each ship where its designator is drawn, for a press on the picture. */
+let tagMarks: ShipMark[] = [];
+let tagSignature = '';
+
+function placeTags(picture: Picture, view: View): void {
+    const half = (value: number): number => Math.round(value * 2) / 2;
+    const found = props.shipTags && props.tracks ? tagsFor(lastMarks, picture.hits, openedStacks.value) : { tags: [], more: [] };
+    const tags = found.tags.map((tag) => ({ ...tag, markX: half(tag.markX), markY: half(tag.markY), kneeX: half(tag.kneeX), kneeY: half(tag.kneeY), x: half(tag.x) }));
+    const more = found.more.map((item) => ({ ...item, markX: half(item.markX), markY: half(item.markY), kneeX: half(item.kneeX), kneeY: half(item.kneeY), x: half(item.x) }));
+    tagMarks = tags.map((tag) => ({ id: tag.id, name: tag.name, kind: tag.kind, shape: tag.shape, x: tag.markX, y: tag.markY }));
+    const signature = JSON.stringify([tags, more, view.w, view.h]);
+    if (signature === tagSignature) return;
+    tagSignature = signature;
+    shipTagList.value = { tags, more };
+    if (tagBox.value.w !== view.w || tagBox.value.h !== view.h) tagBox.value = { w: view.w, h: view.h };
+}
+
+function openStack(bodyKey: string): void {
+    const next = new Set(openedStacks.value);
+    next.add(bodyKey);
+    openedStacks.value = next;
+    stale = true;
+}
 
 /** The point under a press on empty picture, in AU from the primary; null where the readout is blank. */
 function pointUnder(at: { x: number; y: number }): { x: number; y: number } | null {
@@ -451,6 +554,7 @@ function paint(clockDays: number, time: number): void {
     stale = false;
     const started = now();
     const ships = marksFor(frame.picture, clockDays);
+    placeTags(frame.picture, frame.view);
     const plot = plotFor(ships);
     const preview = standPreview(clockDays);
     renderer.draw(current, frame.picture, frame.view, {
@@ -458,6 +562,8 @@ function paint(clockDays: number, time: number): void {
         ...(ships && ships.length > 0 ? { ships } : {}),
         ...(plot ? { plot } : {}),
         ...(preview ? { preview } : {}),
+        ...(props.dockTag ? { dockTag: true } : {}),
+        ...(props.shipTags ? { shipTags: true } : {}),
     });
     const cost = now() - started;
     costSum += cost;
@@ -496,7 +602,7 @@ watch(() => props.layers, (layers) => {
     stale = true;
 }, { deep: true });
 
-watch(() => [route.query.campaignStandIn, route.query.ghost, route.query.line, route.query.point, props.ships, props.plot, props.tracks, props.plotting, props.plotFrom, props.preview] as const, () => { stale = true; });
+watch(() => [route.query.campaignStandIn, route.query.ghost, route.query.line, route.query.point, route.query.course, props.ships, props.plot, props.tracks, props.plotting, props.plotFrom, props.preview, props.dockTag, props.shipTags] as const, () => { stale = true; });
 
 /** js/system_viewer.js:2084-2092: the canvas says which layout it shows. */
 const canvasLabel = computed(() => {
@@ -566,6 +672,17 @@ defineExpose({ paint, fit, shipStatus });
       @pointerleave="onLeave"
       @dblclick.prevent="onDouble"
       @wheel.prevent="onWheel"
+    />
+    <ShipTags
+      v-if="shipTags"
+      :tags="shipTagList.tags"
+      :more="shipTagList.more"
+      :selected="plotFrom ?? null"
+      :notes="shipNotes ?? {}"
+      :width="tagBox.w"
+      :height="tagBox.h"
+      @select="emit('ship', $event)"
+      @open="openStack"
     />
     <div class="orbit-cards">
       <BodyCard

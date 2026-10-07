@@ -1,7 +1,7 @@
 /**
  * Campaign marks on the chart. The caller passes a snapshot. This module
  * never fetches, and it draws nothing when no campaign is open.
- * Records have no pins: the design's only map marks are the party and the locator.
+ * Records have no pins: the map marks are the party, the other vessels, and the locator.
  */
 import { locate, type CampaignAnchor } from '@voyage/shared';
 import type { Camera, Viewport } from './camera.ts';
@@ -9,6 +9,7 @@ import { toScreen } from './camera.ts';
 import { DISC_R } from './glyphs.ts';
 import { hexCentre, hexCorners, parseHex, toGlobal } from './geometry.ts';
 import { PPP_GRID, PPP_NAMES } from './tiers.ts';
+import type { MapVessel } from './vessel_marks.ts';
 
 export type CampaignParty = {
     name: string;
@@ -29,7 +30,12 @@ export type CampaignSnapshot = {
     party: CampaignParty | null;
     locate: CampaignLocate | null;
     reducedMotion: boolean;
+    /** Live vessels beside the party. Absent is the same as none. */
+    vessels?: readonly MapVessel[];
 };
+
+/** How many other vessels one hex draws. Any more are a count, not another mark. */
+export const VESSELS_PER_HEX = 3;
 
 export type CampaignInk = {
     signal: string;
@@ -52,12 +58,27 @@ export type PartyMark = {
     tag: { x: number; y: number; w: number; h: number } | null;
 };
 
+/** One other vessel, quieter than the party and outside the system glyph. */
+export type VesselHit = {
+    id: string;
+    tier: PartyMark['tier'];
+    cx: number;
+    cy: number;
+    worldX: number;
+    worldY: number;
+    glyphR: number;
+    hitR: number;
+    tag: { x: number; y: number; w: number; h: number } | null;
+};
+
 type SectorAt = { slug: string; x: number; y: number };
 
 type Placed = { sx: number; sy: number; corners: number[] };
 
 const DIM_ALPHA = 0.55;
 const TAG_ALPHA = 0.82;
+/** Other vessels are the tag ink, drawn quieter than the party's disc. */
+const VESSEL_ALPHA = 0.45;
 const NAME_FONT = 11;
 const TAG_H = 18;
 const RING_R = 18;
@@ -83,7 +104,22 @@ export function resolvePartyHex(
 
 /** A closed campaign, or an open one with nothing on the map. */
 export function campaignIsBlank(snapshot: CampaignSnapshot | null): boolean {
-    return snapshot == null || (snapshot.party == null && snapshot.locate == null);
+    if (snapshot == null) return true;
+    const vessels = snapshot.vessels;
+    return snapshot.party == null && snapshot.locate == null && !(vessels && vessels.length > 0);
+}
+
+export function vesselContains(hit: VesselHit, sx: number, sy: number): boolean {
+    if (hit.tier === 'point') return false;
+    const gx = sx - hit.worldX;
+    const gy = sy - hit.worldY;
+    if (gx * gx + gy * gy <= hit.glyphR * hit.glyphR) return false;
+    const dx = sx - hit.cx;
+    const dy = sy - hit.cy;
+    if (dx * dx + dy * dy <= hit.hitR * hit.hitR) return true;
+    const tag = hit.tag;
+    if (!tag) return false;
+    return sx >= tag.x && sx <= tag.x + tag.w && sy >= tag.y && sy <= tag.y + tag.h;
 }
 
 export function partyContains(mark: PartyMark, sx: number, sy: number): boolean {
@@ -109,12 +145,13 @@ export function drawCampaignLayer(
         ink: CampaignInk;
         nowMs: number;
     },
-): { animating: boolean; mark: PartyMark | null } {
-    if (campaignIsBlank(args.snapshot) || !args.snapshot) return { animating: false, mark: null };
+): { animating: boolean; mark: PartyMark | null; vessels: VesselHit[] } {
+    if (campaignIsBlank(args.snapshot) || !args.snapshot) return { animating: false, mark: null, vessels: [] };
     const snapshot = args.snapshot;
     ctx.save();
     let animating = false;
     let mark: PartyMark | null = null;
+    const vessels = drawVessels(ctx, snapshot, args.sectors, args.cam, args.vp, args.ink);
     if (snapshot.locate) {
         const place = placeHex(snapshot.locate.hexKey, args.sectors, args.cam, args.vp);
         if (place) animating = drawLocate(ctx, place, snapshot, args.ink, args.cam, args.vp, args.nowMs);
@@ -124,7 +161,7 @@ export function drawCampaignLayer(
         if (place) mark = drawParty(ctx, place, snapshot, args.cam, args.ink);
     }
     ctx.restore();
-    return { animating, mark };
+    return { animating, mark, vessels };
 }
 
 let standInHex: { count: number; hexKey: string } | null = null;
@@ -237,6 +274,95 @@ function pulseRadius(
     const age = nowMs - arrivedAt;
     if (age < 0 || age >= pulseMs) return { radius: RING_R, live: false };
     return { radius: RING_R + (age / pulseMs) * 22, live: true };
+}
+
+function vesselLabel(vessel: MapVessel): string {
+    const name = vessel.inJump ? vessel.name + ' \u00B7 in jump' : vessel.name;
+    return name.toUpperCase();
+}
+
+/**
+ * Other vessels, left of the hex, in id order. The party's own ship is not drawn
+ * again: its marker is the loud one. At most VESSELS_PER_HEX discs; the rest are
+ * a count. Names only at the names tier, where the party's name shows. The marks
+ * do not move, so reduced motion has nothing to hold.
+ */
+function drawVessels(
+    ctx: CanvasRenderingContext2D,
+    snapshot: CampaignSnapshot,
+    sectors: readonly SectorAt[],
+    cam: Camera,
+    vp: Viewport,
+    ink: CampaignInk,
+): VesselHit[] {
+    const rows = snapshot.vessels;
+    if (!rows || rows.length === 0) return [];
+    const tier = markerTier(cam.ppp);
+    const byHex = new Map<string, MapVessel[]>();
+    for (const vessel of rows) {
+        if (vessel.party) continue;
+        const list = byHex.get(vessel.hexKey);
+        if (list) list.push(vessel);
+        else byHex.set(vessel.hexKey, [vessel]);
+    }
+    const hits: VesselHit[] = [];
+    const radius = tier === 'names' ? 6 : tier === 'chevron' ? 5 : 2.5;
+    const step = tier === 'names' ? 18 : tier === 'chevron' ? 14 : 0;
+    const cap = tier === 'point' ? 1 : VESSELS_PER_HEX;
+    const glyphR = tier === 'point' ? 0 : DISC_R * cam.ppp;
+    const offset = tier === 'names' ? Math.max(22, glyphR + 12) : tier === 'chevron' ? Math.max(14, glyphR + 10) : 8;
+    for (const [hexKey, list] of byHex) {
+        list.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+        const place = placeHex(hexKey, sectors, cam, vp);
+        if (!place) continue;
+        const shown = list.slice(0, cap);
+        const hidden = list.length - shown.length;
+        const count = hidden > 0 && tier !== 'point';
+        const slots = shown.length + (count ? 1 : 0);
+        const y0 = place.sy - ((slots - 1) * step) / 2;
+        const cx = place.sx - offset;
+        ctx.font = NAME_FONT + 'px ' + ink.font;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        for (let i = 0; i < shown.length; i += 1) {
+            const vessel = shown[i];
+            const cy = y0 + i * step;
+            ctx.fillStyle = ink.tag;
+            ctx.globalAlpha = VESSEL_ALPHA;
+            ctx.beginPath();
+            ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalAlpha = 1;
+            let tag: VesselHit['tag'] = null;
+            if (tier === 'names') {
+                const label = vesselLabel(vessel);
+                const width = ctx.measureText(label).width;
+                const x = cx + radius + 6;
+                tag = { x, y: cy - 6, w: width, h: 12 };
+                ctx.fillStyle = ink.font;
+                ctx.fillText(label, x, cy);
+            }
+            hits.push({
+                id: vessel.id,
+                tier,
+                cx,
+                cy,
+                worldX: place.sx,
+                worldY: place.sy,
+                glyphR,
+                hitR: radius,
+                tag,
+            });
+        }
+        if (count) {
+            const label = '+' + String(hidden);
+            ctx.fillStyle = ink.font;
+            ctx.globalAlpha = 0.7;
+            ctx.fillText(label, cx + radius + 6, y0 + shown.length * step);
+            ctx.globalAlpha = 1;
+        }
+    }
+    return hits;
 }
 
 function markerTier(ppp: number): PartyMark['tier'] {
