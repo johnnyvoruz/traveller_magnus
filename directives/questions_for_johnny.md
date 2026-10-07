@@ -561,6 +561,28 @@ city lights live in Enhanced. Make Enhanced the default?
 and Enhanced is to be the default look (a stored choice of Vanilla still honoured). Agent C
 flips the default as Part 0 of `prompts/c_ghosts.md`.
 
+### G8. Is the journal next for A and E, with the limits in A's prompt?
+
+The journal (K7) is the slice's next step. A's schema step sets: 20,000 entries, a
+100,000-character body, a title that may be empty, and no rule forcing a handout to be
+player-visible.
+
+*Recommended: yes, as written.*
+
+**Answer (2026-10-06): yes.** `prompts/a_journal_1.md` (A) and
+`prompts/e_journal_design.md` (E) were handed out.
+
+### G9. Should a ship be re-aimable in the middle of a leg?
+
+A leg already under way is history: the ship finishes it and an edited route starts from
+its end. Re-aiming in mid-flight would need a rule, because the book's travel formula is
+from rest to rest and the ship would be moving.
+
+*Recommended: keep it for the MVP.*
+
+**Answer (2026-10-06): keep it for the MVP.** Recorded in `plan.md` "Ship navigation
+backlog" as item 5, for after the campaign MVP.
+
 
 ---
 

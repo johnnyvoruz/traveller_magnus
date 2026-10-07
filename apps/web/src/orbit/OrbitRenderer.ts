@@ -846,18 +846,13 @@ export class OrbitRenderer {
             this.latchDay();
             return;
         }
-        let discs = batch.discs;
-        let changed = false;
-        const scaled = discs.map((disc) => {
-            const next = this.scaleRing(disc);
-            if (next !== disc) changed = true;
-            return next;
-        });
-        if (changed) discs = scaled;
-        this.discStatus = painter.prepare(changed ? { ...batch, discs } : batch);
+        // The ring's fill stays as the batch built it. Fading it would rebake the tile on
+        // every frame of a sweep (a late tile then arrives at full strength and pops) and
+        // would fade the ring's shadow on the planet. The cross-fade is the blit below.
+        this.discStatus = painter.prepare(batch);
         this.latchDay();
         if (this.discStatus !== 'ready') return;
-        this.shaded = new Map(discs.map((disc) => [disc.key, disc.ring !== null]));
+        this.shaded = new Map(batch.discs.map((disc) => [disc.key, disc.ring !== null]));
     }
 
     /**
@@ -890,22 +885,15 @@ export class OrbitRenderer {
     }
 
     /**
-     * Scales a shaded ring's fill for this frame. A settled frame (fill already final) keeps
-     * the disc the batch built, so a first paint is unchanged. The Moons switch does not
-     * scale it: ring shadow stays with the planet. Day/night and a late tile still fade it.
+     * How much of the shaded ring is showing, 0 to 1. Day/night cross-fades it with this
+     * body's sweep. A tile that was not ready when the run started stays out until it
+     * fades up over --t-base, so a late tile does not pop in at the end of the sweep.
      */
-    private scaleRing<T extends { key: string; ring: { inner: number; outer: number; fill: number; phase: number; detail: number } | null }>(disc: T): T {
-        const ring = disc.ring;
-        if (!ring) return disc;
-        const amount = this.dayFactor(disc.key) * this.ringTile(disc.key);
-        if (!(amount < 1)) return disc;
-        return { ...disc, ring: { ...ring, fill: ring.fill * amount } };
-    }
-
-    /** While day/night is moving and the tiles were ready when it started, the sweep owns the fade. */
-    private ringTile(key: string): number {
-        if (this.dayLive && !this.dayHold) return 1;
-        return this.tileMix(key);
+    private ringShown(key: string): number {
+        const tile = this.tileMix(key);
+        if (!this.dayLive) return this.layers?.dayNight === true ? tile : 0;
+        if (this.dayHold && !(tile > 0)) return 0;
+        return this.dayFactor(key) * (this.dayHold ? tile : 1);
     }
 
     /** 0 at the star, 1 at that star's farthest body. A moon uses its world's reach. */
@@ -992,8 +980,8 @@ export class OrbitRenderer {
         const moons = this.moonFactor(key);
         const anim = this.moonsLive || this.dayLive || this.tileRuns.has(key);
         if (!anim) return lit ? 0 : moons;
-        if (this.shaded?.get(key) !== true || (this.dayLive && this.dayHold)) return moons;
-        return moons * (1 - this.dayFactor(key) * this.tileMix(key));
+        if (this.shaded?.get(key) !== true) return moons;
+        return moons * (1 - this.ringShown(key));
     }
 
     /** The flat circles. Alpha under 1 multiplies whatever the caller already faded. */
@@ -1503,23 +1491,54 @@ export class OrbitRenderer {
         if (!(local > 0)) return;
         const ang = Math.atan2(starY - y, starX - x);
         const mid = Math.atan2(-Math.sin(ang), -Math.cos(ang));
+        // The planet face is clipped to the disc, which hides the ring. The ring is drawn
+        // again, outside that disc, at this body's sweep, so it cross-fades instead of
+        // appearing on the frame the front leaves the disc.
+        let covered = false;
         if (local >= 1) {
-            const settled = !this.dayHold && this.shadedDisc(key, x, y, r);
-            if (!settled) this.disc(x, y, r, colour, starX, starY, true);
-            return;
+            covered = this.revealDisc(key, x, y, r);
+            if (!covered) this.disc(x, y, r, colour, starX, starY, true);
+        } else {
+            const front = -r + local * 2 * r;
+            const ctx = this.ctx;
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, TAU);
+            ctx.clip();
+            ctx.beginPath();
+            if (this.litCap(ctx, x, y, r, mid, front)) {
+                ctx.clip();
+                const lit = this.revealDisc(key, x, y, r);
+                if (!lit) this.disc(x, y, r, colour, starX, starY, true);
+            }
+            ctx.restore();
         }
-        const front = -r + local * 2 * r;
+        if (!covered) this.shadeRings(key, x, y, r);
+    }
+
+    /**
+     * The shaded tile may join a sweep once it is actually in hand. dayHold remembers that
+     * the run started without tiles; a tile already seen still cross-fades with the sweep,
+     * and one that arrives later fades over --t-base instead of popping at the end.
+     */
+    private revealDisc(key: string, x: number, y: number, r: number): boolean {
+        if (this.dayHold && !(this.tileMix(key) > 0)) return false;
+        return this.shadedDisc(key, x, y, r);
+    }
+
+    /** The part of the shaded tile outside the planet disc, at the ring's sweep amount. */
+    private shadeRings(key: string, x: number, y: number, r: number): void {
+        const amount = this.ringShown(key);
+        if (!(amount > 0.004) || !(r > 0)) return;
         const ctx = this.ctx;
         ctx.save();
         ctx.beginPath();
-        ctx.arc(x, y, r, 0, TAU);
-        ctx.clip();
-        ctx.beginPath();
-        if (this.litCap(ctx, x, y, r, mid, front)) {
-            ctx.clip();
-            const lit = !this.dayHold && this.shadedDisc(key, x, y, r);
-            if (!lit) this.disc(x, y, r, colour, starX, starY, true);
-        }
+        ctx.rect(0, 0, this.w, this.h);
+        ctx.arc(x, y, r, 0, TAU, true);
+        ctx.clip('evenodd');
+        const current = ctx.globalAlpha;
+        ctx.globalAlpha = (typeof current === 'number' ? current : 1) * Math.min(1, amount);
+        this.shadedDisc(key, x, y, r);
         ctx.restore();
     }
 

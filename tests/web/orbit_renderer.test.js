@@ -967,6 +967,92 @@ test('a moons hide keeps the shaded moons until it settles, and day/night uses t
     assert.ok(both < onlyDay + onlyMoons);
 });
 
+test('day/night cross-fades a planet ring with the body sweep, and a late tile fades over --t-base', () => {
+    const tSlow = cssSeconds('450ms');
+    const tLong = cssSeconds('800ms');
+    const tBase = cssSeconds('300ms');
+    const gesture = tLong + tSlow;
+    const ease = cssBezier('cubic-bezier(.2,.8,.2,1)');
+    const motionTheme = { ...theme, tBase, tSlow, tLong, easeOut: ease };
+    const plan = planSystem(testSystem(), HEX_KEY);
+    const pictureFor = (layers) => {
+        const scene = layoutScene(plan, { ...VIEW, moons: layers.moons, jump: layers.jump }, 1000);
+        return orbitPicture(plan, scene, layers, VIEW.z);
+    };
+    const onLayers = { ...DEFAULT_LAYERS };
+    const offLayers = { ...DEFAULT_LAYERS, dayNight: false };
+    const on = pictureFor(onLayers);
+    const off = pictureFor(offLayers);
+    const ringStroke = (calls) => calls.filter((call) => call.op === 'stroke' && call.stroke === 'ring');
+    const tileOf = (calls, key) => calls.filter((call) => call.op === 'fillRect' && call.fill === 'tile:' + key);
+
+    const fake = fakeDiscs('ready');
+    const rec = recordingContext();
+    const renderer = new OrbitRenderer(rec.ctx, motionTheme, { ...deps, discs: fake.painter });
+    renderer.resize(VIEW.w, VIEW.h, 1);
+    const drawAt = (picture, layers, time) => {
+        rec.calls.length = 0;
+        fake.seen.draws.length = 0;
+        renderer.draw(plan, picture, VIEW, { selected: null, days: 1000, time, motion: true, layers });
+    };
+    drawAt(on, onLayers, 1000);
+    drawAt(on, onLayers, 2000);
+    const fullFill = fake.seen.batches.at(-1).discs.find((item) => item.key === 'w2').ring.fill;
+    const t0 = 4000;
+    drawAt(off, offLayers, t0);
+    drawAt(off, offLayers, t0 + gesture * 1000 + 50);
+    const reveal = 8000;
+    drawAt(on, onLayers, reveal);
+    let crossed = null;
+    for (let step = 1; step < 12; step++) {
+        drawAt(on, onLayers, reveal + gesture * 1000 * (step / 12));
+        const fill = fake.seen.batches.at(-1).discs.find((item) => item.key === 'w2').ring.fill;
+        assert.equal(fill, fullFill);
+        const strokes = ringStroke(rec.calls);
+        const tiles = tileOf(rec.calls, 'w2');
+        const partialStroke = strokes.some((call) => call.alpha > 0.02 && call.alpha < 0.98);
+        const partialTile = tiles.some((call) => call.alpha > 0.02 && call.alpha < 0.98);
+        const clipped = rec.calls.some((call) => call.op === 'clip');
+        if (partialStroke && partialTile && clipped) {
+            crossed = { strokes: strokes.length, tiles: tiles.length };
+            break;
+        }
+    }
+    assert.ok(crossed, 'a frame in the reveal cross-fades the flat ring and the shaded ring');
+
+    drawAt(on, onLayers, reveal + gesture * 1000 + 50);
+    assert.equal(renderer.layersBusy, false);
+    assert.equal(ringStroke(rec.calls).length, 0);
+    assert.ok(tileOf(rec.calls, 'w2').length > 0);
+
+    let cold = true;
+    const late = fakeDiscs('ready');
+    late.painter.prepare = (batch) => {
+        late.seen.batches.push(batch);
+        const status = cold ? 'pending' : 'ready';
+        cold = false;
+        return status;
+    };
+    const lateRec = recordingContext();
+    const latePainter = new OrbitRenderer(lateRec.ctx, motionTheme, { ...deps, discs: late.painter });
+    latePainter.resize(VIEW.w, VIEW.h, 1);
+    const drawLate = (picture, layers, time) => {
+        lateRec.calls.length = 0;
+        latePainter.draw(plan, picture, VIEW, { selected: null, days: 1000, time, motion: true, layers });
+    };
+    drawLate(off, offLayers, 1000);
+    const late0 = 9000;
+    drawLate(on, onLayers, late0);
+    drawLate(on, onLayers, late0 + gesture * 1000 * 0.5);
+    assert.ok(ringStroke(lateRec.calls).some((call) => !(call.alpha < 1)));
+    assert.equal(tileOf(lateRec.calls, 'w2').length, 0);
+    drawLate(on, onLayers, late0 + gesture * 1000 + 20);
+    drawLate(on, onLayers, late0 + gesture * 1000 + tBase * 1000 * 0.4);
+    const arriving = tileOf(lateRec.calls, 'w2');
+    assert.ok(arriving.some((call) => call.alpha > 0.02 && call.alpha < 0.98));
+    assert.ok(ringStroke(lateRec.calls).some((call) => call.alpha > 0.02 && call.alpha < 0.98));
+});
+
 test('a ship entering jump eases out, and the settled frame matches one that never ran', () => {
     const tSlow = cssSeconds('450ms');
     const tLong = cssSeconds('800ms');

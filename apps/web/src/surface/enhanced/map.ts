@@ -31,6 +31,7 @@ import { MAP_HEIGHT, MAP_WIDTH, hashString, mulberry32 } from '../vanilla/map.ts
 import { buildPalette, type Palette, type PaletteStop, type PaletteWorld, type RGB } from '../vanilla/map_palette.ts';
 import { renderDiamond } from '../vanilla/map_projection.ts';
 import { EXOTIC_LIQUIDS, liquidByName } from './liquids.ts';
+import { liquidLook } from './climate.ts';
 import { coverage, seaIce, substance, type SeaIce } from './seas.ts';
 
 /** Equal-area samples of the height field the sea level is counted over. */
@@ -314,6 +315,26 @@ export type SeaPlan = {
 
 /** The sea of a body as the enhanced sheet will draw it, decided by enhanced/seas.ts. */
 export function seaPlan(body: Readonly<Record<string, unknown>> | null | undefined): SeaPlan {
+    const look = liquidLook(body);
+    const named = body && typeof body.liquidType === 'string' ? body.liquidType : '';
+    if (look === 'none') {
+        return {
+            sea: { coverage: 0, liquid: null, ice: { kind: 'none' } },
+            why: 'liquidStatus none',
+            named,
+            drawn: false,
+        };
+    }
+    if (look === 'unresolved') {
+        const cover = coverage(body);
+        const hasSea = cover != null && cover > 0;
+        return {
+            sea: { coverage: cover, liquid: hasSea ? UNKNOWN_EXOTIC_LIQUID : null, ice: { kind: 'none' } },
+            why: 'the liquid is unresolved',
+            named,
+            drawn: hasSea,
+        };
+    }
     const cover = coverage(body);
     const liquid = substance(body);
     let ice: SeaIce;
@@ -323,7 +344,6 @@ export function seaPlan(body: Readonly<Record<string, unknown>> | null | undefin
         // seaIce throws when its rules do not decide. Nothing is guessed: no ice is drawn.
         ice = { kind: 'none', why: 'undecided: ' + (err instanceof Error ? err.message : String(err)) };
     }
-    const named = body && typeof body.liquidType === 'string' ? body.liquidType : '';
     const unknownExotic = named === UNKNOWN_EXOTIC_LIQUID;
     if (unknownExotic) {
         ice = { kind: 'none', why: 'exotic liquid; freezing point unknown' };

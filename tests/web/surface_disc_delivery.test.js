@@ -64,8 +64,10 @@ after(() => {
     clearDiscs();
 });
 
-test('step 1 links the vanilla draw source and adds no bake pass', () => {
-    assert.equal(ENHANCED_DRAW_FRAG, DRAW_FRAG);
+test('step 2 keeps the vanilla program and adds no bake pass', () => {
+    assert.notEqual(ENHANCED_DRAW_FRAG, DRAW_FRAG);
+    assert.equal(DRAW_FRAG.includes('uCityHaze * pow(1.0 - z, 3.0)'), true);
+    assert.equal(ENHANCED_DRAW_FRAG.includes('uCityHaze *'), false);
     assert.deepEqual([...ENHANCED_BAKE_PASSES], []);
     assert.equal(ENHANCED_CITY_VERSION, 'enhanced-cities-1');
     assert.equal(VANILLA_DISC_VERSION, 'vanilla');

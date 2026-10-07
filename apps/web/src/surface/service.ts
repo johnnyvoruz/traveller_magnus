@@ -31,6 +31,7 @@ import {
     diamondMapSpec,
     surfaceCacheKey,
 } from './identity.ts';
+import { enhancedWorldData } from './enhanced/climate.ts';
 import { createEnhancedMap, seaPlan } from './enhanced/map.ts';
 import { createChunkedMap } from './map_chunks.ts';
 import { openDiscLink, type DiscLink } from './disc_link.ts';
@@ -309,8 +310,9 @@ function requestSheet(request: MapRequest, sea: EnhancedSea | null): MapTicket {
         };
         return { ...sheet, done: Promise.resolve(sheet) };
     }
+    const worldData = request.mode === 'enhanced' ? enhancedWorldData(request.body, spec.worldData) : spec.worldData;
     const inputs: VanillaPaintInputs = {
-        worldData: spec.worldData,
+        worldData,
         imageSeed: spec.seed,
         masterSeed: VANILLA_MASTER_SEED,
         continentalDefinition: request.options.continentalDefinition,
@@ -416,7 +418,7 @@ export function prepareDiscs(request: DiscBatchRequest): SurfaceReply {
     if (request.discs.length === 0) return { status: 'unavailable', mode: request.mode, requestId };
     const shades: ShadeRequest[] = [];
     for (const disc of request.discs) {
-        const shade = discShadeRequest(request.timeSeconds, disc);
+        const shade = discShadeRequest(request.timeSeconds, disc, request.mode);
         if (shade) shades.push(shade);
     }
     const envelope = advanceDiscs(request);

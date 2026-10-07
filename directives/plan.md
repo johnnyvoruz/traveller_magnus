@@ -229,6 +229,11 @@ accounts and journals.
      change the travel sums. Every number sits in the rules file so that this is an edit.
   4. Astrogation checks, inaccurate jumps, unrefined fuel: named in the book's text, not
      supplied.
+  5. **Re-aiming a ship in the middle of a leg** (Johnny, 2026-10-06: "keep it for MVP").
+     In the MVP a leg under way is history (`replaceLegsFrom` refuses it); the ship
+     finishes the leg and an edited route begins at its end. A mid-flight change needs a
+     rule from Johnny first: the supplied formula is from rest to rest, and a ship under
+     way is moving.
 
 ## 5. Order and milestones
 

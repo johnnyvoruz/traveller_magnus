@@ -4758,3 +4758,184 @@ Stop and report.
   tests, 856 pass, 0 fail, 11 skipped.
 - **Next:** D, `prompts/d_nav_console.md`. E and A have nothing queued; the journal (K7) is
   the next campaign piece and its recipe is not written.
+
+## 177. Pushed `d4bb7e8`; Johnny on the live waypoints: selection broken, drag waypoints, see and edit a ship's route, the right-hand stack (2026-10-06)
+
+- **`d4bb7e8`** (waypoints and the course, ship tags like the planet's, vessels on the
+  sector map, the ribbon, the liquid row): GitHub run green; the live entry is
+  `index-uJYVuah5.js`, the file the rehearsal built. Johnny was told what to look for.
+- **His notes on it** (screenshot `findings/ui_design_shots/ref_right_stack_misaligned.png`):
+  "Ship not being selected on click, and then I want to be able to click and drag to move
+  waypoints that have been placed. Course cards still don't look amazing. Also line up
+  these alerts and buttons or whatever so they're all right aligned? All these
+  notifications / controls / alerts need to move down like the card in the left. Also when
+  I click on the vessel to select it, I want to see its pathing and be able to edit it.
+  Think basic RTS controls."
+- **Read of the selection defect:** in `OrbitCanvas.vue` `onUp`, a press while plotting
+  goes straight to laying a body or point waypoint and never asks `shipAt`; D to reproduce
+  on the live site and find anything else.
+- **Split:** **A, `prompts/a_route_edit.md`:** `replaceLegsFrom(recordId, index, legs,
+  notBefore)` in `campaign/track.ts` (legs already departed are history); a `route` on the
+  draw state, the selected ship's stored legs drawn as the committed course beside the
+  dashed preview; `waypointAt` as a pure hit test; a stand-in route. **D,
+  `prompts/d_nav_console.md`, which D had not begun, gains a section 0:** the selection
+  defect first; the right-hand stack (strip, ship list, destination row, card, toasts) on
+  one right edge and riding 18 px under the drawer as E's card does; a selected ship's
+  route shown and editable (drag a waypoint in a new course or a stored one, remove one,
+  one Undo, history not editable); then the flow, the live plotter and the instrument look
+  already in that prompt. Follow-up 30.
+- A and E were free; A takes the route work. E still has nothing queued.
+
+## 178. A's route editing accepted, held for D's push; the journal (K7) begins: A on the schema, E on a paper design (2026-10-06)
+
+**A's report on `prompts/a_route_edit.md`, checked against the tree.** `replaceLegsFrom`
+(`campaign/track.ts`) read line by line: index past the end, a departed leg, a bad leg,
+the 500 limit and time order are each refused, one write. `waypointAt` and `DrawnWaypoint`
+(`orbit/ships.ts`), `paintRoute` / `partIndex` / `waypoints()` (`OrbitRenderer.ts`), the
+`route` prop and `waypoints()` on `OrbitCanvas.vue`. Run here: `campaign_track` and
+`orbit_ships` 16 of 16, `orbit_renderer` 31 of 31, `npm run check` clean. Frames
+`k30_route_{selected,with_preview,under_way}.png` looked at. **Accepted.**
+
+**Not pushed, on purpose.** Nothing in it shows until D passes `route` (`d_nav_console.md`
+0c): only the stand-in draws it. `OrbitCanvas.vue` and `OrbitView.vue` hold D's work in
+flight and `surface/` holds C's. It rides with D's nav console push.
+
+**One defect of look, back to A** (first item of `prompts/a_journal_1.md`): where a
+preview parts from the stored route, both draw an arrival tag for the same waypoint, one on
+the other (`k30_route_with_preview.png`). From the parting waypoint the route is to be
+"what was": dimmer, no tag, no number.
+
+**A known limit, put to Johnny:** a leg already under way is history and cannot be
+re-aimed; the ship finishes it and the edited route begins there. Re-aiming in mid-flight
+needs a rule (the travel formula is rest to rest), so it is his to ask for.
+
+**D's prompt** gained a note that A's pieces are on disk, with their exact names.
+
+**The journal begins (K7), as the slice orders it.** Johnny has not answered "what should
+A and E do next"; the recommendation (the journal) is the slice's own next step, so the
+prompts are written and he decides by pasting them or not.
+- **K7a, Agent A, `prompts/a_journal_1.md`:** `CampaignEntry` in the shared schemas
+  (`cj_` ids; `session | note | handout | rumor`; `when` as the file's `Day`; `realDate`;
+  `sequence` on sessions only; `author`; `visibility`; `anchor`; `mentions`), `mentionsOf`
+  for the `[[…]]` tokens, `EntryChange`, `CampaignChanges.journal`, an **optional**
+  `CampaignPage.journal`, the result table widened. Additive, so it can be pushed before
+  the server stores anything. Orchestrator's calls, to be seen by Johnny in A's report:
+  limits (20,000 entries, title 200, body 100,000, 200 mentions); a title may be empty; a
+  handout is not forced player-visible by the schema.
+- **K7b, Agent B, not written:** `campaign_journal` in the Durable Object (schema version
+  3), applied in the same changes call, paged with the rest. Write it when K7a is on disk.
+  B is otherwise idle until v6 finishes.
+- **K7c, Agent A, not written:** the store (`campaign/`): entries by id, commit and
+  conflicts as records, the next session number, the index by hex and by mention.
+- **Screens, Agent E, `prompts/e_journal_design.md`:** design only, to
+  `findings/journal_design.md` with mockups `kj_*`, in the workspace's existing language.
+  E builds after K7b and K7c.
+
+## 179. v6 measured from the CDN: 170 of 512 after 2 h 28 min, healthy, about five hours left; why it is slow; a stale total report at the edge (2026-10-07, 02:00 UTC)
+
+Johnny asked for v6's status and why it is taking so long. The admin route needs his
+session, so it was measured read-only from the public CDN: one request per sector for
+`truth/v6/reconciliation/sectors/<slug>.json` (written once, when a sector is published),
+and each one's `Last-Modified`.
+
+- **170 of 512 sectors published.** First at 23:32:00 UTC on 2026-10-06, the latest at
+  01:59:29 UTC. Average 52 s a sector; by 25s: 50, 47, 50, 58, 46, 57, 60 s. Longest gap
+  between two sectors 3.5 min, none over 10 min: **no stall**, and the two pushes made in
+  that window did not disturb it (the queue carries on across a deploy). At this pace the
+  rest is about five hours: **done near 07:00 UTC (about 02:00 Central), 7.5 hours in all.**
+- **So far (total report, fetched past the cache):** 1,070,606 bodies seen; 206,817
+  unresolved (19.3%); 381 blocking. The share is the same as at 71 sectors. The report is
+  already 8 MB because it lists every unresolved body.
+- **Why it is slow (read in `jobs/truth_build.ts`, `routes/admin.ts`, `wrangler.toml`):**
+  1. It rewrites every system rather than regenerating: each hex's tree object is fetched
+     from R2, reconciled, hashed and written back, **one after another** (`await` in a
+     loop, no batching).
+  2. A sector is a chain of queue messages of 25 hexes (`RECONCILE_SLICE`); each message
+     sends the next, so a sector is strictly serial with a queue hop between slices.
+  3. Only six messages run at once (`max_concurrency = 6`; twelve sectors are fed).
+  4. Finishing a sector fetches every one of its objects again, one by one, to prove they
+     exist (`get`, not `head`), and then **rebuilds the whole-build report by re-reading
+     every finished sector's report**. That grows with each sector (170 reads and an 8 MB
+     write now, 512 and about 24 MB at the end): quadratic, and the reason the pace is
+     drifting from 50 s to 60 s.
+  A full generation of the same 512 sectors took 13 minutes (v5). This job was written to
+  be safe and resumable, not fast; it has been both.
+- **Do not restart it and do not touch it.** Nothing is wrong, and the parts are cached.
+- **A real trap:** `reconciliation/report.json` is rewritten after every sector but is
+  stored `immutable` for a year, so the CDN edge serves the first copy (two sectors, 46
+  bodies) at the plain address. A query string gets the truth. Also up to six finishers
+  rewrite it at once from a listing, so the final copy may miss a late neighbour.
+  `prompts/b_engine_t1_7.md` now says to fetch past the cache and to trust the sum of the
+  per-sector reports.
+- **Owed to B after T1.7 (the inputs hardening step, now five items):** `resolveCatalogue`
+  skipping a directory with a catalogue and no sector files; an admin route to delete a
+  `building` version; the derived build made fast (hexes of a slice in parallel, `head`
+  for the existence check, the total report written once at the end, more lanes); no
+  `immutable` on a rewritten key; the unresolved list out of the total report (counts
+  there, the list per sector).
+- **Before any release, unchanged:** the surfaces read `surfaceTempBand` (C, in flight)
+  and Johnny rules on the unresolved share and the blocking bodies, from B's evidence.
+- **B has a prompt for the idle hours: `prompts/b_build_hardening.md`** (the eight items
+  above written out: a slice in parallel with the same bytes, `head` for the existence
+  check, the total written once, lists out of the total, cache headers, `resolveCatalogue`,
+  an admin route to remove an unreleased version). **Its files stay out of every push
+  until v6 has finished**; T1.7 interrupts it the moment v6 is done.
+
+## 180. Johnny: the journal is next; a leg under way stays history for the MVP; prompts out to A, E and B (2026-10-06, late)
+
+- **Answers.** G8: yes, the journal, with the limits in A's prompt. G9: re-aiming a ship
+  in the middle of a leg is not for the MVP (`plan.md` "Ship navigation backlog", item 5;
+  it needs a rule from him before any design). Both recorded in `questions_for_johnny.md`.
+  Nothing is open with Johnny.
+- **Handed out:** A `prompts/a_journal_1.md`; E `prompts/e_journal_design.md`; B
+  `prompts/b_build_hardening.md` (its files stay out of every push until v6 is done); D
+  was told A's route pieces are on disk. C is still on `prompts/c_city_lights_2.md`.
+- **Written ahead:** `prompts/a_journal_2.md` (K7c, the store), to hand to A when K7a is
+  accepted. It tells A to stop if turning the clock's day count into `{ year, day }` would
+  mean choosing a calendar rule. **Still owed:** K7b for B, when K7a is on disk.
+- **v6 at 02:09 UTC:** 181 of 512.
+- **The next push** is D's nav console with A's route editing, by hunks
+  (`OrbitRenderer.ts`: A and C; `OrbitCanvas.vue`: A and D), rehearsed. A's K7a can ride
+  with it or go alone by path (`packages/shared`, its tests), since it is additive.
+
+## 181. C's ring cross-fade, corrected climate and city lights step 2 accepted; a C-only push rehearsed; a flight log for every vessel (2026-10-06, late)
+
+**C's report on `prompts/c_city_lights_2.md`, checked.**
+- **Rings.** C reproduced the pop on the live site and explained it: the live worker
+  starts cold, so `dayHold` kept the flat ring at full strength for the whole gesture and
+  then blitted the tile at once; and the shaded tile is clipped to the disc, so the ring
+  outside the planet stayed invisible until the sweep ended. Now `ringShown` follows the
+  body's sweep, a late tile fades over `--t-base`, `shadeRings` draws the tile outside the
+  disc at that amount, and the ring's fill is no longer scaled per frame (no rebake).
+  Read in the diff; the new test is in `orbit_renderer.test.js`.
+- **Part 0.** `discShadeRequest(time, disc, mode = 'vanilla')` and `enhancedWorldData`:
+  only the enhanced mode reads the classifier's word; the vanilla path is as it was.
+  On v5 (no reconciled fields) nothing changes, e.g. Rhylanor still "Water, frozen" at
+  328 K until v6 is released.
+- **Step 2.** City haze and halo gone, city light and the downport under cloud
+  transmission, the night ramp and the limb. Step 1 and step 2 near sheets compared by
+  eye at Rhylanor: the look holds. **Not delivered, and said so by C:** the cloud crops
+  and city on/off sheets (the orbit page cannot force them) and a run of
+  `scripts/surface_parity.js`. Both are first in `prompts/c_city_lights_3.md`.
+- Whole tree here: 908 tests, 899 pass, 0 fail (A's journal tests already among them).
+
+**A C-only push, rehearsed.** A is back in `OrbitRenderer.ts` and D is mid-step, so C's
+work was cut out: `findings/push/c_rings_renderer.patch` (the four renderer hunks between
+old lines 846 and 1525, and C's one test, by `filter_range.mjs` in the scratchpad),
+`findings/push/c_surface.patch` (six `surface/` files and `surface_disc_delivery.test.js`,
+whole), and four new files by path. Scratch copy of `d4bb7e8` with exactly that applied:
+`vue-tsc` exit 0, `vite build` done (entry `index-DXPwg3e-.js`, orbit chunk
+`OrbitView-TAAF7GZ1.js`), `tsc -p apps/api` exit 0, 874 tests, 863 pass, 0 fail, 11
+skipped (two more than in the tree, files the archive does not carry), check clean.
+Junctions removed; the real `node_modules` checked.
+
+**Johnny: a flight log for every vessel, "an efficient archive".** Follow-up 31 in
+`slice_2_campaign.md`. The history is already kept (legs stay on the track) but inside
+the record, capped at 500 legs and rewritten whole on every change. Plan: arrived legs
+move to an append-only log in the Durable Object, read by page and by date; a paper
+design by B after K7b. One question put to Johnny: may a referee strike or correct a
+logged leg.
+
+**C's next:** `prompts/c_city_lights_3.md` (a dev harness for the enhanced program and the
+step 2 crops it owes, the parity script, then step 3: the cube C, static filtering, the
+day material).

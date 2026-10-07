@@ -51,7 +51,7 @@ export function tempBandFromKelvin(k: number): string {
 }
 
 // js/planet_profile.js:45-67.
-export function surfaceKind(body: unknown): string | null {
+export function surfaceKind(body: unknown, bandWord?: string | null): string | null {
     if (!body) return null;
     const row = body as Body;
     if (row.sType != null && !row.uwp) return 'star';
@@ -66,8 +66,12 @@ export function surfaceKind(body: unknown): string | null {
     const atm = atmDigit(row);
     const hydro = hydroDigit(row);
     const kelvin = Number(row.meanTempK) || 0;
-    const band = row.tempBand || (kelvin && tempBandFromKelvin ? tempBandFromKelvin(kelvin) : '');
-    if (kelvin >= 450) return 'hot';
+    // A classifier word, when the enhanced look has one, stands in for tempBand and for
+    // the Kelvin shortcut. Vanilla calls leave bandWord empty and keep both.
+    const band = bandWord
+        ? bandWord
+        : (row.tempBand || (kelvin && tempBandFromKelvin ? tempBandFromKelvin(kelvin) : ''));
+    if (!bandWord && kelvin >= 450) return 'hot';
     if (atm != null && atm >= 10) return 'exotic';
     if (band === 'Frozen') return (hydro || atm) ? 'ice' : 'barren';
     if (atm === 0 || (atm == null && hydro == null)) return 'barren';
@@ -147,11 +151,20 @@ function siderealHours(body: Body): number | null {
 
 const cache = new WeakMap<object, Body>();
 
-/** js/planet_profile.js:151-298. `id` seeds the terrain. */
-export function surfaceProfile(body: Body, id: string): Body {
+export type ProfileLook = {
+    /** Classifier climate word. Null keeps tempBand and the Kelvin rule. */
+    readonly band?: string | null;
+    /** 'none' draws no sea. 'unresolved' draws Unknown Exotic Liquid and never freezes it. */
+    readonly sea?: 'data' | 'none' | 'unresolved';
+};
+
+/** js/planet_profile.js:151-298. `id` seeds the terrain. `look` is the enhanced override. */
+export function surfaceProfile(body: Body, id: string, look?: ProfileLook | null): Body {
+    const bandWord = look?.band || null;
+    const sea = look?.sea === 'none' || look?.sea === 'unresolved' ? look.sea : null;
     const hit = cache.get(body);
-    if (hit && hit.id === id) return hit;
-    const family = surfaceKind(body);
+    if (!bandWord && !sea && hit && hit.id === id) return hit;
+    const family = surfaceKind(body, bandWord);
     const seed = seedOf(id || `${body.name}|${body.type}|${body.uwp}`);
     const rand = rng(seed);
     const atm = atmDigit(body) ?? 0;
@@ -166,6 +179,8 @@ export function surfaceProfile(body: Body, id: string): Body {
 
     let liquidName = body.liquidType || (hydro > 0 ? (kelvin < 273 ? 'Ice' : kelvin < 373 ? 'Water' : null) : null);
     if (liquidName === 'Water' && kelvin < 262) liquidName = 'Ice';
+    if (sea === 'none') liquidName = null;
+    if (sea === 'unresolved') liquidName = 'Unknown Exotic Liquid';
     const liquid = liquidName ? (LIQUIDS[liquidName] || LIQUIDS['Unknown Exotic Liquid']) : null;
     const water = hydro >= 11 ? 1 : clamp(hydro / 10, 0, 1);
 
@@ -271,9 +286,10 @@ export function surfaceProfile(body: Body, id: string): Body {
         rings, port,
         rotation: { hours: siderealHours(body), tilt, locked },
         albedo: clamp(0.8 + (num(body.albedo) ?? 0.3) * 0.6, 0.75, 1.15),
-        gas
+        gas,
+        ...(bandWord ? { climateBand: bandWord } : {}),
     };
-    cache.set(body, profile);
+    if (!bandWord && !sea) cache.set(body, profile);
     return profile;
 }
 

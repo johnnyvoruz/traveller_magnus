@@ -11,11 +11,27 @@ Everything is fetched from the public CDN (`https://cdn.traveller.voyage/truth/v
 `https://cdn.traveller.voyage/objects/<hash>`). No production write of any kind, no deploy,
 no git, no file under `truth/` or `universe/` changed.
 
+## A trap found while the build ran (orchestrator, 2026-10-07)
+
+`truth/v6/reconciliation/report.json` is **rewritten after every sector** but is stored with
+`cache-control: public, max-age=31536000, immutable`. The CDN's edge therefore serves the
+first copy it saw: the plain address returned a two-sector report while 170 sectors were
+done. **Fetch it with a throwaway query string** (`?t=<anything new>`, which was a cache
+MISS and returned the true total), and treat the per-sector reports, which are written
+once, as the evidence: the total is only believed if it equals their sum. Up to six
+sectors finish at once and each rewrites the total from a listing, so the last writer may
+have missed a neighbour: if the total and the sum differ, say by how much and which
+sectors, and report the sum.
+
+Put both under "defects found" in your evidence file, with the fix you would make (the
+total written once, when the last sector is done, and no `immutable` on a key that is
+rewritten). Do not fix them in this step.
+
 ## Gather
 
 1. `truth/v6/reconciliation.json` (the provenance) and `truth/v6/reconciliation/report.json`
-   (the total). Check the policy digest equals the digest of the policy in this tree
-   (`environmentPolicy`), and say which climate table that is.
+   (the total, fetched as above). Check the policy digest equals the digest of the policy in
+   this tree (`environmentPolicy`), and say which climate table that is.
 2. The per-sector reports, all 512: sum them and check the sum equals the total report.
    List any sector with no report or with an error.
 

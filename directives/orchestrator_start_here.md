@@ -205,6 +205,34 @@ file true: replace it, do not append to it.
   **Then:** D `d_nav_console.md`; C is mid `c_city_lights_2.md` (the ring pop Johnny
   confirmed, the corrected climate, city lights step 2); A and E are free (the journal, K7,
   is next and has no recipe yet); B waits for v6 (`b_engine_t1_7.md`).
+- **Last push `d4bb7e8`**, green and live (§177). **Since then (§178, §179):**
+  - **A's route editing is accepted and on disk, not pushed** (`replaceLegsFrom`, `route`,
+    `waypointAt`, `waypoints()`): it shows nothing until D wires it, so it rides with D's
+    `d_nav_console.md` push. That push will need the hunk-level method again
+    (`OrbitRenderer.ts` holds A's and C's work, `OrbitCanvas.vue` A's and D's).
+  - **The journal (K7) has begun, if Johnny pastes the prompts** (he had not answered
+    "what next for A and E"; it is the slice's own next step): A `a_journal_1.md` (the
+    route's old tail under a preview, then K7a, the shared schema, additive); E
+    `e_journal_design.md` (paper design only). **Not written:** K7b for B (the Durable
+    Object, when K7a is on disk) and K7c for A (the store).
+  - **v6: 170 of 512 at 02:00 UTC on 2026-10-07, about 52 s a sector, no stall; done
+    near 07:00 to 08:00 UTC.** Measure it without Johnny by probing
+    `cdn.traveller.voyage/truth/v6/reconciliation/sectors/<slug>.json` for the 512 slugs
+    of `/api/truth/versions` (v5's list). **The total `report.json` is stale at the plain
+    address** (stored `immutable`, rewritten per sector): add a query string.
+  - **Answered 2026-10-06 (§180):** the journal is next (G8: yes; A, E and B have their
+    prompts, B's being `b_build_hardening.md` for the idle hours); a leg under way stays
+    history for the MVP (G9; `plan.md` backlog item 5). **Nothing is open with Johnny.**
+  - **Owed by the orchestrator when A reports K7a:** K7b for B (the Durable Object) and
+    K7c for A (the store).
+- **Called for in §181, a C-only push** (`findings/push/c_rings_renderer.patch`,
+  `c_surface.patch`, four new files by path): the ring cross-fade on Day/night, the
+  enhanced look reading the corrected climate, city lights step 2. Rehearsed green; the
+  live entry should become `index-DXPwg3e-.js`. Check `git log -1`. **Then:** C
+  `c_city_lights_3.md`. A's route editing, A's journal schema, D's nav console and B's
+  hardening are all still local.
+- **Follow-up 31, a flight log for every vessel** (§181): a paper design by B after K7b.
+  **Open with Johnny:** may a referee strike or correct a logged leg.
 - **Earlier: `703041d`, green.** **The stack by agent (§169), in order:**
   A `a_course_preview.md`, then `a_vessels_on_map.md`; D `d_ghost_wiring.md`, then
   `d_waypoints.md` (follow-up 28: select on the picture, the docked tag, a course of

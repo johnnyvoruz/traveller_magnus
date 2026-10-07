@@ -3,7 +3,8 @@
  * legacyDiscId and the profile are derived here. The caller never builds either.
  * Stars, belts and rings have no shaded disc. scale is not a request field.
  */
-import type { DiscRequest } from './contracts.ts';
+import type { DiscRequest, SurfaceMode } from './contracts.ts';
+import { enhancedProfile, knownSurfaceWord } from './enhanced/climate.ts';
 import { productionDiscId } from './identity.ts';
 import { surfaceKind, surfaceProfile } from './profile.ts';
 import type { ShadeRequest } from './vanilla/gl_shade.ts';
@@ -12,12 +13,13 @@ const UNSHADED = new Set(['star', 'belt', 'ring']);
 
 type Body = Record<string, any>;
 
-export function discShadeRequest(timeSeconds: number, disc: DiscRequest): ShadeRequest | null {
-    const kind = surfaceKind(disc.body);
-    if (!kind || UNSHADED.has(kind)) return null;
+export function discShadeRequest(timeSeconds: number, disc: DiscRequest, mode: SurfaceMode = 'vanilla'): ShadeRequest | null {
     const body = disc.body as Body;
+    const word = mode === 'enhanced' ? knownSurfaceWord(body) : null;
+    const kind = surfaceKind(disc.body, word);
+    if (!kind || UNSHADED.has(kind)) return null;
     const id = productionDiscId(disc.hexKey, body, kind);
-    const profile = surfaceProfile(body, id) as ShadeRequest['profile'];
+    const profile = (mode === 'enhanced' ? enhancedProfile(body, id) : surfaceProfile(body, id)) as ShadeRequest['profile'];
     const ring = disc.ring
         ? {
             inner: disc.ring.inner,

@@ -249,6 +249,22 @@ only. D's five points for the orchestrator:
   - **K6d, later:** the vessel's dated position log and the Jump button.
 - **K7. The journal.** `campaign_journal` (schema version 3, columns from the plan's §2.4),
   sessions and notes dated from the clock and anchored to the party.
+  **Begun 2026-10-06 (handoff §178), in four parts:**
+  - **K7a (Agent A), the shared schema** (`prompts/a_journal_1.md`): `CampaignEntry`
+    (`cj_` ids; `session | note | handout | rumor`; `when` as `Day`; `realDate`;
+    `sequence` on sessions only; `author`; `visibility`; `anchor`; `mentions`),
+    `mentionsOf` for the `[[…]]` tokens with the platform's ids, `EntryChange`,
+    `CampaignChanges.journal`, an optional `CampaignPage.journal`, the result table
+    widened. Limits: 20,000 entries, title 200, body 100,000, 200 mentions. A title may
+    be empty; a handout is not forced player-visible by the schema.
+  - **K7b (Agent B), the Durable Object:** table `campaign_journal`, applied in the same
+    changes call with `baseRev` conflicts, paged with the rest. Not written.
+  - **K7c (Agent A), the store:** entries by id, commit and conflicts as records, the next
+    session number, the index by hex and by mention. Not written.
+  - **The screens (Agent E):** a paper design first (`prompts/e_journal_design.md`, to
+    `findings/journal_design.md`), in the workspace's existing language; built after K7b
+    and K7c. Left for later, with room kept: `@` to insert a token, the "Mentioned" rail,
+    images on handouts, "Promote to job", players' notes and replies.
 - **K8. The timeline.** Dated records and journal entries in one list; choosing a row focuses
   its place.
 
@@ -613,6 +629,43 @@ only. D's five points for the orchestrator:
       around, we see the planet ghosts move." Selecting a ship starts plotting; thrust is
       chosen first; the preview and the ghosts follow the pointer; the plot card is
       redesigned as a ship's instrument from the view's own language. After follow-up 28.
+  30. **Basic RTS controls (Johnny, 2026-10-06, on the live waypoints build).** "Ship not
+      being selected on click, and then I want to be able to click and drag to move
+      waypoints that have been placed. Course cards still don't look amazing. Also line up
+      these alerts and buttons or whatever so they're all right aligned? All these
+      notifications / controls / alerts need to move down like the card in the left. Also
+      when I click on the vessel to select it, I want to see its pathing and be able to
+      edit it. Think basic RTS controls." A press on a ship always selects it; a selected
+      ship's stored route is drawn and listed; waypoints drag (new course and stored route),
+      can be removed, with one Undo, the legs already flown being history; the right-hand
+      stack shares one right edge and rides under the drawer. Agent A
+      (`prompts/a_route_edit.md`), Agent D (`prompts/d_nav_console.md` section 0, with 29).
+  31. **A flight log for every vessel, as an efficient archive (Johnny, 2026-10-06).** "We
+      can have flight log history for each vehicle, that would be neat, we should ensure
+      that it's an efficient archive." This is K6d's "dated position log", now asked for.
+      - **What exists.** Every leg a vessel flies stays in `status.track` on its own record
+        (`TrackLeg`: from, to, departs, arrives, mode, thrust, note). So the history is
+        kept, but as part of the record: **capped at 500 legs** (`CAMPAIGN_LIMITS.track`),
+        and every change to the track writes the whole record again, history included.
+        No screen shows it as a log.
+      - **What "efficient" means here.** Legs that have arrived leave the record for the
+        vessel's log: append-only, one small row per leg, kept by the campaign's Durable
+        Object, read a page at a time and by date range. The record keeps the leg under
+        way and those to come, with a count and the span of what is archived. A record
+        write stops carrying history; the log is fetched only when a screen or a past date
+        asks; nothing is copied when a snapshot is taken beyond what the git model allows
+        (`architecture.md` §2: decide rows against sealed content-addressed chunks on
+        paper, with the numbers).
+      - **What it shows.** Per leg: from, to, departed, arrived, how (flight, jump, docked,
+        orbit), thrust, the note; distance and the fuel estimate worked out for display by
+        the functions the nav console already uses, not stored. On the vessel's page
+        (newest first), above the route in the nav console, and in the timeline (K8).
+      - **Order.** After the journal's server step (K7b): the same agent (B) and the same
+        storage. First a paper design by B (`findings/flight_log_design.md`): the storage,
+        the move from record to log (when, and how a referee's correction of an arrived
+        leg works), `positionAt` for a past date, what a snapshot and an export carry, the
+        size of a ten-year campaign with twenty ships. Then A (schema, store), then the
+        screens. **Open with Johnny:** may a referee strike or correct a logged leg.
   15. **The pinned body card beside the open panel (D decides; settled by 22):** when the orbit view's
       docked body card and the dossier panel for the same body are both open, two views of
       one thing show at once. Johnny sees pros and cons. D reviews `manifesto.md` (one

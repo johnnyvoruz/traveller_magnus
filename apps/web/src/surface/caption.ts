@@ -41,9 +41,11 @@ export function sheetCaption(mode: SurfaceMode, body: Readonly<Record<string, un
         };
     }
     if (sea.liquid === 'Unknown Exotic Liquid') {
+        const unresolved = plan.why === 'the liquid is unresolved';
+        const note = unresolved ? 'the liquid is unresolved' : 'exotic liquid; freezing point unknown';
         return {
-            text: 'Enhanced · Unknown Exotic Liquid, exotic liquid; freezing point unknown',
-            title: 'Sea: ' + percent(sea.coverage) + ' of Unknown Exotic Liquid: exotic liquid; freezing point unknown. No ice is drawn.',
+            text: 'Enhanced · Unknown Exotic Liquid, ' + note,
+            title: 'Sea: ' + percent(sea.coverage) + ' of Unknown Exotic Liquid: ' + note + '. No ice is drawn.',
         };
     }
     const ice = sea.ice;
