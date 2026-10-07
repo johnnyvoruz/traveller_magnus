@@ -27,7 +27,7 @@ import {
 } from './picture.ts';
 import { discBatch, sunColour, visualRate, type OrbitDiscBatch } from './disc_batch.ts';
 import { pictureOfAu, pointWords } from './distance.ts';
-import { pictureBodies, plotText, type PlotReadout, type ShipMark, type ShipShape } from './ships.ts';
+import { dockedBeside, pictureBodies, plotText, type PlotReadout, type ShipMark, type ShipShape } from './ships.ts';
 import { whenWords } from './ship_list.ts';
 import { cssSeconds, easeOutAt, withAlpha, type EaseOut, type OrbitTheme, type PortPaint } from './theme.ts';
 
@@ -39,6 +39,25 @@ type BubbleRun = { from: number; to: number; t0: number; seconds: number; kind: 
 type BubblePaint = { id: string; kind: 'out' | 'in'; share: number; mark: ShipMark };
 type GhostRun = { from: number; to: number; t0: number; seconds: number; kind: 'in' | 'move' | 'out' };
 type GhostSpot = { x: number; y: number };
+type GhostBody = {
+    key: string;
+    kind: 'world' | 'moon';
+    name: string;
+    x: number;
+    y: number;
+    r: number;
+    cx: number;
+    cy: number;
+    epoch: number;
+    period: number;
+};
+type WaySlot = {
+    span: number;
+    share: number;
+    run: GhostRun | null;
+    spec: GhostSpec | null;
+    drawn: GhostSpot | null;
+};
 type GhostSpec = {
     key: string;
     dest: boolean;
@@ -67,11 +86,6 @@ const WIRE_GRID_MIN_PX = 10;
 const WIRE_SWEEP_MIN_PX = 4;
 /** Pole lean, in radians, so the parallels read as ellipses rather than a flat stack. */
 const WIRE_TILT = 0.55;
-/**
- * Day/night fill, as a share of the disc radius. Wide enough to read as a solid sweep,
- * narrow enough that the night side shows behind it before the wave leaves the disc.
- */
-const DAY_SWEEP_BAND = 0.42;
 /**
  * The largest step of the teal sweep between two frames. The sweep is a sine, whose
  * steepest slope is π. A body's own sweep lasts --t-slow, and a frame at 60fps is a
@@ -151,17 +165,22 @@ export type DrawState = {
     /** Plotting hairlines for this frame only. Omitted or null, the overlay is off. */
     plot?: PlotReadout | null;
     /**
-     * The flight being previewed, or null. Ghosts stand at `arrives`; the flight line
-     * runs from the ship's mark to the destination's ghost. Omitted, the picture is today's.
+     * One leg, or an ordered course of legs, or null. A body ghost stands at that leg's
+     * arrival. The flight line runs from the ship through each waypoint. Omitted, the picture is today's.
      */
     preview?: FlightPreview | null;
+    /**
+     * When set, a ship drawn beside a body is not given a designator, so a tag can stand
+     * for it. Omitted, the designator is drawn.
+     */
+    dockTag?: boolean;
 };
 
 /**
- * Dates and a destination. A body (`toKey`) ghosts the bodies that move.
+ * One leg of a course. A body (`toKey`) is ghosted at this leg's arrival.
  * A point is a target, not a ghost: a point does not move. `tag` is the label when the view has one.
  */
-export type FlightPreview = {
+export type CourseLeg = {
     toKey?: string;
     /** AU from the primary, in the frame realPositionAu answers in. */
     point?: { x: number; y: number };
@@ -169,6 +188,11 @@ export type FlightPreview = {
     arrives: number;
     tag?: string;
 };
+
+/**
+ * One leg, or an ordered list of legs. The one-leg object is the form already in use.
+ */
+export type FlightPreview = CourseLeg | readonly CourseLeg[];
 
 type Sprite = { lit: HTMLCanvasElement; dark: HTMLCanvasElement };
 type ArtImage = { image: CanvasImageSource; ready: boolean };
@@ -240,6 +264,8 @@ export class OrbitRenderer {
     /** Where each ghost was drawn last frame, so a new slide starts from there. */
     private ghostLatch = new Map<string, GhostSpot>();
     private ghostLast: GhostSpec[] = [];
+    /** Per-waypoint fade for a course of two or more legs. Empty while the preview is one leg. */
+    private ways = new Map<string, WaySlot>();
     /** --t-fast from the canvas, read once. Null when the token is missing: the slide snaps. */
     private fastSecondsCache: number | null | undefined = undefined;
     private habLive = false;
@@ -348,7 +374,7 @@ export class OrbitRenderer {
         } else {
             for (const caption of picture.captions) this.captionOf(caption);
         }
-        if (this.moonsLive) this.wireframes(picture, state);
+        if (this.moonsLive || this.dayLive) this.wireframes(picture, state);
         if (!this.scanLive) {
             if (state.layers.scan) this.scan(plan, picture, state);
         } else if (this.scanShare > 0) {
@@ -359,7 +385,7 @@ export class OrbitRenderer {
         this.selection(plan, picture, state);
         const ghostAt = this.paintGhosts(plan, picture, view, state);
         this.beginBubbles(state);
-        this.ships(state.ships, picture.hits);
+        this.ships(state.ships, picture.hits, state.dockTag === true);
         this.plot(state.plot, plan, picture, view, state.days, ghostAt, state.ships);
         this.settleDiscs(state);
         this.keepHeld(picture, state.layers);
@@ -408,7 +434,10 @@ export class OrbitRenderer {
             const seconds = this.channelSeconds(key);
             if (seconds === null) continue;
             const prev = this.layerRuns.get(key);
-            const from = prev ? this.runShare(prev, state.time, ease) : (layers[key] ? 0 : 1);
+            const linear = key === 'moons' || key === 'dayNight';
+            const from = prev
+                ? (linear ? this.linearShare(prev, state.time) : this.runShare(prev, state.time, ease))
+                : (layers[key] ? 0 : 1);
             this.layerRuns.set(key, { from, to: layers[key] ? 1 : 0, t0: state.time, seconds });
             if (key === 'dayNight' && !prev) this.dayArm = true;
         }
@@ -465,6 +494,14 @@ export class OrbitRenderer {
         const u = (now - run.t0) / 1000 / run.seconds;
         if (u >= 1) return run.to;
         return this.shareAt(run, Math.max(0, u), ease);
+    }
+
+    /** The share a linear channel (moons, day/night) has reached. A reverse continues from it. */
+    private linearShare(run: LayerRun, now: number): number {
+        const u = (now - run.t0) / 1000 / run.seconds;
+        if (u >= 1) return run.to;
+        const t = Math.min(1, Math.max(0, u));
+        return run.from + (run.to - run.from) * t;
     }
 
     /** Scale about a centre while a ring is between its endpoints. At rest, draw it as written. */
@@ -528,19 +565,30 @@ export class OrbitRenderer {
      * A band of latitude and longitude lines in --signal. One front leaves the star; a body's
      * own sweep starts when the front reaches it and runs away from the star. Quads under
      * WIRE_GRID_MIN_PX smear, so those discs get the same sweep as one soft band.
+     * Moons and day/night share this wave. Equal shares draw it once.
      */
     private wireframes(picture: Picture, state: DrawState): void {
-        if (!(this.moonsShare > 0)) return;
+        const moonsOn = this.moonsLive && this.moonsShare > 0;
+        const dayOn = this.dayLive && this.dayShare > 0;
+        if (!moonsOn && !dayOn) return;
+        const same = moonsOn && dayOn && this.moonsShare === this.dayShare;
+        const moonsDrawn = moonsOn || (dayOn && state.layers.moons);
         for (const layer of picture.layers) {
             for (const at of layer.worlds) {
-                if (!at.world.moons.some((moon) => !moon.ring)) continue;
-                const local = this.bodyLocal(this.moonsShare, this.reachOf(at.x, at.y, at.starX, at.starY));
-                this.globeWave(at.x, at.y, at.r, local, at.starX, at.starY);
-                const placed = this.moonsOf(at, state);
-                for (const moon of placed) {
+                const reach = this.reachOf(at.x, at.y, at.starX, at.starY);
+                const hasMoon = at.world.moons.some((moon) => !moon.ring);
+                if (dayOn) this.globeWave(at.x, at.y, at.r, this.bodyLocal(this.dayShare, reach), at.starX, at.starY);
+                if (moonsOn && hasMoon && !same) {
+                    this.globeWave(at.x, at.y, at.r, this.bodyLocal(this.moonsShare, reach), at.starX, at.starY);
+                }
+                if (!moonsDrawn) continue;
+                for (const moon of this.moonsOf(at, state)) {
                     if (moon.moon.ring || moon.r < WIRE_SWEEP_MIN_PX) continue;
-                    const moonLocal = this.bodyLocal(this.moonsShare, this.reachOf(moon.x, moon.y, at.starX, at.starY));
-                    this.globeWave(moon.x, moon.y, moon.r, moonLocal, at.starX, at.starY);
+                    const moonReach = this.reachOf(moon.x, moon.y, at.starX, at.starY);
+                    if (dayOn) this.globeWave(moon.x, moon.y, moon.r, this.bodyLocal(this.dayShare, moonReach), at.starX, at.starY);
+                    if (moonsOn && !same) {
+                        this.globeWave(moon.x, moon.y, moon.r, this.bodyLocal(this.moonsShare, moonReach), at.starX, at.starY);
+                    }
                 }
             }
         }
@@ -718,8 +766,11 @@ export class OrbitRenderer {
             }
             ctx.restore();
         };
-        if (this.moonsLive) paint(this.moonsShare);
-        if (this.dayLive) paint(this.dayShare);
+        if (this.moonsLive && this.dayLive && this.moonsShare === this.dayShare) paint(this.moonsShare);
+        else {
+            if (this.moonsLive) paint(this.moonsShare);
+            if (this.dayLive) paint(this.dayShare);
+        }
     }
 
     /**
@@ -761,6 +812,7 @@ export class OrbitRenderer {
      * js/system_viewer.js:2672-2681: one batch for the whole frame, before anything is painted.
      * As legacy, discs are shaded only with the Day / night layer on. Whatever the service
      * answers short of 'ready', and whenever there is no service, the frame is the flat one.
+     * A moons hide keeps the moon discs in the batch until the run ends, so their tiles stay.
      */
     private prepareDiscs(plan: Plan, picture: Picture, state: DrawState): void {
         this.shaded = null;
@@ -778,7 +830,7 @@ export class OrbitRenderer {
         }
         const primary = plan.stars[0];
         const paint = primary ? (this.theme.stars[String(primary.body.sType || '')] || this.theme.starUnknown) : this.theme.starUnknown;
-        const batch = discBatch(plan, picture, { width: this.w, height: this.h, dpr: this.dpr }, {
+        const batch = discBatch(plan, this.discPicture(picture, state), { width: this.w, height: this.h, dpr: this.dpr }, {
             days: state.days, timeSeconds: state.time / 1000, rate: this.rate, frameSeconds: this.frameSeconds, motion: state.motion,
         }, {
             mode: painter.mode(), sun: sunColour(paint.solid), lightMode: false,
@@ -802,6 +854,28 @@ export class OrbitRenderer {
         this.shaded = new Map(discs.map((disc) => [disc.key, disc.ring !== null]));
     }
 
+    /**
+     * The picture a hide is drawn from has already dropped its moons. Until that run ends
+     * the batch is given the moons still on screen, so retainDiscs keeps their tiles.
+     */
+    private discPicture(picture: Picture, state: DrawState): Picture {
+        if (!this.moonsLive || state.layers.moons) return picture;
+        let changed = false;
+        const layers = picture.layers.map((layer) => {
+            let layerChanged = false;
+            const worlds = layer.worlds.map((at) => {
+                const moons = this.moonsOf(at, state);
+                if (moons === at.moons) return at;
+                layerChanged = true;
+                return { ...at, moons: [...moons] };
+            });
+            if (!layerChanged) return layer;
+            changed = true;
+            return { ...layer, worlds };
+        });
+        return changed ? { ...picture, layers } : picture;
+    }
+
     /** dayHold is the service's answer on the frame a day/night run starts, after the discs were asked. */
     private latchDay(): void {
         if (!this.dayArm) return;
@@ -811,12 +885,13 @@ export class OrbitRenderer {
 
     /**
      * Scales a shaded ring's fill for this frame. A settled frame (fill already final) keeps
-     * the disc the batch built, so a first paint is unchanged.
+     * the disc the batch built, so a first paint is unchanged. The Moons switch does not
+     * scale it: ring shadow stays with the planet. Day/night and a late tile still fade it.
      */
     private scaleRing<T extends { key: string; ring: { inner: number; outer: number; fill: number; phase: number; detail: number } | null }>(disc: T): T {
         const ring = disc.ring;
         if (!ring) return disc;
-        const amount = this.moonFactor(disc.key) * this.dayFactor(disc.key) * this.ringTile(disc.key);
+        const amount = this.dayFactor(disc.key) * this.ringTile(disc.key);
         if (!(amount < 1)) return disc;
         return { ...disc, ring: { ...ring, fill: ring.fill * amount } };
     }
@@ -1381,10 +1456,10 @@ export class OrbitRenderer {
     }
 
     /**
-     * The body's disc. During a day/night toggle a soft --signal band sweeps from the lit
-     * limb to the night limb, starting when the front reaches this body, and the settled
-     * disc is uncovered behind it. A tile that arrives after that fades over --t-base.
-     * Returns whether a shaded tile was fully on.
+     * The body's disc. During a day/night toggle the wireframe wave (the same one the moons
+     * use) crosses the disc, and the shading is uncovered behind that front. A hide runs
+     * the front back, so the shading leaves ahead of it. A tile that arrives after the
+     * sweep fades over --t-base. Returns whether a shaded tile was fully on.
      */
     private paintDisc(key: string, x: number, y: number, r: number, colour: string, starX: number, starY: number, night: boolean): boolean {
         if (this.dayLive) {
@@ -1410,7 +1485,11 @@ export class OrbitRenderer {
         return false;
     }
 
-    /** A soft --signal band, one pass from the lit limb across to the night limb. */
+    /**
+     * Shading uncovered behind the day/night front. The front itself is the shared
+     * wireframe wave. At the start of a reveal, and once a hide has passed back off
+     * the disc, the body is the flat disc.
+     */
     private daySweep(key: string, x: number, y: number, r: number, colour: string, starX: number, starY: number): void {
         this.disc(x, y, r, colour, starX, starY, false);
         if (!(r > 0)) return;
@@ -1434,25 +1513,6 @@ export class OrbitRenderer {
             ctx.clip();
             const lit = !this.dayHold && this.shadedDisc(key, x, y, r);
             if (!lit) this.disc(x, y, r, colour, starX, starY, true);
-            const env = tealSweepAlpha(local);
-            const back = front - Math.max(3, r * DAY_SWEEP_BAND);
-            if (env > 0) {
-                ctx.save();
-                ctx.beginPath();
-                if (this.nightCap(ctx, x, y, r, mid, back)) {
-                    ctx.clip();
-                    const c = Math.cos(mid);
-                    const s = Math.sin(mid);
-                    const grad = ctx.createLinearGradient(x + back * c, y + back * s, x + front * c, y + front * s);
-                    grad.addColorStop(0, withAlpha(this.theme.signal, 0));
-                    grad.addColorStop(0.5, withAlpha(this.theme.signal, env));
-                    grad.addColorStop(1, withAlpha(this.theme.signal, 0));
-                    ctx.globalAlpha = 1;
-                    ctx.fillStyle = grad;
-                    ctx.fillRect(x - r - 1, y - r - 1, r * 2 + 2, r * 2 + 2);
-                }
-                ctx.restore();
-            }
         }
         ctx.restore();
     }
@@ -1466,19 +1526,6 @@ export class OrbitRenderer {
         if (front <= -r) return false;
         const phi = Math.acos(Math.max(-1, Math.min(1, front / r)));
         ctx.arc(x, y, r, mid + phi, mid - phi, false);
-        ctx.closePath();
-        return true;
-    }
-
-    /** The part of the disc on the night side of a line `front` px toward the night limb. */
-    private nightCap(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, mid: number, front: number): boolean {
-        if (front <= -r) {
-            ctx.arc(x, y, r, 0, TAU);
-            return true;
-        }
-        if (front >= r) return false;
-        const phi = Math.acos(Math.max(-1, Math.min(1, front / r)));
-        ctx.arc(x, y, r, mid + phi, mid - phi, true);
         ctx.closePath();
         return true;
     }
@@ -2132,7 +2179,7 @@ export class OrbitRenderer {
      * so a zoom that rebuilds the picture does not grow the stroke. A jump report is
      * not drawn; the bubble for that moment is drawn in its place while it runs.
      */
-    private ships(marks: readonly ShipMark[] | undefined, hits: readonly Hit[]): void {
+    private ships(marks: readonly ShipMark[] | undefined, hits: readonly Hit[], dockTag: boolean): void {
         const bubbling = new Set<string>();
         for (const bubble of this.bubbleFrame) {
             bubbling.add(bubble.id);
@@ -2142,6 +2189,7 @@ export class OrbitRenderer {
         for (const mark of marks) {
             if (bubbling.has(mark.id) || mark.jump) continue;
             const at = this.beside(mark, marks, hits);
+            if (dockTag && at !== mark) continue;
             this.paintDesignator(at === mark ? mark : { ...mark, x: at.x, y: at.y }, 1, 1);
         }
     }
@@ -2174,12 +2222,7 @@ export class OrbitRenderer {
         });
         crowd.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
         const index = Math.max(0, crowd.findIndex((item) => item.id === mark.id));
-        const radius = (centre.visualR ?? centre.r) + 16 + index * 20;
-        const angle = Math.PI / 4;
-        return {
-            x: centre.cx + radius * Math.cos(angle),
-            y: centre.cy + radius * Math.sin(angle),
-        };
+        return dockedBeside({ x: centre.cx, y: centre.cy }, centre.visualR ?? centre.r, index);
     }
 
     /** The leaving bubble swells and fades. The arriving bubble shows first, then yields the designator. */
@@ -2283,6 +2326,12 @@ export class OrbitRenderer {
      * where the new dates put them.
      */
     private beginGhosts(state: DrawState): void {
+        const course = this.courseLegs(state);
+        if (course) {
+            this.beginCourse(state, course);
+            return;
+        }
+        if (this.ways.size > 0) this.beginCourse(state, null);
         const preview = this.livePreview(state);
         const span = preview ? preview.arrives - preview.departs : 0;
         const key = preview ? (preview.toKey || this.pointKey(preview.point)) : '';
@@ -2331,6 +2380,7 @@ export class OrbitRenderer {
             }
         }
         this.lockDim = preview || this.ghostShare > 0 ? 0.5 : 1;
+        if (this.ways.size > 0) this.lockDim = 0.5;
     }
 
     private pointKey(point: { x: number; y: number } | undefined): string {
@@ -2338,11 +2388,131 @@ export class OrbitRenderer {
         return 'point:' + point.x + ',' + point.y;
     }
 
-    private livePreview(state: DrawState): FlightPreview | null {
+    /** A course is an array. A one-leg object is not, and the checker keeps the two apart. */
+    private isCourse(preview: FlightPreview): preview is readonly CourseLeg[] {
+        return Array.isArray(preview);
+    }
+
+    /** The one-leg preview. A course of two or more legs is handled apart from this. */
+    private livePreview(state: DrawState): CourseLeg | null {
         const preview = state.preview;
-        if (!preview || !(preview.arrives > preview.departs)) return null;
+        if (!preview) return null;
+        if (this.isCourse(preview)) {
+            const legs = this.legList(preview);
+            return legs.length === 1 ? legs[0] : null;
+        }
+        if (!(preview.arrives > preview.departs)) return null;
         if (!preview.toKey && !preview.point) return null;
         return preview;
+    }
+
+    /** An ordered course. One leg, and the one-leg object, stay on the single-leg path. */
+    private courseLegs(state: DrawState): CourseLeg[] | null {
+        const preview = state.preview;
+        if (!preview || !this.isCourse(preview)) return null;
+        const legs = this.legList(preview);
+        return legs.length >= 2 ? legs : null;
+    }
+
+    private legList(preview: readonly CourseLeg[]): CourseLeg[] {
+        const legs: CourseLeg[] = [];
+        for (const leg of preview) {
+            if (!leg || !(leg.arrives > leg.departs)) continue;
+            if (!leg.toKey && !leg.point) continue;
+            legs.push(leg);
+        }
+        return legs;
+    }
+
+    /** Stable id for a waypoint: its end, and which visit that is when the course repeats an end. */
+    private wayId(legs: readonly CourseLeg[], index: number): string {
+        const end = legs[index].toKey || this.pointKey(legs[index].point) || 'leg';
+        let n = 0;
+        for (let i = 0; i < index; i++) {
+            const other = legs[i].toKey || this.pointKey(legs[i].point) || 'leg';
+            if (other === end) n += 1;
+        }
+        return end + '#' + n;
+    }
+
+    /**
+     * A waypoint added fades in over --t-base. One removed leaves over --t-fast.
+     * The first paint records the course and does not run. Reduced motion snaps.
+     * A clock that moves every leg's two dates together does not start a run.
+     */
+    private beginCourse(state: DrawState, legs: readonly CourseLeg[] | null): void {
+        const list = legs ?? [];
+        const ease = this.theme.easeOut;
+        const next = new Map<string, number>();
+        for (let i = 0; i < list.length; i++) next.set(this.wayId(list, i), list[i].arrives - list[i].departs);
+        if (!state.motion || !ease || !this.ghostReady) {
+            this.ghostReady = true;
+            const keep = new Map<string, WaySlot>();
+            for (const [id, span] of next) {
+                const prev = this.ways.get(id);
+                keep.set(id, {
+                    span,
+                    share: 1,
+                    run: null,
+                    spec: prev ? prev.spec : null,
+                    drawn: prev ? prev.drawn : null,
+                });
+            }
+            this.ways = keep;
+            this.lockDim = list.length > 0 ? 0.5 : 1;
+            return;
+        }
+        for (const [id, span] of next) {
+            const prev = this.ways.get(id);
+            if (!prev) {
+                const seconds = this.baseSeconds();
+                this.ways.set(id, {
+                    span,
+                    share: 1,
+                    run: seconds ? { from: 0, to: 1, t0: state.time, seconds, kind: 'in' } : null,
+                    spec: null,
+                    drawn: null,
+                });
+                continue;
+            }
+            if (Math.abs(prev.span - span) >= 1e-9 && (!prev.run || prev.run.kind === 'move')) {
+                const seconds = this.fastSeconds();
+                if (seconds) prev.run = { from: 0, to: 1, t0: state.time, seconds, kind: 'move' };
+            }
+            prev.span = span;
+        }
+        const gone: string[] = [];
+        for (const [id, slot] of this.ways) {
+            if (next.has(id)) continue;
+            if (!slot.run || slot.run.kind !== 'out') {
+                const seconds = this.fastSeconds();
+                if (!seconds) {
+                    gone.push(id);
+                    continue;
+                }
+                slot.run = { from: slot.share, to: 0, t0: state.time, seconds, kind: 'out' };
+            }
+        }
+        for (const id of gone) this.ways.delete(id);
+        const finished: string[] = [];
+        for (const [id, slot] of this.ways) {
+            if (!slot.run) {
+                if (next.has(id)) slot.share = 1;
+                continue;
+            }
+            const u = (state.time - slot.run.t0) / 1000 / slot.run.seconds;
+            if (u >= 1) {
+                slot.share = slot.run.to;
+                const kind = slot.run.kind;
+                slot.run = null;
+                if (kind === 'out') finished.push(id);
+            } else {
+                slot.share = this.shareAt(slot.run, Math.max(0, u), ease);
+                this.layersBusy = true;
+            }
+        }
+        for (const id of finished) this.ways.delete(id);
+        this.lockDim = list.length > 0 || this.ways.size > 0 ? 0.5 : 1;
     }
 
     private baseSeconds(): number | null {
@@ -2367,9 +2537,11 @@ export class OrbitRenderer {
         return seconds;
     }
 
-    /** The destination ghost's drawn centre, for the flight line. Null when nothing is previewed. */
-    private paintGhosts(plan: Plan, picture: Picture, view: View, state: DrawState): GhostSpot | null {
+    /** Waypoint centres, in order, for the flight line. One leg returns that one centre. */
+    private paintGhosts(plan: Plan, picture: Picture, view: View, state: DrawState): GhostSpot | readonly GhostSpot[] | null {
         if (picture.mode !== 'orbits') return null;
+        const legs = this.courseLegs(state);
+        if (legs || this.ways.size > 0) return this.paintCourse(plan, view, state.days, legs);
         const preview = this.livePreview(state);
         if (!preview) {
             if (this.ghostLast.length > 0 && this.ghostShare > 0) this.drawGhosts(this.ghostLast, 'out');
@@ -2386,7 +2558,7 @@ export class OrbitRenderer {
     }
 
     /** A small target at a point, in the destination's style. A point needs no ghost. */
-    private paintPointTarget(plan: Plan, view: View, days: number, preview: FlightPreview): GhostSpot | null {
+    private paintPointTarget(plan: Plan, view: View, days: number, preview: CourseLeg): GhostSpot | null {
         if (!preview.point) return null;
         const at = pictureOfAu(preview.point, view, plan, 'orbits');
         if (!at) return null;
@@ -2407,7 +2579,7 @@ export class OrbitRenderer {
         return at;
     }
 
-    private ghostSpecs(plan: Plan, view: View, days: number, preview: FlightPreview): GhostSpec[] {
+    private ghostSpecs(plan: Plan, view: View, days: number, preview: CourseLeg): GhostSpec[] {
         const now = this.ghostBodies(layoutScene(plan, view, days));
         const then = this.ghostBodies(layoutScene(plan, view, preview.arrives));
         const specs: GhostSpec[] = [];
@@ -2439,8 +2611,8 @@ export class OrbitRenderer {
     }
 
     /** Worlds, and moons. A belt is not a point. The centre is the orbit the body is drawn on. */
-    private ghostBodies(scene: Scene): Map<string, { key: string; kind: 'world' | 'moon'; name: string; x: number; y: number; r: number; cx: number; cy: number; epoch: number; period: number }> {
-        const out = new Map<string, { key: string; kind: 'world' | 'moon'; name: string; x: number; y: number; r: number; cx: number; cy: number; epoch: number; period: number }>();
+    private ghostBodies(scene: Scene): Map<string, GhostBody> {
+        const out = new Map<string, GhostBody>();
         const take = (set: WorldSet | null): void => {
             if (!set) return;
             for (const at of set.bodies) {
@@ -2587,10 +2759,17 @@ export class OrbitRenderer {
     /** Hairlines and a readout. This frame only: nothing is added to the picture. A destination replaces the ship-to-pointer line with the line to its ghost. */
     private plot(
         plot: PlotReadout | null | undefined, plan: Plan, picture: Picture, view: View, days: number,
-        ghostAt: GhostSpot | null, ships: readonly ShipMark[] | undefined,
+        ghostAt: GhostSpot | readonly GhostSpot[] | null, ships: readonly ShipMark[] | undefined,
     ): void {
         const from = plot && plot.from ? plot.from : this.partyMark(ships);
-        if (ghostAt && from) this.flightLine(from, ghostAt);
+        if (ghostAt && from) {
+            const spots = Array.isArray(ghostAt) ? ghostAt : [ghostAt];
+            let cursor = from;
+            for (const spot of spots) {
+                this.flightLine(cursor, spot);
+                cursor = spot;
+            }
+        }
         if (!plot) return;
         const ctx = this.ctx;
         const theme = this.theme;
@@ -2629,7 +2808,130 @@ export class OrbitRenderer {
         return party ? { x: party.x, y: party.y } : null;
     }
 
-    /** Dashed 7-4, from the ship to where the destination will be. */
+    /**
+     * The course: a line through the waypoints, each body ghosted at its own arrival,
+     * each point a target, numbers on the earlier waypoints and the arrival tag on the last.
+     * Other worlds ghost at the final arrival (option 1). Returns the waypoint centres in order.
+     */
+    private paintCourse(plan: Plan, view: View, days: number, legs: readonly CourseLeg[] | null): GhostSpot[] | null {
+        const list = legs ?? [];
+        const cache = new Map<number, Map<string, GhostBody>>();
+        const bodiesAt = (at: number): Map<string, GhostBody> => {
+            let found = cache.get(at);
+            if (!found) {
+                found = this.ghostBodies(layoutScene(plan, view, at));
+                cache.set(at, found);
+            }
+            return found;
+        };
+        const spots: GhostSpot[] = [];
+        const skip = new Set<string>();
+        const live = new Set<string>();
+        for (let i = 0; i < list.length; i++) {
+            const leg = list[i];
+            if (leg.toKey) skip.add(leg.toKey);
+            const id = this.wayId(list, i);
+            live.add(id);
+            const slot = this.ways.get(id);
+            const last = i === list.length - 1;
+            const spec = this.waySpec(plan, view, days, leg, id, bodiesAt, last);
+            if (spec && !last) spec.label = String(i + 1);
+            if (slot && spec) slot.spec = spec;
+            if (!slot || !spec) continue;
+            const at = this.paintWay(slot, spec, true);
+            if (at) spots.push(at);
+        }
+        for (const [id, slot] of this.ways) {
+            if (live.has(id) || !slot.spec) continue;
+            this.paintWay(slot, slot.spec, false);
+        }
+        if (list.length > 0) {
+            const last = list[list.length - 1];
+            const ordinary = this.ghostSpecs(plan, view, days, { departs: last.departs, arrives: last.arrives });
+            const rest: GhostSpec[] = [];
+            for (const spec of ordinary) {
+                if (spec.dest || skip.has(spec.key)) continue;
+                rest.push(spec);
+            }
+            this.drawStill(rest);
+        }
+        return spots.length > 0 ? spots : null;
+    }
+
+    /** One waypoint. The last one carries the arrival tag; the earlier ones carry their number. */
+    private waySpec(
+        plan: Plan,
+        view: View,
+        days: number,
+        leg: CourseLeg,
+        id: string,
+        bodiesAt: (at: number) => Map<string, GhostBody>,
+        last: boolean,
+    ): GhostSpec | null {
+        if (!leg.toKey && leg.point) {
+            const at = pictureOfAu(leg.point, view, plan, 'orbits');
+            if (!at) return null;
+            const label = last ? (leg.tag || pointWords(plan, leg.point, leg.arrives)) : '';
+            return { key: id, dest: true, label: last ? label : '', now: at, then: at, r: 8, cx: at.x, cy: at.y, sweep: 0 };
+        }
+        if (!leg.toKey) return null;
+        const present = bodiesAt(days).get(leg.toKey);
+        const future = bodiesAt(leg.arrives).get(leg.toKey);
+        if (!present || !future) return null;
+        if (future.kind !== 'world' && future.kind !== 'moon') return null;
+        const sweep = future.period > 0
+            ? bodyAngle(future.epoch, future.period, leg.arrives) - bodyAngle(future.epoch, future.period, leg.departs)
+            : 0;
+        const label = last
+            ? (leg.tag || shortLabel(future.name, plan.name) + ' \u00B7 ' + whenWords(leg.arrives))
+            : '';
+        return {
+            key: id,
+            dest: true,
+            label,
+            now: { x: present.x, y: present.y },
+            then: { x: future.x, y: future.y },
+            r: Math.max(5, future.r + 2.5),
+            cx: future.cx,
+            cy: future.cy,
+            sweep: Number.isFinite(sweep) ? sweep : 0,
+        };
+    }
+
+    /** Draws one waypoint and returns where it was drawn. A leaver is not a vertex of the line. */
+    private paintWay(slot: WaySlot, spec: GhostSpec, onCourse: boolean): GhostSpot | null {
+        const kind: 'in' | 'move' | 'out' | 'show' = slot.run ? slot.run.kind : (onCourse ? 'show' : 'out');
+        const share = slot.share;
+        if (kind === 'move' && slot.drawn) this.ghostLatch.set(spec.key, slot.drawn);
+        const saved = this.ghostShare;
+        this.ghostShare = share;
+        const at = this.ghostAt(spec, kind);
+        this.ghostShare = saved;
+        slot.drawn = at;
+        const placed: GhostSpec = { ...spec, then: at };
+        const alpha = kind === 'show' || kind === 'move' ? 1 : share;
+        if (alpha > 0) {
+            this.strokeGhost(placed, spec, kind, alpha);
+            if (placed.label && (kind === 'show' || kind === 'move' || share > 0.35)) {
+                this.ghostTag(placed, kind === 'show' || kind === 'move' ? 1 : share);
+            }
+        }
+        return onCourse ? at : null;
+    }
+
+    /** Option-1 ghosts sit still. Their share is not the course's per-waypoint share. */
+    private drawStill(specs: readonly GhostSpec[]): void {
+        if (specs.length === 0) return;
+        const share = this.ghostShare;
+        const kind = this.ghostKind;
+        this.ghostShare = 1;
+        this.ghostKind = 'show';
+        this.drawGhosts(specs, 'show');
+        this.ghostShare = share;
+        this.ghostKind = kind;
+    }
+
+    /** Dashed 7-4, one segment of the line from the ship through the waypoints. */
     private flightLine(from: GhostSpot, to: GhostSpot): void {
         const ctx = this.ctx;
         ctx.save();

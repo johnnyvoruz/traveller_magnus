@@ -4,7 +4,8 @@
  */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { placeShips, plotText, standInMarks } from '../../apps/web/src/orbit/ships.ts';
+import { BODY_SNAP_PX } from '../../apps/web/src/orbit/distance.ts';
+import { dockedBeside, placeShips, plotText, shipAt, standInMarks } from '../../apps/web/src/orbit/ships.ts';
 
 const hex = 'Test_Sector/0101';
 const at = (bodyKey) => ({ kind: 'system', hexKey: hex, bodyKey });
@@ -199,4 +200,32 @@ test('the stand-in party sits halfway from the star to the furthest body', () =>
     assert.equal(left.jump, 'out');
     assert.equal(beforeIn.jump, 'in');
     assert.equal(arrived.jump, undefined);
+});
+
+test('shipAt hits a mark, a point inside the body slop, and a point outside it', () => {
+    const marks = [
+        { id: 'a', name: 'Courier', kind: 'vessel', shape: 'circle', x: 0, y: 0 },
+        { id: 'jump', name: 'Outbound', kind: 'traffic', shape: 'triangle', x: 0, y: 0, jump: 'out' },
+    ];
+    assert.equal(shipAt(marks, { x: 0, y: 0 }), 'a');
+    assert.equal(shipAt(marks, { x: BODY_SNAP_PX - 1, y: 0 }), 'a');
+    assert.equal(shipAt(marks, { x: BODY_SNAP_PX, y: 0 }), 'a');
+    assert.equal(shipAt(marks, { x: BODY_SNAP_PX + 0.1, y: 0 }), null);
+    const jumping = [{ id: 'jump', name: 'Outbound', kind: 'traffic', shape: 'triangle', x: 0, y: 0, jump: 'out' }];
+    assert.equal(shipAt(jumping, { x: 0, y: 0 }), null);
+});
+
+test('dockedBeside places one, two and four ships along the diagonal', () => {
+    const body = { x: 100, y: 200 };
+    const radius = 12;
+    const angle = Math.PI / 4;
+    const at = (index) => ({
+        x: body.x + (radius + 16 + index * 20) * Math.cos(angle),
+        y: body.y + (radius + 16 + index * 20) * Math.sin(angle),
+    });
+    assert.deepEqual(dockedBeside(body, radius, 0), at(0));
+    assert.deepEqual(dockedBeside(body, radius, 1), at(1));
+    assert.deepEqual(dockedBeside(body, radius, 3), at(3));
+    const step = Math.hypot(at(1).x - at(0).x, at(1).y - at(0).y);
+    assert.ok(Math.abs(step - 20) < 1e-9);
 });

@@ -181,7 +181,7 @@ test('a ringed world: the band inside its first moon, its particles turning ever
     close(ring.fill, 0.85);
     close(ring.phase, ((days * 24 / 7) % 1) * TAU);
     close(ring.detail, 1 - Math.max(0, Math.min(1, (TAU * (0.5 * 24 / 7) / 60 - 0.05) / 0.4)));
-    assert.deepEqual(ring, ringOf(giant, clock, true));
+    assert.deepEqual(ring, ringOf(giant, clock));
     // The rings widen the tile, so a big ringed world is capped sooner.
     assert.equal(disc(batch, 'w2').radiusPx, shadeRadius(giant.r, 2, ring.outer));
     assert.equal(shadeRadius(100, 2, null), 200);
@@ -190,11 +190,19 @@ test('a ringed world: the band inside its first moon, its particles turning ever
     // A world with no rings has none; nor has any moon.
     assert.equal(disc(batch, 'w0').ring, null);
     assert.equal(disc(batch, 'w2m2').ring, null);
-    // The Moons layer off: no rings and no moons.
+    // The Moons layer off: the moon discs are gone. The planet's shade request is the one
+    // it has with the moons showing: ring, casters, light and spin.
     const bare = pictured(body(), days, view, { ...DEFAULT_LAYERS, moons: false });
     const bareBatch = discBatch(bare.plan, bare.picture, CAMERA, clock, { ...OPTIONS, moonsShown: false });
-    assert.equal(disc(bareBatch, 'w2').ring, null);
     assert.equal(bareBatch.discs.some((item) => item.key.includes('m')), false);
+    const shade = (item) => ({
+        radiusPx: item.radiusPx, spin: item.spin, cloudSpin: item.cloudSpin, sweep: item.sweep,
+        samples: item.samples, tiltDeg: item.tiltDeg, light: item.light, sun: item.sun,
+        ring: item.ring, casters: item.casters, lightMode: item.lightMode,
+    });
+    assert.deepEqual(shade(disc(bareBatch, 'w2')), shade(disc(batch, 'w2')));
+    assert.deepEqual(shade(disc(bareBatch, 'w0')), shade(disc(batch, 'w0')));
+    assert.deepEqual(disc(bareBatch, 'w0').casters, []);
 });
 
 test('a moon in its planet’s shadow: the planet is its caster, in the way of the light', () => {

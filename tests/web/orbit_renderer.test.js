@@ -10,9 +10,11 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { backdropBox, backdropShift, paintBackdrop, rng, seedOf } from '../../apps/web/src/orbit/backdrop.ts';
+import { pictureOfAu } from '../../apps/web/src/orbit/distance.ts';
 import { layoutScene, planSystem } from '../../apps/web/src/orbit/layout.ts';
 import { layoutLineup } from '../../apps/web/src/orbit/lineup.ts';
 import { OrbitRenderer, TEAL_STEP, tealSweepAlpha, waveLocal } from '../../apps/web/src/orbit/OrbitRenderer.ts';
+import { clearDiscs, discHeld, rememberDisc, retainDiscs } from '../../apps/web/src/surface/disc_hold.ts';
 import { DEFAULT_LAYERS, orbitPicture } from '../../apps/web/src/orbit/picture.ts';
 import { cssBezier, cssSeconds, easeOutAt, readOrbitMotion, readOrbitTheme, withAlpha } from '../../apps/web/src/orbit/theme.ts';
 import { blendPictures, travelOrder } from '../../apps/web/src/orbit/tween.ts';
@@ -827,6 +829,144 @@ test('teal sweep alpha starts and ends at nothing and never steps by more than T
     }
 });
 
+test('a moons hide keeps the shaded moons until it settles, and day/night uses that one wave', () => {
+    const tSlow = cssSeconds('450ms');
+    const tLong = cssSeconds('800ms');
+    const gesture = tLong + tSlow;
+    const ease = cssBezier('cubic-bezier(.2,.8,.2,1)');
+    const motionTheme = { ...theme, tBase: cssSeconds('300ms'), tSlow, tLong, easeOut: ease };
+    const plan = planSystem(testSystem(), HEX_KEY);
+    const pictureFor = (layers, view = VIEW) => {
+        const scene = layoutScene(plan, { ...view, moons: layers.moons, jump: layers.jump }, 1000);
+        return orbitPicture(plan, scene, layers, view.z);
+    };
+    const onLayers = { ...DEFAULT_LAYERS };
+    const moonOff = { ...DEFAULT_LAYERS, moons: false };
+    const on = pictureFor(onLayers);
+    const hidden = pictureFor(moonOff);
+    const moonKey = (key) => /m\d/.test(key);
+    const shade = (item) => ({
+        radiusPx: item.radiusPx, spin: item.spin, cloudSpin: item.cloudSpin, sweep: item.sweep,
+        samples: item.samples, tiltDeg: item.tiltDeg, light: item.light, sun: item.sun,
+        ring: item.ring, casters: item.casters, lightMode: item.lightMode,
+    });
+    const paint = (layers, picture, times) => {
+        const fake = fakeDiscs('ready');
+        const { ctx, calls } = recordingContext();
+        const renderer = new OrbitRenderer(ctx, motionTheme, { ...deps, discs: fake.painter });
+        renderer.resize(VIEW.w, VIEW.h, 1);
+        for (const time of times) {
+            calls.length = 0;
+            fake.seen.draws.length = 0;
+            renderer.draw(plan, picture, VIEW, { selected: null, days: 1000, time, motion: true, layers });
+        }
+        return { calls, seen: fake.seen, renderer };
+    };
+
+    const shown = paint(onLayers, on, [1000, 2000]);
+    const bare = paint(moonOff, hidden, [1000, 2000]);
+    const shownPlanet = shown.seen.batches.at(-1).discs.find((item) => item.key === 'w2');
+    const barePlanet = bare.seen.batches.at(-1).discs.find((item) => item.key === 'w2');
+    assert.ok(shownPlanet.ring, 'the giant wears a ring');
+    assert.deepEqual(shade(barePlanet), shade(shownPlanet));
+    assert.equal(bare.seen.batches.at(-1).discs.some((item) => moonKey(item.key)), false);
+    assert.ok(shown.seen.batches.at(-1).discs.some((item) => moonKey(item.key)));
+
+    const fake = fakeDiscs('ready');
+    const { ctx, calls } = recordingContext();
+    const moons = new OrbitRenderer(ctx, motionTheme, { ...deps, discs: fake.painter });
+    moons.resize(VIEW.w, VIEW.h, 1);
+    const drawMoon = (picture, layers, time) => {
+        calls.length = 0;
+        fake.seen.draws.length = 0;
+        moons.draw(plan, picture, VIEW, { selected: null, days: 1000, time, motion: true, layers });
+    };
+    drawMoon(on, onLayers, 1000);
+    const t0 = 3000;
+    drawMoon(hidden, moonOff, t0);
+    const quarter = t0 + gesture * 1000 * 0.25;
+    drawMoon(hidden, moonOff, quarter);
+    const hiding = fake.seen.batches.at(-1);
+    const hidingMoons = hiding.discs.filter((item) => moonKey(item.key)).map((item) => item.key).sort();
+    const shownMoons = shown.seen.batches.at(-1).discs.filter((item) => moonKey(item.key)).map((item) => item.key).sort();
+    assert.deepEqual(hidingMoons, shownMoons);
+    for (const key of hidingMoons) {
+        assert.ok(fake.seen.draws.some((draw) => draw.key === key), key + ' is still drawn a quarter of the way in');
+    }
+    drawMoon(hidden, moonOff, t0 + gesture * 1000 + 1);
+    assert.equal(moons.layersBusy, false);
+    const settled = fake.seen.batches.at(-1);
+    assert.equal(settled.discs.some((item) => moonKey(item.key)), false);
+    assert.equal(fake.seen.draws.some((draw) => moonKey(draw.key)), false);
+    const planetKey = settled.discs.find((item) => item.ring)?.key ?? 'w2';
+    const moonTile = hidingMoons[0];
+    try {
+        rememberDisc(moonTile, { image: {}, size: 8, radiusPx: 4 });
+        rememberDisc(planetKey, { image: {}, size: 16, radiusPx: 8 });
+        retainDiscs(new Set(settled.discs.map((item) => item.key)));
+        assert.equal(discHeld(moonTile), undefined);
+        assert.ok(discHeld(planetKey));
+    } finally {
+        clearDiscs();
+    }
+
+    const turning = fakeDiscs('ready');
+    const turnRec = recordingContext();
+    const turningPainter = new OrbitRenderer(turnRec.ctx, motionTheme, { ...deps, discs: turning.painter });
+    turningPainter.resize(VIEW.w, VIEW.h, 1);
+    const drawTurn = (picture, layers, time) => {
+        turnRec.calls.length = 0;
+        turningPainter.draw(plan, picture, VIEW, { selected: null, days: 1000, time, motion: true, layers });
+    };
+    drawTurn(on, onLayers, 1000);
+    const turn0 = 7000;
+    drawTurn(hidden, moonOff, turn0 + gesture * 1000 * 0.7);
+    const moonAlphas = turnRec.calls.filter((c) => c.op === 'fill' && c.fill === 'moon' && c.alpha < 1).map((c) => c.alpha);
+    assert.ok(moonAlphas.length > 0, 'the returning wave has started to take a moon');
+    drawTurn(on, onLayers, turn0 + gesture * 1000 * 0.7);
+    const carried = turnRec.calls.filter((c) => c.op === 'fill' && c.fill === 'moon' && c.alpha < 1).map((c) => c.alpha);
+    assert.deepEqual(carried, moonAlphas);
+
+    const zoom = { ...VIEW, zoom: 3, z: 1.6 };
+    const dayOff = { ...DEFAULT_LAYERS, dayNight: false };
+    const dayOn = pictureFor(onLayers, zoom);
+    const dayGone = pictureFor(dayOff, zoom);
+    const dayRec = recordingContext();
+    const day = new OrbitRenderer(dayRec.ctx, motionTheme, deps);
+    day.resize(zoom.w, zoom.h, 1);
+    const drawDay = (picture, layers, time) => {
+        dayRec.calls.length = 0;
+        day.draw(plan, picture, zoom, { selected: null, days: 1000, time, motion: true, layers });
+    };
+    drawDay(dayOn, onLayers, 1000);
+    const day0 = 5000;
+    drawDay(dayGone, dayOff, day0);
+    drawDay(dayGone, dayOff, day0 + gesture * 1000 * 0.45);
+    assert.ok(dayRec.calls.some((c) => c.op === 'clip'));
+    assert.ok(dayRec.calls.some((c) => c.op === 'stroke' && c.stroke === 'signal'));
+    const signalFill = (call) => call.fill && call.fill.stops && call.fill.stops.some((stop) => String(stop[1]).includes('signal'));
+    const bands = dayRec.calls.filter((call) => call.op === 'fillRect' && signalFill(call));
+    assert.ok(bands.every((call) => call.args[2] < 20), 'a large disc keeps the wireframe, not a solid band');
+
+    const bothOff = { ...DEFAULT_LAYERS, moons: false, dayNight: false };
+    const strokesAt = (layers, picture, fromLayers, fromPicture) => {
+        const rec = recordingContext();
+        const renderer = new OrbitRenderer(rec.ctx, motionTheme, deps);
+        renderer.resize(zoom.w, zoom.h, 1);
+        renderer.draw(plan, fromPicture, zoom, { selected: null, days: 1000, time: 1000, motion: true, layers: fromLayers });
+        const at = 8000;
+        renderer.draw(plan, picture, zoom, { selected: null, days: 1000, time: at, motion: true, layers });
+        rec.calls.length = 0;
+        renderer.draw(plan, picture, zoom, { selected: null, days: 1000, time: at + gesture * 1000 * 0.45, motion: true, layers });
+        return rec.calls.filter((c) => c.op === 'stroke' && c.stroke === 'signal').length;
+    };
+    const both = strokesAt(bothOff, pictureFor(bothOff, zoom), onLayers, dayOn);
+    const onlyDay = strokesAt(dayOff, dayGone, onLayers, dayOn);
+    const onlyMoons = strokesAt(moonOff, pictureFor(moonOff, zoom), onLayers, dayOn);
+    assert.equal(both, onlyDay);
+    assert.ok(both < onlyDay + onlyMoons);
+});
+
 test('a ship entering jump eases out, and the settled frame matches one that never ran', () => {
     const tSlow = cssSeconds('450ms');
     const tLong = cssSeconds('800ms');
@@ -1002,4 +1142,129 @@ test('the first preview paint is settled, and a new destination starts a run', (
     snapped.draw(plan, picture, VIEW, { selected: null, days: 1000, time: 1001, motion: false, layers: DEFAULT_LAYERS, preview });
     assert.equal(snapped.layersBusy, false);
     assert.ok(said(still.calls).includes('there'));
+});
+
+test('a three-leg course ghosts each waypoint at its own arrival, and one leg is unchanged', () => {
+    const plan = planSystem(testSystem(), HEX_KEY);
+    const first = plan.worlds.find((world) => world.name === 'Test I');
+    const third = plan.worlds.find((world) => world.name === 'Test II');
+    const days = 1000;
+    const point = { x: 1.2, y: 0.8 };
+    const course = [
+        { toKey: first.key, departs: days, arrives: days + 20 },
+        { point, departs: days + 20, arrives: days + 40 },
+        { toKey: third.key, departs: days + 40, arrives: days + 80, tag: 'arrived' },
+    ];
+    const party = [{ id: 'stand-party', name: 'Far Margin', kind: 'party', shape: 'triangle', x: 30, y: 40 }];
+    const shown = drawn({ preview: course, ships: party });
+    const place = (name, at) => {
+        const scene = layoutScene(plan, VIEW, at);
+        const body = scene.primary.bodies.find((item) => item.world.name === name);
+        return { x: body.x, y: body.y };
+    };
+    const early = place('Test I', days + 20);
+    const earlyLater = place('Test I', days + 80);
+    const late = place('Test II', days + 80);
+    const lateEarlier = place('Test II', days + 20);
+    assert.ok(Math.hypot(early.x - earlyLater.x, early.y - earlyLater.y) > 1);
+    assert.ok(Math.hypot(late.x - lateEarlier.x, late.y - lateEarlier.y) > 1);
+    const aimed = pictureOfAu(point, VIEW, plan, 'orbits');
+    assert.ok(aimed);
+    const rings = [];
+    for (let i = 0; i < shown.calls.length; i++) {
+        const call = shown.calls[i];
+        if (call.op !== 'arc' || call.stroke !== 'lock') continue;
+        if (dashOf(shown.calls, i) !== '') continue;
+        if (Math.abs(Math.abs(call.args[4] - call.args[3]) - Math.PI * 2) > 1e-6) continue;
+        rings.push(call.args);
+    }
+    const near = (spot) => rings.find((args) => Math.hypot(args[0] - spot.x, args[1] - spot.y) < 0.05);
+    assert.ok(near(early));
+    assert.equal(near(earlyLater), undefined);
+    assert.ok(near(late));
+    assert.equal(near(lateEarlier), undefined);
+    assert.ok(near(aimed));
+    assert.ok(said(shown.calls).includes('1'));
+    assert.ok(said(shown.calls).includes('2'));
+    assert.ok(said(shown.calls).includes('arrived'));
+    const segments = [];
+    for (let i = 0; i < shown.calls.length; i++) {
+        const call = shown.calls[i];
+        if (call.op !== 'lineTo' || call.stroke !== 'signal') continue;
+        if (dashOf(shown.calls, i) !== '7,4') continue;
+        segments.push(call.args);
+    }
+    assert.equal(segments.length, 3);
+    const ends = [early, aimed, late];
+    for (let i = 0; i < ends.length; i++) {
+        assert.ok(Math.hypot(segments[i][0] - ends[i].x, segments[i][1] - ends[i].y) < 0.05);
+    }
+
+    const one = drawn({ preview: { toKey: first.key, departs: days, arrives: days + 20, tag: 'I · 148-1105 05:15' } });
+    assert.ok(said(one.calls).includes('I · 148-1105 05:15'));
+    assert.equal(said(one.calls).some((text) => text === '1'), false);
+    const listed = drawn({ preview: [{ toKey: first.key, departs: days, arrives: days + 20, tag: 'I · 148-1105 05:15' }] });
+    assert.ok(said(listed.calls).includes('I · 148-1105 05:15'));
+    assert.equal(said(listed.calls).some((text) => text === '1'), false);
+});
+
+test('a waypoint added to a course fades in over --t-base, and the first course paint does not', () => {
+    const tBase = cssSeconds('300ms');
+    const ease = cssBezier('cubic-bezier(.2,.8,.2,1)');
+    const motionTheme = { ...theme, tBase, tSlow: cssSeconds('450ms'), tLong: cssSeconds('800ms'), easeOut: ease };
+    const plan = planSystem(testSystem(), HEX_KEY);
+    const scene = layoutScene(plan, { ...VIEW, moons: true, jump: true }, 1000);
+    const picture = orbitPicture(plan, scene, DEFAULT_LAYERS, VIEW.z);
+    const dest = plan.worlds.find((world) => world.name === 'Test I');
+    const other = plan.worlds.find((world) => world.name === 'Test II');
+    const two = [
+        { toKey: dest.key, departs: 1000, arrives: 1020 },
+        { toKey: other.key, departs: 1020, arrives: 1040, tag: 'next' },
+    ];
+    const three = [
+        two[0],
+        { point: { x: 1.2, y: 0.8 }, departs: 1040, arrives: 1060 },
+        two[1],
+    ];
+    const { ctx, calls } = recordingContext();
+    const renderer = new OrbitRenderer(ctx, motionTheme, deps);
+    renderer.resize(VIEW.w, VIEW.h, 1);
+    const drawAt = (time, preview) => {
+        calls.length = 0;
+        renderer.draw(plan, picture, VIEW, { selected: null, days: 1000, time, motion: true, layers: DEFAULT_LAYERS, preview });
+    };
+    drawAt(5000, two);
+    assert.equal(renderer.layersBusy, false);
+    assert.ok(said(calls).includes('1'));
+    assert.ok(said(calls).includes('next'));
+    assert.equal(said(calls).includes('2'), false);
+    drawAt(5001, three);
+    assert.equal(renderer.layersBusy, true);
+    assert.equal(said(calls).includes('2'), false);
+    assert.ok(said(calls).includes('next'));
+    drawAt(5001 + tBase * 1000 + 5, three);
+    assert.equal(renderer.layersBusy, false);
+    assert.ok(said(calls).includes('2'));
+    assert.ok(said(calls).includes('next'));
+    drawAt(9000, two);
+    assert.equal(renderer.layersBusy, false);
+    assert.equal(said(calls).includes('2'), false);
+});
+
+test('dockTag leaves a docked designator undrawn', () => {
+    const plan = planSystem(testSystem(), HEX_KEY);
+    const scene = layoutScene(plan, { ...VIEW, moons: DEFAULT_LAYERS.moons, jump: DEFAULT_LAYERS.jump }, 1000);
+    const picture = orbitPicture(plan, scene, DEFAULT_LAYERS, VIEW.z);
+    const world = scene.primary.bodies.find((at) => at.world.name === 'Test I');
+    const hit = picture.hits.find((item) => item.kind === 'world' && item.key === world.world.key);
+    const marks = [
+        { id: 'b', name: 'Courier', kind: 'vessel', shape: 'circle', x: hit.cx, y: hit.cy },
+        { id: 'a', name: 'Liner', kind: 'traffic', shape: 'rectangle', x: hit.cx, y: hit.cy },
+        { id: 'f', name: 'Far Margin', kind: 'party', shape: 'triangle', x: hit.cx + 80, y: hit.cy, heading: 0.4 },
+    ];
+    const hidden = extraCalls({ ships: marks, dockTag: true });
+    assert.deepEqual(hidden.filter((call) => call.op === 'fillText').map((call) => call.args[0]), ['Far Margin']);
+    const shown = extraCalls({ ships: marks });
+    assert.ok(shown.some((call) => call.op === 'fillText' && call.args[0] === 'Courier'));
+    assert.ok(shown.some((call) => call.op === 'fillText' && call.args[0] === 'Liner'));
 });

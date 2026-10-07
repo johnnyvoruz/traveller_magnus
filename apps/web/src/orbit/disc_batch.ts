@@ -19,7 +19,7 @@
  */
 import type { DiscBatchRequest, DiscRequest, DiscRing } from '../surface/contracts.ts';
 import { turningOf } from './daynight.ts';
-import { moonOrbitRadius, type Plan } from './layout.ts';
+import { moonOrbitRadius, placeWorld, type MoonAt, type Plan } from './layout.ts';
 import type { Picture, WorldDraw } from './picture.ts';
 
 const TAU = Math.PI * 2;
@@ -66,7 +66,10 @@ export type DiscOptions = {
     /** The light's colour (sunColour of the primary's colour). */
     sun: [number, number, number];
     lightMode: boolean;
-    /** The Moons layer: with it off there are no moons and no rings (2732). */
+    /**
+     * The Moons layer. Off, the moon discs are left out of the batch. The planet's ring
+     * and the shadows the moons cast stay; the switch hides moons and their paths only.
+     */
     moonsShown: boolean;
     /** The selected body's dossier key, or null. */
     selected: string | null;
@@ -113,12 +116,13 @@ export function sweepSamples(sweep: number, radiusPx: number): number {
 
 /**
  * js/system_viewer.js:2727-2743: the rings a world wears, laid inside its first real moon's
- * orbit and broader the more there are. Null without rings, or with the Moons layer off.
+ * orbit and broader the more there are. Null without rings. The Moons layer does not
+ * remove them: a ring shadow is part of the planet.
  */
-export function ringOf(at: WorldDraw, clock: DiscClock, moonsShown: boolean): DiscRing | null {
+export function ringOf(at: WorldDraw, clock: DiscClock): DiscRing | null {
     const w = at.world;
     const count = w.rings + w.ringMoons;
-    if (!(count > 0) || !moonsShown) return null;
+    if (!(count > 0)) return null;
     let first: (typeof w.moons)[number] | null = null;
     for (const moon of w.moons) if (!moon.ring && (first === null || moon.index < first.index)) first = moon;
     const limit = first
@@ -167,7 +171,18 @@ type Seen = {
     r: number;
     parent: string | null;
     hidden: boolean;
+    /** False for a moon kept only as a caster while the Moons layer is off. */
+    emit: boolean;
 };
+
+/**
+ * Moons the batch can eclipse with. The picture omits them while the layer is off;
+ * they are placed again so the planet's shade request does not change.
+ */
+function shadeMoons(at: WorldDraw, days: number): readonly MoonAt[] {
+    if (at.moons.length > 0 || at.world.moons.length === 0) return at.moons;
+    return placeWorld(at.world, at.x, at.y, at.z, days, at.starX, at.starY, [], true).moons;
+}
 
 /** A world, halo and rings and all, that cannot reach the stage (2716-2720, 2744-2746). */
 function offStage(x: number, y: number, r: number, ringOuter: number | null, camera: DiscCamera): boolean {
@@ -183,14 +198,14 @@ export function discBatch(plan: Plan, picture: Picture, camera: DiscCamera, cloc
     const seen: Seen[] = [];
     const add = (
         key: string, body: Readonly<Record<string, unknown>>, moon: boolean, x: number, y: number, r: number,
-        starX: number, starY: number, parent: string | null, ring: DiscRing | null,
+        starX: number, starY: number, parent: string | null, ring: DiscRing | null, emit: boolean,
     ): void => {
         if (!(r >= DISC_MIN_PX)) return;
         const starAngle = Math.atan2(starY - y, starX - x);
         const turn = turnOf(body, moon, starAngle, clock);
         const radiusPx = shadeRadius(r, camera.dpr, ring ? ring.outer : null);
         seen.push({
-            x, y, r, parent,
+            x, y, r, parent, emit,
             hidden: offStage(x, y, r, ring ? ring.outer : null, camera),
             disc: {
                 key, hexKey: plan.hexKey, dossierKey: key, body, radiusPx,
@@ -205,10 +220,10 @@ export function discBatch(plan: Plan, picture: Picture, camera: DiscCamera, cloc
     for (const layer of picture.layers) {
         for (const at of layer.worlds) {
             const w = at.world;
-            add(w.key, w.body, false, at.x, at.y, at.r, at.starX, at.starY, null, ringOf(at, clock, options.moonsShown));
-            for (const m of at.moons) {
+            add(w.key, w.body, false, at.x, at.y, at.r, at.starX, at.starY, null, ringOf(at, clock), true);
+            for (const m of shadeMoons(at, clock.days)) {
                 if (m.moon.ring) continue;
-                add(m.moon.key, m.moon.body, true, m.x, m.y, m.r, at.starX, at.starY, w.key, null);
+                add(m.moon.key, m.moon.body, true, m.x, m.y, m.r, at.starX, at.starY, w.key, null, options.moonsShown);
             }
         }
     }
@@ -227,6 +242,6 @@ export function discBatch(plan: Plan, picture: Picture, camera: DiscCamera, cloc
     return {
         mode: options.mode,
         timeSeconds: clock.motion ? clock.timeSeconds : 0,
-        discs: seen.filter((item) => !item.hidden).map((item) => item.disc),
+        discs: seen.filter((item) => item.emit && !item.hidden).map((item) => item.disc),
     };
 }

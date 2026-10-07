@@ -4618,3 +4618,43 @@ Stop and report.
   exit 0, build green, 843 tests, 832 pass, 0 fail, 11 skipped.
 - **Next, D:** `prompts/d_waypoints.md` (A's hit test and course preview may not be there
   yet; the prompt says what to do then).
+
+## 171. Pushed `5c2e016`; A's course drawing, C's fourth motion pass and E's card gap accepted (2026-10-06)
+
+- **`5c2e016`** (the ghosts wired into plotting, plotting to a point, Jump from a point, the
+  card gap): GitHub run green. The first attempt at it failed harmlessly because Johnny's
+  shell was still in `apps/api`; rerun from the root. D has `prompts/d_waypoints.md`.
+- **Agent A, `a_course_preview.md`:** `preview` is a leg or a list of legs (two or more is
+  a course; one keeps the old drawing); the line runs from the ship through each waypoint;
+  a body is ghosted at its own leg's arrival, a point is a target; earlier waypoints are
+  numbered in the tag's style and the last carries the arrival tag; adds fade in, removals
+  leave. `shipAt(marks, point)` and `dockedBeside(body, radius, index)` are pure in
+  `orbit/ships.ts` (the renderer uses the latter, so a tag placed from it matches the
+  picture); `dockTag` on the draw state stops the renderer drawing a docked ship's
+  designator. Worst frame 5.3 ms with four legs. `k28_course_three_legs.png` looked at.
+  **Accepted.**
+- **Agent C, `c_toggle_motion_4.md`:** what `moonsShown` was dropping, found and fixed:
+  with Moons off the batch lost the planet's ring uniforms (ring particles and ring shadow)
+  and its moon casters (the eclipse terms), and `moonFactor` faded a ring's fill; the batch
+  now always builds the ring and the casters, hidden moons are placed as casters only, and
+  the moons' positions and tiles are kept for the whole hide. Day/night uses the Moons
+  wireframe wave. 8.5 ms frames each way. `fu14d_daynight_on_mid.png` looked at.
+  **Accepted.**
+- **Agent E, `e_card_gap.md`:** the gap is 18 px closed and under each drawer at every
+  width measured. **Accepted** (it went out in `5c2e016`). E notes a full-width toast could
+  cover the card's corner at half and at 520 px.
+- C's and E's build failures were each in another agent's file mid-edit (A's
+  `livePreview`, then D's `OrbitCanvas.vue`).
+- **The push, a snapshot without the shared canvas file:** `findings/push/
+  course_motion4.patch`, six files (`OrbitRenderer.ts`, `ships.ts`, `disc_batch.ts` and
+  their three tests). `OrbitCanvas.vue` holds A's finished lines and D's in-flight ones and
+  is left for D's report; the committed canvas passes one leg, which the new renderer still
+  draws. **Rehearsed:** `vue-tsc` exit 0, build green, 849 tests, 838 pass, 0 fail.
+- **v6:** 71 of 512 sectors in the running report (398,038 bodies; 77,336 unresolved, 19%;
+  149 blocking) after about an hour and a quarter: roughly a sector a minute, so several
+  hours more, not the hour B expected.
+- **Issued:** `prompts/c_city_lights_2.md` (Part 0: the enhanced look takes its band from
+  `surfaceTempBand` and its seas from the corrected liquid, vanilla untouched; then the
+  design's step 2, the lights under the weather), `prompts/e_liquid_row.md` (a surface
+  liquid row on the world page when a body carries `liquidStatus`; the ribbon at half
+  width). A's next is `prompts/a_vessels_on_map.md`.

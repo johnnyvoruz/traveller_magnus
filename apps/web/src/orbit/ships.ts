@@ -7,7 +7,7 @@ import type { CampaignAnchor } from '@voyage/shared';
 import { positionAt } from '../campaign/track.ts';
 import { formatDistance } from '../design/units.ts';
 import { DAY_SECONDS, totalDays } from './clock.ts';
-import { placeAtPicture, type PictureLayout } from './distance.ts';
+import { BODY_SNAP_PX, placeAtPicture, type PictureLayout } from './distance.ts';
 import { AU_KM, type Plan, type View } from './layout.ts';
 import type { Picture } from './picture.ts';
 
@@ -142,6 +142,44 @@ export function placeShips(
         marks.push({ ...base, x: point.x, y: point.y });
     }
     return marks;
+}
+
+/**
+ * The ship under a picture point, or null. The radius is the body hit floor, the same
+ * slop a world uses at its smallest. A jump report is not drawn, so it is not hit.
+ * The nearest mark within the slop wins, and a tie takes the later mark.
+ */
+export function shipAt(
+    marks: readonly ShipMark[],
+    point: { x: number; y: number },
+    slop = BODY_SNAP_PX,
+): string | null {
+    const limit = slop * slop;
+    let best: string | null = null;
+    let bestD = limit;
+    for (const mark of marks) {
+        if (mark.jump) continue;
+        const d = (mark.x - point.x) ** 2 + (mark.y - point.y) ** 2;
+        if (d <= bestD) {
+            bestD = d;
+            best = mark.id;
+        }
+    }
+    return best;
+}
+
+/**
+ * Where a docked ship is drawn beside its body. Down and to the right: one disc
+ * radius plus 16 px clear of the name, then 20 px further along that diagonal for
+ * each earlier ship at the same body. `index` is that ship's place in id order.
+ */
+export function dockedBeside(body: { x: number; y: number }, radius: number, index: number): { x: number; y: number } {
+    const reach = radius + 16 + Math.max(0, index) * 20;
+    const angle = Math.PI / 4;
+    return {
+        x: body.x + reach * Math.cos(angle),
+        y: body.y + reach * Math.sin(angle),
+    };
 }
 
 /** The primary distance, always in AU. Under a tenth is still AU; the ship clause is not. */
