@@ -18,3 +18,6 @@ export const editDateNext = ref(false);
 
 /** The ship sheet's sections folded by the referee, by section key, kept for the session. */
 export const sheetFolded = reactive<Record<string, boolean>>({});
+
+/** The character sheet's sections folded by the referee, by person and then by section name, kept for the session. */
+export const characterFolded = reactive<Record<string, Record<string, boolean>>>({});

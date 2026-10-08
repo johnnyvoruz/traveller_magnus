@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import { scrollToTop } from './platform/browser.ts';
-import { addressPane, campaignRedirect, type Query } from './shell/pane.ts';
+import { addressPane, campaignRedirect, hostsCampaign, type Query } from './shell/pane.ts';
 import Account from './views/Account.vue';
 import MapView from './views/MapView.vue';
 
@@ -8,7 +8,8 @@ import MapView from './views/MapView.vue';
 function preloadPane(path: string, query: Query): void {
     const pane = addressPane(path, query).pane;
     if (pane.kind === 'dossier') void import('./dossier/DossierPanel.vue');
-    else if (pane.kind === 'campaign' || pane.kind === 'party') void import('./workspace/CampaignPanel.vue');
+    else if (pane.kind === 'characters') void import('./characters/screens/CharactersPanel.vue');
+    else if (hostsCampaign(pane)) void import('./workspace/CampaignPanel.vue');
 }
 
 export const router = createRouter({
@@ -27,6 +28,7 @@ export const router = createRouter({
         { path: '/s/:sector/:hex/orbit', name: 'orbit', component: () => import('./views/OrbitView.vue') },
         { path: '/s/:sector/:hex/orbit/b/:body', name: 'orbit-body', component: () => import('./views/OrbitView.vue') },
         { path: '/account', name: 'account', component: Account },
+        { path: '/claim/:token', name: 'claim', component: () => import('./characters/screens/ClaimPage.vue') },
         { path: '/campaign/r/:record', redirect: (to) => legacyRedirect(to) },
         { path: '/campaign/party', redirect: (to) => legacyRedirect(to) },
         { path: '/campaign', redirect: (to) => legacyRedirect(to) },
@@ -63,6 +65,11 @@ if (import.meta.env.DEV) {
         path: '/dev/deck-plan',
         name: 'deck-plan',
         component: () => import('./dev/deck-plan/DeckPlanPage.vue'),
+    });
+    router.addRoute({
+        path: '/dev/city-lights',
+        name: 'city-lights',
+        component: () => import('./dev/city-lights/CityLights.vue'),
     });
 }
 

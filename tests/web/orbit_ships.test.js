@@ -5,6 +5,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { BODY_SNAP_PX } from '../../apps/web/src/orbit/distance.ts';
+import { tagBoxes } from '../../apps/web/src/orbit/ship_marks.ts';
 import { dockedBeside, placeShips, plotText, readoutPlace, shipAt, standInMarks, waypointAt } from '../../apps/web/src/orbit/ships.ts';
 
 const hex = 'Test_Sector/0101';
@@ -257,4 +258,52 @@ test('the hairline readout moves to the pointer\'s other side when it would cros
     const edge = readoutPlace({ x: 980, y: 100 }, text, canvas, []);
     assert.equal(edge.align, 'right');
     assert.equal(edge.x, 972);
+});
+
+test('a ship tag is a box the readout can avoid, including a +N more tag', () => {
+    const measure = (text) => text.length * 7;
+    const boxes = tagBoxes(
+        [{ id: 'a', name: 'Far Margin', x: 40, kneeY: 80 }],
+        [{ count: 3, x: 40, kneeY: 118 }],
+        { a: 'Under way' },
+        measure,
+        'CodeFont',
+    );
+    assert.equal(boxes.length, 2);
+    assert.equal(boxes[0].x, 40);
+    assert.equal(boxes[0].y, 63);
+    assert.equal(boxes[0].h, 34);
+    assert.ok(boxes[0].w > 18);
+    assert.equal(boxes[1].y, 101);
+    const plot = { x: 100, y: 100 };
+    const open = readoutPlace(plot, { w: 40, h: 10 }, { w: 800, h: 600 }, []);
+    const blocked = readoutPlace(plot, { w: 40, h: 10 }, { w: 800, h: 600 }, [], [{ x: open.x, y: open.y, w: 40, h: 10 }]);
+    assert.notDeepEqual(blocked, open);
+});
+
+test('avoid boxes move the readout the same way a name does', () => {
+    const canvas = { w: 1000, h: 800 };
+    const text = { w: 60, h: 10 };
+    const plot = { x: 100, y: 100 };
+    const open = readoutPlace(plot, text, canvas, []);
+    assert.deepEqual(open, { x: 108, y: 112, align: 'left', baseline: 'top' });
+    assert.deepEqual(readoutPlace(plot, text, canvas, [], []), open);
+    assert.deepEqual(readoutPlace(plot, text, canvas, [], undefined), open);
+
+    const under = readoutPlace(plot, text, canvas, [], [{ x: 108, y: 112, w: 48, h: 10 }]);
+    assert.equal(under.align, 'right');
+    assert.equal(under.x, 92);
+    assert.equal(under.y, 112);
+
+    // Both places below the pointer are blocked. The rule tries the other horizontal
+    // side first, finds that blocked too, then the default side above the pointer.
+    // That box is clear, so above wins and the horizontal side stays the default.
+    const both = readoutPlace(plot, text, canvas, [], [
+        { x: 108, y: 112, w: 60, h: 10 },
+        { x: 32, y: 112, w: 60, h: 10 },
+    ]);
+    assert.equal(both.align, 'left');
+    assert.equal(both.baseline, 'bottom');
+    assert.equal(both.x, 108);
+    assert.equal(both.y, 92);
 });

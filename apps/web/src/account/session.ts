@@ -52,14 +52,17 @@ async function pull(fetchImpl: typeof fetch): Promise<void> {
     }
 }
 
-/** The X sign-in call Account.vue used to make. A failure sets `session.error`. */
-export async function signIn(fetchImpl: typeof fetch = fetch): Promise<void> {
+/**
+ * The X sign-in call Account.vue used to make. A failure sets `session.error`.
+ * `callbackURL` is where the sign-in returns. The claim page passes its own path.
+ */
+export async function signIn(fetchImpl: typeof fetch = fetch, callbackURL = '/'): Promise<void> {
     session.error = '';
     try {
         const res = await apiFetch(fetchImpl, '/api/auth/sign-in/social', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ provider: 'twitter', callbackURL: '/' }),
+            body: JSON.stringify({ provider: 'twitter', callbackURL }),
         });
         const body = await res.json() as { url?: string; message?: string; error?: { message?: string } };
         if (res.ok && body.url) {

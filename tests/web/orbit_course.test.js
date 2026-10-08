@@ -7,7 +7,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { FASTEST, HOUR, REAL_TIME } from '../../apps/web/src/orbit/clock.ts';
-import { courseLegs, coursePreview, courseReady, courseTotals, planCourse, tagWords, toGoWords, underwayWords } from '../../apps/web/src/orbit/course.ts';
+import { courseLegs, coursePreview, courseReady, courseTotals, picturePreview, planCourse, tagWords, toGoWords, underwayWords } from '../../apps/web/src/orbit/course.ts';
 import { fieldHours, flightHours } from '../../apps/web/src/orbit/estimates.ts';
 import { shipTags, TAG_CORNER, TAG_LEAD, TAG_RUN, TAG_STEP, TAGS_SHOWN } from '../../apps/web/src/orbit/ship_marks.ts';
 import { dockedBeside } from '../../apps/web/src/orbit/ships.ts';
@@ -84,6 +84,11 @@ test('"Add course" writes flight legs in order, each from the waypoint before; t
     // A course cut off by a leg with no hours previews only what is dated.
     const cut = planCourse({ anchor: ax, end: 'w11', departs: D0 }, [wp('w2', 'Regina A-II', a2), wp(hold.point, '5.00 AU', hold, null, true), wp('w2', 'Regina A-II', a2)], 3, distance);
     assert.equal(coursePreview(cut, () => 'x').length, 1);
+    // The picture still draws the legs after an undated one. The stand-in hour is not the console's hours.
+    const pictured = picturePreview(cut, () => 'x', D0);
+    assert.equal(pictured.length, 3);
+    assert.equal(pictured[1].arrives > pictured[1].departs, true);
+    assert.equal(pictured[2].toKey, 'w2');
 });
 
 test('the count down names the next waypoint', () => {

@@ -39,6 +39,8 @@ const emit = defineEmits<{
 
 /** The ship sheet carries the PDF's 312 fields: loaded when a vessel's page first needs it. */
 const ShipSheet = defineAsyncComponent(() => import('./ShipSheet.vue'));
+/** The character sheet carries the PDF's 420 boxes: loaded when a person's page first needs it. */
+const PersonSheet = defineAsyncComponent(() => import('./PersonSheet.vue'));
 
 const nameField = ref<{ edit: (select?: boolean) => void } | null>(null);
 const tagDraft = ref('');
@@ -52,6 +54,8 @@ const record = computed(() => {
 /** The record is one of this session's deletes: it can be brought back from here. */
 const wasDeleted = computed(() => recentlyDeleted.some((item) => item.id === props.id));
 const info = computed(() => typeInfo(record.value ? record.value.type : 'person'));
+/** A player character is a person in the party (the campaign's settings hold the party's members). */
+const isPlayerCharacter = computed(() => !!record.value && record.value.type === 'person' && !!campaign.settings && campaign.settings.party.memberIds.includes(props.id));
 /** An image being read or sent counts as saving; one that failed, as not saved. */
 const upload = computed(() => uploads[props.id] ?? null);
 const saveState = computed((): 'saving' | 'failed' | 'saved' => {
@@ -165,6 +169,7 @@ watch(() => props.id, () => {
               <option v-for="item in RECORD_TYPES" :key="item.type" :value="item.type">{{ item.one }}</option>
             </select>
           </label>
+          <span v-if="isPlayerCharacter" class="rec-pc" title="A player character: in the party">PC</span>
           <span>· {{ placeLine(record, campaign.records) }}</span>
         </p>
       </div>
@@ -250,6 +255,8 @@ watch(() => props.id, () => {
 
     <TrackBlock v-if="record.type === 'vessel'" :id="id" :read-only="readOnly" />
 
+    <PersonSheet v-if="record.type === 'person'" :id="id" :read-only="readOnly" />
+
     <ShipSheet v-if="record.type === 'vessel'" :id="id" :read-only="readOnly">
       <VesselPlan :id="id" :read-only="readOnly" />
     </ShipSheet>
@@ -299,6 +306,16 @@ watch(() => props.id, () => {
 .rec-names {
   flex: 1 1 auto;
   min-width: 0;
+}
+
+/* A player character's mark: the sheet's rust value tag. */
+.rec-pc {
+  padding: 0 9px 0 7px;
+  border: 1px solid var(--sheet-rust-line);
+  background: var(--sheet-rust);
+  color: var(--text-0);
+  font: 700 12px/1.5 var(--font-code);
+  clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
 }
 
 .rec-meta {

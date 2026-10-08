@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { HOUR } from '../../apps/web/src/orbit/clock.ts';
 import { appendedTail, editedTail, lastThrust, movedWaypoint, onwardLegs, routeFixed, routePreview, samePlace, storedRoute } from '../../apps/web/src/orbit/course.ts';
-import { pressMeans, sameHover } from '../../apps/web/src/orbit/ship_marks.ts';
+import { layingContinues, pressMeans, sameHover } from '../../apps/web/src/orbit/ship_marks.ts';
 import { shipAt } from '../../apps/web/src/orbit/ships.ts';
 
 test('a press on a ship is always that ship: in or out of plotting, over a body or beside one', () => {
@@ -27,6 +27,20 @@ test('with no ship under it, plotting decides: a waypoint or a point while plott
     // Out of plotting the snap means nothing: a press beside a body is open picture.
     assert.deepEqual(pressMeans({ ship: null, body: null, beside: 'w3', plotting: false }), { kind: 'nothing' });
     assert.deepEqual(pressMeans({ ship: null, body: null, beside: null, plotting: false }), { kind: 'nothing' });
+});
+
+test('an existing waypoint is picked up before plotting can lay another point on it', () => {
+    const waypoint = { from: 'route', index: 2 };
+    assert.deepEqual(pressMeans({ ship: 'cr_a', body: 'w3', beside: null, plotting: true, waypoint }), { kind: 'ship', id: 'cr_a' });
+    assert.deepEqual(pressMeans({ ship: null, body: 'w3', beside: null, plotting: true, waypoint }), { kind: 'grab', from: 'route', index: 2 });
+    assert.deepEqual(pressMeans({ ship: null, body: null, beside: null, plotting: false, waypoint: { from: 'preview', index: 0 } }), { kind: 'grab', from: 'preview', index: 0 });
+    assert.deepEqual(pressMeans({ ship: null, body: 'w3', beside: null, plotting: true, waypoint: null }), { kind: 'waypoint', key: 'w3' });
+});
+
+test('laying ends on a body and on a right-click, and open space keeps laying', () => {
+    assert.equal(layingContinues('space'), true);
+    assert.equal(layingContinues('body'), false);
+    assert.equal(layingContinues('right'), false);
 });
 
 test('the rule on real marks: a press at a designator finds the ship whatever the mode', () => {
@@ -51,6 +65,9 @@ test('the plotter says a place once: the same body, ship, blank or point is not 
     assert.ok(!sameHover({ key: 'w3' }, { ship: 'w3' }));
     assert.ok(sameHover({ ship: 'cr_a' }, { ship: 'cr_a' }));
     assert.ok(sameHover({ blank: true }, { blank: true }));
+    assert.ok(sameHover({ grab: { from: 'route', index: 1 } }, { grab: { from: 'route', index: 1 } }));
+    assert.ok(!sameHover({ grab: { from: 'route', index: 1 } }, { grab: { from: 'preview', index: 1 } }));
+    assert.ok(!sameHover({ grab: { from: 'route', index: 1 } }, { key: 'w3' }));
     assert.ok(sameHover({ point: { x: 1, y: 2 } }, { point: { x: 1, y: 2 } }));
     assert.ok(!sameHover({ point: { x: 1, y: 2 } }, { point: { x: 1, y: 2.5 } }));
     assert.ok(!sameHover({ point: { x: 1, y: 2 } }, { key: 'w3' }));

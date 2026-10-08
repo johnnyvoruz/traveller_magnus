@@ -2,13 +2,13 @@
 /**
  * The pop-up at the rail's foot (design §1; K5f). Signed out it is the sign-in card; signed
  * in it is the account menu: who, the campaigns (open one, switch to another, make, rename,
- * delete, export, import), the party, sign out. It opens over the map and nothing waits on
+ * delete, export, import), the characters, the party, sign out. It opens over the map and nothing waits on
  * it; a click anywhere else, or Esc, closes it and focus goes back to the rail's button. A
  * delete asks once, in a dialog of its own here (the server's delete is soft and cannot be
  * undone). Export saves the campaign's file; Import reads one into an open, empty campaign
  * through campaign/import.ts, whose words are shown as given.
  */
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { CAMPAIGN_LIMITS } from '@voyage/shared';
 import { session, signOut } from '../account/session.ts';
@@ -19,6 +19,7 @@ import { apiFetch } from '../platform/http.ts';
 import { saveBlob } from '../platform/browser.ts';
 import Icon from '../design/Icon.vue';
 import { addressPane, atPane } from '../shell/pane.ts';
+import { registerCommand } from '../shell/registry.ts';
 import { showToast } from '../shell/toast.ts';
 import { accountLine, displayName, initials } from './account.ts';
 import { forgetDeleted } from './actions.ts';
@@ -95,6 +96,23 @@ function openParty(): void {
     const pane = addressPane(route.path, route.query).pane;
     if (pane.kind !== 'party') void router.push(atPane(route.path, route.query, { kind: 'party' }));
 }
+
+/** The Characters list, with or without a campaign. From a character, this returns to the list. */
+function openCharacters(): void {
+    const pane = addressPane(route.path, route.query).pane;
+    if (!(pane.kind === 'characters' && pane.character === null)) {
+        void router.push(atPane(route.path, route.query, { kind: 'characters', character: null }));
+    }
+    if (props.open) emit('close');
+}
+
+let stopCharacters: (() => void) | null = null;
+onMounted(() => {
+    stopCharacters = registerCommand({ id: 'characters', name: 'Characters', run: openCharacters });
+});
+onBeforeUnmount(() => {
+    if (stopCharacters) stopCharacters();
+});
 
 async function run(work: () => Promise<void>, then: () => void): Promise<void> {
     if (busy.value) return;
@@ -363,6 +381,9 @@ watch(() => props.open, (open) => {
           <Icon name="file-import" :size="15" /><span>Import into {{ openOne.name }}…</span><em v-if="!emptyCampaign">not empty</em>
         </button>
         <input ref="fileEl" class="vplan-file" type="file" accept="application/json,.json" tabindex="-1" aria-hidden="true" @change="onImportFile">
+        <button v-if="ready" type="button" role="menuitem" class="account-characters" data-command="characters" @click="openCharacters">
+          <Icon name="user" :size="15" /><span>Characters</span>
+        </button>
         <button v-if="ready" type="button" role="menuitem" class="account-party" @click="openParty(); $emit('close')">
           <Icon name="shuttle-space" :size="15" /><span>Go to the party</span>
         </button>

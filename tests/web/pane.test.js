@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { addressPane, campaignRedirect, escapePane, focusTarget, paneChanges, paneOf, withQuery } from '../../apps/web/src/shell/pane.ts';
+import { addressPane, campaignRedirect, escapePane, focusTarget, hostsCampaign, paneChanges, paneOf, withQuery } from '../../apps/web/src/shell/pane.ts';
 
 const SECTOR = 'Spinward_Marches';
 const HEX = '1910';
@@ -143,11 +143,15 @@ test('a panel query wins on a legacy campaign path, and paneOf does not', () => 
 });
 
 test('pane changes are the query the screens write', () => {
-    assert.deepEqual(paneChanges(SHUT), { panel: 'closed', record: null });
-    assert.deepEqual(paneChanges(DOSSIER), { panel: null, record: null });
-    assert.deepEqual(paneChanges(PARTY), { panel: 'party', record: null });
-    assert.deepEqual(paneChanges(LIST), { panel: 'campaign', record: null });
-    assert.deepEqual(paneChanges({ kind: 'campaign', record: 'beowulf' }), { panel: 'campaign', record: 'beowulf' });
+    assert.deepEqual(paneChanges(SHUT), { panel: 'closed', record: null, entry: null, character: null });
+    assert.deepEqual(paneChanges(DOSSIER), { panel: null, record: null, entry: null, character: null });
+    assert.deepEqual(paneChanges(PARTY), { panel: 'party', record: null, entry: null, character: null });
+    assert.deepEqual(paneChanges(LIST), { panel: 'campaign', record: null, entry: null, character: null });
+    assert.deepEqual(paneChanges({ kind: 'campaign', record: 'beowulf' }), { panel: 'campaign', record: 'beowulf', entry: null, character: null });
+    assert.deepEqual(paneChanges({ kind: 'journal', entry: null }), { panel: 'journal', record: null, entry: null, character: null });
+    assert.deepEqual(paneChanges({ kind: 'journal', entry: 'cj_1' }), { panel: 'journal', record: null, entry: 'cj_1', character: null });
+    assert.deepEqual(paneChanges({ kind: 'characters', character: null }), { panel: 'characters', record: null, entry: null, character: null });
+    assert.deepEqual(paneChanges({ kind: 'characters', character: 'ch_1' }), { panel: 'characters', record: null, entry: null, character: 'ch_1' });
     const orbitPath = '/s/' + SECTOR + '/' + HEX + '/orbit';
     const opened = withQuery({ date: '120', time: '0800', x: '1' }, paneChanges(LIST));
     assert.deepEqual(addressPane(orbitPath, opened).pane, LIST);
@@ -185,4 +189,58 @@ test('focus stays on a cold load, and follows the pane table after that', () => 
     assert.equal(focusTarget(dossier, list), 'list-search');
     assert.equal(focusTarget(list, dossier), 'dossier-heading');
     assert.equal(focusTarget(dossier, shut), 'rail-system');
+    const journal = { kind: 'journal', entry: null };
+    const openEntry = { kind: 'journal', entry: 'cj_1' };
+    assert.deepEqual(addressPane('/s/' + SECTOR + '/' + HEX, { panel: 'journal', date: '120' }).pane, journal);
+    assert.deepEqual(addressPane('/s/' + SECTOR + '/' + HEX, { panel: 'journal', entry: 'cj_1', date: '120' }).pane, openEntry);
+    assert.deepEqual(addressPane('/', { panel: 'journal', entry: 'nope' }).pane, journal);
+    assert.deepEqual(escapePane('/', { panel: 'journal', entry: 'cj_1', date: '120' }), {
+        path: '/',
+        query: { panel: 'journal', date: '120' },
+    });
+    assert.deepEqual(escapePane('/', { panel: 'journal', date: '120' }), {
+        path: '/',
+        query: { panel: 'closed', date: '120' },
+    });
+    assert.deepEqual(withQuery({ panel: 'journal', entry: 'cj_1', date: '120' }, { date: '121' }), {
+        panel: 'journal',
+        entry: 'cj_1',
+        date: '121',
+    });
+    assert.equal(focusTarget(list, journal), 'list-search');
+    assert.equal(focusTarget(journal, openEntry), 'leave');
+    assert.equal(focusTarget(openEntry, journal), 'leave');
+    assert.equal(focusTarget(journal, shut), 'rail-campaign');
+    assert.equal(focusTarget(null, journal), 'leave');
+    assert.equal(hostsCampaign(journal), true);
+    assert.equal(hostsCampaign(openEntry), true);
+    assert.equal(hostsCampaign(list), true);
+    assert.equal(hostsCampaign(PARTY), true);
+    assert.equal(hostsCampaign(shut), false);
+    assert.equal(hostsCampaign(dossier), false);
+    const characters = { kind: 'characters', character: null };
+    const openCharacter = { kind: 'characters', character: 'ch_9' };
+    assert.deepEqual(addressPane('/', { panel: 'characters' }).pane, characters);
+    assert.deepEqual(addressPane('/', { panel: 'characters', character: 'ch_9' }).pane, openCharacter);
+    assert.deepEqual(addressPane('/', { panel: 'characters', character: 'nope' }).pane, characters);
+    assert.deepEqual(addressPane('/s/' + SECTOR + '/' + HEX, { panel: 'characters', character: 'ch_9', date: '120' }).pane, openCharacter);
+    assert.deepEqual(escapePane('/', { panel: 'characters', character: 'ch_9', date: '120' }), {
+        path: '/',
+        query: { panel: 'characters', date: '120' },
+    });
+    assert.deepEqual(escapePane('/', { panel: 'characters', date: '120' }), {
+        path: '/',
+        query: { panel: 'closed', date: '120' },
+    });
+    assert.deepEqual(withQuery({ panel: 'characters', character: 'ch_9', date: '120' }, paneChanges(list)), {
+        panel: 'campaign',
+        date: '120',
+    });
+    assert.equal(focusTarget(list, characters), 'list-search');
+    assert.equal(focusTarget(characters, openCharacter), 'leave');
+    assert.equal(focusTarget(openCharacter, characters), 'leave');
+    assert.equal(focusTarget(characters, shut), 'rail-campaign');
+    assert.equal(focusTarget(null, characters), 'leave');
+    assert.equal(hostsCampaign(characters), false);
+    assert.equal(hostsCampaign(openCharacter), false);
 });

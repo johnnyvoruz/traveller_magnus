@@ -21,7 +21,7 @@ import {
     bodyAnchor, earliestDeparture, jumpLeg, jumpStanding, legAt, legStart, pointAnchor, shipsHere, shipTrack, statusWords, vesselPosition, whenWords,
 } from '../orbit/ship_list.ts';
 import NavConsole from '../orbit/NavConsole.vue';
-import type { PlotHover } from '../orbit/ship_marks.ts';
+import { layingContinues, type PlotHover } from '../orbit/ship_marks.ts';
 import ShipStrip from '../orbit/ShipStrip.vue';
 import type { ShipTrack } from '../orbit/ships.ts';
 import { appendLeg, removeLastLeg, replaceLegsFrom, trackOf } from '../campaign/track.ts';
@@ -30,7 +30,7 @@ import { rollJumpHours } from '../campaign/travel.ts';
 import { formatDistance } from '../design/units.ts';
 import { pointWords, realDistanceKmBetween, type PlaceEnd } from '../orbit/distance.ts';
 import {
-    appendedTail, courseLegs, coursePreview, courseReady, courseTotals, editedTail, lastThrust, movedWaypoint, planCourse, routeFixed, routePreview, samePlace,
+    appendedTail, courseLegs, courseReady, courseTotals, editedTail, lastThrust, movedWaypoint, picturePreview, planCourse, routeFixed, routePreview, samePlace,
     storedRoute, tagWords, toGoWords, underwayWords, type EditedTail, type PlannedLeg, type Waypoint,
 } from '../orbit/course.ts';
 import { flightFuelWords, hoursWords, jumpEstimateWords, rollWords, type JumpRoll } from '../orbit/estimates.ts';
@@ -57,7 +57,7 @@ import TimeControls from '../orbit/TimeControls.vue';
 import { cancelFrame, nextFrame, now, observeSize, pageOrigin } from '../platform/browser.ts';
 import { nextTick } from 'vue';
 import { askPaneEscape, setFrame } from '../shell/frame.ts';
-import { addressPane, atPane, withQuery } from '../shell/pane.ts';
+import { addressPane, atPane, hostsCampaign, withQuery } from '../shell/pane.ts';
 import Rail from '../shell/Rail.vue';
 import { loadSession, session } from '../account/session.ts';
 import { campaign, setCampaignDate } from '../campaign/store.ts';
@@ -503,6 +503,11 @@ function sampleShip(): void {
 // The ship in hand (follow-up 29): selecting a ship opens its nav console; with a thrust set the plotter is live.
 /** A ship is in hand: its nav console is open. */
 const plotting = ref(false);
+/**
+ * Laying waypoints. Editing is a ship in hand with this off: the arrow, and nothing new under the pointer.
+ * Laying starts when the console opens with a thrust set, and again from P or Lay from here.
+ */
+const laying = ref(false);
 /** The course being plotted: the waypoints in the order they were pressed (orbit/course.ts). */
 const waypoints = ref<Waypoint[]>([]);
 /** One thrust for the course, in G; null until it is set. None is assumed. */
@@ -510,8 +515,8 @@ const plotAccel = ref<number | null>(null);
 /** The thrust last set for each ship this visit; before that, its last flight leg's (course.ts lastThrust). */
 const thrustSet = new Map<string, number>();
 const canPlot = computed(() => canSetDate.value && ships.value.length > 0 && state.value === 'ready');
-/** The plotter is live: a press on the picture lays a waypoint. Until a thrust is set, a press is an ordinary selection. */
-const live = computed(() => plotting.value && plotAccel.value !== null);
+/** The plotter is live: a press on the picture lays a waypoint. Until a thrust is set, or laying has ended, a press is an ordinary selection. */
+const live = computed(() => laying.value && plotAccel.value !== null);
 
 /** An anchor of this system as an end of the distance sum: its body, or its point; null for anywhere else. */
 function endOf(anchor: CampaignAnchor): PlaceEnd | null {
@@ -603,6 +608,7 @@ const aimPlace = computed((): { waypoint: Waypoint } | { note: string } => {
     if (stepped.value) waypoint = bodyWaypoint(stepped.value);
     else if (!under) return { note: 'Pointer off the picture' };
     else if ('blank' in under) return { note: 'No reading here' };
+    else if ('grab' in under) return { note: 'Drag to move this waypoint' };
     else if ('ship' in under) {
         const found = campaign.records[under.ship];
         return { note: (found ? found.name : 'A ship') + (under.ship === selectedShip.value ? ': press to release' : ': press to take it') };
@@ -891,6 +897,21 @@ const course = computed(() => {
     };
 });
 
+/** The arrival the holograms are drawn at: the waypoint in hand, or the live plotter's aim. */
+const holdAt = computed((): number | null => {
+    if (!plotting.value) return null;
+    if (grab.value) {
+        const leg = dragLeg.value;
+        return leg && leg.arrives !== null ? leg.arrives : null;
+    }
+    if (!live.value) return null;
+    const leg = aimLeg.value;
+    if (leg && leg.arrives !== null) return leg.arrives;
+    const legs = planned.value;
+    const last = legs[legs.length - 1];
+    return last && last.arrives !== null ? last.arrives : null;
+});
+
 /**
  * What the picture is told of the course (the renderer places everything from dates and a
  * key or a point): every dated leg and then the leg to the place under the plotter, the last
@@ -903,12 +924,12 @@ const flightPreview = computed(() => {
     // The picture draws a preview over the route from the first waypoint that differs, so the preview starts with the route's own legs.
     const kept = (routeTold.value ?? []).map((leg) => ({ ...leg, tag: undefined }));
     const d = drag.value;
-    if (d && d.which === 'route') return [...kept.slice(0, d.tail.at), ...coursePreview(d.tail.planned, tag)];
+    if (d && d.which === 'route') return [...kept.slice(0, d.tail.at), ...picturePreview(d.tail.planned, tag, shownDays.value)];
     const legs = planned.value;
     const next = aimLeg.value;
     const dated = legs.every((leg) => leg.arrives !== null);
     const all = next && dated ? [...legs, { ...next, n: legs.length + 1 }] : legs;
-    const shown = coursePreview(all, tag);
+    const shown = picturePreview(all, tag, shownDays.value);
     if (!shown.length) return null;
     return lead.value ? [...kept.slice(0, lead.value), ...shown] : shown;
 });
@@ -923,7 +944,23 @@ function setPlotting(on: boolean): void {
     const id = selectedShip.value;
     const record = shipRecord.value;
     plotAccel.value = on && id ? thrustSet.get(id) ?? (record ? lastThrust(trackOf(record)) : null) : null;
+    laying.value = on && plotAccel.value !== null;
     if (on && plotAccel.value === null) void nextTick(() => { if (consoleEl.value) consoleEl.value.focusThrottle(); });
+}
+
+/** Laying again from the last waypoint. The console stays open and the course stays. */
+function startLaying(): void {
+    if (!plotting.value || plotAccel.value === null) return;
+    laying.value = true;
+}
+
+/**
+ * Laying ends. The course stays uncommitted and the ship stays in hand.
+ * Right-click calls this. To add the course on right-click instead, call addCourse() here.
+ */
+function stopLaying(): void {
+    laying.value = false;
+    stepped.value = null;
 }
 
 /**
@@ -940,8 +977,10 @@ function takeShip(id: string): void {
 }
 
 function setThrust(g: number): void {
+    const first = plotAccel.value === null;
     plotAccel.value = g;
     if (selectedShip.value) thrustSet.set(selectedShip.value, g);
+    if (plotting.value && first) laying.value = true;
 }
 
 /** Every body as a destination, in the body list's order, each world's moons after it. */
@@ -964,7 +1003,10 @@ function stepBody(by: 1 | -1): void {
 /** The place under the plotter becomes the next waypoint, as a press on the picture there does. */
 function commitAim(): void {
     const at = aim.value;
-    if ('waypoint' in at) addWaypoint(at.waypoint);
+    if (!('waypoint' in at)) return;
+    const body = typeof at.waypoint.to === 'string';
+    addWaypoint(at.waypoint);
+    if (body && !layingContinues('body')) stopLaying();
 }
 
 function typeLegHours(index: number, hours: number | null): void {
@@ -986,6 +1028,7 @@ function setDestination(key: string): void {
     const next = live.value ? bodyWaypoint(key) : null;
     if (!next || courseTail.value.end === key) return;
     addWaypoint(next);
+    if (!layingContinues('body')) stopLaying();
 }
 
 /** A press on empty picture while plotting: that point is the next waypoint. */
@@ -1185,7 +1228,7 @@ function jump(): void {
 /** The pane the address names. Absent panel on an orbit path is the dossier. */
 const shownPane = computed(() => addressPane(route.path, route.query).pane);
 const dossierOpen = computed(() => shownPane.value.kind === 'dossier');
-const campaignOpen = computed(() => shownPane.value.kind === 'campaign' || shownPane.value.kind === 'party');
+const campaignOpen = computed(() => hostsCampaign(shownPane.value));
 /** The account pop-up at the rail's foot, as on the map. */
 const accountOpen = ref(false);
 const railEl = ref<{ focusAccount: () => void; focusCampaign: () => void; focusSystem: () => void } | null>(null);
@@ -1388,7 +1431,12 @@ onMounted(() => {
         ...LAYOUTS.map((item) => orbitCommand(item.id, () => { mode.value = item.mode; }, ready)),
         ...LAYERS.map((item) => orbitCommand(item.id, () => { layers.value = toggled(layers.value, item.key); }, ready)),
         orbitCommand('orbit-fit', () => { if (stageEl.value) stageEl.value.fit(); }, ready),
-        orbitCommand('orbit-plot', () => { setPlotting(!plotting.value); }, () => canPlot.value),
+        orbitCommand('orbit-plot', () => {
+            if (!plotting.value) setPlotting(true);
+            else if (!laying.value) startLaying();
+            else stopLaying();
+        }, () => canPlot.value),
+        orbitCommand('orbit-stop-plotting', stopLaying, () => laying.value),
         orbitCommand('orbit-release', () => { setPlotting(false); }, () => plotting.value),
         orbitCommand('orbit-thrust', () => { if (!plotting.value) setPlotting(true); void nextTick(() => { if (consoleEl.value) consoleEl.value.focusThrottle(); }); }, () => canPlot.value),
         orbitCommand('orbit-plot-next-body', () => { stepBody(1); }, () => live.value && stepKeys.value.length > 0),
@@ -1639,6 +1687,8 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
           :layers="layers"
           :tracks="tracks"
           :plotting="live"
+          :in-hand="plotting"
+          :hold-at="holdAt"
           :plot-from="selectedShip"
           :survey-elsewhere="dossierOpen && selectedKey !== null"
           :ship-tags="tracks !== null"
@@ -1647,6 +1697,7 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
           @plot-hover="onPlotHover"
           @way-grab="onWayGrab"
           @way-drop="onWayDrop"
+          @stop-plotting="stopLaying"
           :route="routeTold"
           :way-fixed="routeFixed(shipRoute)"
           :preview-fixed="lead ? routeFixed(shipRoute) : 0"
@@ -1694,6 +1745,7 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
                 :route="routeRows"
                 :onward="onward"
                     :can-step="stepKeys.length > 0"
+                    :laying="laying"
                     :course="course"
                     @accel="setThrust"
                     @leg-hours="typeLegHours"
@@ -1706,6 +1758,8 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
                 @route-remove="removeRouteWaypoint"
                 @route-target="retargetRoute"
                 @commit="commitAim"
+                    @lay="startLaying"
+                    @stop="stopLaying"
                     @step="stepBody"
                     @release="setPlotting(false)"
                   />
@@ -1917,9 +1971,19 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
   font: 500 10px/1.3 var(--font-code);
 }
 
-/* Plotting: the pointer is a crosshair over the picture. */
+/* Plotting: the pointer is a crosshair over the picture. Over a waypoint it is a grab. */
 .orbit-stage.is-plotting .orbit-canvas {
   cursor: crosshair;
+}
+
+.orbit-stage .orbit-canvas.is-grab,
+.orbit-stage.is-plotting .orbit-canvas.is-grab {
+  cursor: grab;
+}
+
+.orbit-stage .orbit-canvas.is-grabbing,
+.orbit-stage.is-plotting .orbit-canvas.is-grabbing {
+  cursor: grabbing;
 }
 
 .orbit-blank {

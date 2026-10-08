@@ -57,6 +57,8 @@ const props = defineProps<{
     hereLabel: string;
     /** There are bodies to step through from the keyboard. */
     canStep: boolean;
+    /** Laying waypoints. Off, the console is editing: the arrow, and Lay from here starts laying again. */
+    laying: boolean;
     /** Every body of the system, in the body list's order: what a waypoint's destination can be changed to from here. */
     bodies: readonly { key: string; name: string }[];
     /** The ship's stored route from the date on; null when it has none here. */
@@ -90,6 +92,10 @@ const emit = defineEmits<{
     routeTarget: [index: number, key: string];
     /** The waypoint under the pointer (or stepped to from the keyboard) is laid. */
     commit: [];
+    /** Laying again from the last waypoint. */
+    lay: [];
+    /** Laying ends. The course stays uncommitted and the ship stays in hand. */
+    stop: [];
     /** The body list, a step on or back, as the place under the plotter. */
     step: [by: 1 | -1];
     release: [];
@@ -333,8 +339,9 @@ defineExpose({
           ><Icon name="rotate-left" :size="11" /></button>
         </div>
       </template>
-      <p v-if="route || course" class="nav-quiet nav-how">Drag a waypoint on the picture to move it (that needs the pointer); here, choose another body for it, or remove it.</p>
-      <p v-else class="nav-quiet nav-how">Press the picture to lay a waypoint: a body, or open space for a point. A point in open space needs the pointer; the bodies can be stepped through with , and . and laid with M.</p>
+      <p v-if="laying && !(route || course)" class="nav-quiet nav-how">Press the picture to lay a waypoint: a body, or open space for a point. A body ends laying. Right-click stops plotting. A point in open space needs the pointer; the bodies can be stepped through with , and . and laid with M. <button type="button" class="orbit-btn nav-stop-lay" data-command="orbit-stop-plotting" @click="emit('stop')">Stop laying</button></p>
+      <p v-else-if="laying" class="nav-quiet nav-how">Press the picture to lay the next waypoint. A body ends laying; right-click stops plotting. Drag a waypoint to move it. The course stays until Add course. <button type="button" class="orbit-btn nav-stop-lay" data-command="orbit-stop-plotting" @click="emit('stop')">Stop laying</button></p>
+      <p v-else class="nav-quiet nav-how">Editing. Nothing new is laid under the pointer. Drag a waypoint to move it, or change it here. <button type="button" class="orbit-btn nav-lay-again" data-command="orbit-plot" @click="emit('lay')">Lay from here</button> (P) lays on from the last waypoint.</p>
     </template>
   </section>
 </template>

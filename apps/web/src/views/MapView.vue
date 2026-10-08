@@ -17,7 +17,7 @@ import { TruthClient } from '../map/truth_client.ts';
 import OmniBox from '../components/OmniBox.vue';
 import { bodyKeys, overviewModel, pickSystem, type AllegianceName, type TreeRow } from '../dossier/model.ts';
 import { askPaneEscape, setFrame } from '../shell/frame.ts';
-import { addressPane, atPane, withQuery } from '../shell/pane.ts';
+import { addressPane, atPane, hostsCampaign, withQuery } from '../shell/pane.ts';
 import { handleKey, registerCommand, systemPanel, type PanelWorld } from '../shell/registry.ts';
 import { orbitPath } from '../orbit/bodies.ts';
 import Rail from '../shell/Rail.vue';
@@ -132,7 +132,7 @@ const dossier = computed(() => dossierRoute(route.path));
 /** The pane the address names. A panel query wins over a legacy /campaign path. */
 const shownPane = computed(() => addressPane(route.path, route.query).pane);
 /** The Campaign panel is the campaign list, a record, or the party. */
-const campaignOpen = computed(() => shownPane.value.kind === 'campaign' || shownPane.value.kind === 'party');
+const campaignOpen = computed(() => hostsCampaign(shownPane.value));
 /** The dossier is open only when the pane is the dossier, not merely because the path names a hex. */
 const dossierShown = computed(() => shownPane.value.kind === 'dossier');
 
@@ -142,10 +142,10 @@ const GREETED_KEY = 'voyage_campaign_greeted';
 /** A first sign-in lands on the home view: the Campaign panel opens once, and never again unasked. */
 function greet(): void {
     if (!session.user || route.path !== '/') return;
+    if (shownPane.value.kind !== 'shut') return;
     if (storageGet(GREETED_KEY) === '1') return;
     storageSet(GREETED_KEY, '1');
     if (storageGet(GREETED_KEY) !== '1') return;
-    if (campaignOpen.value) return;
     suppressFly = true;
     void router.push(atPane(route.path, route.query, { kind: 'campaign', record: null }));
 }
@@ -369,6 +369,7 @@ function openDateEditor(): void {
     accountOpen.value = false;
     const pane = shownPane.value;
     if (pane.kind === 'campaign' && !pane.record) return;
+    if (pane.kind === 'journal' && !pane.entry) return;
     suppressFly = true;
     void router.push(atPane(route.path, route.query, { kind: 'campaign', record: null }));
 }

@@ -69,6 +69,10 @@ type GhostSpec = {
     cy: number;
     /** Signed sweep along the orbit, radians. An arc is drawn only while this stays within half a turn. */
     sweep: number;
+    /** The body's own radius. The hologram is this size; a point has none. */
+    disc: number;
+    /** The then lies inside the body's own disc: a hold mark, not a far outline. */
+    hold: boolean;
 };
 type HeldLayer = { bands: BandAt[]; jumps: JumpAt[]; paths: PathAt[]; panels: Panel[] };
 const TOGGLE_KEYS: readonly ToggleKey[] = ['habitable', 'jump', 'paths', 'moons', 'dayNight', 'scan', 'markMainworld'];
@@ -86,6 +90,41 @@ const WIRE_GRID_MIN_PX = 10;
 const WIRE_SWEEP_MIN_PX = 4;
 /** Pole lean, in radians, so the parallels read as ellipses rather than a flat stack. */
 const WIRE_TILT = 0.55;
+/**
+ * Below this radius the moons-reveal sphere is a speck. A held hologram under it is a
+ * filled teal dot. The same threshold as the reveal's grid (WIRE_GRID_MIN_PX).
+ */
+export const HOLO_DOT_PX = WIRE_GRID_MIN_PX;
+
+/**
+ * Lat/long segments of the moons-reveal sphere, centred on the origin, before that
+ * reveal's rotation. globeWave bins these by the sweep; a held hologram strokes them whole.
+ */
+function sphereSegments(r: number): number[] {
+    const segs: number[] = [];
+    const ellipse = (cx: number, cy: number, rx: number, ry: number): void => {
+        const steps = 24;
+        for (let i = 0; i < steps; i += 1) {
+            const a0 = (i / steps) * TAU;
+            const a1 = ((i + 1) / steps) * TAU;
+            segs.push(
+                cx + rx * Math.cos(a0), cy + ry * Math.sin(a0),
+                cx + rx * Math.cos(a1), cy + ry * Math.sin(a1),
+            );
+        }
+    };
+    const tilt = Math.sin(WIRE_TILT);
+    const stand = Math.cos(WIRE_TILT);
+    for (const lat of [-50, -25, 0, 25, 50]) {
+        const phi = lat * Math.PI / 180;
+        const rx = r * Math.cos(phi);
+        ellipse(0, r * Math.sin(phi) * stand, rx, Math.max(0.6, rx * tilt));
+    }
+    for (const lambda of [18, 40, 62, 80]) {
+        ellipse(0, 0, r * Math.sin(lambda * Math.PI / 180), r * stand);
+    }
+    return segs;
+}
 /**
  * The largest step of the teal sweep between two frames. The sweep is a sine, whose
  * steepest slope is π. A body's own sweep lasts --t-slow, and a frame at 60fps is a
@@ -164,6 +203,20 @@ export type DrawState = {
     ships?: readonly ShipMark[];
     /** Plotting hairlines for this frame only. Omitted or null, the overlay is off. */
     plot?: PlotReadout | null;
+    /**
+     * Arrival of the point in hand, or of the live plotter. Every world and moon is drawn
+     * there. Omitted, the ghosts stay the quiet ones.
+     */
+    holdAt?: number | null;
+    /**
+     * The waypoint under the pointer, or the one in hand. A ring in the lock colour answers.
+     * Omitted, no waypoint is hot.
+     */
+    hotWay?: { from: 'route' | 'preview'; index: number } | null;
+    /**
+     * The held hologram. The picture uses the wireframe. `tint` is the comparison frame only.
+     */
+    hologram?: 'wire' | 'tint';
     /**
      * One leg, or an ordered course of legs, or null. A body ghost stands at that leg's
      * arrival. The flight line runs from the ship through each waypoint. Omitted, the picture is today's.
@@ -282,11 +335,14 @@ export class OrbitRenderer {
     private previewDrawn: DrawnWaypoint[] = [];
     /** The first preview waypoint that is not also the stored route's. 0 draws the preview from the ship. */
     private previewPart = 0;
+    /** Arrival of the point in hand. Null, the ghosts stay the quiet rings. */
+    private holdAt: number | null = null;
+    private hologramStyle: 'wire' | 'tint' = 'wire';
+    private hotWay: { from: 'route' | 'preview'; index: number } | null = null;
     /**
      * From this route index on, a preview has taken over, so the stored course is what was.
      * Null when this frame has no preview.
      */
-    private dimFrom: number | null = null;
     /** --t-fast from the canvas, read once. Null when the token is missing: the slide snaps. */
     private fastSecondsCache: number | null | undefined = undefined;
     private habLive = false;
@@ -407,7 +463,9 @@ export class OrbitRenderer {
         this.routeDrawn = [];
         this.previewDrawn = [];
         this.previewPart = this.partIndex(state);
-        this.dimFrom = null;
+        this.holdAt = typeof state.holdAt === 'number' ? state.holdAt : null;
+        this.hologramStyle = state.hologram === 'tint' ? 'tint' : 'wire';
+        this.hotWay = state.hotWay ?? null;
         const routeAt = this.paintRoute(plan, picture, view, state);
         const ghostAt = this.paintGhosts(plan, picture, view, state);
         this.beginBubbles(state);
@@ -656,24 +714,8 @@ export class OrbitRenderer {
             const bin = Math.min(bins - 1, Math.floor(alpha * bins));
             buckets[bin]?.push(x0, y0, x1, y1);
         };
-        const ellipse = (cx: number, cy: number, rx: number, ry: number) => {
-            const steps = 24;
-            for (let i = 0; i < steps; i++) {
-                const a0 = (i / steps) * TAU;
-                const a1 = ((i + 1) / steps) * TAU;
-                add(cx + rx * Math.cos(a0), cy + ry * Math.sin(a0), cx + rx * Math.cos(a1), cy + ry * Math.sin(a1));
-            }
-        };
-        const tilt = Math.sin(WIRE_TILT);
-        const stand = Math.cos(WIRE_TILT);
-        for (const lat of [-50, -25, 0, 25, 50]) {
-            const phi = lat * Math.PI / 180;
-            const rx = r * Math.cos(phi);
-            ellipse(0, r * Math.sin(phi) * stand, rx, Math.max(0.6, rx * tilt));
-        }
-        for (const lambda of [18, 40, 62, 80]) {
-            ellipse(0, 0, r * Math.sin(lambda * Math.PI / 180), r * stand);
-        }
+        const raw = sphereSegments(r);
+        for (let k = 0; k < raw.length; k += 4) add(raw[k] ?? 0, raw[k + 1] ?? 0, raw[k + 2] ?? 0, raw[k + 3] ?? 0);
         ctx.rotate(rot);
         ctx.strokeStyle = this.theme.signal;
         ctx.lineWidth = 1;
@@ -2625,38 +2667,55 @@ export class OrbitRenderer {
             cx: at.x,
             cy: at.y,
             sweep: 0,
+            disc: 0,
+            hold: false,
         };
         this.strokeGhost(spec, spec, 'show', 1);
         if (label) this.ghostTag(spec, 1);
         return at;
     }
 
-    private ghostSpecs(plan: Plan, view: View, days: number, preview: CourseLeg): GhostSpec[] {
-        const now = this.ghostBodies(layoutScene(plan, view, days));
-        const then = this.ghostBodies(layoutScene(plan, view, preview.arrives));
+    private ghostSpecs(
+        plan: Plan,
+        view: View,
+        days: number,
+        preview: CourseLeg,
+        bodiesAt?: (at: number) => Map<string, GhostBody>,
+    ): GhostSpec[] {
+        const loud = this.holdAt !== null;
+        const at = loud ? (this.holdAt as number) : preview.arrives;
+        const now = bodiesAt ? bodiesAt(days) : this.ghostBodies(layoutScene(plan, view, days));
+        const then = bodiesAt ? bodiesAt(at) : this.ghostBodies(layoutScene(plan, view, at));
         const specs: GhostSpec[] = [];
         for (const future of then.values()) {
             const present = now.get(future.key);
             if (!present) continue;
             const dest = future.key === preview.toKey;
-            if (!dest && future.kind !== 'world') continue;
-            if (dest && future.kind !== 'world' && future.kind !== 'moon') continue;
+            if (future.kind !== 'world' && future.kind !== 'moon') continue;
             const moved = Math.hypot(present.x - future.x, present.y - future.y);
-            if (!dest && moved < Math.max(8, 1.5 * present.r)) continue;
-            const sweep = future.period > 0 ? bodyAngle(future.epoch, future.period, preview.arrives) - bodyAngle(future.epoch, future.period, preview.departs) : 0;
+            // Quiet, with no point in hand: the old rule, one world that has moved, and a destination moon.
+            if (!loud) {
+                if (!dest && future.kind !== 'world') continue;
+                if (!dest && moved < Math.max(8, 1.5 * present.r)) continue;
+            }
+            const sweep = future.period > 0 ? bodyAngle(future.epoch, future.period, at) - bodyAngle(future.epoch, future.period, preview.departs) : 0;
             const label = dest
-                ? (preview.tag || shortLabel(future.name, plan.name) + ' \u00B7 ' + whenWords(preview.arrives))
+                ? (preview.tag || shortLabel(future.name, plan.name) + ' \u00B7 ' + whenWords(at))
                 : '';
+            // Inside its own disc there is no outline to see. The hold mark says it stays.
+            const hold = loud && moved < present.r;
             specs.push({
                 key: future.key,
                 dest,
                 label,
                 now: { x: present.x, y: present.y },
                 then: { x: future.x, y: future.y },
-                r: Math.max(5, future.r + 2.5),
+                r: hold ? Math.max(4, present.r) : Math.max(5, future.r + 2.5),
                 cx: future.cx,
                 cy: future.cy,
                 sweep: Number.isFinite(sweep) ? sweep : 0,
+                disc: future.r,
+                hold,
             });
         }
         return specs;
@@ -2729,6 +2788,91 @@ export class OrbitRenderer {
         return { x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) };
     }
 
+    /**
+     * A body that will not have moved: a thin teal ring on the disc and one tick, so
+     * "it holds its place" reads as an answer. No arc, no second outline.
+     */
+    private holdMark(x: number, y: number, r: number, alpha: number, dest: boolean): void {
+        const ctx = this.ctx;
+        ctx.save();
+        ctx.globalAlpha = alpha * 0.85;
+        ctx.strokeStyle = dest ? this.theme.lock : this.theme.signal;
+        ctx.lineWidth = 1;
+        ctx.lineCap = 'round';
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.arc(x, y, Math.max(4, r), 0, TAU);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(x, y - r - 2);
+        ctx.lineTo(x, y - r - 7);
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    /**
+     * The moons-reveal sphere, still: a low teal fill so it reads solid, and the reveal's
+     * lat/long lines in --signal. Under HOLO_DOT_PX the lines are noise and the fill is the dot.
+     * `tint` is the comparison only: the body's disc, teal and translucent, with no lines.
+     */
+    private hologram(x: number, y: number, r: number, alpha: number): void {
+        if (!(r > 0) || !(alpha > 0)) return;
+        const ctx = this.ctx;
+        const wire = this.hologramStyle === 'wire' && r >= HOLO_DOT_PX;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.beginPath();
+        ctx.arc(0, 0, r, 0, TAU);
+        ctx.fillStyle = this.theme.signal;
+        ctx.globalAlpha = alpha * (wire ? 0.18 : 0.35);
+        ctx.fill();
+        if (wire) {
+            const segs = sphereSegments(r);
+            ctx.rotate(-0.5);
+            ctx.globalAlpha = alpha * 0.9;
+            ctx.strokeStyle = this.theme.signal;
+            ctx.lineWidth = 1;
+            ctx.setLineDash([]);
+            ctx.beginPath();
+            for (let k = 0; k < segs.length; k += 4) {
+                ctx.moveTo(segs[k] ?? 0, segs[k + 1] ?? 0);
+                ctx.lineTo(segs[k + 2] ?? 0, segs[k + 3] ?? 0);
+            }
+            ctx.stroke();
+        }
+        ctx.restore();
+    }
+
+    /** The waypoint under the pointer: a ring in the lock colour, outside the mark. */
+    private hotRing(x: number, y: number, r: number, from: 'route' | 'preview', index: number): void {
+        const hot = this.hotWay;
+        if (!hot || hot.from !== from || hot.index !== index) return;
+        const ctx = this.ctx;
+        ctx.save();
+        ctx.strokeStyle = this.theme.lock;
+        ctx.globalAlpha = 1;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.arc(x, y, r + 6, 0, TAU);
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    /** The waypoint's number, when the mark's label is an arrival tag rather than the number. */
+    private wayNumber(spec: GhostSpec, n: string): void {
+        if (!n || spec.label === n) return;
+        const ctx = this.ctx;
+        ctx.save();
+        ctx.font = '700 11px ' + this.theme.fontCode;
+        ctx.fillStyle = this.theme.lock;
+        ctx.globalAlpha = 1;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(n, spec.then.x, spec.then.y);
+        ctx.restore();
+    }
+
     private strokeGhost(drawn: GhostSpec, spec: GhostSpec, kind: 'in' | 'move' | 'out' | 'show', alpha: number): void {
         const ctx = this.ctx;
         const theme = this.theme;
@@ -2736,6 +2880,10 @@ export class OrbitRenderer {
         const x = drawn.then.x;
         const y = drawn.then.y;
         if (this.offCanvas(x, y, drawn.r + 24)) return;
+        if (spec.hold) {
+            this.holdMark(x, y, spec.disc || drawn.r, alpha, spec.dest);
+            return;
+        }
         ctx.save();
         ctx.globalAlpha = alpha;
         ctx.strokeStyle = colour;
@@ -2771,6 +2919,7 @@ export class OrbitRenderer {
         }
         ctx.stroke();
         ctx.restore();
+        if (this.holdAt !== null && spec.disc > 0) this.hologram(x, y, spec.disc, alpha);
     }
 
     /** The destination's tag: the selection tag's fill, 11px mono, the short name and the arrival. */
@@ -2815,19 +2964,32 @@ export class OrbitRenderer {
         routeAt: readonly GhostSpot[] | null,
     ): void {
         const from = plot && plot.from ? plot.from : this.partyMark(ships);
+        const spots = ghostAt ? (Array.isArray(ghostAt) ? ghostAt : [ghostAt]) : [];
+        if (spots.length > 0) {
+            this.previewDrawn = spots.map((spot, index) => ({ index: this.previewPart + index, x: spot.x, y: spot.y }));
+        }
         if (routeAt && routeAt.length > 0 && from) {
             let cursor: GhostSpot = from;
+            let prev = -1;
             for (let i = 0; i < routeAt.length; i += 1) {
                 const spot = routeAt[i];
                 const index = this.routeDrawn[i] ? this.routeDrawn[i].index : i;
-                const dim = this.dimFrom !== null && index >= this.dimFrom;
-                this.flightLine(cursor, spot, true, dim);
+                // A preview owns the waypoints in between. The line starts again from the preview's last mark, not from the stored shape.
+                if (prev >= 0 && index > prev + 1) {
+                    const bridge = this.previewDrawn[this.previewDrawn.length - 1];
+                    if (!bridge) {
+                        cursor = spot;
+                        prev = index;
+                        continue;
+                    }
+                    cursor = { x: bridge.x, y: bridge.y };
+                }
+                this.flightLine(cursor, spot, true, false);
                 cursor = spot;
+                prev = index;
             }
         }
-        if (ghostAt && from) {
-            const spots = Array.isArray(ghostAt) ? ghostAt : [ghostAt];
-            this.previewDrawn = spots.map((spot, index) => ({ index: this.previewPart + index, x: spot.x, y: spot.y }));
+        if (spots.length > 0 && from) {
             const join = this.previewPart > 0 ? this.routeDrawn[this.previewPart - 1] : null;
             let cursor: GhostSpot = join ? { x: join.x, y: join.y } : from;
             for (const spot of spots) {
@@ -2863,7 +3025,7 @@ export class OrbitRenderer {
             });
             ctx.font = '10px ' + theme.fontCode;
             const width = ctx.measureText(text).width;
-            const at = readoutPlace(plot, { w: width, h: nameH }, { w: this.w, h: this.h }, names);
+            const at = readoutPlace(plot, { w: width, h: nameH }, { w: this.w, h: this.h }, names, plot.avoid);
             ctx.textAlign = at.align;
             ctx.textBaseline = at.baseline;
             ctx.fillText(text, at.x, at.y);
@@ -2909,19 +3071,18 @@ export class OrbitRenderer {
             if (slot && spec) slot.spec = spec;
             if (i < fromIndex) continue;
             if (!slot || !spec) continue;
-            const at = this.paintWay(slot, spec, true);
+            const at = this.paintWay(slot, spec, true, i);
             if (at) spots.push(at);
         }
         for (const [id, slot] of this.ways) {
             if (live.has(id) || !slot.spec) continue;
             this.paintWay(slot, slot.spec, false);
         }
-        if (list.length > 0) {
-            const last = list[list.length - 1];
-            const ordinary = this.ghostSpecs(plan, view, days, { departs: last.departs, arrives: last.arrives });
+        if (list.length > 0 && this.holdAt !== null) {
+            const ordinary = this.ghostSpecs(plan, view, days, { departs: days, arrives: this.holdAt }, bodiesAt);
             const rest: GhostSpec[] = [];
             for (const spec of ordinary) {
-                if (spec.dest || skip.has(spec.key)) continue;
+                if (skip.has(spec.key)) continue;
                 rest.push(spec);
             }
             this.drawStill(rest);
@@ -2943,7 +3104,7 @@ export class OrbitRenderer {
             const at = pictureOfAu(leg.point, view, plan, 'orbits');
             if (!at) return null;
             const label = last ? (leg.tag || pointWords(plan, leg.point, leg.arrives)) : '';
-            return { key: id, dest: true, label: last ? label : '', now: at, then: at, r: 8, cx: at.x, cy: at.y, sweep: 0 };
+            return { key: id, dest: true, label: last ? label : '', now: at, then: at, r: 8, cx: at.x, cy: at.y, sweep: 0, disc: 0, hold: false };
         }
         if (!leg.toKey) return null;
         const present = bodiesAt(days).get(leg.toKey);
@@ -2956,22 +3117,29 @@ export class OrbitRenderer {
         const label = last
             ? (leg.tag || shortLabel(future.name, plan.name) + ' \u00B7 ' + whenWords(leg.arrives))
             : '';
+        const moved = Math.hypot(present.x - future.x, present.y - future.y);
+        const hold = this.holdAt !== null && moved < present.r;
         return {
             key: id,
             dest: true,
             label,
             now: { x: present.x, y: present.y },
             then: { x: future.x, y: future.y },
-            r: Math.max(5, future.r + 2.5),
+            r: hold ? Math.max(4, present.r) : Math.max(5, future.r + 2.5),
             cx: future.cx,
             cy: future.cy,
             sweep: Number.isFinite(sweep) ? sweep : 0,
+            disc: future.r,
+            hold,
         };
     }
 
     /** Draws one waypoint and returns where it was drawn. A leaver is not a vertex of the line. */
-    private paintWay(slot: WaySlot, spec: GhostSpec, onCourse: boolean): GhostSpot | null {
-        const kind: 'in' | 'move' | 'out' | 'show' = slot.run ? slot.run.kind : (onCourse ? 'show' : 'out');
+    private paintWay(slot: WaySlot, spec: GhostSpec, onCourse: boolean, index = -1): GhostSpot | null {
+        // A point in hand is where the date says, this frame. The glide is for a course that is not being dragged.
+        const kind: 'in' | 'move' | 'out' | 'show' = this.holdAt !== null
+            ? 'show'
+            : (slot.run ? slot.run.kind : (onCourse ? 'show' : 'out'));
         const share = slot.share;
         if (kind === 'move' && slot.drawn) this.ghostLatch.set(spec.key, slot.drawn);
         const saved = this.ghostShare;
@@ -2983,6 +3151,10 @@ export class OrbitRenderer {
         const alpha = kind === 'show' || kind === 'move' ? 1 : share;
         if (alpha > 0) {
             this.strokeGhost(placed, spec, kind, alpha);
+            if (onCourse && index >= 0 && (kind === 'show' || kind === 'move' || share > 0.35)) {
+                if (this.holdAt !== null) this.wayNumber(placed, String(index + 1));
+                this.hotRing(at.x, at.y, placed.r, 'preview', index);
+            }
             if (placed.label && (kind === 'show' || kind === 'move' || share > 0.35)) {
                 this.ghostTag(placed, kind === 'show' || kind === 'move' ? 1 : share);
             }
@@ -3075,15 +3247,17 @@ export class OrbitRenderer {
     /**
      * The committed course. The same waypoints as a preview: each body at its own arrival,
      * a point as a target, numbers on the earlier ones. Solid, and still. It does not
-     * ease, and it does not ghost the other worlds. From the parting waypoint on, a preview
-     * owns the tags, and this course is drawn dimmer, with no tag and no number. The line
-     * is drawn later, from the ship, so an under-way leg shows only what is left of it.
+     * ease, and it does not ghost the other worlds. A preview owns the waypoints it redraws:
+     * those marks are not drawn here, so the stored shape is never the only trace and never
+     * a second mark under the one being moved. Waypoints the preview does not cover stay,
+     * numbered, at full strength. The line is drawn later, from the ship.
      */
     private paintRoute(plan: Plan, picture: Picture, view: View, state: DrawState): GhostSpot[] | null {
         if (picture.mode !== 'orbits') return null;
         const legs = this.routeList(state);
         if (!legs) return null;
-        this.dimFrom = this.previewList(state) ? this.previewPart : null;
+        const preview = this.previewList(state);
+        const coverTo = preview ? preview.length : 0;
         const cache = new Map<number, Map<string, GhostBody>>();
         const bodiesAt = (at: number): Map<string, GhostBody> => {
             let found = cache.get(at);
@@ -3099,12 +3273,14 @@ export class OrbitRenderer {
             const last = i === legs.length - 1;
             const spec = this.waySpec(plan, view, state.days, leg, 'route-' + i, bodiesAt, last);
             if (!spec) continue;
-            const past = this.dimFrom !== null && i >= this.dimFrom;
-            if (past) spec.label = '';
-            else if (!last) spec.label = String(i + 1);
+            const owned = preview !== null && i >= this.previewPart && i < coverTo;
+            if (owned) continue;
+            if (!last) spec.label = String(i + 1);
             spots.push(spec.then);
             this.routeDrawn.push({ index: i, x: spec.then.x, y: spec.then.y });
-            this.strokeSettled(spec, past);
+            this.strokeSettled(spec, false);
+            if (this.holdAt !== null) this.wayNumber(spec, String(i + 1));
+            this.hotRing(spec.then.x, spec.then.y, spec.r, 'route', i);
             if (spec.label) this.ghostTag(spec, 1);
         }
         return spots.length > 0 ? spots : null;

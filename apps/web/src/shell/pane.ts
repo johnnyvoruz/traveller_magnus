@@ -20,7 +20,9 @@ export type Pane =
     | { kind: 'shut' }
     | { kind: 'dossier' }
     | { kind: 'campaign'; record: string | null }
-    | { kind: 'party' };
+    | { kind: 'party' }
+    | { kind: 'journal'; entry: string | null }
+    | { kind: 'characters'; character: string | null };
 
 export type PaneAddress = { view: PaneView; pane: Pane };
 
@@ -37,7 +39,7 @@ export type FocusTarget =
 
 export type Redirect = { path: string; query: Record<string, string> };
 
-const KEPT = ['panel', 'record', 'x', 'y', 'z', 'date', 'time', 'campaignStandIn'];
+const KEPT = ['panel', 'record', 'entry', 'character', 'x', 'y', 'z', 'date', 'time', 'campaignStandIn'];
 
 function first(value: unknown): string | undefined {
     const raw = Array.isArray(value) ? value[0] : value;
@@ -97,6 +99,14 @@ function paneFromQuery(view: PaneView, query: Query): Pane {
         const record = first(query.record);
         return { kind: 'campaign', record: record ? decode(record) : null };
     }
+    if (panel === 'journal') {
+        const entry = first(query.entry);
+        return { kind: 'journal', entry: entry && entry.startsWith('cj_') ? decode(entry) : null };
+    }
+    if (panel === 'characters') {
+        const character = first(query.character);
+        return { kind: 'characters', character: character && character.startsWith('ch_') ? decode(character) : null };
+    }
     if (panel === 'dossier' || panel === undefined) {
         return dossierDefault(view) || panel === 'dossier' ? { kind: 'dossier' } : { kind: 'shut' };
     }
@@ -127,10 +137,18 @@ export function addressPane(path: string, query: Query = {}): PaneAddress {
 
 /** The query keys that name a pane. A dossier drops panel and record. */
 export function paneChanges(pane: Pane): Query {
-    if (pane.kind === 'shut') return { panel: 'closed', record: null };
-    if (pane.kind === 'dossier') return { panel: null, record: null };
-    if (pane.kind === 'party') return { panel: 'party', record: null };
-    return { panel: 'campaign', record: pane.record };
+    const cleared = { record: null, entry: null, character: null };
+    if (pane.kind === 'shut') return { ...cleared, panel: 'closed' };
+    if (pane.kind === 'dossier') return { ...cleared, panel: null };
+    if (pane.kind === 'party') return { ...cleared, panel: 'party' };
+    if (pane.kind === 'journal') return { ...cleared, panel: 'journal', entry: pane.entry };
+    if (pane.kind === 'characters') return { ...cleared, panel: 'characters', character: pane.character };
+    return { ...cleared, panel: 'campaign', record: pane.record };
+}
+
+/** The Campaign panel is on screen: the records, a record, the party, or the journal. */
+export function hostsCampaign(pane: Pane): boolean {
+    return pane.kind === 'campaign' || pane.kind === 'party' || pane.kind === 'journal';
 }
 
 /** The current path with the pane written through withQuery. */
@@ -146,7 +164,11 @@ export function escapePane(path: string, query: Query = {}): { path: string; que
     const address = addressPane(path, query);
     const pane = address.pane;
     if (pane.kind === 'campaign' && pane.record) return atPane(path, query, { kind: 'campaign', record: null });
-    if (pane.kind === 'party' || pane.kind === 'campaign') return atPane(path, query, { kind: 'shut' });
+    if (pane.kind === 'journal' && pane.entry) return atPane(path, query, { kind: 'journal', entry: null });
+    if (pane.kind === 'characters' && pane.character) return atPane(path, query, { kind: 'characters', character: null });
+    if (pane.kind === 'party' || pane.kind === 'campaign' || pane.kind === 'journal' || pane.kind === 'characters') {
+        return atPane(path, query, { kind: 'shut' });
+    }
     if (pane.kind !== 'dossier') return null;
     const view = address.view;
     if (view.kind !== 'map' && view.kind !== 'orbit') return null;
@@ -204,6 +226,8 @@ export function campaignRedirect(path: string, query: Query = {}): Redirect | nu
 function samePane(previous: Pane, next: Pane): boolean {
     if (previous.kind !== next.kind) return false;
     if (previous.kind === 'campaign' && next.kind === 'campaign') return previous.record === next.record;
+    if (previous.kind === 'journal' && next.kind === 'journal') return previous.entry === next.entry;
+    if (previous.kind === 'characters' && next.kind === 'characters') return previous.character === next.character;
     return true;
 }
 
@@ -217,6 +241,12 @@ export function focusTarget(previous: Pane | null, next: Pane): FocusTarget {
     if (next.kind === 'campaign' && next.record) return 'record-title';
     if (previous.kind === 'campaign' && previous.record && next.kind === 'campaign') return 'record-row';
     if (next.kind === 'party') return 'party-tab';
+    if (next.kind === 'journal' && next.entry) return 'leave';
+    if (previous.kind === 'journal' && previous.entry && next.kind === 'journal') return 'leave';
+    if (next.kind === 'journal') return 'list-search';
+    if (next.kind === 'characters' && next.character) return 'leave';
+    if (previous.kind === 'characters' && previous.character && next.kind === 'characters') return 'leave';
+    if (next.kind === 'characters') return 'list-search';
     if (next.kind === 'dossier') return 'dossier-heading';
     if (next.kind === 'campaign') return 'list-search';
     if (previous.kind === 'dossier') return 'rail-system';

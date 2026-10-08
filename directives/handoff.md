@@ -5704,3 +5704,29 @@ mentions Roll20.
 - **Next:** the browser push (A's `characters/`, D's sheet files, E's screens and the
   journal screens). `router.ts` also holds B's parked `/admin/preview` route and C's
   dev route, whose targets are not being pushed: it goes by hunks.
+
+## 210. Pushed `6f0ec03` (the character server; the D1 migration applied). A's nav drag reported. The browser push rehearsed (2026-10-08)
+
+- **`6f0ec03`:** the character server. Johnny's first `db:migrate` failed with Cloudflare
+  7403 (wrangler's login); he fixed it and the migration ran before the push.
+- **A, `prompts/a_nav_drag.md`: accepted on the report and the gates** (1,057 tests, 0
+  fail, build green; the frames were not looked at by the orchestrator). Every world and
+  moon drawn at the held arrival as the Moons-reveal wireframe with a low teal fill (a
+  filled disc under 10 px; a ring with a tick for a body that stays within its own
+  disc); the vanished tail explained (the picture dimmed and cleared route marks the
+  preview never redrew; `picturePreview` now emits every leg for the picture); laying
+  against editing; a press on a body or a right-click ends laying (`stopLaying`, one
+  line to make it add the course); `grab` / `grabbing`; the readout clear of the tags;
+  worst frame 3.6 ms in a drag. Seen signed in on A's own ports. A noted its wire-vs-tint
+  pair was shot on a refused drop, so it shows no dated hologram.
+- **The browser push, rehearsed on a clean tree (rules regenerated there):**
+  `findings/push/characters_browser_files.txt` (57 files by path: A's `characters/` and
+  nav drag, D's sheet and wiring, E's character and journal screens, C's dev harness,
+  the shared shell files, their tests) and `findings/push/characters_router.patch`
+  (`router.ts` without B's parked `/admin/preview` line). **Left out, parked:** B's
+  truth-build files, `release_seal`, `TruthPreview.vue`, `scripts/dev_make_admin.js`.
+  Scratch copy of `6f0ec03`: `tsc -p apps/api` exit 0, `vue-tsc` exit 0, `vite build`
+  done, 1,052 tests, 1,039 pass, 0 fail, 13 skipped, check clean.
+- **This is the first time the journal's screens, the character sheet, live Characters
+  and the new dragging go live.** After it, `router.ts` shows as modified locally (B's
+  one parked line).

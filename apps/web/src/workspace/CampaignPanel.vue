@@ -8,7 +8,9 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { addressPane, atPane, type Pane } from '../shell/pane.ts';
-import type { CampaignRecordType } from '@voyage/shared';
+import type { CampaignEntryKind, CampaignRecordType } from '@voyage/shared';
+import { entriesNewestFirst } from '../campaign/journal.ts';
+import { registerCommand } from '../shell/registry.ts';
 import { session } from '../account/session.ts';
 import { campaign } from '../campaign/store.ts';
 import { isOnline, observeSize, onOnlineChange } from '../platform/browser.ts';
@@ -25,6 +27,9 @@ import { ensureCampaign, openFailed, retryCampaign } from './opening.ts';
 import { typeInfo } from './records.ts';
 import RecordPage from './RecordPage.vue';
 import SignInCard from './SignInCard.vue';
+import { createEntry, justMade } from './journal/create.ts';
+import EntryPage from './journal/EntryPage.vue';
+import JournalList from './journal/JournalList.vue';
 
 const props = defineProps<{
     open: boolean;
@@ -32,8 +37,10 @@ const props = defineProps<{
     truthVersion: string;
     /** The record the address names, or null for the list. */
     recordId: string | null;
-    /** The tab the address names: the records, or the party. */
-    tab: 'records' | 'party';
+    /** The tab the address names: the records, the party, or the journal. */
+    tab: 'records' | 'party' | 'journal';
+    /** The journal entry the address names, or null for the list. */
+    entryId: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -68,8 +75,8 @@ const status = computed(() => {
 });
 
 /** The date beside the search bar was pressed: the field opens as soon as the panel can show it. */
-watch(() => [editDateNext.value, status.value, props.recordId, props.open] as const, () => {
-    if (!editDateNext.value || !props.open || status.value !== 'ready' || props.recordId) return;
+watch(() => [editDateNext.value, status.value, props.recordId, props.entryId, props.open] as const, () => {
+    if (!editDateNext.value || !props.open || status.value !== 'ready' || props.recordId || props.entryId) return;
     editDateNext.value = false;
     void nextTick(() => { if (clockLine.value) clockLine.value.edit(); });
 }, { flush: 'post' });
@@ -81,16 +88,31 @@ const shownRecord = computed(() => {
 const title = computed(() => shownRecord.value && span.value !== 'full' ? shownRecord.value.name : 'Campaign');
 /** The tabs' counts and words. */
 const recordCount = computed(() => Object.values(campaign.records).filter((record) => !record.deleted).length);
+const journalCount = computed(() => {
+    void campaign.seq;
+    return entriesNewestFirst().length;
+});
 const partyLine = computed(() => (campaign.settings ? partyWords(campaign.settings.party, campaign.records) : ''));
 
-/** The records tab, or the party's: each is an address, so Back works. */
-function showTab(tab: 'records' | 'party'): void {
-    pushPane(tab === 'party' ? { kind: 'party' } : { kind: 'campaign', record: null });
+const TABS = ['records', 'party', 'journal'] as const;
+
+/** The records tab, the party's, or the journal's: each is an address, so Back works. */
+function showTab(tab: 'records' | 'party' | 'journal'): void {
+    if (tab === 'party') pushPane({ kind: 'party' });
+    else if (tab === 'journal') pushPane({ kind: 'journal', entry: null });
+    else pushPane({ kind: 'campaign', record: null });
+}
+
+function samePane(now: Pane, pane: Pane): boolean {
+    if (now.kind !== pane.kind) return false;
+    if (now.kind === 'campaign' && pane.kind === 'campaign') return now.record === pane.record;
+    if (now.kind === 'journal' && pane.kind === 'journal') return now.entry === pane.entry;
+    return true;
 }
 
 function pushPane(pane: Pane): void {
     const now = addressPane(route.path, route.query).pane;
-    if (now.kind === pane.kind && (now.kind !== 'campaign' || pane.kind !== 'campaign' || now.record === pane.record)) return;
+    if (samePane(now, pane)) return;
     void router.push(atPane(route.path, route.query, pane));
 }
 
@@ -98,7 +120,8 @@ function onTabKey(event: KeyboardEvent): void {
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
     event.preventDefault();
     event.stopPropagation();
-    const next = props.tab === 'party' ? 'records' : 'party';
+    const at = TABS.indexOf(props.tab);
+    const next = TABS[(at + (event.key === 'ArrowRight' ? 1 : TABS.length - 1)) % TABS.length];
     focusTab = true;
     showTab(next);
 }
@@ -140,6 +163,16 @@ function showMap(): void {
 /** The list, or a record, on the view that is already open. */
 function go(id: string | null): void {
     pushPane({ kind: 'campaign', record: id });
+}
+
+function goEntry(id: string | null): void {
+    pushPane({ kind: 'journal', entry: id });
+}
+
+function makeEntry(kind: CampaignEntryKind): void {
+    if (!online.value) return;
+    const id = createEntry(kind);
+    if (id) goEntry(id);
 }
 
 function create(type: CampaignRecordType): void {
@@ -196,7 +229,7 @@ watch(span, () => { void nextTick(() => { bindSize(); publish(); }); });
  * record at its name, and back in the list on the row that was open (or the search).
  */
 watch(() => props.recordId, (now, was) => {
-    if (!props.open) return;
+    if (!props.open || props.tab === 'journal') return;
     void nextTick(() => {
         const el = panelElement();
         if (!el) return;
@@ -213,15 +246,58 @@ watch(() => props.recordId, (now, was) => {
     });
 });
 
+watch(() => props.entryId, (now, was) => {
+    if (!props.open || props.tab !== 'journal') return;
+    if (now && justMade.value && justMade.value.id === now) return;
+    void nextTick(() => {
+        const el = panelElement();
+        if (!el) return;
+        let target: HTMLElement | null = null;
+        if (now) {
+            const found = campaign.journal[now];
+            if (found && found.kind === 'note') target = el.querySelector<HTMLElement>('.jn-read');
+            else target = el.querySelector<HTMLElement>('.jn-entry .edit.is-title .edit-view');
+        } else {
+            const undo = document.querySelector<HTMLElement>('.toast-act');
+            if (undo) target = undo;
+            else {
+                for (const row of el.querySelectorAll<HTMLElement>('.camp-row')) if (row.dataset.id === was) target = row;
+                if (!target) target = el.querySelector<HTMLElement>('.camp-search input, .camp-first .ui-btn');
+            }
+        }
+        if (target) target.focus();
+    });
+});
+
+let stopCommands: (() => void) | null = null;
+
+function bindCommands(): void {
+    if (stopCommands) stopCommands();
+    stopCommands = null;
+    if (props.tab !== 'journal') return;
+    const make = (kind: CampaignEntryKind) => () => { makeEntry(kind); };
+    const offs = [
+        registerCommand({ id: 'journal-new-session', name: 'New session', runnable: () => online.value, run: make('session') }),
+        registerCommand({ id: 'journal-new-note', name: 'New note', runnable: () => online.value, run: make('note') }),
+        registerCommand({ id: 'journal-new-handout', name: 'New handout', runnable: () => online.value, run: make('handout') }),
+        registerCommand({ id: 'journal-new-rumour', name: 'New rumour', runnable: () => online.value, run: make('rumor') }),
+    ];
+    stopCommands = () => { for (const off of offs) off(); };
+}
+
+watch(() => props.tab, bindCommands);
+
 onMounted(() => {
     online.value = isOnline();
     stopOnline = onOnlineChange((now) => { online.value = now; });
+    bindCommands();
     bindSize();
     void nextTick(publish);
     void load();
 });
 
 onBeforeUnmount(() => {
+    if (stopCommands) stopCommands();
     if (stopSize) stopSize();
     if (stopOnline) stopOnline();
     emit('width', 0);
@@ -243,18 +319,21 @@ defineExpose({ remeasure: publish });
       @span="chooseSpan"
     >
       <template v-if="eyebrow" #eyebrow>{{ eyebrow }}</template>
-      <div class="camp" :data-span="span" :data-status="status" :data-view="recordId ? 'record' : tab === 'party' ? 'party' : 'list'">
+      <div class="camp" :data-span="span" :data-status="status" :data-view="entryId ? 'entry' : recordId ? 'record' : tab === 'party' ? 'party' : tab === 'journal' ? 'journal' : 'list'">
         <SignInCard v-if="!signedIn" />
         <template v-else>
-          <div v-if="status === 'ready' && (!recordId || span === 'full')" class="camp-tabs" role="tablist" aria-label="Campaign">
+          <div v-if="status === 'ready' && ((!recordId && !entryId) || span === 'full')" class="camp-tabs" role="tablist" aria-label="Campaign">
             <button type="button" role="tab" class="camp-tab" :aria-selected="tab === 'records' ? 'true' : 'false'" :tabindex="tab === 'records' ? 0 : -1" @click="showTab('records')" @keydown="onTabKey">
               <Icon name="book-sparkles" :size="12" />Records <b>{{ recordCount }}</b>
             </button>
             <button type="button" role="tab" class="camp-tab" :aria-selected="tab === 'party' ? 'true' : 'false'" :tabindex="tab === 'party' ? 0 : -1" @click="showTab('party')" @keydown="onTabKey">
               <Icon name="shuttle-space" :size="12" />Party <small>{{ partyLine }}</small>
             </button>
+            <button type="button" role="tab" class="camp-tab" :aria-selected="tab === 'journal' ? 'true' : 'false'" :tabindex="tab === 'journal' ? 0 : -1" @click="showTab('journal')" @keydown="onTabKey">
+              <Icon name="book-atlas" :size="12" />Journal <b>{{ journalCount }}</b>
+            </button>
           </div>
-          <ClockLine v-if="status === 'ready' && (!recordId || span === 'full')" ref="clockLine" :read-only="!online" />
+          <ClockLine v-if="status === 'ready' && ((!recordId && !entryId) || span === 'full')" ref="clockLine" :read-only="!online" />
           <p v-if="!online" class="camp-strip" role="status">
             You are offline. This is what was loaded; changes wait until you are back.
           </p>
@@ -266,6 +345,13 @@ defineExpose({ remeasure: publish });
             <li v-for="n in 4" :key="n"><i></i><span><i></i><i></i><i></i></span></li>
           </ul>
           <PartyPanel v-else-if="tab === 'party' && !recordId" :read-only="!online" @map="showMap" />
+          <div v-else-if="span === 'full' && tab === 'journal'" class="camp-split">
+            <JournalList ref="list" :selected="entryId" follow :read-only="!online" @open="goEntry" @create="makeEntry" @map="showMap" />
+            <div class="camp-detail">
+              <EntryPage v-if="entryId" :id="entryId" beside :read-only="!online" @back="goEntry(null)" @map="showMap" />
+              <p v-else class="camp-hint">Choose an entry to read it here.</p>
+            </div>
+          </div>
           <div v-else-if="span === 'full'" class="camp-split">
             <CampaignList ref="list" :selected="recordId" :read-only="!online" @open="go" @create="create" @map="showMap" />
             <div class="camp-detail">
@@ -273,6 +359,8 @@ defineExpose({ remeasure: publish });
               <p v-else class="camp-hint">Choose a record to read it here.</p>
             </div>
           </div>
+          <EntryPage v-else-if="entryId" :id="entryId" :beside="false" :read-only="!online" @back="goEntry(null)" @map="showMap" />
+          <JournalList v-else-if="tab === 'journal'" ref="list" :selected="null" :follow="false" :read-only="!online" @open="goEntry" @create="makeEntry" @map="showMap" />
           <RecordPage v-else-if="recordId" :id="recordId" :beside="false" :read-only="!online" @back="go(null)" @map="showMap" />
           <CampaignList v-else ref="list" :selected="null" :read-only="!online" @open="go" @create="create" @map="showMap" />
         </template>
@@ -344,12 +432,14 @@ defineExpose({ remeasure: publish });
 }
 
 /* A record's page fills the panel, so its foot sits at the bottom. */
-.camp[data-view="record"]:not([data-span="full"]) {
+.camp[data-view="record"]:not([data-span="full"]),
+.camp[data-view="entry"]:not([data-span="full"]) {
   display: flex;
   flex-direction: column;
 }
 
-.camp[data-view="record"]:not([data-span="full"]) > .rec {
+.camp[data-view="record"]:not([data-span="full"]) > .rec,
+.camp[data-view="entry"]:not([data-span="full"]) > .jn-entry {
   flex: 1 1 auto;
 }
 

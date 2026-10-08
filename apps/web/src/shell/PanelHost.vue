@@ -5,7 +5,7 @@
  */
 import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { addressPane, atPane, escapePane, focusTarget, type FocusTarget, type Pane } from './pane.ts';
+import { addressPane, atPane, escapePane, focusTarget, hostsCampaign, type FocusTarget, type Pane } from './pane.ts';
 import { frame, onFrame, setPaneEscape, type ViewFrame } from './frame.ts';
 
 const route = useRoute();
@@ -16,19 +16,28 @@ live.value = frame();
 
 const shown = computed(() => addressPane(route.path, route.query).pane);
 const dossierOpen = computed(() => shown.value.kind === 'dossier');
-const campaignOpen = computed(() => shown.value.kind === 'campaign' || shown.value.kind === 'party');
+const campaignOpen = computed(() => hostsCampaign(shown.value));
+const charactersOpen = computed(() => shown.value.kind === 'characters');
 const campaignRecord = computed(() => (shown.value.kind === 'campaign' ? shown.value.record : null));
-const campaignTab = computed((): 'records' | 'party' => (shown.value.kind === 'party' ? 'party' : 'records'));
+const campaignTab = computed((): 'records' | 'party' | 'journal' => {
+    if (shown.value.kind === 'party') return 'party';
+    if (shown.value.kind === 'journal') return 'journal';
+    return 'records';
+});
+const journalEntry = computed(() => (shown.value.kind === 'journal' ? shown.value.entry : null));
 
 const dossierLive = ref(false);
 const campaignLive = ref(false);
+const charactersLive = ref(false);
 watch(shown, (pane) => {
     if (pane.kind === 'dossier') dossierLive.value = true;
-    if (pane.kind === 'campaign' || pane.kind === 'party') campaignLive.value = true;
+    if (hostsCampaign(pane)) campaignLive.value = true;
+    if (pane.kind === 'characters') charactersLive.value = true;
 }, { immediate: true });
 
 const DossierPanel = defineAsyncComponent(() => import('../dossier/DossierPanel.vue'));
 const CampaignPanel = defineAsyncComponent(() => import('../workspace/CampaignPanel.vue'));
+const CharactersPanel = defineAsyncComponent(() => import('../characters/screens/CharactersPanel.vue'));
 
 const active = computed(() => live.value !== null && live.value.kind !== 'none');
 
@@ -48,6 +57,10 @@ function onDossierWidth(px: number): void {
 
 function onCampaignWidth(px: number): void {
     if (campaignOpen.value) applyWidth(px);
+}
+
+function onCharactersWidth(px: number): void {
+    if (charactersOpen.value) applyWidth(px);
 }
 
 watch(shown, (pane) => {
@@ -99,6 +112,7 @@ function focusSoon(target: FocusTarget): void {
         let el: HTMLElement | null = null;
         if (target === 'dossier-heading') el = document.querySelector('.dossier-root .panel.is-open h1');
         else if (target === 'party-tab') el = document.querySelector('.campaign-root .panel.is-open .camp-tab[aria-selected="true"]');
+        else if (shown.value.kind === 'characters') el = document.querySelector('.characters-root .panel.is-open .ch-search input, .characters-root .panel.is-open .ch-first .ui-btn');
         else el = document.querySelector('.campaign-root .panel.is-open .camp-search input, .campaign-root .panel.is-open .camp-first .ui-btn');
         if (!el) return false;
         if (target === 'dossier-heading') el.tabIndex = -1;
@@ -167,8 +181,15 @@ onBeforeUnmount(() => {
     :truth-version="live.truthVersion"
     :record-id="campaignRecord"
     :tab="campaignTab"
+    :entry-id="journalEntry"
     @close="closePane"
     @width="onCampaignWidth"
+  />
+  <CharactersPanel
+    v-if="active && charactersLive && live"
+    :open="charactersOpen"
+    @close="closePane"
+    @width="onCharactersWidth"
   />
   </div>
 </template>

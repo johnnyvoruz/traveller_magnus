@@ -203,6 +203,7 @@ export function shipTags(marks: readonly ShipMark[], hits: readonly Hit[], opene
 /** What a press on the picture means. */
 export type PressMeans =
     | { kind: 'ship'; id: string }
+    | { kind: 'grab'; from: 'route' | 'preview'; index: number }
     | { kind: 'waypoint'; key: string }
     | { kind: 'point' }
     | { kind: 'body'; key: string }
@@ -211,13 +212,21 @@ export type PressMeans =
 /**
  * The one rule for a press on the picture (Johnny, 2026-10-06: "Ship not being selected on
  * click"). **A ship under the press is always that ship**, in or out of plotting: it is
- * never a waypoint, and never the body it stands beside. Only then does plotting decide:
+ * never a waypoint, and never the body it stands beside. Then an existing waypoint, which
+ * is picked up and never has a second point laid on it. Only then does plotting decide:
  * while plotting, a body under the press, or one within the readout's snap of it, is a
  * waypoint, and open picture is a point; otherwise a body is a selection and open picture
  * is nothing.
  */
-export function pressMeans(under: { ship: string | null; body: string | null; beside: string | null; plotting: boolean }): PressMeans {
+export function pressMeans(under: {
+    ship: string | null;
+    body: string | null;
+    beside: string | null;
+    plotting: boolean;
+    waypoint?: { from: 'route' | 'preview'; index: number } | null;
+}): PressMeans {
     if (under.ship) return { kind: 'ship', id: under.ship };
+    if (under.waypoint) return { kind: 'grab', from: under.waypoint.from, index: under.waypoint.index };
     if (under.plotting) {
         const key = under.body ?? under.beside;
         return key ? { kind: 'waypoint', key } : { kind: 'point' };
@@ -225,14 +234,50 @@ export function pressMeans(under: { ship: string | null; body: string | null; be
     return under.body ? { kind: 'body', key: under.body } : { kind: 'nothing' };
 }
 
-/** What the live plotter has under the pointer: a body, a point in AU, a ship (a press takes it), or nothing the picture can answer. */
-export type PlotHover = { key: string } | { point: { x: number; y: number } } | { ship: string } | { blank: true };
+/**
+ * Laying continues after a press in open space. A body arrival and a right-click end it.
+ * The right-click is this one false. To add the course on right-click instead, call
+ * addCourse() where the caller stops because this returned false.
+ */
+export function layingContinues(press: 'body' | 'space' | 'right'): boolean {
+    return press === 'space';
+}
+
+/** What the live plotter has under the pointer: a body, a point in AU, a ship (a press takes it), an existing waypoint, or nothing the picture can answer. */
+export type PlotHover =
+    | { key: string }
+    | { point: { x: number; y: number } }
+    | { ship: string }
+    | { blank: true }
+    | { grab: { from: 'route' | 'preview'; index: number } };
 
 /** Whether two readings are the same place, so a still pointer says nothing twice. */
 export function sameHover(a: PlotHover | null, b: PlotHover | null): boolean {
     if (a === null || b === null) return a === b;
+    if ('grab' in a) return 'grab' in b && a.grab.from === b.grab.from && a.grab.index === b.grab.index;
     if ('key' in a) return 'key' in b && a.key === b.key;
     if ('ship' in a) return 'ship' in b && a.ship === b.ship;
     if ('blank' in a) return 'blank' in b;
     return 'point' in b && a.point.x === b.point.x && a.point.y === b.point.y;
+}
+
+/** One ship tag, or a "+N more" tag, as a box the readout keeps clear of. Picture pixels, origin top-left. */
+export function tagBoxes(
+    tags: readonly { id: string; name: string; x: number; kneeY: number }[],
+    more: readonly { count: number; x: number; kneeY: number }[],
+    notes: Readonly<Record<string, string>>,
+    measure: (text: string, font: string) => number,
+    fontCode: string,
+): { x: number; y: number; w: number; h: number }[] {
+    const nameFont = '700 11px ' + fontCode;
+    const noteFont = '400 10px ' + fontCode;
+    const box = (text: string, note: string, x: number, kneeY: number): { x: number; y: number; w: number; h: number } => {
+        const nameW = measure(text.toUpperCase(), nameFont);
+        const noteW = Math.min(220, note ? measure(note, noteFont) : 0);
+        return { x, y: kneeY - 17, w: Math.max(nameW, noteW) + 18, h: TAG_HEIGHT };
+    };
+    return [
+        ...tags.map((tag) => box(tag.name, notes[tag.id] ?? '', tag.x, tag.kneeY)),
+        ...more.map((item) => box('+' + item.count, 'more here', item.x, item.kneeY)),
+    ];
 }

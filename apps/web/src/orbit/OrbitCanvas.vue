@@ -24,7 +24,7 @@ import { OrbitRenderer, type DiscPainter, type FlightPreview } from './OrbitRend
 import type { Layers, Mode, Picture } from './picture.ts';
 import { OrbitStage } from './stage.ts';
 import { publishOrbitClock } from './running.ts';
-import { bodiesAtOf, datedBodies, pressMeans, sameHover, sceneBodies, shipMarkOf, shipStanding, shipTags as tagsFor, type PlotHover, type ShipStanding, type ShipTag, type TagsMore } from './ship_marks.ts';
+import { bodiesAtOf, datedBodies, pressMeans, sameHover, sceneBodies, shipMarkOf, shipStanding, shipTags as tagsFor, tagBoxes, type PlotHover, type ShipStanding, type ShipTag, type TagsMore } from './ship_marks.ts';
 import { BODY_SNAP_PX, pictureOfAu, placeAtPicture, type PictureLayout } from './distance.ts';
 import { pictureBodies, placeShips, shipAt, waypointAt, standInMarks, type PlotReadout, type ShipMark, type ShipTrack } from './ships.ts';
 import ShipTags from './ShipTags.vue';
@@ -47,8 +47,12 @@ const props = defineProps<{
     tracks?: readonly ShipTrack[] | null;
     /** Plotting overlay. Omitted, it stays off except under the dev stand-in. */
     plot?: PlotReadout | null;
-    /** Plotting mode (K12 2b): the hairlines follow the pointer, measured from the ship `plotFrom`; a body clicked is a destination, not a selection. */
+    /** Laying (K12 2b): the hairlines follow the pointer, measured from the ship `plotFrom`; a body clicked is a destination, not a selection. */
     plotting?: boolean;
+    /** A ship is in hand. Waypoints can be picked up, and a right-click stops laying. The browser menu is suppressed only then. */
+    inHand?: boolean;
+    /** Arrival of the point in hand. Every world and moon is drawn there. Null, the ghosts stay quiet. */
+    holdAt?: number | null;
     plotFrom?: string | null;
     /** The flight being previewed, one leg or a course, or null. Omitted, the dev stand-in may show one. */
     preview?: FlightPreview | null;
@@ -88,6 +92,8 @@ const emit = defineEmits<{
     wayGrab: [from: 'route' | 'preview', index: number];
     /** The waypoint was let go: dropped where the pointer is, or put back (a press that did not move, or a cancel). */
     wayDrop: [moved: boolean];
+    /** Right-click while a ship is in hand: stop laying. */
+    stopPlotting: [];
 }>();
 
 const route = useRoute();
@@ -168,11 +174,21 @@ function setHover(x: number, y: number): void {
 
 // ---- Pointer input ----------------------------------------------------------------------
 
-let press: { x: number; y: number; lastX: number; lastY: number; moved: boolean; way: boolean } | null = null;
+let press: {
+    x: number;
+    y: number;
+    lastX: number;
+    lastY: number;
+    moved: boolean;
+    way: boolean;
+    grabbed: { from: 'route' | 'preview'; index: number } | null;
+} | null = null;
+const grabbing = ref(false);
+const grabHover = ref(false);
 
 /** The drawn waypoint under a press, when it may be picked up: the preview's first (it is drawn over the route), then the route's. */
 function wayUnder(at: { x: number; y: number }): { from: 'route' | 'preview'; index: number } | null {
-    if (!props.plotting || !renderer) return null;
+    if ((!props.plotting && !props.inHand) || !renderer) return null;
     const drawn = renderer.waypoints();
     const mark = props.plotFrom ? shipMarkOf(lastMarks, props.plotFrom) : undefined;
     const ship = mark ? { x: mark.x, y: mark.y } : null;
@@ -189,15 +205,67 @@ function local(event: MouseEvent): { x: number; y: number } {
     return { x: event.clientX - rect.left, y: event.clientY - rect.top };
 }
 
+/** Bodies where they will be at the held arrival, so a press lands on the hologram. */
+let futureHits: { key: string; x: number; y: number; r: number }[] = [];
+
+function refreshFuture(): void {
+    futureHits = [];
+    const current = plan.value;
+    const last = lastFrame;
+    if (typeof props.holdAt !== 'number' || !current || !last) return;
+    if (last.picture.mode === 'row' || last.picture.mode === 'column' || last.picture.mode === 'blend') return;
+    const scene = layoutScene(current, last.view, props.holdAt);
+    const take = (set: Scene['primary']): void => {
+        if (!set) return;
+        for (const at of set.bodies) {
+            if (at.world.belt) continue;
+            futureHits.push({ key: at.world.key, x: at.x, y: at.y, r: at.r });
+            for (const moon of at.moons) {
+                if (moon.moon.ring || !(moon.r > 0)) continue;
+                futureHits.push({ key: moon.moon.key, x: moon.x, y: moon.y, r: moon.r });
+            }
+        }
+    };
+    take(scene.primary);
+    for (const companion of scene.companions) take(companion.set);
+}
+
+function futureBody(at: { x: number; y: number }): string | null {
+    let best: { key: string; d: number } | null = null;
+    for (const hit of futureHits) {
+        const d = Math.hypot(at.x - hit.x, at.y - hit.y);
+        if (d > Math.max(BODY_SNAP_PX, hit.r)) continue;
+        if (!best || d < best.d) best = { key: hit.key, d };
+    }
+    return best ? best.key : null;
+}
+
+function onContext(event: MouseEvent): void {
+    if (!props.inHand) return;
+    event.preventDefault();
+    emit('stopPlotting');
+}
+
 function onDown(event: PointerEvent): void {
     if (event.button !== 0 || !canvasEl.value) return;
     canvasEl.value.setPointerCapture(event.pointerId);
-    // A ship under the press is the ship (pressMeans); otherwise a waypoint under it is picked up, and the camera stays.
     const at = local(event);
+    const hit = stage.pick(at.x, at.y);
+    const future = futureBody(at);
     const way = props.shipTags && shipAt(tagMarks, at) ? null : wayUnder(at);
-    press = { x: event.clientX, y: event.clientY, lastX: event.clientX, lastY: event.clientY, moved: false, way: way !== null };
-    if (way) emit('wayGrab', way.from, way.index);
+    // One rule: a ship, then an existing waypoint, then plotting.
+    const means = pressMeans({
+        ship: props.shipTags ? shipAt(tagMarks, at) : null,
+        body: future ?? (hit ? hit.key : null),
+        beside: props.plotting && !hit && !future ? bodyBeside(at) : null,
+        plotting: props.plotting === true,
+        waypoint: way,
+    });
+    const grabbed = means.kind === 'grab' ? { from: means.from, index: means.index } : null;
+    press = { x: event.clientX, y: event.clientY, lastX: event.clientX, lastY: event.clientY, moved: false, way: grabbed !== null, grabbed };
+    if (grabbed) emit('wayGrab', grabbed.from, grabbed.index);
     dragging.value = true;
+    grabbing.value = grabbed !== null;
 }
 
 function onMove(event: PointerEvent): void {
@@ -224,6 +292,7 @@ function onUp(event: PointerEvent): void {
     const downAt = { x: press.x, y: press.y };
     press = null;
     dragging.value = false;
+    grabbing.value = false;
     if (canvasEl.value && canvasEl.value.hasPointerCapture(event.pointerId)) canvasEl.value.releasePointerCapture(event.pointerId);
     if (way) {
         // Let go within the snap of where it was picked up, it is put back: its mark is a body at another date, not a place to drop on.
@@ -236,13 +305,16 @@ function onUp(event: PointerEvent): void {
     const at = local(event);
     const hit = stage.pick(at.x, at.y);
     // One rule (ship_marks.ts pressMeans): a ship under the press is always that ship, in or out of plotting.
+    const future = futureBody(at);
     const means = pressMeans({
         ship: props.shipTags ? shipAt(tagMarks, at) : null,
-        body: hit ? hit.key : null,
+        body: future ?? (hit ? hit.key : null),
         // A press just beside a body is that body (ruled 2026-10-06): a point is only ever set in open picture.
-        beside: props.plotting && !hit ? bodyBeside(at) : null,
+        beside: props.plotting && !hit && !future ? bodyBeside(at) : null,
         plotting: props.plotting === true,
+        waypoint: props.shipTags && shipAt(tagMarks, at) ? null : wayUnder(at),
     });
+    if (means.kind === 'grab') return;
     if (means.kind === 'ship') emit('ship', means.id);
     // Plotting: a body is a destination, and the camera stays where it is.
     else if (means.kind === 'waypoint') emit('plot', means.key);
@@ -484,21 +556,28 @@ let lastHover: PlotHover | null = null;
 
 function readHover(): void {
     let next: PlotHover | null = null;
-    if (props.plotting && pointer && (!press || press.way)) {
+    const follow = (props.plotting || props.inHand) && pointer && (!press || press.way);
+    if (follow && pointer) {
         const hit = stage.pick(pointer.x, pointer.y);
+        const future = futureBody(pointer);
         const means = pressMeans({
             ship: props.shipTags ? shipAt(tagMarks, pointer) : null,
-            body: hit ? hit.key : null,
-            beside: hit ? null : bodyBeside(pointer),
-            plotting: true,
+            body: future ?? (hit ? hit.key : null),
+            beside: hit || future ? null : bodyBeside(pointer),
+            plotting: props.plotting === true || press?.way === true,
+            waypoint: press?.way ? null : (props.shipTags && shipAt(tagMarks, pointer) ? null : wayUnder(pointer)),
         });
-        if (means.kind === 'ship') next = { ship: means.id };
-        else if (means.kind === 'waypoint') next = { key: means.key };
-        else {
-            const au = pointUnder(pointer);
-            next = au ? { point: au } : { blank: true };
-        }
+        if (means.kind === 'grab') next = { grab: { from: means.from, index: means.index } };
+        else if (means.kind === 'ship') next = { ship: means.id };
+        else if (props.plotting || press?.way) {
+            if (means.kind === 'waypoint') next = { key: means.key };
+            else if (means.kind === 'point' || means.kind === 'nothing') {
+                const au = pointUnder(pointer);
+                next = au ? { point: au } : { blank: true };
+            } else next = { blank: true };
+        } else next = { blank: true };
     }
+    grabHover.value = next !== null && 'grab' in next;
     if (sameHover(lastHover, next)) return;
     lastHover = next;
     emit('plotHover', next);
@@ -536,12 +615,29 @@ function marksFor(picture: Picture, clockDays: number): readonly ShipMark[] | un
     return standInMarks(props.hexKey, clockDays, picture, places, flight ?? undefined, placeAu, partyBody);
 }
 
+function tagAvoid(): { x: number; y: number; w: number; h: number }[] {
+    const canvas = canvasEl.value;
+    if (!props.shipTags || !canvas) return [];
+    const code = getComputedStyle(canvas).getPropertyValue('--font-code').trim() || 'monospace';
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return [];
+    const measure = (text: string, font: string): number => {
+        ctx.save();
+        ctx.font = font;
+        const width = ctx.measureText(text).width;
+        ctx.restore();
+        return width;
+    };
+    return tagBoxes(shipTagList.value.tags, shipTagList.value.more, props.shipNotes ?? {}, measure, code);
+}
+
 function plotFor(marks: readonly ShipMark[] | undefined): PlotReadout | null | undefined {
     if (props.plot !== undefined) return props.plot;
     if (props.plotting) {
         if (!pointer) return undefined;
         const from = marks && props.plotFrom ? shipMarkOf(marks, props.plotFrom) : undefined;
-        return { x: pointer.x, y: pointer.y, from: from ? { x: from.x, y: from.y } : null };
+        const avoid = tagAvoid();
+        return { x: pointer.x, y: pointer.y, from: from ? { x: from.x, y: from.y } : null, ...(avoid.length ? { avoid } : {}) };
     }
     if (standInCount() <= 0 || !pointer) return undefined;
     const party = marks ? marks.find((mark) => mark.kind === 'party') : undefined;
@@ -647,14 +743,21 @@ function paint(clockDays: number, time: number): void {
     const started = now();
     const ships = marksFor(frame.picture, clockDays);
     placeTags(frame.picture, frame.view);
+    refreshFuture();
     readHover();
     const plot = plotFor(ships);
     const preview = standPreview(clockDays);
     const stored = standRoute(clockDays);
+    const hotWay = press?.grabbed ?? (lastHover && 'grab' in lastHover ? lastHover.grab : null);
+    const tint = route.query.ghostTint;
+    const hologram = (Array.isArray(tint) ? tint[0] : tint) === '1' ? 'tint' as const : 'wire' as const;
     renderer.draw(current, frame.picture, frame.view, {
         selected, days: clockDays, time, motion: !reduced, layers: stage.layers,
         ...(ships && ships.length > 0 ? { ships } : {}),
         ...(plot ? { plot } : {}),
+        ...(typeof props.holdAt === 'number' ? { holdAt: props.holdAt } : {}),
+        ...(hotWay ? { hotWay } : {}),
+        ...(hologram === 'tint' ? { hologram } : {}),
         ...(preview ? { preview } : {}),
         ...(stored ? { route: stored } : {}),
         ...(props.dockTag ? { dockTag: true } : {}),
@@ -697,7 +800,7 @@ watch(() => props.layers, (layers) => {
     stale = true;
 }, { deep: true });
 
-watch(() => [route.query.campaignStandIn, route.query.ghost, route.query.line, route.query.point, route.query.course, props.ships, props.plot, props.tracks, props.plotting, props.plotFrom, props.preview, props.route, props.wayFixed, props.dockTag, props.shipTags] as const, () => { stale = true; });
+watch(() => [route.query.campaignStandIn, route.query.ghost, route.query.ghostTint, route.query.line, route.query.point, route.query.course, props.ships, props.plot, props.tracks, props.plotting, props.inHand, props.holdAt, props.plotFrom, props.preview, props.route, props.wayFixed, props.dockTag, props.shipTags] as const, () => { stale = true; });
 
 /** js/system_viewer.js:2084-2092: the canvas says which layout it shows. */
 const canvasLabel = computed(() => {
@@ -763,8 +866,9 @@ defineExpose({ paint, fit, shipStatus, waypoints });
     <canvas
       ref="canvasEl"
       class="orbit-canvas"
-      :class="{ 'is-dragging': dragging, 'is-over': hover !== null && !dragging }"
+      :class="{ 'is-grabbing': grabbing, 'is-grab': grabHover && !grabbing, 'is-dragging': dragging && !grabbing, 'is-over': hover !== null && !dragging && !grabHover }"
       :aria-label="canvasLabel"
+      @contextmenu="onContext"
       @pointerdown="onDown"
       @pointermove="onMove"
       @pointerup="onUp"

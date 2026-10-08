@@ -9,25 +9,14 @@
 // @ts-expect-error -- the generated wrapper is JavaScript with no declaration; its shape is checked below.
 import generated from '../../../../packages/engines/src/generated/rules/mgt2e_ship_sheet_fields.js';
 
-export type SheetFieldType = 'text' | 'checkbox';
+import {
+    byPage, fieldsOf, filledCount, isTall, seriesOf, sheetWith, valueOf, withValue,
+    type SheetField, type SheetFieldType, type SheetRules, type SheetValue, type SheetValues,
+} from './sheet_fields.ts';
 
-export type SheetField = {
-    name: string;
-    page: number;
-    type: SheetFieldType;
-    box: { x: number; y: number; w: number; h: number };
-    section: string;
-};
-
-export type SheetRules = {
-    source: string;
-    pageSize: { width: number; height: number };
-    fields: SheetField[];
-};
-
-/** A value as stored: text for a text field, true or false for a checkbox. */
-export type SheetValue = string | boolean;
-export type SheetValues = Record<string, SheetValue>;
+// The machinery both sheets share lives in sheet_fields.ts; it is passed on here so the ship sheet's callers read one module.
+export { fieldsOf, filledCount, isTall, valueOf, withValue };
+export type { SheetField, SheetFieldType, SheetRules, SheetValue, SheetValues };
 
 /** One field as the page draws it: the PDF's name, and the label the layout shows for it. */
 export type Cell = { field: SheetField; label: string };
@@ -53,11 +42,8 @@ export type Section = {
     blocks: (Row | Table)[];
 };
 
-const SERIES = /^(.*\S)\s+(\d+)$/;
 /** Two boxes within this many points down the page share a row. */
 const ROW_TOLERANCE = 4;
-/** A text box this tall is several lines. */
-const TALL = 30;
 
 export const SHEET_RULES: SheetRules = generated as SheetRules;
 
@@ -68,20 +54,6 @@ export function sheetFields(): SheetField[] {
 /** The field a name denotes, or null. */
 export function fieldNamed(name: string): SheetField | null {
     return SHEET_RULES.fields.find((field) => field.name === name) ?? null;
-}
-
-export function isTall(field: SheetField): boolean {
-    return field.type === 'text' && field.box.h >= TALL;
-}
-
-function seriesOf(name: string): { base: string; n: number } | null {
-    const found = SERIES.exec(name);
-    return found ? { base: found[1], n: Number(found[2]) } : null;
-}
-
-function byPage(a: SheetField, b: SheetField): number {
-    // Down the page (the PDF's y grows upward), then across it.
-    return b.box.y - a.box.y || a.box.x - b.box.x;
 }
 
 /** The sections in page order, each in the order its fields fall on the page. */
@@ -174,43 +146,7 @@ function blocksOf(fields: readonly SheetField[]): (Row | Table)[] {
     return blocks;
 }
 
-/** The value held for a field, in the type the field takes. */
-export function valueOf(values: SheetValues | null | undefined, field: SheetField): SheetValue {
-    const held = values ? values[field.name] : undefined;
-    if (field.type === 'checkbox') return held === true;
-    return typeof held === 'string' ? held : '';
-}
-
-/** The values with one changed; an empty text or an unticked box is dropped, so the sheet stores only what was written. */
-export function withValue(values: SheetValues | null | undefined, field: SheetField, value: SheetValue): SheetValues {
-    const next: SheetValues = { ...(values ?? {}) };
-    const keep = field.type === 'checkbox' ? value === true : typeof value === 'string' && value.trim() !== '';
-    if (keep) next[field.name] = field.type === 'checkbox' ? true : (value as string);
-    else delete next[field.name];
-    return next;
-}
-
 /** The record's sheet with these field values, the rest of the sheet (the deck plan) beside them. */
 export function sheetWithFields(sheet: unknown, values: SheetValues): Record<string, unknown> {
-    const base = sheet && typeof sheet === 'object' && !Array.isArray(sheet) ? { ...(sheet as Record<string, unknown>) } : {};
-    base.fields = values;
-    base.schema = 'mgt2e_ship_sheet@1';
-    return base;
-}
-
-/** The field values a sheet holds, or null when it holds none. */
-export function fieldsOf(sheet: unknown): SheetValues | null {
-    if (!sheet || typeof sheet !== 'object' || Array.isArray(sheet)) return null;
-    const held = (sheet as Record<string, unknown>).fields;
-    if (!held || typeof held !== 'object' || Array.isArray(held)) return null;
-    const out: SheetValues = {};
-    for (const [name, value] of Object.entries(held as Record<string, unknown>)) {
-        if (typeof value === 'string' || typeof value === 'boolean') out[name] = value;
-    }
-    return out;
-}
-
-/** How many fields hold a value. */
-export function filledCount(values: SheetValues | null): number {
-    return values ? Object.keys(values).length : 0;
+    return sheetWith(sheet, values, 'mgt2e_ship_sheet@1');
 }

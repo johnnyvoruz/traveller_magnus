@@ -1394,15 +1394,17 @@ test('a stored route is solid, a preview continues from where they part, and an 
     const edited = place('Test II', days + 50);
     assert.ok(Math.hypot(dashed[0].from[0] - early.x, dashed[0].from[1] - early.y) < 0.05);
     assert.ok(Math.hypot(dashed[0].to[0] - edited.x, dashed[0].to[1] - edited.y) < 0.05);
-    assert.equal(courseSegments(both.calls, '', 0.72).length, 1);
-    assert.equal(courseSegments(both.calls, '', 0.28).length, 2);
+    // The preview owns the waypoint it redraws. The stored shape under it is not drawn.
+    // The waypoint after that preview stays, numbered, at full strength.
+    assert.equal(courseSegments(both.calls, '', 0.72).length, 2);
+    assert.equal(courseSegments(both.calls, '', 0.28).length, 0);
     const times = (calls, text) => said(calls).filter((item) => item === text).length;
     assert.equal(times(shown.calls, '1'), 1);
     assert.equal(times(shown.calls, '2'), 1);
     assert.equal(times(shown.calls, 'plan'), 1);
     assert.equal(times(both.calls, '1'), 1);
     assert.equal(times(both.calls, '2'), 0);
-    assert.equal(times(both.calls, 'plan'), 0);
+    assert.equal(times(both.calls, 'plan'), 1);
     assert.equal(times(both.calls, 'edit'), 1);
     assert.ok(aimed);
 
@@ -1429,12 +1431,55 @@ test('a stored route is solid, a preview continues from where they part, and an 
     assert.equal(renderer.layersBusy, false);
     renderer.draw(plan, picture, VIEW, state);
     const spots = renderer.waypoints();
-    assert.equal(spots.route.length, 3);
-    assert.equal(spots.route[1].index, 1);
+    assert.equal(spots.route.length, 2);
+    assert.equal(spots.route[0].index, 0);
+    assert.equal(spots.route[1].index, 2);
     assert.equal(spots.preview.length, 1);
     assert.equal(spots.preview[0].index, 1);
-    assert.equal(waypointAt(spots.route, { x: spots.route[1].x, y: spots.route[1].y }, { x: 30, y: 40 }), 1);
+    assert.equal(waypointAt(spots.preview, { x: spots.preview[0].x, y: spots.preview[0].y }, { x: 30, y: 40 }), 1);
     assert.equal(waypointAt(spots.route, { x: 30, y: 40 }, { x: 30, y: 40 }), null);
+});
+
+test('a drag of the first, a middle and the last waypoint of a four-leg route keeps four numbers', () => {
+    const plan = planSystem(testSystem(), HEX_KEY);
+    const days = 1000;
+    const world = (name) => plan.worlds.find((item) => item.name === name);
+    const first = world('Test I');
+    const second = world('Test II');
+    const third = world('Test B-I');
+    const point = { x: 1.2, y: 0.4 };
+    const moved = { x: 2.4, y: -0.6 };
+    const route = [
+        { toKey: first.key, departs: days, arrives: days + 10 },
+        { point, departs: days + 10, arrives: days + 20 },
+        { toKey: second.key, departs: days + 20, arrives: days + 40 },
+        { toKey: third.key, departs: days + 40, arrives: days + 60, tag: 'end' },
+    ];
+    const party = [{ id: 'stand-party', name: 'Far Margin', kind: 'party', shape: 'triangle', x: 30, y: 40 }];
+    const drag = (index, leg) => {
+        const preview = route.map((item, at) => (at === index ? { ...item, ...leg, tag: at === 3 ? 'end' : undefined } : { ...item, tag: at === 3 ? 'end' : undefined }));
+        return drawn({ route, preview, ships: party, holdAt: days + 15 });
+    };
+    const numbers = (calls) => ['1', '2', '3', '4'].filter((n) => said(calls).includes(n));
+    assert.deepEqual(numbers(drag(0, { point: moved, toKey: undefined }).calls), ['1', '2', '3', '4']);
+    assert.deepEqual(numbers(drag(1, { point: moved }).calls), ['1', '2', '3', '4']);
+    assert.deepEqual(numbers(drag(3, { toKey: first.key }).calls), ['1', '2', '3', '4']);
+});
+
+test('a held arrival draws a moon at where it will be, and a body that barely moves holds its place', () => {
+    const plan = planSystem(testSystem(), HEX_KEY);
+    const days = 1000;
+    const quiet = drawn({ days });
+    const held = drawn({ days, holdAt: days + 20, preview: { toKey: plan.worlds.find((item) => item.name === 'Test II').key, departs: days, arrives: days + 20, tag: 'then' } });
+    const signalMoves = (calls) => calls.filter((call) => call.op === 'moveTo' && call.stroke === 'signal').length;
+    assert.ok(signalMoves(held.calls) > signalMoves(quiet.calls));
+    const sceneNow = layoutScene(plan, { ...VIEW, moons: true, jump: true }, days);
+    const sceneThen = layoutScene(plan, { ...VIEW, moons: true, jump: true }, days + 20);
+    const moonNow = sceneNow.primary.bodies.flatMap((body) => body.moons).find((moon) => moon.moon.name === 'Test II-a');
+    const moonThen = sceneThen.primary.bodies.flatMap((body) => body.moons).find((moon) => moon.moon.name === 'Test II-a');
+    const nearThen = held.calls.some((call) => call.op === 'moveTo' && Math.hypot(call.args[0] - moonThen.x, call.args[1] - moonThen.y) < moonThen.r + 8);
+    assert.ok(nearThen);
+    assert.ok(Math.hypot(moonThen.x - moonNow.x, moonThen.y - moonNow.y) > 0);
 });
 
 test('dockTag leaves a docked designator undrawn', () => {

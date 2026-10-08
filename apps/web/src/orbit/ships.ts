@@ -55,6 +55,9 @@ export type BodyPoint = { x: number; y: number };
  */
 export type BodiesAt = (anchor: CampaignAnchor, days: number) => BodyPoint | null;
 
+/** A rectangle in picture pixels: CSS pixels of the canvas, origin at its top-left. */
+export type ReadoutBox = { x: number; y: number; w: number; h: number };
+
 /** The plotting overlay for one frame. Off when the painter is not given one. */
 export type PlotReadout = {
     /** Pointer, in picture units. */
@@ -62,6 +65,11 @@ export type PlotReadout = {
     y: number;
     /** The mark the distance is measured from, in picture units. */
     from?: BodyPoint | null;
+    /**
+     * Boxes the hairline readout keeps clear of, in the same picture pixels as `x` and `y`.
+     * Absent or empty, placement is unchanged.
+     */
+    avoid?: readonly ReadoutBox[];
 };
 
 /**
@@ -223,13 +231,6 @@ function primaryAu(au: number): string {
     return (au >= 10 ? au.toFixed(1) : au.toFixed(2)) + ' AU';
 }
 
-/**
- * One line: how far the pointer is from the primary, in AU. When a ship mark was given,
- * the distance from that mark follows, in km under a tenth of an AU and in AU above.
- * Empty when the picture has no place for the pointer. Picture coordinates are never written.
- */
-export type ReadoutBox = { x: number; y: number; w: number; h: number };
-
 export type ReadoutPlace = {
     x: number;
     y: number;
@@ -247,14 +248,16 @@ function boxesOverlap(a: ReadoutBox, b: ReadoutBox): boolean {
 
 /**
  * Where the hairline readout is drawn. Right and below the pointer, flipped to stay
- * on the canvas. When that box would cross a mark's name, it moves to the pointer's
- * other side. `names` are the name boxes already painted, in picture pixels.
+ * on the canvas. When that box would cross a mark's name, or a box in `avoid`, it
+ * moves to the pointer's other side. `names` and `avoid` are in picture pixels.
+ * Absent or empty, `avoid` changes nothing.
  */
 export function readoutPlace(
     plot: { x: number; y: number },
     text: { w: number; h: number },
     canvas: { w: number; h: number },
     names: readonly ReadoutBox[],
+    avoid?: readonly ReadoutBox[],
 ): ReadoutPlace {
     const boxAt = (right: boolean, below: boolean): ReadoutBox => ({
         x: right ? plot.x + READOUT_X : plot.x - READOUT_X - text.w,
@@ -262,7 +265,8 @@ export function readoutPlace(
         w: text.w,
         h: text.h,
     });
-    const hits = (box: ReadoutBox) => names.some((name) => boxesOverlap(box, name));
+    const obstacles = avoid && avoid.length > 0 ? names.concat(avoid) : names;
+    const hits = (box: ReadoutBox) => obstacles.some((name) => boxesOverlap(box, name));
     let right = !(plot.x + READOUT_X + text.w > canvas.w);
     let below = !(plot.y + READOUT_BELOW > canvas.h - 16);
     if (hits(boxAt(right, below))) {
@@ -278,6 +282,11 @@ export function readoutPlace(
     };
 }
 
+/**
+ * One line: how far the pointer is from the primary, in AU. When a ship mark was given,
+ * the distance from that mark follows, in km under a tenth of an AU and in AU above.
+ * Empty when the picture has no place for the pointer. Picture coordinates are never written.
+ */
 export function plotText(plot: PlotReadout, frame?: PlotFrame | null): string {
     if (!frame) return '';
     const here = placeAtPicture({ x: plot.x, y: plot.y }, frame.view, frame.plan, frame.mode, frame.bodies, frame.days);

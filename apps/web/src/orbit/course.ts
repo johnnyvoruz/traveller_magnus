@@ -125,6 +125,30 @@ export function coursePreview(legs: readonly PlannedLeg[], tag: (leg: PlannedLeg
     return out;
 }
 
+/**
+ * The picture's preview. Every leg is emitted, so a waypoint after the one in hand stays
+ * on the picture. A leg with no hours stands one hour after it leaves: that time is for
+ * the mark only. The console keeps the real hours and does not read this.
+ */
+export function picturePreview(legs: readonly PlannedLeg[], tag: (leg: PlannedLeg) => string, fallback: number): { toKey?: string; point?: { x: number; y: number }; departs: number; arrives: number; tag?: string }[] {
+    const out: { toKey?: string; point?: { x: number; y: number }; departs: number; arrives: number; tag?: string }[] = [];
+    let cursor = fallback;
+    for (const leg of legs) {
+        const to = leg.waypoint.to;
+        const base = typeof to === 'string' ? { toKey: to } : { point: { x: to.x, y: to.y } };
+        const departs = leg.departs ?? cursor;
+        const arrives = leg.arrives !== null && leg.arrives > departs ? leg.arrives : departs + HOUR;
+        cursor = arrives;
+        out.push({ ...base, departs, arrives });
+    }
+    if (out.length) {
+        const last = legs[out.length - 1];
+        const words = tag(last);
+        if (words) out[out.length - 1].tag = words;
+    }
+    return out;
+}
+
 /** "3 d 4 h", "5 h 12 m", "12 m", "under a minute": how long until an arrival. */
 export function toGoWords(days: number): string {
     const minutes = Math.max(0, Math.round(days * 24 * 60));
