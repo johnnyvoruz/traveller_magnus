@@ -22,7 +22,7 @@ keeps the contract's shape; nobody stops for a ruling unless a production risk f
    (place, links, the referee's notes) stays in the game.
 
 **Not in the MVP:** portraits and images on a Character; publishing or copying through
-the marketplace; Roll20; locks on parts of a sheet; a history of a box's past values; a
+the marketplace; a dice roller (backlog: our own 3D physics dice, there is no Roll20 API); locks on parts of a sheet; a history of a box's past values; a
 player seeing anything of a referee's universe; new sign-in providers (it uses whatever
 sign-in is switched on); any rule that computes a box (every box is typed).
 

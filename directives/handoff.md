@@ -5583,3 +5583,72 @@ tests, 931 pass, 0 fail, 12 skipped, check clean.
   fail, 12 skipped, check clean. The surface parity script was last run by C (map
   mismatches 0; exit 1 only on the `allowedDrift` shade row, the driver's defect).
 - After the push: check the live surface chunk for `enhanced-cities-4`.
+
+## 203. A live defect found by D: changes made while a save is in flight are lost (2026-10-08)
+
+- **What:** commit a change, then two more while the first save travels: the later ones
+  revert and never reach the server, with the conflict toast. Every record edit, link,
+  journal entry, settings and clock change rides the same queue, so the live ship sheet
+  has it today. D lost 7 of 110 boxes at 120 ms a box against a 20 ms local server.
+  Repro: `findings/lost_save_repro.mjs.txt`.
+- **Where, as D read it (`apps/web/src/campaign/commit.ts`, A's):** no flush is scheduled
+  after a send finishes, and a change queued during a send keeps a stale `baseRev`, so
+  the server calls it a conflict and the client takes the server's copy.
+- **`prompts/a_lost_save.md`:** A fixes it at its next green point, ahead of the rest of
+  the character client, and reports it alone so it can be pushed alone. **No sheet goes
+  live before this fix.**
+- **D's detach ruling is in** (the last boxes seen are the frozen copy). D's hookup of
+  Part 2 to A's store waits for B's schema file to load: the tree is red while A and B
+  are mid-step (`packages/shared/src/schemas/character.ts:224` throws on import;
+  `characters/store.ts` has an unused import). Expected mid-flight; nothing is rehearsed
+  from the whole tree until both report.
+
+## 204. Backlog, from Johnny: the ice caps on the surface map look wrong (2026-10-08)
+
+"Make a note there's some visual bugs with the surface map that we will have to come back
+to, but I don't want to deal with it now so put it in the backlog; it's these stupid
+icecaps, maybe our new generator will fix them later." His screenshot: a dossier's
+surface map, Enhanced, captioned "Water, ice from 50°": the ice is drawn as hard
+horizontal bands across the top and bottom rows of the unfolded map, cutting straight
+through land and sea with a ruler edge, and patchy white blotches sit mid-latitude.
+Recorded in `plan.md` "After 5". Not to be worked now. Agent C's lane when it is; it may
+be overtaken by the generator rebuild. Also confirmed: the city lights push is
+`f4ddd4c`.
+
+## 205. Backlog corrected by Johnny: no Roll20 API; a 3D physics dice roller of our own (2026-10-08)
+
+"There is no API to Roll20, so the backlog item there is to have a 3D physics dice roller
+implementation that copies Roll20; there's a 3D dice roller library we can use for that.
+Not priority, way backlog." `plan.md` "After 5" rewritten to that; the two mentions of
+Roll20 in `character_mvp.md` and `prompts/b_characters.md` reworded. Nothing in the app
+mentions Roll20.
+
+## 206. The character MVP's first turn: every part on disk; the lost-save fix rehearsed for a push of its own (2026-10-08)
+
+- **A, the lost-save fix: accepted.** `adoptRev` moves a still-queued change onto the
+  applied rev, and the flush is rescheduled when a send ends with rows waiting (diff
+  read). `tests/web/campaign_inflight.test.js`. **Push by path,
+  `findings/push/lost_save_files.txt` (2 files)**; scratch copy of `f4ddd4c`: `vue-tsc`
+  exit 0, `vite build` done, the campaign tests 59 of 59.
+- **A, the character client: accepted on the report** (`apps/web/src/characters/`: list,
+  handle, live with replay and fallback, sharing, `bindSheet`; 13 tests). A backed its
+  half-built hologram out of `OrbitRenderer.ts`; the nav drag has the readout `avoid`
+  boxes and `holdAt` only.
+- **B, the character server: complete on disk, accepted on the report.**
+  `packages/shared/src/schemas/character.ts`, D1 migration `0009_characters.sql`,
+  `CharacterRoom`, the routes, a `CHARACTER` binding and migration tag `v2` in
+  `wrangler.toml`; one live round trip with two cookies passed on B's own port.
+  Departures in `findings/characters_contract_ready.md` (a role in `hello.you`; 404 for
+  no access, 403 for an editor on an owner route). **Johnny applies the D1 migration:
+  `npm --workspace apps/api run db:migrate`.**
+- **E, the screens: accepted.** The Characters pane, new, duplicate, pregens, share by
+  link, claim, with D's sheet fed by A's `bindSheet`; a set, its ack and the other side's
+  update were seen with two sessions. E fixed the dev proxy for the socket
+  (`vite.config.ts`: `ws` and the Origin rewrite) and made sign-in return to the claim
+  path. Not clicked: duplicate, pregens, revoke, hand over ownership, a keyboard pass.
+  **E's question, a defect for B:** the invite URL is written `http://traveller.voyage/…`.
+- **Red build:** one unused `@ts-expect-error` in D's `workspace/character_sheet.ts`.
+- **`prompts/character_mvp_close.md`** has each agent's last piece: D the hookup and the
+  build; B the link's address and the server's push list (kept apart from the parked
+  truth-build files); E the unclicked controls, then the journal's second pass; A back to
+  `a_nav_drag.md`. Then two pushes: the server (with the migration), then the browser.

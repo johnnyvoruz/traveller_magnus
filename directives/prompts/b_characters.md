@@ -60,5 +60,5 @@ stuck process holds 8787): one round trip with two cookies and a live socket.
 
 `apps/web`; the campaign record's `sheet` reference (Agent D writes it through the
 existing record save; the server already stores `sheet` as given); portraits; the
-marketplace; Roll20; new sign-in providers. No deploy, no production call, no git. Stop
+marketplace; a dice roller; new sign-in providers. No deploy, no production call, no git. Stop
 and report, with the two lines on the parked steps first.

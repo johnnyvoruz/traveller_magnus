@@ -225,6 +225,9 @@ export async function flushCampaign(): Promise<void> {
             if (item.table === 'settings') settingsHandled = true;
             if (item.table === 'clock' && campaign.clock) campaign.clock.rev = item.rev;
             if (item.table === 'clock') clockHandled = true;
+            // A change queued while this save was in flight still carries the rev it was
+            // built from. The applied rev is the one the next save has to name.
+            adoptRev(item.table, item.id, item.rev);
         }
         if (result.conflicts.length) {
             for (const item of result.conflicts) {
@@ -250,7 +253,30 @@ export async function flushCampaign(): Promise<void> {
     } finally {
         sending = false;
         pending.value = queueHasRows();
+        // A change that arrived during the request never armed its own timer.
+        if (queueHasRows() && !cancelRetry) scheduleFlush();
     }
+}
+
+/** Moves a still-queued change onto the rev the server just applied for that row. */
+function adoptRev(table: 'records' | 'links' | 'settings' | 'clock' | 'journal', id: string, rev: number): void {
+    if (table === 'records') {
+        const queued = queuedRecords.get(id);
+        if (queued) queued.baseRev = rev;
+        return;
+    }
+    if (table === 'links') {
+        const queued = queuedLinks.get(id);
+        if (queued) queued.baseRev = rev;
+        return;
+    }
+    if (table === 'journal') {
+        const queued = queuedJournal.get(id);
+        if (queued) queued.baseRev = rev;
+        return;
+    }
+    if (table === 'settings' && queuedSettings) queuedSettings.baseRev = rev;
+    if (table === 'clock' && queuedClock) queuedClock.baseRev = rev;
 }
 
 function restoreAll(

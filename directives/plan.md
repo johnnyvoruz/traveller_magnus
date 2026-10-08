@@ -234,14 +234,31 @@ accounts and journals.
      finishes the leg and an edited route begins at its end. A mid-flight change needs a
      rule from Johnny first: the supplied formula is from rest to rest, and a ship under
      way is moving.
-- **Characters backlog (Johnny, 2026-10-07; after live sheets).** A character sheet that
-  talks to a virtual tabletop: "they could click on their character sheet in Voyage and
-  then if they have some ID of their current game it could send an API call to Roll20."
-  Nothing is known here about what Roll20's API accepts, from where, or with what
-  authorisation: that is research before any design. The live sheet design
-  (`findings/live_sheet_design.md`) leaves one place for it: a character may carry
-  references to outside games. Pregens for a virtual convention are part of the live
-  sheet design itself, not backlog.
+- **Surface map backlog (Johnny, 2026-10-08): the ice caps.** On the dossier's unfolded
+  surface map (Enhanced, "Water, ice from 50°") the ice is a hard horizontal band across
+  the top and bottom rows that cuts straight through land and sea, with patchy white
+  blotches at mid-latitudes. "I don't want to deal with it now… maybe our new generator
+  will fix them later." Agent C's lane when it is taken up; check first whether the
+  generator rebuild has overtaken it (handoff §204).
+- **The planetary generator, rebuilt (Johnny, 2026-10-07).** "I want to essentially
+  rebuild that whole planetary generator anyway to catch this stuff and build it right
+  from the start with a foundational way that I understand vs. inherit from the old
+  fork." He also does not want corrections processed on the server across the whole
+  chart again ("so damn slow and we're not being smart about it"). Until he describes
+  it: v6 stays staged and unreleased, no derived build is run, and the liquid and climate
+  rulings are parked (handoff §199).
+- **Characters backlog (Johnny; far back, not a priority): a 3D dice roller on the
+  sheet.** First raised 2026-10-07 as a link to Roll20 ("click on their character sheet
+  in Voyage… send an API call to Roll20"). **Corrected by Johnny 2026-10-08: "there is
+  no API to Roll20, so the backlog item there is to have a 3D physics dice roller
+  implementation that copies Roll20; there's a 3D dice roller library we can use for
+  that."** So: no outside integration; our own roller, in the page, rolled from the
+  character sheet, with physics dice like Roll20's, built on an existing 3D dice
+  library (which one is to be chosen when this is taken up: licence, size, no engine
+  code in the browser is unaffected since it is not an engine). What a roll means (target
+  numbers, effect, DMs) is `campaign_manager_plan.md` §10 Q6, still Johnny's to supply:
+  until then it rolls dice and interprets nothing. Pregens for a virtual convention are
+  part of the character MVP itself, not backlog.
 
 ## 5. Order and milestones
 
