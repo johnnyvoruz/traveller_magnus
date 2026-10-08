@@ -24,6 +24,49 @@ So, two things:
    instance, including through the free marketplace (publish a snapshot; whoever adds
    it gets their own).
 
+## And later the same night: characters are first-class, and sharing goes both ways
+
+> "Where will I find the character sheet on the live server right now? It should be
+> attached to new person yeah? Or should we create a new campaign element called
+> characters? Characters are so important though that they maybe are 'Player Characters'
+> or something, so either the person can have their own account and build it on their
+> account, or the ref can build it on their account and then give someone else access on
+> their account. Let's build for both ways. So like for a virtual con, there can be
+> pregens, and then we could figure out Roll20 API stuff later with the character sheet,
+> so they could click on their character sheet in Voyage and then if they have some ID of
+> their current game it could send an API call to Roll20."
+
+This widens the brief. Design for all of it:
+- **A character is its own thing, not only a person record with a sheet.** The
+  orchestrator's reading, for you to test and improve: a **Character** is the shared
+  object (the sheet, name, portrait, summary; G17), owned by an account; in a game it
+  appears as a person record that points at it and carries that game's own layer. So
+  People in a campaign stay as they are, a player character is a person backed by a
+  Character, and a Character can exist with no campaign at all.
+- **Either side may be the owner.** A player builds one on their own account and shares
+  it with a referee. Or a referee builds one on their own account and gives someone
+  else access. Both must work, with the same sheet, the same live editing and the same
+  rights model; say what "owner" can do that an editor cannot (delete, share onward,
+  hand over ownership, take it out of a game).
+- **Pregens for a virtual convention.** A referee makes several characters, hands each
+  to a player who may have arrived that minute: a link that is claimed by signing in.
+  Design the hand-out (one link per character or one per table with a pick list; what a
+  claim gives: edit access, or ownership; what the referee still sees; what happens to
+  an unclaimed or abandoned one; handing the same pregen to a new player next slot,
+  fresh). The sign-in itself matters here: only X is switched on today, while the code
+  already knows Discord and Google (`apps/api/src/auth/options.ts`); Johnny has been
+  asked. Say what the hand-out needs from sign-in.
+- **A home for them.** Where an account sees "my characters" (those it owns, those
+  shared with it), reachable without opening a campaign, and how that sits beside
+  Records, Party and Journal in the campaign pane and in the shell's one panel system.
+  Words and placement only; Agent D designs the screens later.
+- **Roll20, later, not designed here.** Leave one clean place for it: a character may
+  carry references to outside games (a service name and that game's id, supplied by the
+  player), and the sheet may one day send an action to it. Do not describe Roll20's API
+  from memory: list what would have to be found out (what their API accepts, from where,
+  with what authorisation) as open research, and design nothing that depends on the
+  answers.
+
 ## What the specs already hold: read these first
 
 - `slice_2_campaign.md` **K10** (copy between campaigns, "instanced") and **K11** (shared

@@ -93,6 +93,8 @@ export type GpuCube = {
     size: number;
     a: WebGLTexture;
     b: WebGLTexture;
+    /** Enhanced city cube. Absent on the vanilla path. */
+    c?: WebGLTexture | null;
     fbo: WebGLFramebuffer | null;
     bytes: number;
 };
@@ -127,6 +129,7 @@ export function attachBaker(gl: WebGL2RenderingContext): {
     measure: (profiles: BakeProfile[]) => Uint8Array[];
     makeCube: (size: number) => GpuCube;
     dropCube: (cube: GpuCube) => void;
+    charge: (cube: GpuCube, delta: number) => void;
     bakeFace: (profile: BakeProfile, stats: BakeStats, cube: GpuCube, face: number) => void;
     probeDraw: (profile: BakeProfile, stats: BakeStats, size: number, skipCheck: boolean) => void;
     warmupPipeline: (profile: BakeProfile, stats: BakeStats) => void;
@@ -369,8 +372,15 @@ export function attachBaker(gl: WebGL2RenderingContext): {
     function dropCube(cube: GpuCube): void {
         gl.deleteTexture(cube.a);
         gl.deleteTexture(cube.b);
+        if (cube.c) gl.deleteTexture(cube.c);
         if (cube.fbo) gl.deleteFramebuffer(cube.fbo);
         memory -= cube.bytes;
+    }
+
+    /** Adds the city-cube estimate after attach. dropCube subtracts cube.bytes. */
+    function charge(cube: GpuCube, delta: number): void {
+        cube.bytes += delta;
+        memory += delta;
     }
 
     /** js/planet_gl.js:916-926. Attachment 0 is cube A, attachment 1 is cube B. */
@@ -458,6 +468,7 @@ export function attachBaker(gl: WebGL2RenderingContext): {
         measure,
         makeCube,
         dropCube,
+        charge,
         bakeFace,
         probeDraw,
         warmupPipeline,

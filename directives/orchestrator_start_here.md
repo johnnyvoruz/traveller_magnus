@@ -273,6 +273,14 @@ file true: replace it, do not append to it.
   (`a_nav_drag.md`), holding D's orbit files; the live sheet design waits behind.** D is
   on `d_character_sheet_2.md` and stays out of `orbit/`. Open with Johnny: whether
   right-click should add the course rather than only stop the laying.
+- **§198 (2026-10-07, late).** Johnny delegated v6's three liquid questions ("do your
+  best"): provisional rows from the tables already in `rules/`, in
+  `b_liquid_policy_2.md` (B, after `b_hardening_2.md`; no build in it; v7 is one console
+  command for him later). **Characters are first-class:** a Character owned by either a
+  player or a referee, shared with the other, pregens claimed by link, a home outside
+  any campaign, Roll20 later as research; all in `a_live_sheet_design.md`'s new section.
+  The sheet itself is not live yet (D is building it on the person's page). Open with
+  Johnny: G22 (a claimed pregen shared or given) and D2 (Discord and Google sign-in).
 - **§197 (2026-10-07, late): B's three reports read.** K7b accepted, **its push
   rehearsed and offered** (`findings/push/k7b_files.txt`, 6 files); the journal's screens
   follow when E reports its second pass. The hardening is accepted and **held for one

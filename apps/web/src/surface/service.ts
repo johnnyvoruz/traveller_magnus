@@ -10,7 +10,7 @@
  * It does not wait for a tile. drawDisc paints the newest tile held for a key,
  * or returns false so the caller keeps its flat disc. A tile can arrive a later frame.
  */
-import { afterTask, blitImage, now, startSurfaceWorker } from '../platform/browser.ts';
+import { afterTask, blitImage, devicePixelRatio, now, startSurfaceWorker } from '../platform/browser.ts';
 import { SheetCache } from './cache.ts';
 import type {
     DiscBatchRequest,
@@ -38,6 +38,7 @@ import { openDiscLink, type DiscLink } from './disc_link.ts';
 import { clearDiscs, discHeld, retainDiscs } from './disc_hold.ts';
 import { discShadeRequest } from './disc_shade.ts';
 import { discRendererVersion } from './enhanced/bake.ts';
+import { cityLook } from './enhanced/city_look.ts';
 import type { DiscEnvelope } from './enhanced/delivery.ts';
 import type { ShadeRequest } from './vanilla/gl_shade.ts';
 import { cubeSizeFor } from './vanilla/gl_bake.ts';
@@ -398,7 +399,7 @@ function openDiscs(): DiscLink | null {
 function discEpochOf(request: DiscBatchRequest): string {
     const rows = request.discs.map((disc) => disc.key + ':' + String(cubeSizeFor(disc.radiusPx)));
     rows.sort();
-    return request.mode + '|' + rows.join(',');
+    return request.mode + '|' + (request.mode === 'enhanced' ? cityLook().id + '|' : '') + rows.join(',');
 }
 
 function advanceDiscs(request: DiscBatchRequest): DiscEnvelope {
@@ -418,7 +419,7 @@ export function prepareDiscs(request: DiscBatchRequest): SurfaceReply {
     if (request.discs.length === 0) return { status: 'unavailable', mode: request.mode, requestId };
     const shades: ShadeRequest[] = [];
     for (const disc of request.discs) {
-        const shade = discShadeRequest(request.timeSeconds, disc, request.mode);
+        const shade = discShadeRequest(request.timeSeconds, disc, request.mode, devicePixelRatio());
         if (shade) shades.push(shade);
     }
     const envelope = advanceDiscs(request);

@@ -649,6 +649,37 @@ another universe as its own instance, including through the free marketplace.
   unless shared.
 - **G19 (2026-10-07): yes.** A game keeps a frozen copy, marked as no longer live.
 
+### G21. v6's unresolved liquids (asked 2026-10-07; handoff §197, §198)
+
+Three questions: ice on airless worlds that are warm at their warmest; water on ordinary
+atmospheres outside 273 to 373 K; exotic atmospheres where no listed liquid is in range.
+
+**Answer (2026-10-07): "I want to move on from ice and stuff for now, so just do your
+best with 1 - 3."** Delegated. The orchestrator's provisional choices, from the tables
+already in `rules/` only, are in `prompts/b_liquid_policy_2.md` and marked provisional
+in the policy: below Water's melting point is Ice; a vacuum at or above it, or anything
+above the boiling point, is no free liquid; an exotic atmosphere with no listed liquid in
+range is Unknown Exotic Liquid. One edit changes any of them.
+
+### G22. A claimed pregen: shared or given? (asked 2026-10-07)
+
+A referee makes pregenerated characters for a convention and hands each to a player by a
+link.
+
+*Recommended: shared. The referee stays the owner and the player edits it live, so the
+pregen can be handed fresh to the next table; a "give it to them" control makes the
+player the owner when the referee wants that.*
+
+**Answer:**
+
+### D2, asked again 2026-10-07
+
+Players and convention tables need to sign in. Only X is switched on; the code already
+supports Discord and Google once their keys are set. *Recommended: switch both on before
+any player is invited.*
+
+**Answer:**
+
 ### G16 (answer)
 
 **Answer (2026-10-07): yes, and it is in `assets/`** (`Character Sheet 2026_fillable.pdf`

@@ -29,6 +29,16 @@ import { gasStats, STATS_BATCH, thresholdsFromStats, type DecodedThresholds } fr
 
 export type { BakeProfile, CubeFaces, GpuInfo, GpuSpan, LinkedProgram, ShadeRequest };
 
+/** Installed by the enhanced session. Null on the vanilla path, which never calls it. */
+export type CityBakePass = {
+    wants(profile: BakeProfile): boolean;
+    attach(gl: WebGL2RenderingContext, cube: GpuCube): void;
+    paintFace(gl: WebGL2RenderingContext, cube: GpuCube, profile: BakeProfile, face: number): void;
+    finish(gl: WebGL2RenderingContext, cube: GpuCube): void;
+    /** A, B or C. The worker calls this before a bake so the cube matches the draw. */
+    look?(index: number): void;
+};
+
 export type PublicThresholds = {
     sea: number;
     cloudEdge: number;
@@ -44,10 +54,14 @@ type World = {
     statsBytes: Uint8Array | null;
     cubes: Map<number, GpuCube>;
     job: { cube: GpuCube; face: number } | null;
+    /** A/B is finished and C is still painting. Unpublished until C completes. */
+    city: { cube: GpuCube; face: number } | null;
     lastFrame: number;
     near: number;
     want: number;
     lodCapped: boolean;
+    /** Look index the resident cubes were baked with. Unset until the first enhanced frame. */
+    bakedLook?: number;
 };
 
 export type DiscCapture = {
@@ -108,6 +122,8 @@ export type DiscBaker = {
      * is deleted. Bake programs and cubes are left as they are.
      */
     bindDraw: (program: LinkedProgram) => void;
+    /** Enhanced installs cube C. Vanilla leaves this null and allocates A and B only. */
+    setCityPass: (pass: CityBakePass | null) => void;
 };
 
 function publishThresholds(stats: WorldStats): PublicThresholds | null {
@@ -217,6 +233,7 @@ export function createDiscBaker(
     let timeUsed = 0;
     const worlds = new Map<string, World>();
     let tiles = new Map<string, DiscTile>();
+    let cityPass: CityBakePass | null = null;
     let programState: 'idle' | 'pending' | 'ready' = 'idle';
     let parallel: ParallelCompile | null = null;
     let opened: OpenProgram[] = [];
@@ -381,6 +398,7 @@ export function createDiscBaker(
                 statsBytes: null,
                 cubes: new Map(),
                 job: null,
+                city: null,
                 lastFrame: frame,
                 near: 0,
                 want: 32,
@@ -412,7 +430,7 @@ export function createDiscBaker(
         return [...worlds.entries()].map(([id, world]) => ({
             id,
             lastFrame: world.lastFrame,
-            bytes: [...world.cubes.values()].reduce((sum, cube) => sum + cube.bytes, 0),
+            bytes: [...world.cubes.values()].reduce((sum, cube) => sum + cube.bytes, 0) + (world.city ? world.city.cube.bytes : 0),
             jobBytes: world.job ? world.job.cube.bytes : 0,
         }));
     }
@@ -421,32 +439,61 @@ export function createDiscBaker(
         const world = worlds.get(id);
         const gpu = ops;
         if (!world) return;
-        if (gpu && !lost && !broken) {
-            for (const cube of world.cubes.values()) gpu.dropCube(cube);
-            if (world.job) gpu.dropCube(world.job.cube);
-        }
+        if (gpu && !lost && !broken) releaseGpu(world);
         worlds.delete(id);
     }
 
-    function allocate(size: number): GpuCube | null {
+    function releaseGpu(world: World): void {
+        const gpu = ops;
+        if (!gpu || lost || broken) return;
+        for (const cube of world.cubes.values()) gpu.dropCube(cube);
+        world.cubes.clear();
+        if (world.job) gpu.dropCube(world.job.cube);
+        world.job = null;
+        if (world.city) gpu.dropCube(world.city.cube);
+        world.city = null;
+    }
+
+    function wantsCity(profile: BakeProfile): boolean {
+        return cityPass != null && cityPass.wants(profile);
+    }
+
+    function allocate(size: number, withCity: boolean): GpuCube | null {
         const gpu = requireOps();
         const target = canvas;
+        const base = cubeBytes(size);
+        const extra = withCity ? base / 2 : 0;
         const used = gpu.memory() + (target ? atlasBytes(target.width, target.height) : 0);
-        const decision = reserve(used, cubeBytes(size), frame, ledger());
+        const decision = reserve(used, base + extra, frame, ledger());
         for (const id of decision.evict) dropWorld(id);
-        if (!decision.ok) return null;
-        return gpu.makeCube(size);
+        if (!decision.ok) {
+            if (withCity) return allocate(size, false);
+            return null;
+        }
+        const cube = gpu.makeCube(size);
+        if (extra && cityPass && gl) {
+            cityPass.attach(gl, cube);
+            gpu.charge(cube, extra);
+        }
+        return cube;
+    }
+
+    function paintCity(cube: GpuCube, profile: BakeProfile): void {
+        if (!cube.c || !cityPass || !gl) return;
+        for (let face = 0; face < 6; face++) cityPass.paintFace(gl, cube, profile, face);
+        cityPass.finish(gl, cube);
     }
 
     function paint32(world: World): void {
         const gpu = requireOps();
-        const cube = allocate(32);
+        const cube = allocate(32, wantsCity(world.profile));
         if (!cube) {
             world.lodCapped = true;
             return;
         }
         for (let face = 0; face < 6; face++) gpu.bakeFace(world.profile, world.stats, cube, face);
         gpu.finishCube(cube);
+        paintCity(cube, world.profile);
         world.cubes.set(32, cube);
     }
 
@@ -463,7 +510,11 @@ export function createDiscBaker(
                 has32: entry.world.cubes.has(32),
                 want: entry.want,
                 finished: [...entry.world.cubes.keys()],
-                job: entry.world.job ? { size: entry.world.job.cube.size, face: entry.world.job.face } : null,
+                job: entry.world.city
+                    ? { size: entry.world.city.cube.size, face: entry.world.city.face }
+                    : entry.world.job
+                        ? { size: entry.world.job.cube.size, face: entry.world.job.face }
+                        : null,
             })), now() - started, coarseId, FRAME_BAKE_MS);
             coarseId = decision.coarseId;
             const action = decision.action;
@@ -480,16 +531,33 @@ export function createDiscBaker(
                 continue;
             }
             if (action.kind === 'start') {
+                if (world.city) {
+                    gpu.dropCube(world.city.cube);
+                    world.city = null;
+                }
                 if (world.job) {
                     gpu.dropCube(world.job.cube);
                     world.job = null;
                 }
-                const cube = allocate(action.size);
+                const cube = allocate(action.size, wantsCity(world.profile));
                 if (!cube) {
                     world.lodCapped = true;
                     break;
                 }
                 world.job = { cube, face: 0 };
+                continue;
+            }
+            if (world.city && cityPass && gl) {
+                if (texels >= BAKE_BUDGET) break;
+                const pending = world.city;
+                cityPass.paintFace(gl, pending.cube, world.profile, pending.face);
+                texels += pending.cube.size * pending.cube.size;
+                pending.face += 1;
+                if (pending.face >= 6) {
+                    cityPass.finish(gl, pending.cube);
+                    world.cubes.set(pending.cube.size, pending.cube);
+                    world.city = null;
+                }
                 continue;
             }
             const job = world.job;
@@ -498,8 +566,13 @@ export function createDiscBaker(
             texels += job.cube.size * job.cube.size;
             if (job.face >= 6) {
                 gpu.finishCube(job.cube);
-                world.cubes.set(job.cube.size, job.cube);
-                world.job = null;
+                if (job.cube.c && cityPass) {
+                    world.city = { cube: job.cube, face: 0 };
+                    world.job = null;
+                } else {
+                    world.cubes.set(job.cube.size, job.cube);
+                    world.job = null;
+                }
             }
         }
     }
@@ -509,21 +582,12 @@ export function createDiscBaker(
         const target = canvas;
         const used = gpu.memory() + (target ? atlasBytes(target.width, target.height) : 0);
         const rows = ledger();
-        for (const id of evictIds(used, frame, rows)) {
-            const world = worlds.get(id);
-            if (!world) continue;
-            for (const cube of world.cubes.values()) gpu.dropCube(cube);
-            if (world.job) gpu.dropCube(world.job.cube);
-            worlds.delete(id);
-        }
+        for (const id of evictIds(used, frame, rows)) dropWorld(id);
     }
 
     function clear(): void {
         if (!ops || broken) return;
-        for (const world of worlds.values()) {
-            for (const cube of world.cubes.values()) ops.dropCube(cube);
-            if (world.job) ops.dropCube(world.job.cube);
-        }
+        for (const world of worlds.values()) releaseGpu(world);
         worlds.clear();
         tiles = new Map();
     }
@@ -573,12 +637,18 @@ export function createDiscBaker(
         if (!ready() || !requests.length || !canvas || !shade) return tiles;
         const started = now();
         frame += 1;
+        const lookReq = requests.find((req) => req.cityLook != null);
+        if (lookReq && lookReq.cityLook != null && cityPass && cityPass.look) cityPass.look(lookReq.cityLook);
         const adopted: { req: ShadeRequest; world: World }[] = [];
         requests.forEach((req, index) => {
             timeUsed = req.uTime;
             const world = adopt(req.profile);
             world.near = req.near ?? index;
             world.want = cubeSizeFor(req.radius);
+            if (req.cityLook != null && world.bakedLook !== req.cityLook) {
+                if (world.cubes.size > 0 || world.job || world.city) releaseGpu(world);
+                world.bakedLook = req.cityLook;
+            }
             adopted.push({ req, world });
         });
         bakeBodies(adopted.map((item) => ({ world: item.world, want: item.world.want })));
@@ -627,6 +697,11 @@ export function createDiscBaker(
                 profile: item.req.profile,
                 port: shadePort(item.world.stats),
                 cube,
+                cloudForce: item.req.cloudForce,
+                cityOn: item.req.cityOn,
+                diag: item.req.diag,
+                cssDiameter: item.req.cssDiameter,
+                cityLook: item.req.cityLook,
             });
         }
         const gpu = requireOps();
@@ -692,20 +767,40 @@ export function createDiscBaker(
         }
         gpu.finishCube(cube);
         gpu.sync();
+        if (wantsCity(world.profile) && cityPass && gl) {
+            const extra = cubeBytes(size) / 2;
+            cityPass.attach(gl, cube);
+            gpu.charge(cube, extra);
+            for (let face = 0; face < 6; face++) {
+                const faceStarted = now();
+                cityPass.paintFace(gl, cube, world.profile, face);
+                gpu.sync();
+                maxFaceMs = Math.max(maxFaceMs, now() - faceStarted);
+            }
+            cityPass.finish(gl, cube);
+            gpu.sync();
+        }
         const ms = now() - started;
+        const previous = world.cubes.get(size);
+        if (previous && previous !== cube) gpu.dropCube(previous);
         world.cubes.set(size, cube);
         return { ms, maxFaceMs };
     }
 
     function dropCubes(id: string): void {
         const world = worlds.get(id);
-        const gpu = ops;
-        if (!world || !gpu) return;
-        for (const cube of world.cubes.values()) gpu.dropCube(cube);
-        world.cubes.clear();
-        if (world.job) {
-            gpu.dropCube(world.job.cube);
-            world.job = null;
+        if (!world || !ops) return;
+        releaseGpu(world);
+    }
+
+    function setCityPass(pass: CityBakePass | null): void {
+        if (cityPass === pass) return;
+        cityPass = pass;
+        if (!pass) return;
+        for (const [id, world] of worlds) {
+            if (!pass.wants(world.profile)) continue;
+            const missing = [...world.cubes.values()].some((cube) => !cube.c) || (world.job != null && !world.job.cube.c);
+            if (missing) dropCubes(id);
         }
     }
 
@@ -755,7 +850,7 @@ export function createDiscBaker(
             if (programState !== 'ready') return true;
             const world = worlds.get(id);
             if (!world) return false;
-            if (world.job) return true;
+            if (world.job || world.city) return true;
             return !world.lodCapped && world.want > 32 && !world.cubes.has(world.want);
         },
         hasCube: (id, size) => !!worlds.get(id)?.cubes.has(size),
@@ -796,6 +891,7 @@ export function createDiscBaker(
         failed: () => broken || disposed,
         gl: () => gl,
         bindDraw,
+        setCityPass,
         loseForTest: () => {
             if (!loseExt) return false;
             loseExt.loseContext();

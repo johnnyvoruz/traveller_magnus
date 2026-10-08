@@ -5471,3 +5471,115 @@ tests, 931 pass, 0 fail, 12 skipped, check clean.
   rerun the checker. There is no way to open the site on v6 today.
 - Johnny asked again for C's and D's pastes: `c_city_lights_4b.md`,
   `d_character_sheet_2.md`.
+
+## 198. Johnny: "do your best" on v6's liquids; characters are first-class, owned by either side, with pregens; Roll20 later (2026-10-07, late)
+
+- **v6's three liquid questions, delegated:** "I want to move on from ice and stuff for
+  now, so just do your best with 1 - 3." Taken as the rules authority delegating these
+  three, not as leave to bring rules in from memory. The orchestrator's choices use only
+  the liquid windows and the vacuum list already in `rules/`, and only labels and
+  statuses the data already has, and are **provisional**, marked so in the policy:
+  Ice or Water whose mean is below Water's melting point is **Ice**; Ice on a vacuum
+  whose mean is at or above it, and Water or Ice above the boiling point, is **no free
+  liquid** (the coverage figure untouched); on atmospheres 10 to 12 with no listed liquid
+  in range, **Unknown Exotic Liquid** (kept, or replacing a named liquid outside its own
+  window). The 27 with no finite mean stay unresolved. `prompts/b_liquid_policy_2.md`
+  (after `b_hardening_2.md`): the rows as data in `liquidPolicy`, tests, the whole-chart
+  effect counted, the data defects looked at (`findings/v6_data_defects.md`), empty
+  orbits taken out of the "no climate word" count. **No build in that step**; v7 is one
+  console command for Johnny later, then the preview, then his decision. Recorded as G21.
+- **Where the character sheet is on the live server: nowhere yet.** Only its field list
+  is live (`rules/`). D is building it; it will be on a person record's page, as the
+  panel's default, with "Start a character sheet".
+- **Characters, in his words:** "should we create a new campaign element called
+  characters? Characters are so important though that they maybe are 'Player Characters'
+  or something, so either the person can have their own account and build it on their
+  account, or the ref can build it on their account and then give someone else access on
+  their account. Let's build for both ways. So like for a virtual con, there can be
+  pregens, and then we could figure out Roll20 API stuff later."
+  - Taken into `prompts/a_live_sheet_design.md` as a new section: a **Character** is its
+    own shared object owned by an account, appearing in a game as a person record that
+    points at it; **either side may own it** and share with the other; **pregens** handed
+    out by a link claimed on sign-in; a home for "my characters" outside any campaign;
+    one clean place left for outside games (Roll20), with its API as open research and
+    nothing designed on it from memory.
+  - D's build is unchanged: the sheet on the person's page, behind the boundary that
+    lets its values move.
+  - `plan.md` "After 5" gains the Roll20 link as backlog.
+- **Asked of Johnny:** D2 again (switch on Discord and Google sign-in before players are
+  invited: the code already has both, the secrets are his); and whether a claimed pregen
+  is shared or given.
+
+## 199. Johnny parks v6 and the climate work, puts the character MVP first, and the swarm is restarted (2026-10-07 to 10-08)
+
+- **Parked by Johnny:** any definitive liquid ruling and every derived build ("it's so
+  damn slow and we're not being smart about it at all… I want to essentially rebuild
+  that whole planetary generator anyway… build it right from the start with a
+  foundational way that I understand vs. inherit from the old fork"). v6 stays staged,
+  unreleased. `b_liquid_policy_2.md` and `b_hardening_2.md` are parked; the hardening and
+  the start of its second step stay on disk, unpushed. A generator rebuild is a future
+  direction, not yet written into `plan.md`.
+- **Character MVP first, "in the fewest amount of turns".** No paper round:
+  `directives/character_mvp.md` is the contract (a Character owned by an account; access
+  by grant; sharing by a claimed link; one Durable Object per character as the live
+  room; every box a flat field; pregens as duplicates). Prompts: `b_characters.md`,
+  `a_characters_client.md`, `e_characters_screens.md`; D continues
+  `d_character_sheet_2.md`, then "D, Part 2" in the spec. `a_live_sheet_design.md` is
+  withdrawn. A's `a_nav_drag.md` and E's `e_journal_build_2.md` wait behind.
+- **Pushed since §196:** `3b32761`, the journal's server step (K7b).
+- **Most agent sessions were lost.** `directives/swarm_restart.md` restarts each as a
+  fresh session: the common rules, an audit of the lane to green first, what the
+  predecessor left on disk, the task. On disk at the restart: A's partial nav drag
+  (`orbit/`), B's parked hardening and partial second step, C's steps 3, 4 and partial
+  4b, D's partial character sheet build (`workspace/`), E's journal screens. No
+  character server or client exists yet.
+
+## 200. C's step 4b on disk and accepted: three looks, the tree on C (2026-10-08)
+
+- The restarted C found 4b complete from its predecessor: `CITY_LOOK_A` (step 4), `B`
+  (brighter network), `C` (B plus the urban sheet on the highest-population, highest-tech
+  worlds) in `surface/enhanced/city_look.ts`; the tree is on C; Johnny's pick is one line.
+  `city_design_s4b_rhylanor_variants.png` looked at: B and C both restore a lit
+  hemisphere at near and far sizes with black gaps kept; C is the fuller of the two.
+  Rhylanor night mean at far 60: step 2 67.3, A 24.0, B 53.3, C 59.1. Pavabid and Cantrel
+  barely differ between A, B and C. Worst frame 33.5 ms (B), 24.9 ms (C).
+- **Recommended to Johnny: C.** Steps 3, 4 and his pick push together, by path and
+  rehearsed, once he picks. `router.ts` now holds C's, E's and B's lines: hunks.
+- Two things not C's: the build fails in `orbit/OrbitRenderer.ts` (A's half-done nav drag:
+  an unused `HOLO_DOT_PX`, `GhostSpec` missing `disc`), which A's restart audit must
+  clear; and `scripts/surface_parity.js` exits 1 on a shade row marked `allowedDrift`
+  (a driver defect, listed, unpatched).
+
+## 201. D: the character sheet is built, and Part 2 is built against a stand-in store (2026-10-08)
+
+- The restarted D found the sheet build complete and green and finished
+  `d_character_sheet_2.md` (homeworld pill, linked items, free-form sheets kept, the ship
+  sheet intact after the shared refactor: 17 sections, 312 boxes; a mount test of all 420
+  boxes with no store). **"D, Part 2" is built** against a small interface in
+  `workspace/person_character.ts`: start a plain sheet, make this a Character, attach
+  one of mine, live values under the reader, presence (name and dashed ring, a bar of
+  who is here), detach with Undo, "shared with you", access removed. Not connected: A's
+  store and B's schema are not on disk yet. Hooking up is one file. 1,014 tests, 0 fail.
+  Not reviewed in the code by the orchestrator yet; accepted on the report for now.
+- **Rulings on D's questions:** detaching a Character one can no longer reach keeps the
+  **last boxes seen** as the frozen copy (G19), not an empty sheet: D to change. Two
+  people in one box, both names shown: yes. The eight presence colours from existing
+  tokens: yes. No `kind: 'pc'` on the record: fine for the MVP.
+- **Open: D's "lost-save problem"** on the person's page (the ship sheet saves the same
+  way), from a report the orchestrator never saw; its description arrived garbled.
+  **Nothing with the sheet is pushed until it is described**; if it is in `campaign/`'s
+  save path it is A's.
+- The build still fails in `orbit/OrbitRenderer.ts` (five type errors, A's half-done nav
+  drag); `vite build` alone passes.
+
+## 202. Johnny picks look C for the city lights; the push rehearsed (2026-10-08)
+
+- **Pick: C** (the tree is already on `CITY_LOOK_C`). G-pick recorded here.
+- **Push by path, `findings/push/city_lights_files.txt`, 13 files:** C's `surface/`
+  files (steps 3, 4, 4b), the one guard line in `platform/browser.ts`, two tests. **Left
+  out:** `router.ts` (it also holds E's and B's lines) and with it the dev harness
+  `dev/city-lights/`, which stays local. Scratch copy of `3b32761` with exactly those:
+  `vue-tsc` exit 0, `vite build` done, `tsc -p apps/api` exit 0, 953 tests, 941 pass, 0
+  fail, 12 skipped, check clean. The surface parity script was last run by C (map
+  mismatches 0; exit 1 only on the `allowedDrift` shade row, the driver's defect).
+- After the push: check the live surface chunk for `enhanced-cities-4`.

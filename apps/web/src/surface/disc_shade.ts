@@ -5,6 +5,7 @@
  */
 import type { DiscRequest, SurfaceMode } from './contracts.ts';
 import { enhancedProfile, knownSurfaceWord } from './enhanced/climate.ts';
+import { cityLook } from './enhanced/city_look.ts';
 import { productionDiscId } from './identity.ts';
 import { surfaceKind, surfaceProfile } from './profile.ts';
 import type { ShadeRequest } from './vanilla/gl_shade.ts';
@@ -13,7 +14,7 @@ const UNSHADED = new Set(['star', 'belt', 'ring']);
 
 type Body = Record<string, any>;
 
-export function discShadeRequest(timeSeconds: number, disc: DiscRequest, mode: SurfaceMode = 'vanilla'): ShadeRequest | null {
+export function discShadeRequest(timeSeconds: number, disc: DiscRequest, mode: SurfaceMode = 'vanilla', dpr = 1): ShadeRequest | null {
     const body = disc.body as Body;
     const word = mode === 'enhanced' ? knownSurfaceWord(body) : null;
     const kind = surfaceKind(disc.body, word);
@@ -46,6 +47,8 @@ export function discShadeRequest(timeSeconds: number, disc: DiscRequest, mode: S
         casters: disc.casters.map((row) => row.slice()),
         lightMode: disc.lightMode,
         uTime: timeSeconds,
+        cssDiameter: disc.radiusPx * 2 / (dpr > 0 ? dpr : 1),
+        ...(mode === 'enhanced' ? { cityLook: cityLook().index } : {}),
     };
     if (disc.near !== undefined) request.near = disc.near;
     return request;

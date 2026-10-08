@@ -29,7 +29,8 @@ players' views are read from `https://cdn.traveller.voyage`.
 | GET | `/api/admin/truth/builds/:version` | admin | progress and per-sector state, read from `truth_build_sectors` | — |
 | POST | `/api/admin/truth/builds/:version/retry` | admin | `{ sectors?: string[] }`; re-enqueues at offset 0 every `failed` sector and every `building` sector not updated for 10 minutes, or the named slugs in any state; a `reconcile-environment` build is re-queued with that transform; → 202 `{ version, enqueued }`; 409 if released; audit logged (`architecture.md` §5) | `TruthRetry` |
 | POST | `/api/admin/truth/builds/:version/remove` | admin | `{ version }` must equal the path; removes a `building` or `failed` version that never released: its `truth_versions`, `truth_build_sectors` and `truth_systems` rows, and every key under `truth/<version>/`; objects, inputs and the reconcile cache stay; 400 when the names differ; 409 when released, withdrawn, or any other state; audit logged (`truth.remove`) | local zod in `admin.ts` |
-| POST | `/api/admin/truth/release/:version` | admin | refuses unless every sector is `done`; writes the manifest from `truth_build_sectors`; marks released; audit logged | — |
+| POST | `/api/admin/truth/release/:version` | admin | refuses unless every sector is `done`; rewrites each sector index with `Cache-Control: public, max-age=31536000, immutable` (same bytes); a build that has `truth/<version>/reconciliation.json` also seals each sector reconciliation report and the total, and a missing one of those is 409; any other public reconciliation file that is present is sealed too; then writes overview, polities and the manifest and marks released; a seal failure writes none of those three and leaves the version unreleased; audit logged | — |
+| GET | `/api/admin/truth/preview?version=&sector=&hex=` | admin | reads that version's public sector index and the one tree object and returns the hex entry plus the tree for the dossier; also returns the same hex from the latest other released version when that index has it; writes nothing and does not pin a universe | local zod in `admin.ts` |
 
 ## Slice 2 — universes, generation, changes
 
@@ -109,6 +110,35 @@ edit), or `{ hexKey, rev, deleted: true }`. Response: `{ applied: [hexKey...], c
 | POST | `/api/admin/users/:id/disable` | admin | disable sign-in; audit logged |
 | GET | `/api/admin/jobs?state=` | admin | jobs across universes (from the dead-letter queue and job records) |
 | GET | `/api/admin/audit?cursor=` | admin | audit log |
+
+## Characters
+
+A Character is owned by an account and shared by a grant. It does not need a universe.
+The catalogue rows are in D1. The boxes and the open sockets live in `CharacterRoom`, one
+SQLite Durable Object per character, named by the character id. No access, a missing id,
+and a deleted character are 404. An editor calling an owner-only route is 403.
+Mutations check `Origin` the same way universe mutations do. Claim is limited to 3
+requests in 10 seconds per signed-in user (`Retry-After: 10`), the same window as
+better-auth's sign-in rule.
+
+| Method | Path | Auth | Purpose | Schema |
+|---|---|---|---|---|
+| GET | `/api/characters` | user | **Built.** mine and those shared with me: `{ character, role, ownerName }[]` | `CharacterListItem` |
+| POST | `/api/characters` | user | **Built.** `{ name?, from? }`. Without `from`, `name` is required and this account owns the new character. With `from`, the caller must be able to read that character; the copy's name is the source name suffixed (` (copy)`, then ` (copy 2)`) and every box is copied. The request `name` is ignored. 201 `{ character, role }` | `CharacterCreate` / `CharacterHeld` |
+| GET | `/api/characters/:id` | access | **Built.** `{ character, role, doc }`. `doc` is `{ fields, revs, seq }`. A cleared box is absent from `fields` and `revs` | `CharacterOpen` |
+| PATCH | `/api/characters/:id` | owner | **Built.** `{ name?, summary? }`. Open pages get `{ t: 'meta', name, summary }` | `CharacterPatch` / `CharacterHeld` |
+| DELETE | `/api/characters/:id` | owner | **Built.** soft delete. Open pages get `{ t: 'gone', why: 'deleted' }` and the socket closes | `CharacterHeld` |
+| POST | `/api/characters/:id/fields` | access | **Built.** `{ sets: [{ field, value }] }`, at most 64. The same write as a live `set`, for a page with no socket. The batch is checked first; one bad box writes nothing. A text box is a string (2,000 characters, 20,000 for `History & Background`). A checkbox is a boolean. `""` or `false` clears the box. Names outside the 420 widgets are refused | `CharacterFieldsWrite` / `CharacterFieldsResult` |
+| GET | `/api/characters/:id/access` | access | **Built.** who has access, with display name | `CharacterAccessRow` |
+| DELETE | `/api/characters/:id/access/:userId` | owner | **Built.** removes an editor. That person's pages get `{ t: 'gone', why: 'removed' }` and close. The owner is refused until ownership is handed over | `CharacterAccessRemoved` |
+| POST | `/api/characters/:id/owner` | owner | **Built.** `{ userId }` of an editor. That person becomes owner; the caller becomes editor. Open pages get a fresh `hello` with the new role | `CharacterOwnerChange` / `CharacterHeld` |
+| POST | `/api/characters/:id/invites` | owner | **Built.** 201 `{ id, url, expiresAt }`. `url` is `{origin}/claim/{token}`. The token is random, returned once, and stored as a SHA-256 hash. One claim, 14 days | `CharacterInviteCreate` |
+| GET | `/api/characters/:id/invites` | owner | **Built.** every invite for the character. The token is never returned | `CharacterInvite` |
+| DELETE | `/api/characters/:id/invites/:inviteId` | owner | **Built.** revoke. A later claim is `validation` with `details.reason` `revoked` | `CharacterInvite` |
+| POST | `/api/characters/claim` | user | **Built.** `{ token }`. Grants editor, or leaves an existing owner or editor in place, and consumes the link. `{ characterId }`. Unknown token is 404. Used, expired, and revoked are 400 `validation` with `details.reason` `claimed`, `expired`, or `revoked` | `CharacterClaim` / `CharacterClaimResult` |
+| GET | `/api/characters/:id/live` | access | **Built.** WebSocket upgrade into that character's room | `CharacterClientMessage` / `CharacterServerMessage` |
+
+Live frames are JSON text. On open the server sends `hello`: `{ t, you: { id, name, colour, role }, doc, who }`. `colour` is 0 to 7. `who` is one entry per connected user, including you: `{ id, name, colour, field }`, and `field` is null when that person is not in a box. The client sends `{ t: 'set', id, field, value }`. The server applies it in arrival order, bumps that box's `rev` and the room `seq`, sends `{ t: 'ack', id, rev }` to the sender, and `{ t: 'set', field, value, rev, seq, by }` to everyone. `by` is the user id. A bad frame is `{ t: 'no', id, why }` to the sender only. `{ t: 'focus', field }` (`field` null on blur) is answered with `{ t: 'who', who }` to everyone. Presence is the socket attachment. It is not stored. A closed socket drops off `who`.
 
 ## Errors
 

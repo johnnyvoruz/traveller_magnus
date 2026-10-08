@@ -70,6 +70,13 @@ proposals        (id PK, package_id FK, version INT, target_truth_version, state
                   reviewer_id NULL, reviewer_note, created_at, decided_at NULL)
 reports          (id PK, package_id FK, reporter_id FK, reason, created_at, resolved_at NULL, resolved_by NULL)
 audit_log        (id PK, at, actor_id, action, target_kind, target_id, details JSON)   -- every admin and reviewer action
+
+characters       (id PK 'ch_<uuid>', owner_id FK, name, summary, schema ('mgt2e_character@1'),
+                  created_at, updated_at, deleted_at NULL)
+character_access (character_id FK, user_id FK, role ('owner'|'editor'), granted_by FK, created_at,
+                  PK(character_id, user_id))   -- the owner has a row
+character_invites (id PK 'ci_<uuid>', token_hash UNIQUE, character_id FK, role ('editor'),
+                  created_by FK, expires_at, claimed_by NULL, claimed_at NULL, revoked_at NULL)
 ```
 
 Sessions, cookies and expiry are better-auth's, configured in `auth.ts` to a 30-day session
@@ -320,3 +327,28 @@ Installed rows carry `provenance: { packageId, version }`; records likewise.
   (`tree_hash` is null or equals `base_hash`): advance `base_hash`. Different and the tree was
   edited: list it for the builder (keep mine / take truth). Hash comparisons only; no tree is
   read until the builder opens a conflict.
+
+## 9. One character (Durable Object SQLite)
+
+`CharacterRoom` is one SQLite Durable Object per character. The id used with `idFromName`
+is the catalogue id (`ch_<uuid>`). The worker is the only caller. It checks the grant in
+D1 before it forwards.
+
+```sql
+fields           (name PK, value TEXT, rev INT, updated_by, updated_at)
+field_rev        (name PK, rev INT)     -- survives a clear, so the next write keeps climbing
+meta             (key PK, value)        -- key 'seq' is the room counter
+```
+
+`fields.name` is a widget name from `rules/mgt2e_character_sheet_fields.json` (420 names,
+via the generated ESM wrapper). `value` is JSON: a string for a text box, a boolean for a
+checkbox. An empty string or `false` deletes the `fields` row. `field_rev` keeps that
+box's last `rev`. `doc.fields` and `doc.revs` list only the rows still in `fields`.
+`seq` starts at 0 and increments once per applied set.
+
+Open pages are hibernated WebSockets. Presence (user id, display name, role, colour 0 to 7,
+focused field) is the socket attachment. It is not a table. The worker's widget check
+reads the generated rules object, about 53KB, for `name` and `type`.
+
+Indexes: `characters(owner_id)`, `character_access(user_id)`, `character_invites(character_id)`,
+`character_invites(token_hash)` unique.

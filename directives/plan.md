@@ -234,6 +234,14 @@ accounts and journals.
      finishes the leg and an edited route begins at its end. A mid-flight change needs a
      rule from Johnny first: the supplied formula is from rest to rest, and a ship under
      way is moving.
+- **Characters backlog (Johnny, 2026-10-07; after live sheets).** A character sheet that
+  talks to a virtual tabletop: "they could click on their character sheet in Voyage and
+  then if they have some ID of their current game it could send an API call to Roll20."
+  Nothing is known here about what Roll20's API accepts, from where, or with what
+  authorisation: that is research before any design. The live sheet design
+  (`findings/live_sheet_design.md`) leaves one place for it: a character may carry
+  references to outside games. Pregens for a virtual convention are part of the live
+  sheet design itself, not backlog.
 
 ## 5. Order and milestones
 

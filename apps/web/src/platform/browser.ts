@@ -1,6 +1,7 @@
 /** The only module that touches browser globals. Slice 1 A1.1. */
 
 export function devicePixelRatio(): number {
+    if (typeof window === 'undefined') return 1;
     return window.devicePixelRatio || 1;
 }
 

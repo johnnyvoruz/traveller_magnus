@@ -1,12 +1,12 @@
 /**
- * Enhanced city bake, step 1.
- * No cube C yet. A and B stay the vanilla bake, so a mode switch does not
- * allocate a second cube set. Later steps add passes here.
+ * Enhanced city bake, step 3.
+ * A and B stay the vanilla bake. Cube C is a later pass on the enhanced path.
  */
 import type { SurfaceMode } from '../contracts.ts';
+import { cityLook } from './city_look.ts';
 
-/** Renderer version for enhanced city bakes. */
-export const ENHANCED_CITY_VERSION = 'enhanced-cities-1';
+/** Renderer version family. The live string also names the look, so a change rebakes C. */
+export const ENHANCED_CITY_VERSION = 'enhanced-cities-4b';
 
 /**
  * The vanilla disc program has no renderer version of its own.
@@ -14,11 +14,11 @@ export const ENHANCED_CITY_VERSION = 'enhanced-cities-1';
  */
 export const VANILLA_DISC_VERSION = 'vanilla';
 
-/** Extra bake passes. Empty in step 1: the draw program samples A and B only. */
-export const ENHANCED_BAKE_PASSES: readonly string[] = [];
+/** Extra bake passes. C is the city cube. */
+export const ENHANCED_BAKE_PASSES: readonly string[] = ['C'];
 
 export function discRendererVersion(mode: SurfaceMode): string {
-    return mode === 'enhanced' ? ENHANCED_CITY_VERSION : VANILLA_DISC_VERSION;
+    return mode === 'enhanced' ? ENHANCED_CITY_VERSION + '-' + cityLook().id : VANILLA_DISC_VERSION;
 }
 
 /**

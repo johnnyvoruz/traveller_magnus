@@ -419,6 +419,16 @@ export type ShadeRequest = {
     /** Smaller is nearer the selected body. Omitted requests keep their batch order. */
     near?: number;
     uTime: number;
+    /** Below zero, clouds stay the baked field. A harness sets 0..1. The orbit page leaves this unset. */
+    cloudForce?: number;
+    /** False draws the world with the city terms off. Unset means on. */
+    cityOn?: boolean;
+    /** 0 shaded, 1 cube C rgb, 2 cube C core. Unset means shaded. */
+    diag?: number;
+    /** Disc diameter in CSS pixels. The size gate reads this. radius is device pixels. */
+    cssDiameter?: number;
+    /** 0 A, 1 B, 2 C. Unset on the vanilla path. */
+    cityLook?: number;
 };
 
 export type ShadeDraw = {
@@ -439,7 +449,12 @@ export type ShadeDraw = {
     uTime: number;
     profile: ShadeProfile;
     port: [number, number, number] | null;
-    cube: { a: WebGLTexture; b: WebGLTexture };
+    cube: { a: WebGLTexture; b: WebGLTexture; c?: WebGLTexture | null };
+    cloudForce?: number;
+    cityOn?: boolean;
+    diag?: number;
+    cssDiameter?: number;
+    cityLook?: number;
 };
 
 type LinkedProgram = { prog: WebGLProgram; uniforms: Record<string, WebGLUniformLocation | null> };
@@ -457,6 +472,24 @@ export function attachShade(
     dispose: () => void;
 } {
     let current = program;
+    let black: WebGLTexture | null = null;
+
+    function blackCube(): WebGLTexture {
+        if (black) return black;
+        const texture = gl.createTexture();
+        if (!texture) throw new Error('black cube');
+        gl.bindTexture(gl.TEXTURE_CUBE_MAP, texture);
+        const px = new Uint8Array([0, 0, 0, 0]);
+        for (let face = 0; face < 6; face++) {
+            gl.texImage2D(gl.TEXTURE_CUBE_MAP_POSITIVE_X + face, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, px);
+        }
+        gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        black = texture;
+        return texture;
+    }
 
     function use(next: LinkedProgram): void {
         if (current.prog !== next.prog) gl.deleteProgram(current.prog);
@@ -465,6 +498,8 @@ export function attachShade(
 
     function dispose(): void {
         gl.deleteProgram(current.prog);
+        if (black) gl.deleteTexture(black);
+        black = null;
     }
 
     /** js/planet_gl.js:1040-1128. Ring uniforms stay stale when the request has no ring. */
@@ -477,6 +512,7 @@ export function attachShade(
         gl.useProgram(current.prog);
         gl.uniform1i(u.uA ?? null, 0);
         gl.uniform1i(u.uB ?? null, 1);
+        if (u.uC) gl.uniform1i(u.uC, 2);
         for (const req of items) {
             const cube = req.cube;
             const glY = height - req.ty - req.tileSize;
@@ -485,6 +521,10 @@ export function attachShade(
             gl.bindTexture(gl.TEXTURE_CUBE_MAP, cube.a);
             gl.activeTexture(gl.TEXTURE1);
             gl.bindTexture(gl.TEXTURE_CUBE_MAP, cube.b);
+            if (u.uC) {
+                gl.activeTexture(gl.TEXTURE2);
+                gl.bindTexture(gl.TEXTURE_CUBE_MAP, cube.c ?? blackCube());
+            }
             const p = req.profile;
             const basis = axisBasis(p, req.tilt);
             const axis = basis.axis;
@@ -560,6 +600,13 @@ export function attachShade(
             casters.forEach((caster, index) => flat.set([caster[0] ?? 0, caster[1] ?? 0, caster[2] ?? 0, 0], index * 4));
             gl.uniform4fv(u.uCasters ?? null, flat);
             gl.uniform1i(u.uCasterCount ?? null, casters.length);
+            const cityEnabled = req.cityOn !== false && p.lights.pop > 0 && p.kind !== 'gas';
+            gl.uniform1f(u.uCloudForce ?? null, req.cloudForce ?? -1);
+            gl.uniform1f(u.uCityOn ?? null, cityEnabled ? 1 : 0);
+            gl.uniform1f(u.uDiag ?? null, req.diag ?? 0);
+            gl.uniform1f(u.uCssDiameter ?? null, req.cssDiameter ?? req.radius * 2);
+            gl.uniform1f(u.uLook ?? null, req.cityLook ?? 0);
+            gl.uniform1f(u.uPop ?? null, p.lights.pop || 0);
             bindQuad();
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
         }
