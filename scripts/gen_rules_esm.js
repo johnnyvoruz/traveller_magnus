@@ -3,8 +3,33 @@ import path from 'node:path';
 import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const OUT = path.join(ROOT, 'packages', 'engines', 'src', 'generated', 'rules');
+const OUT = process.env.RULES_GEN_OUT
+    ? path.resolve(process.env.RULES_GEN_OUT)
+    : path.join(ROOT, 'packages', 'engines', 'src', 'generated', 'rules');
 fs.mkdirSync(OUT, { recursive: true });
+
+/** The character sheet is the one generated module TypeScript imports with no `@ts-expect-error`. */
+function writeCharacterSheetDeclaration(sourceFile) {
+    const decl = [
+        `// GENERATED from rules/${sourceFile} by scripts/gen_rules_esm.js — do not edit; rules/ is the source.`,
+        'export interface CharacterSheetField {',
+        '    name: string;',
+        '    page: number;',
+        '    type: \'text\' | \'checkbox\';',
+        '    box: { x: number; y: number; w: number; h: number };',
+        '    section: string;',
+        '}',
+        'declare const sheet: {',
+        '    source: string;',
+        '    pageSize: { width: number; height: number };',
+        '    box: string;',
+        '    fields: CharacterSheetField[];',
+        '};',
+        'export default sheet;',
+        '',
+    ].join('\n');
+    fs.writeFileSync(path.join(OUT, 'mgt2e_character_sheet_fields.d.ts'), decl);
+}
 
 for (const file of fs.readdirSync(path.join(ROOT, 'rules')).filter(f => f.endsWith('.js'))) {
     const text = fs.readFileSync(path.join(ROOT, 'rules', file), 'utf8');
@@ -34,6 +59,12 @@ for (const file of fs.readdirSync(path.join(ROOT, 'rules')).filter(f => f.endsWi
         `export default ${JSON.stringify(parsed)};`,
     ].join('\n');
     fs.writeFileSync(path.join(OUT, out), body);
+    // The ship-sheet import still carries @ts-expect-error. A declaration for it would
+    // make that directive unused, and that file is not this generator's to change.
+    if (out === 'mgt2e_character_sheet_fields.js') {
+        if (!Array.isArray(parsed.fields)) throw new Error(`${file} has no fields array`);
+        writeCharacterSheetDeclaration(file);
+    }
     const entries = Array.isArray(parsed) ? parsed.length : (Array.isArray(parsed.fields) ? parsed.fields.length : 0);
     console.log(`${out}: default (${entries} entries)`);
 }

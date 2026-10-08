@@ -82,6 +82,46 @@ export const universes = sqliteTable('universes', {
     index('universes_owner_id').on(t.ownerId),
 ]);
 
+export const characters = sqliteTable('characters', {
+    id: text('id').primaryKey(),
+    ownerId: text('owner_id').notNull().references(() => user.id),
+    name: text('name').notNull(),
+    summary: text('summary').notNull().default(''),
+    schema: text('schema').notNull(),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+    deletedAt: text('deleted_at'),
+}, (t) => [
+    index('characters_owner_id').on(t.ownerId),
+]);
+
+export const characterAccess = sqliteTable('character_access', {
+    characterId: text('character_id').notNull().references(() => characters.id),
+    userId: text('user_id').notNull().references(() => user.id),
+    role: text('role').notNull(),
+    grantedBy: text('granted_by').notNull().references(() => user.id),
+    createdAt: text('created_at').notNull(),
+}, (t) => [
+    primaryKey({ columns: [t.characterId, t.userId] }),
+    index('character_access_user_id').on(t.userId),
+    check('character_access_role_check', sql`${t.role} in ('owner', 'editor')`),
+]);
+
+export const characterInvites = sqliteTable('character_invites', {
+    id: text('id').primaryKey(),
+    tokenHash: text('token_hash').notNull().unique(),
+    characterId: text('character_id').notNull().references(() => characters.id),
+    role: text('role').notNull(),
+    createdBy: text('created_by').notNull().references(() => user.id),
+    expiresAt: text('expires_at').notNull(),
+    claimedBy: text('claimed_by').references(() => user.id),
+    claimedAt: text('claimed_at'),
+    revokedAt: text('revoked_at'),
+}, (t) => [
+    index('character_invites_character_id').on(t.characterId),
+    check('character_invites_role_check', sql`${t.role} = 'editor'`),
+]);
+
 export const auditLog = sqliteTable('audit_log', {
     id: text('id').primaryKey(),
     at: text('at').notNull(),

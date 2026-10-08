@@ -44,6 +44,38 @@ export { copyRecords } from './campaign_copy.ts';
 export type { CopyAnchorChange, CopiedRecord, CopyRecordsInput, CopyRecordsResult } from './campaign_copy.ts';
 export { DECK_PLAN_LIMITS, DeckPlan } from './schemas/deck_plan.ts';
 export type { DeckPlanPart } from './schemas/deck_plan.ts';
+export {
+    CHARACTER_SCHEMA,
+    HISTORY_FIELD,
+    CHARACTER_LIMITS,
+    characterBoxLimit,
+    CharacterId,
+    CharacterInviteId,
+    CharacterRole,
+    CharacterColour,
+    CharacterFieldValue,
+    Character,
+    CharacterListItem,
+    CharacterDoc,
+    CharacterHeld,
+    CharacterOpen,
+    CharacterAccessRow,
+    CharacterInvite,
+    CharacterCreate,
+    CharacterPatch,
+    CharacterFieldSet,
+    CharacterFieldsWrite,
+    CharacterFieldsResult,
+    CharacterInviteCreate,
+    CharacterClaim,
+    CharacterClaimResult,
+    CharacterOwnerChange,
+    CharacterAccessRemoved,
+    CharacterPresence,
+    CharacterYou,
+    CharacterClientMessage,
+    CharacterServerMessage,
+} from './schemas/character.ts';
 export { parseT5Tab } from './parsers/t5tab.ts';
 export type { HexRow } from './parsers/t5tab.ts';
 export { parseXmlElements, parseMetadataXml } from './parsers/metadata_xml.ts';

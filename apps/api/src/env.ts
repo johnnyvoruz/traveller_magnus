@@ -2,6 +2,7 @@ export interface Env {
     DB: D1Database;
     ASSETS: Fetcher;
     UNIVERSE: DurableObjectNamespace;
+    CHARACTER: DurableObjectNamespace;
     PRIVATE_BUCKET: R2Bucket;
     PUBLIC_BUCKET: R2Bucket;
     GENERATE_QUEUE: Queue;

@@ -14,10 +14,14 @@ function apiProxy(target: string): ProxyOptions {
   return {
     target,
     changeOrigin: true,
+    ws: true,
+    xfwd: true,
     configure: (proxy) => {
-      proxy.on('proxyReq', (req) => {
+      const sendTargetOrigin = (req: { getHeader: (name: string) => unknown; setHeader: (name: string, value: string) => void }) => {
         if (req.getHeader('origin')) req.setHeader('origin', new URL(target).origin)
-      })
+      }
+      proxy.on('proxyReq', sendTargetOrigin)
+      proxy.on('proxyReqWs', sendTargetOrigin)
     },
   }
 }

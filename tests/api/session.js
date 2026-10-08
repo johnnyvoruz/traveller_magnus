@@ -14,7 +14,11 @@ function sleep(ms) {
 export function runWrangler(args) {
     let last = '';
     for (let attempt = 0; attempt < 30; attempt++) {
-        const result = spawnSync(process.execPath, [wranglerBin, ...args], {
+        const persist = process.env.VOYAGE_PERSIST_TO;
+        const full = persist && args.includes('--local') && !args.includes('--persist-to')
+            ? [...args, '--persist-to', persist]
+            : args;
+        const result = spawnSync(process.execPath, [wranglerBin, ...full], {
             cwd: apiRoot,
             env: { ...process.env, CI: '1' },
             encoding: 'utf8',

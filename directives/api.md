@@ -124,7 +124,7 @@ better-auth's sign-in rule.
 | Method | Path | Auth | Purpose | Schema |
 |---|---|---|---|---|
 | GET | `/api/characters` | user | **Built.** mine and those shared with me: `{ character, role, ownerName }[]` | `CharacterListItem` |
-| POST | `/api/characters` | user | **Built.** `{ name?, from? }`. Without `from`, `name` is required and this account owns the new character. With `from`, the caller must be able to read that character; the copy's name is the source name suffixed (` (copy)`, then ` (copy 2)`) and every box is copied. The request `name` is ignored. 201 `{ character, role }` | `CharacterCreate` / `CharacterHeld` |
+| POST | `/api/characters` | user | **Built.** `{ name?, from? }`. Without `from`, `name` is required and this account owns the new character. With `from`, the caller must be able to read that character and every box is copied. A `name` on that request is kept. With no `name`, the copy's name is the source name suffixed (` (copy)`, then ` (copy 2)`). 201 `{ character, role }` | `CharacterCreate` / `CharacterHeld` |
 | GET | `/api/characters/:id` | access | **Built.** `{ character, role, doc }`. `doc` is `{ fields, revs, seq }`. A cleared box is absent from `fields` and `revs` | `CharacterOpen` |
 | PATCH | `/api/characters/:id` | owner | **Built.** `{ name?, summary? }`. Open pages get `{ t: 'meta', name, summary }` | `CharacterPatch` / `CharacterHeld` |
 | DELETE | `/api/characters/:id` | owner | **Built.** soft delete. Open pages get `{ t: 'gone', why: 'deleted' }` and the socket closes | `CharacterHeld` |
@@ -132,7 +132,7 @@ better-auth's sign-in rule.
 | GET | `/api/characters/:id/access` | access | **Built.** who has access, with display name | `CharacterAccessRow` |
 | DELETE | `/api/characters/:id/access/:userId` | owner | **Built.** removes an editor. That person's pages get `{ t: 'gone', why: 'removed' }` and close. The owner is refused until ownership is handed over | `CharacterAccessRemoved` |
 | POST | `/api/characters/:id/owner` | owner | **Built.** `{ userId }` of an editor. That person becomes owner; the caller becomes editor. Open pages get a fresh `hello` with the new role | `CharacterOwnerChange` / `CharacterHeld` |
-| POST | `/api/characters/:id/invites` | owner | **Built.** 201 `{ id, url, expiresAt }`. `url` is `{origin}/claim/{token}`. The token is random, returned once, and stored as a SHA-256 hash. One claim, 14 days | `CharacterInviteCreate` |
+| POST | `/api/characters/:id/invites` | owner | **Built.** 201 `{ id, url, expiresAt }`. `url` is `{origin}/claim/{token}`. The origin is the request's own host: a loopback host stays `http`, and any other host is `https`. The token is random, returned once, and stored as a SHA-256 hash. One claim, 14 days | `CharacterInviteCreate` |
 | GET | `/api/characters/:id/invites` | owner | **Built.** every invite for the character. The token is never returned | `CharacterInvite` |
 | DELETE | `/api/characters/:id/invites/:inviteId` | owner | **Built.** revoke. A later claim is `validation` with `details.reason` `revoked` | `CharacterInvite` |
 | POST | `/api/characters/claim` | user | **Built.** `{ token }`. Grants editor, or leaves an existing owner or editor in place, and consumes the link. `{ characterId }`. Unknown token is 404. Used, expired, and revoked are 400 `validation` with `details.reason` `claimed`, `expired`, or `revoked` | `CharacterClaim` / `CharacterClaimResult` |

@@ -6,8 +6,17 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 export const wranglerBin = path.join(root, 'node_modules', 'wrangler', 'bin', 'wrangler.js');
 export const apiRoot = path.join(root, 'apps', 'api');
-export const base = 'http://127.0.0.1:8799';
-const dir = path.join(root, '.tmp', 'api-dev-8799');
+const port = process.env.VOYAGE_API_PORT || '8799';
+const inspectorPort = process.env.VOYAGE_INSPECTOR_PORT || '9229';
+export const base = `http://127.0.0.1:${port}`;
+const dir = path.join(root, '.tmp', `api-dev-${port}`);
+
+/** Local wrangler state. VOYAGE_PERSIST_TO keeps a run off the shared .wrangler/state directory. */
+export function stateRoot() {
+    const set = process.env.VOYAGE_PERSIST_TO;
+    if (set) return path.resolve(set);
+    return path.join(apiRoot, '.wrangler', 'state');
+}
 
 function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
@@ -74,9 +83,11 @@ function startShared() {
     const logPath = path.join(dir, 'log');
     writeFileSync(logPath, '');
     const logFd = openSync(logPath, 'a');
-    const child = spawn(process.execPath, [
-        wranglerBin, 'dev', '--port', '8799', '--ip', '127.0.0.1', '--inspector-port', '9229',
-    ], {
+    const args = [
+        wranglerBin, 'dev', '--port', port, '--ip', '127.0.0.1', '--inspector-port', inspectorPort,
+    ];
+    if (process.env.VOYAGE_PERSIST_TO) args.push('--persist-to', process.env.VOYAGE_PERSIST_TO);
+    const child = spawn(process.execPath, args, {
         cwd: apiRoot,
         env: { ...process.env, CI: '1' },
         detached: true,

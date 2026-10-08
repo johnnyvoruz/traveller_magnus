@@ -24,9 +24,17 @@ migrations_dir = "src/db/migrations"
 name = "UNIVERSE"
 class_name = "UniverseDO"
 
+[[durable_objects.bindings]]
+name = "CHARACTER"
+class_name = "CharacterRoom"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["UniverseDO"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["CharacterRoom"]
 
 [[r2_buckets]]
 binding = "PRIVATE_BUCKET"

@@ -5652,3 +5652,55 @@ mentions Roll20.
   build; B the link's address and the server's push list (kept apart from the parked
   truth-build files); E the unclicked controls, then the journal's second pass; A back to
   `a_nav_drag.md`. Then two pushes: the server (with the migration), then the browser.
+
+## 207. Pushed `043c899` (the lost-save fix). D: the sheet is on A's real store, seen live with two accounts (2026-10-08)
+
+- `043c899` is the lost-save fix alone.
+- **D: accepted on the report.** The stale `@ts-expect-error` is gone (the build is
+  green: 1,051 tests, 0 fail, all four gates); `workspace/character_wiring.ts` is the one
+  file that registers A's store behind the seam; presence colours are the store's. Seen
+  with two accounts: make this a Character from a person's page, boxes crossing both
+  ways, presence both ways, the same box at the same moment (focus and text kept, the
+  later commit standing), Detach and Undo, attach a shared one, access removed.
+  Not exercised: a dropped connection on the person's page, the Tab walk of the new bar.
+- For A, from D: one of the eight presence tones is 2.88:1 as a ring on the panel, under
+  the 3:1 a mark needs. For B: the invite link's address (already B's item).
+- **Waiting on B** for `findings/push/characters_server_files.txt` and the link fix; then
+  the server push (with the D1 migration), then the browser push.
+
+## 208. E's clicks and the journal's second pass accepted; a clean-checkout build break found in the character server's push list (2026-10-08)
+
+- **E: accepted.** Duplicate, pregens, revoke, hand over ownership, the account menu and
+  a keyboard pass exercised (`kch2_*`); the journal's second pass was already on disk and
+  is exercised (rows show labels, the entry level with the list, the orbit Campaign
+  control, the Players switch, Locate, Show in orbit, 1,100 px; search over 2,000 notes
+  filters in 8.4 ms, paints in 74.9 ms: a debounce or a windowed list later). Found for
+  B: a duplicate ignores the name it is given, so four pregens are all "Kite (copy)".
+- **B's push list is on disk, and it holds a break the rehearsals would have hidden.**
+  `packages/engines/src/generated/rules/mgt2e_character_sheet_fields.d.ts` is hand-made
+  in a git-ignored directory. A clean checkout runs `rules:gen`, gets no declaration,
+  and the Worker's and D's imports of that module fail to typecheck (D removed its
+  `@ts-expect-error` because the file exists locally). **Every rehearsal so far copied
+  the working tree's `generated/` into the scratch copy. From now on the scratch copy
+  runs `npm run rules:gen` itself and copies nothing generated.**
+- **`prompts/b_characters_2.md`:** the generator writes the declaration, proved on a
+  clean tree; a duplicate keeps a given name; the push list rewritten as paths only.
+- A's orbit files are mid-edit (three failing tests, one unused `dimFrom`): expected
+  while the nav drag is in flight; nothing is rehearsed from the whole tree meanwhile.
+
+## 209. B's two fixes accepted; the character server push rehearsed on a clean tree (2026-10-08)
+
+- **B:** `scripts/gen_rules_esm.js` now writes `mgt2e_character_sheet_fields.d.ts` with
+  the module (this file only; a ship sheet declaration would strand the
+  `@ts-expect-error` in D's `ship_sheet.ts`); a duplicate keeps a given name; a test
+  guards the declaration. The push list is paths only (27).
+- **Rehearsed the new way:** scratch copy of `043c899` plus the 27 files, **no
+  `generated/` copied**; `gen_rules_esm.js` and `gen_names_esm.js` run there and wrote
+  the declaration; `tsc -p apps/api` exit 0, `vue-tsc` exit 0, `vite build` done, 966
+  tests, 953 pass, 0 fail, 13 skipped, check clean.
+- **Johnny's order:** `npm --workspace apps/api run db:migrate` (adds three tables,
+  touches nothing else), then the push. After it: `GET /api/characters` signed in
+  returns an empty list.
+- **Next:** the browser push (A's `characters/`, D's sheet files, E's screens and the
+  journal screens). `router.ts` also holds B's parked `/admin/preview` route and C's
+  dev route, whose targets are not being pushed: it goes by hunks.
