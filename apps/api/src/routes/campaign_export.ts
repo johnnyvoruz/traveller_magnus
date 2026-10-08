@@ -10,6 +10,7 @@ type LiveRow = { deleted?: boolean };
 type CampaignPageBody = {
     records: LiveRow[];
     links: LiveRow[];
+    journal?: LiveRow[];
     settings: unknown;
     clock: unknown;
     seq: number;
@@ -38,6 +39,7 @@ export function mountCampaignExport(route: Hono<AppEnv>): void {
         if (owned instanceof Response) return owned;
         const records: LiveRow[] = [];
         const links: LiveRow[] = [];
+        const journal: LiveRow[] = [];
         let settings: unknown = null;
         let clock: unknown = null;
         let after = 0;
@@ -56,6 +58,7 @@ export function mountCampaignExport(route: Hono<AppEnv>): void {
             const page = body.data;
             records.push(...live(page.records ?? []));
             links.push(...live(page.links ?? []));
+            journal.push(...live(page.journal ?? []));
             settings = page.settings;
             clock = page.clock;
             if (page.done) break;
@@ -74,6 +77,7 @@ export function mountCampaignExport(route: Hono<AppEnv>): void {
             exportedAt: exportedAt.toISOString(),
             records,
             links,
+            journal,
             settings,
             clock,
         };

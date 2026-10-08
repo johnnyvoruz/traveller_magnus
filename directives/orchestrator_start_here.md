@@ -266,6 +266,22 @@ file true: replace it, do not append to it.
   builds. **D's report 1 (the nav console's second pass) was never pasted.** A hung
   process holds local port 8787: agents now start their own API on their own port and
   state directory (in D's prompt; owed to E's and B's next prompts).
+- **Last push `1f5eccc` (§196), green and live:** the nav console, route editing, the
+  journal's schema and store, the character sheet's fields. Johnny loves the console
+  and wants dragging fixed (follow-up 32): the worlds move while a waypoint is held,
+  every point stays visible, a grab cursor, right-click stops plotting. **A does it now
+  (`a_nav_drag.md`), holding D's orbit files; the live sheet design waits behind.** D is
+  on `d_character_sheet_2.md` and stays out of `orbit/`. Open with Johnny: whether
+  right-click should add the course rather than only stop the laying.
+- **§197 (2026-10-07, late): B's three reports read.** K7b accepted, **its push
+  rehearsed and offered** (`findings/push/k7b_files.txt`, 6 files); the journal's screens
+  follow when E reports its second pass. The hardening is accepted and **held for one
+  fix** (a released version's sector indexes must be immutable again):
+  `b_hardening_2.md`, which also asks for a preview of an unreleased version.
+  `findings/v6_open_cases.md` accepted; **open with Johnny: three rules questions on v6's
+  unresolved liquids** (airless worlds with ice; water outside its range on ordinary
+  atmospheres; exotic atmospheres), no recommendation from Traveller knowledge; a ruling
+  means another derived build.
 - **§194 (2026-10-07, late).** E's journal screens are accepted and **held for B's K7b**
   (the tab must not go live before the server stores entries); `e_journal_build_2.md` is
   E's second pass. **A push is rehearsed and offered:**

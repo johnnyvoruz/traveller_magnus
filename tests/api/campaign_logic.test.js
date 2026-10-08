@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
+import { mentionsOf } from '@voyage/shared';
 import { applyCampaignChanges, CampaignRefusal, installCampaignSchema, readCampaign } from '../../apps/api/src/universe/campaign.ts';
 
 const NOW = '2026-10-04T00:00:00.000Z';
@@ -16,6 +17,35 @@ function rid(n) {
 
 function lid(n) {
     return `cl_00000000-0000-4000-8000-${n.toString(16).padStart(12, '0')}`;
+}
+
+const J = 'cj_00000000-0000-4000-8000-000000000001';
+const J2 = 'cj_00000000-0000-4000-8000-000000000002';
+
+function jid(n) {
+    return `cj_00000000-0000-4000-8000-${n.toString(16).padStart(12, '0')}`;
+}
+
+function entry(id, over = {}) {
+    return {
+        id,
+        kind: 'note',
+        title: 'At the starport',
+        body: '',
+        when: null,
+        realDate: null,
+        sequence: null,
+        author: 'referee',
+        visibility: 'referee',
+        anchor: null,
+        mentions: [],
+        rev: 0,
+        createdAt: NOW,
+        updatedAt: NOW,
+        deleted: false,
+        baseRev: 0,
+        ...over,
+    };
 }
 
 function record(id, over = {}) {
@@ -300,5 +330,167 @@ test('live record and link caps are too_large', () => {
     linksDb.exec('COMMIT');
     const overLinks = refusal(() => applyCampaignChanges(linksSql, { links: [link(lid(60_001), A, B)] }, NOW));
     assert.equal(overLinks.code, 'too_large');
+});
+
+test('journal entries insert, edit, conflict, tombstone, and restore', () => {
+    const { db, sql } = open();
+    const created = applyCampaignChanges(sql, { journal: [entry(J)] }, NOW);
+    assert.deepEqual(created.conflicts, []);
+    assert.equal(created.applied.length, 1);
+    assert.equal(created.applied[0].table, 'journal');
+    assert.equal(created.applied[0].id, J);
+    assert.equal(created.applied[0].rev, 1);
+    const page = readCampaign(sql, 0, 10);
+    assert.equal(page.journal.length, 1);
+    assert.equal(page.journal[0].title, 'At the starport');
+    assert.equal(page.journal[0].rev, 1);
+    assert.equal(page.journal[0].deleted, false);
+    assert.equal(page.journal[0].sequence, null);
+    assert.deepEqual(page.journal[0].mentions, []);
+
+    const edited = applyCampaignChanges(sql, {
+        journal: [entry(J, { title: 'Edited', baseRev: 1, rev: 1 })],
+    }, NOW);
+    assert.equal(edited.conflicts.length, 0);
+    assert.equal(edited.applied[0].table, 'journal');
+    assert.equal(edited.applied[0].rev, 2);
+
+    const stale = applyCampaignChanges(sql, {
+        journal: [entry(J, { title: 'Old', baseRev: 1, rev: 1 })],
+    }, NOW);
+    assert.equal(stale.applied.length, 0);
+    assert.equal(stale.conflicts.length, 1);
+    assert.equal(stale.conflicts[0].table, 'journal');
+    assert.equal(stale.conflicts[0].id, J);
+    assert.equal(stale.conflicts[0].current.title, 'Edited');
+    assert.equal(stale.conflicts[0].current.rev, 2);
+    assert.equal(stale.conflicts[0].current.deleted, false);
+
+    const removed = applyCampaignChanges(sql, {
+        journal: [{ id: J, baseRev: 2, deleted: true }],
+    }, NOW);
+    assert.equal(removed.applied.length, 1);
+    assert.equal(removed.applied[0].table, 'journal');
+    assert.equal(removed.applied[0].rev, 3);
+    const hidden = readCampaign(sql, 0, 10);
+    const tomb = hidden.journal.find((row) => row.id === J);
+    assert.equal(tomb.deleted, true);
+    assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM campaign_journal`).get().n, 1);
+
+    const restored = applyCampaignChanges(sql, {
+        journal: [entry(J, { title: 'Edited', baseRev: tomb.rev, rev: tomb.rev, deleted: false })],
+    }, NOW);
+    assert.equal(restored.conflicts.length, 0);
+    assert.equal(restored.applied[0].rev, tomb.rev + 1);
+    assert.equal(restored.applied[0].table, 'journal');
+    const back = readCampaign(sql, 0, 10);
+    const live = back.journal.find((row) => row.id === J);
+    assert.equal(live.deleted, false);
+    assert.equal(live.title, 'Edited');
+});
+
+test('a session with no sequence is validation', () => {
+    const { sql } = open();
+    const err = refusal(() => applyCampaignChanges(sql, {
+        journal: [entry(J, { kind: 'session', sequence: null })],
+    }, NOW));
+    assert.ok(err instanceof CampaignRefusal);
+    assert.equal(err.code, 'validation');
+    assert.equal(err.message, 'Invalid request.');
+});
+
+test('the 20001st live journal entry is too_large', () => {
+    const { db, sql } = open();
+    const insert = db.prepare(`INSERT INTO campaign_journal (
+        id, kind, title, body, when_json, real_date, sequence, author, visibility,
+        anchor, mentions, rev, seq, created_at, updated_at, deleted
+    ) VALUES (?, 'note', 'n', '', NULL, NULL, NULL, 'referee', 'referee', NULL, '[]', 1, ?, ?, ?, 0)`);
+    db.exec('BEGIN');
+    for (let n = 1; n <= 20_000; n += 1) insert.run(jid(n), n, NOW, NOW);
+    db.exec('COMMIT');
+    const over = refusal(() => applyCampaignChanges(sql, { journal: [entry(jid(20_001))] }, NOW));
+    assert.ok(over instanceof CampaignRefusal);
+    assert.equal(over.code, 'too_large');
+    assert.equal(over.message, '20,000 live entries per universe.');
+    assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM campaign_journal WHERE deleted = 0`).get().n, 20_000);
+});
+
+test('stored journal mentions are mentionsOf the body', () => {
+    const { db, sql } = open();
+    const body = `Met [[${A}|Voss]] at [[hex:Spinward_Marches/1910|Regina]] and [[${A}|again]].`;
+    const forged = [B];
+    const created = applyCampaignChanges(sql, {
+        journal: [entry(J, { body, mentions: forged })],
+    }, NOW);
+    assert.equal(created.conflicts.length, 0);
+    const stored = JSON.parse(db.prepare(`SELECT mentions FROM campaign_journal WHERE id = ?`).get(J).mentions);
+    assert.deepEqual(stored, mentionsOf(body));
+    assert.deepEqual(readCampaign(sql, 0, 10).journal[0].mentions, mentionsOf(body));
+
+    const nextBody = `Only [[hex:Spinward_Marches/1910|Regina]].`;
+    const edited = applyCampaignChanges(sql, {
+        journal: [entry(J, { body: nextBody, mentions: forged, baseRev: 1, rev: 1 })],
+    }, NOW);
+    assert.equal(edited.applied[0].rev, 2);
+    const again = JSON.parse(db.prepare(`SELECT mentions FROM campaign_journal WHERE id = ?`).get(J).mentions);
+    assert.deepEqual(again, mentionsOf(nextBody));
+});
+
+test('journal pages merge with records and links, and an empty universe returns journal []', () => {
+    const bare = open();
+    assert.deepEqual(readCampaign(bare.sql, 0, 10).journal, []);
+
+    const { sql } = open();
+    applyCampaignChanges(sql, { records: [record(A, { name: 'Voss' })] }, NOW);
+    applyCampaignChanges(sql, { journal: [entry(J, { title: 'One' })] }, NOW);
+    applyCampaignChanges(sql, { records: [record(B, { name: 'Ada' })] }, NOW);
+    applyCampaignChanges(sql, { links: [link(LINK, A, B)] }, NOW);
+    applyCampaignChanges(sql, { journal: [entry(J2, { title: 'Two' })] }, NOW);
+
+    const first = readCampaign(sql, 0, 2);
+    assert.equal(first.done, false);
+    assert.deepEqual(first.records.map((row) => row.id), [A]);
+    assert.deepEqual(first.journal.map((row) => row.id), [J]);
+    assert.deepEqual(first.links, []);
+
+    const second = readCampaign(sql, first.seq, 2);
+    assert.equal(second.done, false);
+    assert.ok(second.seq > first.seq);
+    assert.deepEqual(second.records.map((row) => row.id), [B]);
+    assert.deepEqual(second.links.map((row) => row.id), [LINK]);
+    assert.deepEqual(second.journal, []);
+
+    const third = readCampaign(sql, second.seq, 2);
+    assert.equal(third.done, true);
+    assert.deepEqual(third.journal.map((row) => row.id), [J2]);
+    assert.deepEqual(third.records, []);
+    assert.deepEqual(third.links, []);
+
+    const whole = readCampaign(sql, 0, 100);
+    assert.deepEqual(whole.records.map((row) => row.id), [A, B]);
+    assert.deepEqual(whole.links.map((row) => row.id), [LINK]);
+    assert.deepEqual(whole.journal.map((row) => row.id), [J, J2]);
+    assert.equal(whole.done, true);
+});
+
+test('deleting a record leaves a journal entry anchored to it', () => {
+    const { db, sql } = open();
+    applyCampaignChanges(sql, {
+        records: [record(A), record(B, { anchor: { kind: 'record', id: A } })],
+        journal: [entry(J, { anchor: { kind: 'record', id: A } })],
+    }, NOW);
+    const removed = applyCampaignChanges(sql, {
+        records: [{ id: A, baseRev: 1, deleted: true }],
+    }, NOW);
+    assert.equal(removed.applied.some((row) => row.table === 'journal'), false);
+    const page = readCampaign(sql, 0, 10);
+    const anchored = page.records.find((row) => row.id === B);
+    const note = page.journal.find((row) => row.id === J);
+    assert.equal(page.records.find((row) => row.id === A).deleted, true);
+    assert.equal(anchored.deleted, false);
+    assert.deepEqual(anchored.anchor, { kind: 'record', id: A });
+    assert.equal(note.deleted, false);
+    assert.deepEqual(note.anchor, { kind: 'record', id: A });
+    assert.equal(db.prepare(`SELECT deleted FROM campaign_journal WHERE id = ?`).get(J).deleted, 0);
 });
 

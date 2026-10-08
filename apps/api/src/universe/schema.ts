@@ -192,5 +192,5 @@ export async function migrate(storage: DurableObjectStorage): Promise<void> {
         },
     });
     drizzle(storage, { schema: doSchema });
-    console.log(JSON.stringify({ event: 'UniverseDO migration', schemaVersion: 2 }));
+    console.log(JSON.stringify({ event: 'UniverseDO migration', schemaVersion: 3 }));
 }

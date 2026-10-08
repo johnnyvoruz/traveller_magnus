@@ -56,6 +56,23 @@ As `prompts/d_character_sheet.md` Step 2 says, with its Check. The layout that g
 flat widgets is yours, in one place, and a test fails when the rules file has a widget
 the layout does not place (all 420 placed, none twice).
 
+## Your nav console report (report 1), read after this file was written
+
+Sections 1 and 4 are **accepted on their tests** (a leg editable at its departure
+instant; a waypoint in hand returned with the store's words when its leg departs under
+it; a route with a jump after it, the jump 171 h to the hour after each edit).
+- **Your question, new legs laid before a jump that no in-system leg precedes: yes, as
+  you built it.** The jump waits if the new legs end before its departure, and moves
+  later by the overrun if they do not; it departs from where they end.
+- **Changed 2026-10-07, after Johnny used the pushed build (`1f5eccc`): the orbit view is
+  Agent A's for now.** Johnny's words on it: *"the new nav modal is badass… Man that nav
+  panel looks AMAZING!!!"* That is your console. He also wants the worlds to move while
+  a waypoint is dragged, every point to stay visible, a grab cursor, and right-click to
+  stop plotting; Agent A is doing all of it (`prompts/a_nav_drag.md`), with section 3's
+  readout and **the browser items you still owed**. So: **do not edit `orbit/` or
+  `views/OrbitView.vue` in this step, and skip those browser items.** Go straight to the
+  character sheet.
+
 ## 4. Your own API, not a shared one
 
 A process is listening on port 8787 and not answering, and another is on 8788: agents

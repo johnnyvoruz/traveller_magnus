@@ -15,6 +15,7 @@ const PLACE = 'cr_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1';
 const VESSEL = 'cr_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2';
 const PERSON = 'cr_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3';
 const CREW = 'cl_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1';
+const JOURNAL = 'cj_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1';
 const HEX = 'Spinward_Marches/1910';
 
 function authSecret() {
@@ -83,6 +84,28 @@ function record(id, over = {}) {
         status: null,
         images: null,
         provenance: null,
+        rev: 0,
+        createdAt: STAMP,
+        updatedAt: STAMP,
+        deleted: false,
+        baseRev: 0,
+        ...over,
+    };
+}
+
+function journalEntry(id, over = {}) {
+    return {
+        id,
+        kind: 'note',
+        title: 'At the starport',
+        body: `Met [[${PERSON}|Voss]]`,
+        when: null,
+        realDate: null,
+        sequence: null,
+        author: 'referee',
+        visibility: 'referee',
+        anchor: null,
+        mentions: ['cr_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa9'],
         rev: 0,
         createdAt: STAMP,
         updatedAt: STAMP,
@@ -180,6 +203,7 @@ if (process.env.RUN_API_TESTS !== '1') {
                 assert.equal(empty.status, 200, JSON.stringify(empty.body));
                 assert.deepEqual(empty.body.data.records, []);
                 assert.deepEqual(empty.body.data.links, []);
+                assert.deepEqual(empty.body.data.journal, []);
                 assert.equal(empty.body.data.seq, 0);
                 assert.equal(empty.body.data.done, true);
                 assert.equal(empty.body.data.clock, null);
@@ -380,6 +404,33 @@ if (process.env.RUN_API_TESTS !== '1') {
                 }
                 assert.ok(pages >= 2, JSON.stringify(seen));
                 assert.deepEqual([...seen].sort(), [CREW, PERSON, PLACE, VESSEL].sort());
+
+                const journalHome = await jsonFetch(`${base}/api/universes`, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({ name: 'Journal proof', truthVersion: null, editionDefault: 'MgT2E' }),
+                });
+                assert.equal(journalHome.status, 201, JSON.stringify(journalHome.body));
+                const journalId = journalHome.body.data.id;
+                const written = await jsonFetch(`${base}/api/universes/${journalId}/campaign/changes`, {
+                    method: 'PATCH',
+                    headers,
+                    body: JSON.stringify({ journal: [journalEntry(JOURNAL)] }),
+                });
+                assert.equal(written.status, 200, JSON.stringify(written.body));
+                assert.equal(written.body.data.conflicts.length, 0, JSON.stringify(written.body));
+                assert.equal(written.body.data.applied[0].table, 'journal');
+                assert.equal(written.body.data.applied[0].id, JOURNAL);
+                const secondSession = userCookie(`k3a${stamp}`, `k3a${stamp}@localhost`);
+                const reread = await jsonFetch(`${base}/api/universes/${journalId}/campaign?after=0&limit=1000`, {
+                    headers: { cookie: secondSession },
+                });
+                assert.equal(reread.status, 200, JSON.stringify(reread.body));
+                assert.equal(reread.body.data.journal.length, 1);
+                assert.equal(reread.body.data.journal[0].id, JOURNAL);
+                assert.equal(reread.body.data.journal[0].title, 'At the starport');
+                assert.deepEqual(reread.body.data.journal[0].mentions, [PERSON]);
+                assert.equal(reread.body.data.journal[0].rev, written.body.data.applied[0].rev);
 
                 const bare = await jsonFetch(`${base}/api/universes`, {
                     method: 'POST',
@@ -616,6 +667,7 @@ if (process.env.RUN_API_TESTS !== '1') {
             assert.equal(afterRestart.status, 200, JSON.stringify(afterRestart.body));
             assert.deepEqual(afterRestart.body.data.records, before.body.data.records);
             assert.deepEqual(afterRestart.body.data.links, before.body.data.links);
+            assert.deepEqual(afterRestart.body.data.journal, before.body.data.journal);
             assert.deepEqual(afterRestart.body.data.settings, before.body.data.settings);
             assert.deepEqual(afterRestart.body.data.clock, before.body.data.clock);
         } finally {

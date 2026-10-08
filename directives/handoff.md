@@ -5350,3 +5350,124 @@ tests, 931 pass, 0 fail, 12 skipped, check clean.
   which pass, but D's report on it has not been seen and its browser pass was blocked by
   the stuck local API. Said plainly to Johnny.
 - After the push, check by content: the live orbit chunk holds "already departed".
+
+## 195. D's report 1 (the nav console's second pass) read: accepted on its tests, browser pass owed (2026-10-07, late)
+
+- **Built, tests only:** `storedRoute` reads `departs < days` and `replaceLegsFrom`
+  refuses only `departs < notBefore` (line 172 of `campaign/track.ts`, D's one permitted
+  line), tested at the instant and a second either side; a stored waypoint in hand is
+  held by its leg's place on the track and goes back, with the store's words, if its leg
+  departs under it; a route with a jump after it is editable (`after` replaces `locked`
+  in `course.ts`; `onwardLegs`, `appendedTail`, `editedTail`), the jump and what follows
+  shifting with their durations kept (171 h to the hour in the tests), one write, one
+  Undo. **Accepted on its tests.**
+- **D's question, ruled by the orchestrator (a detail of G12):** new legs laid before a
+  jump that no in-system leg precedes: the jump waits if they end before its departure,
+  and moves later by the overrun if not. Yes, as built.
+- **Not done:** nothing in that step was seen in a browser (the local API on 8787 accepts
+  and never answers; D rightly did not restart what it did not start). All of it is now
+  first in `prompts/d_character_sheet_2.md`, on D's own API port. **Section 3** (the
+  readout against a tag) needs `avoid` boxes on `PlotReadout`:
+  `prompts/a_readout_avoid.md`, for A, to start only after the push is made or skipped
+  (it edits two files of the by-path push).
+- **The §194 push stands as rehearsed.** What it carries unverified in a browser: the
+  nav console's second pass only. The first pass was seen in a browser by D.
+
+## 196. Pushed `1f5eccc` (nav console, route editing, journal data, character sheet fields), live; Johnny on dragging waypoints (2026-10-07, 23:05 Central)
+
+- **Pushed and live:** `1f5eccc`, the `test` run green. The live entry and orbit chunk
+  are `index-Cymliaqk.js` and `OrbitView-pwNwR-5S.js`, **the rehearsal's names exactly**
+  (the shared package is committed now, so the §182 trap is closed for it), and the live
+  orbit chunk holds "already departed".
+- **Johnny on the live build:** "the new nav modal is badass… Man that nav panel looks
+  AMAZING!!!" And four things, recorded as follow-up 32 in `slice_2_campaign.md`:
+  1. **"The one key key key thing": while a waypoint is dragged, the celestial bodies
+     must move along their orbits**, so he can see where the waypoint will be at that
+     time.
+  2. **Right-click stops plotting points.**
+  3. **Moving a middle waypoint makes the one after it vanish**; every other point must
+     stay visible during a move.
+  4. **The cursor must change over an existing waypoint**, so it reads as editable and
+     not as "another point will drop here".
+- **`prompts/a_nav_drag.md`, Agent A, now, ahead of the live sheet design.** A holds the
+  picture; D is on the character sheet. A is given D's orbit files for this step
+  (`OrbitCanvas.vue`, `course.ts`, `ship_marks.ts`, `commands.ts`, `NavConsole.vue`,
+  `views/OrbitView.vue`) and D is told to stay out of them and to skip the browser items
+  it owed, which move to A (item 6). The readout `avoid` boxes are folded in (item 5;
+  `a_readout_avoid.md` superseded). **It must be seen in a browser, signed in, on A's own
+  API port**: A stops before building if it cannot sign in locally (it could not, earlier
+  in the slice; the harness is in `agent_d_brief.md`).
+- **Right-click, as built unless Johnny says otherwise:** it ends the laying of points;
+  what is laid stays in the console, uncommitted; the ship stays in hand. Asked of
+  Johnny: should it add the course instead.
+- **Still local after this push:** E's journal screens (held for K7b), C's city lights
+  steps 3 and 4 (held for his pick of 4b), B's `apps/api` work.
+- **Johnny, minutes later, narrowing note 1:** "only one world is moving and the effect
+  is so subtle that it's difficult to see. I don't think it's showing where the moons
+  will be. I realized I'm in a bad system where some of these planets take a hundred
+  years to complete an orbit." So the outlines exist but only for the body aimed at, too
+  faint, and not for moons; and slow outer worlds rightly barely move. Added to item 1 of
+  `prompts/a_nav_drag.md`: every planet and every moon at the held point's arrival; the
+  effect strengthened while a point is in hand; a deliberate "holds its place" mark for a
+  body whose "then" is within its own disc; checked at Regina and in one slow system.
+- **Johnny, a third note, on the look of "then":** "the planet outline could stay, but we
+  need like a ghost planet in the center, so it's like a holographic teal version of the
+  planet, or we can re-use those wireframe spheres we use in the moons reveal animation."
+  In `prompts/a_nav_drag.md` item 1: the outline with a ghost planet inside, built from
+  the Moons reveal's wireframe sphere (C's code in `OrbitRenderer.ts`, called, not
+  copied) with a low teal fill, for planets and moons, a filled dot below the size where
+  a sphere is noise; plus one comparison frame of the tinted-disc option with each one's
+  cost, so he can choose. The tree is left on the wireframe.
+- **Johnny, a fourth note:** "after we click on a planet to dock at, that should sorta
+  switch the plotter tool to just a regular arrow and now the user can make course
+  edits." In `prompts/a_nav_drag.md` item 4: two states with a ship in hand, laying (the
+  plotter's cursor, open-space presses keep laying) and editing (the regular arrow,
+  waypoints picked up and moved); laying ends on a press on a body (that body is the
+  arrival) or on a right-click; the console's control and P start it again; the course
+  is uncommitted in both until "Add course". This agrees with the default taken for
+  right-click (the course stays in the console), which is still to be confirmed.
+
+## 197. B's three reports read: K7b accepted and its push rehearsed; the hardening accepted with one fix first; the v6 open cases put to Johnny (2026-10-07, late)
+
+- **K7b (`prompts/b_journal_k7b.md`): accepted.** `campaign_journal` in the Durable
+  Object (schema version '3' on the meta row), merged into the page by `seq`, applied in
+  the same transaction with `baseRev` conflicts, tombstones restorable, `mentions`
+  recomputed by the server, the 20,000 limit, the export. Item 6: deleting a record
+  leaves a record-anchored entry live and unchanged, as it leaves a record-anchored
+  record. Item 7: the page, the apply, the limit and the export include the journal;
+  `copyRecords` does not (K10's business); snapshots are still a stub and nothing writes
+  `journalHash`. B ran two `tests/api` files with `RUN_API_TESTS=1`, not the whole suite.
+  - **Push rehearsed, by path, `findings/push/k7b_files.txt` (6 files):**
+    `universe/campaign.ts`, `universe/schema.ts`, `routes/campaign_export.ts`, three
+    `tests/api` files. None holds a line of the hardening. Scratch copy of `1f5eccc`
+    with those: `tsc -p apps/api` exit 0, `vue-tsc` exit 0, 949 tests, 936 pass, 0 fail,
+    13 skipped, check clean. The server then stores entries; nothing sends one until E's
+    screens are pushed (E is in its second pass).
+- **The hardening (`prompts/b_build_hardening.md`): all eight items on disk, accepted,
+  not pushed.** Six hexes of a slice at a time with the same bytes; `head` for the
+  existence check; the total written once, when no sector is open and every report is
+  listed (schema version 2, counts only); cache headers; `resolveCatalogue` skipping an
+  empty catalogue; `POST /api/admin/truth/builds/:version/remove` for a version that
+  never released. Measured with a simulated 20 ms R2: one 25-hex slice 2,481 ms serial,
+  616 ms parallel; not pinned by a test. B would raise `max_concurrency` to 12 after
+  deploy (Johnny's file).
+  - **One fix first (`prompts/b_hardening_2.md`):** the sector index went from
+    `immutable` to `max-age=60`. Right during a build, wrong for a released version:
+    every visitor's map would re-fetch or re-validate it every minute
+    (`architecture.md` §10.1). Release is to make a version's files immutable again.
+    Existing versions keep their stored headers, so nothing live is affected.
+  - The same prompt asks for the smallest safe preview of an unreleased version (an
+    admin page or route: one hex of v6 through the dossier), the whole `tests/api` suite
+    on B's own port, and a test pinning the parallel slice.
+- **`findings/v6_open_cases.md`: accepted.** Fourteen liquid cases (694,946), two climate
+  cases (43,376: 43,333 are empty orbits with no mean temperature, 43 a mean stored as
+  NaN), two blocking (1,247). Four families hold 96% of the unresolved: Ice on
+  atmosphere 0 with a warm high (324,812, cases 1 to 3); Water on atmospheres 2 to 9 and
+  13 to 15 outside 273 to 373 K (171,965, cases 6 to 9); an unnamed exotic liquid on
+  atmospheres 10 to 12 with no listed liquid in range (112,091, case 13); a named exotic
+  liquid outside its own range (57,623, cases 10 and 11). Put to Johnny as three
+  questions, each with the options the rules files can express and no recommendation
+  from Traveller knowledge. **A ruling needs another derived build**; release does not
+  rerun the checker. There is no way to open the site on v6 today.
+- Johnny asked again for C's and D's pastes: `c_city_lights_4b.md`,
+  `d_character_sheet_2.md`.

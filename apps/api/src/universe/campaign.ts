@@ -6,12 +6,15 @@ import {
     CampaignChanges,
     CampaignLink,
     CampaignRecord,
+    mentionsOf,
     type CampaignChangesResult,
     type CampaignClock,
+    type CampaignEntry,
     type CampaignLink as CampaignLinkRow,
     type CampaignPage,
     type CampaignRecord as CampaignRecordRow,
     type CampaignSettings,
+    type EntryChange,
     type LinkChange,
     type RecordChange,
 } from '@voyage/shared';
@@ -92,6 +95,26 @@ export function installCampaignSchema(sql: Sql): void {
     sql.exec(`CREATE INDEX IF NOT EXISTS campaign_links_seq ON campaign_links(seq)`);
     sql.exec(`CREATE INDEX IF NOT EXISTS campaign_links_from_id ON campaign_links(from_id)`);
     sql.exec(`CREATE INDEX IF NOT EXISTS campaign_links_to_id ON campaign_links(to_id)`);
+    sql.exec(`CREATE TABLE IF NOT EXISTS campaign_journal (
+        id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL,
+        title TEXT NOT NULL,
+        body TEXT NOT NULL,
+        when_json TEXT,
+        real_date TEXT,
+        sequence INTEGER,
+        author TEXT NOT NULL,
+        visibility TEXT NOT NULL,
+        anchor TEXT,
+        mentions TEXT NOT NULL,
+        rev INTEGER NOT NULL,
+        seq INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        deleted INTEGER NOT NULL
+    )`);
+    sql.exec(`CREATE INDEX IF NOT EXISTS campaign_journal_seq ON campaign_journal(seq)`);
+    sql.exec(`CREATE INDEX IF NOT EXISTS campaign_journal_kind ON campaign_journal(kind)`);
     sql.exec(`CREATE TABLE IF NOT EXISTS lists (
         kind TEXT PRIMARY KEY,
         rev INTEGER,
@@ -106,7 +129,7 @@ export function installCampaignSchema(sql: Sql): void {
         payload_hash TEXT,
         PRIMARY KEY (kind, rev)
     )`);
-    sql.exec(`INSERT INTO meta (key, value) VALUES ('schemaVersion', '2') ON CONFLICT(key) DO UPDATE SET value = '2'`);
+    sql.exec(`INSERT INTO meta (key, value) VALUES ('schemaVersion', '3') ON CONFLICT(key) DO UPDATE SET value = '3'`);
     sql.exec(`INSERT INTO meta (key, value) VALUES ('campaignSeq', '0') ON CONFLICT(key) DO NOTHING`);
 }
 
@@ -138,7 +161,7 @@ function nextSeq(sql: Sql): number {
     return seq;
 }
 
-function countLive(sql: Sql, table: 'campaign_records' | 'campaign_links'): number {
+function countLive(sql: Sql, table: 'campaign_records' | 'campaign_links' | 'campaign_journal'): number {
     const rows = sql.exec(`SELECT COUNT(*) AS n FROM ${table} WHERE deleted = 0`);
     return Number(rows[0]?.n ?? 0);
 }
@@ -210,6 +233,26 @@ function linkFrom(row: SqlRow) {
     return { ...link, provenance: parseJson(row.provenance) };
 }
 
+function entryFrom(row: SqlRow): CampaignEntry {
+    return {
+        id: String(row.id),
+        kind: row.kind as CampaignEntry['kind'],
+        title: String(row.title),
+        body: String(row.body),
+        when: parseJson(row.when_json) as CampaignEntry['when'],
+        realDate: text(row.real_date),
+        sequence: row.sequence == null ? null : Number(row.sequence),
+        author: row.author as CampaignEntry['author'],
+        visibility: row.visibility as CampaignEntry['visibility'],
+        anchor: parseJson(row.anchor) as CampaignEntry['anchor'],
+        mentions: (parseJson(row.mentions) ?? []) as CampaignEntry['mentions'],
+        rev: Number(row.rev),
+        createdAt: String(row.created_at),
+        updatedAt: String(row.updated_at),
+        deleted: bit(row.deleted),
+    };
+}
+
 function loadRecord(sql: Sql, id: string): SqlRow | null {
     const rows = sql.exec(`SELECT * FROM campaign_records WHERE id = ?`, id);
     return rows[0] ?? null;
@@ -220,12 +263,21 @@ function loadLink(sql: Sql, id: string): SqlRow | null {
     return rows[0] ?? null;
 }
 
+function loadEntry(sql: Sql, id: string): SqlRow | null {
+    const rows = sql.exec(`SELECT * FROM campaign_journal WHERE id = ?`, id);
+    return rows[0] ?? null;
+}
+
 function isFullRecord(change: RecordChange): change is Extract<RecordChange, { name: string }> {
     return 'name' in change;
 }
 
 function isFullLink(change: LinkChange): change is Extract<LinkChange, { from: string }> {
     return 'from' in change;
+}
+
+function isFullEntry(change: EntryChange): change is Extract<EntryChange, { kind: string }> {
+    return 'kind' in change;
 }
 
 function provenanceParam(change: object, previous: unknown): string | null {
@@ -271,9 +323,15 @@ export function readCampaign(sql: Sql, afterSeq: number, limit: number): Campaig
         afterSeq,
         cap + 1,
     );
+    const journal = sql.exec(
+        `SELECT * FROM campaign_journal WHERE seq > ? ORDER BY seq LIMIT ?`,
+        afterSeq,
+        cap + 1,
+    );
     const merged = [
         ...records.map((row) => ({ seq: Number(row.seq), table: 'records' as const, row })),
         ...links.map((row) => ({ seq: Number(row.seq), table: 'links' as const, row })),
+        ...journal.map((row) => ({ seq: Number(row.seq), table: 'journal' as const, row })),
     ].sort((a, b) => a.seq - b.seq);
     const done = merged.length <= cap;
     const page = merged.slice(0, cap);
@@ -283,6 +341,7 @@ export function readCampaign(sql: Sql, afterSeq: number, limit: number): Campaig
     return {
         records: page.filter((item) => item.table === 'records').map((item) => recordFrom(item.row)) as CampaignPage['records'],
         links: page.filter((item) => item.table === 'links').map((item) => linkFrom(item.row)) as CampaignPage['links'],
+        journal: page.filter((item) => item.table === 'journal').map((item) => entryFrom(item.row)),
         settings: readSettings(sql),
         clock: readClock(sql),
         seq,
@@ -310,11 +369,20 @@ function tombstoneLinks(sql: Sql, recordId: string, now: string, applied: Campai
     }
 }
 
-function requireRoom(sql: Sql, table: 'campaign_records' | 'campaign_links', wasLive: boolean, willLive: boolean): void {
+function requireRoom(
+    sql: Sql,
+    table: 'campaign_records' | 'campaign_links' | 'campaign_journal',
+    wasLive: boolean,
+    willLive: boolean,
+): void {
     if (wasLive || !willLive) return;
-    const cap = table === 'campaign_records' ? CAMPAIGN_LIMITS.records : CAMPAIGN_LIMITS.links;
+    const cap = table === 'campaign_records'
+        ? CAMPAIGN_LIMITS.records
+        : table === 'campaign_links'
+            ? CAMPAIGN_LIMITS.links
+            : CAMPAIGN_LIMITS.journal;
     if (countLive(sql, table) >= cap) {
-        const noun = table === 'campaign_records' ? 'records' : 'links';
+        const noun = table === 'campaign_records' ? 'records' : table === 'campaign_links' ? 'links' : 'entries';
         throw new CampaignRefusal('too_large', `${cap.toLocaleString('en-US')} live ${noun} per universe.`);
     }
 }
@@ -572,6 +640,82 @@ export function applyCampaignChanges(sql: Sql, changes: unknown, now: string): C
                 );
             }
             applied.push({ table: 'links', id: change.id, rev, seq });
+        }
+        for (const change of input.journal ?? []) {
+            const stored = loadEntry(sql, change.id);
+            if (!stored) {
+                if (!isFullEntry(change) || change.baseRev !== 0) continue;
+                requireRoom(sql, 'campaign_journal', false, !change.deleted);
+                const rev = 1;
+                const seq = nextSeq(sql);
+                const mentions = mentionsOf(change.body);
+                sql.exec(
+                    `INSERT INTO campaign_journal (
+                        id, kind, title, body, when_json, real_date, sequence, author, visibility,
+                        anchor, mentions, rev, seq, created_at, updated_at, deleted
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    change.id,
+                    change.kind,
+                    change.title,
+                    change.body,
+                    jsonText(change.when),
+                    change.realDate,
+                    change.sequence,
+                    change.author,
+                    change.visibility,
+                    jsonText(change.anchor),
+                    JSON.stringify(mentions),
+                    rev,
+                    seq,
+                    now,
+                    now,
+                    change.deleted ? 1 : 0,
+                );
+                applied.push({ table: 'journal', id: change.id, rev, seq });
+                continue;
+            }
+            if (change.baseRev !== Number(stored.rev)) {
+                conflicts.push({ table: 'journal', id: change.id, current: entryFrom(stored) });
+                continue;
+            }
+            const rev = Number(stored.rev) + 1;
+            const seq = nextSeq(sql);
+            const willDelete = change.deleted === true;
+            requireRoom(sql, 'campaign_journal', !bit(stored.deleted), !willDelete);
+            if (isFullEntry(change)) {
+                const mentions = mentionsOf(change.body);
+                sql.exec(
+                    `UPDATE campaign_journal SET
+                        kind = ?, title = ?, body = ?, when_json = ?, real_date = ?, sequence = ?,
+                        author = ?, visibility = ?, anchor = ?, mentions = ?,
+                        rev = ?, seq = ?, updated_at = ?, deleted = ?
+                     WHERE id = ?`,
+                    change.kind,
+                    change.title,
+                    change.body,
+                    jsonText(change.when),
+                    change.realDate,
+                    change.sequence,
+                    change.author,
+                    change.visibility,
+                    jsonText(change.anchor),
+                    JSON.stringify(mentions),
+                    rev,
+                    seq,
+                    now,
+                    willDelete ? 1 : 0,
+                    change.id,
+                );
+            } else {
+                sql.exec(
+                    `UPDATE campaign_journal SET deleted = 1, rev = ?, seq = ?, updated_at = ? WHERE id = ?`,
+                    rev,
+                    seq,
+                    now,
+                    change.id,
+                );
+            }
+            applied.push({ table: 'journal', id: change.id, rev, seq });
         }
         return { applied, conflicts };
     });

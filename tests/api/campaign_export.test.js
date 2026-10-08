@@ -178,6 +178,7 @@ if (process.env.RUN_API_TESTS !== '1') {
             assert.equal(exported.body.links.some((row) => row.id === CREW), false);
             assert.equal(exported.body.records.some((row) => row.deleted === true), false);
             assert.equal(exported.body.links.some((row) => row.deleted === true), false);
+            assert.deepEqual(exported.body.journal, []);
             assert.equal(exported.body.clock, null);
             assert.equal(exported.body.settings.rev, 0);
         });

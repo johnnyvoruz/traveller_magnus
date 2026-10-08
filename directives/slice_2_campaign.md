@@ -690,6 +690,21 @@ only. D's five points for the orchestrator:
       - **Ruled (Johnny, 2026-10-06, G10):** a referee may strike a logged leg (with Undo)
         and edit its note; a logged leg is never re-timed or re-aimed. A struck leg stays
         in the archive, marked, so the log remains append-only.
+  32. **Dragging a waypoint (Johnny, 2026-10-07, on the live nav console, `1f5eccc`).**
+      "The one key key key thing that is missing from the drag to drop waypoint is that
+      the celestial bodies MUST move their orbits in order for me to see where the
+      waypoint will be via time (the new nav modal is badass though), and then I want to
+      right click to stop plotting points, and then if I move a mid point, a point after
+      the selected point I'm moving vanishes during the move. I want to keep all the
+      other points visible when moving points around, and the cursor needs to change
+      when I'm hovering over an existing point so it looks like I can edit it; right now
+      it looks like I'm going to drop another point on top of the existing point. Man
+      that nav panel looks AMAZING!!!" While a waypoint is in hand every body is shown
+      where it will be at that waypoint's arrival; the whole course stays drawn and
+      numbered; a movable waypoint takes a grab cursor and a hover state, and the plotter
+      offers no new point over it; right-click ends the laying of points (the course
+      stays in the console, uncommitted, unless he rules that it adds it). Agent A
+      (`prompts/a_nav_drag.md`), holding D's orbit files for the step.
   15. **The pinned body card beside the open panel (D decides; settled by 22):** when the orbit view's
       docked body card and the dossier panel for the same body are both open, two views of
       one thing show at once. Johnny sees pros and cons. D reviews `manifesto.md` (one
