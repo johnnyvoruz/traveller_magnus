@@ -3,6 +3,7 @@ import {
     CampaignPage,
     Universe,
     type CampaignClock,
+    type CampaignEntry,
     type CampaignLink,
     type CampaignRecord,
     type CampaignSettings,
@@ -11,6 +12,7 @@ import { newId, storageGet, storageSet } from '../platform/browser.ts';
 import { apiFetch } from '../platform/http.ts';
 import { commit, flushCampaign, pending } from './commit.ts';
 import { rebuildCampaignIndex } from './index.ts';
+import { rebuildJournalIndex } from './journal.ts';
 
 type FetchLike = typeof fetch;
 type Schedule = (fn: () => void, ms: number) => () => void;
@@ -25,6 +27,7 @@ export const campaign = reactive({
     universes: [] as UniverseRow[],
     records: {} as Record<string, CampaignRecord>,
     links: {} as Record<string, CampaignLink>,
+    journal: {} as Record<string, CampaignEntry>,
     settings: null as CampaignSettings | null,
     clock: null as CampaignClock | null,
     seq: 0,
@@ -54,11 +57,13 @@ function universeIdForCreate(): string {
 function clearRows(): void {
     for (const key of Object.keys(campaign.records)) delete campaign.records[key];
     for (const key of Object.keys(campaign.links)) delete campaign.links[key];
+    for (const key of Object.keys(campaign.journal)) delete campaign.journal[key];
     campaign.settings = null;
     campaign.clock = null;
     campaign.seq = 0;
     campaign.universeId = null;
     rebuildCampaignIndex(campaign.records, campaign.links, null);
+    rebuildJournalIndex(campaign.journal, campaign.records, null);
 }
 
 function signOutLocal(): void {
@@ -80,18 +85,23 @@ export function resetCampaignState(): void {
 function replaceRows(
     records: Record<string, CampaignRecord>,
     links: Record<string, CampaignLink>,
+    journal: Record<string, CampaignEntry>,
     settings: CampaignSettings,
     clock: CampaignClock | null,
     seq: number,
 ): void {
     for (const key of Object.keys(campaign.records)) delete campaign.records[key];
     for (const key of Object.keys(campaign.links)) delete campaign.links[key];
+    for (const key of Object.keys(campaign.journal)) delete campaign.journal[key];
     Object.assign(campaign.records, records);
     Object.assign(campaign.links, links);
+    Object.assign(campaign.journal, journal);
     campaign.settings = settings;
     campaign.clock = clock;
     campaign.seq = seq;
-    rebuildCampaignIndex(campaign.records, campaign.links, clock ? clock.days : null);
+    const days = clock ? clock.days : null;
+    rebuildCampaignIndex(campaign.records, campaign.links, days);
+    rebuildJournalIndex(campaign.journal, campaign.records, days);
 }
 
 function remember(id: string): void {
@@ -155,6 +165,7 @@ async function loadPages(universe: UniverseRow): Promise<void> {
     campaign.status = 'loading';
     const records: Record<string, CampaignRecord> = {};
     const links: Record<string, CampaignLink> = {};
+    const journal: Record<string, CampaignEntry> = {};
     let settings: CampaignSettings | null = null;
     let clock: CampaignClock | null = null;
     let seq = 0;
@@ -175,6 +186,7 @@ async function loadPages(universe: UniverseRow): Promise<void> {
         const page = CampaignPage.parse((await pageRes.json()).data);
         for (const record of page.records) records[record.id] = record;
         for (const link of page.links) links[link.id] = link;
+        for (const entry of page.journal ?? []) journal[entry.id] = entry;
         settings = page.settings;
         clock = page.clock;
         seq = page.seq;
@@ -189,7 +201,7 @@ async function loadPages(universe: UniverseRow): Promise<void> {
         campaign.status = 'error';
         return;
     }
-    replaceRows(records, links, settings, clock, seq);
+    replaceRows(records, links, journal, settings, clock, seq);
     campaign.universeId = universe.id;
     campaign.status = 'ready';
     remember(universe.id);

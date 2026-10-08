@@ -583,6 +583,78 @@ from rest to rest and the ship would be moving.
 **Answer (2026-10-06): keep it for the MVP.** Recorded in `plan.md` "Ship navigation
 backlog" as item 5, for after the campaign MVP.
 
+### G10. May a referee strike or correct a leg once it is in the flight log?
+
+The flight log (follow-up 31) archives the legs a vessel has flown. A course added by
+mistake would otherwise be history for ever.
+
+*Recommended: yes, narrowly. A logged leg can be struck out (with Undo) and its note
+edited; it cannot be re-timed or re-aimed.*
+
+**Answer (2026-10-06): yes**, as recommended. Recorded in `slice_2_campaign.md`
+follow-up 31.
+
+### G11 to G15. Five small ones, answered together
+
+**Answer (2026-10-07): "all your recommendations sound reasonable, let's go with those."**
+
+- **G11. A ship that has flown, selected: is the plotter live at once with its last
+  thrust?** Yes, as Agent D built it. A ship that has never flown asks for a thrust first.
+- **G12. A route that ends in a jump: are its in-system waypoints editable?** Yes. The
+  jump and every leg after it keep their durations and move in time
+  (`prompts/d_nav_console_2.md` section 4).
+- **G13. A compact nav console for 520 px windows?** Not now.
+- **G14. A journal row with no title** shows the first line of the body; "Untitled note"
+  (or handout, or rumour) only when the body is empty too; an untitled session shows
+  "Session 14".
+- **G15. A deleted session's number** is never reused.
+
+### G16. Is there a fillable character sheet PDF?
+
+The character sheet (K13 part 4) was waiting on one. It is being built from the sheet
+supplied on 2026-10-02 instead (transcribed in `campaign_manager_plan.md` §5.2a). If a
+PDF exists, it goes in `assets/` and is checked against that draft.
+
+*Recommended: build from the transcription now; add the PDF whenever it is to hand.*
+
+### G17 to G20. Live character sheets (asked 2026-10-07; handoff §190)
+
+Johnny's direction: a live sheet owned by the player's account, shared with a referee,
+co-edited by both, the same in every universe that uses it; and a character copied into
+another universe as its own instance, including through the free marketplace.
+
+- **G17. What stays the referee's own about a player's character?** *Recommended: the
+  sheet, the name, the portrait and the summary are live and shared. Each game keeps its
+  own layer that the player does not see unless the referee shares it: where the
+  character is, who they are linked to, and the referee's notes.*
+- **G18. May the referee change anything on a live sheet?** *Recommended: yes, the whole
+  sheet, with each change showing who made it. Locks on parts of it can come later.*
+- **G19. When a live character leaves a game (the player leaves, or the referee removes
+  it), does that game keep a frozen copy?** *Recommended: yes, a copy as it stood, marked
+  as no longer live.*
+- **G20. How live is "live" in the first version?** *Recommended: a change by one shows
+  for the other within a few seconds while both have the sheet open; if both change the
+  same box at once the later change stands and the other sees it. No shared cursor and no
+  merging of typing, which can come later.*
+
+**Answers:**
+
+- **G20 (2026-10-07): "Think of it like two people working in Google Sheets at the same
+  time."** A change appears for the other at once, with presence (who is on the sheet,
+  which box they are in); a box lands when committed, the later commit stands.
+- **G18:** taken as yes from the same answer (both edit anything), until he says
+  otherwise.
+- **G17 (2026-10-07): yes.** The sheet, name, portrait and summary are live and shared;
+  each game keeps its own layer (place, links, the referee's notes), unseen by the player
+  unless shared.
+- **G19 (2026-10-07): yes.** A game keeps a frozen copy, marked as no longer live.
+
+### G16 (answer)
+
+**Answer (2026-10-07): yes, and it is in `assets/`** (`Character Sheet 2026_fillable.pdf`
+and two print versions). The PDF is the source; the transcription is what it is checked
+against (`prompts/a_character_fields.md`, rewritten).
+
 
 ---
 

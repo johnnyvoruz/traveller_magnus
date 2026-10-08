@@ -2,32 +2,18 @@
 /**
  * The ships in this system and the status strip (K12 points 1, 2b, 5; K6d; the K15 reserved
  * place at the picture's upper right). The strip reads the selected ship's state from its
- * track and ends in Jump; under it the ship list (the party's first), and, while a flight
- * is being plotted, the course (each waypoint's leg with its estimate, the totals, the
- * fuel, one G for the course; follow-up 28); while a jump
- * is being marked, the jump preview (parsecs, fuel, the rolled hours). Every figure is an
+ * track and ends in Jump; under it the ship list (the party's first); while a jump
+ * is being marked, the jump preview (parsecs, fuel, the rolled hours); and last the slot the
+ * view fills with the ship's nav console (NavConsole.vue, follow-up 29), so the whole
+ * column shares one right edge. Every figure is an
  * estimate and says so; nothing warns and nothing refuses (K12, the measuring pass).
  * It writes nothing itself: the view owns the clock, the plotting mode and the track.
  */
-import { computed, nextTick, ref } from 'vue';
+import { computed } from 'vue';
 import type { CampaignRecord } from '@voyage/shared';
 import Icon from '../design/Icon.vue';
-import { ACCEL_CHOICES, type ShipState } from './ship_list.ts';
+import type { ShipState } from './ship_list.ts';
 import type { PickedSystem } from '../workspace/pick.ts';
-
-/** One leg of the course, in words. */
-export type CourseRow = {
-    n: number;
-    name: string;
-    /** What the hours field shows: the estimate to a tenth, or what was typed; null when neither. */
-    hours: number | null;
-    typed: boolean;
-    /** "31.4 AU · about 11 d 5 h", "Distance unknown: type the hours", "Waiting on the leg before". */
-    estimate: string;
-    /** "arrives 148-1105 05:15", or empty. */
-    arrives: string;
-    title: string;
-};
 
 const props = defineProps<{
     ships: readonly CampaignRecord[];
@@ -36,18 +22,6 @@ const props = defineProps<{
     status: { state: ShipState; text: string } | null;
     /** Whether the selected ship may jump from where it is, and the words when it may not (ship_list.ts jumpStanding). */
     standing: { can: boolean; note: string };
-    plotting: boolean;
-    /** The course being plotted: its legs in words, its totals, and whether it can be written. Null with no waypoint yet. */
-    course: {
-        rows: readonly CourseRow[];
-        /** "62.1 AU · about 20 d 3 h at 2 G · arrives 157-1105 03:00", or what is missing. */
-        total: string;
-        fuel: { manoeuvre: string; reaction: string } | null;
-        ready: boolean;
-        /** A leg's hours are the referee's: the way back to the estimates is offered. */
-        typed: boolean;
-    } | null;
-    accelG: number;
     /** The jump's marked destination, and the system the map last opened, offered as one. */
     jumpTarget: PickedSystem | null;
     lastOpened: PickedSystem | null;
@@ -62,14 +36,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
     select: [id: string];
-    plot: [on: boolean];
-    /** A leg's hours typed (or emptied): its place in the course from 0. */
-    legHours: [index: number, hours: number | null];
-    useEstimate: [];
-    accel: [g: number];
-    addCourse: [];
-    removeLast: [];
-    clearCourse: [];
     pickOnMap: [];
     useLast: [];
     clearTarget: [];
@@ -86,17 +52,6 @@ function typedHours(event: Event): number | null {
     if (!(target instanceof HTMLInputElement) || target.value.trim() === '') return null;
     const value = Number(target.value);
     return Number.isFinite(value) && value > 0 ? value : null;
-}
-
-const courseEl = ref<HTMLElement | null>(null);
-
-/** Back to the estimates: the control goes with the typed hours, so focus moves to the first field it filled. */
-function useEstimate(): void {
-    emit('useEstimate');
-    void nextTick(() => {
-        const el = courseEl.value ? courseEl.value.querySelector<HTMLInputElement>('input') : null;
-        if (el) el.focus();
-    });
 }
 
 /** The reason Jump is not yet possible, in a word or two. */
@@ -173,52 +128,8 @@ const jumpNote = computed(() => {
       </template>
     </div>
 
-    <!-- Plotting a course: the waypoints in order, before they are written. -->
-    <div v-if="plotting" class="orbit-plot-card" role="group" aria-label="Plot a course">
-      <p v-if="!course" class="orbit-plot-hint"><Icon name="arrows-to-dot" :size="11" />Plotting: press a body, or empty space for a point. Each press adds a waypoint.</p>
-      <template v-else>
-        <ol ref="courseEl" class="orbit-course">
-          <li v-for="(row, index) in course.rows" :key="row.n" class="orbit-course-leg" :title="row.title || undefined">
-            <span class="orbit-course-n" aria-hidden="true">{{ row.n }}</span>
-            <b class="orbit-course-name" :title="row.name">{{ row.name }}</b>
-            <label class="orbit-field is-hours">
-              <span class="orbit-course-sr">Hours for leg {{ row.n }}</span>
-              <input type="number" min="0.1" step="0.1" required :value="row.hours ?? ''" :title="row.typed ? 'This leg’s hours, as typed' : 'This leg’s hours: the estimate, or type your own'" @input="emit('legHours', index, typedHours($event))" @keydown.stop>
-              <span aria-hidden="true">h</span>
-            </label>
-            <span class="orbit-course-meta">{{ row.estimate }}<template v-if="row.arrives"> · {{ row.arrives }}</template></span>
-          </li>
-        </ol>
-        <p class="orbit-est orbit-course-total">{{ course.total }}</p>
-        <div class="orbit-plot-fields">
-          <div class="orbit-accel" role="radiogroup" aria-label="Acceleration for the course">
-            <button v-for="g in ACCEL_CHOICES" :key="g" type="button" class="orbit-accel-g" :class="{ 'is-on': g === accelG }" role="radio" :aria-checked="g === accelG ? 'true' : 'false'" :title="g + ' G'" @click="emit('accel', g)">{{ g }}<small>G</small></button>
-          </div>
-          <button
-            type="button"
-            class="orbit-btn is-icon orbit-use-estimate"
-            :class="{ 'is-off': !course.typed }"
-            data-command="orbit-plot-estimate"
-            :disabled="!course.typed"
-            aria-label="Return every leg’s hours to its estimate"
-            title="Return to the estimates"
-            @click="useEstimate"
-          >
-            <Icon name="rotate-left" :size="11" />
-          </button>
-        </div>
-        <p v-if="course.fuel" class="orbit-est is-fuel">
-          <span v-if="course.fuel.manoeuvre">{{ course.fuel.manoeuvre }}</span>
-          <span>{{ course.fuel.reaction }}</span>
-        </p>
-        <p class="orbit-est orbit-course-rule">Each leg is flown from rest to rest.</p>
-        <div class="orbit-plot-acts">
-          <button type="button" class="orbit-btn is-primary orbit-add-leg" data-command="orbit-add-leg" :disabled="!course.ready" @click="emit('addCourse')"><Icon name="check" :size="12" />Add course</button>
-          <button type="button" class="orbit-btn orbit-course-undo" data-command="orbit-course-undo" title="Remove the last waypoint (Esc)" @click="emit('removeLast')"><Icon name="rotate-left" :size="12" />Last</button>
-          <button type="button" class="orbit-btn orbit-plot-cancel" data-command="orbit-course-clear" title="Clear the whole course" @click="emit('clearCourse')">Clear</button>
-        </div>
-      </template>
-    </div>
+    <!-- The ship's nav console, while a ship is in hand. -->
+    <slot name="console" />
   </div>
 </template>
 
@@ -231,7 +142,13 @@ const jumpNote = computed(() => {
   gap: 6px;
   /* The gutters are the place's own (.orbit-flight): taking them off again here cut the words with room to spare. */
   max-width: min(420px, 100%);
+  min-height: 0;
   pointer-events: auto;
+}
+
+/* Only the console gives way when the picture is short. */
+.orbit-ships > * {
+  flex: 0 0 auto;
 }
 
 .orbit-strip {
@@ -368,9 +285,8 @@ const jumpNote = computed(() => {
   font: 500 12px/1.4 var(--font-text);
 }
 
-/* The jump destination row, the plot card: small glass cards under the list. */
-.orbit-jump-to,
-.orbit-plot-card {
+/* The jump destination row: a small glass card under the list. */
+.orbit-jump-to {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -409,7 +325,7 @@ const jumpNote = computed(() => {
   height: 26px;
 }
 
-/* A destination marked: the row becomes the jump's preview, a small card like the plot's. */
+/* A destination marked: the row becomes the jump's preview, as wide as the nav console. */
 .orbit-jump-to.is-marked {
   flex-direction: column;
   align-items: stretch;
@@ -472,159 +388,8 @@ const jumpNote = computed(() => {
   font-size: 12px;
 }
 
-/* Back to the estimate: its place is held while there is nothing to go back to. */
-.orbit-btn.orbit-use-estimate {
-  width: 28px;
-  height: 28px;
-}
-
-.orbit-btn.orbit-use-estimate.is-off {
-  visibility: hidden;
-}
-
-/* One width, whatever the words say: a figure that changes must not move the controls under the pointer. */
-.orbit-plot-card {
-  flex-direction: column;
-  align-items: stretch;
-  width: 360px;
-  max-width: 100%;
-}
-
-.orbit-plot-hint,
-.orbit-plot-line {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0;
-  color: var(--text-muted);
-}
-
-/* The course: a leg is two lines, its number, name and hours, then its estimate and arrival. The list scrolls past five. */
-.orbit-course {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  max-height: 236px;
-  margin: 0;
-  padding: 0;
-  overflow-y: auto;
-  list-style: none;
-}
-
-.orbit-course-leg {
-  display: grid;
-  grid-template-columns: 16px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 1px 8px;
-}
-
-.orbit-course-n {
-  color: var(--attention);
-  font: 700 12px/1 var(--font-code);
-  text-align: center;
-}
-
-.orbit-course-name {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text-0);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.orbit-course-leg .orbit-field.is-hours {
-  gap: 4px;
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-.orbit-course-leg .orbit-field.is-hours input {
-  width: 84px;
-  height: 26px;
-}
-
-.orbit-course-meta {
-  grid-column: 2 / -1;
-  color: var(--text-muted);
-  font: 400 12px/1.4 var(--font-text);
-  font-variant-numeric: var(--tabular);
-}
-
-.orbit-course-total {
-  padding-top: 6px;
-  border-top: 1px solid var(--line-soft);
-  color: var(--text-1);
-}
-
-.orbit-course-sr {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-}
-
-.orbit-btn.orbit-course-undo {
-  height: 28px;
-  font-size: 12px;
-}
-
-.orbit-plot-line b {
-  color: var(--text-0);
-}
-
-.orbit-plot-fields {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 12px;
-}
-
 .orbit-field.is-hours input {
   width: 72px;
-}
-
-.orbit-accel {
-  display: flex;
-  gap: 2px;
-}
-
-.orbit-accel-g {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 1px;
-  height: 28px;
-  margin: 0;
-  padding: 0 7px;
-  border: 1px solid var(--control-line);
-  border-radius: var(--r-2);
-  background: transparent;
-  color: var(--text-1);
-  font: 600 12px/1 var(--font-code);
-  cursor: pointer;
-}
-
-.orbit-accel-g small {
-  color: var(--text-muted);
-  font-size: 9px;
-}
-
-.orbit-accel-g.is-on {
-  border-color: var(--signal);
-  background: var(--row-active);
-  color: var(--signal);
-}
-
-.orbit-plot-acts {
-  display: flex;
-  justify-content: flex-end;
-  gap: 6px;
-}
-
-.orbit-btn.orbit-add-leg,
-.orbit-btn.orbit-plot-cancel {
-  height: 28px;
-  font-size: 12px;
 }
 
 /* Narrow: the strip's words give way to the dot and Jump. */

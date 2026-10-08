@@ -100,6 +100,9 @@ campaign_records (id PK, type, kind, name, summary, details, tags JSON, anchor J
                   images JSON NULL, provenance JSON NULL, rev INT, seq INT, created_at, updated_at, deleted INT)
 campaign_links   (id PK, from_id, to_id, kind, role, link_order INT, since_json JSON NULL, until_json JSON NULL,
                   notes, visibility, provenance JSON NULL, rev INT, seq INT, created_at, updated_at, deleted INT)
+campaign_journal (id PK, kind, title, body, when_json JSON NULL, real_date NULL, sequence INT NULL,
+                  author, visibility, anchor JSON NULL, mentions JSON, rev INT, seq INT,
+                  created_at, updated_at, deleted INT)
 ```
 
 Rules of the `hexes` table:
@@ -127,18 +130,21 @@ Rules of the `hexes` table:
   `payload_hash` the sha256 of the payload JSON). The current payload stays on `lists`.
 - `hex_history` retention: last 50 revisions per hex and everything from the last 90 days;
   the weekly cron compacts older rows. Snapshots cover the long tail.
-- Schema version 2 stores campaign rows in the Durable Object. `campaign_records_fts`,
-  `campaign_journal` and `campaign_assets` are not created yet.
+- Schema version 3 stores campaign rows in the Durable Object, including `campaign_journal`.
+  `campaign_records_fts` and `campaign_assets` are not created yet.
 - `when_json` is the record's `when` object (`{ start: { year, day }, end? }`), or null.
   `since_json` and `until_json` are the link's day objects. `link_order` is the link's `order`.
-- `seq` is one counter per universe (`meta.campaignSeq`), stamped on every campaign write.
-  Tombstones stay in this slice. A restore writes the row with `deleted` 0 and `baseRev`
-  equal to the stored `rev`. Deleting a record tombstones its links in that same write.
+- `seq` is one counter per universe (`meta.campaignSeq`), stamped on every campaign write,
+  including a journal entry. Tombstones stay in this slice. A restore writes the row with
+  `deleted` 0 and `baseRev` equal to the stored `rev`. Deleting a record tombstones its links
+  in that same write. A journal entry's stored `mentions` are `mentionsOf(body)`; the list on
+  the change is not stored. Deleting a record leaves a journal entry anchored to it unchanged.
 - `provenance` is nullable JSON on records and links: null, or
   `{ mode: 'copy' | 'shared', universeId, recordId, rev, at }` (`CampaignProvenance`).
 
 Indexes: `hexes(sector_slug)`, `hex_history(at)`, `jobs(state)`, `campaign_records(seq)`,
-`campaign_records(type)`, `campaign_links(seq)`, `campaign_links(from_id)`, `campaign_links(to_id)`.
+`campaign_records(type)`, `campaign_links(seq)`, `campaign_links(from_id)`, `campaign_links(to_id)`,
+`campaign_journal(seq)`, `campaign_journal(kind)`.
 
 ## 4. Snapshot manifest (object, kind `snapshot`)
 

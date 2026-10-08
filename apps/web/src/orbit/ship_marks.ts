@@ -199,3 +199,40 @@ export function shipTags(marks: readonly ShipMark[], hits: readonly Hit[], opene
     }
     return { tags, more };
 }
+
+/** What a press on the picture means. */
+export type PressMeans =
+    | { kind: 'ship'; id: string }
+    | { kind: 'waypoint'; key: string }
+    | { kind: 'point' }
+    | { kind: 'body'; key: string }
+    | { kind: 'nothing' };
+
+/**
+ * The one rule for a press on the picture (Johnny, 2026-10-06: "Ship not being selected on
+ * click"). **A ship under the press is always that ship**, in or out of plotting: it is
+ * never a waypoint, and never the body it stands beside. Only then does plotting decide:
+ * while plotting, a body under the press, or one within the readout's snap of it, is a
+ * waypoint, and open picture is a point; otherwise a body is a selection and open picture
+ * is nothing.
+ */
+export function pressMeans(under: { ship: string | null; body: string | null; beside: string | null; plotting: boolean }): PressMeans {
+    if (under.ship) return { kind: 'ship', id: under.ship };
+    if (under.plotting) {
+        const key = under.body ?? under.beside;
+        return key ? { kind: 'waypoint', key } : { kind: 'point' };
+    }
+    return under.body ? { kind: 'body', key: under.body } : { kind: 'nothing' };
+}
+
+/** What the live plotter has under the pointer: a body, a point in AU, a ship (a press takes it), or nothing the picture can answer. */
+export type PlotHover = { key: string } | { point: { x: number; y: number } } | { ship: string } | { blank: true };
+
+/** Whether two readings are the same place, so a still pointer says nothing twice. */
+export function sameHover(a: PlotHover | null, b: PlotHover | null): boolean {
+    if (a === null || b === null) return a === b;
+    if ('key' in a) return 'key' in b && a.key === b.key;
+    if ('ship' in a) return 'ship' in b && a.ship === b.ship;
+    if ('blank' in a) return 'blank' in b;
+    return 'point' in b && a.point.x === b.point.x && a.point.y === b.point.y;
+}

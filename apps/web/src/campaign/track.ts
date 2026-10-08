@@ -39,6 +39,8 @@ const BAD_LEG = 'That leg is not a track leg.';
 const OUT_OF_ORDER = 'Legs must stay in time order.';
 const TOO_MANY = 'A track can have 500 legs.';
 const NO_LEGS = 'That track has no legs.';
+const PAST_END = 'There is no leg there.';
+const DEPARTED = 'That leg has already departed.';
 
 type PartyLike = {
     vesselId: string | null;
@@ -152,6 +154,29 @@ export function removeLastLeg(recordId: string): TrackResult {
     const current = trackOf(record);
     if (!current || current.length === 0) return { ok: false, message: NO_LEGS };
     writeTrack(record, current.slice(0, -1));
+    return { ok: true };
+}
+
+/**
+ * Replaces the track from `index` to its end with `legs`, in one commit.
+ * An empty list removes the tail. A leg that departed before `notBefore` is history
+ * and is refused (at the instant of its departure the ship has not moved: it is still
+ * editable, ruled 2026-10-07), and so is an index past the end. The caller re-dates
+ * whatever follows a moved waypoint; this only checks and writes.
+ */
+export function replaceLegsFrom(recordId: string, index: number, legs: readonly Leg[], notBefore: number): TrackResult {
+    const record = openVessel(recordId);
+    if (isRefusal(record)) return record;
+    const current = trackOf(record) ?? [];
+    if (!Number.isInteger(index) || index < 0 || index > current.length) return { ok: false, message: PAST_END };
+    if (index < current.length && current[index].departs < notBefore) return { ok: false, message: DEPARTED };
+    for (const leg of legs) {
+        if (!TrackLeg.safeParse(leg).success) return { ok: false, message: BAD_LEG };
+    }
+    const next = current.slice(0, index).concat(legs);
+    if (next.length > CAMPAIGN_LIMITS.track) return { ok: false, message: TOO_MANY };
+    if (!Track.safeParse(next).success) return { ok: false, message: OUT_OF_ORDER };
+    writeTrack(record, next);
     return { ok: true };
 }
 

@@ -223,16 +223,84 @@ file true: replace it, do not append to it.
   - **Answered 2026-10-06 (§180):** the journal is next (G8: yes; A, E and B have their
     prompts, B's being `b_build_hardening.md` for the idle hours); a leg under way stays
     history for the MVP (G9; `plan.md` backlog item 5). **Nothing is open with Johnny.**
-  - **Owed by the orchestrator when A reports K7a:** K7b for B (the Durable Object) and
-    K7c for A (the store).
+  - **K7a is accepted and on disk, unpushed (§183).** A goes on to K7c
+    (`a_journal_2.md`); B's K7b is written (`b_journal_k7b.md`), after the hardening step.
+    The tree does not build while D is mid-edit in `views/OrbitView.vue`: rehearse
+    nothing from the whole tree until D reports.
 - **Called for in §181, a C-only push** (`findings/push/c_rings_renderer.patch`,
   `c_surface.patch`, four new files by path): the ring cross-fade on Day/night, the
   enhanced look reading the corrected climate, city lights step 2. Rehearsed green; the
   live entry should become `index-DXPwg3e-.js`. Check `git log -1`. **Then:** C
   `c_city_lights_3.md`. A's route editing, A's journal schema, D's nav console and B's
   hardening are all still local.
+- **v6 has finished (§184): 512 of 512 at 08:32 UTC on 2026-10-07, nine hours, not
+  released.** 3,580,267 bodies; 19.4% liquid unresolved; 1,247 blocking; 43,376 with no
+  surface word. **B does `b_engine_t1_7.md` now**, then the hardening step (no longer
+  held), then K7b. Release waits on B's evidence and Johnny's ruling.
+- **Direction from Johnny (§187, 2026-10-07): character sheets next.** K13 part 4 goes
+  ahead of the timeline (K8) and the flight log. A `a_character_fields.md` (the §5.2a
+  transcription as a rules draft) after `a_journal_3.md`; D `d_character_sheet.md` after
+  `d_nav_console_2.md` (which now has section 4, a route with a jump after it). Johnny
+  copies A's draft into `rules/` and runs `rules:gen` between the two. **He skipped the
+  §185 push**: nothing since `9a95a0c` is committed; cut a fresh push at the next quiet
+  point. His five answers are G11 to G15. **G16: the character sheet PDFs are in
+  `assets/` (§188)**, so A's step is the PDF inventory (the ship sheet's road, §89), and
+  Johnny copies `findings/character_sheet_fields.json` to
+  `rules/mgt2e_character_sheet_fields.json` and runs `rules:gen` once it is checked.
+- **Direction from Johnny (§190): live character sheets and marketplace copies.** A live
+  sheet is owned by a player's account, shared with a referee and co-edited; a copy is an
+  independent instance in another universe, also through the free marketplace. This is
+  K11 and K10 (`slice_2_campaign.md`), with an owner and a second editor. D builds the
+  sheet behind a boundary now; A writes `findings/live_sheet_design.md`
+  (`a_live_sheet_design.md`) after the PDF inventory. **"Live" is Google Sheets (§191):**
+  pushed changes per box and presence; both prompts carry it. G17 to G20 are all
+  answered (§192); nothing is open with Johnny.
+  **The character sheet's fields are in `rules/` (§192):**
+  `rules/mgt2e_character_sheet_fields.json`, 420 widgets, generated wrapper written; D's
+  build is unblocked. A is on `a_live_sheet_design.md`. A's `a_journal_3.md` report was
+  never pasted.
+- **§193 (2026-10-07, late).** C's city lights step 4 is accepted as engineering and
+  **held: too dark** against Johnny's bar; `c_city_lights_4b.md` makes three variants
+  for him to pick from, and steps 3, 4 and 4b go live together. D's character sheet
+  design is accepted as the look; `d_character_sheet_2.md` re-bases it on the PDF and
+  builds. **D's report 1 (the nav console's second pass) was never pasted.** A hung
+  process holds local port 8787: agents now start their own API on their own port and
+  state directory (in D's prompt; owed to E's and B's next prompts).
+- **§194 (2026-10-07, late).** E's journal screens are accepted and **held for B's K7b**
+  (the tab must not go live before the server stores entries); `e_journal_build_2.md` is
+  E's second pass. **A push is rehearsed and offered:**
+  `findings/push/ships_and_schema_files.txt` (26 files: the nav console and its second
+  pass, A's route editing and journal data, the character sheet's rules file). The list
+  is by path, so it is right only while A, D and E stay out of those files; re-check
+  `git status` before giving the commands again. D's report on the nav console's second
+  pass is still unseen.
+- **State at §186 (2026-10-07, late).** The §185 push was **not yet run**; its list now
+  has 23 files (K7c added), re-rehearsed green. Accepted since: A's K7c, B's v6 evidence
+  (v6 **not released**), E's journal design. Prompts written: A `a_journal_3.md`, E
+  `e_journal_build.md`, B `b_v6_questions.md` (first B's two missing reports, the
+  hardening and K7b, both on disk and unread; then `findings/v6_open_cases.md`), D
+  `d_nav_console_2.md` after the push, C in `c_city_lights_4.md`. Open with Johnny: five
+  small questions (§185 three, E's two).
+- **C's city lights step 3 is accepted as built and held (§184):** it goes live with
+  step 4 (`c_city_lights_4.md`), after a fresh parity run. Johnny: hold (§185).
+- **Called for in §185, by path (`findings/push/nav_console_files.txt`, 18 files):** D's
+  nav console, A's route editing, K7a. Rehearsed green. Check `git log -1`, and the live
+  orbit chunk for "already departed". **Then:** D `d_nav_console_2.md` (a leg departing
+  exactly now stays editable; the unmeasured parts; the readout against a tag). **Open
+  with Johnny:** the last thrust live at once; a route that ends in a jump; a compact
+  console at 520 px. **Owed to A after K7c:** an optional "hours typed" field on a leg.
+  B is already in K7b (`apps/api/src/universe/`), with the v6 evidence and the hardening
+  report still to come.
 - **Follow-up 31, a flight log for every vessel** (§181): a paper design by B after K7b.
-  **Open with Johnny:** may a referee strike or correct a logged leg.
+  Ruled (G10): a logged leg may be struck (with Undo) and its note edited, never re-timed.
+- **Last push `9a95a0c`** (§182), tests green and live: C's rings, corrected climate and
+  city lights step 2. C has `c_city_lights_3.md`. **A trap in the rehearsal method, found
+  on this push:** the scratch copy resolves `@voyage/shared` (and engines, generation,
+  api) through `node_modules/@voyage/*`, which link to the **real** tree, so a rehearsal
+  builds against whatever is uncommitted in `packages/`. The live file names then differ
+  from the rehearsal's while the content is right. Until the scratch copy gets its own
+  `@voyage` links, check a deploy by content (a string only the pushed work has, and none
+  of the unpushed work's), not by the entry's name. Nothing is open with Johnny.
 - **Earlier: `703041d`, green.** **The stack by agent (§169), in order:**
   A `a_course_preview.md`, then `a_vessels_on_map.md`; D `d_ghost_wiring.md`, then
   `d_waypoints.md` (follow-up 28: select on the picture, the docked tag, a course of

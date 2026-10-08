@@ -24,9 +24,9 @@ import { OrbitRenderer, type DiscPainter, type FlightPreview } from './OrbitRend
 import type { Layers, Mode, Picture } from './picture.ts';
 import { OrbitStage } from './stage.ts';
 import { publishOrbitClock } from './running.ts';
-import { bodiesAtOf, datedBodies, sceneBodies, shipMarkOf, shipStanding, shipTags as tagsFor, type ShipStanding, type ShipTag, type TagsMore } from './ship_marks.ts';
+import { bodiesAtOf, datedBodies, pressMeans, sameHover, sceneBodies, shipMarkOf, shipStanding, shipTags as tagsFor, type PlotHover, type ShipStanding, type ShipTag, type TagsMore } from './ship_marks.ts';
 import { BODY_SNAP_PX, pictureOfAu, placeAtPicture, type PictureLayout } from './distance.ts';
-import { pictureBodies, placeShips, shipAt, standInMarks, type PlotReadout, type ShipMark, type ShipTrack } from './ships.ts';
+import { pictureBodies, placeShips, shipAt, waypointAt, standInMarks, type PlotReadout, type ShipMark, type ShipTrack } from './ships.ts';
 import ShipTags from './ShipTags.vue';
 import { readOrbitMotion, readOrbitTheme, type OrbitMotion } from './theme.ts';
 
@@ -52,6 +52,11 @@ const props = defineProps<{
     plotFrom?: string | null;
     /** The flight being previewed, one leg or a course, or null. Omitted, the dev stand-in may show one. */
     preview?: FlightPreview | null;
+    /**
+     * The selected ship's stored legs from this frame's date on. Omitted, the dev stand-in
+     * may show Surveyor's. A preview is drawn over it from the waypoint where they part.
+     */
+    route?: FlightPreview | null;
     /** When set, a ship drawn beside a body is not given a designator. */
     dockTag?: boolean;
     /** The dossier is open on the selected body: the pinned card leaves the survey to it (BodyCard surveyElsewhere). */
@@ -60,6 +65,12 @@ const props = defineProps<{
     shipTags?: boolean;
     /** Each ship's state in the strip's short words, by id: the tag's second line. */
     shipNotes?: Record<string, string>;
+    /** How many leading waypoints of the route cannot be picked up (the leg under way; all of a locked route). */
+    wayFixed?: number;
+    /** The same for the preview, which runs on from the route when they share its start. */
+    previewFixed?: number;
+    /** How many of the preview's waypoints are laid: any after them is the plotter's own leg, which is not picked up. */
+    previewLaid?: number;
 }>();
 
 const emit = defineEmits<{
@@ -71,6 +82,12 @@ const emit = defineEmits<{
     plotPoint: [au: { x: number; y: number }];
     /** A ship was pressed, on the picture or by its tag: select it. */
     ship: [id: string];
+    /** In plotting mode, what is under the pointer changed (at most once a painted frame); null when the pointer is off the picture. */
+    plotHover: [under: PlotHover | null];
+    /** In plotting mode, a drawn waypoint was picked up: its place in the route, or in the preview (which runs on from the route). */
+    wayGrab: [from: 'route' | 'preview', index: number];
+    /** The waypoint was let go: dropped where the pointer is, or put back (a press that did not move, or a cancel). */
+    wayDrop: [moved: boolean];
 }>();
 
 const route = useRoute();
@@ -151,7 +168,21 @@ function setHover(x: number, y: number): void {
 
 // ---- Pointer input ----------------------------------------------------------------------
 
-let press: { x: number; y: number; lastX: number; lastY: number; moved: boolean } | null = null;
+let press: { x: number; y: number; lastX: number; lastY: number; moved: boolean; way: boolean } | null = null;
+
+/** The drawn waypoint under a press, when it may be picked up: the preview's first (it is drawn over the route), then the route's. */
+function wayUnder(at: { x: number; y: number }): { from: 'route' | 'preview'; index: number } | null {
+    if (!props.plotting || !renderer) return null;
+    const drawn = renderer.waypoints();
+    const mark = props.plotFrom ? shipMarkOf(lastMarks, props.plotFrom) : undefined;
+    const ship = mark ? { x: mark.x, y: mark.y } : null;
+    const fixed = props.wayFixed ?? 0;
+    const laid = props.previewLaid ?? drawn.preview.length;
+    const inPreview = waypointAt(drawn.preview.filter((item) => item.index < laid), at, ship);
+    if (inPreview !== null) return inPreview >= (props.previewFixed ?? 0) ? { from: 'preview', index: inPreview } : null;
+    const inRoute = waypointAt(drawn.route, at, ship);
+    return inRoute !== null && inRoute >= fixed ? { from: 'route', index: inRoute } : null;
+}
 
 function local(event: MouseEvent): { x: number; y: number } {
     const rect = (canvasEl.value as HTMLCanvasElement).getBoundingClientRect();
@@ -161,7 +192,11 @@ function local(event: MouseEvent): { x: number; y: number } {
 function onDown(event: PointerEvent): void {
     if (event.button !== 0 || !canvasEl.value) return;
     canvasEl.value.setPointerCapture(event.pointerId);
-    press = { x: event.clientX, y: event.clientY, lastX: event.clientX, lastY: event.clientY, moved: false };
+    // A ship under the press is the ship (pressMeans); otherwise a waypoint under it is picked up, and the camera stays.
+    const at = local(event);
+    const way = props.shipTags && shipAt(tagMarks, at) ? null : wayUnder(at);
+    press = { x: event.clientX, y: event.clientY, lastX: event.clientX, lastY: event.clientY, moved: false, way: way !== null };
+    if (way) emit('wayGrab', way.from, way.index);
     dragging.value = true;
 }
 
@@ -174,6 +209,8 @@ function onMove(event: PointerEvent): void {
         return;
     }
     if (Math.hypot(event.clientX - press.x, event.clientY - press.y) > DRAG_SLOP) press.moved = true;
+    // A waypoint in hand moves, not the camera; the plotter's reading (readHover) says where it is.
+    if (press.way) return;
     stage.drag(event.clientX - press.lastX, event.clientY - press.lastY, press.moved);
     press.lastX = event.clientX;
     press.lastY = event.clientY;
@@ -183,35 +220,39 @@ function onMove(event: PointerEvent): void {
 function onUp(event: PointerEvent): void {
     if (!press) return;
     const moved = press.moved;
+    const way = press.way;
+    const downAt = { x: press.x, y: press.y };
     press = null;
     dragging.value = false;
     if (canvasEl.value && canvasEl.value.hasPointerCapture(event.pointerId)) canvasEl.value.releasePointerCapture(event.pointerId);
+    if (way) {
+        // Let go within the snap of where it was picked up, it is put back: its mark is a body at another date, not a place to drop on.
+        const back = Math.hypot(event.clientX - downAt.x, event.clientY - downAt.y) <= BODY_SNAP_PX;
+        emit('wayDrop', moved && !back && event.type !== 'pointercancel');
+        stale = true;
+        return;
+    }
     if (moved || event.type === 'pointercancel') return;
     const at = local(event);
     const hit = stage.pick(at.x, at.y);
-    // Plotting: a body is a destination, and the camera stays where it is.
-    if (props.plotting) {
+    // One rule (ship_marks.ts pressMeans): a ship under the press is always that ship, in or out of plotting.
+    const means = pressMeans({
+        ship: props.shipTags ? shipAt(tagMarks, at) : null,
+        body: hit ? hit.key : null,
         // A press just beside a body is that body (ruled 2026-10-06): a point is only ever set in open picture.
-        const body = hit ? hit.key : bodyBeside(at);
-        if (body) emit('plot', body);
-        else {
-            const au = pointUnder(at);
-            if (au) emit('plotPoint', au);
-        }
-        return;
-    }
-    // A ship's designator on the picture selects that ship, as its tag does.
-    const ship = props.shipTags ? shipAt(tagMarks, at) : null;
-    if (ship) {
-        emit('ship', ship);
-        return;
-    }
-    if (!hit) {
-        stage.release();
-        return;
-    }
-    stage.follow(hit.key, now());
-    emit('pick', hit.key);
+        beside: props.plotting && !hit ? bodyBeside(at) : null,
+        plotting: props.plotting === true,
+    });
+    if (means.kind === 'ship') emit('ship', means.id);
+    // Plotting: a body is a destination, and the camera stays where it is.
+    else if (means.kind === 'waypoint') emit('plot', means.key);
+    else if (means.kind === 'point') {
+        const au = pointUnder(at);
+        if (au) emit('plotPoint', au);
+    } else if (means.kind === 'body') {
+        stage.follow(means.key, now());
+        emit('pick', means.key);
+    } else stage.release();
 }
 
 function onLeave(): void {
@@ -258,12 +299,13 @@ function standPreview(clockDays: number): FlightPreview | null {
     if (props.preview) return props.preview;
     if (standInCount() <= 0) return null;
     const course = queryText('course');
-    if (course || (!queryText('point') && !queryText('ghost'))) return standCourse(clockDays, course || '3');
+    if (course) return standCourse(clockDays, course);
     const point = standPoint();
     if (point) return { point, departs: clockDays, arrives: clockDays + 1 };
     const current = plan.value;
     if (!current) return null;
     const ghost = queryText('ghost');
+    if (!ghost) return null;
     let toKey = '';
     let hours = 11 * 24;
     if (ghost) {
@@ -312,6 +354,26 @@ function standCourse(clockDays: number, mode: string): FlightPreview | null {
         ];
     }
     return [leg({ toKey: main.key }, 0), leg({ point }, 1), leg({ toKey: second.key }, 2)];
+}
+
+/**
+ * Surveyor's stored route: body, point, body, from this frame's date.
+ * `?line=` makes the first leg the one under way, so the picture shows what is left of it.
+ */
+function standRoute(clockDays: number): FlightPreview | null {
+    if (props.route) return props.route;
+    if (standInCount() <= 0) return null;
+    const course = standCourse(clockDays, '3');
+    if (!course || !Array.isArray(course)) return course;
+    const flight = standFlight();
+    if (!flight) return course;
+    const first = { ...course[0], departs: flight.departs, arrives: flight.arrives };
+    let rest = course.slice(1);
+    if (rest.length > 0 && rest[0].departs < flight.arrives) {
+        const shift = flight.arrives - rest[0].departs;
+        rest = rest.map((leg) => ({ ...leg, departs: leg.departs + shift, arrives: leg.arrives + shift }));
+    }
+    return [first, ...rest];
 }
 
 /** `?line=departs,arrives` fixes the stand-in party's flight. Absent, the party stays halfway. */
@@ -414,6 +476,34 @@ function openStack(bodyKey: string): void {
     stale = true;
 }
 
+/**
+ * The live plotter's reading (follow-up 29): what a press here would mean, told to the view
+ * when it changes. It is asked once a painted frame, never per pointer event.
+ */
+let lastHover: PlotHover | null = null;
+
+function readHover(): void {
+    let next: PlotHover | null = null;
+    if (props.plotting && pointer && (!press || press.way)) {
+        const hit = stage.pick(pointer.x, pointer.y);
+        const means = pressMeans({
+            ship: props.shipTags ? shipAt(tagMarks, pointer) : null,
+            body: hit ? hit.key : null,
+            beside: hit ? null : bodyBeside(pointer),
+            plotting: true,
+        });
+        if (means.kind === 'ship') next = { ship: means.id };
+        else if (means.kind === 'waypoint') next = { key: means.key };
+        else {
+            const au = pointUnder(pointer);
+            next = au ? { point: au } : { blank: true };
+        }
+    }
+    if (sameHover(lastHover, next)) return;
+    lastHover = next;
+    emit('plotHover', next);
+}
+
 /** The point under a press on empty picture, in AU from the primary; null where the readout is blank. */
 function pointUnder(at: { x: number; y: number }): { x: number; y: number } | null {
     const current = plan.value;
@@ -439,9 +529,11 @@ function marksFor(picture: Picture, clockDays: number): readonly ShipMark[] | un
     if (props.ships) return props.ships;
     if (standInCount() <= 0) return undefined;
     const flight = standFlight();
-    if (!view) return standInMarks(props.hexKey, clockDays, picture);
+    const routed = standRoute(clockDays);
+    const partyBody = flight && Array.isArray(routed) && routed[0] && routed[0].toKey ? routed[0].toKey : undefined;
+    if (!view) return standInMarks(props.hexKey, clockDays, picture, undefined, undefined, undefined, partyBody);
     const places = flight ? (key: string, at: number) => picturePlace(view, key, at) : undefined;
-    return standInMarks(props.hexKey, clockDays, picture, places, flight ?? undefined, placeAu);
+    return standInMarks(props.hexKey, clockDays, picture, places, flight ?? undefined, placeAu, partyBody);
 }
 
 function plotFor(marks: readonly ShipMark[] | undefined): PlotReadout | null | undefined {
@@ -555,13 +647,16 @@ function paint(clockDays: number, time: number): void {
     const started = now();
     const ships = marksFor(frame.picture, clockDays);
     placeTags(frame.picture, frame.view);
+    readHover();
     const plot = plotFor(ships);
     const preview = standPreview(clockDays);
+    const stored = standRoute(clockDays);
     renderer.draw(current, frame.picture, frame.view, {
         selected, days: clockDays, time, motion: !reduced, layers: stage.layers,
         ...(ships && ships.length > 0 ? { ships } : {}),
         ...(plot ? { plot } : {}),
         ...(preview ? { preview } : {}),
+        ...(stored ? { route: stored } : {}),
         ...(props.dockTag ? { dockTag: true } : {}),
         ...(props.shipTags ? { shipTags: true } : {}),
     });
@@ -602,7 +697,7 @@ watch(() => props.layers, (layers) => {
     stale = true;
 }, { deep: true });
 
-watch(() => [route.query.campaignStandIn, route.query.ghost, route.query.line, route.query.point, route.query.course, props.ships, props.plot, props.tracks, props.plotting, props.plotFrom, props.preview, props.dockTag, props.shipTags] as const, () => { stale = true; });
+watch(() => [route.query.campaignStandIn, route.query.ghost, route.query.line, route.query.point, route.query.course, props.ships, props.plot, props.tracks, props.plotting, props.plotFrom, props.preview, props.route, props.wayFixed, props.dockTag, props.shipTags] as const, () => { stale = true; });
 
 /** js/system_viewer.js:2084-2092: the canvas says which layout it shows. */
 const canvasLabel = computed(() => {
@@ -655,7 +750,12 @@ onBeforeUnmount(() => {
     renderer = null;
 });
 
-defineExpose({ paint, fit, shipStatus });
+/** Where this frame drew the route's waypoints and the preview's, so a drag starts there. */
+function waypoints() {
+    return renderer ? renderer.waypoints() : { route: [], preview: [] };
+}
+
+defineExpose({ paint, fit, shipStatus, waypoints });
 </script>
 
 <template>

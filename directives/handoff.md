@@ -4939,3 +4939,414 @@ logged leg.
 **C's next:** `prompts/c_city_lights_3.md` (a dev harness for the enhanced program and the
 step 2 crops it owes, the parity script, then step 3: the cube C, static filtering, the
 day material).
+
+## 182. Pushed `9a95a0c` (C's rings, corrected climate, city lights step 2), live; a flaw in the rehearsal method; the flight log ruling (2026-10-06, 21:30 Central)
+
+- **Pushed and live.** `9a95a0c`, the `test` run green in 1 min 36 s. The live orbit chunk
+  holds C's `ringShown`, and none of the unpushed work (no nav console, no "already
+  departed", no journal schema). The live entry and orbit chunk are the same size to the
+  byte as the rehearsal's (166,104 and 179,420).
+- **But the live names are not the rehearsal's** (`index-D1Xa8SwN.js` and
+  `OrbitView-DVFoAteQ.js` live; `index-DXPwg3e-.js` and `OrbitView-TAAF7GZ1.js`
+  rehearsed). Cause, found by comparing the shared chunk: the scratch copy's
+  `node_modules` is a junction to the real one, and `node_modules/@voyage/shared` there
+  links to the **real** `packages/shared`, which now holds Agent A's unpushed journal
+  schema. So the rehearsal bundled, and typechecked against, A's working copy of
+  `packages/shared` (about 1 KB more in the shared chunk, which renames every chunk that
+  imports it). The same holds for `@voyage/engines`, `generation` and `api`.
+  - It did no harm here: A's change is additive, CI tested the commit itself, and
+    Cloudflare built it. It was invisible before because nobody had uncommitted work in
+    `packages/`.
+  - **For the next rehearsal:** give the scratch copy a real `node_modules` whose
+    entries are junctions to each of the real one's, except `@voyage`, which points at
+    the scratch copy's own `packages/` and `apps/api`. Until that is done, a rehearsal
+    with uncommitted work in `packages/` is a check of the web tree only, and a deploy is
+    checked by content, not by the entry's name.
+- **Johnny, G10:** a referee may strike a logged leg (with Undo) and edit its note; a
+  logged leg is never re-timed or re-aimed. In follow-up 31.
+- **C** has `prompts/c_city_lights_3.md`. **v6:** 207 of 512 at 02:31 UTC.
+- **On disk and unpushed:** A's route editing and journal schema (in flight), D's nav
+  console (in flight), B's build hardening (held until v6 is done: `apps/api/src/jobs/`,
+  `routes/admin.ts`, two test files).
+
+## 183. A's old-tail fix and the journal schema (K7a) accepted; K7b written for B; A goes on to the store (2026-10-06, late)
+
+**A's report on `prompts/a_journal_1.md`, checked.**
+- **The old tail.** `k31_route_parting.png` looked at: one arrival tag (the preview's),
+  the stored route dim from the parting waypoint (line alpha 0.28 against 0.72, rings
+  0.22 against 0.55, no number, no tag). `orbit_renderer` tests pass.
+- **K7a.** The diff of `packages/shared/src/schemas/campaign.ts` read whole: the limits,
+  `JOURNAL_ID`, `CAMPAIGN_ENTRY_KINDS`, `CampaignEntry` (strict; a session has a
+  sequence, no other kind does), `mentionsOf` (record ids and `hex:` keys, distinct, first
+  seen, capped), `EntryChange`, `CampaignChanges.journal` counted in the row limit, an
+  optional `CampaignPage.journal`, `'journal'` in `applied` and `conflicts`.
+  `tests/shared/campaign.test.js` 8 of 8 here. **Accepted.** A handout with
+  `visibility: 'referee'` parses, by the orchestrator's call; Johnny was told (G8).
+- **Two things in A's report that are not defects.** (1) `npm run build` failed in
+  `views/OrbitView.vue`: that is Agent D in mid-edit (a second `const route`, a
+  `CourseRow.to`), not A; the tree does not build until D reaches a green point, so
+  **nothing is rehearsed from the whole tree before D reports**. (2) "`rules:gen`
+  reported 0 entries" for the climate and travel files: the generator's log line counts
+  only arrays; both generated files are whole (558 and 3,400 bytes).
+- **Not pushed.** K7a is additive and invisible; it rides with the next push. (Once it is
+  committed, the rehearsal trap of §182 is closed for `packages/shared`.)
+
+**Next.** A: `prompts/a_journal_2.md` (K7c, the store), written in §180 and still right
+against the schema as shipped. B: `prompts/b_journal_k7b.md` (the table, paging, apply
+with conflicts, `mentions` recomputed by the server, the limit, every place that walks
+the campaign's tables), after the hardening step; T1.7 ahead of it if v6 finishes.
+**Known until K7b ships:** the server parses a change carrying `journal` and drops it.
+Nothing sends one.
+
+## 184. v6 has finished (512 of 512, nine hours, unreleased); C's city lights step 3 accepted as built and held for step 4 (2026-10-07, evening)
+
+**v6, measured read-only from the CDN on 2026-10-08 at 02:44 UTC.**
+- All 512 per-sector reports are there. First 23:32:00 UTC on 10-06, last 08:32:07 UTC
+  on 10-07: **nine hours**. Not released: `/api/truth/versions` lists v2 to v5, and
+  `truth/v6/manifest.json` is 404.
+- **The total report (fetched past the cache, last written 08:33:34 UTC), 512 sectors:**
+  3,580,267 bodies seen and changed. Changed by field: `surfaceTempBand`,
+  `orbitalTempBand` and `reconciliation` on every body; `liquidStatus` 2,986,933;
+  `liquidType` 1,370,089. Diagnostics: `liquid-unresolved` 694,946 (19.4%);
+  `surface-unknown` 43,376; `hydro-invalid` 1,247 (the blocking list); none
+  `orbital-unknown` or `temperature-inverted`. Liquid outcomes: `ice-zero` 946,748;
+  `ice-frozen` 600,311; `known-outside` 444,310; `known-valid` 432,431; `ice-thaw`
+  364,059; `unknown-exotic` 139,570; `zero` 58,230; `hydro-invalid` 1,247; `missing` 27.
+- **B: `prompts/b_engine_t1_7.md` now**, ahead of the hardening step and of K7b. The
+  hardening files are no longer held by v6; they are pushed when B reports that step.
+- **Before any release, unchanged:** B's evidence, then Johnny on the 19.4% unresolved,
+  the 1,247 blocking and the 43,376 with no surface word.
+
+**C's report on `prompts/c_city_lights_3.md`, checked.**
+- Whole tree: 922 tests, 913 pass, 0 fail. The harness is `/dev/city-lights`, added in
+  `router.ts` only under `import.meta.env.DEV`. The step 2 crops C owed are on disk.
+- Frames looked at: Rhylanor near (step 3 against step 2), Rhylanor day against the night
+  cube (the network sits on the grey built ground), Pavabid near.
+- **Accepted as built, not pushed.** Two reasons. (1) **The look dips at this step**: the
+  filled glow of step 2 (which is live) is gone and step 4's glow is not there yet, so
+  Rhylanor's night side is a thin network on darker ground, with the night cloud reading
+  as grey patches lighter than the ground. Johnny's bar for this work is spectacle. (2)
+  **Parity is stale**: step 3 edited `surface/vanilla/gl.ts`, `gl_bake.ts` and
+  `gl_shade.ts`, and the report reads as parity run before those edits.
+- **`prompts/c_city_lights_4.md`:** parity first on the tree as it stands; the two
+  questions about the look (what lights night cloud; the Pavabid crop's two discs); then
+  the glow taps and the soft shoulder, with a step 2 | step 3 | step 4 comparison strip
+  per world for Johnny to judge by. Steps 3 and 4 are pushed together.
+- Put to Johnny: hold step 3 for step 4 (recommended), or push it now.
+
+**Also on disk:** A is in K7c (`campaign/journal.ts`, the store, the commit path). D is
+still in `views/OrbitView.vue`; C's build passed, so the tree built at that moment.
+
+## 185. Johnny: hold city lights step 3 for step 4. D's nav console accepted; the push with A's route work and K7a rehearsed (2026-10-07, evening)
+
+- **Johnny, city lights:** hold step 3; steps 3 and 4 go live together.
+- **D's report on `prompts/d_nav_console.md`** (pasted partly garbled; read against the
+  tree). Built: 0a `pressMeans` in `ship_marks.ts` (a ship under a press is always that
+  ship; read), 0b the right-hand stack on one edge, 18 px in, riding under the drawer
+  (`fu29_stack_under_drawer.png` looked at), 0c the stored route shown and editable
+  through A's pieces (`storedRoute`, `routeFixed`, `routePreview` in `course.ts`), the
+  flow, the live plotter, the console's look (`fu29_route_then_course.png`: the NAV tab,
+  the six-notch throttle with the rust tag, mono figures, Route and Then rows, one filled
+  control). **Accepted.** D could not sign in on production, so 0a was reproduced and
+  fixed locally only.
+- **Not re-run by D after 0c went in:** widths, the Tab walk, reduced motion with route
+  rows; also a touch pointer, a locked route in the browser, an edit while the clock
+  runs. All in `prompts/d_nav_console_2.md`.
+- **D's seven questions, as taken.** (1) the last thrust offered and the plotter live at
+  once: stands, put to Johnny. (2) Esc closes a drawer before releasing the ship: stands.
+  (3) **a leg departing exactly at the view's date is locked**, so the first waypoint of
+  a course just added cannot be dragged: **ruled by the orchestrator, under way only
+  after the departure instant** (`<`, not `<=`, in `storedRoute` and `replaceLegsFrom`);
+  D's next step, with leave for the one comparison in `campaign/track.ts`. (4) typed
+  hours are lost when a stored route is re-timed: **ruled, the leg records it**; an
+  optional field from A after K7c. (5) a route that ends in a jump is locked: put to
+  Johnny (recommended: edit allowed, the jump and what follows keep their durations and
+  move in time). (6) no compact console at 520 px: stands, put to Johnny. (7) the four
+  older design choices keep their defaults.
+- **The push, rehearsed.** By path, `findings/push/nav_console_files.txt` (18 files: D's
+  eight, A's route work in `track.ts`, `ships.ts`, `OrbitRenderer.ts`, `OrbitCanvas.vue`
+  and their tests, and K7a in `packages/shared` with its test). Left out, in flight: A's
+  K7c (`campaign/store.ts`, `commit.ts`, `journal.ts`), C's steps 3 and 4 (`surface/`,
+  `dev/city-lights/`, `router.ts`), B's work in `apps/api` (the hardening and, already
+  begun, K7b). Scratch copy of `9a95a0c` with exactly those files: `vue-tsc` exit 0,
+  `vite build` done (`index-BUu0j880.js`, `OrbitView-dhTSl5k_.js`), `tsc -p apps/api`
+  exit 0, 908 tests, 897 pass, 0 fail, 11 skipped, check clean. The scratch copy's
+  `@voyage/shared` is the real one (§182), which here equals what is pushed.
+  After the push, check by content: the live orbit chunk holds "already departed".
+- **Known on the live build after this push, until D's second pass:** right after "Add
+  course" the first waypoint cannot be dragged (the others can).
+
+## 186. A's journal store (K7c), B's v6 evidence (T1.7) and E's journal design accepted; the §185 push not yet run and re-rehearsed with K7c (2026-10-07, late)
+
+**The §185 push has not been run** (`git log -1` is still `9a95a0c`; the live orbit chunk
+has no "already departed"). It was re-rehearsed with K7c added: 23 files in
+`findings/push/nav_console_files.txt`; scratch copy of `9a95a0c` with exactly those:
+`vue-tsc` exit 0, `vite build` done (`index-rN_8cT47.js`, `OrbitView--WjtoNWk.js`),
+`tsc -p apps/api` exit 0, 915 tests, 904 pass, 0 fail, 11 skipped, check clean.
+
+**A, K7c (`prompts/a_journal_2.md`): accepted.** `campaign.journal`, the commit path,
+`campaign/journal.ts`; `campaign_journal` and `campaign_store` tests 21 of 21 here.
+`when` comes from `splitDays` on the clock (the tree's own conversion; no calendar rule
+chosen). The check and build failures in A's report are C's `dev/city-lights` harness in
+mid-edit. **Two things change to match E's design** (`prompts/a_journal_3.md`): the
+list's order (newest by `updatedAt`; today's order kept as `entriesByDate` for K8) and
+session numbers never reused, deleted ones included. The same prompt adds
+`hoursTyped` on a leg (D's question 4, §185).
+
+**E, the journal design (`findings/journal_design.md`, mockups `kj_*`): accepted.**
+`kj_pane_full.png` and `kj_list_column.png` looked at: a third tab, the list with a kind
+filter and search, the session open with its dates, place, Referee/Players and the
+Mentioned rail. E's two questions go to Johnny at their recommended answers (an untitled
+row shows the body's first line; session numbers are never reused).
+`prompts/e_journal_build.md`: new files under `workspace/journal/`, the least lines in
+`workspace/CampaignPanel.vue` and `shell/pane.ts`, built against A's store and B's
+on-disk table through the local API.
+
+**B, T1.7 (`findings/v6_shadow_evidence.md`): accepted.** The per-sector sum equals the
+total. Nine sectors, 3,198 trees, 75,422 bodies: outside the five reconciled fields
+every tree matches v5; no resolved liquid outside its window; no label on zero
+coverage; the climate word matches the classifier. v5 untouched. Left open by the
+evidence: 694,946 unresolved liquids, 1,247 blocking, 43,376 unclassified; the Tier 2
+defect unchanged (mainworld `atmCode` / `hydroCode` against the chart digit: 2,873 of
+3,198 mainworlds in those sectors, e.g. Esalin 1004); the vanilla renderer still on its
+own Kelvin rule; no v6 manifest, overview or polities file. **Not released.**
+- **B's reports on the hardening step and on K7b have not reached the orchestrator**,
+  though both are on disk (`apps/api/src/jobs/`, `routes/admin.ts`; `universe/campaign.ts`,
+  `schema.ts`, `routes/campaign_export.ts`, three `tests/api` files). Neither is pushed
+  unread. `prompts/b_v6_questions.md` asks for both first, then
+  `findings/v6_open_cases.md`: the unresolved sorted into cases with counts and the
+  question each puts to Johnny (no recommendation from Traveller knowledge), the same for
+  the unclassified and the blocking, how Johnny can look at v6 unreleased, and what a
+  release still needs.
+
+**Still open with Johnny from §185:** the last thrust live at once; a route that ends in
+a jump; a compact console at 520 px. New: E's two (untitled rows; session numbers).
+
+## 187. Johnny: the push skipped; all five recommendations taken; "next step of work should get us to character sheets" (2026-10-07, late)
+
+- **The §185/§186 push was not run** ("I skipped push"). `9a95a0c` is still the last
+  commit. The 23-file list stays right only until an agent edits one of its files; A, D
+  and E are about to. **The next push is cut afresh at the next quiet point** (expect
+  hunks again), carrying the nav console, the route editing, K7a, K7c and whatever is
+  accepted by then.
+- **Answers (G11 to G15 in `questions_for_johnny.md`):** the last thrust is offered and
+  the plotter is live at once; a route that ends in a jump is editable, the jump and
+  what follows keeping their durations and moving in time (now section 4 of
+  `prompts/d_nav_console_2.md`); no compact console at 520 px; an untitled journal row
+  shows the body's first line; a session number is never reused.
+- **Character sheets are next (K13 part 4).** They were waiting on a fillable PDF that
+  is still not in `assets/`. They need not: the official sheet, front and back, was
+  supplied on 2026-10-02 and is transcribed in `campaign_manager_plan.md` §5.2a.
+  - **A, `prompts/a_character_fields.md`** (after `a_journal_3.md`): the transcription
+    as `findings/rules_drafts/mgt2e_character_sheet.json`, a readable table, a shape
+    test; nothing from memory. Johnny then copies it into `rules/` and runs
+    `npm run rules:gen`.
+  - **D, `prompts/d_character_sheet.md`** (after `d_nav_console_2.md`): the design
+    (`findings/character_sheet_design.md`, `kc_*`) and the build on the person's page:
+    the sheet as the panel's default, collapsible sections, frozen keys, pills; every
+    box stores what is typed, nothing computed. D stops after the design if the rules
+    file is not in `rules/` yet.
+  - **Still Johnny's to supply, and not needed for the first sheet** (plan §10 Q1): how a
+    characteristic's value gives its DM, each skill's specialities, what Rads, Wounds
+    and Recovery Period mean. Until then the DM is typed and a speciality is free text.
+  - Asked of Johnny: whether a fillable character sheet PDF exists; if so it goes in
+    `assets/` and B inventories it against A's draft.
+- **The timeline (K8) and the flight log (follow-up 31) move behind the character
+  sheet.** The journal's screens (E) and the journal's server step (B, on disk, report
+  owed) carry on.
+
+## 188. The character sheet PDFs are in `assets/`; the PDF becomes the source (2026-10-07, late)
+
+- Johnny: "prompts sent, character sheets in /assets". `assets/Character Sheet
+  2026_fillable.pdf`, `..._printletter.pdf`, `..._printta4.pdf` (his file names), already
+  staged by him. G16 answered: the PDF exists.
+- **So K13 part 4 takes the ship sheet's road exactly (§89):** a read-only inventory of
+  the fillable PDF's widgets, copied by Johnny into `rules/`, then D's sheet.
+  `prompts/a_character_fields.md` was **rewritten**: `findings/character_sheet_fields.json`
+  in the ship file's shape, `character_sheet_fields.md` with the diff against §5.2a both
+  ways, `character_sheet_groups.md` (which widgets make each section, table, value-and-DM
+  pair and the skills block: names and positions only), a shape test. A after
+  `a_journal_3.md`; the inventory was B's job for the ship, and B is loaded.
+- `prompts/d_character_sheet.md` was edited to match: the rules file is
+  `rules/mgt2e_character_sheet_fields.json`, the PDF wins over §5.2a, the layout is D's
+  and is tested against the file. D reads it after `d_nav_console_2.md`, so nothing is
+  re-sent.
+- **Johnny's two lines, when A reports and the inventory is checked:**
+  `cp findings/character_sheet_fields.json rules/mgt2e_character_sheet_fields.json` and
+  `npm run rules:gen`.
+- Handed out by Johnny: D (`d_nav_console_2.md`, then `d_character_sheet.md`), and A, B,
+  E as in §186. No push since `9a95a0c`.
+
+## 189. A did the first version of the character prompt (the §5.2a transcription); kept, and the PDF inventory is still owed (2026-10-07, 22:30)
+
+- A's report is on `prompts/a_character_fields.md` as first written, read before the
+  rewrite of §188: `findings/rules_drafts/mgt2e_character_sheet.json` (20 sections, 46
+  fields, 23 table columns, 39 skill names, `notSupplied` listed) and a readable table.
+  Looked at: it parses, sections front then back. **Accepted as the transcription. It
+  does not go into `rules/`.** The prompt now opens by telling A to move both files to
+  `findings/character_sheet_transcription.{json,md}` and then do the PDF inventory.
+- A's two questions (the type of the six profile entries; the types of the table
+  columns) are answered by the PDF's widgets, not by Johnny.
+- **`a_journal_3.md` is on disk** (`entriesByDate` in `campaign/journal.ts`, `hoursTyped`
+  in the shared schema) **and its report has not been pasted.** Whole tree per A: 959
+  tests, 950 pass, 0 fail. Read at the next push.
+
+## 190. Johnny: live character sheets owned by a player and co-edited with the referee; characters copied between universes through the marketplace (2026-10-07, late)
+
+- **His words are in `slice_2_campaign.md`** under K10 and K11, which already held both
+  ideas in outline (K10 "instanced" copies; K11 shared records in an account library;
+  `CampaignProvenance.mode` is already `'copy' | 'shared'`). What is new: **the live
+  character is owned by the player's account, and the referee co-edits it**; and a copy
+  can travel through the free marketplace.
+- **What it needs that does not exist:** any link between two accounts (no account sees
+  into another's universe today), the account library, and a way for a change by one
+  editor to reach the other's open page (the store commits and takes conflicts; nothing
+  is pushed).
+- **What changes now:** one paragraph in `prompts/d_character_sheet.md`: the sheet
+  component takes a sheet document and emits changes, and never reads the record, the
+  store or the universe, so the values can move from the record to a live sheet later
+  without touching the screen.
+- **Next, on paper:** `prompts/a_live_sheet_design.md` (A, after the PDF inventory), to
+  `findings/live_sheet_design.md`: the model, who may do what and the smallest thing
+  that connects two accounts, what "live" honestly means with the sync there is and what
+  a pushed update costs, the edges, the copy and the marketplace against the git model,
+  the steps and their lanes, the questions.
+- **Put to Johnny (G17 to G20):** what stays the referee's own about a player's
+  character; whether the referee may edit the whole sheet; whether a game keeps a frozen
+  copy when a live character leaves it; how live "live" is for the first version.
+- **Roadmap as it now stands:** the character sheet (in flight) → live sheets and the
+  first player-to-referee sharing (design, then build) → characters in the marketplace
+  with systems (Slice 4). The journal's screens and server step carry on beside it. The
+  timeline (K8) and the flight log wait behind.
+
+## 191. Johnny: "live" means two people in Google Sheets; A's PDF inventory of the character sheet accepted (2026-10-07, late)
+
+- **G20 answered:** "Think of it like two people working in Google Sheets at the same
+  time." So: a box changed by one appears for the other at once with no reload;
+  presence (who is on the sheet and which box they are in); a box lands when it is
+  committed and the later commit stands; typing inside one box is not merged letter by
+  letter. That is a pushed channel (the live character's Durable Object holding the open
+  pages' WebSockets), which `plan.md` had deferred to after Slice 5 and which is now
+  pulled forward for sheets. **G18 is taken as yes** from the same answer (both edit
+  anything). G17 and G19 are still open; the design assumes their recommended answers.
+  - `prompts/a_live_sheet_design.md` section 3 rewritten to that bar, with his answers at
+    its foot.
+  - `prompts/d_character_sheet.md` gained three rules that make it possible later: a
+    change is one box (never the whole sheet); values may change under the reader while
+    the box being typed in keeps its text, caret and focus; presence has a place (an
+    optional map of box to person, and enter/leave events), designed now and empty in
+    this step.
+- **A's inventory (`prompts/a_character_fields.md`, the rewritten one): accepted.**
+  Checked here: `findings/character_sheet_fields.json` has the ship file's exact shape
+  (`source`, `pageSize`, `box`, `fields` of `name`, `page`, `type`, `box`, `section`),
+  420 widgets, 420 unique names, 410 text and 10 checkboxes, 317 on page 1 and 103 on
+  page 2, no field without a box or a section; the shape test passes. Sections: Personal
+  Data File 25, Skills 149, Augments 15, Armour 40, Weapons 56, Equipment 32, Finances 8,
+  Wounds 16, Careers 30, History & Background 1, Allies, Contacts, Rivals, Enemies 12
+  each. Read with pypdf 6.19.0. The transcription was moved to
+  `findings/character_sheet_transcription.{json,md}`; only 15 of its names match the 2026
+  PDF, so the PDF wins everywhere.
+  - A's two questions answered by the orchestrator, in D's prompt: the two uncaptioned
+    "Other" characteristic hexes and the eleven blank `Skill/Ability` rows are slots the
+    referee names; free text, a typed value and DM; keys keep the PDF's spelling.
+  - **Johnny's two lines:** `cp findings/character_sheet_fields.json
+    rules/mgt2e_character_sheet_fields.json` and `npm run rules:gen`.
+- D has begun the character sheet's design (`findings/character_sheet_design.md` and a
+  mockup page are on disk). A goes on to `a_live_sheet_design.md`.
+
+## 192. The character sheet's fields are in `rules/`; G17 and G19 answered yes (2026-10-07, late)
+
+- **Johnny copied the inventory:** `rules/mgt2e_character_sheet_fields.json` equals
+  `findings/character_sheet_fields.json` byte for byte, and `npm run rules:gen` wrote
+  `packages/engines/src/generated/rules/mgt2e_character_sheet_fields.js` (420 entries).
+  D's build of the character sheet is unblocked.
+- **G17, yes:** the sheet, the name, the portrait and the summary are live and shared;
+  each game keeps its own layer (where the character is, links, the referee's notes),
+  unseen by the player unless the referee shares it. **G19, yes:** a game keeps a frozen
+  copy, marked as no longer live, when a live character leaves it. Both are now at the
+  foot of `prompts/a_live_sheet_design.md` as rulings, not assumptions. All four of
+  G17 to G20 are closed.
+- Handed out: A `a_live_sheet_design.md`. Nothing is open with Johnny. No push since
+  `9a95a0c`.
+
+## 193. C's city lights step 4 accepted as engineering and held: the worlds are too dark; D's character sheet design accepted as the look, to be re-based on the PDF (2026-10-07, late)
+
+**C, `prompts/c_city_lights_4.md`.**
+- Checked here: `surface_city_cube`, `surface_city_gates`, `surface_gl` 11 of 11;
+  `city_design_s4_rhylanor_compare.png` and `..._pavabid_compare.png` looked at.
+- C's findings, accepted: the grey night cloud of step 3 was a spill of blurred
+  population from cube B (the same patch 28.9 → 68.5 in luminance), outside the design
+  and now dropped; the Pavabid crop's second disc is Pavabid A-X, 3 px away at the pin;
+  glow weights raised to 1.15 tight and 0.55 broad; worst frame 33.2 ms; glow adds no
+  cube bytes. Parity: the run before the glow exited 1 on one shade row (Ocean radius
+  1100, 2 pixels, 1 channel step, marked `allowedDrift`, which the driver does not read);
+  the run at the end exited 0. **A defect in the driver to list, not patched.**
+- **Held, on the orchestrator's reading of the strips:** step 4 is the more correct
+  picture and the less impressive one. Rhylanor (population 9, TL15) goes from a night
+  side alive from limb to terminator (step 2, live) to a few glowing knots on black, and
+  is nearly a dark disc at far 60; Pavabid (population 8) shows almost nothing. Johnny's
+  bar is spectacle, and most worlds are seen at 20 to 60 px.
+- **`prompts/c_city_lights_4b.md`:** three variants for Johnny to choose from, by the
+  ledger's own parameters: A (step 4), B (fuller network and far-size glow for high
+  population), C (B plus a low urban sheet on built ground for the highest population
+  and tech). One strip per world (step 2 | A | B | C, near 320 and far 60/40/20), an
+  orbit view for B and C, the numbers, the acceptance list and budget re-checked.
+  **Steps 3, 4 and 4b go live together**, after Johnny picks.
+
+**D, "Report 2" on `prompts/d_character_sheet.md` (the design; report 1, the nav
+console's second pass, has not been pasted).**
+- D stopped after the design, as told, because the rules file was not yet in `rules/`
+  when it looked. It is now (§192). The design (`findings/character_sheet_design.md`, 36
+  `kc_*`) is **accepted as the look**, but it stands on the 2026-10-02 transcription, and
+  it was made before the "move house" and "Google Sheets" rules were added to the prompt.
+- **`prompts/d_character_sheet_2.md`:** re-read the prompt; re-base on the PDF's fourteen
+  sections and 420 widgets; then build. D's six questions are answered there from the
+  PDF: one Personal Data File section; the profile strip is display only, values as
+  typed (the 2026 PDF has no profile widgets); no Total Mass box on the PDF, so no total;
+  no extra skill lines (the eleven blank rows are the room); Allies, Contacts, Rivals
+  and Enemies have six name-and-notes rows each on the PDF, with linked records as pills
+  above; the DM is typed.
+- **The local API.** D could not do its browser pass: port 8787 is held by a process
+  (pid 69888 at the time) that does not answer, and another listens on 8788. Agents are
+  sharing and colliding on local servers. D's prompt now says: your own API on a free
+  port with its own state directory, your own Vite pointed at it, stopped when done.
+  The same line is owed to E and B in their next prompts. Johnny was told about the hung
+  process.
+- **Owed from D's unpasted report 1:** whatever the readout-against-tag fix needs from
+  Agent A (the tag boxes handed to the renderer).
+
+## 194. E's journal screens accepted and held for K7b; a push of the ship controls, A's journal data and the character sheet's rules file rehearsed (2026-10-07, late)
+
+**E, `prompts/e_journal_build.md`: accepted.** `journal_screen` and `pane` tests 15 of 15
+here; `kj_built_pane_full.png` looked at beside the mockup. New: `workspace/journal/`
+(seven files). E's lines in shared files, as listed in its report: `CampaignPanel.vue`,
+`shell/pane.ts`, `shell/PanelHost.vue`, `views/MapView.vue`, `router.ts`, `pane.test.js`,
+a block in `contrast.test.js`. E ran its own API on port 8797 from a copy of the local
+state, because 8787 was locked.
+- **Held from the push:** with the tab live and no table on the server, every entry
+  would be queued for ever. The screens go live with B's K7b.
+- **Second pass, `prompts/e_journal_build_2.md`:** a list row shows raw token text
+  (`[[cr_…`); the entry sits about 95 px below the list's top; the orbit view's Campaign
+  control treats an open journal as closed (E gets the least lines in
+  `views/OrbitView.vue`); the Players switch, the handout and rumour menu, Locate, Show
+  in orbit and 1,100 px were not exercised; search at 2,000 entries is to be measured.
+
+**Johnny pasted D's "Report 2" a second time**; it is the one answered in §193
+(`prompts/d_character_sheet_2.md`). D's report 1 (the nav console's second pass) is still
+unseen.
+
+**A push, rehearsed: `findings/push/ships_and_schema_files.txt`, 26 files, by path.** The
+nav console and its second pass as they stand on disk (D's `orbit/` files,
+`views/OrbitView.vue`), A's route editing, K7a, K7c and the three small changes
+(`campaign/`, `packages/shared`), `rules/mgt2e_character_sheet_fields.json` and its two
+shape tests, with the tests of each. **Left out:** E's journal screens and its lines in
+the five shared files (held for K7b), C's `surface/`, `dev/city-lights/`, `router.ts`
+and `platform/browser.ts` (held for Johnny's pick of 4b), B's `apps/api` (reports
+owed). Scratch copy of `9a95a0c` with exactly those 26: `vue-tsc` exit 0, `vite build`
+done (`index-Cymliaqk.js`, `OrbitView-pwNwR-5S.js`), `tsc -p apps/api` exit 0, 943
+tests, 931 pass, 0 fail, 12 skipped, check clean.
+- **Unread in this set:** D's second pass on the nav console (the first leg editable at
+  its departure instant; a route with a jump after it) is covered by its own tests,
+  which pass, but D's report on it has not been seen and its browser pass was blocked by
+  the stuck local API. Said plainly to Johnny.
+- After the push, check by content: the live orbit chunk holds "already departed".

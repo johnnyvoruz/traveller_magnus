@@ -27,7 +27,7 @@ import {
 } from './picture.ts';
 import { discBatch, sunColour, visualRate, type OrbitDiscBatch } from './disc_batch.ts';
 import { pictureOfAu, pointWords } from './distance.ts';
-import { dockedBeside, pictureBodies, plotText, readoutPlace, type PlotReadout, type ShipMark, type ShipShape } from './ships.ts';
+import { dockedBeside, pictureBodies, plotText, readoutPlace, type DrawnWaypoint, type PlotReadout, type ShipMark, type ShipShape } from './ships.ts';
 import { whenWords } from './ship_list.ts';
 import { cssSeconds, easeOutAt, withAlpha, type EaseOut, type OrbitTheme, type PortPaint } from './theme.ts';
 
@@ -170,6 +170,12 @@ export type DrawState = {
      */
     preview?: FlightPreview | null;
     /**
+     * The selected ship's stored legs from this frame's date on: the leg under way, then
+     * those to come. Drawn as the committed course. Omitted, the picture is unchanged.
+     * A preview, when also set, is drawn over it from the waypoint where they part.
+     */
+    route?: FlightPreview | null;
+    /**
      * When set, a ship drawn beside a body is not given a designator, so a tag can stand
      * for it. Omitted, the designator is drawn.
      */
@@ -271,6 +277,16 @@ export class OrbitRenderer {
     private ghostLast: GhostSpec[] = [];
     /** Per-waypoint fade for a course of two or more legs. Empty while the preview is one leg. */
     private ways = new Map<string, WaySlot>();
+    /** Waypoints drawn this frame, so a drag starts where the picture put them. */
+    private routeDrawn: DrawnWaypoint[] = [];
+    private previewDrawn: DrawnWaypoint[] = [];
+    /** The first preview waypoint that is not also the stored route's. 0 draws the preview from the ship. */
+    private previewPart = 0;
+    /**
+     * From this route index on, a preview has taken over, so the stored course is what was.
+     * Null when this frame has no preview.
+     */
+    private dimFrom: number | null = null;
     /** --t-fast from the canvas, read once. Null when the token is missing: the slide snaps. */
     private fastSecondsCache: number | null | undefined = undefined;
     private habLive = false;
@@ -388,11 +404,16 @@ export class OrbitRenderer {
             this.scanFade = 1;
         }
         this.selection(plan, picture, state);
+        this.routeDrawn = [];
+        this.previewDrawn = [];
+        this.previewPart = this.partIndex(state);
+        this.dimFrom = null;
+        const routeAt = this.paintRoute(plan, picture, view, state);
         const ghostAt = this.paintGhosts(plan, picture, view, state);
         this.beginBubbles(state);
         this.shipTags = state.shipTags === true;
         this.ships(state.ships, picture.hits, state.dockTag === true);
-        this.plot(state.plot, plan, picture, view, state.days, ghostAt, state.ships);
+        this.plot(state.plot, plan, picture, view, state.days, ghostAt, state.ships, routeAt);
         this.settleDiscs(state);
         this.keepHeld(picture, state.layers);
     }
@@ -2569,8 +2590,10 @@ export class OrbitRenderer {
     /** Waypoint centres, in order, for the flight line. One leg returns that one centre. */
     private paintGhosts(plan: Plan, picture: Picture, view: View, state: DrawState): GhostSpot | readonly GhostSpot[] | null {
         if (picture.mode !== 'orbits') return null;
+        this.previewPart = this.partIndex(state);
         const legs = this.courseLegs(state);
-        if (legs || this.ways.size > 0) return this.paintCourse(plan, view, state.days, legs);
+        if (legs || this.ways.size > 0) return this.paintCourse(plan, view, state.days, legs, this.previewPart);
+        if (this.previewPart >= 1) return null;
         const preview = this.livePreview(state);
         if (!preview) {
             if (this.ghostLast.length > 0 && this.ghostShare > 0) this.drawGhosts(this.ghostLast, 'out');
@@ -2789,13 +2812,26 @@ export class OrbitRenderer {
     private plot(
         plot: PlotReadout | null | undefined, plan: Plan, picture: Picture, view: View, days: number,
         ghostAt: GhostSpot | readonly GhostSpot[] | null, ships: readonly ShipMark[] | undefined,
+        routeAt: readonly GhostSpot[] | null,
     ): void {
         const from = plot && plot.from ? plot.from : this.partyMark(ships);
+        if (routeAt && routeAt.length > 0 && from) {
+            let cursor: GhostSpot = from;
+            for (let i = 0; i < routeAt.length; i += 1) {
+                const spot = routeAt[i];
+                const index = this.routeDrawn[i] ? this.routeDrawn[i].index : i;
+                const dim = this.dimFrom !== null && index >= this.dimFrom;
+                this.flightLine(cursor, spot, true, dim);
+                cursor = spot;
+            }
+        }
         if (ghostAt && from) {
             const spots = Array.isArray(ghostAt) ? ghostAt : [ghostAt];
-            let cursor = from;
+            this.previewDrawn = spots.map((spot, index) => ({ index: this.previewPart + index, x: spot.x, y: spot.y }));
+            const join = this.previewPart > 0 ? this.routeDrawn[this.previewPart - 1] : null;
+            let cursor: GhostSpot = join ? { x: join.x, y: join.y } : from;
             for (const spot of spots) {
-                this.flightLine(cursor, spot);
+                this.flightLine(cursor, spot, false);
                 cursor = spot;
             }
         }
@@ -2847,7 +2883,7 @@ export class OrbitRenderer {
      * each point a target, numbers on the earlier waypoints and the arrival tag on the last.
      * Other worlds ghost at the final arrival (option 1). Returns the waypoint centres in order.
      */
-    private paintCourse(plan: Plan, view: View, days: number, legs: readonly CourseLeg[] | null): GhostSpot[] | null {
+    private paintCourse(plan: Plan, view: View, days: number, legs: readonly CourseLeg[] | null, fromIndex = 0): GhostSpot[] | null {
         const list = legs ?? [];
         const cache = new Map<number, Map<string, GhostBody>>();
         const bodiesAt = (at: number): Map<string, GhostBody> => {
@@ -2871,6 +2907,7 @@ export class OrbitRenderer {
             const spec = this.waySpec(plan, view, days, leg, id, bodiesAt, last);
             if (spec && !last) spec.label = String(i + 1);
             if (slot && spec) slot.spec = spec;
+            if (i < fromIndex) continue;
             if (!slot || !spec) continue;
             const at = this.paintWay(slot, spec, true);
             if (at) spots.push(at);
@@ -2965,18 +3002,136 @@ export class OrbitRenderer {
         this.ghostKind = kind;
     }
 
-    /** Dashed 7-4, one segment of the line from the ship through the waypoints. */
-    private flightLine(from: GhostSpot, to: GhostSpot): void {
+    /**
+     * One segment from the ship through the waypoints.
+     * The committed course is solid, heavier, and quieter. The preview stays dashed 7-4.
+     */
+    private flightLine(from: GhostSpot, to: GhostSpot, committed = false, dim = false): void {
         const ctx = this.ctx;
         ctx.save();
         ctx.strokeStyle = this.theme.signal;
-        ctx.globalAlpha = 1;
-        ctx.lineWidth = 1.25;
+        ctx.globalAlpha = committed ? (dim ? 0.28 : 0.72) : 1;
+        ctx.lineWidth = committed ? 2 : 1.25;
         ctx.lineCap = 'butt';
-        ctx.setLineDash([7, 4]);
+        ctx.setLineDash(committed ? [] : [7, 4]);
         ctx.beginPath();
         ctx.moveTo(from.x, from.y);
         ctx.lineTo(to.x, to.y);
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    /** Where this frame drew each waypoint, for a drag. Empty until a route or a preview is painted. */
+    waypoints(): { route: readonly DrawnWaypoint[]; preview: readonly DrawnWaypoint[] } {
+        return { route: this.routeDrawn, preview: this.previewDrawn };
+    }
+
+    /** The stored legs, including a single one. Invalid legs are left out. */
+    private routeList(state: DrawState): CourseLeg[] | null {
+        const route = state.route;
+        if (!route) return null;
+        if (this.isCourse(route)) {
+            const legs = this.legList(route);
+            return legs.length > 0 ? legs : null;
+        }
+        if (!(route.arrives > route.departs) || (!route.toKey && !route.point)) return null;
+        return [route];
+    }
+
+    /** The preview as a list. A one-leg object is one entry. */
+    private previewList(state: DrawState): CourseLeg[] | null {
+        const preview = state.preview;
+        if (!preview) return null;
+        if (this.isCourse(preview)) {
+            const legs = this.legList(preview);
+            return legs.length > 0 ? legs : null;
+        }
+        const one = this.livePreview(state);
+        return one ? [one] : null;
+    }
+
+    /** True when two legs end at the same body or the same point. */
+    private sameEnd(a: CourseLeg, b: CourseLeg): boolean {
+        if (a.toKey || b.toKey) return a.toKey === b.toKey;
+        if (a.point && b.point) return a.point.x === b.point.x && a.point.y === b.point.y;
+        return false;
+    }
+
+    /**
+     * The first preview waypoint that is not the stored route's.
+     * A preview that only extends the route parts at the first new leg.
+     */
+    private partIndex(state: DrawState): number {
+        const route = this.routeList(state);
+        const preview = this.previewList(state);
+        if (!route || !preview) return 0;
+        const n = Math.min(route.length, preview.length);
+        for (let i = 0; i < n; i += 1) {
+            if (!this.sameEnd(route[i], preview[i])) return i;
+        }
+        return n;
+    }
+
+    /**
+     * The committed course. The same waypoints as a preview: each body at its own arrival,
+     * a point as a target, numbers on the earlier ones. Solid, and still. It does not
+     * ease, and it does not ghost the other worlds. From the parting waypoint on, a preview
+     * owns the tags, and this course is drawn dimmer, with no tag and no number. The line
+     * is drawn later, from the ship, so an under-way leg shows only what is left of it.
+     */
+    private paintRoute(plan: Plan, picture: Picture, view: View, state: DrawState): GhostSpot[] | null {
+        if (picture.mode !== 'orbits') return null;
+        const legs = this.routeList(state);
+        if (!legs) return null;
+        this.dimFrom = this.previewList(state) ? this.previewPart : null;
+        const cache = new Map<number, Map<string, GhostBody>>();
+        const bodiesAt = (at: number): Map<string, GhostBody> => {
+            let found = cache.get(at);
+            if (!found) {
+                found = this.ghostBodies(layoutScene(plan, view, at));
+                cache.set(at, found);
+            }
+            return found;
+        };
+        const spots: GhostSpot[] = [];
+        for (let i = 0; i < legs.length; i += 1) {
+            const leg = legs[i];
+            const last = i === legs.length - 1;
+            const spec = this.waySpec(plan, view, state.days, leg, 'route-' + i, bodiesAt, last);
+            if (!spec) continue;
+            const past = this.dimFrom !== null && i >= this.dimFrom;
+            if (past) spec.label = '';
+            else if (!last) spec.label = String(i + 1);
+            spots.push(spec.then);
+            this.routeDrawn.push({ index: i, x: spec.then.x, y: spec.then.y });
+            this.strokeSettled(spec, past);
+            if (spec.label) this.ghostTag(spec, 1);
+        }
+        return spots.length > 0 ? spots : null;
+    }
+
+    /** A settled waypoint: a solid ring, no travel arc. Quieter than the preview's mark. The old tail is quieter still. */
+    private strokeSettled(spec: GhostSpec, dim = false): void {
+        const ctx = this.ctx;
+        const x = spec.then.x;
+        const y = spec.then.y;
+        if (this.offCanvas(x, y, spec.r + 24)) return;
+        ctx.save();
+        ctx.globalAlpha = dim ? 0.22 : 0.55;
+        ctx.strokeStyle = this.theme.lock;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'miter';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.arc(x, y, spec.r, 0, TAU);
+        ctx.stroke();
+        ctx.beginPath();
+        for (let i = 0; i < 4; i += 1) {
+            const a = i * Math.PI / 2;
+            ctx.moveTo(x + Math.cos(a) * (spec.r + 2), y + Math.sin(a) * (spec.r + 2));
+            ctx.lineTo(x + Math.cos(a) * (spec.r + 2 + 5), y + Math.sin(a) * (spec.r + 2 + 5));
+        }
         ctx.stroke();
         ctx.restore();
     }

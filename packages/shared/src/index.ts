@@ -11,6 +11,7 @@ export {
     CAMPAIGN_LIMITS,
     POINT_AU_LIMIT,
     CAMPAIGN_RECORD_TYPES,
+    CAMPAIGN_ENTRY_KINDS,
     CAMPAIGN_LINK_KINDS,
     CampaignLinkKindName,
     CampaignAnchor,
@@ -19,6 +20,8 @@ export {
     TrackLeg,
     Track,
     CampaignRecord,
+    CampaignEntry,
+    mentionsOf,
     CampaignLink,
     CampaignSettings,
     CampaignClock,
@@ -27,6 +30,7 @@ export {
     UniverseCreate,
     UniverseUpdate,
     RecordChange,
+    EntryChange,
     LinkChange,
     SettingsChange,
     CampaignChanges,
@@ -35,7 +39,7 @@ export {
     locate,
     linkAllowed,
 } from './schemas/campaign.ts';
-export type { CampaignRecordType, CampaignLinkKind, SystemAnchor, LocateAt } from './schemas/campaign.ts';
+export type { CampaignRecordType, CampaignEntryKind, CampaignLinkKind, SystemAnchor, LocateAt } from './schemas/campaign.ts';
 export { copyRecords } from './campaign_copy.ts';
 export type { CopyAnchorChange, CopiedRecord, CopyRecordsInput, CopyRecordsResult } from './campaign_copy.ts';
 export { DECK_PLAN_LIMITS, DeckPlan } from './schemas/deck_plan.ts';

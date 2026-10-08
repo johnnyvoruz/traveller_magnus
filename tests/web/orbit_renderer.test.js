@@ -11,6 +11,7 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { backdropBox, backdropShift, paintBackdrop, rng, seedOf } from '../../apps/web/src/orbit/backdrop.ts';
 import { pictureOfAu } from '../../apps/web/src/orbit/distance.ts';
+import { waypointAt } from '../../apps/web/src/orbit/ships.ts';
 import { layoutScene, planSystem } from '../../apps/web/src/orbit/layout.ts';
 import { layoutLineup } from '../../apps/web/src/orbit/lineup.ts';
 import { OrbitRenderer, TEAL_STEP, tealSweepAlpha, waveLocal } from '../../apps/web/src/orbit/OrbitRenderer.ts';
@@ -1335,6 +1336,105 @@ test('a waypoint added to a course fades in over --t-base, and the first course 
     drawAt(9000, two);
     assert.equal(renderer.layersBusy, false);
     assert.equal(said(calls).includes('2'), false);
+});
+
+/** Signal segments of one dash and one alpha: the committed line is solid at 0.72, the preview dashed 7-4 at 1. */
+function courseSegments(calls, dash, alpha) {
+    const found = [];
+    for (let i = 0; i < calls.length; i += 1) {
+        const call = calls[i];
+        if (call.op !== 'moveTo' || call.stroke !== 'signal') continue;
+        if (dashOf(calls, i) !== dash) continue;
+        if (Math.abs(call.alpha - alpha) > 1e-9) continue;
+        const next = calls[i + 1];
+        if (!next || next.op !== 'lineTo') continue;
+        found.push({ from: call.args, to: next.args });
+    }
+    return found;
+}
+
+test('a stored route is solid, a preview continues from where they part, and an under-way leg starts at the ship', () => {
+    const plan = planSystem(testSystem(), HEX_KEY);
+    const first = plan.worlds.find((world) => world.name === 'Test I');
+    const third = plan.worlds.find((world) => world.name === 'Test II');
+    const days = 1000;
+    const point = { x: 1.2, y: 0.8 };
+    const route = [
+        { toKey: first.key, departs: days, arrives: days + 20 },
+        { point, departs: days + 20, arrives: days + 40 },
+        { toKey: third.key, departs: days + 40, arrives: days + 80, tag: 'plan' },
+    ];
+    const party = [{ id: 'stand-party', name: 'Far Margin', kind: 'party', shape: 'triangle', x: 30, y: 40 }];
+    const place = (name, at) => {
+        const scene = layoutScene(plan, VIEW, at);
+        const body = scene.primary.bodies.find((item) => item.world.name === name);
+        return { x: body.x, y: body.y };
+    };
+    const aimed = pictureOfAu(point, VIEW, plan, 'orbits');
+    const shown = drawn({ route, ships: party });
+    assert.ok(said(shown.calls).includes('1'));
+    assert.ok(said(shown.calls).includes('2'));
+    assert.ok(said(shown.calls).includes('plan'));
+    assert.equal(shown.calls.some((call) => call.op === 'setLineDash' && call.args[0].join(',') === '1,5'), false);
+    const solid = courseSegments(shown.calls, '', 0.72);
+    assert.equal(solid.length, 3);
+    assert.ok(Math.hypot(solid[0].from[0] - 30, solid[0].from[1] - 40) < 0.05);
+    assert.equal(courseSegments(shown.calls, '7,4', 1).length, 0);
+    const plain = drawn({ ships: party });
+    assert.equal(courseSegments(plain.calls, '', 0.72).length, 0);
+
+    const preview = [
+        { toKey: first.key, departs: days, arrives: days + 20 },
+        { toKey: third.key, departs: days + 20, arrives: days + 50, tag: 'edit' },
+    ];
+    const both = drawn({ route, preview, ships: party });
+    const dashed = courseSegments(both.calls, '7,4', 1);
+    assert.equal(dashed.length, 1);
+    const early = place('Test I', days + 20);
+    const edited = place('Test II', days + 50);
+    assert.ok(Math.hypot(dashed[0].from[0] - early.x, dashed[0].from[1] - early.y) < 0.05);
+    assert.ok(Math.hypot(dashed[0].to[0] - edited.x, dashed[0].to[1] - edited.y) < 0.05);
+    assert.equal(courseSegments(both.calls, '', 0.72).length, 1);
+    assert.equal(courseSegments(both.calls, '', 0.28).length, 2);
+    const times = (calls, text) => said(calls).filter((item) => item === text).length;
+    assert.equal(times(shown.calls, '1'), 1);
+    assert.equal(times(shown.calls, '2'), 1);
+    assert.equal(times(shown.calls, 'plan'), 1);
+    assert.equal(times(both.calls, '1'), 1);
+    assert.equal(times(both.calls, '2'), 0);
+    assert.equal(times(both.calls, 'plan'), 0);
+    assert.equal(times(both.calls, 'edit'), 1);
+    assert.ok(aimed);
+
+    const underway = [
+        { toKey: first.key, departs: days - 10, arrives: days + 10 },
+        { point, departs: days + 10, arrives: days + 30 },
+        { toKey: third.key, departs: days + 30, arrives: days + 50, tag: 'plan' },
+    ];
+    const ship = [{ id: 'stand-surveyor', name: 'Surveyor', kind: 'party', shape: 'triangle', x: 80, y: 90 }];
+    const mid = drawn({ route: underway, ships: ship });
+    const left = courseSegments(mid.calls, '', 0.72);
+    assert.equal(left[0].from[0], 80);
+    assert.equal(left[0].from[1], 90);
+    const arrival = place('Test I', days + 10);
+    assert.ok(Math.hypot(left[0].to[0] - arrival.x, left[0].to[1] - arrival.y) < 0.05);
+
+    const scene = layoutScene(plan, { ...VIEW, moons: true, jump: true }, days);
+    const picture = orbitPicture(plan, scene, DEFAULT_LAYERS, VIEW.z);
+    const { ctx } = recordingContext();
+    const renderer = new OrbitRenderer(ctx, theme, deps);
+    renderer.resize(VIEW.w, VIEW.h, 1);
+    const state = { selected: null, days, time: 5000, motion: true, layers: DEFAULT_LAYERS, route, preview, ships: party };
+    renderer.draw(plan, picture, VIEW, { ...state, time: 4000 });
+    assert.equal(renderer.layersBusy, false);
+    renderer.draw(plan, picture, VIEW, state);
+    const spots = renderer.waypoints();
+    assert.equal(spots.route.length, 3);
+    assert.equal(spots.route[1].index, 1);
+    assert.equal(spots.preview.length, 1);
+    assert.equal(spots.preview[0].index, 1);
+    assert.equal(waypointAt(spots.route, { x: spots.route[1].x, y: spots.route[1].y }, { x: 30, y: 40 }), 1);
+    assert.equal(waypointAt(spots.route, { x: 30, y: 40 }, { x: 30, y: 40 }), null);
 });
 
 test('dockTag leaves a docked designator undrawn', () => {

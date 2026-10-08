@@ -163,6 +163,10 @@ function harness(seed = []) {
             const applied = (body.records || []).map((row) => ({
                 table: 'records', id: row.id, rev: row.rev + 1, seq: seq++,
             }));
+            for (const row of body.journal || []) {
+                const rev = typeof row.rev === 'number' ? row.rev : row.baseRev;
+                applied.push({ table: 'journal', id: row.id, rev: rev + 1, seq: seq++ });
+            }
             if (body.clock) {
                 applied.push({
                     table: 'clock',
@@ -449,4 +453,79 @@ test('a failed create and a failed list leave the open campaign ready', async ()
     assert.equal(campaign.universeId, 'uni-1');
     assert.equal(campaign.records[VESSEL].name, 'Beowulf');
     assert.equal(campaign.universes[0].name, 'Alpha game');
+});
+
+const JOURNAL = 'cj_44444444-4444-4444-4444-444444444444';
+
+function entry(over = {}) {
+    return {
+        id: JOURNAL,
+        kind: 'note',
+        title: 'At the starport',
+        body: '',
+        when: null,
+        realDate: null,
+        sequence: null,
+        author: 'referee',
+        visibility: 'referee',
+        anchor: null,
+        mentions: [],
+        rev: 1,
+        createdAt: STAMP,
+        updatedAt: STAMP,
+        deleted: false,
+        ...over,
+    };
+}
+
+test('a page with a journal fills it, and a page without one leaves it empty', async () => {
+    memory.clear();
+    resetCampaign();
+    const box = harness([universeRow({ id: 'uni-1' })]);
+    box.server.pages['uni-1'] = [{ after: 0, body: page([], 1, true) }];
+    await open(box, 'uni-1');
+    assert.deepEqual(campaign.journal, {});
+    box.server.pages['uni-1'] = [{ after: 0, body: { ...page([], 2, true), journal: [entry()] } }];
+    await open(box, 'uni-1');
+    assert.equal(campaign.journal[JOURNAL].title, 'At the starport');
+    assert.equal(campaign.journal[JOURNAL].rev, 1);
+});
+
+test('a journal commit flushes, takes the applied rev, conflicts, and a failed send is restored', async () => {
+    memory.clear();
+    resetCampaign();
+    const box = harness([universeRow({ id: 'uni-1' })]);
+    box.server.pages['uni-1'] = [{ after: 0, body: page([], 1, true) }];
+    await open(box, 'uni-1');
+    const row = entry({ rev: 0, title: 'Local' });
+    commit({ journal: [{ ...row, baseRev: 0 }] });
+    await flushCampaign();
+    assert.equal(box.server.patches.length, 1);
+    assert.equal(box.server.patches[0].body.journal[0].id, JOURNAL);
+    assert.equal(box.server.patches[0].body.journal[0].baseRev, 0);
+    assert.equal(campaign.journal[JOURNAL].rev, 1);
+    assert.equal(pending.value, false);
+
+    commit({ journal: [{ ...campaign.journal[JOURNAL], title: 'Edited', baseRev: 1 }] });
+    box.server.conflict = {
+        applied: [],
+        conflicts: [{ table: 'journal', id: JOURNAL, current: entry({ title: 'Server', rev: 4 }) }],
+    };
+    await flushCampaign();
+    assert.equal(campaign.journal[JOURNAL].title, 'Server');
+    assert.equal(campaign.journal[JOURNAL].rev, 4);
+    assert.equal(toasts[0].message, 'Saved changes conflicted with a newer copy. The server copy is now shown.');
+
+    commit({ journal: [{ ...campaign.journal[JOURNAL], title: 'Again', baseRev: 4 }] });
+    box.server.failPatch = true;
+    await flushCampaign();
+    assert.equal(lastError.value, 'offline');
+    assert.equal(pending.value, true);
+    assert.equal(campaign.journal[JOURNAL].title, 'Again');
+    await flushCampaign();
+    assert.equal(box.server.patches[box.server.patches.length - 1].body.journal[0].title, 'Again');
+    assert.equal(box.server.patches[box.server.patches.length - 1].body.journal[0].baseRev, 4);
+    assert.equal(campaign.journal[JOURNAL].rev, 5);
+    assert.equal(lastError.value, '');
+    assert.equal(pending.value, false);
 });

@@ -1,0 +1,5050 @@
+{
+  "source": "assets/Character Sheet 2026_fillable.pdf",
+  "pageSize": {
+    "width": 792,
+    "height": 612
+  },
+  "box": "PDF user space. Origin is the lower-left of the page. x and y are the lower-left of the widget. w and h are its width and height. Units are points.",
+  "fields": [
+    {
+      "name": "Title",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 421.39,
+        "y": 542.16,
+        "w": 241.607,
+        "h": 10.294
+      },
+      "section": "Personal Data File"
+    },
+    {
+      "name": "Age",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 421.39,
+        "y": 527.871,
+        "w": 68.72,
+        "h": 10.294
+      },
+      "section": "Personal Data File"
+    },
+    {
+      "name": "Species",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 526.649,
+        "y": 527.871,
+        "w": 136.348,
+        "h": 10.294
+      },
+      "section": "Personal Data File"
+    },
+    {
+      "name": "Homeworld",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 445.323,
+        "y": 513.582,
+        "w": 217.674,
+        "h": 10.293
+      },
+      "section": "Personal Data File"
+    },
+    {
+      "name": "Traits",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 425.197,
+        "y": 464.729,
+        "w": 237.8,
+        "h": 49.901
+      },
+      "section": "Personal Data File"
+    },
+    {
+      "name": "Strength",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 406.697,
+        "y": 424.499,
+        "w": 16.093,
+        "h": 17.831
+      },
+      "section": "Personal Data File"
+    },
+    {
+      "name": "Strength DM",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 428.404,
+        "y": 436.634,
+        "w": 16.093,
+        "h": 17.831
+      },
+      "section": "Personal Data File"
+    },
+    {
+      "name": "Admin Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 524.126,
+        "y": 396.767,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Advocate Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 524.126,
+        "y": 384.272,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Animals 1 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 524.126,
+        "y": 371.777,
+        "w": 14.109,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Animals 2 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 524.126,
+        "y": 359.283,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Animals 3 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 524.126,
+        "y": 346.788,
+        "w": 14.109,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Art 1 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 524.126,
+        "y": 334.294,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Art 2 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 524.126,
+        "y": 321.799,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Athletics 1 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 524.126,
+        "y": 284.315,
+        "w": 14.109,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Art 3 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 524.126,
+        "y": 309.304,
+        "w": 14.109,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Athletics 2 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 524.126,
+        "y": 271.821,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Astrogation Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 524.126,
+        "y": 296.81,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Athletics 3 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 524.126,
+        "y": 259.326,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Broker Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 524.126,
+        "y": 246.831,
+        "w": 14.109,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Diplomat Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 524.126,
+        "y": 209.348,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Carouse Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 524.126,
+        "y": 234.337,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Drive 1 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 524.126,
+        "y": 196.853,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Deception Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 524.126,
+        "y": 221.842,
+        "w": 14.109,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Drive 2 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 524.126,
+        "y": 184.358,
+        "w": 14.109,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Drive 3 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 524.126,
+        "y": 171.864,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Electronics 3 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 524.126,
+        "y": 134.38,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Electronics 1 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 524.126,
+        "y": 159.369,
+        "w": 14.109,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Engineer 1 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 524.126,
+        "y": 121.885,
+        "w": 14.109,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Electronics 2 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 524.126,
+        "y": 146.875,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Engineer 2 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 524.126,
+        "y": 109.391,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Explosives Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 524.126,
+        "y": 84.401,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Engineer 3 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 524.126,
+        "y": 96.896,
+        "w": 14.109,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Art Specialism 2",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 438.661,
+        "y": 321.799,
+        "w": 80.582,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Drive Specialism 3",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 446.457,
+        "y": 171.864,
+        "w": 72.786,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Animals Speciialism 2",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 455.427,
+        "y": 359.283,
+        "w": 63.816,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Athletics Specialism 1",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 457.228,
+        "y": 284.315,
+        "w": 62.015,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Electronics Specialism 3",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 465.449,
+        "y": 134.38,
+        "w": 53.794,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Art Specialism 3",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 438.661,
+        "y": 309.304,
+        "w": 80.582,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Electronics Specialism 1",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 465.449,
+        "y": 159.369,
+        "w": 53.794,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Animals Specialism 3",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 455.427,
+        "y": 346.788,
+        "w": 63.816,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Athletics Specialism 2",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 457.228,
+        "y": 271.821,
+        "w": 62.015,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Drive Specialism 1",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 446.457,
+        "y": 196.853,
+        "w": 72.786,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Engineer Specialism 1",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 458.646,
+        "y": 121.885,
+        "w": 60.597,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Animals Specialism 1",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 455.427,
+        "y": 371.777,
+        "w": 63.816,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Electronics Specialism 2",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 465.449,
+        "y": 146.875,
+        "w": 53.794,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Art Specialism 1",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 438.661,
+        "y": 334.294,
+        "w": 80.582,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Athletics Specialism 3",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 457.228,
+        "y": 259.326,
+        "w": 62.015,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Drive Specialism 2",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 446.457,
+        "y": 184.358,
+        "w": 72.786,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Engineer Specialism 2",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 458.646,
+        "y": 109.391,
+        "w": 60.597,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Engineer Specialism 3",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 458.646,
+        "y": 96.896,
+        "w": 60.597,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Flyer 1 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 524.126,
+        "y": 71.907,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Gunner 3 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 643.245,
+        "y": 371.777,
+        "w": 14.109,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Heavy Weapons 3 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 643.245,
+        "y": 296.81,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Leadership Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 643.245,
+        "y": 221.842,
+        "w": 14.109,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Gambler Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 524.126,
+        "y": 34.423,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Gun Combat 3 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 643.245,
+        "y": 334.294,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Language 1 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 643.245,
+        "y": 259.326,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Melee 1 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 643.245,
+        "y": 184.358,
+        "w": 14.109,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Flyer 2 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 524.126,
+        "y": 59.412,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Gun Combat 1 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 643.245,
+        "y": 359.283,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Investigate Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 643.245,
+        "y": 284.315,
+        "w": 14.109,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Mechanic Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 643.245,
+        "y": 209.348,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Gunner 1 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 643.245,
+        "y": 396.767,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Heavy Weapons 1 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 643.245,
+        "y": 321.799,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Language 2 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 643.245,
+        "y": 246.831,
+        "w": 14.109,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Melee 2 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 643.245,
+        "y": 171.864,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Flyer 3 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 524.126,
+        "y": 46.918,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Gun Combat 2 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 643.245,
+        "y": 346.788,
+        "w": 14.109,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Jack-of-All-Trades Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 643.245,
+        "y": 271.821,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Medic Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 643.245,
+        "y": 196.853,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Gunner 2 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 643.245,
+        "y": 384.272,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Heavy Weapons 2 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 643.245,
+        "y": 309.304,
+        "w": 14.109,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Language 3 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 643.245,
+        "y": 234.337,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Melee 3 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 643.245,
+        "y": 159.369,
+        "w": 14.109,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Navigation Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 643.245,
+        "y": 146.875,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Persuade Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 643.245,
+        "y": 134.38,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Flyer Specialism 1",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 445.326,
+        "y": 71.907,
+        "w": 73.853,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Gunner Specialism 3",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 570.047,
+        "y": 371.777,
+        "w": 68.251,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Heavy Weapons Specialism 3",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 591.165,
+        "y": 296.81,
+        "w": 47.133,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Gun Combat Specialism 3",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 587.197,
+        "y": 334.294,
+        "w": 51.101,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Language Specialism 1",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 578.268,
+        "y": 259.326,
+        "w": 60.03,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Melee Specialism 1",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 565.512,
+        "y": 184.358,
+        "w": 72.786,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Flyer Specialism 2",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 445.326,
+        "y": 59.412,
+        "w": 73.853,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Gun Combat Specialism 1",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 587.197,
+        "y": 359.283,
+        "w": 51.101,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Gunner Specialism 1",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 570.047,
+        "y": 396.767,
+        "w": 68.251,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Heavy Weapons Specialism 1",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 591.165,
+        "y": 321.799,
+        "w": 47.133,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Language Specialism 2",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 578.268,
+        "y": 246.831,
+        "w": 60.03,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Melee Specialism 2",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 565.512,
+        "y": 171.864,
+        "w": 72.786,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Flyer Specialism 3",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 445.326,
+        "y": 46.918,
+        "w": 73.853,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Gun Combat Specialism 2",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 587.197,
+        "y": 346.788,
+        "w": 51.101,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Gunner Specialism 2",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 570.047,
+        "y": 384.272,
+        "w": 68.251,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Heavy Weapons Specialism 2",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 591.165,
+        "y": 309.304,
+        "w": 47.133,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Language Specialism 3",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 578.268,
+        "y": 234.337,
+        "w": 60.03,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Melee Specialism 3",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 565.512,
+        "y": 159.369,
+        "w": 72.786,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Recon Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 643.245,
+        "y": 46.918,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Seafarer 3 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 759.402,
+        "y": 334.294,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Tactics 2 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 759.402,
+        "y": 259.326,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Science 3 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 759.402,
+        "y": 371.777,
+        "w": 14.109,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Streetwise Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 759.402,
+        "y": 296.81,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Science 1 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 759.402,
+        "y": 396.767,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Stealth Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 759.402,
+        "y": 321.799,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Tactics 3 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 759.402,
+        "y": 246.831,
+        "w": 14.109,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Seafarer 1 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 759.402,
+        "y": 359.283,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Survival Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 759.402,
+        "y": 284.315,
+        "w": 14.109,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Science 2 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 759.402,
+        "y": 384.272,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Steward Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 759.402,
+        "y": 309.304,
+        "w": 14.109,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Vacc Suit Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 759.402,
+        "y": 234.337,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Profession 3 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 643.245,
+        "y": 59.412,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Seafarer 2 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 759.402,
+        "y": 346.788,
+        "w": 14.109,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Tactics 1 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 759.402,
+        "y": 271.821,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Training Skill",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 681.165,
+        "y": 71.907,
+        "w": 94.111,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Completed Weeks",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 728.22,
+        "y": 59.412,
+        "w": 47.056,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Completed Study Periods",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 750.472,
+        "y": 46.918,
+        "w": 24.804,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Augment Type 1",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 31.722,
+        "y": 540.62,
+        "w": 140.341,
+        "h": 10.293
+      },
+      "section": "Augments"
+    },
+    {
+      "name": "Augment Type 5",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 31.722,
+        "y": 482.51,
+        "w": 140.341,
+        "h": 10.293
+      },
+      "section": "Augments"
+    },
+    {
+      "name": "Augment Type 4",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 31.722,
+        "y": 497.037,
+        "w": 140.341,
+        "h": 10.294
+      },
+      "section": "Augments"
+    },
+    {
+      "name": "Augment Type 3",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 31.722,
+        "y": 511.565,
+        "w": 140.341,
+        "h": 10.293
+      },
+      "section": "Augments"
+    },
+    {
+      "name": "Augment Type 2",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 31.722,
+        "y": 526.092,
+        "w": 140.341,
+        "h": 10.294
+      },
+      "section": "Augments"
+    },
+    {
+      "name": "Augment TL 1",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 175.181,
+        "y": 540.62,
+        "w": 22.252,
+        "h": 10.293
+      },
+      "section": "Augments"
+    },
+    {
+      "name": "Augment TL 5",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 175.181,
+        "y": 482.51,
+        "w": 22.252,
+        "h": 10.293
+      },
+      "section": "Augments"
+    },
+    {
+      "name": "Augment TL 4",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 175.181,
+        "y": 497.037,
+        "w": 22.252,
+        "h": 10.294
+      },
+      "section": "Augments"
+    },
+    {
+      "name": "Augment TL 3",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 175.181,
+        "y": 511.565,
+        "w": 22.252,
+        "h": 10.293
+      },
+      "section": "Augments"
+    },
+    {
+      "name": "Augment TL 2",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 175.181,
+        "y": 526.092,
+        "w": 22.252,
+        "h": 10.294
+      },
+      "section": "Augments"
+    },
+    {
+      "name": "Augment Traits 1",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 200.976,
+        "y": 540.62,
+        "w": 182.693,
+        "h": 10.293
+      },
+      "section": "Augments"
+    },
+    {
+      "name": "Augment Traits 5",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 200.976,
+        "y": 482.51,
+        "w": 182.693,
+        "h": 10.293
+      },
+      "section": "Augments"
+    },
+    {
+      "name": "Augment Traits 4",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 200.976,
+        "y": 497.037,
+        "w": 182.693,
+        "h": 10.294
+      },
+      "section": "Augments"
+    },
+    {
+      "name": "Augment Traits 3",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 200.976,
+        "y": 511.565,
+        "w": 182.693,
+        "h": 10.293
+      },
+      "section": "Augments"
+    },
+    {
+      "name": "Augment Traits 2",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 200.976,
+        "y": 526.092,
+        "w": 182.693,
+        "h": 10.294
+      },
+      "section": "Augments"
+    },
+    {
+      "name": "Armour Type 1",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 31.722,
+        "y": 434.037,
+        "w": 111.428,
+        "h": 10.294
+      },
+      "section": "Armour"
+    },
+    {
+      "name": "Armour Radiation 1",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 146.551,
+        "y": 434.037,
+        "w": 36.851,
+        "h": 10.294
+      },
+      "section": "Armour"
+    },
+    {
+      "name": "Armour Protection 1",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 185.953,
+        "y": 434.037,
+        "w": 53.794,
+        "h": 10.294
+      },
+      "section": "Armour"
+    },
+    {
+      "name": "Armour KG 1",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 243.007,
+        "y": 434.037,
+        "w": 31.245,
+        "h": 10.294
+      },
+      "section": "Armour"
+    },
+    {
+      "name": "Armour Options 1",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 276.803,
+        "y": 434.037,
+        "w": 108.048,
+        "h": 10.294
+      },
+      "section": "Armour"
+    },
+    {
+      "name": "Armour Type 2",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 31.722,
+        "y": 419.424,
+        "w": 111.428,
+        "h": 10.294
+      },
+      "section": "Armour"
+    },
+    {
+      "name": "Armour Radiation 2",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 146.551,
+        "y": 419.424,
+        "w": 36.851,
+        "h": 10.294
+      },
+      "section": "Armour"
+    },
+    {
+      "name": "Armour Protection 2",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 185.953,
+        "y": 419.424,
+        "w": 53.794,
+        "h": 10.294
+      },
+      "section": "Armour"
+    },
+    {
+      "name": "Armour KG 2",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 243.007,
+        "y": 419.424,
+        "w": 31.245,
+        "h": 10.294
+      },
+      "section": "Armour"
+    },
+    {
+      "name": "Armour Options 2",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 276.803,
+        "y": 419.424,
+        "w": 108.048,
+        "h": 10.294
+      },
+      "section": "Armour"
+    },
+    {
+      "name": "Armour Type 3",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 31.722,
+        "y": 404.811,
+        "w": 111.428,
+        "h": 10.294
+      },
+      "section": "Armour"
+    },
+    {
+      "name": "Armour Radiation 3",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 146.551,
+        "y": 404.811,
+        "w": 36.851,
+        "h": 10.294
+      },
+      "section": "Armour"
+    },
+    {
+      "name": "Armour Protection 3",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 185.953,
+        "y": 404.811,
+        "w": 53.794,
+        "h": 10.294
+      },
+      "section": "Armour"
+    },
+    {
+      "name": "Armour KG 3",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 243.007,
+        "y": 404.811,
+        "w": 31.245,
+        "h": 10.294
+      },
+      "section": "Armour"
+    },
+    {
+      "name": "Armour Options 3",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 276.803,
+        "y": 404.811,
+        "w": 108.048,
+        "h": 10.294
+      },
+      "section": "Armour"
+    },
+    {
+      "name": "Armour Type 4",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 31.722,
+        "y": 390.198,
+        "w": 111.428,
+        "h": 10.294
+      },
+      "section": "Armour"
+    },
+    {
+      "name": "Armour Radiation 4",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 146.551,
+        "y": 390.198,
+        "w": 36.851,
+        "h": 10.294
+      },
+      "section": "Armour"
+    },
+    {
+      "name": "Armour Protection 4",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 185.953,
+        "y": 390.198,
+        "w": 53.794,
+        "h": 10.294
+      },
+      "section": "Armour"
+    },
+    {
+      "name": "Armour KG 4",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 243.007,
+        "y": 390.198,
+        "w": 31.245,
+        "h": 10.294
+      },
+      "section": "Armour"
+    },
+    {
+      "name": "Armour Options 4",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 276.803,
+        "y": 390.198,
+        "w": 108.048,
+        "h": 10.294
+      },
+      "section": "Armour"
+    },
+    {
+      "name": "Armour Type 5",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 31.722,
+        "y": 375.585,
+        "w": 111.428,
+        "h": 10.294
+      },
+      "section": "Armour"
+    },
+    {
+      "name": "Armour Radiation 5",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 146.551,
+        "y": 375.585,
+        "w": 36.851,
+        "h": 10.294
+      },
+      "section": "Armour"
+    },
+    {
+      "name": "Armour Protection 5",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 185.953,
+        "y": 375.585,
+        "w": 53.794,
+        "h": 10.294
+      },
+      "section": "Armour"
+    },
+    {
+      "name": "Armour KG 5",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 243.007,
+        "y": 375.585,
+        "w": 31.245,
+        "h": 10.294
+      },
+      "section": "Armour"
+    },
+    {
+      "name": "Armour Options 5",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 276.803,
+        "y": 375.585,
+        "w": 108.048,
+        "h": 10.294
+      },
+      "section": "Armour"
+    },
+    {
+      "name": "Armour Type 6",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 31.722,
+        "y": 360.972,
+        "w": 111.428,
+        "h": 10.294
+      },
+      "section": "Armour"
+    },
+    {
+      "name": "Armour Radiation 6",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 146.551,
+        "y": 360.972,
+        "w": 36.851,
+        "h": 10.294
+      },
+      "section": "Armour"
+    },
+    {
+      "name": "Armour Protection 6",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 185.953,
+        "y": 360.972,
+        "w": 53.794,
+        "h": 10.294
+      },
+      "section": "Armour"
+    },
+    {
+      "name": "Armour KG 6",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 243.007,
+        "y": 360.972,
+        "w": 31.245,
+        "h": 10.294
+      },
+      "section": "Armour"
+    },
+    {
+      "name": "Armour Options 6",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 276.803,
+        "y": 360.972,
+        "w": 108.048,
+        "h": 10.294
+      },
+      "section": "Armour"
+    },
+    {
+      "name": "Armour Type 7",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 31.722,
+        "y": 346.359,
+        "w": 111.428,
+        "h": 10.294
+      },
+      "section": "Armour"
+    },
+    {
+      "name": "Armour Radiation 7",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 146.551,
+        "y": 346.359,
+        "w": 36.851,
+        "h": 10.294
+      },
+      "section": "Armour"
+    },
+    {
+      "name": "Armour Protection 7",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 185.953,
+        "y": 346.359,
+        "w": 53.794,
+        "h": 10.294
+      },
+      "section": "Armour"
+    },
+    {
+      "name": "Armour KG 7",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 243.007,
+        "y": 346.359,
+        "w": 31.245,
+        "h": 10.294
+      },
+      "section": "Armour"
+    },
+    {
+      "name": "Armour Options 7",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 276.803,
+        "y": 346.359,
+        "w": 108.048,
+        "h": 10.294
+      },
+      "section": "Armour"
+    },
+    {
+      "name": "Armour Type 8",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 31.722,
+        "y": 331.747,
+        "w": 111.428,
+        "h": 10.293
+      },
+      "section": "Armour"
+    },
+    {
+      "name": "Armour Radiation 8",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 146.551,
+        "y": 331.747,
+        "w": 36.851,
+        "h": 10.293
+      },
+      "section": "Armour"
+    },
+    {
+      "name": "Armour Protection 8",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 185.953,
+        "y": 331.747,
+        "w": 53.794,
+        "h": 10.293
+      },
+      "section": "Armour"
+    },
+    {
+      "name": "Armour KG 8",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 243.007,
+        "y": 331.747,
+        "w": 31.245,
+        "h": 10.293
+      },
+      "section": "Armour"
+    },
+    {
+      "name": "Armour Options 8",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 276.803,
+        "y": 331.747,
+        "w": 108.048,
+        "h": 10.293
+      },
+      "section": "Armour"
+    },
+    {
+      "name": "Weapon Type 1",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 31.722,
+        "y": 283.801,
+        "w": 83.805,
+        "h": 10.293
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon TL 1",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 118.346,
+        "y": 283.801,
+        "w": 22.819,
+        "h": 10.293
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon Range 1",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 143.985,
+        "y": 283.801,
+        "w": 36.851,
+        "h": 10.293
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon KG 1",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 222.818,
+        "y": 283.801,
+        "w": 31.245,
+        "h": 10.293
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon Traits 1",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 290.741,
+        "y": 283.801,
+        "w": 94.11,
+        "h": 10.293
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon Damage 1",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 183.402,
+        "y": 283.801,
+        "w": 36.85,
+        "h": 10.293
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon Magazine 1",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 257.338,
+        "y": 283.801,
+        "w": 31.245,
+        "h": 10.293
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon Type 2",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 31.722,
+        "y": 269.222,
+        "w": 83.805,
+        "h": 10.293
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon TL 2",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 118.346,
+        "y": 269.222,
+        "w": 22.819,
+        "h": 10.293
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon Range 2",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 143.985,
+        "y": 269.222,
+        "w": 36.851,
+        "h": 10.293
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon Damage 2",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 183.402,
+        "y": 269.222,
+        "w": 36.85,
+        "h": 10.293
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon KG 2",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 222.818,
+        "y": 269.222,
+        "w": 31.245,
+        "h": 10.293
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon Magazine 2",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 257.338,
+        "y": 269.222,
+        "w": 31.245,
+        "h": 10.293
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon Traits 2",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 290.741,
+        "y": 269.222,
+        "w": 94.11,
+        "h": 10.293
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon Type 3",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 31.722,
+        "y": 254.643,
+        "w": 83.805,
+        "h": 10.293
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon TL 3",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 118.346,
+        "y": 254.643,
+        "w": 22.819,
+        "h": 10.293
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon Range 3",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 143.985,
+        "y": 254.643,
+        "w": 36.851,
+        "h": 10.293
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon Damage 3",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 183.402,
+        "y": 254.643,
+        "w": 36.85,
+        "h": 10.293
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon KG 3",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 222.818,
+        "y": 254.643,
+        "w": 31.245,
+        "h": 10.293
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon Magazine 3",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 257.338,
+        "y": 254.643,
+        "w": 31.245,
+        "h": 10.293
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon Traits 3",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 290.741,
+        "y": 254.643,
+        "w": 94.11,
+        "h": 10.293
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon Type 4",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 31.722,
+        "y": 240.063,
+        "w": 83.805,
+        "h": 10.294
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon TL 4",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 118.346,
+        "y": 240.063,
+        "w": 22.819,
+        "h": 10.294
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon Range 4",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 143.985,
+        "y": 240.063,
+        "w": 36.851,
+        "h": 10.294
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon Damage 4",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 183.402,
+        "y": 240.063,
+        "w": 36.85,
+        "h": 10.294
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon KG 4",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 222.818,
+        "y": 240.063,
+        "w": 31.245,
+        "h": 10.294
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon Magazine 4",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 257.338,
+        "y": 240.063,
+        "w": 31.245,
+        "h": 10.294
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon Traits 4",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 290.741,
+        "y": 240.063,
+        "w": 94.11,
+        "h": 10.294
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon Type 5",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 31.722,
+        "y": 225.484,
+        "w": 83.805,
+        "h": 10.293
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon TL 5",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 118.346,
+        "y": 225.484,
+        "w": 22.819,
+        "h": 10.293
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon Range 5",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 143.985,
+        "y": 225.484,
+        "w": 36.851,
+        "h": 10.293
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon Damage 5",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 183.402,
+        "y": 225.484,
+        "w": 36.85,
+        "h": 10.293
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon KG 5",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 222.818,
+        "y": 225.484,
+        "w": 31.245,
+        "h": 10.293
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon Magazine 5",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 257.338,
+        "y": 225.484,
+        "w": 31.245,
+        "h": 10.293
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon Traits 5",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 290.741,
+        "y": 225.484,
+        "w": 94.11,
+        "h": 10.293
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon Type 6",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 31.722,
+        "y": 210.905,
+        "w": 83.805,
+        "h": 10.293
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon TL 6",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 118.346,
+        "y": 210.905,
+        "w": 22.819,
+        "h": 10.293
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon Range 6",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 143.985,
+        "y": 210.905,
+        "w": 36.851,
+        "h": 10.293
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon Damage 6",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 183.402,
+        "y": 210.905,
+        "w": 36.85,
+        "h": 10.293
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon KG 6",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 222.818,
+        "y": 210.905,
+        "w": 31.245,
+        "h": 10.293
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon Magazine 6",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 257.338,
+        "y": 210.905,
+        "w": 31.245,
+        "h": 10.293
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon Traits 6",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 290.741,
+        "y": 210.905,
+        "w": 94.11,
+        "h": 10.293
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon Type 7",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 31.722,
+        "y": 196.326,
+        "w": 83.805,
+        "h": 10.293
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon TL 7",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 118.346,
+        "y": 196.326,
+        "w": 22.819,
+        "h": 10.293
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon Range 7",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 143.985,
+        "y": 196.326,
+        "w": 36.851,
+        "h": 10.293
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon Damage 7",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 183.402,
+        "y": 196.326,
+        "w": 36.85,
+        "h": 10.293
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon KG 7",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 222.818,
+        "y": 196.326,
+        "w": 31.245,
+        "h": 10.293
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon Magazine 7",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 257.338,
+        "y": 196.326,
+        "w": 31.245,
+        "h": 10.293
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon Traits 7",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 290.741,
+        "y": 196.326,
+        "w": 94.11,
+        "h": 10.293
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon Type 8",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 31.722,
+        "y": 181.746,
+        "w": 83.805,
+        "h": 10.294
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon TL 8",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 118.346,
+        "y": 181.746,
+        "w": 22.819,
+        "h": 10.294
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon Range 8",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 143.985,
+        "y": 181.746,
+        "w": 36.851,
+        "h": 10.294
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon Damage 8",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 183.402,
+        "y": 181.746,
+        "w": 36.85,
+        "h": 10.294
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon KG 8",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 222.818,
+        "y": 181.746,
+        "w": 31.245,
+        "h": 10.294
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon Magazine 8",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 257.338,
+        "y": 181.746,
+        "w": 31.245,
+        "h": 10.294
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Weapon Traits 8",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 290.741,
+        "y": 181.746,
+        "w": 94.11,
+        "h": 10.294
+      },
+      "section": "Weapons"
+    },
+    {
+      "name": "Equipment Type 1",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 31.722,
+        "y": 133.99,
+        "w": 112.263,
+        "h": 10.293
+      },
+      "section": "Equipment"
+    },
+    {
+      "name": "Equipment TL 1",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 146.693,
+        "y": 133.99,
+        "w": 22.819,
+        "h": 10.293
+      },
+      "section": "Equipment"
+    },
+    {
+      "name": "Equipment KG 1",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 172.141,
+        "y": 133.99,
+        "w": 31.245,
+        "h": 10.293
+      },
+      "section": "Equipment"
+    },
+    {
+      "name": "Equipment Notes 1",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 206.079,
+        "y": 133.99,
+        "w": 178.772,
+        "h": 10.293
+      },
+      "section": "Equipment"
+    },
+    {
+      "name": "Equipment Type 2",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 31.722,
+        "y": 119.423,
+        "w": 112.263,
+        "h": 10.294
+      },
+      "section": "Equipment"
+    },
+    {
+      "name": "Equipment TL 2",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 146.693,
+        "y": 119.423,
+        "w": 22.819,
+        "h": 10.294
+      },
+      "section": "Equipment"
+    },
+    {
+      "name": "Equipment KG 2",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 172.141,
+        "y": 119.423,
+        "w": 31.245,
+        "h": 10.294
+      },
+      "section": "Equipment"
+    },
+    {
+      "name": "Equipment Notes 2",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 206.079,
+        "y": 119.423,
+        "w": 178.772,
+        "h": 10.294
+      },
+      "section": "Equipment"
+    },
+    {
+      "name": "Equipment Type 3",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 31.722,
+        "y": 104.857,
+        "w": 112.263,
+        "h": 10.293
+      },
+      "section": "Equipment"
+    },
+    {
+      "name": "Equipment TL 3",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 146.693,
+        "y": 104.857,
+        "w": 22.819,
+        "h": 10.293
+      },
+      "section": "Equipment"
+    },
+    {
+      "name": "Equipment KG 3",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 172.141,
+        "y": 104.857,
+        "w": 31.245,
+        "h": 10.293
+      },
+      "section": "Equipment"
+    },
+    {
+      "name": "Equipment Notes 3",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 206.079,
+        "y": 104.857,
+        "w": 178.772,
+        "h": 10.293
+      },
+      "section": "Equipment"
+    },
+    {
+      "name": "Equipment Type 4",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 31.722,
+        "y": 90.29,
+        "w": 112.263,
+        "h": 10.293
+      },
+      "section": "Equipment"
+    },
+    {
+      "name": "Equipment TL 4",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 146.693,
+        "y": 90.29,
+        "w": 22.819,
+        "h": 10.293
+      },
+      "section": "Equipment"
+    },
+    {
+      "name": "Equipment KG 4",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 172.141,
+        "y": 90.29,
+        "w": 31.245,
+        "h": 10.293
+      },
+      "section": "Equipment"
+    },
+    {
+      "name": "Equipment Notes 4",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 206.079,
+        "y": 90.29,
+        "w": 178.772,
+        "h": 10.293
+      },
+      "section": "Equipment"
+    },
+    {
+      "name": "Equipment Type 5",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 31.722,
+        "y": 75.723,
+        "w": 112.263,
+        "h": 10.293
+      },
+      "section": "Equipment"
+    },
+    {
+      "name": "Equipment TL 5",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 146.693,
+        "y": 75.723,
+        "w": 22.819,
+        "h": 10.293
+      },
+      "section": "Equipment"
+    },
+    {
+      "name": "Equipment KG 5",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 172.141,
+        "y": 75.723,
+        "w": 31.245,
+        "h": 10.293
+      },
+      "section": "Equipment"
+    },
+    {
+      "name": "Equipment Notes 5",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 206.079,
+        "y": 75.723,
+        "w": 178.772,
+        "h": 10.293
+      },
+      "section": "Equipment"
+    },
+    {
+      "name": "Equipment Type 6",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 31.722,
+        "y": 61.157,
+        "w": 112.263,
+        "h": 10.293
+      },
+      "section": "Equipment"
+    },
+    {
+      "name": "Equipment TL 6",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 146.693,
+        "y": 61.157,
+        "w": 22.819,
+        "h": 10.293
+      },
+      "section": "Equipment"
+    },
+    {
+      "name": "Equipment KG 6",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 172.141,
+        "y": 61.157,
+        "w": 31.245,
+        "h": 10.293
+      },
+      "section": "Equipment"
+    },
+    {
+      "name": "Equipment Notes 6",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 206.079,
+        "y": 61.157,
+        "w": 178.772,
+        "h": 10.293
+      },
+      "section": "Equipment"
+    },
+    {
+      "name": "Equipment Type 7",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 31.722,
+        "y": 46.59,
+        "w": 112.263,
+        "h": 10.294
+      },
+      "section": "Equipment"
+    },
+    {
+      "name": "Equipment TL 7",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 146.693,
+        "y": 46.59,
+        "w": 22.819,
+        "h": 10.294
+      },
+      "section": "Equipment"
+    },
+    {
+      "name": "Equipment KG 7",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 172.141,
+        "y": 46.59,
+        "w": 31.245,
+        "h": 10.294
+      },
+      "section": "Equipment"
+    },
+    {
+      "name": "Equipment Notes 7",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 206.079,
+        "y": 46.59,
+        "w": 178.772,
+        "h": 10.294
+      },
+      "section": "Equipment"
+    },
+    {
+      "name": "Equipment Type 8",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 31.722,
+        "y": 32.023,
+        "w": 112.263,
+        "h": 10.293
+      },
+      "section": "Equipment"
+    },
+    {
+      "name": "Equipment TL 8",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 146.693,
+        "y": 32.023,
+        "w": 22.819,
+        "h": 10.293
+      },
+      "section": "Equipment"
+    },
+    {
+      "name": "Equipment KG 8",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 172.141,
+        "y": 32.023,
+        "w": 31.245,
+        "h": 10.293
+      },
+      "section": "Equipment"
+    },
+    {
+      "name": "Equipment Notes 8",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 206.079,
+        "y": 32.023,
+        "w": 178.772,
+        "h": 10.293
+      },
+      "section": "Equipment"
+    },
+    {
+      "name": "Name",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 429.449,
+        "y": 556.45,
+        "w": 233.548,
+        "h": 10.293
+      },
+      "section": "Personal Data File"
+    },
+    {
+      "name": "Other Characteristic 1",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 689.586,
+        "y": 448.126,
+        "w": 20.166,
+        "h": 11.793
+      },
+      "section": "Personal Data File"
+    },
+    {
+      "name": "Other Characteristic 2",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 737.192,
+        "y": 448.126,
+        "w": 20.166,
+        "h": 11.793
+      },
+      "section": "Personal Data File"
+    },
+    {
+      "name": "Pilot 1 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 643.245,
+        "y": 121.885,
+        "w": 14.109,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Profession 1 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 643.245,
+        "y": 84.401,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Pilot 2 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 643.245,
+        "y": 109.391,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Profession 2 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 643.245,
+        "y": 71.907,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Pilot 3 Modifier",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 643.245,
+        "y": 96.896,
+        "w": 14.109,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Pilot Specialism 1",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 559.843,
+        "y": 121.885,
+        "w": 78.455,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Pilot Specialism 2",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 559.843,
+        "y": 109.391,
+        "w": 78.455,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Pilot Specialism 3",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 559.843,
+        "y": 96.896,
+        "w": 78.455,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Profession Specialiasm 1",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 580.252,
+        "y": 84.401,
+        "w": 58.046,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Profession Specialism 2",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 580.252,
+        "y": 71.907,
+        "w": 58.046,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Skill/Ability 1",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 661.89,
+        "y": 221.842,
+        "w": 94.11,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Skill/Ability DM 1",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 759.402,
+        "y": 221.842,
+        "w": 14.109,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Skill/Ability DM 2",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 759.402,
+        "y": 209.348,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Skill/Ability 2",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 661.89,
+        "y": 209.348,
+        "w": 94.11,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Skill/Ability DM 3",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 759.402,
+        "y": 196.853,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Skill/Ability 3",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 661.89,
+        "y": 196.853,
+        "w": 94.11,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Skill/Ability DM 4",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 759.402,
+        "y": 184.358,
+        "w": 14.109,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Skill/Ability 4",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 661.89,
+        "y": 184.358,
+        "w": 94.11,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Skill/Ability DM 5",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 759.402,
+        "y": 171.864,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Skill/Ability 5",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 661.89,
+        "y": 171.864,
+        "w": 94.11,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Skill/Ability DM 6",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 759.402,
+        "y": 159.369,
+        "w": 14.109,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Skill/Ability 6",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 661.89,
+        "y": 159.369,
+        "w": 94.11,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Tactics Specialism 2",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 687.402,
+        "y": 259.326,
+        "w": 68.598,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Tactics Specialism 3",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 687.402,
+        "y": 246.831,
+        "w": 68.598,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Tactics Specialism 1",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 687.402,
+        "y": 271.821,
+        "w": 68.598,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Seafarer Specialism 3",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 692.787,
+        "y": 334.294,
+        "w": 63.213,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Science Specialism 3",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 690.803,
+        "y": 371.777,
+        "w": 65.197,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Science Specialism 1",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 690.803,
+        "y": 396.767,
+        "w": 65.197,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Seafarer Specialism 1",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 692.787,
+        "y": 359.283,
+        "w": 63.213,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Science Specialism 2",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 690.803,
+        "y": 384.272,
+        "w": 65.197,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Seafarer Specialism 2",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 692.787,
+        "y": 346.788,
+        "w": 63.213,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Profession Specialism 3",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 580.252,
+        "y": 59.412,
+        "w": 59.591,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Dexterity",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 454.303,
+        "y": 424.499,
+        "w": 16.092,
+        "h": 17.831
+      },
+      "section": "Personal Data File"
+    },
+    {
+      "name": "Dexterity DM",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 476.01,
+        "y": 436.634,
+        "w": 16.093,
+        "h": 17.831
+      },
+      "section": "Personal Data File"
+    },
+    {
+      "name": "Endurance",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 501.909,
+        "y": 424.499,
+        "w": 16.092,
+        "h": 17.831
+      },
+      "section": "Personal Data File"
+    },
+    {
+      "name": "Endurance DM",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 523.616,
+        "y": 436.634,
+        "w": 16.092,
+        "h": 17.831
+      },
+      "section": "Personal Data File"
+    },
+    {
+      "name": "Intellect",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 549.514,
+        "y": 424.499,
+        "w": 16.093,
+        "h": 17.831
+      },
+      "section": "Personal Data File"
+    },
+    {
+      "name": "Intellect DM",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 571.222,
+        "y": 436.634,
+        "w": 16.092,
+        "h": 17.831
+      },
+      "section": "Personal Data File"
+    },
+    {
+      "name": "Education",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 597.12,
+        "y": 424.499,
+        "w": 16.092,
+        "h": 17.831
+      },
+      "section": "Personal Data File"
+    },
+    {
+      "name": "Education DM",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 618.827,
+        "y": 436.634,
+        "w": 16.093,
+        "h": 17.831
+      },
+      "section": "Personal Data File"
+    },
+    {
+      "name": "Social",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 644.726,
+        "y": 424.499,
+        "w": 16.092,
+        "h": 17.831
+      },
+      "section": "Personal Data File"
+    },
+    {
+      "name": "Social DM",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 666.433,
+        "y": 436.634,
+        "w": 16.092,
+        "h": 17.831
+      },
+      "section": "Personal Data File"
+    },
+    {
+      "name": "Other Stat 1",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 692.332,
+        "y": 424.499,
+        "w": 16.092,
+        "h": 17.831
+      },
+      "section": "Personal Data File"
+    },
+    {
+      "name": "Other DM 1",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 714.039,
+        "y": 436.634,
+        "w": 16.092,
+        "h": 17.831
+      },
+      "section": "Personal Data File"
+    },
+    {
+      "name": "Other Stat 2",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 739.937,
+        "y": 424.499,
+        "w": 16.093,
+        "h": 17.831
+      },
+      "section": "Personal Data File"
+    },
+    {
+      "name": "Other Dm 2",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 761.645,
+        "y": 436.634,
+        "w": 16.092,
+        "h": 17.831
+      },
+      "section": "Personal Data File"
+    },
+    {
+      "name": "Distinguishing Features",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 681.165,
+        "y": 470.268,
+        "w": 98.376,
+        "h": 108.704
+      },
+      "section": "Personal Data File"
+    },
+    {
+      "name": "Skill/Ability DM 7",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 759.402,
+        "y": 146.875,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Skill/Ability 7",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 661.89,
+        "y": 146.875,
+        "w": 94.11,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Skill/Ability DM 8",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 759.402,
+        "y": 134.38,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Skill/Ability 8",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 661.89,
+        "y": 134.38,
+        "w": 94.11,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Skill/Ability DM 9",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 759.402,
+        "y": 121.885,
+        "w": 14.109,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Skill/Ability 9",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 661.89,
+        "y": 121.885,
+        "w": 94.11,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Skill/Ability DM 10",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 759.402,
+        "y": 109.391,
+        "w": 14.109,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Skill/Ability 10",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 661.89,
+        "y": 109.391,
+        "w": 94.11,
+        "h": 10.293
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Skill/Ability DM 11",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 759.402,
+        "y": 96.896,
+        "w": 14.109,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Skill/Ability 11",
+      "page": 1,
+      "type": "text",
+      "box": {
+        "x": 661.89,
+        "y": 96.896,
+        "w": 94.11,
+        "h": 10.294
+      },
+      "section": "Skills"
+    },
+    {
+      "name": "Cash on Hand",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 73.701,
+        "y": 542.462,
+        "w": 116.079,
+        "h": 10.294
+      },
+      "section": "Finances"
+    },
+    {
+      "name": "Ship Shares",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 55.417,
+        "y": 527.755,
+        "w": 65.764,
+        "h": 10.293
+      },
+      "section": "Finances"
+    },
+    {
+      "name": "Debt",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 30.614,
+        "y": 513.047,
+        "w": 90.567,
+        "h": 10.294
+      },
+      "section": "Finances"
+    },
+    {
+      "name": "Income",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 153.78,
+        "y": 527.755,
+        "w": 103.889,
+        "h": 10.293
+      },
+      "section": "Finances"
+    },
+    {
+      "name": "Annual Pension",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 181.134,
+        "y": 513.047,
+        "w": 76.535,
+        "h": 10.294
+      },
+      "section": "Finances"
+    },
+    {
+      "name": "Monthly Cash Flow",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 280.961,
+        "y": 542.462,
+        "w": 103.89,
+        "h": 10.294
+      },
+      "section": "Finances"
+    },
+    {
+      "name": "Living Cost",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 306.425,
+        "y": 527.755,
+        "w": 78.426,
+        "h": 10.293
+      },
+      "section": "Finances"
+    },
+    {
+      "name": "Ship Payments",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 315.425,
+        "y": 513.047,
+        "w": 69.426,
+        "h": 10.294
+      },
+      "section": "Finances"
+    },
+    {
+      "name": "Wound Type 1",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 8.556,
+        "y": 455.632,
+        "w": 83.287,
+        "h": 10.294
+      },
+      "section": "Wounds"
+    },
+    {
+      "name": "Wound Location 1",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 95.528,
+        "y": 455.632,
+        "w": 81.637,
+        "h": 10.294
+      },
+      "section": "Wounds"
+    },
+    {
+      "name": "Wound Recovery Period 1",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 180.85,
+        "y": 455.632,
+        "w": 75.119,
+        "h": 10.294
+      },
+      "section": "Wounds"
+    },
+    {
+      "name": "Wound Notes 1",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 259.937,
+        "y": 455.632,
+        "w": 124.914,
+        "h": 10.294
+      },
+      "section": "Wounds"
+    },
+    {
+      "name": "Wound Type 2",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 8.556,
+        "y": 440.968,
+        "w": 83.287,
+        "h": 10.293
+      },
+      "section": "Wounds"
+    },
+    {
+      "name": "Wound Location 2",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 95.528,
+        "y": 440.968,
+        "w": 81.637,
+        "h": 10.293
+      },
+      "section": "Wounds"
+    },
+    {
+      "name": "Wound Recovery Period 2",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 180.85,
+        "y": 440.968,
+        "w": 75.119,
+        "h": 10.293
+      },
+      "section": "Wounds"
+    },
+    {
+      "name": "Wound Notes 2",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 259.937,
+        "y": 440.968,
+        "w": 124.914,
+        "h": 10.293
+      },
+      "section": "Wounds"
+    },
+    {
+      "name": "Wound Type 3",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 8.556,
+        "y": 426.303,
+        "w": 83.287,
+        "h": 10.293
+      },
+      "section": "Wounds"
+    },
+    {
+      "name": "Wound Location 3",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 95.528,
+        "y": 426.303,
+        "w": 81.637,
+        "h": 10.293
+      },
+      "section": "Wounds"
+    },
+    {
+      "name": "Wound Recovery Period 3",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 180.85,
+        "y": 426.303,
+        "w": 75.119,
+        "h": 10.293
+      },
+      "section": "Wounds"
+    },
+    {
+      "name": "Wound Notes 3",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 259.937,
+        "y": 426.303,
+        "w": 124.914,
+        "h": 10.293
+      },
+      "section": "Wounds"
+    },
+    {
+      "name": "Wound Type 4",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 8.556,
+        "y": 411.638,
+        "w": 83.287,
+        "h": 10.294
+      },
+      "section": "Wounds"
+    },
+    {
+      "name": "Wound Location 4",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 95.528,
+        "y": 411.638,
+        "w": 81.637,
+        "h": 10.294
+      },
+      "section": "Wounds"
+    },
+    {
+      "name": "Wound Recovery Period 4",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 180.85,
+        "y": 411.638,
+        "w": 75.119,
+        "h": 10.294
+      },
+      "section": "Wounds"
+    },
+    {
+      "name": "Wound Notes 4",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 259.937,
+        "y": 411.638,
+        "w": 124.914,
+        "h": 10.294
+      },
+      "section": "Wounds"
+    },
+    {
+      "name": "Career Term 1",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 8.556,
+        "y": 352.748,
+        "w": 22.625,
+        "h": 16.576
+      },
+      "section": "Careers"
+    },
+    {
+      "name": "Career 1",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 34.299,
+        "y": 337.748,
+        "w": 136.063,
+        "h": 34.882
+      },
+      "section": "Careers"
+    },
+    {
+      "name": "Career Rank 1",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 221.767,
+        "y": 352.901,
+        "w": 21.827,
+        "h": 16.576
+      },
+      "section": "Careers"
+    },
+    {
+      "name": "Career Notes 1",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 246.614,
+        "y": 337.748,
+        "w": 138.237,
+        "h": 34.882
+      },
+      "section": "Careers"
+    },
+    {
+      "name": "History & Background",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 8.556,
+        "y": 24.242,
+        "w": 376.347,
+        "h": 164.971
+      },
+      "section": "History & Background"
+    },
+    {
+      "name": "Ally Name 1",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 400.252,
+        "y": 542.641,
+        "w": 125.858,
+        "h": 10.824
+      },
+      "section": "Allies"
+    },
+    {
+      "name": "Ally Notes 1",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 528.945,
+        "y": 542.641,
+        "w": 247.654,
+        "h": 10.824
+      },
+      "section": "Allies"
+    },
+    {
+      "name": "Contact Name 1",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 400.252,
+        "y": 403.231,
+        "w": 125.858,
+        "h": 10.777
+      },
+      "section": "Contacts"
+    },
+    {
+      "name": "Contact Notes 1",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 528.945,
+        "y": 403.231,
+        "w": 247.654,
+        "h": 10.777
+      },
+      "section": "Contacts"
+    },
+    {
+      "name": "Rival Name 1",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 400.252,
+        "y": 264.133,
+        "w": 125.858,
+        "h": 10.758
+      },
+      "section": "Rivals"
+    },
+    {
+      "name": "Rival Notes 1",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 528.945,
+        "y": 264.133,
+        "w": 247.654,
+        "h": 10.758
+      },
+      "section": "Rivals"
+    },
+    {
+      "name": "Enemy Name 1",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 400.252,
+        "y": 124.851,
+        "w": 125.858,
+        "h": 10.787
+      },
+      "section": "Enemies"
+    },
+    {
+      "name": "Enemy Notes 1",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 528.945,
+        "y": 124.851,
+        "w": 247.654,
+        "h": 10.787
+      },
+      "section": "Enemies"
+    },
+    {
+      "name": "Enemy Name 2",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 400.252,
+        "y": 108.186,
+        "w": 125.858,
+        "h": 10.787
+      },
+      "section": "Enemies"
+    },
+    {
+      "name": "Enemy Notes 2",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 528.945,
+        "y": 108.186,
+        "w": 247.654,
+        "h": 10.787
+      },
+      "section": "Enemies"
+    },
+    {
+      "name": "Enemy Name 3",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 400.252,
+        "y": 91.522,
+        "w": 125.858,
+        "h": 10.786
+      },
+      "section": "Enemies"
+    },
+    {
+      "name": "Enemy Notes 3",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 528.945,
+        "y": 91.522,
+        "w": 247.654,
+        "h": 10.786
+      },
+      "section": "Enemies"
+    },
+    {
+      "name": "Enemy Name 4",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 400.252,
+        "y": 74.857,
+        "w": 125.858,
+        "h": 10.787
+      },
+      "section": "Enemies"
+    },
+    {
+      "name": "Enemy Notes 4",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 528.945,
+        "y": 74.857,
+        "w": 247.654,
+        "h": 10.787
+      },
+      "section": "Enemies"
+    },
+    {
+      "name": "Enemy Name 5",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 400.252,
+        "y": 58.192,
+        "w": 125.858,
+        "h": 10.787
+      },
+      "section": "Enemies"
+    },
+    {
+      "name": "Enemy Notes 5",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 528.945,
+        "y": 58.192,
+        "w": 247.654,
+        "h": 10.787
+      },
+      "section": "Enemies"
+    },
+    {
+      "name": "Enemy Name 6",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 400.252,
+        "y": 41.528,
+        "w": 125.858,
+        "h": 10.787
+      },
+      "section": "Enemies"
+    },
+    {
+      "name": "Enemy Notes 6",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 528.945,
+        "y": 41.528,
+        "w": 247.654,
+        "h": 10.787
+      },
+      "section": "Enemies"
+    },
+    {
+      "name": "Rival Name 2",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 400.252,
+        "y": 247.505,
+        "w": 125.858,
+        "h": 10.757
+      },
+      "section": "Rivals"
+    },
+    {
+      "name": "Rival Notes 2",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 528.945,
+        "y": 247.505,
+        "w": 247.654,
+        "h": 10.757
+      },
+      "section": "Rivals"
+    },
+    {
+      "name": "Rival Name 3",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 400.252,
+        "y": 230.877,
+        "w": 125.858,
+        "h": 10.757
+      },
+      "section": "Rivals"
+    },
+    {
+      "name": "Rival Notes 3",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 528.945,
+        "y": 230.877,
+        "w": 247.654,
+        "h": 10.757
+      },
+      "section": "Rivals"
+    },
+    {
+      "name": "Rival Name 4",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 400.252,
+        "y": 214.248,
+        "w": 125.858,
+        "h": 10.758
+      },
+      "section": "Rivals"
+    },
+    {
+      "name": "Rival Notes 4",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 528.945,
+        "y": 214.248,
+        "w": 247.654,
+        "h": 10.758
+      },
+      "section": "Rivals"
+    },
+    {
+      "name": "Rival Name 5",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 400.252,
+        "y": 197.62,
+        "w": 125.858,
+        "h": 10.758
+      },
+      "section": "Rivals"
+    },
+    {
+      "name": "Rival Notes 5",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 528.945,
+        "y": 197.62,
+        "w": 247.654,
+        "h": 10.758
+      },
+      "section": "Rivals"
+    },
+    {
+      "name": "Rival Name 6",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 400.252,
+        "y": 180.992,
+        "w": 125.858,
+        "h": 10.758
+      },
+      "section": "Rivals"
+    },
+    {
+      "name": "Rival Notes 6",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 528.945,
+        "y": 180.992,
+        "w": 247.654,
+        "h": 10.758
+      },
+      "section": "Rivals"
+    },
+    {
+      "name": "Contact Name 2",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 400.252,
+        "y": 386.562,
+        "w": 125.858,
+        "h": 10.778
+      },
+      "section": "Contacts"
+    },
+    {
+      "name": "Contact Notes 2",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 528.945,
+        "y": 386.562,
+        "w": 247.654,
+        "h": 10.778
+      },
+      "section": "Contacts"
+    },
+    {
+      "name": "Contact Name 3",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 400.252,
+        "y": 369.894,
+        "w": 125.858,
+        "h": 10.778
+      },
+      "section": "Contacts"
+    },
+    {
+      "name": "Contact Notes 3",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 528.945,
+        "y": 369.894,
+        "w": 247.654,
+        "h": 10.778
+      },
+      "section": "Contacts"
+    },
+    {
+      "name": "Contact Name 4",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 400.252,
+        "y": 353.226,
+        "w": 125.858,
+        "h": 10.777
+      },
+      "section": "Contacts"
+    },
+    {
+      "name": "Contact Notes 4",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 528.945,
+        "y": 353.226,
+        "w": 247.654,
+        "h": 10.777
+      },
+      "section": "Contacts"
+    },
+    {
+      "name": "Contact Name 5",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 400.252,
+        "y": 336.558,
+        "w": 125.858,
+        "h": 10.777
+      },
+      "section": "Contacts"
+    },
+    {
+      "name": "Contact Notes 5",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 528.945,
+        "y": 336.558,
+        "w": 247.654,
+        "h": 10.777
+      },
+      "section": "Contacts"
+    },
+    {
+      "name": "Contact Name 6",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 400.252,
+        "y": 319.89,
+        "w": 125.858,
+        "h": 10.777
+      },
+      "section": "Contacts"
+    },
+    {
+      "name": "Contact Notes 6",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 528.945,
+        "y": 319.89,
+        "w": 247.654,
+        "h": 10.777
+      },
+      "section": "Contacts"
+    },
+    {
+      "name": "Ally Name 2",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 400.252,
+        "y": 525.899,
+        "w": 125.858,
+        "h": 10.823
+      },
+      "section": "Allies"
+    },
+    {
+      "name": "Ally Notes 2",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 528.945,
+        "y": 525.899,
+        "w": 247.654,
+        "h": 10.823
+      },
+      "section": "Allies"
+    },
+    {
+      "name": "Ally Name 3",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 400.252,
+        "y": 509.156,
+        "w": 125.858,
+        "h": 10.824
+      },
+      "section": "Allies"
+    },
+    {
+      "name": "Ally Notes 3",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 528.945,
+        "y": 509.156,
+        "w": 247.654,
+        "h": 10.824
+      },
+      "section": "Allies"
+    },
+    {
+      "name": "Ally Name 4",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 400.252,
+        "y": 492.414,
+        "w": 125.858,
+        "h": 10.823
+      },
+      "section": "Allies"
+    },
+    {
+      "name": "Ally Notes 4",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 528.945,
+        "y": 492.414,
+        "w": 247.654,
+        "h": 10.823
+      },
+      "section": "Allies"
+    },
+    {
+      "name": "Ally Name 5",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 400.252,
+        "y": 475.672,
+        "w": 125.858,
+        "h": 10.823
+      },
+      "section": "Allies"
+    },
+    {
+      "name": "Ally Notes 5",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 528.945,
+        "y": 475.672,
+        "w": 247.654,
+        "h": 10.823
+      },
+      "section": "Allies"
+    },
+    {
+      "name": "Ally Name 6",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 400.252,
+        "y": 458.929,
+        "w": 125.858,
+        "h": 10.824
+      },
+      "section": "Allies"
+    },
+    {
+      "name": "Ally Notes 6",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 528.945,
+        "y": 458.929,
+        "w": 247.654,
+        "h": 10.824
+      },
+      "section": "Allies"
+    },
+    {
+      "name": "Career Survival 1",
+      "page": 2,
+      "type": "checkbox",
+      "box": {
+        "x": 177.398,
+        "y": 346.92,
+        "w": 14.085,
+        "h": 19.085
+      },
+      "section": "Careers"
+    },
+    {
+      "name": "Career Advancement 1",
+      "page": 2,
+      "type": "checkbox",
+      "box": {
+        "x": 202.063,
+        "y": 346.92,
+        "w": 14.085,
+        "h": 19.085
+      },
+      "section": "Careers"
+    },
+    {
+      "name": "Career Term 2",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 8.556,
+        "y": 320.758,
+        "w": 22.625,
+        "h": 16.576
+      },
+      "section": "Careers"
+    },
+    {
+      "name": "Career 2",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 34.299,
+        "y": 305.758,
+        "w": 136.063,
+        "h": 34.882
+      },
+      "section": "Careers"
+    },
+    {
+      "name": "Career Rank 2",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 221.767,
+        "y": 320.911,
+        "w": 21.827,
+        "h": 16.576
+      },
+      "section": "Careers"
+    },
+    {
+      "name": "Career Notes 2",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 246.614,
+        "y": 305.758,
+        "w": 138.237,
+        "h": 34.882
+      },
+      "section": "Careers"
+    },
+    {
+      "name": "Career Survival 2",
+      "page": 2,
+      "type": "checkbox",
+      "box": {
+        "x": 177.398,
+        "y": 314.93,
+        "w": 14.085,
+        "h": 19.085
+      },
+      "section": "Careers"
+    },
+    {
+      "name": "Career Advancement 2",
+      "page": 2,
+      "type": "checkbox",
+      "box": {
+        "x": 202.063,
+        "y": 314.93,
+        "w": 14.085,
+        "h": 19.085
+      },
+      "section": "Careers"
+    },
+    {
+      "name": "Career Term 3",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 8.556,
+        "y": 288.769,
+        "w": 22.625,
+        "h": 16.576
+      },
+      "section": "Careers"
+    },
+    {
+      "name": "Career 3",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 34.299,
+        "y": 273.769,
+        "w": 136.063,
+        "h": 34.882
+      },
+      "section": "Careers"
+    },
+    {
+      "name": "Career Rank 3",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 221.767,
+        "y": 288.922,
+        "w": 21.827,
+        "h": 16.576
+      },
+      "section": "Careers"
+    },
+    {
+      "name": "Career Notes 3",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 246.614,
+        "y": 273.769,
+        "w": 138.237,
+        "h": 34.882
+      },
+      "section": "Careers"
+    },
+    {
+      "name": "Career Survival 3",
+      "page": 2,
+      "type": "checkbox",
+      "box": {
+        "x": 177.398,
+        "y": 282.941,
+        "w": 14.085,
+        "h": 19.085
+      },
+      "section": "Careers"
+    },
+    {
+      "name": "Career Advancement 3",
+      "page": 2,
+      "type": "checkbox",
+      "box": {
+        "x": 202.063,
+        "y": 282.941,
+        "w": 14.085,
+        "h": 19.085
+      },
+      "section": "Careers"
+    },
+    {
+      "name": "Career Term 4",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 8.556,
+        "y": 256.779,
+        "w": 22.625,
+        "h": 16.576
+      },
+      "section": "Careers"
+    },
+    {
+      "name": "Career 4",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 34.299,
+        "y": 241.779,
+        "w": 136.063,
+        "h": 34.882
+      },
+      "section": "Careers"
+    },
+    {
+      "name": "Career Rank 4",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 221.767,
+        "y": 256.932,
+        "w": 21.827,
+        "h": 16.576
+      },
+      "section": "Careers"
+    },
+    {
+      "name": "Career Notes 4",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 246.614,
+        "y": 241.779,
+        "w": 138.237,
+        "h": 34.882
+      },
+      "section": "Careers"
+    },
+    {
+      "name": "Career Survival 4",
+      "page": 2,
+      "type": "checkbox",
+      "box": {
+        "x": 177.398,
+        "y": 250.951,
+        "w": 14.085,
+        "h": 19.085
+      },
+      "section": "Careers"
+    },
+    {
+      "name": "Career Advancement 4",
+      "page": 2,
+      "type": "checkbox",
+      "box": {
+        "x": 202.063,
+        "y": 250.951,
+        "w": 14.085,
+        "h": 19.085
+      },
+      "section": "Careers"
+    },
+    {
+      "name": "Career Term 5",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 8.556,
+        "y": 224.79,
+        "w": 22.625,
+        "h": 16.576
+      },
+      "section": "Careers"
+    },
+    {
+      "name": "Career 5",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 34.299,
+        "y": 209.79,
+        "w": 136.063,
+        "h": 34.881
+      },
+      "section": "Careers"
+    },
+    {
+      "name": "Career Rank 5",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 221.767,
+        "y": 224.943,
+        "w": 21.827,
+        "h": 16.576
+      },
+      "section": "Careers"
+    },
+    {
+      "name": "Career Notes 5",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 246.614,
+        "y": 209.79,
+        "w": 138.237,
+        "h": 34.881
+      },
+      "section": "Careers"
+    },
+    {
+      "name": "Career Survival 5",
+      "page": 2,
+      "type": "checkbox",
+      "box": {
+        "x": 177.398,
+        "y": 218.961,
+        "w": 14.085,
+        "h": 19.085
+      },
+      "section": "Careers"
+    },
+    {
+      "name": "Career Advancement 5",
+      "page": 2,
+      "type": "checkbox",
+      "box": {
+        "x": 202.063,
+        "y": 218.961,
+        "w": 14.085,
+        "h": 19.085
+      },
+      "section": "Careers"
+    }
+  ]
+}

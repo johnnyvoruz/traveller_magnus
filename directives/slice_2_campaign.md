@@ -299,6 +299,27 @@ only. D's five points for the orchestrator:
   when two tables are open at once, deleting from the library, the vessel a shared person is
   aboard).
 
+- **K10 and K11, as Johnny put them on 2026-10-07 (character sheets; handoff §190).** "Two
+  different concepts. There's one main character sheet that can be shared and it's the
+  'live' sheet, that is tied to a player and then shared, and when updates are made it's
+  updated throughout all sheets that are using that sheet in their universe (i.e. a Ref
+  and a player account: the player account creates their sheet, Ref and player can
+  co-edit, and it's the live sheet). The marketplace idea is that this character can be
+  essentially copied to other universe instances (one of the main features: a community
+  where people make systems and publish them to the free marketplace and others add them
+  to their universe)."
+  - **The live sheet is K11 with an owner and a second editor:** the character belongs
+    to the **player's account**; a universe uses it by reference; the player and that
+    universe's referee both edit; one truth shown everywhere. It needs what does not
+    exist yet: a way for one account to share something with another (today no account
+    sees into another's universe), and the account library.
+  - **The copy is K10 widened to the marketplace:** an independent instance in another
+    universe, also by publishing a snapshot to the free catalogue (Slice 4).
+  - **Order:** the sheet itself first (K13 part 4, in flight), built behind a boundary so
+    its values can move (`prompts/d_character_sheet.md`); then a paper design
+    (`prompts/a_live_sheet_design.md`, to `findings/live_sheet_design.md`); then the
+    build, in steps the design names. Four questions are with Johnny (G17 to G20).
+
 - **K12. Plotting and flying jumps (Johnny, 2026-10-05; parked until the MVP steps above are
   done).** "A ref or players plot and plan jumps on the Mongoose 2e rules. Plot a location,
   set a speed of 1 to 6 G, and watch the ship's ping go to it in the orbit view; once outside
@@ -665,7 +686,10 @@ only. D's five points for the orchestrator:
         the move from record to log (when, and how a referee's correction of an arrived
         leg works), `positionAt` for a past date, what a snapshot and an export carry, the
         size of a ten-year campaign with twenty ships. Then A (schema, store), then the
-        screens. **Open with Johnny:** may a referee strike or correct a logged leg.
+        screens.
+      - **Ruled (Johnny, 2026-10-06, G10):** a referee may strike a logged leg (with Undo)
+        and edit its note; a logged leg is never re-timed or re-aimed. A struck leg stays
+        in the archive, marked, so the log remains append-only.
   15. **The pinned body card beside the open panel (D decides; settled by 22):** when the orbit view's
       docked body card and the dossier panel for the same body are both open, two views of
       one thing show at once. Johnny sees pros and cons. D reviews `manifesto.md` (one

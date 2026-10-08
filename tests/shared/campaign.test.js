@@ -3,10 +3,15 @@ import assert from 'node:assert/strict';
 import {
     CAMPAIGN_LIMITS,
     POINT_AU_LIMIT,
+    CAMPAIGN_ENTRY_KINDS,
     CAMPAIGN_LINK_KINDS,
     CAMPAIGN_RECORD_TYPES,
     CampaignAnchor,
     CampaignChanges,
+    CampaignChangesResult,
+    CampaignEntry,
+    EntryChange,
+    mentionsOf,
     CampaignProvenance,
     CampaignImage,
     Track,
@@ -228,6 +233,10 @@ test('a vessel track is ordered legs', () => {
     assert.equal(TrackLeg.safeParse(leg(0, 10, { accelG: 0 })).success, false);
     assert.equal(TrackLeg.safeParse(leg(0, 10, { accelG: 7 })).success, false);
     assert.equal(TrackLeg.safeParse(leg(0, 10, { note: 'n'.repeat(CAMPAIGN_LIMITS.trackNote + 1) })).success, false);
+    assert.equal(TrackLeg.safeParse(leg(0, 10, { hoursTyped: true })).success, true);
+    assert.equal(TrackLeg.parse(leg(0, 10)).hoursTyped, undefined);
+    assert.equal(TrackLeg.parse(leg(0, 10, { hoursTyped: true })).hoursTyped, true);
+    assert.equal(TrackLeg.safeParse(leg(0, 10, { hoursTyped: false })).success, false);
     assert.equal(TrackLeg.safeParse(leg(5, 4)).success, false);
     assert.equal(Track.safeParse([leg(0, 10), leg(9, 12)]).success, false);
     assert.equal(CampaignRecord.safeParse(record({ type: 'vessel', status: { track: [leg(0, 10), leg(9, 12)] } })).success, false);
@@ -305,4 +314,70 @@ test('locate follows a hook when one is passed, and the same call without it is 
     assert.deepEqual(locate(RECORD, records, () => ({ done: { kind: 'jump', arrives: 37 } })), { kind: 'jump', arrives: 37 });
     assert.equal(locate(RECORD, records, () => ({ done: null })), null);
     assert.deepEqual(locate(RECORD, records), system);
+});
+
+const JOURNAL = 'cj_44444444-4444-4444-4444-444444444444';
+
+function entry(over = {}) {
+    return {
+        id: JOURNAL,
+        kind: 'note',
+        title: 'At the starport',
+        body: 'The liner was late.',
+        when: { year: 1105, day: 35 },
+        realDate: '2026-10-06',
+        sequence: null,
+        author: 'referee',
+        visibility: 'referee',
+        anchor: null,
+        mentions: [],
+        rev: 1,
+        createdAt: STAMP,
+        updatedAt: STAMP,
+        deleted: false,
+        ...over,
+    };
+}
+
+test('a journal entry keeps a session numbered and every other kind unnumbered', () => {
+    assert.deepEqual([...CAMPAIGN_ENTRY_KINDS], ['session', 'note', 'handout', 'rumor']);
+    assert.equal(CAMPAIGN_LIMITS.journal, 20_000);
+    assert.equal(CampaignEntry.safeParse(entry({ kind: 'session', sequence: 1 })).success, true);
+    assert.equal(CampaignEntry.safeParse(entry({ kind: 'note' })).success, true);
+    assert.equal(CampaignEntry.safeParse(entry({ kind: 'handout', visibility: 'players', sequence: null })).success, true);
+    assert.equal(CampaignEntry.safeParse(entry({ kind: 'handout', visibility: 'referee' })).success, true);
+    assert.equal(CampaignEntry.safeParse(entry({ kind: 'rumor', title: '' })).success, true);
+    assert.equal(CampaignEntry.safeParse(entry({ kind: 'session', sequence: null })).success, false);
+    assert.equal(CampaignEntry.safeParse(entry({ kind: 'note', sequence: 2 })).success, false);
+    assert.equal(CampaignEntry.safeParse(entry({ title: '' })).success, true);
+    assert.equal(CampaignEntry.safeParse(entry({ body: 'b'.repeat(CAMPAIGN_LIMITS.entryBody + 1) })).success, false);
+    assert.equal(CampaignEntry.safeParse(entry({ realDate: '06-10-2026' })).success, false);
+    assert.equal(CampaignEntry.safeParse(entry({ realDate: null })).success, true);
+    assert.equal(CampaignEntry.safeParse(entry({ when: null })).success, true);
+    assert.equal(CampaignEntry.safeParse(entry({ anchor: { kind: 'system', hexKey: 'Spinward_Marches/1910' } })).success, true);
+    assert.equal(CampaignEntry.safeParse(entry({ anchor: { kind: 'system', hexKey: 'Spinward_Marches/1910', bodyKey: 'w3' } })).success, true);
+    assert.equal(CampaignEntry.safeParse(entry({ anchor: { kind: 'system', hexKey: 'Spinward_Marches/1910', point: { x: 1.2, y: 0.8 } } })).success, true);
+    assert.equal(CampaignEntry.safeParse(entry({ anchor: { kind: 'record', id: RECORD } })).success, true);
+    assert.equal(CampaignEntry.safeParse(entry({ mentions: [RECORD, 'hex:Spinward_Marches/1910'] })).success, true);
+    const text = [
+        `[[${RECORD}|Captain Voss]]`,
+        `[[${OTHER}|Baron Kalle]]`,
+        '[[hex:Spinward_Marches/1910|Regina]]',
+        `[[${RECORD}|Captain Voss]]`,
+        `[[${OTHER}]]`,
+        '[[something else]]',
+    ].join(' ');
+    assert.deepEqual(mentionsOf(text), [RECORD, OTHER, 'hex:Spinward_Marches/1910']);
+    const row = entry({ kind: 'session', sequence: 4 });
+    assert.equal(EntryChange.safeParse({ ...row, baseRev: 1 }).success, true);
+    assert.equal(CampaignChanges.safeParse({ journal: [{ ...row, baseRev: 1 }] }).success, true);
+    assert.equal(CampaignChanges.safeParse({ journal: [{ id: JOURNAL, baseRev: 2, deleted: true }] }).success, true);
+    const page = { records: [], links: [], settings: settings(), clock: null, seq: 0, done: true };
+    assert.equal(CampaignPage.safeParse(page).success, true);
+    assert.equal(CampaignPage.safeParse({ ...page, journal: [row] }).success, true);
+    const result = CampaignChangesResult.safeParse({
+        applied: [{ table: 'journal', id: JOURNAL, rev: 2, seq: 3 }],
+        conflicts: [{ table: 'journal', id: JOURNAL, current: row }],
+    });
+    assert.equal(result.success, true);
 });

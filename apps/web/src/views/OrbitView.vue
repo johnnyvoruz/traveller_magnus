@@ -20,14 +20,19 @@ import { jumpReturnPath, jumpTarget } from '../orbit/jump_state.ts';
 import {
     bodyAnchor, earliestDeparture, jumpLeg, jumpStanding, legAt, legStart, pointAnchor, shipsHere, shipTrack, statusWords, vesselPosition, whenWords,
 } from '../orbit/ship_list.ts';
+import NavConsole from '../orbit/NavConsole.vue';
+import type { PlotHover } from '../orbit/ship_marks.ts';
 import ShipStrip from '../orbit/ShipStrip.vue';
 import type { ShipTrack } from '../orbit/ships.ts';
-import { appendLeg, removeLastLeg, trackOf } from '../campaign/track.ts';
+import { appendLeg, removeLastLeg, replaceLegsFrom, trackOf } from '../campaign/track.ts';
 import type { CampaignAnchor } from '@voyage/shared';
 import { rollJumpHours } from '../campaign/travel.ts';
 import { formatDistance } from '../design/units.ts';
 import { pointWords, realDistanceKmBetween, type PlaceEnd } from '../orbit/distance.ts';
-import { courseLegs, coursePreview, courseReady, courseTotals, planCourse, tagWords, underwayWords, type Waypoint } from '../orbit/course.ts';
+import {
+    appendedTail, courseLegs, coursePreview, courseReady, courseTotals, editedTail, lastThrust, movedWaypoint, planCourse, routeFixed, routePreview, samePlace,
+    storedRoute, tagWords, toGoWords, underwayWords, type EditedTail, type PlannedLeg, type Waypoint,
+} from '../orbit/course.ts';
 import { flightFuelWords, hoursWords, jumpEstimateWords, rollWords, type JumpRoll } from '../orbit/estimates.ts';
 import { stepSpeed } from '../orbit/time_row.ts';
 import { beginPick, endPick, type PickedSystem } from '../workspace/pick.ts';
@@ -68,9 +73,20 @@ const router = useRouter();
 const rootEl = ref<HTMLElement | null>(null);
 const stageEl = ref<InstanceType<typeof OrbitCanvas> | null>(null);
 const flightEl = ref<HTMLElement | null>(null);
+const consoleEl = ref<{ focusThrottle: () => void; removeFocused: () => boolean } | null>(null);
 /** The strip's height, so toasts stack under it. */
 const flightHeight = ref(0);
 let stopFlightSize: (() => void) | null = null;
+// The stack stands on the picture, which is drawn once the system is ready: it is measured whenever it arrives.
+watch(flightEl, (strip) => {
+    if (stopFlightSize) stopFlightSize();
+    stopFlightSize = null;
+    flightHeight.value = 0;
+    if (!strip) return;
+    const measureStrip = (): void => { flightHeight.value = strip.offsetHeight; };
+    measureStrip();
+    stopFlightSize = observeSize(strip, measureStrip);
+});
 const timeEl = ref<{ focusScrub: () => void; focusSpeed: () => void; focusDate: () => void } | null>(null);
 const tabsEl = ref<{ focusTab: (id: DrawerId) => void } | null>(null);
 const stageBox = ref<HTMLElement | null>(null);
@@ -484,13 +500,18 @@ function sampleShip(): void {
     if (at !== shipAt.value) shipAt.value = at;
 }
 
-// Plotting a flight (2b): the mode, the destination pressed on the picture, the leg previewed, then written.
+// The ship in hand (follow-up 29): selecting a ship opens its nav console; with a thrust set the plotter is live.
+/** A ship is in hand: its nav console is open. */
 const plotting = ref(false);
 /** The course being plotted: the waypoints in the order they were pressed (orbit/course.ts). */
 const waypoints = ref<Waypoint[]>([]);
-/** One G for the course. */
-const plotAccel = ref(2);
+/** One thrust for the course, in G; null until it is set. None is assumed. */
+const plotAccel = ref<number | null>(null);
+/** The thrust last set for each ship this visit; before that, its last flight leg's (course.ts lastThrust). */
+const thrustSet = new Map<string, number>();
 const canPlot = computed(() => canSetDate.value && ships.value.length > 0 && state.value === 'ready');
+/** The plotter is live: a press on the picture lays a waypoint. Until a thrust is set, a press is an ordinary selection. */
+const live = computed(() => plotting.value && plotAccel.value !== null);
 
 /** An anchor of this system as an end of the distance sum: its body, or its point; null for anywhere else. */
 function endOf(anchor: CampaignAnchor): PlaceEnd | null {
@@ -499,71 +520,451 @@ function endOf(anchor: CampaignAnchor): PlaceEnd | null {
     return anchor.point ? { x: anchor.point.x, y: anchor.point.y } : null;
 }
 
+function distanceBetween(a: PlaceEnd, aDays: number, b: PlaceEnd, bDays: number): number | null {
+    const plan = searchPlan.value;
+    return plan ? realDistanceKmBetween(plan, a, aDays, b, bDays) : null;
+}
+
+/**
+ * The selected ship's stored route on this picture, from the view's date on (course.ts
+ * storedRoute): the leg under way, which is history, then those to come.
+ */
+const shipRoute = computed(() => storedRoute(shipRecord.value ? trackOf(shipRecord.value) : null, shownDays.value, endOf));
+/** The route as the picture takes it; null with none. It is drawn whenever a ship is selected, in hand or not. */
+const routeTold = computed(() => {
+    const plan = searchPlan.value;
+    const legs = routePreview(shipRoute.value, endOf, (leg) => shortLabel(anchorName(leg.to), plan ? plan.name : '') + ' \u00B7 ' + whenWords(leg.arrives));
+    return legs.length ? legs : null;
+});
+/** A course being plotted runs on from the route's end: this many waypoints of the preview are the route's own. */
+const lead = computed(() => shipRoute.value.legs.length);
+
+/** Where the course starts: the end of the stored route, or the ship; and the earliest it may leave. */
+const courseStart = computed((): { anchor: CampaignAnchor; end: PlaceEnd | null; departs: number | null } => {
+    if (lead.value) {
+        const last = shipRoute.value.legs[lead.value - 1];
+        return { anchor: last.to, end: endOf(last.to), departs: last.arrives };
+    }
+    const from = legStart(shipPosition.value);
+    return { anchor: from, end: endOf(from), departs: earliestDeparture(shipPosition.value, shownDays.value) };
+});
+
 /**
  * The course as legs: each leaves when the one before arrives and is measured to where its
  * destination will be at its own arrival (orbit/course.ts planCourse, over
- * orbit/distance.ts realDistanceKmBetween; never measured on the picture).
+ * orbit/distance.ts realDistanceKmBetween; never measured on the picture). The pointer's
+ * leg is not in here, so a sweeping pointer never settles these again.
  */
 const planned = computed(() => {
-    const plan = searchPlan.value;
-    if (!plotting.value || !shipRecord.value || !waypoints.value.length) return [];
-    const from = legStart(shipPosition.value);
-    const start = { anchor: from, end: endOf(from), departs: earliestDeparture(shipPosition.value, shownDays.value) };
-    return planCourse(start, waypoints.value, plotAccel.value, (a, aDays, b, bDays) => (plan ? realDistanceKmBetween(plan, a, aDays, b, bDays) : null));
+    const g = plotAccel.value;
+    const start = courseStart.value;
+    const d = drag.value;
+    const list = d && d.which === 'course' ? d.waypoints : waypoints.value;
+    if (!plotting.value || g === null || start.departs === null || !shipRecord.value || !list.length) return [];
+    return planCourse({ anchor: start.anchor, end: start.end, departs: start.departs }, list, g, distanceBetween);
 });
 
-/** The course in the card's words. */
+/** Where the next leg would start: the last waypoint and its arrival, or the ship. */
+const courseTail = computed((): { anchor: CampaignAnchor; end: PlaceEnd | null; departs: number | null } => {
+    const legs = planned.value;
+    if (!legs.length) return courseStart.value;
+    const last = legs[legs.length - 1];
+    return { anchor: last.waypoint.anchor, end: last.waypoint.to, departs: last.arrives };
+});
+
+// ---- The live plotter: the place under the pointer, or stepped to from the keyboard ----
+
+/** What the picture has under the pointer (OrbitCanvas plotHover: at most once a painted frame). */
+const hover = shallowRef<PlotHover | null>(null);
+/** The body stepped to from the keyboard; the pointer takes over again when it next moves to another place. */
+const stepped = ref<string | null>(null);
+
+function onPlotHover(under: PlotHover | null): void {
+    hover.value = under;
+    if (under) stepped.value = null;
+}
+
+function bodyWaypoint(key: string): Waypoint | null {
+    const chip = findChip(chips.value, key);
+    return chip ? { to: key, name: chip.name, anchor: bodyAnchor(hexKey.value, key, chip.name), typed: null, own: false } : null;
+}
+
+function pointWaypoint(point: { x: number; y: number }): Waypoint {
+    const plan = searchPlan.value;
+    const name = (plan ? pointWords(plan, point, shownDays.value) : '') || 'A point in open space';
+    return { to: { x: point.x, y: point.y }, name, anchor: pointAnchor(hexKey.value, point, name), typed: null, own: false };
+}
+
+/** The place the plotter is on, as a waypoint; or the words for why there is none. */
+const aimPlace = computed((): { waypoint: Waypoint } | { note: string } => {
+    if (!live.value) return { note: '' };
+    const under = hover.value;
+    let waypoint: Waypoint | null = null;
+    if (stepped.value) waypoint = bodyWaypoint(stepped.value);
+    else if (!under) return { note: 'Pointer off the picture' };
+    else if ('blank' in under) return { note: 'No reading here' };
+    else if ('ship' in under) {
+        const found = campaign.records[under.ship];
+        return { note: (found ? found.name : 'A ship') + (under.ship === selectedShip.value ? ': press to release' : ': press to take it') };
+    } else waypoint = 'key' in under ? bodyWaypoint(under.key) : pointWaypoint(under.point);
+    return waypoint ? { waypoint } : { note: 'No reading here' };
+});
+
+/** The same as the next waypoint a press would lay: the body the course already stands on is not a leg. */
+const aim = computed((): { waypoint: Waypoint } | { note: string } => {
+    const at = aimPlace.value;
+    if ('waypoint' in at && typeof at.waypoint.to === 'string' && courseTail.value.end === at.waypoint.to) return { note: at.waypoint.name + ': the course is here' };
+    return at;
+});
+
+// ---- A waypoint in hand (section 0c): picked up on the picture, dropped on a body or a point ----
+
+/** The waypoint being dragged: its place in the stored route, or in the course being plotted. */
+const held = ref<{ which: 'route'; track: number } | { which: 'course'; index: number } | null>(null);
+/**
+ * The same as a place in the route as it stands now. A stored waypoint is held by its leg's
+ * place on the track, because the route shortens under a running clock as legs arrive.
+ */
+const grab = computed((): { which: 'route' | 'course'; index: number } | null => {
+    const h = held.value;
+    if (!h) return null;
+    return h.which === 'route' ? { which: 'route', index: h.track - shipRoute.value.first } : h;
+});
+/** The clock ran on and the leg into the waypoint in hand departed: it is history, and the waypoint goes back. */
+watch(() => {
+    const g = grab.value;
+    return g !== null && g.which === 'route' && g.index < routeFixed(shipRoute.value);
+}, (departed) => {
+    if (!departed) return;
+    held.value = null;
+    showToast('That leg has already departed.');
+});
+
+function onWayGrab(from: 'route' | 'preview', index: number): void {
+    held.value = from === 'route' || index < lead.value ? { which: 'route', track: shipRoute.value.first + index } : { which: 'course', index: index - lead.value };
+}
+
+/**
+ * The course, or the route's tail, as it would be with the waypoint in hand put where the
+ * plotter is. Null while there is no such place (off the picture, on a ship, on the place
+ * the leg starts from or the next one ends at).
+ */
+const drag = computed((): { which: 'course'; waypoints: Waypoint[] } | { which: 'route'; tail: EditedTail } | null => {
+    const g = grab.value;
+    const at = aimPlace.value;
+    const accel = plotAccel.value;
+    if (!g || accel === null || !('waypoint' in at)) return null;
+    if (g.which === 'course') {
+        const list = waypoints.value;
+        if (!list[g.index]) return null;
+        const before = g.index === 0 ? courseStart.value.end : list[g.index - 1].to;
+        const after = list[g.index + 1] ? list[g.index + 1].to : null;
+        if (samePlace(before, at.waypoint.to) || samePlace(after, at.waypoint.to)) return null;
+        return { which: 'course', waypoints: movedWaypoint(list, g.index, at.waypoint) };
+    }
+    const legs = shipRoute.value.legs;
+    if (!legs[g.index] || samePlace(endOf(legs[g.index].from), at.waypoint.to)) return null;
+    if (legs[g.index + 1] && samePlace(endOf(legs[g.index + 1].to), at.waypoint.to)) return null;
+    const tail = editedTail(shipRoute.value, g.index, { move: at.waypoint }, accel, distanceBetween, endOf, anchorName);
+    return tail ? { which: 'route', tail } : null;
+});
+
+/** The leg into the waypoint in hand, as it would be. */
+const dragLeg = computed((): PlannedLeg | null => {
+    const g = grab.value;
+    const d = drag.value;
+    if (!g || !d) return null;
+    return d.which === 'course' ? planned.value[g.index] ?? null : d.tail.planned[0] ?? null;
+});
+
+/** One change to the stored route, written at once with one Undo (campaign/track.ts replaceLegsFrom); its refusals are shown as they are. */
+function writeTail(tail: EditedTail | null, said: string): void {
+    const id = selectedShip.value;
+    const track = shipRecord.value ? trackOf(shipRecord.value) : null;
+    if (!id || !track || !tail) return;
+    if (!tail.all) {
+        showToast('A leg of that route has no distance known here: the route is as it was.');
+        return;
+    }
+    const before = track.slice(tail.index);
+    const index = tail.index;
+    // The route's legs from the change on, then the jump and whatever follows it, moved in time: one write.
+    const result = replaceLegsFrom(id, index, tail.all, shownDays.value);
+    if (!result.ok) {
+        showToast(result.message);
+        return;
+    }
+    showToast(said, {
+        action: {
+            label: 'Undo',
+            run: () => {
+                const back = replaceLegsFrom(id, index, before, shownDays.value);
+                if (!back.ok) showToast(back.message);
+            },
+        },
+    });
+}
+
+/** The waypoint in hand is let go: where the plotter is, or back where it was. */
+function onWayDrop(moved: boolean): void {
+    const g = grab.value;
+    const d = drag.value;
+    held.value = null;
+    if (!moved || !g || !d) return;
+    if (d.which === 'course') {
+        waypoints.value = d.waypoints;
+        return;
+    }
+    const leg = d.tail.planned[0];
+    writeTail(d.tail, 'Waypoint ' + (g.index + 1) + ' moved to ' + (leg ? leg.waypoint.name : 'a new place') + '.');
+}
+
+/** A stored waypoint removed from the console: the legs either side are joined. */
+function removeRouteWaypoint(index: number): void {
+    const accel = plotAccel.value;
+    const leg = shipRoute.value.legs[index];
+    if (accel === null || !leg) return;
+    writeTail(editedTail(shipRoute.value, index, { remove: true }, accel, distanceBetween, endOf, anchorName), 'Waypoint ' + (index + 1) + ' removed: ' + anchorName(leg.to) + '.');
+}
+
+/** A stored waypoint sent to another body from the console. */
+function retargetRoute(index: number, key: string): void {
+    const accel = plotAccel.value;
+    const next = bodyWaypoint(key);
+    const leg = shipRoute.value.legs[index];
+    if (accel === null || !next || !leg || samePlace(endOf(leg.to), key) || samePlace(endOf(leg.from), key)) return;
+    writeTail(editedTail(shipRoute.value, index, { move: next }, accel, distanceBetween, endOf, anchorName), 'Waypoint ' + (index + 1) + ' moved to ' + next.name + '.');
+}
+
+/** A plotted waypoint removed: one left standing on the place before it goes with it. */
+function removeWaypointAt(index: number): void {
+    const out: Waypoint[] = [];
+    let before = courseStart.value.end;
+    waypoints.value.forEach((item, at) => {
+        if (at === index || samePlace(before, item.to)) return;
+        out.push(item);
+        before = item.to;
+    });
+    waypoints.value = out;
+}
+
+/** A plotted waypoint sent to another body from the console. */
+function retargetWaypoint(index: number, key: string): void {
+    const next = bodyWaypoint(key);
+    const list = waypoints.value;
+    if (!next || !list[index]) return;
+    const before = index === 0 ? courseStart.value.end : list[index - 1].to;
+    const after = list[index + 1] ? list[index + 1].to : null;
+    if (samePlace(before, key) || samePlace(after, key)) return;
+    waypoints.value = movedWaypoint(list, index, next);
+}
+
+/** The stored route in the console's words; while one of its waypoints is in hand, the legs from there on as they would be. */
+const routeRows = computed(() => {
+    const stored = shipRoute.value;
+    if (!stored.legs.length) return null;
+    const d = drag.value;
+    const tail = d && d.which === 'route' ? d.tail : null;
+    const fixed = routeFixed(stored);
+    const live = plotAccel.value !== null;
+    const rows = stored.legs.slice(0, tail ? tail.at : stored.legs.length).map((leg, index) => {
+        const to = endOf(leg.to);
+        return {
+            n: index + 1,
+            to: typeof to === 'string' ? to : '',
+            name: anchorName(leg.to),
+            estimate: (leg.accelG ? leg.accelG + ' G \u00B7 ' : '') + toGoWords(leg.arrives - leg.departs),
+            arrives: whenWords(leg.arrives),
+            state: (index === 0 && stored.underway ? 'underway' : 'planned') as 'underway' | 'planned' | 'moving',
+            editable: live && index >= fixed,
+        };
+    });
+    for (const leg of tail ? tail.planned : []) {
+        rows.push({
+            n: leg.n,
+            to: typeof leg.waypoint.to === 'string' ? leg.waypoint.to : '',
+            name: leg.waypoint.name,
+            estimate: leg.settled ? formatDistance(leg.settled.km, AU_KM) + ' \u00B7 ' + hoursWords(leg.settled.hours, leg.settled.settled) : 'Distance unknown',
+            arrives: leg.arrives === null ? '' : whenWords(leg.arrives),
+            state: 'moving',
+            editable: false,
+        });
+    }
+    return { rows, note: '' };
+});
+
+/**
+ * What follows the route on the track (a jump and every leg after it), as rows that are
+ * not picked up. Their dates are shown as they would be: after the waypoint in hand, or
+ * after the course being plotted (course.ts onwardLegs).
+ */
+const onward = computed(() => {
+    const stored = shipRoute.value;
+    if (!stored.after.length) return null;
+    const d = drag.value;
+    const g = plotAccel.value;
+    let legs = stored.after;
+    if (d && d.which === 'route') legs = d.tail.after;
+    else {
+        const staged = g === null ? null : courseLegs(planned.value, g);
+        if (staged && staged.length) legs = appendedTail(stored, staged).after;
+    }
+    const base = stored.legs.length + waypoints.value.length;
+    const rows = legs.map((leg, index) => ({
+        n: base + index + 1,
+        name: (leg.mode === 'jump' ? 'Jump to ' : '') + anchorName(leg.to),
+        estimate: (leg.mode === 'jump' ? Math.round((leg.arrives - leg.departs) * 24) + ' h' : toGoWords(leg.arrives - leg.departs)) + ' \u00B7 departs ' + whenWords(leg.departs),
+        arrives: whenWords(leg.arrives),
+        moved: !stored.after[index] || stored.after[index].departs !== leg.departs,
+    }));
+    return { rows, note: 'These follow the course: each keeps its own duration and moves in time with it.' };
+});
+
+const bodyOptions = computed(() => chips.value.flatMap((chip) => [{ key: chip.key, name: chip.name }, ...chip.moons.map((moon) => ({ key: moon.key, name: moon.name }))]));
+
+/** The leg to the place under the plotter: one settle, from the ship or the last waypoint. Null where there is no place or no start. */
+const aimLeg = computed((): PlannedLeg | null => {
+    const at = aim.value;
+    const g = plotAccel.value;
+    const tail = courseTail.value;
+    if (grab.value || !('waypoint' in at) || g === null || tail.departs === null) return null;
+    return planCourse({ anchor: tail.anchor, end: tail.end, departs: tail.departs }, [at.waypoint], g, distanceBetween)[0] ?? null;
+});
+
+/** The console's live figures. */
+const here = computed(() => {
+    const leg = grab.value ? dragLeg.value : aimLeg.value;
+    if (!leg || !leg.settled || leg.arrives === null) return null;
+    return {
+        name: leg.waypoint.name,
+        distance: formatDistance(leg.settled.km, AU_KM),
+        time: hoursWords(leg.settled.hours, leg.settled.settled),
+        arrives: whenWords(leg.arrives),
+    };
+});
+const hereNote = computed(() => {
+    if (grab.value) {
+        const place = aimPlace.value;
+        return 'note' in place ? place.note : place.waypoint.name + ': not a place for this waypoint';
+    }
+    const at = aim.value;
+    if ('note' in at) return at.note;
+    if (courseTail.value.departs === null) return 'Waiting on the hours of the leg before';
+    return at.waypoint.name + ': no distance known';
+});
+
+/** The course in the console's words. */
 const course = computed(() => {
     const legs = planned.value;
-    if (!legs.length) return null;
-    const plan = searchPlan.value;
+    const g = plotAccel.value;
+    if (!legs.length || g === null) return null;
     const rows = legs.map((leg) => {
         let estimate = '';
         if (leg.departs === null) estimate = 'Waiting on the hours of the leg before';
-        else if (leg.settled) estimate = formatDistance(leg.settled.km, AU_KM) + ' \u00B7 ' + hoursWords(leg.settled.hours, leg.settled.settled);
+        else if (leg.settled) estimate = formatDistance(leg.settled.km, AU_KM) + ' · ' + hoursWords(leg.settled.hours, leg.settled.settled);
         else estimate = 'Distance unknown: type the hours';
         const body = typeof leg.waypoint.to === 'string';
         return {
-            n: leg.n,
+            n: lead.value + leg.n,
+            to: body ? leg.waypoint.to as string : '',
             name: leg.waypoint.name,
             hours: leg.shown,
             typed: leg.waypoint.own,
             estimate,
-            arrives: leg.arrives === null ? '' : 'arrives ' + whenWords(leg.arrives),
+            arrives: leg.arrives === null ? '' : whenWords(leg.arrives),
             title: leg.settled && body ? 'Measured to where ' + leg.waypoint.name + ' will be at ' + whenWords(leg.settled.arrives) + '.' : '',
         };
     });
     const totals = courseTotals(legs);
     const words = [
         totals.km === null ? '' : formatDistance(totals.km, AU_KM),
-        totals.hours === null ? '' : hoursWords(totals.hours, totals.settled) + ' at ' + plotAccel.value + ' G',
-        totals.arrives === null ? '' : 'arrives ' + whenWords(totals.arrives),
-    ].filter(Boolean).join(' \u00B7 ');
+        totals.hours === null ? '' : hoursWords(totals.hours, totals.settled),
+    ].filter(Boolean).join(' · ');
     const count = legs.length === 1 ? '1 leg' : legs.length + ' legs';
     return {
         rows,
-        total: 'Course, ' + count + (words ? ': ' + words : ': some legs still need their hours'),
-        fuel: flightFuelWords(plotAccel.value, totals.hours),
+        total: count + (totals.hours === null ? ' · some legs still need their hours' : ' · ' + words),
+        arrives: totals.arrives === null ? '' : whenWords(totals.arrives),
+        fuel: flightFuelWords(g, totals.hours),
         ready: courseReady(legs),
         typed: waypoints.value.some((item) => item.own),
-        plan: plan !== null,
     };
 });
 
 /**
  * What the picture is told of the course (the renderer places everything from dates and a
- * key or a point): every dated leg, the last carrying the arrival tag. Null with no waypoint.
+ * key or a point): every dated leg and then the leg to the place under the plotter, the last
+ * carrying the arrival tag. So the ghosts move as the pointer moves, and rest at the last
+ * waypoint's arrival where the plotter has no place. Null with nothing to show.
  */
 const flightPreview = computed(() => {
     const plan = searchPlan.value;
-    const legs = coursePreview(planned.value, (leg) => shortLabel(leg.waypoint.name, plan ? plan.name : '') + (leg.arrives === null ? '' : ' \u00B7 ' + whenWords(leg.arrives)));
-    return legs.length ? legs : null;
+    const tag = (leg: PlannedLeg): string => shortLabel(leg.waypoint.name, plan ? plan.name : '') + (leg.arrives === null ? '' : ' \u00B7 ' + whenWords(leg.arrives));
+    // The picture draws a preview over the route from the first waypoint that differs, so the preview starts with the route's own legs.
+    const kept = (routeTold.value ?? []).map((leg) => ({ ...leg, tag: undefined }));
+    const d = drag.value;
+    if (d && d.which === 'route') return [...kept.slice(0, d.tail.at), ...coursePreview(d.tail.planned, tag)];
+    const legs = planned.value;
+    const next = aimLeg.value;
+    const dated = legs.every((leg) => leg.arrives !== null);
+    const all = next && dated ? [...legs, { ...next, n: legs.length + 1 }] : legs;
+    const shown = coursePreview(all, tag);
+    if (!shown.length) return null;
+    return lead.value ? [...kept.slice(0, lead.value), ...shown] : shown;
 });
 
+/** Takes the selected ship in hand, or lets it go. The thrust offered is the one last used for that ship; the first time there is none. */
 function setPlotting(on: boolean): void {
     if (on && !canPlot.value) return;
     plotting.value = on;
-    if (!on) waypoints.value = [];
+    waypoints.value = [];
+    stepped.value = null;
+    held.value = null;
+    const id = selectedShip.value;
+    const record = shipRecord.value;
+    plotAccel.value = on && id ? thrustSet.get(id) ?? (record ? lastThrust(trackOf(record)) : null) : null;
+    if (on && plotAccel.value === null) void nextTick(() => { if (consoleEl.value) consoleEl.value.focusThrottle(); });
+}
+
+/**
+ * A ship pressed: its chip, its tag or its mark on the picture. It is selected and taken in
+ * hand; the ship already in hand, pressed again, is released (it stays selected).
+ */
+function takeShip(id: string): void {
+    if (plotting.value && id === selectedShip.value) {
+        setPlotting(false);
+        return;
+    }
+    selectedShip.value = id;
+    setPlotting(true);
+}
+
+function setThrust(g: number): void {
+    plotAccel.value = g;
+    if (selectedShip.value) thrustSet.set(selectedShip.value, g);
+}
+
+/** Every body as a destination, in the body list's order, each world's moons after it. */
+const stepKeys = computed(() => chips.value.flatMap((chip) => [chip.key, ...chip.moons.map((moon) => moon.key)]));
+
+/** The keyboard's plotter: the next body, or the one before, round and round; the body the course stands on is passed over. */
+function stepBody(by: 1 | -1): void {
+    const keys = stepKeys.value;
+    if (!live.value || !keys.length) return;
+    const at = aim.value;
+    const on = 'waypoint' in at && typeof at.waypoint.to === 'string' ? at.waypoint.to : stepped.value;
+    let index = on ? keys.indexOf(on) : (by > 0 ? -1 : 0);
+    for (let i = 0; i < keys.length; i += 1) {
+        index = (index + by + keys.length) % keys.length;
+        if (keys[index] !== courseTail.value.end) break;
+    }
+    stepped.value = keys[index];
+}
+
+/** The place under the plotter becomes the next waypoint, as a press on the picture there does. */
+function commitAim(): void {
+    const at = aim.value;
+    if ('waypoint' in at) addWaypoint(at.waypoint);
 }
 
 function typeLegHours(index: number, hours: number | null): void {
@@ -575,29 +976,21 @@ function useEstimate(): void {
     waypoints.value = waypoints.value.map((item) => ({ ...item, own: false, typed: null }));
 }
 
-/** The place the next leg would start from: the last waypoint, or where the ship is. */
-function courseEnd(): PlaceEnd | null {
-    const last = waypoints.value[waypoints.value.length - 1];
-    return last ? last.to : endOf(legStart(shipPosition.value));
-}
-
 function addWaypoint(next: Waypoint): void {
     waypoints.value = [...waypoints.value, next];
+    stepped.value = null;
 }
 
 /** A body pressed while plotting: the next waypoint. The body the course already stands on is not a leg. */
 function setDestination(key: string): void {
-    const chip = plotting.value ? findChip(chips.value, key) : null;
-    if (!chip || courseEnd() === key) return;
-    addWaypoint({ to: key, name: chip.name, anchor: bodyAnchor(hexKey.value, key, chip.name), typed: null, own: false });
+    const next = live.value ? bodyWaypoint(key) : null;
+    if (!next || courseTail.value.end === key) return;
+    addWaypoint(next);
 }
 
 /** A press on empty picture while plotting: that point is the next waypoint. */
 function setDestinationPoint(point: { x: number; y: number }): void {
-    if (!plotting.value) return;
-    const plan = searchPlan.value;
-    const name = (plan ? pointWords(plan, point, shownDays.value) : '') || 'A point in open space';
-    addWaypoint({ to: { x: point.x, y: point.y }, name, anchor: pointAnchor(hexKey.value, point, name), typed: null, own: false });
+    if (live.value) addWaypoint(pointWaypoint(point));
 }
 
 function removeLastWaypoint(): void {
@@ -628,6 +1021,7 @@ function nextShip(): void {
     if (!list.length) return;
     const at = list.findIndex((ship) => ship.id === selectedShip.value);
     selectedShip.value = list[(at + 1) % list.length].id;
+    setPlotting(true);
 }
 
 /**
@@ -636,35 +1030,52 @@ function nextShip(): void {
  * off, the clock stands on the course's departure, and Play is one press.
  */
 function addCourse(): void {
-    const legs = courseLegs(planned.value, plotAccel.value);
+    const g = plotAccel.value;
+    const legs = g === null ? null : courseLegs(planned.value, g);
     const id = selectedShip.value;
     if (!legs || !id) return;
-    let written = 0;
-    for (const leg of legs) {
-        const result = appendLeg(id, leg);
+    const count = legs.length;
+    const stored = shipRoute.value;
+    const track = shipRecord.value ? trackOf(shipRecord.value) : null;
+    let undo: () => void;
+    if (stored.after.length && track) {
+        // A jump follows: the new legs go in before it, and it and what is after it move in time. One write, one Undo.
+        const tail = appendedTail(stored, legs);
+        const before = track.slice(tail.index);
+        const result = replaceLegsFrom(id, tail.index, tail.all, shownDays.value);
         if (!result.ok) {
-            for (let i = 0; i < written; i += 1) removeLastLeg(id);
             showToast(result.message);
             return;
         }
-        written += 1;
+        undo = () => {
+            const back = replaceLegsFrom(id, tail.index, before, shownDays.value);
+            if (!back.ok) showToast(back.message);
+        };
+    } else {
+        let written = 0;
+        for (const leg of legs) {
+            const result = appendLeg(id, leg);
+            if (!result.ok) {
+                for (let i = 0; i < written; i += 1) removeLastLeg(id);
+                showToast(result.message);
+                return;
+            }
+            written += 1;
+        }
+        undo = () => {
+            for (let i = 0; i < count; i += 1) {
+                const back = removeLastLeg(id);
+                if (!back.ok) {
+                    showToast(back.message);
+                    return;
+                }
+            }
+        };
     }
-    const count = written;
     const first = legs[0];
     const last = legs[legs.length - 1];
     showToast((count === 1 ? 'Leg added: ' : 'Course added, ' + count + ' legs: ') + anchorName(first.from) + ' \u2192 ' + anchorName(last.to) + ', arriving ' + whenWords(last.arrives) + '.', {
-        action: {
-            label: 'Undo',
-            run: () => {
-                for (let i = 0; i < count; i += 1) {
-                    const back = removeLastLeg(id);
-                    if (!back.ok) {
-                        showToast(back.message);
-                        return;
-                    }
-                }
-            },
-        },
+        action: { label: 'Undo', run: undo },
     });
     setPlotting(false);
     moved = true;
@@ -880,16 +1291,10 @@ function closeDrawer(): void {
     void nextTick(() => { if (tabsEl.value) tabsEl.value.focusTab(was); });
 }
 
-/** Escape: the drawer first, then a popover, then the selected body, then back to the map. */
+/** Escape: the drawer first, then a popover, then the ship in hand (its last waypoint, then the ship), then the selected body, then back to the map. */
 function escape(): void {
     if (accountOpen.value) {
         closeAccount();
-        return;
-    }
-    // Plotting: the last waypoint goes, one press at a time; with none left, plotting itself.
-    if (plotting.value) {
-        if (waypoints.value.length) removeLastWaypoint();
-        else setPlotting(false);
         return;
     }
     const step = escapeStep({ drawer: drawer.value, popover: !!openPop.value || moonsOpen.value !== null, body: selectedKey.value !== null });
@@ -900,6 +1305,12 @@ function escape(): void {
     if (step === 'popover') {
         openPop.value = '';
         moonsOpen.value = null;
+        return;
+    }
+    // A ship in hand: the last waypoint goes, one press at a time; with none left, the ship is released.
+    if (plotting.value) {
+        if (waypoints.value.length) removeLastWaypoint();
+        else setPlotting(false);
         return;
     }
     if (askPaneEscape()) return;
@@ -978,7 +1389,13 @@ onMounted(() => {
         ...LAYERS.map((item) => orbitCommand(item.id, () => { layers.value = toggled(layers.value, item.key); }, ready)),
         orbitCommand('orbit-fit', () => { if (stageEl.value) stageEl.value.fit(); }, ready),
         orbitCommand('orbit-plot', () => { setPlotting(!plotting.value); }, () => canPlot.value),
+        orbitCommand('orbit-release', () => { setPlotting(false); }, () => plotting.value),
+        orbitCommand('orbit-thrust', () => { if (!plotting.value) setPlotting(true); void nextTick(() => { if (consoleEl.value) consoleEl.value.focusThrottle(); }); }, () => canPlot.value),
+        orbitCommand('orbit-plot-next-body', () => { stepBody(1); }, () => live.value && stepKeys.value.length > 0),
+        orbitCommand('orbit-plot-prev-body', () => { stepBody(-1); }, () => live.value && stepKeys.value.length > 0),
+        orbitCommand('orbit-plot-commit', commitAim, () => live.value && 'waypoint' in aim.value),
         orbitCommand('orbit-add-leg', addCourse, () => !!course.value && course.value.ready),
+        orbitCommand('orbit-waypoint-remove', () => { if (consoleEl.value) consoleEl.value.removeFocused(); }, () => live.value && (waypoints.value.length > 0 || shipRoute.value.legs.length > routeFixed(shipRoute.value))),
         orbitCommand('orbit-course-undo', removeLastWaypoint, () => plotting.value && waypoints.value.length > 0),
         orbitCommand('orbit-course-clear', clearCourse, () => plotting.value && waypoints.value.length > 0),
         orbitCommand('orbit-ship-next', nextShip, () => ships.value.length > 1),
@@ -998,12 +1415,6 @@ onMounted(() => {
     raf = nextFrame(frame);
     if (rootEl.value) rootEl.value.focus();
     setPlaceSource({ current: currentSystem, system: systemInfo, bodies: systemBodies });
-    if (flightEl.value) {
-        const strip = flightEl.value;
-        const measureStrip = (): void => { flightHeight.value = strip.offsetHeight; };
-        measureStrip();
-        stopFlightSize = observeSize(strip, measureStrip);
-    }
     if (stageBox.value) {
         const box = stageBox.value;
         const measure = (): void => { narrow.value = box.clientWidth < NARROW_BELOW; compact.value = box.clientWidth < COMPACT_BELOW; void nextTick(measureDrawer); };
@@ -1130,7 +1541,7 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
           <DrawerTabs ref="tabsEl" :open="drawer" :narrow="compact" @toggle="toggleTab" />
         </template>
       </OrbitHeader>
-      <div ref="stageBox" class="orbit-stage" :class="{ 'is-narrow': narrow, 'is-plotting': plotting }" :style="{ '--drawer-height': drawerHeight + 'px', '--flight-strip-height': (flightHeight ? flightHeight + 8 : 0) + 'px' }" :data-state="state" :data-ship="shipOutside === null ? 'off' : (shipOutside ? 'outside' : 'inside')" :data-ship-at="shipAt">
+      <div ref="stageBox" class="orbit-stage" :class="{ 'is-narrow': narrow, 'is-plotting': live, 'has-drawer': drawer !== '' }" :style="{ '--drawer-height': drawerHeight + 'px', '--flight-strip-height': (flightHeight ? flightHeight + 8 : 0) + 'px' }" :data-state="state" :data-ship="shipOutside === null ? 'off' : (shipOutside ? 'outside' : 'inside')" :data-ship-at="shipAt">
         <!-- The three control drawers hang from the header over the picture; one open at a time. -->
         <Drawer id="time" :ref="drawerEls.time" :open="drawer === 'time'" @close="closeDrawer">
           <TimeControls
@@ -1198,7 +1609,7 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
             data-command="orbit-plot"
             :aria-pressed="plotting ? 'true' : 'false'"
             :disabled="!canPlot"
-            :title="canPlot ? 'Plotting mode: press a body to set the selected ship’s destination (P)' : 'Plotting needs a ship in this system'"
+            :title="canPlot ? 'The selected ship’s nav console: set the thrust, then press the picture to lay waypoints (P)' : 'Plotting needs a ship in this system'"
             @click="setPlotting(!plotting)"
           >
             <Icon name="arrows-to-dot" :size="12" />Plotting<kbd aria-hidden="true">P</kbd>
@@ -1217,40 +1628,6 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
         <Drawer id="layers" :ref="drawerEls.layers" :open="drawer === 'layers'" @close="closeDrawer">
           <LayerKey :layers="layers" @layers="layers = $event" />
         </Drawer>
-        <!-- The K12 place: the status strip with Jump, the ship list under it, the plot card and the jump destination. Signed in with a campaign only. -->
-        <div ref="flightEl" class="orbit-flight">
-          <ShipStrip
-            v-if="canSetDate && state === 'ready'"
-            :ships="ships"
-            :selected="selectedShip"
-            :party-vessel-id="partyVesselId"
-            :status="shipStatus"
-            :standing="standing"
-            :plotting="plotting"
-            :course="course"
-            :accel-g="plotAccel"
-            :jump-target="jumpTarget"
-            :last-opened="lastOpened"
-            :jump-hours="jumpHours"
-            :jump-roll="jumpRoll && !jumpOwn ? rollWords(jumpRoll) : ''"
-            :jump-estimate="jumpEstimate"
-            :narrow="narrow"
-            @select="selectedShip = $event"
-            @plot="setPlotting"
-            @leg-hours="typeLegHours"
-            @remove-last="removeLastWaypoint"
-            @use-estimate="useEstimate"
-            @jump-hours="typeJumpHours"
-            @roll-again="rollJump"
-            @accel="plotAccel = $event"
-            @add-course="addCourse"
-            @clear-course="clearCourse"
-            @pick-on-map="pickOnMap"
-            @use-last="jumpTarget = lastOpened"
-            @clear-target="jumpTarget = null"
-            @jump="jump"
-          />
-        </div>
         <ToastStrip />
         <OrbitCanvas
           v-if="state === 'ready' && system"
@@ -1261,17 +1638,82 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
           :mode="mode"
           :layers="layers"
           :tracks="tracks"
-          :plotting="plotting"
+          :plotting="live"
           :plot-from="selectedShip"
           :survey-elsewhere="dossierOpen && selectedKey !== null"
           :ship-tags="tracks !== null"
           :ship-notes="shipNotes"
-          @ship="selectedShip = $event"
+          @ship="takeShip"
+          @plot-hover="onPlotHover"
+          @way-grab="onWayGrab"
+          @way-drop="onWayDrop"
+          :route="routeTold"
+          :way-fixed="routeFixed(shipRoute)"
+          :preview-fixed="lead ? routeFixed(shipRoute) : 0"
+          :preview-laid="lead + waypoints.length"
           @pick="pickBody"
           :preview="flightPreview"
           @plot="setDestination"
           @plot-point="setDestinationPoint"
-        />
+        >
+          <template #overlay>
+            <!-- The K12 place, on the picture: the status strip with Jump, the ship list, the jump destination and the ship's nav console. Signed in with a campaign only. -->
+            <div ref="flightEl" class="orbit-flight">
+              <ShipStrip
+                v-if="canSetDate && state === 'ready'"
+                :ships="ships"
+                :selected="selectedShip"
+                :party-vessel-id="partyVesselId"
+                :status="shipStatus"
+                :standing="standing"
+                :jump-target="jumpTarget"
+                :last-opened="lastOpened"
+                :jump-hours="jumpHours"
+                :jump-roll="jumpRoll && !jumpOwn ? rollWords(jumpRoll) : ''"
+                :jump-estimate="jumpEstimate"
+                :narrow="narrow"
+                @select="takeShip"
+                @jump-hours="typeJumpHours"
+                @roll-again="rollJump"
+                @pick-on-map="pickOnMap"
+                @use-last="jumpTarget = lastOpened"
+                @clear-target="jumpTarget = null"
+                @jump="jump"
+              >
+                <template #console>
+                  <NavConsole
+                    v-if="plotting && shipRecord"
+                    ref="consoleEl"
+                    :ship="shipRecord.name"
+                    :party="selectedShip === partyVesselId"
+                    :accel-g="plotAccel"
+                    :here="here"
+                    :here-note="hereNote"
+                    :here-label="grab ? 'Moving waypoint ' + String((grab.which === 'route' ? 0 : lead) + grab.index + 1).padStart(2, '0') : stepped ? 'Stepped to' : 'Under the pointer'"
+                :bodies="bodyOptions"
+                :route="routeRows"
+                :onward="onward"
+                    :can-step="stepKeys.length > 0"
+                    :course="course"
+                    @accel="setThrust"
+                    @leg-hours="typeLegHours"
+                    @use-estimate="useEstimate"
+                    @add-course="addCourse"
+                    @remove-last="removeLastWaypoint"
+                    @clear-course="clearCourse"
+                    @leg-remove="removeWaypointAt"
+                @leg-target="retargetWaypoint"
+                @route-remove="removeRouteWaypoint"
+                @route-target="retargetRoute"
+                @commit="commitAim"
+                    @step="stepBody"
+                    @release="setPlotting(false)"
+                  />
+                </template>
+              </ShipStrip>
+            </div>
+          </template>
+        </OrbitCanvas>
         <svg v-if="state !== 'ready'" class="orbit-blank" viewBox="0 0 800 800" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
           <circle v-for="r in [70, 130, 200, 280, 370]" :key="r" class="orbit-blank-ring" cx="400" cy="400" :r="r" />
         </svg>
@@ -1422,20 +1864,39 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
   /* The space K12 will take at the picture's upper right (the flight strip, then the ship list): empty until K6d. */
   --flight-strip-height: 0px;
   /* A toast sits at the picture's upper right under the flight strip: the body card, the key, Fit and the body chips are elsewhere. */
-  --toast-top: calc(14px + var(--flight-strip-height) + var(--drawer-height, 0px));
-  --toast-right: 14px;
+  --toast-top: min(calc(18px + var(--flight-strip-height) + var(--drawer-height, 0px)), calc(100% - 200px));
+  --toast-right: 18px;
   --toast-bottom: auto;
   --toast-left: auto;
-  --toast-max: min(460px, calc(100% - 28px));
+  --toast-max: min(460px, calc(100% - 36px));
 }
 
+/* The right-hand stack (the strip, the ship list, the destination row, the nav console, then
+   the toasts): one right edge, the picture's 18px gutter, and 18px under the top of the
+   picture or under an open drawer, moving with the drawer as the info card at the left does. */
 .orbit-flight {
   position: absolute;
-  right: 14px;
-  top: 14px;
+  top: calc(18px + var(--drawer-height, 0px));
+  right: 18px;
   z-index: 3;
-  max-width: calc(100% - 28px);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  max-width: calc(100% - 36px);
+  /* It never leaves the picture: 18px under the top or the drawer, and clear of Fit at the foot. The console's legs give way first. */
+  max-height: calc(100% - 18px - var(--drawer-height, 0px) - 60px);
   pointer-events: none;
+  transition: top var(--t-base) var(--ease-out);
+}
+
+.orbit-stage > .toasts {
+  transition: top var(--t-base) var(--ease-out);
+}
+
+/* A drawer closes faster than it opens; the stack follows it. */
+.orbit-stage:not(.has-drawer) .orbit-flight,
+.orbit-stage:not(.has-drawer) > .toasts {
+  transition-duration: var(--t-fast);
 }
 
 .orbit-btn.orbit-plot-btn {
@@ -1520,7 +1981,11 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .orbit-card {
+  .orbit-card,
+  .orbit-stage .orbit-flight,
+  .orbit-stage:not(.has-drawer) .orbit-flight,
+  .orbit-stage > .toasts,
+  .orbit-stage:not(.has-drawer) > .toasts {
     transition: none;
   }
 }

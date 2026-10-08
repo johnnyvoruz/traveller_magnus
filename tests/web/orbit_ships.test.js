@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { BODY_SNAP_PX } from '../../apps/web/src/orbit/distance.ts';
-import { dockedBeside, placeShips, plotText, readoutPlace, shipAt, standInMarks } from '../../apps/web/src/orbit/ships.ts';
+import { dockedBeside, placeShips, plotText, readoutPlace, shipAt, standInMarks, waypointAt } from '../../apps/web/src/orbit/ships.ts';
 
 const hex = 'Test_Sector/0101';
 const at = (bodyKey) => ({ kind: 'system', hexKey: hex, bodyKey });
@@ -213,6 +213,20 @@ test('shipAt hits a mark, a point inside the body slop, and a point outside it',
     assert.equal(shipAt(marks, { x: BODY_SNAP_PX + 0.1, y: 0 }), null);
     const jumping = [{ id: 'jump', name: 'Outbound', kind: 'traffic', shape: 'triangle', x: 0, y: 0, jump: 'out' }];
     assert.equal(shipAt(jumping, { x: 0, y: 0 }), null);
+});
+
+test('waypointAt picks the drawn waypoint, and a point on the ship is not one', () => {
+    const waypoints = [
+        { index: 0, x: 0, y: 0 },
+        { index: 2, x: 40, y: 0 },
+    ];
+    const ship = { x: 0, y: 0 };
+    assert.equal(waypointAt(waypoints, { x: 0, y: 0 }, ship), null);
+    assert.equal(waypointAt(waypoints, { x: BODY_SNAP_PX, y: 0 }, ship), null);
+    assert.equal(waypointAt(waypoints, { x: 40, y: 0 }, ship), 2);
+    assert.equal(waypointAt(waypoints, { x: 40 + BODY_SNAP_PX, y: 0 }, ship), 2);
+    assert.equal(waypointAt(waypoints, { x: 40 + BODY_SNAP_PX + 0.1, y: 0 }, ship), null);
+    assert.equal(waypointAt(waypoints, { x: 20, y: 0 }, null), null);
 });
 
 test('dockedBeside places one, two and four ships along the diagonal', () => {

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { campaign, transport } from '../../apps/web/src/campaign/store.ts';
 import { flushCampaign, resetCampaign } from '../../apps/web/src/campaign/commit.ts';
-import { appendLeg, positionAt, removeLastLeg, trackOf, whereAreWe } from '../../apps/web/src/campaign/track.ts';
+import { appendLeg, positionAt, removeLastLeg, replaceLegsFrom, trackOf, whereAreWe } from '../../apps/web/src/campaign/track.ts';
 
 const VESSEL = 'cr_11111111-1111-1111-1111-111111111111';
 const STAMP = '2026-10-05T00:00:00.000Z';
@@ -149,4 +149,93 @@ test('append and remove a leg through the campaign changes', async () => {
     assert.equal(bodies[2].records[0].status.track.length, 1);
     assert.equal(bodies[2].records[0].baseRev, 3);
     assert.equal(campaign.records[VESSEL].status.track.length, 1);
+});
+
+test('replaceLegsFrom replaces the tail, removes it, and keeps a moved waypoint in one commit', async () => {
+    const box = harness();
+    install(box);
+    const stored = track();
+    campaign.records[VESSEL] = vessel({ status: { condition: { hull: 40 }, track: stored }, rev: 1 });
+    const moved = [
+        { ...leg(20, 28, 'flight', JEWELL), accelG: 2 },
+        leg(28, 40, 'orbit', JEWELL),
+    ];
+    assert.deepEqual(replaceLegsFrom(VESSEL, 1, moved, 15), { ok: true });
+    await flushCampaign();
+    const after = campaign.records[VESSEL].status.track;
+    assert.equal(after.length, 3);
+    assert.equal(after[0].departs, 10);
+    assert.equal(after[0].mode, 'docked');
+    assert.equal(after[1].arrives, 28);
+    assert.equal(after[1].to.hexKey, JEWELL.hexKey);
+    assert.equal(after[2].arrives, 40);
+    assert.equal(box.requests.length, 1);
+    assert.equal(box.requests[0].body.records[0].baseRev, 1);
+    assert.equal(box.requests[0].body.records[0].status.condition.hull, 40);
+
+    assert.deepEqual(replaceLegsFrom(VESSEL, 1, [], 15), { ok: true });
+    assert.equal(campaign.records[VESSEL].status.track.length, 1);
+    assert.equal(campaign.records[VESSEL].status.track[0].departs, 10);
+});
+
+test('replaceLegsFrom takes a leg at the instant of its departure and a second before it, and refuses it a second after', async () => {
+    const SECOND = 1 / 86400;
+    for (const [when, ok] of [[20 - SECOND, true], [20, true], [20 + SECOND, false]]) {
+        const box = harness();
+        install(box);
+        campaign.records[VESSEL] = vessel({ status: { track: track() }, rev: 1 });
+        const result = replaceLegsFrom(VESSEL, 1, [{ ...leg(20, 28, 'flight', JEWELL), accelG: 2 }], when);
+        assert.equal(result.ok, ok, 'at ' + when);
+        if (!ok) assert.equal(result.message, 'That leg has already departed.');
+        await flushCampaign();
+        assert.equal(campaign.records[VESSEL].status.track.length, ok ? 2 : 4);
+        assert.equal(box.requests.length, ok ? 1 : 0);
+    }
+});
+
+test('replaceLegsFrom refuses history, an index past the end, a bad leg, a break in time, and 501 legs', () => {
+    const box = harness();
+    install(box);
+    campaign.records[VESSEL] = vessel({ status: { track: track() }, rev: 1 });
+    // A leg is history only once the date has passed its departure (ruled 2026-10-07).
+    const SECOND = 1 / 86400;
+    const history = replaceLegsFrom(VESSEL, 1, [leg(20, 28, 'flight')], 20 + SECOND);
+    assert.equal(history.ok, false);
+    assert.equal(history.message, 'That leg has already departed.');
+    assert.equal(campaign.records[VESSEL].status.track.length, 4);
+    assert.equal(box.requests.length, 0);
+    const past = replaceLegsFrom(VESSEL, 5, [], 0);
+    assert.equal(past.ok, false);
+    assert.equal(past.message, 'There is no leg there.');
+    const negative = replaceLegsFrom(VESSEL, -1, [], 0);
+    assert.equal(negative.message, 'There is no leg there.');
+    const bad = replaceLegsFrom(VESSEL, 3, [{ from: REGINA, to: JEWELL, departs: 50, arrives: 40, mode: 'flight' }], 36);
+    assert.equal(bad.message, 'That leg is not a track leg.');
+    const order = replaceLegsFrom(VESSEL, 3, [leg(30, 48, 'flight', JEWELL)], 36);
+    assert.equal(order.message, 'Legs must stay in time order.');
+    const many = [];
+    for (let i = 0; i < 501; i += 1) many.push(leg(i * 2, i * 2 + 1, 'flight'));
+    const capped = replaceLegsFrom(VESSEL, 0, many, -1);
+    assert.equal(capped.message, 'A track can have 500 legs.');
+    assert.equal(campaign.records[VESSEL].status.track.length, 4);
+    assert.equal(box.requests.length, 0);
+});
+
+test('a typed leg keeps hoursTyped through append and replace', async () => {
+    const box = harness();
+    install(box);
+    const typed = { ...leg(10, 20, 'docked'), hoursTyped: true };
+    assert.equal(appendLeg(VESSEL, typed).ok, true);
+    assert.equal(trackOf(campaign.records[VESSEL])[0].hoursTyped, true);
+    const estimated = leg(20, 30, 'flight');
+    assert.equal(replaceLegsFrom(VESSEL, 1, [estimated, { ...leg(30, 40, 'jump', JEWELL), hoursTyped: true }], 15).ok, true);
+    const stored = trackOf(campaign.records[VESSEL]);
+    assert.equal(stored[0].hoursTyped, true);
+    assert.equal(stored[1].hoursTyped, undefined);
+    assert.equal(stored[2].hoursTyped, true);
+    await flushCampaign();
+    const sent = box.requests[box.requests.length - 1].body.records[0].status.track;
+    assert.equal(sent[0].hoursTyped, true);
+    assert.equal(sent[1].hoursTyped, undefined);
+    assert.equal(sent[2].hoursTyped, true);
 });

@@ -22,6 +22,10 @@ export const CAMPAIGN_LIMITS = {
     caption: 200,
     track: 500,
     trackNote: 200,
+    journal: 20_000,
+    entryTitle: 200,
+    entryBody: 100_000,
+    mentions: 200,
 } as const;
 
 /**
@@ -35,11 +39,15 @@ const HEX_KEY = /^[^/]+\/\d{4}$/;
 const BODY_KEY = /^(?:s\d+|w\d+(?:m\d+)?)$/;
 const RECORD_ID = /^cr_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const LINK_ID = /^cl_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const JOURNAL_ID = /^cj_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const CAMPAIGN_RECORD_TYPES = [
     'person', 'place', 'business', 'organization', 'job', 'event', 'item', 'note', 'vessel',
 ] as const;
 export type CampaignRecordType = typeof CAMPAIGN_RECORD_TYPES[number];
+
+export const CAMPAIGN_ENTRY_KINDS = ['session', 'note', 'handout', 'rumor'] as const;
+export type CampaignEntryKind = typeof CAMPAIGN_ENTRY_KINDS[number];
 
 const LINK_KIND_NAMES = [
     'member', 'owns', 'crew', 'passenger', 'commands', 'ally', 'rival', 'enemy', 'contact', 'patron', 'client', 'target', 'involved',
@@ -146,6 +154,8 @@ export const TrackLeg = z.object({
     mode: z.enum(['docked', 'orbit', 'flight', 'jump']),
     accelG: z.number().finite().min(1).max(6).optional(),
     note: z.string().max(CAMPAIGN_LIMITS.trackNote).optional(),
+    /** Present only when the referee typed the hours. Absent means the console estimated them. */
+    hoursTyped: z.literal(true).optional(),
 }).strict().superRefine((leg, ctx) => {
     if (leg.arrives < leg.departs) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'arrives before departs', path: ['arrives'] });
@@ -225,6 +235,73 @@ export const CampaignSettings = z.object({
 }).strict();
 export type CampaignSettings = z.infer<typeof CampaignSettings>;
 
+const REAL_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const MENTION_HEX = /^hex:[^/]+\/\d{4}$/;
+
+/**
+ * A journal row (campaign_manager_plan.md §2.4).
+ * A handout is not forced to be player-visible: the screen defaults it, and a referee may draft one first.
+ */
+const CampaignEntryObject = z.object({
+    id: z.string().regex(JOURNAL_ID),
+    kind: z.enum(CAMPAIGN_ENTRY_KINDS),
+    title: z.string().max(CAMPAIGN_LIMITS.entryTitle),
+    body: z.string().max(CAMPAIGN_LIMITS.entryBody),
+    when: Day.nullable(),
+    realDate: z.string().regex(REAL_DATE).nullable(),
+    sequence: z.number().int().min(1).nullable(),
+    author: z.enum(['referee', 'players']),
+    visibility: Visibility,
+    anchor: CampaignAnchor,
+    mentions: z.array(z.union([z.string().regex(RECORD_ID), z.string().regex(MENTION_HEX)])).max(CAMPAIGN_LIMITS.mentions),
+    rev: Rev,
+    createdAt: Stamp,
+    updatedAt: Stamp,
+    deleted: z.boolean(),
+}).strict();
+
+/** A session carries a sequence. Every other kind leaves it null. */
+function entrySequence(entry: { kind: string; sequence: number | null }, ctx: z.RefinementCtx): void {
+    if (entry.kind === 'session') {
+        if (entry.sequence == null) {
+            ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'a session has a sequence', path: ['sequence'] });
+        }
+        return;
+    }
+    if (entry.sequence != null) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'only a session has a sequence', path: ['sequence'] });
+    }
+}
+
+export const CampaignEntry = CampaignEntryObject.superRefine(entrySequence);
+export type CampaignEntry = z.infer<typeof CampaignEntry>;
+
+const MENTION_TOKEN = /\[\[(cr_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|hex:[^/\]|]+\/\d{4})(?:\|[^\]]*)?\]\]/;
+
+/**
+ * The distinct record ids and hex targets in `text`, in the order first seen.
+ * A token is `[[cr_<uuid>|Captain Voss]]` or `[[hex:Spinward_Marches/1910|Regina]]`. The label may be left off.
+ * Anything else between double brackets is left alone.
+ */
+export function mentionsOf(text: string): string[] {
+    const found: string[] = [];
+    const seen = new Set<string>();
+    const tokens = new RegExp(MENTION_TOKEN.source, 'gi');
+    for (const match of text.matchAll(tokens)) {
+        const target = match[1];
+        if (!target) continue;
+        const record = RECORD_ID.test(target);
+        const hex = MENTION_HEX.test(target);
+        if (!record && !hex) continue;
+        const key = target.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        found.push(target);
+        if (found.length >= CAMPAIGN_LIMITS.mentions) break;
+    }
+    return found;
+}
+
 const Name = z.string().min(1).max(CAMPAIGN_LIMITS.name);
 const UniverseId = z.string().min(1).max(64).regex(/^[A-Za-z0-9_-]+$/);
 
@@ -261,6 +338,12 @@ export type UniverseUpdate = z.infer<typeof UniverseUpdate>;
 
 const BaseRev = z.number().int().nonnegative();
 
+export const EntryChange = z.union([
+    CampaignEntryObject.extend({ baseRev: BaseRev }).strict().superRefine(entrySequence),
+    z.object({ id: z.string().regex(JOURNAL_ID), baseRev: BaseRev, deleted: z.literal(true) }).strict(),
+]);
+export type EntryChange = z.infer<typeof EntryChange>;
+
 export const RecordChange = z.union([
     CampaignRecord.extend({ baseRev: BaseRev }).strict(),
     z.object({ id: z.string().regex(RECORD_ID), baseRev: BaseRev, deleted: z.literal(true) }).strict(),
@@ -292,10 +375,11 @@ export type ClockChange = z.infer<typeof ClockChange>;
 export const CampaignChanges = z.object({
     records: z.array(RecordChange).optional(),
     links: z.array(LinkChange).optional(),
+    journal: z.array(EntryChange).optional(),
     settings: SettingsChange.optional(),
     clock: ClockChange.optional(),
 }).strict().superRefine((value, ctx) => {
-    const rows = (value.records?.length ?? 0) + (value.links?.length ?? 0) + (value.settings ? 1 : 0) + (value.clock ? 1 : 0);
+    const rows = (value.records?.length ?? 0) + (value.links?.length ?? 0) + (value.journal?.length ?? 0) + (value.settings ? 1 : 0) + (value.clock ? 1 : 0);
     if (rows > CAMPAIGN_LIMITS.patchRows) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'too_large', path: ['records'] });
     }
@@ -311,6 +395,7 @@ export const CampaignPage = z.object({
     links: z.array(CampaignLink),
     settings: CampaignSettings,
     clock: CampaignClock.nullable(),
+    journal: z.array(CampaignEntry).optional(),
     seq: Rev,
     done: z.boolean(),
 }).strict();
@@ -320,7 +405,7 @@ const ChangeId = z.string().min(1);
 
 export const CampaignChangesResult = z.object({
     applied: z.array(z.object({
-        table: z.enum(['records', 'links', 'settings', 'clock']),
+        table: z.enum(['records', 'links', 'settings', 'clock', 'journal']),
         id: ChangeId,
         rev: Rev,
         seq: Rev,
@@ -330,6 +415,7 @@ export const CampaignChangesResult = z.object({
         z.object({ table: z.literal('links'), id: ChangeId, current: CampaignLink }).strict(),
         z.object({ table: z.literal('settings'), id: ChangeId, current: CampaignSettings }).strict(),
         z.object({ table: z.literal('clock'), id: ChangeId, current: CampaignClock.nullable() }).strict(),
+        z.object({ table: z.literal('journal'), id: ChangeId, current: CampaignEntry }).strict(),
     ])),
 }).strict();
 export type CampaignChangesResult = z.infer<typeof CampaignChangesResult>;

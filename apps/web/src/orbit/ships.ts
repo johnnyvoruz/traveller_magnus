@@ -149,6 +149,41 @@ export function placeShips(
  * slop a world uses at its smallest. A jump report is not drawn, so it is not hit.
  * The nearest mark within the slop wins, and a tie takes the later mark.
  */
+/** Where one waypoint of a course was drawn this frame. `index` is its place in that course. */
+export type DrawnWaypoint = {
+    index: number;
+    x: number;
+    y: number;
+};
+
+/**
+ * Which drawn waypoint is under a picture point, or null. The reach is the body snap.
+ * A point on the ship itself is never a waypoint, so a press there selects the ship.
+ * The nearest waypoint within the snap wins, and a tie takes the later one.
+ */
+export function waypointAt(
+    waypoints: readonly DrawnWaypoint[],
+    point: { x: number; y: number },
+    ship: { x: number; y: number } | null,
+): number | null {
+    if (ship) {
+        const nearShip = (ship.x - point.x) ** 2 + (ship.y - point.y) ** 2;
+        if (nearShip <= BODY_SNAP_PX * BODY_SNAP_PX) return null;
+    }
+    const limit = BODY_SNAP_PX * BODY_SNAP_PX;
+    let best = -1;
+    let bestD = limit;
+    for (let i = 0; i < waypoints.length; i += 1) {
+        const waypoint = waypoints[i];
+        const d = (waypoint.x - point.x) ** 2 + (waypoint.y - point.y) ** 2;
+        if (d <= bestD) {
+            bestD = d;
+            best = i;
+        }
+    }
+    return best >= 0 ? waypoints[best].index : null;
+}
+
 export function shipAt(
     marks: readonly ShipMark[],
     point: { x: number; y: number },
@@ -312,6 +347,8 @@ export function standInMarks(
     places?: StandPlaces,
     flight?: { departs: number; arrives: number },
     pictureOf?: PictureOf,
+    /** When set, the party's flight ends at this body instead of the furthest one. */
+    partyBody?: string,
 ): ShipMark[] {
     const bodies = pictureBodies(picture);
     if (bodies.length === 0) return [];
@@ -323,6 +360,11 @@ export function standInMarks(
     for (const body of bodies) {
         const d = (body.x - star.x) ** 2 + (body.y - star.y) ** 2;
         if (d > farD) { far = body; farD = d; }
+    }
+    let partyEnd = far;
+    if (partyBody) {
+        const chosen = byKey.get(partyBody);
+        if (chosen && chosen.key !== star.key) partyEnd = chosen;
     }
     const rest = bodies.filter((body) => body.key !== far.key && body.key !== star.key);
     const dock = rest[0] ?? far;
@@ -379,7 +421,7 @@ export function standInMarks(
     return placeShips([
         {
             id: 'stand-party', name: 'Far Margin', kind: 'party', shape: 'triangle',
-            legs: [{ from: sys(hexKey, star.key), to: sys(hexKey, far.key), departs: partyFrom, arrives: partyTo, mode: 'flight' }],
+            legs: [{ from: sys(hexKey, star.key), to: sys(hexKey, partyEnd.key), departs: partyFrom, arrives: partyTo, mode: 'flight' }],
         },
         {
             id: 'stand-vessel', name: 'Courier', kind: 'vessel', shape: 'circle',

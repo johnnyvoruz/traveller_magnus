@@ -70,16 +70,22 @@ export const ORBIT_COMMANDS: readonly OrbitCommand[] = [
     ...LAYOUTS.map((item) => ({ id: item.id, name: 'Layout: ' + item.label, keys: [item.key], help: 'the ' + item.label.toLowerCase() + ' layout' })),
     ...LAYERS.map((item) => ({ id: item.id, name: 'Show or hide: ' + item.label, keys: [item.hotkey], help: item.label.toLowerCase() + ' on or off' })),
     { id: 'orbit-fit', name: 'Fit the system', keys: ['f'], help: 'fit the whole system' },
-    { id: 'orbit-plot', name: 'Plotting mode', keys: ['p', 'P'], help: 'plotting on or off: the hairlines follow the pointer; press a body, or empty space for a point, to set the selected ship’s destination' },
-    { id: 'orbit-ship-next', name: 'Select the next ship', keys: ['n', 'N'], help: 'the next ship in this system (a ship’s tag or its mark on the picture selects it too)' },
-    { id: 'orbit-add-leg', name: 'Add the plotted course', keys: [], help: 'in the plot card: writes the course’s legs to the ship’s track, and puts the clock on its departure' },
-    { id: 'orbit-course-undo', name: 'Remove the last waypoint', keys: [], help: 'in the plot card, and on Escape while plotting' },
-    { id: 'orbit-course-clear', name: 'Clear the course', keys: [], help: 'in the plot card: every waypoint goes' },
-    { id: 'orbit-plot-estimate', name: 'Return the course’s hours to the estimates', keys: [], help: 'in the plot card: every leg’s hours follow its estimate again' },
+    { id: 'orbit-plot', name: 'Plotting mode', keys: ['p', 'P'], help: 'the selected ship’s nav console on or off (selecting a ship opens it too): set the thrust, then the plotter follows the pointer; press a body, or empty space for a point, to lay a waypoint' },
+    { id: 'orbit-ship-next', name: 'Select the next ship', keys: ['n', 'N'], help: 'the next ship in this system, and its nav console (a ship’s chip, its tag or its mark on the picture selects it too; pressed again, the ship is released)' },
+    { id: 'orbit-thrust', name: 'Thrust', keys: ['g', 'G'], help: 'to the nav console’s throttle: Left and Right a G, Home and End its ends' },
+    { id: 'orbit-plot-next-body', name: 'Plot to the next body', keys: ['.'], help: 'in the nav console: the next body in the body list as the destination under the plotter (a point in open space needs the pointer)' },
+    { id: 'orbit-plot-prev-body', name: 'Plot to the body before', keys: [','], help: 'in the nav console: the body before' },
+    { id: 'orbit-plot-commit', name: 'Lay a waypoint', keys: ['m', 'M'], help: 'in the nav console: the place under the plotter becomes the next waypoint, as a press on the picture does' },
+    { id: 'orbit-add-leg', name: 'Add the plotted course', keys: [], help: 'in the nav console: writes the course’s legs to the ship’s track, and puts the clock on its departure' },
+    { id: 'orbit-waypoint-remove', name: 'Remove the focused waypoint', keys: [], help: 'in the nav console: Delete on a waypoint’s row removes it, from the course being plotted or from the stored route (with an Undo); its destination can be changed to another body there. Dragging a waypoint on the picture needs the pointer' },
+    { id: 'orbit-course-undo', name: 'Remove the last waypoint', keys: [], help: 'in the nav console, and on Escape while plotting' },
+    { id: 'orbit-course-clear', name: 'Clear the course', keys: [], help: 'in the nav console: every waypoint goes' },
+    { id: 'orbit-plot-estimate', name: 'Return the course’s hours to the estimates', keys: [], help: 'in the nav console: every leg’s hours follow its estimate again' },
+    { id: 'orbit-release', name: 'Release the ship', keys: [], help: 'in the nav console, and on Escape once the course is empty: leaves plotting; a press on a body is a selection again' },
     { id: 'orbit-jump-roll', name: 'Roll the jump’s duration again', keys: [], help: 'in the jump preview: a new roll for the hours' },
     { id: 'orbit-jump', name: 'Jump', keys: [], help: 'in the status strip: the selected ship jumps to the marked system, once outside every 100D limit' },
     { id: 'orbit-picture', name: 'Picture: scale and ring strength', keys: [], help: 'in the View drawer' },
-    { id: 'orbit-escape', name: 'Back', keys: ['Escape'], help: 'close the drawer, then a popover, then leave the body, then back to the map' },
+    { id: 'orbit-escape', name: 'Back', keys: ['Escape'], help: 'close the drawer, then a popover, then the last waypoint and the ship in hand, then leave the body, then back to the map' },
 ];
 
 /**
@@ -106,7 +112,7 @@ export function keyWords(spec: string): string {
     if (spec === ' ') return 'Space';
     if (spec === 'C') return 'Shift+C';
     if (spec === 'W') return 'Shift+W';
-    if (spec === 'T' || spec === 'Y' || spec === 'L' || spec === 'P' || spec === 'N') return '';
+    if (spec === 'T' || spec === 'Y' || spec === 'L' || spec === 'P' || spec === 'N' || spec === 'G' || spec === 'M') return '';
     return spec.length === 1 ? spec.toUpperCase() : spec;
 }
 
