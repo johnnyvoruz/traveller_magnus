@@ -7,6 +7,7 @@ import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, r
 import { useRoute, useRouter } from 'vue-router';
 import { addressPane, atPane, escapePane, focusTarget, hostsCampaign, type FocusTarget, type Pane } from './pane.ts';
 import { frame, onFrame, setPaneEscape, type ViewFrame } from './frame.ts';
+import { buildReady } from '../workspace/build/acts.ts';
 
 const route = useRoute();
 const router = useRouter();
@@ -15,7 +16,15 @@ const stopFrame = onFrame(() => { live.value = frame(); });
 live.value = frame();
 
 const shown = computed(() => addressPane(route.path, route.query).pane);
-const dossierOpen = computed(() => shown.value.kind === 'dossier');
+/**
+ * The dossier pane shows a hex, and in Build a sector or a subsector. With Build off a sector's
+ * address has nothing for it to show, so it stays shut there, as it was before Build.
+ */
+const dossierOpen = computed(() => {
+    if (shown.value.kind !== 'dossier') return false;
+    const view = addressPane(route.path, route.query).view;
+    return (view.kind !== 'sector' && view.kind !== 'subsector') || buildReady();
+});
 const campaignOpen = computed(() => hostsCampaign(shown.value));
 const charactersOpen = computed(() => shown.value.kind === 'characters');
 const campaignRecord = computed(() => (shown.value.kind === 'campaign' ? shown.value.record : null));

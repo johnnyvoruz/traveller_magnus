@@ -10,8 +10,9 @@ import { admin } from './routes/admin';
 import { universesRoute } from './routes/universes';
 import { charactersRoute } from './routes/characters';
 import { deadLetterConsumer } from './jobs/dead_letter';
+import { generateConsumer } from './jobs/generate_queue';
 import { truthBuildConsumer } from './jobs/truth_build';
-import { fail } from './http';
+import { fail, ok } from './http';
 export { UniverseDO } from './universe/UniverseDO';
 export { CharacterRoom } from './character/CharacterRoom';
 
@@ -20,6 +21,11 @@ app.use('*', requestContext);
 app.on(['GET', 'POST'], '/api/auth/*', (c) => createAuth(c.env).handler(c.req.raw));
 app.route('/api', health);
 app.get('/api/me', me);
+app.get('/api/providers', (c) => ok(c, {
+    twitter: Boolean(c.env.TWITTER_CLIENT_ID && c.env.TWITTER_CLIENT_SECRET),
+    discord: Boolean(c.env.DISCORD_CLIENT_ID && c.env.DISCORD_CLIENT_SECRET),
+    google: Boolean(c.env.GOOGLE_CLIENT_ID && c.env.GOOGLE_CLIENT_SECRET),
+}));
 app.route('/api', generate);
 app.route('/api/truth', truth);
 app.route('/api/admin', admin);
@@ -32,6 +38,7 @@ export default {
     fetch: app.fetch,
     async queue(batch: MessageBatch, env: Env) {
         if (batch.queue === 'voyage-truth-build') await truthBuildConsumer(batch, env);
+        else if (batch.queue === 'voyage-generate') await generateConsumer(batch, env);
         else if (batch.queue === 'voyage-dlq') await deadLetterConsumer(batch, env);
         else batch.ackAll();
     },

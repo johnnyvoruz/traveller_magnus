@@ -109,7 +109,9 @@ import { MgT2EData } from './generated/rules/mgt2e_data.js';
 
         // Lt: Low Tech
         const cLt = data.Lt;
-        check('Lt', tl <= cLt.maxTl, `TL ${cLt.maxTl}-`);
+        // Reference trade code table: Lt is Pop 1+ and TL 5- (an uninhabited TL 0 world is not Lt).
+        const ltMinPop = cLt.minPop !== undefined ? cLt.minPop : 1;
+        check('Lt', pop >= ltMinPop && tl <= cLt.maxTl, `Pop ${ltMinPop}+, TL ${cLt.maxTl}-`);
 
         // Na: Non-Agricultural
         const cNa = data.Na;
@@ -404,6 +406,7 @@ import { MgT2EData } from './generated/rules/mgt2e_data.js';
         w.scoutBase = mainworldBase.scoutBase;
         w.militaryBase = mainworldBase.militaryBase;
         w.corsairBase = mainworldBase.corsairBase;
+        if (typeof mainworldBase.bases === 'string') w.bases = mainworldBase.bases;
         
         w.gasGiant = w.gasGiant || mainworldBase.gasGiant; 
         w.travelZone = mainworldBase.travelZone || "Green";
@@ -885,10 +888,8 @@ import { MgT2EData } from './generated/rules/mgt2e_data.js';
     
         let totalFactions = baseFactions + fDM;
         tResult('Total Potential Factions', totalFactions);
-        let numExternalFactions = 0;
-        if (totalFactions > 1) {
-            numExternalFactions = totalFactions - 1;
-        }
+        // Reference: the number of factions is D3 + DM (not D3 + DM - 1).
+        let numExternalFactions = Math.max(0, totalFactions);
     
         let factionsData = [];
         for (let i = 0; i < numExternalFactions; i++) {
@@ -1741,6 +1742,7 @@ import { MgT2EData } from './generated/rules/mgt2e_data.js';
             let hxSR = tRoll2D('Highport Check');
             let hxScore = hxSR;
             if (base.pop >= 9) { tDM('Pop 9+', 1); hxScore += 1; }
+            if (base.pop <= 6) { tDM('Pop 6-', -1); hxScore -= 1; }
             if ([9, 10, 11].includes(base.tl)) { tDM('TL 9-11', 1); hxScore += 1; }
             if (base.tl >= 12) { tDM('TL 12+', 2); hxScore += 2; }
     
@@ -2229,6 +2231,7 @@ import { MgT2EData } from './generated/rules/mgt2e_data.js';
 
         let size = 0, atm = 0, hydro = 0, pop = 0, gov = 0, law = 0, tl = 0, starport = 'X', popDigit = null;
         let pValue = 0; // Internal reference for extended socio
+        let tempBand = null, temperatureRoll = null; // Mainworld temperature (2D + Atmosphere DM)
 
         let hasPhysicals = existingWorld && (existingWorld.size !== undefined);
         let hasSocials = existingWorld && (existingWorld.pop !== undefined || existingWorld.popCode !== undefined || existingWorld.uwp !== undefined);
@@ -2254,17 +2257,29 @@ import { MgT2EData } from './generated/rules/mgt2e_data.js';
 
             // ── Atmosphere ────────────────────────────────────────────────
             tSection('Planetary Atmosphere');
-            if (size > 0) {
-                let atmRoll = tRoll2D('Atmosphere');
-                tDM('Standard Atmo', -7);
-                tDM('Size Code', size);
-                let rawAtm = atmRoll - 7 + size;
-                atm = Math.max(0, rawAtm);
-                if (rawAtm !== atm) tClamp('Atmosphere', rawAtm, atm);
-            } else {
-                tSkip('Size 0 forces Atm 0');
-            }
+            // Reference: 2D-7+Size for every Size, floored at 0. There is no Size 0 exception.
+            let atmRoll = tRoll2D('Atmosphere');
+            tDM('Standard Atmo', -7);
+            tDM('Size Code', size);
+            let rawAtm = atmRoll - 7 + size;
+            atm = Math.max(0, rawAtm);
+            if (rawAtm !== atm) tClamp('Atmosphere', rawAtm, atm);
             tResult('Atmosphere Code', atm);
+
+            // ── Temperature ───────────────────────────────────────────────
+            // Reference "World Temperature": 2D + Atmosphere DM. The optional hot/cold
+            // edge-of-habitable-zone DM (+4/-4) is a referee choice and is not applied.
+            tSection('World Temperature');
+            const tempData = MgT2EData.temperatureRoll;
+            let tempDice = tRoll2D('Temperature');
+            const tempAtmDM = (tempData && tempData.atmosphereDMs[atm] !== undefined) ? tempData.atmosphereDMs[atm] : 0;
+            tDM(`Atmosphere ${toEHex(atm)}`, tempAtmDM);
+            temperatureRoll = tempDice + tempAtmDM;
+            tempBand = 'Boiling';
+            for (const entry of (tempData ? tempData.bands : [])) {
+                if (temperatureRoll <= entry.maxRoll) { tempBand = entry.band; break; }
+            }
+            tResult('Temperature', `${tempBand} (${temperatureRoll})`);
 
             // ── Hydrographics ─────────────────────────────────────────────
             tSection('Hydrographic Percentage');
@@ -2276,6 +2291,14 @@ import { MgT2EData } from './generated/rules/mgt2e_data.js';
                     tDM('Atmosphere Extreme', -4);
                 }
                 let hydroDM = (atm <= 1 || atm >= 10) ? -4 : 0;
+                // Reference: Hot DM-2, Boiling DM-6, unless Atmosphere D (or a Panthalassic F;
+                // the mainworld has no F subtype yet at this step, so F takes the DM).
+                const thermalHydroDMs = MgT2EData.rollModifiers.thermalHydro;
+                if (atm !== 13 && (tempBand === 'Hot' || tempBand === 'Boiling')) {
+                    const thermalDM = thermalHydroDMs[tempBand];
+                    tDM(`Temperature ${tempBand}`, thermalDM);
+                    hydroDM += thermalDM;
+                }
                 let rawHydro = hydroRoll - 7 + atm + hydroDM;
                 hydro = Math.max(0, rawHydro);
                 if (rawHydro !== hydro) tClamp('Hydrographics', rawHydro, hydro);
@@ -2443,7 +2466,6 @@ import { MgT2EData } from './generated/rules/mgt2e_data.js';
                 if (starport === 'A') tDM('Starport A', 6);
                 else if (starport === 'B') tDM('Starport B', 4);
                 else if (starport === 'C') tDM('Starport C', 2);
-                else if (starport === 'D' || starport === 'E') tDM('Starport D/E', 1);
                 else if (starport === 'X') tDM('Starport X', -4);
 
                 if (!isNativeSophont) {
@@ -2464,12 +2486,12 @@ import { MgT2EData } from './generated/rules/mgt2e_data.js';
                 if (pop >= 1 && pop <= 5) tDM('Population 1-5', 1);
                 else if (pop === 8) tDM('Population 8', 1);
                 else if (pop === 9) tDM('Population 9', 2);
-                else if (pop >= 10) tDM('Population 10+', 4);
+                else if (pop === 10) tDM('Population A', 4); // reference table has no DM for Pop B+
 
                 // Government DMs
                 if (gov === 0 || gov === 5) tDM('Government 0 or 5', 1);
                 else if (gov === 7) tDM('Government 7', 2);
-                else if (gov >= 13) tDM('Government D+', -2);
+                else if (gov === 13 || gov === 14) tDM('Government D-E', -2); // no DM for Gov F
 
                 // Settings: TL Modifier (applied as a DM so it appears in the roll total)
                 const settingsTlMod = (settings.generationTlMod !== undefined) ? settings.generationTlMod : 0;
@@ -2583,7 +2605,12 @@ import { MgT2EData } from './generated/rules/mgt2e_data.js';
             }
         }
 
+        // Base codes for the world profile (C corsair, M military, N naval, S scout).
+        const bases = (corsairBase ? 'C' : '') + (militaryBase ? 'M' : '') + (navalBase ? 'N' : '') + (scoutBase ? 'S' : '');
+        tResult('Bases', bases || 'None');
+
         // ── Gas Giant ─────────────────────────────────────────────────
+        // Rolled once here; generateSystemInventory reuses this result.
         tSection('Gas Giant Presence');
         let ggRoll = tRoll2D('Gas Giant (9-)');
         let gasGiant = ggRoll <= 9;
@@ -2656,7 +2683,12 @@ import { MgT2EData } from './generated/rules/mgt2e_data.js';
             existingWorld.scoutBase = scoutBase;
             existingWorld.militaryBase = militaryBase;
             existingWorld.corsairBase = corsairBase;
+            existingWorld.bases = bases;
             existingWorld.gasGiant = gasGiant;
+            if (tempBand !== null) {
+                existingWorld.tempBand = tempBand;
+                existingWorld.temperatureRoll = temperatureRoll;
+            }
             return existingWorld;
         }
 
@@ -2665,7 +2697,8 @@ import { MgT2EData } from './generated/rules/mgt2e_data.js';
             hexId, name, uwp, uwpSecondary: uwp, travelZone, tradeCodes, starport, 
             size, atm, atmCode: atm, hydro, hydroCode: hydro, 
             pop, popCode: pop, gov, govCode: gov, law, lawCode: law, tl, tlCode: tl,
-            navalBase, scoutBase, militaryBase, corsairBase, gasGiant 
+            navalBase, scoutBase, militaryBase, corsairBase, bases, gasGiant,
+            tempBand, temperatureRoll
         };
     }
 

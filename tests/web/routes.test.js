@@ -35,6 +35,17 @@ test('targetFor covers the five routes and an unknown sector', () => {
         camera: { x: centre.x, y: centre.y, ppp: 80 },
     });
 
+    const sub = targetFor({ path: '/s/Spinward_Marches/sub/C' }, manifest);
+    assert.equal(sub.kind, 'fit');
+    const regina = toGlobal(-4, -1, 19, 10);
+    const reginaAt = hexCentre(regina.q, regina.r);
+    assert.ok(sub.rect.x0 < reginaAt.x && reginaAt.x < sub.rect.x1);
+    assert.ok(sub.rect.y0 < reginaAt.y && reginaAt.y < sub.rect.y1);
+    const jewel = toGlobal(-4, -1, 1, 1);
+    const jewelAt = hexCentre(jewel.q, jewel.r);
+    assert.ok(jewelAt.x < sub.rect.x0 || jewelAt.y < sub.rect.y0);
+    assert.equal(targetFor({ path: '/s/Spinward_Marches/sub/Q' }, manifest).kind, 'unknown');
+
     assert.deepEqual(targetFor({ path: '/account' }, manifest), { kind: 'account' });
     assert.deepEqual(targetFor({ path: '/design' }, manifest), { kind: 'design' });
 

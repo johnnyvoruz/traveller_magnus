@@ -11,6 +11,8 @@ defineProps<{
     meta: string;
     chip: string;
     span: PanelSpan;
+    /** Show the chip beside the title even under a breadcrumb (Build's line to climb). */
+    keepChip?: boolean;
 }>();
 
 defineEmits<{
@@ -40,7 +42,7 @@ defineExpose({ element });
             <span v-if="$slots.glyph" class="panel-glyph"><slot name="glyph" /></span>
             <h1>{{ title }}</h1>
             <!-- The chip text is the hex chip of the legacy title row; the eyebrow slot is the breadcrumb. -->
-            <span v-if="chip && !$slots.eyebrow" class="ui-hex">{{ chip }}</span>
+            <span v-if="chip && (keepChip || !$slots.eyebrow)" class="ui-hex">{{ chip }}</span>
           </div>
           <p v-if="meta" class="panel-meta">{{ meta }}</p>
         </div>

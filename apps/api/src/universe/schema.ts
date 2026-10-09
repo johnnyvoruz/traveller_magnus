@@ -36,6 +36,7 @@ export const hexes = sqliteTable('hexes', {
     ix: integer('ix'),
     summary: text('summary'),
     provenance: text('provenance'),
+    roll: integer('roll'),
 });
 
 export const hexHistory = sqliteTable('hex_history', {
@@ -121,9 +122,14 @@ export async function migrate(storage: DurableObjectStorage): Promise<void> {
         pbg TEXT,
         ix INTEGER,
         summary TEXT,
-        provenance TEXT
+        provenance TEXT,
+        roll INTEGER NOT NULL DEFAULT 0
     )`);
     sql.exec(`CREATE INDEX IF NOT EXISTS hexes_sector_slug ON hexes(sector_slug)`);
+    const rollColumn = sql.exec(`SELECT name AS name FROM pragma_table_info('hexes')`).toArray();
+    if (!rollColumn.some((row) => row.name === 'roll')) {
+        sql.exec(`ALTER TABLE hexes ADD COLUMN roll INTEGER NOT NULL DEFAULT 0`);
+    }
     sql.exec(`CREATE TABLE IF NOT EXISTS hex_history (
         hex_key TEXT NOT NULL,
         rev INTEGER NOT NULL,

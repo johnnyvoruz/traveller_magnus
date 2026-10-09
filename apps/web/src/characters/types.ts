@@ -243,7 +243,7 @@ export function parseServerMessage(value: unknown): ServerMessage | null {
 export const PRESENCE_TONES = [
     '--signal',
     '--attention',
-    '--sheet-rust',
+    '--sheet-rust-line',
     '--zone-green',
     '--star-k',
     '--star-o',

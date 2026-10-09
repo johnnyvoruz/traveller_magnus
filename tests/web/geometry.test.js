@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { fromGlobal, hexAt, hexCentre, toGlobal } from '../../apps/web/src/map/geometry.ts';
+import { fromGlobal, hexAt, hexCentre, hexDistance, stepGlobal, toGlobal } from '../../apps/web/src/map/geometry.ts';
 
 const SECTORS = [[-4, -1], [0, 0], [-200, 77]];
 
@@ -30,4 +30,26 @@ test('fromGlobal(toGlobal) round-trips the four corners', () => {
 
 test('Regina Spinward_Marches/1910 is q=-110 r=-31', () => {
     assert.deepEqual(toGlobal(-4, -1, 19, 10), { q: -110, r: -31 });
+});
+
+test('each neighbour is one parsec, three above and three below', () => {
+    for (const q of [0, 1, -110]) {
+        const here = { q, r: -31 };
+        const centre = hexCentre(q, -31);
+        for (const step of ['nw', 'n', 'ne']) {
+            const next = stepGlobal(q, -31, step);
+            assert.equal(hexDistance(here, next), 1, step);
+            assert.ok(hexCentre(next.q, next.r).y < centre.y, step);
+        }
+        for (const step of ['sw', 's', 'se']) {
+            const next = stepGlobal(q, -31, step);
+            assert.equal(hexDistance(here, next), 1, step);
+            assert.ok(hexCentre(next.q, next.r).y > centre.y, step);
+        }
+        const north = stepGlobal(q, -31, 'n');
+        const west = stepGlobal(q, -31, 'nw');
+        const east = stepGlobal(q, -31, 'ne');
+        assert.ok(hexCentre(west.q, west.r).x < hexCentre(north.q, north.r).x);
+        assert.ok(hexCentre(east.q, east.r).x > hexCentre(north.q, north.r).x);
+    }
 });

@@ -1,6 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import type { Env } from '../env';
 import { applyCampaignChanges, CampaignRefusal, readCampaign, type Sql } from './campaign';
+import { respondBuilder } from './hexes';
 import { migrate } from './schema';
 
 const WINDOW = 60_000;
@@ -28,6 +29,17 @@ export class UniverseDO extends DurableObject<Env> {
             exec: (query, ...params) => this.ctx.storage.sql.exec(query, ...params).toArray() as ReturnType<Sql['exec']>,
             transaction: (fn) => this.ctx.storage.transactionSync(fn),
         };
+        const builderPath = url.pathname === '/pin' || url.pathname.startsWith('/hexes') || url.pathname.startsWith('/jobs');
+        if (builderPath && request.method !== 'GET' && request.method !== 'HEAD' && !this.allowMutation()) {
+            return Response.json(
+                { ok: false, error: { code: 'rate_limited', message: 'Too many requests.' } },
+                { status: 429, headers: { 'retry-after': '60' } },
+            );
+        }
+        if (builderPath) {
+            const built = await respondBuilder(sql, request, new Date().toISOString());
+            if (built) return built;
+        }
         if (request.method === 'GET' && url.pathname === '/campaign') {
             const after = Number(url.searchParams.get('after') ?? '0');
             const limit = Number(url.searchParams.get('limit') ?? '1000');

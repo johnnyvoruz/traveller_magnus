@@ -5730,3 +5730,181 @@ mentions Roll20.
 - **This is the first time the journal's screens, the character sheet, live Characters
   and the new dragging go live.** After it, `router.ts` shows as modified locally (B's
   one parked line).
+
+## 211. The character MVP is live and Johnny has looked: "MVP looks good." (2026-10-08)
+
+The browser push is in and live (the Characters pane's chunk is served). Live now:
+character sheets on a person's page, live Characters shared by link with pregens, the
+journal, waypoint dragging with ghost worlds. All five agents are free. Parked: v6, the
+climate and liquid rulings, the build hardening (B's files on disk, unpushed), until the
+generator rebuild. Backlog in `plan.md` "After 5". Open with Johnny: Discord and Google
+sign-in (D2); what comes next.
+
+## 212. Johnny sets the road after the character MVP: the Builder, then the marketplace, then accounts (2026-10-08)
+
+- The Builder is `plan.md` Slice 2, deferred on 2026-10-04 behind the campaign. His
+  order: system CRUD, subsector CRUD, sector CRUD, areas and lanes. Then the
+  marketplace, then accounts with a cleanup of the account menu. Backlog: the party
+  supports more than one ship. All in `plan.md` "After 5".
+- `prompts/builder_kickoff.md`: one turn of read-only audits (B the server, plus
+  `findings/signin_setup.md` so Johnny can switch on Discord and Google himself; A the
+  browser and the legacy app's behaviour) and D's paper design of the system editor; E
+  hardens what just went live; C is free. The system CRUD build prompts are written from
+  those three files.
+
+## 213. The Builder's audits and design are in; step 1 is issued on the design's defaults (2026-10-08)
+
+- **B (`findings/builder_server_audit.md`):** a universe cannot read, generate, edit or
+  clear a hex; the hex tables exist and are empty; the Durable Object serves only the
+  campaign; generate, changes, history, revert and snapshots are in `api.md` and not in
+  the Worker; no universe kind is needed (the first override row makes a campaign a
+  builder map; an own map is `truthVersion: null`); one system is one object of about
+  50 KB and one pointer row; the Builder should call `generateHex` and store the
+  envelope. Also `findings/signin_setup.md` for Johnny (Discord and Google switch on per
+  provider once both secrets are set; the sign-in card posts X only).
+- **A (`findings/builder_web_audit.md`):** the map selects one hex, from the route only;
+  nothing in the browser writes a hex; the legacy loader is `tests/oracle/legacy.js`;
+  only Mongoose and Architect of Worlds return worlds and moons the dossier can walk;
+  the legacy editors validated almost nothing; twelve store functions proposed.
+- **D (`findings/builder_system_design.md`, 22 `kb_*`):** Build as a switch; the pane as
+  "what is selected"; first acts per selection; generate with a preview, many with a
+  counted bar and Stop; the dossier editable in place (step 2); delete as two named
+  acts with Undo; seven "needs the rule" slots (R1 to R7), all empty; ten questions.
+- **`prompts/builder_step1.md`:** create, read and delete for one hex and many, on D's
+  recommended answers as defaults (listed in the prompt); B writes the shared contract
+  first; the generator stays behind `generateHex` and the dossier's walk; D also adds
+  the Discord and Google buttons. **Editing is step 2 and waits on Johnny:** a draft you
+  Keep or save-as-you-go; R1 to R7.
+
+## 214. Johnny rules on the Builder: every recommended answer stands; system editing is not live (2026-10-08)
+
+"All your recommendations sound good; the system CRUD shouldn't work like the Google Docs
+functionality that we were going for with the character sheet and other data types."
+Recorded at the foot of `prompts/builder_step1.md`: the seven defaults are rulings; no
+rule is checked (R1 to R7 empty); **the Builder has no socket, no presence, no box-by-box
+sync**: a system is edited as a draft and Kept, one request with a `rev`, a newer server
+copy shown as a conflict. Step 2 (the editor) is unblocked and is written when step 1
+is reported. B, A and D have step 1.
+
+## 215. Builder step 1: all three parts on disk, not yet joined; E's hardening accepted (2026-10-08)
+
+- **B:** the universe Durable Object stores hexes; one hex generates inline, two or more
+  as a job in batches of 64 with progress, Stop and one Undo; remove, restore, revert
+  with `baseRev`; two ready pairs (Mongoose top-down, Architect of Worlds bottom-up);
+  roll n is seed `<seed>/roll/<n>`; `GET /api/providers`; no `wrangler.toml` change, no
+  D1 migration. Round trip on its own port passed.
+- **A:** `apps/web/src/builder/` (open, load a sector page, lay rows over the truth
+  index, preview, generate, remove, restore, undo, with the in-flight queue done right);
+  14 tests. Found: a row has no name or profile, so the map cannot draw a generated
+  system; the server refuses to remove an untouched chart hex; Alt+arrows are taken.
+- **D:** the sign-in card asks `/api/providers` and offers each configured provider; the
+  Build switch, selection, the pane as "what is selected", nine commands, generate one
+  with preview and Roll again, generate many, remove and restore with Undo, **all on a
+  stand-in store**. Saw one generated system with three stars all labelled "Star".
+- **E, the hardening pass: accepted.** A ten-second API drop loses nothing and the
+  status is honest; the journal list is drawn by window with a 150 ms search wait; focus
+  rings. For A: `live.ts` never returns to Live after falling back to polling; presence
+  tone 2 fails 3:1 as a ring.
+- **The tree is red where the parts meet** (`builder/screen.ts` types; one store test).
+  `prompts/builder_step1_close.md` joins them, with rulings: the row carries the chart
+  `entry`, made by the generation package's own index function; removing an untouched
+  chart hex is a `removed` row, not an error; the odd three-star system goes to
+  `findings/generator_oddities.md` for the rebuild. A wires the store behind D's seam,
+  adds sector and subsector panes, and makes the orbit view read a universe's own object.
+- **Nothing pushed.** The next push carries step 1 joined, the sign-in buttons and E's
+  hardening.
+
+## 216. D's part of the step 1 close; step 2 (the system editor) written (2026-10-08)
+
+- **D:** keys K, R, X for Keep, Roll again, Stop; `.psheet-who` a tab stop;
+  `findings/generator_oddities.md` (hex 1908 of the Marches, Architect of Worlds bottom
+  up, roll 0: three white dwarfs by the engine's own trace). The sector, subsector and
+  many-hex panes wait on A's addresses. D's lines for `MapView.vue` and its chosen
+  selection keys are appended to `prompts/builder_step1_close.md` for A.
+- **Found by D:** the dossier shows every Architect of Worlds star as "Star", age 0,
+  though the engine has both. The dossier's reading, not the engine's output. Put to
+  Johnny; default: leave it for the generator rebuild.
+- **`prompts/builder_step2.md`:** editing as a draft you Keep, not live, nothing
+  rule-checked. The idea: the server turns a stored system into an **edit form**
+  (sections of fields with a kind and a permission); `formOf` and `applyForm` in
+  `packages/generation`, one pair per engine, are the only code that knows a tree's
+  shape, and are checked against the legacy oracle; the browser draws the form. B the
+  form and routes, A the draft handle, D the dossier editable in place.
+- **Johnny, 2026-10-08: "leave it".** The dossier's "Star", age 0 on Architect of Worlds
+  systems is not fixed; it goes with the generator rebuild (`findings/generator_oddities.md`).
+  D has `prompts/builder_step2.md`.
+
+## 217. B's step 1 close accepted on the report (2026-10-08)
+
+`chartEntry` in `packages/generation` (what a truth sector index uses) now fills the
+row's `entry` on generate, in the job and in preview; the Spinward Marches index test
+still passes, so published rows are the same bytes. Removing an untouched chart hex
+writes a `removed` row with the chart's hash as `baseHash`; restore deletes it. Undo of a
+restore is a new rev. Round trip on B's own port passed; the HTTP remove of a published
+chart hex was covered by the sqlite test only (a blank local catalogue has no chart).
+1,119 tests, 1 fail, in A's store (line 375), passed to A with B's notes in
+`prompts/builder_step1_close.md`. **A generated Mongoose entry has no PBG, bases,
+allegiance or importance, and an Architect of Worlds entry has an empty profile**: the
+map will draw less for generated systems than for the chart's. B goes on to
+`prompts/builder_step2.md`.
+
+## 218. B's step 2 (the edit form and its routes) accepted on the report (2026-10-08)
+
+`formOf`, `applyForm` and `blankEnvelope` in `packages/generation`; the form schema in
+`packages/shared/src/schemas/form.ts`; routes to read a hex's form, draft (stores
+nothing), Keep (one object, one rev, the entry rebuilt, a stale `baseRev` 409) and
+blank (one star). Round trip on B's own port passed. 1,129 tests, 0 fail; the store test
+that failed at the close no longer does. Ready note `findings/builder_form_ready.md`.
+- **Behaviour carried over from the legacy editor, to tell Johnny:** a profile digit
+  only rewrites the UWP; but a change to a star, a world, an orbit, age, the habitable
+  zone, a gas giant's size or "add bodies" **re-runs the bottom-up generator for the
+  system**, even on a Mongoose system that was generated top-down, because that is what
+  the legacy "Fill & Save" did. The draft shows it before Keep.
+- Not walked by B: every editable field (structural add, moon period, socioeconomics,
+  gas-giant size, Mongoose regenerate); an HTTP edit of a published chart hex.
+- Waiting on A (the step 1 join, then the draft handle) and D (the editor's screen).
+
+## 219. Builder step 1 is joined on disk; the push rehearsed on a clean tree (2026-10-08)
+
+- **A:** the store is behind D's seam (`stand_in.ts` gone; `MapView.vue` on
+  `bindBuilder`), the subsector address is registered, the orbit view reads through the
+  builder binding, the two `characters/` fixes from E are in (`--sheet-rust-line`; the
+  socket retried after polling). A removed row keeps the server's entry; undo of a
+  restore adopts the new rev; the in-flight remove test stands as written. A's report
+  covered B's notes only; the rest was read from the tree. **No browser pass of the
+  joined parts has been reported by anyone.**
+- Whole tree here: 1,129 tests, 0 fail; check clean; `vue-tsc -b` exit 0.
+- **Push, `findings/push/builder_step1_files.txt` (65 files by path) and
+  `findings/push/builder_router.patch`** (the subsector route, without B's parked
+  preview line): Builder step 1 from all three, B's step 2 server (the edit form and its
+  routes, unused by any screen yet), the sign-in card's provider buttons and
+  `/api/providers`, E's hardening. Parked files left out; the first cut also left out
+  `jobs/generate_queue.ts` and `jobs/dead_letter.ts` by mistake (the parked filter was
+  the whole `jobs/` folder) and failed the API typecheck; both are the Builder's and are
+  in. Scratch copy of `aeada0e`, rules regenerated there: `tsc -p apps/api` exit 0,
+  `vue-tsc` exit 0, `vite build` done, tests 0 fail, check clean.
+- No `wrangler.toml` change and no D1 migration in this push (B: the generate queue was
+  already bound; the roll column is added inside the Durable Object).
+
+## 220. Builder step 1 seen working on the real store; A's draft handle in; the push re-cut and rehearsed (2026-10-08)
+
+- **D's browser pass, on A's real store and B's server, on its own ports:** generate one,
+  roll again, Keep, reload and find it with its glyph and profile; Undo; twelve hexes
+  with seven filled (five generated, seven left); a sector job stopped mid-way and
+  undone; a subsector's 46 empty hexes; a chart system removed (still removed after a
+  reload) and restored; Undo on each; no console error, no 4xx or 5xx. The sector and
+  subsector panes are mounted. **Not seen: the orbit picture of a generated system**
+  (D's local copy drew no picture for a chart system either).
+  Three faults found and fixed by D: the seam's "ready" flag was a plain variable, so
+  the pane never learned the store had opened; a box selection on a sector's page added
+  the whole sector; `shell/pane.ts:95` opens an empty "World" pane on sector addresses
+  (guarded in `PanelHost.vue`; A to fix at the source).
+- **A's draft handle (`openDraft`): accepted on the report.** 1,139 tests, 0 fail.
+  Ruling on its question: "Keep mine" after a conflict re-reads the new form and
+  re-applies the person's changes by field id (in `prompts/builder_step2.md`).
+- **The push, re-cut: `findings/push/builder_step1_files.txt` (87 files by path) and
+  `findings/push/builder_router.patch`.** Builder step 1 joined and browser-tested, B's
+  step 2 server and A's draft handle (no screen uses them yet), the sign-in provider
+  buttons, E's hardening. Parked files named one by one this time. Scratch copy of
+  `aeada0e`, rules regenerated there: `tsc -p apps/api` exit 0, `vue-tsc` exit 0,
+  `vite build` done, 1,133 tests, 1,118 pass, 0 fail, 15 skipped, check clean.

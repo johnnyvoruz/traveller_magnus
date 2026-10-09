@@ -12,6 +12,7 @@ import { toGlobal } from './geometry.ts';
 import { roundedLoops } from './polities.ts';
 
 export { sectorOverview } from './overview.ts';
+export { formOf, applyForm, blankEnvelope, FormRefusal } from './form.ts';
 export { polityColour, polityOutlines } from './polities.ts';
 export { BORDER_COLOR_CYCLE } from './territories.ts';
 export { outlineLoops } from './outline.ts';
@@ -133,20 +134,43 @@ function presentRows(tsv: string): [string, Record<string, any>][] {
         .sort((a, b) => a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0);
 }
 
-function chartEntry(row: Record<string, any>, tree: string | null): Record<string, unknown> {
+function present(value: unknown): boolean {
+    return value != null && value !== '';
+}
+
+/**
+ * A truth row already carries the chart columns. A generated hex carries the same
+ * names on the mainworld record (`uwp`, `tradeCodes`, `travelZone`, `name`).
+ * A column that is already set is never replaced.
+ */
+function pick(row: Record<string, any>, key: string): unknown {
+    if (present(row[key])) return row[key];
+    const nests = [row.mgt2eData, row.mgtSocio, row.t5Data, row.t5Socio, row.aowSystem];
+    for (const nest of nests) {
+        if (nest && typeof nest === 'object' && present((nest as Record<string, unknown>)[key])) {
+            return (nest as Record<string, unknown>)[key];
+        }
+    }
+    return row[key];
+}
+
+/** The sector-index entry a truth build stores for one hex. `tree` is that hex's object hash. */
+export function chartEntry(row: Record<string, any>, tree: string | null): Record<string, unknown> {
     const data = row.t5Data as Record<string, any> | undefined;
     const socio = row.t5Socio as Record<string, any> | undefined;
+    const trade = pick(row, 'tradeCodes');
+    const ix = socio && typeof socio.Ix === 'number' ? socio.Ix : pick(row, 'Ix');
     const entry: Record<string, unknown> = {
         tree,
-        type: row.type,
-        name: row.name,
-        uwp: row.uwp,
-        allegiance: row.allegiance,
-        zone: zoneCode(row.travelZone),
-        bases: row.bases,
-        tradeCodes: row.tradeCodes,
-        pbg: typeof row.pbg === 'string' ? row.pbg : pbgOf(data),
-        ix: socio ? socio.Ix : undefined,
+        type: typeof pick(row, 'type') === 'string' ? pick(row, 'type') : 'SYSTEM_PRESENT',
+        name: typeof pick(row, 'name') === 'string' ? pick(row, 'name') : '',
+        uwp: typeof pick(row, 'uwp') === 'string' ? pick(row, 'uwp') : '',
+        allegiance: typeof pick(row, 'allegiance') === 'string' ? pick(row, 'allegiance') : '',
+        zone: zoneCode(pick(row, 'travelZone')),
+        bases: typeof pick(row, 'bases') === 'string' ? pick(row, 'bases') : '',
+        tradeCodes: Array.isArray(trade) ? trade : [],
+        pbg: typeof pick(row, 'pbg') === 'string' ? pick(row, 'pbg') : pbgOf(data),
+        ix: typeof ix === 'number' ? ix : 0,
         partial: row.partial ?? null,
     };
     if (data && data.homestar) entry.stars = data.homestar;

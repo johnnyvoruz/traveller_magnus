@@ -61,6 +61,8 @@ import { addressPane, atPane, hostsCampaign, withQuery } from '../shell/pane.ts'
 import Rail from '../shell/Rail.vue';
 import { loadSession, session } from '../account/session.ts';
 import { campaign, setCampaignDate } from '../campaign/store.ts';
+import { bindBuilder, builderEpoch } from '../builder/bind.ts';
+import { buildStore } from '../workspace/build/seam.ts';
 import { dismissToast, showToast } from '../shell/toast.ts';
 import { ensureCampaign } from '../workspace/opening.ts';
 import { sameDay, stardate } from '../workspace/stardate.ts';
@@ -127,7 +129,26 @@ const index = computed((): SectorIndex | null => {
     return version.value ? client.index(version.value, slug.value) : null;
 });
 
-const entry = computed((): SectorHex | null => (index.value ? index.value.hexes[hex.value] ?? null : null));
+function universeNow() {
+    const row = campaign.status === 'ready' && campaign.universeId
+        ? campaign.universes.find((item) => item.id === campaign.universeId)
+        : null;
+    if (!row) return null;
+    return { id: row.id, name: row.name, truthVersion: row.truthVersion, seed: null, settings: null };
+}
+
+const bound = bindBuilder(universeNow);
+
+const entry = computed((): SectorHex | null => {
+    void builderEpoch.value;
+    const store = buildStore();
+    if (store && store.universe()) {
+        void store.tick();
+        const row = store.row(slug.value + '/' + hex.value);
+        if (row && row.state !== 'removed' && row.entry) return row.entry;
+    }
+    return index.value ? index.value.hexes[hex.value] ?? null : null;
+});
 const missing = computed(() => index.value !== null && entry.value === null);
 
 const subsectorName = computed(() => {
@@ -182,12 +203,19 @@ const searchPlan = computed(() => (system.value ? planSystem(system.value, hexKe
  */
 const state = computed(() => {
     if (versionError.value || treeError.value) return 'failed';
+    void builderEpoch.value;
+    const map = bound.builder();
+    if (map && map.universe() && slug.value && !map.sectorLoaded(slug.value)) return 'loading';
     if (!index.value) return 'loading';
-    if (!entry.value) return 'missing';
-    if (entry.value.tree === null) return 'nodata';
+    const row = map && map.universe() ? map.row(slug.value + '/' + hex.value) : null;
+    if (row && row.state === 'removed') return 'missing';
+    const held = row && row.state !== 'removed' && row.treeHash;
+    if (!entry.value && !held) return 'missing';
+    if (entry.value && entry.value.tree === null && !held) return 'nodata';
     if (!tree.value) return 'loading';
+    if (system.value) return 'ready';
     if (!chips.value.length) return 'nodata';
-    return system.value ? 'ready' : 'unsupported';
+    return 'unsupported';
 });
 
 const title = computed(() => (overview.value ? overview.value.header.title : hex.value));
@@ -202,6 +230,29 @@ const age = computed(() => {
 });
 
 function loadTree(): void {
+    const map = bound.builder();
+    const key = slug.value + '/' + hex.value;
+    if (map && map.universe()) {
+        if (!map.sectorLoaded(slug.value)) {
+            treeTicket += 1;
+            tree.value = null;
+            bound.load(slug.value);
+            return;
+        }
+        const row = map.row(key);
+        if (row && row.state !== 'removed') {
+            const ticket = ++treeTicket;
+            void map.tree(key).then(
+                (doc) => {
+                    if (ticket !== treeTicket) return;
+                    tree.value = doc as TreeEnvelope | null;
+                    treeError.value = doc == null;
+                },
+                () => { if (ticket === treeTicket) { tree.value = null; treeError.value = true; } },
+            );
+            return;
+        }
+    }
     const found = entry.value;
     if (!found || found.tree === null) {
         treeTicket += 1;
@@ -1404,11 +1455,30 @@ watch([slug, hex], () => {
     void load();
 });
 watch(entry, loadTree);
+watch(
+    () => {
+        void builderEpoch.value;
+        const map = bound.builder();
+        return map ? map.tick() : 0;
+    },
+    () => { loadTree(); },
+);
+watch(
+    () => {
+        const id = campaign.status === 'ready' ? campaign.universeId : '';
+        return id ?? '';
+    },
+    () => {
+        bound.sync();
+        loadTree();
+    },
+);
 // Signed in, the dossier beside the picture shows the campaign's records here: the campaign is
 // asked for once the session and the truth version are known, never before the first frame.
 watch(() => [session.user, version.value] as const, () => { void ensureCampaign(version.value); });
 
 onMounted(() => {
+    bound.sync();
     // A visit that starts in the orbit view still learns who is signed in, after its first frame.
     nextFrame(() => { void loadSession(); });
     stopArrive = client.onArrive(() => { arrivals.value += 1; });
@@ -1525,6 +1595,7 @@ onBeforeUnmount(() => {
     for (const off of unregister) off();
     setPlaceSource(null);
     setFrame(null);
+    bound.close();
 });
 
 /** The system on screen, for a campaign pane asked from this orbit. */
@@ -1539,7 +1610,7 @@ function currentSystem(): SystemInfo | null {
 
 async function systemInfo(nextSlug: string, nextHex: string): Promise<SystemInfo | null> {
     if (nextSlug !== slug.value || nextHex !== hex.value || !index.value) return null;
-    const row = index.value.hexes[nextHex];
+    const row = entry.value;
     if (!row) return null;
     return { slug: nextSlug, hex: nextHex, name: row.name || nextHex, sectorName: index.value.name };
 }

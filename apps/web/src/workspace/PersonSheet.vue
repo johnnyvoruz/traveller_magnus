@@ -257,7 +257,7 @@ function openLink(id: string): void {
           <button type="button" class="ui-btn psheet-detach" :disabled="readOnly" title="Keep a copy of the sheet on this person and let the Character go" @click="detach">Detach</button>
         </div>
         <ul v-if="others.length" class="psheet-who" aria-label="Also on this sheet">
-          <li v-for="person in others" :key="person.id" :style="{ '--psheet-tone': 'var(' + (source ? source.tone(person.colour) : '--attention') + ')' }">
+          <li v-for="person in others" :key="person.id" tabindex="0" :style="{ '--psheet-tone': 'var(' + (source ? source.tone(person.colour) : '--attention') + ')' }">
             <i aria-hidden="true"></i>{{ person.name }}<span v-if="person.field"> · in {{ person.field }}</span>
           </li>
         </ul>
@@ -463,10 +463,12 @@ function openLink(id: string): void {
   list-style: none;
 }
 
+/* Each name is a tab stop, as on the Characters pane, so who is here can be read by keyboard. */
 .psheet-who li {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  border-radius: var(--r-1);
 }
 
 .psheet-who i {

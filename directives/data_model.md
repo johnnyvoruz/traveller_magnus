@@ -85,22 +85,24 @@ refreshed when used. `audit_log` is append-only.
 ## 3. One universe (Durable Object SQLite)
 
 ```sql
-meta             (key PK, value)        -- schemaVersion, truthVersion, engineVersion, grid JSON, settings JSON
+meta             (key PK, value)        -- builderPin JSON { seed, settings, truthVersion } is written once, on the first generate; job:<id> holds the generate spec
 sectors          (sector_slug PK, display_name, x INT, y INT, source ('truth'|'own'))
 hexes            (hex_key PK, sector_slug, local_hex, rev INT, updated_at, deleted INT,
                   base_hash NULL,       -- the truth tree hash this row overrides; NULL on own maps
                   tree_hash NULL,       -- the current tree object; NULL for a sector-scale-only edit
                   engine_version NULL,  -- engine that produced tree_hash
                   type, name, uwp, allegiance, zone, bases, trade_codes, pbg, ix,
-                  summary JSON,         -- remaining sector-scale fields (t5Data, counts, notes…)
-                  provenance JSON NULL) -- { packageId, version } when installed
+                  summary JSON,         -- { roll, baseHash, engineVersion, entry } for a builder row; entry is the sector-index hex
+                  provenance JSON NULL, -- { packageId, version } when installed
+                  roll INT)             -- 0 is the universe seed; a higher roll is a different repeatable system
 hexes_fts        FTS5 over hexes(name, hex_key, uwp) content-synced by triggers
 hex_history      (hex_key, rev, at, action, actor, tree_hash NULL, summary JSON, deleted INT, PK(hex_key, rev))
 lists            (kind PK, rev INT, updated_at, payload JSON)
 list_history     (kind, rev, at, action, payload_hash, PK(kind, rev))
 snapshots        (id PK, at, label, trigger, manifest_hash, bytes INT)
-jobs             (id PK, kind, state ('queued'|'running'|'done'|'failed'), total INT, done INT, failed INT,
+jobs             (id PK, kind, state ('queued'|'running'|'done'|'stopped'|'failed'), total INT, done INT, failed INT,
                   failures JSON, created_at, finished_at NULL)
+                  -- builder failures JSON is { failures: [{ hexKey, reason }], skipped, undone, written: { hexKey: rev }, applied: [offset] }
 
 campaign_records (id PK, type, kind, name, summary, details, tags JSON, anchor JSON,
                   when_json JSON NULL, visibility, player_notes NULL, sheet JSON NULL, status JSON NULL,
@@ -118,6 +120,9 @@ Rules of the `hexes` table:
   the builder's grid is `sectors.x, y`; moving a sector changes no key.
 - A hex that equals the truth has **no row**. A row exists when the builder changed something or
   the platform generated something for them.
+- Keep, and a blank system, write a new `hex_history` row with action `keep` and the new tree
+  hash. Revert copies that history row forward, so undoing a Keep restores the previous tree hash.
+  Generate stays action `generate`. No new column.
 - Every tree the platform generates is an object immediately; there are no deferred or virtual
   trees. The derivation that produced it is inside the tree document.
 - `deleted = 1` is a tombstone hiding a truth hex or removing an own-map hex.

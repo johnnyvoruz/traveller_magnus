@@ -230,6 +230,18 @@ export function attachLive(state: CharacterState, onMeta: (name: string, summary
         else scheduleRetry();
     }
 
+    /** A poll that reached the server tries the socket again. Two failures come back here. */
+    function resumeLive(): void {
+        if (mode !== 'poll' || stopped || terminal) return;
+        mode = 'socket';
+        failures = 0;
+        attempt = 0;
+        saidHello = false;
+        cancelPoll();
+        state.status = 'connecting';
+        beginSocket();
+    }
+
     function startPoll(): void {
         if (mode === 'poll' || stopped || terminal) return;
         mode = 'poll';
@@ -238,7 +250,7 @@ export function attachLive(state: CharacterState, onMeta: (name: string, summary
         cancelRetry();
         silence();
         armPoll();
-        void flushPost();
+        void flushPost().then((ok) => { if (ok) resumeLive(); });
     }
 
     function armPoll(): void {
@@ -257,27 +269,29 @@ export function attachLive(state: CharacterState, onMeta: (name: string, summary
             armPoll();
             return;
         }
-        if (unsent.length > 0) await flushPost();
-        else await refresh();
-        armPoll();
+        const ok = unsent.length > 0 ? await flushPost() : await refresh();
+        if (stopped || terminal) return;
+        if (ok) resumeLive();
+        else armPoll();
     }
 
-    async function flushPost(): Promise<void> {
-        if (posting || mode !== 'poll' || stopped || terminal || unsent.length === 0) return;
+    async function flushPost(): Promise<boolean> {
+        if (posting || mode !== 'poll' || stopped || terminal || unsent.length === 0) return false;
         posting = true;
         const batch = unsent.slice();
+        let ok = false;
         try {
             const res = await request('/api/characters/' + encodeURIComponent(state.id) + '/fields', {
                 method: 'POST',
                 body: JSON.stringify({ sets: batch.map((item) => ({ field: item.field, value: item.value })) }),
             });
-            if (stopped || terminal) return;
+            if (stopped || terminal) return false;
             if (res.status === 401) {
                 silentOut();
-                return;
+                return false;
             }
-            if (!res.ok) return;
-            await refresh();
+            if (!res.ok) return false;
+            ok = await refresh();
             for (const item of batch) {
                 const at = unsent.findIndex((row) => row.id === item.id);
                 if (at < 0) continue;
@@ -285,24 +299,24 @@ export function attachLive(state: CharacterState, onMeta: (name: string, summary
                 if ((serverAt[item.field] ?? 0) <= item.at) writeServer(item.field, item.value, item.at);
             }
             recompute();
+            return ok;
         } finally {
             posting = false;
         }
-        if (unsent.length > 0 && mode === 'poll' && !stopped && !terminal) void flushPost();
     }
 
-    async function refresh(): Promise<void> {
+    async function refresh(): Promise<boolean> {
         const res = await request('/api/characters/' + encodeURIComponent(state.id));
-        if (stopped || terminal) return;
+        if (stopped || terminal) return false;
         if (res.status === 401) {
             silentOut();
-            return;
+            return false;
         }
         if (res.status === 404) {
             finishGone('This character is not available.');
-            return;
+            return false;
         }
-        if (!res.ok || !res.data || typeof res.data !== 'object') return;
+        if (!res.ok || !res.data || typeof res.data !== 'object') return false;
         const body = res.data as Record<string, unknown>;
         const role = parseRole(body.role);
         if (role) state.role = role;
@@ -311,6 +325,7 @@ export function attachLive(state: CharacterState, onMeta: (name: string, summary
         const doc = parseDoc(body.doc);
         if (doc) applyDoc(doc);
         else recompute();
+        return true;
     }
 
     function silentOut(): void {
@@ -413,7 +428,7 @@ export function attachLive(state: CharacterState, onMeta: (name: string, summary
         unsent.push({ id: 'c' + String(nextNum), field: name, value, at: ++clock });
         state.notice = '';
         recompute();
-        if (mode === 'poll') void flushPost();
+        if (mode === 'poll') void flushPost().then((ok) => { if (ok) resumeLive(); });
         else if (saidHello) {
             const item = unsent[unsent.length - 1];
             send({ t: 'set', id: item.id, field: item.field, value: item.value });

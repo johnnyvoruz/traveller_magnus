@@ -35,6 +35,18 @@ const KIND_ICON: Record<CampaignEntryKind, 'calendar-star' | 'note-sticky' | 'bo
 
 export type KindFilter = 'all' | CampaignEntryKind;
 
+/**
+ * Which rows a scrolling list draws. `top` is the distance from the start of the list
+ * to the top of the scrollport, in px. The ends include a few rows past the port.
+ */
+export function visibleRange(count: number, top: number, height: number, row: number, overscan = 6): { start: number; end: number } {
+    if (count <= 0 || !(row > 0) || !(height > 0)) return { start: 0, end: 0 };
+    const into = Number.isFinite(top) ? top : 0;
+    const start = Math.max(0, Math.floor(into / row) - overscan);
+    const end = Math.min(count, Math.ceil((into + height) / row) + overscan);
+    return { start, end: Math.max(start, end) };
+}
+
 export type RowFace = {
     id: string;
     kind: CampaignEntryKind;

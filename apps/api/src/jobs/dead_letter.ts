@@ -11,7 +11,13 @@ type DeadBody = {
 
 export async function deadLetterConsumer(batch: MessageBatch, env: Env): Promise<void> {
     for (const message of batch.messages) {
-        const body = message.body as DeadBody | undefined;
+        const body = message.body as (DeadBody & { kind?: unknown; universeId?: unknown; jobId?: unknown }) | undefined;
+        if (body && body.kind === 'generate' && typeof body.universeId === 'string' && typeof body.jobId === 'string') {
+            const stub = env.UNIVERSE.get(env.UNIVERSE.idFromName(body.universeId));
+            await stub.fetch(new Request(`https://universe.internal/jobs/${encodeURIComponent(body.jobId)}/fail`, { method: 'POST' }));
+            message.ack();
+            continue;
+        }
         if (body && typeof body.version === 'string' && typeof body.slug === 'string') {
             const now = new Date().toISOString();
             const written = await env.DB.prepare(

@@ -24,7 +24,11 @@ withDefaults(defineProps<{
     campaignOpen?: boolean;
     /** The account pop-up is showing. */
     accountOpen?: boolean;
-}>(), { campaignOpen: false, accountOpen: false });
+    /** Build can be switched on here: signed in, with a universe open. */
+    buildOffered?: boolean;
+    /** The Build switch is on. */
+    buildOn?: boolean;
+}>(), { campaignOpen: false, accountOpen: false, buildOffered: false, buildOn: false });
 
 const accountButton = ref<HTMLButtonElement | null>(null);
 const campaignButton = ref<HTMLButtonElement | null>(null);
@@ -121,6 +125,18 @@ onMounted(() => {
         >
           <Icon name="book-sparkles" :size="20" />
           <span class="rail-label">Campaign</span>
+        </button>
+        <button
+          v-if="buildOffered"
+          type="button"
+          class="rail-item"
+          aria-label="Build"
+          :title="hint('build', buildOn ? 'Build: on' : 'Build: generate and remove systems on your map')"
+          :aria-pressed="buildOn ? 'true' : 'false'"
+          @click="run('build')"
+        >
+          <Icon name="draw-polygon" :size="20" />
+          <span class="rail-label">Build</span>
         </button>
       </div>
     </div>

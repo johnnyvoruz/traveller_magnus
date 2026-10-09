@@ -1,5 +1,5 @@
 import type { Camera } from './camera.ts';
-import { hexCentre, parseHex, sectorRect, SECTOR_COLS, SECTOR_ROWS, toGlobal, type Rect } from './geometry.ts';
+import { hexCentre, parseHex, ROW_STEP, sectorRect, SECTOR_COLS, SECTOR_ROWS, toGlobal, type Rect } from './geometry.ts';
 
 export type ChartSector = {
     slug: string;
@@ -20,6 +20,32 @@ export type Target =
     | { kind: 'unknown'; message: string };
 
 const HEX_PPP = 80;
+
+/** First column and row of a subsector letter, or null when the letter is not A–P. */
+function subsectorOrigin(letter: string): { col: number; row: number } | null {
+    if (!/^[A-P]$/.test(letter)) return null;
+    const index = letter.charCodeAt(0) - 65;
+    return { col: (index % 4) * 8 + 1, row: Math.floor(index / 4) * 10 + 1 };
+}
+
+/** The eight-by-ten block, with a margin of one hex so the fit holds the outer hexes. */
+function subsectorRect(sx: number, sy: number, col: number, row: number): Rect {
+    let x0 = Infinity;
+    let y0 = Infinity;
+    let x1 = -Infinity;
+    let y1 = -Infinity;
+    for (const column of [col, col + 7]) {
+        for (const line of [row, row + 9]) {
+            const global = toGlobal(sx, sy, column, line);
+            const centre = hexCentre(global.q, global.r);
+            if (centre.x < x0) x0 = centre.x;
+            if (centre.y < y0) y0 = centre.y;
+            if (centre.x > x1) x1 = centre.x;
+            if (centre.y > y1) y1 = centre.y;
+        }
+    }
+    return { x0: x0 - 1, y0: y0 - ROW_STEP, x1: x1 + 1, y1: y1 + ROW_STEP };
+}
 
 /** Bounding box of sectors tagged OTU. The home view. */
 export function homeRect(manifest: ChartManifest): Rect | null {
@@ -80,7 +106,8 @@ export function targetFor(route: { path: string }, manifest: ChartManifest): Tar
     if (path === '/design') return { kind: 'design' };
     const parts = path.split('/').filter((part) => part.length > 0);
     const bodyPath = parts.length === 5 && parts[3] === 'b';
-    if (parts[0] === 's' && (parts.length === 2 || parts.length === 3 || bodyPath)) {
+    const subsectorPath = parts.length === 4 && parts[2] === 'sub';
+    if (parts[0] === 's' && (parts.length === 2 || parts.length === 3 || bodyPath || subsectorPath)) {
         const slug = decodeURIComponent(parts[1]);
         const sector = findSector(manifest, slug);
         if (!sector) return { kind: 'unknown', message: 'No sector ' + slug + '.' };
@@ -88,6 +115,12 @@ export function targetFor(route: { path: string }, manifest: ChartManifest): Tar
             return { kind: 'unknown', message: (sector.name || sector.slug) + ' is not on the canonical chart.' };
         }
         if (parts.length === 2) return { kind: 'fit', rect: sectorRect(sector.x, sector.y) };
+        if (parts.length === 4 && parts[2] === 'sub') {
+            const letter = decodeURIComponent(parts[3]);
+            const origin = subsectorOrigin(letter);
+            if (!origin) return { kind: 'unknown', message: 'No subsector ' + letter + '.' };
+            return { kind: 'fit', rect: subsectorRect(sector.x, sector.y, origin.col, origin.row) };
+        }
         const hhhh = decodeURIComponent(parts[2]);
         const local = parseHex(hhhh);
         if (!local || local.col < 1 || local.col > SECTOR_COLS || local.row < 1 || local.row > SECTOR_ROWS) {

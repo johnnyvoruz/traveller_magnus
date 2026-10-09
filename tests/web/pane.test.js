@@ -23,7 +23,7 @@ test('the twelve addresses of today name a view and a pane', () => {
     const rows = [
         { path: '/', query: {}, view: HOME, pane: SHUT },
         { path: '/', query: { x: '1', y: '2', z: '3' }, view: HOME, pane: SHUT },
-        { path: '/s/' + SECTOR, query: {}, view: { kind: 'sector', sector: SECTOR }, pane: SHUT },
+        { path: '/s/' + SECTOR, query: {}, view: { kind: 'sector', sector: SECTOR }, pane: DOSSIER },
         { path: '/s/' + SECTOR + '/' + HEX, query: {}, view: map(null), pane: DOSSIER },
         { path: '/s/' + SECTOR + '/' + HEX + '/b/' + BODY, query: {}, view: map(BODY), pane: DOSSIER },
         { path: '/s/' + SECTOR + '/' + HEX + '/orbit', query: {}, view: orbit(null), pane: DOSSIER },
@@ -75,7 +75,7 @@ test('an unknown panel matches an absent one, and panel=dossier is the dossier',
     const orbitPath = hex + '/orbit/b/' + BODY;
     assert.deepEqual(paneOf(hex, { panel: 'ships' }).pane, paneOf(hex).pane);
     assert.deepEqual(paneOf('/', { panel: 'ships' }).pane, paneOf('/').pane);
-    assert.deepEqual(paneOf('/s/' + SECTOR, { panel: 'ships' }).pane, SHUT);
+    assert.deepEqual(paneOf('/s/' + SECTOR, { panel: 'ships' }).pane, DOSSIER);
     assert.deepEqual(paneOf(orbitPath, { panel: 'ships' }).pane, DOSSIER);
     assert.deepEqual(paneOf(hex, { panel: 'dossier' }).pane, DOSSIER);
     assert.deepEqual(paneOf('/', { panel: 'dossier' }).pane, DOSSIER);
@@ -173,6 +173,15 @@ test('escape steps the pane and leaves an orbit overview to the view', () => {
     assert.deepEqual(escapePane(hex, { x: '1' }), { path: hex, query: { panel: 'closed', x: '1' } });
     assert.equal(escapePane(orbitPath, { date: '120' }), null);
     assert.equal(escapePane('/', { panel: 'closed' }), null);
+    assert.deepEqual(escapePane('/s/' + SECTOR, {}), { path: '/s/' + SECTOR, query: { panel: 'closed' } });
+    assert.deepEqual(paneOf('/s/' + SECTOR + '/sub/C'), {
+        view: { kind: 'subsector', sector: SECTOR, letter: 'C' },
+        pane: DOSSIER,
+    });
+    assert.deepEqual(escapePane('/s/' + SECTOR + '/sub/C', { x: '1' }), {
+        path: '/s/' + SECTOR + '/sub/C',
+        query: { panel: 'closed', x: '1' },
+    });
 });
 
 test('focus stays on a cold load, and follows the pane table after that', () => {

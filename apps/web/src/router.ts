@@ -23,6 +23,7 @@ export const router = createRouter({
     routes: [
         { path: '/', name: 'home', component: MapView },
         { path: '/s/:sector', name: 'sector', component: MapView },
+        { path: '/s/:sector/sub/:letter', name: 'subsector', component: MapView },
         { path: '/s/:sector/:hex', name: 'hex', component: MapView },
         { path: '/s/:sector/:hex/b/:body', name: 'body', component: MapView },
         { path: '/s/:sector/:hex/orbit', name: 'orbit', component: () => import('./views/OrbitView.vue') },

@@ -493,12 +493,13 @@ onBeforeUnmount(() => {
               />
             </div>
             <p class="ch-owner">{{ live.role === 'owner' ? 'You own this' : 'Owned by ' + (live.ownerName || 'someone') }}</p>
-            <p class="ch-status">{{ quiet(live) }}</p>
+            <p class="ch-status" role="status">{{ quiet(live) }}</p>
             <ul v-if="others.length" class="ch-marks">
               <li
                 v-for="person in others"
                 :key="person.id"
                 class="ch-mark"
+                tabindex="0"
                 :style="{ '--ch-tone': 'var(' + presenceTone(person.colour) + ')' }"
               >{{ person.name }}</li>
             </ul>
@@ -616,6 +617,24 @@ onBeforeUnmount(() => {
 .ch-search input {
   flex: 1 1 auto;
   padding: 0;
+}
+
+.ch-search:focus-within {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.ch-search input:focus-visible {
+  outline: none;
+}
+
+.ch-form input:focus-visible,
+.ch-count input:focus-visible,
+.ch-link:focus-visible,
+.ch-row:focus-visible,
+.ch-mark:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .ch-search input::placeholder {

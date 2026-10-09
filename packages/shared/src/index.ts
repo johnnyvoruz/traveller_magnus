@@ -76,6 +76,47 @@ export {
     CharacterClientMessage,
     CharacterServerMessage,
 } from './schemas/character.ts';
+export {
+    BUILDER_LIMITS,
+    HexKey,
+    HexPlace,
+    BuilderEdition,
+    BuilderGenerator,
+    builderPairReady,
+    BuilderHex,
+    BuilderAbsent,
+    BuilderHexView,
+    BuilderHexPage,
+    HexRemove,
+    HexRestore,
+    HexRevert,
+    BuilderGenerate,
+    BuilderGenerateDone,
+    BuilderJobAccepted,
+    BuilderJobState,
+    BuilderFailure,
+    BuilderJob,
+    BuilderJobUndo,
+    SignInProviders,
+} from './schemas/builder.ts';
+export {
+    FormKind,
+    FormPermission,
+    FormOption,
+    FormValue,
+    FormField,
+    FormSection,
+    EditForm,
+    FormRead,
+    FormChange,
+    FormRoll,
+    FormDraft,
+    FormChanged,
+    FormMessage,
+    FormAnswer,
+    FormKeep,
+    FormBlank,
+} from './schemas/form.ts';
 export { parseT5Tab } from './parsers/t5tab.ts';
 export type { HexRow } from './parsers/t5tab.ts';
 export { parseXmlElements, parseMetadataXml } from './parsers/metadata_xml.ts';

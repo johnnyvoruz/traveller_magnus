@@ -85,7 +85,7 @@ import { MgT2EData } from './generated/rules/mgt2e_data.js';
 
         // Lt: Low Tech
         const cLt = data.Lt;
-        check('Lt', tl >= cLt.minTl && tl <= cLt.maxTl);
+        check('Lt', pop >= (cLt.minPop !== undefined ? cLt.minPop : 1) && tl >= cLt.minTl && tl <= cLt.maxTl);
 
         // Na: Non-Agricultural
         const cNa = data.Na;
@@ -178,7 +178,10 @@ import { MgT2EData } from './generated/rules/mgt2e_data.js';
             if (w.size === 0 && w.type !== 'Planetoid Belt' && w.type !== 'Gas Giant') {
                 const atm = w.atmCode !== undefined ? w.atmCode : w.atm;
                 const hydro = w.hydroCode !== undefined ? w.hydroCode : w.hydro;
-                if (atm !== 0 || hydro !== 0) {
+                // The reference rolls a mainworld's Atmosphere as 2D-7+Size for every Size,
+                // so a Size 0 mainworld may have Atm 1-5. Hydrographics must still be 0.
+                const isMainworldBody = w.type === 'Mainworld' || w.isLunarMainworld === true;
+                if ((atm !== 0 && !isMainworldBody) || hydro !== 0) {
                     const msg = `Natural Physics Violation: Size 0 world at orbit ${w.orbitId || 'Moon'} has Atm ${atm} and Hydro ${hydro} (Both must be 0).`;
                     _log(`[FAIL] ${msg}`);
                     results.errors.push({ orbitId: w.orbitId || null, message: msg });

@@ -1,5 +1,5 @@
-import { generateHex } from '@voyage/generation';
-import { GeneratePreview, sha256Hex, stable } from '@voyage/shared';
+import { chartEntry, generateHex } from '@voyage/generation';
+import { GeneratePreview, SectorHex, sha256Hex, stable } from '@voyage/shared';
 import { Hono } from 'hono';
 import enginesPackage from '../../../../packages/engines/package.json' with { type: 'json' };
 import { originAllowed, requireUser } from '../auth/session';
@@ -55,5 +55,7 @@ generate.post('/generate/preview', async (c) => {
         },
     });
     const hash = await sha256Hex(stable(envelope));
-    return ok(c, { envelope, hash });
+    const row = envelope.body && typeof envelope.body === 'object' ? envelope.body as Record<string, unknown> : {};
+    const entry = SectorHex.parse(chartEntry(row, hash));
+    return ok(c, { envelope, hash, entry });
 });

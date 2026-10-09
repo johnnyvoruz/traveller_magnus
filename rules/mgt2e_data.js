@@ -29,6 +29,22 @@ const MgT2EData = {
         {                      band: 'Frozen'     },
     ],
 
+    // Mainworld temperature roll (assets/2eWorldCreation.txt, World Temperature):
+    // 2D + Atmosphere DM, then the band table. Keys are Atmosphere codes 0-15.
+    temperatureRoll: {
+        atmosphereDMs: {
+            "0": 0, "1": 0, "2": -2, "3": -2, "4": -1, "5": -1, "6": 0, "7": 0,
+            "8": 1, "9": 1, "10": 2, "11": 6, "12": 6, "13": 2, "14": -1, "15": 2
+        },
+        bands: [
+            { maxRoll: 2, band: 'Frozen' },
+            { maxRoll: 4, band: 'Cold' },
+            { maxRoll: 9, band: 'Temperate' },
+            { maxRoll: 11, band: 'Hot' },
+            { maxRoll: 99, band: 'Boiling' }
+        ]
+    },
+
     extremeAtmosphereHydroDM: {
         triggerAtmospheres: [0, 1, 10, 11, 12, 13, 14, 15],
         modifier: -4
@@ -55,12 +71,12 @@ const MgT2EData = {
 
     techLevel: {
         modifiers: {
-            starport: { "A": 6, "B": 4, "C": 2, "D": 1, "E": 1, "X": -4, "F": 1 },
+            starport: { "A": 6, "B": 4, "C": 2, "X": -4 },
             size: { "0": 2, "1": 2, "2": 1, "3": 1, "4": 1 },
             atm: { "0": 1, "1": 1, "2": 1, "3": 1, "10": 1, "11": 1, "12": 1, "13": 1, "14": 1, "15": 1, "16": 1, "17": 1 },
             hydro: { "0": 1, "9": 1, "10": 2 },
-            pop: { "1": 1, "2": 1, "3": 1, "4": 1, "5": 1, "8": 1, "9": 2, "10": 4, "11": 4, "12": 4, "13": 4, "14": 4, "15": 4 },
-            gov: { "0": 1, "5": 1, "7": 2, "13": -2, "14": -2, "15": -2 }
+            pop: { "1": 1, "2": 1, "3": 1, "4": 1, "5": 1, "8": 1, "9": 2, "10": 4 },
+            gov: { "0": 1, "5": 1, "7": 2, "13": -2, "14": -2 }
         },
         environmentalMinimums: {
             "0": 8, "1": 8, "2": 5, "3": 5, "4": 3, "7": 3, "9": 3,
@@ -137,7 +153,7 @@ const MgT2EData = {
         Ic: { minAtm: 0, maxAtm: 1, minHydro: 1, maxHydro: 10 },
         In: { validAtms: [0, 1, 2, 4, 7, 9, 10, 11, 12], minPop: 9, maxPop: 15 },
         Lo: { minPop: 1, maxPop: 3 },
-        Lt: { minTl: 0, maxTl: 5 },
+        Lt: { minPop: 1, maxPop: 15, minTl: 0, maxTl: 5 },
         Na: { minAtm: 0, maxAtm: 3, minHydro: 0, maxHydro: 3, minPop: 6, maxPop: 15 },
         Ni: { minPop: 4, maxPop: 6 },
         Po: { minAtm: 2, maxAtm: 5, minHydro: 0, maxHydro: 3 },

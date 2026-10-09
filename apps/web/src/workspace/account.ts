@@ -9,8 +9,43 @@ export const SIGN_IN_PITCH = 'Keep a private campaign on top of this map: people
 export const SIGN_IN_FREE = 'The map works the same without an account.';
 export const SIGN_IN_FINE = 'Nothing you add changes the map, and nobody else sees it.';
 export const SIGN_IN_OFFLINE = 'You are offline.';
-/** The only provider in this slice (directives/slice_2_campaign.md, J1). */
+/** X alone, as before: what the card offers when the server does not say which providers it has. */
 export const SIGN_IN_LABEL = 'Sign in with X';
+
+/** better-auth's provider ids (apps/api/src/auth/options.ts), in the order the card offers them. */
+export type SignInProvider = { id: 'twitter' | 'discord' | 'google'; name: string; label: string; opening: string };
+export const SIGN_IN_PROVIDERS: readonly SignInProvider[] = [
+    { id: 'twitter', name: 'X', label: SIGN_IN_LABEL, opening: 'Opening X…' },
+    { id: 'discord', name: 'Discord', label: 'Sign in with Discord', opening: 'Opening Discord…' },
+    { id: 'google', name: 'Google', label: 'Sign in with Google', opening: 'Opening Google…' },
+];
+
+/** Where the card asks which providers the server has switched on (`SignInProviders` in packages/shared). */
+export const SIGN_IN_PROVIDERS_URL = '/api/providers';
+
+/**
+ * The providers to offer, from the ids the server lists. Ids the card does not know are
+ * dropped. A null list (the route is missing or failed) is X alone, which is today's card.
+ */
+export function offeredProviders(ids: readonly string[] | null): SignInProvider[] {
+    if (ids === null) return [SIGN_IN_PROVIDERS[0]];
+    return SIGN_IN_PROVIDERS.filter((item) => ids.includes(item.id));
+}
+
+/** The server's list of provider ids, or null when it cannot be had. Never throws. */
+export async function readProviders(fetchImpl: (url: string) => Promise<Response>): Promise<string[] | null> {
+    try {
+        const res = await fetchImpl(SIGN_IN_PROVIDERS_URL);
+        if (!res.ok) return null;
+        const body = await res.json() as { data?: unknown };
+        const flags = body ? body.data : null;
+        if (!flags || typeof flags !== 'object' || Array.isArray(flags)) return null;
+        // One flag a provider: true means the server has it registered.
+        return Object.entries(flags as Record<string, unknown>).filter((entry) => entry[1] === true).map((entry) => entry[0]);
+    } catch {
+        return null;
+    }
+}
 
 function clean(value: unknown): string {
     return typeof value === 'string' ? value.trim() : '';

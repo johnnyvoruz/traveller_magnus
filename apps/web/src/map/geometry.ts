@@ -21,6 +21,24 @@ export function toGlobal(sx: number, sy: number, col: number, row: number): { q:
     return { q: sx * SECTOR_COLS + (col - 1), r: sy * SECTOR_ROWS + (row - 1) };
 }
 
+/** One step on the odd-q chart. Above is a smaller row number. */
+export type HexStep = 'nw' | 'n' | 'ne' | 'sw' | 's' | 'se';
+
+/** [column, row] for an even q, then an odd q. N is a smaller row. */
+const HEX_STEP: Record<HexStep, readonly [readonly [number, number], readonly [number, number]]> = {
+    nw: [[-1, -1], [-1, 0]],
+    n: [[0, -1], [0, -1]],
+    ne: [[1, -1], [1, 0]],
+    sw: [[-1, 0], [-1, 1]],
+    s: [[0, 1], [0, 1]],
+    se: [[1, 0], [1, 1]],
+};
+
+export function stepGlobal(q: number, r: number, step: HexStep): { q: number; r: number } {
+    const delta = HEX_STEP[step][(q & 1) === 1 ? 1 : 0];
+    return { q: q + delta[0], r: r + delta[1] };
+}
+
 export function fromGlobal(q: number, r: number): { sx: number; sy: number; col: number; row: number } {
     const sx = Math.floor(q / SECTOR_COLS);
     const sy = Math.floor(r / SECTOR_ROWS);

@@ -35,6 +35,10 @@ function maskCompanionOrbitID(root) {
 }
 
 const FIX = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
+// Engine 1.1.0 corrected MgT2E rules (findings/engine_1_1_0_rule_fixes.md). A case whose output
+// those corrections changed reads its corrected fixture here; the legacy fixture is kept unchanged
+// for legacy.test.js, which documents what the old app did.
+const CORRECTED = path.join(FIX, 'engine_1.1.0');
 
 test('hashString matches oracle', () => {
     const ctx = loadLegacy();
@@ -47,7 +51,8 @@ for (const name of pending) test(`esm ${name}`, { skip: 'pending conversion' }, 
 for (const [name, fn] of Object.entries(cases))
     test(`esm ${name} matches legacy fixture`, async () => {
         await withEngineRng(async () => {
-            const raw = fs.readFileSync(path.join(FIX, name + '.json'), 'utf8');
+            const corrected = path.join(CORRECTED, name + '.json');
+            const raw = fs.readFileSync(fs.existsSync(corrected) ? corrected : path.join(FIX, name + '.json'), 'utf8');
             const actual = await fn();
             const expected = name === 'parse_t5tab' ? stable(maskCompanionOrbitID(mapLegacyKeys(raw))) : raw;
             assert.equal(name === 'parse_t5tab' ? stable(maskCompanionOrbitID(actual)) : stable(actual), expected);

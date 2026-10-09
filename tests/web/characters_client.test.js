@@ -519,16 +519,32 @@ test('two failed upgrades fall back to saving and reloading', async () => {
     await ticks();
     assert.deepEqual(env.server.fieldPosts[0], [{ field: 'Name', value: 'Bea' }]);
     assert.equal(handle.fields.Name, 'Bea');
+    assert.equal(handle.status, 'connecting');
+    assert.equal(env.sockets.length, 3);
+    env.sockets[2].open();
+    env.sockets[2].receive(hello({ doc: { fields: { Name: 'Bea' }, revs: { Name: 2 }, seq: 2 } }));
+    await ticks();
+    assert.equal(handle.status, 'live');
+});
 
+test('a poll stays quiet while the page is hidden, then tries the socket once it succeeds', async () => {
+    const handle = openCharacter(ID);
+    await ticks();
+    env.sockets[0].fail();
+    env.fireNext();
+    env.sockets[1].fail();
+    assert.equal(handle.status, 'offline');
+    env.blockSocket = true;
     env.server.doc = { fields: { Name: 'Cara' }, revs: { Name: 3 }, seq: 9 };
     env.hidden = true;
     env.fireNext();
     await ticks();
-    assert.equal(handle.fields.Name, 'Bea');
+    assert.equal(handle.fields.Name, 'Ada');
     env.hidden = false;
     env.shown[0](false);
     await ticks();
     assert.equal(handle.fields.Name, 'Cara');
+    assert.equal(handle.status, 'offline');
 });
 
 test('a blocked socket uses the fallback at once', async () => {

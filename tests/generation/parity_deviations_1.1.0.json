@@ -1,0 +1,368 @@
+{
+ "engineVersion": "1.1.0",
+ "hex": "Spinward_Marches/1910",
+ "note": "Exact differences between the live legacy oracle and the corrected engine. See findings/engine_1_1_0_rule_fixes.md.",
+ "diffs": [
+  {
+   "path": "$.mgt2eData.DR",
+   "legacy": "184.29",
+   "got": "198.29"
+  },
+  {
+   "path": "$.mgt2eData.IR",
+   "legacy": 21,
+   "got": 15
+  },
+  {
+   "path": "$.mgt2eData.culturalProfile",
+   "legacy": "9C6D-5652",
+   "got": "9C6D-4674"
+  },
+  {
+   "path": "$.mgt2eData.culturalQuirks.0",
+   "legacy": "Unusual Custom: Technology",
+   "got": "At war – At war with another planet/polity, or troubled by terrorists/rebels."
+  },
+  {
+   "path": "$.mgt2eData.culturalQuirks.1",
+   "legacy": "Tourist Attraction – Draws visitors from all over civilised space.",
+   "got": "Obsessed – Monomania regarding a substance, personality, act, or item."
+  },
+  {
+   "path": "$.mgt2eData.economicProfile",
+   "legacy": "+4, D7E+5, 6370, Cr233280, A, 21, 184.29",
+   "got": "+4, D7E+5, 6370, Cr233280, A, 15, 198.29"
+  },
+  {
+   "path": "$.mgt2eData.factions",
+   "legacy": "",
+   "got": "N"
+  },
+  {
+   "path": "$.mgt2eData.factionsData.0",
+   "got": {
+    "gov": 12,
+    "identity": "Dissident/Rebel",
+    "strength": "N"
+   }
+  },
+  {
+   "path": "$.mgt2eData.judicialSystemProfile",
+   "legacy": "AU-Y-Y",
+   "got": "AP-Y-Y"
+  },
+  {
+   "path": "$.mgt2eData.lawProfile",
+   "legacy": "9-8A9B8",
+   "got": "9-8C8BA"
+  },
+  {
+   "path": "$.mgt2eData.militaryProfile",
+   "legacy": "30100-880:0.60%",
+   "got": "60000-D86:3.00%"
+  },
+  {
+   "path": "$.mgt2eData.techProfile",
+   "legacy": "C-C-CCCCC-CCCC-CC-E",
+   "got": "C-B-CCCCC-CCCC-CC-E"
+  },
+  {
+   "path": "$.mgtSocio.DR",
+   "legacy": "184.29",
+   "got": "198.29"
+  },
+  {
+   "path": "$.mgtSocio.IR",
+   "legacy": 21,
+   "got": 15
+  },
+  {
+   "path": "$.mgtSocio.culturalProfile",
+   "legacy": "9C6D-5652",
+   "got": "9C6D-4674"
+  },
+  {
+   "path": "$.mgtSocio.culturalQuirks.0",
+   "legacy": "Unusual Custom: Technology",
+   "got": "At war – At war with another planet/polity, or troubled by terrorists/rebels."
+  },
+  {
+   "path": "$.mgtSocio.culturalQuirks.1",
+   "legacy": "Tourist Attraction – Draws visitors from all over civilised space.",
+   "got": "Obsessed – Monomania regarding a substance, personality, act, or item."
+  },
+  {
+   "path": "$.mgtSocio.economicProfile",
+   "legacy": "+4, D7E+5, 6370, Cr233280, A, 21, 184.29",
+   "got": "+4, D7E+5, 6370, Cr233280, A, 15, 198.29"
+  },
+  {
+   "path": "$.mgtSocio.factions",
+   "legacy": "",
+   "got": "N"
+  },
+  {
+   "path": "$.mgtSocio.factionsData.0",
+   "got": {
+    "gov": 12,
+    "identity": "Dissident/Rebel",
+    "strength": "N"
+   }
+  },
+  {
+   "path": "$.mgtSocio.judicialSystemProfile",
+   "legacy": "AU-Y-Y",
+   "got": "AP-Y-Y"
+  },
+  {
+   "path": "$.mgtSocio.lawProfile",
+   "legacy": "9-8A9B8",
+   "got": "9-8C8BA"
+  },
+  {
+   "path": "$.mgtSocio.militaryProfile",
+   "legacy": "30100-880:0.60%",
+   "got": "60000-D86:3.00%"
+  },
+  {
+   "path": "$.mgtSocio.techProfile",
+   "legacy": "C-C-CCCCC-CCCC-CC-E",
+   "got": "C-B-CCCCC-CCCC-CC-E"
+  },
+  {
+   "path": "$.mgtSystem.worlds.2.classifications.0",
+   "legacy": "Research Base",
+   "got": "Standard"
+  },
+  {
+   "path": "$.mgtSystem.worlds.2.tl",
+   "legacy": 12,
+   "got": 11
+  },
+  {
+   "path": "$.mgtSystem.worlds.2.tlCode",
+   "legacy": 12,
+   "got": 11
+  },
+  {
+   "path": "$.mgtSystem.worlds.2.uwp",
+   "legacy": "Y10036A-C",
+   "got": "Y10036A-B"
+  },
+  {
+   "path": "$.mgtSystem.worlds.2.uwpSecondary",
+   "legacy": "Y10036A-C",
+   "got": "Y10036A-B"
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.DR",
+   "legacy": "184.29",
+   "got": "198.29"
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.IR",
+   "legacy": 21,
+   "got": 15
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.culturalProfile",
+   "legacy": "9C6D-5652",
+   "got": "9C6D-4674"
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.culturalQuirks.0",
+   "legacy": "Unusual Custom: Technology",
+   "got": "At war – At war with another planet/polity, or troubled by terrorists/rebels."
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.culturalQuirks.1",
+   "legacy": "Tourist Attraction – Draws visitors from all over civilised space.",
+   "got": "Obsessed – Monomania regarding a substance, personality, act, or item."
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.economicProfile",
+   "legacy": "+4, D7E+5, 6370, Cr233280, A, 21, 184.29",
+   "got": "+4, D7E+5, 6370, Cr233280, A, 15, 198.29"
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.factions",
+   "legacy": "",
+   "got": "N"
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.factionsData.0",
+   "got": {
+    "gov": 12,
+    "identity": "Dissident/Rebel",
+    "strength": "N"
+   }
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.judicialSystemProfile",
+   "legacy": "AU-Y-Y",
+   "got": "AP-Y-Y"
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.lawProfile",
+   "legacy": "9-8A9B8",
+   "got": "9-8C8BA"
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.militaryProfile",
+   "legacy": "30100-880:0.60%",
+   "got": "60000-D86:3.00%"
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.techProfile",
+   "legacy": "C-C-CCCCC-CCCC-CC-E",
+   "got": "C-B-CCCCC-CCCC-CC-E"
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.1.classifications.0",
+   "legacy": "Standard",
+   "got": "Penal Colony"
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.0.classifications.0",
+   "legacy": "Research Base",
+   "got": "Standard"
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.0.tl",
+   "legacy": 12,
+   "got": 11
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.0.tlCode",
+   "legacy": 12,
+   "got": 11
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.0.uwp",
+   "legacy": "G200229-C",
+   "got": "G200229-B"
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.0.uwpSecondary",
+   "legacy": "G200229-C",
+   "got": "G200229-B"
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.3.classifications.1",
+   "legacy": "Penal Colony"
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.moons.0.classifications.0",
+   "legacy": "Standard",
+   "got": "Research Base"
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.moons.0.tl",
+   "legacy": 11,
+   "got": 12
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.moons.0.tlCode",
+   "legacy": 11,
+   "got": 12
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.moons.0.uwp",
+   "legacy": "YS00439-B",
+   "got": "YS00439-C"
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.moons.0.uwpSecondary",
+   "legacy": "YS00439-B",
+   "got": "YS00439-C"
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.classifications.0",
+   "legacy": "Research Base",
+   "got": "Standard"
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.tl",
+   "legacy": 12,
+   "got": 11
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.tlCode",
+   "legacy": 12,
+   "got": 11
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.uwp",
+   "legacy": "G5A6229-C",
+   "got": "G5A6229-B"
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.uwpSecondary",
+   "legacy": "G5A6229-C",
+   "got": "G5A6229-B"
+  },
+  {
+   "path": "$.t5Data.DR",
+   "legacy": "184.29",
+   "got": "198.29"
+  },
+  {
+   "path": "$.t5Data.IR",
+   "legacy": 21,
+   "got": 15
+  },
+  {
+   "path": "$.t5Data.culturalProfile",
+   "legacy": "9C6D-5652",
+   "got": "9C6D-4674"
+  },
+  {
+   "path": "$.t5Data.culturalQuirks.0",
+   "legacy": "Unusual Custom: Technology",
+   "got": "At war – At war with another planet/polity, or troubled by terrorists/rebels."
+  },
+  {
+   "path": "$.t5Data.culturalQuirks.1",
+   "legacy": "Tourist Attraction – Draws visitors from all over civilised space.",
+   "got": "Obsessed – Monomania regarding a substance, personality, act, or item."
+  },
+  {
+   "path": "$.t5Data.economicProfile",
+   "legacy": "+4, D7E+5, 6370, Cr233280, A, 21, 184.29",
+   "got": "+4, D7E+5, 6370, Cr233280, A, 15, 198.29"
+  },
+  {
+   "path": "$.t5Data.factions",
+   "legacy": "",
+   "got": "N"
+  },
+  {
+   "path": "$.t5Data.factionsData.0",
+   "got": {
+    "gov": 12,
+    "identity": "Dissident/Rebel",
+    "strength": "N"
+   }
+  },
+  {
+   "path": "$.t5Data.judicialSystemProfile",
+   "legacy": "AU-Y-Y",
+   "got": "AP-Y-Y"
+  },
+  {
+   "path": "$.t5Data.lawProfile",
+   "legacy": "9-8A9B8",
+   "got": "9-8C8BA"
+  },
+  {
+   "path": "$.t5Data.militaryProfile",
+   "legacy": "30100-880:0.60%",
+   "got": "60000-D86:3.00%"
+  },
+  {
+   "path": "$.t5Data.techProfile",
+   "legacy": "C-C-CCCCC-CCCC-CC-E",
+   "got": "C-B-CCCCC-CCCC-CC-E"
+  }
+ ]
+}

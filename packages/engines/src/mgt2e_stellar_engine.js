@@ -890,8 +890,16 @@ import { settings } from './core/settings.js';
         }
 
         // Gas Giants - WBH Adjustment: 83% presence (9-) to satisfy the 15-20% Lunar Mainworld statistical requirement
-        let ggRoll = tRoll2D('Gas Giant Presence (<= 9)');
-        let ggExists = ggRoll <= 9 || (mainworldBase && mainworldBase.gasGiant);
+        // The reference rolls gas giant presence once (2D, absent on 10+). The mainworld
+        // generator already rolled it; reuse that result instead of rolling again.
+        let ggExists;
+        if (mainworldBase && typeof mainworldBase.gasGiant === 'boolean') {
+            ggExists = mainworldBase.gasGiant;
+            tResult('Gas Giant Presence', `${ggExists} (rolled with the mainworld)`, 'MgT2E 1.3: System Inventory');
+        } else {
+            let ggRoll = tRoll2D('Gas Giant Presence (<= 9)');
+            ggExists = ggRoll <= 9;
+        }
         if (ggExists) {
             let ggQ = tRoll2D('GG Quantity');
             const ggDMs = MgT2EData.systemInventory.gasGiantDMs;
@@ -1033,7 +1041,7 @@ import { settings } from './core/settings.js';
         // Helper: determine if a top-down mainworld resides in the habitable zone
         function isMainworldInHZ(mw) {
             const tempModMap = { 'Frozen': 2, 'Cold': 4, 'Temperate': 7, 'Hot': 10, 'Boiling': 12 };
-            const modifiedRoll = tempModMap[mw.tempBand] ?? 7;
+            const modifiedRoll = Number.isFinite(mw.temperatureRoll) ? mw.temperatureRoll : (tempModMap[mw.tempBand] ?? 7);
             const rawRoll = modifiedRoll - getAtmDM(mw.atm || 0);
             tResult('HZ Check', `tempBand=${mw.tempBand ?? 'unknown (defaulting Temperate)'}, modRoll=${modifiedRoll}, atmDM=${getAtmDM(mw.atm || 0)}, rawRoll=${rawRoll} → ${rawRoll >= 3 && rawRoll <= 11 ? 'IN HZ (Method 4)' : 'OUTSIDE HZ (Methods 1/2/3)'}`, 'MgT2E Step 1');
             return rawRoll >= 3 && rawRoll <= 11;
@@ -1051,7 +1059,7 @@ import { settings } from './core/settings.js';
             // Reverse-engineer the world's temperature to get its orbit deviation from HZCO.
             tResult('Method Selected', '4 — Continuation (top-down mainworld in habitable zone)', 'MgT2E Step 1');
             const tempModMap = { 'Frozen': 2, 'Cold': 4, 'Temperate': 7, 'Hot': 10, 'Boiling': 12 };
-            const modifiedRoll = tempModMap[mainworldBase.tempBand] ?? 7;
+            const modifiedRoll = Number.isFinite(mainworldBase.temperatureRoll) ? mainworldBase.temperatureRoll : (tempModMap[mainworldBase.tempBand] ?? 7);
             const atmDM = getAtmDM(mainworldBase.atm || 0);
             const rawHzRoll = Math.max(2, Math.min(12, modifiedRoll - atmDM));
             let hzDeviation = MgT2EData.stellar.hzDeviation[rawHzRoll];
@@ -1122,7 +1130,7 @@ import { settings } from './core/settings.js';
         if (mainworldBase != null && !useMethod4) {
             tSection('Mainworld Target Orbit (out-of-HZ override)');
             const tempModMap = { 'Frozen': 2, 'Cold': 4, 'Temperate': 7, 'Hot': 10, 'Boiling': 12 };
-            const modifiedRoll = tempModMap[mainworldBase.tempBand] ?? 7;
+            const modifiedRoll = Number.isFinite(mainworldBase.temperatureRoll) ? mainworldBase.temperatureRoll : (tempModMap[mainworldBase.tempBand] ?? 7);
             const atmDM = getAtmDM(mainworldBase.atm || 0);
             const rawHzRoll = Math.max(2, Math.min(12, modifiedRoll - atmDM));
             let mwDeviation = MgT2EData.stellar.hzDeviation[rawHzRoll];

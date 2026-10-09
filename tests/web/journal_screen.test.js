@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { bodyParts } from '../../apps/web/src/workspace/journal/body.ts';
 import { parsePlayed, parseWhen } from '../../apps/web/src/workspace/journal/dates.ts';
-import { entryName, filterEntries, kindCounts, readLine, rowFace } from '../../apps/web/src/workspace/journal/list.ts';
+import { entryName, filterEntries, kindCounts, readLine, rowFace, visibleRange } from '../../apps/web/src/workspace/journal/list.ts';
 
 const ID = 'cj_11111111-1111-4111-8111-111111111111';
 const RECORD = 'cr_22222222-2222-4222-8222-222222222222';
@@ -126,6 +126,13 @@ test('the filter keeps the store order and the search reads title and body', () 
     const here = new Set([older.id]);
     assert.deepEqual(filterEntries(list, { kind: 'all', query: '', hexIds: here }).map((item) => item.id), [older.id]);
     assert.deepEqual(kindCounts(list), { all: 3, session: 1, note: 1, handout: 0, rumor: 1 });
+});
+
+test('a long list draws the rows in the scrollport', () => {
+    assert.deepEqual(visibleRange(0, 0, 400, 64), { start: 0, end: 0 });
+    assert.deepEqual(visibleRange(2000, 0, 400, 64), { start: 0, end: 13 });
+    assert.deepEqual(visibleRange(2000, 6400, 400, 64), { start: 94, end: 113 });
+    assert.deepEqual(visibleRange(2000, 2000 * 64, 400, 64).end, 2000);
 });
 
 test('a body draws a record chip, a hex chip, and leaves an unknown token and a script as text', () => {

@@ -408,7 +408,7 @@ const PAIRS = [
     ['--signal', '--panel-raised', MARK, 'sheet box: the ring on a value that arrived'],
     ['--text-0', '--sheet-rust', TEXT, 'record page: the PC tag (12 px mono bold)'],
     // Presence on a live sheet: the colours the Characters store hands out (characters/types.ts PRESENCE_TONES), as the dashed ring and the name's edge.
-    // The eighth, --sheet-rust, is 2.88:1 here, under the 3:1 a mark needs: reported to Agent A, whose list it is.
+    // Tone 2 is --sheet-rust-line. --sheet-rust itself is 2.88:1 as a ring, under the 3:1 a mark needs.
     ['--signal', '--panel-raised', MARK, 'presence: the dashed ring round a box someone is in'],
     ['--attention', '--panel-raised', MARK, 'presence: the dashed ring round a box someone is in'],
     ['--zone-green', '--panel-raised', MARK, 'presence: the dashed ring round a box someone is in'],
@@ -431,7 +431,7 @@ const PAIRS = [
     ['--danger', '--bg-1', TEXT, 'characters: Delete, a failed claim'],
     ['--signal', '--bg-1', MARK, 'characters: presence 0, the mark’s edge'],
     ['--attention', '--bg-1', MARK, 'characters: presence 1, the mark’s edge'],
-    ['--sheet-rust', '--bg-1', MARK, 'characters: presence 2, the mark’s edge'],
+    ['--sheet-rust-line', '--bg-1', MARK, 'characters: presence 2, the mark’s edge'],
     ['--zone-green', '--bg-1', MARK, 'characters: presence 3, the mark’s edge'],
     ['--star-k', '--bg-1', MARK, 'characters: presence 4, the mark’s edge'],
     ['--star-o', '--bg-1', MARK, 'characters: presence 5, the mark’s edge'],
@@ -439,6 +439,25 @@ const PAIRS = [
     ['--text-0', '--bg-1', MARK, 'characters: presence 7, the mark’s edge'],
     ['--text-0', '--bg-0', TEXT, 'claim: the page behind the card'],
     ['--attention', '--bg-1', MARK, 'characters: the focus ring'],
+    // Build (workspace/build/, the dossier panel in Build)
+    ['--attention', '--surface-1', SMALL, 'build: Preview or Removed, the last word of the panel breadcrumb (10.5 px)'],
+    ['--text-1', '--surface-1', SMALL, 'build: the subsector in the panel breadcrumb (10.5 px)'],
+    ['--signal', OMNI_FIELD, SMALL, 'build strip: Building (10 px), the count'],
+    ['--text-0', OMNI_FIELD, TEXT, 'build strip: the universe’s name'],
+    ['--text-muted', OMNI_FIELD, TEXT, 'build strip: on the chart, the key hint'],
+    ['--danger', '--panel-raised', TEXT, 'build: Remove button'],
+    ['--danger', '--chrome-bg', TEXT, 'build menu: Remove from my map'],
+    ['--text-1', '--chrome-bg', TEXT, 'build menu: an act'],
+    ['--text-muted', '--chrome-bg', SMALL, 'build menu: its title (11 px), an act’s second line, the key hint'],
+    ['--signal-active', '--row-active', TEXT, 'generate sheet: the chosen option'],
+    ['--text-muted', '--panel-raised', SMALL, 'generate sheet: not yet, bottom up only; the next mark on Edit (10 px)'],
+    ['--on-signal', '--signal', SMALL, 'build: the key hint on the filled Generate button (11 px)'],
+    ['--signal', ['--wash', '--bg-1'], SMALL, 'build: Yours tag (10 px)'],
+    ['--text-1', ['--neutral-wash', '--bg-1'], SMALL, 'build: Chart tag (10 px)'],
+    ['--chart-selected', '--bg-0', MARK, 'build marks: a selected hex, a previewed hex'],
+    ['--text-faint', '--bg-0', MARK, 'build marks: a removed hex'],
+    ['--signal', '--panel-raised', TEXT, 'build: a subsector’s name on the sector page'],
+    ['--text-muted', '--panel-raised', SMALL, 'build: a subsector’s letter (11 px)'],
 ];
 
 if (process.env.CONTRAST_REPORT) {

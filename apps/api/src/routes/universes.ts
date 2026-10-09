@@ -8,6 +8,7 @@ import type { AppEnv } from '../env';
 import { fail, ok } from '../http';
 import { CAMPAIGN_LIMITS, UniverseCreate, UniverseUpdate } from '@voyage/shared';
 import { ownedUniverse, type UniverseRow } from '../universe/forward';
+import { mountBuilderRoutes } from './builder';
 import { mountCampaignExport } from './campaign_export';
 import { mountObjectRoutes } from './objects';
 
@@ -17,6 +18,7 @@ const PURGE_DAYS = 30;
 export const universesRoute = new Hono<AppEnv>();
 mountObjectRoutes(universesRoute);
 mountCampaignExport(universesRoute);
+mountBuilderRoutes(universesRoute);
 
 function database(c: { env: AppEnv['Bindings'] }) {
     return drizzle(c.env.DB, { schema: { universes } });

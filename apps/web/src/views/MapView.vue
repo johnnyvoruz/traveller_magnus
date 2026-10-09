@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { SectorHex, SectorIndex, TreeEnvelope, TruthManifest, TruthOverview } from '@voyage/shared';
 import { campaign } from '../campaign/store.ts';
@@ -7,10 +7,12 @@ import { fit, flight, SHORT_HOP, toWorld, zoomAt, type Camera, type Viewport } f
 import { standInSnapshot, type CampaignSnapshot } from '../map/campaign_layer.ts';
 import { vesselsOnMap } from '../map/vessel_marks.ts';
 import { campaignDays, partyMarker } from '../workspace/party_where.ts';
-import { formatHex, fromGlobal, hexAt, parseHex, SECTOR_ROWS } from '../map/geometry.ts';
+import { formatHex, fromGlobal, hexAt, parseHex, SECTOR_ROWS, stepGlobal, toGlobal, type HexStep } from '../map/geometry.ts';
 import { attachInput, type InputWhy } from '../map/input.ts';
 import { MapRenderer } from '../map/MapRenderer.ts';
 import { dossierRoute, homeRect, targetFor, type DossierRoute } from '../map/routes.ts';
+import { bindBuilder } from '../builder/bind.ts';
+import { subsectorHexes, subsectorLetter, subsectorPath } from '../builder/address.ts';
 import { readMotion, readTheme } from '../map/theme.ts';
 import { tierFor } from '../map/tiers.ts';
 import { TruthClient } from '../map/truth_client.ts';
@@ -32,6 +34,13 @@ import { cancelPick, offerSystem, picking } from '../workspace/pick.ts';
 import { setPlaceSource, type SystemInfo } from '../workspace/place_source.ts';
 import { parseHexKey } from '../workspace/places.ts';
 import { loadSession, session } from '../account/session.ts';
+import { buildReady, discardPreview, setBuildMap } from '../workspace/build/acts.ts';
+import { BUILD_COMMANDS, canBuild, menuFor, runBuild, type BuildCommandId } from '../workspace/build/commands.ts';
+import { keyAt, keysInBox, type SectorPlace } from '../workspace/build/marks.ts';
+import { scopeKeys } from '../workspace/build/scope.ts';
+import { buildStore } from '../workspace/build/seam.ts';
+import { addKeys, build, layOver, plural, SELECTION_CAP, setBuildOn, toggleKey } from '../workspace/build/state.ts';
+import type { Rect as PopRect } from '../workspace/pop_place.ts';
 import {
     cancelFrame,
     devicePixelRatio,
@@ -53,6 +62,30 @@ const accountOpen = ref(false);
 const status = ref('Loading the chart.');
 const versionRef = ref('');
 const manifestRef = ref<TruthManifest | null>(null);
+
+function universeNow() {
+    const row = campaign.status === 'ready' && campaign.universeId
+        ? campaign.universes.find((item) => item.id === campaign.universeId)
+        : null;
+    if (!row) return null;
+    const manifest = manifestRef.value;
+    return {
+        id: row.id,
+        name: row.name,
+        truthVersion: row.truthVersion,
+        seed: manifest ? manifest.seed : null,
+        settings: manifest ? manifest.settings : null,
+    };
+}
+
+const bound = bindBuilder(universeNow);
+
+function addressedScope(): { slug: string; letter: string | null } | null {
+    const view = addressPane(route.path, route.query).view;
+    if (view.kind === 'sector') return { slug: view.sector, letter: null };
+    if (view.kind === 'subsector') return { slug: view.sector, letter: view.letter };
+    return null;
+}
 const omniOpen = ref(false);
 const treeRef = ref<TreeEnvelope | null>(null);
 const treeError = ref(false);
@@ -98,6 +131,24 @@ let panelPx = 0;
 /** When the camera reached the hex being located; null while it is on the way. */
 let locateArrived: number | null = null;
 
+// ---- Build (findings/builder_system_design.md): the marks, the strip and the menu load only when it is on ----
+const BuildMarks = defineAsyncComponent(() => import('../workspace/build/BuildMarks.vue'));
+const BuildStrip = defineAsyncComponent(() => import('../workspace/build/BuildStrip.vue'));
+const BuildMenu = defineAsyncComponent(() => import('../workspace/build/BuildMenu.vue'));
+const mapEl = ref<HTMLElement | null>(null);
+const marksEl = ref<{ place: (cam: Camera, vp: Viewport) => void } | null>(null);
+/** The box being dragged, in canvas pixels. */
+const boxRef = ref<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+/** The right-click menu: where it opened and the hexes it acts on. */
+const menuRef = ref<{ anchor: PopRect; keys: string[] } | null>(null);
+/** The sectors the chart drew last, for the removed hexes among them. */
+const screenSlugs = ref<string[]>([]);
+let boxPointer = -1;
+let unregisterBuild: (() => void) | null = null;
+let unregisterBuildActs: (() => void)[] = [];
+/** The chart's index with the universe's rows laid over it, held until either changes. */
+const laid = new Map<string, { base: SectorIndex; tick: number; index: SectorIndex }>();
+
 const client = new TruthClient({
     cdnBase: import.meta.env.VITE_CDN_BASE || 'https://cdn.traveller.voyage',
     apiBase: pageOrigin(),
@@ -109,14 +160,34 @@ function viewport(): Viewport {
     return { width: el ? el.clientWidth : 0, height: el ? el.clientHeight : 0 };
 }
 
+/** The universe's universe: what the map draws for a sector. With no universe open it is the chart's own index. */
+function mapIndex(slug: string): SectorIndex | null {
+    const base = version ? client.index(version, slug) : null;
+    const store = buildStore();
+    if (!base || !store || !store.universe()) return base;
+    const tick = store.tick();
+    const held = laid.get(slug);
+    if (held && held.base === base && held.tick === tick) return held.index;
+    const index = layOver(base, store.rows(slug));
+    laid.set(slug, { base, tick, index });
+    return index;
+}
+
 function selectionLine(): string {
+    if (buildReady() && build.selection.length > 1) return plural(build.selection.length, 'hex', 'hexes') + ' selected';
     if (!selected || !chart || !version) return '';
-    const index = client.index(version, selected.slug);
+    const index = mapIndex(selected.slug);
     if (!index) return '';
-    const row = index.hexes[selected.hhhh];
-    if (!row) return '';
     let sectorName = selected.slug;
     for (const sector of chart.sectors) if (sector.slug === selected.slug) sectorName = sector.name;
+    const row = index.hexes[selected.hhhh];
+    if (!row) {
+        const store = buildStore();
+        const held = store ? store.row(selected.slug + '/' + selected.hhhh) : null;
+        const kept = held && held.state === 'removed' && held.entry ? held.entry.name : '';
+        if (buildReady() && kept) return kept + ' · ' + sectorName + ' ' + selected.hhhh;
+        return buildReady() ? 'Empty hex · ' + sectorName + ' ' + selected.hhhh : '';
+    }
     return row.name + ' · ' + sectorName + ' ' + selected.hhhh + ' · ' + row.uwp;
 }
 
@@ -158,7 +229,10 @@ function syncSelection(): void {
     } else {
         selected = null;
     }
-    if (renderer) renderer.setSelection(selected);
+    // Many hexes are outlined by the build marks; the single outline would mark only the last one.
+    // The same for a hex being previewed: it is drawn dashed until the system is kept.
+    const marked = buildReady() && (build.selection.length > 1 || build.preview !== null || build.rolling !== '');
+    if (renderer) renderer.setSelection(marked ? null : selected);
 }
 
 function placeKey(state: DossierRoute): string {
@@ -168,7 +242,7 @@ function placeKey(state: DossierRoute): string {
 
 function sectorIndex(slug: string): SectorIndex | null {
     if (!version) return null;
-    return client.index(version, slug);
+    return mapIndex(slug);
 }
 
 function subsectorName(index: SectorIndex, hex: string): string {
@@ -193,20 +267,28 @@ const dossierEntry = computed((): SectorHex | null => {
 const dossierSectorName = computed(() => {
     void dossierTick.value;
     const state = dossier.value;
-    if (state.kind === 'closed') return '';
-    const index = sectorIndex(state.slug);
+    const scope = state.kind === 'closed' ? addressedScope() : null;
+    const slug = state.kind === 'closed' ? (scope ? scope.slug : '') : state.slug;
+    if (!slug) return '';
+    const index = sectorIndex(slug);
     if (index) return index.name;
-    if (!chart) return state.slug;
-    for (const sector of chart.sectors) if (sector.slug === state.slug) return sector.name;
-    return state.slug;
+    if (!chart) return slug;
+    for (const sector of chart.sectors) if (sector.slug === slug) return sector.name;
+    return slug;
 });
 
 const dossierSubsector = computed(() => {
     void dossierTick.value;
     const state = dossier.value;
-    if (state.kind === 'closed') return '';
-    const index = sectorIndex(state.slug);
-    return index ? subsectorName(index, state.hex) : '';
+    if (state.kind !== 'closed') {
+        const index = sectorIndex(state.slug);
+        return index ? subsectorName(index, state.hex) : '';
+    }
+    const scope = addressedScope();
+    if (!scope || !scope.letter) return '';
+    const index = sectorIndex(scope.slug);
+    const hex = subsectorHexes(scope.letter)[0];
+    return index && hex ? subsectorName(index, hex) : 'Subsector ' + scope.letter;
 });
 
 const dossierAllegiances = computed((): AllegianceName[] => {
@@ -261,7 +343,10 @@ function loadDossier(): void {
     }
     pendingSector.value = false;
     const entry = index.hexes[state.hex];
-    if (!entry) {
+    // A system of the builder's: its tree is the universe's object, not the chart's.
+    const store = buildStore();
+    const mine = store && store.universe() ? store.row(key) : null;
+    if (!entry && !(mine && mine.state !== 'removed')) {
         loadedHex = key;
         treeGen += 1;
         missingHex.value = true;
@@ -270,7 +355,20 @@ function loadDossier(): void {
         return;
     }
     missingHex.value = false;
-    if (entry.tree === null) {
+    if (store && mine && mine.state !== 'removed') {
+        if (loadedHex !== key) {
+            treeRef.value = null;
+            treeError.value = false;
+        }
+        loadedHex = key;
+        const ticket = ++treeGen;
+        void store.tree(key).then(
+            (doc) => { if (doc) acceptTree(ticket, key, doc); else rejectTree(ticket); },
+            () => { rejectTree(ticket); },
+        );
+        return;
+    }
+    if (!entry || entry.tree === null) {
         loadedHex = key;
         treeGen += 1;
         treeRef.value = null;
@@ -393,6 +491,21 @@ function onEscape(): void {
         stopLocate();
         return;
     }
+    // Build: the sheet, then a preview, then a many-hex selection, each before the panel.
+    if (buildReady()) {
+        if (build.sheetOpen) {
+            build.sheetOpen = false;
+            return;
+        }
+        if (build.preview || build.rolling) {
+            discardPreview();
+            return;
+        }
+        if (build.selection.length > 1) {
+            build.selection = [];
+            return;
+        }
+    }
     if (omniOpen.value && (campaignOpen.value || dossierShown.value)) return;
     const state = dossierRoute(route.path);
     let bodyOpen = state.kind === 'body';
@@ -453,7 +566,12 @@ function frame(): void {
         const drawn = renderer.draw(cam);
         const el = canvasEl.value;
         if (el) el.dataset.drawMs = drawn.ms.toFixed(2);
-        if (drawn.tier === 'hex' && version) requestIndexes(drawn.sectorsOnScreen);
+        if (drawn.tier === 'hex' && version) {
+            requestIndexes(drawn.sectorsOnScreen);
+            for (const slug of drawn.sectorsOnScreen) bound.load(slug);
+        }
+        if (marksEl.value) marksEl.value.place(cam, viewport());
+        if (build.on && drawn.sectorsOnScreen.join('\n') !== screenSlugs.value.join('\n')) screenSlugs.value = [...drawn.sectorsOnScreen];
         // A title fade is in progress: keep drawing until the renderer says it has settled.
         if (drawn.animating) dirty = true;
     }
@@ -643,7 +761,7 @@ onMounted(() => {
     const el = canvasEl.value;
     if (!el) return;
     renderer = new MapRenderer(el, readTheme(el));
-    renderer.setIndexSource((slug) => (version ? client.index(version, slug) : null));
+    renderer.setIndexSource((slug) => mapIndex(slug));
     observer = new ResizeObserver(() => onResize());
     observer.observe(el);
     stopDpr = onDevicePixelRatioChange(() => onResize());
@@ -695,15 +813,17 @@ onMounted(() => {
                 stopLocate();
                 if (!onWorld) return;
             }
-            if (onWorld) {
+            // A plain click selects one hex: a many-hex selection ends.
+            if (build.selection.length) build.selection = [];
+            // In Build an empty hex can be selected too, where the chart is close enough to show hexes.
+            if (onWorld || (buildReady() && tierFor(cam.ppp) === 'hex')) {
                 const sector = chart ? chart.sectors.find((item) => item.x === place.sx && item.y === place.sy && item.canonical) : null;
-                if (!sector) return;
-                const path = '/s/' + encodeURIComponent(sector.slug) + '/' + hhhh;
-                if (route.path !== path) {
-                    suppressFly = true;
-                    void router.push({ path, query: withQuery(route.query, {}) });
+                if (!sector) {
+                    if (onWorld) return;
+                } else {
+                    openHex(sector.slug + '/' + hhhh);
+                    return;
                 }
-                return;
             }
             if (route.path !== '/' && route.path !== '') {
                 suppressFly = true;
@@ -719,9 +839,16 @@ onMounted(() => {
             const hhhh = formatHex(place.col, place.row);
             const sector = chart ? chart.sectors.find((item) => item.x === place.sx && item.y === place.sy && item.canonical) : null;
             if (!sector || !version) return;
-            const index = client.index(version, sector.slug);
+            const index = mapIndex(sector.slug);
             const entry = index ? index.hexes[hhhh] : null;
-            // No generated system (an incomplete survey, or the index is not in yet): stay on the map.
+            // A system the referee generated is opened from the universe row. The chart is the rest.
+            const store = buildStore();
+            const row = store && store.universe() ? store.row(sector.slug + '/' + hhhh) : null;
+            if (row && row.state === 'removed') return;
+            if (row && row.state !== 'removed') {
+                void router.push({ path: orbitPath(sector.slug, hhhh), query: withQuery(route.query, {}) });
+                return;
+            }
             if (!entry || entry.tree === null) return;
             void router.push({ path: orbitPath(sector.slug, hhhh), query: withQuery(route.query, {}) });
         },
@@ -762,6 +889,17 @@ onMounted(() => {
         run: () => { runSystemPanel(); },
     });
     el.focus();
+    bound.sync();
+    setBuildMap({
+        truth: truthRow,
+        sectorName: sectorNameOf,
+        subsectorName: (hexKey) => {
+            const place = parseHexKey(hexKey);
+            const index = place && version ? client.index(version, place.slug) : null;
+            return place && index ? subsectorName(index, place.hex) : '';
+        },
+        settings: () => (manifestRef.value ? manifestRef.value.settings : null),
+    });
     setPlaceSource({ current: currentSystem, system: systemInfo, bodies: systemBodies });
     applyCampaign();
     void boot();
@@ -772,6 +910,269 @@ watch(
     () => [campaign.status, campaign.seq, campaign.clock ? campaign.clock.days : null, route.query.campaignStandIn] as const,
     () => { applyCampaign(); },
 );
+
+// ---- Build: the switch, the selection, the commands (findings/builder_system_design.md §1) ----
+
+/** Build can be switched on: signed in, with a universe open. */
+const buildOffered = computed(() => session.user !== null && campaign.status === 'ready' && campaign.universeId !== null);
+const buildUniverse = computed(() => {
+    void campaign.universeId;
+    const store = buildStore();
+    return buildOffered.value && store ? store.universe() : null;
+});
+/** The hexes the builder removed among the sectors on screen: a faint outline while Build is on. */
+const removedKeys = computed(() => {
+    const store = buildStore();
+    if (!store || !build.on || !buildUniverse.value) return [];
+    void store.tick();
+    const out: string[] = [];
+    for (const slug of screenSlugs.value) for (const row of store.rows(slug)) if (row.state === 'removed') out.push(row.hexKey);
+    return out;
+});
+/** A sector or a subsector on the address, with its pane showing: its hexes are what Build has selected. */
+function scopeSelection(): string[] {
+    const scope = addressedScope();
+    return scope && dossierShown.value && buildReady() ? scopeKeys(scope) : [];
+}
+const manyKeys = computed(() => {
+    if (!build.on || !buildUniverse.value) return [];
+    return build.selection.length > 1 ? build.selection : scopeSelection();
+});
+const previewKey = computed(() => (build.on && buildUniverse.value ? (build.preview ? build.preview.hexKey : build.rolling) : ''));
+
+function truthRow(hexKey: string): SectorHex | null {
+    const place = parseHexKey(hexKey);
+    const index = place && version ? client.index(version, place.slug) : null;
+    return place && index ? index.hexes[place.hex] ?? null : null;
+}
+
+function sectorNameOf(slug: string): string {
+    if (chart) for (const sector of chart.sectors) if (sector.slug === slug) return sector.name;
+    return slug.replace(/_/g, ' ');
+}
+
+function sectorOf(slug: string): SectorPlace | null {
+    const found = chart ? chart.sectors.find((item) => item.slug === slug) : null;
+    return found ? { slug: found.slug, x: found.x, y: found.y } : null;
+}
+
+function sectorAt(x: number, y: number): string | null {
+    const found = chart ? chart.sectors.find((item) => item.x === x && item.y === y && item.canonical) : null;
+    return found ? found.slug : null;
+}
+
+/** One hex, selected: its page, with the dossier pane open and the camera left alone. */
+function openHex(hexKey: string): void {
+    const place = parseHexKey(hexKey);
+    if (!place) return;
+    const path = '/s/' + encodeURIComponent(place.slug) + '/' + place.hex;
+    if (route.path === path && dossierShown.value) return;
+    suppressFly = true;
+    void router.push({ path, query: withQuery(route.query, { panel: null, record: null }) });
+}
+
+/** The hexes a build act takes: the many-hex selection, else the one hex selected, pane open or shut. */
+function actingKeys(): string[] {
+    const picked = pickedKeys();
+    return picked.length ? picked : scopeSelection();
+}
+
+/** What was picked by hand: the many-hex selection, else the one hex selected. A box or a Shift+click adds to this, never to a whole sector. */
+function pickedKeys(): string[] {
+    if (build.selection.length > 1) return build.selection;
+    return selected ? [selected.slug + '/' + selected.hhhh] : [];
+}
+
+/**
+ * Generate and Generate with… open the selected hex when the pane is shut, so the
+ * preview or the sheet can be seen. The watcher that drops a preview on shut stays.
+ */
+function runBuildAct(id: string, keys: readonly string[]): void {
+    if ((id === 'build-generate' || id === 'build-generate-with') && !dossierShown.value && keys.length === 1) {
+        openHex(keys[0]);
+    }
+    runBuild(id as BuildCommandId, keys);
+}
+
+/** A new many-hex selection: two or more are held; one is simply that hex; none is nothing. */
+function selectKeys(keys: string[], anchor: string): void {
+    if (build.preview || build.rolling) discardPreview();
+    build.sheetOpen = false;
+    build.error = '';
+    if (keys.length <= 1) {
+        build.selection = [];
+        if (keys.length === 1) openHex(keys[0]);
+        return;
+    }
+    build.selection = keys;
+    // A hand-picked set has no hex address. One subsector, or one sector, is the pane.
+    openScope(scopePath(keys, anchor));
+}
+
+function scopePath(keys: readonly string[], anchor: string): string {
+    const places: { slug: string; hex: string }[] = [];
+    for (const key of keys) {
+        const place = parseHexKey(key);
+        if (place) places.push(place);
+    }
+    if (!places.length) return route.path;
+    const slug = places[0].slug;
+    const oneSector = places.every((place) => place.slug === slug);
+    const focus = parseHexKey(keys.includes(anchor) ? anchor : keys[keys.length - 1]);
+    const sectorSlug = oneSector ? slug : (focus ? focus.slug : slug);
+    if (oneSector) {
+        const letters = new Set(places.map((place) => subsectorLetter(place.hex)));
+        if (letters.size === 1) {
+            const letter = [...letters][0];
+            if (letter) return subsectorPath(sectorSlug, letter);
+        }
+    }
+    return '/s/' + encodeURIComponent(sectorSlug);
+}
+
+function openScope(path: string): void {
+    if (route.path === path && dossierShown.value) return;
+    suppressFly = true;
+    void router.push({ path, query: withQuery(route.query, { panel: null, record: null }) });
+}
+
+function canvasPoint(event: PointerEvent | MouseEvent): { x: number; y: number } | null {
+    const el = canvasEl.value;
+    if (!el || event.target !== el) return null;
+    const box = el.getBoundingClientRect();
+    return { x: event.clientX - box.left, y: event.clientY - box.top };
+}
+
+/**
+ * Shift, or the Select hexes switch: the press belongs to the selection and the chart does
+ * not pan. Taken in the capture phase, so the chart's own pointer handling never sees it.
+ */
+function onBuildDown(event: PointerEvent): void {
+    if (!buildReady() || event.button !== 0 || !(event.shiftKey || build.selecting)) return;
+    if (tierFor(cam.ppp) !== 'hex') return;
+    const point = canvasPoint(event);
+    if (!point || !canvasEl.value) return;
+    event.stopPropagation();
+    event.preventDefault();
+    canvasEl.value.setPointerCapture(event.pointerId);
+    canvasEl.value.focus();
+    boxPointer = event.pointerId;
+    boxRef.value = { x0: point.x, y0: point.y, x1: point.x, y1: point.y };
+}
+
+function onBuildMove(event: PointerEvent): void {
+    const box = boxRef.value;
+    if (!box || event.pointerId !== boxPointer || !canvasEl.value) return;
+    const rect = canvasEl.value.getBoundingClientRect();
+    boxRef.value = { x0: box.x0, y0: box.y0, x1: event.clientX - rect.left, y1: event.clientY - rect.top };
+}
+
+function onBuildUp(event: PointerEvent): void {
+    const box = boxRef.value;
+    if (!box || event.pointerId !== boxPointer) return;
+    boxRef.value = null;
+    boxPointer = -1;
+    const held = pickedKeys();
+    const moved = Math.hypot(box.x1 - box.x0, box.y1 - box.y0) > 4;
+    if (!moved) {
+        const key = keyAt(cam, viewport(), box.x1, box.y1, sectorAt);
+        if (key) selectKeys(toggleKey(held, key), key);
+        return;
+    }
+    const inside = keysInBox(cam, viewport(), { x: box.x0, y: box.y0 }, { x: box.x1, y: box.y1 }, sectorAt, SELECTION_CAP);
+    const next = addKeys(held, inside);
+    if (next.over) showToast('A selection holds at most ' + SELECTION_CAP.toLocaleString('en') + ' hexes.');
+    if (inside.length) selectKeys(next.keys, inside[inside.length - 1]);
+}
+
+/** Right-click in Build: the acts for the hex under the pointer, or for the selection it is part of. */
+function onBuildMenu(event: MouseEvent): void {
+    if (!buildReady()) return;
+    const point = canvasPoint(event);
+    if (!point) return;
+    event.preventDefault();
+    if (tierFor(cam.ppp) !== 'hex') return;
+    const key = keyAt(cam, viewport(), point.x, point.y, sectorAt);
+    if (!key) return;
+    let keys = pickedKeys();
+    if (!keys.includes(key)) {
+        build.selection = [];
+        openHex(key);
+        keys = [key];
+    }
+    menuRef.value = { anchor: { left: event.clientX, top: event.clientY, right: event.clientX, bottom: event.clientY }, keys };
+}
+
+const buildMenu = computed(() => (menuRef.value ? menuFor(menuRef.value.keys) : null));
+
+function pickBuildMenu(id: string): void {
+    const keys = menuRef.value ? menuRef.value.keys : [];
+    closeBuildMenu();
+    if (id !== 'build-edit') runBuildAct(id, keys);
+}
+
+function closeBuildMenu(): void {
+    menuRef.value = null;
+    if (canvasEl.value) canvasEl.value.focus();
+}
+
+function setStripWidth(px: number): void {
+    if (!mapEl.value) return;
+    if (px > 0) mapEl.value.style.setProperty('--build-strip', px + 8 + 'px');
+    else mapEl.value.style.removeProperty('--build-strip');
+}
+
+function toggleBuild(): void {
+    accountOpen.value = false;
+    setBuildOn(!build.on);
+}
+
+// The switch itself is a command only where Build can be had; the acts only while it is on.
+watch(buildOffered, (offered) => {
+    if (unregisterBuild) unregisterBuild();
+    unregisterBuild = offered
+        ? registerCommand({ id: 'build', name: 'Build: on or off', keys: ['b'], run: () => { toggleBuild(); } })
+        : null;
+}, { immediate: true });
+
+watch(() => build.on && buildOffered.value, (on) => {
+    for (const remove of unregisterBuildActs) remove();
+    unregisterBuildActs = on
+        ? BUILD_COMMANDS.map((item) => registerCommand({
+            id: item.id,
+            name: item.name,
+            ...(item.keys ? { keys: [...item.keys] } : {}),
+            runnable: () => canBuild(item.id, actingKeys()),
+            run: () => { runBuildAct(item.id, actingKeys()); },
+        }))
+        : [];
+    if (!on) menuRef.value = null;
+}, { immediate: true });
+
+// Anything of the universe's map changed, or the selection did: the chart and the pane follow.
+watch(
+    () => {
+        const store = buildStore();
+        return [store ? store.tick() : 0, build.on, buildUniverse.value ? buildUniverse.value.id : '', build.selection.length, previewKey.value] as const;
+    },
+    () => {
+        if (!chart) return;
+        syncSelection();
+        loadDossier();
+        showStatus();
+        markDirty();
+    },
+);
+
+watch(marksEl, () => { markDirty(); });
+
+// The pane was shut: a many-hex selection and a preview go with it.
+watch(dossierShown, (shown) => {
+    if (shown) return;
+    if (build.selection.length) build.selection = [];
+    if (build.preview || build.rolling) discardPreview();
+    build.sheetOpen = false;
+});
 
 function applyCampaign(): void {
     if (!renderer) return;
@@ -947,7 +1348,7 @@ function holdsWorld(sx: number, sy: number, hhhh: string): boolean {
     const sector = chart.sectors.find((item) => item.x === sx && item.y === sy && item.canonical);
     if (!sector) return false;
     if (tierFor(cam.ppp) === 'hex' && version) {
-        const index = client.index(version, sector.slug);
+        const index = mapIndex(sector.slug);
         if (index) return Object.prototype.hasOwnProperty.call(index.hexes, hhhh);
     }
     if (!overview) return false;
@@ -967,13 +1368,72 @@ function goHome(): void {
     }
 }
 
+/** U I O are the three neighbours above; N M , are the three below. Shift grows the selection. */
+const NEIGHBOUR_KEY: Record<string, HexStep> = {
+    KeyU: 'nw',
+    KeyI: 'n',
+    KeyO: 'ne',
+    KeyN: 'sw',
+    KeyM: 's',
+    Comma: 'se',
+};
+
+function typingTarget(event: KeyboardEvent): boolean {
+    const target = event.target;
+    if (!target || typeof target !== 'object') return false;
+    const tag = 'tagName' in target ? String(target.tagName) : '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+    return 'isContentEditable' in target && target.isContentEditable === true;
+}
+
+/** The hex a neighbour step leaves from: the last of a many-hex selection, else the one selected. */
+function selectionAnchor(): string | null {
+    if (build.selection.length) return build.selection[build.selection.length - 1];
+    return selected ? selected.slug + '/' + selected.hhhh : null;
+}
+
+function neighbourOf(hexKey: string, step: HexStep): string | null {
+    const place = parseHexKey(hexKey);
+    if (!place) return null;
+    const local = parseHex(place.hex);
+    const sector = sectorOf(place.slug);
+    if (!local || !sector) return null;
+    const here = toGlobal(sector.x, sector.y, local.col, local.row);
+    const stepped = stepGlobal(here.q, here.r, step);
+    const next = fromGlobal(stepped.q, stepped.r);
+    const slug = sectorAt(next.sx, next.sy);
+    if (!slug) return null;
+    return slug + '/' + formatHex(next.col, next.row);
+}
+
+function moveSelection(step: HexStep, grow: boolean): void {
+    const anchor = selectionAnchor();
+    if (!anchor) return;
+    const key = neighbourOf(anchor, step);
+    if (!key) return;
+    if (!grow) {
+        selectKeys([key], key);
+        return;
+    }
+    const added = addKeys(pickedKeys(), [key]);
+    if (added.over) showToast('A selection holds at most ' + SELECTION_CAP.toLocaleString('en') + ' hexes.');
+    selectKeys(added.keys, key);
+}
+
 function onMapKey(event: KeyboardEvent): void {
+    const step = NEIGHBOUR_KEY[event.code];
+    if (step && buildReady() && selectionAnchor() && !event.ctrlKey && !event.altKey && !event.metaKey && !typingTarget(event)) {
+        event.preventDefault();
+        moveSelection(step, event.shiftKey);
+        return;
+    }
     handleKey(event);
 }
 
 /** The host paints the panes. This view only says what the dossier is showing. */
 function publishFrame(): void {
     const state = dossier.value;
+    const scope = state.kind === 'closed' ? addressedScope() : null;
     const placed = state.kind === 'closed' ? null : state;
     setFrame({
         kind: 'map',
@@ -985,7 +1445,7 @@ function publishFrame(): void {
         focusSystem: () => { if (railEl.value) railEl.value.focusSystem(); },
         key: onMapKey,
         dossier: {
-            slug: placed ? placed.slug : '',
+            slug: placed ? placed.slug : (scope ? scope.slug : ''),
             hex: placed ? placed.hex : '',
             sectorName: dossierSectorName.value,
             subsectorName: dossierSubsector.value,
@@ -1019,7 +1479,26 @@ watch(
     { immediate: true },
 );
 
+watch(
+    () => {
+        const id = campaign.status === 'ready' ? campaign.universeId : '';
+        return [id ?? '', manifestRef.value ? manifestRef.value.seed : ''] as const;
+    },
+    () => {
+        bound.sync();
+        const scope = addressedScope();
+        if (scope) bound.load(scope.slug);
+    },
+);
+
 watch(() => route.path, () => {
+    // A preview, the sheet and a failed roll's words belong to the hex they were asked on.
+    const here = placeKey(dossierRoute(route.path));
+    if ((build.preview && build.preview.hexKey !== here) || (build.rolling && build.rolling !== here)) discardPreview();
+    if (build.selection.length <= 1) {
+        build.sheetOpen = false;
+        build.error = '';
+    }
     sawQuery = false;
     // A locate belongs to the page it was asked from.
     if (locating.recordId) stopLocate();
@@ -1046,6 +1525,10 @@ onBeforeUnmount(() => {
     if (unregisterSystem) unregisterSystem();
     if (unregisterCampaign) unregisterCampaign();
     if (unregisterLocate) unregisterLocate();
+    if (unregisterBuild) unregisterBuild();
+    for (const remove of unregisterBuildActs) remove();
+    setBuildMap(null);
+    bound.close();
     setPlaceSource(null);
     setFrame(null);
     if (locating.recordId) stopLocate();
@@ -1053,15 +1536,43 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="map" @keydown="onMapKey">
-    <canvas ref="canvasEl" tabindex="0"></canvas>
+  <div
+    ref="mapEl"
+    class="map"
+    @keydown="onMapKey"
+    @pointerdown.capture="onBuildDown"
+    @pointermove.capture="onBuildMove"
+    @pointerup.capture="onBuildUp"
+    @pointercancel.capture="onBuildUp"
+    @contextmenu="onBuildMenu"
+  >
+    <canvas ref="canvasEl" tabindex="0" :class="{ 'is-selecting': build.on && build.selecting }"></canvas>
+    <BuildMarks
+      v-if="build.on && buildUniverse"
+      ref="marksEl"
+      :many="manyKeys"
+      :preview="previewKey"
+      :removed="removedKeys"
+      :sector-of="sectorOf"
+      :box="boxRef"
+    />
     <Rail
       ref="railEl"
       :panel-open="dossierShown"
       :search-open="omniOpen"
       :campaign-open="campaignOpen"
       :account-open="accountOpen"
+      :build-offered="buildOffered"
+      :build-on="build.on && buildOffered"
     />
+    <BuildStrip
+      v-if="build.on && buildUniverse"
+      :name="buildUniverse.name"
+      :truth-version="buildUniverse.truthVersion"
+      @clear="build.selection = []"
+      @width="setStripWidth"
+    />
+    <BuildMenu v-if="menuRef && buildMenu" :title="buildMenu.title" :items="buildMenu.items" :anchor="menuRef.anchor" @pick="pickBuildMenu" @close="closeBuildMenu" />
     <OmniBox :version="versionRef" :manifest="manifestRef" @open="omniOpen = $event" />
     <StardateChip @open="openDateEditor" />
     <AccountMenu :open="accountOpen" @close="closeAccount" @campaign="openCampaignFromMenu" />
@@ -1091,6 +1602,10 @@ onBeforeUnmount(() => {
   outline: 1px solid var(--signal);
   outline-offset: -1px;
 }
+/* Select hexes is on: a drag draws a box. */
+.map > canvas.is-selecting {
+  cursor: crosshair;
+}
 /* A toast sits on the chart beside the panel, above the status line: it covers no control. */
 .map {
   --toast-left: calc(var(--rail-width) + max(var(--chrome-inset), var(--panel-width, 0px)));
@@ -1100,7 +1615,7 @@ onBeforeUnmount(() => {
 /* The panel covers the chart: the toast goes to the search row, right of the search field. */
 .map[data-toasts="top"] {
   --toast-top: var(--chrome-top);
-  --toast-right: var(--chrome-inset);
+  --toast-right: calc(var(--chrome-inset) + var(--build-strip, 0px));
   --toast-bottom: auto;
   --toast-left: calc(var(--rail-width) + var(--chrome-inset) + 452px + 220px);
   --toast-flow: row-reverse;

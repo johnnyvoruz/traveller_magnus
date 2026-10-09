@@ -787,7 +787,7 @@ import { MgT2EMath } from './mgt2e_math.js';
 
             // 1. Base Atmosphere Code
             writeLogLine("--- ATMOSPHERE PHYSICS ---");
-            let isMainworldLocked = (w.type === 'Mainworld' && mainworldBase && mainworldBase.atm !== undefined);
+            let isMainworldLocked = ((w.type === 'Mainworld' || w.isLunarMainworld === true) && mainworldBase && mainworldBase.atm !== undefined); // a lunar mainworld runs as a faux 'Satellite'; lock it too
             let isAtmSeeded = !isMainworldLocked && Array.isArray(w._manualFields) && w._manualFields.includes('atmCode') && w.atmCode !== undefined;
 
             if ((w.size === 'S' || w.size === 0 || w.size === 1) && !isMainworldLocked && !isAtmSeeded) {
@@ -1415,7 +1415,7 @@ import { MgT2EMath } from './mgt2e_math.js';
             tSection('Hydrographics');
             const _seedHydro = Array.isArray(w._manualFields) && w._manualFields.includes('hydroCode') && w.hydroCode !== undefined ? w.hydroCode : undefined;
             w.hydroCode = 0;
-            if (w.type === 'Mainworld' && mainworldBase && mainworldBase.hydro !== undefined) {
+            if ((w.type === 'Mainworld' || w.isLunarMainworld === true) && mainworldBase && mainworldBase.hydro !== undefined) {
                 tSkip('Mainworld Hydro Inherited');
                 w.hydroCode = mainworldBase.hydro;
             } else if (_seedHydro !== undefined) {
@@ -1426,8 +1426,8 @@ import { MgT2EMath } from './mgt2e_math.js';
                 const extremeAtmDM = MgT2EData.extremeAtmosphereHydroDM;
                 if (extremeAtmDM.triggerAtmospheres.includes(w.atmCode)) { tDM('Desert Atm', extremeAtmDM.modifier); hMod += extremeAtmDM.modifier; }
                 const thermalDMs = MgT2EData.rollModifiers.thermalHydro;
-                if (tempBand === "Hot" && w.atmCode !== 13) { tDM('Hot', thermalDMs.Hot); hMod += thermalDMs.Hot; }
-                if (tempBand === "Boiling" && w.atmCode !== 13) { tDM('Boiling', thermalDMs.Boiling); hMod += thermalDMs.Boiling; }
+                const thermalExempt = w.atmCode === 13 || (w.atmCode === 15 && Array.isArray(w.gases) && w.gases.includes('Panthalassic')); // reference: no DM for Atm D or a Panthalassic F
+                if ((tempBand === "Hot" || tempBand === "Boiling") && !thermalExempt) { tDM(tempBand, thermalDMs[tempBand]); hMod += thermalDMs[tempBand]; }
 
                 w.hydroCode = Math.max(0, Math.min(10, tRoll2D('Hydro Roll') - 7 + w.atmCode + hMod));
                 tDM('Atm Mod', w.atmCode);

@@ -21,6 +21,8 @@ const props = defineProps<{
     counts?: Record<string, number>;
     /** This system's key, "slug/hhhh". Locate is offered only beside the map. */
     hexKey?: string;
+    /** Build is on: Explore orbits is a plain button, so the pane has one filled control. */
+    plainOrbit?: boolean;
 }>();
 
 defineEmits<{
@@ -59,7 +61,8 @@ function toggleLocate(): void {
         <button
           v-if="model.tree"
           type="button"
-          class="ui-btn is-primary"
+          class="ui-btn"
+          :class="{ 'is-primary': !plainOrbit }"
           title="Open orbit view for this system (or double-click it on the map)"
           @click="$emit('orbit')"
         >
@@ -99,7 +102,8 @@ function toggleLocate(): void {
           <button
             v-if="orbitLink && model.tree"
             type="button"
-            class="ui-btn is-primary"
+            class="ui-btn"
+            :class="{ 'is-primary': !plainOrbit }"
             title="Open orbit view for this system (or double-click it on the map)"
             @click="$emit('orbit')"
           >

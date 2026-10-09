@@ -9,9 +9,23 @@ import { TSV } from '../golden/cases.js';
 import { loadLegacy } from '../oracle/legacy.js';
 import { withEngineRng } from '../golden/rng_lock.js';
 import { createRequire } from 'node:module';
+import fs from 'node:fs';
 
 const require = createRequire(import.meta.url);
 const engineVersion = require('../../packages/engines/package.json').version;
+// Engine 1.1.0 corrects MgT2E rules the legacy oracle still breaks (findings/engine_1_1_0_rule_fixes.md).
+// Every resulting difference is listed exactly, path by path, with both values. No masks.
+const DEVIATIONS = JSON.parse(fs.readFileSync(new URL('./parity_deviations_1.1.0.json', import.meta.url), 'utf8'));
+
+function allDiffs(a, b, path, out = []) {
+    if (Object.is(a, b)) return out;
+    if (a && b && typeof a === 'object' && typeof b === 'object' && Array.isArray(a) === Array.isArray(b)) {
+        for (const key of [...new Set([...Object.keys(a), ...Object.keys(b)])].sort()) allDiffs(a[key], b[key], `${path}.${key}`, out);
+        return out;
+    }
+    out.push({ path, legacy: a, got: b });
+    return out;
+}
 
 function namePool() {
     const pool = [];
@@ -88,10 +102,14 @@ test('MgT2E flesh Spinward_Marches/1910 matches the oracle', async () => {
         const got = stripHexViewState(envelope.body);
         const oracleJson = stable(maskCompanionOrbitID(oracleBody));
         const gotJson = stable(maskCompanionOrbitID(got));
-        if (oracleJson !== gotJson) {
+        assert.equal(DEVIATIONS.engineVersion, engineVersion, 'the deviation ledger is for another engine version');
+        const diffs = JSON.parse(JSON.stringify(allDiffs(JSON.parse(oracleJson), JSON.parse(gotJson), '$')));
+        const listed = new Set(DEVIATIONS.diffs.map((d) => stable(d)));
+        const unlisted = diffs.find((d) => !listed.has(stable(d)));
+        if (unlisted) {
             const diff = firstDiff(JSON.parse(oracleJson), JSON.parse(gotJson), '$');
-            assert.fail(`${diff ? diff.path : '$'}\noracle: ${stable(diff ? diff.legacy : oracleBody)}\ngot: ${stable(diff ? diff.got : got)}`);
+            assert.fail(`unlisted deviation ${unlisted.path}\noracle: ${stable(unlisted.legacy)}\ngot: ${stable(unlisted.got)}\n(first diff ${diff ? diff.path : '$'})`);
         }
-        assert.equal(gotJson, oracleJson);
+        assert.deepEqual(diffs, DEVIATIONS.diffs);
     });
 });

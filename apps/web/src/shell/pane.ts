@@ -12,6 +12,7 @@ export type Query = Record<string, unknown>;
 export type PaneView =
     | { kind: 'home' }
     | { kind: 'sector'; sector: string }
+    | { kind: 'subsector'; sector: string; letter: string }
     | { kind: 'map'; sector: string; hex: string; body: string | null }
     | { kind: 'orbit'; sector: string; hex: string; body: string | null }
     | { kind: 'page' };
@@ -64,6 +65,9 @@ function viewOf(parts: string[]): PaneView {
     if (parts[0] !== 's' || !parts[1]) return { kind: 'page' };
     const sector = decode(parts[1]);
     if (parts.length === 2) return { kind: 'sector', sector };
+    if (parts.length === 4 && parts[2] === 'sub' && /^[A-P]$/.test(decode(parts[3]))) {
+        return { kind: 'subsector', sector, letter: decode(parts[3]) };
+    }
     const hex = decode(parts[2]);
     if (parts.length === 3) return { kind: 'map', sector, hex, body: null };
     if (parts.length === 5 && parts[3] === 'b' && parts[4]) {
@@ -88,7 +92,7 @@ function campaignPane(parts: string[]): Pane | null {
 }
 
 function dossierDefault(view: PaneView): boolean {
-    return view.kind === 'map' || view.kind === 'orbit';
+    return view.kind === 'map' || view.kind === 'orbit' || view.kind === 'sector' || view.kind === 'subsector';
 }
 
 function paneFromQuery(view: PaneView, query: Query): Pane {
@@ -171,6 +175,7 @@ export function escapePane(path: string, query: Query = {}): { path: string; que
     }
     if (pane.kind !== 'dossier') return null;
     const view = address.view;
+    if (view.kind === 'sector' || view.kind === 'subsector') return atPane(path, query, { kind: 'shut' });
     if (view.kind !== 'map' && view.kind !== 'orbit') return null;
     if (view.body) {
         const base = '/s/' + encodeURIComponent(view.sector) + '/' + view.hex;

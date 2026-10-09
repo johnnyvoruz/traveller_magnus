@@ -234,6 +234,14 @@ accounts and journals.
      finishes the leg and an edited route begins at its end. A mid-flight change needs a
      rule from Johnny first: the supplied formula is from rest to rest, and a ship under
      way is moving.
+- **The road after the character MVP (Johnny, 2026-10-08).** The Builder next (Slice 2
+  above, taken in this order: system CRUD, subsector CRUD, sector CRUD, areas and lanes:
+  "everything we would need to create homebrew content"), then the marketplace, then
+  accounts, "including major cleanup of the account window" (the account menu today is
+  one flat list: campaigns, new, rename, delete, export, import, Characters, Go to the
+  party, Sign out). Kickoff: `prompts/builder_kickoff.md`.
+- **Campaign backlog (Johnny, 2026-10-08): the party supports more than one ship.**
+  Today `settings.party.vesselId` is a single vessel.
 - **Surface map backlog (Johnny, 2026-10-08): the ice caps.** On the dossier's unfolded
   surface map (Enhanced, "Water, ice from 50°") the ice is a hard horizontal band across
   the top and bottom rows that cuts straight through land and sea, with patchy white

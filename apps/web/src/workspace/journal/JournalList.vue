@@ -3,7 +3,7 @@
  * The journal list (journal design §2). Newest first is the store's order. The kind chips
  * are a radio: Left and Right move, Space chooses. Search matches the stored title and body, and a token's label.
  */
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { CampaignEntryKind } from '@voyage/shared';
 import { campaign } from '../../campaign/store.ts';
 import { deleteEntry, entriesAtHex, entriesNewestFirst } from '../../campaign/journal.ts';
@@ -12,7 +12,12 @@ import { locating, startLocate, stopLocate } from '../locate.ts';
 import { placeSource } from '../place_source.ts';
 import { hexKeyOf, hexWords } from '../places.ts';
 import { resolveAnchor } from '../party.ts';
-import { emptyKind, filterEntries, filterWord, kindCounts, KIND_ORDER, rowFace, type KindFilter } from './list.ts';
+import { emptyKind, filterEntries, filterWord, kindCounts, KIND_ORDER, rowFace, visibleRange, type KindFilter } from './list.ts';
+
+/** How long a search waits before the list is filtered again. */
+const SEARCH_WAIT = 150;
+/** A row's height before one has been measured. The window corrects on the next scroll. */
+const ROW_FALLBACK = 72;
 
 const props = defineProps<{
     selected: string | null;
@@ -28,6 +33,8 @@ const emit = defineEmits<{
 }>();
 
 const query = ref('');
+/** The query the list is filtered by. Typing updates it after SEARCH_WAIT. */
+const needle = ref('');
 const filter = ref<KindFilter>('all');
 const menuOpen = ref(false);
 const searchEl = ref<HTMLInputElement | null>(null);
@@ -35,6 +42,13 @@ const listEl = ref<HTMLElement | null>(null);
 const typesEl = ref<HTMLElement | null>(null);
 const here = ref<{ hexKey: string; label: string; name: string } | null>(null);
 const atHere = ref(false);
+const scrollTop = ref(0);
+const viewHeight = ref(0);
+const listTop = ref(0);
+const rowHeight = ref(ROW_FALLBACK);
+
+let searchWait: ReturnType<typeof setTimeout> | null = null;
+let scrollEl: HTMLElement | null = null;
 
 const all = computed(() => {
     void campaign.seq;
@@ -60,11 +74,21 @@ function nameOf(target: string): string | null {
     return null;
 }
 
-const rows = computed(() => filterEntries(all.value, { kind: filter.value, query: query.value, hexIds: hexIds.value, nameOf }));
+const rows = computed(() => filterEntries(all.value, { kind: filter.value, query: needle.value, hexIds: hexIds.value, nameOf }));
 const faces = computed(() => {
     const records = campaign.records;
     return rows.value.map((entry) => rowFace(entry, records, nameOf));
 });
+const range = computed(() => visibleRange(
+    faces.value.length,
+    scrollTop.value - listTop.value,
+    viewHeight.value || 640,
+    rowHeight.value,
+));
+const shown = computed(() => faces.value.slice(range.value.start, range.value.end));
+const padBefore = computed(() => range.value.start * rowHeight.value);
+const padAfter = computed(() => Math.max(0, (faces.value.length - range.value.end) * rowHeight.value));
+
 const places = computed(() => {
     const found = new Map<string, string>();
     for (const entry of rows.value) {
@@ -81,15 +105,78 @@ function readHere(): void {
     if (!here.value) atHere.value = false;
 }
 
-onMounted(readHere);
+onMounted(() => {
+    readHere();
+    void nextTick(bindScroll);
+});
+onBeforeUnmount(() => {
+    if (searchWait) clearTimeout(searchWait);
+    if (scrollEl) scrollEl.removeEventListener('scroll', readScroll);
+});
 watch(() => campaign.seq, readHere);
+watch(rows, () => { void nextTick(bindScroll); });
 
 const first = computed(() => all.value.length === 0);
-const kindEmpty = computed(() => (rows.value.length === 0 && !query.value.trim() ? emptyKind(filter.value) : null));
+const kindEmpty = computed(() => (rows.value.length === 0 && !needle.value.trim() ? emptyKind(filter.value) : null));
+
+function readScroll(): void {
+    if (!scrollEl) return;
+    scrollTop.value = scrollEl.scrollTop;
+    viewHeight.value = scrollEl.clientHeight;
+    const list = listEl.value;
+    if (!list) return;
+    const listRect = list.getBoundingClientRect();
+    const scrollRect = scrollEl.getBoundingClientRect();
+    listTop.value = listRect.top - scrollRect.top + scrollEl.scrollTop;
+    const row = list.querySelector<HTMLElement>(':scope > li:not(.jn-pad)');
+    if (row) {
+        const height = row.getBoundingClientRect().height;
+        if (height > 0 && Math.abs(height - rowHeight.value) > 1) rowHeight.value = height;
+    }
+}
+
+function bindScroll(): void {
+    const list = listEl.value;
+    const next = list ? list.closest<HTMLElement>('.panel-body') : null;
+    if (next === scrollEl) {
+        readScroll();
+        return;
+    }
+    if (scrollEl) scrollEl.removeEventListener('scroll', readScroll);
+    scrollEl = next;
+    if (scrollEl) scrollEl.addEventListener('scroll', readScroll, { passive: true });
+    readScroll();
+}
+
+watch(query, (value) => {
+    if (searchWait) clearTimeout(searchWait);
+    searchWait = null;
+    if (!value.trim()) {
+        needle.value = '';
+        return;
+    }
+    searchWait = setTimeout(() => {
+        searchWait = null;
+        needle.value = value;
+    }, SEARCH_WAIT);
+});
+
+watch(shown, () => { void nextTick(readScroll); });
 
 function make(kind: CampaignEntryKind): void {
     if (props.readOnly) return;
     emit('create', kind);
+}
+
+function reveal(index: number): void {
+    const scroller = scrollEl;
+    const list = listEl.value;
+    if (!scroller || !list || index < 0) return;
+    const top = listTop.value + index * rowHeight.value;
+    const bottom = top + rowHeight.value;
+    if (top < scroller.scrollTop) scroller.scrollTop = top;
+    else if (bottom > scroller.scrollTop + scroller.clientHeight) scroller.scrollTop = bottom - scroller.clientHeight;
+    readScroll();
 }
 
 function locateRow(id: string): void {
@@ -100,7 +187,8 @@ function locateRow(id: string): void {
         return;
     }
     emit('map');
-    startLocate(id, hexKey, () => {
+    reveal(faces.value.findIndex((face) => face.id === id));
+    void nextTick(() => startLocate(id, hexKey, () => {
         if (!listEl.value) return null;
         for (const el of listEl.value.querySelectorAll<HTMLElement>('.camp-locate')) {
             if (el.dataset.id !== id) continue;
@@ -108,11 +196,7 @@ function locateRow(id: string): void {
             return box.height > 0 ? box.top + box.height / 2 : null;
         }
         return null;
-    });
-}
-
-function rowButtons(): HTMLElement[] {
-    return listEl.value ? Array.from(listEl.value.querySelectorAll<HTMLElement>('.camp-row')) : [];
+    }));
 }
 
 function focusUndo(): void {
@@ -122,17 +206,27 @@ function focusUndo(): void {
     });
 }
 
+function focusRow(index: number): void {
+    if (index < 0) {
+        if (searchEl.value) searchEl.value.focus();
+        return;
+    }
+    const face = faces.value[index];
+    if (!face) return;
+    reveal(index);
+    void nextTick(() => {
+        const button = listEl.value?.querySelector<HTMLElement>('.camp-row[data-id="' + face.id + '"]');
+        if (button) button.focus();
+        if (props.follow) emit('open', face.id);
+    });
+}
+
 function onRowKey(event: KeyboardEvent, id: string): void {
-    const buttons = rowButtons();
-    const at = buttons.indexOf(event.currentTarget as HTMLElement);
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-        const next = buttons[at + (event.key === 'ArrowDown' ? 1 : -1)];
         event.preventDefault();
         event.stopPropagation();
-        if (next) {
-            next.focus();
-            if (props.follow && next.dataset.id) emit('open', next.dataset.id);
-        } else if (event.key === 'ArrowUp' && searchEl.value) searchEl.value.focus();
+        const at = faces.value.findIndex((face) => face.id === id);
+        focusRow(at + (event.key === 'ArrowDown' ? 1 : -1));
         return;
     }
     if (event.key === 'Enter') {
@@ -169,12 +263,9 @@ function onListKey(event: KeyboardEvent): void {
 
 function onSearchKey(event: KeyboardEvent): void {
     if (event.key === 'ArrowDown') {
-        const buttons = rowButtons();
-        if (buttons[0]) {
-            event.preventDefault();
-            buttons[0].focus();
-        }
+        event.preventDefault();
         event.stopPropagation();
+        focusRow(0);
         return;
     }
     if (event.key === 'Escape' && query.value) {
@@ -283,8 +374,8 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
         </button>
       </div>
 
-      <p v-if="query.trim() && rows.length === 0" class="jn-none">
-        No entries match "{{ query.trim() }}".
+      <p v-if="needle.trim() && rows.length === 0" class="jn-none">
+        No entries match "{{ needle.trim() }}".
         <button type="button" class="ui-btn" @click="query = ''">Clear the search</button>
       </p>
       <p v-else-if="kindEmpty" class="jn-none">
@@ -294,7 +385,8 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
       <p v-else-if="rows.length === 0" class="jn-none">No entries here.</p>
 
       <ul v-else ref="listEl" class="camp-rows" aria-label="Journal">
-        <li v-for="face in faces" :key="face.id" :class="{ 'has-locate': places.has(face.id) }">
+        <li v-if="padBefore > 0" class="jn-pad" aria-hidden="true" :style="{ height: padBefore + 'px' }"></li>
+        <li v-for="face in shown" :key="face.id" :class="{ 'has-locate': places.has(face.id) }">
           <button
             type="button"
             class="camp-row"
@@ -326,6 +418,7 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
             <Icon name="location-crosshairs" :size="13" />
           </button>
         </li>
+        <li v-if="padAfter > 0" class="jn-pad" aria-hidden="true" :style="{ height: padAfter + 'px' }"></li>
       </ul>
     </template>
   </div>
@@ -358,6 +451,12 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
 .jn-kind {
   flex: 0 0 auto;
   margin-left: auto;
+}
+
+.jn-pad {
+  margin: 0;
+  padding: 0;
+  border: 0;
 }
 
 .jn-none {
