@@ -281,7 +281,7 @@ watch(() => props.id, greet, { immediate: true });
 
     <section class="jn-body-block">
       <h3 class="ui-heading">Entry</h3>
-      <JournalBody ref="bodyField" :value="entry.body" :disabled="readOnly" :name-of="nameOf" @save="saveBody" @open="openPart" />
+      <JournalBody ref="bodyField" :value="entry.body" :disabled="readOnly" :records="campaign.records" :name-of="nameOf" @save="saveBody" @open="openPart" />
     </section>
 
     <footer class="rec-foot">

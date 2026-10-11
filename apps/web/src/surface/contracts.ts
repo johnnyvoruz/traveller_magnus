@@ -1,4 +1,5 @@
 /** Request and result shapes shared by both surface modes. No painter lives here. */
+import type { HybridWorld } from './hybrid/inputs.ts';
 
 export type SurfaceMode = 'vanilla' | 'enhanced';
 
@@ -134,6 +135,9 @@ export type EnhancedSea = {
 /** Plain inputs for the enhanced sheet: the vanilla ones (the same continents) and the sea. */
 export type EnhancedPaintInputs = VanillaPaintInputs & { readonly sea: EnhancedSea };
 
+/** Plain inputs for the hybrid sheet (surface/hybrid): the world's data, read on the page. */
+export type HybridPaintInputs = { readonly world: HybridWorld };
+
 export type SurfaceWorkerMessage = {
     readonly version: typeof SURFACE_MESSAGE_VERSION;
     readonly requestId: string;
@@ -143,6 +147,8 @@ export type SurfaceWorkerMessage = {
     readonly inputs?: VanillaPaintInputs;
     /** Present on an enhanced map request: the worker then paints the enhanced sheet. */
     readonly enhanced?: EnhancedPaintInputs;
+    /** Present on a hybrid map request (the enhanced mode's map): the worker paints the hybrid sheet. */
+    readonly hybrid?: HybridPaintInputs;
 };
 
 export type SurfaceWorkerReply = {

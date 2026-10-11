@@ -390,7 +390,9 @@ export function planSystem(sys: Bag, hexKey: string): Plan {
             portPeriod: highportPeriodYears(raw),
         };
         worlds.push(world);
-        if (star >= 0) (sets[star] as PlanWorld[]).push(world);
+        // A body with no stored distance is listed and not drawn. P-Type names the two
+        // stars; it does not invent an au, and au 0 would sit on the star.
+        if (star >= 0 && world.au > 0) (sets[star] as PlanWorld[]).push(world);
     }
 
     // js/system_viewer.js:2785-2791.

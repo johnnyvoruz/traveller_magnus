@@ -4,6 +4,7 @@
  * Vanilla never calls this.
  */
 import { surfaceProfile, type ProfileLook } from '../profile.ts';
+import { liquidByName } from './liquids.ts';
 
 type Body = Record<string, any>;
 
@@ -22,11 +23,20 @@ export function knownSurfaceWord(body: Body | null | undefined): string | null {
     return typeof band === 'string' && band !== '' ? band : null;
 }
 
-/** How the enhanced sea treats liquidStatus. 'data' means the field is absent or known. */
+/**
+ * How the enhanced sea treats liquidStatus. 'data' means the field is absent or known.
+ * An unresolved or unknown status whose liquidType is water (Water or Ice), another liquid of
+ * the table, or empty is drawn from the data as well: a sea of water is never painted as the
+ * unknown exotic liquid. Only an unresolved status naming a liquid nobody knows is 'unresolved'.
+ */
 export function liquidLook(body: Body | null | undefined): ProfileLook['sea'] {
     const status = body ? statusOf(body.liquidStatus) : null;
     if (status === 'none') return 'none';
-    if (status === 'unresolved' || status === 'unknown') return 'unresolved';
+    if (status === 'unresolved' || status === 'unknown') {
+        const named = body && typeof body.liquidType === 'string' ? body.liquidType.trim() : '';
+        if (named === '' || named === 'Ice' || liquidByName(named)) return 'data';
+        return 'unresolved';
+    }
     return 'data';
 }
 

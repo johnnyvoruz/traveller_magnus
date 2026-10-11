@@ -79,6 +79,26 @@ test('the 33rd index drops the least recently read one', async () => {
     assert.equal(client.index('v2', 's32').slug, 's32');
 });
 
+test('opening an own sector makes no request under truth/', async () => {
+    const urls = [];
+    const client = new TruthClient({
+        cdnBase: 'https://cdn.example',
+        apiBase: 'https://api.example',
+        fetch: async (url) => {
+            urls.push(String(url));
+            return jsonResponse(200, { slug: 'x', hexes: {}, systems: 0 });
+        },
+    });
+    const own = '~01M4JVP1EXES5VA79JXG9F5NHM';
+    client.want('v5', [own, '~slot_40_40']);
+    await flush();
+    assert.deepEqual(urls, []);
+    assert.equal(client.index('v5', own), null);
+    client.want('v5', ['Spinward_Marches']);
+    await flush();
+    assert.deepEqual(urls, ['https://cdn.example/truth/v5/sectors/Spinward_Marches/index.json']);
+});
+
 test('a 404 does not poison later calls', async () => {
     let calls = 0;
     const client = new TruthClient({

@@ -18,6 +18,21 @@ export function attachInput(el: HTMLElement, api: {
     click(sx: number, sy: number): void;
     /** A double click at a canvas point. Each of its two clicks has already been reported. */
     doubleClick?(sx: number, sy: number): void;
+    /**
+     * Build (findings/builder_system_design.md §18): a press that draws a box, or acts on one
+     * hex, instead of moving the chart. Absent, or when `wants` says no, every drag moves
+     * the chart as it always has. A second finger ends the box and the two fingers move the chart.
+     */
+    box?: {
+        wants(event: PointerEvent): boolean;
+        start(sx: number, sy: number, event: PointerEvent): void;
+        move(sx: number, sy: number): void;
+        /** `moved` is false for a press that stayed where it began. */
+        end(sx: number, sy: number, moved: boolean): void;
+        cancel(): void;
+    };
+    /** A drag that moves the chart has begun (true) or ended (false): the cursor says so. */
+    panning?(on: boolean): void;
 }): () => void {
     el.style.touchAction = 'none';
 
@@ -33,6 +48,10 @@ export function attachInput(el: HTMLElement, api: {
     let pinchStart = { x: 0, y: 0, dist: 1 };
     let motionGen = 0;
     let motionFrame = 0;
+    /** The press under way draws a box (api.box) and does not move the chart. */
+    let boxing = false;
+    /** The press under way has moved the chart far enough to be a drag. */
+    let panned = false;
 
     function local(clientX: number, clientY: number): { x: number; y: number } {
         const rect = el.getBoundingClientRect();
@@ -92,7 +111,14 @@ export function attachInput(el: HTMLElement, api: {
             vx = 0;
             vy = 0;
             startCam = null;
+            panned = false;
+            boxing = api.box ? api.box.wants(event) : false;
+            if (boxing && api.box) api.box.start(point.x, point.y, event);
         } else if (pointers.size === 2) {
+            if (boxing && api.box) {
+                boxing = false;
+                api.box.cancel();
+            }
             pinched = true;
             startCam = api.getCamera();
             pinchStart = pinchOf();
@@ -114,6 +140,15 @@ export function attachInput(el: HTMLElement, api: {
             return;
         }
         if (pointers.size !== 1) return;
+        if (boxing && api.box) {
+            last = point;
+            api.box.move(point.x, point.y);
+            return;
+        }
+        if (!panned && api.panning && Math.hypot(point.x - origin.x, point.y - origin.y) > CLICK_PX) {
+            panned = true;
+            api.panning(true);
+        }
         const dx = point.x - last.x;
         const dy = point.y - last.y;
         const t = now();
@@ -126,6 +161,9 @@ export function attachInput(el: HTMLElement, api: {
         lastT = t;
         api.setCamera(panBy(api.getCamera(), -dx, -dy), 'drag');
     }
+
+    /** The last click on the chart. A second click that lands on the dossier still counts. */
+    let armed: { at: number; x: number; y: number } | null = null;
 
     function onUp(event: PointerEvent): void {
         const wasTracked = pointers.delete(event.pointerId);
@@ -142,13 +180,43 @@ export function attachInput(el: HTMLElement, api: {
         if (pointers.size > 1) return;
         const point = local(event.clientX, event.clientY);
         const dist = Math.hypot(point.x - origin.x, point.y - origin.y);
+        if (panned) {
+            panned = false;
+            if (api.panning) api.panning(false);
+        }
+        if (boxing && api.box) {
+            boxing = false;
+            if (event.type === 'pointercancel') api.box.cancel();
+            else api.box.end(point.x, point.y, dist > CLICK_PX);
+            return;
+        }
         const elapsed = now() - downAt;
         const motion = readMotion(el);
         if (!pinched && dist <= CLICK_PX && elapsed <= motion.tBase * 1000) {
+            armed = { at: now(), x: point.x, y: point.y };
             api.click(point.x, point.y);
             return;
         }
         if (!pinched && now() - lastT <= 100) inertia();
+    }
+
+    /**
+     * The dossier pane sits over the left of the chart. A double-click whose second
+     * press lands on that pane never reaches the canvas, so the native dblclick is lost.
+     * Capture sees that press and repeats the chart click as a double-click.
+     */
+    function onWindowUp(event: PointerEvent): void {
+        if (!armed || !api.doubleClick) return;
+        const target = event.target;
+        if (target instanceof Node && (target === el || el.contains(target))) return;
+        const held = armed;
+        const motion = readMotion(el);
+        const point = local(event.clientX, event.clientY);
+        const recent = now() - held.at <= motion.tBase * 1000;
+        const near = Math.hypot(point.x - held.x, point.y - held.y) <= CLICK_PX;
+        armed = null;
+        if (!recent || !near) return;
+        api.doubleClick(held.x, held.y);
     }
 
     function onWheel(event: WheelEvent): void {
@@ -196,6 +264,7 @@ export function attachInput(el: HTMLElement, api: {
     }
 
     function onDouble(event: MouseEvent): void {
+        armed = null;
         if (!api.doubleClick) return;
         const point = local(event.clientX, event.clientY);
         api.doubleClick(point.x, point.y);
@@ -208,9 +277,11 @@ export function attachInput(el: HTMLElement, api: {
     el.addEventListener('wheel', onWheel, { passive: false });
     el.addEventListener('keydown', onKey);
     el.addEventListener('dblclick', onDouble);
+    addEventListener('pointerup', onWindowUp, true);
 
     return () => {
         cancelMotion();
+        removeEventListener('pointerup', onWindowUp, true);
         el.removeEventListener('pointerdown', onDown);
         el.removeEventListener('pointermove', onMove);
         el.removeEventListener('pointerup', onUp);

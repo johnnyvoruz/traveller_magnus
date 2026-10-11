@@ -67,11 +67,60 @@ export type BuildStore = {
     undo(token: UndoToken): Promise<void>;
 };
 
+// ---- step 3: the referee's own sectors, and a system designed by hand ------------------------------
+
+/** A place on the grid of sectors. */
+export type Slot = { x: number; y: number };
+
+/** A sector the referee made (packages/shared `RefereeSector`), as the screens read it. */
+export type OwnSector = { id: string; slot: Slot; name: string; subsectors: string[]; rev: number };
+
+/**
+ * What one Undo of a sector act puts back. Opaque to the screens. `toRev` is the revision
+ * whose stored copy returns; `atRev` is the revision the act made, and the Undo applies only
+ * while the sector still stands there.
+ */
+export type SectorUndoToken = { id: string; toRev: number; atRev: number };
+
+/**
+ * The referee's sectors of the open universe, and the two calls a hand-designed system needs
+ * beside its draft. Answered by Agent A's store (`builder/sectors.ts`, `Builder.sectors()`).
+ */
+export type OwnSectors = {
+    /** A number that changes whenever a sector does; reactive. */
+    tick(): number;
+    /** False until the first list has arrived. */
+    loaded(): boolean;
+    list(): OwnSector[];
+    get(id: string): OwnSector | null;
+    make(name: string, slot: Slot): Promise<OwnSector>;
+    rename(id: string, name: string): Promise<SectorUndoToken>;
+    move(id: string, slot: Slot): Promise<SectorUndoToken>;
+    /** The sector and its hexes go; the server keeps a copy first. */
+    remove(id: string): Promise<SectorUndoToken>;
+    /** An empty name clears it. */
+    renameSubsector(id: string, letter: string, name: string): Promise<SectorUndoToken>;
+    undo(token: SectorUndoToken): Promise<void>;
+    /** Whether the stored system is designed by hand; null when the hex holds none. */
+    formMode(hexKey: string): Promise<'hand' | 'generated' | null>;
+    /** The stored system (or the chart's, at rev 0) becomes a hand-designed one. The returned call puts the earlier version back. */
+    designByHand(hexKey: string, baseRev: number): Promise<() => Promise<void>>;
+};
+
 /**
  * Held in a ref: the store is opened after the screens are (when the universe is known), and a
  * screen that asked for it while it was null must hear when it arrives.
  */
 const current = shallowRef<BuildStore | null>(null);
+const sectors = shallowRef<OwnSectors | null>(null);
+
+export function useOwnSectors(store: OwnSectors | null): void {
+    sectors.value = store;
+}
+
+export function ownSectors(): OwnSectors | null {
+    return sectors.value;
+}
 
 export function useBuildStore(store: BuildStore | null): void {
     current.value = store;

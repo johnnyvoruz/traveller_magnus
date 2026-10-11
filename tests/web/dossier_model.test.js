@@ -9,7 +9,7 @@ import { buildSector } from '@voyage/generation';
 import { environmentPolicy, reconcileTree } from '../../packages/engines/src/reconcile_environment.js';
 import { TRUTH_SEED, TRUTH_SETTINGS } from '../../tools/truth/settings.js';
 import { celsiusOf, fahrenheitOf, formatKelvin, formatTempFull, wholeDegrees } from '../../apps/web/src/design/units.ts';
-import { bodyKeys, bodyModel, climateDisplay, liquidDisplay, mainworldProfile, overviewModel, pickSystem, rowFor } from '../../apps/web/src/dossier/model.ts';
+import { bodyKeys, bodyModel, climateDisplay, liquidDisplay, mainworldProfile, overviewModel, pickSystem, rowFor, sectorPlace } from '../../apps/web/src/dossier/model.ts';
 import { cardFor } from '../../apps/web/src/orbit/card.ts';
 import { planSystem } from '../../apps/web/src/orbit/layout.ts';
 
@@ -69,6 +69,17 @@ test('Regina overview and Caesillian 0914 partial follow the inspector', async (
     assert.equal(model.header.title, 'Regina system');
     assert.equal(model.header.name, 'Regina');
     assert.equal(model.header.place, 'Spinward Marches - Regina');
+    assert.equal(sectorPlace('Far Home', ''), 'Far Home');
+    assert.equal(sectorPlace('  Far Home  ', '   '), 'Far Home');
+    assert.equal(sectorPlace('', 'Regina'), 'Regina');
+    assert.equal(overviewModel({
+        sectorName: 'Far Home',
+        subsectorName: '',
+        hex: '1910',
+        entry: regina,
+        tree,
+        allegiances: marches.index.metadata.allegiances,
+    }).header.place, 'Far Home');
     assert.equal(model.ribbon.kind, 'cells');
     const digits = model.ribbon.cells.map((cell) => cell.digit);
     assert.equal(digits.slice(0, 7).join(' ') + ' ' + model.ribbon.dash + ' ' + digits[7], 'A 7 8 8 8 9 9 - C');

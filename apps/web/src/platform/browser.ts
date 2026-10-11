@@ -233,3 +233,20 @@ export function observeLongTasks(fn: (duration: number) => void, buffered = true
         return () => {};
     }
 }
+
+/** GET a JSON document from this site. Rejects on a network error or a non-2xx status. */
+export async function fetchJson(url: string): Promise<unknown> {
+    const response = await fetch(url, { credentials: 'same-origin' });
+    if (!response.ok) throw new Error(url + ': HTTP ' + response.status);
+    return response.json();
+}
+
+/** Load an image; resolves null when it fails. */
+export function loadImageAsync(src: string): Promise<HTMLImageElement | null> {
+    return new Promise((resolve) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = () => resolve(null);
+        image.src = src;
+    });
+}

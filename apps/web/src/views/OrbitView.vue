@@ -53,7 +53,10 @@ import {
 import OrbitCanvas from '../orbit/OrbitCanvas.vue';
 import OrbitHeader from '../orbit/OrbitHeader.vue';
 import { detectSystem, normalizeSystem } from '../orbit/system.ts';
+import { presentTree } from '../orbit/hand_present.ts';
+import { treeAsk } from '../orbit/tree_source.ts';
 import TimeControls from '../orbit/TimeControls.vue';
+import { noteDriverState, registerClockDriver } from '../orbit/sim_clock.ts';
 import { cancelFrame, nextFrame, now, observeSize, pageOrigin } from '../platform/browser.ts';
 import { nextTick } from 'vue';
 import { askPaneEscape, setFrame } from '../shell/frame.ts';
@@ -63,6 +66,8 @@ import { loadSession, session } from '../account/session.ts';
 import { campaign, setCampaignDate } from '../campaign/store.ts';
 import { bindBuilder, builderEpoch } from '../builder/bind.ts';
 import { buildStore } from '../workspace/build/seam.ts';
+import { isOwnSlug } from '../workspace/build/sectors.ts';
+import type { OwnSector } from '../workspace/build/seam.ts';
 import { dismissToast, showToast } from '../shell/toast.ts';
 import { ensureCampaign } from '../workspace/opening.ts';
 import { sameDay, stardate } from '../workspace/stardate.ts';
@@ -139,6 +144,23 @@ function universeNow() {
 
 const bound = bindBuilder(universeNow);
 
+/** The referee's sector on this address, once its list has landed. Null for a charted sector. */
+function refereeSector(): OwnSector | null {
+    if (!isOwnSlug(slug.value)) return null;
+    const map = bound.builder();
+    if (!map) return null;
+    const sectors = map.sectors();
+    void sectors.tick();
+    return sectors.get(slug.value);
+}
+
+function openSectors(): void {
+    const map = bound.builder();
+    if (!map) return;
+    const sectors = map.sectors();
+    if (!sectors.loaded()) void sectors.load().catch(() => undefined);
+}
+
 const entry = computed((): SectorHex | null => {
     void builderEpoch.value;
     const store = buildStore();
@@ -165,10 +187,13 @@ const allegiances = computed((): AllegianceName[] => {
 });
 
 const overview = computed(() => {
-    if (!index.value || !entry.value) return null;
+    if (!entry.value) return null;
+    const own = refereeSector();
+    const letter = subsectorLetter(hex.value);
+    const ownSub = own && letter ? (own.subsectors[letter.charCodeAt(0) - 65] ?? '') : '';
     return overviewModel({
-        sectorName: index.value.name,
-        subsectorName: subsectorName.value,
+        sectorName: own ? own.name : (index.value ? index.value.name : slug.value.replace(/_/g, ' ')),
+        subsectorName: own ? ownSub : subsectorName.value,
         hex: hex.value,
         entry: entry.value,
         tree: treeError.value ? null : tree.value,
@@ -201,18 +226,26 @@ const searchPlan = computed(() => (system.value ? planSystem(system.value, hexKe
  * loading, ready, nodata (no document, or one with no bodies), unsupported (an edition the
  * orbit model does not read yet), missing (no such world), failed.
  */
+const noWorlds = computed(() => {
+    const worlds = system.value && Array.isArray(system.value.worlds) ? system.value.worlds : [];
+    return worlds.every((world: { type?: string }) => !world || world.type === 'Empty');
+});
+
 const state = computed(() => {
     if (versionError.value || treeError.value) return 'failed';
     void builderEpoch.value;
     const map = bound.builder();
-    if (map && map.universe() && slug.value && !map.sectorLoaded(slug.value)) return 'loading';
-    if (!index.value) return 'loading';
-    const row = map && map.universe() ? map.row(slug.value + '/' + hex.value) : null;
+    const universe = map ? map.universe() : null;
+    if (map && universe && slug.value && !map.sectorLoaded(slug.value)) return 'loading';
+    const row = map && universe ? map.row(slug.value + '/' + hex.value) : null;
     if (row && row.state === 'removed') return 'missing';
     const held = row && row.state !== 'removed' && row.treeHash;
+    // The chart index is how an unedited hex is known. A universe row already answers that.
+    if (!index.value && !held) return 'loading';
     if (!entry.value && !held) return 'missing';
     if (entry.value && entry.value.tree === null && !held) return 'nodata';
     if (!tree.value) return 'loading';
+    if (nothingToDraw(tree.value.body)) return 'empty';
     if (system.value) return 'ready';
     if (!chips.value.length) return 'nodata';
     return 'unsupported';
@@ -220,55 +253,84 @@ const state = computed(() => {
 
 const title = computed(() => (overview.value ? overview.value.header.title : hex.value));
 const hexChip = computed(() => (overview.value ? overview.value.header.hexChip : ''));
-const place = computed(() => (overview.value ? overview.value.header.place : slug.value.replace(/_/g, ' ')));
+const place = computed(() => {
+    const line = overview.value ? overview.value.header.place : '';
+    return line || slug.value.replace(/_/g, ' ');
+});
 
 const age = computed(() => {
     if (!tree.value) return '';
     const system = pickSystem(tree.value.body);
-    // js/system_viewer.js:1672: the age in Gyr at two decimals, 0 when the system has none.
-    return system ? formatDisplayNumber(system.age || 0, 2) + ' Gyr' : '';
+    const years = system ? system.age : undefined;
+    // A stored age is shown. A document that has none, such as a system designed by hand, shows nothing.
+    if (typeof years !== 'number' || !Number.isFinite(years)) return '';
+    return formatDisplayNumber(years, 2) + ' Gyr';
 });
+
+function nothingToDraw(body: unknown): boolean {
+    if (!body || typeof body !== 'object') return false;
+    const hand = (body as { handSystem?: { stars?: unknown[]; worlds?: unknown[] } }).handSystem;
+    if (!hand) return false;
+    return (hand.stars?.length ?? 0) === 0 && (hand.worlds?.length ?? 0) === 0;
+}
+
+function taken(doc: unknown): TreeEnvelope | null {
+    const presented = presentTree(doc);
+    return presented && typeof presented === 'object' ? presented as TreeEnvelope : null;
+}
+
+function chartHash(): string | null {
+    const listed = index.value ? index.value.hexes[hex.value] : null;
+    return listed && typeof listed.tree === 'string' ? listed.tree : null;
+}
 
 function loadTree(): void {
     const map = bound.builder();
     const key = slug.value + '/' + hex.value;
-    if (map && map.universe()) {
-        if (!map.sectorLoaded(slug.value)) {
-            treeTicket += 1;
-            tree.value = null;
-            bound.load(slug.value);
-            return;
-        }
-        const row = map.row(key);
-        if (row && row.state !== 'removed') {
-            const ticket = ++treeTicket;
-            void map.tree(key).then(
-                (doc) => {
-                    if (ticket !== treeTicket) return;
-                    tree.value = doc as TreeEnvelope | null;
-                    treeError.value = doc == null;
-                },
-                () => { if (ticket === treeTicket) { tree.value = null; treeError.value = true; } },
-            );
-            return;
-        }
-    }
-    const found = entry.value;
-    if (!found || found.tree === null) {
+    const universe = map ? map.universe() : null;
+    const loaded = !!(universe && map && map.sectorLoaded(slug.value));
+    const ask = treeAsk({
+        universeId: universe ? universe.id : null,
+        sectorLoaded: loaded,
+        row: loaded && map ? map.row(key) : null,
+        chartHash: chartHash(),
+    });
+    if (ask.kind === 'wait') {
         treeTicket += 1;
         tree.value = null;
+        treeError.value = false;
+        bound.load(slug.value);
         return;
     }
-    const cached = client.treeNow(found.tree);
+    if (ask.kind === 'removed' || ask.kind === 'none') {
+        treeTicket += 1;
+        tree.value = null;
+        treeError.value = false;
+        return;
+    }
+    if (ask.kind === 'private' && map) {
+        const ticket = ++treeTicket;
+        void map.tree(key).then(
+            (doc) => {
+                if (ticket !== treeTicket) return;
+                tree.value = taken(doc);
+                treeError.value = doc == null;
+            },
+            () => { if (ticket === treeTicket) { tree.value = null; treeError.value = true; } },
+        );
+        return;
+    }
+    if (ask.kind !== 'public') return;
+    const cached = client.treeNow(ask.hash);
     if (cached) {
         treeTicket += 1;
-        tree.value = cached;
+        tree.value = taken(cached);
         treeError.value = false;
         return;
     }
     const ticket = ++treeTicket;
-    void client.tree(found.tree).then(
-        (doc) => { if (ticket === treeTicket) { tree.value = doc; treeError.value = false; } },
+    void client.tree(ask.hash).then(
+        (doc) => { if (ticket === treeTicket) { tree.value = taken(doc); treeError.value = false; } },
         () => { if (ticket === treeTicket) { tree.value = null; treeError.value = true; } },
     );
 }
@@ -342,6 +404,8 @@ function setDays(next: number): void {
     days = next;
     show();
 }
+
+watch([paused, speed], () => { noteDriverState(!paused.value, speed.value); });
 
 function togglePlay(): void {
     shuttle.value = 0;
@@ -1470,6 +1534,7 @@ watch(
     },
     () => {
         bound.sync();
+        openSectors();
         loadTree();
     },
 );
@@ -1479,6 +1544,15 @@ watch(() => [session.user, version.value] as const, () => { void ensureCampaign(
 
 onMounted(() => {
     bound.sync();
+    openSectors();
+    // While this view is open the surface map's time bar steers this clock (orbit/sim_clock.ts).
+    unregister.push(registerClockDriver({
+        setDays: (next) => { moved = true; shuttle.value = 0; setDays(next); writeLink(); },
+        setPlaying: (playing) => { shuttle.value = 0; paused.value = !playing; if (!playing) writeLink(); },
+        setRate: (rate) => { speed.value = rate; },
+        playing: () => !paused.value,
+        rate: () => speed.value,
+    }));
     // A visit that starts in the orbit view still learns who is signed in, after its first frame.
     nextFrame(() => { void loadSession(); });
     stopArrive = client.onArrive(() => { arrivals.value += 1; });
@@ -1542,7 +1616,14 @@ onMounted(() => {
     void load();
 });
 
+function ownSubName(sector: OwnSector): string {
+    const letter = subsectorLetter(hex.value);
+    if (!letter) return '';
+    return sector.subsectors[letter.charCodeAt(0) - 65] ?? '';
+}
+
 function publishFrame(): void {
+    const ownNow = refereeSector();
     setFrame({
         kind: 'orbit',
         panelTop: 'var(--chrome-inset)',
@@ -1555,8 +1636,8 @@ function publishFrame(): void {
         dossier: {
             slug: slug.value,
             hex: hex.value,
-            sectorName: index.value ? index.value.name : '',
-            subsectorName: subsectorName.value,
+            sectorName: ownNow ? ownNow.name : (index.value ? index.value.name : ''),
+            subsectorName: ownNow ? ownSubName(ownNow) : subsectorName.value,
             entry: entry.value,
             tree: tree.value,
             bodyKey: selectedKey.value,
@@ -1580,6 +1661,7 @@ watch(
         treeError.value,
         selectedKey.value,
         subsectorName.value,
+        refereeSector(),
         missing.value,
         allegiances.value,
     ] as const,
@@ -1848,7 +1930,11 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
           </template>
           <template v-else-if="state === 'unsupported'">
             <p>No orbit picture for this system yet.</p>
-            <p class="orbit-note-sub">It was generated under {{ edition || 'another edition' }}; the picture reads Mongoose 2nd edition systems for now. Its bodies and their dossier are below.</p>
+            <p class="orbit-note-sub">It was generated under {{ edition || 'another edition' }}, which this picture does not read yet. Its bodies and their dossier are below.</p>
+          </template>
+          <template v-else-if="state === 'empty'">
+            <p>This system has nothing to draw.</p>
+            <p class="orbit-note-sub">It has no stars and no worlds.</p>
           </template>
           <template v-else-if="state === 'nodata'">
             <p>No orbit data for this world.</p>
@@ -1867,6 +1953,7 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
             </div>
           </template>
         </div>
+        <p v-if="state === 'ready' && noWorlds" class="orbit-empty-worlds" role="status">No worlds in this system.</p>
         <BodyChips
           v-if="chips.length"
           class="orbit-stage-chips"
@@ -2108,6 +2195,16 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
 
 .orbit-note-actions .orbit-btn {
   margin-top: 0;
+}
+
+.orbit-empty-worlds {
+  position: relative;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0 var(--sp-4) var(--sp-2);
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
 }
 
 .orbit-stage-chips {

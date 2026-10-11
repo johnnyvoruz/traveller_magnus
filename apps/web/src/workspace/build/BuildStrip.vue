@@ -4,15 +4,22 @@
  * hexes switch, and how many are selected (findings/builder_system_design.md §1). It stands
  * at the top right: the legacy place, right of the search field, holds the campaign date.
  */
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import Icon from '../../design/Icon.vue';
 import { observeSize } from '../../platform/browser.ts';
-import { build } from './state.ts';
+import { tallyOf } from './acts.ts';
+import { build, SELECTION_CAP } from './state.ts';
 
 defineProps<{ name: string; truthVersion: string | null }>();
 const emit = defineEmits<{ clear: []; width: [px: number] }>();
 
 const root = ref<HTMLElement | null>(null);
+/** The selection, counted: how many, how many of them are empty, and whether the cap is reached (§18 item 9). */
+const count = computed(() => {
+    const keys = build.selection;
+    if (keys.length < 2) return null;
+    return { n: keys.length.toLocaleString('en'), empty: tallyOf(keys).empty.length, full: keys.length >= SELECTION_CAP };
+});
 let stop: (() => void) | null = null;
 
 onMounted(() => {
@@ -38,13 +45,17 @@ onBeforeUnmount(() => {
       class="ui-btn"
       data-command="build-select"
       :aria-pressed="build.selecting ? 'true' : 'false'"
-      title="Select hexes: drag a box on the chart (S). Shift+drag does the same at any time."
+      title="Select hexes (S): a plain drag draws a box. Shift+drag does the same at any time"
       @click="build.selecting = !build.selecting"
     >
       <Icon name="table-cells" :size="13" />Select hexes<kbd class="build-key">S</kbd>
     </button>
-    <button v-if="build.selection.length > 1" type="button" class="ui-btn build-strip-count" title="Clear the selection (Esc)" @click="$emit('clear')">
-      <b>{{ build.selection.length }}</b>selected<Icon name="xmark" :size="12" />
+    <span v-if="build.selecting" class="build-strip-say" role="status">Drag draws a box · Alt takes away · Space+drag moves the map · Esc when done</span>
+    <span v-if="count" class="build-strip-tally" role="status">
+      <b>{{ count.n }}</b> hexes<template v-if="count.full"> · the most one selection holds</template><template v-else> · {{ count.empty }} empty</template>
+    </span>
+    <button v-if="count" type="button" class="ui-btn build-strip-count" title="Clear the selection (Esc)" @click="$emit('clear')">
+      Clear<Icon name="xmark" :size="12" />
     </button>
   </div>
 </template>
@@ -104,9 +115,18 @@ onBeforeUnmount(() => {
   color: var(--signal);
 }
 
-.build-strip-count b {
+.build-strip-say,
+.build-strip-tally {
+  overflow: hidden;
+  color: var(--text-muted);
+  font: 400 12.5px/1.3 var(--font-text);
+  text-overflow: ellipsis;
+}
+
+.build-strip-tally b {
   color: var(--signal);
-  font: 700 12px/1 var(--font-code);
+  font: 700 12.5px/1 var(--font-code);
+  font-variant-numeric: var(--tabular);
 }
 
 /* A narrow window: the universe's name gives way; the controls stay whole. */
@@ -119,6 +139,11 @@ onBeforeUnmount(() => {
   }
 
   .build-strip-who em {
+    display: none;
+  }
+
+  /* The words for the tool give way first: the switch itself says it is on. */
+  .build-strip-say {
     display: none;
   }
 }

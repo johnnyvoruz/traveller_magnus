@@ -13,8 +13,8 @@ const HASH = 'ab'.repeat(32);
 const HASH2 = 'cd'.repeat(32);
 const STAMP = '2026-10-08T00:00:00.000Z';
 
-function field(id, value, permission = 'type', kind = 'text') {
-    return { id, label: id, kind, permission, value, options: [] };
+function field(id, value, permission = 'type', kind = 'text', label = id) {
+    return { id, label, kind, permission, value, options: [] };
 }
 
 function form(fields, edition = 'MgT2E') {
@@ -341,7 +341,7 @@ test('Keep waits for a save already in flight and uses the rev it applied', asyn
 test('a conflict offers the server row and the next Keep uses its rev', async () => {
     clearToasts();
     let conflicted = true;
-    const current = row({ rev: 4, treeHash: HASH2 });
+    const current = row({ rev: 4, treeHash: HASH });
     const fetchImpl = fake((call) => {
         if (call.url.includes('/hexes?')) return json({ items: [row()], nextCursor: null });
         if (call.url.endsWith('/form')) return json(read());
@@ -355,7 +355,7 @@ test('a conflict offers the server row and the next Keep uses its rev', async ()
             assert.equal(call.body.baseRev, 4);
             assert.equal(call.body.hash, HASH);
             assert.deepEqual(call.body.changes, [{ id: 'name.system', value: 'Mine' }]);
-            return json(row({ rev: 5, treeHash: HASH2 }));
+            return json(row({ rev: 5, treeHash: HASH }));
         }
         throw new Error('unexpected ' + call.url);
     });
@@ -366,8 +366,9 @@ test('a conflict offers the server row and the next Keep uses its rev', async ()
     const first = await draft.keep();
     assert.equal(first, null);
     assert.equal(draft.dirty.value, true);
+    assert.equal(draft.replaced.value, false);
     assert.equal(draft.conflict.value.rev, 4);
-    assert.equal(draft.conflict.value.treeHash, HASH2);
+    assert.equal(draft.conflict.value.treeHash, HASH);
     assert.equal(map.row(KEY).rev, 4);
     assert.equal(toasts.length, 0);
     const second = await draft.keep();
@@ -375,6 +376,190 @@ test('a conflict offers the server row and the next Keep uses its rev', async ()
     assert.equal(draft.dirty.value, false);
     assert.equal(draft.conflict.value, null);
     assert.equal(map.row(KEY).rev, 5);
+    map.close();
+});
+
+test('Keep mine re-reads the newer tree and does not resend the old hash', async () => {
+    const newer = [
+        field('name.system', 'Theirs', 'type', 'text', 'Name'),
+        field('system.age', 4, 'roll', 'number', 'Age'),
+    ];
+    let forms = 0;
+    const fetchImpl = fake((call) => {
+        if (call.url.includes('/hexes?')) return json({ items: [row()], nextCursor: null });
+        if (call.url.endsWith('/form')) {
+            forms += 1;
+            if (forms === 1) {
+                return json(read([
+                    field('name.system', 'Regina', 'type', 'text', 'Name'),
+                    field('profile.s', 5, 'type', 'number', 'Size'),
+                    field('system.age', 4, 'roll', 'number', 'Age'),
+                ]));
+            }
+            return json({ hash: HASH2, form: form(newer) });
+        }
+        if (call.url.endsWith('/draft')) {
+            if (call.body.hash === HASH2) {
+                assert.deepEqual(call.body.changes, [{ id: 'name.system', value: 'Mine' }]);
+                assert.deepEqual(call.body.roll, [{ id: 'system.age' }]);
+                return json(answer(
+                    [field('name.system', 'Mine', 'type', 'text', 'Name'), field('system.age', 9, 'roll', 'number', 'Age')],
+                    [{ id: 'system.age', why: 'Rolled again.' }],
+                ));
+            }
+            return json(answer([field('name.system', 'Mine', 'type', 'text', 'Name')]));
+        }
+        if (call.url.endsWith('/keep')) {
+            if (call.body.hash === HASH) return fail(409, 'The hex changed.', { current: row({ rev: 4, treeHash: HASH2 }) });
+            assert.equal(call.body.hash, HASH2);
+            assert.equal(call.body.baseRev, 4);
+            assert.deepEqual(call.body.changes, [{ id: 'name.system', value: 'Mine' }]);
+            return json(row({ rev: 5, treeHash: HASH2 }));
+        }
+        throw new Error('unexpected ' + call.url);
+    });
+    const map = open(fetchImpl, clock());
+    await map.loadSector('spin');
+    const draft = await map.openDraft(KEY);
+    draft.set('name.system', 'Mine');
+    draft.set('profile.s', 8);
+    draft.rollAgain('system.age');
+    draft.rollAgain('body.2');
+    const blocked = await draft.keep();
+    assert.equal(blocked, null);
+    assert.equal(draft.replaced.value, true);
+    const again = await draft.keep();
+    assert.equal(again, null);
+    assert.equal(posts(fetchImpl).filter((call) => call.url.endsWith('/keep')).length, 1);
+    await draft.keepMine();
+    assert.equal(draft.replaced.value, false);
+    assert.equal(draft.conflict.value, null);
+    assert.equal(draft.dirty.value, true);
+    assert.deepEqual(draft.dropped.value, [
+        { id: 'profile.s', label: 'Size' },
+        { id: 'body.2', label: 'body.2' },
+    ]);
+    assert.equal(draft.changedByEngine.value[0].why, 'Rolled again.');
+    assert.equal(posts(fetchImpl).filter((call) => call.url.endsWith('/keep')).length, 1);
+    const saved = await draft.keep();
+    assert.ok(saved);
+    assert.equal(draft.dirty.value, false);
+    assert.equal(map.row(KEY).rev, 5);
+    map.close();
+});
+
+test('Take theirs shows the stored form and drops the local draft', async () => {
+    let forms = 0;
+    const fetchImpl = fake((call) => {
+        if (call.url.includes('/hexes?')) return json({ items: [row()], nextCursor: null });
+        if (call.url.endsWith('/form')) {
+            forms += 1;
+            if (forms === 1) return json(read());
+            return json({ hash: HASH2, form: form([field('name.system', 'Theirs', 'type', 'text', 'Name')]) });
+        }
+        if (call.url.endsWith('/draft')) return json(answer([field('name.system', 'Mine')]));
+        if (call.url.endsWith('/keep')) return fail(409, 'The hex changed.', { current: row({ rev: 4, treeHash: HASH2 }) });
+        throw new Error('unexpected ' + call.url);
+    });
+    const map = open(fetchImpl, clock());
+    await map.loadSector('spin');
+    const draft = await map.openDraft(KEY);
+    draft.set('name.system', 'Mine');
+    await draft.keep();
+    await draft.takeTheirs();
+    assert.equal(draft.dirty.value, false);
+    assert.equal(draft.conflict.value, null);
+    assert.equal(draft.replaced.value, false);
+    assert.equal(draft.form.value.sections[0].fields[0].value, 'Theirs');
+    assert.equal(posts(fetchImpl).filter((call) => call.url.endsWith('/keep')).length, 1);
+    map.close();
+});
+
+test('a blank system is one save, then the draft of what was stored', async () => {
+    const fetchImpl = fake((call) => {
+        if (call.url.includes('/hexes?')) return json({ items: [], nextCursor: null });
+        if (call.url.endsWith('/blank')) {
+            assert.deepEqual(call.body, { baseRev: 0 });
+            return json(row({ rev: 1, treeHash: HASH2, state: 'own' }));
+        }
+        if (call.url.endsWith('/form')) return json({ hash: HASH2, form: form([field('name.system', '', 'type', 'text', 'Name')]) });
+        if (call.url.endsWith('/revert')) {
+            assert.deepEqual(call.body, { toRev: 0, baseRev: 1 });
+            return json({ hexKey: KEY, state: 'own', treeHash: null, baseHash: null, roll: 0, rev: 0 });
+        }
+        throw new Error('unexpected ' + call.url);
+    });
+    const map = open(fetchImpl, clock());
+    await map.loadSector('spin');
+    const opened = await map.blank(KEY);
+    assert.equal(opened.draft.form.value.sections[0].fields[0].label, 'Name');
+    assert.equal(opened.draft.dirty.value, false);
+    assert.equal(map.row(KEY).rev, 1);
+    assert.equal(map.row(KEY).treeHash, HASH2);
+    await map.undo(opened.undo);
+    assert.equal(map.row(KEY), null);
+    map.close();
+});
+
+test('a blank sends only the row rev', async () => {
+    const fetchImpl = fake((call) => {
+        if (call.url.includes('/hexes?')) return json({ items: [row({ state: 'removed', treeHash: null, rev: 2 })], nextCursor: null });
+        if (call.url.endsWith('/blank')) {
+            assert.deepEqual(call.body, { baseRev: 2 });
+            return json(row({ rev: 3, treeHash: HASH2 }));
+        }
+        if (call.url.endsWith('/form')) return json(read());
+        throw new Error('unexpected ' + call.url);
+    });
+    const map = open(fetchImpl, clock());
+    await map.loadSector('spin');
+    const opened = await map.blank(KEY);
+    assert.equal(opened.draft.form.value.edition, 'MgT2E');
+    assert.equal(map.row(KEY).rev, 3);
+    map.close();
+});
+
+test('a blank that loses the race does not open a draft', async () => {
+    clearToasts();
+    const fetchImpl = fake((call) => {
+        if (call.url.includes('/hexes?')) return json({ items: [], nextCursor: null });
+        if (call.url.endsWith('/blank')) return fail(409, 'The hex changed.', { current: row({ rev: 3, treeHash: HASH2 }) });
+        throw new Error('unexpected ' + call.url);
+    });
+    const map = open(fetchImpl, clock());
+    await map.loadSector('spin');
+    await assert.rejects(() => map.blank(KEY), /hex changed/);
+    assert.equal(map.row(KEY).rev, 3);
+    assert.equal(toasts.length, 0);
+    assert.equal(fetchImpl.calls.some((call) => call.url.endsWith('/form')), false);
+    map.close();
+});
+
+test('a refused draft names the field and blocks Keep', async () => {
+    const fetchImpl = fake((call) => {
+        if (call.url.includes('/hexes?')) return json({ items: [row()], nextCursor: null });
+        if (call.url.endsWith('/form')) return json(read([field('profile.st', 'A', 'type', 'text', 'Starport')]));
+        if (call.url.endsWith('/draft')) return fail(400, 'profile.st cannot hold that.');
+        throw new Error('unexpected ' + call.url);
+    });
+    const time = clock();
+    const map = open(fetchImpl, time);
+    await map.loadSector('spin');
+    const draft = await map.openDraft(KEY);
+    draft.set('profile.st', 'AA');
+    assert.equal(draft.dirty.value, true);
+    assert.equal(draft.messages.value.length, 0);
+    fire(time);
+    await until(() => draft.messages.value.length === 1);
+    assert.deepEqual(draft.messages.value[0], {
+        id: 'profile.st',
+        text: 'profile.st cannot hold that.',
+        holds: true,
+    });
+    assert.equal(draft.dirty.value, true);
+    assert.equal(draft.form.value.sections[0].fields[0].value, 'AA');
+    await assert.rejects(() => draft.keep(), /cannot hold that/);
+    assert.equal(posts(fetchImpl).some((call) => call.url.endsWith('/keep')), false);
     map.close();
 });
 
@@ -419,5 +604,232 @@ test('Keep surfaces a validation refusal from the save itself', async () => {
     assert.equal(draft.dirty.value, true);
     assert.equal(draft.messages.value[0].holds, true);
     assert.equal(map.row(KEY).rev, 1);
+    map.close();
+});
+
+test('a hand form keeps its kind, and a parent, an order and an add go out as field ids', async () => {
+    const hand = {
+        edition: 'MgT2E',
+        mode: 'hand',
+        sections: [{
+            id: 'stars',
+            label: 'Stars',
+            fields: [
+                field('s1.parent', '', 'type', 'text', 'Parent'),
+                field('s1.order', 0, 'type', 'number', 'Order'),
+                field('star.add', false, 'type', 'switch', 'Add a star'),
+            ],
+        }],
+    };
+    const fetchImpl = fake((call) => {
+        if (call.url.includes('/hexes?')) return json({ items: [row()], nextCursor: null });
+        if (call.url.endsWith('/form')) return json({ hash: HASH, form: hand });
+        if (call.url.endsWith('/draft')) return json({ form: hand, changed: [], messages: [] });
+        throw new Error('unexpected ' + call.url);
+    });
+    const time = clock();
+    const map = open(fetchImpl, time);
+    await map.loadSector('spin');
+    const draft = await map.openDraft(KEY);
+    assert.equal(draft.form.value.mode, 'hand');
+    draft.set('s1.parent', 's0');
+    draft.set('s1.order', 2);
+    draft.set('star.add', true);
+    assert.equal(draft.form.value.mode, 'hand');
+    fire(time);
+    await until(() => posts(fetchImpl).some((call) => call.url.endsWith('/draft')));
+    const body = posts(fetchImpl).find((call) => call.url.endsWith('/draft')).body;
+    assert.deepEqual(body.changes, [
+        { id: 's1.parent', value: 's0' },
+        { id: 's1.order', value: 2 },
+        { id: 'star.add', value: true },
+    ]);
+    draft.set('s1.parent', '');
+    draft.set('s1.order', 0);
+    draft.set('star.add', false);
+    assert.equal(draft.dirty.value, false);
+    assert.equal(draft.form.value.mode, 'hand');
+    map.close();
+});
+
+test('several adds stay in call order, count as their own changes, and discard drops them', async () => {
+    const expected = [
+        { id: 'star.add', value: 's9' },
+        { id: 'body.add', value: 'w1' },
+        { id: 'w1.kind', value: 'gas' },
+        { id: 'w1.parent', value: 's9' },
+        { id: 'body.add', value: 'w2' },
+        { id: 'w2.name', value: 'Pebble' },
+    ];
+    const fetchImpl = fake((call) => {
+        if (call.url.includes('/hexes?')) return json({ items: [row()], nextCursor: null });
+        if (call.url.endsWith('/form')) return json(read([field('name.system', 'Regina')]));
+        if (call.url.endsWith('/draft')) {
+            assert.deepEqual(call.body.changes, expected);
+            return json(answer([field('name.system', 'Regina')]));
+        }
+        if (call.url.endsWith('/keep')) {
+            assert.deepEqual(call.body.changes, expected);
+            return json(row({ rev: 2 }));
+        }
+        throw new Error('unexpected ' + call.url);
+    });
+    const time = clock();
+    const map = open(fetchImpl, time);
+    await map.loadSector('spin');
+    const draft = await map.openDraft(KEY);
+    draft.add('star.add', 's9');
+    draft.add('body.add', 'w1');
+    draft.set('w1.name', 'Haven');
+    assert.equal(draft.dirty.value, true);
+    draft.discard();
+    assert.equal(draft.dirty.value, false);
+    assert.equal(time.armed().length, 0);
+    assert.equal(posts(fetchImpl).length, 0);
+    draft.add('star.add', 's9');
+    draft.add('body.add', 'w1');
+    draft.set('w2.name', 'Too soon');
+    draft.set('w1.kind', 'gas');
+    draft.set('w1.parent', 's9');
+    draft.add('body.add', 'w2');
+    draft.set('w2.name', 'Pebble');
+    draft.set('nope.x', 1);
+    assert.equal(draft.dirty.value, true);
+    fire(time);
+    await until(() => posts(fetchImpl).some((call) => call.url.endsWith('/draft')));
+    assert.equal(posts(fetchImpl).find((call) => call.url.endsWith('/draft')).body.changes.length, expected.length);
+    const saved = await draft.keep();
+    assert.ok(saved);
+    assert.equal(draft.dirty.value, false);
+    map.close();
+});
+
+test('Keep mine carries every add and a field of a body added in this draft', async () => {
+    const expected = [
+        { id: 'name.system', value: 'Mine' },
+        { id: 'star.add', value: 's9' },
+        { id: 'body.add', value: 'w1' },
+        { id: 'w1.name', value: 'Haven' },
+        { id: 'w1.kind', value: 'gas' },
+        { id: 'w1.parent', value: 's9' },
+        { id: 'body.add', value: 'w2' },
+    ];
+    const fetchImpl = fake((call) => {
+        if (call.url.includes('/hexes?')) return json({ items: [row()], nextCursor: null });
+        if (call.url.endsWith('/form')) {
+            if (call.url && fetchImpl.calls.filter((item) => item.url.endsWith('/form')).length > 1) {
+                return json({ hash: HASH2, form: form([field('name.system', 'Theirs', 'type', 'text', 'Name')]) });
+            }
+            return json(read([
+                field('name.system', 'Regina', 'type', 'text', 'Name'),
+                field('profile.s', 5, 'type', 'number', 'Size'),
+            ]));
+        }
+        if (call.url.endsWith('/draft')) {
+            const drafted = fetchImpl.calls.filter((item) => item.url.endsWith('/draft')).length;
+            if (drafted === 1) {
+                assert.equal(call.body.changes.some((item) => item.id === 'profile.s'), true);
+                assert.equal(call.body.changes.filter((item) => item.id === 'body.add').length, 2);
+            } else {
+                assert.deepEqual(call.body.changes, expected);
+            }
+            return json(answer([field('name.system', 'Mine', 'type', 'text', 'Name')]));
+        }
+        if (call.url.endsWith('/keep')) {
+            if (call.body.hash === HASH) {
+                assert.equal(call.body.changes.some((item) => item.id === 'profile.s'), true);
+                return fail(409, 'The hex changed.', { current: row({ rev: 4, treeHash: HASH2 }) });
+            }
+            assert.deepEqual(call.body.changes, expected);
+            assert.equal(call.body.hash, HASH2);
+            assert.equal(call.body.baseRev, 4);
+            return json(row({ rev: 5, treeHash: HASH2 }));
+        }
+        throw new Error('unexpected ' + call.url);
+    });
+    const map = open(fetchImpl, clock());
+    await map.loadSector('spin');
+    const draft = await map.openDraft(KEY);
+    draft.set('name.system', 'Mine');
+    draft.set('profile.s', 8);
+    draft.add('star.add', 's9');
+    draft.add('body.add', 'w1');
+    draft.set('w1.name', 'Haven');
+    draft.set('w1.kind', 'gas');
+    draft.set('w1.parent', 's9');
+    draft.add('body.add', 'w2');
+    assert.equal(await draft.keep(), null);
+    assert.equal(draft.replaced.value, true);
+    await draft.keepMine();
+    assert.deepEqual(draft.dropped.value, [{ id: 'profile.s', label: 'Size' }]);
+    assert.equal(draft.dirty.value, true);
+    assert.equal(draft.replaced.value, false);
+    const saved = await draft.keep();
+    assert.ok(saved);
+    assert.equal(draft.dirty.value, false);
+    assert.equal(map.row(KEY).rev, 5);
+    map.close();
+});
+
+test('unset takes a star, world, or moon remove back and leaves earlier edits', async () => {
+    const opening = [
+        field('name.system', 'Regina', 'type', 'text', 'Name'),
+        field('s1.remove', false, 'type', 'switch', 'Remove'),
+        field('b1.remove', false, 'type', 'switch', 'Remove world'),
+        field('m1.remove', false, 'type', 'switch', 'Remove moon'),
+    ];
+    let drafts = 0;
+    const fetchImpl = fake((call) => {
+        if (call.url.includes('/hexes?')) return json({ items: [row()], nextCursor: null });
+        if (call.url.endsWith('/form')) return json(read(opening));
+        if (call.url.endsWith('/draft')) {
+            drafts += 1;
+            if (drafts === 1) {
+                assert.deepEqual(call.body.changes, [
+                    { id: 'name.system', value: 'Kept' },
+                    { id: 'star.add', value: 's9' },
+                    { id: 's1.remove', value: true },
+                    { id: 'b1.remove', value: true },
+                    { id: 'm1.remove', value: true },
+                ]);
+                return json({
+                    form: form([field('name.system', 'Kept', 'type', 'text', 'Name')]),
+                    changed: [],
+                    messages: [{ id: 's1.remove', text: '2 bodies go with this star.', holds: false }],
+                });
+            }
+            assert.deepEqual(call.body.changes, [
+                { id: 'name.system', value: 'Kept' },
+                { id: 'star.add', value: 's9' },
+            ]);
+            return json(answer(opening));
+        }
+        throw new Error('unexpected ' + call.url);
+    });
+    const time = clock();
+    const map = open(fetchImpl, time);
+    await map.loadSector('spin');
+    const draft = await map.openDraft(KEY);
+    draft.set('name.system', 'Kept');
+    draft.add('star.add', 's9');
+    draft.set('s1.remove', true);
+    draft.set('b1.remove', true);
+    draft.set('m1.remove', true);
+    fire(time);
+    await until(() => draft.messages.value.length === 1);
+    assert.equal(draft.messages.value[0].holds, false);
+    assert.equal(draft.form.value.sections[0].fields.some((field) => field.id === 's1.remove'), false);
+    draft.set('s1.remove', false);
+    draft.set('b1.remove', false);
+    draft.set('m1.remove', false);
+    assert.equal(time.armed().length, 0);
+    draft.unset('s1.remove');
+    draft.unset('b1.remove');
+    draft.unset('m1.remove');
+    draft.unset('not.here');
+    assert.equal(draft.dirty.value, true);
+    fire(time);
+    await until(() => drafts === 2 && draft.form.value.sections[0].fields.some((item) => item.id === 's1.remove'));
+    assert.equal(draft.form.value.sections[0].fields.some((item) => item.id === 's1.remove'), true);
     map.close();
 });

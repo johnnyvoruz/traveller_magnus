@@ -118,6 +118,14 @@ Rules of the `hexes` table:
 
 - `hex_key` is `"<sector_slug>/<hhhh>"`. The legacy numeric slot is never identity. Position on
   the builder's grid is `sectors.x, y`; moving a sector changes no key.
+- A sector the referee made uses the same `sectors` row. `sector_slug` is the id, `~` plus a
+  26-character ULID, and is not the slot. `display_name` is the name. `source` is `referee`.
+  `subsectors` is a JSON array of sixteen names, index 0 for A through index 15 for P.
+  `rev` starts at 1. `deleted` 1 keeps the row so its history can restore it, and frees the slot.
+  `sector_history` stores the rev, the action, and a JSON payload `{ sector, hexes }`. A delete
+  or a subsector clear puts the removed hex rows in `hexes`. Chart slugs never contain `~`, so
+  the hex key `<id>/<hhhh>` is not a chart key. On a pinned universe those hexes are `own`:
+  remove drops the row, and there is nothing to restore from the chart.
 - A hex that equals the truth has **no row**. A row exists when the builder changed something or
   the platform generated something for them.
 - Keep, and a blank system, write a new `hex_history` row with action `keep` and the new tree

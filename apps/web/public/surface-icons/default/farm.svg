@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+<title>Farmland</title>
+<line x1="-9.6" y1="51.2" x2="9.6" y2="12.8" stroke="#785a14" stroke-width="2" stroke-opacity="0.9"/><line x1="0.0" y1="51.2" x2="19.2" y2="12.8" stroke="#785a14" stroke-width="2" stroke-opacity="0.9"/><line x1="9.6" y1="51.2" x2="28.8" y2="12.8" stroke="#785a14" stroke-width="2" stroke-opacity="0.9"/><line x1="19.2" y1="51.2" x2="38.4" y2="12.8" stroke="#785a14" stroke-width="2" stroke-opacity="0.9"/><line x1="28.8" y1="51.2" x2="48.0" y2="12.8" stroke="#785a14" stroke-width="2" stroke-opacity="0.9"/>
+</svg>

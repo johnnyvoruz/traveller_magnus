@@ -21,7 +21,9 @@ import {
 // Orbit distances. Engines does not re-export this generated table, and the file has no declaration.
 // @ts-expect-error TS7016 the generated rules module has no declaration file
 import { MgT2EData } from '../../engines/src/generated/rules/mgt2e_data.js';
-import type { EditForm, FormAnswer, FormChange, FormField, FormMessage, FormSection, FormValue } from '@voyage/shared';
+import type { EditForm, FormAnswer, FormChange, FormField, FormMessage, FormSection, FormValue, HandBody, HandEnvelope, HandProfile } from '@voyage/shared';
+import { emptyHandProfile } from '@voyage/shared';
+import { applyHand, blankHand, formOfHand, HandRefusal } from './hand.ts';
 
 type Row = Record<string, any>;
 type Envelope = {
@@ -339,18 +341,83 @@ function uwpCells(source: Row): Record<string, number | string> {
     };
 }
 
+/**
+ * Engine 1.1.0 writes `mainworld.bases` as these letters, in this order
+ * (`mgt2e_socio_engine.js`: C corsair, M military, N naval, S scout).
+ * M is military. The hex editor's merchant code is also M; the string is the engine's.
+ */
+const ENGINE_LETTERS: [string, string][] = [
+    ['corsair', 'C'],
+    ['military', 'M'],
+    ['naval', 'N'],
+    ['scout', 'S'],
+];
+
 function basesNow(source: Row): Record<string, boolean> {
-    const list = Array.isArray(source.bases) ? source.bases.map(String) : text(source.bases).split(/[\s,]+/).filter(Boolean);
+    const raw = source.bases;
     const out: Record<string, boolean> = {};
-    for (const [key, , code] of BASES) {
-        if (!code) out[key] = !!source[key + 'Base'] || !!source[key];
-        else if (code.length === 1) out[key] = list.some((item) => item === code || item.includes(code));
-        else out[key] = list.includes(code);
+    if (typeof raw === 'string') {
+        const letters = new Set(raw);
+        for (const [key, letter] of ENGINE_LETTERS) out[key] = letters.has(letter);
+        for (const [key] of BASES) {
+            if (out[key] !== undefined) continue;
+            out[key] = false;
+        }
+    } else {
+        const list = Array.isArray(raw) ? raw.map(String) : [];
+        for (const [key, , code] of BASES) {
+            if (!code) out[key] = !!source[key + 'Base'] || !!source[key];
+            else out[key] = list.includes(code);
+        }
     }
-    out.naval = out.naval || !!source.navalBase;
-    out.scout = out.scout || !!source.scoutBase;
-    out.military = !!source.militaryBase;
+    out.naval = !!out.naval || !!source.navalBase;
+    out.scout = !!out.scout || !!source.scoutBase;
+    out.military = !!out.military || !!source.militaryBase;
+    out.corsair = !!out.corsair || !!source.corsairBase;
     return out;
+}
+
+function basesString(flags: Record<string, boolean>): string {
+    return ENGINE_LETTERS.map(([key, letter]) => (flags[key] ? letter : '')).join('');
+}
+
+/** One UWP character. A value that is not one character is refused. No rule about which character. */
+function profileChar(id: string, value: FormValue): string {
+    if (id === 'profile.st') {
+        const starport = text(value).trim().toUpperCase();
+        if (starport.length !== 1) throw new FormRefusal(`${id} cannot hold that.`);
+        return starport;
+    }
+    if (typeof value === 'number' && Number.isInteger(value) && value >= 0) {
+        const digit = String(toEHex(value));
+        if (digit.length !== 1) throw new FormRefusal(`${id} cannot hold that.`);
+        return digit;
+    }
+    const digit = text(value).trim().toUpperCase();
+    if (digit.length === 1) return digit;
+    throw new FormRefusal(`${id} cannot hold that.`);
+}
+
+function profileChars(source: Row): Record<string, string> {
+    const uwp = text(source.uwp);
+    const dash = uwp.indexOf('-');
+    const head = dash >= 0 ? uwp.slice(0, dash) : uwp;
+    const tail = dash >= 0 ? uwp.slice(dash + 1) : '';
+    const cells = uwpCells(source);
+    const at = (index: number, key: string): string => {
+        const ch = head[index];
+        return ch ? ch.toUpperCase() : String(toEHex(Number(cells[key]))).slice(0, 1);
+    };
+    return {
+        st: (head[0] || text(cells.st) || 'X').toUpperCase().slice(0, 1),
+        s: at(1, 's'),
+        a: at(2, 'a'),
+        h: at(3, 'h'),
+        p: at(4, 'p'),
+        g: at(5, 'g'),
+        l: at(6, 'l'),
+        tl: (tail[0] || String(toEHex(Number(cells.tl)))).toUpperCase().slice(0, 1),
+    };
 }
 
 function formOfCopy(envelope: Envelope, copy: Copy): EditForm {
@@ -477,10 +544,11 @@ function formOfCopy(envelope: Envelope, copy: Copy): EditForm {
         label: 'Needs the rule',
         fields: rules.map(([id, label]) => field(`rule.${id}`, label, 'text', 'read', '')),
     });
-    return { edition: copy.edition, sections };
+    return { edition: copy.edition, mode: 'generated' as const, sections };
 }
 
-export function formOf(envelope: Envelope): EditForm {
+export function formOf(envelope: Envelope | HandEnvelope): EditForm {
+    if (envelope.kind === 'hand') return formOfHand(envelope);
     return formOfCopy(envelope, copyOf(envelope));
 }
 
@@ -946,79 +1014,137 @@ function directIds(id: string): boolean {
     return id === 'name' || id === 'name.propagate' || id.startsWith('profile.') || id.startsWith('chart.') || id.startsWith('socio.');
 }
 
+function targetsOf(body: Row, edition: 'MgT2E' | 'AoW'): Row[] {
+    const targets: Row[] = [];
+    const add = (row: Row | null | undefined) => {
+        if (row && typeof row === 'object' && !targets.includes(row)) targets.push(row);
+    };
+    add(body.mgt2eData);
+    add(body.mgtSocio);
+    const sys = edition === 'AoW' ? body.aowSystem : body.mgtSystem;
+    if (sys && typeof sys === 'object') {
+        add(sys.mainworld);
+        if (Array.isArray(sys.worlds)) {
+            add(sys.worlds.find((world: Row) => world && (world.type === 'Mainworld' || world.isMainworld)));
+        }
+    }
+    return targets;
+}
+
+function stamp(body: Row, edition: 'MgT2E' | 'AoW', partial: Row): void {
+    for (const target of targetsOf(body, edition)) Object.assign(target, partial);
+}
+
 function writeDirect(body: Row, edition: 'MgT2E' | 'AoW', changes: FormChange[]): void {
     const source = profileSource(body, edition);
-    const cells = uwpCells(source);
+    const chars = profileChars(source);
     const flags = basesNow(source);
     let name = text(body.name || source.name);
+    let nameTouched = false;
     let propagate = false;
-    let zone = text(source.travelZone || 'Green');
+    let zone = text(source.travelZone || body.travelZone || 'Green');
+    let zoneTouched = false;
     let allegiance = text(body.allegiance || source.allegiance);
+    let allegianceTouched = false;
     let region = text(body.cluster || source.cluster);
+    let regionTouched = false;
     let notes = text(body.notes || source.notes);
+    let notesTouched = false;
     let trade = Array.isArray(source.tradeCodes) ? [...source.tradeCodes] : text(source.tradeCodes).split(/[\s,]+/).filter(Boolean);
+    let tradeTouched = false;
     let pbg = text(source.pbg);
+    let pbgTouched = false;
     let stellar = text(source.homestar || source.stellar);
+    let stellarTouched = false;
     let gas = !!source.gasGiant;
-    const socio: Row = { ...(body.mgtSocio || {}) };
+    let gasTouched = false;
+    let profileTouched = false;
+    let baseTouched = false;
+    const socio: Row = {};
+    let socioTouched = false;
     for (const change of changes) {
         if (!directIds(change.id)) continue;
-        if (change.id === 'name') name = text(change.value).trim();
+        if (change.id === 'name') { name = text(change.value).trim(); nameTouched = true; }
         else if (change.id === 'name.propagate') propagate = truthy(change.value);
-        else if (change.id === 'profile.st') cells.st = text(change.value).toUpperCase().replace(/[^A-Z]/g, '').slice(0, 1);
-        else if (change.id === 'profile.s') cells.s = parseInt(text(change.value), 10) || 0;
-        else if (change.id === 'profile.a') cells.a = parseInt(text(change.value), 10) || 0;
-        else if (change.id === 'profile.h') cells.h = parseInt(text(change.value), 10) || 0;
-        else if (change.id === 'profile.p') cells.p = parseInt(text(change.value), 10) || 0;
-        else if (change.id === 'profile.g') cells.g = parseInt(text(change.value), 10) || 0;
-        else if (change.id === 'profile.l') cells.l = parseInt(text(change.value), 10) || 0;
-        else if (change.id === 'profile.tl') cells.tl = parseInt(text(change.value), 10) || 0;
-        else if (change.id === 'chart.zone') zone = text(change.value) || 'Green';
-        else if (change.id === 'chart.allegiance') allegiance = text(change.value).trim() || '----';
-        else if (change.id === 'chart.region') region = text(change.value).trim() || '----';
-        else if (change.id === 'chart.notes') notes = text(change.value).trim();
-        else if (change.id === 'chart.trade') trade = text(change.value).split(/[\s,]+/).map((item) => item.trim()).filter(Boolean);
-        else if (change.id === 'chart.pbg') pbg = text(change.value).padEnd(3, '0').toUpperCase().slice(0, 3);
-        else if (change.id === 'chart.stellar') stellar = text(change.value).trim();
-        else if (change.id === 'chart.gasGiant') gas = truthy(change.value);
-        else if (change.id.startsWith('chart.base.')) flags[change.id.slice('chart.base.'.length)] = truthy(change.value);
+        else if (change.id.startsWith('profile.')) {
+            const key = change.id.slice('profile.'.length);
+            chars[key] = profileChar(change.id, change.value);
+            profileTouched = true;
+        }
+        else if (change.id === 'chart.zone') { zone = text(change.value) || 'Green'; zoneTouched = true; }
+        else if (change.id === 'chart.allegiance') { allegiance = text(change.value).trim() || '----'; allegianceTouched = true; }
+        else if (change.id === 'chart.region') { region = text(change.value).trim() || '----'; regionTouched = true; }
+        else if (change.id === 'chart.notes') { notes = text(change.value).trim(); notesTouched = true; }
+        else if (change.id === 'chart.trade') {
+            trade = text(change.value).split(/[\s,]+/).map((item) => item.trim()).filter(Boolean);
+            tradeTouched = true;
+        }
+        else if (change.id === 'chart.pbg') { pbg = text(change.value).padEnd(3, '0').toUpperCase().slice(0, 3); pbgTouched = true; }
+        else if (change.id === 'chart.stellar') { stellar = text(change.value).trim(); stellarTouched = true; }
+        else if (change.id === 'chart.gasGiant') { gas = truthy(change.value); gasTouched = true; }
+        else if (change.id.startsWith('chart.base.')) {
+            flags[change.id.slice('chart.base.'.length)] = truthy(change.value);
+            baseTouched = true;
+        }
         else if (change.id.startsWith('socio.')) {
             const key = change.id.slice('socio.'.length);
             const spec = SOCIO_FIELDS.find((item) => item[0] === key);
             if (!spec || spec[3] === 'read') continue;
             socio[key] = spec[2] === 'number' ? (parseInt(text(change.value), 10) || 0) : change.value;
+            socioTouched = true;
         }
     }
-    const bases: string[] = [];
-    for (const [key, , code] of BASES) if (code && flags[key]) bases.push(code);
-    const uwp = `${cells.st}${toEHex(Number(cells.s))}${toEHex(Number(cells.a))}${toEHex(Number(cells.h))}${toEHex(Number(cells.p))}${toEHex(Number(cells.g))}${toEHex(Number(cells.l))}-${toEHex(Number(cells.tl))}`;
-    const shared: Row = {
-        uwp, travelZone: zone, tradeCodes: trade, starport: cells.st,
-        size: cells.s, atm: cells.a, hydro: cells.h, pop: cells.p, gov: cells.g, law: cells.l, tl: cells.tl,
-        bases, navalBase: !!flags.naval, scoutBase: !!flags.scout, militaryBase: !!flags.military,
-        gasGiant: gas, allegiance, cluster: region, notes, name,
-    };
-    if (pbg) {
-        shared.pbg = pbg;
-        shared.popDigit = fromEHex(pbg[0]);
-        shared.planetoidBelts = fromEHex(pbg[1]);
-        shared.gasGiantsCount = fromEHex(pbg[2]);
-    }
-    if (stellar) shared.homestar = stellar;
     const oldName = text(body.name || source.name);
-    body.name = name;
-    body.allegiance = allegiance;
-    body.cluster = region;
-    body.notes = notes;
-    if (body.mgtSocio) Object.assign(body.mgtSocio, shared, socio, { name });
-    if (body.mgt2eData) body.mgt2eData = { ...body.mgt2eData, ...shared, name };
-    const sys = edition === 'AoW' ? body.aowSystem : body.mgtSystem;
-    if (sys && Array.isArray(sys.worlds)) {
-        const mw = sys.worlds.find((world: Row) => world && (world.type === 'Mainworld' || world.isMainworld)) || sys.mainworld;
-        if (mw) Object.assign(mw, shared, socio, { name });
-        if (sys.mainworld && sys.mainworld !== mw) Object.assign(sys.mainworld, shared, socio, { name });
-    }
+    if (nameTouched) body.name = name;
     if (propagate && oldName && oldName !== name) propagateName(body, oldName, name);
+    if (profileTouched) {
+        const uwp = `${chars.st}${chars.s}${chars.a}${chars.h}${chars.p}${chars.g}${chars.l}-${chars.tl}`;
+        stamp(body, edition, {
+            uwp,
+            starport: chars.st,
+            size: fromEHex(chars.s),
+            atm: fromEHex(chars.a),
+            hydro: fromEHex(chars.h),
+            pop: fromEHex(chars.p),
+            gov: fromEHex(chars.g),
+            law: fromEHex(chars.l),
+            tl: fromEHex(chars.tl),
+        });
+    }
+    if (baseTouched) {
+        stamp(body, edition, {
+            bases: basesString(flags),
+            navalBase: !!flags.naval,
+            scoutBase: !!flags.scout,
+            militaryBase: !!flags.military,
+            corsairBase: !!flags.corsair,
+        });
+    }
+    if (zoneTouched) stamp(body, edition, { travelZone: zone });
+    if (tradeTouched) stamp(body, edition, { tradeCodes: trade });
+    if (gasTouched) stamp(body, edition, { gasGiant: gas });
+    if (pbgTouched) {
+        stamp(body, edition, {
+            pbg,
+            popDigit: fromEHex(pbg[0]),
+            planetoidBelts: fromEHex(pbg[1]),
+            gasGiantsCount: fromEHex(pbg[2]),
+        });
+    }
+    if (stellarTouched) stamp(body, edition, { homestar: stellar });
+    if (allegianceTouched) {
+        body.allegiance = allegiance;
+        stamp(body, edition, { allegiance });
+    }
+    if (regionTouched) {
+        body.cluster = region;
+        stamp(body, edition, { cluster: region });
+    }
+    if (notesTouched) {
+        body.notes = notes;
+        stamp(body, edition, { notes });
+    }
+    if (socioTouched) stamp(body, edition, socio);
 }
 
 function propagateName(body: Row, oldName: string, newName: string): void {
@@ -1065,13 +1191,22 @@ function messagesFromTrace(lines: string[]): FormMessage[] {
     }));
 }
 
-export function applyForm(envelope: Envelope, changes: FormChange[] = [], roll: { id: string }[] = []): { envelope: Envelope; answer: FormAnswer } {
+export function applyForm(envelope: Envelope | HandEnvelope, changes: FormChange[] = [], roll: { id: string }[] = []): { envelope: Envelope | HandEnvelope; answer: FormAnswer } {
+    if (envelope.kind === 'hand') {
+        try {
+            return applyHand(envelope, changes, roll);
+        } catch (err) {
+            if (err instanceof HandRefusal) throw new FormRefusal(err.message);
+            throw err;
+        }
+    }
     const before = formOf(envelope);
     const known = byId(before);
     for (const change of changes) {
         const item = known.get(change.id);
         if (!item) throw new FormRefusal(`Unknown field ${change.id}.`);
         if (item.permission === 'read') throw new FormRefusal(`${change.id} cannot be edited.`);
+        if (change.id.startsWith('profile.')) profileChar(change.id, change.value);
     }
     if (changes.length === 0 && roll.length === 0) {
         return { envelope, answer: { form: before, changed: [], messages: [] } };
@@ -1107,6 +1242,8 @@ export function applyForm(envelope: Envelope, changes: FormChange[] = [], roll: 
                 messages.push({ id: 'stars', text: JSON.stringify(sys.ageConflict.stars || sys.ageConflict), holds: false });
             }
             nextBody = install(nextBody, copy.edition, sys, copy.bodies.length === 0 && envelope.body && !systemOf(envelope.body, copy.edition).worlds?.length);
+            const priorName = text(envelope.body?.name || profileSource(envelope.body, copy.edition).name);
+            if (priorName) nextBody.name = priorName;
         } catch (err) {
             const textValue = err instanceof Error ? err.message : String(err);
             messages.push({ id: null, text: textValue, holds: true });
@@ -1128,32 +1265,145 @@ export function applyForm(envelope: Envelope, changes: FormChange[] = [], roll: 
     return { envelope: next, answer: { form, changed, messages } };
 }
 
-export function blankEnvelope(hexKey: string, edition: 'MgT2E' | 'AoW', pinned: { seed: string; settings: Record<string, unknown>; engineVersion: string }, star?: { sType?: string; subType?: number; sClass?: string }): Envelope {
-    // js/system_editor.js openCreate defaults, then _buildBlankWorkingCopy and the auto preview.
-    const sType = star?.sType || 'G';
-    const fixed = exotic(sType);
-    const subType = fixed ? fixed.subType : (star?.subType != null ? star.subType : 2);
-    const sClass = fixed ? fixed.sClass : (star?.sClass || 'V');
-    const knownType = STAR_TYPES.some(([value]) => value === sType);
-    const knownClass = STAR_CLASSES.some(([value]) => value === sClass);
-    if (!knownType || !knownClass) throw new FormRefusal('That star is not one the editor offers.');
-    const empty: Envelope = {
-        kind: 'tree',
-        engineVersion: pinned.engineVersion,
-        derivation: { edition, mode: 'bottom-up', seed: pinned.seed, settings: pinned.settings, inputs: { stage: null, summary: { type: 'SYSTEM_PRESENT' }, priorBody: null } },
+export function blankEnvelope(hexKey: string, edition: 'MgT2E' | 'AoW' | undefined, pinned: { seed: string; settings: Record<string, unknown>; engineVersion: string }, star?: { sType?: string; subType?: number; sClass?: string }): HandEnvelope {
+    // A blank system is empty. The star argument is the old create dialog and is not used:
+    // running the preview named the system and rolled a mainworld profile.
+    void star;
+    void pinned.settings;
+    void pinned.seed;
+    return blankHand(hexKey, edition, pinned.engineVersion);
+}
+
+function formValue(form: EditForm, id: string): FormValue | undefined {
+    for (const section of form.sections) {
+        const found = section.fields.find((item) => item.id === id);
+        if (found) return found.value;
+    }
+    return undefined;
+}
+
+function formHas(form: EditForm, id: string): boolean {
+    return form.sections.some((section) => section.fields.some((item) => item.id === id));
+}
+
+function switchedCell(value: FormValue | undefined): string {
+    if (value == null || value === '') return '';
+    if (typeof value === 'number' && Number.isInteger(value) && value >= 0) {
+        const digit = String(toEHex(value));
+        return digit.length === 1 ? digit : '';
+    }
+    const cell = String(value).trim().toUpperCase();
+    return cell.length === 1 ? cell : '';
+}
+
+/**
+ * One-way copy of a generated form into a hand document.
+ * Reads field ids only. Star mass, orbits, and socioeconomics are not copied.
+ * Profile numbers use the same ehex spelling `profileChar` writes, so the chart profile stays.
+ */
+export function handFromForm(form: EditForm, hexKey: string, engineVersion: string): HandEnvelope {
+    const starIndexes = [...new Set(form.sections.flatMap((section) => section.fields)
+        .map((item) => /^star\.(\d+)\.type$/.exec(item.id)?.[1])
+        .filter((item): item is string => !!item))].sort((a, b) => Number(a) - Number(b));
+    const stars = starIndexes.map((index, order) => {
+        const prefix = `star.${index}`;
+        const role = String(formValue(form, `${prefix}.role`) ?? '');
+        const primary = starIndexes[0];
+        return {
+            id: prefix,
+            name: '',
+            sType: String(formValue(form, `${prefix}.type`) ?? '').slice(0, 8),
+            subType: String(formValue(form, `${prefix}.subtype`) ?? '').slice(0, 8),
+            sClass: String(formValue(form, `${prefix}.class`) ?? '').slice(0, 8),
+            parentId: role === 'Companion' && primary && index !== primary ? `star.${primary}` : null,
+            order,
+        };
+    });
+    const bodyIndexes = [...new Set(form.sections.flatMap((section) => section.fields)
+        .map((item) => /^body\.(\d+)\.name$/.exec(item.id)?.[1])
+        .filter((item): item is string => !!item))].sort((a, b) => Number(a) - Number(b));
+    const bodies: HandBody[] = [];
+    const parentStar = stars[0]?.id ?? '';
+    bodyIndexes.forEach((index, order) => {
+        if (!parentStar) return;
+        const prefix = `body.${index}`;
+        const kind = formHas(form, `${prefix}.ggType`)
+            ? 'gas'
+            : (formHas(form, `${prefix}.addMoon`) ? 'world' : 'belt');
+        bodies.push({
+            id: prefix,
+            kind,
+            name: String(formValue(form, `${prefix}.name`) ?? '').slice(0, 80),
+            parentId: parentStar,
+            order,
+            mainworld: formValue(form, `${prefix}.mainworld`) === true && kind === 'world',
+            profile: emptyHandProfile(),
+            notes: '',
+            bases: '',
+            zone: '',
+            allegiance: '',
+            trade: '',
+        });
+        const moons = [...new Set(form.sections.flatMap((section) => section.fields)
+            .map((item) => new RegExp(`^body\\.${index}\\.moon\\.(\\d+)\\.name$`).exec(item.id)?.[1])
+            .filter((item): item is string => !!item))].sort((a, b) => Number(a) - Number(b));
+        moons.forEach((moon, moonOrder) => {
+            const moonId = `body.${index}.moon.${moon}`;
+            bodies.push({
+                id: moonId,
+                kind: 'moon',
+                name: String(formValue(form, `${moonId}.name`) ?? '').slice(0, 80),
+                parentId: prefix,
+                order: moonOrder,
+                mainworld: false,
+                profile: emptyHandProfile(),
+                notes: '',
+                bases: '',
+                zone: '',
+                allegiance: '',
+                trade: '',
+            });
+        });
+    });
+    const profile: HandProfile = {
+        st: switchedCell(formValue(form, 'profile.st')),
+        s: switchedCell(formValue(form, 'profile.s')),
+        a: switchedCell(formValue(form, 'profile.a')),
+        h: switchedCell(formValue(form, 'profile.h')),
+        p: switchedCell(formValue(form, 'profile.p')),
+        g: switchedCell(formValue(form, 'profile.g')),
+        l: switchedCell(formValue(form, 'profile.l')),
+        tl: switchedCell(formValue(form, 'profile.tl')),
+    };
+    const host = bodies.find((body) => body.mainworld)
+        ?? bodies.find((body) => body.kind === 'world')
+        ?? bodies.find((body) => body.kind !== 'moon')
+        ?? null;
+    let marked = false;
+    for (const body of bodies) {
+        if (!body.mainworld) continue;
+        if (marked) body.mainworld = false;
+        marked = true;
+    }
+    if (host) {
+        host.profile = profile;
+        host.notes = String(formValue(form, 'chart.notes') ?? '').slice(0, 4000);
+        host.zone = String(formValue(form, 'chart.zone') ?? '').slice(0, 16);
+        host.allegiance = String(formValue(form, 'chart.allegiance') ?? '').slice(0, 16);
+        host.trade = String(formValue(form, 'chart.trade') ?? '').slice(0, 80);
+        const letters: [string, string][] = [['corsair', 'C'], ['military', 'M'], ['naval', 'N'], ['scout', 'S']];
+        host.bases = letters.map(([key, letter]) => (formValue(form, `chart.base.${key}`) === true ? letter : '')).join('');
+    }
+    return {
+        kind: 'hand',
+        engineVersion,
+        ...(form.edition ? { edition: form.edition } : {}),
         hexKey,
-        body: { type: 'SYSTEM_PRESENT', hexId: hexKey },
+        system: {
+            name: String(formValue(form, 'name') ?? '').slice(0, 80),
+            notes: String(formValue(form, 'chart.notes') ?? '').slice(0, 4000),
+            stars,
+            bodies,
+        },
     };
-    const copy: Copy = {
-        edition, hexKey, allowAddBodies: false, age: null, hzco: null, mainworldRef: null,
-        stars: [{
-            id: 'star.0', role: 'Primary', sType, subType, sClass, orbitId: null, orbitAU: null, parentIndex: 0,
-            mass: null, lum: null, diam: null, temp: null, mao: null, manual: [], raw: {},
-        }],
-        bodies: [],
-    };
-    const seed = seedFrom(copy, null);
-    const sys = runEngine(copy, seed, empty);
-    const body = install({ type: 'SYSTEM_PRESENT', hexId: hexKey }, edition, sys, true);
-    return envelopeFrom(empty, body);
 }

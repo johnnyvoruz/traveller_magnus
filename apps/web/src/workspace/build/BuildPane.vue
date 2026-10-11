@@ -4,11 +4,14 @@
  * the builder removed, or many hexes (findings/builder_system_design.md §1). One filled
  * button, and it never destroys.
  */
-import { computed } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import Icon from '../../design/Icon.vue';
 import { parseHexKey } from '../places.ts';
 import { buildSettings, generateMany, hexName, hexState, previewAt, removeHexes, restorable, restoreHexes, stopBuild, tallyOf, truthAt } from './acts.ts';
+import { edit, openBlank } from './edit.ts';
 import GenerateSheet from './GenerateSheet.vue';
+import { generateGrowing, growUi } from './grow_acts.ts';
+import { NAME_MAX, slotGroups, subsectorWords } from './sectors.ts';
 import { build, choiceLine, plural, settingRows } from './state.ts';
 
 const props = defineProps<{
@@ -39,8 +42,29 @@ function names(keys: string[]): string {
     return keys.length > 4 ? shown + ' and ' + (keys.length - 4) + ' more' : shown;
 }
 
+/** The empty slots the hexes reach into: generating there makes each slot's sector first (§18). */
+const slots = computed(() => slotGroups(props.keys));
+const inSlots = computed(() => slots.value.reduce((sum, group) => sum + group.count, 0));
+const growLead = computed(() => {
+    const sectors = slots.value.length === 1 ? 'a new sector' : slots.value.length + ' new sectors';
+    if (props.keys.length === 1) return 'This hex is in an empty slot. Generating here makes ' + sectors + '.';
+    const which = inSlots.value === props.keys.length ? 'These ' + props.keys.length + ' hexes are' : inSlots.value + ' of these ' + props.keys.length + ' hexes are';
+    return which + (slots.value.length === 1 ? ' in an empty slot' : ' in empty slots') + '. Generating here makes ' + sectors + '.';
+});
+const growBox = ref<HTMLElement | null>(null);
+
+// A name is missing: the cursor goes to its box.
+watch(() => [growUi.want, growUi.focus] as const, ([slug]) => {
+    if (!slug) return;
+    void nextTick(() => {
+        const box = growBox.value ? growBox.value.querySelector<HTMLInputElement>('input[data-slot="' + slug + '"]') : null;
+        if (box) box.focus();
+    });
+});
+
 function generate(): void {
-    if (props.mode === 'many') generateMany(props.keys);
+    if (slots.value.length) void generateGrowing(props.keys);
+    else if (props.mode === 'many') generateMany(props.keys);
     else void previewAt(one.value);
 }
 </script>
@@ -77,6 +101,26 @@ function generate(): void {
         <li v-if="count.removed.length"><b>{{ count.removed.length }}</b>removed from your map</li>
       </ul>
 
+      <div v-if="slots.length" ref="growBox" class="build-grow" role="group" aria-label="New sectors">
+        <p class="build-grow-lead">{{ growLead }}</p>
+        <label v-for="group in slots" :key="group.slug" class="build-grow-name">
+          <span>{{ slots.length === 1 ? 'Name of the new sector' : 'Name of the sector for ' + group.count + (group.count === 1 ? ' hex' : ' hexes') }}</span>
+          <input
+            v-model="growUi.names[group.slug]"
+            class="build-grow-box"
+            type="text"
+            autocomplete="off"
+            spellcheck="false"
+            :maxlength="NAME_MAX"
+            placeholder="Sector name"
+            :data-slot="group.slug"
+            :disabled="growUi.busy || busy"
+            @keydown.enter.prevent="generate"
+          />
+          <small>{{ subsectorWords(group.letters) }}. The sector has its sixteen subsectors; Rename (F2) names one once the sector is made.</small>
+        </label>
+      </div>
+
       <div class="build-card">
         <div class="build-acts">
           <button
@@ -93,19 +137,29 @@ function generate(): void {
             v-if="mode !== 'many' || count.empty.length > 0"
             type="button"
             class="ui-btn build-big"
-            :class="{ 'is-primary': mode !== 'removed' }"
+            :class="{ 'is-primary': mode !== 'removed', 'is-grow': slots.length > 0 }"
             :data-build-first="mode !== 'removed' ? '' : undefined"
             :disabled="busy"
             :aria-busy="build.rolling ? 'true' : undefined"
             @click="generate"
           >
             <Icon name="wand-magic-sparkles" :size="13" />
-            <template v-if="mode === 'many'">Generate the {{ plural(count.empty.length, 'empty hex', 'empty hexes') }}</template>
+            <template v-if="slots.length">{{ growUi.busy ? 'Making…' : (slots.length === 1 ? 'Make the sector and generate ' : 'Make ' + slots.length + ' sectors and generate ') + (mode === 'many' ? plural(count.empty.length, 'hex', 'hexes') : 'a system') }}</template>
+            <template v-else-if="mode === 'many'">Generate the {{ plural(count.empty.length, 'empty hex', 'empty hexes') }}</template>
             <template v-else>{{ build.rolling ? 'Generating…' : 'Generate a system' }}</template>
             <kbd v-if="mode !== 'removed'" class="build-key">G</kbd>
           </button>
-          <button v-if="mode === 'empty'" type="button" class="ui-btn build-big" disabled title="Next: with the system editor">
-            <Icon name="plus" :size="13" />Blank system<span class="build-next">next</span>
+          <button
+            v-if="mode === 'empty' && !slots.length"
+            type="button"
+            class="ui-btn build-big"
+            data-command="build-blank"
+            :disabled="busy || edit.opening"
+            :aria-busy="edit.opening ? 'true' : undefined"
+            title="An empty system designed by hand: no star, no world, nothing rolled. The designer opens on it"
+            @click="openBlank(one)"
+          >
+            <Icon name="plus" :size="13" />{{ edit.opening ? 'Making…' : 'Blank system' }}
           </button>
           <p v-if="mode === 'many' && count.empty.length === 0" class="build-fine">No hex here is empty.</p>
         </div>
@@ -115,7 +169,9 @@ function generate(): void {
         </p>
         <p v-if="mode === 'removed' && chartRow" class="build-with">Chart: {{ chartRow.name || one }} · <code>{{ chartRow.uwp }}</code></p>
       </div>
+      <p v-if="growUi.error && slots.length" class="build-error" role="alert">{{ growUi.error }}</p>
       <p v-if="build.error" class="build-error" role="alert">{{ build.error }}</p>
+      <p v-else-if="mode === 'empty' && edit.error && edit.hexKey === one" class="build-error" role="alert">{{ edit.error }}</p>
 
       <div v-if="mode === 'many'" class="build-acts build-more">
         <button v-if="filled > 0" type="button" class="ui-btn" :disabled="busy" title="Choose the engine, then “Regenerate them too”" @click="build.sheetOpen = true">
@@ -129,7 +185,8 @@ function generate(): void {
         </button>
       </div>
 
-      <p v-if="mode === 'empty'" class="build-fine">Generate shows the system first; nothing is kept until you say so.</p>
+      <p v-if="slots.length" class="build-fine">Here the systems are kept as they are generated, with no preview: one Undo takes them and the new {{ slots.length === 1 ? 'sector' : 'sectors' }} back.</p>
+      <p v-else-if="mode === 'empty'" class="build-fine">Generate shows the system first; nothing is kept until you say so. A blank system is stored at once, empty, and opens in the designer: every body in it is yours to add.</p>
       <p v-else-if="mode === 'removed'" class="build-fine">A removed hex shows as a faint outline while Build is on, and not at all otherwise.</p>
       </div>
       <div v-if="mode === 'many'" class="build-side">
@@ -166,6 +223,48 @@ function generate(): void {
   font: 400 14.5px/1.5 var(--font-text);
 }
 
+/* Hexes in an empty slot: what generating there will make, and the new sector's name. */
+.build-grow {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.build-grow-lead {
+  margin: 0;
+  padding: 8px 10px;
+  border-left: 3px solid var(--attention);
+  background: var(--bg-2);
+  color: var(--text-0);
+  font: 400 13.5px/1.5 var(--font-text);
+}
+
+.build-grow-name {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--text-muted);
+  font: 500 12px/1.3 var(--font-text);
+}
+
+.build-grow-box {
+  box-sizing: border-box;
+  width: 100%;
+  height: 34px;
+  margin: 0;
+  padding: 0 10px;
+  border: 1px solid var(--control-line);
+  border-radius: var(--r-2);
+  background: var(--bg-2);
+  color: var(--text-0);
+  font: 400 14px/1.2 var(--font-text);
+}
+
+.build-grow-name small {
+  font-size: 12px;
+}
+
 .build-card {
   margin-top: 14px;
   padding: 14px;
@@ -189,6 +288,15 @@ function generate(): void {
   min-height: 38px;
   padding: 0 14px;
   font-size: 14px;
+}
+
+/* The act that makes a sector says so in full: at column width it wraps rather than run past the pane. */
+.build-big.is-grow {
+  max-width: 100%;
+  height: auto;
+  padding-block: 8px;
+  white-space: normal;
+  text-align: left;
 }
 
 .is-primary .build-key {

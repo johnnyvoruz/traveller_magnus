@@ -74,6 +74,49 @@
   --scroll-track-line: color-mix(in srgb, var(--signal-dim) 33%, transparent);
   --focus-ring: var(--attention);  /* legacy :focus-visible is 2px amber */
 
+  /* Default hybrid symbol set. public/surface-icons/default uses these same colours. */
+  --icon-city: #c0182b;
+  --icon-arcology: #7a1fa2;
+  --icon-outpost: #e07b00;
+  --icon-farm: #785a14;
+  --icon-resource: #e8b800;
+  --icon-resource-ink: #222222;
+  --icon-naval: #2846a0;
+  --icon-scout: #1e8c5a;
+  --icon-military: #5a5a5a;
+  --icon-estate: #be9628;
+  --icon-penal: #464646;
+  --icon-dome: #30c0ff;
+  --icon-port: #ffffff;
+  --icon-port-ink: #111111;
+  --icon-port-letter: #b00020;
+  --icon-volcano: #e8501c;
+  --icon-mark: #c9ced8;
+  --icon-farm-line: color-mix(in srgb, var(--icon-farm) 90%, transparent);
+
+  /* Hybrid surface map. Canvas reads these once per layer, the way icons read --icon-*. */
+  --surface-net: #788296;
+  --surface-net-fill: color-mix(in srgb, var(--surface-net) 18%, transparent);
+  --surface-net-line: #a0aabe;
+  --surface-net-stroke: color-mix(in srgb, var(--surface-net-line) 45%, transparent);
+  --surface-sun-core: #fff4d6;
+  --surface-sun-inner: color-mix(in srgb, #ffd68c 85%, transparent);
+  --surface-sun-mid: color-mix(in srgb, #ffaa50 28%, transparent);
+  --surface-sun-edge: color-mix(in srgb, #ff963c 0%, transparent);
+  --surface-twilight-core: color-mix(in srgb, #ffe28c 90%, transparent);
+  --surface-twilight-mid: color-mix(in srgb, #ffbe5a 45%, transparent);
+  --surface-twilight-edge: color-mix(in srgb, var(--attention) 0%, transparent);
+  --surface-terminator-lit: color-mix(in srgb, var(--attention) 85%, transparent);
+  --surface-terminator-signal: color-mix(in srgb, var(--signal) 80%, transparent);
+  --surface-ink-on-light: color-mix(in srgb, #19191e 85%, transparent);
+  --surface-ink-on-dark: color-mix(in srgb, #fafaf5 90%, transparent);
+  --surface-outline-dark: color-mix(in srgb, #000000 30%, transparent);
+  --surface-outline-light: color-mix(in srgb, var(--icon-port) 30%, transparent);
+  --surface-graticule: color-mix(in srgb, var(--icon-port) 35%, transparent);
+  --surface-twilight-ring: color-mix(in srgb, #ffbe3c 90%, transparent);
+  --surface-twilight-midline: color-mix(in srgb, var(--icon-port) 90%, transparent);
+  --surface-scale-chip: color-mix(in srgb, #10141c 75%, transparent);
+
   /* text */
   --text-0: #e6eef0;      /* panel title */
   --text-1: #d2e0e5;      /* body */
@@ -209,6 +252,13 @@
   --chart-zone-red: #FF0000;
   --chart-grid: #1f2833;         /* renderer.js:1047 */
   --chart-selected: #66fcf1;     /* inspected hex outline (renderer.js:2030) */
+
+  /* Build cursors (findings/builder_system_design.md §18): what the next press will do. Inline SVG, no image files.
+     The badge colours are --signal and --danger; the arrow is the system's own white on ink. */
+  --cursor-add: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cpath d='M3 2v15l4-3.6 2.8 6.1 2.3-1-2.8-6h5.4z' fill='%23ffffff' stroke='%230b0c10' stroke-width='1.4' stroke-linejoin='round'/%3E%3Ccircle cx='19' cy='19' r='6.2' fill='%2366fcf1' stroke='%230b0c10' stroke-width='1.4'/%3E%3Cpath d='M19 15.8v6.4M15.8 19h6.4' stroke='%230b0c10' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") 3 2, copy;                 /* Shift over a hex not selected: add it */
+  --cursor-take: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cpath d='M3 2v15l4-3.6 2.8 6.1 2.3-1-2.8-6h5.4z' fill='%23ffffff' stroke='%230b0c10' stroke-width='1.4' stroke-linejoin='round'/%3E%3Ccircle cx='19' cy='19' r='6.2' fill='%23ff6b6b' stroke='%230b0c10' stroke-width='1.4'/%3E%3Cpath d='M15.8 19h6.4' stroke='%230b0c10' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") 3 2, default;             /* Shift over a selected hex, or Alt+Shift: take it away */
+  --cursor-box: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cpath d='M12 3v7M12 14v7M3 12h7M14 12h7' stroke='%230b0c10' stroke-width='3.4' stroke-linecap='round'/%3E%3Cpath d='M12 3v7M12 14v7M3 12h7M14 12h7' stroke='%23ffffff' stroke-width='1.6' stroke-linecap='round'/%3E%3Crect x='15' y='15' width='10' height='8' fill='%230b0c10' fill-opacity='.55' stroke='%2366fcf1' stroke-width='1.6' stroke-dasharray='3 2'/%3E%3C/svg%3E") 12 12, crosshair;              /* Select hexes is on: a drag draws a box */
+  --cursor-box-take: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cpath d='M12 3v7M12 14v7M3 12h7M14 12h7' stroke='%230b0c10' stroke-width='3.4' stroke-linecap='round'/%3E%3Cpath d='M12 3v7M12 14v7M3 12h7M14 12h7' stroke='%23ffffff' stroke-width='1.6' stroke-linecap='round'/%3E%3Crect x='15' y='15' width='10' height='8' fill='%230b0c10' fill-opacity='.55' stroke='%23ff6b6b' stroke-width='1.6' stroke-dasharray='3 2'/%3E%3C/svg%3E") 12 12, crosshair;          /* the box takes away */
   --chart-route-xboat: #016a01;  /* a route with no allegiance (core.js:137-150) */
   --chart-route-other: #9faeb8;  /* an allegiance with no colour until truth v3 resolves stylesheets */
   --chart-route-im: #048104;

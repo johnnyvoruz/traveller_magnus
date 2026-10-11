@@ -91,8 +91,13 @@ function campaignPane(parts: string[]): Pane | null {
     return null;
 }
 
+/**
+ * A hex on the map, and its orbit, open the dossier.
+ * A sector or a subsector does not. With Build off that pane was an empty "World".
+ * Build opens it with panel=dossier while Build is on.
+ */
 function dossierDefault(view: PaneView): boolean {
-    return view.kind === 'map' || view.kind === 'orbit' || view.kind === 'sector' || view.kind === 'subsector';
+    return view.kind === 'map' || view.kind === 'orbit';
 }
 
 function paneFromQuery(view: PaneView, query: Query): Pane {
@@ -208,7 +213,9 @@ export function withQuery(query: Query, changes: Query): Record<string, string> 
 }
 
 /**
- * The three old campaign paths, onto the home map, and the strip of panel=dossier.
+ * The three old campaign paths, onto the home map, and the strip of panel=dossier
+ * where the dossier is already the default. A sector or a subsector keeps it:
+ * that pane is shut until the query names it.
  * Null when the address is already in its canonical form.
  */
 export function campaignRedirect(path: string, query: Query = {}): Redirect | null {
@@ -221,7 +228,8 @@ export function campaignRedirect(path: string, query: Query = {}): Redirect | nu
         }
         return { path: '/', query: withQuery(query, { panel: 'campaign', record: null }) };
     }
-    if (first(query.panel) === 'dossier') {
+    const view = viewOf(parts);
+    if (first(query.panel) === 'dossier' && view.kind !== 'sector' && view.kind !== 'subsector') {
         const kept = path.startsWith('/') ? path : '/' + path;
         return { path: kept.length > 0 ? kept : '/', query: withQuery(query, { panel: null }) };
     }

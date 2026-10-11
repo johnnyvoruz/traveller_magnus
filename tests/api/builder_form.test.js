@@ -196,6 +196,32 @@ if (process.env.RUN_API_TESTS !== '1') {
             assert.deepEqual(kept.body.data.entry, indexed);
             assert.equal(kept.body.data.entry.allegiance, 'Im');
 
+            const raced = await jsonFetch(`${hex('1910')}/keep`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                    hash: row.treeHash,
+                    baseRev: kept.body.data.rev,
+                    changes: [{ id: 'chart.notes', value: 'too late' }],
+                }),
+            });
+            assert.equal(raced.status, 409, JSON.stringify(raced.body));
+            assert.equal(raced.body.error.code, 'conflict');
+            assert.equal(raced.body.error.details.current.treeHash, kept.body.data.treeHash);
+            assert.equal(raced.body.error.details.current.rev, kept.body.data.rev);
+            const racedDraft = await jsonFetch(`${hex('1910')}/draft`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                    hash: row.treeHash,
+                    changes: [{ id: 'chart.notes', value: 'too late' }],
+                }),
+            });
+            assert.equal(racedDraft.status, 409, JSON.stringify(racedDraft.body));
+            assert.equal(racedDraft.body.error.details.current.treeHash, kept.body.data.treeHash);
+            const afterRace = await jsonFetch(`${hex('1910')}`, { headers: { cookie } });
+            assert.equal(afterRace.body.data.treeHash, kept.body.data.treeHash);
+
             const keptForm = await jsonFetch(`${hex('1910')}/form`, { headers: { cookie } });
             assert.equal(keptForm.body.data.hash, kept.body.data.treeHash);
             assert.equal(field(keptForm.body.data.form, 'chart.allegiance').value, 'Im');
@@ -221,9 +247,12 @@ if (process.env.RUN_API_TESTS !== '1') {
                 headers,
                 body: JSON.stringify({ edition: 'MgT2E', baseRev: 0, starType: 'Q' }),
             });
-            assert.equal(odd.status, 400, JSON.stringify(odd.body));
-            const absent = await jsonFetch(`${hex('1912')}`, { headers: { cookie } });
-            assert.equal(absent.status, 404, JSON.stringify(absent.body));
+            assert.equal(odd.status, 200, JSON.stringify(odd.body));
+            const oddObject = await jsonFetch(`${base}/api/universes/${id}/objects/${odd.body.data.treeHash}`, { headers: { cookie } });
+            assert.equal(oddObject.body.kind, 'hand');
+            assert.equal(oddObject.body.system.name, '');
+            assert.equal(oddObject.body.system.stars.length, 0);
+            assert.equal(oddObject.text.includes('Lesotho'), false);
 
             const blank = await jsonFetch(`${hex('1911')}/blank`, {
                 method: 'POST',
@@ -233,12 +262,15 @@ if (process.env.RUN_API_TESTS !== '1') {
             assert.equal(blank.status, 200, JSON.stringify(blank.body));
             assert.equal(blank.body.data.rev, 1);
             assert.equal(blank.body.data.roll, 0);
+            assert.equal(blank.body.data.entry.name, '');
+            assert.equal(blank.body.data.entry.uwp, '');
             assert.match(blank.body.data.treeHash, /^[0-9a-f]{64}$/);
             const blankForm = await jsonFetch(`${hex('1911')}/form`, { headers: { cookie } });
             assert.equal(blankForm.status, 200, JSON.stringify(blankForm.body));
-            assert.equal(field(blankForm.body.data.form, 'star.0.type').value, 'G');
-            assert.equal(field(blankForm.body.data.form, 'star.0.subtype') != null, true);
-            assert.equal(field(blankForm.body.data.form, 'star.0.class') != null, true);
+            assert.equal(blankForm.body.data.form.mode, 'hand');
+            assert.equal(field(blankForm.body.data.form, 'system.name').value, '');
+            assert.equal(field(blankForm.body.data.form, 'star.0.type'), null);
+            assert.equal(field(blankForm.body.data.form, 'star.add').value, false);
         } finally {
             if (child) stopDev(child.pid);
             rmSync(persistTo, { recursive: true, force: true });

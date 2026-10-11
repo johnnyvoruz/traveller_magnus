@@ -29,7 +29,7 @@ export class UniverseDO extends DurableObject<Env> {
             exec: (query, ...params) => this.ctx.storage.sql.exec(query, ...params).toArray() as ReturnType<Sql['exec']>,
             transaction: (fn) => this.ctx.storage.transactionSync(fn),
         };
-        const builderPath = url.pathname === '/pin' || url.pathname.startsWith('/hexes') || url.pathname.startsWith('/jobs');
+        const builderPath = url.pathname === '/pin' || url.pathname.startsWith('/hexes') || url.pathname.startsWith('/jobs') || url.pathname.startsWith('/sectors');
         if (builderPath && request.method !== 'GET' && request.method !== 'HEAD' && !this.allowMutation()) {
             return Response.json(
                 { ok: false, error: { code: 'rate_limited', message: 'Too many requests.' } },

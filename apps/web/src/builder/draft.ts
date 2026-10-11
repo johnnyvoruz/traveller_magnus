@@ -3,6 +3,9 @@
  * The draft call names the stored envelope every time, debounced, and an older
  * answer is dropped. Keep joins the map queue so it takes the rev a save in
  * flight already applied. A 409 leaves the draft and offers the server's row.
+ * When that row is a newer tree, Keep mine re-reads its form and applies the
+ * local edits by field id. Keep posts only after that, and never against a hash
+ * that is gone. Blank creates a system, then opens this same handle.
  */
 import { ref, type Ref } from 'vue';
 import {
@@ -11,8 +14,8 @@ import {
     type EditForm,
     type FormChange,
     type FormChanged,
+    FormMessage,
     type FormField,
-    type FormMessage,
     type FormRoll,
     type FormValue,
 } from '@voyage/shared';
@@ -35,6 +38,11 @@ export type DraftPort = {
     keep(hexKey: string, body: { hash: string; changes: FormChange[]; roll?: FormRoll[] }): Promise<KeepOutcome>;
 };
 
+/** A field the new system no longer has. `label` is the name the person saw. */
+export type DroppedField = { id: string; label: string };
+
+export type BlankOpened = { draft: DraftHandle; undo: UndoToken };
+
 export type DraftHandle = {
     form: Ref<EditForm>;
     dirty: Ref<boolean>;
@@ -43,13 +51,31 @@ export type DraftHandle = {
     messages: Ref<FormMessage[]>;
     /** The row stored now, when Keep lost a race. Null while the draft still leads. */
     conflict: Ref<HexRow | null>;
+    /** True when that row's tree is not the one this draft names. Keep will not resend the old hash. */
+    replaced: Ref<boolean>;
+    /** Fields dropped while applying this draft onto a newer tree, named for the person. */
+    dropped: Ref<DroppedField[]>;
     set(fieldId: string, value: FormValue): void;
+    /**
+     * Append one star or one body. Each call is its own change, in call order.
+     * `id` is the client's and is the same id Keep sends.
+     */
+    add(field: 'star.add' | 'body.add', id: string): void;
+    /** Drop one pending change, including a remove whose field has already left the form. */
+    unset(fieldId: string): void;
     rollAgain(id: string): void;
     keep(): Promise<UndoToken | null>;
+    /** Re-read the stored form and lay this draft's edits on it. Does not Keep. */
+    keepMine(): Promise<void>;
+    /** Show the stored form and throw this draft away. */
+    takeTheirs(): Promise<void>;
     discard(): void;
 };
 
-type DraftMap = { openDraft(hexKey: string): Promise<DraftHandle> };
+type DraftMap = {
+    openDraft(hexKey: string): Promise<DraftHandle>;
+    blank(hexKey: string): Promise<BlankOpened>;
+};
 
 let bound: DraftMap | null = null;
 
@@ -63,8 +89,13 @@ export function openDraft(hexKey: string): Promise<DraftHandle> {
     return bound.openDraft(hexKey);
 }
 
+export function blank(hexKey: string): Promise<BlankOpened> {
+    if (!bound) throw new Error('offline');
+    return bound.blank(hexKey);
+}
+
 function cloneForm(form: EditForm): EditForm {
-    return {
+    const copy: EditForm = {
         edition: form.edition,
         sections: form.sections.map((section) => ({
             id: section.id,
@@ -79,6 +110,8 @@ function cloneForm(form: EditForm): EditForm {
             })),
         })),
     };
+    if (form.mode) copy.mode = form.mode;
+    return copy;
 }
 
 function findField(form: EditForm, id: string): FormField | null {
@@ -93,6 +126,50 @@ function findField(form: EditForm, id: string): FormField | null {
 function writeField(form: EditForm, id: string, value: FormValue): void {
     const field = findField(form, id);
     if (field) field.value = value;
+}
+
+/** The server names the field in the sentence: `profile.st cannot hold that.` */
+function fieldIdIn(text: string): string | null {
+    const patterns = [
+        /^(\S+) cannot hold that\.$/,
+        /^Unknown field (\S+)\.$/,
+        /^Nothing rolls (\S+)\.$/,
+        /^(\S+) cannot be edited\.$/,
+    ];
+    for (const pattern of patterns) {
+        const found = pattern.exec(text);
+        if (found) return found[1];
+    }
+    return null;
+}
+
+function listedMessages(details: unknown): FormMessage[] {
+    if (!details || typeof details !== 'object' || Array.isArray(details)) return [];
+    const raw = (details as { messages?: unknown }).messages;
+    if (!Array.isArray(raw)) return [];
+    const out: FormMessage[] = [];
+    for (const item of raw) {
+        const parsed = FormMessage.safeParse(item);
+        if (parsed.success) out.push(parsed.data);
+    }
+    return out;
+}
+
+/**
+ * A draft the server refuses (HTTP 400). The words and the field id land on
+ * `messages`. `holds` stays true so Keep does not post while it stands.
+ * A drop or a conflict is not this.
+ */
+function refusalMessages(err: unknown): FormMessage[] | null {
+    if (!err || typeof err !== 'object') return null;
+    if ((err as { status?: unknown }).status !== 400) return null;
+    const listed = listedMessages((err as { details?: unknown }).details);
+    if (listed.length) {
+        return listed.some((item) => item.holds) ? listed : listed.map((item) => ({ ...item, holds: true }));
+    }
+    const raw = err instanceof Error ? err.message : '';
+    const text = raw && raw !== 'offline' ? raw : 'The server refused this draft.';
+    return [{ id: fieldIdIn(text), text, holds: true }];
 }
 
 export async function startDraft(port: DraftPort, hexKey: string): Promise<DraftHandle> {
@@ -111,6 +188,34 @@ export async function startDraft(port: DraftPort, hexKey: string): Promise<Draft
     const changedByEngine = ref<FormChanged[]>([]);
     const messages = ref<FormMessage[]>([]);
     const conflict = ref<HexRow | null>(null);
+    const replaced = ref(false);
+    const dropped = ref<DroppedField[]>([]);
+
+    function labelOf(id: string): string {
+        const live = findField(form.value, id);
+        if (live && live.label) return live.label;
+        const origin = findField(baseline, id);
+        return origin && origin.label ? origin.label : id;
+    }
+
+    function stillThere(next: EditForm, id: string): boolean {
+        if (findField(next, id)) return true;
+        if (!/^body\.\d+$/.test(id)) return false;
+        const prefix = id + '.';
+        for (const section of next.sections) {
+            for (const field of section.fields) {
+                if (field.id.startsWith(prefix)) return true;
+            }
+        }
+        return false;
+    }
+
+    async function readForm(): Promise<{ hash: string; form: EditForm }> {
+        const loaded = await port.request('GET', port.hexPath(hexKey, '/form'));
+        const parsed = FormRead.safeParse(loaded);
+        if (!parsed.success) throw new Error('The server sent a form the store could not read.');
+        return parsed.data;
+    }
 
     function bodyNow(): { hash: string; changes: FormChange[]; roll?: FormRoll[] } {
         const body: { hash: string; changes: FormChange[]; roll?: FormRoll[] } = {
@@ -127,13 +232,27 @@ export async function startDraft(port: DraftPort, hexKey: string): Promise<Draft
         else changes.push({ id, value });
     }
 
+    /** A field of a star or body this draft has already added, before the answer returns. */
+    function pendingAdd(fieldId: string): boolean {
+        for (const change of changes) {
+            if (change.id !== 'star.add' && change.id !== 'body.add') continue;
+            const id = change.value;
+            if (typeof id !== 'string' || !id) continue;
+            if (fieldId === id || fieldId.startsWith(id + '.')) return true;
+        }
+        return false;
+    }
+
     async function publish(token: number): Promise<void> {
         if (token !== epoch) return;
         const body = bodyNow();
         let answerData: unknown;
         try {
             answerData = await port.request('POST', port.hexPath(hexKey, '/draft'), body);
-        } catch {
+        } catch (err) {
+            if (token !== epoch) return;
+            const refused = refusalMessages(err);
+            if (refused) messages.value = refused;
             return;
         }
         if (token !== epoch) return;
@@ -170,12 +289,28 @@ export async function startDraft(port: DraftPort, hexKey: string): Promise<Draft
 
     function set(fieldId: string, value: FormValue): void {
         const field = findField(form.value, fieldId);
-        if (!field || field.permission === 'read') return;
+        if (field && field.permission === 'read') return;
+        if (!field && !pendingAdd(fieldId)) return;
         rolls = rolls.filter((id) => id !== fieldId);
         const origin = findField(baseline, fieldId);
         if (origin && origin.value === value) changes = changes.filter((item) => item.id !== fieldId);
         else upsert(fieldId, value);
         writeField(form.value, fieldId, value);
+        note();
+    }
+
+    function add(field: 'star.add' | 'body.add', id: string): void {
+        if (field !== 'star.add' && field !== 'body.add') return;
+        if (!id) return;
+        changes.push({ id: field, value: id });
+        note();
+    }
+
+    function unset(fieldId: string): void {
+        if (!changes.some((item) => item.id === fieldId)) return;
+        changes = changes.filter((item) => item.id !== fieldId);
+        const origin = findField(baseline, fieldId);
+        if (origin) writeField(form.value, fieldId, origin.value);
         note();
     }
 
@@ -198,12 +333,15 @@ export async function startDraft(port: DraftPort, hexKey: string): Promise<Draft
         }
         const held = messages.value.find((item) => item.holds);
         if (held) throw new Error(held.text || 'The engine could not build this system.');
+        if (replaced.value) return null;
         if (!dirty.value) return null;
         const mark = epoch;
         const sent = bodyNow();
         const outcome = await port.keep(hexKey, sent);
         if (outcome.status === 'conflict') {
             conflict.value = outcome.current;
+            const tree = outcome.current ? outcome.current.treeHash : null;
+            replaced.value = tree !== hash;
             return null;
         }
         if (outcome.status === 'refused') {
@@ -212,15 +350,80 @@ export async function startDraft(port: DraftPort, hexKey: string): Promise<Draft
         }
         if (outcome.row.treeHash) hash = outcome.row.treeHash;
         conflict.value = null;
+        replaced.value = false;
         if (mark === epoch) {
             changes = [];
             rolls = [];
+            dropped.value = [];
             baseline = cloneForm(form.value);
             dirty.value = false;
             changedByEngine.value = [];
             messages.value = [];
         }
         return outcome.undo;
+    }
+
+    async function keepMine(): Promise<void> {
+        if (!conflict.value && !replaced.value) return;
+        const mine = changes.map((item) => ({ id: item.id, value: item.value }));
+        const mineRolls = [...rolls];
+        epoch += 1;
+        if (timer) timer();
+        timer = null;
+        const read = await readForm();
+        const gone: DroppedField[] = [];
+        const nextChanges: FormChange[] = [];
+        for (const change of mine) {
+            const carried = change.id === 'star.add' || change.id === 'body.add' || pendingAdd(change.id);
+            if (!carried && !stillThere(read.form, change.id)) {
+                gone.push({ id: change.id, label: labelOf(change.id) });
+                continue;
+            }
+            const origin = findField(read.form, change.id);
+            if (origin && origin.value === change.value) continue;
+            nextChanges.push(change);
+        }
+        const nextRolls: string[] = [];
+        for (const id of mineRolls) {
+            if (!stillThere(read.form, id)) {
+                if (!gone.some((item) => item.id === id)) gone.push({ id, label: labelOf(id) });
+                continue;
+            }
+            nextRolls.push(id);
+        }
+        hash = read.hash;
+        baseline = cloneForm(read.form);
+        form.value = cloneForm(read.form);
+        changes = nextChanges;
+        rolls = nextRolls;
+        for (const change of changes) writeField(form.value, change.id, change.value);
+        dropped.value = gone;
+        conflict.value = null;
+        replaced.value = false;
+        dirty.value = changes.length > 0 || rolls.length > 0;
+        changedByEngine.value = [];
+        messages.value = [];
+        if (!dirty.value) return;
+        const token = ++epoch;
+        await publish(token);
+    }
+
+    async function takeTheirs(): Promise<void> {
+        epoch += 1;
+        if (timer) timer();
+        timer = null;
+        const read = await readForm();
+        hash = read.hash;
+        baseline = cloneForm(read.form);
+        form.value = cloneForm(read.form);
+        changes = [];
+        rolls = [];
+        dirty.value = false;
+        changedByEngine.value = [];
+        messages.value = [];
+        conflict.value = null;
+        replaced.value = false;
+        dropped.value = [];
     }
 
     function discard(): void {
@@ -234,7 +437,25 @@ export async function startDraft(port: DraftPort, hexKey: string): Promise<Draft
         changedByEngine.value = [];
         messages.value = [];
         conflict.value = null;
+        replaced.value = false;
+        dropped.value = [];
     }
 
-    return { form, dirty, changedByEngine, messages, conflict, set, rollAgain, keep, discard };
+    return {
+        form,
+        dirty,
+        changedByEngine,
+        messages,
+        conflict,
+        replaced,
+        dropped,
+        set,
+        add,
+        unset,
+        rollAgain,
+        keep,
+        keepMine,
+        takeTheirs,
+        discard,
+    };
 }

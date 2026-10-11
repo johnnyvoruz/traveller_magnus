@@ -16,6 +16,16 @@ import { buildReady, hexState, placeNames } from '../workspace/build/acts.ts';
 import BuildBar from '../workspace/build/BuildBar.vue';
 import BuildPane from '../workspace/build/BuildPane.vue';
 import BuildScope from '../workspace/build/BuildScope.vue';
+import { edit, editing, draftHandle } from '../workspace/build/edit.ts';
+import SystemEditor from '../workspace/build/SystemEditor.vue';
+import DesignAsk from '../workspace/build/DesignAsk.vue';
+import { handUi } from '../workspace/build/hand.ts';
+import { isHandHex } from '../workspace/build/hand_acts.ts';
+import { buildStore, ownSectors } from '../workspace/build/seam.ts';
+import { cancelRename, commitRename, nameAt, sectorUi } from '../workspace/build/sector_acts.ts';
+import SectorBar from '../workspace/build/SectorBar.vue';
+import SectorPane from '../workspace/build/SectorPane.vue';
+import { isOwnSlug, NAME_MAX, parseSlot } from '../workspace/build/sectors.ts';
 import { scopeTitle } from '../workspace/build/scope.ts';
 import { subsectorLetter } from '../builder/address.ts';
 import { build, choiceLine, plural, spanLine } from '../workspace/build/state.ts';
@@ -26,6 +36,7 @@ import { bodyByKey, dossierPath, orbitPath } from '../orbit/bodies.ts';
 import { orbitOpenLocation } from './orbit_open.ts';
 import { parseLinkDate, startDays } from '../orbit/clock.ts';
 import { dayNightFigure, markerAt, starportTick, turningOf, yearFigure } from '../orbit/daynight.ts';
+import { subsolarOn, type Subsolar } from '../orbit/sun.ts';
 import { planSystem, type Plan } from '../orbit/layout.ts';
 import { bodyAngle } from '../orbit/maths.ts';
 import { bodyKeys, bodyModel, overviewModel, pickSystem, type AllegianceName } from './model.ts';
@@ -73,6 +84,31 @@ const scope = computed((): { slug: string; letter: string | null } | null => {
     if (view.kind === 'subsector') return { slug: view.sector, letter: view.letter };
     return null;
 });
+/** The address is an empty slot on the grid of sectors: Build offers a new sector there. */
+const slot = computed(() => (scope.value && scope.value.letter === null ? parseSlot(scope.value.slug) : null));
+/** The sector on the address is one the referee made: it can be renamed, moved and deleted. */
+const own = computed(() => {
+    const store = ownSectors();
+    return scope.value && store && isOwnSlug(scope.value.slug) ? store.get(scope.value.slug) : null;
+});
+/** A subsector of the referee's with no name of its own: its title reads muted. */
+const unnamed = computed(() => own.value !== null && scope.value !== null && scope.value.letter !== null && nameAt() === '');
+const universeName = computed(() => {
+    const store = buildStore();
+    const universe = store ? store.universe() : null;
+    return universe ? universe.name : '';
+});
+const renameBox = ref<HTMLInputElement | null>(null);
+
+// The title became a box: it takes focus with its text selected, so typing replaces the name.
+watch(() => sectorUi.renaming, (on) => {
+    if (on) void nextTick(() => { if (renameBox.value) { renameBox.value.focus(); renameBox.value.select(); } });
+});
+
+function keepRename(event: Event): void {
+    void commitRename((event.target as HTMLInputElement).value);
+}
+
 /** A system rolled for this hex and not kept: the panel shows it in place of what is stored. */
 const preview = computed(() => (building.value && build.preview && build.preview.hexKey === hexKey.value ? build.preview : null));
 const liveEntry = computed(() => (preview.value ? preview.value.entry : props.entry));
@@ -95,7 +131,9 @@ const overview = computed(() => {
  * What Build makes of the selection: many hexes, an empty hex, a hex the builder removed,
  * or one system. Null when Build is off, and while the sector is still arriving.
  */
-const buildMode = computed((): 'many' | 'empty' | 'removed' | 'system' | 'scope' | null => {
+const buildMode = computed((): 'many' | 'empty' | 'removed' | 'system' | 'scope' | 'slot' | null => {
+    // Hexes picked in an empty slot are shown from the slot's address: they are many hexes, not the slot.
+    if (slot.value) return build.selection.length > 1 ? 'many' : 'slot';
     // A hand-picked selection is shown from the sector's or the subsector's address.
     if (scope.value) return build.selection.length > 1 ? 'many' : 'scope';
     if (!building.value) return null;
@@ -174,6 +212,32 @@ function placeOnStrip(days: number): number | null {
     return markerAt(turningOf(found.body, !!found.parent), days, angle);
 }
 
+/**
+ * Where the star stands over the body shown on a clock value, for the surface map's day and
+ * night layer. Uses the same kept plan as the strip, so a running clock does not lay the
+ * system out every frame. Null for a star, or with nothing shown.
+ */
+function sunOnSurface(days: number): Subsolar | null {
+    if (!liveTree.value || !props.bodyKey || liveError.value) return null;
+    const system = pickSystem(liveTree.value.body);
+    const found = system ? bodyByKey(system, props.bodyKey) : null;
+    if (!system || !found || found.star) return null;
+    if (!aimed || aimed.system !== system || aimed.hexKey !== liveTree.value.hexKey) {
+        aimed = { system, hexKey: liveTree.value.hexKey, plan: planSystem(system as Record<string, any>, liveTree.value.hexKey) };
+    }
+    const key = props.bodyKey;
+    const world = aimed.plan.worlds.find((item) => item.key === key);
+    const host = world ?? aimed.plan.worlds.find((item) => item.moons.some((moon) => moon.key === key));
+    const angle = host && host.period > 0 ? bodyAngle(host.epoch, host.period, days) + Math.PI : 0;
+    return subsolarOn(found.body as Record<string, unknown>, !!found.parent, days, angle);
+}
+
+/** Now for the surface map's time bar: the campaign date when one is set, else the view's date. */
+const nowDays = computed(() => {
+    const stored = campaign.clock ? campaign.clock.days : null;
+    return stored !== null && Number.isFinite(stored) ? stored : clockDays.value;
+});
+
 /** Local time at the starport (longitude 0) for the view's date. Hidden when there is no day. */
 const tick = computed(() => {
     if (!dayNight.value || dayNight.value.locked || !liveTree.value || !props.bodyKey || liveError.value) return null;
@@ -207,10 +271,27 @@ const bodySurface = computed((): SurfaceTarget | null => {
     return found && !found.star ? { hexKey: liveTree.value.hexKey, dossierKey: props.bodyKey, body: found.body } : null;
 });
 
+/** A sector's or a subsector's address asked for this pane while Build is off: it says so, and is not an empty "World". */
+const scopeOff = computed(() => {
+    if (props.hex || props.orbit || buildReady()) return '';
+    const kind = addressPane(route.path, route.query).view.kind;
+    return kind === 'sector' || kind === 'subsector' ? kind : '';
+});
+
+/** The address is an empty slot, asked for while Build is off. */
+const slotOff = computed(() => {
+    if (!scopeOff.value) return false;
+    const view = addressPane(route.path, route.query).view;
+    return view.kind === 'sector' && parseSlot(view.sector) !== null;
+});
+
 const title = computed(() => {
+    if (scopeOff.value) return slotOff.value ? 'Empty slot' : props.sectorName || 'Sector';
+    if (buildMode.value === 'slot') return 'Empty slot';
     if (buildMode.value === 'many') return plural(build.selection.length, 'hex', 'hexes');
     if (buildMode.value === 'scope' && scope.value) return scopeTitle(scope.value, props.sectorName, (key) => placeNames(key).subsector);
     if (buildMode.value === 'empty' || buildMode.value === 'removed') return 'Empty hex';
+    if (drafting.value && overview.value) return overview.value.header.title;
     if (profile.value) return profile.value.title;
     if (overview.value) return overview.value.header.title;
     return props.hex || 'World';
@@ -218,6 +299,7 @@ const title = computed(() => {
 
 const meta = computed(() => {
     if (buildMode.value === 'many') return spanLine(build.selection);
+    if (buildMode.value === 'slot') return sectorUi.where;
     if (buildMode.value === 'scope') return scope.value && scope.value.letter ? 'Subsector ' + scope.value.letter + ' · 80 hexes' : 'Sector · 1,280 hexes';
     // In Build the line above the title says where; it is not said twice.
     if (buildMode.value) return profile.value ? profile.value.place : '';
@@ -227,25 +309,32 @@ const meta = computed(() => {
 });
 
 const chip = computed(() => {
-    if (buildMode.value === 'many' || buildMode.value === 'scope') return '';
+    if (buildMode.value === 'many' || buildMode.value === 'scope' || buildMode.value === 'slot') return '';
     if (buildMode.value === 'empty' || buildMode.value === 'removed') return props.hex;
     return overview.value && !profile.value ? overview.value.header.hexChip : '';
 });
 
+/** A draft of this system is open: the pane shows the editor in the dossier's place. */
+const drafting = computed(() => buildMode.value === 'system' && editing(hexKey.value));
+/** The draft could not be opened: said under the bar. */
+const editError = computed(() => (buildMode.value === 'system' && !draftHandle.value && edit.hexKey === hexKey.value ? edit.error : ''));
+
 /** The last word of the line to climb: what state the thing shown is in, when it has one worth saying. */
 const buildWord = computed(() => {
+    if (drafting.value) return 'Editing';
     if (preview.value) return 'Preview';
     if (buildMode.value === 'removed') return 'Removed';
     return '';
 });
 
 function openSubsector(letter: string): void {
-    void router.push({ path: '/s/' + encodeURIComponent(props.slug) + '/sub/' + letter, query: route.query });
+    // A sector's or a subsector's pane opens only when the address asks for it (Build is on here).
+    void router.push({ path: '/s/' + encodeURIComponent(props.slug) + '/sub/' + letter, query: { ...route.query, panel: 'dossier' } });
 }
 
 function openSector(): void {
     build.selection = [];
-    void router.push({ path: '/s/' + encodeURIComponent(props.slug), query: route.query });
+    void router.push({ path: '/s/' + encodeURIComponent(props.slug), query: { ...route.query, panel: 'dossier' } });
 }
 
 /** From a hex, up one step: the subsector it lies in. */
@@ -329,7 +418,7 @@ defineExpose({ remeasure: publish });
   <div class="dossier-root">
     <Panel ref="panel" :open="open" :title="title" :meta="meta" :chip="chip" :span="span" :keep-chip="buildMode !== null" @close="$emit('close')" @span="chooseSpan">
       <template v-if="profile || buildMode" #eyebrow>
-        <template v-if="profile">
+        <template v-if="profile && !drafting">
           <button type="button" class="doss-crumb" @click="showOverview">
             <Icon name="arrow-left" :size="10" />{{ profile.crumbSystem }}
           </button>
@@ -341,7 +430,8 @@ defineExpose({ remeasure: publish });
         <template v-else>
           <!-- Build's line to climb: the sector is a link; the subsector waits for its address. -->
           <!-- On the sector's own page the line names the universe's sector plainly: there is nothing above it to climb to. -->
-          <span v-if="buildMode === 'scope' && scope && !scope.letter">Sector</span>
+          <span v-if="buildMode === 'slot'">{{ universeName || 'Your map' }}</span>
+          <span v-else-if="buildMode === 'scope' && scope && !scope.letter">Sector</span>
           <button v-else type="button" class="doss-crumb" @click="openSector">{{ places.sector || sectorName }}</button>
           <template v-if="buildMode === 'scope' && scope && scope.letter">
             <span class="doss-crumb-sep">/</span><span>Subsector</span>
@@ -354,11 +444,28 @@ defineExpose({ remeasure: publish });
           <template v-if="buildWord"><span class="doss-crumb-sep">/</span><span class="doss-crumb-word">{{ buildWord }}</span></template>
         </template>
       </template>
-      <template v-if="profile && bodyKey" #glyph>
+      <template v-if="profile && bodyKey && !drafting" #glyph>
         <BodyGlyph :glyph="profile.glyph" :mainworld="profile.mapBadge !== ''" :size="26" />
       </template>
-      <template v-if="profile || buildMode === 'system'" #actions>
-        <template v-if="profile">
+      <template v-if="sectorUi.renaming && own" #title>
+        <input
+          ref="renameBox"
+          class="panel-title-box"
+          type="text"
+          autocomplete="off"
+          spellcheck="false"
+          :maxlength="NAME_MAX"
+          :value="nameAt()"
+          :disabled="sectorUi.busy"
+          :aria-label="scope && scope.letter ? 'Name of subsector ' + scope.letter : 'Name of the sector'"
+          @keydown.enter.prevent="keepRename"
+          @keydown.escape.prevent.stop="cancelRename()"
+          @blur="!sectorUi.busy && cancelRename()"
+        />
+      </template>
+      <template v-else-if="unnamed && buildMode === 'scope'" #title><span class="panel-title-unnamed">{{ title }}</span></template>
+      <template v-if="profile || buildMode === 'system' || (own && buildMode === 'scope')" #actions>
+        <template v-if="profile && !drafting">
           <button
             type="button"
             class="ui-btn is-icon"
@@ -384,11 +491,20 @@ defineExpose({ remeasure: publish });
             <Icon name="solar-system" :size="13" />Orbits
           </button>
         </template>
+        <SectorBar v-else-if="own && buildMode === 'scope' && scope" :name="own.name" :subsector="scope.letter !== null" />
         <BuildBar v-else :hex-key="hexKey" :name="overview ? (overview.header.name || overview.header.title) : hex" />
       </template>
-      <BuildScope v-if="buildMode === 'scope' && scope" :slug="scope.slug" :letter="scope.letter" :span="span" @subsector="openSubsector" @open="openHex" />
+      <SectorPane v-if="buildMode === 'slot'" />
+      <template v-else-if="buildMode === 'scope' && scope">
+        <p v-if="own && sectorUi.moving" class="doss-preview" role="status">
+          Pick an empty slot for {{ own.name }}: click one on the chart, or use the arrow keys and Enter. Its hexes and its names go with it. Esc cancels.
+        </p>
+        <p v-if="own && sectorUi.error" class="doss-preview is-error" role="alert">{{ sectorUi.error }}</p>
+        <BuildScope :slug="scope.slug" :letter="scope.letter" :span="span" @subsector="openSubsector" @open="openHex" />
+      </template>
       <BuildPane v-else-if="buildMode === 'many' || buildMode === 'empty' || buildMode === 'removed'" :mode="buildMode" :keys="buildKeys" :span="span" @open="openHex" />
-      <DossierBody v-else-if="profile" :model="profile" :span="span" :day-night="dayNight" :tick="tick" :live="orbit === true" :place="placeOnStrip" :restated="restated" :surface="bodySurface" @open="openKey">
+      <SystemEditor v-else-if="drafting" :span="span" />
+      <DossierBody v-else-if="profile" :model="profile" :span="span" :day-night="dayNight" :tick="tick" :live="orbit === true" :place="placeOnStrip" :restated="restated" :surface="bodySurface" :sun="sunOnSurface" :now-days="nowDays" :start-days="clockDays" @open="openKey">
         <template #records>
           <RecordsHere
             v-if="!preview"
@@ -404,8 +520,11 @@ defineExpose({ remeasure: publish });
       <template v-else-if="overview">
         <p v-if="preview" class="doss-preview" role="status">
           A preview. Nothing is kept yet. {{ choiceLine(preview.choice) }}, roll {{ preview.roll + 1 }}.
+          <b v-if="isHandHex(hexKey)">Keeping it replaces the system you designed by hand. Undo brings that back.</b>
         </p>
+        <DesignAsk v-if="buildMode === 'system' && handUi.asking === hexKey" />
         <p v-if="building && build.error" class="doss-preview is-error" role="alert">{{ build.error }}</p>
+        <p v-if="editError" class="doss-preview is-error" role="alert">{{ editError }}</p>
         <DossierOverview
           :model="overview"
           :span="span"
@@ -423,6 +542,8 @@ defineExpose({ remeasure: publish });
           </template>
         </DossierOverview>
       </template>
+      <p v-else-if="slotOff" class="doss-muted doss-pad">Build is off. Switch it on to make a sector in this slot.</p>
+      <p v-else-if="scopeOff" class="doss-muted doss-pad">Build is off. Switch it on to select and generate in this {{ scopeOff }}.</p>
       <p v-else-if="missing" class="doss-muted doss-pad">This hex has no world in the sector index.</p>
       <p v-else-if="pending" class="doss-muted doss-pad">Loading this sector.</p>
     </Panel>
@@ -470,6 +591,25 @@ defineExpose({ remeasure: publish });
 }
 
 .doss-crumb-sep {
+  color: var(--text-muted);
+}
+
+/* A sector's or a subsector's name being typed, in the title's own place and size. */
+.panel-title-box {
+  width: min(320px, 100%);
+  height: 30px;
+  margin: -3px 0;
+  padding: 0 8px;
+  border: 1px solid var(--signal);
+  border-radius: var(--r-2);
+  background: var(--bg-2);
+  color: var(--text-0);
+  font: inherit;
+  letter-spacing: inherit;
+}
+
+/* A subsector with no name of its own. */
+.panel-title-unnamed {
   color: var(--text-muted);
 }
 

@@ -80,6 +80,44 @@ function refusal(fn) {
     }
 }
 
+test('a chart hex kept at rev 0 is the referee\'s, and revert to 0 is the chart', () => {
+    const sql = open();
+    ensurePin(sql, PINNED);
+    const row = applyGenerated(sql, {
+        hexKey: KEY, treeHash: HASH, baseHash: HASH_B, roll: 0, baseRev: 0, engineVersion: '1.1.0', action: 'keep',
+    }, PINNED, NOW);
+    assert.equal(row.state, 'override');
+    assert.equal(row.rev, 1);
+    assert.equal(row.baseHash, HASH_B);
+    const chart = revertHex(sql, KEY, 0, row.rev, PINNED, NOW);
+    assert.equal(chart.state, 'truth');
+    assert.equal(chart.rev, 0);
+    const again = applyGenerated(sql, {
+        hexKey: KEY, treeHash: HASH, baseHash: HASH_B, roll: 0, baseRev: 0, engineVersion: '1.1.0', action: 'keep',
+    }, PINNED, NOW);
+    const removed = removeHex(sql, KEY, again.rev, PINNED, NOW);
+    assert.equal(removed.state, 'removed');
+    const restored = restoreHex(sql, KEY, removed.rev, PINNED, NOW);
+    assert.equal(restored.state, 'truth');
+    assert.equal(restored.rev, 0);
+});
+
+test('a referee sector hex is own on a pinned universe and remove drops the row', () => {
+    const sql = open();
+    ensurePin(sql, PINNED);
+    const key = `${'~' + '0'.repeat(26)}/1910`;
+    const row = applyGenerated(sql, {
+        hexKey: key, treeHash: HASH, baseHash: null, roll: 0, baseRev: 0, engineVersion: '1.1.0',
+    }, PINNED, NOW);
+    assert.equal(row.state, 'own');
+    const gone = removeHex(sql, key, row.rev, PINNED, NOW);
+    assert.equal(gone.state, 'own');
+    assert.equal(gone.rev, 0);
+    const back = refusal(() => restoreHex(sql, key, 0, PINNED, NOW));
+    assert.equal(back.code, 'validation');
+    assert.equal(back.details.reason, 'no_chart');
+});
+
 test('roll 0 keeps the universe seed', () => {
     assert.equal(generationSeed('TravellerMagnus', 0), 'TravellerMagnus');
     assert.equal(generationSeed('TravellerMagnus', 2), 'TravellerMagnus/roll/2');

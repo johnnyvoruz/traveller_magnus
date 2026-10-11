@@ -6,6 +6,7 @@
 import type { SectorHex, Settings } from '@voyage/shared';
 import { showToast } from '../../shell/toast.ts';
 import { parseHexKey } from '../places.ts';
+import { isHandHex } from './hand_acts.ts';
 import { buildStore, type HexState, type UndoToken } from './seam.ts';
 import { build, generateTargets, jobToast, plural, removeTargets, restoreTargets, stateOf, tally, type Tally } from './state.ts';
 
@@ -16,7 +17,13 @@ export type BuildMap = {
     subsectorName: (hexKey: string) => string;
     /** The universe's generation settings, once known. */
     settings: () => Settings | null;
+    /** Select these hexes on the map, as a click or a box would (a new sector's hexes, once it is made). */
+    select?: (keys: string[]) => void;
 };
+
+export function selectOnMap(keys: string[]): void {
+    if (map && map.select) map.select(keys);
+}
 
 let map: BuildMap | null = null;
 let stopJob: (() => void) | null = null;
@@ -131,10 +138,12 @@ export async function keepPreview(): Promise<void> {
     const store = buildStore();
     const held = build.preview;
     if (!store || !held) return;
+    // Read before the keep: afterwards the hex holds the generated system.
+    const replaced = isHandHex(held.hexKey);
     try {
         const token = await store.keep(held, truthAt(held.hexKey));
         build.preview = null;
-        offerUndo('Generated ' + (held.entry.name || 'a system') + '.', token);
+        offerUndo('Generated ' + (held.entry.name || 'a system') + (replaced ? ', in place of the system designed by hand.' : '.'), token);
     } catch (err) {
         fail(err);
     }
@@ -142,7 +151,12 @@ export async function keepPreview(): Promise<void> {
 
 // ---- many hexes: counted, with Stop --------------------------------------------------------------
 
-export function generateMany(keys: readonly string[]): void {
+/**
+ * Many hexes, kept as they land. `grown` names the sectors made for this act a moment before
+ * (findings/builder_system_design.md §18): the toast says so, and its one Undo takes the
+ * systems back and then the sectors.
+ */
+export function generateMany(keys: readonly string[], grown: { names: string[]; undo: () => Promise<void> } | null = null): void {
     const store = buildStore();
     if (!store || build.job) return;
     const targets = generateTargets(tallyOf(keys), build.filledToo);
@@ -162,12 +176,31 @@ export function generateMany(keys: readonly string[]): void {
         ({ token, progress }) => {
             stopJob = null;
             build.job = null;
-            offerUndo(jobToast(progress, where(targets)), token);
+            if (!grown) {
+                offerUndo(jobToast(progress, where(targets)), token);
+                return;
+            }
+            const made = grown.names.length === 1 ? 'the new sector ' + grown.names[0] : plural(grown.names.length, 'new sector', 'new sectors') + ': ' + grown.names.join(', ');
+            showToast(jobToast(progress, made), {
+                action: {
+                    label: 'Undo',
+                    run: () => {
+                        const store = buildStore();
+                        if (!store) return;
+                        // Two calls behind one Undo: the systems, then the sectors (the server has no single act for both yet).
+                        void store.undo(token).then(grown.undo).catch((err: unknown) => {
+                            showToast(err instanceof Error && err.message ? 'Undo stopped part way: ' + err.message : 'Undo stopped part way.');
+                        });
+                    },
+                },
+            });
         },
         (err) => {
             stopJob = null;
             build.job = null;
             fail(err);
+            // Nothing was generated: the sectors made for it are taken back, so no empty sector is left behind.
+            if (grown) void grown.undo().catch(() => undefined);
         },
     );
 }

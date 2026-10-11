@@ -116,7 +116,40 @@ export {
     FormAnswer,
     FormKeep,
     FormBlank,
+    FormDesign,
 } from './schemas/form.ts';
+export {
+    OwnSectorId,
+    SUBSECTOR_LETTERS,
+    SubsectorLetter,
+    SubsectorNames,
+    SectorSlot,
+    RefereeSector,
+    RefereeSectorPage,
+    SectorMake,
+    SectorRename,
+    SectorMove,
+    SectorRev,
+    SubsectorRename,
+    SectorUndo,
+    SectorSeed,
+    SectorGenerate,
+    SectorGenerateDone,
+    SectorGenerateUndo,
+    SectorGenerateUndone,
+    emptySubsectors,
+} from './schemas/sector.ts';
+export type { SubsectorLetter as SubsectorLetterName } from './schemas/sector.ts';
+export {
+    HAND_LIMITS,
+    HandProfile,
+    HandStar,
+    HandKind,
+    HandBody,
+    HandSystem,
+    HandEnvelope,
+    emptyHandProfile,
+} from './schemas/hand.ts';
 export { parseT5Tab } from './parsers/t5tab.ts';
 export type { HexRow } from './parsers/t5tab.ts';
 export { parseXmlElements, parseMetadataXml } from './parsers/metadata_xml.ts';

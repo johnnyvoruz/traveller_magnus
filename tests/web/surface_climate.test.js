@@ -74,7 +74,7 @@ test('vanilla keeps its temperature rule when the classifier fields are present'
     assert.equal(vanilla.kind, 'hot');
 });
 
-test('liquidStatus none is no sea, and unresolved or unknown is the unresolved liquid', () => {
+test('liquidStatus none is no sea; unresolved or unknown water is still water, and only an unknown name is the unresolved liquid', () => {
     const sea = garden();
     sea.liquidStatus = { status: 'none', outcome: 'zero' };
     sea.liquidType = 'Water';
@@ -87,9 +87,23 @@ test('liquidStatus none is no sea, and unresolved or unknown is the unresolved l
     assert.equal(sheetCaption('enhanced', sea).text, 'Enhanced · no seas');
 
     for (const status of ['unresolved', 'unknown']) {
+        // A sea of water whose status did not resolve is drawn as water, never the purple
+        // unknown liquid (the hybrid design's Phase 0).
+        for (const named of ['Water', 'Ice', '']) {
+            const body = garden();
+            body.liquidStatus = { status, outcome: 'missing' };
+            body.liquidType = named;
+            body.lowTempK = 200;
+            const look = enhancedProfile(body, 'sea-' + status + '-' + named);
+            assert.notEqual(look.liquidName, 'Unknown Exotic Liquid', status + ' ' + named);
+            const plan = seaPlan(body);
+            assert.notEqual(plan.sea.liquid, 'Unknown Exotic Liquid', status + ' ' + named);
+            assert.notEqual(plan.why, 'the liquid is unresolved');
+            if (named) assert.equal(plan.sea.liquid, 'Water');
+        }
         const body = garden();
         body.liquidStatus = { status, outcome: 'missing' };
-        body.liquidType = 'Water';
+        body.liquidType = 'Glorp';
         body.lowTempK = 200;
         const look = enhancedProfile(body, 'sea-' + status);
         assert.equal(look.liquidName, 'Unknown Exotic Liquid');

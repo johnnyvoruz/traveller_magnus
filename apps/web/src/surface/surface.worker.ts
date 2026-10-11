@@ -1,6 +1,7 @@
 /**
  * CPU sheets off the page thread: the vanilla sheet, and the enhanced one when the request
- * carries its inputs.
+ * carries its inputs: the hybrid map (surface/hybrid) when it carries a world, else the
+ * enhanced-seas sheet when it carries a sea.
  * One job runs. At most two wait. A newer map pushes an older waiting job out.
  * Cancel removes a waiting job and drops the running result when it finishes.
  * The RGBA buffer is transferred.
@@ -8,12 +9,14 @@
 import {
     SURFACE_MESSAGE_VERSION,
     type EnhancedPaintInputs,
+    type HybridPaintInputs,
     type SurfaceMode,
     type SurfaceWorkerMessage,
     type SurfaceWorkerReply,
     type VanillaPaintInputs,
 } from './contracts.ts';
 import { renderEnhancedMapPixels } from './enhanced/map.ts';
+import { renderHybridPixels } from './hybrid/index.ts';
 import { MAP_HEIGHT, MAP_WIDTH, renderFlatMapPixels, type DiamondMapInputs } from './vanilla/map.ts';
 
 export type SurfacePort = {
@@ -27,6 +30,7 @@ type Job = {
     mode: SurfaceMode;
     inputs: VanillaPaintInputs;
     enhanced: EnhancedPaintInputs | null;
+    hybrid: HybridPaintInputs | null;
     cancelled: boolean;
 };
 
@@ -37,11 +41,13 @@ export function attachSurfaceWorker(
     options?: {
         render?: (inputs: DiamondMapInputs) => Uint8ClampedArray;
         renderEnhanced?: (inputs: EnhancedPaintInputs) => Uint8ClampedArray;
+        renderHybrid?: (inputs: HybridPaintInputs) => Uint8ClampedArray;
         schedule?: (fn: () => void) => void;
     },
 ): void {
     const render = options?.render ?? ((inputs: DiamondMapInputs) => renderFlatMapPixels(inputs));
     const renderEnhanced = options?.renderEnhanced ?? ((inputs: EnhancedPaintInputs) => renderEnhancedMapPixels(inputs));
+    const renderHybrid = options?.renderHybrid ?? ((inputs: HybridPaintInputs) => renderHybridPixels(inputs));
     const schedule = options?.schedule ?? ((fn: () => void) => { setTimeout(fn, 0); });
     const queued: Job[] = [];
     let active: Job | null = null;
@@ -82,7 +88,7 @@ export function attachSurfaceWorker(
         const job = queued.shift();
         if (!job) return;
         active = job;
-        const pixels = job.enhanced ? renderEnhanced(job.enhanced) : render(job.inputs);
+        const pixels = job.hybrid ? renderHybrid(job.hybrid) : job.enhanced ? renderEnhanced(job.enhanced) : render(job.inputs);
         active = null;
         if (job.cancelled) {
             dropped(job);
@@ -118,6 +124,7 @@ export function attachSurfaceWorker(
             mode: message.mode,
             inputs: message.inputs,
             enhanced: message.mode === 'enhanced' && message.enhanced ? message.enhanced : null,
+            hybrid: message.mode === 'enhanced' && message.hybrid ? message.hybrid : null,
             cancelled: false,
         });
         trim();

@@ -47,7 +47,7 @@ export type ChartHex = {
     entry: ChartEntry;
 };
 
-type JobBlob = {
+export type JobBlob = {
     failures: BuilderFailure[];
     skipped: number;
     undone?: boolean;
@@ -91,7 +91,7 @@ function ownMap(pin: Pin): boolean {
 function absent(hexKey: string, pin: Pin): Absent {
     return BuilderAbsent.parse({
         hexKey,
-        state: ownMap(pin) ? 'own' : 'truth',
+        state: ownMap(pin) || ownSectorKey(hexKey) ? 'own' : 'truth',
         treeHash: null,
         baseHash: null,
         roll: 0,
@@ -99,9 +99,14 @@ function absent(hexKey: string, pin: Pin): Absent {
     });
 }
 
-function placeOf(deleted: number, pin: Pin): HexRow['state'] {
+/** A referee sector id starts with "~". Chart slugs never contain that character. */
+export function ownSectorKey(hexKey: string): boolean {
+    return hexKey.startsWith('~');
+}
+
+function placeOf(deleted: number, pin: Pin, hexKey: string): HexRow['state'] {
     if (deleted) return 'removed';
-    return ownMap(pin) ? 'own' : 'override';
+    return ownMap(pin) || ownSectorKey(hexKey) ? 'own' : 'override';
 }
 
 function emptyEntry(tree: string | null): ChartEntry {
@@ -130,7 +135,7 @@ function rowOf(record: SqlRow, pin: Pin): HexRow {
     const treeHash = record.tree_hash ? String(record.tree_hash) : null;
     return BuilderHex.parse({
         hexKey: String(record.hex_key),
-        state: placeOf(Number(record.deleted) ? 1 : 0, pin),
+        state: placeOf(Number(record.deleted) ? 1 : 0, pin, String(record.hex_key)),
         treeHash,
         baseHash: record.base_hash ? String(record.base_hash) : null,
         roll: Number.isInteger(record.roll) ? Number(record.roll) : summary.roll,
@@ -292,7 +297,7 @@ export type GeneratedWrite = {
     action?: string;
 };
 
-function writeGenerated(sql: Sql, write: GeneratedWrite, pin: Pin, now: string): HexRow {
+export function writeGenerated(sql: Sql, write: GeneratedWrite, pin: Pin, now: string): HexRow {
     requireKey(write.hexKey);
     const row = assertRev(sql, write.hexKey, write.baseRev, pin);
     const fields: HexFields = {
@@ -323,7 +328,7 @@ export function removeHex(sql: Sql, hexKey: string, baseRev: number, pin: Pin, n
         const row = assertRev(sql, hexKey, baseRev, pin);
         if (row && Number(row.deleted)) throw new HexRefusal('validation', 'Nothing to remove.', { reason: 'empty' });
         if (!row) {
-            if (ownMap(pin) || !chart) throw new HexRefusal('validation', 'Nothing to remove.', { reason: 'empty' });
+            if (ownMap(pin) || ownSectorKey(hexKey) || !chart) throw new HexRefusal('validation', 'Nothing to remove.', { reason: 'empty' });
             const parsed = SectorHex.safeParse(chart.entry);
             if (!parsed.success) throw new HexRefusal('validation', 'The chart entry is not a sector hex.');
             insertHex(sql, {
@@ -340,7 +345,7 @@ export function removeHex(sql: Sql, hexKey: string, baseRev: number, pin: Pin, n
             });
             return rowOf(current(sql, hexKey)!, pin);
         }
-        if (ownMap(pin)) {
+        if (ownMap(pin) || ownSectorKey(hexKey)) {
             sql.exec(`DELETE FROM hexes WHERE hex_key = ?`, hexKey);
             return absent(hexKey, pin);
         }
@@ -366,7 +371,7 @@ export function restoreHex(sql: Sql, hexKey: string, baseRev: number, pin: Pin, 
     void now;
     return sql.transaction(() => {
         assertRev(sql, hexKey, baseRev, pin);
-        if (ownMap(pin)) throw new HexRefusal('validation', 'This universe has no chart.', { reason: 'no_chart' });
+        if (ownMap(pin) || ownSectorKey(hexKey)) throw new HexRefusal('validation', 'This universe has no chart.', { reason: 'no_chart' });
         const row = current(sql, hexKey);
         if (!row) throw new HexRefusal('validation', 'Nothing to restore.', { reason: 'empty' });
         sql.exec(`DELETE FROM hexes WHERE hex_key = ?`, hexKey);
@@ -447,43 +452,97 @@ export type JobSpec = {
     settings: Record<string, unknown>;
     engineVersion: string;
     captured: Record<string, Captured>;
+    /** Sectors this act made, at the rev they were made. Absent on a generate that made none. */
+    madeSectors?: { id: string; rev: number }[];
 };
 
-export function createJob(sql: Sql, id: string, spec: JobSpec, pin: Pin, now: string): JobRow {
-    return sql.transaction(() => {
-        const captured: Record<string, Captured> = {};
-        for (const hexKey of spec.hexKeys) {
-            requireKey(hexKey);
-            const row = current(sql, hexKey);
-            if (!row) captured[hexKey] = null;
-            else {
-                const parsed = parseSummary(row.summary);
-                captured[hexKey] = {
-                    rev: Number(row.rev),
-                    treeHash: row.tree_hash ? String(row.tree_hash) : null,
-                    baseHash: row.base_hash ? String(row.base_hash) : null,
-                    roll: Number(row.roll) || parsed.roll,
-                    deleted: Number(row.deleted) ? 1 : 0,
-                    engineVersion: row.engine_version ? String(row.engine_version) : parsed.engineVersion,
-                    entry: parsed.entry ?? emptyEntry(row.tree_hash ? String(row.tree_hash) : null),
-                };
-            }
+/** Insert a queued job. Caller holds the transaction when the insert shares one with sector rows. */
+export function insertJob(sql: Sql, id: string, spec: JobSpec, pin: Pin, now: string): JobRow {
+    const captured: Record<string, Captured> = {};
+    for (const hexKey of spec.hexKeys) {
+        requireKey(hexKey);
+        const row = current(sql, hexKey);
+        if (!row) captured[hexKey] = null;
+        else {
+            const parsed = parseSummary(row.summary);
+            captured[hexKey] = {
+                rev: Number(row.rev),
+                treeHash: row.tree_hash ? String(row.tree_hash) : null,
+                baseHash: row.base_hash ? String(row.base_hash) : null,
+                roll: Number(row.roll) || parsed.roll,
+                deleted: Number(row.deleted) ? 1 : 0,
+                engineVersion: row.engine_version ? String(row.engine_version) : parsed.engineVersion,
+                entry: parsed.entry ?? emptyEntry(row.tree_hash ? String(row.tree_hash) : null),
+            };
         }
-        const stored: JobSpec = { ...spec, captured };
-        sql.exec(`INSERT INTO meta (key, value) VALUES (?, ?)`, `job:${id}`, JSON.stringify(stored));
-        sql.exec(
-            `INSERT INTO jobs (id, kind, state, total, done, failed, failures, created_at, finished_at)
-             VALUES (?, 'generate', 'queued', ?, 0, 0, ?, ?, NULL)`,
-            id, spec.hexKeys.length, JSON.stringify({ failures: [], skipped: 0, written: {}, applied: [] }), now,
-        );
-        sql.exec(
-            `INSERT INTO snapshots (id, at, label, trigger, manifest_hash, bytes)
-             VALUES (?, ?, ?, 'generate', '', ?)`,
-            id, now, 'Before generate', JSON.stringify(captured).length,
-        );
-        void pin;
-        return jobOf(sql.exec(`SELECT * FROM jobs WHERE id = ?`, id)[0]);
-    });
+    }
+    const stored: JobSpec = { ...spec, captured };
+    sql.exec(`INSERT INTO meta (key, value) VALUES (?, ?)`, `job:${id}`, JSON.stringify(stored));
+    sql.exec(
+        `INSERT INTO jobs (id, kind, state, total, done, failed, failures, created_at, finished_at)
+         VALUES (?, 'generate', 'queued', ?, 0, 0, ?, ?, NULL)`,
+        id, spec.hexKeys.length, JSON.stringify({ failures: [], skipped: 0, written: {}, applied: [] }), now,
+    );
+    sql.exec(
+        `INSERT INTO snapshots (id, at, label, trigger, manifest_hash, bytes)
+         VALUES (?, ?, ?, 'generate', '', ?)`,
+        id, now, 'Before generate', JSON.stringify(captured).length,
+    );
+    void pin;
+    return jobOf(sql.exec(`SELECT * FROM jobs WHERE id = ?`, id)[0]);
+}
+
+export function createJob(sql: Sql, id: string, spec: JobSpec, pin: Pin, now: string): JobRow {
+    return sql.transaction(() => insertJob(sql, id, spec, pin, now));
+}
+
+/** The stored job, its blob, and its spec. */
+export function readJobBundle(sql: Sql, id: string): { state: string; blob: JobBlob; spec: JobSpec } {
+    const row = sql.exec(`SELECT * FROM jobs WHERE id = ?`, id)[0];
+    if (!row) throw new HexRefusal('not_found', 'No such job.');
+    return { state: String(row.state), blob: jobBlob(row.failures), spec: readJobSpec(sql, id) };
+}
+
+export function saveJobBlob(sql: Sql, id: string, blob: JobBlob): void {
+    sql.exec(`UPDATE jobs SET failures = ? WHERE id = ?`, JSON.stringify(blob), id);
+}
+
+/** A queued or running job becomes stopped. A finished job is left as it is. */
+export function markJobStopped(sql: Sql, id: string, now: string): void {
+    const row = sql.exec(`SELECT * FROM jobs WHERE id = ?`, id)[0];
+    if (!row) throw new HexRefusal('not_found', 'No such job.');
+    if (row.state !== 'queued' && row.state !== 'running') return;
+    sql.exec(`UPDATE jobs SET state = 'stopped', finished_at = ? WHERE id = ?`, now, id);
+}
+
+export function requireWrittenRev(sql: Sql, hexKey: string, rev: number, pin: Pin): void {
+    requireKey(hexKey);
+    const row = current(sql, hexKey);
+    const live = row ? Number(row.rev) : 0;
+    if (live !== rev) throw new HexRefusal('conflict', 'The hex changed.', { current: view(sql, hexKey, pin) });
+}
+
+/** Put one written hex back to the row captured at job create. The row is deleted when there was none. */
+export function undoWrittenHex(sql: Sql, hexKey: string, writtenRev: number, prior: Captured, pin: Pin, now: string): { toRev: number; baseRev: number } {
+    requireWrittenRev(sql, hexKey, writtenRev, pin);
+    if (!prior) {
+        sql.exec(`DELETE FROM hexes WHERE hex_key = ?`, hexKey);
+        return { toRev: writtenRev, baseRev: 0 };
+    }
+    const fields: HexFields = {
+        hexKey,
+        rev: nextRev(sql, hexKey, writtenRev),
+        at: now,
+        deleted: prior.deleted,
+        baseHash: prior.baseHash,
+        treeHash: prior.treeHash,
+        engineVersion: prior.engineVersion,
+        roll: prior.roll,
+        action: 'undo',
+        entry: prior.entry ?? emptyEntry(prior.treeHash),
+    };
+    updateHex(sql, fields);
+    return { toRev: writtenRev, baseRev: Number(current(sql, hexKey)!.rev) };
 }
 
 export function readJob(sql: Sql, id: string): JobRow {
@@ -515,6 +574,7 @@ export function applyJobBatch(sql: Sql, id: string, offset: number, writes: Batc
         const row = sql.exec(`SELECT * FROM jobs WHERE id = ?`, id)[0];
         if (!row) throw new HexRefusal('not_found', 'No such job.');
         const blob = jobBlob(row.failures);
+        if (blob.undone) return jobOf(row);
         if (blob.applied?.includes(offset)) return jobOf(row);
         const written = { ...(blob.written ?? {}) };
         const batchFailures = [...failures];
@@ -656,6 +716,10 @@ export async function respondBuilder(sql: Sql, request: Request, now: string): P
         }
         if (!pin && request.method === 'GET' && path === '/hexes') return json({ items: [], nextCursor: null });
         if (!pin && request.method === 'GET' && path === '/hexes/count') return json({ count: 0 });
+        if (path === '/sectors' || path.startsWith('/sectors/')) {
+            const { respondSectors } = await import('./sectors.ts');
+            return respondSectors(sql, request, now, pin);
+        }
         if (!pin && (path.startsWith('/hex') || path.startsWith('/job'))) {
             throw new HexRefusal('validation', 'The universe has no generation pin.');
         }

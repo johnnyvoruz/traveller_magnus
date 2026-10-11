@@ -4,14 +4,18 @@
  * signed-in universe or the chart manifest changes, and close when it goes.
  */
 import type { Settings } from '@voyage/shared';
-import { shallowRef } from 'vue';
+import { shallowRef, watch } from 'vue';
 import { apiFetch } from '../platform/http.ts';
 import { useBuildStore } from '../workspace/build/seam.ts';
 import { attachDraftMap } from './draft.ts';
 import { asBuildStore } from './screen.ts';
 import { openMap, type Builder, type OpenMapOptions } from './store.ts';
 
-/** Bumps when the signed-in store is opened or closed, so a view can subscribe before it exists. */
+/**
+ * Bumps when the signed-in store is opened or closed, and when its rows change:
+ * a sector page landing, or a hex generated, kept, removed, restored or undone.
+ * Views read this. The store's own tick is not reactive to them.
+ */
 export const builderEpoch = shallowRef(0);
 
 export type BoundUniverse = {
@@ -32,6 +36,15 @@ export type BoundBuilder = {
 export function bindBuilder(read: () => BoundUniverse | null, fetchImpl: typeof fetch = fetch): BoundBuilder {
     let builder: Builder | null = null;
     let options: OpenMapOptions | null = null;
+    let stopRows: (() => void) | null = null;
+
+    /** The next change to this store's rows bumps the binding. */
+    function followRows(next: Builder): void {
+        if (stopRows) stopRows();
+        stopRows = watch(() => next.tick(), () => {
+            builderEpoch.value += 1;
+        });
+    }
 
     function sync(): void {
         const next = read();
@@ -52,6 +65,7 @@ export function bindBuilder(read: () => BoundUniverse | null, fetchImpl: typeof 
             builder = openMap(options);
             attachDraftMap(builder);
             useBuildStore(asBuildStore(builder));
+            followRows(builder);
             builderEpoch.value += 1;
             return;
         }
@@ -67,6 +81,8 @@ export function bindBuilder(read: () => BoundUniverse | null, fetchImpl: typeof 
     }
 
     function close(): void {
+        if (stopRows) stopRows();
+        stopRows = null;
         if (builder) builder.close();
         builder = null;
         options = null;

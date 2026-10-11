@@ -46,9 +46,15 @@ export const FormSection = z.object({
 }).strict();
 export type FormSection = z.infer<typeof FormSection>;
 
-/** One engine's edit form. The seven rule places are fields in the `rules` section. */
+/**
+ * One edit form.
+ * `generated` is an engine tree. `hand` is a system designed by hand: the engine is not run.
+ * A form that omits `mode` is `generated`.
+ */
 export const EditForm = z.object({
-    edition: z.enum(['MgT2E', 'AoW']),
+    /** Set on a generated system, and on a hand system that was switched from one. A blank that names no edition omits it. */
+    edition: z.enum(['MgT2E', 'AoW']).optional(),
+    mode: z.enum(['generated', 'hand']).optional(),
     sections: z.array(FormSection),
 }).strict();
 export type EditForm = z.infer<typeof EditForm>;
@@ -115,14 +121,20 @@ export const FormKeep = z.object({
 export type FormKeep = z.infer<typeof FormKeep>;
 
 /**
- * Blank system. The legacy create dialog's primary star.
- * Omitted star fields are G, 2, and V (`js/system_editor.js` `openCreate`).
+ * Blank system. Edition and star fields are the old create dialog.
+ * A client may omit them. When they are sent, they are accepted and not used.
  */
 export const FormBlank = z.object({
-    edition: z.enum(['MgT2E', 'AoW']),
     baseRev: z.number().int().nonnegative(),
+    edition: z.enum(['MgT2E', 'AoW']).optional(),
     starType: z.string().optional(),
     starSubtype: z.number().int().min(0).max(9).optional(),
     starClass: z.string().optional(),
 }).strict();
 export type FormBlank = z.infer<typeof FormBlank>;
+
+/** Design by hand. `baseRev` is 0 when the hex has no row and the chart holds the tree. */
+export const FormDesign = z.object({
+    baseRev: z.number().int().nonnegative(),
+}).strict();
+export type FormDesign = z.infer<typeof FormDesign>;

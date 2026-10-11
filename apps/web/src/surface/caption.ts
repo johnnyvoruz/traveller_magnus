@@ -57,3 +57,23 @@ export function sheetCaption(mode: SurfaceMode, body: Readonly<Record<string, un
         title: 'Sea: ' + percent(sea.coverage) + ' of ' + sea.liquid + '. Sea ice: ' + ice.kind + ' (' + plan.why + ').',
     };
 }
+
+/** The caption of a hybrid sheet (the enhanced mode's map): its sea, its layout and how it was made. */
+export function hybridCaption(model: {
+    readonly world: { readonly liquid: string | null; readonly liquidAssumed: boolean; readonly tempSource: string; readonly meanK: number; readonly lowK: number; readonly highK: number };
+    readonly layout: string;
+    readonly seaShare: number;
+    readonly hexes: readonly { readonly terrain: string }[];
+}): SheetCaption {
+    const w = model.world;
+    const sea = w.liquid ? w.liquid + (w.liquidAssumed ? ' (assumed)' : '') : 'no seas';
+    const layout = model.layout === 'normal' ? '' : model.layout === 'locked' ? ' · locked, night side centred' : ' · ' + model.layout;
+    const iced = model.hexes.filter((h) => h.terrain === 'SI' || h.terrain === 'IF' || h.terrain === 'IC').length;
+    const notes = [
+        'Hybrid hex map: ' + model.hexes.length + ' hexes.',
+        w.liquid ? 'Sea: ' + Math.round(model.seaShare * 100) + '% of the surface, ' + w.liquid + (w.liquidAssumed ? ' (the data names no liquid; water is assumed)' : '') + '.' : 'No sea.',
+        'Ice: ' + iced + ' hexes.',
+        'Temperatures: ' + (w.tempSource === 'engine' ? 'engine' : 'climate word only') + ', mean ' + Math.round(w.meanK) + ' K (' + Math.round(w.lowK) + '–' + Math.round(w.highK) + ' K).',
+    ];
+    return { text: 'Enhanced · ' + sea + layout, title: notes.join(' ') };
+}

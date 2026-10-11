@@ -35,7 +35,7 @@ const cells = computed(() => subsectorCells(props.slug, (hexKey) => placeNames(h
       <h3 class="ui-heading">Subsectors</h3>
       <div class="build-subs-grid">
         <button v-for="cell in cells" :key="cell.letter" type="button" @click="$emit('subsector', cell.letter)">
-          <b>{{ cell.letter }}</b><span>{{ cell.name }}</span>
+          <b>{{ cell.letter }}</b><span :class="{ 'is-unnamed': cell.name === 'Subsector ' + cell.letter }">{{ cell.name }}</span>
         </button>
       </div>
     </nav>
@@ -84,6 +84,10 @@ const cells = computed(() => subsectorCells(props.slug, (hexKey) => placeNames(h
 .build-subs-grid b {
   color: var(--text-muted);
   font: 700 11px/1.2 var(--font-code);
+}
+
+.build-subs-grid span.is-unnamed {
+  color: var(--text-1);
 }
 
 .build-subs-grid span {

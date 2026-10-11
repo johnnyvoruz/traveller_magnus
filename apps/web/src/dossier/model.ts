@@ -119,7 +119,7 @@ const UWP_KINDS: Record<string, string> = {
     Starport: 'starport', Size: 'size', Atmosphere: 'atmosphere', Hydrographics: 'hydrographics',
     Population: 'population', Government: 'government', 'Law level': 'law',
 };
-const SYSTEM_KEYS = ['aowSystem', 'mgtSystem', 'ctSystem', 't5System', 'rttSystem'] as const;
+const SYSTEM_KEYS = ['aowSystem', 'mgtSystem', 'ctSystem', 't5System', 'rttSystem', 'handSystem'] as const;
 
 function rec(value: unknown): Record<string, unknown> | null {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
@@ -128,6 +128,18 @@ function rec(value: unknown): Record<string, unknown> | null {
 
 function arr(value: unknown): unknown[] {
     return Array.isArray(value) ? value : [];
+}
+
+/** Moons, or satellites when that is the list the document stored. */
+function moonItems(world: Record<string, unknown>): unknown[] {
+    const moons = arr(world.moons);
+    const present = moons.some((item) => {
+        const moon = rec(item);
+        return !!moon && moon.type !== 'Empty';
+    });
+    if (present) return moons;
+    const satellites = arr(world.satellites);
+    return satellites.length ? satellites : moons;
 }
 
 function blank(value: unknown): boolean {
@@ -439,7 +451,7 @@ function bodyName(body: Record<string, unknown>): string {
 function parentWorld(system: SystemDoc, body: Record<string, unknown>): Record<string, unknown> | null {
     for (const item of arr(system.worlds)) {
         const world = rec(item);
-        if (world && arr(world.moons).includes(body)) return world;
+        if (world && moonItems(world).includes(body)) return world;
     }
     return null;
 }
@@ -456,12 +468,26 @@ function bodyTypeLabel(system: SystemDoc, body: Record<string, unknown>): string
     return text(body.worldType) || text(body.type) || 'Body';
 }
 
+/** "orbits Aster and Aster B", from the two stars' own names. Empty when either name is absent. */
+function pairWords(system: SystemDoc, body: Record<string, unknown>): string {
+    if (body.orbitType !== 'P-Type') return '';
+    const stars = arr(system.stars);
+    const primary = rec(stars[Number(body.parentStarIdx)]);
+    const other = rec(stars[Number(body.pairStarIdx)]);
+    const left = primary ? text(primary.name) : '';
+    const right = other ? text(other.name) : '';
+    if (!left || !right) return '';
+    return 'orbits ' + left + ' and ' + right;
+}
+
 function bodyFacts(system: SystemDoc, body: Record<string, unknown>): string[] {
     if (isStar(body)) {
         const place = starPlace(body, arr(system.stars));
         return place ? [place] : [];
     }
     const facts = [bodyTypeLabel(system, body)];
+    const pair = pairWords(system, body);
+    if (pair) facts.push(pair);
     if (isMoon(system, body)) {
         if (body.pd != null && body.pd !== '') {
             const pd = num(body.pd, 1, 'PD');
@@ -500,6 +526,8 @@ function bodyPlace(system: SystemDoc, body: Record<string, unknown>): string {
             const au = num(body.au, 3, 'AU');
             if (au) parts.push(au);
         }
+        const pair = pairWords(system, body);
+        if (pair) parts.push(pair);
     }
     return parts.filter(Boolean).join(' \u00B7 ');
 }
@@ -512,7 +540,7 @@ function keyFor(system: SystemDoc, target: Record<string, unknown>): string | nu
         if (worlds[i] === target) return 'w' + i;
         const world = rec(worlds[i]);
         if (!world) continue;
-        const moons = arr(world.moons);
+        const moons = moonItems(world);
         for (let j = 0; j < moons.length; j++) if (moons[j] === target) return 'w' + i + 'm' + j;
     }
     return null;
@@ -564,7 +592,7 @@ function mappedMainworld(system: SystemDoc | null, profile: Record<string, unkno
             const world = rec(item);
             if (!world) continue;
             if (world.type === 'Mainworld') return world;
-            for (const moonItem of arr(world.moons)) {
+            for (const moonItem of moonItems(world)) {
                 const moon = rec(moonItem);
                 if (moon && moon.type === 'Mainworld') return moon;
             }
@@ -582,7 +610,7 @@ export function bodyKeys(system: SystemDoc): string[] {
         const world = rec(worlds[i]);
         if (!world || world.type === 'Empty') continue;
         keys.push('w' + i);
-        const moons = arr(world.moons);
+        const moons = moonItems(world);
         for (let j = 0; j < moons.length; j++) {
             const moon = rec(moons[j]);
             if (!moon || moon.type === 'Empty') continue;
@@ -625,7 +653,7 @@ function systemTree(system: SystemDoc | null): { count: number; rows: TreeRow[] 
         const world = rec(item);
         if (!world || world.type === 'Empty') return;
         rows.push(treeRow(system, world, 'w' + index, 'worlds'));
-        arr(world.moons).forEach((moonItem, moonIndex) => {
+        moonItems(world).forEach((moonItem, moonIndex) => {
             const moon = rec(moonItem);
             if (!moon || moon.type === 'Empty') return;
             rows.push(treeRow(system, moon, 'w' + index + 'm' + moonIndex, 'moons'));
@@ -772,6 +800,15 @@ function hexOf(tree: TreeEnvelope): string {
     return slash >= 0 ? key.slice(slash + 1) : key;
 }
 
+/** Sector and subsector as one place. No dash when either name is empty. */
+export function sectorPlace(sectorName: string, subsectorName: string): string {
+    const sector = sectorName.trim();
+    const sub = subsectorName.trim();
+    if (!sector) return sub;
+    if (!sub) return sector;
+    return sector + ' - ' + sub;
+}
+
 export function overviewModel(input: {
     sectorName: string;
     subsectorName: string;
@@ -784,7 +821,8 @@ export function overviewModel(input: {
     const partial = input.entry.tree == null;
     const state = input.tree ? input.tree.body : null;
     const profile = state ? mainworldProfile(state) : {};
-    const rawName = state ? (text(state.name) || text(profile.name)) : text(input.entry.name);
+    // A system designed by hand carries its name on the chart row, not in an engine's state.
+    const rawName = state ? (text(state.name) || text(profile.name) || text(input.entry.name)) : text(input.entry.name);
     const bare = rawName || input.hex;
     const title = rawName ? rawName + ' system' : bare;
     const system = state ? pickSystem(state) : null;
@@ -804,7 +842,7 @@ export function overviewModel(input: {
             title,
             name: rawName,
             hexChip: title === input.hex ? '' : input.hex,
-            place: input.sectorName + ' - ' + input.subsectorName,
+            place: sectorPlace(input.sectorName, input.subsectorName),
         },
         ribbon: ribbonOf(uwp),
         rows: state && !partial ? identityRows(state, input.allegiances, !openMain) : chartRows(input.entry, input.allegiances),
@@ -845,7 +883,7 @@ function locate(system: SystemDoc, key: string): { body: Record<string, unknown>
         const index = Number(moon[1]);
         const moonIndex = Number(moon[2]);
         const parent = rec(arr(system.worlds)[index]);
-        const body = parent ? rec(arr(parent.moons)[moonIndex]) : null;
+        const body = parent ? rec(moonItems(parent)[moonIndex]) : null;
         return body ? { body, worldIndex: index, starIndex: null } : null;
     }
     return null;
@@ -878,7 +916,7 @@ export function bodyModel(tree: TreeEnvelope, bodyKey: string): BodyModel | null
     const title = bare === hex ? bare : bare + ' system';
     const parent = parentWorld(system, body);
     const parentKey = parent ? keyFor(system, parent) : null;
-    const moons = arr(body.moons).flatMap((item, index) => {
+    const moons = moonItems(body).flatMap((item, index) => {
         const moon = rec(item);
         if (!moon || moon.type === 'Empty' || found.worldIndex < 0) return [];
         return [linkOf(system, moon, 'w' + found.worldIndex + 'm' + index, 'moons')];
@@ -920,6 +958,7 @@ export function bodyModel(tree: TreeEnvelope, bodyKey: string): BodyModel | null
         const profile = profileRows.length ? { heading: 'World profile', rows: profileRows } : null;
         if (profile) mainSections.push(profile);
         const orbit = section('Orbit', [
+            ['Orbits', pairWords(system, body) || null],
             ['Orbit', body.orbitId, 2],
             ['Distance (AU)', body.au, 3],
             ['Satellite orbit (PD)', body.pd, 2],
@@ -962,7 +1001,7 @@ export function bodyModel(tree: TreeEnvelope, bodyKey: string): BodyModel | null
         if (physical) sideSections.push(physical);
         if (life) sideSections.push(life);
     }
-    const moonCount = arr(body.moons).filter((item) => {
+    const moonCount = moonItems(body).filter((item) => {
         const moon = rec(item);
         return !!moon && moon.type !== 'Empty';
     }).length;

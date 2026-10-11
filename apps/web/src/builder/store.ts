@@ -35,9 +35,11 @@ import { onPageHide } from '../platform/browser.ts';
 import { apiFetch } from '../platform/http.ts';
 import { clearToasts, showToast } from '../shell/toast.ts';
 import { parseHexKey } from '../workspace/places.ts';
-import { startDraft, type DraftHandle, type KeepOutcome } from './draft.ts';
+import { startDraft, type BlankOpened, type DraftHandle, type KeepOutcome } from './draft.ts';
 import { mergeHex } from './overlay.ts';
+import { openSectors } from './sectors.ts';
 import type { GenerateHandle, HexView, JobProgress, UndoToken } from './types.ts';
+import type { OwnSectors } from '../workspace/build/seam.ts';
 
 type FetchLike = typeof fetch;
 type Schedule = (fn: () => void, ms: number) => () => void;
@@ -63,7 +65,7 @@ export type OpenMapOptions = {
     settings?: Settings | null;
 };
 
-type ChangeOp = 'remove' | 'restore' | 'keep';
+type ChangeOp = 'remove' | 'restore' | 'keep' | 'blank';
 type KeepPayload = { hash: string; changes: FormChange[]; roll?: FormRoll[] };
 type Queued = {
     hexKey: string;
@@ -71,6 +73,8 @@ type Queued = {
     op: ChangeOp;
     before: HexRow | null;
     keep?: KeepPayload;
+    /** Present when this save is a blank. The post body is only `baseRev`. */
+    blank?: true;
     settle?: (value: KeepOutcome) => void;
     fail?: (err: unknown) => void;
 };
@@ -159,9 +163,13 @@ export type Builder = {
     undo(token: UndoToken): Promise<void>;
     /** The edit form for one stored system. Local until `keep` on the handle. */
     openDraft(hexKey: string): Promise<DraftHandle>;
+    /** An empty hand system on this hex, then that system's draft. A hex that already has a tree is refused. */
+    blank(hexKey: string): Promise<BlankOpened>;
     flushMap(): Promise<void>;
     /** The object stored for the row's hash. One fetch. The body is not read. */
     tree(hexKey: string): Promise<unknown | null>;
+    /** The referee's sectors, and the one-way switch into a hand-designed system. */
+    sectors(): OwnSectors & { load(): Promise<void> };
     close(): void;
 };
 
@@ -311,30 +319,50 @@ export function openMap(options: OpenMapOptions): Builder {
         return body;
     }
 
+    function blankBody(change: Queued): { baseRev: number } {
+        if (!change.blank) throw new Error('Name the hex.');
+        return { baseRev: change.baseRev };
+    }
+
+    function suffixOf(op: ChangeOp): string {
+        if (op === 'remove') return '/remove';
+        if (op === 'restore') return '/restore';
+        if (op === 'blank') return '/blank';
+        return '/keep';
+    }
+
+    function bodyOf(change: Queued): unknown {
+        if (change.op === 'keep') return keepBody(change);
+        if (change.op === 'blank') return blankBody(change);
+        return { baseRev: change.baseRev };
+    }
+
+    function settleSaved(change: Queued, data: unknown): void {
+        const saved = readRow(data);
+        land(change.hexKey, data);
+        if (!saved) {
+            change.fail?.(new Error('The server sent a row the store could not read.'));
+            return;
+        }
+        const undo = mint({
+            kind: 'reverts',
+            items: [{
+                hexKey: change.hexKey,
+                toRev: change.before ? change.before.rev : 0,
+                before: change.before,
+                op: change.op,
+            }],
+        });
+        lastError.value = '';
+        change.settle?.({ status: 'kept', row: saved, undo });
+    }
+
     async function sendOne(change: Queued): Promise<void> {
         const id = requireId();
-        const suffix = change.op === 'remove' ? '/remove' : change.op === 'restore' ? '/restore' : '/keep';
-        const body = change.op === 'keep' ? keepBody(change) : { baseRev: change.baseRev };
         try {
-            const data = await request('POST', hexPath(id, change.hexKey, suffix), body);
-            if (change.op === 'keep') {
-                const saved = readRow(data);
-                land(change.hexKey, data);
-                if (!saved) {
-                    change.fail?.(new Error('The server sent a row the store could not read.'));
-                    return;
-                }
-                const undo = mint({
-                    kind: 'reverts',
-                    items: [{
-                        hexKey: change.hexKey,
-                        toRev: change.before ? change.before.rev : 0,
-                        before: change.before,
-                        op: 'keep',
-                    }],
-                });
-                lastError.value = '';
-                change.settle?.({ status: 'kept', row: saved, undo });
+            const data = await request('POST', hexPath(id, change.hexKey, suffixOf(change.op)), bodyOf(change));
+            if (change.op === 'keep' || change.op === 'blank') {
+                settleSaved(change, data);
                 return;
             }
             land(change.hexKey, data);
@@ -342,14 +370,14 @@ export function openMap(options: OpenMapOptions): Builder {
         } catch (err) {
             if (err instanceof HttpError && err.status === 409) {
                 const current = takeConflict(change.hexKey, err);
-                if (change.op === 'keep') change.settle?.({ status: 'conflict', current });
+                if (change.op === 'keep' || change.op === 'blank') change.settle?.({ status: 'conflict', current });
                 else showToast('Saved changes conflicted with a newer copy. The server copy is now shown.');
                 lastError.value = '';
                 return;
             }
             if (err instanceof HttpError && err.status >= 400 && err.status < 500) {
                 putBack(change.hexKey, change.before);
-                if (change.op === 'keep') {
+                if (change.op === 'keep' || change.op === 'blank') {
                     change.settle?.({
                         status: 'refused',
                         message: err.message,
@@ -728,8 +756,8 @@ export function openMap(options: OpenMapOptions): Builder {
 
     const cancelHide = onPageHide(() => { void flushMap(); });
 
-    /** Drain this hex, then Keep. A save already in flight applies its rev first. */
-    async function keepHex(hexKey: string, body: { hash: string; changes: FormChange[]; roll?: FormRoll[] }): Promise<KeepOutcome> {
+    /** Drain this hex, then Keep or blank. A save already in flight applies its rev first. */
+    async function enqueueSaved(hexKey: string, change: Pick<Queued, 'op' | 'keep' | 'blank'>): Promise<KeepOutcome> {
         if (!universeId) throw new Error('offline');
         for (let pass = 0; pass < 5; pass += 1) {
             await flushMap();
@@ -748,19 +776,27 @@ export function openMap(options: OpenMapOptions): Builder {
         remember({
             hexKey,
             baseRev: before ? before.rev : 0,
-            op: 'keep',
+            op: change.op,
             before,
-            keep: {
-                hash: body.hash,
-                changes: body.changes.map((item) => ({ id: item.id, value: item.value })),
-                roll: body.roll && body.roll.length ? body.roll.map((item) => ({ id: item.id })) : undefined,
-            },
+            keep: change.keep,
+            blank: change.blank,
             settle: box.settle,
             fail: box.fail,
         });
         pending.value = true;
         await flushMap();
         return result;
+    }
+
+    function keepHex(hexKey: string, body: { hash: string; changes: FormChange[]; roll?: FormRoll[] }): Promise<KeepOutcome> {
+        return enqueueSaved(hexKey, {
+            op: 'keep',
+            keep: {
+                hash: body.hash,
+                changes: body.changes.map((item) => ({ id: item.id, value: item.value })),
+                roll: body.roll && body.roll.length ? body.roll.map((item) => ({ id: item.id })) : undefined,
+            },
+        });
     }
 
     function openDraft(hexKey: string): Promise<DraftHandle> {
@@ -772,6 +808,29 @@ export function openMap(options: OpenMapOptions): Builder {
             hexPath: (key, suffix = '') => hexPath(requireId(), key, suffix),
             keep: (key, body) => keepHex(key, body),
         }, hexKey);
+    }
+
+    async function blank(hexKey: string): Promise<BlankOpened> {
+        if (!parseHexKey(hexKey)) throw new Error('Name the hex.');
+        const outcome = await enqueueSaved(hexKey, { op: 'blank', blank: true });
+        if (outcome.status === 'conflict') throw new Error('The hex changed.');
+        if (outcome.status === 'refused') throw new Error(outcome.message);
+        return { draft: await openDraft(hexKey), undo: outcome.undo };
+    }
+
+    let ownSectors: ReturnType<typeof openSectors> | null = null;
+
+    function sectors(): OwnSectors & { load(): Promise<void> } {
+        if (!ownSectors) {
+            ownSectors = openSectors({
+                universeId: requireId(),
+                request,
+                reload: async (slug) => {
+                    await loadSector(slug).catch(() => undefined);
+                },
+            });
+        }
+        return ownSectors;
     }
 
     function close(): void {
@@ -809,8 +868,10 @@ export function openMap(options: OpenMapOptions): Builder {
         restore,
         undo,
         openDraft,
+        blank,
         flushMap,
         tree,
+        sectors,
         close,
     };
 }

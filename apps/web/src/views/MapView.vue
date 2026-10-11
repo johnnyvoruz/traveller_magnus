@@ -1,20 +1,20 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter, type RouteLocationNormalized } from 'vue-router';
 import type { SectorHex, SectorIndex, TreeEnvelope, TruthManifest, TruthOverview } from '@voyage/shared';
 import { campaign } from '../campaign/store.ts';
 import { fit, flight, SHORT_HOP, toWorld, zoomAt, type Camera, type Viewport } from '../map/camera.ts';
 import { standInSnapshot, type CampaignSnapshot } from '../map/campaign_layer.ts';
 import { vesselsOnMap } from '../map/vessel_marks.ts';
 import { campaignDays, partyMarker } from '../workspace/party_where.ts';
-import { formatHex, fromGlobal, hexAt, parseHex, SECTOR_ROWS, stepGlobal, toGlobal, type HexStep } from '../map/geometry.ts';
+import { formatHex, fromGlobal, hexAt, parseHex, SECTOR_ROWS, sectorRect, stepGlobal, toGlobal, type HexStep } from '../map/geometry.ts';
 import { attachInput, type InputWhy } from '../map/input.ts';
 import { MapRenderer } from '../map/MapRenderer.ts';
 import { dossierRoute, homeRect, targetFor, type DossierRoute } from '../map/routes.ts';
 import { bindBuilder } from '../builder/bind.ts';
 import { subsectorHexes, subsectorLetter, subsectorPath } from '../builder/address.ts';
 import { readMotion, readTheme } from '../map/theme.ts';
-import { tierFor } from '../map/tiers.ts';
+import { PPP_NAMES, tierFor } from '../map/tiers.ts';
 import { TruthClient } from '../map/truth_client.ts';
 import OmniBox from '../components/OmniBox.vue';
 import { bodyKeys, overviewModel, pickSystem, type AllegianceName, type TreeRow } from '../dossier/model.ts';
@@ -34,12 +34,20 @@ import { cancelPick, offerSystem, picking } from '../workspace/pick.ts';
 import { setPlaceSource, type SystemInfo } from '../workspace/place_source.ts';
 import { parseHexKey } from '../workspace/places.ts';
 import { loadSession, session } from '../account/session.ts';
-import { buildReady, discardPreview, setBuildMap } from '../workspace/build/acts.ts';
+import { buildReady, discardPreview, hexName, hexState, setBuildMap, tallyOf } from '../workspace/build/acts.ts';
 import { BUILD_COMMANDS, canBuild, menuFor, runBuild, type BuildCommandId } from '../workspace/build/commands.ts';
-import { keyAt, keysInBox, type SectorPlace } from '../workspace/build/marks.ts';
+import { hexPoints, hexWorldBox, hexesPath, keyAt, keysInBox, keysWorldBox, screenBox, slotGhostPath, slotsInView, type SectorPlace } from '../workspace/build/marks.ts';
+import type { BoxMark, HoverMark } from '../workspace/build/BuildMarks.vue';
+import { boxResult, boxWords, centreIn, chipPlace, clickIntent, cursorFor, fitIn, gestureFor, hoverTone, hoverWords, clearGlide, visibleArea, type Area, type Gesture, type Held } from '../workspace/build/pointer.ts';
+import { cancelMove, cancelRename, moveTo, sectorUi, setSectorAt, setSectorNav, stepCursor } from '../workspace/build/sector_acts.ts';
+import { freeSlots, isOwnSlug, ownIndex, parseSlot, slotHolder, slotSlug, slotWords, withOwn } from '../workspace/build/sectors.ts';
+
+import { presentTree } from '../orbit/hand_present.ts';
 import { scopeKeys } from '../workspace/build/scope.ts';
-import { buildStore } from '../workspace/build/seam.ts';
-import { addKeys, build, layOver, plural, SELECTION_CAP, setBuildOn, toggleKey } from '../workspace/build/state.ts';
+import { blank, openDraft } from '../builder/draft.ts';
+import { discardEdit, dropEdit, edit, holdLeaving, setDraftOpener, stay, draftHandle } from '../workspace/build/edit.ts';
+import { buildStore, ownSectors, useOwnSectors, type OwnSector, type Slot } from '../workspace/build/seam.ts';
+import { addKeys, build, layOver, plural, SELECTION_CAP, setBuildOn } from '../workspace/build/state.ts';
 import type { Rect as PopRect } from '../workspace/pop_place.ts';
 import {
     cancelFrame,
@@ -94,7 +102,10 @@ const missingHex = ref(false);
 const dossierTick = ref(0);
 
 let cam: Camera = { x: 0, y: 0, ppp: 1 };
+/** What the map draws: the chart's manifest with the referee's own sectors laid in (workspace/build/sectors.ts). */
 let chart: TruthManifest | null = null;
+/** The chart's own manifest, as released. */
+let truthChart: TruthManifest | null = null;
 let overview: TruthOverview | null = null;
 let version = '';
 let overviewReady = false;
@@ -136,16 +147,33 @@ const BuildMarks = defineAsyncComponent(() => import('../workspace/build/BuildMa
 const BuildStrip = defineAsyncComponent(() => import('../workspace/build/BuildStrip.vue'));
 const BuildMenu = defineAsyncComponent(() => import('../workspace/build/BuildMenu.vue'));
 const mapEl = ref<HTMLElement | null>(null);
-const marksEl = ref<{ place: (cam: Camera, vp: Viewport) => void } | null>(null);
-/** The box being dragged, in canvas pixels. */
-const boxRef = ref<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+const marksEl = ref<{ place: (cam: Camera, vp: Viewport) => void; hover: (mark: HoverMark | null) => void; box: (mark: BoxMark | null) => void } | null>(null);
+/** The box being dragged, in canvas pixels, what it does, and the hexes it covered when last measured. */
+let boxing: { x0: number; y0: number; x1: number; y1: number; mode: 'box-add' | 'box-take'; span: string; changed: string[]; over: boolean } | null = null;
+let boxFrame = 0;
+/** The keys held, as the last key or pointer event said. */
+const held: Held = { shift: false, alt: false, space: false };
+/** The mouse over the chart, in canvas pixels; null when it is elsewhere or the pointer is a finger. */
+let pointerAt: { x: number; y: number } | null = null;
+/** The drag under way: the chart moving, or a box. */
+let dragging: Gesture | null = null;
+/** The hover last drawn, so a pointer that stays on one hex draws nothing new. */
+let hoverSig = '';
+/** The camera the address asked for, until the visitor moves the chart: when the pane's width arrives it is aimed again at the chart the pane leaves. */
+let routeAim: { kind: 'camera'; camera: Camera } | { kind: 'fit'; rect: { x0: number; y0: number; x1: number; y1: number } } | null = null;
 /** The right-click menu: where it opened and the hexes it acts on. */
 const menuRef = ref<{ anchor: PopRect; keys: string[] } | null>(null);
 /** The sectors the chart drew last, for the removed hexes among them. */
 const screenSlugs = ref<string[]>([]);
-let boxPointer = -1;
 let unregisterBuild: (() => void) | null = null;
 let unregisterBuildActs: (() => void)[] = [];
+/** The universe whose own sectors are open, and the empty index made for each, held until the sector changes. */
+let ownFor = '';
+const ownIndexes = new Map<string, { rev: number; index: SectorIndex }>();
+/** The session has been read once: until then an address in a sector of the referee's cannot be judged. */
+let sessionRead = false;
+/** The block of slots on screen while a sector is being moved. */
+const viewSlots = ref<{ from: Slot; to: Slot } | null>(null);
 /** The chart's index with the universe's rows laid over it, held until either changes. */
 const laid = new Map<string, { base: SectorIndex; tick: number; index: SectorIndex }>();
 
@@ -160,9 +188,105 @@ function viewport(): Viewport {
     return { width: el ? el.clientWidth : 0, height: el ? el.clientHeight : 0 };
 }
 
+/** The referee's own sectors of the open universe; none when no universe is open. */
+function ownList(): OwnSector[] {
+    const store = ownSectors();
+    return store ? store.list() : [];
+}
+
+/** The index under a sector's rows: the chart's, or an empty one for a sector the referee made. */
+function baseIndex(slug: string): SectorIndex | null {
+    if (!version) return null;
+    if (!isOwnSlug(slug)) return client.index(version, slug);
+    const store = ownSectors();
+    const sector = store ? store.get(slug) : null;
+    if (!sector) return null;
+    const held = ownIndexes.get(slug);
+    if (held && held.rev === sector.rev) return held.index;
+    const index = ownIndex(sector, version);
+    ownIndexes.set(slug, { rev: sector.rev, index });
+    return index;
+}
+
+/** The chart's manifest and the referee's sectors, handed to the renderer as one chart. */
+function applyChart(): void {
+    if (!truthChart) return;
+    chart = withOwn(truthChart, ownList());
+    if (renderer) renderer.setChart(chart, overviewReady && overview ? overview : { truthVersion: version, sectors: [] }, 'canonical');
+    markDirty();
+}
+
+/** The referee's sectors follow the open universe, from the builder store. */
+function syncOwn(): void {
+    const universe = universeNow();
+    const id = universe ? universe.id : '';
+    if (id === ownFor) return;
+    ownFor = id;
+    ownIndexes.clear();
+    const builder = id ? bound.builder() : null;
+    const store = builder ? builder.sectors() : null;
+    if (!store) {
+        useOwnSectors(null);
+        applyChart();
+        return;
+    }
+    useOwnSectors(store);
+    void store.load().then(() => {
+        applyChart();
+        applyRoute();
+    }, () => {
+        // The chart shows without them; the acts say why when one is tried.
+    });
+}
+
+/** The slug on a sector's, subsector's or hex's address. */
+function routeSlug(): string {
+    const parts = route.path.split('/').filter((part) => part.length > 0);
+    if (parts[0] !== 's' || !parts[1]) return '';
+    try {
+        return decodeURIComponent(parts[1]);
+    } catch {
+        return parts[1];
+    }
+}
+
+/** The address names a sector of the referee's and their list is not in yet: the route waits for it. */
+function ownPending(): boolean {
+    if (!isOwnSlug(routeSlug())) return false;
+    if (!sessionRead) return true;
+    if (!session.user) return false;
+    if (campaign.status === 'loading' || campaign.status === 'signed-out') return true;
+    const store = ownSectors();
+    return campaign.status === 'ready' && campaign.universeId !== null && (!store || !store.loaded());
+}
+
+/** The empty slot on the address, if that is what it names. */
+function slotOnRoute(): Slot | null {
+    const scope = addressedScope();
+    return scope && scope.letter === null ? parseSlot(scope.slug) : null;
+}
+
+/** What Build has selected on the grid of sectors: an empty slot, or a sector of the referee's (or one of its subsectors). */
+function syncSectorAt(): void {
+    const scope = addressedScope();
+    if (!scope || !buildReady() || !dossierShown.value) {
+        setSectorAt(null);
+        return;
+    }
+    const slot = scope.letter === null ? parseSlot(scope.slug) : null;
+    if (slot) {
+        sectorUi.where = slotWords(truthChart, ownList(), slot);
+        setSectorAt({ kind: 'slot', slot });
+        return;
+    }
+    const store = ownSectors();
+    if (isOwnSlug(scope.slug) && store && store.get(scope.slug)) setSectorAt({ kind: 'own', id: scope.slug, letter: scope.letter });
+    else setSectorAt(null);
+}
+
 /** The universe's universe: what the map draws for a sector. With no universe open it is the chart's own index. */
 function mapIndex(slug: string): SectorIndex | null {
-    const base = version ? client.index(version, slug) : null;
+    const base = baseIndex(slug);
     const store = buildStore();
     if (!base || !store || !store.universe()) return base;
     const tick = store.tick();
@@ -269,7 +393,7 @@ const dossierSectorName = computed(() => {
     const state = dossier.value;
     const scope = state.kind === 'closed' ? addressedScope() : null;
     const slug = state.kind === 'closed' ? (scope ? scope.slug : '') : state.slug;
-    if (!slug) return '';
+    if (!slug || parseSlot(slug)) return '';
     const index = sectorIndex(slug);
     if (index) return index.name;
     if (!chart) return slug;
@@ -330,6 +454,16 @@ function loadDossier(): void {
         return;
     }
     const key = placeKey(state);
+    if (parseSlot(state.slug)) {
+        // A hex picked in an empty slot: nothing is there, and no index will come.
+        loadedHex = key;
+        treeGen += 1;
+        pendingSector.value = false;
+        missingHex.value = true;
+        treeRef.value = null;
+        treeError.value = false;
+        return;
+    }
     const index = sectorIndex(state.slug);
     if (!index) {
         if (loadedHex !== key) {
@@ -363,7 +497,7 @@ function loadDossier(): void {
         loadedHex = key;
         const ticket = ++treeGen;
         void store.tree(key).then(
-            (doc) => { if (doc) acceptTree(ticket, key, doc); else rejectTree(ticket); },
+            (doc) => { if (doc) acceptTree(ticket, key, presentTree(doc) as TreeEnvelope); else rejectTree(ticket); },
             () => { rejectTree(ticket); },
         );
         return;
@@ -491,14 +625,36 @@ function onEscape(): void {
         stopLocate();
         return;
     }
-    // Build: the sheet, then a preview, then a many-hex selection, each before the panel.
+    // Build: a draft first (it asks before it is lost), then the sheet, a preview, a many-hex selection, each before the panel.
     if (buildReady()) {
+        // A sector being moved, then a name being typed, each before anything else of Build's.
+        if (sectorUi.moving) {
+            cancelMove();
+            return;
+        }
+        if (sectorUi.renaming) {
+            cancelRename();
+            return;
+        }
+        if (edit.leaving) {
+            stay();
+            return;
+        }
+        if (draftHandle.value || edit.opening) {
+            if (!holdLeaving(() => { /* the editor is already closed */ }, false)) discardEdit();
+            return;
+        }
         if (build.sheetOpen) {
             build.sheetOpen = false;
             return;
         }
         if (build.preview || build.rolling) {
             discardPreview();
+            return;
+        }
+        if (build.selecting) {
+            build.selecting = false;
+            paintHover();
             return;
         }
         if (build.selection.length > 1) {
@@ -524,6 +680,53 @@ function onEscape(): void {
     if (dossierShown.value) closePanel();
 }
 
+/** How far from the pane's edge (and the chrome row) a hex that was just selected is brought. */
+const CLEAR_MARGIN = 28;
+
+/** The chart that nothing covers: right of the pane. The chrome row counts only when the map is moved to clear something. */
+function area(withChrome = false): Area {
+    return visibleArea(viewport(), { left: panelPx, top: withChrome ? chromeRow() : 0 });
+}
+
+/** How far down the search row reaches: the chrome stands over the chart's top edge. Measured, not assumed. */
+function chromeRow(): number {
+    const field = mapEl.value ? mapEl.value.querySelector('.omni-field') : null;
+    const canvas = canvasEl.value;
+    if (!field || !canvas) return 0;
+    return Math.max(0, field.getBoundingClientRect().bottom - canvas.getBoundingClientRect().top);
+}
+
+/** A camera the address asked for, put in the middle of the chart the pane leaves. */
+function aim(target: { kind: 'camera'; camera: Camera } | { kind: 'fit'; rect: { x0: number; y0: number; x1: number; y1: number } }): Camera {
+    const vp = viewport();
+    return target.kind === 'fit' ? fitIn(target.rect, vp, area(), 0) : centreIn(target.camera, vp, area());
+}
+
+/** What was just selected, as a box of the screen under a camera: many hexes, one hex, or nothing. */
+function subjectBox(at: Camera): Area | null {
+    const keys = build.selection.length > 1 ? build.selection : (selected ? [selected.slug + '/' + selected.hhhh] : []);
+    const world = keysWorldBox(keys, sectorOf);
+    return world ? screenBox(at, viewport(), world) : null;
+}
+
+/**
+ * The pane has opened or grown: what was just selected must not be under it. The map glides
+ * just far enough, once; the camera the address asked for is aimed again at the chart the
+ * pane leaves, if the visitor has not moved it since.
+ */
+function clearPane(): void {
+    if (!placed) return;
+    const base = fly ? fly.to : cam;
+    if (routeAim) {
+        flyTo(aim(routeAim));
+        return;
+    }
+    const box = subjectBox(base);
+    if (!box) return;
+    const next = clearGlide(base, area(true), box, CLEAR_MARGIN);
+    if (next) flyTo(next);
+}
+
 /** A toast needs this much of the chart beside the panel; with less it goes to the search row. */
 const TOAST_ROOM = 400;
 
@@ -535,9 +738,11 @@ function setWidth(px: number): void {
         const chart = el ? el.clientWidth - px : 0;
         map.dataset.toasts = px > 0 && chart < TOAST_ROOM ? 'top' : 'side';
     }
+    const grew = px > panelPx;
     panelPx = px;
     if (locating.recordId) applyCampaign();
     if (renderer) renderer.setWorkspaceLeft(px);
+    if (grew) clearPane();
     markDirty();
 }
 
@@ -571,6 +776,12 @@ function frame(): void {
             for (const slug of drawn.sectorsOnScreen) bound.load(slug);
         }
         if (marksEl.value) marksEl.value.place(cam, viewport());
+        if (pointerAt) paintHover();
+        if (sectorUi.moving) {
+            const seen = slotsInView(cam, viewport());
+            const held = viewSlots.value;
+            if (!held || held.from.x !== seen.from.x || held.from.y !== seen.from.y || held.to.x !== seen.to.x || held.to.y !== seen.to.y) viewSlots.value = seen;
+        }
         if (build.on && drawn.sectorsOnScreen.join('\n') !== screenSlugs.value.join('\n')) screenSlugs.value = [...drawn.sectorsOnScreen];
         // A title fade is in progress: keep drawing until the renderer says it has settled.
         if (drawn.animating) dirty = true;
@@ -582,6 +793,8 @@ function frame(): void {
 function requestIndexes(slugs: string[]): void {
     const missing: string[] = [];
     for (const slug of slugs) {
+        // A sector of the referee's has no index on the chart to ask for.
+        if (isOwnSlug(slug)) continue;
         if (client.index(version, slug)) continue;
         missing.push(slug);
         pendingIndexes.add(slug);
@@ -659,6 +872,7 @@ function applyRoute(): void {
     if (place === '') lastPlace = '';
     if (suppressFly) {
         suppressFly = false;
+        routeAim = null;
         if (place) lastPlace = place;
         showStatus();
         markDirty();
@@ -682,6 +896,42 @@ function applyRoute(): void {
                 placed = true;
             }
         }
+        markDirty();
+        return;
+    }
+    const slotNow = slotOnRoute();
+    if (slotNow) {
+        // An empty slot has no sector to find: the camera frames the slot itself.
+        fallbackNote = '';
+        showStatus();
+        const linked = cameraFromQuery();
+        if (linked && !sawQuery) {
+            sawQuery = true;
+            fly = null;
+            cam = linked;
+            placed = true;
+            markDirty();
+            return;
+        }
+        routeAim = { kind: 'fit', rect: sectorRect(slotNow.x, slotNow.y) };
+        flyTo(aim(routeAim));
+        return;
+    }
+    // A hex picked in an empty slot: there is no sector to find, so the camera goes to the hex itself.
+    const slotHex = dossierRoute(route.path);
+    const hexSlot = slotHex.kind !== 'closed' ? parseSlot(slotHex.slug) : null;
+    if (hexSlot && slotHex.kind !== 'closed') {
+        fallbackNote = '';
+        showStatus();
+        const world = hexWorldBox(slotHex.slug + '/' + slotHex.hex, sectorOf);
+        if (world) {
+            routeAim = { kind: 'camera', camera: { x: (world.x0 + world.x1) / 2, y: (world.y0 + world.y1) / 2, ppp: Math.max(cam.ppp, PPP_NAMES) } };
+            flyTo(aim(routeAim));
+        }
+        return;
+    }
+    if (ownPending()) {
+        showStatus();
         markDirty();
         return;
     }
@@ -714,8 +964,9 @@ function applyRoute(): void {
         markDirty();
         return;
     }
-    if (target.kind === 'fit') flyTo(fit(target.rect, vp, 0));
-    else if (target.kind === 'camera') flyTo(target.camera);
+    if (target.kind === 'fit') routeAim = { kind: 'fit', rect: target.rect };
+    else if (target.kind === 'camera') routeAim = { kind: 'camera', camera: target.camera };
+    if (routeAim) flyTo(aim(routeAim));
 }
 
 function onResize(): void {
@@ -740,16 +991,15 @@ async function boot(): Promise<void> {
             // A 404 is an empty document inside the client. Any other failure leaves the chart without borders.
         });
         const manifest = await manifestPromise;
-        chart = manifest;
+        truthChart = manifest;
         manifestRef.value = manifest;
-        const empty: TruthOverview = { truthVersion: version, sectors: [] };
-        if (renderer) renderer.setChart(manifest, empty, 'canonical');
+        applyChart();
         showStatus();
         applyRoute();
         markDirty();
         overview = await overviewPromise;
         overviewReady = true;
-        if (renderer) renderer.setChart(manifest, overview, 'canonical');
+        applyChart();
         showStatus();
         markDirty();
     } catch (err) {
@@ -777,6 +1027,7 @@ onMounted(() => {
         getViewport: viewport,
         setCamera: (next: Camera, why: InputWhy) => {
             fly = null;
+            routeAim = null;
             cam = next;
             arriveAtLocate();
             if (why) {
@@ -784,51 +1035,11 @@ onMounted(() => {
                 scheduleQuery();
             }
         },
-        click: (sx, sy) => {
-            if (renderer && renderer.partyAt(sx, sy)) {
-                openParty();
-                return;
-            }
-            const vesselId = renderer ? renderer.vesselAt(sx, sy) : null;
-            if (vesselId) {
-                openVessel(vesselId);
-                return;
-            }
-            const world = toWorld(cam, viewport(), sx, sy);
-            const hit = hexAt(world.x, world.y);
-            const place = fromGlobal(hit.q, hit.r);
-            const hhhh = formatHex(place.col, place.row);
-            const onWorld = holdsWorld(place.sx, place.sy, hhhh);
-            // A record's place is being picked: a system clicked goes to it, and nothing else happens.
-            if (picking.value) {
-                const sector = onWorld && chart ? chart.sectors.find((item) => item.x === place.sx && item.y === place.sy && item.canonical) : null;
-                if (!sector) return;
-                const index = version ? client.index(version, sector.slug) : null;
-                const entry = index ? index.hexes[hhhh] : null;
-                offerSystem({ slug: sector.slug, hex: hhhh, name: entry ? entry.name : '' });
-                return;
-            }
-            // A click on the chart ends a locate; on empty space that is all it does.
-            if (locating.recordId) {
-                stopLocate();
-                if (!onWorld) return;
-            }
-            // A plain click selects one hex: a many-hex selection ends.
-            if (build.selection.length) build.selection = [];
-            // In Build an empty hex can be selected too, where the chart is close enough to show hexes.
-            if (onWorld || (buildReady() && tierFor(cam.ppp) === 'hex')) {
-                const sector = chart ? chart.sectors.find((item) => item.x === place.sx && item.y === place.sy && item.canonical) : null;
-                if (!sector) {
-                    if (onWorld) return;
-                } else {
-                    openHex(sector.slug + '/' + hhhh);
-                    return;
-                }
-            }
-            if (route.path !== '/' && route.path !== '') {
-                suppressFly = true;
-                void router.push({ path: '/', query: withQuery(route.query, cameraQuery()) });
-            }
+        click: (sx, sy) => { chartClick(sx, sy); },
+        box: { wants: boxWants, start: boxStart, move: boxMove, end: boxEnd, cancel: boxCancel },
+        panning: (on) => {
+            dragging = on && buildReady() ? 'pan' : null;
+            paintHover();
         },
         // Legacy js/canvas_input.js:361-373: a double click on a system with orbit data enters its orbit view.
         doubleClick: (sx, sy) => {
@@ -890,20 +1101,38 @@ onMounted(() => {
     });
     el.focus();
     bound.sync();
+    syncOwn();
+    setSectorNav({
+        openSector: (id, letter) => { openScope(letter ? subsectorPath(id, letter) : '/s/' + encodeURIComponent(id)); },
+        openSlot: (slot) => { openScope('/s/' + encodeURIComponent(slotSlug(slot))); },
+        systems: (id) => {
+            const store = buildStore();
+            return store ? store.rows(id).filter((row) => row.state !== 'removed').length : 0;
+        },
+        free: (slot) => slotHolder(truthChart, ownList(), slot) === null,
+    });
+    setDraftOpener(openDraft, (hexKey) => blank(hexKey));
     setBuildMap({
         truth: truthRow,
         sectorName: sectorNameOf,
         subsectorName: (hexKey) => {
             const place = parseHexKey(hexKey);
-            const index = place && version ? client.index(version, place.slug) : null;
+            if (place && parseSlot(place.slug)) return 'Subsector ' + subsectorLetter(place.hex) + ', unnamed';
+            const index = place ? baseIndex(place.slug) : null;
             return place && index ? subsectorName(index, place.hex) : '';
         },
         settings: () => (manifestRef.value ? manifestRef.value.settings : null),
+        select: (keys) => { void nextTick(() => { selectKeys(keys, keys[keys.length - 1] ?? ''); }); },
     });
     setPlaceSource({ current: currentSystem, system: systemInfo, bodies: systemBodies });
     applyCampaign();
     void boot();
-    nextFrame(() => { void loadSession(); });
+    nextFrame(() => {
+        void loadSession().then(() => {
+            sessionRead = true;
+            if (isOwnSlug(routeSlug())) applyRoute();
+        });
+    });
 });
 
 watch(
@@ -938,6 +1167,10 @@ const manyKeys = computed(() => {
     if (!build.on || !buildUniverse.value) return [];
     return build.selection.length > 1 ? build.selection : scopeSelection();
 });
+/** The empty slot that is selected, and while a sector is being moved the empty slots on screen and the keyboard's one. */
+const selectedSlot = computed(() => (build.on && buildUniverse.value && sectorUi.at && sectorUi.at.kind === 'slot' ? sectorUi.at.slot : null));
+const moveTargets = computed(() => (sectorUi.moving && viewSlots.value ? freeSlots(truthChart, ownList(), viewSlots.value.from, viewSlots.value.to, 120) : []));
+const moveCursor = computed(() => (sectorUi.moving && sectorUi.cursor ? { x: sectorUi.cursor.x, y: sectorUi.cursor.y, free: slotHolder(truthChart, ownList(), sectorUi.cursor) === null } : null));
 const previewKey = computed(() => (build.on && buildUniverse.value ? (build.preview ? build.preview.hexKey : build.rolling) : ''));
 
 function truthRow(hexKey: string): SectorHex | null {
@@ -947,18 +1180,95 @@ function truthRow(hexKey: string): SectorHex | null {
 }
 
 function sectorNameOf(slug: string): string {
+    if (parseSlot(slug)) return 'Empty sector slot';
     if (chart) for (const sector of chart.sectors) if (sector.slug === slug) return sector.name;
     return slug.replace(/_/g, ' ');
 }
 
 function sectorOf(slug: string): SectorPlace | null {
+    const slot = parseSlot(slug);
+    if (slot) return { slug, x: slot.x, y: slot.y };
     const found = chart ? chart.sectors.find((item) => item.slug === slug) : null;
     return found ? { slug: found.slug, x: found.x, y: found.y } : null;
 }
 
+/**
+ * The sector a hex of the grid is in. In Build a slot no sector holds is a place too: its
+ * hexes can be picked, and generating there makes the sector (findings/builder_system_design.md §18).
+ */
 function sectorAt(x: number, y: number): string | null {
     const found = chart ? chart.sectors.find((item) => item.x === x && item.y === y && item.canonical) : null;
-    return found ? found.slug : null;
+    if (found) return found.slug;
+    return buildReady() && slotHolder(truthChart, ownList(), { x, y }) === null ? slotSlug({ x, y }) : null;
+}
+
+/** A click on the chart: a party, a vessel, a hex, or empty space. */
+function chartClick(sx: number, sy: number): void {
+    if (renderer && renderer.partyAt(sx, sy)) {
+        openParty();
+        return;
+    }
+    const vesselId = renderer ? renderer.vesselAt(sx, sy) : null;
+    if (vesselId) {
+        openVessel(vesselId);
+        return;
+    }
+    const world = toWorld(cam, viewport(), sx, sy);
+    const hit = hexAt(world.x, world.y);
+    const place = fromGlobal(hit.q, hit.r);
+    const hhhh = formatHex(place.col, place.row);
+    const onWorld = holdsWorld(place.sx, place.sy, hhhh);
+    // A record's place is being picked: a system clicked goes to it, and nothing else happens.
+    if (picking.value) {
+        const sector = onWorld && chart ? chart.sectors.find((item) => item.x === place.sx && item.y === place.sy && item.canonical) : null;
+        if (!sector) return;
+        const index = version ? client.index(version, sector.slug) : null;
+        const entry = index ? index.hexes[hhhh] : null;
+        offerSystem({ slug: sector.slug, hex: hhhh, name: entry ? entry.name : '' });
+        return;
+    }
+    // A click on the chart ends a locate; on empty space that is all it does.
+    if (locating.recordId) {
+        stopLocate();
+        if (!onWorld) return;
+    }
+    // Build, on the grid of sectors: a sector being moved goes to the slot clicked; an empty
+    // slot is selected; a sector of the referee's opens from the scale of sectors.
+    if (buildReady()) {
+        const slot = { x: place.sx, y: place.sy };
+        if (sectorUi.moving) {
+            void moveTo(slot);
+            return;
+        }
+        const holder = slotHolder(truthChart, ownList(), slot);
+        if (!holder) {
+            if (build.selection.length) build.selection = [];
+            if (tierFor(cam.ppp) === 'hex') openHex(slotSlug(slot) + '/' + hhhh);
+            else openScope('/s/' + encodeURIComponent(slotSlug(slot)));
+            return;
+        }
+        if (holder.kind === 'own' && tierFor(cam.ppp) !== 'hex') {
+            if (build.selection.length) build.selection = [];
+            openScope('/s/' + encodeURIComponent(holder.slug));
+            return;
+        }
+    }
+    // A plain click selects one hex: a many-hex selection ends.
+    if (build.selection.length) build.selection = [];
+    // In Build an empty hex can be selected too, where the chart is close enough to show hexes.
+    if (onWorld || (buildReady() && tierFor(cam.ppp) === 'hex')) {
+        const sector = chart ? chart.sectors.find((item) => item.x === place.sx && item.y === place.sy && item.canonical) : null;
+        if (!sector) {
+            if (onWorld) return;
+        } else {
+            openHex(sector.slug + '/' + hhhh);
+            return;
+        }
+    }
+    if (route.path !== '/' && route.path !== '') {
+        suppressFly = true;
+        void router.push({ path: '/', query: withQuery(route.query, cameraQuery()) });
+    }
 }
 
 /** One hex, selected: its page, with the dossier pane open and the camera left alone. */
@@ -1020,6 +1330,7 @@ function scopePath(keys: readonly string[], anchor: string): string {
     const oneSector = places.every((place) => place.slug === slug);
     const focus = parseHexKey(keys.includes(anchor) ? anchor : keys[keys.length - 1]);
     const sectorSlug = oneSector ? slug : (focus ? focus.slug : slug);
+    if (parseSlot(sectorSlug)) return '/s/' + encodeURIComponent(sectorSlug);
     if (oneSector) {
         const letters = new Set(places.map((place) => subsectorLetter(place.hex)));
         if (letters.size === 1) {
@@ -1033,7 +1344,7 @@ function scopePath(keys: readonly string[], anchor: string): string {
 function openScope(path: string): void {
     if (route.path === path && dossierShown.value) return;
     suppressFly = true;
-    void router.push({ path, query: withQuery(route.query, { panel: null, record: null }) });
+    void router.push({ path, query: withQuery(route.query, { panel: 'dossier', record: null }) });
 }
 
 function canvasPoint(event: PointerEvent | MouseEvent): { x: number; y: number } | null {
@@ -1043,47 +1354,181 @@ function canvasPoint(event: PointerEvent | MouseEvent): { x: number; y: number }
     return { x: event.clientX - box.left, y: event.clientY - box.top };
 }
 
-/**
- * Shift, or the Select hexes switch: the press belongs to the selection and the chart does
- * not pan. Taken in the capture phase, so the chart's own pointer handling never sees it.
- */
-function onBuildDown(event: PointerEvent): void {
-    if (!buildReady() || event.button !== 0 || !(event.shiftKey || build.selecting)) return;
-    if (tierFor(cam.ppp) !== 'hex') return;
-    const point = canvasPoint(event);
-    if (!point || !canvasEl.value) return;
-    event.stopPropagation();
-    event.preventDefault();
-    canvasEl.value.setPointerCapture(event.pointerId);
-    canvasEl.value.focus();
-    boxPointer = event.pointerId;
-    boxRef.value = { x0: point.x, y0: point.y, x1: point.x, y1: point.y };
+// ---- §18: the box, the hover and the cursor --------------------------------------------------------
+
+function hexTier(): boolean {
+    return tierFor(cam.ppp) === 'hex';
 }
 
-function onBuildMove(event: PointerEvent): void {
-    const box = boxRef.value;
-    if (!box || event.pointerId !== boxPointer || !canvasEl.value) return;
-    const rect = canvasEl.value.getBoundingClientRect();
-    boxRef.value = { x0: box.x0, y0: box.y0, x1: event.clientX - rect.left, y1: event.clientY - rect.top };
+/** A press in Build draws a box when Shift is held, or the Select hexes tool is on (Space, the middle button and two fingers still move the chart). */
+function boxWants(event: PointerEvent): boolean {
+    if (!buildReady() || sectorUi.moving || picking.value) return false;
+    readHeld(event);
+    return gestureFor({ ...held, build: true, tool: build.selecting, button: event.button, hexTier: hexTier() }) !== 'pan';
 }
 
-function onBuildUp(event: PointerEvent): void {
-    const box = boxRef.value;
-    if (!box || event.pointerId !== boxPointer) return;
-    boxRef.value = null;
-    boxPointer = -1;
-    const held = pickedKeys();
-    const moved = Math.hypot(box.x1 - box.x0, box.y1 - box.y0) > 4;
+function boxStart(sx: number, sy: number, event: PointerEvent): void {
+    const mode = gestureFor({ ...held, build: true, tool: build.selecting, button: event.button, hexTier: hexTier() });
+    boxing = { x0: sx, y0: sy, x1: sx, y1: sy, mode: mode === 'box-take' ? 'box-take' : 'box-add', span: '', changed: [], over: false };
+    dragging = boxing.mode;
+    if (canvasEl.value) canvasEl.value.focus();
+    paintHover();
+}
+
+function boxMove(sx: number, sy: number): void {
+    if (!boxing) return;
+    boxing.x1 = sx;
+    boxing.y1 = sy;
+    if (!boxFrame) boxFrame = nextFrame(paintBox);
+}
+
+/** The hexes inside the box, one more than a selection holds, so a box that reaches the cap is told so. */
+function boxedKeys(box: { x0: number; y0: number; x1: number; y1: number }): string[] {
+    return keysInBox(cam, viewport(), { x: box.x0, y: box.y0 }, { x: box.x1, y: box.y1 }, sectorAt, SELECTION_CAP + 1);
+}
+
+/** The box and what it would do, drawn once a frame, and measured again only when the box has moved. */
+function paintBox(): void {
+    boxFrame = 0;
+    const marks = marksEl.value;
+    if (!boxing || !marks) return;
+    // Measured again whenever the box's edge moves a pixel: a hex joins when its centre comes inside, which a corner hex alone does not tell.
+    const span = Math.round(boxing.x0) + ',' + Math.round(boxing.y0) + ',' + Math.round(boxing.x1) + ',' + Math.round(boxing.y1);
+    let path: string | null = null;
+    if (span !== boxing.span) {
+        boxing.span = span;
+        const result = boxResult(pickedKeys(), boxedKeys(boxing), boxing.mode, SELECTION_CAP);
+        boxing.changed = result.changed;
+        boxing.over = result.over;
+        path = hexesPath(result.changed, sectorOf);
+    }
+    const moved = Math.hypot(boxing.x1 - boxing.x0, boxing.y1 - boxing.y0) > 4;
+    const empty = boxing.mode === 'box-add' ? tallyOf(boxing.changed).empty.length : 0;
+    marks.box({
+        rect: { x0: boxing.x0, y0: boxing.y0, x1: boxing.x1, y1: boxing.y1 },
+        path,
+        take: boxing.mode === 'box-take',
+        words: moved ? boxWords(boxing.changed.length, empty, boxing.mode, boxing.over) : '',
+        at: { x: boxing.x1, y: boxing.y1 },
+    });
+}
+
+function boxEnd(sx: number, sy: number, moved: boolean): void {
+    const box = boxing;
+    boxCancel();
+    if (!box) return;
+    const have = pickedKeys();
     if (!moved) {
-        const key = keyAt(cam, viewport(), box.x1, box.y1, sectorAt);
-        if (key) selectKeys(toggleKey(held, key), key);
+        const key = keyAt(cam, viewport(), sx, sy, sectorAt);
+        const intent = clickIntent({ shift: held.shift, alt: held.alt }, key !== null && have.includes(key));
+        // With the tool on, a press that does not move is a plain click: it selects that hex alone.
+        if (intent === 'select') chartClick(sx, sy);
+        else if (key && intent === 'add') selectKeys(addKeys(have, [key]).keys, key);
+        else if (key) selectKeys(have.filter((item) => item !== key), key);
         return;
     }
-    const inside = keysInBox(cam, viewport(), { x: box.x0, y: box.y0 }, { x: box.x1, y: box.y1 }, sectorAt, SELECTION_CAP);
-    const next = addKeys(held, inside);
-    if (next.over) showToast('A selection holds at most ' + SELECTION_CAP.toLocaleString('en') + ' hexes.');
-    if (inside.length) selectKeys(next.keys, inside[inside.length - 1]);
+    const inside = boxedKeys({ ...box, x1: sx, y1: sy });
+    const result = boxResult(have, inside, box.mode, SELECTION_CAP);
+    if (result.over || inside.length > SELECTION_CAP) showToast('A selection holds at most ' + SELECTION_CAP.toLocaleString('en') + ' hexes: the box was cut there.');
+    if (result.changed.length) selectKeys(result.keys, result.changed[result.changed.length - 1]);
 }
+
+function boxCancel(): void {
+    boxing = null;
+    if (boxFrame) cancelFrame(boxFrame);
+    boxFrame = 0;
+    dragging = null;
+    if (marksEl.value) marksEl.value.box(null);
+    paintHover();
+}
+
+function readHeld(event: { shiftKey: boolean; altKey: boolean }): void {
+    held.shift = event.shiftKey;
+    held.alt = event.altKey;
+}
+
+/** The mouse over the chart: the hover follows it. A finger has no hover. */
+function onPointerHover(event: PointerEvent): void {
+    readHeld(event);
+    const point = event.pointerType === 'touch' ? null : canvasPoint(event);
+    if (!point) {
+        if (pointerAt || hoverSig) {
+            pointerAt = null;
+            paintHover();
+        }
+        return;
+    }
+    pointerAt = point;
+    paintHover();
+}
+
+function onPointerOut(): void {
+    pointerAt = null;
+    paintHover();
+}
+
+/** Shift, Alt and Space change what the next press does: the cursor and the hover say so at once, without a move. */
+function onHeldKey(event: KeyboardEvent): void {
+    const down = event.type === 'keydown';
+    readHeld(event);
+    if (event.code === 'Space' && !typingTarget(event)) {
+        held.space = down;
+        // Space held with the tool on is the hand that moves the map; it scrolls nothing and presses nothing.
+        if (build.selecting && event.target === canvasEl.value) event.preventDefault();
+    }
+    if (event.key === 'Shift' || event.key === 'Alt' || event.code === 'Space') paintHover();
+}
+
+/** The cursor and the hover: what the next press will do, at the hex under the pointer. */
+function paintHover(): void {
+    const el = canvasEl.value;
+    if (!el) return;
+    const on = buildReady();
+    const key = on && pointerAt && hexTier() ? keyAt(cam, viewport(), pointerAt.x, pointerAt.y, sectorAt) : null;
+    const have = key ? pickedKeys() : [];
+    const overSelected = key !== null && have.includes(key);
+    const cursor = cursorFor({ build: on, tool: build.selecting, hexTier: hexTier(), held, dragging, overSelected });
+    if (cursor === 'default') delete el.dataset.cursor;
+    else if (el.dataset.cursor !== cursor) el.dataset.cursor = cursor;
+    const marks = marksEl.value;
+    if (!marks) return;
+    if (!on || !pointerAt || dragging !== null || sectorUi.moving) {
+        if (hoverSig) marks.hover(null);
+        hoverSig = '';
+        return;
+    }
+    const vp = viewport();
+    const world = toWorld(cam, vp, pointerAt.x, pointerAt.y);
+    const hit = hexAt(world.x, world.y);
+    const place = fromGlobal(hit.q, hit.r);
+    const slot = { x: place.sx, y: place.sy };
+    const inSlot = slotHolder(truthChart, ownList(), slot) === null;
+    const ghost = inSlot ? slotGhostPath(slot) : '';
+    if (!key) {
+        // Far out, an empty slot is what a click picks: it shows its ghost grid and says what it is.
+        if (!inSlot) {
+            if (hoverSig) marks.hover(null);
+            hoverSig = '';
+            return;
+        }
+        const mid = { left: pointerAt.x, right: pointerAt.x, top: pointerAt.y - 12, bottom: pointerAt.y + 12 };
+        hoverSig = 'slot:' + slot.x + ',' + slot.y;
+        marks.hover({ points: '', ghost, tone: 'plain', empty: true, words: 'Empty sector slot', chip: chipPlace(mid, area(true), 10, 26) });
+        return;
+    }
+    const tone = hoverTone(held, overSelected);
+    const state = hexState(key);
+    const kind = inSlot ? 'slot' : state === 'empty' ? 'empty' : state === 'removed' ? 'removed' : 'filled';
+    const hex = key.slice(key.lastIndexOf('/') + 1);
+    const sig = key + '|' + tone + '|' + kind;
+    const hexBox = hexWorldBox(key, sectorOf);
+    const box = hexBox ? screenBox(cam, vp, hexBox) : { left: pointerAt.x, right: pointerAt.x, top: pointerAt.y, bottom: pointerAt.y };
+    const words = sig === hoverSig && hoverWordsHeld ? hoverWordsHeld : hoverWords(hex, kind, kind === 'filled' ? hexName(key) : '', tone);
+    hoverWordsHeld = words;
+    hoverSig = sig;
+    marks.hover({ points: hexPoints(key, sectorOf), ghost, tone, empty: kind !== 'filled', words, chip: chipPlace(box, area(true), 8, 26) });
+}
+let hoverWordsHeld = '';
 
 /** Right-click in Build: the acts for the hex under the pointer, or for the selection it is part of. */
 function onBuildMenu(event: MouseEvent): void {
@@ -1124,8 +1569,27 @@ function setStripWidth(px: number): void {
 
 function toggleBuild(): void {
     accountOpen.value = false;
+    // Switching Build off with changes not kept asks first, as leaving the hex does.
+    if (build.on && holdLeaving(() => { setBuildOn(false); })) return;
     setBuildOn(!build.on);
+    // A sector's or a subsector's pane is Build's: switched off there, it shuts.
+    if (!build.on && addressedScope() && dossierShown.value) closePanel();
 }
+
+/**
+ * A draft with changes not kept is not lost by going somewhere else: the going is held and
+ * the pane asks (Keep, Discard, or stay). The same hex with its pane still showing is not leaving.
+ */
+function guardDraft(to: RouteLocationNormalized): boolean {
+    if (!draftHandle.value && !edit.opening) return true;
+    const next = dossierRoute(to.path);
+    const sameHex = next.kind !== 'closed' && next.slug + '/' + next.hex === edit.hexKey;
+    const orbit = addressPane(to.path, to.query).view.kind === 'orbit';
+    if (sameHex && !orbit && addressPane(to.path, to.query).pane.kind === 'dossier') return true;
+    return !holdLeaving(() => { void router.push(to.fullPath); });
+}
+onBeforeRouteUpdate(guardDraft);
+onBeforeRouteLeave(guardDraft);
 
 // The switch itself is a command only where Build can be had; the acts only while it is on.
 watch(buildOffered, (offered) => {
@@ -1165,6 +1629,47 @@ watch(
 );
 
 watch(marksEl, () => { markDirty(); });
+
+// The tool switched, or the selection changed, with the pointer still: the cursor and the hover say so at once.
+watch(() => [build.selecting, build.selection.length, build.on] as const, () => { paintHover(); });
+
+// The referee's sectors changed: the chart is laid again, and the pane and what is selected follow.
+watch(() => {
+    const store = ownSectors();
+    return store ? store.tick() : -1;
+}, () => {
+    applyChart();
+    dossierTick.value += 1;
+    syncSectorAt();
+    showStatus();
+});
+
+// What Build has selected on the grid of sectors follows the address, the pane and the switch.
+watch(
+    () => [route.path, shownPane.value.kind, build.on, buildUniverse.value ? buildUniverse.value.id : ''] as const,
+    () => {
+        syncSectorAt();
+        markDirty();
+    },
+    { immediate: true },
+);
+
+watch(() => [sectorUi.moving, sectorUi.cursor] as const, () => {
+    if (!sectorUi.moving) viewSlots.value = null;
+    // The keyboard's slot is kept on screen.
+    const cursor = sectorUi.cursor;
+    const seen = viewSlots.value;
+    if (cursor && seen && (cursor.x < seen.from.x || cursor.x > seen.to.x || cursor.y < seen.from.y || cursor.y > seen.to.y)) {
+        const rect = sectorRect(cursor.x, cursor.y);
+        flyTo({ x: (rect.x0 + rect.x1) / 2, y: (rect.y0 + rect.y1) / 2, ppp: cam.ppp });
+    }
+    markDirty();
+});
+
+// An address in a sector of the referee's waits for the session and the campaign: once they settle, the route is read again.
+watch(() => [session.user, campaign.status] as const, () => {
+    if (isOwnSlug(routeSlug())) applyRoute();
+});
 
 // The pane was shut: a many-hex selection and a preview go with it.
 watch(dossierShown, (shown) => {
@@ -1243,8 +1748,7 @@ function applyLocate(): void {
         showToast('That place is not on this chart.');
         return;
     }
-    const to = target.camera;
-    flyTo({ x: to.x - panelPx / (2 * to.ppp), y: to.y, ppp: to.ppp });
+    flyTo(centreIn(target.camera, viewport(), area()));
     if (!fly) locateArrived = now();
     applyCampaign();
 }
@@ -1411,13 +1915,39 @@ function moveSelection(step: HexStep, grow: boolean): void {
     if (!anchor) return;
     const key = neighbourOf(anchor, step);
     if (!key) return;
-    if (!grow) {
-        selectKeys([key], key);
+    if (!grow) selectKeys([key], key);
+    else {
+        const added = addKeys(pickedKeys(), [key]);
+        if (added.over) showToast('A selection holds at most ' + SELECTION_CAP.toLocaleString('en') + ' hexes.');
+        selectKeys(added.keys, key);
+    }
+    // The hex stepped to is kept where it can be seen: the least glide, as when the pane opens.
+    const world = hexWorldBox(key, sectorOf);
+    const base = fly ? fly.to : cam;
+    const next = world ? clearGlide(base, area(true), screenBox(base, viewport(), world), CLEAR_MARGIN) : null;
+    if (next) flyTo(next);
+}
+
+/**
+ * A sector is being moved: the arrows step the keyboard's slot and Enter moves the sector
+ * there. Taken in the capture phase, before the chart pans.
+ */
+function onMoveKey(event: KeyboardEvent): void {
+    onHeldKey(event);
+    if (!sectorUi.moving || typingTarget(event) || event.ctrlKey || event.altKey || event.metaKey) return;
+    const step: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+    const by = step[event.key];
+    if (by) {
+        event.preventDefault();
+        event.stopPropagation();
+        stepCursor(by[0], by[1]);
         return;
     }
-    const added = addKeys(pickedKeys(), [key]);
-    if (added.over) showToast('A selection holds at most ' + SELECTION_CAP.toLocaleString('en') + ' hexes.');
-    selectKeys(added.keys, key);
+    if (event.key === 'Enter' && sectorUi.cursor) {
+        event.preventDefault();
+        event.stopPropagation();
+        void moveTo(sectorUi.cursor);
+    }
 }
 
 function onMapKey(event: KeyboardEvent): void {
@@ -1486,8 +2016,9 @@ watch(
     },
     () => {
         bound.sync();
+        syncOwn();
         const scope = addressedScope();
-        if (scope) bound.load(scope.slug);
+        if (scope && !parseSlot(scope.slug)) bound.load(scope.slug);
     },
 );
 
@@ -1528,6 +2059,11 @@ onBeforeUnmount(() => {
     if (unregisterBuild) unregisterBuild();
     for (const remove of unregisterBuildActs) remove();
     setBuildMap(null);
+    setSectorNav(null);
+    setSectorAt(null);
+    useOwnSectors(null);
+    setDraftOpener(null);
+    dropEdit();
     bound.close();
     setPlaceSource(null);
     setFrame(null);
@@ -1539,14 +2075,14 @@ onBeforeUnmount(() => {
   <div
     ref="mapEl"
     class="map"
+    @keydown.capture="onMoveKey"
     @keydown="onMapKey"
-    @pointerdown.capture="onBuildDown"
-    @pointermove.capture="onBuildMove"
-    @pointerup.capture="onBuildUp"
-    @pointercancel.capture="onBuildUp"
+    @keyup.capture="onHeldKey"
+    @pointermove="onPointerHover"
+    @pointerleave="onPointerOut"
     @contextmenu="onBuildMenu"
   >
-    <canvas ref="canvasEl" tabindex="0" :class="{ 'is-selecting': build.on && build.selecting }"></canvas>
+    <canvas ref="canvasEl" tabindex="0"></canvas>
     <BuildMarks
       v-if="build.on && buildUniverse"
       ref="marksEl"
@@ -1554,7 +2090,9 @@ onBeforeUnmount(() => {
       :preview="previewKey"
       :removed="removedKeys"
       :sector-of="sectorOf"
-      :box="boxRef"
+      :slot="selectedSlot"
+      :targets="moveTargets"
+      :cursor="moveCursor"
     />
     <Rail
       ref="railEl"
@@ -1602,9 +2140,24 @@ onBeforeUnmount(() => {
   outline: 1px solid var(--signal);
   outline-offset: -1px;
 }
-/* Select hexes is on: a drag draws a box. */
-.map > canvas.is-selecting {
-  cursor: crosshair;
+/* Build: the cursor says what the next press will do (findings/builder_system_design.md §18). */
+.map > canvas[data-cursor="grab"] {
+  cursor: grab;
+}
+.map > canvas[data-cursor="grabbing"] {
+  cursor: grabbing;
+}
+.map > canvas[data-cursor="add"] {
+  cursor: var(--cursor-add);
+}
+.map > canvas[data-cursor="take"] {
+  cursor: var(--cursor-take);
+}
+.map > canvas[data-cursor="box"] {
+  cursor: var(--cursor-box);
+}
+.map > canvas[data-cursor="box-take"] {
+  cursor: var(--cursor-box-take);
 }
 /* A toast sits on the chart beside the panel, above the status line: it covers no control. */
 .map {

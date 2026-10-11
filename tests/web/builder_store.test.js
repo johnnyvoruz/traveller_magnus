@@ -181,6 +181,22 @@ test('a sector page answers every hex in view, and one hex does not fetch again'
     map.close();
 });
 
+test('a universe tree is fetched from the private object route and kept', async () => {
+    const envelope = { kind: 'tree', body: { mgtSystem: { stars: [{ name: 'Sol' }], worlds: [] } } };
+    const fetchImpl = fake((call) => {
+        if (call.url.includes('/hexes?sector=')) return json({ items: [row()], nextCursor: null });
+        assert.equal(call.url, `/api/universes/uni-1/objects/${HASH}`);
+        assert.equal(call.url.includes('cdn.traveller.voyage'), false);
+        return { ok: true, status: 200, json: async () => envelope };
+    });
+    const map = open(fetchImpl, clock());
+    await map.loadSector('spin');
+    assert.deepEqual(await map.tree(KEY), envelope);
+    assert.deepEqual(await map.tree(KEY), envelope);
+    assert.equal(fetchImpl.calls.length, 2);
+    map.close();
+});
+
 test('preview stores nothing, and generate one keeps the returned row and its roll', async () => {
     const envelope = { kind: 'tree', body: { marker: true } };
     const kept = row({ roll: 3, rev: 2, treeHash: HASH2 });
@@ -540,5 +556,30 @@ test('the screen seam keeps a preview by generating that roll', async () => {
     await screen.keep(made, null);
     assert.equal(screen.row(KEY).roll, 4);
     assert.equal(screen.row(KEY).entry, null);
+    map.close();
+});
+
+test('blank posts only the row rev', async () => {
+    const fetchImpl = fake((call) => {
+        if (call.url.includes('/hexes?')) return json({ items: [], nextCursor: null });
+        if (call.url.endsWith('/blank')) {
+            assert.deepEqual(call.body, { baseRev: 0 });
+            assert.equal(Object.keys(call.body).join(','), 'baseRev');
+            return json(row({ rev: 1, treeHash: HASH2, state: 'own' }));
+        }
+        if (call.url.endsWith('/form')) {
+            return json({
+                hash: HASH2,
+                form: { sections: [{ id: 'name', label: 'Name', fields: [{ id: 'name.system', label: 'Name', kind: 'text', permission: 'type', value: '', options: [] }] }] },
+            });
+        }
+        throw new Error('unexpected ' + call.url);
+    });
+    const map = open(fetchImpl, clock());
+    await map.loadSector('spin');
+    const opened = await map.blank(KEY);
+    assert.equal(opened.draft.dirty.value, false);
+    assert.equal(map.row(KEY).rev, 1);
+    assert.equal(fetchImpl.calls.filter((call) => call.url.endsWith('/blank')).length, 1);
     map.close();
 });

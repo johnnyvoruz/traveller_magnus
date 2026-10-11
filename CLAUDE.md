@@ -40,20 +40,26 @@ listing what was created, what was stubbed or skipped and every Halt & Challenge
 
 ## Critical rules (The Johnny Protocol)
 
-1. **`rules/` is read-only.** Never edit any file in `rules/`. The new app consumes them through
-   a generated ESM wrapper (`scripts/gen_rules_esm.js`). These are the authoritative RPG tables.
+1. **`rules/` changes only on Johnny's word.** No session edits a file in `rules/` unless Johnny
+   has named that change. Each change cites the rules text in `assets/`, is written up in
+   `findings/`, and is reviewed by Johnny before it is pushed. The new app consumes the tables
+   through a generated ESM wrapper (`scripts/gen_rules_esm.js`). These are the authoritative
+   RPG tables.
 2. **Zero-Assumption Policy.** Do not interpret, guess, or "fill in" Traveller RPG rules from
    training data. If a rule is ambiguous or missing from `rules/`, stop and ask.
 3. **Halt & Challenge.** On any ambiguity in RPG logic, or any step of a recipe that cannot be
    done as written, draft a specific question for Johnny, log it, and stop. Do not improvise.
-4. **Engine parity is sacred.** Engine code is copied from `js/` into `packages/engines` and must
-   produce byte-identical output to the golden fixtures in `tests/golden/fixtures`. Any
-   difference is reported, never "fixed" toward either side.
+4. **Engine output is pinned.** `packages/engines` must produce byte-identical output to the
+   golden fixtures of its own version (`tests/golden/fixtures/engine_<version>/`). The engines
+   began as a copy of `js/` and now differ from it on purpose: every difference from the legacy
+   app is listed in `tests/generation/parity_deviations_<version>.json`, and the parity test
+   fails on any difference not listed. A new deviation needs Johnny's word, a citation and a
+   version bump. An unplanned difference is reported, never "fixed" toward either side.
 5. **No globals, no native dialogs, no hex colours outside `tokens.css`.** `npm run check`
    enforces the manifesto; a session is not done while it fails.
 6. **Do not interact with Git.** Johnny stages and commits. You only work on the code.
-7. **New files over edits** in the new tree; **no edits at all** in `js/`, `hex_map.html`,
-   `style.css` or `rules/`.
+7. **New files over edits** in the new tree; **no edits at all** in `js/`, `hex_map.html` or
+   `style.css`, and none in `rules/` but under rule 1.
 
 ## Commands (root `package.json`, npm workspaces)
 

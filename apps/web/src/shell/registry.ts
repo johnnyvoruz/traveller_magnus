@@ -44,6 +44,7 @@ function typing(event: KeyboardEvent): boolean {
 
 function matches(event: KeyboardEvent, spec: string): boolean {
     if (spec === 'Ctrl+K') return event.ctrlKey && !event.altKey && (event.key === 'k' || event.key === 'K');
+    if (spec === 'Ctrl+Enter') return event.ctrlKey && !event.altKey && event.key === 'Enter';
     return event.key === spec && !event.ctrlKey && !event.altKey && !event.metaKey;
 }
 

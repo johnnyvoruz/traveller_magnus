@@ -1,0 +1,173 @@
+{
+  "name": "default",
+  "version": 1,
+  "description": "The built-in symbol set: simple strokes drawn for this project. Terrain and accent icons are black and tinted to the map ink; feature icons keep their own colours.",
+  "icons": {
+    "OC": {
+      "file": "oc.svg",
+      "name": "Ocean",
+      "tint": "auto"
+    },
+    "SH": {
+      "file": "sh.svg",
+      "name": "Shallows",
+      "tint": "auto"
+    },
+    "SI": {
+      "file": "si.svg",
+      "name": "Sea ice",
+      "tint": "auto"
+    },
+    "IF": {
+      "file": "if.svg",
+      "name": "Ice field",
+      "tint": "auto"
+    },
+    "IC": {
+      "file": "ic.svg",
+      "name": "Ice cap",
+      "tint": "auto"
+    },
+    "FR": {
+      "file": "fr.svg",
+      "name": "Frost",
+      "tint": "auto"
+    },
+    "TU": {
+      "file": "tu.svg",
+      "name": "Tundra",
+      "tint": "auto"
+    },
+    "TA": {
+      "file": "ta.svg",
+      "name": "Taiga",
+      "tint": "auto"
+    },
+    "FO": {
+      "file": "fo.svg",
+      "name": "Forest",
+      "tint": "auto"
+    },
+    "JU": {
+      "file": "ju.svg",
+      "name": "Jungle",
+      "tint": "auto"
+    },
+    "SW": {
+      "file": "sw.svg",
+      "name": "Swamp",
+      "tint": "auto"
+    },
+    "GR": {
+      "file": "gr.svg",
+      "name": "Grass and steppe",
+      "tint": "auto"
+    },
+    "DE": {
+      "file": "de.svg",
+      "name": "Desert",
+      "tint": "auto"
+    },
+    "BK": {
+      "file": "bk.svg",
+      "name": "Baked lands",
+      "tint": "auto"
+    },
+    "EV": {
+      "file": "ev.svg",
+      "name": "Evaporite flat",
+      "tint": "auto"
+    },
+    "XR": {
+      "file": "xr.svg",
+      "name": "Exotic terrain",
+      "tint": "auto"
+    },
+    "RG": {
+      "file": "rg.svg",
+      "name": "Regolith",
+      "tint": "auto"
+    },
+    "RK": {
+      "file": "rk.svg",
+      "name": "Bare rock",
+      "tint": "auto"
+    },
+    "LV": {
+      "file": "lv.svg",
+      "name": "Lava",
+      "tint": "auto"
+    },
+    "MT": {
+      "file": "mt.svg",
+      "name": "Mountains",
+      "tint": "auto"
+    },
+    "VO": {
+      "file": "vo.svg",
+      "name": "Volcano",
+      "tint": "auto"
+    },
+    "CR": {
+      "file": "cr.svg",
+      "name": "Crater",
+      "tint": "auto"
+    },
+    "starport": {
+      "file": "starport.svg",
+      "name": "Starport"
+    },
+    "city": {
+      "file": "city.svg",
+      "name": "City"
+    },
+    "arcology": {
+      "file": "arcology.svg",
+      "name": "Arcology"
+    },
+    "town": {
+      "file": "town.svg",
+      "name": "Town"
+    },
+    "outpost": {
+      "file": "outpost.svg",
+      "name": "Outpost"
+    },
+    "rural": {
+      "file": "rural.svg",
+      "name": "Rural"
+    },
+    "farm": {
+      "file": "farm.svg",
+      "name": "Farmland"
+    },
+    "resource": {
+      "file": "resource.svg",
+      "name": "Resource"
+    },
+    "naval": {
+      "file": "naval.svg",
+      "name": "Naval base"
+    },
+    "scout": {
+      "file": "scout.svg",
+      "name": "Scout base"
+    },
+    "military": {
+      "file": "military.svg",
+      "name": "Military base"
+    },
+    "estate": {
+      "file": "estate.svg",
+      "name": "Noble estate"
+    },
+    "penal": {
+      "file": "penal.svg",
+      "name": "Penal colony"
+    },
+    "dome": {
+      "file": "dome.svg",
+      "name": "Domed (unbreathable air)"
+    }
+  }
+}

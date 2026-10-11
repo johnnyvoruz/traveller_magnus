@@ -3,6 +3,7 @@ import type { PanelSpan } from '../shell/panel_state.ts';
 import type { BodyLink, BodyModel } from './model.ts';
 import BodyRow from './BodyRow.vue';
 import type { DayNightFigure, StarportTick } from '../orbit/daynight.ts';
+import type { Subsolar } from '../orbit/sun.ts';
 import DayNight from './DayNight.vue';
 import FactTiles from './FactTiles.vue';
 import JourneyTimes from './JourneyTimes.vue';
@@ -26,6 +27,12 @@ defineProps<{
     live?: boolean;
     /** Marker share for one clock value. Used while live. */
     place?: (days: number) => number | null;
+    /** Where the star stands over the body on a date, for the surface map's shadow. */
+    sun?: ((days: number) => Subsolar | null) | null;
+    /** Now for the surface map's time bar: the campaign date in days. */
+    nowDays?: number;
+    /** Where the shared clock starts when nothing has set it: the view's date. */
+    startDays?: number;
 }>();
 
 defineEmits<{ open: [key: string] }>();
@@ -38,7 +45,7 @@ function factsOf(link: BodyLink): string {
 <template>
   <div class="doss-body" :data-span="span">
     <div class="doss-main">
-      <SurfaceStage :badge="model.mapBadge" :target="surface ?? null" />
+      <SurfaceStage :badge="model.mapBadge" :target="surface ?? null" :sun="sun ?? null" :now-days="nowDays" :start-days="startDays" />
       <UwpRibbon v-if="model.ribbon" :ribbon="model.ribbon" />
       <FactTiles :facts="model.facts" :restated="restated" />
       <DayNight v-if="dayNight" :figure="dayNight" :name="model.title" :tick="tick ?? null" :live="live === true" :place="place" />

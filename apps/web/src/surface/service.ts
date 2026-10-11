@@ -1,9 +1,11 @@
 /**
  * Map requests. Both sheets paint in the surface worker: 'vanilla' the legacy painter
- * (vanilla/map.ts), 'enhanced' the enhanced one (enhanced/map.ts: the same continents, seas
- * and sea ice from enhanced/seas.ts). The two are told apart here and nowhere in vanilla.
- * The cache key carries the mode, the painter and, for enhanced, the sea it was asked to
- * draw, so one mode's sheet is never handed to the other.
+ * (vanilla/map.ts), 'enhanced' the hybrid surface map (surface/hybrid: the icosahedral hex
+ * map with climate, ice, terrain and people). The two are told apart here and nowhere in
+ * vanilla. The cache key carries the mode, the painter, the hybrid surface version and a
+ * digest of the world's data, so one mode's sheet is never handed to the other and a world
+ * whose data changed is painted again. The enhanced-seas painter (enhanced/map.ts) still
+ * answers a request that carries a sea; requestMap no longer sends one.
  * A reply whose generation is not the live one is dropped.
  * Discs compile in the disc worker. prepareDiscs posts the batch with its mode,
  * renderer version and generation, and returns.
@@ -18,6 +20,7 @@ import type {
     DrawingOptions,
     EnhancedPaintInputs,
     EnhancedSea,
+    HybridPaintInputs,
     MapRequest,
     SurfaceMode,
     SurfaceReply,
@@ -34,6 +37,10 @@ import {
 import { enhancedWorldData } from './enhanced/climate.ts';
 import { createEnhancedMap, seaPlan } from './enhanced/map.ts';
 import { createChunkedMap } from './map_chunks.ts';
+import { HYBRID_SURFACE_VERSION, hybridWorld, worldDigest } from './hybrid/inputs.ts';
+import { hybridModel, SHEET_LAYOUT } from './hybrid/index.ts';
+import { createHybridPaint } from './hybrid/paint.ts';
+import { modelPreparation } from './hybrid/model.ts';
 import { openDiscLink, type DiscLink } from './disc_link.ts';
 import { clearDiscs, discHeld, retainDiscs } from './disc_hold.ts';
 import { discShadeRequest } from './disc_shade.ts';
@@ -49,6 +56,7 @@ const MAP_ALGORITHM = 'vanilla-diamond-1';
 const MAP_PALETTE = 'vanilla-legacy-1';
 const ENHANCED_ALGORITHM = 'enhanced-seas-1';
 const ENHANCED_PALETTE = 'enhanced-liquids-1';
+const HYBRID_PALETTE = 'hybrid-terrain-1';
 const MAP_REVISION = 'surface-map-1';
 const TASK_BUDGET_MS = 50;
 
@@ -92,8 +100,10 @@ type Live = {
     mode: SurfaceMode;
     key: string;
     inputs: VanillaPaintInputs;
-    /** The enhanced sheet's inputs; null for a vanilla request. */
+    /** The enhanced-seas sheet's inputs; null otherwise. */
     enhanced: EnhancedPaintInputs | null;
+    /** The hybrid sheet's inputs; null for a vanilla request. */
+    hybrid: HybridPaintInputs | null;
     started: number;
     resolve: (sheet: MapSheet | null) => void;
     cancelTimer: (() => void) | null;
@@ -142,16 +152,18 @@ function drawingOptionsKey(options: DrawingOptions): string {
     return String(options.continentalDefinition) + ',' + String(options.coastlineComplexity);
 }
 
-function cacheKey(request: MapRequest, sea: EnhancedSea | null): string {
+function cacheKey(request: MapRequest, sea: EnhancedSea | null, hybrid: HybridPaintInputs | null): string {
     return surfaceCacheKey({
         hexKey: request.hexKey,
         dossierKey: request.dossierKey,
         revision: MAP_REVISION,
         mode: request.mode,
-        algorithm: sea ? ENHANCED_ALGORITHM : MAP_ALGORITHM,
-        palette: sea ? ENHANCED_PALETTE : MAP_PALETTE,
-        // The enhanced sheet is also a picture of the sea it was told to draw.
-        options: drawingOptionsKey(request.options) + (sea ? ';' + JSON.stringify(sea) : ''),
+        algorithm: hybrid ? HYBRID_SURFACE_VERSION : sea ? ENHANCED_ALGORITHM : MAP_ALGORITHM,
+        palette: hybrid ? HYBRID_PALETTE : sea ? ENHANCED_PALETTE : MAP_PALETTE,
+        // The enhanced sheet is also a picture of the sea it was told to draw; the hybrid
+        // one of the world's data, by digest.
+        options: drawingOptionsKey(request.options)
+            + (hybrid ? ';' + worldDigest(hybrid.world) : sea ? ';' + JSON.stringify(sea) : ''),
         resolution: MAP_WIDTH + 'x' + MAP_HEIGHT,
     });
 }
@@ -253,9 +265,12 @@ function onWorkerMessage(event: { data: SurfaceWorkerReply }): void {
 }
 
 function paintOnPage(job: Live): void {
-    const chunk = job.enhanced
-        ? createEnhancedMap(job.enhanced, now, budget())
-        : createChunkedMap(job.inputs, now, budget());
+    const hybrid = job.hybrid;
+    const chunk = hybrid
+        ? createHybridPaint(() => hybridModel(hybrid.world), SHEET_LAYOUT, now, budget(), modelPreparation(hybrid.world))
+        : job.enhanced
+            ? createEnhancedMap(job.enhanced, now, budget())
+            : createChunkedMap(job.inputs, now, budget());
     const run = (): void => {
         if (live !== job) return;
         const done = chunk.step();
@@ -283,12 +298,15 @@ function unavailable(mode: SurfaceMode): MapTicket {
     };
 }
 
-/** One sheet. `sea` is the enhanced sheet's sea; null asks for the vanilla sheet. */
-function requestSheet(request: MapRequest, sea: EnhancedSea | null): MapTicket {
+/**
+ * One sheet. `hybrid` asks for the hybrid sheet, `sea` for the enhanced-seas sheet; both
+ * null asks for the vanilla sheet.
+ */
+function requestSheet(request: MapRequest, sea: EnhancedSea | null, hybrid: HybridPaintInputs | null = null): MapTicket {
     dropLive();
     const spec = diamondMapSpec(request.body, request.hexKey);
     if (!spec) return unavailable(request.mode);
-    const key = cacheKey(request, sea);
+    const key = cacheKey(request, sea, hybrid);
     const requestId = String(++sequence);
     const ticketGeneration = ++generation;
     const hit = cache.get(key);
@@ -320,7 +338,7 @@ function requestSheet(request: MapRequest, sea: EnhancedSea | null): MapTicket {
         coastlineComplexity: request.options.coastlineComplexity,
         printMode: false,
     };
-    const enhanced: EnhancedPaintInputs | null = sea ? { ...inputs, sea } : null;
+    const enhanced: EnhancedPaintInputs | null = sea && !hybrid ? { ...inputs, sea } : null;
     let resolve: (sheet: MapSheet | null) => void = () => {};
     const done = new Promise<MapSheet | null>((settle) => { resolve = settle; });
     const job: Live = {
@@ -330,6 +348,7 @@ function requestSheet(request: MapRequest, sea: EnhancedSea | null): MapTicket {
         key,
         inputs,
         enhanced,
+        hybrid,
         started: now(),
         resolve,
         cancelTimer: null,
@@ -349,6 +368,7 @@ function requestSheet(request: MapRequest, sea: EnhancedSea | null): MapTicket {
             generation: ticketGeneration,
             inputs,
             ...(enhanced ? { enhanced } : {}),
+            ...(hybrid ? { hybrid } : {}),
         });
     }
     return {
@@ -365,10 +385,26 @@ export function requestMap(request: MapRequest): MapTicket {
     switch (request.mode) {
         case 'vanilla':
             return requestSheet(request, null);
-        case 'enhanced':
-            // The sea is decided here, on the page, from the body; the painter gets plain data.
-            return requestSheet(request, seaPlan(request.body).sea);
+        case 'enhanced': {
+            // The world is read here, on the page, from the body; the painter gets plain data.
+            const world = hybridInputsFor(request);
+            if (!world) return unavailable(request.mode);
+            return requestSheet(request, null, { world });
+        }
     }
+}
+
+/** The hybrid map's inputs for a request (the stage reads the same to draw its overlays). */
+export function hybridInputsFor(request: Pick<MapRequest, 'hexKey' | 'dossierKey' | 'body' | 'options'>): ReturnType<typeof hybridWorld> {
+    return hybridWorld(request.hexKey, request.dossierKey, request.body, {
+        continental: request.options.continentalDefinition,
+        coastline: request.options.coastlineComplexity,
+    });
+}
+
+/** The enhanced-seas sheet (enhanced/map.ts), by request. Kept for comparison and tests. */
+export function requestSeasMap(request: MapRequest): MapTicket {
+    return requestSheet(request, seaPlan(request.body).sea);
 }
 
 let discLink: DiscLink | null = null;

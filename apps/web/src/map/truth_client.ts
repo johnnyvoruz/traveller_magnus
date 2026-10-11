@@ -92,9 +92,15 @@ export class TruthClient {
         return found;
     }
 
-    /** Start fetches for slugs that are missing, in the given order. */
+    /**
+     * Start fetches for slugs that are missing, in the given order.
+     * A sector id that starts with ~ belongs to the referee, or it is an empty slot.
+     * The chart has no index for it. The map, the orbit view, the dossier, and search
+     * all ask through here, so no request under truth/ is made.
+     */
     want(version: string, slugs: string[]): void {
         for (const slug of slugs) {
+            if (slug.startsWith('~')) continue;
             const key = version + '\0' + slug;
             if (this.indexes.has(key)) {
                 this.index(version, slug);

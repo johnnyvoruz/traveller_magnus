@@ -142,3 +142,101 @@ function refreshSurfaceCommand(): void {
 
 registerCommand(surfaceCommand);
 refreshSurfaceCommand();
+
+// ---- Hybrid map: painted or with the symbol overlay, and which icon set ----------------------
+
+export type MapStyle = 'painted' | 'symbols';
+
+const STYLE_KEY = 'voyage_surface_style';
+const ICON_SET_KEY = 'voyage_surface_icons';
+/** The icon set used when none is chosen: public/surface-icons/default/. */
+export const DEFAULT_ICON_SET_NAME = 'default';
+
+let sessionStyle: MapStyle | null = null;
+let sessionIconSet: string | null = null;
+const styleListeners = new Set<(style: MapStyle) => void>();
+
+/** Painted until a stored choice says symbols. */
+export function mapStyle(): MapStyle {
+    if (sessionStyle) return sessionStyle;
+    try {
+        const raw = storageGet(STYLE_KEY);
+        if (raw === 'painted' || raw === 'symbols') return raw;
+    } catch {
+        // A blocked store: painted.
+    }
+    return 'painted';
+}
+
+export function setMapStyle(style: MapStyle): void {
+    sessionStyle = style;
+    try {
+        storageSet(STYLE_KEY, style);
+    } catch {
+        // The session keeps it.
+    }
+    for (const listener of [...styleListeners]) listener(style);
+}
+
+export function onMapStyle(listener: (style: MapStyle) => void): () => void {
+    styleListeners.add(listener);
+    return () => { styleListeners.delete(listener); };
+}
+
+/** The icon set's folder name under public/surface-icons/. 'default' unless one is stored. */
+export function iconSetName(): string {
+    if (sessionIconSet) return sessionIconSet;
+    try {
+        const raw = storageGet(ICON_SET_KEY);
+        if (raw && /^[a-z0-9][a-z0-9_-]{0,40}$/.test(raw)) return raw;
+    } catch {
+        // A blocked store: the default set.
+    }
+    return DEFAULT_ICON_SET_NAME;
+}
+
+/** Choose an icon set by folder name; null goes back to the default. */
+export function setIconSetName(name: string | null): void {
+    const next = name && /^[a-z0-9][a-z0-9_-]{0,40}$/.test(name) ? name : DEFAULT_ICON_SET_NAME;
+    sessionIconSet = next;
+    try {
+        storageSet(ICON_SET_KEY, next);
+    } catch {
+        // The session keeps it.
+    }
+}
+
+// ---- Hybrid map: the day and night overlay ---------------------------------------------------
+
+const DAY_NIGHT_KEY = 'voyage_surface_daynight';
+
+let sessionDayNight: boolean | null = null;
+const dayNightListeners = new Set<(on: boolean) => void>();
+
+/** The day and night overlay over the hybrid map. On until a stored choice says off. */
+export function dayNightOverlay(): boolean {
+    if (sessionDayNight !== null) return sessionDayNight;
+    try {
+        const raw = storageGet(DAY_NIGHT_KEY);
+        if (raw === 'off') return false;
+        if (raw === 'on') return true;
+    } catch {
+        // A blocked store: on.
+    }
+    return true;
+}
+
+export function setDayNightOverlay(on: boolean): void {
+    sessionDayNight = on;
+    try {
+        storageSet(DAY_NIGHT_KEY, on ? 'on' : 'off');
+    } catch {
+        // The session keeps it.
+    }
+    for (const listener of [...dayNightListeners]) listener(on);
+}
+
+export function onDayNightOverlay(listener: (on: boolean) => void): () => void {
+    dayNightListeners.add(listener);
+    return () => { dayNightListeners.delete(listener); };
+}

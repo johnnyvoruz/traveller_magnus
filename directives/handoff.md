@@ -5908,3 +5908,449 @@ that failed at the close no longer does. Ready note `findings/builder_form_ready
   buttons, E's hardening. Parked files named one by one this time. Scratch copy of
   `aeada0e`, rules regenerated there: `tsc -p apps/api` exit 0, `vue-tsc` exit 0,
   `vite build` done, 1,133 tests, 1,118 pass, 0 fail, 15 skipped, check clean.
+
+## 221. Pushed `3d28e33`; it also carried another agent's engine 1.1.0 rule fixes and a change to `rules/`, unreviewed by the orchestrator (2026-10-08)
+
+- **`3d28e33` is Builder step 1 and more.** The push list of §220 was "everything changed
+  except the parked files". Unknown to the orchestrator, other agents working for Johnny
+  ("a couple other unnamed agents… quietly working on surface maps and world gen") had
+  changes in the tree, and the list swept them in: **`packages/engines` 1.0.0 → 1.1.0**
+  (`mgt2e_socio_engine.js`, `mgt2e_stellar_engine.js`, `mgt2e_world_engine.js`,
+  `mgt2e_uwp_auditor.js`), **`rules/mgt2e_data.js`** (a `temperatureRoll` table; TL DMs
+  for starport, population and government; `Lt.minPop`), new golden fixtures
+  `tests/golden/fixtures/engine_1.1.0/`, `tests/generation/parity_deviations_1.1.0.json`,
+  edits to `tests/golden/esm.test.js` and `tests/generation/parity.test.js`, and
+  `assets/2eWorldGeneration_EngineSpec.md`. Their own note,
+  `findings/engine_1_1_0_rule_fixes.md`, is headed "Uncommitted, for Johnny's review".
+  **It is committed, deployed and live.** The rehearsal passed because their tests carry
+  the new expectations.
+- **What it is:** ten Mongoose 2e world-creation fixes cited to
+  `assets/2eWorldCreation.txt` (gas giant presence rolled once; Lt needs Pop 1+; no TL DM
+  for starport D or E; size 0 atmosphere; the temperature roll with hot and boiling DMs
+  to hydro; government D and E −2 TL; highport DM; a bases string on the mainworld;
+  factions D3+DM; the population TL DM stopping at A). The legacy tree, oracle and legacy
+  fixtures are unchanged; parity with the legacy app is now "the diff equals the recorded
+  deviations". **Not verified by the orchestrator against the rules text** (Zero-
+  Assumption: no judging a rule from memory).
+- **Effect on production:** systems generated in the Builder from now on come from
+  engine 1.1.0. The released chart (v5) is stored and does not change. CLAUDE.md's rule 4
+  ("engine parity is sacred… any difference is reported, never fixed") and rule 1
+  ("`rules/` is read-only") no longer describe what was done; they are Johnny's to amend.
+- **Surface maps:** `assets/HybridSurfaceMap_Design.md` (730 lines, "design only, for
+  Johnny's review", by a review agent) is on disk, untracked; no surface code has
+  changed. Per-hex world data on the icosahedral grid, climate from the engine, ice by
+  temperature, a people layer, a day/night terminator, four phases, open questions for
+  Johnny. Not reviewed in depth.
+- **Changed from now on: a push list names files the orchestrator has accounted for, one
+  by one. Never "everything except".** And Johnny is asked to name any other agent and
+  its lane.
+- **Builder step 2:** A's `keepMine` / `takeTheirs` / `blank` and the `dossierDefault`
+  fix; D's editor, seen on the real store. Four faults for B found by D (a changed tree
+  answers 404 instead of a conflict; typing a starport cell corrupts the profile; a
+  name-only change moves another field; an Architect of Worlds star change renames the
+  system): `prompts/builder_step2_close.md`.
+
+## 222. Builder step 2 closed on the server; Johnny asks for new sectors, a hand-made system designer, and a clean separation from the chart (2026-10-08)
+
+- **B's four fixes, accepted on the report:** a stale draft or Keep is a 409 with the
+  current row; a profile cell takes one character in its own place; a name change
+  changes the name only (the form had been reading letters of the 1.1.0 bases string as
+  switches and storing an array, losing the scout base); a star change keeps the name
+  and typed fields. 1,172 tests, 0 fail.
+- **D:** the conflict strip on A's handle (Keep mine seen; Take theirs unit-tested
+  only), Blank system. **Found: the sector and subsector panes cannot open**:
+  `campaignRedirect` (`shell/pane.ts` ~229) strips `panel=dossier`, and A's
+  `dossierDefault` fix plus D's dropped guard left no other way in. D's browser pass
+  after B's fixes is still owed (D reported before they landed). A blank system came
+  back named with a full profile after one world was added.
+- **Johnny:** how are new sectors and subsectors made; a manual system designer ("CRUD
+  their own system design with any / all settings and add planets and pair them…
+  updated world gen is around the corner, but manual stuff should be A-OK"); and is
+  there "a clean way to segment these newly created systems / subsectors / sectors so
+  they don't merge with our truth layer and can be shared with our upcoming content
+  marketplace".
+- **`prompts/builder_step3.md`:** the two leftovers first; part 1, sectors of the
+  referee's own (a slot the chart leaves empty, an id that is not the slot, sixteen
+  subsector names; a subsector always exists and only its name is owned); part 2, a
+  system designed by hand as a second mode in which the engine never runs, stored as a
+  system document of our own schema so it outlives the generator rebuild; part 3, B
+  proves the separation from the chart in `findings/builder_isolation.md` and sketches
+  the package a marketplace would share.
+- **Johnny, on the live site:** "there is no orbit view for a system that is currently
+  auto generated." It went out unseen (D's local pass never drew an orbit picture, for a
+  charted system either). Added to `prompts/builder_step3.md` as Agent A's second item,
+  to be reported and pushed alone.
+
+## 222b. The orchestrator and Agent D are cleared and restarted (2026-10-09)
+
+- **A:** the pane line is in (`campaignRedirect` leaves `panel=dossier` on sector and
+  subsector addresses); the orbit view now reads an Architect of Worlds tree
+  (`normalizeSystem` returned null for anything but Mongoose) and fetches a universe's
+  own object from `/api/universes/:id/objects/:hash`. Seen only on Regina; **no
+  generated system was opened locally.** A's store does not list referee sectors yet;
+  its draft handle does not carry the hand kind.
+- **D:** step 2's leftovers verified in a browser (both conflict choices, the starport
+  cell, a name-only change, an Architect of Worlds star change, the scope panes on a
+  cold load). Found: a refused draft is swallowed in `builder/draft.ts` ~192 to 196, so
+  a two-character profile cell fails silently (A's). Step 3's screens designed on paper
+  (`kb3_*`, design note section 15), none built. Six questions, answered by the
+  orchestrator at Johnny's request with D's own recommendations.
+- **B:** step 3 contracts and routes are on disk with ready notes and
+  `findings/builder_isolation.md`; no report yet.
+- Whole tree at the handoff: 1,215 tests, 0 fail; `vue-tsc -b` clean. 131 files changed
+  since `3d28e33`, none pushed.
+- **Handoffs written:** `directives/orchestrator_handoff_2026-10-09.md` (the next
+  orchestrator reads it first) and `directives/prompts/d_restart_2026-10-09.md`.
+  `prompts/a_next_2026-10-09.md` is A's next step.
+- **The other agent has a name and a lane (its own heads-up, pasted by Johnny):
+  "Traveller Architecture".** Uncommitted, for his review, not to be reverted or pushed
+  without his word: engines 1.1.0 changed again on disk (water against ice decided after
+  `highTempK`; five `engine_1.1.0` fixtures Water to Ice); the hybrid surface map
+  (`surface/hybrid/*`, `SurfaceStage.vue`, `orbit/sun.ts`, `orbit/sim_clock.ts`,
+  `dossier/SurfaceTimeBar.vue`, `public/surface-icons/default/`,
+  `tests/web/surface_hybrid.test.js`); and edits in **`dossier/DossierPanel.vue`,
+  `dossier/DossierBody.vue` and `views/OrbitView.vue`, which Agents D, A and E also
+  edit.** Recorded in `orchestrator_handoff_2026-10-09.md` under "Not ours". A push of
+  ours that includes those three files goes by hunks or waits for Johnny.
+- **Johnny hands the Traveller Architecture agent's thread to Agent C** ("it was the right
+  agent for this, I needed a higher effort agent to solve. Please implement these changes
+  and get them ready for prod"). `prompts/c_hybrid_surface.md`: audit first
+  (`findings/hybrid_surface_audit.md`), then ready for production: seen by hand on ten
+  kinds of world, the ice caps against Johnny's complaint (handoff 204), city lights
+  look C and the Vanilla parity surviving "Enhanced now means the hybrid map", the four
+  open items finished or cut cleanly (saving hex edits on the server is not in it), the
+  frame budget, the manifesto, the second engine batch verified against the spec and not
+  extended, and a push list with the surface map's line ranges in the three files shared
+  with D, A and E. The handoff file's "Not ours" section now says the work is C's.
+
+## 223. New orchestrator session; the other agent is named; Agent C takes over the hybrid surface map (2026-10-09)
+
+- **The other agent is "Traveller Architecture"**, working directly for Johnny. Its own
+  account (pasted by Johnny): everything uncommitted at `3d28e33`; the hybrid surface map
+  (`apps/web/src/surface/hybrid/*`, `dossier/SurfaceStage.vue`, `dossier/SurfaceTimeBar.vue`,
+  `orbit/sun.ts`, `orbit/sim_clock.ts`, edits in `DossierPanel.vue`, `DossierBody.vue`,
+  `views/OrbitView.vue`, and the wiring in `surface/`); day/night with a shared clock and
+  two toggles; `apps/web/public/surface-icons/`; a second engine 1.1.0 change (Water
+  against Ice decided after `highTempK`, nine lines in `mgt2e_world_engine.js`, five
+  golden fixtures Water to Ice); `tests/web/surface_hybrid.test.js` and three older
+  assertions changed. It did not touch the builder, `PanelHost.vue`, `BuildPane.vue`,
+  `directives/`, `form.ts`, the API routes or the shared schemas. **Nothing was tested by
+  hand in the running app.** This answers "who are the other agents" (open since 221).
+- **Johnny: Agent C implements it and gets it ready for production.** The prompt is
+  `prompts/c_hybrid_surface.md` (written by the previous orchestrator, not logged until
+  now; read again against the tree today and issued unchanged): audit first
+  (`findings/hybrid_surface_audit.md`), then seven conditions for "ready" (seen by hand on
+  ten kinds of world, the ice, city lights look C and Vanilla parity kept, the four open
+  items finished or cut cleanly, the frame budget, the manifesto, the engine change
+  verified against the rules text and not extended), and two push files that give the
+  surface map's line ranges in the three files shared with A, D and E.
+- **Seen in the tree today:** `views/OrbitView.vue` carries both A's orbit fix
+  (`tree_source.ts`, `hand_present.ts`) and the surface map's clock driver
+  (`sim_clock.ts`), so the two pushes are cut by hunk or go together. The engine change
+  alters what the Builder generates in production (cold worlds with atmosphere 2 or more
+  become Ice); whether it ships is Johnny's call after C's item 7.
+- Not run this session: the gates. The 1,215 figure is the previous orchestrator's; the
+  Architecture agent reports 1,202 passed, 13 skipped, 0 fail.
+
+## 224. Reports from A, B, C and D; the orbit picture is still stuck; three close prompts (2026-10-10)
+
+- **Whole tree, run here:** 1,283 tests, 1,270 pass, 0 fail, 13 skipped; check clean;
+  `tsc -p apps/api` exit 0. Nothing pushed; HEAD is still `3d28e33`.
+- **Johnny:** Traveller Architecture has finished editing; Agent C leads the surface
+  map. The water-against-ice engine change is C's to handle and can wait. He asked to
+  be shown the proposed `CLAUDE.md` wording and step 3's two defaults before ruling;
+  both were written out in chat.
+- **A, accepted:** a draft refused with a 400 lands on the handle's `messages` as a
+  holding `FormMessage`; `builder.sectors()` (`builder/sectors.ts`) replaces D's
+  stand-in; `cloneForm` keeps `form.mode` (seen in the tree). **Not fixed: the orbit
+  canvas never draws for a generated, edited or blank system; the note stays "Loading
+  this system."** Cause, found by D and confirmed in the tree: `OrbitView.vue` `state`
+  (about 212 to 230) reads `map.sectorLoaded()` and `map.row()`, which are not reactive,
+  and `builderEpoch` bumps only when the store opens or closes.
+  `prompts/a_orbit_loading_2026-10-10.md`.
+- **B, accepted on the report:** referee sectors (id `~` plus a ULID, slot, name, sixteen
+  subsector names, rev; list, make, rename, move, delete, undo; a charted slot is 400);
+  the hand document and its form; a blank system is an empty hand document;
+  `findings/builder_isolation.md`. Question: which table Roll uses on a hand field (with
+  Johnny; default: none, Roll changes nothing).
+- **D, accepted on the report (step 3 screens, browser-passed on A's store and B's
+  server):** new sector, rename, move, delete with Undo, subsector rename and generate,
+  the hand designer (two stars, three worlds, two moons, giving a body away), "Design
+  by hand" on a generated system. Not buildable on B's contract: a world orbiting two
+  paired stars; "Design by hand" on Regina; several adds in one draft (D stores each add
+  at once); blank without an edition. `prompts/b_step3_close.md` gives B all four.
+  D's three questions are with Johnny. D is cleared; its next prompt is written when B
+  reports and Johnny has ruled.
+- **C, six of seven conditions:** ragged ice from engine temperatures, the tilt check,
+  cuts made cleanly (globe sampling, seasonal ice, saved edits), Vanilla and `DRAW_FRAG`
+  unchanged, parity script ok, push files written. Not met: a Build-generated system
+  seen. Also open: first Symbols click at exactly 50.0 ms; hex colour literals in
+  `surface/hybrid/icons.ts` (seen in the tree; the checker passes anyway).
+  `prompts/c_hybrid_close.md`, which also splits the push list so the map can go without
+  the engine change.
+- **C on the engine change:** neither the spec nor the rules text states the 273 K /
+  atmosphere 0 or 1 test; the nine lines copy an existing shortcut; biospherics rewrites
+  the temperatures afterwards and leaves the label (Okina: atmosphere 4, high 275.1 K,
+  labelled Ice). Recorded in `findings/generator_oddities.md`. Orchestrator's
+  recommendation to Johnny: hold it out of the push, for the generator rebuild.
+- **E:** nothing new; ports closed; the hardening report of 215 stands.
+- **Next push, not cut:** the Builder (steps 2 and 3 with the orbit fix) after A's and
+  B's closes and a D pass; the surface map after C's close. Both touch `OrbitView.vue`,
+  `DossierPanel.vue` and `DossierBody.vue`.
+
+## 225. Johnny rules on step 3, the engine change and the surface map's defaults (2026-10-10)
+
+- **`CLAUDE.md`:** the rewrites of rules 1 and 4 are approved. Rule 4 is edited in the
+  file ("Engine output is pinned": fixtures of the engine's own version, differences
+  from legacy listed in `parity_deviations_<version>.json`). Rule 1 ("`rules/` changes
+  only on Johnny's word", with a citation, a note in `findings/` and his review) and the
+  matching words in rule 7 could not be written by the orchestrator's session (the
+  edit was refused by its permission mode); Johnny pastes them.
+- **A referee's sector goes only in a slot the chart leaves empty:** yes.
+- **"Design by hand" is not one-way.** A hand-made system can be generated again and a
+  generated one tweaked by hand. This replaces the "one-way" default of step 3.
+- **The water-against-ice engine change does not ship.** It waits for the generator
+  rebuild. The surface map goes without it (C splits the push list).
+- **Hand designer:** adds and removes wait for Keep; a world with moons cannot be given
+  to another world (greyed, with the reason); a star can be removed with everything that
+  orbits it, said first with the count (the existing ask, no modal); Roll does nothing
+  in hand mode and its control is hidden.
+- **The surface map's eleven defaults all stand** (design note section 13.5): painted
+  with a Symbols toggle; Vanilla's pole crop kept; hex edits referee only and per
+  campaign, no editor until the server stores them; engine temperatures over trade
+  codes; estates and penal colonies from imported T5 data only; locked worlds centred on
+  the night side; high and low read as day and night; unedited maps may change on a
+  version bump; one clock, Now is the campaign date; day-averaged shadow at high speed;
+  the starport's longitude is the prime meridian for time.
+- **Prompts:** A, B and C have theirs (224). The rulings for B are appended to
+  `prompts/b_step3_close.md` (items 5 to 7: star removal takes its bodies; generate over
+  a hand-made system; adds wait for Keep). `prompts/d_step3_close.md` is D's fresh
+  start, to be given when `findings/builder_step3_close_ready.md` exists.
+
+## 226. A's orbit fix, B's close and C's close accepted; D starts; CLAUDE.md rules 1, 4 and 7 rewritten (2026-10-10)
+
+- **Whole tree, run here:** 1,289 tests, 1,275 pass, 0 fail, 14 skipped; check clean.
+  HEAD still `3d28e33`; nothing pushed.
+- **`CLAUDE.md`:** rules 1, 4 and 7 now read as approved in 225, edited by the
+  orchestrator at the referee's request.
+- **A, accepted on the report and the tree:** each `bindBuilder` watches the store's
+  `tick()` and bumps `builderEpoch` (`builder/bind.ts` line 44), so the orbit view leaves
+  "Loading this system."; six systems seen from the map and cold (`kb_orbit2_*`):
+  Mongoose, Architect of Worlds, edited, blank ("This system has nothing to draw."),
+  hand-made (two stars drawn; worlds and moons in the dossier and chips, absent from the
+  canvas, nothing invented), Regina. Leftovers in `prompts/a_orbit_leftovers.md`: the
+  client asks the CDN for an own sector chart index (404); `hand_present.ts` does not
+  carry the P-Type fields from B; one double-click that opened the dossier instead of
+  the orbit view.
+- **B, accepted on the report:** seven contract items
+  (`findings/builder_step3_close_ready.md`): `alsoParentId` for a body orbiting two
+  paired stars (omitted when absent, old documents byte-identical); `design` with
+  `baseRev: 0` on a chart hex; a whole changes array applied in order with client ids
+  for adds; blank takes only `baseRev`; removing a star takes what orbits it, with a
+  counted message in the draft; generate over a hand-made system with `filledToo`;
+  adds and removes wait for Keep. The name field writes the chart title only; the
+  mainworld name is its own field (`name.propagate` defaults to false).
+- **C, accepted:** both generated systems seen on the dossier (`hy_build_*`); first
+  Symbols click 3.7 ms and 4.3 ms; icon colours through `--icon-*`; push list split
+  (map 72 paths; engine six on `engine_water_ice_files.txt`); no surface test needs the
+  engine change. **Open: a warm in-app dossier open costs a 58.4 ms frame**
+  (`prompts/c_hybrid_warm_open.md`).
+- **Found by C: `scripts/check_manifesto.js` checks hex colours only in CSS and Vue
+  style blocks**, so a literal in a `.ts` file passes. `prompts/e_checker_audit.md`
+  (read-only audit by E; the checker is not changed yet).
+- **D** starts on `prompts/d_step3_close.md`.
+- **Push plan put to the referee:** one push of everything accounted for after the D
+  pass (Builder steps 2 and 3, the orbit fix, the surface map), leaving out the parked
+  files and the six engine paths, so the three shared files are never cut by hunk.
+
+## 227. One push after the D pass; the colour audit; the Campaign is next (2026-10-10)
+
+- **The referee: one push, "slow and steady".** Builder steps 2 and 3, the orbit fix
+  and the surface map go together after the D pass; parked files and the six engine
+  paths stay out.
+- **E, the colour audit, accepted** (`findings/checker_colour_audit.md`): 145 colour
+  literals in scripts pass `npm run check`. 117 in `packages/generation/src` are
+  published chart colours (regions, route colours, territories) and are to be
+  allowlisted; 17 in `surface/` and 2 in `dossier/SurfaceStage.vue` are C's
+  (`prompts/c_hybrid_colours.md`, before the push, since the hybrid files are new);
+  9 in `orbit/system.ts` are A's, after the push. The checker patch is in the note, not
+  applied; it goes in once those are moved, with the allowlist.
+- **Direction: the Campaign is the next focus after this push**, then sign-in. Order
+  against the Builder's areas and lanes, the marketplace and accounts is put to the
+  referee. `prompts/e_campaign_gap_audit.md`: E lists what of the campaign plans is
+  live, part built or not started, what needs a ruling, and a proposed order
+  (`findings/campaign_gap_audit.md`).
+- **Sign-in is already better-auth** (`apps/api/src/auth/`, `better-auth` ^1 with the
+  drizzle adapter and the admin plugin): X is live; Discord and Google are wired and
+  switch on when their secrets are set (`findings/signin_setup.md`); passkeys are the
+  library's plugin, not installed. What the referee wants added is asked.
+
+## 228. A's leftovers accepted; D stopped half-way, blocked on A's draft handle (2026-10-10)
+
+- **A, accepted on the report:** `TruthClient.want` skips every `~` slug (no chart
+  request for an own sector); `hand_present.ts` carries `orbitType`, `parentStarIdx`
+  and `pairStarIdx`, and the dossier says "orbits Aster and Aster B" from stored names;
+  a second press that lands on the dossier pane counts as the chart's double-click (the
+  cause was the pane covering the hex, not the engine; not re-shot). 1,294 tests,
+  0 fail. "Far Home -" is `dossier/model.ts` about 836.
+- **D, half of the close built and browser-passed:** a world orbiting a pair of stars;
+  "Design by hand" on Regina with Restore; Generate on a hand-made system with Undo; no
+  Roll by hand; every "one-way" word gone. **Not built, blocked on `builder/draft.ts`
+  and `store.ts` (seen in the tree):** `set` keeps one change per field id and drops a
+  change to a field not yet on the form, so several adds in one draft cannot be held;
+  a remove cannot be taken back once the star is off the form; `blank` still requires
+  an edition. So adds and removes are still stored at once and a star with bodies is
+  still greyed.
+- **D's two questions, answered by the orchestrator with D's recommendations:** the
+  star-removal ask shows the server's count; no "Generate with…" on a hand-made system
+  until asked. Told to the referee, who may overrule.
+- **Prompts:** `a_draft_handle_close.md` (add, unset, `blank(hexKey)`, the dash, a shot
+  of the double-click; note `findings/builder_handle_ready.md`), then
+  `d_step3_close_2.md` (the blocked half, the right-click menu flash, the pane over the
+  chart, the unrun passes).
+- B's paste was its earlier report again; nothing new. The push still waits on A, then
+  D, with C's two small passes alongside.
+
+## 229. The referee on the live Builder: selecting hexes is to be made best in class (2026-10-10)
+
+- **His words:** a selected hex on the left is covered at once by the pane that opens;
+  no hover, so it is not clear which hex a click will take; a plain drag draws a select
+  box when he wants to move the map (he needs both); more cursor clues for adding and
+  removing; and can selecting hexes make sectors and subsectors, so a map grows past the
+  chart.
+- **Seen in the tree:** `MapView.vue` captures the pointer in Build
+  (`onBuildDown/Move/Up`, about 1825) and `canvas.is-selecting` is the only cursor
+  state; `setWidth` (about 660) stores the pane width and only the locate flight uses
+  it; no hover mark exists.
+- **`prompts/d_select_hexes.md`, D, before the second half of the step 3 close:** a
+  plain drag always pans; the box is Shift+drag (Alt+Shift takes away) or the Select
+  tool with Space still panning; hover outline with a chip; cursor and outline tone say
+  move, select, add, take away, box, with a count on the box; the camera treats the
+  chart not under the pane as the visible area and glides once to clear a selection;
+  hexes in an empty slot are selectable and generating there makes the sector, with one
+  Undo; a subsector is never made (every sector has sixteen), only named. Design note
+  section 18, `kb4_*`, then the build and a browser pass. These are defaults put to the
+  referee.
+
+## 230. The file bus starts; no reports on it yet; B gets the Builder contract (2026-10-10)
+
+- **The referee: the file bus replaces pasting.** Agents write
+  `directives/reports/<lane>_<slug>.md` and stop; the orchestrator writes
+  `directives/prompts/`; interfaces go in `directives/contracts/`; lane rules are
+  `directives/lanes/<lane>.md`; `board.md` is the truth for every lane and
+  `orchestrator_state.md` the short current state. Processed reports move to
+  `reports/done/`.
+- **Nothing to verify this turn:** `reports/` holds only the template. The six live
+  prompts predate the bus, so each got a "File bus" footer (report path, Progress).
+- **Seen in the tree, not accepted:** A's draft handle looks finished
+  (`findings/builder_handle_ready.md` 18:59: `add`, `unset`, `blank(hexKey)`,
+  `sectorPlace`; `kb_orbit2_dblclick.png`), and it touched `views/MapView.vue` (D's)
+  and `views/OrbitView.vue` (shared); its report is to list both. D is building
+  `d_select_hexes` (section 18 and `kb4_*` at 19:02). C is in `SurfaceStage.vue` and
+  `tokens.css`. E's audit is not on disk.
+- **`prompts/b_builder_contract.md`, B:** write `contracts/b_builder.md` from the code
+  (every Builder route, the draft cycle, sectors, undo), and say whether "make a sector
+  and generate in it" can be one act with one Undo, or propose the route without
+  building it. No code changes.
+- **Asked of the referee:** the lane folders in `lanes/*.md`, which do not yet cover
+  what prompts allow (`map/`, `design/tokens.css`, `dossier/model.ts`, `tests/`, E's
+  folders).
+- The push still waits on A's report, D's two passes and C's two.
+
+## 231. First reports on the bus: B's contract, C's two passes, E's audit; A accepted on the tree (2026-10-10)
+
+- **B, accepted:** `contracts/b_builder.md` (22 routes, the draft cycle, sectors, undo),
+  no code touched, gates 1310 tests 0 fail. "Make a sector and generate" is two calls
+  with no shared undo today; `POST .../sectors/generate` and
+  `POST .../sectors/:sectorId/undo-generate` are proposed, per new sector, not built.
+  `prompts/b_sector_generate.md` is written and held for the referee's yes. Two stale
+  lines in the older findings notes are named in the report; the contract is right.
+- **C, warm open, accepted as a finding (partial):** the long frame on opening a
+  dossier (58 to 75 ms, one chip open far worse cold) is still there with the surface
+  bitmaps at 1×1 and the model skipped (66.8 ms): it is the dossier route
+  (`DossierPanel.vue`, `DossierBody.vue`, the router, `MapView` layout), not the map.
+  C backed out its stagger. Goes to one lane after D's passes; asked whether it holds
+  the push.
+- **C, colours, accepted:** 19 literals moved to 21 `--surface-*` tokens read once per
+  layer; `surface_parity.js` exit 0; Vanilla palette untouched; grep finds no literal
+  in `surface/hybrid` or `SurfaceStage.vue`. No before shot.
+- **E, accepted:** `findings/campaign_gap_audit.md`: 26 live, 4 part built, 37 not
+  started, 5 dropped; eight rule questions; ten steps in order.
+- **A, accepted on the tree, report file owed:** it wrote its checklist under Progress.
+  Checked here: `add`, `unset`, `blank(hexKey)`, `sectorPlace`; its three test files
+  pass (40). `hand_present.ts` does carry the three pair fields (B's note there is
+  stale). Out-of-lane: `MapView.vue` 1114, `OrbitView.vue` 256 to 259. D may start
+  `d_step3_close_2` after `d_select_hexes`.
+- **Unclaimed so far:** `dossier/DossierPanel.vue` changed at 19:08 while D was on a
+  prompt that does not name it.
+
+## 232. D's select-hexes accepted; the referee's answers and the direction after the Builder; all five lanes go (2026-10-10)
+
+- **D, `d_select_hexes`, accepted:** a plain drag pans; Shift+drag boxes, Alt+Shift
+  takes away, the Select tool with Space still panning; hover outline and chip; five
+  cursors as tokens; the map glides once to clear the pane; hexes in an empty slot are
+  selectable and "Make the sector and generate" is one act on the screen. 1,310 tests,
+  0 fail. Every changed file is listed, including `DossierPanel.vue` line 136 (shared,
+  not named by the prompt, disclosed). The empty-slot Undo is two calls and says "Undo
+  stopped part way" if the second fails: not faked. Letting go of a 409-hex box was
+  175 ms in headless software rendering, as a plain drag is there.
+- **The referee, yes to all five:** B builds the one-act route now; the dossier-open
+  frame does not hold the push; E's Campaign order is approved (steps 1 to 5 first);
+  E's defaults stand for its eight rule questions, and a party with several ships is a
+  list of vessel ids with one flagged current that "Where are we" follows; the lane
+  folders are confirmed (`lanes/*.md` rewritten: tests, findings and appended token
+  lines belong to each lane).
+- **Direction, his words in `prompts/c_marketplace_audit.md`:** the galaxy Builder
+  working first, then the content marketplace stubbed, then public games: a referee
+  sets a game public and the party ship's location shows as a non-interactive mark on
+  other users' maps that share the same base truth.
+- **B's proposal did not cover what D built** (a box across existing sectors and
+  several empty slots, one job, one undo token; D suggests `makeSectors` on generate).
+  `prompts/b_sector_generate.md` now has B rewrite the contract section first, then
+  build it. D moves `grow_acts.ts` onto it in a later small prompt.
+- **Prompts:** `a_orbit_colours.md` (the owed report, then nine star colours to
+  tokens; moved ahead of the push since A was idle and the file is in the push
+  anyway), `b_sector_generate.md`, `c_marketplace_audit.md` (read-only),
+  `d_step3_close_2.md` (unblocked, with a dated addition), `e_journal_mention.md`.
+- D's three questions are put to the referee; the built behaviour stands meanwhile.
+- **Later the same turn, the referee: yes to D's three**, all as built: the six
+  neighbour keys stay `U I O / N M ,`; Generate in an empty slot keeps at once; the
+  map glides again when the pane is widened. All five lanes were told go.
+- **C, `c_marketplace_audit`, accepted** (read-only; `git status` unchanged):
+  `findings/marketplace_gap_audit.md`: of the marketplace the specs promise, nothing
+  is live, 2 lines are part built (the manifest type, the truth attribution sentence),
+  9 not started. Three stub sizes (a: screens that say coming; b: publish and list for
+  the own account; c: publish, list and install with no review), each starting with a
+  B contract `contracts/b_marketplace.md`. Public games: hex-only mark, matched on the
+  same non-null `truth_version`. Nine questions put to the referee.
+- **The referee on the marketplace and public games:** the stub is size b (publish and
+  list for the own account, no browse, no install), and yes to all nine of C's
+  recommended answers (listed on the board under Decisions).
+  `prompts/b_marketplace_contract.md` is B's next: two contracts
+  (`b_marketplace.md`, `b_public_games.md`), no code, after `b_sector_generate`.
+
+## 233. Every lane reported; the Builder push list is checked against a clean copy; the last commit is red on five fixtures (2026-10-11)
+
+- **Accepted and filed:** A `a_draft_handle_close` (the owed report) and
+  `a_orbit_colours` (nine star colours read from tokens that were already in
+  `tokens.css`; no hex left in `orbit/system.ts`); B `b_sector_generate`
+  (`POST .../generate` with `makeSectors`, `POST .../sectors/undo-generate`, one
+  transaction, the contract updated, API tests on its own ports); D `d_step3_close_2`
+  (adds and removes wait for Keep, star removal with the server's count, blank with no
+  edition, menus wait for the mode; no shared file touched); E `e_journal_mention`
+  (`@` insert, token `[[cr_<uuid>|label]]`). The two cross-lane gate failures seen
+  mid-flight (E's `JournalBody.vue` on the check, B's `generateWithSectors` on the
+  typecheck) are gone: whole tree 1,323 tests 0 fail, check and typecheck clean.
+- **Push list:** `findings/push/builder_2026-10-11.md` with
+  `builder_2026-10-11_files.txt`. Left out: the six engine paths, B's parked hardening
+  (ten paths, with `router.ts` and `scripts/dev_make_admin.js`),
+  `assets/HybridSurfaceMap_Design.md` (unclaimed).
+- **Clean copy:** check, typecheck and build pass; the only red file is
+  `tests/golden/esm.test.js`, five fixtures, **and it is red the same way on a pure
+  copy of `3d28e33`**. They are the five fixtures of the held water-against-ice set, so
+  the last commit's engine output and its fixtures already disagree; the working tree
+  hides it. Not caused by this push; not fixed; put to the referee.
+- **Prompts, all to start after the push:** `d_grow_one_act.md`,
+  `a_dossier_open_frame.md` (A holds the two dossier shared files),
+  `e_checker_colours.md`, and B's `b_marketplace_contract.md`. C is free.
+- **Asked:** the five red fixtures; D's menu placeholder; the unclaimed design asset.

@@ -40,7 +40,8 @@ defineExpose({ element });
           </p>
           <div class="panel-title-row">
             <span v-if="$slots.glyph" class="panel-glyph"><slot name="glyph" /></span>
-            <h1>{{ title }}</h1>
+            <!-- The title, or a box in its place while it is being renamed. -->
+            <h1><slot name="title">{{ title }}</slot></h1>
             <!-- The chip text is the hex chip of the legacy title row; the eyebrow slot is the breadcrumb. -->
             <span v-if="chip && (keepChip || !$slots.eyebrow)" class="ui-hex">{{ chip }}</span>
           </div>

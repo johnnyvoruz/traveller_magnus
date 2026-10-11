@@ -12,7 +12,8 @@ import { toGlobal } from './geometry.ts';
 import { roundedLoops } from './polities.ts';
 
 export { sectorOverview } from './overview.ts';
-export { formOf, applyForm, blankEnvelope, FormRefusal } from './form.ts';
+export { formOf, applyForm, blankEnvelope, handFromForm, FormRefusal } from './form.ts';
+export { handChartEntry, handWalk } from './hand.ts';
 export { polityColour, polityOutlines } from './polities.ts';
 export { BORDER_COLOR_CYCLE } from './territories.ts';
 export { outlineLoops } from './outline.ts';

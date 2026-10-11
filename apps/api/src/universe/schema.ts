@@ -176,6 +176,28 @@ export async function migrate(storage: DurableObjectStorage): Promise<void> {
         finished_at TEXT
     )`);
     sql.exec(`CREATE INDEX IF NOT EXISTS jobs_state ON jobs(state)`);
+    const sectorColumns = sql.exec(`SELECT name AS name FROM pragma_table_info('sectors')`).toArray();
+    if (!sectorColumns.some((row) => row.name === 'subsectors')) {
+        sql.exec(`ALTER TABLE sectors ADD COLUMN subsectors TEXT NOT NULL DEFAULT ''`);
+    }
+    if (!sectorColumns.some((row) => row.name === 'rev')) {
+        sql.exec(`ALTER TABLE sectors ADD COLUMN rev INTEGER NOT NULL DEFAULT 1`);
+    }
+    if (!sectorColumns.some((row) => row.name === 'deleted')) {
+        sql.exec(`ALTER TABLE sectors ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0`);
+    }
+    if (!sectorColumns.some((row) => row.name === 'updated_at')) {
+        sql.exec(`ALTER TABLE sectors ADD COLUMN updated_at TEXT`);
+    }
+    sql.exec(`CREATE UNIQUE INDEX IF NOT EXISTS referee_sectors_slot ON sectors(x, y) WHERE deleted = 0 AND source = 'referee'`);
+    sql.exec(`CREATE TABLE IF NOT EXISTS sector_history (
+        sector_slug TEXT NOT NULL,
+        rev INTEGER NOT NULL,
+        at TEXT,
+        action TEXT,
+        payload TEXT,
+        PRIMARY KEY (sector_slug, rev)
+    )`);
     sql.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS hexes_fts USING fts5(
         name, hex_key, uwp, content='hexes', content_rowid='rowid'
     )`);

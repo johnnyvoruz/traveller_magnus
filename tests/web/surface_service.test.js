@@ -9,9 +9,10 @@ import { SURFACE_MESSAGE_VERSION } from '../../apps/web/src/surface/contracts.ts
 import { SheetCache } from '../../apps/web/src/surface/cache.ts';
 import { attachSurfaceWorker } from '../../apps/web/src/surface/surface.worker.ts';
 import {
-    configureSurfaceRuntime, disposeSurfaces, requestMap,
+    configureSurfaceRuntime, disposeSurfaces, hybridInputsFor, requestMap, requestSeasMap,
 } from '../../apps/web/src/surface/service.ts';
 import { renderEnhancedMapPixels } from '../../apps/web/src/surface/enhanced/map.ts';
+import { renderHybridPixels } from '../../apps/web/src/surface/hybrid/index.ts';
 import { renderFlatMapPixels } from '../../apps/web/src/surface/vanilla/map.ts';
 
 const DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'surface');
@@ -281,12 +282,12 @@ describe('surface service', { concurrency: false }, () => {
             assert.ok(enhanced);
             assert.equal(enhanced.mode, 'enhanced');
             assert.equal(enhanced.fromCache, false, 'the vanilla sheet in the cache is not handed to enhanced');
-            assert.equal(enhanced.longestChunkMs < 50, true);
+            assert.equal(enhanced.longestChunkMs < 50, true, 'longest chunk ' + enhanced.longestChunkMs);
             assert.notEqual(sha256(enhanced.pixels), row.rgbaDigest);
-            assert.equal(sha256(enhanced.pixels), sha256(renderEnhancedMapPixels({
-                ...paintInputs(row),
-                sea: { coverage: 0.5, liquid: 'Water', ice: { kind: 'none' } },
-            })));
+            // The enhanced look's map is the hybrid surface map (surface/hybrid).
+            const world = hybridInputsFor(enhancedRequest);
+            assert.ok(world);
+            assert.equal(sha256(enhanced.pixels), sha256(renderHybridPixels({ world })));
             assert.notEqual(enhanced.key, before.key);
 
             // Back and forth: each mode's sheet comes back from its own cache entry, unchanged.
@@ -314,7 +315,24 @@ describe('surface service', { concurrency: false }, () => {
         }
     });
 
-    test('an enhanced request sends the worker the sea beside the vanilla inputs', () => {
+    test('the enhanced-seas sheet is still painted on request', { timeout: 120000 }, async () => {
+        configureSurfaceRuntime({ spawn: null });
+        try {
+            const row = fixture('class-wet');
+            const base = requestFrom(row);
+            const body = Object.freeze({ ...base.body, liquidType: 'Water', hydroPercent: 50, lowTempK: 280, highTempK: 300 });
+            const seas = await requestSeasMap(Object.freeze({ ...base, body, mode: 'enhanced' })).done;
+            assert.ok(seas);
+            assert.equal(sha256(seas.pixels), sha256(renderEnhancedMapPixels({
+                ...paintInputs(row),
+                sea: { coverage: 0.5, liquid: 'Water', ice: { kind: 'none' } },
+            })));
+        } finally {
+            disposeSurfaces();
+        }
+    });
+
+    test('an enhanced request sends the worker the hybrid world beside the vanilla inputs', () => {
         const sent = [];
         configureSurfaceRuntime({
             spawn: () => ({
@@ -332,8 +350,12 @@ describe('surface service', { concurrency: false }, () => {
             assert.equal(maps.length, 2);
             assert.equal(maps[0].mode, 'vanilla');
             assert.equal('enhanced' in maps[0], false);
+            assert.equal('hybrid' in maps[0], false);
             assert.equal(maps[1].mode, 'enhanced');
-            assert.deepEqual(maps[1].enhanced, { ...maps[1].inputs, sea: { coverage: 0.5, liquid: 'Water', ice: { kind: 'none' } } });
+            assert.equal('enhanced' in maps[1], false);
+            assert.deepEqual(maps[1].hybrid, { world: hybridInputsFor({ ...base, body }) });
+            assert.equal(maps[1].hybrid.world.liquid, 'Water');
+            assert.equal(maps[1].hybrid.world.hydroPercent, 50);
             assert.deepEqual(maps[1].inputs, maps[0].inputs);
         } finally {
             disposeSurfaces();
