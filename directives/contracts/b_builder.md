@@ -38,7 +38,7 @@ Failure: `{ ok: false, error: { code, message, details? } }`.
 
 `HexRemove` and `HexRestore` are `{ baseRev }` with `baseRev` an integer ≥ 0. `BuilderHex.rev` is ≥ 1. `BuilderAbsent.rev` is 0. A page of rows never includes rev 0.
 
-A stale `baseRev` writes nothing. Hex: 409 `conflict`, `The hex changed.` Sector: 409 `conflict`, `The sector changed.` Slot taken: 409 `conflict`, `That slot is in use.`
+A stale `baseRev` writes nothing. Hex: 409 `conflict`, `This hex changed. Reload it, then try again.` Sector: 409 `conflict`, `This sector changed. Reload it, then try again.` Slot taken: 409 `conflict`, `That slot is in use. Choose another slot.`
 
 Object cap: a new private object that would pass 250 MB is 400 `too_large`, `250 MB of objects per universe.` The door write is not applied, and the new object is deleted.
 
@@ -62,7 +62,7 @@ Answer data: `BuilderHex` when a row exists.
 
 Rev: read only. A missing row is 404 `not_found` `No such hex.` This GET does not return `BuilderAbsent`. `BuilderAbsent` is the answer of restore, of revert to rev 0, and of remove on an own map or a `~` sector.
 
-Errors: 400 `validation` `Invalid hex key.`
+Errors: 400 `validation` `That hex address is not valid. Check the address and try again.`
 
 `state: 'own'` for a `~` key is **on disk, unpushed**.
 
@@ -90,7 +90,7 @@ Body: `HexRevert` `{ toRev, baseRev }`, both integers ≥ 0.
 
 `toRev: 0` deletes the row and returns `BuilderAbsent`. Any other `toRev` copies that history row forward as a new rev (`action: 'revert'`) and returns `BuilderHex`.
 
-Errors: 404 `not_found` `No such revision.` 400 `Invalid hex key.` 409 as above.
+Errors: 404 `not_found` `No such revision.` 400 `That hex address is not valid. Check the address and try again.` 409 as above.
 
 History rows are kept. Nothing in the code expires them.
 
@@ -154,7 +154,7 @@ Body: `SectorMake` `{ name, slot }`. `name` is trimmed, 1–80 characters. `slot
 
 Answer data: `RefereeSector`. Status 201. `rev` is 1. `deleted` is false. `subsectors` is sixteen empty strings, index 0 is A and index 15 is P. Subsectors A–P always exist; this route does not create one.
 
-Errors: 400 `The chart is not loaded.` when the universe has a truth version and `truth/<version>/manifest.json` is missing. 400 `That slot holds a charted sector.` `details.reason` `charted`. 409 `That slot is in use.` `details.current` is the `RefereeSector` already there. 409 `That sector already exists.` 400 `Invalid sector.` 400 `The universe has no generation pin.`
+Errors: 400 `The chart is not loaded.` when the universe has a truth version and `truth/<version>/manifest.json` is missing. 400 `That slot holds a charted sector.` `details.reason` `charted`. 409 `That slot is in use. Choose another slot.` `details.current` is the `RefereeSector` already there. 409 `That sector already exists.` 400 `That sector address is not valid. Check the address and try again.` 400 `This universe has no generation pin. Open it again.`
 
 ### `POST /:id/sectors/:sectorId/rename` — **on disk, unpushed**
 
@@ -162,7 +162,7 @@ Body: `SectorRename` `{ name, baseRev }`. `baseRev` integer ≥ 1.
 
 Answer data: `RefereeSector`. Rev becomes `baseRev + 1`.
 
-Errors: 404 `No such sector.` (missing, deleted, or not a referee id). 400 `Invalid sector.` 409 `The sector changed.`
+Errors: 404 `No such sector.` (missing, deleted, or not a referee id). 400 `That sector address is not valid. Check the address and try again.` 409 `This sector changed. Reload it, then try again.`
 
 ### `POST /:id/sectors/:sectorId/move` — **on disk, unpushed**
 
@@ -170,7 +170,7 @@ Body: `SectorMove` `{ slot, baseRev }`. The server decides `charted` from the tr
 
 Answer data: `RefereeSector`. Rev becomes `baseRev + 1`. Hex keys are not rewritten.
 
-Errors: the rename errors, plus 400 `The chart is not loaded.`, 400 `That slot holds a charted sector.`, 409 `That slot is in use.`
+Errors: the rename errors, plus 400 `The chart is not loaded.`, 400 `That slot holds a charted sector.`, 409 `That slot is in use. Choose another slot.`
 
 ### `POST /:id/sectors/:sectorId/delete` — **on disk, unpushed**
 
@@ -186,7 +186,7 @@ Body: `SectorUndo` `{ toRev, baseRev }`, both integers ≥ 1.
 
 Answer data: `RefereeSector`. The history payload at `toRev` is copied forward as rev `baseRev + 1`. When that payload holds hex rows, they are inserted again. See **Undo**.
 
-Errors: 404 `No such sector.` 404 `No such revision.` 400 `Invalid sector.` 409 `The sector changed.` 409 `That slot is in use.` when the restored sector is not deleted and the slot has another live sector. 409 `A hex in that copy is already stored.` `details.hexKey` when a stored hex blocks the restore.
+Errors: 404 `No such sector.` 404 `No such revision.` 400 `That sector address is not valid. Check the address and try again.` 409 `This sector changed. Reload it, then try again.` 409 `That slot is in use. Choose another slot.` when the restored sector is not deleted and the slot has another live sector. 409 `A hex in that copy is already stored.` `details.hexKey` when a stored hex blocks the restore.
 
 ### `POST /:id/sectors/:sectorId/subsectors/:letter/clear` — **on disk, unpushed**
 
@@ -220,7 +220,7 @@ The route reads the current tree (the row, or the chart object when there is no 
 
 Answer data: `BuilderHex`.
 
-Errors: 404 `No stored tree.` 400 `This system is already designed by hand.` 400 `That system cannot be stored.` Form refusals from the hand conversion. 409 on hash or rev. 400 `too_large`.
+Errors: 404 `No stored tree.` 400 `This system is already designed by hand.` 400 `This system can't be stored. Check the stars and the worlds, then try again.` Form refusals from the hand conversion. 409 on hash or rev. 400 `too_large`.
 
 Undo of this write is hex revert. Revert `{ toRev: 0, baseRev: <the new rev> }` drops the row and the hex reads as the chart again.
 
@@ -243,7 +243,7 @@ One hex, `filledToo: true`, or the hex is empty: the server generates, stores a 
 
 More than one hex: 202 `{ jobId }`. Schema `BuilderJobAccepted`. The job is queued. `baseRev` is not used. Each hex's rev is captured when the job is created. A hex whose rev moved before the batch is a failure `{ hexKey, reason: 'conflict' }` and is not written. `filledToo: false` skips a hex that already holds a system.
 
-Errors for one hex: 400 `The generator refused this hex.` `details.reason` is the error text, at most 200 characters. 409 `The hex changed.` 400 `too_large`. 400 `duplicate hex key` and `baseRev is required for one hex` are `Invalid request.`
+Errors for one hex: 400 `The generator refused this hex.` `details.reason` is the error text, at most 200 characters. 409 `This hex changed. Reload it, then try again.` 400 `too_large`. 400 `duplicate hex key` and `baseRev is required for one hex` are `Invalid request.`
 
 A body with `makeSectors` of one or more entries is not this answer. It is the next route section. The same path without `makeSectors` still answers 200 or 202 as above. An empty `makeSectors` array is ignored.
 
@@ -263,7 +263,7 @@ Answer data: `SectorGenerateDone`.
 
 `skipped` is empty on this answer. A held hex in the queued job is still skipped later when `filledToo` is false, and the job's own counts say so.
 
-Errors, same code and words as make and as generate: 400 `The chart is not loaded.` 400 `That slot holds a charted sector.` `details.reason` `charted`. 409 `That slot is in use.` `details.current` is the `RefereeSector` already there. 400 `That engine and generator are not available yet.` `details.reason` `generator_unavailable`. 400 `The generator refused this hex.` 409 `The hex changed.` 400 `too_large`. 400 `The universe has no generation pin.` 400 `Invalid sector.` 409 `That sector already exists.` Plus 400 `That slot is named twice.` 400 `A hex names a slot that is not being made.` 400 `A new sector has no hexes.` Invalid JSON and invalid shape as on remove.
+Errors, same code and words as make and as generate: 400 `The chart is not loaded.` 400 `That slot holds a charted sector.` `details.reason` `charted`. 409 `That slot is in use. Choose another slot.` `details.current` is the `RefereeSector` already there. 400 `That engine and generator are not available yet.` `details.reason` `generator_unavailable`. 400 `The generator refused this hex.` 409 `This hex changed. Reload it, then try again.` 400 `too_large`. 400 `This universe has no generation pin. Open it again.` 400 `That sector address is not valid. Check the address and try again.` 409 `That sector already exists.` Plus 400 `You named that slot twice. Name each slot once.` 400 `A hex names a slot that is not being made.` 400 `Add at least one hex to this new sector.` Invalid JSON and invalid shape as on remove.
 
 If the inline generate throws, no sector row is written.
 
@@ -288,7 +288,7 @@ Answer data: `SectorGenerateUndone`.
 
 `sectors[].toRev` and `sectors[].baseRev` are the delete rev. `POST .../sectors/:id/undo` with that pair puts that sector and its hexes back. That is the undo of this undo, one call per sector made. `hexes` lists only hexes that were not in a made sector. `POST .../revert` with that pair puts the generated tree back. `restored` is how many written hexes this call took back.
 
-A moved sector rev is 409 `The sector changed.` A moved hex rev is 409 `The hex changed.` Nothing is written in either case. No clock expires the job or the history.
+A moved sector rev is 409 `This sector changed. Reload it, then try again.` A moved hex rev is 409 `This hex changed. Reload it, then try again.` Nothing is written in either case. No clock expires the job or the history.
 
 ## Draft cycle
 
@@ -296,17 +296,17 @@ A moved sector rev is 409 `The sector changed.` A moved hex rev is 409 `The hex 
 
 Open: `GET .../form`. The draft and the keep name that `hash`.
 
-`changes` apply in order. A generated document refuses an id that is not already on the form: `Unknown field <id>.` A hand document does not: an id created earlier in the same array is valid.
+`changes` apply in order. A generated document refuses an id that is not already on the form: `This form has no field with that name. Check the field and try again.` A hand document does not: an id created earlier in the same array is valid.
 
 Hand adds:
 
 - `star.add` / `body.add`. `true`, `'true'`, or `1` assigns the next `sN` or `bN`. A string is the client id: 1–40 characters, a letter or digit, then letters, digits, `.`, `_`, or `-`. `false`, `'false'`, `0`, `null`, and `''` add nothing.
-- An id that duplicates another id, or that is a prefix of one (or the reverse), is `<id> is already in this system.`
+- An id that duplicates another id, or that is a prefix of one (or the reverse), is `This system already has a star or a world with that identifier. Choose another.`
 - `body.add` appends an empty world under the first star that exists at that point. A world before any star is `A world needs a star.` Kind and parent are later changes in the same array.
 - `<id>.parent` is one id, or two ids joined by `+`. Either order is accepted. Storage is the parent star, then the companion, on `parentId` and `alsoParentId`. `alsoParentId` is omitted when absent.
-- `<starId>.remove` true removes that star, every star whose `parentId` chain leads to it, and every world or moon that orbits any of them (`parentId` or `alsoParentId`). The answer message is `<starId>.remove`, text `N bodies go with this star.` (`1 body goes` for one, `0 bodies go` for zero), `holds: false`. The count omits the named star.
+- `<starId>.remove` true removes that star, every star whose `parentId` chain leads to it, and every world or moon that orbits any of them (`parentId` or `alsoParentId`). The answer message is `<starId>.remove`, text `Removing this star also removes N bodies.` (`1 body` for one, `0 bodies` for zero), `holds: false`. The count omits the named star.
 - `<bodyId>.remove` true on a world removes moons whose `parentId` chain leads to it. A moon removes only itself. No count message.
-- A later change that names something this remove already dropped is `Unknown field <id>.`
+- A later change that names something this remove already dropped is `This form has no field with that name. Check the field and try again.`
 - A world that has moons cannot be given to another world: `A world that has moons cannot be given to another world.` The document is unchanged. A world with no moons can, by setting `kind` to `moon` and `parent` to that world.
 - Unpairing two stars is `These two stars are not paired.` A pair that names a missing star is `A body orbits these two stars together. Give it to one star first.` A moon given two parents is `A moon orbits one world.`
 
@@ -316,7 +316,7 @@ Keep sends the same `changes` and `roll` as the draft, plus `baseRev`. Discard i
 
 Generated structural switches (`*.addWorld`, `*.addMoon`, `*.remove`, and the other add switches) still have to exist on the form before the draft. A generated roll can set `holds: true`. Keep then returns 400 and writes nothing.
 
-Other hand refusals, all 400 `validation`, document unchanged: `<id> cannot be edited.` `<id> cannot hold that.` `star.add cannot hold that.` `body.add cannot hold that.` `A moon whose parent does not exist.` `A world orbits a star.` `A star orbits a star that is not in this system.` `That system cannot be stored.`
+Other hand refusals, all 400 `validation`, document unchanged: `You can't edit <label>. Choose a field you can edit.` `<label> cannot hold that.` followed by what to type. At the star limit, `You can't add another star. Remove a star before you add another.` At the world limit, `You can't add another world. Remove a world before you add another.` A bad new id is `<label> cannot hold that. Use letters, digits, periods, underscores, or hyphens.` `Choose a world for this moon.` `Choose a star for this body. A belt can orbit a world or a gas giant.` `Choose a star in this system.` `This system can't be stored. Check the stars and the worlds, then try again.`
 
 The form field `name` on a generated system writes the envelope `body.name` (the chart title). The mainworld's own name is a different field, `<bodyId>.name`.
 
@@ -365,7 +365,7 @@ Generated MgT2E output, read from the engine: a companion star gets `separation`
 
 ### Stored fields
 
-All of these are optional. A document that omits them still parses. Empty `''` or `null` removes the key. Any other value must be a finite number or the draft is `<id> cannot hold that.` `rules/` states no minimum and no maximum for a typed orbit, so the server does not add one.
+All of these are optional. A document that omits them still parses. Empty `''` or `null` removes the key. Any other value must be a finite number or the draft is `<label> cannot hold that. Type a finite number.` `rules/` states no minimum and no maximum for a typed orbit, so the server does not add one.
 
 | Form id | Who | Stored key | Unit |
 |---|---|---|---|
@@ -379,7 +379,7 @@ All of these are optional. A document that omits them still parses. Empty `''` o
 | `<bodyId>.orbit.years` | world, gas | `periodYears` | Years. `packages/engines/src/mgt2e_math.js` lines 103 to 105 returns years. The world engine copies that onto `periodYears` (`mgt2e_world_engine.js` line 365). |
 | `<bodyId>.orbit.pd` | moon | `pd` | Planetary diameters. The engine writes `pd` at `mgt2e_world_engine.js` line 669. |
 
-A moon's form does not carry `.orbit.id`, `.orbit.au`, or `.orbit.years`. A world, gas giant, belt, or star does not carry `.orbit.pd`. Sending one of those is `Unknown field <id>.`
+A moon's form does not carry `.orbit.id`, `.orbit.au`, or `.orbit.years`. A world, gas giant, belt, or star does not carry `.orbit.pd`. Sending one of those is `This form has no field with that name. Check the field and try again.`
 
 `order` stays the nonnegative integer list order. It is not an orbit number. Setting both does not make them match, and the server does not require them to match. No rule in `rules/` and no hand check says two bodies cannot share an orbit number. The draft allows it.
 
@@ -403,7 +403,7 @@ Johnny's decision: a belt has no year data. The form for kind `belt` does not in
 - `<beltId>.orbit.days`
 - `<beltId>.orbit.hours`
 
-`.orbit.days` and `.orbit.hours` are not stored for any kind. On a world, gas giant, star, or moon they are `Unknown field <id>.` A stored belt that already has `periodYears` still parses. The form does not show it, and `handWalk` does not copy it. Generated belts still receive `periodYears` when `au` is set. That engine output is unchanged.
+`.orbit.days` and `.orbit.hours` are not stored for any kind. On a world, gas giant, star, or moon they are `This form has no field with that name. Check the field and try again.` A stored belt that already has `periodYears` still parses. The form does not show it, and `handWalk` does not copy it. Generated belts still receive `periodYears` when `au` is set. That engine output is unchanged.
 
 Lane D stops showing `<beltId>.orbit.years`, `<beltId>.orbit.days`, and `<beltId>.orbit.hours`. Lane A does not read `periodYears`, `periodDays`, `periodHours`, `siderealHours`, or `solarDayHours` off a hand belt. The dossier and the orbit card are theirs.
 
@@ -421,13 +421,15 @@ For a world or a belt the function builds a one-body system and calls `generateP
 
 Cells written back are the one-character profile cells the engine set. Orbit numbers on the hand body are not changed.
 
-A gas giant's `size` is `GG` and its profile is `uwpGG`. Neither fits one of these cells, so nothing is written. See Questions.
+A gas giant's `size` is `GG` and its profile is `uwpGG`. Neither fits one of these cells, so nothing is written. Johnny, 2026-10-11: that empty profile stays. The roll is unchanged.
 
 A belt's size is 0. When a mainworld baseline is present, atmosphere and hydrographics are 0 as well, and the social cells are rolled. The form does not lock a belt cell.
 
-When the star has no spectral type, `generateStarObject` is not called. The atmosphere step uses luminosity 1 where luminosity is missing (`mgt2e_world_engine.js`, `lum || 1.0`). The moon pass then reads `primary.mass` and throws. That throw is caught. Cells already written are kept. The message says the star has no spectral type.
+On the mainworld, only size, atmosphere, and hydrographics are rolled. Population, government, law, starport, and tech level stay. Johnny, 2026-10-11: that stays. The roll is unchanged.
 
-A star with a type, subtype, and class is looked up with `generateStarObject`. That lookup does not roll. A white dwarf's rolled mass and cooling (`applyWhiteDwarfPhysics`) are not run, because that step rolls. The typed `D` branch of `generateStarObject` uses the brown-dwarf table. See Questions.
+When the star has no type, subtype, or class, `generateStarObject` is not called. The atmosphere step uses luminosity 1 where luminosity is missing (`mgt2e_world_engine.js`, `lum || 1.0`). The moon pass then reads `primary.mass` and throws. That throw is caught. Cells already written are kept. The message names the fields to set: `Set Type, Subtype, and Class.`
+
+A star with a type, subtype, and class is looked up with `generateStarObject`. That lookup does not roll. A white dwarf's rolled mass and cooling (`applyWhiteDwarfPhysics`) are not run, because that step rolls. The typed `D` branch of `generateStarObject` uses the brown-dwarf table. Johnny, 2026-10-11: the engine version stays `1.1.0`, and that lookup stays until luminosity and the other looked-up numbers are fields. Those numbers are not a closed list. See "Hand: select fields".
 
 `orbitNumberToAu` is the orbit-number interpolation `allocateOrbits` already used, moved to one function in `mgt2e_stellar_engine.js`. `allocateOrbits` calls it. The engines version stays `1.1.0`.
 
@@ -435,11 +437,11 @@ Architect of Worlds is not this extraction. Its profile is built across the disk
 
 ## What may orbit what
 
-**On disk, unpushed.** A belt may orbit a star, a world, or a gas giant. A world or a gas giant whose parent is not a star is still refused: `A world orbits a star.`
+**On disk, unpushed.** A belt may orbit a star, a world, or a gas giant. A world or a gas giant whose parent is not a star is still refused: `Choose a star for this body. A belt can orbit a world or a gas giant.`
 
 A belt around a world or a gas giant uses the moon's fields, `<id>.orbit.pd` and `<id>.orbit.eccentricity`, and no year. That parent clears `orbitId`, `au`, and `periodYears`. A star parent clears `pd`.
 
-Removing the world or the gas giant removes the belt, by the same cascade as a moon. The count is the number of ids that left. The star's sentence is unchanged: `N bodies go with this star.`
+Removing the world or the gas giant removes the belt, by the same cascade as a moon. The count is the number of ids that left. The star's sentence is unchanged: `Removing this star also removes N bodies.`
 
 `handWalk` does not give that belt its own world row. It nests it in the parent's `moons`:
 
@@ -473,7 +475,58 @@ AoW: `packages/engines/src/aow_uwp_auditor.js` lines 51 to 54 fail a planetoid b
 ### Rulings left as they were
 
 - A hand system that is not MgT2E stores a typed AU. The orbit helper is the MgT2E table only, and it does not convert a stored field (`tests/generation/hand.test.js`, the helper test). The picker that works in AU only is the screen's.
-- A moon's period stays off the form. `moon.orbit.years` is `Unknown field` (`tests/generation/roll_body.test.js`).
+- A moon's period stays off the form. `moon.orbit.years` is `This form has no field with that name. Check the field and try again.` (`tests/generation/roll_body.test.js`).
 - No belt profile cell is locked. All eight are permission `type` (same test). A belt roll may still write size 0, which is what the engine does. The referee can type over it.
-- Eccentricity accepts any finite number. Infinity is refused with `cannot hold that` (same test).
+- Eccentricity accepts any finite number. Infinity is refused with `Eccentricity cannot hold that. Type a finite number.` (same test).
 - A world at orbit 0, and two bodies on orbit 0, are stored. The screen does not call them out (same test). Nothing in `hand.ts` refuses an inner limit or a shared orbit.
+
+## Design by hand keeps the row's orbits
+
+**On disk, unpushed.** `POST .../hexes/:sector/:local/design` calls `handFromForm(form, hexKey, engineVersion, envelope)`. The fourth argument is the generated or charted tree. The copy reads numbers that are already on those rows. It does not turn an orbit number into AU.
+
+| Row | Copied when the row holds a finite number | Not copied |
+|---|---|---|
+| Star | `orbitId` (else numeric `orbit`), `orbitAU` or `distAU`, `eccentricity`, `periodYears` | Mass, luminosity, diameter, temperature. A null primary `orbitId` stays absent. |
+| World, gas giant | `orbitId`, `au` or `orbitalRadius` or `distAU`, `eccentricity`, `periodYears` | |
+| Belt | `orbitId`, `au`, `eccentricity` | `periodYears`, even when the generated belt has one |
+| Moon | `pd`, `eccentricity` | `orbitId`, `au`, `periodYears` |
+
+A companion's `parentId` is `star.` plus the row's `parentStarIdx` when that star is in the form. `handWalk` then shows the same orbit numbers. Restore is unchanged: the design stores `baseHash` of the previous tree, and undo returns that object byte for byte.
+
+## Hand: the spectral class label
+
+**On disk, unpushed.** Field id `<starId>.classText`, label **Spectral class**, kind `text`, permission `read`. Lane D shows it and does not send a change for it. A change is `You can't edit Spectral class. Choose a field you can edit.`
+
+The value is the star's own `sType`, `subType`, and `sClass`, spelled the way `generateStarObject` already names a star (`packages/engines/src/mgt2e_stellar_engine.js` lines 77 and 131). A brown dwarf or a white dwarf is the type and the class (`BD V`). Any other star is the type, the subtype, and the class (`K2 V`). Empty pieces are left out. When all three are empty, the label is empty. No luminosity table is read.
+
+## Hand: select fields
+
+**On disk, unpushed.** The form kind is `choice` (the existing kind; there is no `select` kind). Each option has `value` and `label`. A stored document that already holds another string still parses, and a draft that does not change that field keeps the string. EditField already adds the current value to the list so opening it does not drop the string.
+
+Refusal for a new MgT2E star value outside the list: `Choose a Type from the list.` The same sentence uses **Subtype** or **Class**. Status 400, code `validation`. Kind stays `Kind cannot hold that. Choose a kind from the list.`
+
+| Field id | Label | Edition | Options | Source |
+|---|---|---|---|---|
+| `<starId>.type` | Type | MgT2E | `O` `B` `A` `F` `G` `K` `M` `D` `BD` | Values: `rules/mgt2e_data.js` `starStats` lines 244 to 254. Labels: `packages/generation/src/form.ts` `STAR_TYPES` lines 107 to 110 (the generated editor). |
+| `<starId>.subtype` | Subtype | MgT2E | `0` through `9` | `form.ts` line 486, the generated form's subtype choice. `generateStarObject` interpolates a subtype in that range (`mgt2e_stellar_engine.js` lines 90 to 123). `rules/` anchors are 0, 5, and `M9` only. Those anchors are not a ban on the other digits, so the digits are not filtered. |
+| `<starId>.class` | Class | MgT2E | `Ia` `Ib` `II` `III` `IV` `V` `VI` `D` | Tables `starStats_Ia`, `starStats_Ib`, `starStats_II`, `starStats_III`, `starStats_IV`, `starStats_V`, `starStats_VI` (`rules/mgt2e_data.js` lines 273 to 370) and `D` on `starStats_BD` lines 372 to 375. Labels: `form.ts` `STAR_CLASSES` lines 111 to 115. |
+| `<starId>.type`, `.subtype`, `.class` | Type, Subtype, Class | AoW, or no edition | Text. Not a choice. | `rules/aow_data.js` `spectralTypeTable` (line 231) maps a temperature to one combined string such as `G2`. It does not list type, subtype, and class as three fields. No closed list is applied, so the fields stay text. |
+| `<bodyId>.kind` | Kind | Both | `world` `moon` `gas` `belt` | Already `choice`. Labels World, Moon, Gas giant, Belt. Not a `rules/` table. |
+| `<starId>.parent` | Orbits | Both | `""` (Nothing) and each other star's id | Closed by the stars in this system. The label is the star's name, otherwise its spectral class, otherwise `No name`. |
+| `<bodyId>.parent` | Parent | Both | Star ids; for a world or a gas giant, also `primaryId+companionId` of a paired star; for a moon, also a world, gas giant, or belt; for a belt, also a world or a gas giant | Same parent rules the server already enforces. A belt given to a world stays kind `belt`. |
+
+Setting Type to `D` sets Class to `D` and Subtype to `0`. Setting Type to `BD` sets Class to `V` and Subtype to `0`. That is `exotic` in `form.ts` lines 202 to 206, and the same force in `generateStarObject` (`mgt2e_stellar_engine.js` lines 73 to 77) and the primary override (lines 681 to 682). While the type is `D` or `BD`, Subtype and Class are permission `read`. A new change of either, once the type is already `D` or `BD`, is `Choose a Subtype from the list.` or `Choose a Class from the list.`
+
+`rules/` does not forbid a class that is missing from one table. `generateStarObject` falls back to `starStats_V` when the class table is missing (line 87) and clamps a class VI B subtype above 5 (lines 90 to 91). Those are not refusals, so the lists are not filtered for them.
+
+A companion's separation is not a hand field. The hand star stores `parentId`. `rules/mgt2e_data.js` has no separation list. The MgT2E engine writes `Close`, `Near`, `Far`, and `Companion` (`mgt2e_stellar_engine.js` lines 809 to 838). `rules/aow_data.js` `stellarSeparationTable` (line 395) lists `Extremely Close`, `Very Close`, `Close`, and further rows in that table. That list is not wired to a hand field. Separation stays off the form.
+
+Name, Order, Orbit, AU, Eccentricity, and Period (years) stay text or number. `rules/` gives no closed list for them.
+
+### Luminosity, mass, diameter, temperature
+
+Not added. The roll still looks these up.
+
+`rollBodyProfile` calls `generateStarObject` when type, subtype, and class are all present (`packages/engines/src/mgt2e_roll_body.js` `resolveStar`). That function writes `mass`, `diam`, `temp`, and `lum`. `lum` is `calculateStellarLuminosity(diam, temp)`, not a table of luminosities. `mass`, `diam`, and `temp` are interpolated between the anchors in `starStats_*`. The world steps then read `primary.lum` (missing becomes 1, `mgt2e_world_engine.js`), `primary.mass` (the moon pass throws when it is missing), and `primary.diam` (missing becomes 1).
+
+`rules/` gives formulas and anchor rows, not a closed list of those four numbers. No dropdown was invented. A stored hand star without the four numbers keeps today's lookup. See Questions.

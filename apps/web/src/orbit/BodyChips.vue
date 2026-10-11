@@ -27,13 +27,21 @@ function holds(chip: BodyChip, key: string | null): boolean {
     return key !== null && chip.moons.some((moon) => moon.key === key);
 }
 
+function satellites(chip: BodyChip): BodyChip[] {
+    return chip.moons.filter((moon) => moon.glyph.kind !== 'belt');
+}
+
+function belts(chip: BodyChip): BodyChip[] {
+    return chip.moons.filter((moon) => moon.glyph.kind === 'belt');
+}
+
 /** The mainworld among a world's moons, or null. */
 function mainMoon(chip: BodyChip): BodyChip | null {
-    return chip.moons.find((moon) => moon.mainworld) || null;
+    return satellites(chip).find((moon) => moon.mainworld) || null;
 }
 
 function moonsTitle(chip: BodyChip): string {
-    const main = mainMoon(chip);
+    const main = satellites(chip).find((moon) => moon.mainworld) || null;
     return 'Moons of ' + chip.name + (main ? ', with the mainworld ' + main.name : '');
 }
 </script>
@@ -54,25 +62,25 @@ function moonsTitle(chip: BodyChip): string {
         <Icon v-if="chip.mainworld" class="orbit-chip-main" name="star" :size="11" />
         <span v-if="chip.mainworld" class="orbit-chip-sr">, mainworld</span>
       </button>
-      <template v-if="chip.moons.length">
+      <template v-if="satellites(chip).length">
         <button
           type="button"
           class="orbit-chip orbit-chip-moons"
           :class="{ 'has-mainworld': mainMoon(chip) !== null }"
           :aria-expanded="moonsOpen === chip.key ? 'true' : 'false'"
           :aria-controls="'orbit-moons-' + chip.key"
-          :aria-label="moonsTitle(chip) + ', ' + chip.moons.length"
+          :aria-label="moonsTitle(chip) + ', ' + satellites(chip).length"
           :title="moonsTitle(chip)"
           @click="$emit('moons', moonsOpen === chip.key ? null : chip.key)"
         >
           <Icon name="moon" :size="11" />
-          <span>{{ chip.moons.length }}</span>
+          <span>{{ satellites(chip).length }}</span>
           <Icon v-if="mainMoon(chip)" class="orbit-chip-main" name="star" :size="11" />
         </button>
         <div v-if="moonsOpen === chip.key" class="orbit-pop-backdrop" @click="$emit('moons', null)"></div>
         <div v-show="moonsOpen === chip.key" :id="'orbit-moons-' + chip.key" class="orbit-moons" role="group" :aria-label="'Moons of ' + chip.name">
           <button
-            v-for="moon in chip.moons"
+            v-for="moon in satellites(chip)"
             :key="moon.key"
             type="button"
             class="orbit-chip"
@@ -88,6 +96,19 @@ function moonsTitle(chip: BodyChip): string {
           </button>
         </div>
       </template>
+      <button
+        v-for="belt in belts(chip)"
+        :key="belt.key"
+        type="button"
+        class="orbit-chip"
+        :aria-pressed="selected === belt.key ? 'true' : 'false'"
+        :title="belt.name + ' (belt)'"
+        @click="$emit('select', belt.key)"
+      >
+        <BodyGlyph :glyph="belt.glyph" :size="16" />
+        <span>{{ belt.label }}</span>
+        <span class="orbit-chip-sr">, belt</span>
+      </button>
     </div>
   </nav>
 </template>

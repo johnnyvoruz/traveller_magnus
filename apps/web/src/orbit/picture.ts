@@ -137,6 +137,19 @@ export function emptyLayer(): Layer {
     return { bands: [], panels: [], jumps: [], paths: [], rocks: [], worlds: [] };
 }
 
+/** The dashed belt band, around a star or scaled to a world. A belt is always drawn. */
+export function hostedBeltPaths(at: WorldAt): PathAt[] {
+    const out: PathAt[] = [];
+    for (const belt of at.hostedBelts || []) {
+        if (belt.r < 2) continue;
+        out.push({
+            key: belt.key, cx: at.x, cy: at.y, r: belt.r, alpha: 1, style: 'belt', width: 5,
+            phase: -(belt.angle * belt.r), main: belt.main ? belt.name : null,
+        });
+    }
+    return out;
+}
+
 function setLayer(set: WorldSet, layers: Layers, z: number): Layer {
     const layer = emptyLayer();
     for (const belt of set.belts) {
@@ -146,6 +159,7 @@ function setLayer(set: WorldSet, layers: Layers, z: number): Layer {
             phase: -(belt.angle * belt.r), main: belt.world.mainworldBelt ? belt.world.name : null,
         });
     }
+    for (const at of set.bodies) layer.paths.push(...hostedBeltPaths(at));
     if (layers.paths && layers.pathStrength > 0) {
         set.bodies.forEach((at, i) => {
             const r = set.orbits[i] || 0;

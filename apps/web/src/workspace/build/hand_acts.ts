@@ -12,7 +12,7 @@
  */
 import { reactive } from 'vue';
 import { showToast } from '../../shell/toast.ts';
-import { addField, draftHandle, dropEdit, edit, editing, openEdit, setField, unsetField } from './edit.ts';
+import { addField, draftHandle, dropEdit, edit, editing, openEdit, rollField, setField, unsetField } from './edit.ts';
 import { formIds, handList, handUi, moveChanges, moveTarget, nextId, nodeTitle, orbitsValue, parentOptions, removeChanges, removeTakesOthers, reparentChanges, type HandKind, type HandNode } from './hand.ts';
 import { buildStore, ownSectors } from './seam.ts';
 
@@ -255,4 +255,38 @@ export async function confirmDesign(): Promise<void> {
     } finally {
         handUi.askBusy = false;
     }
+}
+
+// ---- a profile roll (contracts/b_builder.md "Hand: roll a profile") ---------------------------------
+
+/** The draft's roll id for a body's profile. It is not a row of the form. */
+export function profileRollId(id: string): string {
+    return id + '.profile.roll';
+}
+
+/**
+ * Why the roll cannot run for this body, or what it does not fill, as one plain sentence; empty
+ * when it fills every cell. `blocked` is true when the button cannot do anything.
+ */
+export function rollNote(id: string): { text: string; blocked: boolean } {
+    const handle = draftHandle.value;
+    const node = handNodes().find((item) => item.id === id);
+    if (!handle || !node || node.kind === 'star') return { text: '', blocked: true };
+    if (handle.form.value.edition !== 'MgT2E') return { text: 'Roll profile works on MgT2E systems only.', blocked: true };
+    if (node.kind === 'moon') return { text: 'A roll doesn’t fill a moon’s profile.', blocked: true };
+    if (edit.rolled.includes(profileRollId(id))) return { text: 'To roll different values, select Keep, and then roll again.', blocked: true };
+    if (node.kind === 'gas') return { text: 'A roll doesn’t fill a gas giant’s profile.', blocked: false };
+    if (node.mainworld) return { text: 'On the mainworld, a roll fills only size, atmosphere, and hydrographics.', blocked: false };
+    return { text: '', blocked: false };
+}
+
+export function canRollProfile(id: string): boolean {
+    return !busy() && handUi.rolling === '' && !rollNote(id).blocked;
+}
+
+/** Roll one body's profile into the draft: the cells fill when the answer arrives; Keep stores them, Discard drops them. */
+export function rollProfile(id: string): void {
+    if (!canRollProfile(id)) return;
+    handUi.rolling = id;
+    rollField(profileRollId(id));
 }

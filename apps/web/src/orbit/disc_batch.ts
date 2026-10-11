@@ -24,8 +24,14 @@ import type { Picture, WorldDraw } from './picture.ts';
 
 const TAU = Math.PI * 2;
 
-/** A body smaller than this on screen stays a flat disc (2723). */
+/** A body smaller than this on screen stays a flat disc (2723). CSS pixels. */
 export const DISC_MIN_PX = 2.5;
+
+/** True when a disc this wide, in CSS pixels, is asked for a surface texture. */
+export function discWantsTexture(radiusPx: number): boolean {
+    return radiusPx >= DISC_MIN_PX;
+}
+
 /** Ring particles are shown circling the inner edge every seven hours (2737). */
 export const RING_HOURS = 7;
 /** The rings' inner edge and their widest reach, in planet radii (2740, 243). */
@@ -200,7 +206,7 @@ export function discBatch(plan: Plan, picture: Picture, camera: DiscCamera, cloc
         key: string, body: Readonly<Record<string, unknown>>, moon: boolean, x: number, y: number, r: number,
         starX: number, starY: number, parent: string | null, ring: DiscRing | null, emit: boolean,
     ): void => {
-        if (!(r >= DISC_MIN_PX)) return;
+        if (!discWantsTexture(r)) return;
         const starAngle = Math.atan2(starY - y, starX - x);
         const turn = turnOf(body, moon, starAngle, clock);
         const radiusPx = shadeRadius(r, camera.dpr, ring ? ring.outer : null);

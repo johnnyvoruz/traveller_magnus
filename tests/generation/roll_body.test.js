@@ -100,12 +100,12 @@ test('a belt roll is not locked, and a belt around a world uses the moon orbit f
     }
     assert.equal(belt.profile.s, '0');
     assert.throws(() => applyForm(made.envelope, [{ id: 'belt.orbit.eccentricity', value: Number.POSITIVE_INFINITY }], []), /cannot hold that/);
-    assert.throws(() => applyForm(envelope, [{ id: 'body.add', value: 'other' }, { id: 'other.parent', value: 'w' }], []), /A world orbits a star/);
+    assert.throws(() => applyForm(envelope, [{ id: 'body.add', value: 'other' }, { id: 'other.parent', value: 'w' }], []), /Choose a star for this body/);
 });
 
 test('rulings that stay as they were: moon period, shared orbit, inner orbit, and an edition that is not MgT2E', () => {
     const envelope = starSystem();
-    assert.throws(() => applyForm(envelope, [{ id: 'body.add', value: 'moon' }, { id: 'moon.kind', value: 'moon' }, { id: 'moon.parent', value: 'w' }, { id: 'moon.orbit.years', value: 1 }], []), /Unknown field/);
+    assert.throws(() => applyForm(envelope, [{ id: 'body.add', value: 'moon' }, { id: 'moon.kind', value: 'moon' }, { id: 'moon.parent', value: 'w' }, { id: 'moon.orbit.years', value: 1 }], []), /no field with that name/);
     const shared = applyForm(envelope, [
         { id: 'body.add', value: 'near' },
         { id: 'near.orbit.id', value: 0 },

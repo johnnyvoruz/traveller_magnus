@@ -18,6 +18,7 @@ import { type BodyPart } from './body.ts';
 import { justMade } from './create.ts';
 import { parsePlayed, parseWhen } from './dates.ts';
 import JournalBody from './JournalBody.vue';
+import RecordAvatar from '../RecordAvatar.vue';
 import { placeSource } from '../place_source.ts';
 import { kindWord, whenText, whenWeekday } from './list.ts';
 
@@ -241,10 +242,7 @@ watch(() => props.id, greet, { immediate: true });
 </script>
 
 <template>
-  <p v-if="!entry" class="jn-missing">
-    This entry is not in the journal.
-    <button type="button" class="ui-btn" @click="emit('back')">All entries</button>
-  </p>
+  <p v-if="!entry" class="jn-missing">This entry is not in the journal.</p>
   <article v-else ref="rootEl" class="rec jn-entry" :data-beside="beside ? 'yes' : 'no'" :data-save="saveState" @keydown="onKey">
     <div v-if="saveState === 'failed' && lastError" class="camp-strip is-error" role="alert">
       <span>That change was not saved. Your text is still here.</span>
@@ -285,7 +283,6 @@ watch(() => props.id, greet, { immediate: true });
     </section>
 
     <footer class="rec-foot">
-      <button type="button" class="ui-btn" @click="emit('back')"><Icon name="chevron-left" :size="12" />All entries</button>
       <span class="rec-gap"></span>
       <button type="button" class="ui-btn rec-delete" :disabled="readOnly" @click="remove"><Icon name="trash" :size="13" />Delete</button>
     </footer>
@@ -340,6 +337,7 @@ watch(() => props.id, greet, { immediate: true });
         <p v-if="entry.mentions.length === 0" class="jn-quiet">Nothing mentioned yet.</p>
         <p v-else class="jn-rail">
           <button v-for="target in entry.mentions" :key="target" type="button" class="ui-chip jn-token" @click="openPart(mentionPart(target))">
+            <RecordAvatar v-if="campaign.records[target] && !campaign.records[target].deleted" :record="campaign.records[target]" :universe-id="campaign.universeId" size="chip" />
             {{ mentionPart(target).label }}
           </button>
         </p>

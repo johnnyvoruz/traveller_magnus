@@ -16,10 +16,10 @@ import BuildMenu, { type MenuItem } from './BuildMenu.vue';
 import DesignAsk from './DesignAsk.vue';
 import EditField from './EditField.vue';
 import OrbitPicker from './OrbitPicker.vue';
-import { canPick, openPicker, pickFieldId, pickUi } from './orbit_pick.ts';
+import { canPick, openPicker, orbitPartner, pickFieldId, pickUi } from './orbit_pick.ts';
 import { draftHandle, edit, markOf, messagesFor, setField } from './edit.ts';
 import { fieldOwner, handList, handUi, KIND_WORD, movedWords, nodeFields, nodeTitle, orbitsValue, parentOptions, removeWords, selectNode, systemFields, type HandKind, type HandNode } from './hand.ts';
-import { addBody, addWhy, canAdd, canGive, canMainworld, canMoveBody, canRemoveBody, giveBody, makeMainworld, moonHost, moveBody, removeBody } from './hand_acts.ts';
+import { addBody, addWhy, canAdd, canGive, canMainworld, canMoveBody, canRemoveBody, canRollProfile, giveBody, makeMainworld, moonHost, moveBody, profileRollId, removeBody, rollNote, rollProfile } from './hand_acts.ts';
 
 defineProps<{ span: PanelSpan }>();
 
@@ -35,6 +35,11 @@ const system = computed(() => (form.value ? systemFields(form.value) : []));
 const host = computed(() => moonHost());
 const busy = computed(() => edit.keeping);
 const root = ref<HTMLElement | null>(null);
+/** The server's word on the selected body's roll ("Set Type, Subtype, and Class."), as sent. */
+const rollMessages = computed(() => (selected.value ? messagesFor(profileRollId(selected.value.id), messages.value).filter((item) => item.text.trim() !== '') : []));
+// The roll's answer has arrived: the button is free again.
+watch(() => [handle.value ? handle.value.form.value : null, messages.value] as const, () => { handUi.rolling = ''; });
+
 /** The body the orbit picker is open for, while it is still in the list. */
 const picking = computed(() => (nodes.value.some((node) => node.id === pickUi.id) ? pickUi.id : ''));
 
@@ -96,6 +101,9 @@ function rowMine(node: HandNode): boolean {
 
 function set(id: string, value: FormValue): void {
     setField(id, value);
+    // On MgT2E an orbit number and its AU follow each other: one change each.
+    const partner = form.value ? orbitPartner(form.value, id, value) : null;
+    if (partner) setField(partner.id, partner.value);
 }
 
 function give(id: string, event: Event): void {
@@ -252,10 +260,10 @@ function endDrag(): void {
       </ul>
       <div class="hand-add" role="group" aria-label="Add a body">
         <button v-for="item in ADD" :key="item.kind" type="button" class="ui-btn" :data-command="item.command" :disabled="!canAdd(item.kind)" :title="addWhy(item.kind) || 'Adds a body to the draft. To save it, select Keep'" @click="addBody(item.kind)">
-          <Icon name="plus" :size="12" />{{ KIND_WORD[item.kind] }}
+          <Icon name="plus" :size="12" />Add {{ KIND_WORD[item.kind].toLowerCase() }}
         </button>
         <button type="button" class="ui-btn" data-command="build-add-moon" :disabled="!canAdd('moon')" :title="addWhy('moon') || 'Adds a body to the draft. To save it, select Keep'" @click="addBody('moon')">
-          <Icon name="plus" :size="12" />{{ host ? 'Moon of ' + nodeTitle(host) : 'Moon' }}
+          <Icon name="plus" :size="12" />Add moon<span v-if="host" class="hand-add-to"> to {{ nodeTitle(host) }}</span>
         </button>
       </div>
       <p class="build-fine hand-fine">Added and removed bodies are saved when you select Keep. To undo every change in the draft, select Discard.</p>
@@ -277,7 +285,7 @@ function endDrag(): void {
             @set="set(field.id, $event)"
           />
           <!-- "Pick orbit" stands after the orbit box it fills; the box stays typeable. -->
-          <div v-if="form && field.id === pickFieldId(form, selected) && canPick(form, selected, nodes)" class="hand-pick-row">
+          <div v-if="form && field.id === pickFieldId(form, selected, nodes) && canPick(form, selected, nodes)" class="hand-pick-row">
             <button type="button" class="ui-btn" data-command="build-body-orbit" :disabled="busy" :title="'Pick the orbit of ' + nodeTitle(selected) + ' on a picture of the system'" @click="openPicker(selected.id)">
               <Icon name="location-crosshairs" :size="12" />Pick orbit
             </button>
@@ -294,7 +302,24 @@ function endDrag(): void {
         </template>
       </div>
       <template v-if="fields.profile.length">
-        <h3 class="ui-heading">Profile</h3>
+        <div class="hand-profile-head">
+          <h3 class="ui-heading">Profile</h3>
+          <button
+            v-if="selected.kind !== 'star'"
+            type="button"
+            class="ui-btn is-icon"
+            data-command="build-body-roll"
+            aria-label="Roll profile"
+            title="Roll profile"
+            :disabled="!canRollProfile(selected.id)"
+            :aria-busy="handUi.rolling === selected.id ? 'true' : undefined"
+            @click="rollProfile(selected.id)"
+          >
+            <Icon name="wand-magic-sparkles" :size="13" />
+          </button>
+        </div>
+        <p v-if="rollNote(selected.id).text" class="build-fine hand-roll-note">{{ rollNote(selected.id).text }}</p>
+        <p v-for="(message, index) in rollMessages" :key="'roll' + index" class="sysed-strip">{{ message.text }}</p>
         <div class="sysed-cells">
           <EditField
             v-for="field in fields.profile"
@@ -315,7 +340,7 @@ function endDrag(): void {
           <p v-for="(message, index) in messagesFor(field.id, messages)" :key="field.id + index" class="sysed-strip" :class="{ 'is-error': message.holds }">{{ field.label }}: {{ message.text }}</p>
         </template>
       </template>
-      <p class="build-fine hand-fine">A field you leave blank stays blank. Nothing is rolled or checked, and no other field changes when you type.</p>
+      <p class="build-fine hand-fine">A field you leave blank stays blank. Nothing is rolled unless you select Roll profile, nothing is checked, and no other field changes when you type.</p>
     </section>
 
     <section class="hand-system" data-section="system">
@@ -567,6 +592,21 @@ function endDrag(): void {
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 10px;
+}
+
+.hand-profile-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.hand-profile-head .ui-heading {
+  margin-bottom: 0;
+}
+
+.hand-roll-note {
+  margin: 4px 0 8px;
 }
 
 .hand-pick-row {

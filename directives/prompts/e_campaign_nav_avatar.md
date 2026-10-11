@@ -136,4 +136,4 @@ answer first. After each meaningful step append one line under Progress:
 
 ## Progress
 
-done: crumb parts, avatar shape, and reorder are pure functions, and the first image can already be saved at the front. next: wire the crumb and the avatar through the lent screens.
+done: crumb and avatar are on the lent screens, the browser pass is in findings/ui_design_shots/kc2_*, and the report is directives/reports/e_campaign_nav_avatar.md. next: none.

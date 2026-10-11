@@ -350,7 +350,7 @@ test('a conflict offers the server row and the next Keep uses its rev', async ()
             if (conflicted) {
                 conflicted = false;
                 assert.equal(call.body.baseRev, 1);
-                return fail(409, 'The hex changed.', { current });
+                return fail(409, 'This hex changed. Reload it, then try again.', { current });
             }
             assert.equal(call.body.baseRev, 4);
             assert.equal(call.body.hash, HASH);
@@ -410,7 +410,7 @@ test('Keep mine re-reads the newer tree and does not resend the old hash', async
             return json(answer([field('name.system', 'Mine', 'type', 'text', 'Name')]));
         }
         if (call.url.endsWith('/keep')) {
-            if (call.body.hash === HASH) return fail(409, 'The hex changed.', { current: row({ rev: 4, treeHash: HASH2 }) });
+            if (call.body.hash === HASH) return fail(409, 'This hex changed. Reload it, then try again.', { current: row({ rev: 4, treeHash: HASH2 }) });
             assert.equal(call.body.hash, HASH2);
             assert.equal(call.body.baseRev, 4);
             assert.deepEqual(call.body.changes, [{ id: 'name.system', value: 'Mine' }]);
@@ -458,7 +458,7 @@ test('Take theirs shows the stored form and drops the local draft', async () => 
             return json({ hash: HASH2, form: form([field('name.system', 'Theirs', 'type', 'text', 'Name')]) });
         }
         if (call.url.endsWith('/draft')) return json(answer([field('name.system', 'Mine')]));
-        if (call.url.endsWith('/keep')) return fail(409, 'The hex changed.', { current: row({ rev: 4, treeHash: HASH2 }) });
+        if (call.url.endsWith('/keep')) return fail(409, 'This hex changed. Reload it, then try again.', { current: row({ rev: 4, treeHash: HASH2 }) });
         throw new Error('unexpected ' + call.url);
     });
     const map = open(fetchImpl, clock());
@@ -523,7 +523,7 @@ test('a blank that loses the race does not open a draft', async () => {
     clearToasts();
     const fetchImpl = fake((call) => {
         if (call.url.includes('/hexes?')) return json({ items: [], nextCursor: null });
-        if (call.url.endsWith('/blank')) return fail(409, 'The hex changed.', { current: row({ rev: 3, treeHash: HASH2 }) });
+        if (call.url.endsWith('/blank')) return fail(409, 'This hex changed. Reload it, then try again.', { current: row({ rev: 3, treeHash: HASH2 }) });
         throw new Error('unexpected ' + call.url);
     });
     const map = open(fetchImpl, clock());
@@ -539,7 +539,7 @@ test('a refused draft names the field and blocks Keep', async () => {
     const fetchImpl = fake((call) => {
         if (call.url.includes('/hexes?')) return json({ items: [row()], nextCursor: null });
         if (call.url.endsWith('/form')) return json(read([field('profile.st', 'A', 'type', 'text', 'Starport')]));
-        if (call.url.endsWith('/draft')) return fail(400, 'profile.st cannot hold that.');
+        if (call.url.endsWith('/draft')) return fail(400, 'Starport cannot hold that. Type one character.');
         throw new Error('unexpected ' + call.url);
     });
     const time = clock();
@@ -553,7 +553,7 @@ test('a refused draft names the field and blocks Keep', async () => {
     await until(() => draft.messages.value.length === 1);
     assert.deepEqual(draft.messages.value[0], {
         id: 'profile.st',
-        text: 'profile.st cannot hold that.',
+        text: 'Starport cannot hold that. Type one character.',
         holds: true,
     });
     assert.equal(draft.dirty.value, true);
@@ -738,7 +738,7 @@ test('Keep mine carries every add and a field of a body added in this draft', as
         if (call.url.endsWith('/keep')) {
             if (call.body.hash === HASH) {
                 assert.equal(call.body.changes.some((item) => item.id === 'profile.s'), true);
-                return fail(409, 'The hex changed.', { current: row({ rev: 4, treeHash: HASH2 }) });
+                return fail(409, 'This hex changed. Reload it, then try again.', { current: row({ rev: 4, treeHash: HASH2 }) });
             }
             assert.deepEqual(call.body.changes, expected);
             assert.equal(call.body.hash, HASH2);
@@ -795,7 +795,7 @@ test('unset takes a star, world, or moon remove back and leaves earlier edits', 
                 return json({
                     form: form([field('name.system', 'Kept', 'type', 'text', 'Name')]),
                     changed: [],
-                    messages: [{ id: 's1.remove', text: '2 bodies go with this star.', holds: false }],
+                    messages: [{ id: 's1.remove', text: 'Removing this star also removes 2 bodies.', holds: false }],
                 });
             }
             assert.deepEqual(call.body.changes, [

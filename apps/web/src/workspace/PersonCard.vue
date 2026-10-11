@@ -10,7 +10,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { campaign } from '../campaign/store.ts';
 import Icon from '../design/Icon.vue';
 import { atPane } from '../shell/pane.ts';
-import { imageUrl, primaryImage } from './images.ts';
+import RecordAvatar from './RecordAvatar.vue';
 import { placeLine, typeInfo } from './records.ts';
 
 const props = defineProps<{ id: string }>();
@@ -24,10 +24,6 @@ const returnTo = ref<HTMLElement | null>(null);
 const record = computed(() => {
     const found = campaign.records[props.id];
     return found && !found.deleted ? found : null;
-});
-const image = computed(() => {
-    const found = record.value ? primaryImage(record.value) : null;
-    return found && campaign.universeId ? { src: imageUrl(campaign.universeId, found.hash), caption: found.caption } : null;
 });
 const where = computed(() => (record.value ? placeLine(record.value, campaign.records) : ''));
 
@@ -73,8 +69,7 @@ onBeforeUnmount(() => {
       </div>
       <template v-if="record">
         <div class="person-card-body">
-          <img v-if="image" class="person-card-img" :src="image.src" :alt="image.caption || record.name" decoding="async">
-          <div v-else class="person-card-img is-none" aria-hidden="true"><Icon name="user" :size="36" /></div>
+          <RecordAvatar :record="record" :universe-id="campaign.universeId" size="head" />
           <div class="person-card-text">
             <h3 class="person-card-name">{{ record.name }}</h3>
             <p v-if="where" class="person-card-where"><Icon name="location-dot" :size="11" />{{ where }}</p>

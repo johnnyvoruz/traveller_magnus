@@ -63,3 +63,5 @@ answer first. After each meaningful step append one line under Progress:
 
 ## Progress
 done: read the contract and handWalk. next: nest the belt and draw the band.
+done: the belt is nested, drawn as the belt band, and left out of the moon count. next: the gates and the shot.
+done: the belt is nested like the walk, drawn around its parent, and the shot is saved. next: none.

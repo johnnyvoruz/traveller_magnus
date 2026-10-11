@@ -128,19 +128,22 @@ function writeField(form: EditForm, id: string, value: FormValue): void {
     if (field) field.value = value;
 }
 
-/** The server names the field in the sentence: `profile.st cannot hold that.` */
-function fieldIdIn(text: string): string | null {
-    const patterns = [
-        /^(\S+) cannot hold that\.$/,
-        /^Unknown field (\S+)\.$/,
-        /^Nothing rolls (\S+)\.$/,
-        /^(\S+) cannot be edited\.$/,
-    ];
-    for (const pattern of patterns) {
-        const found = pattern.exec(text);
-        if (found) return found[1];
+/**
+ * A bare 400 names the field by its form label, not by its id.
+ * One matching label on this form is enough. Two fields with the same label
+ * stay unnamed: the answer carries no field code.
+ */
+function fieldIdIn(text: string, form: EditForm): string | null {
+    const named = /^(.+) cannot hold that\. /.exec(text) ?? /^You can't edit (.+?)\. /.exec(text);
+    if (!named) return null;
+    const label = named[1];
+    const hits: string[] = [];
+    for (const section of form.sections) {
+        for (const field of section.fields) {
+            if (field.label === label) hits.push(field.id);
+        }
     }
-    return null;
+    return hits.length === 1 ? hits[0] : null;
 }
 
 function listedMessages(details: unknown): FormMessage[] {
@@ -160,7 +163,7 @@ function listedMessages(details: unknown): FormMessage[] {
  * `messages`. `holds` stays true so Keep does not post while it stands.
  * A drop or a conflict is not this.
  */
-function refusalMessages(err: unknown): FormMessage[] | null {
+function refusalMessages(err: unknown, form: EditForm): FormMessage[] | null {
     if (!err || typeof err !== 'object') return null;
     if ((err as { status?: unknown }).status !== 400) return null;
     const listed = listedMessages((err as { details?: unknown }).details);
@@ -169,7 +172,7 @@ function refusalMessages(err: unknown): FormMessage[] | null {
     }
     const raw = err instanceof Error ? err.message : '';
     const text = raw && raw !== 'offline' ? raw : 'The server refused this draft.';
-    return [{ id: fieldIdIn(text), text, holds: true }];
+    return [{ id: fieldIdIn(text, form), text, holds: true }];
 }
 
 export async function startDraft(port: DraftPort, hexKey: string): Promise<DraftHandle> {
@@ -251,7 +254,7 @@ export async function startDraft(port: DraftPort, hexKey: string): Promise<Draft
             answerData = await port.request('POST', port.hexPath(hexKey, '/draft'), body);
         } catch (err) {
             if (token !== epoch) return;
-            const refused = refusalMessages(err);
+            const refused = refusalMessages(err, form.value);
             if (refused) messages.value = refused;
             return;
         }

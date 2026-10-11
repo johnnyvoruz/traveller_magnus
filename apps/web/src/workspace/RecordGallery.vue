@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
- * A record's images (K14): the primary image at the head (`part="hero"`), and the gallery
- * strip with add (file chooser, drop, paste), remove with undo, "Make primary" and the
- * caption in place (`part="strip"`). The encoding and the upload are campaign/images.ts;
+ * A record's images (K14): the avatar in the page head (`part="avatar"`), and the gallery
+ * strip with add (file chooser, drop, paste), remove with undo, "Make this the avatar"
+ * and the caption in place (`part="strip"`). The encoding and the upload are campaign/images.ts;
  * the upload's progress and failure are said in the saving mark's language. Sheets and
  * deck plans are not images.
  */
@@ -13,15 +13,15 @@ import { campaign } from '../campaign/store.ts';
 import Icon from '../design/Icon.vue';
 import { showToast } from '../shell/toast.ts';
 import { saveRecord } from './actions.ts';
-import EditableText from './EditableText.vue';
 import { closeLightbox, lightbox, openLightbox, uploads } from './gallery_state.ts';
 import { acceptFile, imageUrl, imageWords, primaryImage, withImageBack } from './images.ts';
+import RecordAvatar from './RecordAvatar.vue';
 import Lightbox from './Lightbox.vue';
 
 const props = defineProps<{
     id: string;
-    /** The primary image alone, or the strip with its controls. */
-    part: 'hero' | 'strip';
+    /** The avatar in the page head, or the strip of every image. */
+    part: 'avatar' | 'strip';
     /** Changes cannot be made just now (offline). */
     readOnly: boolean;
 }>();
@@ -30,7 +30,9 @@ const fileEl = ref<HTMLInputElement | null>(null);
 const stripEl = ref<HTMLElement | null>(null);
 const dragging = ref(false);
 /** An upload that failed after the image was read: it can be sent again without reading the file. */
-let retry: PreparedImage | null = null;
+const retry = ref<PreparedImage | null>(null);
+/** The failed upload was a Change, so a retry still becomes the avatar. */
+let retryFront = false;
 
 const record = computed(() => {
     const found = campaign.records[props.id];
@@ -49,25 +51,27 @@ function url(hash: string): string {
 
 // ---- Adding ---------------------------------------------------------------------------
 
-function fail(message: string, file: string, prepared: PreparedImage | null = null): void {
-    retry = prepared;
+function fail(message: string, file: string, prepared: PreparedImage | null = null, front = false): void {
+    retry.value = prepared;
+    retryFront = front;
     uploads[props.id] = { stage: 'failed', message, file };
 }
 
-async function send(prepared: PreparedImage, file: string): Promise<boolean> {
+async function send(prepared: PreparedImage, file: string, front = false): Promise<boolean> {
     uploads[props.id] = { stage: 'uploading', message: '', file };
     const added = await addImage(props.id, prepared);
     if (!added.ok) {
-        fail(added.message, file, prepared);
+        fail('The upload failed.', file, prepared, front);
         return false;
     }
+    if (front) makePrimary(props.id, prepared.hash);
     delete uploads[props.id];
-    retry = null;
+    retry.value = null;
     return true;
 }
 
-/** Files chosen, dropped or pasted, one after another; the first refusal stops the rest. */
-async function take(files: readonly File[]): Promise<void> {
+/** Files chosen, dropped or pasted, one after another; the first refusal stops the rest. `front` makes the new image the avatar. */
+async function take(files: readonly File[], front = false): Promise<void> {
     if (props.readOnly || !record.value) return;
     for (const file of files) {
         if (full.value) {
@@ -85,37 +89,46 @@ async function take(files: readonly File[]): Promise<void> {
             fail(prepared.message, file.name);
             return;
         }
-        if (!(await send(prepared.image, file.name))) return;
+        if (!(await send(prepared.image, file.name, front))) return;
     }
 }
 
 function tryAgain(): void {
-    const prepared = retry;
+    const prepared = retry.value;
     const name = upload.value ? upload.value.file : '';
     if (!prepared) {
         delete uploads[props.id];
+        retry.value = null;
         pick();
         return;
     }
-    void send(prepared, name);
+    void send(prepared, name, retryFront);
 }
 
-function dismiss(): void {
-    retry = null;
-    delete uploads[props.id];
+let placeFront = false;
+
+function openPicker(front: boolean): void {
+    if (props.readOnly || full.value) return;
+    placeFront = front;
+    if (fileEl.value) fileEl.value.click();
 }
 
 function pick(): void {
-    if (props.readOnly || full.value) return;
-    if (fileEl.value) fileEl.value.click();
+    openPicker(false);
+}
+
+function changeImage(): void {
+    openPicker(true);
 }
 
 function onFiles(event: Event): void {
     const input = event.target;
     if (!(input instanceof HTMLInputElement)) return;
     const files = input.files ? Array.from(input.files) : [];
+    const front = placeFront;
+    placeFront = false;
     input.value = '';
-    void take(files);
+    void take(files, front);
 }
 
 function onDrop(event: DragEvent): void {
@@ -174,17 +187,49 @@ watch(() => props.id, () => { closeLightbox(); });
 </script>
 
 <template>
-  <figure v-if="part === 'hero' && primary && record" class="img-hero">
-    <button type="button" class="img-hero-open" :title="'See the image' + (images.length > 1 ? 's' : '')" @click="openLightbox(id, 0)">
-      <img :src="url(primary.hash)" :alt="primary.caption || record.name" :width="primary.width" :height="primary.height">
+  <div
+    v-if="part === 'avatar' && record"
+    class="rec-avatar-slot"
+    :data-empty="primary ? 'no' : 'yes'"
+    @dragover.prevent="dragging = !readOnly"
+    @dragleave="dragging = false"
+    @drop.prevent="onDrop"
+  >
+    <input ref="fileEl" class="vplan-file" type="file" accept="image/*" tabindex="-1" aria-hidden="true" @change="onFiles">
+    <button
+      v-if="primary"
+      type="button"
+      class="rec-avatar-open"
+      :title="'See ' + record.name"
+      @click="openLightbox(id, 0)"
+    >
+      <RecordAvatar :record="record" :universe-id="universeId" size="head" />
     </button>
-    <figcaption>
-      <EditableText :key="primary.hash" label="Caption" prompt="Add a caption" :value="primary.caption || ''" :max="CAMPAIGN_LIMITS.caption" :disabled="readOnly" @save="caption(primary.hash, $event)" />
-    </figcaption>
-  </figure>
+    <button
+      v-else
+      type="button"
+      class="rec-avatar-open"
+      :disabled="readOnly || full"
+      title="Add an image"
+      @click="pick"
+    >
+      <RecordAvatar :record="record" :universe-id="universeId" size="head" />
+      <span v-if="!readOnly" class="rec-avatar-label">Add an image</span>
+    </button>
+    <span v-if="primary && !readOnly" class="rec-avatar-acts">
+      <button type="button" :disabled="full" @click="changeImage">Change</button>
+      <button type="button" @click="remove(primary.hash)">Remove</button>
+    </span>
+    <p v-if="upload && upload.stage !== 'failed'" class="rec-avatar-status" role="status">
+      {{ upload.stage === 'reading' ? 'Reading the image…' : 'Uploading…' }}
+    </p>
+    <p v-else-if="upload" class="rec-avatar-status" role="alert">
+      {{ upload.message }} <button v-if="retry" type="button" @click="tryAgain">Try again.</button>
+    </p>
+  </div>
 
   <section
-    v-else-if="part === 'strip' && record"
+    v-else-if="part === 'strip' && record && images.length"
     ref="stripEl"
     class="img"
     :class="{ 'is-dragging': dragging }"
@@ -200,9 +245,9 @@ watch(() => props.id, () => { closeLightbox(); });
         <button type="button" class="img-thumb-open" :title="(image.caption || imageWords(image)) + (index === 0 ? ' · primary' : '')" @click="openLightbox(id, index)">
           <img :src="url(image.thumbHash)" :alt="image.caption || record.name + ', image ' + (index + 1)" loading="lazy">
         </button>
-        <span v-if="index === 0" class="img-primary-tag">Primary</span>
+        <span v-if="index === 0" class="img-primary-tag">Avatar</span>
         <span class="img-thumb-acts">
-          <button v-if="index > 0" type="button" class="img-act" :disabled="readOnly" :aria-label="'Make image ' + (index + 1) + ' the primary image'" title="Make primary" @click="toFront(image.hash)">
+          <button v-if="index > 0" type="button" class="img-act" :disabled="readOnly" aria-label="Make this the avatar" title="Make this the avatar" @click="toFront(image.hash)">
             <Icon name="star" :size="11" />
           </button>
           <button type="button" class="img-act is-remove" :disabled="readOnly" :aria-label="'Remove image ' + (index + 1)" title="Remove" @click="remove(image.hash)">
@@ -215,15 +260,7 @@ watch(() => props.id, () => { closeLightbox(); });
         <span>{{ images.length ? 'Add' : 'Add an image' }}</span>
       </button>
     </div>
-    <p v-if="upload && upload.stage !== 'failed'" class="img-note" role="status">
-      {{ upload.stage === 'reading' ? 'Reading ' + upload.file + '…' : 'Uploading ' + upload.file + '…' }}
-    </p>
-    <div v-else-if="upload" class="camp-strip is-error img-failed" role="alert">
-      <span>That image was not saved. {{ upload.message }}</span>
-      <button type="button" class="ui-btn" @click="tryAgain">Try again</button>
-      <button type="button" class="ui-btn is-icon" aria-label="Dismiss" title="Dismiss" @click="dismiss"><Icon name="xmark" :size="12" /></button>
-    </div>
-    <p v-else class="img-hint">Drop images here, or paste one. They are kept as WebP, 2,048 px at most.</p>
+    <p class="img-hint">Drop images here, or paste one. They are kept as WebP, 2,048 px at most.</p>
     <Lightbox
       v-if="shown !== null && images[shown]"
       :images="images"
@@ -239,6 +276,85 @@ watch(() => props.id, () => { closeLightbox(); });
 </template>
 
 <style>
+/* The avatar sits in the page head. Its box does not grow when the image arrives. */
+.rec-avatar-slot {
+  position: relative;
+  flex: 0 0 auto;
+  width: 72px;
+  min-height: 52px;
+}
+
+.rec-avatar-open {
+  display: block;
+  width: 52px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.rec-avatar-open:disabled {
+  cursor: default;
+}
+
+.rec-avatar-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 3px;
+  border-radius: var(--r-pill);
+  background: var(--chrome-glass);
+  color: var(--text-0);
+  font: 600 9px/1.1 var(--font-text);
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.rec-avatar-slot:hover .rec-avatar-label,
+.rec-avatar-slot:focus-within .rec-avatar-label {
+  opacity: 1;
+}
+
+.rec-avatar-acts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.rec-avatar-acts button {
+  min-height: 32px;
+  margin: 0;
+  padding: 0 4px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-2);
+  background: var(--chrome-bg);
+  color: var(--text-0);
+  font: 600 11px/1 var(--font-text);
+  cursor: pointer;
+}
+
+.rec-avatar-status {
+  width: 72px;
+  margin: 4px 0 0;
+  color: var(--text-1);
+  font: 400 12px/1.3 var(--font-text);
+}
+
+.rec-avatar-status button {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--signal);
+  font: inherit;
+  cursor: pointer;
+}
+
 /* The primary image at the head of the page: as wide as the panel, no taller than a third of the screen. */
 .img-hero {
   margin: 0 0 14px;

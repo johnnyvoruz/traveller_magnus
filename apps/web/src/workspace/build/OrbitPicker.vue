@@ -23,7 +23,7 @@ const form = computed(() => (draftHandle.value ? draftHandle.value.form.value : 
 const nodes = computed(() => (form.value ? handList(form.value) : []));
 const node = computed(() => nodes.value.find((item) => item.id === props.body) ?? null);
 const name = computed(() => (node.value ? nodeTitle(node.value) : ''));
-const mode = computed(() => (form.value && node.value ? modeFor(form.value, node.value.kind) : 'au'));
+const mode = computed(() => (form.value && node.value ? modeFor(form.value, node.value, nodes.value) : 'au'));
 const parents = computed(() => pickParents(nodes.value, props.body));
 
 function firstParent(): string {

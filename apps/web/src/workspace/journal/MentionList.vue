@@ -6,7 +6,8 @@
  */
 import '../RecordPicker.vue';
 import type { CampaignRecord } from '@voyage/shared';
-import Icon from '../../design/Icon.vue';
+import { campaign } from '../../campaign/store.ts';
+import RecordAvatar from '../RecordAvatar.vue';
 import { placeLine, typeInfo } from '../records.ts';
 
 defineProps<{
@@ -48,7 +49,7 @@ const emit = defineEmits<{
         @mousemove="emit('hover', index)"
         @click="emit('choose', record)"
       >
-        <Icon :name="typeInfo(record.type).icon" :size="13" />
+        <RecordAvatar :record="record" :universe-id="campaign.universeId" size="chip" />
         <span class="picker-text">
           <b>{{ record.name }}</b>
           <small>{{ typeInfo(record.type).one }} · {{ placeLine(record, records) }}</small>

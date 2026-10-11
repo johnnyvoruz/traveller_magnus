@@ -16,7 +16,7 @@ import {
     removedWith, removeTakesOthers, removeWords, reparentChanges, selectNode, systemFields,
 } from '../../apps/web/src/workspace/build/hand.ts';
 import {
-    addBody, addWhy, cancelRemove, canGive, canMoveBody, canRemoveBody, confirmRemove, giveBody, handMode, handNodes, isHandHex, makeMainworld, moonHost, moveBody, removeBody,
+    addBody, addWhy, canRollProfile, profileRollId, rollNote, rollProfile, cancelRemove, canGive, canMoveBody, canRemoveBody, confirmRemove, giveBody, handMode, handNodes, isHandHex, makeMainworld, moonHost, moveBody, removeBody,
 } from '../../apps/web/src/workspace/build/hand_acts.ts';
 import { useBuildStore, useOwnSectors } from '../../apps/web/src/workspace/build/seam.ts';
 import { clearToasts, toasts } from '../../apps/web/src/shell/toast.ts';
@@ -191,7 +191,7 @@ test('a remove is one change; the server takes what orbits with it, and its answ
     const star = applyForm(envelope, removeChanges(list, 's1'), []);
     assert.deepEqual(handList(star.answer.form), []);
     assert.equal(removedWith(ids(list), handList(star.answer.form), 's1'), 6);
-    assert.deepEqual(star.answer.messages, [{ id: 's1.remove', text: '6 bodies go with this star.', holds: false }]);
+    assert.deepEqual(star.answer.messages, [{ id: 's1.remove', text: 'Removing this star also removes 6 bodies.', holds: false }]);
     // Until the answer no longer shows the body, nothing is counted.
     assert.equal(removedWith(ids(list), list, 's1'), null);
 });
@@ -217,7 +217,7 @@ test('the selected body shows its own fields; what the list sets (parent, order,
     assert.equal(moon.rows.some((field) => field.id === 'b4.kind'), false);
     assert.deepEqual(moon.rows.map((field) => field.id), ['b4.name', 'b4.orbit.pd', 'b4.orbit.eccentricity', 'b4.mainworld', 'b4.notes', 'b4.bases', 'b4.zone', 'b4.allegiance', 'b4.trade']);
     const star = nodeFields(form, list[0]);
-    assert.deepEqual(star.rows.map((field) => field.id), ['s1.name', 's1.type', 's1.subtype', 's1.class', 's1.orbit.id', 's1.orbit.au', 's1.orbit.eccentricity', 's1.orbit.years']);
+    assert.deepEqual(star.rows.map((field) => field.id), ['s1.name', 's1.classText', 's1.type', 's1.subtype', 's1.class', 's1.orbit.id', 's1.orbit.au', 's1.orbit.eccentricity', 's1.orbit.years']);
     assert.equal(star.profile.length, 0);
 });
 
@@ -469,4 +469,51 @@ test('the designer’s acts are commands', () => {
         assert.equal(canBuild(id, []), false, id + ' cannot run with no draft open');
     }
     setDraftOpener(null);
+});
+
+// ---- third pass: the class as a name, belts around worlds, the roll ------------------------------------
+
+test('an unnamed star is called by its spectral class; "No name" only when it has none', () => {
+    const envelope = system([[{ id: 'star.add', value: 's1' }], [{ id: 's1.type', value: 'K' }, { id: 's1.subtype', value: '1' }, { id: 's1.class', value: 'V' }, { id: 'star.add', value: 's2' }]]);
+    const list = handList(formOf(envelope));
+    assert.equal(nodeTitle(list.find((node) => node.id === 's1')), 'K1 V');
+    assert.equal(nodeTitle(list.find((node) => node.id === 's2')), 'No name');
+    assert.ok(parentOptions(list, 's2').some((option) => option.label === 'K1 V'));
+});
+
+test('a belt is given to a world or a gas giant and stays a belt; the server stores it; removing the world takes it', () => {
+    const envelope = applyForm(aster(), [{ id: 'body.add', value: 'b9' }, { id: 'b9.kind', value: 'belt' }], []).envelope;
+    const list = handList(formOf(envelope));
+    const options = parentOptions(list, 'b9');
+    assert.deepEqual(options.filter((option) => option.value === 'b1' || option.value === 'b3').map((option) => [option.value, option.becomes]), [['b1', null], ['b3', null]]);
+    assert.equal(options.some((option) => option.value === 'b9'), false);
+    assert.deepEqual(reparentChanges(list, 'b9', 'b1'), [{ id: 'b9.parent', value: 'b1' }]);
+    const next = applyForm(envelope, reparentChanges(list, 'b9', 'b1'), []).envelope;
+    const after = handList(formOf(next));
+    assert.deepEqual([after.find((node) => node.id === 'b9').kind, after.find((node) => node.id === 'b9').parent], ['belt', 'b1']);
+    assert.equal(removeTakesOthers(after, 'b1'), true);
+    assert.equal(removeWords(after, 'b1'), 'Cinder and everything that orbits it');
+    const gone = applyForm(next, removeChanges(after, 'b1'), []).envelope;
+    assert.equal(removedWith(ids(after), handList(formOf(gone)), 'b1'), 1);
+});
+
+test('Roll profile goes in the draft’s roll list, counts as one change, and says what it does not fill', async () => {
+    const draft = await open(aster());
+    const sent = [];
+    draftHandle.value.rollAgain = (id) => sent.push(id);
+    assert.deepEqual(rollNote('b1'), { text: '', blocked: false });
+    assert.deepEqual(rollNote('b2'), { text: 'On the mainworld, a roll fills only size, atmosphere, and hydrographics.', blocked: false });
+    assert.equal(rollNote('b3').text, 'A roll doesn’t fill a gas giant’s profile.');
+    assert.equal(rollNote('b4').blocked, true);
+    assert.equal(canRollProfile('b1'), true);
+    rollProfile('b1');
+    assert.deepEqual(sent, [profileRollId('b1')]);
+    assert.equal(handUi.rolling, 'b1');
+    assert.deepEqual(edit.rolled, ['b1.profile.roll']);
+    assert.equal(handChangeCount(edit.mine, [], edit.rolled), 1);
+    // A second roll in the same draft would give the same cells: it says what to do instead.
+    handUi.rolling = '';
+    assert.deepEqual(rollNote('b1'), { text: 'To roll different values, select Keep, and then roll again.', blocked: true });
+    void draft;
+    dropEdit();
 });

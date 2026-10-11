@@ -84,7 +84,7 @@ function live(sql: Sql, id: string): SqlRow | null {
 }
 
 function requireLive(sql: Sql, id: string): SqlRow {
-    if (!OwnSectorId.safeParse(id).success) throw new HexRefusal('validation', 'Invalid sector.');
+    if (!OwnSectorId.safeParse(id).success) throw new HexRefusal('validation', 'That sector address is not valid. Check the address and try again.');
     const row = live(sql, id);
     if (!row || Number(row.deleted) === 1) throw new HexRefusal('not_found', 'No such sector.');
     return row;
@@ -92,7 +92,7 @@ function requireLive(sql: Sql, id: string): SqlRow {
 
 function assertRev(row: SqlRow, baseRev: number): void {
     if (Number(row.rev) !== baseRev) {
-        throw new HexRefusal('conflict', 'The sector changed.', { current: view(row) });
+        throw new HexRefusal('conflict', 'This sector changed. Reload it, then try again.', { current: view(row) });
     }
 }
 
@@ -107,7 +107,7 @@ function slotTaken(sql: Sql, x: number, y: number, except: string): SqlRow | nul
 function refuseSlot(sql: Sql, x: number, y: number, except: string, charted: boolean): void {
     if (charted) throw new HexRefusal('validation', 'That slot holds a charted sector.', { reason: 'charted' });
     const taken = slotTaken(sql, x, y, except);
-    if (taken) throw new HexRefusal('conflict', 'That slot is in use.', { current: view(taken) });
+    if (taken) throw new HexRefusal('conflict', 'That slot is in use. Choose another slot.', { current: view(taken) });
 }
 
 function hexesOf(sql: Sql, id: string): SqlRow[] {
@@ -160,7 +160,7 @@ function chartedOf(body: unknown): boolean {
 }
 
 function make(sql: Sql, id: string, name: string, x: number, y: number, charted: boolean, now: string): SectorRow {
-    if (!OwnSectorId.safeParse(id).success) throw new HexRefusal('validation', 'Invalid sector.');
+    if (!OwnSectorId.safeParse(id).success) throw new HexRefusal('validation', 'That sector address is not valid. Check the address and try again.');
     if (live(sql, id)) throw new HexRefusal('conflict', 'That sector already exists.');
     refuseSlot(sql, x, y, id, charted);
     const subsectors = emptySubsectors();
@@ -279,7 +279,7 @@ function removeSector(sql: Sql, id: string, baseRev: number, now: string): Secto
 }
 
 function undo(sql: Sql, id: string, toRev: number, baseRev: number, now: string): SectorRow {
-    if (!OwnSectorId.safeParse(id).success) throw new HexRefusal('validation', 'Invalid sector.');
+    if (!OwnSectorId.safeParse(id).success) throw new HexRefusal('validation', 'That sector address is not valid. Check the address and try again.');
     const row = live(sql, id);
     if (!row) throw new HexRefusal('not_found', 'No such sector.');
     assertRev(row, baseRev);
@@ -324,8 +324,8 @@ export function resolveMadeSectors(
     for (let i = 0; i < seeds.length; i++) {
         const seed = seeds[i]!;
         const key = `${seed.slot.x},${seed.slot.y}`;
-        if (bySlot.has(key)) throw new HexRefusal('validation', 'That slot is named twice.');
-        if (!OwnSectorId.safeParse(ids[i]).success) throw new HexRefusal('validation', 'Invalid sector.');
+        if (bySlot.has(key)) throw new HexRefusal('validation', 'You named that slot twice. Name each slot once.');
+        if (!OwnSectorId.safeParse(ids[i]).success) throw new HexRefusal('validation', 'That sector address is not valid. Check the address and try again.');
         bySlot.set(key, { id: ids[i]!, name: seed.name, x: seed.slot.x, y: seed.slot.y });
     }
     const used = new Set<string>();
@@ -343,7 +343,7 @@ export function resolveMadeSectors(
         return `${sector.id}/${local}`;
     });
     for (const key of bySlot.keys()) {
-        if (!used.has(key)) throw new HexRefusal('validation', 'A new sector has no hexes.');
+        if (!used.has(key)) throw new HexRefusal('validation', 'Add at least one hex to this new sector.');
     }
     return { sectors: [...bySlot.values()], hexKeys: rewritten };
 }
@@ -441,7 +441,7 @@ async function routeSector(sql: Sql, request: Request, now: string, pin: Pin | n
         if (!pin) return json({ items: [] });
         return json(list(sql));
     }
-    if (!pin) throw new HexRefusal('validation', 'The universe has no generation pin.');
+    if (!pin) throw new HexRefusal('validation', 'This universe has no generation pin. Open it again.');
     if (request.method === 'POST' && path === '/sectors/generate') {
         const body = await bodyOf(request) as GenerateCommit;
         if (!body || !Array.isArray(body.sectors)) throw new HexRefusal('validation', 'Invalid request.');

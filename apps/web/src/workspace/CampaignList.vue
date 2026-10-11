@@ -12,11 +12,11 @@ import Icon from '../design/Icon.vue';
 import { deleteRecord, recentlyDeleted, restoreRecord } from './actions.ts';
 import AddButton from './AddButton.vue';
 import { locating, startLocate, stopLocate } from './locate.ts';
-import { thumbUrl } from './images.ts';
-import { handedQuery, listSort } from './list_state.ts';
+import RecordAvatar from './RecordAvatar.vue';
+import { handedQuery, listSort, recordFilter, recordQuery } from './list_state.ts';
 import { placeSource } from './place_source.ts';
 import { hexKeyOf, hexWords, liveById, resolvePlace, type Resolved } from './places.ts';
-import { RECORD_TYPES, filterRecords, liveRecords, placeLine, typeCounts, typeInfo, type TypeFilter } from './records.ts';
+import { RECORD_TYPES, filterRecords, liveRecords, placeLine, typeCounts, typeInfo } from './records.ts';
 
 const props = defineProps<{
     /** The record open beside the list (full width), or null. */
@@ -32,8 +32,8 @@ const emit = defineEmits<{
     map: [];
 }>();
 
-const query = ref('');
-const filter = ref<TypeFilter>('all');
+const query = recordQuery;
+const filter = recordFilter;
 const searchEl = ref<HTMLInputElement | null>(null);
 const listEl = ref<HTMLElement | null>(null);
 const nameDraft = ref('');
@@ -274,8 +274,7 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
             @click="emit('open', record.id)"
             @keydown="onRowKey($event, record.id)"
           >
-            <img v-if="thumbUrl(campaign.universeId, record)" class="camp-glyph is-thumb" :src="thumbUrl(campaign.universeId, record) || ''" alt="" loading="lazy">
-            <span v-else class="camp-glyph" aria-hidden="true"><Icon :name="typeInfo(record.type).icon" :size="16" /></span>
+            <RecordAvatar :record="record" :universe-id="campaign.universeId" size="row" />
             <span class="camp-row-text">
               <b>{{ record.name }}</b>
               <span v-if="record.summary" class="camp-row-sum">{{ record.summary }}</span>

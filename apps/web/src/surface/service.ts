@@ -430,7 +430,7 @@ function openDiscs(): DiscLink | null {
 /**
  * Generation changes when the mode or the cube size of a disc changes.
  * A spin resubmit keeps the generation so the tile already held stays up.
- * The worker still drops an older in-flight bitmap when a newer watch is queued.
+ * The worker drops an in-flight bitmap only when a later watch changes the envelope.
  */
 function discEpochOf(request: DiscBatchRequest): string {
     const rows = request.discs.map((disc) => disc.key + ':' + String(cubeSizeFor(disc.radiusPx)));

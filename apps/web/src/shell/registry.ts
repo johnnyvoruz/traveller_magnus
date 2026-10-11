@@ -1,3 +1,5 @@
+import { offerMyPackages } from '../workspace/market/command.ts';
+
 export type Command = {
     id: string;
     name: string;
@@ -63,3 +65,6 @@ export function handleKey(event: KeyboardEvent): boolean {
     }
     return false;
 }
+
+// The marketplace stub's "My packages" (workspace/market/command.ts), while someone is signed in.
+offerMyPackages(registerCommand);

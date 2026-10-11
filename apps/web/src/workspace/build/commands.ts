@@ -7,7 +7,7 @@ import type { FaIconName } from '../../design/icons.ts';
 import { generateMany, discardPreview, hexName, hexState, keepPreview, overChart, previewAt, removeHexes, restorable, restoreHexes, rollAgain, stopBuild, tallyOf } from './acts.ts';
 import { discardEdit, edit, editDirty, holdLeaving, keepEdit, openBlank, openEdit, draftHandle } from './edit.ts';
 import { handUi } from './hand.ts';
-import { addBody, askDesign, canAdd, canMainworld, canMoveBody, canRemoveBody, handMode, isHandHex, makeMainworld, moveBody, removeBody } from './hand_acts.ts';
+import { addBody, askDesign, canAdd, canMainworld, canMoveBody, canRemoveBody, canRollProfile, handMode, isHandHex, makeMainworld, moveBody, removeBody, rollProfile } from './hand_acts.ts';
 import { canDelete, canMove, canNewSector, canRename, deleteSector, newSector, startMove, startRename } from './sector_acts.ts';
 import { askSectorName, inEmptySlot } from './grow_acts.ts';
 import { canPickSelected, openPicker } from './orbit_pick.ts';
@@ -20,20 +20,20 @@ export type BuildCommandId =
     | 'build-edit' | 'build-draft-keep' | 'build-draft-discard' | 'build-blank'
     | 'build-sector-new' | 'build-sector-rename' | 'build-sector-move' | 'build-sector-delete'
     | 'build-design-hand' | 'build-add-star' | 'build-add-world' | 'build-add-gas' | 'build-add-belt' | 'build-add-moon'
-    | 'build-body-up' | 'build-body-down' | 'build-body-mainworld' | 'build-body-remove' | 'build-body-orbit' | 'build-publish';
+    | 'build-body-up' | 'build-body-down' | 'build-body-mainworld' | 'build-body-remove' | 'build-body-orbit' | 'build-publish' | 'build-body-roll';
 
 export const BUILD_COMMANDS: readonly { id: BuildCommandId; name: string; keys?: string[] }[] = [
     { id: 'build-select', name: 'Select hexes', keys: ['s'] },
     { id: 'build-generate', name: 'Generate a system', keys: ['g'] },
     { id: 'build-generate-with', name: 'Generate with…', keys: ['G'] },
-    { id: 'build-keep', name: 'Keep the preview', keys: ['k'] },
+    // One Keep: the preview, or the draft, whichever is open (Ctrl+Enter for the draft as before; K too).
+    { id: 'build-keep', name: 'Keep', keys: ['k', 'Ctrl+Enter'] },
     { id: 'build-roll', name: 'Roll again', keys: ['r'] },
     { id: 'build-discard', name: 'Discard the preview' },
     { id: 'build-stop', name: 'Stop generating', keys: ['x'] },
     { id: 'build-restore', name: 'Restore to the chart' },
-    { id: 'build-remove', name: 'Remove from your map', keys: ['Delete'] },
+    { id: 'build-remove', name: 'Remove', keys: ['Delete'] },
     { id: 'build-edit', name: 'Edit this system', keys: ['e'] },
-    { id: 'build-draft-keep', name: 'Keep the draft', keys: ['Ctrl+Enter'] },
     { id: 'build-draft-discard', name: 'Discard the draft' },
     { id: 'build-blank', name: 'Blank system' },
     // Step 3: a sector of the referee's own, and a system designed by hand.
@@ -42,17 +42,18 @@ export const BUILD_COMMANDS: readonly { id: BuildCommandId; name: string; keys?:
     { id: 'build-sector-move', name: 'Move the sector…' },
     { id: 'build-sector-delete', name: 'Delete the sector' },
     { id: 'build-design-hand', name: 'Design by hand…' },
-    { id: 'build-add-star', name: 'Add a star' },
-    { id: 'build-add-world', name: 'Add a world' },
-    { id: 'build-add-gas', name: 'Add a gas giant' },
-    { id: 'build-add-belt', name: 'Add a belt' },
-    { id: 'build-add-moon', name: 'Add a moon to the selected world' },
+    { id: 'build-add-star', name: 'Add star' },
+    { id: 'build-add-world', name: 'Add world' },
+    { id: 'build-add-gas', name: 'Add gas giant' },
+    { id: 'build-add-belt', name: 'Add belt' },
+    { id: 'build-add-moon', name: 'Add moon' },
     { id: 'build-body-up', name: 'Move the selected body up' },
     { id: 'build-body-down', name: 'Move the selected body down' },
     { id: 'build-body-mainworld', name: 'Make the selected body the mainworld' },
     { id: 'build-body-remove', name: 'Remove the selected body' },
     { id: 'build-body-orbit', name: 'Pick the orbit of the selected body' },
     { id: 'build-publish', name: 'Publish selection…' },
+    { id: 'build-body-roll', name: 'Roll profile' },
 ];
 
 const ADD_KIND = {
@@ -100,6 +101,7 @@ export function canBuild(id: BuildCommandId, keys: readonly string[]): boolean {
     if (id === 'build-body-mainworld') return canMainworld(handUi.selected);
     if (id === 'build-body-remove') return canRemoveBody(handUi.selected);
     if (id === 'build-body-orbit') return canPickSelected();
+    if (id === 'build-body-roll') return edit.mode === 'hand' && canRollProfile(handUi.selected);
     if (id === 'build-publish') return signedIn() && keys.length > 1 && publishKeys(keys, hexState).length > 0;
     if (id === 'build-draft-keep') return editDirty() && !edit.keeping && handUi.removing === null;
     if (id === 'build-draft-discard') return draftHandle.value !== null && !edit.keeping;
@@ -112,7 +114,8 @@ export function canBuild(id: BuildCommandId, keys: readonly string[]): boolean {
     if (id === 'build-blank') return !busy && !build.preview && keys.length === 1 && hexState(keys[0]) === 'empty' && !inEmptySlot(keys);
     if (id === 'build-select') return true;
     if (id === 'build-stop') return build.job !== null && build.job.state === 'running';
-    if (id === 'build-keep' || id === 'build-roll') return build.preview !== null && !busy;
+    if (id === 'build-keep') return (build.preview !== null && !busy) || canBuild('build-draft-keep', keys);
+    if (id === 'build-roll') return build.preview !== null && !busy;
     if (id === 'build-discard') return build.preview !== null;
     if (busy || keys.length === 0) return false;
     if (id === 'build-generate') {
@@ -136,6 +139,7 @@ export function runBuild(id: BuildCommandId, keys: readonly string[]): void {
     else if (id === 'build-body-mainworld') makeMainworld(handUi.selected);
     else if (id === 'build-body-remove') removeBody(handUi.selected);
     else if (id === 'build-body-orbit') openPicker(handUi.selected);
+    else if (id === 'build-body-roll') rollProfile(handUi.selected);
     else if (id === 'build-publish') openPublish(kindOfKeys(keys));
     else if (id === 'build-design-hand') void askDesign(keys[0], hexName(keys[0]));
     else if (id === 'build-draft-keep') void keepEdit();
@@ -145,7 +149,7 @@ export function runBuild(id: BuildCommandId, keys: readonly string[]): void {
     else if (id === 'build-blank') void openBlank(keys[0]);
     else if (id === 'build-select') build.selecting = !build.selecting;
     else if (id === 'build-stop') stopBuild();
-    else if (id === 'build-keep') void keepPreview();
+    else if (id === 'build-keep') void (build.preview ? keepPreview() : keepEdit());
     else if (id === 'build-roll') rollAgain();
     else if (id === 'build-discard') discardPreview();
     else if (id === 'build-generate') {
@@ -210,7 +214,8 @@ export function menuFor(keys: readonly string[]): { title: string; items: BuildM
     if (systems > 0) {
         items.push({
             id: 'build-remove',
-            label: many ? 'Remove the ' + plural(systems, 'system', 'systems') : (overChart(keys) ? 'Remove from your map' : 'Remove'),
+            label: many ? 'Remove the ' + plural(systems, 'system', 'systems') : 'Remove',
+            ...(overChart(keys) ? { say: 'Empties the hex on your map. The chart doesn’t change' } : {}),
             icon: 'trash',
             key: 'Del',
             danger: true,

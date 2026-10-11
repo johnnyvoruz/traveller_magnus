@@ -53,21 +53,29 @@ function numberAt(fields: Map<string, FormField>, id: string): number | null {
     return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
-/** The unit a body is placed in on this system. */
-export function modeFor(form: EditForm, kind: HandKind): PickMode {
-    if (kind === 'moon') return 'pd';
+/** What a body orbits is a world or a gas giant (a moon, or a belt around one): it is placed in planetary diameters. */
+function aroundWorld(node: HandNode, list: readonly HandNode[]): boolean {
+    if (node.kind === 'moon') return true;
+    if (node.kind !== 'belt') return false;
+    const parent = list.find((item) => item.id === node.parent);
+    return !!parent && (parent.kind === 'world' || parent.kind === 'gas');
+}
+
+/** The unit a body is placed in on this system: diameters around a world, else the orbit number on MgT2E, else AU. */
+export function modeFor(form: EditForm, node: HandNode, list: readonly HandNode[] = []): PickMode {
+    if (aroundWorld(node, list)) return 'pd';
     return form.edition === 'MgT2E' ? 'orbit' : 'au';
 }
 
 /** The field "Pick orbit" stands beside: the orbit number on MgT2E, AU elsewhere, diameters for a moon. */
-export function pickFieldId(form: EditForm, node: HandNode): string {
-    const mode = modeFor(form, node.kind);
+export function pickFieldId(form: EditForm, node: HandNode, list: readonly HandNode[] = []): string {
+    const mode = modeFor(form, node, list);
     return node.id + (mode === 'pd' ? '.orbit.pd' : mode === 'orbit' ? '.orbit.id' : '.orbit.au');
 }
 
 /** The form has the field the picker writes for this body, and there is something to orbit: the picker is offered only then. */
 export function canPick(form: EditForm, node: HandNode, list: readonly HandNode[] = []): boolean {
-    if (!fieldMap(form).has(pickFieldId(form, node))) return false;
+    if (!fieldMap(form).has(pickFieldId(form, node, list))) return false;
     return list.length === 0 || pickParents(list, node.id).some((item) => item.why === '');
 }
 
@@ -164,9 +172,18 @@ export function ticksOf(scale: PickScale): { p: number; label: string }[] {
     return out;
 }
 
-/** The parents the picker offers: those the "Orbits" list allows that keep the body what it is. Changing its kind stays with that list. */
+/**
+ * The parents the picker offers: those the "Orbits" list allows that keep the body what it is,
+ * and that keep its unit (a belt goes between stars, or between worlds, here). Changing its kind,
+ * or a belt's unit, stays with that list.
+ */
 export function pickParents(list: readonly HandNode[], id: string): { value: string; label: string; why: string }[] {
-    return parentOptions(list, id).filter((option) => option.value !== '' && option.becomes === null).map((option) => ({ value: option.value, label: option.label, why: option.why }));
+    const node = list.find((item) => item.id === id);
+    const nearWorld = !!node && aroundWorld(node, list);
+    const isWorld = (value: string): boolean => { const item = list.find((other) => other.id === value); return !!item && item.kind !== 'star'; };
+    return parentOptions(list, id)
+        .filter((option) => option.value !== '' && option.becomes === null && (!node || node.kind !== 'belt' || isWorld(option.value) === nearWorld))
+        .map((option) => ({ value: option.value, label: option.label, why: option.why }));
 }
 
 /** Every other body around that parent with an orbit on this scale, nearest first. Bodies with no orbit are counted, not drawn. */
@@ -176,7 +193,7 @@ export function ringsAround(form: EditForm, list: readonly HandNode[], parent: s
     for (const node of list) {
         if (node.id === selfId || orbitsValue(node) !== parent) continue;
         const name = nodeTitle(node);
-        const nodeMode = modeFor(form, node.kind);
+        const nodeMode = modeFor(form, node, list);
         const p = nodeMode === mode ? storedP(form, node.id, mode) : null;
         if (p === null) unplaced.push(name);
         else rings.push({ id: node.id, name, kind: node.kind, p, words: pickWords(mode, p) });
@@ -203,4 +220,22 @@ export function canPickSelected(): boolean {
     const list = handNodes();
     const node = list.find((item) => item.id === handUi.selected);
     return !!node && canPick(handle.form.value, node, list);
+}
+
+/**
+ * Typing an orbit number fills its AU, and typing AU fills the orbit number, with the
+ * contract's conversion, on an MgT2E system only. Clearing one clears the other. Null when
+ * the field is neither, or the system is not MgT2E.
+ */
+export function orbitPartner(form: EditForm, fieldId: string, value: FormValue): FormChange | null {
+    if (form.edition !== 'MgT2E') return null;
+    const byNumber = fieldId.endsWith('.orbit.id');
+    if (!byNumber && !fieldId.endsWith('.orbit.au')) return null;
+    const owner = fieldId.slice(0, -(byNumber ? '.orbit.id' : '.orbit.au').length);
+    const other = owner + (byNumber ? '.orbit.au' : '.orbit.id');
+    if (!fieldMap(form).has(other)) return null;
+    const n = typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : NaN;
+    if (value === null || value === '' || !Number.isFinite(n)) return { id: other, value: null };
+    if (byNumber) return n < 0 ? null : { id: other, value: Number(mgt2eOrbitToAu(n).toPrecision(4)) };
+    return n < 0 ? null : { id: other, value: Math.round(mgt2eAuToOrbit(n) * 100) / 100 };
 }

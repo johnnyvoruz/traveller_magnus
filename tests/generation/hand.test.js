@@ -10,7 +10,7 @@ const pinned = { seed: TRUTH_SEED, settings: { ...TRUTH_SETTINGS }, engineVersio
 test('a hand edit writes the document only', () => {
     const envelope = blankEnvelope('spin/2008', 'MgT2E', pinned, {});
     const before = stable(envelope);
-    assert.throws(() => applyForm(envelope, [{ id: 'b1.profile.st', value: '77' }], []), /b1.profile.st|Unknown field/);
+    assert.throws(() => applyForm(envelope, [{ id: 'b1.profile.st', value: '77' }], []), /Starport cannot hold that/);
     assert.equal(stable(envelope), before);
     const starred = applyForm(envelope, [{ id: 'star.add', value: true }], []);
     const world = applyForm(starred.envelope, [{ id: 'body.add', value: true }], []);
@@ -41,7 +41,7 @@ test('a hand edit writes the document only', () => {
     assert.equal(walk.worlds[0].type, 'Mainworld');
     assert.equal(walk.worlds[0].uwp, undefined);
     const held = stable(named.envelope);
-    assert.throws(() => applyForm(named.envelope, [{ id: 'b1.profile.a', value: '77' }], []), /b1.profile.a cannot hold that/);
+    assert.throws(() => applyForm(named.envelope, [{ id: 'b1.profile.a', value: '77' }], []), /Atmosphere cannot hold that/);
     assert.equal(stable(named.envelope), held);
 });
 
@@ -50,8 +50,68 @@ test('a moon whose parent does not exist is refused', () => {
     const starred = applyForm(envelope, [{ id: 'star.add', value: true }], []).envelope;
     const world = applyForm(starred, [{ id: 'body.add', value: true }], []).envelope;
     const before = stable(world);
-    assert.throws(() => applyForm(world, [{ id: 'b1.kind', value: 'moon' }], []), /parent does not exist/);
+    assert.throws(() => applyForm(world, [{ id: 'b1.kind', value: 'moon' }], []), /Choose a world for this moon/);
     assert.equal(stable(world), before);
+});
+
+test('design by hand copies the orbit numbers the generated rows already hold', () => {
+    const envelope = generateHex({
+        hexKey: 'spin/1911', edition: 'MgT2E', mode: 'top-down', summary: { type: 'SYSTEM_PRESENT' }, pinned,
+    });
+    const raw = envelope.body.mgtSystem;
+    const hand = handFromForm(formOf(envelope), 'spin/1911', '1.1.0', envelope);
+    const walk = handWalk(hand.system);
+    assert.equal(walk.stars.length, raw.stars.length);
+    let sawWorldAu = false;
+    raw.stars.forEach((star, index) => {
+        const row = walk.stars[index];
+        if (typeof star.orbitId === 'number') assert.equal(row.orbitId, star.orbitId);
+        else assert.equal(Object.hasOwn(row, 'orbitId'), false);
+        const orbitAU = typeof star.orbitAU === 'number' ? star.orbitAU : star.distAU;
+        if (typeof orbitAU === 'number') assert.equal(row.orbitAU, orbitAU);
+        else assert.equal(Object.hasOwn(row, 'orbitAU'), false);
+        if (typeof star.eccentricity === 'number') assert.equal(row.eccentricity, star.eccentricity);
+        else assert.equal(Object.hasOwn(row, 'eccentricity'), false);
+        if (typeof star.periodYears === 'number') assert.equal(row.periodYears, star.periodYears);
+        else assert.equal(Object.hasOwn(row, 'periodYears'), false);
+    });
+    const worlds = raw.worlds.filter((world) => world && world.type !== 'Empty');
+    assert.equal(walk.worlds.length, worlds.length);
+    worlds.forEach((world, index) => {
+        const row = walk.worlds[index];
+        if (typeof world.orbitId === 'number') assert.equal(row.orbitId, world.orbitId);
+        else assert.equal(Object.hasOwn(row, 'orbitId'), false);
+        const au = typeof world.au === 'number' ? world.au : (typeof world.orbitalRadius === 'number' ? world.orbitalRadius : world.distAU);
+        if (typeof au === 'number') {
+            assert.equal(row.au, au);
+            sawWorldAu = true;
+        } else assert.equal(Object.hasOwn(row, 'au'), false);
+        if (typeof world.eccentricity === 'number') assert.equal(row.eccentricity, world.eccentricity);
+        const belt = String(world.type || '').toLowerCase().includes('belt');
+        if (belt) assert.equal(Object.hasOwn(row, 'periodYears'), false);
+        else if (typeof world.periodYears === 'number') assert.equal(row.periodYears, world.periodYears);
+        const moons = world.moons || world.satellites || [];
+        moons.forEach((moon, moonIndex) => {
+            const nested = row.moons[moonIndex];
+            if (typeof moon.pd === 'number') assert.equal(nested.pd, moon.pd);
+            else assert.equal(Object.hasOwn(nested, 'pd'), false);
+            if (typeof moon.eccentricity === 'number') assert.equal(nested.eccentricity, moon.eccentricity);
+        });
+    });
+    assert.equal(sawWorldAu, true);
+    const label = hand.system.stars[0];
+    const shown = formOf(hand).sections.flatMap((section) => section.fields).find((item) => item.id === `${label.id}.classText`);
+    assert.equal(shown.permission, 'read');
+    assert.equal(shown.label, 'Spectral class');
+    assert.equal(typeof shown.value === 'string' && shown.value !== '', true);
+    const again = HandEnvelope.parse(JSON.parse(JSON.stringify(hand)));
+    again.system.stars[0].sType = 'Q';
+    const kept = applyForm(again, [{ id: 'system.name', value: 'Kept' }], []);
+    assert.equal(kept.envelope.system.stars[0].sType, 'Q');
+    assert.throws(() => applyForm(hand, [{ id: `${label.id}.type`, value: 'Q' }], []), /Choose a Type from the list/);
+    const dwarf = applyForm(hand, [{ id: `${label.id}.type`, value: 'D' }], []);
+    assert.equal(dwarf.envelope.system.stars[0].sClass, 'D');
+    assert.equal(dwarf.envelope.system.stars[0].subType, '0');
 });
 
 test('design by hand keeps the form and drops the engine tree', () => {
@@ -159,7 +219,7 @@ test('removing a star takes what orbits it, and a world with moons stays a world
     assert.deepEqual(removed.envelope.system.stars.map((star) => star.id), ['other']);
     assert.deepEqual(removed.envelope.system.bodies.map((body) => body.id), ['kept']);
     const note = removed.answer.messages.find((item) => item.id === 's1.remove');
-    assert.equal(note.text, '4 bodies go with this star.');
+    assert.equal(note.text, 'Removing this star also removes 4 bodies.');
     assert.equal(note.holds, false);
     const worldOnly = applyForm(built, [{ id: 'w.remove', value: true }], []);
     assert.equal(worldOnly.envelope.system.bodies.some((body) => body.id === 'moon'), false);
@@ -203,7 +263,7 @@ test('orbit numbers are optional, order stays a list index, and a belt drops a y
         { id: 'moon.orbit.pd', value: 12 },
         { id: 'moon.orbit.eccentricity', value: 0.05 },
     ], [{ id: 'w.profile.roll' }]);
-    assert.equal(placed.answer.messages[0].text, 'Rolled size, atmosphere, and hydrographics. Population, government, law, starport, and tech level need another body\'s mainworld profile. The star has no spectral type, so the atmosphere step treats a missing luminosity as 1.');
+    assert.equal(placed.answer.messages[0].text, 'Rolled size, atmosphere, and hydrographics. Population, government, law, starport, and tech level need another body\'s mainworld profile. Set Type, Subtype, and Class.');
     const far = placed.envelope.system.stars.find((star) => star.id === 'far');
     assert.equal(far.orbitId, 1.5);
     assert.equal(far.orbitAU, 0.55);
@@ -241,9 +301,9 @@ test('orbit numbers are optional, order stays a list index, and a belt drops a y
     assert.equal(cleared.envelope.system.bodies.find((body) => body.id === 'w').au, undefined);
     assert.equal(cleared.envelope.system.bodies.find((body) => body.id === 'w').orbitId, 3);
     const held = stable(placed.envelope);
-    assert.throws(() => applyForm(placed.envelope, [{ id: 'w.orbit.au', value: 'near' }], []), /cannot hold that/);
-    assert.throws(() => applyForm(placed.envelope, [{ id: 'moon.orbit.au', value: 1 }], []), /Unknown field/);
-    assert.throws(() => applyForm(placed.envelope, [{ id: 'w.parent', value: 'g' }], []), /A world orbits a star/);
+    assert.throws(() => applyForm(placed.envelope, [{ id: 'w.orbit.au', value: 'near' }], []), /AU cannot hold that/);
+    assert.throws(() => applyForm(placed.envelope, [{ id: 'moon.orbit.au', value: 1 }], []), /no field with that name/);
+    assert.throws(() => applyForm(placed.envelope, [{ id: 'w.parent', value: 'g' }], []), /Choose a star for this body/);
     const around = applyForm(placed.envelope, [{ id: 'belt.parent', value: 'w' }], []);
     const aroundBelt = around.envelope.system.bodies.find((body) => body.id === 'belt');
     assert.equal(aroundBelt.parentId, 'w');

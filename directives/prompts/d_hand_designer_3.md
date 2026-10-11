@@ -87,4 +87,30 @@ Write `directives/reports/d_hand_designer_3.md` from `directives/reports/_TEMPLA
 Questions for Johnny written out in full, recommended answer first. After each
 meaningful step append one line under Progress: "done: X. next: Y."
 
+## Added 2026-10-11 16:50: go now; what Lane B's follow-ups give you
+
+- Your marketplace screens report is accepted, and Lane B's follow-ups are accepted:
+  **start now.**
+- **First, one red test that is yours:** `tests/web/build_hand.test.js` line 220
+  expects the star rows without `<starId>.classText`. Lane B's form now sends that
+  read-only field after the name. Update the expectation; `npm test` is red for every
+  lane until you do.
+- From `directives/contracts/b_builder.md`, "Hand: select fields" and
+  `directives/reports/done/b_hand_followups.md`: `<starId>.classText` (label "Spectral
+  class", read only) is the class label for item 3. On an **MgT2E** hand system Type,
+  Subtype and Class arrive as `choice` with their options; Parent arrives as `choice`.
+  On Architect of Worlds and on a blank system those three stay text (the rules give
+  one combined string there): render what the form sends, do not convert.
+- A generated system switched to "Design by hand" now keeps its orbits, so the picker
+  shows them.
+- The roll: a star with no type, subtype or class answers
+  `Set Type, Subtype, and Class.` A gas giant's profile is not filled; on the mainworld
+  only size, atmosphere and hydrographics are (Johnny, yes to both).
+- A star's luminosity, mass, diameter and temperature are **not** fields yet (Johnny
+  is deciding between number fields and nothing): build no control for them.
+- Server sentences are unchanged in this pass; do not reword them on the screen.
+
 ## Progress
+done: build_hand.test.js star fields include s1.classText (red test fixed). next: read the contract's roll, select-field and belt sections.
+done: items 1-6 built (roll profile, 'not in the list' mark, class as name, belts around worlds, orbit/AU follow, one Keep/Remove/Add names); tests updated. next: browser pass kb7_*.
+done: browser pass kb7_* (rolls, belt around a world, orbit/AU, dropdowns, not in the list, remove ask, palette names, spans); gates (2 red files are Lane C's); servers stopped; report written. next: the orchestrator's next prompt (Lane A: a repeated roll id).

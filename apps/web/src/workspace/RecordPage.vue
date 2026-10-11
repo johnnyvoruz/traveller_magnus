@@ -17,7 +17,7 @@ import { uploadWords } from './images.ts';
 import LinksBlock from './LinksBlock.vue';
 import { campaignDays, vesselWhere } from './party_where.ts';
 import RecordGallery from './RecordGallery.vue';
-import { RECORD_TYPES, addTag, cleanDetails, cleanName, cleanSummary, placeLine, typeInfo } from './records.ts';
+import { RECORD_TYPES, addTag, cleanDetails, cleanName, cleanSummary, placeLine } from './records.ts';
 import { dockShipAt } from './track_actions.ts';
 import TrackBlock from './TrackBlock.vue';
 import VesselPlan from './VesselPlan.vue';
@@ -53,7 +53,6 @@ const record = computed(() => {
 });
 /** The record is one of this session's deletes: it can be brought back from here. */
 const wasDeleted = computed(() => recentlyDeleted.some((item) => item.id === props.id));
-const info = computed(() => typeInfo(record.value ? record.value.type : 'person'));
 /** A player character is a person in the party (the campaign's settings hold the party's members). */
 const isPlayerCharacter = computed(() => !!record.value && record.value.type === 'person' && !!campaign.settings && campaign.settings.party.memberIds.includes(props.id));
 /** An image being read or sent counts as saving; one that failed, as not saved. */
@@ -156,10 +155,8 @@ watch(() => props.id, () => {
       <button type="button" class="ui-btn" @click="flushCampaign()">Try again</button>
     </div>
 
-    <RecordGallery :id="id" part="hero" :read-only="readOnly" />
-
     <header class="rec-ident">
-      <span class="camp-glyph is-large" aria-hidden="true"><Icon :name="info.icon" :size="22" /></span>
+      <RecordGallery :id="id" part="avatar" :read-only="readOnly" />
       <div class="rec-names">
         <EditableText ref="nameField" title label="Name" :value="record.name" :max="CAMPAIGN_LIMITS.name" :disabled="readOnly" @save="rename" />
         <p class="rec-meta">
@@ -262,9 +259,6 @@ watch(() => props.id, () => {
     </ShipSheet>
 
     <footer class="rec-foot">
-      <button v-if="!beside" type="button" class="ui-btn" @click="emit('back')">
-        <Icon name="chevron-left" :size="12" />All records
-      </button>
       <span class="rec-gap"></span>
       <button type="button" class="ui-btn rec-delete" :disabled="readOnly" @click="remove">
         <Icon name="trash" :size="13" />Delete
@@ -278,9 +272,7 @@ watch(() => props.id, () => {
       <button v-if="wasDeleted" type="button" class="ui-btn is-primary" :disabled="readOnly" @click="restoreRecord(id)">
         <Icon name="rotate-left" :size="12" />Undo the delete
       </button>
-      <button v-if="!beside" type="button" class="ui-btn" @click="emit('back')">
-        <Icon name="chevron-left" :size="12" />All records
-      </button>
+
     </div>
   </div>
 </template>

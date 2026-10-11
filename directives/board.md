@@ -1,27 +1,28 @@
 # Board
 
-One line per lane. Only the orchestrator edits this file. Updated 2026-10-11 16:30 (clock corrected).
+One line per lane. Only the orchestrator edits this file. Updated 2026-10-11 18:30 (by the clock).
 
-**The Builder push is made: `8118f72`, 2026-10-11.** Every prompt that says "start
-only after the board says the push is made" may start.
+**Last push: `951724d`, version 1.1.1, 2026-10-11.** Any prompt that says "start only
+after the board says the push is made" may start.
 
 | Lane | Status | Current prompt | Blocker / next |
 |---|---|---|---|
-| A | go | prompts/a_belt_around_world.md | draw a belt that orbits a world |
-| B | go | prompts/b_hand_followups.md | orbits kept on "Design by hand", star class, star dropdowns, messages. Then prompts/b_marketplace_server.md |
-| C | **not started** (no Progress line, no report) | prompts/c_orbit_textures_2.md | urgent: grey discs at middle zoom (Azgul Kou, Meshan 2008) |
-| D | **not started** (no Progress line, no report) | prompts/d_marketplace_screens.md | then prompts/d_hand_designer_3.md after B's follow-ups |
-| E | working (files changing; the build fails in its files meanwhile) | prompts/e_campaign_nav_avatar.md | |
-| F | parked | | |
+| A | go | prompts/a_roll_again.md, then prompts/a_market_types.md | not started at 18:12 (no Progress line); roll again, then the shared marketplace types |
+| B | go | prompts/b_star_numbers.md | four number fields on a hand star; codes for three answers. Marketplace server accepted |
+| C | free | (none) | texture handover fix accepted; waits on Johnny's look at the live site after 1.1.2 |
+| D | go | prompts/d_publish_single.md | not started at 18:12 (no Progress line); publish from one system; next: show B's star number fields |
+| E | go | prompts/e_record_visibility.md | record visibility, player notes, the menu's file control. Packages entry accepted |
+| F | go | prompts/f_build_ux_review.md | stopped after its first step at 17:01 (no shots, no note); restart with lanes/START.md |
+
+**Restarting a frozen lane:** paste the block in directives/lanes/START.md with the
+lane's letter as the first message of a new session; from then on "go" is enough.
 
 ## Shared files this turn
-- dossier/DossierPanel.vue, dossier/DossierBody.vue, views/OrbitView.vue: no lane.
-  (C may read OrbitView.vue for the texture fault and must not edit it.)
+- dossier/DossierBody.vue, views/OrbitView.vue: no lane.
 - design/tokens.css: any lane may append its own token lines.
-- workspace/ outside build/ (RecordPage.vue, RecordGallery.vue, CampaignPanel.vue,
-  CampaignList.vue, PartyPanel.vue, PersonCard.vue, RecordPicker.vue,
-  gallery_state.ts, images.ts): **lent to E** this turn; D stays in workspace/build/.
-- orbit/disc_batch.ts and the disc drawing in orbit/OrbitRenderer.ts: **lent to C**.
+- workspace/RecordPage.vue (head control, one section) and workspace/AccountMenu.vue
+  (the file input's rule): **lent to E**. router.ts: no lane.
+- dossier/DossierPanel.vue: **D only**, one line and its import (the publish form).
 
 ## Contracts
 - contracts/b_marketplace.md, contracts/b_public_games.md (B): size b and the opt-in
@@ -39,16 +40,20 @@ only after the board says the push is made" may start.
    (findings/campaign_gap_audit.md §4), steps 1 to 5 first. Step 4 (`@` mention) is done.
 
 ## Known, not fixed
-- **Live: the orbit view's worlds are grey discs with day and night but no texture**
-  (Johnny's screenshot, Azgul Kou, Meshan 2008, middle zoom). C's first pass tested a
-  world filling the frame, which is textured; the middle zoom is another path.
-  Whether it is a regression or was never textured at that zoom is part of C's job.
+- **Live grey discs (Johnny's screenshot, Azgul Kou, middle zoom):** C could not make
+  them grey on a production build of this tree (12 discs textured at 3.1x), found that
+  since `703041d` the disc worker throws away an in-flight answer whenever a new watch
+  arrives, even for the same picture, and fixed that (it bites when a bake outlasts
+  the gap between watches, which C's machine never did). In 1.1.2. Not proven to be
+  the live cause until Johnny looks after the deploy.
 - The profile roll is not built yet (B, prompts/b_hand_roll_belt.md); D's button is
   drawn, not wired.
 - "Design by hand" on a generated system drops every orbit (D found it): B,
   prompts/b_hand_followups.md.
 - About fifty Builder server messages break the copy standard (raw ids, raw JSON,
   legacy control names): B, same prompt.
+- B's report says presentHand does not copy the orbit fields: stale, A's accepted pass
+  does (tests/web/orbit_hand.test.js).
 - Modal frame styles live in workspace/Lightbox.vue and D's picker carries a copy;
   one shared frame in design/base.css is owed.
 - `packages/shared/src/orbit_au.ts` is a copy of the MgT2E orbit table from the engine,
@@ -73,8 +78,12 @@ only after the board says the push is made" may start.
   the blank request body (read from what the server stored).
 
 ## Pending push
-**Ready: findings/push/builder_2026-10-11b.md** (98 paths, version 1.1.1). Johnny reads
-findings/engine_roll_body.md first. E's Campaign work in flight stays out.
+**Ready: version 1.1.2**, `findings/push/builder_2026-10-11c.md` (paths in
+`builder_2026-10-11c_files.txt`). Tree green at 18:15: 1380 pass, checker clean,
+typecheck and build pass. Carries E's crumb, avatars and packages entry, D's
+marketplace screens and third hand-designer pass, A's belt around a world and plain
+messages, B's follow-ups and marketplace server (migration 0010), C's texture handover.
+Push before saying go, so no lane edits a listed file mid-commit.
 
 ## Decisions from Johnny
 - 2026-10-10: the file bus replaces pasting.
@@ -150,5 +159,25 @@ findings/engine_roll_body.md first. E's Campaign work in flight stays out.
   features harden, on his word. The orchestrator bumps `apps/web/src/version.ts` in
   each push list. The engine version (1.1.0) stays tied to its fixtures folder.
 
+- 2026-10-11, yes to eight: the parked preview route leaves router.ts for a patch
+  file; a hand star's luminosity, mass, diameter and temperature are four number
+  fields that show the lookup until typed; the plain-style server messages are applied
+  in one pass with the browser lines that quote them; AoW and blank systems keep
+  type, subtype and class as text; a package may be published from a single system; a
+  chart system removed from the map goes into a package as a deleted hex; E's five
+  Campaign choices stay as built; only the app version moves per push.
+
+- 2026-10-11: K or Ctrl+Enter keeps whichever is open (preview or draft); "Remove"
+  stays without "from your map"; Lane F does a read-only UX review of Build and the
+  hand designer.
+
 ## Open with Johnny
-1. Is it right that only the app version moves per push, not the engine version?
+1. C: after 1.1.2 is deployed and hard-reloaded, is Azgul Kou still grey at middle zoom?
+2. E: hide the account menu's native "Choose File" control (in E's prompt already as a
+   fault fix; say no to take it out).
+
+## Queue (prompts not yet written)
+- D: show B's four star number fields (after `b_star_numbers` reports).
+- A: read B's three codes in place of the sentences (after `b_star_numbers`).
+- F's findings, when the note exists, become prompts for the owning lanes.
+- E, Campaign order step 3 (timeline as a list), then 6 (handout images; ask B first).

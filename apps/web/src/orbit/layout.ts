@@ -241,6 +241,8 @@ export type PlanMoon = {
     /** The highport, where the body's starport profile has one. */
     port: Port | null;
     portPeriod: number;
+    /** A planetoid belt that orbits this world. It is not a moon and it is not drawn as a disc. */
+    belt?: boolean;
 };
 
 export type PlanWorld = {
@@ -261,6 +263,8 @@ export type PlanWorld = {
     jumpAU: number;
     ringed: boolean;
     moons: PlanMoon[];
+    /** Planetoid belts that orbit this body. Absent on a plan built before they existed. */
+    hostedBelts?: PlanMoon[];
     ringMoons: number;
     /** Entries of world.rings: they have no dossier key and select their world. */
     rings: number;
@@ -344,27 +348,34 @@ export function planSystem(sys: Bag, hexKey: string): Plan {
         const starMass = star >= 0 ? ((rawStars[star] || {}).mass || 1) : 1;
         const mainworldBelt = isMainworldBelt(raw);
         const moons: PlanMoon[] = [];
+        const hostedBelts: PlanMoon[] = [];
         let ringMoons = 0;
+        let child = 0;
         const rawMoons: unknown[] = Array.isArray(raw.moons) ? raw.moons : [];
         for (const item of rawMoons) {
             if (!isBag(item) || item.type === 'Empty') continue;
             const moonKey = keys[at++] || '';
-            const mi = moons.length;
-            const ring = item.size === 'R';
-            moons.push({
+            const mi = child;
+            child += 1;
+            const hosted = item.type === 'Planetoid Belt' && item.isMoon !== true;
+            const ring = !hosted && item.size === 'R';
+            const row: PlanMoon = {
                 key: moonKey,
                 body: item,
                 index: mi,
                 ring,
                 ringIndex: ring ? ringMoons : -1,
                 basePx: moonBasePx(item),
-                period: moonPeriodYears(item, raw),
+                period: hosted ? 0 : moonPeriodYears(item, raw),
                 epoch: hashEpoch(hexKey + ':moon:' + index + ':' + mi),
                 mainworld: item.type === 'Mainworld',
                 name: String(item.name || ''),
-                port: ring ? null : highportOf(item),
+                port: ring || hosted ? null : highportOf(item),
                 portPeriod: highportPeriodYears(item),
-            });
+                belt: hosted,
+            };
+            if (hosted) hostedBelts.push(row);
+            else moons.push(row);
             if (ring) ringMoons += 1;
         }
         const world: PlanWorld = {
@@ -383,6 +394,7 @@ export function planSystem(sys: Bag, hexKey: string): Plan {
             jumpAU: hundredDau(raw.diamKm),
             ringed: hasRings(raw),
             moons,
+            hostedBelts,
             ringMoons,
             rings: Array.isArray(raw.rings) ? raw.rings.length : 0,
             name: String(raw.name || ''),
@@ -491,12 +503,24 @@ export type MoonAt = {
     cover: number;
 };
 
+/** A belt band around a world, in the same units as a moon's orbit ring. */
+export type HostedBeltAt = {
+    key: string;
+    r: number;
+    /** Fixed dash phase. A belt has no year, so the band does not turn. */
+    angle: number;
+    name: string;
+    main: boolean;
+};
+
 export type WorldAt = {
     world: PlanWorld;
     x: number;
     y: number;
     r: number;
     moons: MoonAt[];
+    /** Belt bands around this world. Empty when it hosts none. */
+    hostedBelts?: HostedBeltAt[];
     /** Radii of the world.rings circles. */
     rings: number[];
     /** Where its light comes from: the star it is drawn round. */
@@ -620,6 +644,12 @@ export function placeWorld(
     const r = w.basePx * z;
     const moons: MoonAt[] = [];
     const rings: number[] = [];
+    const hostedBelts: HostedBeltAt[] = [];
+    for (const m of w.hostedBelts || []) {
+        const dist = moonOrbitRadius(r, m.index, w.ringed, z);
+        hostedBelts.push({ key: m.key, r: dist, angle: m.epoch, name: m.name, main: m.mainworld });
+        hits.push({ kind: 'belt', key: m.key, cx: px, cy: py, r: dist + 7 * z, innerR: Math.max(0, dist - 7 * z) });
+    }
     if (moonsShown) {
         for (const m of w.moons) {
             if (m.ring) {
@@ -643,7 +673,7 @@ export function placeWorld(
         }
     }
     hits.push({ kind: 'world', key: w.key, cx: px, cy: py, r: Math.max(r + 9 * z, 14), visualR: r });
-    return { world: w, x: px, y: py, r, moons, rings, starX, starY };
+    return { world: w, x: px, y: py, r, moons, hostedBelts, rings, starX, starY };
 }
 
 /** js/system_viewer.js:3191-3236: one star's worlds, and their hit targets. */
@@ -768,7 +798,8 @@ export function sceneBounds(plan: Plan, view: View, days: number): Bounds {
     const includeWorlds = (list: PlanWorld[], x: number, y: number, max: number, pixels: number, hole: number): void => {
         for (const w of list) {
             const moonCount = view.moons === false ? 0 : w.moons.length + w.rings;
-            const local = (moonCount ? 20 + moonCount * 6 : 10) * z;
+            const beltCount = (w.hostedBelts || []).length;
+            const local = (moonCount + beltCount ? 20 + (moonCount + beltCount) * 6 : 10) * z;
             const extent = Math.max(w.basePx * z + local, Math.min(180, w.name.length * 3.5));
             include(x, y, scaleR(w.au, max, pixels, hole, view.linear) + extent, w.name);
         }

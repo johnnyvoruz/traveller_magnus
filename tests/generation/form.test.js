@@ -152,11 +152,11 @@ test('each profile cell changes one character and keeps the dash', () => {
     const before = stable(envelope);
     assert.throws(() => applyForm(envelope, [{ id: 'profile.st', value: '77' }]), (err) => {
         assert.ok(err instanceof FormRefusal);
-        assert.match(err.message, /profile\.st/);
+        assert.match(err.message, /Starport cannot hold that/);
         return true;
     });
     assert.throws(() => applyForm(envelope, [{ id: 'profile.s', value: '' }]), (err) => {
-        assert.match(err.message, /profile\.s/);
+        assert.match(err.message, /Size cannot hold that/);
         return true;
     });
     assert.equal(stable(envelope), before);
@@ -207,6 +207,6 @@ test('a star type keeps the system name and the fields typed in the draft', () =
 test('rolling a body on Architect of Worlds does not run', () => {
     const envelope = aow(HEXES[0]);
     const applied = applyForm(envelope, [], [{ id: 'body.0' }]);
-    assert.equal(applied.answer.messages[0].text, 'Regeneration is only available for MgT2E systems.');
+    assert.equal(applied.answer.messages[0].text, 'You can roll a world again on a Mongoose system. Open one to roll again.');
     assert.equal(stable(applied.envelope), stable(envelope));
 });

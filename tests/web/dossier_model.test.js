@@ -554,6 +554,51 @@ test('a belt shows no year, and a world still does', () => {
     assert.equal(beltOrbit.rows.some((row) => row.label === 'Distance (AU)'), true);
 });
 
+test('a belt around a world is a belt under that world, with no year and no moon count', () => {
+    const tree = {
+        kind: 'tree',
+        hexKey: 'own/0102',
+        body: {
+            handSystem: {
+                name: 'Hand',
+                stars: [{ name: 'Primary', sType: 'G', subType: '2', sClass: 'V' }],
+                worlds: [{
+                    type: 'World',
+                    name: 'Rock',
+                    au: 1,
+                    moons: [
+                        { type: 'Satellite', name: 'Lune', isMoon: true, pd: 12 },
+                        { type: 'Planetoid Belt', name: 'Dust', pd: 25, periodYears: 4, periodDays: 1400 },
+                    ],
+                }],
+            },
+        },
+    };
+    const rock = bodyModel(tree, 'w0');
+    const belt = bodyModel(tree, 'w0m1');
+    assert.equal(rock.facts.find((fact) => fact.label === 'Moons').value, '1');
+    assert.equal(rock.moons.length, 1);
+    assert.equal(rock.moons[0].name, 'Lune');
+    assert.equal(belt.facts.some((fact) => fact.label === 'Year'), false);
+    assert.equal(belt.place.includes('belt of Rock'), true);
+    assert.equal(belt.place.includes('moon of'), false);
+    const orbit = belt.sideSections.find((section) => section.heading === 'Orbit');
+    assert.equal(orbit.rows.some((row) => row.label === 'Distance (PD)'), true);
+    assert.equal(orbit.rows.some((row) => row.label === 'Satellite orbit (PD)'), false);
+    assert.equal(orbit.rows.some((row) => row.label === 'Orbital period (days)'), false);
+    const row = overviewModel({
+        sectorName: 'Own',
+        subsectorName: '',
+        hex: '0102',
+        entry: { tree: 'hash', type: '', name: 'Hand', uwp: '', allegiance: '', zone: '', bases: '', tradeCodes: [], pbg: '', ix: 0, partial: null },
+        tree,
+    }).tree.rows.find((item) => item.name === 'Dust');
+    assert.equal(row.moon, true);
+    assert.equal(row.glyph.kind, 'belt');
+    assert.equal(row.facts[0], 'Planetoid Belt');
+    assert.equal(row.facts.some((fact) => fact.includes('PD')), true);
+});
+
 function walkBodies(system, visit) {
     (system.worlds || []).forEach((world, index) => {
         visit(world, 'w' + index, false);

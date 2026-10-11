@@ -258,6 +258,12 @@ function loadRecord(sql: Sql, id: string): SqlRow | null {
     return rows[0] ?? null;
 }
 
+/** The stored campaign record, or null when the id is not in this universe. */
+export function storedCampaignRecord(sql: Sql, id: string): CampaignRecordRow | null {
+    const row = loadRecord(sql, id);
+    return row ? recordFrom(row) as CampaignRecordRow : null;
+}
+
 function loadLink(sql: Sql, id: string): SqlRow | null {
     const rows = sql.exec(`SELECT * FROM campaign_links WHERE id = ?`, id);
     return rows[0] ?? null;

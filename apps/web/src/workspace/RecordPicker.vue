@@ -9,6 +9,7 @@ import type { CampaignRecord } from '@voyage/shared';
 import { campaign } from '../campaign/store.ts';
 import Icon from '../design/Icon.vue';
 import { pickRecords } from './links.ts';
+import RecordAvatar from './RecordAvatar.vue';
 import { placeLine, typeInfo } from './records.ts';
 
 const props = withDefaults(defineProps<{
@@ -104,7 +105,7 @@ onMounted(() => { if (inputEl.value) inputEl.value.focus(); });
         @mousemove="active = index"
         @click="emit('pick', record)"
       >
-        <Icon :name="typeInfo(record.type).icon" :size="13" />
+        <RecordAvatar :record="record" :universe-id="campaign.universeId" size="chip" />
         <span class="picker-text">
           <b>{{ record.name }}</b>
           <small>{{ typeInfo(record.type).one }} · {{ placeLine(record, campaign.records) }}</small>

@@ -1,8 +1,9 @@
 /**
  * Disc delivery epoch. A result is kept only when its mode, version and
- * generation are the ones the page is on now. A newer watch supersedes an
- * in-flight one even inside the same generation, so a late bitmap is closed
- * before it can enter disc_hold.
+ * generation are the ones the page is on now. The page posts a watch on every
+ * frame, so a later watch of that same envelope must not throw the in-flight
+ * bitmaps away: they are the textures for the discs already on screen. A
+ * change of mode, version or generation still closes them.
  */
 import { closeBitmap, sliceBitmap } from '../../platform/browser.ts';
 import type { SurfaceMode } from '../contracts.ts';
@@ -20,10 +21,19 @@ export function sameEnvelope(live: DiscEnvelope | null, job: DiscEnvelope): bool
     return live.mode === job.mode && live.version === job.version && live.generation === job.generation;
 }
 
-/** True when a watch queued after `job` should make `job` throw its bitmaps away. */
+/**
+ * True when a watch queued after `job` should make `job` throw its bitmaps away.
+ * Same mode, version and generation is one picture: the answer is handed to the
+ * painter. A different envelope is a new picture, and the old answer is dropped.
+ */
 export function watchSuperseded(queued: DiscEnvelope | null, job: DiscEnvelope | null): boolean {
     if (!queued || !job) return false;
-    return queued !== job;
+    return queued.mode !== job.mode || queued.version !== job.version || queued.generation !== job.generation;
+}
+
+/** The painter takes a finished answer unless a later watch changed the envelope. */
+export function handOverDiscAnswer(queued: DiscEnvelope | null, finished: DiscEnvelope): boolean {
+    return !watchSuperseded(queued, finished);
 }
 
 export async function settleDiscDelivery(

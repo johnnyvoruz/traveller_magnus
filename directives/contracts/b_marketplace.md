@@ -1,7 +1,7 @@
 # Marketplace stub contract (size b)
 
-Written 2026-10-11. Nothing in this file is built. Browser lanes build against it after Johnny accepts it.
-No schema file and no migration is part of this pass. The zod names below are the names the build will add beside the manifest that already exists.
+Written 2026-10-11. Updated 2026-10-11: the stub is on disk, unpushed. Browser lanes build against this file.
+The zod names below are in `packages/shared/src/schemas/package.ts`. The D1 migration is `apps/api/src/db/migrations/0010_packages.sql`.
 
 This is Johnny's size b (2026-10-10), decisions 1, 2, and 3. A signed-in referee publishes a named part of a universe they own and lists their own packages. Another account cannot list or read them. Nobody installs one. Sharing is free. A publish is a snapshot locked to the hex ids in the body.
 
@@ -34,7 +34,7 @@ Failure: `{ ok: false, error: { code, message, details? } }`. A bad shape sends 
 | Name | File |
 |---|---|
 | `PackageHex`, `PackageManifest` | `packages/shared/src/schemas/package.ts` (already exported) |
-| `PackageCreate`, `PackagePublish`, `PackageListing`, `PackagePage`, `PackageVersion`, `PackagePublishAccepted` | `packages/shared/src/schemas/package.ts` (named here, not added in this pass) |
+| `PackageCreate`, `PackagePublish`, `PackageListing`, `PackagePage`, `PackageVersion`, `PackagePublishAccepted`, `PackageListPage` | `packages/shared/src/schemas/package.ts` |
 
 `PackageListing` is the card. Decision 1: title, author handle, kind, truth version, edition, hex count, tags, latest version number. The list also carries `id`, because the client has to open the package. Trees and records are not on this shape.
 
@@ -58,7 +58,7 @@ Failure: `{ ok: false, error: { code, message, details? } }`. A bad shape sends 
 
 ## Routes
 
-### `POST /api/packages` — **not built**
+### `POST /api/packages` — **on disk, unpushed**
 
 Who: a signed-in user (decision 2).
 
@@ -74,9 +74,9 @@ Answer: 201 `PackageListing`. `latestVersion` is 0 and `hexCount` is 0. No R2 ob
 
 Storage: one `packages` row. `author_id` is the caller. `slug` is generated and unique. `hidden` is 0. `installs` is 0. `takedown_reason` and `takedown_by` are null. `latest_version` is 0.
 
-Errors: 404 `No such universe.` 400 `Invalid request.` A universe whose `truth_version` is null is 400 `validation`, `This universe is not on a published chart.` See Questions in the lane report. The existing `PackageManifest.truthVersion` is a required string (`packages/shared/src/schemas/package.ts`).
+Errors: 404 `No such universe.` 400 `Invalid request.` A universe whose `truth_version` is null is 400 `validation`, `This universe is not on a published chart.` Johnny approved that refusal on 2026-10-11. The existing `PackageManifest.truthVersion` is a required string (`packages/shared/src/schemas/package.ts`).
 
-### `POST /api/packages/:packageId/versions` — **not built**
+### `POST /api/packages/:packageId/versions` — **on disk, unpushed**
 
 Who: the author (decision 2).
 
@@ -86,7 +86,7 @@ Body: `PackagePublish`, the shape `api.md` already names.
 { universeId, hexKeys, recordIds }
 ```
 
-`hexKeys` is 1–1280 unique `HexKey`s. `recordIds` is 0–500 campaign record ids. Both caps are **proposed**. The package spec gives no cap. 1280 is `BUILDER_LIMITS.hexesPerJob` in `packages/shared/src/schemas/builder.ts`, one sector of 32 by 40. 500 records is not in a spec.
+`hexKeys` is 1–1280 unique `HexKey`s. `recordIds` is 0–500 campaign record ids. Johnny approved both caps on 2026-10-11. 1280 is `BUILDER_LIMITS.hexesPerJob` in `packages/shared/src/schemas/builder.ts`, one sector of 32 by 40.
 
 `universeId` must be the universe stored on the package. Another id is 400 `validation`, `This package publishes from a different universe.`
 
@@ -108,7 +108,7 @@ Errors, and nothing is queued when any of these fire:
 
 A hex in a referee sector (`~` plus an id) is allowed. `data_model.md` §6 says a package made from own sectors carries those slugs. That is a package. It is not the public-games mark.
 
-### `GET /api/packages` — **not built**
+### `GET /api/packages` — **on disk, unpushed**
 
 Who: the signed-in caller. Decision 1 and size b: this is their list, not a catalogue. `api.md` Slice 4's public `GET /api/packages?kind=&q=&tag=&sort=` is not this route. No query filters in the stub.
 
@@ -118,7 +118,7 @@ Answer: 200 `{ items: PackageListing[], nextCursor }`. `nextCursor` is a string,
 
 Errors: 400 `validation`, `Invalid limit.`
 
-### `GET /api/packages/:packageId` — **not built**
+### `GET /api/packages/:packageId` — **on disk, unpushed**
 
 Who: the author. `api.md` makes this public. Size b does not. Another account, and an id that is not a package, are both 404 `not_found`, `No such package.` The missing row and someone else's row use the same answer. Settled 2026-10-11.
 
@@ -126,7 +126,7 @@ Answer: 200 `PackagePage`.
 
 Errors: 404 `No such package.`
 
-### `GET /api/packages/:packageId/versions/:version` — **not built**
+### `GET /api/packages/:packageId/versions/:version` — **on disk, unpushed**
 
 Who: the author. This is how the form reads progress. `api.md` points long work at `/jobs/:jobId`. The stub does not add a package job onto the universe generate route, so that route's answer stays as it is.
 
@@ -138,15 +138,15 @@ Errors: 404 `No such package.` 404 `not_found`, `No such version.`
 
 ## Storage
 
-D1, from `data_model.md` §2, plus three columns the spec row does not have. Those three are **proposed** and are what makes a publish lock to one universe and report progress.
+D1, from `data_model.md` §2, plus the columns below that the spec row does not have. Johnny approved them on 2026-10-11. They lock a publish to one universe, report progress, and tell the job which hexes and records to copy.
 
 `packages`
 
 | Column | From | Stub |
 |---|---|---|
-| `id` | spec | `pk_` + 26 Crockford. Proposed alphabet. |
+| `id` | spec | `pk_` + 26 Crockford, as settled above |
 | `author_id` | spec | the caller |
-| `universe_id` | **proposed** | the universe named at create. Versions cannot switch it. |
+| `universe_id` | approved | the universe named at create. Versions cannot switch it. |
 | `kind`, `title`, `slug`, `description`, `tags`, `edition`, `truth_version`, `engine_version` | spec | copied as the create route says. `slug` is unique. `tags` is JSON. |
 | `latest_version` | spec | 0 until a version is `done`, then that number |
 | `installs` | spec | stays 0. No install route. |
@@ -158,12 +158,13 @@ D1, from `data_model.md` §2, plus three columns the spec row does not have. Tho
 | Column | From | Stub |
 |---|---|---|
 | `package_id`, `version` | spec | version starts at 1 |
-| `state` | **proposed** | `queued`, `running`, `done`, `failed` |
-| `error` | **proposed** | null, or the failure text sliced to 200 characters |
+| `state` | approved | `queued`, `running`, `done`, `failed` |
+| `error` | approved | null, or the failure text sliced to 200 characters |
 | `manifest_hash` | spec | sha256 of the manifest's stable bytes. Null until `done`. |
 | `content_hash` | spec | sha256 of the records-subset object. Null until `done`. |
 | `bytes` | spec | size of the manifest plus the records object plus image bytes this version put |
 | `hex_count`, `record_count` | spec | the body lengths |
+| `hex_keys`, `record_ids` | approved | JSON arrays, the body lists. The route writes them before it sends the queue message. They are not copied onto `PackageVersion`. |
 | `created_at` | spec | when the row was inserted |
 
 Not created in the stub: `package_installs`, `proposals`, `reports`. Decision 3: report and takedown come with the full marketplace.
@@ -219,8 +220,8 @@ Queue: `PUBLISH_QUEUE` / `voyage-publish`, already bound in `apps/api/wrangler.t
 
 Steps, in order:
 
-1. The route inserts the version row at `queued` and sends the message. The HTTP answer is 202. The route does not copy objects.
-2. The consumer sets `state` to `running`. A row that is already `done` is left alone, so a retry does not publish twice.
+1. The route inserts the version row at `queued`, including `hex_keys` and `record_ids`, and then sends the message. The HTTP answer is 202. The route does not copy objects. The message stays `{ kind: 'publish', packageId, version, universeId }`. The job reads the two lists from the version row.
+2. The consumer sets `state` to `running`. A row that is already `done` is left alone, so a retry does not publish twice. A later finish does not move `latest_version` backwards.
 3. It reads the hex rows and the named records from that universe's Durable Object, and the truth object when the hex has no row.
 4. It copies each missing object to `objects/<sha256>` on the public bucket.
 5. It writes the records-subset object, then `packages/<id>/<version>/manifest.json`.
@@ -230,21 +231,23 @@ A throw after the row exists sets `state` to `failed` and `error` to the message
 
 Progress: `GET /api/packages/:packageId/versions/:version`. There is no SSE stream in the stub. The server sets no poll interval. The client chooses it. The client built in this tree waits 400 ms. Settled 2026-10-11.
 
-## Blocked at build (2026-10-11)
+## Lists on the version row (settled 2026-10-11)
 
-The route accepts `hexKeys` and `recordIds`, then the queue message is only `{ kind: 'publish', packageId, version, universeId }`. `package_versions` has no column for those two lists. The job cannot know which hexes and records to copy. Nothing is built until that is settled. Recommended: two JSON columns on `package_versions`, `hex_keys` and `record_ids`, written by the route before the message is sent, and not copied onto `PackageVersion`. The queue message stays as written.
+Johnny approved two JSON columns on `package_versions`, `hex_keys` and `record_ids`. The route writes them before it sends the queue message. `PackageVersion` does not include them. The queue message stays `{ kind: 'publish', packageId, version, universeId }`.
 
 ## Limits
 
+Johnny approved these numbers on 2026-10-11.
+
 | Limit | Number | Where it comes from |
 |---|---|---|
-| Hexes in one version | 1280 | **Proposed.** Not in the package spec. Same number as `BUILDER_LIMITS.hexesPerJob`. |
-| Records in one version | 500 | **Proposed.** Not in a spec. |
-| Title | 1–80 characters, trimmed | **Proposed.** The sector-name cap. Campaign names allow 200. |
-| Description | 0–2000 characters | **Proposed.** Not in a spec. |
-| Kind | 1–40 characters, trimmed | **Proposed.** `PackageManifest.kind` is an unbounded string today. The example in `data_model.md` §7 is `subsector`. No enum is declared. |
-| Tags | at most 32, each 1–40 characters | **Proposed.** The same numbers as `CAMPAIGN_LIMITS.tags` and `CAMPAIGN_LIMITS.tag`. |
-| Versions kept | 100 | **Proposed.** Not in a spec. Version 101 is 400 `too_large`, `This package has too many versions.` |
+| Hexes in one version | 1280 | Not in the package spec. Same number as `BUILDER_LIMITS.hexesPerJob`. Over the cap: 400 `too_large`, `A package holds at most 1280 hexes.` |
+| Records in one version | 500 | Not in a spec. Over the cap: 400 `too_large`, `A package holds at most 500 records.` |
+| Title | 1–80 characters, trimmed | The sector-name cap. Campaign names allow 200. |
+| Description | 0–2000 characters | Not in a spec. |
+| Kind | 1–40 characters, trimmed | `PackageManifest.kind` is an unbounded string today. The example in `data_model.md` §7 is `subsector`. No enum is declared. |
+| Tags | at most 32, each 1–40 characters | The same numbers as `CAMPAIGN_LIMITS.tags` and `CAMPAIGN_LIMITS.tag`. |
+| Versions kept | 100 | Not in a spec. Version 101 is 400 `too_large`, `This package has too many versions.` |
 | Page size | 100 | `api.md` pagination. |
 
 ## What the browser lanes call

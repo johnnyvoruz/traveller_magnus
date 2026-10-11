@@ -122,6 +122,47 @@ export const characterInvites = sqliteTable('character_invites', {
     check('character_invites_role_check', sql`${t.role} = 'editor'`),
 ]);
 
+export const packages = sqliteTable('packages', {
+    id: text('id').primaryKey(),
+    authorId: text('author_id').notNull().references(() => user.id),
+    universeId: text('universe_id').notNull().references(() => universes.id),
+    kind: text('kind').notNull(),
+    title: text('title').notNull(),
+    slug: text('slug').notNull().unique(),
+    description: text('description').notNull(),
+    tags: text('tags').notNull(),
+    edition: text('edition').notNull(),
+    truthVersion: text('truth_version').notNull(),
+    engineVersion: text('engine_version').notNull(),
+    latestVersion: integer('latest_version').notNull().default(0),
+    installs: integer('installs').notNull().default(0),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+    hidden: integer('hidden').notNull().default(0),
+    takedownReason: text('takedown_reason'),
+    takedownBy: text('takedown_by'),
+}, (t) => [
+    index('packages_author_id').on(t.authorId),
+]);
+
+export const packageVersions = sqliteTable('package_versions', {
+    packageId: text('package_id').notNull().references(() => packages.id),
+    version: integer('version').notNull(),
+    state: text('state').notNull(),
+    error: text('error'),
+    manifestHash: text('manifest_hash'),
+    contentHash: text('content_hash'),
+    bytes: integer('bytes'),
+    hexCount: integer('hex_count').notNull(),
+    recordCount: integer('record_count').notNull(),
+    hexKeys: text('hex_keys').notNull(),
+    recordIds: text('record_ids').notNull(),
+    createdAt: text('created_at').notNull(),
+}, (t) => [
+    primaryKey({ columns: [t.packageId, t.version] }),
+    check('package_versions_state_check', sql`${t.state} in ('queued', 'running', 'done', 'failed')`),
+]);
+
 export const auditLog = sqliteTable('audit_log', {
     id: text('id').primaryKey(),
     at: text('at').notNull(),

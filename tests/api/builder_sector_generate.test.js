@@ -146,7 +146,7 @@ if (process.env.RUN_API_TESTS !== '1') {
                 makeSectors: [{ name: 'Again', slot: { x: 8, y: 8 } }],
             });
             assert.equal(taken.status, 409, JSON.stringify(taken.body));
-            assert.equal(taken.body.error.message, 'That slot is in use.');
+            assert.equal(taken.body.error.message, 'That slot is in use. Choose another slot.');
             const afterTaken = await jsonFetch(`${base}/api/universes/${id}/sectors`, { headers: { cookie } });
             assert.equal(afterTaken.body.data.items.length, 1);
 
@@ -187,7 +187,7 @@ if (process.env.RUN_API_TESTS !== '1') {
             assert.equal(renamed.status, 200, JSON.stringify(renamed.body));
             const staleSector = await post(base, id, headers, '/sectors/undo-generate', { sectorId: movedId, baseRev: 1 });
             assert.equal(staleSector.status, 409, JSON.stringify(staleSector.body));
-            assert.equal(staleSector.body.error.message, 'The sector changed.');
+            assert.equal(staleSector.body.error.message, 'This sector changed. Reload it, then try again.');
             const still = await jsonFetch(`${base}/api/universes/${id}/hexes/${encodeURIComponent(movedId)}/0101`, { headers: { cookie } });
             assert.equal(still.status, 200, JSON.stringify(still.body));
 
@@ -204,7 +204,7 @@ if (process.env.RUN_API_TESTS !== '1') {
             assert.equal(again.status, 200, JSON.stringify(again.body));
             const staleHex = await post(base, id, headers, '/sectors/undo-generate', { sectorId: bumpId, baseRev: 1 });
             assert.equal(staleHex.status, 409, JSON.stringify(staleHex.body));
-            assert.equal(staleHex.body.error.message, 'The hex changed.');
+            assert.equal(staleHex.body.error.message, 'This hex changed. Reload it, then try again.');
             const bumpStill = await jsonFetch(`${base}/api/universes/${id}/sectors`, { headers: { cookie } });
             assert.equal(bumpStill.body.data.items.some((item) => item.id === bumpId && item.deleted !== true), true);
 

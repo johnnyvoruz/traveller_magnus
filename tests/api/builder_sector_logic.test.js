@@ -173,7 +173,7 @@ test('a refused inline write leaves no sector, and a charted slot writes nothing
         sectors: [{ id: ID, name: 'Far Reach', x: 1, y: 1, charted: false }],
         hex: hexWrite(`${ID}/0101`, TREE, 5),
         job: null,
-    }, PIN, NOW), /The hex changed/);
+    }, PIN, NOW), /This hex changed/);
     assert.equal(sql.exec(`SELECT sector_slug FROM sectors`).length, 0);
     const charted = await call(sql, 'POST', '/sectors/generate', {
         sectors: [{ id: ID, name: 'Far Reach', x: 4, y: 4, charted: true }],
@@ -245,7 +245,7 @@ test('a moved sector rev or a moved hex rev writes nothing', async () => {
     assert.equal(renamed.status, 200, JSON.stringify(renamed.body));
     const staleSector = await call(sql, 'POST', '/sectors/undo-generate', { sectorId: ID, baseRev: 1 });
     assert.equal(staleSector.status, 409, JSON.stringify(staleSector.body));
-    assert.equal(staleSector.body.error.message, 'The sector changed.');
+    assert.equal(staleSector.body.error.message, 'This sector changed. Reload it, then try again.');
     assert.equal(sql.exec(`SELECT deleted FROM sectors WHERE sector_slug = ?`, ID)[0].deleted, 0);
     assert.equal(sql.exec(`SELECT hex_key FROM hexes`).length, 1);
 
@@ -271,7 +271,7 @@ test('a moved sector rev or a moved hex rev writes nothing', async () => {
     jobSql.exec(`UPDATE hexes SET rev = 9 WHERE hex_key = ?`, keys[0]);
     const staleHex = await call(jobSql, 'POST', '/sectors/undo-generate', { jobId: 'job-stale' });
     assert.equal(staleHex.status, 409, JSON.stringify(staleHex.body));
-    assert.equal(staleHex.body.error.message, 'The hex changed.');
+    assert.equal(staleHex.body.error.message, 'This hex changed. Reload it, then try again.');
     assert.equal(jobSql.exec(`SELECT state FROM jobs WHERE id = ?`, 'job-stale')[0].state, 'running');
     assert.equal(jobSql.exec(`SELECT deleted FROM sectors WHERE sector_slug = ?`, ID)[0].deleted, 0);
     assert.equal(jobSql.exec(`SELECT hex_key FROM hexes`).length, 1);
@@ -289,7 +289,7 @@ test('slot names are rewritten, and a bad box is refused with nothing stored', a
         ['~slot_1_1/0101', '~slot_1_1/0102'],
         [{ name: 'A', slot: { x: 1, y: 1 } }, { name: 'B', slot: { x: 1, y: 1 } }],
         ids,
-    ), /That slot is named twice/);
+    ), /You named that slot twice/);
     assert.throws(() => resolveMadeSectors(
         ['~slot_9_9/0101'],
         [{ name: 'A', slot: { x: 1, y: 1 } }],
@@ -299,7 +299,7 @@ test('slot names are rewritten, and a bad box is refused with nothing stored', a
         ['~slot_1_1/0101'],
         [{ name: 'A', slot: { x: 1, y: 1 } }, { name: 'B', slot: { x: 2, y: 2 } }],
         ids,
-    ), /A new sector has no hexes/);
+    ), /Add at least one hex to this new sector/);
     const sql = openAll();
     await call(sql, 'POST', '/sectors', { id: ID, name: 'Taken', slot: { x: 3, y: 120 }, charted: false });
     const taken = await call(sql, 'POST', '/sectors/generate', {
@@ -308,7 +308,7 @@ test('slot names are rewritten, and a bad box is refused with nothing stored', a
         job: null,
     });
     assert.equal(taken.status, 409, JSON.stringify(taken.body));
-    assert.equal(taken.body.error.message, 'That slot is in use.');
+    assert.equal(taken.body.error.message, 'That slot is in use. Choose another slot.');
     assert.equal(sql.exec(`SELECT sector_slug FROM sectors WHERE deleted = 0`).length, 1);
 });
 

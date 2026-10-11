@@ -32,6 +32,8 @@ export type HandNode = {
     also: string;
     order: number;
     mainworld: boolean;
+    /** A star's spectral class as the form spells it ("K1 V"); empty for a body, or a star with none. */
+    cls: string;
     /** How far in it stands: 0 for a star that orbits nothing. */
     depth: number;
 };
@@ -78,7 +80,7 @@ function readNodes(form: EditForm): HandNode[] {
     const out: HandNode[] = [];
     for (const id of owners(form, 'stars')) {
         if (valueOf(fields, id + '.remove') === true) continue;
-        out.push({ id, kind: 'star', name: textOf(fields, id + '.name'), parent: textOf(fields, id + '.parent'), also: '', order: numberOf(fields, id + '.order'), mainworld: false, depth: 0 });
+        out.push({ id, kind: 'star', name: textOf(fields, id + '.name'), parent: textOf(fields, id + '.parent'), also: '', order: numberOf(fields, id + '.order'), mainworld: false, cls: textOf(fields, id + '.classText').trim(), depth: 0 });
     }
     for (const id of owners(form, 'bodies')) {
         if (valueOf(fields, id + '.remove') === true) continue;
@@ -93,6 +95,7 @@ function readNodes(form: EditForm): HandNode[] {
             also,
             order: numberOf(fields, id + '.order'),
             mainworld: valueOf(fields, id + '.mainworld') === true,
+            cls: '',
             depth: 0,
         });
     }
@@ -142,8 +145,9 @@ export function handList(form: EditForm): HandNode[] {
 }
 
 /** What a row calls a body with no name. */
+/** What a body is called: its name, else a star's spectral class, else "No name". */
 export function nodeTitle(node: HandNode): string {
-    return node.name.trim() || 'No name';
+    return node.name.trim() || node.cls || 'No name';
 }
 
 /** What orbits a body: a world of two stars together orbits each of them. */
@@ -206,11 +210,13 @@ export function parentOptions(list: readonly HandNode[], id: string): ParentOpti
     }
     for (const world of list) {
         if (world.kind === 'star' || world.kind === 'moon' || world.id === id) continue;
+        // A belt goes around a world or a gas giant and stays a belt; it does not go around another belt.
+        if (node.kind === 'belt' && world.kind === 'belt') continue;
         out.push({
             value: world.id,
             label: nodeTitle(world),
-            becomes: node.kind === 'moon' ? null : 'moon',
-            why: moons > 0 ? 'A body with moons can’t become a moon. First, move its moons to another body.' : '',
+            becomes: node.kind === 'moon' || node.kind === 'belt' ? null : 'moon',
+            why: moons > 0 && node.kind !== 'belt' ? 'A body with moons can’t become a moon. First, move its moons to another body.' : '',
         });
     }
     return out;
@@ -290,7 +296,8 @@ export function removeWords(list: readonly HandNode[], id: string): string {
     const node = list.find((item) => item.id === id);
     if (!node) return '';
     if (!removeTakesOthers(list, id)) return nodeTitle(node);
-    return nodeTitle(node) + (node.kind === 'star' ? ' and everything that orbits it' : ' and its moons');
+    const moonsOnly = childrenOf(list, id).every((item) => item.kind === 'moon');
+    return nodeTitle(node) + (node.kind === 'star' || !moonsOnly ? ' and everything that orbits it' : ' and its moons');
 }
 
 /**
@@ -372,8 +379,10 @@ export function systemFields(form: EditForm): FormField[] {
  * given to another parent is one change though its kind may change with it; a body added is
  * one change, whatever was typed into it.
  */
-export function handChangeCount(mine: Readonly<Record<string, FormValue>>, added: readonly string[] = []): number {
+export function handChangeCount(mine: Readonly<Record<string, FormValue>>, added: readonly string[] = [], rolled: readonly string[] = []): number {
     const seen = new Set<string>(added.map((id) => 'add:' + id));
+    // A profile roll is one change, whatever it fills.
+    for (const id of rolled) if (id.endsWith('.profile.roll') && !added.some((made) => id.startsWith(made + '.'))) seen.add(id);
     for (const id of Object.keys(mine)) {
         if (added.some((made) => id.startsWith(made + '.'))) continue;
         if (id.endsWith('.order')) seen.add('order');
@@ -409,6 +418,8 @@ export const handUi = reactive({
      * kind, and the ids the list held before, so the server's answer can be counted.
      */
     removing: null as null | { id: string; name: string; kind: HandKind; before: string[] },
+    /** The body whose profile roll is waiting for the draft's answer; empty when none is. */
+    rolling: '',
 });
 
 export function selectNode(id: string): void {

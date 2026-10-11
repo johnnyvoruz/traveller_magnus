@@ -6,7 +6,17 @@ export { HexSummary, Derivation, TreeEnvelope } from './schemas/hex.ts';
 export type { HexState } from './schemas/hex.ts';
 export { OverlaySector, OverlayBase, Tombstone, OverlayDoc } from './schemas/overlay.ts';
 export { SectorHex, SectorIndex, Territory, TruthManifest, SectorOverview, TruthOverview, TruthPolities } from './schemas/truth.ts';
-export { PackageHex, PackageManifest } from './schemas/package.ts';
+export {
+    PackageHex,
+    PackageManifest,
+    PackageCreate,
+    PackagePublish,
+    PackageListing,
+    PackagePage,
+    PackageVersion,
+    PackagePublishAccepted,
+    PackageListPage,
+} from './schemas/package.ts';
 export {
     CAMPAIGN_LIMITS,
     POINT_AU_LIMIT,

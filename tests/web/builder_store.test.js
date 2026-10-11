@@ -432,7 +432,7 @@ test('a conflict replaces the local row and drops the change behind it', async (
     const current = row({ rev: 4, treeHash: HASH2 });
     const fetchImpl = fake((call) => {
         if (call.url.includes('/hexes?')) return json({ items: [row()], nextCursor: null });
-        return fail(409, 'The hex changed.', { current });
+        return fail(409, 'This hex changed. Reload it, then try again.', { current });
     });
     const map = open(fetchImpl, clock());
     await map.loadSector('spin');
@@ -964,26 +964,26 @@ test('a grow error is the server message, and a taken slot lands that sector', a
     map.close();
 
     const taken = fake((call) => {
-        if (call.url.endsWith('/generate')) return fail(409, 'That slot is in use.', { current: madeSector({ name: 'Occupied', rev: 6 }) });
+        if (call.url.endsWith('/generate')) return fail(409, 'That slot is in use. Choose another slot.', { current: madeSector({ name: 'Occupied', rev: 6 }) });
         throw new Error('unexpected ' + call.url);
     });
     const held = open(taken, clock());
     const clash = held.generateGrowing(growBody([SLOT_KEY]));
     const clashSettled = await Promise.allSettled([clash.accepted, clash.finished]);
-    assert.equal(clashSettled[0].reason.message, 'That slot is in use.');
-    assert.equal(clashSettled[1].reason.message, 'That slot is in use.');
+    assert.equal(clashSettled[0].reason.message, 'That slot is in use. Choose another slot.');
+    assert.equal(clashSettled[1].reason.message, 'That slot is in use. Choose another slot.');
     assert.equal(held.sectors().get(HOME).name, 'Occupied');
     assert.equal(held.sectors().get(HOME).rev, 6);
     held.close();
 
     const other = fake((call) => {
-        if (call.url.endsWith('/generate')) return fail(409, 'The sector changed.', { current: madeSector() });
+        if (call.url.endsWith('/generate')) return fail(409, 'This sector changed. Reload it, then try again.', { current: madeSector() });
         throw new Error('unexpected ' + call.url);
     });
     const left = open(other, clock());
     const missed = left.generateGrowing(growBody([SLOT_KEY]));
     const missedSettled = await Promise.allSettled([missed.accepted, missed.finished]);
-    assert.equal(missedSettled[0].reason.message, 'The sector changed.');
+    assert.equal(missedSettled[0].reason.message, 'This sector changed. Reload it, then try again.');
     assert.equal(left.sectors().list().length, 0);
     left.close();
 });

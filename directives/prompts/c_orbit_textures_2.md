@@ -78,6 +78,30 @@ Write `directives/reports/c_orbit_textures_2.md` from
 recommended answer first. After each meaningful step append one line under Progress:
 "done: X. next: Y."
 
+## Added 2026-10-11 16:45: for a session replacing one that froze
+
+The session before you froze mid-fix. Its one Progress line (below) says what it
+found: at the middle zoom the path asks for a texture at 2.5 px, and the worker drops
+an answer that is in flight when any later watch object arrives, including one of the
+same generation. It left edits on disk, unfinished and unreported:
+
+- `apps/web/src/orbit/disc_batch.ts`
+- `apps/web/src/surface/enhanced/delivery.ts`
+- `apps/web/src/surface/vanilla/gl.worker.ts`
+- `tests/web/orbit_disc_texture.test.js` (new)
+- shots `findings/ui_design_shots/kc_orbit_tex2_before8_*`
+
+Read `git diff` on those four files first. Decide for each hunk whether it is the fix,
+half of it, or a probe to remove; run the new test and the whole suite; then carry on
+from goal 1 of this prompt with that head start. Do not trust the finding until you
+have seen Johnny's view (Azgul Kou, Meshan 2008, middle zoom) grey before and textured
+after on a production build. Lane A changed `orbit/layout.ts`, `picture.ts`,
+`lineup.ts`, `card.ts` and `BodyChips.vue` today for belts around a world: those hunks
+are A's and accepted; leave them.
+
 ## Progress
 
 done: read the board, the lane, and this prompt. The middle-zoom path asks for a texture at 2.5 px and the worker drops an in-flight answer when any later watch object arrives, including the same generation. next: confirm that drop in git history and shoot the middle zoom on a production build.
+done: the identity drop landed in 703041d (delivery.ts watchSuperseded `queued !== job`, gl.worker.ts stillCurrent). Every named later commit contains it. The parent worker posted the in-flight tiles. The half-written fix compares the envelope and is kept. next: run the new test, then shoot Azgul Kou grey on the old worker and textured on the fix.
+done: the new test passes. A production build of the committed worker, served on port 8807, paints Azgul Kou at zoom 3.1 with 12 textured discs (shot kc_orbit_tex2_before_azgul_dpr1.png) and, closer, a clouded water mainworld. The drop does not leave that view grey on this machine. next: rebuild with the envelope fix and shoot the same zoom again.
+done: the envelope fix is in the production bundle. Azgul Kou, Regina and Rangent at 3.1× stay textured, enhanced and vanilla, DPR 1 and 2. Canvas draw stayed under 2 ms. Report written. next: stop.

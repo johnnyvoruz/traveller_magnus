@@ -17,10 +17,12 @@ import { isOnline, observeSize, onOnlineChange } from '../platform/browser.ts';
 import Icon from '../design/Icon.vue';
 import Panel from '../shell/Panel.vue';
 import { readSpan, writeSpan, type PanelSpan } from '../shell/panel_state.ts';
-import { createRecord, justCreated } from './actions.ts';
+import { createRecord, justCreated, recentlyDeleted } from './actions.ts';
+import CampaignCrumb from './CampaignCrumb.vue';
 import CampaignList from './CampaignList.vue';
+import { campaignCrumb, listCrumbLabel, type CrumbGo } from './crumb.ts';
 import ClockLine from './ClockLine.vue';
-import { editDateNext } from './list_state.ts';
+import { editDateNext, journalFilter, journalQuery, recordFilter, recordQuery } from './list_state.ts';
 import PartyPanel from './PartyPanel.vue';
 import { partyWords } from './party.ts';
 import { ensureCampaign, openFailed, retryCampaign } from './opening.ts';
@@ -28,6 +30,7 @@ import { typeInfo } from './records.ts';
 import RecordPage from './RecordPage.vue';
 import SignInCard from './SignInCard.vue';
 import { createEntry, justMade } from './journal/create.ts';
+import { filterWord } from './journal/list.ts';
 import EntryPage from './journal/EntryPage.vue';
 import JournalList from './journal/JournalList.vue';
 
@@ -137,6 +140,43 @@ watch(() => props.tab, () => {
         if (tab) tab.focus();
     });
 });
+const crumb = computed(() => {
+    if (status.value !== 'ready') return [];
+    if (props.tab === 'party' && !props.recordId && !props.entryId) {
+        return campaignCrumb({ level: 'party', beside: false, middle: 'Party', pageName: 'Party' });
+    }
+    if (props.entryId) {
+        const found = campaign.journal[props.entryId];
+        const name = found && found.title.trim() ? found.title.trim() : 'This entry';
+        const many = journalFilter.value === 'all' ? 'Journal' : filterWord(journalFilter.value);
+        return campaignCrumb({
+            level: 'entry', beside: span.value === 'full', pageName: name,
+            middle: listCrumbLabel(many, journalQuery.value),
+        });
+    }
+    if (props.recordId) {
+        const gone = recentlyDeleted.find((item) => item.id === props.recordId);
+        const name = shownRecord.value ? shownRecord.value.name : gone ? gone.name : 'Deleted record';
+        const many = recordFilter.value === 'all' ? 'Records' : typeInfo(recordFilter.value).many;
+        return campaignCrumb({
+            level: 'record', beside: span.value === 'full', pageName: name,
+            middle: listCrumbLabel(many, recordQuery.value),
+        });
+    }
+    return [];
+});
+
+function onCrumb(dest: CrumbGo): void {
+    if (dest === 'campaign') {
+        recordFilter.value = 'all';
+        recordQuery.value = '';
+        showTab('records');
+        return;
+    }
+    if (dest === 'journal') goEntry(null);
+    else go(null);
+}
+
 const eyebrow = computed(() => {
     if (!signedIn.value) return '';
     if (shownRecord.value && span.value !== 'full') return 'Campaign · ' + typeInfo(shownRecord.value.type).many;
@@ -182,6 +222,32 @@ function create(type: CampaignRecordType): void {
 
 /** "/" goes to the list's search, unless a field is being typed in. */
 function onKey(event: KeyboardEvent): void {
+    if (event.key === 'Escape' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        const target = event.target instanceof HTMLElement ? event.target : null;
+        const tag = target ? target.tagName : '';
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        if (props.entryId) {
+            event.preventDefault();
+            event.stopPropagation();
+            goEntry(null);
+            return;
+        }
+        if (props.recordId) {
+            event.preventDefault();
+            event.stopPropagation();
+            go(null);
+            return;
+        }
+        if (props.tab === 'party') {
+            event.preventDefault();
+            event.stopPropagation();
+            recordFilter.value = 'all';
+            recordQuery.value = '';
+            showTab('records');
+            return;
+        }
+        return;
+    }
     if (event.key !== '/' || event.ctrlKey || event.metaKey || event.altKey) return;
     const target = event.target as HTMLElement | null;
     const tag = target ? target.tagName : '';
@@ -318,7 +384,10 @@ defineExpose({ remeasure: publish });
       @close="$emit('close')"
       @span="chooseSpan"
     >
-      <template v-if="eyebrow" #eyebrow>{{ eyebrow }}</template>
+      <template v-if="crumb.length" #eyebrow>
+        <CampaignCrumb :parts="crumb" @go="onCrumb" />
+      </template>
+      <template v-else-if="eyebrow" #eyebrow>{{ eyebrow }}</template>
       <div class="camp" :data-span="span" :data-status="status" :data-view="entryId ? 'entry' : recordId ? 'record' : tab === 'party' ? 'party' : tab === 'journal' ? 'journal' : 'list'">
         <SignInCard v-if="!signedIn" />
         <template v-else>

@@ -12,9 +12,17 @@ export const FILE_MAX_BYTES = 8 * 1024 * 1024;
 export type UploadStage = 'reading' | 'uploading' | 'failed';
 export type Upload = { stage: UploadStage; message: string; file: string };
 
-/** The first image is the primary one. */
+/** The first image is the primary one, and the record's avatar. */
 export function primaryImage(record: Pick<CampaignRecord, 'images'>): CampaignImage | null {
     return record.images && record.images.length ? record.images[0] : null;
+}
+
+/** The gallery with this image moved to the front. Null when it is already there or missing. */
+export function withImageFirst(images: readonly CampaignImage[], hash: string): CampaignImage[] | null {
+    const index = images.findIndex((image) => image.hash === hash);
+    if (index <= 0) return null;
+    const chosen = images[index];
+    return [chosen, ...images.filter((image) => image.hash !== hash)];
 }
 
 /** Where an object is served from, for the signed-in owner. */

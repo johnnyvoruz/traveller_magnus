@@ -225,7 +225,7 @@ if (process.env.RUN_API_TESTS !== '1') {
             });
             assert.equal(starNote.status, 200, JSON.stringify(starNote.body));
             const note = starNote.body.data.messages.find((item) => item.id === 's1.remove');
-            assert.equal(note.text, '2 bodies go with this star.');
+            assert.equal(note.text, 'Removing this star also removes 2 bodies.');
             assert.equal(note.holds, false);
             const still = await jsonFetch(`${hex('0101')}`, { headers: { cookie } });
             assert.equal(still.body.data.treeHash, kept.body.data.treeHash);

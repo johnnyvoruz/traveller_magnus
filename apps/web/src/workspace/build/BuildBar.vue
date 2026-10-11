@@ -29,7 +29,7 @@ const dirty = computed(() => drafting.value && draftHandle.value !== null && dra
 /** By hand, a move is one change though it renumbers many rows. */
 const line = computed(() => {
     if (!draftHandle.value) return '';
-    if (edit.mode === 'hand') return plural(handChangeCount(edit.mine, edit.added.map((item) => item.id)), 'change', 'changes');
+    if (edit.mode === 'hand') return plural(handChangeCount(edit.mine, edit.added.map((item) => item.id), edit.rolled), 'change', 'changes');
     return changeLine(edit.mine, edit.rolled, draftHandle.value.messages.value);
 });
 const held = computed(() => draftHandle.value !== null && draftHandle.value.messages.value.some((item) => item.holds));
@@ -58,7 +58,7 @@ const items = computed((): MenuItem[] => {
     else if (mode.value === 'generated') out.push({ id: 'other-way', label: 'Design by hand…', say: 'You type and arrange every body. The engine stops generating this system', icon: 'draw-polygon' });
     out.push({
         id: 'remove',
-        label: overChart([props.hexKey]) ? 'Remove from your map' : 'Remove',
+        label: 'Remove',
         say: overChart([props.hexKey]) ? 'Empties the hex on your map. The chart doesn’t change' : 'Empties the hex',
         icon: 'trash',
         key: 'Del',

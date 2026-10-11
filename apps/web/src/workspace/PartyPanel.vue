@@ -19,7 +19,7 @@ import { EMPTY_PARTY, isAboard, partyMembers, partyVessel, withAnchor, withMembe
 import { campaignDays, partyWhere } from './party_where.ts';
 import { placeWords, resolvePlace, liveById } from './places.ts';
 import RecordPicker from './RecordPicker.vue';
-import { typeInfo } from './records.ts';
+import RecordAvatar from './RecordAvatar.vue';
 import { dockShipAt } from './track_actions.ts';
 import WhereBlock from './WhereBlock.vue';
 
@@ -197,7 +197,7 @@ watch(() => campaign.universeId, () => { choosing.value = ''; });
       <section class="party-ship">
         <h3 class="ui-heading">The ship</h3>
         <div v-if="vessel" class="party-card">
-          <span class="camp-glyph" aria-hidden="true"><Icon name="shuttle-space" :size="16" /></span>
+          <RecordAvatar :record="vessel" :universe-id="campaign.universeId" size="row" />
           <span class="party-card-text">
             <b>{{ vessel.name }}</b>
             <span v-if="vessel.summary" class="party-card-sum">{{ vessel.summary }}</span>
@@ -228,7 +228,7 @@ watch(() => campaign.universeId, () => { choosing.value = ''; });
         <p v-if="!aboardRows.length" class="party-none-line">{{ vessel ? 'Nobody aboard.' : 'Nobody yet.' }}</p>
         <ul v-else class="party-rows">
           <li v-for="row in aboardRows" :key="row.record.id">
-            <span class="camp-glyph is-small" aria-hidden="true"><Icon :name="typeInfo(row.record.type).icon" :size="13" /></span>
+            <RecordAvatar :record="row.record" :universe-id="campaign.universeId" size="chip" />
             <button type="button" class="party-name" @click="open(row.record)">{{ row.record.name }}</button>
             <span class="party-role">{{ row.role || (vessel ? 'aboard ' + vessel.name : '') }}</span>
             <button type="button" class="ui-btn is-icon party-remove" :disabled="readOnly" :aria-label="'Remove ' + row.record.name + ' from the party'" title="Remove from the party" @click="remove(row.record)">
@@ -242,7 +242,7 @@ watch(() => campaign.universeId, () => { choosing.value = ''; });
         <h3 class="ui-heading">Not aboard <span class="ui-count">{{ ashoreRows.length }}</span></h3>
         <ul class="party-rows">
           <li v-for="row in ashoreRows" :key="row.record.id">
-            <span class="camp-glyph is-small" aria-hidden="true"><Icon :name="typeInfo(row.record.type).icon" :size="13" /></span>
+            <RecordAvatar :record="row.record" :universe-id="campaign.universeId" size="chip" />
             <button type="button" class="party-name" @click="open(row.record)">{{ row.record.name }}</button>
             <span class="party-role">{{ row.where }}</span>
             <button type="button" class="ui-btn party-board" :disabled="readOnly" :title="'Put ' + row.record.name + ' aboard ' + (vessel ? vessel.name : '')" @click="board(row.record)">

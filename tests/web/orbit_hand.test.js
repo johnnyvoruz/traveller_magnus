@@ -6,7 +6,8 @@ import { overviewModel } from '../../apps/web/src/dossier/model.ts';
 import { cardFor } from '../../apps/web/src/orbit/card.ts';
 import { yearFigure } from '../../apps/web/src/orbit/daynight.ts';
 import { presentHand, presentTree } from '../../apps/web/src/orbit/hand_present.ts';
-import { planSystem } from '../../apps/web/src/orbit/layout.ts';
+import { layoutScene, moonOrbitRadius, planSystem } from '../../apps/web/src/orbit/layout.ts';
+import { DEFAULT_LAYERS, orbitPicture } from '../../apps/web/src/orbit/picture.ts';
 import { normalizeSystem } from '../../apps/web/src/orbit/system.ts';
 
 const profile = emptyHandProfile();
@@ -153,6 +154,52 @@ test('stored orbit numbers are copied, and a body without them is unchanged', ()
     assert.equal(card.lines.some((line) => /year|period/i.test(line.label)), false);
     assert.equal(yearFigure({ type: 'Planetoid Belt', yearHours: 41172, periodYears: 4.7 }), null);
     assert.ok(yearFigure({ type: 'World', yearHours: 8766 }));
+});
+
+test('a belt around a world is nested like the walk, drawn as a belt, and has no year', () => {
+    const system = {
+        name: 'Hand',
+        notes: '',
+        stars: [
+            { id: 's0', name: 'Primary', sType: 'G', subType: '2', sClass: 'V', parentId: null, order: 0 },
+        ],
+        bodies: [
+            { id: 'b0', kind: 'world', name: 'Rock', parentId: 's0', order: 0, au: 1, mainworld: true, profile, notes: '', bases: '', zone: '', allegiance: '', trade: '' },
+            { id: 'm0', kind: 'moon', name: 'Lune', parentId: 'b0', order: 0, pd: 12, mainworld: false, profile, notes: '', bases: '', zone: '', allegiance: '', trade: '' },
+            { id: 'd0', kind: 'belt', name: 'Dust', parentId: 'b0', order: 1, pd: 25, eccentricity: 0.1, periodYears: 4, mainworld: false, profile, notes: '', bases: '', zone: '', allegiance: '', trade: '' },
+        ],
+    };
+    assert.deepEqual(presentHand(system), handWalk(system));
+    const host = presentHand(system).worlds[0];
+    assert.equal(host.name, 'Rock');
+    assert.equal(host.moons.length, 2);
+    assert.equal(host.moons[0].isMoon, true);
+    assert.equal(host.moons[1].type, 'Planetoid Belt');
+    assert.equal(host.moons[1].pd, 25);
+    assert.equal(Object.hasOwn(host.moons[1], 'isMoon'), false);
+    assert.equal(Object.hasOwn(host.moons[1], 'periodYears'), false);
+    const plan = planSystem(normalizeSystem(presentTree({ kind: 'hand', hexKey: 'own/0102', system }).body), 'own/0102');
+    const world = plan.worlds[0];
+    assert.equal(world.moons.length, 1);
+    assert.equal(world.moons[0].name, 'Lune');
+    assert.equal(world.hostedBelts.length, 1);
+    assert.equal(world.hostedBelts[0].name, 'Dust');
+    const view = { w: 1000, h: 800, zoom: 1, offX: 0, offY: 0, z: 1, linear: false, moons: true, jump: true };
+    const picture = orbitPicture(plan, layoutScene(plan, view, 0), DEFAULT_LAYERS, view.z);
+    const drawn = picture.layers.flatMap((layer) => layer.worlds).find((at) => at.world.key === world.key);
+    const band = picture.layers.flatMap((layer) => layer.paths).find((path) => path.key === world.hostedBelts[0].key);
+    const orbit = picture.layers.flatMap((layer) => layer.paths).find((path) => path.key === world.key && path.style !== 'belt');
+    assert.equal(band.style, 'belt');
+    assert.equal(band.cx, drawn.x);
+    assert.equal(band.cy, drawn.y);
+    assert.equal(band.r, moonOrbitRadius(drawn.r, world.hostedBelts[0].index, world.ringed, view.z));
+    assert.equal(orbit.r > band.r * 4, true);
+    const beltCard = cardFor(plan, 'belt', world.hostedBelts[0].key, 0);
+    assert.equal(beltCard.sub, 'Planetoid Belt');
+    assert.equal(beltCard.lines.some((line) => line.label === 'Distance' && line.value.includes('PD')), true);
+    assert.equal(beltCard.lines.some((line) => /year|period|day/i.test(line.label)), false);
+    const rock = cardFor(plan, 'world', world.key, 0);
+    assert.equal(rock.lines.find((line) => line.label === 'Moons').value, '1');
 });
 
 test('an empty hand document is not an orbit model', () => {

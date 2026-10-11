@@ -349,10 +349,10 @@ export function mountBuilderRoutes(route: Hono<AppEnv>): void {
         if (loaded.kind === 'hand') return fail(c, 400, 'validation', 'This system is already designed by hand.');
         let envelope: ReturnType<typeof handFromForm>;
         try {
-            envelope = HandEnvelope.parse(handFromForm(formOf(loaded as Parameters<typeof formOf>[0]), hexKey, enginesPackage.version));
+            envelope = HandEnvelope.parse(handFromForm(formOf(loaded as Parameters<typeof formOf>[0]), hexKey, enginesPackage.version, loaded));
         } catch (err) {
             if (err instanceof FormRefusal) return refusedForm(c, err);
-            return fail(c, 400, 'validation', 'That system cannot be stored.');
+            return fail(c, 400, 'validation', 'This system can\'t be stored. Check the stars and the worlds, then try again.');
         }
         return storeTree(c, owned, {
             hexKey,
@@ -572,7 +572,7 @@ function refusedForm(c: Ctx, err: unknown): Response {
 async function loadEnvelope(c: Ctx, owned: OwnedUniverse, hexKey: string, hash: string, row: StoredHex | null, pin: Pin): Promise<TreeEnvelope | HandEnvelope | Response> {
     if (row?.state === 'removed') return fail(c, 404, 'not_found', 'No stored tree.');
     if (row?.treeHash && row.treeHash !== hash) {
-        return fail(c, 409, 'conflict', 'The hex changed.', { current: row });
+        return fail(c, 409, 'conflict', 'This hex changed. Reload it, then try again.', { current: row });
     }
     let text: string | null = null;
     if (row && row.treeHash === hash) {

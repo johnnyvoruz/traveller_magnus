@@ -234,12 +234,13 @@ test('a draft that cannot be opened says so and changes nothing', async () => {
 
 // ---- keys -----------------------------------------------------------------------------------------
 
-test('Edit is E and Keep the draft is Ctrl+Enter, which works from inside a box', () => {
+test('Edit is E, and Keep is one command, K or Ctrl+Enter; Ctrl+Enter works from inside a box', () => {
     const keys = Object.fromEntries(BUILD_COMMANDS.filter((item) => item.keys).map((item) => [item.id, item.keys]));
     assert.deepEqual(keys['build-edit'], ['e']);
-    assert.deepEqual(keys['build-draft-keep'], ['Ctrl+Enter']);
+    assert.deepEqual(keys['build-keep'], ['k', 'Ctrl+Enter']);
+    assert.equal(BUILD_COMMANDS.some((item) => item.id === 'build-draft-keep'), false, 'one Keep in the palette');
     let ran = 0;
-    const remove = registerCommand({ id: 'build-draft-keep', name: 'Keep the draft', keys: ['Ctrl+Enter'], run: () => { ran += 1; } });
+    const remove = registerCommand({ id: 'build-keep', name: 'Keep', keys: ['Ctrl+Enter'], run: () => { ran += 1; } });
     try {
         const event = (more) => ({ key: 'Enter', ctrlKey: false, altKey: false, metaKey: false, target: { tagName: 'INPUT' }, preventDefault() {}, ...more });
         assert.equal(handleKey(event({})), false);

@@ -797,7 +797,7 @@ export function openMap(options: OpenMapOptions): Builder {
                 lastError.value = '';
                 return { undo, progress };
             } catch (err) {
-                if (err instanceof HttpError && err.status === 409 && err.message === 'That slot is in use.') {
+                if (err instanceof HttpError && err.status === 409 && err.message === 'That slot is in use. Choose another slot.') {
                     const details = err.details;
                     const current = isRecord(details) ? details.current : undefined;
                     if (RefereeSector.safeParse(current).success) sectorBook().adopt([current]);
@@ -1051,7 +1051,7 @@ export function openMap(options: OpenMapOptions): Builder {
     async function blank(hexKey: string): Promise<BlankOpened> {
         if (!parseHexKey(hexKey)) throw new Error('Name the hex.');
         const outcome = await enqueueSaved(hexKey, { op: 'blank', blank: true });
-        if (outcome.status === 'conflict') throw new Error('The hex changed.');
+        if (outcome.status === 'conflict') throw new Error('This hex changed. Reload it, then try again.');
         if (outcome.status === 'refused') throw new Error(outcome.message);
         return { draft: await openDraft(hexKey), undo: outcome.undo };
     }

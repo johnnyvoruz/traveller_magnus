@@ -104,7 +104,26 @@ go again after `prompts/b_hand_roll_belt.md` is reported.
    records.`), title 1 to 80 trimmed, description 0 to 2000, kind 1 to 40 trimmed, at
    most 32 tags of 1 to 40 each, 100 versions (`This package has too many versions.`).
 
+## Added 2026-10-11 16:45: for a session replacing one that froze
+
+The session before you froze before writing any server code: the only thing on disk
+from this prompt is the contract edit of its first pass (`nextCursor`, the `pk_`
+alphabet, the poll interval, the other-account 404). Both of its questions are
+answered yes (the 16:35 section above). The two Progress lines saying "stay blocked"
+are out of date: **build now.** `packages/generation/src/form.ts`, `hand.ts` and
+`apps/api/src/routes/builder.ts` carry your accepted hand-designer follow-ups,
+unpushed: leave them as they are. Lane A is changing message strings in those three
+files and in `sectors.ts` and `hexes.ts` this turn (`prompts/a_builder_messages.md`):
+do not edit them; your work is in new files and the D1 schema.
+
+After this prompt, the board names your next one.
+
 ## Progress
 
 done: settled nextCursor, the pk_ alphabet, the poll interval, and the other-account 404 in contracts/b_marketplace.md. The publish job has nowhere to read hexKeys and recordIds. next: blocked report, no server code.
 done: rechecked the 16:00 board. The two questions are still unanswered. next: stay blocked, no server code.
+done: found only the contract settlements on disk, no server code, nothing to back out. Johnny answered yes to the JSON columns and the limits. next: write those into the contract, then the schema and migration.
+done: contract marks the routes on disk, and the schema, migration, routes, and publish job are written. next: tests, then the gates.
+done: job, migration, and HTTP contract tests pass. The job reads the profile with SQL and does not import ensureProfile. next: the four gates, then the report.
+done: npm test, check, typecheck, and build passed, and the Builder API test passed on its own port. next: the report.
+done: report is directives/reports/b_marketplace_server.md. next: none.

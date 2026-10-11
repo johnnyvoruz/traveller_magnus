@@ -132,3 +132,8 @@ report.
   `tests/golden/fixtures/engine_1.1.0/` and the parity deviations file: do not bump it.
 
 ## Progress
+
+done: design by hand copies orbit numbers off the generated rows, and the spectral class is a read-only form field. next: star choice lists.
+done: MgT2E Type, Subtype, and Class are choice fields; AoW stays text; luminosity is a formula, so it is asked and not given a control. next: messages.
+done: message sentences were not changed. The before/after table is findings/builder_messages.md. Web tests quote the old sentences in several files. next: report.
+done: the 16:45 roll answers stay as built. A roll with no type, subtype, or class says to set those fields. Luminosity, mass, diameter, and temperature stay a question because rules/ gives no closed list. next: report.

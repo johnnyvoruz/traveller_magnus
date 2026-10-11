@@ -2,7 +2,7 @@
  * Vanilla disc GL off the page thread. The canvas here is an OffscreenCanvas.
  * The page posts batches and receives tiles. It does not create this canvas.
  */
-import { watchSuperseded } from '../enhanced/delivery.ts';
+import { handOverDiscAnswer } from '../enhanced/delivery.ts';
 import { mountDiscProgram, resetDiscProgram } from '../enhanced/session.ts';
 import { cubeSizeFor, MEMORY_BUDGET, type BakeProfile, type CubeFaces, type GpuSpan } from './gl_bake.ts';
 import { createDiscBaker, type DiscBaker, type DiscCapture } from './gl.ts';
@@ -123,7 +123,7 @@ async function pack(
 }
 
 function stillCurrent(job: WatchRequest): boolean {
-    return !watchSuperseded(watch, job);
+    return handOverDiscAnswer(watch, job);
 }
 
 async function runWatch(job: WatchRequest): Promise<void> {

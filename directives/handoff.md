@@ -6552,3 +6552,96 @@ that failed at the close no longer does. Ready note `findings/builder_form_ready
   `b_hand_followups.md`); and versions: the app is 1.1.N, the last number up with each
   push, the second when features harden. `APP_VERSION` is 1.1.1 in the pending push
   list; the engine version stays 1.1.0 because it names the fixtures folder.
+
+## 242. Pushed 951724d (1.1.1); A's belt, B's follow-ups, D's marketplace screens and E's crumb and avatar accepted (2026-10-11)
+
+- **The referee pushed `951724d`, version 1.1.1.** He thought lanes had frozen; none
+  had: four reports landed between 16:27 and 16:34 and C was writing shots at 16:31.
+- **E, `e_campaign_nav_avatar`, accepted:** the dossier's crumb reused in the panel
+  eyebrow (`CampaignCrumb.vue`), Escape one level up, "All records" and "All entries"
+  gone, list filter and search kept across a page; `RecordAvatar.vue` (circle for
+  people, square otherwise) in the list, the page head, the party, the picker and
+  journal mentions; add, change, remove and "Make this the avatar". Worst frame 8 ms
+  with 12 images. Five choices put to the referee as built.
+- **D, `d_marketplace_screens`, accepted:** `workspace/market/` (publish form from a
+  Build selection, "My packages", the package page), against a fake store nothing in
+  the app imports; registry line added; **two route lines for `router.ts` are owed**
+  (the file holds the parked preview route, so it cannot be pushed as it is).
+- **A, `a_belt_around_world`, accepted:** nested like `handWalk`, drawn with the
+  existing belt path around its parent, not counted as a moon, no year.
+- **B, `b_hand_followups`, accepted as partial:** "Design by hand" keeps the generated
+  orbits; `<starId>.classText`; on MgT2E type, subtype and class are `choice` fields
+  with options from `rules/`, parent a choice; AoW and blank systems stay text; no
+  server sentence changed (table in `findings/builder_messages.md`); no control for
+  luminosity, mass, diameter, temperature because `rules/` gives no closed list.
+- **One red test** since B's change: `tests/web/build_hand.test.js` 220 (D's), fixed
+  first in `d_hand_designer_3.md`, which is go. B goes on `b_marketplace_server.md`.
+- Eight questions are with the referee (board).
+
+## 243. Yes to eight; A, B and C froze and are restarted from the bus (2026-10-11)
+
+- **The referee: yes to all eight** (listed on the board under Decisions).
+- **A, B and C froze.** `directives/lanes/START.md` is the text to paste into a new
+  session so that "go" works again: read the board, take the lane's prompt, audit and
+  finish or back out a predecessor's half-made edits, report to the bus.
+- **Left on disk by the frozen sessions:** C, a half-made texture fix
+  (`orbit/disc_batch.ts`, `surface/enhanced/delivery.ts`, `surface/vanilla/gl.worker.ts`,
+  `tests/web/orbit_disc_texture.test.js`), now named in its prompt; B, nothing for the
+  marketplace server; A, nothing in flight.
+- **`router.ts`:** the parked `/admin/preview` line is out of the file and saved as
+  `findings/push/truth_preview_route.patch`; the file equals the commit again.
+- **Prompts:** `a_builder_messages.md` (apply `findings/builder_messages.md`, server
+  strings and the browser lines that quote them, in one pass, strings only);
+  `e_packages_entry.md` (the two `/packages` routes, the account-menu entry, the real
+  marketplace store wired); resume notes in `b_marketplace_server.md` and
+  `c_orbit_textures_2.md`; `d_hand_designer_3.md` stays go. Queued, not written: the
+  four star number fields (B), publish from one system (D), the client's type swap (A).
+- **Lane F (the referee):** an expensive specialist for complex systems and very
+  refined UI and UX, used from time to time. `lanes/F.md` rewritten: no standing
+  folders, files lent per prompt, assigned only on his word. All five lanes told go.
+
+## 244. A's messages pass and D's third hand-designer pass accepted; the tree is red only in C's texture work (2026-10-11)
+
+- **A, `a_builder_messages`, accepted:** every row of `findings/builder_messages.md`
+  applied across `hand.ts`, `form.ts`, `sectors.ts`, `hexes.ts`, `routes/builder.ts`,
+  the contract and the quoting tests; refusals name the form label, not a raw id; a
+  grep finds none of the old sentences; 24 Builder API tests pass. Three places still
+  tell answers apart by sentence and want a code from B later.
+- **D, `d_hand_designer_3`, accepted:** `build_hand.test.js` 220 fixed; "Roll profile"
+  wired (once per draft until A's handle sends a repeat); MgT2E type, subtype and
+  class as selects, a stored odd value kept and marked; the class as a star's name of
+  last resort; a belt around a world or gas giant; orbit number and AU fill each
+  other; Keep, Remove and the Add names are one name each.
+- **Red, not theirs:** `orbit_disc_texture.test.js`, `surface_service.test.js`,
+  `orbit_renderer.test.js`, all on C's half-made texture fix.
+- **Prompts:** `a_roll_again.md` (a repeated `.profile.roll` is sent, one change);
+  `d_publish_single.md` (one line in `DossierPanel.vue`, `build-publish` for one key;
+  roll again once A's note is on disk).
+- D's two questions and whether to use Lane F for a UX review are with the referee.
+- **Later, the referee: yes to three.** K keeps whichever is open; "Remove" stays as
+  labelled; `prompts/f_build_ux_review.md`, Lane F: a read-only expert review of Build
+  and the hand designer, ranked findings in `findings/build_ux_review.md`, no edits.
+
+## 245. Marketplace server, packages entry and the texture handover accepted; push 1.1.2 written (2026-10-11 18:30)
+
+- **B, `b_marketplace_server`, accepted:** shared schemas, migration `0010_packages.sql`,
+  `routes/packages.ts`, `jobs/publish_queue.ts`, `universe/publish_read.ts`,
+  `auth/profile.ts`; a dead publish message marks its version failed. No parked file
+  is imported by any of it.
+- **E, `e_packages_entry`, accepted:** exactly two lines in `router.ts`, one menu item
+  in `AccountMenu.vue`, `tests/web/packages_entry.test.js`. No start-up opener: the
+  client opens in `workspace/market/market.ts` when the screen asks, like the Builder.
+  Found: the menu's import input shows the native file control.
+- **C, `c_orbit_textures_2`, accepted with the cause unproven:** the frozen session's
+  half-made edit was the fix (a later watch drops an in-flight answer only when mode,
+  version or generation changed). C could not reproduce grey discs on a production
+  build of this tree at Johnny's zoom, with or without the fix.
+- The failures the three reports saw in each other's files were work in flight; the
+  orchestrator's run at 18:15 is green (1380 pass, 16 skipped; checker, typecheck and
+  build pass).
+- **Not reported, despite "all agents have reported":** A and D had not started (empty
+  Progress, no file newer than 16:53); F stopped after one Progress line at 17:01.
+- **Prompts:** `b_star_numbers.md`, `a_market_types.md` (after roll again),
+  `e_record_visibility.md` (Campaign order steps 1 and 2, and the menu's file control).
+- **Push 1.1.2:** `findings/push/builder_2026-10-11c.md`; `APP_VERSION` bumped;
+  `router.ts` in for the first time since the preview route left it.

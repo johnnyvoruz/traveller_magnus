@@ -102,3 +102,4 @@ recommended answer first. After each meaningful step append one line under Progr
 "done: X. next: Y."
 
 ## Progress
+done: mockups km_*; workspace/market/ (form, packages view, logic, command, fake); build-publish command, More item, registry line; 7 tests; browser pass km_built_* against the fake (dev console only); servers stopped; report written (route lines and one DossierPanel line asked for). next: prompts/d_hand_designer_3.md after B's follow-ups (and the build_hand classText expectation then).

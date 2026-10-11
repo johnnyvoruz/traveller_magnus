@@ -13,7 +13,7 @@ import {
     starHzAU, type Hit, type Plan, type PlanStar, type PlanWorld, type View,
 } from './layout.ts';
 import {
-    emptyLayer, PATH_ALPHA_LINEUP, type Caption, type Dot, type Layers, type Mode, type Picture,
+    emptyLayer, hostedBeltPaths, PATH_ALPHA_LINEUP, type Caption, type Dot, type Layers, type Mode, type Picture,
 } from './picture.ts';
 
 export type LineupNode = {
@@ -78,7 +78,7 @@ export function lineupMetrics(nodes: LineupNode[], horizontal: boolean, w: numbe
     if (moonsShown) {
         for (const node of nodes) {
             if (!node.world) continue;
-            const idx = Math.max(node.world.moons.length, node.world.rings) - 1;
+            const idx = Math.max(node.world.moons.length + (node.world.hostedBelts || []).length, node.world.rings) - 1;
             if (idx >= 0) moonGap = Math.max(moonGap, 10 + idx * 6);
         }
     }
@@ -133,6 +133,7 @@ export function lineupReach(node: LineupNode, z: number, zoom: number, moonsShow
     let reach = r;
     // 2459: every non-Empty moon by its place, the ring moons included.
     for (const m of w.moons) reach = Math.max(reach, moonOrbitRadius(r, m.index, w.ringed, z));
+    for (const m of w.hostedBelts || []) reach = Math.max(reach, moonOrbitRadius(r, m.index, w.ringed, z));
     for (let ri = 0; ri < w.rings; ri++) reach = Math.max(reach, ringOrbitRadius(r, ri, w.rings));
     return reach;
 }
@@ -254,7 +255,9 @@ export function layoutLineup(plan: Plan, view: View, mode: Mode, days: number, l
             return;
         }
         if (node.world) {
-            layer.worlds.push({ ...placeWorld(node.world, p.x, p.y, z, days, starAt.x, starAt.y, hits, layers.moons), z, label: 0 });
+            const placed = placeWorld(node.world, p.x, p.y, z, days, starAt.x, starAt.y, hits, layers.moons);
+            layer.paths.push(...hostedBeltPaths(placed));
+            layer.worlds.push({ ...placed, z, label: 0 });
         }
     });
 

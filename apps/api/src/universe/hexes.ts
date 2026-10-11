@@ -176,13 +176,13 @@ function view(sql: Sql, hexKey: string, pin: Pin): HexRow | Absent {
 }
 
 function requireKey(hexKey: string): void {
-    if (!HEX_KEY.test(hexKey)) throw new HexRefusal('validation', 'Invalid hex key.');
+    if (!HEX_KEY.test(hexKey)) throw new HexRefusal('validation', 'That hex address is not valid. Check the address and try again.');
 }
 
 function assertRev(sql: Sql, hexKey: string, baseRev: number, pin: Pin): SqlRow | null {
     const row = current(sql, hexKey);
     const rev = row ? Number(row.rev) : 0;
-    if (rev !== baseRev) throw new HexRefusal('conflict', 'The hex changed.', { current: view(sql, hexKey, pin) });
+    if (rev !== baseRev) throw new HexRefusal('conflict', 'This hex changed. Reload it, then try again.', { current: view(sql, hexKey, pin) });
     return row;
 }
 
@@ -519,7 +519,7 @@ export function requireWrittenRev(sql: Sql, hexKey: string, rev: number, pin: Pi
     requireKey(hexKey);
     const row = current(sql, hexKey);
     const live = row ? Number(row.rev) : 0;
-    if (live !== rev) throw new HexRefusal('conflict', 'The hex changed.', { current: view(sql, hexKey, pin) });
+    if (live !== rev) throw new HexRefusal('conflict', 'This hex changed. Reload it, then try again.', { current: view(sql, hexKey, pin) });
 }
 
 /** Put one written hex back to the row captured at job create. The row is deleted when there was none. */
@@ -721,7 +721,7 @@ export async function respondBuilder(sql: Sql, request: Request, now: string): P
             return respondSectors(sql, request, now, pin);
         }
         if (!pin && (path.startsWith('/hex') || path.startsWith('/job'))) {
-            throw new HexRefusal('validation', 'The universe has no generation pin.');
+            throw new HexRefusal('validation', 'This universe has no generation pin. Open it again.');
         }
         if (request.method === 'GET' && path === '/hexes') {
             const sector = url.searchParams.get('sector') ?? '';

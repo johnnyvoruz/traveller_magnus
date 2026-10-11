@@ -52,7 +52,8 @@ watch(() => props.resync, () => { text.value = props.field.value === null ? '' :
 const options = computed(() => {
     const now = props.field.value === null ? '' : String(props.field.value);
     const held = props.field.options.some((item) => item.value === now);
-    return held ? props.field.options : [{ value: now, label: now || '—' }, ...props.field.options];
+    // A value typed before the list existed is kept, and said to be outside it; an empty one is "Not set".
+    return held ? props.field.options : [{ value: now, label: now ? now + ' (not in the list)' : 'Not set' }, ...props.field.options];
 });
 
 function onText(event: Event): void {

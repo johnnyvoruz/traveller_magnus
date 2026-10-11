@@ -2,6 +2,7 @@ import { DurableObject } from 'cloudflare:workers';
 import type { Env } from '../env';
 import { applyCampaignChanges, CampaignRefusal, readCampaign, type Sql } from './campaign';
 import { respondBuilder } from './hexes';
+import { readPublishSources } from './publish_read';
 import { migrate } from './schema';
 
 const WINDOW = 60_000;
@@ -72,6 +73,15 @@ export class UniverseDO extends DurableObject<Env> {
                 }
                 throw err;
             }
+        }
+        if (request.method === 'POST' && url.pathname === '/publish-read') {
+            let body: unknown;
+            try {
+                body = await request.json();
+            } catch {
+                return Response.json({ ok: false, error: { code: 'validation', message: 'Invalid JSON.' } }, { status: 400 });
+            }
+            return Response.json({ ok: true, data: readPublishSources(sql, body) });
         }
         return Response.json({ ok: false, error: { code: 'not_found', message: 'No such route.' } }, { status: 404 });
     }

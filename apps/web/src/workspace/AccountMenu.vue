@@ -2,7 +2,7 @@
 /**
  * The pop-up at the rail's foot (design §1; K5f). Signed out it is the sign-in card; signed
  * in it is the account menu: who, the campaigns (open one, switch to another, make, rename,
- * delete, export, import), the characters, the party, sign out. It opens over the map and nothing waits on
+ * delete, export, import), the characters, My packages, the party, sign out. It opens over the map and nothing waits on
  * it; a click anywhere else, or Esc, closes it and focus goes back to the rail's button. A
  * delete asks once, in a dialog of its own here (the server's delete is soft and cannot be
  * undone). Export saves the campaign's file; Import reads one into an open, empty campaign
@@ -26,6 +26,7 @@ import { forgetDeleted } from './actions.ts';
 import { CAMPAIGN_CAP, canCreate, cleanCampaignName, deleteWords, freshName, sortCampaigns } from './campaigns.ts';
 import { stopLocate } from './locate.ts';
 import { forgetOpening, retryCampaign } from './opening.ts';
+import { MY_PACKAGES_PATH } from './market/command.ts';
 import { liveRecords } from './records.ts';
 import SignInCard from './SignInCard.vue';
 
@@ -103,6 +104,12 @@ function openCharacters(): void {
     if (!(pane.kind === 'characters' && pane.character === null)) {
         void router.push(atPane(route.path, route.query, { kind: 'characters', character: null }));
     }
+    if (props.open) emit('close');
+}
+
+/** The referee's own packages. The palette command uses this same address. */
+function openPackages(): void {
+    if (route.path !== MY_PACKAGES_PATH) void router.push(MY_PACKAGES_PATH);
     if (props.open) emit('close');
 }
 
@@ -383,6 +390,9 @@ watch(() => props.open, (open) => {
         <input ref="fileEl" class="vplan-file" type="file" accept="application/json,.json" tabindex="-1" aria-hidden="true" @change="onImportFile">
         <button v-if="ready" type="button" role="menuitem" class="account-characters" data-command="characters" @click="openCharacters">
           <Icon name="user" :size="15" /><span>Characters</span>
+        </button>
+        <button type="button" role="menuitem" class="account-packages" @click="openPackages">
+          <Icon name="store" :size="15" /><span>My packages</span>
         </button>
         <button v-if="ready" type="button" role="menuitem" class="account-party" @click="openParty(); $emit('close')">
           <Icon name="shuttle-space" :size="15" /><span>Go to the party</span>

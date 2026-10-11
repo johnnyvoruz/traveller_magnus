@@ -11,7 +11,7 @@ import { mgt2eOrbitToAu } from '@voyage/shared';
 import { dropEdit, edit, openEdit, setDraftOpener } from '../../apps/web/src/workspace/build/edit.ts';
 import { handList } from '../../apps/web/src/workspace/build/hand.ts';
 import {
-    canPick, clampP, modeFor, orbitChanges, pAtRadius, pickParents, pickWords, placeOrbit, radiusOf, ringsAround, scaleFor, stepP, storedP, ticksOf, valueAt,
+    orbitPartner, canPick, clampP, modeFor, orbitChanges, pAtRadius, pickParents, pickWords, placeOrbit, radiusOf, ringsAround, scaleFor, stepP, storedP, ticksOf, valueAt,
 } from '../../apps/web/src/workspace/build/orbit_pick.ts';
 import { useBuildStore, useOwnSectors } from '../../apps/web/src/workspace/build/seam.ts';
 
@@ -41,11 +41,12 @@ test('the unit follows the edition: orbit number on MgT2E, AU elsewhere, planeta
     const mg = formOf(vell('MgT2E'));
     const aow = formOf(vell('AoW'));
     const none = formOf(vell(undefined));
-    assert.equal(modeFor(mg, 'world'), 'orbit');
-    assert.equal(modeFor(mg, 'star'), 'orbit');
-    assert.equal(modeFor(mg, 'moon'), 'pd');
-    assert.equal(modeFor(aow, 'world'), 'au');
-    assert.equal(modeFor(none, 'belt'), 'au');
+    const kind = (k) => ({ id: 'x', kind: k, name: '', parent: '', also: '', order: 0, mainworld: false, cls: '', depth: 0 });
+    assert.equal(modeFor(mg, kind('world')), 'orbit');
+    assert.equal(modeFor(mg, kind('star')), 'orbit');
+    assert.equal(modeFor(mg, kind('moon')), 'pd');
+    assert.equal(modeFor(aow, kind('world')), 'au');
+    assert.equal(modeFor(none, kind('belt')), 'au');
     const list = handList(mg);
     for (const node of list) assert.equal(canPick(mg, node), true, node.id);
 });
@@ -136,4 +137,27 @@ test('Place gives the body to the parent picked, then sets its orbit, as draft c
     placeOrbit('b4', 'b2', 'pd', Math.log10(20));
     assert.deepEqual(draft.changes().slice(3), [{ id: 'b4.orbit.pd', value: 20 }]);
     dropEdit();
+});
+
+test('a belt around a world is placed like a moon, in planetary diameters, and its picker keeps to worlds', () => {
+    const start = applyForm(vell('MgT2E'), [{ id: 'body.add', value: 'b9' }, { id: 'b9.kind', value: 'belt' }, { id: 'b9.parent', value: 'b2' }, { id: 'b9.orbit.pd', value: 30 }], []).envelope;
+    const form = formOf(start);
+    const list = handList(form);
+    const belt = list.find((node) => node.id === 'b9');
+    assert.equal(belt.kind, 'belt');
+    assert.equal(modeFor(form, belt, list), 'pd');
+    assert.equal(canPick(form, belt, list), true);
+    assert.deepEqual(pickParents(list, 'b9').map((item) => item.value), ['b1', 'b2', 'b3']);
+    assert.deepEqual(ringsAround(form, list, 'b2', 'b4', 'pd').rings.map((ring) => ring.id), ['b9']);
+});
+
+test('on MgT2E the orbit number and AU follow each other as typed; clearing one clears the other; elsewhere nothing follows', () => {
+    const mg = formOf(vell('MgT2E'));
+    assert.deepEqual(orbitPartner(mg, 'b2.orbit.id', 3.4), { id: 'b2.orbit.au', value: Number(mgt2eOrbitToAu(3.4).toPrecision(4)) });
+    assert.deepEqual(orbitPartner(mg, 'b2.orbit.au', 1.24), { id: 'b2.orbit.id', value: 3.4 });
+    assert.deepEqual(orbitPartner(mg, 'b2.orbit.au', null), { id: 'b2.orbit.id', value: null });
+    assert.deepEqual(orbitPartner(mg, 's2.orbit.id', '2'), { id: 's2.orbit.au', value: 0.7 });
+    assert.equal(orbitPartner(mg, 'b2.orbit.eccentricity', 0.1), null);
+    assert.equal(orbitPartner(mg, 'b4.orbit.pd', 12), null);
+    assert.equal(orbitPartner(formOf(vell('AoW')), 'b2.orbit.id', 3), null);
 });

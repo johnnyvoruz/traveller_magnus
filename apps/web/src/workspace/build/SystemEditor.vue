@@ -35,8 +35,8 @@ const sections = computed(() => (form.value ? form.value.sections.filter((sectio
 })) : []));
 /** The rule places of a hand-designed system: the form's own `rules` section, whatever it holds. */
 const handRules = computed(() => (form.value ? (form.value.sections.find((section) => section.id === 'rules')?.fields ?? []) : []));
-/** By hand, the server's word on a remove ("4 bodies go with this star.") is said by the remove's own ask, not again at the top. */
-const loose = computed(() => (form.value ? looseMessages(form.value, messages.value).filter((item) => !(edit.mode === 'hand' && item.id !== null && item.id.endsWith('.remove'))) : []));
+/** By hand, the server's word on a remove ("Removing this star also removes 4 bodies.") is said by the remove's own ask, and on a profile roll under the Profile heading: not again at the top. */
+const loose = computed(() => (form.value ? looseMessages(form.value, messages.value).filter((item) => !(edit.mode === 'hand' && item.id !== null && (item.id.endsWith('.remove') || item.id.endsWith('.profile.roll')))) : []));
 /** A whole body can be rolled again where the form's owner is a world: `body.<n>`. */
 const rollable = (owner: string): boolean => /^body\.\d+$/.test(owner);
 const busy = computed(() => edit.keeping);

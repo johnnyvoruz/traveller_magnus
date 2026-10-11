@@ -30,6 +30,8 @@ export const router = createRouter({
         { path: '/s/:sector/:hex/orbit/b/:body', name: 'orbit-body', component: () => import('./views/OrbitView.vue') },
         { path: '/account', name: 'account', component: Account },
         { path: '/claim/:token', name: 'claim', component: () => import('./characters/screens/ClaimPage.vue') },
+        { path: '/packages', name: 'packages', component: () => import('./workspace/market/PackagesView.vue') },
+        { path: '/packages/:packageId', name: 'package', component: () => import('./workspace/market/PackagesView.vue') },
         { path: '/campaign/r/:record', redirect: (to) => legacyRedirect(to) },
         { path: '/campaign/party', redirect: (to) => legacyRedirect(to) },
         { path: '/campaign', redirect: (to) => legacyRedirect(to) },

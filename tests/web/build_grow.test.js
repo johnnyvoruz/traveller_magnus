@@ -166,11 +166,11 @@ test('a refusal is said in the server’s words; the selection and the names sta
     const { answers, picked } = setup();
     growUi.names[SLOT_A] = 'Vell';
     generateGrowing([SLOT_A + '/0101']);
-    const refused = new Error('That slot is in use.');
+    const refused = new Error('That slot is in use. Choose another slot.');
     answers.accepted.reject(refused);
     answers.finished.reject(refused);
     await tick();
-    assert.equal(growUi.error, 'That slot is in use.');
+    assert.equal(growUi.error, 'That slot is in use. Choose another slot.');
     assert.equal(growUi.busy, false);
     assert.equal(build.job, null);
     assert.equal(build.error, '');
@@ -187,9 +187,9 @@ test('an Undo the server refuses is said in its words', async () => {
     answers.accepted.resolve({ sectors: [], keys: {}, undo: { id: 'grow' } });
     answers.finished.resolve({ undo: { id: 'grow' }, progress: { total: 1, done: 1, failed: [], skipped: 0, state: 'done' } });
     await tick();
-    answers.undo = new Error('The sector changed.');
+    answers.undo = new Error('This sector changed. Reload it, then try again.');
     toasts[0].action.run();
     await tick();
-    assert.equal(toasts[toasts.length - 1].message, 'The sector changed.');
+    assert.equal(toasts[toasts.length - 1].message, 'This sector changed. Reload it, then try again.');
     teardown();
 });

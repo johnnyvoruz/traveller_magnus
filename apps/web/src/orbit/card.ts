@@ -210,7 +210,8 @@ function worldCard(world: PlanWorld, days: number): BodyCardModel {
     if (w.eccentricity != null) lines.push({ label: 'Eccentricity', value: formatDisplayNumber(w.eccentricity, 3) });
     profile(lines, w, false);
     physical(lines, w, null, bodyAngle(world.epoch, world.period, days));
-    if (world.moons.length) lines.push({ label: 'Moons', value: String(world.moons.length), gap: true });
+    const moonCount = world.moons.filter((moon) => !moon.belt).length;
+    if (moonCount) lines.push({ label: 'Moons', value: String(moonCount), gap: true });
     const displayType = w.ggType ? w.type + ' ' + w.ggType : (w.worldType || w.type);
     return pack({
         title: String(w.name || w.type || ''),
@@ -219,6 +220,15 @@ function worldCard(world: PlanWorld, days: number): BodyCardModel {
         season: worldSeason(world, days),
         seasonHelp: SEASON_HELP,
     });
+}
+
+function hostedBeltCard(moon: PlanMoon): BodyCardModel {
+    const body = moon.body;
+    const lines: CardLine[] = [];
+    if (body.pd != null) lines.push({ label: 'Distance', value: formatDisplayNumber(body.pd, 2, 'PD') });
+    if (body.eccentricity != null) lines.push({ label: 'Eccentricity', value: formatDisplayNumber(body.eccentricity, 3) });
+    profile(lines, body, true);
+    return pack({ title: String(body.name || ''), sub: 'Planetoid Belt', lines, season: null, seasonHelp: '' });
 }
 
 function beltCard(world: PlanWorld): BodyCardModel {
@@ -259,7 +269,8 @@ export function cardFor(plan: Plan, kind: HitKind, key: string, days: number): B
             // 3217: a mainworld belt is a 'world' hit and gets the world's card.
             return kind === 'belt' ? beltCard(world) : worldCard(world, days);
         }
-        for (const moon of world.moons) if (moon.key === key) return moonCard(moon, world, days);
+        for (const moon of world.moons) if (moon.key === key) return moon.belt ? hostedBeltCard(moon) : moonCard(moon, world, days);
+        for (const belt of world.hostedBelts || []) if (belt.key === key) return hostedBeltCard(belt);
     }
     return null;
 }

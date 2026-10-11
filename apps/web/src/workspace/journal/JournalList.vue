@@ -8,6 +8,7 @@ import type { CampaignEntryKind } from '@voyage/shared';
 import { campaign } from '../../campaign/store.ts';
 import { deleteEntry, entriesAtHex, entriesNewestFirst } from '../../campaign/journal.ts';
 import Icon from '../../design/Icon.vue';
+import { journalFilter, journalQuery } from '../list_state.ts';
 import { locating, startLocate, stopLocate } from '../locate.ts';
 import { placeSource } from '../place_source.ts';
 import { hexKeyOf, hexWords } from '../places.ts';
@@ -32,10 +33,10 @@ const emit = defineEmits<{
     map: [];
 }>();
 
-const query = ref('');
+const query = ref(journalQuery.value);
 /** The query the list is filtered by. Typing updates it after SEARCH_WAIT. */
-const needle = ref('');
-const filter = ref<KindFilter>('all');
+const needle = ref(journalQuery.value);
+const filter = journalFilter;
 const menuOpen = ref(false);
 const searchEl = ref<HTMLInputElement | null>(null);
 const listEl = ref<HTMLElement | null>(null);
@@ -153,11 +154,13 @@ watch(query, (value) => {
     searchWait = null;
     if (!value.trim()) {
         needle.value = '';
+        journalQuery.value = '';
         return;
     }
     searchWait = setTimeout(() => {
         searchWait = null;
         needle.value = value;
+        journalQuery.value = value;
     }, SEARCH_WAIT);
 });
 

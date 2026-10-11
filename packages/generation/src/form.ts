@@ -224,7 +224,7 @@ function editionOf(body: Row): 'MgT2E' | 'AoW' {
     if (aow && Array.isArray(aow.stars) && aow.stars.length > 0) return 'AoW';
     const mgt = body.mgtSystem;
     if (mgt && Array.isArray(mgt.stars) && mgt.stars.length > 0) return 'MgT2E';
-    throw new FormRefusal('This system has no Mongoose or Architect of Worlds tree.');
+    throw new FormRefusal('This system has no Mongoose or Architect of Worlds stars to edit. Choose a system that has those stars.');
 }
 
 function systemOf(body: Row, edition: 'MgT2E' | 'AoW'): Row {
@@ -381,21 +381,34 @@ function basesString(flags: Record<string, boolean>): string {
     return ENGINE_LETTERS.map(([key, letter]) => (flags[key] ? letter : '')).join('');
 }
 
+const PROFILE_LABELS: Record<string, string> = {
+    'profile.st': 'Starport',
+    'profile.s': 'Size',
+    'profile.a': 'Atmosphere',
+    'profile.h': 'Hydrographics',
+    'profile.p': 'Population',
+    'profile.g': 'Government',
+    'profile.l': 'Law Level',
+    'profile.tl': 'Tech Level',
+};
+
 /** One UWP character. A value that is not one character is refused. No rule about which character. */
 function profileChar(id: string, value: FormValue): string {
+    const label = PROFILE_LABELS[id] ?? 'This field';
+    const refused = `${label} cannot hold that. Type one character.`;
     if (id === 'profile.st') {
         const starport = text(value).trim().toUpperCase();
-        if (starport.length !== 1) throw new FormRefusal(`${id} cannot hold that.`);
+        if (starport.length !== 1) throw new FormRefusal(refused);
         return starport;
     }
     if (typeof value === 'number' && Number.isInteger(value) && value >= 0) {
         const digit = String(toEHex(value));
-        if (digit.length !== 1) throw new FormRefusal(`${id} cannot hold that.`);
+        if (digit.length !== 1) throw new FormRefusal(refused);
         return digit;
     }
     const digit = text(value).trim().toUpperCase();
     if (digit.length === 1) return digit;
-    throw new FormRefusal(`${id} cannot hold that.`);
+    throw new FormRefusal(refused);
 }
 
 function profileChars(source: Row): Record<string, string> {
@@ -643,7 +656,7 @@ function addStar(copy: Copy, parent: Star, role: string, messages: FormMessage[]
         if (copy.stars.length >= 4) {
             messages.push({
                 id: `${parent.id}.addCompanion`,
-                text: 'AoW supports at most 4 stars, always in paired arrangements (a Quaternary system) — real multi-star systems beyond this are generally unstable. Remove a companion before adding another.',
+                text: 'This system has 4 stars, which is the most Architect of Worlds stores. Remove a star before you add another.',
                 holds: false,
             });
             return true;
@@ -652,7 +665,7 @@ function addStar(copy: Copy, parent: Star, role: string, messages: FormMessage[]
         if (companions.length === 2 && parent !== companions[1]) {
             messages.push({
                 id: `${parent.id}.addCompanion`,
-                text: 'A 4th star in an AoW system must pair with the most recently added companion, forming a second binary pair — use that companion\'s own "+Comp" button to add it.',
+                text: 'In Architect of Worlds, the fourth star pairs with the companion you added last. Add it from that companion.',
                 holds: false,
             });
             return true;
@@ -695,7 +708,7 @@ function addMoon(body: Body, messages: FormMessage[]): void {
     if (hill != null && nextPd > hill) {
         messages.push({
             id: `${body.id}.moon.${body.moons.length - 1}.pd`,
-            text: `This moon's orbit (${nextPd.toFixed(1)} pd) exceeds the gas giant's Hill Sphere limit (${Number(hill).toFixed(1)} pd) — it may be destroyed when the system regenerates. You can lower its orbit (⌀) value manually.`,
+            text: 'This moon\'s orbit is past the gas giant\'s Hill sphere. Lower Orbit (pd) if you want to keep the moon.',
             holds: false,
         });
     }
@@ -792,7 +805,7 @@ function applyRolls(copy: Copy, rolls: { id: string }[], messages: FormMessage[]
         const id = roll.id;
         if (/^body\.\d+$/.test(id)) {
             if (copy.edition !== 'MgT2E') {
-                messages.push({ id, text: 'Regeneration is only available for MgT2E systems.', holds: false });
+                messages.push({ id, text: 'You can roll a world again on a Mongoose system. Open one to roll again.', holds: false });
                 continue;
             }
             bodyId = id;
@@ -812,7 +825,7 @@ function applyRolls(copy: Copy, rolls: { id: string }[], messages: FormMessage[]
         const body = copy.bodies.find((item) => id.startsWith(item.id));
         const moon = body && body.moons.find((item) => id === `${item.id}.pd`);
         if (moon) { moon.pd = null; moon.manual = moon.manual.filter((item) => item !== 'pd'); rerun = true; continue; }
-        throw new FormRefusal(`Nothing rolls ${id}.`);
+        throw new FormRefusal('Nothing rolls this field.');
     }
     return { rerun, bodyId };
 }
@@ -1204,8 +1217,8 @@ export function applyForm(envelope: Envelope | HandEnvelope, changes: FormChange
     const known = byId(before);
     for (const change of changes) {
         const item = known.get(change.id);
-        if (!item) throw new FormRefusal(`Unknown field ${change.id}.`);
-        if (item.permission === 'read') throw new FormRefusal(`${change.id} cannot be edited.`);
+        if (!item) throw new FormRefusal('This form has no field with that name. Check the field and try again.');
+        if (item.permission === 'read') throw new FormRefusal(`You can't edit ${item.label}. Choose a field you can edit.`);
         if (change.id.startsWith('profile.')) profileChar(change.id, change.value);
     }
     if (changes.length === 0 && roll.length === 0) {
@@ -1239,7 +1252,7 @@ export function applyForm(envelope: Envelope | HandEnvelope, changes: FormChange
             }
             const ageLine = trace.lines.slice(start).find((line: string) => line.includes('AGE CONFLICT'));
             if (sys.ageConflict && !ageLine) {
-                messages.push({ id: 'stars', text: JSON.stringify(sys.ageConflict.stars || sys.ageConflict), holds: false });
+                messages.push({ id: 'stars', text: 'The stars disagree about this system\'s age. Change a star, or roll the age again.', holds: false });
             }
             nextBody = install(nextBody, copy.edition, sys, copy.bodies.length === 0 && envelope.body && !systemOf(envelope.body, copy.edition).worlds?.length);
             const priorName = text(envelope.body?.name || profileSource(envelope.body, copy.edition).name);
@@ -1296,12 +1309,34 @@ function switchedCell(value: FormValue | undefined): string {
     return cell.length === 1 ? cell : '';
 }
 
+function finiteAt(row: Row | undefined, keys: string[]): number | undefined {
+    if (!row) return undefined;
+    for (const key of keys) {
+        const value = row[key];
+        if (typeof value === 'number' && Number.isFinite(value)) return value;
+    }
+    return undefined;
+}
+
+function rawSystemOf(source: { body?: Record<string, unknown> } | undefined): Row | null {
+    if (!source?.body) return null;
+    try {
+        const body = source.body as Row;
+        return systemOf(body, editionOf(body));
+    } catch {
+        return null;
+    }
+}
+
 /**
  * One-way copy of a generated form into a hand document.
- * Reads field ids only. Star mass, orbits, and socioeconomics are not copied.
  * Profile numbers use the same ehex spelling `profileChar` writes, so the chart profile stays.
+ * Star mass and socioeconomics are not copied.
+ * When `source` is the generated envelope, orbit numbers are copied off those rows.
+ * A missing number stays missing. Nothing here turns an orbit number into AU.
  */
-export function handFromForm(form: EditForm, hexKey: string, engineVersion: string): HandEnvelope {
+export function handFromForm(form: EditForm, hexKey: string, engineVersion: string, source?: { body?: Record<string, unknown> }): HandEnvelope {
+    const rawSystem = rawSystemOf(source);
     const starIndexes = [...new Set(form.sections.flatMap((section) => section.fields)
         .map((item) => /^star\.(\d+)\.type$/.exec(item.id)?.[1])
         .filter((item): item is string => !!item))].sort((a, b) => Number(a) - Number(b));
@@ -1309,7 +1344,7 @@ export function handFromForm(form: EditForm, hexKey: string, engineVersion: stri
         const prefix = `star.${index}`;
         const role = String(formValue(form, `${prefix}.role`) ?? '');
         const primary = starIndexes[0];
-        return {
+        const star: HandEnvelope['system']['stars'][number] = {
             id: prefix,
             name: '',
             sType: String(formValue(form, `${prefix}.type`) ?? '').slice(0, 8),
@@ -1318,19 +1353,35 @@ export function handFromForm(form: EditForm, hexKey: string, engineVersion: stri
             parentId: role === 'Companion' && primary && index !== primary ? `star.${primary}` : null,
             order,
         };
+        const rawStar = rawSystem?.stars?.[Number(index)] as Row | undefined;
+        const orbitId = finiteAt(rawStar, ['orbitId', 'orbitID'])
+            ?? (typeof rawStar?.orbit === 'number' && Number.isFinite(rawStar.orbit) ? rawStar.orbit : undefined);
+        if (orbitId !== undefined) star.orbitId = orbitId;
+        const orbitAU = finiteAt(rawStar, ['orbitAU', 'distAU']);
+        if (orbitAU !== undefined) star.orbitAU = orbitAU;
+        const eccentricity = finiteAt(rawStar, ['eccentricity']);
+        if (eccentricity !== undefined) star.eccentricity = eccentricity;
+        const periodYears = finiteAt(rawStar, ['periodYears']);
+        if (periodYears !== undefined) star.periodYears = periodYears;
+        const parentIndex = rawStar?.parentStarIdx;
+        if (typeof parentIndex === 'number' && Number.isInteger(parentIndex) && starIndexes.includes(String(parentIndex)) && String(parentIndex) !== index) {
+            star.parentId = `star.${parentIndex}`;
+        }
+        return star;
     });
     const bodyIndexes = [...new Set(form.sections.flatMap((section) => section.fields)
         .map((item) => /^body\.(\d+)\.name$/.exec(item.id)?.[1])
         .filter((item): item is string => !!item))].sort((a, b) => Number(a) - Number(b));
     const bodies: HandBody[] = [];
     const parentStar = stars[0]?.id ?? '';
+    const rawWorlds = ((rawSystem?.worlds || []) as Row[]).filter((world) => world && world.type !== 'Empty');
     bodyIndexes.forEach((index, order) => {
         if (!parentStar) return;
         const prefix = `body.${index}`;
         const kind = formHas(form, `${prefix}.ggType`)
             ? 'gas'
             : (formHas(form, `${prefix}.addMoon`) ? 'world' : 'belt');
-        bodies.push({
+        const body: HandBody = {
             id: prefix,
             kind,
             name: String(formValue(form, `${prefix}.name`) ?? '').slice(0, 80),
@@ -1343,13 +1394,27 @@ export function handFromForm(form: EditForm, hexKey: string, engineVersion: stri
             zone: '',
             allegiance: '',
             trade: '',
-        });
+        };
+        const rawWorld = rawWorlds[Number(index)];
+        const orbitId = finiteAt(rawWorld, ['orbitId'])
+            ?? (typeof rawWorld?.orbit === 'number' && Number.isFinite(rawWorld.orbit) ? rawWorld.orbit : undefined);
+        if (orbitId !== undefined) body.orbitId = orbitId;
+        const au = finiteAt(rawWorld, ['au', 'orbitalRadius', 'distAU']);
+        if (au !== undefined) body.au = au;
+        const eccentricity = finiteAt(rawWorld, ['eccentricity']);
+        if (eccentricity !== undefined) body.eccentricity = eccentricity;
+        if (kind !== 'belt') {
+            const periodYears = finiteAt(rawWorld, ['periodYears']);
+            if (periodYears !== undefined) body.periodYears = periodYears;
+        }
+        bodies.push(body);
         const moons = [...new Set(form.sections.flatMap((section) => section.fields)
             .map((item) => new RegExp(`^body\\.${index}\\.moon\\.(\\d+)\\.name$`).exec(item.id)?.[1])
             .filter((item): item is string => !!item))].sort((a, b) => Number(a) - Number(b));
+        const rawMoons = (rawWorld?.moons || rawWorld?.satellites || []) as Row[];
         moons.forEach((moon, moonOrder) => {
             const moonId = `body.${index}.moon.${moon}`;
-            bodies.push({
+            const satellite: HandBody = {
                 id: moonId,
                 kind: 'moon',
                 name: String(formValue(form, `${moonId}.name`) ?? '').slice(0, 80),
@@ -1362,7 +1427,13 @@ export function handFromForm(form: EditForm, hexKey: string, engineVersion: stri
                 zone: '',
                 allegiance: '',
                 trade: '',
-            });
+            };
+            const rawMoon = rawMoons[Number(moon)];
+            const pd = finiteAt(rawMoon, ['pd']);
+            if (pd !== undefined) satellite.pd = pd;
+            const moonEccentricity = finiteAt(rawMoon, ['eccentricity']);
+            if (moonEccentricity !== undefined) satellite.eccentricity = moonEccentricity;
+            bodies.push(satellite);
         });
     });
     const profile: HandProfile = {
