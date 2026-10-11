@@ -13,6 +13,7 @@ import type { SectorHex, TreeEnvelope } from '@voyage/shared';
 import type { BuildRow, BuildStore, BuildUniverse, JobProgress as ScreenProgress } from '../workspace/build/seam.ts';
 import { rowEntry } from './overlay.ts';
 import type { Builder } from './store.ts';
+import type { GenerateGrowingHandle } from './types.ts';
 import type { JobProgress } from './types.ts';
 
 function screenProgress(progress: JobProgress): ScreenProgress {
@@ -44,7 +45,7 @@ function buildRow(row: ReturnType<Builder['row']>): BuildRow | null {
     return { hexKey: row.hexKey, state: row.state, entry: rowEntry(row), roll: row.roll, rev: row.rev };
 }
 
-export function asBuildStore(builder: Builder): BuildStore {
+export function asBuildStore(builder: Builder): BuildStore & { generateGrowing: Builder['generateGrowing'] } {
     return {
         universe(): BuildUniverse | null {
             return builder.universe();
@@ -91,6 +92,7 @@ export function asBuildStore(builder: Builder): BuildStore {
                 finished: handle.finished.then(({ undo, progress }) => ({ token: { id: undo.id }, progress: screenProgress(progress) })),
             };
         },
+        generateGrowing: (body, onProgress): GenerateGrowingHandle => builder.generateGrowing(body, onProgress),
         remove: async (hexes) => {
             const truth = new Map(hexes.map((item) => [item.hexKey, item.truth]));
             return { id: builder.remove(hexes.map((item) => item.hexKey), (key) => truth.get(key) ?? null).id };

@@ -446,7 +446,7 @@ const PAIRS = [
     ['--text-0', OMNI_FIELD, TEXT, 'build strip: the universe’s name'],
     ['--text-muted', OMNI_FIELD, TEXT, 'build strip: on the chart, the key hint'],
     ['--danger', '--panel-raised', TEXT, 'build: Remove button'],
-    ['--danger', '--chrome-bg', TEXT, 'build menu: Remove from my map'],
+    ['--danger', '--chrome-bg', TEXT, 'build menu: Remove from your map'],
     ['--text-1', '--chrome-bg', TEXT, 'build menu: an act'],
     ['--text-muted', '--chrome-bg', SMALL, 'build menu: its title (11 px), an act’s second line, the key hint'],
     ['--signal-active', '--row-active', TEXT, 'generate sheet: the chosen option'],

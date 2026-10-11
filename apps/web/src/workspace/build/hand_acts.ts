@@ -52,10 +52,10 @@ function pending(id: string): { id: string; kind: HandKind } | null {
 
 /** Why a body of this kind cannot be added now, or empty when it can. */
 export function addWhy(kind: HandKind): string {
-    if (draftHandle.value === null || edit.mode !== 'hand') return 'No system by hand is open.';
+    if (draftHandle.value === null || edit.mode !== 'hand') return 'To add a body, open a system designed by hand.';
     if (kind === 'star') return '';
     if (!handNodes().some((item) => item.kind === 'star') && !edit.added.some((item) => item.kind === 'star')) return 'Add a star first.';
-    if (kind === 'moon' && !moonHost()) return 'Select the world it orbits first.';
+    if (kind === 'moon' && !moonHost()) return 'To add a moon, first select the world it orbits.';
     return '';
 }
 
@@ -239,7 +239,7 @@ export async function confirmDesign(): Promise<void> {
     try {
         const back = await port.designByHand(hexKey, row ? row.rev : 0);
         cancelDesign();
-        showToast((name || 'This system') + ' is now designed by hand. The engine has stopped running for it.', {
+        showToast((name || 'This system') + ' is now designed by hand. The engine no longer generates it.', {
             action: {
                 label: 'Undo',
                 run: () => {
@@ -251,7 +251,7 @@ export async function confirmDesign(): Promise<void> {
         });
         void openEdit(hexKey, name);
     } catch (err) {
-        handUi.askError = err instanceof Error && err.message ? err.message : 'That did not work.';
+        handUi.askError = err instanceof Error && err.message ? err.message : 'Design by hand failed. Try again.';
     } finally {
         handUi.askBusy = false;
     }

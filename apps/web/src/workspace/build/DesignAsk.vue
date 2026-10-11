@@ -30,9 +30,9 @@ const what = computed(() => (handUi.removing && handUi.removing.kind === 'star' 
 <template>
   <div v-if="remove && handUi.removing" class="sysed-strip design-ask" role="alertdialog" :aria-label="'Remove ' + handUi.removing.name">
     <p><b>Remove {{ handUi.removing.name }}?</b></p>
-    <p v-if="count === null" role="status">Counting what goes with it…</p>
-    <p v-else role="status">All {{ count }} {{ count === 1 ? 'body' : 'bodies' }} orbiting {{ what }} will also be removed.</p>
-    <p class="design-ask-fine">Nothing is gone until you keep the draft. Discard, or Cancel here, puts it all back.</p>
+    <p v-if="count === null" role="status">Counting the bodies that orbit it…</p>
+    <p v-else role="status">This also removes the {{ count }} {{ count === 1 ? 'body that orbits' : 'bodies that orbit' }} {{ what }}.</p>
+    <p class="design-ask-fine">Nothing is removed until you select Keep. To bring everything back, select Cancel or Discard.</p>
     <div class="sysed-strip-acts">
       <button type="button" class="ui-btn is-primary" data-remove-confirm :disabled="count === null" @click="confirmRemove()">Remove</button>
       <button type="button" class="ui-btn" data-remove-cancel @click="cancelRemove()">Cancel</button>
@@ -40,8 +40,8 @@ const what = computed(() => (handUi.removing && handUi.removing.kind === 'star' 
   </div>
   <div v-else-if="!remove" class="sysed-strip design-ask" role="alertdialog" aria-label="Design by hand">
     <p><b>Design {{ handUi.askName || 'this system' }} by hand?</b></p>
-    <p>The engine stops running for this system: every star, world and moon becomes yours to type, add, remove and give to another. Undo returns the version kept before, and Generate will roll the system again whenever you ask.</p>
-    <p class="design-ask-fine">Carried over: the system's name, its stars, each world's name and kind, and the mainworld's profile, notes, zone, allegiance, trade codes and bases. Not carried: masses, orbits, distances and the rest of what the engine rolled.</p>
+    <p>The engine stops generating this system. You add, remove, type, and arrange every star, world, and moon yourself. To go back to the previous version, select Undo in the message that appears. To roll the system again later, select Generate a system.</p>
+    <p class="design-ask-fine">Copied: the system’s name, its stars, each world’s name and kind, and the mainworld’s profile, notes, zone, allegiance, trade codes, and bases. Not copied: masses, orbits, distances, and everything else the engine rolled.</p>
     <div class="sysed-strip-acts">
       <button type="button" class="ui-btn is-primary" data-command="build-design-hand" :disabled="handUi.askBusy" :aria-busy="handUi.askBusy ? 'true' : undefined" @click="confirmDesign()">{{ handUi.askBusy ? 'Changing…' : 'Design by hand' }}</button>
       <button type="button" class="ui-btn" data-design-cancel :disabled="handUi.askBusy" @click="cancelDesign()">Cancel</button>

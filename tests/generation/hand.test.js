@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { FormBlank, FormDesign, HandEnvelope, SectorRev, stable } from '@voyage/shared';
+import { FormBlank, FormDesign, HandEnvelope, MGT2E_ORBIT_AU, SectorRev, mgt2eAuToOrbit, mgt2eOrbitToAu, stable } from '@voyage/shared';
+import { MGT2E_ORBIT_AU as ENGINE_ORBIT_AU } from '@voyage/engines';
 import { applyForm, blankEnvelope, formOf, generateHex, handChartEntry, handFromForm, handWalk } from '@voyage/generation';
 import { TRUTH_SEED, TRUTH_SETTINGS } from '../../tools/truth/settings.js';
 
@@ -164,4 +165,114 @@ test('removing a star takes what orbits it, and a world with moons stays a world
     assert.equal(worldOnly.envelope.system.bodies.some((body) => body.id === 'moon'), false);
     assert.equal(worldOnly.envelope.system.bodies.some((body) => body.id === 'w'), false);
     assert.equal(worldOnly.envelope.system.bodies.some((body) => body.id === 'both'), true);
+});
+
+test('orbit numbers are optional, order stays a list index, and a belt drops a year', () => {
+    const blank = blankEnvelope('spin/2008', 'MgT2E', pinned, {});
+    const built = applyForm(blank, [
+        { id: 'star.add', value: 's1' },
+        { id: 'star.add', value: 'far' },
+        { id: 'far.parent', value: 's1' },
+        { id: 'body.add', value: 'w' },
+        { id: 'body.add', value: 'g' },
+        { id: 'g.kind', value: 'gas' },
+        { id: 'body.add', value: 'belt' },
+        { id: 'belt.kind', value: 'belt' },
+        { id: 'body.add', value: 'moon' },
+        { id: 'moon.kind', value: 'moon' },
+        { id: 'moon.parent', value: 'w' },
+    ], []).envelope;
+    const placed = applyForm(built, [
+        { id: 'far.orbit.id', value: 1.5 },
+        { id: 'far.orbit.au', value: 0.55 },
+        { id: 'far.orbit.eccentricity', value: 0.1 },
+        { id: 'far.orbit.years', value: 0.4 },
+        { id: 'far.order', value: 3 },
+        { id: 'w.orbit.id', value: 3 },
+        { id: 'w.orbit.au', value: 1 },
+        { id: 'w.orbit.eccentricity', value: 0.02 },
+        { id: 'w.orbit.years', value: 1 },
+        { id: 'w.order', value: 9 },
+        { id: 'g.orbit.id', value: 3 },
+        { id: 'g.orbit.au', value: 1 },
+        { id: 'belt.orbit.id', value: 4 },
+        { id: 'belt.orbit.au', value: 1.6 },
+        { id: 'belt.orbit.years', value: 2 },
+        { id: 'belt.orbit.days', value: 700 },
+        { id: 'belt.orbit.hours', value: 20 },
+        { id: 'moon.orbit.pd', value: 12 },
+        { id: 'moon.orbit.eccentricity', value: 0.05 },
+    ], [{ id: 'w.profile.roll' }]);
+    assert.equal(placed.answer.messages[0].text, 'Rolled size, atmosphere, and hydrographics. Population, government, law, starport, and tech level need another body\'s mainworld profile. The star has no spectral type, so the atmosphere step treats a missing luminosity as 1.');
+    const far = placed.envelope.system.stars.find((star) => star.id === 'far');
+    assert.equal(far.orbitId, 1.5);
+    assert.equal(far.orbitAU, 0.55);
+    assert.equal(far.periodYears, 0.4);
+    assert.equal(far.order, 3);
+    const world = placed.envelope.system.bodies.find((body) => body.id === 'w');
+    const gas = placed.envelope.system.bodies.find((body) => body.id === 'g');
+    const belt = placed.envelope.system.bodies.find((body) => body.id === 'belt');
+    const moon = placed.envelope.system.bodies.find((body) => body.id === 'moon');
+    assert.equal(world.au, 1);
+    assert.equal(world.orbitId, 3);
+    assert.equal(world.order, 9);
+    assert.equal(gas.orbitId, 3);
+    assert.equal(belt.au, 1.6);
+    assert.equal(belt.periodYears, undefined);
+    assert.equal(moon.pd, 12);
+    const ids = placed.answer.form.sections.flatMap((section) => section.fields).map((item) => item.id);
+    assert.equal(ids.includes('belt.orbit.years'), false);
+    assert.equal(ids.includes('belt.orbit.au'), true);
+    assert.equal(ids.includes('moon.orbit.pd'), true);
+    assert.equal(ids.includes('moon.orbit.au'), false);
+    assert.equal(ids.includes('w.orbit.years'), true);
+    const walk = handWalk(placed.envelope.system);
+    const companion = walk.stars.find((star) => star.name === '' && star.orbitAU === 0.55);
+    assert.equal(companion.orbitId, 1.5);
+    assert.equal(companion.separation, 'Companion');
+    const drawn = walk.worlds.find((item) => item.au === 1 && item.orbitId === 3 && item.type !== 'Gas Giant');
+    assert.equal(drawn.orbitType, 'S-Type');
+    assert.equal(drawn.periodYears, 1);
+    const beltRow = walk.worlds.find((item) => item.type === 'Planetoid Belt');
+    assert.equal(beltRow.au, 1.6);
+    assert.equal(Object.hasOwn(beltRow, 'periodYears'), false);
+    assert.equal(drawn.moons[0].pd, 12);
+    const cleared = applyForm(placed.envelope, [{ id: 'w.orbit.au', value: null }], []);
+    assert.equal(cleared.envelope.system.bodies.find((body) => body.id === 'w').au, undefined);
+    assert.equal(cleared.envelope.system.bodies.find((body) => body.id === 'w').orbitId, 3);
+    const held = stable(placed.envelope);
+    assert.throws(() => applyForm(placed.envelope, [{ id: 'w.orbit.au', value: 'near' }], []), /cannot hold that/);
+    assert.throws(() => applyForm(placed.envelope, [{ id: 'moon.orbit.au', value: 1 }], []), /Unknown field/);
+    assert.throws(() => applyForm(placed.envelope, [{ id: 'w.parent', value: 'g' }], []), /A world orbits a star/);
+    const around = applyForm(placed.envelope, [{ id: 'belt.parent', value: 'w' }], []);
+    const aroundBelt = around.envelope.system.bodies.find((body) => body.id === 'belt');
+    assert.equal(aroundBelt.parentId, 'w');
+    assert.equal(aroundBelt.au, undefined);
+    assert.equal(aroundBelt.pd, undefined);
+    const aroundIds = around.answer.form.sections.flatMap((section) => section.fields).map((item) => item.id);
+    assert.equal(aroundIds.includes('belt.orbit.pd'), true);
+    assert.equal(aroundIds.includes('belt.orbit.au'), false);
+    assert.equal(aroundIds.includes('belt.orbit.years'), false);
+    const aroundWalk = handWalk(around.envelope.system);
+    const host = aroundWalk.worlds.find((item) => item.type !== 'Gas Giant' && item.type !== 'Planetoid Belt');
+    assert.equal(host.moons.some((moon) => moon.type === 'Planetoid Belt' && moon.isMoon !== true), true);
+    assert.equal(aroundWalk.worlds.some((item) => item.type === 'Planetoid Belt'), false);
+    const removedWorld = applyForm(around.envelope, [{ id: 'w.remove', value: true }], []);
+    assert.equal(removedWorld.envelope.system.bodies.some((body) => body.id === 'belt'), false);
+    assert.equal(removedWorld.envelope.system.bodies.some((body) => body.id === 'moon'), false);
+    assert.equal(stable(placed.envelope), held);
+    const old = HandEnvelope.parse({ kind: 'hand', engineVersion: '1.1.0', hexKey: 'spin/2008', system: built.system });
+    assert.equal(old.system.bodies[0].au, undefined);
+});
+
+test('the MgT2E orbit helper matches the engine table and does not convert a stored field', () => {
+    assert.deepEqual([...MGT2E_ORBIT_AU], [...ENGINE_ORBIT_AU]);
+    assert.equal(mgt2eOrbitToAu(0), 0);
+    assert.equal(mgt2eOrbitToAu(3), 1);
+    assert.equal(mgt2eOrbitToAu(3.5), 1.3);
+    assert.equal(mgt2eOrbitToAu(20), 78700);
+    assert.equal(mgt2eAuToOrbit(1), 3);
+    assert.equal(mgt2eAuToOrbit(1.3), 3.5);
+    assert.equal(mgt2eAuToOrbit(80000), 20);
+    assert.equal(Number.isNaN(mgt2eOrbitToAu(-1)), true);
 });

@@ -47,12 +47,12 @@ function go(): void {
       <label v-for="item in ENGINES" :key="item.id" class="build-opt" :class="{ 'is-on': draft.engine === item.id, 'is-off': !item.ready }">
         <input type="radio" name="build-engine" :value="item.id" :checked="draft.engine === item.id" :disabled="!item.ready" @change="pickEngine(item.id)" />
         <span>{{ item.label }}</span>
-        <em v-if="!item.ready">not yet</em>
+        <em v-if="!item.ready">not available yet</em>
         <em v-else-if="item.generators.length === 1">{{ item.generators[0] === 'bottom-up' ? 'bottom up' : 'top down' }}</em>
       </label>
     </fieldset>
     <fieldset class="build-opts">
-      <legend class="ui-heading">How</legend>
+      <legend class="ui-heading">Method</legend>
       <label v-for="generator in engine.generators" :key="generator" class="build-opt" :class="{ 'is-on': draft.generator === generator }">
         <input type="radio" name="build-generator" :value="generator" :checked="draft.generator === generator" @change="pickGenerator(generator)" />
         <span>{{ GENERATOR_LABEL[generator] }}</span>
@@ -61,7 +61,7 @@ function go(): void {
     <fieldset v-if="many && filled > 0" class="build-opts">
       <legend class="ui-heading">The {{ plural(filled, 'hex', 'hexes') }} that already {{ filled === 1 ? 'holds' : 'hold' }} a system</legend>
       <label class="build-opt" :class="{ 'is-on': !filledToo }">
-        <input type="radio" name="build-filled" :checked="!filledToo" @change="filledToo = false" /><span>Leave {{ filled === 1 ? 'it' : 'them' }}</span>
+        <input type="radio" name="build-filled" :checked="!filledToo" @change="filledToo = false" /><span>Leave {{ filled === 1 ? 'it as it is' : 'them as they are' }}</span>
       </label>
       <label class="build-opt" :class="{ 'is-on': filledToo }">
         <input type="radio" name="build-filled" :checked="filledToo" @change="filledToo = true" /><span>Regenerate {{ filled === 1 ? 'it' : 'them' }} too</span>
@@ -74,7 +74,7 @@ function go(): void {
       </dl>
     </section>
     <div class="build-sheet-foot">
-      <span class="build-fine">Remembered for next time.</span>
+      <span class="build-fine">Your choice is saved for next time.</span>
       <button type="button" class="ui-btn" @click="$emit('cancel')">Cancel</button>
       <button type="submit" class="ui-btn is-primary" :disabled="count === 0">
         <Icon name="wand-magic-sparkles" :size="13" />{{ many ? 'Generate ' + count : 'Preview' }}

@@ -227,18 +227,18 @@ export function settingRows(settings: Settings | null): { label: string; value: 
     if (!settings) return [];
     const flag = (on: boolean): string => (on ? 'on' : 'off');
     return [
-        { label: 'Starport Max', value: settings.generationStarportMax },
-        { label: 'Starport Mod', value: String(settings.generationStarportMod) },
-        { label: 'Pop Max', value: String(settings.generationPopMax) },
-        { label: 'Pop Mod', value: String(settings.generationPopMod) },
-        { label: 'Pop Check Frequency', value: String(settings.generationPopCheckFrequency) },
-        { label: 'TL Max', value: String(settings.generationTlMax) },
-        { label: 'TL Mod', value: String(settings.generationTlMod) },
-        { label: 'Disable Red/Amber Zone Assignments', value: flag(settings.generationNoTravelZones) },
-        { label: 'Use Realistic Stellar Variant (MgT2e)', value: flag(settings.generationUseRealisticStellar) },
-        { label: 'Use Min TL (MgT2e)', value: flag(settings.generationUseTlFloor) },
-        { label: 'Settlement Centuries (RTT)', value: String(settings.generationRttSettlement) },
-        { label: 'Tech Level (RTT)', value: String(settings.generationRttTL) },
+        { label: 'Starport max', value: settings.generationStarportMax },
+        { label: 'Starport mod', value: String(settings.generationStarportMod) },
+        { label: 'Pop max', value: String(settings.generationPopMax) },
+        { label: 'Pop mod', value: String(settings.generationPopMod) },
+        { label: 'Pop check frequency', value: String(settings.generationPopCheckFrequency) },
+        { label: 'TL max', value: String(settings.generationTlMax) },
+        { label: 'TL mod', value: String(settings.generationTlMod) },
+        { label: 'Disable Red/Amber Zone assignments', value: flag(settings.generationNoTravelZones) },
+        { label: 'Use realistic stellar variant (MgT2E)', value: flag(settings.generationUseRealisticStellar) },
+        { label: 'Use min TL (MgT2E)', value: flag(settings.generationUseTlFloor) },
+        { label: 'Settlement centuries (RTT)', value: String(settings.generationRttSettlement) },
+        { label: 'Tech level (RTT)', value: String(settings.generationRttTL) },
     ];
 }
 
@@ -247,6 +247,6 @@ export function jobToast(progress: JobProgress, where: string): string {
     const built = plural(progress.done, 'system', 'systems');
     const place = where ? ' in ' + where : '';
     const failed = progress.failed.length ? ' ' + plural(progress.failed.length, 'hex', 'hexes') + ' failed.' : '';
-    if (progress.state === 'stopped') return 'Stopped. ' + built + ' of ' + progress.total + ' built' + place + '.' + failed;
+    if (progress.state === 'stopped') return 'Stopped. Generated ' + progress.done + ' of ' + plural(progress.total, 'system', 'systems') + place + '.' + failed;
     return 'Generated ' + built + place + '.' + failed;
 }

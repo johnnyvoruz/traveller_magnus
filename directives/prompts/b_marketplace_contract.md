@@ -104,3 +104,6 @@ recommended answer first, each with what it blocks. After each meaningful step a
 one line under Progress: "done: X. next: Y."
 
 ## Progress
+- done: read the board. The Builder push is ready and not yet made, so this prompt does not start. next: orchestrator, after that line changes.
+- done: both contracts written. Decisions 1–10 cited. next: report.
+- done: report written at directives/reports/b_marketplace_contract.md. next: orchestrator.

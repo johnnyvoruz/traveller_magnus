@@ -1,9 +1,10 @@
 /**
  * Read and write a hand-designed system.
- * This file does not call a generator and does not read an engine tree.
+ * A profile roll calls `rollBodyProfile` for one body. Nothing else runs a generator.
  */
 import type { EditForm, FormAnswer, FormChange, FormField, FormMessage, FormSection, FormValue, HandBody, HandEnvelope, HandKind, HandProfile, HandStar, HandSystem } from '@voyage/shared';
 import { emptyHandProfile, HAND_LIMITS, HandSystem as HandSystemSchema } from '@voyage/shared';
+import { fromEHex, rollBodyProfile } from '@voyage/engines';
 
 export class HandRefusal extends Error {
     constructor(message: string) {
@@ -80,6 +81,10 @@ export function formOfHand(envelope: HandEnv): EditForm {
         starFields.push(field(`${prefix}.class`, 'Class', 'text', 'type', star.sClass));
         starFields.push(field(`${prefix}.parent`, 'Orbits', 'text', 'type', star.parentId ?? ''));
         starFields.push(field(`${prefix}.order`, 'Order', 'number', 'type', star.order));
+        starFields.push(field(`${prefix}.orbit.id`, 'Orbit', 'number', 'type', star.orbitId ?? null));
+        starFields.push(field(`${prefix}.orbit.au`, 'AU', 'number', 'type', star.orbitAU ?? null));
+        starFields.push(field(`${prefix}.orbit.eccentricity`, 'Eccentricity', 'number', 'type', star.eccentricity ?? null));
+        starFields.push(field(`${prefix}.orbit.years`, 'Period (years)', 'number', 'type', star.periodYears ?? null));
         starFields.push(field(`${prefix}.remove`, 'Remove', 'switch', 'type', false));
     }
     starFields.push(field('star.add', 'Add a star', 'switch', 'type', false));
@@ -91,6 +96,7 @@ export function formOfHand(envelope: HandEnv): EditForm {
         const parentShown = body.alsoParentId ? `${body.parentId}+${body.alsoParentId}` : body.parentId;
         bodyFields.push(field(`${prefix}.parent`, 'Parent', 'text', 'type', parentShown));
         bodyFields.push(field(`${prefix}.order`, 'Order', 'number', 'type', body.order));
+        for (const item of bodyOrbitFields(system, body)) bodyFields.push(item);
         bodyFields.push(field(`${prefix}.mainworld`, 'Mainworld', 'switch', 'type', body.mainworld));
         for (const cell of PROFILE) {
             bodyFields.push(field(`${prefix}.profile.${cell}`, PROFILE_LABELS[cell], 'text', 'type', body.profile[cell]));
@@ -168,6 +174,43 @@ function readParent(id: string, value: FormValue): { parentId: string; alsoParen
 
 function truthy(value: FormValue): boolean {
     return value === true || value === 'true' || value === 1;
+}
+
+/** A finite number, or null when the referee clears the field. */
+function orbitNumber(id: string, value: FormValue): number | null {
+    if (value === null || value === '') return null;
+    if (typeof value !== 'number' || !Number.isFinite(value)) throw new HandRefusal(`${id} cannot hold that.`);
+    return value;
+}
+
+function putNumber<T extends object>(item: T, key: keyof T, next: number | null): void {
+    if (next === null) delete item[key];
+    else item[key] = next as T[keyof T];
+}
+
+const BELT_YEAR_LEAVES = ['orbit.years', 'orbit.days', 'orbit.hours'] as const;
+
+function beltAroundBody(system: HandSystem, body: HandBody): boolean {
+    if (body.kind !== 'belt') return false;
+    const host = system.bodies.find((item) => item.id === body.parentId);
+    return !!host && (host.kind === 'world' || host.kind === 'gas');
+}
+
+function bodyOrbitFields(system: HandSystem, body: HandBody): FormField[] {
+    const prefix = body.id;
+    if (body.kind === 'moon' || beltAroundBody(system, body)) {
+        return [
+            field(`${prefix}.orbit.pd`, 'Orbit (planetary diameters)', 'number', 'type', body.pd ?? null),
+            field(`${prefix}.orbit.eccentricity`, 'Eccentricity', 'number', 'type', body.eccentricity ?? null),
+        ];
+    }
+    const fields = [
+        field(`${prefix}.orbit.id`, 'Orbit', 'number', 'type', body.orbitId ?? null),
+        field(`${prefix}.orbit.au`, 'AU', 'number', 'type', body.au ?? null),
+        field(`${prefix}.orbit.eccentricity`, 'Eccentricity', 'number', 'type', body.eccentricity ?? null),
+    ];
+    if (body.kind !== 'belt') fields.push(field(`${prefix}.orbit.years`, 'Period (years)', 'number', 'type', body.periodYears ?? null));
+    return fields;
 }
 
 const BODY_FIELDS = ['name', 'kind', 'parent', 'order', 'mainworld', 'notes', 'bases', 'zone', 'allegiance', 'trade', 'remove'] as const;
@@ -249,7 +292,11 @@ function applyOne(system: HandSystem, change: FormChange, notes: FormMessage[]):
                 throw new HandRefusal(`${id} cannot hold that.`);
             }
             star.order = change.value;
-        } else throw new HandRefusal(`Unknown field ${id}.`);
+        } else if (leaf === 'orbit.id') putNumber(star, 'orbitId', orbitNumber(id, change.value));
+        else if (leaf === 'orbit.au') putNumber(star, 'orbitAU', orbitNumber(id, change.value));
+        else if (leaf === 'orbit.eccentricity') putNumber(star, 'eccentricity', orbitNumber(id, change.value));
+        else if (leaf === 'orbit.years') putNumber(star, 'periodYears', orbitNumber(id, change.value));
+        else throw new HandRefusal(`Unknown field ${id}.`);
         return;
     }
     const bodyId = bodyIdOf(system, id);
@@ -267,17 +314,34 @@ function applyOne(system: HandSystem, change: FormChange, notes: FormMessage[]):
         body.profile[cell] = oneChar(id, change.value);
         return;
     }
+    if (body.kind === 'belt' && (BELT_YEAR_LEAVES as readonly string[]).includes(leaf)) return;
+    if (leaf === 'orbit.id' || leaf === 'orbit.au' || leaf === 'orbit.eccentricity' || leaf === 'orbit.years' || leaf === 'orbit.pd') {
+        if (body.kind === 'moon' || beltAroundBody(system, body)) {
+            if (leaf === 'orbit.pd') putNumber(body, 'pd', orbitNumber(id, change.value));
+            else if (leaf === 'orbit.eccentricity') putNumber(body, 'eccentricity', orbitNumber(id, change.value));
+            else throw new HandRefusal(`Unknown field ${id}.`);
+            return;
+        }
+        if (leaf === 'orbit.pd') throw new HandRefusal(`Unknown field ${id}.`);
+        if (leaf === 'orbit.id') putNumber(body, 'orbitId', orbitNumber(id, change.value));
+        else if (leaf === 'orbit.au') putNumber(body, 'au', orbitNumber(id, change.value));
+        else if (leaf === 'orbit.eccentricity') putNumber(body, 'eccentricity', orbitNumber(id, change.value));
+        else putNumber(body, 'periodYears', orbitNumber(id, change.value));
+        return;
+    }
     if (!BODY_FIELDS.includes(leaf as typeof BODY_FIELDS[number])) throw new HandRefusal(`Unknown field ${id}.`);
     if (leaf === 'name') body.name = bounded(id, change.value, 80);
     else if (leaf === 'kind') {
         const kind = text(change.value);
         if (!KINDS.some(([value]) => value === kind)) throw new HandRefusal(`${id} cannot hold that.`);
         body.kind = kind as HandKind;
+        syncBeltOrbit(system, body);
     } else if (leaf === 'parent') {
         const next = readParent(id, change.value);
         body.parentId = next.parentId;
         if (next.alsoParentId) body.alsoParentId = next.alsoParentId;
         else delete body.alsoParentId;
+        syncBeltOrbit(system, body);
     }
     else if (leaf === 'order') {
         if (typeof change.value !== 'number' || !Number.isInteger(change.value) || change.value < 0) {
@@ -326,7 +390,18 @@ function dropStar(system: HandSystem, starId: string): number {
     return goneStars.size - 1 + goneBodies.size;
 }
 
-/** A world takes its moons. A moon takes nothing else. */
+/** A world takes its moons and any belt that orbits it. A moon takes nothing else. A belt takes nothing else. */
+
+function syncBeltOrbit(system: HandSystem, body: HandBody): void {
+    if (body.kind !== 'belt') return;
+    if (beltAroundBody(system, body)) {
+        delete body.orbitId;
+        delete body.au;
+        delete body.periodYears;
+        return;
+    }
+    delete body.pd;
+}
 function dropBody(system: HandSystem, bodyId: string): void {
     const gone = new Set<string>([bodyId]);
     let grew = true;
@@ -371,7 +446,10 @@ function refuseParents(system: HandSystem): void {
         if (body.kind === 'moon' && !worlds.has(body.parentId)) {
             throw new HandRefusal('A moon whose parent does not exist.');
         }
-        if (body.kind !== 'moon' && !stars.has(body.parentId)) {
+        if (body.kind === 'belt' && !stars.has(body.parentId) && !beltAroundBody(system, body)) {
+            throw new HandRefusal('A world orbits a star.');
+        }
+        if (body.kind !== 'moon' && body.kind !== 'belt' && !stars.has(body.parentId)) {
             throw new HandRefusal('A world orbits a star.');
         }
     }
@@ -392,11 +470,7 @@ export function applyHand(envelope: HandEnv, changes: FormChange[] = [], roll: {
         if (item?.permission === 'read') throw new HandRefusal(`${change.id} cannot be edited.`);
         if (change.id.includes('.profile.')) oneChar(change.id, change.value);
     }
-    const messages: FormMessage[] = roll.map((item) => ({
-        id: item.id,
-        text: 'Nothing rolls this field.',
-        holds: false,
-    }));
+    const messages: FormMessage[] = [];
     if (changes.length === 0 && roll.length === 0) {
         return { envelope, answer: { form: before, changed: [], messages } };
     }
@@ -404,6 +478,7 @@ export function applyHand(envelope: HandEnv, changes: FormChange[] = [], roll: {
     for (const change of changes) applyOne(system, change, messages);
     settlePairs(system);
     refuseParents(system);
+    rollProfiles(envelope, system, roll, messages);
     const next: HandEnv = { ...envelope, system: HandSystemSchema.parse(system) };
     const form = formOfHand(next);
     const after = knownIds(form);
@@ -414,6 +489,10 @@ export function applyHand(envelope: HandEnv, changes: FormChange[] = [], roll: {
         })
         .map(([id]) => ({ id, why: '' }));
     return { envelope: next, answer: { form, changed, messages } };
+}
+
+function copyFinite(row: Record<string, unknown>, key: string, value: number | undefined): void {
+    if (typeof value === 'number' && Number.isFinite(value)) row[key] = value;
 }
 
 function spectral(star: HandStar): string {
@@ -460,6 +539,69 @@ export function handChartEntry(system: HandSystem, tree: string | null): Record<
     return entry;
 }
 
+function mainworldBaseline(system: HandSystem, exceptId: string): { name: string; starport: string; size: number; atm: number; hydro: number; pop: number; gov: number; law: number; tl: number } | null {
+    const host = system.bodies.find((body) => body.mainworld && body.id !== exceptId);
+    if (!host || !PROFILE.every((cell) => host.profile[cell].length === 1)) return null;
+    return {
+        name: host.name,
+        starport: host.profile.st,
+        size: fromEHex(host.profile.s),
+        atm: fromEHex(host.profile.a),
+        hydro: fromEHex(host.profile.h),
+        pop: fromEHex(host.profile.p),
+        gov: fromEHex(host.profile.g),
+        law: fromEHex(host.profile.l),
+        tl: fromEHex(host.profile.tl),
+    };
+}
+
+function rollProfiles(envelope: HandEnv, system: HandSystem, rolls: { id: string }[], messages: FormMessage[]): void {
+    for (const item of rolls) {
+        if (!item.id.endsWith('.profile.roll')) {
+            messages.push({ id: item.id, text: 'Nothing rolls this field.', holds: false });
+            continue;
+        }
+        const bodyId = item.id.slice(0, -'.profile.roll'.length);
+        const body = system.bodies.find((candidate) => candidate.id === bodyId);
+        if (!body || envelope.edition !== 'MgT2E' || (body.kind !== 'world' && body.kind !== 'gas' && body.kind !== 'belt')) {
+            messages.push({ id: item.id, text: 'Nothing rolls this field.', holds: false });
+            continue;
+        }
+        const stars = byOrder(system.stars);
+        const parentBody = system.bodies.find((candidate) => candidate.id === body.parentId);
+        const starId = parentBody && (parentBody.kind === 'world' || parentBody.kind === 'gas') ? parentBody.parentId : body.parentId;
+        const parentStarIndex = Math.max(0, stars.findIndex((star) => star.id === starId));
+        const also = body.alsoParentId ? stars.findIndex((star) => star.id === body.alsoParentId) : -1;
+        const rolled = rollBodyProfile({
+            hexId: envelope.hexKey,
+            bodyId: body.id,
+            roll: body.profileRoll ?? 0,
+            stars: stars.map((star) => ({ sType: star.sType, subType: star.subType, sClass: star.sClass, orbitId: star.orbitId })),
+            body: {
+                kind: body.kind,
+                name: body.name,
+                orbitId: body.orbitId,
+                au: body.au,
+                eccentricity: body.eccentricity,
+                parentStarIndex,
+                alsoParentIndex: also >= 0 ? also : null,
+            },
+            mainworld: mainworldBaseline(system, body.id),
+            isMainworld: body.mainworld,
+        });
+        let wrote = false;
+        for (const cell of PROFILE) {
+            const next = rolled.cells[cell];
+            if (typeof next === 'string' && next.length === 1) {
+                body.profile[cell] = next;
+                wrote = true;
+            }
+        }
+        if (wrote) body.profileRoll = (body.profileRoll ?? 0) + 1;
+        messages.push({ id: item.id, text: rolled.message, holds: false });
+    }
+}
+
 function walkType(body: HandBody): string {
     if (body.mainworld) return 'Mainworld';
     if (body.kind === 'gas') return 'Gas Giant';
@@ -472,8 +614,12 @@ function walkType(body: HandBody): string {
  * The shape `pickSystem` and `bodyKeys` already walk.
  * Stars need `sType` (a letter the glyph can draw) and, for a companion, `separation` and `parentStarIdx`.
  * Worlds need `name`, `type`, and nested `moons`. A complete profile is `uwp`.
+ * A belt that orbits a world or a gas giant is nested in that body's `moons`, with `type` `Planetoid Belt`.
+ * It has `pd` and `eccentricity` when those are stored. It has no `periodYears` and `isMoon` is not set.
  * A body that orbits two paired stars also has `orbitType` `P-Type`, `parentStarIdx` of the star the companion orbits, and `pairStarIdx` of the companion.
- * `orbitAU`, `orbitId`, `au`, mass, luminosity, diameter, temperature, period, and journey times are absent.
+ * A stored orbit number is copied onto `orbitAU`, `orbitId`, `au`, `eccentricity`, `pd`, or `periodYears`.
+ * A belt's `periodYears` is not copied. Mass, luminosity, diameter, temperature, and journey times stay absent.
+ * No generator writes a belt around a world.
  */
 export function handWalk(system: HandSystem): { name: string; stars: Record<string, unknown>[]; worlds: Record<string, unknown>[] } {
     const stars = byOrder(system.stars);
@@ -491,9 +637,13 @@ export function handWalk(system: HandSystem): { name: string; stars: Record<stri
             row.separation = 'Companion';
             row.parentStarIdx = parentIndex;
         }
+        copyFinite(row, 'orbitId', star.orbitId);
+        copyFinite(row, 'orbitAU', star.orbitAU);
+        copyFinite(row, 'eccentricity', star.eccentricity);
+        copyFinite(row, 'periodYears', star.periodYears);
         return row;
     });
-    const worlds = byOrder(system.bodies.filter((body) => body.kind !== 'moon'));
+    const worlds = byOrder(system.bodies.filter((body) => body.kind !== 'moon' && !beltAroundBody(system, body)));
     const worldRows = worlds.map((body) => {
         const row: Record<string, unknown> = {
             name: body.name,
@@ -503,26 +653,48 @@ export function handWalk(system: HandSystem): { name: string; stars: Record<stri
             travelZone: body.zone,
             bases: body.bases,
             tradeCodes: body.trade.split(/\s+/).filter(Boolean),
-            moons: byOrder(system.bodies.filter((moon) => moon.kind === 'moon' && moon.parentId === body.id)).map((moon) => {
+            moons: byOrder(system.bodies.filter((child) => child.parentId === body.id && (child.kind === 'moon' || beltAroundBody(system, child)))).map((child) => {
+                if (child.kind === 'belt') {
+                    const nested: Record<string, unknown> = {
+                        name: child.name,
+                        type: 'Planetoid Belt',
+                        notes: child.notes,
+                    };
+                    const beltUwp = profileComplete(child.profile);
+                    if (beltUwp) nested.uwp = beltUwp;
+                    copyFinite(nested, 'pd', child.pd);
+                    copyFinite(nested, 'eccentricity', child.eccentricity);
+                    return nested;
+                }
                 const nested: Record<string, unknown> = {
-                    name: moon.name,
-                    type: walkType(moon),
+                    name: child.name,
+                    type: walkType(child),
                     isMoon: true,
-                    notes: moon.notes,
+                    notes: child.notes,
                 };
-                const uwp = profileComplete(moon.profile);
+                const uwp = profileComplete(child.profile);
                 if (uwp) nested.uwp = uwp;
+                copyFinite(nested, 'pd', child.pd);
+                copyFinite(nested, 'eccentricity', child.eccentricity);
                 return nested;
             }),
         };
         const uwp = profileComplete(body.profile);
         if (uwp) row.uwp = uwp;
+        copyFinite(row, 'orbitId', body.orbitId);
+        copyFinite(row, 'au', body.au);
+        copyFinite(row, 'eccentricity', body.eccentricity);
+        if (body.kind !== 'belt') copyFinite(row, 'periodYears', body.periodYears);
         if (body.alsoParentId) {
             const primary = stars.findIndex((star) => star.id === body.parentId);
             const other = stars.findIndex((star) => star.id === body.alsoParentId);
             row.orbitType = 'P-Type';
             if (primary >= 0) row.parentStarIdx = primary;
             if (other >= 0) row.pairStarIdx = other;
+        } else if (typeof body.au === 'number' || typeof body.orbitId === 'number') {
+            row.orbitType = 'S-Type';
+            const parent = stars.findIndex((star) => star.id === body.parentId);
+            if (parent >= 0) row.parentStarIdx = parent;
         }
         return row;
     });

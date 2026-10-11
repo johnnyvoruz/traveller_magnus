@@ -10,6 +10,8 @@ import { handUi } from './hand.ts';
 import { addBody, askDesign, canAdd, canMainworld, canMoveBody, canRemoveBody, handMode, isHandHex, makeMainworld, moveBody, removeBody } from './hand_acts.ts';
 import { canDelete, canMove, canNewSector, canRename, deleteSector, newSector, startMove, startRename } from './sector_acts.ts';
 import { askSectorName, inEmptySlot } from './grow_acts.ts';
+import { canPickSelected, openPicker } from './orbit_pick.ts';
+import { kindOfKeys, openPublish, publishKeys, signedIn } from '../market/market.ts';
 import { build, plural, removeTargets } from './state.ts';
 
 export type BuildCommandId =
@@ -18,7 +20,7 @@ export type BuildCommandId =
     | 'build-edit' | 'build-draft-keep' | 'build-draft-discard' | 'build-blank'
     | 'build-sector-new' | 'build-sector-rename' | 'build-sector-move' | 'build-sector-delete'
     | 'build-design-hand' | 'build-add-star' | 'build-add-world' | 'build-add-gas' | 'build-add-belt' | 'build-add-moon'
-    | 'build-body-up' | 'build-body-down' | 'build-body-mainworld' | 'build-body-remove';
+    | 'build-body-up' | 'build-body-down' | 'build-body-mainworld' | 'build-body-remove' | 'build-body-orbit' | 'build-publish';
 
 export const BUILD_COMMANDS: readonly { id: BuildCommandId; name: string; keys?: string[] }[] = [
     { id: 'build-select', name: 'Select hexes', keys: ['s'] },
@@ -29,7 +31,7 @@ export const BUILD_COMMANDS: readonly { id: BuildCommandId; name: string; keys?:
     { id: 'build-discard', name: 'Discard the preview' },
     { id: 'build-stop', name: 'Stop generating', keys: ['x'] },
     { id: 'build-restore', name: 'Restore to the chart' },
-    { id: 'build-remove', name: 'Remove from my map', keys: ['Delete'] },
+    { id: 'build-remove', name: 'Remove from your map', keys: ['Delete'] },
     { id: 'build-edit', name: 'Edit this system', keys: ['e'] },
     { id: 'build-draft-keep', name: 'Keep the draft', keys: ['Ctrl+Enter'] },
     { id: 'build-draft-discard', name: 'Discard the draft' },
@@ -49,6 +51,8 @@ export const BUILD_COMMANDS: readonly { id: BuildCommandId; name: string; keys?:
     { id: 'build-body-down', name: 'Move the selected body down' },
     { id: 'build-body-mainworld', name: 'Make the selected body the mainworld' },
     { id: 'build-body-remove', name: 'Remove the selected body' },
+    { id: 'build-body-orbit', name: 'Pick the orbit of the selected body' },
+    { id: 'build-publish', name: 'Publish selection…' },
 ];
 
 const ADD_KIND = {
@@ -95,6 +99,8 @@ export function canBuild(id: BuildCommandId, keys: readonly string[]): boolean {
     if (id === 'build-body-down') return canMoveBody(handUi.selected, 1);
     if (id === 'build-body-mainworld') return canMainworld(handUi.selected);
     if (id === 'build-body-remove') return canRemoveBody(handUi.selected);
+    if (id === 'build-body-orbit') return canPickSelected();
+    if (id === 'build-publish') return signedIn() && keys.length > 1 && publishKeys(keys, hexState).length > 0;
     if (id === 'build-draft-keep') return editDirty() && !edit.keeping && handUi.removing === null;
     if (id === 'build-draft-discard') return draftHandle.value !== null && !edit.keeping;
     // While a draft is open nothing else acts on the map: the draft is kept or discarded first.
@@ -129,6 +135,8 @@ export function runBuild(id: BuildCommandId, keys: readonly string[]): void {
     else if (id === 'build-body-down') moveBody(handUi.selected, 1);
     else if (id === 'build-body-mainworld') makeMainworld(handUi.selected);
     else if (id === 'build-body-remove') removeBody(handUi.selected);
+    else if (id === 'build-body-orbit') openPicker(handUi.selected);
+    else if (id === 'build-publish') openPublish(kindOfKeys(keys));
     else if (id === 'build-design-hand') void askDesign(keys[0], hexName(keys[0]));
     else if (id === 'build-draft-keep') void keepEdit();
     else if (id === 'build-draft-discard') {
@@ -168,6 +176,7 @@ export function menuFor(keys: readonly string[]): { title: string; items: BuildM
     const systems = removeTargets(count).length;
     const state = many ? null : hexState(keys[0]);
     const items: BuildMenuItem[] = [];
+    let checking = -1;
     if (build.preview && !many && build.preview.hexKey === keys[0]) {
         items.push({ id: 'build-keep', label: 'Keep', icon: 'check', key: 'K' });
         items.push({ id: 'build-roll', label: 'Roll again', icon: 'wand-magic-sparkles', key: 'R' });
@@ -187,10 +196,12 @@ export function menuFor(keys: readonly string[]): { title: string; items: BuildM
     }
     if (!many && (state === 'truth' || state === 'override' || state === 'own')) {
         items.push({ id: 'build-edit', label: 'Edit', icon: 'pen-to-square', key: 'E' });
-        // Neither, until the server has said whether the system is by hand: the item never changes under the pointer.
+        // Until the server has said whether the system is by hand, a muted "Checking…" holds the line, so Remove
+        // never moves. All three are one line high: the preview says that keeping replaces a hand system.
         const mode = handMode(keys[0]);
-        if (mode === 'hand') items.push({ id: 'build-generate', label: 'Generate a system', say: 'A preview first; keeping it replaces the system designed by hand', icon: 'wand-magic-sparkles', key: 'G' });
+        if (mode === 'hand') items.push({ id: 'build-generate', label: 'Generate a system', icon: 'wand-magic-sparkles', key: 'G' });
         else if (mode === 'generated') items.push({ id: 'build-design-hand', label: 'Design by hand…', icon: 'draw-polygon' });
+        else checking = items.push({ id: 'build-design-hand', label: 'Checking…', icon: 'circle-dashed' }) - 1;
     }
     if (many || state === 'override') {
         const can = restorable(keys).length;
@@ -199,7 +210,7 @@ export function menuFor(keys: readonly string[]): { title: string; items: BuildM
     if (systems > 0) {
         items.push({
             id: 'build-remove',
-            label: many ? 'Remove the ' + plural(systems, 'system', 'systems') : (overChart(keys) ? 'Remove from my map' : 'Remove'),
+            label: many ? 'Remove the ' + plural(systems, 'system', 'systems') : (overChart(keys) ? 'Remove from your map' : 'Remove'),
             icon: 'trash',
             key: 'Del',
             danger: true,
@@ -207,6 +218,7 @@ export function menuFor(keys: readonly string[]): { title: string; items: BuildM
         });
     }
     for (const item of items) item.disabled = !canBuild(item.id, keys);
+    if (checking >= 0) items[checking].disabled = true;
     const hex = keys[0].slice(keys[0].lastIndexOf('/') + 1);
     const title = many ? plural(keys.length, 'hex', 'hexes') : (state === 'empty' || state === 'removed' ? 'Empty hex ' + hex : hexName(keys[0]));
     return { title, items };

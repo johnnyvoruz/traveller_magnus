@@ -82,7 +82,7 @@ test('a message sits under its field; one for a field that is gone is said at th
 
 test('the count of changes, and a typed number', () => {
     assert.equal(changeLine({ a: 1 }, ['b'], []), '2 changes');
-    assert.equal(changeLine({ a: 1 }, [], [{ id: null, text: 'x', holds: false }]), '1 change · 1 thing to read');
+    assert.equal(changeLine({ a: 1 }, [], [{ id: null, text: 'x', holds: false }]), '1 change · 1 message');
     assert.equal(numberValue(' 0.5 '), 0.5);
     assert.equal(numberValue(''), null);
     assert.equal(numberValue('abc'), null);
@@ -220,14 +220,14 @@ test('leaving with changes not kept is held and asked; without changes it is not
     leaveDiscarding();
     assert.equal(went, 1);
     assert.equal(draftHandle.value, null);
-    assert.equal(toasts[toasts.length - 1].message, 'The draft of Sco was discarded.');
+    assert.equal(toasts[toasts.length - 1].message, 'Discarded your changes to Sco.');
 });
 
 test('a draft that cannot be opened says so and changes nothing', async () => {
     setDraftOpener(async () => { throw new Error('offline'); });
     await openEdit('S/2009', 'Sco');
     assert.equal(draftHandle.value, null);
-    assert.equal(edit.error, 'The server could not be reached. Nothing was changed.');
+    assert.equal(edit.error, 'Can’t reach the server, so nothing was changed. Check your connection and try again.');
     discardEdit();
     setDraftOpener(null);
 });

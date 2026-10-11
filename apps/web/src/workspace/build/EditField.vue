@@ -105,14 +105,14 @@ const changed = computed(() => props.mark !== 'none' && props.was !== undefined 
         @blur="onBlur"
         @input="onText"
       />
-      <span v-if="field.permission === 'roll' && locked" class="ef-locked" title="You typed this: it is kept as typed when the system is rolled again">Locked</span>
+      <span v-if="field.permission === 'roll' && locked" class="ef-locked" title="You typed this value, so rolling the system again doesn’t change it">Locked</span>
       <button
         v-if="field.permission === 'roll'"
         type="button"
         class="ui-btn is-icon ef-roll"
         :disabled="busy"
         :aria-label="'Roll ' + field.label + ' again'"
-        :title="locked ? 'Roll again: gives this back to the engine' : 'Roll again'"
+        :title="locked ? 'Roll again. The engine replaces the value you typed' : 'Roll again'"
         @click="$emit('roll')"
       >
         <Icon name="wand-magic-sparkles" :size="12" />

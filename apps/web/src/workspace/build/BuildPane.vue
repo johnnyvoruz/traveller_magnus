@@ -10,6 +10,8 @@ import { parseHexKey } from '../places.ts';
 import { buildSettings, generateMany, hexName, hexState, previewAt, removeHexes, restorable, restoreHexes, stopBuild, tallyOf, truthAt } from './acts.ts';
 import { edit, openBlank } from './edit.ts';
 import GenerateSheet from './GenerateSheet.vue';
+import PublishForm from '../market/PublishForm.vue';
+import { marketUi } from '../market/market.ts';
 import { generateGrowing, growUi } from './grow_acts.ts';
 import { NAME_MAX, slotGroups, subsectorWords } from './sectors.ts';
 import { build, choiceLine, plural, settingRows } from './state.ts';
@@ -47,9 +49,9 @@ const slots = computed(() => slotGroups(props.keys));
 const inSlots = computed(() => slots.value.reduce((sum, group) => sum + group.count, 0));
 const growLead = computed(() => {
     const sectors = slots.value.length === 1 ? 'a new sector' : slots.value.length + ' new sectors';
-    if (props.keys.length === 1) return 'This hex is in an empty slot. Generating here makes ' + sectors + '.';
-    const which = inSlots.value === props.keys.length ? 'These ' + props.keys.length + ' hexes are' : inSlots.value + ' of these ' + props.keys.length + ' hexes are';
-    return which + (slots.value.length === 1 ? ' in an empty slot' : ' in empty slots') + '. Generating here makes ' + sectors + '.';
+    if (props.keys.length === 1) return 'This hex is in an empty sector slot. Generating here creates ' + sectors + '.';
+    const which = inSlots.value === props.keys.length ? 'These ' + props.keys.length + ' hexes are' : 'Of these ' + props.keys.length + ' hexes, ' + inSlots.value + ' are';
+    return which + (slots.value.length === 1 ? ' in an empty sector slot' : ' in empty sector slots') + '. Generating here creates ' + sectors + '.';
 });
 const growBox = ref<HTMLElement | null>(null);
 
@@ -63,7 +65,7 @@ watch(() => [growUi.want, growUi.focus] as const, ([slug]) => {
 });
 
 function generate(): void {
-    if (slots.value.length) void generateGrowing(props.keys);
+    if (slots.value.length) generateGrowing(props.keys);
     else if (props.mode === 'many') generateMany(props.keys);
     else void previewAt(one.value);
 }
@@ -75,13 +77,16 @@ function generate(): void {
       <div class="build-prog-line">
         <b>{{ build.job.label }}</b>
         <span>{{ build.job.done }} of {{ build.job.total }}<template v-if="build.job.failed.length"> · {{ build.job.failed.length }} failed</template></span>
+        <button v-if="growUi.undoRunning" type="button" class="ui-btn" data-grow-undo title="Stops the job and removes the new sectors and every system generated in them" @click="growUi.undoRunning()">Undo</button>
         <button type="button" class="ui-btn" :disabled="build.job.state !== 'running'" @click="stopBuild()">{{ build.job.state === 'running' ? 'Stop' : 'Stopping…' }}<kbd class="build-key">X</kbd></button>
       </div>
       <div class="build-prog-bar"><i :style="{ width: (build.job.total ? 100 * build.job.done / build.job.total : 0) + '%' }"></i></div>
     </div>
 
+    <PublishForm v-if="marketUi.open && mode === 'many'" :keys="keys" />
+
     <GenerateSheet
-      v-if="build.sheetOpen"
+      v-else-if="build.sheetOpen"
       :many="mode === 'many'"
       :empty="mode === 'many' ? count.empty.length : 1"
       :filled="mode === 'many' ? filled : 0"
@@ -92,8 +97,8 @@ function generate(): void {
 
     <template v-else>
       <div class="build-main">
-      <p v-if="mode === 'empty'" class="build-lead">Nothing is charted in this hex.</p>
-      <p v-else-if="mode === 'removed'" class="build-lead">You removed {{ chartRow && chartRow.name ? chartRow.name : 'this system' }} from your map. The chart still holds it.</p>
+      <p v-if="mode === 'empty'" class="build-lead">This hex is empty.</p>
+      <p v-else-if="mode === 'removed'" class="build-lead">You removed {{ chartRow && chartRow.name ? chartRow.name : 'this system' }} from your map. It’s still on the chart.</p>
       <ul v-else class="build-tally">
         <li><b>{{ count.empty.length }}</b>{{ count.empty.length === 1 ? 'empty hex' : 'empty hexes' }}</li>
         <li><b>{{ count.chart.length }}</b>{{ count.chart.length === 1 ? 'system as charted' : 'systems as charted' }}<em v-if="count.chart.length">{{ names(count.chart) }}</em></li>
@@ -117,7 +122,7 @@ function generate(): void {
             :disabled="growUi.busy || busy"
             @keydown.enter.prevent="generate"
           />
-          <small>{{ subsectorWords(group.letters) }}. The sector has its sixteen subsectors; Rename (F2) names one once the sector is made.</small>
+          <small>{{ subsectorWords(group.letters) }}. The sector has 16 subsectors. To name a subsector after the sector is created, select the subsector, and then select Rename (F2).</small>
         </label>
       </div>
 
@@ -144,7 +149,7 @@ function generate(): void {
             @click="generate"
           >
             <Icon name="wand-magic-sparkles" :size="13" />
-            <template v-if="slots.length">{{ growUi.busy ? 'Making…' : (slots.length === 1 ? 'Make the sector and generate ' : 'Make ' + slots.length + ' sectors and generate ') + (mode === 'many' ? plural(count.empty.length, 'hex', 'hexes') : 'a system') }}</template>
+            <template v-if="slots.length">{{ growUi.busy ? 'Creating…' : (slots.length === 1 ? 'Create the sector and generate ' : 'Create ' + slots.length + ' sectors and generate ') + (mode === 'many' ? plural(count.empty.length, 'hex', 'hexes') : 'a system') }}</template>
             <template v-else-if="mode === 'many'">Generate the {{ plural(count.empty.length, 'empty hex', 'empty hexes') }}</template>
             <template v-else>{{ build.rolling ? 'Generating…' : 'Generate a system' }}</template>
             <kbd v-if="mode !== 'removed'" class="build-key">G</kbd>
@@ -156,12 +161,12 @@ function generate(): void {
             data-command="build-blank"
             :disabled="busy || edit.opening"
             :aria-busy="edit.opening ? 'true' : undefined"
-            title="An empty system designed by hand: no star, no world, nothing rolled. The designer opens on it"
+            title="Creates an empty system and opens it in the designer. It has no stars or worlds, and nothing is rolled"
             @click="openBlank(one)"
           >
-            <Icon name="plus" :size="13" />{{ edit.opening ? 'Making…' : 'Blank system' }}
+            <Icon name="plus" :size="13" />{{ edit.opening ? 'Creating…' : 'Blank system' }}
           </button>
-          <p v-if="mode === 'many' && count.empty.length === 0" class="build-fine">No hex here is empty.</p>
+          <p v-if="mode === 'many' && count.empty.length === 0" class="build-fine">None of the selected hexes are empty.</p>
         </div>
         <p class="build-with">
           <Icon name="sliders" :size="12" />{{ choiceLine(build.choice) }} · this universe's settings ·
@@ -174,7 +179,7 @@ function generate(): void {
       <p v-else-if="mode === 'empty' && edit.error && edit.hexKey === one" class="build-error" role="alert">{{ edit.error }}</p>
 
       <div v-if="mode === 'many'" class="build-acts build-more">
-        <button v-if="filled > 0" type="button" class="ui-btn" :disabled="busy" title="Choose the engine, then “Regenerate them too”" @click="build.sheetOpen = true">
+        <button v-if="filled > 0" type="button" class="ui-btn" :disabled="busy" title="Choose an engine, and then select “Regenerate them too”" @click="build.sheetOpen = true">
           <Icon name="wand-magic-sparkles" :size="13" />Regenerate the {{ plural(filled, 'system', 'systems') }}…
         </button>
         <button v-if="canRestore.length > 0" type="button" class="ui-btn" :disabled="busy" @click="restoreHexes(keys)">
@@ -185,9 +190,9 @@ function generate(): void {
         </button>
       </div>
 
-      <p v-if="slots.length" class="build-fine">Here the systems are kept as they are generated, with no preview: one Undo takes them and the new {{ slots.length === 1 ? 'sector' : 'sectors' }} back.</p>
-      <p v-else-if="mode === 'empty'" class="build-fine">Generate shows the system first; nothing is kept until you say so. A blank system is stored at once, empty, and opens in the designer: every body in it is yours to add.</p>
-      <p v-else-if="mode === 'removed'" class="build-fine">A removed hex shows as a faint outline while Build is on, and not at all otherwise.</p>
+      <p v-if="slots.length" class="build-fine">These systems are saved as they are generated, with no preview. To remove the new {{ slots.length === 1 ? 'sector and its systems' : 'sectors and their systems' }}, select Undo. Undo also works while the job is running.</p>
+      <p v-else-if="mode === 'empty'" class="build-fine">Generate a system shows a preview first. The system is saved only when you select Keep. Blank system saves an empty system right away and opens it in the designer, where you add each body yourself.</p>
+      <p v-else-if="mode === 'removed'" class="build-fine">While Build is on, a removed hex shows as a faint outline. When Build is off, the hex doesn’t show.</p>
       </div>
       <div v-if="mode === 'many'" class="build-side">
         <h3 class="ui-heading">Selected <span class="ui-count">{{ keys.length }}</span></h3>
@@ -201,7 +206,7 @@ function generate(): void {
             </button>
           </li>
         </ul>
-        <p v-if="keys.length > rows.length" class="build-fine">The first {{ rows.length }} of {{ keys.length }} are listed.</p>
+        <p v-if="keys.length > rows.length" class="build-fine">Showing the first {{ rows.length }} of {{ keys.length }} hexes.</p>
       </div>
     </template>
   </div>
@@ -369,7 +374,7 @@ function generate(): void {
   align-items: start;
 }
 
-.build-pane[data-mode="many"]:is([data-span="half"], [data-span="full"]) > :is(.build-prog, .build-sheet) {
+.build-pane[data-mode="many"]:is([data-span="half"], [data-span="full"]) > :is(.build-prog, .build-sheet, .mk-form) {
   grid-column: 1 / -1;
 }
 

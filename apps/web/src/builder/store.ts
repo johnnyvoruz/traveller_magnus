@@ -23,6 +23,9 @@ import {
     BuilderJob,
     BuilderJobUndo,
     FormMessage,
+    RefereeSector,
+    SectorGenerateDone,
+    SectorGenerateUndone,
     SectorHex,
     type BuilderGenerator,
     type BuilderHex as HexRow,
@@ -38,7 +41,7 @@ import { parseHexKey } from '../workspace/places.ts';
 import { startDraft, type BlankOpened, type DraftHandle, type KeepOutcome } from './draft.ts';
 import { mergeHex } from './overlay.ts';
 import { openSectors } from './sectors.ts';
-import type { GenerateHandle, HexView, JobProgress, UndoToken } from './types.ts';
+import type { GenerateGrowingBody, GenerateGrowingHandle, GenerateHandle, HexView, JobProgress, UndoToken } from './types.ts';
 import type { OwnSectors } from '../workspace/build/seam.ts';
 
 type FetchLike = typeof fetch;
@@ -79,9 +82,14 @@ type Queued = {
     fail?: (err: unknown) => void;
 };
 type RevertItem = { hexKey: string; toRev: number; before: HexRow | null; op: ChangeOp | 'generate' };
+type GrowUndoBody = { sectorId: string; baseRev: number } | { jobId: string };
+type GrowRestoreSector = { id: string; toRev: number; baseRev: number };
+type GrowRestoreHex = { hexKey: string; toRev: number; baseRev: number };
 type UndoRecord =
     | { kind: 'reverts'; items: RevertItem[] }
-    | { kind: 'job'; jobId: string; sectors: string[] };
+    | { kind: 'job'; jobId: string; sectors: string[] }
+    | { kind: 'grow'; body: GrowUndoBody; sectorIds: string[]; reloadSlugs: string[] }
+    | { kind: 'grow-restore'; sectors: GrowRestoreSector[]; hexes: GrowRestoreHex[] };
 
 class HttpError extends Error {
     readonly status: number;
@@ -154,13 +162,19 @@ export type Builder = {
     hexView(hexKey: string, truth: SectorHex | null): HexView | null;
     preview(hexKey: string, edition: string, generator: BuilderGenerator, roll: number): Promise<{ envelope: unknown; hash: string; roll: number; entry: SectorHex | null }>;
     generate(body: { hexKeys: readonly string[]; edition: string; generator: BuilderGenerator; roll: number; filledToo: boolean }, onProgress?: (progress: JobProgress) => void): GenerateHandle;
+    /** One generate that also makes sectors. Undo is `POST .../sectors/undo-generate`. */
+    generateGrowing(body: GenerateGrowingBody, onProgress?: (progress: JobProgress) => void): GenerateGrowingHandle;
     /**
      * `truthOf` is the chart row under a hex that has no universe row yet.
      * Removing that chart system writes a removed row at baseRev 0.
      */
     remove(hexKeys: readonly string[], truthOf?: (hexKey: string) => SectorHex | null): UndoToken;
     restore(hexKeys: readonly string[]): UndoToken;
-    undo(token: UndoToken): Promise<void>;
+    /**
+     * A grow act's token returns the Restore (sector undos, then hex reverts), or null when
+     * the answer cannot be read. Every other token returns null.
+     */
+    undo(token: UndoToken): Promise<UndoToken | null>;
     /** The edit form for one stored system. Local until `keep` on the handle. */
     openDraft(hexKey: string): Promise<DraftHandle>;
     /** An empty hand system on this hex, then that system's draft. A hex that already has a tree is refused. */
@@ -192,6 +206,8 @@ export function openMap(options: OpenMapOptions): Builder {
     let askStop = false;
     let wake: (() => void) | null = null;
     let generating = false;
+    /** A grow job whose undo-generate has succeeded. Its poll ends as `stopped`. */
+    let releasedJob: string | null = null;
     /** Hexes whose generate request has not landed. A remove of one of them still queues. */
     const pendingGenerate = new Set<string>();
 
@@ -439,12 +455,13 @@ export function openMap(options: OpenMapOptions): Builder {
         return run;
     }
 
-    async function loadSector(slug: string): Promise<void> {
+    async function loadSector(slug: string, stale?: () => boolean): Promise<void> {
         const id = requireId();
         const fresh: HexRow[] = [];
         let cursor: string | null = null;
         const seen = new Set<string>();
         for (let page = 0; page < MAX_PAGES; page += 1) {
+            if (stale?.()) return;
             const url = `/api/universes/${encodeURIComponent(id)}/hexes?sector=${encodeURIComponent(slug)}&limit=100` + (cursor ? `&cursor=${encodeURIComponent(cursor)}` : '');
             const data = BuilderHexPage.parse(await request('GET', url));
             fresh.push(...data.items);
@@ -453,6 +470,8 @@ export function openMap(options: OpenMapOptions): Builder {
             seen.add(next);
             cursor = next;
         }
+        // A grow Undo may have dropped these rows while the page was in flight.
+        if (stale?.()) return;
         for (const key of [...rows.keys()]) {
             if (sectorOf(key) === slug && !queue.has(key)) dropRow(key);
         }
@@ -473,8 +492,11 @@ export function openMap(options: OpenMapOptions): Builder {
         return out;
     }
 
-    async function reload(slugs: readonly string[]): Promise<void> {
-        for (const slug of slugs) await loadSector(slug);
+    async function reload(slugs: readonly string[], stale?: () => boolean): Promise<void> {
+        for (const slug of slugs) {
+            if (stale?.()) return;
+            await loadSector(slug, stale);
+        }
     }
 
     function hexView(hexKey: string, truth: SectorHex | null): HexView | null {
@@ -526,27 +548,50 @@ export function openMap(options: OpenMapOptions): Builder {
         return BuilderJob.parse(await request('GET', `/api/universes/${encodeURIComponent(id)}/jobs/${encodeURIComponent(jobId)}`));
     }
 
+    /** A grow undo that landed while this poll was asleep. The poll then ends as stopped. */
+    function released(jobId: string, last: JobProgress): JobProgress | null {
+        if (releasedJob !== jobId) return null;
+        releasedJob = null;
+        return { ...last, state: 'stopped' };
+    }
+
     async function watch(jobId: string, slugs: readonly string[], onProgress?: (progress: JobProgress) => void): Promise<JobProgress> {
         const id = requireId();
         let polls = 0;
         let stopSent = false;
+        const stale = (): boolean => releasedJob === jobId;
+        let last: JobProgress = { total: 0, done: 0, failed: [], skipped: 0, state: 'running' };
         while (polls < MAX_POLLS) {
+            const early = released(jobId, last);
+            if (early) return early;
             polls += 1;
             let job = await readJob(id, jobId);
-            await reload(slugs);
-            onProgress?.(progressOf(job));
-            if (job.state === 'done' || job.state === 'stopped' || job.state === 'failed') return progressOf(job);
+            const afterRead = released(jobId, progressOf(job));
+            if (afterRead) return afterRead;
+            await reload(slugs, stale);
+            const afterReload = released(jobId, progressOf(job));
+            if (afterReload) return afterReload;
+            last = progressOf(job);
+            onProgress?.(last);
+            const afterNote = released(jobId, last);
+            if (afterNote) return afterNote;
+            if (job.state === 'done' || job.state === 'stopped' || job.state === 'failed') return last;
             if (askStop && !stopSent) {
                 stopSent = true;
                 onProgress?.(progressOf(job, 'stopping'));
                 job = BuilderJob.parse(await request('POST', `/api/universes/${encodeURIComponent(id)}/jobs/${encodeURIComponent(jobId)}/stop`, {}));
                 await reload(slugs);
                 onProgress?.(progressOf(job));
-                if (job.state === 'done' || job.state === 'stopped' || job.state === 'failed') return progressOf(job);
+                last = progressOf(job);
+                if (job.state === 'done' || job.state === 'stopped' || job.state === 'failed') return last;
             }
             await wait(JOB_POLL_MS);
             wake = null;
+            const afterWait = released(jobId, last);
+            if (afterWait) return afterWait;
         }
+        const late = released(jobId, last);
+        if (late) return late;
         throw new Error('The job did not finish.');
     }
 
@@ -635,6 +680,149 @@ export function openMap(options: OpenMapOptions): Builder {
         };
     }
 
+    const SLOT_KEY = /^~slot_(-?\d+)_(-?\d+)\/(\d{4})$/;
+
+    function checkSeeds(seeds: GenerateGrowingBody['makeSectors']): void {
+        if (!Array.isArray(seeds) || seeds.length === 0) throw new Error('Name the sectors to make.');
+        for (const seed of seeds) {
+            if (!seed || typeof seed.name !== 'string' || !seed.name.trim()) throw new Error('Name the sectors to make.');
+            const slot = seed.slot;
+            if (!slot || !Number.isInteger(slot.x) || !Number.isInteger(slot.y)) throw new Error('Name the sectors to make.');
+        }
+    }
+
+    /** Placeholder keys become `<id>/<hhhh>` for the sector that was made in that slot. */
+    function growKeys(hexKeys: readonly string[], made: { id: string; slot: { x: number; y: number } }[]): Record<string, string> {
+        const keys: Record<string, string> = {};
+        for (const hexKey of hexKeys) {
+            const match = SLOT_KEY.exec(hexKey);
+            if (!match) continue;
+            const x = Number(match[1]);
+            const y = Number(match[2]);
+            const sector = made.find((item) => item.slot.x === x && item.slot.y === y);
+            if (!sector) throw new Error('The server did not send the sector.');
+            keys[hexKey] = sector.id + '/' + match[3];
+        }
+        return keys;
+    }
+
+    function growSlugs(hexKeys: readonly string[], sectorIds: readonly string[]): { watch: string[]; existing: string[] } {
+        const existing: string[] = [];
+        for (const key of hexKeys) {
+            const slug = sectorOf(key);
+            if (!slug || slug.startsWith('~slot_')) continue;
+            if (!existing.includes(slug)) existing.push(slug);
+        }
+        const watch = [...sectorIds];
+        for (const slug of existing) if (!watch.includes(slug)) watch.push(slug);
+        return { watch, existing };
+    }
+
+    function dropSectorRows(ids: readonly string[]): void {
+        const made = new Set(ids);
+        for (const key of [...rows.keys()]) {
+            const slug = sectorOf(key);
+            if (slug && made.has(slug)) dropRow(key);
+        }
+    }
+
+    function generateGrowing(body: GenerateGrowingBody, onProgress?: (progress: JobProgress) => void): GenerateGrowingHandle {
+        checkGenerate(body);
+        checkSeeds(body.makeSectors);
+        if (generating) throw new Error('A build is already running.');
+        generating = true;
+        askStop = false;
+        releasedJob = null;
+        for (const key of body.hexKeys) pendingGenerate.add(key);
+        let accept: (value: { sectors: ReturnType<ReturnType<typeof openSectors>['adopt']>; keys: Record<string, string>; undo: UndoToken }) => void = () => {};
+        let rejectAccepted: (err: unknown) => void = () => {};
+        let acceptedSettled = false;
+        const accepted = new Promise<{ sectors: ReturnType<ReturnType<typeof openSectors>['adopt']>; keys: Record<string, string>; undo: UndoToken }>((resolve, reject) => {
+            accept = resolve;
+            rejectAccepted = reject;
+        });
+        const finished = (async () => {
+            try {
+                const previous = new Map<string, HexRow | null>();
+                for (const key of body.hexKeys) previous.set(key, copyRow(rows.get(key) ?? null));
+                await flushMap();
+                if (queue.size > 0) throw new Error(lastError.value || 'offline');
+                const id = requireId();
+                const payload: Record<string, unknown> = {
+                    hexKeys: [...body.hexKeys],
+                    edition: body.edition,
+                    generator: body.generator,
+                    roll: body.roll,
+                    filledToo: body.filledToo,
+                    makeSectors: body.makeSectors.map((seed) => ({ name: seed.name, slot: { x: seed.slot.x, y: seed.slot.y } })),
+                };
+                if (body.hexKeys.length === 1) {
+                    const only = body.hexKeys[0];
+                    const slug = sectorOf(only);
+                    const prior = previous.get(only);
+                    payload.baseRev = slug && slug.startsWith('~slot_') ? 0 : (prior ? prior.rev : 0);
+                }
+                const data = await request('POST', `/api/universes/${encodeURIComponent(id)}/generate`, payload);
+                const done = SectorGenerateDone.parse(data);
+                const made = sectorBook().adopt(done.sectors);
+                if (made.length === 0) throw new Error('The server did not send the sector.');
+                const sectorIds = made.map((sector) => sector.id);
+                const slugs = growSlugs(body.hexKeys, sectorIds);
+                const keys = growKeys(body.hexKeys, made);
+                for (const row of done.rows) land(row.hexKey, row);
+                for (const slug of slugs.watch) loaded.add(slug);
+                bump();
+                const undoBody: GrowUndoBody = done.jobId
+                    ? { jobId: done.jobId }
+                    : { sectorId: made[0].id, baseRev: made[0].rev };
+                const undo = mint({ kind: 'grow', body: undoBody, sectorIds, reloadSlugs: slugs.existing });
+                const opened = { sectors: made, keys, undo };
+                acceptedSettled = true;
+                accept(opened);
+                if (done.jobId) {
+                    const progress = await watch(done.jobId, slugs.watch, onProgress);
+                    if (queue.size > 0 && !cancelRetry) scheduleFlush();
+                    lastError.value = '';
+                    return { undo, progress };
+                }
+                const progress: JobProgress = {
+                    total: body.hexKeys.length,
+                    done: done.rows.length,
+                    failed: [],
+                    skipped: done.skipped.length,
+                    state: 'done',
+                };
+                onProgress?.(progress);
+                if (queue.size > 0 && !cancelRetry) scheduleFlush();
+                lastError.value = '';
+                return { undo, progress };
+            } catch (err) {
+                if (err instanceof HttpError && err.status === 409 && err.message === 'That slot is in use.') {
+                    const details = err.details;
+                    const current = isRecord(details) ? details.current : undefined;
+                    if (RefereeSector.safeParse(current).success) sectorBook().adopt([current]);
+                }
+                if (!lastError.value) lastError.value = err instanceof Error ? err.message : 'offline';
+                if (!acceptedSettled) {
+                    acceptedSettled = true;
+                    rejectAccepted(err);
+                }
+                throw err;
+            } finally {
+                for (const key of body.hexKeys) pendingGenerate.delete(key);
+                generating = false;
+            }
+        })();
+        return {
+            stop() {
+                askStop = true;
+                if (wake) wake();
+            },
+            accepted,
+            finished,
+        };
+    }
+
     function remove(hexKeys: readonly string[], truthOf?: (hexKey: string) => SectorHex | null): UndoToken {
         const items: RevertItem[] = [];
         for (const hexKey of hexKeys) {
@@ -700,9 +888,58 @@ export function openMap(options: OpenMapOptions): Builder {
         land(item.hexKey, data);
     }
 
-    async function undo(token: UndoToken): Promise<void> {
+    async function undoGrow(tokenId: string, rec: Extract<UndoRecord, { kind: 'grow' }>): Promise<UndoToken | null> {
+        await flushMap();
+        if (queue.size > 0) throw new Error(lastError.value || 'offline');
+        const id = requireId();
+        const data = await request('POST', `/api/universes/${encodeURIComponent(id)}/sectors/undo-generate`, rec.body);
+        const undone = SectorGenerateUndone.safeParse(data);
+        sectorBook().forget(rec.sectorIds);
+        dropSectorRows(rec.sectorIds);
+        for (const sectorId of rec.sectorIds) loaded.delete(sectorId);
+        undos.delete(tokenId);
+        if ('jobId' in rec.body) {
+            releasedJob = rec.body.jobId;
+            if (wake) wake();
+        }
+        await reload(rec.reloadSlugs);
+        lastError.value = '';
+        bump();
+        if (!undone.success) return null;
+        return mint({ kind: 'grow-restore', sectors: undone.data.sectors, hexes: undone.data.hexes });
+    }
+
+    async function undoGrowRestore(tokenId: string, rec: Extract<UndoRecord, { kind: 'grow-restore' }>): Promise<null> {
+        await flushMap();
+        if (queue.size > 0) throw new Error(lastError.value || 'offline');
+        const id = requireId();
+        const slugs: string[] = [];
+        for (const sector of rec.sectors) {
+            const data = await request('POST', `/api/universes/${encodeURIComponent(id)}/sectors/${encodeURIComponent(sector.id)}/undo`, {
+                toRev: sector.toRev,
+                baseRev: sector.baseRev,
+            });
+            if (RefereeSector.safeParse(data).success) sectorBook().adopt([data]);
+            if (!slugs.includes(sector.id)) slugs.push(sector.id);
+        }
+        for (const hex of rec.hexes) {
+            const data = await request('POST', hexPath(id, hex.hexKey, '/revert'), { toRev: hex.toRev, baseRev: hex.baseRev });
+            land(hex.hexKey, data);
+            const slug = sectorOf(hex.hexKey);
+            if (slug && !slugs.includes(slug)) slugs.push(slug);
+        }
+        await reload(slugs);
+        undos.delete(tokenId);
+        lastError.value = '';
+        bump();
+        return null;
+    }
+
+    async function undo(token: UndoToken): Promise<UndoToken | null> {
         const rec = undos.get(token.id);
-        if (!rec) return;
+        if (!rec) return null;
+        if (rec.kind === 'grow') return undoGrow(token.id, rec);
+        if (rec.kind === 'grow-restore') return undoGrowRestore(token.id, rec);
         if (rec.kind === 'job') {
             await flushMap();
             if (queue.size > 0) throw new Error(lastError.value || 'offline');
@@ -712,7 +949,7 @@ export function openMap(options: OpenMapOptions): Builder {
             undos.delete(token.id);
             lastError.value = '';
             bump();
-            return;
+            return null;
         }
         const unsent = !flight && rec.items.length > 0 && rec.items.every((item) => {
             const queued = queue.get(item.hexKey);
@@ -726,7 +963,7 @@ export function openMap(options: OpenMapOptions): Builder {
             undos.delete(token.id);
             pending.value = queue.size > 0;
             bump();
-            return;
+            return null;
         }
         await flushMap();
         if (queue.size > 0) throw new Error(lastError.value || 'offline');
@@ -734,6 +971,7 @@ export function openMap(options: OpenMapOptions): Builder {
         undos.delete(token.id);
         lastError.value = '';
         bump();
+        return null;
     }
 
     async function tree(hexKey: string): Promise<unknown | null> {
@@ -820,6 +1058,12 @@ export function openMap(options: OpenMapOptions): Builder {
 
     let ownSectors: ReturnType<typeof openSectors> | null = null;
 
+    function sectorBook(): NonNullable<typeof ownSectors> {
+        sectors();
+        if (!ownSectors) throw new Error('offline');
+        return ownSectors;
+    }
+
     function sectors(): OwnSectors & { load(): Promise<void> } {
         if (!ownSectors) {
             ownSectors = openSectors({
@@ -864,6 +1108,7 @@ export function openMap(options: OpenMapOptions): Builder {
         hexView,
         preview,
         generate,
+        generateGrowing,
         remove,
         restore,
         undo,

@@ -528,6 +528,32 @@ test('Regina overview and Caesillian 0914 partial follow the inspector', async (
     assert.equal(partialModel.rows.some((row) => row.label === 'Starport'), false);
 });
 
+test('a belt shows no year, and a world still does', () => {
+    const tree = {
+        kind: 'tree',
+        hexKey: 'own/0102',
+        body: {
+            handSystem: {
+            name: 'Hand',
+            stars: [{ name: 'Primary', sType: 'G', subType: '2', sClass: 'V' }],
+            worlds: [
+                { type: 'Planetoid Belt', name: 'Dust', au: 2.8, orbitId: 4, periodYears: 4.7, periodDays: 1716, eccentricity: 0 },
+                { type: 'World', name: 'Rock', au: 1, orbitId: 3, periodYears: 1, periodDays: 365 },
+            ],
+            },
+        },
+    };
+    const belt = bodyModel(tree, 'w0');
+    const world = bodyModel(tree, 'w1');
+    assert.equal(belt.facts.some((fact) => fact.label === 'Year'), false);
+    assert.equal(world.facts.some((fact) => fact.label === 'Year'), true);
+    const beltOrbit = belt.sideSections.find((section) => section.heading === 'Orbit');
+    const worldOrbit = world.sideSections.find((section) => section.heading === 'Orbit');
+    assert.equal(beltOrbit.rows.some((row) => row.label === 'Orbital period (days)'), false);
+    assert.equal(worldOrbit.rows.some((row) => row.label === 'Orbital period (days)'), true);
+    assert.equal(beltOrbit.rows.some((row) => row.label === 'Distance (AU)'), true);
+});
+
 function walkBodies(system, visit) {
     (system.worlds || []).forEach((world, index) => {
         visit(world, 'w' + index, false);

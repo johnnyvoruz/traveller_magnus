@@ -76,12 +76,12 @@ export function nameAt(): string {
 }
 
 function fail(err: unknown): void {
-    sectorUi.error = err instanceof Error && err.message ? err.message : 'That did not work.';
+    sectorUi.error = err instanceof Error && err.message ? err.message : 'That action failed. Try again.';
 }
 
 /** An Undo that could not be done says so where it was pressed: the pane may be showing something else by then. */
 function sayFail(err: unknown): void {
-    showToast(err instanceof Error && err.message ? err.message : 'That could not be undone.');
+    showToast(err instanceof Error && err.message ? err.message : 'Undo failed. Try again.');
 }
 
 function offerUndo(message: string, token: SectorUndoToken, after?: () => void): void {
@@ -124,7 +124,7 @@ export async function newSector(): Promise<void> {
     if (!store || !at || at.kind !== 'slot') return;
     const name = cleanName(sectorUi.name);
     if (!name) {
-        sectorUi.error = sectorUi.name.trim() ? 'A name holds at most ' + NAME_MAX + ' characters.' : '';
+        sectorUi.error = sectorUi.name.trim() ? 'Use a name of ' + NAME_MAX + ' characters or fewer.' : '';
         sectorUi.focusName += 1;
         return;
     }
@@ -133,7 +133,7 @@ export async function newSector(): Promise<void> {
     if (!made) return;
     sectorUi.name = '';
     if (nav) nav.openSector(made.id, null);
-    showToast('Made the sector ' + made.name + '.', {
+    showToast('Created the sector ' + made.name + '.', {
         action: {
             label: 'Undo',
             run: () => {
@@ -170,11 +170,11 @@ export async function commitRename(text: string): Promise<void> {
         return;
     }
     if (typed.length > NAME_MAX) {
-        sectorUi.error = 'A name holds at most ' + NAME_MAX + ' characters.';
+        sectorUi.error = 'Use a name of ' + NAME_MAX + ' characters or fewer.';
         return;
     }
     if (at.letter === null && !typed) {
-        sectorUi.error = 'A sector has a name.';
+        sectorUi.error = 'Enter a name for the sector.';
         return;
     }
     const letter = at.letter;
@@ -225,14 +225,14 @@ export async function moveTo(slot: Slot): Promise<void> {
         return;
     }
     if (nav && !nav.free(slot)) {
-        sectorUi.error = 'That slot is taken. Pick an empty one.';
+        sectorUi.error = 'That sector slot is in use. Select an empty sector slot.';
         return;
     }
     const token = await run(() => store.move(id, slot));
     if (!token) return;
     cancelMove();
     if (nav) nav.openSector(id, null);
-    offerUndo('Moved ' + sector.name + '. Its hexes and names went with it.', token, () => { if (nav) nav.openSector(id, null); });
+    offerUndo('Moved ' + sector.name + ' with its hexes and names.', token, () => { if (nav) nav.openSector(id, null); });
 }
 
 // ---- Delete -------------------------------------------------------------------------------------
@@ -245,8 +245,8 @@ export function canDelete(): boolean {
 export function deleteWords(): string {
     const at = ownAt();
     const count = at && nav ? nav.systems(at.id) : 0;
-    const goes = count > 0 ? 'Its ' + plural(count, 'system goes', 'systems go') + ' with it. ' : '';
-    return goes + 'A copy is kept; Undo puts it all back.';
+    const goes = count > 0 ? 'Also deletes its ' + plural(count, 'system', 'systems') + '. ' : '';
+    return goes + 'You can undo this.';
 }
 
 export async function deleteSector(): Promise<void> {
@@ -260,5 +260,5 @@ export async function deleteSector(): Promise<void> {
     if (!token) return;
     if (nav) nav.openSlot(sector.slot);
     const held = count > 0 ? ' and its ' + plural(count, 'system', 'systems') : '';
-    offerUndo('Deleted ' + sector.name + held + '. A copy is kept.', token, () => { if (nav) nav.openSector(sector.id, null); });
+    offerUndo('Deleted ' + sector.name + held + '.', token, () => { if (nav) nav.openSector(sector.id, null); });
 }

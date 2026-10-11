@@ -336,7 +336,8 @@ export function dayNightFigure(
     if (!body) return null;
     const turning = turningOf(body, !!parent);
     if (turning.lockedToStar) {
-        const yearDays = typeof body.periodDays === 'number' && Number.isFinite(body.periodDays) ? body.periodDays : null;
+        const storedDays = typeof body.periodDays === 'number' && Number.isFinite(body.periodDays) ? body.periodDays : null;
+        const yearDays = beltBody(body) ? null : storedDays;
         return {
             locked: true,
             lockedFacts: { twilightZone: body.isTwilightZone === true, yearDays },
@@ -403,8 +404,14 @@ export type YearFigure = {
  * solarDaysInYear. Null when the document gives no year length. The tile used to read
  * "19 yr", which says neither what a year is measured in nor how many days it holds.
  */
+function beltBody(body: Record<string, any>): boolean {
+    const type = typeof body.type === 'string' ? body.type : '';
+    const worldType = typeof body.worldType === 'string' ? body.worldType : '';
+    return type === 'Planetoid Belt' || type === 'Asteroid Belt' || worldType === 'Belt';
+}
+
 export function yearFigure(body: Record<string, any> | null | undefined): YearFigure | null {
-    if (!body) return null;
+    if (!body || beltBody(body)) return null;
     const hours = positive(body.yearHours);
     if (hours === null) return null;
     const days = hours / CLOCK_DAY_HOURS;

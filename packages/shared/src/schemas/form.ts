@@ -48,7 +48,8 @@ export type FormSection = z.infer<typeof FormSection>;
 
 /**
  * One edit form.
- * `generated` is an engine tree. `hand` is a system designed by hand: the engine is not run.
+ * `generated` is an engine tree. `hand` is a system designed by hand.
+ * A profile roll runs one body. The rest of a hand form does not run the engine.
  * A form that omits `mode` is `generated`.
  */
 export const EditForm = z.object({

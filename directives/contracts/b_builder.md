@@ -354,3 +354,126 @@ Nothing in this code expires an undo by time.
 ## Make sectors and generate, as one Undo
 
 **On disk, unpushed.** The two sections above are the act. One `POST .../generate` with `makeSectors` covers hexes in existing sectors and hexes in any number of new slots. One `POST .../sectors/undo-generate` takes back every sector that act made and every hex it wrote. `POST .../jobs/:jobId/undo` is unchanged: it does not delete those sectors, and a running job still answers 400 `The job is still running.`
+
+## Hand: orbit data
+
+**On disk, unpushed.** Extends the draft cycle. `order` is unchanged.
+
+The orbit view places a companion when the star row carries `orbitAU` or `orbitId` (`apps/web/src/orbit/distance.ts` lines 7 to 8 and 39 to 41; `starCompanionAU` prefers `orbitAU`, otherwise `orbitToAU(orbitId)` at `apps/web/src/orbit/maths.ts` lines 79 to 82). It places a world from numeric `au` (`distance.ts` lines 74 to 75; `layout.ts` line 375). A world is drawn on a star only when `orbitType` is `P-Type` or `S-Type` and `au` is greater than 0 (`layout.ts` lines 341 to 343 and 393 to 395). A moon's measured place is `pd` times the parent's `diamKm` (`distance.ts` lines 86 to 92). The drawn moon ring uses the moon's index, not `pd` (`layout.ts` lines 75 to 77). The card reads `pd` and `eccentricity` (`apps/web/src/orbit/card.ts`). `presentHand` fills none of these (`apps/web/src/orbit/hand_present.ts`).
+
+Generated MgT2E output, read from the engine: a companion star gets `separation`, `orbitId`, and `eccentricity` (`packages/engines/src/mgt2e_stellar_engine.js` lines 809 to 813 and 823 to 827; the primary's `orbitId` is null at line 683). A world gets `orbitId` and `au` from the orbit-number interpolation at lines 1817 to 1825, plus `eccentricity` and `orbitType`. A moon gets `pd` in planetary diameters, `eccentricity`, and `periodHrs` (`packages/engines/src/mgt2e_world_engine.js` lines 669 to 682). A planetoid belt gets `size` 0 and `eccentricity` 0 (lines 315 to 316), then `beltM`, `beltS`, `beltC`, and `composition` (lines 345 to 348). The same period block writes `periodYears`, `periodDays`, and `periodHours` when `au` is set (lines 354 to 367). The hand document stores none of the belt composition fields.
+
+### Stored fields
+
+All of these are optional. A document that omits them still parses. Empty `''` or `null` removes the key. Any other value must be a finite number or the draft is `<id> cannot hold that.` `rules/` states no minimum and no maximum for a typed orbit, so the server does not add one.
+
+| Form id | Who | Stored key | Unit |
+|---|---|---|---|
+| `<starId>.orbit.id` | star | `orbitId` | MgT2E orbit number. The table is `rules/mgt2e_data.js` lines 394 to 396 (`orbitAu`, 21 entries, orbit 0 at 0 AU through orbit 20 at 78700 AU). The same array is `packages/engines/src/core/constants.js` lines 125 to 127. |
+| `<starId>.orbit.au` | star | `orbitAU` | AU. The viewer prefers this over `orbitId`. |
+| `<starId>.orbit.eccentricity` | star | `eccentricity` | Dimensionless. `rules/mgt2e_data.js` lines 533 to 538 give eccentricity dice modifiers by anomalous-orbit type, not a numeric maximum. |
+| `<starId>.orbit.years` | star | `periodYears` | Years. The viewer uses `periodYears` when it is greater than 0 (`layout.ts` line 327). |
+| `<bodyId>.orbit.id` | world, gas, belt | `orbitId` | Same orbit number as a star. |
+| `<bodyId>.orbit.au` | world, gas, belt | `au` | AU. This is the key `layout.ts` line 375 reads. |
+| `<bodyId>.orbit.eccentricity` | world, gas, belt, moon | `eccentricity` | Same as a star. The engine sets a belt's eccentricity to 0 (`mgt2e_world_engine.js` lines 316 to 317). That is engine output, not a `rules/` lock, so the hand field stays editable. |
+| `<bodyId>.orbit.years` | world, gas | `periodYears` | Years. `packages/engines/src/mgt2e_math.js` lines 103 to 105 returns years. The world engine copies that onto `periodYears` (`mgt2e_world_engine.js` line 365). |
+| `<bodyId>.orbit.pd` | moon | `pd` | Planetary diameters. The engine writes `pd` at `mgt2e_world_engine.js` line 669. |
+
+A moon's form does not carry `.orbit.id`, `.orbit.au`, or `.orbit.years`. A world, gas giant, belt, or star does not carry `.orbit.pd`. Sending one of those is `Unknown field <id>.`
+
+`order` stays the nonnegative integer list order. It is not an orbit number. Setting both does not make them match, and the server does not require them to match. No rule in `rules/` and no hand check says two bodies cannot share an orbit number. The draft allows it.
+
+The engine auditor refuses a non-moon world whose `orbitId` is below the star's destroying inner limit: `packages/engines/src/mgt2e_uwp_auditor.js` lines 169 to 171, `Orbit Violation: World at orbit ${w.orbitId} is inside the star's destroying inner limit (${innerLimit}).` The hand path does not run that auditor. A hand draft does not refuse an orbit inside the star.
+
+`handWalk` copies a stored finite number onto the row keys above. It does not invent a missing one. For a world, gas giant, or belt that has `au` or `orbitId` and no `alsoParentId`, the walk also sets `orbitType` to `S-Type` and `parentStarIdx` to that body's star. A body with `alsoParentId` stays `P-Type`, as it already was. A belt's `periodYears` is not copied onto the walk. Lane A copies these keys in `presentHand`. `separation` on a companion stays the word `Companion`. The generated engine uses `Close`, `Near`, `Far`, and `Companion` (`mgt2e_stellar_engine.js` lines 809 and 823). `rules/` was not quoted for that enum here, so the hand walk does not pick one.
+
+### Conversion helper
+
+`packages/shared` exports `MGT2E_ORBIT_AU`, `mgt2eOrbitToAu`, and `mgt2eAuToOrbit`. Shared imports no engine. The array is the table at `rules/mgt2e_data.js` lines 394 to 396. `mgt2eOrbitToAu` is the interpolation in `orbitNumberToAu` (`mgt2e_stellar_engine.js`). `allocateOrbits` calls that function. An orbit number past 20 uses the last entry the way that block does. `mgt2eAuToOrbit` is `convertAuToOrbit` at lines 189 to 197 (an AU past the last interval returns 20). The screen calls these to draw the picker line, then writes the number it chose into `.orbit.id` or `.orbit.au` as an ordinary draft change. The server does not convert one stored field into the other.
+
+`rules/` also has `rules/ct_data.js` lines 3 to 5 (`ORBIT_AU`, first entry 0.2, later entries differ, 20 entries) and `rules/t5_data.js` line 37 (`ORBIT_AU`, first entry 0.2, 20 entries). The hand editions are MgT2E and AoW (`HandEnvelope.edition`). `rules/aow_data.js` has no orbit-distance table. The helper is the MgT2E table only. It is not applied to an AoW system. See Questions.
+
+A moon's period is not a form field. The engine sets `periodHrs` with `Math.sqrt(moonKm^3 / w.mass) / 361730` (`mgt2e_world_engine.js` lines 680 to 682). The viewer uses `periodHrs / (365.25 * 24)` when `periodHrs` is greater than 0, otherwise a different formula from `pd`, parent mass, and parent diameter (`apps/web/src/orbit/maths.ts` lines 139 to 151). `rules/` was not found stating which one a typed moon period uses. The form omits it.
+
+### Belt year fields
+
+Johnny's decision: a belt has no year data. The form for kind `belt` does not include these ids, and a draft change with one of them on a belt is dropped (no write, no error):
+
+- `<beltId>.orbit.years`
+- `<beltId>.orbit.days`
+- `<beltId>.orbit.hours`
+
+`.orbit.days` and `.orbit.hours` are not stored for any kind. On a world, gas giant, star, or moon they are `Unknown field <id>.` A stored belt that already has `periodYears` still parses. The form does not show it, and `handWalk` does not copy it. Generated belts still receive `periodYears` when `au` is set. That engine output is unchanged.
+
+Lane D stops showing `<beltId>.orbit.years`, `<beltId>.orbit.days`, and `<beltId>.orbit.hours`. Lane A does not read `periodYears`, `periodDays`, `periodHours`, `siderealHours`, or `solarDayHours` off a hand belt. The dossier and the orbit card are theirs.
+
+## Hand: roll a profile
+
+**On disk, unpushed.**
+
+The field id is `<bodyId>.profile.roll`. It is sent in the draft's `roll` array. It is not a typed change, and it is not a row on the form. Lane D's Roll profile button sends that id.
+
+`rollBodyProfile` is `packages/engines/src/mgt2e_roll_body.js`. It calls `isolateRng` (`packages/engines/src/core/rng.js`): `reseedForHex` of `hexId|bodyId|roll`, then the previous generator is put back. `roll` is the body's `profileRoll`, or 0 when that field is absent. A roll that writes a cell stores the next number. Discard drops the draft, so the stored number stays. The same master seed, hex, body, and number return the same cells. Rolling again uses the next number.
+
+MgT2E only. A moon, an edition that is not MgT2E, and any other id still answer `Nothing rolls this field.` `holds` is false.
+
+For a world or a belt the function builds a one-body system and calls `generatePhysicals`, `generateAtmospherics`, `generateRotationalDynamics`, `generateBiospherics`, and, when another body is the mainworld and its eight cells are filled, `generateCoreSocial`. The body is passed as `Terrestrial Planet` or `Planetoid Belt`, not as `Mainworld`, so the mainworld lock does not copy a baseline over the roll. Those step functions were not rewritten. `generateSubordinateSocial` stays unexported; `generateCoreSocial` calls it.
+
+Cells written back are the one-character profile cells the engine set. Orbit numbers on the hand body are not changed.
+
+A gas giant's `size` is `GG` and its profile is `uwpGG`. Neither fits one of these cells, so nothing is written. See Questions.
+
+A belt's size is 0. When a mainworld baseline is present, atmosphere and hydrographics are 0 as well, and the social cells are rolled. The form does not lock a belt cell.
+
+When the star has no spectral type, `generateStarObject` is not called. The atmosphere step uses luminosity 1 where luminosity is missing (`mgt2e_world_engine.js`, `lum || 1.0`). The moon pass then reads `primary.mass` and throws. That throw is caught. Cells already written are kept. The message says the star has no spectral type.
+
+A star with a type, subtype, and class is looked up with `generateStarObject`. That lookup does not roll. A white dwarf's rolled mass and cooling (`applyWhiteDwarfPhysics`) are not run, because that step rolls. The typed `D` branch of `generateStarObject` uses the brown-dwarf table. See Questions.
+
+`orbitNumberToAu` is the orbit-number interpolation `allocateOrbits` already used, moved to one function in `mgt2e_stellar_engine.js`. `allocateOrbits` calls it. The engines version stays `1.1.0`.
+
+Architect of Worlds is not this extraction. Its profile is built across the disk steps, including `generateUWPPhysicals`. None of them takes one hand body. Not built.
+
+## What may orbit what
+
+**On disk, unpushed.** A belt may orbit a star, a world, or a gas giant. A world or a gas giant whose parent is not a star is still refused: `A world orbits a star.`
+
+A belt around a world or a gas giant uses the moon's fields, `<id>.orbit.pd` and `<id>.orbit.eccentricity`, and no year. That parent clears `orbitId`, `au`, and `periodYears`. A star parent clears `pd`.
+
+Removing the world or the gas giant removes the belt, by the same cascade as a moon. The count is the number of ids that left. The star's sentence is unchanged: `N bodies go with this star.`
+
+`handWalk` does not give that belt its own world row. It nests it in the parent's `moons`:
+
+- `type` is `Planetoid Belt`
+- `name` and `notes`
+- `uwp` when the eight cells are filled
+- `pd` and `eccentricity` when they are stored
+- `isMoon` is not set
+- `periodYears` is not set
+
+No generator produces a belt around a world. The generators are untouched.
+
+Lane A draws that nested row. Lane D's parent list still turns a body given to a world into a moon. A belt given to a world or a gas giant stays kind `belt`. The server accepts that. The screen has to send it.
+
+Hand editions are MgT2E and AoW.
+
+`rules/guideline_4_2_gas_giants_and_belts.md` places gas giants, then planetoid belts, into stellar orbits (section 1, lines 4 to 9, Classic Traveller; section 2, lines 11 to 21, Mongoose, belt composition by HZCO). It does not say a belt orbits a world. `rules/guideline_1_4_orbital_allocation.md` line 7 says a habitable-zone displacement must not overwrite a planetoid belt; the search targets an empty slot or a gas giant. Lines 14 to 17 (Mongoose) place planetoid belts in stellar slots after gas giants, and a size-1 mainworld that collides with a belt becomes a subordinate world inside that belt. That is a world in a belt's slot, not a belt orbiting a world. `rules/mgt2e_data.js` lines 545 to 553 list moon quantities for terrestrial sizes and for SGG, MGG, and LGG. Belts are not in that list. **rules/ is silent** on a belt orbiting a world or a gas giant.
+
+Rings: `rules/mgt2e_data.js` lines 417 to 419 say size `0` and size `R` (ring) have no diameter. Generated worlds start with `rings` as an array (`mgt2e_world_engine.js` line 375). Each ring then gets `center` and `span` (lines 720 to 722). The viewer treats moon size `R` as a ring and also reads `raw.rings` (`layout.ts` lines 70 to 72 and 353). The hand model has no `rings` array and no size `R`. This pass does not add them.
+
+### A belt's profile
+
+`rules/guideline_4_2_gas_giants_and_belts.md` lines 25 to 26 (Traveller 5 only): belt size is 0, and the string is `St000PGL-T`, so atmosphere and hydrographics are 0. T5 is not a hand edition. That string is not copied onto MgT2E or AoW.
+
+Mongoose section 2 of the same file (lines 17 to 21) and `rules/mgt2e_data.js` lines 778 to 793 give belt composition percentages (M, S, C). They do not fix UWP digits. **rules/ is silent** on a fixed MgT2E belt UWP.
+
+What the MgT2E engine emits for a generated belt, from the source: `size` 0 and `eccentricity` 0 (`mgt2e_world_engine.js` lines 315 to 316); `gravity`, `mass`, `density`, `escapeVel`, and `orbitalVelSurface` null (lines 318 to 322); `beltM`, `beltS`, `beltC`, and `composition` (lines 345 to 348); `periodYears`, `periodDays`, and `periodHours` when `au` is set (lines 354 to 367); `siderealHours`, `solarDayHours`, `axialTilt`, `highTempK`, and `lowTempK` null, `tidallyLocked` false, and `albedo` and `meanTempK` still set (`mgt2e_world_engine.js` lines 1598 to 1614). Moons are not generated for a belt (the belt branch does not build them). `generateCoreSocial` does not skip a belt (`mgt2e_socio_engine.js` lines 450 to 453 skip only Empty and Gas Giant). `generateSubordinateSocial` (lines 161 to 184) forces atmosphere 0 when size is 0 and hydrographics 0 when size is 1 or less, then rolls population, government, law, starport, and tech level. `syncUWP` (lines 375 to 377) writes `uwp` and `uwpSecondary`.
+
+AoW: `packages/engines/src/aow_uwp_auditor.js` lines 51 to 54 fail a planetoid belt whose `size` is not 0. `aow_seed_bridge.js` line 433 maps a belt's mass to 0 and says `stepPhysicalParameters` skips belts. `aow_world_engine.js` lines 1240 and 1252 to 1254 skip planetoid belts in that step. **rules/ is silent** on an AoW belt UWP. The editions differ. No profile digit is locked, and no profile cell is removed from the belt form.
+
+### Rulings left as they were
+
+- A hand system that is not MgT2E stores a typed AU. The orbit helper is the MgT2E table only, and it does not convert a stored field (`tests/generation/hand.test.js`, the helper test). The picker that works in AU only is the screen's.
+- A moon's period stays off the form. `moon.orbit.years` is `Unknown field` (`tests/generation/roll_body.test.js`).
+- No belt profile cell is locked. All eight are permission `type` (same test). A belt roll may still write size 0, which is what the engine does. The referee can type over it.
+- Eccentricity accepts any finite number. Infinity is refused with `cannot hold that` (same test).
+- A world at orbit 0, and two bodies on orbit 0, are stored. The screen does not call them out (same test). Nothing in `hand.ts` refuses an inner limit or a shared orbit.

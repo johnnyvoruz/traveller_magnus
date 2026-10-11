@@ -49,23 +49,23 @@ function set(id: string, value: FormValue): void {
 <template>
   <div v-if="form" class="sysed" :class="{ 'is-hand': edit.mode === 'hand' }" :data-span="span">
     <div class="sysed-top">
-      <div v-if="edit.leaving" class="sysed-strip" role="alertdialog" aria-label="Leave with changes not kept">
-        <p>You have changes to {{ edit.name || 'this system' }} that are not kept.</p>
+      <div v-if="edit.leaving" class="sysed-strip" role="alertdialog" aria-label="Unsaved changes">
+        <p>You have unsaved changes to {{ edit.name || 'this system' }}.</p>
         <div class="sysed-strip-acts">
-          <button type="button" class="ui-btn is-primary" :disabled="busy" @click="leaveKeeping()">{{ edit.leaving.going ? 'Keep and go' : 'Keep' }}</button>
-          <button type="button" class="ui-btn" :disabled="busy" @click="leaveDiscarding()">{{ edit.leaving.going ? 'Discard and go' : 'Discard' }}</button>
+          <button type="button" class="ui-btn is-primary" :disabled="busy" @click="leaveKeeping()">{{ edit.leaving.going ? 'Keep and leave' : 'Keep' }}</button>
+          <button type="button" class="ui-btn" :disabled="busy" @click="leaveDiscarding()">{{ edit.leaving.going ? 'Discard and leave' : 'Discard' }}</button>
           <button type="button" class="ui-btn" data-edit-stay @click="stay()">{{ edit.leaving.going ? 'Stay' : 'Keep editing' }}</button>
         </div>
       </div>
       <div v-if="conflict" class="sysed-strip is-conflict" role="alert">
-        <p>This system was changed somewhere else after you opened it. Your changes are still here and have not been kept.</p>
+        <p>A newer version of this system was saved after you opened it. Your changes are still here, and they aren’t saved. To continue, select Take theirs or Keep mine.</p>
         <div class="sysed-strip-acts">
-          <button type="button" class="ui-btn" title="Drop your changes and edit the system as it is stored now" @click="takeTheirs()">Take theirs</button>
-          <button type="button" class="ui-btn is-primary" title="Lay your changes onto the system as it is stored now; nothing is kept until you press Keep" @click="keepMine()">Keep mine</button>
+          <button type="button" class="ui-btn" title="Discards your changes and opens the latest saved version" @click="takeTheirs()">Take theirs</button>
+          <button type="button" class="ui-btn is-primary" title="Applies your changes to the latest saved version. They’re saved when you select Keep" @click="keepMine()">Keep mine</button>
         </div>
       </div>
       <p v-if="dropped.length" class="sysed-strip is-note" role="status">
-        Your changes are laid onto the newer system; press Keep to store them. No longer there, and left out: {{ dropped.map((item) => item.label || item.id).join(', ') }}.
+        Your changes are applied to the latest saved version. To save them, select Keep. These fields no longer exist and were left out: {{ dropped.map((item) => item.label || item.id).join(', ') }}.
       </p>
       <p v-if="edit.error" class="sysed-strip is-error" role="alert">{{ edit.error }}</p>
       <p v-for="(message, index) in loose" :key="index" class="sysed-strip" :class="{ 'is-error': message.holds }" role="status">{{ message.text }}</p>

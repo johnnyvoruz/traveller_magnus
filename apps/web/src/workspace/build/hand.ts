@@ -193,7 +193,7 @@ export function parentOptions(list: readonly HandNode[], id: string): ParentOpti
         out.push({ value: '', label: 'Nothing', becomes: null, why: '' });
         for (const star of stars) {
             if (star.id === id) continue;
-            out.push({ value: star.id, label: nodeTitle(star), becomes: null, why: under.has(star.id) ? 'It orbits this star.' : '' });
+            out.push({ value: star.id, label: nodeTitle(star), becomes: null, why: under.has(star.id) ? nodeTitle(node) + ' can’t orbit a star that orbits it.' : '' });
         }
         return out;
     }
@@ -210,7 +210,7 @@ export function parentOptions(list: readonly HandNode[], id: string): ParentOpti
             value: world.id,
             label: nodeTitle(world),
             becomes: node.kind === 'moon' ? null : 'moon',
-            why: moons > 0 ? 'It has moons of its own. Give them away first.' : '',
+            why: moons > 0 ? 'A body with moons can’t become a moon. First, move its moons to another body.' : '',
         });
     }
     return out;
@@ -290,7 +290,7 @@ export function removeWords(list: readonly HandNode[], id: string): string {
     const node = list.find((item) => item.id === id);
     if (!node) return '';
     if (!removeTakesOthers(list, id)) return nodeTitle(node);
-    return nodeTitle(node) + (node.kind === 'star' ? ' and what orbits it' : ' and its moons');
+    return nodeTitle(node) + (node.kind === 'star' ? ' and everything that orbits it' : ' and its moons');
 }
 
 /**
@@ -390,7 +390,7 @@ export function movedWords(node: HandNode, list: readonly HandNode[], mine: Read
     const also = node.also ? list.find((item) => item.id === node.also) : undefined;
     const to = parent ? nodeTitle(parent) + (also ? ' and ' + nodeTitle(also) : '') : 'nothing';
     const before = was[node.id + '.kind'];
-    const becomes = node.kind !== 'star' && typeof before === 'string' && before !== node.kind ? 'Becomes a ' + KIND_WORD[node.kind].toLowerCase() + ' of ' + to : 'Given to ' + to;
+    const becomes = node.kind !== 'star' && typeof before === 'string' && before !== node.kind ? 'Becomes a ' + KIND_WORD[node.kind].toLowerCase() + ' of ' + to : 'Now orbits ' + to;
     return becomes;
 }
 

@@ -90,8 +90,8 @@ test('the universe’s settings are shown under the legacy tray’s labels', () 
         generationNoTravelZones: false, generationPopCheckFrequency: 100,
     });
     assert.equal(rows.length, 12);
-    assert.deepEqual(rows[0], { label: 'Starport Max', value: 'A' });
-    assert.deepEqual(rows.find((row) => row.label === 'Use Min TL (MgT2e)'), { label: 'Use Min TL (MgT2e)', value: 'on' });
+    assert.deepEqual(rows[0], { label: 'Starport max', value: 'A' });
+    assert.deepEqual(rows.find((row) => row.label === 'Use min TL (MgT2E)'), { label: 'Use min TL (MgT2E)', value: 'on' });
 });
 
 test('the rows are laid over the chart: a system replaces or adds, a removed one takes away', () => {
@@ -110,7 +110,7 @@ test('the rows are laid over the chart: a system replaces or adds, a removed one
 test('the toast when a many-hex build ends', () => {
     assert.equal(jobToast({ total: 7, done: 7, failed: [], state: 'done' }, 'Regina'), 'Generated 7 systems in Regina.');
     assert.equal(jobToast({ total: 9, done: 1, failed: ['x'], state: 'done' }, ''), 'Generated 1 system. 1 hex failed.');
-    assert.equal(jobToast({ total: 12, done: 4, failed: [], state: 'stopped' }, 'Regina'), 'Stopped. 4 systems of 12 built in Regina.');
+    assert.equal(jobToast({ total: 12, done: 4, failed: [], state: 'stopped' }, 'Regina'), 'Stopped. Generated 4 of 12 systems in Regina.');
 });
 
 test('no key does two build things, and none takes a key the map already uses', () => {

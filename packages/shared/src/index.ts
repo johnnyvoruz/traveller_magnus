@@ -140,6 +140,7 @@ export {
     emptySubsectors,
 } from './schemas/sector.ts';
 export type { SubsectorLetter as SubsectorLetterName } from './schemas/sector.ts';
+export { MGT2E_ORBIT_AU, mgt2eAuToOrbit, mgt2eOrbitToAu } from './orbit_au.ts';
 export {
     HAND_LIMITS,
     HandProfile,

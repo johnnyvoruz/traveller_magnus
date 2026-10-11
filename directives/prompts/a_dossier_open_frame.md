@@ -68,3 +68,5 @@ files. Questions for Johnny written out in full, recommended answer first. After
 meaningful step append one line under Progress: "done: X. next: Y."
 
 ## Progress
+done: store grow is reported. next: measure the warm dossier open before any dossier edit.
+done: warm opens present no frame at or over 50 ms, so no dossier file changed, and the report is written. next: none.

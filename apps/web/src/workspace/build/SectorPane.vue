@@ -21,7 +21,7 @@ watch(() => sectorUi.focusName, focusBox);
 
 <template>
   <div class="build-pane sector-pane">
-    <p class="build-lead">No sector is charted in this slot.</p>
+    <p class="build-lead">This sector slot is empty.</p>
     <div class="build-card">
       <label class="sector-label" for="sector-new-name">Name</label>
       <input
@@ -38,13 +38,13 @@ watch(() => sectorUi.focusName, focusBox);
       />
       <div class="build-acts sector-acts">
         <button type="button" class="ui-btn is-primary build-big" data-command="build-sector-new" :disabled="sectorUi.busy" :aria-busy="sectorUi.busy ? 'true' : undefined" @click="newSector()">
-          <Icon name="plus" :size="13" />{{ sectorUi.busy ? 'Making…' : 'New sector' }}<kbd class="build-key">N</kbd>
+          <Icon name="plus" :size="13" />{{ sectorUi.busy ? 'Creating…' : 'New sector' }}<kbd class="build-key">N</kbd>
         </button>
       </div>
-      <p class="build-with">It is yours alone: sixteen subsectors, A to P, named when you name them. The chart is not touched.</p>
+      <p class="build-with">The new sector is on your map only. It has 16 subsectors, A to P, with no names until you name them. The chart doesn’t change.</p>
     </div>
     <p v-if="sectorUi.error" class="build-error" role="alert">{{ sectorUi.error }}</p>
-    <p class="build-fine sector-fine">A charted sector cannot be replaced; you change it hex by hex.</p>
+    <p class="build-fine sector-fine">You can’t replace a sector that is on the chart. To change one, edit its hexes one at a time.</p>
   </div>
 </template>
 

@@ -79,8 +79,8 @@ test('a box adds what it covers up to the cap and says when the cap cut it; a ta
     assert.deepEqual(take, { keys: ['a'], changed: ['b', 'c'], over: false });
     assert.equal(boxWords(12, 7, 'box-add'), '12 hexes, 7 empty');
     assert.equal(boxWords(1, 1, 'box-add'), '1 hex, 1 empty');
-    assert.equal(boxWords(5, 0, 'box-take'), '5 hexes taken away');
-    assert.equal(boxWords(1279, 900, 'box-add', true), '1279 hexes, 900 empty · the most one selection holds');
+    assert.equal(boxWords(5, 0, 'box-take'), '5 hexes deselected');
+    assert.equal(boxWords(1279, 900, 'box-add', true), '1279 hexes, 900 empty · selection limit reached');
 });
 
 test('the chart the pane leaves: a camera aimed there puts its target in the middle of what is uncovered', () => {

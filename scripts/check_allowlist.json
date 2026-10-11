@@ -4,5 +4,14 @@
   },
   "apps/web/src/platform/browser.ts": {
     "window.": "single browser-globals adapter (slice 1 A1.1)"
+  },
+  "packages/generation/src/regions.ts": {
+    "colour literal": "published chart colour tables"
+  },
+  "packages/generation/src/route_colours.ts": {
+    "colour literal": "published chart colour tables"
+  },
+  "packages/generation/src/territories.ts": {
+    "colour literal": "published chart colour tables"
   }
 }

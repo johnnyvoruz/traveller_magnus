@@ -45,14 +45,14 @@ onBeforeUnmount(() => {
       class="ui-btn"
       data-command="build-select"
       :aria-pressed="build.selecting ? 'true' : 'false'"
-      title="Select hexes (S): a plain drag draws a box. Shift+drag does the same at any time"
+      title="Select hexes (S). While this is on, drag to draw a selection box. Shift+drag works at any time"
       @click="build.selecting = !build.selecting"
     >
       <Icon name="table-cells" :size="13" />Select hexes<kbd class="build-key">S</kbd>
     </button>
-    <span v-if="build.selecting" class="build-strip-say" role="status">Drag draws a box · Alt takes away · Space+drag moves the map · Esc when done</span>
+    <span v-if="build.selecting" class="build-strip-say" role="status">Drag to select · Alt+drag to deselect · Space+drag to move the map · Esc to finish</span>
     <span v-if="count" class="build-strip-tally" role="status">
-      <b>{{ count.n }}</b> hexes<template v-if="count.full"> · the most one selection holds</template><template v-else> · {{ count.empty }} empty</template>
+      <b>{{ count.n }}</b> hexes<template v-if="count.full"> · selection limit reached</template><template v-else> · {{ count.empty }} empty</template>
     </span>
     <button v-if="count" type="button" class="ui-btn build-strip-count" title="Clear the selection (Esc)" @click="$emit('clear')">
       Clear<Icon name="xmark" :size="12" />

@@ -118,8 +118,8 @@ export function boxResult(held: readonly string[], inside: readonly string[], mo
 /** "12 hexes, 7 empty" beside the pointer while a box is dragged; "5 hexes taken away" when it takes. */
 export function boxWords(changed: number, empty: number, mode: 'box-add' | 'box-take', over = false): string {
     const hexes = changed + (changed === 1 ? ' hex' : ' hexes');
-    if (mode === 'box-take') return hexes + ' taken away';
-    return hexes + ', ' + empty + ' empty' + (over ? ' · the most one selection holds' : '');
+    if (mode === 'box-take') return hexes + ' deselected';
+    return hexes + ', ' + empty + ' empty' + (over ? ' · selection limit reached' : '');
 }
 
 // ---- where the chart can be seen ---------------------------------------------------------------------

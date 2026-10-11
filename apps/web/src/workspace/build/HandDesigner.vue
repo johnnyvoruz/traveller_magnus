@@ -15,6 +15,8 @@ import type { Rect } from '../pop_place.ts';
 import BuildMenu, { type MenuItem } from './BuildMenu.vue';
 import DesignAsk from './DesignAsk.vue';
 import EditField from './EditField.vue';
+import OrbitPicker from './OrbitPicker.vue';
+import { canPick, openPicker, pickFieldId, pickUi } from './orbit_pick.ts';
 import { draftHandle, edit, markOf, messagesFor, setField } from './edit.ts';
 import { fieldOwner, handList, handUi, KIND_WORD, movedWords, nodeFields, nodeTitle, orbitsValue, parentOptions, removeWords, selectNode, systemFields, type HandKind, type HandNode } from './hand.ts';
 import { addBody, addWhy, canAdd, canGive, canMainworld, canMoveBody, canRemoveBody, giveBody, makeMainworld, moonHost, moveBody, removeBody } from './hand_acts.ts';
@@ -33,6 +35,8 @@ const system = computed(() => (form.value ? systemFields(form.value) : []));
 const host = computed(() => moonHost());
 const busy = computed(() => edit.keeping);
 const root = ref<HTMLElement | null>(null);
+/** The body the orbit picker is open for, while it is still in the list. */
+const picking = computed(() => (nodes.value.some((node) => node.id === pickUi.id) ? pickUi.id : ''));
 
 /** The body the row's More menu is open on, and where. */
 const menu = ref<{ id: string; anchor: Rect; from: HTMLElement } | null>(null);
@@ -123,12 +127,12 @@ const menuItems = computed((): MenuItem[] => {
     if (!node) return [];
     const out: MenuItem[] = [];
     if (node.kind !== 'star') {
-        out.push({ id: 'mainworld', label: node.mainworld ? 'This is the mainworld' : 'Make mainworld', say: 'The chart shows this world for the system', icon: 'location-dot', disabled: !canMainworld(id) });
+        out.push({ id: 'mainworld', label: node.mainworld ? 'This is the mainworld' : 'Make mainworld', say: 'The map shows this world’s profile for the system', icon: 'location-dot', disabled: !canMainworld(id) });
     }
     out.push({
         id: 'remove',
         label: 'Remove ' + removeWords(nodes.value, id),
-        say: 'Waits for Keep, with the rest of the draft',
+        say: 'Removed when you select Keep',
         icon: 'trash',
         danger: true,
         disabled: !canRemoveBody(id),
@@ -188,8 +192,8 @@ function endDrag(): void {
     <section class="hand-bodies" data-section="bodies">
       <h3 class="ui-heading">Bodies <span class="ui-count">{{ nodes.length }}</span></h3>
       <DesignAsk v-if="handUi.removing" remove class="hand-ask" />
-      <p v-if="!nodes.length" class="hand-empty">Nothing here yet. Add a star, then the worlds that orbit it.</p>
-      <ul v-else class="hand-list" aria-label="The bodies of this system">
+      <p v-if="!nodes.length" class="hand-empty">This system has no bodies. To add a star, select Star. Then add the worlds that orbit it.</p>
+      <ul v-else class="hand-list" aria-label="Bodies in this system">
         <li
           v-for="node in nodes"
           :key="node.id"
@@ -201,14 +205,14 @@ function endDrag(): void {
           @dragleave="dropId === node.id && (dropId = '')"
           @drop.prevent="onDrop(node)"
         >
-          <span class="hand-grip" draggable="true" title="Drag onto another body to give it to that one" aria-hidden="true" @dragstart="onDrag($event, node)" @dragend="endDrag">
+          <span class="hand-grip" draggable="true" title="To change what this body orbits, drag it onto another body" aria-hidden="true" @dragstart="onDrag($event, node)" @dragend="endDrag">
             <Icon name="grip-lines" :size="11" />
           </span>
           <button
             type="button"
             class="hand-pick"
             :aria-pressed="node.id === handUi.selected ? 'true' : 'false'"
-            :title="'Show the fields of ' + nodeTitle(node)"
+            :title="'Show the fields for ' + nodeTitle(node)"
             @click="selectNode(node.id)"
             @keydown.up.prevent="step(-1)"
             @keydown.down.prevent="step(1)"
@@ -235,7 +239,7 @@ function endDrag(): void {
             type="button"
             class="ui-btn is-icon"
             data-command="build-body-remove"
-            :aria-label="'More for ' + nodeTitle(node)"
+            :aria-label="'More actions for ' + nodeTitle(node)"
             title="More"
             aria-haspopup="true"
             :aria-expanded="menu && menu.id === node.id ? 'true' : 'false'"
@@ -247,14 +251,14 @@ function endDrag(): void {
         </li>
       </ul>
       <div class="hand-add" role="group" aria-label="Add a body">
-        <button v-for="item in ADD" :key="item.kind" type="button" class="ui-btn" :data-command="item.command" :disabled="!canAdd(item.kind)" :title="addWhy(item.kind) || 'Added to the draft; kept with the rest'" @click="addBody(item.kind)">
+        <button v-for="item in ADD" :key="item.kind" type="button" class="ui-btn" :data-command="item.command" :disabled="!canAdd(item.kind)" :title="addWhy(item.kind) || 'Adds a body to the draft. To save it, select Keep'" @click="addBody(item.kind)">
           <Icon name="plus" :size="12" />{{ KIND_WORD[item.kind] }}
         </button>
-        <button type="button" class="ui-btn" data-command="build-add-moon" :disabled="!canAdd('moon')" :title="addWhy('moon') || 'Added to the draft; kept with the rest'" @click="addBody('moon')">
+        <button type="button" class="ui-btn" data-command="build-add-moon" :disabled="!canAdd('moon')" :title="addWhy('moon') || 'Adds a body to the draft. To save it, select Keep'" @click="addBody('moon')">
           <Icon name="plus" :size="12" />{{ host ? 'Moon of ' + nodeTitle(host) : 'Moon' }}
         </button>
       </div>
-      <p class="build-fine hand-fine">Adding and removing a body wait for Keep, like every other change. Discard drops them all.</p>
+      <p class="build-fine hand-fine">Added and removed bodies are saved when you select Keep. To undo every change in the draft, select Discard.</p>
     </section>
 
     <section v-if="selected" class="hand-body" data-section="body">
@@ -272,6 +276,12 @@ function endDrag(): void {
             :resync="edit.resync"
             @set="set(field.id, $event)"
           />
+          <!-- "Pick orbit" stands after the orbit box it fills; the box stays typeable. -->
+          <div v-if="form && field.id === pickFieldId(form, selected) && canPick(form, selected, nodes)" class="hand-pick-row">
+            <button type="button" class="ui-btn" data-command="build-body-orbit" :disabled="busy" :title="'Pick the orbit of ' + nodeTitle(selected) + ' on a picture of the system'" @click="openPicker(selected.id)">
+              <Icon name="location-crosshairs" :size="12" />Pick orbit
+            </button>
+          </div>
           <!-- What it orbits stands after its name, as the row's own picker has it. -->
           <div v-if="field.id === selected.id + '.name' && picks(selected)" class="ef hand-orbits-row">
             <label class="ef-label" :for="'hand-orbits-' + selected.id">Orbits</label>
@@ -305,7 +315,7 @@ function endDrag(): void {
           <p v-for="(message, index) in messagesFor(field.id, messages)" :key="field.id + index" class="sysed-strip" :class="{ 'is-error': message.holds }">{{ field.label }}: {{ message.text }}</p>
         </template>
       </template>
-      <p class="build-fine hand-fine">An empty box is empty. Nothing is rolled, nothing is checked, and nothing else moves when you type.</p>
+      <p class="build-fine hand-fine">A field you leave blank stays blank. Nothing is rolled or checked, and no other field changes when you type.</p>
     </section>
 
     <section class="hand-system" data-section="system">
@@ -326,6 +336,7 @@ function endDrag(): void {
         />
       </div>
     </section>
+    <OrbitPicker v-if="picking" :body="picking" />
     <BuildMenu v-if="menu" :title="menuTitle" :items="menuItems" :anchor="menu.anchor" @pick="pickMenu" @close="closeMenu" />
   </div>
 </template>
@@ -556,6 +567,12 @@ function endDrag(): void {
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 10px;
+}
+
+.hand-pick-row {
+  display: flex;
+  justify-content: flex-end;
+  margin: -4px 0 10px;
 }
 
 .hand-fine {

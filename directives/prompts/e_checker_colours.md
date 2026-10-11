@@ -60,3 +60,7 @@ Questions for Johnny written out in full, recommended answer first. After each
 meaningful step append one line under Progress: "done: X. next: Y."
 
 ## Progress
+
+done: npm run check before the patch: manifesto: clean. next: apply the patch and count hits with no new allowlist.
+done: patch applied. Before the allowlist, 3 colour literals, all in packages/generation/src (regions, route_colours, territories). next: allowlist those three and prove a new literal fails.
+done: those three allowlisted; a scratch hex and rgb() both fail; the tree check is clean. next: the report.

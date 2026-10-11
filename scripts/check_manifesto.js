@@ -11,6 +11,7 @@ const SCRIPT_PATTERNS = {
     'innerHTML': /\binnerHTML\b/, 'getElementById': /\bgetElementById\b/
 };
 const STYLE_PATTERNS = { 'hex colour': /#[0-9a-fA-F]{3,8}\b/, 'ms literal': /\b\d+ms\b/ };
+const SCRIPT_COLOUR = /#[0-9a-fA-F]{3,8}\b|\brgba?\(\s*\d|\bhsla?\(\s*\d|:\s*['"](?:lightblue|lightgreen|yellow|gray|grey|purple)['"]/;
 // architecture.md §3 boundaries
 const BOUNDARIES = [
     { from: /packages[\\/](engines|shared|generation)[\\/]/, mayNotImport: /(^|[\\/])apps[\\/]|@voyage\/(web|api)/ },
@@ -27,6 +28,7 @@ function check(rel, file, text) {
     const scriptText = isCss ? '' : isVue ? text.replace(/<style[\s\S]*?<\/style>/g, '') : text;
     for (const [name, re] of Object.entries(SCRIPT_PATTERNS)) if (re.test(scriptText) && !ALLOW[rel]?.[name]) fail(rel, name);
     if (!/tokens\.css$/.test(rel)) for (const [name, re] of Object.entries(STYLE_PATTERNS)) if (re.test(styleText) && !ALLOW[rel]?.[name]) fail(rel, name);
+    if (SCRIPT_COLOUR.test(scriptText) && !ALLOW[rel]?.['colour literal']) fail(rel, 'colour literal');
     for (const b of BOUNDARIES) if (b.from.test(file))
         for (const m of scriptText.matchAll(/from\s+['"]([^'"]+)['"]/g)) if (b.mayNotImport.test(m[1])) fail(rel, `forbidden import ${m[1]}`);
 }

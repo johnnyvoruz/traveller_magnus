@@ -3,6 +3,8 @@ import { test } from 'node:test';
 import { emptyHandProfile } from '@voyage/shared';
 import { handWalk } from '@voyage/generation';
 import { overviewModel } from '../../apps/web/src/dossier/model.ts';
+import { cardFor } from '../../apps/web/src/orbit/card.ts';
+import { yearFigure } from '../../apps/web/src/orbit/daynight.ts';
 import { presentHand, presentTree } from '../../apps/web/src/orbit/hand_present.ts';
 import { planSystem } from '../../apps/web/src/orbit/layout.ts';
 import { normalizeSystem } from '../../apps/web/src/orbit/system.ts';
@@ -63,6 +65,94 @@ test('a world that orbits two stars keeps their names and is not drawn', () => {
     });
     const row = model.tree.rows.find((item) => item.name === 'Both');
     assert.ok(row.facts.includes('orbits Aster and Aster B'));
+});
+
+function body(over) {
+    return {
+        id: 'b0',
+        kind: 'world',
+        name: 'Prime',
+        parentId: 's0',
+        order: 0,
+        mainworld: false,
+        profile,
+        notes: '',
+        bases: '',
+        zone: '',
+        allegiance: '',
+        trade: '',
+        ...over,
+    };
+}
+
+test('stored orbit numbers are copied, and a body without them is unchanged', () => {
+    const bare = {
+        name: 'Hand',
+        notes: '',
+        stars: [
+            { id: 's0', name: 'Primary', sType: 'G', subType: '2', sClass: 'V', parentId: null, order: 0 },
+        ],
+        bodies: [body({})],
+    };
+    const walked = presentHand(bare);
+    assert.equal(Object.hasOwn(walked.stars[0], 'orbitAU'), false);
+    assert.equal(Object.hasOwn(walked.worlds[0], 'au'), false);
+    assert.equal(Object.hasOwn(walked.worlds[0], 'orbitType'), false);
+    assert.deepEqual(presentHand(bare), handWalk(bare));
+
+    const placed = {
+        name: 'Hand',
+        notes: '',
+        stars: [
+            { id: 's0', name: 'Primary', sType: 'G', subType: '2', sClass: 'V', parentId: null, order: 0 },
+            {
+                id: 's1', name: 'Far', sType: 'M', subType: '5', sClass: 'V', parentId: 's0', order: 1,
+                orbitId: 11, orbitAU: 19.4, eccentricity: 0.2, periodYears: 80,
+            },
+        ],
+        bodies: [
+            body({ id: 'w0', name: 'Inner', order: 0, orbitId: 3, au: 0.5, eccentricity: 0.01, periodYears: 0.35 }),
+            body({ id: 'w1', kind: 'gas', name: 'Giant', order: 1, orbitId: 8, au: 5.2, eccentricity: 0.04, periodYears: 11.8 }),
+            body({
+                id: 'belt', kind: 'belt', name: 'Dust', order: 2, orbitId: 4, au: 2.8, eccentricity: 0,
+                periodYears: 4.7, periodDays: 1700, periodHours: 40000, siderealHours: 9, solarDayHours: 10,
+            }),
+            body({ id: 'm0', kind: 'moon', name: 'Lune', parentId: 'w0', order: 0, pd: 25, eccentricity: 0.03 }),
+        ],
+    };
+    assert.deepEqual(presentHand(placed), handWalk(placed));
+    const star = presentHand(placed).stars[1];
+    assert.equal(star.separation, 'Companion');
+    assert.equal(star.orbitAU, 19.4);
+    assert.equal(star.orbitId, 11);
+    assert.equal(star.periodYears, 80);
+    const worlds = presentHand(placed).worlds;
+    assert.equal(worlds[0].orbitType, 'S-Type');
+    assert.equal(worlds[0].parentStarIdx, 0);
+    assert.equal(worlds[0].au, 0.5);
+    assert.equal(worlds[0].periodYears, 0.35);
+    assert.equal(worlds[1].au, 5.2);
+    assert.equal(worlds[1].periodYears, 11.8);
+    const belt = worlds[2];
+    assert.equal(belt.type, 'Planetoid Belt');
+    assert.equal(belt.au, 2.8);
+    assert.equal(belt.orbitType, 'S-Type');
+    assert.equal(Object.hasOwn(belt, 'periodYears'), false);
+    assert.equal(Object.hasOwn(belt, 'periodDays'), false);
+    assert.equal(Object.hasOwn(belt, 'periodHours'), false);
+    assert.equal(Object.hasOwn(belt, 'siderealHours'), false);
+    assert.equal(Object.hasOwn(belt, 'solarDayHours'), false);
+    assert.equal(worlds[0].moons[0].pd, 25);
+    assert.equal(worlds[0].moons[0].eccentricity, 0.03);
+    const plan = planSystem(normalizeSystem(presentTree({ kind: 'hand', hexKey: 'own/0102', system: placed }).body), 'own/0102');
+    const drawn = plan.worlds.filter((world) => world.name === 'Inner' || world.name === 'Giant');
+    assert.deepEqual(drawn.map((world) => world.au), [0.5, 5.2]);
+    assert.equal(drawn[0].au < drawn[1].au, true);
+    const beltWorld = plan.worlds.find((world) => world.name === 'Dust');
+    const card = cardFor(plan, 'belt', beltWorld.key, 0);
+    assert.equal(card.lines.some((line) => /year|period/i.test(line.label)), false);
+    assert.equal(yearFigure({ type: 'Planetoid Belt', yearHours: 41172, periodYears: 4.7 }), null);
+    assert.ok(yearFigure({ type: 'World', yearHours: 8766 }));
 });
 
 test('an empty hand document is not an orbit model', () => {

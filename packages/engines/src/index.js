@@ -27,7 +27,8 @@ export { computeSystemCounts, profileOf, systemReady, buildStage, storeBuild, bu
 export { reconcileTree, environmentPolicy } from './reconcile_environment.js';
 export { MgT2EMath } from './mgt2e_math.js';
 export { generateCoreSocial, generateExtendedSocioeconomics, finalizeSubordinateSocial as finalizeSubordinateSocialMgT2E, generateMainworldUWP } from './mgt2e_socio_engine.js';
-export { generateStellarSystem, generateSystemInventory, allocateOrbits, walkMgT2ESystem, logMgT2EBodyBiography, generateStarObject, getMAO, convertAuToOrbit } from './mgt2e_stellar_engine.js';
+export { generateStellarSystem, generateSystemInventory, allocateOrbits, walkMgT2ESystem, logMgT2EBodyBiography, generateStarObject, getMAO, convertAuToOrbit, orbitNumberToAu } from './mgt2e_stellar_engine.js';
+export { rollBodyProfile } from './mgt2e_roll_body.js';
 export { generateMgT2ESystemTopDown, expandLoadedSocioeconomicsMgT2E } from './mgt2e_topdown_generator.js';
 export { auditMgT2ESystem, runAndLog as runAndLogMgT2E } from './mgt2e_uwp_auditor.js';
 export { generatePhysicals as generatePhysicalsMgT2E, generateAtmospherics, generateRotationalDynamics, generateBiospherics, evaluateMainworldCandidates } from './mgt2e_world_engine.js';

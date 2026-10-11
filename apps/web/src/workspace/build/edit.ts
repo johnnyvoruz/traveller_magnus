@@ -117,7 +117,7 @@ export function rulesAfter(form: EditForm, sectionId: string): FormField[] {
 /** "3 changes", counting what was typed and what was sent to be rolled again. */
 export function changeLine(mine: Record<string, FormValue>, rolled: readonly string[], messages: readonly FormMessage[]): string {
     const count = Object.keys(mine).length + rolled.length;
-    const said = messages.length ? ' · ' + plural(messages.length, 'thing', 'things') + ' to read' : '';
+    const said = messages.length ? ' · ' + plural(messages.length, 'message', 'messages') : '';
     return plural(count, 'change', 'changes') + said;
 }
 
@@ -228,7 +228,7 @@ async function modeOf(hexKey: string, handle: DraftHandle): Promise<'generated' 
 
 function say(err: unknown): string {
     const text = err instanceof Error ? err.message : '';
-    return text && text !== 'offline' ? text : 'The server could not be reached. Nothing was changed.';
+    return text && text !== 'offline' ? text : 'Can’t reach the server, so nothing was changed. Check your connection and try again.';
 }
 
 export async function openEdit(hexKey: string, name: string): Promise<void> {
@@ -294,7 +294,7 @@ export function discardEdit(): void {
     const name = edit.name;
     if (handle) handle.discard();
     clear();
-    if (lost) showToast('The draft of ' + (name || 'this system') + ' was discarded.');
+    if (lost) showToast('Discarded your changes to ' + (name || 'this system') + '.');
 }
 
 /** Keep: one save. On success the editor closes and the toast offers Undo. A conflict leaves the draft open. */
@@ -386,7 +386,7 @@ export async function openBlank(hexKey: string): Promise<void> {
     try {
         const made = await blanker(hexKey);
         const token = made.undo;
-        showToast('A blank system was made, with nothing in it. Add a star, then its worlds.', {
+        showToast('Created a blank system. Add a star, and then add its worlds.', {
             action: {
                 label: 'Undo',
                 run: () => {

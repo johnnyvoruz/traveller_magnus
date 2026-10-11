@@ -101,7 +101,7 @@ function offerUndo(message: string, token: UndoToken): void {
 }
 
 function fail(err: unknown): void {
-    build.error = err instanceof Error ? err.message : 'That did not work.';
+    build.error = err instanceof Error ? err.message : 'That action failed. Try again.';
 }
 
 // ---- one hex: a preview, then keep ---------------------------------------------------------------
@@ -143,7 +143,7 @@ export async function keepPreview(): Promise<void> {
     try {
         const token = await store.keep(held, truthAt(held.hexKey));
         build.preview = null;
-        offerUndo('Generated ' + (held.entry.name || 'a system') + (replaced ? ', in place of the system designed by hand.' : '.'), token);
+        offerUndo('Generated ' + (held.entry.name || 'a system') + (replaced ? '. It replaces the system designed by hand.' : '.'), token);
     } catch (err) {
         fail(err);
     }
@@ -151,12 +151,8 @@ export async function keepPreview(): Promise<void> {
 
 // ---- many hexes: counted, with Stop --------------------------------------------------------------
 
-/**
- * Many hexes, kept as they land. `grown` names the sectors made for this act a moment before
- * (findings/builder_system_design.md §18): the toast says so, and its one Undo takes the
- * systems back and then the sectors.
- */
-export function generateMany(keys: readonly string[], grown: { names: string[]; undo: () => Promise<void> } | null = null): void {
+/** Many hexes, kept as they land. Hexes in an empty slot go through grow_acts.ts instead. */
+export function generateMany(keys: readonly string[]): void {
     const store = buildStore();
     if (!store || build.job) return;
     const targets = generateTargets(tallyOf(keys), build.filledToo);
@@ -176,33 +172,19 @@ export function generateMany(keys: readonly string[], grown: { names: string[]; 
         ({ token, progress }) => {
             stopJob = null;
             build.job = null;
-            if (!grown) {
-                offerUndo(jobToast(progress, where(targets)), token);
-                return;
-            }
-            const made = grown.names.length === 1 ? 'the new sector ' + grown.names[0] : plural(grown.names.length, 'new sector', 'new sectors') + ': ' + grown.names.join(', ');
-            showToast(jobToast(progress, made), {
-                action: {
-                    label: 'Undo',
-                    run: () => {
-                        const store = buildStore();
-                        if (!store) return;
-                        // Two calls behind one Undo: the systems, then the sectors (the server has no single act for both yet).
-                        void store.undo(token).then(grown.undo).catch((err: unknown) => {
-                            showToast(err instanceof Error && err.message ? 'Undo stopped part way: ' + err.message : 'Undo stopped part way.');
-                        });
-                    },
-                },
-            });
+            offerUndo(jobToast(progress, where(targets)), token);
         },
         (err) => {
             stopJob = null;
             build.job = null;
             fail(err);
-            // Nothing was generated: the sectors made for it are taken back, so no empty sector is left behind.
-            if (grown) void grown.undo().catch(() => undefined);
         },
     );
+}
+
+/** Another act's running job: Stop (the X key, the bar's button) reaches it. Null when it ends. */
+export function holdJob(stop: (() => void) | null): void {
+    stopJob = stop;
 }
 
 export function stopBuild(): void {

@@ -77,9 +77,9 @@ test('what a body may be given to: a moon to a world or a star (becoming a world
     // A world that has moons cannot be stored as a moon: the choice is there, and says why it cannot be taken.
     const marrow = parentOptions(list, 'b2').filter((option) => option.becomes === 'moon');
     assert.equal(marrow.length, 2);
-    assert.ok(marrow.every((option) => option.why === 'It has moons of its own. Give them away first.'));
+    assert.ok(marrow.every((option) => option.why === 'A body with moons can’t become a moon. First, move its moons to another body.'));
     // A star orbits another star or nothing, never something that orbits it.
-    assert.deepEqual(parentOptions(list, 's1').map((option) => [option.value, option.why]), [['', ''], ['s2', 'It orbits this star.']]);
+    assert.deepEqual(parentOptions(list, 's1').map((option) => [option.value, option.why]), [['', ''], ['s2', 'Aster can’t orbit a star that orbits it.']]);
     assert.deepEqual(parentOptions(list, 's2').map((option) => option.value), ['', 's1']);
 });
 
@@ -127,7 +127,7 @@ test('a world orbits two stars together: one choice for each pair of paired star
     // It stands under the star the other orbits, and counts as orbiting each of the two.
     assert.deepEqual(shape(after).slice(0, 3), ['s1:star', '  s2:star', '  b1:world']);
     assert.deepEqual(ids(below(after, 's2')), ['b1']);
-    assert.equal(movedWords(world, after, { 'b1.parent': 's1+s2' }, { 'b1.kind': 'world' }), 'Given to Aster and Aster B');
+    assert.equal(movedWords(world, after, { 'b1.parent': 's1+s2' }, { 'b1.kind': 'world' }), 'Now orbits Aster and Aster B');
     // The choice it holds now changes nothing; one star alone takes it back.
     assert.deepEqual(reparentChanges(after, 'b1', 's1+s2'), []);
     assert.deepEqual(reparentChanges(after, 'b1', 's1'), [{ id: 'b1.parent', value: 's1' }]);
@@ -141,7 +141,7 @@ test('the row says what a body becomes before it is kept', () => {
     const was = { 'b5.kind': 'moon', 'b4.kind': 'moon' };
     const mine = { 'b5.kind': 'world', 'b5.parent': 's1', 'b4.parent': 'b1' };
     assert.equal(movedWords(list.find((node) => node.id === 'b5'), list, mine, was), 'Becomes a world of Aster');
-    assert.equal(movedWords(list.find((node) => node.id === 'b4'), list, mine, was), 'Given to Cinder');
+    assert.equal(movedWords(list.find((node) => node.id === 'b4'), list, mine, was), 'Now orbits Cinder');
     assert.equal(movedWords(list.find((node) => node.id === 'b1'), list, mine, was), '');
 });
 
@@ -177,7 +177,7 @@ test('a remove is one change; the server takes what orbits with it, and its answ
     const list = handList(formOf(envelope));
     assert.equal(removeWords(list, 'b2'), 'Marrow and its moons');
     assert.equal(removeWords(list, 'b1'), 'Cinder');
-    assert.equal(removeWords(list, 's1'), 'Aster and what orbits it');
+    assert.equal(removeWords(list, 's1'), 'Aster and everything that orbits it');
     assert.equal(removeTakesOthers(list, 'b1'), false);
     assert.equal(removeTakesOthers(list, 'b2'), true);
     assert.equal(removeTakesOthers(list, 's1'), true, 'nothing is withheld: a star with worlds can be removed');
@@ -210,13 +210,14 @@ test('the selected body shows its own fields; what the list sets (parent, order,
     const form = formOf(aster());
     const list = handList(form);
     const world = nodeFields(form, list.find((node) => node.id === 'b2'));
-    assert.deepEqual(world.rows.map((field) => field.id), ['b2.name', 'b2.kind', 'b2.mainworld', 'b2.notes', 'b2.bases', 'b2.zone', 'b2.allegiance', 'b2.trade']);
+    assert.deepEqual(world.rows.map((field) => field.id), ['b2.name', 'b2.kind', 'b2.orbit.id', 'b2.orbit.au', 'b2.orbit.eccentricity', 'b2.orbit.years', 'b2.mainworld', 'b2.notes', 'b2.bases', 'b2.zone', 'b2.allegiance', 'b2.trade']);
     assert.deepEqual(world.rows[1].options.map((option) => option.value), ['world', 'gas', 'belt']);
     assert.equal(world.profile.length, 8);
     const moon = nodeFields(form, list.find((node) => node.id === 'b4'));
     assert.equal(moon.rows.some((field) => field.id === 'b4.kind'), false);
+    assert.deepEqual(moon.rows.map((field) => field.id), ['b4.name', 'b4.orbit.pd', 'b4.orbit.eccentricity', 'b4.mainworld', 'b4.notes', 'b4.bases', 'b4.zone', 'b4.allegiance', 'b4.trade']);
     const star = nodeFields(form, list[0]);
-    assert.deepEqual(star.rows.map((field) => field.id), ['s1.name', 's1.type', 's1.subtype', 's1.class']);
+    assert.deepEqual(star.rows.map((field) => field.id), ['s1.name', 's1.type', 's1.subtype', 's1.class', 's1.orbit.id', 's1.orbit.au', 's1.orbit.eccentricity', 's1.orbit.years']);
     assert.equal(star.profile.length, 0);
 });
 
@@ -432,10 +433,14 @@ test('a system by hand offers Generate in place of "Design by hand"; a generated
         rows: () => [],
     });
     useOwnSectors({ formMode: async (hexKey) => { asks.push(hexKey); return hexKey === key ? 'hand' : 'generated'; } });
-    // Until the server has said, the system is neither, and the menu offers neither.
+    // Until the server has said, the system is neither: a muted "Checking…" holds the line, so Remove does not move.
     assert.equal(handMode(key), null);
     assert.equal(isHandHex(key), false);
-    assert.deepEqual(menuFor([key]).items.map((item) => item.id), ['build-edit', 'build-remove']);
+    const cold = menuFor([key]).items;
+    assert.deepEqual(cold.map((item) => item.id), ['build-edit', 'build-design-hand', 'build-remove']);
+    assert.equal(cold[1].label, 'Checking…');
+    assert.equal(cold[1].disabled, true);
+    assert.equal(cold[1].say, undefined);
     assert.equal(canBuild('build-generate', [key]), false);
     await new Promise((resolve) => setTimeout(resolve, 0));
     assert.equal(isHandHex(key), true);
@@ -447,7 +452,9 @@ test('a system by hand offers Generate in place of "Design by hand"; a generated
     assert.equal(canBuild('build-design-hand', [other]), true);
     const hand = menuFor([key]).items.map((item) => item.id);
     assert.deepEqual(hand, ['build-edit', 'build-generate', 'build-remove']);
-    assert.match(menuFor([key]).items[1].say, /replaces the system designed by hand/);
+    // One line high, as "Checking…" was: the preview says that keeping replaces the hand system.
+    assert.equal(menuFor([key]).items[1].say, undefined);
+    assert.equal(menuFor([key]).items[1].disabled, false);
     assert.deepEqual(menuFor([other]).items.map((item) => item.id), ['build-edit', 'build-design-hand', 'build-remove']);
     // Asked once for a revision, however often the screen reads it.
     assert.deepEqual(asks, [key, other]);

@@ -6354,3 +6354,201 @@ that failed at the close no longer does. Ready note `findings/builder_form_ready
   `a_dossier_open_frame.md` (A holds the two dossier shared files),
   `e_checker_colours.md`, and B's `b_marketplace_contract.md`. C is free.
 - **Asked:** the five red fixtures; D's menu placeholder; the unclaimed design asset.
+
+## 234. The push is made (8118f72); D is blocked on A's store; C looks at the five red fixtures (2026-10-11)
+
+- **The referee pushed `8118f72`** as listed. The 17 held paths are still uncommitted;
+  `assets/HybridSurfaceMap_Design.md` is cleared to go in and rides with the next push.
+- **The board was stale when the lanes were told go** (it still said "not yet made"):
+  B stopped with a blocked report, as its prompt says; A and E wrote nothing. The
+  orchestrator's fault: the board is flipped before "go" from now on.
+- **D, `d_grow_one_act`, blocked, accepted:** `Builder.generate` cannot send
+  `makeSectors` and `Builder.undo` cannot call `sectors/undo-generate`. D wrote the
+  exact ask (`generateGrowing` with `accepted` and `finished`, the key remap, the
+  token, the Restore). `prompts/a_store_grow.md` gives it to A, ahead of the
+  dossier-open frame.
+- **The referee, yes to three:** a read-only pass on the five golden cases that are red
+  on the committed tree before anything is decided (`prompts/c_golden_red.md`, C); the
+  right-click menu reserves its line with "Checking…" (D's item 6); the design asset
+  goes in.
+
+## 235. A's store, B's two contracts, C's golden pass and E's checker accepted; the "red commit" is withdrawn; the referee on the hand designer (2026-10-11)
+
+- **Withdrawn: section 233's "the last commit is red on five fixtures".** C ran the
+  five cases on true archives: they pass on `3d28e33` and `8118f72`. The orchestrator's
+  clean copy used a junction to the repository's `node_modules`, where `@voyage/engines`
+  links back to the working tree, so the held nine lines ran against committed
+  fixtures. What the held set does: eight `liquidType` fields go from Water to Ice,
+  nothing else (`findings/golden_red_on_head.md`). Whether it ships is the referee's.
+  The push check itself was sound for everything not imported through `@voyage/*`.
+- **A, `a_store_grow`, accepted:** `generateGrowing` (one `POST .../generate` with
+  `makeSectors`), undo through `sectors/undo-generate`, a Restore token, eight tests,
+  1,331 tests 0 fail. D is unblocked.
+- **B, `b_marketplace_contract`, accepted:** `contracts/b_marketplace.md` (size b) and
+  `contracts/b_public_games.md`; no code. Three questions (unpinned universes cannot
+  publish; manifests in the public bucket; the mark follows the single `vesselId`).
+- **E, `e_checker_colours`, accepted:** the checker fails on colour literals in
+  scripts; three generation tables allowlisted; check clean.
+- **The referee on the live hand designer:** it looks okay; the instructions are
+  cryptic and purple, and are to follow the Google developer style guide; a roll
+  button on the Profile heading; orbit data is missing, and an orbit picker (a modal
+  of the system: pick a body to orbit, move to see the orbit line, Place) is wanted
+  beside the typed number; and why can a belt not orbit a world.
+- **Seen in the tree:** a hand body stores `parentId` and `order` only; the refusal
+  "A world orbits a star." (`packages/generation/src/hand.ts` 374) applies to every
+  non-moon body and cites no rule.
+- **Prompts:** `b_hand_orbit_roll.md` (contract first: orbit fields with units cited
+  from `rules/`, a one-body profile roll through the existing engine, and what
+  `rules/` says may orbit a world, answer only); `d_hand_designer_2.md` (copy rewrite,
+  the roll button, the picker; parts 2 and 3 wait on B's sections), after
+  `d_grow_one_act.md`.
+
+## 236. The orbit view's textures are reported broken; A's dossier pass closes with no change; belts; all questions answered (2026-10-11)
+
+- **The referee: "whatever happened broke all the orbit textures on the planetary
+  bodies."** Not reproduced here. Read only: between `3d28e33` and `8118f72` the
+  surface service's `enhanced` mode became the hybrid sheet and its cache key changed;
+  `requestMap` is not what the orbit discs call; a Vite of unknown origin listens on
+  5173; A's parity run exited 1 on "Dev middleware did not serve
+  js/planet_renderer.js from disk" (put down to a port clash). All tests pass.
+  `prompts/c_orbit_textures.md`, C, urgent: see it, find the commit and lines on
+  scratch copies with their own `npm ci`, fix it if it is in `surface/`, add the test
+  that would have caught it.
+- **A, `a_dossier_open_frame`, accepted, no product change:** counting only frames
+  that start at or after the click, no warm open presents a frame at or over 50 ms
+  (worst 25.1 ms, dev, DPR 2); C's earlier 58 to 75 ms included a frame already on
+  screen. The known issue is closed.
+- **The referee took every recommendation** on the six questions of section 235 (the
+  engine lines stay held; unpinned universes cannot publish; manifests in the public
+  bucket; the mark follows `vesselId`; no palette allowlist entry; Google style for
+  all app copy).
+- **Belts:** he asks whether a belt always has a certain UWP, and rules that a belt
+  has no year data. B's prompt gains part 4 (the belt's profile from `rules/` with
+  citations; no year fields on a belt in the hand form), D's gains part 4.
+- **`prompts/a_marketplace_client.md`, A:** the stub's client in a new
+  `apps/web/src/marketplace/`, against `contracts/b_marketplace.md` and a fake
+  transport; the server follows B's Builder pass.
+- D had not started `d_grow_one_act` (it waited on A); B had not started
+  `b_hand_orbit_roll`.
+- **Later the same turn, the referee: the broken textures are on the live site.**
+  `prompts/c_orbit_textures.md` gained a dated addition: test the production build
+  served through wrangler, look for a missing worker script or asset, a cache or hash
+  mismatch; never call production. All five lanes were told go.
+
+## 237. Grow is done end to end; hand orbit data is in, the roll is not; the texture fault is not reproduced (2026-10-11)
+
+- **D, `d_grow_one_act`, accepted:** one `POST .../generate` and one toast for one
+  slot, two slots and across a sector edge; one `POST .../sectors/undo-generate`, also
+  while the job runs; "Undo stopped part way" deleted; the "Checking…" menu line.
+  1,337 tests 0 fail. Restore shows once A returns the token from `asBuildStore.undo`.
+- **B, `b_hand_orbit_roll`, accepted as partial:** optional `orbitId`, `orbitAU`, `au`,
+  `eccentricity`, `pd`, `periodYears` on a hand system, form fields `<id>.orbit.*`, a
+  belt drops year changes, `packages/shared/src/orbit_au.ts` (the MgT2E table copied
+  from the engine and pinned by a test). **Not built: the profile roll**, because the
+  engines export no one-body roll. `rules/` is silent on a belt around a world and on
+  fixed belt digits for MgT2E (the MgT2E engine forces size 0 and rolls the rest; the
+  T5 string in guideline 4.2 is not a hand edition). Six questions to the referee.
+- **A, `a_marketplace_client`, accepted:** `apps/web/src/marketplace/` against the
+  contract and a fake transport, eight tests; local types until B adds the schemas.
+- **C, `c_orbit_textures`, partial, not reproduced:** clean builds of both commits
+  paint textured discs; the disc worker is byte-identical. The orchestrator looked at
+  the live site: it serves the `8118f72` bundle, the worker answers 200 with C's hash,
+  Regina's orbit view loads with no console error. What the referee sees is asked.
+- **The referee:** Discord and Google secrets are set; passkeys wait.
+- **Prompts:** `a_hand_orbit_present.md`, `b_marketplace_server.md`,
+  `d_hand_designer_2.md` (dated addition: parts 1, 3, 4 build, the roll is design
+  only). C and E free.
+
+## 238. The texture fault seen: grey discs at middle zoom; the referee's rulings on the hand designer (2026-10-11)
+
+- **The referee's screenshot of the live site:** Azgul Kou (Meshan 2008), a dozen
+  worlds and moons as plain grey discs with the day-and-night half, no texture, the
+  water-world mainworld included. C's first pass had zoomed one world to fill the
+  frame, where the tile path textures it. `prompts/c_orbit_textures_2.md`: reproduce
+  that zoom on a production build, find the first bad commit back past `aeada0e` or
+  show it was never textured there, follow one disc through the batch path, fix it
+  (C is lent `orbit/disc_batch.ts` and the disc drawing in `OrbitRenderer.ts`), add
+  the test.
+- **Rulings:** the one-body profile roll is to be added to the engines (his word under
+  CLAUDE.md rule 4; extraction only, output byte-identical); non-MgT2E hand systems
+  pick orbits in AU; a moon's period stays off the form; a belt may be placed around a
+  world by hand, nothing generates one, moon rules come later from another book; no
+  belt cell is locked; eccentricity is any finite number; a world inside the inner
+  limit or two bodies on one orbit are not refused and not called out.
+- **`prompts/b_hand_roll_belt.md`**, B, after the marketplace server.
+
+## 239. The referee on the Campaign pages: a breadcrumb at the top, the image as the avatar; B's server blocked on two answers (2026-10-11)
+
+- **His words:** the "Back to Campaign" control sits at the bottom and he keeps
+  pressing the X; move it to the top, perhaps as breadcrumbs. "Add an image" should be
+  the avatar area itself, and that image the record's avatar wherever it is shown; a
+  circle for characters and people, a square for everything else.
+- **Seen in the tree:** `RecordPage.vue` has "All records" in the foot (about 265,
+  281) and a fixed kind glyph in the head (162); `RecordGallery.vue` holds "Add an
+  image" (213); a record's `images` is an array of at most 12 with no cover field; a
+  crumb already exists in `shell/Panel.vue` and the dossier.
+- **`prompts/e_campaign_nav_avatar.md`, E:** one crumb pattern reused; the foot button
+  goes; the first image is the avatar (a reorder, no schema change); `RecordAvatar.vue`
+  used in the list, the page head, the party, the picker and journal mentions. E is
+  lent D's record files in `workspace/` (D is in `workspace/build/`). Default put to
+  the referee: first image is the avatar.
+- **B, `b_marketplace_server`, blocked, accepted as such:** the publish job cannot see
+  which hexes and records were chosen (the queue message and `package_versions` do not
+  carry them), and the limits are still "proposed". Both put to the referee. B goes on
+  `b_hand_roll_belt.md` meanwhile.
+- **Later the same turn, the referee: yes to all three.** The first image is the
+  avatar; `hex_keys` and `record_ids` columns on `package_versions`; the marketplace
+  limits as B proposed. `prompts/b_marketplace_server.md` carries the answers and
+  follows `b_hand_roll_belt.md`. All lanes told go.
+
+## 240. A's hand orbits and D's hand designer second pass accepted; the marketplace screens start (2026-10-11)
+
+- **A, `a_hand_orbit_present`, accepted** (reported partial only because the build
+  failed on D's `OrbitPicker.vue` mid-edit; the build passes now): `presentHand` copies
+  the stored orbit fields; a belt has no year in `orbit/daynight.ts` and
+  `dossier/model.ts`; `asBuildStore.undo` returns the Restore token. Known gap: a hand
+  moon has no parent diameter, so its ring is drawn by index.
+- **D, `d_hand_designer_2`, accepted:** 118 strings in `workspace/build/` rewritten to
+  the Google style (table in the design note §21); the orbit picker (`orbit_pick.ts`,
+  `OrbitPicker.vue`, command `build-body-orbit`): MgT2E writes the orbit number and its
+  AU, other editions AU only, a moon planetary diameters; worst frame 8.4 ms; the roll
+  button drawn, not wired. 1,355 tests 0 fail.
+- **Found by D:** "Design by hand" on a generated system drops every orbit; unnamed
+  stars read "No name"; about fifty Builder server messages break the copy standard.
+  `prompts/b_hand_followups.md`, B, after the roll and belt, before the marketplace
+  server.
+- **`prompts/d_marketplace_screens.md`, D:** publish from a Build selection and "my
+  packages", in a new `workspace/market/`, against A's seam and a fake store.
+- D's three questions put to the referee. A is free.
+
+## 241. B's one-body roll and belt around a world accepted and verified; star values become dropdowns; a push list is ready (2026-10-11)
+
+- **Only B had reported** when the referee said all had: C (`c_orbit_textures_2`) and D
+  (`d_marketplace_screens`) show no Progress line and no report; E is mid-work.
+- **B, `b_hand_roll_belt`, accepted (partial by its own account):** new
+  `packages/engines/src/mgt2e_roll_body.js` (`rollBodyProfile` calls the existing
+  MgT2E steps on one body); `orbitNumberToAu` replaces the interpolation written twice
+  in `allocateOrbits`; `isolateRng` in `core/rng.js`; `<id>.profile.roll` in the hand
+  draft; a belt may orbit a world or a gas giant and is nested in its `moons`. Not
+  filled by the roll: a gas giant's profile; on the mainworld only size, atmosphere
+  and hydrographics. Engines stay 1.1.0. Note for the referee:
+  `findings/engine_roll_body.md`.
+- **Verified by the orchestrator on a copy with its own package links:** golden and
+  parity pass with the committed fixtures and without the held nine lines, so the
+  refactor moves no existing output. (Recipe in `orchestrator_state.md`, Traps.)
+- **The referee:** yes to D's three (blank systems pick in AU; typing an orbit number
+  fills AU; an unnamed star shows its class); and "all star info that is sorta set
+  should all be picker dropdown and not free-text".
+- **Prompts:** `b_hand_followups.md` gains part 4 (selects with options cited from
+  `rules/`) and is go; `d_hand_designer_3.md` (wire the roll, dropdowns, class label,
+  belt around a world, orbit and AU in step, one name per control) for after D's
+  marketplace screens; `a_belt_around_world.md`, A, go.
+- **Push list `findings/push/builder_2026-10-11b.md`:** everything accepted since
+  `8118f72`, without E's Campaign work in flight, the held engine set and the parked
+  hardening.
+- **Later the same turn, the referee:** yes, a gas giant's profile is not rolled and
+  the mainworld gets size, atmosphere and hydrographics only; a value the engine needs
+  from a hand-made star to function, such as luminosity, is to be a picker (added to
+  `b_hand_followups.md`); and versions: the app is 1.1.N, the last number up with each
+  push, the second when features harden. `APP_VERSION` is 1.1.1 in the pending push
+  list; the engine version stays 1.1.0 because it names the fixtures folder.

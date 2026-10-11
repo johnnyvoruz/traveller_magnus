@@ -457,6 +457,7 @@ function parentWorld(system: SystemDoc, body: Record<string, unknown>): Record<s
 }
 
 function isMoon(system: SystemDoc, body: Record<string, unknown>): boolean {
+    if (isBelt(body)) return false;
     if (body.isMoon || body.isSatellite || body.type === 'Satellite') return true;
     return parentWorld(system, body) != null;
 }
@@ -488,7 +489,7 @@ function bodyFacts(system: SystemDoc, body: Record<string, unknown>): string[] {
     const facts = [bodyTypeLabel(system, body)];
     const pair = pairWords(system, body);
     if (pair) facts.push(pair);
-    if (isMoon(system, body)) {
+    if (isBelt(body) || isMoon(system, body)) {
         if (body.pd != null && body.pd !== '') {
             const pd = num(body.pd, 1, 'PD');
             if (pd) facts.push(pd);
@@ -517,7 +518,7 @@ function bodyPlace(system: SystemDoc, body: Record<string, unknown>): string {
         if (role && role !== parts[0]) parts.push(role);
     } else {
         const parent = parentWorld(system, body);
-        if (parent) parts.push('moon of ' + bodyName(parent));
+        if (parent) parts.push((isBelt(body) ? 'belt of ' : 'moon of ') + bodyName(parent));
         else if (body.orbitId != null && body.orbitId !== '') {
             const orbit = num(body.orbitId, 2);
             if (orbit) parts.push('Orbit ' + orbit);
@@ -918,7 +919,7 @@ export function bodyModel(tree: TreeEnvelope, bodyKey: string): BodyModel | null
     const parentKey = parent ? keyFor(system, parent) : null;
     const moons = moonItems(body).flatMap((item, index) => {
         const moon = rec(item);
-        if (!moon || moon.type === 'Empty' || found.worldIndex < 0) return [];
+        if (!moon || moon.type === 'Empty' || isBelt(moon) || found.worldIndex < 0) return [];
         return [linkOf(system, moon, 'w' + found.worldIndex + 'm' + index, 'moons')];
     });
     const worlds = star && found.starIndex != null
@@ -957,13 +958,15 @@ export function bodyModel(tree: TreeEnvelope, bodyKey: string): BodyModel | null
             ]);
         const profile = profileRows.length ? { heading: 'World profile', rows: profileRows } : null;
         if (profile) mainSections.push(profile);
+        const belt = isBelt(body);
         const orbit = section('Orbit', [
             ['Orbits', pairWords(system, body) || null],
             ['Orbit', body.orbitId, 2],
             ['Distance (AU)', body.au, 3],
-            ['Satellite orbit (PD)', body.pd, 2],
+            ['Satellite orbit (PD)', belt ? null : body.pd, 2],
+            ['Distance (PD)', belt ? body.pd : null, 2],
             ['Eccentricity', body.eccentricity, 3],
-            ['Orbital period (days)', body.periodDays, 1],
+            ['Orbital period (days)', belt ? null : body.periodDays, 1],
             ['Axial tilt (°)', body.axialTilt, 1],
             ['Tidally locked', body.tidallyLocked === true ? true : null],
             ['Twilight zone', body.isTwilightZone === true ? true : null],
@@ -1003,7 +1006,7 @@ export function bodyModel(tree: TreeEnvelope, bodyKey: string): BodyModel | null
     }
     const moonCount = moonItems(body).filter((item) => {
         const moon = rec(item);
-        return !!moon && moon.type !== 'Empty';
+        return !!moon && moon.type !== 'Empty' && !isBelt(moon);
     }).length;
     const socioFull = body.type === 'Mainworld' ? socioBlock(tree.body) : null;
     return {
@@ -1029,7 +1032,7 @@ export function bodyModel(tree: TreeEnvelope, bodyKey: string): BodyModel | null
                 // The spin against the stars, or "Tidally locked": not the sunrise-to-sunrise day, which
                 // the Day and night card gives. Relabelled from "Day" (ruled 2026-10-04, handoff §59).
                 { label: 'Rotation', value: rotationText(body) },
-                { label: 'Year', value: periodText(body) },
+                { label: 'Year', value: isBelt(body) ? '' : periodText(body) },
                 { label: 'Moons', value: moonCount ? String(moonCount) : '' },
             ]),
         journey: journeyFrom(body),

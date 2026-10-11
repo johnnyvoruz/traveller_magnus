@@ -583,3 +583,441 @@ test('blank posts only the row rev', async () => {
     assert.equal(fetchImpl.calls.filter((call) => call.url.endsWith('/blank')).length, 1);
     map.close();
 });
+
+const HOME = '~0123456789ABCDEFGHJKMNPQRS';
+const TAKEN = '~0123456789ABCDEFGHJKMNPQRT';
+const SLOT_KEY = '~slot_4_-7/0101';
+const HOME_KEY = HOME + '/0101';
+
+function blankNames() {
+    return ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''];
+}
+
+function madeSector(over = {}) {
+    return {
+        id: HOME,
+        slot: { x: 4, y: -7 },
+        name: 'Far',
+        subsectors: blankNames(),
+        rev: 1,
+        deleted: false,
+        ...over,
+    };
+}
+
+function growBody(hexKeys) {
+    return {
+        hexKeys,
+        edition: 'MgT2E',
+        generator: 'top-down',
+        roll: 0,
+        filledToo: true,
+        makeSectors: [{ name: 'Far', slot: { x: 4, y: -7 } }],
+    };
+}
+
+/** A grow poll that misses Undo waits on the fake clock and never ends. */
+function until(promise) {
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('The grow test hung.')), 1000);
+        promise.then((value) => {
+            clearTimeout(timer);
+            resolve(value);
+        }, (err) => {
+            clearTimeout(timer);
+            reject(err);
+        });
+    });
+}
+
+function doneJob(over = {}) {
+    return job({ id: 'job-1', state: 'done', total: 2, done: 2, finishedAt: STAMP, ...over });
+}
+
+function nearSector() {
+    return madeSector({ id: TAKEN, slot: { x: 5, y: 0 }, name: 'Near', rev: 2 });
+}
+
+test('generateGrowing posts one generate with makeSectors, and baseRev only for one hex', async () => {
+    const posts = [];
+    const fetchImpl = fake((call) => {
+        if (call.method === 'POST' && call.url.endsWith('/generate')) posts.push(call.body);
+        if (call.url.includes('/jobs/')) return json(doneJob());
+        if (call.url.includes('/hexes?')) return json({ items: [], nextCursor: null });
+        if (call.url.endsWith('/generate')) {
+            const count = call.body.hexKeys.length;
+            return json({
+                sectors: [madeSector()],
+                rows: count === 1 ? [row({ hexKey: call.body.hexKeys[0], rev: 2 })] : [],
+                skipped: [],
+                jobId: count === 1 ? null : 'job-1',
+            }, count === 1 ? 201 : 202);
+        }
+        throw new Error('unexpected ' + call.url);
+    });
+    const map = open(fetchImpl, clock());
+    const screen = asBuildStore(map);
+    const started = screen.generateGrowing(growBody([KEY, SLOT_KEY]));
+    await started.accepted;
+    await started.finished;
+    assert.equal(posts.length, 1);
+    assert.deepEqual(posts[0].makeSectors, [{ name: 'Far', slot: { x: 4, y: -7 } }]);
+    assert.equal(Object.hasOwn(posts[0], 'baseRev'), false);
+    map.close();
+
+    const oneSlot = open(fetchImpl, clock());
+    const slotAct = oneSlot.generateGrowing(growBody([SLOT_KEY]));
+    await slotAct.accepted;
+    await slotAct.finished;
+    assert.equal(posts[1].baseRev, 0);
+    assert.deepEqual(posts[1].hexKeys, [SLOT_KEY]);
+    oneSlot.close();
+
+    const prior = row({ rev: 4 });
+    const withRow = fake((call) => {
+        if (call.url.includes('/hexes?')) return json({ items: [prior], nextCursor: null });
+        if (call.method === 'POST' && call.url.endsWith('/generate')) {
+            posts.push(call.body);
+            return json({
+                sectors: [madeSector()],
+                rows: [row({ hexKey: KEY, rev: 5 })],
+                skipped: [],
+                jobId: null,
+            }, 201);
+        }
+        throw new Error('unexpected ' + call.url);
+    });
+    const held = open(withRow, clock());
+    await held.loadSector('spin');
+    const act = held.generateGrowing(growBody([KEY]));
+    await act.accepted;
+    await act.finished;
+    assert.equal(posts[2].baseRev, 4);
+    assert.equal(posts.length, 3);
+    held.close();
+});
+
+test('a grow answer lands the rows and remaps slot keys before accepted resolves', async () => {
+    const otherSlot = '~slot_5_0/0202';
+    const fetchImpl = fake((call) => {
+        if (call.url.includes('/jobs/')) return json(doneJob({ total: 2, done: 2 }));
+        if (call.url.includes('sector=' + encodeURIComponent(HOME))) {
+            return json({ items: [row({ hexKey: HOME_KEY, rev: 3 })], nextCursor: null });
+        }
+        if (call.url.includes('sector=' + encodeURIComponent(TAKEN))) {
+            return json({ items: [row({ hexKey: TAKEN + '/0202', rev: 4 })], nextCursor: null });
+        }
+        if (call.url.includes('/hexes?')) return json({ items: [], nextCursor: null });
+        if (call.url.endsWith('/generate')) {
+            const queued = call.body.hexKeys.length > 1;
+            return json({
+                sectors: queued ? [madeSector(), nearSector()] : [madeSector()],
+                rows: queued ? [] : [row({ hexKey: HOME_KEY, rev: 2 })],
+                skipped: [],
+                jobId: queued ? 'job-1' : null,
+            }, queued ? 202 : 201);
+        }
+        throw new Error('unexpected ' + call.url);
+    });
+    const inline = open(fetchImpl, clock());
+    const one = inline.generateGrowing(growBody([SLOT_KEY]));
+    const seen = one.accepted.then((opened) => ({
+        id: inline.sectors().get(HOME)?.id ?? null,
+        rev: inline.row(HOME_KEY)?.rev ?? null,
+        keys: opened.keys,
+    }));
+    const opened = await one.accepted;
+    const snap = await seen;
+    assert.equal(snap.id, HOME);
+    assert.equal(snap.rev, 2);
+    assert.deepEqual(snap.keys, { [SLOT_KEY]: HOME_KEY });
+    assert.equal(opened.sectors[0].id, HOME);
+    await one.finished;
+    inline.close();
+
+    const queued = open(fetchImpl, clock());
+    const body = growBody([SLOT_KEY, otherSlot]);
+    body.makeSectors = [
+        { name: 'Far', slot: { x: 4, y: -7 } },
+        { name: 'Near', slot: { x: 5, y: 0 } },
+    ];
+    const many = queued.generateGrowing(body);
+    const atAccept = many.accepted.then(() => ({
+        far: queued.sectors().get(HOME)?.slot.y ?? null,
+        near: queued.sectors().get(TAKEN)?.name ?? null,
+        row: queued.row(HOME_KEY),
+    }));
+    const accepted = await many.accepted;
+    const mid = await atAccept;
+    assert.equal(mid.far, -7);
+    assert.equal(mid.near, 'Near');
+    assert.equal(mid.row, null);
+    assert.deepEqual(accepted.keys, {
+        [SLOT_KEY]: HOME_KEY,
+        [otherSlot]: TAKEN + '/0202',
+    });
+    await many.finished;
+    assert.equal(queued.row(HOME_KEY).rev, 3);
+    assert.equal(queued.row(TAKEN + '/0202').rev, 4);
+    queued.close();
+});
+
+test('undo of a grow token posts sectors/undo-generate as soon as accepted resolves', async () => {
+    const posts = [];
+    const fetchImpl = fake((call) => {
+        if (call.url.includes('/jobs/') && !call.url.endsWith('/undo-generate')) {
+            return json(job({ id: 'job-1', state: 'running', total: 2, done: 0 }));
+        }
+        if (call.url.includes('/hexes?')) return json({ items: [], nextCursor: null });
+        if (call.url.endsWith('/undo-generate')) {
+            posts.push({ url: call.url, body: call.body });
+            return json({ sectors: [], restored: 0, hexes: [] });
+        }
+        if (call.url.endsWith('/generate')) {
+            const queued = call.body.hexKeys.length > 1;
+            return json({
+                sectors: [madeSector()],
+                rows: queued ? [] : [row({ hexKey: HOME_KEY, rev: 2 })],
+                skipped: [],
+                jobId: queued ? 'job-1' : null,
+            }, queued ? 202 : 201);
+        }
+        throw new Error('unexpected ' + call.url);
+    });
+    const inline = open(fetchImpl, clock());
+    const one = inline.generateGrowing(growBody([SLOT_KEY]));
+    const opened = await one.accepted;
+    await one.finished;
+    await inline.undo(opened.undo);
+    assert.equal(posts.length, 1);
+    assert.equal(posts[0].url, '/api/universes/uni-1/sectors/undo-generate');
+    assert.deepEqual(posts[0].body, { sectorId: HOME, baseRev: 1 });
+    inline.close();
+
+    const running = open(fetchImpl, clock());
+    const act = running.generateGrowing(growBody([KEY, SLOT_KEY]));
+    const accepted = await act.accepted;
+    const undoing = running.undo(accepted.undo);
+    await until(act.finished);
+    await until(undoing);
+    assert.equal(posts.length, 2);
+    assert.deepEqual(posts[1].body, { jobId: 'job-1' });
+    assert.equal(posts[1].url, '/api/universes/uni-1/sectors/undo-generate');
+    assert.equal(fetchImpl.calls.some((call) => call.url.includes('/jobs/') && call.url.endsWith('/undo')), false);
+    running.close();
+});
+
+test('undo during a running grow job resolves finished as stopped', async () => {
+    const fetchImpl = fake((call) => {
+        if (call.url.includes('/jobs/') && !call.url.endsWith('/undo-generate')) {
+            return json(job({ id: 'job-1', state: 'running', total: 2, done: 0 }));
+        }
+        if (call.url.includes('/hexes?')) return json({ items: [], nextCursor: null });
+        if (call.url.endsWith('/undo-generate')) return json({ sectors: [], restored: 0, hexes: [] });
+        if (call.url.endsWith('/generate')) {
+            return json({ sectors: [madeSector()], rows: [], skipped: [], jobId: 'job-1' }, 202);
+        }
+        throw new Error('unexpected ' + call.url);
+    });
+    const map = open(fetchImpl, clock());
+    const act = map.generateGrowing(growBody([KEY, SLOT_KEY]));
+    const opened = await act.accepted;
+    const undoing = map.undo(opened.undo);
+    const done = await until(act.finished);
+    await until(undoing);
+    assert.equal(done.progress.state, 'stopped');
+    assert.equal(done.undo.id, opened.undo.id);
+    map.close();
+});
+
+test('undo of a grow drops the made sector and its rows, and reloads the old slug', async () => {
+    let undone = false;
+    const fetchImpl = fake((call) => {
+        if (call.url.endsWith('/undo-generate')) {
+            undone = true;
+            return json({
+                sectors: [{ id: HOME, toRev: 1, baseRev: 1 }],
+                restored: 0,
+                hexes: [{ hexKey: KEY, toRev: 4, baseRev: 4 }],
+            });
+        }
+        if (call.url.includes('/jobs/') && !call.url.endsWith('/undo-generate')) {
+            return json(job({ id: 'job-1', state: 'running', total: 2, done: 0 }));
+        }
+        if (call.url.includes('sector=spin')) {
+            return json({ items: [row({ rev: undone ? 9 : 4 })], nextCursor: null });
+        }
+        if (call.url.includes('/hexes?')) return json({ items: [], nextCursor: null });
+        if (call.url.endsWith('/generate')) {
+            return json({
+                sectors: [madeSector()],
+                rows: [row({ hexKey: HOME_KEY, rev: 2 })],
+                skipped: [],
+                jobId: 'job-1',
+            }, 202);
+        }
+        throw new Error('unexpected ' + call.url);
+    });
+    const map = open(fetchImpl, clock());
+    const act = map.generateGrowing(growBody([KEY, SLOT_KEY]));
+    const opened = await act.accepted;
+    assert.equal(map.sectors().get(HOME).name, 'Far');
+    assert.equal(map.row(HOME_KEY).rev, 2);
+    const before = fetchImpl.calls.filter((call) => call.url.includes('sector=spin')).length;
+    const undoing = map.undo(opened.undo);
+    await until(act.finished);
+    await until(undoing);
+    assert.equal(map.sectors().get(HOME), null);
+    assert.equal(map.row(HOME_KEY), null);
+    assert.equal(map.row(KEY).rev, 9);
+    assert.ok(fetchImpl.calls.filter((call) => call.url.includes('sector=spin')).length > before);
+    map.close();
+});
+
+test('undo of a grow returns a Restore token, and a bad answer returns null', async () => {
+    const broken = fake((call) => {
+        if (call.url.includes('/hexes?')) return json({ items: [], nextCursor: null });
+        if (call.url.endsWith('/undo-generate')) return json({ restored: 0 });
+        if (call.url.endsWith('/generate')) {
+            return json({
+                sectors: [madeSector()],
+                rows: [row({ hexKey: HOME_KEY, rev: 2 })],
+                skipped: [],
+                jobId: null,
+            }, 201);
+        }
+        throw new Error('unexpected ' + call.url);
+    });
+    const bad = open(broken, clock());
+    const failed = bad.generateGrowing(growBody([SLOT_KEY]));
+    const failedOpen = await failed.accepted;
+    await failed.finished;
+    assert.equal(await bad.undo(failedOpen.undo), null);
+    assert.equal(bad.sectors().get(HOME), null);
+    assert.equal(bad.row(HOME_KEY), null);
+    bad.close();
+
+    const posts = [];
+    const fetchImpl = fake((call) => {
+        if (call.url.endsWith('/undo-generate')) {
+            return json({
+                sectors: [{ id: HOME, toRev: 1, baseRev: 2 }],
+                restored: 1,
+                hexes: [{ hexKey: KEY, toRev: 3, baseRev: 4 }],
+            });
+        }
+        if (call.url.endsWith('/sectors/' + HOME + '/undo') || call.url.endsWith('/revert')) {
+            posts.push({ url: call.url, body: call.body });
+            if (call.url.endsWith('/undo')) return json(madeSector({ rev: 2 }));
+            return json(row({ rev: 8 }));
+        }
+        if (call.url.includes('/hexes?')) return json({ items: [], nextCursor: null });
+        if (call.url.endsWith('/generate')) {
+            return json({
+                sectors: [madeSector()],
+                rows: [row({ hexKey: HOME_KEY, rev: 2 }), row({ hexKey: KEY, rev: 5 })],
+                skipped: [],
+                jobId: null,
+            }, 201);
+        }
+        throw new Error('unexpected ' + call.url);
+    });
+    const map = open(fetchImpl, clock());
+    const act = map.generateGrowing(growBody([KEY, SLOT_KEY]));
+    const opened = await act.accepted;
+    await act.finished;
+    const restore = await map.undo(opened.undo);
+    assert.equal(typeof restore?.id, 'string');
+    assert.notEqual(restore.id, opened.undo.id);
+    assert.equal(await map.undo(restore), null);
+    assert.deepEqual(posts.map((call) => call.url), [
+        '/api/universes/uni-1/sectors/' + HOME + '/undo',
+        '/api/universes/uni-1/hexes/spin/1910/revert',
+    ]);
+    assert.deepEqual(posts[0].body, { toRev: 1, baseRev: 2 });
+    assert.deepEqual(posts[1].body, { toRev: 3, baseRev: 4 });
+    const screenMap = open(fetchImpl, clock());
+    const screen = asBuildStore(screenMap);
+    const shown = screen.generateGrowing(growBody([SLOT_KEY]));
+    const shownOpen = await shown.accepted;
+    await shown.finished;
+    const wrapped = await screen.undo(shownOpen.undo);
+    assert.equal(typeof wrapped?.id, 'string');
+    assert.notEqual(wrapped.id, shownOpen.undo.id);
+    screenMap.close();
+    map.close();
+});
+
+test('a grow error is the server message, and a taken slot lands that sector', async () => {
+    const refused = fake((call) => {
+        if (call.url.endsWith('/generate')) return fail(400, 'The sector name is taken.');
+        throw new Error('unexpected ' + call.url);
+    });
+    const map = open(refused, clock());
+    const act = map.generateGrowing(growBody([SLOT_KEY]));
+    const settled = await Promise.allSettled([act.accepted, act.finished]);
+    assert.equal(settled[0].status, 'rejected');
+    assert.equal(settled[1].status, 'rejected');
+    assert.equal(settled[0].reason.message, 'The sector name is taken.');
+    assert.equal(settled[1].reason.message, 'The sector name is taken.');
+    assert.equal(map.sectors().list().length, 0);
+    map.close();
+
+    const taken = fake((call) => {
+        if (call.url.endsWith('/generate')) return fail(409, 'That slot is in use.', { current: madeSector({ name: 'Occupied', rev: 6 }) });
+        throw new Error('unexpected ' + call.url);
+    });
+    const held = open(taken, clock());
+    const clash = held.generateGrowing(growBody([SLOT_KEY]));
+    const clashSettled = await Promise.allSettled([clash.accepted, clash.finished]);
+    assert.equal(clashSettled[0].reason.message, 'That slot is in use.');
+    assert.equal(clashSettled[1].reason.message, 'That slot is in use.');
+    assert.equal(held.sectors().get(HOME).name, 'Occupied');
+    assert.equal(held.sectors().get(HOME).rev, 6);
+    held.close();
+
+    const other = fake((call) => {
+        if (call.url.endsWith('/generate')) return fail(409, 'The sector changed.', { current: madeSector() });
+        throw new Error('unexpected ' + call.url);
+    });
+    const left = open(other, clock());
+    const missed = left.generateGrowing(growBody([SLOT_KEY]));
+    const missedSettled = await Promise.allSettled([missed.accepted, missed.finished]);
+    assert.equal(missedSettled[0].reason.message, 'The sector changed.');
+    assert.equal(left.sectors().list().length, 0);
+    left.close();
+});
+
+test('generate and its undo still omit makeSectors and return null', async () => {
+    const posts = [];
+    const fetchImpl = fake((call) => {
+        if (call.url.endsWith('/generate')) {
+            posts.push(call.body);
+            return json({ jobId: 'job-9' });
+        }
+        if (call.url.includes('/jobs/job-9') && call.method === 'GET') return json(doneJob({ id: 'job-9' }));
+        if (call.url.endsWith('/jobs/job-9/undo')) {
+            posts.push({ url: call.url, body: call.body });
+            return json({ restored: 0, conflicts: [] });
+        }
+        if (call.url.includes('/hexes?')) return json({ items: [], nextCursor: null });
+        throw new Error('unexpected ' + call.url);
+    });
+    const map = open(fetchImpl, clock());
+    const done = await map.generate({
+        hexKeys: [KEY, OTHER],
+        edition: 'MgT2E',
+        generator: 'top-down',
+        roll: 0,
+        filledToo: true,
+    }).finished;
+    assert.equal(Object.hasOwn(posts[0], 'makeSectors'), false);
+    assert.equal(Object.hasOwn(posts[0], 'baseRev'), false);
+    assert.deepEqual(posts[0].hexKeys, [KEY, OTHER]);
+    const back = await map.undo(done.undo);
+    assert.equal(back, null);
+    assert.equal(posts[1].url, '/api/universes/uni-1/jobs/job-9/undo');
+    assert.deepEqual(posts[1].body, {});
+    assert.equal(fetchImpl.calls.some((call) => call.url.endsWith('/undo-generate')), false);
+    map.close();
+});

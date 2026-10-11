@@ -3,8 +3,8 @@ import { z } from 'zod';
 /**
  * A system designed by hand.
  * This is not an engine tree. Nothing here is a rolled value.
- * Orbital elements, mass, and journey times are absent until the referee types a field that stores them.
- * This step stores no such field.
+ * Mass and journey times are absent.
+ * Orbit numbers are optional. A document stored before they existed still parses.
  */
 
 const Name = z.string().max(80);
@@ -38,6 +38,13 @@ export const HandStar = z.object({
     /** Another star's id. Null when this star orbits no star. */
     parentId: z.string().max(40).nullable(),
     order: z.number().int().nonnegative(),
+    /** MgT2E orbit number. Absent until the referee types one. */
+    orbitId: z.number().finite().optional(),
+    /** AU. The orbit view prefers this over orbitId. */
+    orbitAU: z.number().finite().optional(),
+    eccentricity: z.number().finite().optional(),
+    /** Years. Absent on a document that never stored one. */
+    periodYears: z.number().finite().optional(),
 }).strict();
 export type HandStar = z.infer<typeof HandStar>;
 
@@ -50,6 +57,7 @@ export const HandBody = z.object({
     name: Name,
     /**
      * A star id, or a world id when `kind` is `moon`.
+     * A belt may name a star, a world, or a gas giant.
      * When `alsoParentId` is set, this is one of the two stars and `alsoParentId` is the other.
      */
     parentId: z.string().min(1).max(40),
@@ -59,8 +67,26 @@ export const HandBody = z.object({
      */
     alsoParentId: z.string().min(1).max(40).optional(),
     order: z.number().int().nonnegative(),
+    /** MgT2E orbit number. Worlds, gas giants, and belts. Absent until typed. */
+    orbitId: z.number().finite().optional(),
+    /** AU. The orbit view reads this. */
+    au: z.number().finite().optional(),
+    eccentricity: z.number().finite().optional(),
+    /** Planetary diameters. Moons. Absent until typed. */
+    pd: z.number().finite().optional(),
+    /**
+     * Years. A belt form does not write this.
+     * A belt that already has it still parses.
+     */
+    periodYears: z.number().finite().optional(),
     mainworld: z.boolean(),
     profile: HandProfile,
+    /**
+     * How many profile rolls have been applied to this body.
+     * The next roll uses this number. Absent means none.
+     * A discarded draft does not store the next number.
+     */
+    profileRoll: z.number().int().nonnegative().optional(),
     notes: z.string().max(HAND_LIMITS.notes),
     bases: z.string().max(8),
     zone: z.string().max(16),
@@ -91,9 +117,15 @@ export const HandSystem = z.object({
     }
     const worlds = system.bodies.filter((body) => body.kind !== 'moon');
     const worldIds = new Set(worlds.map((body) => body.id));
+    const beltHosts = new Set(system.bodies.filter((body) => body.kind === 'world' || body.kind === 'gas').map((body) => body.id));
     for (const body of system.bodies) {
         if (body.kind === 'moon') {
             if (!worldIds.has(body.parentId)) {
+                ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['bodies'], message: `${body.id} parent` });
+            }
+        } else if (body.kind === 'belt') {
+            const aroundBody = beltHosts.has(body.parentId) && body.parentId !== body.id;
+            if (!stars.has(body.parentId) && !aroundBody) {
                 ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['bodies'], message: `${body.id} parent` });
             }
         } else if (!stars.has(body.parentId)) {

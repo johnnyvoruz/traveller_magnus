@@ -13,6 +13,7 @@ import { changeLine, discardEdit, edit, editing, holdLeaving, keepEdit, openEdit
 import { askDesign, handMode } from './hand_acts.ts';
 import { handChangeCount, handUi } from './hand.ts';
 import { build, plural } from './state.ts';
+import { commands } from '../../shell/registry.ts';
 
 const props = defineProps<{ hexKey: string; name: string }>();
 
@@ -49,23 +50,27 @@ function discard(): void {
 const items = computed((): MenuItem[] => {
     const out: MenuItem[] = [];
     if (restorable([props.hexKey]).length) {
-        out.push({ id: 'restore', label: 'Restore to the chart', say: 'Drops your changes; the chart’s system returns', icon: 'rotate-left' });
+        out.push({ id: 'restore', label: 'Restore to the chart', say: 'Removes your changes and shows the chart’s system again', icon: 'rotate-left' });
     }
     // Hand and generated go both ways: a generated system offers the designer, a system by hand offers Generate.
     // One item under one id, so the menu keeps its place and its focus whichever it says; none until the server has said which.
-    if (mode.value === 'hand') out.push({ id: 'other-way', label: 'Generate a system', say: 'A preview first; keeping it replaces the system designed by hand', icon: 'wand-magic-sparkles', key: 'G' });
-    else if (mode.value === 'generated') out.push({ id: 'other-way', label: 'Design by hand…', say: 'Every body yours to type and arrange; the engine stops running for this system', icon: 'draw-polygon' });
+    if (mode.value === 'hand') out.push({ id: 'other-way', label: 'Generate a system', say: 'Shows a preview. If you select Keep, it replaces the system designed by hand', icon: 'wand-magic-sparkles', key: 'G' });
+    else if (mode.value === 'generated') out.push({ id: 'other-way', label: 'Design by hand…', say: 'You type and arrange every body. The engine stops generating this system', icon: 'draw-polygon' });
     out.push({
         id: 'remove',
-        label: overChart([props.hexKey]) ? 'Remove from my map' : 'Remove',
-        say: overChart([props.hexKey]) ? 'The hex is empty on your map; the chart is untouched' : 'The hex is empty again',
+        label: overChart([props.hexKey]) ? 'Remove from your map' : 'Remove',
+        say: overChart([props.hexKey]) ? 'Empties the hex on your map. The chart doesn’t change' : 'Empties the hex',
         icon: 'trash',
         key: 'Del',
         danger: true,
         rule: true,
     });
+    // What is selected, not this hex: the palette's command knows the selection.
+    if (publishCommand.value) out.push({ id: 'publish', label: 'Publish selection…', say: 'Shares the selected hexes and their records as a package', icon: 'store', rule: true });
     return out;
 });
+
+const publishCommand = computed(() => { void build.selection.length; const found = commands().find((item) => item.id === 'build-publish'); return found && (!found.runnable || found.runnable()) ? found : null; });
 
 function openMore(): void {
     const el = more.value;
@@ -83,6 +88,7 @@ function pick(id: string): void {
     anchor.value = null;
     if (id === 'restore') void restoreHexes([props.hexKey]);
     else if (id === 'remove') void removeHexes([props.hexKey]);
+    else if (id === 'publish') { if (publishCommand.value) publishCommand.value.run(); }
     else if (id === 'other-way') void (mode.value === 'hand' ? previewAt(props.hexKey) : askDesign(props.hexKey, props.name));
 }
 
@@ -105,7 +111,7 @@ watch(() => (preview.value ? preview.value.roll : -1), (roll) => {
     <template v-else-if="drafting">
       <span class="build-tag is-preview">Draft</span>
       <span class="build-bar-word" role="status">{{ dirty ? line : 'no changes yet' }}</span>
-      <span v-if="edit.mode === 'hand'" class="build-tag is-yours" title="Designed by hand: the engine does not roll this system">By hand</span>
+      <span v-if="edit.mode === 'hand'" class="build-tag is-yours" title="Designed by hand. The engine doesn’t generate this system">By hand</span>
       <span class="build-bar-gap"></span>
       <button type="button" class="ui-btn" data-command="build-draft-discard" :disabled="edit.keeping" @click="discard()">{{ dirty ? 'Discard' : 'Close' }}</button>
       <button
@@ -114,7 +120,7 @@ watch(() => (preview.value ? preview.value.roll : -1), (roll) => {
         data-command="build-draft-keep"
         :disabled="!dirty || edit.keeping || held || handUi.removing !== null"
         :aria-busy="edit.keeping ? 'true' : undefined"
-        :title="held ? 'The engine could not build this system: see its message' : handUi.removing ? 'Answer the question about the remove first' : 'Keep (Ctrl+Enter)'"
+        :title="held ? 'The engine can’t build this system. To find out why, read the engine’s message in the form' : handUi.removing ? 'To keep the draft, first select Remove or Cancel in the remove question' : 'Keep (Ctrl+Enter)'"
         @click="keepEdit()"
       >
         <Icon name="check" :size="13" />{{ edit.keeping ? 'Keeping…' : 'Keep' }}<kbd class="build-key">Ctrl+Enter</kbd>
@@ -128,7 +134,7 @@ watch(() => (preview.value ? preview.value.roll : -1), (roll) => {
         data-command="build-edit"
         :disabled="!editable || opening || busy"
         :aria-busy="opening ? 'true' : undefined"
-        :title="state === 'truth' ? 'Edit this system (E). Keeping the draft makes it yours; the chart is untouched' : 'Edit this system (E)'"
+        :title="state === 'truth' ? 'Edit this system (E). When you keep your changes, the system becomes yours. The chart doesn’t change' : 'Edit this system (E)'"
         @click="openEdit(hexKey, name)"
       >
         <Icon name="pen-to-square" :size="13" />{{ opening ? 'Opening…' : 'Edit' }}<kbd v-if="editable" class="build-key">E</kbd>
@@ -137,7 +143,7 @@ watch(() => (preview.value ? preview.value.roll : -1), (roll) => {
         ref="more"
         type="button"
         class="ui-btn is-icon"
-        aria-label="More build acts"
+        aria-label="More build actions"
         title="More"
         aria-haspopup="true"
         :aria-expanded="anchor ? 'true' : 'false'"
@@ -150,7 +156,7 @@ watch(() => (preview.value ? preview.value.roll : -1), (roll) => {
       <span class="build-bar-state">
         <span v-if="state === 'truth'" class="build-tag is-chart">Chart</span>
         <span v-else class="build-tag is-yours">Yours</span>
-        <span class="build-bar-word">{{ state === 'truth' ? 'as charted' : state === 'override' && overChart([hexKey]) ? 'in place of the chart’s' : 'made here' }}</span>
+        <span class="build-bar-word">{{ state === 'truth' ? 'as charted' : state === 'override' && overChart([hexKey]) ? 'replaces the chart’s system' : 'made here' }}</span>
       </span>
     </template>
     <BuildMenu v-if="anchor" :title="name" :items="items" :anchor="anchor" @pick="pick" @close="closeMore" />

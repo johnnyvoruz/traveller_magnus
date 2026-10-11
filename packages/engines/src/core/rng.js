@@ -34,6 +34,17 @@ export function reseedForHex(hexId) {
     rng = mulberry32(hexSeed);
 }
 
+/** Run `fn` on a reseeded generator, then put the previous generator back. */
+export function isolateRng(hexId, fn) {
+    const saved = rng;
+    reseedForHex(hexId);
+    try {
+        return fn();
+    } finally {
+        rng = saved;
+    }
+}
+
 export function shouldGeneratePopulation(hexId) {
     const freq = (settings.generationPopCheckFrequency !== undefined)
         ? Number(settings.generationPopCheckFrequency) : 100;

@@ -186,7 +186,18 @@ import { settings } from './core/settings.js';
      * Converts an AU distance to a Traveller orbit number using the standard orbit table.
      * Module-scope so both generateStellarSystem and allocateOrbits can call it.
      */
-    function convertAuToOrbit(au) {
+    function orbitNumberToAu(orbitId) {
+    let auInt = Math.floor(orbitId);
+    let auFrac = orbitId - auInt;
+    let orbitAuTable = MgT2EData.stellar.orbitAu;
+    let maxIdx = orbitAuTable.length - 1;
+    let limitIdx = Math.min(auInt, maxIdx);
+    let auTarget = orbitAuTable[limitIdx];
+    let auDiff = limitIdx < maxIdx ? (orbitAuTable[limitIdx + 1] - orbitAuTable[limitIdx]) : auTarget;
+    return auTarget + (auFrac * auDiff);
+}
+
+function convertAuToOrbit(au) {
         const orbitAuTable = MgT2EData.stellar.orbitAu;
         for (let i = 0; i < orbitAuTable.length - 1; i++) {
             if (au >= orbitAuTable[i] && au < orbitAuTable[i + 1]) {
@@ -1813,17 +1824,7 @@ import { settings } from './core/settings.js';
                     let world = {
                         ...wInfo,
                         orbitId: s.orbitId,
-                        // Convert orbit number to AU with interpolation
-                        au: (() => {
-                            let auInt = Math.floor(s.orbitId);
-                            let auFrac = s.orbitId - auInt;
-                            let orbitAuTable = MgT2EData.stellar.orbitAu;
-                            let maxIdx = orbitAuTable.length - 1;
-                            let limitIdx = Math.min(auInt, maxIdx);
-                            let auTarget = orbitAuTable[limitIdx];
-                            let auDiff = limitIdx < maxIdx ? (orbitAuTable[limitIdx + 1] - orbitAuTable[limitIdx]) : auTarget;
-                            return auTarget + (auFrac * auDiff);
-                        })(),
+                        au: orbitNumberToAu(s.orbitId),
                         parentStarIdx: s.parentStarIdx,
                         orbitType: s.type,
                         eccentricity: s.eccentricity,
@@ -1867,17 +1868,7 @@ import { settings } from './core/settings.js';
         // 7b. Anomalous World Finalisation — build world objects from anomalousPending
         if (anomalousPending.length > 0) {
             tSection('Step 7b: Anomalous World Finalisation');
-            const orbitAuTable = MgT2EData.stellar.orbitAu;
-
-            function computeAnomalousAu(orbitId) {
-                const auInt = Math.floor(orbitId);
-                const auFrac = orbitId - auInt;
-                const maxIdx = orbitAuTable.length - 1;
-                const limitIdx = Math.min(auInt, maxIdx);
-                const auTarget = orbitAuTable[limitIdx];
-                const auDiff = limitIdx < maxIdx ? (orbitAuTable[limitIdx + 1] - orbitAuTable[limitIdx]) : auTarget;
-                return auTarget + (auFrac * auDiff);
-            }
+            const computeAnomalousAu = orbitNumberToAu;
 
             for (const ap of anomalousPending) {
                 tSection(`Finalise Anomalous: ${ap.type} at Orbit ${ap.orbitId}`);
@@ -2020,3 +2011,4 @@ export { logMgT2EBodyBiography };
 export { generateStarObject };
 export { getMAO };
 export { convertAuToOrbit };
+export { orbitNumberToAu };

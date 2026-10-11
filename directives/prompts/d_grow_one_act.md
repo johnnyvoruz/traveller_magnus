@@ -80,4 +80,13 @@ Write `directives/reports/d_grow_one_act.md` from `directives/reports/_TEMPLATE.
 Questions for Johnny written out in full, recommended answer first. After each
 meaningful step append one line under Progress: "done: X. next: Y."
 
+## Added 2026-10-11 14:00
+- The push is made (`8118f72`). Your blocked report is accepted: Lane A is adding
+  `generateGrowing` and the undo to the store (`prompts/a_store_grow.md`) to the
+  signatures you wrote. **Start again only when the board shows A's store pass
+  accepted**; then read `findings/builder_grow_ready.md` for the final signatures.
+- Item 6 is **yes** (Johnny, 2026-10-11): build the "Checking…" line.
+
 ## Progress
+done: read contract and Lane A's store; the store cannot send makeSectors or call undo-generate. Blocked report written with the two functions A needs. next: wait for Lane A, then build grow_acts.ts/acts.ts onto them.
+done: built on A's generateGrowing (one request, one Undo, Undo while running, Restore when the store gives a token) and the "Checking…" menu line; four gates green; browser pass kb5_grow_* (one request per act and per Undo, from the API log); servers stopped; report written. next: prompts/d_hand_designer_2.md when Johnny says go.

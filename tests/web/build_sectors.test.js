@@ -168,7 +168,7 @@ test('New sector: with no name the box takes focus and nothing is made; with one
     assert.deepEqual(store.calls, [['make', 'Hollow Reach', { x: -7, y: -4 }]]);
     assert.deepEqual(went, [['sector', ID, null]]);
     assert.equal(sectorUi.name, '');
-    assert.equal(toasts[toasts.length - 1].message, 'Made the sector Hollow Reach.');
+    assert.equal(toasts[toasts.length - 1].message, 'Created the sector Hollow Reach.');
     toasts[toasts.length - 1].action.run();
     await new Promise((resolve) => setTimeout(resolve, 0));
     assert.deepEqual(store.calls[1], ['remove', ID]);
@@ -183,7 +183,7 @@ test('Rename: the sector must keep a name; a subsector’s may be emptied; the s
     assert.equal(sectorUi.renaming, true);
     assert.equal(nameAt(), 'Hollow Reach');
     await commitRename('  ');
-    assert.equal(sectorUi.error, 'A sector has a name.');
+    assert.equal(sectorUi.error, 'Enter a name for the sector.');
     assert.equal(sectorUi.renaming, true);
     await commitRename('Hollow Reach');
     assert.equal(sectorUi.renaming, false);
@@ -214,13 +214,13 @@ test('Move: the keyboard’s slot steps from the sector’s own; a taken slot is
     stepCursor(0, -1);
     assert.deepEqual(sectorUi.cursor, { x: -7, y: -5 });
     await moveTo({ x: -7, y: -5 });
-    assert.equal(sectorUi.error, 'That slot is taken. Pick an empty one.');
+    assert.equal(sectorUi.error, 'That sector slot is in use. Select an empty sector slot.');
     assert.deepEqual(store.calls, []);
     await moveTo({ x: -6, y: -4 });
     assert.deepEqual(store.calls, [['move', ID, { x: -6, y: -4 }]]);
     assert.equal(sectorUi.moving, '');
     assert.deepEqual(went, [['sector', ID, null]]);
-    assert.equal(toasts[toasts.length - 1].message, 'Moved Hollow Reach. Its hexes and names went with it.');
+    assert.equal(toasts[toasts.length - 1].message, 'Moved Hollow Reach with its hexes and names.');
     // Its own slot is no move at all.
     startMove();
     await moveTo({ x: -6, y: -4 });
@@ -234,12 +234,12 @@ test('Move: the keyboard’s slot steps from the sector’s own; a taken slot is
 test('Delete asks nothing: it says what goes before it is pressed, goes to the empty slot, and its toast’s Undo names the delete’s own revision', async () => {
     const { store, went } = setUp([own()]);
     setSectorAt({ kind: 'own', id: ID, letter: null });
-    assert.equal(deleteWords(), 'Its 12 systems go with it. A copy is kept; Undo puts it all back.');
+    assert.equal(deleteWords(), 'Also deletes its 12 systems. You can undo this.');
     await deleteSector();
     assert.deepEqual(store.calls, [['remove', ID]]);
     assert.deepEqual(went, [['slot', { x: -7, y: -4 }]]);
     const toast = toasts[toasts.length - 1];
-    assert.equal(toast.message, 'Deleted Hollow Reach and its 12 systems. A copy is kept.');
+    assert.equal(toast.message, 'Deleted Hollow Reach and its 12 systems.');
     toast.action.run();
     await new Promise((resolve) => setTimeout(resolve, 0));
     assert.deepEqual(store.calls[1], ['undo', { id: ID, toRev: 4, atRev: 4 }]);

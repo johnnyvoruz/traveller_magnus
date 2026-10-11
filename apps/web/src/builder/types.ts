@@ -4,7 +4,8 @@
  * A tree envelope is never read here.
  */
 import type { SectorHex } from '@voyage/shared';
-import type { BuilderJobState } from '@voyage/shared';
+import type { BuilderGenerator, BuilderJobState } from '@voyage/shared';
+import type { OwnSector } from '../workspace/build/seam.ts';
 
 export type { BuilderEdition, BuilderGenerator, BuilderHex, BuilderJob } from '@voyage/shared';
 
@@ -36,5 +37,27 @@ export type UndoToken = { id: string };
 
 export type GenerateHandle = {
     stop(): void;
+    finished: Promise<{ undo: UndoToken; progress: JobProgress }>;
+};
+
+/** One sector the grow act makes. The id is the server's. */
+export type GrowSectorSeed = { name: string; slot: { x: number; y: number } };
+
+export type GenerateGrowingBody = {
+    hexKeys: readonly string[];
+    edition: string;
+    generator: BuilderGenerator;
+    roll: number;
+    filledToo: boolean;
+    makeSectors: readonly GrowSectorSeed[];
+};
+
+/**
+ * One generate that also makes sectors. `accepted` is the 201 or 202.
+ * `finished` is the end of the job, or the same moment when the act was inline.
+ */
+export type GenerateGrowingHandle = {
+    stop(): void;
+    accepted: Promise<{ sectors: OwnSector[]; keys: Record<string, string>; undo: UndoToken }>;
     finished: Promise<{ undo: UndoToken; progress: JobProgress }>;
 };

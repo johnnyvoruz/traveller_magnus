@@ -46,7 +46,14 @@ function conflictSector(err: unknown): unknown {
     return (details as { current: unknown }).current;
 }
 
-export function openSectors(port: SectorPort): OwnSectors & { load(): Promise<void> } {
+/** The sector list, plus the grow act's land and drop. `sectors()` does not expose those two. */
+export type SectorBook = OwnSectors & {
+    load(): Promise<void>;
+    adopt(rows: readonly unknown[]): OwnSector[];
+    forget(ids: readonly string[]): void;
+};
+
+export function openSectors(port: SectorPort): SectorBook {
     const base = '/api/universes/' + encodeURIComponent(port.universeId);
     const state = reactive({ tick: 0, loaded: false });
     const held = new Map<string, OwnSector>();
@@ -146,6 +153,15 @@ export function openSectors(port: SectorPort): OwnSectors & { load(): Promise<vo
             const read = FormRead.safeParse(data);
             if (!read.success) return null;
             return read.data.form.mode === 'hand' ? 'hand' : 'generated';
+        },
+        /** Sectors the grow act just made, or the sector already in a slot (a 409). */
+        adopt(rows: readonly unknown[]): OwnSector[] {
+            return rows.map((row) => land(row));
+        },
+        /** Made sectors leave memory. Their hex rows are the store's. */
+        forget(ids: readonly string[]): void {
+            for (const id of ids) held.delete(id);
+            state.tick += 1;
         },
         designByHand: async (hexKey, baseRev) => {
             const place = parseHexKey(hexKey);
