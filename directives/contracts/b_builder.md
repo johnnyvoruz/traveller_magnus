@@ -32,13 +32,13 @@ Failure: `{ ok: false, error: { code, message, details? } }`.
 | Name | File |
 |---|---|
 | `HexKey`, `BuilderHex`, `BuilderAbsent`, `BuilderHexView`, `BuilderHexPage`, `HexRemove`, `HexRestore`, `HexRevert`, `BuilderGenerate`, `BuilderGenerateDone`, `BuilderJobAccepted`, `BuilderJob`, `BuilderJobUndo` | `packages/shared/src/schemas/builder.ts` |
-| `FormRead`, `FormDraft`, `FormAnswer`, `FormKeep`, `FormBlank`, `FormDesign`, `FormChange`, `FormMessage`, `EditForm` | `packages/shared/src/schemas/form.ts` |
+| `FormRead`, `FormDraft`, `FormAnswer`, `FormKeep`, `FormBlank`, `FormDesign`, `FormChange`, `FormMessage`, `EditForm`, `FieldRefusalDetails`, `SlotInUseDetails`, `HexChangedDetails` | `packages/shared/src/schemas/form.ts` |
 | `HandEnvelope`, `HandSystem`, `HandBody` | `packages/shared/src/schemas/hand.ts` |
 | `SectorMake`, `SectorRename`, `SectorMove`, `SectorRev`, `SectorUndo`, `SubsectorRename`, `RefereeSector`, `RefereeSectorPage`, `SectorSeed`, `SectorGenerate`, `SectorGenerateDone`, `SectorGenerateUndo`, `SectorGenerateUndone` | `packages/shared/src/schemas/sector.ts` |
 
 `HexRemove` and `HexRestore` are `{ baseRev }` with `baseRev` an integer ≥ 0. `BuilderHex.rev` is ≥ 1. `BuilderAbsent.rev` is 0. A page of rows never includes rev 0.
 
-A stale `baseRev` writes nothing. Hex: 409 `conflict`, `This hex changed. Reload it, then try again.` Sector: 409 `conflict`, `This sector changed. Reload it, then try again.` Slot taken: 409 `conflict`, `That slot is in use. Choose another slot.`
+A stale `baseRev` writes nothing. Hex: 409 `conflict`, `This hex changed. Reload it, then try again.` `details.code` `hex_changed`. Sector: 409 `conflict`, `This sector changed. Reload it, then try again.` Slot taken: 409 `conflict`, `That slot is in use. Choose another slot.` `details.code` `slot_in_use`. The shapes are under "Codes the browser reads".
 
 Object cap: a new private object that would pass 250 MB is 400 `too_large`, `250 MB of objects per universe.` The door write is not applied, and the new object is deleted.
 
@@ -525,8 +525,39 @@ Name, Order, Orbit, AU, Eccentricity, and Period (years) stay text or number. `r
 
 ### Luminosity, mass, diameter, temperature
 
-Not added. The roll still looks these up.
+**On disk, unpushed.** Four number fields on a hand star. The same ids the generated editor already uses (`form.ts` `DERIVED`). A document stored before these fields existed still parses: each number is optional.
 
-`rollBodyProfile` calls `generateStarObject` when type, subtype, and class are all present (`packages/engines/src/mgt2e_roll_body.js` `resolveStar`). That function writes `mass`, `diam`, `temp`, and `lum`. `lum` is `calculateStellarLuminosity(diam, temp)`, not a table of luminosities. `mass`, `diam`, and `temp` are interpolated between the anchors in `starStats_*`. The world steps then read `primary.lum` (missing becomes 1, `mgt2e_world_engine.js`), `primary.mass` (the moon pass throws when it is missing), and `primary.diam` (missing becomes 1).
+| Field id | Label | Unit, from the engine |
+|---|---|---|
+| `<starId>.mass` | Mass | Solar masses. `generateStarObject` records `Mass (Sol)` (`packages/engines/src/mgt2e_stellar_engine.js` lines 79 and 135). |
+| `<starId>.diam` | Diameter | Solar diameters. The same function records `Diameter (Sol)` (lines 81 and 137). `calculateStellarLuminosity` takes that diameter as solar radii (`packages/engines/src/mgt2e_math.js` lines 86 to 90). |
+| `<starId>.temp` | Temperature | Kelvin. `generateStarObject` records `Temperature (K)` (lines 80 and 136). The luminosity function takes Kelvin (math lines 88 to 90). |
+| `<starId>.lum` | Luminosity | Solar luminosities. `generateStarObject` records `Luminosity (Sol)` (lines 82 and 140). The function returns solar units (math lines 89 to 90). `lum` is `calculateStellarLuminosity(diam, temp)`, not a table. |
 
-`rules/` gives formulas and anchor rows, not a closed list of those four numbers. No dropdown was invented. A stored hand star without the four numbers keeps today's lookup. See Questions.
+Kind `number`, permission `type`. The stored value is a finite number above 0, or absent. The form field's `value` is that number, or `null` when nothing has been typed. `FormField.lookup` (a number, or `null`) sits beside `value`. The browser shows `lookup` while `value` is `null`.
+
+`lookup` for mass, diameter, and temperature is `generateStarObject` when `sType` is non-empty, `subType` parses as a finite number, and `sClass` is non-empty (the same gate as `resolveStar`). Otherwise `lookup` is `null`. That gate is what the hand form can call. `form.ts` `resolvePhysics` already calls `generateStarObject` for a generated Architect of Worlds star as well as Mongoose. A hand star, including Architect of Worlds and a blank (no edition), uses that same call. There is no other lookup on the hand path. When the gate fails, the lookup is none.
+
+Luminosity's `lookup` is the stored diameter and temperature when either has been typed, passed through `calculateStellarLuminosity` with the looked-up number filling the one that was not typed. When neither has been typed, `lookup` is `generateStarObject`'s `lum`, or `null` when that call does not run. Typing a diameter or a temperature does not store a luminosity.
+
+Clearing the field (`null` or `""`) deletes the stored number. The next form shows the lookup again.
+
+A value that is not a finite number above 0 is 400 `validation`. The sentence is `<Label> cannot hold that. Type a finite number above 0.` `details` is `FieldRefusalDetails`. The engine lines cited above do not admit 0 or a negative typed number, so the bound stays above 0.
+
+`rollBodyProfile` reads a stored number in place of the looked-up one. `resolveStar` still calls `generateStarObject` when type, subtype, and class are all present, then replaces `mass`, `diam`, `temp`, or `lum` when that stored number is present. A stored diameter or temperature with no stored luminosity recomputes `lum` with `calculateStellarLuminosity`. Callers that pass no stored numbers get the same star as before.
+
+When type, subtype, or class is missing, so `generateStarObject` is not called, and at least one of the four numbers is stored: mass, diameter, and temperature all have to be stored. Luminosity may be stored or left to the same function. The roll then uses those numbers. When one of mass, diameter, or temperature is still empty, the draft is refused and nothing is written. The sentence names the empty ones, in that order: `Set Mass.`, `Set Mass and Diameter.`, or `Set Mass, Diameter, and Temperature.` A star with none of the four stored keeps today's roll, including `Set Type, Subtype, and Class.`
+
+A generated form still shows `mass`, `lum`, `diam`, and `temp` as roll fields (`form.ts` `DERIVED`). Design by hand still does not copy them onto the hand document. The hand form looks them up.
+
+### Codes the browser reads
+
+**On disk, unpushed.** The envelope `code` stays `validation` or `conflict`. The sentence stays the `message`. A stable `details.code` tells the three answers apart. The shapes are in `packages/shared/src/schemas/form.ts`.
+
+| `details.code` | Where | Shape |
+|---|---|---|
+| `field` | 400 whose sentence is `<label> cannot hold that. ...` or `You can't edit <label>. ...` | `{ code: "field", id: "<field id>" }` `FieldRefusalDetails` |
+| `slot_in_use` | 409 `That slot is in use. Choose another slot.` | `{ code: "slot_in_use", current: <RefereeSector> }` `SlotInUseDetails` |
+| `hex_changed` | 409 `This hex changed. Reload it, then try again.` | `{ code: "hex_changed", current: <the row already returned> }` `HexChangedDetails` |
+
+`current` is the same object those responses already sent. A 400 that is not one of those two sentences has no `details.code`.

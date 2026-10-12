@@ -127,6 +127,9 @@ export {
     FormKeep,
     FormBlank,
     FormDesign,
+    FieldRefusalDetails,
+    SlotInUseDetails,
+    HexChangedDetails,
 } from './schemas/form.ts';
 export {
     OwnSectorId,

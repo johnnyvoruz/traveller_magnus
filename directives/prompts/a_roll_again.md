@@ -52,3 +52,6 @@ Write `directives/reports/a_roll_again.md` from `directives/reports/_TEMPLATE.md
 each meaningful step append one line under Progress: "done: X. next: Y."
 
 ## Progress
+done: the contract says a later roll uses the next number, and rollProfiles applies each entry in order. next: append a repeated profile roll and carry it through Keep mine.
+done: a profile roll is appended again, Keep mine carries the copies whose body is still on the form, and the draft tests cover two entries, one change, Discard, and Keep mine. next: run the gates.
+done: gates passed (1384 tests, checker, typecheck, build). next: the report is written.

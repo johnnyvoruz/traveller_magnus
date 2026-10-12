@@ -36,6 +36,8 @@ export const FormField = z.object({
     permission: FormPermission,
     value: FormValue,
     options: z.array(FormOption),
+    /** Present on a hand star's mass, diameter, temperature, and luminosity. Shown while `value` is null. */
+    lookup: FormValue.optional(),
 }).strict();
 export type FormField = z.infer<typeof FormField>;
 
@@ -125,6 +127,27 @@ export type FormKeep = z.infer<typeof FormKeep>;
  * Blank system. Edition and star fields are the old create dialog.
  * A client may omit them. When they are sent, they are accepted and not used.
  */
+/** A bare 400 that names one field. The sentence stays `error.message`. */
+export const FieldRefusalDetails = z.object({
+    code: z.literal('field'),
+    id: z.string().min(1),
+}).strict();
+export type FieldRefusalDetails = z.infer<typeof FieldRefusalDetails>;
+
+/** 409 `That slot is in use. Choose another slot.` `current` is the `RefereeSector` already returned. */
+export const SlotInUseDetails = z.object({
+    code: z.literal('slot_in_use'),
+    current: z.unknown(),
+}).strict();
+export type SlotInUseDetails = z.infer<typeof SlotInUseDetails>;
+
+/** 409 `This hex changed. Reload it, then try again.` `current` is the row already returned. */
+export const HexChangedDetails = z.object({
+    code: z.literal('hex_changed'),
+    current: z.unknown(),
+}).strict();
+export type HexChangedDetails = z.infer<typeof HexChangedDetails>;
+
 export const FormBlank = z.object({
     baseRev: z.number().int().nonnegative(),
     edition: z.enum(['MgT2E', 'AoW']).optional(),

@@ -45,6 +45,14 @@ export const HandStar = z.object({
     eccentricity: z.number().finite().optional(),
     /** Years. Absent on a document that never stored one. */
     periodYears: z.number().finite().optional(),
+    /** Solar masses. Absent until typed. `generateStarObject` writes `Mass (Sol)`. */
+    mass: z.number().finite().positive().optional(),
+    /** Solar diameters. Absent until typed. */
+    diam: z.number().finite().positive().optional(),
+    /** Kelvin. Absent until typed. */
+    temp: z.number().finite().positive().optional(),
+    /** Solar luminosities. Absent until typed. A looked-up luminosity is not stored. */
+    lum: z.number().finite().positive().optional(),
 }).strict();
 export type HandStar = z.infer<typeof HandStar>;
 

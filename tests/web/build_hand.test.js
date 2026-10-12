@@ -217,7 +217,7 @@ test('the selected body shows its own fields; what the list sets (parent, order,
     assert.equal(moon.rows.some((field) => field.id === 'b4.kind'), false);
     assert.deepEqual(moon.rows.map((field) => field.id), ['b4.name', 'b4.orbit.pd', 'b4.orbit.eccentricity', 'b4.mainworld', 'b4.notes', 'b4.bases', 'b4.zone', 'b4.allegiance', 'b4.trade']);
     const star = nodeFields(form, list[0]);
-    assert.deepEqual(star.rows.map((field) => field.id), ['s1.name', 's1.classText', 's1.type', 's1.subtype', 's1.class', 's1.orbit.id', 's1.orbit.au', 's1.orbit.eccentricity', 's1.orbit.years']);
+    assert.deepEqual(star.rows.map((field) => field.id), ['s1.name', 's1.classText', 's1.type', 's1.subtype', 's1.class', 's1.mass', 's1.diam', 's1.temp', 's1.lum', 's1.orbit.id', 's1.orbit.au', 's1.orbit.eccentricity', 's1.orbit.years']);
     assert.equal(star.profile.length, 0);
 });
 
@@ -511,9 +511,24 @@ test('Roll profile goes in the draft’s roll list, counts as one change, and sa
     assert.equal(handUi.rolling, 'b1');
     assert.deepEqual(edit.rolled, ['b1.profile.roll']);
     assert.equal(handChangeCount(edit.mine, [], edit.rolled), 1);
-    // A second roll in the same draft would give the same cells: it says what to do instead.
     handUi.rolling = '';
-    assert.deepEqual(rollNote('b1'), { text: 'To roll different values, select Keep, and then roll again.', blocked: true });
     void draft;
+    dropEdit();
+});
+
+test('Roll profile again without Keep: the button stays on, each press is sent, and it still counts as one change', async () => {
+    await open(aster());
+    const sent = [];
+    draftHandle.value.rollAgain = (id) => sent.push(id);
+    rollProfile('b1');
+    // While the first answer is out, a second press waits.
+    assert.equal(canRollProfile('b1'), false);
+    handUi.rolling = '';
+    assert.deepEqual(rollNote('b1'), { text: '', blocked: false });
+    assert.equal(canRollProfile('b1'), true);
+    rollProfile('b1');
+    assert.deepEqual(sent, ['b1.profile.roll', 'b1.profile.roll']);
+    assert.deepEqual(edit.rolled, ['b1.profile.roll']);
+    assert.equal(handChangeCount(edit.mine, [], edit.rolled), 1);
     dropEdit();
 });

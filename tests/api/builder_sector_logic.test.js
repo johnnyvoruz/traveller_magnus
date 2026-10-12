@@ -272,6 +272,7 @@ test('a moved sector rev or a moved hex rev writes nothing', async () => {
     const staleHex = await call(jobSql, 'POST', '/sectors/undo-generate', { jobId: 'job-stale' });
     assert.equal(staleHex.status, 409, JSON.stringify(staleHex.body));
     assert.equal(staleHex.body.error.message, 'This hex changed. Reload it, then try again.');
+    assert.equal(staleHex.body.error.details.code, 'hex_changed');
     assert.equal(jobSql.exec(`SELECT state FROM jobs WHERE id = ?`, 'job-stale')[0].state, 'running');
     assert.equal(jobSql.exec(`SELECT deleted FROM sectors WHERE sector_slug = ?`, ID)[0].deleted, 0);
     assert.equal(jobSql.exec(`SELECT hex_key FROM hexes`).length, 1);
@@ -309,6 +310,7 @@ test('slot names are rewritten, and a bad box is refused with nothing stored', a
     });
     assert.equal(taken.status, 409, JSON.stringify(taken.body));
     assert.equal(taken.body.error.message, 'That slot is in use. Choose another slot.');
+    assert.equal(taken.body.error.details.code, 'slot_in_use');
     assert.equal(sql.exec(`SELECT sector_slug FROM sectors WHERE deleted = 0`).length, 1);
 });
 

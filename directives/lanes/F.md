@@ -27,3 +27,7 @@ Append one line to the "## Progress" section of your prompt file after each mean
 
 ## Finish
 Write directives/reports/<lane>_<slug>.md from reports/_TEMPLATE.md, then stop.
+
+## Status, 2026-10-11
+
+Retired on Johnny's word: it ran out of budget on each use. Not assigned and not proposed until he says it is back.

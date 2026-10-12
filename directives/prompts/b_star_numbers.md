@@ -77,3 +77,8 @@ lines. Questions for Johnny written out in full, recommended answer first. After
 meaningful step append one line under Progress: "done: X. next: Y."
 
 ## Progress
+done: read the hand form, the roll, and the three sentence matches. next: write the contract, then the fields and the codes.
+done: wrote the contract, the four fields, and the three codes. next: run the gates.
+done: generation tests cover a stored number, an unset field, a bad number, and a classless star. next: run the gates.
+done: confirmed the contract, fields, codes, and tests are in the working tree. next: run npm test, check, typecheck, and build.
+done: gates passed (1387 tests, checker, typecheck, build, 24 Builder API tests). next: write the report.

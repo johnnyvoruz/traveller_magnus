@@ -408,6 +408,15 @@ watch(() => props.open, (open) => {
 </template>
 
 <style>
+/* VesselPlan.vue owns this class, and that page is not on the map, so the menu carries the same rule. */
+.vplan-file {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .account-backdrop {
   position: fixed;
   inset: 0;

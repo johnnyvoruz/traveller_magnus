@@ -7,6 +7,7 @@ import { test } from 'node:test';
 import { openDraft } from '../../apps/web/src/builder/draft.ts';
 import { openMap } from '../../apps/web/src/builder/store.ts';
 import { clearToasts, toasts } from '../../apps/web/src/shell/toast.ts';
+import { handChangeCount } from '../../apps/web/src/workspace/build/hand.ts';
 
 const KEY = 'spin/1910';
 const HASH = 'ab'.repeat(32);
@@ -831,5 +832,103 @@ test('unset takes a star, world, or moon remove back and leaves earlier edits', 
     fire(time);
     await until(() => drafts === 2 && draft.form.value.sections[0].fields.some((item) => item.id === 's1.remove'));
     assert.equal(draft.form.value.sections[0].fields.some((item) => item.id === 's1.remove'), true);
+    map.close();
+});
+
+const PROFILE = 'b1.profile.roll';
+const PROFILE_TWICE = [{ id: PROFILE }, { id: PROFILE }];
+
+test('two profile rolls of one body leave as two entries and count as one change', async () => {
+    const fields = [field('b1.name', 'Haven', 'type', 'text', 'Name')];
+    const fetchImpl = fake((call) => {
+        if (call.url.includes('/hexes?')) return json({ items: [row()], nextCursor: null });
+        if (call.url.endsWith('/form')) return json(read(fields));
+        if (call.url.endsWith('/draft')) {
+            assert.deepEqual(call.body, { hash: HASH, changes: [], roll: PROFILE_TWICE });
+            return json(answer(fields));
+        }
+        if (call.url.endsWith('/keep')) {
+            assert.deepEqual(call.body, { hash: HASH, baseRev: 1, changes: [], roll: PROFILE_TWICE });
+            return json(row({ rev: 2, treeHash: HASH2 }));
+        }
+        throw new Error('unexpected ' + call.url);
+    });
+    const map = open(fetchImpl, clock());
+    await map.loadSector('spin');
+    const draft = await map.openDraft(KEY);
+    draft.rollAgain(PROFILE);
+    draft.rollAgain(PROFILE);
+    assert.equal(handChangeCount({}, [], [PROFILE, PROFILE]), 1);
+    const undo = await draft.keep();
+    assert.ok(undo);
+    assert.equal(draft.dirty.value, false);
+    assert.equal(posts(fetchImpl).filter((call) => call.url.endsWith('/draft')).length, 1);
+    assert.equal(posts(fetchImpl).filter((call) => call.url.endsWith('/keep')).length, 1);
+    map.close();
+});
+
+test('Discard drops every profile roll before anything is sent', async () => {
+    const fetchImpl = fake((call) => {
+        if (call.url.includes('/hexes?')) return json({ items: [row()], nextCursor: null });
+        if (call.url.endsWith('/form')) return json(read([field('b1.name', 'Haven')]));
+        throw new Error('unexpected ' + call.url);
+    });
+    const time = clock();
+    const map = open(fetchImpl, time);
+    await map.loadSector('spin');
+    const draft = await map.openDraft(KEY);
+    draft.rollAgain(PROFILE);
+    draft.rollAgain(PROFILE);
+    assert.equal(draft.dirty.value, true);
+    assert.equal(time.armed().length, 1);
+    draft.discard();
+    assert.equal(draft.dirty.value, false);
+    assert.equal(time.armed().length, 0);
+    assert.equal(posts(fetchImpl).length, 0);
+    map.close();
+});
+
+test('Keep mine carries both profile rolls in order and drops a roll whose body is gone', async () => {
+    const opening = [
+        field('b1.name', 'Haven', 'type', 'text', 'Name'),
+        field('b9.name', 'Gone', 'type', 'text', 'Name'),
+    ];
+    const newer = [field('b1.name', 'Haven', 'type', 'text', 'Name')];
+    let forms = 0;
+    const fetchImpl = fake((call) => {
+        if (call.url.includes('/hexes?')) return json({ items: [row()], nextCursor: null });
+        if (call.url.endsWith('/form')) {
+            forms += 1;
+            if (forms === 1) return json(read(opening));
+            return json({ hash: HASH2, form: form(newer) });
+        }
+        if (call.url.endsWith('/draft')) {
+            if (call.body.hash === HASH) {
+                assert.deepEqual(call.body.roll, [...PROFILE_TWICE, { id: 'b9.profile.roll' }]);
+                return json(answer(opening));
+            }
+            assert.equal(call.body.hash, HASH2);
+            assert.deepEqual(call.body.changes, []);
+            assert.deepEqual(call.body.roll, PROFILE_TWICE);
+            return json(answer(newer));
+        }
+        if (call.url.endsWith('/keep')) {
+            return fail(409, 'This hex changed. Reload it, then try again.', { current: row({ rev: 4, treeHash: HASH2 }) });
+        }
+        throw new Error('unexpected ' + call.url);
+    });
+    const map = open(fetchImpl, clock());
+    await map.loadSector('spin');
+    const draft = await map.openDraft(KEY);
+    draft.rollAgain(PROFILE);
+    draft.rollAgain(PROFILE);
+    draft.rollAgain('b9.profile.roll');
+    assert.equal(await draft.keep(), null);
+    assert.equal(draft.replaced.value, true);
+    await draft.keepMine();
+    assert.equal(draft.dirty.value, true);
+    assert.equal(draft.replaced.value, false);
+    assert.deepEqual(draft.dropped.value, [{ id: 'b9.profile.roll', label: 'b9.profile.roll' }]);
+    assert.equal(posts(fetchImpl).filter((call) => call.url.endsWith('/draft')).length, 2);
     map.close();
 });

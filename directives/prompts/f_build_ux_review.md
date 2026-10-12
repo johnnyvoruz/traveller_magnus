@@ -133,3 +133,5 @@ question for Johnny in full. After each meaningful step append one line under Pr
 
 ## Progress
 done: Read the lane assignment, recovery state, design reference and Builder contract; no predecessor review or report exists, and no owned changes need recovery. next: Run isolated local API and Vite and inspect the referee workflows.
+done: Started isolated API 8816, Vite 5216 with its own cache, and headless Edge 9416; signed in as local dev admin, created a sector and generated a one-hex preview through the UI. next: Exercise drafts, hand design, selection, job recovery and access at the required widths.
+done: Exercised generated conflict recovery, blank and converted hand systems, paired stars, all body kinds, orbit picking, four layouts, bulk generation and offline rolls; reproduced stale Undo removing a later edit, silent partial bulk Undo and modal focus escape. next: Complete selection, chart Restore, sector actions and marketplace checks, then rank the evidence.

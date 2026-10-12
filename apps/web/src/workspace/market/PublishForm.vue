@@ -4,12 +4,14 @@
  * km_limits, km_uncharted). Shown in the Build pane in place of its acts while it is open:
  * what goes in is what is selected. A new package, or a new version of one of yours.
  */
-import { computed, nextTick, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { hexState, placeNames } from '../build/acts.ts';
 import { buildStore } from '../build/seam.ts';
+import { draftHandle, edit } from '../build/edit.ts';
+import { build } from '../build/state.ts';
 import {
-    closePublish, formProblems, hexWords, MARKET_LIMITS, marketStore, marketUi, NOT_CHARTED, parseTags, plural, publish, publishKeys, recordsOn,
+    closePublish, formProblems, hexWords, MARKET_LIMITS, marketStore, marketUi, NOT_CHARTED, parseTags, plural, publish, publishKeys, recordsOn, removedWords,
 } from './market.ts';
 
 const props = defineProps<{ keys: string[] }>();
@@ -30,6 +32,7 @@ const target = computed(() => (marketUi.target === 'new' ? null : mine.value.fin
 const isNew = computed(() => marketUi.target === 'new' || !target.value);
 const tags = computed(() => parseTags(marketUi.tags));
 const summary = computed(() => hexWords(hexes.value, (slug) => placeNames(slug + '/0101').sector || slug) + ' · ' + plural(chosen.value.length, 'record', 'records'));
+const removed = computed(() => removedWords(hexes.value, hexState));
 const problems = computed(() => formProblems({
     isNew: isNew.value,
     title: marketUi.title,
@@ -78,6 +81,19 @@ onMounted(() => {
         if (first) first.focus();
     });
 });
+
+// Opened on one system, the form belongs to it: another hex, or none, closes it (what was typed stays for next time).
+// Many hexes follow the selection as before.
+watch(() => (props.keys.length === 1 ? props.keys[0] : null), (now, was) => {
+    if (was !== null && now !== was) closePublish();
+});
+// A draft or a preview opened meanwhile (E, G) takes the pane: what is published is what is kept.
+watch(() => draftHandle.value !== null || edit.opening || build.preview !== null, (taken) => {
+    if (taken) closePublish();
+});
+onBeforeUnmount(() => {
+    if (props.keys.length === 1) closePublish();
+});
 </script>
 
 <template>
@@ -89,7 +105,7 @@ onMounted(() => {
       <div class="mk-acts"><button type="button" class="ui-btn" @click="closePublish()">Close</button></div>
     </template>
     <form v-else class="mk-fields" @submit.prevent="send">
-      <p class="mk-sum"><b>{{ summary }}</b></p>
+      <p class="mk-sum"><b>{{ summary }}</b><span v-if="removed">{{ removed }}</span></p>
       <p v-for="item in selectionProblems" :key="item.text" class="mk-err" role="alert">{{ item.text }}</p>
 
       <label class="mk-fld">
@@ -109,7 +125,7 @@ onMounted(() => {
         <label class="mk-fld">
           <span>Kind</span>
           <input v-model="marketUi.kind" class="mk-box" type="text" :maxlength="MARKET_LIMITS.kind" autocomplete="off" :disabled="marketUi.busy" />
-          <small>For example: subsector, sector, or hexes.</small>
+          <small>For example: system, subsector, sector, or hexes.</small>
         </label>
         <label class="mk-fld">
           <span>Description</span>
@@ -159,6 +175,12 @@ onMounted(() => {
   flex-direction: column;
   gap: 10px;
   margin: 0;
+}
+
+.mk-sum span {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-1);
 }
 
 .mk-sum {

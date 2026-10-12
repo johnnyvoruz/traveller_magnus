@@ -182,7 +182,7 @@ function requireKey(hexKey: string): void {
 function assertRev(sql: Sql, hexKey: string, baseRev: number, pin: Pin): SqlRow | null {
     const row = current(sql, hexKey);
     const rev = row ? Number(row.rev) : 0;
-    if (rev !== baseRev) throw new HexRefusal('conflict', 'This hex changed. Reload it, then try again.', { current: view(sql, hexKey, pin) });
+    if (rev !== baseRev) throw new HexRefusal('conflict', 'This hex changed. Reload it, then try again.', { code: 'hex_changed', current: view(sql, hexKey, pin) });
     return row;
 }
 
@@ -519,7 +519,7 @@ export function requireWrittenRev(sql: Sql, hexKey: string, rev: number, pin: Pi
     requireKey(hexKey);
     const row = current(sql, hexKey);
     const live = row ? Number(row.rev) : 0;
-    if (live !== rev) throw new HexRefusal('conflict', 'This hex changed. Reload it, then try again.', { current: view(sql, hexKey, pin) });
+    if (live !== rev) throw new HexRefusal('conflict', 'This hex changed. Reload it, then try again.', { code: 'hex_changed', current: view(sql, hexKey, pin) });
 }
 
 /** Put one written hex back to the row captured at job create. The row is deleted when there was none. */

@@ -33,6 +33,19 @@ export const ORBIT_TOP = 20;
 /** Which body the picker is open for; empty when it is closed. */
 export const pickUi = reactive({ id: '' });
 
+/**
+ * Where Tab goes inside the picker, which holds focus while it is open: from the last control
+ * forward to the first, from the first back to the last, and from anywhere outside to the first
+ * (or, going back, the last). Null leaves the step to the browser.
+ */
+export function wrapFocus(count: number, index: number, back: boolean): number | null {
+    if (count === 0) return null;
+    if (index < 0) return back ? count - 1 : 0;
+    if (!back && index >= count - 1) return 0;
+    if (back && index <= 0) return count - 1;
+    return null;
+}
+
 export function openPicker(id: string): void {
     pickUi.id = id;
 }

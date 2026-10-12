@@ -152,7 +152,7 @@ export function newRecord(type: CampaignRecordType, id: string, now: string, anc
     };
 }
 
-export type RecordPatch = Partial<Pick<CampaignRecord, 'type' | 'name' | 'summary' | 'details' | 'tags' | 'anchor' | 'images' | 'sheet'>>;
+export type RecordPatch = Partial<Pick<CampaignRecord, 'type' | 'name' | 'summary' | 'details' | 'tags' | 'anchor' | 'visibility' | 'playerNotes' | 'images' | 'sheet'>>;
 
 /** True when the patch would change nothing: no change is sent for it. */
 export function unchanged(record: CampaignRecord, patch: RecordPatch): boolean {

@@ -107,7 +107,7 @@ function slotTaken(sql: Sql, x: number, y: number, except: string): SqlRow | nul
 function refuseSlot(sql: Sql, x: number, y: number, except: string, charted: boolean): void {
     if (charted) throw new HexRefusal('validation', 'That slot holds a charted sector.', { reason: 'charted' });
     const taken = slotTaken(sql, x, y, except);
-    if (taken) throw new HexRefusal('conflict', 'That slot is in use. Choose another slot.', { current: view(taken) });
+    if (taken) throw new HexRefusal('conflict', 'That slot is in use. Choose another slot.', { code: 'slot_in_use', current: view(taken) });
 }
 
 function hexesOf(sql: Sql, id: string): SqlRow[] {

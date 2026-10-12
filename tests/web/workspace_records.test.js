@@ -115,6 +115,14 @@ test('the changes a screen sends: whole rows on the revision held, and a tombsto
     assert.equal(unchanged(record, { name: 'Captain Idris Voss', tags: ['patron'] }), true);
     assert.equal(unchanged(record, { tags: ['patron', 'debt'] }), false);
     assert.equal(unchanged(record, { type: 'place' }), false);
+    assert.equal(unchanged(record, { visibility: 'referee', playerNotes: null }), true);
+    assert.equal(unchanged(record, { visibility: 'players' }), false);
+    assert.equal(unchanged(record, { playerNotes: 'Bring the letter.' }), false);
+    const shared = edited(record, { visibility: 'players', playerNotes: 'Bring the letter.' }, '2026-10-05T00:00:00.000Z');
+    assert.equal(RecordChange.safeParse(shared).success, true);
+    assert.equal(shared.visibility, 'players');
+    assert.equal(shared.playerNotes, 'Bring the letter.');
+    assert.equal(shared.baseRev, 4);
 });
 
 test('create, edit, delete and undo against the store, with nothing sent yet', () => {
@@ -136,6 +144,15 @@ test('create, edit, delete and undo against the store, with nothing sent yet', (
     assert.equal(saveRecord(made, { name: 'Captain Idris Voss' }), true);
     assert.equal(campaign.records[made].name, 'Captain Idris Voss');
     assert.equal(saveRecord(made, { name: 'Captain Idris Voss' }), false, 'an unchanged field sends nothing');
+    assert.equal(campaign.records[made].visibility, 'referee');
+    assert.equal(saveRecord(made, { visibility: 'players' }), true);
+    assert.equal(campaign.records[made].visibility, 'players');
+    assert.equal(saveRecord(made, { visibility: 'players' }), false);
+    assert.equal(campaign.records[made].playerNotes, null);
+    assert.equal(saveRecord(made, { playerNotes: 'The letter.' }), true);
+    assert.equal(campaign.records[made].playerNotes, 'The letter.');
+    assert.equal(saveRecord(made, { playerNotes: null }), true);
+    assert.equal(campaign.records[made].playerNotes, null);
     assert.equal(saveRecord('cr_missing', { name: 'x' }), false);
 
     // Delete: gone from the list, kept as a tombstone, said in a toast that can undo it.

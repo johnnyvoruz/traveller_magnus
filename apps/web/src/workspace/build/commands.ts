@@ -11,7 +11,7 @@ import { addBody, askDesign, canAdd, canMainworld, canMoveBody, canRemoveBody, c
 import { canDelete, canMove, canNewSector, canRename, deleteSector, newSector, startMove, startRename } from './sector_acts.ts';
 import { askSectorName, inEmptySlot } from './grow_acts.ts';
 import { canPickSelected, openPicker } from './orbit_pick.ts';
-import { kindOfKeys, openPublish, publishKeys, signedIn } from '../market/market.ts';
+import { canPublish, kindOfKeys, openPublish, signedIn } from '../market/market.ts';
 import { build, plural, removeTargets } from './state.ts';
 
 export type BuildCommandId =
@@ -102,7 +102,8 @@ export function canBuild(id: BuildCommandId, keys: readonly string[]): boolean {
     if (id === 'build-body-remove') return canRemoveBody(handUi.selected);
     if (id === 'build-body-orbit') return canPickSelected();
     if (id === 'build-body-roll') return edit.mode === 'hand' && canRollProfile(handUi.selected);
-    if (id === 'build-publish') return signedIn() && keys.length > 1 && publishKeys(keys, hexState).length > 0;
+    // One system or many hexes; not over an open draft or preview, which would publish what is not kept.
+    if (id === 'build-publish') return signedIn() && draftHandle.value === null && !edit.opening && !build.preview && canPublish(keys, hexState);
     if (id === 'build-draft-keep') return editDirty() && !edit.keeping && handUi.removing === null;
     if (id === 'build-draft-discard') return draftHandle.value !== null && !edit.keeping;
     // While a draft is open nothing else acts on the map: the draft is kept or discarded first.

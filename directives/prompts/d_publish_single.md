@@ -73,3 +73,5 @@ Questions for Johnny written out in full, recommended answer first. After each
 meaningful step append one line under Progress: "done: X. next: Y."
 
 ## Progress
+done: part 1 built (DossierPanel line and import, build-publish for one key, More menu wording, removed hex as a deleted hex, empty hex sentence); 1 test; gates green. Part 2 skipped: findings/builder_roll_again_ready.md not on disk. next: browser pass km3_*.
+done: browser pass km3_* (pointer, keyboard, Cancel, Escape, another hex, removed Regina as a deleted hex, empty hex); gates green (1384 pass); servers stopped; notes §24 and marketplace §1, §2, §4; report written. next: Lane A's roll-again note for part 2, then show B's star number fields.

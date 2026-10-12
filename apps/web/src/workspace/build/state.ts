@@ -9,6 +9,15 @@ import { parseHexKey } from '../places.ts';
 import type { BuildRow, GenerateChoice, Generator, HexState, JobProgress, Preview } from './seam.ts';
 
 const ON_KEY = 'voyage_build_on';
+/** Set once the person has put away the note on whose map this is. */
+export const YOURS_KEY = 'voyage_build_yours_told';
+
+/**
+ * Whose map this is (prompts/d_generate_feedback.md part 3), said once where a person starting to
+ * build reads it. What is true: a universe points at one released chart and stores only its own
+ * changes; publishing a package is the only way anything leaves it.
+ */
+export const YOURS_NOTE = 'You’re building your own map. Anything you generate, change, or remove is saved to your map only, and the published chart doesn’t change. Nobody else sees your map unless you publish a package.';
 const CHOICE_KEY = 'voyage_build_choice';
 
 /** One legacy sector: the most hexes one act takes (js/macro_orchestrator.js:99). */
@@ -240,6 +249,12 @@ export function settingRows(settings: Settings | null): { label: string; value: 
         { label: 'Settlement centuries (RTT)', value: String(settings.generationRttSettlement) },
         { label: 'Tech level (RTT)', value: String(settings.generationRttTL) },
     ];
+}
+
+/** A running job in one line: "Generating 80 hexes · 12 of 80", with the failures when there are any. */
+export function jobLine(job: JobProgress & { label: string }): string {
+    const failed = job.failed.length ? ' · ' + job.failed.length + ' failed' : '';
+    return job.label + ' · ' + job.done.toLocaleString('en-US') + ' of ' + job.total.toLocaleString('en-US') + failed;
 }
 
 /** The words of the toast when a many-hex build ends. */

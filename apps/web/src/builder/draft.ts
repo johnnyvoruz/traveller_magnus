@@ -213,6 +213,21 @@ export async function startDraft(port: DraftPort, hexKey: string): Promise<Draft
         return false;
     }
 
+    /** A profile roll is not a row. It stays while its body is still on the form. */
+    function profileRollStays(next: EditForm, id: string): boolean {
+        if (!id.endsWith('.profile.roll')) return false;
+        const owner = id.slice(0, -'.profile.roll'.length);
+        if (!owner) return false;
+        if (findField(next, owner)) return true;
+        const prefix = owner + '.';
+        for (const section of next.sections) {
+            for (const field of section.fields) {
+                if (field.id === owner || field.id.startsWith(prefix)) return true;
+            }
+        }
+        return false;
+    }
+
     async function readForm(): Promise<{ hash: string; form: EditForm }> {
         const loaded = await port.request('GET', port.hexPath(hexKey, '/form'));
         const parsed = FormRead.safeParse(loaded);
@@ -320,7 +335,8 @@ export async function startDraft(port: DraftPort, hexKey: string): Promise<Draft
     function rollAgain(id: string): void {
         if (!id) return;
         changes = changes.filter((item) => item.id !== id);
-        if (!rolls.includes(id)) rolls.push(id);
+        // A profile roll is applied once per entry. Any other roll stays once.
+        if (id.endsWith('.profile.roll') || !rolls.includes(id)) rolls.push(id);
         note();
     }
 
@@ -388,7 +404,7 @@ export async function startDraft(port: DraftPort, hexKey: string): Promise<Draft
         }
         const nextRolls: string[] = [];
         for (const id of mineRolls) {
-            if (!stillThere(read.form, id)) {
+            if (!stillThere(read.form, id) && !profileRollStays(read.form, id)) {
                 if (!gone.some((item) => item.id === id)) gone.push({ id, label: labelOf(id) });
                 continue;
             }

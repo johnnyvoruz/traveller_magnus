@@ -10,7 +10,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import Icon from '../../design/Icon.vue';
 import { draftHandle } from './edit.ts';
 import { handList, nodeTitle, orbitsValue } from './hand.ts';
-import { closePicker, modeFor, pAtRadius, pickParents, pickWords, placeOrbit, radiusOf, ringsAround, scaleFor, stepP, storedP, ticksOf } from './orbit_pick.ts';
+import { closePicker, modeFor, wrapFocus, pAtRadius, pickParents, pickWords, placeOrbit, radiusOf, ringsAround, scaleFor, stepP, storedP, ticksOf } from './orbit_pick.ts';
 
 const props = defineProps<{ body: string }>();
 
@@ -77,6 +77,7 @@ const self = computed(() => {
 });
 
 const picture = ref<SVGSVGElement | null>(null);
+const dialog = ref<HTMLElement | null>(null);
 let box: { left: number; top: number; width: number } | null = null;
 let returnTo: HTMLElement | null = null;
 
@@ -144,12 +145,29 @@ function onPictureKey(event: KeyboardEvent): void {
     }
 }
 
+/** The controls Tab can reach inside the picker, in order. */
+function stops(): HTMLElement[] {
+    const root = dialog.value;
+    if (!root) return [];
+    return [...root.querySelectorAll<HTMLElement>('button, [tabindex="0"], select, input')].filter((el) => !(el as HTMLButtonElement).disabled && el.getClientRects().length > 0);
+}
+
 function onKey(event: KeyboardEvent): void {
     if (event.key === 'Escape') {
         event.preventDefault();
         event.stopPropagation();
         closePicker();
         return;
+    }
+    // Focus stays in the picker while it is open: Tab past either end comes round to the other.
+    if (event.key === 'Tab') {
+        const list = stops();
+        const at = list.indexOf(document.activeElement as HTMLElement);
+        const next = wrapFocus(list.length, at, event.shiftKey);
+        if (next !== null) {
+            event.preventDefault();
+            list[next].focus();
+        }
     }
     // The map's and the panel's shortcuts do not fire under the modal.
     event.stopPropagation();
@@ -167,8 +185,17 @@ function place(): void {
     closePicker();
 }
 
+/** Focus that lands outside the open picker any other way (a click on the page under the scrim's edge, a script) is brought back. */
+function holdFocus(event: FocusEvent): void {
+    const root = dialog.value;
+    if (!root || !(event.target instanceof Node) || root.contains(event.target)) return;
+    const list = stops();
+    if (list.length) list[0].focus();
+}
+
 onMounted(() => {
     returnTo = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    document.addEventListener('focusin', holdFocus);
     void nextTick(() => {
         measure();
         if (picture.value) picture.value.focus();
@@ -176,13 +203,17 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
-    if (returnTo && returnTo.isConnected) returnTo.focus();
+    document.removeEventListener('focusin', holdFocus);
+    // Back to the control that opened it; opened from the palette, to the body's own Pick orbit button.
+    const opener = returnTo && returnTo.isConnected && returnTo.closest('.hand') ? returnTo : document.querySelector<HTMLElement>('.hand [data-command="build-body-orbit"]');
+    const back = opener ?? (returnTo && returnTo.isConnected ? returnTo : null);
+    if (back) back.focus();
 });
 </script>
 
 <template>
   <Teleport to="body">
-    <div class="pick" role="dialog" aria-modal="true" :aria-label="'Pick orbit for ' + name" @keydown="onKey">
+    <div ref="dialog" class="pick" role="dialog" aria-modal="true" :aria-label="'Pick orbit for ' + name" @keydown="onKey">
       <div class="pick-scrim" @click="closePicker()"></div>
       <div class="pick-card">
         <div class="pick-bar">

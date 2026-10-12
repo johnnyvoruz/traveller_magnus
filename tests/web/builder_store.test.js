@@ -1021,3 +1021,57 @@ test('generate and its undo still omit makeSectors and return null', async () =>
     assert.equal(fetchImpl.calls.some((call) => call.url.endsWith('/undo-generate')), false);
     map.close();
 });
+
+test('generate reports a start before the first answer, and the job does not name landed hexes', async () => {
+    let posted = false;
+    const seen = [];
+    const fetchImpl = fake((call) => {
+        if (call.url.includes('/hexes?')) return json({ items: [], nextCursor: null });
+        if (call.url.endsWith('/generate')) {
+            posted = true;
+            return json({ jobId: 'job-1' });
+        }
+        if (call.url.includes('/jobs/')) return json(doneJob({ total: 2, done: 2 }));
+        throw new Error('unexpected ' + call.url);
+    });
+    const map = open(fetchImpl, clock());
+    const handle = map.generate(
+        { hexKeys: [KEY, OTHER], edition: 'MgT2E', generator: 'top-down', roll: 0, filledToo: true },
+        (progress) => {
+            if (seen.length === 0) assert.equal(posted, false);
+            seen.push(progress);
+        },
+    );
+    const result = await handle.finished;
+    assert.deepEqual(seen[0], { total: 2, done: 0, failed: [], skipped: 0, state: 'running' });
+    assert.equal(Object.hasOwn(seen[0], 'landed'), false);
+    assert.equal(result.progress.done, 2);
+    assert.equal(Object.hasOwn(result.progress, 'landed'), false);
+    map.close();
+});
+
+test('a grow act reports a start before the first answer', async () => {
+    let posted = false;
+    const seen = [];
+    const fetchImpl = fake((call) => {
+        if (call.url.includes('/hexes?')) return json({ items: [], nextCursor: null });
+        if (call.url.endsWith('/generate')) {
+            posted = true;
+            return json({
+                sectors: [madeSector()],
+                rows: [row({ hexKey: SLOT_KEY, rev: 2 })],
+                skipped: [],
+                jobId: null,
+            }, 201);
+        }
+        throw new Error('unexpected ' + call.url);
+    });
+    const map = open(fetchImpl, clock());
+    const act = map.generateGrowing(growBody([SLOT_KEY]), (progress) => {
+        if (seen.length === 0) assert.equal(posted, false);
+        seen.push(progress);
+    });
+    await act.finished;
+    assert.deepEqual(seen[0], { total: 1, done: 0, failed: [], skipped: 0, state: 'running' });
+    map.close();
+});

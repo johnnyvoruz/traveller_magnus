@@ -6,6 +6,7 @@ import { isolateRng, toEHex } from './core/rng.js';
 import { trace, startTrace } from './core/trace.js';
 import { generateAtmospherics, generateBiospherics, generatePhysicals, generateRotationalDynamics } from './mgt2e_world_engine.js';
 import { generateCoreSocial } from './mgt2e_socio_engine.js';
+import { MgT2EMath } from './mgt2e_math.js';
 import { convertAuToOrbit, generateStarObject, orbitNumberToAu } from './mgt2e_stellar_engine.js';
 
 const SOCIAL = ['st', 'p', 'g', 'l', 'tl'];
@@ -30,15 +31,39 @@ function oneDigit(value) {
     return null;
 }
 
+function positive(value) {
+    return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function applyStored(made, star) {
+    const mass = positive(star.mass);
+    const diam = positive(star.diam);
+    const temp = positive(star.temp);
+    const lum = positive(star.lum);
+    if (mass != null) made.mass = mass;
+    if (diam != null) made.diam = diam;
+    if (temp != null) made.temp = temp;
+    if (lum != null) made.lum = lum;
+    else if ((diam != null || temp != null) && positive(made.diam) != null && positive(made.temp) != null) {
+        made.lum = MgT2EMath.calculateStellarLuminosity(made.diam, made.temp);
+    }
+    if (!made.lookedUp && positive(made.mass) != null && positive(made.diam) != null && positive(made.temp) != null && positive(made.lum) != null) {
+        made.lookedUp = true;
+    }
+    return made;
+}
+
 function resolveStar(star) {
     const subtype = subtypeNumber(star.subType);
     if (!star.sType || !star.sClass || subtype === null) {
-        return { sType: star.sType || '', sClass: star.sClass || '', subType: star.subType, orbitId: star.orbitId, lookedUp: false };
+        return applyStored({
+            sType: star.sType || '', sClass: star.sClass || '', subType: star.subType, orbitId: star.orbitId, lookedUp: false,
+        }, star);
     }
     const made = generateStarObject(star.sType, subtype, star.sClass, 'Star');
     made.orbitId = star.orbitId;
     made.lookedUp = true;
-    return made;
+    return applyStored(made, star);
 }
 
 function hzcoOf(stars, body) {

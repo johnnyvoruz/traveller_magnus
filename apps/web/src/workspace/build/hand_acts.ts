@@ -274,7 +274,6 @@ export function rollNote(id: string): { text: string; blocked: boolean } {
     if (!handle || !node || node.kind === 'star') return { text: '', blocked: true };
     if (handle.form.value.edition !== 'MgT2E') return { text: 'Roll profile works on MgT2E systems only.', blocked: true };
     if (node.kind === 'moon') return { text: 'A roll doesn’t fill a moon’s profile.', blocked: true };
-    if (edit.rolled.includes(profileRollId(id))) return { text: 'To roll different values, select Keep, and then roll again.', blocked: true };
     if (node.kind === 'gas') return { text: 'A roll doesn’t fill a gas giant’s profile.', blocked: false };
     if (node.mainworld) return { text: 'On the mainworld, a roll fills only size, atmosphere, and hydrographics.', blocked: false };
     return { text: '', blocked: false };

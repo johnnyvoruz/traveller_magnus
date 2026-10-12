@@ -26,6 +26,7 @@ import {
     type Picture, type Rocks, type StarDraw, type WorldDraw,
 } from './picture.ts';
 import { discBatch, sunColour, visualRate, type OrbitDiscBatch } from './disc_batch.ts';
+import { SURFACE_WEBGL_NOTICE, webglMissing } from '../surface/webgl_notice.ts';
 import { pictureOfAu, pointWords } from './distance.ts';
 import { dockedBeside, pictureBodies, plotText, readoutPlace, type DrawnWaypoint, type PlotReadout, type ShipMark, type ShipShape } from './ships.ts';
 import { whenWords } from './ship_list.ts';
@@ -474,6 +475,48 @@ export class OrbitRenderer {
         this.plot(state.plot, plan, picture, view, state.days, ghostAt, state.ships, routeAt);
         this.settleDiscs(state);
         this.keepHeld(picture, state.layers);
+        this.paintWebglNotice();
+    }
+
+    /**
+     * One quiet line when this browser has no WebGL. The discs stay the flat
+     * day-and-night fallback. The line sits on the picture, clear of the right edge.
+     */
+    private paintWebglNotice(): void {
+        if (!webglMissing()) return;
+        const ctx = this.ctx;
+        const canvas = ctx.canvas;
+        if (canvas instanceof HTMLCanvasElement) canvas.dataset.webgl = 'off';
+        const font = this.theme.fontText || 'sans-serif';
+        ctx.save();
+        ctx.font = '12px ' + font;
+        ctx.textBaseline = 'top';
+        ctx.textAlign = 'left';
+        const max = Math.max(80, this.w - 96);
+        const lines: string[] = [];
+        let line = '';
+        for (const word of SURFACE_WEBGL_NOTICE.split(' ')) {
+            const next = line ? line + ' ' + word : word;
+            if (line && ctx.measureText(next).width > max) {
+                lines.push(line);
+                line = word;
+            } else line = next;
+        }
+        if (line) lines.push(line);
+        const lineH = 16;
+        const pad = 8;
+        const widest = lines.reduce((span, row) => Math.max(span, ctx.measureText(row).width), 0);
+        const boxW = Math.min(max, widest) + pad * 2;
+        const boxH = lines.length * lineH + pad * 2;
+        const x = 12;
+        const y = Math.max(12, this.h - 12 - boxH);
+        ctx.fillStyle = withAlpha(this.theme.night, 0.9);
+        ctx.fillRect(x, y, boxW, boxH);
+        ctx.fillStyle = this.theme.text;
+        lines.forEach((row, index) => {
+            ctx.fillText(row, x + pad, y + pad + index * lineH);
+        });
+        ctx.restore();
     }
 
     /**

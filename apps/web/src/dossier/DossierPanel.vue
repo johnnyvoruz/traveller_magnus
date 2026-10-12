@@ -18,6 +18,8 @@ import BuildPane from '../workspace/build/BuildPane.vue';
 import BuildScope from '../workspace/build/BuildScope.vue';
 import { edit, editing, draftHandle } from '../workspace/build/edit.ts';
 import SystemEditor from '../workspace/build/SystemEditor.vue';
+import PublishForm from '../workspace/market/PublishForm.vue';
+import { marketUi } from '../workspace/market/market.ts';
 import DesignAsk from '../workspace/build/DesignAsk.vue';
 import { handUi } from '../workspace/build/hand.ts';
 import { isHandHex } from '../workspace/build/hand_acts.ts';
@@ -503,6 +505,7 @@ defineExpose({ remeasure: publish });
         <BuildScope :slug="scope.slug" :letter="scope.letter" :span="span" @subsector="openSubsector" @open="openHex" />
       </template>
       <BuildPane v-else-if="buildMode === 'many' || buildMode === 'empty' || buildMode === 'removed'" :mode="buildMode" :keys="buildKeys" :span="span" @open="openHex" />
+      <PublishForm v-else-if="marketUi.open && buildMode === 'system'" class="build-pane" :keys="[hexKey]" />
       <SystemEditor v-else-if="drafting" :span="span" />
       <DossierBody v-else-if="profile" :model="profile" :span="span" :day-night="dayNight" :tick="tick" :live="orbit === true" :place="placeOnStrip" :restated="restated" :surface="bodySurface" :sun="sunOnSurface" :now-days="nowDays" :start-days="clockDays" @open="openKey">
         <template #records>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * One record (design §3): its name, type, place, summary, details and tags, each edited
+ * One record (design §3): its name, type, who can see it, place, summary, details, player notes and tags, each edited
  * where it stands, its connections (K5d), the saving mark, and Delete; a vessel also carries
  * its track (K12) and its ship sheet (K13) with its deck plan (K9) inside.
  */
@@ -43,6 +43,8 @@ const ShipSheet = defineAsyncComponent(() => import('./ShipSheet.vue'));
 const PersonSheet = defineAsyncComponent(() => import('./PersonSheet.vue'));
 
 const nameField = ref<{ edit: (select?: boolean) => void } | null>(null);
+const refereeBtn = ref<HTMLButtonElement | null>(null);
+const playersBtn = ref<HTMLButtonElement | null>(null);
 const tagDraft = ref('');
 const tagging = ref(false);
 const tagInput = ref<HTMLInputElement | null>(null);
@@ -91,6 +93,29 @@ function rename(text: string): void {
 
 function setType(event: Event): void {
     saveRecord(props.id, { type: (event.target as HTMLSelectElement).value as CampaignRecordType });
+}
+
+/** Who can see this record. The journal entry uses the same two words. */
+function setVisibility(visibility: 'referee' | 'players'): void {
+    const now = record.value;
+    if (!now || props.readOnly) return;
+    if (now.visibility !== visibility) saveRecord(props.id, { visibility });
+    const button = visibility === 'players' ? playersBtn.value : refereeBtn.value;
+    if (button) button.focus();
+}
+
+function onVisibilityKey(event: KeyboardEvent): void {
+    const key = event.key;
+    if (key !== 'ArrowRight' && key !== 'ArrowLeft' && key !== 'ArrowDown' && key !== 'ArrowUp' && key !== 'Home' && key !== 'End') return;
+    event.preventDefault();
+    event.stopPropagation();
+    const players = key === 'ArrowRight' || key === 'ArrowDown' || key === 'End';
+    setVisibility(players ? 'players' : 'referee');
+}
+
+function saveNotes(text: string): void {
+    const notes = cleanDetails(text);
+    saveRecord(props.id, { playerNotes: notes ? notes : null });
 }
 
 function removeTag(tag: string): void {
@@ -155,7 +180,7 @@ watch(() => props.id, () => {
       <button type="button" class="ui-btn" @click="flushCampaign()">Try again</button>
     </div>
 
-    <header class="rec-ident">
+    <header class="rec-ident" :class="{ 'is-players': record.visibility === 'players' }">
       <RecordGallery :id="id" part="avatar" :read-only="readOnly" />
       <div class="rec-names">
         <EditableText ref="nameField" title label="Name" :value="record.name" :max="CAMPAIGN_LIMITS.name" :disabled="readOnly" @save="rename" />
@@ -166,6 +191,10 @@ watch(() => props.id, () => {
               <option v-for="item in RECORD_TYPES" :key="item.type" :value="item.type">{{ item.one }}</option>
             </select>
           </label>
+          <span class="ui-seg" role="group" aria-label="Who can read this" @keydown="onVisibilityKey">
+            <button ref="refereeBtn" type="button" :aria-pressed="record.visibility === 'referee' ? 'true' : 'false'" :disabled="readOnly" @click="setVisibility('referee')">Referee</button>
+            <button ref="playersBtn" type="button" :aria-pressed="record.visibility === 'players' ? 'true' : 'false'" :disabled="readOnly" @click="setVisibility('players')">Players</button>
+          </span>
           <span v-if="isPlayerCharacter" class="rec-pc" title="A player character: in the party">PC</span>
           <span>· {{ placeLine(record, campaign.records) }}</span>
         </p>
@@ -210,6 +239,21 @@ watch(() => props.id, () => {
         :max="CAMPAIGN_LIMITS.details"
         :disabled="readOnly"
         @save="saveRecord(id, { details: cleanDetails($event) })"
+      />
+    </section>
+
+    <section>
+      <h3 class="ui-heading">Player notes</h3>
+      <p class="rec-notes-why">Players see this text when you share the record.</p>
+      <p v-if="!record.playerNotes" class="rec-notes-empty">No player notes yet.</p>
+      <EditableText
+        multiline
+        label="Player notes"
+        prompt="Add player notes"
+        :value="record.playerNotes ?? ''"
+        :max="CAMPAIGN_LIMITS.details"
+        :disabled="readOnly"
+        @save="saveNotes"
       />
     </section>
 
@@ -318,6 +362,19 @@ watch(() => props.id, () => {
   margin: 2px 0 0;
   color: var(--text-muted);
   font: 400 12.5px/1.4 var(--font-text);
+}
+
+.rec-notes-why,
+.rec-notes-empty {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font: 400 13px/1.4 var(--font-text);
+}
+
+.rec-ident.is-players {
+  padding: 8px;
+  border-radius: var(--r-2);
+  box-shadow: inset 0 0 0 2px var(--attention);
 }
 
 /* The type is changed from the word itself. */

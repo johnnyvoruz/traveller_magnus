@@ -149,6 +149,11 @@ function progressOf(job: ReturnType<typeof BuilderJob.parse>, state: JobProgress
     };
 }
 
+/** Counts only. The job answer names failed hexes, not the ones that landed. */
+function started(total: number): JobProgress {
+    return { total, done: 0, failed: [], skipped: 0, state: 'running' };
+}
+
 export type Builder = {
     pending: Ref<boolean>;
     lastError: Ref<string>;
@@ -615,6 +620,8 @@ export function openMap(options: OpenMapOptions): Builder {
         askStop = false;
         for (const key of body.hexKeys) pendingGenerate.add(key);
         const slugs = sectorsOf(body.hexKeys);
+        // After this call returns, before the request, so the bar can paint on the click.
+        queueMicrotask(() => onProgress?.(started(body.hexKeys.length)));
         const finished = (async () => {
             const previous = new Map<string, HexRow | null>();
             for (const key of body.hexKeys) previous.set(key, copyRow(rows.get(key) ?? null));
@@ -734,6 +741,7 @@ export function openMap(options: OpenMapOptions): Builder {
         askStop = false;
         releasedJob = null;
         for (const key of body.hexKeys) pendingGenerate.add(key);
+        queueMicrotask(() => onProgress?.(started(body.hexKeys.length)));
         let accept: (value: { sectors: ReturnType<ReturnType<typeof openSectors>['adopt']>; keys: Record<string, string>; undo: UndoToken }) => void = () => {};
         let rejectAccepted: (err: unknown) => void = () => {};
         let acceptedSettled = false;

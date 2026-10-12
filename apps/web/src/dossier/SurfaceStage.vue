@@ -26,6 +26,7 @@ import {
     dayNightOverlay, enhancedFlags, iconSetName, mapStyle, onDayNightOverlay, onMapStyle, onSurfaceMode, setDayNightOverlay, setMapStyle, surfaceMode, type MapStyle,
 } from '../surface/preferences.ts';
 import { cancelSurface, hybridInputsFor, requestMap } from '../surface/service.ts';
+import { SURFACE_WEBGL_NOTICE, webglMissing } from '../surface/webgl_notice.ts';
 import { drawMapOverlay, MAP_HEIGHT, MAP_WIDTH, renderDiamondBlank } from '../surface/vanilla/map.ts';
 import { iconPaint, loadIconSet, type IconImage, type IconSet, type Tinter } from '../surface/hybrid/icons.ts';
 import { hybridModel, SHEET_LAYOUT } from '../surface/hybrid/index.ts';
@@ -78,6 +79,8 @@ const timing = ref<{ sheet: string; worker: string; chunk: string; cached: strin
 
 /** The mode in force: the device's preference, followed while this is on screen. */
 const mode = ref<SurfaceMode>(surfaceMode());
+/** Empty when this browser can paint WebGL. The map itself is a 2D canvas and still paints. */
+const webglNotice = webglMissing() ? SURFACE_WEBGL_NOTICE : '';
 const mappable = computed(() => props.target !== null && canMapWorld(props.target.body));
 /** Which painter drew the sheet and, in enhanced, what its sea is; the reason is the tooltip. */
 const style = ref<MapStyle>(mapStyle());
@@ -445,6 +448,7 @@ onBeforeUnmount(() => {
     :data-worker-start-ms="timing.worker"
     :data-longest-chunk-ms="timing.chunk"
     :data-from-cache="timing.cached"
+    :data-webgl="webglNotice ? 'off' : 'on'"
   >
     <div class="doss-stage">
       <canvas
@@ -457,7 +461,7 @@ onBeforeUnmount(() => {
         :aria-label="'Surface map of ' + worldName"
         @animationend="onSheetEnd"
       />
-      <div class="doss-daynight" :data-on="dayNight && hybrid ? 'true' : 'false'" aria-hidden="true">
+      <div class="doss-stage-daynight" :data-on="dayNight && hybrid ? 'true' : 'false'" aria-hidden="true">
         <canvas ref="shadowEl" class="doss-layer doss-shadow" :width="MAP_WIDTH" :height="MAP_HEIGHT" />
         <canvas ref="glowEl" class="doss-layer doss-glow" :width="MAP_WIDTH" :height="MAP_HEIGHT" />
       </div>
@@ -504,6 +508,7 @@ onBeforeUnmount(() => {
       :locked="!!(model && model.sub)"
       :averaged="averagedShown"
     />
+    <p v-if="webglNotice" class="doss-webgl" role="status">{{ webglNotice }}</p>
   </figure>
 </template>
 
@@ -534,7 +539,7 @@ onBeforeUnmount(() => {
 }
 
 /* The day and night layer: the shadow, then its light (terminator line, lights, reticle) added on top. */
-.doss-daynight {
+.doss-stage-daynight {
   position: absolute;
   inset: 0;
   pointer-events: none;
@@ -542,7 +547,7 @@ onBeforeUnmount(() => {
   transition: opacity var(--t-slow) var(--ease-in-out);
 }
 
-.doss-daynight[data-on="false"] {
+.doss-stage-daynight[data-on="false"] {
   opacity: 0;
 }
 
@@ -739,6 +744,13 @@ onBeforeUnmount(() => {
   text-align: right;
 }
 
+/* The same quiet line the orbit picture draws when WebGL is off. */
+.doss-webgl {
+  margin: 8px 0 0;
+  color: var(--text-muted);
+  font: 400 12px/1.4 var(--font-text);
+}
+
 /* Reduced motion: the blank, then the sheet. No beam, no fades. */
 @media (prefers-reduced-motion: reduce) {
   .doss-scan-field {
@@ -751,7 +763,7 @@ onBeforeUnmount(() => {
     transition: none;
   }
 
-  .doss-daynight,
+  .doss-stage-daynight,
   .doss-toggle,
   .doss-pip {
     transition: none;

@@ -8,6 +8,7 @@ import { computed, nextTick, ref, watch, watchEffect } from 'vue';
 import Icon from '../../design/Icon.vue';
 import { hexState, keepPreview, discardPreview, overChart, previewAt, removeHexes, restorable, restoreHexes, rollAgain } from './acts.ts';
 import BuildMenu, { type MenuItem } from './BuildMenu.vue';
+import BuildSpin from './BuildSpin.vue';
 import type { Rect } from '../pop_place.ts';
 import { changeLine, discardEdit, edit, editing, holdLeaving, keepEdit, openEdit, draftHandle } from './edit.ts';
 import { askDesign, handMode } from './hand_acts.ts';
@@ -66,10 +67,14 @@ const items = computed((): MenuItem[] => {
         rule: true,
     });
     // What is selected, not this hex: the palette's command knows the selection.
-    if (publishCommand.value) out.push({ id: 'publish', label: 'Publish selection…', say: 'Shares the selected hexes and their records as a package', icon: 'store', rule: true });
+    if (publishCommand.value) out.push({ id: 'publish', label: 'Publish selection…', say: publishSay.value, icon: 'store', rule: true });
     return out;
 });
 
+const publishSay = computed(() => {
+    if (build.selection.length > 1) return 'Shares the selected hexes and their records as a package';
+    return state.value === 'removed' ? 'Shares this hex as a deleted hex in a package' : 'Shares this system and its records as a package';
+});
 const publishCommand = computed(() => { void build.selection.length; const found = commands().find((item) => item.id === 'build-publish'); return found && (!found.runnable || found.runnable()) ? found : null; });
 
 function openMore(): void {
@@ -103,7 +108,7 @@ watch(() => (preview.value ? preview.value.roll : -1), (roll) => {
     <template v-if="preview">
       <button ref="keep" type="button" class="ui-btn is-primary" :disabled="busy" @click="keepPreview()"><Icon name="check" :size="13" />Keep<kbd class="build-key">K</kbd></button>
       <button type="button" class="ui-btn" :disabled="busy" :aria-busy="build.rolling ? 'true' : undefined" @click="rollAgain()">
-        <Icon name="wand-magic-sparkles" :size="13" />{{ build.rolling ? 'Rolling…' : 'Roll again' }}<kbd class="build-key">R</kbd>
+        <BuildSpin v-if="build.rolling" /><Icon v-else name="wand-magic-sparkles" :size="13" />{{ build.rolling ? 'Rolling…' : 'Roll again' }}<kbd class="build-key">R</kbd>
       </button>
       <span class="build-bar-gap"></span>
       <button type="button" class="ui-btn" @click="discardPreview()">Discard</button>

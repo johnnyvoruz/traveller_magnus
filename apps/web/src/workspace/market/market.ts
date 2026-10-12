@@ -63,6 +63,26 @@ export function publishKeys(keys: readonly string[], state: (hexKey: string) => 
     return keys.filter((key) => state(key) !== 'empty');
 }
 
+/** Why an empty hex alone offers no Publish: said in the pane where the command would be. */
+export const EMPTY_ALONE = 'An empty hex has nothing to publish.';
+
+/** Publish is offered for one hex that holds a system (or was removed from the map), or for many with at least one. */
+export function canPublish(keys: readonly string[], state: (hexKey: string) => HexHolds): boolean {
+    return keys.length > 0 && publishKeys(keys, state).length > 0;
+}
+
+/**
+ * The chart systems removed from the map go in as deleted hexes (Johnny, 2026-10-11): said under
+ * the summary, so nobody is surprised. Empty when none of the hexes is removed.
+ */
+export function removedWords(keys: readonly string[], state: (hexKey: string) => HexHolds): string {
+    const removed = keys.filter((key) => state(key) === 'removed').length;
+    if (removed === 0) return '';
+    if (keys.length === 1) return 'You removed this system from your map. It goes in as a deleted hex.';
+    if (removed === 1) return '1 of these hexes is removed from your map. It goes in as a deleted hex.';
+    return removed.toLocaleString('en-US') + ' of these hexes are removed from your map. They go in as deleted hexes.';
+}
+
 /** "48 hexes in 2 sectors". */
 export function hexWords(keys: readonly string[], sectorName: (slug: string) => string = (slug) => slug): string {
     const slugs = new Set<string>();
@@ -106,8 +126,9 @@ export function parseTags(text: string): string[] {
     return out;
 }
 
-/** The kind a selection suggests: a whole sector, a whole subsector, or hexes. The contract has no list: this is only the box's first value. */
+/** The kind a selection suggests: one system, a whole sector, a whole subsector, or hexes. The contract has no list: this is only the box's first value. */
 export function kindOfKeys(keys: readonly string[]): string {
+    if (keys.length === 1) return 'system';
     const slugs = new Set(keys.map((key) => (parseHexKey(key) ?? { slug: '' }).slug));
     if (slugs.size !== 1) return 'hexes';
     if (keys.length === 1280) return 'sector';
@@ -131,7 +152,7 @@ export function formProblems(input: { isNew: boolean; title: string; kind: strin
     const kind = input.kind.trim();
     if (!title) out.push({ field: 'title', text: 'Enter a title.' });
     else if (title.length > MARKET_LIMITS.title) out.push({ field: 'title', text: 'Shorten the title to 80 characters or fewer.' });
-    if (!kind) out.push({ field: 'kind', text: 'Enter a kind, for example subsector.' });
+    if (!kind) out.push({ field: 'kind', text: 'Enter a kind, for example system or subsector.' });
     else if (kind.length > MARKET_LIMITS.kind) out.push({ field: 'kind', text: 'Shorten the kind to 40 characters or fewer.' });
     if (input.description.length > MARKET_LIMITS.description) out.push({ field: 'description', text: 'Shorten the description to 2,000 characters or fewer.' });
     if (input.tags.length > MARKET_LIMITS.tags) out.push({ field: 'tags', text: 'Use 32 tags or fewer.' });

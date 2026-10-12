@@ -210,6 +210,7 @@ if (process.env.RUN_API_TESTS !== '1') {
             });
             assert.equal(stale.status, 409, JSON.stringify(stale.body));
             assert.equal(stale.body.error.code, 'conflict');
+            assert.equal(stale.body.error.details.code, 'hex_changed');
             assert.equal(stale.body.error.details.current.rev, second.rev);
 
             const removed = await jsonFetch(`${hex('1910')}/remove`, {

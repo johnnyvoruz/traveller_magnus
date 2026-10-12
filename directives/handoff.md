@@ -6645,3 +6645,83 @@ that failed at the close no longer does. Ready note `findings/builder_form_ready
   `e_record_visibility.md` (Campaign order steps 1 and 2, and the menu's file control).
 - **Push 1.1.2:** `findings/push/builder_2026-10-11c.md`; `APP_VERSION` bumped;
   `router.ts` in for the first time since the preview route left it.
+
+## 246. 1.1.2 pushed (`da727c7`); Johnny's live findings on generation; roll again accepted (2026-10-11 19:00)
+
+- **Pushed:** `da727c7`, version 1.1.2.
+- **A, `a_roll_again`, accepted:** a repeated `.profile.roll` is sent in order and
+  counts as one change; `findings/builder_roll_again_ready.md` is on disk for D.
+- **Johnny on the live site:** no spinner while generating; a subsector fills every
+  hex; he wants it confirmed that what he generates is his own copy.
+- **Found:** the many-hex bar and the one-hex "Generating…" words exist
+  (`BuildPane.vue` 76-83, 149-155) but he did not see them. The design note's density
+  group (§2) was never built: no `density` in the contract, the sheet or the store.
+  The legacy behaviour to copy is `autoPopulate` (`js/macro_orchestrator.js` 526-554).
+- **Told Johnny:** a universe stores only its own changes over a read-only released
+  chart version (`hexes.ts`: a hex is `own` or `truth`); generation never writes the
+  truth; only the admin truth build makes a chart version.
+- **Prompts:** `b_generate_density.md`, `a_generate_density.md`,
+  `d_generate_feedback.md`, each queued second behind the lane's current prompt.
+
+- **19:15, Johnny, live 1.1.2:** discs still untextured, and a generated world's
+  dossier holds only "Day and night" (shot `findings/ui_design_shots/live_daisuke_1.1.2.png`).
+  `DossierBody.vue` 48-84 shows that when the dossier model is empty; `dayNight` comes
+  from the orbit view. Lead: signed in through his own universe, which C never tested.
+  C urgent on `prompts/c_own_system_blank.md`, lent `dossier/model.ts` and `orbit/`.
+
+## 247. Both live faults found on the live page; D's publish from one system accepted (2026-10-11 18:50)
+
+- **The nearly empty dossier:** `DayNight.vue` 115 (`<section class="doss-section
+  doss-daynight">`) and `SurfaceStage.vue` 460/537 (`.doss-daynight { position:
+  absolute; inset: 0; pointer-events: none }`) share an unscoped class; in the built
+  CSS chunk the section takes the stage layer's rule and covers the pane (540 by 887
+  px, measured). The dossier is whole underneath. In since `8118f72`.
+- **No disc textures for Johnny:** his Edge 154 returns null for `webgl2` and `webgl`
+  on a canvas and an OffscreenCanvas; the orbit view reports `data-discs=
+  "unavailable:0"`. The worker file loads. C's two passes could not have reproduced
+  it; the 1.1.2 handover fix was real but not his cause.
+- The "signed in through a universe" lead of the 18:30 prompt was wrong (Johnny: same
+  in a private window and on charted worlds); the prompt file was rewritten in place
+  before C started.
+- **D, `d_publish_single`, accepted:** three lines in `DossierPanel.vue` (two imports
+  and the form, with `buildMode === 'system'` and `class="build-pane"` added to the
+  prompt's line, kept); part 2 skipped because A's note landed after; carried into
+  `d_generate_feedback.md` with Johnny's density answer (a dropdown: "Every selected
+  hex" and the three densities, Standard default).
+- D's tip for every lane: start Vite with its own cache directory
+  (`findings/builder_pass_src/vite.d.config.mjs`); a second dev server rebuilding the
+  shared `.vite` gave 504s.
+
+- **18:40:** textures work for Johnny in Chrome (Edge had turned acceleration off).
+  Yes to D's two questions. B and E froze again (B at the gates, E before its tests).
+  New prompts: `c_ice_caps.md` (edge shape only, extent unchanged, deterministic),
+  `e_palette_runnable.md` (`components/OmniBox.vue` lent to E).
+
+- **18:50, Lane F stopped (budget) with no note.** Its last Progress line names three
+  reproduced faults: a stale Undo removing a later edit, a silent partial bulk Undo, a
+  modal focus escape. Shots `kf_01`..`kf_28`. Routed: A `a_undo_faults.md`; D part 5 of
+  `d_generate_feedback.md`.
+
+## 248. Six reports accepted; push 1.1.3 written (2026-10-11 19:25)
+
+- **C, `c_own_system_blank`:** stage layer renamed `doss-stage-daynight`;
+  `tests/web/style_class_collision.test.js` (no other collision found);
+  `surface/webgl_notice.ts`, the notice on the dossier map and painted on the orbit
+  canvas (`OrbitRenderer.ts`, lent section). The dossier map already paints without
+  WebGL (2D canvas); discs do not, and C recommends no software renderer.
+- **D, `d_generate_feedback`:** reproduced Johnny's "no spinner" (one hex: only the
+  button's word; a subsector: a still line that never moved; nothing with the pane
+  closed). Built `BuildSpin.vue`, `flight.ts`, hex marks on the map, a job chip under
+  the strip, the "your own map" note, roll again, focus held in the orbit picker.
+  Density not built (B had not reported).
+- **B, `b_star_numbers`:** four optional numbers on a hand star with `lookup`; three
+  `details.code` values; `mgt2e_roll_body.js` `resolveStar` keeps a stored number.
+  Golden and parity pass on the clean copy with committed fixtures.
+- **A, `a_market_types` and `a_generate_density`:** shared types; the opening progress
+  callback before the request. The job answer gives counts only, so no landed keys.
+- **E, `e_record_visibility`:** Referee/Players switch, Player notes, the menu's file
+  input hidden. `workspace/records.ts` edited for the write (reported).
+- One timing test (`surface_service.test.js`, `longestChunkMs < 50`) failed once for E
+  under load and passes alone: C steadies it.
+- **Prompts:** `d_star_numbers.md`; additions to `a_undo_faults.md`,
+  `b_generate_density.md`, `c_ice_caps.md`, `e_palette_runnable.md`.

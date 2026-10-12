@@ -4,12 +4,15 @@
  */
 import type { EditForm, FormAnswer, FormChange, FormField, FormMessage, FormSection, FormValue, HandBody, HandEnvelope, HandKind, HandProfile, HandStar, HandSystem } from '@voyage/shared';
 import { emptyHandProfile, HAND_LIMITS, HandSystem as HandSystemSchema } from '@voyage/shared';
-import { fromEHex, rollBodyProfile } from '@voyage/engines';
+import { fromEHex, generateStarObject, MgT2EMath, rollBodyProfile } from '@voyage/engines';
 
 export class HandRefusal extends Error {
-    constructor(message: string) {
+    readonly fieldId: string | null;
+
+    constructor(message: string, fieldId: string | null = null) {
         super(message);
         this.name = 'HandRefusal';
+        this.fieldId = fieldId;
     }
 }
 
@@ -66,6 +69,44 @@ function classText(star: HandStar): string {
     if (type === '' && sub === '' && cls === '') return '';
     if (type === 'D' || type === 'BD') return [type, cls].filter((part) => part !== '').join(' ');
     return [`${type}${sub}`.trim(), cls].filter((part) => part !== '').join(' ');
+}
+
+function subtypeNumber(value: string): number | null {
+    if (value.trim() === '') return null;
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+}
+
+type StarNumbers = { mass: number; diam: number; temp: number; lum: number };
+
+/** `generateStarObject` when type, subtype, and class can be passed. Otherwise none. */
+function lookedUpStar(star: HandStar): StarNumbers | null {
+    const subtype = subtypeNumber(star.subType);
+    if (!star.sType || !star.sClass || subtype === null) return null;
+    const made = generateStarObject(star.sType, subtype, star.sClass, 'Lookup');
+    if (typeof made.mass !== 'number' || typeof made.diam !== 'number' || typeof made.temp !== 'number' || typeof made.lum !== 'number') return null;
+    return { mass: made.mass, diam: made.diam, temp: made.temp, lum: made.lum };
+}
+
+/** Shown luminosity. Typed diameter or temperature wins; nothing is stored here. */
+function shownLum(star: HandStar, looked: StarNumbers | null): number | null {
+    const diam = star.diam ?? looked?.diam ?? null;
+    const temp = star.temp ?? looked?.temp ?? null;
+    if ((star.diam != null || star.temp != null) && diam != null && temp != null && diam > 0 && temp > 0) {
+        return MgT2EMath.calculateStellarLuminosity(diam, temp);
+    }
+    return looked?.lum ?? null;
+}
+
+function storedPositive(value: number | undefined): number | null {
+    return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function setList(names: string[]): string {
+    if (names.length <= 1) return names[0] ?? '';
+    if (names.length === 2) return `${names[0]} and ${names[1]}`;
+    const last = names[names.length - 1] ?? '';
+    return `${names.slice(0, -1).join(', ')}, and ${last}`;
 }
 
 function starLabel(star: HandStar): string {
@@ -136,6 +177,10 @@ const LEAF_LABELS: Record<string, string> = {
     'orbit.eccentricity': 'Eccentricity',
     'orbit.years': 'Period (years)',
     'orbit.pd': 'Orbit (planetary diameters)',
+    mass: 'Mass',
+    diam: 'Diameter',
+    temp: 'Temperature',
+    lum: 'Luminosity',
     remove: 'Remove',
     kind: 'Kind',
     mainworld: 'Mainworld',
@@ -167,8 +212,10 @@ function holdText(id: string, next: string, label?: string): string {
 
 const UNKNOWN_FIELD = 'This form has no field with that name. Check the field and try again.';
 
-function field(id: string, label: string, kind: FormField['kind'], permission: FormField['permission'], value: FormValue, options: FormField['options'] = []): FormField {
-    return { id, label, kind, permission, value, options };
+function field(id: string, label: string, kind: FormField['kind'], permission: FormField['permission'], value: FormValue, options: FormField['options'] = [], lookup?: number | null): FormField {
+    const made: FormField = { id, label, kind, permission, value, options };
+    if (lookup !== undefined) made.lookup = lookup;
+    return made;
 }
 
 function byOrder<T extends { order: number; id: string }>(items: T[]): T[] {
@@ -217,6 +264,11 @@ export function formOfHand(envelope: HandEnv): EditForm {
         starFields.push(field(`${prefix}.type`, 'Type', listed ? 'choice' : 'text', 'type', star.sType, listed ? choices(STAR_TYPES) : []));
         starFields.push(field(`${prefix}.subtype`, 'Subtype', listed ? 'choice' : 'text', forced ? 'read' : 'type', star.subType, listed ? choices(forced ? [[forced.subType, forced.subType]] : STAR_SUBTYPES) : []));
         starFields.push(field(`${prefix}.class`, 'Class', listed ? 'choice' : 'text', forced ? 'read' : 'type', star.sClass, listed ? choices(forced ? [[forced.sClass, forced.sClass]] : STAR_CLASSES) : []));
+        const looked = lookedUpStar(star);
+        starFields.push(field(`${prefix}.mass`, 'Mass', 'number', 'type', star.mass ?? null, [], looked?.mass ?? null));
+        starFields.push(field(`${prefix}.diam`, 'Diameter', 'number', 'type', star.diam ?? null, [], looked?.diam ?? null));
+        starFields.push(field(`${prefix}.temp`, 'Temperature', 'number', 'type', star.temp ?? null, [], looked?.temp ?? null));
+        starFields.push(field(`${prefix}.lum`, 'Luminosity', 'number', 'type', star.lum ?? null, [], shownLum(star, looked)));
         starFields.push(field(`${prefix}.parent`, 'Orbits', 'choice', 'type', star.parentId ?? '', parentChoices(system, star.id, 'star')));
         starFields.push(field(`${prefix}.order`, 'Order', 'number', 'type', star.order));
         starFields.push(field(`${prefix}.orbit.id`, 'Orbit', 'number', 'type', star.orbitId ?? null));
@@ -272,12 +324,12 @@ function oneChar(id: string, value: FormValue): string {
     if (typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 9) return String(value);
     const cell = text(value).trim();
     if (cell.length === 1) return cell;
-    throw new HandRefusal(holdText(id, 'Type one character.'));
+    throw new HandRefusal(holdText(id, 'Type one character.'), id);
 }
 
 function bounded(id: string, value: FormValue, max: number, label?: string): string {
     const next = text(value);
-    if (next.length > max) throw new HandRefusal(holdText(id, 'Shorten it.', label));
+    if (next.length > max) throw new HandRefusal(holdText(id, 'Shorten it.', label), id);
     return next;
 }
 
@@ -293,7 +345,7 @@ function clientId(fieldId: string, value: FormValue, items: { id: string }[], pr
     if (value === false || value === 'false' || value === 0 || value === null || value === '') return null;
     if (truthy(value)) return nextId(items, prefix);
     const id = text(value).trim();
-    if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$/.test(id)) throw new HandRefusal(holdText(fieldId, 'Use letters, digits, periods, underscores, or hyphens.'));
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$/.test(id)) throw new HandRefusal(holdText(fieldId, 'Use letters, digits, periods, underscores, or hyphens.'), fieldId);
     if (items.some((item) => item.id === id || id.startsWith(item.id + '.') || item.id.startsWith(id + '.'))) {
         throw new HandRefusal('This system already has a star or a world with that identifier. Choose another.');
     }
@@ -305,7 +357,7 @@ function readParent(id: string, value: FormValue): { parentId: string; alsoParen
     if (!raw.includes('+')) return { parentId: bounded(id, raw, 40) };
     const parts = raw.split('+');
     if (parts.length !== 2 || parts[0].length === 0 || parts[1].length === 0 || parts[0] === parts[1] || parts[0].length > 40 || parts[1].length > 40) {
-        throw new HandRefusal(holdText(id, 'Choose a parent from the list.'));
+        throw new HandRefusal(holdText(id, 'Choose a parent from the list.'), id);
     }
     return { parentId: parts[0], alsoParentId: parts[1] };
 }
@@ -314,10 +366,18 @@ function truthy(value: FormValue): boolean {
     return value === true || value === 'true' || value === 1;
 }
 
-/** A finite number, or null when the referee clears the field. */
+/** A finite number above 0, or null when the referee clears the field. */
+function starMeasure(id: string, value: FormValue, label: string): number | null {
+    if (value === null || value === '') return null;
+    if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+        throw new HandRefusal(`${label} cannot hold that. Type a finite number above 0.`, id);
+    }
+    return value;
+}
+
 function orbitNumber(id: string, value: FormValue): number | null {
     if (value === null || value === '') return null;
-    if (typeof value !== 'number' || !Number.isFinite(value)) throw new HandRefusal(holdText(id, 'Type a finite number.'));
+    if (typeof value !== 'number' || !Number.isFinite(value)) throw new HandRefusal(holdText(id, 'Type a finite number.'), id);
     return value;
 }
 
@@ -441,13 +501,16 @@ function applyOne(system: HandSystem, change: FormChange, notes: FormMessage[], 
         else if (leaf === 'parent') star.parentId = text(change.value) === '' ? null : bounded(id, change.value, 40, 'Orbits');
         else if (leaf === 'order') {
             if (typeof change.value !== 'number' || !Number.isInteger(change.value) || change.value < 0) {
-                throw new HandRefusal(holdText(id, 'Type a whole number that is 0 or greater.'));
+                throw new HandRefusal(holdText(id, 'Type a whole number that is 0 or greater.'), id);
             }
             star.order = change.value;
         } else if (leaf === 'orbit.id') putNumber(star, 'orbitId', orbitNumber(id, change.value));
         else if (leaf === 'orbit.au') putNumber(star, 'orbitAU', orbitNumber(id, change.value));
         else if (leaf === 'orbit.eccentricity') putNumber(star, 'eccentricity', orbitNumber(id, change.value));
         else if (leaf === 'orbit.years') putNumber(star, 'periodYears', orbitNumber(id, change.value));
+        else if (leaf === 'mass' || leaf === 'diam' || leaf === 'temp' || leaf === 'lum') {
+            putNumber(star, leaf, starMeasure(id, change.value, fieldLabel(id)));
+        }
         else throw new HandRefusal(UNKNOWN_FIELD);
         return;
     }
@@ -485,7 +548,7 @@ function applyOne(system: HandSystem, change: FormChange, notes: FormMessage[], 
     if (leaf === 'name') body.name = bounded(id, change.value, 80);
     else if (leaf === 'kind') {
         const kind = text(change.value);
-        if (!KINDS.some(([value]) => value === kind)) throw new HandRefusal(holdText(id, 'Choose a kind from the list.'));
+        if (!KINDS.some(([value]) => value === kind)) throw new HandRefusal(holdText(id, 'Choose a kind from the list.'), id);
         body.kind = kind as HandKind;
         syncBeltOrbit(system, body);
     } else if (leaf === 'parent') {
@@ -497,7 +560,7 @@ function applyOne(system: HandSystem, change: FormChange, notes: FormMessage[], 
     }
     else if (leaf === 'order') {
         if (typeof change.value !== 'number' || !Number.isInteger(change.value) || change.value < 0) {
-            throw new HandRefusal(holdText(id, 'Type a whole number that is 0 or greater.'));
+            throw new HandRefusal(holdText(id, 'Type a whole number that is 0 or greater.'), id);
         }
         body.order = change.value;
     } else if (leaf === 'mainworld') {
@@ -619,7 +682,7 @@ export function applyHand(envelope: HandEnv, changes: FormChange[] = [], roll: {
     const known = knownIds(before);
     for (const change of changes) {
         const item = known.get(change.id);
-        if (item?.permission === 'read') throw new HandRefusal(`You can't edit ${item.label}. Choose a field you can edit.`);
+        if (item?.permission === 'read') throw new HandRefusal(`You can't edit ${item.label}. Choose a field you can edit.`, change.id);
         if (change.id.includes('.profile.')) oneChar(change.id, change.value);
     }
     const messages: FormMessage[] = [];
@@ -720,6 +783,21 @@ function rollProfiles(envelope: HandEnv, system: HandSystem, rolls: { id: string
             continue;
         }
         const stars = byOrder(system.stars);
+        for (const star of stars) {
+            const looked = lookedUpStar(star);
+            const mass = storedPositive(star.mass);
+            const diam = storedPositive(star.diam);
+            const temp = storedPositive(star.temp);
+            const lum = storedPositive(star.lum);
+            if (!looked && (mass != null || diam != null || temp != null || lum != null)) {
+                const missing = [
+                    mass == null ? 'Mass' : '',
+                    diam == null ? 'Diameter' : '',
+                    temp == null ? 'Temperature' : '',
+                ].filter((name) => name !== '');
+                if (missing.length) throw new HandRefusal(`Set ${setList(missing)}.`);
+            }
+        }
         const parentBody = system.bodies.find((candidate) => candidate.id === body.parentId);
         const starId = parentBody && (parentBody.kind === 'world' || parentBody.kind === 'gas') ? parentBody.parentId : body.parentId;
         const parentStarIndex = Math.max(0, stars.findIndex((star) => star.id === starId));
@@ -728,7 +806,16 @@ function rollProfiles(envelope: HandEnv, system: HandSystem, rolls: { id: string
             hexId: envelope.hexKey,
             bodyId: body.id,
             roll: body.profileRoll ?? 0,
-            stars: stars.map((star) => ({ sType: star.sType, subType: star.subType, sClass: star.sClass, orbitId: star.orbitId })),
+            stars: stars.map((star) => ({
+                sType: star.sType,
+                subType: star.subType,
+                sClass: star.sClass,
+                orbitId: star.orbitId,
+                mass: storedPositive(star.mass) ?? undefined,
+                diam: storedPositive(star.diam) ?? undefined,
+                temp: storedPositive(star.temp) ?? undefined,
+                lum: storedPositive(star.lum) ?? undefined,
+            })),
             body: {
                 kind: body.kind,
                 name: body.name,

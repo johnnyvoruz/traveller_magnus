@@ -6,9 +6,10 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import Icon from '../../design/Icon.vue';
-import { observeSize } from '../../platform/browser.ts';
-import { tallyOf } from './acts.ts';
-import { build, SELECTION_CAP } from './state.ts';
+import { observeSize, storageGet, storageSet } from '../../platform/browser.ts';
+import { hexName, stopBuild, tallyOf } from './acts.ts';
+import BuildSpin from './BuildSpin.vue';
+import { build, jobLine, SELECTION_CAP, YOURS_KEY, YOURS_NOTE } from './state.ts';
 
 defineProps<{ name: string; truthVersion: string | null }>();
 const emit = defineEmits<{ clear: []; width: [px: number] }>();
@@ -20,6 +21,17 @@ const count = computed(() => {
     if (keys.length < 2) return null;
     return { n: keys.length.toLocaleString('en'), empty: tallyOf(keys).empty.length, full: keys.length >= SELECTION_CAP };
 });
+/** What is being generated, in words: "Generating 80 hexes · 12 of 80", or "Generating a system in 0101". */
+const inFlight = computed(() => {
+    if (build.job) return jobLine(build.job);
+    if (build.rolling) return 'Generating a system in ' + hexName(build.rolling);
+    return '';
+});
+const told = ref(storageGet(YOURS_KEY) === '1');
+function putAway(): void {
+    told.value = true;
+    storageSet(YOURS_KEY, '1');
+}
 let stop: (() => void) | null = null;
 
 onMounted(() => {
@@ -57,6 +69,17 @@ onBeforeUnmount(() => {
     <button v-if="count" type="button" class="ui-btn build-strip-count" title="Clear the selection (Esc)" @click="$emit('clear')">
       Clear<Icon name="xmark" :size="12" />
     </button>
+    <!-- Generation in flight, under the strip whether the pane is open or not. It hangs below: the strip never changes size. -->
+    <div v-if="inFlight" class="build-strip-job" role="status" data-build-job>
+      <BuildSpin :size="14" />
+      <span>{{ inFlight }}</span>
+      <button v-if="build.job" type="button" class="ui-btn" :disabled="build.job.state !== 'running'" @click="stopBuild()">{{ build.job.state === 'running' ? 'Stop' : 'Stopping…' }}<kbd class="build-key">X</kbd></button>
+    </div>
+    <!-- Whose map this is: said once, the first time Build is on, until it is put away. -->
+    <div v-else-if="!told" class="build-strip-note" role="note" data-build-yours>
+      <p>{{ YOURS_NOTE }}</p>
+      <button type="button" class="ui-btn" @click="putAway()">Got it</button>
+    </div>
   </div>
 </template>
 
@@ -121,6 +144,67 @@ onBeforeUnmount(() => {
   color: var(--text-muted);
   font: 400 12.5px/1.3 var(--font-text);
   text-overflow: ellipsis;
+}
+
+.build-strip-job {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  max-width: 100%;
+  min-height: 36px;
+  padding: 4px 6px 4px 12px;
+  border: 1px solid var(--signal);
+  border-radius: var(--r-3);
+  background: var(--chrome-glass);
+  box-shadow: var(--shadow-chrome);
+  color: var(--signal);
+}
+
+.build-strip-note {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  box-sizing: border-box;
+  width: min(380px, 100%);
+  padding: 10px 10px 10px 14px;
+  border: 1px solid var(--control-line);
+  border-left: 3px solid var(--signal);
+  border-radius: var(--r-3);
+  background: var(--chrome-glass);
+  box-shadow: var(--shadow-chrome);
+  white-space: normal;
+}
+
+.build-strip-note p {
+  margin: 0;
+  color: var(--text-0);
+  font: 400 13px/1.45 var(--font-text);
+}
+
+.build-strip-note .ui-btn {
+  flex: none;
+  padding: 3px 9px;
+  font-size: 12px;
+}
+
+.build-strip-job span {
+  overflow: hidden;
+  color: var(--text-0);
+  font: 600 12.5px/1.3 var(--font-text);
+  font-variant-numeric: var(--tabular);
+  text-overflow: ellipsis;
+}
+
+.build-strip-job .ui-btn {
+  padding: 3px 8px;
+  font-size: 12px;
 }
 
 .build-strip-tally b {

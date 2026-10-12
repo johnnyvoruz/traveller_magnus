@@ -41,9 +41,12 @@ type Envelope = {
 };
 
 export class FormRefusal extends Error {
-    constructor(message: string) {
+    readonly fieldId: string | null;
+
+    constructor(message: string, fieldId: string | null = null) {
         super(message);
         this.name = 'FormRefusal';
+        this.fieldId = fieldId;
     }
 }
 
@@ -398,17 +401,17 @@ function profileChar(id: string, value: FormValue): string {
     const refused = `${label} cannot hold that. Type one character.`;
     if (id === 'profile.st') {
         const starport = text(value).trim().toUpperCase();
-        if (starport.length !== 1) throw new FormRefusal(refused);
+        if (starport.length !== 1) throw new FormRefusal(refused, id);
         return starport;
     }
     if (typeof value === 'number' && Number.isInteger(value) && value >= 0) {
         const digit = String(toEHex(value));
-        if (digit.length !== 1) throw new FormRefusal(refused);
+        if (digit.length !== 1) throw new FormRefusal(refused, id);
         return digit;
     }
     const digit = text(value).trim().toUpperCase();
     if (digit.length === 1) return digit;
-    throw new FormRefusal(refused);
+    throw new FormRefusal(refused, id);
 }
 
 function profileChars(source: Row): Record<string, string> {
@@ -1209,7 +1212,7 @@ export function applyForm(envelope: Envelope | HandEnvelope, changes: FormChange
         try {
             return applyHand(envelope, changes, roll);
         } catch (err) {
-            if (err instanceof HandRefusal) throw new FormRefusal(err.message);
+            if (err instanceof HandRefusal) throw new FormRefusal(err.message, err.fieldId);
             throw err;
         }
     }
@@ -1218,7 +1221,7 @@ export function applyForm(envelope: Envelope | HandEnvelope, changes: FormChange
     for (const change of changes) {
         const item = known.get(change.id);
         if (!item) throw new FormRefusal('This form has no field with that name. Check the field and try again.');
-        if (item.permission === 'read') throw new FormRefusal(`You can't edit ${item.label}. Choose a field you can edit.`);
+        if (item.permission === 'read') throw new FormRefusal(`You can't edit ${item.label}. Choose a field you can edit.`, change.id);
         if (change.id.startsWith('profile.')) profileChar(change.id, change.value);
     }
     if (changes.length === 0 && roll.length === 0) {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { rollBodyProfile } from '@voyage/engines';
-import { applyForm, blankEnvelope, formOf } from '@voyage/generation';
+import { generateStarObject, MgT2EMath, rollBodyProfile } from '@voyage/engines';
+import { applyForm, blankEnvelope, FormRefusal, formOf } from '@voyage/generation';
 import { TRUTH_SEED, TRUTH_SETTINGS } from '../../tools/truth/settings.js';
 
 const pinned = { seed: TRUTH_SEED, settings: { ...TRUTH_SETTINGS }, engineVersion: '1.1.0' };
@@ -121,4 +121,128 @@ test('rulings that stay as they were: moon period, shared orbit, inner orbit, an
     const beltFields = form.sections.flatMap((section) => section.fields).filter((field) => field.id.startsWith('main.profile.'));
     assert.equal(beltFields.length, 8);
     assert.equal(beltFields.every((field) => field.permission === 'type'), true);
+});
+
+function fieldOf(envelope, id) {
+    const fields = formOf(envelope).sections.flatMap((section) => section.fields);
+    const field = fields.find((item) => item.id === id);
+    assert.ok(field, id);
+    return field;
+}
+
+test('a typed star number is stored, shown from the lookup until then, and read by the roll', () => {
+    const envelope = starSystem();
+    const looked = generateStarObject('G', 2, 'V', 'Lookup');
+    const mass = fieldOf(envelope, 's1.mass');
+    assert.equal(mass.value, null);
+    assert.equal(mass.lookup, looked.mass);
+    assert.equal(fieldOf(envelope, 's1.diam').lookup, looked.diam);
+    assert.equal(fieldOf(envelope, 's1.temp').lookup, looked.temp);
+    assert.equal(fieldOf(envelope, 's1.lum').lookup, looked.lum);
+    assert.equal(envelope.system.stars[0].mass, undefined);
+
+    const stored = applyForm(envelope, [{ id: 's1.mass', value: 2 }], []);
+    assert.equal(stored.envelope.system.stars[0].mass, 2);
+    assert.equal(fieldOf(stored.envelope, 's1.mass').value, 2);
+    assert.equal(fieldOf(stored.envelope, 's1.mass').lookup, looked.mass);
+
+    const wider = applyForm(envelope, [{ id: 's1.diam', value: 2 }], []);
+    assert.equal(wider.envelope.system.stars[0].diam, 2);
+    assert.equal(wider.envelope.system.stars[0].lum, undefined);
+    assert.equal(fieldOf(wider.envelope, 's1.lum').value, null);
+    assert.equal(fieldOf(wider.envelope, 's1.lum').lookup, MgT2EMath.calculateStellarLuminosity(2, looked.temp));
+
+    const plain = applyForm(envelope, [], [{ id: 'w.profile.roll' }]);
+    const heavy = applyForm(envelope, [{ id: 's1.lum', value: 100 }], [{ id: 'w.profile.roll' }]);
+    assert.equal(heavy.envelope.system.stars[0].lum, 100);
+    const plainProfile = plain.envelope.system.bodies.find((body) => body.id === 'w').profile;
+    const heavyProfile = heavy.envelope.system.bodies.find((body) => body.id === 'w').profile;
+    assert.notDeepEqual(heavyProfile, plainProfile);
+
+    const cleared = applyForm(stored.envelope, [{ id: 's1.mass', value: null }], []);
+    assert.equal(cleared.envelope.system.stars[0].mass, undefined);
+    assert.equal(fieldOf(cleared.envelope, 's1.mass').value, null);
+    assert.equal(fieldOf(cleared.envelope, 's1.mass').lookup, looked.mass);
+    const clearedAgain = applyForm(stored.envelope, [{ id: 's1.mass', value: '' }], []);
+    assert.equal(clearedAgain.envelope.system.stars[0].mass, undefined);
+});
+
+test('a bad star number is refused, and a star with no class rolls when the four numbers are typed', () => {
+    const envelope = starSystem();
+    for (const value of [0, -1, Number.POSITIVE_INFINITY]) {
+        assert.throws(
+            () => applyForm(envelope, [{ id: 's1.mass', value }], []),
+            (err) => {
+                assert.ok(err instanceof FormRefusal);
+                assert.equal(err.message, 'Mass cannot hold that. Type a finite number above 0.');
+                assert.equal(err.fieldId, 's1.mass');
+                return true;
+            },
+        );
+    }
+    assert.equal(envelope.system.stars[0].mass, undefined);
+
+    const blank = blankEnvelope('spin/2008', 'MgT2E', pinned, {});
+    assert.throws(
+        () => applyForm(blank, [
+            { id: 'star.add', value: 's1' },
+            { id: 'body.add', value: 'w' },
+            { id: 's1.mass', value: 1 },
+        ], [{ id: 'w.profile.roll' }]),
+        (err) => {
+            assert.ok(err instanceof FormRefusal);
+            assert.equal(err.message, 'Set Diameter and Temperature.');
+            assert.equal(err.fieldId, null);
+            return true;
+        },
+    );
+    assert.throws(
+        () => applyForm(blank, [
+            { id: 'star.add', value: 's1' },
+            { id: 'body.add', value: 'w' },
+            { id: 's1.lum', value: 1 },
+        ], [{ id: 'w.profile.roll' }]),
+        /Set Mass, Diameter, and Temperature\./,
+    );
+
+    const numbered = applyForm(blank, [
+        { id: 'star.add', value: 's1' },
+        { id: 'body.add', value: 'main' },
+        { id: 'main.mainworld', value: true },
+        { id: 'main.profile.st', value: 'A' },
+        { id: 'main.profile.s', value: '7' },
+        { id: 'main.profile.a', value: '8' },
+        { id: 'main.profile.h', value: '8' },
+        { id: 'main.profile.p', value: '8' },
+        { id: 'main.profile.g', value: '5' },
+        { id: 'main.profile.l', value: '5' },
+        { id: 'main.profile.tl', value: 'A' },
+        { id: 'body.add', value: 'w' },
+        { id: 'w.orbit.id', value: 3 },
+        { id: 'w.orbit.au', value: 1 },
+        { id: 'w.orbit.eccentricity', value: 0.01 },
+        { id: 's1.mass', value: 1 },
+        { id: 's1.diam', value: 1 },
+        { id: 's1.temp', value: 5772 },
+        { id: 's1.lum', value: 1 },
+    ], [{ id: 'w.profile.roll' }]);
+    const world = numbered.envelope.system.bodies.find((body) => body.id === 'w');
+    assert.equal(world.profileRoll, 1);
+    assert.equal(numbered.answer.messages[0].text.includes('Set Type'), false);
+    assert.equal(numbered.envelope.system.stars[0].sClass, '');
+
+    const empty = applyForm(blank, [{ id: 'star.add', value: 's1' }], []);
+    assert.equal(fieldOf(empty.envelope, 's1.mass').lookup, null);
+    assert.equal(fieldOf(empty.envelope, 's1.lum').lookup, null);
+
+    const looked = generateStarObject('G', 2, 'V', 'Lookup');
+    const aow = blankEnvelope('spin/2008', 'AoW', pinned, {});
+    const typed = applyForm(aow, [
+        { id: 'star.add', value: 's1' },
+        { id: 's1.type', value: 'G' },
+        { id: 's1.subtype', value: '2' },
+        { id: 's1.class', value: 'V' },
+    ], []);
+    assert.equal(fieldOf(typed.envelope, 's1.mass').value, null);
+    assert.equal(fieldOf(typed.envelope, 's1.mass').lookup, looked.mass);
 });

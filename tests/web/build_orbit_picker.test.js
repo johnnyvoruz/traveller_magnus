@@ -11,8 +11,20 @@ import { mgt2eOrbitToAu } from '@voyage/shared';
 import { dropEdit, edit, openEdit, setDraftOpener } from '../../apps/web/src/workspace/build/edit.ts';
 import { handList } from '../../apps/web/src/workspace/build/hand.ts';
 import {
-    orbitPartner, canPick, clampP, modeFor, orbitChanges, pAtRadius, pickParents, pickWords, placeOrbit, radiusOf, ringsAround, scaleFor, stepP, storedP, ticksOf, valueAt,
+    orbitPartner, canPick, clampP, modeFor, orbitChanges, pAtRadius, pickParents, pickWords, placeOrbit, radiusOf, ringsAround, scaleFor, stepP, storedP, ticksOf, valueAt, wrapFocus,
 } from '../../apps/web/src/workspace/build/orbit_pick.ts';
+
+test('focus stays in the picker: Tab past either end comes round, and focus outside comes back in', () => {
+    // Five stops: Close, one parent, the picture, Cancel, Place.
+    assert.equal(wrapFocus(5, 4, false), 0);
+    assert.equal(wrapFocus(5, 0, true), 4);
+    assert.equal(wrapFocus(5, 2, false), null);
+    assert.equal(wrapFocus(5, 2, true), null);
+    assert.equal(wrapFocus(5, -1, false), 0);
+    assert.equal(wrapFocus(5, -1, true), 4);
+    assert.equal(wrapFocus(1, 0, false), 0);
+    assert.equal(wrapFocus(0, -1, false), null);
+});
 import { useBuildStore, useOwnSectors } from '../../apps/web/src/workspace/build/seam.ts';
 
 const PIN = { seed: 'seed', settings: {}, engineVersion: '1.1.0' };

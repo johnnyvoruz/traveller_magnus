@@ -11,6 +11,8 @@
 import { computed, ref } from 'vue';
 import type { Camera, Viewport } from '../../map/camera.ts';
 import { cameraTransform, hexesPath, hexPoints, slotBox, type SectorPlace } from './marks.ts';
+import { flight, flightSplit, revOf } from './flight.ts';
+import { build } from './state.ts';
 
 export type HoverMark = {
     /** The hex's corners in parsecs, or empty when only a slot is hovered. */
@@ -64,6 +66,18 @@ const previewAt = computed(() => (props.preview ? hexPoints(props.preview, props
 const slotAt = computed(() => (props.slot ? slotBox(props.slot) : null));
 const targetsAt = computed(() => (props.targets ?? []).map((slot) => ({ key: slot.x + ',' + slot.y, ...slotBox(slot) })));
 const cursorAt = computed(() => (props.cursor ? { free: props.cursor.free, ...slotBox(props.cursor) } : null));
+/**
+ * Generation in flight, read from Build's state (no prop: the map view need not know): the hexes
+ * still waiting march, each turns to a wash as its system lands, and one hex being rolled for a
+ * preview marches until the preview is drawn.
+ */
+const inFlight = computed(() => flightSplit(flight.keys, flight.from, revOf));
+const waitingAt = computed(() => {
+    const keys = [...inFlight.value.waiting];
+    if (build.rolling && !keys.includes(build.rolling)) keys.push(build.rolling);
+    return keys.length ? hexesPath(keys, props.sectorOf) : '';
+});
+const landedAt = computed(() => (inFlight.value.landed.length ? hexesPath(inFlight.value.landed, props.sectorOf) : ''));
 
 function show(el: Element | null, on: boolean): void {
     if (!el) return;
@@ -143,6 +157,8 @@ defineExpose({
       <polygon v-for="item in removedAt" :key="'r' + item.key" class="build-mark-removed" :points="item.at" />
       <path v-if="manyAt" class="build-mark-many" :d="manyAt" />
       <polygon v-if="previewAt" class="build-mark-preview" :points="previewAt" />
+      <path v-if="landedAt" class="build-mark-landed" :d="landedAt" />
+      <path v-if="waitingAt" class="build-mark-working" :d="waitingAt" />
       <path ref="preEl" class="build-mark-pre" hidden />
       <polygon ref="hoverEl" class="build-mark-hover" hidden />
     </g>
@@ -191,6 +207,34 @@ defineExpose({
   stroke: var(--chart-selected);
   stroke-width: 2;
   stroke-dasharray: 6 5;
+}
+
+/* Generation in flight: a hex still waiting marches; one whose system has landed is washed. */
+/* Amber, the tone of what to look at now, so a waiting hex stands apart from the selection's outline under it. */
+.build-mark-working {
+  fill: color-mix(in srgb, var(--attention) 10%, transparent);
+  stroke: var(--attention);
+  stroke-width: 2;
+  stroke-dasharray: 5 5;
+  animation: build-mark-march 0.9s linear infinite;
+}
+
+.build-mark-landed {
+  fill: color-mix(in srgb, var(--signal) 22%, transparent);
+  stroke: var(--chart-selected);
+  stroke-width: 1.5;
+}
+
+@keyframes build-mark-march {
+  to {
+    stroke-dashoffset: -10;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .build-mark-working {
+    animation: none;
+  }
 }
 
 .build-mark-removed {

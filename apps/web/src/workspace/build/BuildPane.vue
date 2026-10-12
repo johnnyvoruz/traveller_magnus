@@ -9,9 +9,10 @@ import Icon from '../../design/Icon.vue';
 import { parseHexKey } from '../places.ts';
 import { buildSettings, generateMany, hexName, hexState, previewAt, removeHexes, restorable, restoreHexes, stopBuild, tallyOf, truthAt } from './acts.ts';
 import { edit, openBlank } from './edit.ts';
+import BuildSpin from './BuildSpin.vue';
 import GenerateSheet from './GenerateSheet.vue';
 import PublishForm from '../market/PublishForm.vue';
-import { marketUi } from '../market/market.ts';
+import { EMPTY_ALONE, marketUi } from '../market/market.ts';
 import { generateGrowing, growUi } from './grow_acts.ts';
 import { NAME_MAX, slotGroups, subsectorWords } from './sectors.ts';
 import { build, choiceLine, plural, settingRows } from './state.ts';
@@ -73,8 +74,10 @@ function generate(): void {
 
 <template>
   <div class="build-pane" :data-span="span" :data-mode="mode">
-    <div v-if="build.job" class="build-prog" role="status">
+    <!-- Laid over the top of the pane from the frame of the click, so nothing under it moves when it comes or goes. -->
+    <div v-if="build.job" class="build-prog" role="status" data-build-job>
       <div class="build-prog-line">
+        <BuildSpin :size="14" />
         <b>{{ build.job.label }}</b>
         <span>{{ build.job.done }} of {{ build.job.total }}<template v-if="build.job.failed.length"> · {{ build.job.failed.length }} failed</template></span>
         <button v-if="growUi.undoRunning" type="button" class="ui-btn" data-grow-undo title="Stops the job and removes the new sectors and every system generated in them" @click="growUi.undoRunning()">Undo</button>
@@ -83,7 +86,8 @@ function generate(): void {
       <div class="build-prog-bar"><i :style="{ width: (build.job.total ? 100 * build.job.done / build.job.total : 0) + '%' }"></i></div>
     </div>
 
-    <PublishForm v-if="marketUi.open && mode === 'many'" :keys="keys" />
+    <!-- A removed chart system goes in as a deleted hex; an empty hex alone has nothing to publish. -->
+    <PublishForm v-if="marketUi.open && mode !== 'empty'" :keys="keys" />
 
     <GenerateSheet
       v-else-if="build.sheetOpen"
@@ -145,10 +149,11 @@ function generate(): void {
             :class="{ 'is-primary': mode !== 'removed', 'is-grow': slots.length > 0 }"
             :data-build-first="mode !== 'removed' ? '' : undefined"
             :disabled="busy"
-            :aria-busy="build.rolling ? 'true' : undefined"
+            :aria-busy="build.rolling || build.job || growUi.busy ? 'true' : undefined"
             @click="generate"
           >
-            <Icon name="wand-magic-sparkles" :size="13" />
+            <BuildSpin v-if="build.rolling || build.job || growUi.busy" />
+            <Icon v-else name="wand-magic-sparkles" :size="13" />
             <template v-if="slots.length">{{ growUi.busy ? 'Creating…' : (slots.length === 1 ? 'Create the sector and generate ' : 'Create ' + slots.length + ' sectors and generate ') + (mode === 'many' ? plural(count.empty.length, 'hex', 'hexes') : 'a system') }}</template>
             <template v-else-if="mode === 'many'">Generate the {{ plural(count.empty.length, 'empty hex', 'empty hexes') }}</template>
             <template v-else>{{ build.rolling ? 'Generating…' : 'Generate a system' }}</template>
@@ -191,7 +196,7 @@ function generate(): void {
       </div>
 
       <p v-if="slots.length" class="build-fine">These systems are saved as they are generated, with no preview. To remove the new {{ slots.length === 1 ? 'sector and its systems' : 'sectors and their systems' }}, select Undo. Undo also works while the job is running.</p>
-      <p v-else-if="mode === 'empty'" class="build-fine">Generate a system shows a preview first. The system is saved only when you select Keep. Blank system saves an empty system right away and opens it in the designer, where you add each body yourself.</p>
+      <p v-else-if="mode === 'empty'" class="build-fine">Generate a system shows a preview first. The system is saved only when you select Keep. Blank system saves an empty system right away and opens it in the designer, where you add each body yourself. {{ EMPTY_ALONE }}</p>
       <p v-else-if="mode === 'removed'" class="build-fine">While Build is on, a removed hex shows as a faint outline. When Build is off, the hex doesn’t show.</p>
       </div>
       <div v-if="mode === 'many'" class="build-side">
@@ -507,16 +512,34 @@ function generate(): void {
 }
 
 /* The one thin bar: a title, a count the store gives, Stop. */
+.build-pane {
+  position: relative;
+}
+
+/* A button at work is not dimmed like one that can't be used: its spinner must read. */
+.build-big[aria-busy="true"]:disabled {
+  opacity: 1;
+  cursor: progress;
+}
+
+/* Over the pane's top, not in its flow: what is under it keeps its place while the job runs. */
 .build-prog {
-  margin: -14px -16px 14px;
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 3;
   padding: 9px 16px 11px;
-  border-bottom: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--signal);
+  background: var(--bg-1);
+  box-shadow: var(--shadow-chrome);
 }
 
 .build-prog-line {
   display: flex;
   align-items: center;
   gap: 10px;
+  color: var(--signal);
   font-size: 13px;
 }
 

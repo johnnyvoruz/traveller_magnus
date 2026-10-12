@@ -6,6 +6,7 @@
 import type { SectorHex, Settings } from '@voyage/shared';
 import { showToast } from '../../shell/toast.ts';
 import { parseHexKey } from '../places.ts';
+import { endFlight, startFlight } from './flight.ts';
 import { isHandHex } from './hand_acts.ts';
 import { buildStore, type HexState, type UndoToken } from './seam.ts';
 import { build, generateTargets, jobToast, plural, removeTargets, restoreTargets, stateOf, tally, type Tally } from './state.ts';
@@ -162,6 +163,7 @@ export function generateMany(keys: readonly string[]): void {
     build.preview = null;
     const label = 'Generating ' + plural(targets.length, 'hex', 'hexes');
     build.job = { total: targets.length, done: 0, failed: [], state: 'running', label };
+    startFlight(targets);
     const run = store.generateMany(
         targets.map((hexKey) => ({ hexKey, truth: truthAt(hexKey) })),
         build.choice,
@@ -172,11 +174,13 @@ export function generateMany(keys: readonly string[]): void {
         ({ token, progress }) => {
             stopJob = null;
             build.job = null;
+            endFlight();
             offerUndo(jobToast(progress, where(targets)), token);
         },
         (err) => {
             stopJob = null;
             build.job = null;
+            endFlight();
             fail(err);
         },
     );

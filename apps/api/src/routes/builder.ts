@@ -5,6 +5,7 @@ import {
     FormAnswer,
     FormBlank,
     FormDesign,
+    FieldRefusalDetails,
     FormDraft,
     FormKeep,
     FormRead,
@@ -320,7 +321,7 @@ export function mountBuilderRoutes(route: Hono<AppEnv>): void {
                 sClass: input.starClass,
             });
         } catch (err) {
-            if (err instanceof FormRefusal) return fail(c, 400, 'validation', err.message);
+            if (err instanceof FormRefusal) return refusedForm(c, err);
             return fail(c, 400, 'validation', 'The generator refused this hex.', { reason: String(err).slice(0, 200) });
         }
         return storeTree(c, owned, {
@@ -565,14 +566,17 @@ async function readJson<T>(c: Ctx, schema: { safeParse: (value: unknown) => { su
 }
 
 function refusedForm(c: Ctx, err: unknown): Response {
-    if (err instanceof FormRefusal) return fail(c, 400, 'validation', err.message);
+    if (err instanceof FormRefusal) {
+        const details = err.fieldId ? FieldRefusalDetails.parse({ code: 'field', id: err.fieldId }) : undefined;
+        return fail(c, 400, 'validation', err.message, details);
+    }
     throw err;
 }
 
 async function loadEnvelope(c: Ctx, owned: OwnedUniverse, hexKey: string, hash: string, row: StoredHex | null, pin: Pin): Promise<TreeEnvelope | HandEnvelope | Response> {
     if (row?.state === 'removed') return fail(c, 404, 'not_found', 'No stored tree.');
     if (row?.treeHash && row.treeHash !== hash) {
-        return fail(c, 409, 'conflict', 'This hex changed. Reload it, then try again.', { current: row });
+        return fail(c, 409, 'conflict', 'This hex changed. Reload it, then try again.', { code: 'hex_changed', current: row });
     }
     let text: string | null = null;
     if (row && row.treeHash === hash) {

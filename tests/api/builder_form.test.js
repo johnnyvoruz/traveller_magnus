@@ -148,6 +148,8 @@ if (process.env.RUN_API_TESTS !== '1') {
                 body: JSON.stringify({ hash: row.treeHash, changes: [{ id: 'rule.R1', value: 'checked' }] }),
             });
             assert.equal(locked.status, 400, JSON.stringify(locked.body));
+            assert.equal(locked.body.error.details.code, 'field');
+            assert.equal(locked.body.error.details.id, 'rule.R1');
 
             const draft = await jsonFetch(`${hex('1910')}/draft`, {
                 method: 'POST',

@@ -66,3 +66,6 @@ Questions for Johnny written out in full, recommended answer first. After each
 meaningful step append one line under Progress: "done: X. next: Y."
 
 ## Progress
+done: visibility switch and player notes on the record page; the menu hides its file input. next: tests, then the gates.
+done: tests/web/record_visibility.test.js for the two pages and the hidden file input. next: npm test, check, typecheck, build, then the browser pass.
+done: gates and the browser pass. next: the report.

@@ -51,3 +51,5 @@ Write `directives/reports/a_market_types.md` from `directives/reports/_TEMPLATE.
 After each meaningful step append one line under Progress: "done: X. next: Y."
 
 ## Progress
+done: the shared schema has the same wire fields the client sends and reads, and types.ts now exports those shared types. next: run the gates, including a private API pass with the real client.
+done: gates passed, and the private client pass returned 201, 202, 200, 200, 200. next: the report is written.

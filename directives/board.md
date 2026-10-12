@@ -1,28 +1,27 @@
 # Board
 
-One line per lane. Only the orchestrator edits this file. Updated 2026-10-11 18:30 (by the clock).
+One line per lane. Only the orchestrator edits this file. Updated 2026-10-11 19:25 (by the clock).
 
-**Last push: `951724d`, version 1.1.1, 2026-10-11.** Any prompt that says "start only
+**Last push: `da727c7`, version 1.1.2, 2026-10-11.** Any prompt that says "start only
 after the board says the push is made" may start.
 
 | Lane | Status | Current prompt | Blocker / next |
 |---|---|---|---|
-| A | go | prompts/a_roll_again.md, then prompts/a_market_types.md | not started at 18:12 (no Progress line); roll again, then the shared marketplace types |
-| B | go | prompts/b_star_numbers.md | four number fields on a hand star; codes for three answers. Marketplace server accepted |
-| C | free | (none) | texture handover fix accepted; waits on Johnny's look at the live site after 1.1.2 |
-| D | go | prompts/d_publish_single.md | not started at 18:12 (no Progress line); publish from one system; next: show B's star number fields |
-| E | go | prompts/e_record_visibility.md | record visibility, player notes, the menu's file control. Packages entry accepted |
-| F | go | prompts/f_build_ux_review.md | stopped after its first step at 17:01 (no shots, no note); restart with lanes/START.md |
+| A | go | prompts/a_undo_faults.md | the two Undo faults; density through the store when B reports; B's three codes |
+| B | go | prompts/b_generate_density.md | density on generate, contract first; A and D wait on it |
+| C | go | prompts/c_ice_caps.md | ragged ice caps; first steady one timing test |
+| D | go | prompts/d_star_numbers.md | the four star numbers; density dropdown when B and A have it |
+| E | go | prompts/e_palette_runnable.md | the palette hides what cannot run; Lightbox focus (OmniBox.vue and Lightbox.vue lent) |
+| F | retired | (none) | Johnny, 2026-10-11: unreliable (runs out of budget); do not use or propose until he says it is back |
 
 **Restarting a frozen lane:** paste the block in directives/lanes/START.md with the
 lane's letter as the first message of a new session; from then on "go" is enough.
 
 ## Shared files this turn
-- dossier/DossierBody.vue, views/OrbitView.vue: no lane.
+- dossier/DossierPanel.vue, dossier/DossierBody.vue, views/OrbitView.vue: no lane.
 - design/tokens.css: any lane may append its own token lines.
-- workspace/RecordPage.vue (head control, one section) and workspace/AccountMenu.vue
-  (the file input's rule): **lent to E**. router.ts: no lane.
-- dossier/DossierPanel.vue: **D only**, one line and its import (the publish form).
+- components/OmniBox.vue and workspace/Lightbox.vue: **lent to E**.
+- packages/engines/src/mgt2e_roll_body.js: no lane (B's edit accepted; closed again).
 
 ## Contracts
 - contracts/b_marketplace.md, contracts/b_public_games.md (B): size b and the opt-in
@@ -40,7 +39,14 @@ lane's letter as the first message of a new session; from then on "go" is enough
    (findings/campaign_gap_audit.md §4), steps 1 to 5 first. Step 4 (`@` mention) is done.
 
 ## Known, not fixed
-- **Live grey discs (Johnny's screenshot, Azgul Kou, middle zoom):** C could not make
+- (fixed in 1.1.3) **Live, 1.1.2: a world's dossier is covered by its Day and night section.**
+  `DayNight.vue` 115 and `SurfaceStage.vue` 460 both use the unscoped class
+  `doss-daynight`; the stage's `position: absolute; inset: 0` lands on the section.
+  Since `8118f72`. C renames the stage's class.
+- **Live: no disc textures in Johnny's Edge because it has no WebGL** (both contexts
+  null on the main thread and on an OffscreenCanvas; `data-discs="unavailable:0"`).
+  The app says nothing when that happens. The older note below is superseded.
+- **(superseded) Live grey discs (Johnny's screenshot, Azgul Kou, middle zoom):** C could not make
   them grey on a production build of this tree (12 discs textured at 3.1x), found that
   since `703041d` the disc worker throws away an in-flight answer whenever a new watch
   arrives, even for the same picture, and fixed that (it bites when a bake outlasts
@@ -78,12 +84,12 @@ lane's letter as the first message of a new session; from then on "go" is enough
   the blank request body (read from what the server stored).
 
 ## Pending push
-**Ready: version 1.1.2**, `findings/push/builder_2026-10-11c.md` (paths in
-`builder_2026-10-11c_files.txt`). Tree green at 18:15: 1380 pass, checker clean,
-typecheck and build pass. Carries E's crumb, avatars and packages entry, D's
-marketplace screens and third hand-designer pass, A's belt around a world and plain
-messages, B's follow-ups and marketplace server (migration 0010), C's texture handover.
-Push before saying go, so no lane edits a listed file mid-commit.
+**Ready: version 1.1.3**, `findings/push/builder_2026-10-11d.md`. Tree green at 19:15
+(1397 pass; checker, typecheck, build pass). Carries the dossier fix (class rename),
+the no-WebGL notice, generation in flight, the "your map" note, publish from one
+system, roll again, the four star numbers (server), three error codes, record
+visibility and player notes, the shared marketplace types.
+Push before saying go.
 
 ## Decisions from Johnny
 - 2026-10-10: the file bus replaces pasting.
@@ -171,13 +177,29 @@ Push before saying go, so no lane edits a listed file mid-commit.
   stays without "from your map"; Lane F does a read-only UX review of Build and the
   hand designer.
 
+- 2026-10-11: yes, hide the account menu's native file control (E).
+- 2026-10-11, live on 1.1.2: generating must show a spinner while it runs; generating
+  a subsector must not fill every hex; the app must say that what a person generates
+  is their own map and never changes the published chart.
+
+- 2026-10-11: density yes to all three (Standard default, one hex always generates,
+  seeded per hex), **as a dropdown**: "Every selected hex" and the three densities.
+
+- 2026-10-11: textures confirmed working in Chrome; Edge had turned hardware
+  acceleration off on his machine. Not an app fault; the no-WebGL notice stays in C's prompt.
+
+- 2026-10-11: a removed hex is published from the palette only (enough); the palette
+  hides commands that cannot run (E, OmniBox.vue lent); ice caps must stop reading as
+  a perfect circle: ragged edge, the sea cutting in (C, prompts/c_ice_caps.md).
+
 ## Open with Johnny
-1. C: after 1.1.2 is deployed and hard-reloaded, is Azgul Kou still grey at middle zoom?
-2. E: hide the account menu's native "Choose File" control (in E's prompt already as a
-   fault fix; say no to take it out).
+1. C: no software renderer for orbit discs without WebGL (keep flat disc and notice)?
+2. D: the "your own map" note under the Build strip the first time Build is on?
+3. D: the strip says "your map over chart v5" in place of "on the chart, v5"?
+4. D: the job bar covers the pane's first line (the tally) while a job runs?
 
 ## Queue (prompts not yet written)
-- D: show B's four star number fields (after `b_star_numbers` reports).
-- A: read B's three codes in place of the sentences (after `b_star_numbers`).
-- F's findings, when the note exists, become prompts for the owning lanes.
 - E, Campaign order step 3 (timeline as a list), then 6 (handout images; ask B first).
+- The rest of F's review (ranking, visual refinement, words, access) was never done;
+  no lane has it.
+- Public games (contract exists), after density.

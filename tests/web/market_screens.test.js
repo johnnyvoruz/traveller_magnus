@@ -8,7 +8,7 @@ import { session } from '../../apps/web/src/account/session.ts';
 import { campaign } from '../../apps/web/src/campaign/store.ts';
 import { fakeMarketStore } from '../../apps/web/src/workspace/market/fake_store.ts';
 import {
-    closePublish, formProblems, hexWords, kindOfKeys, listingLine, marketUi, openPublish, packagePath, parseTags, publish, publishKeys, recordsOn, stateWords, useMarketStore,
+    canPublish, closePublish, EMPTY_ALONE, formProblems, hexWords, kindOfKeys, listingLine, marketUi, openPublish, packagePath, parseTags, publish, publishKeys, recordsOn, removedWords, stateWords, useMarketStore,
 } from '../../apps/web/src/workspace/market/market.ts';
 
 const U = { id: 'u1', truthVersion: 'v5' };
@@ -41,6 +41,22 @@ test('what goes in: only hexes that hold something; the summary; the kind a sele
     assert.equal(kindOfKeys(sub), 'subsector');
     assert.equal(kindOfKeys(sub.slice(1)), 'hexes');
     assert.equal(kindOfKeys(['A/0101', 'B/0101']), 'hexes');
+});
+
+test('one system: offered for a filled or removed hex, not an empty one; the summary and the deleted hex said', () => {
+    const state = (key) => (key.endsWith('01') ? 'empty' : key.endsWith('02') ? 'removed' : 'truth');
+    assert.equal(canPublish(['A/0103'], state), true);
+    assert.equal(canPublish(['A/0102'], state), true);
+    assert.equal(canPublish(['A/0101'], state), false);
+    assert.equal(canPublish([], state), false);
+    assert.equal(canPublish(['A/0101', 'A/0103'], state), true);
+    assert.equal(EMPTY_ALONE, 'An empty hex has nothing to publish.');
+    assert.equal(kindOfKeys(['A/0103']), 'system');
+    assert.equal(hexWords(['Spinward_Marches/1910']), '1 hex in Spinward Marches');
+    assert.equal(removedWords(['A/0103'], state), '');
+    assert.equal(removedWords(['A/0102'], state), 'You removed this system from your map. It goes in as a deleted hex.');
+    assert.equal(removedWords(['A/0102', 'A/0103'], state), '1 of these hexes is removed from your map. It goes in as a deleted hex.');
+    assert.equal(removedWords(['A/0102', 'B/0102', 'A/0103'], state), '2 of these hexes are removed from your map. They go in as deleted hexes.');
 });
 
 test('records on the hexes: each once, by name; tags as typed', () => {

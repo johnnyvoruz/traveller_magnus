@@ -1,43 +1,41 @@
-# Orchestrator state — 2026-10-11 18:30
+# Orchestrator state — 2026-10-11 19:25
 
-Overwritten every turn. History is `handoff.md` (last section: 245).
+Overwritten every turn. History is `handoff.md` (last section: 248).
 
 ## Where the roadmap is
-Pushed: `951724d`, version 1.1.1. **Push 1.1.2 is written and waiting on Johnny**
-(`findings/push/builder_2026-10-11c.md`): Campaign crumb and avatars, the marketplace
-stub end to end (screens, client, server, routes, menu entry), the hand designer's
-third pass, belts around a world, plain server messages, the disc-texture handover.
-After it: publish from one system (D), roll again (A), star number fields (B then D),
-record visibility and player notes (E), F's review turned into prompts, then public
-games.
+Pushed: `da727c7`, version 1.1.2. **Push 1.1.3 is written and waiting on Johnny**
+(`findings/push/builder_2026-10-11d.md`): the dossier fix, the no-WebGL notice,
+generation visibly in flight, "your own map", publish from one system, roll again,
+star numbers and codes on the server, record visibility and player notes. Still to
+come for Johnny's three live findings: density (B, then A, then D). Then star numbers
+on the form (D), Undo faults (A), ice caps (C), palette (E), then public games.
 
 ## Lanes
-- A go: `a_roll_again` then `a_market_types`. Had not started at 18:12.
-- B go: `b_star_numbers` (contract first; engine file only if fixtures stay
-  byte-identical; three error codes).
-- C free. Texture fix accepted; the live cause is not proven (see board, Known).
-- D go: `d_publish_single`. Had not started at 18:12. Holds one line of
-  `DossierPanel.vue`.
-- E go: `e_record_visibility` (RecordPage.vue and AccountMenu.vue lent).
-- F go: `f_build_ux_review`. One Progress line at 17:01, `findings/kf_state/` made, no
-  shots, no note: treat as stopped; restart text is `directives/lanes/START.md`.
+- A go: `a_undo_faults` (F's two Undo faults; density through the store when B
+  reports; B's three codes).
+- B go: `b_generate_density` (legacy `autoPopulate`, `js/macro_orchestrator.js`
+  526-554; optionally landed hex keys on the job).
+- C go: `c_ice_caps` (edge shape only; first steady the `longestChunkMs` test).
+- D go: `d_star_numbers` (four fields with lookups; density dropdown when B and A
+  have it; one string if Johnny says yes).
+- E go: `e_palette_runnable` (OmniBox.vue, Lightbox.vue lent).
+- **F is retired** (Johnny): never assign or propose it until he says it is back.
 
 ## Next turn
-1. If Johnny pushed: record the hash on the board ("Last push"), clear Pending push.
-   If a lane edited a listed file before the push, re-run the gates before trusting it.
-2. Reports: A, B, D, E, F. D after B: the star number fields. A after B: the codes.
-3. Johnny's look at the live orbit view after the deploy decides whether C or F goes
-   back to the texture fault.
-4. Deploy note given to Johnny: migration `0010_packages.sql` must be applied to D1
-   before the Worker that mounts `/api/packages` serves it; the `voyage-publish` queue
-   is already in the committed wrangler config.
+1. If Johnny pushed: record the hash, clear Pending push.
+2. His answers to the four open questions (board); D's string depends on one.
+3. Reports; the density chain B, A, D is the priority.
 
 ## Versions
 Every push list bumps `APP_VERSION` in `apps/web/src/version.ts` by one in the last
 place and lists the file; the commit message starts with the version. Last pushed:
-1.1.1. On disk: 1.1.2. Engine version untouched (fixtures folder name).
+1.1.2 (`da727c7`). On disk: 1.1.3. Engine version untouched (fixtures folder name).
 
 ## Traps
+- A live fault is looked at on the live page first (computed styles, console,
+  `data-discs`), before a lane is sent to reproduce it locally. Two lane passes missed
+  what ten minutes on traveller.voyage showed.
+- The sector in a URL is `Spinward_Marches`, with an underscore.
 - **Clean copy recipe that works:** `outer/node_modules` = junction to the repo's
   `node_modules`; `outer/clean` = `git archive HEAD` plus the push paths;
   `outer/clean/node_modules/@voyage/{engines,generation,shared,api}` = junctions to
