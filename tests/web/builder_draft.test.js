@@ -4,6 +4,7 @@
  */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { FormField } from '@voyage/shared';
 import { openDraft } from '../../apps/web/src/builder/draft.ts';
 import { openMap } from '../../apps/web/src/builder/store.ts';
 import { clearToasts, toasts } from '../../apps/web/src/shell/toast.ts';
@@ -536,6 +537,30 @@ test('a blank that loses the race does not open a draft', async () => {
     map.close();
 });
 
+test('the draft keeps every field the form schema names, including lookup', async () => {
+    const star = {
+        id: 'star.0.mass',
+        label: 'Mass',
+        kind: 'number',
+        permission: 'roll',
+        value: null,
+        options: [{ value: 'G', label: 'G' }],
+        lookup: 0.82,
+    };
+    assert.deepEqual(Object.keys(star).sort(), Object.keys(FormField.shape).sort());
+    const fetchImpl = fake((call) => {
+        if (call.url.includes('/hexes?')) return json({ items: [row()], nextCursor: null });
+        if (call.url.endsWith('/form')) return json({ hash: HASH, form: { edition: 'MgT2E', mode: 'hand', sections: [{ id: 'star', label: 'Star', fields: [star] }] } });
+        throw new Error('unexpected ' + call.url);
+    });
+    const map = open(fetchImpl, clock());
+    await map.loadSector('spin');
+    const draft = await map.openDraft(KEY);
+    assert.equal(draft.form.value.mode, 'hand');
+    assert.deepEqual(draft.form.value.sections[0].fields[0], star);
+    map.close();
+});
+
 test('a refused draft names the field and blocks Keep', async () => {
     const fetchImpl = fake((call) => {
         if (call.url.includes('/hexes?')) return json({ items: [row()], nextCursor: null });
@@ -585,6 +610,27 @@ test('a message that holds blocks Keep', async () => {
     assert.equal(draft.dirty.value, true);
     assert.equal(posts(fetchImpl).some((call) => call.url.endsWith('/keep')), false);
     assert.equal(draft.messages.value[0].holds, true);
+    map.close();
+});
+
+test('Keep of a field refusal names that field', async () => {
+    const fetchImpl = fake((call) => {
+        if (call.url.includes('/hexes?')) return json({ items: [row()], nextCursor: null });
+        if (call.url.endsWith('/form')) return json(read([field('star.0.mass', null, 'roll', 'number', 'Mass')]));
+        if (call.url.endsWith('/draft')) return json(answer([field('star.0.mass', 0, 'roll', 'number', 'Mass')]));
+        if (call.url.endsWith('/keep')) return fail(400, 'Mass cannot hold that. Type a finite number above 0.', { code: 'field', id: 'star.0.mass' });
+        throw new Error('unexpected ' + call.url);
+    });
+    const map = open(fetchImpl, clock());
+    await map.loadSector('spin');
+    const draft = await map.openDraft(KEY);
+    draft.set('star.0.mass', 0);
+    await assert.rejects(() => draft.keep(), /cannot hold that/);
+    assert.deepEqual(draft.messages.value[0], {
+        id: 'star.0.mass',
+        text: 'Mass cannot hold that. Type a finite number above 0.',
+        holds: true,
+    });
     map.close();
 });
 

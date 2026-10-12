@@ -3,7 +3,7 @@
  * per hex from the active icon set, latitude ticks, the graticule, a locked world's twilight
  * ring, a scale bar, and city lights on the night side. Draws on any 2D context.
  */
-import { codeRow, terrainRgb, type SurfaceCode } from './codes.ts';
+import { CODE_TABLE, codeRow, SURFACE_CODES, terrainRgb, type SurfaceCode } from './codes.ts';
 import type { SheetLayout } from './field.ts';
 import { sheetPoint } from './field.ts';
 import { dot, hexSpacing, latticeNet, sphere, type V3 } from './grid.ts';
@@ -65,11 +65,40 @@ export function codesShown(model: HybridModel): SurfaceCode[] {
     return [...used].filter((code) => codeRow(code) !== null);
 }
 
+/**
+ * Legend rows in SURFACE_CODES order (the table the drawing uses). Codes on this world
+ * come first. The rest follow, for the "Not on this world" group.
+ */
+export function legendGroups(model: HybridModel): { here: SurfaceCode[]; absent: SurfaceCode[] } {
+    const present = new Set(codesShown(model));
+    const here: SurfaceCode[] = [];
+    const absent: SurfaceCode[] = [];
+    for (const code of SURFACE_CODES) {
+        if (!CODE_TABLE[code]) continue;
+        if (present.has(code)) here.push(code);
+        else absent.push(code);
+    }
+    return { here, absent };
+}
+
 export type SymbolOptions = {
     readonly set: IconSet | null;
     readonly tint?: Tinter;
     readonly outlines?: boolean;
+    /** Icons in the hexes. The grid can draw with this false. */
+    readonly icons?: boolean;
+    /** Grid stroke in sheet pixels. Quiet at the column width, still a line when the map is large. */
+    readonly outlineWidth?: number;
 };
+
+/**
+ * Grid stroke in sheet pixels. About one device pixel: `dpr × (sheet / css)`, held between
+ * 0.6 and 1.25 so a narrow column stays quiet and a wide map stays visible.
+ */
+export function hexOutlineWidth(sheetWidth: number, cssWidth: number, dpr: number): number {
+    const raw = dpr * (sheetWidth / Math.max(cssWidth, 1));
+    return Math.max(0.6, Math.min(raw, 1.25));
+}
 
 /** Hex outlines and symbols. The context is in sheet pixels (scale it for a sharper canvas). */
 export function drawSymbols(ctx: Ctx2D, model: HybridModel, layout: SheetLayout, options: SymbolOptions): void {
@@ -82,13 +111,10 @@ export function drawSymbols(ctx: Ctx2D, model: HybridModel, layout: SheetLayout,
         return [layout.ox + nx * s, layout.oy + ny * s];
     };
     if (options.outlines !== false) {
-        const outlineDark = iconPaint('--surface-outline-dark');
-        const outlineLight = iconPaint('--surface-outline-light');
-        for (const [colour, width] of [[outlineDark, 1.5], [outlineLight, 0.6]] as const) {
-            ctx.strokeStyle = colour;
-            ctx.lineWidth = width;
-            ctx.beginPath();
-            for (const f of grid.faces) {
+        ctx.strokeStyle = iconPaint('--surface-hex');
+        ctx.lineWidth = options.outlineWidth ?? 0.75;
+        ctx.beginPath();
+        for (const f of grid.faces) {
                 for (let i = 0; i < n; i += 1) {
                     for (let j = 0; i + j < n; j += 1) {
                         const tris: [number, number][][] = [[[i, j], [i + 1, j], [i, j + 1]]];
@@ -108,8 +134,8 @@ export function drawSymbols(ctx: Ctx2D, model: HybridModel, layout: SheetLayout,
                 }
             }
             ctx.stroke();
-        }
     }
+    if (options.icons === false) return;
     grid.faces.forEach((f, fi) => {
         ctx.save();
         ctx.beginPath();
@@ -192,6 +218,11 @@ export type MarkOptions = {
     readonly ring?: boolean;
     readonly font?: string;
     readonly ink?: string;
+    /**
+     * Drop a latitude label whose tick is closer than this, in sheet pixels, to one already
+     * kept. Preference is the equator, the poles, then 60°, then 30°. Omit it to keep every label.
+     */
+    readonly labelGap?: number;
 };
 
 /** Latitude ticks, graticule, a locked world's terminator ring and the scale bar. */
@@ -236,14 +267,38 @@ export function drawMarks(ctx: Ctx2D, model: HybridModel, layout: SheetLayout, o
         ctx.lineWidth = 1;
         ctx.textAlign = 'right';
         ctx.textBaseline = 'middle';
+        const rows: { L: number; y: number }[] = [];
         for (const L of [90, 60, 30, 0, -30, -60, -90]) {
             const lon = L > 26.6 ? -180 : L < -26.6 ? -144 : -162;
             const y = L === 90 ? layout.oy : L === -90 ? layout.oy + 1.5 * Math.sqrt(3) * layout.side : sheetPoint(layout, sphere(L * D2R, lon * D2R))[1];
+            rows.push({ L, y });
+        }
+        const gap = options.labelGap ?? 0;
+        const keep = new Set<number>();
+        if (gap <= 0) {
+            for (const row of rows) keep.add(row.L);
+        } else {
+            const by = new Map(rows.map((row) => [row.L, row.y]));
+            const keptY: number[] = [];
+            for (const L of [0, 90, -90, 60, -60, 30, -30]) {
+                const y = by.get(L);
+                if (y === undefined) continue;
+                if (keptY.some((kept) => Math.abs(kept - y) < gap)) continue;
+                keep.add(L);
+                keptY.push(y);
+            }
+        }
+        const fontPx = Number.parseFloat(font) || 10;
+        for (const row of rows) {
+            if (!keep.has(row.L)) continue;
+            const text = row.L === 0 ? '0°' : Math.abs(row.L) + '°' + (row.L > 0 ? 'N' : 'S');
+            // A label that would start past the sheet edge is dropped. It is not drawn smaller.
+            if (layout.ox - 6 - text.length * fontPx * 0.56 < 1) continue;
             ctx.beginPath();
-            ctx.moveTo(layout.ox - 5, y);
-            ctx.lineTo(layout.ox - 1, y);
+            ctx.moveTo(layout.ox - 5, row.y);
+            ctx.lineTo(layout.ox - 1, row.y);
             ctx.stroke();
-            ctx.fillText(L === 0 ? '0°' : Math.abs(L) + '°' + (L > 0 ? 'N' : 'S'), layout.ox - 6, y);
+            ctx.fillText(text, layout.ox - 6, row.y);
         }
     }
     if (options.scale !== false) {

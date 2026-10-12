@@ -38,7 +38,8 @@ import { enhancedWorldData } from './enhanced/climate.ts';
 import { createEnhancedMap, seaPlan } from './enhanced/map.ts';
 import { createChunkedMap } from './map_chunks.ts';
 import { HYBRID_SURFACE_VERSION, hybridWorld, worldDigest } from './hybrid/inputs.ts';
-import { cachedHybridModel, rememberHybridModel, SHEET_LAYOUT } from './hybrid/index.ts';
+import { LARGE_SHEET, SHEET_LAYOUT, type SheetLayout } from './hybrid/field.ts';
+import { cachedHybridModel, rememberHybridModel } from './hybrid/index.ts';
 import { createHybridPaint } from './hybrid/paint.ts';
 import { modelPreparation, startHybridBuild } from './hybrid/model.ts';
 import { openDiscLink, type DiscLink } from './disc_link.ts';
@@ -104,6 +105,8 @@ type Live = {
     enhanced: EnhancedPaintInputs | null;
     /** The hybrid sheet's inputs; null for a vanilla request. */
     hybrid: HybridPaintInputs | null;
+    /** Sheet the job paints. Vanilla and the enhanced-seas sheet stay on the 800 × 400 layout. */
+    layout: SheetLayout;
     started: number;
     resolve: (sheet: MapSheet | null) => void;
     cancelTimer: (() => void) | null;
@@ -159,7 +162,15 @@ function drawingOptionsKey(options: DrawingOptions): string {
     return String(options.continentalDefinition) + ',' + String(options.coastlineComplexity);
 }
 
-function cacheKey(request: MapRequest, sea: EnhancedSea | null, hybrid: HybridPaintInputs | null): string {
+/** Two hybrid sizes: the column sheet, and the large view. Anything else stays on the column sheet. */
+function hybridLayout(request: MapRequest, hybrid: HybridPaintInputs | null): SheetLayout {
+    if (!hybrid) return SHEET_LAYOUT;
+    const { width, height } = request.resolution;
+    if (width === LARGE_SHEET.width && height === LARGE_SHEET.height) return LARGE_SHEET;
+    return SHEET_LAYOUT;
+}
+
+function cacheKey(request: MapRequest, sea: EnhancedSea | null, hybrid: HybridPaintInputs | null, layout: SheetLayout): string {
     return surfaceCacheKey({
         hexKey: request.hexKey,
         dossierKey: request.dossierKey,
@@ -171,7 +182,7 @@ function cacheKey(request: MapRequest, sea: EnhancedSea | null, hybrid: HybridPa
         // one of the world's data, by digest.
         options: drawingOptionsKey(request.options)
             + (hybrid ? ';' + worldDigest(hybrid.world) : sea ? ';' + JSON.stringify(sea) : ''),
-        resolution: MAP_WIDTH + 'x' + MAP_HEIGHT,
+        resolution: layout.width + 'x' + layout.height,
     });
 }
 
@@ -240,8 +251,8 @@ function sheetFrom(job: Live, pixels: Uint8ClampedArray, fromCache: boolean): Ma
         requestId: job.requestId,
         generation: job.generation,
         key: job.key,
-        width: pixels.length === MAP_WIDTH * MAP_HEIGHT * 4 ? MAP_WIDTH : 0,
-        height: pixels.length === MAP_WIDTH * MAP_HEIGHT * 4 ? MAP_HEIGHT : 0,
+        width: job.layout.width,
+        height: job.layout.height,
         pixels,
         fromCache,
         workerStartMs: workerStartPending ? null : workerStartMs,
@@ -284,7 +295,7 @@ function paintOnPage(job: Live): void {
                 rememberHybridModel(hybrid.world, model);
                 return model;
             },
-            SHEET_LAYOUT, clock, budget(), modelPreparation(hybrid.world), modelBuild)
+            job.layout, clock, budget(), modelPreparation(hybrid.world), modelBuild)
         : job.enhanced
             ? createEnhancedMap(job.enhanced, clock, budget())
             : createChunkedMap(job.inputs, clock, budget());
@@ -323,7 +334,8 @@ function requestSheet(request: MapRequest, sea: EnhancedSea | null, hybrid: Hybr
     dropLive();
     const spec = diamondMapSpec(request.body, request.hexKey);
     if (!spec) return unavailable(request.mode);
-    const key = cacheKey(request, sea, hybrid);
+    const layout = hybridLayout(request, hybrid);
+    const key = cacheKey(request, sea, hybrid, layout);
     const requestId = String(++sequence);
     const ticketGeneration = ++generation;
     const hit = cache.get(key);
@@ -335,8 +347,8 @@ function requestSheet(request: MapRequest, sea: EnhancedSea | null, hybrid: Hybr
             requestId,
             generation: ticketGeneration,
             key,
-            width: MAP_WIDTH,
-            height: MAP_HEIGHT,
+            width: layout.width,
+            height: layout.height,
             pixels: hit,
             fromCache: true,
             workerStartMs: null,
@@ -366,6 +378,7 @@ function requestSheet(request: MapRequest, sea: EnhancedSea | null, hybrid: Hybr
         inputs,
         enhanced,
         hybrid,
+        layout,
         started: now(),
         resolve,
         cancelTimer: null,
@@ -385,7 +398,7 @@ function requestSheet(request: MapRequest, sea: EnhancedSea | null, hybrid: Hybr
             generation: ticketGeneration,
             inputs,
             ...(enhanced ? { enhanced } : {}),
-            ...(hybrid ? { hybrid } : {}),
+            ...(hybrid ? { hybrid, sheet: { width: layout.width, height: layout.height, side: layout.side } } : {}),
         });
     }
     return {

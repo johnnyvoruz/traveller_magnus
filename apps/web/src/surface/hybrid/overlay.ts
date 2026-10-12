@@ -2,10 +2,10 @@
  * The day and night layer over a hybrid sheet (design §9). A separate image, laid over the
  * terrain, so the terrain pixels never change with the time. No random stream is drawn from.
  *
- * Bands by the star's elevation ε: day, civil (0 to −6°), nautical (−6 to −12°),
- * astronomical (−12 to −18°), night, each edge softened over ±0.75°. A world with no air has
- * no twilight: one hard edge. At fast clock speeds the layer shows the day-averaged night
- * share by latitude instead of a terminator that would only flicker.
+ * The night side is one dark tint. The edge is a twilight band (TWILIGHT_BAND_DEG), wide
+ * enough to read as soft on the column map and short of blurring noon into dusk. A world
+ * with no air has one hard edge. There is no terminator line, no second colour, and no
+ * glow. At fast clock speeds the layer shows the day-averaged night share by latitude.
  */
 import type { Field } from './field.ts';
 import { sphere, type V3 } from './grid.ts';
@@ -22,15 +22,21 @@ export function sunVector(latDeg: number, lonDeg: number): V3 {
     return sphere(latDeg * D2R, lonDeg * D2R);
 }
 
-/** Darkening 0..1 for an elevation in degrees. */
-export function shadowAlpha(epsDeg: number, airless: boolean): number {
-    const S = (b: number, w: number): number => 1 - smooth(b - w, b + w, epsDeg);
-    if (airless) return 0.62 * S(0, 0.25);
-    return 0.22 * S(0, 0.75) + 0.16 * S(-6, 0.75) + 0.14 * S(-12, 0.75) + 0.10 * S(-18, 0.75);
+/**
+ * Width of the atmospheric twilight, in degrees of elevation, from bright day down into
+ * night. 12° is the built width. 6° and 18° are the other widths compared in the shots.
+ */
+export const TWILIGHT_BAND_DEG = 12;
+
+/** Darkening 0..1 for an elevation in degrees. Light and dark only. */
+export function shadowAlpha(epsDeg: number, airless: boolean, bandDeg: number = TWILIGHT_BAND_DEG): number {
+    if (airless) return 0.62 * (1 - smooth(-0.35, 0.35, epsDeg));
+    const day = bandDeg * 0.35;
+    const night = -bandDeg;
+    return 0.58 * (1 - smooth(night, day, epsDeg));
 }
 
 export const NIGHT_TINT: readonly [number, number, number] = [8, 12, 32];
-const WARM: readonly [number, number, number] = [70, 40, 50];
 
 export type ShadowMode =
     | { readonly kind: 'instant'; readonly sun: V3 }
@@ -50,26 +56,24 @@ export function paintShadow(field: Field, mode: ShadowMode, airless: boolean, ou
     if (mode.kind === 'instant') {
         const [sx, sy, sz] = mode.sun;
         const full = shadowAlpha(-90, airless);
-        const topSin = Math.sin(1 * D2R);
-        const bottomSin = Math.sin(-19 * D2R);
+        const topSin = Math.sin(TWILIGHT_BAND_DEG * 0.35 * D2R);
+        const bottomSin = Math.sin(-TWILIGHT_BAND_DEG * D2R);
         for (let k = 0; k < W * H; k += 1) {
             if (face[k] < 0) continue;
             const s = P[k * 3] * sx + P[k * 3 + 1] * sy + P[k * 3 + 2] * sz;
             if (s >= topSin) continue;
             let a: number;
-            let warm = 0;
             if (s <= bottomSin) {
                 a = full;
             } else {
                 const eps = Math.asin(s) * R2D;
                 a = shadowAlpha(eps, airless);
-                if (!airless && eps < 0 && eps > -6) warm = 0.25 * (1 - Math.abs(eps + 3) / 3);
             }
             if (a <= 0) continue;
             const i = k * 4;
-            px[i] = NIGHT_TINT[0] + (WARM[0] - NIGHT_TINT[0]) * warm;
-            px[i + 1] = NIGHT_TINT[1] + (WARM[1] - NIGHT_TINT[1]) * warm;
-            px[i + 2] = NIGHT_TINT[2] + (WARM[2] - NIGHT_TINT[2]) * warm;
+            px[i] = NIGHT_TINT[0];
+            px[i + 1] = NIGHT_TINT[1];
+            px[i + 2] = NIGHT_TINT[2];
             px[i + 3] = a * 255;
         }
         return px;
@@ -102,13 +106,11 @@ export function elevationAt(p: V3, sun: V3): number {
 
 // ---- The animated layer (design §9, as built §13.10) -----------------------------------------
 //
-// paintDayNight fills two images of the half-size field each frame: the shadow (a dark tint,
-// drawn normally) and the glow (light, drawn with screen blending): a thin cyan-to-amber line
-// on the terminator with a slow sheen travelling along it, and a faint amber sunset wash in
-// the civil band. Elevations come from a lookup on sin ε, so a frame has no asin and no acos
-// per pixel. The averaged shading crossfades in by `mix` (0 instant, 1 averaged).
+// paintDayNight fills the shadow image. The glow image stays clear: the edge is the shadow's
+// own fade, not a line. Elevations come from a lookup on sin ε. The averaged shading
+// crossfades in by `mix` (0 instant, 1 averaged).
 
-/** Glow colours: the day edge of the line (the app's signal teal) and its twilight side (amber). */
+/** Kept so an older caller can name the colours. The layer no longer paints them. */
 export const GLOW_DAY: readonly [number, number, number] = [102, 252, 241];
 export const GLOW_DUSK: readonly [number, number, number] = [255, 196, 110];
 
@@ -120,43 +122,38 @@ export type DayNightFrame = {
     /** 0: the instant terminator. 1: the day-averaged shading. Between: a crossfade. */
     readonly mix: number;
     readonly airless: boolean;
-    /** Phase of the sheen along the terminator line, radians of real time. */
+    /** Unused. The edge is the shadow fade, so there is no sheen to phase. */
     readonly sheenPhase: number;
+    /** Trial width of the twilight, degrees. Omit it for TWILIGHT_BAND_DEG. */
+    readonly bandDeg?: number;
 };
 
 export type DayNightImages = { readonly shadow: Uint8ClampedArray; readonly glow: Uint8ClampedArray };
 
-const LUT_MIN_DEG = -24;
-const LUT_MAX_DEG = 6;
+const LUT_MIN_DEG = -40;
+const LUT_MAX_DEG = 24;
 const LUT_SIZE = 2048;
 const LUT_LO = Math.sin(LUT_MIN_DEG * D2R);
 const LUT_HI = Math.sin(LUT_MAX_DEG * D2R);
-type Lut = { alpha: Float32Array; warm: Float32Array; line: Float32Array; tone: Float32Array; halo: Float32Array };
-const luts = new Map<boolean, Lut>();
+type Lut = { alpha: Float32Array };
+const luts = new Map<string, Lut>();
 
-/** The soft, wide bands: each edge eased over ±2° (one hard edge with no air). */
-export function softShadowAlpha(epsDeg: number, airless: boolean): number {
-    const S = (b: number, w: number): number => 1 - smooth(b - w, b + w, epsDeg);
-    if (airless) return 0.64 * S(0, 0.3);
-    return 0.22 * S(0.4, 2) + 0.16 * S(-6, 2.2) + 0.14 * S(-12, 2.4) + 0.12 * S(-18, 2.6);
+/** The same darkening as shadowAlpha. `bandDeg` selects a trial width for a shot. */
+export function softShadowAlpha(epsDeg: number, airless: boolean, bandDeg: number = TWILIGHT_BAND_DEG): number {
+    return shadowAlpha(epsDeg, airless, bandDeg);
 }
 
-function lutOf(airless: boolean): Lut {
-    let lut = luts.get(airless);
+function lutOf(airless: boolean, bandDeg: number): Lut {
+    const key = (airless ? 'a' : 'b') + ':' + bandDeg;
+    let lut = luts.get(key);
     if (lut) return lut;
-    lut = { alpha: new Float32Array(LUT_SIZE), warm: new Float32Array(LUT_SIZE), line: new Float32Array(LUT_SIZE), tone: new Float32Array(LUT_SIZE), halo: new Float32Array(LUT_SIZE) };
-    const sigma = airless ? 0.35 : 0.8;
+    lut = { alpha: new Float32Array(LUT_SIZE) };
     for (let i = 0; i < LUT_SIZE; i += 1) {
         const s = LUT_LO + (LUT_HI - LUT_LO) * (i / (LUT_SIZE - 1));
         const eps = Math.asin(s) * R2D;
-        lut.alpha[i] = softShadowAlpha(eps, airless);
-        lut.warm[i] = airless ? 0 : Math.max(0, 0.3 * (1 - Math.abs(eps + 3) / 4));
-        const d = (eps + 0.4) / sigma;
-        lut.line[i] = Math.exp(-d * d);
-        lut.tone[i] = smooth(-0.8, -3.2, eps);
-        lut.halo[i] = airless ? 0 : 0.16 * smooth(-9, -3, eps) * (1 - smooth(-1, 1.5, eps));
+        lut.alpha[i] = softShadowAlpha(eps, airless, bandDeg);
     }
-    luts.set(airless, lut);
+    luts.set(key, lut);
     return lut;
 }
 
@@ -200,9 +197,10 @@ export function paintDayNight(field: Field, frame: DayNightFrame, into?: DayNigh
     const mix = Math.max(0, Math.min(1, frame.mix));
     const instant = frame.sun && mix < 1 ? 1 - mix : 0;
     const averaged = mix > 0 ? mix : 0;
-    const lut = lutOf(frame.airless);
+    const band = frame.bandDeg ?? TWILIGHT_BAND_DEG;
+    const lut = lutOf(frame.airless, band);
     const night = averaged > 0 ? nightShareTable(frame.declinationDeg) : null;
-    const peak = softShadowAlpha(-90, frame.airless) * 0.75;
+    const peak = softShadowAlpha(-90, frame.airless, band) * 0.75;
     const sx = frame.sun ? frame.sun[0] : 0;
     const sy = frame.sun ? frame.sun[1] : 0;
     const sz = frame.sun ? frame.sun[2] : 0;
@@ -210,40 +208,15 @@ export function paintDayNight(field: Field, frame: DayNightFrame, into?: DayNigh
     const scale = (LUT_SIZE - 1) / (LUT_HI - LUT_LO);
     const P = field.P;
     const face = field.face;
-    const [dr, dg, db] = GLOW_DAY;
-    const [ur, ug, ub] = GLOW_DUSK;
     const [nr, ng, nb] = NIGHT_TINT;
-    const lineGain = frame.airless ? 0.7 : 0.55;
     for (let k = 0; k < W * H; k += 1) {
         if (face[k] < 0) continue;
         let a = 0;
-        let warm = 0;
         if (instant > 0) {
             const s = P[k * 3] * sx + P[k * 3 + 1] * sy + P[k * 3 + 2] * sz;
-            if (s <= LUT_LO) {
-                a = full;
-            } else if (s < LUT_HI) {
-                const i = ((s - LUT_LO) * scale) | 0;
-                a = lut.alpha[i];
-                warm = lut.warm[i];
-                const line = lut.line[i];
-                const halo = lut.halo[i];
-                if (line > 0.02 || halo > 0.01) {
-                    const sheen = 0.72 + 0.28 * Math.sin(frame.sheenPhase - 14 * P[k * 3 + 1]);
-                    const tone = lut.tone[i];
-                    const g = instant * (line * lineGain * sheen + halo);
-                    const lineShare = line * lineGain * sheen / Math.max(1e-6, line * lineGain * sheen + halo);
-                    const q = k * 4;
-                    // The line runs teal to amber across the edge; the halo is amber.
-                    const t = 1 - lineShare + lineShare * tone;
-                    glow[q] = dr + (ur - dr) * t;
-                    glow[q + 1] = dg + (ug - dg) * t;
-                    glow[q + 2] = db + (ub - db) * t;
-                    glow[q + 3] = Math.min(1, g) * 255;
-                }
-            }
+            if (s <= LUT_LO) a = full;
+            else if (s < LUT_HI) a = lut.alpha[((s - LUT_LO) * scale) | 0];
             a *= instant;
-            warm *= instant;
         }
         if (night) {
             const sinLat = P[k * 3 + 1];
@@ -252,9 +225,9 @@ export function paintDayNight(field: Field, frame: DayNightFrame, into?: DayNigh
         }
         if (a <= 0) continue;
         const q = k * 4;
-        shadow[q] = nr + (70 - nr) * warm;
-        shadow[q + 1] = ng + (40 - ng) * warm;
-        shadow[q + 2] = nb + (50 - nb) * warm;
+        shadow[q] = nr;
+        shadow[q + 1] = ng;
+        shadow[q + 2] = nb;
         shadow[q + 3] = a * 255;
     }
     return { shadow, glow };

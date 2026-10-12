@@ -22,6 +22,7 @@ import {
     BuilderHexPage,
     BuilderJob,
     BuilderJobUndo,
+    FieldRefusalDetails,
     FormMessage,
     RefereeSector,
     SectorGenerateDone,
@@ -139,6 +140,44 @@ function copyRow(row: HexRow | null): HexRow | null {
     return row ? { ...row } : null;
 }
 
+/**
+ * A generate job keeps running after the store that started it closes.
+ * The next store for that universe takes the progress and a new Undo token.
+ * A job that finishes while its store is still open is not kept: that store holds the token.
+ */
+type FollowedJob = {
+    jobId: string;
+    sectors: readonly string[];
+    record: UndoRecord;
+    progress: JobProgress;
+    hear: Set<(progress: JobProgress) => void>;
+    stop: () => void;
+    spent: boolean;
+};
+
+const followedJobs = new Map<string, FollowedJob>();
+
+function copyUndo(record: UndoRecord): UndoRecord {
+    if (record.kind === 'job') return { kind: 'job', jobId: record.jobId, sectors: [...record.sectors] };
+    if (record.kind === 'grow') {
+        return {
+            kind: 'grow',
+            body: { ...record.body },
+            sectorIds: [...record.sectorIds],
+            reloadSlugs: [...record.reloadSlugs],
+        };
+    }
+    return record;
+}
+
+function spendFollowed(jobId: string): void {
+    for (const [universeId, live] of followedJobs) {
+        if (live.jobId !== jobId) continue;
+        live.spent = true;
+        followedJobs.delete(universeId);
+    }
+}
+
 function progressOf(job: ReturnType<typeof BuilderJob.parse>, state: JobProgress['state'] = job.state): JobProgress {
     return {
         total: job.total,
@@ -180,6 +219,10 @@ export type Builder = {
      * the answer cannot be read. Every other token returns null.
      */
     undo(token: UndoToken): Promise<UndoToken | UndoOutcome | null>;
+    /** The job this store started or picked up after another store closed. Null when there is none. */
+    job: Ref<{ progress: JobProgress; undo: UndoToken } | null>;
+    /** Stop the followed job. The store that started it is the one that sends the stop. */
+    stopJob(): void;
     /** The edit form for one stored system. Local until `keep` on the handle. */
     openDraft(hexKey: string): Promise<DraftHandle>;
     /** An empty hand system on this hex, then that system's draft. A hex that already has a tree is refused. */
@@ -215,6 +258,53 @@ export function openMap(options: OpenMapOptions): Builder {
     let releasedJob: string | null = null;
     /** Hexes whose generate request has not landed. A remove of one of them still queues. */
     const pendingGenerate = new Set<string>();
+    const currentJob = ref<{ progress: JobProgress; undo: UndoToken } | null>(null);
+    let dropHear: (() => void) | null = null;
+    let closed = false;
+
+    function terminal(progress: JobProgress): boolean {
+        return progress.state === 'done' || progress.state === 'stopped' || progress.state === 'failed';
+    }
+
+    function announce(progress: JobProgress): void {
+        if (!universeId) return;
+        const live = followedJobs.get(universeId);
+        if (!live || live.spent) return;
+        live.progress = progress;
+        if (currentJob.value) currentJob.value = { progress, undo: currentJob.value.undo };
+        for (const hear of [...live.hear]) hear(progress);
+        if (!terminal(progress)) return;
+        if (!closed || live.hear.size > 0) followedJobs.delete(universeId);
+    }
+
+    function rememberJob(jobId: string, sectors: readonly string[], record: UndoRecord, undo: UndoToken, progress: JobProgress): void {
+        if (!universeId) return;
+        const prior = followedJobs.get(universeId);
+        if (prior && prior.jobId !== jobId) {
+            prior.spent = true;
+            followedJobs.delete(universeId);
+        }
+        followedJobs.set(universeId, {
+            jobId,
+            sectors,
+            record,
+            progress,
+            hear: new Set(),
+            stop: () => {
+                askStop = true;
+                if (wake) wake();
+            },
+            spent: false,
+        });
+        currentJob.value = { progress, undo };
+    }
+
+    function stopJob(): void {
+        if (!universeId) return;
+        const live = followedJobs.get(universeId);
+        if (!live || live.spent) return;
+        live.stop();
+    }
 
     function bump(): void {
         state.tick += 1;
@@ -337,13 +427,20 @@ export function openMap(options: OpenMapOptions): Builder {
     }
 
     function formMessages(err: HttpError): FormMessageRow[] {
-        if (!isRecord(err.details) || !Array.isArray(err.details.messages)) return [];
-        const out: FormMessageRow[] = [];
-        for (const item of err.details.messages) {
-            const parsed = FormMessage.safeParse(item);
-            if (parsed.success) out.push(parsed.data);
+        const listed: FormMessageRow[] = [];
+        if (isRecord(err.details) && Array.isArray(err.details.messages)) {
+            for (const item of err.details.messages) {
+                const parsed = FormMessage.safeParse(item);
+                if (parsed.success) listed.push(parsed.data);
+            }
         }
-        return out;
+        const field = FieldRefusalDetails.safeParse(err.details);
+        if (field.success && listed.length === 1 && listed[0].id === null) {
+            return [{ ...listed[0], id: field.data.id }];
+        }
+        if (listed.length) return listed;
+        if (field.success) return [{ id: field.data.id, text: err.message, holds: true }];
+        return [];
     }
 
     function keepBody(change: Queued): { hash: string; baseRev: number; changes: FormChange[]; roll?: FormRoll[] } {
@@ -574,7 +671,9 @@ export function openMap(options: OpenMapOptions): Builder {
     function released(jobId: string, last: JobProgress): JobProgress | null {
         if (releasedJob !== jobId) return null;
         releasedJob = null;
-        return { ...last, state: 'stopped' };
+        const progress: JobProgress = { ...last, state: 'stopped' };
+        announce(progress);
+        return progress;
     }
 
     async function watch(jobId: string, slugs: readonly string[], onProgress?: (progress: JobProgress) => void): Promise<JobProgress> {
@@ -590,21 +689,25 @@ export function openMap(options: OpenMapOptions): Builder {
             let job = await readJob(id, jobId);
             const afterRead = released(jobId, progressOf(job));
             if (afterRead) return afterRead;
-            await reload(slugs, stale);
+            if (!closed) await reload(slugs, stale);
             const afterReload = released(jobId, progressOf(job));
             if (afterReload) return afterReload;
             last = progressOf(job);
+            announce(last);
             onProgress?.(last);
             const afterNote = released(jobId, last);
             if (afterNote) return afterNote;
             if (job.state === 'done' || job.state === 'stopped' || job.state === 'failed') return last;
             if (askStop && !stopSent) {
                 stopSent = true;
-                onProgress?.(progressOf(job, 'stopping'));
+                const stopping = progressOf(job, 'stopping');
+                announce(stopping);
+                onProgress?.(stopping);
                 job = BuilderJob.parse(await request('POST', `/api/universes/${encodeURIComponent(id)}/jobs/${encodeURIComponent(jobId)}/stop`, {}));
-                await reload(slugs);
-                onProgress?.(progressOf(job));
+                if (!closed) await reload(slugs);
                 last = progressOf(job);
+                announce(last);
+                onProgress?.(last);
                 if (job.state === 'done' || job.state === 'stopped' || job.state === 'failed') return last;
             }
             await wait(JOB_POLL_MS);
@@ -658,7 +761,9 @@ export function openMap(options: OpenMapOptions): Builder {
             }
             const data = await request('POST', `/api/universes/${encodeURIComponent(id)}/generate`, payload);
             if (isRecord(data) && typeof data.jobId === 'string') {
-                const undo = mint({ kind: 'job', jobId: data.jobId, sectors: slugs });
+                const record: UndoRecord = { kind: 'job', jobId: data.jobId, sectors: slugs };
+                const undo = mint(record);
+                rememberJob(data.jobId, slugs, record, undo, started(body.hexKeys.length));
                 const progress = await watch(data.jobId, slugs, onProgress);
                 if (queue.size > 0 && !cancelRetry) scheduleFlush();
                 lastError.value = '';
@@ -801,7 +906,9 @@ export function openMap(options: OpenMapOptions): Builder {
                 const undoBody: GrowUndoBody = done.jobId
                     ? { jobId: done.jobId }
                     : { sectorId: made[0].id, baseRev: made[0].rev };
-                const undo = mint({ kind: 'grow', body: undoBody, sectorIds, reloadSlugs: slugs.existing });
+                const record: UndoRecord = { kind: 'grow', body: undoBody, sectorIds, reloadSlugs: slugs.existing };
+                const undo = mint(record);
+                if (done.jobId) rememberJob(done.jobId, slugs.watch, record, undo, started(body.hexKeys.length));
                 const opened = { sectors: made, keys, undo };
                 acceptedSettled = true;
                 accept(opened);
@@ -933,6 +1040,7 @@ export function openMap(options: OpenMapOptions): Builder {
         const data = await request('POST', `/api/universes/${encodeURIComponent(id)}/sectors/undo-generate`, rec.body);
         const undone = SectorGenerateUndone.safeParse(data);
         sectorBook().forget(rec.sectorIds);
+        if ('jobId' in rec.body) spendFollowed(rec.body.jobId);
         dropSectorRows(rec.sectorIds);
         for (const sectorId of rec.sectorIds) loaded.delete(sectorId);
         undos.delete(tokenId);
@@ -983,6 +1091,7 @@ export function openMap(options: OpenMapOptions): Builder {
             if (queue.size > 0) throw new Error(lastError.value || 'offline');
             const id = requireId();
             const undone = BuilderJobUndo.parse(await request('POST', `/api/universes/${encodeURIComponent(id)}/jobs/${encodeURIComponent(rec.jobId)}/undo`, {}));
+            spendFollowed(rec.jobId);
             await reload(rec.sectors);
             undos.delete(token.id);
             lastError.value = '';
@@ -1139,7 +1248,32 @@ export function openMap(options: OpenMapOptions): Builder {
         return ownSectors;
     }
 
+    function adoptJob(): void {
+        if (!universeId) return;
+        const live = followedJobs.get(universeId);
+        if (!live || live.spent) return;
+        const undo = mint(copyUndo(live.record));
+        currentJob.value = { progress: live.progress, undo };
+        const hear = (progress: JobProgress) => {
+            currentJob.value = { progress, undo };
+            if (terminal(progress)) generating = false;
+            void reload(live.sectors).catch(() => undefined);
+            bump();
+        };
+        if (terminal(live.progress)) followedJobs.delete(universeId);
+        else {
+            live.hear.add(hear);
+            dropHear = () => { live.hear.delete(hear); };
+            generating = true;
+        }
+        void reload(live.sectors).catch(() => undefined);
+    }
+
     function close(): void {
+        closed = true;
+        if (dropHear) dropHear();
+        dropHear = null;
+        currentJob.value = null;
         cancelHide();
         if (cancelTimer) cancelTimer();
         if (cancelRetry) cancelRetry();
@@ -1151,6 +1285,8 @@ export function openMap(options: OpenMapOptions): Builder {
         lastError.value = '';
         clearToasts();
     }
+
+    adoptJob();
 
     return {
         pending,
@@ -1174,6 +1310,8 @@ export function openMap(options: OpenMapOptions): Builder {
         remove,
         restore,
         undo,
+        job: currentJob,
+        stopJob,
         openDraft,
         blank,
         flushMap,

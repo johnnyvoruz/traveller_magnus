@@ -35,6 +35,14 @@ export const BuilderGenerator = z.enum(['top-down', 'bottom-up']);
 export type BuilderGenerator = z.infer<typeof BuilderGenerator>;
 
 /**
+ * How many empty hexes get a system.
+ * `every` writes each empty hex. The other three are the legacy chances
+ * `js/ui_menus.js` lines 66 to 68: sparse 2, standard 3, dense 4, each out of 6.
+ */
+export const GenerateDensity = z.enum(['every', 'sparse', 'standard', 'dense']);
+export type GenerateDensity = z.infer<typeof GenerateDensity>;
+
+/**
  * Pairs `generateHex` actually runs today.
  * Mongoose goes through `buildOne`, which generates top down.
  * Architect of Worlds goes through `generateAoWSystemBottomUp`.
@@ -106,6 +114,8 @@ export const BuilderGenerate = z.object({
     roll: z.number().int().nonnegative().default(0),
     /** Default false: hexes that already hold a system are left alone. */
     filledToo: z.boolean().default(false),
+    /** Default `every`: each empty hex is written. Absent is that default. */
+    density: GenerateDensity.default('every'),
     /** Required when `hexKeys` has one entry. 0 means the universe has no row yet. */
     baseRev: z.number().int().nonnegative().optional(),
 }).strict().superRefine((value, ctx) => {
@@ -121,6 +131,8 @@ export type BuilderGenerate = z.infer<typeof BuilderGenerate>;
 export const BuilderGenerateDone = z.object({
     rows: z.array(BuilderHex),
     skipped: z.array(HexKey),
+    /** Empty hexes the roll left empty. 0 when the request was one hex, or when every empty hex was written. */
+    leftEmpty: z.number().int().nonnegative().default(0),
 }).strict();
 export type BuilderGenerateDone = z.infer<typeof BuilderGenerateDone>;
 
@@ -146,6 +158,13 @@ export const BuilderJob = z.object({
     done: z.number().int().nonnegative(),
     failed: z.number().int().nonnegative(),
     skipped: z.number().int().nonnegative(),
+    /** Hexes the density roll left empty. Not part of `skipped`. */
+    leftEmpty: z.number().int().nonnegative().default(0),
+    /**
+     * Hex keys this job wrote, in write order, after `GET ?since=`.
+     * Omit `since` and this is every key the job wrote.
+     */
+    placed: z.array(HexKey).default([]),
     failures: z.array(BuilderFailure),
     createdAt: z.string().min(1),
     finishedAt: z.string().nullable(),

@@ -92,6 +92,7 @@ export {
     HexPlace,
     BuilderEdition,
     BuilderGenerator,
+    GenerateDensity,
     builderPairReady,
     BuilderHex,
     BuilderAbsent,

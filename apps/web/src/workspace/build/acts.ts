@@ -9,6 +9,7 @@ import { parseHexKey } from '../places.ts';
 import { endFlight, startFlight } from './flight.ts';
 import { endJobToast, startJobToast } from './job_toast.ts';
 import { isHandHex } from './hand_acts.ts';
+import { runUndo } from './undo_words.ts';
 import { buildStore, type HexState, type UndoToken } from './seam.ts';
 import { build, generateTargets, jobToast, plural, removeTargets, restoreTargets, stateOf, tally, type Tally } from './state.ts';
 
@@ -90,16 +91,10 @@ function where(keys: readonly string[]): string {
     return place ? map.sectorName(place.slug) : '';
 }
 
-function offerUndo(message: string, token: UndoToken): void {
-    showToast(message, {
-        action: {
-            label: 'Undo',
-            run: () => {
-                const store = buildStore();
-                if (store) void store.undo(token);
-            },
-        },
-    });
+/** A toast with Undo. What the Undo did is said when it answers (undo_words.ts); a refused one is offered again. */
+export function offerUndo(message: string, token: UndoToken): void {
+    const again = (): void => { void runUndo(token, { again, name: hexName }); };
+    showToast(message, { action: { label: 'Undo', run: again } });
 }
 
 function fail(err: unknown): void {

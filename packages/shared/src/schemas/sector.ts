@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { BUILDER_LIMITS, BuilderEdition, BuilderGenerator, BuilderHex, HexKey } from './builder.ts';
+import { BUILDER_LIMITS, BuilderEdition, BuilderGenerator, BuilderHex, GenerateDensity, HexKey } from './builder.ts';
 
 /**
  * A sector the referee made.
@@ -102,6 +102,8 @@ export const SectorGenerate = z.object({
     generator: BuilderGenerator,
     roll: z.number().int().nonnegative().default(0),
     filledToo: z.boolean().default(false),
+    /** Default `every`. The same field as `BuilderGenerate`. */
+    density: GenerateDensity.default('every'),
     baseRev: z.number().int().nonnegative().optional(),
     makeSectors: z.array(SectorSeed).min(1).max(BUILDER_LIMITS.hexesPerJob),
 }).strict().superRefine((value, ctx) => {
@@ -119,6 +121,8 @@ export const SectorGenerateDone = z.object({
     rows: z.array(BuilderHex),
     skipped: z.array(HexKey),
     jobId: z.string().nullable(),
+    /** 0 on this answer. The queued job carries the count. */
+    leftEmpty: z.number().int().nonnegative().default(0),
 }).strict();
 export type SectorGenerateDone = z.infer<typeof SectorGenerateDone>;
 

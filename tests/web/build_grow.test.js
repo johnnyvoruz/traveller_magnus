@@ -180,6 +180,22 @@ test('a refusal is said in the server’s words; the selection and the names sta
     teardown();
 });
 
+test('a report is not a Restore token: an Undo that left hexes says so, and offers no Restore', async () => {
+    const { answers } = setup();
+    growUi.names[SLOT_A] = 'Vell';
+    generateGrowing([SLOT_A + '/0101', SLOT_A + '/0102']);
+    answers.accepted.resolve({ sectors: [], keys: {}, undo: { id: 'grow' } });
+    answers.finished.resolve({ undo: { id: 'grow' }, progress: { total: 2, done: 2, failed: [], skipped: 0, state: 'done' } });
+    await tick();
+    answers.restore = { id: 'grow', restored: 1, left: [ID_A + '/0101'], message: '' };
+    toasts[toasts.length - 1].action.run();
+    await tick();
+    const said = toasts[toasts.length - 1];
+    assert.equal(said.message, 'Undo put back 1 system. 1 system had changed, so it was left as it is: 0101.');
+    assert.equal(said.action, null);
+    teardown();
+});
+
 test('an Undo the server refuses is said in its words', async () => {
     const { answers } = setup();
     growUi.names[SLOT_A] = 'Vell';

@@ -1107,6 +1107,54 @@ test('a job Undo that leaves a moved hex reports the count and the key', async (
     map.close();
 });
 
+test('a job followed across a closed store undoes on the next store', async () => {
+    let polls = 0;
+    const fetchImpl = fake((call) => {
+        if (call.url.includes('/hexes?')) return json({ items: [row({ rev: 2, entry: chart({ name: 'Kept' }) })], nextCursor: null });
+        if (call.url.endsWith('/generate')) return json({ jobId: 'job-follow' });
+        if (call.url.includes('/jobs/') && call.method === 'GET') {
+            polls += 1;
+            if (polls === 1) return json(job({ id: 'job-follow', state: 'running', total: 2, done: 1 }));
+            return json(doneJob({ id: 'job-follow', total: 2, done: 2 }));
+        }
+        if (call.url.endsWith('/undo')) return json({ restored: 2, conflicts: [] });
+        throw new Error('unexpected ' + call.method + ' ' + call.url);
+    });
+    const time = clock();
+    const first = open(fetchImpl, time, { universeId: 'uni-follow' });
+    const seen = [];
+    const handle = first.generate(
+        { hexKeys: [KEY, OTHER], edition: 'MgT2E', generator: 'top-down', roll: 0, filledToo: true },
+        (progress) => { seen.push(progress.done); },
+    );
+    const started = Date.now();
+    while (!(first.job.value && first.job.value.progress.done === 1)) {
+        if (Date.now() - started > 1000) throw new Error('the first store never saw the running job');
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    assert.equal(first.job.value.undo.id.length > 0, true);
+    first.close();
+    assert.equal(first.job.value, null);
+    const second = open(fetchImpl, time, { universeId: 'uni-follow' });
+    assert.equal(second.job.value.progress.state, 'running');
+    assert.equal(second.job.value.progress.done, 1);
+    for (const item of time.armed()) {
+        if (item.ms !== 400) continue;
+        item.dead = true;
+        item.fn();
+    }
+    const again = Date.now();
+    while (!(second.job.value && second.job.value.progress.state === 'done')) {
+        if (Date.now() - again > 1000) throw new Error('the second store never saw the job finish');
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    assert.equal(second.job.value.progress.done, 2);
+    assert.equal(second.row(KEY).entry.name, 'Kept');
+    assert.equal(await second.undo(second.job.value.undo), null);
+    assert.equal(await handle.finished.then((done) => done.progress.state), 'done');
+    second.close();
+});
+
 test('a grow act reports a start before the first answer', async () => {
     let posted = false;
     const seen = [];

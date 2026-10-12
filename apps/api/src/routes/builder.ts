@@ -1,7 +1,8 @@
-import { applyForm, blankEnvelope, chartEntry, FormRefusal, formOf, generateHex, handChartEntry, handFromForm } from '@voyage/generation';
+import { applyForm, blankEnvelope, chartEntry, densityKeeps, FormRefusal, formOf, generateHex, handChartEntry, handFromForm } from '@voyage/generation';
 import {
     builderPairReady,
     BuilderGenerate,
+    BuilderGenerateDone,
     FormAnswer,
     FormBlank,
     FormDesign,
@@ -37,6 +38,7 @@ import { ulid } from '../auth/session';
 import { universes } from '../db/schema';
 import type { AppEnv } from '../env';
 import { fail, ok } from '../http';
+import { enqueueGenerate } from '../jobs/generate_queue';
 import { defaultPin } from '../universe/defaults';
 import { ownedUniverse, type OwnedUniverse } from '../universe/forward';
 import { chartHoldsSystem, chartTree, generationSeed, hexDoorPath, HexRefusal, sectorOf, type ChartHex, type Pin } from '../universe/hexes';
@@ -114,7 +116,10 @@ export function mountBuilderRoutes(route: Hono<AppEnv>): void {
     route.get('/:id/jobs/:jobId', async (c) => {
         const owned = await ownedUniverse(c);
         if (owned instanceof Response) return owned;
-        return door(owned, `/jobs/${encodeURIComponent(c.req.param('jobId'))}`, 'GET');
+        const raw = c.req.query('since');
+        if (raw !== undefined && !/^\d+$/.test(raw)) return fail(c, 400, 'validation', 'Invalid request.');
+        const since = raw === undefined ? '' : `?since=${raw}`;
+        return door(owned, `/jobs/${encodeURIComponent(c.req.param('jobId'))}${since}`, 'GET');
     });
 
     route.post('/:id/jobs/:jobId/stop', async (c) => {
@@ -393,6 +398,7 @@ export function mountBuilderRoutes(route: Hono<AppEnv>): void {
                     generator: input.generator,
                     roll: input.roll,
                     filledToo: input.filledToo,
+                    density: input.density,
                     seed: pin.seed,
                     settings: pin.settings,
                     engineVersion: enginesPackage.version,
@@ -400,7 +406,7 @@ export function mountBuilderRoutes(route: Hono<AppEnv>): void {
                 },
             });
             if (!created.ok) return created;
-            await c.env.GENERATE_QUEUE.send({ kind: 'generate', universeId: owned.row.id, jobId: id, offset: 0 });
+            await enqueueGenerate(c.env.GENERATE_QUEUE, owned.row.id, id, input.hexKeys.length);
             return ok(c, { jobId: id }, 202);
         }
         const hexKey = input.hexKeys[0];
@@ -411,7 +417,15 @@ export function mountBuilderRoutes(route: Hono<AppEnv>): void {
         const { sector, local } = sectorOf(hexKey);
         const entry = await publishedHex(c.env, pin.truthVersion, sector, local);
         const holds = (held && held.state !== 'removed' && held.treeHash) || (!held && chartHoldsSystem(entry));
-        if (holds && !input.filledToo) return ok(c, { rows: [], skipped: [hexKey] });
+        const decision = densityKeeps({
+            universeSeed: pin.seed,
+            hexKey,
+            density: input.density,
+            alone: true,
+            holds: Boolean(holds),
+            filledToo: input.filledToo,
+        });
+        if (decision === 'skip') return ok(c, BuilderGenerateDone.parse({ rows: [], skipped: [hexKey], leftEmpty: 0 }));
         let envelope: ReturnType<typeof generateHex>;
         try {
             envelope = generateHex({
@@ -459,7 +473,7 @@ export function mountBuilderRoutes(route: Hono<AppEnv>): void {
         }
         await recount(c.env, owned.row.id, owned);
         const stored = await applied.json() as { data: unknown };
-        return ok(c, { rows: [stored.data], skipped: [] });
+        return ok(c, BuilderGenerateDone.parse({ rows: [stored.data], skipped: [], leftEmpty: 0 }));
     });
 }
 
@@ -723,6 +737,7 @@ async function generateWithSectors(c: Ctx, owned: OwnedUniverse, body: unknown):
             rows: stored.data?.hex ? [stored.data.hex] : [],
             skipped: [],
             jobId: null,
+            leftEmpty: 0,
         }), 201);
     }
     const id = ulid();
@@ -737,6 +752,7 @@ async function generateWithSectors(c: Ctx, owned: OwnedUniverse, body: unknown):
                 generator: input.generator,
                 roll: input.roll,
                 filledToo: input.filledToo,
+                density: input.density,
                 seed: pin.seed,
                 settings: pin.settings,
                 engineVersion: enginesPackage.version,
@@ -745,12 +761,13 @@ async function generateWithSectors(c: Ctx, owned: OwnedUniverse, body: unknown):
         },
     });
     if (!created.ok) return created;
-    await c.env.GENERATE_QUEUE.send({ kind: 'generate', universeId: owned.row.id, jobId: id, offset: 0 });
+    await enqueueGenerate(c.env.GENERATE_QUEUE, owned.row.id, id, planned.hexKeys.length);
     const stored = await created.json() as { data?: { sectors?: unknown; jobId?: string | null } };
     return ok(c, SectorGenerateDone.parse({
         sectors: stored.data?.sectors ?? [],
         rows: [],
         skipped: [],
         jobId: stored.data?.jobId ?? id,
+        leftEmpty: 0,
     }), 202);
 }

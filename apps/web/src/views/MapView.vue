@@ -24,7 +24,6 @@ import { handleKey, registerCommand, systemPanel, type PanelWorld } from '../she
 import { orbitPath } from '../orbit/bodies.ts';
 import Rail from '../shell/Rail.vue';
 import { dismissToast, showToast, toasts } from '../shell/toast.ts';
-import ToastStrip from '../shell/ToastStrip.vue';
 import AccountMenu from '../workspace/AccountMenu.vue';
 import { editDateNext } from '../workspace/list_state.ts';
 import StardateChip from '../workspace/StardateChip.vue';
@@ -2114,7 +2113,6 @@ onBeforeUnmount(() => {
     <OmniBox :version="versionRef" :manifest="manifestRef" @open="omniOpen = $event" />
     <StardateChip @open="openDateEditor" />
     <AccountMenu :open="accountOpen" @close="closeAccount" @campaign="openCampaignFromMenu" />
-    <ToastStrip />
     <p class="status ui-status" aria-live="polite">{{ status }}</p>
   </div>
 </template>

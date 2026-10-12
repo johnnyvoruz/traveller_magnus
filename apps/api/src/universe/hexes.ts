@@ -50,8 +50,11 @@ export type ChartHex = {
 export type JobBlob = {
     failures: BuilderFailure[];
     skipped: number;
+    leftEmpty?: number;
     undone?: boolean;
     written?: Record<string, number>;
+    /** Hex keys written, in the order the batches applied them. */
+    placed?: string[];
     applied?: number[];
 };
 
@@ -419,6 +422,8 @@ function jobBlob(raw: unknown): JobBlob {
             skipped: typeof parsed.skipped === 'number' ? parsed.skipped : 0,
             undone: parsed.undone === true,
             written: parsed.written && typeof parsed.written === 'object' ? parsed.written : {},
+            placed: Array.isArray(parsed.placed) ? parsed.placed.filter((key) => typeof key === 'string') : [],
+            leftEmpty: typeof parsed.leftEmpty === 'number' && parsed.leftEmpty > 0 ? parsed.leftEmpty : 0,
             applied: Array.isArray(parsed.applied) ? parsed.applied : [],
         };
     } catch {
@@ -436,6 +441,8 @@ function jobOf(record: SqlRow): JobRow {
         done: Number(record.done),
         failed: Number(record.failed),
         skipped: blob.skipped,
+        leftEmpty: blob.leftEmpty ?? 0,
+        placed: blob.placed ?? [],
         failures: blob.failures,
         createdAt: String(record.created_at),
         finishedAt: record.finished_at ? String(record.finished_at) : null,
@@ -448,6 +455,8 @@ export type JobSpec = {
     generator: string;
     roll: number;
     filledToo: boolean;
+    /** Absent on a job stored before density. Treated as `every`. */
+    density?: 'every' | 'sparse' | 'standard' | 'dense';
     seed: string;
     settings: Record<string, unknown>;
     engineVersion: string;
@@ -481,7 +490,7 @@ export function insertJob(sql: Sql, id: string, spec: JobSpec, pin: Pin, now: st
     sql.exec(
         `INSERT INTO jobs (id, kind, state, total, done, failed, failures, created_at, finished_at)
          VALUES (?, 'generate', 'queued', ?, 0, 0, ?, ?, NULL)`,
-        id, spec.hexKeys.length, JSON.stringify({ failures: [], skipped: 0, written: {}, applied: [] }), now,
+        id, spec.hexKeys.length, JSON.stringify({ failures: [], skipped: 0, leftEmpty: 0, written: {}, placed: [], applied: [] }), now,
     );
     sql.exec(
         `INSERT INTO snapshots (id, at, label, trigger, manifest_hash, bytes)
@@ -545,10 +554,12 @@ export function undoWrittenHex(sql: Sql, hexKey: string, writtenRev: number, pri
     return { toRev: writtenRev, baseRev: Number(current(sql, hexKey)!.rev) };
 }
 
-export function readJob(sql: Sql, id: string): JobRow {
+export function readJob(sql: Sql, id: string, since = 0): JobRow {
     const rows = sql.exec(`SELECT * FROM jobs WHERE id = ?`, id);
     if (!rows[0]) throw new HexRefusal('not_found', 'No such job.');
-    return jobOf(rows[0]);
+    const job = jobOf(rows[0]);
+    if (since <= 0) return job;
+    return { ...job, placed: job.placed.slice(since) };
 }
 
 export function readJobSpec(sql: Sql, id: string): JobSpec {
@@ -569,7 +580,7 @@ export function stopJob(sql: Sql, id: string, now: string): JobRow {
 
 export type BatchWrite = GeneratedWrite & { capturedRev: number };
 
-export function applyJobBatch(sql: Sql, id: string, offset: number, writes: BatchWrite[], skipped: string[], failures: BuilderFailure[], pin: Pin, now: string, finished: boolean): JobRow {
+export function applyJobBatch(sql: Sql, id: string, offset: number, writes: BatchWrite[], skipped: string[], failures: BuilderFailure[], pin: Pin, now: string, finished: boolean, leftEmpty: string[] = []): JobRow {
     return sql.transaction(() => {
         const row = sql.exec(`SELECT * FROM jobs WHERE id = ?`, id)[0];
         if (!row) throw new HexRefusal('not_found', 'No such job.');
@@ -577,6 +588,7 @@ export function applyJobBatch(sql: Sql, id: string, offset: number, writes: Batc
         if (blob.undone) return jobOf(row);
         if (blob.applied?.includes(offset)) return jobOf(row);
         const written = { ...(blob.written ?? {}) };
+        const placed = [...(blob.placed ?? [])];
         const batchFailures = [...failures];
         let appliedWrites = 0;
         for (const write of writes) {
@@ -588,19 +600,25 @@ export function applyJobBatch(sql: Sql, id: string, offset: number, writes: Batc
             }
             const next = writeGenerated(sql, { ...write, baseRev: rev }, pin, now);
             written[write.hexKey] = next.rev;
+            placed.push(write.hexKey);
             appliedWrites += 1;
         }
         const nextBlob: JobBlob = {
             failures: [...blob.failures, ...batchFailures].slice(0, 100),
             skipped: blob.skipped + skipped.length,
+            leftEmpty: (blob.leftEmpty ?? 0) + leftEmpty.length,
             undone: blob.undone,
             written,
+            placed,
             applied: [...(blob.applied ?? []), offset],
         };
-        const done = Math.min(Number(row.total), Number(row.done) + appliedWrites + skipped.length + batchFailures.length);
+        const done = Math.min(Number(row.total), Number(row.done) + appliedWrites + skipped.length + batchFailures.length + leftEmpty.length);
         const failed = Number(row.failed) + batchFailures.length;
         const stopped = row.state === 'stopped';
-        const complete = finished || stopped || done >= Number(row.total);
+        // The count closes the job. A tail slice can land before an earlier one,
+        // and `finished` on that tail must not close the job early.
+        const complete = stopped || done >= Number(row.total);
+        void finished;
         let state = 'running';
         if (complete && stopped) state = 'stopped';
         else if (complete) {
@@ -754,7 +772,11 @@ export async function respondBuilder(sql: Sql, request: Request, now: string): P
             return json(createJob(sql, body.id, body.spec, pin!, now), 201);
         }
         const job = /^\/jobs\/([^/]+)$/.exec(path);
-        if (request.method === 'GET' && job) return json(readJob(sql, decodeURIComponent(job[1])));
+        if (request.method === 'GET' && job) {
+            const raw = new URL(request.url).searchParams.get('since');
+            const since = raw == null || raw === '' ? 0 : Number(raw);
+            return json(readJob(sql, decodeURIComponent(job[1]), Number.isInteger(since) && since > 0 ? since : 0));
+        }
         const spec = /^\/jobs\/([^/]+)\/spec$/.exec(path);
         if (request.method === 'GET' && spec) return json({ job: readJob(sql, decodeURIComponent(spec[1])), spec: readJobSpec(sql, decodeURIComponent(spec[1])) });
         const stop = /^\/jobs\/([^/]+)\/stop$/.exec(path);
@@ -769,9 +791,9 @@ export async function respondBuilder(sql: Sql, request: Request, now: string): P
         const batch = /^\/jobs\/([^/]+)\/batch$/.exec(path);
         if (request.method === 'POST' && batch) {
             const body = await bodyOf(request) as {
-                offset: number; writes: BatchWrite[]; skipped: string[]; failures: BuilderFailure[]; finished: boolean;
+                offset: number; writes: BatchWrite[]; skipped: string[]; failures: BuilderFailure[]; finished: boolean; leftEmpty?: string[];
             };
-            return json(applyJobBatch(sql, decodeURIComponent(batch[1]), body.offset, body.writes ?? [], body.skipped ?? [], body.failures ?? [], pin!, now, body.finished === true));
+            return json(applyJobBatch(sql, decodeURIComponent(batch[1]), body.offset, body.writes ?? [], body.skipped ?? [], body.failures ?? [], pin!, now, body.finished === true, body.leftEmpty ?? []));
         }
         return null;
     } catch (err) {

@@ -1,6 +1,6 @@
-# Orchestrator state — 2026-10-11 20:20
+# Orchestrator state — 2026-10-11 21:05
 
-Overwritten every turn. History is `handoff.md` (last section: 250).
+Overwritten every turn. History is `handoff.md` (last section: 251).
 
 ## Where the roadmap is
 Pushed: `ac18cbb`, version 1.1.3 (was `findings/push/builder_2026-10-11d.md`): the dossier fix, the no-WebGL notice,
@@ -10,44 +10,32 @@ come for Johnny's three live findings: density (B, then A, then D). Then star nu
 on the form (D), Undo faults (A), ice caps (C), palette (E), then public games.
 
 ## Lanes
-- A second: `a_own_dots` (overview dots come from the chart's `sector.cells` only;
-  own, hand-made and removed systems are not reflected; data source is the open point,
-  may need a B route).
-- A go: `a_form_followups` (cloneForm lookup, refusal with its field id, job across
-  routes; density and allowance when B's reports exist).
-- B in flight: `b_generate_density`, then `b_generate_cap` (100 a day for non-admins,
-  per-account number, 429 with a code; `fieldLabel` and the classless-star roll;
-  report on job throughput and on the job stuck at 68 of 80).
-- B third: `b_generate_speed`. Read from `jobs/generate_queue.ts`: 4 hexes per
-  message, about 18 awaited round trips per message (whole-job spec each time, a stop
-  check and a row read per hex, counts and two D1 updates per message); `finished` is
-  set by the last-offset message, a risk if slices land out of order.
-- C go: `c_surface_map_read` (ice caps accepted: `surface/ice_edge.ts`; parity script now
-  pins capped worlds' mismatch counts and no longer needs `summary.ok`; legacy fixtures
-  untouched). Was: `c_ice_caps`, then `c_surface_map_read` (Johnny's shots
-  `findings/ui_design_shots/live_map_symbols_*.png`). Four surface tests red until it finishes (shader, oracle,
-  enhanced map, service).
-- D go: `d_undo_words` (UndoOutcome shown; later parts gated on A and B).
-- E go: `e_toast_shell` (one strip in the shell; busy; sticky action).
+- A go: `a_density_store` (density, `leftEmpty`, `placed` with `?since=`; dots when
+  B's route exists; allowance when B's cap exists).
+- B go, urgent: `b_keep_crash_dots` (Keep crash on generated systems: fix in the
+  caller, no engine edit without Johnny; `GET .../hexes/:sector/dots`), then
+  `b_generate_cap`, then `b_generate_speed`. Density accepted: the job is one message
+  posting every 32 hexes, resumable; one message per slice did not run under two local
+  wrangler processes.
+- C free: `c_surface_map_read` accepted (SurfaceKey.vue, large view by teleport, grid
+  always on, night tint with a 12 degree band, sun reticle removed unasked, map width
+  at column was already 474 px so only type changed). E saw the
+  checker fail on a comment in `SurfaceStage.vue` ("window." ban); green at 20:55.
+- D go: `d_density_sheet` (refusal at field, spinner to `design/`, toast flags and
+  `job`/`stopJob` on the seam; density gated on A; allowance gated on B and A).
+- E go: `e_timeline_list` (Campaign step 3).
 - **F is retired** (Johnny): never assign or propose it until he says it is back.
 
-- 20:20: "all reported except B" meant the reports already processed; A, C, D, E had
-  not started their new prompts (empty Progress, no file newer than 19:55). **Push
-  1.1.4 written** (`findings/push/builder_2026-10-11e.md`), B's density set left out.
-  B hit a local queue stall near message 100 and is moving to one walking message:
-  note added to its prompt; watch its report against `b_generate_speed`.
-
 ## Next turn
-1. Reports. Push 1.1.4 as soon as C's tests are green; do not wait for density.
-2. Johnny's answers to the seven open questions (board).
-3. Chain: B density -> A store -> D sheet. B cap -> A -> D.
-4. Worker scaling: answer from B's report, not from memory. Config today:
-   `voyage-generate` `max_batch_size = 1`, no `max_concurrency`; `cpu_ms = 60000`.
+1. C's report, then push 1.1.5 (gates, list, clean copy). B's density files go in now.
+2. B's Keep crash: if it is live, it is the next push's headline; if it needs an
+   engine line, it is a question for Johnny.
+3. Chains: B dots -> A dots. B cap -> A -> D. A density -> D sheet.
 
 ## Versions
 Every push list bumps `APP_VERSION` in `apps/web/src/version.ts` by one in the last
 place and lists the file; the commit message starts with the version. Last pushed:
-1.1.3 (`ac18cbb`). On disk: 1.1.4. Engine version untouched (fixtures folder name).
+1.1.3 (`ac18cbb`). 1.1.4 pushed (`76e5a57`). On disk: 1.1.5, push list f written. Engine version untouched (fixtures folder name).
 
 ## Traps
 - A live fault is looked at on the live page first (computed styles, console,

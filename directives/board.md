@@ -1,28 +1,27 @@
 # Board
 
-One line per lane. Only the orchestrator edits this file. Updated 2026-10-11 20:20 (by the clock).
+One line per lane. Only the orchestrator edits this file. Updated 2026-10-11 21:05 (by the clock).
 
-**Last push: `ac18cbb`, version 1.1.3, 2026-10-11.** Any prompt that says "start only
+**Last push: `76e5a57`, version 1.1.4, 2026-10-11.** Any prompt that says "start only
 after the board says the push is made" may start.
 
 | Lane | Status | Current prompt | Blocker / next |
 |---|---|---|---|
-| A | go | prompts/a_form_followups.md, then prompts/a_own_dots.md | not started at 20:08 (no Progress line) |
-| B | in flight | prompts/b_generate_density.md (note added 20:15), then b_generate_cap.md, then b_generate_speed.md | local queue stalls near the hundredth message; B is reshaping the job to one walking message: see the added note |
-| C | go | prompts/c_surface_map_read.md | not started at 20:08 |
-| D | go | prompts/d_undo_words.md | not started at 20:08 |
-| E | go | prompts/e_toast_shell.md | not started at 20:08 |
+| A | go | prompts/a_density_store.md | density, leftEmpty and landed keys through the store; then the dots and the allowance as B lands them |
+| B | go, **urgent** | prompts/b_keep_crash_dots.md, then b_generate_cap.md, then b_generate_speed.md | Keep throws on a freshly generated system (D found it); the dots route A is blocked on; then the cap; then speed |
+| C | free | (none) | dossier map accepted (open large, key, grid always on, soft night, 12-degree twilight). Next, not yet written: high-tilt disc ice; the dry-world caption |
+| D | go | prompts/d_density_sheet.md | refusal at its field; one spinner in design/; the toast's flags and a job across routes; density when A reports |
+| E | go | prompts/e_timeline_list.md | Campaign order step 3: the timeline as a list |
 | F | retired | (none) | Johnny, 2026-10-11: unreliable (runs out of budget); do not use or propose until he says it is back |
 
 **Restarting a frozen lane:** paste the block in directives/lanes/START.md with the
 lane's letter as the first message of a new session; from then on "go" is enough.
 
 ## Shared files this turn
-- map/MapRenderer.ts (`overviewPoints`, `setChart`, one new setter): **lent to A**.
-- views/OrbitView.vue and views/MapView.vue: **E only**, one line and its import each
-  (the toast strip's mount). D does not edit MapView.vue this turn.
-- shell/ToastStrip.vue, shell/toast.ts and the shell file that mounts the strip: **lent to E**.
-- dossier/DossierPanel.vue, dossier/DossierBody.vue: no lane.
+- shell/ToastStrip.vue: **D only**, one swap (the spinner from design/).
+- workspace/CampaignPanel.vue and the pane's list that links to the timeline: **lent to E**, one line each.
+- map/MapRenderer.ts (`overviewPoints`, `setChart`, one new setter): lent to A for the dots, when B's route exists.
+- views/MapView.vue, views/OrbitView.vue, dossier/DossierPanel.vue, dossier/DossierBody.vue: no lane.
 - design/tokens.css: any lane may append its own token lines.
 
 ## Contracts
@@ -41,6 +40,13 @@ lane's letter as the first message of a new session; from then on "go" is enough
    (findings/campaign_gap_audit.md §4), steps 1 to 5 first. Step 4 (`@` mention) is done.
 
 ## Known, not fixed
+- **Keep on a freshly generated system throws** "w.solarDayHours.toFixed is not a
+  function" on most MgT2E systems (D, local API, production bundle). The call is a
+  trace line, `mgt2e_world_engine.js` 1692; the caller in `packages/generation` is
+  the suspect. May be live. B, urgent.
+- Zoomed out, the map's dots come only from the published overview: a referee's own
+  systems have no dot, a removed one keeps its dot, an own sector is empty. Needs a
+  dots route from B, then A.
 - (fixed in 1.1.3) **Live, 1.1.2: a world's dossier is covered by its Day and night section.**
   `DayNight.vue` 115 and `SurfaceStage.vue` 460 both use the unscoped class
   `doss-daynight`; the stage's `position: absolute; inset: 0` lands on the section.
@@ -86,12 +92,11 @@ lane's letter as the first message of a new session; from then on "go" is enough
   the blank request body (read from what the server stored).
 
 ## Pending push
-**Ready: version 1.1.4**, `findings/push/builder_2026-10-11e.md`. Tree green at 20:12
-(1409 pass; checker, typecheck, build pass). Carries the ice caps, the Undo faults
-fixed in the store, star numbers on the form, progress by the button and the job
-toast, the strip's words, the palette, the Lightbox focus, the signed-out rail.
-**Left out: B's density work in flight** (eleven paths and the Builder contract).
-Push before saying go to A, C, D, E.
+**Ready: version 1.1.5**, `findings/push/builder_2026-10-11f.md`. Tree green at 21:10
+(1426 pass; checker, typecheck, build pass), every lane idle between prompts.
+Carries density on the server (the browser does not send it yet), the store fixes,
+Undo that says what it did, toasts on every route, the dossier map changes.
+Push before saying go.
 
 ## Decisions from Johnny
 - 2026-10-10: the file bus replaces pasting.
@@ -221,17 +226,30 @@ Push before saying go to A, C, D, E.
   gives nothing back; previews and Roll again count; a request over the allowance is
   refused whole.
 
+- 2026-10-11: the ice caps are good enough for now; come back later, perhaps with a
+  higher-effort model, after the process is streamlined. Yes: a high-tilt world's
+  orbit disc should show its ice where the dossier map does (C, later, small).
+
 ## Open with Johnny
-1. Do the ice caps look right (`kc_caps_*`)?
-2. A high-tilt world's orbit disc: ice at the equator to match the dossier map, later?
+1. B: keep a generate job as one resumable queue message until the speed pass measures
+   a split?
+2. D: a hex an Undo left is named by its number when it holds no system any more?
+   (built so)
+3. D: a refused one-hex Undo keeps offering Undo? (built so)
+4. E: lift the spinner to design/ so Build and the toast share it? (in D's prompt)
 
 ## Queue (prompts not yet written)
+- C: the caption says "Water · frozen" on a dry frozen body (hydro 0; C's own finding).
+- C removed the sun reticle from the dossier map's day and night layer unasked: with Johnny.
 - E, Campaign order step 3 (timeline as a list), then 6 (handout images; ask B first).
 - The rest of F's review (ranking, visual refinement, words, access) was never done;
   no lane has it.
 - Public games (contract exists), after density and the cap.
 - `workspace/build/BuildSpin.vue` wants lifting to `design/` (one spinner for the app).
 - Worker queue settings: B recommends in `b_generate_speed`; wrangler.toml changes go out with Johnny's deploy.
+- C, later, small: a high-tilt world's orbit disc puts the cap on the pole while the
+  dossier map shows an equatorial belt; make the disc agree (show before and after).
+- Later, on Johnny's word: a second pass on the ice caps' look.
 - **Last, lowest priority (Johnny, 2026-10-11):** city lights are drawn on the
   atmosphere layer of a world's surface, not on the ground under it (C, `surface/`).
   No prompt until everything above is done.

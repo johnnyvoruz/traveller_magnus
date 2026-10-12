@@ -8,7 +8,8 @@
  */
 import { reactive } from 'vue';
 import { showToast } from '../../shell/toast.ts';
-import { holdJob, selectOnMap, stopBuild, tallyOf } from './acts.ts';
+import { hexName, holdJob, selectOnMap, stopBuild, tallyOf } from './acts.ts';
+import { isOutcome, sayUndo } from './undo_words.ts';
 import { endJobToast, startJobToast } from './job_toast.ts';
 import { endFlight, renameFlight, startFlight } from './flight.ts';
 import { buildStore, type GrowHandle, type GrowProgress, type JobProgress, type UndoToken } from './seam.ts';
@@ -70,7 +71,13 @@ async function takeBack(token: UndoToken, names: readonly string[]): Promise<voi
     const store = buildStore();
     if (!store) return;
     try {
-        const restore = await store.undo(token);
+        const answer = await store.undo(token);
+        // A report (it has `left`) is said as what it is; only a token without one is a Restore.
+        if (isOutcome(answer)) {
+            sayUndo(answer, { again: () => { void takeBack(token, names); }, name: hexName });
+            return;
+        }
+        const restore = answer || null;
         const message = 'Removed ' + sectorsSaid(names) + ' and every system generated in ' + (names.length === 1 ? 'it' : 'them') + '.';
         if (restore) showToast(message, { action: { label: 'Restore', run: () => { void putBack(restore, names); } } });
         else showToast(message);
@@ -83,7 +90,11 @@ async function putBack(token: UndoToken, names: readonly string[]): Promise<void
     const store = buildStore();
     if (!store) return;
     try {
-        await store.undo(token);
+        const answer = await store.undo(token);
+        if (isOutcome(answer)) {
+            sayUndo(answer, { again: () => { void putBack(token, names); }, name: hexName });
+            return;
+        }
         showToast('Restored ' + sectorsSaid(names) + ' and ' + (names.length === 1 ? 'its' : 'their') + ' systems.');
     } catch (err) {
         showToast(said(err, 'Restore failed. Try again.'));

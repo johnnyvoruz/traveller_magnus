@@ -28,8 +28,8 @@ import {
     easeInOutCubic, wrapLon, lonDelta, lerpPose, angleBetween, createSunMotion, createFade, frameDue,
     clockStepDeg, JUMP_TWEEN_MS, AVERAGE_FADE_MS, REDUCED_STEP_MS,
 } from '../../apps/web/src/surface/hybrid/motion.ts';
-import { paintDayNight, nightShare } from '../../apps/web/src/surface/hybrid/overlay.ts';
-import { cityLights } from '../../apps/web/src/surface/hybrid/symbols.ts';
+import { NIGHT_TINT, paintDayNight, nightShare } from '../../apps/web/src/surface/hybrid/overlay.ts';
+import { cityLights, drawMarks, drawSymbols, legendGroups } from '../../apps/web/src/surface/hybrid/symbols.ts';
 import { createDayNightLayer } from '../../apps/web/src/surface/hybrid/daynight_layer.ts';
 import {
     dayNightOverlay, setDayNightOverlay, onDayNightOverlay, mapStyle, setMapStyle,
@@ -675,14 +675,22 @@ describe('the animated day and night layer', () => {
         assert.ok(median < 4, 'median day/night frame ' + median.toFixed(2) + ' ms');
 
         const sum = (px, k) => { let s = 0; for (let i = k; i < px.length; i += 4) s += px[i]; return s; };
+        const oneInk = (px) => {
+            for (let i = 0; i < px.length; i += 4) {
+                if (px[i + 3] === 0) continue;
+                if (px[i] !== NIGHT_TINT[0] || px[i + 1] !== NIGHT_TINT[1] || px[i + 2] !== NIGHT_TINT[2]) return false;
+            }
+            return true;
+        };
         const day = paintDayNight(field, { sun: sunVector(0, 0), declinationDeg: 0, mix: 0, airless: false, sheenPhase: 0 });
-        assert.ok(sum(day.shadow, 3) > 0 && sum(day.glow, 3) > 0, 'a shadow and a glowing terminator');
-        // Fully averaged: no terminator line to glow.
+        assert.ok(sum(day.shadow, 3) > 0 && sum(day.glow, 3) === 0, 'a shadow and no terminator line');
+        assert.ok(oneInk(day.shadow), 'the shadow is one dark colour');
+        // Fully averaged: still a shadow, still no line.
         const avg = paintDayNight(field, { sun: sunVector(0, 0), declinationDeg: 0, mix: 1, airless: false, sheenPhase: 0 });
-        assert.ok(sum(avg.glow, 3) < sum(day.glow, 3) * 0.05, 'averaged glow ' + sum(avg.glow, 3));
-        // Airless: a hard, darker edge, no twilight halo.
+        assert.ok(sum(avg.shadow, 3) > 0 && sum(avg.glow, 3) === 0, 'averaged shadow ' + sum(avg.shadow, 3));
+        // Airless: a hard edge, no line, no second colour.
         const bare = paintDayNight(field, { sun: sunVector(0, 0), declinationDeg: 0, mix: 0, airless: true, sheenPhase: 0 });
-        assert.ok(sum(bare.glow, 3) < sum(day.glow, 3), 'airless glow is thinner');
+        assert.ok(sum(bare.shadow, 3) > 0 && sum(bare.glow, 3) === 0 && oneInk(bare.shadow), 'airless shadow stays one colour');
 
         // The layer itself, against a fake canvas.
         const layer = createDayNightLayer(fakeHost());
@@ -699,7 +707,8 @@ describe('the animated day and night layer', () => {
         }
         layerTimes.sort((x, y) => x - y);
         assert.ok(layerTimes[layerTimes.length >> 1] < 4, 'median layer frame ' + layerTimes[layerTimes.length >> 1].toFixed(2) + ' ms');
-        assert.ok(glow.calls.arc > 0, 'the subsolar reticle is drawn');
+        assert.equal(glow.calls.arc, 0, 'no terminator outline');
+        assert.ok(glow.calls.drawImage > 0, 'settlement lights stay');
         assert.equal(JSON.stringify(model.hexes), hexes);
         assert.equal(sha(paintHybrid(model, SHEET_LAYOUT)), before);
     });
@@ -752,5 +761,46 @@ describe('the animated day and night layer', () => {
         const landed = calm.draw({ model, sub: goal, playing: false, rate: 1, jumped: true, nowMs: 16 }, fakeCtx(), fakeCtx(), SHEET_LAYOUT);
         assert.equal(landed.busy, false);
         assert.ok(Math.abs(lonDelta(landed.pose.lon, wrapLon((model.starportLon ?? 0) + goal.lonFromPortDeg))) < 1e-9);
+    });
+});
+
+describe('symbol key and the always-on grid', () => {
+    test('the key lists this world first, in the drawing table order', () => {
+        const model = modelOf(earth());
+        const groups = legendGroups(model);
+        const present = new Set(groups.here);
+        assert.deepEqual(groups.here, SURFACE_CODES.filter((code) => present.has(code)));
+        assert.deepEqual(groups.absent, SURFACE_CODES.filter((code) => !present.has(code)));
+        assert.ok(groups.here.length > 0 && groups.absent.length > 0);
+        for (const code of [...groups.here, ...groups.absent]) assert.ok(CODE_TABLE[code].name);
+    });
+
+    test('outlines draw with the symbols off, and crowded latitude labels drop', () => {
+        const model = modelOf(earth());
+        const calls = { stroke: 0 };
+        const ctx = {
+            strokeStyle: '', lineWidth: 1,
+            beginPath() {}, moveTo() {}, lineTo() {},
+            stroke() { calls.stroke += 1; },
+            save() {}, restore() {}, clip() {}, closePath() {},
+            drawImage() { throw new Error('icons are off'); },
+        };
+        drawSymbols(ctx, model, SHEET_LAYOUT, { set: null, icons: false, outlineWidth: 0.8 });
+        assert.equal(calls.stroke, 1);
+        assert.equal(ctx.lineWidth, 0.8);
+        const labels = [];
+        drawMarks({
+            strokeStyle: '', fillStyle: '', font: '', lineWidth: 1, textAlign: '', textBaseline: '',
+            beginPath() {}, moveTo() {}, lineTo() {}, stroke() {},
+            fillText(text) { labels.push(text); },
+        }, model, SHEET_LAYOUT, { graticule: false, ring: false, scale: false, labelGap: 1e9 });
+        assert.deepEqual(labels, ['0°']);
+        const wide = [];
+        drawMarks({
+            strokeStyle: '', fillStyle: '', font: '', lineWidth: 1, textAlign: '', textBaseline: '',
+            beginPath() {}, moveTo() {}, lineTo() {}, stroke() {},
+            fillText(text) { wide.push(text); },
+        }, model, SHEET_LAYOUT, { graticule: false, ring: false, scale: false, font: '18px sans-serif' });
+        assert.ok(wide.includes('0°') && !wide.includes('90°N'), 'a label that does not fit is dropped: ' + wide.join(','));
     });
 });

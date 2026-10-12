@@ -78,3 +78,5 @@ Questions for Johnny written out in full, recommended answer first. After each
 meaningful step append one line under Progress: "done: X. next: Y."
 
 ## Progress
+done: part 1 built (undo_words.ts: the server's sentence with Undo offered again, a job's left hexes named once and marked on the map, a report never taken for a Restore token; offerUndo, the edit toasts and the grow path all go through it); 2 test files; gates green (1417 pass). Parts 2, 3, 4 skipped: a_form_followups, b_generate_density and b_generate_cap reports are not on disk. next: browser pass kb10_*.
+done: browser pass kb10_* (the refused one-hex Undo by pointer and keyboard; the partial job Undo with its hex marked; four widths); found Keep on a fresh generated system failing on the server (solarDayHours.toFixed), for Lane B; servers stopped; §27; report written. next: parts 2 to 4 when their reports are on disk.

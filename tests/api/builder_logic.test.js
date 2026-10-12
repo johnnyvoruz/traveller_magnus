@@ -9,6 +9,7 @@ import {
     ensurePin,
     generationSeed,
     readHexPage,
+    readJob,
     removeHex,
     restoreHex,
     revertHex,
@@ -345,5 +346,36 @@ test('stop leaves a queued job undone until undo', () => {
     assert.equal(stopped.state, 'stopped');
     const refused = refusal(() => undoJob(sql, 'job-2', OWN, NOW));
     assert.equal(refused, null);
+});
+
+test('a density batch counts hexes left empty and lists the ones it wrote', () => {
+    const sql = open();
+    ensurePin(sql, OWN);
+    const empty = 'Spinward_Marches/1912';
+    createJob(sql, 'job-density', {
+        hexKeys: [KEY, KEY_B, empty],
+        edition: 'MgT2E',
+        generator: 'top-down',
+        roll: 0,
+        filledToo: false,
+        density: 'standard',
+        seed: 'TravellerMagnus',
+        settings: {},
+        engineVersion: '1.0.0',
+        captured: {},
+    }, OWN, NOW);
+    const done = applyJobBatch(sql, 'job-density', 0, [
+        { hexKey: KEY, treeHash: HASH, baseHash: null, roll: 0, baseRev: 0, capturedRev: 0, engineVersion: '1.0.0' },
+    ], [KEY_B], [], OWN, NOW, true, [empty]);
+    assert.equal(done.state, 'done');
+    assert.equal(done.done, 3);
+    assert.equal(done.skipped, 1);
+    assert.equal(done.leftEmpty, 1);
+    assert.deepEqual(done.placed, [KEY]);
+    assert.deepEqual(readJob(sql, 'job-density', 1).placed, []);
+    assert.equal(readJob(sql, 'job-density', 0).leftEmpty, 1);
+    const undone = undoJob(sql, 'job-density', OWN, NOW);
+    assert.equal(undone.restored, 1);
+    assert.equal(readHexPage(sql, 'Spinward_Marches', null, 10, OWN).items.length, 0);
 });
 

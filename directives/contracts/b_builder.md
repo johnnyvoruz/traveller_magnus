@@ -98,6 +98,10 @@ History rows are kept. Nothing in the code expires them.
 
 Answer data: `BuilderJob`. `kind` is `generate`. `state` is `queued`, `running`, `done`, `stopped`, or `failed`. `failures` holds at most 100 `{ hexKey, reason }`.
 
+`done` is how many hexes the job has finished. A finished hex was written, skipped, failed, or left empty. `skipped` is still "already held a system". `leftEmpty` is how many empty hexes the density roll did not write. `placed` is the hex keys written, in write order.
+
+`GET .../jobs/:jobId?since=<n>` returns `placed` as only the keys after the first `n` writes. Omit `since` and `n` is 0, so `placed` is every key this job wrote. `since` must be a string of digits. Anything else is 400 `Invalid request.` A 1,280-hex job lists at most 1,280 keys. Each key is one `HexKey` (a sector slug, a slash, and four digits). That list stays in the job's existing JSON blob. There is no new table.
+
 Errors: 404 `not_found` `No such job.`
 
 ### `POST /:id/jobs/:jobId/stop` — **live at `3d28e33`**
@@ -233,13 +237,20 @@ Body: `BuilderGenerate`.
 - `generator`: `top-down` or `bottom-up`.
 - `roll`: integer ≥ 0, default 0. `0` is the universe seed. A higher roll is a different repeatable system.
 - `filledToo`: default false.
+- `density`: `every`, `sparse`, `standard`, or `dense`. Default `every`. Absent means `every`.
 - `baseRev`: required when `hexKeys` has one entry. Integer ≥ 0. Omitted for more than one hex.
+
+`every` writes each empty hex. `sparse`, `standard`, and `dense` are the legacy chances 2, 3, and 4 out of 6 (`js/ui_menus.js` lines 66 to 68). For more than one hex, each empty hex is rolled with `setRandomSeed` of the universe seed, then `reseedForHex(hexKey)`, then `roll1D()` (`js/macro_orchestrator.js` lines 534 to 536). The hex is written when the roll is at or under the chance. The same universe seed, hex, and density always roll the same way. `buildSector` does not roll this. It only builds rows that already say `SYSTEM_PRESENT`. The system itself is still seeded with `generationSeed`, after this roll.
+
+One hex in the request is always written when it does not already hold a system, whatever `density` says. `filledToo: true` regenerates a held hex and does not roll it. Density applies only to empty hexes. A hex the roll leaves empty is not written. It counts as `leftEmpty`, not as `skipped`.
+
+One hex answers 200 `BuilderGenerateDone` with `leftEmpty: 0`. More than one hex answers 202 `{ jobId }`. The job's `leftEmpty` is the count. Undo puts back only the hexes the job wrote. A hex left empty was not written, so undo does not touch it.
 
 Pairs the server runs: `MgT2E` with `top-down`, and `AoW` with `bottom-up`. Anything else is 400 `validation` `That engine and generator are not available yet.` `details.reason` `generator_unavailable`.
 
-One hex, and the hex already holds a system (a stored tree whose state is not `removed`, or a chart system when there is no row), and `filledToo` is false: 200 `{ rows: [], skipped: [hexKey] }`. The row is unchanged. A hand document counts as a held system. **On disk, unpushed:** the chart entry of a stored hand document uses the hand entry. The generate call itself replaces whatever object the hex holds.
+One hex, and the hex already holds a system (a stored tree whose state is not `removed`, or a chart system when there is no row), and `filledToo` is false: 200 `{ rows: [], skipped: [hexKey], leftEmpty: 0 }`. The row is unchanged. A hand document counts as a held system. **On disk, unpushed:** the chart entry of a stored hand document uses the hand entry. The generate call itself replaces whatever object the hex holds.
 
-One hex, `filledToo: true`, or the hex is empty: the server generates, stores a tree (`kind: 'tree'`), and returns 200 `BuilderGenerateDone` `{ rows: [BuilderHex], skipped: [] }`. History `action` is `generate`. Rev is the next history rev. This replaces a hand document. The hand object remains in the bucket. Hex revert to the hand rev returns it.
+One hex, `filledToo: true`, or the hex is empty: the server generates, stores a tree (`kind: 'tree'`), and returns 200 `BuilderGenerateDone` `{ rows: [BuilderHex], skipped: [], leftEmpty: 0 }`. History `action` is `generate`. Rev is the next history rev. This replaces a hand document. The hand object remains in the bucket. Hex revert to the hand rev returns it.
 
 More than one hex: 202 `{ jobId }`. Schema `BuilderJobAccepted`. The job is queued. `baseRev` is not used. Each hex's rev is captured when the job is created. A hex whose rev moved before the batch is a failure `{ hexKey, reason: 'conflict' }` and is not written. `filledToo: false` skips a hex that already holds a system.
 
@@ -251,14 +262,18 @@ A body with `makeSectors` of one or more entries is not this answer. It is the n
 
 Body: `SectorGenerate`. The same fields as `BuilderGenerate`, plus `makeSectors`: 1–1280 of `SectorSeed` `{ name, slot }`. `name` is trimmed, 1–80 characters. `slot` is `{ x, y }`, integers from -1000 to 1000.
 
-This one call makes every named sector and generates every hex in the box. Hexes already in a sector use their real key (`Spinward_Marches/1910`, or `~<id>/1910`). A hex in a sector that does not exist yet is named `~slot_<x>_<y>/<hhhh>`, the same placeholder the Build screen uses. `<x>` and `<y>` are the slot's integers, and `<hhhh>` is the local hex. The server assigns `~` plus a ULID, rewrites those keys, and returns the sectors.
+`density` is the same field as on `BuilderGenerate`, and it is applied the same way. One hex in the box is always written when it is empty. More than one hex: each empty hex is rolled, and a roll that misses is `leftEmpty` on the job. `filledToo: true` regenerates held hexes and does not roll them.
+
+A new sector is made even when every hex in it rolls empty. The sector was named and asked for. Undo of that act still removes the sector. A hex left empty was not written, so the hex undo has nothing to put back.
+
+This one call makes every named sector and generates every hex in the box that the density roll keeps. Hexes already in a sector use their real key (`Spinward_Marches/1910`, or `~<id>/1910`). A hex in a sector that does not exist yet is named `~slot_<x>_<y>/<hhhh>`, the same placeholder the Build screen uses. `<x>` and `<y>` are the slot's integers, and `<hhhh>` is the local hex. The server assigns `~` plus a ULID, rewrites those keys, and returns the sectors.
 
 One hex in the whole box: status 201. The sector row and that hex are written in one transaction. `jobId` is null. More than one hex: status 202, one job of kind `generate`, the same job `POST .../generate` queues. Sectors are created before the job runs. `rows` is empty until the job writes.
 
 Answer data: `SectorGenerateDone`.
 
 ```
-{ sectors: RefereeSector[], rows: BuilderHex[], skipped: HexKey[], jobId: string | null }
+{ sectors: RefereeSector[], rows: BuilderHex[], skipped: HexKey[], jobId: string | null, leftEmpty: 0 }
 ```
 
 `skipped` is empty on this answer. A held hex in the queued job is still skipped later when `filledToo` is false, and the job's own counts say so.

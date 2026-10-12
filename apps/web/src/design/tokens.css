@@ -112,6 +112,8 @@
   --surface-ink-on-dark: color-mix(in srgb, #fafaf5 90%, transparent);
   --surface-outline-dark: color-mix(in srgb, #000000 30%, transparent);
   --surface-outline-light: color-mix(in srgb, var(--icon-port) 30%, transparent);
+  /* Hybrid hex grid. Same ink as the legacy blank grid: signal at 34%. */
+  --surface-hex: color-mix(in srgb, var(--signal) 34%, transparent);
   --surface-graticule: color-mix(in srgb, var(--icon-port) 35%, transparent);
   --surface-twilight-ring: color-mix(in srgb, #ffbe3c 90%, transparent);
   --surface-twilight-midline: color-mix(in srgb, var(--icon-port) 90%, transparent);

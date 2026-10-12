@@ -72,7 +72,6 @@ import { dismissToast, showToast } from '../shell/toast.ts';
 import { ensureCampaign } from '../workspace/opening.ts';
 import { sameDay, stardate } from '../workspace/stardate.ts';
 import AccountMenu from '../workspace/AccountMenu.vue';
-import ToastStrip from '../shell/ToastStrip.vue';
 import { commands, handleKey, registerCommand } from '../shell/registry.ts';
 
 const route = useRoute();
@@ -1829,7 +1828,6 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
         <Drawer id="layers" :ref="drawerEls.layers" :open="drawer === 'layers'" @close="closeDrawer">
           <LayerKey :layers="layers" @layers="layers = $event" />
         </Drawer>
-        <ToastStrip />
         <OrbitCanvas
           v-if="state === 'ready' && system"
           ref="stageEl"

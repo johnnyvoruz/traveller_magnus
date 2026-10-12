@@ -2,15 +2,22 @@
 /**
  * The toast strip (design_reference.md §3; campaign_manager_plan.md §6.3): at most two, each
  * with an optional action. A toast leaves after its time unless the pointer is on it or focus
- * is in it. It is a polite live region, so a screen reader hears it.
+ * is in it. Mounted once, in App.vue, so every route shows the same toasts.
  *
- * A toast covers the picture, never a control: each view says where through the --toast-*
- * properties (the map: beside the panel at the chart's foot, or in the search row when the
- * panel covers the chart; the orbit view: the picture's upper right).
+ * The map's corner is the chart's foot beside the panel (or the search row when the panel
+ * covers the chart). The orbit view's corner is the picture's upper right. Pages with neither
+ * use the lower right. A busy toast shows a ring and is announced once; later words stay quiet.
+ * The ring matches workspace/build/BuildSpin.vue. That component stays where Lane D owns it.
  */
-import { onBeforeUnmount, watch } from 'vue';
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import Icon from '../design/Icon.vue';
-import { dismissToast, toasts, type Toast } from './toast.ts';
+import { dismissToast, nextBusyAnnouncement, orbitToastBox, readPx, runToastAction, toasts, type Toast } from './toast.ts';
+
+const route = useRoute();
+const root = ref<HTMLElement | null>(null);
+const said = ref('');
+const announced = new Set<number>();
 
 const timers = new Map<number, ReturnType<typeof setTimeout>>();
 const held = new Set<number>();
@@ -38,9 +45,7 @@ function release(toast: Toast): void {
 }
 
 function act(toast: Toast): void {
-    const action = toast.action;
-    dismissToast(toast.id);
-    if (action) action.run();
+    runToastAction(toast);
 }
 
 watch(() => toasts.map((toast) => toast.id), (ids) => {
@@ -49,22 +54,135 @@ watch(() => toasts.map((toast) => toast.id), (ids) => {
     for (const id of [...held]) if (!ids.includes(id)) held.delete(id);
 }, { immediate: true });
 
+watch(toasts, () => {
+    const text = nextBusyAnnouncement(toasts, announced);
+    if (text !== null) said.value = text;
+}, { deep: true });
+
+let viewport: ResizeObserver | null = null;
+let added: MutationObserver | null = null;
+let panelStyle: MutationObserver | null = null;
+let stageSize: ResizeObserver | null = null;
+let stageStyle: MutationObserver | null = null;
+let stage: Element | null = null;
+
+function railPx(): number {
+    const app = document.querySelector('.app');
+    const from = app instanceof HTMLElement ? getComputedStyle(app).getPropertyValue('--rail-width') : '';
+    return readPx(from) || readPx(getComputedStyle(document.documentElement).getPropertyValue('--rail-width'));
+}
+
+/** Pixels left for a toast at the chart's foot, after the rail and the panel. */
+function mapRoom(): number {
+    const app = document.querySelector('.app');
+    if (!(app instanceof HTMLElement)) return 0;
+    const style = getComputedStyle(app);
+    const inset = readPx(style.getPropertyValue('--chrome-inset')) || 10;
+    const panel = readPx(style.getPropertyValue('--panel-width'));
+    const left = railPx() + Math.max(inset, panel);
+    return document.documentElement.clientWidth - left - inset;
+}
+
+function place(): void {
+    const el = root.value;
+    if (!el) return;
+    const next = document.querySelector('.orbit-stage');
+    if (next !== stage) {
+        stageSize?.disconnect();
+        stageStyle?.disconnect();
+        stageSize = null;
+        stageStyle = null;
+        stage = next;
+        if (next instanceof HTMLElement) {
+            stageSize = new ResizeObserver(() => { place(); });
+            stageSize.observe(next);
+            stageStyle = new MutationObserver(() => { place(); });
+            stageStyle.observe(next, { attributes: true, attributeFilter: ['style'] });
+        }
+    }
+    const map = document.querySelector('.map');
+    if (map instanceof HTMLElement) {
+        const strip = map.style.getPropertyValue('--build-strip');
+        if (strip) el.style.setProperty('--build-strip', strip);
+        else el.style.removeProperty('--build-strip');
+    } else {
+        el.style.removeProperty('--build-strip');
+    }
+    if (!(next instanceof HTMLElement)) {
+        el.style.top = '';
+        el.style.right = '';
+        el.style.bottom = '';
+        el.style.left = '';
+        el.style.maxWidth = '';
+        // The chart foot beside a wide panel can fall off a short screen. Sit in the lower right instead.
+        if (map instanceof HTMLElement && mapRoom() < 180) {
+            const inset = readPx(getComputedStyle(document.documentElement).getPropertyValue('--chrome-inset')) || 10;
+            const rail = railPx();
+            const width = document.documentElement.clientWidth;
+            el.style.top = 'auto';
+            el.style.left = 'auto';
+            el.style.right = inset + 'px';
+            el.style.bottom = (inset + 44) + 'px';
+            el.style.maxWidth = Math.min(460, Math.max(160, width - rail - inset * 2)) + 'px';
+        }
+        return;
+    }
+    const box = next.getBoundingClientRect();
+    const placed = orbitToastBox(
+        { top: box.top, right: box.right, width: box.width, height: box.height },
+        readPx(next.style.getPropertyValue('--flight-strip-height')),
+        readPx(next.style.getPropertyValue('--drawer-height')),
+        document.documentElement.clientWidth,
+    );
+    el.style.top = placed.top + 'px';
+    el.style.right = placed.right + 'px';
+    el.style.bottom = 'auto';
+    el.style.left = 'auto';
+    el.style.maxWidth = placed.maxWidth + 'px';
+}
+
+watch(() => route.fullPath, () => { void nextTick(place); });
+
+onMounted(() => {
+    viewport = new ResizeObserver(() => { place(); });
+    viewport.observe(document.documentElement);
+    const app = document.querySelector('.app');
+    if (app) {
+        added = new MutationObserver(() => { place(); });
+        added.observe(app, { childList: true, subtree: true });
+        panelStyle = new MutationObserver(() => { place(); });
+        panelStyle.observe(app, { attributes: true, attributeFilter: ['style'] });
+    }
+    void nextTick(place);
+});
+
 onBeforeUnmount(() => {
     for (const id of [...timers.keys()]) stop(id);
+    viewport?.disconnect();
+    added?.disconnect();
+    panelStyle?.disconnect();
+    stageSize?.disconnect();
+    stageStyle?.disconnect();
 });
 </script>
 
 <template>
-  <div class="toasts" role="status" aria-live="polite">
+  <div ref="root" class="toasts">
+    <p class="toast-said" role="status">{{ said }}</p>
     <div
       v-for="toast in toasts"
       :key="toast.id"
       class="toast"
+      :role="toast.busy ? undefined : 'status'"
       @mouseenter="hold(toast)"
       @mouseleave="release(toast)"
       @focusin="hold(toast)"
       @focusout="release(toast)"
     >
+      <svg v-if="toast.busy" class="toast-spin" width="13" height="13" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+        <circle class="toast-spin-track" cx="8" cy="8" r="6.25" />
+        <circle class="toast-spin-arc" cx="8" cy="8" r="6.25" />
+      </svg>
       <span class="toast-text">{{ toast.message }}</span>
       <button v-if="toast.action" type="button" class="toast-act" @click="act(toast)">{{ toast.action.label }}</button>
       <button type="button" class="toast-close" aria-label="Dismiss" title="Dismiss" @click="dismissToast(toast.id)">
@@ -91,6 +209,38 @@ onBeforeUnmount(() => {
   transition: left var(--t-rail) ease;
 }
 
+/* The map's corner. .map is not an ancestor of the strip, so the chart's numbers are repeated here. */
+.app:has(.map) .toasts {
+  top: auto;
+  right: auto;
+  bottom: calc(var(--chrome-inset) + 44px);
+  left: calc(var(--rail-width) + max(var(--chrome-inset), var(--panel-width, 0px)));
+  max-width: min(460px, calc(100% - var(--rail-width) - max(var(--chrome-inset), var(--panel-width, 0px)) - var(--chrome-inset)));
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.app:has(.map[data-toasts="top"]) .toasts {
+  top: var(--chrome-top);
+  right: calc(var(--chrome-inset) + var(--build-strip, 0px));
+  bottom: auto;
+  left: calc(var(--rail-width) + var(--chrome-inset) + 452px + 220px);
+  flex-direction: row-reverse;
+  align-items: flex-start;
+  max-width: none;
+}
+
+/* A page with no chart: the lower right, under the header. */
+.app:not(:has(.map)):not(:has(.orbit)) .toasts {
+  top: auto;
+  right: var(--chrome-inset);
+  bottom: var(--chrome-inset);
+  left: auto;
+  max-width: min(460px, calc(100% - 2 * var(--chrome-inset)));
+  flex-direction: column;
+  align-items: stretch;
+}
+
 .toast {
   display: flex;
   flex: 0 1 auto;
@@ -110,10 +260,45 @@ onBeforeUnmount(() => {
   animation: toast-in var(--t-fast) var(--ease-out) both;
 }
 
+.toast-said {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
 .toast-text {
   flex: 1 1 auto;
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.toast-spin {
+  flex: none;
+  overflow: visible;
+}
+
+.toast-spin circle {
+  fill: none;
+  stroke-width: 2.25;
+}
+
+.toast-spin-track {
+  stroke: currentColor;
+  opacity: 0.25;
+}
+
+.toast-spin-arc {
+  stroke: currentColor;
+  stroke-dasharray: 10 40;
+  stroke-linecap: round;
+  transform-origin: 8px 8px;
+  animation: toast-spin-turn 0.85s linear infinite;
 }
 
 .toast-act {
@@ -158,12 +343,20 @@ onBeforeUnmount(() => {
   to { opacity: 1; transform: none; }
 }
 
+@keyframes toast-spin-turn {
+  to { transform: rotate(360deg); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .toasts {
     transition: none;
   }
 
   .toast {
+    animation: none;
+  }
+
+  .toast-spin-arc {
     animation: none;
   }
 }

@@ -12,6 +12,15 @@ import type { HandKind } from './hand.ts';
 import { showToast } from '../../shell/toast.ts';
 import { buildStore, ownSectors } from './seam.ts';
 import { plural } from './state.ts';
+import { runUndo } from './undo_words.ts';
+
+/** A hex as an Undo's report names it: the system's name on this map, else its number. */
+function undoName(hexKey: string): string {
+    const store = buildStore();
+    const row = store ? store.row(hexKey) : null;
+    const name = row && row.entry ? row.entry.name : '';
+    return name || hexKey.slice(hexKey.lastIndexOf('/') + 1);
+}
 
 // ---- pure: reading a form -------------------------------------------------------------------------
 
@@ -313,15 +322,8 @@ export async function keepEdit(): Promise<boolean> {
         const name = edit.name;
         clear();
         if (token) {
-            showToast('Kept your changes to ' + (name || 'this system') + '.', {
-                action: {
-                    label: 'Undo',
-                    run: () => {
-                        const store = buildStore();
-                        if (store) void store.undo(token);
-                    },
-                },
-            });
+            const again = (): void => { void runUndo(token, { again, name: undoName }); };
+            showToast('Kept your changes to ' + (name || 'this system') + '.', { action: { label: 'Undo', run: again } });
         }
         return true;
     } catch (err) {
@@ -386,16 +388,11 @@ export async function openBlank(hexKey: string): Promise<void> {
     try {
         const made = await blanker(hexKey);
         const token = made.undo;
-        showToast('Created a blank system. Add a star, and then add its worlds.', {
-            action: {
-                label: 'Undo',
-                run: () => {
-                    if (edit.hexKey === hexKey) dropEdit();
-                    const store = buildStore();
-                    if (store) void store.undo(token);
-                },
-            },
-        });
+        const again = (): void => {
+            if (edit.hexKey === hexKey) dropEdit();
+            void runUndo(token, { again, name: undoName });
+        };
+        showToast('Created a blank system. Add a star, and then add its worlds.', { action: { label: 'Undo', run: again } });
         if (mark !== ticket) return;
         const mode = await modeOf(hexKey, made.draft);
         if (mark !== ticket) return;

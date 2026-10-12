@@ -40,6 +40,13 @@ export type JobProgress = { total: number; done: number; failed: string[]; state
 /** What one Undo puts back. Opaque to the screens. */
 export type UndoToken = { id: string };
 
+/**
+ * An Undo that did not put everything back (findings/builder_undo_faults.md). `left` is the hex
+ * keys still as they were; `message` is the server's sentence when it refused, or empty when a
+ * job left the hexes that had changed.
+ */
+export type UndoOutcome = { id: string; restored: number; left: string[]; message: string };
+
 export type BuildUniverse = { id: string; name: string; truthVersion: string | null };
 
 export type BuildStore = {
@@ -70,7 +77,7 @@ export type BuildStore = {
      */
     generateGrowing(body: GrowBody, onProgress?: (progress: GrowProgress) => void): GrowHandle;
     /** Takes the act back. An act that can be put back again answers with the token that does it. */
-    undo(token: UndoToken): Promise<UndoToken | null | void>;
+    undo(token: UndoToken): Promise<UndoToken | UndoOutcome | null | void>;
 };
 
 export type GrowBody = {

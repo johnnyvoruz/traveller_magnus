@@ -6782,3 +6782,38 @@ that failed at the close no longer does. Ready note `findings/builder_form_ready
   the job into one message that walks it. Note added to `b_generate_density.md`:
   prove local against product, keep it resumable, do not close the door on the
   approved speed plan.
+
+- Johnny: ice caps good enough for now, revisit later; high-tilt disc ice to match the map: yes, later (board, Queue).
+- **1.1.4 pushed (`76e5a57`).**
+
+## 251. Density on the server; a Keep crash on generated systems; five reports (2026-10-11 21:05)
+
+- **B, `b_generate_density`, accepted:** `packages/generation/src/density.ts`
+  (`densityKeeps`, `rollHoldsSystem`), `density` on both generate bodies (absent means
+  every), `leftEmpty`, `placed` and `?since=` on the job. The job is now one queue
+  message posting every 32 hexes and resuming from the counted hexes; one message per
+  slice stalled under two local wrangler processes. Open with Johnny whether to keep
+  that until the speed pass.
+- **D, `d_undo_words`, accepted (part 1):** `undo_words.ts`; a refused Undo shows the
+  server's sentence and stays offered; a partial job Undo names the hexes left and
+  marks them. **Found:** Keep on a freshly generated system throws
+  "w.solarDayHours.toFixed is not a function" on seven of eight systems. The only such
+  call is a trace line at `mgt2e_world_engine.js` 1692; `form.ts` 150 carries
+  `solarDayHours`. B, urgent, fix in the caller.
+- **A, `a_form_followups`, accepted:** `cloneForm` copies `lookup` (a test fails when
+  the schema gains a property the clone drops); a Keep refusal names its field; a
+  running job is remembered per universe and picked up by the next store with a new
+  Undo token. **`a_own_dots`: blocked**, no cheap server answer; route asked of B in
+  `findings/map_own_dots.md`.
+- **E, `e_toast_shell`, accepted:** one strip in `App.vue`, `busy`, `action.close`;
+  exactly the import and the element removed from `MapView.vue` and `OrbitView.vue`.
+- **Prompts:** `b_keep_crash_dots.md`, `a_density_store.md`, `d_density_sheet.md`,
+  `e_timeline_list.md`.
+
+- **C, `c_surface_map_read`, accepted:** `dossier/SurfaceKey.vue`; the same stage
+  teleported to a dialog for the large view (sheet 1600x800, 915 ms bake against 333
+  at column); hex outlines on every paint (`--surface-hex`, the legacy 34% signal);
+  night as one tint with a 12 degree twilight band, no stroke; the sun reticle removed
+  (not asked). The map's drawn width at column was already the full 474 px: only the
+  type and the scale's place changed. Found: a dry frozen body is captioned
+  "Water · frozen". **Push 1.1.5 written** (`findings/push/builder_2026-10-11f.md`).

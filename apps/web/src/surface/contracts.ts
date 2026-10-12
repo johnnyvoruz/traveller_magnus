@@ -138,6 +138,16 @@ export type EnhancedPaintInputs = VanillaPaintInputs & { readonly sea: EnhancedS
 /** Plain inputs for the hybrid sheet (surface/hybrid): the world's data, read on the page. */
 export type HybridPaintInputs = { readonly world: HybridWorld };
 
+/**
+ * Hybrid sheet size. Omit it for the 800 × 400 sheet. The large map sends 1600 × 800, side 264.
+ * Any other size is ignored and the worker paints 800 × 400.
+ */
+export type HybridSheetSpec = {
+    readonly width: number;
+    readonly height: number;
+    readonly side: number;
+};
+
 export type SurfaceWorkerMessage = {
     readonly version: typeof SURFACE_MESSAGE_VERSION;
     readonly requestId: string;
@@ -149,6 +159,8 @@ export type SurfaceWorkerMessage = {
     readonly enhanced?: EnhancedPaintInputs;
     /** Present on a hybrid map request (the enhanced mode's map): the worker paints the hybrid sheet. */
     readonly hybrid?: HybridPaintInputs;
+    /** Hybrid sheet size. Vanilla ignores it and stays 800 × 400. */
+    readonly sheet?: HybridSheetSpec;
 };
 
 export type SurfaceWorkerReply = {

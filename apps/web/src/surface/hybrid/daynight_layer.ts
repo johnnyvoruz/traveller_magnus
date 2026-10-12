@@ -1,13 +1,14 @@
 /**
  * The animated day and night layer of the hybrid map, frame by frame: where the sun is shown
  * (motion.ts), the crossfade into and out of the day-averaged shading, the shadow and glow
- * images (overlay.ts paintDayNight), settlement lights and the subsolar reticle. SurfaceStage
+ * images (overlay.ts paintDayNight) and settlement lights. The terminator is the shadow's
+ * fade, so this layer draws no outline and no reticle. SurfaceStage
  * calls draw() from requestAnimationFrame; the review renderer calls the same code. The
  * terrain sheet is never touched: the layer draws on its own two canvases.
  */
 import type { Subsolar } from '../../orbit/sun.ts';
 import { AVERAGED_ABOVE_DAYS_PER_SECOND, localDaysPerSecond } from '../../orbit/sun.ts';
-import { fieldOf, halfLayout, sheetPoint, type SheetLayout } from './field.ts';
+import { fieldOf, halfLayout, type SheetLayout } from './field.ts';
 import { latOf, lonOf } from './grid.ts';
 import type { HybridModel } from './model.ts';
 import { AVERAGE_FADE_MS, clockStepDeg, createFade, createSunMotion, wrapLon, type SunPose } from './motion.ts';
@@ -82,17 +83,12 @@ export type DayNightLayer = {
     reset(): void;
 };
 
-/** End colours of the sun sprite and the reticle, read once when the layer is built. */
+/** End colours of the settlement-light sprite, read once when the layer is built. */
 type SunPaint = {
     core: string;
     inner: string;
     mid: string;
     edge: string;
-    twilightCore: string;
-    twilightMid: string;
-    twilightEdge: string;
-    lit: string;
-    signal: string;
 };
 
 function sunPaint(): SunPaint {
@@ -101,12 +97,13 @@ function sunPaint(): SunPaint {
         inner: iconPaint('--surface-sun-inner'),
         mid: iconPaint('--surface-sun-mid'),
         edge: iconPaint('--surface-sun-edge'),
-        twilightCore: iconPaint('--surface-twilight-core'),
-        twilightMid: iconPaint('--surface-twilight-mid'),
-        twilightEdge: iconPaint('--surface-twilight-edge'),
-        lit: iconPaint('--surface-terminator-lit'),
-        signal: iconPaint('--surface-terminator-signal'),
     };
+}
+
+/** A cached half-size canvas. A fake canvas with no numeric width is kept. A real one is rebuilt when the sheet size changes. */
+function canvasWidth(held: LayerCanvas): number | null {
+    const width = (held.canvas as { width?: unknown }).width;
+    return typeof width === 'number' ? width : null;
 }
 
 export function createDayNightLayer(host: LayerHost): DayNightLayer {
@@ -173,8 +170,8 @@ export function createDayNightLayer(host: LayerHost): DayNightLayer {
             const field = fieldOf(hl, m.grid.n);
             const sheen = host.reducedMotion ? 0 : input.nowMs * SHEEN_PER_MS;
             images = paintDayNight(field, { sun, declinationDeg: pose.lat, mix, airless: m.airless, sheenPhase: sheen }, images);
-            if (!half) half = host.canvas(hl.width, hl.height);
-            if (!halfGlow) halfGlow = host.canvas(hl.width, hl.height);
+            if (!half || (canvasWidth(half) !== null && canvasWidth(half) !== hl.width)) half = host.canvas(hl.width, hl.height);
+            if (!halfGlow || (canvasWidth(halfGlow) !== null && canvasWidth(halfGlow) !== hl.width)) halfGlow = host.canvas(hl.width, hl.height);
             clear(shadow, glow, layout);
             if (half && halfGlow) {
                 half.ctx.putImageData(host.imageData(images.shadow, hl.width, hl.height) as never, 0, 0);
@@ -197,9 +194,6 @@ export function createDayNightLayer(host: LayerHost): DayNightLayer {
                 glow.restore();
             }
 
-            // The subsolar reticle: a slowly turning ring with four ticks, gone when averaged.
-            if (!still && mix < 0.99) drawReticle(glow, sheetPoint(layout, sun), 1 - mix, sheen, paint);
-
             const busy = motion.tweening || mixFade.moving(input.nowMs) || (input.playing && !still);
             return { drawn: true, busy, averaged, still, pose, mix };
         },
@@ -210,32 +204,4 @@ export function createDayNightLayer(host: LayerHost): DayNightLayer {
     };
 }
 
-function drawReticle(ctx: LayerCtx, at: [number, number], alpha: number, phase: number, paint: SunPaint): void {
-    const [x, y] = at;
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    const core = ctx.createRadialGradient(x, y, 0, x, y, 9);
-    core.addColorStop(0, paint.twilightCore);
-    core.addColorStop(0.3, paint.twilightMid);
-    core.addColorStop(1, paint.twilightEdge);
-    ctx.fillStyle = core;
-    ctx.beginPath();
-    ctx.arc(x, y, 9, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = paint.lit;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.arc(x, y, 7.5, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.strokeStyle = paint.signal;
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    const turn = phase * 0.35;
-    for (let i = 0; i < 4; i += 1) {
-        const a = turn + i * Math.PI / 2;
-        ctx.moveTo(x + Math.cos(a) * 10, y + Math.sin(a) * 10);
-        ctx.lineTo(x + Math.cos(a) * 14, y + Math.sin(a) * 14);
-    }
-    ctx.stroke();
-    ctx.restore();
-}
+

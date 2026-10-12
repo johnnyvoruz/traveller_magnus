@@ -16,9 +16,9 @@
  * shared clock (orbit/sim_clock.ts) and never changes the sheet's pixels. The time bar under
  * the map steers that clock. Seeds are the service's business; this file builds none.
  */
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
 import Icon from '../design/Icon.vue';
-import { cancelFrame, createCanvas, fetchJson, loadImageAsync, nextFrame, now, prefersReducedMotion } from '../platform/browser.ts';
+import { cancelFrame, createCanvas, devicePixelRatio, fetchJson, loadImageAsync, nextFrame, now, prefersReducedMotion } from '../platform/browser.ts';
 import { hybridCaption, sheetCaption } from '../surface/caption.ts';
 import type { SurfaceMode } from '../surface/contracts.ts';
 import { CONTINENTAL_DEFINITION, COASTLINE_COMPLEXITY, canMapWorld, worldMapData } from '../surface/identity.ts';
@@ -27,16 +27,20 @@ import {
 } from '../surface/preferences.ts';
 import { cancelSurface, hybridInputsFor, requestMap } from '../surface/service.ts';
 import { SURFACE_WEBGL_NOTICE, webglMissing } from '../surface/webgl_notice.ts';
-import { drawMapOverlay, MAP_HEIGHT, MAP_WIDTH, renderDiamondBlank } from '../surface/vanilla/map.ts';
+import { drawMapOverlay, renderDiamondBlank } from '../surface/vanilla/map.ts';
 import { iconPaint, loadIconSet, type IconImage, type IconSet, type Tinter } from '../surface/hybrid/icons.ts';
-import { hybridModel, SHEET_LAYOUT } from '../surface/hybrid/index.ts';
+import { LARGE_SHEET, SHEET_LAYOUT } from '../surface/hybrid/field.ts';
+import { hexSpacing } from '../surface/hybrid/grid.ts';
+import { hybridModel } from '../surface/hybrid/index.ts';
 import type { HybridModel } from '../surface/hybrid/model.ts';
 import { createDayNightLayer, type DayNightLayer, type LayerCtx, type LayerHost } from '../surface/hybrid/daynight_layer.ts';
 import { frameDue } from '../surface/hybrid/motion.ts';
 import { netClipPath, netOutline } from '../surface/hybrid/stage.ts';
-import { drawMarks, drawSymbols } from '../surface/hybrid/symbols.ts';
+import { drawMarks, drawSymbols, hexOutlineWidth } from '../surface/hybrid/symbols.ts';
 import { clockDays, clockJumps, offerStart, simClock, subscribeSimClock } from '../orbit/sim_clock.ts';
 import { portTimeText, type Subsolar } from '../orbit/sun.ts';
+import { wrapFocus } from '../workspace/focus_trap.ts';
+import SurfaceKey from './SurfaceKey.vue';
 import SurfaceTimeBar from './SurfaceTimeBar.vue';
 
 export type SurfaceTarget = {
@@ -67,6 +71,17 @@ const marksEl = ref<HTMLCanvasElement | null>(null);
 const shadowEl = ref<HTMLCanvasElement | null>(null);
 const glowEl = ref<HTMLCanvasElement | null>(null);
 const figureEl = ref<HTMLElement | null>(null);
+const dialogEl = ref<HTMLElement | null>(null);
+const expandBtn = ref<HTMLButtonElement | null>(null);
+const closeBtn = ref<HTMLButtonElement | null>(null);
+const keyBtn = ref<HTMLButtonElement | null>(null);
+/** The large map uses the whole window, on the same stage, the same clock, and the same layers. */
+const large = ref(false);
+/** Column height held while the figure is on the body, so the dossier does not jump. */
+const holdPx = ref(0);
+const keyOpen = ref(false);
+/** Drawn width of the figure, in CSS pixels. Labels and the grid stroke follow it. */
+const viewPx = ref(0);
 /** The marks and symbol layer is drawn at twice the sheet's size, for crisp lines. */
 const MARK_SCALE = 2;
 const blankEl = ref<HTMLCanvasElement | null>(null);
@@ -96,7 +111,17 @@ const hybrid = computed(() => mode.value === 'enhanced' && model.value !== null)
 const caption = computed(() => (hybrid.value && model.value
     ? hybridCaption(model.value)
     : sheetCaption(mode.value, props.target ? props.target.body : null)));
-const clipPath = computed(() => (mode.value === 'enhanced' ? netClipPath(SHEET_LAYOUT) : undefined));
+/** Enhanced large view bakes 1600 × 800. Vanilla stays 800 × 400 and scales in CSS. */
+const activeLayout = computed(() => (large.value && mode.value === 'enhanced' ? LARGE_SHEET : SHEET_LAYOUT));
+const sheetW = computed(() => activeLayout.value.width);
+const sheetH = computed(() => activeLayout.value.height);
+const clipPath = computed(() => (mode.value === 'enhanced' ? netClipPath(activeLayout.value) : undefined));
+const scaleText = computed(() => {
+    const m = model.value;
+    if (!m || mode.value !== 'enhanced') return '';
+    const km = (m.world.diamKm / 2) * hexSpacing(m.grid.n);
+    return '1 hex ≈ ' + Math.round(km).toLocaleString('en-US') + ' km';
+});
 const nowDays = computed(() => (typeof props.nowDays === 'number' && Number.isFinite(props.nowDays) ? props.nowDays : clockDays()));
 const worldName = computed(() => {
     const name = props.target ? props.target.body.name : '';
@@ -107,6 +132,9 @@ let token = 0;
 let requestId: string | null = null;
 let shown: SurfaceTarget | null = null;
 let shownMode: SurfaceMode | null = null;
+let shownWidth = 0;
+let returnTo: HTMLElement | null = null;
+let resizeObs: ResizeObserver | null = null;
 let stopMode: (() => void) | null = null;
 let stopStyle: (() => void) | null = null;
 let stopClock: (() => void) | null = null;
@@ -130,10 +158,20 @@ function drop(): void {
     requestId = null;
 }
 
+function fitCanvas(canvas: HTMLCanvasElement | null, w: number, h: number): void {
+    if (!canvas) return;
+    if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+    }
+}
+
 function clearSheet(): void {
+    const layout = activeLayout.value;
+    fitCanvas(sheetEl.value, layout.width, layout.height);
     const canvas = sheetEl.value;
     const ctx = canvas ? canvas.getContext('2d') : null;
-    if (ctx) ctx.clearRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
+    if (ctx) ctx.clearRect(0, 0, layout.width, layout.height);
 }
 
 /**
@@ -144,8 +182,11 @@ function paint(pixels: Uint8ClampedArray, body: Record<string, unknown>): boolea
     const canvas = sheetEl.value;
     const ctx = canvas ? canvas.getContext('2d') : null;
     if (!ctx) return false;
-    ctx.clearRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
-    ctx.putImageData(new ImageData(pixels as Uint8ClampedArray<ArrayBuffer>, MAP_WIDTH, MAP_HEIGHT), 0, 0);
+    const layout = activeLayout.value;
+    if (pixels.length !== layout.width * layout.height * 4) return false;
+    fitCanvas(canvas, layout.width, layout.height);
+    ctx.clearRect(0, 0, layout.width, layout.height);
+    ctx.putImageData(new ImageData(pixels as Uint8ClampedArray<ArrayBuffer>, layout.width, layout.height), 0, 0);
     if (mode.value === 'vanilla') drawMapOverlay(ctx, worldMapData(body));
     drawLayers();
     return true;
@@ -177,6 +218,8 @@ const tint: Tinter = (image, colour) => {
 };
 
 function drawLayers(): void {
+    const layout = activeLayout.value;
+    fitCanvas(marksEl.value, layout.width * MARK_SCALE, layout.height * MARK_SCALE);
     const canvas = marksEl.value;
     const ctx = canvas ? canvas.getContext('2d') : null;
     if (!ctx || !canvas) return;
@@ -186,11 +229,19 @@ function drawLayers(): void {
     if (!hybrid.value || !m) return;
     ctx.setTransform(MARK_SCALE, 0, 0, MARK_SCALE, 0, 0);
     const began = now();
+    const css = viewPx.value || layout.width;
+    const dpr = devicePixelRatio();
+    const stroke = hexOutlineWidth(layout.width, css, dpr);
     const symbols = style.value === 'symbols';
-    if (symbols) drawSymbols(ctx, m, SHEET_LAYOUT, { set: iconSet.value, tint });
-    drawMarks(ctx, m, SHEET_LAYOUT, { graticule: symbols, ring: symbols });
+    drawSymbols(ctx, m, layout, { set: iconSet.value, tint, icons: symbols, outlineWidth: stroke });
+    const fontPx = 12 * (layout.width / Math.max(css, 1));
+    const gap = 16 * (layout.width / Math.max(css, 1));
+    drawMarks(ctx, m, layout, { graticule: false, ring: false, scale: false, font: fontPx + 'px sans-serif', labelGap: gap });
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    if (figureEl.value && symbols) figureEl.value.dataset.symbolsMs = (now() - began).toFixed(2);
+    if (figureEl.value) {
+        figureEl.value.dataset.symbolsMs = (now() - began).toFixed(2);
+        figureEl.value.dataset.gridPx = (stroke * dpr * css / layout.width).toFixed(2);
+    }
 }
 
 /** What the day and night layer needs from the page: canvases, ImageData, the motion setting. */
@@ -229,7 +280,10 @@ function frame(time: number): void {
     const jumped = jumps !== seenJumps;
     seenJumps = jumps;
     const began = now();
-    const out = layer.draw({ model: m, sub, playing: simClock.playing, rate: simClock.rate, jumped, nowMs: time }, shadowCtx as unknown as LayerCtx, glowCtx as unknown as LayerCtx, SHEET_LAYOUT);
+    const layout = activeLayout.value;
+    fitCanvas(shadowEl.value, layout.width, layout.height);
+    fitCanvas(glowEl.value, layout.width, layout.height);
+    const out = layer.draw({ model: m, sub, playing: simClock.playing, rate: simClock.rate, jumped, nowMs: time }, shadowCtx as unknown as LayerCtx, glowCtx as unknown as LayerCtx, layout);
     if (figureEl.value) figureEl.value.dataset.overlayMs = (now() - began).toFixed(2);
     lastDrawn = time;
     const local = sub && !out.still ? portTimeText(sub) : null;
@@ -253,10 +307,12 @@ function toggleDayNight(): void {
 }
 
 function drawBlankNet(canvas: HTMLCanvasElement): void {
+    const layout = activeLayout.value;
+    fitCanvas(canvas, layout.width, layout.height);
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    const outline = netOutline(SHEET_LAYOUT);
+    const outline = netOutline(layout);
     ctx.fillStyle = iconPaint('--surface-net-fill');
     ctx.strokeStyle = iconPaint('--surface-net-stroke');
     ctx.lineWidth = 1;
@@ -323,10 +379,12 @@ function toggleStyle(): void {
 
 function start(): void {
     const target = props.target;
-    if (same(target, shown) && shownMode === mode.value && requestId !== null) return;
+    const width = activeLayout.value.width;
+    if (same(target, shown) && shownMode === mode.value && shownWidth === width && requestId !== null) return;
     drop();
     shown = target;
     shownMode = mode.value;
+    shownWidth = width;
     if (!target || !mappable.value) return;
     const mine = token;
     // Nothing of the last body may show under the new one.
@@ -352,7 +410,7 @@ function start(): void {
         hexKey: target.hexKey,
         dossierKey: target.dossierKey,
         body: target.body,
-        resolution: { width: MAP_WIDTH, height: MAP_HEIGHT },
+        resolution: { width: activeLayout.value.width, height: activeLayout.value.height },
         options,
     });
     requestId = ticket.requestId;
@@ -398,6 +456,83 @@ function onSheetEnd(): void {
     if (state.value === 'revealing') state.value = 'full';
 }
 
+function noteWidth(): void {
+    const width = figureEl.value ? figureEl.value.clientWidth : 0;
+    if (!width || width === viewPx.value) return;
+    viewPx.value = width;
+    drawLayers();
+}
+
+/** Controls Tab can reach while the large map is open. */
+function stops(): HTMLElement[] {
+    const root = dialogEl.value;
+    if (!root) return [];
+    return [...root.querySelectorAll<HTMLElement>('button, [tabindex="0"], select, input, textarea')].filter((el) => !(el as HTMLButtonElement).disabled && el.getClientRects().length > 0);
+}
+
+function holdFocus(event: FocusEvent): void {
+    if (!large.value) return;
+    const root = dialogEl.value;
+    if (!root || !(event.target instanceof Node) || root.contains(event.target)) return;
+    const list = stops();
+    if (list.length) list[0].focus();
+}
+
+function onDialogKey(event: KeyboardEvent): void {
+    if (event.key === 'Escape') {
+        if (large.value) {
+            event.preventDefault();
+            event.stopPropagation();
+            closeLarge();
+        } else if (keyOpen.value) {
+            event.preventDefault();
+            event.stopPropagation();
+            keyOpen.value = false;
+            keyBtn.value?.focus();
+        }
+        return;
+    }
+    if (!large.value || event.key !== 'Tab') return;
+    const list = stops();
+    const at = list.indexOf(document.activeElement as HTMLElement);
+    const next = wrapFocus(list.length, at, event.shiftKey);
+    if (next !== null) {
+        event.preventDefault();
+        list[next].focus();
+    }
+    event.stopPropagation();
+}
+
+function openLarge(): void {
+    if (large.value) return;
+    holdPx.value = figureEl.value ? figureEl.value.offsetHeight : 0;
+    returnTo = document.activeElement instanceof HTMLElement ? document.activeElement : expandBtn.value;
+    keyOpen.value = false;
+    large.value = true;
+    document.addEventListener('focusin', holdFocus);
+    void nextTick(() => {
+        closeBtn.value?.focus();
+        noteWidth();
+        start();
+    });
+}
+
+function closeLarge(): void {
+    if (!large.value) return;
+    large.value = false;
+    document.removeEventListener('focusin', holdFocus);
+    void nextTick(() => {
+        const back = returnTo && returnTo.isConnected ? returnTo : expandBtn.value;
+        back?.focus();
+        noteWidth();
+        start();
+    });
+}
+
+function toggleKey(): void {
+    keyOpen.value = !keyOpen.value;
+}
+
 watch(() => props.target, start, { flush: 'post' });
 watch(() => props.sun, wake);
 watch(() => [simClock.playing, simClock.rate], wake);
@@ -425,24 +560,45 @@ onMounted(() => {
         loadIcons();
     });
     start();
+    if (typeof ResizeObserver !== 'undefined' && figureEl.value) {
+        resizeObs = new ResizeObserver(() => noteWidth());
+        resizeObs.observe(figureEl.value);
+        noteWidth();
+    }
 });
 onBeforeUnmount(() => {
     if (stopMode) stopMode();
     if (stopStyle) stopStyle();
     if (stopClock) stopClock();
     if (stopDayNight) stopDayNight();
+    if (resizeObs) resizeObs.disconnect();
+    document.removeEventListener('focusin', holdFocus);
     rest();
     drop();
 });
 </script>
 
 <template>
+  <div v-if="mappable" class="doss-map-slot">
+  <div v-if="large" class="doss-map-hold" :style="{ height: holdPx + 'px' }"></div>
+  <Teleport to="body" :disabled="!large">
+  <div
+    ref="dialogEl"
+    class="doss-map-frame"
+    :class="{ 'is-large': large }"
+    :role="large ? 'dialog' : undefined"
+    :aria-modal="large ? 'true' : undefined"
+    :aria-label="large ? 'Surface map' : undefined"
+    @keydown="onDialogKey"
+  >
+  <div v-if="large" class="doss-map-scrim" @click="closeLarge"></div>
   <figure
-    v-if="mappable"
     ref="figureEl"
     class="doss-map"
     :data-state="state"
     :data-mode="mode"
+    :data-large="large ? 'true' : 'false'"
+    :data-map-css="viewPx"
     :aria-busy="state === 'waiting' || state === 'ready' ? 'true' : undefined"
     :data-sheet-ms="timing.sheet"
     :data-worker-start-ms="timing.worker"
@@ -455,24 +611,37 @@ onBeforeUnmount(() => {
         ref="sheetEl"
         class="doss-sheet"
         :class="arrival"
-        :width="MAP_WIDTH"
-        :height="MAP_HEIGHT"
+        :width="sheetW"
+        :height="sheetH"
         role="img"
         :aria-label="'Surface map of ' + worldName"
         @animationend="onSheetEnd"
       />
       <div class="doss-stage-daynight" :data-on="dayNight && hybrid ? 'true' : 'false'" aria-hidden="true">
-        <canvas ref="shadowEl" class="doss-layer doss-shadow" :width="MAP_WIDTH" :height="MAP_HEIGHT" />
-        <canvas ref="glowEl" class="doss-layer doss-glow" :width="MAP_WIDTH" :height="MAP_HEIGHT" />
+        <canvas ref="shadowEl" class="doss-layer doss-shadow" :width="sheetW" :height="sheetH" />
+        <canvas ref="glowEl" class="doss-layer doss-glow" :width="sheetW" :height="sheetH" />
       </div>
-      <canvas ref="marksEl" class="doss-layer doss-marks" :width="MAP_WIDTH * MARK_SCALE" :height="MAP_HEIGHT * MARK_SCALE" aria-hidden="true" />
+      <canvas ref="marksEl" class="doss-layer doss-marks" :width="sheetW * MARK_SCALE" :height="sheetH * MARK_SCALE" aria-hidden="true" />
+      <button
+        v-if="!large"
+        ref="expandBtn"
+        type="button"
+        class="ui-btn is-icon doss-expand"
+        aria-label="Open the map large"
+        title="Open the map large"
+        @click="openLarge"
+      >
+        <Icon name="up-right-and-down-left-from-center" :size="13" />
+      </button>
       <div v-show="state !== 'full'" class="doss-scan" aria-hidden="true">
-        <canvas ref="blankEl" class="doss-blank" :width="MAP_WIDTH" :height="MAP_HEIGHT" />
+        <canvas ref="blankEl" class="doss-blank" :width="sheetW" :height="sheetH" />
         <div class="doss-scan-field" :style="clipPath ? { clipPath } : undefined">
           <div class="doss-scan-beam" :class="beam" @animationend="onBeamEnd"></div>
         </div>
       </div>
     </div>
+    <p v-if="scaleText" class="doss-scale">{{ scaleText }}</p>
+    <SurfaceKey v-if="hybrid && !large && keyOpen" placement="pop" :model="model" :icon-set="iconSet" />
     <figcaption class="doss-map-caption">
       <p v-if="badge" class="ui-badge doss-badge"><Icon name="star" :size="10.5" /><span>{{ badge }}</span></p>
       <div v-if="hybrid" class="doss-toggles" role="group" aria-label="Map layers">
@@ -491,12 +660,26 @@ onBeforeUnmount(() => {
           type="button"
           class="doss-toggle"
           :aria-pressed="style === 'symbols' ? 'true' : 'false'"
-          :title="style === 'symbols' ? 'Symbols on: hide the hex outlines and symbols' : 'Symbols off: show hex outlines and symbols over the painted map'"
+          :title="style === 'symbols' ? 'Symbols on: hide the symbols' : 'Symbols off: show the symbols over the painted map'"
           @click="toggleStyle"
         >
           <Icon name="layer-group" :size="11" />
           <span>Symbols</span>
           <span class="doss-pip" aria-hidden="true"></span>
+        </button>
+        <button
+          v-if="!large"
+          ref="keyBtn"
+          type="button"
+          class="doss-toggle"
+          :aria-pressed="keyOpen ? 'true' : 'false'"
+          aria-controls="surf-key"
+          title="Key: the names of the symbols"
+          @click="toggleKey"
+          @keydown.enter.prevent="toggleKey"
+          @keydown.space.prevent="toggleKey"
+        >
+          <span>Key</span>
         </button>
       </div>
       <span class="doss-hint" :title="caption.title">Surface map · {{ caption.text }}</span>
@@ -510,13 +693,91 @@ onBeforeUnmount(() => {
     />
     <p v-if="webglNotice" class="doss-webgl" role="status">{{ webglNotice }}</p>
   </figure>
+  <SurfaceKey v-if="hybrid && large" placement="column" :model="model" :icon-set="iconSet" />
+  <button
+    v-if="large"
+    ref="closeBtn"
+    type="button"
+    class="ui-btn is-icon doss-map-close"
+    aria-label="Close"
+    title="Close (Esc)"
+    @click="closeLarge"
+  >
+    <Icon name="xmark" :size="14" />
+  </button>
+  </div>
+  </Teleport>
+  </div>
 </template>
 
 <style>
+.doss-map-slot {
+  display: contents;
+}
+
+.doss-map-hold {
+  width: 100%;
+}
+
+.doss-map-frame:not(.is-large) {
+  display: contents;
+}
+
+.doss-map-frame.is-large {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 24px;
+  animation: doss-large-in var(--t-fast) var(--ease-out) both;
+}
+
+.doss-map-scrim {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--bg-0) 88%, transparent);
+}
+
+.doss-map-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 2;
+}
+
+@keyframes doss-large-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 .doss-map {
+  position: relative;
   flex: 0 0 auto;
-  width: min(100%, var(--panel-column));
-  margin: 0 auto 14px;
+  width: 100%;
+  margin: 0 0 14px;
+}
+
+.doss-map-frame.is-large .doss-map {
+  z-index: 1;
+  width: min(calc(100vw - 340px), calc((100vh - 200px) * 2));
+  max-height: calc(100vh - 48px);
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-4);
+  background: var(--bg-1);
+  box-shadow: var(--shadow-pop);
+}
+
+.doss-expand {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
 }
 
 .doss-stage {
@@ -538,7 +799,7 @@ onBeforeUnmount(() => {
   visibility: hidden;
 }
 
-/* The day and night layer: the shadow, then its light (terminator line, lights, reticle) added on top. */
+/* The day and night layer: a dark overlay, then settlement lights added on top. */
 .doss-stage-daynight {
   position: absolute;
   inset: 0;
@@ -727,15 +988,22 @@ onBeforeUnmount(() => {
   to { transform: translateY(0); }
 }
 
+.doss-scale {
+  margin: 8px 0 0;
+  color: var(--text-muted);
+  font: 400 12px/16px var(--font-text);
+}
+
 .doss-map-caption {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
   min-height: 28px;
   padding-top: 8px;
-  font-size: 11.5px;
-  line-height: 1.3;
+  font-size: 12px;
+  line-height: 16px;
 }
 
 .doss-hint {
@@ -767,6 +1035,10 @@ onBeforeUnmount(() => {
   .doss-toggle,
   .doss-pip {
     transition: none;
+  }
+
+  .doss-map-frame.is-large {
+    animation: none;
   }
 }
 </style>

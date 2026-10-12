@@ -93,3 +93,9 @@ Questions for Johnny written out in full, recommended answer first. After each
 meaningful step append one line under Progress: "done: X. next: Y."
 
 ## Progress
+
+done: the live shots show a bright terminator, hexes only with Symbols, and no key. next: draw the grid always, soften the night edge, and add the key and the large view.
+
+done: the grid stays on, the night edge is a dark tint, and the column map opens large with a key. next: run the gates and shoot the map.
+
+done: the report is written. next: stop.

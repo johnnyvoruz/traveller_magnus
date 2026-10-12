@@ -1,9 +1,18 @@
-import { chartEntry, generateHex } from '@voyage/generation';
+import { chartEntry, densityKeeps, generateHex } from '@voyage/generation';
 import { BUILDER_LIMITS, SectorHex, sha256Hex, stable } from '@voyage/shared';
 import type { Env } from '../env';
 import { chartHoldsSystem, chartTree, generationSeed, hexDoorPath, sectorOf } from '../universe/hexes';
 
 const OBJECT_QUOTA_BYTES = 250 * 1024 * 1024;
+// One post is one universe mutation, and a universe allows 120 mutations a
+// minute. Thirty-two hexes keeps a subsector to three posts. The transaction
+// cap stays BUILDER_LIMITS.batch (64).
+const GENERATE_SLICE = 32;
+
+export async function enqueueGenerate(queue: Queue, universeId: string, jobId: string, hexCount: number): Promise<void> {
+    if (hexCount < 1) return;
+    await queue.send({ kind: 'generate', universeId, jobId, offset: 0 });
+}
 
 type GenerateMessage = { kind?: unknown; universeId?: unknown; jobId?: unknown; offset?: unknown };
 type HexView = { state?: string; treeHash?: string | null; baseHash?: string | null; rev?: number };
@@ -47,78 +56,96 @@ async function runBatch(env: Env, universeId: string, jobId: string, offset: num
         generator: string;
         roll: number;
         filledToo: boolean;
+        density?: 'every' | 'sparse' | 'standard' | 'dense';
         seed: string;
         settings: Record<string, unknown>;
         engineVersion: string;
         captured: Record<string, { rev: number; baseHash: string | null } | null>;
     };
     if (job.state === 'done' || job.state === 'failed' || job.state === 'stopped') return;
-    const slice = spec.hexKeys.slice(offset, offset + BUILDER_LIMITS.batch);
+    // A retry continues from the hexes already counted. The same message walks
+    // the rest. A follow-up message is what the local queue broker drops.
+    let cursor = typeof (opened.data.job as { done?: unknown }).done === 'number' ? (opened.data.job as { done: number }).done : offset;
     const charts = new Map<string, Record<string, unknown> | null>();
     const pin = (await call(env, universeId, '/pin')).data as { truthVersion: string | null };
-    const writes: Array<Record<string, unknown>> = [];
-    const skipped: string[] = [];
-    const failures: Array<{ hexKey: string; reason: string }> = [];
-    let addedBytes = 0;
-    let stopped = false;
-    for (const hexKey of slice) {
-        const live = (await call(env, universeId, `/jobs/${encodeURIComponent(jobId)}`)).data as { state: string };
-        if (live.state === 'stopped') {
-            stopped = true;
-            break;
-        }
-        try {
-            const row = await readRow(env, universeId, hexKey);
-            const { sector, local } = sectorOf(hexKey);
-            const chart = await chartHexes(env, pin.truthVersion, sector, charts);
-            const entry = chart ? chart[local] : undefined;
-            const holds = (row && row.state !== 'removed' && row.treeHash) || (!row && chartHoldsSystem(entry));
-            if (holds && !spec.filledToo) {
-                skipped.push(hexKey);
-                continue;
+    while (cursor < spec.hexKeys.length) {
+        const slice = spec.hexKeys.slice(cursor, cursor + GENERATE_SLICE);
+        const writes: Array<Record<string, unknown>> = [];
+        const skipped: string[] = [];
+        const leftEmpty: string[] = [];
+        const failures: Array<{ hexKey: string; reason: string }> = [];
+        let addedBytes = 0;
+        let stopped = false;
+        for (const hexKey of slice) {
+            const live = (await call(env, universeId, `/jobs/${encodeURIComponent(jobId)}`)).data as { state: string };
+            if (live.state === 'stopped') {
+                stopped = true;
+                break;
             }
-            const captured = spec.captured[hexKey];
-            const envelope = generateHex({
-                hexKey,
-                edition: spec.edition,
-                mode: spec.generator,
-                summary: { type: 'SYSTEM_PRESENT' },
-                pinned: {
-                    seed: generationSeed(spec.seed, spec.roll),
-                    settings: spec.settings,
+            try {
+                const row = await readRow(env, universeId, hexKey);
+                const { sector, local } = sectorOf(hexKey);
+                const chart = await chartHexes(env, pin.truthVersion, sector, charts);
+                const entry = chart ? chart[local] : undefined;
+                const holds = (row && row.state !== 'removed' && row.treeHash) || (!row && chartHoldsSystem(entry));
+                const decision = densityKeeps({
+                    universeSeed: spec.seed,
+                    hexKey,
+                    density: spec.density ?? 'every',
+                    alone: spec.hexKeys.length === 1,
+                    holds: Boolean(holds),
+                    filledToo: spec.filledToo,
+                });
+                if (decision === 'skip') {
+                    skipped.push(hexKey);
+                    continue;
+                }
+                if (decision === 'empty') {
+                    leftEmpty.push(hexKey);
+                    continue;
+                }
+                const captured = spec.captured[hexKey];
+                const envelope = generateHex({
+                    hexKey,
+                    edition: spec.edition,
+                    mode: spec.generator,
+                    summary: { type: 'SYSTEM_PRESENT' },
+                    pinned: {
+                        seed: generationSeed(spec.seed, spec.roll),
+                        settings: spec.settings,
+                        engineVersion: spec.engineVersion,
+                    },
+                });
+                const bytes = stable(envelope);
+                const stored = await storeTree(env, universeId, bytes);
+                addedBytes += stored.added;
+                writes.push({
+                    hexKey,
+                    treeHash: stored.hash,
+                    baseHash: row?.baseHash ?? chartTree(entry),
+                    roll: spec.roll,
+                    baseRev: captured ? captured.rev : 0,
+                    capturedRev: captured ? captured.rev : 0,
                     engineVersion: spec.engineVersion,
-                },
-            });
-            const bytes = stable(envelope);
-            const stored = await storeTree(env, universeId, bytes);
-            addedBytes += stored.added;
-            writes.push({
-                hexKey,
-                treeHash: stored.hash,
-                baseHash: row?.baseHash ?? chartTree(entry),
-                roll: spec.roll,
-                baseRev: captured ? captured.rev : 0,
-                capturedRev: captured ? captured.rev : 0,
-                engineVersion: spec.engineVersion,
-                entry: SectorHex.parse(chartEntry(envelope.body as Record<string, unknown>, stored.hash)),
-            });
-        } catch (err) {
-            failures.push({ hexKey, reason: String(err).slice(0, BUILDER_LIMITS.reason) });
+                    entry: SectorHex.parse(chartEntry(envelope.body as Record<string, unknown>, stored.hash)),
+                });
+            } catch (err) {
+                failures.push({ hexKey, reason: String(err).slice(0, BUILDER_LIMITS.reason) });
+            }
         }
-    }
-    const finished = stopped || offset + slice.length >= spec.hexKeys.length;
-    await call(env, universeId, `/jobs/${encodeURIComponent(jobId)}/batch`, 'POST', {
-        offset, writes, skipped, failures, finished,
-    });
-    if (addedBytes > 0) {
-        await env.DB.prepare(
-            `UPDATE universes SET object_bytes = object_bytes + ? WHERE id = ?`,
-        ).bind(addedBytes, universeId).run();
-    }
-    const count = (await call(env, universeId, '/hexes/count')).data as { count: number };
-    await env.DB.prepare(`UPDATE universes SET hex_override_count = ? WHERE id = ?`).bind(count.count, universeId).run();
-    if (!finished) {
-        await env.GENERATE_QUEUE.send({ kind: 'generate', universeId, jobId, offset: offset + slice.length });
+        const finished = stopped || cursor + slice.length >= spec.hexKeys.length;
+        await call(env, universeId, `/jobs/${encodeURIComponent(jobId)}/batch`, 'POST', {
+            offset: cursor, writes, skipped, failures, finished, leftEmpty,
+        });
+        if (addedBytes > 0) {
+            await env.DB.prepare(
+                `UPDATE universes SET object_bytes = object_bytes + ? WHERE id = ?`,
+            ).bind(addedBytes, universeId).run();
+        }
+        const count = (await call(env, universeId, '/hexes/count')).data as { count: number };
+        await env.DB.prepare(`UPDATE universes SET hex_override_count = ? WHERE id = ?`).bind(count.count, universeId).run();
+        if (finished) return;
+        cursor += slice.length;
     }
 }
 

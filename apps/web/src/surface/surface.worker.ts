@@ -16,6 +16,7 @@ import {
     type VanillaPaintInputs,
 } from './contracts.ts';
 import { renderEnhancedMapPixels } from './enhanced/map.ts';
+import { LARGE_SHEET, SHEET_LAYOUT, type SheetLayout } from './hybrid/field.ts';
 import { renderHybridPixels } from './hybrid/index.ts';
 import { MAP_HEIGHT, MAP_WIDTH, renderFlatMapPixels, type DiamondMapInputs } from './vanilla/map.ts';
 
@@ -31,8 +32,18 @@ type Job = {
     inputs: VanillaPaintInputs;
     enhanced: EnhancedPaintInputs | null;
     hybrid: HybridPaintInputs | null;
+    /** Hybrid sheet layout. Null keeps the 800 × 400 sheet. */
+    layout: SheetLayout | null;
     cancelled: boolean;
 };
+
+function layoutOf(message: SurfaceWorkerMessage): SheetLayout | null {
+    const spec = message.sheet;
+    if (!spec || message.mode !== 'enhanced' || !message.hybrid) return null;
+    if (spec.width === LARGE_SHEET.width && spec.height === LARGE_SHEET.height && spec.side === LARGE_SHEET.side) return LARGE_SHEET;
+    if (spec.width === SHEET_LAYOUT.width && spec.height === SHEET_LAYOUT.height && spec.side === SHEET_LAYOUT.side) return SHEET_LAYOUT;
+    return null;
+}
 
 const QUEUE_CAP = 2;
 
@@ -41,13 +52,13 @@ export function attachSurfaceWorker(
     options?: {
         render?: (inputs: DiamondMapInputs) => Uint8ClampedArray;
         renderEnhanced?: (inputs: EnhancedPaintInputs) => Uint8ClampedArray;
-        renderHybrid?: (inputs: HybridPaintInputs) => Uint8ClampedArray;
+        renderHybrid?: (inputs: HybridPaintInputs, layout?: SheetLayout) => Uint8ClampedArray;
         schedule?: (fn: () => void) => void;
     },
 ): void {
     const render = options?.render ?? ((inputs: DiamondMapInputs) => renderFlatMapPixels(inputs));
     const renderEnhanced = options?.renderEnhanced ?? ((inputs: EnhancedPaintInputs) => renderEnhancedMapPixels(inputs));
-    const renderHybrid = options?.renderHybrid ?? ((inputs: HybridPaintInputs) => renderHybridPixels(inputs));
+    const renderHybrid = options?.renderHybrid ?? ((inputs: HybridPaintInputs, layout?: SheetLayout) => renderHybridPixels(inputs, layout ?? SHEET_LAYOUT));
     const schedule = options?.schedule ?? ((fn: () => void) => { setTimeout(fn, 0); });
     const queued: Job[] = [];
     let active: Job | null = null;
@@ -88,7 +99,7 @@ export function attachSurfaceWorker(
         const job = queued.shift();
         if (!job) return;
         active = job;
-        const pixels = job.hybrid ? renderHybrid(job.hybrid) : job.enhanced ? renderEnhanced(job.enhanced) : render(job.inputs);
+        const pixels = job.hybrid ? renderHybrid(job.hybrid, job.layout ?? undefined) : job.enhanced ? renderEnhanced(job.enhanced) : render(job.inputs);
         active = null;
         if (job.cancelled) {
             dropped(job);
@@ -99,8 +110,8 @@ export function attachSurfaceWorker(
                 op: 'map',
                 mode: job.mode,
                 generation: job.generation,
-                width: MAP_WIDTH,
-                height: MAP_HEIGHT,
+                width: job.layout?.width ?? MAP_WIDTH,
+                height: job.layout?.height ?? MAP_HEIGHT,
                 pixels,
             }, [pixels.buffer as ArrayBuffer]);
         }
@@ -125,6 +136,7 @@ export function attachSurfaceWorker(
             inputs: message.inputs,
             enhanced: message.mode === 'enhanced' && message.enhanced ? message.enhanced : null,
             hybrid: message.mode === 'enhanced' && message.hybrid ? message.hybrid : null,
+            layout: layoutOf(message),
             cancelled: false,
         });
         trim();

@@ -45,7 +45,12 @@ function buildRow(row: ReturnType<Builder['row']>): BuildRow | null {
     return { hexKey: row.hexKey, state: row.state, entry: rowEntry(row), roll: row.roll, rev: row.rev };
 }
 
-export function asBuildStore(builder: Builder): BuildStore & { generateGrowing: Builder['generateGrowing'] } {
+export function asBuildStore(builder: Builder): BuildStore & {
+    generateGrowing: Builder['generateGrowing'];
+    /** The job in flight, including one picked up after the map was left. Absent from the seam type: Lane D reads it here. */
+    job: Builder['job'];
+    stopJob: Builder['stopJob'];
+} {
     return {
         universe(): BuildUniverse | null {
             return builder.universe();
@@ -99,5 +104,7 @@ export function asBuildStore(builder: Builder): BuildStore & { generateGrowing: 
         },
         restore: async (hexKeys) => ({ id: builder.restore(hexKeys).id }),
         undo: (token) => builder.undo(token),
+        job: builder.job,
+        stopJob: () => builder.stopJob(),
     };
 }

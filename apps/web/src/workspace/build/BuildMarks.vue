@@ -13,6 +13,7 @@ import type { Camera, Viewport } from '../../map/camera.ts';
 import { cameraTransform, hexesPath, hexPoints, slotBox, type SectorPlace } from './marks.ts';
 import { flight, flightSplit, revOf } from './flight.ts';
 import { build } from './state.ts';
+import { undoLeft } from './undo_words.ts';
 
 export type HoverMark = {
     /** The hex's corners in parsecs, or empty when only a slot is hovered. */
@@ -77,6 +78,8 @@ const waitingAt = computed(() => {
     if (build.rolling && !keys.includes(build.rolling)) keys.push(build.rolling);
     return keys.length ? hexesPath(keys, props.sectorOf) : '';
 });
+/** The hexes an Undo left as they are, while the toast that names them shows. */
+const leftAt = computed(() => (undoLeft.keys.length ? hexesPath(undoLeft.keys, props.sectorOf) : ''));
 const landedAt = computed(() => (inFlight.value.landed.length ? hexesPath(inFlight.value.landed, props.sectorOf) : ''));
 
 function show(el: Element | null, on: boolean): void {
@@ -159,6 +162,7 @@ defineExpose({
       <polygon v-if="previewAt" class="build-mark-preview" :points="previewAt" />
       <path v-if="landedAt" class="build-mark-landed" :d="landedAt" />
       <path v-if="waitingAt" class="build-mark-working" :d="waitingAt" />
+      <path v-if="leftAt" class="build-mark-left" :d="leftAt" />
       <path ref="preEl" class="build-mark-pre" hidden />
       <polygon ref="hoverEl" class="build-mark-hover" hidden />
     </g>
@@ -223,6 +227,13 @@ defineExpose({
   fill: color-mix(in srgb, var(--signal) 22%, transparent);
   stroke: var(--chart-selected);
   stroke-width: 1.5;
+}
+
+/* A hex an Undo left as it is, because it had changed since: amber, solid, while the toast that names it shows. */
+.build-mark-left {
+  fill: color-mix(in srgb, var(--attention) 14%, transparent);
+  stroke: var(--attention);
+  stroke-width: 2.5;
 }
 
 @keyframes build-mark-march {

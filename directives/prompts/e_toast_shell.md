@@ -61,3 +61,6 @@ Questions for Johnny written out in full, recommended answer first. After each
 meaningful step append one line under Progress: "done: X. next: Y."
 
 ## Progress
+
+done: one strip in App.vue, views unmounted, busy and action.close on the toast, ring drawn in the strip, announcement once. next: tests, then the four gates and the browser pass.
+done: tests, gates, and the browser pass. A narrow panel uses the lower right so the toast stays on screen. Report written.

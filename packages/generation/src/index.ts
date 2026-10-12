@@ -12,6 +12,7 @@ import { toGlobal } from './geometry.ts';
 import { roundedLoops } from './polities.ts';
 
 export { sectorOverview } from './overview.ts';
+export { densityKeeps, rollHoldsSystem } from './density.ts';
 export { formOf, applyForm, blankEnvelope, handFromForm, FormRefusal } from './form.ts';
 export { handChartEntry, handWalk } from './hand.ts';
 export { polityColour, polityOutlines } from './polities.ts';

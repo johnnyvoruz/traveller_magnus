@@ -56,3 +56,5 @@ Write `directives/reports/a_form_followups.md` from `directives/reports/_TEMPLAT
 After each meaningful step append one line under Progress: "done: X. next: Y."
 
 ## Progress
+done: lookup is copied, a Keep refusal names the field, and a closed store's job is picked up by the next store. Tests for all three pass. next: the same job on a private server, then the gates and the report.
+done: the private server showed the next store follow a 16-hex job from running to done and Undo it. Gates are in. One failing test is Lane C's surface hybrid. next: stop.

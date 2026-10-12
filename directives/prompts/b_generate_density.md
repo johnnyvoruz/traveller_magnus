@@ -110,3 +110,6 @@ done: an 80-hex job stayed queued while the worker held 64 hexes before posting.
 done: four-hex slices finish a subsector, then the local queue stalls when the consumer sends the next slice. next: enqueue every slice up front and rerun.
 done: pre-enqueued slices still stop near the hundredth message. next: one message walks the job, posting every four hexes.
 done: the universe allows 120 mutations a minute and a four-hex post hit that on the fifth subsector. next: post thirty-two hexes at a time and rerun.
+done: thirty-two hexes a post passes, and one walking message would close the speed work. next: send one message per slice and rerun the worker test.
+done: one message per slice stalls on the local broker under two workers. next: one message posts every 32 hexes, then the report.
+done: the worker suite passed and the report is written. next: stop.

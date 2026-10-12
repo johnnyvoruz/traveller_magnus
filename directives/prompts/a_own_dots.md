@@ -75,3 +75,4 @@ Questions for Johnny written out in full, recommended answer first. After each
 meaningful step append one line under Progress: "done: X. next: Y."
 
 ## Progress
+done: overview dots are the published cell string only, and no route returns that string with the referee's rows applied. next: write the route for Lane B and stop.

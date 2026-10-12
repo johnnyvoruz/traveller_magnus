@@ -23,6 +23,9 @@ export function layoutFor(width: number, height: number, side: number): SheetLay
 /** The app's sheet: 800 × 400, as the stage and the cache have always had it. */
 export const SHEET_LAYOUT: SheetLayout = layoutFor(800, 400, 132);
 
+/** The large map: the same net, twice the side, on a 1600 × 800 sheet. */
+export const LARGE_SHEET: SheetLayout = layoutFor(1600, 800, 264);
+
 /** Half size, for the day and night overlay. */
 export function halfLayout(layout: SheetLayout): SheetLayout {
     return { width: Math.ceil(layout.width / 2), height: Math.ceil(layout.height / 2), side: layout.side / 2, ox: layout.ox / 2, oy: layout.oy / 2 };

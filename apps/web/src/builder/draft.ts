@@ -95,20 +95,26 @@ export function blank(hexKey: string): Promise<BlankOpened> {
     return bound.blank(hexKey);
 }
 
+function cloneField(field: FormField): FormField {
+    const copy: FormField = {
+        id: field.id,
+        label: field.label,
+        kind: field.kind,
+        permission: field.permission,
+        value: field.value,
+        options: field.options.map((option) => ({ value: option.value, label: option.label })),
+    };
+    if (field.lookup !== undefined) copy.lookup = field.lookup;
+    return copy;
+}
+
 function cloneForm(form: EditForm): EditForm {
     const copy: EditForm = {
         edition: form.edition,
         sections: form.sections.map((section) => ({
             id: section.id,
             label: section.label,
-            fields: section.fields.map((field) => ({
-                id: field.id,
-                label: field.label,
-                kind: field.kind,
-                permission: field.permission,
-                value: field.value,
-                options: field.options.map((option) => ({ value: option.value, label: option.label })),
-            })),
+            fields: section.fields.map((field) => cloneField(field)),
         })),
     };
     if (form.mode) copy.mode = form.mode;
