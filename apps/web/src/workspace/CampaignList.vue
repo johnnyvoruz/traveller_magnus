@@ -30,6 +30,7 @@ const emit = defineEmits<{
     create: [type: CampaignRecordType];
     /** The map has to be seen (a locate): the panel gives way when it covers it. */
     map: [];
+    timeline: [];
 }>();
 
 const query = recordQuery;
@@ -225,6 +226,7 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
             @keydown="onSearchKey"
           >
         </label>
+        <button type="button" class="ui-btn" @click="emit('timeline')">Timeline</button>
         <AddButton :type="addType" :disabled="readOnly" @add="add" />
       </div>
 

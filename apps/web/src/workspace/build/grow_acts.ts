@@ -10,11 +10,11 @@ import { reactive } from 'vue';
 import { showToast } from '../../shell/toast.ts';
 import { hexName, holdJob, selectOnMap, stopBuild, tallyOf } from './acts.ts';
 import { isOutcome, sayUndo } from './undo_words.ts';
-import { endJobToast, startJobToast } from './job_toast.ts';
-import { endFlight, renameFlight, startFlight } from './flight.ts';
+import { endJobToast, jobUndo, NO_JOB_UNDO, startJobToast, takenOver } from './job_toast.ts';
+import { endFlight, noteFlight, renameFlight, startFlight } from './flight.ts';
 import { buildStore, type GrowHandle, type GrowProgress, type JobProgress, type UndoToken } from './seam.ts';
 import { cleanName, slotGroups } from './sectors.ts';
-import { build, generateTargets, jobToast, plural } from './state.ts';
+import { build, generateTargets, jobLabel, jobToast, plural } from './state.ts';
 
 /** The names typed for the new sectors, by the slot's address; kept while the selection lasts. */
 export const growUi = reactive({
@@ -48,7 +48,13 @@ export function screenProgress(progress: GrowProgress): JobProgress {
     const state = progress.state === 'stopping' || progress.state === 'stopped' || progress.state === 'running' || progress.state === 'done'
         ? progress.state
         : progress.state === 'failed' ? 'done' : 'running';
-    return { total: progress.total, done: progress.done, failed: progress.failed, state };
+    const out: JobProgress = { total: progress.total, done: progress.done, failed: progress.failed, state };
+    // The density counts, when the store sends them (findings/builder_density_ready.md).
+    if (progress.skipped !== undefined) out.skipped = progress.skipped;
+    if (progress.leftEmpty !== undefined) out.leftEmpty = progress.leftEmpty;
+    if (progress.placed) out.placed = progress.placed;
+    if (progress.landed) out.landed = progress.landed;
+    return out;
 }
 
 /** "the new sector Vell", or "2 new sectors: Vell, Ostra". */
@@ -126,7 +132,8 @@ export function generateGrowing(keys: readonly string[]): void {
     const targets = generateTargets(tallyOf(keys), build.filledToo);
     if (targets.length === 0) return;
     const made = slots.map((group) => names[group.slug]);
-    const label = 'Generating ' + plural(targets.length, 'hex', 'hexes');
+    const density = build.density;
+    const label = jobLabel(targets.length, density);
     build.error = '';
     build.sheetOpen = false;
     build.preview = null;
@@ -139,7 +146,12 @@ export function generateGrowing(keys: readonly string[]): void {
             roll: 0,
             filledToo: true,
             makeSectors: slots.map((group) => ({ name: names[group.slug], slot: group.slot })),
-        }, (progress) => { if (build.job) build.job = { ...screenProgress(progress), label }; });
+            density,
+        }, (progress) => {
+            const now = screenProgress(progress);
+            noteFlight(now);
+            if (build.job) build.job = { ...now, label };
+        });
     } catch (err) {
         growUi.error = said(err, 'Couldn’t create the sector. Try again.');
         return;
@@ -181,11 +193,20 @@ export function generateGrowing(keys: readonly string[]): void {
     );
     run.finished.then(
         ({ undo, progress }) => {
+            // Taken over by the store that follows it after a route change: its end was said there.
+            if (takenOver()) {
+                holdJob(null);
+                growUi.undoRunning = null;
+                return;
+            }
             end();
             if (undone) return;
-            showToast(jobToast(screenProgress(progress), madeWords(made)), { action: { label: 'Undo', run: () => { void takeBack(undo, made); } } });
+            const token = jobUndo(undo, store);
+            if (token) showToast(jobToast(screenProgress(progress), madeWords(made)), { action: { label: 'Undo', run: () => { void takeBack(token, made); } } });
+            else showToast(jobToast(screenProgress(progress), madeWords(made)) + ' ' + NO_JOB_UNDO);
         },
         (err: unknown) => {
+            if (takenOver()) return;
             end();
             // A refusal before the answer was said beside the names; one after it (the job's watch) is said here.
             if (answered) build.error = said(err, 'The job didn’t finish. Some hexes might still be empty. To fill them, select them and generate again.');

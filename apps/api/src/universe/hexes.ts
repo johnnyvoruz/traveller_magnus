@@ -679,6 +679,23 @@ export function undoJob(sql: Sql, id: string, pin: Pin, now: string): BuilderJob
     });
 }
 
+export type DotSourceRow = { local: string; holds: boolean; uwp: string };
+
+/** Every referee row in these sectors. One query each. The caller bounds the list. */
+export function readDotRows(sql: Sql, sectors: string[]): { sector: string; rows: DotSourceRow[] }[] {
+    return sectors.map((sector) => {
+        const rows = sql.exec(`SELECT local_hex, deleted, uwp FROM hexes WHERE sector_slug = ?`, sector);
+        return {
+            sector,
+            rows: rows.map((row) => ({
+                local: String(row.local_hex ?? ''),
+                holds: Number(row.deleted) !== 1,
+                uwp: typeof row.uwp === 'string' ? row.uwp : '',
+            })),
+        };
+    });
+}
+
 export function countHexes(sql: Sql): number {
     const rows = sql.exec(`SELECT COUNT(*) AS n FROM hexes`);
     return Number(rows[0]?.n ?? 0);
@@ -731,6 +748,13 @@ export async function respondBuilder(sql: Sql, request: Request, now: string): P
         if (request.method === 'GET' && path === '/pin') {
             if (!pin) throw new HexRefusal('not_found', 'No pin.');
             return json(pin);
+        }
+        if (request.method === 'GET' && path === '/hexes/dot-rows') {
+            const raw = url.searchParams.get('sectors') ?? '';
+            const sectors = raw.split(',').map((item) => item.trim()).filter(Boolean);
+            if (sectors.length < 1 || sectors.length > 32) throw new HexRefusal('validation', 'Invalid request.');
+            if (!pin) return json(sectors.map((sector) => ({ sector, rows: [] })));
+            return json(readDotRows(sql, sectors));
         }
         if (!pin && request.method === 'GET' && path === '/hexes') return json({ items: [], nextCursor: null });
         if (!pin && request.method === 'GET' && path === '/hexes/count') return json({ count: 0 });

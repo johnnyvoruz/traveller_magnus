@@ -24,12 +24,22 @@ export type HexView = {
 /** `stopping` is local, while the stop request is in flight. The server then says `stopped`. */
 export type JobState = BuilderJobState | 'stopping';
 
+/** Absent on the wire means `every`. The store omits the field in that case. */
+export type GenerateDensityName = 'every' | 'sparse' | 'standard' | 'dense';
+
 export type JobProgress = {
     total: number;
+    /** Hexes finished: written, skipped, failed, or left empty. Not the systems written. */
     done: number;
     /** Hex keys, from the job's failures. The count on the wire is separate. */
     failed: string[];
     skipped: number;
+    /** Empty hexes the density roll did not write. Not part of `skipped`. */
+    leftEmpty: number;
+    /** Hex keys written, in write order. Systems generated is `placed.length`. */
+    placed: string[];
+    /** Keys written since the previous callback, in that same order. Empty on the opening callback. */
+    landed: string[];
     state: JobState;
 };
 
@@ -60,6 +70,8 @@ export type GenerateGrowingBody = {
     generator: BuilderGenerator;
     roll: number;
     filledToo: boolean;
+    /** Absent means `every`, and the field is left off the request. */
+    density?: GenerateDensityName;
     makeSectors: readonly GrowSectorSeed[];
 };
 

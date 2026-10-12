@@ -3,7 +3,7 @@
 Issued 2026-10-11 by the orchestrator. You may be a fresh session with no memory. Read
 `CLAUDE.md`, `directives/manifesto.md`, `directives/board.md`, `directives/lanes/B.md`,
 then this file. No git but read-only, no deploy, no `rules/`, no Traveller rule from
-memory. Do `prompts/b_keep_crash_dots.md` first if it has no report yet (it is urgent).
+memory. Your Keep-crash and dots report is accepted; both go out in version 1.1.6.
 
 ## 1. The cap (Johnny, 2026-10-11)
 

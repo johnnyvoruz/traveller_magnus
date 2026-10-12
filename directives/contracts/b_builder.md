@@ -56,6 +56,24 @@ Errors: 400 `validation` `sector is required.` or `Invalid limit.` With no gener
 
 A stored hex whose key starts with `~` has `state: 'own'` even on a pinned universe. That state rule is **on disk, unpushed**.
 
+### `GET /:id/hexes/:sector/dots` — **on disk, unpushed**
+
+Owner only. One sector. `:sector` is a chart slug (`Charted`, `Spinward_Marches`) or an own sector id (`~` plus 26 Crockford characters).
+
+Answer data: `BuilderDots` `{ cells, stamp }`. `cells` is 1,280 characters. `stamp` is the sha256 of `cells`. The response header `ETag` is `"<stamp>"`. `If-None-Match` of that stamp, quoted or not, is 304 with an empty body.
+
+Cell order is the overview's order. `packages/generation/src/overview.ts` `sectorOverview` writes `cells[(col - 1) * 40 + (row - 1)]`, and `tools/truth/build.js` pushes that string into `overview.json`. Column is `floor(i / 40) + 1`. Row is `(i % 40) + 1`. `.` is empty. Any other character is a system. A chart UWP that starts with `.` is stored as `?` by `sectorOverview`. A held row with an empty profile is also `?`.
+
+The string is the chart's `cells` for that slug at the universe's pinned truth version, then the referee's rows. A row with `deleted` not 1 sets the cell to the first character of its UWP, or `?` when that character is missing or `.`. A removed row sets `.`. A hex with no row keeps the chart character. A sector id that starts with `~`, or a slug the overview does not list, starts as 1,280 dots and then the rows.
+
+Cost of one call: one SQL read of that sector's hex rows (`local_hex`, `deleted`, `uwp`). The response is about 1.4 KB. When the sector is a chart slug and the universe has a truth version, the first call in a Worker isolate also reads `truth/<version>/overview.json` (the live v5 file is 1,417,411 bytes) and keeps each sector's 1,280 characters for that version. A later call for the same version does not read it again.
+
+Errors: 400 `validation` `Invalid request.` for a sector id that is neither a chart slug nor an own sector id. 401 and 404 as in "Who may call".
+
+### `GET /:id/hexes/dots?sectors=a,b,c` — **on disk, unpushed**
+
+The same overlay for more than one sector. `sectors` is a comma-separated list, at most `BUILDER_LIMITS.dots` (32), no duplicates. One SQL read per sector. The overview object is read at most once. Answer data: `BuilderDotsPage` `{ sectors: [{ sector, cells, stamp }], stamp }`. The page `stamp` is the sha256 of `sector=stamp` lines in request order. `ETag` and `If-None-Match` use the page stamp. More than 32, a duplicate, an empty list, or a bad id is 400 `Invalid request.`
+
 ### `GET /:id/hexes/:sector/:local` — **live at `3d28e33`**
 
 Answer data: `BuilderHex` when a row exists.

@@ -1,27 +1,25 @@
 # Board
 
-One line per lane. Only the orchestrator edits this file. Updated 2026-10-11 21:05 (by the clock).
+One line per lane. Only the orchestrator edits this file. Updated 2026-10-11 22:20 (by the clock).
 
-**Last push: `76e5a57`, version 1.1.4, 2026-10-11.** Any prompt that says "start only
+**Last push: `cdb6385`, version 1.1.5, 2026-10-11.** Any prompt that says "start only
 after the board says the push is made" may start.
 
 | Lane | Status | Current prompt | Blocker / next |
 |---|---|---|---|
-| A | go | prompts/a_density_store.md | density, leftEmpty and landed keys through the store; then the dots and the allowance as B lands them |
-| B | go, **urgent** | prompts/b_keep_crash_dots.md, then b_generate_cap.md, then b_generate_speed.md | Keep throws on a freshly generated system (D found it); the dots route A is blocked on; then the cap; then speed |
-| C | free | (none) | dossier map accepted (open large, key, grid always on, soft night, 12-degree twilight). Next, not yet written: high-tilt disc ice; the dry-world caption |
-| D | go | prompts/d_density_sheet.md | refusal at its field; one spinner in design/; the toast's flags and a job across routes; density when A reports |
-| E | go | prompts/e_timeline_list.md | Campaign order step 3: the timeline as a list |
+| A | go | prompts/a_own_dots_2.md | the zoomed-out dots, with B's route (MapRenderer.ts: three places lent) |
+| B | go | prompts/b_generate_cap.md, then b_passkeys.md, then b_generate_speed.md | the daily cap of 100 and two hand-form faults; then username and passkey sign-in; then speed |
+| C | in flight | prompts/c_surface_map_2.md | built, gates passed, shooting the production build at 22:05; its eight files are left out of 1.1.6 |
+| D | go | prompts/d_menu_selection.md | a right-click inside a selection keeps it; the daily allowance when B and A have it |
+| E | go | prompts/e_handout_images.md | Campaign step 6: an image on a journal entry; confirms the upload and schema first |
 | F | retired | (none) | Johnny, 2026-10-11: unreliable (runs out of budget); do not use or propose until he says it is back |
 
 **Restarting a frozen lane:** paste the block in directives/lanes/START.md with the
 lane's letter as the first message of a new session; from then on "go" is enough.
 
 ## Shared files this turn
-- shell/ToastStrip.vue: **D only**, one swap (the spinner from design/).
-- workspace/CampaignPanel.vue and the pane's list that links to the timeline: **lent to E**, one line each.
-- map/MapRenderer.ts (`overviewPoints`, `setChart`, one new setter): lent to A for the dots, when B's route exists.
-- views/MapView.vue, views/OrbitView.vue, dossier/DossierPanel.vue, dossier/DossierBody.vue: no lane.
+- map/MapRenderer.ts (`overviewPoints`, `setChart`, one new setter): **lent to A**. D keeps out of the renderer.
+- workspace/images.ts: lent to E only if a helper must take an entry (lines named in its report).
 - design/tokens.css: any lane may append its own token lines.
 
 ## Contracts
@@ -40,7 +38,7 @@ lane's letter as the first message of a new session; from then on "go" is enough
    (findings/campaign_gap_audit.md §4), steps 1 to 5 first. Step 4 (`@` mention) is done.
 
 ## Known, not fixed
-- **Keep on a freshly generated system throws** "w.solarDayHours.toFixed is not a
+- (fixed, in push 1.1.6) **Keep on a freshly generated system throws** "w.solarDayHours.toFixed is not a
   function" on most MgT2E systems (D, local API, production bundle). The call is a
   trace line, `mgt2e_world_engine.js` 1692; the caller in `packages/generation` is
   the suspect. May be live. B, urgent.
@@ -92,10 +90,11 @@ lane's letter as the first message of a new session; from then on "go" is enough
   the blank request body (read from what the server stored).
 
 ## Pending push
-**Ready: version 1.1.5**, `findings/push/builder_2026-10-11f.md`. Tree green at 21:10
-(1426 pass; checker, typecheck, build pass), every lane idle between prompts.
-Carries density on the server (the browser does not send it yet), the store fixes,
-Undo that says what it did, toasts on every route, the dossier map changes.
+**Ready: version 1.1.6**, `findings/push/builder_2026-10-11g.md`. Tree green at 22:10
+(1454 pass; checker, typecheck, build pass). Headline: **the Keep fix** (live fault
+since `3d28e33`). Also the density dropdown end to end, the dots routes, the timeline
+and dates on records, one spinner, the job toast across routes, the refusal at its
+field. **Left out: C's surface-map second pass in flight** (eight paths).
 Push before saying go.
 
 ## Decisions from Johnny
@@ -230,15 +229,46 @@ Push before saying go.
   higher-effort model, after the process is streamlined. Yes: a high-tilt world's
   orbit disc should show its ice where the dossier map does (C, later, small).
 
+- 2026-10-11: **the Undo system is low priority**: no more Undo work unless something
+  more important needs it. Yes: a generate job stays one resumable message until the
+  speed pass measures a split; a left hex named by number; the refused Undo stays
+  offered; the spinner moves to design/. The sun marker on the surface map: Johnny
+  looks on 1.1.5 first.
+
+- 2026-10-11, **flow:** questions are answered before a lane is told to go; a lane
+  whose prompt an open question could change is held.
+
+- 2026-10-11, yes to six: the column map has no key pop-over, "Key" opens the large
+  view; day and night keeps its fade, gains a faint terminator line and a darker night;
+  the sun marker comes back, small; the record page gets a date with an optional end;
+  a job's result has no Undo if the map was left in its first second, and says so;
+  Referee-only rows stay unmarked on the timeline. Also from him: the large map view
+  is centred, has zoom and pan controls, and a full legend that can be read.
+
+- 2026-10-11, passkey sign-in: **no email service if it can be avoided**; one account
+  when sign-ins share a verified email (yes); it goes after the cap and before speed in
+  B's queue (yes).
+
+- 2026-10-11, passkey sign-in: **an account is a username and a passkey; no email is
+  asked for** (his users care about privacy and do not want to give one).
+
+- 2026-10-11, passkey sign-in, yes to three: passkey only, no two-factor or
+  authenticator code; recovery by one-time codes shown at sign-up, a nudge to add a
+  second passkey, linking a provider optional; if passkey, codes and any linked
+  provider are all lost the account is lost, and the screen says so.
+
+- 2026-10-11: yes, B brings the passkey package (name, size, dependencies) to Johnny in
+  its design note and installs nothing until he says so.
+
 ## Open with Johnny
-1. B: keep a generate job as one resumable queue message until the speed pass measures
-   a split?
-2. D: a hex an Undo left is named by its number when it holds no system any more?
-   (built so)
-3. D: a refused one-hex Undo keeps offering Undo? (built so)
-4. E: lift the spinner to design/ so Build and the toast share it? (in D's prompt)
+Change no prompt:
+1. D: the density choice is remembered per universe; engine and method stay one
+   choice for every universe. Leave it?
+2. D: the second line under Generate reads "Standard, 3 in 6". Clear enough?
 
 ## Queue (prompts not yet written)
+- Screens for username and passkey sign-in (sign-in card, account page: passkeys,
+  recovery codes, linked providers): after B's contract `contracts/b_auth.md`.
 - C: the caption says "Water · frozen" on a dry frozen body (hydro 0; C's own finding).
 - C removed the sun reticle from the dossier map's day and night layer unasked: with Johnny.
 - E, Campaign order step 3 (timeline as a list), then 6 (handout images; ask B first).

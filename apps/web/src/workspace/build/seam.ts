@@ -7,7 +7,7 @@
  * Nothing here reads an engine's tree: a tree is handed to the dossier whole.
  */
 import type { SectorHex, TreeEnvelope } from '@voyage/shared';
-import { shallowRef } from 'vue';
+import { shallowRef, type Ref } from 'vue';
 
 /** What a hex is on this map. `truth` and `empty` have no row of the builder's. */
 export type HexState = 'empty' | 'truth' | 'override' | 'own' | 'removed';
@@ -35,7 +35,27 @@ export type Preview = {
 };
 
 export type JobState = 'running' | 'stopping' | 'stopped' | 'done';
-export type JobProgress = { total: number; done: number; failed: string[]; state: JobState };
+
+/** How many of the empty hexes a run fills (contracts/b_builder.md, both generate sections). Absent means every. */
+export type Density = 'every' | 'sparse' | 'standard' | 'dense';
+
+/**
+ * A job's counts (findings/builder_density_ready.md). `done` is the hexes checked: written,
+ * skipped, failed or left empty, in the order they were sent. `placed` is the keys written, in
+ * write order, and systems generated is `placed.length`; `landed` is the keys written since the
+ * last report; `leftEmpty` is how many the density roll did not write. The last four are optional:
+ * a store from before density does not send them.
+ */
+export type JobProgress = {
+    total: number;
+    done: number;
+    failed: string[];
+    state: JobState;
+    skipped?: number;
+    leftEmpty?: number;
+    placed?: string[];
+    landed?: string[];
+};
 
 /** What one Undo puts back. Opaque to the screens. */
 export type UndoToken = { id: string };
@@ -66,6 +86,7 @@ export type BuildStore = {
         hexes: { hexKey: string; truth: SectorHex | null }[],
         choice: GenerateChoice,
         onProgress: (progress: JobProgress) => void,
+        density?: Density,
     ): { stop: () => void; finished: Promise<{ token: UndoToken; progress: JobProgress }> };
     /** A chart system is hidden (`removed`); a system with no chart under it is gone. */
     remove(hexes: { hexKey: string; truth: SectorHex | null }[]): Promise<UndoToken>;
@@ -78,6 +99,20 @@ export type BuildStore = {
     generateGrowing(body: GrowBody, onProgress?: (progress: GrowProgress) => void): GrowHandle;
     /** Takes the act back. An act that can be put back again answers with the token that does it. */
     undo(token: UndoToken): Promise<UndoToken | UndoOutcome | null | void>;
+    /**
+     * A generate job this store follows, also one started by a store that has since closed (a route
+     * change): its counts, and an Undo token this store knows. Null when none runs or was just
+     * finished here (findings/builder_density_ready.md).
+     */
+    job?: Readonly<Ref<FollowedJob | null>>;
+    /** Asks the store that is still polling the followed job to stop it. */
+    stopJob?(): void;
+};
+
+/** A followed job, as the store gives it: `state` may also be `failed`. */
+export type FollowedJob = {
+    progress: { total: number; done: number; failed: string[]; state: string; skipped?: number; leftEmpty?: number; placed?: string[]; landed?: string[] };
+    undo: UndoToken;
 };
 
 export type GrowBody = {
@@ -87,10 +122,12 @@ export type GrowBody = {
     roll: number;
     filledToo: boolean;
     makeSectors: readonly { name: string; slot: Slot }[];
+    /** Absent means every; the store forwards the body as it is. */
+    density?: Density;
 };
 
 /** The store's own count of the act, as it polls: its states, not the screen's. */
-export type GrowProgress = { total: number; done: number; failed: string[]; state: string };
+export type GrowProgress = { total: number; done: number; failed: string[]; state: string; skipped?: number; leftEmpty?: number; placed?: string[]; landed?: string[] };
 
 export type GrowHandle = {
     stop(): void;

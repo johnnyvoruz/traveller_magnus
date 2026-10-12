@@ -109,6 +109,9 @@ export {
     BuilderJob,
     BuilderJobUndo,
     SignInProviders,
+    BuilderDots,
+    BuilderDotsSector,
+    BuilderDotsPage,
 } from './schemas/builder.ts';
 export {
     FormKind,

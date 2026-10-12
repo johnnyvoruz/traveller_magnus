@@ -21,6 +21,8 @@ import { createRecord, justCreated, recentlyDeleted } from './actions.ts';
 import CampaignCrumb from './CampaignCrumb.vue';
 import CampaignList from './CampaignList.vue';
 import { campaignCrumb, listCrumbLabel, type CrumbGo } from './crumb.ts';
+import TimelineList from './TimelineList.vue';
+import type { TimelineRow } from './timeline.ts';
 import ClockLine from './ClockLine.vue';
 import { editDateNext, journalFilter, journalQuery, recordFilter, recordQuery } from './list_state.ts';
 import PartyPanel from './PartyPanel.vue';
@@ -58,6 +60,9 @@ const list = ref<{ focusSearch: () => void } | null>(null);
 const clockLine = ref<{ edit: () => void } | null>(null);
 
 const span = ref<PanelSpan>(readSpan());
+/** The timeline is a view on the records tab. It is not its own address. */
+const showTimeline = ref(false);
+const onTimeline = computed(() => showTimeline.value && props.tab === 'records' && !props.recordId && !props.entryId);
 const online = ref(true);
 let stopSize: (() => void) | null = null;
 let stopOnline: (() => void) | null = null;
@@ -101,6 +106,7 @@ const TABS = ['records', 'party', 'journal'] as const;
 
 /** The records tab, the party's, or the journal's: each is an address, so Back works. */
 function showTab(tab: 'records' | 'party' | 'journal'): void {
+    showTimeline.value = false;
     if (tab === 'party') pushPane({ kind: 'party' });
     else if (tab === 'journal') pushPane({ kind: 'journal', entry: null });
     else pushPane({ kind: 'campaign', record: null });
@@ -144,6 +150,9 @@ const crumb = computed(() => {
     if (status.value !== 'ready') return [];
     if (props.tab === 'party' && !props.recordId && !props.entryId) {
         return campaignCrumb({ level: 'party', beside: false, middle: 'Party', pageName: 'Party' });
+    }
+    if (onTimeline.value) {
+        return campaignCrumb({ level: 'timeline', beside: false, middle: 'Timeline', pageName: 'Timeline' });
     }
     if (props.entryId) {
         const found = campaign.journal[props.entryId];
@@ -201,6 +210,17 @@ function showMap(): void {
 }
 
 /** The list, or a record, on the view that is already open. */
+function openTimeline(): void {
+    if (props.tab !== 'records' || props.recordId || props.entryId) pushPane({ kind: 'campaign', record: null });
+    showTimeline.value = true;
+}
+
+function openTimed(row: TimelineRow): void {
+    showTimeline.value = false;
+    if (row.source === 'entry') goEntry(row.id);
+    else go(row.id);
+}
+
 function go(id: string | null): void {
     pushPane({ kind: 'campaign', record: id });
 }
@@ -236,6 +256,12 @@ function onKey(event: KeyboardEvent): void {
             event.preventDefault();
             event.stopPropagation();
             go(null);
+            return;
+        }
+        if (showTimeline.value) {
+            event.preventDefault();
+            event.stopPropagation();
+            showTimeline.value = false;
             return;
         }
         if (props.tab === 'party') {
@@ -388,10 +414,11 @@ defineExpose({ remeasure: publish });
         <CampaignCrumb :parts="crumb" @go="onCrumb" />
       </template>
       <template v-else-if="eyebrow" #eyebrow>{{ eyebrow }}</template>
-      <div class="camp" :data-span="span" :data-status="status" :data-view="entryId ? 'entry' : recordId ? 'record' : tab === 'party' ? 'party' : tab === 'journal' ? 'journal' : 'list'">
+      <div class="camp" :data-span="span" :data-status="status" :data-view="entryId ? 'entry' : recordId ? 'record' : onTimeline ? 'timeline' : tab === 'party' ? 'party' : tab === 'journal' ? 'journal' : 'list'">
         <SignInCard v-if="!signedIn" />
         <template v-else>
-          <div v-if="status === 'ready' && ((!recordId && !entryId) || span === 'full')" class="camp-tabs" role="tablist" aria-label="Campaign">
+          <div v-if="status === 'ready' && ((!recordId && !entryId) || span === 'full')" class="camp-head">
+          <div class="camp-tabs" role="tablist" aria-label="Campaign">
             <button type="button" role="tab" class="camp-tab" :aria-selected="tab === 'records' ? 'true' : 'false'" :tabindex="tab === 'records' ? 0 : -1" @click="showTab('records')" @keydown="onTabKey">
               <Icon name="book-sparkles" :size="12" />Records <b>{{ recordCount }}</b>
             </button>
@@ -401,6 +428,8 @@ defineExpose({ remeasure: publish });
             <button type="button" role="tab" class="camp-tab" :aria-selected="tab === 'journal' ? 'true' : 'false'" :tabindex="tab === 'journal' ? 0 : -1" @click="showTab('journal')" @keydown="onTabKey">
               <Icon name="book-atlas" :size="12" />Journal <b>{{ journalCount }}</b>
             </button>
+          </div>
+            <button type="button" class="camp-timeline" :aria-pressed="onTimeline ? 'true' : 'false'" @click="openTimeline">Timeline</button>
           </div>
           <ClockLine v-if="status === 'ready' && ((!recordId && !entryId) || span === 'full')" ref="clockLine" :read-only="!online" />
           <p v-if="!online" class="camp-strip" role="status">
@@ -413,6 +442,7 @@ defineExpose({ remeasure: publish });
           <ul v-else-if="status !== 'ready'" class="camp-skeleton" aria-label="Loading your campaign" aria-busy="true">
             <li v-for="n in 4" :key="n"><i></i><span><i></i><i></i><i></i></span></li>
           </ul>
+          <TimelineList v-else-if="onTimeline" :read-only="!online" @open="openTimed" @map="showMap" @journal="showTab('journal')" />
           <PartyPanel v-else-if="tab === 'party' && !recordId" :read-only="!online" @map="showMap" />
           <div v-else-if="span === 'full' && tab === 'journal'" class="camp-split">
             <JournalList ref="list" :selected="entryId" follow :read-only="!online" @open="goEntry" @create="makeEntry" @map="showMap" />
@@ -422,7 +452,7 @@ defineExpose({ remeasure: publish });
             </div>
           </div>
           <div v-else-if="span === 'full'" class="camp-split">
-            <CampaignList ref="list" :selected="recordId" :read-only="!online" @open="go" @create="create" @map="showMap" />
+            <CampaignList ref="list" :selected="recordId" :read-only="!online" @open="go" @create="create" @map="showMap" @timeline="openTimeline" />
             <div class="camp-detail">
               <RecordPage v-if="recordId" :id="recordId" beside :read-only="!online" @back="go(null)" @map="showMap" />
               <p v-else class="camp-hint">Choose a record to read it here.</p>
@@ -431,7 +461,7 @@ defineExpose({ remeasure: publish });
           <EntryPage v-else-if="entryId" :id="entryId" :beside="false" :read-only="!online" @back="goEntry(null)" @map="showMap" />
           <JournalList v-else-if="tab === 'journal'" ref="list" :selected="null" :follow="false" :read-only="!online" @open="goEntry" @create="makeEntry" @map="showMap" />
           <RecordPage v-else-if="recordId" :id="recordId" :beside="false" :read-only="!online" @back="go(null)" @map="showMap" />
-          <CampaignList v-else ref="list" :selected="null" :read-only="!online" @open="go" @create="create" @map="showMap" />
+          <CampaignList v-else ref="list" :selected="null" :read-only="!online" @open="go" @create="create" @map="showMap" @timeline="openTimeline" />
         </template>
       </div>
     </Panel>
@@ -451,12 +481,46 @@ defineExpose({ remeasure: publish });
   font: 400 14px/1.5 var(--font-text);
 }
 
-/* Two tabs under the header: the records and the party (design J3). */
-.camp-tabs {
+/* The records, the party, and the journal, with the timeline beside them. */
+.camp-head {
   display: flex;
-  gap: 6px;
+  align-items: flex-end;
+  gap: 8px;
   margin: -4px 0 12px;
   border-bottom: 1px solid var(--line-1);
+}
+
+.camp-tabs {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  border-bottom: 0;
+  overflow-x: auto;
+}
+
+.camp-timeline {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  margin: 0 0 -1px;
+  padding: 6px 10px 8px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font: 600 13px/1.3 var(--font-text);
+  cursor: pointer;
+}
+
+.camp-timeline:hover,
+.camp-timeline[aria-pressed="true"] {
+  color: var(--signal);
+}
+
+.camp-timeline[aria-pressed="true"] {
+  border-bottom-color: var(--signal);
 }
 
 .camp-tab {

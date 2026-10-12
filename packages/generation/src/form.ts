@@ -851,13 +851,45 @@ function uwpLock(raw: Row, uwp: string | null): { fields: Row; mf: string[] } {
     return { fields, mf };
 }
 
+// stable() stores a non-finite number as { $num: "Infinity" | "-Infinity" | "NaN" }.
+// generateRotationalDynamics keeps a manual solar day and calls toFixed on it.
+const NUMERIC_PHYS = new Set([
+    'siderealHours', 'axialTilt', 'solarDayHours', 'eccentricity',
+    'albedo', 'greenhouseFactor', 'density', 'diamKm', 'mass', 'gravity',
+]);
+
+function produced(value: unknown): unknown {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+    const row = value as { $num?: unknown };
+    if (Object.keys(row).length !== 1 || typeof row.$num !== 'string') return value;
+    if (row.$num === 'Infinity') return Infinity;
+    if (row.$num === '-Infinity') return -Infinity;
+    if (row.$num === 'NaN') return NaN;
+    return value;
+}
+
 function physSeed(raw: Row): { fields: Row; mf: string[] } {
     const fields: Row = {};
     const mf: string[] = [];
     for (const key of PHYS) {
-        if (raw[key] !== undefined && raw[key] !== null) { fields[key] = raw[key]; mf.push(key); }
+        if (raw[key] === undefined || raw[key] === null) continue;
+        const value = produced(raw[key]);
+        if (value == null || typeof value === 'object') continue;
+        if (NUMERIC_PHYS.has(key) && typeof value !== 'number') continue;
+        fields[key] = value;
+        mf.push(key);
     }
     return { fields, mf };
+}
+
+function giantSeed(raw: Row): Row {
+    const fields: Row = {};
+    for (const key of ['diamTerra', 'diamKm', 'mass', 'gravity', 'density'] as const) {
+        if (raw[key] === undefined || raw[key] === null) continue;
+        const value = produced(raw[key]);
+        if (typeof value === 'number') fields[key] = value;
+    }
+    return fields;
 }
 
 function socioSeed(raw: Row): Row | null {
@@ -897,13 +929,7 @@ function seedFrom(copy: Copy, unlockBodyId: string | null): Row {
         const unlock = unlockBodyId === item.id;
         const locked = unlock ? { fields: {}, mf: [] } : uwpLock(item.raw, item.uwp);
         const phys = unlock ? { fields: {}, mf: [] } : physSeed(item.raw || {});
-        const gg = !unlock && item.type === 'Gas Giant' && item.raw ? {
-            ...(item.raw.diamTerra !== undefined && { diamTerra: item.raw.diamTerra }),
-            ...(item.raw.diamKm !== undefined && { diamKm: item.raw.diamKm }),
-            ...(item.raw.mass !== undefined && { mass: item.raw.mass }),
-            ...(item.raw.gravity !== undefined && { gravity: item.raw.gravity }),
-            ...(item.raw.density !== undefined && { density: item.raw.density }),
-        } : {};
+        const gg = !unlock && item.type === 'Gas Giant' && item.raw ? giantSeed(item.raw) : {};
         const engType = item.isMainworld ? 'Mainworld'
             : item.type === 'Gas Giant' ? 'Gas Giant'
             : item.type === 'Belt' ? 'Planetoid Belt'

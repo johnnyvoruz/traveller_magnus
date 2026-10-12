@@ -47,6 +47,10 @@ describe('record visibility and player notes', { concurrency: 1 }, () => {
             assert.match(html, /Players see this text when you share the record\./);
             assert.match(html, /No player notes yet\./);
             assert.match(html, /Add player notes/);
+            assert.match(html, /class="rec-when"/);
+            assert.match(html, /No date/);
+            assert.match(html, /Set a date/);
+            assert.doesNotMatch(html, /Add an end date/);
             assert.doesNotMatch(html, /class="rec-ident is-players"/);
         }
     });
@@ -61,6 +65,19 @@ describe('record visibility and player notes', { concurrency: 1 }, () => {
         assert.match(html, /aria-pressed="true"[^>]*>Players</);
         assert.match(html, /Bring the letter\./);
         assert.doesNotMatch(html, /No player notes yet\./);
+    });
+
+    test('a dated record shows both days in the page head', async () => {
+        const html = await renderRecord(personId, 'event', 'First contract', {
+            when: { start: { year: 1105, day: 40 }, end: { year: 1105, day: 48 } },
+        });
+        assert.match(html, /class="rec-when"/);
+        assert.match(html, /040-1105/);
+        assert.match(html, /048-1105/);
+        assert.match(html, /aria-label="Clear the date"/);
+        assert.match(html, />to</);
+        assert.doesNotMatch(html, /No date/);
+        assert.doesNotMatch(html, /Add an end date/);
     });
 
     test('the account menu hides the file input with the shipyard rule, and Import still asks for a file', () => {

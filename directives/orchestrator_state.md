@@ -1,6 +1,6 @@
-# Orchestrator state — 2026-10-11 21:05
+# Orchestrator state — 2026-10-11 22:20
 
-Overwritten every turn. History is `handoff.md` (last section: 251).
+Overwritten every turn. History is `handoff.md` (last section: 253).
 
 ## Where the roadmap is
 Pushed: `ac18cbb`, version 1.1.3 (was `findings/push/builder_2026-10-11d.md`): the dossier fix, the no-WebGL notice,
@@ -10,34 +10,40 @@ come for Johnny's three live findings: density (B, then A, then D). Then star nu
 on the form (D), Undo faults (A), ice caps (C), palette (E), then public games.
 
 ## Lanes
-- A go: `a_density_store` (density, `leftEmpty`, `placed` with `?since=`; dots when
-  B's route exists; allowance when B's cap exists).
-- B go, urgent: `b_keep_crash_dots` (Keep crash on generated systems: fix in the
-  caller, no engine edit without Johnny; `GET .../hexes/:sector/dots`), then
-  `b_generate_cap`, then `b_generate_speed`. Density accepted: the job is one message
-  posting every 32 hexes, resumable; one message per slice did not run under two local
-  wrangler processes.
-- C free: `c_surface_map_read` accepted (SurfaceKey.vue, large view by teleport, grid
-  always on, night tint with a 12 degree band, sun reticle removed unasked, map width
-  at column was already 474 px so only type changed). E saw the
-  checker fail on a comment in `SurfaceStage.vue` ("window." ban); green at 20:55.
-- D go: `d_density_sheet` (refusal at field, spinner to `design/`, toast flags and
-  `job`/`stopJob` on the seam; density gated on A; allowance gated on B and A).
-- E go: `e_timeline_list` (Campaign step 3).
-- **F is retired** (Johnny): never assign or propose it until he says it is back.
+- A go: `a_own_dots_2` (B's dots routes; pages of 32; ETag; MapRenderer three places).
+- B go: `b_generate_cap`, then `b_passkeys` (design note and dependency approval
+  first), then `b_generate_speed`. Keep crash: `stable()` stores a non-finite number
+  as `{ $num }`, `physSeed` copied the object and marked it manual; fixed in
+  `packages/generation/src/form.ts`; in the tree since `3d28e33`. B freezes at worker
+  suites: three times now.
+- C in flight: `c_surface_map_2`. Eight files held out of 1.1.6
+  (`SurfaceStage.vue`, `SurfaceKey.vue`, `surface/hybrid/overlay.ts`, `symbols.ts`,
+  `chrome.ts`, `view.ts`, `tests/web/surface_hybrid.test.js`, `design/tokens.css`).
+- D go: `d_menu_selection` (right-click inside a selection loses it, `MapView.vue`
+  about 1541; allowance gated on B and A). Density dropdown accepted: Standard
+  default, per universe, "up to N", "hexes checked", the nothing-new sentence.
+- E go: `e_handout_images` (step 1 confirms schema and upload; stops if B is needed).
+  Record dates accepted (`RecordWhen.vue`, `record_when.ts`).
+- **F is retired.**
 
 ## Next turn
-1. C's report, then push 1.1.5 (gates, list, clean copy). B's density files go in now.
-2. B's Keep crash: if it is live, it is the next push's headline; if it needs an
-   engine line, it is a question for Johnny.
-3. Chains: B dots -> A dots. B cap -> A -> D. A density -> D sheet.
+1. If Johnny pushed 1.1.6: record the hash. Tell him the Keep fix needs the deploy.
+2. C's report: its eight files go in 1.1.7.
+3. Chains: B cap -> A -> D allowance. B passkey design note -> Johnny approves the
+   dependency -> build -> screens lane.
 
 ## Versions
 Every push list bumps `APP_VERSION` in `apps/web/src/version.ts` by one in the last
 place and lists the file; the commit message starts with the version. Last pushed:
-1.1.3 (`ac18cbb`). 1.1.4 pushed (`76e5a57`). On disk: 1.1.5, push list f written. Engine version untouched (fixtures folder name).
+1.1.3 (`ac18cbb`). 1.1.4 pushed (`76e5a57`). 1.1.5 pushed (`cdb6385`). On disk: 1.1.6, push list g written. Engine version untouched (fixtures folder name).
 
 ## Traps
+- **Flow (Johnny, 2026-10-11): questions first.** A lane is not given GO while a
+  question that could change its prompt is open. Reply order: QUESTIONS, GO, PUSH.
+  Under GO, only lanes no open question touches; the rest are listed as held. No more
+  "built on the recommended answer, say otherwise".
+- Undo is low priority (Johnny): write no prompt for Undo polish unless a more
+  important job needs it.
 - A live fault is looked at on the live page first (computed styles, console,
   `data-discs`), before a lane is sent to reproduce it locally. Two lane passes missed
   what ten minutes on traveller.voyage showed.

@@ -61,3 +61,9 @@ Write `directives/reports/a_density_store.md` from `directives/reports/_TEMPLATE
 After each meaningful step append one line under Progress: "done: X. next: Y."
 
 ## Progress
+
+done: density, leftEmpty, placed, and since-polling on the store. next: tests, then the gates.
+done: builder store tests pass, including since-polling and density on the three calls. next: npm test, check, typecheck, build.
+done: npm test 1434 pass, 0 fail, 17 skip; check clean; typecheck clean; build clean. next: private subsector at each density.
+done: private subsector at every, sparse, standard, and dense, one hex written, Undo after, server stopped. Dots and the allowance skipped. next: the report.
+done: directives/reports/a_density_store.md written. next: stop.

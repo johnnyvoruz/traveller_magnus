@@ -11,7 +11,7 @@
 import { computed, ref } from 'vue';
 import type { Camera, Viewport } from '../../map/camera.ts';
 import { cameraTransform, hexesPath, hexPoints, slotBox, type SectorPlace } from './marks.ts';
-import { flight, flightSplit, revOf } from './flight.ts';
+import { flight, flightSplit } from './flight.ts';
 import { build } from './state.ts';
 import { undoLeft } from './undo_words.ts';
 
@@ -72,7 +72,7 @@ const cursorAt = computed(() => (props.cursor ? { free: props.cursor.free, ...sl
  * still waiting march, each turns to a wash as its system lands, and one hex being rolled for a
  * preview marches until the preview is drawn.
  */
-const inFlight = computed(() => flightSplit(flight.keys, flight.from, revOf));
+const inFlight = computed(() => flightSplit(flight.keys, flight.placed, flight.checked));
 const waitingAt = computed(() => {
     const keys = [...inFlight.value.waiting];
     if (build.rolling && !keys.includes(build.rolling)) keys.push(build.rolling);

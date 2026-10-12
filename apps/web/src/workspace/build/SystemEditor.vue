@@ -7,11 +7,12 @@
  * to (so each gets its own block), and the section called `profile` is laid out as a row of
  * cells. Nothing is checked: the seven rule places are present and empty.
  */
-import { computed } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import type { EditForm, FormValue } from '@voyage/shared';
 import type { PanelSpan } from '../../shell/panel_state.ts';
 import EditField from './EditField.vue';
 import HandDesigner from './HandDesigner.vue';
+import { fieldOwner, handList, selectNode } from './hand.ts';
 import {
     edit, firstLine, groupFields, groupTitle, keepMine, leaveDiscarding, leaveKeeping, looseMessages, markOf, messagesFor, moreLines, rollField, rulesAfter,
     setField, stay, takeTheirs, whyOf, draftHandle,
@@ -37,6 +38,33 @@ const sections = computed(() => (form.value ? form.value.sections.filter((sectio
 const handRules = computed(() => (form.value ? (form.value.sections.find((section) => section.id === 'rules')?.fields ?? []) : []));
 /** By hand, the server's word on a remove ("Removing this star also removes 4 bodies.") is said by the remove's own ask, and on a profile roll under the Profile heading: not again at the top. */
 const loose = computed(() => (form.value ? looseMessages(form.value, messages.value).filter((item) => !(edit.mode === 'hand' && item.id !== null && (item.id.endsWith('.remove') || item.id.endsWith('.profile.roll')))) : []));
+/**
+ * A refusal at its field (findings/builder_density_ready.md): the draft holds `{ id, text, holds }`
+ * for a field the server refused, and each field draws its own messages. The same sentence is not
+ * said again at the top. When Keep is refused at a field, that field is shown (by hand, its body
+ * is selected), scrolled into view and focused.
+ */
+const fieldIds = computed(() => new Set(form.value ? form.value.sections.flatMap((section) => section.fields.map((field) => field.id)) : []));
+const atField = computed(() => messages.value.filter((item) => item.holds && item.id !== null && fieldIds.value.has(item.id)));
+const topError = computed(() => (edit.error && !atField.value.some((item) => item.text === edit.error) ? edit.error : ''));
+const root = ref<HTMLElement | null>(null);
+
+watch(() => edit.error, async (said) => {
+    const refused = said ? atField.value.find((item) => item.text === said) : undefined;
+    if (!refused || refused.id === null || !form.value) return;
+    const id = refused.id;
+    if (edit.mode === 'hand') {
+        const owner = fieldOwner(id, handList(form.value).map((node) => node.id));
+        if (owner) selectNode(owner);
+    }
+    await nextTick();
+    const el = root.value ? root.value.querySelector<HTMLElement>('.ef[data-field="' + CSS.escape(id) + '"]') : null;
+    if (!el) return;
+    el.scrollIntoView({ block: 'center' });
+    const control = el.querySelector<HTMLElement>('input, select, button');
+    if (control) control.focus();
+});
+
 /** A whole body can be rolled again where the form's owner is a world: `body.<n>`. */
 const rollable = (owner: string): boolean => /^body\.\d+$/.test(owner);
 const busy = computed(() => edit.keeping);
@@ -47,7 +75,7 @@ function set(id: string, value: FormValue): void {
 </script>
 
 <template>
-  <div v-if="form" class="sysed" :class="{ 'is-hand': edit.mode === 'hand' }" :data-span="span">
+  <div v-if="form" ref="root" class="sysed" :class="{ 'is-hand': edit.mode === 'hand' }" :data-span="span">
     <div class="sysed-top">
       <div v-if="edit.leaving" class="sysed-strip" role="alertdialog" aria-label="Unsaved changes">
         <p>You have unsaved changes to {{ edit.name || 'this system' }}.</p>
@@ -67,7 +95,7 @@ function set(id: string, value: FormValue): void {
       <p v-if="dropped.length" class="sysed-strip is-note" role="status">
         Your changes are applied to the latest saved version. To save them, select Keep. These fields no longer exist and were left out: {{ dropped.map((item) => item.label || item.id).join(', ') }}.
       </p>
-      <p v-if="edit.error" class="sysed-strip is-error" role="alert">{{ edit.error }}</p>
+      <p v-if="topError" class="sysed-strip is-error" role="alert">{{ topError }}</p>
       <p v-for="(message, index) in loose" :key="index" class="sysed-strip" :class="{ 'is-error': message.holds }" role="status">{{ message.text }}</p>
     </div>
 

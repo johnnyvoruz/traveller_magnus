@@ -8,7 +8,7 @@ import { computed, nextTick, ref, watch, watchEffect } from 'vue';
 import Icon from '../../design/Icon.vue';
 import { hexState, keepPreview, discardPreview, overChart, previewAt, removeHexes, restorable, restoreHexes, rollAgain } from './acts.ts';
 import BuildMenu, { type MenuItem } from './BuildMenu.vue';
-import BuildSpin from './BuildSpin.vue';
+import Spinner from '../../design/Spinner.vue';
 import type { Rect } from '../pop_place.ts';
 import { changeLine, discardEdit, edit, editing, holdLeaving, keepEdit, openEdit, draftHandle } from './edit.ts';
 import { askDesign, handMode } from './hand_acts.ts';
@@ -34,6 +34,15 @@ const line = computed(() => {
     return changeLine(edit.mine, edit.rolled, draftHandle.value.messages.value);
 });
 const held = computed(() => draftHandle.value !== null && draftHandle.value.messages.value.some((item) => item.holds));
+/** Why Keep waits: a value the server refused is said at its field; anything else is the engine's word in the form. */
+const heldWhy = computed(() => {
+    const handle = draftHandle.value;
+    const ids = new Set(handle ? handle.form.value.sections.flatMap((section) => section.fields.map((field) => field.id)) : []);
+    const atField = handle !== null && handle.messages.value.some((item) => item.holds && item.id !== null && ids.has(item.id));
+    return atField
+        ? 'To keep the draft, first correct the value the server refused. Its sentence is under that field'
+        : 'The engine can’t build this system. To find out why, read the engine’s message in the form';
+});
 /**
  * Whether this system is designed by hand. Read as soon as the bar shows, not when the menu
  * opens: an item that changed under the pointer would take the menu's focus with it.
@@ -108,7 +117,7 @@ watch(() => (preview.value ? preview.value.roll : -1), (roll) => {
     <template v-if="preview">
       <button ref="keep" type="button" class="ui-btn is-primary" :disabled="busy" @click="keepPreview()"><Icon name="check" :size="13" />Keep<kbd class="build-key">K</kbd></button>
       <button type="button" class="ui-btn" :disabled="busy" :aria-busy="build.rolling ? 'true' : undefined" @click="rollAgain()">
-        <BuildSpin v-if="build.rolling" /><Icon v-else name="wand-magic-sparkles" :size="13" />{{ build.rolling ? 'Rolling…' : 'Roll again' }}<kbd class="build-key">R</kbd>
+        <Spinner v-if="build.rolling" /><Icon v-else name="wand-magic-sparkles" :size="13" />{{ build.rolling ? 'Rolling…' : 'Roll again' }}<kbd class="build-key">R</kbd>
       </button>
       <span class="build-bar-gap"></span>
       <button type="button" class="ui-btn" @click="discardPreview()">Discard</button>
@@ -125,7 +134,7 @@ watch(() => (preview.value ? preview.value.roll : -1), (roll) => {
         data-command="build-draft-keep"
         :disabled="!dirty || edit.keeping || held || handUi.removing !== null"
         :aria-busy="edit.keeping ? 'true' : undefined"
-        :title="held ? 'The engine can’t build this system. To find out why, read the engine’s message in the form' : handUi.removing ? 'To keep the draft, first select Remove or Cancel in the remove question' : 'Keep (Ctrl+Enter)'"
+        :title="held ? heldWhy : handUi.removing ? 'To keep the draft, first select Remove or Cancel in the remove question' : 'Keep (Ctrl+Enter)'"
         @click="keepEdit()"
       >
         <Icon name="check" :size="13" />{{ edit.keeping ? 'Keeping…' : 'Keep' }}<kbd class="build-key">Ctrl+Enter</kbd>

@@ -6,6 +6,7 @@
 import { computed, ref, watch } from 'vue';
 import type { CampaignRecord } from '@voyage/shared';
 import Icon from '../design/Icon.vue';
+import type { FaIconName } from '../design/icons.ts';
 import { avatarShape } from './crumb.ts';
 import { imageUrl, primaryImage } from './images.ts';
 import { typeInfo } from './records.ts';
@@ -14,6 +15,8 @@ const props = defineProps<{
     record: Pick<CampaignRecord, 'name' | 'type' | 'images'>;
     universeId: string | null;
     size: 'head' | 'row' | 'chip';
+    /** A journal row has no record type. The icon is the journal kind's. */
+    icon?: FaIconName;
 }>();
 
 const failed = ref(false);
@@ -37,7 +40,7 @@ watch(() => (image.value ? image.value.hash : ''), () => { failed.value = false;
       decoding="async"
       @error="failed = true"
     >
-    <Icon v-else :name="typeInfo(record.type).icon" :size="size === 'head' ? 22 : size === 'row' ? 16 : 12" />
+    <Icon v-else :name="icon || typeInfo(record.type).icon" :size="size === 'head' ? 22 : size === 'row' ? 16 : 12" />
   </span>
 </template>
 

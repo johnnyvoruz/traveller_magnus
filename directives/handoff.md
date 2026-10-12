@@ -6817,3 +6817,57 @@ that failed at the close no longer does. Ready note `findings/builder_form_ready
   (not asked). The map's drawn width at column was already the full 474 px: only the
   type and the scale's place changed. Found: a dry frozen body is captioned
   "Water · frozen". **Push 1.1.5 written** (`findings/push/builder_2026-10-11f.md`).
+
+- Johnny: Undo work is low priority, only where something more important needs it; all five recommendations taken.
+- **1.1.5 pushed (`cdb6385`).**
+
+- **Flow change (Johnny):** questions first; GO only for lanes no open question touches; reply order QUESTIONS, GO, PUSH.
+
+- **Johnny asked what email plus passkey sign-in would take.** Read: better-auth 1.7.7
+  installed, plugins in use `admin()` only (`auth/options.ts` 33); `email-otp` and
+  `magic-link` ship in the installed package; there is **no passkey plugin in
+  `better-auth/dist/plugins`** and no `@better-auth/passkey` in `node_modules`, so it is
+  a new dependency to confirm from the docs; the Worker sends no email today. Five
+  questions put to him; no prompt until answered (board, Open).
+
+## 252. Density through the store, the timeline, one spinner; the surface map's second round of feedback (2026-10-11 21:35)
+
+- **A, `a_density_store`, accepted:** `density` on the three calls; `leftEmpty`,
+  `placed`, `landed`; polling with `?since=`. A private subsector at each density:
+  every 80, sparse 34, standard 40, dense 48 systems of 80 hexes.
+- **D, `d_density_sheet`, accepted (parts 1 to 3):** refusal at its field;
+  `design/Spinner.vue` (BuildSpin removed; one swap in `shell/ToastStrip.vue`; one
+  assertion changed in E's `toast_shell.test.js`); the job toast busy with a Stop that
+  stays; a followed job picked up. Leaving the map before the generate request answers
+  leaves a result with no Undo, and the toast says so (Undo is low priority).
+- **E, `e_timeline_list`, accepted:** the Campaign timeline as a list, newest first,
+  Today marked, one tab stop. Nothing sets a record's `when` yet.
+- **B, in flight:** the Keep crash is an unrevived `{$num:Infinity}`; fixed on disk.
+- **Johnny on the surface map (1.1.5):** see state, Lanes, C. Three questions hold C;
+  one holds E; five on passkeys hold nobody. First turn under the questions-first flow.
+- **Prompt:** `d_density_dropdown.md`.
+
+- Johnny: yes to six (board, Decisions). Prompts written after the answers: `c_surface_map_2.md`, `e_record_dates.md`. Passkey questions still open.
+
+- Johnny on passkeys: no email service if avoidable; merge on verified email yes; after the cap, before speed. Options given to him: recovery codes, a second passkey, a linked social provider as the way back; three questions open (board).
+
+- Johnny: username and passkey, no email asked for. Two passkey questions left (recovery codes; lost means lost).
+
+- Johnny, passkeys: passkey only (no 2FA), recovery codes plus a second-passkey nudge, lost means lost. `prompts/b_passkeys.md` written, third in B's queue; design note and dependency approval first.
+
+- 21:45: D stopped at the adapter line (`builder/screen.ts` `generateMany` builds the body itself and drops `density`). A idle, so the four lines and one test are lent to D (prompt section added). B froze at the worker suite again and was restarted. Johnny: yes, the passkey dependency comes to him first.
+
+## 253. The Keep fix, the dots routes, the density dropdown, dates on records; push 1.1.6 written (2026-10-11 22:20)
+
+- **B, `b_keep_crash_dots`, accepted:** Keep fixed in `form.ts` (`physSeed` and the
+  gas-giant copy revive `{ $num }` and do not mark a non-number manual); ten numeric
+  fields round-trip for MgT2E, AoW and hand; live since `3d28e33`. Dots:
+  `GET /:id/hexes/:sector/dots` and `GET /:id/hexes/dots?sectors=` (32), `overview.ts`
+  `dotIndex`/`dotMark`/`applyDotRows`, ETag. No engine edit.
+- **D, `d_density_dropdown`, accepted:** the adapter change on loan, the select, the
+  words, marks from `landed`. Counts matched the map at each density (80, 31, 36, 51
+  of 80). Not reached in a browser: the right-click path (the selection is lost).
+- **E, `e_record_dates`, accepted:** `RecordWhen.vue`; start and optional end on all
+  nine kinds; the clock untouched (day count 403424 before and after).
+- **Push 1.1.6** written without C's eight in-flight files.
+- **Prompts:** `a_own_dots_2.md`, `d_menu_selection.md`, `e_handout_images.md`.

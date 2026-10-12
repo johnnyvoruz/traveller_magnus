@@ -10,6 +10,7 @@ import {
 import type { FaIconName } from '../design/icons.ts';
 import { sameImages } from './images.ts';
 import { liveById, resolvePlace, sameAnchor } from './places.ts';
+import { sameRecordWhen } from './record_when.ts';
 
 export type TypeInfo = {
     type: CampaignRecordType;
@@ -152,7 +153,7 @@ export function newRecord(type: CampaignRecordType, id: string, now: string, anc
     };
 }
 
-export type RecordPatch = Partial<Pick<CampaignRecord, 'type' | 'name' | 'summary' | 'details' | 'tags' | 'anchor' | 'visibility' | 'playerNotes' | 'images' | 'sheet'>>;
+export type RecordPatch = Partial<Pick<CampaignRecord, 'type' | 'name' | 'summary' | 'details' | 'tags' | 'anchor' | 'visibility' | 'playerNotes' | 'images' | 'sheet' | 'when'>>;
 
 /** True when the patch would change nothing: no change is sent for it. */
 export function unchanged(record: CampaignRecord, patch: RecordPatch): boolean {
@@ -165,6 +166,8 @@ export function unchanged(record: CampaignRecord, patch: RecordPatch): boolean {
             if (!sameImages(patch.images ?? null, record.images)) return false;
         } else if (key === 'sheet') {
             if (JSON.stringify(patch.sheet ?? null) !== JSON.stringify(record.sheet ?? null)) return false;
+        } else if (key === 'when') {
+            if (!sameRecordWhen(patch.when ?? null, record.when)) return false;
         } else if (Array.isArray(next) && Array.isArray(have)) {
             if (next.length !== have.length || next.some((item, i) => item !== have[i])) return false;
         } else if (next !== have) return false;

@@ -12,7 +12,7 @@ import { canDelete, canMove, canNewSector, canRename, deleteSector, newSector, s
 import { askSectorName, inEmptySlot } from './grow_acts.ts';
 import { canPickSelected, openPicker } from './orbit_pick.ts';
 import { canPublish, kindOfKeys, openPublish, signedIn } from '../market/market.ts';
-import { build, JOB_HOLD, plural, removeTargets } from './state.ts';
+import { build, densityLine, generateWords, JOB_HOLD, plural, removeTargets } from './state.ts';
 
 export type BuildCommandId =
     | 'build-select' | 'build-generate' | 'build-generate-with' | 'build-keep' | 'build-roll'
@@ -192,7 +192,9 @@ export function menuFor(keys: readonly string[]): { title: string; items: BuildM
         if (state === 'removed') items.push({ id: 'build-restore', label: 'Restore to the chart', icon: 'rotate-left' });
         items.push({
             id: 'build-generate',
-            label: many ? 'Generate the ' + plural(count.empty.length, 'empty hex', 'empty hexes') : 'Generate a system',
+            label: many ? generateWords(count.empty.length, build.density) : 'Generate a system',
+            // Many hexes: how many of them the run fills, so nobody fills a subsector by surprise. One hex always generates.
+            ...(many ? { say: densityLine(build.density) } : {}),
             icon: 'wand-magic-sparkles',
             key: 'G',
         });

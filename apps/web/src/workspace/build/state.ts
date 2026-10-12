@@ -6,7 +6,7 @@ import { reactive } from 'vue';
 import { builderPairReady, type SectorHex, type SectorIndex, type Settings } from '@voyage/shared';
 import { storageGet, storageSet } from '../../platform/browser.ts';
 import { parseHexKey } from '../places.ts';
-import type { BuildRow, GenerateChoice, Generator, HexState, JobProgress, Preview } from './seam.ts';
+import type { BuildRow, Density, GenerateChoice, Generator, HexState, JobProgress, Preview } from './seam.ts';
 
 const ON_KEY = 'voyage_build_on';
 /** Set once the person has put away the note on whose map this is. */
@@ -98,6 +98,8 @@ export const build = reactive({
     /** Hex keys, in the order they were picked. One hex is the route's; this holds two or more. */
     selection: [] as string[],
     choice: readChoice(),
+    /** How many of the selected empty hexes a many-hex run fills; per universe (readDensity). One hex always generates. */
+    density: 'standard' as Density,
     /** Many-hex only: hexes that already hold a system are generated again too. */
     filledToo: false,
     sheetOpen: false,
@@ -264,17 +266,84 @@ export function settingRows(settings: Settings | null): { label: string; value: 
 /** Said where a writing act is held while a job runs: the job writes the same map. */
 export const JOB_HOLD = 'While hexes are generating, you can’t change systems. To change one now, select Stop.';
 
-/** A running job in one line: "Generating 80 hexes · 12 of 80", with the failures when there are any. */
+/**
+ * A running job in one line. With a density the server reports hexes checked, not systems made
+ * (`done` counts the hexes it left empty too), in steps of up to 32: "Generating up to 80
+ * systems · 32 of 80 hexes checked". A store from before density: "Generating 80 hexes · 12 of 80".
+ */
 export function jobLine(job: JobProgress & { label: string }): string {
     const failed = job.failed.length ? ' · ' + job.failed.length + ' failed' : '';
-    return job.label + ' · ' + job.done.toLocaleString('en-US') + ' of ' + job.total.toLocaleString('en-US') + failed;
+    const counted = job.placed ? ' hexes checked' : '';
+    return job.label + ' · ' + job.done.toLocaleString('en-US') + ' of ' + job.total.toLocaleString('en-US') + counted + failed;
 }
 
-/** The words of the toast when a many-hex build ends. */
+/** Said when a run over the same hexes at the same density writes nothing: the roll is seeded per hex. */
+export const NOTHING_NEW = 'No systems were generated. At this density, the roll leaves these hexes empty every time. To fill them, set Hexes to fill to Every selected hex, or select one hex, and then select Generate.';
+
+/**
+ * The words of the toast when a many-hex build ends. With the store's density counts, systems
+ * generated is `placed.length` and the hexes the roll left empty are said apart; without them
+ * (a store from before density), `done` is the systems, as it was.
+ */
 export function jobToast(progress: JobProgress, where: string): string {
-    const built = plural(progress.done, 'system', 'systems');
     const place = where ? ' in ' + where : '';
     const failed = progress.failed.length ? ' ' + plural(progress.failed.length, 'hex', 'hexes') + ' failed.' : '';
-    if (progress.state === 'stopped') return 'Stopped. Generated ' + progress.done + ' of ' + plural(progress.total, 'system', 'systems') + place + '.' + failed;
-    return 'Generated ' + built + place + '.' + failed;
+    if (!progress.placed) {
+        const built = plural(progress.done, 'system', 'systems');
+        if (progress.state === 'stopped') return 'Stopped. Generated ' + progress.done + ' of ' + plural(progress.total, 'system', 'systems') + place + '.' + failed;
+        return 'Generated ' + built + place + '.' + failed;
+    }
+    const made = progress.placed.length;
+    const empty = progress.leftEmpty ?? 0;
+    const left = empty === 0 ? '' : ' ' + (empty === 1 ? '1 hex was left empty.' : empty.toLocaleString('en-US') + ' hexes were left empty.');
+    if (progress.state === 'stopped') {
+        return 'Stopped after checking ' + progress.done.toLocaleString('en-US') + ' of ' + plural(progress.total, 'hex', 'hexes') + '. Generated ' + plural(made, 'system', 'systems') + place + '.' + left + failed;
+    }
+    if (made === 0 && empty > 0 && progress.failed.length === 0) return NOTHING_NEW;
+    return 'Generated ' + plural(made, 'system', 'systems') + place + '.' + left + failed;
+}
+
+// ---- how many of the selected hexes a run fills -------------------------------------------------
+
+export type DensityOption = { id: Density; label: string; line: string };
+
+/** The dropdown's options, in Johnny's order (prompts/d_density_dropdown.md), and each one's words on a control's second line. */
+export const DENSITIES: readonly DensityOption[] = [
+    { id: 'every', label: 'Every selected hex', line: 'Every selected hex' },
+    { id: 'sparse', label: 'Sparse (2 in 6)', line: 'Sparse, 2 in 6' },
+    { id: 'standard', label: 'Standard (3 in 6)', line: 'Standard, 3 in 6' },
+    { id: 'dense', label: 'Dense (4 in 6)', line: 'Dense, 4 in 6' },
+];
+
+export const DEFAULT_DENSITY: Density = 'standard';
+
+export function cleanDensity(raw: unknown): Density {
+    return DENSITIES.some((item) => item.id === raw) ? (raw as Density) : DEFAULT_DENSITY;
+}
+
+export function densityLine(density: Density): string {
+    return (DENSITIES.find((item) => item.id === density) ?? DENSITIES[2]).line;
+}
+
+/** The Generate control for many hexes, before the run: the count is known only when every hex is filled. */
+export function generateWords(empty: number, density: Density): string {
+    if (density === 'every') return 'Generate the ' + plural(empty, 'empty hex', 'empty hexes');
+    return 'Generate up to ' + plural(empty, 'hex', 'hexes');
+}
+
+/** The job's label: what it may make. */
+export function jobLabel(count: number, density: Density): string {
+    return density === 'every' ? 'Generating ' + plural(count, 'hex', 'hexes') : 'Generating up to ' + plural(count, 'system', 'systems');
+}
+
+const DENSITY_KEY = 'voyage_build_density:';
+
+/** The choice for this universe: remembered with the engine and the method, Standard until one is made. */
+export function readDensity(universeId: string): Density {
+    return cleanDensity(storageGet(DENSITY_KEY + universeId));
+}
+
+export function setDensity(universeId: string | null, density: Density): void {
+    build.density = cleanDensity(density);
+    if (universeId) storageSet(DENSITY_KEY + universeId, build.density);
 }

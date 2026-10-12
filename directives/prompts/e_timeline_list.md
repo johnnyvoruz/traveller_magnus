@@ -77,3 +77,7 @@ Questions for Johnny written out in full, recommended answer first. After each
 meaningful step append one line under Progress: "done: X. next: Y."
 
 ## Progress
+
+done: Timeline list in the Campaign pane, newest first, with a crumb back to Campaign. next: gates, then the browser pass.
+done: gates green, and the browser pass on ports 8896 and 5236. next: the report.
+done: report directives/reports/e_timeline_list.md. next: stop.

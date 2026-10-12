@@ -1,6 +1,9 @@
-import { applyForm, blankEnvelope, chartEntry, densityKeeps, FormRefusal, formOf, generateHex, handChartEntry, handFromForm } from '@voyage/generation';
+import { applyDotRows, applyForm, blankEnvelope, chartEntry, densityKeeps, FormRefusal, formOf, generateHex, handChartEntry, handFromForm } from '@voyage/generation';
 import {
+    BUILDER_LIMITS,
     builderPairReady,
+    BuilderDots,
+    BuilderDotsPage,
     BuilderGenerate,
     BuilderGenerateDone,
     FormAnswer,
@@ -23,12 +26,14 @@ import {
     SectorMove,
     SectorRename,
     SectorRev,
+    OwnSectorId,
     SectorUndo,
     sha256Hex,
     stable,
     SubsectorLetter,
     SubsectorRename,
     TreeEnvelope,
+    TruthOverview,
 } from '@voyage/shared';
 import { eq, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
@@ -67,6 +72,71 @@ async function pinFor(env: AppEnv['Bindings'], truthVersion: string | null): Pro
     return { seed: row.seed, settings: JSON.parse(row.settings) as Record<string, unknown>, truthVersion };
 }
 
+const CHART_SLUG = /^[A-Za-z0-9][A-Za-z0-9_-]{0,80}$/;
+const overviewCells = new Map<string, Map<string, string> | null>();
+
+function sectorList(raw: string): string[] | null {
+    const parts = raw.split(',').map((item) => item.trim()).filter(Boolean);
+    if (parts.length < 1 || parts.length > BUILDER_LIMITS.dots) return null;
+    if (new Set(parts).size !== parts.length) return null;
+    for (const part of parts) {
+        if (!OwnSectorId.safeParse(part).success && !CHART_SLUG.test(part)) return null;
+    }
+    return parts;
+}
+
+function sameStamp(header: string | undefined, stamp: string): boolean {
+    if (!header) return false;
+    return header.split(',').some((item) => {
+        const value = item.trim();
+        return value === stamp || value === `"${stamp}"` || value === `W/"${stamp}"`;
+    });
+}
+
+async function overviewMap(env: AppEnv['Bindings'], version: string): Promise<Map<string, string> | null> {
+    const cached = overviewCells.get(version);
+    if (cached !== undefined) return cached;
+    const object = await env.PUBLIC_BUCKET.get(`truth/${version}/overview.json`);
+    if (!object) {
+        overviewCells.set(version, null);
+        return null;
+    }
+    let parsed: ReturnType<typeof TruthOverview.safeParse>;
+    try {
+        parsed = TruthOverview.safeParse(JSON.parse(await object.text()));
+    } catch {
+        overviewCells.set(version, null);
+        return null;
+    }
+    if (!parsed.success) {
+        overviewCells.set(version, null);
+        return null;
+    }
+    const map = new Map(parsed.data.sectors.map((sector) => [sector.slug, sector.cells]));
+    overviewCells.set(version, map);
+    return map;
+}
+
+async function dotSectors(
+    c: Parameters<typeof fail>[0],
+    owned: OwnedUniverse,
+    sectors: string[],
+): Promise<Response | { out: { sector: string; cells: string; stamp: string }[]; stamp: string }> {
+    const pin = await pinFor(c.env, owned.row.truthVersion);
+    await door(owned, '/pin', 'POST', pin);
+    const listed = await door(owned, `/hexes/dot-rows?sectors=${encodeURIComponent(sectors.join(','))}`, 'GET');
+    if (!listed.ok) return listed;
+    const body = await listed.json() as { data?: { sector: string; rows: { local: string; holds: boolean; uwp: string }[] }[] };
+    const bySector = new Map((body.data ?? []).map((item) => [item.sector, item.rows]));
+    const chart = pin.truthVersion ? await overviewMap(c.env, pin.truthVersion) : null;
+    const out = [];
+    for (const sector of sectors) {
+        const cells = applyDotRows(sector.startsWith('~') ? null : (chart?.get(sector) ?? null), bySector.get(sector) ?? []);
+        out.push({ sector, cells, stamp: await sha256Hex(cells) });
+    }
+    return { out, stamp: await sha256Hex(out.map((item) => `${item.sector}=${item.stamp}`).join('\n')) };
+}
+
 export function mountBuilderRoutes(route: Hono<AppEnv>): void {
     route.get('/:id/hexes', async (c) => {
         const owned = await ownedUniverse(c);
@@ -77,6 +147,34 @@ export function mountBuilderRoutes(route: Hono<AppEnv>): void {
         const query = new URLSearchParams({ sector, limit });
         if (cursor) query.set('cursor', cursor);
         return door(owned, `/hexes?${query}`, 'GET');
+    });
+
+    route.get('/:id/hexes/dots', async (c) => {
+        const owned = await ownedUniverse(c);
+        if (owned instanceof Response) return owned;
+        const sectors = sectorList(c.req.query('sectors') ?? '');
+        if (!sectors) return fail(c, 400, 'validation', 'Invalid request.');
+        const built = await dotSectors(c, owned, sectors);
+        if (built instanceof Response) return built;
+        const data = BuilderDotsPage.parse({ sectors: built.out, stamp: built.stamp });
+        const headers = { etag: `"${built.stamp}"` };
+        if (sameStamp(c.req.header('if-none-match'), built.stamp)) return c.body(null, 304, headers);
+        return c.json({ ok: true, data }, 200, headers);
+    });
+
+    route.get('/:id/hexes/:sector/dots', async (c) => {
+        const owned = await ownedUniverse(c);
+        if (owned instanceof Response) return owned;
+        let sector = c.req.param('sector');
+        try { sector = decodeURIComponent(sector); } catch { return fail(c, 400, 'validation', 'Invalid request.'); }
+        const sectors = sectorList(sector);
+        if (!sectors) return fail(c, 400, 'validation', 'Invalid request.');
+        const built = await dotSectors(c, owned, sectors);
+        if (built instanceof Response) return built;
+        const data = BuilderDots.parse({ cells: built.out[0].cells, stamp: built.out[0].stamp });
+        const headers = { etag: `"${data.stamp}"` };
+        if (sameStamp(c.req.header('if-none-match'), data.stamp)) return c.body(null, 304, headers);
+        return c.json({ ok: true, data }, 200, headers);
     });
 
     route.get('/:id/hexes/:sector/:local', async (c) => {

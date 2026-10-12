@@ -6,8 +6,8 @@
  */
 import { computed, ref } from 'vue';
 import Icon from '../../design/Icon.vue';
-import type { GenerateChoice, Generator } from './seam.ts';
-import { build, cleanChoice, ENGINES, GENERATOR_LABEL, plural, setChoice } from './state.ts';
+import { buildStore, type Density, type GenerateChoice, type Generator } from './seam.ts';
+import { build, cleanChoice, DENSITIES, ENGINES, GENERATOR_LABEL, plural, setChoice, setDensity } from './state.ts';
 
 const props = defineProps<{
     /** How many empty hexes Generate would fill, and how many hold a system. One hex: 1 and 0. */
@@ -22,6 +22,7 @@ const emit = defineEmits<{ go: []; cancel: [] }>();
 
 const draft = ref<GenerateChoice>({ ...build.choice });
 const filledToo = ref(build.filledToo);
+const density = ref<Density>(build.density);
 const engine = computed(() => ENGINES.find((item) => item.id === draft.value.engine) ?? ENGINES[0]);
 const count = computed(() => props.empty + (filledToo.value ? props.filled : 0));
 
@@ -36,8 +37,19 @@ function pickGenerator(generator: Generator): void {
 function go(): void {
     setChoice(draft.value);
     build.filledToo = props.many ? filledToo.value : false;
+    if (props.many) {
+        const store = buildStore();
+        const universe = store ? store.universe() : null;
+        setDensity(universe ? universe.id : null, density.value);
+    }
     emit('go');
 }
+
+/** The submit's words: a count that is only known when every hex is filled. */
+const goWords = computed(() => {
+    if (!props.many) return 'Preview';
+    return density.value === 'every' ? 'Generate ' + count.value : 'Generate up to ' + count.value;
+});
 </script>
 
 <template>
@@ -58,6 +70,14 @@ function go(): void {
         <span>{{ GENERATOR_LABEL[generator] }}</span>
       </label>
     </fieldset>
+    <!-- How many of the empty hexes a run fills: one hex always generates, so it has no choice here. -->
+    <div v-if="many" class="build-opts build-density">
+      <label class="ui-heading" for="build-density">Hexes to fill</label>
+      <select id="build-density" v-model="density" class="build-density-box">
+        <option v-for="item in DENSITIES" :key="item.id" :value="item.id">{{ item.label }}</option>
+      </select>
+      <small class="build-fine">{{ density === 'every' ? 'Every empty hex gets a system.' : 'Each empty hex is rolled on its own, so how many get a system isn’t known until the run ends.' }}</small>
+    </div>
     <fieldset v-if="many && filled > 0" class="build-opts">
       <legend class="ui-heading">The {{ plural(filled, 'hex', 'hexes') }} that already {{ filled === 1 ? 'holds' : 'hold' }} a system</legend>
       <label class="build-opt" :class="{ 'is-on': !filledToo }">
@@ -77,7 +97,7 @@ function go(): void {
       <span class="build-fine">Your choice is saved for next time.</span>
       <button type="button" class="ui-btn" @click="$emit('cancel')">Cancel</button>
       <button type="submit" class="ui-btn is-primary" :disabled="count === 0">
-        <Icon name="wand-magic-sparkles" :size="13" />{{ many ? 'Generate ' + count : 'Preview' }}
+        <Icon name="wand-magic-sparkles" :size="13" />{{ goWords }}
       </button>
     </div>
   </form>
@@ -155,6 +175,32 @@ function go(): void {
 .build-opt:has(input:focus-visible) {
   outline: 2px solid var(--focus-ring);
   outline-offset: -2px;
+}
+
+.build-density {
+  gap: 6px;
+}
+
+.build-density .ui-heading {
+  display: block;
+}
+
+.build-density-box {
+  box-sizing: border-box;
+  width: 100%;
+  height: 34px;
+  margin: 0;
+  padding: 0 9px;
+  border: 1px solid var(--control-line);
+  border-radius: var(--r-2);
+  background: var(--bg-2);
+  color: var(--text-0);
+  font: 400 13.5px/1.2 var(--font-text);
+}
+
+.build-density-box:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
 }
 
 .build-set {

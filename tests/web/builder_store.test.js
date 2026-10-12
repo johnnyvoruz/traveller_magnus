@@ -267,7 +267,7 @@ test('generate many reads the server counts, and stop leaves the rows already do
             undone = true;
             return json({ restored: 2, conflicts: [] });
         }
-        if (call.url.includes('/jobs/')) return json(job({ failures: [{ hexKey: 'spin/1912', reason: 'stopped' }] }));
+        if (call.url.includes('/jobs/')) return json(job({ failures: [{ hexKey: 'spin/1912', reason: 'stopped' }], placed: [KEY, OTHER] }));
         if (call.url.includes('/hexes?')) return json({ items: undone ? [] : [doneA, doneB], nextCursor: null });
         throw new Error('unexpected ' + call.url);
     });
@@ -284,6 +284,8 @@ test('generate many reads the server counts, and stop leaves the rows already do
     assert.equal(result.progress.state, 'stopped');
     assert.equal(result.progress.done, 2);
     assert.equal(result.progress.total, 3);
+    assert.deepEqual(result.progress.placed, [KEY, OTHER]);
+    assert.deepEqual(result.progress.landed, []);
     assert.equal(map.row(KEY).state, 'override');
     assert.equal(map.row(OTHER).state, 'override');
     assert.equal(map.row('spin/1912'), null);
@@ -1022,7 +1024,7 @@ test('generate and its undo still omit makeSectors and return null', async () =>
     map.close();
 });
 
-test('generate reports a start before the first answer, and the job does not name landed hexes', async () => {
+test('generate reports a start before the first answer, with no keys landed yet', async () => {
     let posted = false;
     const seen = [];
     const fetchImpl = fake((call) => {
@@ -1043,10 +1045,10 @@ test('generate reports a start before the first answer, and the job does not nam
         },
     );
     const result = await handle.finished;
-    assert.deepEqual(seen[0], { total: 2, done: 0, failed: [], skipped: 0, state: 'running' });
-    assert.equal(Object.hasOwn(seen[0], 'landed'), false);
+    assert.deepEqual(seen[0], { total: 2, done: 0, failed: [], skipped: 0, leftEmpty: 0, placed: [], landed: [], state: 'running' });
     assert.equal(result.progress.done, 2);
-    assert.equal(Object.hasOwn(result.progress, 'landed'), false);
+    assert.deepEqual(result.progress.placed, []);
+    assert.deepEqual(result.progress.landed, []);
     map.close();
 });
 
@@ -1177,6 +1179,189 @@ test('a grow act reports a start before the first answer', async () => {
         seen.push(progress);
     });
     await act.finished;
-    assert.deepEqual(seen[0], { total: 1, done: 0, failed: [], skipped: 0, state: 'running' });
+    assert.deepEqual(seen[0], { total: 1, done: 0, failed: [], skipped: 0, leftEmpty: 0, placed: [], landed: [], state: 'running' });
+    assert.equal(seen[1].done, 1);
+    assert.deepEqual(seen[1].placed, [SLOT_KEY]);
+    assert.deepEqual(seen[1].landed, [SLOT_KEY]);
+    assert.equal(seen[1].leftEmpty, 0);
     map.close();
+});
+
+test('density is sent only when named, on one hex, many hexes, and a grow', async () => {
+    const posts = [];
+    const fetchImpl = fake((call) => {
+        if (call.url.includes('/hexes?')) return json({ items: [], nextCursor: null });
+        if (call.url.endsWith('/generate')) {
+            posts.push(call.body);
+            if (call.body.hexKeys.length === 1 && !call.body.makeSectors) {
+                return json({ rows: [row({ hexKey: call.body.hexKeys[0], rev: 1 })], skipped: [], leftEmpty: 0 });
+            }
+            if (call.body.makeSectors) {
+                return json({
+                    sectors: [madeSector()],
+                    rows: [row({ hexKey: SLOT_KEY, rev: 2 })],
+                    skipped: [],
+                    jobId: null,
+                    leftEmpty: 0,
+                }, 201);
+            }
+            return json({ jobId: 'job-density' });
+        }
+        if (call.url.includes('/jobs/')) return json(doneJob({ id: 'job-density', total: 2, done: 2, placed: [KEY, OTHER] }));
+        throw new Error('unexpected ' + call.url);
+    });
+    const map = open(fetchImpl, clock());
+    const one = await map.generate({
+        hexKeys: [KEY], edition: 'MgT2E', generator: 'top-down', roll: 0, filledToo: false,
+    }).finished;
+    assert.equal(Object.hasOwn(posts[0], 'density'), false);
+    assert.equal(one.progress.done, 1);
+    assert.equal(one.progress.leftEmpty, 0);
+    assert.deepEqual(one.progress.placed, [KEY]);
+    assert.deepEqual(one.progress.landed, [KEY]);
+
+    const named = await map.generate({
+        hexKeys: [OTHER], edition: 'MgT2E', generator: 'top-down', roll: 0, filledToo: false, density: 'every',
+    }).finished;
+    assert.equal(posts[1].density, 'every');
+    assert.deepEqual(named.progress.placed, [OTHER]);
+
+    await map.generate({
+        hexKeys: [KEY, OTHER], edition: 'MgT2E', generator: 'top-down', roll: 0, filledToo: false, density: 'dense',
+    }).finished;
+    assert.equal(posts[2].density, 'dense');
+    assert.equal(Object.hasOwn(posts[2], 'baseRev'), false);
+
+    await map.generateGrowing({ ...growBody([SLOT_KEY]), density: 'standard' }).finished;
+    assert.equal(posts[3].density, 'standard');
+
+    assert.throws(
+        () => map.generate({ hexKeys: [KEY], edition: 'MgT2E', generator: 'top-down', roll: 0, filledToo: false, density: 'thick' }),
+        /Name the density\./,
+    );
+    assert.equal(posts.length, 4);
+    map.close();
+});
+
+test('the screen adapter passes density through on many hexes when named, and omits it when not (Lane D, lent line)', async () => {
+    const posts = [];
+    const fetchImpl = fake((call) => {
+        if (call.url.includes('/hexes?')) return json({ items: [], nextCursor: null });
+        if (call.url.endsWith('/generate')) {
+            posts.push(call.body);
+            return json({ jobId: 'job-screen-density-' + posts.length });
+        }
+        if (call.url.includes('/jobs/')) {
+            const id = call.url.slice(call.url.indexOf('/jobs/') + 6).split('?')[0];
+            return json(doneJob({ id, total: 2, done: 2, placed: [KEY] , leftEmpty: 1 }));
+        }
+        throw new Error('unexpected ' + call.url);
+    });
+    const screen = asBuildStore(open(fetchImpl, clock()));
+    const hexes = [{ hexKey: KEY, truth: null }, { hexKey: OTHER, truth: null }];
+    const choice = { engine: 'MgT2E', generator: 'top-down' };
+    const named = await screen.generateMany(hexes, choice, () => {}, 'sparse').finished;
+    assert.equal(posts[0].density, 'sparse');
+    assert.equal(named.progress.leftEmpty, 1);
+    assert.deepEqual(named.progress.placed, [KEY]);
+    await screen.generateMany(hexes, choice, () => {}).finished;
+    assert.equal(Object.hasOwn(posts[1], 'density'), false);
+});
+
+test('a job polls with since and the callback receives only the keys written since last time', async () => {
+    const polls = [];
+    const seen = [];
+    let step = 0;
+    const time = clock();
+    const fetchImpl = fake((call) => {
+        if (call.url.includes('/hexes?')) return json({ items: [], nextCursor: null });
+        if (call.url.endsWith('/generate')) return json({ jobId: 'job-placed' });
+        if (call.method === 'GET' && call.url.includes('/jobs/')) {
+            polls.push(call.url);
+            step += 1;
+            if (step === 1) {
+                return json(job({
+                    id: 'job-placed',
+                    state: 'running',
+                    total: 4,
+                    done: 3,
+                    skipped: 1,
+                    leftEmpty: 1,
+                    placed: [KEY, OTHER],
+                }));
+            }
+            return json(doneJob({
+                id: 'job-placed',
+                total: 4,
+                done: 4,
+                skipped: 1,
+                leftEmpty: 1,
+                placed: ['spin/1912'],
+            }));
+        }
+        throw new Error('unexpected ' + call.url);
+    });
+    const map = open(fetchImpl, time);
+    const handle = map.generate(
+        { hexKeys: [KEY, OTHER, 'spin/1912', 'spin/1913'], edition: 'MgT2E', generator: 'top-down', roll: 0, filledToo: false, density: 'sparse' },
+        (progress) => seen.push(progress),
+    );
+    const startedAt = Date.now();
+    while (seen.length < 2) {
+        if (Date.now() - startedAt > 1000) throw new Error('the first poll never arrived');
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    for (const item of time.armed()) {
+        if (item.ms !== 400) continue;
+        item.dead = true;
+        item.fn();
+    }
+    const result = await handle.finished;
+    assert.equal(polls[0].endsWith('/jobs/job-placed?since=0'), true);
+    assert.equal(polls[1].endsWith('/jobs/job-placed?since=2'), true);
+    assert.deepEqual(seen[0].landed, []);
+    assert.deepEqual(seen[1].landed, [KEY, OTHER]);
+    assert.deepEqual(seen[1].placed, [KEY, OTHER]);
+    assert.equal(seen[1].done, 3);
+    assert.equal(seen[1].skipped, 1);
+    assert.equal(seen[1].leftEmpty, 1);
+    assert.deepEqual(seen[2].landed, ['spin/1912']);
+    assert.deepEqual(result.progress.placed, [KEY, OTHER, 'spin/1912']);
+    assert.equal(result.progress.done, 4);
+    assert.equal(result.progress.placed.length, 3);
+    assert.equal(result.progress.leftEmpty, 1);
+    assert.equal(result.progress.skipped, 1);
+    map.close();
+    const handed = [];
+    const screenFetch = fake((call) => {
+        if (call.url.includes('/hexes?')) return json({ items: [], nextCursor: null });
+        if (call.url.endsWith('/generate')) return json({ jobId: 'job-screen' });
+        if (call.url.includes('/jobs/')) {
+            return json(doneJob({
+                id: 'job-screen',
+                total: 2,
+                done: 2,
+                skipped: 0,
+                leftEmpty: 1,
+                placed: [KEY],
+            }));
+        }
+        throw new Error('unexpected ' + call.url);
+    });
+    const screenBuilder = open(screenFetch, clock());
+    const screenMap = asBuildStore(screenBuilder);
+    const many = screenMap.generateMany(
+        [{ hexKey: KEY, truth: null }, { hexKey: OTHER, truth: null }],
+        { engine: 'MgT2E', generator: 'top-down' },
+        (progress) => handed.push(progress),
+    );
+    const screenDone = await many.finished;
+    assert.deepEqual(handed[0].landed, []);
+    assert.deepEqual(handed[1].landed, [KEY]);
+    assert.deepEqual(handed[1].placed, [KEY]);
+    assert.equal(handed[1].leftEmpty, 1);
+    assert.equal(handed[1].done, 2);
+    assert.equal(screenDone.progress.placed.length, 1);
+    assert.equal(screenDone.progress.done, 2);
+    screenBuilder.close();
 });

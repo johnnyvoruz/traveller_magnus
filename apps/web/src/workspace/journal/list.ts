@@ -33,6 +33,11 @@ const KIND_ICON: Record<CampaignEntryKind, 'calendar-star' | 'note-sticky' | 'bo
     rumor: 'radar',
 };
 
+/** The icon a journal row already uses. The timeline's entries use the same one. */
+export function entryIcon(kind: CampaignEntryKind): 'calendar-star' | 'note-sticky' | 'book-atlas' | 'radar' {
+    return KIND_ICON[kind];
+}
+
 export type KindFilter = 'all' | CampaignEntryKind;
 
 /**

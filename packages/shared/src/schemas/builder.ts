@@ -14,6 +14,8 @@ export const BUILDER_LIMITS = {
     batch: 64,
     page: 100,
     reason: 200,
+    /** One dots call. Twenty touched sectors fit; thirty-two is the bound. */
+    dots: 32,
 } as const;
 
 /** `<slug>/<hhhh>`. The same rule as the overlay document. */
@@ -184,3 +186,21 @@ export const SignInProviders = z.object({
     google: z.boolean(),
 }).strict();
 export type SignInProviders = z.infer<typeof SignInProviders>;
+
+/** One sector of overview cells with the referee's rows applied. `stamp` is the sha256 of `cells`. */
+export const BuilderDots = z.object({
+    cells: z.string().length(1280),
+    stamp: z.string().regex(/^[0-9a-f]{64}$/),
+}).strict();
+export type BuilderDots = z.infer<typeof BuilderDots>;
+
+export const BuilderDotsSector = BuilderDots.extend({
+    sector: z.string().min(1),
+}).strict();
+export type BuilderDotsSector = z.infer<typeof BuilderDotsSector>;
+
+export const BuilderDotsPage = z.object({
+    sectors: z.array(BuilderDotsSector).max(BUILDER_LIMITS.dots),
+    stamp: z.string().regex(/^[0-9a-f]{64}$/),
+}).strict();
+export type BuilderDotsPage = z.infer<typeof BuilderDotsPage>;

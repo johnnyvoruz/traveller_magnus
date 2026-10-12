@@ -77,3 +77,10 @@ Johnny written out in full, recommended answer first. After each meaningful step
 append one line under Progress: "done: X. next: Y."
 
 ## Progress
+
+done: read the Keep path. stable() stores Infinity as {$num}; load parses it back as an object and physSeed marks it manual. next: a failing rename test on a stored MgT2E tree.
+done: the rename test failed on 12 of 16 stored MgT2E systems. The value at the trace line is the object {$num:Infinity}. Four systems escape because every solar day is a finite number or null. next: revive that object in physSeed.
+done: physSeed and the gas-giant copy hand the engine a number again. The rename, the numeric round-trip, AoW, and a hand rename pass. The bug is in pushed 1.1.5 and the live bundle says 1.1.5. next: the dots contract and route.
+done: the contract records the dots routes. next: the route, then the worker suite.
+done: the route, the shared types, and the worker test were already on disk; no half-written file to finish or back out. next: the Keep and dots unit tests.
+done: Keep, dots, the worker suites, npm test, check, typecheck, and build passed. next: the report.

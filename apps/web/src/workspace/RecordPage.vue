@@ -5,7 +5,7 @@
  * its track (K12) and its ship sheet (K13) with its deck plan (K9) inside.
  */
 import { computed, defineAsyncComponent, nextTick, onMounted, ref, watch } from 'vue';
-import { CAMPAIGN_LIMITS, type CampaignAnchor, type CampaignRecordType } from '@voyage/shared';
+import { CAMPAIGN_LIMITS, type CampaignAnchor, type CampaignRecord, type CampaignRecordType } from '@voyage/shared';
 import { flushCampaign, lastError, pending } from '../campaign/commit.ts';
 import { campaign } from '../campaign/store.ts';
 import { trackOf } from '../campaign/track.ts';
@@ -17,6 +17,7 @@ import { uploadWords } from './images.ts';
 import LinksBlock from './LinksBlock.vue';
 import { campaignDays, vesselWhere } from './party_where.ts';
 import RecordGallery from './RecordGallery.vue';
+import RecordWhen from './RecordWhen.vue';
 import { RECORD_TYPES, addTag, cleanDetails, cleanName, cleanSummary, placeLine } from './records.ts';
 import { dockShipAt } from './track_actions.ts';
 import TrackBlock from './TrackBlock.vue';
@@ -93,6 +94,11 @@ function rename(text: string): void {
 
 function setType(event: Event): void {
     saveRecord(props.id, { type: (event.target as HTMLSelectElement).value as CampaignRecordType });
+}
+
+/** The record's date. Looking at the page does not call this, and it does not move the campaign clock. */
+function setWhen(when: CampaignRecord['when']): void {
+    saveRecord(props.id, { when });
 }
 
 /** Who can see this record. The journal entry uses the same two words. */
@@ -198,6 +204,7 @@ watch(() => props.id, () => {
           <span v-if="isPlayerCharacter" class="rec-pc" title="A player character: in the party">PC</span>
           <span>· {{ placeLine(record, campaign.records) }}</span>
         </p>
+        <RecordWhen :key="id" :when="record.when" :clock-days="campaign.clock ? campaign.clock.days : null" :read-only="readOnly" @save="setWhen" />
       </div>
       <p class="rec-save" :class="'is-' + saveState" role="status">
         <template v-if="saveState === 'saving'">{{ saveWords }}</template>

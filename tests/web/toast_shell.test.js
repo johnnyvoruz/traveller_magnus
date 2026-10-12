@@ -85,7 +85,9 @@ test('the strip is mounted once, draws its own ring, and keeps a busy toast quie
     assert.match(strip, /:role="toast\.busy \? undefined : 'status'"/);
     assert.match(strip, /nextBusyAnnouncement\(toasts, announced\)/);
     assert.match(strip, /prefers-reduced-motion: reduce/);
-    assert.match(strip, /\.toast-spin-arc \{\s*animation: none;/);
+    // The ring is the app's one spinner (Lane D, prompts/d_density_sheet.md part 2), which stands still under reduced motion.
+    assert.match(strip, /import Spinner from '\.\.\/design\/Spinner\.vue'/);
+    assert.match(source('apps/web/src/design/Spinner.vue'), /prefers-reduced-motion: reduce\) \{\s*\.ui-spin-arc \{\s*animation: none;/);
     assert.match(strip, /\.app:has\(\.map\) \.toasts/);
     assert.match(strip, /\.app:not\(:has\(\.map\)\):not\(:has\(\.orbit\)\) \.toasts/);
 });

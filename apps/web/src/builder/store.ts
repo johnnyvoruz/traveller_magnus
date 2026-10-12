@@ -42,7 +42,7 @@ import { parseHexKey } from '../workspace/places.ts';
 import { startDraft, type BlankOpened, type DraftHandle, type KeepOutcome } from './draft.ts';
 import { mergeHex } from './overlay.ts';
 import { openSectors } from './sectors.ts';
-import type { GenerateGrowingBody, GenerateGrowingHandle, GenerateHandle, HexView, JobProgress, UndoOutcome, UndoToken } from './types.ts';
+import type { GenerateDensityName, GenerateGrowingBody, GenerateGrowingHandle, GenerateHandle, HexView, JobProgress, UndoOutcome, UndoToken } from './types.ts';
 import type { OwnSectors } from '../workspace/build/seam.ts';
 
 type FetchLike = typeof fetch;
@@ -55,6 +55,7 @@ const MAX_PAGES = 20;
 const MAX_POLLS = 10_000;
 
 const GENERATORS = new Set<BuilderGenerator>(['bottom-up', 'top-down']);
+const DENSITIES = new Set<GenerateDensityName>(['every', 'sparse', 'standard', 'dense']);
 
 export type MapUniverse = { id: string; name: string; truthVersion: string | null };
 
@@ -178,19 +179,55 @@ function spendFollowed(jobId: string): void {
     }
 }
 
-function progressOf(job: ReturnType<typeof BuilderJob.parse>, state: JobProgress['state'] = job.state): JobProgress {
+/**
+ * A poll's `placed` is only the keys after `since`. A stop answer lists every key,
+ * and an empty list there means the server omitted it.
+ */
+function foldPlaced(incoming: readonly string[], accumulated: readonly string[], full: boolean): { placed: string[]; landed: string[] } {
+    if (full) {
+        if (incoming.length === 0) return { placed: [...accumulated], landed: [] };
+        return { placed: [...incoming], landed: incoming.slice(accumulated.length) };
+    }
+    return { placed: [...accumulated, ...incoming], landed: [...incoming] };
+}
+
+function progressOf(
+    job: ReturnType<typeof BuilderJob.parse>,
+    accumulated: readonly string[],
+    state: JobProgress['state'] = job.state,
+    full = false,
+): JobProgress {
+    const folded = foldPlaced(job.placed, accumulated, full);
     return {
         total: job.total,
         done: job.done,
         failed: job.failures.map((item) => item.hexKey),
         skipped: job.skipped,
+        leftEmpty: job.leftEmpty,
+        placed: folded.placed,
+        landed: folded.landed,
         state,
     };
 }
 
-/** Counts only. The job answer names failed hexes, not the ones that landed. */
+/** Before the request. `landed` stays empty until a hex is written. */
 function started(total: number): JobProgress {
-    return { total, done: 0, failed: [], skipped: 0, state: 'running' };
+    return { total, done: 0, failed: [], skipped: 0, leftEmpty: 0, placed: [], landed: [], state: 'running' };
+}
+
+/** One inline answer. `done` counts skipped and left-empty hexes; `placed` is only what was written. */
+function settled(total: number, rows: readonly { hexKey: string }[], skipped: readonly string[], leftEmpty: number): JobProgress {
+    const placed = rows.map((row) => row.hexKey);
+    return {
+        total,
+        done: rows.length + skipped.length + leftEmpty,
+        failed: [],
+        skipped: skipped.length,
+        leftEmpty,
+        placed,
+        landed: placed,
+        state: 'done',
+    };
 }
 
 export type Builder = {
@@ -205,7 +242,7 @@ export type Builder = {
     /** Null until that sector's page is in memory, unless a row was just written. */
     hexView(hexKey: string, truth: SectorHex | null): HexView | null;
     preview(hexKey: string, edition: string, generator: BuilderGenerator, roll: number): Promise<{ envelope: unknown; hash: string; roll: number; entry: SectorHex | null }>;
-    generate(body: { hexKeys: readonly string[]; edition: string; generator: BuilderGenerator; roll: number; filledToo: boolean }, onProgress?: (progress: JobProgress) => void): GenerateHandle;
+    generate(body: { hexKeys: readonly string[]; edition: string; generator: BuilderGenerator; roll: number; filledToo: boolean; density?: GenerateDensityName }, onProgress?: (progress: JobProgress) => void): GenerateHandle;
     /** One generate that also makes sectors. Undo is `POST .../sectors/undo-generate`. */
     generateGrowing(body: GenerateGrowingBody, onProgress?: (progress: JobProgress) => void): GenerateGrowingHandle;
     /**
@@ -663,8 +700,8 @@ export function openMap(options: OpenMapOptions): Builder {
         });
     }
 
-    async function readJob(id: string, jobId: string): Promise<ReturnType<typeof BuilderJob.parse>> {
-        return BuilderJob.parse(await request('GET', `/api/universes/${encodeURIComponent(id)}/jobs/${encodeURIComponent(jobId)}`));
+    async function readJob(id: string, jobId: string, since: number): Promise<ReturnType<typeof BuilderJob.parse>> {
+        return BuilderJob.parse(await request('GET', `/api/universes/${encodeURIComponent(id)}/jobs/${encodeURIComponent(jobId)}?since=${since}`));
     }
 
     /** A grow undo that landed while this poll was asleep. The poll then ends as stopped. */
@@ -681,18 +718,21 @@ export function openMap(options: OpenMapOptions): Builder {
         let polls = 0;
         let stopSent = false;
         const stale = (): boolean => releasedJob === jobId;
-        let last: JobProgress = { total: 0, done: 0, failed: [], skipped: 0, state: 'running' };
+        let accumulated: string[] = [];
+        let last: JobProgress = started(0);
         while (polls < MAX_POLLS) {
             const early = released(jobId, last);
             if (early) return early;
             polls += 1;
-            let job = await readJob(id, jobId);
-            const afterRead = released(jobId, progressOf(job));
+            let job = await readJob(id, jobId, accumulated.length);
+            const read = progressOf(job, accumulated);
+            accumulated = read.placed;
+            const afterRead = released(jobId, read);
             if (afterRead) return afterRead;
             if (!closed) await reload(slugs, stale);
-            const afterReload = released(jobId, progressOf(job));
+            const afterReload = released(jobId, read);
             if (afterReload) return afterReload;
-            last = progressOf(job);
+            last = read;
             announce(last);
             onProgress?.(last);
             const afterNote = released(jobId, last);
@@ -700,12 +740,13 @@ export function openMap(options: OpenMapOptions): Builder {
             if (job.state === 'done' || job.state === 'stopped' || job.state === 'failed') return last;
             if (askStop && !stopSent) {
                 stopSent = true;
-                const stopping = progressOf(job, 'stopping');
+                const stopping: JobProgress = { ...last, state: 'stopping', landed: [] };
                 announce(stopping);
                 onProgress?.(stopping);
                 job = BuilderJob.parse(await request('POST', `/api/universes/${encodeURIComponent(id)}/jobs/${encodeURIComponent(jobId)}/stop`, {}));
                 if (!closed) await reload(slugs);
-                last = progressOf(job);
+                last = progressOf(job, accumulated, job.state, true);
+                accumulated = last.placed;
                 announce(last);
                 onProgress?.(last);
                 if (job.state === 'done' || job.state === 'stopped' || job.state === 'failed') return last;
@@ -720,7 +761,7 @@ export function openMap(options: OpenMapOptions): Builder {
         throw new Error('The job did not finish.');
     }
 
-    function checkGenerate(body: { hexKeys: readonly string[]; edition: string; generator: BuilderGenerator; roll: number; filledToo: boolean }): void {
+    function checkGenerate(body: { hexKeys: readonly string[]; edition: string; generator: BuilderGenerator; roll: number; filledToo: boolean; density?: GenerateDensityName }): void {
         if (!Array.isArray(body.hexKeys) || body.hexKeys.length === 0) throw new Error('Name the hexes to generate.');
         const seen = new Set<string>();
         for (const key of body.hexKeys) {
@@ -731,9 +772,10 @@ export function openMap(options: OpenMapOptions): Builder {
         if (!GENERATORS.has(body.generator)) throw new Error('Name the generator.');
         if (typeof body.roll !== 'number' || !Number.isInteger(body.roll) || body.roll < 0) throw new Error('Name the roll.');
         if (typeof body.filledToo !== 'boolean') throw new Error('Name whether filled hexes are generated too.');
+        if (body.density !== undefined && !DENSITIES.has(body.density)) throw new Error('Name the density.');
     }
 
-    function generate(body: { hexKeys: readonly string[]; edition: string; generator: BuilderGenerator; roll: number; filledToo: boolean }, onProgress?: (progress: JobProgress) => void): GenerateHandle {
+    function generate(body: { hexKeys: readonly string[]; edition: string; generator: BuilderGenerator; roll: number; filledToo: boolean; density?: GenerateDensityName }, onProgress?: (progress: JobProgress) => void): GenerateHandle {
         checkGenerate(body);
         if (generating) throw new Error('A build is already running.');
         generating = true;
@@ -755,6 +797,7 @@ export function openMap(options: OpenMapOptions): Builder {
                 roll: body.roll,
                 filledToo: body.filledToo,
             };
+            if (body.density !== undefined) payload.density = body.density;
             if (body.hexKeys.length === 1) {
                 const prior = previous.get(body.hexKeys[0]);
                 payload.baseRev = prior ? prior.rev : 0;
@@ -783,13 +826,7 @@ export function openMap(options: OpenMapOptions): Builder {
                     atRev: row.rev,
                 })),
             });
-            const progress: JobProgress = {
-                total: body.hexKeys.length,
-                done: done.rows.length,
-                failed: [],
-                skipped: done.skipped.length,
-                state: 'done',
-            };
+            const progress = settled(body.hexKeys.length, done.rows, done.skipped, done.leftEmpty);
             onProgress?.(progress);
             if (queue.size > 0 && !cancelRetry) scheduleFlush();
             lastError.value = '';
@@ -887,6 +924,7 @@ export function openMap(options: OpenMapOptions): Builder {
                     filledToo: body.filledToo,
                     makeSectors: body.makeSectors.map((seed) => ({ name: seed.name, slot: { x: seed.slot.x, y: seed.slot.y } })),
                 };
+                if (body.density !== undefined) payload.density = body.density;
                 if (body.hexKeys.length === 1) {
                     const only = body.hexKeys[0];
                     const slug = sectorOf(only);
@@ -918,13 +956,7 @@ export function openMap(options: OpenMapOptions): Builder {
                     lastError.value = '';
                     return { undo, progress };
                 }
-                const progress: JobProgress = {
-                    total: body.hexKeys.length,
-                    done: done.rows.length,
-                    failed: [],
-                    skipped: done.skipped.length,
-                    state: 'done',
-                };
+                const progress = settled(body.hexKeys.length, done.rows, done.skipped, done.leftEmpty);
                 onProgress?.(progress);
                 if (queue.size > 0 && !cancelRetry) scheduleFlush();
                 lastError.value = '';

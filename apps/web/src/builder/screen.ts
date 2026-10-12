@@ -16,11 +16,25 @@ import type { Builder } from './store.ts';
 import type { GenerateGrowingHandle } from './types.ts';
 import type { JobProgress } from './types.ts';
 
-function screenProgress(progress: JobProgress): ScreenProgress {
+function screenProgress(progress: JobProgress): ScreenProgress & {
+    skipped: number;
+    leftEmpty: number;
+    placed: string[];
+    landed: string[];
+} {
     const state = progress.state === 'stopping' || progress.state === 'stopped' || progress.state === 'running' || progress.state === 'done'
         ? progress.state
         : progress.state === 'failed' ? 'done' : 'running';
-    return { total: progress.total, done: progress.done, failed: progress.failed, state };
+    return {
+        total: progress.total,
+        done: progress.done,
+        failed: progress.failed,
+        state,
+        skipped: progress.skipped,
+        leftEmpty: progress.leftEmpty,
+        placed: progress.placed,
+        landed: progress.landed,
+    };
 }
 
 /** A chart row with no name. Not read from a tree. */
@@ -84,13 +98,14 @@ export function asBuildStore(builder: Builder): BuildStore & {
             const done = await handle.finished;
             return { id: done.undo.id };
         },
-        generateMany: (hexes, choice, onProgress) => {
+        generateMany: (hexes, choice, onProgress, density) => {
             const handle = builder.generate({
                 hexKeys: hexes.map((item) => item.hexKey),
                 edition: choice.engine,
                 generator: choice.generator,
                 roll: 0,
                 filledToo: true,
+                ...(density ? { density } : {}),
             }, (progress) => onProgress(screenProgress(progress)));
             return {
                 stop: () => handle.stop(),

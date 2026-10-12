@@ -9,13 +9,13 @@ import Icon from '../../design/Icon.vue';
 import { parseHexKey } from '../places.ts';
 import { buildSettings, generateMany, hexName, hexState, previewAt, removeHexes, restorable, restoreHexes, stopBuild, tallyOf, truthAt } from './acts.ts';
 import { edit, openBlank } from './edit.ts';
-import BuildSpin from './BuildSpin.vue';
+import Spinner from '../../design/Spinner.vue';
 import GenerateSheet from './GenerateSheet.vue';
 import PublishForm from '../market/PublishForm.vue';
 import { EMPTY_ALONE, marketUi } from '../market/market.ts';
 import { generateGrowing, growUi } from './grow_acts.ts';
 import { NAME_MAX, slotGroups, subsectorWords } from './sectors.ts';
-import { build, choiceLine, JOB_HOLD, plural, settingRows } from './state.ts';
+import { build, choiceLine, densityLine, generateWords, JOB_HOLD, plural, settingRows } from './state.ts';
 
 const props = defineProps<{
     mode: 'empty' | 'removed' | 'many';
@@ -34,7 +34,7 @@ const canRestore = computed(() => restorable(props.keys));
 const chartRow = computed(() => (props.mode === 'removed' ? truthAt(one.value) : null));
 const busy = computed(() => build.rolling !== '' || build.job !== null);
 /** The job, or a stand-in of the same shape while none runs: the progress box keeps its size hidden. */
-const shownJob = computed(() => build.job ?? { label: '', total: 0, done: 0, failed: [] as string[], state: 'running' as const });
+const shownJob = computed(() => build.job ?? { label: '', total: 0, done: 0, failed: [] as string[], state: 'running' as const, placed: undefined as string[] | undefined });
 /** The list reads in hex order, whatever order the hexes were picked in. */
 const rows = computed(() => [...props.keys].sort().slice(0, 200).map((key) => {
     const place = parseHexKey(key);
@@ -144,11 +144,15 @@ function generate(): void {
             :aria-busy="build.rolling || build.job || growUi.busy ? 'true' : undefined"
             @click="generate"
           >
-            <BuildSpin v-if="build.rolling || build.job || growUi.busy" />
+            <Spinner v-if="build.rolling || build.job || growUi.busy" />
             <Icon v-else name="wand-magic-sparkles" :size="13" />
-            <template v-if="slots.length">{{ growUi.busy ? 'Creating…' : (slots.length === 1 ? 'Create the sector and generate ' : 'Create ' + slots.length + ' sectors and generate ') + (mode === 'many' ? plural(count.empty.length, 'hex', 'hexes') : 'a system') }}</template>
-            <template v-else-if="mode === 'many'">Generate the {{ plural(count.empty.length, 'empty hex', 'empty hexes') }}</template>
-            <template v-else>{{ build.rolling ? 'Generating…' : 'Generate a system' }}</template>
+            <!-- Many hexes: how many of them a run fills is said on the button's second line, so nobody fills a subsector by surprise. -->
+            <span class="build-big-words">
+              <template v-if="slots.length">{{ growUi.busy ? 'Creating…' : (slots.length === 1 ? 'Create the sector and generate ' : 'Create ' + slots.length + ' sectors and generate ') + (mode === 'many' ? (build.density === 'every' ? '' : 'up to ') + plural(count.empty.length, 'hex', 'hexes') : 'a system') }}</template>
+              <template v-else-if="mode === 'many'">{{ generateWords(count.empty.length, build.density) }}</template>
+              <template v-else>{{ build.rolling ? 'Generating…' : 'Generate a system' }}</template>
+              <small v-if="mode === 'many'" class="build-big-line" data-density>{{ densityLine(build.density) }}</small>
+            </span>
             <kbd v-if="mode !== 'removed'" class="build-key">G</kbd>
           </button>
           <button
@@ -176,9 +180,10 @@ function generate(): void {
           </p>
           <div class="build-prog" :class="{ 'is-hidden': !build.job }" :role="build.job ? 'status' : undefined" :aria-hidden="build.job ? undefined : 'true'" :data-build-job="build.job ? '' : undefined">
             <div class="build-prog-line">
-              <BuildSpin :size="14" />
-              <b>{{ shownJob.done }} of {{ shownJob.total }}</b>
-              <span><template v-if="shownJob.failed.length">{{ shownJob.failed.length }} failed · </template>{{ shownJob.state === 'running' ? 'generating' : 'stopping' }}</span>
+              <Spinner :size="14" />
+              <!-- The server reports in steps of up to 32, and counts the hexes it leaves empty as checked: hexes checked, then systems so far. -->
+              <b>{{ shownJob.done }} of {{ shownJob.total }}<template v-if="shownJob.placed"> hexes checked</template></b>
+              <span><template v-if="shownJob.placed">{{ plural(shownJob.placed.length, 'system', 'systems') }} so far · </template><template v-if="shownJob.failed.length">{{ shownJob.failed.length }} failed · </template>{{ shownJob.state === 'running' ? 'generating' : 'stopping' }}</span>
               <button v-if="growUi.undoRunning" type="button" class="ui-btn" data-grow-undo title="Stops the job and removes the new sectors and every system generated in them" @click="growUi.undoRunning()">Undo</button>
               <button type="button" class="ui-btn" :disabled="shownJob.state !== 'running'" @click="stopBuild()">{{ shownJob.state === 'running' ? 'Stop' : 'Stopping…' }}<kbd class="build-key">X</kbd></button>
             </div>
@@ -306,6 +311,20 @@ function generate(): void {
   min-height: 38px;
   padding: 0 14px;
   font-size: 14px;
+}
+
+.build-big-words {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 4px 0;
+  text-align: left;
+}
+
+/* The second line: how many of the hexes the run fills. */
+.build-big-line {
+  font: 500 11.5px/1.3 var(--font-text);
+  opacity: 0.85;
 }
 
 /* The act that makes a sector says so in full: at column width it wraps rather than run past the pane. */

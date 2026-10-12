@@ -4,14 +4,22 @@
  * map ends in the one toast with Undo. No act asks first.
  */
 import type { SectorHex, Settings } from '@voyage/shared';
-import { showToast } from '../../shell/toast.ts';
+import { showToast, TOAST_ACTION_MS } from '../../shell/toast.ts';
 import { parseHexKey } from '../places.ts';
-import { endFlight, startFlight } from './flight.ts';
-import { endJobToast, startJobToast } from './job_toast.ts';
+import { endFlight, noteFlight, startFlight } from './flight.ts';
+import { endJobToast, jobUndo, NO_JOB_UNDO, startJobToast, stopFollowed, takenOver } from './job_toast.ts';
 import { isHandHex } from './hand_acts.ts';
 import { runUndo } from './undo_words.ts';
 import { buildStore, type HexState, type UndoToken } from './seam.ts';
-import { build, generateTargets, jobToast, plural, removeTargets, restoreTargets, stateOf, tally, type Tally } from './state.ts';
+import { build, generateTargets, jobLabel, jobToast, plural, readDensity, removeTargets, restoreTargets, stateOf, tally, type Tally } from './state.ts';
+import { watch } from 'vue';
+
+// The density is remembered per universe: read it whenever Build's universe changes.
+watch(() => {
+    const store = buildStore();
+    const universe = store && typeof store.universe === 'function' ? store.universe() : null;
+    return universe ? universe.id : '';
+}, (id) => { if (id) build.density = readDensity(id); }, { immediate: true });
 
 /** What the acts ask of the map view: the chart under a hex, and names. */
 export type BuildMap = {
@@ -157,26 +165,38 @@ export function generateMany(keys: readonly string[]): void {
     build.error = '';
     build.sheetOpen = false;
     build.preview = null;
-    const label = 'Generating ' + plural(targets.length, 'hex', 'hexes');
+    // The density roll only ever leaves an empty hex empty; a hex that holds a system is always written (packages/generation density.ts).
+    const density = build.density;
+    const label = jobLabel(targets.length, density);
     build.job = { total: targets.length, done: 0, failed: [], state: 'running', label };
     startFlight(targets);
     const run = store.generateMany(
         targets.map((hexKey) => ({ hexKey, truth: truthAt(hexKey) })),
         build.choice,
-        (progress) => { if (build.job) build.job = { ...progress, label }; },
+        (progress) => {
+            noteFlight(progress);
+            if (build.job) build.job = { ...progress, label };
+        },
+        density,
     );
     stopJob = run.stop;
     startJobToast(stopBuild);
     void run.finished.then(
         ({ token, progress }) => {
             stopJob = null;
+            // Taken over by the store that follows it after a route change: its end was said there.
+            if (takenOver()) return;
             build.job = null;
             endFlight();
             endJobToast();
-            offerUndo(jobToast(progress, where(targets)), token);
+            // After a route change the store that started the job has closed: the current one's token is the one that works.
+            const undo = jobUndo(token, store);
+            if (undo) offerUndo(jobToast(progress, where(targets)), undo);
+            else showToast(jobToast(progress, where(targets)) + ' ' + NO_JOB_UNDO, { ms: TOAST_ACTION_MS });
         },
         (err) => {
             stopJob = null;
+            if (takenOver()) return;
             build.job = null;
             endFlight();
             endJobToast();
@@ -191,6 +211,8 @@ export function holdJob(stop: (() => void) | null): void {
 }
 
 export function stopBuild(): void {
+    // A job followed by the current store is stopped through it: the store that started it may have closed.
+    if (stopFollowed()) return;
     if (stopJob) stopJob();
 }
 

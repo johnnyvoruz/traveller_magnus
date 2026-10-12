@@ -7,11 +7,12 @@
  * The map's corner is the chart's foot beside the panel (or the search row when the panel
  * covers the chart). The orbit view's corner is the picture's upper right. Pages with neither
  * use the lower right. A busy toast shows a ring and is announced once; later words stay quiet.
- * The ring matches workspace/build/BuildSpin.vue. That component stays where Lane D owns it.
+ * The ring is the app's one spinner, design/Spinner.vue, which also stands still under reduced motion.
  */
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import Icon from '../design/Icon.vue';
+import Spinner from '../design/Spinner.vue';
 import { dismissToast, nextBusyAnnouncement, orbitToastBox, readPx, runToastAction, toasts, type Toast } from './toast.ts';
 
 const route = useRoute();
@@ -179,10 +180,7 @@ onBeforeUnmount(() => {
       @focusin="hold(toast)"
       @focusout="release(toast)"
     >
-      <svg v-if="toast.busy" class="toast-spin" width="13" height="13" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-        <circle class="toast-spin-track" cx="8" cy="8" r="6.25" />
-        <circle class="toast-spin-arc" cx="8" cy="8" r="6.25" />
-      </svg>
+      <Spinner v-if="toast.busy" class="toast-spin" :size="13" />
       <span class="toast-text">{{ toast.message }}</span>
       <button v-if="toast.action" type="button" class="toast-act" @click="act(toast)">{{ toast.action.label }}</button>
       <button type="button" class="toast-close" aria-label="Dismiss" title="Dismiss" @click="dismissToast(toast.id)">
@@ -278,29 +276,6 @@ onBeforeUnmount(() => {
   overflow-wrap: anywhere;
 }
 
-.toast-spin {
-  flex: none;
-  overflow: visible;
-}
-
-.toast-spin circle {
-  fill: none;
-  stroke-width: 2.25;
-}
-
-.toast-spin-track {
-  stroke: currentColor;
-  opacity: 0.25;
-}
-
-.toast-spin-arc {
-  stroke: currentColor;
-  stroke-dasharray: 10 40;
-  stroke-linecap: round;
-  transform-origin: 8px 8px;
-  animation: toast-spin-turn 0.85s linear infinite;
-}
-
 .toast-act {
   flex: 0 0 auto;
   margin: 0;
@@ -343,20 +318,12 @@ onBeforeUnmount(() => {
   to { opacity: 1; transform: none; }
 }
 
-@keyframes toast-spin-turn {
-  to { transform: rotate(360deg); }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .toasts {
     transition: none;
   }
 
   .toast {
-    animation: none;
-  }
-
-  .toast-spin-arc {
     animation: none;
   }
 }

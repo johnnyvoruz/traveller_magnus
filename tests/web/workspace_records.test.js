@@ -37,6 +37,7 @@ test('a new record is a whole, valid row with a name to be seen by', () => {
         assert.equal(CampaignRecord.safeParse(record).success, true, type);
         assert.equal(record.name, 'New ' + typeInfo(type).one.toLowerCase());
         assert.equal(record.anchor, null);
+        assert.equal(record.when, null);
         assert.equal(record.visibility, 'referee');
         assert.equal(record.rev, 0);
         assert.equal(RecordChange.safeParse(created(record)).success, true);
@@ -118,6 +119,16 @@ test('the changes a screen sends: whole rows on the revision held, and a tombsto
     assert.equal(unchanged(record, { visibility: 'referee', playerNotes: null }), true);
     assert.equal(unchanged(record, { visibility: 'players' }), false);
     assert.equal(unchanged(record, { playerNotes: 'Bring the letter.' }), false);
+    const dated = { start: { year: 1105, day: 40 }, end: { year: 1105, day: 48 } };
+    assert.equal(unchanged(record, { when: null }), true);
+    assert.equal(unchanged({ ...record, when: dated }, { when: { start: { year: 1105, day: 40 }, end: { year: 1105, day: 48 } } }), true);
+    assert.equal(unchanged({ ...record, when: dated }, { when: { start: { year: 1105, day: 41 }, end: { year: 1105, day: 48 } } }), false);
+    assert.equal(unchanged({ ...record, when: dated }, { when: { start: { year: 1105, day: 40 } } }), false);
+    assert.equal(unchanged({ ...record, when: dated }, { when: null }), false);
+    const stored = edited(record, { when: dated }, '2026-10-05T00:00:00.000Z');
+    assert.equal(RecordChange.safeParse(stored).success, true);
+    assert.deepEqual(stored.when, dated);
+    assert.equal(edited({ ...record, when: dated }, { when: null }, '2026-10-05T00:00:00.000Z').when, null);
     const shared = edited(record, { visibility: 'players', playerNotes: 'Bring the letter.' }, '2026-10-05T00:00:00.000Z');
     assert.equal(RecordChange.safeParse(shared).success, true);
     assert.equal(shared.visibility, 'players');
