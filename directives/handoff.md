@@ -6871,3 +6871,12 @@ that failed at the close no longer does. Ready note `findings/builder_form_ready
   nine kinds; the clock untouched (day count 403424 before and after).
 - **Push 1.1.6** written without C's eight in-flight files.
 - **Prompts:** `a_own_dots_2.md`, `d_menu_selection.md`, `e_handout_images.md`.
+
+- Johnny on density: always ask when more than one hex is selected; plain wording. Part 0 added to `d_menu_selection.md` (one prompt from five entry points; last choice preselected; one hex never asks).
+
+- **1.1.6 pushed (`9e154fa`).** **C, `c_surface_map_2`, accepted:** one centred card
+  holding map and legend; zoom and pan (`surface/hybrid/view.ts`); legend rows are
+  buttons with glyphs on their terrain colour, hover both ways; terminator stroke and
+  sun mark (`chrome.ts`); night at the middle step; the column has one control. Push
+  1.1.7 written (`findings/push/builder_2026-10-11h.md`). Next for C:
+  `c_disc_tilt_caption.md`.

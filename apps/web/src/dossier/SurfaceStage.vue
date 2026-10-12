@@ -29,14 +29,17 @@ import { cancelSurface, hybridInputsFor, requestMap } from '../surface/service.t
 import { SURFACE_WEBGL_NOTICE, webglMissing } from '../surface/webgl_notice.ts';
 import { drawMapOverlay, renderDiamondBlank } from '../surface/vanilla/map.ts';
 import { iconPaint, loadIconSet, type IconImage, type IconSet, type Tinter } from '../surface/hybrid/icons.ts';
-import { LARGE_SHEET, SHEET_LAYOUT } from '../surface/hybrid/field.ts';
+import { drawSunMark, drawTerminus } from '../surface/hybrid/chrome.ts';
+import { LARGE_SHEET, SHEET_LAYOUT, sheetPoint } from '../surface/hybrid/field.ts';
 import { hexSpacing } from '../surface/hybrid/grid.ts';
 import { hybridModel } from '../surface/hybrid/index.ts';
 import type { HybridModel } from '../surface/hybrid/model.ts';
 import { createDayNightLayer, type DayNightLayer, type LayerCtx, type LayerHost } from '../surface/hybrid/daynight_layer.ts';
 import { frameDue } from '../surface/hybrid/motion.ts';
-import { netClipPath, netOutline } from '../surface/hybrid/stage.ts';
-import { drawMarks, drawSymbols, hexOutlineWidth } from '../surface/hybrid/symbols.ts';
+import { mapSun, netClipPath, netOutline } from '../surface/hybrid/stage.ts';
+import { CODE_TABLE, type SurfaceCode } from '../surface/hybrid/codes.ts';
+import { drawMarks, drawSymbols, symbolOf } from '../surface/hybrid/symbols.ts';
+import { FIT_VIEW, hexCssPx, maxZoom, panBy, zoomAbout, ZOOM_KEY, ZOOM_NOTCH_PX, ZOOM_WHEEL, type MapView } from '../surface/hybrid/view.ts';
 import { clockDays, clockJumps, offerStart, simClock, subscribeSimClock } from '../orbit/sim_clock.ts';
 import { portTimeText, type Subsolar } from '../orbit/sun.ts';
 import { wrapFocus } from '../workspace/focus_trap.ts';
@@ -71,19 +74,25 @@ const marksEl = ref<HTMLCanvasElement | null>(null);
 const shadowEl = ref<HTMLCanvasElement | null>(null);
 const glowEl = ref<HTMLCanvasElement | null>(null);
 const figureEl = ref<HTMLElement | null>(null);
+const stageEl = ref<HTMLElement | null>(null);
 const dialogEl = ref<HTMLElement | null>(null);
 const expandBtn = ref<HTMLButtonElement | null>(null);
 const closeBtn = ref<HTMLButtonElement | null>(null);
-const keyBtn = ref<HTMLButtonElement | null>(null);
 /** The large map uses the whole window, on the same stage, the same clock, and the same layers. */
 const large = ref(false);
 /** Column height held while the figure is on the body, so the dossier does not jump. */
 const holdPx = ref(0);
-const keyOpen = ref(false);
 /** Drawn width of the figure, in CSS pixels. Labels and the grid stroke follow it. */
 const viewPx = ref(0);
-/** The marks and symbol layer is drawn at twice the sheet's size, for crisp lines. */
-const MARK_SCALE = 2;
+/** Zoom and pan of the large map. The column stays at fit. */
+const mapView = ref<MapView>(FIT_VIEW);
+/** Legend row under the pointer or keyboard focus. */
+const highlight = ref<SurfaceCode | null>(null);
+/** Name of the hex under the pointer, or the keyboard cursor. */
+const picked = ref('');
+const cursorId = ref<number | null>(null);
+/** On-screen width of one hex, in CSS pixels. The scale sentence does not change with zoom. */
+const hexBar = ref(0);
 const blankEl = ref<HTMLCanvasElement | null>(null);
 const state = ref<State>('waiting');
 const beam = ref<'scan-down' | 'scan-up'>('scan-down');
@@ -121,6 +130,11 @@ const scaleText = computed(() => {
     if (!m || mode.value !== 'enhanced') return '';
     const km = (m.world.diamKm / 2) * hexSpacing(m.grid.n);
     return '1 hex ≈ ' + Math.round(km).toLocaleString('en-US') + ' km';
+});
+const zoomStyle = computed(() => {
+    if (!large.value) return undefined;
+    const v = mapView.value;
+    return { transform: 'translate(' + v.x + 'px, ' + v.y + 'px) scale(' + v.zoom + ')' };
 });
 const nowDays = computed(() => (typeof props.nowDays === 'number' && Number.isFinite(props.nowDays) ? props.nowDays : clockDays()));
 const worldName = computed(() => {
@@ -217,31 +231,127 @@ const tint: Tinter = (image, colour) => {
     return canvas;
 };
 
+function stageBox(): { w: number; h: number } {
+    const stage = stageEl.value;
+    return { w: stage ? stage.clientWidth : 0, h: stage ? stage.clientHeight : 0 };
+}
+
+function viewLimit(): number {
+    const m = model.value;
+    const box = stageBox();
+    const layout = activeLayout.value;
+    if (!m || !box.w) return 1;
+    return maxZoom(box.w, layout.width, layout.side, m.grid.n);
+}
+
+function applyView(next: MapView): void {
+    const box = stageBox();
+    if (!large.value || !box.w) {
+        mapView.value = FIT_VIEW;
+    } else {
+        const zoom = Math.min(Math.max(1, next.zoom), viewLimit());
+        mapView.value = panBy({ zoom, x: next.x, y: next.y }, box.w, box.h, 0, 0);
+    }
+    drawLayers();
+}
+
 function drawLayers(): void {
     const layout = activeLayout.value;
-    fitCanvas(marksEl.value, layout.width * MARK_SCALE, layout.height * MARK_SCALE);
     const canvas = marksEl.value;
     const ctx = canvas ? canvas.getContext('2d') : null;
     if (!ctx || !canvas) return;
+    const box = stageBox();
+    const dpr = devicePixelRatio();
+    const sw = box.w || layout.width;
+    const sh = box.h || layout.height;
+    fitCanvas(canvas, Math.max(1, Math.round(sw * dpr)), Math.max(1, Math.round(sh * dpr)));
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const m = model.value;
     if (!hybrid.value || !m) return;
-    ctx.setTransform(MARK_SCALE, 0, 0, MARK_SCALE, 0, 0);
+    const zoom = large.value ? mapView.value.zoom : 1;
+    const ox = large.value ? mapView.value.x : 0;
+    const oy = large.value ? mapView.value.y : 0;
+    const cssPerSheet = (sw / layout.width) * zoom;
+    const scale = cssPerSheet * dpr;
+    ctx.setTransform(scale, 0, 0, scale, ox * dpr, oy * dpr);
     const began = now();
-    const css = viewPx.value || layout.width;
-    const dpr = devicePixelRatio();
-    const stroke = hexOutlineWidth(layout.width, css, dpr);
+    const oneCss = 1 / Math.max(cssPerSheet, 0.001);
+    const hexCss = hexCssPx(sw, layout.width, layout.side, m.grid.n, zoom);
+    const iconCss = Math.min(14, Math.max(8, hexCss * 0.45));
     const symbols = style.value === 'symbols';
-    drawSymbols(ctx, m, layout, { set: iconSet.value, tint, icons: symbols, outlineWidth: stroke });
-    const fontPx = 12 * (layout.width / Math.max(css, 1));
-    const gap = 16 * (layout.width / Math.max(css, 1));
+    drawSymbols(ctx, m, layout, {
+        set: iconSet.value,
+        tint,
+        icons: symbols,
+        outlineWidth: oneCss,
+        iconRadius: iconCss * oneCss,
+        highlight: highlight.value,
+    });
+    const fontPx = 12 * oneCss;
+    const gap = 16 * oneCss;
     drawMarks(ctx, m, layout, { graticule: false, ring: false, scale: false, font: fontPx + 'px sans-serif', labelGap: gap });
+    if (dayNight.value) {
+        const sub = props.sun ? props.sun(nowDays.value) : null;
+        const pose = mapSun(m, sub, simClock.playing, simClock.rate);
+        if (pose.sun) {
+            drawTerminus(ctx, m.grid, layout, pose.sun, oneCss);
+            drawSunMark(ctx, layout, pose.sun, 6 * oneCss);
+        }
+    }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     if (figureEl.value) {
         figureEl.value.dataset.symbolsMs = (now() - began).toFixed(2);
-        figureEl.value.dataset.gridPx = (stroke * dpr * css / layout.width).toFixed(2);
+        figureEl.value.dataset.gridPx = (oneCss * cssPerSheet * dpr).toFixed(2);
+        figureEl.value.dataset.zoom = zoom.toFixed(2);
+        figureEl.value.dataset.hexPx = hexCss.toFixed(1);
     }
+    hexBar.value = Math.round(hexCss);
+}
+
+function sheetFromStage(sx: number, sy: number): [number, number] | null {
+    const layout = activeLayout.value;
+    const box = stageBox();
+    if (!box.w || !box.h) return null;
+    const zoom = large.value ? mapView.value.zoom : 1;
+    const ox = large.value ? mapView.value.x : 0;
+    const oy = large.value ? mapView.value.y : 0;
+    const u = (sx - ox) / (box.w * zoom);
+    const v = (sy - oy) / (box.h * zoom);
+    return [u * layout.width, v * layout.height];
+}
+
+function nameHex(id: number): void {
+    const m = model.value;
+    if (!m) return;
+    const hex = m.hexes[id];
+    if (!hex) return;
+    const code = symbolOf(hex) ?? hex.terrain;
+    picked.value = CODE_TABLE[code] ? CODE_TABLE[code].name : '';
+    cursorId.value = id;
+}
+
+function pickAt(sx: number, sy: number): void {
+    const m = model.value;
+    const at = sheetFromStage(sx, sy);
+    if (!m || !at) return;
+    const layout = activeLayout.value;
+    let best = -1;
+    let bestD = Infinity;
+    const limit = (layout.side / m.grid.n) * 0.7;
+    for (let id = 0; id < m.grid.count; id += 1) {
+        const p = sheetPoint(layout, m.grid.P[id]);
+        const d = (p[0] - at[0]) * (p[0] - at[0]) + (p[1] - at[1]) * (p[1] - at[1]);
+        if (d < bestD) {
+            bestD = d;
+            best = id;
+        }
+    }
+    if (best < 0 || bestD > limit * limit) {
+        picked.value = '';
+        return;
+    }
+    nameHex(best);
 }
 
 /** What the day and night layer needs from the page: canvases, ImageData, the motion setting. */
@@ -458,9 +568,9 @@ function onSheetEnd(): void {
 
 function noteWidth(): void {
     const width = figureEl.value ? figureEl.value.clientWidth : 0;
-    if (!width || width === viewPx.value) return;
-    viewPx.value = width;
-    drawLayers();
+    if (width && width !== viewPx.value) viewPx.value = width;
+    if (large.value) applyView(mapView.value);
+    else drawLayers();
 }
 
 /** Controls Tab can reach while the large map is open. */
@@ -480,16 +590,10 @@ function holdFocus(event: FocusEvent): void {
 
 function onDialogKey(event: KeyboardEvent): void {
     if (event.key === 'Escape') {
-        if (large.value) {
-            event.preventDefault();
-            event.stopPropagation();
-            closeLarge();
-        } else if (keyOpen.value) {
-            event.preventDefault();
-            event.stopPropagation();
-            keyOpen.value = false;
-            keyBtn.value?.focus();
-        }
+        if (!large.value) return;
+        event.preventDefault();
+        event.stopPropagation();
+        closeLarge();
         return;
     }
     if (!large.value || event.key !== 'Tab') return;
@@ -503,11 +607,164 @@ function onDialogKey(event: KeyboardEvent): void {
     event.stopPropagation();
 }
 
+function localPoint(event: { clientX: number; clientY: number }): { x: number; y: number } {
+    const stage = stageEl.value;
+    if (!stage) return { x: 0, y: 0 };
+    const rect = stage.getBoundingClientRect();
+    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+}
+
+function zoomAtPoint(sx: number, sy: number, factor: number): void {
+    const box = stageBox();
+    if (!box.w) return;
+    applyView(zoomAbout(mapView.value, box.w, box.h, sx, sy, factor, viewLimit()));
+}
+
+function zoomBy(factor: number): void {
+    const box = stageBox();
+    zoomAtPoint(box.w / 2, box.h / 2, factor);
+}
+
+function fitMap(): void {
+    applyView(FIT_VIEW);
+}
+
+function stepCursor(dLat: number, dLon: number): void {
+    const m = model.value;
+    if (!m) return;
+    const id = cursorId.value ?? 0;
+    const lat = m.grid.lat[id];
+    const lon = m.grid.lon[id];
+    let best = id;
+    let score = 0;
+    for (const nb of m.grid.nb[id]) {
+        const s = dLat * (m.grid.lat[nb] - lat) + dLon * (m.grid.lon[nb] - lon);
+        if (s > score) {
+            score = s;
+            best = nb;
+        }
+    }
+    nameHex(best);
+    drawLayers();
+}
+
+function onStageKey(event: KeyboardEvent): void {
+    if (!large.value || event.target !== stageEl.value) return;
+    const box = stageBox();
+    const pan = !event.shiftKey && mapView.value.zoom > 1;
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+        event.preventDefault();
+        if (pan) {
+            const dx = event.key === 'ArrowLeft' ? box.w * 0.15 : event.key === 'ArrowRight' ? -box.w * 0.15 : 0;
+            const dy = event.key === 'ArrowUp' ? box.h * 0.15 : event.key === 'ArrowDown' ? -box.h * 0.15 : 0;
+            applyView(panBy(mapView.value, box.w, box.h, dx, dy));
+        } else {
+            const dLon = event.key === 'ArrowLeft' ? -1 : event.key === 'ArrowRight' ? 1 : 0;
+            const dLat = event.key === 'ArrowUp' ? 1 : event.key === 'ArrowDown' ? -1 : 0;
+            stepCursor(dLat, dLon);
+        }
+        return;
+    }
+    if (event.key === '+' || event.key === '=') {
+        event.preventDefault();
+        zoomBy(ZOOM_KEY);
+    } else if (event.key === '-' || event.key === '_') {
+        event.preventDefault();
+        zoomBy(1 / ZOOM_KEY);
+    } else if (event.key === '0') {
+        event.preventDefault();
+        fitMap();
+    }
+}
+
+let pointers = new Map<number, { x: number; y: number }>();
+let dragLast: { x: number; y: number } | null = null;
+let pinchStart: { dist: number; zoom: number; x: number; y: number } | null = null;
+
+function onStageWheel(event: WheelEvent): void {
+    if (!large.value) return;
+    event.preventDefault();
+    const point = localPoint(event);
+    let pixels = event.deltaY;
+    if (event.deltaMode === 1) pixels *= 16;
+    else if (event.deltaMode === 2) pixels *= stageBox().h;
+    const factor = Math.pow(ZOOM_WHEEL, -pixels / ZOOM_NOTCH_PX);
+    zoomAtPoint(point.x, point.y, factor);
+}
+
+function onStageDown(event: PointerEvent): void {
+    if (!large.value || event.button !== 0) return;
+    const target = event.target;
+    if (target instanceof Element && target.closest('button')) return;
+    const point = localPoint(event);
+    pointers.set(event.pointerId, point);
+    stageEl.value?.setPointerCapture(event.pointerId);
+    if (pointers.size === 2) {
+        const pts = [...pointers.values()];
+        const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1;
+        pinchStart = { dist, zoom: mapView.value.zoom, x: mapView.value.x, y: mapView.value.y };
+        dragLast = null;
+        return;
+    }
+    dragLast = point;
+    pinchStart = null;
+}
+
+function onStageMove(event: PointerEvent): void {
+    const point = localPoint(event);
+    if (!large.value) {
+        pickAt(point.x, point.y);
+        return;
+    }
+    // A move with the button up is a hover. A missed pointer-up must not keep the drag.
+    if (event.buttons === 0) {
+        pointers.clear();
+        dragLast = null;
+        pinchStart = null;
+    } else if (pointers.has(event.pointerId)) {
+        pointers.set(event.pointerId, point);
+    }
+    if (pointers.size >= 2 && pinchStart) {
+        const pts = [...pointers.values()];
+        const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1;
+        const mid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+        const box = stageBox();
+        const zoomed = zoomAbout(
+            { zoom: pinchStart.zoom, x: pinchStart.x, y: pinchStart.y },
+            box.w, box.h, mid.x, mid.y, dist / pinchStart.dist, viewLimit(),
+        );
+        applyView(zoomed);
+        return;
+    }
+    if (dragLast && pointers.size === 1) {
+        const box = stageBox();
+        applyView(panBy(mapView.value, box.w, box.h, point.x - dragLast.x, point.y - dragLast.y));
+        dragLast = point;
+        return;
+    }
+    pickAt(point.x, point.y);
+}
+
+function onStageUp(event: PointerEvent): void {
+    pointers.delete(event.pointerId);
+    if (pointers.size < 2) pinchStart = null;
+    if (pointers.size === 0) dragLast = null;
+    else if (pointers.size === 1) dragLast = [...pointers.values()][0];
+}
+
+function onStageDouble(event: MouseEvent): void {
+    if (!large.value) return;
+    const target = event.target;
+    if (target instanceof Element && target.closest('button')) return;
+    const point = localPoint(event);
+    zoomAtPoint(point.x, point.y, ZOOM_KEY);
+}
+
 function openLarge(): void {
     if (large.value) return;
     holdPx.value = figureEl.value ? figureEl.value.offsetHeight : 0;
     returnTo = document.activeElement instanceof HTMLElement ? document.activeElement : expandBtn.value;
-    keyOpen.value = false;
+    mapView.value = FIT_VIEW;
     large.value = true;
     document.addEventListener('focusin', holdFocus);
     void nextTick(() => {
@@ -520,6 +777,8 @@ function openLarge(): void {
 function closeLarge(): void {
     if (!large.value) return;
     large.value = false;
+    mapView.value = FIT_VIEW;
+    highlight.value = null;
     document.removeEventListener('focusin', holdFocus);
     void nextTick(() => {
         const back = returnTo && returnTo.isConnected ? returnTo : expandBtn.value;
@@ -527,10 +786,6 @@ function closeLarge(): void {
         noteWidth();
         start();
     });
-}
-
-function toggleKey(): void {
-    keyOpen.value = !keyOpen.value;
 }
 
 watch(() => props.target, start, { flush: 'post' });
@@ -563,8 +818,10 @@ onMounted(() => {
     if (typeof ResizeObserver !== 'undefined' && figureEl.value) {
         resizeObs = new ResizeObserver(() => noteWidth());
         resizeObs.observe(figureEl.value);
+        if (stageEl.value) resizeObs.observe(stageEl.value);
         noteWidth();
     }
+    stageEl.value?.addEventListener('wheel', onStageWheel, { passive: false });
 });
 onBeforeUnmount(() => {
     if (stopMode) stopMode();
@@ -572,10 +829,12 @@ onBeforeUnmount(() => {
     if (stopClock) stopClock();
     if (stopDayNight) stopDayNight();
     if (resizeObs) resizeObs.disconnect();
+    stageEl.value?.removeEventListener('wheel', onStageWheel);
     document.removeEventListener('focusin', holdFocus);
     rest();
     drop();
 });
+watch(highlight, () => drawLayers());
 </script>
 
 <template>
@@ -592,6 +851,8 @@ onBeforeUnmount(() => {
     @keydown="onDialogKey"
   >
   <div v-if="large" class="doss-map-scrim" @click="closeLarge"></div>
+  <div class="doss-map-card">
+  <div class="doss-map-body">
   <figure
     ref="figureEl"
     class="doss-map"
@@ -606,33 +867,46 @@ onBeforeUnmount(() => {
     :data-from-cache="timing.cached"
     :data-webgl="webglNotice ? 'off' : 'on'"
   >
-    <div class="doss-stage">
-      <canvas
-        ref="sheetEl"
-        class="doss-sheet"
-        :class="arrival"
-        :width="sheetW"
-        :height="sheetH"
-        role="img"
-        :aria-label="'Surface map of ' + worldName"
-        @animationend="onSheetEnd"
-      />
-      <div class="doss-stage-daynight" :data-on="dayNight && hybrid ? 'true' : 'false'" aria-hidden="true">
-        <canvas ref="shadowEl" class="doss-layer doss-shadow" :width="sheetW" :height="sheetH" />
-        <canvas ref="glowEl" class="doss-layer doss-glow" :width="sheetW" :height="sheetH" />
+    <div
+      ref="stageEl"
+      class="doss-stage"
+      :tabindex="large ? 0 : undefined"
+      :aria-label="large ? 'Surface map. Plus and minus zoom, 0 fits, arrows pan.' : undefined"
+      @pointerdown="onStageDown"
+      @pointermove="onStageMove"
+      @pointerup="onStageUp"
+      @pointercancel="onStageUp"
+      @dblclick="onStageDouble"
+      @keydown="onStageKey"
+    >
+      <div class="doss-zoom" :style="zoomStyle">
+        <canvas
+          ref="sheetEl"
+          class="doss-sheet"
+          :class="arrival"
+          :width="sheetW"
+          :height="sheetH"
+          role="img"
+          :aria-label="'Surface map of ' + worldName"
+          @animationend="onSheetEnd"
+        />
+        <div class="doss-stage-daynight" :data-on="dayNight && hybrid ? 'true' : 'false'" aria-hidden="true">
+          <canvas ref="shadowEl" class="doss-layer doss-shadow" :width="sheetW" :height="sheetH" />
+          <canvas ref="glowEl" class="doss-layer doss-glow" :width="sheetW" :height="sheetH" />
+        </div>
       </div>
-      <canvas ref="marksEl" class="doss-layer doss-marks" :width="sheetW * MARK_SCALE" :height="sheetH * MARK_SCALE" aria-hidden="true" />
-      <button
-        v-if="!large"
-        ref="expandBtn"
-        type="button"
-        class="ui-btn is-icon doss-expand"
-        aria-label="Open the map large"
-        title="Open the map large"
-        @click="openLarge"
-      >
-        <Icon name="up-right-and-down-left-from-center" :size="13" />
-      </button>
+      <canvas ref="marksEl" class="doss-layer doss-marks" aria-hidden="true" />
+      <div v-if="large" class="doss-zoom-tools" role="group" aria-label="Zoom">
+        <button type="button" class="ui-btn is-icon" aria-label="Zoom in" title="Zoom in" @click="zoomBy(ZOOM_KEY)">
+          <Icon name="plus" :size="13" />
+        </button>
+        <button type="button" class="ui-btn is-icon" aria-label="Zoom out" title="Zoom out" @click="zoomBy(1 / ZOOM_KEY)">
+          <span aria-hidden="true">−</span>
+        </button>
+        <button type="button" class="ui-btn is-icon doss-fit" aria-label="Fit the map" title="Fit the map" @click="fitMap">
+          <span>Fit</span>
+        </button>
+      </div>
       <div v-show="state !== 'full'" class="doss-scan" aria-hidden="true">
         <canvas ref="blankEl" class="doss-blank" :width="sheetW" :height="sheetH" />
         <div class="doss-scan-field" :style="clipPath ? { clipPath } : undefined">
@@ -640,8 +914,11 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </div>
-    <p v-if="scaleText" class="doss-scale">{{ scaleText }}</p>
-    <SurfaceKey v-if="hybrid && !large && keyOpen" placement="pop" :model="model" :icon-set="iconSet" />
+    <p v-if="scaleText" class="doss-scale">
+      <span class="doss-scale-bar" :style="{ width: hexBar + 'px' }" aria-hidden="true"></span>
+      <span>{{ scaleText }}</span>
+      <span v-if="picked" class="doss-pick">{{ picked }}</span>
+    </p>
     <figcaption class="doss-map-caption">
       <p v-if="badge" class="ui-badge doss-badge"><Icon name="star" :size="10.5" /><span>{{ badge }}</span></p>
       <div v-if="hybrid" class="doss-toggles" role="group" aria-label="Map layers">
@@ -667,21 +944,18 @@ onBeforeUnmount(() => {
           <span>Symbols</span>
           <span class="doss-pip" aria-hidden="true"></span>
         </button>
-        <button
-          v-if="!large"
-          ref="keyBtn"
-          type="button"
-          class="doss-toggle"
-          :aria-pressed="keyOpen ? 'true' : 'false'"
-          aria-controls="surf-key"
-          title="Key: the names of the symbols"
-          @click="toggleKey"
-          @keydown.enter.prevent="toggleKey"
-          @keydown.space.prevent="toggleKey"
-        >
-          <span>Key</span>
-        </button>
       </div>
+      <button
+        v-if="!large"
+        ref="expandBtn"
+        type="button"
+        class="ui-btn doss-open"
+        :title="hybrid ? 'Open the map large, with the key' : 'Open the map large'"
+        @click="openLarge"
+      >
+        <Icon name="up-right-and-down-left-from-center" :size="13" />
+        <span>{{ hybrid ? 'Map and key' : 'Open the map large' }}</span>
+      </button>
       <span class="doss-hint" :title="caption.title">Surface map · {{ caption.text }}</span>
     </figcaption>
     <SurfaceTimeBar
@@ -693,7 +967,8 @@ onBeforeUnmount(() => {
     />
     <p v-if="webglNotice" class="doss-webgl" role="status">{{ webglNotice }}</p>
   </figure>
-  <SurfaceKey v-if="hybrid && large" placement="column" :model="model" :icon-set="iconSet" />
+  <SurfaceKey v-if="hybrid && large" :model="model" :icon-set="iconSet" :active="highlight" @highlight="highlight = $event" />
+  </div>
   <button
     v-if="large"
     ref="closeBtn"
@@ -705,6 +980,7 @@ onBeforeUnmount(() => {
   >
     <Icon name="xmark" :size="14" />
   </button>
+  </div>
   </div>
   </Teleport>
   </div>
@@ -719,7 +995,9 @@ onBeforeUnmount(() => {
   width: 100%;
 }
 
-.doss-map-frame:not(.is-large) {
+.doss-map-frame:not(.is-large),
+.doss-map-frame:not(.is-large) .doss-map-card,
+.doss-map-frame:not(.is-large) .doss-map-body {
   display: contents;
 }
 
@@ -727,12 +1005,60 @@ onBeforeUnmount(() => {
   position: fixed;
   inset: 0;
   z-index: 40;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 16px;
-  padding: 24px;
+  padding: var(--sp-6);
   animation: doss-large-in var(--t-fast) var(--ease-out) both;
+}
+
+.doss-map-frame.is-large .doss-map-card {
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: auto;
+  max-height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-4);
+  background: var(--bg-1);
+  box-shadow: var(--shadow-pop);
+}
+
+.doss-map-frame.is-large .doss-map-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: row;
+  align-items: stretch;
+  min-width: 0;
+  min-height: 0;
+}
+
+.doss-map-frame.is-large .surf-key {
+  flex: 0 0 480px;
+  max-height: 100%;
+  overflow: auto;
+  border-left: 1px solid var(--line-1);
+}
+
+@media (max-width: 1023px) {
+  .doss-map-frame.is-large .doss-map-body {
+    flex-direction: column;
+  }
+
+  .doss-map-frame.is-large .surf-key {
+    flex: 0 0 auto;
+    width: 100%;
+    max-height: none;
+    border-left: 0;
+    border-top: 1px solid var(--line-1);
+  }
 }
 
 .doss-map-scrim {
@@ -762,15 +1088,68 @@ onBeforeUnmount(() => {
 
 .doss-map-frame.is-large .doss-map {
   z-index: 1;
-  width: min(calc(100vw - 340px), calc((100vh - 200px) * 2));
-  max-height: calc(100vh - 48px);
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  width: auto;
+  min-width: 0;
+  min-height: 0;
   margin: 0;
   padding: 12px;
-  overflow: auto;
-  border: 1px solid var(--line-1);
-  border-radius: var(--r-4);
-  background: var(--bg-1);
-  box-shadow: var(--shadow-pop);
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.doss-zoom {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 0;
+}
+
+.doss-zoom-tools {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 3;
+  display: flex;
+  gap: 6px;
+}
+
+.doss-fit {
+  width: auto;
+  padding: 0 8px;
+}
+
+.doss-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  height: 30px;
+  padding: 0 8px;
+  font: 600 12px/1 var(--font-text);
+}
+
+.doss-scale-bar {
+  display: inline-block;
+  height: 4px;
+  margin-right: 8px;
+  vertical-align: middle;
+  background: var(--text-1);
+}
+
+.doss-pick {
+  margin-left: 12px;
+  color: var(--text-1);
+}
+
+.doss-scale {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  white-space: nowrap;
 }
 
 .doss-expand {
@@ -784,6 +1163,14 @@ onBeforeUnmount(() => {
   position: relative;
   aspect-ratio: 800 / 400;
   overflow: hidden;
+}
+
+.doss-map-frame.is-large .doss-stage {
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: 100%;
+  margin-inline: auto;
+  aspect-ratio: 800 / 400;
 }
 
 /* The hybrid map's layers over the sheet: the shadow, then the marks and symbols. */

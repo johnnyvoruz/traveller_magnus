@@ -1,10 +1,50 @@
-# Lane D — a right-click inside a selection keeps the selection; then the daily allowance
+# Lane D — generating many hexes always asks for the density; a right-click inside a selection keeps it; then the daily allowance
 
 Issued 2026-10-11 by the orchestrator. You may be a fresh session with no memory. Read
 `CLAUDE.md`, `directives/manifesto.md`, `directives/board.md`, `directives/lanes/D.md`,
 `directives/agent_d_brief.md`, then this file. No git but read-only, no deploy, no
 `rules/`, no Traveller rule from memory. Your density-dropdown report is accepted,
 with both lent edits; it goes out in version 1.1.6.
+
+## 0. First: generating many hexes always asks for the density (Johnny, 2026-10-11)
+
+Two rulings on your density-dropdown report:
+
+- "Density choice should be whenever we have multiple hexes selected we prompt for
+  density selection." So the choice is **asked every time**, not carried silently on
+  the button from the last run.
+- The plain wording, not the dice: he chose your alternative ("About half of the
+  empty hexes") over "Standard, 3 in 6".
+
+Build:
+
+- **Every way of generating more than one hex opens the same small prompt before
+  anything runs**: the pane's Generate button for a selection, the `G` key, the
+  right-click menu's Generate item, the palette's command, and Generate in an empty
+  sector slot. One prompt, one component; in the pane it opens in place by the button
+  (not a window-covering modal), from the menu and the palette it opens the pane's.
+- The prompt: the heading says what is selected ("80 empty hexes in Subsector C"),
+  then "Hexes to fill" as four choices that can all be read at once (a short list of
+  radio rows reads better than a closed select here; a select is acceptable if the
+  pane is too narrow: say which you built and why), then **Generate** and Cancel.
+  Enter generates, Escape cancels, focus starts on the selected choice and returns to
+  the control that opened it.
+- **The words of the four choices**, name first, then the plain meaning:
+  "Sparse: about a third of the empty hexes", "Standard: about half of the empty
+  hexes", "Dense: about two thirds of the empty hexes", "Every hex: all of the empty
+  hexes". The "2 in 6" figures move to a one-line hint under the list for people who
+  want the roll ("Each empty hex is rolled once: 2, 3, or 4 chances in 6.").
+- **Preselected:** the last choice made in this universe, or Standard the first time.
+  It is still shown and still has to be confirmed: nothing runs without the prompt.
+- The Generate button for a selection goes back to one line ("Generate…", with the
+  ellipsis that says a choice follows; the count stays in the prompt's heading). Drop
+  the second line and `densityLine` where nothing else uses it.
+- The full Generate sheet (engine, method) keeps its "Hexes to fill" row with the
+  same four wordings; choosing Generate there does not ask a second time.
+- **One hex never asks**: Generate, preview, Keep, as today.
+- The words while it runs and after are unchanged from your last pass.
+- Tests: each entry point opens the prompt and none runs a job without it; Cancel
+  writes nothing; the preselection; one hex is not asked.
 
 ## 1. The right-click menu on many hexes
 
@@ -57,14 +97,15 @@ pointer rule, shots `kb13_*`, `directives/reports/d_menu_selection.md`.
 ## Gates
 
 `npm test`, `npm run check`, `npm run typecheck`, `npm run build`, pasted. Fourth gate:
-a browser pass on your own ports and Vite cache, stopped after: select nine hexes,
-right-click one of them: the selection stays and the menu reads "Generate up to 9
-hexes" with the density line; choose it: the job runs; right-click a hex outside:
+a browser pass on your own ports and Vite cache, stopped after: the density prompt from each of its five entry points, by pointer and by
+keyboard, Cancel and Generate, the preselection after a reload; select nine hexes,
+right-click one of them: the selection stays, the menu's Generate opens the prompt,
+and the job runs after it; right-click a hex outside:
 that hex alone; the menu key; one hex as before.
 
 ## Stop rule
 
-Stop when part 1 passes (and part 2 if its files were there) and the report is written.
+Stop when parts 0 and 1 pass (and part 2 if its files were there) and the report is written.
 
 Write `directives/reports/d_menu_selection.md` from `directives/reports/_TEMPLATE.md`.
 Questions for Johnny written out in full, recommended answer first. After each

@@ -1,16 +1,16 @@
 # Board
 
-One line per lane. Only the orchestrator edits this file. Updated 2026-10-11 22:20 (by the clock).
+One line per lane. Only the orchestrator edits this file. Updated 2026-10-11 22:40 (by the clock).
 
-**Last push: `cdb6385`, version 1.1.5, 2026-10-11.** Any prompt that says "start only
+**Last push: `9e154fa`, version 1.1.6, 2026-10-11.** Any prompt that says "start only
 after the board says the push is made" may start.
 
 | Lane | Status | Current prompt | Blocker / next |
 |---|---|---|---|
 | A | go | prompts/a_own_dots_2.md | the zoomed-out dots, with B's route (MapRenderer.ts: three places lent) |
 | B | go | prompts/b_generate_cap.md, then b_passkeys.md, then b_generate_speed.md | the daily cap of 100 and two hand-form faults; then username and passkey sign-in; then speed |
-| C | in flight | prompts/c_surface_map_2.md | built, gates passed, shooting the production build at 22:05; its eight files are left out of 1.1.6 |
-| D | go | prompts/d_menu_selection.md | a right-click inside a selection keeps it; the daily allowance when B and A have it |
+| C | go | prompts/c_disc_tilt_caption.md | surface map second pass accepted (in 1.1.7); now a high-tilt world's disc ice, and the dry-world caption |
+| D | go | prompts/d_menu_selection.md | generating many hexes always asks for the density, in plain words; a right-click inside a selection keeps it; the allowance when B and A have it |
 | E | go | prompts/e_handout_images.md | Campaign step 6: an image on a journal entry; confirms the upload and schema first |
 | F | retired | (none) | Johnny, 2026-10-11: unreliable (runs out of budget); do not use or propose until he says it is back |
 
@@ -90,12 +90,9 @@ lane's letter as the first message of a new session; from then on "go" is enough
   the blank request body (read from what the server stored).
 
 ## Pending push
-**Ready: version 1.1.6**, `findings/push/builder_2026-10-11g.md`. Tree green at 22:10
-(1454 pass; checker, typecheck, build pass). Headline: **the Keep fix** (live fault
-since `3d28e33`). Also the density dropdown end to end, the dots routes, the timeline
-and dates on records, one spinner, the job toast across routes, the refusal at its
-field. **Left out: C's surface-map second pass in flight** (eight paths).
-Push before saying go.
+**Ready: version 1.1.7**, `findings/push/builder_2026-10-11h.md`: C's surface map
+second pass (eight paths) and directives. Tree green at 22:35 (1454 pass; checker,
+typecheck, build pass). Push before saying go.
 
 ## Decisions from Johnny
 - 2026-10-10: the file bus replaces pasting.
@@ -260,25 +257,22 @@ Push before saying go.
 - 2026-10-11: yes, B brings the passkey package (name, size, dependencies) to Johnny in
   its design note and installs nothing until he says so.
 
+- 2026-10-11, density: **whenever more than one hex is selected, generating asks for
+  the density every time**; the choices read in plain words ("about half of the empty
+  hexes"), not "3 in 6".
+
 ## Open with Johnny
-Change no prompt:
-1. D: the density choice is remembered per universe; engine and method stay one
-   choice for every universe. Leave it?
-2. D: the second line under Generate reads "Standard, 3 in 6". Clear enough?
+(none)
 
 ## Queue (prompts not yet written)
 - Screens for username and passkey sign-in (sign-in card, account page: passkeys,
   recovery codes, linked providers): after B's contract `contracts/b_auth.md`.
-- C: the caption says "Water · frozen" on a dry frozen body (hydro 0; C's own finding).
-- C removed the sun reticle from the dossier map's day and night layer unasked: with Johnny.
 - E, Campaign order step 3 (timeline as a list), then 6 (handout images; ask B first).
 - The rest of F's review (ranking, visual refinement, words, access) was never done;
   no lane has it.
 - Public games (contract exists), after density and the cap.
 - `workspace/build/BuildSpin.vue` wants lifting to `design/` (one spinner for the app).
 - Worker queue settings: B recommends in `b_generate_speed`; wrangler.toml changes go out with Johnny's deploy.
-- C, later, small: a high-tilt world's orbit disc puts the cap on the pole while the
-  dossier map shows an equatorial belt; make the disc agree (show before and after).
 - Later, on Johnny's word: a second pass on the ice caps' look.
 - **Last, lowest priority (Johnny, 2026-10-11):** city lights are drawn on the
   atmosphere layer of a world's surface, not on the ground under it (C, `surface/`).

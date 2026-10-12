@@ -28,8 +28,10 @@ import {
     easeInOutCubic, wrapLon, lonDelta, lerpPose, angleBetween, createSunMotion, createFade, frameDue,
     clockStepDeg, JUMP_TWEEN_MS, AVERAGE_FADE_MS, REDUCED_STEP_MS,
 } from '../../apps/web/src/surface/hybrid/motion.ts';
-import { NIGHT_TINT, paintDayNight, nightShare } from '../../apps/web/src/surface/hybrid/overlay.ts';
-import { cityLights, drawMarks, drawSymbols, legendGroups } from '../../apps/web/src/surface/hybrid/symbols.ts';
+import { NIGHT_PEAK, NIGHT_PEAK_STEPS, NIGHT_TINT, paintDayNight, nightShare, shadowAlpha } from '../../apps/web/src/surface/hybrid/overlay.ts';
+import { cityLights, drawMarks, drawSymbols, legendBlocks, legendGroups, weakestLegendRow } from '../../apps/web/src/surface/hybrid/symbols.ts';
+import { TERMINUS_ALPHA, TERMINUS_ALPHA_STEPS, terminusSegments } from '../../apps/web/src/surface/hybrid/chrome.ts';
+import { clampView, hexCssPx, maxZoom, panBy, zoomAbout, HEX_READ_PX } from '../../apps/web/src/surface/hybrid/view.ts';
 import { createDayNightLayer } from '../../apps/web/src/surface/hybrid/daynight_layer.ts';
 import {
     dayNightOverlay, setDayNightOverlay, onDayNightOverlay, mapStyle, setMapStyle,
@@ -802,5 +804,38 @@ describe('symbol key and the always-on grid', () => {
             fillText(text) { wide.push(text); },
         }, model, SHEET_LAYOUT, { graticule: false, ring: false, scale: false, font: '18px sans-serif' });
         assert.ok(wide.includes('0°') && !wide.includes('90°N'), 'a label that does not fit is dropped: ' + wide.join(','));
+    });
+
+    test('legend blocks follow the table kinds, and the weakest row stays readable', () => {
+        const blocks = legendBlocks(SURFACE_CODES);
+        assert.deepEqual(blocks.map((block) => block.heading), ['Sea', 'Ice', 'Land', 'Accents', 'Features']);
+        const flat = blocks.flatMap((block) => block.codes);
+        assert.deepEqual(flat, [...SURFACE_CODES]);
+        const weak = weakestLegendRow();
+        assert.ok(weak.ratio >= 3, weak.name + ' ' + weak.ratio.toFixed(2));
+    });
+});
+
+describe('large map zoom and the night tune', () => {
+    test('zoom stays inside the stage and a hex reaches the readable size', () => {
+        const fit = clampView({ zoom: 1, x: 40, y: -20 }, 800, 400);
+        assert.deepEqual(fit, { zoom: 1, x: 0, y: 0 });
+        const zoomed = zoomAbout({ zoom: 1, x: 0, y: 0 }, 800, 400, 200, 100, 2, 4);
+        assert.ok(Math.abs(200 - (zoomed.x + 200 * zoomed.zoom)) < 1e-6);
+        const pushed = panBy(zoomed, 800, 400, 5000, 5000);
+        assert.ok(pushed.x <= 0 && pushed.x >= 800 - 800 * pushed.zoom);
+        assert.equal(maxZoom(800, 1600, 264, 8), HEX_READ_PX / hexCssPx(800, 1600, 264, 8, 1));
+        assert.equal(hexCssPx(800, 1600, 264, 8, maxZoom(800, 1600, 264, 8)), HEX_READ_PX);
+    });
+
+    test('the built night and the terminator are the middle step', () => {
+        assert.equal(NIGHT_PEAK, NIGHT_PEAK_STEPS[1]);
+        assert.ok(NIGHT_PEAK > NIGHT_PEAK_STEPS[0] && NIGHT_PEAK < NIGHT_PEAK_STEPS[2]);
+        assert.equal(TERMINUS_ALPHA, TERMINUS_ALPHA_STEPS[1]);
+        assert.ok(shadowAlpha(-90, false) > 0.7 && shadowAlpha(-90, false) < 0.74);
+        const model = modelOf(earth());
+        const lines = terminusSegments(model.grid, SHEET_LAYOUT, sunVector(0, 0));
+        assert.ok(lines.length > 10);
+        for (const line of lines) assert.ok(line.every((n) => Number.isFinite(n)));
     });
 });

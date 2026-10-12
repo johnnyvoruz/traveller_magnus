@@ -4,8 +4,9 @@
  *
  * The night side is one dark tint. The edge is a twilight band (TWILIGHT_BAND_DEG), wide
  * enough to read as soft on the column map and short of blurring noon into dusk. A world
- * with no air has one hard edge. There is no terminator line, no second colour, and no
- * glow. At fast clock speeds the layer shows the day-averaged night share by latitude.
+ * with no air has one hard edge. This image has no line and no second colour: the page
+ * strokes a faint terminator of its own. At fast clock speeds the layer shows the
+ * day-averaged night share by latitude.
  */
 import type { Field } from './field.ts';
 import { sphere, type V3 } from './grid.ts';
@@ -28,12 +29,24 @@ export function sunVector(latDeg: number, lonDeg: number): V3 {
  */
 export const TWILIGHT_BAND_DEG = 12;
 
+/**
+ * Peak night alpha with air. The first step is the previous strength. The built one is
+ * the middle. The third is one step darker again. Tune NIGHT_PEAK.
+ */
+export const NIGHT_PEAK_STEPS = [0.58, 0.72, 0.86] as const;
+export const NIGHT_PEAK = NIGHT_PEAK_STEPS[1];
+
+/** The same three steps for a world with no air. The built one is the middle. */
+export const NIGHT_PEAK_AIRLESS_STEPS = [0.62, 0.76, 0.90] as const;
+export const NIGHT_PEAK_AIRLESS = NIGHT_PEAK_AIRLESS_STEPS[1];
+
 /** Darkening 0..1 for an elevation in degrees. Light and dark only. */
 export function shadowAlpha(epsDeg: number, airless: boolean, bandDeg: number = TWILIGHT_BAND_DEG): number {
-    if (airless) return 0.62 * (1 - smooth(-0.35, 0.35, epsDeg));
+    const peak = airless ? NIGHT_PEAK_AIRLESS : NIGHT_PEAK;
+    if (airless) return peak * (1 - smooth(-0.35, 0.35, epsDeg));
     const day = bandDeg * 0.35;
     const night = -bandDeg;
-    return 0.58 * (1 - smooth(night, day, epsDeg));
+    return peak * (1 - smooth(night, day, epsDeg));
 }
 
 export const NIGHT_TINT: readonly [number, number, number] = [8, 12, 32];

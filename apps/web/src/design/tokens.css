@@ -114,6 +114,12 @@
   --surface-outline-light: color-mix(in srgb, var(--icon-port) 30%, transparent);
   /* Hybrid hex grid. Same ink as the legacy blank grid: signal at 34%. */
   --surface-hex: color-mix(in srgb, var(--signal) 34%, transparent);
+  /* Faint terminator. Middle of the three strengths 22%, 40%, 62%. Tune this one line. */
+  --surface-terminus: color-mix(in srgb, var(--icon-port) 40%, transparent);
+  /* Quiet sun mark at the subsolar point. */
+  --surface-sun-mark: color-mix(in srgb, var(--surface-sun-core) 55%, transparent);
+  /* Hexes named from the legend. */
+  --surface-pick: color-mix(in srgb, var(--signal) 85%, transparent);
   --surface-graticule: color-mix(in srgb, var(--icon-port) 35%, transparent);
   --surface-twilight-ring: color-mix(in srgb, #ffbe3c 90%, transparent);
   --surface-twilight-midline: color-mix(in srgb, var(--icon-port) 90%, transparent);

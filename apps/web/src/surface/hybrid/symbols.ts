@@ -3,7 +3,7 @@
  * per hex from the active icon set, latitude ticks, the graticule, a locked world's twilight
  * ring, a scale bar, and city lights on the night side. Draws on any 2D context.
  */
-import { CODE_TABLE, codeRow, SURFACE_CODES, terrainRgb, type SurfaceCode } from './codes.ts';
+import { CODE_TABLE, codeRow, SURFACE_CODES, terrainRgb, type CodeKind, type RGB, type SurfaceCode } from './codes.ts';
 import type { SheetLayout } from './field.ts';
 import { sheetPoint } from './field.ts';
 import { dot, hexSpacing, latticeNet, sphere, type V3 } from './grid.ts';
@@ -81,6 +81,76 @@ export function legendGroups(model: HybridModel): { here: SurfaceCode[]; absent:
     return { here, absent };
 }
 
+/** Headings in CODE_TABLE kind order. The table has no separate settlement or base list. */
+export const LEGEND_HEADINGS: Record<CodeKind, string> = {
+    sea: 'Sea',
+    ice: 'Ice',
+    land: 'Land',
+    accent: 'Accents',
+    feature: 'Features',
+};
+
+const KIND_ORDER: readonly CodeKind[] = ['sea', 'ice', 'land', 'accent', 'feature'];
+
+export type LegendBlock = { readonly kind: CodeKind; readonly heading: string; readonly codes: SurfaceCode[] };
+
+/** One block per kind that has a code, in the table's kind order, codes in table order. */
+export function legendBlocks(codes: readonly SurfaceCode[]): LegendBlock[] {
+    return KIND_ORDER.map((kind) => ({
+        kind,
+        heading: LEGEND_HEADINGS[kind],
+        codes: codes.filter((code) => CODE_TABLE[code].kind === kind),
+    })).filter((block) => block.codes.length > 0);
+}
+
+const INK_DARK: RGB = [25, 25, 30];
+const INK_LIGHT: RGB = [250, 250, 245];
+const SWATCH_LIGHT: RGB = [232, 238, 242];
+const SWATCH_DARK: RGB = [20, 28, 36];
+
+function channel(c: number): number {
+    const x = c / 255;
+    return x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+}
+
+/** Contrast ratio of two opaque colours, 1 to 21. */
+export function contrast(a: readonly number[], b: readonly number[]): number {
+    const lum = (rgb: readonly number[]): number => 0.2126 * channel(rgb[0]) + 0.7152 * channel(rgb[1]) + 0.0722 * channel(rgb[2]);
+    const hi = Math.max(lum(a), lum(b));
+    const lo = Math.min(lum(a), lum(b));
+    return (hi + 0.05) / (lo + 0.05);
+}
+
+/**
+ * Legend swatch and glyph ink. Terrain, ice, sea and accents sit on their own colour,
+ * with the same light-or-dark ink the map uses. Features are drawn in their map colour,
+ * on whichever plain ground keeps that colour visible.
+ */
+export function legendInk(code: SurfaceCode): { ground: RGB; ink: RGB } {
+    const row = CODE_TABLE[code];
+    if (row.kind === 'feature') {
+        const ground = contrast(row.rgb, SWATCH_LIGHT) >= contrast(row.rgb, SWATCH_DARK) ? SWATCH_LIGHT : SWATCH_DARK;
+        return { ground, ink: row.rgb };
+    }
+    const lum = 0.3 * row.rgb[0] + 0.59 * row.rgb[1] + 0.11 * row.rgb[2];
+    return { ground: row.rgb, ink: lum > 125 ? INK_DARK : INK_LIGHT };
+}
+
+/** The legend row with the lowest contrast, for the report. */
+export function weakestLegendRow(): { code: SurfaceCode; name: string; ratio: number } {
+    let code: SurfaceCode = SURFACE_CODES[0];
+    let ratio = Infinity;
+    for (const next of SURFACE_CODES) {
+        const ink = legendInk(next);
+        const value = contrast(ink.ground, ink.ink);
+        if (value < ratio) {
+            ratio = value;
+            code = next;
+        }
+    }
+    return { code, name: CODE_TABLE[code].name, ratio };
+}
+
 export type SymbolOptions = {
     readonly set: IconSet | null;
     readonly tint?: Tinter;
@@ -89,6 +159,10 @@ export type SymbolOptions = {
     readonly icons?: boolean;
     /** Grid stroke in sheet pixels. Quiet at the column width, still a line when the map is large. */
     readonly outlineWidth?: number;
+    /** Symbol radius in sheet pixels. Omit it for the hex-sized default. */
+    readonly iconRadius?: number;
+    /** Stroke the hexes that carry this code. */
+    readonly highlight?: SurfaceCode | null;
 };
 
 /**
@@ -105,7 +179,11 @@ export function drawSymbols(ctx: Ctx2D, model: HybridModel, layout: SheetLayout,
     const grid = model.grid;
     const n = grid.n;
     const s = layout.side;
-    const r = (s / n) * 0.40;
+    const r = options.iconRadius ?? (s / n) * 0.40;
+    const carries = (hex: HexRecord, code: SurfaceCode): boolean => hex.terrain === code
+        || (hex.accents as readonly string[]).includes(code)
+        || (hex.features as readonly string[]).includes(code)
+        || (code === 'dome' && hex.domed);
     const at = (f: (typeof grid.faces)[number], i: number, j: number): [number, number] => {
         const [nx, ny] = latticeNet(f, n, i, j);
         return [layout.ox + nx * s, layout.oy + ny * s];
@@ -135,8 +213,7 @@ export function drawSymbols(ctx: Ctx2D, model: HybridModel, layout: SheetLayout,
             }
             ctx.stroke();
     }
-    if (options.icons === false) return;
-    grid.faces.forEach((f, fi) => {
+    if (options.icons !== false) grid.faces.forEach((f, fi) => {
         ctx.save();
         ctx.beginPath();
         ctx.moveTo(layout.ox + f.a[0] * s, layout.oy + f.a[1] * s);
@@ -157,6 +234,23 @@ export function drawSymbols(ctx: Ctx2D, model: HybridModel, layout: SheetLayout,
         }
         ctx.restore();
     });
+    if (!options.highlight) return;
+    const code = options.highlight;
+    ctx.strokeStyle = iconPaint('--surface-pick');
+    ctx.lineWidth = (options.outlineWidth ?? 1) * 2;
+    ctx.beginPath();
+    grid.faces.forEach((f, fi) => {
+        for (let i = 0; i <= n; i += 1) {
+            for (let j = 0; i + j <= n; j += 1) {
+                const hex = model.hexes[grid.vid[fi][i * (n + 1) + j]];
+                if (!carries(hex, code)) continue;
+                const [x, y] = at(f, i, j);
+                ctx.moveTo(x + r, y);
+                ctx.arc(x, y, r * 1.15, 0, Math.PI * 2);
+            }
+        }
+    });
+    ctx.stroke();
 }
 
 /** Sheet points along a parametric curve on the sphere, split where the net tears. */

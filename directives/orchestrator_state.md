@@ -16,10 +16,10 @@ on the form (D), Undo faults (A), ice caps (C), palette (E), then public games.
   as `{ $num }`, `physSeed` copied the object and marked it manual; fixed in
   `packages/generation/src/form.ts`; in the tree since `3d28e33`. B freezes at worker
   suites: three times now.
-- C in flight: `c_surface_map_2`. Eight files held out of 1.1.6
-  (`SurfaceStage.vue`, `SurfaceKey.vue`, `surface/hybrid/overlay.ts`, `symbols.ts`,
-  `chrome.ts`, `view.ts`, `tests/web/surface_hybrid.test.js`, `design/tokens.css`).
-- D go: `d_menu_selection` (right-click inside a selection loses it, `MapView.vue`
+- C go: `c_disc_tilt_caption`. Surface map 2 accepted (`surface/hybrid/view.ts`,
+  `chrome.ts`; terminator 40%, night middle step, sun mark; tokens `--surface-terminus`,
+  `--surface-sun-mark`, `--surface-pick`).
+- D go: `d_menu_selection` (part 0: generating many hexes always asks the density, plain words; right-click inside a selection loses it, `MapView.vue`
   about 1541; allowance gated on B and A). Density dropdown accepted: Standard
   default, per universe, "up to N", "hexes checked", the nothing-new sentence.
 - E go: `e_handout_images` (step 1 confirms schema and upload; stops if B is needed).
@@ -35,7 +35,7 @@ on the form (D), Undo faults (A), ice caps (C), palette (E), then public games.
 ## Versions
 Every push list bumps `APP_VERSION` in `apps/web/src/version.ts` by one in the last
 place and lists the file; the commit message starts with the version. Last pushed:
-1.1.3 (`ac18cbb`). 1.1.4 pushed (`76e5a57`). 1.1.5 pushed (`cdb6385`). On disk: 1.1.6, push list g written. Engine version untouched (fixtures folder name).
+1.1.3 (`ac18cbb`). 1.1.4 pushed (`76e5a57`). 1.1.6 pushed (`9e154fa`). On disk: 1.1.7, push list h written. Engine version untouched (fixtures folder name).
 
 ## Traps
 - **Flow (Johnny, 2026-10-11): questions first.** A lane is not given GO while a
