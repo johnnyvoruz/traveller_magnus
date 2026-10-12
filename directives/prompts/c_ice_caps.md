@@ -66,3 +66,8 @@ Questions for Johnny written out in full, recommended answer first. After each
 meaningful step append one line under Progress: "done: X. next: Y."
 
 ## Progress
+
+done: the page-path timing check will use CPU time, and the cap edge is a shared nudge (lobes, sea retreat, land reach) that leaves the climate line where it is. next: wire it into the vanilla map, the hybrid sheet and the disc shader.
+done: the nudge is in the vanilla map, the hybrid sheet and the disc shader, and the parity script pins the capped worlds. next: run the parity gate and take the before and after shots.
+done: parity exits 0, the shots are taken, and the enhanced sheet yields the model in slices on this thread's CPU so the longest chunk stays under 50 ms. next: write the report.
+done: the report is written. next: stop.

@@ -540,7 +540,7 @@ test('a refused draft names the field and blocks Keep', async () => {
     const fetchImpl = fake((call) => {
         if (call.url.includes('/hexes?')) return json({ items: [row()], nextCursor: null });
         if (call.url.endsWith('/form')) return json(read([field('profile.st', 'A', 'type', 'text', 'Starport')]));
-        if (call.url.endsWith('/draft')) return fail(400, 'Starport cannot hold that. Type one character.');
+        if (call.url.endsWith('/draft')) return fail(400, 'Starport cannot hold that. Type one character.', { code: 'field', id: 'profile.st' });
         throw new Error('unexpected ' + call.url);
     });
     const time = clock();

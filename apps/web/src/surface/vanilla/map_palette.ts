@@ -60,14 +60,19 @@ function colorFromStops(h: number, stops: PaletteStop[]): RGB {
     return stops[stops.length - 1].c;
 }
 
-/** planet_renderer.js 245-255 */
-export function heightToRGB(h: number, lat: number, palette: Palette): RGB {
+/**
+ * planet_renderer.js 245-255, plus a cap-edge shift in radians.
+ * Positive shift moves the cap toward the equator. A world with no cap
+ * (polarAngle at π) ignores the shift, so its pixels stay as the legacy sheet.
+ */
+export function heightToRGB(h: number, lat: number, palette: Palette, shiftRad = 0): RGB {
     const { stops, polarColor, polarAngle, polarFade } = palette;
     const absLat = Math.abs(lat);
     const base   = colorFromStops(h, stops);
-    if (absLat > polarAngle - polarFade) {
+    const edge = polarAngle >= Math.PI - 1e-4 ? polarAngle : polarAngle - shiftRad;
+    if (absLat > edge - polarFade) {
         const blend = Math.min(1, Math.max(0,
-            (absLat - (polarAngle - polarFade)) / polarFade));
+            (absLat - (edge - polarFade)) / polarFade));
         return lerpRGB(base, polarColor, blend);
     }
     return base;

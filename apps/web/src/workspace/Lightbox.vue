@@ -1,14 +1,15 @@
 <script setup lang="ts">
 /**
  * One image large (K14): over everything, with its caption to read or change, the way to
- * the next and the one before, and Esc to leave. Focus goes to Close on open and back to
- * where it was on close. Under reduced motion nothing fades.
+ * the next and the one before, and Esc to leave. Focus goes to Close on open, stays inside
+ * while it is open, and goes back to where it was on close. Under reduced motion nothing fades.
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import type { CampaignImage } from '@voyage/shared';
 import { CAMPAIGN_LIMITS } from '@voyage/shared';
 import Icon from '../design/Icon.vue';
 import EditableText from './EditableText.vue';
+import { wrapFocus } from './focus_trap.ts';
 import { imageUrl, imageWords } from './images.ts';
 
 const props = defineProps<{
@@ -26,6 +27,7 @@ const emit = defineEmits<{
     caption: [hash: string, text: string];
 }>();
 
+const dialog = ref<HTMLElement | null>(null);
 const closeBtn = ref<HTMLElement | null>(null);
 const returnTo = ref<HTMLElement | null>(null);
 
@@ -37,7 +39,25 @@ function step(by: number): void {
     emit('index', (props.index + by + count.value) % count.value);
 }
 
+/** The controls Tab can reach, in order. */
+function stops(): HTMLElement[] {
+    const root = dialog.value;
+    if (!root) return [];
+    return [...root.querySelectorAll<HTMLElement>('button, [tabindex="0"], select, input, textarea')].filter((el) => !(el as HTMLButtonElement).disabled && el.getClientRects().length > 0);
+}
+
 function onKey(event: KeyboardEvent): void {
+    if (event.key === 'Tab') {
+        const list = stops();
+        const at = list.indexOf(document.activeElement as HTMLElement);
+        const next = wrapFocus(list.length, at, event.shiftKey);
+        if (next !== null) {
+            event.preventDefault();
+            list[next].focus();
+        }
+        event.stopPropagation();
+        return;
+    }
     if (event.key === 'Escape') {
         event.preventDefault();
         event.stopPropagation();
@@ -55,12 +75,22 @@ function onKey(event: KeyboardEvent): void {
     event.stopPropagation();
 }
 
+/** Focus that lands outside the open lightbox is brought back to Close. */
+function holdFocus(event: FocusEvent): void {
+    const root = dialog.value;
+    if (!root || !(event.target instanceof Node) || root.contains(event.target)) return;
+    const list = stops();
+    if (list.length) list[0].focus();
+}
+
 onMounted(() => {
     returnTo.value = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    document.addEventListener('focusin', holdFocus);
     void nextTick(() => { if (closeBtn.value) closeBtn.value.focus(); });
 });
 
 onBeforeUnmount(() => {
+    document.removeEventListener('focusin', holdFocus);
     const back = returnTo.value;
     if (back && back.isConnected) back.focus();
 });
@@ -69,7 +99,7 @@ onBeforeUnmount(() => {
 <template>
   <!-- On the body: the panel's transform would otherwise make it the containing block of this fixed box. -->
   <Teleport to="body">
-  <div class="lightbox" role="dialog" aria-modal="true" :aria-label="image && image.caption ? image.caption : name" @keydown="onKey">
+  <div ref="dialog" class="lightbox" role="dialog" aria-modal="true" :aria-label="image && image.caption ? image.caption : name" @keydown="onKey">
     <div class="lightbox-scrim" @click="emit('close')"></div>
     <div class="lightbox-card">
       <div class="lightbox-bar">

@@ -1,27 +1,29 @@
 # Board
 
-One line per lane. Only the orchestrator edits this file. Updated 2026-10-11 19:25 (by the clock).
+One line per lane. Only the orchestrator edits this file. Updated 2026-10-11 20:20 (by the clock).
 
-**Last push: `da727c7`, version 1.1.2, 2026-10-11.** Any prompt that says "start only
+**Last push: `ac18cbb`, version 1.1.3, 2026-10-11.** Any prompt that says "start only
 after the board says the push is made" may start.
 
 | Lane | Status | Current prompt | Blocker / next |
 |---|---|---|---|
-| A | go | prompts/a_undo_faults.md | the two Undo faults; density through the store when B reports; B's three codes |
-| B | go | prompts/b_generate_density.md | density on generate, contract first; A and D wait on it |
-| C | go | prompts/c_ice_caps.md | ragged ice caps; first steady one timing test |
-| D | go | prompts/d_star_numbers.md | the four star numbers; density dropdown when B and A have it |
-| E | go | prompts/e_palette_runnable.md | the palette hides what cannot run; Lightbox focus (OmniBox.vue and Lightbox.vue lent) |
+| A | go | prompts/a_form_followups.md, then prompts/a_own_dots.md | not started at 20:08 (no Progress line) |
+| B | in flight | prompts/b_generate_density.md (note added 20:15), then b_generate_cap.md, then b_generate_speed.md | local queue stalls near the hundredth message; B is reshaping the job to one walking message: see the added note |
+| C | go | prompts/c_surface_map_read.md | not started at 20:08 |
+| D | go | prompts/d_undo_words.md | not started at 20:08 |
+| E | go | prompts/e_toast_shell.md | not started at 20:08 |
 | F | retired | (none) | Johnny, 2026-10-11: unreliable (runs out of budget); do not use or propose until he says it is back |
 
 **Restarting a frozen lane:** paste the block in directives/lanes/START.md with the
 lane's letter as the first message of a new session; from then on "go" is enough.
 
 ## Shared files this turn
-- dossier/DossierPanel.vue, dossier/DossierBody.vue, views/OrbitView.vue: no lane.
+- map/MapRenderer.ts (`overviewPoints`, `setChart`, one new setter): **lent to A**.
+- views/OrbitView.vue and views/MapView.vue: **E only**, one line and its import each
+  (the toast strip's mount). D does not edit MapView.vue this turn.
+- shell/ToastStrip.vue, shell/toast.ts and the shell file that mounts the strip: **lent to E**.
+- dossier/DossierPanel.vue, dossier/DossierBody.vue: no lane.
 - design/tokens.css: any lane may append its own token lines.
-- components/OmniBox.vue and workspace/Lightbox.vue: **lent to E**.
-- packages/engines/src/mgt2e_roll_body.js: no lane (B's edit accepted; closed again).
 
 ## Contracts
 - contracts/b_marketplace.md, contracts/b_public_games.md (B): size b and the opt-in
@@ -84,12 +86,12 @@ lane's letter as the first message of a new session; from then on "go" is enough
   the blank request body (read from what the server stored).
 
 ## Pending push
-**Ready: version 1.1.3**, `findings/push/builder_2026-10-11d.md`. Tree green at 19:15
-(1397 pass; checker, typecheck, build pass). Carries the dossier fix (class rename),
-the no-WebGL notice, generation in flight, the "your map" note, publish from one
-system, roll again, the four star numbers (server), three error codes, record
-visibility and player notes, the shared marketplace types.
-Push before saying go.
+**Ready: version 1.1.4**, `findings/push/builder_2026-10-11e.md`. Tree green at 20:12
+(1409 pass; checker, typecheck, build pass). Carries the ice caps, the Undo faults
+fixed in the store, star numbers on the form, progress by the button and the job
+toast, the strip's words, the palette, the Lightbox focus, the signed-out rail.
+**Left out: B's density work in flight** (eleven paths and the Builder contract).
+Push before saying go to A, C, D, E.
 
 ## Decisions from Johnny
 - 2026-10-10: the file bus replaces pasting.
@@ -192,14 +194,44 @@ Push before saying go.
   hides commands that cannot run (E, OmniBox.vue lent); ice caps must stop reading as
   a perfect circle: ragged edge, the sea cutting in (C, prompts/c_ice_caps.md).
 
+- 2026-10-11: a software renderer for discs without WebGL is not ruled out; later.
+  The "your own map" note stays under the Build strip. The strip's own line is
+  rewritten in the Google style (both wordings read as confusing). Job progress goes
+  beside the Generate button and into a lower-right toast that lasts the job, so a
+  person can do other things while it runs; it does not cover the pane's first line.
+
+- 2026-10-11: signed out, the rail shows the Campaign and Build items switched off,
+  so visitors see what an account gives; only those two.
+
+- 2026-10-11: yes, a switched-off rail item opens the sign-in card when chosen.
+
+- 2026-10-11: **non-admins may generate 100 systems a day** (a bot must not drive
+  costs up); a premium account with more may come later, not now.
+
+- 2026-10-11, the dossier's surface map (live 1.1.3): a button to open it large; a
+  key for the symbols; the hex grid always on, as in the old app; day and night as a
+  soft light and dark overlay with no outline; less crunched at column width.
+
+- 2026-10-11: B's speed plan approved (third for B, behind the cap). The referee's own
+  systems must show as dots on the zoomed-out map (A).
+
+- 2026-10-11, yes to seven: the strip reads "YOUR MAP / <name> · your copy of the
+  published chart" with the version in the tooltip; the note as D wrote it; preview,
+  Keep and opening a draft stay held while a job runs. The cap: the UTC day; Undo
+  gives nothing back; previews and Roll again count; a request over the allowance is
+  refused whole.
+
 ## Open with Johnny
-1. C: no software renderer for orbit discs without WebGL (keep flat disc and notice)?
-2. D: the "your own map" note under the Build strip the first time Build is on?
-3. D: the strip says "your map over chart v5" in place of "on the chart, v5"?
-4. D: the job bar covers the pane's first line (the tally) while a job runs?
+1. Do the ice caps look right (`kc_caps_*`)?
+2. A high-tilt world's orbit disc: ice at the equator to match the dossier map, later?
 
 ## Queue (prompts not yet written)
 - E, Campaign order step 3 (timeline as a list), then 6 (handout images; ask B first).
 - The rest of F's review (ranking, visual refinement, words, access) was never done;
   no lane has it.
-- Public games (contract exists), after density.
+- Public games (contract exists), after density and the cap.
+- `workspace/build/BuildSpin.vue` wants lifting to `design/` (one spinner for the app).
+- Worker queue settings: B recommends in `b_generate_speed`; wrangler.toml changes go out with Johnny's deploy.
+- **Last, lowest priority (Johnny, 2026-10-11):** city lights are drawn on the
+  atmosphere layer of a world's surface, not on the ground under it (C, `surface/`).
+  No prompt until everything above is done.

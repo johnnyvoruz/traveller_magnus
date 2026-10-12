@@ -6725,3 +6725,60 @@ that failed at the close no longer does. Ready note `findings/builder_form_ready
   under load and passes alone: C steadies it.
 - **Prompts:** `d_star_numbers.md`; additions to `a_undo_faults.md`,
   `b_generate_density.md`, `c_ice_caps.md`, `e_palette_runnable.md`.
+
+- **1.1.3 pushed (`ac18cbb`).** Johnny: software disc renderer maybe later; note placement yes; strip line to be rewritten plainly; job progress by the Generate button plus a lower-right toast for the life of the job. All in `d_star_numbers.md` part 3.
+
+- Johnny: signed out, the rail shows Campaign and Build switched off (only those two). Added to `e_palette_runnable.md`; `shell/Rail.vue` lent to E. Built so choosing one opens the sign-in card; that choice is open with Johnny.
+
+## 249. Undo faults, star numbers on the form, palette and rail accepted; the daily cap (2026-10-11 20:10)
+
+- **A, `a_undo_faults`, accepted:** both faults were the store's. A one-hex Undo sent
+  the live rev as `baseRev`, so the server wiped a later Keep; now it sends the rev
+  the act wrote and the server answers 409 `hex_changed`. A job Undo's `{ restored,
+  conflicts }` was dropped; now `UndoOutcome { id, restored, left, message }`. B's
+  three codes read. The screen still ignores the return (`acts.ts`): D's next prompt.
+- **D, `d_star_numbers`, accepted, partial:** four number fields with units and
+  lookups; progress under the Generate button in a reserved 53 px slot; one job toast
+  with Stop (`job_toast.ts`); the strip chip removed; strip words rewritten. Found:
+  `cloneForm` drops `lookup` (A); refusal shows at the top (A); `fieldLabel` mislabels
+  numbered owners and a classless star rolls against the contract (B); toasts die on
+  leaving the map and the strip is per view (A, E).
+- **E, `e_palette_runnable`, accepted:** palette lists only runnable commands;
+  `workspace/focus_trap.ts` and the Lightbox; signed out, the rail shows Campaign and
+  Build with `aria-disabled` and opens the sign-in card.
+- **Red:** four surface tests, Lane C's ice caps in flight. No push.
+- **Johnny:** non-admins capped at 100 generated systems a day; asked what makes the
+  Worker scale. Prompts: `b_generate_cap.md`, `a_form_followups.md`, `d_undo_words.md`,
+  `e_toast_shell.md`.
+
+- Johnny on the dossier's surface map (1.1.3): open large, a symbol key, grid always on, soft day and night with no outline, crunched at column. `prompts/c_surface_map_read.md`, queued behind the ice caps.
+
+- Johnny: city lights render on the atmosphere layer; very back of the queue (board, Queue, last line). No prompt written.
+
+- Johnny asked for the plan to speed up generation. Orchestrator read `generate_queue.ts` (slice 4, ~18 round trips per message, whole-job spec per message, `finished` by last offset). `prompts/b_generate_speed.md` queued third for B: measure, cut round trips, slice size, out-of-order test, recommend queue settings without editing wrangler.toml.
+
+- **C, `c_ice_caps`, accepted (look to be judged by Johnny):** `surface/ice_edge.ts`, a
+  seeded nudge of the cap's edge (lobes, sea retreat, land reach) in the vanilla map,
+  the hybrid sheet and the disc shader; extent formulas unchanged; a first attempt
+  that rewrote legacy fixtures was backed out by C. `scripts/surface_parity.js` now
+  pins each capped world's mismatch count against the legacy renderer (they were 0)
+  and no longer requires `summary.ok`. The timing test uses thread CPU time. On a
+  large-tilt world the sheet shows an equatorial belt but the disc cap stays on the
+  pole (not changed in this pass). Map bake 267 ms before, 153 to 184 after.
+- Johnny: own systems as dots when zoomed out: `prompts/a_own_dots.md` (A, second).
+
+## 250. Push 1.1.4 written without B's density; seven answers (2026-10-11 20:20)
+
+- Johnny: yes to D's three (strip words, note, held acts) and the cap's four (UTC day,
+  no refund on Undo, previews count, refuse whole).
+- Tree green at 20:12 with A, C, D, E idle between prompts and only B in flight, so
+  1.1.4 was cut. Left out, B's density in flight: `jobs/generate_queue.ts`,
+  `routes/builder.ts`, `universe/hexes.ts`, `packages/generation/src/index.ts` and
+  `density.ts`, `packages/shared/src/index.ts`, `schemas/builder.ts`,
+  `schemas/sector.ts`, `tests/api/builder_logic.test.js`, `builder_density.test.js`,
+  `tests/generation/density.test.js`, `contracts/b_builder.md`. No browser file reads
+  any of it.
+- B's Progress: the local queue stalls near the hundredth message; it is reshaping
+  the job into one message that walks it. Note added to `b_generate_density.md`:
+  prove local against product, keep it resumable, do not close the door on the
+  approved speed plan.

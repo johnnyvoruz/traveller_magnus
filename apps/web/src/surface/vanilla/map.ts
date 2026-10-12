@@ -72,9 +72,10 @@ export function renderFlatMapPixels(inputs: DiamondMapInputs): Uint8ClampedArray
     const palette       = buildPalette(inputs.worldData, oceanRng);
 
     const data = new Uint8ClampedArray(MAP_WIDTH * MAP_HEIGHT * 4);
+    const capSeed = hashString(ms + '-' + imageSeed + '-cap');
     renderDiamond(
         { data, width: MAP_WIDTH, height: MAP_HEIGHT },
-        heightGrid, seeds, heightCDF, palette, maskWeight, warpStrength,
+        heightGrid, seeds, heightCDF, palette, maskWeight, warpStrength, 0, Number.POSITIVE_INFINITY, capSeed,
     );
     return data;
 }

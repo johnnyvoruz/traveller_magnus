@@ -41,6 +41,7 @@ export function createChunkedMap(
     let py = 0;
     let tasks = 0;
     let longestMs = 0;
+    const capSeed = hashString(ms + '-' + imageSeed + '-cap');
 
     function step(): boolean {
         if (phase === 'done') return true;
@@ -78,7 +79,7 @@ export function createChunkedMap(
                 if (yieldNow()) break;
                 py = renderDiamond(
                     { data: pixels, width: MAP_WIDTH, height: MAP_HEIGHT },
-                    heightGrid, seeds, samples, palette, maskWeight, warpStrength, py, 1,
+                    heightGrid, seeds, samples, palette, maskWeight, warpStrength, py, 1, capSeed,
                 );
             }
             if (py >= MAP_HEIGHT) phase = 'done';

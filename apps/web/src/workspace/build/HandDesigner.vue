@@ -18,7 +18,7 @@ import EditField from './EditField.vue';
 import OrbitPicker from './OrbitPicker.vue';
 import { canPick, openPicker, orbitPartner, pickFieldId, pickUi } from './orbit_pick.ts';
 import { draftHandle, edit, markOf, messagesFor, setField } from './edit.ts';
-import { fieldOwner, handList, handUi, KIND_WORD, movedWords, nodeFields, nodeTitle, orbitsValue, parentOptions, removeWords, selectNode, systemFields, type HandKind, type HandNode } from './hand.ts';
+import { fieldOwner, handList, handUi, KIND_WORD, movedWords, nodeFields, nodeTitle, orbitsValue, parentOptions, removeWords, selectNode, systemFields, unitOf, type HandKind, type HandNode } from './hand.ts';
 import { addBody, addWhy, canAdd, canGive, canMainworld, canMoveBody, canRemoveBody, canRollProfile, giveBody, makeMainworld, moonHost, moveBody, profileRollId, removeBody, rollNote, rollProfile } from './hand_acts.ts';
 
 defineProps<{ span: PanelSpan }>();
@@ -36,7 +36,8 @@ const host = computed(() => moonHost());
 const busy = computed(() => edit.keeping);
 const root = ref<HTMLElement | null>(null);
 /** The server's word on the selected body's roll ("Set Type, Subtype, and Class."), as sent. */
-const rollMessages = computed(() => (selected.value ? messagesFor(profileRollId(selected.value.id), messages.value).filter((item) => item.text.trim() !== '') : []));
+/** The server's word on this body's roll, each sentence once: a body rolled again sends its roll again, and each answer says it. */
+const rollMessages = computed(() => (selected.value ? messagesFor(profileRollId(selected.value.id), messages.value).filter((item, index, list) => item.text.trim() !== '' && list.findIndex((other) => other.text === item.text) === index) : []));
 // The roll's answer has arrived: the button is free again.
 watch(() => [handle.value ? handle.value.form.value : null, messages.value] as const, () => { handUi.rolling = ''; });
 
@@ -282,6 +283,7 @@ function endDrag(): void {
             :messages="messagesFor(field.id, messages)"
             :busy="busy"
             :resync="edit.resync"
+            :unit="unitOf(field.id)"
             @set="set(field.id, $event)"
           />
           <!-- "Pick orbit" stands after the orbit box it fills; the box stays typeable. -->

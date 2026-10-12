@@ -367,6 +367,27 @@ export function nodeFields(form: EditForm, node: HandNode): { profile: FormField
     return { profile, rows };
 }
 
+/**
+ * The units of a hand star's four numbers, as contracts/b_builder.md names them ("Luminosity,
+ * mass, diameter, temperature"). No other field states a unit.
+ */
+const STAR_UNITS: Record<string, string> = {
+    mass: 'solar masses',
+    diam: 'solar diameters',
+    temp: 'kelvin',
+    lum: 'solar luminosities',
+};
+
+export function unitOf(fieldId: string): string {
+    const match = /^star\.\d+\.(mass|diam|temp|lum)$/.exec(fieldId);
+    return match ? STAR_UNITS[match[1]] : '';
+}
+
+/** A looked-up number as the box shows it: four significant figures, no trailing zeros. */
+export function lookupWords(value: number): string {
+    return Number.isFinite(value) ? String(Number(value.toPrecision(4))) : '';
+}
+
 /** The system's own fields: its name and its notes. */
 export function systemFields(form: EditForm): FormField[] {
     const out: FormField[] = [];

@@ -83,4 +83,30 @@ Under "Needs from others" give Lanes A and D the field, its values and the new c
 name in three lines. Questions for Johnny written out in full, recommended answer
 first. After each meaningful step append one line under Progress: "done: X. next: Y."
 
+## Added 2026-10-11 20:15 by the orchestrator (read before you go further)
+
+Your Progress says the local queue stalls near the hundredth message and that you are
+moving to "one message walks the job". Before that becomes the design:
+
+- **Say whether the stall is the local queue or the product.** If it only happens
+  under `wrangler dev`, name the limit (the version, what stalls, a minimal repro) and
+  do not reshape the production job around it: test at a size the local queue carries
+  and say so.
+- **One message for a whole job has its own ceiling.** A 1,280-hex job in one
+  invocation must fit the consumer's wall-clock limit and `cpu_ms = 60000`, a retry
+  repeats everything not yet posted, and nothing can ever run side by side. Johnny has
+  approved `prompts/b_generate_speed.md` (fewer round trips per hex, larger slices,
+  out-of-order safety, then queue settings); a single walking message closes that door.
+- If the walking message is still what you judge right, keep it **resumable** (it
+  re-enqueues itself with its offset well inside the limits, and a retry starts from
+  the last posted offset), write the reason and the measured numbers in the report,
+  and put the question to Johnny there. Do not leave the job in a shape where Stop,
+  Undo or the counts behave differently from the contract.
+
 ## Progress
+done: contract names density, leftEmpty, and placed. next: wire the roll through generate and the job.
+done: the roll, the job counts, and placed are wired. next: run the unit tests, then the gates.
+done: an 80-hex job stayed queued while the worker held 64 hexes before posting. next: post four hexes at a time and rerun the worker test.
+done: four-hex slices finish a subsector, then the local queue stalls when the consumer sends the next slice. next: enqueue every slice up front and rerun.
+done: pre-enqueued slices still stop near the hundredth message. next: one message walks the job, posting every four hexes.
+done: the universe allows 120 mutations a minute and a four-hex post hit that on the fifth subsector. next: post thirty-two hexes at a time and rerun.

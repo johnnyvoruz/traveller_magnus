@@ -8,7 +8,8 @@
  */
 import { reactive } from 'vue';
 import { showToast } from '../../shell/toast.ts';
-import { holdJob, selectOnMap, tallyOf } from './acts.ts';
+import { holdJob, selectOnMap, stopBuild, tallyOf } from './acts.ts';
+import { endJobToast, startJobToast } from './job_toast.ts';
 import { endFlight, renameFlight, startFlight } from './flight.ts';
 import { buildStore, type GrowHandle, type GrowProgress, type JobProgress, type UndoToken } from './seam.ts';
 import { cleanName, slotGroups } from './sectors.ts';
@@ -136,12 +137,14 @@ export function generateGrowing(keys: readonly string[]): void {
     build.job = { total: targets.length, done: 0, failed: [], state: 'running', label };
     startFlight(targets);
     holdJob(run.stop);
+    startJobToast(stopBuild);
     let answered = false;
     let undone = false;
     const end = (): void => {
         holdJob(null);
         build.job = null;
         endFlight();
+        endJobToast();
         growUi.undoRunning = null;
     };
     run.accepted.then(

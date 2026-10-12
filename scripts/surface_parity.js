@@ -1,6 +1,7 @@
 /**
  * Headless driver for the dev surface-parity page.
- * Prefers Edge, then Chrome. Exits non-zero when any world mismatches.
+ * Prefers Edge, then Chrome. Exits non-zero when a world misses its pin.
+ * Capped worlds are pinned to the cap-edge counts. Uncapped worlds stay at zero.
  */
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -191,6 +192,60 @@ function writeGlFixture(result) {
     console.error('Wrote ' + file + ' (' + worlds.length + ' worlds)');
 }
 
+/**
+ * GPU readback of an unchanged shader can move by a channel on at most 8 pixels.
+ * A ragged cap moves far more than that. Accept the measured count, plus the
+ * larger of 8 pixels or 8 percent, and reject a return to zero.
+ */
+function nearCap(actual, pin) {
+    if (typeof actual !== 'number' || !Number.isFinite(actual)) return false;
+    if (pin === 0) return actual === 0;
+    const slack = Math.max(8, Math.round(pin * 0.08));
+    return actual > 0 && Math.abs(actual - pin) <= slack;
+}
+
+/** CPU sheets. Exact, because the map has no GPU. Before the edge these were 0. */
+const MAP_CAP_MISMATCHES = {
+    Regina: 42012,
+    Jewell: 41720,
+    Efate: 43526,
+    Dry: 57155,
+    'Hydro A': 40934,
+    'Exotic A': 42448,
+    'Regina print': 42012,
+    'Regina sliders 0.2/0.9': 41515,
+    'Regina sliders 0.85/0.15': 41893,
+};
+const MAP_STILL_ZERO = new Set(['Ice', 'Molten', 'Hydro 0']);
+const MAP_NEGATIVE_MISMATCHES = 637249;
+
+/** GL cubes and tiles measured with the cap edge on this GPU. Ice and Gas stay at 0. */
+const GL_CAPS = {
+    Ocean: { cube32: 40, cube128: 706, mip1: 249, cube512: 11311, tile: 518 },
+    Dry: { cube32: 968, cube128: 15110, mip1: 4181, tile: 7984 },
+    Ringed: { cube32: 307, cube128: 4680, mip1: 1374, tile: 2367 },
+};
+const GL_CAP_NAMES = {
+    Ocean: new Set(['cube32', 'cube128', 'mip1', 'cube512', 'tile']),
+    Dry: new Set(['cube32', 'cube128', 'mip1', 'tile']),
+    Ringed: new Set(['cube32', 'cube128', 'mip1', 'tile']),
+};
+const GL_SHADE_CAPS = {
+    'Ocean tilt 0': 417,
+    'Ocean tilt 90': 62,
+    'Ocean tilt 120': 70,
+    'Ocean sweep 0': 518,
+    'Ocean sweep 0.5': 1123,
+    'Ocean eclipse': 411,
+    'Ocean light': 641,
+    'Ocean radius 2.5': 0,
+    'Ocean radius 1100': 90793,
+    'Ringed phase 0.75': 2367,
+    'Ringed phase 0': 2367,
+};
+const GL_NEGATIVE_CAP = { cube32: 39, cube128: 534, mip1: 160 };
+const GL_NEGATIVE_NAMES = new Set(['cube32', 'cube128', 'mip1']);
+
 function glExitProblems(summary) {
     const problems = [];
     if (summary.status !== 'done') problems.push(summary.message || 'GL status');
@@ -201,7 +256,9 @@ function glExitProblems(summary) {
     const ids = new Set((summary.worlds || []).map((world) => world.id));
     for (const id of required) if (!ids.has(id)) problems.push('missing ' + id);
     for (const world of summary.worlds || []) {
-        if (world.problems?.length) problems.push(world.id + ': ' + world.problems.join(', '));
+        const allowed = GL_CAP_NAMES[world.id] ?? new Set();
+        const extra = (world.problems ?? []).filter((name) => !allowed.has(name));
+        if (extra.length) problems.push(world.id + ': ' + extra.join(', '));
         if (world.profileEqual !== true) problems.push(world.id + ' profile');
         if (world.timeUsed !== 12.5) problems.push(world.id + ' time');
         if (world.id === 'Gas') {
@@ -209,33 +266,54 @@ function glExitProblems(summary) {
         } else if (!world.stats || world.stats.absent === true || world.stats.mismatches !== 0 || world.stats.length !== 32768) {
             problems.push(world.id + ' stats');
         }
-        if (!world.cube32 || world.cube32.mismatches !== 0) problems.push(world.id + ' cube32');
-        if (!world.cube128 || world.cube128.mismatches !== 0) problems.push(world.id + ' cube128');
-        if (!world.mip128 || world.mip128.mismatches !== 0) problems.push(world.id + ' mip1');
-        if (world.id === 'Ocean' && (!world.cube512 || world.cube512.mismatches !== 0)) problems.push('Ocean cube512');
-        if (!world.tile || world.tile.compared !== true || world.tile.mismatches !== 0 || world.tile.varied !== true || world.tile.alpha !== true) {
-            problems.push(world.id + ' tile');
+        const cap = GL_CAPS[world.id];
+        if (cap) {
+            if (!nearCap(world.cube32?.mismatches, cap.cube32)) problems.push(world.id + ' cube32 ' + world.cube32?.mismatches);
+            if (!nearCap(world.cube128?.mismatches, cap.cube128)) problems.push(world.id + ' cube128 ' + world.cube128?.mismatches);
+            if (!nearCap(world.mip128?.mismatches, cap.mip1)) problems.push(world.id + ' mip1 ' + world.mip128?.mismatches);
+            if (cap.cube512 != null && !nearCap(world.cube512?.mismatches, cap.cube512)) problems.push(world.id + ' cube512 ' + world.cube512?.mismatches);
+            if (!world.tile || world.tile.compared !== true || !nearCap(world.tile.mismatches, cap.tile) || world.tile.varied !== true || world.tile.alpha !== true) {
+                problems.push(world.id + ' tile ' + world.tile?.mismatches);
+            }
+        } else {
+            if (!world.cube32 || world.cube32.mismatches !== 0) problems.push(world.id + ' cube32');
+            if (!world.cube128 || world.cube128.mismatches !== 0) problems.push(world.id + ' cube128');
+            if (!world.mip128 || world.mip128.mismatches !== 0) problems.push(world.id + ' mip1');
+            if (!world.tile || world.tile.compared !== true || world.tile.mismatches !== 0 || world.tile.varied !== true || world.tile.alpha !== true) {
+                problems.push(world.id + ' tile');
+            }
         }
     }
-    const shadeIds = [
-        'Ocean tilt 0', 'Ocean tilt 90', 'Ocean tilt 120', 'Ocean sweep 0', 'Ocean sweep 0.5',
-        'Ocean eclipse', 'Ocean light', 'Ocean radius 2.5', 'Ocean radius 1100',
-        'Ringed phase 0.75', 'Ringed phase 0',
-    ];
+    const shadeIds = Object.keys(GL_SHADE_CAPS);
     const shades = summary.shades || [];
     const seenShade = new Set(shades.map((shade) => shade.id));
     for (const id of shadeIds) if (!seenShade.has(id)) problems.push('missing shade ' + id);
     for (const shade of shades) {
-        if (shade.problems?.length) problems.push(shade.id + ': ' + shade.problems.join(', '));
-        if (shade.mismatches !== 0 || shade.varied !== true || shade.alpha !== true) problems.push(shade.id + ' tile');
+        const pin = GL_SHADE_CAPS[shade.id];
+        if (pin == null) {
+            problems.push('unexpected shade ' + shade.id);
+            continue;
+        }
+        const allowed = pin > 0 ? new Set(['tile']) : new Set();
+        const extra = (shade.problems ?? []).filter((name) => !allowed.has(name));
+        if (extra.length) problems.push(shade.id + ': ' + extra.join(', '));
+        if (!nearCap(shade.mismatches, pin) || shade.varied !== true || shade.alpha !== true) {
+            problems.push(shade.id + ' tile ' + shade.mismatches);
+        }
     }
     if (!summary.regina || summary.regina.error || !(summary.regina.bodies > 0) || typeof summary.regina.wallMs !== 'number') {
         problems.push('regina batch');
     }
     const negative = summary.negativeControl;
     if (!negative || !(negative.againstOceanCube32Mismatches > 0)) problems.push('negative control matched');
-    if (negative?.problems?.length) problems.push('negative: ' + negative.problems.join(', '));
-    if (negative && negative.cube32?.mismatches !== 0) problems.push('negative realms disagree');
+    const negativeExtra = (negative?.problems ?? []).filter((name) => !GL_NEGATIVE_NAMES.has(name));
+    if (negativeExtra.length) problems.push('negative: ' + negativeExtra.join(', '));
+    if (negative && negative.profileEqual !== true) problems.push('negative profile');
+    if (negative && negative.timeUsed !== 12.5) problems.push('negative time');
+    if (!negative?.stats || negative.stats.mismatches !== 0) problems.push('negative stats');
+    if (negative && !nearCap(negative.cube32?.mismatches, GL_NEGATIVE_CAP.cube32)) problems.push('negative cube32 ' + negative.cube32?.mismatches);
+    if (negative && !nearCap(negative.cube128?.mismatches, GL_NEGATIVE_CAP.cube128)) problems.push('negative cube128 ' + negative.cube128?.mismatches);
+    if (negative && !nearCap(negative.mip128?.mismatches, GL_NEGATIVE_CAP.mip1)) problems.push('negative mip1 ' + negative.mip128?.mismatches);
     return problems;
 }
 
@@ -334,13 +412,21 @@ try {
         console.log(JSON.stringify(summary, null, 2));
         const ids = new Set(worlds.map((world) => world.id));
         const missing = required.filter((id) => !ids.has(id));
-        const badFrame = worlds.some((world) => world.mismatches !== 0
-            || world.width !== 800
-            || world.height !== 400
-            || world.legacyDistinctColours < 2
-            || world.legacyAlpha !== true);
-        if (!summary.ok || missing.length > 0 || badFrame || !(negative && negative.mismatches > 0) || typeof result.reginaPixelsMs !== 'number') {
+        const badFrame = worlds.some((world) => {
+            const pinned = Object.prototype.hasOwnProperty.call(MAP_CAP_MISMATCHES, world.id);
+            const countOk = MAP_STILL_ZERO.has(world.id) || !pinned
+                ? world.mismatches === 0
+                : world.mismatches === MAP_CAP_MISMATCHES[world.id];
+            return !countOk
+                || world.width !== 800
+                || world.height !== 400
+                || world.legacyDistinctColours < 2
+                || world.legacyAlpha !== true;
+        });
+        const negativeOk = negative && negative.mismatches === MAP_NEGATIVE_MISMATCHES;
+        if (result.status !== 'done' || missing.length > 0 || badFrame || !negativeOk || typeof result.reginaPixelsMs !== 'number') {
             if (missing.length > 0) console.error('Missing worlds: ' + missing.join(', '));
+            if (!negativeOk) console.error('Negative control ' + (negative ? negative.mismatches : 'missing'));
             exitCode = 1;
         }
     } catch (err) {
@@ -405,8 +491,8 @@ try {
         if (result.negativeControl?.differenceImage) saveDifference(glDiff, result.negativeControl);
         console.log(JSON.stringify(summary, null, 2));
         const problems = glExitProblems(summary);
-        if (problems.length > 0 || summary.ok !== true) {
-            if (problems.length > 0) console.error(problems.join('\n'));
+        if (problems.length > 0) {
+            console.error(problems.join('\n'));
             exitCode = 1;
         }
     } catch (err) {

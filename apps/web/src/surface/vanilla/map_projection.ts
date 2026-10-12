@@ -2,6 +2,7 @@
 // The header at 778-781 says six rhombi. The loops draw six northern triangles,
 // one uninterrupted equatorial band, and five southern triangles. Ported as the loops draw.
 
+import { CAP_REACH_RAD, capHasCoast, capNoise, capShiftRad } from '../ice_edge.ts';
 import { POLE_FRAC, continentHeight, remapHeight, type ContinentSeed } from './map_fields.ts';
 import { heightToRGB, type Palette } from './map_palette.ts';
 
@@ -22,6 +23,7 @@ export function renderDiamond(
     warpStrength: number,
     startPy = 0,
     maxRows = Number.POSITIVE_INFINITY,
+    capSeed = 0,
 ): number {
     const data    = imageData.data;
     const W       = imageData.width;
@@ -57,7 +59,7 @@ export function renderDiamond(
                 const wz      = cosLat * Math.sin(lon);
                 const h       = continentHeight(heightGrid, seeds, wx, sinLat, wz, maskWeight, warpStrength);
                 const hN      = remapHeight(h, heightCDF);
-                const [r, g, b] = heightToRGB(hN, lat, palette);
+                const [r, g, b] = heightToRGB(hN, lat, palette, capShift(wx, sinLat, wz, hN, lat, palette, capSeed));
                 const idx     = (py * W + px) * 4;
                 data[idx] = r; data[idx + 1] = g; data[idx + 2] = b; data[idx + 3] = 255;
             }
@@ -78,7 +80,7 @@ export function renderDiamond(
             const wz  = cosLat * Math.sin(lon);
             const h   = continentHeight(heightGrid, seeds, wx, sinLat, wz, maskWeight, warpStrength);
             const hN  = remapHeight(h, heightCDF);
-            const [r, g, b] = heightToRGB(hN, lat, palette);
+            const [r, g, b] = heightToRGB(hN, lat, palette, capShift(wx, sinLat, wz, hN, lat, palette, capSeed));
             const idx = (py * W + px) * 4;
             data[idx] = r; data[idx + 1] = g; data[idx + 2] = b; data[idx + 3] = 255;
         }
@@ -106,7 +108,7 @@ export function renderDiamond(
                 const wz      = cosLat * Math.sin(lon);
                 const h       = continentHeight(heightGrid, seeds, wx, sinLat, wz, maskWeight, warpStrength);
                 const hN      = remapHeight(h, heightCDF);
-                const [r, g, b] = heightToRGB(hN, lat, palette);
+                const [r, g, b] = heightToRGB(hN, lat, palette, capShift(wx, sinLat, wz, hN, lat, palette, capSeed));
                 const idx     = (py * W + px) * 4;
                 data[idx] = r; data[idx + 1] = g; data[idx + 2] = b; data[idx + 3] = 255;
             }
@@ -115,4 +117,15 @@ export function renderDiamond(
         rows += 1;
     }
     return py;
+}
+
+/** Shift of this point's cap edge. Zero away from the boundary and on a world with no cap. */
+function capShift(wx: number, wy: number, wz: number, h: number, lat: number, palette: Palette, seed: number): number {
+    // Seed 0 is the unseeded call: the latitude probe and the seas sheet keep the climate line.
+    if (seed === 0) return 0;
+    if (palette.polarAngle >= Math.PI - 1e-4) return 0;
+    if (Math.abs(lat) < palette.polarAngle - palette.polarFade - CAP_REACH_RAD) return 0;
+    const sea = h < palette.seaLevel;
+    const elevation = sea || palette.seaLevel >= 1 ? 0 : (h - palette.seaLevel) / (1 - palette.seaLevel);
+    return capShiftRad(capNoise(wx, wy, wz, seed), sea, elevation, capHasCoast(palette.seaLevel));
 }

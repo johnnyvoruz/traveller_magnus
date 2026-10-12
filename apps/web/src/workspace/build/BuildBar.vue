@@ -13,7 +13,7 @@ import type { Rect } from '../pop_place.ts';
 import { changeLine, discardEdit, edit, editing, holdLeaving, keepEdit, openEdit, draftHandle } from './edit.ts';
 import { askDesign, handMode } from './hand_acts.ts';
 import { handChangeCount, handUi } from './hand.ts';
-import { build, plural } from './state.ts';
+import { build, JOB_HOLD, plural } from './state.ts';
 import { commands } from '../../shell/registry.ts';
 
 const props = defineProps<{ hexKey: string; name: string }>();
@@ -139,7 +139,7 @@ watch(() => (preview.value ? preview.value.roll : -1), (roll) => {
         data-command="build-edit"
         :disabled="!editable || opening || busy"
         :aria-busy="opening ? 'true' : undefined"
-        :title="state === 'truth' ? 'Edit this system (E). When you keep your changes, the system becomes yours. The chart doesn’t change' : 'Edit this system (E)'"
+        :title="build.job ? JOB_HOLD : state === 'truth' ? 'Edit this system (E). When you keep your changes, the system becomes yours. The chart doesn’t change' : 'Edit this system (E)'"
         @click="openEdit(hexKey, name)"
       >
         <Icon name="pen-to-square" :size="13" />{{ opening ? 'Opening…' : 'Edit' }}<kbd v-if="editable" class="build-key">E</kbd>
@@ -149,10 +149,10 @@ watch(() => (preview.value ? preview.value.roll : -1), (roll) => {
         type="button"
         class="ui-btn is-icon"
         aria-label="More build actions"
-        title="More"
         aria-haspopup="true"
         :aria-expanded="anchor ? 'true' : 'false'"
         :disabled="busy"
+        :title="build.job ? JOB_HOLD : 'More'"
         @click="openMore"
       >
         <Icon name="ellipsis-vertical" :size="13" />

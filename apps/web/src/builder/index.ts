@@ -8,4 +8,4 @@ export { mergeHex } from './overlay.ts';
 export { asBuildStore } from './screen.ts';
 export { openMap, previewSeed } from './store.ts';
 export type { Builder, MapUniverse, OpenMapOptions } from './store.ts';
-export type { GenerateGrowingBody, GenerateGrowingHandle, GenerateHandle, GrowSectorSeed, HexView, JobProgress, JobState, UndoToken } from './types.ts';
+export type { GenerateGrowingBody, GenerateGrowingHandle, GenerateHandle, GrowSectorSeed, HexView, JobProgress, JobState, UndoOutcome, UndoToken } from './types.ts';

@@ -14,6 +14,7 @@ import {
     type EditForm,
     type FormChange,
     type FormChanged,
+    FieldRefusalDetails,
     FormMessage,
     type FormField,
     type FormRoll,
@@ -26,7 +27,7 @@ type FetchResult = Promise<unknown>;
 
 export type KeepOutcome =
     | { status: 'kept'; row: HexRow; undo: UndoToken }
-    | { status: 'conflict'; current: HexRow | null }
+    | { status: 'conflict'; current: HexRow | null; message: string }
     | { status: 'refused'; message: string; messages: FormMessage[] };
 
 export type DraftPort = {
@@ -128,22 +129,10 @@ function writeField(form: EditForm, id: string, value: FormValue): void {
     if (field) field.value = value;
 }
 
-/**
- * A bare 400 names the field by its form label, not by its id.
- * One matching label on this form is enough. Two fields with the same label
- * stay unnamed: the answer carries no field code.
- */
-function fieldIdIn(text: string, form: EditForm): string | null {
-    const named = /^(.+) cannot hold that\. /.exec(text) ?? /^You can't edit (.+?)\. /.exec(text);
-    if (!named) return null;
-    const label = named[1];
-    const hits: string[] = [];
-    for (const section of form.sections) {
-        for (const field of section.fields) {
-            if (field.label === label) hits.push(field.id);
-        }
-    }
-    return hits.length === 1 ? hits[0] : null;
+/** A bare 400 names the field by `details.code` `field`. The sentence stays the message. */
+function fieldIdFrom(details: unknown): string | null {
+    const parsed = FieldRefusalDetails.safeParse(details);
+    return parsed.success ? parsed.data.id : null;
 }
 
 function listedMessages(details: unknown): FormMessage[] {
@@ -163,7 +152,7 @@ function listedMessages(details: unknown): FormMessage[] {
  * `messages`. `holds` stays true so Keep does not post while it stands.
  * A drop or a conflict is not this.
  */
-function refusalMessages(err: unknown, form: EditForm): FormMessage[] | null {
+function refusalMessages(err: unknown, _form: EditForm): FormMessage[] | null {
     if (!err || typeof err !== 'object') return null;
     if ((err as { status?: unknown }).status !== 400) return null;
     const listed = listedMessages((err as { details?: unknown }).details);
@@ -172,7 +161,7 @@ function refusalMessages(err: unknown, form: EditForm): FormMessage[] | null {
     }
     const raw = err instanceof Error ? err.message : '';
     const text = raw && raw !== 'offline' ? raw : 'The server refused this draft.';
-    return [{ id: fieldIdIn(text, form), text, holds: true }];
+    return [{ id: fieldIdFrom((err as { details?: unknown }).details), text, holds: true }];
 }
 
 export async function startDraft(port: DraftPort, hexKey: string): Promise<DraftHandle> {

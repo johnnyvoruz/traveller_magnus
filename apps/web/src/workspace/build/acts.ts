@@ -7,6 +7,7 @@ import type { SectorHex, Settings } from '@voyage/shared';
 import { showToast } from '../../shell/toast.ts';
 import { parseHexKey } from '../places.ts';
 import { endFlight, startFlight } from './flight.ts';
+import { endJobToast, startJobToast } from './job_toast.ts';
 import { isHandHex } from './hand_acts.ts';
 import { buildStore, type HexState, type UndoToken } from './seam.ts';
 import { build, generateTargets, jobToast, plural, removeTargets, restoreTargets, stateOf, tally, type Tally } from './state.ts';
@@ -170,17 +171,20 @@ export function generateMany(keys: readonly string[]): void {
         (progress) => { if (build.job) build.job = { ...progress, label }; },
     );
     stopJob = run.stop;
+    startJobToast(stopBuild);
     void run.finished.then(
         ({ token, progress }) => {
             stopJob = null;
             build.job = null;
             endFlight();
+            endJobToast();
             offerUndo(jobToast(progress, where(targets)), token);
         },
         (err) => {
             stopJob = null;
             build.job = null;
             endFlight();
+            endJobToast();
             fail(err);
         },
     );

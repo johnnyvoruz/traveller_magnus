@@ -41,7 +41,7 @@ import { parseHexKey } from '../workspace/places.ts';
 import { startDraft, type BlankOpened, type DraftHandle, type KeepOutcome } from './draft.ts';
 import { mergeHex } from './overlay.ts';
 import { openSectors } from './sectors.ts';
-import type { GenerateGrowingBody, GenerateGrowingHandle, GenerateHandle, HexView, JobProgress, UndoToken } from './types.ts';
+import type { GenerateGrowingBody, GenerateGrowingHandle, GenerateHandle, HexView, JobProgress, UndoOutcome, UndoToken } from './types.ts';
 import type { OwnSectors } from '../workspace/build/seam.ts';
 
 type FetchLike = typeof fetch;
@@ -81,7 +81,7 @@ type Queued = {
     settle?: (value: KeepOutcome) => void;
     fail?: (err: unknown) => void;
 };
-type RevertItem = { hexKey: string; toRev: number; before: HexRow | null; op: ChangeOp | 'generate' };
+type RevertItem = { hexKey: string; toRev: number; before: HexRow | null; op: ChangeOp | 'generate'; /** The rev this act wrote. A later edit makes this baseRev stale. */ atRev?: number };
 type GrowUndoBody = { sectorId: string; baseRev: number } | { jobId: string };
 type GrowRestoreSector = { id: string; toRev: number; baseRev: number };
 type GrowRestoreHex = { hexKey: string; toRev: number; baseRev: number };
@@ -179,7 +179,7 @@ export type Builder = {
      * A grow act's token returns the Restore (sector undos, then hex reverts), or null when
      * the answer cannot be read. Every other token returns null.
      */
-    undo(token: UndoToken): Promise<UndoToken | null>;
+    undo(token: UndoToken): Promise<UndoToken | UndoOutcome | null>;
     /** The edit form for one stored system. Local until `keep` on the handle. */
     openDraft(hexKey: string): Promise<DraftHandle>;
     /** An empty hand system on this hex, then that system's draft. A hex that already has a tree is refused. */
@@ -304,8 +304,22 @@ export function openMap(options: OpenMapOptions): Builder {
         }, ms);
     }
 
+    function detailCode(err: HttpError): string | null {
+        return isRecord(err.details) && typeof err.details.code === 'string' ? err.details.code : null;
+    }
+
     function conflictCurrent(err: HttpError): unknown {
         return isRecord(err.details) ? err.details.current : undefined;
+    }
+
+    /** The rev a remove or a restore wrote, so a later edit makes that Undo stale. */
+    function noteActRev(hexKey: string, op: ChangeOp, rev: number): void {
+        for (const rec of undos.values()) {
+            if (rec.kind !== 'reverts') continue;
+            for (const item of rec.items) {
+                if (item.hexKey === hexKey && item.op === op && item.atRev === undefined) item.atRev = rev;
+            }
+        }
     }
 
     /** The row a 409 carried. The change behind this save is dropped. */
@@ -372,6 +386,7 @@ export function openMap(options: OpenMapOptions): Builder {
                 toRev: change.before ? change.before.rev : 0,
                 before: change.before,
                 op: change.op,
+                atRev: saved.rev,
             }],
         });
         lastError.value = '';
@@ -387,11 +402,13 @@ export function openMap(options: OpenMapOptions): Builder {
                 return;
             }
             land(change.hexKey, data);
+            const saved = readRow(data);
+            noteActRev(change.hexKey, change.op, saved ? saved.rev : 0);
             lastError.value = '';
         } catch (err) {
             if (err instanceof HttpError && err.status === 409) {
                 const current = takeConflict(change.hexKey, err);
-                if (change.op === 'keep' || change.op === 'blank') change.settle?.({ status: 'conflict', current });
+                if (change.op === 'keep' || change.op === 'blank') change.settle?.({ status: 'conflict', current, message: err.message });
                 else showToast('Saved changes conflicted with a newer copy. The server copy is now shown.');
                 lastError.value = '';
                 return;
@@ -658,6 +675,7 @@ export function openMap(options: OpenMapOptions): Builder {
                     toRev: previous.get(row.hexKey)?.rev ?? 0,
                     before: previous.get(row.hexKey) ?? null,
                     op: 'generate' as const,
+                    atRev: row.rev,
                 })),
             });
             const progress: JobProgress = {
@@ -805,7 +823,7 @@ export function openMap(options: OpenMapOptions): Builder {
                 lastError.value = '';
                 return { undo, progress };
             } catch (err) {
-                if (err instanceof HttpError && err.status === 409 && err.message === 'That slot is in use. Choose another slot.') {
+                if (err instanceof HttpError && err.status === 409 && detailCode(err) === 'slot_in_use') {
                     const details = err.details;
                     const current = isRecord(details) ? details.current : undefined;
                     if (RefereeSector.safeParse(current).success) sectorBook().adopt([current]);
@@ -891,9 +909,21 @@ export function openMap(options: OpenMapOptions): Builder {
     async function revertOne(item: RevertItem): Promise<void> {
         const id = requireId();
         const local = rows.get(item.hexKey);
-        const baseRev = local ? local.rev : 0;
-        const data = await request('POST', hexPath(id, item.hexKey, '/revert'), { toRev: item.toRev, baseRev });
-        land(item.hexKey, data);
+        const baseRev = item.atRev !== undefined ? item.atRev : (local ? local.rev : 0);
+        try {
+            const data = await request('POST', hexPath(id, item.hexKey, '/revert'), { toRev: item.toRev, baseRev });
+            land(item.hexKey, data);
+        } catch (err) {
+            if (err instanceof HttpError && err.status === 409 && detailCode(err) === 'hex_changed') {
+                const current = conflictCurrent(err);
+                if (current != null) {
+                    const row = readRow(current);
+                    if (row) writeRow(row);
+                    else dropRow(item.hexKey);
+                }
+            }
+            throw err;
+        }
     }
 
     async function undoGrow(tokenId: string, rec: Extract<UndoRecord, { kind: 'grow' }>): Promise<UndoToken | null> {
@@ -943,7 +973,7 @@ export function openMap(options: OpenMapOptions): Builder {
         return null;
     }
 
-    async function undo(token: UndoToken): Promise<UndoToken | null> {
+    async function undo(token: UndoToken): Promise<UndoToken | UndoOutcome | null> {
         const rec = undos.get(token.id);
         if (!rec) return null;
         if (rec.kind === 'grow') return undoGrow(token.id, rec);
@@ -952,11 +982,14 @@ export function openMap(options: OpenMapOptions): Builder {
             await flushMap();
             if (queue.size > 0) throw new Error(lastError.value || 'offline');
             const id = requireId();
-            BuilderJobUndo.parse(await request('POST', `/api/universes/${encodeURIComponent(id)}/jobs/${encodeURIComponent(rec.jobId)}/undo`, {}));
+            const undone = BuilderJobUndo.parse(await request('POST', `/api/universes/${encodeURIComponent(id)}/jobs/${encodeURIComponent(rec.jobId)}/undo`, {}));
             await reload(rec.sectors);
             undos.delete(token.id);
             lastError.value = '';
             bump();
+            if (undone.conflicts.length > 0) {
+                return { id: token.id, restored: undone.restored, left: [...undone.conflicts], message: '' };
+            }
             return null;
         }
         const unsent = !flight && rec.items.length > 0 && rec.items.every((item) => {
@@ -975,11 +1008,32 @@ export function openMap(options: OpenMapOptions): Builder {
         }
         await flushMap();
         if (queue.size > 0) throw new Error(lastError.value || 'offline');
-        for (const item of rec.items) await revertOne(item);
-        undos.delete(token.id);
+        const left: string[] = [];
+        let restored = 0;
+        let message = '';
+        for (const item of rec.items) {
+            try {
+                await revertOne(item);
+                restored += 1;
+            } catch (err) {
+                if (err instanceof HttpError && err.status === 409 && detailCode(err) === 'hex_changed') {
+                    left.push(item.hexKey);
+                    if (!message) message = err.message;
+                    continue;
+                }
+                throw err;
+            }
+        }
+        if (left.length === 0) {
+            undos.delete(token.id);
+            lastError.value = '';
+            bump();
+            return null;
+        }
+        rec.items = rec.items.filter((item) => left.includes(item.hexKey));
         lastError.value = '';
         bump();
-        return null;
+        return { id: token.id, restored, left, message };
     }
 
     async function tree(hexKey: string): Promise<unknown | null> {
@@ -1059,7 +1113,7 @@ export function openMap(options: OpenMapOptions): Builder {
     async function blank(hexKey: string): Promise<BlankOpened> {
         if (!parseHexKey(hexKey)) throw new Error('Name the hex.');
         const outcome = await enqueueSaved(hexKey, { op: 'blank', blank: true });
-        if (outcome.status === 'conflict') throw new Error('This hex changed. Reload it, then try again.');
+        if (outcome.status === 'conflict') throw new Error(outcome.message);
         if (outcome.status === 'refused') throw new Error(outcome.message);
         return { draft: await openDraft(hexKey), undo: outcome.undo };
     }

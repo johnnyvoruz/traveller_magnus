@@ -16,6 +16,7 @@
  * draws from none of them.
  */
 import { hashString, mulberry32 } from '../vanilla/map.ts';
+import { edgeTemp } from '../ice_edge.ts';
 import { buildCDF, buildContinentSeeds, buildGrid3D, continentHeight, fbm3D, remapHeight } from '../vanilla/map_fields.ts';
 import { VANILLA_MASTER_SEED } from '../identity.ts';
 import type { AccentCode, FeatureCode, TerrainCode } from './codes.ts';
@@ -143,57 +144,53 @@ export type BuildOptions = {
     readonly lockedSubLonDeg?: number;
 };
 
-export function buildHybridModel(world: HybridWorld, options: BuildOptions = {}): HybridModel {
-    const grid = gridOf(world.size);
-    const seed = world.seed;
-    const height = heightField(seed, world.continental, world.coastline);
-    const gic = buildGrid3D(stream(seed, 'ic'));
-    const gtr = buildGrid3D(stream(seed, 'tr'));
-    const iceNoise = (p: V3): number => clamp((fbm3D(gic, p[0] * 1.3 + 3.1, p[1] * 1.3, p[2] * 1.3, 4, 0.55) - 0.5) * 4.5, -1, 1);
-    const texture = (p: V3): number => clamp((fbm3D(gtr, p[0] * 0.9, p[1] * 0.9 + 5.3, p[2] * 0.9, 3, 0.5) - 0.5) * 4, -1, 1);
-    const liquid = world.liquid;
-    const phaseKnown = world.meltK !== null && world.boilK !== null;
-    const meltK = world.meltK ?? 273;
-    const boilK = world.boilK ?? 373;
-    const airless = world.atm <= 1;
-    const life = !has(world, 'Va') && world.atm >= 4 && world.atm <= 9 && world.hydro >= 2 && world.meanK >= 248 && world.meanK <= 323;
-    const molten = world.hydro >= 15 || (!liquid && world.meanK > 1000);
-    const seaRank = liquid ? world.hydroPercent / 100 : 0;
+/** Hexes sampled, hydro flips, or climates classified in one page-path step. */
+const MODEL_BATCH = 32;
 
-    // S4 climate: rotating (design 6.3) or locked (6.4).
-    const mean = world.meanK;
-    const tiltE = world.tilt > 90 ? 180 - world.tilt : world.tilt;
-    const A = Math.max(0, Math.min(1.5 * (mean - world.lowK), 3 * (world.highK - mean)));
-    const Aeff = A * clamp((54 - tiltE) / 9, -1, 1);
-    let tp = Math.abs(Math.sin(world.tilt * D2R));
-    if (world.yearHours < 36.5 * 24) tp /= 2;
-    if (world.yearHours > 2 * 8760) tp *= 1.5;
-    const S = (world.highK - world.lowK) / 2;
-    const width = 0.2 + 0.3 * Math.min(1, world.pressure / 3);
-    const ringDeg = 5 + 20 * Math.min(1, world.pressure / 3);
-    const sub: V3 | null = world.locked ? sphere(0, (options.lockedSubLonDeg ?? LOCKED_NIGHT_CENTRED_LON) * D2R) : null;
-    const g = (c: number): number => Math.tanh(c / width) / Math.tanh(1 / width);
-    const gamma = LAPSE_K * Math.min(1, mean / 288);
-    const tempAt = (p: V3, e: number): number => {
-        const base = sub
-            ? mean + S * g(Math.cos(Math.acos(clamp(dot(p, sub), -1, 1)) + LOCKED_EDGE_WOBBLE_DEG * D2R * iceNoise([p[0] * 1.7, p[1] * 1.7, p[2] * 1.7])))
-            : mean + Aeff * (1 / 3 - p[1] * p[1]);
-        return base - gamma * Math.max(0, e) + 3 * iceNoise(p);
-    };
-    // Mean-climate fringe only. paint.ts draws it as broken floes. It does not follow the
-    // clock: moving it would repaint the terrain sheet, which the day/night layer never does.
-    const seasonalBand = (latDeg: number): number => (sub ? 0 : 0.5 * tp * Math.abs(Math.sin(latDeg * D2R)) * (world.highK - world.lowK) / 2);
-    const layout: Layout = molten ? 'molten'
-        : world.locked ? 'locked'
-            : liquid && phaseKnown && world.highK < meltK ? 'frozen'
-                : world.lowK > BAKED_K ? 'scorched' : 'normal';
+export type HybridBuild = {
+    /** One slice. True when the model is complete. */
+    step(): boolean;
+    /** The finished model. Drains any slices still waiting. */
+    model(): HybridModel;
+};
 
-    // S2 sampling.
-    const n = grid.n;
-    const rr = Math.tan(0.45 * hexSpacing(n));
-    const hexes: HexRecord[] = [];
-    for (let id = 0; id < grid.count; id += 1) {
-        const p = grid.P[id];
+/**
+ * The same build as buildHybridModel, in slices a page can run one per turn. Sampling, the
+ * hydro correction and the climate pass are the long parts; each slice does MODEL_BATCH of
+ * them. The hex data at the end matches a single buildHybridModel call.
+ */
+export function startHybridBuild(world: HybridWorld, options: BuildOptions = {}): HybridBuild {
+    let phase = 0;
+    let id = 0;
+    let grid!: Grid;
+    let seed!: string;
+    let height!: (p: V3) => number;
+    let iceNoise!: (p: V3) => number;
+    let texture!: (p: V3) => number;
+    let liquid!: string | null;
+    let phaseKnown!: boolean;
+    let meltK!: number;
+    let boilK!: number;
+    let airless!: boolean;
+    let life!: boolean;
+    let seaRank!: number;
+    let sub!: V3 | null;
+    let ringDeg!: number;
+    let tempAt!: (p: V3, e: number) => number;
+    let seasonalBand!: (latDeg: number) => number;
+    let layout!: Layout;
+    let rr!: number;
+    let hexes!: HexRecord[];
+    let seaShare = 0;
+    let model!: HybridModel;
+    let hydroOrder: HexRecord[] | null = null;
+    let hydroTarget = 0;
+    let hydroTol = 0;
+    let hydroCurrent = 0;
+    let hydroGuard = 0;
+
+    const sampleHex = (hexId: number): void => {
+        const p = grid.P[hexId];
         let t1: V3 = [p[2], 0, -p[0]];
         if (Math.hypot(t1[0], t1[1], t1[2]) < 1e-6) t1 = [1, 0, 0];
         t1 = norm(t1);
@@ -214,54 +211,14 @@ export function buildHybridModel(world: HybridWorld, options: BuildOptions = {})
         }
         const waterFrac = wet / 7;
         hexes.push({
-            id, row: grid.row[id], col: grid.col[id], lat: grid.lat[id], lon: grid.lon[id], area: grid.area[id],
+            id: hexId, row: grid.row[hexId], col: grid.col[hexId], lat: grid.lat[hexId], lon: grid.lon[hexId], area: grid.area[hexId],
             height: sum / 7, heightMax: top, waterFrac, water: waterFrac >= 0.5,
             elevation: 0, depth: 0, tempK: 0, moisture: 0, ice: 'none', seasonal: false, twilight: false, theta: 0,
             terrain: 'RK', landTerrain: 'RK', accents: [], features: [], port: null, domed: false, habitability: 0, coastal: false, waterHops: 99,
         });
-    }
-
-    // S3 hydro correction (design 4.4): flip the hexes nearest half wet until within tolerance.
-    if (liquid) {
-        const target = world.hydroPercent / 100;
-        const tol = Math.max(0.015, grid.area[0]);
-        let current = 0;
-        for (const x of hexes) if (x.water) current += x.area;
-        const order = [...hexes].sort((a, b) => Math.abs(a.waterFrac - 0.5) - Math.abs(b.waterFrac - 0.5) || a.id - b.id);
-        for (let guard = 0; guard < grid.count && Math.abs(current - target) > tol; guard += 1) {
-            const want = current < target;
-            const pick = order.find((x) => x.water !== want);
-            if (!pick) break;
-            pick.water = want;
-            current += want ? pick.area : -pick.area;
-            order.splice(order.indexOf(pick), 1);
-        }
-    } else {
-        for (const x of hexes) x.water = false;
-    }
-    let seaShare = 0;
-    for (const x of hexes) if (x.water) seaShare += x.area;
-
-    // Hop distance to water, for moisture.
-    const queue: number[] = [];
-    for (const x of hexes) if (x.water) { x.waterHops = 0; queue.push(x.id); }
-    for (let head = 0; head < queue.length; head += 1) {
-        const c = queue[head];
-        for (const k of grid.nb[c]) {
-            if (hexes[k].waterHops > hexes[c].waterHops + 1) {
-                hexes[k].waterHops = hexes[c].waterHops + 1;
-                queue.push(k);
-            }
-        }
-    }
-
-    const model = {
-        world, grid, seaRank, meltK, boilK, phaseKnown, layout, life, airless, sub, ringDeg, hexes,
-        height, iceNoise, texture, tempAt, seasonalBand, seaShare, starportLon: null as number | null, starportHex: null as number | null,
     };
 
-    // S4–S6 per hex.
-    for (const x of hexes) {
+    const climateHex = (x: HexRecord): void => {
         const p = grid.P[x.id];
         x.elevation = x.water ? 0 : clamp((x.height - seaRank) / (1 - seaRank || 1), 0, 1);
         x.depth = x.water ? clamp((seaRank - x.height) / Math.max(seaRank, 1e-6), 0, 1) : 0;
@@ -272,36 +229,169 @@ export function buildHybridModel(world: HybridWorld, options: BuildOptions = {})
             x.twilight = Math.abs(x.theta - 90) <= ringDeg;
         }
         x.moisture = moistureAt(model, p, x.lat, x.elevation, x.waterHops);
-        const c = classify(model, x.water, x.tempK, x.elevation, x.moisture, x.lat, x.depth);
+        const hasCoast = seaShare > 0.02 && seaShare < 0.98;
+        const noise = model.iceNoise(p);
+        const iceT = edgeTemp(x.tempK, model.meltK, noise, x.water, x.elevation, hasCoast, model.layout);
+        const c = classify(model, x.water, x.tempK, x.elevation, x.moisture, x.lat, x.depth, iceT);
         x.ice = c.ice;
         x.seasonal = c.seasonal;
         x.terrain = c.terrain;
-        x.landTerrain = x.water ? classify(model, false, x.tempK, x.elevation, x.moisture, x.lat, 0).terrain : x.terrain;
-    }
+        const landT = x.water ? edgeTemp(x.tempK, model.meltK, noise, false, 0, hasCoast, model.layout) : iceT;
+        x.landTerrain = x.water ? classify(model, false, x.tempK, 0, x.moisture, x.lat, 0, landT).terrain : x.terrain;
+    };
 
-    // Accents.
-    const rft = stream(seed, 'ft');
-    const land = hexes.filter((x) => !x.water);
-    for (const x of land) if (x.elevation >= 0.7) x.accents.push('MT');
-    const volcanoes = Math.min(Math.round(world.seismic / 3), Math.ceil(0.05 * land.length));
-    const peaks = land.filter((x) => x.accents.includes('MT') && x.ice === 'none');
-    for (let i = 0; i < volcanoes && peaks.length; i += 1) {
-        const k = Math.floor(rft() * peaks.length);
-        peaks[k].accents.push('VO');
-        peaks.splice(k, 1);
-    }
-    if (world.atm <= 1 || has(world, 'Va')) {
-        const craters = world.size + 1 + Math.floor(rft() * 6);
-        const pool = [...land];
-        for (let i = 0; i < craters && pool.length; i += 1) {
-            const k = Math.floor(rft() * pool.length);
-            pool[k].accents.push('CR');
-            pool.splice(k, 1);
+    const step = (): boolean => {
+        if (phase === 7) return true;
+        if (phase === 0) {
+            grid = gridOf(world.size);
+            seed = world.seed;
+            height = heightField(seed, world.continental, world.coastline);
+            const gic = buildGrid3D(stream(seed, 'ic'));
+            const gtr = buildGrid3D(stream(seed, 'tr'));
+            iceNoise = (p: V3): number => clamp((fbm3D(gic, p[0] * 1.3 + 3.1, p[1] * 1.3, p[2] * 1.3, 4, 0.55) - 0.5) * 4.5, -1, 1);
+            texture = (p: V3): number => clamp((fbm3D(gtr, p[0] * 0.9, p[1] * 0.9 + 5.3, p[2] * 0.9, 3, 0.5) - 0.5) * 4, -1, 1);
+            liquid = world.liquid;
+            phaseKnown = world.meltK !== null && world.boilK !== null;
+            meltK = world.meltK ?? 273;
+            boilK = world.boilK ?? 373;
+            airless = world.atm <= 1;
+            life = !has(world, 'Va') && world.atm >= 4 && world.atm <= 9 && world.hydro >= 2 && world.meanK >= 248 && world.meanK <= 323;
+            const molten = world.hydro >= 15 || (!liquid && world.meanK > 1000);
+            seaRank = liquid ? world.hydroPercent / 100 : 0;
+            const mean = world.meanK;
+            const tiltE = world.tilt > 90 ? 180 - world.tilt : world.tilt;
+            const A = Math.max(0, Math.min(1.5 * (mean - world.lowK), 3 * (world.highK - mean)));
+            const Aeff = A * clamp((54 - tiltE) / 9, -1, 1);
+            let tp = Math.abs(Math.sin(world.tilt * D2R));
+            if (world.yearHours < 36.5 * 24) tp /= 2;
+            if (world.yearHours > 2 * 8760) tp *= 1.5;
+            const S = (world.highK - world.lowK) / 2;
+            const width = 0.2 + 0.3 * Math.min(1, world.pressure / 3);
+            ringDeg = 5 + 20 * Math.min(1, world.pressure / 3);
+            sub = world.locked ? sphere(0, (options.lockedSubLonDeg ?? LOCKED_NIGHT_CENTRED_LON) * D2R) : null;
+            const g = (c: number): number => Math.tanh(c / width) / Math.tanh(1 / width);
+            const gamma = LAPSE_K * Math.min(1, mean / 288);
+            tempAt = (p: V3, e: number): number => {
+                const base = sub
+                    ? mean + S * g(Math.cos(Math.acos(clamp(dot(p, sub), -1, 1)) + LOCKED_EDGE_WOBBLE_DEG * D2R * iceNoise([p[0] * 1.7, p[1] * 1.7, p[2] * 1.7])))
+                    : mean + Aeff * (1 / 3 - p[1] * p[1]);
+                return base - gamma * Math.max(0, e) + 3 * iceNoise(p);
+            };
+            seasonalBand = (latDeg: number): number => (sub ? 0 : 0.5 * tp * Math.abs(Math.sin(latDeg * D2R)) * (world.highK - world.lowK) / 2);
+            layout = molten ? 'molten'
+                : world.locked ? 'locked'
+                    : liquid && phaseKnown && world.highK < meltK ? 'frozen'
+                        : world.lowK > BAKED_K ? 'scorched' : 'normal';
+            rr = Math.tan(0.45 * hexSpacing(grid.n));
+            hexes = [];
+            id = 0;
+            phase = 1;
+            return false;
         }
-    }
+        if (phase === 1) {
+            const end = Math.min(grid.count, id + MODEL_BATCH);
+            for (; id < end; id += 1) sampleHex(id);
+            if (id >= grid.count) phase = 2;
+            return false;
+        }
+        if (phase === 2) {
+            if (!liquid) {
+                for (const x of hexes) x.water = false;
+                phase = 3;
+                return false;
+            }
+            if (!hydroOrder) {
+                hydroTarget = world.hydroPercent / 100;
+                hydroTol = Math.max(0.015, grid.area[0]);
+                hydroCurrent = 0;
+                for (const x of hexes) if (x.water) hydroCurrent += x.area;
+                hydroOrder = [...hexes].sort((a, b) => Math.abs(a.waterFrac - 0.5) - Math.abs(b.waterFrac - 0.5) || a.id - b.id);
+                hydroGuard = 0;
+            }
+            const order = hydroOrder;
+            let n = 0;
+            let finished = false;
+            while (n < MODEL_BATCH) {
+                if (!(hydroGuard < grid.count && Math.abs(hydroCurrent - hydroTarget) > hydroTol)) { finished = true; break; }
+                const want = hydroCurrent < hydroTarget;
+                const pick = order.find((x) => x.water !== want);
+                if (!pick) { finished = true; break; }
+                pick.water = want;
+                hydroCurrent += want ? pick.area : -pick.area;
+                order.splice(order.indexOf(pick), 1);
+                hydroGuard += 1;
+                n += 1;
+            }
+            if (finished) phase = 3;
+            return false;
+        }
+        if (phase === 3) {
+            seaShare = 0;
+            for (const x of hexes) if (x.water) seaShare += x.area;
+            const queue: number[] = [];
+            for (const x of hexes) if (x.water) { x.waterHops = 0; queue.push(x.id); }
+            for (let head = 0; head < queue.length; head += 1) {
+                const c = queue[head];
+                for (const k of grid.nb[c]) {
+                    if (hexes[k].waterHops > hexes[c].waterHops + 1) {
+                        hexes[k].waterHops = hexes[c].waterHops + 1;
+                        queue.push(k);
+                    }
+                }
+            }
+            model = {
+                world, grid, seaRank, meltK, boilK, phaseKnown, layout, life, airless, sub, ringDeg, hexes,
+                height, iceNoise, texture, tempAt, seasonalBand, seaShare, starportLon: null, starportHex: null,
+            };
+            id = 0;
+            phase = 4;
+            return false;
+        }
+        if (phase === 4) {
+            const end = Math.min(hexes.length, id + MODEL_BATCH);
+            for (; id < end; id += 1) climateHex(hexes[id]);
+            if (id >= hexes.length) phase = 5;
+            return false;
+        }
+        if (phase === 5) {
+            const rft = stream(seed, 'ft');
+            const land = hexes.filter((x) => !x.water);
+            for (const x of land) if (x.elevation >= 0.7) x.accents.push('MT');
+            const volcanoes = Math.min(Math.round(world.seismic / 3), Math.ceil(0.05 * land.length));
+            const peaks = land.filter((x) => x.accents.includes('MT') && x.ice === 'none');
+            for (let i = 0; i < volcanoes && peaks.length; i += 1) {
+                const k = Math.floor(rft() * peaks.length);
+                peaks[k].accents.push('VO');
+                peaks.splice(k, 1);
+            }
+            if (world.atm <= 1 || has(world, 'Va')) {
+                const craters = world.size + 1 + Math.floor(rft() * 6);
+                const pool = [...land];
+                for (let i = 0; i < craters && pool.length; i += 1) {
+                    const k = Math.floor(rft() * pool.length);
+                    pool[k].accents.push('CR');
+                    pool.splice(k, 1);
+                }
+            }
+            phase = 6;
+            return false;
+        }
+        placePeople(model);
+        phase = 7;
+        return true;
+    };
 
-    placePeople(model);
-    return model;
+    return {
+        step,
+        model: () => {
+            while (phase < 7) step();
+            return model;
+        },
+    };
+}
+
+export function buildHybridModel(world: HybridWorld, options: BuildOptions = {}): HybridModel {
+    return startHybridBuild(world, options).model();
 }
 
 type ClimateModel = Pick<HybridModel, 'world' | 'sub' | 'texture'>;
@@ -324,20 +414,20 @@ export function moistureAt(model: ClimateModel, p: V3, latDeg: number, elevation
 type ClassModel = Pick<HybridModel, 'world' | 'layout' | 'meltK' | 'boilK' | 'phaseKnown' | 'airless' | 'life' | 'sub' | 'seasonalBand'>;
 
 /** The terrain table (design §5.4). First match wins. */
-export function classify(model: ClassModel, water: boolean, T: number, e: number, m: number, latDeg: number, depth: number): { ice: IceKind; seasonal: boolean; terrain: TerrainCode } {
+export function classify(model: ClassModel, water: boolean, T: number, e: number, m: number, latDeg: number, depth: number, iceT: number = T): { ice: IceKind; seasonal: boolean; terrain: TerrainCode } {
     const world = model.world;
     const Tm = model.meltK;
     if (model.layout === 'molten') return { ice: 'none', seasonal: false, terrain: 'LV' };
     if (water) {
         if (model.phaseKnown) {
             const icy = has(world, 'Ic');
-            if (T < Tm) return { ice: icy ? 'iceField' : 'seaIce', seasonal: false, terrain: icy ? 'IF' : 'SI' };
-            if (T < Tm + model.seasonalBand(latDeg)) return { ice: 'seaIce', seasonal: true, terrain: 'SI' };
+            if (iceT < Tm) return { ice: icy ? 'iceField' : 'seaIce', seasonal: false, terrain: icy ? 'IF' : 'SI' };
+            if (iceT < Tm + model.seasonalBand(latDeg)) return { ice: 'seaIce', seasonal: true, terrain: 'SI' };
             if (T > model.boilK) return { ice: 'none', seasonal: false, terrain: 'EV' };
         }
         return { ice: 'none', seasonal: false, terrain: depth > 0.35 ? 'OC' : 'SH' };
     }
-    if (model.phaseKnown && T < Tm - 5 && world.hydro > 0) {
+    if (model.phaseKnown && iceT < Tm - 5 && world.hydro > 0) {
         if (model.airless) {
             // Frost wherever it is cold enough. A latitude cut drew a ruler across the sheet.
             return { ice: 'frost', seasonal: false, terrain: 'FR' };

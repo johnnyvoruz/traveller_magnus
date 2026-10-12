@@ -9,6 +9,8 @@
  *
  * Reversed-edge smoothstep calls in the bake are kept as written:
  * js/planet_gl.js:230, 237, 264, 285, 291, 294, 309, 312.
+ * The cap edge in BAKE_FRAG is the one departure: lobes, a retreat over open
+ * sea, a reach over high land. The climate thresholds themselves are unchanged.
  */
 import { STATS_H, STATS_W } from './gl_stats.ts';
 
@@ -245,6 +247,12 @@ void main() {
     float localC = uLocked > 0.5
         ? uMeanC + uSpread * 0.6 * d.x - e * 28.0
         : uMeanC + (uSpread / 40.0) * (15.0 - 45.0 * sinLat * sinLat) - e * 28.0;
+    // The melting line stays. This only moves the boundary, and only near it.
+    float capNear = smoothstep(10.0, -2.0, localC) * (1.0 - smoothstep(-18.0, -30.0, localC));
+    float capAlong = snoise(d * 2.6 + uOffset) * 9.0;
+    if (uSea < 0.98 && h < uSea) capAlong -= 10.0;
+    else if (h >= uSea) capAlong += 4.0 + 8.0 * clamp((h - uSea) / max(0.001, 1.0 - uSea), 0.0, 1.0);
+    float capC = localC - capAlong * capNear;
     vec3 col;
     float ocean = 0.0;
     if (h < uSea) {
@@ -252,7 +260,7 @@ void main() {
             float depth = (uSea - h) / max(0.001, uSea);
             col = mix(uLiqShallow, uLiqDeep, smoothstep(0.0, 0.12, depth));
             if (uFrozen < 0.5) {
-                float ice = smoothstep(-6.0, -14.0, localC);
+                float ice = smoothstep(-6.0, -14.0, capC);
                 col = mix(col, vec3(0.89, 0.93, 0.96), ice);
                 ocean = 1.0 - ice;
             }
@@ -273,7 +281,7 @@ void main() {
         }
         if (uHasLiquid > 0.5 && uFrozen < 0.5) col = mix(col, vec3(0.86, 0.8, 0.63), (1.0 - smoothstep(0.0, 0.012, e)) * step(4.0, localC) * 0.6);
         col = mix(col, uRockHigh * 0.92, smoothstep(0.35, 0.7, e) * 0.55);
-        col = mix(col, vec3(0.94, 0.955, 0.97), smoothstep(-8.0, -16.0, localC));
+        col = mix(col, vec3(0.94, 0.955, 0.97), smoothstep(-8.0, -16.0, capC));
     }
     if (uIce > 0.5) col = mix(col, vec3(0.64, 0.44, 0.35), smoothstep(0.72, 0.95, ridged(d * 4.0 + uOffset, 4)) * 0.6);
     float lava = 0.0;

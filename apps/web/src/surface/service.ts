@@ -38,9 +38,9 @@ import { enhancedWorldData } from './enhanced/climate.ts';
 import { createEnhancedMap, seaPlan } from './enhanced/map.ts';
 import { createChunkedMap } from './map_chunks.ts';
 import { HYBRID_SURFACE_VERSION, hybridWorld, worldDigest } from './hybrid/inputs.ts';
-import { hybridModel, SHEET_LAYOUT } from './hybrid/index.ts';
+import { cachedHybridModel, rememberHybridModel, SHEET_LAYOUT } from './hybrid/index.ts';
 import { createHybridPaint } from './hybrid/paint.ts';
-import { modelPreparation } from './hybrid/model.ts';
+import { modelPreparation, startHybridBuild } from './hybrid/model.ts';
 import { openDiscLink, type DiscLink } from './disc_link.ts';
 import { clearDiscs, discHeld, retainDiscs } from './disc_hold.ts';
 import { discShadeRequest } from './disc_shade.ts';
@@ -125,6 +125,7 @@ const cache = new SheetCache();
 let spawnOverride: 'default' | null | (() => WorkerLike) = 'default';
 let scheduleOverride: ((fn: () => void) => () => void) | null = null;
 let budgetOverride: number | null = null;
+let clockOverride: (() => number) | null = null;
 
 function schedule(fn: () => void): () => void {
     if (scheduleOverride) return scheduleOverride(fn);
@@ -140,10 +141,16 @@ export function configureSurfaceRuntime(options: {
     spawn?: (() => WorkerLike) | null;
     schedule?: (fn: () => void) => () => void;
     taskBudgetMs?: number;
+    /**
+     * Clock for the page-path chunk timer. The default is wall time. A test
+     * passes CPU time so a stalled machine does not count as a long chunk.
+     */
+    clock?: (() => number) | null;
 }): void {
     if (options.spawn !== undefined) spawnOverride = options.spawn;
     if (options.schedule) scheduleOverride = options.schedule;
     if (options.taskBudgetMs !== undefined) budgetOverride = options.taskBudgetMs;
+    clockOverride = 'clock' in options ? (options.clock ?? null) : null;
     disposeSurfaces();
 }
 
@@ -266,11 +273,21 @@ function onWorkerMessage(event: { data: SurfaceWorkerReply }): void {
 
 function paintOnPage(job: Live): void {
     const hybrid = job.hybrid;
+    const clock = clockOverride ?? now;
+    const cached = hybrid ? cachedHybridModel(hybrid.world) : null;
+    const modelBuild = hybrid && !cached ? startHybridBuild(hybrid.world) : null;
     const chunk = hybrid
-        ? createHybridPaint(() => hybridModel(hybrid.world), SHEET_LAYOUT, now, budget(), modelPreparation(hybrid.world))
+        ? createHybridPaint(
+            () => {
+                if (cached) return cached;
+                const model = (modelBuild as NonNullable<typeof modelBuild>).model();
+                rememberHybridModel(hybrid.world, model);
+                return model;
+            },
+            SHEET_LAYOUT, clock, budget(), modelPreparation(hybrid.world), modelBuild)
         : job.enhanced
-            ? createEnhancedMap(job.enhanced, now, budget())
-            : createChunkedMap(job.inputs, now, budget());
+            ? createEnhancedMap(job.enhanced, clock, budget())
+            : createChunkedMap(job.inputs, clock, budget());
     const run = (): void => {
         if (live !== job) return;
         const done = chunk.step();

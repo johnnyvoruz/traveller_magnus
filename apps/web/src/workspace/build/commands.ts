@@ -12,7 +12,7 @@ import { canDelete, canMove, canNewSector, canRename, deleteSector, newSector, s
 import { askSectorName, inEmptySlot } from './grow_acts.ts';
 import { canPickSelected, openPicker } from './orbit_pick.ts';
 import { canPublish, kindOfKeys, openPublish, signedIn } from '../market/market.ts';
-import { build, plural, removeTargets } from './state.ts';
+import { build, JOB_HOLD, plural, removeTargets } from './state.ts';
 
 export type BuildCommandId =
     | 'build-select' | 'build-generate' | 'build-generate-with' | 'build-keep' | 'build-roll'
@@ -225,6 +225,9 @@ export function menuFor(keys: readonly string[]): { title: string; items: BuildM
     }
     for (const item of items) item.disabled = !canBuild(item.id, keys);
     if (checking >= 0) items[checking].disabled = true;
+    // While a job writes the map, the acts that write are held: said once, on the first of them.
+    const held = build.job ? items.find((item) => item.disabled) : undefined;
+    if (held) held.say = JOB_HOLD;
     const hex = keys[0].slice(keys[0].lastIndexOf('/') + 1);
     const title = many ? plural(keys.length, 'hex', 'hexes') : (state === 'empty' || state === 'removed' ? 'Empty hex ' + hex : hexName(keys[0]));
     return { title, items };

@@ -13,11 +13,21 @@ const ON_KEY = 'voyage_build_on';
 export const YOURS_KEY = 'voyage_build_yours_told';
 
 /**
- * Whose map this is (prompts/d_generate_feedback.md part 3), said once where a person starting to
- * build reads it. What is true: a universe points at one released chart and stores only its own
- * changes; publishing a package is the only way anything leaves it.
+ * Whose map this is (prompts/d_generate_feedback.md part 3, reread for prompts/d_star_numbers.md),
+ * said once where a person starting to build reads it. What is true: a universe points at one
+ * released chart and stores only its own changes; publishing a package is the only way anything
+ * leaves it.
  */
-export const YOURS_NOTE = 'You’re building your own map. Anything you generate, change, or remove is saved to your map only, and the published chart doesn’t change. Nobody else sees your map unless you publish a package.';
+export function yoursNote(onChart: boolean): string {
+    const first = onChart ? 'This map is your own copy of the published chart.' : 'This map is your own.';
+    return first + ' What you generate, change, or remove stays on your map, and nobody else sees it unless you publish a package.';
+}
+
+/** The Build strip's line: the map's name, what it is in plain words, and the chart's version where whoever needs it can find it. */
+export function stripLine(name: string, truthVersion: string | null): { what: string; title: string } {
+    if (truthVersion === null) return { what: 'a map of your own', title: name + ' is a map of your own, with no published chart under it' };
+    return { what: 'your copy of the published chart', title: name + ' is your copy of the published chart, version ' + truthVersion };
+}
 const CHOICE_KEY = 'voyage_build_choice';
 
 /** One legacy sector: the most hexes one act takes (js/macro_orchestrator.js:99). */
@@ -250,6 +260,9 @@ export function settingRows(settings: Settings | null): { label: string; value: 
         { label: 'Tech level (RTT)', value: String(settings.generationRttTL) },
     ];
 }
+
+/** Said where a writing act is held while a job runs: the job writes the same map. */
+export const JOB_HOLD = 'While hexes are generating, you can’t change systems. To change one now, select Stop.';
 
 /** A running job in one line: "Generating 80 hexes · 12 of 80", with the failures when there are any. */
 export function jobLine(job: JobProgress & { label: string }): string {

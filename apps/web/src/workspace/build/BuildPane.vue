@@ -15,7 +15,7 @@ import PublishForm from '../market/PublishForm.vue';
 import { EMPTY_ALONE, marketUi } from '../market/market.ts';
 import { generateGrowing, growUi } from './grow_acts.ts';
 import { NAME_MAX, slotGroups, subsectorWords } from './sectors.ts';
-import { build, choiceLine, plural, settingRows } from './state.ts';
+import { build, choiceLine, JOB_HOLD, plural, settingRows } from './state.ts';
 
 const props = defineProps<{
     mode: 'empty' | 'removed' | 'many';
@@ -33,6 +33,8 @@ const filled = computed(() => count.value.chart.length + count.value.yours.lengt
 const canRestore = computed(() => restorable(props.keys));
 const chartRow = computed(() => (props.mode === 'removed' ? truthAt(one.value) : null));
 const busy = computed(() => build.rolling !== '' || build.job !== null);
+/** The job, or a stand-in of the same shape while none runs: the progress box keeps its size hidden. */
+const shownJob = computed(() => build.job ?? { label: '', total: 0, done: 0, failed: [] as string[], state: 'running' as const });
 /** The list reads in hex order, whatever order the hexes were picked in. */
 const rows = computed(() => [...props.keys].sort().slice(0, 200).map((key) => {
     const place = parseHexKey(key);
@@ -74,18 +76,6 @@ function generate(): void {
 
 <template>
   <div class="build-pane" :data-span="span" :data-mode="mode">
-    <!-- Laid over the top of the pane from the frame of the click, so nothing under it moves when it comes or goes. -->
-    <div v-if="build.job" class="build-prog" role="status" data-build-job>
-      <div class="build-prog-line">
-        <BuildSpin :size="14" />
-        <b>{{ build.job.label }}</b>
-        <span>{{ build.job.done }} of {{ build.job.total }}<template v-if="build.job.failed.length"> · {{ build.job.failed.length }} failed</template></span>
-        <button v-if="growUi.undoRunning" type="button" class="ui-btn" data-grow-undo title="Stops the job and removes the new sectors and every system generated in them" @click="growUi.undoRunning()">Undo</button>
-        <button type="button" class="ui-btn" :disabled="build.job.state !== 'running'" @click="stopBuild()">{{ build.job.state === 'running' ? 'Stop' : 'Stopping…' }}<kbd class="build-key">X</kbd></button>
-      </div>
-      <div class="build-prog-bar"><i :style="{ width: (build.job.total ? 100 * build.job.done / build.job.total : 0) + '%' }"></i></div>
-    </div>
-
     <!-- A removed chart system goes in as a deleted hex; an empty hex alone has nothing to publish. -->
     <PublishForm v-if="marketUi.open && mode !== 'empty'" :keys="keys" />
 
@@ -138,6 +128,7 @@ function generate(): void {
             class="ui-btn is-primary build-big"
             data-build-first
             :disabled="busy"
+            :title="build.job ? JOB_HOLD : undefined"
             @click="restoreHexes(keys)"
           >
             <Icon name="rotate-left" :size="13" />Restore to the chart
@@ -149,6 +140,7 @@ function generate(): void {
             :class="{ 'is-primary': mode !== 'removed', 'is-grow': slots.length > 0 }"
             :data-build-first="mode !== 'removed' ? '' : undefined"
             :disabled="busy"
+            :title="build.job ? JOB_HOLD : undefined"
             :aria-busy="build.rolling || build.job || growUi.busy ? 'true' : undefined"
             @click="generate"
           >
@@ -166,17 +158,33 @@ function generate(): void {
             data-command="build-blank"
             :disabled="busy || edit.opening"
             :aria-busy="edit.opening ? 'true' : undefined"
-            title="Creates an empty system and opens it in the designer. It has no stars or worlds, and nothing is rolled"
+            :title="build.job ? JOB_HOLD : 'Creates an empty system and opens it in the designer. It has no stars or worlds, and nothing is rolled'"
             @click="openBlank(one)"
           >
             <Icon name="plus" :size="13" />{{ edit.opening ? 'Creating…' : 'Blank system' }}
           </button>
           <p v-if="mode === 'many' && count.empty.length === 0" class="build-fine">None of the selected hexes are empty.</p>
         </div>
-        <p class="build-with">
-          <Icon name="sliders" :size="12" />{{ choiceLine(build.choice) }} · this universe's settings ·
-          <button type="button" class="build-link" :disabled="busy" @click="build.sheetOpen = true">Change…</button>
-        </p>
+        <!--
+          Under the Generate button, the settings line and the job's progress share one place: the taller of the two sets
+          its height, so nothing moves when a job starts or ends, and the tally above stays in view.
+        -->
+        <div class="build-slot">
+          <p class="build-with" :class="{ 'is-hidden': build.job }" :aria-hidden="build.job ? 'true' : undefined">
+            <Icon name="sliders" :size="12" />{{ choiceLine(build.choice) }} · this universe's settings ·
+            <button type="button" class="build-link" :disabled="busy" @click="build.sheetOpen = true">Change…</button>
+          </p>
+          <div class="build-prog" :class="{ 'is-hidden': !build.job }" :role="build.job ? 'status' : undefined" :aria-hidden="build.job ? undefined : 'true'" :data-build-job="build.job ? '' : undefined">
+            <div class="build-prog-line">
+              <BuildSpin :size="14" />
+              <b>{{ shownJob.done }} of {{ shownJob.total }}</b>
+              <span><template v-if="shownJob.failed.length">{{ shownJob.failed.length }} failed · </template>{{ shownJob.state === 'running' ? 'generating' : 'stopping' }}</span>
+              <button v-if="growUi.undoRunning" type="button" class="ui-btn" data-grow-undo title="Stops the job and removes the new sectors and every system generated in them" @click="growUi.undoRunning()">Undo</button>
+              <button type="button" class="ui-btn" :disabled="shownJob.state !== 'running'" @click="stopBuild()">{{ shownJob.state === 'running' ? 'Stop' : 'Stopping…' }}<kbd class="build-key">X</kbd></button>
+            </div>
+            <div class="build-prog-bar"><i :style="{ width: (shownJob.total ? 100 * shownJob.done / shownJob.total : 0) + '%' }"></i></div>
+          </div>
+        </div>
         <p v-if="mode === 'removed' && chartRow" class="build-with">Chart: {{ chartRow.name || one }} · <code>{{ chartRow.uwp }}</code></p>
       </div>
       <p v-if="growUi.error && slots.length" class="build-error" role="alert">{{ growUi.error }}</p>
@@ -184,13 +192,13 @@ function generate(): void {
       <p v-else-if="mode === 'empty' && edit.error && edit.hexKey === one" class="build-error" role="alert">{{ edit.error }}</p>
 
       <div v-if="mode === 'many'" class="build-acts build-more">
-        <button v-if="filled > 0" type="button" class="ui-btn" :disabled="busy" title="Choose an engine, and then select “Regenerate them too”" @click="build.sheetOpen = true">
+        <button v-if="filled > 0" type="button" class="ui-btn" :disabled="busy" :title="build.job ? JOB_HOLD : 'Choose an engine, and then select “Regenerate them too”'" @click="build.sheetOpen = true">
           <Icon name="wand-magic-sparkles" :size="13" />Regenerate the {{ plural(filled, 'system', 'systems') }}…
         </button>
-        <button v-if="canRestore.length > 0" type="button" class="ui-btn" :disabled="busy" @click="restoreHexes(keys)">
+        <button v-if="canRestore.length > 0" type="button" class="ui-btn" :disabled="busy" :title="build.job ? JOB_HOLD : undefined" @click="restoreHexes(keys)">
           <Icon name="rotate-left" :size="13" />Restore {{ canRestore.length }} to the chart
         </button>
-        <button v-if="filled > 0" type="button" class="ui-btn is-danger" :disabled="busy" @click="removeHexes(keys)">
+        <button v-if="filled > 0" type="button" class="ui-btn is-danger" :disabled="busy" :title="build.job ? JOB_HOLD : undefined" @click="removeHexes(keys)">
           <Icon name="trash" :size="13" />Remove the {{ plural(filled, 'system', 'systems') }}
         </button>
       </div>
@@ -379,7 +387,7 @@ function generate(): void {
   align-items: start;
 }
 
-.build-pane[data-mode="many"]:is([data-span="half"], [data-span="full"]) > :is(.build-prog, .build-sheet, .mk-form) {
+.build-pane[data-mode="many"]:is([data-span="half"], [data-span="full"]) > :is(.build-sheet, .mk-form) {
   grid-column: 1 / -1;
 }
 
@@ -522,17 +530,22 @@ function generate(): void {
   cursor: progress;
 }
 
-/* Over the pane's top, not in its flow: what is under it keeps its place while the job runs. */
+/* One place, two contents: the hidden one still takes its room, so the slot's height never changes. */
+.build-slot {
+  display: grid;
+}
+
+.build-slot > * {
+  grid-area: 1 / 1;
+  min-width: 0;
+}
+
+.build-slot > .is-hidden {
+  visibility: hidden;
+}
+
 .build-prog {
-  position: absolute;
-  top: 0;
-  right: 0;
-  left: 0;
-  z-index: 3;
-  padding: 9px 16px 11px;
-  border-bottom: 1px solid var(--signal);
-  background: var(--bg-1);
-  box-shadow: var(--shadow-chrome);
+  margin-top: 10px;
 }
 
 .build-prog-line {

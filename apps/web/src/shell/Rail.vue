@@ -10,7 +10,7 @@
  * session is known it is the signed-out button.
  */
 import { computed, nextTick, onMounted, ref } from 'vue';
-import { session } from '../account/session.ts';
+import { loadSession, session } from '../account/session.ts';
 import Icon from '../design/Icon.vue';
 import { displayName, initials } from '../workspace/account.ts';
 import { commands } from './registry.ts';
@@ -44,6 +44,15 @@ defineExpose({
 
 const expanded = ref(false);
 const ready = ref(0);
+/** False until /api/me has answered. A signed-in person must not see Campaign and Build switched off first. */
+const sessionKnown = ref(session.user !== null);
+
+/** What the two items do today, and the step that unlocks them. */
+const CAMPAIGN_LOCK = 'Campaign: sign in to keep records, a party, and a journal.';
+const BUILD_LOCK = 'Build: sign in to generate systems and sectors on your map.';
+
+/** Signed out, and we know it: Campaign and Build stay in the list, switched off. The account command opens the sign-in card. */
+const lockedGuest = computed(() => sessionKnown.value && session.user === null && has('account'));
 
 function findCommand(id: string) {
     void ready.value;
@@ -78,6 +87,7 @@ function hint(id: string, label: string): string {
 onMounted(() => {
     // Commands register in the parents' mounted hooks, which run after this one.
     void nextTick(() => { ready.value += 1; });
+    void loadSession().then(() => { sessionKnown.value = true; });
 });
 </script>
 
@@ -114,26 +124,30 @@ onMounted(() => {
           <span class="rail-label">System</span>
         </button>
         <button
-          v-if="has('campaign')"
+          v-if="lockedGuest || has('campaign')"
           ref="campaignButton"
           type="button"
           class="rail-item"
-          aria-label="Campaign"
-          title="Campaign"
-          :aria-expanded="campaignOpen ? 'true' : 'false'"
-          @click="run('campaign')"
+          :class="{ 'is-locked': lockedGuest }"
+          :aria-label="lockedGuest ? CAMPAIGN_LOCK : 'Campaign'"
+          :title="lockedGuest ? CAMPAIGN_LOCK : 'Campaign'"
+          :aria-disabled="lockedGuest ? 'true' : undefined"
+          :aria-expanded="lockedGuest ? undefined : (campaignOpen ? 'true' : 'false')"
+          @click="lockedGuest ? run('account') : run('campaign')"
         >
           <Icon name="book-sparkles" :size="20" />
           <span class="rail-label">Campaign</span>
         </button>
         <button
-          v-if="buildOffered"
+          v-if="lockedGuest || buildOffered"
           type="button"
           class="rail-item"
-          aria-label="Build"
-          :title="hint('build', buildOn ? 'Build: on' : 'Build: generate and remove systems on your map')"
-          :aria-pressed="buildOn ? 'true' : 'false'"
-          @click="run('build')"
+          :class="{ 'is-locked': lockedGuest }"
+          :aria-label="lockedGuest ? BUILD_LOCK : 'Build'"
+          :title="lockedGuest ? BUILD_LOCK : hint('build', buildOn ? 'Build: on' : 'Build: generate and remove systems on your map')"
+          :aria-disabled="lockedGuest ? 'true' : undefined"
+          :aria-pressed="lockedGuest ? undefined : (buildOn ? 'true' : 'false')"
+          @click="lockedGuest ? run('account') : run('build')"
         >
           <Icon name="draw-polygon" :size="20" />
           <span class="rail-label">Build</span>
@@ -230,12 +244,13 @@ onMounted(() => {
   transition: background var(--t-fast) var(--ease-out), color var(--t-fast) var(--ease-out);
 }
 
-.rail-item:disabled {
+.rail-item:disabled,
+.rail-item.is-locked {
   opacity: 0.35;
   cursor: default;
 }
 
-.rail-item:not(:disabled):hover {
+.rail-item:not(:disabled):not(.is-locked):hover {
   background: var(--rail-hover);
   color: var(--text-0);
 }

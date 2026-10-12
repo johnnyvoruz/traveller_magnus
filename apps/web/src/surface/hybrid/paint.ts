@@ -4,12 +4,13 @@
  * craters. Pure pixels, so it runs in the surface worker. Off the net is transparent.
  * The day and night overlay is a separate layer (overlay.ts); this image never changes with time.
  */
+import { edgeTemp } from '../ice_edge.ts';
 import { hashString, mulberry32 } from '../vanilla/map.ts';
 import { LIQUIDS } from '../profile.ts';
 import { terrainRgb, type RGB } from './codes.ts';
 import { fieldBuild, sheetPoint, type Field, type FieldBuild, type SheetLayout } from './field.ts';
 import type { V3 } from './grid.ts';
-import { classify, type HybridModel } from './model.ts';
+import { classify, type HybridBuild, type HybridModel } from './model.ts';
 import { UNKNOWN_LIQUID } from './liquids.ts';
 
 const R2D = 180 / Math.PI;
@@ -65,10 +66,10 @@ export function paintHybrid(model: HybridModel, layout: SheetLayout): Uint8Clamp
 
 /**
  * The sheet in steps of about budgetMs (for the page when there is no worker): the prepare
- * steps one per turn (modelPreparation), the model, the field rows, the height rows, the
- * colour rows, then coasts and accents.
+ * steps one per turn (modelPreparation), one model slice per turn when a build is passed,
+ * the field rows, the height rows, the colour rows, then coasts and accents.
  */
-export function createHybridPaint(modelOf: () => HybridModel, layout: SheetLayout, clock: () => number, budgetMs: number, prepare: readonly (() => void)[] = []): HybridPaintJob {
+export function createHybridPaint(modelOf: () => HybridModel, layout: SheetLayout, clock: () => number, budgetMs: number, prepare: readonly (() => void)[] = [], modelBuild: HybridBuild | null = null): HybridPaintJob {
     const { width: W, height: H } = layout;
     const out = new Uint8ClampedArray(W * H * 4);
     let model: HybridModel | null = null;
@@ -76,6 +77,7 @@ export function createHybridPaint(modelOf: () => HybridModel, layout: SheetLayou
     let h: Float32Array | null = null;
     let build: FieldBuild | null = null;
     let prepared = 0;
+    let modelReady = false;
     let phase = 0;
     let row = 0;
     let tasks = 0;
@@ -89,9 +91,22 @@ export function createHybridPaint(modelOf: () => HybridModel, layout: SheetLayou
                 prepare[prepared]();
                 prepared += 1;
                 if (spent() || prepared < prepare.length) break;
+            } else if (phase === 0 && modelBuild && !modelReady) {
+                modelReady = modelBuild.step();
+                break;
             } else if (phase === 0) {
-                model = modelOf();
+                model = modelBuild ? modelBuild.model() : modelOf();
+                if (modelBuild) {
+                    phase = 0.25;
+                    break;
+                }
                 build = fieldBuild(layout, model.grid.n);
+                field = build.field;
+                h = new Float32Array(W * H);
+                phase = 0.5;
+                if (spent()) break;
+            } else if (phase === 0.25) {
+                build = fieldBuild(layout, (model as HybridModel).grid.n);
                 field = build.field;
                 h = new Float32Array(W * H);
                 phase = 0.5;
@@ -157,7 +172,9 @@ function paintRow(out: Uint8ClampedArray, field: Field, model: HybridModel, h: F
         const T = model.tempAt(p, e);
         const q = k * 3;
         const m = field.bw[q] * hexes[field.bl[q]].moisture + field.bw[q + 1] * hexes[field.bl[q + 1]].moisture + field.bw[q + 2] * hexes[field.bl[q + 2]].moisture;
-        const pc = classify(model, water, T, e, m, lat, depth).terrain;
+        const hasCoast = model.seaShare > 0.02 && model.seaShare < 0.98;
+        const iceT = edgeTemp(T, model.meltK, model.iceNoise(p), water, e, hasCoast, model.layout);
+        const pc = classify(model, water, T, e, m, lat, depth, iceT).terrain;
         let c: RGB;
         if (water) {
             const t = Math.pow(smooth(0, 0.45, depth), 0.7);

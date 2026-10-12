@@ -964,7 +964,7 @@ test('a grow error is the server message, and a taken slot lands that sector', a
     map.close();
 
     const taken = fake((call) => {
-        if (call.url.endsWith('/generate')) return fail(409, 'That slot is in use. Choose another slot.', { current: madeSector({ name: 'Occupied', rev: 6 }) });
+        if (call.url.endsWith('/generate')) return fail(409, 'That slot is in use. Choose another slot.', { code: 'slot_in_use', current: madeSector({ name: 'Occupied', rev: 6 }) });
         throw new Error('unexpected ' + call.url);
     });
     const held = open(taken, clock());
@@ -1047,6 +1047,63 @@ test('generate reports a start before the first answer, and the job does not nam
     assert.equal(Object.hasOwn(seen[0], 'landed'), false);
     assert.equal(result.progress.done, 2);
     assert.equal(Object.hasOwn(result.progress, 'landed'), false);
+    map.close();
+});
+
+test('an old generate Undo sends the rev that generate wrote, and a later Keep stays', async () => {
+    const generated = row({ rev: 1, entry: chart({ name: 'Flacourtia' }) });
+    const kept = row({ rev: 2, treeHash: HASH2, entry: chart({ name: 'F later edit', tree: HASH2 }) });
+    let revertBody = null;
+    const fetchImpl = fake((call) => {
+        if (call.url.includes('/hexes?')) return json({ items: [kept], nextCursor: null });
+        if (call.url.endsWith('/generate')) return json({ rows: [generated], skipped: [] });
+        if (call.url.endsWith('/form')) return json({ hash: HASH, form: { edition: 'MgT2E', sections: [{ id: 'name', label: 'Name', fields: [{ id: 'system.name', label: 'System Name', kind: 'text', permission: 'type', value: 'Flacourtia', options: [] }] }] } });
+        if (call.url.endsWith('/draft')) return json({ form: { edition: 'MgT2E', sections: [{ id: 'name', label: 'Name', fields: [{ id: 'system.name', label: 'System Name', kind: 'text', permission: 'type', value: 'F later edit', options: [] }] }] }, changed: [], messages: [] });
+        if (call.url.endsWith('/keep')) return json(kept);
+        if (call.url.endsWith('/revert')) {
+            revertBody = call.body;
+            return fail(409, 'This hex changed. Reload it, then try again.', { code: 'hex_changed', current: kept });
+        }
+        throw new Error('unexpected ' + call.url);
+    });
+    const map = open(fetchImpl, clock());
+    const made = await map.generate({ hexKeys: [KEY], edition: 'MgT2E', generator: 'top-down', roll: 0, filledToo: true }).finished;
+    const draft = await map.openDraft(KEY);
+    draft.set('system.name', 'F later edit');
+    await draft.keep();
+    const outcome = await map.undo(made.undo);
+    assert.deepEqual(revertBody, { toRev: 0, baseRev: 1 });
+    assert.deepEqual(outcome, {
+        id: made.undo.id,
+        restored: 0,
+        left: [KEY],
+        message: 'This hex changed. Reload it, then try again.',
+    });
+    assert.equal(map.row(KEY).rev, 2);
+    assert.equal(map.row(KEY).entry.name, 'F later edit');
+    map.close();
+});
+
+test('a job Undo that leaves a moved hex reports the count and the key', async () => {
+    const fetchImpl = fake((call) => {
+        if (call.url.includes('/hexes?')) return json({ items: [row({ rev: 4, entry: chart({ name: 'F edit survives' }) })], nextCursor: null });
+        if (call.url.endsWith('/generate')) return json({ jobId: 'job-1' });
+        if (call.url.includes('/jobs/') && call.method === 'GET') return json(doneJob({ total: 2, done: 2 }));
+        if (call.url.endsWith('/undo')) return json({ restored: 1, conflicts: [KEY] });
+        throw new Error('unexpected ' + call.url);
+    });
+    const map = open(fetchImpl, clock());
+    const made = await map.generate({
+        hexKeys: [KEY, OTHER],
+        edition: 'MgT2E',
+        generator: 'top-down',
+        roll: 0,
+        filledToo: true,
+    }).finished;
+    const outcome = await map.undo(made.undo);
+    assert.deepEqual(outcome, { id: made.undo.id, restored: 1, left: [KEY], message: '' });
+    assert.equal(map.row(KEY).entry.name, 'F edit survives');
+    assert.equal(await map.undo(made.undo), null);
     map.close();
 });
 

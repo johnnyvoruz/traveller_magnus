@@ -10,6 +10,7 @@ import { computed, ref, watch } from 'vue';
 import type { FormField, FormMessage, FormValue } from '@voyage/shared';
 import Icon from '../../design/Icon.vue';
 import { numberValue, type FieldMark } from './edit.ts';
+import { lookupWords } from './hand.ts';
 
 const props = defineProps<{
     field: FormField;
@@ -25,6 +26,8 @@ const props = defineProps<{
     busy?: boolean;
     /** Goes up when the form was replaced under the referee: the box drops what was being typed and shows the form's value. */
     resync?: number;
+    /** The unit beside a number box, as the contract names it ("solar masses"). */
+    unit?: string;
 }>();
 
 const emit = defineEmits<{ set: [value: FormValue]; roll: [] }>();
@@ -66,6 +69,9 @@ function onBlur(): void {
     text.value = props.field.value === null ? '' : String(props.field.value);
 }
 
+/** A number nobody has typed shows the server's lookup, muted and tagged, until one is typed; clearing the box brings it back. */
+const lookup = computed(() => (props.field.kind === 'number' && props.field.value === null && typeof props.field.lookup === 'number' && text.value === '' ? lookupWords(props.field.lookup) : ''));
+
 const whyLines = computed(() => props.why.split(/\r?\n/).map((line) => line.trim()).filter((line) => line !== ''));
 const whyRest = computed(() => whyLines.value.slice(1).join('\n'));
 const changed = computed(() => props.mark !== 'none' && props.was !== undefined && props.was !== props.field.value);
@@ -102,10 +108,13 @@ const changed = computed(() => props.mark !== 'none' && props.was !== undefined 
         autocomplete="off"
         spellcheck="false"
         :value="text"
+        :placeholder="lookup || undefined"
+        :aria-describedby="lookup ? inputId + '-lookup' : undefined"
         @focus="focused = true"
         @blur="onBlur"
         @input="onText"
       />
+      <span v-if="unit" class="ef-unit">{{ unit }}</span>
       <span v-if="field.permission === 'roll' && locked" class="ef-locked" title="You typed this value, so rolling the system again doesn’t change it">Locked</span>
       <button
         v-if="field.permission === 'roll'"
@@ -120,6 +129,7 @@ const changed = computed(() => props.mark !== 'none' && props.was !== undefined 
       </button>
     </div>
     <p v-if="changed" class="ef-was">was <s>{{ said(was) || 'empty' }}</s></p>
+    <p v-if="lookup" :id="inputId + '-lookup'" class="ef-was"><span class="ef-lookup">Looked up</span> To use another value, type it.</p>
     <!-- The engine's own words. A long trace is folded to its first line, so one change does not bury the form. -->
     <p v-if="why && whyLines.length <= 3" class="ef-why">{{ why }}</p>
     <details v-else-if="why" class="ef-why is-long">
@@ -134,7 +144,8 @@ const changed = computed(() => props.mark !== 'none' && props.was !== undefined 
 /* A row: the label at the left, the control at the right; what is said about it underneath, full width. */
 .ef {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, auto);
+  /* The label keeps room to be read however wide the control (a number with its unit) asks to be. */
+  grid-template-columns: minmax(88px, 1fr) minmax(0, auto);
   gap: 2px 12px;
   align-items: center;
   padding: 6px 0 7px;
@@ -190,7 +201,7 @@ const changed = computed(() => props.mark !== 'none' && props.was !== undefined 
 }
 
 .ef-box.is-number {
-  width: 128px;
+  width: 112px;
   font-family: var(--font-code);
   font-variant-numeric: var(--tabular);
   text-align: right;
@@ -286,6 +297,30 @@ select.ef-box {
 
 .ef-roll {
   flex: 0 0 auto;
+}
+
+/* A looked-up number: the placeholder is muted, and a quiet tag says it was not typed. */
+.ef-box::placeholder {
+  color: var(--text-muted);
+  opacity: 1;
+}
+
+.ef-unit {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font: 400 12px/1.3 var(--font-text);
+}
+
+.ef-lookup {
+  display: inline-block;
+  margin-right: 4px;
+  padding: 0 6px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-pill);
+  color: var(--text-muted);
+  font: 700 10px/1.5 var(--font-text);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .ef-was,

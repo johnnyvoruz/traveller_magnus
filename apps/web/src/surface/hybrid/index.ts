@@ -12,9 +12,26 @@ import { paintHybrid } from './paint.ts';
 
 const models = new Map<string, HybridModel>();
 
+function modelKey(world: HybridWorld): string {
+    return JSON.stringify(world);
+}
+
+/** A model already built for this world, or null. Does not build one. */
+export function cachedHybridModel(world: HybridWorld): HybridModel | null {
+    return models.get(modelKey(world)) ?? null;
+}
+
+/** Keep a model the page built in slices, so the next ask is the same object. */
+export function rememberHybridModel(world: HybridWorld, model: HybridModel): void {
+    const key = modelKey(world);
+    if (models.get(key) === model) return;
+    if (!models.has(key) && models.size > 12) models.clear();
+    models.set(key, model);
+}
+
 /** The model for a world, memoised by its data (the page asks often). */
 export function hybridModel(world: HybridWorld): HybridModel {
-    const key = JSON.stringify(world);
+    const key = modelKey(world);
     let model = models.get(key);
     if (!model) {
         model = buildHybridModel(world);

@@ -14,6 +14,7 @@ import { commands, registerCommand } from '../shell/registry.ts';
 import { session } from '../account/session.ts';
 import { campaign } from '../campaign/store.ts';
 import { createRecord } from '../workspace/actions.ts';
+import { build } from '../workspace/build/state.ts';
 import { handedQuery } from '../workspace/list_state.ts';
 import { campaignMatches } from '../workspace/omni_campaign.ts';
 import { offerSystem, picking } from '../workspace/pick.ts';
@@ -48,14 +49,43 @@ let generation = 0;
 let unregister: (() => void) | null = null;
 const cache = new Map<string, SearchItem[]>();
 
+/** Signed out, the rail shows these switched off. The palette lists only what can run. */
+const SIGNED_OUT_HIDDEN = new Set(['campaign', 'build']);
+
+function commandListed(command: { id: string; runnable?: () => boolean }): boolean {
+    if (command.id === 'search') return false;
+    if (session.user === null && SIGNED_OUT_HIDDEN.has(command.id)) return false;
+    return command.runnable ? command.runnable() : true;
+}
+
 function commandResults(): OmniResult[] {
     const out: OmniResult[] = [];
     for (const command of commands()) {
-        if (command.id === 'search') continue;
+        if (!commandListed(command)) continue;
         out.push({ kind: 'command', name: command.name, detail: 'Command', id: command.id });
     }
     return out;
 }
+
+/**
+ * Re-reads every command while the palette can be open. `commands()` is a plain array, so the
+ * stamp also reads the fields that register or unregister commands (the session, the campaign,
+ * whether Build is on) and the route, which is what moves the one selected hex.
+ */
+const commandStamp = computed(() => {
+    const bits = [
+        session.user ? '1' : '0',
+        campaign.status,
+        campaign.universeId ?? '',
+        build.on ? '1' : '0',
+        route.fullPath,
+    ];
+    for (const command of commands()) {
+        if (command.id === 'search') continue;
+        bits.push(command.id + (command.runnable ? (command.runnable() ? '1' : '0') : 'a'));
+    }
+    return bits.join('\n');
+});
 
 function remember(key: string, items: SearchItem[]): void {
     cache.delete(key);
@@ -89,7 +119,7 @@ async function search(): Promise<void> {
     if (text.trim() === '') {
         if (controller) controller.abort();
         results.value = localCommands;
-        note.value = '';
+        note.value = localCommands.length === 0 ? 'Nothing can run right now.' : '';
         active.value = -1;
         open.value = true;
         return;
@@ -109,7 +139,6 @@ async function search(): Promise<void> {
         failed = true;
     }
     if (ticket !== generation) return;
-    note.value = failed ? 'Search is unavailable.' : '';
     const worlds = rankResults(text, [...systems, ...sectors, ...localCommands]);
     // The campaign group leads, at most five, then a row for the rest (design §6).
     const mine: OmniResult[] = [];
@@ -118,7 +147,11 @@ async function search(): Promise<void> {
         mine.push(...found.items);
         if (found.total > found.items.length) mine.push({ kind: 'more', name: 'All ' + found.total + ' matches', detail: 'Open the list with this search', query: text });
     }
-    results.value = [...mine, ...worlds];
+    const listed = [...mine, ...worlds];
+    results.value = listed;
+    if (failed) note.value = 'Search is unavailable.';
+    else if (listed.length === 0) note.value = 'No results match your search.';
+    else note.value = '';
     active.value = -1;
     action.value = 0;
     open.value = true;
@@ -179,7 +212,7 @@ function openResult(index: number): void {
         void router.push({ path: '/s/' + encodeURIComponent(result.sector), query: withQuery(route.query, {}) });
     } else {
         const command = commands().find((item) => item.id === result.id);
-        if (command) command.run();
+        if (command && commandListed(command)) command.run();
     }
     closePopup();
     inputEl.value?.blur();
@@ -221,6 +254,10 @@ function onKeydown(event: KeyboardEvent): void {
 }
 
 watch(open, (value) => { emit('open', value); });
+
+watch(commandStamp, () => {
+    if (open.value) void search();
+});
 
 onMounted(() => {
     unregister = registerCommand({

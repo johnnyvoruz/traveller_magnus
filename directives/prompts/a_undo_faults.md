@@ -74,3 +74,7 @@ Questions for Johnny written out in full, recommended answer first. After each
 meaningful step append one line under Progress: "done: X. next: Y."
 
 ## Progress
+done: the shots are an old Undo after a later Keep, and a many-hex Undo that leaves one edited hex. next: reproduce both on a private server, then fix the store.
+done: both faults reproduced on a private server. The old store sent the live rev and dropped the job's conflicts. next: the store sends the act rev and returns the report.
+done: the store refuses a stale one-hex Undo with the server sentence and reports a partial job Undo. Tests cover both. next: the after-run, the gates, the note, and the report.
+done: the after-run matches the contract. Gates are in. Four failing tests are Lane C surface files. next: stop.

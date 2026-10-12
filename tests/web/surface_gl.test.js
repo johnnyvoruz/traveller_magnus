@@ -41,7 +41,22 @@ test('orbit disc shaders match js/planet_gl.js', () => {
         .replaceAll('${STATS_W}', '128');
     assert.equal(STATS_FRAG, stats);
     const bake = grab(text, 'BAKE_FRAG').replaceAll('${NOISE}', noise).replaceAll('${FIELDS}', fields);
-    assert.equal(BAKE_FRAG, bake);
+    // The cap edge is the one departure from js/planet_gl.js. Strip it and the rest must match.
+    const capBlock = [
+        '    // The melting line stays. This only moves the boundary, and only near it.',
+        '    float capNear = smoothstep(10.0, -2.0, localC) * (1.0 - smoothstep(-18.0, -30.0, localC));',
+        '    float capAlong = snoise(d * 2.6 + uOffset) * 9.0;',
+        '    if (uSea < 0.98 && h < uSea) capAlong -= 10.0;',
+        '    else if (h >= uSea) capAlong += 4.0 + 8.0 * clamp((h - uSea) / max(0.001, 1.0 - uSea), 0.0, 1.0);',
+        '    float capC = localC - capAlong * capNear;',
+        '',
+    ].join('\n');
+    assert.ok(BAKE_FRAG.includes(capBlock), 'cap edge block');
+    const bakeWithoutCap = BAKE_FRAG
+        .replace(capBlock, '')
+        .replaceAll('smoothstep(-6.0, -14.0, capC)', 'smoothstep(-6.0, -14.0, localC)')
+        .replaceAll('smoothstep(-8.0, -16.0, capC)', 'smoothstep(-8.0, -16.0, localC)');
+    assert.equal(bakeWithoutCap, bake);
     assert.equal(DRAW_FRAG, grab(text, 'DRAW_FRAG'));
     for (const call of [
         'smoothstep(reach, 1.0 + uHalo * 0.45, d)',
@@ -56,8 +71,8 @@ test('orbit disc shaders match js/planet_gl.js', () => {
     for (const call of [
         'smoothstep(0.35, 0.0, pc.x)',
         'smoothstep(uStorm.w, uStorm.w * 0.35, r)',
-        'smoothstep(-6.0, -14.0, localC)',
-        'smoothstep(-8.0, -16.0, localC)',
+        'smoothstep(-6.0, -14.0, capC)',
+        'smoothstep(-8.0, -16.0, capC)',
         'smoothstep(uSea, uSea - 0.05, h)',
         'smoothstep(0.05, 0.0, hs.x)',
         'smoothstep(0.08, 0.0, e)',

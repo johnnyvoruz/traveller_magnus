@@ -35,6 +35,17 @@ export type JobProgress = {
 
 export type UndoToken = { id: string };
 
+/**
+ * An Undo that did not put everything back. `left` is the hex keys still as they were.
+ * `message` is the server's sentence when a hex had moved, or empty when a job listed conflicts.
+ */
+export type UndoOutcome = {
+    id: string;
+    restored: number;
+    left: string[];
+    message: string;
+};
+
 export type GenerateHandle = {
     stop(): void;
     finished: Promise<{ undo: UndoToken; progress: JobProgress }>;
