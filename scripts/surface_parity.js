@@ -221,9 +221,9 @@ const MAP_NEGATIVE_MISMATCHES = 637249;
 
 /** GL cubes and tiles measured with the cap edge on this GPU. Ice and Gas stay at 0. */
 const GL_CAPS = {
-    Ocean: { cube32: 40, cube128: 706, mip1: 249, cube512: 11311, tile: 518 },
-    Dry: { cube32: 968, cube128: 15110, mip1: 4181, tile: 7984 },
-    Ringed: { cube32: 307, cube128: 4680, mip1: 1374, tile: 2367 },
+    Ocean: { cube32: 184, cube128: 2543, mip1: 932, cube512: 40686, tile: 821 },
+    Dry: { cube32: 1559, cube128: 25127, mip1: 7831, tile: 11925 },
+    Ringed: { cube32: 691, cube128: 10658, mip1: 3556, tile: 4401 },
 };
 const GL_CAP_NAMES = {
     Ocean: new Set(['cube32', 'cube128', 'mip1', 'cube512', 'tile']),
@@ -231,19 +231,19 @@ const GL_CAP_NAMES = {
     Ringed: new Set(['cube32', 'cube128', 'mip1', 'tile']),
 };
 const GL_SHADE_CAPS = {
-    'Ocean tilt 0': 417,
-    'Ocean tilt 90': 62,
-    'Ocean tilt 120': 70,
-    'Ocean sweep 0': 518,
-    'Ocean sweep 0.5': 1123,
-    'Ocean eclipse': 411,
-    'Ocean light': 641,
-    'Ocean radius 2.5': 0,
-    'Ocean radius 1100': 90793,
-    'Ringed phase 0.75': 2367,
-    'Ringed phase 0': 2367,
+    'Ocean tilt 0': 525,
+    'Ocean tilt 90': 144,
+    'Ocean tilt 120': 103,
+    'Ocean sweep 0': 821,
+    'Ocean sweep 0.5': 1456,
+    'Ocean eclipse': 286,
+    'Ocean light': 1320,
+    'Ocean radius 2.5': 1,
+    'Ocean radius 1100': 123370,
+    'Ringed phase 0.75': 4401,
+    'Ringed phase 0': 4401,
 };
-const GL_NEGATIVE_CAP = { cube32: 39, cube128: 534, mip1: 160 };
+const GL_NEGATIVE_CAP = { cube32: 149, cube128: 2389, mip1: 806 };
 const GL_NEGATIVE_NAMES = new Set(['cube32', 'cube128', 'mip1']);
 
 function glExitProblems(summary) {

@@ -248,11 +248,22 @@ void main() {
         ? uMeanC + uSpread * 0.6 * d.x - e * 28.0
         : uMeanC + (uSpread / 40.0) * (15.0 - 45.0 * sinLat * sinLat) - e * 28.0;
     // The melting line stays. This only moves the boundary, and only near it.
+    // Four simplex scales. The sheet paints with value noise instead, same
+    // kind of reach: several scales, a south-pole offset, and a fringe.
     float capNear = smoothstep(10.0, -2.0, localC) * (1.0 - smoothstep(-18.0, -30.0, localC));
-    float capAlong = snoise(d * 2.6 + uOffset) * 9.0;
+    vec3 q = d;
+    vec3 os = uOffset + (d.z < 0.0 ? vec3(19.2, 7.1, 3.4) : vec3(0.0));
+    float nBroad = snoise(q * 1.1 + os);
+    float nMid = snoise(q * 2.7 + os.yxz);
+    float nFine = snoise(q * 6.4 + os.zyx);
+    float nSpec = snoise(q * 13.0 + os.xzy);
+    float ragged = clamp(nBroad * 0.34 + nMid * 0.28 + nFine * 0.22 + nSpec * 0.16, -1.0, 1.0);
+    float capAlong = ragged * 9.0;
     if (uSea < 0.98 && h < uSea) capAlong -= 10.0;
     else if (h >= uSea) capAlong += 4.0 + 8.0 * clamp((h - uSea) / max(0.001, 1.0 - uSea), 0.0, 1.0);
     float capC = localC - capAlong * capNear;
+    float fringe = capNear * smoothstep(8.0, 0.0, capC) * (1.0 - smoothstep(-8.0, -18.0, capC));
+    capC -= nSpec * fringe * 6.0;
     vec3 col;
     float ocean = 0.0;
     if (h < uSea) {
@@ -261,8 +272,11 @@ void main() {
             col = mix(uLiqShallow, uLiqDeep, smoothstep(0.0, 0.12, depth));
             if (uFrozen < 0.5) {
                 float ice = smoothstep(-6.0, -14.0, capC);
-                col = mix(col, vec3(0.89, 0.93, 0.96), ice);
-                ocean = 1.0 - ice;
+                float iceAge = smoothstep(-6.0, -22.0, capC);
+                vec3 iceCol = mix(vec3(0.70, 0.82, 0.86), vec3(0.93, 0.96, 0.98), iceAge);
+                float iceCover = clamp(ice + fringe * max(nSpec, 0.0) * 0.8 - fringe * max(-nSpec, 0.0) * 0.8, 0.0, 1.0);
+                col = mix(col, iceCol, iceCover);
+                ocean = 1.0 - iceCover;
             }
         } else {
             col = mix(uRockLow, uRockHigh, 0.2 + h * 0.3);
@@ -281,7 +295,11 @@ void main() {
         }
         if (uHasLiquid > 0.5 && uFrozen < 0.5) col = mix(col, vec3(0.86, 0.8, 0.63), (1.0 - smoothstep(0.0, 0.012, e)) * step(4.0, localC) * 0.6);
         col = mix(col, uRockHigh * 0.92, smoothstep(0.35, 0.7, e) * 0.55);
-        col = mix(col, vec3(0.94, 0.955, 0.97), smoothstep(-8.0, -16.0, capC));
+        float snow = smoothstep(-8.0, -16.0, capC);
+        float snowAge = smoothstep(-8.0, -24.0, capC);
+        vec3 snowCol = mix(vec3(0.76, 0.78, 0.74), vec3(0.94, 0.955, 0.97), snowAge);
+        float snowCover = clamp(snow + fringe * max(nSpec, 0.0) * 0.8 - fringe * max(-nSpec, 0.0) * 0.8, 0.0, 1.0);
+        col = mix(col, snowCol, snowCover);
     }
     if (uIce > 0.5) col = mix(col, vec3(0.64, 0.44, 0.35), smoothstep(0.72, 0.95, ridged(d * 4.0 + uOffset, 4)) * 0.6);
     float lava = 0.0;

@@ -13,7 +13,10 @@ import { deleteEntry, nextSessionNumber, saveEntry } from '../../campaign/journa
 import Icon from '../../design/Icon.vue';
 import { atPane, paneChanges, withQuery } from '../../shell/pane.ts';
 import EditableText from '../EditableText.vue';
+import { uploads } from '../gallery_state.ts';
+import { uploadWords } from '../images.ts';
 import WhereBlock from '../WhereBlock.vue';
+import EntryGallery from './EntryGallery.vue';
 import { type BodyPart } from './body.ts';
 import { justMade } from './create.ts';
 import { parsePlayed, parseWhen } from './dates.ts';
@@ -51,7 +54,12 @@ const entry = computed((): CampaignEntry | null => {
     return found && !found.deleted ? found : null;
 });
 
-const saveState = computed((): 'saving' | 'failed' | 'saved' => (lastError.value ? 'failed' : pending.value ? 'saving' : 'saved'));
+const upload = computed(() => uploads[props.id] ?? null);
+const saveState = computed((): 'saving' | 'failed' | 'saved' => {
+    if (lastError.value || (upload.value && upload.value.stage === 'failed')) return 'failed';
+    return pending.value || upload.value ? 'saving' : 'saved';
+});
+const saveWords = computed(() => (upload.value && upload.value.stage !== 'failed' ? uploadWords(upload.value) : 'Saving…'));
 
 function write(next: CampaignEntry): void {
     if (props.readOnly) return;
@@ -250,9 +258,7 @@ watch(() => props.id, greet, { immediate: true });
     </div>
 
     <header class="rec-ident" :class="{ 'is-players': entry.visibility === 'players' }">
-        <span class="camp-glyph is-large" aria-hidden="true">
-          <Icon :name="entry.kind === 'session' ? 'calendar-star' : entry.kind === 'note' ? 'note-sticky' : entry.kind === 'handout' ? 'book-atlas' : 'radar'" :size="22" />
-        </span>
+        <EntryGallery :id="id" part="avatar" :read-only="readOnly" />
         <div class="rec-names">
           <EditableText ref="titleField" title label="Title" prompt="Add a title" :value="entry.title" :max="CAMPAIGN_LIMITS.entryTitle" :disabled="readOnly" @save="rename" />
           <p class="rec-meta">
@@ -271,7 +277,7 @@ watch(() => props.id, greet, { immediate: true });
           </p>
         </div>
         <p class="rec-save" :class="'is-' + saveState" role="status">
-          <template v-if="saveState === 'saving'">Saving…</template>
+          <template v-if="saveState === 'saving'">{{ saveWords }}</template>
           <template v-else-if="saveState === 'failed'">Not saved</template>
           <template v-else><Icon name="check" :size="12" />Saved</template>
         </p>
@@ -281,6 +287,8 @@ watch(() => props.id, greet, { immediate: true });
       <h3 class="ui-heading">Entry</h3>
       <JournalBody ref="bodyField" :value="entry.body" :disabled="readOnly" :records="campaign.records" :name-of="nameOf" @save="saveBody" @open="openPart" />
     </section>
+
+    <EntryGallery :id="id" part="strip" :read-only="readOnly" />
 
     <footer class="rec-foot">
       <span class="rec-gap"></span>
@@ -354,6 +362,7 @@ watch(() => props.id, greet, { immediate: true });
     "strip strip"
     "ident side"
     "body side"
+    "images side"
     "foot side";
   column-gap: 16px;
   align-items: start;
@@ -364,6 +373,7 @@ watch(() => props.id, greet, { immediate: true });
 .jn-entry[data-beside="yes"] .camp-strip { grid-area: strip; }
 .jn-entry[data-beside="yes"] .rec-ident { grid-area: ident; }
 .jn-entry[data-beside="yes"] .jn-body-block { grid-area: body; }
+.jn-entry[data-beside="yes"] .jn-images { grid-area: images; }
 .jn-entry[data-beside="yes"] .rec-foot { grid-area: foot; }
 .jn-entry[data-beside="yes"] .jn-side { grid-area: side; }
 
@@ -386,8 +396,9 @@ watch(() => props.id, greet, { immediate: true });
 .jn-entry[data-beside="no"] .jn-dates { order: 2; }
 .jn-entry[data-beside="no"] .where { order: 3; }
 .jn-entry[data-beside="no"] .jn-body-block { order: 4; }
-.jn-entry[data-beside="no"] .jn-mentioned { order: 5; }
-.jn-entry[data-beside="no"] .rec-foot { order: 6; }
+.jn-entry[data-beside="no"] .jn-images { order: 5; }
+.jn-entry[data-beside="no"] .jn-mentioned { order: 6; }
+.jn-entry[data-beside="no"] .rec-foot { order: 7; }
 
 .rec-ident.is-players {
   padding: 8px;

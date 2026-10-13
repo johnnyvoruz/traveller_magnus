@@ -343,7 +343,7 @@ export class MapRenderer {
         }
         this.sectorNames(on, cam, vp);
         if (tier !== 'hex' && cam.ppp >= FAR_LABEL_MIN_PPP) this.farLabels(on, cam, vp, view);
-        this.selectionOutline(cam, vp);
+        this.selectionOutline(cam, vp, tier);
         let animating = tier === 'hex' && cam.ppp >= PPP_NAMES ? this.subsectorTitles(ready, marks, cam, vp) : false;
         if (this.paintCampaign(cam, vp)) animating = true;
 
@@ -810,12 +810,24 @@ export class MapRenderer {
         for (const label of drawn) ctx.fillText(label.name, label.box.x0, label.sy);
     }
 
-    private selectionOutline(cam: Camera, vp: Viewport): void {
+    private selectionOutline(cam: Camera, vp: Viewport, tier: Tier): void {
         const selected = this.selected;
         if (!selected) return;
         let sector: DrawSector | null = null;
         for (const item of this.sectors) if (item.slug === selected.slug) sector = item;
         if (!sector) return;
+        // Zoomed out, a hex polygon is drawn after the dots and covers them. The sector border does not.
+        if (tier !== 'hex') {
+            const ctx = this.ctx;
+            ctx.beginPath();
+            ctx.strokeStyle = this.theme.chart.selected;
+            ctx.lineWidth = SELECT_STROKE;
+            const a = toScreen(cam, vp, sector.rect.x0, sector.rect.y0);
+            const b = toScreen(cam, vp, sector.rect.x1, sector.rect.y1);
+            ctx.rect(a.sx, a.sy, b.sx - a.sx, b.sy - a.sy);
+            ctx.stroke();
+            return;
+        }
         const local = parseHex(selected.hhhh);
         if (!local) return;
         const global = toGlobal(sector.x, sector.y, local.col, local.row);

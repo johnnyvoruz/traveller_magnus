@@ -86,11 +86,11 @@ Answer data: `BuilderDots` `{ cells, stamp }`. `cells` is 1,280 characters. `sta
 
 Cell order is the overview's order. `packages/generation/src/overview.ts` `sectorOverview` writes `cells[(col - 1) * 40 + (row - 1)]`, and `tools/truth/build.js` pushes that string into `overview.json`. Column is `floor(i / 40) + 1`. Row is `(i % 40) + 1`. `.` is empty. Any other character is a system. A chart UWP that starts with `.` is stored as `?` by `sectorOverview`. A held row with an empty profile is also `?`.
 
-The string is the chart's `cells` for that slug at the universe's pinned truth version, then the referee's rows. A row with `deleted` not 1 sets the cell to the first character of its UWP, or `?` when that character is missing or `.`. A removed row sets `.`. A hex with no row keeps the chart character. A sector id that starts with `~`, or a slug the overview does not list, starts as 1,280 dots and then the rows.
+The string is the chart's `cells` for that slug at the universe's pinned truth version, then the referee's rows. A row with `deleted` not 1 sets the cell to the first character of its UWP, or `?` when that character is missing or `.`. A removed row sets `.`. A hex with no row keeps the chart character. A sector id that starts with `~`, or a slug the overview does not list, starts as 1,280 dots and then the rows. A missing or unreadable `overview.json` is not that case: the server does not know the chart, so it does not answer with dots.
 
 Cost of one call: one SQL read of that sector's hex rows (`local_hex`, `deleted`, `uwp`). The response is about 1.4 KB. When the sector is a chart slug and the universe has a truth version, the first call in a Worker isolate also reads `truth/<version>/overview.json` (the live v5 file is 1,417,411 bytes) and keeps each sector's 1,280 characters for that version. A later call for the same version does not read it again.
 
-Errors: 400 `validation` `Invalid request.` for a sector id that is neither a chart slug nor an own sector id. 401 and 404 as in "Who may call".
+Errors: 400 `validation` `Invalid request.` for a sector id that is neither a chart slug nor an own sector id. 401 and 404 as in "Who may call". When the universe has a truth version and `truth/<version>/overview.json` is missing, not JSON, or not the overview shape, a request that names a chart slug is 503 `chart_unavailable`, `The chart for this version could not be read.` A page that mixes a chart slug with an own sector id fails the same way. A page of only own sector ids still answers. A slug that a readable overview simply does not list stays 1,280 dots plus the rows.
 
 ### `GET /:id/hexes/dots?sectors=a,b,c` — **on disk, unpushed**
 

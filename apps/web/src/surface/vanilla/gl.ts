@@ -722,6 +722,9 @@ export function createDiscBaker(
         });
         measureFresh(adopted.map((item) => item.world));
         const baker = requireOps();
+        // A high-tilt body keeps polling the tilt program. The startup kick can
+        // end before that program links, and this batch is the next chance.
+        if (adopted.some((item) => baker.needsTilt(item.world.profile)) && !tiltWarmed) warmTilt();
         bakeBodies(adopted.filter((item) => !baker.needsTilt(item.world.profile) || tiltWarmed).map((item) => ({ world: item.world, want: item.world.want })));
         evict();
         const sized = adopted.map((item) => ({

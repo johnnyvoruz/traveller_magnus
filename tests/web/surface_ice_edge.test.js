@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { capHasCoast, capNoise, capShiftRad, edgeTemp } from '../../apps/web/src/surface/ice_edge.ts';
+import { capDetail, capHasCoast, capNoise, capShiftRad, edgeTemp } from '../../apps/web/src/surface/ice_edge.ts';
 
 test('a cap edge is seeded, retreats over sea, and reaches over high land', () => {
     const seed = 0x51ce;
@@ -9,6 +9,17 @@ test('a cap edge is seeded, retreats over sea, and reaches over high land', () =
     assert.equal(a, b);
     assert.ok(Math.abs(a) <= 1, 'noise ' + a);
     assert.notEqual(capNoise(0.2, 0.9, -0.1, seed), capNoise(-0.4, 0.2, 0.8, seed));
+    assert.notEqual(capDetail(0, 0, 1, seed), capDetail(0, 0, -1, seed), 'the two poles differ');
+    let sum = 0;
+    const steps = 12;
+    for (let i = 0; i < steps; i += 1) {
+        for (let j = 0; j < steps; j += 1) {
+            const a = (i + 0.5) / steps * Math.PI;
+            const b = (j + 0.5) / steps * Math.PI * 2;
+            sum += capNoise(Math.sin(a) * Math.cos(b), Math.sin(a) * Math.sin(b), Math.cos(a), seed);
+        }
+    }
+    assert.ok(Math.abs(sum / (steps * steps)) < 0.08, 'noise mean ' + (sum / (steps * steps)));
 
     const sea = capShiftRad(0, true, 0, true);
     const land = capShiftRad(0, false, 1, true);

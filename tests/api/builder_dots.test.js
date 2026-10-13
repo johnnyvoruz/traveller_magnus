@@ -257,6 +257,49 @@ if (process.env.RUN_API_TESTS !== '1') {
             assert.equal(bounded.status, 400, JSON.stringify(bounded.body));
             const bad = await jsonFetch(`${base}/api/universes/${id}/hexes/${encodeURIComponent('bad slug')}/dots`, { headers: { cookie } });
             assert.equal(bad.status, 400, JSON.stringify(bad.body));
+
+            const absent = await jsonFetch(`${base}/api/universes/${id}/hexes/Unlisted/dots`, { headers: { cookie } });
+            assert.equal(absent.status, 200, JSON.stringify(absent.body));
+            assert.equal(absent.body.data.cells, '.'.repeat(1280));
+
+            const releasedAt = '2026-10-10T00:00:00.000Z';
+            const settings = JSON.stringify(TRUTH_SETTINGS).replaceAll("'", "''");
+            const versionSql = ['dmiss', 'dbad'].map((version) =>
+                `INSERT INTO truth_versions (version, engine_version, milieu, seed, settings, sectors, state, started_at, released_at, sectors_total, sectors_done, sectors_failed)
+VALUES ('${version}', '1.1.0', '', '${TRUTH_SEED}', '${settings}', '[]', 'released', '${releasedAt}', '${releasedAt}', 1, 1, '[]');`,
+            ).join('\n');
+            const versionDir = mkdtempSync(path.join(tmpdir(), 'voyage-dots-ver-'));
+            const versionFile = path.join(versionDir, 'versions.sql');
+            writeFileSync(versionFile, versionSql);
+            try {
+                runWrangler(['d1', 'execute', 'voyage', '--local', '--persist-to', persistTo, '--file', versionFile]);
+            } finally {
+                rmSync(versionDir, { recursive: true, force: true });
+            }
+            const badDir = mkdtempSync(path.join(tmpdir(), 'voyage-dots-bad-'));
+            const badFile = path.join(badDir, 'overview.json');
+            writeFileSync(badFile, '{');
+            try {
+                runWrangler(['r2', 'object', 'put', 'voyage-public/truth/dbad/overview.json', '--local', '--persist-to', persistTo, '--file', badFile, '--content-type', 'application/json']);
+            } finally {
+                rmSync(badDir, { recursive: true, force: true });
+            }
+            const ownOnly = '~0123456789ABCDEFGHJKMNPQRS';
+            for (const [version, expectChart] of [['dmiss', 503], ['dbad', 503]]) {
+                const made = await jsonFetch(`${base}/api/universes`, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({ name: version, truthVersion: version, editionDefault: 'MgT2E' }),
+                });
+                assert.equal(made.status, 201, JSON.stringify(made.body));
+                const chartDots = await jsonFetch(`${base}/api/universes/${made.body.data.id}/hexes/Charted/dots`, { headers: { cookie } });
+                assert.equal(chartDots.status, expectChart, JSON.stringify(chartDots.body));
+                assert.equal(chartDots.body.error.code, 'chart_unavailable');
+                assert.equal(chartDots.body.error.message, 'The chart for this version could not be read.');
+                const ownDotsOnly = await jsonFetch(`${base}/api/universes/${made.body.data.id}/hexes/${encodeURIComponent(ownOnly)}/dots`, { headers: { cookie } });
+                assert.equal(ownDotsOnly.status, 200, JSON.stringify(ownDotsOnly.body));
+                assert.equal(ownDotsOnly.body.data.cells, '.'.repeat(1280));
+            }
         } finally {
             if (child) stopDev(child.pid);
             rmSync(persistTo, { recursive: true, force: true });

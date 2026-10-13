@@ -8,6 +8,7 @@ import type { CampaignEntryKind } from '@voyage/shared';
 import { campaign } from '../../campaign/store.ts';
 import { deleteEntry, entriesAtHex, entriesNewestFirst } from '../../campaign/journal.ts';
 import Icon from '../../design/Icon.vue';
+import RecordAvatar from '../RecordAvatar.vue';
 import { journalFilter, journalQuery } from '../list_state.ts';
 import { locating, startLocate, stopLocate } from '../locate.ts';
 import { placeSource } from '../place_source.ts';
@@ -398,7 +399,14 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
             @click="emit('open', face.id)"
             @keydown="onRowKey($event, face.id)"
           >
-            <span class="camp-glyph" aria-hidden="true"><Icon :name="face.icon" :size="16" /></span>
+            <RecordAvatar
+              v-if="face.images && face.images.length"
+              :record="{ name: face.name, type: 'note', images: face.images }"
+              :universe-id="campaign.universeId"
+              size="row"
+              :icon="face.icon"
+            />
+            <span v-else class="camp-glyph" aria-hidden="true"><Icon :name="face.icon" :size="16" /></span>
             <span class="camp-row-text">
               <span class="jn-name">
                 <b v-if="face.number" class="jn-num">{{ face.number }}</b>

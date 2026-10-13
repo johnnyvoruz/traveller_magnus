@@ -4,7 +4,7 @@
  * craters. Pure pixels, so it runs in the surface worker. Off the net is transparent.
  * The day and night overlay is a separate layer (overlay.ts); this image never changes with time.
  */
-import { edgeTemp } from '../ice_edge.ts';
+import { capDetail, edgeTemp } from '../ice_edge.ts';
 import { hashString, mulberry32 } from '../vanilla/map.ts';
 import { LIQUIDS } from '../profile.ts';
 import { terrainRgb, type RGB } from './codes.ts';
@@ -159,6 +159,7 @@ function paintRow(out: Uint8ClampedArray, field: Field, model: HybridModel, h: F
     const sr = model.seaRank;
     const hexes = model.hexes;
     const exotic = model.world.atm >= 10 && model.world.atm <= 12;
+    const capSeed = hashString(model.world.seed + '-cap');
     const rock: RGB = exotic ? mix([132, 126, 120], sea.shallow, 0.25) : model.airless ? [150, 146, 140] : [134, 128, 122];
     for (let x = 0; x < W; x += 1) {
         const k = y * W + x;
@@ -174,17 +175,29 @@ function paintRow(out: Uint8ClampedArray, field: Field, model: HybridModel, h: F
         const m = field.bw[q] * hexes[field.bl[q]].moisture + field.bw[q + 1] * hexes[field.bl[q + 1]].moisture + field.bw[q + 2] * hexes[field.bl[q + 2]].moisture;
         const hasCoast = model.seaShare > 0.02 && model.seaShare < 0.98;
         const iceT = edgeTemp(T, model.meltK, model.iceNoise(p), water, e, hasCoast, model.layout);
+        // Colour only. The hex stays on iceT, so the ice area does not move.
+        // capNoise shifts the painted line around that hex, and a finer sample
+        // breaks the one remaining scallop into floes and leads.
+        const openLayout = model.layout !== 'frozen' && model.layout !== 'molten' && model.layout !== 'scorched';
+        const distK = Math.abs(iceT - model.meltK);
+        const REACH_K = 12;
+        const nearEdge = openLayout && distK < 18;
+        const spec = nearEdge ? capDetail(p[0], p[1], p[2], capSeed) : 0;
+        const broadCold = (model.meltK - iceT) + spec * REACH_K;
+        // The fine sample only on the fringe, so the sheet stays inside the paint budget.
+        const fine = nearEdge && broadCold > -10 && broadCold < 12
+            ? capDetail(p[0] * 3.7 + 1.7, p[1] * 3.7, p[2] * 3.7 - 0.4, capSeed ^ 0xa5a5)
+            : 0;
         const pc = classify(model, water, T, e, m, lat, depth, iceT).terrain;
         let c: RGB;
         if (water) {
             const t = Math.pow(smooth(0, 0.45, depth), 0.7);
             if (pc === 'SI' || pc === 'IF') {
-                c = mix(sea.iceShallow, sea.iceDeep, t * 0.6);
-                if (pc === 'IF') c = mix(c, [214, 224, 236], 0.5);
-                if (T >= model.meltK) {
-                    const floe = model.iceNoise([p[0] * 9, p[1] * 9, p[2] * 9]);
-                    c = mix(mix(sea.shallow, sea.deep, t), c, floe > 0.05 ? 0.85 : 0.35);
-                }
+                let thick = mix(sea.iceShallow, sea.iceDeep, t * 0.6);
+                if (pc === 'IF') thick = mix(thick, [214, 224, 236], 0.5);
+                const thin = mix(mix(sea.shallow, sea.deep, t), thick, 0.4);
+                const age = clamp((model.meltK - iceT) / 18, 0, 1);
+                c = mix(thin, thick, 0.3 + 0.7 * age);
             } else if (pc === 'EV') {
                 c = mix([228, 218, 196], [206, 190, 160], t);
             } else if (pc === 'LV') {
@@ -194,7 +207,14 @@ function paintRow(out: Uint8ClampedArray, field: Field, model: HybridModel, h: F
             }
         } else {
             if (pc === 'IC' || pc === 'FR' || (pc === 'BK' && T > model.boilK) || pc === 'LV') {
-                c = pc === 'IC' ? terrainRgb('IC') : pc === 'FR' ? mix(rock, terrainRgb('FR'), 0.75) : terrainRgb(pc);
+                if (pc === 'IC' || pc === 'FR') {
+                    const thick = pc === 'IC' ? terrainRgb('IC') : mix(rock, terrainRgb('FR'), 0.75);
+                    const thin = pc === 'IC' ? mix(rock, terrainRgb('IC'), 0.4) : mix(rock, terrainRgb('FR'), 0.4);
+                    const age = clamp((model.meltK - iceT) / 18, 0, 1);
+                    c = mix(thin, thick, 0.3 + 0.7 * age);
+                } else {
+                    c = terrainRgb(pc);
+                }
             } else {
                 let r = 0;
                 let g = 0;
@@ -220,6 +240,17 @@ function paintRow(out: Uint8ClampedArray, field: Field, model: HybridModel, h: F
             const shade = 1 + clamp(((hx0 - hx1) + (hy0 - hy1)) * 9 * (layout.side / 136), -0.28, 0.28);
             const grain = 1 + 0.05 * model.texture([p[0] * 7, p[1] * 7, p[2] * 7]);
             c = [c[0] * shade * grain, c[1] * shade * grain, c[2] * shade * grain];
+        }
+        if (nearEdge) {
+            const visualCold = broadCold + fine * 7;
+            const cover = smooth(-5, 7, visualCold);
+            const age = clamp(visualCold / 16, 0, 1);
+            const open = water ? mix(sea.shallow, sea.deep, 0.45) : rock;
+            const thin = water ? mix(open, [214, 224, 232], 0.62) : mix(open, [206, 210, 206], 0.55);
+            const thick: RGB = water ? [232, 240, 246] : [238, 242, 244];
+            const iceCol = mix(thin, thick, 0.2 + 0.8 * age);
+            const band = 1 - smooth(6, 18, distK);
+            c = mix(c, mix(open, iceCol, cover), band);
         }
         const i4 = k * 4;
         out[i4] = c[0];

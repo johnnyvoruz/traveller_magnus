@@ -98,7 +98,7 @@ export function buildTimeline(input: {
             place: anchor ? entryPlace(anchor, input.records) : '',
             hexKey: resolved ? resolved.hexKey : null,
             visibility: entry.visibility,
-            avatar: { name: entryName(entry), type: 'note', images: null },
+            avatar: { name: entryName(entry), type: 'note', images: entry.images ?? null },
             icon: entryIcon(entry.kind),
             createdAt: entry.createdAt,
         } as TimelineRow & { createdAt: string });

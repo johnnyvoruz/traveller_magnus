@@ -46,9 +46,10 @@ function mix(n: number): number {
     return (x ^ (x >>> 16)) >>> 0;
 }
 
-/** Value noise, -1..1, from a world direction and the cap seed. */
-export function capNoise(x: number, y: number, z: number, seed: number): number {
-    const scale = 2.4;
+/**
+ * Value noise, -1..1. capDetail sums several scales so the painted edge is not one scallop.
+ */
+function valueNoise(x: number, y: number, z: number, scale: number, seed: number): number {
     const fx = x * scale;
     const fy = y * scale;
     const fz = z * scale;
@@ -78,6 +79,25 @@ export function capNoise(x: number, y: number, z: number, seed: number): number 
     const nxy0 = nx00 + (nx10 - nx00) * sy;
     const nxy1 = nx01 + (nx11 - nx01) * sy;
     return (nxy0 + (nxy1 - nxy0) * sz) * 2 - 1;
+}
+
+/** Value noise, -1..1, from a world direction and the cap seed. The vanilla map uses this. */
+export function capNoise(x: number, y: number, z: number, seed: number): number {
+    return valueNoise(x, y, z, 2.4, seed);
+}
+
+/**
+ * The sheet's painted margin. Several scales, and a different seed on the
+ * south pole. The hex ice and the vanilla map stay on capNoise.
+ */
+export function capDetail(x: number, y: number, z: number, seed: number): number {
+    const ps = (z < 0 ? (seed ^ 0x51ce) : seed) | 0;
+    const lobe = valueNoise(x, y, z, 2.4, ps);
+    const extra = valueNoise(x, y, z, 1.1, ps ^ 0x9e37) * 0.45
+        + valueNoise(x, y, z, 6.4, ps ^ 0x85eb) * 0.35
+        + valueNoise(x, y, z, 13.0, ps ^ 0xc0ff) * 0.20;
+    const n = lobe * 0.62 + extra * 0.38;
+    return n < -1 ? -1 : n > 1 ? 1 : n;
 }
 
 /**

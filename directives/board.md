@@ -1,32 +1,31 @@
 # Board
 
-One line per lane. Only the orchestrator edits this file. Updated 2026-10-12 21:05 (by the clock).
+One line per lane. Only the orchestrator edits this file. Updated 2026-10-12 22:15 (by the clock).
 
-**Last push: `57ec8d0`, version 1.1.8, 2026-10-12.** Any prompt that says "start only
+**Last push: `615add4`, version 1.1.9, 2026-10-12.** Any prompt that says "start only
 after the board says the push is made" may start.
 
 | Lane | Status | Current prompt | Blocker / next |
 |---|---|---|---|
-| A | go | prompts/a_passkey_client.md | allowance store accepted; now the first chunk back to 169 kB, the passkey client (contracts/b_auth.md) with a note for D, and the selection outline over the dots (MapRenderer.ts lent) |
-| B | go | prompts/b_auth_gate_dots.md | the recovery gate made safe to deploy (and sign-out allowed in a recovery session), the dots route without an overview, a read of the public games contract |
-| C | go | prompts/c_ice_caps_2.md | the ice caps, second look: the edge follows land and sea, a broken margin, no change in how much ice |
-| D | go | prompts/d_passkey_screens.md | the sign-in card, the account page and the recovery-session screen for username and passkey |
-| E | in flight | prompts/e_handout_images_2.md, then e_player_pack.md | handout images under way; then the Player Pack, first version |
+| A | go | prompts/a_signout_fix.md | **live fault first: sign-out does not end the session (415)**; then the closed-prompt code, createdAt, the router line; then the campaign importer reads the journal |
+| B | go | prompts/b_public_games.md | three lines in contracts/b_auth.md (linked providers, sign-out body, local recipe), then the public games server (migration 0013) |
+| C | free | (none) | ice caps second look accepted (in 1.1.10); takes the surface findings from D's first-visit review when it lands |
+| D | go | prompts/d_first_run_review.md | a read-only first-visit review of the live site; then the passkey screen follow-ups when A's report exists |
+| E | go | prompts/e_player_pack.md | handout images accepted (in 1.1.10); now the Player Pack, first version |
 | F | retired | (none) | Johnny, 2026-10-11: unreliable (runs out of budget); do not use or propose until he says it is back |
 
 **Restarting a frozen lane:** paste the block in directives/lanes/START.md with the
 lane's letter as the first message of a new session; from then on "go" is enough.
 
 ## Shared files this turn
-- account/ (session.ts and the new passkey client): **lent to A**. D reads it, does not edit it.
-- map/MapRenderer.ts (the selection draw only): **lent to A**.
-- workspace/SignInCard.vue, workspace/account.ts, views/Account.vue: D.
-- workspace/images.ts: lent to E only if a helper must take an entry (lines named in its report).
+- account/, platform/http.ts (sign-out), router.ts (one line, `guardRecovery`): **lent to A**.
+- workspace/passkey/, workspace/SignInCard.vue, views/Account.vue, design/base.css (the modal frame): D.
+- apps/web/src/pack/ (new): E.
 - design/tokens.css: any lane may append its own token lines.
 
 ## Contracts
 - contracts/b_marketplace.md, contracts/b_public_games.md (B): size b and the opt-in
-  hex mark; three questions open with Johnny.
+  hex mark; nothing open; public games server being built.
 - contracts/b_auth.md (B): username and passkey sign-in, built, **held out of pushes** until the gate is fixed.
 - contracts/b_builder.md (B): the Builder routes, the draft cycle, sectors, undo, and
   the one act: `POST .../generate` with `makeSectors`, `POST .../sectors/undo-generate`.
@@ -41,13 +40,11 @@ lane's letter as the first message of a new session; from then on "go" is enough
    (findings/campaign_gap_audit.md §4), steps 1 to 5 first. Step 4 (`@` mention) is done.
 
 ## Known, not fixed
-- The first chunk is 251 kB (was 169): `account/session.ts` imports a zod schema from
-  `@voyage/shared` as a value. A, first item this turn.
-- The passkey server's recovery gate (`auth/recovery_gate.ts`) does a D1 read on every
-  signed-in `/api/*` request and breaks them all if 0012 is not applied. B, this turn.
-- The dots routes answer a chart sector as all dots when the overview cannot be read. B, this turn.
-- `apps/web/src/campaign/import.ts` does not read `journal` from an exported campaign
-  file (B's finding); no lane has it yet.
+- **Live: sign-out does not end the session.** `POST /api/auth/sign-out` with no body
+  answers 415 on production (checked 2026-10-12 21:50); the page shows signed out,
+  a reload signs back in. A, first item, `prompts/a_signout_fix.md`.
+- A journal entry's image bytes are owner-only (`GET .../objects/:hash`); a player
+  view will need a read opened by B. Not needed until a player view exists.
 - Not seen yet: dots and the toast advancing while a job runs (D's local queue answered
   only at the end). Look on production after the deploy.
 - Speed leftovers (B's own): two jobs on one universe can race the 250 MB quota; a
@@ -103,8 +100,12 @@ lane's letter as the first message of a new session; from then on "go" is enough
   the blank request body (read from what the server stored).
 
 ## Pending push
-**Ready, not yet committed at 21:05: version 1.1.9**, `findings/push/builder_2026-10-12b.md` (66 paths).
-Held out: the passkey server (17 paths) until B's gate fix; E's handout images in flight.
+**Ready, not pushed at 22:10: version 1.1.10**, `findings/push/builder_2026-10-12c.md`
+(30 paths): handout images on a journal entry, the ice caps' second look, the
+selection outline no longer covers zoomed-out dots, the dots route answers 503 when
+the chart overview cannot be read.
+**Held on disk for the push after:** username and passkey sign-in, whole, waiting on
+A's sign-out and closed-prompt fixes.
 
 ## Decisions from Johnny
 - 2026-10-10: the file bus replaces pasting.
@@ -293,12 +294,12 @@ Held out: the passkey server (17 paths) until B's gate fix; E's handout images i
   my notes", no import yet.
 
 ## Open with Johnny
-(none)
+1. C: the map's ice edge and the disc's ice edge are ragged by different noise, so a bay on one is not the same bay on the other. Force one shared noise in a later pass? Changes no prompt.
 
 ## Queue (prompts not yet written)
 - Screens for username and passkey sign-in (sign-in card, account page: passkeys,
   recovery codes, linked providers): after B's contract `contracts/b_auth.md`.
 - The rest of F's review (ranking, visual refinement, words, access) was never done;
   no lane has it.
-- Public games (contract exists), after density and the cap.
+- Public games, browser side: A calls the feed and draws the mark (MapRenderer.ts), D the on/off switch; after B's server.
 - Worker queue settings: B recommends in `b_generate_speed`; wrangler.toml changes go out with Johnny's deploy.

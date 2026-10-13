@@ -6944,3 +6944,32 @@ that failed at the close no longer does. Ready note `findings/builder_form_ready
   images, which is fine. 1.1.9 not yet pushed.
 
 - 21:05: Johnny said pushed; HEAD and origin still `57ec8d0` (1.1.8). Told him.
+
+## 256. Passkeys built end to end and held one push; a live sign-out fault; handout images; push 1.1.10 written (2026-10-12 22:05)
+
+- **1.1.9 pushed (`615add4`).** It carried A's newer `session.ts` (bundle fix, the
+  passkey fields), edited after the list was checked; the tree's gates pass with it.
+- **A, `a_passkey_client`, accepted:** index chunk 250.58 -> 171.33 kB;
+  `account/passkey.ts` (lazy libraries); `selectionOutline` is the sector rectangle
+  below the hex tier.
+- **B, `b_auth_gate_dots`, accepted:** the recovery flag rides on the session lookup;
+  without 0012 the Worker behaves as at `57ec8d0` and passkey routes answer 503; a
+  recovery session may sign out; an unreadable overview is 503 `chart_unavailable`;
+  `findings/public_games_ready.md` (nothing open; next migration 0013).
+- **D, `d_passkey_screens`, accepted:** `workspace/passkey/` (card, account page,
+  recovery screen, codes block), wired to A's client, virtual-authenticator pass.
+  Found: **sign-out posts no body and gets 415** (confirmed on production by the
+  orchestrator with curl: 415 without a body, 200 with `{}`); a closed prompt arrives
+  as a library code; the router guard is a workaround in `Account.vue`.
+- **E, `e_handout_images_2`, accepted:** gallery on an entry, avatars in the list and
+  timeline, the clock untouched.
+- **Push 1.1.10:** handout images, the outline, the dots 503. Passkey set held for
+  A's fixes; C's ice caps in flight.
+- **Prompts:** `a_signout_fix.md`, `b_public_games.md`, `d_first_run_review.md`;
+  E on `e_player_pack.md`.
+
+- 22:15: **C, `c_ice_caps_2`, accepted** and added to push 1.1.10 (eight paths).
+  Sheet raggedness is paint near the melt line (`capDetail`, four scales, south seed);
+  hex ice unchanged, so area is identical on ten worlds; the disc bake has its own
+  four-scale edge with floes; disc ice pins re-pinned. One question to Johnny (shared
+  noise later: recommended no). C is free until D's review lands.

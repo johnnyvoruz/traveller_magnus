@@ -65,6 +65,8 @@ export type RowFace = {
     /** The body's first line, left off when it would repeat the name. */
     summary: string | null;
     meta: string;
+    /** The entry's images. The first one is the row's avatar. Null when there are none. */
+    images: CampaignEntry['images'];
 };
 
 export function kindWord(kind: CampaignEntryKind): string {
@@ -182,6 +184,7 @@ export function rowFace(entry: CampaignEntry, records: Readonly<Record<string, C
         soft: !titled && entry.kind !== 'session',
         summary: line && line !== name ? line : null,
         meta: metaLine(entry, entryPlace(anchorOf(entry), records)),
+        images: entry.images ?? null,
     };
 }
 

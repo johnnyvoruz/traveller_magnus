@@ -12,7 +12,7 @@ import { phaseOf, UNKNOWN_LIQUID } from './liquids.ts';
 type Body = Readonly<Record<string, unknown>> | null | undefined;
 
 /** Bumped whenever a change would redraw an unedited map. Part of the cache key and of saved hex data. */
-export const HYBRID_SURFACE_VERSION = 'hybrid-surface-1';
+export const HYBRID_SURFACE_VERSION = 'hybrid-surface-3';
 
 export type HybridWorld = {
     /** Name-independent: enhancedSeedKey(hexKey, dossierKey). */

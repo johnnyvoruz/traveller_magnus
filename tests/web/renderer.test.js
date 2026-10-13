@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { MapRenderer } from '../../apps/web/src/map/MapRenderer.ts';
-import { DISC_R, GAS_R, HALO_R, POLITY_FILL_ALPHA, REGION_FILL_ALPHA, RING_R, RING_SCALE_X, RING_SCALE_Y, TERRITORY_FILL_ALPHA, TERRITORY_STROKE } from '../../apps/web/src/map/glyphs.ts';
+import { DISC_R, GAS_R, HALO_R, POLITY_FILL_ALPHA, REGION_FILL_ALPHA, RING_R, RING_SCALE_X, RING_SCALE_Y, SELECT_STROKE, TERRITORY_FILL_ALPHA, TERRITORY_STROKE } from '../../apps/web/src/map/glyphs.ts';
 import { ROW_STEP, sectorRect } from '../../apps/web/src/map/geometry.ts';
 
 if (typeof globalThis.Path2D !== 'function') {
@@ -640,4 +640,59 @@ test('setPolities builds 447 paths', (t) => {
     } finally {
         globalThis.Path2D = Original;
     }
+});
+
+function selectionGeometry(calls) {
+    const at = calls.findIndex((call) => call[0] === 'set' && call[1] === 'strokeStyle' && call[2] === 'selected');
+    if (at < 0) return null;
+    const width = calls.slice(at).find((call) => call[0] === 'set' && call[1] === 'lineWidth');
+    const shape = calls.slice(at).find((call) => call[0] === 'rect' || call[0] === 'moveTo');
+    return { shape: shape && shape[0], lineWidth: width && width[2] };
+}
+
+test('zoomed out, a selection is the sector outline and the dots are still drawn', (t) => {
+    const { canvas, calls } = recordingCanvas();
+    const renderer = new MapRenderer(canvas, theme);
+    const { manifest, overview } = chart();
+    renderer.setChart(manifest, overview, 'canonical');
+    renderer.resize(800, 600, 1);
+    const cam = { ...centreOf(0, 0), ppp: 1 };
+    renderer.draw(cam);
+    const dots = calls.filter((call) => call[0] === 'fillRect').length;
+    assert.equal(dots, 3);
+    calls.length = 0;
+    renderer.setSelection({ slug: 'On', hhhh: '0101' });
+    renderer.draw(cam);
+    assert.equal(calls.filter((call) => call[0] === 'fillRect').length, dots);
+    const firstDot = calls.findIndex((call) => call[0] === 'fillRect');
+    const selectedAt = calls.findIndex((call) => call[0] === 'set' && call[1] === 'strokeStyle' && call[2] === 'selected');
+    assert.ok(firstDot >= 0 && firstDot < selectedAt);
+    assert.deepEqual(selectionGeometry(calls), { shape: 'rect', lineWidth: SELECT_STROKE });
+    assert.equal(calls.slice(selectedAt).some((call) => call[0] === 'lineTo'), false);
+    calls.length = 0;
+    renderer.draw({ ...cam, ppp: 8 });
+    assert.ok(calls.filter((call) => call[0] === 'fillRect').length >= dots);
+    assert.deepEqual(selectionGeometry(calls), { shape: 'rect', lineWidth: SELECT_STROKE });
+    calls.length = 0;
+    renderer.draw({ ...cam, ppp: 30 });
+    assert.deepEqual(selectionGeometry(calls), { shape: 'moveTo', lineWidth: SELECT_STROKE });
+
+    const sectors = [];
+    const published = [];
+    for (let i = 0; i < 40; i += 1) {
+        const slug = 's' + i;
+        sectors.push({ slug, name: slug, x: i % 8, y: Math.floor(i / 8), canonical: true, systems: 2 });
+        published.push({ slug, cells: cellsOf(['0101', '0202']) });
+    }
+    const wide = recordingCanvas();
+    const many = new MapRenderer(wide.canvas, theme);
+    many.setChart({ sectors }, { truthVersion: 'v2', sectors: published }, 'canonical');
+    many.resize(8000, 8000, 1);
+    many.setSelection({ slug: 's0', hhhh: '0101' });
+    const far = { ...centreOf(0, 0), ppp: 1 };
+    many.draw(far);
+    const samples = [];
+    for (let n = 0; n < 9; n += 1) samples.push(many.draw(far).ms);
+    samples.sort((a, b) => a - b);
+    t.diagnostic(`40 sectors selection outline ms: ${samples[4].toFixed(3)} (before the sector outline: 0.375)`);
 });

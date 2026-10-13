@@ -138,7 +138,8 @@ async function systemsToGenerate(
 }
 
 const CHART_SLUG = /^[A-Za-z0-9][A-Za-z0-9_-]{0,80}$/;
-const overviewCells = new Map<string, Map<string, string> | null>();
+const CHART_UNREAD = 'The chart for this version could not be read.';
+const overviewCells = new Map<string, Map<string, string> | 'unread'>();
 
 function sectorList(raw: string): string[] | null {
     const parts = raw.split(',').map((item) => item.trim()).filter(Boolean);
@@ -158,24 +159,24 @@ function sameStamp(header: string | undefined, stamp: string): boolean {
     });
 }
 
-async function overviewMap(env: AppEnv['Bindings'], version: string): Promise<Map<string, string> | null> {
+async function overviewMap(env: AppEnv['Bindings'], version: string): Promise<Map<string, string> | 'unread'> {
     const cached = overviewCells.get(version);
     if (cached !== undefined) return cached;
     const object = await env.PUBLIC_BUCKET.get(`truth/${version}/overview.json`);
     if (!object) {
-        overviewCells.set(version, null);
-        return null;
+        overviewCells.set(version, 'unread');
+        return 'unread';
     }
     let parsed: ReturnType<typeof TruthOverview.safeParse>;
     try {
         parsed = TruthOverview.safeParse(JSON.parse(await object.text()));
     } catch {
-        overviewCells.set(version, null);
-        return null;
+        overviewCells.set(version, 'unread');
+        return 'unread';
     }
     if (!parsed.success) {
-        overviewCells.set(version, null);
-        return null;
+        overviewCells.set(version, 'unread');
+        return 'unread';
     }
     const map = new Map(parsed.data.sectors.map((sector) => [sector.slug, sector.cells]));
     overviewCells.set(version, map);
@@ -194,9 +195,13 @@ async function dotSectors(
     const body = await listed.json() as { data?: { sector: string; rows: { local: string; holds: boolean; uwp: string }[] }[] };
     const bySector = new Map((body.data ?? []).map((item) => [item.sector, item.rows]));
     const chart = pin.truthVersion ? await overviewMap(c.env, pin.truthVersion) : null;
+    if (chart === 'unread' && sectors.some((sector) => !sector.startsWith('~'))) {
+        return fail(c, 503, 'chart_unavailable', CHART_UNREAD);
+    }
     const out = [];
     for (const sector of sectors) {
-        const cells = applyDotRows(sector.startsWith('~') ? null : (chart?.get(sector) ?? null), bySector.get(sector) ?? []);
+        const known = sector.startsWith('~') || chart === null || chart === 'unread' ? null : (chart.get(sector) ?? null);
+        const cells = applyDotRows(known, bySector.get(sector) ?? []);
         out.push({ sector, cells, stamp: await sha256Hex(cells) });
     }
     return { out, stamp: await sha256Hex(out.map((item) => `${item.sector}=${item.stamp}`).join('\n')) };
