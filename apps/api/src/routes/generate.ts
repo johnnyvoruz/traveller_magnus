@@ -2,6 +2,7 @@ import { chartEntry, generateHex } from '@voyage/generation';
 import { GeneratePreview, SectorHex, sha256Hex, stable } from '@voyage/shared';
 import { Hono } from 'hono';
 import enginesPackage from '../../../../packages/engines/package.json' with { type: 'json' };
+import { isAllowanceRefusal, releaseAllowance, takeAllowance } from '../auth/allowance';
 import { originAllowed, requireUser } from '../auth/session';
 import type { AppEnv } from '../env';
 import { fail, ok } from '../http';
@@ -43,19 +44,27 @@ generate.post('/generate/preview', async (c) => {
     const parsed = GeneratePreview.safeParse(body);
     if (!parsed.success) return fail(c, 400, 'validation', 'Invalid request.', parsed.error.flatten());
     const input = parsed.data;
-    const envelope = generateHex({
-        hexKey: input.hexKey,
-        edition: input.edition,
-        mode: input.mode,
-        summary: summaryOf(input.inputs),
-        pinned: {
-            seed: input.seed,
-            settings: input.settings,
-            engineVersion: enginesPackage.version,
-        },
-    });
+    const taken = await takeAllowance(c.env, actor.id, actor.role, 1);
+    if (isAllowanceRefusal(taken)) return fail(c, 429, taken.details.code, taken.message, taken.details);
+    let envelope: ReturnType<typeof generateHex>;
+    try {
+        envelope = generateHex({
+            hexKey: input.hexKey,
+            edition: input.edition,
+            mode: input.mode,
+            summary: summaryOf(input.inputs),
+            pinned: {
+                seed: input.seed,
+                settings: input.settings,
+                engineVersion: enginesPackage.version,
+            },
+        });
+    } catch (err) {
+        await releaseAllowance(c.env, actor.id, actor.role, 1);
+        return fail(c, 400, 'validation', 'The generator refused this hex.', { reason: String(err).slice(0, 200) });
+    }
     const hash = await sha256Hex(stable(envelope));
     const row = envelope.body && typeof envelope.body === 'object' ? envelope.body as Record<string, unknown> : {};
     const entry = SectorHex.parse(chartEntry(row, hash));
-    return ok(c, { envelope, hash, entry });
+    return ok(c, { envelope, hash, entry, allowance: taken });
 });

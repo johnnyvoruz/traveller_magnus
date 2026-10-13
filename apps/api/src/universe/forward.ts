@@ -1,6 +1,6 @@
 import { and, eq, isNull } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
-import { originAllowed, requireUser, type AppContext } from '../auth/session';
+import { originAllowed, requireUser, type AppContext, type SessionUser } from '../auth/session';
 import { universes } from '../db/schema';
 import { fail } from '../http';
 
@@ -8,6 +8,7 @@ export type UniverseRow = typeof universes.$inferSelect;
 
 export type OwnedUniverse = {
     row: UniverseRow;
+    actor: SessionUser;
     forward: (request: Request) => Promise<Response>;
 };
 
@@ -37,5 +38,5 @@ export async function ownedUniverse(c: AppContext): Promise<OwnedUniverse | Resp
         const stub = c.env.UNIVERSE.get(c.env.UNIVERSE.idFromName(row.id));
         return stub.fetch(new Request(request, { headers }));
     };
-    return { row, forward };
+    return { row, actor, forward };
 }

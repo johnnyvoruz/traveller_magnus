@@ -7,7 +7,9 @@
 import { computed, nextTick, ref, watch } from 'vue';
 import Icon from '../../design/Icon.vue';
 import { parseHexKey } from '../places.ts';
-import { buildSettings, generateMany, hexName, hexState, previewAt, removeHexes, restorable, restoreHexes, stopBuild, tallyOf, truthAt } from './acts.ts';
+import { buildSettings, hexName, hexState, placeWords, previewAt, removeHexes, restorable, restoreHexes, stopBuild, tallyOf, truthAt } from './acts.ts';
+import { askDensity, runMany } from './density_ask.ts';
+import DensityAsk from './DensityAsk.vue';
 import { edit, openBlank } from './edit.ts';
 import Spinner from '../../design/Spinner.vue';
 import GenerateSheet from './GenerateSheet.vue';
@@ -15,7 +17,7 @@ import PublishForm from '../market/PublishForm.vue';
 import { EMPTY_ALONE, marketUi } from '../market/market.ts';
 import { generateGrowing, growUi } from './grow_acts.ts';
 import { NAME_MAX, slotGroups, subsectorWords } from './sectors.ts';
-import { build, choiceLine, densityLine, generateWords, JOB_HOLD, plural, settingRows } from './state.ts';
+import { build, choiceLine, JOB_HOLD, plural, settingRows } from './state.ts';
 
 const props = defineProps<{
     mode: 'empty' | 'removed' | 'many';
@@ -67,11 +69,33 @@ watch(() => [growUi.want, growUi.focus] as const, ([slug]) => {
     });
 });
 
+/** The pane's Generate: more than one hex asks how many to fill first; one hex generates as before. */
 function generate(): void {
-    if (slots.value.length) generateGrowing(props.keys);
-    else if (props.mode === 'many') generateMany(props.keys);
+    if (props.keys.length > 1) askDensity(props.keys);
+    else generateNow();
+}
+
+/** The full sheet has chosen the density already: it runs without asking again. */
+function generateNow(): void {
+    if (props.keys.length > 1) runMany(props.keys);
+    else if (slots.value.length) generateGrowing(props.keys);
     else void previewAt(one.value);
 }
+
+/** The prompt's heading: what is selected ("80 empty hexes in Subsector C", "16 empty hexes in a new sector"). */
+const askHeading = computed(() => {
+    const empty = plural(count.value.empty.length, 'empty hex', 'empty hexes');
+    if (slots.value.length) return empty + (slots.value.length === 1 ? ' in a new sector' : ' in ' + slots.value.length + ' new sectors');
+    const place = placeWords(props.keys);
+    return empty + (place ? ' in ' + place : '');
+});
+/** The prompt is open for these hexes. */
+const asking = computed(() => {
+    const keys = build.asking;
+    if (!keys || keys.length !== props.keys.length) return false;
+    const here = new Set(props.keys);
+    return keys.every((key) => here.has(key));
+});
 </script>
 
 <template>
@@ -85,7 +109,7 @@ function generate(): void {
       :empty="mode === 'many' ? count.empty.length : 1"
       :filled="mode === 'many' ? filled : 0"
       :settings="settingRows(buildSettings())"
-      @go="generate"
+      @go="generateNow"
       @cancel="build.sheetOpen = false"
     />
 
@@ -120,7 +144,9 @@ function generate(): void {
         </label>
       </div>
 
-      <div class="build-card">
+      <!-- More than one hex: how many to fill is asked here, in place of the card, before anything runs. -->
+      <DensityAsk v-if="asking" :heading="askHeading" />
+      <div v-else class="build-card">
         <div class="build-acts">
           <button
             v-if="mode === 'removed'"
@@ -138,6 +164,7 @@ function generate(): void {
             type="button"
             class="ui-btn build-big"
             :class="{ 'is-primary': mode !== 'removed', 'is-grow': slots.length > 0 }"
+            data-command="build-generate"
             :data-build-first="mode !== 'removed' ? '' : undefined"
             :disabled="busy"
             :title="build.job ? JOB_HOLD : undefined"
@@ -146,13 +173,10 @@ function generate(): void {
           >
             <Spinner v-if="build.rolling || build.job || growUi.busy" />
             <Icon v-else name="wand-magic-sparkles" :size="13" />
-            <!-- Many hexes: how many of them a run fills is said on the button's second line, so nobody fills a subsector by surprise. -->
-            <span class="build-big-words">
-              <template v-if="slots.length">{{ growUi.busy ? 'Creating…' : (slots.length === 1 ? 'Create the sector and generate ' : 'Create ' + slots.length + ' sectors and generate ') + (mode === 'many' ? (build.density === 'every' ? '' : 'up to ') + plural(count.empty.length, 'hex', 'hexes') : 'a system') }}</template>
-              <template v-else-if="mode === 'many'">{{ generateWords(count.empty.length, build.density) }}</template>
-              <template v-else>{{ build.rolling ? 'Generating…' : 'Generate a system' }}</template>
-              <small v-if="mode === 'many'" class="build-big-line" data-density>{{ densityLine(build.density) }}</small>
-            </span>
+            <!-- Many hexes: the ellipsis says a choice follows (how many to fill); the count is in the prompt's heading. -->
+            <template v-if="slots.length">{{ growUi.busy ? 'Creating…' : (slots.length === 1 ? 'Create the sector and generate' : 'Create ' + slots.length + ' sectors and generate') + (keys.length > 1 ? '…' : ' a system') }}</template>
+            <template v-else-if="mode === 'many'">Generate…</template>
+            <template v-else>{{ build.rolling ? 'Generating…' : 'Generate a system' }}</template>
             <kbd v-if="mode !== 'removed'" class="build-key">G</kbd>
           </button>
           <button
@@ -311,20 +335,6 @@ function generate(): void {
   min-height: 38px;
   padding: 0 14px;
   font-size: 14px;
-}
-
-.build-big-words {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: flex-start;
-  padding: 4px 0;
-  text-align: left;
-}
-
-/* The second line: how many of the hexes the run fills. */
-.build-big-line {
-  font: 500 11.5px/1.3 var(--font-text);
-  opacity: 0.85;
 }
 
 /* The act that makes a sector says so in full: at column width it wraps rather than run past the pane. */

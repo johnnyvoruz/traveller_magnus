@@ -6880,3 +6880,32 @@ that failed at the close no longer does. Ready note `findings/builder_form_ready
   sun mark (`chrome.ts`); night at the middle step; the column has one control. Push
   1.1.7 written (`findings/push/builder_2026-10-11h.md`). Next for C:
   `c_disc_tilt_caption.md`.
+
+## 254. The cap, the density prompt, right-click, the dots store, the tilt disc; push 1.1.8 written (2026-10-12 19:15)
+
+- **1.1.7 pushed (`79a8076`).**
+- **A, `a_own_dots_2`, accepted (partial by design):** `builder/dots.ts`, store
+  `noteDots`/`dotOverlay` (pages of 32, `If-None-Match` per dirty sector),
+  `MapRenderer.setDotOverlay`. Not on the live map: two calls in `MapView.vue` are
+  D's (`d_dots_allowance.md` part 1), with the browser pass.
+- **B, `b_generate_cap`, accepted:** migration `0011_generation_allowance.sql`,
+  `auth/allowance.ts` (one UPDATE reserves the density roll's writes), 429
+  `generation_allowance`, `allowance` on `/api/me` and every generate answer, admins
+  uncapped; `fieldLabel` and the bare-star roll message fixed in `hand.ts`. The 68 of
+  80 stall was the `UniverseDO` budget of 120 mutations a minute.
+- **B, `b_passkeys`, blocked on Johnny:** design note
+  `findings/passkey_signin_design.md` (`@better-auth/passkey` 1.7.7; passkey-first by
+  `registration.requireSession: false` and `afterVerification`; email stored as
+  `<id>@users.invalid`; username is the handle; own `recovery_code` table, ten codes;
+  rpID `traveller.voyage`, local needs `http://localhost:8787`; migration 0012).
+- **C, `c_disc_tilt_caption`, accepted:** `surface/tilt_latitude.ts` shared by sheet
+  and disc; `BAKE_FRAG_TILT` only when the folded tilt is over 45 degrees and the
+  world is not locked (0, 23, 45 and locked: zero samples changed); caption reads the
+  body: "no seas" for hydrographics 0. First use of the tilt program costs 1.6 s.
+- **D, `d_menu_selection`, accepted (parts 0 and 1):** `density_ask.ts`,
+  `DensityAsk.vue`, five ways in, one hex never asks; `input.ts` no longer tracks a
+  secondary press (the fault: its release was taken as a click); `menuKeysFor`.
+- **E, `e_handout_images`, blocked on B:** `CampaignEntryObject` has no `images`;
+  the object route is not tied to a record. B: `b_entry_images.md`.
+- **Prompts:** `a_allowance_store.md`, `b_entry_images.md`, `d_dots_allowance.md`,
+  `e_handout_images_2.md`; a note added to `b_generate_speed.md`. C held.

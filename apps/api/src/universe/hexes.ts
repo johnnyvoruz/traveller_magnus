@@ -696,6 +696,23 @@ export function readDotRows(sql: Sql, sectors: string[]): { sector: string; rows
     });
 }
 
+export type HoldSourceRow = { local: string; present: boolean; holds: boolean };
+
+/** Every referee row in these sectors. `holds` is a stored tree that is not removed. */
+export function readHoldRows(sql: Sql, sectors: string[]): { sector: string; rows: HoldSourceRow[] }[] {
+    return sectors.map((sector) => {
+        const rows = sql.exec(`SELECT local_hex, deleted, tree_hash FROM hexes WHERE sector_slug = ?`, sector);
+        return {
+            sector,
+            rows: rows.map((row) => ({
+                local: String(row.local_hex ?? ''),
+                present: true,
+                holds: Number(row.deleted) !== 1 && typeof row.tree_hash === 'string' && row.tree_hash.length > 0,
+            })),
+        };
+    });
+}
+
 export function countHexes(sql: Sql): number {
     const rows = sql.exec(`SELECT COUNT(*) AS n FROM hexes`);
     return Number(rows[0]?.n ?? 0);
@@ -748,6 +765,13 @@ export async function respondBuilder(sql: Sql, request: Request, now: string): P
         if (request.method === 'GET' && path === '/pin') {
             if (!pin) throw new HexRefusal('not_found', 'No pin.');
             return json(pin);
+        }
+        if (request.method === 'GET' && path === '/hexes/hold-rows') {
+            const raw = url.searchParams.get('sectors') ?? '';
+            const sectors = raw.split(',').map((item) => item.trim()).filter(Boolean);
+            if (sectors.length < 1 || sectors.length > 1280) throw new HexRefusal('validation', 'Invalid request.');
+            if (!pin) return json(sectors.map((sector) => ({ sector, rows: [] })));
+            return json(readHoldRows(sql, sectors));
         }
         if (request.method === 'GET' && path === '/hexes/dot-rows') {
             const raw = url.searchParams.get('sectors') ?? '';

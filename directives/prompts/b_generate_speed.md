@@ -93,4 +93,17 @@ Write `directives/reports/b_generate_speed.md` from `directives/reports/_TEMPLAT
 Questions for Johnny written out in full, recommended answer first. After each
 meaningful step append one line under Progress: "done: X. next: Y."
 
+## Added 2026-10-12 (orchestrator)
+
+Your cap report explains the job that stopped at 68 of 80: each post was one
+`UniverseDO` mutation, and the object's budget of 120 mutations a minute answered
+"Too many requests." on the fifth subsector. The slice is 32 now, so that run no
+longer reproduces it, but a person who generates several sectors quickly can still
+reach the budget, and then a job stalls without a word. In this pass: say what the
+budget protects, whether a job's own posts should count against it, what a job does
+when it is refused (it must wait and resume, or end with a plain sentence; it must
+never sit at 68 of 80), and show a test that runs enough work at once to reach it.
+The local broker dropping a later message (the stop at 32 of 80) is local only: say so
+with the evidence, or show it can happen in production.
+
 ## Progress

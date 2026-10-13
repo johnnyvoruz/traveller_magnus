@@ -155,6 +155,11 @@ export class MapRenderer {
     private readonly ctx: CanvasRenderingContext2D;
     private readonly theme: MapTheme;
     private sectors: DrawSector[] = [];
+    /**
+     * Referee cells that differ from the chart string. A sector absent here
+     * draws `sector.cells`. Signed out, this stays empty.
+     */
+    private dotOverlay = new Map<string, string>();
     private layer: 'canonical' | 'all' = 'canonical';
     private getIndex: (slug: string) => SectorIndex | null = () => null;
     /** Width of each sector name at 18 px. One measureText per name, not per frame. */
@@ -203,6 +208,23 @@ export class MapRenderer {
             rect: sectorRect(sector.x, sector.y),
             cells: cells.get(sector.slug) ?? null,
         }));
+    }
+
+    /**
+     * Cells with the referee's rows applied, one string per sector slug.
+     * A string equal to that sector's chart is not kept: the draw uses the chart's.
+     * Null clears the overlay. An own sector has no chart string, so its overlay is drawn.
+     */
+    setDotOverlay(overlay: ReadonlyMap<string, string> | null): void {
+        const next = new Map<string, string>();
+        if (overlay) {
+            for (const [slug, cells] of overlay) {
+                const sector = this.sectors.find((item) => item.slug === slug);
+                if (sector && sector.cells === cells) continue;
+                next.set(slug, cells);
+            }
+        }
+        this.dotOverlay = next;
     }
 
     /** One Path2D per polity, built when the document arrives. Replaces any previous list. */
@@ -378,7 +400,7 @@ export class MapRenderer {
         const ctx = this.ctx;
         ctx.fillStyle = this.theme.textMuted;
         for (const sector of sectors) {
-            const cells = sector.cells;
+            const cells = this.dotOverlay.get(sector.slug) ?? sector.cells;
             if (!cells) continue;
             for (let i = 0; i < cells.length; i++) {
                 if (cells.charAt(i) === '.') continue;

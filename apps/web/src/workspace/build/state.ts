@@ -100,6 +100,8 @@ export const build = reactive({
     choice: readChoice(),
     /** How many of the selected empty hexes a many-hex run fills; per universe (readDensity). One hex always generates. */
     density: 'standard' as Density,
+    /** The hexes the density prompt is asking about; null when it is closed. Nothing runs for many hexes without it. */
+    asking: null as string[] | null,
     /** Many-hex only: hexes that already hold a system are generated again too. */
     filledToo: false,
     sheetOpen: false,
@@ -119,6 +121,7 @@ export function setBuildOn(on: boolean): void {
         build.sheetOpen = false;
         build.preview = null;
         build.error = '';
+        build.asking = null;
     }
 }
 
@@ -278,7 +281,7 @@ export function jobLine(job: JobProgress & { label: string }): string {
 }
 
 /** Said when a run over the same hexes at the same density writes nothing: the roll is seeded per hex. */
-export const NOTHING_NEW = 'No systems were generated. At this density, the roll leaves these hexes empty every time. To fill them, set Hexes to fill to Every selected hex, or select one hex, and then select Generate.';
+export const NOTHING_NEW = 'No systems were generated. At this density, the roll leaves these hexes empty every time. To fill them, choose Every hex under Hexes to fill, or select one hex, and then select Generate.';
 
 /**
  * The words of the toast when a many-hex build ends. With the store's density counts, systems
@@ -305,15 +308,21 @@ export function jobToast(progress: JobProgress, where: string): string {
 
 // ---- how many of the selected hexes a run fills -------------------------------------------------
 
-export type DensityOption = { id: Density; label: string; line: string };
+export type DensityOption = { id: Density; name: string; meaning: string };
 
-/** The dropdown's options, in Johnny's order (prompts/d_density_dropdown.md), and each one's words on a control's second line. */
+/**
+ * The four choices, in the order Johnny's ruling gives them (prompts/d_menu_selection.md part 0):
+ * the name first, then the plain meaning. The dice move to DENSITY_HINT.
+ */
 export const DENSITIES: readonly DensityOption[] = [
-    { id: 'every', label: 'Every selected hex', line: 'Every selected hex' },
-    { id: 'sparse', label: 'Sparse (2 in 6)', line: 'Sparse, 2 in 6' },
-    { id: 'standard', label: 'Standard (3 in 6)', line: 'Standard, 3 in 6' },
-    { id: 'dense', label: 'Dense (4 in 6)', line: 'Dense, 4 in 6' },
+    { id: 'sparse', name: 'Sparse', meaning: 'about a third of the empty hexes' },
+    { id: 'standard', name: 'Standard', meaning: 'about half of the empty hexes' },
+    { id: 'dense', name: 'Dense', meaning: 'about two thirds of the empty hexes' },
+    { id: 'every', name: 'Every hex', meaning: 'all of the empty hexes' },
 ];
+
+/** For people who want the roll. */
+export const DENSITY_HINT = 'Each empty hex is rolled once: 2, 3, or 4 chances in 6.';
 
 export const DEFAULT_DENSITY: Density = 'standard';
 
@@ -321,14 +330,10 @@ export function cleanDensity(raw: unknown): Density {
     return DENSITIES.some((item) => item.id === raw) ? (raw as Density) : DEFAULT_DENSITY;
 }
 
-export function densityLine(density: Density): string {
-    return (DENSITIES.find((item) => item.id === density) ?? DENSITIES[2]).line;
-}
-
-/** The Generate control for many hexes, before the run: the count is known only when every hex is filled. */
-export function generateWords(empty: number, density: Density): string {
-    if (density === 'every') return 'Generate the ' + plural(empty, 'empty hex', 'empty hexes');
-    return 'Generate up to ' + plural(empty, 'hex', 'hexes');
+/** "Standard: about half of the empty hexes". */
+export function densityWords(density: Density): string {
+    const item = DENSITIES.find((option) => option.id === density) ?? DENSITIES[1];
+    return item.name + ': ' + item.meaning;
 }
 
 /** The job's label: what it may make. */

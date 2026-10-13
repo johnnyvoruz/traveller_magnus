@@ -85,6 +85,74 @@ function centreOf(sx, sy) {
     return { x: (rect.x0 + rect.x1) / 2, y: (rect.y0 + rect.y1) / 2 };
 }
 
+test('an overlay draws the referee\'s systems and leaves an unchanged chart string on the chart', () => {
+    const { canvas, calls } = recordingCanvas();
+    const renderer = new MapRenderer(canvas, theme);
+    const { manifest, overview } = chart();
+    renderer.setChart(manifest, overview, 'canonical');
+    renderer.resize(800, 600, 1);
+    const cam = { ...centreOf(0, 0), ppp: 1 };
+    renderer.draw(cam);
+    const chartDots = calls.filter((call) => call[0] === 'fillRect').length;
+    assert.equal(chartDots, 3);
+    calls.length = 0;
+    renderer.setDotOverlay(new Map([['On', overview.sectors[0].cells]]));
+    renderer.draw(cam);
+    assert.equal(calls.filter((call) => call[0] === 'fillRect').length, chartDots);
+    calls.length = 0;
+    const base = overview.sectors[0].cells;
+    const withOwn = base.charAt(0) + 'A' + base.slice(2);
+    renderer.setDotOverlay(new Map([['On', withOwn]]));
+    renderer.draw(cam);
+    assert.equal(calls.filter((call) => call[0] === 'fillRect').length, chartDots + 1);
+    calls.length = 0;
+    renderer.setDotOverlay(new Map([['On', base.replaceAll('A', '.')]]));
+    renderer.draw(cam);
+    assert.equal(calls.filter((call) => call[0] === 'fillRect').length, 1);
+});
+
+test('a sector of the referee\'s draws its overlay, and forty sectors stay within a millisecond', (t) => {
+    const sectors = [];
+    const published = [];
+    for (let i = 0; i < 40; i++) {
+        const slug = 's' + i;
+        const cells = cellsOf(['0101', '0202']);
+        sectors.push({ slug, name: slug, x: i % 8, y: Math.floor(i / 8), canonical: true, systems: 2 });
+        published.push({ slug, cells });
+    }
+    const ownId = '~0123456789ABCDEFGHJKMNPQRS';
+    sectors.push({ slug: ownId, name: 'Mine', x: 8, y: 0, canonical: true, systems: 0 });
+    const { canvas, calls } = recordingCanvas();
+    const renderer = new MapRenderer(canvas, theme);
+    renderer.setChart({ sectors }, { truthVersion: 'v2', sectors: published }, 'canonical');
+    renderer.resize(8000, 8000, 1);
+    const cam = { x: 160, y: 120, ppp: 1 };
+    renderer.draw(cam);
+    assert.equal(renderer.draw(cam).sectorsOnScreen.length, 41);
+    function median() {
+        const samples = [];
+        for (let n = 0; n < 9; n += 1) samples.push(renderer.draw(cam).ms);
+        samples.sort((a, b) => a - b);
+        return samples[4];
+    }
+    calls.length = 0;
+    const before = median();
+    const chartRects = calls.filter((call) => call[0] === 'fillRect').length / 9;
+    renderer.setDotOverlay(new Map(published.map((sector) => [sector.slug, sector.cells])));
+    calls.length = 0;
+    const same = median();
+    assert.equal(calls.filter((call) => call[0] === 'fillRect').length / 9, chartRects);
+    const overlay = new Map(published.map((sector) => [sector.slug, sector.cells]));
+    overlay.set(ownId, cellsOf(['0101']));
+    renderer.setDotOverlay(overlay);
+    calls.length = 0;
+    const after = median();
+    assert.equal(calls.filter((call) => call[0] === 'fillRect').length / 9, chartRects + 1);
+    t.diagnostic(`40 sectors overview ms: chart ${before.toFixed(3)}, same string ${same.toFixed(3)}, own sector ${after.toFixed(3)}`);
+    assert.ok(Math.abs(same - before) < 1, `same string ${same} chart ${before}`);
+    assert.ok(after - before < 1, `overlay ${after} chart ${before}`);
+});
+
 test('tier galaxy issues no arc and no hex-number text', () => {
     const { canvas, calls } = recordingCanvas();
     const renderer = new MapRenderer(canvas, theme);

@@ -96,3 +96,8 @@ answer first. After each meaningful step append one line under Progress: "done: 
 next: Y."
 
 ## Progress
+
+done: read the generate paths, the admin role check, and the hand roll message. next: the allowance table and the two hand-form fixes.
+done: allowance table, charge on generate and preview, hand leaf labels, and the roll-profile sentence. next: run the unit tests and the worker allowance gate.
+done: worker gate and the four checks passed. next: the report.
+done: wrote directives/reports/b_generate_cap.md. next: prompts/b_passkeys.md.

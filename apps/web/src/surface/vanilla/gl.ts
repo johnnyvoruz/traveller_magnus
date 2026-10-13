@@ -24,7 +24,7 @@ import {
 } from './gl_bake.ts';
 import { axisBasis as axisOf, bestCubeSize, FRAME_BAKE_MS, HALO, packAtlas, planFrame, tileSide } from './gl_plan.ts';
 import { attachShade, DRAW_FRAG, shadePort, type ShadeDraw, type ShadeRequest } from './gl_shade.ts';
-import { BAKE_FRAG, STATS_FRAG, VERT } from './gl_shaders.ts';
+import { BAKE_FRAG, BAKE_FRAG_TILT, STATS_FRAG, VERT } from './gl_shaders.ts';
 import { gasStats, STATS_BATCH, thresholdsFromStats, type DecodedThresholds } from './gl_stats.ts';
 
 export type { BakeProfile, CubeFaces, GpuInfo, GpuSpan, LinkedProgram, ShadeRequest };
@@ -153,6 +153,7 @@ const PROGRAMS: { label: string; source: string }[] = [
     { label: 'stats', source: STATS_FRAG },
     { label: 'bake', source: BAKE_FRAG },
     { label: 'draw', source: DRAW_FRAG },
+    { label: 'bake-tilt', source: BAKE_FRAG_TILT },
 ];
 
 function beginProgram(gl: WebGL2RenderingContext, fragment: string, label: string): OpenProgram {
@@ -259,8 +260,9 @@ export function createDiscBaker(
         const stats = linked[0];
         const bake = linked[1];
         const draw = linked[2];
-        if (!stats || !bake || !draw) throw new Error('link failed');
-        ops.build(stats, bake);
+        const bakeTilt = linked[3];
+        if (!stats || !bake || !draw || !bakeTilt) throw new Error('link failed');
+        ops.build(stats, bake, bakeTilt);
         if (!shade) shade = attachShade(gl, draw, () => ops?.bindQuad());
         else shade.use(draw);
         opened = [];

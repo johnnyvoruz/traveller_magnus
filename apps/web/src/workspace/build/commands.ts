@@ -4,7 +4,7 @@
  * hexes acted on: the many-hex selection, else the one hex the map has selected.
  */
 import type { FaIconName } from '../../design/icons.ts';
-import { generateMany, discardPreview, hexName, hexState, keepPreview, overChart, previewAt, removeHexes, restorable, restoreHexes, rollAgain, stopBuild, tallyOf } from './acts.ts';
+import { discardPreview, hexName, hexState, keepPreview, overChart, previewAt, removeHexes, restorable, restoreHexes, rollAgain, stopBuild, tallyOf } from './acts.ts';
 import { discardEdit, edit, editDirty, holdLeaving, keepEdit, openBlank, openEdit, draftHandle } from './edit.ts';
 import { handUi } from './hand.ts';
 import { addBody, askDesign, canAdd, canMainworld, canMoveBody, canRemoveBody, canRollProfile, handMode, isHandHex, makeMainworld, moveBody, removeBody, rollProfile } from './hand_acts.ts';
@@ -12,7 +12,8 @@ import { canDelete, canMove, canNewSector, canRename, deleteSector, newSector, s
 import { askSectorName, inEmptySlot } from './grow_acts.ts';
 import { canPickSelected, openPicker } from './orbit_pick.ts';
 import { canPublish, kindOfKeys, openPublish, signedIn } from '../market/market.ts';
-import { build, densityLine, generateWords, JOB_HOLD, plural, removeTargets } from './state.ts';
+import { build, JOB_HOLD, plural, removeTargets } from './state.ts';
+import { askDensity } from './density_ask.ts';
 
 export type BuildCommandId =
     | 'build-select' | 'build-generate' | 'build-generate-with' | 'build-keep' | 'build-roll'
@@ -154,9 +155,10 @@ export function runBuild(id: BuildCommandId, keys: readonly string[]): void {
     else if (id === 'build-roll') rollAgain();
     else if (id === 'build-discard') discardPreview();
     else if (id === 'build-generate') {
-        // In an empty slot the sector is made first, and it needs a name: the pane asks for it.
-        if (inEmptySlot(keys)) askSectorName(keys);
-        else if (keys.length > 1) generateMany(keys);
+        // More than one hex always asks how many to fill (the G key, the menu, the palette alike); nothing runs before it.
+        if (keys.length > 1) askDensity(keys);
+        // One hex in an empty slot: the sector is made first, and it needs a name: the pane asks for it.
+        else if (inEmptySlot(keys)) askSectorName(keys);
         else void previewAt(keys[0]);
     } else if (id === 'build-generate-with') build.sheetOpen = true;
     else if (id === 'build-restore') void restoreHexes(keys);
@@ -173,6 +175,17 @@ export type BuildMenuItem = {
     disabled?: boolean;
     rule?: boolean;
 };
+
+/**
+ * Which hexes a menu acts on (prompts/d_menu_selection.md part 1), for a right press, a long
+ * press or the menu key: a hex inside the selection gives the selection; a hex outside it gives
+ * that hex alone; no hex (the key with nothing focused) gives the selection.
+ */
+export function menuKeysFor(focus: string | null, selection: readonly string[]): string[] {
+    if (focus && !selection.includes(focus)) return [focus];
+    if (selection.length) return [...selection];
+    return focus ? [focus] : [];
+}
 
 /** The right-click menu for the hexes acted on: every act that applies, the ones that cannot run greyed. */
 export function menuFor(keys: readonly string[]): { title: string; items: BuildMenuItem[] } {
@@ -192,9 +205,8 @@ export function menuFor(keys: readonly string[]): { title: string; items: BuildM
         if (state === 'removed') items.push({ id: 'build-restore', label: 'Restore to the chart', icon: 'rotate-left' });
         items.push({
             id: 'build-generate',
-            label: many ? generateWords(count.empty.length, build.density) : 'Generate a system',
-            // Many hexes: how many of them the run fills, so nobody fills a subsector by surprise. One hex always generates.
-            ...(many ? { say: densityLine(build.density) } : {}),
+            // Many hexes: the ellipsis says a choice follows; the prompt asks how many to fill. One hex always generates.
+            label: many ? 'Generate…' : 'Generate a system',
             icon: 'wand-magic-sparkles',
             key: 'G',
         });

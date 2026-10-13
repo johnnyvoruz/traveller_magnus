@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
+import { readAllowance } from '../auth/allowance';
 import { ensureProfile } from '../auth/profile';
 import { requireUser, type AppContext } from '../auth/session';
 import { profile } from '../db/schema';
@@ -20,5 +21,6 @@ export async function me(c: AppContext) {
         email: actor.email,
         role: actor.role,
         profile: { ...row, lastSeenAt: now },
+        allowance: await readAllowance(c.env, actor.id, actor.role),
     });
 }

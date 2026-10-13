@@ -17,6 +17,8 @@
 import { reactive, ref, type Ref } from 'vue';
 import {
     BuilderAbsent,
+    BuilderDots,
+    BuilderDotsPage,
     BuilderGenerateDone,
     BuilderHex,
     BuilderHexPage,
@@ -39,6 +41,7 @@ import { onPageHide } from '../platform/browser.ts';
 import { apiFetch } from '../platform/http.ts';
 import { clearToasts, showToast } from '../shell/toast.ts';
 import { parseHexKey } from '../workspace/places.ts';
+import { cellIndex, DOT_CELLS, dotCharOf, dotPages, patchCells } from './dots.ts';
 import { startDraft, type BlankOpened, type DraftHandle, type KeepOutcome } from './draft.ts';
 import { mergeHex } from './overlay.ts';
 import { openSectors } from './sectors.ts';
@@ -256,6 +259,14 @@ export type Builder = {
      * the answer cannot be read. Every other token returns null.
      */
     undo(token: UndoToken): Promise<UndoToken | UndoOutcome | null>;
+    /**
+     * Sectors on screen at an overview tier. Fetches each missing sector once,
+     * in pages of 32, and a dirty sector again with `If-None-Match`.
+     * `chart` is that sector's published cells, when the view has them.
+     */
+    noteDots(slugs: readonly string[], chart?: ReadonlyMap<string, string>): Promise<{ requests: number; bytes: number }>;
+    /** The cells the map should draw. A string equal to the chart is still included; the renderer drops it. */
+    dotOverlay(): ReadonlyMap<string, string>;
     /** The job this store started or picked up after another store closed. Null when there is none. */
     job: Ref<{ progress: JobProgress; undo: UndoToken } | null>;
     /** Stop the followed job. The store that started it is the one that sends the stop. */
@@ -298,6 +309,14 @@ export function openMap(options: OpenMapOptions): Builder {
     const currentJob = ref<{ progress: JobProgress; undo: UndoToken } | null>(null);
     let dropHear: (() => void) | null = null;
     let closed = false;
+    /** Last server string, the string drawn, and the stamp of the server string. */
+    const dotHeld = new Map<string, { confirmed: string; shown: string; stamp: string; gen: number }>();
+    const dotDirty = new Set<string>();
+    const dotFlight = new Set<string>();
+    const dotChart = new Map<string, string>();
+    /** Hex keys a job has written, so Undo can clear those dots before the reload. */
+    const jobPlaced = new Map<string, readonly string[]>();
+    let dotQueued = false;
 
     function terminal(progress: JobProgress): boolean {
         return progress.state === 'done' || progress.state === 'stopped' || progress.state === 'failed';
@@ -389,6 +408,7 @@ export function openMap(options: OpenMapOptions): Builder {
     function putBack(hexKey: string, before: HexRow | null): void {
         if (before) writeRow(before);
         else dropRow(hexKey);
+        paintRow(hexKey, before);
     }
 
     /** A follow-up queued during a save takes the rev that save applied, and keeps its own op. */
@@ -397,7 +417,10 @@ export function openMap(options: OpenMapOptions): Builder {
         const queued = queue.get(hexKey);
         if (queued) queued.baseRev = row ? row.rev : 0;
         if (!row) {
-            if (!queued) dropRow(hexKey);
+            if (!queued) {
+                dropRow(hexKey);
+                paintDot(hexKey, chartChar(hexKey));
+            }
             return;
         }
         if (queued) {
@@ -406,6 +429,7 @@ export function openMap(options: OpenMapOptions): Builder {
             return;
         }
         writeRow(row);
+        paintRow(hexKey, row);
     }
 
     function remember(change: Queued): void {
@@ -700,6 +724,183 @@ export function openMap(options: OpenMapOptions): Builder {
         });
     }
 
+    function chartChar(hexKey: string): string {
+        const place = parseHexKey(hexKey);
+        if (!place) return '.';
+        const cells = dotChart.get(place.slug);
+        const at = cellIndex(place.hex);
+        if (!cells || at === null) return '.';
+        return cells.charAt(at);
+    }
+
+    function paintDot(hexKey: string, ch: string): void {
+        const place = parseHexKey(hexKey);
+        if (!place) return;
+        const held = dotHeld.get(place.slug);
+        if (!held) {
+            dotDirty.add(place.slug);
+            return;
+        }
+        const next = patchCells(held.shown, place.hex, ch);
+        if (next === held.shown) return;
+        held.shown = next;
+        held.gen += 1;
+        dotDirty.add(place.slug);
+        bump();
+        scheduleDotRefresh();
+    }
+
+    function paintRow(hexKey: string, row: HexRow | null): void {
+        if (!row || row.state === 'removed') paintDot(hexKey, row && row.state === 'removed' ? '.' : chartChar(hexKey));
+        else paintDot(hexKey, dotCharOf(row.entry?.uwp, false));
+    }
+
+    function scheduleDotRefresh(): void {
+        if (dotQueued || closed) return;
+        const stale = [...dotDirty].filter((slug) => dotHeld.has(slug) && !dotFlight.has(slug));
+        if (stale.length === 0) return;
+        dotQueued = true;
+        queueMicrotask(() => {
+            dotQueued = false;
+            void refreshDots(stale);
+        });
+    }
+
+    async function readConditional(url: string, stamp: string | null): Promise<{ status: number; data: unknown; bytes: number }> {
+        const headers = new Headers();
+        if (stamp) headers.set('If-None-Match', '"' + stamp + '"');
+        let res: Response;
+        try {
+            res = await apiFetch(options.fetch, url, { method: 'GET', headers });
+        } catch (err) {
+            throw new HttpError(0, err instanceof Error ? err.message : 'offline');
+        }
+        if (res.status === 304) return { status: 304, data: null, bytes: 0 };
+        const payload = await res.json().catch(() => null) as { data?: unknown; error?: { message?: string } } | null;
+        const bytes = payload ? JSON.stringify(payload).length : 0;
+        if (!res.ok) {
+            const message = payload && payload.error && payload.error.message;
+            throw new HttpError(res.status, message || 'offline');
+        }
+        if (!payload || !isRecord(payload) || !('data' in payload)) throw new HttpError(res.status, 'offline');
+        return { status: res.status, data: payload.data, bytes };
+    }
+
+    /** A reply that started before a later paint keeps that paint. The stamp still updates. */
+    function keepDot(sector: string, cells: string, stamp: string, startedGen: number | null): void {
+        if (cells.length !== DOT_CELLS) return;
+        const held = dotHeld.get(sector);
+        if (held && startedGen !== null && held.gen !== startedGen) {
+            held.confirmed = cells;
+            held.stamp = stamp;
+            return;
+        }
+        dotHeld.set(sector, { confirmed: cells, shown: cells, stamp, gen: held ? held.gen : 0 });
+        dotDirty.delete(sector);
+    }
+
+    async function fetchDotPage(slugs: readonly string[]): Promise<number> {
+        const id = requireId();
+        for (const slug of slugs) dotFlight.add(slug);
+        try {
+            const query = slugs.map((slug) => encodeURIComponent(slug)).join(',');
+            const got = await readConditional(`/api/universes/${encodeURIComponent(id)}/hexes/dots?sectors=${query}`, null);
+            const page = BuilderDotsPage.parse(got.data);
+            for (const sector of page.sectors) keepDot(sector.sector, sector.cells, sector.stamp, null);
+            return got.bytes;
+        } finally {
+            for (const slug of slugs) dotFlight.delete(slug);
+        }
+    }
+
+    async function fetchDotOne(slug: string): Promise<number> {
+        const held = dotHeld.get(slug);
+        if (!held) return 0;
+        const started = held.gen;
+        const id = requireId();
+        dotFlight.add(slug);
+        let retry = false;
+        try {
+            const got = await readConditional(`/api/universes/${encodeURIComponent(id)}/hexes/${encodeURIComponent(slug)}/dots`, held.stamp);
+            const current = dotHeld.get(slug);
+            if (!current) return 0;
+            if (got.status === 304) {
+                if (current.gen === started) dotDirty.delete(slug);
+                else retry = true;
+                return 0;
+            }
+            const one = BuilderDots.parse(got.data);
+            keepDot(slug, one.cells, one.stamp, started);
+            retry = dotDirty.has(slug);
+            return got.bytes;
+        } finally {
+            dotFlight.delete(slug);
+            if (retry) scheduleDotRefresh();
+        }
+    }
+
+    async function refreshDots(slugs: readonly string[]): Promise<void> {
+        if (closed) return;
+        try {
+            for (const slug of slugs) {
+                if (!dotDirty.has(slug) || !dotHeld.has(slug) || dotFlight.has(slug)) continue;
+                await fetchDotOne(slug);
+            }
+            bump();
+        } catch (err) {
+            if (!lastError.value) lastError.value = err instanceof Error ? err.message : 'offline';
+        }
+    }
+
+    function notePlaced(jobId: string, placed: readonly string[], landed: readonly string[]): void {
+        jobPlaced.set(jobId, placed);
+        for (const key of landed) {
+            const row = rows.get(key);
+            if (!row) paintDot(key, '?');
+            else paintRow(key, row);
+        }
+    }
+
+    async function noteDots(slugs: readonly string[], chart?: ReadonlyMap<string, string>): Promise<{ requests: number; bytes: number }> {
+        if (chart) {
+            for (const [slug, cells] of chart) dotChart.set(slug, cells);
+        }
+        if (closed || !universeId) return { requests: 0, bytes: 0 };
+        const seen = new Set<string>();
+        const cold: string[] = [];
+        const stale: string[] = [];
+        for (const slug of slugs) {
+            if (!slug || seen.has(slug)) continue;
+            seen.add(slug);
+            if (dotFlight.has(slug)) continue;
+            if (!dotHeld.has(slug)) cold.push(slug);
+            else if (dotDirty.has(slug)) stale.push(slug);
+        }
+        let requests = 0;
+        let bytes = 0;
+        try {
+            for (const page of dotPages(cold)) {
+                bytes += await fetchDotPage(page);
+                requests += 1;
+            }
+            for (const slug of stale) {
+                bytes += await fetchDotOne(slug);
+                requests += 1;
+            }
+        } catch (err) {
+            if (!lastError.value) lastError.value = err instanceof Error ? err.message : 'offline';
+            throw err;
+        }
+        if (requests > 0) bump();
+        return { requests, bytes };
+    }
+
+    function dotOverlay(): ReadonlyMap<string, string> {
+        const out = new Map<string, string>();
+        for (const [slug, held] of dotHeld) out.set(slug, held.shown);
+        return out;
+    }
+
     async function readJob(id: string, jobId: string, since: number): Promise<ReturnType<typeof BuilderJob.parse>> {
         return BuilderJob.parse(await request('GET', `/api/universes/${encodeURIComponent(id)}/jobs/${encodeURIComponent(jobId)}?since=${since}`));
     }
@@ -733,6 +934,7 @@ export function openMap(options: OpenMapOptions): Builder {
             const afterReload = released(jobId, read);
             if (afterReload) return afterReload;
             last = read;
+            notePlaced(jobId, read.placed, read.landed);
             announce(last);
             onProgress?.(last);
             const afterNote = released(jobId, last);
@@ -747,6 +949,7 @@ export function openMap(options: OpenMapOptions): Builder {
                 if (!closed) await reload(slugs);
                 last = progressOf(job, accumulated, job.state, true);
                 accumulated = last.placed;
+                notePlaced(jobId, last.placed, last.landed);
                 announce(last);
                 onProgress?.(last);
                 if (job.state === 'done' || job.state === 'stopped' || job.state === 'failed') return last;
@@ -1019,6 +1222,7 @@ export function openMap(options: OpenMapOptions): Builder {
             }
             remember({ hexKey, baseRev: rev, op: 'remove', before });
             items.push({ hexKey, toRev: rev, before, op: 'remove' });
+            paintDot(hexKey, '.');
         }
         bump();
         if (items.length) {
@@ -1036,6 +1240,7 @@ export function openMap(options: OpenMapOptions): Builder {
             dropRow(hexKey);
             remember({ hexKey, baseRev: before.rev, op: 'restore', before });
             items.push({ hexKey, toRev: before.rev, before, op: 'restore' });
+            paintDot(hexKey, chartChar(hexKey));
         }
         bump();
         if (items.length) {
@@ -1072,7 +1277,12 @@ export function openMap(options: OpenMapOptions): Builder {
         const data = await request('POST', `/api/universes/${encodeURIComponent(id)}/sectors/undo-generate`, rec.body);
         const undone = SectorGenerateUndone.safeParse(data);
         sectorBook().forget(rec.sectorIds);
-        if ('jobId' in rec.body) spendFollowed(rec.body.jobId);
+        if ('jobId' in rec.body) {
+            const placed = jobPlaced.get(rec.body.jobId) ?? [];
+            for (const key of placed) paintDot(key, chartChar(key));
+            jobPlaced.delete(rec.body.jobId);
+            spendFollowed(rec.body.jobId);
+        }
         dropSectorRows(rec.sectorIds);
         for (const sectorId of rec.sectorIds) loaded.delete(sectorId);
         undos.delete(tokenId);
@@ -1123,6 +1333,9 @@ export function openMap(options: OpenMapOptions): Builder {
             if (queue.size > 0) throw new Error(lastError.value || 'offline');
             const id = requireId();
             const undone = BuilderJobUndo.parse(await request('POST', `/api/universes/${encodeURIComponent(id)}/jobs/${encodeURIComponent(rec.jobId)}/undo`, {}));
+            const placed = jobPlaced.get(rec.jobId) ?? [];
+            for (const key of placed) paintDot(key, chartChar(key));
+            jobPlaced.delete(rec.jobId);
             spendFollowed(rec.jobId);
             await reload(rec.sectors);
             undos.delete(token.id);
@@ -1153,6 +1366,7 @@ export function openMap(options: OpenMapOptions): Builder {
         let restored = 0;
         let message = '';
         for (const item of rec.items) {
+            paintRow(item.hexKey, item.before);
             try {
                 await revertOne(item);
                 restored += 1;
@@ -1342,6 +1556,8 @@ export function openMap(options: OpenMapOptions): Builder {
         remove,
         restore,
         undo,
+        noteDots,
+        dotOverlay,
         job: currentJob,
         stopJob,
         openDraft,

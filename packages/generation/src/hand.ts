@@ -191,14 +191,24 @@ const LEAF_LABELS: Record<string, string> = {
     trade: 'Trade codes',
 };
 
+/**
+ * The leaf after the owner. A numbered owner is `name.12.leaf`, so `star.0.temp` is `temp`.
+ * `s1.orbit.id` has no numeric segment and stays `orbit.id`.
+ */
+function fieldLeaf(id: string): string {
+    const parts = id.split('.');
+    if (parts.length >= 3 && /^\d+$/.test(parts[1] ?? '')) return parts.slice(2).join('.');
+    const dot = id.indexOf('.');
+    return dot < 0 ? id : id.slice(dot + 1);
+}
+
 /** The form label for this id. A raw id never reaches a sentence. */
 function fieldLabel(id: string): string {
     if (id === 'system.name') return 'System Name';
     if (id === 'system.notes') return 'Notes';
     if (id === 'star.add') return 'Add a star';
     if (id === 'body.add') return 'Add a world';
-    const dot = id.indexOf('.');
-    const leaf = dot < 0 ? id : id.slice(dot + 1);
+    const leaf = fieldLeaf(id);
     if (leaf.startsWith('profile.')) {
         const cell = leaf.slice('profile.'.length);
         if (cell in PROFILE_LABELS) return PROFILE_LABELS[cell as keyof typeof PROFILE_LABELS];
@@ -838,9 +848,15 @@ function rollProfiles(envelope: HandEnv, system: HandSystem, rolls: { id: string
         }
         if (wrote) body.profileRoll = (body.profileRoll ?? 0) + 1;
         const missingStar = ' The star has no spectral type, so the atmosphere step treats a missing luminosity as 1.';
-        const text = rolled.message.includes(missingStar)
-            ? rolled.message.replace(missingStar, ' Set Type, Subtype, and Class.')
-            : rolled.message;
+        const host = stars[parentStarIndex];
+        const hostBare = !!host && !lookedUpStar(host)
+            && storedPositive(host.mass) == null && storedPositive(host.diam) == null
+            && storedPositive(host.temp) == null && storedPositive(host.lum) == null;
+        const note = ' Set Type, Subtype, and Class.';
+        let text = rolled.message;
+        if (hostBare) {
+            text = text.includes(missingStar) ? text.replace(missingStar, note) : `${text}${note}`;
+        }
         messages.push({ id: item.id, text, holds: false });
     }
 }

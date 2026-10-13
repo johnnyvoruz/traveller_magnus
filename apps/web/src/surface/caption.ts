@@ -4,6 +4,7 @@
  */
 import type { SurfaceMode } from './contracts.ts';
 import { seaColours, seaPlan } from './enhanced/map.ts';
+import { phaseOf } from './hybrid/liquids.ts';
 
 export type SheetCaption = {
     /** "Vanilla", or "Enhanced · Ethane". */
@@ -58,22 +59,70 @@ export function sheetCaption(mode: SurfaceMode, body: Readonly<Record<string, un
     };
 }
 
-/** The caption of a hybrid sheet (the enhanced mode's map): its sea, its layout and how it was made. */
+function oneDigit(value: unknown): number | null {
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (typeof value === 'string' && /^[0-9A-Za-z]$/.test(value.trim())) {
+        const parsed = parseInt(value.trim(), 36);
+        return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+}
+
+/** Hydrographics digit on the body: hydroCode, hydro, then the UWP's fourth character. */
+function hydroDigit(body: Readonly<Record<string, unknown>>): number | null {
+    for (const key of ['hydroCode', 'hydro']) {
+        const value = oneDigit(body[key]);
+        if (value !== null) return value;
+    }
+    return typeof body.uwp === 'string' && body.uwp.length > 3 ? oneDigit(body.uwp[3]) : null;
+}
+
+function statusOf(field: unknown): string | null {
+    if (!field || typeof field !== 'object') return null;
+    const status = (field as { status?: unknown }).status;
+    return typeof status === 'string' ? status : null;
+}
+
+/**
+ * A body has surface liquid when its hydrographics digit is above 0.
+ * A digit of 0 names none, including when hydroPercent is a few percent:
+ * that percent is the engine's spread inside hydrographics 0
+ * (packages/engines/src/mgt2e_world_engine.js, hydro code 0).
+ * With no digit, hydroPercent above 0 counts. liquidStatus 'none' names none.
+ */
+function hasSurfaceLiquid(body: Readonly<Record<string, unknown>> | null, fallback: boolean): boolean {
+    if (!body) return fallback;
+    if (statusOf(body.liquidStatus) === 'none') return false;
+    const digit = hydroDigit(body);
+    if (digit === 0) return false;
+    if (digit !== null && digit > 0) return true;
+    const percent = body.hydroPercent;
+    return typeof percent === 'number' && Number.isFinite(percent) ? percent > 0 : fallback;
+}
+
+/** The caption of a hybrid sheet. The liquid name is the body's, and the layout word is not that name. */
 export function hybridCaption(model: {
     readonly world: { readonly liquid: string | null; readonly liquidAssumed: boolean; readonly tempSource: string; readonly meanK: number; readonly lowK: number; readonly highK: number };
     readonly layout: string;
     readonly seaShare: number;
     readonly hexes: readonly { readonly terrain: string }[];
-}): SheetCaption {
+}, body?: Readonly<Record<string, unknown>> | null): SheetCaption {
     const w = model.world;
-    const sea = w.liquid ? w.liquid + (w.liquidAssumed ? ' (assumed)' : '') : 'no seas';
-    const layout = model.layout === 'normal' ? '' : model.layout === 'locked' ? ' · locked, night side centred' : ' · ' + model.layout;
+    const handed = body && typeof body === 'object' ? body : null;
+    const named = handed && typeof handed.liquidType === 'string' ? handed.liquidType.trim() : '';
+    const liquid = hasSurfaceLiquid(handed, !!w.liquid)
+        ? (named || (w.liquid ? w.liquid + (w.liquidAssumed ? ' (assumed)' : '') : ''))
+        : '';
+    const sea = liquid || 'no seas';
+    const phase = liquid && liquid !== 'Ice' ? phaseOf(liquid) : null;
+    const frozen = phase !== null && w.highK < phase.meltK ? ' · frozen' : '';
+    const locked = model.layout === 'locked' ? ' · locked, night side centred' : '';
     const iced = model.hexes.filter((h) => h.terrain === 'SI' || h.terrain === 'IF' || h.terrain === 'IC').length;
     const notes = [
         'Hybrid hex map: ' + model.hexes.length + ' hexes.',
-        w.liquid ? 'Sea: ' + Math.round(model.seaShare * 100) + '% of the surface, ' + w.liquid + (w.liquidAssumed ? ' (the data names no liquid; water is assumed)' : '') + '.' : 'No sea.',
+        liquid ? 'Sea: ' + (named || w.liquid || 'unnamed') + (w.liquidAssumed && !named ? ' (the data names no liquid; water is assumed)' : '') + '.' : 'No sea.',
         'Ice: ' + iced + ' hexes.',
         'Temperatures: ' + (w.tempSource === 'engine' ? 'engine' : 'climate word only') + ', mean ' + Math.round(w.meanK) + ' K (' + Math.round(w.lowK) + '–' + Math.round(w.highK) + ' K).',
     ];
-    return { text: 'Enhanced · ' + sea + layout, title: notes.join(' ') };
+    return { text: 'Enhanced · ' + sea + frozen + locked, title: notes.join(' ') };
 }

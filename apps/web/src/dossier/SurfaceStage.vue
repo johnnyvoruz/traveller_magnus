@@ -118,7 +118,7 @@ const averagedShown = ref(false);
 const portTime = ref<string | null>(null);
 const hybrid = computed(() => mode.value === 'enhanced' && model.value !== null);
 const caption = computed(() => (hybrid.value && model.value
-    ? hybridCaption(model.value)
+    ? hybridCaption(model.value, props.target ? props.target.body : null)
     : sheetCaption(mode.value, props.target ? props.target.body : null)));
 /** Enhanced large view bakes 1600 × 800. Vanilla stays 800 × 400 and scales in CSS. */
 const activeLayout = computed(() => (large.value && mode.value === 'enhanced' ? LARGE_SHEET : SHEET_LAYOUT));

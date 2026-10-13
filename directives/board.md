@@ -1,25 +1,26 @@
 # Board
 
-One line per lane. Only the orchestrator edits this file. Updated 2026-10-11 22:40 (by the clock).
+One line per lane. Only the orchestrator edits this file. Updated 2026-10-12 19:15 (by the clock).
 
-**Last push: `9e154fa`, version 1.1.6, 2026-10-11.** Any prompt that says "start only
+**Last push: `79a8076`, version 1.1.7, 2026-10-11.** Any prompt that says "start only
 after the board says the push is made" may start.
 
 | Lane | Status | Current prompt | Blocker / next |
 |---|---|---|---|
-| A | go | prompts/a_own_dots_2.md | the zoomed-out dots, with B's route (MapRenderer.ts: three places lent) |
-| B | go | prompts/b_generate_cap.md, then b_passkeys.md, then b_generate_speed.md | the daily cap of 100 and two hand-form faults; then username and passkey sign-in; then speed |
-| C | go | prompts/c_disc_tilt_caption.md | surface map second pass accepted (in 1.1.7); now a high-tilt world's disc ice, and the dry-world caption |
-| D | go | prompts/d_menu_selection.md | generating many hexes always asks for the density, in plain words; a right-click inside a selection keeps it; the allowance when B and A have it |
-| E | go | prompts/e_handout_images.md | Campaign step 6: an image on a journal entry; confirms the upload and schema first |
+| A | go | prompts/a_allowance_store.md | dots accepted (store and renderer); now the daily allowance in the store, and a note for D |
+| B | go | prompts/b_entry_images.md, then b_generate_speed.md | cap accepted; images on a journal entry (E waits on it), then speed. **Passkey build held**: three questions with Johnny |
+| C | held | (none) | tilt and caption accepted; held until Johnny says what C does next (the queue has only the city lights) |
+| D | go | prompts/d_dots_allowance.md | density prompt and right-click accepted; now A's two dots calls in MapView.vue and the browser pass; the allowance when A's note exists |
+| E | go | prompts/e_handout_images_2.md | Player Pack design note (read-only); handout images when B's field is reported |
 | F | retired | (none) | Johnny, 2026-10-11: unreliable (runs out of budget); do not use or propose until he says it is back |
 
 **Restarting a frozen lane:** paste the block in directives/lanes/START.md with the
 lane's letter as the first message of a new session; from then on "go" is enough.
 
 ## Shared files this turn
-- map/MapRenderer.ts (`overviewPoints`, `setChart`, one new setter): **lent to A**. D keeps out of the renderer.
-- workspace/images.ts: lent to E only if a helper must take an entry (lines named in its report).
+- views/MapView.vue: D (its own): A's two dots calls. A keeps out.
+- account/session.ts: **lent to A** for the allowance field off `GET /api/me`.
+- builder/screen.ts: A (the allowance refusal through the adapter). D keeps out this turn.
 - design/tokens.css: any lane may append its own token lines.
 
 ## Contracts
@@ -42,9 +43,8 @@ lane's letter as the first message of a new session; from then on "go" is enough
   function" on most MgT2E systems (D, local API, production bundle). The call is a
   trace line, `mgt2e_world_engine.js` 1692; the caller in `packages/generation` is
   the suspect. May be live. B, urgent.
-- Zoomed out, the map's dots come only from the published overview: a referee's own
-  systems have no dot, a removed one keeps its dot, an own sector is empty. Needs a
-  dots route from B, then A.
+- Zoomed out, the map's dots come only from the published overview. Route (B) and
+  store and renderer (A) are done; the two `MapView.vue` calls are D's, this turn.
 - (fixed in 1.1.3) **Live, 1.1.2: a world's dossier is covered by its Day and night section.**
   `DayNight.vue` 115 and `SurfaceStage.vue` 460 both use the unscoped class
   `doss-daynight`; the stage's `position: absolute; inset: 0` lands on the section.
@@ -90,9 +90,11 @@ lane's letter as the first message of a new session; from then on "go" is enough
   the blank request body (read from what the server stored).
 
 ## Pending push
-**Ready: version 1.1.7**, `findings/push/builder_2026-10-11h.md`: C's surface map
-second pass (eight paths) and directives. Tree green at 22:35 (1454 pass; checker,
-typecheck, build pass). Push before saying go.
+**Ready: version 1.1.8**, `findings/push/builder_2026-10-12a.md`. Tree green at 19:00
+(1478 pass; checker, typecheck, build pass). The daily cap of 100 (migration 0011),
+the density prompt on every many-hex Generate, right-click keeps a selection, the
+dots store and renderer (not on the live map until D's two calls), the high-tilt
+disc, the dry-world caption, two hand-form faults.
 
 ## Decisions from Johnny
 - 2026-10-10: the file bus replaces pasting.
@@ -261,17 +263,25 @@ typecheck, build pass). Push before saying go.
   the density every time**; the choices read in plain words ("about half of the empty
   hexes"), not "3 in 6".
 
+- 2026-10-12 (orchestrator, trivial): the four density choices stay in the order
+  Sparse, Standard, Dense, Every hex.
+
 ## Open with Johnny
-(none)
+1. B: add `@better-auth/passkey` 1.7.7 (with `@simplewebauthn/server` and `/browser`)? Holds the passkey build.
+2. B: the username is the public handle (3 to 24, letters, digits, underscore; a taken name refused)? Holds the passkey build.
+3. B: sign-up limited to 5 passkey ceremonies an hour for one address, Turnstile only if needed? Holds the passkey build.
+4. D: a right-click inside a subsector or sector opened by its address acts on all of it? Changes no prompt.
+5. C: a body with hydrographics 0 that stores a small water percent: caption "no seas", map still paints the percent? Changes no prompt unless no.
+6. C's next job: the city lights now (its queue is otherwise empty)? Holds C.
 
 ## Queue (prompts not yet written)
 - Screens for username and passkey sign-in (sign-in card, account page: passkeys,
   recovery codes, linked providers): after B's contract `contracts/b_auth.md`.
-- E, Campaign order step 3 (timeline as a list), then 6 (handout images; ask B first).
+- Player Pack build, after E's design note and Johnny's answers to it.
 - The rest of F's review (ranking, visual refinement, words, access) was never done;
   no lane has it.
 - Public games (contract exists), after density and the cap.
-- `workspace/build/BuildSpin.vue` wants lifting to `design/` (one spinner for the app).
+- C: the tilt bake program costs 1.6 s the first time it is used in a session (a late disc, once); fix with C's next prompt.
 - Worker queue settings: B recommends in `b_generate_speed`; wrangler.toml changes go out with Johnny's deploy.
 - Later, on Johnny's word: a second pass on the ice caps' look.
 - **Last, lowest priority (Johnny, 2026-10-11):** city lights are drawn on the

@@ -91,6 +91,11 @@ export function overChart(keys: readonly string[]): boolean {
     return keys.some((key) => truthAt(key) !== null);
 }
 
+/** Where these hexes are, in words: their subsector, else their sector ("Subsector C", "Spinward Marches"). */
+export function placeWords(keys: readonly string[]): string {
+    return where(keys);
+}
+
 function where(keys: readonly string[]): string {
     if (!map || keys.length === 0) return '';
     const names = new Set(keys.map((key) => map ? map.subsectorName(key) : ''));

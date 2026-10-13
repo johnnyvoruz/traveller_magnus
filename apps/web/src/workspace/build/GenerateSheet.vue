@@ -7,7 +7,7 @@
 import { computed, ref } from 'vue';
 import Icon from '../../design/Icon.vue';
 import { buildStore, type Density, type GenerateChoice, type Generator } from './seam.ts';
-import { build, cleanChoice, DENSITIES, ENGINES, GENERATOR_LABEL, plural, setChoice, setDensity } from './state.ts';
+import { build, cleanChoice, DENSITIES, DENSITY_HINT, ENGINES, GENERATOR_LABEL, plural, setChoice, setDensity } from './state.ts';
 
 const props = defineProps<{
     /** How many empty hexes Generate would fill, and how many hold a system. One hex: 1 and 0. */
@@ -74,9 +74,9 @@ const goWords = computed(() => {
     <div v-if="many" class="build-opts build-density">
       <label class="ui-heading" for="build-density">Hexes to fill</label>
       <select id="build-density" v-model="density" class="build-density-box">
-        <option v-for="item in DENSITIES" :key="item.id" :value="item.id">{{ item.label }}</option>
+        <option v-for="item in DENSITIES" :key="item.id" :value="item.id">{{ item.name }}: {{ item.meaning }}</option>
       </select>
-      <small class="build-fine">{{ density === 'every' ? 'Every empty hex gets a system.' : 'Each empty hex is rolled on its own, so how many get a system isn’t known until the run ends.' }}</small>
+      <small class="build-fine">{{ DENSITY_HINT }}</small>
     </div>
     <fieldset v-if="many && filled > 0" class="build-opts">
       <legend class="ui-heading">The {{ plural(filled, 'hex', 'hexes') }} that already {{ filled === 1 ? 'holds' : 'hold' }} a system</legend>

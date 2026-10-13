@@ -74,3 +74,5 @@ Questions for Johnny written out in full, recommended answer first. After each
 meaningful step append one line under Progress: "done: X. next: Y."
 
 ## Progress
+
+done: step 1. CampaignEntry has no images field, so an entry cannot store one. The object route is not tied to a record. next: blocked report for Lane B, then stop.

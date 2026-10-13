@@ -38,6 +38,28 @@ Failure: `{ ok: false, error: { code, message, details? } }`.
 
 `HexRemove` and `HexRestore` are `{ baseRev }` with `baseRev` an integer ≥ 0. `BuilderHex.rev` is ≥ 1. `BuilderAbsent.rev` is 0. A page of rows never includes rev 0.
 
+## Daily generation allowance
+
+**On disk, unpushed.** A non-admin account may generate 100 systems a day. The number is `generation_allowance.daily_limit` for that user (migration `0011_generation_allowance.sql`). The default is 100. Changing one row changes that account. No deploy.
+
+The role is the one `requireRole(c, 'admin')` checks: `user.role` through `roleSatisfies` in `apps/api/src/auth/roles.ts`. `admin` is not capped. `reviewer` and `user` are capped.
+
+What counts is a system the server generates: one hex, a preview (`POST /api/generate/preview`), Roll again (the same generate with a new `roll`), a job, a generate with `makeSectors`, and a `filledToo` regeneration. A hex the density roll leaves empty does not count. A hex that already holds a system, and is left alone, does not count. Hand design, an edit, Keep, and a one-body profile roll do not count.
+
+The count is the density roll, taken before anything is queued or written. `densityKeeps` decides each hex. Only a `write` is reserved. The difference is not given back when the job ends, because the empty hexes were never reserved. Undo does not give a system back. A request that fails before it stores or queues a system releases the count it reserved. Stop does not.
+
+The day is the UTC calendar day. It resets at 00:00 UTC. A job that was accepted before midnight keeps running after midnight.
+
+Counting is one D1 `UPDATE` on `generation_allowance`: add the count only when today's used count plus that count is still within `daily_limit`. A stored `day` that is not today starts from 0 inside that statement. Two requests cannot both pass the same remainder.
+
+A request that would pass the allowance is refused whole. Nothing is queued and no hex is written. Status 429. `error.code` is `generation_allowance`. `details` is `{ code: "generation_allowance", remaining, limit, resetsAt }`. `resetsAt` is the next 00:00 UTC, ISO-8601. The message says how many systems are left and that the allowance resets at 00:00 UTC. One system left uses the singular: `You can generate 1 more system today. The allowance resets at 00:00 UTC.`
+
+`GET /api/me` includes `allowance`: `GenerationAllowance` `{ limit, used, remaining, resetsAt }`. For an admin, `limit` and `remaining` are null and `used` is 0. Every generate answer includes the same object: `BuilderGenerateDone.allowance`, `BuilderJobAccepted.allowance`, `SectorGenerateDone.allowance`, and the preview body. The field is optional on the schema so an older answer still parses. This server sends it.
+
+The per-request ceiling stays 1,280 hexes for every account, including an admin.
+
+`POST .../generate/preview` still has its own 60 requests a minute. That 429 stays `rate_limited`. It is not this allowance.
+
 A stale `baseRev` writes nothing. Hex: 409 `conflict`, `This hex changed. Reload it, then try again.` `details.code` `hex_changed`. Sector: 409 `conflict`, `This sector changed. Reload it, then try again.` Slot taken: 409 `conflict`, `That slot is in use. Choose another slot.` `details.code` `slot_in_use`. The shapes are under "Codes the browser reads".
 
 Object cap: a new private object that would pass 250 MB is 400 `too_large`, `250 MB of objects per universe.` The door write is not applied, and the new object is deleted.
@@ -460,7 +482,7 @@ A belt's size is 0. When a mainworld baseline is present, atmosphere and hydrogr
 
 On the mainworld, only size, atmosphere, and hydrographics are rolled. Population, government, law, starport, and tech level stay. Johnny, 2026-10-11: that stays. The roll is unchanged.
 
-When the star has no type, subtype, or class, `generateStarObject` is not called. The atmosphere step uses luminosity 1 where luminosity is missing (`mgt2e_world_engine.js`, `lum || 1.0`). The moon pass then reads `primary.mass` and throws. That throw is caught. Cells already written are kept. The message names the fields to set: `Set Type, Subtype, and Class.`
+When the star has no type, subtype, or class, and none of mass, diameter, temperature, or luminosity is stored, `generateStarObject` is not called. The atmosphere step uses luminosity 1 where luminosity is missing (`mgt2e_world_engine.js`, `lum || 1.0`). Cells already written are kept, including a full eight-cell profile. The message always includes `Set Type, Subtype, and Class.` A mainworld roll and a roll that writes every cell include it too. The profile string itself is not the message.
 
 A star with a type, subtype, and class is looked up with `generateStarObject`. That lookup does not roll. A white dwarf's rolled mass and cooling (`applyWhiteDwarfPhysics`) are not run, because that step rolls. The typed `D` branch of `generateStarObject` uses the brown-dwarf table. Johnny, 2026-10-11: the engine version stays `1.1.0`, and that lookup stays until luminosity and the other looked-up numbers are fields. Those numbers are not a closed list. See "Hand: select fields".
 

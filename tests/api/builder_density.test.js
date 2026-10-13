@@ -114,7 +114,12 @@ if (process.env.RUN_API_TESTS !== '1') {
         try {
             runWrangler(['d1', 'migrations', 'apply', 'voyage', '--local', '--persist-to', persistTo]);
             const stamp = randomBytes(4).toString('hex');
-            const cookie = userCookie(`den${stamp}`, `den${stamp}@localhost`, persistTo);
+            const userId = `den${stamp}`;
+            const cookie = userCookie(userId, `${userId}@localhost`, persistTo);
+            const allowanceFile = path.join(persistTo, 'allowance.sql');
+            writeFileSync(allowanceFile, `INSERT INTO generation_allowance (user_id, daily_limit, day, used) VALUES ('${userId}', 10000, '', 0);\n`);
+            runWrangler(['d1', 'execute', 'voyage', '--local', '--persist-to', persistTo, '--file', allowanceFile]);
+            rmSync(allowanceFile);
             const headers = { 'content-type': 'application/json', cookie };
             child = startDev({ port, persistTo, inspectorPort });
             await up(base);

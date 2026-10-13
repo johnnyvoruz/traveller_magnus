@@ -315,3 +315,14 @@ void main() {
     outA = vec4(clamp(col, 0.0, 1.0), clamp(h * 0.8 + 0.1, 0.0, 1.0));
     outB = vec4(ocean, city, lava, cloud);
 }`;
+
+/**
+ * The same bake, with the unlocked latitude term multiplied by uLatK.
+ * uLatK is latitudeTiltFactor (tilt_latitude.ts): +1 is not used, because
+ * that case keeps BAKE_FRAG itself so a small tilt does not change a pixel.
+ * The locked branch is unchanged.
+ */
+const BAKE_LATITUDE = ': uMeanC + (uSpread / 40.0) * (15.0 - 45.0 * sinLat * sinLat) - e * 28.0;';
+export const BAKE_FRAG_TILT = BAKE_FRAG
+    .replace('uniform float uMeanC, uSpread, uLocked;', 'uniform float uMeanC, uSpread, uLocked, uLatK;')
+    .replace(BAKE_LATITUDE, ': uMeanC + (uSpread / 40.0) * (15.0 - 45.0 * sinLat * sinLat) * uLatK - e * 28.0;');

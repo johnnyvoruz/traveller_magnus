@@ -98,6 +98,11 @@ export function attachInput(el: HTMLElement, api: {
     }
 
     function onDown(event: PointerEvent): void {
+        // A secondary (right) press is the context menu's alone: never a click, a box or a pan. In
+        // Chromium on Windows its release comes before `contextmenu`, and taken as a click it selected
+        // the one hex under it, so a right-click inside a selection lost the selection
+        // (prompts/d_menu_selection.md part 1).
+        if (event.button === 2) return;
         cancelMotion();
         el.setPointerCapture(event.pointerId);
         const point = local(event.clientX, event.clientY);

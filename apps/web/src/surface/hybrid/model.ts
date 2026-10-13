@@ -22,6 +22,7 @@ import { VANILLA_MASTER_SEED } from '../identity.ts';
 import type { AccentCode, FeatureCode, TerrainCode } from './codes.ts';
 import { dot, gridOf, hexSpacing, norm, sphere, type Grid, type V3 } from './grid.ts';
 import type { HybridWorld } from './inputs.ts';
+import { latitudeTiltFactor } from '../tilt_latitude.ts';
 
 const D2R = Math.PI / 180;
 const R2D = 180 / Math.PI;
@@ -259,9 +260,9 @@ export function startHybridBuild(world: HybridWorld, options: BuildOptions = {})
             const molten = world.hydro >= 15 || (!liquid && world.meanK > 1000);
             seaRank = liquid ? world.hydroPercent / 100 : 0;
             const mean = world.meanK;
-            const tiltE = world.tilt > 90 ? 180 - world.tilt : world.tilt;
             const A = Math.max(0, Math.min(1.5 * (mean - world.lowK), 3 * (world.highK - mean)));
-            const Aeff = A * clamp((54 - tiltE) / 9, -1, 1);
+            // Same factor the disc bake uses. +1 at a folded tilt of 45 or less, 0 at 54, -1 at 63 or more.
+            const Aeff = A * latitudeTiltFactor(world.tilt);
             let tp = Math.abs(Math.sin(world.tilt * D2R));
             if (world.yearHours < 36.5 * 24) tp /= 2;
             if (world.yearHours > 2 * 8760) tp *= 1.5;

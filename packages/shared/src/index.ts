@@ -112,6 +112,7 @@ export {
     BuilderDots,
     BuilderDotsSector,
     BuilderDotsPage,
+    GenerationAllowance,
 } from './schemas/builder.ts';
 export {
     FormKind,

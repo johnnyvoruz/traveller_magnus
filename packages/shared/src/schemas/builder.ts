@@ -130,16 +130,31 @@ export const BuilderGenerate = z.object({
 });
 export type BuilderGenerate = z.infer<typeof BuilderGenerate>;
 
+/**
+ * What this account may still generate today.
+ * `limit` and `remaining` are null for an admin, who has no cap.
+ * Absent on an older answer. This server sends it on `GET /api/me` and on every generate answer.
+ */
+export const GenerationAllowance = z.object({
+    limit: z.number().int().positive().nullable(),
+    used: z.number().int().nonnegative(),
+    remaining: z.number().int().nonnegative().nullable(),
+    resetsAt: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/),
+}).strict();
+export type GenerationAllowance = z.infer<typeof GenerationAllowance>;
+
 export const BuilderGenerateDone = z.object({
     rows: z.array(BuilderHex),
     skipped: z.array(HexKey),
     /** Empty hexes the roll left empty. 0 when the request was one hex, or when every empty hex was written. */
     leftEmpty: z.number().int().nonnegative().default(0),
+    allowance: GenerationAllowance.optional(),
 }).strict();
 export type BuilderGenerateDone = z.infer<typeof BuilderGenerateDone>;
 
 export const BuilderJobAccepted = z.object({
     jobId: z.string().min(1),
+    allowance: GenerationAllowance.optional(),
 }).strict();
 export type BuilderJobAccepted = z.infer<typeof BuilderJobAccepted>;
 

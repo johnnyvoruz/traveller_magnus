@@ -56,3 +56,11 @@ Questions for Johnny written out in full, recommended answer first. After each
 meaningful step append one line under Progress: "done: X. next: Y."
 
 ## Progress
+
+done: read the sheet temperature rule and the disc bake. next: before shots of disc and sheet, then the latitude factor.
+done: before shots are saved, and the high-tilt bake plus the dry caption are in. next: after shots, then the gates.
+done: after shots show 0, 23, and 45 degrees and the locked world unchanged, and 54 degrees and above moved. next: the gates.
+done: the gates pass, and the live caption on Vech A-IV-a reads "Surface map · Enhanced · no seas". next: the report.
+done: the report is written. next: stop.
+
+

@@ -108,3 +108,7 @@ Johnny written out in full, recommended answer first. After each meaningful step
 append one line under Progress: "done: X. next: Y."
 
 ## Progress
+
+done: read the installed better-auth plugins and the passkey docs. next: the design note.
+done: wrote findings/passkey_signin_design.md. next: the report, then stop for the dependency.
+done: wrote directives/reports/b_passkeys.md. The package is not installed. next: wait for Johnny. prompts/b_generate_speed.md stays next and is not started.

@@ -34,7 +34,7 @@ import { setPlaceSource, type SystemInfo } from '../workspace/place_source.ts';
 import { parseHexKey } from '../workspace/places.ts';
 import { loadSession, session } from '../account/session.ts';
 import { buildReady, discardPreview, hexName, hexState, setBuildMap, tallyOf } from '../workspace/build/acts.ts';
-import { BUILD_COMMANDS, canBuild, menuFor, runBuild, type BuildCommandId } from '../workspace/build/commands.ts';
+import { BUILD_COMMANDS, canBuild, menuFor, menuKeysFor, runBuild, type BuildCommandId } from '../workspace/build/commands.ts';
 import { hexPoints, hexWorldBox, hexesPath, keyAt, keysInBox, keysWorldBox, screenBox, slotGhostPath, slotsInView, type SectorPlace } from '../workspace/build/marks.ts';
 import type { BoxMark, HoverMark } from '../workspace/build/BuildMarks.vue';
 import { boxResult, boxWords, centreIn, chipPlace, clickIntent, cursorFor, fitIn, gestureFor, hoverTone, hoverWords, clearGlide, visibleArea, type Area, type Gesture, type Held } from '../workspace/build/pointer.ts';
@@ -1532,19 +1532,46 @@ let hoverWordsHeld = '';
 /** Right-click in Build: the acts for the hex under the pointer, or for the selection it is part of. */
 function onBuildMenu(event: MouseEvent): void {
     if (!buildReady()) return;
+    // The menu key opened it already (a browser may still send its own contextmenu after the key).
+    if (performance.now() - keyMenuAt < 400) {
+        event.preventDefault();
+        return;
+    }
     const point = canvasPoint(event);
     if (!point) return;
     event.preventDefault();
     if (tierFor(cam.ppp) !== 'hex') return;
     const key = keyAt(cam, viewport(), point.x, point.y, sectorAt);
     if (!key) return;
-    let keys = pickedKeys();
-    if (!keys.includes(key)) {
+    // Inside the selection (picked by hand, or a subsector's or sector's address): the menu is for the selection.
+    // Outside it: that hex alone, which the map then opens.
+    const keys = menuKeysFor(key, actingKeys());
+    if (keys.length === 1 && keys[0] === key && !actingKeys().includes(key)) {
         build.selection = [];
         openHex(key);
-        keys = [key];
     }
     menuRef.value = { anchor: { left: event.clientX, top: event.clientY, right: event.clientX, bottom: event.clientY }, keys };
+}
+
+/**
+ * The keyboard's menu key (Menu, or Shift+F10) in Build, by the same rule as a right press: from
+ * the focused hex, the menu for the selection when that hex is in it, else for that hex alone; with
+ * no focused hex (a subsector's address), for what the address selects. It opens at the hex.
+ */
+let keyMenuAt = 0;
+function onMenuKey(event: KeyboardEvent): boolean {
+    if (!(event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10'))) return false;
+    if (!buildReady() || typingTarget(event)) return false;
+    event.preventDefault();
+    const keys = menuKeysFor(selected ? selected.slug + '/' + selected.hhhh : null, actingKeys());
+    if (keys.length === 0) return true;
+    const el = canvasEl.value;
+    const world = hexWorldBox(keys[0], sectorOf);
+    const rect = el ? el.getBoundingClientRect() : { left: 0, top: 0 };
+    const box = world ? screenBox(cam, viewport(), world) : { left: 0, top: 0, right: 0, bottom: 0 };
+    keyMenuAt = performance.now();
+    menuRef.value = { anchor: { left: rect.left + box.left, top: rect.top + box.top, right: rect.left + box.right, bottom: rect.top + box.bottom }, keys };
+    return true;
 }
 
 const buildMenu = computed(() => (menuRef.value ? menuFor(menuRef.value.keys) : null));
@@ -1628,6 +1655,12 @@ watch(
 );
 
 watch(marksEl, () => { markDirty(); });
+
+// The density prompt lives in the pane: asked from the right-click menu or the palette with the pane closed, the pane opens on those hexes.
+watch(() => build.asking, (keys) => {
+    if (!keys || keys.length < 2 || dossierShown.value) return;
+    openScope(scopePath(keys, keys[0]));
+});
 
 // The tool switched, or the selection changed, with the pointer still: the cursor and the hover say so at once.
 watch(() => [build.selecting, build.selection.length, build.on] as const, () => { paintHover(); });
@@ -1950,6 +1983,7 @@ function onMoveKey(event: KeyboardEvent): void {
 }
 
 function onMapKey(event: KeyboardEvent): void {
+    if (onMenuKey(event)) return;
     const step = NEIGHBOUR_KEY[event.code];
     if (step && buildReady() && selectionAnchor() && !event.ctrlKey && !event.altKey && !event.metaKey && !typingTarget(event)) {
         event.preventDefault();

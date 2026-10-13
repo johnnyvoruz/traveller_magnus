@@ -64,3 +64,7 @@ Questions for Johnny written out in full, recommended answer first. After each
 meaningful step append one line under Progress: "done: X. next: Y."
 
 ## Progress
+
+done: the dots route is in the contract, and the renderer still draws only the published cells. next: overlay setter and the store cache.
+done: overlay setter, store cache, and the dots tests are green, including Undo clearing a generated dot at once. next: the four gates and the report, stopping at the MapView lines.
+done: npm test, check, typecheck, and build passed. next: the report is written, partial, at the two MapView lines.

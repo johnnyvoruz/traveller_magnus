@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { endFlight, flight, flightSplit, noteFlight, renameFlight, startFlight } from '../../apps/web/src/workspace/build/flight.ts';
 import {
-    build, cleanDensity, DEFAULT_DENSITY, DENSITIES, densityLine, generateWords, jobLabel, jobLine, jobToast, NOTHING_NEW, readDensity, setDensity, stripLine, yoursNote,
+    build, cleanDensity, DEFAULT_DENSITY, DENSITIES, DENSITY_HINT, densityWords, jobLabel, jobLine, jobToast, NOTHING_NEW, readDensity, setDensity, stripLine, yoursNote,
 } from '../../apps/web/src/workspace/build/state.ts';
 import { endJobToast, jobUndo, startJobToast, takenOver } from '../../apps/web/src/workspace/build/job_toast.ts';
 import { useBuildStore } from '../../apps/web/src/workspace/build/seam.ts';
@@ -202,15 +202,18 @@ test('a running job in one line: hexes checked when the store counts them so', (
 });
 
 test('density: the four choices in order, Standard by default, the words before, during and after a run', () => {
-    assert.deepEqual(DENSITIES.map((item) => item.label), ['Every selected hex', 'Sparse (2 in 6)', 'Standard (3 in 6)', 'Dense (4 in 6)']);
+    // Johnny's ruling: the plain words, the name first; the dice in a hint.
+    assert.deepEqual(DENSITIES.map((item) => item.name + ': ' + item.meaning), [
+        'Sparse: about a third of the empty hexes',
+        'Standard: about half of the empty hexes',
+        'Dense: about two thirds of the empty hexes',
+        'Every hex: all of the empty hexes',
+    ]);
+    assert.equal(DENSITY_HINT, 'Each empty hex is rolled once: 2, 3, or 4 chances in 6.');
+    assert.equal(densityWords('standard'), 'Standard: about half of the empty hexes');
     assert.equal(DEFAULT_DENSITY, 'standard');
     assert.equal(cleanDensity('thick'), 'standard');
     assert.equal(cleanDensity('sparse'), 'sparse');
-    assert.equal(densityLine('standard'), 'Standard, 3 in 6');
-    assert.equal(densityLine('every'), 'Every selected hex');
-    assert.equal(generateWords(80, 'standard'), 'Generate up to 80 hexes');
-    assert.equal(generateWords(1, 'dense'), 'Generate up to 1 hex');
-    assert.equal(generateWords(80, 'every'), 'Generate the 80 empty hexes');
     assert.equal(jobLabel(80, 'sparse'), 'Generating up to 80 systems');
     assert.equal(jobLabel(80, 'every'), 'Generating 80 hexes');
     const done = (placed, leftEmpty, extra = {}) => ({ total: placed + leftEmpty, done: placed + leftEmpty, failed: [], state: 'done', placed: Array.from({ length: placed }, (_, i) => 'A/' + i), leftEmpty, ...extra });
@@ -223,18 +226,13 @@ test('density: the four choices in order, Standard by default, the words before,
     assert.equal(jobToast(done(0, 40), 'Subsector C'), NOTHING_NEW);
 });
 
-test('the right-click menu for many hexes says what a run may fill, and the choice on its second line; one hex has neither', () => {
+test('the right-click menu for many hexes says a choice follows ("Generate…"); one hex says what it does', () => {
     useBuildStore({ tick: () => 0, row: () => null, universe: () => ({ id: 'u-menu', name: 'U', truthVersion: null }) });
-    build.density = 'sparse';
     const many = menuFor(['A/0101', 'A/0102', 'A/0103']).items.find((item) => item.id === 'build-generate');
-    assert.equal(many.label, 'Generate up to 3 hexes');
-    assert.equal(many.say, 'Sparse, 2 in 6');
-    build.density = 'every';
-    assert.equal(menuFor(['A/0101', 'A/0102']).items.find((item) => item.id === 'build-generate').label, 'Generate the 2 empty hexes');
+    assert.equal(many.label, 'Generate…');
+    assert.equal(many.say, undefined);
     const one = menuFor(['A/0101']).items.find((item) => item.id === 'build-generate');
     assert.equal(one.label, 'Generate a system');
-    assert.equal(one.say, undefined);
-    build.density = 'standard';
     useBuildStore(null);
 });
 

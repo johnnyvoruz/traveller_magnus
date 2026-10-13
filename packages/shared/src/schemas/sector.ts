@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { BUILDER_LIMITS, BuilderEdition, BuilderGenerator, BuilderHex, GenerateDensity, HexKey } from './builder.ts';
+import { BUILDER_LIMITS, BuilderEdition, BuilderGenerator, BuilderHex, GenerateDensity, GenerationAllowance, HexKey } from './builder.ts';
 
 /**
  * A sector the referee made.
@@ -123,6 +123,7 @@ export const SectorGenerateDone = z.object({
     jobId: z.string().nullable(),
     /** 0 on this answer. The queued job carries the count. */
     leftEmpty: z.number().int().nonnegative().default(0),
+    allowance: GenerationAllowance.optional(),
 }).strict();
 export type SectorGenerateDone = z.infer<typeof SectorGenerateDone>;
 

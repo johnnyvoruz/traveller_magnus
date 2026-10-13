@@ -2,6 +2,7 @@ import { applyDotRows, applyForm, blankEnvelope, chartEntry, densityKeeps, FormR
 import {
     BUILDER_LIMITS,
     builderPairReady,
+    GenerationAllowance,
     BuilderDots,
     BuilderDotsPage,
     BuilderGenerate,
@@ -43,6 +44,7 @@ import { ulid } from '../auth/session';
 import { universes } from '../db/schema';
 import type { AppEnv } from '../env';
 import { fail, ok } from '../http';
+import { isAllowanceRefusal, releaseAllowance, takeAllowance, type AllowanceView } from '../auth/allowance';
 import { enqueueGenerate } from '../jobs/generate_queue';
 import { defaultPin } from '../universe/defaults';
 import { ownedUniverse, type OwnedUniverse } from '../universe/forward';
@@ -70,6 +72,69 @@ async function pinFor(env: AppEnv['Bindings'], truthVersion: string | null): Pro
     ).bind(truthVersion).first<{ seed: string; settings: string }>();
     if (!row) return defaultPin(truthVersion);
     return { seed: row.seed, settings: JSON.parse(row.settings) as Record<string, unknown>, truthVersion };
+}
+
+type ChargeCtx = Parameters<typeof fail>[0];
+
+async function chargeAllowance(c: ChargeCtx, actor: OwnedUniverse['actor'], count: number): Promise<AllowanceView | Response> {
+    const taken = await takeAllowance(c.env, actor.id, actor.role, count);
+    if (isAllowanceRefusal(taken)) return fail(c, 429, taken.details.code, taken.message, taken.details);
+    return taken;
+}
+
+const sectorCharts = new Map<string, Record<string, unknown> | null>();
+
+async function chartIndex(env: AppEnv['Bindings'], version: string | null, sector: string): Promise<Record<string, unknown> | null> {
+    if (!version || sector.startsWith('~')) return null;
+    const key = `${version}/${sector}`;
+    const cached = sectorCharts.get(key);
+    if (cached !== undefined) return cached;
+    const object = await env.PUBLIC_BUCKET.get(`truth/${version}/sectors/${sector}/index.json`);
+    if (!object) {
+        sectorCharts.set(key, null);
+        return null;
+    }
+    const parsed = JSON.parse(await object.text()) as { hexes?: Record<string, unknown> };
+    const hexes = parsed.hexes ?? {};
+    sectorCharts.set(key, hexes);
+    return hexes;
+}
+
+/** How many systems this request will generate. Density is rolled first, so an empty hex is not counted. */
+async function systemsToGenerate(
+    c: ChargeCtx,
+    owned: OwnedUniverse,
+    pin: Pin,
+    hexKeys: string[],
+    density: 'every' | 'sparse' | 'standard' | 'dense',
+    filledToo: boolean,
+): Promise<number | Response> {
+    const sectors = [...new Set(hexKeys.map((hexKey) => sectorOf(hexKey).sector))];
+    const listed = await door(owned, `/hexes/hold-rows?sectors=${encodeURIComponent(sectors.join(','))}`, 'GET');
+    if (!listed.ok) return listed;
+    const body = await listed.json() as { data?: { sector: string; rows: { local: string; present: boolean; holds: boolean }[] }[] };
+    const rows = new Map<string, { present: boolean; holds: boolean }>();
+    for (const item of body.data ?? []) {
+        for (const row of item.rows) rows.set(`${item.sector}/${row.local}`, { present: row.present, holds: row.holds });
+    }
+    let count = 0;
+    for (const hexKey of hexKeys) {
+        const { sector, local } = sectorOf(hexKey);
+        const row = rows.get(hexKey);
+        let holds = false;
+        if (row?.present) holds = row.holds;
+        else holds = chartHoldsSystem((await chartIndex(c.env, pin.truthVersion, sector))?.[local]);
+        const decision = densityKeeps({
+            universeSeed: pin.seed,
+            hexKey,
+            density,
+            alone: hexKeys.length === 1,
+            holds,
+            filledToo,
+        });
+        if (decision === 'write') count += 1;
+    }
+    return count;
 }
 
 const CHART_SLUG = /^[A-Za-z0-9][A-Za-z0-9_-]{0,80}$/;
@@ -485,6 +550,11 @@ export function mountBuilderRoutes(route: Hono<AppEnv>): void {
             return fail(c, 400, 'validation', 'That engine and generator are not available yet.', { reason: 'generator_unavailable' });
         }
         const pin = await pinFor(c.env, owned.row.truthVersion);
+        const counted = await systemsToGenerate(c, owned, pin, input.hexKeys, input.density, input.filledToo);
+        if (typeof counted !== 'number') return counted;
+        const taken = await chargeAllowance(c, owned.actor, counted);
+        if (taken instanceof Response) return taken;
+        const allowance = GenerationAllowance.parse(taken);
         await door(owned, '/pin', 'POST', pin);
         if (input.hexKeys.length > 1) {
             const id = ulid();
@@ -503,9 +573,17 @@ export function mountBuilderRoutes(route: Hono<AppEnv>): void {
                     captured: {},
                 },
             });
-            if (!created.ok) return created;
-            await enqueueGenerate(c.env.GENERATE_QUEUE, owned.row.id, id, input.hexKeys.length);
-            return ok(c, { jobId: id }, 202);
+            if (!created.ok) {
+                await releaseAllowance(c.env, owned.actor.id, owned.actor.role, counted);
+                return created;
+            }
+            try {
+                await enqueueGenerate(c.env.GENERATE_QUEUE, owned.row.id, id, input.hexKeys.length);
+            } catch (err) {
+                await releaseAllowance(c.env, owned.actor.id, owned.actor.role, counted);
+                throw err;
+            }
+            return ok(c, { jobId: id, allowance }, 202);
         }
         const hexKey = input.hexKeys[0];
         const existing = await door(owned, hexDoorPath(hexKey), 'GET');
@@ -523,7 +601,7 @@ export function mountBuilderRoutes(route: Hono<AppEnv>): void {
             holds: Boolean(holds),
             filledToo: input.filledToo,
         });
-        if (decision === 'skip') return ok(c, BuilderGenerateDone.parse({ rows: [], skipped: [hexKey], leftEmpty: 0 }));
+        if (decision === 'skip' || counted === 0) return ok(c, BuilderGenerateDone.parse({ rows: [], skipped: [hexKey], leftEmpty: 0, allowance }));
         let envelope: ReturnType<typeof generateHex>;
         try {
             envelope = generateHex({
@@ -538,6 +616,7 @@ export function mountBuilderRoutes(route: Hono<AppEnv>): void {
                 },
             });
         } catch (err) {
+            await releaseAllowance(c.env, owned.actor.id, owned.actor.role, counted);
             return fail(c, 400, 'validation', 'The generator refused this hex.', { reason: String(err).slice(0, 200) });
         }
         const bytes = stable(envelope);
@@ -547,7 +626,10 @@ export function mountBuilderRoutes(route: Hono<AppEnv>): void {
         const prior = await c.env.PRIVATE_BUCKET.head(key);
         let added = 0;
         if (!prior) {
-            if (owned.row.objectBytes + size > OBJECT_QUOTA_BYTES) return fail(c, 400, 'too_large', '250 MB of objects per universe.');
+            if (owned.row.objectBytes + size > OBJECT_QUOTA_BYTES) {
+                await releaseAllowance(c.env, owned.actor.id, owned.actor.role, counted);
+                return fail(c, 400, 'too_large', '250 MB of objects per universe.');
+            }
             await c.env.PRIVATE_BUCKET.put(key, bytes, { httpMetadata: { contentType: 'application/json' } });
             added = size;
         }
@@ -562,6 +644,7 @@ export function mountBuilderRoutes(route: Hono<AppEnv>): void {
         });
         if (!applied.ok) {
             if (added) await c.env.PRIVATE_BUCKET.delete(key);
+            await releaseAllowance(c.env, owned.actor.id, owned.actor.role, counted);
             return applied;
         }
         if (added) {
@@ -571,7 +654,7 @@ export function mountBuilderRoutes(route: Hono<AppEnv>): void {
         }
         await recount(c.env, owned.row.id, owned);
         const stored = await applied.json() as { data: unknown };
-        return ok(c, BuilderGenerateDone.parse({ rows: [stored.data], skipped: [], leftEmpty: 0 }));
+        return ok(c, BuilderGenerateDone.parse({ rows: [stored.data], skipped: [], leftEmpty: 0, allowance }));
     });
 }
 
@@ -776,8 +859,13 @@ async function generateWithSectors(c: Ctx, owned: OwnedUniverse, body: unknown):
         if (charted) return fail(c, 400, 'validation', 'That slot holds a charted sector.', { reason: 'charted' });
         sectors.push({ ...sector, charted: false });
     }
+    if (input.hexKeys.length === 1 && input.baseRev === undefined) return fail(c, 400, 'validation', 'Invalid request.');
+    const counted = await systemsToGenerate(c, owned, pin, planned.hexKeys, input.density, input.filledToo);
+    if (typeof counted !== 'number') return counted;
+    const taken = await chargeAllowance(c, owned.actor, counted);
+    if (taken instanceof Response) return taken;
+    const allowance = GenerationAllowance.parse(taken);
     if (input.hexKeys.length === 1) {
-        if (input.baseRev === undefined) return fail(c, 400, 'validation', 'Invalid request.');
         const hexKey = planned.hexKeys[0]!;
         let envelope: ReturnType<typeof generateHex>;
         try {
@@ -793,6 +881,7 @@ async function generateWithSectors(c: Ctx, owned: OwnedUniverse, body: unknown):
                 },
             });
         } catch (err) {
+            await releaseAllowance(c.env, owned.actor.id, owned.actor.role, counted);
             return fail(c, 400, 'validation', 'The generator refused this hex.', { reason: String(err).slice(0, 200) });
         }
         const bytes = stable(envelope);
@@ -802,7 +891,10 @@ async function generateWithSectors(c: Ctx, owned: OwnedUniverse, body: unknown):
         const prior = await c.env.PRIVATE_BUCKET.head(key);
         let added = 0;
         if (!prior) {
-            if (owned.row.objectBytes + size > OBJECT_QUOTA_BYTES) return fail(c, 400, 'too_large', '250 MB of objects per universe.');
+            if (owned.row.objectBytes + size > OBJECT_QUOTA_BYTES) {
+                await releaseAllowance(c.env, owned.actor.id, owned.actor.role, counted);
+                return fail(c, 400, 'too_large', '250 MB of objects per universe.');
+            }
             await c.env.PRIVATE_BUCKET.put(key, bytes, { httpMetadata: { contentType: 'application/json' } });
             added = size;
         }
@@ -821,6 +913,7 @@ async function generateWithSectors(c: Ctx, owned: OwnedUniverse, body: unknown):
         });
         if (!applied.ok) {
             if (added) await c.env.PRIVATE_BUCKET.delete(key);
+            await releaseAllowance(c.env, owned.actor.id, owned.actor.role, counted);
             return applied;
         }
         if (added) {
@@ -836,6 +929,7 @@ async function generateWithSectors(c: Ctx, owned: OwnedUniverse, body: unknown):
             skipped: [],
             jobId: null,
             leftEmpty: 0,
+            allowance,
         }), 201);
     }
     const id = ulid();
@@ -858,8 +952,16 @@ async function generateWithSectors(c: Ctx, owned: OwnedUniverse, body: unknown):
             },
         },
     });
-    if (!created.ok) return created;
-    await enqueueGenerate(c.env.GENERATE_QUEUE, owned.row.id, id, planned.hexKeys.length);
+    if (!created.ok) {
+        await releaseAllowance(c.env, owned.actor.id, owned.actor.role, counted);
+        return created;
+    }
+    try {
+        await enqueueGenerate(c.env.GENERATE_QUEUE, owned.row.id, id, planned.hexKeys.length);
+    } catch (err) {
+        await releaseAllowance(c.env, owned.actor.id, owned.actor.role, counted);
+        throw err;
+    }
     const stored = await created.json() as { data?: { sectors?: unknown; jobId?: string | null } };
     return ok(c, SectorGenerateDone.parse({
         sectors: stored.data?.sectors ?? [],
@@ -867,5 +969,6 @@ async function generateWithSectors(c: Ctx, owned: OwnedUniverse, body: unknown):
         skipped: [],
         jobId: stored.data?.jobId ?? id,
         leftEmpty: 0,
+        allowance,
     }), 202);
 }

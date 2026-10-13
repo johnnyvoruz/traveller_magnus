@@ -3,6 +3,7 @@
  * two RGBA8 cubes. js/planet_gl.js:789-936 and 974-976. No shade pass.
  */
 import { now } from '../../platform/browser.ts';
+import { latitudeTermScales, latitudeTiltFactor } from '../tilt_latitude.ts';
 import { STATS_BATCH, STATS_H, STATS_W, type StatsFields } from './gl_stats.ts';
 
 /** js/planet_gl.js:18 */
@@ -83,6 +84,8 @@ export type BakeProfile = StatsFields & {
     geology: { mountains: number; craters: number; volcanism: number };
     rock: { low: number[]; high: number[] };
     climate: { meanC: number; spread: number; locked: boolean };
+    /** Present on surfaceProfile. The bake reads tilt from here and ignores it when the factor is 1. */
+    rotation?: { tilt?: number };
     life: { cover: number; maturity: number; canopy: number[]; scrub: number[] };
     gas: { zone: number[]; belt: number[]; pole: number[]; storm: number[]; bands: number } | null;
 };
@@ -124,7 +127,7 @@ const norm3 = (c: number[]): [number, number, number] => [(c[0] ?? 0) / 255, (c[
 
 /** Owns the cube textures. Programs are linked in gl.ts and passed to build. */
 export function attachBaker(gl: WebGL2RenderingContext): {
-    build: (stats: LinkedProgram, bake: LinkedProgram) => void;
+    build: (stats: LinkedProgram, bake: LinkedProgram, bakeTilt: LinkedProgram) => void;
     memory: () => number;
     measure: (profiles: BakeProfile[]) => Uint8Array[];
     makeCube: (size: number) => GpuCube;
@@ -148,7 +151,7 @@ export function attachBaker(gl: WebGL2RenderingContext): {
     let memory = 0;
     let longest = 0;
     const spans: GpuSpan[] = [];
-    let programs: { stats: LinkedProgram; bake: LinkedProgram } | null = null;
+    let programs: { stats: LinkedProgram; bake: LinkedProgram; bakeTilt: LinkedProgram } | null = null;
     let anisotropy: Aniso | null = null;
     let statsTarget: { texture: WebGLTexture; fbo: WebGLFramebuffer } | null = null;
     let quad: WebGLBuffer | null = null;
@@ -196,8 +199,16 @@ export function attachBaker(gl: WebGL2RenderingContext): {
         gl.uniform1f(u.uCraters ?? null, profile.geology.craters);
     }
 
+    /** The original bake when the latitude factor is 1 or the world is locked. Otherwise the tilted copy. */
+    function chooseBake(profile: BakeProfile): { program: LinkedProgram; latK: number | null } {
+        if (!programs) throw new Error('baker is not built');
+        const tilt = profile.rotation?.tilt ?? 0;
+        if (!latitudeTermScales(tilt, profile.climate.locked)) return { program: programs.bake, latK: null };
+        return { program: programs.bakeTilt, latK: latitudeTiltFactor(tilt) };
+    }
+
     /** js/planet_gl.js:795-831 */
-    function setBake(u: Record<string, WebGLUniformLocation | null>, profile: BakeProfile, stats: BakeStats, size: number, face: number): void {
+    function setBake(u: Record<string, WebGLUniformLocation | null>, profile: BakeProfile, stats: BakeStats, size: number, face: number, latK: number | null): void {
         setFields(u, profile);
         gl.uniform1i(u.uFace ?? null, face);
         gl.uniform1f(u.uSize ?? null, size);
@@ -216,6 +227,7 @@ export function attachBaker(gl: WebGL2RenderingContext): {
         gl.uniform1f(u.uMeanC ?? null, profile.climate.meanC);
         gl.uniform1f(u.uSpread ?? null, profile.climate.spread);
         gl.uniform1f(u.uLocked ?? null, profile.climate.locked ? 1 : 0);
+        if (latK !== null) gl.uniform1f(u.uLatK ?? null, latK);
         gl.uniform1f(u.uLife ?? null, profile.life.cover);
         gl.uniform1f(u.uMaturity ?? null, profile.life.maturity);
         gl.uniform3fv(u.uCanopy ?? null, norm3(profile.life.canopy));
@@ -235,13 +247,14 @@ export function attachBaker(gl: WebGL2RenderingContext): {
         gl.uniform4f(u.uStorm ?? null, v[0] ?? 0, v[1] ?? 0, (v[2] ?? 0) * 0.6, 0.16);
     }
 
-    function build(stats: LinkedProgram, bake: LinkedProgram): void {
+    function build(stats: LinkedProgram, bake: LinkedProgram, bakeTilt: LinkedProgram): void {
         if (programs) {
             gl.deleteProgram(programs.stats.prog);
             gl.deleteProgram(programs.bake.prog);
+            gl.deleteProgram(programs.bakeTilt.prog);
         }
         memory = 0;
-        programs = { stats, bake };
+        programs = { stats, bake, bakeTilt };
         const ext = gl.getExtension('EXT_texture_filter_anisotropic');
         anisotropy = ext
             ? {
@@ -335,7 +348,8 @@ export function attachBaker(gl: WebGL2RenderingContext): {
     function probeDraw(profile: BakeProfile, stats: BakeStats, size: number, skipCheck: boolean): void {
         if (!programs) throw new Error('baker is not built');
         const cube = makeCube(size);
-        const { prog, uniforms: u } = programs.bake;
+        const chosen = chooseBake(profile);
+        const { prog, uniforms: u } = chosen.program;
         gl.useProgram(prog);
         gl.bindFramebuffer(gl.FRAMEBUFFER, cube.fbo);
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_CUBE_MAP_POSITIVE_X, cube.a, 0);
@@ -349,7 +363,7 @@ export function attachBaker(gl: WebGL2RenderingContext): {
             if (status !== gl.FRAMEBUFFER_COMPLETE) throw new Error('probe framebuffer ' + status);
         }
         gl.viewport(0, 0, size, size);
-        setBake(u, profile, stats, size, 0);
+        setBake(u, profile, stats, size, 0, chosen.latK);
         time('drawArrays', () => drawQuad());
         gl.readBuffer(gl.COLOR_ATTACHMENT0);
         const pixels = new Uint8Array(size * size * 4);
@@ -386,7 +400,8 @@ export function attachBaker(gl: WebGL2RenderingContext): {
     /** js/planet_gl.js:916-926. Attachment 0 is cube A, attachment 1 is cube B. */
     function bakeFace(profile: BakeProfile, stats: BakeStats, cube: GpuCube, face: number): void {
         if (!programs) throw new Error('baker is not built');
-        const { prog, uniforms: u } = programs.bake;
+        const chosen = chooseBake(profile);
+        const { prog, uniforms: u } = chosen.program;
         gl.useProgram(prog);
         gl.bindFramebuffer(gl.FRAMEBUFFER, cube.fbo);
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_CUBE_MAP_POSITIVE_X + face, cube.a, 0);
@@ -398,7 +413,7 @@ export function attachBaker(gl: WebGL2RenderingContext): {
         });
         if (status !== gl.FRAMEBUFFER_COMPLETE) throw new Error('bake framebuffer ' + status);
         gl.viewport(0, 0, cube.size, cube.size);
-        setBake(u, profile, stats, cube.size, face);
+        setBake(u, profile, stats, cube.size, face, chosen.latK);
         time('bakeFace ' + cube.size, () => drawQuad());
     }
 

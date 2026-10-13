@@ -43,6 +43,22 @@ export function askSectorName(keys: readonly string[]): void {
     growUi.focus += 1;
 }
 
+/**
+ * Before the density is asked: a new sector needs its name. A missing one is said beside its box,
+ * which takes the cursor, as Generate itself does. True when one is missing.
+ */
+export function slotNamesMissing(keys: readonly string[]): boolean {
+    const slots = slotGroups(keys);
+    for (const group of slots) {
+        if (cleanName(growUi.names[group.slug] ?? '')) continue;
+        growUi.want = group.slug;
+        growUi.focus += 1;
+        growUi.error = slots.length === 1 ? 'To generate here, first name the new sector.' : 'To generate here, first name each new sector.';
+        return true;
+    }
+    return false;
+}
+
 /** The store's states, read as the screen's four. */
 export function screenProgress(progress: GrowProgress): JobProgress {
     const state = progress.state === 'stopping' || progress.state === 'stopped' || progress.state === 'running' || progress.state === 'done'
