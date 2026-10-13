@@ -114,6 +114,13 @@ export type DiscBaker = {
     stallProbe: (profile: BakeProfile, size: number, skipCheck: boolean) => GpuSpan[];
     /** One 1x1 bake so the driver's first wait happens before a real face. */
     warmup: (profile: BakeProfile) => GpuSpan[];
+    /**
+     * Links the high-tilt bake if it is still open, then draws one 1x1 face
+     * with it. A low-tilt picture does not call this. Returns false while the
+     * parallel compile is still open.
+     */
+    warmTilt: () => boolean;
+    tiltIsWarm: () => boolean;
     failed: () => boolean;
     /** The context the disc worker uses to link a draw program. Null before setup. */
     gl: () => WebGL2RenderingContext | null;
@@ -149,12 +156,12 @@ type ParallelCompile = { COMPLETION_STATUS_KHR: number };
 
 type OpenProgram = { label: string; prog: WebGLProgram; shaders: WebGLShader[] };
 
-const PROGRAMS: { label: string; source: string }[] = [
+const CORE_PROGRAMS: { label: string; source: string }[] = [
     { label: 'stats', source: STATS_FRAG },
     { label: 'bake', source: BAKE_FRAG },
     { label: 'draw', source: DRAW_FRAG },
-    { label: 'bake-tilt', source: BAKE_FRAG_TILT },
 ];
+const TILT_PROGRAM = { label: 'bake-tilt', source: BAKE_FRAG_TILT };
 
 function beginProgram(gl: WebGL2RenderingContext, fragment: string, label: string): OpenProgram {
     const compile = (type: number, source: string): WebGLShader => {
@@ -238,6 +245,8 @@ export function createDiscBaker(
     let programState: 'idle' | 'pending' | 'ready' = 'idle';
     let parallel: ParallelCompile | null = null;
     let opened: OpenProgram[] = [];
+    let tiltOpen: OpenProgram | null = null;
+    let tiltWarmed = false;
     let blockingAt = 0;
     const blockingBuilt: LinkedProgram[] = [];
     const linkCosts: { label: string; ms: number }[] = [];
@@ -248,6 +257,8 @@ export function createDiscBaker(
         worlds.clear();
         tiles = new Map();
         opened = [];
+        tiltOpen = null;
+        tiltWarmed = false;
         blockingBuilt.length = 0;
         blockingAt = 0;
         programState = 'idle';
@@ -260,9 +271,8 @@ export function createDiscBaker(
         const stats = linked[0];
         const bake = linked[1];
         const draw = linked[2];
-        const bakeTilt = linked[3];
-        if (!stats || !bake || !draw || !bakeTilt) throw new Error('link failed');
-        ops.build(stats, bake, bakeTilt);
+        if (!stats || !bake || !draw) throw new Error('link failed');
+        ops.build(stats, bake, null);
         if (!shade) shade = attachShade(gl, draw, () => ops?.bindQuad());
         else shade.use(draw);
         opened = [];
@@ -272,13 +282,18 @@ export function createDiscBaker(
     function startCompile(): void {
         if (!gl || programState !== 'idle') return;
         parallel = gl.getExtension('KHR_parallel_shader_compile') as ParallelCompile | null;
+        tiltOpen = null;
+        tiltWarmed = false;
         if (parallel) {
             opened = [];
-            for (const spec of PROGRAMS) {
+            for (const spec of CORE_PROGRAMS) {
                 const started = now();
                 opened.push(beginProgram(gl as WebGL2RenderingContext, spec.source, spec.label));
                 ops?.mark('beginProgram ' + spec.label, now() - started);
             }
+            const started = now();
+            tiltOpen = beginProgram(gl as WebGL2RenderingContext, TILT_PROGRAM.source, TILT_PROGRAM.label);
+            ops?.mark('beginProgram ' + TILT_PROGRAM.label, now() - started);
         } else {
             blockingAt = 0;
             blockingBuilt.length = 0;
@@ -310,7 +325,7 @@ export function createDiscBaker(
             mountPrograms(linked);
             return;
         }
-        const spec = PROGRAMS[blockingAt];
+        const spec = CORE_PROGRAMS[blockingAt];
         if (!spec) return;
         const started = now();
         const linked = linkDiscProgram(gl, spec.source);
@@ -319,7 +334,7 @@ export function createDiscBaker(
         linkCosts.push({ label: spec.label, ms });
         blockingBuilt.push(linked);
         blockingAt += 1;
-        if (blockingAt >= PROGRAMS.length) mountPrograms(blockingBuilt);
+        if (blockingAt >= CORE_PROGRAMS.length) mountPrograms(blockingBuilt);
     }
 
     function onRestored(): void {
@@ -328,6 +343,8 @@ export function createDiscBaker(
         worlds.clear();
         tiles = new Map();
         opened = [];
+        tiltOpen = null;
+        tiltWarmed = false;
         blockingBuilt.length = 0;
         blockingAt = 0;
         programState = 'idle';
@@ -616,7 +633,55 @@ export function createDiscBaker(
         canvas = null;
     }
 
-    /** Bake only. Does not shade, so a timed step is the bake path. */
+    function finishTilt(block: boolean): boolean {
+        if (!gl || !ops || !ready()) return false;
+        if (ops.tiltInstalled()) return true;
+        if (tiltOpen) {
+            if (!block && parallel && !compilationDone(tiltOpen)) return false;
+            const note = (name: string, ms: number): void => ops?.mark(name, ms);
+            ops.installTilt(finishProgram(gl, tiltOpen, note));
+            tiltOpen = null;
+            return true;
+        }
+        if (parallel) return false;
+        const started = now();
+        ops.installTilt(linkDiscProgram(gl, TILT_PROGRAM.source));
+        ops.mark('link bake-tilt', now() - started);
+        return true;
+    }
+
+    /** Draws one 1x1 high-tilt face once the tilt program has linked. */
+    function warmTilt(): boolean {
+        pump();
+        if (!ready() || !ops || tiltWarmed) return tiltWarmed;
+        if (!finishTilt(false)) return false;
+        const sample = [...worlds.values()].find((world) => world.stats) ?? [...worlds.values()][0];
+        if (!sample) return false;
+        const profile: BakeProfile = {
+            ...sample.profile,
+            climate: { ...sample.profile.climate, locked: false },
+            rotation: { ...sample.profile.rotation, tilt: 60 },
+        };
+        ops.takeSpans();
+        ops.warmupPipeline(profile, sample.stats ?? { sea: 0.5, cloudEdge: 0.6 });
+        tiltWarmed = true;
+        return true;
+    }
+
+    function ensureTilt(profile: BakeProfile): void {
+        const gpu = requireOps();
+        if (!gpu.needsTilt(profile) || tiltWarmed) return;
+        if (!finishTilt(true)) return;
+        const stats = worlds.get(profile.id)?.stats;
+        if (!stats) return;
+        gpu.warmupPipeline({
+            ...profile,
+            climate: { ...profile.climate, locked: false },
+            rotation: { ...profile.rotation, tilt: profile.rotation?.tilt ?? 60 },
+        }, stats);
+        tiltWarmed = true;
+    }
+
     function step(profile: BakeProfile, radiusPx: number, uTime: number): number {
         const started = now();
         pump();
@@ -624,6 +689,8 @@ export function createDiscBaker(
         timeUsed = uTime;
         frame += 1;
         const world = adopt(profile);
+        if (!world.stats) measureFresh([world]);
+        ensureTilt(profile);
         world.near = 0;
         world.want = cubeSizeFor(radiusPx);
         bakeBodies([{ world, want: world.want }]);
@@ -653,7 +720,9 @@ export function createDiscBaker(
             }
             adopted.push({ req, world });
         });
-        bakeBodies(adopted.map((item) => ({ world: item.world, want: item.world.want })));
+        measureFresh(adopted.map((item) => item.world));
+        const baker = requireOps();
+        bakeBodies(adopted.filter((item) => !baker.needsTilt(item.world.profile) || tiltWarmed).map((item) => ({ world: item.world, want: item.world.want })));
         evict();
         const sized = adopted.map((item) => ({
             ...item,
@@ -757,6 +826,7 @@ export function createDiscBaker(
         timeUsed = uTime;
         const world = worlds.get(profile.id);
         if (!world?.stats) throw new Error('statistics were not measured');
+        ensureTilt(profile);
         const gpu = requireOps();
         const cube = gpu.makeCube(size);
         let maxFaceMs = 0;
@@ -879,16 +949,20 @@ export function createDiscBaker(
             requireOps().probeDraw(world.profile, stats, size, skipCheck);
             return requireOps().takeSpans();
         },
+        warmTilt,
+        tiltIsWarm: () => tiltWarmed,
         warmup: (profile) => {
             pump();
             if (!ready()) return [];
-            requireOps().takeSpans();
+            const gpu = requireOps();
+            gpu.takeSpans();
             const world = adopt(profile);
             if (!world.stats) measureFresh([world]);
             const stats = world.stats;
-            if (!stats) return requireOps().takeSpans();
-            requireOps().warmupPipeline(world.profile, stats);
-            return requireOps().takeSpans();
+            if (!stats) return gpu.takeSpans();
+            if (gpu.needsTilt(world.profile) && !gpu.tiltInstalled()) return gpu.takeSpans();
+            gpu.warmupPipeline(world.profile, stats);
+            return gpu.takeSpans();
         },
         failed: () => broken || disposed,
         gl: () => gl,

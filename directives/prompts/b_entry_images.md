@@ -62,3 +62,7 @@ meaningful step append one line under Progress: "done: X. next: Y."
 
 ## Progress
 
+done: images on the journal schema, the column for an old table, and the omit-or-clear write. next: the unit tests.
+done: unit tests, the worker gate, and the web build. next: the report.
+done: wrote directives/reports/b_entry_images.md. next: prompts/b_generate_speed.md.
+

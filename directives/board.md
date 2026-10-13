@@ -1,31 +1,33 @@
 # Board
 
-One line per lane. Only the orchestrator edits this file. Updated 2026-10-12 19:15 (by the clock).
+One line per lane. Only the orchestrator edits this file. Updated 2026-10-12 21:05 (by the clock).
 
-**Last push: `79a8076`, version 1.1.7, 2026-10-11.** Any prompt that says "start only
+**Last push: `57ec8d0`, version 1.1.8, 2026-10-12.** Any prompt that says "start only
 after the board says the push is made" may start.
 
 | Lane | Status | Current prompt | Blocker / next |
 |---|---|---|---|
-| A | go | prompts/a_allowance_store.md | dots accepted (store and renderer); now the daily allowance in the store, and a note for D |
-| B | go | prompts/b_entry_images.md, then b_generate_speed.md | cap accepted; images on a journal entry (E waits on it), then speed. **Passkey build held**: three questions with Johnny |
-| C | held | (none) | tilt and caption accepted; held until Johnny says what C does next (the queue has only the city lights) |
-| D | go | prompts/d_dots_allowance.md | density prompt and right-click accepted; now A's two dots calls in MapView.vue and the browser pass; the allowance when A's note exists |
-| E | go | prompts/e_handout_images_2.md | Player Pack design note (read-only); handout images when B's field is reported |
+| A | go | prompts/a_passkey_client.md | allowance store accepted; now the first chunk back to 169 kB, the passkey client (contracts/b_auth.md) with a note for D, and the selection outline over the dots (MapRenderer.ts lent) |
+| B | go | prompts/b_auth_gate_dots.md | the recovery gate made safe to deploy (and sign-out allowed in a recovery session), the dots route without an overview, a read of the public games contract |
+| C | go | prompts/c_ice_caps_2.md | the ice caps, second look: the edge follows land and sea, a broken margin, no change in how much ice |
+| D | go | prompts/d_passkey_screens.md | the sign-in card, the account page and the recovery-session screen for username and passkey |
+| E | in flight | prompts/e_handout_images_2.md, then e_player_pack.md | handout images under way; then the Player Pack, first version |
 | F | retired | (none) | Johnny, 2026-10-11: unreliable (runs out of budget); do not use or propose until he says it is back |
 
 **Restarting a frozen lane:** paste the block in directives/lanes/START.md with the
 lane's letter as the first message of a new session; from then on "go" is enough.
 
 ## Shared files this turn
-- views/MapView.vue: D (its own): A's two dots calls. A keeps out.
-- account/session.ts: **lent to A** for the allowance field off `GET /api/me`.
-- builder/screen.ts: A (the allowance refusal through the adapter). D keeps out this turn.
+- account/ (session.ts and the new passkey client): **lent to A**. D reads it, does not edit it.
+- map/MapRenderer.ts (the selection draw only): **lent to A**.
+- workspace/SignInCard.vue, workspace/account.ts, views/Account.vue: D.
+- workspace/images.ts: lent to E only if a helper must take an entry (lines named in its report).
 - design/tokens.css: any lane may append its own token lines.
 
 ## Contracts
 - contracts/b_marketplace.md, contracts/b_public_games.md (B): size b and the opt-in
   hex mark; three questions open with Johnny.
+- contracts/b_auth.md (B): username and passkey sign-in, built, **held out of pushes** until the gate is fixed.
 - contracts/b_builder.md (B): the Builder routes, the draft cycle, sectors, undo, and
   the one act: `POST .../generate` with `makeSectors`, `POST .../sectors/undo-generate`.
 - Next in b_builder.md: "Hand: orbit data", "Hand: roll a profile", "What may orbit what".
@@ -39,6 +41,17 @@ lane's letter as the first message of a new session; from then on "go" is enough
    (findings/campaign_gap_audit.md §4), steps 1 to 5 first. Step 4 (`@` mention) is done.
 
 ## Known, not fixed
+- The first chunk is 251 kB (was 169): `account/session.ts` imports a zod schema from
+  `@voyage/shared` as a value. A, first item this turn.
+- The passkey server's recovery gate (`auth/recovery_gate.ts`) does a D1 read on every
+  signed-in `/api/*` request and breaks them all if 0012 is not applied. B, this turn.
+- The dots routes answer a chart sector as all dots when the overview cannot be read. B, this turn.
+- `apps/web/src/campaign/import.ts` does not read `journal` from an exported campaign
+  file (B's finding); no lane has it yet.
+- Not seen yet: dots and the toast advancing while a job runs (D's local queue answered
+  only at the end). Look on production after the deploy.
+- Speed leftovers (B's own): two jobs on one universe can race the 250 MB quota; a
+  crash between the D1 byte add and the settled mark double-counts bytes.
 - (fixed, in push 1.1.6) **Keep on a freshly generated system throws** "w.solarDayHours.toFixed is not a
   function" on most MgT2E systems (D, local API, production bundle). The call is a
   trace line, `mgt2e_world_engine.js` 1692; the caller in `packages/generation` is
@@ -90,11 +103,8 @@ lane's letter as the first message of a new session; from then on "go" is enough
   the blank request body (read from what the server stored).
 
 ## Pending push
-**Ready: version 1.1.8**, `findings/push/builder_2026-10-12a.md`. Tree green at 19:00
-(1478 pass; checker, typecheck, build pass). The daily cap of 100 (migration 0011),
-the density prompt on every many-hex Generate, right-click keeps a selection, the
-dots store and renderer (not on the live map until D's two calls), the high-tilt
-disc, the dry-world caption, two hand-form faults.
+**Ready, not yet committed at 21:05: version 1.1.9**, `findings/push/builder_2026-10-12b.md` (66 paths).
+Held out: the passkey server (17 paths) until B's gate fix; E's handout images in flight.
 
 ## Decisions from Johnny
 - 2026-10-10: the file bus replaces pasting.
@@ -266,24 +276,29 @@ disc, the dry-world caption, two hand-form faults.
 - 2026-10-12 (orchestrator, trivial): the four density choices stay in the order
   Sparse, Standard, Dense, Every hex.
 
+- 2026-10-12, yes to six: add `@better-auth/passkey` 1.7.7; the username is the
+  public handle (3 to 24, letters, digits, underscore; taken refused); five passkey
+  sign-up ceremonies an hour for one address, Turnstile only if needed; a right-click
+  inside a subsector or sector opened by its address acts on all of it; a
+  hydrographics-0 world keeps its painted percent and is captioned "no seas"; C does
+  the city lights now.
+
+- 2026-10-12, yes to twelve: a recovery session may sign out; Generate stays on when
+  the density roll might pass what is left; at zero the note under the Build strip
+  stays while nothing is selected; C takes the second look at the ice caps now. The
+  Player Pack, first version: a referee-only mention reads "a record"; a hex mention
+  shows its written label; a link between two player-visible records shows without
+  role or notes; one HTML file, no ZIP package; no map; no images; party and ship
+  only when marked for players, the clock day as cutoff; a notes box with "Download
+  my notes", no import yet.
+
 ## Open with Johnny
-1. B: add `@better-auth/passkey` 1.7.7 (with `@simplewebauthn/server` and `/browser`)? Holds the passkey build.
-2. B: the username is the public handle (3 to 24, letters, digits, underscore; a taken name refused)? Holds the passkey build.
-3. B: sign-up limited to 5 passkey ceremonies an hour for one address, Turnstile only if needed? Holds the passkey build.
-4. D: a right-click inside a subsector or sector opened by its address acts on all of it? Changes no prompt.
-5. C: a body with hydrographics 0 that stores a small water percent: caption "no seas", map still paints the percent? Changes no prompt unless no.
-6. C's next job: the city lights now (its queue is otherwise empty)? Holds C.
+(none)
 
 ## Queue (prompts not yet written)
 - Screens for username and passkey sign-in (sign-in card, account page: passkeys,
   recovery codes, linked providers): after B's contract `contracts/b_auth.md`.
-- Player Pack build, after E's design note and Johnny's answers to it.
 - The rest of F's review (ranking, visual refinement, words, access) was never done;
   no lane has it.
 - Public games (contract exists), after density and the cap.
-- C: the tilt bake program costs 1.6 s the first time it is used in a session (a late disc, once); fix with C's next prompt.
 - Worker queue settings: B recommends in `b_generate_speed`; wrangler.toml changes go out with Johnny's deploy.
-- Later, on Johnny's word: a second pass on the ice caps' look.
-- **Last, lowest priority (Johnny, 2026-10-11):** city lights are drawn on the
-  atmosphere layer of a world's surface, not on the ground under it (C, `surface/`).
-  No prompt until everything above is done.

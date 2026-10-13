@@ -6,7 +6,7 @@
  */
 import { computed, nextTick, ref, watch, watchEffect } from 'vue';
 import Icon from '../../design/Icon.vue';
-import { hexState, keepPreview, discardPreview, overChart, previewAt, removeHexes, restorable, restoreHexes, rollAgain } from './acts.ts';
+import { allowanceFor, hexState, keepPreview, discardPreview, overChart, previewAt, removeHexes, restorable, restoreHexes, rollAgain } from './acts.ts';
 import BuildMenu, { type MenuItem } from './BuildMenu.vue';
 import Spinner from '../../design/Spinner.vue';
 import type { Rect } from '../pop_place.ts';
@@ -21,6 +21,10 @@ const props = defineProps<{ hexKey: string; name: string }>();
 const preview = computed(() => (build.preview && build.preview.hexKey === props.hexKey ? build.preview : null));
 const state = computed(() => hexState(props.hexKey));
 const busy = computed(() => build.rolling !== '' || build.job !== null);
+/** Roll again is a new generated system: the daily allowance by it, and the server's refusal in the same place. */
+const rollSay = computed(() => (preview.value ? allowanceFor([preview.value.hexKey]) : null));
+const rollHeld = computed(() => !!rollSay.value && rollSay.value.blocked);
+const rollWord = computed(() => (preview.value && build.error ? build.error : rollSay.value ? rollSay.value.text : ''));
 const more = ref<HTMLButtonElement | null>(null);
 const keep = ref<HTMLButtonElement | null>(null);
 const anchor = ref<Rect | null>(null);
@@ -116,9 +120,10 @@ watch(() => (preview.value ? preview.value.roll : -1), (roll) => {
   <div class="build-bar">
     <template v-if="preview">
       <button ref="keep" type="button" class="ui-btn is-primary" :disabled="busy" @click="keepPreview()"><Icon name="check" :size="13" />Keep<kbd class="build-key">K</kbd></button>
-      <button type="button" class="ui-btn" :disabled="busy" :aria-busy="build.rolling ? 'true' : undefined" @click="rollAgain()">
+      <button type="button" class="ui-btn" :disabled="busy || rollHeld" :title="rollHeld && rollSay ? rollSay.text : undefined" :aria-busy="build.rolling ? 'true' : undefined" @click="rollAgain()">
         <Spinner v-if="build.rolling" /><Icon v-else name="wand-magic-sparkles" :size="13" />{{ build.rolling ? 'Rolling…' : 'Roll again' }}<kbd class="build-key">R</kbd>
       </button>
+      <span v-if="rollWord" class="build-bar-word build-bar-allowance" :class="{ 'is-held': rollHeld || !!build.error }" :title="rollWord" :role="build.error ? 'alert' : 'status'" data-build-allowance>{{ rollWord }}</span>
       <span class="build-bar-gap"></span>
       <button type="button" class="ui-btn" @click="discardPreview()">Discard</button>
     </template>
@@ -204,6 +209,19 @@ watch(() => (preview.value ? preview.value.roll : -1), (roll) => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* The allowance by Roll again: muted while some is left; a sentence that holds Roll again wraps, so it's read whole. */
+.build-bar-allowance {
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.build-bar-allowance.is-held {
+  color: var(--text-0);
+  white-space: normal;
+  line-height: 1.35;
 }
 
 /* A narrow window: the key hints go, so the count, Discard and Keep stay whole. */

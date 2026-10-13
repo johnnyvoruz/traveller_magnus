@@ -106,6 +106,11 @@ export function takenOver(): boolean {
     return taken;
 }
 
+/** A new job from this screen, at the click: one taken over before is over. Said also when its toast waits for the server. */
+export function newJob(): void {
+    if (!following) taken = false;
+}
+
 function follow(store: BuildStore): void {
     const ref = store.job;
     if (!ref || !ref.value) return;

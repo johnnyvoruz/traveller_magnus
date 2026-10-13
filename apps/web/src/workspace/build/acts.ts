@@ -7,11 +7,14 @@ import type { SectorHex, Settings } from '@voyage/shared';
 import { showToast, TOAST_ACTION_MS } from '../../shell/toast.ts';
 import { parseHexKey } from '../places.ts';
 import { endFlight, noteFlight, startFlight } from './flight.ts';
-import { endJobToast, jobUndo, NO_JOB_UNDO, startJobToast, stopFollowed, takenOver } from './job_toast.ts';
+import { endJobToast, jobUndo, newJob, NO_JOB_UNDO, startJobToast, stopFollowed, takenOver } from './job_toast.ts';
 import { isHandHex } from './hand_acts.ts';
 import { runUndo } from './undo_words.ts';
 import { buildStore, type HexState, type UndoToken } from './seam.ts';
 import { build, generateTargets, jobLabel, jobToast, plural, readDensity, removeTargets, restoreTargets, stateOf, tally, type Tally } from './state.ts';
+import { actError, allowanceNow, allowanceSay, writesOf, type AllowanceSay } from './allowance_words.ts';
+import type { Density } from './seam.ts';
+import { allowanceCovers } from '../../builder/allowance.ts';
 import { watch } from 'vue';
 
 // The density is remembered per universe: read it whenever Build's universe changes.
@@ -111,7 +114,27 @@ export function offerUndo(message: string, token: UndoToken): void {
 }
 
 function fail(err: unknown): void {
-    build.error = err instanceof Error ? err.message : 'That action failed. Try again.';
+    // The allowance's refusal is the server's sentence plus the reset in the person's time zone.
+    build.error = actError(err, 'That action failed. Try again.');
+}
+
+/**
+ * The allowance for generating these hexes (allowance_words.ts): what to say by the control, and
+ * whether it is off. One hex costs one system; many cost what the density roll writes.
+ */
+export function allowanceFor(keys: readonly string[], density: Density | null = build.density, filledToo = build.filledToo): AllowanceSay | null {
+    if (keys.length <= 1) return allowanceSay(allowanceNow(), 1, 1);
+    const count = tallyOf(keys);
+    const targets = generateTargets(count, filledToo);
+    const writes = writesOf(count.empty.length, targets.length - count.empty.length, density);
+    return allowanceSay(allowanceNow(), writes.least, writes.most);
+}
+
+/** A request the allowance is sure to refuse is not sent: its sentence goes where the refusal would. */
+function heldByAllowance(say: AllowanceSay | null): boolean {
+    if (!say || !say.blocked) return false;
+    build.error = say.text;
+    return true;
 }
 
 // ---- one hex: a preview, then keep ---------------------------------------------------------------
@@ -119,6 +142,8 @@ function fail(err: unknown): void {
 export async function previewAt(hexKey: string, roll = 0): Promise<void> {
     const store = buildStore();
     if (!store || build.job) return;
+    // A preview is a generated system: it counts (Keep does not).
+    if (heldByAllowance(allowanceFor([hexKey]))) return;
     const ticket = ++rollTicket;
     build.error = '';
     build.sheetOpen = false;
@@ -167,6 +192,8 @@ export function generateMany(keys: readonly string[]): void {
     if (!store || build.job) return;
     const targets = generateTargets(tallyOf(keys), build.filledToo);
     if (targets.length === 0) return;
+    const say = allowanceFor(keys);
+    if (heldByAllowance(say)) return;
     build.error = '';
     build.sheetOpen = false;
     build.preview = null;
@@ -174,7 +201,24 @@ export function generateMany(keys: readonly string[]): void {
     const density = build.density;
     const label = jobLabel(targets.length, density);
     build.job = { total: targets.length, done: 0, failed: [], state: 'running', label };
-    startFlight(targets);
+    // When the roll might pass what is left, the server may refuse the request whole: the map's marks and the
+    // toast wait until it accepts the job, so a refusal starts neither.
+    const shown = { on: false, stop: null as (() => void) | null };
+    const show = (): void => {
+        if (shown.on) return;
+        shown.on = true;
+        if (shown.stop) shown.stop();
+        startFlight(targets);
+        startJobToast(stopBuild);
+    };
+    const followed = store.job;
+    newJob();
+    if (allowanceCovers(allowanceNow(), targets.length) || !followed) show();
+    else shown.stop = watch(() => followed.value, (now) => { if (now) show(); });
+    const settle = (): void => {
+        if (shown.stop) shown.stop();
+        shown.stop = null;
+    };
     const run = store.generateMany(
         targets.map((hexKey) => ({ hexKey, truth: truthAt(hexKey) })),
         build.choice,
@@ -185,9 +229,9 @@ export function generateMany(keys: readonly string[]): void {
         density,
     );
     stopJob = run.stop;
-    startJobToast(stopBuild);
     void run.finished.then(
         ({ token, progress }) => {
+            settle();
             stopJob = null;
             // Taken over by the store that follows it after a route change: its end was said there.
             if (takenOver()) return;
@@ -200,6 +244,7 @@ export function generateMany(keys: readonly string[]): void {
             else showToast(jobToast(progress, where(targets)) + ' ' + NO_JOB_UNDO, { ms: TOAST_ACTION_MS });
         },
         (err) => {
+            settle();
             stopJob = null;
             if (takenOver()) return;
             build.job = null;

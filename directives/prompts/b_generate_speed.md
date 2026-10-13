@@ -107,3 +107,8 @@ The local broker dropping a later message (the stop at 32 of 80) is local only: 
 with the evidence, or show it can happen in production.
 
 ## Progress
+
+done: confirmed the live queue is one message, GENERATE_SLICE 32, and a whole-job spec. next: time an 80-hex job and a 640-hex job before any cut.
+done: timed the old path (80 hexes 93.6/s, 640 hexes 79.1/s; store was most of each slice). next: cut the round trips and measure slice sizes.
+done: one slice read, trees stored together, counts once at the end, slice 32. next: the report and the gates.
+done: wrote directives/reports/b_generate_speed.md. next: none.

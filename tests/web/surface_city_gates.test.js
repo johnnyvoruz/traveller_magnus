@@ -45,7 +45,13 @@ test('the enhanced program gates city light and leaves vanilla bytes alone', () 
     );
     const discard = planet.indexOf('if (d > 1.0 + aa) return vec4(0.0);');
     const gate = planet.indexOf('float T =');
+    const cloudMix = planet.indexOf('color = mix(color, uCloudColor');
+    const cityAdd = planet.indexOf('color += city * (1.0 - clamp(cloud, 0.0, 1.0) * 0.92)');
+    const limb = planet.indexOf('color += tint * uSun * uAirStrength');
     assert.ok(discard >= 0 && gate > discard);
+    assert.ok(cloudMix > discard && cityAdd > cloudMix && limb > cityAdd);
+    assert.equal(planet.includes('cityRaw += baked.rgb * tHere'), false);
+    assert.ok(planet.includes('cityRaw += baked.rgb;'));
     assert.ok(planet.includes('uGas < 0.5 ? 1.0 : 0.0'));
     assert.ok(planet.includes('density > 0.002'));
 });

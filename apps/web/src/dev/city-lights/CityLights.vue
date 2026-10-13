@@ -138,6 +138,8 @@ async function draw(): Promise<{ ms: number; memory: number }> {
         current.bakeSize(body.profile, view.lod, 0);
     }
     current.renderBatch([request]);
+    if (!current.tiltIsWarm()) current.warmTilt();
+    current.renderBatch([request]);
     for (let i = 0; i < 80 && current.jobPending(body.profile.id); i++) {
         await new Promise<void>((resolve) => {
             nextFrame(() => resolve());

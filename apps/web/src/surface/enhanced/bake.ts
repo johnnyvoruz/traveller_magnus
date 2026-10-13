@@ -6,7 +6,7 @@ import type { SurfaceMode } from '../contracts.ts';
 import { cityLook } from './city_look.ts';
 
 /** Renderer version family. The live string also names the look, so a change rebakes C. */
-export const ENHANCED_CITY_VERSION = 'enhanced-cities-4b';
+export const ENHANCED_CITY_VERSION = 'enhanced-cities-4c';
 
 /**
  * The vanilla disc program has no renderer version of its own.
@@ -17,8 +17,11 @@ export const VANILLA_DISC_VERSION = 'vanilla';
 /** Extra bake passes. C is the city cube. */
 export const ENHANCED_BAKE_PASSES: readonly string[] = ['C'];
 
+/** Bumped when the cap edge changes, so a stored enhanced cube is not served stale. */
+const ICE_EDGE_VERSION = 'ice2';
+
 export function discRendererVersion(mode: SurfaceMode): string {
-    return mode === 'enhanced' ? ENHANCED_CITY_VERSION + '-' + cityLook().id : VANILLA_DISC_VERSION;
+    return mode === 'enhanced' ? ENHANCED_CITY_VERSION + '-' + cityLook().id + '-' + ICE_EDGE_VERSION : VANILLA_DISC_VERSION;
 }
 
 /**

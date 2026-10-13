@@ -7,7 +7,7 @@
 import { computed, nextTick, ref, watch } from 'vue';
 import Icon from '../../design/Icon.vue';
 import { parseHexKey } from '../places.ts';
-import { buildSettings, hexName, hexState, placeWords, previewAt, removeHexes, restorable, restoreHexes, stopBuild, tallyOf, truthAt } from './acts.ts';
+import { allowanceFor, buildSettings, hexName, hexState, placeWords, previewAt, removeHexes, restorable, restoreHexes, stopBuild, tallyOf, truthAt } from './acts.ts';
 import { askDensity, runMany } from './density_ask.ts';
 import DensityAsk from './DensityAsk.vue';
 import { edit, openBlank } from './edit.ts';
@@ -89,6 +89,9 @@ const askHeading = computed(() => {
     const place = placeWords(props.keys);
     return empty + (place ? ' in ' + place : '');
 });
+/** One hex: the daily allowance by its Generate button. Many hexes: the density prompt says it, for the choice made there. */
+const oneSay = computed(() => (props.mode !== 'many' && props.keys.length === 1 ? allowanceFor(props.keys) : null));
+const oneHeld = computed(() => !!oneSay.value && oneSay.value.blocked);
 /** The prompt is open for these hexes. */
 const asking = computed(() => {
     const keys = build.asking;
@@ -166,8 +169,8 @@ const asking = computed(() => {
             :class="{ 'is-primary': mode !== 'removed', 'is-grow': slots.length > 0 }"
             data-command="build-generate"
             :data-build-first="mode !== 'removed' ? '' : undefined"
-            :disabled="busy"
-            :title="build.job ? JOB_HOLD : undefined"
+            :disabled="busy || oneHeld"
+            :title="build.job ? JOB_HOLD : oneHeld && oneSay ? oneSay.text : undefined"
             :aria-busy="build.rolling || build.job || growUi.busy ? 'true' : undefined"
             @click="generate"
           >
@@ -193,6 +196,7 @@ const asking = computed(() => {
           </button>
           <p v-if="mode === 'many' && count.empty.length === 0" class="build-fine">None of the selected hexes are empty.</p>
         </div>
+        <p v-if="oneSay && !build.error" class="build-allowance" :class="{ 'is-held': oneSay.blocked }" role="status" data-build-allowance>{{ oneSay.text }}</p>
         <!--
           Under the Generate button, the settings line and the job's progress share one place: the taller of the two sets
           its height, so nothing moves when a job starts or ends, and the tally above stays in view.
@@ -422,6 +426,25 @@ const asking = computed(() => {
 
 .build-pane:is([data-span="half"], [data-span="full"]) .build-side > .ui-heading {
   margin-top: 0;
+}
+
+/* The daily allowance: a muted line while some is left; when the request can't run, it stands out like a note. */
+.build-allowance {
+  margin: 8px 0 0;
+  color: var(--text-muted);
+  font: 400 12.5px/1.45 var(--font-text);
+}
+
+.build-allowance.is-held {
+  padding: 7px 10px;
+  border-left: 3px solid var(--attention);
+  border-radius: var(--r-2);
+  background: var(--bg-2);
+  color: var(--text-0);
+}
+
+.build-ask .build-allowance {
+  margin: 0;
 }
 
 .build-error {

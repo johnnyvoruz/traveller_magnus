@@ -78,5 +78,20 @@ Write `directives/reports/e_handout_images_2.md` from `directives/reports/_TEMPL
 Questions for Johnny written out in full, recommended answer first. After each
 meaningful step append one line under Progress: "done: X. next: Y."
 
+## Added 2026-10-12 21:00 (orchestrator)
+
+Part 1 (the Player Pack note) is accepted; your eight questions are with Johnny.
+**Part 2 may start now:** Lane B's report is at `directives/reports/done/b_entry_images.md`.
+From it: a patch that leaves `images` out keeps the stored list; send `null` to clear;
+an older entry reads as null; thirteen images are refused with "An entry can hold 12
+images." Your first report was filed as `reports/done/e_handout_images_2_part1.md`;
+write this one as `directives/reports/e_handout_images_2.md`.
+
 ## Progress
+
+done: part 1, findings/player_pack_design.md. B's entry-images report was not in at the start. next: look again, then part 2 or a waiting report.
+done: looked again. directives/reports/b_entry_images.md is still absent. The schema field and the api.md section are on disk. Part 2 waits for the report. next: the report, then stop.
+done: B's report is in. Entry gallery, list avatar, and timeline avatar write images through saveEntry. next: tests and gates.
+done: npm run check, typecheck, and build passed. npm test is 1527 pass, 22 skipped, and 1 fail in tests/api/passkeys.test.js (Lane B). next: the browser pass.
+done: browser pass on API 127.0.0.1:8852 and Vite localhost:5197. Choose, drop, reload, keyboard lightbox, undo, list and timeline avatars, wrong type, over 8 MB, column, half, full, 520 px. Clock days stayed null. Servers stopped. next: the report.
 

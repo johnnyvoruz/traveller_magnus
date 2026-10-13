@@ -37,10 +37,12 @@ import {
     type FormRoll,
     type Settings,
 } from '@voyage/shared';
+import { noteAllowance, readAllowance, session } from '../account/session.ts';
 import { onPageHide } from '../platform/browser.ts';
 import { apiFetch } from '../platform/http.ts';
 import { clearToasts, showToast } from '../shell/toast.ts';
 import { parseHexKey } from '../workspace/places.ts';
+import { AllowanceRefused, allowanceFromRefusal } from './allowance.ts';
 import { cellIndex, DOT_CELLS, dotCharOf, dotPages, patchCells } from './dots.ts';
 import { startDraft, type BlankOpened, type DraftHandle, type KeepOutcome } from './draft.ts';
 import { mergeHex } from './overlay.ts';
@@ -267,6 +269,8 @@ export type Builder = {
     noteDots(slugs: readonly string[], chart?: ReadonlyMap<string, string>): Promise<{ requests: number; bytes: number }>;
     /** The cells the map should draw. A string equal to the chart is still included; the renderer drops it. */
     dotOverlay(): ReadonlyMap<string, string>;
+    /** This account's allowance. A read after `resetsAt` asks GET /api/me once. */
+    allowance(): ReturnType<typeof readAllowance>;
     /** The job this store started or picked up after another store closed. Null when there is none. */
     job: Ref<{ progress: JobProgress; undo: UndoToken } | null>;
     /** Stop the followed job. The store that started it is the one that sends the stop. */
@@ -394,6 +398,28 @@ export function openMap(options: OpenMapOptions): Builder {
         }
         if (!payload || !isRecord(payload) || !('data' in payload)) throw new HttpError(res.status, 'offline');
         return payload.data;
+    }
+
+    function accountId(): string | null {
+        return session.user ? session.user.id : null;
+    }
+
+    /** An answer that omits `allowance` leaves the held value alone. */
+    function applyAllowance(data: unknown, account: string | null): void {
+        if (!isRecord(data) || !('allowance' in data)) return;
+        noteAllowance(data.allowance, account);
+    }
+
+    function asRefusal(err: unknown, account: string | null): AllowanceRefused | null {
+        if (!(err instanceof HttpError) || err.status !== 429) return null;
+        if (!isRecord(err.details) || err.details.code !== 'generation_allowance') return null;
+        const remaining = err.details.remaining;
+        const limit = err.details.limit;
+        const resetsAt = err.details.resetsAt;
+        if (typeof remaining !== 'number' || typeof limit !== 'number' || typeof resetsAt !== 'string') return null;
+        const next = allowanceFromRefusal({ remaining, limit, resetsAt });
+        if (next) noteAllowance(next, account);
+        return new AllowanceRefused(err.message, { remaining, limit, resetsAt });
     }
 
     function writeRow(row: HexRow): void {
@@ -693,14 +719,23 @@ export function openMap(options: OpenMapOptions): Builder {
         const seed = options.seed;
         const settings = options.settings;
         if (!seed || !settings) throw new Error('The chart is still loading.');
-        const data = await request('POST', '/api/generate/preview', {
-            edition,
-            mode: generator,
-            seed: previewSeed(seed, roll),
-            settings,
-            hexKey,
-            inputs: { type: 'SYSTEM_PRESENT' },
-        });
+        const account = accountId();
+        let data: unknown;
+        try {
+            data = await request('POST', '/api/generate/preview', {
+                edition,
+                mode: generator,
+                seed: previewSeed(seed, roll),
+                settings,
+                hexKey,
+                inputs: { type: 'SYSTEM_PRESENT' },
+            });
+        } catch (err) {
+            const refused = asRefusal(err, account);
+            if (refused) throw refused;
+            throw err;
+        }
+        applyAllowance(data, account);
         if (!isRecord(data) || data.envelope == null || typeof data.hash !== 'string') {
             throw new Error('The server did not send a system.');
         }
@@ -1005,7 +1040,16 @@ export function openMap(options: OpenMapOptions): Builder {
                 const prior = previous.get(body.hexKeys[0]);
                 payload.baseRev = prior ? prior.rev : 0;
             }
-            const data = await request('POST', `/api/universes/${encodeURIComponent(id)}/generate`, payload);
+            const account = accountId();
+            let data: unknown;
+            try {
+                data = await request('POST', `/api/universes/${encodeURIComponent(id)}/generate`, payload);
+            } catch (err) {
+                const refused = asRefusal(err, account);
+                if (refused) throw refused;
+                throw err;
+            }
+            applyAllowance(data, account);
             if (isRecord(data) && typeof data.jobId === 'string') {
                 const record: UndoRecord = { kind: 'job', jobId: data.jobId, sectors: slugs };
                 const undo = mint(record);
@@ -1035,6 +1079,7 @@ export function openMap(options: OpenMapOptions): Builder {
             lastError.value = '';
             return { undo, progress };
         })().catch((err: unknown) => {
+            if (err instanceof AllowanceRefused) throw err;
             if (!lastError.value) lastError.value = err instanceof Error ? err.message : 'offline';
             throw err;
         }).finally(() => {
@@ -1134,7 +1179,16 @@ export function openMap(options: OpenMapOptions): Builder {
                     const prior = previous.get(only);
                     payload.baseRev = slug && slug.startsWith('~slot_') ? 0 : (prior ? prior.rev : 0);
                 }
-                const data = await request('POST', `/api/universes/${encodeURIComponent(id)}/generate`, payload);
+                const account = accountId();
+                let data: unknown;
+                try {
+                    data = await request('POST', `/api/universes/${encodeURIComponent(id)}/generate`, payload);
+                } catch (err) {
+                    const refused = asRefusal(err, account);
+                    if (refused) throw refused;
+                    throw err;
+                }
+                applyAllowance(data, account);
                 const done = SectorGenerateDone.parse(data);
                 const made = sectorBook().adopt(done.sectors);
                 if (made.length === 0) throw new Error('The server did not send the sector.');
@@ -1165,6 +1219,13 @@ export function openMap(options: OpenMapOptions): Builder {
                 lastError.value = '';
                 return { undo, progress };
             } catch (err) {
+                if (err instanceof AllowanceRefused) {
+                    if (!acceptedSettled) {
+                        acceptedSettled = true;
+                        rejectAccepted(err);
+                    }
+                    throw err;
+                }
                 if (err instanceof HttpError && err.status === 409 && detailCode(err) === 'slot_in_use') {
                     const details = err.details;
                     const current = isRecord(details) ? details.current : undefined;
@@ -1558,6 +1619,7 @@ export function openMap(options: OpenMapOptions): Builder {
         undo,
         noteDots,
         dotOverlay,
+        allowance: () => readAllowance(),
         job: currentJob,
         stopJob,
         openDraft,

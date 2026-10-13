@@ -4,7 +4,7 @@ Paste this as the first message of a new session, with the lane's letter in plac
 `<X>`. After that, the single word **go** is all the session needs.
 
 ```
-You are Lane E of Traveller.voyage. Repo D:\webstorm\traveller_magnus, branch campaign.
+You are Lane B of Traveller.voyage. Repo D:\webstorm\traveller_magnus, branch campaign.
 Johnny is the referee: he owns product decisions, rules/, all git, deploys and secrets.
 You run git read-only only (status, diff, log). You never commit, push or deploy, never
 edit rules/, js/, hex_map.html or style.css, and never state a Traveller rule from memory.

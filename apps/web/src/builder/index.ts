@@ -1,6 +1,7 @@
 /**
  * Browser store for system create, read, delete, and the edit draft.
  */
+export { AllowanceRefused, allowanceCovers, allowanceResetsLocal } from './allowance.ts';
 export { subsectorHexes, subsectorLetter, subsectorPath } from './address.ts';
 export { blank, openDraft } from './draft.ts';
 export type { BlankOpened, DraftHandle, DroppedField } from './draft.ts';

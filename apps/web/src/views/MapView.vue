@@ -106,6 +106,8 @@ let chart: TruthManifest | null = null;
 /** The chart's own manifest, as released. */
 let truthChart: TruthManifest | null = null;
 let overview: TruthOverview | null = null;
+/** The chart's dot strings by sector, built once per overview for the builder's dots (builder/store.ts noteDots). */
+let chartDots: { from: TruthOverview | null; cells: Map<string, string> } | null = null;
 let version = '';
 let overviewReady = false;
 let selected: { slug: string; hhhh: string } | null = null;
@@ -773,6 +775,19 @@ function frame(): void {
         if (drawn.tier === 'hex' && version) {
             requestIndexes(drawn.sectorsOnScreen);
             for (const slug of drawn.sectorsOnScreen) bound.load(slug);
+        }
+        // Zoomed out, the referee's own systems are dots: the store asks only for sectors it doesn't hold or that changed.
+        if (drawn.tier !== 'hex') {
+            const builder = bound.builder();
+            if (builder) {
+                if (!chartDots || chartDots.from !== overview) {
+                    const cells = new Map<string, string>();
+                    if (overview) for (const sector of overview.sectors) cells.set(sector.slug, sector.cells);
+                    chartDots = { from: overview, cells };
+                }
+                // A failed request is kept as the store's lastError; the chart's own dots still draw.
+                builder.noteDots(drawn.sectorsOnScreen, chartDots.cells).catch(() => undefined);
+            }
         }
         if (marksEl.value) marksEl.value.place(cam, viewport());
         if (pointerAt) paintHover();
@@ -1650,6 +1665,8 @@ watch(
         syncSelection();
         loadDossier();
         showStatus();
+        const builder = bound.builder();
+        if (renderer) renderer.setDotOverlay(builder ? builder.dotOverlay() : null);
         markDirty();
     },
 );
@@ -2140,6 +2157,7 @@ onBeforeUnmount(() => {
       v-if="build.on && buildUniverse"
       :name="buildUniverse.name"
       :truth-version="buildUniverse.truthVersion"
+      :pane-open="dossierShown"
       @clear="build.selection = []"
       @width="setStripWidth"
     />

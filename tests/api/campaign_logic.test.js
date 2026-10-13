@@ -494,3 +494,103 @@ test('deleting a record leaves a journal entry anchored to it', () => {
     assert.equal(db.prepare(`SELECT deleted FROM campaign_journal WHERE id = ?`).get(J).deleted, 0);
 });
 
+function picture(letter) {
+    const thumb = String.fromCharCode(letter.charCodeAt(0) + 1);
+    return { hash: letter.repeat(64), thumbHash: thumb.repeat(64), width: 4, height: 4, bytes: 8 };
+}
+
+test('a journal entry keeps its images, and a patch that omits them leaves them', () => {
+    const { sql } = open();
+    const images = [picture('a'), picture('c')];
+    const created = applyCampaignChanges(sql, { journal: [entry(J, { images })] }, NOW);
+    assert.equal(created.conflicts.length, 0);
+    const stored = readCampaign(sql, 0, 10).journal[0];
+    assert.deepEqual(stored.images, images);
+    const titled = applyCampaignChanges(sql, {
+        journal: [entry(J, { title: 'Renamed', baseRev: stored.rev, rev: stored.rev })],
+    }, NOW);
+    assert.equal(titled.conflicts.length, 0);
+    const kept = readCampaign(sql, 0, 10).journal.find((row) => row.id === J);
+    assert.equal(kept.title, 'Renamed');
+    assert.deepEqual(kept.images, images);
+    const cleared = applyCampaignChanges(sql, {
+        journal: [entry(J, { images: null, baseRev: kept.rev, rev: kept.rev })],
+    }, NOW);
+    assert.equal(cleared.conflicts.length, 0);
+    assert.equal(readCampaign(sql, 0, 10).journal.find((row) => row.id === J).images, null);
+    const again = open();
+    const carried = { ...stored, baseRev: 0, rev: 0 };
+    applyCampaignChanges(again.sql, { journal: [carried] }, NOW);
+    assert.deepEqual(readCampaign(again.sql, 0, 10).journal[0].images, images);
+    const bare = entry(J2);
+    delete bare.images;
+    applyCampaignChanges(sql, { journal: [bare] }, NOW);
+    assert.equal(readCampaign(sql, 0, 10).journal.find((row) => row.id === J2).images, null);
+    const over = refusal(() => applyCampaignChanges(sql, {
+        journal: [entry(jid(9), { images: Array.from({ length: 13 }, () => picture('e')) })],
+    }, NOW));
+    assert.ok(over instanceof CampaignRefusal);
+    assert.equal(over.code, 'validation');
+    assert.equal(over.message, 'An entry can hold 12 images.');
+});
+
+test('an old journal table gains the images column and reads null', () => {
+    const db = new DatabaseSync(':memory:');
+    const sql = {
+        exec(query, ...params) {
+            const statement = query.trim();
+            if (/^(begin|commit|rollback)\b/i.test(statement)) {
+                db.exec(statement);
+                return [];
+            }
+            const prepared = db.prepare(statement);
+            if (/^(select|with|pragma)\b/i.test(statement)) return prepared.all(...params);
+            prepared.run(...params);
+            return [];
+        },
+        transaction(fn) {
+            db.exec('BEGIN');
+            try {
+                const result = fn();
+                db.exec('COMMIT');
+                return result;
+            } catch (err) {
+                db.exec('ROLLBACK');
+                throw err;
+            }
+        },
+    };
+    db.exec(`CREATE TABLE campaign_journal (
+        id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL,
+        title TEXT NOT NULL,
+        body TEXT NOT NULL,
+        when_json TEXT,
+        real_date TEXT,
+        sequence INTEGER,
+        author TEXT NOT NULL,
+        visibility TEXT NOT NULL,
+        anchor TEXT,
+        mentions TEXT NOT NULL,
+        rev INTEGER NOT NULL,
+        seq INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        deleted INTEGER NOT NULL
+    )`);
+    db.prepare(`INSERT INTO campaign_journal (
+        id, kind, title, body, when_json, real_date, sequence, author, visibility,
+        anchor, mentions, rev, seq, created_at, updated_at, deleted
+    ) VALUES (?, 'note', 'Old', '', NULL, NULL, NULL, 'referee', 'referee', NULL, '[]', 1, 1, ?, ?, 0)`).run(J, NOW, NOW);
+    installCampaignSchema(sql);
+    const names = db.prepare(`SELECT name FROM pragma_table_info('campaign_journal')`).all().map((row) => row.name);
+    assert.equal(names.includes('images'), true);
+    const page = readCampaign(sql, 0, 10);
+    assert.equal(page.journal[0].images, null);
+    const saved = applyCampaignChanges(sql, {
+        journal: [entry(J, { title: 'Old', baseRev: 1, rev: 1, images: [picture('a')] })],
+    }, NOW);
+    assert.equal(saved.conflicts.length, 0, JSON.stringify(saved));
+    assert.deepEqual(readCampaign(sql, 0, 10).journal.find((row) => row.id === J).images, [picture('a')]);
+});
+

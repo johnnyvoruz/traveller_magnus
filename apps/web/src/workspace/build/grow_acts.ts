@@ -8,9 +8,11 @@
  */
 import { reactive } from 'vue';
 import { showToast } from '../../shell/toast.ts';
-import { hexName, holdJob, selectOnMap, stopBuild, tallyOf } from './acts.ts';
+import { allowanceCovers } from '../../builder/allowance.ts';
+import { allowanceFor, hexName, holdJob, selectOnMap, stopBuild, tallyOf } from './acts.ts';
+import { actError, allowanceNow } from './allowance_words.ts';
 import { isOutcome, sayUndo } from './undo_words.ts';
-import { endJobToast, jobUndo, NO_JOB_UNDO, startJobToast, takenOver } from './job_toast.ts';
+import { endJobToast, jobUndo, newJob, NO_JOB_UNDO, startJobToast, takenOver } from './job_toast.ts';
 import { endFlight, noteFlight, renameFlight, startFlight } from './flight.ts';
 import { buildStore, type GrowHandle, type GrowProgress, type JobProgress, type UndoToken } from './seam.ts';
 import { cleanName, slotGroups } from './sectors.ts';
@@ -85,7 +87,7 @@ export function sectorsSaid(names: readonly string[]): string {
 }
 
 function said(err: unknown, otherwise: string): string {
-    return err instanceof Error && err.message ? err.message : otherwise;
+    return actError(err, otherwise);
 }
 
 /** The one Undo: one request. When the store gives back the token that puts it all back, the toast offers Restore. */
@@ -147,6 +149,14 @@ export function generateGrowing(keys: readonly string[]): void {
     }
     const targets = generateTargets(tallyOf(keys), build.filledToo);
     if (targets.length === 0) return;
+    // A request the allowance is sure to refuse is not sent: its sentence goes beside the names, where a refusal would.
+    const say = allowanceFor(keys);
+    if (say && say.blocked) {
+        growUi.error = say.text;
+        return;
+    }
+    // When the roll might pass what is left, the marks and the toast wait for the server to accept: a refusal starts neither.
+    const sure = allowanceCovers(allowanceNow(), targets.length);
     const made = slots.map((group) => names[group.slug]);
     const density = build.density;
     const label = jobLabel(targets.length, density);
@@ -174,9 +184,13 @@ export function generateGrowing(keys: readonly string[]): void {
     }
     growUi.busy = true;
     build.job = { total: targets.length, done: 0, failed: [], state: 'running', label };
-    startFlight(targets);
     holdJob(run.stop);
-    startJobToast(stopBuild);
+    const show = (): void => {
+        startFlight(targets);
+        startJobToast(stopBuild);
+    };
+    newJob();
+    if (sure) show();
     let answered = false;
     let undone = false;
     const end = (): void => {
@@ -189,6 +203,7 @@ export function generateGrowing(keys: readonly string[]): void {
     run.accepted.then(
         ({ keys: real, undo }) => {
             answered = true;
+            if (!sure) show();
             renameFlight(real);
             growUi.busy = false;
             growUi.names = {};

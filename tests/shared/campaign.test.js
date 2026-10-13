@@ -368,6 +368,20 @@ test('a journal entry keeps a session numbered and every other kind unnumbered',
         '[[something else]]',
     ].join(' ');
     assert.deepEqual(mentionsOf(text), [RECORD, OTHER, 'hex:Spinward_Marches/1910']);
+    const older = entry({ kind: 'note' });
+    delete older.images;
+    const readOlder = CampaignEntry.safeParse(older);
+    assert.equal(readOlder.success, true);
+    assert.equal(readOlder.success && readOlder.data.images, null);
+    const hash = 'ab'.repeat(32);
+    const thumb = 'cd'.repeat(32);
+    const image = { hash, thumbHash: thumb, width: 8, height: 8, bytes: 12 };
+    assert.equal(CampaignEntry.safeParse(entry({ images: [image] })).success, true);
+    assert.equal(CampaignEntry.safeParse(entry({ images: Array.from({ length: CAMPAIGN_LIMITS.images + 1 }, () => image) })).success, false);
+    const omitted = EntryChange.safeParse({ ...entry({ kind: 'note' }), baseRev: 1 });
+    assert.equal(omitted.success, true);
+    assert.equal(omitted.success && Object.prototype.hasOwnProperty.call(omitted.data, 'images'), false);
+    assert.equal(EntryChange.safeParse({ ...entry({ kind: 'note', images: null }), baseRev: 1 }).success, true);
     const row = entry({ kind: 'session', sequence: 4 });
     assert.equal(EntryChange.safeParse({ ...row, baseRev: 1 }).success, true);
     assert.equal(CampaignChanges.safeParse({ journal: [{ ...row, baseRev: 1 }] }).success, true);

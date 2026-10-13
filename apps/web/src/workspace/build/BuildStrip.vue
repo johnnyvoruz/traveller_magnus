@@ -8,9 +8,15 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import Icon from '../../design/Icon.vue';
 import { observeSize, storageGet, storageSet } from '../../platform/browser.ts';
 import { tallyOf } from './acts.ts';
+import { allowanceNow, allowanceSpent } from './allowance_words.ts';
 import { build, SELECTION_CAP, stripLine, YOURS_KEY, yoursNote } from './state.ts';
 
-defineProps<{ name: string; truthVersion: string | null }>();
+const props = defineProps<{
+    name: string;
+    truthVersion: string | null;
+    /** The hex pane is open: it says the allowance by its Generate button, so the strip doesn't say it twice. */
+    paneOpen?: boolean;
+}>();
 const emit = defineEmits<{ clear: []; width: [px: number] }>();
 
 const root = ref<HTMLElement | null>(null);
@@ -20,6 +26,11 @@ const count = computed(() => {
     if (keys.length < 2) return null;
     return { n: keys.length.toLocaleString('en'), empty: tallyOf(keys).empty.length, full: keys.length >= SELECTION_CAP };
 });
+/**
+ * Today's allowance is used up: said here while nothing is selected, so a person knows before they select anything.
+ * Once hexes are selected or a hex's pane is open, the pane says it by the Generate button instead.
+ */
+const spent = computed(() => (build.selection.length === 0 && !props.paneOpen ? allowanceSpent(allowanceNow()) : ''));
 const told = ref(storageGet(YOURS_KEY) === '1');
 function putAway(): void {
     told.value = true;
@@ -63,10 +74,16 @@ onBeforeUnmount(() => {
     <button v-if="count" type="button" class="ui-btn build-strip-count" title="Clear the selection (Esc)" @click="$emit('clear')">
       Clear<Icon name="xmark" :size="12" />
     </button>
-    <!-- Whose map this is: said once, the first time Build is on, until it is put away. It hangs below: the strip never changes size. -->
-    <div v-if="!told" class="build-strip-note" role="note" data-build-yours>
-      <p>{{ yoursNote(truthVersion !== null) }}</p>
-      <button type="button" class="ui-btn" @click="putAway()">Got it</button>
+    <!-- The notes hang below: the strip never changes size. -->
+    <div v-if="!told || spent" class="build-strip-notes">
+      <!-- Whose map this is: said once, the first time Build is on, until it is put away. -->
+      <div v-if="!told" class="build-strip-note" role="note" data-build-yours>
+        <p>{{ yoursNote(truthVersion !== null) }}</p>
+        <button type="button" class="ui-btn" @click="putAway()">Got it</button>
+      </div>
+      <div v-if="spent" class="build-strip-note is-allowance" role="status" data-build-allowance>
+        <p>{{ spent }}</p>
+      </div>
     </div>
   </div>
 </template>
@@ -134,15 +151,23 @@ onBeforeUnmount(() => {
   text-overflow: ellipsis;
 }
 
-.build-strip-note {
+.build-strip-notes {
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
   display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  width: min(380px, 100%);
+}
+
+.build-strip-note {
+  display: flex;
   align-items: flex-start;
   gap: 10px;
   box-sizing: border-box;
-  width: min(380px, 100%);
+  width: 100%;
   padding: 10px 10px 10px 14px;
   border: 1px solid var(--control-line);
   border-left: 3px solid var(--signal);
@@ -156,6 +181,10 @@ onBeforeUnmount(() => {
   margin: 0;
   color: var(--text-0);
   font: 400 13px/1.45 var(--font-text);
+}
+
+.build-strip-note.is-allowance {
+  border-left-color: var(--attention);
 }
 
 .build-strip-note .ui-btn {

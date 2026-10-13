@@ -1,12 +1,10 @@
 import { DurableObject } from 'cloudflare:workers';
 import type { Env } from '../env';
+import { chargesMutationBudget, MUTATION_BUDGET, MUTATION_WINDOW_MS } from './budget';
 import { applyCampaignChanges, CampaignRefusal, readCampaign, type Sql } from './campaign';
 import { respondBuilder } from './hexes';
 import { readPublishSources } from './publish_read';
 import { migrate } from './schema';
-
-const WINDOW = 60_000;
-const BUDGET = 120;
 
 export class UniverseDO extends DurableObject<Env> {
     private mutationHits: number[] = [];
@@ -18,8 +16,8 @@ export class UniverseDO extends DurableObject<Env> {
 
     private allowMutation(): boolean {
         const now = Date.now();
-        this.mutationHits = this.mutationHits.filter((at) => now - at < WINDOW);
-        if (this.mutationHits.length >= BUDGET) return false;
+        this.mutationHits = this.mutationHits.filter((at) => now - at < MUTATION_WINDOW_MS);
+        if (this.mutationHits.length >= MUTATION_BUDGET) return false;
         this.mutationHits.push(now);
         return true;
     }
@@ -31,7 +29,7 @@ export class UniverseDO extends DurableObject<Env> {
             transaction: (fn) => this.ctx.storage.transactionSync(fn),
         };
         const builderPath = url.pathname === '/pin' || url.pathname.startsWith('/hexes') || url.pathname.startsWith('/jobs') || url.pathname.startsWith('/sectors');
-        if (builderPath && request.method !== 'GET' && request.method !== 'HEAD' && !this.allowMutation()) {
+        if (chargesMutationBudget(request.method, url.pathname, request.headers.get('x-voyage-worker')) && !this.allowMutation()) {
             return Response.json(
                 { ok: false, error: { code: 'rate_limited', message: 'Too many requests.' } },
                 { status: 429, headers: { 'retry-after': '60' } },

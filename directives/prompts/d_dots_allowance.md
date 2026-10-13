@@ -95,3 +95,5 @@ meaningful step append one line under Progress: "done: X. next: Y."
 
 ## Progress
 
+done: part 1 (A's two calls in MapView.vue, the chart's strings cached per overview, the noteDots rejection caught; browser pass kb14_dots_* on my API with the v5 overview put in its bucket). next: part 2, A's allowance note and B's contract.
+done: part 2 (allowance_words.ts; the line in the prompt, the sheet, by the one-hex Generate and Roll again, the strip at zero; sure-to-pass held, might-pass sent with the toast and marks waiting for the job; the refusal with the local reset; tests; §31; browser pass kb14_allow_* on a capped account, set back to admin); gates green (1503 pass); servers stopped; report written. next: wait for the next prompt.

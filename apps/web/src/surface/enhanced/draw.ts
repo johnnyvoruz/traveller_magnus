@@ -41,7 +41,9 @@ const GATED_CITY = `        float c = clamp(cloud, 0.0, 1.0);
         vec3 rawCity = uCityGain * gainK * uCityOn * night * seen * (direct * cityRaw + glow + sheetAcc);
         float peak = max(rawCity.r, max(rawCity.g, rawCity.b));
         vec3 city = rawCity / (1.0 + peak);
-        color += city * (uGas < 0.5 ? 1.0 : 0.0);`;
+        // The cloud mix already ran. This fraction is the ground still showing,
+        // so the add matches lights placed on the ground before that mix.
+        color += city * (1.0 - clamp(cloud, 0.0, 1.0) * 0.92) * (uGas < 0.5 ? 1.0 : 0.0);`;
 
 const PORT = `    if (uPort.w > 0.0 && uLightMode < 0.5) {
         float gap = length(qc - uPort.xyz);
@@ -75,7 +77,7 @@ const GATED_PORT = `    // The downport keeps its place, its strength and its co
         float portNight = max(1.0 - smoothstep(-0.16, 0.08, geo), 0.8 * (1.0 - lit));
         float portPath = min(7.0, 1.0 / max(z, 0.07));
         float portSeen = smoothstep(0.02, 0.30, z) * exp(-uAirStrength * 0.22 * (portPath - 1.0));
-        float gate = portT * portNight * portSeen;
+        float gate = min(portT, 1.0 - clamp(cloud, 0.0, 1.0) * 0.92) * portNight * portSeen;
         color += uPortColor * pad * (0.7 + 0.8 * dark) * strobe * uPort.w * gate * uCityOn;
         color += vec3(1.0) * pad * 0.25 * (1.0 - dark) * uPort.w * gate * uCityOn;
     }`;
@@ -160,14 +162,10 @@ const SAMPLE_C = `        albedo += texture(uA, q, bias).rgb;
         else if (uHasClouds > 0.5) cloudHere = texture(uB, toPlanet(n, uCloudSpin + uSweep * 1.03 * f), bias).a;
         cloud += cloudHere;
         vec4 baked = texture(uC, q, bias);
-        float cHere = clamp(cloudHere, 0.0, 1.0);
-        float clearHere = 1.0 - smoothstep(0.65, 0.95, cHere);
-        float tHere = exp(-3.0 * cHere / max(z, 0.35)) * clearHere;
-        cityRaw += baked.rgb * tHere;
+        cityRaw += baked.rgb;
         cityMat += baked.rgb;
         cityCore += baked.a;
-        float thinHere = 4.0 * cHere * (1.0 - cHere) * clearHere;
-        float spread = tHere + 0.18 * thinHere;
+        float spread = 1.0;
         if (admitTight > 0.0) {
             vec4 g1 = texture(uC, q, bias + log2(2.0));
             g1.rgb *= smoothstep(core0, core1, g1.a);

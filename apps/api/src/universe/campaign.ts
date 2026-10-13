@@ -111,8 +111,13 @@ export function installCampaignSchema(sql: Sql): void {
         seq INTEGER NOT NULL,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
-        deleted INTEGER NOT NULL
+        deleted INTEGER NOT NULL,
+        images TEXT
     )`);
+    const journalColumns = sql.exec(`SELECT name AS name FROM pragma_table_info('campaign_journal')`);
+    if (!journalColumns.some((row) => row.name === 'images')) {
+        sql.exec(`ALTER TABLE campaign_journal ADD COLUMN images TEXT`);
+    }
     sql.exec(`CREATE INDEX IF NOT EXISTS campaign_journal_seq ON campaign_journal(seq)`);
     sql.exec(`CREATE INDEX IF NOT EXISTS campaign_journal_kind ON campaign_journal(kind)`);
     sql.exec(`CREATE TABLE IF NOT EXISTS lists (
@@ -246,6 +251,7 @@ function entryFrom(row: SqlRow): CampaignEntry {
         visibility: row.visibility as CampaignEntry['visibility'],
         anchor: parseJson(row.anchor) as CampaignEntry['anchor'],
         mentions: (parseJson(row.mentions) ?? []) as CampaignEntry['mentions'],
+        images: (parseJson(row.images) ?? null) as CampaignEntry['images'],
         rev: Number(row.rev),
         createdAt: String(row.created_at),
         updatedAt: String(row.updated_at),
@@ -284,6 +290,35 @@ function isFullLink(change: LinkChange): change is Extract<LinkChange, { from: s
 
 function isFullEntry(change: EntryChange): change is Extract<EntryChange, { kind: string }> {
     return 'kind' in change;
+}
+
+/** A patch writes images only when the field is present. Omitting it leaves the stored list. */
+function imagesWrite(change: object): string | null | undefined {
+    if (!Object.prototype.hasOwnProperty.call(change, 'images')) return undefined;
+    const value = (change as { images?: unknown }).images;
+    if (value === undefined) return undefined;
+    return jsonText(value);
+}
+
+type ParseIssue = {
+    code?: string;
+    path?: Array<string | number>;
+    unionErrors?: { issues?: ParseIssue[] }[];
+};
+
+/** True when a journal change sends more than 12 images. */
+function journalImageOverflow(error: { issues: ParseIssue[] }): boolean {
+    function walk(issues: ParseIssue[], path: Array<string | number>): boolean {
+        for (const issue of issues) {
+            const here = [...path, ...(issue.path ?? [])];
+            if (issue.code === 'too_big' && here[0] === 'journal' && here.includes('images')) return true;
+            for (const nested of issue.unionErrors ?? []) {
+                if (walk(nested.issues ?? [], here)) return true;
+            }
+        }
+        return false;
+    }
+    return walk(error.issues, []);
 }
 
 function provenanceParam(change: object, previous: unknown): string | null {
@@ -347,7 +382,7 @@ export function readCampaign(sql: Sql, afterSeq: number, limit: number): Campaig
     return {
         records: page.filter((item) => item.table === 'records').map((item) => recordFrom(item.row)) as CampaignPage['records'],
         links: page.filter((item) => item.table === 'links').map((item) => linkFrom(item.row)) as CampaignPage['links'],
-        journal: page.filter((item) => item.table === 'journal').map((item) => entryFrom(item.row)),
+        journal: page.filter((item) => item.table === 'journal').map((item) => entryFrom(item.row)) as CampaignPage['journal'],
         settings: readSettings(sql),
         clock: readClock(sql),
         seq,
@@ -399,7 +434,7 @@ export function applyCampaignChanges(sql: Sql, changes: unknown, now: string): C
         const tooLarge = parsed.error.issues.some((issue) => issue.message === 'too_large');
         throw new CampaignRefusal(
             tooLarge ? 'too_large' : 'validation',
-            tooLarge ? 'This change is over the campaign limit.' : 'Invalid request.',
+            tooLarge ? 'This change is over the campaign limit.' : journalImageOverflow(parsed.error) ? 'An entry can hold 12 images.' : 'Invalid request.',
             parsed.error.flatten(),
         );
     }
@@ -658,8 +693,8 @@ export function applyCampaignChanges(sql: Sql, changes: unknown, now: string): C
                 sql.exec(
                     `INSERT INTO campaign_journal (
                         id, kind, title, body, when_json, real_date, sequence, author, visibility,
-                        anchor, mentions, rev, seq, created_at, updated_at, deleted
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                        anchor, mentions, images, rev, seq, created_at, updated_at, deleted
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                     change.id,
                     change.kind,
                     change.title,
@@ -671,6 +706,7 @@ export function applyCampaignChanges(sql: Sql, changes: unknown, now: string): C
                     change.visibility,
                     jsonText(change.anchor),
                     JSON.stringify(mentions),
+                    imagesWrite(change) ?? null,
                     rev,
                     seq,
                     now,
@@ -681,7 +717,11 @@ export function applyCampaignChanges(sql: Sql, changes: unknown, now: string): C
                 continue;
             }
             if (change.baseRev !== Number(stored.rev)) {
-                conflicts.push({ table: 'journal', id: change.id, current: entryFrom(stored) });
+                conflicts.push({
+                    table: 'journal',
+                    id: change.id,
+                    current: entryFrom(stored) as Extract<CampaignChangesResult['conflicts'][number], { table: 'journal' }>['current'],
+                });
                 continue;
             }
             const rev = Number(stored.rev) + 1;
@@ -690,28 +730,55 @@ export function applyCampaignChanges(sql: Sql, changes: unknown, now: string): C
             requireRoom(sql, 'campaign_journal', !bit(stored.deleted), !willDelete);
             if (isFullEntry(change)) {
                 const mentions = mentionsOf(change.body);
-                sql.exec(
-                    `UPDATE campaign_journal SET
-                        kind = ?, title = ?, body = ?, when_json = ?, real_date = ?, sequence = ?,
-                        author = ?, visibility = ?, anchor = ?, mentions = ?,
-                        rev = ?, seq = ?, updated_at = ?, deleted = ?
-                     WHERE id = ?`,
-                    change.kind,
-                    change.title,
-                    change.body,
-                    jsonText(change.when),
-                    change.realDate,
-                    change.sequence,
-                    change.author,
-                    change.visibility,
-                    jsonText(change.anchor),
-                    JSON.stringify(mentions),
-                    rev,
-                    seq,
-                    now,
-                    willDelete ? 1 : 0,
-                    change.id,
-                );
+                const images = imagesWrite(change);
+                if (images === undefined) {
+                    sql.exec(
+                        `UPDATE campaign_journal SET
+                            kind = ?, title = ?, body = ?, when_json = ?, real_date = ?, sequence = ?,
+                            author = ?, visibility = ?, anchor = ?, mentions = ?,
+                            rev = ?, seq = ?, updated_at = ?, deleted = ?
+                         WHERE id = ?`,
+                        change.kind,
+                        change.title,
+                        change.body,
+                        jsonText(change.when),
+                        change.realDate,
+                        change.sequence,
+                        change.author,
+                        change.visibility,
+                        jsonText(change.anchor),
+                        JSON.stringify(mentions),
+                        rev,
+                        seq,
+                        now,
+                        willDelete ? 1 : 0,
+                        change.id,
+                    );
+                } else {
+                    sql.exec(
+                        `UPDATE campaign_journal SET
+                            kind = ?, title = ?, body = ?, when_json = ?, real_date = ?, sequence = ?,
+                            author = ?, visibility = ?, anchor = ?, mentions = ?, images = ?,
+                            rev = ?, seq = ?, updated_at = ?, deleted = ?
+                         WHERE id = ?`,
+                        change.kind,
+                        change.title,
+                        change.body,
+                        jsonText(change.when),
+                        change.realDate,
+                        change.sequence,
+                        change.author,
+                        change.visibility,
+                        jsonText(change.anchor),
+                        JSON.stringify(mentions),
+                        images,
+                        rev,
+                        seq,
+                        now,
+                        willDelete ? 1 : 0,
+                        change.id,
+                    );
+                }
             } else {
                 sql.exec(
                     `UPDATE campaign_journal SET deleted = 1, rev = ?, seq = ?, updated_at = ? WHERE id = ?`,

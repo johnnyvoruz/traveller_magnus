@@ -6909,3 +6909,38 @@ that failed at the close no longer does. Ready note `findings/builder_form_ready
   the object route is not tied to a record. B: `b_entry_images.md`.
 - **Prompts:** `a_allowance_store.md`, `b_entry_images.md`, `d_dots_allowance.md`,
   `e_handout_images_2.md`; a note added to `b_generate_speed.md`. C held.
+
+- **1.1.8 pushed (`57ec8d0`).** Johnny, yes to six (board). Prompts:
+  `c_city_lights.md`, `b_passkeys_build.md` (second in B's queue, before speed).
+  `reports/b_passkeys.md` moved to done.
+
+## 255. Allowance on screen, own dots live, city lights, speed, entry images; passkey server built and held; push 1.1.9 written (2026-10-12 21:15)
+
+- **A, `a_allowance_store`, accepted:** `session.allowance` off `GET /api/me`,
+  replaced by every generate answer and by a 429; `AllowanceRefused`;
+  `allowanceCovers`, `allowanceResetsLocal`. Side effect found by the orchestrator:
+  the value import of the zod schema put zod in the first chunk (169 -> 251 kB).
+- **B, `b_entry_images`, accepted:** `images` on a journal entry, old tables altered.
+- **B, `b_generate_speed`, accepted:** 80 hexes 855 -> 691 ms, 640 hexes 8,096 ->
+  6,822 ms locally; one slice read, trees six at a time, counts at the end; a job's
+  own posts no longer spend the 120-a-minute budget; a refused job waits twice then
+  fails with a sentence. Recommends `retry_delay = 10` on the consumer, nothing else.
+- **B, `b_passkeys_build`, accepted but held out of the push:** `@better-auth/passkey`
+  1.7.7, migration 0012, sign-up after verification (no pending row), ten sealed
+  recovery codes, the last-way-in checks, `contracts/b_auth.md`. Fault: the recovery
+  gate reads D1 per signed-in request and breaks every one if 0012 is missing.
+- **C, `c_city_lights`, accepted:** lights after the cloud mix scaled by uncovered
+  ground, before the limb tint; `enhanced-cities-4c`; tilt program linked in idle.
+- **D, `d_dots_allowance`, accepted:** the two dots calls (401 sectors, each asked
+  once), the allowance lines at 20 and under, a sure-to-pass request not sent, a
+  might-pass request held until the job is accepted.
+- **E, `e_handout_images_2`, part 1 accepted:** `findings/player_pack_design.md`.
+- **Prompts:** `a_passkey_client.md`, `b_auth_gate_dots.md`, `d_passkey_screens.md`;
+  a section added to `e_handout_images_2.md`. C held.
+
+- 21:05: Johnny, yes to twelve (board). `b_auth_gate_dots.md` and
+  `d_passkey_screens.md` edited (recovery sign-out allowed; D's part 2 unheld);
+  `c_ice_caps_2.md` and `e_player_pack.md` written. E was started early on handout
+  images, which is fine. 1.1.9 not yet pushed.
+
+- 21:05: Johnny said pushed; HEAD and origin still `57ec8d0` (1.1.8). Told him.

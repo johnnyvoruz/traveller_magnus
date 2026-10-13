@@ -254,6 +254,12 @@ const CampaignEntryObject = z.object({
     visibility: Visibility,
     anchor: CampaignAnchor,
     mentions: z.array(z.union([z.string().regex(RECORD_ID), z.string().regex(MENTION_HEX)])).max(CAMPAIGN_LIMITS.mentions),
+    /**
+     * The same list a record stores. Absent on an entry written before the column existed,
+     * and on a patch that is not changing the list. A read fills that absence with null.
+     * A patch that sends null clears the list.
+     */
+    images: z.array(CampaignImage).max(CAMPAIGN_LIMITS.images).nullable().optional(),
     rev: Rev,
     createdAt: Stamp,
     updatedAt: Stamp,
@@ -273,8 +279,18 @@ function entrySequence(entry: { kind: string; sequence: number | null }, ctx: z.
     }
 }
 
-export const CampaignEntry = CampaignEntryObject.superRefine(entrySequence);
-export type CampaignEntry = z.infer<typeof CampaignEntry>;
+/** A stored entry. An older row with no `images` field reads as null. */
+export const CampaignEntry = CampaignEntryObject.superRefine(entrySequence).transform((entry) => ({
+    ...entry,
+    images: entry.images ?? null,
+}));
+type CampaignEntryRead = z.infer<typeof CampaignEntry>;
+/**
+ * The read value has `images`. A value the screen builds may still omit it;
+ * a parse of that value fills null. The screen type stays optional so an
+ * entry written before the field assigns.
+ */
+export type CampaignEntry = Omit<CampaignEntryRead, 'images'> & { images?: CampaignEntryRead['images'] };
 
 const MENTION_TOKEN = /\[\[(cr_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|hex:[^/\]|]+\/\d{4})(?:\|[^\]]*)?\]\]/;
 

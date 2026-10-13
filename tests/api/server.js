@@ -124,13 +124,14 @@ export async function withDevServer(run) {
 }
 
 /** A private wrangler dev. The caller stops it. It does not use port 8799. */
-export function startDev({ port, persistTo, inspectorPort }) {
+export function startDev({ port, persistTo, inspectorPort, args = [] }) {
     return spawn(process.execPath, [
         wranglerBin, 'dev',
         '--port', String(port),
         '--ip', '127.0.0.1',
         '--inspector-port', String(inspectorPort),
         '--persist-to', persistTo,
+        ...args,
     ], {
         cwd: apiRoot,
         env: { ...process.env, CI: '1' },

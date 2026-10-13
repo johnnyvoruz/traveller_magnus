@@ -8,6 +8,7 @@
  */
 import { computed, nextTick, onMounted, ref } from 'vue';
 import Icon from '../../design/Icon.vue';
+import { allowanceFor } from './acts.ts';
 import { cancelDensity, confirmDensity } from './density_ask.ts';
 import type { Density } from './seam.ts';
 import { build, DENSITIES, DENSITY_HINT } from './state.ts';
@@ -21,6 +22,13 @@ const chosen = ref<Density>(build.density);
 const root = ref<HTMLElement | null>(null);
 const name = 'build-density-ask';
 const words = computed(() => props.heading);
+/** The daily allowance for these hexes at the chosen density: quiet while there is plenty (allowance_words.ts). */
+const say = computed(() => (build.asking ? allowanceFor(build.asking, chosen.value) : null));
+const held = computed(() => !!say.value && say.value.blocked);
+
+function go(): void {
+    if (!held.value) confirmDensity(chosen.value);
+}
 
 function onKey(event: KeyboardEvent): void {
     if (event.key !== 'Escape') return;
@@ -38,7 +46,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <form ref="root" class="build-ask" data-density-ask aria-labelledby="build-ask-title" @submit.prevent="confirmDensity(chosen)" @keydown="onKey">
+  <form ref="root" class="build-ask" data-density-ask aria-labelledby="build-ask-title" @submit.prevent="go" @keydown="onKey">
     <h3 id="build-ask-title" class="build-ask-title">{{ words }}</h3>
     <fieldset class="build-opts">
       <legend class="ui-heading">Hexes to fill</legend>
@@ -48,8 +56,9 @@ onMounted(() => {
       </label>
     </fieldset>
     <p class="build-fine build-ask-hint">{{ DENSITY_HINT }}</p>
+    <p v-if="say" class="build-allowance" :class="{ 'is-held': say.blocked }" role="status" data-build-allowance>{{ say.text }}</p>
     <div class="build-ask-acts">
-      <button type="submit" class="ui-btn is-primary" data-density-go><Icon name="wand-magic-sparkles" :size="13" />Generate</button>
+      <button type="submit" class="ui-btn is-primary" data-density-go :disabled="held"><Icon name="wand-magic-sparkles" :size="13" />Generate</button>
       <button type="button" class="ui-btn" @click="cancelDensity()">Cancel</button>
     </div>
   </form>

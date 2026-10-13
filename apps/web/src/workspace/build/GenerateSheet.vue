@@ -8,6 +8,7 @@ import { computed, ref } from 'vue';
 import Icon from '../../design/Icon.vue';
 import { buildStore, type Density, type GenerateChoice, type Generator } from './seam.ts';
 import { build, cleanChoice, DENSITIES, DENSITY_HINT, ENGINES, GENERATOR_LABEL, plural, setChoice, setDensity } from './state.ts';
+import { allowanceNow, allowanceSay, writesOf } from './allowance_words.ts';
 
 const props = defineProps<{
     /** How many empty hexes Generate would fill, and how many hold a system. One hex: 1 and 0. */
@@ -25,6 +26,12 @@ const filledToo = ref(build.filledToo);
 const density = ref<Density>(build.density);
 const engine = computed(() => ENGINES.find((item) => item.id === draft.value.engine) ?? ENGINES[0]);
 const count = computed(() => props.empty + (filledToo.value ? props.filled : 0));
+/** The daily allowance for what this sheet would run (allowance_words.ts). One hex is a preview: one system. */
+const say = computed(() => {
+    const writes = props.many ? writesOf(props.empty, filledToo.value ? props.filled : 0, density.value) : { least: 1, most: 1 };
+    return allowanceSay(allowanceNow(), writes.least, writes.most);
+});
+const held = computed(() => !!say.value && say.value.blocked);
 
 function pickEngine(id: string): void {
     draft.value = cleanChoice({ engine: id, generator: draft.value.generator });
@@ -35,6 +42,7 @@ function pickGenerator(generator: Generator): void {
 }
 
 function go(): void {
+    if (held.value) return;
     setChoice(draft.value);
     build.filledToo = props.many ? filledToo.value : false;
     if (props.many) {
@@ -94,9 +102,10 @@ const goWords = computed(() => {
       </dl>
     </section>
     <div class="build-sheet-foot">
+      <p v-if="say" class="build-allowance" :class="{ 'is-held': say.blocked }" role="status" data-build-allowance>{{ say.text }}</p>
       <span class="build-fine">Your choice is saved for next time.</span>
       <button type="button" class="ui-btn" @click="$emit('cancel')">Cancel</button>
-      <button type="submit" class="ui-btn is-primary" :disabled="count === 0">
+      <button type="submit" class="ui-btn is-primary" :disabled="count === 0 || held">
         <Icon name="wand-magic-sparkles" :size="13" />{{ goWords }}
       </button>
     </div>
@@ -240,6 +249,10 @@ const goWords = computed(() => {
   padding: 10px 16px;
   border-top: 1px solid var(--line-1);
   background: var(--surface-1);
+}
+
+.build-sheet-foot .build-allowance {
+  flex: 1 0 100%;
 }
 
 .build-fine {

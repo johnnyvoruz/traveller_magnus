@@ -80,3 +80,7 @@ meaningful step append one line under Progress: "done: X. next: Y."
 
 ## Progress
 
+done: the allowance is on the session, because it arrives on GET /api/me and is the account's number. next: the store takes it from every generate answer and a 429.
+done: generate, preview, a job, a made sector and a 429 update the number, and the store tests pass. next: the four gates, the note and the report.
+done: tests, check, and the web build passed. API typecheck is red in campaign.ts, which this pass did not edit. next: the note and the report are written.
+

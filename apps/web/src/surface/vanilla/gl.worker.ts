@@ -19,6 +19,7 @@ const scope = globalThis as unknown as Scope;
 let baker: DiscBaker | null = null;
 let canvas: OffscreenCanvas | null = null;
 let warmed = false;
+let tiltKick = false;
 let watch: WatchRequest | null = null;
 const jobs: (() => Promise<void>)[] = [];
 let running = false;
@@ -41,6 +42,16 @@ function session(): DiscBaker {
             post({ op: 'state', ready: false, lost: false, failed: false });
         },
     });
+    if (!tiltKick) {
+        tiltKick = true;
+        enqueue(async () => {
+            const target = session();
+            for (let i = 0; i < 40 && !target.tiltIsWarm(); i++) {
+                if (target.warmTilt()) break;
+                await wait(16);
+            }
+        });
+    }
     return baker;
 }
 

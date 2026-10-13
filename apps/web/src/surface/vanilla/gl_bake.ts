@@ -127,7 +127,10 @@ const norm3 = (c: number[]): [number, number, number] => [(c[0] ?? 0) / 255, (c[
 
 /** Owns the cube textures. Programs are linked in gl.ts and passed to build. */
 export function attachBaker(gl: WebGL2RenderingContext): {
-    build: (stats: LinkedProgram, bake: LinkedProgram, bakeTilt: LinkedProgram) => void;
+    build: (stats: LinkedProgram, bake: LinkedProgram, bakeTilt: LinkedProgram | null) => void;
+    installTilt: (bakeTilt: LinkedProgram) => void;
+    needsTilt: (profile: BakeProfile) => boolean;
+    tiltInstalled: () => boolean;
     memory: () => number;
     measure: (profiles: BakeProfile[]) => Uint8Array[];
     makeCube: (size: number) => GpuCube;
@@ -151,7 +154,7 @@ export function attachBaker(gl: WebGL2RenderingContext): {
     let memory = 0;
     let longest = 0;
     const spans: GpuSpan[] = [];
-    let programs: { stats: LinkedProgram; bake: LinkedProgram; bakeTilt: LinkedProgram } | null = null;
+    let programs: { stats: LinkedProgram; bake: LinkedProgram; bakeTilt: LinkedProgram | null } | null = null;
     let anisotropy: Aniso | null = null;
     let statsTarget: { texture: WebGLTexture; fbo: WebGLFramebuffer } | null = null;
     let quad: WebGLBuffer | null = null;
@@ -204,7 +207,12 @@ export function attachBaker(gl: WebGL2RenderingContext): {
         if (!programs) throw new Error('baker is not built');
         const tilt = profile.rotation?.tilt ?? 0;
         if (!latitudeTermScales(tilt, profile.climate.locked)) return { program: programs.bake, latK: null };
+        if (!programs.bakeTilt) throw new Error('tilt program is not linked');
         return { program: programs.bakeTilt, latK: latitudeTiltFactor(tilt) };
+    }
+
+    function needsTilt(profile: BakeProfile): boolean {
+        return latitudeTermScales(profile.rotation?.tilt ?? 0, profile.climate.locked);
     }
 
     /** js/planet_gl.js:795-831 */
@@ -247,11 +255,17 @@ export function attachBaker(gl: WebGL2RenderingContext): {
         gl.uniform4f(u.uStorm ?? null, v[0] ?? 0, v[1] ?? 0, (v[2] ?? 0) * 0.6, 0.16);
     }
 
-    function build(stats: LinkedProgram, bake: LinkedProgram, bakeTilt: LinkedProgram): void {
+    function installTilt(bakeTilt: LinkedProgram): void {
+        if (!programs) throw new Error('baker is not built');
+        if (programs.bakeTilt) gl.deleteProgram(programs.bakeTilt.prog);
+        programs.bakeTilt = bakeTilt;
+    }
+
+    function build(stats: LinkedProgram, bake: LinkedProgram, bakeTilt: LinkedProgram | null): void {
         if (programs) {
             gl.deleteProgram(programs.stats.prog);
             gl.deleteProgram(programs.bake.prog);
-            gl.deleteProgram(programs.bakeTilt.prog);
+            if (programs.bakeTilt) gl.deleteProgram(programs.bakeTilt.prog);
         }
         memory = 0;
         programs = { stats, bake, bakeTilt };
@@ -479,6 +493,9 @@ export function attachBaker(gl: WebGL2RenderingContext): {
 
     return {
         build,
+        installTilt,
+        needsTilt,
+        tiltInstalled: () => programs?.bakeTilt != null,
         memory: () => memory,
         measure,
         makeCube,

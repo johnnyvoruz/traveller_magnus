@@ -3,13 +3,17 @@ import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import { builderPairReady } from '@voyage/shared';
 import {
+    accountedBytes,
     applyGenerated,
     applyJobBatch,
     createJob,
     ensurePin,
     generationSeed,
+    markJobFailed,
     readHexPage,
     readJob,
+    readJobSlice,
+    settleJobBytes,
     removeHex,
     restoreHex,
     revertHex,
@@ -377,5 +381,106 @@ test('a density batch counts hexes left empty and lists the ones it wrote', () =
     const undone = undoJob(sql, 'job-density', OWN, NOW);
     assert.equal(undone.restored, 1);
     assert.equal(readHexPage(sql, 'Spinward_Marches', null, 10, OWN).items.length, 0);
+});
+
+test('slices that arrive out of order finish once, and a repeat does not count twice', () => {
+    const sql = open();
+    ensurePin(sql, OWN);
+    const keys = ['Spinward_Marches/1910', 'Spinward_Marches/1911', 'Spinward_Marches/1912', 'Spinward_Marches/1913'];
+    createJob(sql, 'job-order', {
+        hexKeys: keys,
+        edition: 'MgT2E',
+        generator: 'top-down',
+        roll: 0,
+        filledToo: true,
+        seed: 'TravellerMagnus',
+        settings: {},
+        engineVersion: '1.0.0',
+        captured: {},
+    }, OWN, NOW);
+    const write = (hexKey) => ({
+        hexKey, treeHash: HASH, baseHash: null, roll: 0, baseRev: 0, capturedRev: 0, engineVersion: '1.0.0',
+    });
+    const seen = [];
+    const land = (offset, hexKey) => {
+        const job = applyJobBatch(sql, 'job-order', offset, [write(hexKey)], [], [], OWN, NOW, offset === 3, [], 10);
+        seen.push(job.done);
+        return job;
+    };
+    const tail = land(3, keys[3]);
+    assert.equal(tail.state, 'running');
+    assert.equal(tail.done, 1);
+    const second = land(1, keys[1]);
+    const third = land(0, keys[0]);
+    const last = land(2, keys[2]);
+    assert.equal(second.state, 'running');
+    assert.equal(third.state, 'running');
+    assert.equal(last.state, 'done');
+    assert.equal(last.done, 4);
+    assert.deepEqual(seen, [1, 2, 3, 4]);
+    const repeated = applyJobBatch(sql, 'job-order', 3, [write(keys[3])], [], [], OWN, NOW, true, [], 10);
+    assert.equal(repeated.done, 4);
+    assert.equal(accountedBytes(sql, 'job-order'), 40);
+    assert.equal(settleJobBytes(sql, 'job-order', 40), 40);
+    assert.equal(readJobSlice(sql, 'job-order', 0, 1).job.bytesSettled, 40);
+    const slice = readJobSlice(sql, 'job-order', 1, 2);
+    assert.deepEqual(slice.spec.hexKeys, [keys[1], keys[2]]);
+    assert.deepEqual(slice.job.applied, [3, 1, 0, 2]);
+    assert.equal(slice.rows[0].treeHash, HASH);
+    const undone = undoJob(sql, 'job-order', OWN, NOW);
+    assert.equal(undone.restored, 4);
+    assert.equal(readHexPage(sql, 'Spinward_Marches', null, 10, OWN).items.length, 0);
+});
+
+test('a busy job ends failed and keeps the sentence on the next hex', () => {
+    const sql = open();
+    ensurePin(sql, OWN);
+    createJob(sql, 'job-busy', {
+        hexKeys: [KEY, KEY_B],
+        edition: 'MgT2E',
+        generator: 'top-down',
+        roll: 0,
+        filledToo: true,
+        seed: 'TravellerMagnus',
+        settings: {},
+        engineVersion: '1.0.0',
+        captured: {},
+    }, OWN, NOW);
+    markJobFailed(sql, 'job-busy', NOW, 'This universe is busy. Generation stopped. Try again in a minute.', KEY);
+    const job = readJob(sql, 'job-busy');
+    assert.equal(job.state, 'failed');
+    assert.equal(job.failures[0].hexKey, KEY);
+    assert.equal(job.failures[0].reason, 'This universe is busy. Generation stopped. Try again in a minute.');
+    markJobFailed(sql, 'job-busy', NOW, 'again', KEY_B);
+    assert.equal(readJob(sql, 'job-busy').failures.length, 1);
+});
+
+test('two batches posted together both land', async () => {
+    const sql = open();
+    ensurePin(sql, OWN);
+    createJob(sql, 'job-pair', {
+        hexKeys: [KEY, KEY_B],
+        edition: 'MgT2E',
+        generator: 'top-down',
+        roll: 0,
+        filledToo: true,
+        seed: 'TravellerMagnus',
+        settings: {},
+        engineVersion: '1.0.0',
+        captured: {},
+    }, OWN, NOW);
+    const write = (hexKey) => ({
+        hexKey, treeHash: HASH, baseHash: null, roll: 0, baseRev: 0, capturedRev: 0, engineVersion: '1.0.0',
+    });
+    const [first, second] = await Promise.all([
+        Promise.resolve().then(() => applyJobBatch(sql, 'job-pair', 1, [write(KEY_B)], [], [], OWN, NOW, true)),
+        Promise.resolve().then(() => applyJobBatch(sql, 'job-pair', 0, [write(KEY)], [], [], OWN, NOW, false)),
+    ]);
+    const done = first.done > second.done ? first : second;
+    assert.equal(done.state, 'done');
+    assert.equal(done.done, 2);
+    assert.deepEqual(done.placed.slice().sort(), [KEY, KEY_B].sort());
+    const undone = undoJob(sql, 'job-pair', OWN, NOW);
+    assert.equal(undone.restored, 2);
 });
 

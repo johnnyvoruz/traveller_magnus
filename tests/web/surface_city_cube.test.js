@@ -75,6 +75,7 @@ test('the enhanced draw samples C and leaves the vanilla source alone', () => {
     assert.ok(planet.includes('mix(uUrbanColor, uGlassColor, clamp(cityCore, 0.0, 1.0))'));
     assert.equal(depth(ENHANCED_DRAW_FRAG), 0);
     assert.deepEqual([...ENHANCED_BAKE_PASSES], ['C']);
-    assert.equal(ENHANCED_CITY_VERSION, 'enhanced-cities-4b');
-    assert.equal(discRendererVersion('enhanced'), ENHANCED_CITY_VERSION + '-' + cityLook().id);
+    assert.equal(ENHANCED_CITY_VERSION, 'enhanced-cities-4c');
+    assert.equal(discRendererVersion('enhanced'), ENHANCED_CITY_VERSION + '-' + cityLook().id + '-ice2');
+    assert.equal(discRendererVersion('vanilla'), 'vanilla');
 });

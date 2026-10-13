@@ -56,6 +56,10 @@ export type JobBlob = {
     /** Hex keys written, in the order the batches applied them. */
     placed?: string[];
     applied?: number[];
+    /** Bytes this job stored. The queue adds the unsettled part once, when the job ends. */
+    objectBytes?: number;
+    /** Bytes already added to the universe row. A retry subtracts this and does not add them again. */
+    bytesSettled?: number;
 };
 
 const HEX_KEY = /^[^/]+\/\d{4}$/;
@@ -425,6 +429,8 @@ function jobBlob(raw: unknown): JobBlob {
             placed: Array.isArray(parsed.placed) ? parsed.placed.filter((key) => typeof key === 'string') : [],
             leftEmpty: typeof parsed.leftEmpty === 'number' && parsed.leftEmpty > 0 ? parsed.leftEmpty : 0,
             applied: Array.isArray(parsed.applied) ? parsed.applied : [],
+            objectBytes: typeof parsed.objectBytes === 'number' && parsed.objectBytes > 0 ? parsed.objectBytes : 0,
+            bytesSettled: typeof parsed.bytesSettled === 'number' && parsed.bytesSettled > 0 ? parsed.bytesSettled : 0,
         };
     } catch {
         return { failures: [], skipped: 0 };
@@ -562,6 +568,91 @@ export function readJob(sql: Sql, id: string, since = 0): JobRow {
     return { ...job, placed: job.placed.slice(since) };
 }
 
+export type SliceHex = { state: string; treeHash: string | null; baseHash: string | null };
+
+/** One slice of a job: its keys, the pin, and the rows those keys already have. */
+export function readJobSlice(sql: Sql, id: string, offset: number, count: number): {
+    job: { state: string; done: number; total: number; applied: number[]; objectBytes: number; bytesSettled: number };
+    pin: { truthVersion: string | null };
+    spec: {
+        hexKeys: string[];
+        total: number;
+        edition: string;
+        generator: string;
+        roll: number;
+        filledToo: boolean;
+        density?: JobSpec['density'];
+        seed: string;
+        settings: Record<string, unknown>;
+        engineVersion: string;
+        captured: Record<string, Captured>;
+    };
+    rows: Array<SliceHex | null>;
+} {
+    if (!Number.isInteger(offset) || offset < 0 || !Number.isInteger(count) || count < 1 || count > BUILDER_LIMITS.batch) {
+        throw new HexRefusal('validation', 'Invalid request.');
+    }
+    const pin = readPin(sql);
+    if (!pin) throw new HexRefusal('validation', 'This universe has no generation pin. Open it again.');
+    const jobRow = sql.exec(`SELECT state, done, total, failures FROM jobs WHERE id = ?`, id)[0];
+    if (!jobRow) throw new HexRefusal('not_found', 'No such job.');
+    const blob = jobBlob(jobRow.failures);
+    const spec = readJobSpec(sql, id);
+    const hexKeys = spec.hexKeys.slice(offset, offset + count);
+    const captured: Record<string, Captured> = {};
+    for (const hexKey of hexKeys) captured[hexKey] = spec.captured[hexKey] ?? null;
+    return {
+        job: {
+            state: String(jobRow.state),
+            done: Number(jobRow.done),
+            total: Number(jobRow.total),
+            applied: blob.applied ?? [],
+            objectBytes: blob.objectBytes ?? 0,
+            bytesSettled: blob.bytesSettled ?? 0,
+        },
+        pin: { truthVersion: pin.truthVersion },
+        spec: {
+            hexKeys,
+            total: spec.hexKeys.length,
+            edition: spec.edition,
+            generator: spec.generator,
+            roll: spec.roll,
+            filledToo: spec.filledToo,
+            density: spec.density,
+            seed: spec.seed,
+            settings: spec.settings,
+            engineVersion: spec.engineVersion,
+            captured,
+        },
+        rows: readSliceRows(sql, hexKeys, pin),
+    };
+}
+
+function readSliceRows(sql: Sql, hexKeys: string[], pin: Pin): Array<SliceHex | null> {
+    if (hexKeys.length === 0) return [];
+    const marks = hexKeys.map(() => '?').join(', ');
+    const found = sql.exec(
+        `SELECT hex_key, deleted, tree_hash, base_hash FROM hexes WHERE hex_key IN (${marks})`,
+        ...hexKeys,
+    );
+    const byKey = new Map(found.map((row) => [String(row.hex_key), row]));
+    return hexKeys.map((hexKey) => {
+        const row = byKey.get(hexKey);
+        if (!row) return null;
+        return {
+            state: placeOf(Number(row.deleted) ? 1 : 0, pin, hexKey),
+            treeHash: row.tree_hash ? String(row.tree_hash) : null,
+            baseHash: row.base_hash ? String(row.base_hash) : null,
+        };
+    });
+}
+
+export function readJobState(sql: Sql, id: string): { state: string } {
+    const row = sql.exec(`SELECT state FROM jobs WHERE id = ?`, id)[0];
+    if (!row) throw new HexRefusal('not_found', 'No such job.');
+    return { state: String(row.state) };
+}
+
 export function readJobSpec(sql: Sql, id: string): JobSpec {
     const rows = sql.exec(`SELECT value FROM meta WHERE key = ?`, `job:${id}`);
     if (!rows[0] || typeof rows[0].value !== 'string') throw new HexRefusal('not_found', 'No such job.');
@@ -580,7 +671,7 @@ export function stopJob(sql: Sql, id: string, now: string): JobRow {
 
 export type BatchWrite = GeneratedWrite & { capturedRev: number };
 
-export function applyJobBatch(sql: Sql, id: string, offset: number, writes: BatchWrite[], skipped: string[], failures: BuilderFailure[], pin: Pin, now: string, finished: boolean, leftEmpty: string[] = []): JobRow {
+export function applyJobBatch(sql: Sql, id: string, offset: number, writes: BatchWrite[], skipped: string[], failures: BuilderFailure[], pin: Pin, now: string, finished: boolean, leftEmpty: string[] = [], addedBytes = 0): JobRow {
     return sql.transaction(() => {
         const row = sql.exec(`SELECT * FROM jobs WHERE id = ?`, id)[0];
         if (!row) throw new HexRefusal('not_found', 'No such job.');
@@ -611,6 +702,7 @@ export function applyJobBatch(sql: Sql, id: string, offset: number, writes: Batc
             written,
             placed,
             applied: [...(blob.applied ?? []), offset],
+            objectBytes: (blob.objectBytes ?? 0) + (Number.isFinite(addedBytes) && addedBytes > 0 ? Math.floor(addedBytes) : 0),
         };
         const done = Math.min(Number(row.total), Number(row.done) + appliedWrites + skipped.length + batchFailures.length + leftEmpty.length);
         const failed = Number(row.failed) + batchFailures.length;
@@ -718,11 +810,42 @@ export function countHexes(sql: Sql): number {
     return Number(rows[0]?.n ?? 0);
 }
 
-export function markJobFailed(sql: Sql, id: string, now: string): void {
-    sql.exec(
-        `UPDATE jobs SET state = 'failed', finished_at = ? WHERE id = ? AND state IN ('queued', 'running')`,
-        now, id,
-    );
+/** Remember how much of this job has been added to the universe row. */
+export function settleJobBytes(sql: Sql, id: string, bytes: number): number {
+    return sql.transaction(() => {
+        const row = sql.exec(`SELECT failures FROM jobs WHERE id = ?`, id)[0];
+        if (!row) throw new HexRefusal('not_found', 'No such job.');
+        const blob = jobBlob(row.failures);
+        const settled = Math.max(blob.bytesSettled ?? 0, Number.isFinite(bytes) && bytes > 0 ? Math.floor(bytes) : 0);
+        blob.bytesSettled = settled;
+        sql.exec(`UPDATE jobs SET failures = ? WHERE id = ?`, JSON.stringify(blob), id);
+        return settled;
+    });
+}
+
+export function accountedBytes(sql: Sql, id: string): number {
+    const row = sql.exec(`SELECT failures FROM jobs WHERE id = ?`, id)[0];
+    if (!row) return 0;
+    return jobBlob(row.failures).objectBytes ?? 0;
+}
+
+/** A queued or running job ends failed. `reason` is stored on `hexKey` when both are set. */
+export function markJobFailed(sql: Sql, id: string, now: string, reason?: string, hexKey?: string): void {
+    sql.transaction(() => {
+        const row = sql.exec(`SELECT * FROM jobs WHERE id = ?`, id)[0];
+        if (!row) return;
+        if (row.state !== 'queued' && row.state !== 'running') return;
+        const blob = jobBlob(row.failures);
+        let failed = Number(row.failed);
+        if (reason && hexKey && HEX_KEY.test(hexKey)) {
+            blob.failures = [...blob.failures, { hexKey, reason: reason.slice(0, BUILDER_LIMITS.reason) }].slice(0, 100);
+            failed += 1;
+        }
+        sql.exec(
+            `UPDATE jobs SET state = 'failed', failed = ?, failures = ?, finished_at = ? WHERE id = ?`,
+            failed, JSON.stringify(blob), now, id,
+        );
+    });
 }
 
 function json(data: unknown, status = 200): Response {
@@ -831,17 +954,45 @@ export async function respondBuilder(sql: Sql, request: Request, now: string): P
         if (request.method === 'POST' && stop) return json(stopJob(sql, decodeURIComponent(stop[1]), now));
         const undo = /^\/jobs\/([^/]+)\/undo$/.exec(path);
         if (request.method === 'POST' && undo) return json(undoJob(sql, decodeURIComponent(undo[1]), pin!, now));
+        const stateOnly = /^\/jobs\/([^/]+)\/state$/.exec(path);
+        if (request.method === 'GET' && stateOnly) return json(readJobState(sql, decodeURIComponent(stateOnly[1])));
+        const slice = /^\/jobs\/([^/]+)\/slice$/.exec(path);
+        if (request.method === 'GET' && slice) {
+            const offset = Number(url.searchParams.get('offset') ?? '0');
+            const count = Number(url.searchParams.get('n') ?? '0');
+            return json(readJobSlice(sql, decodeURIComponent(slice[1]), offset, count));
+        }
         const fail = /^\/jobs\/([^/]+)\/fail$/.exec(path);
         if (request.method === 'POST' && fail) {
-            markJobFailed(sql, decodeURIComponent(fail[1]), now);
+            const text = await request.text();
+            let reason: string | undefined;
+            let hexKey: string | undefined;
+            if (text) {
+                let body: { reason?: unknown; hexKey?: unknown };
+                try {
+                    body = JSON.parse(text) as { reason?: unknown; hexKey?: unknown };
+                } catch {
+                    throw new HexRefusal('validation', 'Invalid JSON.');
+                }
+                if (typeof body.reason === 'string') reason = body.reason;
+                if (typeof body.hexKey === 'string') hexKey = body.hexKey;
+            }
+            markJobFailed(sql, decodeURIComponent(fail[1]), now, reason, hexKey);
             return json(readJob(sql, decodeURIComponent(fail[1])));
+        }
+        const settled = /^\/jobs\/([^/]+)\/settled$/.exec(path);
+        if (request.method === 'POST' && settled) {
+            const body = await bodyOf(request) as { bytes?: number };
+            return json({ bytes: settleJobBytes(sql, decodeURIComponent(settled[1]), body.bytes ?? 0) });
         }
         const batch = /^\/jobs\/([^/]+)\/batch$/.exec(path);
         if (request.method === 'POST' && batch) {
             const body = await bodyOf(request) as {
-                offset: number; writes: BatchWrite[]; skipped: string[]; failures: BuilderFailure[]; finished: boolean; leftEmpty?: string[];
+                offset: number; writes: BatchWrite[]; skipped: string[]; failures: BuilderFailure[]; finished: boolean; leftEmpty?: string[]; addedBytes?: number;
             };
-            return json(applyJobBatch(sql, decodeURIComponent(batch[1]), body.offset, body.writes ?? [], body.skipped ?? [], body.failures ?? [], pin!, now, body.finished === true, body.leftEmpty ?? []));
+            const id = decodeURIComponent(batch[1]);
+            const job = applyJobBatch(sql, id, body.offset, body.writes ?? [], body.skipped ?? [], body.failures ?? [], pin!, now, body.finished === true, body.leftEmpty ?? [], body.addedBytes ?? 0);
+            return json({ ...job, objectBytes: accountedBytes(sql, id) });
         }
         return null;
     } catch (err) {

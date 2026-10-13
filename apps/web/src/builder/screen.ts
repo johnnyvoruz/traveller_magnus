@@ -10,6 +10,7 @@
  * the server writes each key the screen named.
  */
 import type { SectorHex, TreeEnvelope } from '@voyage/shared';
+import { readAllowance } from '../account/session.ts';
 import type { BuildRow, BuildStore, BuildUniverse, JobProgress as ScreenProgress } from '../workspace/build/seam.ts';
 import { rowEntry } from './overlay.ts';
 import type { Builder } from './store.ts';
@@ -64,6 +65,8 @@ export function asBuildStore(builder: Builder): BuildStore & {
     /** The job in flight, including one picked up after the map was left. Absent from the seam type: Lane D reads it here. */
     job: Builder['job'];
     stopJob: Builder['stopJob'];
+    /** This account's allowance. Absent from the seam type: Lane D reads it here. */
+    allowance: Builder['allowance'];
 } {
     return {
         universe(): BuildUniverse | null {
@@ -121,5 +124,6 @@ export function asBuildStore(builder: Builder): BuildStore & {
         undo: (token) => builder.undo(token),
         job: builder.job,
         stopJob: () => builder.stopJob(),
+        allowance: () => readAllowance(),
     };
 }
