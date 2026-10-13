@@ -11,6 +11,9 @@ import { ownedUniverse, type UniverseRow } from '../universe/forward';
 import { mountBuilderRoutes } from './builder';
 import { mountCampaignExport } from './campaign_export';
 import { mountObjectRoutes } from './objects';
+import { detectPublicGames } from '../auth/public_schema';
+import { deletePublicMark } from '../universe/public_mark';
+import { refreshAfterCampaign, setPublicGames } from './public_games';
 
 const LIVE_LIMIT = CAMPAIGN_LIMITS.universes;
 const PURGE_DAYS = 30;
@@ -173,6 +176,7 @@ universesRoute.delete('/:id', async (c) => {
         purgeAfter,
         updatedAt: deletedAt,
     }).where(eq(universes.id, owned.row.id)).run();
+    if (await detectPublicGames(c.env.DB)) await deletePublicMark(c.env, owned.row.id);
     const row = await database(c).select().from(universes).where(eq(universes.id, owned.row.id)).get();
     return ok(c, present(row!));
 });
@@ -190,5 +194,13 @@ universesRoute.patch('/:id/campaign/changes', async (c) => {
     if (owned instanceof Response) return owned;
     const url = new URL(c.req.url);
     url.pathname = '/campaign/changes';
-    return owned.forward(new Request(url, c.req.raw));
+    const response = await owned.forward(new Request(url, c.req.raw));
+    await refreshAfterCampaign(c.env, owned, response);
+    return response;
+});
+
+universesRoute.patch('/:id/public-games', async (c) => {
+    const owned = await ownedUniverse(c);
+    if (owned instanceof Response) return owned;
+    return setPublicGames(c, owned);
 });

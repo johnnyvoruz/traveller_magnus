@@ -6973,3 +6973,27 @@ that failed at the close no longer does. Ready note `findings/builder_form_ready
   hex ice unchanged, so area is identical on ten worlds; the disc bake has its own
   four-scale edge with floes; disc ice pins re-pinned. One question to Johnny (shared
   noise later: recommended no). C is free until D's review lands.
+
+- **1.1.10 pushed (`f99a8a2`).** Johnny: no shared ice noise. A, B, D, E go; C free.
+
+- 22:40: **A accepted** (`a_signout_fix`: sign-out posts `{}` and reports failure, `ceremony_cancelled`, `createdAt`, `guardRecovery(router)`; `a_importer`: import reads the journal). **D accepted** (`d_first_run_review`: `findings/first_run_review.md`, 19 findings; follow-ups: added date, link-social stand-in `workspace/passkey/link.ts`, sign-out refusal shown). `d_account_menu.md` written for tonight (finding 2: no way to `/account` from the menu). Passkey push waits on B's public games report: `index.ts` mounts both.
+
+- 22:45: Johnny, yes to three (board). `c_regina_temperature.md` written (read-only). The two D items wait for the passkey push.
+
+## 257. The passkey release: push 1.1.11 written (2026-10-12 23:00)
+
+- **B, `b_public_games`, accepted:** the Worker accepts a body-less sign-out;
+  `link-social` on, with a test; production rpID and origin traced in
+  `contracts/b_auth.md`; public games server (shared schemas, `public_hex.ts`,
+  migration 0013, switch, recompute after a campaign save, feed with a leak test and
+  a limit of 60 polls, safe without 0013). `ownedUniverse` has a raw SQL path when
+  0013 is present: Builder suites not re-run on it, so 0013 is held out.
+- **D, `d_account_menu`, accepted:** "Account and sign-in" in the menu; the menu's
+  Sign out waits on the server; sign-up and recovery return to the address they
+  started from; the name shown once.
+- **E, `e_player_pack`, accepted:** `apps/web/src/pack/`, one HTML file, the leak
+  test, "Download the Player Pack" on the journal list; 136,690 bytes at ten times
+  the fixture.
+- **Push 1.1.11:** the whole passkey set, the sign-out fix, the Player Pack, the
+  importer, the public games server without its migration. A, B, D held until the
+  push so the list stays still. C read-only on Regina.

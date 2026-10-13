@@ -72,7 +72,7 @@ test('GET /api/me carries the passkey fields, and a recovery refusal sets the ga
     assert.equal(session.allowance, null);
 });
 
-test('sign-out passes a recovery refusal through and still clears when the request throws', async () => {
+test('sign-out passes a recovery refusal through and stays signed in when the request throws', async () => {
     await signOut(async () => json(200, {}));
     await loadSession(async () => json(200, {
         ok: true,
@@ -84,9 +84,38 @@ test('sign-out passes a recovery refusal through and still clears when the reque
     assert.equal(session.user.id, 'ada');
     assert.equal(session.allowance.remaining, 10);
     assert.equal(session.gate, 'recovery');
-    const cleared = await signOut(async () => { throw new Error('down'); });
-    assert.deepEqual(cleared, { ok: true });
+    const offline = await signOut(async () => { throw new Error('down'); });
+    assert.deepEqual(offline, { ok: false, code: 'network', message: 'The server could not be reached. You are still signed in.' });
+    assert.equal(session.user.id, 'ada');
+    assert.equal(session.allowance.remaining, 10);
+    assert.equal(session.gate, 'recovery');
+});
+
+test('sign-out posts a JSON body, and a 415 or a 500 leaves the session', async () => {
+    await signOut(async () => json(200, {}));
+    await loadSession(async () => json(200, {
+        ok: true,
+        data: { id: 'ada', email: null, role: 'user', profile: null, allowance: { limit: 10, used: 0, remaining: 10, resetsAt: '2026-10-13T00:00:00.000Z' } },
+    }));
+    const calls = [];
+    const refused = await signOut(async (url, init) => {
+        calls.push({
+            url: String(url),
+            body: init && init.body,
+            type: new Headers(init && init.headers).get('content-type'),
+        });
+        return json(415, {});
+    });
+    assert.deepEqual(calls[0], { url: '/api/auth/sign-out', body: '{}', type: 'application/json' });
+    assert.deepEqual(refused, { ok: false, code: 'sign_out_failed', message: 'Sign-out did not finish. You are still signed in.' });
+    assert.equal(session.user.id, 'ada');
+    assert.equal(session.allowance.remaining, 10);
+    const failed = await signOut(async () => json(500, { code: 'internal', message: 'Sign-out failed.' }));
+    assert.deepEqual(failed, { ok: false, code: 'internal', message: 'Sign-out failed.' });
+    assert.equal(session.user.id, 'ada');
+    assert.equal(session.gate, 'open');
+    const done = await signOut(async () => json(200, { success: true }));
+    assert.deepEqual(done, { ok: true });
     assert.equal(session.user, null);
     assert.equal(session.allowance, null);
-    assert.equal(session.gate, 'signed-out');
 });

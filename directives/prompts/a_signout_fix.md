@@ -6,6 +6,14 @@ then this file. No git but read-only, no deploy, no `rules/`, no Traveller rule 
 memory. Your bundle fix, passkey client and selection outline are accepted. The
 passkey paths wait one more push for parts 1 and 2 below.
 
+## Added 2026-10-12 22:20 (orchestrator): Johnny wants passkeys out tonight
+
+Parts 1 and 2 are all that hold the passkey push. **Do parts 1 and 2, run the gates,
+write `directives/reports/a_signout_fix.md` and say so in Progress. Then carry on
+with part 3 (the importer) and write it up as `directives/reports/a_importer.md`.**
+In part 2, do not wait for Lane B on linked providers: leave `list-accounts` as you
+read it and say so; the router line and `createdAt` are in.
+
 ## 1. First, a live fault: sign-out never reaches the server
 
 Lane D found it; the orchestrator confirmed it on production at 21:50:
@@ -79,4 +87,7 @@ Questions for Johnny written out in full, recommended answer first. After each
 meaningful step append one line under Progress: "done: X. next: Y."
 
 ## Progress
+
+done: sign-out posts `{}`, a non-success leaves the session, a closed prompt is ceremony_cancelled, listPasskeys passes createdAt, and guardRecovery is on the router. next: the importer.
+done: import reads the journal, an old entry still parses, and an existing entry is "That campaign is not empty." Reports: directives/reports/a_signout_fix.md and directives/reports/a_importer.md. next: none.
 

@@ -1,7 +1,10 @@
 import type { Context } from 'hono';
+import { APIError } from '@better-auth/core/error';
 import { createAuth } from './auth';
 import type { AppEnv } from '../env';
 import { fail } from '../http';
+import { detectPasskeyColumns } from './passkey_schema';
+import { isRecoverySession, RECOVERY_CODE, RECOVERY_MESSAGE } from './recovery_gate';
 import { roleSatisfies, type RoleName } from './roles';
 
 export type AppContext = Context<AppEnv>;
@@ -33,9 +36,26 @@ export type SessionUser = {
     role: string;
 };
 
+/** The before hook throws this when get-session loads a recovery session. Map it to the app envelope. */
+function recoveryRefusal(error: unknown): boolean {
+    if (!(error instanceof APIError)) return false;
+    const body = error.body as { code?: string } | undefined;
+    return body?.code === RECOVERY_CODE;
+}
+
 export async function requireUser(c: AppContext): Promise<SessionUser | Response> {
-    const session = await createAuth(c.env).api.getSession({ headers: c.req.raw.headers });
+    await detectPasskeyColumns(c.env.DB);
+    let session: Awaited<ReturnType<ReturnType<typeof createAuth>['api']['getSession']>>;
+    try {
+        session = await createAuth(c.env).api.getSession({ headers: c.req.raw.headers });
+    } catch (error) {
+        if (recoveryRefusal(error)) return fail(c, 403, RECOVERY_CODE, RECOVERY_MESSAGE);
+        throw error;
+    }
     if (!session?.user) return fail(c, 401, 'unauthenticated', 'Sign in required.');
+    if (isRecoverySession(session as { session?: { mustAddPasskey?: boolean | number } })) {
+        return fail(c, 403, RECOVERY_CODE, RECOVERY_MESSAGE);
+    }
     const account = session.user as typeof session.user & { role?: string };
     const role = account.role ?? '';
     const user = { id: account.id, email: account.email, role };

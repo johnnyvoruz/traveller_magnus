@@ -1,19 +1,21 @@
 /**
  * Restores a campaign export into the open campaign when that campaign is empty.
  * Ids and image hashes stay as they are. The image files are not uploaded.
- * Records go first, then links, then settings, then the clock.
+ * Records go first, then links, then the journal, then settings, then the clock.
  * Each PATCH stays within the campaign row and byte limits, and each one is
  * flushed before the next is queued.
  */
 import {
     CAMPAIGN_LIMITS,
     CampaignClock,
+    CampaignEntry,
     CampaignLink,
     CampaignRecord,
     CampaignSettings,
     Universe,
     type CampaignChanges,
     type ClockChange,
+    type EntryChange,
     type LinkChange,
     type RecordChange,
     type SettingsChange,
@@ -29,6 +31,7 @@ const UniverseExport = Universe.pick({
 }).strict();
 const RecordsExport = CampaignRecord.array();
 const LinksExport = CampaignLink.array();
+const JournalExport = CampaignEntry.array();
 const ClockExport = CampaignClock.nullable();
 
 export type CampaignExport = {
@@ -36,6 +39,8 @@ export type CampaignExport = {
     exportedAt: string;
     records: CampaignRecord[];
     links: CampaignLink[];
+    /** Absent on a file written before the journal was exported. */
+    journal: CampaignEntry[];
     settings: CampaignSettings;
     clock: CampaignClock | null;
 };
@@ -54,7 +59,7 @@ const NOT_EMPTY = 'That campaign is not empty.';
 const NOT_SAVED = 'The next batch did not save.';
 const TOO_LARGE = 'A row is over the update limit.';
 
-const DOCUMENT_KEYS = ['universe', 'exportedAt', 'records', 'links', 'settings', 'clock'];
+const DOCUMENT_KEYS = ['universe', 'exportedAt', 'records', 'links', 'journal', 'settings', 'clock'];
 const EXPORTED_AT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/;
 
 function received(value: unknown): string {
@@ -105,6 +110,12 @@ export function parseExport(text: string): ParseResult {
     if (!Object.prototype.hasOwnProperty.call(json, 'links')) return { ok: false, message: 'links: Required' };
     const links = LinksExport.safeParse(json.links);
     if (!links.success) return { ok: false, message: faultOf('links', links.error.issues) };
+    let journal: CampaignEntry[] = [];
+    if (Object.prototype.hasOwnProperty.call(json, 'journal')) {
+        const parsed = JournalExport.safeParse(json.journal);
+        if (!parsed.success) return { ok: false, message: faultOf('journal', parsed.error.issues) };
+        journal = parsed.data;
+    }
     if (!Object.prototype.hasOwnProperty.call(json, 'settings')) return { ok: false, message: 'settings: Required' };
     const settings = CampaignSettings.safeParse(json.settings);
     if (!settings.success) return { ok: false, message: faultOf('settings', settings.error.issues) };
@@ -118,6 +129,7 @@ export function parseExport(text: string): ParseResult {
             exportedAt: json.exportedAt,
             records: records.data,
             links: links.data,
+            journal,
             settings: settings.data,
             clock: clock.data,
         },
@@ -127,34 +139,41 @@ export function parseExport(text: string): ParseResult {
 type Batch = {
     records: RecordChange[];
     links: LinkChange[];
+    journal: EntryChange[];
     settings?: SettingsChange;
     clock?: ClockChange;
 };
 
 function emptyBatch(): Batch {
-    return { records: [], links: [] };
+    return { records: [], links: [], journal: [] };
 }
 
 function toChanges(batch: Batch): CampaignChanges {
     const patch: CampaignChanges = {};
     if (batch.records.length > 0) patch.records = batch.records;
     if (batch.links.length > 0) patch.links = batch.links;
+    if (batch.journal.length > 0) patch.journal = batch.journal;
     if (batch.settings) patch.settings = batch.settings;
     if (batch.clock) patch.clock = batch.clock;
     return patch;
 }
 
 function rowCount(batch: Batch): number {
-    return batch.records.length + batch.links.length + (batch.settings ? 1 : 0) + (batch.clock ? 1 : 0);
+    return batch.records.length + batch.links.length + batch.journal.length + (batch.settings ? 1 : 0) + (batch.clock ? 1 : 0);
 }
 
 function byteSize(patch: CampaignChanges): number {
     return new TextEncoder().encode(JSON.stringify(patch)).length;
 }
 
-function withItem(batch: Batch, item: RecordChange | LinkChange | SettingsChange | ClockChange, kind: 'record' | 'link' | 'settings' | 'clock'): Batch {
+function withItem(
+    batch: Batch,
+    item: RecordChange | LinkChange | EntryChange | SettingsChange | ClockChange,
+    kind: 'record' | 'link' | 'journal' | 'settings' | 'clock',
+): Batch {
     if (kind === 'record') return { ...batch, records: batch.records.concat([item as RecordChange]) };
     if (kind === 'link') return { ...batch, links: batch.links.concat([item as LinkChange]) };
+    if (kind === 'journal') return { ...batch, journal: batch.journal.concat([item as EntryChange]) };
     if (kind === 'settings') return { ...batch, settings: item as SettingsChange };
     return { ...batch, clock: item as ClockChange };
 }
@@ -168,7 +187,7 @@ type Packed =
     | { ok: true; batches: Batch[] }
     | { ok: false; batches: Batch[]; message: string };
 
-function pack(items: { kind: 'record' | 'link' | 'settings' | 'clock'; row: RecordChange | LinkChange | SettingsChange | ClockChange }[]): Packed {
+function pack(items: { kind: 'record' | 'link' | 'journal' | 'settings' | 'clock'; row: RecordChange | LinkChange | EntryChange | SettingsChange | ClockChange }[]): Packed {
     const batches: Batch[] = [];
     let current = emptyBatch();
     for (const item of items) {
@@ -188,12 +207,15 @@ function pack(items: { kind: 'record' | 'link' | 'settings' | 'clock'; row: Reco
 function changesOf(doc: CampaignExport): Packed {
     const settingsRev = campaign.settings ? campaign.settings.rev : 0;
     const clockRev = campaign.clock ? campaign.clock.rev : 0;
-    const items: { kind: 'record' | 'link' | 'settings' | 'clock'; row: RecordChange | LinkChange | SettingsChange | ClockChange }[] = [];
+    const items: { kind: 'record' | 'link' | 'journal' | 'settings' | 'clock'; row: RecordChange | LinkChange | EntryChange | SettingsChange | ClockChange }[] = [];
     for (const record of doc.records) {
         items.push({ kind: 'record', row: { ...record, baseRev: 0 } });
     }
     for (const link of doc.links) {
         items.push({ kind: 'link', row: { ...link, baseRev: 0 } });
+    }
+    for (const entry of doc.journal) {
+        items.push({ kind: 'journal', row: { ...entry, baseRev: 0 } });
     }
     items.push({
         kind: 'settings',
@@ -211,14 +233,14 @@ function saved(landed: number): ImportResult {
 
 /**
  * Imports `doc` into `target`.
- * `target` must be the open campaign, and that campaign must have no records and no links.
+ * `target` must be the open campaign, and that campaign must have no records, links, or journal entries.
  * Stops at the first batch that does not save and reports how many rows landed before it.
  */
 export async function importCampaign(doc: CampaignExport, target: string): Promise<ImportResult> {
     if (campaign.status !== 'ready' || campaign.universeId !== target) {
         return { ok: false, message: NOT_OPEN, landed: 0 };
     }
-    if (Object.keys(campaign.records).length > 0 || Object.keys(campaign.links).length > 0) {
+    if (Object.keys(campaign.records).length > 0 || Object.keys(campaign.links).length > 0 || Object.keys(campaign.journal).length > 0) {
         return { ok: false, message: NOT_EMPTY, landed: 0 };
     }
     const packed = changesOf(doc);

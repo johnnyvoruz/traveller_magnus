@@ -8,6 +8,8 @@ import type { CampaignEntryKind } from '@voyage/shared';
 import { campaign } from '../../campaign/store.ts';
 import { deleteEntry, entriesAtHex, entriesNewestFirst } from '../../campaign/journal.ts';
 import Icon from '../../design/Icon.vue';
+import { saveBlob } from '../../platform/browser.ts';
+import { showToast } from '../../shell/toast.ts';
 import RecordAvatar from '../RecordAvatar.vue';
 import { journalFilter, journalQuery } from '../list_state.ts';
 import { locating, startLocate, stopLocate } from '../locate.ts';
@@ -34,6 +36,8 @@ const emit = defineEmits<{
     map: [];
 }>();
 
+const packAsk = ref<string | null>(null);
+const packBusy = ref(false);
 const query = ref(journalQuery.value);
 /** The query the list is filtered by. Typing updates it after SEARCH_WAIT. */
 const needle = ref(journalQuery.value);
@@ -254,7 +258,54 @@ function onRowKey(event: KeyboardEvent, id: string): void {
     }
 }
 
+function packInput() {
+    const universe = campaign.universes.find((row) => row.id === campaign.universeId);
+    return {
+        name: universe && universe.name ? universe.name : 'Campaign',
+        clockDays: campaign.clock ? campaign.clock.days : null,
+        records: campaign.records,
+        links: campaign.links,
+        journal: campaign.journal,
+        settings: campaign.settings,
+    };
+}
+
+async function askPack(): Promise<void> {
+    if (packBusy.value) return;
+    packBusy.value = true;
+    try {
+        const pack = await import('../../pack/plan.ts');
+        packAsk.value = pack.packConfirm(pack.planPack(packInput()));
+    } catch {
+        showToast('The Player Pack could not be built.');
+    } finally {
+        packBusy.value = false;
+    }
+}
+
+async function savePack(): Promise<void> {
+    if (packBusy.value) return;
+    packBusy.value = true;
+    try {
+        const built = await import('../../pack/build.ts');
+        const paint = await import('../../pack/paint.ts');
+        const file = built.buildPlayerPack(packInput(), paint.readPackPaint());
+        saveBlob(new Blob([file.html], { type: 'text/html;charset=utf-8' }), file.fileName);
+        packAsk.value = null;
+    } catch {
+        showToast('The Player Pack could not be built.');
+    } finally {
+        packBusy.value = false;
+    }
+}
+
 function onListKey(event: KeyboardEvent): void {
+    if (packAsk.value && event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        packAsk.value = null;
+        return;
+    }
     if (event.key !== 'Escape') return;
     const target = event.target;
     const tag = target instanceof HTMLElement ? target.tagName : '';
@@ -306,6 +357,15 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
 
 <template>
   <div class="camp-list" @keydown="onListKey">
+    <div class="jn-pack">
+      <button type="button" class="ui-btn" data-command="journal-pack" :disabled="packBusy" @click="askPack">Download the Player Pack</button>
+      <div v-if="packAsk" class="jn-ask" role="alertdialog" aria-labelledby="jn-pack-title">
+        <p id="jn-pack-title">Download the Player Pack?</p>
+        <p>{{ packAsk }}</p>
+        <button type="button" class="ui-btn is-primary" data-command="journal-pack-save" :disabled="packBusy" @click="savePack">Download</button>
+        <button type="button" class="ui-btn" data-command="journal-pack-cancel" @click="packAsk = null">Cancel</button>
+      </div>
+    </div>
     <div v-if="first" class="camp-first">
       <span class="camp-glyph is-large" aria-hidden="true"><Icon name="book-atlas" :size="22" /></span>
       <h2>Sessions, notes, handouts and rumours land here.</h2>
@@ -477,5 +537,25 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
   gap: 8px;
   margin: 8px 0;
   color: var(--text-1);
+}
+
+.jn-pack {
+  margin: 0 0 12px;
+}
+
+.jn-ask {
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-2);
+  background: var(--surface-1);
+}
+
+.jn-ask p {
+  margin: 0 0 8px;
+}
+
+.jn-ask .ui-btn {
+  margin-right: 8px;
 }
 </style>

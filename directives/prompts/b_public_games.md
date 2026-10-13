@@ -85,3 +85,8 @@ meaningful step append one line under Progress: "done: X. next: Y."
 
 ## Progress
 
+done: the auth contract states list-accounts, link-social, the JSON body rule, the local passkey recipe, and createdAt. next: the linking test, the body-less sign-out test, then the public games server.
+done: the linking test passed and the public-games server is written (0013, feed, switch, recompute, delete). next: the worker suite, then the gates.
+done: the worker suite, passkeys, health, npm test, check, typecheck, and build passed. The public-games contract is marked built. next: the report.
+done: the report is written. next: stop.
+

@@ -239,22 +239,29 @@ export async function signIn(fetchImpl: typeof fetch = fetch, callbackURL = '/',
 
 export type SignOutResult = { ok: true } | { ok: false; code: string; message: string };
 
+const SIGN_OUT_FAILED = 'sign_out_failed';
+const SIGN_OUT_FAILED_MESSAGE = 'Sign-out did not finish. You are still signed in.';
+const SIGN_OUT_OFFLINE = 'The server could not be reached. You are still signed in.';
+
 /**
- * Ends the session. The user is signed out even when the request fails.
- * A 403 `passkey_required` is returned as the server sent it, and the local session stays.
+ * Ends the session only when the server says so.
+ * The body is `{}` so the request carries a JSON content type. An empty POST is 415, and the cookie would stay.
+ * Any other answer leaves the local session where it is.
  */
 export async function signOut(fetchImpl: typeof fetch = fetch): Promise<SignOutResult> {
     try {
-        const res = await apiFetch(fetchImpl, '/api/auth/sign-out', { method: 'POST' });
+        const res = await apiFetch(fetchImpl, '/api/auth/sign-out', {
+            method: 'POST',
+            body: '{}',
+        });
         if (!res.ok) {
             const failure = await failureFrom(res);
-            if (failure?.code === 'passkey_required') {
-                session.gate = 'recovery';
-                return { ok: false, code: failure.code, message: failure.message };
-            }
+            if (!failure) return { ok: false, code: SIGN_OUT_FAILED, message: SIGN_OUT_FAILED_MESSAGE };
+            if (failure.code === 'passkey_required') session.gate = 'recovery';
+            return { ok: false, code: failure.code, message: failure.message };
         }
     } catch {
-        // The local session still ends.
+        return { ok: false, code: 'network', message: SIGN_OUT_OFFLINE };
     }
     session.user = null;
     session.error = '';

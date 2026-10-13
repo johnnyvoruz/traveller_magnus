@@ -1,55 +1,39 @@
-# Orchestrator state — 2026-10-12 22:15
+# Orchestrator state — 2026-10-12 23:00
 
 Overwritten every turn. History is `handoff.md` (last section: 256).
 
 ## Where the roadmap is
-Pushed: 1.1.9 (`615add4`). On disk: 1.1.10, push list `findings/push/builder_2026-10-12c.md`.
-Builder: done bar polish. Passkeys: server, client and screens all built, held one
-more push for A's sign-out and closed-prompt fixes. Public games: B building the
-server (migration 0013); browser side after. Campaign: handout images done; Player
-Pack with E. D is reviewing the live site as a first visitor.
+Pushed: 1.1.10 (`f99a8a2`). On disk: **1.1.11, the passkey release**, push list
+`findings/push/builder_2026-10-12d.md`. After it: public games in the browser, D's
+first-visit review (top ten), the Regina investigation (C, read-only, in flight).
 
 ## Lanes
-- A go: `a_signout_fix` (live: body-less sign-out is 415; cancelled ceremony code;
-  `createdAt`; `guardRecovery(router)` in router.ts; importer reads journal).
-  Accepted: bundle back to 171 kB, `account/passkey.ts`, sector outline when zoomed out.
-- B go: `b_public_games` (part 1 contract lines for A and D; part 2 server steps 1
-  to 5 of `findings/public_games_ready.md`, leak test, safe without 0013). Accepted:
-  recovery flag off the session lookup, `passkey_schema.ts` probe, legacy tables when
-  0012 is absent, dots 503 `chart_unavailable`.
-- C free: `c_ice_caps_2` accepted (sheet: `capDetail` paint near the melt line, hex
-  class unchanged so ice area identical; disc: four simplex scales, floes, south
-  offset; disc ice pins re-pinned in `scripts/surface_parity.js`;
-  `hybrid-surface-3`). Next: surface findings from D's review.
-- D go: `d_first_run_review` (part 1 read-only on live; part 2 follow-ups gated on
-  A's report). Accepted: `workspace/passkey/` (SignInBody, AccountPage,
-  RecoveryScreen, CodesBlock, PasskeyAdd, words.ts, recovery.ts).
-- E go: `e_player_pack` (Johnny's eight answers inside; leak test is the gate).
-  Accepted: `EntryGallery.vue`, `entry_images.ts`.
+- A held until the push. Next prompt: wrap `link-social` in `account/passkey.ts`
+  (D's `workspace/passkey/link.ts` then goes); the public games feed
+  (`contracts/b_public_games.md`, end section) and the mark (MapRenderer.ts lent).
+- B held until the push. Next prompt: run the eight Builder worker suites with 0013
+  applied (the raw SQL path in `ownedUniverse`); `publicGames` on the owner's
+  universe list (Johnny: yes); then 0013 and `tests/api/public_games.test.js` join
+  a push. Speed leftovers (quota race, byte double count) if time.
+- C in flight: `c_regina_temperature` (read-only).
+- D held until the push. Next prompt: "Your map" and the universe's name on the
+  Build strip; first visit opens on the Spinward Marches with one line of help; the
+  review's top ten in its files; the public games switch after B.
+- E free. Player Pack accepted (`apps/web/src/pack/`, leak test). Next: review
+  findings in `workspace/journal/` (13, 14), or the next Campaign step.
 - **F is retired.**
 
-## Passkey set, held out of pushes until A's `a_signout_fix` is accepted
-Server: apps/api/package.json, apps/web/package.json, package-lock.json,
-apps/api/src/db/migrations/0012_passkey.sql, db/auth-schema.ts, auth-schema-legacy.ts,
-schema.ts, auth/auth.ts, session.ts, options.ts, passkey_data.ts, passkey_flow.ts,
-passkey_schema.ts, passkey_words.ts, recovery_gate.ts, src/index.ts, routes/auth.ts,
-tests/api/passkeys.test.js, passkey_schema.test.js, software_authenticator.js,
-directives/contracts/b_auth.md. Browser: apps/web/src/account/passkey.ts,
-workspace/passkey/, workspace/SignInCard.vue, views/Account.vue,
-tests/web/passkey_client.test.js, passkey_screens.test.js. Reports in done/:
-b_passkeys_build, a_passkey_client, d_passkey_screens, b_auth_gate_dots.
+## Held out of 1.1.11
+`apps/api/src/db/migrations/0013_public_games.sql`, `tests/api/public_games.test.js`,
+the six engine paths, the ten parked truth-build paths.
 
 ## Next turn
-1. If Johnny pushed 1.1.10: record the hash (not pushed at 22:10; A, B, D, E had not
-   started their new prompts then).
-2. A's report: the passkey set joins a push (needs migration 0012 with the deploy;
-   safe either order now). Sign-out fix is urgent: push it even if the rest lags.
-3. C's report: ice caps; show Johnny the before-and-after sheet.
-4. B's report -> public games browser prompts (A: feed and mark, MapRenderer.ts
-   lent; D: the switch).
-5. D's review -> rank with Johnny; E's Player Pack.
-6. Deploy notes for Johnny: migrations with the Worker (`npm run deploy:ci`); his
-   account role `admin`; optional `retry_delay = 10` on the generate consumer.
+1. Check `git log` and `origin/campaign` for 1.1.11 before recording a hash.
+2. Deploy for Johnny: `npm run deploy:ci` (migration 0012 with the Worker); then a
+   real sign-up on production is the first true test of rpID and origin; his own
+   account can add a passkey from the account page.
+3. Write the four held prompts (A, B, D, E) as soon as the push is confirmed.
+4. C's Regina note will bring engine questions for Johnny.
 
 ## Versions
 Every push list bumps `APP_VERSION` in `apps/web/src/version.ts` by one in the last
@@ -77,7 +61,7 @@ untouched (fixtures folder name).
   `New-Item -ItemType Junction`); `node scripts/gen_rules_esm.js`,
   `gen_names_esm.js`, `node --test "tests/**/*.test.js"`, `check_manifesto.js`. Known
   artefact: one zod failure in `tests/web/campaign_import.test.js`. Fresh `outerN`
-  each time (last used: outer13).
+  each time (last used: outer15).
 - "All agents reported" and "frozen" are checked against `reports/`, Progress lines
   and file times. Read "Needs from others" before writing the next lane's prompt.
 - `handoff.md` is large: read by offset. Never print a golden test's assertion output.

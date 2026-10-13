@@ -2,7 +2,33 @@ import { sql } from 'drizzle-orm';
 import { check, index, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { user } from './auth-schema';
 
-export { account, accountRelations, session, sessionRelations, user, userRelations, verification } from './auth-schema';
+export { account, accountRelations, passkey, passkeyRelations, session, sessionRelations, user, userRelations, verification } from './auth-schema';
+
+export const recoveryCode = sqliteTable('recovery_code', {
+    id: text('id').primaryKey(),
+    userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+    codeHash: text('code_hash').notNull(),
+    createdAt: integer('created_at').notNull(),
+    usedAt: integer('used_at'),
+}, (t) => [index('recovery_code_userId_idx').on(t.userId)]);
+
+export const recoveryFailure = sqliteTable('recovery_failure', {
+    id: text('id').primaryKey(),
+    userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+    createdAt: integer('created_at').notNull(),
+}, (t) => [index('recovery_failure_userId_idx').on(t.userId)]);
+
+export const recoveryEnvelope = sqliteTable('recovery_envelope', {
+    userId: text('user_id').primaryKey().references(() => user.id, { onDelete: 'cascade' }),
+    payload: text('payload').notNull(),
+    createdAt: integer('created_at').notNull(),
+});
+
+export const passkeySignup = sqliteTable('passkey_signup', {
+    id: text('id').primaryKey(),
+    address: text('address').notNull(),
+    createdAt: integer('created_at').notNull(),
+}, (t) => [index('passkey_signup_address_idx').on(t.address, t.createdAt)]);
 
 export const profile = sqliteTable('profile', {
     userId: text('user_id').primaryKey().references(() => user.id),

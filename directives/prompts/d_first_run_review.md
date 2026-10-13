@@ -84,3 +84,6 @@ meaningful step append one line under Progress: "done: X. next: Y."
 
 ## Progress
 
+done: part 1, findings/first_run_review.md (19 findings ranked, the ten first; kb16_* shots; signed out on live, signed in on my local build). next: part 2, A's report exists.
+done: part 2 (added date, sign-out refusal by the button, link-social, router workaround removed, closed prompt and failed add checked; the global rules measured and kept; the frame lift not done and why); gates; browser pass pk10. next: the report.
+done: report directives/reports/d_first_run_review.md; servers and browser stopped. next: wait for the next prompt.

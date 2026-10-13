@@ -97,6 +97,7 @@ function appliedOf(body) {
     let seq = 1;
     for (const row of body.records || []) applied.push({ table: 'records', id: row.id, rev: 1, seq: seq++ });
     for (const row of body.links || []) applied.push({ table: 'links', id: row.id, rev: 1, seq: seq++ });
+    for (const row of body.journal || []) applied.push({ table: 'journal', id: row.id, rev: 1, seq: seq++ });
     if (body.settings) applied.push({ table: 'settings', id: 'campaignSettings', rev: body.settings.baseRev + 1, seq: seq++ });
     if (body.clock) applied.push({ table: 'clock', id: 'campaignTime', rev: body.clock.baseRev + 1, seq: seq++ });
     return applied;
@@ -213,4 +214,79 @@ test('a failed second batch reports the count', async () => {
     assert.equal(campaign.status, 'ready');
     assert.equal(campaign.universeId, TARGET);
     assert.equal(campaign.records[recordId(0)].name, 'Person 0');
+});
+
+function entryId(n) {
+    return `cj_00000000-0000-4000-8000-${n.toString(16).padStart(12, '0')}`;
+}
+
+function entry(over = {}) {
+    return {
+        id: entryId(1),
+        kind: 'note',
+        title: 'At Regina',
+        body: 'The scout is here.',
+        when: { year: 1105, day: 42 },
+        realDate: null,
+        sequence: null,
+        author: 'referee',
+        visibility: 'players',
+        anchor: { kind: 'system', hexKey: 'spin/1910' },
+        mentions: [recordId(0), 'hex:spin/1910'],
+        images: [{ hash: HASH, thumbHash: THUMB, width: 20, height: 10, bytes: 4, caption: 'The port' }],
+        rev: 3,
+        createdAt: STAMP,
+        updatedAt: STAMP,
+        deleted: false,
+        ...over,
+    };
+}
+
+test('a journal export comes back with when, visibility, mentions and images', async () => {
+    const box = harness();
+    openEmpty();
+    transport.fetch = box.fetchImpl;
+    transport.schedule = () => () => {};
+    const file = document(1, 0);
+    file.journal = [entry()];
+    const parsed = parseExport(JSON.stringify(file));
+    assert.equal(parsed.ok, true);
+    const result = await importCampaign(parsed.document, TARGET);
+    assert.equal(result.ok, true);
+    const sent = box.requests.map((item) => item.body).find((body) => body.journal);
+    assert.equal(sent.journal.length, 1);
+    assert.equal(sent.journal[0].id, entryId(1));
+    assert.equal(sent.journal[0].baseRev, 0);
+    assert.deepEqual(sent.journal[0].when, { year: 1105, day: 42 });
+    assert.equal(sent.journal[0].visibility, 'players');
+    assert.deepEqual(sent.journal[0].mentions, [recordId(0), 'hex:spin/1910']);
+    assert.equal(sent.journal[0].images[0].hash, HASH);
+    assert.equal(sent.journal[0].images[0].caption, 'The port');
+    assert.equal(campaign.journal[entryId(1)].title, 'At Regina');
+    assert.equal(campaign.journal[entryId(1)].images[0].hash, HASH);
+});
+
+test('a journal entry from before images, and a campaign that already has one, follow the record rules', async () => {
+    const older = entry();
+    delete older.images;
+    const file = document(0, 0);
+    file.journal = [older];
+    const parsed = parseExport(JSON.stringify(file));
+    assert.equal(parsed.ok, true);
+    assert.equal(parsed.document.journal[0].images, null);
+    const bare = parseExport(JSON.stringify(document(0, 0)));
+    assert.equal(bare.ok, true);
+    assert.deepEqual(bare.document.journal, []);
+
+    const box = harness();
+    openEmpty();
+    transport.fetch = box.fetchImpl;
+    transport.schedule = () => () => {};
+    campaign.journal[entryId(1)] = entry();
+    const refused = await importCampaign(parsed.document, TARGET);
+    assert.equal(refused.ok, false);
+    assert.equal(refused.message, 'That campaign is not empty.');
+    assert.equal(refused.landed, 0);
+    assert.equal(box.requests.length, 0);
+    assert.equal(campaign.journal[entryId(1)].title, 'At Regina');
 });

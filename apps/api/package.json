@@ -10,19 +10,20 @@
     "db:migrate": "wrangler d1 migrations apply voyage --remote"
   },
   "dependencies": {
-    "hono": "^4",
-    "drizzle-orm": "^0.45.3",
-    "better-auth": "^1",
     "@better-auth/drizzle-adapter": "^1",
-    "zod": "^3",
-    "@voyage/shared": "*",
+    "@better-auth/passkey": "1.7.7",
     "@voyage/engines": "*",
-    "@voyage/generation": "*"
+    "@voyage/generation": "*",
+    "@voyage/shared": "*",
+    "better-auth": "^1",
+    "drizzle-orm": "^0.45.3",
+    "hono": "^4",
+    "zod": "^3"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4",
     "drizzle-kit": "^0.31.11",
-    "wrangler": "^4",
     "typescript": "^5",
-    "@cloudflare/workers-types": "^4"
+    "wrangler": "^4"
   }
 }

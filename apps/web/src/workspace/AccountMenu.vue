@@ -29,6 +29,7 @@ import { forgetOpening, retryCampaign } from './opening.ts';
 import { MY_PACKAGES_PATH } from './market/command.ts';
 import { liveRecords } from './records.ts';
 import SignInCard from './SignInCard.vue';
+import { noteReturn, RECOVERY_PATH } from './passkey/recovery.ts';
 
 const props = defineProps<{ open: boolean }>();
 
@@ -254,7 +255,8 @@ function onFormKey(event: KeyboardEvent): void {
 }
 
 const name = computed(() => displayName(session.user));
-const line = computed(() => accountLine(session.user));
+// A passkey account's name is its username: the @ line would only say it again.
+const line = computed(() => { const said = accountLine(session.user); return said.replace(/^@/, '') === name.value ? '' : said; });
 const mark = computed(() => initials(session.user));
 
 function items(): HTMLElement[] {
@@ -293,19 +295,40 @@ function onKey(event: KeyboardEvent): void {
     emit('close');
 }
 
+/**
+ * Sign out. Only when the server has ended the session is this person's campaign let go and the
+ * menu closed; otherwise they stay signed in and the menu says why, in the session's own words.
+ */
 async function leave(): Promise<void> {
     if (leaving.value) return;
     leaving.value = true;
+    trouble.value = '';
     try {
-        await signOut();
+        const done = await signOut();
+        if (!done.ok) {
+            trouble.value = done.message;
+            // Focus stays on Sign out once it's live again, so the next try is one key away.
+            void nextTick(() => {
+                const el = pop.value ? pop.value.querySelector<HTMLElement>('[data-command="sign-out"]') : null;
+                if (el) el.focus();
+            });
+            return;
+        }
         // The next person at this browser must not see this one's campaign.
         resetCampaign();
         forgetDeleted();
         forgetOpening();
+        emit('close');
     } finally {
         leaving.value = false;
-        emit('close');
     }
+}
+
+/** The account page: passkeys, recovery codes, linked accounts. "Back to the map" there returns here. */
+function openAccount(): void {
+    noteReturn(route.fullPath);
+    if (route.path !== RECOVERY_PATH) void router.push(RECOVERY_PATH);
+    emit('close');
 }
 
 watch(() => props.open, (open) => {
@@ -397,8 +420,11 @@ watch(() => props.open, (open) => {
         <button v-if="ready" type="button" role="menuitem" class="account-party" @click="openParty(); $emit('close')">
           <Icon name="shuttle-space" :size="15" /><span>Go to the party</span>
         </button>
+        <button type="button" role="menuitem" class="account-page" data-command="account-page" @click="openAccount">
+          <Icon name="gear" :size="15" /><span>Account and sign-in</span>
+        </button>
         <p v-if="trouble" class="account-trouble" role="alert">{{ trouble }}</p>
-        <button type="button" role="menuitem" :disabled="leaving" @click="leave">
+        <button type="button" role="menuitem" data-command="sign-out" :disabled="leaving" @click="leave">
           <Icon name="arrow-left" :size="15" /><span>{{ leaving ? 'Signing out…' : 'Sign out' }}</span>
         </button>
       </div>

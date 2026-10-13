@@ -1,17 +1,17 @@
 # Board
 
-One line per lane. Only the orchestrator edits this file. Updated 2026-10-12 22:15 (by the clock).
+One line per lane. Only the orchestrator edits this file. Updated 2026-10-12 23:00 (by the clock).
 
-**Last push: `615add4`, version 1.1.9, 2026-10-12.** Any prompt that says "start only
+**Last push: `f99a8a2`, version 1.1.10, 2026-10-12.** Any prompt that says "start only
 after the board says the push is made" may start.
 
 | Lane | Status | Current prompt | Blocker / next |
 |---|---|---|---|
-| A | go | prompts/a_signout_fix.md | **live fault first: sign-out does not end the session (415)**; then the closed-prompt code, createdAt, the router line; then the campaign importer reads the journal |
-| B | go | prompts/b_public_games.md | three lines in contracts/b_auth.md (linked providers, sign-out body, local recipe), then the public games server (migration 0013) |
-| C | free | (none) | ice caps second look accepted (in 1.1.10); takes the surface findings from D's first-visit review when it lands |
-| D | go | prompts/d_first_run_review.md | a read-only first-visit review of the live site; then the passkey screen follow-ups when A's report exists |
-| E | go | prompts/e_player_pack.md | handout images accepted (in 1.1.10); now the Player Pack, first version |
+| A | held until 1.1.11 is pushed | (next: public games feed and mark, link-social wrap) | prompt not yet written; the push list must stay still |
+| B | held until 1.1.11 is pushed | (next: Builder suites with 0013 applied, publicGames on the universe list) | public games server accepted; migration 0013 and its worker test are held out of 1.1.11 |
+| C | go | prompts/c_regina_temperature.md | read-only: why Regina reads -84 C, Ethane and desert; trace to the line, cite rules/, count how wide; options for Johnny |
+| D | held until 1.1.11 is pushed | (next: "Your map" on the Build strip, first visit opens on the Spinward Marches, the review's top ten) | account menu accepted |
+| E | free | (none) | Player Pack, first version, accepted (in 1.1.11) |
 | F | retired | (none) | Johnny, 2026-10-11: unreliable (runs out of budget); do not use or propose until he says it is back |
 
 **Restarting a frozen lane:** paste the block in directives/lanes/START.md with the
@@ -40,9 +40,12 @@ lane's letter as the first message of a new session; from then on "go" is enough
    (findings/campaign_gap_audit.md §4), steps 1 to 5 first. Step 4 (`@` mention) is done.
 
 ## Known, not fixed
-- **Live: sign-out does not end the session.** `POST /api/auth/sign-out` with no body
-  answers 415 on production (checked 2026-10-12 21:50); the page shows signed out,
-  a reload signs back in. A, first item, `prompts/a_signout_fix.md`.
+- `universe/forward.ts` `ownedUniverse` takes a hand-written SQL path when migration
+  0013 is applied; the Builder worker suites have not been run on that path. 0013
+  stays out of pushes until B runs them.
+- `tests/web/renderer.test.js` "draw reports animating while a title fades in" failed
+  once in E's run and passes in the orchestrator's: watch for a timing flake.
+- (fixed in 1.1.11, needs the deploy) Live: sign-out did not end the session (a body-less POST answered 415).
 - A journal entry's image bytes are owner-only (`GET .../objects/:hash`); a player
   view will need a read opened by B. Not needed until a player view exists.
 - Not seen yet: dots and the toast advancing while a job runs (D's local queue answered
@@ -100,12 +103,10 @@ lane's letter as the first message of a new session; from then on "go" is enough
   the blank request body (read from what the server stored).
 
 ## Pending push
-**Ready, not pushed at 22:10: version 1.1.10**, `findings/push/builder_2026-10-12c.md`
-(30 paths): handout images on a journal entry, the ice caps' second look, the
-selection outline no longer covers zoomed-out dots, the dots route answers 503 when
-the chart overview cannot be read.
-**Held on disk for the push after:** username and passkey sign-in, whole, waiting on
-A's sign-out and closed-prompt fixes.
+**Ready: version 1.1.11**, `findings/push/builder_2026-10-12d.md`: **username and
+passkey sign-in, whole** (migration 0012), sign-out fixed, the Player Pack, the
+campaign importer reads the journal, the public games server (inert: migration 0013
+and its worker test are held out).
 
 ## Decisions from Johnny
 - 2026-10-10: the file bus replaces pasting.
@@ -293,10 +294,21 @@ A's sign-out and closed-prompt fixes.
   only when marked for players, the clock day as cutoff; a notes box with "Download
   my notes", no import yet.
 
+- 2026-10-12: no shared noise between the map's ice edge and the disc's; they agree on the ice line and that is enough.
+
+- 2026-10-12, yes to three (D's first-visit review): a read-only pass on why Regina
+  reads -84 C and Ethane, rules text cited, before any engine change (C); the Build
+  strip shows "Your map" and the universe's name, "My campaign" stays for the records
+  (D, after the passkey push); a first visit opens on the Spinward Marches with Regina
+  in view and one dismissible line of help (D, after the passkey push).
+
+- 2026-10-12: yes, the owner's universe list carries `publicGames` (only when migration 0013 is present).
+
 ## Open with Johnny
-1. C: the map's ice edge and the disc's ice edge are ragged by different noise, so a bay on one is not the same bay on the other. Force one shared noise in a later pass? Changes no prompt.
+(none)
 
 ## Queue (prompts not yet written)
+- D's first-visit review, `findings/first_run_review.md`: 19 findings, the ten first; owners to assign after tonight's push (OmniBox, Rail, panel host at 520 px, journal; `design/base.css` reset; the four modal frame files).
 - Screens for username and passkey sign-in (sign-in card, account page: passkeys,
   recovery codes, linked providers): after B's contract `contracts/b_auth.md`.
 - The rest of F's review (ranking, visual refinement, words, access) was never done;

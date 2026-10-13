@@ -80,6 +80,6 @@ meaningful step append one line under Progress: "done: X. next: Y."
 done: the prompt is read. next: look at live caps and the first pass before any change.
 done: the six dossier maps and the mainworld discs are shot. next: break the scallop, soften the step, and keep the ice area.
 done: the after shots are in. next: parity, timings, and the gates.
-done: the six dossier maps and the mainworld discs are shot. next: break the scallop, soften the step, and keep the ice area.
+done: the report is written. next: stop.
 
 

@@ -2,6 +2,9 @@ import { Hono } from 'hono';
 import type { AppEnv, Env } from './env';
 import { requestContext } from './http';
 import { createAuth } from './auth/auth';
+import { linkRefusal, signOutRequest } from './auth/auth_http';
+import { detectPasskeyColumns } from './auth/passkey_schema';
+import { PASSKEY_UNAVAILABLE } from './auth/passkey_words';
 import { health } from './routes/health';
 import { me } from './routes/auth';
 import { generate } from './routes/generate';
@@ -9,6 +12,7 @@ import { truth } from './routes/truth';
 import { admin } from './routes/admin';
 import { packagesRoute } from './routes/packages';
 import { universesRoute } from './routes/universes';
+import { getPublicGames } from './routes/public_games';
 import { charactersRoute } from './routes/characters';
 import { deadLetterConsumer } from './jobs/dead_letter';
 import { generateConsumer } from './jobs/generate_queue';
@@ -18,9 +22,23 @@ import { fail, ok } from './http';
 export { UniverseDO } from './universe/UniverseDO';
 export { CharacterRoom } from './character/CharacterRoom';
 
+function passkeySurface(path: string): boolean {
+    return path.startsWith('/api/auth/passkey')
+        || path === '/api/auth/username'
+        || path.startsWith('/api/auth/recovery')
+        || path === '/api/auth/is-username-available';
+}
+
 const app = new Hono<AppEnv>();
 app.use('*', requestContext);
-app.on(['GET', 'POST'], '/api/auth/*', (c) => createAuth(c.env).handler(c.req.raw));
+app.on(['GET', 'POST'], '/api/auth/*', async (c) => {
+    const ready = await detectPasskeyColumns(c.env.DB);
+    if (!ready && passkeySurface(c.req.path)) {
+        return c.json({ code: 'passkey_unavailable', message: PASSKEY_UNAVAILABLE }, 503);
+    }
+    const response = await createAuth(c.env).handler(signOutRequest(c.req.raw));
+    return linkRefusal(response);
+});
 app.route('/api', health);
 app.get('/api/me', me);
 app.get('/api/providers', (c) => ok(c, {
@@ -32,6 +50,7 @@ app.route('/api', generate);
 app.route('/api/truth', truth);
 app.route('/api/admin', admin);
 app.route('/api/universes', universesRoute);
+app.get('/api/public-games', getPublicGames);
 app.route('/api/packages', packagesRoute);
 app.route('/api/characters', charactersRoute);
 app.onError((err, c) => { console.error(JSON.stringify({ requestId: c.get('requestId'), err: String(err), stack: (err as Error).stack })); return fail(c, 500, 'internal', 'Something went wrong.', { requestId: c.get('requestId') }); });

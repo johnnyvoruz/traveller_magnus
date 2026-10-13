@@ -83,3 +83,7 @@ meaningful step append one line under Progress: "done: X. next: Y."
 
 ## Progress
 
+done: read the accepted note and Johnny's eight answers. next: the pack functions.
+done: pack functions, journal button, and leak test. next: gates and the browser pass.
+done: leak test, check, and the browser pass. next: the report.
+

@@ -51,6 +51,15 @@ export {
 } from './schemas/campaign.ts';
 export type { CampaignRecordType, CampaignEntryKind, CampaignLinkKind, SystemAnchor, LocateAt } from './schemas/campaign.ts';
 export { copyRecords } from './campaign_copy.ts';
+export { PUBLIC_DEFAULT_DAYS, publicMarkHex } from './public_hex.ts';
+export type { PublicHex } from './public_hex.ts';
+export {
+    PublicGamesSetting,
+    PublicGamesHex,
+    PublicGamesSector,
+    PublicGamesSectorSlug,
+    PublicGamesTruthVersion,
+} from './schemas/public_games.ts';
 export type { CopyAnchorChange, CopiedRecord, CopyRecordsInput, CopyRecordsResult } from './campaign_copy.ts';
 export { DECK_PLAN_LIMITS, DeckPlan } from './schemas/deck_plan.ts';
 export type { DeckPlanPart } from './schemas/deck_plan.ts';

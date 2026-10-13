@@ -3,6 +3,7 @@ import { scrollToTop } from './platform/browser.ts';
 import { addressPane, campaignRedirect, hostsCampaign, type Query } from './shell/pane.ts';
 import Account from './views/Account.vue';
 import MapView from './views/MapView.vue';
+import { guardRecovery } from './workspace/passkey/recovery.ts';
 
 /** Starts the pane chunk the address names. Not awaited: the view paints first. */
 function preloadPane(path: string, query: Query): void {
@@ -88,3 +89,6 @@ router.beforeEach((to) => {
 router.afterEach((to, from) => {
     if (to.path !== from.path && !to.hash) scrollToTop();
 });
+
+// Account.vue also calls this until Lane D removes that line. The guard installs once per router.
+guardRecovery(router);
