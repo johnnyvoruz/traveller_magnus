@@ -115,16 +115,36 @@ const said = computed(() => {
   font-weight: 600;
 }
 
-/* A narrow window: the weekday goes, then the date gives the search field the room. */
+/* A narrow window: the weekday goes, and "No campaign date" leaves its icon. */
 @media (max-width: 860px) {
   .stardate span {
     display: none;
   }
 }
 
+/*
+ * Below 680 px the search row has no room for the date: it sits under the search field, on
+ * the right, where shell/Panel.vue puts it on a phone. One chip, so it is never shown twice.
+ * Under an open side panel, as the build strip is, so it never covers the panel's controls.
+ */
 @media (max-width: 680px) {
   .stardate {
-    display: none;
+    top: calc(var(--chrome-top) + var(--chrome-height) + 8px);
+    left: auto;
+    right: var(--chrome-inset);
+    z-index: 2;
+  }
+
+  /* Under the search there is room to say it again. */
+  .stardate.is-unset span {
+    display: inline-block;
+  }
+}
+
+/* From 600 to 680 px an open side panel covers the place: no sliver of the chip beside it. */
+@media (min-width: 600px) and (max-width: 680px) {
+  .app:has(.panel.is-open) .stardate {
+    visibility: hidden;
   }
 }
 

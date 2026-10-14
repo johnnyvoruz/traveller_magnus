@@ -1,4 +1,4 @@
-import { offerMyPackages } from '../workspace/market/command.ts';
+import { offerMarketplace, offerMyPackages } from '../workspace/market/command.ts';
 
 export type Command = {
     id: string;
@@ -68,3 +68,5 @@ export function handleKey(event: KeyboardEvent): boolean {
 
 // The marketplace stub's "My packages" (workspace/market/command.ts), while someone is signed in.
 offerMyPackages(registerCommand);
+// The marketplace's rail item (workspace/market/command.ts), signed in or out.
+offerMarketplace(registerCommand);

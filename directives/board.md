@@ -1,19 +1,19 @@
 # Board
 
-One line per lane. Only the orchestrator edits this file. Updated 2026-10-14 12:30 (by the clock).
+One line per lane. Only the orchestrator edits this file. Updated 2026-10-14 17:00 (by the clock).
 
-**Last push: `d8f8ec3`, version 1.1.14, engine 1.2.0, 2026-10-14** (pushed before Johnny's
-12:45 answers; carries the restore route and migration 0016, both being taken out of use by
-Z phase 3c; deploy not yet checked). Truth v10.
+**Last push: `392671b`, version 1.1.15, engine e1.2, 2026-10-14, live** (GitHub run green;
+live index `index-BI9NdrnN.js`; the DELETE route answers 401 signed out). Truth v10.
+**Deploys run on push** (Johnny, 2026-10-14): push commands no longer include `npm run deploy:ci`.
 
 | Lane | Status | Current prompt | Blocker / next |
 |---|---|---|---|
 | A | free | (none) | `a_sheet_row_and_skills` accepted |
 | B | free | (none) | the marketplace moved to Z (Johnny, 2026-10-14) |
 | C | free | (none) | no-sea accepted |
-| D | free | (none) | `d_polish_note_and_frame` accepted; question on the picker fade open |
+| D | free | (none) | `d_small_polish` accepted |
 | E | free | (none) | `e_phone_sheet` accepted |
-| Z | reported | prompts/z_marketplace.md | phase 3c accepted (DELETE an import, one per package); phase 4 (browser, app 1.2.0) next |
+| Z | free | prompts/z_marketplace.md | the marketplace is done: phases 1 to 4b accepted; in app 1.2.0 |
 | F | retired | (none) | Johnny, 2026-10-11: unreliable (runs out of budget); do not use or propose until he says it is back |
 
 ## Naming (Johnny, 2026-10-14)
@@ -140,8 +140,9 @@ lane's letter as the first message of a new session; from then on "go" is enough
   the blank request body (read from what the server stored).
 
 ## Pending push
-**1.1.15 called for, 2026-10-14 13:50:** `findings/push/release_2026-10-14c.md` (19 paths, no
-migration). Rehearsed in `scratchpad/outer19`. No open question touches it.
+**App 1.2.0 called for, 2026-10-14 17:00:** `findings/push/release_2026-10-14d.md` (45 paths, no
+migration). Rehearsed in `scratchpad/outer20`. Out: the ten parked truth-build files and
+`versionvideo/` (a changelog-video tool, untracked, made 14:23 by no lane on the board).
 
 ## Decisions from Johnny
 - 2026-10-10: the file bus replaces pasting.
@@ -387,6 +388,11 @@ migration). Rehearsed in `scratchpad/outer19`. No open question touches it.
 - 2026-10-14, yes to all four: the orbit picker keeps its fade; imported records name their package (provenance mode `package`); restore an import's undo point (after placement); a takedown keeps a private manifest copy.
 - 2026-10-14 12:45: no undo machinery for imports: removing an import is a plain delete of what it brought ("make the record and then CRUD delete it"); one import per package per campaign; importing into a never-opened map pins it (phase 4); no quota refund on removal.
 - 2026-10-14 13:45: a package's install count never goes down (a remove leaves it).
+- 2026-10-14 17:00, orchestrator (Z 4b questions, no behaviour change): an in-place
+  re-import of a package the campaign holds in place is the same import re-applied, not a
+  second one, so it is allowed; an admin's view of a hidden package has no outline or Import.
+- 2026-10-14 15:45: admins open hidden package pages (and a Hidden filter); everyone else sees "Listing not found."
+- 2026-10-14 14:20: the marketplace gets its own rail item, "Marketplace"; a small version number at the foot of the sign-in and account windows (D).
 - 2026-10-14: the marketplace goes to Lane Z, not B. Yes to Z's five: edges leaving a piece dropped on publish; another edition refused; theirs or mine per hex; takedown keeps objects, deletes manifests; an install counts against the quota, not the daily cap.
 - 2026-10-14, a Back "<" left of the pane's X: one pane back; X still closes the pane.
 

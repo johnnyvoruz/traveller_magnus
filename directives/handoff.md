@@ -7136,3 +7136,24 @@ that failed at the close no longer does. Ready note `findings/builder_form_ready
 - Undo taken out: no snapshot, meta keys or restore route; `DELETE /api/universes/:id/installs/:installId` removes every hex and record with that install's provenance (edited or not), sectors it made, and the row; one import per package per campaign (409 at preview and install); 0016 untouched. Gates re-run green (worker suites 20 / 20; build `index-BI9NdrnN.js`).
 - Z's questions 1 and 3 decided by the orchestrator as suggested (no behaviour change); question 2 (install count after a remove) asked of Johnny, and **push 1.1.15 is held until he answers** (the rule from 12:55).
 - 13:45, Johnny: "keep the number, never decrement" (no code change). Push 1.1.15 called.
+
+## 272. 1.1.15 live; deploys run on push; Z phase 4 and D's version label (2026-10-14 14:20)
+
+- `392671b` live (run green, index `index-BI9NdrnN.js`, DELETE 401 signed out). Johnny: "the github auto deploys so I don't think we need to run the deploy command." The repo's `test.yml` only tests; the deploy is Cloudflare's build on push, and it applies D1 migrations (0013/0014 at 02:44:08 after his failed local run; 0015 a minute after the 1.1.13 push). That closes the old "who applied 0013 and 0014" note. Push commands drop `npm run deploy:ci`; the orchestrator still checks `d1_migrations` after a push with a migration.
+- Johnny: the marketplace gets a rail item. **Z phase 4 go** (prompt), pin on import done server-side in `routes/installs.ts`. **D `d_version_label`**: "Version 1.1.N" at the foot of `SignInBody.vue` and `AccountPage.vue`.
+
+## 273. D's version label accepted; Z phase 4 code in, not pushed; 4b go (2026-10-14 15:30)
+
+- **D `d_version_label`:** "Version 1.1.N" (from `APP_VERSION`) last in `SignInBody.vue`, `AccountPage.vue` (hidden while loading or signed out, where the card already says it) and the signed-in `AccountMenu.vue` (outside the `role="menu"` list). 11 px, `--text-muted`, selectable. Test `tests/web/version_label.test.js`.
+- **Board fault fixed:** the 14:20 script wrote the D and Z rows above the title instead of into the table (D noticed two D rows). Rows rewritten by line.
+- **Z phase 4:** catalogue, package page, rail item, import panel with drag placement (`PlaceMarks.vue` in `MapView.vue`), imports list with Update and Remove, `MarketAsk.vue` modal; pin on import in `routes/installs.ts`; `InstallRow.recordCount`. Gates re-run green (1690 / 1661 / 0; build `index-CGyhxDsG.js`). **No browser pass and no tests for `place.ts` or `catalogue.ts`; the outline is blank locally.** Not pushed. **4b go** written in the prompt. Z's admin-restore question asked of Johnny.
+- 15:45, Johnny: admins open hidden package pages; everyone else "Listing not found." Added to Z's 4b as items 5 (server: admin read of a hidden page, `hidden=1` catalogue filter for admins) and 6 (browser).
+- 16:00: Johnny asked for work for D while Z runs 4b. Findings 10, 16, 17, 19 of the first-visit review were already fixed (checked in code). **D `d_small_polish`:** the date chip is hidden from 600 to 680 px (no date anywhere there since E's sheet), the `h1`/`p` reset moves from `views/Account.vue` to `base.css`, the orbit picker card joins the frame's colour. Kept off Z's files.
+
+## 274. The marketplace is done; D's polish accepted; app 1.2.0 called for (2026-10-14 17:00)
+
+- **Z phase 4b accepted:** admin read of hidden pages and `?hidden=1` (403 for others); "Listing not found."; tests `market_place.test.js` (client placement agrees with `placeCells`/`placeKeys`, odd and even columns, sector edges, empty space) and `market_catalogue.test.js` (every call's URL, method and body). The pass found and fixed: every modal sentence blank (`MarketAsk.vue` state shadowed the `text` prop), a charted outline always refused (it ran before the chart loaded), the outline off screen at mount. Browser pass end to end on two local accounts (`findings/marketplace/`, its own wrangler.toml and Vite with `/cdn/` serving local packages). Production has no published package yet.
+- Z's questions decided by the orchestrator, no change: an in-place re-import is the same import re-applied (allowed); a hidden page shows no outline or Import.
+- **D `d_small_polish` accepted:** the date chip at every width (under the search, right, from 680 px down; hidden beside an open side panel from 600 to 680 px); `h1`/`p` reset in `base.css` (pixel-identical); the picker's card on the frame.
+- **`versionvideo/`** appeared at 14:23 (a changelog-video jig with its own `node_modules`); no lane was asked for it. Left out of the push; asked Johnny.
+- `APP_VERSION` **1.2.0**. Gates: 1707 / 1678 / 0; check; typecheck; build `index-DF2lx3IJ.js`; worker suites 8 / 8. Clean copy `outer20`: the known zod failure only.

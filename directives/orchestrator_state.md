@@ -1,11 +1,11 @@
-# Orchestrator state — 2026-10-14 12:30 (written for the next orchestrator session)
+# Orchestrator state — 2026-10-14 17:00 (written for the next orchestrator session)
 
-Overwritten every turn. History: `handoff.md` (last section 270; read by offset, it is large).
+Overwritten every turn. History: `handoff.md` (last section 274; read by offset, it is large).
 `orchestrator_start_here.md` is the 2026-10-07 page and is stale. This file and
 `board.md` are the state.
 
 ## Where the roadmap is
-Live and deployed: **1.1.12 (`8b111fc`), engine 1.2.0**, HEAD and origin. Truth v10 live
+Live and deployed: **1.1.15 (`392671b`), engine e1.2**, HEAD and origin. App 1.2.0 on disk, push called 17:00. Truth v10 live
 (released 2026-10-14). **On disk, unpushed, gates
 green at 20:45:** public games (server, feed), the first-visit fixes, the dossier codes,
 and **engine 1.2.0** (Lane Z's water and ice patch, applied by Z at 20:11 before C's
@@ -21,15 +21,14 @@ Code and fixture paths keep `1.2.0`. **App 1.2.0 = the push that finishes the ma
 (Z phase 4); pushes before it stay 1.1.N.
 
 ## Next turn
-1. **Check push 1.1.15** (commit on origin, run green, live index `index-BI9NdrnN.js`).
-2. Then Z phase 4 go (browser; this push is app 1.2.0): catalogue, package page, import
-   preview, drag placement, remove, pin on import; lend `views/MapView.vue` and `map/`
-   from D. Ask any design question first; gate the go on the 1.1.15 commit.
-3. Unconfirmed still: who applied 0013 and 0014.
+1. **Check push 1.2.0:** commit on origin, run green, live index `index-DF2lx3IJ.js`, the
+   Marketplace rail item and `/packages` signed out on production.
+2. Next leg is Johnny's: suggested, more than one ship per party (B server, A store, D
+   screens), and a fresh first-visit review of 1.2.0 at 1600 and 390 px.
+3. `versionvideo/`: whose, and does it belong in the repo (asked 17:00).
 
 ## Versions
-Each push list bumps `APP_VERSION` in `apps/web/src/version.ts` (now 1.1.15 on disk; next is 1.2.0 with the
-marketplace screens) and the commit message starts with it. Engine version is 1.2.0 on disk, 1.1.0
+Each push list bumps `APP_VERSION` in `apps/web/src/version.ts` (now 1.2.0 on disk; next 1.2.1) and the commit message starts with it. Engine version is 1.2.0 on disk, 1.1.0
 live.
 
 ## Traps

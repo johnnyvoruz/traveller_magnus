@@ -505,6 +505,25 @@ VALUES ('${version}', '1.1.0', 'M1105', 'TravellerMagnus', '${SETTINGS}', '[]', 
             const authorView = await jsonFetch(`${base}/api/packages/${packageId}`, { headers: { cookie: owner } });
             assert.equal(authorView.status, 200);
             assert.equal(authorView.body.data.hidden, true);
+            // Phase 4b: an admin opens a hidden page and lists hidden packages; nobody else can.
+            const third = userCookie(`mkv${stamp}`, `mkv${stamp}@localhost`, persistTo);
+            const thirdView = await jsonFetch(`${base}/api/packages/${packageId}`, { headers: { cookie: third } });
+            assert.equal(thirdView.status, 404);
+            assert.equal(thirdView.body.error.message, 'No such package.');
+            const adminView = await jsonFetch(`${base}/api/packages/${packageId}`, { headers: { cookie: other } });
+            assert.equal(adminView.status, 200, JSON.stringify(adminView.body));
+            assert.equal(adminView.body.data.hidden, true);
+            assert.equal(adminView.body.data.takedownReason, 'Spam.');
+            for (const cookie of [null, third, owner]) {
+                const refused = await jsonFetch(`${base}/api/packages?hidden=1`, cookie ? { headers: { cookie } } : {});
+                assert.equal(refused.status, 403);
+                assert.equal(refused.body.error.code, 'forbidden');
+                assert.equal(refused.body.error.message, 'Role required.');
+            }
+            const hiddenList = await jsonFetch(`${base}/api/packages?hidden=1`, { headers: { cookie: other } });
+            assert.equal(hiddenList.status, 200, JSON.stringify(hiddenList.body));
+            assert.equal(hiddenList.body.data.items.some((item) => item.id === packageId), true);
+            assert.equal(hiddenList.body.data.items.every((item) => item.hidden === true), true);
             const goneReport = await jsonFetch(reportPath, { method: 'POST', headers: otherHeaders, body: JSON.stringify({ reason: 'Spam.' }) });
             assert.equal(goneReport.status, 404);
             const restored = await jsonFetch(`${base}/api/admin/packages/${packageId}/restore`, { method: 'POST', headers: otherHeaders, body: '{}' });

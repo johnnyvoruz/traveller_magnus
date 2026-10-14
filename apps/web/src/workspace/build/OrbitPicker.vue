@@ -299,13 +299,11 @@ onBeforeUnmount(() => {
 </template>
 
 <style>
-/* The frame (.ui-modal, its scrim and card) is design/base.css. The card here is narrower, scrolls, and keeps the page's type. */
+/* The frame (.ui-modal, its scrim and card) is design/base.css. The card here is narrower and scrolls. */
 .ui-modal-card.pick-card {
   box-sizing: border-box;
   width: min(780px, 100%);
   overflow: auto;
-  background: var(--panel-raised);
-  font: inherit;
 }
 
 .pick-bar {

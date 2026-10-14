@@ -26,8 +26,7 @@ export const MARKET_LIMITS = {
     tag: 40,
 } as const;
 
-/** The server's sentences the screens say before asking (contracts/b_marketplace.md). */
-export const NOT_CHARTED = 'This universe is not on a published chart.';
+/** The server's sentences the screens say before asking (contracts/b_marketplace.md). An own map publishes too (F1). */
 export const SIGN_IN = 'Sign in to publish and to see your packages.';
 
 // ---- the store ---------------------------------------------------------------------------------------
@@ -171,7 +170,7 @@ export function stateWords(state: PackageVersion['state']): string {
 
 /** The eight fields of a listing, as one line under its title (decision 1). */
 export function listingLine(item: PackageListing): string {
-    const parts = ['by @' + item.authorHandle, item.kind, item.truthVersion ? 'chart ' + item.truthVersion : 'no chart', item.edition, plural(item.hexCount, 'hex', 'hexes'), item.latestVersion ? 'version ' + item.latestVersion : 'not published yet'];
+    const parts = ['by @' + item.authorHandle, item.kind, item.truthVersion ? 'chart ' + item.truthVersion : 'own map', item.edition, plural(item.hexCount, 'hex', 'hexes'), item.latestVersion ? 'version ' + item.latestVersion : 'not published yet'];
     return parts.join(' · ');
 }
 

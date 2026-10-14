@@ -21,6 +21,7 @@ import {
 import { loadSession, session, signOut } from '../../account/session.ts';
 import { resetCampaign } from '../../campaign/commit.ts';
 import { apiFetch } from '../../platform/http.ts';
+import { APP_VERSION } from '../../version.ts';
 import { readProviders } from '../account.ts';
 import { forgetDeleted } from '../actions.ts';
 import { forgetOpening } from '../opening.ts';
@@ -536,6 +537,8 @@ watch(() => (session.user ? session.user.id : ''), (id) => {
           </div>
         </template>
       </section>
+      <!-- Signed out, the sign-in card below says the version itself. -->
+      <p v-if="phase !== 'out' && phase !== 'loading'" class="pk-version" data-version>Version {{ APP_VERSION }}</p>
     </div>
   </main>
 </template>
@@ -575,6 +578,16 @@ watch(() => (session.user ? session.user.id : ''), (id) => {
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+/* The app's version, last on the page: the smallest text, muted, selectable. */
+.pk-page .pk-version {
+  margin: 20px 0 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.3;
+  text-align: right;
+  user-select: text;
 }
 
 .pk-head {

@@ -1,7 +1,8 @@
 /**
  * The marketplace stub, speaking contracts/b_marketplace.md.
- * The server is not built. A screen passes fetch, and tests pass a fake.
- * Nothing here reads another account's packages or installs one.
+ * A screen passes fetch, and tests pass a fake. This is the author's side (publish, watch,
+ * their own list); the public catalogue and imports are marketplace/catalogue.ts.
+ * An own map (no truth version) publishes too (contracts/b_marketplace.md F1).
  */
 import { reactive } from 'vue';
 import { apiFetch } from '../platform/http.ts';
@@ -30,7 +31,6 @@ const READ = 'The server sent a response the store could not read.';
 const SIGN_IN = 'Sign in to publish and to see your packages.';
 const OWN_UNIVERSE = 'You can publish only from a universe you own.';
 const OWN_PACKAGE = 'You can open only a package you published.';
-const CHART = 'This universe is not on a published chart.';
 const STILL_RUNNING = 'This publish is still running.';
 
 const STATES = new Set<PackageVersionState>(['queued', 'running', 'done', 'failed']);
@@ -226,7 +226,6 @@ export function openMarketplace(options: OpenMarketplaceOptions): Marketplace {
     function assertSource(source: PublishSource): void {
         const who = assertSignedIn();
         if (who.id !== source.ownerId) throw new MarketplaceError(OWN_UNIVERSE);
-        if (source.truthVersion == null) throw new MarketplaceError(CHART);
     }
 
     function knownHandle(packageId: string): string | null {

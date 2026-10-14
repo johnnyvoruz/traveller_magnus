@@ -302,13 +302,12 @@ test('signed out, or not the owner, the client refuses before any request', asyn
     assert.equal(owned.calls.length, 1);
 });
 
-test('a universe with no truth version is refused before any request', async () => {
-    const transport = fake(() => fail(500, 'The request should not be sent.'));
+test('an own map with no truth version can publish', async () => {
+    const transport = fake(() => json(listing(), 201));
     const shelf = open(transport, clock(), () => ({ id: 'user-1', handle: 'ada' }));
     const blank = { ownerId: 'user-1', truthVersion: null };
-    await assert.rejects(shelf.create(createBody, blank), (err) => err.message === 'This universe is not on a published chart.');
-    assert.throws(() => shelf.publish(ID, publishBody, blank), (err) => err.message === 'This universe is not on a published chart.');
-    assert.equal(transport.calls.length, 0);
+    await shelf.create(createBody, blank);
+    assert.equal(transport.calls.length, 1);
 });
 
 test('the store is the screen state, and the folder has no window and no native dialog', () => {

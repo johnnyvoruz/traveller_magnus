@@ -119,13 +119,14 @@ export type PackageCardPage = z.infer<typeof PackageCardPage>;
 export const PackageSort = z.enum(['updated', 'installs', 'title']);
 export type PackageSort = z.infer<typeof PackageSort>;
 
-/** Catalogue query. Every field optional; `mine` is the literal "1". */
+/** Catalogue query. Every field optional; `mine` and `hidden` (admin only) are the literal "1". */
 export const PackageCatalogueQuery = z.object({
     q: z.string().trim().min(1).max(100).optional(),
     kind: z.string().trim().min(1).max(40).optional(),
     tag: z.string().trim().min(1).max(40).optional(),
     sort: PackageSort.optional(),
     mine: z.literal('1').optional(),
+    hidden: z.literal('1').optional(),
 }).strict();
 export type PackageCatalogueQuery = z.infer<typeof PackageCatalogueQuery>;
 
@@ -134,6 +135,8 @@ export const PackagePublicPage = PackagePage.extend({
     installs: z.number().int().nonnegative(),
     updatedAt: z.string(),
     hidden: z.boolean(),
+    /** Only on an admin's view of a hidden package. */
+    takedownReason: z.string().nullable().optional(),
 }).strict();
 export type PackagePublicPage = z.infer<typeof PackagePublicPage>;
 
@@ -233,6 +236,8 @@ export const InstallRow = z.object({
     updateAvailable: z.boolean(),
     placement: Placement.nullable(),
     hexCount: z.number().int().nonnegative(),
+    /** Phase 4: the Remove confirmation says how many records go. */
+    recordCount: z.number().int().nonnegative(),
     installedAt: z.string(),
     updatedAt: z.string(),
 }).strict();

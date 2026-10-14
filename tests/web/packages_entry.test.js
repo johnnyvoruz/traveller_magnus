@@ -47,8 +47,9 @@ describe('my packages entry', { concurrency: 1 }, () => {
     test('a cold load of /packages renders the list shell', async () => {
         session.user = null;
         const html = await renderAt('/packages');
-        assert.match(html, /My packages/);
-        assert.match(html, /aria-label="Loading your packages"/);
+        assert.match(html, /<h1 class="mk-title">Marketplace<\/h1>/);
+        assert.match(html, /aria-label="Loading packages"/);
+        assert.match(html, /aria-label="Search packages"/);
         assert.doesNotMatch(html, /coming soon/i);
         assert.doesNotMatch(html, /Sign in to publish/);
     });
@@ -56,9 +57,9 @@ describe('my packages entry', { concurrency: 1 }, () => {
     test('a cold load of /packages/:packageId renders the package shell', async () => {
         session.user = null;
         const html = await renderAt('/packages/anything');
-        assert.match(html, /<h1 class="mk-title">My packages<\/h1>/);
+        assert.match(html, /<h1 class="mk-title">Package<\/h1>/);
         assert.match(html, /href="\/packages"/);
-        assert.doesNotMatch(html, /Loading your packages/);
+        assert.doesNotMatch(html, /Loading packages/);
         assert.doesNotMatch(html, /coming soon/i);
     });
 

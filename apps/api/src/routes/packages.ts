@@ -13,6 +13,7 @@ import {
     PackagePublishAccepted,
     PackageVersion,
 } from '@voyage/shared';
+import { roleSatisfies } from '../auth/roles';
 import { ensureProfile } from '../auth/profile';
 import { originAllowed, requireUser, ulid, type SessionUser } from '../auth/session';
 import type { AppEnv } from '../env';
@@ -318,7 +319,7 @@ function likeOf(text: string): string {
     return `%${text.toLowerCase().replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
 }
 
-const CATALOGUE_KEYS = ['q', 'kind', 'tag', 'sort', 'mine'];
+const CATALOGUE_KEYS = ['q', 'kind', 'tag', 'sort', 'mine', 'hidden'];
 
 /** F2. Signed in with no catalogue key keeps the stub's own list, so the client in this tree keeps working. */
 packagesRoute.get('/', async (c) => {
@@ -342,6 +343,10 @@ packagesRoute.get('/', async (c) => {
         if (!/^-?\d+$/.test(rawLimit)) return fail(c, 400, 'validation', 'Invalid limit.');
         limit = Math.min(100, Math.max(1, Number(rawLimit)));
     }
+    if (input.hidden) {
+        const actor = await viewer(c);
+        if (!actor || !roleSatisfies(actor.role, 'admin')) return fail(c, 403, 'forbidden', 'Role required.');
+    }
     let mineId: string | null = null;
     if (input.mine) {
         const actor = await requireUser(c);
@@ -354,10 +359,13 @@ packagesRoute.get('/', async (c) => {
     if (rawCursor && !cursor) return fail(c, 400, 'validation', 'Invalid request.');
     const where: string[] = [];
     const binds: (string | number)[] = [];
+    if (input.hidden) {
+        where.push('hidden = 1');
+    }
     if (mineId) {
         where.push('author_id = ?');
         binds.push(mineId);
-    } else {
+    } else if (!input.hidden) {
         where.push('hidden = 0', 'latest_version > 0');
     }
     if (input.kind) {
@@ -440,7 +448,9 @@ packagesRoute.get('/:packageId', async (c) => {
     const pkg = await c.env.DB.prepare(`SELECT ${CARD_COLUMNS} FROM packages WHERE id = ?`)
         .bind(c.req.param('packageId') ?? '').first<CardRow>();
     const author = !!pkg && !!actor && pkg.authorId === actor.id;
-    if (!pkg || (!author && (Number(pkg.hidden) === 1 || pkg.latestVersion < 1))) {
+    const admin = !!actor && roleSatisfies(actor.role, 'admin');
+    const hidden = !!pkg && Number(pkg.hidden) === 1;
+    if (!pkg || (!author && !(admin && hidden) && (hidden || pkg.latestVersion < 1))) {
         return fail(c, 404, 'not_found', 'No such package.');
     }
     const fallback = author && actor ? (await ensureProfile(c.env, actor.id, actor.email)).handle : await handleOf(c, pkg.authorId);
@@ -460,8 +470,14 @@ packagesRoute.get('/:packageId', async (c) => {
         ...card,
         description: pkg.description,
         versions: (versions.results ?? []).map((row) => PackageVersion.parse(row)),
+        ...(admin && hidden ? { takedownReason: await takedownReasonOf(c, pkg.id) } : {}),
     }));
 });
+
+async function takedownReasonOf(c: Ctx, packageId: string): Promise<string | null> {
+    const row = await c.env.DB.prepare(`SELECT takedown_reason AS reason FROM packages WHERE id = ?`).bind(packageId).first<{ reason: string | null }>();
+    return row?.reason ?? null;
+}
 
 async function reportsReady(c: Ctx): Promise<boolean> {
     const row = await c.env.DB.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'package_reports'`).first<{ name: string }>();

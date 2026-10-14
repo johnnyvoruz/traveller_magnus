@@ -176,6 +176,11 @@ onMounted(() => {
           </span>
           <span v-if="lockedGuest && !expanded && lockFocus === 'build'" class="rail-pop" role="status">{{ BUILD_LOCK }}</span>
         </button>
+        <!-- Lent to Lane Z (marketplace phase 4): the catalogue, signed in or out. -->
+        <button v-if="has('marketplace')" type="button" class="rail-item" aria-label="Marketplace" :title="hint('marketplace', 'Marketplace')" @click="run('marketplace')">
+          <Icon name="store" :size="20" />
+          <span class="rail-label">Marketplace</span>
+        </button>
       </div>
     </div>
     <div class="rail-group" role="group" aria-label="Account">

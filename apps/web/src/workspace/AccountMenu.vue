@@ -32,6 +32,7 @@ import { campaignDays, partyMarker } from './party_where.ts';
 import { partyOnChart, PUBLIC_GAMES_LABEL, PUBLIC_GAMES_NO_PLACE, PUBLIC_GAMES_SAY, publicGamesOf, publicGamesToast, setPublicGames } from './public_games.ts';
 import SignInCard from './SignInCard.vue';
 import { noteReturn, RECOVERY_PATH } from './passkey/recovery.ts';
+import { APP_VERSION } from '../version.ts';
 
 const props = defineProps<{ open: boolean }>();
 
@@ -479,6 +480,7 @@ watch(() => props.open, (open) => {
           <Icon name="arrow-left" :size="15" /><span>{{ leaving ? 'Signing out…' : 'Sign out' }}</span>
         </button>
       </div>
+      <p class="account-version" data-version>Version {{ APP_VERSION }}</p>
     </template>
     <SignInCard v-else ref="card" heading />
   </section>
@@ -505,6 +507,16 @@ watch(() => props.open, (open) => {
    body it is outside .app, so the expanded rail's width is carried over here (App.vue). */
 body:has(.rail.is-expanded) .account-pop {
   --rail-width: var(--rail-width-open);
+}
+
+/* The app's version, last in the menu, outside its items: the smallest text, muted, selectable. */
+.account-pop .account-version {
+  margin: 8px 0 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.3;
+  text-align: right;
+  user-select: text;
 }
 
 .account-pop {

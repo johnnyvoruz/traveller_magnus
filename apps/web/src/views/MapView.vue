@@ -43,6 +43,7 @@ import { hexPoints, hexWorldBox, hexesPath, keyAt, keysInBox, keysWorldBox, scre
 import type { BoxMark, HoverMark } from '../workspace/build/BuildMarks.vue';
 import { boxResult, boxWords, centreIn, chipPlace, clickIntent, cursorFor, fitIn, gestureFor, hoverTone, hoverWords, clearGlide, visibleArea, type Area, type Gesture, type Held } from '../workspace/build/pointer.ts';
 import { cancelMove, cancelRename, moveTo, sectorUi, setSectorAt, setSectorNav, stepCursor } from '../workspace/build/sector_acts.ts';
+import { placing } from '../workspace/market/place.ts';
 import { freeSlots, isOwnSlug, ownIndex, parseSlot, slotHolder, slotSlug, slotWords, withOwn } from '../workspace/build/sectors.ts';
 
 import { presentTree } from '../orbit/hand_present.ts';
@@ -163,9 +164,12 @@ let beforeSelect: { path: string; query: Record<string, unknown> } | null = null
 
 // ---- Build (findings/builder_system_design.md): the marks, the strip and the menu load only when it is on ----
 const BuildMarks = defineAsyncComponent(() => import('../workspace/build/BuildMarks.vue'));
+// Lent to Lane Z (marketplace phase 4): a package's outline while it is placed.
+const PlaceMarks = defineAsyncComponent(() => import('../workspace/market/PlaceMarks.vue'));
 const BuildStrip = defineAsyncComponent(() => import('../workspace/build/BuildStrip.vue'));
 const BuildMenu = defineAsyncComponent(() => import('../workspace/build/BuildMenu.vue'));
 const mapEl = ref<HTMLElement | null>(null);
+const placeEl = ref<{ place: (cam: Camera, vp: Viewport) => void } | null>(null);
 const marksEl = ref<{ place: (cam: Camera, vp: Viewport) => void; hover: (mark: HoverMark | null) => void; box: (mark: BoxMark | null) => void } | null>(null);
 /** The box being dragged, in canvas pixels, what it does, and the hexes it covered when last measured. */
 let boxing: { x0: number; y0: number; x1: number; y1: number; mode: 'box-add' | 'box-take'; span: string; changed: string[]; over: boolean } | null = null;
@@ -841,6 +845,10 @@ function frame(): void {
             }
         }
         if (marksEl.value) marksEl.value.place(cam, viewport());
+        if (placeEl.value) {
+            centrePlacing();
+            placeEl.value.place(cam, viewport());
+        }
         if (pointerAt) paintHover();
         if (sectorUi.moving) {
             const seen = slotsInView(cam, viewport());
@@ -1341,6 +1349,45 @@ function sectorNameOf(slug: string): string {
     if (parseSlot(slug)) return 'Empty sector slot';
     if (chart) for (const sector of chart.sectors) if (sector.slug === slug) return sector.name;
     return slug.replace(/_/g, ' ');
+}
+
+/** Placing a package (Lane Z): the slug at a slot, a chart or own sector, or the empty slot's own slug. */
+function placeSlugAt(x: number, y: number): string {
+    const found = chart ? chart.sectors.find((item) => item.x === x && item.y === y && item.canonical) : null;
+    return found ? found.slug : slotSlug({ x, y });
+}
+
+function placeSlotOf(slug: string): { x: number; y: number } | null {
+    const place = sectorOf(slug);
+    return place ? { x: place.x, y: place.y } : null;
+}
+
+function placeKeyAt(sx: number, sy: number): string | null {
+    return keyAt(cam, viewport(), sx, sy, (x, y) => placeSlugAt(x, y));
+}
+
+/**
+ * The outline starts where it is, or in the middle of the view when its own sector is not on
+ * this map. That waits for the first draw after the camera is placed, so the middle is the view's.
+ */
+let placeCentred = false;
+watch(placeEl, (el) => {
+    placeCentred = false;
+    if (el) markDirty();
+});
+
+function centrePlacing(): void {
+    if (placeCentred || !placed) return;
+    const vp = viewport();
+    if (!vp.width || !vp.height) return;
+    placeCentred = true;
+    const slug = placing.to.slice(0, placing.to.indexOf('/'));
+    if (placeSlotOf(slug)) return;
+    const middle = placeKeyAt(vp.width / 2, vp.height / 2);
+    if (middle) {
+        placing.to = middle;
+        markDirty();
+    }
 }
 
 function sectorOf(slug: string): SectorPlace | null {
@@ -2288,6 +2335,14 @@ onBeforeUnmount(() => {
       :slot="selectedSlot"
       :targets="moveTargets"
       :cursor="moveCursor"
+    />
+    <PlaceMarks
+      v-if="placing.active && placing.universeId === campaign.universeId"
+      ref="placeEl"
+      :sector-of="sectorOf"
+      :slot-of="placeSlotOf"
+      :slug-at="placeSlugAt"
+      :key-at="placeKeyAt"
     />
     <Rail
       ref="railEl"

@@ -11,7 +11,7 @@ import { buildStore } from '../build/seam.ts';
 import { draftHandle, edit } from '../build/edit.ts';
 import { build } from '../build/state.ts';
 import {
-    closePublish, formProblems, hexWords, MARKET_LIMITS, marketStore, marketUi, NOT_CHARTED, parseTags, plural, publish, publishKeys, recordsOn, removedWords,
+    closePublish, formProblems, hexWords, MARKET_LIMITS, marketStore, marketUi, parseTags, plural, publish, publishKeys, recordsOn, removedWords,
 } from './market.ts';
 
 const props = defineProps<{ keys: string[] }>();
@@ -99,12 +99,7 @@ onBeforeUnmount(() => {
 <template>
   <section ref="root" class="mk-form" aria-label="Publish selection" @keydown="onKey">
     <h3 class="ui-heading">Publish selection</h3>
-    <template v-if="universe && universe.truthVersion === null">
-      <p class="mk-err" role="alert">{{ NOT_CHARTED }}</p>
-      <p class="build-fine">Only a universe on a published chart can publish a package.</p>
-      <div class="mk-acts"><button type="button" class="ui-btn" @click="closePublish()">Close</button></div>
-    </template>
-    <form v-else class="mk-fields" @submit.prevent="send">
+    <form class="mk-fields" @submit.prevent="send">
       <p class="mk-sum"><b>{{ summary }}</b><span v-if="removed">{{ removed }}</span></p>
       <p v-for="item in selectionProblems" :key="item.text" class="mk-err" role="alert">{{ item.text }}</p>
 

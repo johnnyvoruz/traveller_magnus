@@ -17,6 +17,7 @@ import { CEREMONY_CANCELLED, PASSKEY_UNAVAILABLE, passkeySupported, redeemRecove
 import { session, signIn } from '../../account/session.ts';
 import { apiFetch } from '../../platform/http.ts';
 import { isOnline, onOnlineChange } from '../../platform/browser.ts';
+import { APP_VERSION } from '../../version.ts';
 import { offeredProviders, readProviders, SIGN_IN_FINE, SIGN_IN_OFFLINE, signInFrom, signInPitch, type SignInProvider } from '../account.ts';
 import {
     atUsername, CREATE_ACCOUNT, guardRecovery, heldCodes, LOST_PASSKEY, NO_WEBAUTHN_ALONE, NO_WEBAUTHN_PROVIDERS, NOT_REACHED, OTHER_ACCOUNTS,
@@ -307,6 +308,7 @@ defineExpose({ focus: () => { const top = createEl.value || first.value; if (top
       <p v-else-if="session.error" class="signin-error" role="alert">{{ session.error }}</p>
       <p class="signin-fine">{{ SIGN_IN_FINE }}</p>
     </template>
+    <p class="signin-version" data-version>Version {{ APP_VERSION }}</p>
   </div>
 </template>
 
@@ -457,5 +459,15 @@ defineExpose({ focus: () => { const top = createEl.value || first.value; if (top
 .signin .signin-fine {
   color: var(--text-muted);
   font-size: 12px;
+}
+
+/* The app's version, last in the card: the smallest text, muted, selectable. */
+.signin .signin-version {
+  margin: -4px 0 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.3;
+  text-align: right;
+  user-select: text;
 }
 </style>

@@ -309,6 +309,19 @@ VALUES ('${version}', '1.1.0', 'M1105', 'TravellerMagnus', '${SETTINGS}', '[]', 
             // Removed, it can be imported again.
             const back = await install({ version: 2, placement });
             assert.equal(back.status, 200, JSON.stringify(back.body));
+
+            // A map never opened is pinned by the import itself (phase 4).
+            const fresh = await jsonFetch(`${base}/api/universes`, { method: 'POST', headers: bHeaders, body: JSON.stringify({ name: 'Unopened', truthVersion: version, editionDefault: 'MgT2E' }) });
+            assert.equal(fresh.status, 201, JSON.stringify(fresh.body));
+            const unopened = fresh.body.data.id;
+            const freshPreview = await jsonFetch(`${base}/api/universes/${unopened}/install/preview?packageId=${packageId}&version=2`, { headers: { cookie: reader } });
+            assert.equal(freshPreview.status, 200, JSON.stringify(freshPreview.body));
+            const freshInstall = await jsonFetch(`${base}/api/universes/${unopened}/install`, {
+                method: 'POST', headers: bHeaders,
+                body: JSON.stringify({ packageId, version: 2, resolutions: {}, recordResolutions: {}, expect: { conflicts: freshPreview.body.data.conflicts } }),
+            });
+            assert.equal(freshInstall.status, 200, JSON.stringify(freshInstall.body));
+            assert.equal((await hexAt(unopened, 'Demo/1910')).status, 200);
         } finally {
             if (child) stopDev(child.pid);
             rmSync(persistTo, { recursive: true, force: true });

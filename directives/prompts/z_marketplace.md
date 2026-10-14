@@ -385,3 +385,130 @@ or snapshot use left in `installs.ts` or `install.ts`. Your questions: 1 decided
 orchestrator, as you suggested (an update may omit the import id: one import per package
 makes it unambiguous); 3 decided, as you suggested (no UI could make a double import on
 1.1.14, so nothing to merge); 2 asked of Johnny. Phase 4 waits for its go.
+
+## Phase 4 — GO (2026-10-14 14:20): the marketplace in the browser (this is app 1.2.0)
+
+1.1.15 is committed (`392671b`) and live. Johnny's answers that shape this phase:
+- **The marketplace has its own item on the left rail, "Marketplace"** (2026-10-14), so
+  a signed-out visitor finds it. The account menu's "Packages" item stays as it is
+  (Lane D is editing `AccountMenu.vue` this turn for another reason: do not touch it).
+- **Importing into a never-opened map pins it first** (yes, 2026-10-14). Do it on the
+  server: `routes/installs.ts` calls the Durable Object's `/pin` with `pinFor(...)` the way
+  `routes/builder.ts` 276 does, before the preview and the install. A worker test for it.
+- No undo anywhere: removing an import is the DELETE; one import per package per
+  campaign; the install count never goes down.
+
+### Build
+1. **Rail:** a "Marketplace" item (`shell/registry.ts`, `shell/Rail.vue`, lent from E) that
+   opens the catalogue, signed in or out.
+2. **Catalogue** (`/packages`): cards (title, author, kind, edition, chart version or "Own
+   map", hex count, tags, installs, updated), search, kind and tag filters, sort. Signed
+   out works. "My packages" is the `mine=1` view for a signed-in author.
+3. **Package page** (`/packages/:packageId`): description, versions, a small map preview
+   of the piece's outline, Import (signed in), Report (signed in, not the author),
+   and for an admin a Take down / Restore with a reason (app modal, `.ui-modal*` from
+   `design/base.css`; no native dialogs).
+4. **Import:** pick one of your campaigns; choose **In place** or **Place on the map**.
+   Placing shows the piece's outline on the map; the person drags it (it snaps to hexes;
+   `placeCells`/`placeKeys` from `@voyage/shared` give the same answer the server will),
+   then the preview lists every hex by outcome (new, replaces chart, replaces own,
+   conflict, already installed), with theirs / mine on each conflict and the
+   "different edition", "already has this package" and "does not fit" sentences shown as
+   the server sends them. Confirm installs; then open the campaign at the piece.
+5. **A campaign's imports:** a list (title, version, in place or placed, "Update
+   available" with an Update action that runs the same preview), and **Remove** with a
+   confirm in the app modal that says plainly what goes: "Removes N systems and M
+   records that came from this package, including any you changed."
+6. **Publish** stays the existing `PublishForm.vue` flow; it now works from an own map.
+
+### Rules for this phase
+- The look follows the legacy app's polish (`directives/design_reference.md`); tokens
+  only. Copy follows Google's developer style: short, plain.
+- Signed in locally needs the passkey recipe: wrangler rewrites `Origin`, so run it with
+  `--host`/`--local-upstream` and set `BETTER_AUTH_URL` to the Vite origin. A local API
+  has no truth files: put `truth-local/v10/overview.json` in its bucket.
+- Start Vite with its own cache directory; stop your servers after.
+
+**Phase 4 may write:** `apps/web/src/marketplace/`, `apps/web/src/workspace/market/`,
+`apps/web/src/router.ts` (marketplace routes only), `shell/registry.ts` and
+`shell/Rail.vue` (lent from E: the one item), `views/MapView.vue` and `apps/web/src/map/`
+(lent from D: the placement outline and drag only; name each change in the report),
+`apps/api/src/routes/installs.ts` (the pin), `packages/shared/` only if a schema needs a
+field the screens need (say so), `design/tokens.css` (your own lines), tests under
+`tests/web/` and `tests/api/`, shots `findings/ui_design_shots/kb18_market_*`,
+`findings/marketplace/`, `directives/reports/z_marketplace_4.md`. Not `AccountMenu.vue`,
+`SignInCard.vue`, `workspace/passkey/` (Lane D this turn), `routes/admin.ts`.
+
+**Gates:** `npm test`, `RUN_API_TESTS=1` for the install and packages suites, `npm run
+check`, `npm run typecheck`, `npm run build`, pasted. **Browser:** shots, signed out and
+signed in, at 1600 px and 520 px (the bottom sheet): the rail item, the catalogue, a
+package page, an in-place import with a conflict, a placed import being dragged, the
+preview, the result on the map, Update available, Remove. Then the report, then stop.
+done: phase 4 step 0, the server pin: routes/installs.ts pins a never-opened map before preview and install (pinFor as builder.ts); worker test in install_delete.test.js green. next: read the browser marketplace code, then the rail item.
+done: phase 4 screens: marketplace/catalogue.ts (wire), workspace/market/place.ts, PlaceMarks.vue, ImportPanel.vue, ImportsList.vue, MarketAsk.vue, PackagesView.vue (catalogue, mine, package page), command.ts and the rail item, MapView placement outline (lent), own-map publish (store, PublishForm), InstallRow.recordCount; build ok. next: unit tests, then the browser.
+done: phase 4 gates (test, check, typecheck, build, API suites 8/8) and report reports/z_marketplace_4.md; shots not taken. next: stop.
+
+## Orchestrator review of phase 4 (2026-10-14 15:30)
+
+Code accepted as far as it can be without a browser: gates re-run green (1690 tests,
+1661 pass, 0 fail; check; typecheck; build `index-CGyhxDsG.js`). **Not pushed:** app 1.2.0
+is the marketplace a person can use, and nobody has used it yet. Two things are missing:
+the browser pass and tests for the two new client modules. Your question 2 ("shots in a
+follow-up?"): yes, now. Your question 1 (admin restore of a hidden package) is asked of
+Johnny and is **not** in 4b.
+
+## Phase 4b — GO (2026-10-14 15:30): use it in a browser; test the client placement
+
+1. **Tests.** `tests/web/market_place.test.js`: `place.ts` agrees with the server for
+   the same inputs (feed the same keys and placement to `placeCells`/`placeKeys` and to
+   your client helpers; in place, an odd-column drag, across a sector edge, empty space),
+   `anchorUnder`, and the outcome and Remove sentences. `tests/web/market_catalogue.test.js`:
+   `catalogue.ts` builds the right URLs and bodies for every call (catalogue filters,
+   `mine=1`, report, takedown, restore, installs, preview with and without placement,
+   install, DELETE) and passes server error sentences through unchanged.
+2. **The outline locally.** "Place on the map stays disabled without manifests" is not
+   acceptable for the pass: make the local manifests reachable (for example, run Vite with
+   `VITE_CDN_BASE` pointing at something that serves the local public bucket, or read the
+   manifest through an API route if one already exists). Say in the report what you did
+   and confirm production serves `packages/<id>/<v>/manifest.json` from
+   `https://cdn.traveller.voyage/` (curl one real published manifest if one exists; if
+   none exists, say so).
+3. **The browser pass, signed in and signed out.** Lanes already drive Edge signed in
+   locally: `findings/builder_pass_src/drive.mjs` (`connect`, `signIn`) and `lib.mjs`;
+   D's last report (`directives/reports/done/d_version_label.md`) names its ports. Use your
+   own ports and Vite cache directory; stop everything after. Do it end to end on two
+   local accounts: author publishes a subsector from an own map and from a charted
+   universe; the other account finds it from the rail signed out, then signs in, imports
+   it in place into a campaign that edited one of those hexes (a conflict, choose Mine),
+   then imports the other package **placed** by dragging across a sector edge onto
+   charted space, previews, confirms, sees it on the map; the author publishes v2; the
+   importer sees Update available, updates (placement kept); Remove; a second import of
+   the same package is refused with the server's sentence; Report. Shots
+   `findings/ui_design_shots/kb18_market_*` at 1600 px and 520 px for each step.
+4. Fix what the pass finds, inside the phase 4 file list. A fault outside it goes under
+   "Needs from others".
+
+**May write:** the phase 4 list, plus the two test files, plus scripts under
+`findings/marketplace/`. **Gates:** as phase 4, plus the browser pass. Report
+`directives/reports/z_marketplace_4b.md`, then stop.
+
+### Added to 4b, 2026-10-14 15:45 (Johnny's answer to your question 1)
+
+Johnny: "yes, admins open hidden pages, otherwise make like a 'listing not found'."
+
+5. **Server** (`apps/api/src/routes/packages.ts`, added to your list for this item):
+   `GET /api/packages/:packageId` answers a hidden package to a caller with role
+   `admin` (the existing `roleSatisfies`), with `hidden: true`; everyone else keeps the
+   404. The catalogue takes `hidden=1` for an admin only (hidden packages only; anyone
+   else sending it gets 403 `forbidden`, `Role required.`). Worker tests for both, signed
+   out, signed in, admin.
+6. **Browser:** a package page that answers 404 shows "Listing not found." with a link back
+   to the Marketplace (signed out, signed in, a hidden package for a non-admin, a wrong
+   id: all the same words). An admin sees the hidden page with a plain "Hidden" note, the
+   takedown reason, and Restore; and a "Hidden" filter in the catalogue that only admins
+   see. Shots of both in the pass.
+done: 4b item 5: GET /api/packages/:id answers a hidden package to an admin (hidden, takedownReason); ?hidden=1 admin-only (403 Role required otherwise); shared PackageCatalogueQuery.hidden and PackagePublicPage.takedownReason; worker test in packages.test.js. next: client tests (item 1).
+done: 4b item 1: tests/web/market_place.test.js (client vs server placement, anchorUnder, sentences) and tests/web/market_catalogue.test.js (every call, errors), 14 pass; catalogue.ts takes hidden. next: Listing not found and the admin Hidden view (item 6).
+done: 4b item 6 code: PackagesView shows Listing not found on any 404 with a link back, an admin sees Hidden plus the reason and Restore, and an admin-only Hidden filter (?hidden=1). next: local manifests and the production manifest check (item 2).
+done: 4b items 2-4 and 6: browser pass on my own ports (API 8819, Vite 5219 with its own cache, Edge 9419; all stopped), fixed what it found (outline centring, chart-sector outline, Remove modal text, landing words, Already the same, campaign label); shots kb18_market_*. next: gates and report.
+done: phase 4b gates (npm test 1675/0 fail, check, typecheck, build, API suites 8/8) and report reports/z_marketplace_4b.md. next: stop.

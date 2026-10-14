@@ -107,7 +107,7 @@ test('the preview lists one outcome per hex, the placement and the sectors it ma
 test('an import row says whether an update is available', () => {
     const row = {
         installId: 'in_X', packageId: 'pk_X', title: 'T', version: 1, latestVersion: 2, updateAvailable: true,
-        placement: null, hexCount: 3, installedAt: 'a', updatedAt: 'b',
+        placement: null, hexCount: 3, recordCount: 1, installedAt: 'a', updatedAt: 'b',
     };
     assert.deepEqual(InstallRow.parse(row), row);
     const placed = { ...row, placement: { anchor: 'Demo/0101', to: 'Demo/0505' } };

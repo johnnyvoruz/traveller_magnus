@@ -28,7 +28,8 @@ import type { AppEnv, Env } from '../env';
 import { fail, ok } from '../http';
 import { chargeObjectBytes } from '../jobs/object_charge';
 import { chartHex } from '../jobs/publish_queue';
-import { ownSectorKey } from '../universe/hexes';
+import { defaultPin } from '../universe/defaults';
+import { ownSectorKey, type Pin } from '../universe/hexes';
 import { ownedUniverse, type OwnedUniverse } from '../universe/forward';
 import type { InstallHexInput, InstallRecordInput, PreviewHex, PreviewRecords } from '../universe/install';
 
@@ -286,7 +287,27 @@ async function missingObjects(env: Env, universeId: string, loaded: Loaded): Pro
     return { missing, placed, bytes };
 }
 
+/** The generation pin the Builder sets (routes/builder.ts pinFor); the same rule, kept here. */
+async function pinFor(env: Env, truthVersion: string | null): Promise<Pin> {
+    if (!truthVersion) return defaultPin(null);
+    const row = await env.DB.prepare(`SELECT seed, settings FROM truth_versions WHERE version = ?`)
+        .bind(truthVersion).first<{ seed: string; settings: string }>();
+    if (!row) return defaultPin(truthVersion);
+    return { seed: row.seed, settings: JSON.parse(row.settings) as Record<string, unknown>, truthVersion };
+}
+
+/** A map never opened has no pin; importing into it pins it first, as opening it would. */
+async function ensurePinned(c: Ctx, owned: OwnedUniverse): Promise<void> {
+    const response = await owned.forward(new Request('https://universe.internal/pin', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(await pinFor(c.env, owned.row.truthVersion)),
+    }));
+    if (!response.ok) throw new Error('Pin failed.');
+}
+
 async function previewOf(c: Ctx, owned: OwnedUniverse, packageId: string, version: number, target?: Target): Promise<Previewed> {
+    await ensurePinned(c, owned);
     const loaded = await load(c, owned, packageId, version, target);
     const called = await doCall<{ hexes: PreviewHex[]; records: PreviewRecords }>(owned, c, '/install/preview', {
         packageId: loaded.packageId,
@@ -468,14 +489,14 @@ installsRoute.get('/:id/installs', async (c) => {
     if (!(await installsReady(c.env))) return unavailable(c);
     const listed = await c.env.DB.prepare(
         `SELECT i.id AS installId, i.package_id AS packageId, p.title AS title, i.version AS version,
-                p.latest_version AS latestVersion, p.hidden AS hidden, i.hex_count AS hexCount,
+                p.latest_version AS latestVersion, p.hidden AS hidden, i.hex_count AS hexCount, i.record_count AS recordCount,
                 i.placement AS placement,
                 i.created_at AS installedAt, i.updated_at AS updatedAt
          FROM package_installs i JOIN packages p ON p.id = i.package_id
          WHERE i.universe_id = ? ORDER BY i.updated_at DESC, i.id DESC`,
     ).bind(owned.row.id).all<{
         installId: string; packageId: string; title: string; version: number; latestVersion: number;
-        hidden: number; hexCount: number; placement: string | null; installedAt: string; updatedAt: string;
+        hidden: number; hexCount: number; recordCount: number; placement: string | null; installedAt: string; updatedAt: string;
     }>();
     const items = (listed.results ?? []).map((row) => {
         const hidden = Number(row.hidden) === 1;
@@ -489,6 +510,7 @@ installsRoute.get('/:id/installs', async (c) => {
             updateAvailable: !hidden && latest > row.version,
             placement: row.placement ? JSON.parse(row.placement) as unknown : null,
             hexCount: row.hexCount,
+            recordCount: row.recordCount,
             installedAt: row.installedAt,
             updatedAt: row.updatedAt,
         };
