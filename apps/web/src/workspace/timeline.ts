@@ -176,6 +176,25 @@ export function buildTimeline(input: {
     return { years, count: stamped.length };
 }
 
+/**
+ * The empty timeline's one next step. With no campaign date, set that date.
+ * With a date, add a session: a session takes the date when it is written.
+ */
+export function timelineAdvice(hasClock: boolean): { text: string; act: 'date' | 'journal'; label: string } {
+    if (!hasClock) {
+        return {
+            text: 'Set the campaign date. Sessions take that date when you write them.',
+            act: 'date',
+            label: 'Set the campaign date',
+        };
+    }
+    return {
+        text: 'Add a session in the Journal. It uses the campaign date.',
+        act: 'journal',
+        label: 'Open the Journal',
+    };
+}
+
 /** The first dated row on Today, or the next row when Today has none. */
 export function todayIndex(model: TimelineModel): number {
     let seen = 0;

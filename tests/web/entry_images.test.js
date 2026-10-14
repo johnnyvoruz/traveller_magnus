@@ -111,7 +111,8 @@ test('the entry page uses the record gallery words and does not write the clock'
     assert.match(gallery, /The upload failed\./);
     assert.match(gallery, /Try again\./);
     assert.match(gallery, /Removed the image\./);
-    assert.match(gallery, /Make this the avatar/);
+    assert.match(gallery, /Make this the cover/);
+    assert.match(gallery, />Cover</);
     assert.match(gallery, /Drop images here, or paste one\. They are kept as WebP, 2,048 px at most\./);
     assert.match(gallery, /saveEntry\(\{ \.\.\.latest, images:/);
     assert.doesNotMatch(gallery, /clock/);

@@ -118,7 +118,8 @@ import { runAndLog } from './mgt2e_uwp_auditor.js';
 
         // Generate atmospheric properties
         if (WorldEngine && WorldEngine.generateAtmospherics) {
-            WorldEngine.generateAtmospherics(sys, mainworldBase);
+            // { mainworldBase } so a chart profile (t5Data has no type 'Mainworld') still locks atm/hydro (engine 1.2.0).
+            WorldEngine.generateAtmospherics(sys, { mainworldBase });
         }
 
         // Generate rotational dynamics (day length, axial tilt)

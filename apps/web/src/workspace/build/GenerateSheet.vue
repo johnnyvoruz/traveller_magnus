@@ -96,7 +96,7 @@ const goWords = computed(() => {
       </label>
     </fieldset>
     <section v-if="settings.length">
-      <h3 class="ui-heading">Settings <span class="ui-count">this universe</span></h3>
+      <h3 class="ui-heading">Settings <span class="ui-count">your map</span></h3>
       <dl class="build-set">
         <div v-for="row in settings" :key="row.label"><dt>{{ row.label }}</dt><dd>{{ row.value }}</dd></div>
       </dl>

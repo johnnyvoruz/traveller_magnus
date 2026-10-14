@@ -60,6 +60,8 @@ export type JobBlob = {
     objectBytes?: number;
     /** Bytes already added to the universe row. A retry subtracts this and does not add them again. */
     bytesSettled?: number;
+    /** Why the job failed when the reason names no hex. */
+    error?: string;
 };
 
 const HEX_KEY = /^[^/]+\/\d{4}$/;
@@ -431,6 +433,7 @@ function jobBlob(raw: unknown): JobBlob {
             applied: Array.isArray(parsed.applied) ? parsed.applied : [],
             objectBytes: typeof parsed.objectBytes === 'number' && parsed.objectBytes > 0 ? parsed.objectBytes : 0,
             bytesSettled: typeof parsed.bytesSettled === 'number' && parsed.bytesSettled > 0 ? parsed.bytesSettled : 0,
+            error: typeof parsed.error === 'string' && parsed.error.length > 0 ? parsed.error : undefined,
         };
     } catch {
         return { failures: [], skipped: 0 };
@@ -452,6 +455,7 @@ function jobOf(record: SqlRow): JobRow {
         failures: blob.failures,
         createdAt: String(record.created_at),
         finishedAt: record.finished_at ? String(record.finished_at) : null,
+        ...(blob.error ? { error: blob.error } : {}),
     });
 }
 
@@ -829,7 +833,7 @@ export function accountedBytes(sql: Sql, id: string): number {
     return jobBlob(row.failures).objectBytes ?? 0;
 }
 
-/** A queued or running job ends failed. `reason` is stored on `hexKey` when both are set. */
+/** A queued or running job ends failed. A reason with a hex key is one failure. A reason with no hex key is `error`. */
 export function markJobFailed(sql: Sql, id: string, now: string, reason?: string, hexKey?: string): void {
     sql.transaction(() => {
         const row = sql.exec(`SELECT * FROM jobs WHERE id = ?`, id)[0];
@@ -837,9 +841,14 @@ export function markJobFailed(sql: Sql, id: string, now: string, reason?: string
         if (row.state !== 'queued' && row.state !== 'running') return;
         const blob = jobBlob(row.failures);
         let failed = Number(row.failed);
-        if (reason && hexKey && HEX_KEY.test(hexKey)) {
-            blob.failures = [...blob.failures, { hexKey, reason: reason.slice(0, BUILDER_LIMITS.reason) }].slice(0, 100);
-            failed += 1;
+        if (reason) {
+            const text = reason.slice(0, BUILDER_LIMITS.reason);
+            if (hexKey && HEX_KEY.test(hexKey)) {
+                blob.failures = [...blob.failures, { hexKey, reason: text }].slice(0, 100);
+                failed += 1;
+            } else {
+                blob.error = text;
+            }
         }
         sql.exec(
             `UPDATE jobs SET state = 'failed', failed = ?, failures = ?, finished_at = ? WHERE id = ?`,

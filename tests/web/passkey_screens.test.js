@@ -5,7 +5,7 @@
  * and no email anywhere in the copy.
  */
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { session } from '../../apps/web/src/account/session.ts';
 import * as words from '../../apps/web/src/workspace/passkey/words.ts';
@@ -101,15 +101,11 @@ test('when a passkey was added, in the house form for a real date; unreadable sa
     assert.equal(words.addedOn(null), '');
 });
 
-test('linking a provider uses link-social, never sign-in/social, and passes refusals through', async () => {
-    const { linkSocial } = await import('../../apps/web/src/workspace/passkey/link.ts');
-    const calls = [];
-    const answer = (status, body) => async (url, init) => { calls.push({ url, body: JSON.parse(init.body) }); return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } }); };
-    assert.deepEqual(await linkSocial('google', '/account', answer(200, { url: 'https://accounts.example/x', redirect: false })), { ok: true, url: 'https://accounts.example/x' });
-    assert.equal(calls[0].url, '/api/auth/link-social');
-    assert.deepEqual(calls[0].body, { provider: 'google', disableRedirect: true, callbackURL: '/account' });
-    assert.deepEqual(await linkSocial('discord', '/account', answer(404, { code: 'PROVIDER_NOT_FOUND', message: 'Provider not found' })), { ok: false, code: 'PROVIDER_NOT_FOUND', message: 'Provider not found' });
-    assert.deepEqual(await linkSocial('twitter', '/account', async () => { throw new TypeError('offline'); }), { ok: false, code: 'network', message: 'The server could not be reached. Try again.' });
+test('linking a provider is linkProvider from Lane A, returning to /account; the stand-in is gone', () => {
+    const page = readFileSync(new URL('../../apps/web/src/workspace/passkey/AccountPage.vue', import.meta.url), 'utf8');
+    assert.match(page, /await linkProvider\(id, '\/account'\)/);
+    assert.ok(!page.includes('link.ts') && !page.includes('linkSocial'));
+    assert.ok(!existsSync(new URL('../../apps/web/src/workspace/passkey/link.ts', import.meta.url)));
 });
 
 test('the return address: where sign-in was opened, never /account itself, else the home view', async () => {
@@ -142,4 +138,35 @@ test('no screen names an email address; the explainer is said as Johnny asked', 
         assert.ok(!/email|e-mail/i.test(template), file + ' shows no email');
     }
     assert.equal(words.PASSKEY_EXPLAIN, 'A passkey signs you in with your fingerprint, face, or device PIN. There is no password.');
+});
+
+test('the sign-in card: Create an account on top and filled, the providers, then the passkey Sign in and the lost link', () => {
+    const file = readFileSync(new URL('../../apps/web/src/workspace/passkey/SignInBody.vue', import.meta.url), 'utf8');
+    const template = file.split('<template>')[1] || '';
+    assert.equal(words.CREATE_ACCOUNT, 'Create an account');
+    assert.equal(words.SIGN_IN_PASSKEY, 'Sign in');
+    const at = (text) => {
+        const i = template.indexOf(text);
+        assert.ok(i >= 0, text + ' is on the card');
+        return i;
+    };
+    // The order on the page is the Tab order: nothing on the card sets a tabindex.
+    const order = [at('data-signin="create"'), at('OTHER_ACCOUNTS'), at('v-for="(provider, index) in offered"'), at('data-signin="passkey"'), at('data-signin="lost"')];
+    assert.deepEqual(order, [...order].sort((a, b) => a - b), 'create, the providers, the passkey, the lost link');
+    assert.ok(!/tabindex/.test(template));
+    const button = (mark) => {
+        const i = template.indexOf(mark);
+        return template.slice(template.lastIndexOf('<button', i), template.indexOf('>', i));
+    };
+    assert.match(button('data-signin="create"'), /is-primary/, 'Create an account is the filled button');
+    assert.doesNotMatch(button('data-signin="passkey"'), /is-primary/, 'the passkey Sign in is a plain button');
+    // Nothing stands between the passkey button and "I lost my passkey".
+    const between = template.slice(template.indexOf('</button>', at('data-signin="passkey"')) + 9, template.lastIndexOf('<button', at('data-signin="lost"')));
+    assert.equal(between.trim(), '');
+    // The fingerprint sentence is off the card; the account page still says it.
+    assert.ok(!file.includes('PASSKEY_EXPLAIN'));
+    // Focus on opening lands on the top button; without passkeys that is the first provider, still the filled one.
+    assert.match(file, /focus: \(\) => \{ const top = createEl\.value \|\| first\.value;/);
+    assert.match(template, /'is-primary': index === 0 && !canPasskey/);
+    assert.match(template, /<p v-else class="signin-note" role="status">\{\{ noPasskeySay \}\}<\/p>/);
 });

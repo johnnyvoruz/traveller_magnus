@@ -73,4 +73,8 @@ meaningful step append one line under Progress: "done: X. next: Y."
 ## Progress
 
 done: the prompt is read. next: see Regina on the live page and read the stored body.
+done: the live page and the v5 body are read. next: run the engine on the truth inputs.
+done: the headless run matches the stored body. next: count the sector and take the shots.
+done: the count and the shots are in. next: write the note and the report.
+done: the report is written. next: stop.
 

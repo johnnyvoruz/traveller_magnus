@@ -7,7 +7,7 @@
 import { computed, nextTick, ref, watch } from 'vue';
 import Icon from '../../design/Icon.vue';
 import { parseHexKey } from '../places.ts';
-import { allowanceFor, buildSettings, hexName, hexState, placeWords, previewAt, removeHexes, restorable, restoreHexes, stopBuild, tallyOf, truthAt } from './acts.ts';
+import { allowanceFor, buildSettings, hexName, hexState, oneSectorFor, placeWords, previewAt, removeHexes, restorable, restoreHexes, stopBuild, tallyOf, truthAt } from './acts.ts';
 import { askDensity, runMany } from './density_ask.ts';
 import DensityAsk from './DensityAsk.vue';
 import { edit, openBlank } from './edit.ts';
@@ -59,6 +59,8 @@ const growLead = computed(() => {
     return which + (slots.value.length === 1 ? ' in an empty sector slot' : ' in empty sector slots') + '. Generating here creates ' + sectors + '.';
 });
 const growBox = ref<HTMLElement | null>(null);
+/** The hexes a Generate would send are in two sectors: the sentence that says what to do instead. Generate is off. */
+const twoSay = computed(() => (props.mode === 'many' ? oneSectorFor(props.keys) : ''));
 
 // A name is missing: the cursor goes to its box.
 watch(() => [growUi.want, growUi.focus] as const, ([slug]) => {
@@ -127,7 +129,8 @@ const asking = computed(() => {
         <li v-if="count.removed.length"><b>{{ count.removed.length }}</b>removed from your map</li>
       </ul>
 
-      <div v-if="slots.length" ref="growBox" class="build-grow" role="group" aria-label="New sectors">
+      <!-- Two sectors are never made by one request: no names are asked for; the sentence under Generate says what to do. -->
+      <div v-if="slots.length && !twoSay" ref="growBox" class="build-grow" role="group" aria-label="New sectors">
         <p class="build-grow-lead">{{ growLead }}</p>
         <label v-for="group in slots" :key="group.slug" class="build-grow-name">
           <span>{{ slots.length === 1 ? 'Name of the new sector' : 'Name of the sector for ' + group.count + (group.count === 1 ? ' hex' : ' hexes') }}</span>
@@ -169,7 +172,8 @@ const asking = computed(() => {
             :class="{ 'is-primary': mode !== 'removed', 'is-grow': slots.length > 0 }"
             data-command="build-generate"
             :data-build-first="mode !== 'removed' ? '' : undefined"
-            :disabled="busy || oneHeld"
+            :disabled="busy || oneHeld || twoSay !== ''"
+            :aria-describedby="twoSay ? 'build-one-sector' : undefined"
             :title="build.job ? JOB_HOLD : oneHeld && oneSay ? oneSay.text : undefined"
             :aria-busy="build.rolling || build.job || growUi.busy ? 'true' : undefined"
             @click="generate"
@@ -196,6 +200,7 @@ const asking = computed(() => {
           </button>
           <p v-if="mode === 'many' && count.empty.length === 0" class="build-fine">None of the selected hexes are empty.</p>
         </div>
+        <p v-if="twoSay" id="build-one-sector" class="build-allowance is-held" role="status" data-build-one-sector>{{ twoSay }}</p>
         <p v-if="oneSay && !build.error" class="build-allowance" :class="{ 'is-held': oneSay.blocked }" role="status" data-build-allowance>{{ oneSay.text }}</p>
         <!--
           Under the Generate button, the settings line and the job's progress share one place: the taller of the two sets
@@ -203,8 +208,8 @@ const asking = computed(() => {
         -->
         <div class="build-slot">
           <p class="build-with" :class="{ 'is-hidden': build.job }" :aria-hidden="build.job ? 'true' : undefined">
-            <Icon name="sliders" :size="12" />{{ choiceLine(build.choice) }} · this universe's settings ·
-            <button type="button" class="build-link" :disabled="busy" @click="build.sheetOpen = true">Change…</button>
+            <Icon name="sliders" :size="12" />{{ choiceLine(build.choice) }} · your map’s settings ·
+            <button type="button" class="build-link" :disabled="busy || twoSay !== ''" @click="build.sheetOpen = true">Change…</button>
           </p>
           <div class="build-prog" :class="{ 'is-hidden': !build.job }" :role="build.job ? 'status' : undefined" :aria-hidden="build.job ? undefined : 'true'" :data-build-job="build.job ? '' : undefined">
             <div class="build-prog-line">
@@ -220,8 +225,8 @@ const asking = computed(() => {
         </div>
         <p v-if="mode === 'removed' && chartRow" class="build-with">Chart: {{ chartRow.name || one }} · <code>{{ chartRow.uwp }}</code></p>
       </div>
-      <p v-if="growUi.error && slots.length" class="build-error" role="alert">{{ growUi.error }}</p>
-      <p v-if="build.error" class="build-error" role="alert">{{ build.error }}</p>
+      <p v-if="growUi.error && slots.length && growUi.error !== twoSay" class="build-error" role="alert">{{ growUi.error }}</p>
+      <p v-if="build.error && build.error !== twoSay" class="build-error" role="alert">{{ build.error }}</p>
       <p v-else-if="mode === 'empty' && edit.error && edit.hexKey === one" class="build-error" role="alert">{{ edit.error }}</p>
 
       <div v-if="mode === 'many'" class="build-acts build-more">
@@ -236,7 +241,7 @@ const asking = computed(() => {
         </button>
       </div>
 
-      <p v-if="slots.length" class="build-fine">These systems are saved as they are generated, with no preview. To remove the new {{ slots.length === 1 ? 'sector and its systems' : 'sectors and their systems' }}, select Undo. Undo also works while the job is running.</p>
+      <p v-if="slots.length && !twoSay" class="build-fine">These systems are saved as they are generated, with no preview. To remove the new {{ slots.length === 1 ? 'sector and its systems' : 'sectors and their systems' }}, select Undo. Undo also works while the job is running.</p>
       <p v-else-if="mode === 'empty'" class="build-fine">Generate a system shows a preview first. The system is saved only when you select Keep. Blank system saves an empty system right away and opens it in the designer, where you add each body yourself. {{ EMPTY_ALONE }}</p>
       <p v-else-if="mode === 'removed'" class="build-fine">While Build is on, a removed hex shows as a faint outline. When Build is off, the hex doesn’t show.</p>
       </div>

@@ -6,6 +6,7 @@ import { toScreen, visibleRect } from './camera.ts';
 import { hexCentre, hexCorners, parseHex, ROW_STEP, sectorRect, SECTOR_COLS, SECTOR_ROWS, toGlobal, type Rect } from './geometry.ts';
 import {
     BASE_TEXT_X, BASE_TEXT_Y, BELT_DOTS, BELT_R, DISC_R, FONT_NAME, FONT_PORT, FONT_SMALL,
+    PUBLIC_R, PUBLIC_X, PUBLIC_Y,
     GAS_R, GAS_X, GAS_Y, HALO_FILL, HALO_R, HALO_STROKE, NAME_Y, NAVAL_INNER, NAVAL_OUTER,
     NAVAL_X, NAVAL_Y, NUMBER_Y, PORT_Y, RING_R, RING_SCALE_X, RING_SCALE_Y, RING_STROKE,
     POLITY_FILL_ALPHA, REGION_FILL_ALPHA, SCOUT_R, SCOUT_X, SCOUT_Y, SELECT_STROKE,
@@ -13,6 +14,7 @@ import {
 } from './glyphs.ts';
 import { routeSegments, type RouteSegment } from './route_lines.ts';
 import { drawCampaignLayer, partyContains, vesselContains, type CampaignSnapshot, type PartyMark, type VesselHit } from './campaign_layer.ts';
+import type { PublicGameMark } from './public_games.ts';
 import type { MapTheme } from './theme.ts';
 import { PPP_GRID, PPP_NAMES, tierFor, type Tier } from './tiers.ts';
 import { boxesOverlap, clampTitle, fadeToward, stepScale, titleAnchor, titleInView, zoomStep, type Box } from './titles.ts';
@@ -164,6 +166,11 @@ export class MapRenderer {
     private getIndex: (slug: string) => SectorIndex | null = () => null;
     /** Width of each sector name at 18 px. One measureText per name, not per frame. */
     private readonly nameWidthAt18 = new Map<string, number>();
+    /** True after those widths were taken with the display font, not its fallback. */
+    private nameWidthsReady = false;
+    /** fonts.load has been asked. A second ask only follows a failed first batch. */
+    private nameFontAsked = false;
+    private nameFontTries = 0;
     /** routeSegments cached per index object. */
     private readonly routeCache = new WeakMap<SectorIndex, RouteSegment[]>();
     /** Polity paths from polities.json. Built once in setPolities. */
@@ -186,6 +193,8 @@ export class MapRenderer {
     private campaignSnapshot: CampaignSnapshot | null = null;
     private partyMark: PartyMark | null = null;
     private vesselMarks: VesselHit[] = [];
+    /** Public games by sector slug. Empty draws nothing and adds no hit target. */
+    private publicGames = new Map<string, readonly PublicGameMark[]>();
 
     constructor(canvas: HTMLCanvasElement, theme: MapTheme) {
         const ctx = canvas.getContext('2d');
@@ -247,6 +256,15 @@ export class MapRenderer {
 
     setSelection(selection: Selection | null): void {
         this.selected = selection;
+    }
+
+    /**
+     * Public games for the sectors on screen. Null clears them.
+     * The diamond is not a hit: `partyAt` and `vesselAt` do not read it,
+     * so a click still lands on the hex underneath.
+     */
+    setPublicGames(marks: ReadonlyMap<string, readonly PublicGameMark[]> | null): void {
+        this.publicGames = marks ? new Map(marks) : new Map();
     }
 
     /** The campaign snapshot. Null draws nothing and does not fetch. */
@@ -341,13 +359,69 @@ export class MapRenderer {
             if (cam.ppp >= PPP_NAMES) this.chartMarks(marks, cam.ppp);
             else this.chartDiscs(marks, cam.ppp);
         }
+        const namesPending = this.settleNameFont();
         this.sectorNames(on, cam, vp);
         if (tier !== 'hex' && cam.ppp >= FAR_LABEL_MIN_PPP) this.farLabels(on, cam, vp, view);
         this.selectionOutline(cam, vp, tier);
         let animating = tier === 'hex' && cam.ppp >= PPP_NAMES ? this.subsectorTitles(ready, marks, cam, vp) : false;
+        if (namesPending) animating = true;
+        if (tier === 'hex') this.paintPublic(on, cam, vp);
         if (this.paintCampaign(cam, vp)) animating = true;
 
         return { tier, sectorsOnScreen: on.map((sector) => sector.slug), ms: now() - started, animating };
+    }
+
+    /**
+     * One diamond per public game, off the world disc. No path is stored for hits.
+     * Names and counts are drawn at the same zoom as hex labels. Nothing is drawn
+     * when the map is empty, and the canvas is not touched in that case.
+     */
+    private paintPublic(sectors: DrawSector[], cam: Camera, vp: Viewport): void {
+        if (this.publicGames.size === 0) return;
+        const drawn: { sx: number; sy: number; label: string | null }[] = [];
+        const pad = 24;
+        for (const sector of sectors) {
+            const rows = this.publicGames.get(sector.slug);
+            if (!rows || rows.length === 0) continue;
+            for (const row of rows) {
+                const local = parseHex(row.hex);
+                if (!local) continue;
+                const global = toGlobal(sector.x, sector.y, local.col, local.row);
+                const centre = hexCentre(global.q, global.r);
+                const screen = toScreen(cam, vp, centre.x, centre.y);
+                const sx = screen.sx + PUBLIC_X * cam.ppp;
+                const sy = screen.sy + PUBLIC_Y * cam.ppp;
+                if (sx < -pad || sy < -pad || sx > vp.width + pad || sy > vp.height + pad) continue;
+                const label = cam.ppp >= PPP_NAMES
+                    ? (row.count > 1 ? String(row.count) : row.name)
+                    : null;
+                drawn.push({ sx, sy, label });
+            }
+        }
+        if (drawn.length === 0) return;
+        const ctx = this.ctx;
+        const radius = Math.max(2, PUBLIC_R * cam.ppp);
+        ctx.save();
+        ctx.beginPath();
+        ctx.strokeStyle = this.theme.chart.publicGame;
+        ctx.lineWidth = 1.5;
+        for (const mark of drawn) {
+            ctx.moveTo(mark.sx, mark.sy - radius);
+            ctx.lineTo(mark.sx + radius, mark.sy);
+            ctx.lineTo(mark.sx, mark.sy + radius);
+            ctx.lineTo(mark.sx - radius, mark.sy);
+            ctx.closePath();
+        }
+        ctx.stroke();
+        ctx.fillStyle = this.theme.chart.publicGame;
+        ctx.font = (FONT_SMALL * cam.ppp) + 'px ' + this.theme.fontText;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        for (const mark of drawn) {
+            if (!mark.label) continue;
+            ctx.fillText(mark.label, mark.sx + radius + 4, mark.sy);
+        }
+        ctx.restore();
     }
 
     private paintCampaign(cam: Camera, vp: Viewport): boolean {
@@ -1023,6 +1097,60 @@ export class MapRenderer {
         return { x: screen.sx - hexSizePx, y: screen.sy - hexSizePx, w: hexSizePx * 2, h: hexSizePx * 2 };
     }
 
+    /** The first family of the display token, without quotes. */
+    private displayFamily(): string {
+        const raw = this.theme.fontDisplay.split(',')[0].trim();
+        const quoted = raw.length >= 2 && (raw[0] === "'" || raw[0] === '"') && raw[raw.length - 1] === raw[0];
+        return quoted ? raw.slice(1, -1) : raw;
+    }
+
+    /** True when measureText will see the display face. No document means the test font is the face. */
+    private displayFontLoaded(): boolean {
+        const fonts = typeof document !== 'undefined' ? document.fonts : undefined;
+        if (!fonts || typeof fonts.check !== 'function') return true;
+        const family = this.displayFamily();
+        if (!family) return true;
+        try {
+            return fonts.check(NAME_SIZE + "px '" + family + "'");
+        } catch {
+            return true;
+        }
+    }
+
+    /**
+     * Widths taken before the display font loads belong to the fallback, which is
+     * narrower, so a later frame would draw the real face past the sector.
+     * Asks for one more frame until the face is the one being measured.
+     * Returns true while that frame is still owed.
+     */
+    private settleNameFont(): boolean {
+        if (this.nameWidthsReady) return false;
+        if (this.displayFontLoaded()) {
+            this.nameWidthAt18.clear();
+            this.nameWidthsReady = true;
+            return false;
+        }
+        if (!this.nameFontAsked) {
+            this.nameFontAsked = true;
+            const fonts = typeof document !== 'undefined' ? document.fonts : undefined;
+            const family = this.displayFamily();
+            const load = fonts && typeof fonts.load === 'function' ? fonts.load(NAME_SIZE + "px '" + family + "'") : null;
+            if (load && typeof load.then === 'function') {
+                void load.then(() => {
+                    this.nameWidthAt18.clear();
+                    this.nameFontTries += 1;
+                    this.nameWidthsReady = this.displayFontLoaded() || this.nameFontTries >= 2;
+                    if (!this.nameWidthsReady) this.nameFontAsked = false;
+                }, () => {
+                    this.nameWidthsReady = true;
+                });
+            } else {
+                this.nameWidthsReady = true;
+            }
+        }
+        return !this.nameWidthsReady;
+    }
+
     /** Width at 18 px, cached by name. */
     private measuredNameWidth(name: string): number {
         const cached = this.nameWidthAt18.get(name);
@@ -1034,9 +1162,12 @@ export class MapRenderer {
     }
 
     /**
-     * Layer 7. Measure at 18 px. Wider than 84% of the rectangle: scale to that
-     * width. Below 9 px, or a rectangle over 2400 px, draw nothing. The result
-     * is never wider than the rectangle.
+     * Layer 7, sector names only. Subsector titles are a later pass and already
+     * drop below 9 px. Measure at 18 px, once per name. Wider than the sector
+     * less a 16% margin (84% of the drawn width): scale down to that width.
+     * Below a 9 px floor, or a rectangle over 2400 px, draw nothing. 9 px is
+     * half the display size; under it the name is noise on a sector this narrow.
+     * No ellipsis. The drawn name is never wider than the sector.
      */
     private sectorNames(sectors: DrawSector[], cam: Camera, vp: Viewport): void {
         const widthPx = SECTOR_COLS * cam.ppp;

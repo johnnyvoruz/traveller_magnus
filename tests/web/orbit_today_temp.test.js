@@ -61,11 +61,11 @@ test('the worked example Johnny approved: 301 K at midsummer, 273 K at midwinter
 });
 
 test('the tilt term is the engine’s own lines, read from the engine file', () => {
-    // packages/engines/src/mgt2e_world_engine.js:1757-1759. The web app may not import the
+    // packages/engines/src/mgt2e_world_engine.js:1739-1741. The web app may not import the
     // engines, so the copy in today_temp.ts is held to the lines themselves, lifted from the file.
     const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
     const source = fs.readFileSync(path.join(ROOT, 'packages/engines/src/mgt2e_world_engine.js'), 'utf8').split(/\r?\n/);
-    const lines = source.slice(1756, 1759);
+    const lines = source.slice(1738, 1741);
     // If the engine moves or rewrites them, this says so instead of comparing something else.
     assert.match(lines[0], /^\s*let tfactor = Math\.abs\(Math\.sin\(\(w\.axialTilt \|\| 0\) \* Math\.PI \/ 180\)\);\s*$/);
     assert.match(lines[1], /^\s*if \(w\.yearHours < \(36\.5 \* 24\)\) \{ tSkip\('Quick Year Adjust'\); tfactor \/= 2; \}\s*$/);

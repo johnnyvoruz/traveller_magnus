@@ -336,6 +336,8 @@ export const Universe = z.object({
     hexOverrideCount: z.number().int().nonnegative(),
     objectBytes: z.number().int().nonnegative(),
     lastSnapshotAt: z.string().nullable(),
+    /** Present only when migration 0013 is applied. Omitted on an older database. */
+    publicGames: z.boolean().optional(),
 }).strict();
 export type Universe = z.infer<typeof Universe>;
 

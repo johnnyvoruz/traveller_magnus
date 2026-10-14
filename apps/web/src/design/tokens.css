@@ -291,6 +291,7 @@
   --chart-route-juhl: lightblue;
   --chart-route-juru: lightblue;
   --chart-route-core-route: purple;
+  --chart-public: #c4b5fd;       /* a public game: diamond, not a world, a vessel, or the selection */
 }
 
 body {

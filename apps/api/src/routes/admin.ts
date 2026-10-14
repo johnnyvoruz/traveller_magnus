@@ -1,3 +1,4 @@
+import { ONE_SECTOR_LIMIT } from '../jobs/one_sector';
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { Hono } from 'hono';
@@ -70,6 +71,7 @@ admin.post('/truth/build', async (c) => {
     } else {
         slugs = input.sectors;
     }
+    if (slugs.length > 1) return fail(c, 400, 'validation', ONE_SECTOR_LIMIT, { reason: 'one_sector' });
     for (const slug of slugs) {
         const xml = `inputs/${resolved.version}/${slug}.xml`;
         if (input.from) {
@@ -209,6 +211,7 @@ admin.post('/truth/builds/:version/retry', async (c) => {
             return item.state === 'building' && item.updated_at < staleBefore;
         }).map((item) => item.sector_slug);
     }
+    if (targets.length > 1) return fail(c, 400, 'validation', ONE_SECTOR_LIMIT, { reason: 'one_sector' });
     const now = new Date().toISOString();
     const updates = targets.map((slug) => c.env.DB.prepare(
         `UPDATE truth_build_sectors SET state = 'building', error = NULL, updated_at = ? WHERE version = ? AND sector_slug = ?`,

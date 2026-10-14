@@ -73,6 +73,14 @@ export function kindWord(kind: CampaignEntryKind): string {
     return KIND_WORD[kind];
 }
 
+/** The panel heading: the title, or "New session" (and the same shape for the other kinds). */
+export function entryHeading(entry: { title: string; kind: CampaignEntryKind } | null): string {
+    if (!entry) return 'New session';
+    const name = entry.title.replace(/\s+/g, ' ').trim();
+    if (name) return name;
+    return entry.kind === 'session' ? 'New session' : 'New ' + kindWord(entry.kind).toLowerCase();
+}
+
 export function filterWord(kind: CampaignEntryKind): string {
     return FILTER_WORD[kind];
 }

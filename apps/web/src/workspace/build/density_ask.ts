@@ -6,7 +6,7 @@
  * sheet has its own "Hexes to fill" row and runs without asking again.
  */
 import { nextTick } from 'vue';
-import { generateMany } from './acts.ts';
+import { generateMany, oneSectorFor } from './acts.ts';
 import { generateGrowing, inEmptySlot, slotNamesMissing } from './grow_acts.ts';
 import { buildStore } from './seam.ts';
 import { build, setDensity } from './state.ts';
@@ -43,6 +43,8 @@ function giveBack(): void {
 /** Opens the prompt for these hexes. One hex is never asked about: the caller generates it as before. */
 export function askDensity(keys: readonly string[]): void {
     if (keys.length < 2 || build.job) return;
+    // Two sectors are never sent: the pane says what to do instead, and nothing is asked.
+    if (oneSectorFor(keys)) return;
     // A new sector is named first: its box says so and takes the cursor.
     if (inEmptySlot(keys) && slotNamesMissing(keys)) return;
     build.sheetOpen = false;

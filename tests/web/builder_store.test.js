@@ -1365,3 +1365,45 @@ test('a job polls with since and the callback receives only the keys written sin
     assert.equal(screenDone.progress.done, 2);
     screenBuilder.close();
 });
+
+test('a failed job with a sentence and no failures hands that sentence on, and a job without one has no error key', async () => {
+    const sentence = 'The limit is one sector per request.';
+    const body = { hexKeys: [KEY, OTHER], edition: 'MgT2E', generator: 'top-down', roll: 0, filledToo: true };
+    const failedFetch = fake((call) => {
+        if (call.url.includes('/hexes?')) return json({ items: [], nextCursor: null });
+        if (call.url.endsWith('/generate')) return json({ jobId: 'job-fail' });
+        if (call.url.includes('/jobs/')) {
+            return json(job({
+                id: 'job-fail',
+                state: 'failed',
+                total: 2,
+                done: 0,
+                failed: 0,
+                failures: [],
+                finishedAt: STAMP,
+                error: sentence,
+            }));
+        }
+        throw new Error('unexpected ' + call.url);
+    });
+    const failedMap = open(failedFetch, clock());
+    const failed = await failedMap.generate(body).finished;
+    assert.equal(failed.progress.state, 'failed');
+    assert.deepEqual(failed.progress.failed, []);
+    assert.equal(failed.progress.error, sentence);
+    failedMap.close();
+
+    const quietFetch = fake((call) => {
+        if (call.url.includes('/hexes?')) return json({ items: [], nextCursor: null });
+        if (call.url.endsWith('/generate')) return json({ jobId: 'job-quiet' });
+        if (call.url.includes('/jobs/')) {
+            return json(job({ id: 'job-quiet', state: 'failed', total: 2, done: 0, failed: 0, failures: [], finishedAt: STAMP }));
+        }
+        throw new Error('unexpected ' + call.url);
+    });
+    const quietMap = open(quietFetch, clock());
+    const quiet = await quietMap.generate(body).finished;
+    assert.equal(quiet.progress.state, 'failed');
+    assert.equal(Object.hasOwn(quiet.progress, 'error'), false);
+    quietMap.close();
+});

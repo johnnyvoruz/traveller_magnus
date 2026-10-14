@@ -12,7 +12,7 @@ import { phaseOf, UNKNOWN_LIQUID } from './liquids.ts';
 type Body = Readonly<Record<string, unknown>> | null | undefined;
 
 /** Bumped whenever a change would redraw an unedited map. Part of the cache key and of saved hex data. */
-export const HYBRID_SURFACE_VERSION = 'hybrid-surface-3';
+export const HYBRID_SURFACE_VERSION = 'hybrid-surface-4';
 
 export type HybridWorld = {
     /** Name-independent: enhancedSeedKey(hexKey, dossierKey). */
@@ -89,10 +89,12 @@ function statusOf(field: unknown): string | null {
     return typeof status === 'string' ? status : null;
 }
 
-/** The sea's liquid. Water and Ice are one liquid; an unresolved or unnamed sea is water, and says so. */
+/** The sea's liquid. Water and Ice are one liquid. Null, or a status of none, unresolved or unknown, is no sea. An absent name is water, and says so. */
 function seaLiquid(body: Record<string, unknown>, hydroPercent: number): { liquid: string | null; assumed: boolean } {
     if (!(hydroPercent > 0)) return { liquid: null, assumed: false };
-    if (statusOf(body.liquidStatus) === 'none') return { liquid: null, assumed: false };
+    const status = statusOf(body.liquidStatus);
+    if (status === 'none' || status === 'unresolved' || status === 'unknown') return { liquid: null, assumed: false };
+    if (body.liquidType === null) return { liquid: null, assumed: false };
     const named = typeof body.liquidType === 'string' ? body.liquidType.trim() : '';
     if (named === 'Water' || named === 'Ice') return { liquid: 'Water', assumed: false };
     if (named === UNKNOWN_LIQUID) return { liquid: UNKNOWN_LIQUID, assumed: false };

@@ -6,7 +6,9 @@ export type OmniResult =
     | { kind: 'command'; name: string; detail: string; id: string }
     /** A campaign record (the signed-in user's own), and the row that opens the list with every match. */
     | { kind: 'record'; name: string; detail: string; id: string; thumb: string | null }
-    | { kind: 'more'; name: string; detail: string; query: string };
+    | { kind: 'more'; name: string; detail: string; query: string }
+    /** An empty-field example. Choosing it runs that search. It is not a place. */
+    | { kind: 'example'; name: string; detail: string };
 
 export type SearchItem = {
     sectorSlug: string;
@@ -23,8 +25,17 @@ export function normalizeQuery(value: string): string {
 }
 
 /**
+ * Within one rank, a system in the Spinward Marches leads, then the name.
+ * "Regina" then comes before "Regiimaa" for a shared prefix (finding 4).
+ */
+function marchBias(result: OmniResult): number {
+    return result.kind === 'system' && result.sector === 'Spinward_Marches' ? 0 : 1;
+}
+
+/**
  * Every word of the query must appear. Rank 0 exact name, 1 name starts with
- * the query, 2 otherwise, then by name. At most 40.
+ * the query, 2 otherwise. Within a rank, the Spinward Marches, then the name.
+ * At most 40.
  */
 export function rankResults(query: string, results: OmniResult[]): OmniResult[] {
     const normalized = normalizeQuery(query);
@@ -38,7 +49,7 @@ export function rankResults(query: string, results: OmniResult[]): OmniResult[] 
         const rank = name === normalized ? 0 : name.startsWith(normalized) ? 1 : 2;
         ranked.push({ result, rank });
     }
-    ranked.sort((a, b) => a.rank - b.rank || a.result.name.localeCompare(b.result.name));
+    ranked.sort((a, b) => a.rank - b.rank || marchBias(a.result) - marchBias(b.result) || a.result.name.localeCompare(b.result.name));
     return ranked.slice(0, RESULT_CAP).map((item) => item.result);
 }
 

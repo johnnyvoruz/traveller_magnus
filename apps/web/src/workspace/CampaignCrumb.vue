@@ -55,6 +55,23 @@ function trail(parts: readonly CrumbPart[]): string {
   padding: 0;
 }
 
+/* Same quiet trail as the dossier crumb. A bare button would keep the browser's grey face. */
+.camp-crumb .doss-crumb {
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--signal);
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+
+.camp-crumb .doss-crumb:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .camp-crumb-root,
 .camp-crumb-here {
   flex: 0 0 auto;

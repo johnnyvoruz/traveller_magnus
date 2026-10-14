@@ -41,6 +41,8 @@ export type JobProgress = {
     /** Keys written since the previous callback, in that same order. Empty on the opening callback. */
     landed: string[];
     state: JobState;
+    /** Set when the job failed and named no hex. Absent otherwise. */
+    error?: string;
 };
 
 export type UndoToken = { id: string };

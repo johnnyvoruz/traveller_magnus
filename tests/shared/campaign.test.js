@@ -116,6 +116,9 @@ function idFor(prefix, n) {
 
 test('each campaign schema accepts a good value', () => {
     assert.equal(Universe.safeParse(universe()).success, true);
+    assert.equal(Universe.safeParse(universe({ publicGames: false })).success, true);
+    assert.equal(Universe.safeParse(universe({ publicGames: true })).success, true);
+    assert.equal(Universe.safeParse(universe({ publicGames: 1 })).success, false);
     assert.equal(UniverseCreate.safeParse({ name: 'My campaign', truthVersion: 'v5', editionDefault: 'MgT2E' }).success, true);
     assert.equal(UniverseCreate.safeParse({ name: 'Blank chart', truthVersion: null, editionDefault: 'MgT2E' }).success, true);
     assert.equal(UniverseCreate.safeParse({ id: 'uni_client_1', name: 'My campaign', truthVersion: null, editionDefault: 'MgT2E' }).success, true);

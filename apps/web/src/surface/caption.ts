@@ -15,6 +15,20 @@ export type SheetCaption = {
 
 const VANILLA_NOTE = 'The surface as the original painter draws it.';
 
+/** One line for each 1.2.0 outcome that stores no free liquid. The words stay inside the outcome name. */
+const OUTCOME_LINE: Readonly<Record<string, string>> = {
+    'vacuum-above-melt': 'No sea. There is no air, and the surface is above melting.',
+    'above-boiling': 'No sea. The surface is above boiling.',
+    'unknown-exotic': 'No sea. No listed liquid fits this temperature.',
+    'temperature-missing': 'No sea. The temperature is missing.',
+};
+
+function outcomeLine(body: Readonly<Record<string, unknown>> | null | undefined): string | null {
+    if (!body || !body.liquidStatus || typeof body.liquidStatus !== 'object') return null;
+    const outcome = (body.liquidStatus as { outcome?: unknown }).outcome;
+    return typeof outcome === 'string' ? (OUTCOME_LINE[outcome] ?? null) : null;
+}
+
 function percent(cover: number | null): string {
     if (cover == null) return 'no cover given';
     return String(Number((cover * 100).toFixed(1))) + '% cover';
@@ -26,6 +40,8 @@ export function sheetCaption(mode: SurfaceMode, body: Readonly<Record<string, un
     const plan = seaPlan(body);
     const sea = plan.sea;
     if (sea.coverage == null || !(sea.coverage > 0)) {
+        const line = outcomeLine(body);
+        if (line) return { text: 'Enhanced · ' + line, title: line };
         return { text: 'Enhanced · no seas', title: 'No sea: ' + plan.why + '.' };
     }
     if (sea.liquid === null) {
@@ -88,11 +104,14 @@ function statusOf(field: unknown): string | null {
  * A digit of 0 names none, including when hydroPercent is a few percent:
  * that percent is the engine's spread inside hydrographics 0
  * (packages/engines/src/mgt2e_world_engine.js, hydro code 0).
- * With no digit, hydroPercent above 0 counts. liquidStatus 'none' names none.
+ * With no digit, hydroPercent above 0 counts. liquidType null, and a status of none,
+ * unresolved or unknown, name none. An absent liquidType keeps the digit.
  */
 function hasSurfaceLiquid(body: Readonly<Record<string, unknown>> | null, fallback: boolean): boolean {
     if (!body) return fallback;
-    if (statusOf(body.liquidStatus) === 'none') return false;
+    const status = statusOf(body.liquidStatus);
+    if (status === 'none' || status === 'unresolved' || status === 'unknown') return false;
+    if (body.liquidType === null) return false;
     const digit = hydroDigit(body);
     if (digit === 0) return false;
     if (digit !== null && digit > 0) return true;
@@ -110,17 +129,18 @@ export function hybridCaption(model: {
     const w = model.world;
     const handed = body && typeof body === 'object' ? body : null;
     const named = handed && typeof handed.liquidType === 'string' ? handed.liquidType.trim() : '';
-    const liquid = hasSurfaceLiquid(handed, !!w.liquid)
+    const because = outcomeLine(handed);
+    const liquid = because ? '' : (hasSurfaceLiquid(handed, !!w.liquid)
         ? (named || (w.liquid ? w.liquid + (w.liquidAssumed ? ' (assumed)' : '') : ''))
-        : '';
-    const sea = liquid || 'no seas';
+        : '');
+    const sea = because || liquid || 'no seas';
     const phase = liquid && liquid !== 'Ice' ? phaseOf(liquid) : null;
     const frozen = phase !== null && w.highK < phase.meltK ? ' · frozen' : '';
     const locked = model.layout === 'locked' ? ' · locked, night side centred' : '';
     const iced = model.hexes.filter((h) => h.terrain === 'SI' || h.terrain === 'IF' || h.terrain === 'IC').length;
     const notes = [
         'Hybrid hex map: ' + model.hexes.length + ' hexes.',
-        liquid ? 'Sea: ' + (named || w.liquid || 'unnamed') + (w.liquidAssumed && !named ? ' (the data names no liquid; water is assumed)' : '') + '.' : 'No sea.',
+        because ? because : (liquid ? 'Sea: ' + (named || w.liquid || 'unnamed') + (w.liquidAssumed && !named ? ' (the data names no liquid; water is assumed)' : '') + '.' : 'No sea.'),
         'Ice: ' + iced + ' hexes.',
         'Temperatures: ' + (w.tempSource === 'engine' ? 'engine' : 'climate word only') + ', mean ' + Math.round(w.meanK) + ' K (' + Math.round(w.lowK) + '–' + Math.round(w.highK) + ' K).',
     ];

@@ -400,14 +400,14 @@ test('Regina and Zeycude: the released systems, at the fitted view', { timeout: 
     const parent = regina.at.get('w4');
     const moon = regina.at.get('w4m1');
     close(main.casters[0][2], parent.r / moon.r);
-    // Regina A-II and A-VII turn backwards: the tilt says so, the spin stays forward.
-    assert.equal(disc(regina.batch, 'w2').tiltDeg, 130);
-    assert.equal(disc(regina.batch, 'w8').tiltDeg, 94);
+    // Regina A-VII and C-I turn backwards: the tilt says so, the spin stays forward.
+    assert.equal(disc(regina.batch, 'w8').tiltDeg, 174);
+    assert.equal(disc(regina.batch, 'w1').tiltDeg, 178.8);
     // Its three ringed worlds wear rings; the others do not.
     assert.deepEqual(regina.batch.discs.filter((item) => item.ring).map((item) => item.key).sort(), ['w5', 'w6', 'w9']);
     const zeycude = batches.Zeycude;
     assert.deepEqual(zeycude.batch.discs.filter((item) => item.ring).map((item) => item.key), ['w6']);
-    assert.equal(disc(zeycude.batch, 'w8').tiltDeg, 177);
+    assert.equal(disc(zeycude.batch, 'w7').tiltDeg, 96);
     assert.equal(disc(zeycude.batch, 'w0').body.name, 'Zeycude');
     assert.ok(disc(zeycude.batch, 'w6').casters.length >= 3);
 });

@@ -3,7 +3,7 @@ import {
     PublicGamesSetting,
     PublicGamesTruthVersion,
 } from '@voyage/shared';
-import { detectPublicGames, publicGamesReady } from '../auth/public_schema';
+import { detectPublicGames, publicGamesReady, readPublicGames } from '../auth/public_schema';
 import { requireUser, type AppContext } from '../auth/session';
 import { fail } from '../http';
 import type { Env } from '../env';
@@ -48,8 +48,9 @@ export async function getPublicGames(c: AppContext): Promise<Response> {
         `SELECT m.local_hex AS hex, u.name AS name
          FROM public_marks m
          JOIN universes u ON u.id = m.universe_id
-         WHERE m.truth_version = ? AND m.sector_slug = ? AND u.deleted_at IS NULL AND u.public_games = 1`,
-    ).bind(truthVersion, sector).all<{ hex: string; name: string }>();
+         WHERE m.truth_version = ? AND m.sector_slug = ? AND u.deleted_at IS NULL AND u.public_games = 1
+           AND u.owner_id != ?`,
+    ).bind(truthVersion, sector, actor.id).all<{ hex: string; name: string }>();
     const names = new Map<string, string[]>();
     for (const row of listed.results ?? []) {
         const have = names.get(row.hex) ?? [];
@@ -69,7 +70,8 @@ export async function getPublicGames(c: AppContext): Promise<Response> {
 
 export async function setPublicGames(c: AppContext, owned: OwnedUniverse): Promise<Response> {
     await detectPublicGames(c.env.DB);
-    if (!publicGamesReady() || owned.publicGames === null) {
+    const current = await readPublicGames(c.env.DB, owned.row.id);
+    if (!publicGamesReady() || current === null) {
         return fail(c, 503, 'public_games_unavailable', PUBLIC_GAMES_UNAVAILABLE);
     }
     let body: unknown;
@@ -90,9 +92,12 @@ export async function setPublicGames(c: AppContext, owned: OwnedUniverse): Promi
     return c.json({ public: parsed.data.public });
 }
 
-/** After a campaign save that changed place. No D1 call when public games are off. */
+/** After a campaign save. No D1 call when 0013 is absent or the save failed. */
 export async function refreshAfterCampaign(env: Env, owned: OwnedUniverse, response: Response): Promise<void> {
-    if (owned.publicGames !== 1 || !response.ok) return;
+    if (!response.ok) return;
+    await detectPublicGames(env.DB);
+    const flag = await readPublicGames(env.DB, owned.row.id);
+    if (flag !== 1) return;
     const body = await response.clone().json() as { data?: { applied?: { table: string }[] } };
     const applied = body.data?.applied ?? [];
     if (!placeTouched(applied)) return;

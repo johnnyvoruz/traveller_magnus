@@ -90,7 +90,9 @@ truth.get('/search', async (c) => {
              WHEN lower(ts.name) = ? THEN 0
              WHEN lower(ts.name) LIKE ? ESCAPE '\\' THEN 1
              ELSE 2
-         END, ts.name
+         END,
+         CASE WHEN ts.sector_slug = 'Spinward_Marches' THEN 0 ELSE 1 END,
+         ts.name
          LIMIT 50`,
     ).bind(match, version, version, version, layer, q.toLowerCase(), likePrefix(q)).all();
     return ok(c, { items: result.results });

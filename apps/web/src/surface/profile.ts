@@ -177,12 +177,14 @@ export function surfaceProfile(body: Body, id: string, look?: ProfileLook | null
     let air = family === 'barren' || pressure <= 0.001 ? 0 : clamp(0.85 + 0.45 * Math.log10(pressure), 0.06, 1.6);
     if (family === 'gas') air = 0.7;
 
-    let liquidName = body.liquidType || (hydro > 0 ? (kelvin < 273 ? 'Ice' : kelvin < 373 ? 'Water' : null) : null);
+    const noFreeLiquid = body.liquidType === null || sea === 'none';
+    let liquidName = noFreeLiquid
+        ? null
+        : (body.liquidType || (hydro > 0 ? (kelvin < 273 ? 'Ice' : kelvin < 373 ? 'Water' : null) : null));
     if (liquidName === 'Water' && kelvin < 262) liquidName = 'Ice';
-    if (sea === 'none') liquidName = null;
     if (sea === 'unresolved') liquidName = 'Unknown Exotic Liquid';
     const liquid = liquidName ? (LIQUIDS[liquidName] || LIQUIDS['Unknown Exotic Liquid']) : null;
-    const water = hydro >= 11 ? 1 : clamp(hydro / 10, 0, 1);
+    const water = noFreeLiquid ? 0 : (hydro >= 11 ? 1 : clamp(hydro / 10, 0, 1));
 
     const biomass = num(body.biomass);
     const complexity = num(body.biocomplexity);

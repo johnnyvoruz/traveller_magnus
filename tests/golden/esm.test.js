@@ -8,6 +8,7 @@ import { hashString } from '../../packages/engines/src/core/rng.js';
 import { loadLegacy } from '../oracle/legacy.js';
 import { cases, pending } from './cases_esm.js';
 import { withEngineRng } from './rng_lock.js';
+import { createRequire } from 'node:module';
 
 function mapLegacyKeys(raw) {
     const mapped = {};
@@ -38,7 +39,11 @@ const FIX = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
 // Engine 1.1.0 corrected MgT2E rules (findings/engine_1_1_0_rule_fixes.md). A case whose output
 // those corrections changed reads its corrected fixture here; the legacy fixture is kept unchanged
 // for legacy.test.js, which documents what the old app did.
-const CORRECTED = path.join(FIX, 'engine_1.1.0');
+// Engine 1.2.0 decides the surface liquid once from final temperatures and keeps a charted
+// mainworld's atm/hydro (findings/liquid_temperature_minimal.md); its fixtures are
+// engine_<version>, read from packages/engines/package.json.
+const ENGINE_VERSION = createRequire(import.meta.url)('../../packages/engines/package.json').version;
+const CORRECTED = path.join(FIX, 'engine_' + ENGINE_VERSION);
 
 test('hashString matches oracle', () => {
     const ctx = loadLegacy();

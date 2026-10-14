@@ -16,7 +16,8 @@ import { endJobToast, jobUndo, newJob, NO_JOB_UNDO, startJobToast, takenOver } f
 import { endFlight, noteFlight, renameFlight, startFlight } from './flight.ts';
 import { buildStore, type GrowHandle, type GrowProgress, type JobProgress, type UndoToken } from './seam.ts';
 import { cleanName, slotGroups } from './sectors.ts';
-import { build, generateTargets, jobLabel, jobToast, plural } from './state.ts';
+import { build, errorOf, generateTargets, jobError, jobLabel, jobToast, plural } from './state.ts';
+import { oneSectorSay } from './one_sector.ts';
 
 /** The names typed for the new sectors, by the slot's address; kept while the selection lasts. */
 export const growUi = reactive({
@@ -149,6 +150,13 @@ export function generateGrowing(keys: readonly string[]): void {
     }
     const targets = generateTargets(tallyOf(keys), build.filledToo);
     if (targets.length === 0) return;
+    // The server refuses two sectors in one request: nothing is sent, and the pane says what to do instead.
+    const two = oneSectorSay(targets);
+    if (two) {
+        build.sheetOpen = false;
+        growUi.error = two;
+        return;
+    }
     // A request the allowance is sure to refuse is not sent: its sentence goes beside the names, where a refusal would.
     const say = allowanceFor(keys);
     if (say && say.blocked) {
@@ -232,6 +240,12 @@ export function generateGrowing(keys: readonly string[]): void {
             }
             end();
             if (undone) return;
+            const lost = jobError({ failed: progress.failed, error: errorOf(progress) });
+            if (lost) {
+                build.error = lost;
+                showToast(lost);
+                return;
+            }
             const token = jobUndo(undo, store);
             if (token) showToast(jobToast(screenProgress(progress), madeWords(made)), { action: { label: 'Undo', run: () => { void takeBack(token, made); } } });
             else showToast(jobToast(screenProgress(progress), madeWords(made)) + ' ' + NO_JOB_UNDO);

@@ -210,7 +210,7 @@ async function loadPages(universe: UniverseRow): Promise<void> {
 /**
  * Opens one campaign and loads its pages.
  * A `universeId` opens that one. Otherwise the universe this device opened last.
- * When the account has none, creates "My campaign" on `truthVersion`.
+ * When the account has none, creates "My map" on `truthVersion`.
  * When this device has no memory and the account has several, opens the first.
  */
 export async function openCampaign(options: {
@@ -241,7 +241,7 @@ export async function openCampaign(options: {
     }
     if (!universe) universe = universes[0];
     if (!universe) {
-        const created = await postCampaign('My campaign');
+        const created = await postCampaign('My map');
         if (!created) {
             if (campaign.status === 'loading') campaign.status = 'error';
             return;

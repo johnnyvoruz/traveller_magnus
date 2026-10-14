@@ -4,8 +4,6 @@
  * Vanilla never calls this.
  */
 import { surfaceProfile, type ProfileLook } from '../profile.ts';
-import { liquidByName } from './liquids.ts';
-
 type Body = Record<string, any>;
 
 function statusOf(value: unknown): string | null {
@@ -24,19 +22,14 @@ export function knownSurfaceWord(body: Body | null | undefined): string | null {
 }
 
 /**
- * How the enhanced sea treats liquidStatus. 'data' means the field is absent or known.
- * An unresolved or unknown status whose liquidType is water (Water or Ice), another liquid of
- * the table, or empty is drawn from the data as well: a sea of water is never painted as the
- * unknown exotic liquid. Only an unresolved status naming a liquid nobody knows is 'unresolved'.
+ * How the enhanced sea treats a 1.2.0 liquid. 'none' is no free liquid: liquidType null,
+ * or a status of none, unresolved or unknown. An absent liquidType (the 1.1.0 shape) is
+ * 'data', and the profile infers a sea the way it does today.
  */
 export function liquidLook(body: Body | null | undefined): ProfileLook['sea'] {
+    if (body && body.liquidType === null) return 'none';
     const status = body ? statusOf(body.liquidStatus) : null;
-    if (status === 'none') return 'none';
-    if (status === 'unresolved' || status === 'unknown') {
-        const named = body && typeof body.liquidType === 'string' ? body.liquidType.trim() : '';
-        if (named === '' || named === 'Ice' || liquidByName(named)) return 'data';
-        return 'unresolved';
-    }
+    if (status === 'none' || status === 'unresolved' || status === 'unknown') return 'none';
     return 'data';
 }
 

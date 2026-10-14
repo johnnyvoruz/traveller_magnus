@@ -32,7 +32,7 @@ import { buildPalette, type Palette, type PaletteStop, type PaletteWorld, type R
 import { renderDiamond } from '../vanilla/map_projection.ts';
 import { EXOTIC_LIQUIDS, liquidByName } from './liquids.ts';
 import { liquidLook } from './climate.ts';
-import { coverage, seaIce, substance, type SeaIce } from './seas.ts';
+import { coverage, seaIce, substance, vaporEquatorDeg, type SeaIce } from './seas.ts';
 
 /** Equal-area samples of the height field the sea level is counted over. */
 export const SEA_SAMPLES = 4096;
@@ -187,6 +187,12 @@ export function sheetPlan(sea: EnhancedSea, world: PaletteWorld, oceanRng: numbe
     const count = liquid ? seaSamples(sea.coverage, SEA_SAMPLES) : 0;
     const rank = seaRank(count, SEA_SAMPLES);
     const open = sheetPalette(base, land, rank, liquid);
+    const dry = sheetPalette(base, land, 0, null);
+    const boilFrom = sea.boilFromLatDeg;
+    const aboveBoiling = (py: number): boolean => {
+        if (boilFrom == null) return false;
+        return Math.abs(rowLatitude(py)) * 180 / Math.PI < boilFrom;
+    };
     if (!liquid || count === 0) return { seaCount: 0, seaRank: 0, rowPalette: () => open };
     // Unknown Exotic Liquid has no melting point, so it is never frozen (E13).
     const ice = sea.liquid === UNKNOWN_EXOTIC_LIQUID ? { kind: 'none' as const } : sea.ice;
@@ -194,7 +200,11 @@ export function sheetPlan(sea: EnhancedSea, world: PaletteWorld, oceanRng: numbe
     const frozenSea = sea.liquid === 'Water' ? ICE_COLOURS : paledSeaColours(liquid);
     if (ice.kind === 'all') {
         const frozen = sheetPalette(base, land, rank, frozenSea);
-        return { seaCount: count, seaRank: rank, rowPalette: () => frozen };
+        return {
+            seaCount: count,
+            seaRank: rank,
+            rowPalette: (py: number) => (aboveBoiling(py) ? dry : frozen),
+        };
     }
     if (ice.kind === 'caps') {
         const frozen = sheetPalette(base, land, rank, frozenSea);
@@ -204,6 +214,7 @@ export function sheetPlan(sea: EnhancedSea, world: PaletteWorld, oceanRng: numbe
             seaCount: count,
             seaRank: rank,
             rowPalette(py: number): Palette {
+                if (aboveBoiling(py)) return dry;
                 const share = capShare(rowLatitude(py), from);
                 if (share <= 0) return open;
                 if (share >= 1) return frozen;
@@ -220,7 +231,11 @@ export function sheetPlan(sea: EnhancedSea, world: PaletteWorld, oceanRng: numbe
     // TODO(locked worlds): E10 leaves a world locked to its star for a later design: its ice
     // belongs on the side turned from the star, placed about the far point and not by
     // latitude. Until that is designed it is drawn as 'none', with no sea ice.
-    return { seaCount: count, seaRank: rank, rowPalette: () => open };
+    return {
+        seaCount: count,
+        seaRank: rank,
+        rowPalette: (py: number) => (aboveBoiling(py) ? dry : open),
+    };
 }
 
 /**
@@ -348,12 +363,22 @@ export function seaPlan(body: Readonly<Record<string, unknown>> | null | undefin
     if (unknownExotic) {
         ice = { kind: 'none', why: 'exotic liquid; freezing point unknown' };
     }
+    if (ice.kind === 'vapor') {
+        return {
+            sea: { coverage: 0, liquid: null, ice: { kind: 'none' } },
+            why: ice.why,
+            named,
+            drawn: false,
+        };
+    }
     const name = liquid ? liquid.name : (unknownExotic ? UNKNOWN_EXOTIC_LIQUID : null);
+    const boilFrom = name ? vaporEquatorDeg(body) : null;
     return {
         sea: {
             coverage: cover,
             liquid: name,
             ice: ice.kind === 'caps' ? { kind: 'caps', fromLatDeg: ice.fromLatDeg } : { kind: ice.kind },
+            ...(boilFrom != null ? { boilFromLatDeg: boilFrom } : {}),
         },
         why: ice.why,
         named,

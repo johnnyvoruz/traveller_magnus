@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue';
 import type { PanelSpan } from '../shell/panel_state.ts';
+import CodeNote from './CodeNote.vue';
+import { headlineParts } from './code_words.ts';
 import type { StatRow } from './model.ts';
 import StatRows from './StatRows.vue';
 
@@ -29,7 +31,13 @@ watch(() => props.span, applySpan);
     <details v-if="rows || empty" ref="box" class="doss-socio-acc">
       <summary>
         <span class="doss-socio-title">Socioeconomics</span>
-        <span v-if="headline" class="doss-socio-line">{{ headline }}</span>
+        <span v-if="headline" class="doss-socio-line">
+          <template v-for="(part, index) in headlineParts(headline)" :key="part.label + index">
+            <span v-if="index"> · </span>
+            <CodeNote v-if="part.words" :text="part.words || ''" :code="part.label">{{ part.label }}</CodeNote>
+            <template v-else>{{ part.label }}</template>
+          </template>
+        </span>
       </summary>
       <div class="doss-socio-detail">
         <StatRows v-if="rows" :rows="rows" />
@@ -38,7 +46,13 @@ watch(() => props.span, applySpan);
     </details>
     <p v-else class="doss-socio-stay">
       <span class="doss-socio-title">Socioeconomics</span>
-      <span v-if="headline" class="doss-socio-line">{{ headline }}</span>
+      <span v-if="headline" class="doss-socio-line">
+        <template v-for="(part, index) in headlineParts(headline)" :key="part.label + index">
+          <span v-if="index"> · </span>
+          <CodeNote v-if="part.words" :text="part.words || ''" :code="part.label">{{ part.label }}</CodeNote>
+          <template v-else>{{ part.label }}</template>
+        </template>
+      </span>
     </p>
     <slot />
   </div>

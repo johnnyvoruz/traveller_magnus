@@ -366,10 +366,18 @@ function decideLiquid(body, policy, temps) {
         return { replace: true, liquidType: null, liquidStatus: packStatus({ status: 'none', outcome }) };
     }
 
+    // Engine 1.2.0 already decided "no free liquid" from the final temperatures: keep that verdict.
+    const verdict = body.liquidStatus && (body.liquidStatus.status === 'none'
+        || (body.liquidStatus.status === 'unresolved' && body.liquidStatus.outcome === 'unknown-exotic'));
+    if (verdict && (body.liquidType === null || body.liquidType === undefined)) {
+        return { replace: false, liquidStatus: body.liquidStatus };
+    }
     const water = rowByName(policy.liquids, spec.ordinarySubstance);
     const label = provenanceLiquid(body);
     const stored = typeof label === 'string' && label.length > 0 ? label : null;
-    const frozen = stored === spec.iceLabel && temps.high != null && temps.high < water.mp;
+    // q3.identity is 'mean': Ice is frozen water when the MEAN is below Water's melting point
+    // (engine 1.2.0, surface_liquid.js decides the same way; question Q2).
+    const frozen = stored === spec.iceLabel && temps.mean != null && temps.mean < water.mp;
     if (frozen) {
         return {
             replace: false,

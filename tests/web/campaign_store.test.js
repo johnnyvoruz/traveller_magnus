@@ -200,7 +200,7 @@ test('first open creates one campaign and a second open does not', async () => {
     await open(box);
     assert.equal(box.server.posts.length, 1);
     assert.match(box.server.posts[0].id, /^uni_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
-    assert.equal(box.server.posts[0].name, 'My campaign');
+    assert.equal(box.server.posts[0].name, 'My map');
     assert.equal(box.server.posts[0].truthVersion, 'v5');
     assert.equal(box.server.posts[0].editionDefault, 'MgT2E');
     assert.equal(campaign.universeId, box.server.posts[0].id);

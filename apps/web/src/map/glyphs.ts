@@ -38,6 +38,10 @@ export const BELT_DOTS = [
 ];
 export const FONT_SMALL = 10 / 75;
 export const FONT_NAME = 12 / 75;
+/** Public-game diamond, up and to the right of the world disc. Parsecs from the hex centre. */
+export const PUBLIC_X = 18 / 75;
+export const PUBLIC_Y = -14 / 75;
+export const PUBLIC_R = 4.5 / 75;
 export const FONT_PORT = 18 / 75;
 export const SELECT_STROKE = 2.5;
 /** Fill alphas are fractions. The stroke is screen pixels: legacy 2.5 / zoom. */

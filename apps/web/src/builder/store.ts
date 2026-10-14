@@ -212,6 +212,7 @@ function progressOf(
         placed: folded.placed,
         landed: folded.landed,
         state,
+        ...(job.error ? { error: job.error } : {}),
     };
 }
 

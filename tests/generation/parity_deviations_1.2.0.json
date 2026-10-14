@@ -1,0 +1,2264 @@
+{
+ "engineVersion": "1.2.0",
+ "hex": "Spinward_Marches/1910",
+ "note": "Exact differences between the live legacy oracle and engine 1.2.0. Engine 1.1.0 rows: findings/engine_1_1_0_rule_fixes.md. New in 1.2.0 (a charted mainworld keeps its atmosphere and hydrographics; the surface liquid is decided once from the final temperatures; a late exotic liquid die is drawn on its own stream keyed on hex and body): findings/liquid_temperature_minimal.md.",
+ "diffs": [
+  {
+   "path": "$.mgt2eData.DR",
+   "legacy": "184.29",
+   "got": "198.29"
+  },
+  {
+   "path": "$.mgt2eData.IR",
+   "legacy": 21,
+   "got": 15
+  },
+  {
+   "path": "$.mgt2eData._atmHazardFlag",
+   "legacy": true,
+   "got": false
+  },
+  {
+   "path": "$.mgt2eData.albedo",
+   "legacy": 0.25,
+   "got": 0.05
+  },
+  {
+   "path": "$.mgt2eData.atmCode",
+   "legacy": 10,
+   "got": 8
+  },
+  {
+   "path": "$.mgt2eData.atmProfile",
+   "legacy": "A-0.40-0.000",
+   "got": "8-2.48-0.248"
+  },
+  {
+   "path": "$.mgt2eData.axialTilt",
+   "legacy": 0.7,
+   "got": 0.9
+  },
+  {
+   "path": "$.mgt2eData.biocomplexity",
+   "legacy": 0,
+   "got": 4
+  },
+  {
+   "path": "$.mgt2eData.biodiversity",
+   "legacy": 0,
+   "got": 6
+  },
+  {
+   "path": "$.mgt2eData.biomass",
+   "legacy": 0,
+   "got": 6
+  },
+  {
+   "path": "$.mgt2eData.compatibility",
+   "legacy": 0,
+   "got": 4
+  },
+  {
+   "path": "$.mgt2eData.culturalProfile",
+   "legacy": "9C6D-5652",
+   "got": "9C6D-4674"
+  },
+  {
+   "path": "$.mgt2eData.culturalQuirks.0",
+   "legacy": "Unusual Custom: Technology",
+   "got": "At war – At war with another planet/polity, or troubled by terrorists/rebels."
+  },
+  {
+   "path": "$.mgt2eData.culturalQuirks.1",
+   "legacy": "Tourist Attraction – Draws visitors from all over civilised space.",
+   "got": "Obsessed – Monomania regarding a substance, personality, act, or item."
+  },
+  {
+   "path": "$.mgt2eData.economicProfile",
+   "legacy": "+4, D7E+5, 6370, Cr233280, A, 21, 184.29",
+   "got": "+4, D7E+5, 6370, Cr233280, A, 15, 198.29"
+  },
+  {
+   "path": "$.mgt2eData.exoticSubtype",
+   "legacy": "Very Thin"
+  },
+  {
+   "path": "$.mgt2eData.factions",
+   "legacy": "",
+   "got": "N"
+  },
+  {
+   "path": "$.mgt2eData.factionsData.0",
+   "got": {
+    "gov": 12,
+    "identity": "Dissident/Rebel",
+    "strength": "N"
+   }
+  },
+  {
+   "path": "$.mgt2eData.gases.0",
+   "legacy": "Methane 77.8%",
+   "got": "Nitrogen 89.3%"
+  },
+  {
+   "path": "$.mgt2eData.gases.1",
+   "legacy": "Argon 22.2%",
+   "got": "Oxygen 10.0%"
+  },
+  {
+   "path": "$.mgt2eData.gases.2",
+   "got": "Argon 0.7%"
+  },
+  {
+   "path": "$.mgt2eData.greenhouseFactor",
+   "legacy": 0.9476902711603772,
+   "got": 0.8972821633022752
+  },
+  {
+   "path": "$.mgt2eData.habitability",
+   "legacy": 0,
+   "got": 4
+  },
+  {
+   "path": "$.mgt2eData.highTempK",
+   "legacy": 243.90450339284283,
+   "got": 239.28782882445523
+  },
+  {
+   "path": "$.mgt2eData.hydroCode",
+   "legacy": 4,
+   "got": 8
+  },
+  {
+   "path": "$.mgt2eData.hydroPercent",
+   "legacy": 43,
+   "got": 76
+  },
+  {
+   "path": "$.mgt2eData.judicialSystemProfile",
+   "legacy": "AU-Y-Y",
+   "got": "AP-Y-Y"
+  },
+  {
+   "path": "$.mgt2eData.lawProfile",
+   "legacy": "9-8A9B8",
+   "got": "9-8C8BA"
+  },
+  {
+   "path": "$.mgt2eData.lifeProfile",
+   "legacy": "0000",
+   "got": "6464"
+  },
+  {
+   "path": "$.mgt2eData.liquidType",
+   "legacy": "Ethane",
+   "got": "Ice"
+  },
+  {
+   "path": "$.mgt2eData.lowTempK",
+   "legacy": 155.77671221952502,
+   "got": 206.39594943347637
+  },
+  {
+   "path": "$.mgt2eData.meanTempC",
+   "legacy": -59.85586014187135,
+   "got": -48.35780398887272
+  },
+  {
+   "path": "$.mgt2eData.meanTempK",
+   "legacy": 213.14413985812865,
+   "got": 224.64219601112728
+  },
+  {
+   "path": "$.mgt2eData.militaryProfile",
+   "legacy": "30100-880:0.60%",
+   "got": "60000-D86:3.00%"
+  },
+  {
+   "path": "$.mgt2eData.oxygenFrac",
+   "got": 0.1
+  },
+  {
+   "path": "$.mgt2eData.oxygenFraction",
+   "got": 0.1
+  },
+  {
+   "path": "$.mgt2eData.plateInteraction",
+   "legacy": "Transversing",
+   "got": "Diverging"
+  },
+  {
+   "path": "$.mgt2eData.ppo",
+   "got": 0.24792528186156415
+  },
+  {
+   "path": "$.mgt2eData.ppoBar",
+   "got": 0.24792528186156415
+  },
+  {
+   "path": "$.mgt2eData.pressureBar",
+   "legacy": 0.39916304446756845,
+   "got": 2.4792528186156413
+  },
+  {
+   "path": "$.mgt2eData.resourceRating",
+   "legacy": 5,
+   "got": 8
+  },
+  {
+   "path": "$.mgt2eData.scaleHeight",
+   "got": 6.291210027539435
+  },
+  {
+   "path": "$.mgt2eData.surfaceDist",
+   "legacy": "Dispersed",
+   "got": "Mixed"
+  },
+  {
+   "path": "$.mgt2eData.taints.0",
+   "legacy": "Methane"
+  },
+  {
+   "path": "$.mgt2eData.techProfile",
+   "legacy": "C-C-CCCCC-CCCC-CC-E",
+   "got": "C-B-CCCCC-CCCC-CC-E"
+  },
+  {
+   "path": "$.mgt2eData.tectonicPlates",
+   "legacy": 5,
+   "got": 10
+  },
+  {
+   "path": "$.mgt2eData.totalPressureBar",
+   "legacy": 0.39916304446756845,
+   "got": 2.4792528186156413
+  },
+  {
+   "path": "$.mgt2eData.tradeCodes.0",
+   "legacy": "Fl",
+   "got": "Ht"
+  },
+  {
+   "path": "$.mgt2eData.tradeCodes.1",
+   "legacy": "Ht",
+   "got": "Ri"
+  },
+  {
+   "path": "$.mgt2eData.uwpSecondary",
+   "legacy": "A7A4899-C",
+   "got": "A788899-C"
+  },
+  {
+   "path": "$.mgtSocio.DR",
+   "legacy": "184.29",
+   "got": "198.29"
+  },
+  {
+   "path": "$.mgtSocio.IR",
+   "legacy": 21,
+   "got": 15
+  },
+  {
+   "path": "$.mgtSocio._atmHazardFlag",
+   "legacy": true,
+   "got": false
+  },
+  {
+   "path": "$.mgtSocio.albedo",
+   "legacy": 0.25,
+   "got": 0.05
+  },
+  {
+   "path": "$.mgtSocio.atmCode",
+   "legacy": 10,
+   "got": 8
+  },
+  {
+   "path": "$.mgtSocio.atmProfile",
+   "legacy": "A-0.40-0.000",
+   "got": "8-2.48-0.248"
+  },
+  {
+   "path": "$.mgtSocio.axialTilt",
+   "legacy": 0.7,
+   "got": 0.9
+  },
+  {
+   "path": "$.mgtSocio.biocomplexity",
+   "legacy": 0,
+   "got": 4
+  },
+  {
+   "path": "$.mgtSocio.biodiversity",
+   "legacy": 0,
+   "got": 6
+  },
+  {
+   "path": "$.mgtSocio.biomass",
+   "legacy": 0,
+   "got": 6
+  },
+  {
+   "path": "$.mgtSocio.compatibility",
+   "legacy": 0,
+   "got": 4
+  },
+  {
+   "path": "$.mgtSocio.culturalProfile",
+   "legacy": "9C6D-5652",
+   "got": "9C6D-4674"
+  },
+  {
+   "path": "$.mgtSocio.culturalQuirks.0",
+   "legacy": "Unusual Custom: Technology",
+   "got": "At war – At war with another planet/polity, or troubled by terrorists/rebels."
+  },
+  {
+   "path": "$.mgtSocio.culturalQuirks.1",
+   "legacy": "Tourist Attraction – Draws visitors from all over civilised space.",
+   "got": "Obsessed – Monomania regarding a substance, personality, act, or item."
+  },
+  {
+   "path": "$.mgtSocio.economicProfile",
+   "legacy": "+4, D7E+5, 6370, Cr233280, A, 21, 184.29",
+   "got": "+4, D7E+5, 6370, Cr233280, A, 15, 198.29"
+  },
+  {
+   "path": "$.mgtSocio.exoticSubtype",
+   "legacy": "Very Thin"
+  },
+  {
+   "path": "$.mgtSocio.factions",
+   "legacy": "",
+   "got": "N"
+  },
+  {
+   "path": "$.mgtSocio.factionsData.0",
+   "got": {
+    "gov": 12,
+    "identity": "Dissident/Rebel",
+    "strength": "N"
+   }
+  },
+  {
+   "path": "$.mgtSocio.gases.0",
+   "legacy": "Methane 77.8%",
+   "got": "Nitrogen 89.3%"
+  },
+  {
+   "path": "$.mgtSocio.gases.1",
+   "legacy": "Argon 22.2%",
+   "got": "Oxygen 10.0%"
+  },
+  {
+   "path": "$.mgtSocio.gases.2",
+   "got": "Argon 0.7%"
+  },
+  {
+   "path": "$.mgtSocio.greenhouseFactor",
+   "legacy": 0.9476902711603772,
+   "got": 0.8972821633022752
+  },
+  {
+   "path": "$.mgtSocio.habitability",
+   "legacy": 0,
+   "got": 4
+  },
+  {
+   "path": "$.mgtSocio.highTempK",
+   "legacy": 243.90450339284283,
+   "got": 239.28782882445523
+  },
+  {
+   "path": "$.mgtSocio.hydroCode",
+   "legacy": 4,
+   "got": 8
+  },
+  {
+   "path": "$.mgtSocio.hydroPercent",
+   "legacy": 43,
+   "got": 76
+  },
+  {
+   "path": "$.mgtSocio.judicialSystemProfile",
+   "legacy": "AU-Y-Y",
+   "got": "AP-Y-Y"
+  },
+  {
+   "path": "$.mgtSocio.lawProfile",
+   "legacy": "9-8A9B8",
+   "got": "9-8C8BA"
+  },
+  {
+   "path": "$.mgtSocio.lifeProfile",
+   "legacy": "0000",
+   "got": "6464"
+  },
+  {
+   "path": "$.mgtSocio.liquidType",
+   "legacy": "Ethane",
+   "got": "Ice"
+  },
+  {
+   "path": "$.mgtSocio.lowTempK",
+   "legacy": 155.77671221952502,
+   "got": 206.39594943347637
+  },
+  {
+   "path": "$.mgtSocio.meanTempC",
+   "legacy": -59.85586014187135,
+   "got": -48.35780398887272
+  },
+  {
+   "path": "$.mgtSocio.meanTempK",
+   "legacy": 213.14413985812865,
+   "got": 224.64219601112728
+  },
+  {
+   "path": "$.mgtSocio.militaryProfile",
+   "legacy": "30100-880:0.60%",
+   "got": "60000-D86:3.00%"
+  },
+  {
+   "path": "$.mgtSocio.oxygenFrac",
+   "got": 0.1
+  },
+  {
+   "path": "$.mgtSocio.oxygenFraction",
+   "got": 0.1
+  },
+  {
+   "path": "$.mgtSocio.plateInteraction",
+   "legacy": "Transversing",
+   "got": "Diverging"
+  },
+  {
+   "path": "$.mgtSocio.ppo",
+   "got": 0.24792528186156415
+  },
+  {
+   "path": "$.mgtSocio.ppoBar",
+   "got": 0.24792528186156415
+  },
+  {
+   "path": "$.mgtSocio.pressureBar",
+   "legacy": 0.39916304446756845,
+   "got": 2.4792528186156413
+  },
+  {
+   "path": "$.mgtSocio.resourceRating",
+   "legacy": 5,
+   "got": 8
+  },
+  {
+   "path": "$.mgtSocio.scaleHeight",
+   "got": 6.291210027539435
+  },
+  {
+   "path": "$.mgtSocio.surfaceDist",
+   "legacy": "Dispersed",
+   "got": "Mixed"
+  },
+  {
+   "path": "$.mgtSocio.taints.0",
+   "legacy": "Methane"
+  },
+  {
+   "path": "$.mgtSocio.techProfile",
+   "legacy": "C-C-CCCCC-CCCC-CC-E",
+   "got": "C-B-CCCCC-CCCC-CC-E"
+  },
+  {
+   "path": "$.mgtSocio.tectonicPlates",
+   "legacy": 5,
+   "got": 10
+  },
+  {
+   "path": "$.mgtSocio.totalPressureBar",
+   "legacy": 0.39916304446756845,
+   "got": 2.4792528186156413
+  },
+  {
+   "path": "$.mgtSocio.tradeCodes.0",
+   "legacy": "Fl",
+   "got": "Ht"
+  },
+  {
+   "path": "$.mgtSocio.tradeCodes.1",
+   "legacy": "Ht",
+   "got": "Ri"
+  },
+  {
+   "path": "$.mgtSocio.uwpSecondary",
+   "legacy": "A7A4899-C",
+   "got": "A788899-C"
+  },
+  {
+   "path": "$.mgtSystem.worlds.0.albedo",
+   "legacy": 0.37,
+   "got": 0.33999999999999997
+  },
+  {
+   "path": "$.mgtSystem.worlds.0.axialTilt",
+   "legacy": 5,
+   "got": 0.02
+  },
+  {
+   "path": "$.mgtSystem.worlds.0.greenhouseFactor",
+   "legacy": 0.34226671937360964,
+   "got": 1.3690668774944386
+  },
+  {
+   "path": "$.mgtSystem.worlds.0.highTempK",
+   "legacy": 677.4638533308122,
+   "got": 789.9900096463822
+  },
+  {
+   "path": "$.mgtSystem.worlds.0.liquidRoll",
+   "got": 0.1272366603370756
+  },
+  {
+   "path": "$.mgtSystem.worlds.0.liquidType",
+   "legacy": "Ethane",
+   "got": "Sulphuric Acid"
+  },
+  {
+   "path": "$.mgtSystem.worlds.0.lowTempK",
+   "legacy": 365.11171309883724,
+   "got": 425.7564508174668
+  },
+  {
+   "path": "$.mgtSystem.worlds.0.meanTempC",
+   "legacy": 259.1620528868084,
+   "got": 347.5537066312362
+  },
+  {
+   "path": "$.mgtSystem.worlds.0.meanTempK",
+   "legacy": 532.1620528868084,
+   "got": 620.5537066312362
+  },
+  {
+   "path": "$.mgtSystem.worlds.0.siderealHours",
+   "legacy": 360,
+   "got": 104.5513888888889
+  },
+  {
+   "path": "$.mgtSystem.worlds.0.solarDayHours",
+   "legacy": 394.40500297912797,
+   "got": 107.26895770873082
+  },
+  {
+   "path": "$.mgtSystem.worlds.0.solarDaysInYear",
+   "legacy": 10.463594501601897,
+   "got": 38.47239787471886
+  },
+  {
+   "path": "$.mgtSystem.worlds.1.albedo",
+   "legacy": 0.23000000000000007,
+   "got": 0.30000000000000004
+  },
+  {
+   "path": "$.mgtSystem.worlds.1.axialTilt",
+   "legacy": 0.4,
+   "got": 10
+  },
+  {
+   "path": "$.mgtSystem.worlds.1.greenhouseFactor",
+   "legacy": 1.4476840596313048,
+   "got": 8.686104357787828
+  },
+  {
+   "path": "$.mgtSystem.worlds.1.highTempK",
+   "legacy": 672.5693030183681,
+   "got": 926.187676178265
+  },
+  {
+   "path": "$.mgtSystem.worlds.1.liquidRoll",
+   "got": 0.9249169265385717
+  },
+  {
+   "path": "$.mgtSystem.worlds.1.liquidStatus",
+   "got": {
+    "outcome": "unknown-exotic",
+    "status": "unresolved"
+   }
+  },
+  {
+   "path": "$.mgtSystem.worlds.1.liquidType",
+   "legacy": "Sulphuric Acid",
+   "got": null
+  },
+  {
+   "path": "$.mgtSystem.worlds.1.lowTempK",
+   "legacy": 548.1940825696169,
+   "got": 754.8276127144061
+  },
+  {
+   "path": "$.mgtSystem.worlds.1.meanTempC",
+   "legacy": 331.6159469064854,
+   "got": 559.5708360711287
+  },
+  {
+   "path": "$.mgtSystem.worlds.1.meanTempK",
+   "legacy": 604.6159469064854,
+   "got": 832.5708360711287
+  },
+  {
+   "path": "$.mgtSystem.worlds.1.siderealHours",
+   "legacy": 31.68166666666667,
+   "got": 74.44666666666667
+  },
+  {
+   "path": "$.mgtSystem.worlds.1.solarDayHours",
+   "legacy": 32.083471236876775,
+   "got": 76.7039629225132
+  },
+  {
+   "path": "$.mgtSystem.worlds.1.solarDaysInYear",
+   "legacy": 78.84844776678318,
+   "got": 32.98045902209146
+  },
+  {
+   "path": "$.mgtSystem.worlds.2.axialTilt",
+   "legacy": 175,
+   "got": 60
+  },
+  {
+   "path": "$.mgtSystem.worlds.2.classifications.0",
+   "legacy": "Research Base",
+   "got": "Standard"
+  },
+  {
+   "path": "$.mgtSystem.worlds.2.liquidType",
+   "legacy": "Ice"
+  },
+  {
+   "path": "$.mgtSystem.worlds.2.siderealHours",
+   "legacy": 720,
+   "got": 29.125833333333333
+  },
+  {
+   "path": "$.mgtSystem.worlds.2.solarDayHours",
+   "legacy": 612.7946286548179,
+   "got": 29.333425153132996
+  },
+  {
+   "path": "$.mgtSystem.worlds.2.solarDaysInYear",
+   "legacy": -6.716081395602178,
+   "got": 140.30337689337304
+  },
+  {
+   "path": "$.mgtSystem.worlds.2.tl",
+   "legacy": 12,
+   "got": 11
+  },
+  {
+   "path": "$.mgtSystem.worlds.2.tlCode",
+   "legacy": 12,
+   "got": 11
+  },
+  {
+   "path": "$.mgtSystem.worlds.2.uwp",
+   "legacy": "Y10036A-C",
+   "got": "Y10036A-B"
+  },
+  {
+   "path": "$.mgtSystem.worlds.2.uwpSecondary",
+   "legacy": "Y10036A-C",
+   "got": "Y10036A-B"
+  },
+  {
+   "path": "$.mgtSystem.worlds.3.albedo",
+   "legacy": 0.15000000000000002,
+   "got": 0.55
+  },
+  {
+   "path": "$.mgtSystem.worlds.3.axialTilt",
+   "legacy": 170,
+   "got": 0.1
+  },
+  {
+   "path": "$.mgtSystem.worlds.3.highTempK",
+   "legacy": 415.084982046434,
+   "got": 354.06697268034037
+  },
+  {
+   "path": "$.mgtSystem.worlds.3.liquidStatus",
+   "got": {
+    "outcome": "vacuum-above-melt",
+    "status": "none"
+   }
+  },
+  {
+   "path": "$.mgtSystem.worlds.3.liquidType",
+   "legacy": "Ice",
+   "got": null
+  },
+  {
+   "path": "$.mgtSystem.worlds.3.meanTempC",
+   "legacy": 75.69425525859344,
+   "got": 24.43576542266925
+  },
+  {
+   "path": "$.mgtSystem.worlds.3.meanTempK",
+   "legacy": 348.69425525859344,
+   "got": 297.43576542266925
+  },
+  {
+   "path": "$.mgtSystem.worlds.3.siderealHours",
+   "legacy": 19.64375,
+   "got": 94.99666666666667
+  },
+  {
+   "path": "$.mgtSystem.worlds.3.solarDayHours",
+   "legacy": 19.61758206764858,
+   "got": 95.61344179212651
+  },
+  {
+   "path": "$.mgtSystem.worlds.3.solarDaysInYear",
+   "legacy": -750.6802500173399,
+   "got": 154.02155947168097
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.albedo",
+   "legacy": 0.45,
+   "got": 0.5
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.axialTilt",
+   "legacy": 2,
+   "got": 10
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.highTempK",
+   "legacy": 274.7456906460977,
+   "got": 273.0264984977426
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.meanTempC",
+   "legacy": -8.142624048327832,
+   "got": -9.098328889107279
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.meanTempK",
+   "legacy": 264.85737595167217,
+   "got": 263.9016711108927
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.DR",
+   "legacy": "184.29",
+   "got": "198.29"
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.IR",
+   "legacy": 21,
+   "got": 15
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0._atmHazardFlag",
+   "legacy": true,
+   "got": false
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.albedo",
+   "legacy": 0.25,
+   "got": 0.05
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.atmCode",
+   "legacy": 10,
+   "got": 8
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.atmProfile",
+   "legacy": "A-0.40-0.000",
+   "got": "8-2.48-0.248"
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.axialTilt",
+   "legacy": 0.7,
+   "got": 0.9
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.biocomplexity",
+   "legacy": 0,
+   "got": 4
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.biodiversity",
+   "legacy": 0,
+   "got": 6
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.biomass",
+   "legacy": 0,
+   "got": 6
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.compatibility",
+   "legacy": 0,
+   "got": 4
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.culturalProfile",
+   "legacy": "9C6D-5652",
+   "got": "9C6D-4674"
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.culturalQuirks.0",
+   "legacy": "Unusual Custom: Technology",
+   "got": "At war – At war with another planet/polity, or troubled by terrorists/rebels."
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.culturalQuirks.1",
+   "legacy": "Tourist Attraction – Draws visitors from all over civilised space.",
+   "got": "Obsessed – Monomania regarding a substance, personality, act, or item."
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.economicProfile",
+   "legacy": "+4, D7E+5, 6370, Cr233280, A, 21, 184.29",
+   "got": "+4, D7E+5, 6370, Cr233280, A, 15, 198.29"
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.exoticSubtype",
+   "legacy": "Very Thin"
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.factions",
+   "legacy": "",
+   "got": "N"
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.factionsData.0",
+   "got": {
+    "gov": 12,
+    "identity": "Dissident/Rebel",
+    "strength": "N"
+   }
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.gases.0",
+   "legacy": "Methane 77.8%",
+   "got": "Nitrogen 89.3%"
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.gases.1",
+   "legacy": "Argon 22.2%",
+   "got": "Oxygen 10.0%"
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.gases.2",
+   "got": "Argon 0.7%"
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.greenhouseFactor",
+   "legacy": 0.9476902711603772,
+   "got": 0.8972821633022752
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.habitability",
+   "legacy": 0,
+   "got": 4
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.highTempK",
+   "legacy": 243.90450339284283,
+   "got": 239.28782882445523
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.hydroCode",
+   "legacy": 4,
+   "got": 8
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.hydroPercent",
+   "legacy": 43,
+   "got": 76
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.judicialSystemProfile",
+   "legacy": "AU-Y-Y",
+   "got": "AP-Y-Y"
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.lawProfile",
+   "legacy": "9-8A9B8",
+   "got": "9-8C8BA"
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.lifeProfile",
+   "legacy": "0000",
+   "got": "6464"
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.liquidType",
+   "legacy": "Ethane",
+   "got": "Ice"
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.lowTempK",
+   "legacy": 155.77671221952502,
+   "got": 206.39594943347637
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.meanTempC",
+   "legacy": -59.85586014187135,
+   "got": -48.35780398887272
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.meanTempK",
+   "legacy": 213.14413985812865,
+   "got": 224.64219601112728
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.militaryProfile",
+   "legacy": "30100-880:0.60%",
+   "got": "60000-D86:3.00%"
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.oxygenFrac",
+   "got": 0.1
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.oxygenFraction",
+   "got": 0.1
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.plateInteraction",
+   "legacy": "Transversing",
+   "got": "Diverging"
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.ppo",
+   "got": 0.24792528186156415
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.ppoBar",
+   "got": 0.24792528186156415
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.pressureBar",
+   "legacy": 0.39916304446756845,
+   "got": 2.4792528186156413
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.resourceRating",
+   "legacy": 5,
+   "got": 8
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.scaleHeight",
+   "got": 6.291210027539435
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.surfaceDist",
+   "legacy": "Dispersed",
+   "got": "Mixed"
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.taints.0",
+   "legacy": "Methane"
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.techProfile",
+   "legacy": "C-C-CCCCC-CCCC-CC-E",
+   "got": "C-B-CCCCC-CCCC-CC-E"
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.tectonicPlates",
+   "legacy": 5,
+   "got": 10
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.totalPressureBar",
+   "legacy": 0.39916304446756845,
+   "got": 2.4792528186156413
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.tradeCodes.0",
+   "legacy": "Fl",
+   "got": "Ht"
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.tradeCodes.1",
+   "legacy": "Ht",
+   "got": "Ri"
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.0.uwpSecondary",
+   "legacy": "A7A4899-C",
+   "got": "A788899-C"
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.1.albedo",
+   "legacy": 0.02,
+   "got": 0.18000000000000002
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.1.axialTilt",
+   "legacy": 0,
+   "got": 130
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.1.classifications.0",
+   "legacy": "Standard",
+   "got": "Penal Colony"
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.1.eccentricity",
+   "legacy": 0,
+   "got": 0.4
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.1.highTempK",
+   "legacy": 229.3974983274476,
+   "got": 283.24352878068015
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.1.hydroPercent",
+   "legacy": 4,
+   "got": 0
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.1.liquidType",
+   "legacy": "Ice"
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.1.meanTempC",
+   "legacy": -80.1004659708646,
+   "got": -88.50775197301186
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.1.meanTempK",
+   "legacy": 192.8995340291354,
+   "got": 184.49224802698814
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.1.siderealHours",
+   "legacy": 458.3374975518645,
+   "got": 120
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.1.solarDayHours",
+   "legacy": 462.78703174309163,
+   "got": 119.69868648677233
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.1.solarDaysInYear",
+   "legacy": 103.00797293692766,
+   "got": -398.25628367794553
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.1.surfaceDist",
+   "legacy": "Skewed",
+   "got": "Mixed"
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.1.tidallyLocked",
+   "legacy": true,
+   "got": false
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.1.totalTidalAmplitude",
+   "legacy": 15.26,
+   "got": 19.53
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.2.albedo",
+   "legacy": 0.18000000000000002,
+   "got": 0.02
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.2.axialTilt",
+   "legacy": 0.9,
+   "got": 0.8
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.2.eccentricity",
+   "legacy": 0.005,
+   "got": 0.30000000000000004
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.2.highTempK",
+   "legacy": 219.95005818233344,
+   "got": 274.18245288595125
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.2.hydroPercent",
+   "legacy": 1,
+   "got": 0
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.2.liquidType",
+   "legacy": "Ice"
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.2.meanTempC",
+   "legacy": -88.50775201282309,
+   "got": -80.10046600569405
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.2.meanTempK",
+   "legacy": 184.4922479871769,
+   "got": 192.89953399430595
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.2.siderealHours",
+   "legacy": 1236.083917743076,
+   "got": 815.8153857104302
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.2.solarDayHours",
+   "legacy": 1268.9882852692317,
+   "got": 830.0199661166347
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.2.solarDaysInYear",
+   "legacy": 37.56595281038353,
+   "got": 57.433261833914436
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.2.surfaceDist",
+   "legacy": "Slightly Scattered",
+   "got": "Scattered"
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.2.tidallyLocked",
+   "legacy": true,
+   "got": false
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.moons.2.totalTidalAmplitude",
+   "legacy": 0.1,
+   "got": 0.69
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.siderealHours",
+   "legacy": 15.360833333333334,
+   "got": 26.97972222222222
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.solarDayHours",
+   "legacy": 15.365784613446886,
+   "got": 26.995000302550462
+  },
+  {
+   "path": "$.mgtSystem.worlds.4.solarDaysInYear",
+   "legacy": 3102.396346206486,
+   "got": 1765.9104836849947
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.albedo",
+   "legacy": 0.3,
+   "got": 0.35000000000000003
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.axialTilt",
+   "legacy": 10,
+   "got": 4
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.highTempK",
+   "legacy": 717.9211172561205,
+   "got": 717.8998571511581
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.meanTempC",
+   "legacy": 444.7493836717674,
+   "got": 444.7403801660836
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.meanTempK",
+   "legacy": 717.7493836717674,
+   "got": 717.7403801660836
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.0.albedo",
+   "legacy": 0.45,
+   "got": 0.29
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.0.atm",
+   "legacy": 0,
+   "got": 1
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.0.atmCode",
+   "legacy": 0,
+   "got": 1
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.0.atmProfile",
+   "legacy": "0-None-0.000",
+   "got": "1-None-0.000"
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.0.axialTilt",
+   "legacy": 0.2,
+   "got": 0.8
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.0.classifications.0",
+   "legacy": "Research Base",
+   "got": "Standard"
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.0.greenhouseFactor",
+   "legacy": 0,
+   "got": 0.19575525022575863
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.0.highTempK",
+   "legacy": 130.87172626078808,
+   "got": 144.92206288389622
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.0.liquidType",
+   "legacy": "Ice"
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.0.lowTempK",
+   "legacy": 25,
+   "got": 58.724711498981
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.0.meanTempC",
+   "legacy": -162.9138170622037,
+   "got": -150.32231872029405
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.0.meanTempK",
+   "legacy": 110.08618293779632,
+   "got": 122.67768127970595
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.0.pressureBar",
+   "legacy": 0,
+   "got": 0.053597111819311975
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.0.surfaceDist",
+   "legacy": "Scattered",
+   "got": "Mixed"
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.0.tl",
+   "legacy": 12,
+   "got": 11
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.0.tlCode",
+   "legacy": 12,
+   "got": 11
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.0.totalPressureBar",
+   "legacy": 0,
+   "got": 0.053597111819311975
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.0.uwp",
+   "legacy": "G200229-C",
+   "got": "G210229-B"
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.0.uwpSecondary",
+   "legacy": "G200229-C",
+   "got": "G210229-B"
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.0.uwpSecondaryAtm",
+   "legacy": 0,
+   "got": 1
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.1.albedo",
+   "legacy": 0.4000000000000001,
+   "got": 0.75
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.1.atmProfile",
+   "legacy": "A-0.45-0.000",
+   "got": "A-1.69-0.000"
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.1.axialTilt",
+   "legacy": 0.7,
+   "got": 0.4
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.1.eccentricity",
+   "legacy": 0,
+   "got": 0.05
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.1.exoticSubtype",
+   "legacy": "Thin, Irritant",
+   "got": "Dense, Irritant"
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.1.greenhouseFactor",
+   "legacy": 1.0077048880289614,
+   "got": 0.6499005098925159
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.1.highTempK",
+   "legacy": 152.71861441064573,
+   "got": 114.02818768585799
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.1.hydro",
+   "legacy": 9,
+   "got": 7
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.1.hydroCode",
+   "legacy": 9,
+   "got": 7
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.1.hydroPercent",
+   "legacy": 88,
+   "got": 67
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.1.liquidRoll",
+   "got": 0.5011242879554629
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.1.lowTempK",
+   "legacy": 100.45969952622714,
+   "got": 89.67823162129476
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.1.meanTempC",
+   "legacy": -138.94928203316647,
+   "got": -170.14060283532734
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.1.meanTempK",
+   "legacy": 134.05071796683353,
+   "got": 102.85939716467266
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.1.pressureBar",
+   "legacy": 0.4513196183810942,
+   "got": 1.689482691034209
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.1.surfaceDist",
+   "legacy": "Slightly Scattered",
+   "got": "Mixed"
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.1.totalPressureBar",
+   "legacy": 0.4513196183810942,
+   "got": 1.689482691034209
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.1.uwp",
+   "legacy": "G9A9139-C",
+   "got": "G9A7139-C"
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.1.uwpSecondary",
+   "legacy": "G9A9139-C",
+   "got": "G9A7139-C"
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.1.uwpSecondaryHydro",
+   "legacy": 9,
+   "got": 7
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.2.albedo",
+   "legacy": 0.45,
+   "got": 0.15000000000000002
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.2.axialTilt",
+   "legacy": 0,
+   "got": 120
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.2.highTempK",
+   "legacy": 134.22683640284055,
+   "got": 149.65919803433158
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.2.hydroPercent",
+   "legacy": 5,
+   "got": 0
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.2.liquidType",
+   "legacy": "Ice"
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.2.lowTempK",
+   "legacy": 0,
+   "got": 1
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.2.meanTempC",
+   "legacy": -162.98708858466506,
+   "got": -150.33865635925636
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.2.meanTempK",
+   "legacy": 110.01291141533495,
+   "got": 122.66134364074364
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.2.seismicStress",
+   "legacy": 0,
+   "got": 1
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.2.siderealHours",
+   "legacy": 779.6643663601172,
+   "got": 480
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.2.solarDayHours",
+   "legacy": 783.3300939946672,
+   "got": 478.62107466453125
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.2.solarDaysInYear",
+   "legacy": 212.69020617126378,
+   "got": -348.09716498308586
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.2.surfaceDist",
+   "legacy": "Scattered",
+   "got": "Slightly Scattered"
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.2.tidallyLocked",
+   "legacy": true,
+   "got": false
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.2.totalTidalAmplitude",
+   "legacy": 8.93,
+   "got": 10.41
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.3.albedo",
+   "legacy": 0.30000000000000004,
+   "got": 0.15000000000000002
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.3.atm",
+   "legacy": 0,
+   "got": 1
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.3.atmCode",
+   "legacy": 0,
+   "got": 1
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.3.atmProfile",
+   "legacy": "0-None-0.000",
+   "got": "1-None-0.000"
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.3.axialTilt",
+   "legacy": 0.08,
+   "got": 0
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.3.classifications.1",
+   "legacy": "Penal Colony"
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.3.greenhouseFactor",
+   "legacy": 0,
+   "got": 0.10552393800276597
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.3.highTempK",
+   "legacy": 138.95846081658908,
+   "got": 149.5257759199987
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.3.hydroPercent",
+   "legacy": 0,
+   "got": 4
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.3.lowTempK",
+   "legacy": 1,
+   "got": 28.39920598406759
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.3.meanTempC",
+   "legacy": -156.15032835180853,
+   "got": -147.22342761377416
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.3.meanTempK",
+   "legacy": 116.84967164819146,
+   "got": 125.77657238622584
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.3.pressureBar",
+   "legacy": 0,
+   "got": 0.0026058856446761636
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.3.surfaceDist",
+   "legacy": "Mixed",
+   "got": "Slightly Scattered"
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.3.totalPressureBar",
+   "legacy": 0,
+   "got": 0.0026058856446761636
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.3.uwp",
+   "legacy": "H200269-C",
+   "got": "H210269-C"
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.3.uwpSecondary",
+   "legacy": "H200269-C",
+   "got": "H210269-C"
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.3.uwpSecondaryAtm",
+   "legacy": 0,
+   "got": 1
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.4.hydroPercent",
+   "legacy": 5,
+   "got": 2
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.4.surfaceDist",
+   "legacy": "Concentrated",
+   "got": "Skewed"
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.5.hydroPercent",
+   "legacy": 0,
+   "got": 5
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.6._atmHazardFlag",
+   "legacy": false,
+   "got": "Check"
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.6.albedo",
+   "legacy": 0.35000000000000003,
+   "got": 0.63
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.6.atm",
+   "legacy": 1,
+   "got": 10
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.6.atmCode",
+   "legacy": 1,
+   "got": 10
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.6.atmProfile",
+   "legacy": "1-None-0.000",
+   "got": "A-2.99-0.000"
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.6.axialTilt",
+   "legacy": 0.9,
+   "got": 165
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.6.eccentricity",
+   "legacy": 0.02,
+   "got": 0.2
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.6.exoticSubtype",
+   "got": "Very Dense, Occasionally Corrosive"
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.6.gases",
+   "got": [
+    "Oxygen 71.4%",
+    "Argon 28.6%"
+   ]
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.6.greenhouseFactor",
+   "legacy": 0.23053095354867226,
+   "got": 3.4592855893548244
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.6.highTempK",
+   "legacy": 144.2745586151839,
+   "got": 171.17787002486617
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.6.hydro",
+   "legacy": 0,
+   "got": 2
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.6.hydroCode",
+   "legacy": 0,
+   "got": 2
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.6.hydroPercent",
+   "legacy": 5,
+   "got": 17
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.6.liquidRoll",
+   "got": 0.05024614650756121
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.6.liquidType",
+   "legacy": "Ice",
+   "got": "Ethane"
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.6.lowTempK",
+   "legacy": 55.57557921111292,
+   "got": 122.9755994984057
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.6.meanTempC",
+   "legacy": -152.18952522386803,
+   "got": -128.21625638922424
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.6.meanTempK",
+   "legacy": 120.81047477613197,
+   "got": 144.78374361077576
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.6.pressureBar",
+   "legacy": 0.048868366769514976,
+   "got": 2.991664197179489
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.6.siderealHours",
+   "legacy": 13103.967447306866,
+   "got": 7200
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.6.solarDayHours",
+   "legacy": 14222.605715348265,
+   "got": 6901.7375156609005
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.6.solarDaysInYear",
+   "legacy": 11.714213451905536,
+   "got": -24.139810998872388
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.6.taints",
+   "got": []
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.6.tidallyLocked",
+   "legacy": true,
+   "got": false
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.6.totalPressureBar",
+   "legacy": 0.048868366769514976,
+   "got": 2.991664197179489
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.6.totalTidalAmplitude",
+   "legacy": 0,
+   "got": 0.07
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.6.uwp",
+   "legacy": "Y510000-0",
+   "got": "Y5A2000-0"
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.6.uwpSecondary",
+   "legacy": "Y510000-0",
+   "got": "Y5A2000-0"
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.6.uwpSecondaryAtm",
+   "legacy": 1,
+   "got": 10
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.6.uwpSecondaryHydro",
+   "legacy": 0,
+   "got": 2
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.7.albedo",
+   "legacy": 0.55,
+   "got": 0.02
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.7.axialTilt",
+   "legacy": 179.92,
+   "got": 60
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.7.highTempK",
+   "legacy": 134.95971431602987,
+   "got": 163.94853517315536
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.7.hydroPercent",
+   "legacy": 0,
+   "got": 2
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.7.meanTempC",
+   "legacy": -168.37002676969877,
+   "got": -145.8959161387549
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.7.meanTempK",
+   "legacy": 104.62997323030125,
+   "got": 127.10408386124512
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.7.siderealHours",
+   "legacy": 720,
+   "got": 25.77041666666667
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.7.solarDayHours",
+   "legacy": 716.9018680916341,
+   "got": 25.77440340524029
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.7.solarDaysInYear",
+   "legacy": -232.3981099887239,
+   "got": 6464.0347468918635
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.moons.7.surfaceDist",
+   "legacy": "Extremely Dispersed",
+   "got": "Scattered"
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.siderealHours",
+   "legacy": 15.604166666666666,
+   "got": 14.598055555555556
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.solarDayHours",
+   "legacy": 15.605628270031602,
+   "got": 14.599334747673916
+  },
+  {
+   "path": "$.mgtSystem.worlds.5.solarDaysInYear",
+   "legacy": 10676.060989599864,
+   "got": 11411.933630635212
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.albedo",
+   "legacy": 0.3,
+   "got": 0.45
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.axialTilt",
+   "legacy": 6,
+   "got": 25
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.highTempK",
+   "legacy": 199.81936675886564,
+   "got": 199.12798121628808
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.meanTempC",
+   "legacy": -75.08854350386451,
+   "got": -75.38229858060294
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.meanTempK",
+   "legacy": 197.9114564961355,
+   "got": 197.61770141939706
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.moons.0.albedo",
+   "legacy": 0.55,
+   "got": 0.45
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.moons.0.axialTilt",
+   "legacy": 0.6,
+   "got": 0.5
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.moons.0.classifications.0",
+   "legacy": "Standard",
+   "got": "Research Base"
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.moons.0.eccentricity",
+   "legacy": 0,
+   "got": 0.02
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.moons.0.highTempK",
+   "legacy": 85.93312339364078,
+   "got": 91.27148221643193
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.moons.0.hydroPercent",
+   "legacy": 4,
+   "got": 0
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.moons.0.liquidType",
+   "legacy": "Ice"
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.moons.0.meanTempC",
+   "legacy": -200.73914458673235,
+   "got": -197.02151276596237
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.moons.0.meanTempK",
+   "legacy": 72.26085541326765,
+   "got": 75.97848723403763
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.moons.0.surfaceDist",
+   "legacy": "Scattered",
+   "got": "Dispersed"
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.moons.0.tl",
+   "legacy": 11,
+   "got": 12
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.moons.0.tlCode",
+   "legacy": 11,
+   "got": 12
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.moons.0.uwp",
+   "legacy": "YS00439-B",
+   "got": "YS00439-C"
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.moons.0.uwpSecondary",
+   "legacy": "YS00439-B",
+   "got": "YS00439-C"
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.moons.1.albedo",
+   "legacy": 0.55,
+   "got": 0.45
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.moons.1.axialTilt",
+   "legacy": 0.04,
+   "got": 0.6
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.moons.1.eccentricity",
+   "legacy": 0.02,
+   "got": 0
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.moons.1.highTempK",
+   "legacy": 86.80556325740537,
+   "got": 90.35415760586096
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.moons.1.liquidType",
+   "legacy": "Ice"
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.moons.1.meanTempC",
+   "legacy": -200.73914458673235,
+   "got": -197.02151276596237
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.moons.1.meanTempK",
+   "legacy": 72.26085541326765,
+   "got": 75.97848723403763
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.moons.1.surfaceDist",
+   "legacy": "Dispersed",
+   "got": "Skewed"
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.moons.2.albedo",
+   "legacy": 0.09999999999999998,
+   "got": 0.30000000000000004
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.moons.2.axialTilt",
+   "legacy": 15,
+   "got": 0.1
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.moons.2.highTempK",
+   "legacy": 122.14313894288392,
+   "got": 114.70516117209749
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.moons.2.meanTempC",
+   "legacy": -187.0668762123937,
+   "got": -192.299823885838
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.moons.2.meanTempK",
+   "legacy": 85.9331237876063,
+   "got": 80.70017611416198
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.moons.2.siderealHours",
+   "legacy": 960,
+   "got": 1666.8513432392522
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.moons.2.solarDayHours",
+   "legacy": 961.8253118491202,
+   "got": 1672.3619164487927
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.moons.2.solarDaysInYear",
+   "legacy": 525.9375270382851,
+   "got": 302.48238792170736
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.siderealHours",
+   "legacy": 21.919722222222223,
+   "got": 15.408888888888889
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.solarDayHours",
+   "legacy": 21.92067207992645,
+   "got": 15.409358269897956
+  },
+  {
+   "path": "$.mgtSystem.worlds.6.solarDaysInYear",
+   "legacy": 23076.848379114614,
+   "got": 32828.10465539936
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.albedo",
+   "legacy": 0.9,
+   "got": 0.81
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.atm",
+   "legacy": 10,
+   "got": 0
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.atmCode",
+   "legacy": 10,
+   "got": 0
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.atmProfile",
+   "legacy": "A-0.53-0.000",
+   "got": "0-None-0.000"
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.axialTilt",
+   "legacy": 1,
+   "got": 0.06
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.classifications.0",
+   "legacy": "Research Base",
+   "got": "Standard"
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.exoticSubtype",
+   "legacy": "Thin, Irritant"
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.gases",
+   "legacy": [
+    "Neon 100.0%"
+   ]
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.greenhouseFactor",
+   "legacy": 1.4616677923682397,
+   "got": 0
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.highTempK",
+   "legacy": 60.1761494059074,
+   "got": 59.24434934931498
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.hydro",
+   "legacy": 6,
+   "got": 0
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.hydroCode",
+   "legacy": 6,
+   "got": 0
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.hydroPercent",
+   "legacy": 63,
+   "got": 0
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.liquidType",
+   "legacy": "Oxygen"
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.lowTempK",
+   "legacy": 40.99930286478742,
+   "got": 1
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.meanTempC",
+   "legacy": -219.90254917000553,
+   "got": -223.2314812851645
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.meanTempK",
+   "legacy": 53.09745082999447,
+   "got": 49.7685187148355
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.moons.0.albedo",
+   "legacy": 0.34,
+   "got": 0.6000000000000001
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.moons.0.axialTilt",
+   "legacy": 179.6,
+   "got": 25
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.moons.0.highTempK",
+   "legacy": 82.8987490463127,
+   "got": 73.14371102876767
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.moons.0.hydroPercent",
+   "legacy": 4,
+   "got": 0
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.moons.0.liquidType",
+   "legacy": "Ice"
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.moons.0.meanTempC",
+   "legacy": -205.0558170058973,
+   "got": -213.0510895016044
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.moons.0.meanTempK",
+   "legacy": 67.9441829941027,
+   "got": 59.9489104983956
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.moons.0.siderealHours",
+   "legacy": 7200,
+   "got": 61.288888888888884
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.moons.0.solarDayHours",
+   "legacy": 7136.643845867769,
+   "got": 61.293520782792086
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.moons.0.solarDaysInYear",
+   "legacy": -113.64326163126866,
+   "got": 13231.928487502193
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.moons.0.surfaceDist",
+   "legacy": "Mixed",
+   "got": "Dispersed"
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.moons.1.albedo",
+   "legacy": 0.74,
+   "got": 0.53
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.moons.1.axialTilt",
+   "legacy": 91,
+   "got": 0.6
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.moons.1.highTempK",
+   "legacy": 73.91566714453232,
+   "got": 85.70726342262647
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.moons.1.hydroPercent",
+   "legacy": 2,
+   "got": 4
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.moons.1.meanTempC",
+   "legacy": -219.17182770160832,
+   "got": -210.5847432491442
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.moons.1.meanTempK",
+   "legacy": 53.82817229839169,
+   "got": 62.41525675085579
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.moons.1.siderealHours",
+   "legacy": 15.794444444444444,
+   "got": 2640.9703680742264
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.moons.1.solarDayHours",
+   "legacy": 15.794136861296067,
+   "got": 2649.598282887216
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.moons.1.solarDaysInYear",
+   "legacy": -51350.161826987045,
+   "got": 306.09601802027476
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.moons.1.surfaceDist",
+   "legacy": "Extremely Dispersed",
+   "got": "Mixed"
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.pressureBar",
+   "legacy": 0.5341181838116609,
+   "got": 0
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.siderealHours",
+   "legacy": 21.80666666666667,
+   "got": 25.963333333333335
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.solarDayHours",
+   "legacy": 21.807253010732037,
+   "got": 25.964164517167244
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.solarDaysInYear",
+   "legacy": 37190.905399501724,
+   "got": 31236.571591159365
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.surfaceDist",
+   "legacy": "Very Dispersed",
+   "got": "Skewed"
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.taints",
+   "legacy": []
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.tl",
+   "legacy": 12,
+   "got": 11
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.tlCode",
+   "legacy": 12,
+   "got": 11
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.totalPressureBar",
+   "legacy": 0.5341181838116609,
+   "got": 0
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.uwp",
+   "legacy": "G5A6229-C",
+   "got": "G500229-B"
+  },
+  {
+   "path": "$.mgtSystem.worlds.7.uwpSecondary",
+   "legacy": "G5A6229-C",
+   "got": "G500229-B"
+  },
+  {
+   "path": "$.t5Data.DR",
+   "legacy": "184.29",
+   "got": "198.29"
+  },
+  {
+   "path": "$.t5Data.IR",
+   "legacy": 21,
+   "got": 15
+  },
+  {
+   "path": "$.t5Data.culturalProfile",
+   "legacy": "9C6D-5652",
+   "got": "9C6D-4674"
+  },
+  {
+   "path": "$.t5Data.culturalQuirks.0",
+   "legacy": "Unusual Custom: Technology",
+   "got": "At war – At war with another planet/polity, or troubled by terrorists/rebels."
+  },
+  {
+   "path": "$.t5Data.culturalQuirks.1",
+   "legacy": "Tourist Attraction – Draws visitors from all over civilised space.",
+   "got": "Obsessed – Monomania regarding a substance, personality, act, or item."
+  },
+  {
+   "path": "$.t5Data.economicProfile",
+   "legacy": "+4, D7E+5, 6370, Cr233280, A, 21, 184.29",
+   "got": "+4, D7E+5, 6370, Cr233280, A, 15, 198.29"
+  },
+  {
+   "path": "$.t5Data.factions",
+   "legacy": "",
+   "got": "N"
+  },
+  {
+   "path": "$.t5Data.factionsData.0",
+   "got": {
+    "gov": 12,
+    "identity": "Dissident/Rebel",
+    "strength": "N"
+   }
+  },
+  {
+   "path": "$.t5Data.judicialSystemProfile",
+   "legacy": "AU-Y-Y",
+   "got": "AP-Y-Y"
+  },
+  {
+   "path": "$.t5Data.lawProfile",
+   "legacy": "9-8A9B8",
+   "got": "9-8C8BA"
+  },
+  {
+   "path": "$.t5Data.militaryProfile",
+   "legacy": "30100-880:0.60%",
+   "got": "60000-D86:3.00%"
+  },
+  {
+   "path": "$.t5Data.techProfile",
+   "legacy": "C-C-CCCCC-CCCC-CC-E",
+   "got": "C-B-CCCCC-CCCC-CC-E"
+  }
+ ]
+}

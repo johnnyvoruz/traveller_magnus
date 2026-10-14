@@ -4,7 +4,7 @@
  * hexes acted on: the many-hex selection, else the one hex the map has selected.
  */
 import type { FaIconName } from '../../design/icons.ts';
-import { discardPreview, hexName, hexState, keepPreview, overChart, previewAt, removeHexes, restorable, restoreHexes, rollAgain, stopBuild, tallyOf } from './acts.ts';
+import { discardPreview, hexName, hexState, keepPreview, oneSectorFor, overChart, previewAt, removeHexes, restorable, restoreHexes, rollAgain, stopBuild, tallyOf } from './acts.ts';
 import { discardEdit, edit, editDirty, holdLeaving, keepEdit, openBlank, openEdit, draftHandle } from './edit.ts';
 import { handUi } from './hand.ts';
 import { addBody, askDesign, canAdd, canMainworld, canMoveBody, canRemoveBody, canRollProfile, handMode, isHandHex, makeMainworld, moveBody, removeBody, rollProfile } from './hand_acts.ts';
@@ -120,6 +120,8 @@ export function canBuild(id: BuildCommandId, keys: readonly string[]): boolean {
     if (id === 'build-roll') return build.preview !== null && !busy;
     if (id === 'build-discard') return build.preview !== null;
     if (busy || keys.length === 0) return false;
+    // Hexes in two sectors are never sent as one request: Generate is off, and the pane and the menu say why.
+    if ((id === 'build-generate' || id === 'build-generate-with') && oneSectorFor(keys)) return false;
     if (id === 'build-generate') {
         if (build.preview) return false;
         return keys.length > 1 ? tallyOf(keys).empty.length > 0 : fillable(keys) || replaceable(keys);
@@ -238,6 +240,9 @@ export function menuFor(keys: readonly string[]): { title: string; items: BuildM
         });
     }
     for (const item of items) item.disabled = !canBuild(item.id, keys);
+    const two = build.job ? '' : oneSectorFor(keys);
+    const first = two ? items.find((item) => item.id === 'build-generate') : undefined;
+    if (first) first.say = two;
     if (checking >= 0) items[checking].disabled = true;
     // While a job writes the map, the acts that write are held: said once, on the first of them.
     const held = build.job ? items.find((item) => item.disabled) : undefined;

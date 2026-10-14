@@ -357,7 +357,7 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
 
 <template>
   <div class="camp-list" @keydown="onListKey">
-    <div class="jn-pack">
+    <div v-if="!first" class="jn-pack">
       <button type="button" class="ui-btn" data-command="journal-pack" :disabled="packBusy" @click="askPack">Download the Player Pack</button>
       <div v-if="packAsk" class="jn-ask" role="alertdialog" aria-labelledby="jn-pack-title">
         <p id="jn-pack-title">Download the Player Pack?</p>

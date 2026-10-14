@@ -5,10 +5,12 @@
  */
 import { shallowRef } from 'vue';
 
+/** Said on the account page, by the passkey list. Off the sign-in card since 2026-10-13. */
 export const PASSKEY_EXPLAIN = 'A passkey signs you in with your fingerprint, face, or device PIN. There is no password.';
 export const PASSKEY_WAITING = 'Waiting for your passkey…';
 export const PASSKEY_CLOSED = 'You closed the passkey prompt.';
-export const SIGN_IN_PASSKEY = 'Sign in with a passkey';
+/** The passkey button on the sign-in card: the last in its list (Johnny, 2026-10-13). */
+export const SIGN_IN_PASSKEY = 'Sign in';
 export const CREATE_ACCOUNT = 'Create an account';
 export const USERNAME_HINT = '3 to 24 letters, digits, or underscores. Other people see this name.';
 export const LOST_PASSKEY = 'I lost my passkey';

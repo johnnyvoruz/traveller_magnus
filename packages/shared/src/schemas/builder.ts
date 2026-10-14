@@ -185,6 +185,8 @@ export const BuilderJob = z.object({
     failures: z.array(BuilderFailure),
     createdAt: z.string().min(1),
     finishedAt: z.string().nullable(),
+    /** Set when the job failed for a reason that names no hex. */
+    error: z.string().min(1).max(BUILDER_LIMITS.reason).optional(),
 }).strict();
 export type BuilderJob = z.infer<typeof BuilderJob>;
 

@@ -60,8 +60,17 @@ function installLegacy(ctx) {
     );
 }
 
+function withoutLiquidFlag(value) {
+    if (!value || typeof value !== 'object') return value;
+    const copy = { ...value };
+    delete copy.liquidType;
+    delete copy.liquidStatus;
+    if (copy.worldData) copy.worldData = withoutLiquidFlag(copy.worldData);
+    return copy;
+}
+
 function same(actual, expected) {
-    assert.deepEqual(JSON.parse(JSON.stringify(actual)), JSON.parse(JSON.stringify(expected)));
+    assert.deepEqual(JSON.parse(JSON.stringify(withoutLiquidFlag(actual))), JSON.parse(JSON.stringify(expected)));
 }
 
 function eachBody(sys, visit) {

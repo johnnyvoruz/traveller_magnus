@@ -30,6 +30,30 @@ export function stripLine(name: string, truthVersion: string | null): { what: st
 }
 const CHOICE_KEY = 'voyage_build_choice';
 
+/** Set on this device once a person has generated or designed a system: Build's first step isn't said again. */
+export const STARTED_KEY = 'voyage_build_started';
+
+export type FirstStep = {
+    say: string;
+    /** The one control that starts it, and what it does: go where hexes can be read, zoom in where the map stands, or turn Select hexes on. */
+    act: string;
+    does: 'go' | 'zoom' | 'select';
+};
+
+/**
+ * What to do first in Build, with nothing selected (prompts/d_first_run_fixes.md item 4). A hex
+ * can be selected only where the chart draws hexes, so the step depends on how far out the map is.
+ */
+export function firstStep(tier: 'galaxy' | 'sector' | 'hex'): FirstStep {
+    if (tier === 'galaxy') {
+        return { say: 'To build, first go to a sector and zoom in until you see the hexes. Then select an empty hex, and select Generate a system.', act: 'Go to the Spinward Marches', does: 'go' };
+    }
+    if (tier === 'sector') {
+        return { say: 'To build, first zoom in until you see the hexes. Then select an empty hex, and select Generate a system.', act: 'Zoom in', does: 'zoom' };
+    }
+    return { say: 'Select an empty hex, and then select Generate a system. To fill an area, turn on Select hexes and drag across it.', act: 'Select hexes', does: 'select' };
+}
+
 /** One legacy sector: the most hexes one act takes (js/macro_orchestrator.js:99). */
 export const SELECTION_CAP = 1280;
 
@@ -60,7 +84,7 @@ export const ENGINES: readonly Engine[] = [
 
 export const GENERATOR_LABEL: Record<Generator, string> = {
     'bottom-up': 'Full system, bottom up',
-    'top-down': 'Full system, top down',
+    'top-down': 'Full system, from the star outward',
 };
 
 export const DEFAULT_CHOICE: GenerateChoice = { engine: 'MgT2E', generator: 'top-down' };
@@ -275,9 +299,25 @@ export const JOB_HOLD = 'While hexes are generating, you can’t change systems.
  * systems · 32 of 80 hexes checked". A store from before density: "Generating 80 hexes · 12 of 80".
  */
 export function jobLine(job: JobProgress & { label: string }): string {
+    const lost = jobError(job);
+    if (lost) return lost;
     const failed = job.failed.length ? ' · ' + job.failed.length + ' failed' : '';
     const counted = job.placed ? ' hexes checked' : '';
     return job.label + ' · ' + job.done.toLocaleString('en-US') + ' of ' + job.total.toLocaleString('en-US') + counted + failed;
+}
+
+/**
+ * A job that failed whole says why in the server's sentence: no hex failed, so there is nothing
+ * to count (contracts/b_builder.md, "One sector per request"). Empty for every other job.
+ */
+export function jobError(progress: { failed: readonly string[]; error?: string }): string {
+    return progress.error && progress.failed.length === 0 ? progress.error : '';
+}
+
+/** The store's progress may carry the job's sentence before its type says so: read as text, or nothing. */
+export function errorOf(progress: object): string | undefined {
+    const said = (progress as { error?: unknown }).error;
+    return typeof said === 'string' && said ? said : undefined;
 }
 
 /** Said when a run over the same hexes at the same density writes nothing: the roll is seeded per hex. */
@@ -289,6 +329,8 @@ export const NOTHING_NEW = 'No systems were generated. At this density, the roll
  * (a store from before density), `done` is the systems, as it was.
  */
 export function jobToast(progress: JobProgress, where: string): string {
+    const lost = jobError(progress);
+    if (lost) return lost;
     const place = where ? ' in ' + where : '';
     const failed = progress.failed.length ? ' ' + plural(progress.failed.length, 'hex', 'hexes') + ' failed.' : '';
     if (!progress.placed) {

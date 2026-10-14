@@ -103,6 +103,12 @@ if (process.env.RUN_API_TESTS !== '1') {
         let child = null;
         try {
             runWrangler(['d1', 'migrations', 'apply', 'voyage', '--local', '--persist-to', persistTo]);
+            if (process.env.VOYAGE_BEFORE_0013 === '1') {
+                const drop = path.join(persistTo, 'drop-later.sql');
+                writeFileSync(drop, 'DROP TABLE IF EXISTS object_byte_charges;\nDROP TABLE IF EXISTS public_marks;\nALTER TABLE universes DROP COLUMN public_games;\n');
+                runWrangler(['d1', 'execute', 'voyage', '--local', '--persist-to', persistTo, '--file', drop]);
+                rmSync(drop);
+            }
             const stamp = randomBytes(4).toString('hex');
             const userId = `spd${stamp}`;
             const cookie = userCookie(userId, `${userId}@localhost`, persistTo);

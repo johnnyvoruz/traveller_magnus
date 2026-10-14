@@ -16,7 +16,18 @@ export type WorldMapData = {
     temperatureK: number;
     size: unknown;
     uwp: string;
+    /** Set only when the engine stored no free liquid. Absent on a 1.1.0 body. */
+    liquidType?: string | null;
+    /** none, unresolved or unknown. Absent when the engine did not store a status. */
+    liquidStatus?: string | null;
 };
+
+function liquidStatusName(body: Body): string | null {
+    const field = body.liquidStatus;
+    if (!field || typeof field !== 'object') return null;
+    const status = (field as { status?: unknown }).status;
+    return typeof status === 'string' ? status : null;
+}
 
 export type DiamondMapSpec = { worldData: WorldMapData; seed: string };
 
@@ -70,7 +81,7 @@ export function worldMapData(body: Body): WorldMapData {
     // The port of js/planet_renderer.js:1045-1052 is always loaded here.
     let temperature = body.tempBand || '';
     if (!temperature && temperatureK > 0) temperature = tempBandFromKelvin(temperatureK);
-    return {
+    const data: WorldMapData = {
         name: (body.name && String(body.name).trim()) || '',
         atmosphere,
         hydrographics: hydro,
@@ -79,6 +90,14 @@ export function worldMapData(body: Body): WorldMapData {
         size,
         uwp,
     };
+    const status = liquidStatusName(body);
+    const noFreeLiquid = body.liquidType === null
+        || status === 'none' || status === 'unresolved' || status === 'unknown';
+    if (noFreeLiquid) {
+        data.liquidType = body.liquidType === null ? null : (typeof body.liquidType === 'string' ? body.liquidType : null);
+        data.liquidStatus = status;
+    }
+    return data;
 }
 
 /** js/hex_editor.js:2323-2327. */

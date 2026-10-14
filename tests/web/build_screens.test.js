@@ -79,7 +79,7 @@ test('the generate choice: only an engine the dossier can walk, and a generator 
     assert.deepEqual(cleanChoice({ engine: 'MgT2E', generator: 'bottom-up' }), { engine: 'MgT2E', generator: 'top-down' });
     assert.deepEqual(cleanChoice({ engine: 'T5', generator: 'top-down' }), DEFAULT_CHOICE);
     assert.deepEqual(cleanChoice('nonsense'), DEFAULT_CHOICE);
-    assert.equal(choiceLine({ engine: 'MgT2E', generator: 'top-down' }), 'Mongoose 2nd Ed (MgT2E) · full system, top down');
+    assert.equal(choiceLine({ engine: 'MgT2E', generator: 'top-down' }), 'Mongoose 2nd Ed (MgT2E) · full system, from the star outward');
 });
 
 test('the universe’s settings are shown under the legacy tray’s labels', () => {

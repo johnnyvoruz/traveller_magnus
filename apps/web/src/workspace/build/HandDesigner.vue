@@ -34,6 +34,8 @@ const fields = computed(() => (form.value && selected.value ? nodeFields(form.va
 const system = computed(() => (form.value ? systemFields(form.value) : []));
 const host = computed(() => moonHost());
 const busy = computed(() => edit.keeping);
+/** The draft has changes: the bar's button then reads Discard, and Close until it has. */
+const dirty = computed(() => handle.value !== null && handle.value.dirty.value);
 const root = ref<HTMLElement | null>(null);
 /** The server's word on the selected body's roll ("Set Type, Subtype, and Class."), as sent. */
 /** The server's word on this body's roll, each sentence once: a body rolled again sends its roll again, and each answer says it. */
@@ -201,7 +203,7 @@ function endDrag(): void {
     <section class="hand-bodies" data-section="bodies">
       <h3 class="ui-heading">Bodies <span class="ui-count">{{ nodes.length }}</span></h3>
       <DesignAsk v-if="handUi.removing" remove class="hand-ask" />
-      <p v-if="!nodes.length" class="hand-empty">This system has no bodies. To add a star, select Star. Then add the worlds that orbit it.</p>
+      <p v-if="!nodes.length" class="hand-empty">This system has no bodies. To add a star, select Add star. Then add the worlds that orbit it.</p>
       <ul v-else class="hand-list" aria-label="Bodies in this system">
         <li
           v-for="node in nodes"
@@ -267,7 +269,7 @@ function endDrag(): void {
           <Icon name="plus" :size="12" />Add moon<span v-if="host" class="hand-add-to"> to {{ nodeTitle(host) }}</span>
         </button>
       </div>
-      <p class="build-fine hand-fine">Added and removed bodies are saved when you select Keep. To undo every change in the draft, select Discard.</p>
+      <p class="build-fine hand-fine">Added and removed bodies are saved when you select Keep. {{ dirty ? 'To undo every change in the draft, select Discard.' : 'To leave the designer, select Close.' }}</p>
     </section>
 
     <section v-if="selected" class="hand-body" data-section="body">

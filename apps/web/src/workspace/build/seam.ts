@@ -55,6 +55,8 @@ export type JobProgress = {
     leftEmpty?: number;
     placed?: string[];
     landed?: string[];
+    /** The server's sentence for a job that failed whole: no hex failed, the job did (`BuilderJob.error`). */
+    error?: string;
 };
 
 /** What one Undo puts back. Opaque to the screens. */

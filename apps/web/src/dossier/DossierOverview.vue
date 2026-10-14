@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, useId } from 'vue';
 import type { PanelSpan } from '../shell/panel_state.ts';
+import { ribbonCellWords, uwpWords } from './code_words.ts';
 import type { OverviewModel } from './model.ts';
 import Icon from '../design/Icon.vue';
 import JourneyTimes from './JourneyTimes.vue';
@@ -32,6 +33,15 @@ defineEmits<{
 }>();
 
 const locateBtn = ref<HTMLButtonElement | null>(null);
+const ribbonFocus = ref(false);
+const ribbonTipId = useId();
+/** One sentence per digit, read when the ribbon link itself has keyboard focus. */
+const ribbonTip = computed(() => {
+    const ribbon = props.model.ribbon;
+    if (!ribbon) return '';
+    if (ribbon.kind === 'plain') return uwpWords();
+    return ribbon.cells.map((cell) => ribbonCellWords(cell.label, cell.digit)).filter((item) => item).join(' ');
+});
 const locateSubject = computed(() => (props.hexKey ? systemSubject(props.hexKey) : ''));
 const isLocating = computed(() => locateSubject.value !== '' && locating.recordId === locateSubject.value);
 
@@ -85,9 +95,13 @@ function toggleLocate(): void {
         type="button"
         class="doss-ribbon-link"
         :aria-label="model.callout && model.callout.name ? 'Open ' + model.callout.name : 'Open the mainworld'"
+        :aria-describedby="ribbonFocus && ribbonTip ? ribbonTipId : undefined"
+        @focus="ribbonFocus = true"
+        @blur="ribbonFocus = false"
         @click="$emit('open', model.mainworldKey)"
       >
-        <UwpRibbon :ribbon="model.ribbon" />
+        <UwpRibbon :ribbon="model.ribbon" quiet />
+        <span v-if="ribbonFocus && ribbonTip" :id="ribbonTipId" class="doss-note-pop doss-ribbon-focus" role="tooltip">{{ ribbonTip }}</span>
       </button>
       <UwpRibbon v-else-if="model.ribbon" :ribbon="model.ribbon" />
       <div v-if="model.holdLead" class="doss-callout" :aria-hidden="model.callout || model.mainworldKey ? undefined : 'true'">
@@ -146,6 +160,7 @@ function toggleLocate(): void {
 <style>
 /* The ribbon is the link to the mainworld. It keeps the ribbon's own shape. */
 .doss-ribbon-link {
+  position: relative;
   display: block;
   width: 100%;
   margin: 0;
@@ -156,6 +171,13 @@ function toggleLocate(): void {
   font: inherit;
   text-align: inherit;
   cursor: pointer;
+}
+
+.doss-ribbon-link > .doss-ribbon-focus {
+  display: block;
+  left: 0;
+  right: auto;
+  width: min(260px, 100%);
 }
 
 .doss-ribbon-link:hover .doss-cell {

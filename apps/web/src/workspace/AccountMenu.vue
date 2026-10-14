@@ -21,13 +21,15 @@ import Icon from '../design/Icon.vue';
 import { addressPane, atPane } from '../shell/pane.ts';
 import { registerCommand } from '../shell/registry.ts';
 import { showToast } from '../shell/toast.ts';
-import { accountLine, displayName, initials } from './account.ts';
+import { accountLine, displayName, initials, signInFrom } from './account.ts';
 import { forgetDeleted } from './actions.ts';
 import { CAMPAIGN_CAP, canCreate, cleanCampaignName, deleteWords, freshName, sortCampaigns } from './campaigns.ts';
 import { stopLocate } from './locate.ts';
 import { forgetOpening, retryCampaign } from './opening.ts';
 import { MY_PACKAGES_PATH } from './market/command.ts';
 import { liveRecords } from './records.ts';
+import { campaignDays, partyMarker } from './party_where.ts';
+import { partyOnChart, PUBLIC_GAMES_LABEL, PUBLIC_GAMES_NO_PLACE, PUBLIC_GAMES_SAY, publicGamesOf, publicGamesToast, setPublicGames } from './public_games.ts';
 import SignInCard from './SignInCard.vue';
 import { noteReturn, RECOVERY_PATH } from './passkey/recovery.ts';
 
@@ -186,6 +188,35 @@ function remove(): void {
     });
 }
 
+/** Public games for the open campaign: on, off, or null when the server has no such setting (then no switch). */
+const publicOn = computed(() => publicGamesOf(openOne.value));
+/** On, and the party has no place on the chart: nothing is shown to anyone yet, and the menu says what to do. */
+const publicNowhere = computed(() => {
+    if (publicOn.value !== true || campaign.status !== 'ready' || !campaign.settings) return false;
+    const mark = partyMarker(campaign.settings.party, campaign.records, campaignDays(campaign.clock));
+    return !partyOnChart(mark ? mark.hexKey : null);
+});
+
+/** The switch: the server's answer is what is shown; a refusal is said in its sentence, and the switch stays as it was. */
+async function togglePublic(): Promise<void> {
+    const target = openOne.value;
+    const now = publicOn.value;
+    if (!target || now === null || busy.value) return;
+    busy.value = true;
+    trouble.value = '';
+    try {
+        const done = await setPublicGames(target.id, !now);
+        if (!done.ok) trouble.value = done.message;
+        else showToast(publicGamesToast(done.public, target.name));
+    } finally {
+        busy.value = false;
+        void nextTick(() => {
+            const el = pop.value ? pop.value.querySelector<HTMLElement>('[data-command="public-games"]') : null;
+            if (el) el.focus();
+        });
+    }
+}
+
 /** The campaign's file, from the server, saved as it names it. */
 function exportCampaign(): void {
     const target = openOne.value;
@@ -260,7 +291,7 @@ const line = computed(() => { const said = accountLine(session.user); return sai
 const mark = computed(() => initials(session.user));
 
 function items(): HTMLElement[] {
-    return menu.value ? Array.from(menu.value.querySelectorAll<HTMLElement>('[role="menuitem"]')) : [];
+    return menu.value ? Array.from(menu.value.querySelectorAll<HTMLElement>('[role="menuitem"], [role="menuitemcheckbox"]')) : [];
 }
 
 function focusFirst(): void {
@@ -334,11 +365,15 @@ function openAccount(): void {
 watch(() => props.open, (open) => {
     mode.value = '';
     trouble.value = '';
+    // The card opened from Build says so only that once.
+    if (!open) signInFrom.value = null;
     if (open) void nextTick(focusFirst);
 });
 </script>
 
 <template>
+  <!-- On the body, in the house pattern: inside the map view it is drawn under an open panel. -->
+  <Teleport to="body">
   <div v-if="open" class="account-backdrop" @click="$emit('close')"></div>
   <section
     v-if="open"
@@ -401,6 +436,22 @@ watch(() => props.open, (open) => {
         <button v-if="openOne" type="button" role="menuitem" class="account-rename" :disabled="busy" @click="begin('rename')">
           <Icon name="pen-to-square" :size="15" /><span>Rename {{ openOne.name }}</span>
         </button>
+        <!-- Public games: only when the server has the setting. Off until the referee turns it on. -->
+        <button
+          v-if="openOne && publicOn !== null"
+          type="button"
+          role="menuitemcheckbox"
+          class="account-public"
+          data-command="public-games"
+          :aria-checked="publicOn ? 'true' : 'false'"
+          aria-describedby="account-public-say"
+          :disabled="busy"
+          @click="togglePublic"
+        >
+          <Icon name="eye" :size="15" /><span>{{ PUBLIC_GAMES_LABEL }}</span><em>{{ publicOn ? 'On' : 'Off' }}</em>
+        </button>
+        <p v-if="openOne && publicOn !== null" id="account-public-say" class="account-say">{{ PUBLIC_GAMES_SAY }}</p>
+        <p v-if="openOne && publicNowhere" class="account-say is-todo" role="status" data-public-nowhere>{{ PUBLIC_GAMES_NO_PLACE }}</p>
         <button v-if="openOne" type="button" role="menuitem" class="account-delete" :disabled="busy" @click="begin('delete')">
           <Icon name="trash" :size="15" /><span>Delete {{ openOne.name }}</span>
         </button>
@@ -431,6 +482,7 @@ watch(() => props.open, (open) => {
     </template>
     <SignInCard v-else ref="card" heading />
   </section>
+  </Teleport>
 </template>
 
 <style>
@@ -449,9 +501,14 @@ watch(() => props.open, (open) => {
   z-index: 8;
 }
 
-/* Anchored to the rail's foot, clear of the rail whether it is collapsed or expanded. */
+/* Anchored to the rail's foot, clear of the rail whether it is collapsed or expanded. On the
+   body it is outside .app, so the expanded rail's width is carried over here (App.vue). */
+body:has(.rail.is-expanded) .account-pop {
+  --rail-width: var(--rail-width-open);
+}
+
 .account-pop {
-  position: absolute;
+  position: fixed;
   left: calc(var(--rail-width) + var(--chrome-inset));
   bottom: var(--chrome-inset);
   z-index: 9;
@@ -572,6 +629,23 @@ watch(() => props.open, (open) => {
   margin-left: auto;
   color: var(--text-muted);
   font: 400 12px/1 var(--font-text);
+}
+
+/* What the switch above it shows other people: under its row, in line with the row's words. */
+.account-say {
+  margin: 0 0 4px;
+  padding: 0 10px 0 36px;
+  color: var(--text-muted);
+  font: 400 12px/1.45 var(--font-text);
+}
+
+.account-say.is-todo {
+  color: var(--attention);
+}
+
+.account-items .account-public[aria-checked='true'] em {
+  color: var(--signal);
+  font-weight: 700;
 }
 
 .account-group {

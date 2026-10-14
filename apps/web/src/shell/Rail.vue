@@ -12,10 +12,10 @@
 import { computed, nextTick, onMounted, ref } from 'vue';
 import { loadSession, session } from '../account/session.ts';
 import Icon from '../design/Icon.vue';
-import { displayName, initials } from '../workspace/account.ts';
+import { displayName, initials, signInFrom } from '../workspace/account.ts';
 import { commands } from './registry.ts';
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
     /** The system panel is showing. */
     panelOpen: boolean;
     /** The omnibox list is showing. */
@@ -43,6 +43,8 @@ defineExpose({
 });
 
 const expanded = ref(false);
+/** The locked item with keyboard focus, so its reason is on screen and not only in a tooltip. */
+const lockFocus = ref<'campaign' | 'build' | ''>('');
 const ready = ref(0);
 /** False until /api/me has answered. A signed-in person must not see Campaign and Build switched off first. */
 const sessionKnown = ref(session.user !== null);
@@ -74,6 +76,14 @@ function run(id: string): void {
     const command = findCommand(id);
     if (!command || !canRun(id)) return;
     command.run();
+}
+
+/** A switched-off item: say why, then open the sign-in card if it is not already open. */
+function onLocked(which: 'campaign' | 'build'): void {
+    lockFocus.value = which;
+    if (!expanded.value) expanded.value = true;
+    signInFrom.value = which === 'build' ? 'build' : null;
+    if (!props.accountOpen) run('account');
 }
 
 /** A tooltip with the command's first shortcut, read from the registry once it is filled. */
@@ -132,11 +142,18 @@ onMounted(() => {
           :aria-label="lockedGuest ? CAMPAIGN_LOCK : 'Campaign'"
           :title="lockedGuest ? CAMPAIGN_LOCK : 'Campaign'"
           :aria-disabled="lockedGuest ? 'true' : undefined"
+          :aria-describedby="lockedGuest ? 'rail-why-campaign' : undefined"
           :aria-expanded="lockedGuest ? undefined : (campaignOpen ? 'true' : 'false')"
-          @click="lockedGuest ? run('account') : run('campaign')"
+          @focus="lockFocus = 'campaign'"
+          @blur="lockFocus = ''"
+          @click="lockedGuest ? onLocked('campaign') : run('campaign')"
         >
           <Icon name="book-sparkles" :size="20" />
-          <span class="rail-label">Campaign</span>
+          <span class="rail-label">
+            Campaign
+            <span v-if="lockedGuest" id="rail-why-campaign" class="rail-why">{{ CAMPAIGN_LOCK }}</span>
+          </span>
+          <span v-if="lockedGuest && !expanded && lockFocus === 'campaign'" class="rail-pop" role="status">{{ CAMPAIGN_LOCK }}</span>
         </button>
         <button
           v-if="lockedGuest || buildOffered"
@@ -146,11 +163,18 @@ onMounted(() => {
           :aria-label="lockedGuest ? BUILD_LOCK : 'Build'"
           :title="lockedGuest ? BUILD_LOCK : hint('build', buildOn ? 'Build: on' : 'Build: generate and remove systems on your map')"
           :aria-disabled="lockedGuest ? 'true' : undefined"
+          :aria-describedby="lockedGuest ? 'rail-why-build' : undefined"
           :aria-pressed="lockedGuest ? undefined : (buildOn ? 'true' : 'false')"
-          @click="lockedGuest ? run('account') : run('build')"
+          @focus="lockFocus = 'build'"
+          @blur="lockFocus = ''"
+          @click="lockedGuest ? onLocked('build') : run('build')"
         >
           <Icon name="draw-polygon" :size="20" />
-          <span class="rail-label">Build</span>
+          <span class="rail-label">
+            Build
+            <span v-if="lockedGuest" id="rail-why-build" class="rail-why">{{ BUILD_LOCK }}</span>
+          </span>
+          <span v-if="lockedGuest && !expanded && lockFocus === 'build'" class="rail-pop" role="status">{{ BUILD_LOCK }}</span>
         </button>
       </div>
     </div>
@@ -224,6 +248,7 @@ onMounted(() => {
 
 /* 14.5px of left padding centres the 22px icon in the collapsed button, so expanding does not move it. */
 .rail-item {
+  position: relative;
   display: flex;
   flex-shrink: 0;
   align-items: center;
@@ -295,6 +320,43 @@ onMounted(() => {
 
 .rail.is-expanded .rail-label {
   opacity: 1;
+}
+
+.rail.is-expanded .rail-item.is-locked {
+  height: auto;
+  min-height: 40px;
+  align-items: flex-start;
+}
+
+.rail-why {
+  display: none;
+  margin-top: 2px;
+  color: var(--text-1);
+  font: 400 12px/1.35 var(--font-text);
+  white-space: normal;
+}
+
+.rail.is-expanded .rail-why {
+  display: block;
+}
+
+/* Collapsed, focus shows the same sentence beside the rail. Touch and a click expand the rail. */
+.rail-pop {
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 0;
+  z-index: 6;
+  width: max-content;
+  max-width: 260px;
+  padding: 8px 10px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-2);
+  background: var(--chrome-bg);
+  color: var(--text-1);
+  font: 400 12px/1.4 var(--font-text);
+  text-align: left;
+  white-space: normal;
+  box-shadow: var(--shadow-pop);
 }
 
 @media (prefers-reduced-motion: reduce) {

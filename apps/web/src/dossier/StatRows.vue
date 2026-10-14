@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { tempLines } from '../design/units.ts';
+import CodeNote from './CodeNote.vue';
+import { baseParts, editionWords, hasBaseWords, labelWords, stellarWords, tradeWords, zoneWords } from './code_words.ts';
 import type { StatRow } from './model.ts';
 
 defineProps<{ rows: StatRow[] }>();
@@ -8,17 +10,41 @@ defineProps<{ rows: StatRow[] }>();
 <template>
   <dl v-if="rows.length" class="doss-stats">
     <div v-for="row in rows" :key="row.label" class="doss-stat" :class="row.zone ? 'is-' + row.zone : ''">
-      <dt>{{ row.label }}</dt>
+      <dt>
+        <CodeNote v-if="labelWords(row.label)" :text="labelWords(row.label) || ''" :code="row.label">{{ row.label }}</CodeNote>
+        <template v-else>{{ row.label }}</template>
+      </dt>
       <dd v-if="row.chips" class="doss-chips">
         <span v-for="(chip, index) in row.chips" :key="chip.code + chip.name + index" class="ui-chip">
-          <b v-if="chip.code">{{ chip.code }}</b>
-          {{ chip.name }}
+          <CodeNote v-if="chip.code && tradeWords(chip.code)" :text="tradeWords(chip.code) || ''" :code="chip.code">
+            <b>{{ chip.code }}</b>
+            {{ chip.name }}
+          </CodeNote>
+          <template v-else>
+            <b v-if="chip.code">{{ chip.code }}</b>
+            {{ chip.name }}
+          </template>
         </span>
       </dd>
       <template v-else-if="row.code">
-        <dd class="ui-code doss-code" :class="{ 'is-solo': !row.name }">{{ row.code }}</dd>
+        <dd class="ui-code doss-code" :class="{ 'is-solo': !row.name }">
+          <CodeNote v-if="zoneWords(row.code)" :text="zoneWords(row.code) || ''" :code="row.code">{{ row.code }}</CodeNote>
+          <template v-else>{{ row.code }}</template>
+        </dd>
         <dd v-if="row.name" class="doss-name">{{ row.name }}</dd>
       </template>
+      <dd v-else-if="row.label === 'Bases' && hasBaseWords(row.text)" class="doss-value">
+        <template v-for="(part, index) in baseParts(row.text)" :key="index">
+          <CodeNote v-if="part.words" :text="part.words" :code="'base-' + part.letter">{{ part.letter }}</CodeNote>
+          <template v-else>{{ part.letter }}</template>
+        </template>
+      </dd>
+      <dd v-else-if="row.label === 'Edition' && editionWords(row.text)" class="doss-value">
+        <CodeNote :text="editionWords(row.text) || ''" :code="row.text">{{ row.text }}</CodeNote>
+      </dd>
+      <dd v-else-if="row.label === 'Type' && stellarWords(row.text)" class="doss-value">
+        <CodeNote :text="stellarWords(row.text) || ''" code="stellar">{{ row.text }}</CodeNote>
+      </dd>
       <dd v-else-if="tempLines(row.text)" class="doss-value doss-value-lines">
         <span v-for="line in tempLines(row.text)" :key="line">{{ line }}</span>
       </dd>

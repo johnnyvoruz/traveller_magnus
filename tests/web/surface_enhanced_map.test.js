@@ -337,13 +337,18 @@ test('the same inputs give the same sheet: at once, in steps, and in the worker'
 });
 
 test('the sea of a body is decided by seas.ts, and the caption says what was drawn', () => {
-    // Regina's mainworld as released: an ethane sea, liquid at every latitude.
+    // Released-shape Regina with an ethane sea. The equator is above Ethane's boiling point, so those rows are dry.
     const regina = {
         type: 'Mainworld', name: 'Regina', uwp: 'A788899-C', isMoon: true, tidallyLocked: true, liquidType: 'Ethane', hydroPercent: 60,
         hydroCode: 6, meanTempK: 189.60630776703493, lowTempK: 147.43623604258838, highTempK: 214.384010187577,
     };
     const plan = seaPlan(regina);
-    assert.deepEqual(plan.sea, { coverage: 0.6, liquid: 'Ethane', ice: { kind: 'none' } });
+    assert.equal(typeof plan.sea.boilFromLatDeg, 'number');
+    assert.ok(plan.sea.boilFromLatDeg > 30 && plan.sea.boilFromLatDeg < 50);
+    assert.deepEqual(
+        { coverage: plan.sea.coverage, liquid: plan.sea.liquid, ice: plan.sea.ice },
+        { coverage: 0.6, liquid: 'Ethane', ice: { kind: 'none' } },
+    );
     assert.equal(plan.drawn, true);
     assert.match(plan.why, /lowTempK 147\.4\d+ >= meltingK 90 \(Ethane\)/);
     const caption = sheetCaption('enhanced', regina);

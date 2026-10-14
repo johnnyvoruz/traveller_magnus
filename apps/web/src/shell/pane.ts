@@ -92,12 +92,11 @@ function campaignPane(parts: string[]): Pane | null {
 }
 
 /**
- * A hex on the map, and its orbit, open the dossier.
- * A sector or a subsector does not. With Build off that pane was an empty "World".
- * Build opens it with panel=dossier while Build is on.
+ * A hex, its orbit, a sector and a subsector open the dossier on a bare address.
+ * A panel query still wins, including panel=closed, which keeps the pane shut.
  */
 function dossierDefault(view: PaneView): boolean {
-    return view.kind === 'map' || view.kind === 'orbit';
+    return view.kind === 'map' || view.kind === 'orbit' || view.kind === 'sector' || view.kind === 'subsector';
 }
 
 function paneFromQuery(view: PaneView, query: Query): Pane {
@@ -214,8 +213,9 @@ export function withQuery(query: Query, changes: Query): Record<string, string> 
 
 /**
  * The three old campaign paths, onto the home map, and the strip of panel=dossier
- * where the dossier is already the default. A sector or a subsector keeps it:
- * that pane is shut until the query names it.
+ * where the dossier is already the default for a hex or its orbit. A sector or a
+ * subsector keeps a panel=dossier query as written: the bare path already opens
+ * that pane, and panel=closed is what keeps it shut.
  * Null when the address is already in its canonical form.
  */
 export function campaignRedirect(path: string, query: Query = {}): Redirect | null {

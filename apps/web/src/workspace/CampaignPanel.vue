@@ -32,7 +32,7 @@ import { typeInfo } from './records.ts';
 import RecordPage from './RecordPage.vue';
 import SignInCard from './SignInCard.vue';
 import { createEntry, justMade } from './journal/create.ts';
-import { filterWord } from './journal/list.ts';
+import { entryHeading, filterWord } from './journal/list.ts';
 import EntryPage from './journal/EntryPage.vue';
 import JournalList from './journal/JournalList.vue';
 
@@ -93,7 +93,15 @@ const shownRecord = computed(() => {
     const found = props.recordId ? campaign.records[props.recordId] : null;
     return found && !found.deleted ? found : null;
 });
-const title = computed(() => shownRecord.value && span.value !== 'full' ? shownRecord.value.name : 'Campaign');
+const title = computed(() => {
+    if (span.value === 'full') return 'Campaign';
+    if (shownRecord.value) return shownRecord.value.name;
+    if (props.entryId) {
+        const found = campaign.journal[props.entryId];
+        return entryHeading(found && !found.deleted ? found : null);
+    }
+    return 'Campaign';
+});
 /** The tabs' counts and words. */
 const recordCount = computed(() => Object.values(campaign.records).filter((record) => !record.deleted).length);
 const journalCount = computed(() => {
@@ -156,7 +164,7 @@ const crumb = computed(() => {
     }
     if (props.entryId) {
         const found = campaign.journal[props.entryId];
-        const name = found && found.title.trim() ? found.title.trim() : 'This entry';
+        const name = entryHeading(found && !found.deleted ? found : null);
         const many = journalFilter.value === 'all' ? 'Journal' : filterWord(journalFilter.value);
         return campaignCrumb({
             level: 'entry', beside: span.value === 'full', pageName: name,

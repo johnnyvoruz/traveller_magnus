@@ -3,8 +3,10 @@
  * One clickable body: glyph, name over a detail line, then the UWP or a mainworld tag
  * (js/system_inspector.js bodyRow, style.css .atlas-body-row). The parent listens for the click.
  */
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import BodyGlyph from './BodyGlyph.vue';
+import CodeNote from './CodeNote.vue';
+import { uwpWords } from './code_words.ts';
 import type { BodyGlyphData } from './model.ts';
 
 const props = withDefaults(defineProps<{
@@ -21,10 +23,11 @@ const props = withDefaults(defineProps<{
 
 const lead = computed(() => props.facts[0] || '');
 const mainworld = computed(() => props.tag !== '' || lead.value.startsWith('Mainworld'));
+const rowFocus = ref(false);
 </script>
 
 <template>
-  <button type="button" class="doss-row" :class="{ 'is-moon': moon, 'is-mainworld': mainworld }">
+  <button type="button" class="doss-row" :class="{ 'is-moon': moon, 'is-mainworld': mainworld }" @focus="rowFocus = true" @blur="rowFocus = false">
     <BodyGlyph :glyph="glyph" :mainworld="mainworld" :size="moon ? 18 : 22" />
     <span class="doss-row-text">
       <span class="doss-row-name">{{ name }}</span>
@@ -34,7 +37,9 @@ const mainworld = computed(() => props.tag !== '' || lead.value.startsWith('Main
     </span>
     <span v-if="count" class="ui-count doss-row-count" :title="count === 1 ? 'One of your records is here' : count + ' of your records are here'">{{ count }}</span>
     <span v-if="tag" class="ui-tag">{{ tag }}</span>
-    <span v-else-if="uwp" class="doss-row-uwp">{{ uwp }}</span>
+    <span v-else-if="uwp" class="doss-row-uwp">
+      <CodeNote :text="uwpWords()" code="uwp" quiet :force="rowFocus">{{ uwp }}</CodeNote>
+    </span>
   </button>
 </template>
 

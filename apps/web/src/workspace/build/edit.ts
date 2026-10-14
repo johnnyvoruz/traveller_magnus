@@ -12,7 +12,7 @@ import type { HandKind } from './hand.ts';
 import { showToast } from '../../shell/toast.ts';
 import { buildStore, ownSectors } from './seam.ts';
 import { plural } from './state.ts';
-import { runUndo } from './undo_words.ts';
+import { blankUndone, runUndo } from './undo_words.ts';
 
 /** A hex as an Undo's report names it: the system's name on this map, else its number. */
 function undoName(hexKey: string): string {
@@ -390,7 +390,7 @@ export async function openBlank(hexKey: string): Promise<void> {
         const token = made.undo;
         const again = (): void => {
             if (edit.hexKey === hexKey) dropEdit();
-            void runUndo(token, { again, name: undoName });
+            void runUndo(token, { again, name: undoName }).then((gone) => { if (gone) showToast(blankUndone(hexKey)); });
         };
         showToast('Created a blank system. Add a star, and then add its worlds.', { action: { label: 'Undo', run: again } });
         if (mark !== ticket) return;

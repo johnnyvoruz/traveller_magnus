@@ -23,7 +23,17 @@ export type PaletteWorld = {
     temperature?: unknown;
     temperatureK?: unknown;
     size?: unknown;
+    /** Null, or a status of none, unresolved or unknown, paints no sea. Absent keeps the legacy palette. */
+    liquidType?: unknown;
+    liquidStatus?: unknown;
 };
+
+/** True when the engine stored no free liquid. An absent liquidType is not this case. */
+function noFreeLiquid(world: PaletteWorld): boolean {
+    if (world.liquidType === null) return true;
+    const status = world.liquidStatus;
+    return status === 'none' || status === 'unresolved' || status === 'unknown';
+}
 
 type ExoticVariant = {
     deep: RGB; mid: RGB; shallow: RGB; shore: RGB;
@@ -81,7 +91,7 @@ export function heightToRGB(h: number, lat: number, palette: Palette, shiftRad =
 /** planet_renderer.js 265-455 */
 export function buildPalette(worldData: PaletteWorld, oceanRng: number): Palette {
     const atm   = parseStat(worldData.atmosphere);
-    const hydro = parseStat(worldData.hydrographics);
+    const hydro = noFreeLiquid(worldData) ? 0 : parseStat(worldData.hydrographics);
     const seaLevel = Math.max(0.05, Math.min(1, hydro / 10));
 
     const tempK    = (typeof worldData.temperatureK === 'number' ? worldData.temperatureK : 0) || 0;

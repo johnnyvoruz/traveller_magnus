@@ -232,6 +232,79 @@ test('a sector name scales to 84% of its rectangle and is omitted below 9px', ()
     assert.equal(displayFontSize(calls), 18);
 });
 
+test('a sector name measured before the display font loads is fitted again once that font is ready', async () => {
+    const name = 'Tsebntsiatldlants';
+    let loaded = false;
+    let unit = 6;
+    let release = () => {};
+    const previous = globalThis.document;
+    globalThis.document = {
+        fonts: {
+            check: () => loaded,
+            load: () => new Promise((resolve) => { release = resolve; }),
+        },
+    };
+    let fontPx = 18;
+    let measures = 0;
+    const calls = [];
+    const ctx = new Proxy({}, {
+        get(_target, prop) {
+            if (prop === 'measureText') {
+                return (text) => {
+                    measures += 1;
+                    return { width: unit * String(text).length * (fontPx / 18) };
+                };
+            }
+            return (...args) => { calls.push([String(prop), ...args]); };
+        },
+        set(_target, prop, value) {
+            if (prop === 'font') {
+                const matched = /^([\d.]+)px /.exec(String(value));
+                if (matched) fontPx = Number(matched[1]);
+            }
+            calls.push(['set', String(prop), value]);
+            return true;
+        },
+    });
+    const canvas = { width: 0, height: 0, getContext: () => ctx };
+    try {
+        const renderer = new MapRenderer(canvas, theme);
+        renderer.resize(800, 600, 1);
+        renderer.setChart({
+            sectors: [{ slug: name, name, x: -7, y: -9, canonical: true }],
+        }, { truthVersion: 'v2', sectors: [] }, 'canonical');
+        const cam = { ...centreOf(-7, -9), ppp: 4 };
+
+        const first = renderer.draw(cam);
+        assert.equal(first.animating, true);
+        assert.equal(calls.filter((call) => call[0] === 'fillText' && call[1] === name).length, 1);
+        assert.equal(displayFontSize(calls), 18);
+        const measuredOnce = measures;
+
+        calls.length = 0;
+        const second = renderer.draw(cam);
+        assert.equal(second.animating, true);
+        assert.equal(measures, measuredOnce);
+
+        unit = 14;
+        loaded = true;
+        release();
+        await Promise.resolve();
+        calls.length = 0;
+        const third = renderer.draw(cam);
+        assert.equal(third.animating, false);
+        assert.equal(calls.filter((call) => call[0] === 'fillText' && call[1] === name).length, 0);
+        assert.ok(measures > measuredOnce);
+
+        const measuredTwice = measures;
+        renderer.draw(cam);
+        assert.equal(measures, measuredTwice);
+    } finally {
+        if (previous === undefined) delete globalThis.document;
+        else globalThis.document = previous;
+    }
+});
+
 function styleSets(calls, prop, value) {
     return calls.filter((call) => call[0] === 'set' && call[1] === prop && call[2] === value);
 }

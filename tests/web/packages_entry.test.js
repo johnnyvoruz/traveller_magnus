@@ -74,14 +74,20 @@ describe('my packages entry', { concurrency: 1 }, () => {
         await router.push('/');
         await router.isReady();
         session.user = { id: 'me', email: null, role: 'user', profile: { handle: 'varn' } };
-        const signedIn = await renderToString(createSSRApp(menu, { open: true }).use(router));
+        // The menu is teleported to the body: its markup is in the render's teleports.
+        const rendered = async () => {
+            const ctx = {};
+            await renderToString(createSSRApp(menu, { open: true }).use(router), ctx);
+            return (ctx.teleports && ctx.teleports.body) || '';
+        };
+        const signedIn = await rendered();
         const item = signedIn.match(/<button type="button" role="menuitem" class="account-packages">[\s\S]*?<\/button>/);
         assert.ok(item, 'My packages is a menu item');
         assert.match(item[0], /role="menuitem"/);
         assert.match(item[0], /<span>My packages<\/span>/);
         assert.doesNotMatch(item[0], /<em|ui-count|badge/);
         session.user = null;
-        const signedOut = await renderToString(createSSRApp(menu, { open: true }).use(router));
+        const signedOut = await rendered();
         assert.doesNotMatch(signedOut, /account-packages/);
         assert.doesNotMatch(signedOut, />My packages</);
     });

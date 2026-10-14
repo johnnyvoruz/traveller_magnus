@@ -64,6 +64,32 @@ A stale `baseRev` writes nothing. Hex: 409 `conflict`, `This hex changed. Reload
 
 Object cap: a new private object that would pass 250 MB is 400 `too_large`, `250 MB of objects per universe.` The door write is not applied, and the new object is deleted.
 
+A finished generate job adds its new object bytes once. When `object_byte_charges` is present, migration `0014_object_byte_charges.sql` stores one row per job id. The insert and the `object_bytes` add are one D1 batch, so a crash rolls both back. A retry that finds the row adds nothing, then writes the settled mark. The Worker reads `sqlite_master` once per D1 binding. When the table is absent, the job runs the plain `UPDATE universes SET object_bytes = object_bytes + ?` and nothing else, which is what 1.1.11 did, and then writes the settled mark. A batch that still fails because the table is missing has rolled back, so that same plain update runs once. Two generate jobs on one universe can still both pass the 250 MB check. That race is open. A lock held from the slice read until the job ends would stall the second job, so it is not built.
+
+## One sector per request
+
+A generate request, a truth build, and a truth-build retry each name at most one sector. The sentence is `The limit is one sector per request.` The code is `validation`. `details.reason` is `one_sector`. Nothing is written, no job is queued, and the daily allowance is not charged.
+
+A sector is the prefix of a hex key, the text before `/`. `sectorCount` in `apps/api/src/jobs/one_sector.ts` counts distinct prefixes. A subsector, or one sector opened by its address, is one prefix and proceeds. Two prefixes are refused.
+
+Routes that refuse:
+
+- `POST /api/universes/:id/generate` when `hexKeys` name more than one prefix (`apps/api/src/routes/builder.ts`). This is the same check with or without `makeSectors`.
+- `POST /api/admin/truth/build` when the sector list has more than one slug.
+- `POST /api/admin/truth/builds/:version/retry` when more than one sector would be retried.
+
+The generate job checks again before the first slice (`apps/api/src/jobs/generate_queue.ts`). A job that already holds two prefixes is marked failed. The sentence is stored on the job as `error`, with no failure row and no hex key. `GET .../jobs/:id` returns that `error` on `BuilderJob`.
+
+Lane D, say the sentence before the request is sent. These Build actions can send two sectors today:
+
+- Generate, or Generate with…, on a selection whose hex keys use two prefixes. A drag across a sector border does this. `generateMany` (`apps/web/src/workspace/build/acts.ts`) sends one `POST .../generate`.
+- The same Generate line on the right-click menu (`apps/web/src/workspace/build/commands.ts`, `build-generate`). It calls `generateMany` with the selection.
+- Create sectors and generate when the selection covers two empty slots. `generateGrowing` (`apps/web/src/workspace/build/grow_acts.ts`) sends one `POST .../generate` with two `makeSectors`. The button reads "Create N sectors and generate".
+
+A sector or a subsector opened by its address is one prefix (`scopeKeys` in `apps/web/src/workspace/build/scope.ts`). Leave that path as it is.
+
+After a 400, the pane already shows the sentence: `build.error` in `BuildPane.vue` and on the bar, and `growUi.error` beside the new-sector names. Both take the server message. A job the queue fails later does not. The store copies `failures[].hexKey` into the progress and never reads `BuilderJob.error`, so the toast counts failed hexes and does not say the sentence. Show `error` when the job ends `failed` and `failures` is empty.
+
 ## Routes in `apps/api/src/routes/builder.ts`
 
 ### `GET /:id/hexes` — **live at `3d28e33`**

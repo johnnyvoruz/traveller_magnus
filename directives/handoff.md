@@ -6997,3 +6997,84 @@ that failed at the close no longer does. Ready note `findings/builder_form_ready
 - **Push 1.1.11:** the whole passkey set, the sign-out fix, the Player Pack, the
   importer, the public games server without its migration. A, B, D held until the
   push so the list stays still. C read-only on Regina.
+
+## 258. 1.1.11 pushed and deployed; the next leg set up (2026-10-12 23:25)
+
+- **1.1.11 pushed (`ef92359`) and deployed.** Checked live at 23:11:
+  `GET /api/auth/passkey/generate-authenticate-options` 200 (0012 applied), a
+  body-less `POST /api/auth/sign-out` 200 (was 415), `GET /api/public-games` 401
+  signed out. Not yet heard from Johnny: a real passkey sign-up on production.
+- **C, `c_regina_temperature`, accepted (read-only):** the stored truth is what the
+  engine gives. Regina is a moon of a gas giant at 5.21 AU; `generateAtmospherics`
+  drops a chart profile whose `type` is not `Mainworld`, so atmosphere and hydro are
+  re-rolled (atmosphere code 10, Ethane) and the chart digits are written back over
+  the UWP afterwards; a missing temperature band defaults to Temperate when the
+  baseline is placed. 126 of 246 Spinward Marches mainworlds with atmosphere 4 to 9
+  and hydro 1 or more are frozen, boiling or non-water. Three questions on the board.
+- **Prompts for the next leg:** `a_public_games_feed.md`, `b_public_games_0013.md`,
+  `d_first_run_fixes.md`, `e_first_run_fixes.md`. C free.
+- Session totals, 2026-10-12: pushes 1.1.8 `57ec8d0`, 1.1.9 `615add4`, 1.1.10
+  `f99a8a2`, 1.1.11 `ef92359`.
+
+- 2026-10-13 12:20: new orchestrator session. `reports/` empty, all four Progress sections empty: A, B, D, E not started. HEAD and origin both `ef92359`. The four gates pass on the tree as it stands. Nothing to push. Asked Johnny again: the three Regina questions, the production passkey sign-up.
+
+## 259. Johnny says yes to the Regina engine pass; a trial outside the tree comes first (2026-10-13 12:45)
+
+- New session. `reports/` empty, A, B, D, E not started; four gates pass; HEAD and origin `ef92359`.
+- **Johnny: yes to question 1, no to 2 and 3.** Reading C's trace again: the Temperate default put Regina's baseline at 4.094 (habitable); the brown dwarf's forbidden zone and the `Sa` anchor moved it to 5.21. The approved changes may leave Regina frozen, and an engine edit reddens `npm test` for four running lanes. So `c_regina_engine_trial.md`: both changes in a copy outside the repo, three builds measured, a patch in `findings/`, no product file.
+- **Passkeys:** Johnny thought the build wanted a hardware key. It sets no `authenticatorAttachment` (plugin defaults: resident key and user verification preferred), so a password manager's passkey works. No change. He had not created the account yet.
+- 2026-10-13: Johnny: a passkey sign-up works on production. Closed.
+- 2026-10-13: Johnny on the sign-in card: Create an account on top, the passkey button last and labelled "Sign in", the helper sentence gone. Added to `d_first_run_fixes.md` as the first item (D had not started).
+- 2026-10-13 13:20: Johnny, yes to both card defaults. On water against ice: "solve it once and for all" with a high-effort model. `c_regina_engine_trial.md` withdrawn (never started); `c_liquid_temperature_once.md` written: six invariants as a census, three bins (plumbing, cited departure, gap to Johnny with the default built), work in a copy outside the repo, patch plus landing recipe, no product file. The held nine lines and the parked truth-build paths are to be accounted for in it.
+- 2026-10-13 13:40: Johnny: new **Lane Z** (another model) for heavier-effort requests; it is working on `c_liquid_temperature_once.md` now. `lanes/Z.md` written; C is free. No Progress line in the prompt yet.
+
+## 260. Four reports read; a deploy hazard holds 1.1.12; Lane Z's second patch goes to C for review (2026-10-13 20:05)
+
+- New session. Johnny pasted `orchestrator_start_here.md` (2026-10-07, stale) and said A to E are ready and that Lane Z, in another model outside the project, "has done some stuff" on water and ice. HEAD and origin `ef92359`. No file under `apps/`, `packages/` or `tests/` changed after 13:28: nobody was mid-step.
+- **Working tree gates, 20:00:** `npm test` 0 fail, checker clean, typecheck passes, build passes (index 175.34 kB).
+- **A `a_public_games_feed`: accepted.** Its question (the count in a shared hex includes the viewer's own game) is decided by the orchestrator: the server leaves out the caller's own universes (B).
+- **B `b_public_games_0013`: accepted, one thing held.** `chargeObjectBytes` (`jobs/object_charge.ts`) throws when `object_byte_charges` is absent, so a finished generate job fails if the Worker is deployed before migration 0014. B's suites always had it applied. `b_charge_fallback.md` makes it fall back to the 1.1.11 statement; it also carries the feed change and E's search `ORDER BY`. **No push until it reports.**
+- **E `e_first_run_fixes`: accepted** (signed-in browser pass not done: no local session). Its needs went to B (search order) and D (the Build pitch on the sign-in card).
+- **D froze at 13:20** in `d_first_run_fixes` before its gates. Restart; then `d_public_games_wire.md` (A's `MapView.vue` lines, the switch, the Build pitch).
+- **Lane Z left two patches in `findings/`.** `liquid_temperature_once` (13:05, a report, nine questions, holds the temperature to the rolled band) and `liquid_temperature_minimal` (18:48, no report, engine 1.2.0, 29 files: the chart kept, one `decideSurfaceLiquid`, a one-sector cap on the Worker, `tools/truth/upload_truth.js`; no band roll). The minimal one supersedes the first. `git apply --check` passes on the dirty tree, so it rests on the parked truth-build files. Census after: all six invariants 0; Regina becomes 8 / 8, 204 K, Ice. Parity ledger 70 to 456.
+- **`c_liquid_minimal_review.md` (C, read-only):** gates in a copy, which always-out paths the patch needs, rule 4 on the 456, what 1.2.0 does to universes made on 1.1.0, what the one-sector cap refuses, every number in `surface_liquid.js`, the dice, the uploader; then a note on the surfaces.
+- A `a_sector_labels.md` (finding 11), E `e_dossier_codes.md` (finding 15, cited text only).
+- Asked Johnny: land the minimal patch as 1.2.0 after C's review; the temperature roll later; atmosphere 1 not a vacuum; E's undated sessions.
+
+## 261. Lane Z applied the 1.2.0 patch before the review; gates green; the push is held for the review's changes (2026-10-13 20:45)
+
+- Johnny: Z has finished, follow `reports/z_liquid_minimal.md`'s checklist; all lanes have reported. HEAD and origin still `ef92359`.
+- **Z applied `liquid_temperature_minimal.patch` to the working tree at 20:11** (31 files, engine 1.2.0, the five 1.1.0 fixtures restored), and something ran `node tools/truth/build.js v10` in the repo (512 sectors, 307 s, `truth-local/`; nothing uploaded).
+- **Checklist 1, the four gates in the repo, 20:45:** `npm test` exit 0, checker clean, typecheck passes, build passes (index 176.61 kB).
+- **C's review: "land with these changes"** (accepted). (1) The late exotic liquid die is drawn from the shared stream and moves later rolls: 38 of 281 sampled systems. (2) The uploader can overwrite a released version and writes with fallback keys through `--endpoint`. (3) Comments cite the withdrawn patch. (4) `builder_sector_generate.test.js` expects 202 where the cap answers 400. (5) The job's backstop drops the cap's sentence. Also: a 1.1.0 universe generates as 1.2.0 while its row keeps 1.1.0.
+- **Decision: no push and no v10 upload until change 1 is in**, because engine output changes once more and the fixtures, ledger and v10 would be pinned twice. Johnny may overrule (then the fix is 1.2.1). `z_liquid_land_changes.md` (Z: 1, 2, 3, regenerate), `b_one_sector_followups.md` (B: 4, 5, the contract; the cap is B's from now).
+- **Checklist 3:** the board carries an "Engine 1.2.0" notice for every lane. **Checklist 4:** `c_no_sea.md` (C, from its own surfaces note; 273 against 273.15 comes back as a question). **Checklist 5:** `z_sheets_static.md` to E, with an assignment note (wrangler.toml is Johnny's; noindex waits on him). **Checklist 6:** upload and release left to Johnny.
+- **Accepted:** A `a_sector_labels` (the overprint was a width cached before the display font loaded); B `b_charge_fallback` (the 0014 hold is lifted; feed omits the caller; search order); D `d_first_run_fixes` (finding 12 is not D's: `addressPane`, `shell/pane.ts`); E `e_dossier_codes` (eight groups of codes left bare for want of a source: stands).
+- D goes to `d_public_games_wire.md`. A is held on two answers (a new map's name, addresses opening a pane).
+- Asked Johnny nine: the chart lock for every charted mainworld; the temperature roll parked; atmosphere 1; atmosphere 0 above melting; exotic 10 to 12; E's undated sessions; "My map"; addresses open a pane; noindex on the unlisted sheet.
+- 2026-10-13 20:55: Johnny, yes to 7 and 8. `a_map_name_address_pane.md` (A): "My map" for a new account's first universe only; `addressPane` opens the pane on a sector or subsector address; a first visit must still open no pane (D's first view is described by the address `/s/Spinward_Marches/sub/C`: A finds out whether it navigates there). The other seven questions stay open; none holds a lane.
+
+## 262. Z's dice fix is in; two surface tests red; four more reports read (2026-10-13 21:10)
+
+- **Z `z_liquid_land_changes`: accepted.** The late die is on `isolateRng` keyed by hex, world, moon and orbit; a test fails on the old wiring. 220 of 1,735 sampled systems changed (exactly those with a late draw); truth Regina's later social rolls moved (399 values), her physical row did not. Fixtures regenerated (two of eleven changed); the ledger is 456 rows, all identical. The uploader refuses a version that is not `building`, has no fallback keys and needs `--yes` for every non-local write (20 tests). Applied to the repo at 21:00, 22 files. Z's three questions decided by the orchestrator (technical): yes to all.
+- **`npm test` is red by two at 21:00**, both from C's surface edits in flight: `esm profile_regina` and `surface_enhanced_map` line 339. Regina carries a liquid string, so by C's prompt her profile must not move: a note was added to `c_no_sea.md` telling C to explain the change before regenerating the fixture.
+- **B `b_one_sector_followups`: accepted** (the test states the cap; `BuilderJob.error`; the contract). **E `z_sheets_static`: accepted** (five URLs from the worker, no host-config change; the unlisted sheet verbatim, `noindex` with Johnny). **D `d_public_games_wire`: accepted** with two faults it found: a stranger's game with the viewer's own campaign name is hidden (A's name guard, now wrong because the server leaves the caller out), and the account menu opens under an open panel.
+- Prompts: `d_menu_and_job_error.md` (menu teleport, the cap said in Build, the job's sentence, E's words), `a_feed_draw_all.md` (second for A), `e_rail_build_pitch.md`. B and Z are free.
+- The push now waits on C and on D's menu fix. `truth-local/v10` is stale; Johnny rebuilds after the push.
+- 2026-10-13 21:20: **Johnny, yes to all nine** (board, Decisions), and "let's get into a good place for a push". A `a_map_name_address_pane` accepted (a first visit stays on `/`: no pane). D's held line is released; E gets the `noindex` line. **A gap found while preparing the list:** Z proved upload and release only on the working tree, which holds the ten parked truth-build files; the push leaves them out. `b_release_path.md`: B runs the release on the pushed shape in a copy, writes `findings/push/admin_cap_only.patch`, settles `truth_build.test.js` line 1333 and gives a verdict. The push waits on C, D item 1 and B. No new work is started until it is cut.
+
+## 263. A, C, D, E reported; the tree is green; the push waits on A's two lines and B's verdict (2026-10-13 21:45)
+
+- **C `c_no_sea`: accepted.** No sea where there is no free liquid; sea ice and boiling read from the stored liquid; four outcome captions; shots on real bodies. C blamed the red `profile_regina` on the engine; Z blamed C. **Checked by the orchestrator:** it is C's `surfaceProfile` change, 7 fields on three bodies of Regina's system (w1m3, w6, w7) with `liquidType: null`, exactly the intended no-sea path; Regina is unchanged. The fixture was regenerated with a script that refused any other kind of difference. `esm.test.js` 30 of 30.
+- **D `d_menu_and_job_error`: accepted** (menu teleported; the one-sector limit said before any request, no `POST` sent; the switch's line; E's words; `ownName` gone). Item 4 needs two lines in A's store: `a_job_error.md`.
+- **A `a_feed_draw_all`, E `e_rail_build_pitch`: accepted.** The `packages_entry` red that A and E saw was D's mid-step state; green now.
+- **Whole tree, 21:40:** `npm test` 1648, 1621 pass, 0 fail, 27 skipped; checker clean; typecheck; build (index 176.30 kB).
+- B mid-step: v9 built, uploaded and released locally on the pushed shape, hashes match. Report owed.
+- Asked Johnny two (D's limit sentences; 273 against 273.15), neither holds the push.
+
+## 264. Push 1.1.12 called for (2026-10-13 21:50)
+
+- Johnny: yes to both open questions; A go. **A `a_job_error`, B `b_release_path`: accepted.** B's verdict: the ten parked files stay out; a local v9 released on the pushed shape; `findings/push/admin_cap_only.patch` is HEAD's `admin.ts` plus the cap. B scoped `truth_build.test.js`'s audit count (parked, stays out); that file now fails later on the cap (`sectors: 'all'`), parked.
+- **CI trap caught in the clean copy:** `liquid_temperature_census.test.js` reads `universe/raw/Core.tsv`, `Reft.tsv`, `Trojan_Reach.tsv`, which are git-ignored (only `Spinward_Marches.tsv` is tracked). The orchestrator added a skip when they are absent. The Regina and late-die tests read only the tracked file.
+- `APP_VERSION` 1.1.12. Clean copy `outer16` (HEAD + list + the cap patch, own `@voyage` links): only the known zod failure; checker clean; typecheck there shows the same zod artefact in untouched files. Junctions now made with PowerShell `New-Item -ItemType Junction` (`cmd //c mklink` fails from Git Bash).
+- Push note `findings/push/release_2026-10-13.md`; commands given. After the deploy: Johnny's v10 rebuild, upload and release.

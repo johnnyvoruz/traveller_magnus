@@ -11,7 +11,7 @@ import { ownedUniverse, type UniverseRow } from '../universe/forward';
 import { mountBuilderRoutes } from './builder';
 import { mountCampaignExport } from './campaign_export';
 import { mountObjectRoutes } from './objects';
-import { detectPublicGames } from '../auth/public_schema';
+import { detectPublicGames, publicGamesReady, readPublicGames } from '../auth/public_schema';
 import { deletePublicMark } from '../universe/public_mark';
 import { refreshAfterCampaign, setPublicGames } from './public_games';
 
@@ -27,8 +27,8 @@ function database(c: { env: AppEnv['Bindings'] }) {
     return drizzle(c.env.DB, { schema: { universes } });
 }
 
-function present(row: UniverseRow) {
-    return {
+function present(row: UniverseRow, publicGames?: boolean) {
+    const body = {
         id: row.id,
         ownerId: row.ownerId,
         name: row.name,
@@ -44,6 +44,17 @@ function present(row: UniverseRow) {
         objectBytes: row.objectBytes,
         lastSnapshotAt: row.lastSnapshotAt,
     };
+    if (publicGames === undefined) return body;
+    return { ...body, publicGames };
+}
+
+/** Attach `publicGames` only when migration 0013 is present. */
+async function presentOwned(c: { env: AppEnv['Bindings'] }, row: UniverseRow) {
+    await detectPublicGames(c.env.DB);
+    if (!publicGamesReady()) return present(row);
+    const flag = await readPublicGames(c.env.DB, row.id);
+    if (flag === null) return present(row);
+    return present(row, flag === 1);
 }
 
 function slugFor(name: string, id: string): string {
@@ -67,7 +78,14 @@ universesRoute.get('/', async (c) => {
         eq(universes.ownerId, actor.id),
         isNull(universes.deletedAt),
     )).orderBy(asc(universes.createdAt));
-    return ok(c, rows.map(present));
+    await detectPublicGames(c.env.DB);
+    if (!publicGamesReady()) return ok(c, rows.map((row) => present(row)));
+    const flags = await c.env.DB.prepare(
+        `SELECT id, public_games AS publicGames FROM universes WHERE owner_id = ? AND deleted_at IS NULL`,
+    ).bind(actor.id).all<{ id: string; publicGames: number }>();
+    const on = new Map<string, boolean>();
+    for (const flag of flags.results ?? []) on.set(String(flag.id), Number(flag.publicGames) === 1);
+    return ok(c, rows.map((row) => present(row, on.get(row.id) === true)));
 });
 
 universesRoute.post('/', async (c) => {
@@ -83,7 +101,7 @@ universesRoute.post('/', async (c) => {
         const existing = await database(c).select().from(universes).where(eq(universes.id, input.id)).get();
         if (existing) {
             if (existing.ownerId !== actor.id) return fail(c, 404, 'not_found', 'No such universe.');
-            return ok(c, present(existing), 200);
+            return ok(c, await presentOwned(c, existing), 200);
         }
     }
     if (input.truthVersion !== null) {
@@ -120,7 +138,7 @@ universesRoute.post('/', async (c) => {
     } catch (err) {
         if (input.id) {
             const winner = await database(c).select().from(universes).where(eq(universes.id, id)).get();
-            if (winner && winner.ownerId === actor.id) return ok(c, present(winner), 200);
+            if (winner && winner.ownerId === actor.id) return ok(c, await presentOwned(c, winner), 200);
         }
         throw err;
     }
@@ -139,13 +157,13 @@ universesRoute.post('/', async (c) => {
         )).run();
         throw err;
     }
-    return ok(c, present(row), 201);
+    return ok(c, await presentOwned(c, row), 201);
 });
 
 universesRoute.get('/:id', async (c) => {
     const owned = await ownedUniverse(c);
     if (owned instanceof Response) return owned;
-    return ok(c, present(owned.row));
+    return ok(c, await presentOwned(c, owned.row));
 });
 
 universesRoute.patch('/:id', async (c) => {
@@ -162,7 +180,7 @@ universesRoute.patch('/:id', async (c) => {
         updatedAt: now,
     }).where(eq(universes.id, owned.row.id)).run();
     const row = await database(c).select().from(universes).where(eq(universes.id, owned.row.id)).get();
-    return ok(c, present(row!));
+    return ok(c, await presentOwned(c, row!));
 });
 
 universesRoute.delete('/:id', async (c) => {
@@ -178,7 +196,7 @@ universesRoute.delete('/:id', async (c) => {
     }).where(eq(universes.id, owned.row.id)).run();
     if (await detectPublicGames(c.env.DB)) await deletePublicMark(c.env, owned.row.id);
     const row = await database(c).select().from(universes).where(eq(universes.id, owned.row.id)).get();
-    return ok(c, present(row!));
+    return ok(c, await presentOwned(c, row!));
 });
 
 universesRoute.get('/:id/campaign', async (c) => {

@@ -46,6 +46,7 @@ import type { AppEnv } from '../env';
 import { fail, ok } from '../http';
 import { isAllowanceRefusal, releaseAllowance, takeAllowance, type AllowanceView } from '../auth/allowance';
 import { enqueueGenerate } from '../jobs/generate_queue';
+import { ONE_SECTOR_LIMIT, sectorCount } from '../jobs/one_sector';
 import { defaultPin } from '../universe/defaults';
 import { ownedUniverse, type OwnedUniverse } from '../universe/forward';
 import { chartHoldsSystem, chartTree, generationSeed, hexDoorPath, HexRefusal, sectorOf, type ChartHex, type Pin } from '../universe/hexes';
@@ -551,6 +552,7 @@ export function mountBuilderRoutes(route: Hono<AppEnv>): void {
         const parsed = BuilderGenerate.safeParse(body);
         if (!parsed.success) return fail(c, 400, 'validation', 'Invalid request.', parsed.error.flatten());
         const input = parsed.data;
+        if (sectorCount(input.hexKeys) > 1) return fail(c, 400, 'validation', ONE_SECTOR_LIMIT, { reason: 'one_sector' });
         if (!builderPairReady(input.edition, input.generator)) {
             return fail(c, 400, 'validation', 'That engine and generator are not available yet.', { reason: 'generator_unavailable' });
         }
@@ -845,6 +847,7 @@ async function generateWithSectors(c: Ctx, owned: OwnedUniverse, body: unknown):
     const parsed = SectorGenerate.safeParse(body);
     if (!parsed.success) return fail(c, 400, 'validation', 'Invalid request.', parsed.error.flatten());
     const input = parsed.data;
+    if (sectorCount(input.hexKeys) > 1) return fail(c, 400, 'validation', ONE_SECTOR_LIMIT, { reason: 'one_sector' });
     if (!builderPairReady(input.edition, input.generator)) {
         return fail(c, 400, 'validation', 'That engine and generator are not available yet.', { reason: 'generator_unavailable' });
     }

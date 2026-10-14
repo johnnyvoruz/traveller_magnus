@@ -81,13 +81,24 @@ export function sayUndo(answer: UndoToken | UndoOutcome | null | void, how: Undo
     return null;
 }
 
-/** Runs one Undo and says what it did. A failure is said in the store's words. */
-export async function runUndo(token: UndoToken, how: UndoSay): Promise<void> {
+/**
+ * Runs one Undo and says what it did. A failure is said in the store's words. True when the
+ * store answered with nothing: everything was put back, and nothing has been said yet.
+ */
+export async function runUndo(token: UndoToken, how: UndoSay): Promise<boolean> {
     const store = buildStore();
-    if (!store) return;
+    if (!store) return false;
     try {
-        sayUndo(await store.undo(token), how);
+        const answer = await store.undo(token);
+        sayUndo(answer, how);
+        return !answer;
     } catch (err) {
         showToast(err instanceof Error && err.message ? err.message : 'Undo failed. Try again.');
+        return false;
     }
+}
+
+/** What Undo did to a blank system: the hex is empty again, and nothing else on the map says so. */
+export function blankUndone(hexKey: string): string {
+    return 'Removed the blank system at ' + hexKey.slice(hexKey.lastIndexOf('/') + 1) + '.';
 }

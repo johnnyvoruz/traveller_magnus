@@ -60,6 +60,11 @@ const saveState = computed((): 'saving' | 'failed' | 'saved' => {
     return pending.value || upload.value ? 'saving' : 'saved';
 });
 const saveWords = computed(() => (upload.value && upload.value.stage !== 'failed' ? uploadWords(upload.value) : 'Saving…'));
+/** "Saved" waits until a change is made on this visit. A new entry is already stored. */
+const changedHere = ref(false);
+watch(() => props.id, () => { changedHere.value = false; });
+watch(pending, (value) => { if (value) changedHere.value = true; });
+watch(upload, (value) => { if (value) changedHere.value = true; });
 
 function write(next: CampaignEntry): void {
     if (props.readOnly) return;
@@ -276,7 +281,7 @@ watch(() => props.id, greet, { immediate: true });
             </span>
           </p>
         </div>
-        <p class="rec-save" :class="'is-' + saveState" role="status">
+        <p v-if="changedHere || saveState !== 'saved'" class="rec-save" :class="'is-' + saveState" role="status">
           <template v-if="saveState === 'saving'">{{ saveWords }}</template>
           <template v-else-if="saveState === 'failed'">Not saved</template>
           <template v-else><Icon name="check" :size="12" />Saved</template>

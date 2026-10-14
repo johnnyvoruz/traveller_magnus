@@ -9,7 +9,8 @@ import { entriesByDate } from '../campaign/journal.ts';
 import { campaign } from '../campaign/store.ts';
 import RecordAvatar from './RecordAvatar.vue';
 import { locating, startLocate } from './locate.ts';
-import { buildTimeline, todayIndex, type TimelineRow } from './timeline.ts';
+import { editDateNext } from './list_state.ts';
+import { buildTimeline, timelineAdvice, todayIndex, type TimelineRow } from './timeline.ts';
 
 defineProps<{
     /** Changes cannot be made just now (offline). The list itself only reads. */
@@ -23,6 +24,16 @@ const emit = defineEmits<{
     /** The empty list points at the Journal, where a session takes the campaign date. */
     journal: [];
 }>();
+
+const advice = computed(() => timelineAdvice(campaign.clock !== null));
+
+function followAdvice(): void {
+    if (advice.value.act === 'date') {
+        editDateNext.value = true;
+        return;
+    }
+    emit('journal');
+}
 
 const listEl = ref<HTMLElement | null>(null);
 const active = ref(0);
@@ -115,8 +126,8 @@ onMounted(openAtToday);
 <template>
   <div class="tl">
     <div v-if="model.count === 0" class="camp-empty">
-      <p>This campaign has no dated entries or records yet. Add a session in the Journal, or set a date on a record.</p>
-      <button type="button" class="ui-btn is-primary" :disabled="readOnly" @click="emit('journal')">Open the Journal</button>
+      <p>{{ advice.text }}</p>
+      <button type="button" class="ui-btn is-primary" :disabled="readOnly" @click="followAdvice">{{ advice.label }}</button>
     </div>
     <div
       v-else

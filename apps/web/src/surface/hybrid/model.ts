@@ -423,7 +423,9 @@ export function classify(model: ClassModel, water: boolean, T: number, e: number
         if (model.phaseKnown) {
             const icy = has(world, 'Ic');
             if (iceT < Tm) return { ice: icy ? 'iceField' : 'seaIce', seasonal: false, terrain: icy ? 'IF' : 'SI' };
-            if (iceT < Tm + model.seasonalBand(latDeg)) return { ice: 'seaIce', seasonal: true, terrain: 'SI' };
+            // A stored liquid draws ice only below its melting point. An assumed liquid
+            // (no liquidType on the body) keeps the seasonal band, so those sheets do not move.
+            if (world.liquidAssumed && iceT < Tm + model.seasonalBand(latDeg)) return { ice: 'seaIce', seasonal: true, terrain: 'SI' };
             if (T > model.boilK) return { ice: 'none', seasonal: false, terrain: 'EV' };
         }
         return { ice: 'none', seasonal: false, terrain: depth > 0.35 ? 'OC' : 'SH' };

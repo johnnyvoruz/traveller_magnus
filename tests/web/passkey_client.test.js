@@ -9,7 +9,7 @@ import {
     CEREMONY_CANCELLED, PASSKEY_UNAVAILABLE, _fetchForTests, _loadPasskeyClientForTests,
     addPasskey, listLinkedAccounts, listPasskeys, passkeySupported, redeemRecovery,
     regenerateRecoveryCodes, removePasskey, renamePasskey, setUsername, signInWithPasskey,
-    signUp, startSocial, unlinkAccount,
+    linkProvider, signUp, startSocial, unlinkAccount,
 } from '../../apps/web/src/account/passkey.ts';
 import { loadSession, session, signOut } from '../../apps/web/src/account/session.ts';
 
@@ -298,6 +298,33 @@ test('regenerate, username, unlink, and the provider start', async () => {
     assert.deepEqual(await startSocial('google'), { ok: true, url: 'https://accounts.example/google' });
     assert.deepEqual(calls.find((call) => call.url.includes('sign-in/social')).body, { provider: 'google', disableRedirect: true });
     assert.equal(loads, 0);
+});
+
+test('linkProvider posts link-social and keeps the already-linked sentence', async () => {
+    await reset();
+    await loadSession(async () => me('ada'));
+    const calls = install({
+        add: () => ({ data: null, error: null }),
+        passkey: () => ({ data: null, error: null }),
+        http: (call) => {
+            if (call.url.includes('/api/me')) return me('ada');
+            if (call.url.includes('link-social') && call.body && call.body.provider === 'google') {
+                return json(200, { url: 'https://accounts.example/link', redirect: true });
+            }
+            if (call.url.includes('link-social')) {
+                return json(409, { code: 'SOCIAL_ACCOUNT_ALREADY_LINKED', message: 'Social account already linked' });
+            }
+            return json(404, { code: 'missing', message: call.url });
+        },
+    });
+    assert.deepEqual(await linkProvider('google', '/account'), { ok: true, url: 'https://accounts.example/link' });
+    assert.deepEqual(calls.find((call) => call.url.includes('link-social')).body, {
+        provider: 'google', disableRedirect: true, callbackURL: '/account',
+    });
+    assert.deepEqual(await linkProvider('discord', '/account'), {
+        ok: false, code: 'SOCIAL_ACCOUNT_ALREADY_LINKED', message: 'Social account already linked',
+    });
+    assert.equal(calls.some((call) => String(call.url).includes('sign-in/social')), false);
 });
 
 test('a recovery session is refused regenerate, and the gate follows', async () => {

@@ -85,6 +85,12 @@ if (process.env.RUN_API_TESTS !== '1') {
         let child = null;
         try {
             runWrangler(['d1', 'migrations', 'apply', 'voyage', '--local', '--persist-to', persistTo]);
+            if (process.env.VOYAGE_BEFORE_0013 === '1') {
+                const drop = path.join(persistTo, 'drop-later.sql');
+                writeFileSync(drop, 'DROP TABLE IF EXISTS object_byte_charges;\nDROP TABLE IF EXISTS public_marks;\nALTER TABLE universes DROP COLUMN public_games;\n');
+                runWrangler(['d1', 'execute', 'voyage', '--local', '--persist-to', persistTo, '--file', drop]);
+                rmSync(drop);
+            }
             const stamp = randomBytes(4).toString('hex');
             const cookie = userCookie(`gen${stamp}`, `gen${stamp}@localhost`, persistTo);
             const other = userCookie(`oth${stamp}`, `oth${stamp}@localhost`, persistTo);
@@ -229,21 +235,40 @@ if (process.env.RUN_API_TESTS !== '1') {
             });
             assert.equal(pairBack.status, 200, JSON.stringify(pairBack.body));
 
+            const beforeCap = await jsonFetch(`${base}/api/me`, { headers: { cookie } });
+            assert.equal(beforeCap.status, 200, JSON.stringify(beforeCap.body));
+            const usedBefore = beforeCap.body.data.allowance.used;
             const box = await post(base, id, headers, '/generate', {
                 hexKeys: [homeHex, '~slot_11_8/0101', '~slot_12_8/0102'],
                 edition: 'MgT2E', generator: 'top-down', roll: 0, filledToo: true,
                 makeSectors: [{ name: 'Left', slot: { x: 11, y: 8 } }, { name: 'Right', slot: { x: 12, y: 8 } }],
             });
-            assert.equal(box.status, 202, JSON.stringify(box.body));
-            const boxIds = box.body.data.sectors.map((item) => item.id);
-            const boxUndo = await post(base, id, headers, '/sectors/undo-generate', { jobId: box.body.data.jobId });
-            assert.equal(boxUndo.status, 200, JSON.stringify(boxUndo.body));
-            await sleep(1500);
+            assert.equal(box.status, 400, JSON.stringify(box.body));
+            assert.equal(box.body.error.code, 'validation');
+            assert.equal(box.body.error.message, 'The limit is one sector per request.');
+            assert.equal(box.body.error.details.reason, 'one_sector');
+            assert.equal(box.body.data, undefined);
+            const afterCap = await jsonFetch(`${base}/api/me`, { headers: { cookie } });
+            assert.equal(afterCap.body.data.allowance.used, usedBefore);
             const homeNow = await jsonFetch(`${base}/api/universes/${id}/hexes/${encodeURIComponent(homeId)}/1910`, { headers: { cookie } });
             assert.equal(homeNow.status, 200, JSON.stringify(homeNow.body));
             assert.equal(homeNow.body.data.treeHash, originalHash);
             const listed = await jsonFetch(`${base}/api/universes/${id}/sectors`, { headers: { cookie } });
-            assert.equal(boxIds.some((sectorId) => listed.body.data.items.some((item) => item.id === sectorId)), false);
+            assert.equal(listed.body.data.items.some((item) => item.name === 'Left' || item.name === 'Right'), false);
+            const left = await post(base, id, headers, '/generate', {
+                hexKeys: ['~slot_11_8/0101', '~slot_11_8/0102'],
+                edition: 'MgT2E', generator: 'top-down', roll: 0,
+                makeSectors: [{ name: 'Left', slot: { x: 11, y: 8 } }],
+            });
+            assert.equal(left.status, 202, JSON.stringify(left.body));
+            assert.equal(typeof left.body.data.jobId, 'string');
+            const right = await post(base, id, headers, '/generate', {
+                hexKeys: ['~slot_12_8/0101', '~slot_12_8/0102'],
+                edition: 'MgT2E', generator: 'top-down', roll: 0,
+                makeSectors: [{ name: 'Right', slot: { x: 12, y: 8 } }],
+            });
+            assert.equal(right.status, 202, JSON.stringify(right.body));
+            assert.equal(typeof right.body.data.jobId, 'string');
         } finally {
             if (child) stopDev(child.pid);
             rmSync(persistTo, { recursive: true, force: true });

@@ -331,3 +331,17 @@ export async function startSocial(provider: string): Promise<AuthResult<{ url: s
     if (typeof url !== 'string' || !url) return unreadable();
     return { ok: true, url };
 }
+
+/**
+ * Link Google, Discord, or X to the account that is already signed in.
+ * `POST /api/auth/link-social` with `{ provider, disableRedirect: true, callbackURL }`.
+ * Success is `{ ok: true, url }`. The screen assigns `url`. This function does not navigate.
+ * A refusal, including a provider already linked to another account, keeps the server's code and sentence.
+ */
+export async function linkProvider(provider: string, callbackURL: string): Promise<AuthResult<{ url: string }>> {
+    const done = await post('/api/auth/link-social', { provider, disableRedirect: true, callbackURL });
+    if (!done.ok) return done;
+    const url = done.body && typeof done.body === 'object' ? (done.body as { url?: unknown }).url : null;
+    if (typeof url !== 'string' || !url) return unreadable();
+    return { ok: true, url };
+}

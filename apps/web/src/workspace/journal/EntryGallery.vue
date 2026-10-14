@@ -283,9 +283,9 @@ watch(() => props.id, () => { closeLightbox(); });
         <button type="button" class="img-thumb-open" :title="(image.caption || imageWords(image)) + (index === 0 ? ' · primary' : '')" @click="openLightbox(id, index)">
           <img :src="url(image.thumbHash)" :alt="image.caption || face?.name + ', image ' + (index + 1)" loading="lazy">
         </button>
-        <span v-if="index === 0" class="img-primary-tag">Avatar</span>
+        <span v-if="index === 0" class="img-primary-tag">Cover</span>
         <span class="img-thumb-acts">
-          <button v-if="index > 0" type="button" class="img-act" :disabled="readOnly" aria-label="Make this the avatar" title="Make this the avatar" @click="toFront(image.hash)">
+          <button v-if="index > 0" type="button" class="img-act" :disabled="readOnly" aria-label="Make this the cover" title="Make this the cover" @click="toFront(image.hash)">
             <Icon name="star" :size="11" />
           </button>
           <button type="button" class="img-act is-remove" :disabled="readOnly" :aria-label="'Remove image ' + (index + 1)" title="Remove" @click="remove(image.hash)">
@@ -312,3 +312,15 @@ watch(() => props.id, () => { closeLightbox(); });
     />
   </section>
 </template>
+
+<style>
+/* The record's image label appears only on hover. On an entry it is the control's name. */
+.jn-entry .rec-avatar-label {
+  opacity: 1;
+}
+
+.jn-entry .img-primary-tag {
+  letter-spacing: 0;
+  text-transform: none;
+}
+</style>

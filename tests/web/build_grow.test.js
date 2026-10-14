@@ -99,32 +99,63 @@ test('one slot: one request carries the slot key and the new sector; nothing is 
     teardown();
 });
 
-test('two slots and a hex across a sector edge: still one request, one toast, one Undo', async () => {
-    const { calls, answers } = setup();
-    const keys = ['Spinward_Marches/3240', SLOT_A + '/0101', SLOT_B + '/0101'];
+test('two slots, or a slot and a hex across a sector edge: nothing is sent, and the pane says to make one sector at a time', async () => {
+    const { calls } = setup();
     growUi.names[SLOT_A] = 'Vell';
     growUi.names[SLOT_B] = 'Ostra';
+    generateGrowing([SLOT_A + '/0101', SLOT_B + '/0101']);
+    assert.equal(calls.grow.length, 0);
+    assert.equal(growUi.error, 'You can create one sector at a time. Select hexes inside one empty sector slot, and then generate. Repeat for each slot.');
+    assert.equal(build.job, null);
+    growUi.error = '';
+    generateGrowing(['Spinward_Marches/3240', SLOT_A + '/0101']);
+    assert.equal(calls.grow.length, 0);
+    assert.equal(growUi.error, 'You can generate in one sector at a time. Select hexes inside one sector, and then select Generate.');
+    // The names typed stay for the next try.
+    assert.deepEqual({ ...growUi.names }, { [SLOT_A]: 'Vell', [SLOT_B]: 'Ostra' });
+    assert.equal(toasts.length, 0);
+    teardown();
+});
+
+test('one slot: one toast, one Undo, and Restore when the store gives one back', async () => {
+    const { calls, answers } = setup();
+    const keys = [SLOT_A + '/0101', SLOT_A + '/0102', SLOT_A + '/0103'];
+    growUi.names[SLOT_A] = 'Vell';
     generateGrowing(keys);
     assert.equal(calls.grow.length, 1);
     assert.deepEqual(calls.grow[0].body.hexKeys, keys);
-    assert.deepEqual(calls.grow[0].body.makeSectors, [{ name: 'Vell', slot: { x: 3, y: -2 } }, { name: 'Ostra', slot: { x: 4, y: -2 } }]);
-    answers.accepted.resolve({ sectors: [], keys: { [keys[1]]: ID_A + '/0101', [keys[2]]: ID_B + '/0101' }, undo: { id: 'grow' } });
+    assert.deepEqual(calls.grow[0].body.makeSectors, [{ name: 'Vell', slot: { x: 3, y: -2 } }]);
+    answers.accepted.resolve({ sectors: [], keys: { [keys[0]]: ID_A + '/0101', [keys[1]]: ID_A + '/0102', [keys[2]]: ID_A + '/0103' }, undo: { id: 'grow' } });
     answers.finished.resolve({ undo: { id: 'grow' }, progress: { total: 3, done: 3, failed: [], skipped: 0, state: 'done' } });
     await tick();
     assert.equal(toasts.length, 1);
-    assert.equal(toasts[0].message, 'Generated 3 systems in 2 new sectors: Vell, Ostra.');
+    assert.equal(toasts[0].message, 'Generated 3 systems in the new sector Vell.');
     // The Undo is one request, with the act's own token, and offers Restore when the store gives one back.
     answers.restore = { id: 'restore' };
     toasts[0].action.run();
     await tick();
     assert.deepEqual(calls.undo, [{ id: 'grow' }]);
     const undone = toasts[toasts.length - 1];
-    assert.equal(undone.message, 'Removed the new sectors Vell and Ostra and every system generated in them.');
+    assert.equal(undone.message, 'Removed the new sector Vell and every system generated in it.');
     assert.equal(undone.action.label, 'Restore');
     undone.action.run();
     await tick();
     assert.deepEqual(calls.undo, [{ id: 'grow' }, { id: 'restore' }]);
-    assert.equal(toasts[toasts.length - 1].message, 'Restored the new sectors Vell and Ostra and their systems.');
+    assert.equal(toasts[toasts.length - 1].message, 'Restored the new sector Vell and its systems.');
+    teardown();
+});
+
+test('a job that failed whole: the server\u2019s sentence is the toast and stays beside Generate', async () => {
+    const { answers } = setup();
+    growUi.names[SLOT_A] = 'Vell';
+    generateGrowing([SLOT_A + '/0101', SLOT_A + '/0102']);
+    answers.accepted.resolve({ sectors: [], keys: {}, undo: { id: 'grow' } });
+    answers.finished.resolve({ undo: { id: 'grow' }, progress: { total: 2, done: 0, failed: [], skipped: 0, state: 'failed', error: 'The limit is one sector per request.' } });
+    await tick();
+    assert.equal(build.job, null);
+    assert.equal(toasts.length, 1);
+    assert.equal(toasts[0].message, 'The limit is one sector per request.');
+    assert.equal(build.error, 'The limit is one sector per request.');
     teardown();
 });
 

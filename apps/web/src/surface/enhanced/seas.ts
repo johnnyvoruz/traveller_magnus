@@ -2,6 +2,7 @@
  * Enhanced sea cover and sea ice. Presentation only. No drawing.
  * Vanilla profiles still infer a liquid from temperature; this module does not.
  */
+import { phaseOf } from '../hybrid/liquids.ts';
 import { liquidByName, type Liquid } from './liquids.ts';
 
 type Body = Record<string, unknown> | null | undefined;
@@ -9,13 +10,16 @@ type Body = Record<string, unknown> | null | undefined;
 export type Substance = Liquid & {
     /** liquidType was 'Ice': the data already calls the water frozen. */
     readonly frozenByData: boolean;
+    /** Boiling point in kelvin, from the same table row as meltingK. */
+    readonly boilingK: number;
 };
 
 export type SeaIce =
     | { readonly kind: 'none'; readonly why: string }
     | { readonly kind: 'all'; readonly why: string }
     | { readonly kind: 'caps'; readonly fromLatDeg: number; readonly why: string }
-    | { readonly kind: 'locked'; readonly why: string };
+    | { readonly kind: 'locked'; readonly why: string }
+    | { readonly kind: 'vapor'; readonly why: string };
 
 const digit = (value: unknown): number | null => {
     if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -75,10 +79,12 @@ export function substance(body: Body): Substance | null {
     if (typeof named !== 'string' || named === '') return null;
     if (named === 'Ice') {
         const water = liquidByName('Water');
-        return water ? { name: water.name, meltingK: water.meltingK, frozenByData: true } : null;
+        const phase = phaseOf('Water');
+        return water && phase ? { name: water.name, meltingK: water.meltingK, boilingK: phase.boilK, frozenByData: true } : null;
     }
     const row = liquidByName(named);
-    return row ? { name: row.name, meltingK: row.meltingK, frozenByData: false } : null;
+    const phase = phaseOf(named);
+    return row && phase ? { name: row.name, meltingK: row.meltingK, boilingK: phase.boilK, frozenByData: false } : null;
 }
 
 /** Kelvin at a latitude in degrees. Null when mean, high or low is missing, or when they contradict. */
@@ -125,10 +131,12 @@ export function seaIce(body: Body): SeaIce {
     if (!(low <= mean && mean <= high)) {
         return none('temperatures contradictory: low ' + low + ', mean ' + mean + ', high ' + high);
     }
+    if (low >= liquid.boilingK) {
+        return { kind: 'vapor', why: 'lowTempK ' + low + ' >= boilingK ' + liquid.boilingK + ' (' + liquid.name + ')' };
+    }
     if (low >= liquid.meltingK) {
         return none('lowTempK ' + low + ' >= meltingK ' + liquid.meltingK + ' (' + liquid.name + ')');
     }
-    if (liquid.frozenByData) return all('liquidType Ice, frozen water, meltingK ' + liquid.meltingK);
     if (high < liquid.meltingK) return all('highTempK ' + high + ' < meltingK ' + liquid.meltingK + ' (' + liquid.name + ')');
     if (lockedToStar(row)) {
         const flags = [
@@ -160,4 +168,29 @@ export function seaIce(body: Body): SeaIce {
         'sea ice rule does not decide: pole ' + String(pole) + ', equator ' + String(equator)
         + ', meltingK ' + liquid.meltingK + ' (' + liquid.name + '), A ' + span,
     );
+}
+
+/**
+ * Latitude, in degrees, equatorward of which the surface is at or above the stored
+ * liquid's boiling point. Null when the equator is at or below that point, or when
+ * the body has no table liquid. The points are the table row for liquidType
+ * (Ice uses Water), not a literal in this file.
+ */
+export function vaporEquatorDeg(body: Body): number | null {
+    const liquid = substance(body);
+    if (!liquid) return null;
+    const row = body as Record<string, unknown>;
+    const mean = finite(row.meanTempK);
+    const low = finite(row.lowTempK);
+    const high = finite(row.highTempK);
+    if (mean == null || low == null || high == null) return null;
+    if (!(low <= mean && mean <= high)) return null;
+    const equator = latitudeTempK(row, 0);
+    const pole = latitudeTempK(row, 90);
+    if (equator == null || pole == null || equator <= liquid.boilingK) return null;
+    if (pole >= liquid.boilingK) return 90;
+    const span = amplitude(mean, low, high);
+    const sin2 = span === 0 ? Number.NaN : 1 / 3 - (liquid.boilingK - mean) / span;
+    if (!(sin2 > 0 && sin2 < 1)) return null;
+    return Math.asin(Math.sqrt(sin2)) * 180 / Math.PI;
 }

@@ -111,7 +111,7 @@ if (process.env.RUN_API_TESTS !== '1') {
             assert.equal(created.body.data.name, 'My campaign');
             assert.equal(created.body.data.truthVersion, null);
             assert.equal(created.body.data.editionDefault, 'MgT2E');
-            assert.equal(created.body.data.engineVersion, '1.0.0');
+            assert.equal(created.body.data.engineVersion, '1.1.0');
             assert.equal(created.body.data.deletedAt, null);
             const id = created.body.data.id;
 

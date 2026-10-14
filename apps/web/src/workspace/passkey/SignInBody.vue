@@ -1,9 +1,10 @@
 <script setup lang="ts">
 /**
- * The sign-in card (findings/passkey_screens_design.md §1): "Sign in with a passkey" first,
- * then "Create an account" with a username, "I lost my passkey" for a recovery code, and the
- * providers the server has switched on (X, Discord, Google) below. Shown in the pop-up at the
- * rail's foot, in the Campaign and Characters panels while signed out, and on /account.
+ * The sign-in card (findings/passkey_screens_design.md §1; reordered 2026-10-13): "Create an
+ * account" with a username first, then the providers the server has switched on (X, Discord,
+ * Google), then the passkey's "Sign in" with "I lost my passkey" for a recovery code under it.
+ * Shown in the pop-up at the rail's foot, in the Campaign and Characters panels while signed
+ * out, and on /account.
  *
  * This body is its own chunk, loaded by workspace/SignInCard.vue when a card is shown. The calls
  * are Lane A's (account/passkey.ts), which load the passkey libraries at the first ceremony.
@@ -16,10 +17,10 @@ import { CEREMONY_CANCELLED, PASSKEY_UNAVAILABLE, passkeySupported, redeemRecove
 import { session, signIn } from '../../account/session.ts';
 import { apiFetch } from '../../platform/http.ts';
 import { isOnline, onOnlineChange } from '../../platform/browser.ts';
-import { offeredProviders, readProviders, SIGN_IN_FINE, SIGN_IN_FREE, SIGN_IN_OFFLINE, SIGN_IN_PITCH, type SignInProvider } from '../account.ts';
+import { offeredProviders, readProviders, SIGN_IN_FINE, SIGN_IN_OFFLINE, signInFrom, signInPitch, type SignInProvider } from '../account.ts';
 import {
     atUsername, CREATE_ACCOUNT, guardRecovery, heldCodes, LOST_PASSKEY, NO_WEBAUTHN_ALONE, NO_WEBAUTHN_PROVIDERS, NOT_REACHED, OTHER_ACCOUNTS,
-    PASSKEY_CLOSED, PASSKEY_EXPLAIN, PASSKEY_WAITING, RECOVER_HEADING, RECOVER_LEAD, RECOVERY_PATH, SIGN_IN_PASSKEY,
+    PASSKEY_CLOSED, PASSKEY_WAITING, RECOVER_HEADING, RECOVER_LEAD, RECOVERY_PATH, SIGN_IN_PASSKEY,
     USERNAME_HINT, usernameProblem,
 } from './words.ts';
 import { noteReturn } from './recovery.ts';
@@ -39,14 +40,17 @@ const busy = ref('');
 const offered = ref<SignInProvider[]>(offeredProviders(null));
 const online = ref(true);
 const canPasskey = ref(true);
-/** A line under the buttons: muted for a closed prompt, the alert colour for a refusal. */
+/** A line under the control it answers: muted for a closed prompt, the alert colour for a refusal. */
 const said = ref<{ text: string; alert: boolean } | null>(null);
+/** Which control the line answers: the username form, or the passkey's Sign in. */
+const saidAt = ref<'create' | 'passkey'>('passkey');
 const username = ref('');
 const typing = ref(false);
 const nameRefused = ref('');
 const recoverName = ref('');
 const code = ref('');
 
+/** The first provider, when the browser has no passkeys: the card's top button then. */
 const first = ref<HTMLButtonElement | null>(null);
 const createEl = ref<HTMLButtonElement | null>(null);
 const lostEl = ref<HTMLButtonElement | null>(null);
@@ -98,6 +102,7 @@ async function signInPasskey(): Promise<void> {
     if (busy.value || !online.value) return;
     busy.value = 'passkey';
     said.value = null;
+    saidAt.value = 'passkey';
     try {
         const done = await signInWithPasskey();
         if (!done.ok) failed(done);
@@ -113,6 +118,7 @@ async function createAccount(): Promise<void> {
     if (busy.value || !online.value || !canCreate.value) return;
     busy.value = 'create';
     said.value = null;
+    saidAt.value = 'create';
     nameRefused.value = '';
     const name = username.value.trim();
     try {
@@ -187,14 +193,16 @@ onMounted(() => {
     canPasskey.value = passkeySupported();
     stopOnline = onOnlineChange((now) => { online.value = now; });
     void readProviders((url) => apiFetch(fetch, url)).then((ids) => { offered.value = offeredProviders(ids); });
-    emit('ready');
+    // After the card is drawn again for a browser with no passkeys: the top button is then the first provider.
+    void nextTick(() => emit('ready'));
 });
 
 onBeforeUnmount(() => {
     if (stopOnline) stopOnline();
 });
 
-defineExpose({ focus: () => { if (first.value) first.value.focus(); } });
+/** Focus lands on the card's top button: "Create an account", or the first provider without passkeys. */
+defineExpose({ focus: () => { const top = createEl.value || first.value; if (top) top.focus(); } });
 </script>
 
 <template>
@@ -223,23 +231,11 @@ defineExpose({ focus: () => { if (first.value) first.value.focus(); } });
     </form>
 
     <template v-else>
-      <p class="signin-pitch">{{ SIGN_IN_PITCH }} {{ SIGN_IN_FREE }}</p>
+      <p class="signin-pitch" :data-signin-from="signInFrom || undefined">{{ signInPitch(signInFrom) }}</p>
 
+      <!-- A new account, first: the filled button, and its username form in its place. -->
       <template v-if="canPasskey">
-        <button
-          ref="first"
-          type="button"
-          class="ui-btn is-primary signin-go"
-          data-signin="passkey"
-          :disabled="busy !== '' || !online"
-          :aria-busy="busy === 'passkey' ? 'true' : undefined"
-          @click="signInPasskey"
-        >
-          {{ busy === 'passkey' ? PASSKEY_WAITING : SIGN_IN_PASSKEY }}
-        </button>
-        <p class="signin-explain">{{ PASSKEY_EXPLAIN }}</p>
-
-        <button v-if="mode === 'card'" ref="createEl" type="button" class="ui-btn signin-go" data-signin="create" :disabled="busy !== '' || !online" @click="show('create')">
+        <button v-if="mode === 'card'" ref="createEl" type="button" class="ui-btn is-primary signin-go" data-signin="create" :disabled="busy !== '' || !online" @click="show('create')">
           {{ CREATE_ACCOUNT }}
         </button>
         <form v-else class="signin-form is-boxed" aria-label="Create an account" novalidate @submit.prevent="createAccount" @keydown="onFormKey">
@@ -270,13 +266,11 @@ defineExpose({ focus: () => { if (first.value) first.value.focus(); } });
             <button type="button" class="ui-btn" :disabled="busy !== ''" @click="show('card')">Cancel</button>
           </div>
         </form>
-
-        <p v-if="said" :class="said.alert ? 'signin-error' : 'signin-quiet'" :role="said.alert ? 'alert' : 'status'">{{ said.text }}</p>
-        <button ref="lostEl" type="button" class="signin-link" data-signin="lost" :disabled="busy !== ''" @click="show('lost')">{{ LOST_PASSKEY }}</button>
+        <p v-if="said && saidAt === 'create'" :class="said.alert ? 'signin-error' : 'signin-quiet'" :role="said.alert ? 'alert' : 'status'">{{ said.text }}</p>
       </template>
       <p v-else class="signin-note" role="status">{{ noPasskeySay }}</p>
 
-      <!-- The providers, below: one row each, the first the filled one when there is no passkey button. -->
+      <!-- The providers: one row each, the first the filled one when there is no passkey button. -->
       <div v-if="offered.length" class="signin-ways">
         <p v-if="canPasskey" class="signin-rule">{{ OTHER_ACCOUNTS }}</p>
         <button
@@ -293,6 +287,22 @@ defineExpose({ focus: () => { if (first.value) first.value.focus(); } });
           {{ busy === provider.id ? provider.opening : provider.label }}
         </button>
       </div>
+
+      <!-- The passkey, last in the list: a plain button, with the way in for a lost passkey directly under it. -->
+      <template v-if="canPasskey">
+        <button
+          type="button"
+          class="ui-btn signin-go"
+          data-signin="passkey"
+          :disabled="busy !== '' || !online"
+          :aria-busy="busy === 'passkey' ? 'true' : undefined"
+          @click="signInPasskey"
+        >
+          {{ busy === 'passkey' ? PASSKEY_WAITING : SIGN_IN_PASSKEY }}
+        </button>
+        <button ref="lostEl" type="button" class="signin-link" data-signin="lost" :disabled="busy !== ''" @click="show('lost')">{{ LOST_PASSKEY }}</button>
+        <p v-if="said && saidAt === 'passkey'" :class="said.alert ? 'signin-error' : 'signin-quiet'" :role="said.alert ? 'alert' : 'status'">{{ said.text }}</p>
+      </template>
       <p v-if="!online" class="signin-note" role="status">{{ SIGN_IN_OFFLINE }}</p>
       <p v-else-if="session.error" class="signin-error" role="alert">{{ session.error }}</p>
       <p class="signin-fine">{{ SIGN_IN_FINE }}</p>
@@ -333,7 +343,6 @@ defineExpose({ focus: () => { if (first.value) first.value.focus(); } });
 }
 
 /* Two classes: a page around the card (/account) styles its own paragraphs. */
-.signin .signin-explain,
 .signin .signin-hint,
 .signin .signin-quiet {
   color: var(--text-muted);

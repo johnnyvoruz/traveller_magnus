@@ -11,16 +11,25 @@ import { MgT2EData } from '../../packages/engines/src/generated/rules/mgt2e_data
 import { TRUTH_SEED, TRUTH_SETTINGS } from '../../tools/truth/settings.js';
 import { pickSystem } from '../../apps/web/src/dossier/model.ts';
 import { EXOTIC_LIQUIDS } from '../../apps/web/src/surface/enhanced/liquids.ts';
-import { coverage, latitudeTempK, seaIce, substance } from '../../apps/web/src/surface/enhanced/seas.ts';
+import { seaPlan } from '../../apps/web/src/surface/enhanced/map.ts';
+import { coverage, latitudeTempK, seaIce, substance, vaporEquatorDeg } from '../../apps/web/src/surface/enhanced/seas.ts';
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const engineVersion = require('../../packages/engines/package.json').version;
 
-function meltingK(name) {
+function tableRow(name) {
     const row = MgT2EData.atmosphereExtended.exoticLiquids.find((item) => item.name === name);
     if (!row) throw new Error('missing liquid ' + name);
-    return row.mp;
+    return row;
+}
+
+function meltingK(name) {
+    return tableRow(name).mp;
+}
+
+function boilingK(name) {
+    return tableRow(name).bp;
 }
 
 function amplitude(mean, low, high) {
@@ -62,9 +71,9 @@ test('coverage uses the percent, else the hydro digit, and can be zero', () => {
 
 test('substance is the named table row, and Ice is frozen water', () => {
     const water = meltingK('Water');
-    assert.deepEqual(substance({ liquidType: 'Water' }), { name: 'Water', meltingK: water, frozenByData: false });
-    assert.deepEqual(substance({ liquidType: 'Methane' }), { name: 'Methane', meltingK: meltingK('Methane'), frozenByData: false });
-    assert.deepEqual(substance({ liquidType: 'Ice' }), { name: 'Water', meltingK: water, frozenByData: true });
+    assert.deepEqual(substance({ liquidType: 'Water' }), { name: 'Water', meltingK: water, boilingK: boilingK('Water'), frozenByData: false });
+    assert.deepEqual(substance({ liquidType: 'Methane' }), { name: 'Methane', meltingK: meltingK('Methane'), boilingK: boilingK('Methane'), frozenByData: false });
+    assert.deepEqual(substance({ liquidType: 'Ice' }), { name: 'Water', meltingK: water, boilingK: boilingK('Water'), frozenByData: true });
     assert.equal(substance({ liquidType: 'Unknown Exotic Liquid' }), null);
     assert.equal(substance({}), null);
     assert.equal(substance({ liquidType: '' }), null);
@@ -133,6 +142,26 @@ test('sea ice kinds follow the written order', () => {
     const frozen = { hydroPercent: 20, liquidType: 'Ice', meanTempK: 260, lowTempK: 240, highTempK: 290 };
     assert.equal(seaIce(frozen).kind, 'all');
     assert.equal(seaIce({ hydroPercent: 0, liquidType: 'Ice', meanTempK: 200, lowTempK: 180, highTempK: 220 }).kind, 'none');
+
+    // Ice stored by the engine, with an equator above Water's melting point: caps, not a frozen sheet.
+    const warmEquator = { hydroPercent: 20, liquidType: 'Ice', meanTempK: 270, lowTempK: 240, highTempK: 320 };
+    const warmIce = seaIce(warmEquator);
+    assert.equal(warmIce.kind, 'caps');
+    assert.ok(latitudeTempK(warmEquator, 0) > water);
+    assert.ok(latitudeTempK(warmEquator, warmIce.fromLatDeg) <= water + 1e-6);
+
+    const boiled = { hydroPercent: 40, liquidType: 'Water', meanTempK: 400, lowTempK: 390, highTempK: 420 };
+    assert.equal(seaIce(boiled).kind, 'vapor');
+    assert.equal(seaPlan(boiled).drawn, false);
+    assert.equal(seaPlan(boiled).sea.liquid, null);
+
+    const belt = { hydroPercent: 40, liquidType: 'Water', meanTempK: 360, lowTempK: 300, highTempK: 400 };
+    const boilAt = vaporEquatorDeg(belt);
+    assert.equal(typeof boilAt, 'number');
+    assert.ok(latitudeTempK(belt, 0) > boilingK('Water'));
+    assert.ok(latitudeTempK(belt, boilAt) <= boilingK('Water') + 1);
+    assert.equal(seaPlan(belt).sea.boilFromLatDeg, boilAt);
+    assert.equal(seaPlan(belt).drawn, true);
 });
 
 function catalogue(slug) {

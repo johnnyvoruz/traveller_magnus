@@ -11,6 +11,8 @@ export type ChartColours = {
     routeOther: string;
     titleText: string;
     titlePill: string;
+    /** --chart-public. The public-game diamond and its label. */
+    publicGame: string;
 };
 
 /** Original allegiance codes from OTU_DEFAULT_ROUTE_COLORS. Keys of routeColours. */
@@ -86,6 +88,7 @@ export function readTheme(el: HTMLElement): MapTheme {
             routeOther: token(style, '--chart-route-other'),
             titleText: token(style, '--chart-title-text'),
             titlePill: token(style, '--chart-title-pill'),
+            publicGame: token(style, '--chart-public'),
         },
         routeColours: routeColours(style),
     };

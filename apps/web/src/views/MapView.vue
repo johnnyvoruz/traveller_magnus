@@ -14,8 +14,9 @@ import { dossierRoute, homeRect, targetFor, type DossierRoute } from '../map/rou
 import { bindBuilder } from '../builder/bind.ts';
 import { subsectorHexes, subsectorLetter, subsectorPath } from '../builder/address.ts';
 import { readMotion, readTheme } from '../map/theme.ts';
-import { PPP_NAMES, tierFor } from '../map/tiers.ts';
+import { PPP_NAMES, tierFor, type Tier } from '../map/tiers.ts';
 import { TruthClient } from '../map/truth_client.ts';
+import { publicGamesOverlay, watchPublicGames } from '../map/public_games.ts';
 import OmniBox from '../components/OmniBox.vue';
 import { bodyKeys, overviewModel, pickSystem, type AllegianceName, type TreeRow } from '../dossier/model.ts';
 import { askPaneEscape, setFrame } from '../shell/frame.ts';
@@ -27,6 +28,9 @@ import { dismissToast, showToast, toasts } from '../shell/toast.ts';
 import AccountMenu from '../workspace/AccountMenu.vue';
 import { editDateNext } from '../workspace/list_state.ts';
 import StardateChip from '../workspace/StardateChip.vue';
+import FirstHint from '../workspace/FirstHint.vue';
+import { FIRST_PLACE, FIRST_WORLD, firstNear, HINT_KEY, hintShown, LAST_VIEW_KEY, openingFor, parseView, viewText } from '../workspace/first_visit.ts';
+import { afterClear } from '../workspace/build/clear.ts';
 import { locateOriginY, locating, startLocate, stopLocate, systemSubject } from '../workspace/locate.ts';
 import { ensureCampaign } from '../workspace/opening.ts';
 import { cancelPick, offerSystem, picking } from '../workspace/pick.ts';
@@ -142,6 +146,18 @@ const pendingIndexes = new Set<string>();
 let panelPx = 0;
 /** When the camera reached the hex being located; null while it is on the way. */
 let locateArrived: number | null = null;
+/** The line of help for a first visit is over: dismissed, or a hex has been opened (workspace/first_visit.ts). */
+const hintDone = ref(storageGet(HINT_KEY) === '1');
+/** The tier the chart drew last: Build's first step depends on it. */
+const tierNow = ref<Tier>('galaxy');
+/**
+ * The path the camera was last aimed for. The route is read again when a list arrives (the
+ * referee's sectors, after sign-in) or the window is measured: that isn't a visit, and it
+ * must not take the camera back from a view the address, the last visit or the person chose.
+ */
+let aimedPath: string | null = null;
+/** The address a many-hex selection was started from: Clear goes back to it (workspace/build/clear.ts). */
+let beforeSelect: { path: string; query: Record<string, unknown> } | null = null;
 
 // ---- Build (findings/builder_system_design.md): the marks, the strip and the menu load only when it is on ----
 const BuildMarks = defineAsyncComponent(() => import('../workspace/build/BuildMarks.vue'));
@@ -659,7 +675,7 @@ function onEscape(): void {
             return;
         }
         if (build.selection.length > 1) {
-            build.selection = [];
+            clearSelection();
             return;
         }
     }
@@ -772,6 +788,14 @@ function frame(): void {
         const drawn = renderer.draw(cam);
         const el = canvasEl.value;
         if (el) el.dataset.drawMs = drawn.ms.toFixed(2);
+        if (tierNow.value !== drawn.tier) tierNow.value = drawn.tier;
+        // Other people's public games on this chart (map/public_games.ts): asked for once a sector, drawn at the hex tier.
+        watchPublicGames({
+            signedIn: session.user !== null,
+            truthVersion: version ? version : null,
+            sectors: drawn.tier === 'hex' ? drawn.sectorsOnScreen : [],
+        }, markDirty);
+        renderer.setPublicGames(drawn.tier === 'hex' ? publicGamesOverlay(drawn.sectorsOnScreen) : null);
         if (drawn.tier === 'hex' && version) {
             requestIndexes(drawn.sectorsOnScreen);
             for (const slug of drawn.sectorsOnScreen) bound.load(slug);
@@ -832,6 +856,8 @@ function scheduleQuery(): void {
         const x = cam.x.toFixed(3);
         const y = cam.y.toFixed(3);
         const z = cam.ppp.toFixed(3);
+        // The view at rest is kept on this device: a bare address opens on it next time (workspace/first_visit.ts).
+        storageSet(LAST_VIEW_KEY, viewText(cam));
         if (route.query.x === x && route.query.y === y && route.query.z === z) return;
         void router.replace({ path: route.path, query: withQuery(route.query, { x, y, z }) });
     };
@@ -871,6 +897,26 @@ function cameraFromQuery(): Camera | null {
     return zoomAt({ x, y, ppp: z }, vp, vp.width / 2, vp.height / 2, 1);
 }
 
+/**
+ * The first camera of a load whose address names no place and carries no camera: the view this
+ * browser was last left on; else, on a first visit, the Regina subsector of the Spinward
+ * Marches (in a narrow window, Regina itself, near enough to read the names); else the home
+ * view (a chart without that sector).
+ */
+function openingAim(): { exact: Camera } | { kind: 'fit'; rect: { x0: number; y0: number; x1: number; y1: number } } | { kind: 'camera'; camera: Camera } | null {
+    if (!chart) return null;
+    const stored = parseView(storageGet(LAST_VIEW_KEY));
+    if (stored && openingFor({ named: false, linked: false, stored }) === 'last') return { exact: stored };
+    const first = targetFor({ path: FIRST_PLACE }, chart);
+    if (first.kind === 'fit') {
+        const world = targetFor({ path: FIRST_WORLD }, chart);
+        const near = firstNear(fit(first.rect, viewport(), 0).ppp, world.kind === 'camera' ? world.camera : null);
+        return near ? { kind: 'camera', camera: near } : first;
+    }
+    const home = homeRect(chart);
+    return home ? { kind: 'fit', rect: home } : null;
+}
+
 function applyRoute(): void {
     if (!chart) return;
     const vp = viewport();
@@ -887,6 +933,7 @@ function applyRoute(): void {
     if (suppressFly) {
         suppressFly = false;
         routeAim = null;
+        aimedPath = route.path;
         if (place) lastPlace = place;
         showStatus();
         markDirty();
@@ -904,9 +951,9 @@ function applyRoute(): void {
             cam = linked;
             placed = true;
         } else if (!placed) {
-            const home = homeRect(chart);
-            if (home) {
-                cam = fit(home, vp, 0);
+            const open = openingAim();
+            if (open) {
+                cam = 'exact' in open ? open.exact : open.kind === 'fit' ? fit(open.rect, vp, 0) : open.camera;
                 placed = true;
             }
         }
@@ -969,6 +1016,12 @@ function applyRoute(): void {
         return;
     }
     if (target.kind === 'camera') lastPlace = place;
+    // Read again for the path the camera already answered: nothing moves.
+    if (placed && aimedPath === route.path) {
+        markDirty();
+        return;
+    }
+    aimedPath = route.path;
     const queried = cameraFromQuery();
     if (queried && !sawQuery) {
         sawQuery = true;
@@ -977,6 +1030,22 @@ function applyRoute(): void {
         placed = true;
         markDirty();
         return;
+    }
+    // The bare address, the first time this load places the camera: the last view, or a first visit's.
+    if (home && !placed) {
+        const open = openingAim();
+        if (open && 'exact' in open) {
+            fly = null;
+            cam = open.exact;
+            placed = true;
+            markDirty();
+            return;
+        }
+        if (open) {
+            routeAim = open;
+            flyTo(aim(routeAim));
+            return;
+        }
     }
     if (target.kind === 'fit') routeAim = { kind: 'fit', rect: target.rect };
     else if (target.kind === 'camera') routeAim = { kind: 'camera', camera: target.camera };
@@ -1187,6 +1256,54 @@ const moveTargets = computed(() => (sectorUi.moving && viewSlots.value ? freeSlo
 const moveCursor = computed(() => (sectorUi.moving && sectorUi.cursor ? { x: sectorUi.cursor.x, y: sectorUi.cursor.y, free: slotHolder(truthChart, ownList(), sectorUi.cursor) === null } : null));
 const previewKey = computed(() => (build.on && buildUniverse.value ? (build.preview ? build.preview.hexKey : build.rolling) : ''));
 
+// ---- A first visit's line of help (workspace/first_visit.ts) ----
+const hintOn = computed(() => hintShown({
+    done: hintDone.value,
+    chartReady: manifestRef.value !== null,
+    paneOpen: shownPane.value.kind !== 'shut',
+    buildOn: build.on && buildOffered.value,
+}));
+
+function endHint(): void {
+    if (hintDone.value) return;
+    hintDone.value = true;
+    storageSet(HINT_KEY, '1');
+}
+
+function dismissHint(): void {
+    endHint();
+    if (canvasEl.value) canvasEl.value.focus();
+}
+
+// A hex has been opened: the person has found what the line points at.
+watch(() => dossier.value.kind, (kind) => { if (kind !== 'closed') endHint(); }, { immediate: true });
+
+/** Build's first step, from the strip: far out, it goes where hexes can be read; nearer, it zooms in where the map stands. */
+function startBuild(how: 'go' | 'zoom'): void {
+    const first = how === 'go' && chart ? targetFor({ path: FIRST_PLACE }, chart) : null;
+    if (first && first.kind === 'fit') {
+        routeAim = first;
+        flyTo(aim(routeAim));
+        return;
+    }
+    const base = fly ? fly.to : cam;
+    routeAim = null;
+    flyTo({ x: base.x, y: base.y, ppp: Math.max(base.ppp, PPP_NAMES) });
+}
+
+/**
+ * Clear, and Esc on a many-hex selection: the selection is emptied and the map goes back to the
+ * address it was started from, the camera left where it is. It never becomes the whole sector.
+ */
+function clearSelection(): void {
+    const to = afterClear(beforeSelect, { path: route.path, query: route.query });
+    beforeSelect = null;
+    build.selection = [];
+    if (router.resolve(to).fullPath === route.fullPath) return;
+    suppressFly = true;
+    void router.push(to);
+}
+
 function truthRow(hexKey: string): SectorHex | null {
     const place = parseHexKey(hexKey);
     const index = place && version ? client.index(version, place.slug) : null;
@@ -1328,6 +1445,7 @@ function selectKeys(keys: string[], anchor: string): void {
         if (keys.length === 1) openHex(keys[0]);
         return;
     }
+    if (build.selection.length <= 1) beforeSelect = { path: route.path, query: { ...route.query } };
     build.selection = keys;
     // A hand-picked set has no hex address. One subsector, or one sector, is the pane.
     openScope(scopePath(keys, anchor));
@@ -2158,11 +2276,14 @@ onBeforeUnmount(() => {
       :name="buildUniverse.name"
       :truth-version="buildUniverse.truthVersion"
       :pane-open="dossierShown"
-      @clear="build.selection = []"
+      :tier="tierNow"
+      @clear="clearSelection()"
       @width="setStripWidth"
+      @start="startBuild"
     />
     <BuildMenu v-if="menuRef && buildMenu" :title="buildMenu.title" :items="buildMenu.items" :anchor="menuRef.anchor" @pick="pickBuildMenu" @close="closeBuildMenu" />
     <OmniBox :version="versionRef" :manifest="manifestRef" @open="omniOpen = $event" />
+    <FirstHint v-if="hintOn" @dismiss="dismissHint" />
     <StardateChip @open="openDateEditor" />
     <AccountMenu :open="accountOpen" @close="closeAccount" @campaign="openCampaignFromMenu" />
     <p class="status ui-status" aria-live="polite">{{ status }}</p>

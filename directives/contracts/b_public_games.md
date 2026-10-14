@@ -81,7 +81,7 @@ Answer: 200 `PublicGamesSector`.
 
 Decision 4: where `count` is 1, `name` is that universe's name. Where `count` is greater than one, `name` is null. The count is the only extra fact. No list of names.
 
-Rows match `truth_version` and `sector_slug`. A universe with public off has no row. An empty sector is `{ hexes: [] }`, including a sector slug the chart has never heard of, so a blank sector does not 404.
+Rows match `truth_version` and `sector_slug`. A universe with public off has no row. The join leaves out a universe whose `owner_id` is the signed-in caller, so that person does not see their own game. A hex with no other public game is not in `hexes`. One other game on that hex has `count` 1 and `name` set to that universe's name. Two or more other games have `name` null. An empty sector is `{ hexes: [] }`, including a sector slug the chart has never heard of, so a blank sector does not 404.
 
 Order: `hex` ascending. Upper bound: 1280 hexes, one entry per local hex. Counts collapse onto the hex, so the body cannot grow with the number of games. A sector is 32 by 40.
 
@@ -110,7 +110,7 @@ Whoever owns `map/` that turn draws one dot per item, with the count beside it. 
 
 The owner's switch is `PATCH /api/universes/:id/public-games` with `{ public: true }` or `{ public: false }`. Default off. The switch lives with the universe's own settings, not on the public layer. Success is the raw object `{ public: boolean }`, not the `ok` envelope. The errors are the list under the setting above, including 503 when 0013 is absent.
 
-`GET /api/universes` does not include `publicGames`. The switch learns the value from the PATCH answer. A new universe is off.
+`GET /api/universes` and `GET /api/universes/:id` include `publicGames: boolean` for the owner when migration 0013 is present. Without that column the field is omitted, and the rest of the object is unchanged. Create, rename, and delete include it on the same rule, so a rename does not drop it from the list the browser already holds. A new universe is off (`false` when the field is present). The switch still learns the value it just wrote from the PATCH answer.
 
 ## Before migration 0013 — **built**
 
@@ -118,19 +118,20 @@ The owner's switch is `PATCH /api/universes/:id/public-games` with `{ public: tr
 
 - `PATCH /api/universes/:id/public-games` is 503 with the sentence above.
 - `GET /api/public-games` is 200 `{ hexes: [] }`.
-- Universe create, list, and campaign save keep the Drizzle select they had. Soft-delete does not touch `public_marks`.
+- Universe create, list, read, and campaign save keep the Drizzle select. `public_games` is not a column of that select, so a later column on `universes` cannot be forgotten in a second list. Soft-delete does not touch `public_marks`.
+- `GET /api/universes` and `GET /api/universes/:id` omit `publicGames`.
 
-When the column is present, `ownedUniverse` reads the existing universe columns and `public_games` in one statement. A soft-delete (`DELETE /api/universes/:id`) also runs `DELETE FROM public_marks`. The foreign key does not fire, because the universe row stays and only `deleted_at` is set.
+When the column is present, the switch and the recompute after a campaign save each read `public_games` with one statement of their own. The owner list reads it once for every live universe. The single-universe read reads it once. A soft-delete (`DELETE /api/universes/:id`) also runs `DELETE FROM public_marks`. The foreign key does not fire, because the universe row stays and only `deleted_at` is set.
 
 ## Cost
 
-A campaign save with public off adds no D1 statement beyond the one ownership select that save already does. After 0013, that select includes `public_games`. The pragma is once per isolate, on the first `ownedUniverse` or feed call, and is not repeated on later saves.
+A campaign save when 0013 is absent adds no D1 statement for public games. When 0013 is present and the save answered ok, one statement reads `public_games`. If that value is not 1, nothing else runs. The pragma is once per isolate, on the first list, read, switch, save, or feed call, and is not repeated.
 
-A campaign save with public on adds D1 only when the response `applied` array includes `records`, `settings`, or `clock`. The Worker then reads the campaign from the Durable Object (pages of 1,000 rows, at most 40 pages; settings and clock come back on every page; links and journal are not used) and makes one D1 write: an upsert, or a delete when the hex must not be published. A journal-only patch, or a 200 that applied none of those three tables, adds no D1.
+A campaign save with public on, after that read, adds D1 only when the response `applied` array includes `records`, `settings`, or `clock`. The Worker then reads the campaign from the Durable Object (pages of 1,000 rows, at most 40 pages; settings and clock come back on every page; links and journal are not used) and makes one D1 write: an upsert, or a delete when the hex must not be published. A journal-only patch, or a 200 that applied none of those three tables, adds no further D1. A failed save adds none.
 
 Turning public on is one `UPDATE` plus that same one write. Turning it off is one `UPDATE` plus one `DELETE`.
 
-One sector load of the feed is one join of `public_marks` and `universes` (`deleted_at IS NULL` and `public_games = 1`), after the in-memory rate check.
+One sector load of the feed is one join of `public_marks` and `universes` (`deleted_at IS NULL`, `public_games = 1`, and `owner_id` not the caller), after the in-memory rate check.
 
 ## Abuse
 
@@ -138,12 +139,14 @@ One sector load of the feed is one join of `public_marks` and `universes` (`dele
 
 ## What Lanes A and D need
 
-Lane A, the feed: call `GET /api/public-games?truthVersion=<the map's pin>&sector=<slug>` when a sector is drawn and the pin is not null. Skip the call when the pin is null. Draw `PublicGamesSector`. Do not poll. Send the session cookie. A signed-out caller is 401.
+Lane A, the feed: call `GET /api/public-games?truthVersion=<the map's pin>&sector=<slug>` when a sector is drawn and the pin is not null. Skip the call when the pin is null. Draw `PublicGamesSector`. Do not poll. Send the session cookie. A signed-out caller is 401. The answer already leaves out the caller's own games. Do not subtract them again in the browser.
 
 Lane A, the switch: `PATCH /api/universes/:id/public-games` with a JSON body `{ public: true }` or `{ public: false }`, beside the universe's own settings. Handle 401, 403, 404, 400, and 503. The 503 sentence is "Public games are not available yet."
 
 The prompt that draws the dots has to name `map/MapRenderer.ts`. This contract does not.
 
 Lane A, auth (from `contracts/b_auth.md`, this same pass): link Google, Discord, or X with `POST /api/auth/link-social`, not `POST /api/auth/sign-in/social`. `sign-in/social` starts a new sign-in and can land on a different account. `list-user-passkeys` includes `createdAt` as an ISO 8601 string. The Worker now accepts a body-less `POST /api/auth/sign-out` (it rewrites that one call to `{}`). The browser should still send a JSON body.
+
+Lane D, the switch: read `publicGames` from `GET /api/universes` and from `GET /api/universes/:id`. It is a boolean when 0013 is present and absent otherwise. Do not treat a missing field as on.
 
 Lane D: the local passkey recipe is in `contracts/b_auth.md`. `BETTER_AUTH_URL` is the page origin (`localhost`, not `127.0.0.1`), and `wrangler dev` needs `--host localhost:<port> --local-upstream localhost:<port>`. Production `rpID` is `traveller.voyage` and the expected origin is `https://traveller.voyage`, from `BETTER_AUTH_URL` in `wrangler.toml`, not from the request host.

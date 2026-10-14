@@ -49,6 +49,13 @@ let generation = 0;
 let unregister: (() => void) | null = null;
 const cache = new Map<string, SearchItem[]>();
 
+/** Shown until the person types. There is no list of recent places. */
+const EXAMPLES: OmniResult[] = [
+    { kind: 'example', name: 'Regina', detail: 'A world' },
+    { kind: 'example', name: 'Spinward Marches', detail: 'A sector' },
+    { kind: 'example', name: 'Jewell subsector', detail: 'A subsector' },
+];
+
 /** Signed out, the rail shows these switched off. The palette lists only what can run. */
 const SIGNED_OUT_HIDDEN = new Set(['campaign', 'build']);
 
@@ -118,8 +125,8 @@ async function search(): Promise<void> {
     const localCommands = commandResults();
     if (text.trim() === '') {
         if (controller) controller.abort();
-        results.value = localCommands;
-        note.value = localCommands.length === 0 ? 'Nothing can run right now.' : '';
+        results.value = [...EXAMPLES, ...localCommands];
+        note.value = 'Try a world, a sector, or a subsector.';
         active.value = -1;
         open.value = true;
         return;
@@ -163,9 +170,15 @@ function groupBefore(index: number): string {
     const before = index > 0 ? results.value[index - 1] : null;
     const mine = (item: OmniResult | null): boolean => !!item && (item.kind === 'record' || item.kind === 'more');
     if (!result) return '';
+    if (result.kind === 'example') return index === 0 ? 'Try' : '';
     if (mine(result)) return index === 0 ? 'Your campaign' : '';
-    if (before && mine(before)) return 'The chart';
+    if (before && (mine(before) || before.kind === 'example')) return before.kind === 'example' && result.kind === 'command' ? 'Commands' : 'The chart';
     return '';
+}
+
+/** A chosen place drops the camera query, so the map flies to that place. */
+function placeQuery(): Record<string, string> {
+    return withQuery(route.query, { x: null, y: null, z: null });
 }
 
 /** A record made at the system of a row, opened with its name ready to type. */
@@ -195,6 +208,11 @@ function closePopup(): void {
 function openResult(index: number): void {
     const result = results.value[index];
     if (!result) return;
+    if (result.kind === 'example') {
+        query.value = result.name;
+        void search();
+        return;
+    }
     if (result.kind === 'system') {
         if (action.value === 1 || action.value === 2) {
             makeHere(index, action.value === 1 ? 'person' : 'place');
@@ -202,14 +220,14 @@ function openResult(index: number): void {
         }
         // A record's place is being picked: the system goes to it, and the map stays where it is.
         if (offerSystem({ slug: result.sector, hex: result.hex, name: result.name })) query.value = '';
-        else void router.push({ path: '/s/' + encodeURIComponent(result.sector) + '/' + result.hex, query: withQuery(route.query, {}) });
+        else void router.push({ path: '/s/' + encodeURIComponent(result.sector) + '/' + result.hex, query: placeQuery() });
     } else if (result.kind === 'record') {
         void router.push(atPane(route.path, route.query, { kind: 'campaign', record: result.id }));
     } else if (result.kind === 'more') {
         handedQuery.value = result.query;
         void router.push(atPane(route.path, route.query, { kind: 'campaign', record: null }));
     } else if (result.kind === 'sector') {
-        void router.push({ path: '/s/' + encodeURIComponent(result.sector), query: withQuery(route.query, {}) });
+        void router.push({ path: '/s/' + encodeURIComponent(result.sector), query: placeQuery() });
     } else {
         const command = commands().find((item) => item.id === result.id);
         if (command && commandListed(command)) command.run();
@@ -314,7 +332,7 @@ onBeforeUnmount(() => {
             <span class="omni-line">
               <img v-if="result.kind === 'record' && result.thumb" class="omni-thumb" :src="result.thumb" alt="" loading="lazy">
               <strong>{{ result.name }}</strong>
-              <span class="omni-kind">{{ result.kind === 'record' ? 'yours' : result.kind === 'more' ? 'list' : result.kind }}</span>
+              <span class="omni-kind">{{ result.kind === 'record' ? 'yours' : result.kind === 'more' ? 'list' : result.kind === 'example' ? 'try' : result.kind }}</span>
             </span>
             <span class="omni-detail">{{ result.detail }}</span>
             <span v-if="result.kind === 'system' && withCampaign" class="omni-new" aria-label="Make a record here">

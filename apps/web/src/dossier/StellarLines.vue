@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import BodyGlyph from './BodyGlyph.vue';
+import CodeNote from './CodeNote.vue';
+import { stellarWords } from './code_words.ts';
 import type { StellarLine } from './model.ts';
 
 defineProps<{ lines: StellarLine[] }>();
@@ -10,7 +12,8 @@ defineProps<{ lines: StellarLine[] }>();
     <h3 class="ui-heading">Stellar configuration</h3>
     <p v-for="(line, index) in lines" :key="index" class="doss-star">
       <BodyGlyph :glyph="line.glyph" :size="16" />
-      <span>{{ line.text }}</span>
+      <CodeNote v-if="stellarWords(line.text)" :text="stellarWords(line.text) || ''" code="stellar">{{ line.text }}</CodeNote>
+      <span v-else>{{ line.text }}</span>
     </p>
   </div>
 </template>

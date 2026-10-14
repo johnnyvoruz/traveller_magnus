@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { CAMPAIGN_RECORD_TYPES } from '@voyage/shared';
 import { totalDays } from '../../apps/web/src/orbit/clock.ts';
 import { campaignCrumb } from '../../apps/web/src/workspace/crumb.ts';
-import { buildTimeline, todayIndex } from '../../apps/web/src/workspace/timeline.ts';
+import { buildTimeline, timelineAdvice, todayIndex } from '../../apps/web/src/workspace/timeline.ts';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const view = fs.readFileSync(path.join(root, 'apps/web/src/workspace/TimelineList.vue'), 'utf8');
@@ -176,9 +176,17 @@ test('the trail returns to Campaign, and the list is one tab stop that only read
     assert.match(view, /tabindex="0"/);
     assert.match(view, /entriesByDate\(\)/);
     assert.match(view, /role="listbox"/);
-    assert.match(view, /or set a date on a record/);
-    assert.match(view, /Open the Journal/);
+    assert.match(view, /timelineAdvice/);
+    assert.match(view, /followAdvice/);
+    assert.match(view, /editDateNext/);
+    assert.match(view, /advice\.label/);
     assert.doesNotMatch(view, /setCampaignDate/);
+    assert.deepEqual(timelineAdvice(false), {
+        text: 'Set the campaign date. Sessions take that date when you write them.',
+        act: 'date',
+        label: 'Set the campaign date',
+    });
+    assert.equal(timelineAdvice(true).act, 'journal');
     assert.doesNotMatch(builder, /setCampaignDate/);
     assert.match(panel, /class="camp-timeline"/);
     assert.match(list, /emit\('timeline'\)/);

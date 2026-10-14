@@ -130,6 +130,11 @@ export type EnhancedSea = {
     readonly ice:
         | { readonly kind: 'none' | 'all' | 'locked' }
         | { readonly kind: 'caps'; readonly fromLatDeg: number };
+    /**
+     * Equatorward of this latitude the surface is at or above the liquid's boiling
+     * point, so those rows are land. Absent when the equator stays at or below boiling.
+     */
+    readonly boilFromLatDeg?: number;
 };
 
 /** Plain inputs for the enhanced sheet: the vanilla ones (the same continents) and the sea. */

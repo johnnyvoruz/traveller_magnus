@@ -3,6 +3,8 @@ import { BUILDER_LIMITS, SectorHex, sha256Hex, stable } from '@voyage/shared';
 import type { Env } from '../env';
 import { chartHoldsSystem, chartTree, generationSeed, sectorOf } from '../universe/hexes';
 import { BUSY_SENTENCE, busyDelayMs, nextSliceOffset } from './generate_pace';
+import { chargeObjectBytes } from './object_charge';
+import { ONE_SECTOR_LIMIT, sectorCount } from './one_sector';
 
 const OBJECT_QUOTA_BYTES = 250 * 1024 * 1024;
 // Workers allow 6 simultaneous outgoing connections per invocation.
@@ -112,6 +114,10 @@ async function runSlices(env: Env, universeId: string, jobId: string, offset: nu
     const first = started.data as SliceAnswer;
     if (terminal(first.job.state)) {
         await finishCounts(env, universeId, jobId, first.job.objectBytes ?? 0, first.job.bytesSettled ?? 0);
+        return;
+    }
+    if (sectorCount(first.spec.hexKeys) > 1) {
+        await call(env, universeId, `/jobs/${encodeURIComponent(jobId)}/fail`, 'POST', { reason: ONE_SECTOR_LIMIT });
         return;
     }
     const total = first.spec.total;
@@ -249,9 +255,7 @@ async function finishCounts(env: Env, universeId: string, jobId: string, account
     const countAt = Date.now();
     const pending = Math.max(0, Math.floor(accounted) - Math.floor(settled));
     if (pending > 0) {
-        await env.DB.prepare(
-            `UPDATE universes SET object_bytes = object_bytes + ? WHERE id = ?`,
-        ).bind(pending, universeId).run();
+        await chargeObjectBytes(env.DB, universeId, jobId, pending);
         await call(env, universeId, `/jobs/${encodeURIComponent(jobId)}/settled`, 'POST', { bytes: accounted });
     }
     const count = (await call(env, universeId, '/hexes/count')).data as { count: number };

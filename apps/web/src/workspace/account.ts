@@ -2,11 +2,20 @@
  * Words and small readings for the account pop-up and the signed-out Campaign panel
  * (findings/campaign_workspace_design.md §1). Pure: it runs under Node.
  */
+import { ref } from 'vue';
 import type { SessionUser } from '../account/session.ts';
 
 /** What an account is for, in one sentence. The second says the viewer needs none. */
 export const SIGN_IN_PITCH = 'Keep a private campaign on top of this map: people, places, jobs, your ship.';
 export const SIGN_IN_FREE = 'The map works the same without an account.';
+/** The card opened from the rail's switched-off Build item: what Build is, in place of the campaign's line. */
+export const SIGN_IN_PITCH_BUILD = 'Sign in to use Build. It generates systems on a copy of the map that’s yours.';
+/** Where the sign-in card was opened from. The rail sets it for its Build item; the pop-up clears it when it closes. */
+export const signInFrom = ref<'build' | null>(null);
+/** The card's first paragraph. */
+export function signInPitch(from: 'build' | null): string {
+    return from === 'build' ? SIGN_IN_PITCH_BUILD : SIGN_IN_PITCH + ' ' + SIGN_IN_FREE;
+}
 export const SIGN_IN_FINE = 'Nothing you add changes the map, and nobody else sees it.';
 export const SIGN_IN_OFFLINE = 'You are offline.';
 /** X alone, as before: what the card offers when the server does not say which providers it has. */

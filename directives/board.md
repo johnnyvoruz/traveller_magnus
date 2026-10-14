@@ -1,26 +1,42 @@
 # Board
 
-One line per lane. Only the orchestrator edits this file. Updated 2026-10-12 23:00 (by the clock).
+One line per lane. Only the orchestrator edits this file. Updated 2026-10-13 21:50 (by the clock).
 
-**Last push: `f99a8a2`, version 1.1.10, 2026-10-12.** Any prompt that says "start only
+**Last push: `ef92359`, version 1.1.11, 2026-10-12, deployed** (migration 0012 applied; checked live at 23:11). Any prompt that says "start only
 after the board says the push is made" may start.
 
 | Lane | Status | Current prompt | Blocker / next |
 |---|---|---|---|
-| A | held until 1.1.11 is pushed | (next: public games feed and mark, link-social wrap) | prompt not yet written; the push list must stay still |
-| B | held until 1.1.11 is pushed | (next: Builder suites with 0013 applied, publicGames on the universe list) | public games server accepted; migration 0013 and its worker test are held out of 1.1.11 |
-| C | go | prompts/c_regina_temperature.md | read-only: why Regina reads -84 C, Ethane and desert; trace to the line, cite rules/, count how wide; options for Johnny |
-| D | held until 1.1.11 is pushed | (next: "Your map" on the Build strip, first visit opens on the Spinward Marches, the review's top ten) | account menu accepted |
-| E | free | (none) | Player Pack, first version, accepted (in 1.1.11) |
+| A | free | (none) | job sentence accepted. Nothing queued until the push |
+| B | free | (none) | release path accepted: the ten parked files stay out; `admin.ts` by the cap-only patch |
+| C | free | (none) | no-sea accepted |
+| D | free | (none) | after the push: the Generate sheet's "top down" note |
+| E | free | (none) | the Build pitch and `noindex` accepted |
+| Z | reported | (none) | `z_liquid_land_changes` accepted: the late die is on a side stream, fixtures and ledger regenerated (456 rows, unchanged), the uploader guarded. Nothing queued |
 | F | retired | (none) | Johnny, 2026-10-11: unreliable (runs out of budget); do not use or propose until he says it is back |
+
+## Engine 1.2.0 (every lane, 2026-10-13)
+**The engine on the working tree is 1.2.0** (Lane Z's water and ice patch, applied 20:11,
+not pushed). Fixtures: `tests/golden/fixtures/engine_1.2.0/`. Ledger:
+`tests/generation/parity_deviations_1.2.0.json`. The `engine_1.1.0` fixtures are back at
+the last commit and are no longer run. A body may carry `liquidType: null` with
+`liquidStatus`. The Worker refuses a truth build, a retry or a Builder generate that spans
+more than one sector: "The limit is one sector per request." Lane Z changes engine output
+once more this turn (`z_liquid_land_changes.md`): a red engine or parity test in your
+gates goes under "Needs from others"; do not touch `packages/engines`, the fixtures or
+the ledger.
 
 **Restarting a frozen lane:** paste the block in directives/lanes/START.md with the
 lane's letter as the first message of a new session; from then on "go" is enough.
 
 ## Shared files this turn
-- account/, platform/http.ts (sign-out), router.ts (one line, `guardRecovery`): **lent to A**.
-- workspace/passkey/, workspace/SignInCard.vue, views/Account.vue, design/base.css (the modal frame): D.
-- apps/web/src/pack/ (new): E.
+- packages/engines, tests/golden/fixtures/engine_1.2.0/, tests/generation/parity*, tools/truth/: nobody (Z has finished).
+- apps/api/src/jobs/generate_queue.ts, jobs/one_sector.ts, routes/builder.ts: B (taken over from Z's patch).
+- views/MapView.vue, workspace/build/, workspace/passkey/: D.
+- shell/pane.ts (`addressPane`): **lent to A**.
+- shell/Rail.vue: E. map/public_games.ts: A.
+- tests/golden/fixtures/engine_1.2.0/profile_regina.json: C, that one file, only after it explains the change.
+- apps/web/public/sheets/ (new): E.
 - design/tokens.css: any lane may append its own token lines.
 
 ## Contracts
@@ -40,9 +56,23 @@ lane's letter as the first message of a new session; from then on "go" is enough
    (findings/campaign_gap_audit.md §4), steps 1 to 5 first. Step 4 (`@` mention) is done.
 
 ## Known, not fixed
-- `universe/forward.ts` `ownedUniverse` takes a hand-written SQL path when migration
-  0013 is applied; the Builder worker suites have not been run on that path. 0013
-  stays out of pushes until B runs them.
+- (fixed on disk, B, 2026-10-13) `ownedUniverse` is the Drizzle select again; every worker
+  suite passed with 0013 applied except the parked `truth_build.test.js`.
+- (fixed on disk, B) the byte charge falls back to the plain add when 0014 is absent; both
+  states run in the worker suites.
+- (fixed on disk, Z, 21:00) the late exotic die is on a side stream; 220 of 1,735 sampled
+  systems changed, Regina's social rolls among them (399 values; her physical row did
+  not move). **`truth-local/v10` from 20:11 is stale: Johnny deletes and rebuilds after
+  the push.**
+- (fixed) `npm test` green again at 21:40: C's surface edits and the regenerated Regina fixture.
+- (fixed on disk, D) the account menu is teleported to `body` and opens above any panel.
+- (fixed on disk, B) the cap's worker test and the job's sentence (`BuilderJob.error`).
+- A universe made on 1.1.0 generates as 1.2.0 while its row keeps 1.1.0 (C's check 4).
+  Not decided; raise at the landing.
+- Parked truth-build work: `truth_build.test.js` line 1333 expects 1 `truth.remove` audit row
+  on `vreconcile` and gets 2 (B's run). Nobody owns it until the water and ice landing.
+- Lane Z's patch applies only to the tree with the sixteen always-out paths in place; what
+  must be pushed with it is question 2 of C's review.
 - `tests/web/renderer.test.js` "draw reports animating while a title fades in" failed
   once in E's run and passes in the orchestrator's: watch for a timing flake.
 - (fixed in 1.1.11, needs the deploy) Live: sign-out did not end the session (a body-less POST answered 415).
@@ -103,10 +133,10 @@ lane's letter as the first message of a new session; from then on "go" is enough
   the blank request body (read from what the server stored).
 
 ## Pending push
-**Ready: version 1.1.11**, `findings/push/builder_2026-10-12d.md`: **username and
-passkey sign-in, whole** (migration 0012), sign-out fixed, the Player Pack, the
-campaign importer reads the journal, the public games server (inert: migration 0013
-and its worker test are held out).
+**1.1.12 called for, 2026-10-13 21:50:** `findings/push/release_2026-10-13.md` (list
+`release_2026-10-13_files.txt`, `admin.ts` by `admin_cap_only.patch`), engine 1.2.0,
+migrations 0013 and 0014, deploy with `npm run deploy:ci`. Rehearsed in
+`scratchpad/outer16`. Then Johnny rebuilds, uploads and releases v10 locally.
 
 ## Decisions from Johnny
 - 2026-10-10: the file bus replaces pasting.
@@ -304,14 +334,83 @@ and its worker test are held out).
 
 - 2026-10-12: yes, the owner's universe list carries `publicGames` (only when migration 0013 is present).
 
+- 2026-10-13, Regina: **yes** to an engine pass that keeps a charted mainworld's
+  atmosphere and hydrographics when it is a moon and stops defaulting a missing
+  temperature band to Temperate; no to the lock alone; no to hiding it on the screens.
+  The orchestrator runs a trial outside the tree first (C's trace says the forbidden
+  zone, not the default, moved Regina out). Passkeys: no change wanted; the build
+  already takes password-manager passkeys.
+- 2026-10-13: **a real passkey sign-up works on production** (Johnny).
+- 2026-10-13, the sign-in card: "Create an account" at the top; the passkey button
+  last in the list and labelled "Sign in"; the passkey helper sentence removed (D,
+  added to `d_first_run_fixes.md`). The button sits below the provider rows; only
+  the fingerprint sentence goes (yes to both).
+- 2026-10-13: **Lane Z** is new: heavier-effort requests, run by another model
+  (`lanes/Z.md`). It has the water and ice pass; C is free.
+- 2026-10-13: water, ice and temperature are to be solved once, by a high-effort
+  session (`c_liquid_temperature_once.md`); the Regina trial prompt is withdrawn.
+- 2026-10-13: yes, a new account's map is named "My map" (existing ones keep their
+  name); yes, a sector's or subsector's address opens its pane (finding 12). Lane A.
+
+- 2026-10-13 21:10, **yes to nine**. Engine 1.2.0: the chart lock holds a charted
+  mainworld's atmosphere and hydrographics for **every** charted mainworld, not only a
+  moon (his word for the deviation, rule 4; no rules text either way, recorded as a gap);
+  the book's temperature roll is parked for a separate decision; only atmosphere 0 is a
+  vacuum for the ice rule; atmosphere 0 at or above water's melting point names no liquid
+  and keeps its hydrographics digit; exotic liquids stay with atmospheres 10 to 12.
+  A session written before the campaign had a date stays off the timeline. The public
+  games switch stays in the account menu under Rename with D's words, and gains a line
+  when it is on and the party has no place. `noindex` on the unlisted sheet.
+- 2026-10-13 21:10: "let's get into a good place for a push."
+
+- 2026-10-13 21:40, yes to both: Build's two one-sector sentences as written (D); the
+  screen keeps 273.15 and the engine 273 (C). A go.
+
 ## Open with Johnny
-(none)
+(none).
+
+## Decided by the orchestrator, 2026-10-13
+- The public games feed leaves out the caller's own universes (built, B).
+- In a window too small for the whole Regina subsector with names, a first visit opens on
+  Regina with names (D's question 2, as built).
+- The dossier codes with no line in rules/ or assets/ stay bare (E's eight: Cr, nobility
+  letters, allegiance, the trade codes Ph An Cp and sophont remarks, PCR, the government,
+  law, tech, starport and military strings, AoW and RTT, luminosity classes other than V
+  and D and BD). Johnny may supply text for any of them later.
+- No push of engine 1.2.0 and no v10 upload before Lane C's change 1 is in (it is, 21:00).
+- Z's three: the side-stream key is `<hexId>|liquid|<world>|<moon>|<orbitId>` under the
+  master seed; the 20:11 v10 build is thrown away; the uploader's `--endpoint` reads the
+  version state from the local emulation and needs its own `S3_ENDPOINT_*` keys.
+- The map draws every public game the server sends (D's question 1; A removes the name guard).
+- The account menu under a panel is fixed before the push (D's question 4).
+- C's surface change to `engine_1.2.0/profile_regina.json` is intended: 7 fields on three
+  bodies of Regina's system (w1m3, w6, w7) that carry `liquidType: null` now paint no sea;
+  Regina herself is unchanged. Regenerated by the orchestrator with a guard that refused
+  any other difference.
+- The ten parked truth-build files stay out of 1.1.12; `admin.ts` goes by the cap-only
+  patch (B's question; a local v9 released on that shape).
+- `tests/generation/liquid_temperature_census.test.js` skips when `universe/raw/Core.tsv`
+  and the other sample files are absent (git-ignored; CI has none). Edited by the
+  orchestrator: one guard line, no assertion changed.
+- The Generate sheet's "top down" note becomes "from the star outward" too (D's question
+  2; after the push).
 
 ## Queue (prompts not yet written)
-- D's first-visit review, `findings/first_run_review.md`: 19 findings, the ten first; owners to assign after tonight's push (OmniBox, Rail, panel host at 520 px, journal; `design/base.css` reset; the four modal frame files).
-- Screens for username and passkey sign-in (sign-in card, account page: passkeys,
-  recovery codes, linked providers): after B's contract `contracts/b_auth.md`.
-- The rest of F's review (ranking, visual refinement, words, access) was never done;
-  no lane has it.
-- Public games, browser side: A calls the feed and draws the mark (MapRenderer.ts), D the on/off switch; after B's server.
-- Worker queue settings: B recommends in `b_generate_speed`; wrangler.toml changes go out with Johnny's deploy.
+- After 1.1.12: Johnny rebuilds v10 locally, uploads (`tools/truth/upload_truth.js`, bulk
+  over R2's S3 interface, keys in `.env`) and releases. His commands only.
+- D: E's suggested words ("Full system, from the star outward."); the Build pane saying
+  the one-sector limit before a request is sent (after B's contract).
+- The 250 MB quota race: B's reservation design (reports/done/b_public_games_0013.md).
+- D's review, left over: finding 18
+  (520 px: the dossier hides the world), the shared modal frame (`Lightbox.vue`,
+  `build/OrbitPicker.vue`, `PersonCard.vue`, `PlanModal.vue`, `design/base.css`), the
+  `h1`/`p` reset moved from `views/Account.vue` to `base.css`.
+- An engine pass for the Regina fault, on Johnny's word only (the generator rebuild;
+  the held nine water-against-ice lines belong with it).
+- Player Pack next steps: images in the file, the map, importing player notes; a
+  player read of image bytes needs B.
+- Campaign order (findings/campaign_gap_audit.md §4): 7 more than one ship, 8 flight
+  log (on Johnny's word), 10 ship numbers and dice.
+- A software disc renderer for browsers without WebGL: later, not ruled out.
+- Worker: `retry_delay = 10` on the `voyage-generate` consumer (B's recommendation;
+  wrangler.toml is Johnny's).

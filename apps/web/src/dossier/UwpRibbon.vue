@@ -1,8 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+import CodeNote from './CodeNote.vue';
+import { ribbonCellWords, uwpWords } from './code_words.ts';
 import type { Ribbon } from './model.ts';
 
-const props = defineProps<{ ribbon: Ribbon }>();
+const props = withDefaults(defineProps<{
+    ribbon: Ribbon;
+    /** The system page wraps the ribbon in a button, so the cells are not extra tab stops. */
+    quiet?: boolean;
+}>(), { quiet: false });
 
 const label = computed(() => {
     if (props.ribbon.kind === 'plain') return 'UWP ' + props.ribbon.text;
@@ -12,16 +18,21 @@ const label = computed(() => {
 </script>
 
 <template>
-  <div v-if="ribbon.kind === 'cells'" class="doss-ribbon" role="img" :aria-label="label" :title="label">
+  <div v-if="ribbon.kind === 'cells'" class="doss-ribbon" :role="quiet ? undefined : 'group'" :aria-label="quiet ? undefined : label">
     <template v-for="(cell, index) in ribbon.cells" :key="cell.label">
       <span v-if="index === 7" class="doss-dash">{{ ribbon.dash }}</span>
       <span class="doss-cell">
-        <b>{{ cell.digit }}</b>
+        <b>
+          <CodeNote v-if="ribbonCellWords(cell.label, cell.digit)" :text="ribbonCellWords(cell.label, cell.digit) || ''" :quiet="quiet" :code="cell.label">{{ cell.digit }}</CodeNote>
+          <template v-else>{{ cell.digit }}</template>
+        </b>
         <small>{{ cell.label }}</small>
       </span>
     </template>
   </div>
-  <p v-else class="doss-uwp-plain">{{ ribbon.text }}</p>
+  <p v-else class="doss-uwp-plain">
+    <CodeNote :text="uwpWords()" :quiet="quiet" code="uwp">{{ ribbon.text }}</CodeNote>
+  </p>
 </template>
 
 <style>

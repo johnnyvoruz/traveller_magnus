@@ -15,7 +15,7 @@ import { dismissToast, showToast, toasts } from '../../shell/toast.ts';
 import { offerUndo } from './acts.ts';
 import { endFlight, noteFlight } from './flight.ts';
 import { buildStore, type BuildStore, type JobProgress, type JobState, type UndoToken } from './seam.ts';
-import { build, jobLine, jobToast, plural } from './state.ts';
+import { build, errorOf, jobError, jobLine, jobToast, plural } from './state.ts';
 
 /** Longer than any job: the toast leaves when the job ends, not on a clock. */
 const HELD_MS = 2 ** 31 - 1;
@@ -124,6 +124,8 @@ function follow(store: BuildStore): void {
         const out: JobProgress = { total: now.progress.total, done: now.progress.done, failed: [...now.progress.failed], state: screenState(now.progress.state) };
         if (now.progress.leftEmpty !== undefined) out.leftEmpty = now.progress.leftEmpty;
         if (now.progress.placed) out.placed = [...now.progress.placed];
+        const lost = errorOf(now.progress);
+        if (lost) out.error = lost;
         return out;
     };
     const apply = (): void => {
@@ -138,6 +140,12 @@ function follow(store: BuildStore): void {
         build.job = null;
         endFlight();
         endJobToast();
+        const lost = jobError(progress);
+        if (lost) {
+            build.error = lost;
+            showToast(lost);
+            return;
+        }
         offerUndo(jobToast(progress, ''), now.undo);
     };
     if (ENDED.has(ref.value.progress.state)) {

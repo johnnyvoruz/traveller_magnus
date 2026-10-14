@@ -11,7 +11,8 @@ import { endJobToast, jobUndo, newJob, NO_JOB_UNDO, startJobToast, stopFollowed,
 import { isHandHex } from './hand_acts.ts';
 import { runUndo } from './undo_words.ts';
 import { buildStore, type HexState, type UndoToken } from './seam.ts';
-import { build, generateTargets, jobLabel, jobToast, plural, readDensity, removeTargets, restoreTargets, stateOf, tally, type Tally } from './state.ts';
+import { build, errorOf, generateTargets, jobError, jobLabel, jobToast, plural, readDensity, removeTargets, restoreTargets, stateOf, tally, type Tally } from './state.ts';
+import { oneSectorSay } from './one_sector.ts';
 import { actError, allowanceNow, allowanceSay, writesOf, type AllowanceSay } from './allowance_words.ts';
 import type { Density } from './seam.ts';
 import { allowanceCovers } from '../../builder/allowance.ts';
@@ -186,12 +187,29 @@ export async function keepPreview(): Promise<void> {
 
 // ---- many hexes: counted, with Stop --------------------------------------------------------------
 
+/**
+ * The hexes a Generate on this selection would send name two sectors: the sentence that says what
+ * to do instead, or empty. Judged on what would be sent (the empty hexes, and the filled ones when
+ * they are regenerated too), so a selection across a border whose empty hexes are all on one side goes.
+ */
+export function oneSectorFor(keys: readonly string[]): string {
+    if (keys.length < 2) return '';
+    return oneSectorSay(generateTargets(tallyOf(keys), build.filledToo));
+}
+
 /** Many hexes, kept as they land. Hexes in an empty slot go through grow_acts.ts instead. */
 export function generateMany(keys: readonly string[]): void {
     const store = buildStore();
     if (!store || build.job) return;
     const targets = generateTargets(tallyOf(keys), build.filledToo);
     if (targets.length === 0) return;
+    // The server refuses two sectors in one request: nothing is sent, and the pane says what to do instead.
+    const two = oneSectorSay(targets);
+    if (two) {
+        build.sheetOpen = false;
+        build.error = two;
+        return;
+    }
     const say = allowanceFor(keys);
     if (heldByAllowance(say)) return;
     build.error = '';
@@ -224,7 +242,7 @@ export function generateMany(keys: readonly string[]): void {
         build.choice,
         (progress) => {
             noteFlight(progress);
-            if (build.job) build.job = { ...progress, label };
+            if (build.job) build.job = { ...progress, label, error: errorOf(progress) };
         },
         density,
     );
@@ -238,6 +256,13 @@ export function generateMany(keys: readonly string[]): void {
             build.job = null;
             endFlight();
             endJobToast();
+            // A job that failed whole: its sentence stays beside Generate after the toast has gone.
+            const lost = jobError({ failed: progress.failed, error: errorOf(progress) });
+            if (lost) {
+                build.error = lost;
+                showToast(lost, { ms: TOAST_ACTION_MS });
+                return;
+            }
             // After a route change the store that started the job has closed: the current one's token is the one that works.
             const undo = jobUndo(token, store);
             if (undo) offerUndo(jobToast(progress, where(targets)), undo);

@@ -455,6 +455,28 @@ test('a busy job ends failed and keeps the sentence on the next hex', () => {
     assert.equal(readJob(sql, 'job-busy').failures.length, 1);
 });
 
+test('a failed job keeps a sentence that names no hex', () => {
+    const sql = open();
+    ensurePin(sql, OWN);
+    createJob(sql, 'job-cap', {
+        hexKeys: ['Spinward_Marches/1910', 'Deneb/0101'],
+        edition: 'MgT2E',
+        generator: 'top-down',
+        roll: 0,
+        filledToo: true,
+        seed: 'TravellerMagnus',
+        settings: {},
+        engineVersion: '1.0.0',
+        captured: {},
+    }, OWN, NOW);
+    markJobFailed(sql, 'job-cap', NOW, 'The limit is one sector per request.');
+    const job = readJob(sql, 'job-cap');
+    assert.equal(job.state, 'failed');
+    assert.equal(job.failed, 0);
+    assert.equal(job.failures.length, 0);
+    assert.equal(job.error, 'The limit is one sector per request.');
+});
+
 test('two batches posted together both land', async () => {
     const sql = open();
     ensurePin(sql, OWN);

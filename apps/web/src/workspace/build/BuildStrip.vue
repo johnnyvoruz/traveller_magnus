@@ -4,22 +4,27 @@
  * hexes switch, and how many are selected (findings/builder_system_design.md §1). It stands
  * at the top right: the legacy place, right of the search field, holds the campaign date.
  */
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import Icon from '../../design/Icon.vue';
+import type { Tier } from '../../map/tiers.ts';
 import { observeSize, storageGet, storageSet } from '../../platform/browser.ts';
 import { tallyOf } from './acts.ts';
 import { allowanceNow, allowanceSpent } from './allowance_words.ts';
-import { build, SELECTION_CAP, stripLine, YOURS_KEY, yoursNote } from './state.ts';
+import { draftHandle } from './edit.ts';
+import { build, firstStep, SELECTION_CAP, STARTED_KEY, stripLine, YOURS_KEY, yoursNote } from './state.ts';
 
 const props = defineProps<{
     name: string;
     truthVersion: string | null;
     /** The hex pane is open: it says the allowance by its Generate button, so the strip doesn't say it twice. */
     paneOpen?: boolean;
+    /** How far out the chart is drawn: the first step depends on it. */
+    tier?: Tier;
 }>();
-const emit = defineEmits<{ clear: []; width: [px: number] }>();
+const emit = defineEmits<{ clear: []; width: [px: number]; start: [how: 'go' | 'zoom'] }>();
 
 const root = ref<HTMLElement | null>(null);
+const selectEl = ref<HTMLButtonElement | null>(null);
 /** The selection, counted: how many, how many of them are empty, and whether the cap is reached (§18 item 9). */
 const count = computed(() => {
     const keys = build.selection;
@@ -35,6 +40,28 @@ const told = ref(storageGet(YOURS_KEY) === '1');
 function putAway(): void {
     told.value = true;
     storageSet(YOURS_KEY, '1');
+}
+/**
+ * The first step: said while Build is on with nothing selected, until this browser has generated
+ * or designed a system once. The tool being on has its own words in the strip.
+ */
+const started = ref(storageGet(STARTED_KEY) === '1');
+watch(() => build.job !== null || build.preview !== null || build.rolling !== '' || draftHandle.value !== null, (working) => {
+    if (!working || started.value) return;
+    started.value = true;
+    storageSet(STARTED_KEY, '1');
+}, { immediate: true });
+const step = computed(() => (!started.value && build.selection.length === 0 && !props.paneOpen && !build.selecting ? firstStep(props.tier ?? 'hex') : null));
+function takeStep(): void {
+    const now = step.value;
+    if (!now) return;
+    if (now.does !== 'select') {
+        emit('start', now.does);
+        return;
+    }
+    // The note goes when the tool is on: focus moves to the switch, which now reads as pressed.
+    build.selecting = true;
+    void nextTick(() => { if (selectEl.value) selectEl.value.focus(); });
 }
 let stop: (() => void) | null = null;
 
@@ -58,6 +85,7 @@ onBeforeUnmount(() => {
       <b>{{ name }}<em> · {{ stripLine(name, truthVersion).what }}</em></b>
     </span>
     <button
+      ref="selectEl"
       type="button"
       class="ui-btn"
       data-command="build-select"
@@ -75,7 +103,7 @@ onBeforeUnmount(() => {
       Clear<Icon name="xmark" :size="12" />
     </button>
     <!-- The notes hang below: the strip never changes size. -->
-    <div v-if="!told || spent" class="build-strip-notes">
+    <div v-if="!told || spent || step" class="build-strip-notes">
       <!-- Whose map this is: said once, the first time Build is on, until it is put away. -->
       <div v-if="!told" class="build-strip-note" role="note" data-build-yours>
         <p>{{ yoursNote(truthVersion !== null) }}</p>
@@ -83,6 +111,11 @@ onBeforeUnmount(() => {
       </div>
       <div v-if="spent" class="build-strip-note is-allowance" role="status" data-build-allowance>
         <p>{{ spent }}</p>
+      </div>
+      <!-- What to do first, with the one control that starts it. -->
+      <div v-if="step" class="build-strip-note is-step" role="note" data-build-step>
+        <p>{{ step.say }}</p>
+        <button type="button" class="ui-btn is-primary" :data-build-step-act="step.does" @click="takeStep()">{{ step.act }}</button>
       </div>
     </div>
   </div>
@@ -185,6 +218,12 @@ onBeforeUnmount(() => {
 
 .build-strip-note.is-allowance {
   border-left-color: var(--attention);
+}
+
+/* The first step: its button under its sentence, so a long label never squeezes the words. */
+.build-strip-note.is-step {
+  flex-direction: column;
+  gap: 8px;
 }
 
 .build-strip-note .ui-btn {

@@ -190,7 +190,8 @@ describe('hybrid model', () => {
         assert.ok(cold.hexes.some((h) => !h.water && h.ice !== 'none'), 'land ice');
         // An unresolved water sea is water, never the unknown liquid.
         const world = worldOf(earth({ liquidType: 'Water', liquidStatus: { status: 'unresolved' } }));
-        assert.equal(world.liquid, 'Water');
+        assert.equal(world.liquid, null);
+        assert.equal(world.hydro, 0);
         const unnamed = worldOf(earth({ liquidType: '' }));
         assert.equal(unnamed.liquid, 'Water');
         assert.equal(unnamed.liquidAssumed, true);

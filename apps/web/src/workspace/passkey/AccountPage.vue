@@ -15,7 +15,7 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
 import {
-    listLinkedAccounts, listPasskeys, regenerateRecoveryCodes, removePasskey, renamePasskey, setUsername, unlinkAccount,
+    linkProvider, listLinkedAccounts, listPasskeys, regenerateRecoveryCodes, removePasskey, renamePasskey, setUsername, unlinkAccount,
     type LinkedAccount, type PasskeyRow,
 } from '../../account/passkey.ts';
 import { loadSession, session, signOut } from '../../account/session.ts';
@@ -25,7 +25,6 @@ import { readProviders } from '../account.ts';
 import { forgetDeleted } from '../actions.ts';
 import { forgetOpening } from '../opening.ts';
 import CodesBlock from './CodesBlock.vue';
-import { linkSocial } from './link.ts';
 import PasskeyAdd from './PasskeyAdd.vue';
 import { returnPath } from './recovery.ts';
 import RecoveryScreen from './RecoveryScreen.vue';
@@ -313,7 +312,7 @@ async function unlink(row: LinkedAccount): Promise<void> {
 async function link(id: string): Promise<void> {
     let url = '';
     const ok = await act('link', async () => {
-        const done = await linkSocial(id);
+        const done = await linkProvider(id, '/account');
         if (done.ok) url = done.url;
         return done;
     }, id);

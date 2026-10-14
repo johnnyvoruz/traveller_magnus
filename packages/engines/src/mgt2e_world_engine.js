@@ -12,13 +12,14 @@
  * - State mutation pattern (sys object passed & returned)
  * - Comprehensive trace logging (tSection, tRoll2D, tDM, tResult, tSkip)
  */
-import { rng, roll1D, roll2D, roll3D, toEHex, fromEHex } from './core/rng.js';
+import { rng, roll1D, roll2D, roll3D, toEHex, fromEHex, isolateRng } from './core/rng.js';
 import { trace, writeLogLine, tSection, tResult, tDM, tSkip, tRoll1D, tRoll2D, tRoll3D, tRoll4D } from './core/trace.js';
 import { isManual } from './core/manual.js';
 import { MgT2EData } from './generated/rules/mgt2e_data.js';
 import { MGT2E_SURFACE_DISTS, MGT2E_PLATE_INTERACTIONS } from './core/constants.js';
 import { isMaskingEligible } from './universal_math.js';
 import { MgT2EMath } from './mgt2e_math.js';
+import { decideSurfaceLiquid, liquidCandidates, isExoticAtmosphere } from './surface_liquid.js';
     // =====================================================================
     // HELPER FUNCTIONS
     // =====================================================================
@@ -1446,34 +1447,15 @@ import { MgT2EMath } from './mgt2e_math.js';
 
             let distRoll = Math.max(0, Math.min(10, tRoll2D('Surface Liquid Distribution (2D-2)') - 2));
             w.surfaceDist = MGT2E_SURFACE_DISTS[distRoll];
-            w.liquidType = "Water";
-
-            // Ice Distinction (WBH RAW)
-            if (w.highTempK < 273 || w.atmCode === 0 || w.atmCode === 1) {
-                w.liquidType = "Ice";
-            }
-
-            // Exotic Liquids Selection (WBH RAW — Data-Driven Weighted Random)
-            if (w.atmCode >= 10 && w.atmCode <= 12 && w.hydroPercent > 0) {
-                const exoticTable = MgT2EData.atmosphereExtended.exoticLiquids;
-                const candidates = exoticTable.filter(liq => w.meanTempK >= liq.mp && w.meanTempK <= liq.bp);
-                if (candidates.length > 0) {
-                    const totalWeight = candidates.reduce((sum, liq) => sum + liq.abundance, 0);
-                    let roll = rng() * totalWeight;
-                    let winner = candidates[candidates.length - 1];
-                    for (const liq of candidates) {
-                        roll -= liq.abundance;
-                        if (roll <= 0) { winner = liq; break; }
-                    }
-                    w.liquidType = winner.name;
-                } else {
-                    w.liquidType = "Unknown Exotic Liquid";
-                }
+            // Liquid die (engine 1.2.0). The liquid itself is decided once, from the final
+            // temperatures, by decideSurfaceLiquid in generateBiospherics. The die is drawn here,
+            // under the 1.1.0 condition, so the dice stream does not move.
+            if (isExoticAtmosphere(w.atmCode) && w.hydroPercent > 0 && liquidCandidates(w.meanTempK).length > 0) {
+                w.liquidRoll = rng();
             }
 
             w.tempBand = tempBand;
             tResult('Surface Distribution', w.surfaceDist);
-            tResult('Liquid Type', w.liquidType, 'MgT2E 2.3: Hydrographics');
 
             // Sync final physical codes back to UWP strings
             let finalAtmChar = toEHex(w.atmCode);
@@ -1786,6 +1768,7 @@ import { MgT2EMath } from './mgt2e_math.js';
             if (farAu > 0 && !isManual(w, 'lowTempK')) w.lowTempK = MgT2EMath.calculateMeanTemperature(lowLum, farAu, w.albedo, w.greenhouseFactor);
             tResult('High Temp (K)', w.highTempK != null ? w.highTempK.toFixed(1) + ' K' : 'N/A', 'MgT2E 2.4: Thermal Logic');
             tResult('Low Temp (K)', w.lowTempK != null ? w.lowTempK.toFixed(1) + ' K' : 'N/A', 'MgT2E 2.4: Thermal Logic');
+
         };
 
         for (let i = 0; i < targetWorlds.length; i++) {
@@ -2198,6 +2181,13 @@ import { MgT2EMath } from './mgt2e_math.js';
      * @param {Object|Object} options - Options object or Mainworld baseline data
      * @returns {Object} Modified system object
      */
+    /** Key of a body's side stream for the late liquid die: hex, top-level index, moon index, orbit. */
+    function liquidDieKey(sys, w, parent) {
+        const top = (sys.worlds || []).indexOf(parent || w);
+        const moon = parent && parent.moons ? parent.moons.indexOf(w) : -1;
+        return `${sys.hexId || '0000'}|liquid|${top}|${moon}|${w.orbitId != null ? w.orbitId : ''}`;
+    }
+
     function generateBiospherics(sys, options = {}) {
         let mainworldBase = null;
         let targetWorlds = sys.worlds;
@@ -2398,6 +2388,14 @@ import { MgT2EMath } from './mgt2e_math.js';
 
             tResult('Recalc High Temp', w.highTempK != null ? w.highTempK.toFixed(1) + ' K' : 'N/A');
             tResult('Recalc Low Temp', w.lowTempK != null ? w.lowTempK.toFixed(1) + ' K' : 'N/A');
+
+            // Surface liquid, decided once: this is the last write of meanTempK/highTempK/lowTempK.
+            if (w.type !== 'Gas Giant' && w.atmCode !== undefined && !isManual(w, 'liquidType')) {
+                // A late die (exotic body, candidates, no stored liquidRoll) comes from its own stream,
+                // keyed on hex and body, so no later roll on the shared stream moves (engine 1.2.0).
+                decideSurfaceLiquid(w, () => isolateRng(liquidDieKey(sys, w, parent), () => rng()));
+                tResult('Liquid Type', w.liquidType ?? ('none (' + (w.liquidStatus ? w.liquidStatus.outcome : 'no hydrographics') + ')'), 'surface_liquid.js');
+            }
 
             if (w.type === 'Gas Giant' || w.size === 'R') {
                 w.habitability = 0;

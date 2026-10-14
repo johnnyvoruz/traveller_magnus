@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { addressPane, campaignRedirect, escapePane, focusTarget, hostsCampaign, paneChanges, paneOf, withQuery } from '../../apps/web/src/shell/pane.ts';
+import { addressPane, atPane, campaignRedirect, escapePane, focusTarget, hostsCampaign, paneChanges, paneOf, withQuery } from '../../apps/web/src/shell/pane.ts';
+import { afterClear } from '../../apps/web/src/workspace/build/clear.ts';
+import { FIRST_PLACE } from '../../apps/web/src/workspace/first_visit.ts';
 
 const SECTOR = 'Spinward_Marches';
 const HEX = '1910';
@@ -23,7 +26,7 @@ test('the twelve addresses of today name a view and a pane', () => {
     const rows = [
         { path: '/', query: {}, view: HOME, pane: SHUT },
         { path: '/', query: { x: '1', y: '2', z: '3' }, view: HOME, pane: SHUT },
-        { path: '/s/' + SECTOR, query: {}, view: { kind: 'sector', sector: SECTOR }, pane: SHUT },
+        { path: '/s/' + SECTOR, query: {}, view: { kind: 'sector', sector: SECTOR }, pane: DOSSIER },
         { path: '/s/' + SECTOR + '/' + HEX, query: {}, view: map(null), pane: DOSSIER },
         { path: '/s/' + SECTOR + '/' + HEX + '/b/' + BODY, query: {}, view: map(BODY), pane: DOSSIER },
         { path: '/s/' + SECTOR + '/' + HEX + '/orbit', query: {}, view: orbit(null), pane: DOSSIER },
@@ -75,7 +78,7 @@ test('an unknown panel matches an absent one, and panel=dossier is the dossier',
     const orbitPath = hex + '/orbit/b/' + BODY;
     assert.deepEqual(paneOf(hex, { panel: 'ships' }).pane, paneOf(hex).pane);
     assert.deepEqual(paneOf('/', { panel: 'ships' }).pane, paneOf('/').pane);
-    assert.deepEqual(paneOf('/s/' + SECTOR, { panel: 'ships' }).pane, SHUT);
+    assert.deepEqual(paneOf('/s/' + SECTOR, { panel: 'ships' }).pane, DOSSIER);
     assert.deepEqual(paneOf(orbitPath, { panel: 'ships' }).pane, DOSSIER);
     assert.deepEqual(paneOf(hex, { panel: 'dossier' }).pane, DOSSIER);
     assert.deepEqual(paneOf('/', { panel: 'dossier' }).pane, DOSSIER);
@@ -177,16 +180,22 @@ test('escape steps the pane and leaves an orbit overview to the view', () => {
     assert.deepEqual(escapePane(hex, { x: '1' }), { path: hex, query: { panel: 'closed', x: '1' } });
     assert.equal(escapePane(orbitPath, { date: '120' }), null);
     assert.equal(escapePane('/', { panel: 'closed' }), null);
-    assert.equal(escapePane('/s/' + SECTOR, {}), null);
+    assert.deepEqual(escapePane('/s/' + SECTOR, {}), {
+        path: '/s/' + SECTOR,
+        query: { panel: 'closed' },
+    });
     assert.deepEqual(escapePane('/s/' + SECTOR, { panel: 'dossier' }), {
         path: '/s/' + SECTOR,
         query: { panel: 'closed' },
     });
     assert.deepEqual(paneOf('/s/' + SECTOR + '/sub/C'), {
         view: { kind: 'subsector', sector: SECTOR, letter: 'C' },
-        pane: SHUT,
+        pane: DOSSIER,
     });
-    assert.equal(escapePane('/s/' + SECTOR + '/sub/C', { x: '1' }), null);
+    assert.deepEqual(escapePane('/s/' + SECTOR + '/sub/C', { x: '1' }), {
+        path: '/s/' + SECTOR + '/sub/C',
+        query: { panel: 'closed', x: '1' },
+    });
     assert.deepEqual(escapePane('/s/' + SECTOR + '/sub/C', { panel: 'dossier', x: '1' }), {
         path: '/s/' + SECTOR + '/sub/C',
         query: { panel: 'closed', x: '1' },
@@ -261,4 +270,50 @@ test('focus stays on a cold load, and follows the pane table after that', () => 
     assert.equal(focusTarget(null, characters), 'leave');
     assert.equal(hostsCampaign(characters), false);
     assert.equal(hostsCampaign(openCharacter), false);
+});
+
+test('a bare sector or subsector address opens the dossier, and a panel query still wins', () => {
+    const sector = '/s/' + SECTOR;
+    const sub = sector + '/sub/C';
+    const hex = sector + '/' + HEX;
+    for (const path of [sector, sub]) {
+        assert.deepEqual(addressPane(path, {}).pane, DOSSIER);
+        assert.deepEqual(addressPane(path, { panel: 'dossier', x: '1' }).pane, DOSSIER);
+        assert.deepEqual(addressPane(path, { panel: 'closed' }).pane, SHUT);
+        assert.deepEqual(addressPane(path, { panel: 'campaign' }).pane, LIST);
+    }
+    assert.deepEqual(addressPane(hex, {}).pane, DOSSIER);
+    assert.deepEqual(addressPane(hex, { panel: 'closed', x: '1' }).pane, SHUT);
+    assert.equal(addressPane(hex, { x: '1' }).view.kind, 'map');
+});
+
+test('closing a sector or subsector pane writes panel=closed and stays shut', () => {
+    for (const path of ['/s/' + SECTOR, '/s/' + SECTOR + '/sub/C']) {
+        const closed = atPane(path, { x: '1', y: '2', z: '3' }, SHUT);
+        assert.equal(closed.query.panel, 'closed');
+        assert.deepEqual(addressPane(closed.path, closed.query).pane, SHUT);
+        assert.equal(campaignRedirect(closed.path, closed.query), null);
+        const again = addressPane(closed.path, closed.query);
+        assert.deepEqual(again.pane, SHUT);
+    }
+});
+
+test('a first visit stays on the home address, which opens no pane', () => {
+    assert.equal(FIRST_PLACE, '/s/Spinward_Marches/sub/C');
+    assert.deepEqual(addressPane('/', {}).pane, SHUT);
+    assert.deepEqual(addressPane(FIRST_PLACE, {}).pane, DOSSIER);
+    const view = readFileSync(new URL('../../apps/web/src/views/MapView.vue', import.meta.url), 'utf8');
+    const uses = view.split('\n').filter((line) => line.includes('FIRST_PLACE') && !line.includes('import '));
+    assert.deepEqual(uses.map((line) => line.includes('targetFor({ path: FIRST_PLACE }')), [true, true]);
+});
+
+test('Clear and Esc return a sector or subsector selection to that address with the pane shut', () => {
+    const now = { path: '/s/' + SECTOR + '/sub/C', query: { panel: 'dossier', x: '5.000', y: '6.000', z: '70.000' } };
+    for (const path of ['/s/' + SECTOR, '/s/' + SECTOR + '/sub/C']) {
+        const to = afterClear({ path, query: { panel: 'dossier', x: '1' } }, now);
+        assert.equal(to.path, path);
+        assert.equal(to.query.panel, 'closed');
+        assert.equal(addressPane(to.path, to.query).pane.kind, 'shut');
+        assert.equal(campaignRedirect(to.path, to.query), null);
+    }
 });
