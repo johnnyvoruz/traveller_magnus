@@ -1,15 +1,22 @@
 /**
- * Install a package into this universe in place (contracts/b_marketplace.md F4).
+ * Install a package into this universe, in place or at a placement
+ * (contracts/b_marketplace.md F4, F12, F13), and undo an import from its snapshot.
  * The Worker reads the manifest and the chart; this module chooses an outcome per
  * hex against the stored rows and, on install, writes them in one transaction
  * after a snapshot. Records go through the campaign change path afterwards.
  */
 import { CampaignRecord, type InstallOutcome } from '@voyage/shared';
-import { applyCampaignChanges, storedCampaignRecord, type Sql, type SqlRow } from './campaign.ts';
-import { chartTree, ownSectorKey, storedEntry, storedHexRow, writeInstalled } from './hexes.ts';
+import { applyCampaignChanges, rawCampaignRecord, restoreInstalledRecord, storedCampaignRecord, type Sql, type SqlRow } from './campaign.ts';
+import { chartTree, HexRefusal, ownSectorKey, restoreInstalledHex, storedEntry, storedHexRow, writeInstalled } from './hexes.ts';
+import { dropImportSector, makeImportSector } from './sectors.ts';
 
 export type InstallHexInput = {
+    /** Where the hex lands in this universe. */
     hexKey: string;
+    /** The package's own key; equal to hexKey for an install in place. */
+    from?: string;
+    /** True with a placement: the package's base hash says nothing about this space. */
+    placed?: boolean;
     baseHash: string | null;
     treeHash: string | null;
     summary: Record<string, unknown> | null;
@@ -44,6 +51,21 @@ export type InstallBody = {
     records: InstallRecordInput[];
     resolutions: Record<string, 'theirs' | 'mine'>;
     recordResolutions: Record<string, 'theirs' | 'mine'>;
+    /** Own sectors a placement needs; made in the same transaction as the hexes. */
+    sectors?: { id: string; slot: { x: number; y: number }; name: string }[];
+    /** The package_installs row and the version it held before (null: a first import). */
+    rowId?: string;
+    prevVersion?: number | null;
+};
+
+/** What an import changed, kept in meta `installed:<installId>` for its undo. */
+type InstallDone = {
+    hexes: Record<string, number | null>;
+    records: Record<string, number>;
+    sectors: string[];
+    rowId: string | null;
+    prevVersion: number | null;
+    prevInstallId: string | null;
 };
 
 export class InstallRefusal extends Error {
@@ -111,7 +133,7 @@ export function outcomeOf(sql: Sql, packageId: string, hex: InstallHexInput): Pr
         const entry = chartEntry(hex.chart);
         current = charted && entry ? { ...entry, treeHash: chartHash } : null;
     }
-    const base = { from: hex.hexKey, to: hex.hexKey, removes: hex.deleted, current };
+    const base = { from: hex.from ?? hex.hexKey, to: hex.hexKey, removes: hex.deleted, current };
     if (hex.deleted ? !present : present && tree !== null && tree === hex.treeHash) {
         return { ...base, outcome: 'already installed' };
     }
@@ -119,19 +141,19 @@ export function outcomeOf(sql: Sql, packageId: string, hex: InstallHexInput): Pr
         const prov = provenanceOf(row);
         const untouchedUpdate = prov?.packageId === packageId && typeof prov.treeHash === 'string' && prov.treeHash === (tree ?? '');
         const rowTree = typeof row.tree_hash === 'string' && row.tree_hash ? row.tree_hash : null;
-        const atBase = Number(row.deleted) !== 1 && rowTree !== null && rowTree === hex.baseHash;
+        const atBase = !hex.placed && Number(row.deleted) !== 1 && rowTree !== null && rowTree === hex.baseHash;
         if (untouchedUpdate || atBase) return { ...base, outcome: 'replaces own' };
         return { ...base, outcome: 'conflict' };
     }
-    if (charted) return { ...base, outcome: chartHash === hex.baseHash ? 'replaces chart' : 'conflict' };
-    return { ...base, outcome: hex.baseHash === null ? 'new' : 'conflict' };
+    if (charted) return { ...base, outcome: hex.placed || chartHash === hex.baseHash ? 'replaces chart' : 'conflict' };
+    return { ...base, outcome: hex.placed || hex.baseHash === null ? 'new' : 'conflict' };
 }
 
-function recordProvenance(value: unknown): { mode?: unknown; universeId?: unknown } | null {
-    return value && typeof value === 'object' ? value as { mode?: unknown; universeId?: unknown } : null;
+function recordProvenance(value: unknown): { mode?: unknown; universeId?: unknown; packageId?: unknown } | null {
+    return value && typeof value === 'object' ? value as { mode?: unknown; universeId?: unknown; packageId?: unknown } : null;
 }
 
-export function recordOutcomes(sql: Sql, sourceUniverseId: string, ids: string[]): PreviewRecords {
+export function recordOutcomes(sql: Sql, sourceUniverseId: string, ids: string[], packageId = ''): PreviewRecords {
     const out: PreviewRecords = { add: [], replace: [], conflicts: [] };
     for (const id of ids) {
         const stored = storedCampaignRecord(sql, id);
@@ -140,7 +162,7 @@ export function recordOutcomes(sql: Sql, sourceUniverseId: string, ids: string[]
             continue;
         }
         const prov = recordProvenance((stored as { provenance?: unknown }).provenance);
-        if (prov?.mode === 'copy' && prov.universeId === sourceUniverseId) out.replace.push(id);
+        if ((prov?.mode === 'copy' && prov.universeId === sourceUniverseId) || (prov?.mode === 'package' && prov.packageId === packageId)) out.replace.push(id);
         else out.conflicts.push(id);
     }
     return out;
@@ -149,7 +171,7 @@ export function recordOutcomes(sql: Sql, sourceUniverseId: string, ids: string[]
 export function previewInstall(sql: Sql, body: { packageId: string; sourceUniverseId: string; hexes: InstallHexInput[]; recordIds: string[] }): { hexes: PreviewHex[]; records: PreviewRecords } {
     return {
         hexes: body.hexes.map((hex) => outcomeOf(sql, body.packageId, hex)),
-        records: recordOutcomes(sql, body.sourceUniverseId, body.recordIds),
+        records: recordOutcomes(sql, body.sourceUniverseId, body.recordIds, body.packageId),
     };
 }
 
@@ -170,11 +192,27 @@ export function applyInstall(sql: Sql, body: InstallBody, now: string): { writte
     const snapshotId = body.installId;
     let written = 0;
     let skipped = 0;
+    const done: InstallDone = {
+        hexes: {},
+        records: {},
+        sectors: [],
+        rowId: body.rowId ?? null,
+        prevVersion: body.prevVersion ?? null,
+        prevInstallId: body.rowId ? metaValue(sql, `installrow:${body.rowId}`) : null,
+    };
     sql.transaction(() => {
+        for (const plan of body.sectors ?? []) {
+            try {
+                if (makeImportSector(sql, plan.id, plan.name, plan.slot.x, plan.slot.y, now)) done.sectors.push(plan.id);
+            } catch (err) {
+                if (err instanceof HexRefusal) throw new InstallRefusal(409, 'conflict', 'The empty space for this piece was taken. Open the preview again.', { sectorId: plan.id });
+                throw err;
+            }
+        }
         const captured: Record<string, SqlRow | null> = {};
         for (const hex of body.hexes) captured[hex.hexKey] = storedHexRow(sql, hex.hexKey);
-        const capturedRecords: Record<string, unknown> = {};
-        for (const item of body.records) capturedRecords[item.id] = storedCampaignRecord(sql, item.id);
+        const capturedRecords: Record<string, SqlRow | null> = {};
+        for (const item of body.records) capturedRecords[item.id] = rawCampaignRecord(sql, item.id);
         const blob = JSON.stringify({ hexes: captured, records: capturedRecords });
         sql.exec(`INSERT INTO meta (key, value) VALUES (?, ?)`, `install:${body.installId}`, blob);
         sql.exec(
@@ -206,6 +244,8 @@ export function applyInstall(sql: Sql, body: InstallBody, now: string): { writte
                     treeHash: hex.deleted ? '' : hex.treeHash ?? '',
                 }),
             }, now);
+            const after = storedHexRow(sql, hex.hexKey);
+            done.hexes[hex.hexKey] = after ? Number(after.rev) : null;
             written += 1;
         }
     });
@@ -216,11 +256,11 @@ export function applyInstall(sql: Sql, body: InstallBody, now: string): { writte
         const change: Record<string, unknown> = {};
         for (const key of RECORD_KEYS) if (key in item.record) change[key] = item.record[key];
         change.provenance = {
-            mode: 'copy',
-            universeId: body.sourceUniverseId,
-            recordId: item.id,
-            rev: typeof item.record.rev === 'number' ? item.record.rev : 0,
-            at: body.publishedAt,
+            mode: 'package',
+            packageId: body.packageId,
+            version: body.version,
+            installId: body.installId,
+            at: now,
         };
         change.deleted = false;
         change.baseRev = stored && typeof stored.rev === 'number' ? stored.rev : 0;
@@ -230,6 +270,77 @@ export function applyInstall(sql: Sql, body: InstallBody, now: string): { writte
     if (changes.length) {
         const result = applyCampaignChanges(sql, { records: changes }, now);
         records = result.applied.length;
+        for (const item of result.applied) if (item.table === 'records') done.records[item.id] = item.rev;
     }
+    sql.transaction(() => {
+        setMeta(sql, `installed:${body.installId}`, JSON.stringify(done));
+        if (body.rowId) setMeta(sql, `installrow:${body.rowId}`, body.installId);
+    });
     return { written, skipped, records, snapshotId };
+}
+
+function metaValue(sql: Sql, key: string): string | null {
+    const value = sql.exec(`SELECT value FROM meta WHERE key = ?`, key)[0]?.value;
+    return typeof value === 'string' ? value : null;
+}
+
+function setMeta(sql: Sql, key: string, value: string): void {
+    sql.exec(`INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = ?`, key, value, value);
+}
+
+export type InstallRestore = {
+    snapshotId: string;
+    hexes: number;
+    records: number;
+    sectors: number;
+    rowId: string | null;
+    prevVersion: number | null;
+};
+
+/**
+ * Undo an import from its snapshot (contracts/b_marketplace.md F13). All or nothing:
+ * the checks and every write are one transaction. Refused when a hex or record the
+ * import wrote has changed since, when a later import of the same package is still
+ * in place, or when the import is already undone.
+ */
+export function restoreInstall(sql: Sql, snapshotId: string, now: string): InstallRestore {
+    return sql.transaction(() => {
+        const snap = sql.exec(`SELECT trigger FROM snapshots WHERE id = ?`, snapshotId)[0];
+        if (!snap) throw new InstallRefusal(404, 'not_found', 'There is no such undo point.');
+        if (snap.trigger !== 'install') throw new InstallRefusal(400, 'validation', 'Only an undo point made by an import can be restored here.');
+        if (metaValue(sql, `restored:${snapshotId}`)) throw new InstallRefusal(409, 'conflict', 'This import is already undone.');
+        const blobText = metaValue(sql, `install:${snapshotId}`);
+        const doneText = metaValue(sql, `installed:${snapshotId}`);
+        if (!blobText || !doneText) throw new InstallRefusal(409, 'conflict', 'This import was made before undo was possible, so it cannot be undone.');
+        const blob = JSON.parse(blobText) as { hexes: Record<string, SqlRow | null>; records: Record<string, SqlRow | null> };
+        const done = JSON.parse(doneText) as InstallDone;
+        if (done.rowId && metaValue(sql, `installrow:${done.rowId}`) !== snapshotId) {
+            throw new InstallRefusal(409, 'conflict', 'Undo the later import of this package first.');
+        }
+        const hexKeys = Object.entries(done.hexes).filter(([key, rev]) => {
+            const row = storedHexRow(sql, key);
+            return (row ? Number(row.rev) : null) !== rev;
+        }).map(([key]) => key);
+        const recordIds = Object.entries(done.records).filter(([id, rev]) => Number(rawCampaignRecord(sql, id)?.rev ?? -1) !== rev).map(([id]) => id);
+        if (hexKeys.length || recordIds.length) {
+            throw new InstallRefusal(409, 'conflict', 'Some systems or records changed after the import. Undo those changes first, then try again.', { hexKeys, recordIds });
+        }
+        for (const key of Object.keys(done.hexes)) restoreInstalledHex(sql, key, blob.hexes[key] ?? null, now);
+        for (const id of Object.keys(done.records)) restoreInstalledRecord(sql, id, blob.records[id] ?? null, now);
+        let sectors = 0;
+        for (const id of done.sectors) if (dropImportSector(sql, id, now)) sectors += 1;
+        setMeta(sql, `restored:${snapshotId}`, now);
+        if (done.rowId) {
+            if (done.prevInstallId) setMeta(sql, `installrow:${done.rowId}`, done.prevInstallId);
+            else sql.exec(`DELETE FROM meta WHERE key = ?`, `installrow:${done.rowId}`);
+        }
+        return {
+            snapshotId,
+            hexes: Object.keys(done.hexes).length,
+            records: Object.keys(done.records).length,
+            sectors,
+            rowId: done.rowId,
+            prevVersion: done.prevVersion,
+        };
+    });
 }

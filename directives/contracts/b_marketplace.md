@@ -537,3 +537,30 @@ Johnny's phase-2 answers: routes and border paths that leave the piece are dropp
 - **F8, limits.** Quota: 400 `too_large`, `This universe is out of space.`, checked at preview and install against `universes.object_bytes` + bytes not yet held; charged with `chargeObjectBytes` keyed by `installId`. Daily cap: not touched. Mutation budget: `/install` takes one mutation in the Durable Object (429 `Too many requests.`).
 - **F9, migration** `0015_marketplace.sql`: `package_installs` and `package_reports`, every statement `IF NOT EXISTS`, no change to existing tables. Worker before migration: install, installs list and report answer 503 `The marketplace is being updated. Try again soon.` (probed per request); catalogue, page and publish keep working. Migration before Worker: the old Worker never names the new tables.
 - **Undo.** No restore route (see F4 undo). The undo point is written.
+## F13. Phase 3 as built (2026-10-14) - **on disk, unpushed**
+
+### Placement (part A)
+
+- `GET /api/universes/:id/install/preview` takes `anchor` and `to` (both hex keys, both or neither), or `installId` to preview an update of that import. Both together is 400 `validation` "An update keeps its placement. Leave the anchor out." The old `placement` query is still 400 `Invalid request.`
+- `POST /api/universes/:id/install` takes `placement: { anchor, to }` or `installId` (zod refuses both). A placement makes a new import row each time; `installId` reuses the row and its stored placement; neither reuses the in-place row.
+- The shift is `packages/shared/src/package_place.ts` (F5 cube shift). Source slots: the package's truth manifest `sectors[]` plus the source universe's own sectors. Target slots: the target truth manifest plus its own sectors; `~slot_x_y` names empty space.
+- Refusals, 400 `validation`: "The piece does not fit on the map." (a slot outside -1000..1000), "The anchor is not in the package.", "A sector of the piece is not on the map.", "That hex address is not valid."
+- Empty space: the preview lists `sectorsCreated [{ id, slot, name }]`. The id is `~` plus 26 Crockford characters from sha256(universe | row or package+placement | slot), so the preview and the install agree. The DO makes the sectors in the install transaction (`makeImportSector`); a taken slot is 409 "The empty space for this piece was taken. Open the preview again."
+- Every tree is rewritten (`placeTree`), stored as a new private object and charged to quota. Summaries get `entry.tree` = the new hash; records go through `placeRecord`.
+- With a placement the package base hash is not used: a charted hex is `replaces chart` (the chart in R2 is not touched; the row is an override), an untouched row of this package is `replaces own`, any other row is `conflict`, empty is `new`.
+- Records carry `{ mode: 'package', packageId, version, installId, at }`. `copy` and `shared` still parse. A record is replaced without asking when it is package mode with this package, or legacy copy mode from the source universe.
+- The universe must be pinned (opened once) before an import. Hex reads in an unpinned universe already say "This universe has no generation pin."
+
+### Undo of an import (part B)
+
+- `POST /api/universes/:id/snapshots/:snapshotId/restore`. Owner only (`ownedUniverse`). Answer `InstallRestored { snapshotId, hexes, records, sectors }`.
+- One DO call (`/install/restore`), one transaction: the checks, then every write.
+- Only `install` snapshots: other triggers are 400 `validation` "Only an undo point made by an import can be restored here." An unknown id is 404 "There is no such undo point."
+- Every hex the import wrote goes back to the captured row; a hex the import created is removed. Every record goes back to its captured row; a record the import created is tombstoned. Each has a new rev (and seq for records) so devices pull it. History action `restore`.
+- Own sectors the import made are marked deleted, unless a system is still stored in them.
+- A second restore is 409 `conflict` "This import is already undone."
+- After later edits: refused, 409 `conflict` "Some systems or records changed after the import. Undo those changes first, then try again." with `details { hexKeys, recordIds }`. The DO compares the current rev with the rev the import wrote (meta `installed:<installId>`).
+- A later import of the same row in place: 409 "Undo the later import of this package first." Undo goes newest first.
+- Imports from before phase 3 have no `installed:` record: 409 "This import was made before undo was possible, so it cannot be undone."
+- D1: undoing a first import sets `package_installs.removed_at` (migration `0016_package_installs_removed.sql`); the list shows `removed: true` and `updateAvailable: false`. Undoing an update puts the earlier version back on the row. Importing again clears `removed_at`. A Worker without 0016 answers the restore route with 503 and lists `removed: false`; 0016 without the new Worker is ignored.
+- Quota: no refund. The trees stay in private storage and are still named by hex history, generate snapshots and other imports; R2 has no reference count to say an object is free.

@@ -503,3 +503,33 @@ async function routeSector(sql: Sql, request: Request, now: string, pin: Pin | n
     }
     throw new HexRefusal('not_found', 'No such route.');
 }
+
+/**
+ * An own sector made by an import (contracts/b_marketplace.md F13). The Worker
+ * chose a slot no chart sector holds; the slot rules are the same as for make.
+ * An id that is already live is kept (an update of the same import).
+ */
+export function makeImportSector(sql: Sql, id: string, name: string, x: number, y: number, now: string): boolean {
+    const row = live(sql, id);
+    if (row && Number(row.deleted) !== 1) return false;
+    if (!row) {
+        make(sql, id, name, x, y, false, now);
+        return true;
+    }
+    refuseSlot(sql, x, y, id, false);
+    const rev = Number(row.rev) + 1;
+    writeSector(sql, { id, x, y, name, subsectors: emptySubsectors(), rev, deleted: 0, at: now }, true);
+    remember(sql, id, rev, now, 'make', snapshotOf(live(sql, id)!, null));
+    return true;
+}
+
+/** Undo of an import: the sector it made goes, unless a system is still stored in it. */
+export function dropImportSector(sql: Sql, id: string, now: string): boolean {
+    const row = live(sql, id);
+    if (!row || Number(row.deleted) === 1 || hexesOf(sql, id).length) return false;
+    const rev = Number(row.rev) + 1;
+    const sector = view(row);
+    writeSector(sql, { id, x: sector.slot.x, y: sector.slot.y, name: sector.name, subsectors: sector.subsectors, rev, deleted: 1, at: now }, true);
+    remember(sql, id, rev, now, 'restore', snapshotOf(live(sql, id) ?? row, null));
+    return true;
+}

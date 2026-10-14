@@ -1063,3 +1063,42 @@ export async function respondBuilder(sql: Sql, request: Request, now: string): P
         throw err;
     }
 }
+
+const HEX_COLUMNS = [
+    'sector_slug', 'local_hex', 'updated_at', 'deleted', 'base_hash', 'tree_hash', 'engine_version', 'type', 'name',
+    'uwp', 'allegiance', 'zone', 'bases', 'trade_codes', 'pbg', 'ix', 'summary', 'provenance', 'roll',
+] as const;
+
+function cellOf(value: unknown): string | number | null {
+    return typeof value === 'string' || typeof value === 'number' ? value : null;
+}
+
+/**
+ * Undo an import (contracts/b_marketplace.md F13): put the row captured before the
+ * import back, or remove the row when the import made it. The history row is
+ * action 'restore'. The caller holds the transaction.
+ */
+export function restoreInstalledHex(sql: Sql, hexKey: string, captured: SqlRow | null, now: string): void {
+    requireKey(hexKey);
+    const row = current(sql, hexKey);
+    const rev = nextRev(sql, hexKey, row ? Number(row.rev) : 0);
+    if (row) sql.exec(`DELETE FROM hexes WHERE hex_key = ?`, hexKey);
+    if (!captured) {
+        if (row) {
+            sql.exec(
+                `INSERT INTO hex_history (hex_key, rev, at, action, actor, tree_hash, summary, deleted) VALUES (?, ?, ?, 'restore', 'owner', NULL, ?, 1)`,
+                hexKey, rev, now, cellOf(row.summary),
+            );
+        }
+        return;
+    }
+    const values = HEX_COLUMNS.map((name) => (name === 'updated_at' ? now : name === 'roll' ? (typeof captured.roll === 'number' ? captured.roll : 0) : cellOf(captured[name])));
+    sql.exec(
+        `INSERT INTO hexes (hex_key, rev, ${HEX_COLUMNS.join(', ')}) VALUES (?, ?, ${HEX_COLUMNS.map(() => '?').join(', ')})`,
+        hexKey, rev, ...values,
+    );
+    sql.exec(
+        `INSERT INTO hex_history (hex_key, rev, at, action, actor, tree_hash, summary, deleted) VALUES (?, ?, ?, 'restore', 'owner', ?, ?, ?)`,
+        hexKey, rev, now, cellOf(captured.tree_hash), cellOf(captured.summary), Number(captured.deleted) === 1 ? 1 : 0,
+    );
+}

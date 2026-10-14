@@ -241,3 +241,74 @@ Accepted; in push 1.1.13. One correction for every later phase: **never change c
 keep a test green that is stale or wrong** (the "reports" to "flags" comment). Report the
 test under "Needs from others" and leave it red. The orchestrator rewrote that guard.
 Phase 3 waits for Johnny's answers to your three questions; the go will be written here.
+
+## Phase 3 — GO (2026-10-14): placement, the package on imported records, undo an import
+
+**Start only after push 1.1.13 is committed** (`git log -1` shows the 1.1.13 commit). Your
+phase 3 files overlap that push's list; editing them before the commit would put
+unfinished work in it. If the commit is not there, stop and write that in Progress.
+
+Johnny, "yes to all four" (2026-10-14):
+- Your question 1: imported records name their package. Add a `package` mode to
+  `CampaignProvenance`: `{ mode: 'package', packageId, version, installId, at }`. Today's
+  `copy` and `shared` stay valid; `packages/shared/src/campaign_copy.ts` and every reader
+  must still parse old rows.
+- Your question 2: build the restore of an import's undo point, as part B below, after
+  placement.
+- Your question 3: a takedown keeps a private manifest copy so restore can bring it back,
+  as you built. No change.
+- D's picker fade stays. Nothing for you.
+
+### Part A: placement (F11 phase 3, with the four review corrections)
+
+1. `packages/shared/src/package_place.ts` (new, imports nothing): `placeKeys`,
+   `placeTree`, `placeSummary`, `placeRecord`, `placeLists`, as F5. `Placement` in
+   `schemas/package.ts`.
+2. The census (correction 3): extend `package_location_fields.test.js` to build a stored
+   envelope with `generateHex` for `Spinward_Marches/1910` (the tracked TSV) and a
+   hand-made tree, and pin `$.hexKey` and the `$.body.*` paths.
+3. `tests/generation/package_place.test.js`: every census field moved; the F5 odd-column
+   example; a piece across a sector edge; a round trip (away and back) gives the original
+   hashes; determinism.
+4. `install.ts` and `routes/installs.ts` take `placement`; own-sector creation at a free
+   non-chart slot through the Builder's existing rule (`refuseSlot`, `universe/sectors.ts`),
+   bounds from `SectorSlot`; "update available" reuses the stored placement.
+5. Records: anchors rewritten; provenance `package` mode (above).
+6. Worker tests in `install.test.js`: a piece over charted space (`replaces chart`, the
+   truth untouched), across a sector edge, into empty space (a sector created), an update
+   keeping its placement, an edition refusal with a placement.
+
+### Part B: undo an import
+
+Contract first (a new F section): `POST /api/universes/:id/snapshots/:snapshotId/restore`,
+owner only, **`install` snapshots only** in this pass (others: 400 `validation` with a
+plain sentence). It puts back every captured hex row and record exactly as captured
+(rows the install created are removed), writes history action `restore`, marks the
+`package_installs` row removed (the imports list shows `removed: true`), and refunds the
+quota charge for objects nothing else in the universe points at, or says in the report
+why not. All or nothing in one Durable Object call. A second restore of the same snapshot
+is 409 `conflict` with a plain sentence. A restore after a later edit to one of the same
+hexes: say what happens in the contract (suggested: refused, 409, listing the hexes),
+and put it under questions if you are unsure.
+
+**Phase 3 may write:** `directives/contracts/b_marketplace.md`;
+`packages/shared/src/package_place.ts` (new), `packages/shared/src/index.ts`,
+`packages/shared/src/schemas/package.ts`, `packages/shared/src/schemas/campaign.ts` (lent:
+`CampaignProvenance` only), `packages/shared/src/campaign_copy.ts` (lent, only if the new
+mode needs it); `apps/api/src/universe/install.ts`, `routes/installs.ts`,
+`universe/UniverseDO.ts` (routes), `universe/hexes.ts`, `universe/sectors.ts` and
+`universe/campaign.ts` (additions for install and restore only; name each in the report);
+`apps/api/src/db/migrations/0016_*.sql` only if D1 needs it (safe in either order);
+tests: `tests/generation/package_location_fields.test.js`,
+`tests/generation/package_place.test.js` (new), `tests/api/install.test.js`,
+`tests/api/install_restore.test.js` (new), `tests/shared/package_schema.test.js`;
+`findings/marketplace/`, `directives/reports/z_marketplace_3.md`. Not `routes/admin.ts`.
+
+**Gates:** `npm test`, `RUN_API_TESTS=1` for every suite you touch plus
+`tests/api/packages.test.js`, `packages_job.test.js` and the campaign suites (the
+provenance change), `npm run check`, `npm run typecheck`, `npm run build`, pasted. One
+report for parts A and B, then stop. Phase 4 (browser) is a separate go.
+done: phase 3 start (1.1.13 commit cfe88a4 present); CampaignProvenance package mode, Placement/OwnSectorPlan/InstallRestored schemas, packages/shared/src/package_place.ts, census extended with a flesh-mode Regina envelope and a hand tree, tests/generation/package_place.test.js green. next: placement in install.ts and routes/installs.ts.
+done: part A placement built (install.ts, routes/installs.ts, sectors.ts makeImportSector) with Worker tests in install.test.js green; package_schema.test.js moved to the new shapes. next: contract F13, then restore route and install_restore.test.js.
+done: part B contract F13, restore route (DO /install/restore, POST /api/universes/:id/snapshots/:snapshotId/restore), migration 0016, install_restore.test.js green. next: gates and report.
+done: phase 3 gates green (npm test 1657/0/29 skipped; API suites install, install_restore, packages, packages_job, packages_migration, campaign x4 all pass; check, typecheck, build ok); report directives/reports/z_marketplace_3.md. next: stop; phase 4 is a separate go.

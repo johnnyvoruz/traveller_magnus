@@ -147,6 +147,21 @@ export const PackageTakedown = z.object({
 }).strict();
 export type PackageTakedown = z.infer<typeof PackageTakedown>;
 
+/** F5. Where the piece lands: the manifest hex `anchor` lands on `to`. The shift is done in cube coordinates. */
+export const Placement = z.object({
+    anchor: HexKey,
+    to: HexKey,
+}).strict();
+export type Placement = z.infer<typeof Placement>;
+
+/** F5. An own sector an install with a placement creates. */
+export const OwnSectorPlan = z.object({
+    id: z.string(),
+    slot: z.object({ x: z.number().int(), y: z.number().int() }).strict(),
+    name: z.string(),
+}).strict();
+export type OwnSectorPlan = z.infer<typeof OwnSectorPlan>;
+
 /** F4. What an install would do to one hex. */
 export const InstallOutcome = z.enum(['new', 'replaces chart', 'replaces own', 'conflict', 'already installed']);
 export type InstallOutcome = z.infer<typeof InstallOutcome>;
@@ -168,9 +183,10 @@ export type InstallPreviewHex = z.infer<typeof InstallPreviewHex>;
 export const InstallPreview = z.object({
     packageId: z.string(),
     version: z.number().int().positive(),
-    /** Phase 2 installs in place only, so this is always null. */
-    placement: z.null(),
+    /** Null in place. On an update of a placed import, the stored placement. */
+    placement: Placement.nullable(),
     hexes: z.array(InstallPreviewHex),
+    sectorsCreated: z.array(OwnSectorPlan),
     records: z.object({
         add: z.number().int().nonnegative(),
         replace: z.number().int().nonnegative(),
@@ -186,10 +202,18 @@ const Choice = z.enum(['theirs', 'mine']);
 export const InstallRequest = z.object({
     packageId: z.string().min(1),
     version: z.number().int().positive(),
+    /** Omit for in place. Not given with `installId`: an update keeps its stored placement. */
+    placement: Placement.optional(),
+    /** Update this import (its stored placement is reused). */
+    installId: z.string().min(1).optional(),
     resolutions: z.record(z.string(), Choice),
     recordResolutions: z.record(z.string(), Choice),
     expect: z.object({ conflicts: z.number().int().nonnegative() }).strict(),
-}).strict();
+}).strict().superRefine((value, ctx) => {
+    if (value.placement && value.installId) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['placement'], message: 'an update keeps its placement' });
+    }
+});
 export type InstallRequest = z.infer<typeof InstallRequest>;
 
 export const InstallResult = z.object({
@@ -208,12 +232,23 @@ export const InstallRow = z.object({
     version: z.number().int().positive(),
     latestVersion: z.number().int().nonnegative(),
     updateAvailable: z.boolean(),
-    placement: z.null(),
+    placement: Placement.nullable(),
     hexCount: z.number().int().nonnegative(),
     installedAt: z.string(),
     updatedAt: z.string(),
+    /** F13. The import was undone. */
+    removed: z.boolean(),
 }).strict();
 export type InstallRow = z.infer<typeof InstallRow>;
 
 export const InstallList = z.object({ items: z.array(InstallRow) }).strict();
 export type InstallList = z.infer<typeof InstallList>;
+
+/** F13. The answer of undoing an import. */
+export const InstallRestored = z.object({
+    snapshotId: z.string(),
+    hexes: z.number().int().nonnegative(),
+    records: z.number().int().nonnegative(),
+    sectors: z.number().int().nonnegative(),
+}).strict();
+export type InstallRestored = z.infer<typeof InstallRestored>;

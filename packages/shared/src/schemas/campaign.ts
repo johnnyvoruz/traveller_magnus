@@ -123,13 +123,24 @@ const Stamp = z.string().min(1);
 const Visibility = z.enum(['referee', 'players']);
 
 /** Where a copied or shared row came from. Null on a row born in this campaign. */
-export const CampaignProvenance = z.object({
+const CopiedProvenance = z.object({
     mode: z.enum(['copy', 'shared']),
     universeId: z.string().min(1),
     recordId: z.string().min(1),
     rev: Rev,
     at: Stamp,
 }).strict();
+
+/** A row an import of a package wrote (contracts/b_marketplace.md F13). */
+const PackageProvenance = z.object({
+    mode: z.literal('package'),
+    packageId: z.string().min(1),
+    version: z.number().int().positive(),
+    installId: z.string().min(1),
+    at: Stamp,
+}).strict();
+
+export const CampaignProvenance = z.union([CopiedProvenance, PackageProvenance]);
 export type CampaignProvenance = z.infer<typeof CampaignProvenance>;
 
 const IMAGE_HASH = /^[0-9a-f]{64}$/;

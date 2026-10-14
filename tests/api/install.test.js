@@ -169,7 +169,9 @@ VALUES ('${version}', '1.1.0', 'M1105', 'TravellerMagnus', '${SETTINGS}', '[]', 
                 tree: chartHash, type: 'SYSTEM_PRESENT', name: 'Charted', uwp: 'A000000-0', allegiance: '',
                 zone: '', bases: '', tradeCodes: [], pbg: '', ix: 0, partial: null,
             };
-            r2Put(persistTo, `truth/${version}/manifest.json`, '{"sectors":[]}');
+            // Chart sits at slot (0,0) and Demo at (1,0); slot (-1,0) is empty space.
+            const truthManifest = JSON.stringify({ sectors: [{ slug: 'Chart', x: 0, y: 0 }, { slug: 'Demo', x: 1, y: 0 }] });
+            r2Put(persistTo, `truth/${version}/manifest.json`, truthManifest);
             r2Put(persistTo, `truth/${version}/sectors/Chart/index.json`, JSON.stringify({ hexes: { '0101': chartEntry, '0102': chartEntry } }));
             r2Put(persistTo, `objects/${chartHash}`, chartBody);
             child = startDev({ port, persistTo, inspectorPort: 19876 });
@@ -303,8 +305,9 @@ VALUES ('${version}', '1.1.0', 'M1105', 'TravellerMagnus', '${SETTINGS}', '[]', 
             const campaign = await jsonFetch(`${base}/api/universes/${target}/campaign`, { headers: { cookie: reader } });
             const copied = campaign.body.data.records.find((row) => row.id === RECORD);
             assert.ok(copied, JSON.stringify(campaign.body.data.records));
-            assert.equal(copied.provenance.mode, 'copy');
-            assert.equal(copied.provenance.universeId, source);
+            assert.equal(copied.provenance.mode, 'package');
+            assert.equal(copied.provenance.packageId, packageId);
+            assert.equal(copied.provenance.version, 1);
 
             const again = await jsonFetch(previewPath(target, 1), { headers: { cookie: reader } });
             const againOutcome = Object.fromEntries(again.body.data.hexes.map((hex) => [hex.to, hex.outcome]));
@@ -346,6 +349,110 @@ VALUES ('${version}', '1.1.0', 'M1105', 'TravellerMagnus', '${SETTINGS}', '[]', 
             assert.equal(list.body.data.items[0].updateAvailable, false);
             const page = await jsonFetch(`${base}/api/packages/${packageId}`);
             assert.equal(page.body.data.installs, 1);
+
+            // Placement (F5, F12): a piece of two hexes across the Chart|Demo edge.
+            await blank(aHeaders, source, 'Chart/3201');
+            await blank(aHeaders, source, 'Demo/0101');
+            const edge = await jsonFetch(`${base}/api/packages`, {
+                method: 'POST', headers: aHeaders,
+                body: JSON.stringify({ title: 'Edge', kind: 'subsector', description: '', tags: [], universeId: source }),
+            });
+            assert.equal(edge.status, 201, JSON.stringify(edge.body));
+            const edgeId = edge.body.data.id;
+            const e1 = await jsonFetch(`${base}/api/packages/${edgeId}/versions`, {
+                method: 'POST', headers: aHeaders,
+                body: JSON.stringify({ universeId: source, hexKeys: ['Chart/3201', 'Demo/0101'], recordIds: [] }),
+            });
+            assert.equal(e1.status, 202, JSON.stringify(e1.body));
+            await settle(base, edgeId, 1, author);
+            const placedTarget = await made(bHeaders, 'Placed', version);
+            // Opening the map pins the universe, as the Builder does before any import.
+            assert.equal((await jsonFetch(`${base}/api/universes/${placedTarget}/sectors`, { headers: { cookie: reader } })).status, 200);
+            const truthBefore = r2Get(persistTo, `truth/${version}/sectors/Chart/index.json`);
+            const placeQuery = (universeId, v, anchor, to) => `${base}/api/universes/${universeId}/install/preview?packageId=${edgeId}&version=${v}&anchor=${encodeURIComponent(anchor)}&to=${encodeURIComponent(to)}`;
+
+            const offMap = await jsonFetch(placeQuery(placedTarget, 1, 'Chart/3201', '~slot_1000_0/3201'), { headers: { cookie: reader } });
+            assert.equal(offMap.status, 400, JSON.stringify(offMap.body));
+            assert.equal(offMap.body.error.message, 'The piece does not fit on the map.');
+            const noAnchor = await jsonFetch(placeQuery(placedTarget, 1, 'Demo/0909', 'Chart/0102'), { headers: { cookie: reader } });
+            assert.equal(noAnchor.status, 400);
+            assert.equal(noAnchor.body.error.message, 'The anchor is not in the package.');
+            const placedEdition = await jsonFetch(placeQuery(otherEdition, 1, 'Demo/0101', 'Chart/0102'), { headers: { cookie: reader } });
+            assert.equal(placedEdition.status, 400);
+            assert.equal(placedEdition.body.error.message, 'This package is for a different edition.');
+
+            // Demo/0101 lands on charted Chart/0102; Chart/3201 crosses the west edge into empty slot (-1,0).
+            const placedPreview = await jsonFetch(placeQuery(placedTarget, 1, 'Demo/0101', 'Chart/0102'), { headers: { cookie: reader } });
+            assert.equal(placedPreview.status, 200, JSON.stringify(placedPreview.body));
+            const plan = placedPreview.body.data;
+            assert.deepEqual(plan.placement, { anchor: 'Demo/0101', to: 'Chart/0102' });
+            assert.equal(plan.sectorsCreated.length, 1);
+            assert.deepEqual(plan.sectorsCreated[0].slot, { x: -1, y: 0 });
+            const madeId = plan.sectorsCreated[0].id;
+            assert.match(madeId, /^~[0-9A-HJKMNP-TV-Z]{26}$/);
+            const planned = Object.fromEntries(plan.hexes.map((hex) => [hex.from, [hex.to, hex.outcome]]));
+            assert.deepEqual(planned, { 'Demo/0101': ['Chart/0102', 'replaces chart'], 'Chart/3201': [`${madeId}/3202`, 'new'] });
+            const placedAgain = await jsonFetch(placeQuery(placedTarget, 1, 'Demo/0101', 'Chart/0102'), { headers: { cookie: reader } });
+            assert.equal(placedAgain.body.data.sectorsCreated[0].id, madeId);
+
+            const placedPath = `${base}/api/universes/${placedTarget}/install`;
+            const both = await jsonFetch(placedPath, {
+                method: 'POST', headers: bHeaders,
+                body: JSON.stringify({ packageId: edgeId, version: 1, placement: plan.placement, installId: 'in_x', resolutions: {}, recordResolutions: {}, expect: { conflicts: 0 } }),
+            });
+            assert.equal(both.status, 400);
+            const placedInstall = await jsonFetch(placedPath, {
+                method: 'POST', headers: bHeaders,
+                body: JSON.stringify({ packageId: edgeId, version: 1, placement: plan.placement, resolutions: {}, recordResolutions: {}, expect: { conflicts: 0 } }),
+            });
+            assert.equal(placedInstall.status, 200, JSON.stringify(placedInstall.body));
+            assert.equal(placedInstall.body.data.written, 2);
+            const overChart = await hexRead(placedTarget, reader, 'Chart/0102');
+            assert.equal(overChart.status, 200, JSON.stringify(overChart.body));
+            assert.equal(overChart.body.data.state, 'override', JSON.stringify(overChart.body));
+            assert.notEqual(overChart.body.data.treeHash, chartHash);
+            const intoEmpty = await hexRead(placedTarget, reader, `${madeId}/3202`);
+            assert.equal(intoEmpty.status, 200, JSON.stringify(intoEmpty.body));
+            assert.equal(intoEmpty.body.data.state, 'own', JSON.stringify(intoEmpty.body));
+            const movedTree = await jsonFetch(`${base}/api/universes/${placedTarget}/objects/${intoEmpty.body.data.treeHash}`, { headers: { cookie: reader } });
+            assert.equal(movedTree.status, 200, JSON.stringify(movedTree.body));
+            assert.equal(movedTree.body.hexKey, `${madeId}/3202`);
+            assert.equal(r2Get(persistTo, `truth/${version}/sectors/Chart/index.json`), truthBefore);
+            const sectors = await jsonFetch(`${base}/api/universes/${placedTarget}/sectors`, { headers: { cookie: reader } });
+            assert.equal(sectors.status, 200, JSON.stringify(sectors.body));
+            const madeSector = sectors.body.data.items.find((item) => item.id === madeId);
+            assert.ok(madeSector, JSON.stringify(sectors.body.data));
+            assert.deepEqual(madeSector.slot, { x: -1, y: 0 });
+
+            // An update keeps the stored placement: Demo/0102 follows Demo/0101 one row down.
+            await blank(aHeaders, source, 'Demo/0102');
+            const e2 = await jsonFetch(`${base}/api/packages/${edgeId}/versions`, {
+                method: 'POST', headers: aHeaders,
+                body: JSON.stringify({ universeId: source, hexKeys: ['Chart/3201', 'Demo/0101', 'Demo/0102'], recordIds: [] }),
+            });
+            assert.equal(e2.status, 202, JSON.stringify(e2.body));
+            await settle(base, edgeId, 2, author);
+            const rowId = placedInstall.body.data.installId;
+            const keepBoth = await jsonFetch(`${placeQuery(placedTarget, 2, 'Demo/0101', 'Chart/0102')}&installId=${rowId}`, { headers: { cookie: reader } });
+            assert.equal(keepBoth.status, 400);
+            const updatePreview = await jsonFetch(`${base}/api/universes/${placedTarget}/install/preview?packageId=${edgeId}&version=2&installId=${rowId}`, { headers: { cookie: reader } });
+            assert.equal(updatePreview.status, 200, JSON.stringify(updatePreview.body));
+            assert.deepEqual(updatePreview.body.data.placement, plan.placement);
+            assert.deepEqual(updatePreview.body.data.sectorsCreated, []);
+            const updated = Object.fromEntries(updatePreview.body.data.hexes.map((hex) => [hex.from, [hex.to, hex.outcome]]));
+            assert.deepEqual(updated['Demo/0102'], ['Chart/0103', 'new']);
+            assert.equal(updated['Demo/0101'][1], 'already installed');
+            const updatedInstall = await jsonFetch(placedPath, {
+                method: 'POST', headers: bHeaders,
+                body: JSON.stringify({ packageId: edgeId, version: 2, installId: rowId, resolutions: {}, recordResolutions: {}, expect: { conflicts: updatePreview.body.data.conflicts } }),
+            });
+            assert.equal(updatedInstall.status, 200, JSON.stringify(updatedInstall.body));
+            assert.equal(updatedInstall.body.data.installId, rowId);
+            const placedList = await jsonFetch(`${base}/api/universes/${placedTarget}/installs`, { headers: { cookie: reader } });
+            assert.equal(placedList.body.data.items.length, 1);
+            assert.equal(placedList.body.data.items[0].version, 2);
+            assert.deepEqual(placedList.body.data.items[0].placement, plan.placement);
+            assert.equal(placedList.body.data.items[0].removed, false);
 
             // Worker deployed before 0015: the install routes answer 503, the rest keep working.
             sqlFile(persistTo, `DROP TABLE package_installs;`);

@@ -1,11 +1,10 @@
 # Board
 
-One line per lane. Only the orchestrator edits this file. Updated 2026-10-14 11:30 (by the clock).
+One line per lane. Only the orchestrator edits this file. Updated 2026-10-14 12:30 (by the clock).
 
-**Last push: `8b111fc`, version 1.1.12, engine 1.2.0, 2026-10-13, deployed** (migrations 0013
-and 0014 applied at 02:44:08 UTC; GitHub run green; live `/api/health` engine 1.2.0; live
-index `index-D7GMJuX1.js`, the same file the tree builds). **Truth v10 released 2026-10-14**
-(built 21:52 on 1.2.0, uploaded by 22:11, 180,312 systems; live Regina A788899-C, 8 / 8, Ice).
+**Last push: `cfe88a4`, version 1.1.13, engine 1.2.0, 2026-10-14, deployed** (migration
+0015 applied 16:54:42 UTC; GitHub run 38601979211 green; live index `index-CEIWbUQh.js`;
+`GET /api/packages?sort=updated` 200 signed out). Truth v10.
 
 | Lane | Status | Current prompt | Blocker / next |
 |---|---|---|---|
@@ -14,7 +13,7 @@ index `index-D7GMJuX1.js`, the same file the tree builds). **Truth v10 released 
 | C | free | (none) | no-sea accepted |
 | D | free | (none) | `d_polish_note_and_frame` accepted; question on the picker fade open |
 | E | free | (none) | `e_phone_sheet` accepted |
-| Z | reported | prompts/z_marketplace.md | phase 2 accepted (server); phase 3 (placement) waits for a go and three answers |
+| Z | reported | prompts/z_marketplace.md | phase 3 accepted (placement, provenance `package`, undo an import); phase 4 (browser) waits for three answers and a go |
 | F | retired | (none) | Johnny, 2026-10-11: unreliable (runs out of budget); do not use or propose until he says it is back |
 
 ## Engine 1.2.0 (every lane, 2026-10-13)
@@ -134,10 +133,9 @@ lane's letter as the first message of a new session; from then on "go" is enough
   the blank request body (read from what the server stored).
 
 ## Pending push
-**1.1.13 called for, 2026-10-14 11:30:** `findings/push/release_2026-10-14.md` (list
-`release_2026-10-14_files.txt`, 53 paths; `admin.ts` stays at HEAD), migration 0015,
-deploy with `npm run deploy:ci`. Rehearsed in `scratchpad/outer17`. Still out: the ten
-parked truth-build files.
+**1.1.14 called for, 2026-10-14 12:30:** `findings/push/release_2026-10-14b.md` (list
+`release_2026-10-14b_files.txt`, 22 paths), migration 0016. Rehearsed in
+`scratchpad/outer18`. Still out: the ten parked truth-build files.
 
 ## Decisions from Johnny
 - 2026-10-10: the file bus replaces pasting.
@@ -380,12 +378,13 @@ parked truth-build files.
 - 2026-10-14, the character sheet: the six profile hexes on one row (abbreviations STR,
   DEX, END, INT, EDU, SOC allowed); one line per skill with a "+" in a left gutter to add
   the next specialism line, names aligned, specialism lines as tiers. No cap on specialism lines ("it doesn't make sense to cap it").
+- 2026-10-14, yes to all four: the orbit picker keeps its fade; imported records name their package (provenance mode `package`); restore an import's undo point (after placement); a takedown keeps a private manifest copy.
 - 2026-10-14: the marketplace goes to Lane Z, not B. Yes to Z's five: edges leaving a piece dropped on publish; another edition refused; theirs or mine per hex; takedown keeps objects, deletes manifests; an install counts against the quota, not the daily cap.
 - 2026-10-14, a Back "<" left of the pane's X: one pane back; X still closes the pane.
 
 ## Open with Johnny
-- D: keep the orbit picker's new 0.2 s fade? Z: package id on imported records; a snapshot
-  restore route (undo an import); takedown keeps a private manifest copy (handoff 269).
+- Z phase 3: refund on undo; pin a never-opened universe on import; two placements of
+  one package share records (handoff 270).
 
 ## Decided by the orchestrator, 2026-10-13
 - The public games feed leaves out the caller's own universes (built, B).

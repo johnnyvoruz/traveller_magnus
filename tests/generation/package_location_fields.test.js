@@ -6,6 +6,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { generateHex } from '@voyage/generation';
+import { parseT5Tab } from '@voyage/shared';
+import { withEngineRng } from '../golden/rng_lock.js';
+import { TRUTH_SEED, TRUTH_SETTINGS } from '../../tools/truth/settings.js';
 
 const DIR = fileURLToPath(new URL('../golden/fixtures/engine_1.2.0/', import.meta.url));
 
@@ -40,6 +44,26 @@ const EXPECTED = [
     '$.worlds[].moons[].parentId',
 ];
 
+function walkInto(found, root, label) {
+    const walk = (value, path, key) => {
+        if (Array.isArray(value)) {
+            for (const item of value) walk(item, `${path}[]`, key);
+            return;
+        }
+        if (value && typeof value === 'object') {
+            for (const [k, v] of Object.entries(value)) walk(v, `${path}.${k}`, k);
+            return;
+        }
+        if (value == null) return;
+        const text = String(value);
+        if (LOCATION_KEY.test(key) || LOCATION_VALUE.some((re) => re.test(text))) {
+            if (!found.has(path)) found.set(path, new Set());
+            found.get(path).add(label);
+        }
+    };
+    walk(root, '$', '');
+}
+
 function census() {
     const found = new Map();
     const note = (path, file) => {
@@ -72,4 +96,51 @@ test('the census reads every engine 1.2.0 fixture', () => {
 test('every location field in the engine 1.2.0 fixtures is listed', () => {
     const { found } = census();
     assert.deepEqual([...found.keys()].sort(), [...EXPECTED].sort());
+});
+
+/**
+ * Review correction 3: a stored envelope, as the truth build stores it (packages/generation
+ * buildSector: mode `flesh`, the TSV row as summary), from the tracked Spinward_Marches.tsv.
+ */
+export async function regina() {
+    const row = parseT5Tab(readFileSync(new URL('../../universe/raw/Spinward_Marches.tsv', import.meta.url), 'utf8')).get('1910');
+    let envelope;
+    await withEngineRng(async () => {
+        envelope = generateHex({
+            hexKey: 'Spinward_Marches/1910', edition: 'MgT2E', mode: 'flesh', summary: row,
+            pinned: { seed: TRUTH_SEED, settings: TRUTH_SETTINGS, engineVersion: '1.2.0' },
+        });
+    });
+    return envelope;
+}
+
+/** A hand-made tree, the shape `blankHand` writes (packages/generation/src/hand.ts). */
+export function handTree() {
+    return { kind: 'hand', engineVersion: '1.2.0', hexKey: 'Spinward_Marches/1910', edition: 'MgT2E', system: { name: 'Hand', notes: '', stars: [], bodies: [] } };
+}
+
+const ENVELOPE_EXPECTED = [
+    '$.body.mgt2eData.hexId',
+    '$.body.mgt2eData.parentId',
+    '$.body.mgtSocio.hexId',
+    '$.body.mgtSocio.parentId',
+    '$.body.mgtSystem.hexId',
+    '$.body.mgtSystem.mainworld.hexId',
+    '$.body.mgtSystem.mainworld.parentId',
+    '$.body.mgtSystem.worlds[].moons[].hexId',
+    '$.body.mgtSystem.worlds[].moons[].parentId',
+    '$.hexKey',
+];
+
+test('a stored envelope from generateHex holds the location fields the live Regina tree holds', async () => {
+    const found = new Map();
+    walkInto(found, await regina(), 'regina');
+    assert.deepEqual([...found.keys()].sort(), [...ENVELOPE_EXPECTED].sort());
+    assert.equal([...found.keys()].some((path) => path.startsWith('$.derivation')), false);
+});
+
+test('a hand-made tree holds only its hexKey', () => {
+    const found = new Map();
+    walkInto(found, handTree(), 'hand');
+    assert.deepEqual([...found.keys()], ['$.hexKey']);
 });

@@ -793,3 +793,35 @@ export function applyCampaignChanges(sql: Sql, changes: unknown, now: string): C
         return { applied, conflicts };
     });
 }
+
+const RECORD_COLUMNS = [
+    'type', 'kind', 'name', 'summary', 'details', 'tags', 'anchor', 'when_json', 'visibility', 'player_notes',
+    'sheet', 'status', 'images', 'provenance', 'created_at', 'deleted',
+] as const;
+
+/** The stored record row as it is, for an exact undo (contracts/b_marketplace.md F13). */
+export function rawCampaignRecord(sql: Sql, id: string): SqlRow | null {
+    return sql.exec(`SELECT * FROM campaign_records WHERE id = ?`, id)[0] ?? null;
+}
+
+/**
+ * Undo an import of one record: put the captured row back, or tombstone the
+ * record the import made. The rev and seq move on so devices pull the change.
+ * The caller holds the transaction.
+ */
+export function restoreInstalledRecord(sql: Sql, id: string, captured: SqlRow | null, now: string): void {
+    const row = rawCampaignRecord(sql, id);
+    if (!row) return;
+    const rev = Number(row.rev) + 1;
+    const seq = nextSeq(sql);
+    if (!captured) {
+        sql.exec(`UPDATE campaign_records SET deleted = 1, rev = ?, seq = ?, updated_at = ? WHERE id = ?`, rev, seq, now, id);
+        return;
+    }
+    const sets = RECORD_COLUMNS.map((name) => `${name} = ?`).join(', ');
+    const values = RECORD_COLUMNS.map((name) => {
+        const value = captured[name];
+        return typeof value === 'string' || typeof value === 'number' ? value : null;
+    });
+    sql.exec(`UPDATE campaign_records SET ${sets}, rev = ?, seq = ?, updated_at = ? WHERE id = ?`, ...values, rev, seq, now, id);
+}

@@ -30,7 +30,12 @@ export {
     InstallResult,
     InstallRow,
     InstallList,
+    InstallRestored,
+    Placement,
+    OwnSectorPlan,
 } from './schemas/package.ts';
+export { placeCells, placeKeys, placeTree, placeSummary, placeRecord, placeLists, cubeOf, offsetOf, PlaceError } from './package_place.ts';
+export type { PlaceCell, SectorAt } from './package_place.ts';
 export {
     CAMPAIGN_LIMITS,
     POINT_AU_LIMIT,
