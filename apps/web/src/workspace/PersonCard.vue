@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * A person at a glance (slice 2 follow-up 9): the app's one modal pattern (the lightbox's)
+ * A person at a glance (slice 2 follow-up 9): the app's one modal frame (`.ui-modal`, design/base.css)
  * holding a read-only card, the primary image, the name, the summary and where they are,
  * with "Open record" and Esc. Pressed from a pill on the ship sheet. On the body, as the
  * other modals are, so the panel's transform cannot hold it.
@@ -57,13 +57,13 @@ onBeforeUnmount(() => {
 
 <template>
   <Teleport to="body">
-  <div class="lightbox person-card" role="dialog" aria-modal="true" :aria-label="record ? record.name : 'Person'" @keydown="onKey">
-    <div class="lightbox-scrim" @click="emit('close')"></div>
-    <div class="lightbox-card person-card-box">
-      <div class="lightbox-bar">
-        <span class="lightbox-count"><Icon :name="record ? typeInfo(record.type).icon : 'user'" :size="12" />{{ record ? typeInfo(record.type).one : 'Person' }}</span>
-        <span class="lightbox-meta"></span>
-        <button ref="closeBtn" type="button" class="ui-btn is-icon lightbox-close" aria-label="Close" title="Close (Esc)" @click="emit('close')">
+  <div class="ui-modal person-card" role="dialog" aria-modal="true" :aria-label="record ? record.name : 'Person'" @keydown="onKey">
+    <div class="ui-modal-scrim" @click="emit('close')"></div>
+    <div class="ui-modal-card person-card-box">
+      <div class="ui-modal-bar">
+        <span class="ui-modal-title"><Icon :name="record ? typeInfo(record.type).icon : 'user'" :size="12" />{{ record ? typeInfo(record.type).one : 'Person' }}</span>
+        <span class="ui-modal-meta"></span>
+        <button ref="closeBtn" type="button" class="ui-btn is-icon" aria-label="Close" title="Close (Esc)" @click="emit('close')">
           <Icon name="xmark" :size="14" />
         </button>
       </div>
@@ -88,11 +88,11 @@ onBeforeUnmount(() => {
 </template>
 
 <style>
-.person-card-box {
+.ui-modal-card.person-card-box {
   width: min(520px, 100%);
 }
 
-.person-card .lightbox-count {
+.person-card .ui-modal-title {
   display: inline-flex;
   align-items: center;
   gap: 6px;

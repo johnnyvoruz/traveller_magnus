@@ -352,3 +352,70 @@
     transition: none;
   }
 }
+
+/*
+ * The one modal frame, lifted from the lightbox (K14): a fixed layer on the body, a scrim that
+ * closes it, and one card. Lightbox.vue, build/OrbitPicker.vue, PersonCard.vue and
+ * PlanModal.vue draw it; each sets only its card's size and what goes inside.
+ */
+.ui-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: ui-modal-in var(--t-fast) var(--ease-out) both;
+}
+
+.ui-modal-scrim {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--bg-0) 88%, transparent);
+}
+
+.ui-modal-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(1100px, 100%);
+  max-height: 100%;
+  padding: 12px 14px 14px;
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-4);
+  background: var(--bg-1);
+  box-shadow: var(--shadow-pop);
+  color: var(--text-1);
+  font: 400 14px/1.5 var(--font-text);
+}
+
+/* The card's top line: a title, a muted line beside it, and Close at the end. */
+.ui-modal-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ui-modal-title {
+  color: var(--text-0);
+  font-weight: 600;
+}
+
+.ui-modal-meta {
+  flex: 1 1 auto;
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+
+@keyframes ui-modal-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-modal {
+    animation: none;
+  }
+}

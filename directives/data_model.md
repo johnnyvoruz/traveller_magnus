@@ -257,16 +257,17 @@ sits inside x ∈ [−200, 247], y ∈ [−248, 77]. The band **y ≥ 100** is t
 no chart sector is there, so a builder's own sectors never overlap a real one. Rules:
 
 - An own-map universe (`truth_version = null`) places its first sector at (0, 100) and each
-  further sector at the next free x in the same row unless the builder moves it; a
-  truth-pinned universe may add own sectors only inside the band.
-- Own sector slugs are namespaced by the owner's handle with a tilde: `johnny~Sandbox_Alpha`.
-  Canonical slugs never contain `~`, so an own sector can never collide with a chart sector by
-  key, and two builders' sectors never collide by key because handles are unique. Hex keys are
-  still `<sector_slug>/<hhhh>`.
-- A package made from own sectors carries their slugs and band coordinates. Installing it
-  into another universe keeps both. Two packages that chose the same band coordinates
-  conflict by position; slice 4 reports that and the installer picks which to keep; moving a
-  sector is the deferred relocation feature.
+  further sector at the next free x in the same row unless the builder moves it. **As built
+  (checked 2026-10-14):** the band is a convention, not enforced. An own sector may take any
+  slot from −1000 to 1000 on each axis (`SectorSlot`, `packages/shared/src/schemas/sector.ts`)
+  that holds no chart sector and no other own sector (`refuseSlot`, `universe/sectors.ts`).
+- **As built:** own sector ids are `~` plus 26 Crockford characters (`OwnSectorId`), not
+  `handle~Name`; the display name is a separate field. Canonical slugs never contain `~`,
+  so an own sector never collides with a chart sector by key, and two random ids do not
+  collide. Hex keys are still `<sector_slug>/<hhhh>`.
+- A package made from own sectors carries their ids and slots. Installing it in place keeps
+  both. Placing it elsewhere (Johnny, 2026-10-14) is the marketplace's placement:
+  `contracts/b_marketplace.md` F5.
 - The band is open-ended downward and sideways; there is no allocation registry. Builders
   who want to be sure of a private corner pick a distinctive y row.
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * The orbit picker (findings/builder_system_design.md §22; mockups kb6_picker, kb6_pair,
- * kb6_moon, kb6_au, kb6_narrow). The app's one modal pattern, the lightbox's: on the body,
+ * kb6_moon, kb6_au, kb6_narrow). The app's one modal frame (`.ui-modal`, design/base.css): on the body,
  * a scrim, Esc to leave, focus back where it was. The picture is one SVG: what the body orbits
  * at the middle, every other body at its own orbit, a faint ring under the pointer and the
  * solid ring picked. Place writes the value into the draft; nothing is stored until Keep.
@@ -213,9 +213,9 @@ onBeforeUnmount(() => {
 
 <template>
   <Teleport to="body">
-    <div ref="dialog" class="pick" role="dialog" aria-modal="true" :aria-label="'Pick orbit for ' + name" @keydown="onKey">
-      <div class="pick-scrim" @click="closePicker()"></div>
-      <div class="pick-card">
+    <div ref="dialog" class="ui-modal pick" role="dialog" aria-modal="true" :aria-label="'Pick orbit for ' + name" @keydown="onKey">
+      <div class="ui-modal-scrim" @click="closePicker()"></div>
+      <div class="ui-modal-card pick-card">
         <div class="pick-bar">
           <b class="pick-title">Pick orbit for {{ name }}</b>
           <span class="pick-hint">Point to an orbit, then select it. To fine-tune, use the arrow keys.</span>
@@ -299,37 +299,13 @@ onBeforeUnmount(() => {
 </template>
 
 <style>
-/* The lightbox's frame (workspace/Lightbox.vue), which loads only with the Campaign panel. */
-.pick {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-}
-
-.pick-scrim {
-  position: absolute;
-  inset: 0;
-  background: color-mix(in srgb, var(--bg-0) 88%, transparent);
-}
-
-.pick-card {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+/* The frame (.ui-modal, its scrim and card) is design/base.css. The card here is narrower, scrolls, and keeps the page's type. */
+.ui-modal-card.pick-card {
   box-sizing: border-box;
   width: min(780px, 100%);
-  max-height: 100%;
   overflow: auto;
-  padding: 12px 14px 14px;
-  border: 1px solid var(--line-1);
-  border-radius: var(--r-4);
   background: var(--panel-raised);
-  box-shadow: var(--shadow-pop);
+  font: inherit;
 }
 
 .pick-bar {
@@ -536,7 +512,7 @@ onBeforeUnmount(() => {
 
 /* A narrow window: the parents wrap above the picture. */
 @media (max-width: 640px) {
-  .pick {
+  .ui-modal.pick {
     padding: 8px;
   }
 

@@ -10,6 +10,8 @@ import { me } from './routes/auth';
 import { generate } from './routes/generate';
 import { truth } from './routes/truth';
 import { admin } from './routes/admin';
+import { adminPackagesRoute } from './routes/admin_packages';
+import { installsRoute } from './routes/installs';
 import { packagesRoute } from './routes/packages';
 import { universesRoute } from './routes/universes';
 import { getPublicGames } from './routes/public_games';
@@ -48,7 +50,9 @@ app.get('/api/providers', (c) => ok(c, {
 }));
 app.route('/api', generate);
 app.route('/api/truth', truth);
+app.route('/api/admin/packages', adminPackagesRoute);
 app.route('/api/admin', admin);
+app.route('/api/universes', installsRoute);
 app.route('/api/universes', universesRoute);
 app.get('/api/public-games', getPublicGames);
 app.route('/api/packages', packagesRoute);

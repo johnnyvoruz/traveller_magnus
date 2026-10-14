@@ -268,3 +268,272 @@ Lane D, the publish form: `title`, `kind`, `description`, `tags`, and the univer
 - Updates: a later version is a new snapshot at the same hex ids. Installing a version the universe already has changes nothing.
 - Propose to canonical: `POST /api/proposals` offers one version against the current truth. A reviewer accepts or rejects it. An accept feeds the next truth build.
 - Report and takedown: a reader reports a package, and an admin hides it and deletes the public objects. Decision 3: that arrives with the full marketplace, not this stub.
+
+---
+
+# Full marketplace (Lane Z, 2026-10-14) — **contract only** below this line
+
+Johnny's five answers of 2026-10-14 (`directives/prompts/z_marketplace.md`). Everything above this line is the stub as built and stays true until phase 2 lands. Every route and change below is **contract only** until its phase report says it is on disk. Where this section and the stub disagree, this section is the target.
+
+## F0. What the code says (checked 2026-10-14)
+
+- The stub's refusal lives in two places: `routes/packages.ts` (create and version) and `jobs/publish_queue.ts` `runPublish` (throws `This universe is not on a published chart.`). D1 `packages.truth_version` is `NOT NULL` (`0010_packages.sql`). `PackageManifest.truthVersion` is a required string. `PackageListing.truthVersion` is already nullable.
+- Own sector ids in code are `~` plus 26 Crockford characters (`packages/shared/src/schemas/sector.ts` 12, `OwnSectorId`). `data_model.md` A5 still says `johnny~Sandbox_Alpha`. The code wins; A5 needs a line (orchestrator's file).
+- The 250 MB byte quota is `OBJECT_QUOTA_BYTES` in `apps/api/src/jobs/generate_queue.ts` 9, charged on D1 `universes.object_bytes`. The daily cap of 100 is per **user**, not per universe: `DEFAULT_DAILY_LIMIT` in `apps/api/src/auth/allowance.ts` 9, table `generation_allowance`. `universe/budget.ts` is the 120-a-minute mutation budget, not either of those.
+- `hexes.provenance` and `campaign_records.provenance` / `campaign_links.provenance` columns already exist in the Durable Object (`hexes.ts` 226, `campaign.ts` 68, 88). `campaign_journal` has no `provenance` column. `insertHex` always writes `provenance` NULL.
+- Snapshots: `insertJob` writes a `snapshots` row with `trigger 'generate'` and keeps the captured rows in `meta` (`hexes.ts` 506). An install snapshot uses the same table with `trigger 'install'`.
+- Grid: odd-q offset. `apps/web/src/map/geometry.ts` `toGlobal(sx, sy, col, row) = { q: sx*32 + col-1, r: sy*40 + row-1 }`; odd global `q` sits half a row lower (`hexCentre`); cube from offset is `x = q`, `z = r - (q - (q&1))/2`, `y = -x - z` (`hexDistance`).
+- A stored tree object (live Regina v10) has top-level `hexKey` and, in `body`, `hexId` and `parentId` at the paths in F6. The engine fixtures carry the legacy slot form (`1-C-1910`); stored trees carry the hex key form (`Spinward_Marches/1910`).
+
+## F1. Publishing from an own map (answer 1)
+
+`POST /api/packages` and `POST /api/packages/:packageId/versions`: the refusal `This universe is not on a published chart.` is removed from both routes and from `runPublish`. No other change to who may call, bodies or errors.
+
+- `packages.truth_version` is stored NULL for an own-map universe (migration F9).
+- `PackageManifest.truthVersion` becomes `z.string().nullable()`. `schemaVersion` stays 1: a null is a new value, not a new shape, and every manifest already written has a string.
+- `baseHash` with no chart: every `PackageHex.baseHash` is `null`, the same rule the stub already uses for an own-sector key. On install, `baseHash: null` means "the publisher had no chart under this hex"; F4's merge treats a target hex with no row and no chart entry as matching it.
+- The chart fallback in `resolvePublish` is skipped when `truthVersion` is null: a key with no row is 400 `validation`, `A hex is not in this universe.`
+
+## F2. Public catalogue and package page (answer 2)
+
+### `GET /api/packages` — **contract only**
+
+Who: anyone, signed out included. Hidden packages and packages with `latest_version = 0` are absent.
+
+Query:
+
+| Name | Rule |
+|---|---|
+| `q` | optional, 1–100 characters after trim; matches title, description and tags (case-insensitive `LIKE` in phase 2; FTS is later) |
+| `kind` | optional, exact match after trim |
+| `tag` | optional, exact match on one tag |
+| `sort` | `updated` (default, newest `updated_at` first), `installs` (most first), `title` (A to Z) |
+| `mine` | `1` returns the caller's own packages, hidden and unpublished included: the stub's list. Signed out with `mine=1` is 401 `unauthenticated`, `Sign in required.` |
+| `cursor`, `limit` | as the stub; the cursor is opaque and only valid for the same `sort` |
+
+Answer: 200 `PackageListPage` of `PackageCard`.
+
+`PackageCard` = `PackageListing` plus `installs` (integer ≥ 0), `updatedAt` (ISO), `hidden` (boolean; always false on the public list, true possible with `mine=1`).
+
+Errors: 400 `validation`, `Invalid limit.` 400 `validation`, `Invalid request.` (bad `sort`, `q` too long, bad cursor).
+
+The client in this tree that calls `GET /api/packages` for "my packages" moves to `?mine=1` in phase 4. Until then the route keeps the stub answer when the caller is signed in and sends no query, so nothing breaks in between. Signed in with any of `q`, `kind`, `tag`, `sort` gives the catalogue.
+
+### `GET /api/packages/:packageId` — **contract only**
+
+Who: anyone, for a package that is not hidden and has a `done` version. The author also sees their own hidden or unpublished package. Everything else is 404 `not_found`, `No such package.`
+
+Answer: 200 `PackagePage`, extended with `installs`, `updatedAt`, `hidden`, and `manifestUrl` (the public URL of the latest done manifest, or null). Non-authors see only `done` versions; the author sees all states.
+
+### `GET /api/packages/:packageId/versions/:version`
+
+Unchanged: author only.
+
+### `POST /api/packages/:packageId/report` — **contract only**
+
+Who: signed in, not the author. Body `PackageReport`: `{ reason }`, 1–500 characters after trim.
+
+Answer: 201 `{ reported: true }`. One open report per user per package; a second is 200 with the same answer and changes nothing.
+
+Storage: D1 `package_reports` (F9).
+
+Errors: 401 `Sign in required.` 403 `Origin check failed.` 404 `No such package.` (missing or hidden). 400 `validation`, `You cannot report your own package.` 400 `Invalid request.`
+
+### `POST /api/admin/packages/:packageId/takedown` — **contract only**
+
+Who: role `admin` (the existing `roleSatisfies`). Body `PackageTakedown`: `{ reason }`, 1–500 characters.
+
+Answer: 200 `{ hidden: true }`. Sets `hidden = 1`, `takedown_reason`, `takedown_by`; marks open reports `closed`; writes the admin audit row the rest of `routes/admin.ts` writes. Public objects are **not** deleted: they are content-addressed and may be shared by other packages and by installed campaigns (A2). The manifest key `packages/<id>/<v>/manifest.json` **is** deleted for every version so the package cannot be fetched by URL.
+
+Errors: 401, 403 `forbidden`, `Role required.` (the sentence `requireRole` in `auth/session.ts` 69 already sends), 404 `No such package.`
+
+`POST /api/admin/packages/:packageId/restore` reverses `hidden` only (manifests are rewritten from the stored version rows' hashes on the next publish; until then a restored package shows no `manifestUrl`). Same callers and errors.
+
+## F3. Imports list and updates (answer 5)
+
+### `GET /api/universes/:id/installs` — **contract only**
+
+Who: the universe owner. Answer: 200 `{ items: InstallRow[] }`, newest first.
+
+`InstallRow`: `{ installId, packageId, title, version, latestVersion, updateAvailable, placement, hexCount, installedAt, removed }`. `updateAvailable` is `latestVersion > version` and the package is not hidden. A hidden package shows `latestVersion` equal to `version` and `updateAvailable` false; the copy stays (answer 5: the campaign keeps its imported copy). Nothing is pushed: the field is computed on read.
+
+Taking an update is the same preview and install (F4, F5) with the newer `version` and **no** placement in the body: the server reuses the placement stored on the install row. Declining is doing nothing.
+
+Errors: 401, 404 `No such universe.`
+
+## F4. Import in place
+
+### `GET /api/universes/:id/install/preview?packageId=&version=` — **contract only**
+
+Who: the universe owner, signed in. The package must be visible to the caller (F2 rules). Optional `placement` (F5) as one JSON query parameter; absent means in place.
+
+Answer: 200 `InstallPreview`:
+
+```
+{ packageId, version, placement, hexes: InstallPreviewHex[], records: { add, replace }, sectorsCreated: OwnSectorPlan[], bytes, conflicts }
+```
+
+`InstallPreviewHex`: `{ from, to, outcome, current }`. `from` is the key in the manifest, `to` the key it lands on (equal when in place). `outcome` is one of:
+
+| outcome | when (target is `to` in this universe) |
+|---|---|
+| `already installed` | the target's tree hash equals the (rewritten) `treeHash` |
+| `new` | no row, and no chart entry (own map, own sector, or empty chart hex) |
+| `replaces chart` | no row, and the chart has a system there, and the chart tree equals `baseHash` (in place) or placement is set |
+| `replaces own` | a row exists whose tree equals `baseHash`, or placement is set and the row is an own or override row with provenance from this same install (an update) |
+| `conflict` | anything else: a row the referee changed, a chart hex whose tree differs from `baseHash`, or a placed piece over a row with no provenance from this install |
+
+`current` is `{ name, uwp, treeHash }` of what is there now, or null. A `deleted: true` manifest hex previews as `replaces chart` / `replaces own` / `conflict` by the same rules with `to` shown as removed.
+
+`records.add` and `records.replace` count records by id: a record whose id already exists in the universe with the same `provenance.packageId` is `replace`; one with that id and no matching provenance is a conflict listed in `conflicts`; else `add`.
+
+`bytes` is the sum of object bytes this universe does not yet hold (the quota check, F8). `conflicts` is the count of `conflict` rows plus record conflicts.
+
+Errors: 401, 404 `No such universe.`, 404 `No such package.`, 404 `No such version.` (missing or not `done`), 400 `validation`, `Invalid request.` (bad placement), 400 `validation`, `This package is for a different edition.` when `packages.edition` differs from `universes.edition_default` (see question 3 in the phase-1 report: this may need Johnny), 400 `validation`, `The piece does not fit on the map.` (F5), 409 `conflict`, `A sector is already at that position.` (F5).
+
+### `POST /api/universes/:id/install` — **contract only**
+
+Body `InstallRequest`:
+
+```
+{ packageId, version, placement?, resolutions: { [toHexKey]: 'theirs' | 'mine' }, recordResolutions: { [recordId]: 'theirs' | 'mine' }, expect: { conflicts } }
+```
+
+Every `conflict` row in the preview must have a resolution; a missing one is 409 `conflict`, `Choose theirs or mine for every conflict.` with `details.hexKeys`. `expect.conflicts` must equal the server's fresh count; otherwise 409 `conflict`, `The map changed. Preview again.` (the map moved under the referee). Per-field merge is not in this contract (`data_model.md` A7 names it; see report question 4).
+
+Steps, in one Durable Object call so it is all or nothing:
+
+1. Snapshot: a `snapshots` row, `trigger 'install'`, label `Before install <title> v<version>`, captured rows of every `to` key and every touched record, kept as generate keeps them (`meta` key `install:<installId>`).
+2. Objects: copy each tree, image and rewritten tree object into `u/<universeId>/objects/<hash>` from the public bucket (rewritten ones are written by the rewrite module, F6).
+3. Hexes: each `new`, `replaces chart`, `replaces own`, and `conflict` resolved `theirs` writes a row through `insertHex`/`updateHex` with `base_hash` = the target's chart tree or null, `tree_hash` = (rewritten) `treeHash`, summary from the manifest (rewritten), `provenance = { packageId, version, installId }`, history action `install`. `mine` and `already installed` write nothing.
+4. Records: each record is written with `provenance = { packageId, version, installId }` and its anchors rewritten (F6). Journal entries are not in packages today (`PackagePublish` names records only), so no journal row is written.
+5. Lists: routes and border paths from the manifest's `lists` objects are merged into `lists` (phase 2 publishes them for real; F7).
+6. D1: one `package_installs` row; `packages.installs` + 1 on the first install of that package into that universe only.
+
+Answer: 200 `InstallResult`: `{ installId, written, skipped, snapshotId }`.
+
+Undo (review correction 4, checked 2026-10-14): **no snapshot restore route exists.** `snapshots` rows are written (generate, and now install) but nothing reads them back; `scheduled()` in `index.ts` is a stub. The install writes its undo point (a `snapshots` row, trigger `install`, and the captured rows and records under `meta` key `install:<installId>`), so a restore can be built on it later. Building restore needs a go.
+
+Errors: the preview's errors, the two 409s above, 400 `too_large`, `This universe is out of space.` (F8), 403 `Origin check failed.`
+
+## F5. Place elsewhere (answers 3 and 4)
+
+### Placement
+
+`Placement` (shared zod): `{ anchor: HexKey, to: HexKey }`. `anchor` must be a key in the manifest's `hexes`; `to` is where that hex lands. Both keys are resolved to global odd-q coordinates with `toGlobal` and the sector positions this universe knows (chart sectors from the pinned truth's overview, own sectors from `sectors`). The piece moves by the **cube** vector between them:
+
+```
+cube(q, r) = { x: q, z: r - (q - (q&1))/2 }
+d = cube(to) - cube(anchor)
+for each hex h: cube(h') = cube(h) + d, then back: q' = x', r' = z' + (q' - (q'&1))/2
+```
+
+An offset (`{dq, dr}`) alone is not accepted: the anchor pair is what the map drag produces, and it carries the sector positions. A placement whose `to` equals `anchor` is in place.
+
+**Worked example (odd column shift).** A piece of three hexes in one sector at slot (0,0): `0101`, `0102`, `0201` (`0101` and `0201` are neighbours; `0201` sits half a row lower, being an odd global q). Anchor `0101` → `0201`, one column right.
+
+| hex | global (q,r) | cube (x,z) | + (1,0) | back to (q,r) | lands on |
+|---|---|---|---|---|---|
+| 0101 | (0,0) | (0,0) | (1,0) | (1,0) | 0201 |
+| 0102 | (0,1) | (0,1) | (1,1) | (1,1) | 0202 |
+| 0201 | (1,0) | (1,0) | (2,0) | (2,1) | **0302** |
+
+Adding one to the column in offset form would put `0201` on `0301`, which is no longer next to `0202`'s new place the way it was next to `0102`'s: the shape would shear. The cube shift keeps every neighbour pair. A shift by an even number of columns gives the same answer in both forms.
+
+### Crossing a sector or subsector edge
+
+Allowed. A moved hex whose `(q', r')` falls in another sector takes that sector's slug via `fromGlobal`. Subsector letters are not part of a hex key, so a subsector edge changes nothing in the data. The 1280-hex cap still holds, so a piece can touch at most four sectors.
+
+### Landing where no sector exists
+
+If `fromGlobal` gives a sector position with no chart sector and no own sector, the install creates an own sector there (`OwnSectorId`, a fresh `~` + 26 Crockford id, display name `<package title>` trimmed to 80, empty subsector names), at that exact slot. The preview lists it in `sectorsCreated: [{ id: null, slot: {x,y}, name }]`; the id is minted at install. A slot taken by another own sector is not "empty": hexes land in that sector.
+
+Slot rule (review correction 1, 2026-10-14): there is no band rule in the code. A sector created by a placed install takes any slot that `refuseSlot` (`universe/sectors.ts` 107) accepts for the Builder: inside `SectorSlot` (−1000..1000), holding no chart sector and no other own sector. Phase 3 reuses `refuseSlot`. A slot that holds a chart sector never gets an own sector: hexes there become overrides of the chart (`replaces chart`).
+
+A piece landing in charted space, answer 4: each `to` key in a chart sector is an override row in this campaign only; the truth is not touched. The preview lists every such hex as `replaces chart` before confirm.
+
+`The piece does not fit on the map.`: any moved hex whose sector slot falls outside the `SectorSlot` bounds (−1000..1000), the limit the server enforces (review correction 2). The `geometry.ts` 68 comment is the drawn chart span and is not enforced.
+
+### The rewrite (one pure module)
+
+`packages/shared/src/package_place.ts` (shared because the Worker and, in phase 4, the browser preview outline both need it; `packages/engines` is never touched). Exports:
+
+- `placeKeys(keys, placement, sectorAt) → Map<from, to>`, pure, deterministic.
+- `placeTree(tree, map) → tree'`: a deep copy where every census field (F6) whose value names a `from` key gets the `to` key, and `parentId` suffixes are kept (`Spinward_Marches/1910-GG-pre` → `<to>-GG-pre`). Stable-encoded, hashed: a new object with a new hash.
+- `placeSummary`, `placeRecord` (anchors), `placeLists` (route and border endpoints).
+
+A field that names a key not in the map (a route endpoint outside the piece) is left as is. A round trip (move away, move back) must give back the original hashes (phase 3 test).
+
+## F6. Location fields (the census)
+
+`tests/generation/package_location_fields.test.js` fails if this list changes in the engine 1.2.0 fixtures:
+
+```
+$.hexId  $.hex  $.bodies[].profile.id  ("<ccrr>|<body>")
+$.mainworld.hexId  $.mainworld.parentId
+$.worlds[].hexId  $.worlds[].moons[].hexId  $.worlds[].moons[].parentId
+$.mgt2eData.hexId  $.mgt2eData.parentId  $.mgtSocio.hexId  $.mgtSocio.parentId
+$.mgtSystem.hexId  $.mgtSystem.mainworld.hexId  $.mgtSystem.mainworld.parentId
+$.mgtSystem.worlds[].moons[].hexId  $.mgtSystem.worlds[].moons[].parentId
+```
+
+The rewrite also covers fields the fixtures do not hold: the stored tree's top-level `hexKey` (and the same body paths under `$.body`), `PackageHex.summary` keys that name a hex, `CampaignAnchor` `{ kind: 'system', hexKey }` on records, and route and border-path endpoints in `lists`. `$.bodies[].profile.id` and `$.hex` are profile fixtures (render output, not stored trees); they are listed so a change shows, but no stored object carries them today. The census covers the fixtures' body shape, not the stored envelope (review correction 3). Phase 3's test also walks a real stored envelope (built with `generateHex` for `Spinward_Marches/1910` from the tracked TSV, plus a hand-made tree) and pins `$.hexKey`, `$.body.mgt2eData.{hexId,parentId}`, `$.body.mgtSocio.{hexId,parentId}`, `$.body.mgtSystem.hexId`, `$.body.mgtSystem.mainworld.{hexId,parentId}`, `$.body.mgtSystem.worlds[].moons[].{hexId,parentId}`; nothing in `derivation`.
+
+## F7. Lists on publish
+
+Phase 2 replaces the stub's empty-array hashes: `lists.routes` is the hash of the routes from `lists` whose both ends are in `hexKeys`; `lists.borderPaths` likewise for border paths wholly inside. Edges that leave the piece are dropped (report question 2).
+
+## F8. Limits and charges
+
+| Limit | Rule |
+|---|---|
+| Hexes, records | the stub's 1280 and 500, per version and so per install |
+| Byte quota (250 MB, `OBJECT_QUOTA_BYTES`) | An install **counts**: objects copied into the universe's private prefix are charged to `universes.object_bytes` through `chargeObjectBytes`, keyed by `installId`. Over the quota: 400 `too_large`, `This universe is out of space.` checked at preview (`bytes`) and again at install. |
+| Daily cap (100 systems a user a day) | An install **does not count**: it copies, it does not generate (the allowance guards generation compute). |
+| Mutation budget (120 a minute) | One install is one mutation. |
+
+## F9. Migration `0015_marketplace.sql`
+
+Safe in either order:
+
+- `packages.truth_version` nullable: SQLite cannot drop `NOT NULL` in place, so the migration builds `packages_new` with the same columns (nullable `truth_version`), copies rows, drops and renames, recreates both indexes. The old Worker only ever writes a string, so it runs before or after.
+- `CREATE TABLE package_installs (id TEXT PRIMARY KEY, universe_id, package_id, version, placement TEXT NULL, hex_count, created_at, updated_at)` with index on `(universe_id)`. An update rewrites `version` and `updated_at` on the same row.
+- `CREATE TABLE package_reports (id, package_id, user_id, reason, state 'open'|'closed', created_at)`, unique `(package_id, user_id, state)` where open.
+- New Worker code that reads `package_installs` or `package_reports` before the migration answers 503 `unavailable`, `The marketplace is being updated. Try again soon.` by the probe pattern `object_charge.ts` uses. Old code ignores the new tables.
+
+## F10. Shared zod names (phase 2 and 3)
+
+`PackageCard`, `PackageCatalogueQuery`, `PackageReport`, `PackageTakedown`, `Placement`, `InstallPreview`, `InstallPreviewHex`, `InstallOutcome`, `OwnSectorPlan`, `InstallRequest`, `InstallResult`, `InstallRow`, `InstallList`, in `packages/shared/src/schemas/package.ts`; `PackageManifest.truthVersion` nullable.
+
+## F11. Build plan, phases 2 to 4
+
+Phase 2 — server, in place (needs: migration, shared, routes, DO):
+1. `apps/api/src/db/migrations/0015_marketplace.sql` and `db/schema.ts` (F9). Test: `tests/api/packages_migration.test.js` extended (both orders).
+2. `packages/shared/src/schemas/package.ts`: F10 names except `Placement`'s use; `truthVersion` nullable. Test: a new `tests/shared/package_schema.test.js`.
+3. `routes/packages.ts` + `jobs/publish_queue.ts`: own-map publish (F1), catalogue and page (F2), report; `routes/admin.ts`: takedown and restore. Lists published (F7).
+4. `apps/api/src/universe/install.ts` (new): preview and install in the DO (F4), snapshot, provenance, records; `UniverseDO.ts` routes `/install/preview`, `/install`; Worker routes in a new `routes/installs.ts`; `package_installs` and installs list (F3).
+5. Tests `RUN_API_TESTS=1`: `tests/api/packages.test.js` (signed out, other account, hidden, report, takedown), new `tests/api/install.test.js` (each outcome, conflict both ways, already installed, update, quota, every error sentence).
+Phase 3 — placement: `packages/shared/src/package_place.ts` and `tests/generation/package_place.test.js` (every F6 field, round trip, odd-column example above, edge crossing); `install.ts` takes `placement`, own-sector creation; tests in `install.test.js` over charted space and across a sector edge.
+Phase 4 — browser, as the prompt says; the outline drag calls `placeKeys` from shared for its preview.
+
+Split change from the prompt: none, except the rewrite module lives in `packages/shared` (not `packages/generation`) because the browser needs it and `shared` may import only zod: the module imports nothing.
+
+## F12. Phase 2 as built (2026-10-14) — **on disk, unpushed**
+
+Johnny's phase-2 answers: routes and border paths that leave the piece are dropped; another edition is refused, `This package is for a different edition.`; a conflict is theirs or mine per hex; a takedown hides the package, removes its manifests from the public bucket and keeps the objects; an install counts against the 250 MB quota, not the daily cap. Where F1 to F11 and this section differ, this section is what the code does.
+
+- **F1, own maps.** Both refusals and the job's refusal are gone. `packages.truth_version` stays `NOT NULL`; an own-map package stores `''` (`OWN_MAP` in `routes/packages.ts`) and every answer shows `truthVersion: null`. No table rebuild, so no migration risk on `packages` (this replaces F9's rebuild). `PackageManifest.truthVersion` is nullable. A key with no row on an own map is 400 `A hex is not in this universe.`
+- **F2, catalogue.** `GET /api/packages` signed in with none of `q`, `kind`, `tag`, `sort`, `mine` returns the stub's own list (`PackageListPage` of `PackageListing`), so the screens in this tree are unchanged. Otherwise it is the catalogue: `PackageCardPage` of `PackageCard` (`installs`, `updatedAt`, `hidden`). Search is case-insensitive `LIKE` over title, description and the tags JSON. The cursor is opaque and tied to its `sort`; a cursor from another sort is 400 `Invalid request.` Unknown query keys other than `cursor` and `limit` are ignored.
+- **F2, page.** `GET /api/packages/:packageId` answers `PackagePublicPage` (= `PackagePage` + `installs`, `updatedAt`, `hidden`). `manifestUrl` is **not** built: the Worker has no public base URL binding; the client can derive the manifest key `packages/<id>/<v>/manifest.json` from `versions`.
+- **F2, report.** As F2. 503 `The marketplace is being updated. Try again soon.` when `package_reports` is absent.
+- **F2, takedown and restore** are in `apps/api/src/routes/admin_packages.ts`, mounted at `/api/admin/packages` (not in `routes/admin.ts`). 403 is `Role required.` (`requireRole`, `auth/session.ts` 69). Takedown moves each done version's manifest to the private bucket at `takedown/packages/<id>/<v>/manifest.json` and deletes the public key; restore moves it back. Objects are never deleted. Audit actions `package.takedown`, `package.restore`. Restore takes no body.
+- **F3, imports list.** `GET /api/universes/:id/installs` → `InstallList` of `InstallRow` (`installId, packageId, title, version, latestVersion, updateAvailable, placement: null, hexCount, installedAt, updatedAt`). There is no `removed` field.
+- **F4, preview.** `GET /api/universes/:id/install/preview?packageId=&version=` → `InstallPreview`. Each `InstallPreviewHex` also carries `removes` (the manifest marks the hex deleted). `records.conflicts` is the list of record ids, `records.add` and `records.replace` are counts. Any `placement` query is 400 `Invalid request.` until phase 3. The edition check compares `packages.edition` with `universes.edition_default`.
+  Outcome rules as coded (`universe/install.ts` `outcomeOf`): `already installed` when the target already holds the package's tree (or is already empty for a removed hex); with a stored row, `replaces own` when the row's tree is `baseHash` or the row still holds the tree an earlier install of this package wrote (provenance `treeHash` equals the row's tree), else `conflict`; with no row on a chart hex, `replaces chart` when the chart tree is `baseHash`, else `conflict`; with no row and no chart, `new` when `baseHash` is null, else `conflict`.
+- **F4, install.** `POST /api/universes/:id/install`, body `InstallRequest` (`packageId, version, resolutions, recordResolutions, expect: { conflicts }`), strict, no `placement`. Answer `InstallResult`: `{ installId, written, skipped, records, snapshotId }`. Order: preview again, 409s, quota, copy missing objects public → `u/<id>/objects/<hash>`, then one Durable Object call: snapshot row + captured rows in one transaction with the hex writes; records then go through the campaign change path (its own transaction). Hex rows carry `provenance = { packageId, version, installId, treeHash }`, history action `install`. A removed hex writes a chart tombstone, or deletes the row on a non-chart key. An update reuses the in-place `package_installs` row (same `installId`); `packages.installs` counts universes, not updates.
+- **Record provenance.** `CampaignProvenance` is strict (`mode, universeId, recordId, rev, at`, `schemas/campaign.ts` 126), and that file is not in this go. Installed records carry `{ mode: 'copy', universeId: <the package's source universe>, recordId, rev, at: <manifest publishedAt> }`; a record whose id is already here with that `copy` provenance is `replace`, any other is a conflict. The package id is not on the record (report question 1).
+- **Journal entries** are not in packages (`PackagePublish` has no journal ids), so none are written.
+- **F7, lists.** The Durable Object stores no routes or border paths (only `campaignSettings` and `campaignTime` rows in `lists`), so publish still writes the empty-array hashes. Johnny's "drop the ones that leave the piece" applies when routes are stored.
+- **F8, limits.** Quota: 400 `too_large`, `This universe is out of space.`, checked at preview and install against `universes.object_bytes` + bytes not yet held; charged with `chargeObjectBytes` keyed by `installId`. Daily cap: not touched. Mutation budget: `/install` takes one mutation in the Durable Object (429 `Too many requests.`).
+- **F9, migration** `0015_marketplace.sql`: `package_installs` and `package_reports`, every statement `IF NOT EXISTS`, no change to existing tables. Worker before migration: install, installs list and report answer 503 `The marketplace is being updated. Try again soon.` (probed per request); catalogue, page and publish keep working. Migration before Worker: the old Worker never names the new tables.
+- **Undo.** No restore route (see F4 undo). The undo point is written.

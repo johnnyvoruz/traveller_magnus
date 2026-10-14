@@ -14,8 +14,9 @@
  */
 import { computed, reactive, ref } from 'vue';
 import Icon from '../design/Icon.vue';
+import { extraFieldName } from '@voyage/shared';
 import {
-    characterSections, filledIn, skillName, skillsFound, type CharSection, type SkillLine, type SlotName,
+    characterSections, filledIn, profileAbbr, skillGroups, skillName, trainedLineCount, type CharSection, type SkillGroup, type SkillLine, type SlotName,
 } from './character_sheet.ts';
 import { valueOf, type SheetDoc, type SheetField } from './sheet_fields.ts';
 import SheetBox from './SheetBox.vue';
@@ -61,16 +62,20 @@ function foldAll(fold: boolean): void {
 
 const values = computed(() => props.doc.fields);
 
-function held(field: SheetField): string | boolean {
+function held(field: Pick<SheetField, 'name' | 'type'>): string | boolean {
     return valueOf(values.value, field);
 }
 
-function has(field: SheetField | null): boolean {
+function has(field: { name: string } | null): boolean {
     return field !== null && field.name in values.value;
 }
 
-function who(field: SheetField): { name: string; tone: string } | null {
+function who(field: { name: string }): { name: string; tone: string } | null {
     return props.presence ? props.presence[field.name] ?? null : null;
+}
+
+function textBox(name: string): { name: string; type: 'text' } {
+    return { name, type: 'text' };
 }
 
 /** The input's id, from the PDF's name, so its label can point at it. */
@@ -82,16 +87,32 @@ function commit(name: string, value: string | boolean): void {
     if (props.editable) emit('change', name, value);
 }
 
-// ---- The skills: a finder over the PDF's lines ----
+// ---- The skills: one row per skill. A "+" adds a line; an empty added line lasts until the sheet closes. ----
 const find = ref('');
 const trainedOnly = ref(false);
+const opened = reactive<Record<string, number[]>>({});
 
-function shownLines(lines: readonly SkillLine[]): SkillLine[] {
-    return skillsFound(lines, values.value, find.value, trainedOnly.value);
+function groupsOf(lines: readonly SkillLine[]): SkillGroup[] {
+    return skillGroups(lines, values.value, find.value, trainedOnly.value, opened);
+}
+
+function skillCount(lines: readonly SkillLine[]): number {
+    return new Set(lines.map((line) => line.label)).size;
 }
 
 function trainedCount(lines: readonly SkillLine[]): number {
-    return skillsFound(lines, values.value, '', true).length;
+    return trainedLineCount(lines, values.value);
+}
+
+function addLine(group: SkillGroup): void {
+    const ns = [group.head.n ?? 0, ...group.more.map((line) => line.n ?? 0), ...group.extra];
+    const next = Math.max(...ns) + 1;
+    const have = opened[group.label] ?? [];
+    if (!have.includes(next)) opened[group.label] = [...have, next];
+}
+
+function idle(line: SkillLine): boolean {
+    return !has(line.modifier) && !has(line.specialism);
 }
 
 /** A skill's name with the found words marked: [before, match, after]. */
@@ -198,9 +219,9 @@ function linked(slot: SlotName): readonly { id: string; name: string }[] {
 
           <!-- The profile: the six values typed above, exactly as typed. Nothing is entered here and nothing is converted. -->
           <div v-else-if="block.kind === 'profile'" class="csheet-profile" role="group" aria-label="Universal Character Profile: the six values as typed above">
-            <span v-for="cell in block.cells" :key="cell.value.name" class="csheet-hex">
+            <span v-for="cell in block.cells" :key="cell.value.name" class="csheet-hex" :title="cell.label" :aria-label="cell.label">
               <b>{{ held(cell.value) || '–' }}</b>
-              <span>{{ cell.label }}</span>
+              <span aria-hidden="true">{{ profileAbbr(cell.label) }}</span>
             </span>
           </div>
 
@@ -213,46 +234,111 @@ function linked(slot: SlotName): readonly { id: string; name: string }[] {
                 <input v-model="find" type="search" class="sheet-input" placeholder="Find a skill" @keydown.stop>
               </label>
               <span class="csheet-seg" role="group" aria-label="Which skills to show">
-                <button type="button" :aria-pressed="!trainedOnly ? 'true' : 'false'" @click="trainedOnly = false">All {{ block.lines.length }}</button>
+                <button type="button" :aria-pressed="!trainedOnly ? 'true' : 'false'" @click="trainedOnly = false">All {{ skillCount(block.lines) }}</button>
                 <button type="button" :aria-pressed="trainedOnly ? 'true' : 'false'" title="Only the lines with something typed" @click="trainedOnly = true">Trained {{ trainedCount(block.lines) }}</button>
               </span>
             </div>
             <ul class="csheet-skills">
-              <li v-for="line in shownLines(block.lines)" :key="line.modifier.name" class="csheet-skill" :class="{ 'has-spec': line.specialism, 'is-idle': !has(line.modifier) && !has(line.specialism) }">
-                <span class="csheet-skill-name" :title="skillName(line)">{{ marked(line.label)[0] }}<mark>{{ marked(line.label)[1] }}</mark>{{ marked(line.label)[2] }}<small v-if="line.n !== null"> {{ line.n }}</small></span>
-                <SheetBox
-                  v-if="line.specialism"
-                  :name="line.specialism.name"
-                  kind="text"
-                  :label="skillName(line) + ' specialism'"
-                  placeholder="specialism"
-                  :value="held(line.specialism)"
-                  :disabled="!editable"
-                  :holder="who(line.specialism)"
-                  @commit="commit"
-                  @enter="emit('enter', $event)"
-                  @leave="emit('leave', $event)"
-                />
-                <SheetBox
-                  class="csheet-level"
-                  :class="{ 'is-empty': !has(line.modifier) }"
-                  :name="line.modifier.name"
-                  kind="text"
-                  look="tag"
-                  :label="skillName(line) + ' modifier'"
-                  :value="held(line.modifier)"
-                  :disabled="!editable"
-                  :holder="who(line.modifier)"
-                  @commit="commit"
-                  @enter="emit('enter', $event)"
-                  @leave="emit('leave', $event)"
-                />
+              <li v-for="group in groupsOf(block.lines)" :key="group.label" class="csheet-skill-group">
+                <div class="csheet-skill" :class="{ 'has-spec': group.head.specialism, 'is-idle': idle(group.head) }">
+                  <span class="csheet-gutter">
+                    <button v-if="group.numbered" type="button" class="csheet-add" :aria-label="'Add another ' + group.label + ' specialism'" @click="addLine(group)">+</button>
+                  </span>
+                  <span class="csheet-skill-name" :title="group.label">{{ marked(group.label)[0] }}<mark>{{ marked(group.label)[1] }}</mark>{{ marked(group.label)[2] }}</span>
+                  <SheetBox
+                    v-if="group.head.specialism"
+                    :name="group.head.specialism.name"
+                    kind="text"
+                    :label="group.label + ' specialism'"
+                    placeholder="specialism"
+                    :value="held(group.head.specialism)"
+                    :disabled="!editable"
+                    :holder="who(group.head.specialism)"
+                    @commit="commit"
+                    @enter="emit('enter', $event)"
+                    @leave="emit('leave', $event)"
+                  />
+                  <SheetBox
+                    class="csheet-level"
+                    :class="{ 'is-empty': !has(group.head.modifier) }"
+                    :name="group.head.modifier.name"
+                    kind="text"
+                    look="tag"
+                    :label="skillName(group.head) + ' modifier'"
+                    :value="held(group.head.modifier)"
+                    :disabled="!editable"
+                    :holder="who(group.head.modifier)"
+                    @commit="commit"
+                    @enter="emit('enter', $event)"
+                    @leave="emit('leave', $event)"
+                  />
+                </div>
+                <div v-for="line in group.more" :key="line.modifier.name" class="csheet-skill is-tier has-spec" :class="{ 'is-idle': idle(line) }">
+                  <span class="csheet-gutter"></span>
+                  <SheetBox
+                    v-if="line.specialism"
+                    :name="line.specialism.name"
+                    kind="text"
+                    :label="skillName(line) + ' specialism'"
+                    placeholder="specialism"
+                    :value="held(line.specialism)"
+                    :disabled="!editable"
+                    :holder="who(line.specialism)"
+                    @commit="commit"
+                    @enter="emit('enter', $event)"
+                    @leave="emit('leave', $event)"
+                  />
+                  <SheetBox
+                    class="csheet-level"
+                    :class="{ 'is-empty': !has(line.modifier) }"
+                    :name="line.modifier.name"
+                    kind="text"
+                    look="tag"
+                    :label="skillName(line) + ' modifier'"
+                    :value="held(line.modifier)"
+                    :disabled="!editable"
+                    :holder="who(line.modifier)"
+                    @commit="commit"
+                    @enter="emit('enter', $event)"
+                    @leave="emit('leave', $event)"
+                  />
+                </div>
+                <div v-for="n in group.extra" :key="'extra-' + n" class="csheet-skill is-tier has-spec" :class="{ 'is-idle': !has(textBox(extraFieldName(group.label, n, 'Specialism'))) && !has(textBox(extraFieldName(group.label, n, 'Modifier'))) }">
+                  <span class="csheet-gutter"></span>
+                  <SheetBox
+                    :name="extraFieldName(group.label, n, 'Specialism')"
+                    kind="text"
+                    :label="group.label + ' ' + n + ' specialism'"
+                    placeholder="specialism"
+                    :value="held(textBox(extraFieldName(group.label, n, 'Specialism')))"
+                    :disabled="!editable"
+                    :holder="who(textBox(extraFieldName(group.label, n, 'Specialism')))"
+                    @commit="commit"
+                    @enter="emit('enter', $event)"
+                    @leave="emit('leave', $event)"
+                  />
+                  <SheetBox
+                    class="csheet-level"
+                    :class="{ 'is-empty': !has(textBox(extraFieldName(group.label, n, 'Modifier'))) }"
+                    :name="extraFieldName(group.label, n, 'Modifier')"
+                    kind="text"
+                    look="tag"
+                    :label="group.label + ' ' + n + ' modifier'"
+                    :value="held(textBox(extraFieldName(group.label, n, 'Modifier')))"
+                    :disabled="!editable"
+                    :holder="who(textBox(extraFieldName(group.label, n, 'Modifier')))"
+                    @commit="commit"
+                    @enter="emit('enter', $event)"
+                    @leave="emit('leave', $event)"
+                  />
+                </div>
               </li>
             </ul>
-            <p v-if="!shownLines(block.lines).length" class="csheet-note">No skill has those words.</p>
+            <p v-if="!groupsOf(block.lines).length" class="csheet-note">No skill has those words.</p>
             <h5 class="csheet-sub">Other skills and abilities</h5>
             <ul class="csheet-skills">
               <li v-for="(blank, at) in block.blanks" :key="blank.name.name" class="csheet-skill is-blank" :class="{ 'is-idle': !has(blank.name) && !has(blank.dm) }">
+                <span class="csheet-gutter"></span>
                 <SheetBox
                   :name="blank.name.name"
                   kind="text"
@@ -416,36 +502,43 @@ function linked(slot: SlotName): readonly { id: string; name: string }[] {
   text-align: center;
 }
 
-/* The profile hexes: the six values typed above, shown, never typed here. */
+/* The profile hexes: six on one row. They shrink with the pane and keep their proportions. */
 .csheet-profile {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  flex-wrap: nowrap;
+  gap: 4px;
+  min-width: 0;
+  container-type: inline-size;
 }
 
 .csheet-hex {
   display: flex;
+  flex: 1 1 0;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 78px;
-  height: 72px;
+  width: auto;
+  max-width: 78px;
+  min-width: 0;
+  aspect-ratio: 13 / 12;
+  height: auto;
   background: var(--bg-2);
   clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
 }
 
 .csheet-hex b {
-  max-width: 64px;
+  max-width: 86%;
   overflow: hidden;
   color: var(--signal);
-  font: 700 18px/1.1 var(--font-code);
+  font: 700 clamp(11px, 5cqi, 18px)/1.1 var(--font-code);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .csheet-hex span {
   color: var(--text-muted);
-  font: 600 12px/1.2 var(--font-text);
+  font: 600 clamp(8px, 3cqi, 12px)/1.2 var(--font-text);
+  letter-spacing: 0.04em;
 }
 
 /* The skills: a finder, then the list in columns. A line with something typed is bright; an empty one is quiet. */
@@ -508,25 +601,64 @@ function linked(slot: SlotName): readonly { id: string; name: string }[] {
   list-style: none;
 }
 
+.csheet-skill-group {
+  break-inside: avoid;
+}
+
 .csheet-skill {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 46px;
+  display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
   padding: 2px 0;
   break-inside: avoid;
 }
 
-.csheet-skill.has-spec {
-  grid-template-columns: 104px minmax(0, 1fr) 46px;
+.csheet-gutter {
+  display: flex;
+  flex: 0 0 1.5rem;
+  align-items: center;
+  justify-content: center;
+}
+
+.csheet-add {
+  width: 1.25rem;
+  height: 1.25rem;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--control-line);
+  border-radius: var(--r-1);
+  background: transparent;
+  color: var(--text-1);
+  font: 700 14px/1 var(--font-text);
+  cursor: pointer;
+}
+
+.csheet-add:hover {
+  border-color: var(--signal-dim);
+  color: var(--signal);
+}
+
+.csheet-add:focus-visible {
+  outline-offset: 2px;
+}
+
+.csheet-skill.is-tier {
+  padding-left: 1rem;
 }
 
 .csheet-skill-name {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   color: var(--text-0);
   font: 600 12.5px/1.4 var(--font-text);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.csheet-skill.has-spec .csheet-skill-name {
+  flex: 0 1 7.5rem;
 }
 
 .csheet-skill-name small {

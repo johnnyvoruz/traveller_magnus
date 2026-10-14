@@ -81,6 +81,24 @@ export function panBy(cam: Camera, dxPx: number, dyPx: number): Camera {
     return { x: cam.x + dxPx / ppp, y: cam.y + dyPx / ppp, ppp };
 }
 
+/**
+ * A camera that shows the world point (x, y) at the centre of the band above a
+ * bottom sheet `sheetPx` tall. The zoom stays. No sheet leaves the point at the
+ * centre of the viewport.
+ */
+export function centreAbove(cam: Camera, vp: Viewport, x: number, y: number, sheetPx: number): Camera {
+    const ppp = cam.ppp;
+    if (!(ppp > 0)) return cam;
+    const bottom = Math.min(Math.max(0, sheetPx), Math.max(0, vp.height));
+    const sy = (vp.height - bottom) / 2;
+    const sx = vp.width / 2;
+    return {
+        x: x - (sx - vp.width / 2) / ppp,
+        y: y - (sy - vp.height / 2) / ppp,
+        ppp,
+    };
+}
+
 export function fit(rect: Rect, vp: Viewport, marginPx: number): Camera {
     const worldW = rect.x1 - rect.x0;
     const worldH = rect.y1 - rect.y0;

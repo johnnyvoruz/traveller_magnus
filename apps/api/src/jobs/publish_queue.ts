@@ -55,7 +55,7 @@ async function universeCall(env: Env, universeId: string, hexKeys: string[], rec
     return parsed.data;
 }
 
-async function chartHex(env: Env, version: string, hexKey: string, cache: Map<string, Record<string, unknown> | null>): Promise<unknown> {
+export async function chartHex(env: Env, version: string, hexKey: string, cache: Map<string, Record<string, unknown> | null>): Promise<unknown> {
     const { sector, local } = sectorOf(hexKey);
     let index = cache.get(sector);
     if (index === undefined) {
@@ -119,8 +119,8 @@ function imageHashesOf(record: unknown): string[] {
     return hashes;
 }
 
-/** Reads the named hexes and records. Throws `PublishRefusal` when one is not in the universe. */
-export async function resolvePublish(env: Env, universeId: string, truthVersion: string, hexKeys: string[], recordIds: string[]): Promise<ResolvedPublish> {
+/** Reads the named hexes and records. An own map (null truth) has no chart fallback. Throws `PublishRefusal` when one is not in the universe. */
+export async function resolvePublish(env: Env, universeId: string, truthVersion: string | null, hexKeys: string[], recordIds: string[]): Promise<ResolvedPublish> {
     const sources = await universeCall(env, universeId, hexKeys, recordIds);
     if (sources.hexes.length !== hexKeys.length || sources.records.length !== recordIds.length) {
         throw new Error('Publish read failed.');
@@ -131,7 +131,7 @@ export async function resolvePublish(env: Env, universeId: string, truthVersion:
     for (let i = 0; i < hexKeys.length; i += 1) {
         const source = sources.hexes[i];
         if (!source || source.hexKey !== hexKeys[i]) throw new Error('Publish read failed.');
-        const chart = source.found ? null : await chartHex(env, truthVersion, source.hexKey, cache);
+        const chart = source.found || truthVersion == null ? null : await chartHex(env, truthVersion, source.hexKey, cache);
         const built = oneHex(source, chart);
         hexes[source.hexKey] = built.hex;
         if (built.tree) treeHashes.push(built.tree);
@@ -224,7 +224,6 @@ export async function runPublish(env: Env, message: { packageId: string; version
          FROM universes WHERE id = ?`,
     ).bind(pkg.universeId).first<UniverseRow>();
     if (!universe || universe.deletedAt) throw new Error('No such universe.');
-    if (!universe.truthVersion) throw new Error('This universe is not on a published chart.');
 
     const profile = await env.DB.prepare(
         `SELECT handle FROM profile WHERE user_id = ?`,

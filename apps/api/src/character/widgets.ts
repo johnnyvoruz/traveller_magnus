@@ -1,3 +1,4 @@
+import { numberedSkillLabels, parseExtraName } from '@voyage/shared';
 import sheet from '../../../../packages/engines/src/generated/rules/mgt2e_character_sheet_fields.js';
 
 export type WidgetKind = 'text' | 'checkbox';
@@ -10,6 +11,8 @@ for (const field of sheet.fields) {
 /** The generated rules wrapper, one object for all 420 widgets. The worker reads `name` and `type`. */
 export const WIDGET_COUNT = kinds.size;
 
+const numbered = numberedSkillLabels(sheet.fields.map((field) => field.name));
+
 export function widgetKind(name: string): WidgetKind | null {
-    return kinds.get(name) ?? null;
+    return kinds.get(name) ?? (parseExtraName(name, numbered) ? 'text' : null);
 }

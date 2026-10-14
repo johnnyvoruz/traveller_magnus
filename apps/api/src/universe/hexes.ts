@@ -326,6 +326,59 @@ export function writeGenerated(sql: Sql, write: GeneratedWrite, pin: Pin, now: s
     return rowOf(current(sql, write.hexKey)!, pin);
 }
 
+/** The stored row for one key, or null. Install reads it to choose an outcome. */
+export function storedHexRow(sql: Sql, hexKey: string): SqlRow | null {
+    return current(sql, hexKey);
+}
+
+/** The chart entry a stored summary holds, or an empty one. */
+export function storedEntry(row: SqlRow): ChartEntry | null {
+    return parseSummary(row.summary).entry;
+}
+
+export type InstalledWrite = {
+    hexKey: string;
+    treeHash: string | null;
+    baseHash: string | null;
+    engineVersion: string | null;
+    /** A removed hex from the package. A chart hex keeps a tombstone; an own hex row is deleted. */
+    deleted: boolean;
+    /** True when the key holds a chart system, so a removal is a tombstone. */
+    charted: boolean;
+    entry: unknown;
+    /** JSON `{ packageId, version, installId, treeHash }`. */
+    provenance: string;
+};
+
+/**
+ * One installed hex (contracts/b_marketplace.md F4). History action `install`.
+ * The caller holds the transaction and has already chosen the outcome.
+ */
+export function writeInstalled(sql: Sql, write: InstalledWrite, now: string): void {
+    requireKey(write.hexKey);
+    const row = current(sql, write.hexKey);
+    const baseRev = row ? Number(row.rev) : 0;
+    if (write.deleted && !write.charted) {
+        if (row) sql.exec(`DELETE FROM hexes WHERE hex_key = ?`, write.hexKey);
+        return;
+    }
+    const entry = entryOf(write.entry, write.deleted ? null : write.treeHash);
+    const fields: HexFields = {
+        hexKey: write.hexKey,
+        rev: nextRev(sql, write.hexKey, baseRev),
+        at: now,
+        deleted: write.deleted ? 1 : 0,
+        baseHash: write.baseHash,
+        treeHash: write.deleted ? null : write.treeHash,
+        engineVersion: write.engineVersion,
+        roll: 0,
+        action: 'install',
+        entry: write.deleted ? { ...entry, type: 'REMOVED' } : entry,
+    };
+    if (row) updateHex(sql, fields);
+    else insertHex(sql, fields);
+    sql.exec(`UPDATE hexes SET provenance = ? WHERE hex_key = ?`, write.provenance, write.hexKey);
+}
 /** One system. A stale baseRev writes nothing. The check and the write are one transaction. */
 export function applyGenerated(sql: Sql, write: GeneratedWrite, pin: Pin, now: string): HexRow {
     return sql.transaction(() => writeGenerated(sql, write, pin, now));

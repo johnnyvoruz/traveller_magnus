@@ -68,7 +68,7 @@ const goWords = computed(() => {
         <input type="radio" name="build-engine" :value="item.id" :checked="draft.engine === item.id" :disabled="!item.ready" @change="pickEngine(item.id)" />
         <span>{{ item.label }}</span>
         <em v-if="!item.ready">not available yet</em>
-        <em v-else-if="item.generators.length === 1">{{ item.generators[0] === 'bottom-up' ? 'bottom up' : 'top down' }}</em>
+        <em v-else-if="item.generators.length === 1">{{ item.generators[0] === 'bottom-up' ? 'bottom up' : 'from the star outward' }}</em>
       </label>
     </fieldset>
     <fieldset class="build-opts">

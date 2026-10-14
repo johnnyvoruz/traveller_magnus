@@ -3,6 +3,7 @@ import type { Env } from '../env';
 import { chargesMutationBudget, MUTATION_BUDGET, MUTATION_WINDOW_MS } from './budget';
 import { applyCampaignChanges, CampaignRefusal, readCampaign, type Sql } from './campaign';
 import { respondBuilder } from './hexes';
+import { applyInstall, InstallRefusal, previewInstall, type InstallBody } from './install';
 import { readPublishSources } from './publish_read';
 import { migrate } from './schema';
 
@@ -81,6 +82,32 @@ export class UniverseDO extends DurableObject<Env> {
             }
             return Response.json({ ok: true, data: readPublishSources(sql, body) });
         }
-        return Response.json({ ok: false, error: { code: 'not_found', message: 'No such route.' } }, { status: 404 });
-    }
+        if (request.method === 'POST' && (url.pathname === '/install/preview' || url.pathname === '/install')) {
+            if (url.pathname === '/install' && !this.allowMutation()) {
+                return Response.json(
+                    { ok: false, error: { code: 'rate_limited', message: 'Too many requests.' } },
+                    { status: 429, headers: { 'retry-after': '60' } },
+                );
+            }
+            let body: unknown;
+            try {
+                body = await request.json();
+            } catch {
+                return Response.json({ ok: false, error: { code: 'validation', message: 'Invalid JSON.' } }, { status: 400 });
+            }
+            try {
+                const data = url.pathname === '/install'
+                    ? applyInstall(sql, body as InstallBody, new Date().toISOString())
+                    : previewInstall(sql, body as Parameters<typeof previewInstall>[1]);
+                return Response.json({ ok: true, data });
+            } catch (err) {
+                if (err instanceof InstallRefusal) {
+                    const error: { code: string; message: string; details?: unknown } = { code: err.code, message: err.message };
+                    if (err.details !== undefined) error.details = err.details;
+                    return Response.json({ ok: false, error }, { status: err.status });
+                }
+                throw err;
+            }
+        }
+        return Response.json({ ok: false, error: { code: 'not_found', message: 'No such route.' } }, { status: 404 });    }
 }

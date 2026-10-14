@@ -8,6 +8,7 @@
  * (tests/web/workspace_character_sheet.test.js), never a silent gap. Nothing here says what
  * a box means or computes anything from one. Pure.
  */
+import { extraFieldName, parseExtraName } from '@voyage/shared';
 import generated from '../../../../packages/engines/src/generated/rules/mgt2e_character_sheet_fields.js';
 import { byPage, isTall, sheetWith, type SheetDoc, type SheetField, type SheetRules, type SheetValues } from './sheet_fields.ts';
 
@@ -38,6 +39,15 @@ export type CharBlock =
 export type CharSection = { name: string; blocks: CharBlock[] };
 
 const CORE = ['Strength', 'Dexterity', 'Endurance', 'Intellect', 'Education', 'Social'] as const;
+
+/** Johnny's display labels for the profile row. The hex's accessible name stays the full word. */
+const PROFILE_ABBR: Record<(typeof CORE)[number], string> = {
+    Strength: 'STR', Dexterity: 'DEX', Endurance: 'END', Intellect: 'INT', Education: 'EDU', Social: 'SOC',
+};
+
+export function profileAbbr(label: string): string {
+    return label in PROFILE_ABBR ? PROFILE_ABBR[label as (typeof CORE)[number]] : label;
+}
 
 /** Builds the layout over a list of widgets; a name the layout asks for and the file lacks is an error, loudly. */
 export function characterSections(fields: readonly SheetField[] = CHARACTER_RULES.fields): CharSection[] {
@@ -172,6 +182,115 @@ export function filledIn(section: CharSection, values: SheetValues | null): numb
 /** A skill's line as a referee reads it: "Athletics 2". */
 export function skillName(line: Pick<SkillLine, 'label' | 'n'>): string {
     return line.n === null ? line.label : line.label + ' ' + line.n;
+}
+
+/** Labels the PDF prints as numbered lines, read from the layout. */
+export function numberedLabelsOf(lines: readonly SkillLine[]): ReadonlySet<string> {
+    return new Set(lines.filter((line) => line.n !== null).map((line) => line.label));
+}
+
+/** The first line number that is not one of the PDF's own lines for this skill. */
+export function firstExtraNumber(lines: readonly SkillLine[], label: string): number {
+    let max = 0;
+    for (const line of lines) {
+        if (line.label === label && line.n !== null && line.n > max) max = line.n;
+    }
+    return max + 1;
+}
+
+/** One skill as the page shows it: its first line, then later lines under that. */
+export type SkillGroup = {
+    label: string;
+    head: SkillLine;
+    /** Later PDF lines to show, in order. */
+    more: SkillLine[];
+    /** Line numbers past the PDF's own, in order. */
+    extra: number[];
+    /** The PDF gave this skill numbered lines, so the row can grow. */
+    numbered: boolean;
+};
+
+function textAt(values: SheetValues | null, name: string | null): string {
+    if (!name || !values) return '';
+    const held = values[name];
+    return typeof held === 'string' ? held : '';
+}
+
+/**
+ * One row per skill. A numbered skill shows its first line, plus any later line that has
+ * something typed, that was added while this sheet is open (`open`), or whose specialism
+ * matches the finder. A found or trained line sits under that first line.
+ */
+export function skillGroups(
+    lines: readonly SkillLine[],
+    values: SheetValues | null,
+    find: string,
+    trainedOnly: boolean,
+    open: Readonly<Record<string, readonly number[]>>,
+): SkillGroup[] {
+    const labels = numberedLabelsOf(lines);
+    const words = find.trim().toLowerCase();
+    const byLabel = new Map<string, SkillLine[]>();
+    for (const line of lines) {
+        const list = byLabel.get(line.label);
+        if (list) list.push(line);
+        else byLabel.set(line.label, [line]);
+    }
+    const groups: SkillGroup[] = [];
+    for (const [label, group] of byLabel) {
+        const head = group[0];
+        if (!head) continue;
+        const numbered = labels.has(label);
+        const firstExtra = numbered ? firstExtraNumber(lines, label) : 0;
+        const stored: number[] = [];
+        if (values && numbered) {
+            for (const name of Object.keys(values)) {
+                const parsed = parseExtraName(name, labels);
+                if (parsed && parsed.label === label && !stored.includes(parsed.n)) stored.push(parsed.n);
+            }
+        }
+        const opened = open[label] ?? [];
+        const specText = (line: SkillLine): string => textAt(values, line.specialism ? line.specialism.name : null).toLowerCase();
+        const lineTyped = (line: SkillLine): boolean => textAt(values, line.modifier.name) !== '' || specText(line) !== '';
+        const extraSpec = (n: number): string => textAt(values, extraFieldName(label, n, 'Specialism')).toLowerCase();
+        const extraTyped = (n: number): boolean => extraSpec(n) !== '' || textAt(values, extraFieldName(label, n, 'Modifier')) !== '';
+        const labelHit = words === '' || label.toLowerCase().includes(words);
+        const specHit = group.some((line) => words !== '' && specText(line).includes(words))
+            || stored.some((n) => words !== '' && extraSpec(n).includes(words));
+        const anyTyped = group.some(lineTyped) || stored.some(extraTyped);
+        const show = trainedOnly ? anyTyped && (labelHit || specHit) : words === '' || labelHit || specHit;
+        if (!show) continue;
+        const more = group.slice(1).filter((line) => {
+            if (lineTyped(line)) return true;
+            if (line.n !== null && opened.includes(line.n)) return true;
+            return words !== '' && specText(line).includes(words);
+        });
+        const extraNs = new Set<number>();
+        for (const n of stored) {
+            if (extraTyped(n) || opened.includes(n) || (words !== '' && extraSpec(n).includes(words))) extraNs.add(n);
+        }
+        for (const n of opened) if (n >= firstExtra) extraNs.add(n);
+        groups.push({ label, head, more, extra: [...extraNs].sort((a, b) => a - b), numbered });
+    }
+    return groups;
+}
+
+/** How many skill lines have something typed, including a line stored past the PDF's own. */
+export function trainedLineCount(lines: readonly SkillLine[], values: SheetValues | null): number {
+    const pdf = skillsFound(lines, values, '', true).length;
+    const labels = numberedLabelsOf(lines);
+    const seen = new Set<string>();
+    if (!values) return pdf;
+    for (const name of Object.keys(values)) {
+        const parsed = parseExtraName(name, labels);
+        if (!parsed) continue;
+        const key = parsed.label + '/' + parsed.n;
+        if (seen.has(key)) continue;
+        const spec = values[extraFieldName(parsed.label, parsed.n, 'Specialism')];
+        const mod = values[extraFieldName(parsed.label, parsed.n, 'Modifier')];
+        if ((typeof spec === 'string' && spec !== '') || (typeof mod === 'string' && mod !== '')) seen.add(key);
+    }
+    return pdf + seen.size;
 }
 
 /** The lines a finder shows: those whose name, or whose typed specialism, has the words; and, when asked, only those with something typed. */

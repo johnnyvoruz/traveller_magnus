@@ -99,12 +99,12 @@ onBeforeUnmount(() => {
 <template>
   <!-- On the body: the panel's transform would otherwise make it the containing block of this fixed box. -->
   <Teleport to="body">
-  <div ref="dialog" class="lightbox" role="dialog" aria-modal="true" :aria-label="image && image.caption ? image.caption : name" @keydown="onKey">
-    <div class="lightbox-scrim" @click="emit('close')"></div>
-    <div class="lightbox-card">
-      <div class="lightbox-bar">
-        <span class="lightbox-count">{{ index + 1 }} of {{ count }}</span>
-        <span v-if="image" class="lightbox-meta">{{ imageWords(image) }}</span>
+  <div ref="dialog" class="ui-modal lightbox" role="dialog" aria-modal="true" :aria-label="image && image.caption ? image.caption : name" @keydown="onKey">
+    <div class="ui-modal-scrim" @click="emit('close')"></div>
+    <div class="ui-modal-card">
+      <div class="ui-modal-bar">
+        <span class="ui-modal-title">{{ index + 1 }} of {{ count }}</span>
+        <span v-if="image" class="ui-modal-meta">{{ imageWords(image) }}</span>
         <button ref="closeBtn" type="button" class="ui-btn is-icon lightbox-close" aria-label="Close" title="Close (Esc)" @click="emit('close')">
           <Icon name="xmark" :size="14" />
         </button>
@@ -135,56 +135,7 @@ onBeforeUnmount(() => {
 </template>
 
 <style>
-.lightbox {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  animation: lightbox-in var(--t-fast) var(--ease-out) both;
-}
-
-.lightbox-scrim {
-  position: absolute;
-  inset: 0;
-  background: color-mix(in srgb, var(--bg-0) 88%, transparent);
-}
-
-.lightbox-card {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  width: min(1100px, 100%);
-  max-height: 100%;
-  padding: 12px 14px 14px;
-  border: 1px solid var(--line-1);
-  border-radius: var(--r-4);
-  background: var(--bg-1);
-  box-shadow: var(--shadow-pop);
-  color: var(--text-1);
-  font: 400 14px/1.5 var(--font-text);
-}
-
-.lightbox-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.lightbox-count {
-  color: var(--text-0);
-  font-weight: 600;
-}
-
-.lightbox-meta {
-  flex: 1 1 auto;
-  color: var(--text-muted);
-  font-size: 12.5px;
-}
-
+/* The frame (.ui-modal, its scrim, card and bar) is design/base.css. */
 .lightbox-stage {
   position: relative;
   display: flex;
@@ -231,16 +182,5 @@ onBeforeUnmount(() => {
 
 .lightbox-caption {
   padding: 0 2px;
-}
-
-@keyframes lightbox-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .lightbox {
-    animation: none;
-  }
 }
 </style>

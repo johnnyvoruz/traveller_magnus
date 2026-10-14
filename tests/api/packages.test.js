@@ -141,7 +141,7 @@ if (process.env.RUN_API_TESTS !== '1') {
 } else if (!existsSync(wranglerBin)) {
     test('marketplace routes', { skip: 'wrangler is absent' }, () => {});
 } else {
-    test('marketplace routes enforce the stub contract', { timeout: 300000 }, async () => {
+    test('marketplace routes: stub, own-map publish, public catalogue, report, takedown', { timeout: 300000 }, async () => {
         const persistTo = mkdtempSync(path.join(tmpdir(), 'voyage-packages-'));
         const port = 18874;
         const base = `http://127.0.0.1:${port}`;
@@ -169,10 +169,18 @@ VALUES ('${version}', '1.1.0', 'M1105', 'TravellerMagnus', '${SETTINGS}', '[]', 
             child = startDev({ port, persistTo, inspectorPort: 19874 });
             await up(base);
 
+            const publicList = await jsonFetch(`${base}/api/packages`);
+            assert.equal(publicList.status, 200, JSON.stringify(publicList.body));
+            assert.deepEqual(publicList.body.data.items, []);
+            const publicMissing = await jsonFetch(`${base}/api/packages/pk_missing`);
+            assert.equal(publicMissing.status, 404);
+            assert.equal(publicMissing.body.error.message, 'No such package.');
+            const mineSignedOut = await jsonFetch(`${base}/api/packages?mine=1`);
+            assert.equal(mineSignedOut.status, 401);
+            assert.equal(mineSignedOut.body.error.message, 'Sign in required.');
             for (const [method, pathName] of [
-                ['GET', '/api/packages'],
                 ['POST', '/api/packages'],
-                ['GET', '/api/packages/pk_missing'],
+                ['POST', '/api/packages/pk_missing/report'],
                 ['POST', '/api/packages/pk_missing/versions'],
                 ['GET', '/api/packages/pk_missing/versions/1'],
             ]) {
@@ -195,8 +203,27 @@ VALUES ('${version}', '1.1.0', 'M1105', 'TravellerMagnus', '${SETTINGS}', '[]', 
                     title: 'Nope', kind: 'subsector', description: '', tags: [], universeId: bare.body.data.id,
                 }),
             });
-            assert.equal(refused.status, 400, JSON.stringify(refused.body));
-            assert.equal(refused.body.error.message, 'This universe is not on a published chart.');
+            // Answer 1: an own map publishes. Its manifest has a null truth version and null base hashes.
+            assert.equal(refused.status, 201, JSON.stringify(refused.body));
+            assert.equal(refused.body.data.truthVersion, null);
+            const ownBlankHex = await jsonFetch(`${base}/api/universes/${bare.body.data.id}/hexes/Demo/0101/blank`, {
+                method: 'POST', headers, body: JSON.stringify({ baseRev: 0 }),
+            });
+            assert.equal(ownBlankHex.status, 200, JSON.stringify(ownBlankHex.body));
+            const ownMissing = await jsonFetch(`${base}/api/packages/${refused.body.data.id}/versions`, {
+                method: 'POST', headers, body: JSON.stringify({ universeId: bare.body.data.id, hexKeys: ['Demo/0102'], recordIds: [] }),
+            });
+            assert.equal(ownMissing.status, 400);
+            assert.equal(ownMissing.body.error.message, 'A hex is not in this universe.');
+            const ownPublished = await jsonFetch(`${base}/api/packages/${refused.body.data.id}/versions`, {
+                method: 'POST', headers, body: JSON.stringify({ universeId: bare.body.data.id, hexKeys: ['Demo/0101'], recordIds: [] }),
+            });
+            assert.equal(ownPublished.status, 202, JSON.stringify(ownPublished.body));
+            const ownSettled = await untilSettled(base, refused.body.data.id, 1, owner);
+            assert.equal(ownSettled.body.data.state, 'done', JSON.stringify(ownSettled.body));
+            const ownManifest = JSON.parse(r2Get(persistTo, `packages/${refused.body.data.id}/1/manifest.json`));
+            assert.equal(ownManifest.truthVersion, null);
+            assert.equal(ownManifest.hexes['Demo/0101'].baseHash, null);
 
             const foreignOrigin = await jsonFetch(`${base}/api/packages`, {
                 method: 'POST',
@@ -414,6 +441,77 @@ VALUES ('${version}', '1.1.0', 'M1105', 'TravellerMagnus', '${SETTINGS}', '[]', 
             const noVersion = await jsonFetch(`${base}/api/packages/${packageId}/versions/9`, { headers: { cookie: owner } });
             assert.equal(noVersion.status, 404);
             assert.equal(noVersion.body.error.message, 'No such version.');
+
+            // Answer 2: the catalogue and the page are public once a version is done.
+            const outPage = await jsonFetch(`${base}/api/packages/${packageId}`);
+            assert.equal(outPage.status, 200, JSON.stringify(outPage.body));
+            assert.equal(outPage.body.data.installs, 0);
+            assert.equal(outPage.body.data.hidden, false);
+            assert.equal(typeof outPage.body.data.updatedAt, 'string');
+            assert.ok(outPage.body.data.versions.every((row) => row.state === 'done'));
+            const otherPage = await jsonFetch(`${base}/api/packages/${packageId}`, { headers: { cookie: other } });
+            assert.equal(otherPage.status, 200);
+            const unpublished = await jsonFetch(`${base}/api/packages/${capId}`);
+            assert.equal(unpublished.status, 404);
+            const catalogue = await jsonFetch(`${base}/api/packages?sort=title`);
+            assert.equal(catalogue.status, 200, JSON.stringify(catalogue.body));
+            const titles = catalogue.body.data.items.map((item) => item.title);
+            assert.ok(titles.includes('Regina belt'));
+            assert.equal(titles.includes('Capped'), false);
+            assert.deepEqual([...titles].sort(), titles);
+            const searched = await jsonFetch(`${base}/api/packages?q=REGINA`);
+            assert.deepEqual(searched.body.data.items.map((item) => item.id), [packageId]);
+            const byTag = await jsonFetch(`${base}/api/packages?tag=belt`);
+            assert.deepEqual(byTag.body.data.items.map((item) => item.id), [packageId]);
+            const byKind = await jsonFetch(`${base}/api/packages?kind=notes`);
+            assert.deepEqual(byKind.body.data.items, []);
+            const badSort = await jsonFetch(`${base}/api/packages?sort=random`);
+            assert.equal(badSort.status, 400);
+            assert.equal(badSort.body.error.message, 'Invalid request.');
+            const firstCard = await jsonFetch(`${base}/api/packages?sort=installs&limit=1`);
+            assert.equal(typeof firstCard.body.data.nextCursor, 'string');
+            const wrongCursor = await jsonFetch(`${base}/api/packages?sort=title&cursor=${encodeURIComponent(firstCard.body.data.nextCursor)}`);
+            assert.equal(wrongCursor.status, 400);
+            const mine = await jsonFetch(`${base}/api/packages?mine=1`, { headers: { cookie: owner } });
+            assert.ok(mine.body.data.items.some((item) => item.id === capId));
+
+            // Report and takedown.
+            const reportPath = `${base}/api/packages/${packageId}/report`;
+            const selfReport = await jsonFetch(reportPath, { method: 'POST', headers, body: JSON.stringify({ reason: 'Mine.' }) });
+            assert.equal(selfReport.status, 400);
+            assert.equal(selfReport.body.error.message, 'You cannot report your own package.');
+            const otherHeaders = { 'content-type': 'application/json', cookie: other };
+            const emptyReport = await jsonFetch(reportPath, { method: 'POST', headers: otherHeaders, body: JSON.stringify({ reason: ' ' }) });
+            assert.equal(emptyReport.status, 400);
+            assert.equal(emptyReport.body.error.message, 'Invalid request.');
+            const reported = await jsonFetch(reportPath, { method: 'POST', headers: otherHeaders, body: JSON.stringify({ reason: 'Spam.' }) });
+            assert.equal(reported.status, 201, JSON.stringify(reported.body));
+            const reportedAgain = await jsonFetch(reportPath, { method: 'POST', headers: otherHeaders, body: JSON.stringify({ reason: 'Spam.' }) });
+            assert.equal(reportedAgain.status, 200);
+            const takedownPath = `${base}/api/admin/packages/${packageId}/takedown`;
+            const notAdmin = await jsonFetch(takedownPath, { method: 'POST', headers: otherHeaders, body: JSON.stringify({ reason: 'Spam.' }) });
+            assert.equal(notAdmin.status, 403);
+            assert.equal(notAdmin.body.error.message, 'Role required.');
+            sqlFile(persistTo, `UPDATE user SET role = 'admin' WHERE id = 'mku${stamp}';`);
+            const noTarget = await jsonFetch(`${base}/api/admin/packages/pk_missing/takedown`, { method: 'POST', headers: otherHeaders, body: JSON.stringify({ reason: 'Spam.' }) });
+            assert.equal(noTarget.status, 404);
+            assert.equal(noTarget.body.error.message, 'No such package.');
+            const takenDown = await jsonFetch(takedownPath, { method: 'POST', headers: otherHeaders, body: JSON.stringify({ reason: 'Spam.' }) });
+            assert.equal(takenDown.status, 200, JSON.stringify(takenDown.body));
+            const gone = await jsonFetch(`${base}/api/packages/${packageId}`);
+            assert.equal(gone.status, 404);
+            const goneList = await jsonFetch(`${base}/api/packages?sort=updated`);
+            assert.equal(goneList.body.data.items.some((item) => item.id === packageId), false);
+            const authorView = await jsonFetch(`${base}/api/packages/${packageId}`, { headers: { cookie: owner } });
+            assert.equal(authorView.status, 200);
+            assert.equal(authorView.body.data.hidden, true);
+            const goneReport = await jsonFetch(reportPath, { method: 'POST', headers: otherHeaders, body: JSON.stringify({ reason: 'Spam.' }) });
+            assert.equal(goneReport.status, 404);
+            const restored = await jsonFetch(`${base}/api/admin/packages/${packageId}/restore`, { method: 'POST', headers: otherHeaders, body: '{}' });
+            assert.equal(restored.status, 200, JSON.stringify(restored.body));
+            const back = await jsonFetch(`${base}/api/packages/${packageId}`);
+            assert.equal(back.status, 200);
+            assert.equal(r2Get(persistTo, `packages/${packageId}/1/manifest.json`), manifestText);
         } finally {
             if (child) stopDev(child.pid);
             rmSync(persistTo, { recursive: true, force: true });

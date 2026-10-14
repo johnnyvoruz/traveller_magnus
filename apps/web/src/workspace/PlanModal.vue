@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * The deck plan at the window's size (follow-up 1): the one modal pattern (the lightbox's),
+ * The deck plan at the window's size (follow-up 1): the one modal frame (`.ui-modal`, design/base.css),
  * with the viewer inside it unchanged (pan, zoom, Fit, the credit), Esc to leave, focus back
  * where it was. The viewer is Agent C's deckplan/DeckPlanView.vue, wrapped, not edited.
  */
@@ -39,13 +39,13 @@ onBeforeUnmount(() => {
 <template>
   <!-- On the body: the panel's transform would otherwise make it the containing block of this fixed box. -->
   <Teleport to="body">
-  <div class="lightbox plan-modal" role="dialog" aria-modal="true" :aria-label="'Deck plan of ' + name" @keydown="onKey">
-    <div class="lightbox-scrim" @click="emit('close')"></div>
-    <div class="lightbox-card plan-modal-card">
-      <div class="lightbox-bar">
-        <span class="lightbox-count">{{ plan.name }}</span>
-        <span class="lightbox-meta">{{ name }} · drag to pan, wheel to zoom, F to fit</span>
-        <button ref="closeBtn" type="button" class="ui-btn is-icon lightbox-close" aria-label="Close" title="Close (Esc)" @click="emit('close')">
+  <div class="ui-modal plan-modal" role="dialog" aria-modal="true" :aria-label="'Deck plan of ' + name" @keydown="onKey">
+    <div class="ui-modal-scrim" @click="emit('close')"></div>
+    <div class="ui-modal-card plan-modal-card">
+      <div class="ui-modal-bar">
+        <span class="ui-modal-title">{{ plan.name }}</span>
+        <span class="ui-modal-meta">{{ name }} · drag to pan, wheel to zoom, F to fit</span>
+        <button ref="closeBtn" type="button" class="ui-btn is-icon" aria-label="Close" title="Close (Esc)" @click="emit('close')">
           <Icon name="xmark" :size="14" />
         </button>
       </div>
@@ -58,11 +58,11 @@ onBeforeUnmount(() => {
 </template>
 
 <style>
-.plan-modal {
+.ui-modal.plan-modal {
   padding: 16px;
 }
 
-.plan-modal-card {
+.ui-modal-card.plan-modal-card {
   width: 100%;
   height: 100%;
 }

@@ -1,9 +1,14 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import Icon from '../design/Icon.vue';
 import type { PanelSpan } from './panel_state.ts';
+import { backTo, canPaneBack, sheetFull, toggleSheet } from './pane_back.ts';
 
 const element = ref<HTMLElement | null>(null);
+const phone = ref(false);
+const router = useRouter();
+let stopMedia: (() => void) | null = null;
 
 defineProps<{
     open: boolean;
@@ -21,18 +26,83 @@ defineEmits<{
 }>();
 
 defineExpose({ element });
+
+function readPhone(): void {
+    const view = document.defaultView;
+    phone.value = view ? view.matchMedia('(max-width: 599px)').matches : false;
+}
+
+onMounted(() => {
+    readPhone();
+    const view = document.defaultView;
+    if (!view) return;
+    const media = view.matchMedia('(max-width: 599px)');
+    const onChange = (): void => { phone.value = media.matches; };
+    media.addEventListener('change', onChange);
+    stopMedia = () => media.removeEventListener('change', onChange);
+});
+
+onBeforeUnmount(() => {
+    if (stopMedia) stopMedia();
+});
+
+function onBack(): void {
+    const target = backTo();
+    if (!target) return;
+    void router.push({ path: target.path, query: target.query });
+}
+
+let grabY = 0;
+let grabMoved = false;
+
+function onGrabDown(event: PointerEvent): void {
+    grabY = event.clientY;
+    grabMoved = false;
+    const el = event.currentTarget;
+    if (el instanceof HTMLElement) el.setPointerCapture(event.pointerId);
+}
+
+function onGrabMove(event: PointerEvent): void {
+    if (Math.abs(event.clientY - grabY) > 8) grabMoved = true;
+}
+
+function onGrabUp(): void {
+    if (grabMoved) toggleSheet();
+}
+
+function onGrabClick(): void {
+    if (grabMoved) {
+        grabMoved = false;
+        return;
+    }
+    toggleSheet();
+}
 </script>
 
 <template>
   <section
     ref="element"
     class="panel"
-    :class="{ 'is-open': open }"
     :data-span="span"
+    :data-sheet="phone ? (sheetFull ? 'full' : 'half') : 'side'"
+    :class="{ 'is-open': open, 'is-sheet-full': sheetFull }"
     :aria-hidden="open ? 'false' : 'true'"
     :inert="open ? undefined : true"
   >
     <div class="panel-card">
+      <button
+        type="button"
+        class="panel-grab"
+        aria-label="Resize sheet"
+        title="Resize sheet"
+        :aria-pressed="sheetFull ? 'true' : 'false'"
+        @pointerdown="onGrabDown"
+        @pointermove="onGrabMove"
+        @pointerup="onGrabUp"
+        @click="onGrabClick"
+      >
+        <span class="panel-grab-bar"></span>
+      </button>
       <header class="panel-head">
         <div class="panel-titles">
           <p v-if="$slots.eyebrow" class="panel-eyebrow">
@@ -54,6 +124,9 @@ defineExpose({ element });
             <button type="button" title="Full page" :aria-pressed="span === 'full'" @click="$emit('span', 'full')">Full</button>
           </div>
         </div>
+        <button v-if="canPaneBack" type="button" class="panel-back" aria-label="Back" title="Back" @click="onBack">
+          <Icon name="chevron-left" :size="18" />
+        </button>
         <button type="button" class="panel-close" aria-label="Close panel" title="Close" @click="$emit('close')">
           <Icon name="xmark" :size="18" />
         </button>
@@ -205,7 +278,8 @@ defineExpose({ element });
   padding-left: 12px;
 }
 
-.panel-close {
+.panel-close,
+.panel-back {
   position: absolute;
   top: 50%;
   right: 10px;
@@ -224,13 +298,34 @@ defineExpose({ element });
   transition: background var(--t-fast) var(--ease-out), color var(--t-fast) var(--ease-out);
 }
 
-.panel-close:hover {
+.panel-back {
+  right: 44px;
+}
+
+.panel-head:has(.panel-back) {
+  padding-right: 84px;
+}
+
+.panel-close:hover,
+.panel-back:hover {
   background: var(--wash-faint);
   color: var(--signal);
 }
 
-.panel-close:active {
+.panel-close:active,
+.panel-back:active {
   transform: translateY(-50%) scale(0.9);
+}
+
+.panel-grab {
+  display: none;
+}
+
+.panel-grab-bar {
+  width: 36px;
+  height: 4px;
+  border-radius: var(--r-pill);
+  background: var(--line-1);
 }
 
 /* Controls for what the panel shows; stays put while the body scrolls (legacy .atlas-body-bar). */
@@ -256,9 +351,74 @@ defineExpose({ element });
   scrollbar-gutter: auto;
 }
 
+/* Below 600 px the pane is a bottom sheet. Above that, the side pane is unchanged. */
+@media (max-width: 599px) {
+  .panel {
+    top: auto;
+    left: 0;
+    right: 0;
+    height: 50%;
+    padding: 0;
+    transform: translateY(100%);
+  }
+
+  .panel.is-open {
+    transform: translateY(0);
+  }
+
+  .panel.is-open.is-sheet-full {
+    top: 0;
+    height: auto;
+  }
+
+  .panel.is-open .panel-card,
+  .panel.is-open[data-span] .panel-card {
+    width: 100%;
+    height: 100%;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+
+  .panel.is-open.is-sheet-full .panel-card {
+    border-radius: 0;
+  }
+
+  .panel-spans {
+    display: none;
+  }
+
+  .panel.is-open .panel-grab {
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    width: 100%;
+    height: 22px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--signal-dim);
+    cursor: grab;
+  }
+
+  .panel-grab:active {
+    cursor: grabbing;
+  }
+
+  /* The date sits under the search, still above the sheet. Wider windows keep it hidden. */
+  .app .stardate {
+    display: inline-flex;
+    z-index: 6;
+    top: calc(var(--chrome-top) + var(--chrome-height) + 8px);
+    left: auto;
+    right: var(--chrome-inset);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .panel,
-  .panel-close {
+  .panel-close,
+  .panel-back {
     transition: none;
   }
 }

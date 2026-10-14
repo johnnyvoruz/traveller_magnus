@@ -1,11 +1,12 @@
-# Orchestrator state — 2026-10-13 21:50 (written for the next orchestrator session)
+# Orchestrator state — 2026-10-14 11:30 (written for the next orchestrator session)
 
-Overwritten every turn. History: `handoff.md` (last section 264; read by offset, it is large).
+Overwritten every turn. History: `handoff.md` (last section 269; read by offset, it is large).
 `orchestrator_start_here.md` is the 2026-10-07 page and is stale. This file and
 `board.md` are the state.
 
 ## Where the roadmap is
-Live and deployed: **1.1.11 (`ef92359`)**, HEAD and origin. **On disk, unpushed, gates
+Live and deployed: **1.1.12 (`8b111fc`), engine 1.2.0**, HEAD and origin. Truth v10 live
+(released 2026-10-14). **On disk, unpushed, gates
 green at 20:45:** public games (server, feed), the first-visit fixes, the dossier codes,
 and **engine 1.2.0** (Lane Z's water and ice patch, applied by Z at 20:11 before C's
 review came back). **This leg:** 1.1.12 with all of it once Z's fix is in; then Johnny
@@ -15,18 +16,16 @@ rebuilds, uploads and releases truth v10.
 All free. F is retired: never assign or propose.
 
 ## Next turn
-1. **Check the push:** `git log -1` and `git log -1 origin/campaign` show the 1.1.12
-   commit; `git status` shows only the ten parked files (`admin.ts` partly) and
-   `findings/`-free leftovers; the GitHub run green (`gh run list -R
-   johnnyvoruz/traveller_magnus`); after `npm run deploy:ci`, `/api/health` reports engine
-   1.2.0 and the live index chunk contains "Show my party on other maps".
-2. Then Johnny's v10 (delete `truth-local/v10`, build, dry run, upload, release). Watch
-   for: the uploader's `.env` keys, the 38-hour single-file path if the bulk path fails.
-3. Queue: D's "top down" note; the board's Queue list.
+1. **Check push 1.1.13:** commit on origin, GitHub run green, `/api/health` version 1.1.13
+   in the index chunk, `d1_migrations` has 0015, `GET /api/packages?sort=updated` answers
+   200 signed out.
+2. Johnny's answers: D's picker fade; Z's three (package id on records, snapshot restore,
+   takedown keeps a private manifest copy). Then Z phase 3 go (placement).
+3. Unconfirmed still: who applied 0013 and 0014.
 
 ## Versions
-Each push list bumps `APP_VERSION` in `apps/web/src/version.ts` (now 1.1.12 on disk; next
-1.1.13) and the commit message starts with it. Engine version is 1.2.0 on disk, 1.1.0
+Each push list bumps `APP_VERSION` in `apps/web/src/version.ts` (now 1.1.13 on disk; next
+1.1.14) and the commit message starts with it. Engine version is 1.2.0 on disk, 1.1.0
 live.
 
 ## Traps

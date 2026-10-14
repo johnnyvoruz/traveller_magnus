@@ -40,9 +40,20 @@ if (!existsSync(wranglerBin)) {
             const freshNames = names(fresh);
             assert.ok(freshNames.includes('packages'), freshNames.join(','));
             assert.ok(freshNames.includes('package_versions'));
-            for (const banned of ['package_installs', 'proposals', 'reports']) {
+            for (const banned of ['proposals', 'reports']) {
                 assert.equal(freshNames.includes(banned), false, banned);
             }
+            // 0015: installs and reports exist; packages.truth_version keeps NOT NULL (own maps store '').
+            assert.ok(freshNames.includes('package_installs'));
+            assert.ok(freshNames.includes('package_reports'));
+            const installColumns = rows(fresh, `PRAGMA table_info(package_installs)`).map((row) => row.name);
+            for (const column of ['id', 'universe_id', 'package_id', 'version', 'placement', 'hex_count', 'record_count', 'created_at', 'updated_at']) {
+                assert.ok(installColumns.includes(column), column);
+            }
+            // Re-running 0015 on a database that has it changes nothing (IF NOT EXISTS throughout).
+            const again = path.join(fresh, 'again.sql');
+            writeFileSync(again, readFileSync(path.join(migrations, '0015_marketplace.sql'), 'utf8').split('--> statement-breakpoint').join('\n'));
+            runWrangler(['d1', 'execute', 'voyage', '--local', '--persist-to', fresh, '--file', again]);
             const freshColumns = rows(fresh, `PRAGMA table_info(package_versions)`).map((row) => row.name);
             assert.ok(freshColumns.includes('hex_keys'), freshColumns.join(','));
             assert.ok(freshColumns.includes('record_ids'));
@@ -70,7 +81,7 @@ if (!existsSync(wranglerBin)) {
             const upgraded = rows(upgrade, `PRAGMA table_info(package_versions)`).map((row) => row.name);
             assert.ok(upgraded.includes('hex_keys'), upgraded.join(','));
             assert.ok(upgraded.includes('record_ids'));
-            assert.equal(names(upgrade).includes('package_installs'), false);
+            assert.equal(names(upgrade).includes('package_installs'), true);
         } finally {
             rmSync(fresh, { recursive: true, force: true });
             rmSync(upgrade, { recursive: true, force: true });

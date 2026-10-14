@@ -22,7 +22,8 @@ export const PackageManifest = z.object({
     author: z.object({ id: z.string(), handle: z.string() }),
     edition: z.string(),
     engineVersion: z.string(),
-    truthVersion: z.string(),
+    /** Null when the package was published from an own map (contracts/b_marketplace.md F1). */
+    truthVersion: z.string().nullable(),
     hexes: z.record(z.string(), PackageHex),
     lists: z.object({
         routes: z.string(),
@@ -100,3 +101,119 @@ export const PackageListPage = z.object({
     nextCursor: z.string().nullable(),
 }).strict();
 export type PackageListPage = z.infer<typeof PackageListPage>;
+
+/** Full marketplace, contracts/b_marketplace.md F2. The catalogue card. */
+export const PackageCard = PackageListing.extend({
+    installs: z.number().int().nonnegative(),
+    updatedAt: z.string(),
+    hidden: z.boolean(),
+}).strict();
+export type PackageCard = z.infer<typeof PackageCard>;
+
+export const PackageCardPage = z.object({
+    items: z.array(PackageCard),
+    nextCursor: z.string().nullable(),
+}).strict();
+export type PackageCardPage = z.infer<typeof PackageCardPage>;
+
+export const PackageSort = z.enum(['updated', 'installs', 'title']);
+export type PackageSort = z.infer<typeof PackageSort>;
+
+/** Catalogue query. Every field optional; `mine` is the literal "1". */
+export const PackageCatalogueQuery = z.object({
+    q: z.string().trim().min(1).max(100).optional(),
+    kind: z.string().trim().min(1).max(40).optional(),
+    tag: z.string().trim().min(1).max(40).optional(),
+    sort: PackageSort.optional(),
+    mine: z.literal('1').optional(),
+}).strict();
+export type PackageCatalogueQuery = z.infer<typeof PackageCatalogueQuery>;
+
+/** The package page for a reader. The author's view of their own package uses the same shape. */
+export const PackagePublicPage = PackagePage.extend({
+    installs: z.number().int().nonnegative(),
+    updatedAt: z.string(),
+    hidden: z.boolean(),
+}).strict();
+export type PackagePublicPage = z.infer<typeof PackagePublicPage>;
+
+export const PackageReport = z.object({
+    reason: z.string().trim().min(1).max(500),
+}).strict();
+export type PackageReport = z.infer<typeof PackageReport>;
+
+export const PackageTakedown = z.object({
+    reason: z.string().trim().min(1).max(500),
+}).strict();
+export type PackageTakedown = z.infer<typeof PackageTakedown>;
+
+/** F4. What an install would do to one hex. */
+export const InstallOutcome = z.enum(['new', 'replaces chart', 'replaces own', 'conflict', 'already installed']);
+export type InstallOutcome = z.infer<typeof InstallOutcome>;
+
+export const InstallPreviewHex = z.object({
+    from: HexKey,
+    to: HexKey,
+    outcome: InstallOutcome,
+    /** The manifest marks this hex removed. */
+    removes: z.boolean(),
+    current: z.object({
+        name: z.string(),
+        uwp: z.string(),
+        treeHash: z.string().nullable(),
+    }).strict().nullable(),
+}).strict();
+export type InstallPreviewHex = z.infer<typeof InstallPreviewHex>;
+
+export const InstallPreview = z.object({
+    packageId: z.string(),
+    version: z.number().int().positive(),
+    /** Phase 2 installs in place only, so this is always null. */
+    placement: z.null(),
+    hexes: z.array(InstallPreviewHex),
+    records: z.object({
+        add: z.number().int().nonnegative(),
+        replace: z.number().int().nonnegative(),
+        conflicts: z.array(z.string()),
+    }).strict(),
+    bytes: z.number().int().nonnegative(),
+    conflicts: z.number().int().nonnegative(),
+}).strict();
+export type InstallPreview = z.infer<typeof InstallPreview>;
+
+const Choice = z.enum(['theirs', 'mine']);
+
+export const InstallRequest = z.object({
+    packageId: z.string().min(1),
+    version: z.number().int().positive(),
+    resolutions: z.record(z.string(), Choice),
+    recordResolutions: z.record(z.string(), Choice),
+    expect: z.object({ conflicts: z.number().int().nonnegative() }).strict(),
+}).strict();
+export type InstallRequest = z.infer<typeof InstallRequest>;
+
+export const InstallResult = z.object({
+    installId: z.string(),
+    written: z.number().int().nonnegative(),
+    skipped: z.number().int().nonnegative(),
+    records: z.number().int().nonnegative(),
+    snapshotId: z.string(),
+}).strict();
+export type InstallResult = z.infer<typeof InstallResult>;
+
+export const InstallRow = z.object({
+    installId: z.string(),
+    packageId: z.string(),
+    title: z.string(),
+    version: z.number().int().positive(),
+    latestVersion: z.number().int().nonnegative(),
+    updateAvailable: z.boolean(),
+    placement: z.null(),
+    hexCount: z.number().int().nonnegative(),
+    installedAt: z.string(),
+    updatedAt: z.string(),
+}).strict();
+export type InstallRow = z.infer<typeof InstallRow>;
+
+export const InstallList = z.object({ items: z.array(InstallRow) }).strict();
+export type InstallList = z.infer<typeof InstallList>;

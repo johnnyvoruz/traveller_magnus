@@ -3,7 +3,7 @@ import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, r
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter, type RouteLocationNormalized } from 'vue-router';
 import type { SectorHex, SectorIndex, TreeEnvelope, TruthManifest, TruthOverview } from '@voyage/shared';
 import { campaign } from '../campaign/store.ts';
-import { fit, flight, SHORT_HOP, toWorld, zoomAt, type Camera, type Viewport } from '../map/camera.ts';
+import { centreAbove, fit, flight, SHORT_HOP, toWorld, zoomAt, type Camera, type Viewport } from '../map/camera.ts';
 import { standInSnapshot, type CampaignSnapshot } from '../map/campaign_layer.ts';
 import { vesselsOnMap } from '../map/vessel_marks.ts';
 import { campaignDays, partyMarker } from '../workspace/party_where.ts';
@@ -144,6 +144,8 @@ let lastPlace = '';
 const pendingIndexes = new Set<string>();
 /** The open panel's measured width, gutters included: the chart is clear to the right of it. */
 let panelPx = 0;
+/** The bottom sheet, in canvas pixels. Zero when the pane is a side column or full height. */
+let sheetPx = 0;
 /** When the camera reached the hex being located; null while it is on the way. */
 let locateArrived: number | null = null;
 /** The line of help for a first visit is over: dismissed, or a hex has been opened (workspace/first_visit.ts). */
@@ -702,7 +704,17 @@ const CLEAR_MARGIN = 28;
 
 /** The chart that nothing covers: right of the pane. The chrome row counts only when the map is moved to clear something. */
 function area(withChrome = false): Area {
-    return visibleArea(viewport(), { left: panelPx, top: withChrome ? chromeRow() : 0 });
+    const base = visibleArea(viewport(), { left: panelPx, top: withChrome ? chromeRow() : 0 });
+    if (sheetPx <= 0) return base;
+    return { ...base, bottom: Math.max(base.top, base.bottom - sheetPx) };
+}
+
+function readSheet(): number {
+    const map = mapEl.value;
+    if (!map) return 0;
+    const raw = getComputedStyle(map).getPropertyValue('--sheet-cover');
+    const n = Number.parseFloat(raw);
+    return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
 /** How far down the search row reaches: the chrome stands over the chart's top edge. Measured, not assumed. */
@@ -734,6 +746,19 @@ function subjectBox(at: Camera): Area | null {
 function clearPane(): void {
     if (!placed) return;
     const base = fly ? fly.to : cam;
+    if (sheetPx > 0) {
+        if (routeAim) {
+            flyTo(aim(routeAim));
+            return;
+        }
+        const box = subjectBox(base);
+        if (!box) return;
+        const floor = viewport().height - sheetPx;
+        if (box.bottom <= floor && box.top >= 0) return;
+        const mid = toWorld(base, viewport(), (box.left + box.right) / 2, (box.top + box.bottom) / 2);
+        flyTo(centreAbove(base, viewport(), mid.x, mid.y, sheetPx));
+        return;
+    }
     if (routeAim) {
         flyTo(aim(routeAim));
         return;
@@ -755,8 +780,10 @@ function setWidth(px: number): void {
         const chart = el ? el.clientWidth - px : 0;
         map.dataset.toasts = px > 0 && chart < TOAST_ROOM ? 'top' : 'side';
     }
-    const grew = px > panelPx;
+    const nextSheet = readSheet();
+    const grew = px > panelPx || (sheetPx === 0 && nextSheet > 0);
     panelPx = px;
+    sheetPx = nextSheet;
     if (locating.recordId) applyCampaign();
     if (renderer) renderer.setWorkspaceLeft(px);
     if (grew) clearPane();
@@ -2284,7 +2311,10 @@ onBeforeUnmount(() => {
     <BuildMenu v-if="menuRef && buildMenu" :title="buildMenu.title" :items="buildMenu.items" :anchor="menuRef.anchor" @pick="pickBuildMenu" @close="closeBuildMenu" />
     <OmniBox :version="versionRef" :manifest="manifestRef" @open="omniOpen = $event" />
     <FirstHint v-if="hintOn" @dismiss="dismissHint" />
-    <StardateChip @open="openDateEditor" />
+    <!-- The pane paints above this view. The date has to leave it, or a full sheet covers the chip. -->
+    <Teleport to=".app">
+      <StardateChip @open="openDateEditor" />
+    </Teleport>
     <AccountMenu :open="accountOpen" @close="closeAccount" @campaign="openCampaignFromMenu" />
     <p class="status ui-status" aria-live="polite">{{ status }}</p>
   </div>

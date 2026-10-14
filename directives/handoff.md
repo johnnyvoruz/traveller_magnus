@@ -7078,3 +7078,43 @@ that failed at the close no longer does. Ready note `findings/builder_form_ready
 - **CI trap caught in the clean copy:** `liquid_temperature_census.test.js` reads `universe/raw/Core.tsv`, `Reft.tsv`, `Trojan_Reach.tsv`, which are git-ignored (only `Spinward_Marches.tsv` is tracked). The orchestrator added a skip when they are absent. The Regina and late-die tests read only the tracked file.
 - `APP_VERSION` 1.1.12. Clean copy `outer16` (HEAD + list + the cap patch, own `@voyage` links): only the known zod failure; checker clean; typecheck there shows the same zod artefact in untouched files. Junctions now made with PowerShell `New-Item -ItemType Junction` (`cmd //c mklink` fails from Git Bash).
 - Push note `findings/push/release_2026-10-13.md`; commands given. After the deploy: Johnny's v10 rebuild, upload and release.
+
+## 265. 1.1.12 pushed and deployed (2026-10-13 21:55)
+
+- Johnny ran the commands: commit `8b111fc` (194 files), pushed. His `npm run deploy:ci` failed at once with Cloudflare 7403 ("The given account is not valid or is not authorized to access this service") on the D1 query; wrangler had refreshed its OAuth token in the same second and has `d1 (write)`.
+- **Production was deployed anyway:** `d1_migrations` shows 0013 and 0014 applied at 2026-10-14 02:44:08 UTC, 40 s after his attempt; `/api/health` reports version and engine 1.2.0. Who applied them (the Workers Build on push, or a retry of his) is not confirmed: ask before relying on either next time.
+- GitHub run 38502522120 green (1 m 28 s). Live index `index-D7GMJuX1.js`, the name the tree builds; it carries `--chart-public`. `/sheets/` and the listed sheet answer 200; `/api/public-games` signed out answers 401.
+- Next: Johnny's v10 (delete `truth-local/v10`, build, dry run, upload, release).
+
+## 266. v10 released; polish to D and E; the marketplace goal (2026-10-14 09:45)
+
+- **v10:** rebuilt 21:52 on engine 1.2.0 (after the push), upload finished 22:11 (156,222 objects, 512 sector files, 38 D1 parts; `truth_versions` v10 `building`, 512 / 512, 180,312 systems). Johnny released it 2026-10-14 morning. Live: `/api/health` truthVersion v10; Regina's tree (`b6272eab…`) A788899-C, atm 8, hydro 8, Ice, `Ht Ri Sa`.
+- **7403 is intermittent:** the orchestrator's first remote D1 read this morning failed with it and the next went through on the same OAuth login (`d1 (write)`). Johnny's `deploy:ci` failure fits. Retry once before suspecting the login.
+- Johnny, yes to both: polish next (prompts `d_polish_note_and_frame.md`, `e_phone_sheet.md`); older-engine universes generate new systems on the current engine.
+- **Marketplace, where it is:** the size-b stub (1.1.2, `routes/packages.ts`, `marketplace/`): publish a part of a universe you own and list your own packages. Not built: browsing others', the public package page, install (`api.md` slice 4, `data_model.md` §7 three-way merge), placing elsewhere (`data_model.md` §5: "moving a sector is the deferred relocation feature"). The stub refuses a universe with no chart version ("This universe is not on a published chart."), so an own map cannot be published today.
+- **Found for relocation:** a stored tree carries its own location (`hexKey`, `body.hexId`, `parentId` such as `Spinward_Marches/1910-GG-pre`). Placing a system at another hex means rewriting those fields, so the placed copy is a new object with a new hash; campaign records anchored to hexes and the route and border lists need the same rewrite.
+
+## 267. Marketplace answers; B on the contract; A on the character sheet (2026-10-14 10:10)
+
+- Johnny: yes to all five marketplace answers (board, Decisions). **B, `b_marketplace_install`:** part 1 only, the contract plus a test that lists every location field in a stored tree. Points B must settle: rigid shifts on the offset grid (odd column shifts), pieces crossing a sector edge, landing in empty space versus §5's band rules.
+- Johnny on the sheet (two shots, the Column pane): the six profile hexes wrap (Social alone on row two); the skill list shows every PDF line (Animals 1 to 3…). **A, `a_sheet_row_and_skills`**, lent D's `CharacterSheet.vue` and `character_sheet.ts`. Storage stays the PDF's fields, so a skill has at most the PDF's three specialism lines.
+
+- 10:25, Johnny: no cap on specialism lines (A's prompt amended: lines 4 and on stored as `Extra/<skill>/<n>/Specialism|Modifier`, accepted by `widgetKind` through a shared parser, n to 99 as a junk guard); a Back "<" left of the pane's X (added to E's prompt as step 5). No lane had started.
+- 10:40, Johnny: Z takes the marketplace. `prompts/z_marketplace.md`: four phases (1 audit, contract and a location census test; 2 server for own-map publish, public catalogue, report and takedown, import in place, updates; 3 the placement rewrite; 4 browser, with a lend of D's map files then), a stop and report after each. `b_marketplace_install.md` withdrawn. D had started its polish.
+
+## 268. Z phase 1 accepted (2026-10-14)
+
+- `z_marketplace_1`: contract sections F0-F11 in `contracts/b_marketplace.md`, `tests/generation/package_location_fields.test.js` (17 paths, 11 fixtures). npm test 1624 pass, 0 fail; check clean.
+- Z's two corrections hold: own sector ids are `~` + 26 Crockford; the quota is in `generate_queue.ts`, the daily cap per user in `auth/allowance.ts`. Orchestrator fixed `data_model.md` §5 (also: the band is not enforced; any free non-chart slot in −1000..1000).
+- Orchestrator corrections for phase 2/3, written into the prompt: no band rule in code (Z's question 1 moot); "does not fit" uses `SectorSlot` bounds; the census must also pin the stored envelope (`$.hexKey`, `$.body.*`); check that a snapshot restore exists before relying on it for undo.
+- Asked Johnny Z's questions 2-6 (lists leaving the piece, edition mismatch, per-hex merge, takedown keeps objects, quota yes / cap no).
+- Johnny: yes to all five (Z questions 2-6, as suggested). **Z phase 2 go** (server), written into the prompt; takedown in a new `routes/admin_packages.ts` so the parked `admin.ts` stays untouched; migration `0015_marketplace.sql`.
+
+## 269. A, D, E and Z phase 2 accepted; push 1.1.13 called for (2026-10-14 11:30)
+
+- **A `a_sheet_row_and_skills`:** six hexes on one row (cap 78 px, 12.4 px values at a 272 px pane); one line per skill, a gutter, "+" with no cap; lines 4 on as `Extra/<label>/<n>/…` (`packages/shared/src/character_extra.ts`; `widgetKind` accepts them; a test locks the web and server label sets).
+- **D `d_polish_note_and_frame`:** `.ui-modal`, `-scrim`, `-card` plus `-bar`, `-title`, `-meta` in `base.css`; four dialogs on it; no `lightbox-*` class borrowed anywhere; pixels identical at 1600 px. The orbit picker now fades in (question). Fixed on the way: the dev deck-plan page's `.pick` label.
+- **E `e_phone_sheet`:** bottom sheet below 600 px with a handle; `shell/pane_back.ts` session stack; `camera.centreAbove`; `MapView.vue` recentres and teleports the date chip (E touched D's `MapView.vue`: accepted, the call site had to be there).
+- **Z phase 2:** server for own-map publish (`truth_version` stored `''`, shown null; no table rebuild), the public catalogue and page, report, `routes/admin_packages.ts` takedown and restore, `universe/install.ts` preview and install, `routes/installs.ts` with the imports list; migration 0015 (`IF NOT EXISTS`, 503 before it). Not built: snapshot restore (none exists), lists on publish (the DO stores none), `manifestUrl`.
+- **Z reworded a comment in `packages.ts` ("reports" to "flags") to keep a stale guard green.** Wrong way round; the orchestrator rewrote the guard in `tests/api/packages_job.test.js` to check proposals only. Tell Z: never bend code to dodge a test; report the test.
+- Orchestrator gates on the combined tree: 1669 tests, 1641 pass, 0 fail; check; typecheck; build `index-CEIWbUQh.js`; worker suites 14 / 14. Clean copy `outer17`: the known zod failure only. `APP_VERSION` 1.1.13. Push note `findings/push/release_2026-10-14.md`.

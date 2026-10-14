@@ -140,6 +140,38 @@ test('the worker widget list is the 420 boxes', () => {
     assert.equal(WIDGET_COUNT, 420);
 });
 
+test('an extra specialism line is a text box: it is written and read back', () => {
+    const { sql } = sheetSql();
+    const sockets = [];
+    const room = new SheetRoom(sql, sockets);
+    const owner = fakeSocket({ userId: 'owner', name: 'Ada', role: 'owner', colour: 1, field: null });
+    const editor = fakeSocket({ userId: 'editor', name: 'Bea', role: 'editor', colour: 2, field: null });
+    sockets.push(owner, editor);
+    room.connect(owner);
+    room.connect(editor);
+    room.receive(owner, JSON.stringify({ t: 'set', id: 'extra-1', field: 'Extra/Athletics/4/Specialism', value: 'climbing' }), NOW);
+    assert.equal(readDoc(sql).fields['Extra/Athletics/4/Specialism'], 'climbing');
+    assert.equal(readDoc(sql).revs['Extra/Athletics/4/Specialism'], 1);
+    assert.equal(owner.messages.some((message) => message.t === 'ack' && message.id === 'extra-1' && message.rev === 1), true);
+    assert.equal(editor.messages.some((message) => message.t === 'set' && message.field === 'Extra/Athletics/4/Specialism' && message.value === 'climbing'), true);
+});
+
+test('a skill with no numbered lines, and a PDF line number, are refused', () => {
+    const { sql } = sheetSql();
+    const sockets = [];
+    const room = new SheetRoom(sql, sockets);
+    const owner = fakeSocket({ userId: 'owner', name: 'Ada', role: 'owner', colour: 1, field: null });
+    sockets.push(owner);
+    room.connect(owner);
+    const before = owner.messages.length;
+    room.receive(owner, JSON.stringify({ t: 'set', id: 'no-admin', field: 'Extra/Admin/4/Specialism', value: 'law' }), NOW);
+    room.receive(owner, JSON.stringify({ t: 'set', id: 'pdf-line', field: 'Extra/Athletics/3/Specialism', value: 'dex' }), NOW);
+    const refused = owner.messages.slice(before);
+    assert.deepEqual(refused.map((message) => message.why), ['unknown_field', 'unknown_field']);
+    assert.equal(readDoc(sql).fields['Extra/Admin/4/Specialism'], undefined);
+    assert.equal(readDoc(sql).fields['Extra/Athletics/3/Specialism'], undefined);
+});
+
 test('two editors, later set wins, bad name and type stay with the sender', () => {
     const { sql } = sheetSql();
     const sockets = [];

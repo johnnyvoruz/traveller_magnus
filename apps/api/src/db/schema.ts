@@ -189,6 +189,34 @@ export const packageVersions = sqliteTable('package_versions', {
     check('package_versions_state_check', sql`${t.state} in ('queued', 'running', 'done', 'failed')`),
 ]);
 
+/** 0015. One row per in-place install of a package into a universe; an update rewrites it. */
+export const packageInstalls = sqliteTable('package_installs', {
+    id: text('id').primaryKey(),
+    universeId: text('universe_id').notNull(),
+    packageId: text('package_id').notNull(),
+    version: integer('version').notNull(),
+    placement: text('placement'),
+    hexCount: integer('hex_count').notNull(),
+    recordCount: integer('record_count').notNull(),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+}, (t) => [
+    index('package_installs_universe').on(t.universeId),
+    index('package_installs_package').on(t.packageId),
+]);
+
+/** 0015. A reader's report of a package. One open report per reader per package. */
+export const packageReports = sqliteTable('package_reports', {
+    id: text('id').primaryKey(),
+    packageId: text('package_id').notNull(),
+    userId: text('user_id').notNull(),
+    reason: text('reason').notNull(),
+    state: text('state').notNull(),
+    createdAt: text('created_at').notNull(),
+}, (t) => [
+    check('package_reports_state_check', sql`${t.state} in ('open', 'closed')`),
+]);
+
 export const auditLog = sqliteTable('audit_log', {
     id: text('id').primaryKey(),
     at: text('at').notNull(),

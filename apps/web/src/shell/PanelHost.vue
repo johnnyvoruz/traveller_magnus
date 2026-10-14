@@ -6,6 +6,7 @@
 import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { addressPane, atPane, escapePane, focusTarget, hostsCampaign, type FocusTarget, type Pane } from './pane.ts';
+import { notePane, sheetFull } from './pane_back.ts';
 import { frame, onFrame, setPaneEscape, type ViewFrame } from './frame.ts';
 
 const route = useRoute();
@@ -41,14 +42,27 @@ const CharactersPanel = defineAsyncComponent(() => import('../characters/screens
 
 const active = computed(() => live.value !== null && live.value.kind !== 'none');
 
+let lastPx = 0;
+
+function phoneSheet(): boolean {
+    const view = document.defaultView;
+    return view ? view.matchMedia('(max-width: 599px)').matches : false;
+}
+
 function applyWidth(px: number): void {
+    lastPx = px;
     const root = document.querySelector('.app');
+    const phone = phoneSheet();
+    const open = px > 0;
     if (root instanceof HTMLElement) {
-        if (px > 0) root.style.setProperty('--panel-width', px + 'px');
+        if (!phone && open) root.style.setProperty('--panel-width', px + 'px');
         else root.style.removeProperty('--panel-width');
+        if (phone && open && !sheetFull.value) {
+            root.style.setProperty('--sheet-cover', Math.round(document.documentElement.clientHeight / 2) + 'px');
+        } else root.style.removeProperty('--sheet-cover');
     }
     const view = live.value;
-    if (view) view.setWidth(px);
+    if (view) view.setWidth(phone ? 0 : px);
 }
 
 function onDossierWidth(px: number): void {
@@ -147,10 +161,32 @@ function onPaneEscape(): boolean {
     return true;
 }
 
-onMounted(() => { setPaneEscape(onPaneEscape); });
+watch(() => [route.path, route.query] as const, () => {
+    notePane(route.path, route.query);
+}, { immediate: true });
+
+watch(sheetFull, () => applyWidth(lastPx));
+
+let stopResize: (() => void) | null = null;
+
+onMounted(() => {
+    setPaneEscape(onPaneEscape);
+    const view = document.defaultView;
+    const box = document.documentElement;
+    const observer = new ResizeObserver(() => applyWidth(lastPx));
+    observer.observe(box);
+    const media = view ? view.matchMedia('(max-width: 599px)') : null;
+    const onMedia = (): void => applyWidth(lastPx);
+    if (media) media.addEventListener('change', onMedia);
+    stopResize = () => {
+        observer.disconnect();
+        if (media) media.removeEventListener('change', onMedia);
+    };
+});
 onBeforeUnmount(() => {
     stopFrame();
     setPaneEscape(null);
+    if (stopResize) stopResize();
 });
 </script>
 

@@ -16,6 +16,20 @@ export {
     PackageVersion,
     PackagePublishAccepted,
     PackageListPage,
+    PackageCard,
+    PackageCardPage,
+    PackageSort,
+    PackageCatalogueQuery,
+    PackagePublicPage,
+    PackageReport,
+    PackageTakedown,
+    InstallOutcome,
+    InstallPreviewHex,
+    InstallPreview,
+    InstallRequest,
+    InstallResult,
+    InstallRow,
+    InstallList,
 } from './schemas/package.ts';
 export {
     CAMPAIGN_LIMITS,
@@ -182,3 +196,5 @@ export { parseT5Tab } from './parsers/t5tab.ts';
 export type { HexRow } from './parsers/t5tab.ts';
 export { parseXmlElements, parseMetadataXml } from './parsers/metadata_xml.ts';
 export type { XmlEl, MetadataXml } from './parsers/metadata_xml.ts';
+export { EXTRA_LINE_GUARD, EXTRA_LINE_MIN, extraFieldName, numberedSkillLabels, parseExtraName } from './character_extra.ts';
+export type { ExtraLineName, ExtraPart } from './character_extra.ts';

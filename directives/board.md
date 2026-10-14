@@ -1,18 +1,20 @@
 # Board
 
-One line per lane. Only the orchestrator edits this file. Updated 2026-10-13 21:50 (by the clock).
+One line per lane. Only the orchestrator edits this file. Updated 2026-10-14 11:30 (by the clock).
 
-**Last push: `ef92359`, version 1.1.11, 2026-10-12, deployed** (migration 0012 applied; checked live at 23:11). Any prompt that says "start only
-after the board says the push is made" may start.
+**Last push: `8b111fc`, version 1.1.12, engine 1.2.0, 2026-10-13, deployed** (migrations 0013
+and 0014 applied at 02:44:08 UTC; GitHub run green; live `/api/health` engine 1.2.0; live
+index `index-D7GMJuX1.js`, the same file the tree builds). **Truth v10 released 2026-10-14**
+(built 21:52 on 1.2.0, uploaded by 22:11, 180,312 systems; live Regina A788899-C, 8 / 8, Ice).
 
 | Lane | Status | Current prompt | Blocker / next |
 |---|---|---|---|
-| A | free | (none) | job sentence accepted. Nothing queued until the push |
-| B | free | (none) | release path accepted: the ten parked files stay out; `admin.ts` by the cap-only patch |
+| A | free | (none) | `a_sheet_row_and_skills` accepted |
+| B | free | (none) | the marketplace moved to Z (Johnny, 2026-10-14) |
 | C | free | (none) | no-sea accepted |
-| D | free | (none) | after the push: the Generate sheet's "top down" note |
-| E | free | (none) | the Build pitch and `noindex` accepted |
-| Z | reported | (none) | `z_liquid_land_changes` accepted: the late die is on a side stream, fixtures and ledger regenerated (456 rows, unchanged), the uploader guarded. Nothing queued |
+| D | free | (none) | `d_polish_note_and_frame` accepted; question on the picker fade open |
+| E | free | (none) | `e_phone_sheet` accepted |
+| Z | reported | prompts/z_marketplace.md | phase 2 accepted (server); phase 3 (placement) waits for a go and three answers |
 | F | retired | (none) | Johnny, 2026-10-11: unreliable (runs out of budget); do not use or propose until he says it is back |
 
 ## Engine 1.2.0 (every lane, 2026-10-13)
@@ -33,7 +35,8 @@ lane's letter as the first message of a new session; from then on "go" is enough
 - packages/engines, tests/golden/fixtures/engine_1.2.0/, tests/generation/parity*, tools/truth/: nobody (Z has finished).
 - apps/api/src/jobs/generate_queue.ts, jobs/one_sector.ts, routes/builder.ts: B (taken over from Z's patch).
 - views/MapView.vue, workspace/build/, workspace/passkey/: D.
-- shell/pane.ts (`addressPane`): **lent to A**.
+- shell/ (PanelHost, Panel, frame, pane.ts): E.
+- Marketplace server (routes/packages.ts, installs.ts, admin_packages.ts, universe/install.ts, migration 0015, schemas/package.ts): Z. universe/hexes.ts and campaign.ts: Z, install changes only. routes/admin.ts: nobody (parked hunks). apps/api/src/character/widgets.ts (`widgetKind`): lent to A.
 - shell/Rail.vue: E. map/public_games.ts: A.
 - tests/golden/fixtures/engine_1.2.0/profile_regina.json: C, that one file, only after it explains the change.
 - apps/web/public/sheets/ (new): E.
@@ -67,8 +70,6 @@ lane's letter as the first message of a new session; from then on "go" is enough
 - (fixed) `npm test` green again at 21:40: C's surface edits and the regenerated Regina fixture.
 - (fixed on disk, D) the account menu is teleported to `body` and opens above any panel.
 - (fixed on disk, B) the cap's worker test and the job's sentence (`BuilderJob.error`).
-- A universe made on 1.1.0 generates as 1.2.0 while its row keeps 1.1.0 (C's check 4).
-  Not decided; raise at the landing.
 - Parked truth-build work: `truth_build.test.js` line 1333 expects 1 `truth.remove` audit row
   on `vreconcile` and gets 2 (B's run). Nobody owns it until the water and ice landing.
 - Lane Z's patch applies only to the tree with the sixteen always-out paths in place; what
@@ -133,10 +134,10 @@ lane's letter as the first message of a new session; from then on "go" is enough
   the blank request body (read from what the server stored).
 
 ## Pending push
-**1.1.12 called for, 2026-10-13 21:50:** `findings/push/release_2026-10-13.md` (list
-`release_2026-10-13_files.txt`, `admin.ts` by `admin_cap_only.patch`), engine 1.2.0,
-migrations 0013 and 0014, deploy with `npm run deploy:ci`. Rehearsed in
-`scratchpad/outer16`. Then Johnny rebuilds, uploads and releases v10 locally.
+**1.1.13 called for, 2026-10-14 11:30:** `findings/push/release_2026-10-14.md` (list
+`release_2026-10-14_files.txt`, 53 paths; `admin.ts` stays at HEAD), migration 0015,
+deploy with `npm run deploy:ci`. Rehearsed in `scratchpad/outer17`. Still out: the ten
+parked truth-build files.
 
 ## Decisions from Johnny
 - 2026-10-10: the file bus replaces pasting.
@@ -366,8 +367,25 @@ migrations 0013 and 0014, deploy with `npm run deploy:ci`. Rehearsed in
 - 2026-10-13 21:40, yes to both: Build's two one-sector sentences as written (D); the
   screen keeps 273.15 and the engine 273 (C). A go.
 
+- 2026-10-14, yes to both: the lanes take D's first-visit polish (D, E); a universe made
+  on an older engine generates its new systems with the current engine, and stored systems
+  keep what they have (its row keeps the engine it was made with).
+- 2026-10-14, Johnny's goal for the marketplace: make a map, sector or whatever, publish
+  it, and import it into a campaign either in the same place or placed like a puzzle
+  piece somewhere else. 10:10, yes to all five: own maps publish; anyone browses
+  (importing needs an account; report and takedown); any package moves as one rigid shape
+  snapped to the hex grid; a piece may land anywhere, charted space included, replacing
+  the chart's systems in that campaign only, listed in the preview; a campaign keeps its
+  copy and shows "update available".
+- 2026-10-14, the character sheet: the six profile hexes on one row (abbreviations STR,
+  DEX, END, INT, EDU, SOC allowed); one line per skill with a "+" in a left gutter to add
+  the next specialism line, names aligned, specialism lines as tiers. No cap on specialism lines ("it doesn't make sense to cap it").
+- 2026-10-14: the marketplace goes to Lane Z, not B. Yes to Z's five: edges leaving a piece dropped on publish; another edition refused; theirs or mine per hex; takedown keeps objects, deletes manifests; an install counts against the quota, not the daily cap.
+- 2026-10-14, a Back "<" left of the pane's X: one pane back; X still closes the pane.
+
 ## Open with Johnny
-(none).
+- D: keep the orbit picker's new 0.2 s fade? Z: package id on imported records; a snapshot
+  restore route (undo an import); takedown keeps a private manifest copy (handoff 269).
 
 ## Decided by the orchestrator, 2026-10-13
 - The public games feed leaves out the caller's own universes (built, B).

@@ -7,9 +7,10 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { test } from 'node:test';
+import { EXTRA_LINE_MIN, extraFieldName, numberedSkillLabels, parseExtraName } from '@voyage/shared';
 import {
-    blockFields, CHARACTER_RULES, CHARACTER_SCHEMA, characterDoc, characterSections, characterSheetWith, filledIn, otherKeys, sectionFields,
-    skillName, skillsFound,
+    blockFields, CHARACTER_RULES, CHARACTER_SCHEMA, characterDoc, characterSections, characterSheetWith, filledIn, firstExtraNumber, numberedLabelsOf, otherKeys, profileAbbr, sectionFields,
+    skillGroups, skillName, skillsFound, trainedLineCount,
 } from '../../apps/web/src/workspace/character_sheet.ts';
 import { boxEntered, boxGiven, boxLeft, boxOf, boxTyped, valueOf, withValue } from '../../apps/web/src/workspace/sheet_fields.ts';
 
@@ -77,6 +78,46 @@ test('the skills are the PDF’s lines: a box each, a specialism where it prints
     assert.ok(skills.lines.filter((l) => l.n !== null).every((l) => l.specialism !== null), 'every numbered line has its specialism box');
     const names = skills.lines.map(skillName);
     assert.deepEqual(names, [...names].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })), 'in name order');
+});
+
+test('a numbered skill shows its first line, and a later line only when it is typed, open, or found', () => {
+    const { lines } = block('Skills', 'skills');
+    const labels = numberedLabelsOf(lines);
+    assert.deepEqual([...labels].sort(), [...numberedSkillLabels(CHARACTER_RULES.fields.map((field) => field.name))].sort());
+    for (const label of labels) assert.equal(firstExtraNumber(lines, label), EXTRA_LINE_MIN, label);
+    assert.equal(profileAbbr('Strength'), 'STR');
+    assert.equal(profileAbbr('Social'), 'SOC');
+    const closed = skillGroups(lines, null, '', false, {});
+    const athletics = closed.find((group) => group.label === 'Athletics');
+    const admin = closed.find((group) => group.label === 'Admin');
+    assert.equal(athletics.head.n, 1);
+    assert.deepEqual(athletics.more, []);
+    assert.deepEqual(athletics.extra, []);
+    assert.equal(athletics.numbered, true);
+    assert.equal(admin.numbered, false);
+    assert.equal(admin.head.specialism, null);
+    const opened = skillGroups(lines, null, '', false, { Athletics: [2, 3, 4, 5] });
+    assert.deepEqual(opened.find((group) => group.label === 'Athletics').more.map(skillName), ['Athletics 2', 'Athletics 3']);
+    assert.deepEqual(opened.find((group) => group.label === 'Athletics').extra, [4, 5]);
+    const values = { 'Athletics 3 Modifier': '1', [extraFieldName('Athletics', 5, 'Specialism')]: 'climbing' };
+    const kept = skillGroups(lines, values, '', false, {});
+    const keptAthletics = kept.find((group) => group.label === 'Athletics');
+    assert.deepEqual(keptAthletics.more.map(skillName), ['Athletics 3']);
+    assert.deepEqual(keptAthletics.extra, [5]);
+    assert.equal(parseExtraName(extraFieldName('Athletics', 5, 'Specialism'), labels).n, 5);
+    assert.equal(parseExtraName('Extra/Admin/4/Specialism', labels), null);
+    assert.equal(parseExtraName('Extra/Athletics/3/Specialism', labels), null);
+    assert.equal(parseExtraName('Extra/Athletics/100/Specialism', labels), null);
+    const found = skillGroups(lines, values, 'athl', false, {});
+    assert.deepEqual(found.map((group) => group.label), ['Athletics']);
+    assert.deepEqual(found[0].more.map(skillName), ['Athletics 3']);
+    assert.deepEqual(found[0].extra, [5]);
+    const trained = skillGroups(lines, { 'Pilot 1 Modifier': '2', 'Pilot Specialism 1': 'spacecraft', 'Science Specialism 2': 'planetology' }, '', true, {});
+    assert.deepEqual(trained.map((group) => group.label), ['Pilot', 'Science']);
+    assert.deepEqual(trained.find((group) => group.label === 'Science').more.map(skillName), ['Science 2']);
+    assert.deepEqual(skillGroups(lines, values, 'climb', false, {}).find((group) => group.label === 'Athletics').extra, [5]);
+    assert.equal(trainedLineCount(lines, values), 2);
+    assert.equal(trainedLineCount(lines, null), 0);
 });
 
 test('finding a skill: by its name or its typed specialism; Trained shows the lines with something typed', () => {
@@ -177,7 +218,15 @@ test('the sheet mounts from a plain object with no store: every box of the PDF i
         });
         const html = await renderToString(app);
         const boxes = (html.match(/<(?:input|textarea)/g) ?? []).length;
-        assert.equal(boxes, 421, 'the 420 boxes and the skills finder');
+        const skills = block('Skills', 'skills');
+        const seen = new Set();
+        let hidden = 0;
+        for (const line of skills.lines) {
+            if (line.n === null) continue;
+            if (seen.has(line.label)) hidden += 2;
+            else seen.add(line.label);
+        }
+        assert.equal(boxes, 421 - hidden, 'the finder, every box, except the numbered lines after the first');
         assert.equal((html.match(/<section class="sheet-panel/g) ?? []).length, 14);
         for (const name of ['Personal Data File', 'Skills', 'Weapons', 'History &amp; Background', 'Enemies']) assert.ok(html.includes('aria-label="' + name + '"'), name);
         assert.match(html, /In use by <\/span>Mara/, 'the box someone else is in says who');
@@ -185,11 +234,14 @@ test('the sheet mounts from a plain object with no store: every box of the PDF i
         assert.match(html, /Regina/);
         assert.match(html, /Jonna Reyes/);
         assert.match(html, /Medikit/);
-        // The profile shows the core value exactly as typed.
-        assert.match(html, /<b>7<\/b><span>Strength<\/span>/);
-        // Not editable: every box is disabled.
+        // The profile shows the core value exactly as typed, with the abbreviation under it and the full name on the hex.
+        assert.match(html, /title="Strength"[^>]*>\s*<b>7<\/b><span aria-hidden="true">STR<\/span>/);
+        assert.match(html, /aria-label="Add another Athletics specialism"/);
+        assert.equal(html.includes('Athletics 2 modifier'), false);
+        assert.equal(html.includes('>Admin<') || html.includes('>Admin</span>'), true);
+        // Not editable: every drawn box is disabled. Lines after the first of a numbered skill are not drawn.
         const fixed = await renderToString(createSSRApp(sheet, { doc, editable: false }));
-        assert.equal((fixed.match(/<(?:input|textarea)[^>]* disabled/g) ?? []).length, 420);
+        assert.equal((fixed.match(/<(?:input|textarea)[^>]* disabled/g) ?? []).length, 420 - hidden);
     } finally {
         await server.close();
     }

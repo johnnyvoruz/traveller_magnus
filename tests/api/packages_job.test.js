@@ -280,7 +280,9 @@ test('a chart hex, a deleted row, and an own-sector key keep the contract shapes
     assert.equal(publicBucket.puts.includes(`objects/${TREE}`), false);
 });
 
-test('the marketplace files do not name install, proposal, or report tables', () => {
+// Install and report arrived with the full marketplace (contracts/b_marketplace.md F2-F4);
+// proposals (slice 5) are still out of scope.
+test('the marketplace files do not name proposal tables', () => {
     const files = [
         'apps/api/src/routes/packages.ts',
         'apps/api/src/jobs/publish_queue.ts',
@@ -290,6 +292,6 @@ test('the marketplace files do not name install, proposal, or report tables', ()
     ];
     for (const file of files) {
         const text = readFileSync(path.join(root, file), 'utf8');
-        assert.equal(/package_installs|\bproposals\b|\breports\b/.test(text), false, file);
+        assert.equal(/\bproposals\b/.test(text), false, file);
     }
 });
