@@ -523,13 +523,13 @@ export function makeImportSector(sql: Sql, id: string, name: string, x: number, 
     return true;
 }
 
-/** Undo of an import: the sector it made goes, unless a system is still stored in it. */
+/** Removing an import (contracts/b_marketplace.md F14): the sector it made goes, unless a system is still stored in it. */
 export function dropImportSector(sql: Sql, id: string, now: string): boolean {
     const row = live(sql, id);
     if (!row || Number(row.deleted) === 1 || hexesOf(sql, id).length) return false;
     const rev = Number(row.rev) + 1;
     const sector = view(row);
     writeSector(sql, { id, x: sector.slot.x, y: sector.slot.y, name: sector.name, subsectors: sector.subsectors, rev, deleted: 1, at: now }, true);
-    remember(sql, id, rev, now, 'restore', snapshotOf(live(sql, id) ?? row, null));
+    remember(sql, id, rev, now, 'delete', snapshotOf(live(sql, id) ?? row, null));
     return true;
 }

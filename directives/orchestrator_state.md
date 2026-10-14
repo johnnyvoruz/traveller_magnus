@@ -1,6 +1,6 @@
-# Orchestrator state — 2026-10-14 11:30 (written for the next orchestrator session)
+# Orchestrator state — 2026-10-14 12:30 (written for the next orchestrator session)
 
-Overwritten every turn. History: `handoff.md` (last section 269; read by offset, it is large).
+Overwritten every turn. History: `handoff.md` (last section 270; read by offset, it is large).
 `orchestrator_start_here.md` is the 2026-10-07 page and is stale. This file and
 `board.md` are the state.
 
@@ -15,17 +15,21 @@ rebuilds, uploads and releases truth v10.
 ## Lanes (2026-10-13 21:50)
 All free. F is retired: never assign or propose.
 
+## Naming
+Engine versions are **e1.2** to Johnny and in prose (his word, 2026-10-14); app versions 1.1.N.
+Code and fixture paths keep `1.2.0`. **App 1.2.0 = the push that finishes the marketplace**
+(Z phase 4); pushes before it stay 1.1.N.
+
 ## Next turn
-1. **Check push 1.1.13:** commit on origin, GitHub run green, `/api/health` version 1.1.13
-   in the index chunk, `d1_migrations` has 0015, `GET /api/packages?sort=updated` answers
-   200 signed out.
-2. Johnny's answers: D's picker fade; Z's three (package id on records, snapshot restore,
-   takedown keeps a private manifest copy). Then Z phase 3 go (placement).
+1. **Check push 1.1.15** (commit on origin, run green, live index `index-BI9NdrnN.js`).
+2. Then Z phase 4 go (browser; this push is app 1.2.0): catalogue, package page, import
+   preview, drag placement, remove, pin on import; lend `views/MapView.vue` and `map/`
+   from D. Ask any design question first; gate the go on the 1.1.15 commit.
 3. Unconfirmed still: who applied 0013 and 0014.
 
 ## Versions
-Each push list bumps `APP_VERSION` in `apps/web/src/version.ts` (now 1.1.13 on disk; next
-1.1.14) and the commit message starts with it. Engine version is 1.2.0 on disk, 1.1.0
+Each push list bumps `APP_VERSION` in `apps/web/src/version.ts` (now 1.1.15 on disk; next is 1.2.0 with the
+marketplace screens) and the commit message starts with it. Engine version is 1.2.0 on disk, 1.1.0
 live.
 
 ## Traps

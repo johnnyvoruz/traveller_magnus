@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
     CampaignProvenance,
     InstallPreview,
-    InstallRestored,
+    InstallRemoved,
     InstallRequest,
     InstallRow,
     PackageCard,
@@ -82,9 +82,10 @@ test('provenance has a package mode; copy and shared rows still parse', () => {
     assert.equal(CampaignProvenance.safeParse({ mode: 'package', universeId: 'u_1', recordId: 'cr_1', rev: 2, at }).success, false);
 });
 
-test('a restore answer counts what came back', () => {
-    const answer = { snapshotId: 'in_X', hexes: 2, records: 1, sectors: 1 };
-    assert.deepEqual(InstallRestored.parse(answer), answer);
+test('a remove answer counts what was deleted', () => {
+    const answer = { hexes: 2, records: 1, sectors: 1 };
+    assert.deepEqual(InstallRemoved.parse(answer), answer);
+    assert.equal(InstallRemoved.safeParse({ ...answer, snapshotId: 'in_X' }).success, false);
 });
 
 test('the preview lists one outcome per hex, the placement and the sectors it makes', () => {
@@ -106,9 +107,10 @@ test('the preview lists one outcome per hex, the placement and the sectors it ma
 test('an import row says whether an update is available', () => {
     const row = {
         installId: 'in_X', packageId: 'pk_X', title: 'T', version: 1, latestVersion: 2, updateAvailable: true,
-        placement: null, removed: false, hexCount: 3, installedAt: 'a', updatedAt: 'b',
+        placement: null, hexCount: 3, installedAt: 'a', updatedAt: 'b',
     };
     assert.deepEqual(InstallRow.parse(row), row);
-    const undone = { ...row, updateAvailable: false, removed: true, placement: { anchor: 'Demo/0101', to: 'Demo/0505' } };
-    assert.deepEqual(InstallRow.parse(undone), undone);
+    const placed = { ...row, placement: { anchor: 'Demo/0101', to: 'Demo/0505' } };
+    assert.deepEqual(InstallRow.parse(placed), placed);
+    assert.equal(InstallRow.safeParse({ ...row, removed: false }).success, false);
 });

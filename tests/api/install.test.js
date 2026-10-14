@@ -146,7 +146,7 @@ if (process.env.RUN_API_TESTS !== '1') {
 } else if (!existsSync(wranglerBin)) {
     test('package install routes', { skip: 'wrangler is absent' }, () => {});
 } else {
-    test('install in place: preview outcomes, conflicts, snapshot, provenance, updates, limits', { timeout: 400000 }, async () => {
+    test('install in place: preview outcomes, conflicts, provenance, updates, limits', { timeout: 400000 }, async () => {
         const persistTo = mkdtempSync(path.join(tmpdir(), 'voyage-install-'));
         const port = 18876;
         const base = `http://127.0.0.1:${port}`;
@@ -452,7 +452,6 @@ VALUES ('${version}', '1.1.0', 'M1105', 'TravellerMagnus', '${SETTINGS}', '[]', 
             assert.equal(placedList.body.data.items.length, 1);
             assert.equal(placedList.body.data.items[0].version, 2);
             assert.deepEqual(placedList.body.data.items[0].placement, plan.placement);
-            assert.equal(placedList.body.data.items[0].removed, false);
 
             // Worker deployed before 0015: the install routes answer 503, the rest keep working.
             sqlFile(persistTo, `DROP TABLE package_installs;`);

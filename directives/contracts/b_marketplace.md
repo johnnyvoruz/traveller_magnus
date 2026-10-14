@@ -403,16 +403,16 @@ Every `conflict` row in the preview must have a resolution; a missing one is 409
 
 Steps, in one Durable Object call so it is all or nothing:
 
-1. Snapshot: a `snapshots` row, `trigger 'install'`, label `Before install <title> v<version>`, captured rows of every `to` key and every touched record, kept as generate keeps them (`meta` key `install:<installId>`).
+1. (Taken out in 1.1.15, F14: no snapshot and no undo capture. 1.1.13 and 1.1.14 wrote one; those rows stay and nothing reads them.)
 2. Objects: copy each tree, image and rewritten tree object into `u/<universeId>/objects/<hash>` from the public bucket (rewritten ones are written by the rewrite module, F6).
 3. Hexes: each `new`, `replaces chart`, `replaces own`, and `conflict` resolved `theirs` writes a row through `insertHex`/`updateHex` with `base_hash` = the target's chart tree or null, `tree_hash` = (rewritten) `treeHash`, summary from the manifest (rewritten), `provenance = { packageId, version, installId }`, history action `install`. `mine` and `already installed` write nothing.
 4. Records: each record is written with `provenance = { packageId, version, installId }` and its anchors rewritten (F6). Journal entries are not in packages today (`PackagePublish` names records only), so no journal row is written.
 5. Lists: routes and border paths from the manifest's `lists` objects are merged into `lists` (phase 2 publishes them for real; F7).
 6. D1: one `package_installs` row; `packages.installs` + 1 on the first install of that package into that universe only.
 
-Answer: 200 `InstallResult`: `{ installId, written, skipped, snapshotId }`.
+Answer: 200 `InstallResult`: `{ installId, written, skipped, records }` (`snapshotId` dropped in 1.1.15, F14).
 
-Undo (review correction 4, checked 2026-10-14): **no snapshot restore route exists.** `snapshots` rows are written (generate, and now install) but nothing reads them back; `scheduled()` in `index.ts` is a stub. The install writes its undo point (a `snapshots` row, trigger `install`, and the captured rows and records under `meta` key `install:<installId>`), so a restore can be built on it later. Building restore needs a go.
+Removing an import: see F14 (a plain delete; no undo, no restore).
 
 Errors: the preview's errors, the two 409s above, 400 `too_large`, `This universe is out of space.` (F8), 403 `Origin check failed.`
 
@@ -551,8 +551,9 @@ Johnny's phase-2 answers: routes and border paths that leave the piece are dropp
 - Records carry `{ mode: 'package', packageId, version, installId, at }`. `copy` and `shared` still parse. A record is replaced without asking when it is package mode with this package, or legacy copy mode from the source universe.
 - The universe must be pinned (opened once) before an import. Hex reads in an unpinned universe already say "This universe has no generation pin."
 
-### Undo of an import (part B)
+### Undo of an import (part B) - **taken out in 1.1.15; see F14**
 
+- Shipped in 1.1.14 and removed in 1.1.15 (Johnny, 2026-10-14). The route, its DO route `/install/restore`, `InstallRestored` and `InstallRow.removed` are gone. Migration 0016 stays as pushed; its `removed_at` column is no longer read or written. The text below is history.
 - `POST /api/universes/:id/snapshots/:snapshotId/restore`. Owner only (`ownedUniverse`). Answer `InstallRestored { snapshotId, hexes, records, sectors }`.
 - One DO call (`/install/restore`), one transaction: the checks, then every write.
 - Only `install` snapshots: other triggers are 400 `validation` "Only an undo point made by an import can be restored here." An unknown id is 404 "There is no such undo point."
@@ -564,3 +565,32 @@ Johnny's phase-2 answers: routes and border paths that leave the piece are dropp
 - Imports from before phase 3 have no `installed:` record: 409 "This import was made before undo was possible, so it cannot be undone."
 - D1: undoing a first import sets `package_installs.removed_at` (migration `0016_package_installs_removed.sql`); the list shows `removed: true` and `updateAvailable: false`. Undoing an update puts the earlier version back on the row. Importing again clears `removed_at`. A Worker without 0016 answers the restore route with 503 and lists `removed: false`; 0016 without the new Worker is ignored.
 - Quota: no refund. The trees stay in private storage and are still named by hex history, generate snapshots and other imports; R2 has no reference count to say an object is free.
+
+## F14. Phase 3c: one import per package, remove is a plain delete (1.1.15) - **on disk, unpushed**
+
+Johnny, 2026-10-14: "make the record and then CRUD delete it vs. all this undo." No quota refund when an import is removed.
+
+### One import per package per campaign
+
+- A campaign holds a package once: one `package_installs` row per (universe, package).
+- `GET /api/universes/:id/install/preview` and `POST /api/universes/:id/install`: an import of a package the campaign already holds is 409 `conflict`, "This campaign already has this package. Remove it first, or take its update."
+- Taking an update is the same row and keeps its placement: name the row with `installId`, or, for an in-place import, leave both `installId` and the placement out (the in-place row is found, as in 1.1.13). A placement given for a package the campaign holds is the 409 above; to move a piece, remove it and import it again.
+- A 1.1.14 campaign that already holds one package twice keeps both rows; each updates by `installId`, and an import without one is the 409.
+- Hex rows and records now carry the row id as `provenance.installId`. Rows from 1.1.13 and 1.1.14 carry a per-call id; the delete below still finds them.
+- No snapshot, no `install:`, `installed:`, `installrow:` or `restored:` meta keys are written. Own sectors an import makes are listed in meta `installsectors:<installId>` so the delete can take them away.
+
+### `DELETE /api/universes/:id/installs/:installId`
+
+- Owner only (`ownedUniverse`), origin-checked.
+- One Durable Object call (`/install/remove`), one transaction, all or nothing.
+- Deletes every hex row whose provenance names this import, edited since or not: a charted hex shows the chart again; an own-sector hex is empty. History action `remove`.
+- Deletes every record (provenance mode `package`) of this import the way the campaign's own delete does it: a tombstone at a new rev and seq, and its links too.
+- An own sector the import made is deleted when no row is left in it (sector history action `delete`).
+- Then the `package_installs` row is deleted; it is gone from the imports list. `packages.installs` is not lowered (it counts universes that ever imported).
+- Which rows: when this row is the only import of the package in the campaign, every row and record of the package. Otherwise (a 1.1.14 campaign with the package twice), rows naming this row id, or a per-call id that 1.1.14 meta `installed:<id>` / `installrow:<rowId>` ties to this row.
+- Answer: 200 `InstallRemoved { hexes, records, sectors }` (counts).
+- Errors: 401 `Sign in required.`, 403 `Origin check failed.`, 404 `No such universe.`, 404 `No such import.`, 503 `The marketplace is being updated. Try again soon.` before 0015.
+- Quota: no refund. Bytes stay charged.
+- Imports made on 1.1.13 and 1.1.14 delete the same way. Their snapshot rows and meta keys stay where they are.
+
+Single systems and records from an import stay editable and deletable through the normal Builder and campaign routes.

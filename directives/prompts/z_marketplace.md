@@ -312,3 +312,76 @@ done: phase 3 start (1.1.13 commit cfe88a4 present); CampaignProvenance package 
 done: part A placement built (install.ts, routes/installs.ts, sectors.ts makeImportSector) with Worker tests in install.test.js green; package_schema.test.js moved to the new shapes. next: contract F13, then restore route and install_restore.test.js.
 done: part B contract F13, restore route (DO /install/restore, POST /api/universes/:id/snapshots/:snapshotId/restore), migration 0016, install_restore.test.js green. next: gates and report.
 done: phase 3 gates green (npm test 1657/0/29 skipped; API suites install, install_restore, packages, packages_job, packages_migration, campaign x4 all pass; check, typecheck, build ok); report directives/reports/z_marketplace_3.md. next: stop; phase 4 is a separate go.
+
+## Orchestrator review of phase 3 (2026-10-14 12:30)
+
+Accepted as built, then changed by Johnny (below). **Correction, 12:55: push 1.1.14 went out
+(`d8f8ec3`) before the change, so phase 3 is committed and deployed, the restore route
+and migration 0016 included.** The phase 3 placement work stays exactly as it is.
+
+## Phase 3c — GO (2026-10-14): remove an import is a plain delete; one import per package
+
+Johnny, 2026-10-14: "I hate all the focus we're giving to undo. I'd rather just make the
+record and then CRUD delete it vs. all this undo bull." And on two placements of one
+package: "I'd think we can only limit one import per package per campaign." And yes to
+pinning a never-opened universe on import (that is phase 4, through the Builder's pin;
+not in this go). No quota refund when an import is removed; do not ask again.
+
+### Take out
+- The restore route `POST /api/universes/:id/snapshots/:snapshotId/restore` (live in
+  1.1.14; nothing in the browser calls it, so removing it is safe), its Durable
+  Object route, `restoreInstall`, `restoreInstalledHex`, `restoreInstalledRecord`,
+  `rawCampaignRecord` if nothing else uses it, `InstallRestored`, and
+  `tests/api/install_restore.test.js` (delete the file).
+- **Keep** migration `0016_package_installs_removed.sql` as it is: it is pushed and may be
+  applied in production. Do not delete or edit it, and add no migration to drop the
+  column. Stop reading and writing `removed_at` (an unused nullable column is harmless);
+  drop the column probe. `InstallRow.removed` goes.
+- The install's undo capture: the `snapshots` row with trigger `install`, the meta keys
+  `install:<id>`, `installed:<id>`, `installrow:<id>`, `restored:<id>`, and
+  `snapshotId` in `InstallResult`. 1.1.13 is live with the snapshot write; removing it is
+  safe (no route reads it). Leave rows already written in production alone.
+- Contract: F13's undo text and F4's "undo point" step, replaced by the two items below.
+
+### Put in
+1. **One import per package per campaign.** A second import of a package the campaign
+   already holds is 409 `conflict`, "This campaign already has this package. Remove it
+   first, or take its update." (preview and install both). Taking an update (a newer
+   version of the same package) is the same import row, as today, and keeps its
+   placement. Placement cannot change on an update; to move a piece, remove it and
+   import it again.
+2. **Remove an import: `DELETE /api/universes/:id/installs/:installId`**, owner only,
+   origin-checked, one Durable Object call, all or nothing. It deletes every hex row and
+   every record whose provenance names this `installId`, **edited since or not**: a
+   charted hex shows the chart again; an own-sector hex becomes empty; records are
+   deleted the way the campaign's own delete does it. An own sector the import created is
+   deleted when no other row is left in it. Then the `package_installs` row is deleted
+   (no `removed` flag; it is gone from the list). History action: the Builder's normal
+   delete. Answer 200 `{ hexes, records, sectors }` (counts). Errors: 401, 403 origin,
+   404 `No such universe.`, 404 `No such import.`
+3. Individual systems and records from an import stay editable and deletable through
+   the normal Builder and campaign routes, as any row.
+
+**Phase 3c may write:** the phase 3 list except the migrations folder (no new migration,
+no change to 0016), plus deleting `tests/api/install_restore.test.js`, plus
+`tests/api/install_delete.test.js` (new). Imports already made on 1.1.14 have a
+`removed_at` of null and the install meta keys; the delete route must work on them too.
+
+**Tests:** `install_delete.test.js`: signed out 401, another account 404, unknown 404; a
+placed import over charted space removed (the chart shows again, its own sector gone,
+records gone, the list empty); an edited hex is removed too; a second import of the same
+package 409 at preview and at install; an update still works and keeps its placement.
+
+**Gates:** as phase 3 (with `install_delete` in place of `install_restore`). Report
+`directives/reports/z_marketplace_3c.md`, then stop. Phase 4 is a separate go.
+done: phase 3c code (restore route, DO /install/restore, restoreInstall, restoreInstalledHex/Record, rawCampaignRecord, InstallRestored, snapshot capture and install meta keys, removed_at reads/probe taken out; one import per package; DELETE /api/universes/:id/installs/:installId with DO /install/remove), install_restore.test.js deleted, install_delete.test.js written; typecheck ok. next: run tests, contract F14, report.
+done: phase 3c gates green (npm test 1657/0/29 skipped; API suites pass, campaign.test.js on fresh state; check, typecheck, build ok); contract F14; report directives/reports/z_marketplace_3c.md. next: stop; phase 4 is a separate go.
+
+## Orchestrator review of phase 3c (2026-10-14 13:40)
+
+Accepted. Gates re-run: 1686 / 1657 pass / 0 fail; check; typecheck; build; install,
+install_delete, packages, packages_job, campaign_logic 20 / 20; no restore, `removed_at`
+or snapshot use left in `installs.ts` or `install.ts`. Your questions: 1 decided by the
+orchestrator, as you suggested (an update may omit the import id: one import per package
+makes it unambiguous); 3 decided, as you suggested (no UI could make a double import on
+1.1.14, so nothing to merge); 2 asked of Johnny. Phase 4 waits for its go.

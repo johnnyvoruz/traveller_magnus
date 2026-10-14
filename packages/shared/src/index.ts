@@ -30,7 +30,7 @@ export {
     InstallResult,
     InstallRow,
     InstallList,
-    InstallRestored,
+    InstallRemoved,
     Placement,
     OwnSectorPlan,
 } from './schemas/package.ts';

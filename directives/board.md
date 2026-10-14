@@ -2,9 +2,9 @@
 
 One line per lane. Only the orchestrator edits this file. Updated 2026-10-14 12:30 (by the clock).
 
-**Last push: `cfe88a4`, version 1.1.13, engine 1.2.0, 2026-10-14, deployed** (migration
-0015 applied 16:54:42 UTC; GitHub run 38601979211 green; live index `index-CEIWbUQh.js`;
-`GET /api/packages?sort=updated` 200 signed out). Truth v10.
+**Last push: `d8f8ec3`, version 1.1.14, engine 1.2.0, 2026-10-14** (pushed before Johnny's
+12:45 answers; carries the restore route and migration 0016, both being taken out of use by
+Z phase 3c; deploy not yet checked). Truth v10.
 
 | Lane | Status | Current prompt | Blocker / next |
 |---|---|---|---|
@@ -13,8 +13,15 @@ One line per lane. Only the orchestrator edits this file. Updated 2026-10-14 12:
 | C | free | (none) | no-sea accepted |
 | D | free | (none) | `d_polish_note_and_frame` accepted; question on the picker fade open |
 | E | free | (none) | `e_phone_sheet` accepted |
-| Z | reported | prompts/z_marketplace.md | phase 3 accepted (placement, provenance `package`, undo an import); phase 4 (browser) waits for three answers and a go |
+| Z | reported | prompts/z_marketplace.md | phase 3c accepted (DELETE an import, one per package); phase 4 (browser, app 1.2.0) next |
 | F | retired | (none) | Johnny, 2026-10-11: unreliable (runs out of budget); do not use or propose until he says it is back |
+
+## Naming (Johnny, 2026-10-14)
+The engine version is written **e1.2** (next e1.3) in reports, prompts and anything
+Johnny reads; the app version stays **1.1.N**. Code, `packages/engines/package.json`,
+fixture folders (`engine_1.2.0/`), ledgers and stored rows keep the semver string `1.2.0`.
+**App 1.2.0 is the push that finishes the marketplace** (Z phase 4; Johnny, 2026-10-14).
+Until then pushes stay 1.1.N; after it, 1.2.N.
 
 ## Engine 1.2.0 (every lane, 2026-10-13)
 **The engine on the working tree is 1.2.0** (Lane Z's water and ice patch, applied 20:11,
@@ -133,9 +140,8 @@ lane's letter as the first message of a new session; from then on "go" is enough
   the blank request body (read from what the server stored).
 
 ## Pending push
-**1.1.14 called for, 2026-10-14 12:30:** `findings/push/release_2026-10-14b.md` (list
-`release_2026-10-14b_files.txt`, 22 paths), migration 0016. Rehearsed in
-`scratchpad/outer18`. Still out: the ten parked truth-build files.
+**1.1.15 called for, 2026-10-14 13:50:** `findings/push/release_2026-10-14c.md` (19 paths, no
+migration). Rehearsed in `scratchpad/outer19`. No open question touches it.
 
 ## Decisions from Johnny
 - 2026-10-10: the file bus replaces pasting.
@@ -379,12 +385,13 @@ lane's letter as the first message of a new session; from then on "go" is enough
   DEX, END, INT, EDU, SOC allowed); one line per skill with a "+" in a left gutter to add
   the next specialism line, names aligned, specialism lines as tiers. No cap on specialism lines ("it doesn't make sense to cap it").
 - 2026-10-14, yes to all four: the orbit picker keeps its fade; imported records name their package (provenance mode `package`); restore an import's undo point (after placement); a takedown keeps a private manifest copy.
+- 2026-10-14 12:45: no undo machinery for imports: removing an import is a plain delete of what it brought ("make the record and then CRUD delete it"); one import per package per campaign; importing into a never-opened map pins it (phase 4); no quota refund on removal.
+- 2026-10-14 13:45: a package's install count never goes down (a remove leaves it).
 - 2026-10-14: the marketplace goes to Lane Z, not B. Yes to Z's five: edges leaving a piece dropped on publish; another edition refused; theirs or mine per hex; takedown keeps objects, deletes manifests; an install counts against the quota, not the daily cap.
 - 2026-10-14, a Back "<" left of the pane's X: one pane back; X still closes the pane.
 
 ## Open with Johnny
-- Z phase 3: refund on undo; pin a never-opened universe on import; two placements of
-  one package share records (handoff 270).
+(none).
 
 ## Decided by the orchestrator, 2026-10-13
 - The public games feed leaves out the caller's own universes (built, B).

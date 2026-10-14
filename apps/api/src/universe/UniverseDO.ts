@@ -3,7 +3,7 @@ import type { Env } from '../env';
 import { chargesMutationBudget, MUTATION_BUDGET, MUTATION_WINDOW_MS } from './budget';
 import { applyCampaignChanges, CampaignRefusal, readCampaign, type Sql } from './campaign';
 import { respondBuilder } from './hexes';
-import { applyInstall, InstallRefusal, previewInstall, restoreInstall, type InstallBody } from './install';
+import { applyInstall, InstallRefusal, previewInstall, removeInstall, type InstallBody, type InstallRemoveBody } from './install';
 import { readPublishSources } from './publish_read';
 import { migrate } from './schema';
 
@@ -82,7 +82,7 @@ export class UniverseDO extends DurableObject<Env> {
             }
             return Response.json({ ok: true, data: readPublishSources(sql, body) });
         }
-        if (request.method === 'POST' && (url.pathname === '/install/preview' || url.pathname === '/install' || url.pathname === '/install/restore')) {
+        if (request.method === 'POST' && (url.pathname === '/install/preview' || url.pathname === '/install' || url.pathname === '/install/remove')) {
             if (url.pathname !== '/install/preview' && !this.allowMutation()) {
                 return Response.json(
                     { ok: false, error: { code: 'rate_limited', message: 'Too many requests.' } },
@@ -96,8 +96,8 @@ export class UniverseDO extends DurableObject<Env> {
                 return Response.json({ ok: false, error: { code: 'validation', message: 'Invalid JSON.' } }, { status: 400 });
             }
             try {
-                const data = url.pathname === '/install/restore'
-                    ? restoreInstall(sql, String((body as { snapshotId?: unknown } | null)?.snapshotId ?? ''), new Date().toISOString())
+                const data = url.pathname === '/install/remove'
+                    ? removeInstall(sql, body as InstallRemoveBody, new Date().toISOString())
                     : url.pathname === '/install'
                     ? applyInstall(sql, body as InstallBody, new Date().toISOString())
                     : previewInstall(sql, body as Parameters<typeof previewInstall>[1]);

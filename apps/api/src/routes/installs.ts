@@ -1,13 +1,14 @@
 /**
- * Import a package into a campaign, in place or at a placement, and undo an import
- * (contracts/b_marketplace.md F3, F4, F12, F13). Mounted under /api/universes.
+ * Import a package into a campaign, in place or at a placement, and remove an import
+ * (contracts/b_marketplace.md F3, F4, F12, F13, F14). One import per package per
+ * campaign. Mounted under /api/universes.
  */
 import { Hono } from 'hono';
 import {
     InstallList,
     InstallPreview,
     InstallRequest,
-    InstallRestored,
+    InstallRemoved,
     InstallResult,
     PackageManifest,
     PlaceError,
@@ -123,7 +124,13 @@ const PLACE_MESSAGES: Record<string, string> = {
 
 type Target = { rowId: string | null; prevVersion: number | null; placement: PlacementShape | null };
 
-/** Which package_installs row this import writes, and where it goes. */
+const ALREADY = 'This campaign already has this package. Remove it first, or take its update.';
+
+/**
+ * Which package_installs row this import writes, and where it goes. One import per
+ * package per campaign (F14): an update names its row, or, in place, finds it; any
+ * other import of a package the campaign holds is 409.
+ */
 async function targetOf(c: Ctx, owned: OwnedUniverse, packageId: string, placement: PlacementShape | null, installId: string | null): Promise<Target> {
     if (installId) {
         const row = await c.env.DB.prepare(`SELECT id, version, placement FROM package_installs WHERE id = ? AND universe_id = ? AND package_id = ?`)
@@ -132,14 +139,13 @@ async function targetOf(c: Ctx, owned: OwnedUniverse, packageId: string, placeme
         const stored = row.placement ? Placement.safeParse(JSON.parse(row.placement)) : null;
         return { rowId: row.id, prevVersion: row.version, placement: stored?.success ? stored.data : null };
     }
-    if (placement) return { rowId: null, prevVersion: null, placement };
-    const row = await c.env.DB.prepare(`SELECT id, version FROM package_installs WHERE universe_id = ? AND package_id = ? AND placement IS NULL`)
-        .bind(owned.row.id, packageId).first<{ id: string; version: number }>();
-    if (!row) return { rowId: null, prevVersion: null, placement: null };
-    const removed = await hasRemovedColumn(c.env)
-        ? await c.env.DB.prepare(`SELECT removed_at AS removedAt FROM package_installs WHERE id = ?`).bind(row.id).first<{ removedAt: string | null }>()
-        : null;
-    return { rowId: row.id, prevVersion: removed?.removedAt ? null : row.version, placement: null };
+    const rows = await c.env.DB.prepare(`SELECT id, version, placement FROM package_installs WHERE universe_id = ? AND package_id = ?`)
+        .bind(owned.row.id, packageId).all<{ id: string; version: number; placement: string | null }>();
+    const held = rows.results ?? [];
+    if (!held.length) return { rowId: null, prevVersion: null, placement };
+    const inPlace = held.length === 1 && held[0]!.placement === null ? held[0]! : null;
+    if (placement || !inPlace) throw new Stop(fail(c, 409, 'conflict', ALREADY));
+    return { rowId: inPlace.id, prevVersion: inPlace.version, placement: null };
 }
 
 async function load(c: Ctx, owned: OwnedUniverse, packageId: string, version: number, target: Target = { rowId: null, prevVersion: null, placement: null }): Promise<Loaded> {
@@ -393,10 +399,11 @@ installsRoute.post('/:id/install', async (c) => {
         await c.env.PRIVATE_BUCKET.put(`u/${owned.row.id}/objects/${hash}`, text, { httpMetadata: { contentType: 'application/json' } });
         copied += new TextEncoder().encode(text).byteLength;
     }
-    const installId = `in_${ulid()}`;
+    // One charge per call; the row id stays the same across updates.
+    const chargeId = `in_${ulid()}`;
     const rowId = previewed.rowId ?? `in_${ulid()}`;
-    const called = await doCall<{ written: number; skipped: number; records: number; snapshotId: string }>(owned, c, '/install', {
-        installId,
+    const called = await doCall<{ written: number; skipped: number; records: number }>(owned, c, '/install', {
+        installId: rowId,
         packageId: previewed.packageId,
         version: previewed.version,
         title: previewed.title,
@@ -407,8 +414,6 @@ installsRoute.post('/:id/install', async (c) => {
         resolutions: input.resolutions,
         recordResolutions: input.recordResolutions,
         sectors: previewed.sectors,
-        rowId,
-        prevVersion: previewed.prevVersion,
     });
     if (!called.parsed.ok || !called.parsed.data) {
         const error = called.parsed.error;
@@ -416,13 +421,12 @@ installsRoute.post('/:id/install', async (c) => {
         if (called.status === 429) return fail(c, 429, 'rate_limited', 'Too many requests.');
         throw new Error(error?.message || 'Install failed.');
     }
-    await chargeObjectBytes(c.env.DB, owned.row.id, installId, copied);
+    await chargeObjectBytes(c.env.DB, owned.row.id, chargeId, copied);
     const now = new Date().toISOString();
     const hexCount = previewed.hexes.length;
-    const removable = await hasRemovedColumn(c.env);
     if (previewed.rowId) {
         await c.env.DB.prepare(
-            `UPDATE package_installs SET version = ?, hex_count = ?, record_count = ?, updated_at = ?${removable ? ', removed_at = NULL' : ''} WHERE id = ?`,
+            `UPDATE package_installs SET version = ?, hex_count = ?, record_count = ?, updated_at = ? WHERE id = ?`,
         ).bind(previewed.version, hexCount, previewed.records.length, now, previewed.rowId).run();
     } else {
         await c.env.DB.batch([
@@ -436,57 +440,42 @@ installsRoute.post('/:id/install', async (c) => {
     return ok(c, InstallResult.parse({ installId: rowId, ...called.parsed.data }));
 });
 
-/** Migration 0016 adds removed_at; a Worker that runs before it lists nothing as removed and refuses restore. */
-async function hasRemovedColumn(env: Env): Promise<boolean> {
-    const row = await env.DB.prepare(`SELECT name FROM pragma_table_info('package_installs') WHERE name = 'removed_at'`).first<{ name: string }>();
-    return row?.name === 'removed_at';
-}
-
-installsRoute.post('/:id/snapshots/:snapshotId/restore', async (c) => {
+installsRoute.delete('/:id/installs/:installId', async (c) => {
     const owned = await ownedUniverse(c);
     if (owned instanceof Response) return owned;
-    if (!(await installsReady(c.env)) || !(await hasRemovedColumn(c.env))) return unavailable(c);
-    const snapshotId = c.req.param('snapshotId');
-    const called = await doCall<{ snapshotId: string; hexes: number; records: number; sectors: number; rowId: string | null; prevVersion: number | null }>(
-        owned, c, '/install/restore', { snapshotId },
-    );
+    if (!(await installsReady(c.env))) return unavailable(c);
+    const row = await c.env.DB.prepare(`SELECT id, package_id AS packageId FROM package_installs WHERE id = ? AND universe_id = ?`)
+        .bind(c.req.param('installId'), owned.row.id).first<{ id: string; packageId: string }>();
+    if (!row) return fail(c, 404, 'not_found', 'No such import.');
+    const count = await c.env.DB.prepare(`SELECT COUNT(*) AS n FROM package_installs WHERE universe_id = ? AND package_id = ?`)
+        .bind(owned.row.id, row.packageId).first<{ n: number }>();
+    const called = await doCall<{ hexes: number; records: number; sectors: number }>(owned, c, '/install/remove', {
+        installId: row.id,
+        packageId: row.packageId,
+        sole: Number(count?.n ?? 0) <= 1,
+    });
     if (!called.parsed.ok || !called.parsed.data) {
-        const error = called.parsed.error;
-        if (error && (called.status === 400 || called.status === 404 || called.status === 409)) {
-            return fail(c, called.status as 400 | 404 | 409, error.code as never, error.message, error.details);
-        }
         if (called.status === 429) return fail(c, 429, 'rate_limited', 'Too many requests.');
-        throw new Error(error?.message || 'Restore failed.');
+        throw new Error(called.parsed.error?.message || 'Remove failed.');
     }
-    const data = called.parsed.data;
-    if (data.rowId) {
-        const now = new Date().toISOString();
-        if (data.prevVersion == null) {
-            await c.env.DB.prepare(`UPDATE package_installs SET removed_at = ?, updated_at = ? WHERE id = ? AND universe_id = ?`)
-                .bind(now, now, data.rowId, owned.row.id).run();
-        } else {
-            await c.env.DB.prepare(`UPDATE package_installs SET version = ?, updated_at = ? WHERE id = ? AND universe_id = ?`)
-                .bind(data.prevVersion, now, data.rowId, owned.row.id).run();
-        }
-    }
-    return ok(c, InstallRestored.parse({ snapshotId: data.snapshotId, hexes: data.hexes, records: data.records, sectors: data.sectors }));
+    await c.env.DB.prepare(`DELETE FROM package_installs WHERE id = ? AND universe_id = ?`).bind(row.id, owned.row.id).run();
+    return ok(c, InstallRemoved.parse(called.parsed.data));
 });
 
 installsRoute.get('/:id/installs', async (c) => {
     const owned = await ownedUniverse(c);
     if (owned instanceof Response) return owned;
     if (!(await installsReady(c.env))) return unavailable(c);
-    const removable = await hasRemovedColumn(c.env);
     const listed = await c.env.DB.prepare(
         `SELECT i.id AS installId, i.package_id AS packageId, p.title AS title, i.version AS version,
                 p.latest_version AS latestVersion, p.hidden AS hidden, i.hex_count AS hexCount,
-                i.placement AS placement, ${removable ? 'i.removed_at' : 'NULL'} AS removedAt,
+                i.placement AS placement,
                 i.created_at AS installedAt, i.updated_at AS updatedAt
          FROM package_installs i JOIN packages p ON p.id = i.package_id
          WHERE i.universe_id = ? ORDER BY i.updated_at DESC, i.id DESC`,
     ).bind(owned.row.id).all<{
         installId: string; packageId: string; title: string; version: number; latestVersion: number;
-        hidden: number; hexCount: number; placement: string | null; removedAt: string | null; installedAt: string; updatedAt: string;
+        hidden: number; hexCount: number; placement: string | null; installedAt: string; updatedAt: string;
     }>();
     const items = (listed.results ?? []).map((row) => {
         const hidden = Number(row.hidden) === 1;
@@ -497,9 +486,8 @@ installsRoute.get('/:id/installs', async (c) => {
             title: row.title,
             version: row.version,
             latestVersion: latest,
-            updateAvailable: !row.removedAt && !hidden && latest > row.version,
+            updateAvailable: !hidden && latest > row.version,
             placement: row.placement ? JSON.parse(row.placement) as unknown : null,
-            removed: !!row.removedAt,
             hexCount: row.hexCount,
             installedAt: row.installedAt,
             updatedAt: row.updatedAt,

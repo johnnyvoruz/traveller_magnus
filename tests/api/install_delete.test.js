@@ -141,21 +141,21 @@ async function settle(base, packageId, version, cookie) {
 }
 
 if (process.env.RUN_API_TESTS !== '1') {
-    test('undo of an import', { skip: 'set RUN_API_TESTS=1' }, () => {});
+    test('remove an import', { skip: 'set RUN_API_TESTS=1' }, () => {});
 } else if (!existsSync(wranglerBin)) {
-    test('undo of an import', { skip: 'wrangler is absent' }, () => {});
+    test('remove an import', { skip: 'wrangler is absent' }, () => {});
 } else {
-    test('undo of an import: all or nothing, once, refused after later edits, own sectors go', { timeout: 400000 }, async () => {
-        const persistTo = mkdtempSync(path.join(tmpdir(), 'voyage-restore-'));
-        const port = 18878;
+    test('remove an import: a plain delete, edited rows too; one import per package', { timeout: 400000 }, async () => {
+        const persistTo = mkdtempSync(path.join(tmpdir(), 'voyage-remove-'));
+        const port = 18879;
         const base = `http://127.0.0.1:${port}`;
         let child = null;
         try {
             runWrangler(['d1', 'migrations', 'apply', 'voyage', '--local', '--persist-to', persistTo]);
             const stamp = randomBytes(4).toString('hex');
-            const version = `rst${stamp}`;
-            const author = userCookie(`rsa${stamp}`, `rsa${stamp}@localhost`, persistTo);
-            const reader = userCookie(`rsb${stamp}`, `rsb${stamp}@localhost`, persistTo);
+            const version = `rmv${stamp}`;
+            const author = userCookie(`rma${stamp}`, `rma${stamp}@localhost`, persistTo);
+            const reader = userCookie(`rmb${stamp}`, `rmb${stamp}@localhost`, persistTo);
             const aHeaders = { 'content-type': 'application/json', cookie: author };
             const bHeaders = { 'content-type': 'application/json', cookie: reader };
             sqlFile(persistTo, `
@@ -169,9 +169,9 @@ VALUES ('${version}', '1.1.0', 'M1105', 'TravellerMagnus', '${SETTINGS}', '[]', 
                 zone: '', bases: '', tradeCodes: [], pbg: '', ix: 0, partial: null,
             };
             r2Put(persistTo, `truth/${version}/manifest.json`, JSON.stringify({ sectors: [{ slug: 'Chart', x: 0, y: 0 }, { slug: 'Demo', x: 1, y: 0 }] }));
-            r2Put(persistTo, `truth/${version}/sectors/Chart/index.json`, JSON.stringify({ hexes: { '0101': chartEntry } }));
+            r2Put(persistTo, `truth/${version}/sectors/Chart/index.json`, JSON.stringify({ hexes: { 1910: chartEntry } }));
             r2Put(persistTo, `objects/${chartHash}`, chartBody);
-            child = startDev({ port, persistTo, inspectorPort: 19878 });
+            child = startDev({ port, persistTo, inspectorPort: 19879 });
             await up(base);
 
             const made = async (headers, name) => {
@@ -189,145 +189,126 @@ VALUES ('${version}', '1.1.0', 'M1105', 'TravellerMagnus', '${SETTINGS}', '[]', 
                 assert.equal(res.status, 200, JSON.stringify(res.body));
                 return res.body.data;
             };
-            const hexRead = async (universeId, key) => {
+            const hexAt = (universeId, key) => {
                 const [sector, local] = key.split('/');
-                const res = await jsonFetch(`${base}/api/universes/${universeId}/hexes/${encodeURIComponent(sector)}/${local}`, { headers: { cookie: reader } });
-                assert.equal(res.status, 200, JSON.stringify(res.body));
-                return res.body.data;
+                return jsonFetch(`${base}/api/universes/${universeId}/hexes/${encodeURIComponent(sector)}/${local}`, { headers: { cookie: reader } });
             };
             const source = await made(aHeaders, 'Source');
             const target = await made(bHeaders, 'Target');
+            await blank(aHeaders, source, 'Chart/3201');
             await blank(aHeaders, source, 'Demo/1910');
-            const struck = await jsonFetch(`${base}/api/universes/${source}/hexes/Chart/0101/remove`, {
-                method: 'POST', headers: aHeaders, body: JSON.stringify({ baseRev: 0 }),
-            });
-            assert.equal(struck.status, 200, JSON.stringify(struck.body));
             const seeded = await jsonFetch(`${base}/api/universes/${source}/campaign/changes`, {
                 method: 'PATCH', headers: aHeaders, body: JSON.stringify({ records: [record(RECORD)] }),
             });
             assert.equal(seeded.status, 200, JSON.stringify(seeded.body));
             const created = await jsonFetch(`${base}/api/packages`, {
                 method: 'POST', headers: aHeaders,
-                body: JSON.stringify({ title: 'Belt', kind: 'subsector', description: '', tags: [], universeId: source }),
+                body: JSON.stringify({ title: 'Edge', kind: 'subsector', description: '', tags: [], universeId: source }),
             });
             assert.equal(created.status, 201, JSON.stringify(created.body));
             const packageId = created.body.data.id;
             const v1 = await jsonFetch(`${base}/api/packages/${packageId}/versions`, {
                 method: 'POST', headers: aHeaders,
-                body: JSON.stringify({ universeId: source, hexKeys: ['Demo/1910', 'Chart/0101'], recordIds: [RECORD] }),
+                body: JSON.stringify({ universeId: source, hexKeys: ['Chart/3201', 'Demo/1910'], recordIds: [RECORD] }),
             });
             assert.equal(v1.status, 202, JSON.stringify(v1.body));
             await settle(base, packageId, 1, author);
 
+            // Placed one sector west: Demo/1910 lands on charted Chart/1910, Chart/3201 in a new own sector at slot (-1,0).
+            const placement = { anchor: 'Demo/1910', to: 'Chart/1910' };
+            const previewPath = (v, extra = '') => `${base}/api/universes/${target}/install/preview?packageId=${packageId}&version=${v}${extra}`;
+            const placedQuery = `&anchor=${encodeURIComponent(placement.anchor)}&to=${encodeURIComponent(placement.to)}`;
+            const chartBefore = await hexAt(target, 'Chart/1910');
+            const preview = await jsonFetch(previewPath(1, placedQuery), { headers: { cookie: reader } });
+            assert.equal(preview.status, 200, JSON.stringify(preview.body));
+            assert.equal(preview.body.data.sectorsCreated.length, 1);
+            assert.deepEqual(preview.body.data.sectorsCreated[0].slot, { x: -1, y: 0 });
+            const madeId = preview.body.data.sectorsCreated[0].id;
+            const outcomes = Object.fromEntries(preview.body.data.hexes.map((hex) => [hex.from, [hex.to, hex.outcome]]));
+            assert.deepEqual(outcomes, { 'Demo/1910': ['Chart/1910', 'replaces chart'], 'Chart/3201': [`${madeId}/3201`, 'new'] });
             const installPath = `${base}/api/universes/${target}/install`;
-            const install = async (extra = {}) => {
-                const res = await jsonFetch(installPath, {
-                    method: 'POST', headers: bHeaders,
-                    body: JSON.stringify({ packageId, version: 1, resolutions: {}, recordResolutions: {}, expect: { conflicts: 0 }, ...extra }),
-                });
-                assert.equal(res.status, 200, JSON.stringify(res.body));
-                return res.body.data;
-            };
-            const restorePath = (snapshotId) => `${base}/api/universes/${target}/snapshots/${snapshotId}/restore`;
-            const restore = (snapshotId, headers = bHeaders) => jsonFetch(restorePath(snapshotId), { method: 'POST', headers, body: '{}' });
-            const bytesOf = async () => {
-                const file = path.join(mkdtempSync(path.join(tmpdir(), 'voyage-q-')), 'q.sql');
-                writeFileSync(file, `SELECT object_bytes AS b FROM universes WHERE id = '${target}';`);
-                const out = runWrangler(['d1', 'execute', 'voyage', '--local', '--persist-to', persistTo, '--json', '--file', file]);
-                return JSON.parse(String(out))[0].results[0].b;
-            };
-
-            const chartPath = `${base}/api/universes/${target}/hexes/Chart/0101`;
-            const chartBefore = await jsonFetch(chartPath, { headers: { cookie: reader } });
-            const first = await install();
-            const afterInstall = await hexRead(target, 'Demo/1910');
-            assert.equal(afterInstall.state, 'override', JSON.stringify(afterInstall));
-            assert.equal((await hexRead(target, 'Chart/0101')).state, 'removed');
-            const charged = await bytesOf();
-            assert.ok(charged > 0);
-
-            const signedOut = await jsonFetch(restorePath(first.snapshotId), { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
-            assert.equal(signedOut.status, 401);
-            const notOwner = await restore(first.snapshotId, aHeaders);
-            assert.equal(notOwner.status, 404);
-            assert.equal(notOwner.body.error.message, 'No such universe.');
-            const unknown = await restore('in_missing');
-            assert.equal(unknown.status, 404);
-            assert.equal(unknown.body.error.message, 'There is no such undo point.');
-
-            // A generate job leaves an undo point too; it is not restored here.
-            const job = await jsonFetch(`${base}/api/universes/${target}/generate`, {
+            const install = (body) => jsonFetch(installPath, {
                 method: 'POST', headers: bHeaders,
-                body: JSON.stringify({ hexKeys: ['Demo/0501', 'Demo/0502'], edition: 'MgT2E', generator: 'top-down' }),
+                body: JSON.stringify({ packageId, resolutions: {}, recordResolutions: {}, expect: { conflicts: 0 }, ...body }),
             });
-            assert.equal(job.status, 202, JSON.stringify(job.body));
-            const wrongKind = await restore(job.body.data.jobId);
-            assert.equal(wrongKind.status, 400);
-            assert.equal(wrongKind.body.error.code, 'validation');
-            assert.equal(wrongKind.body.error.message, 'Only an undo point made by an import can be restored here.');
+            const first = await install({ version: 1, placement });
+            assert.equal(first.status, 200, JSON.stringify(first.body));
+            assert.equal('snapshotId' in first.body.data, false);
+            const installId = first.body.data.installId;
+            assert.equal((await hexAt(target, 'Chart/1910')).body.data.state, 'override');
+            assert.equal((await hexAt(target, `${madeId}/3201`)).body.data.state, 'own');
 
-            const beforeUndo = await bytesOf();
-            const undone = await restore(first.snapshotId);
-            assert.equal(undone.status, 200, JSON.stringify(undone.body));
-            assert.deepEqual(undone.body.data, { snapshotId: first.snapshotId, hexes: 2, records: 1, sectors: 0 });
-            const gone = await jsonFetch(`${base}/api/universes/${target}/hexes/Demo/1910`, { headers: { cookie: reader } });
-            assert.equal(gone.status, 404, JSON.stringify(gone.body));
-            assert.equal(gone.body.error.message, 'No such hex.');
-            // Chart/0101 reads as it did before the import (no stored row).
-            const chartBack = await jsonFetch(chartPath, { headers: { cookie: reader } });
-            assert.deepEqual([chartBack.status, chartBack.body], [chartBefore.status, chartBefore.body]);
-            const campaign = await jsonFetch(`${base}/api/universes/${target}/campaign`, { headers: { cookie: reader } });
-            const left = campaign.body.data.records.find((row) => row.id === RECORD);
-            assert.ok(!left || left.deleted === true, JSON.stringify(left));
+            // One import per package per campaign: preview and install both refuse a second.
+            const ALREADY = 'This campaign already has this package. Remove it first, or take its update.';
+            const againInPlace = await jsonFetch(previewPath(1), { headers: { cookie: reader } });
+            assert.equal(againInPlace.status, 409, JSON.stringify(againInPlace.body));
+            assert.equal(againInPlace.body.error.message, ALREADY);
+            const againPlaced = await jsonFetch(previewPath(1, `&anchor=Demo%2F1910&to=Chart%2F1909`), { headers: { cookie: reader } });
+            assert.equal(againPlaced.status, 409);
+            assert.equal(againPlaced.body.error.message, ALREADY);
+            const secondInstall = await install({ version: 1, placement: { anchor: 'Demo/1910', to: 'Chart/1909' } });
+            assert.equal(secondInstall.status, 409);
+            assert.equal(secondInstall.body.error.code, 'conflict');
+            assert.equal(secondInstall.body.error.message, ALREADY);
+
+            // An update is the same row and keeps its placement: Demo/1911 follows to Chart/1911.
+            await blank(aHeaders, source, 'Demo/1911');
+            const v2 = await jsonFetch(`${base}/api/packages/${packageId}/versions`, {
+                method: 'POST', headers: aHeaders,
+                body: JSON.stringify({ universeId: source, hexKeys: ['Chart/3201', 'Demo/1910', 'Demo/1911'], recordIds: [RECORD] }),
+            });
+            assert.equal(v2.status, 202, JSON.stringify(v2.body));
+            await settle(base, packageId, 2, author);
+            const update = await jsonFetch(previewPath(2, `&installId=${installId}`), { headers: { cookie: reader } });
+            assert.equal(update.status, 200, JSON.stringify(update.body));
+            assert.deepEqual(update.body.data.placement, placement);
+            const updated = Object.fromEntries(update.body.data.hexes.map((hex) => [hex.from, [hex.to, hex.outcome]]));
+            assert.deepEqual(updated['Demo/1911'], ['Chart/1911', 'new']);
+            const took = await install({ version: 2, installId, expect: { conflicts: update.body.data.conflicts } });
+            assert.equal(took.status, 200, JSON.stringify(took.body));
+            assert.equal(took.body.data.installId, installId);
             let list = await jsonFetch(`${base}/api/universes/${target}/installs`, { headers: { cookie: reader } });
             assert.equal(list.body.data.items.length, 1);
-            assert.equal(list.body.data.items[0].removed, true);
-            assert.equal(list.body.data.items[0].updateAvailable, false);
-            // The generate job may still be charging; the undo itself gives nothing back.
-            assert.ok(await bytesOf() >= beforeUndo, 'no quota refund (contract F13)');
+            assert.equal(list.body.data.items[0].version, 2);
+            assert.deepEqual(list.body.data.items[0].placement, placement);
+            assert.equal('removed' in list.body.data.items[0], false);
 
-            const twice = await restore(first.snapshotId);
-            assert.equal(twice.status, 409);
-            assert.equal(twice.body.error.code, 'conflict');
-            assert.equal(twice.body.error.message, 'This import is already undone.');
-
-            // Import again, edit one system, and the undo is refused with that hex named.
-            const second = await install();
-            assert.equal(second.installId, first.installId);
-            list = await jsonFetch(`${base}/api/universes/${target}/installs`, { headers: { cookie: reader } });
-            assert.equal(list.body.data.items[0].removed, false);
-            const present = await hexRead(target, 'Demo/1910');
-            const edited = await jsonFetch(`${base}/api/universes/${target}/hexes/Demo/1910/remove`, {
+            // An imported system edited since is still part of the import.
+            const present = (await hexAt(target, 'Chart/1910')).body.data;
+            const edited = await jsonFetch(`${base}/api/universes/${target}/hexes/Chart/1910/remove`, {
                 method: 'POST', headers: bHeaders, body: JSON.stringify({ baseRev: present.rev }),
             });
             assert.equal(edited.status, 200, JSON.stringify(edited.body));
-            const refused = await restore(second.snapshotId);
-            assert.equal(refused.status, 409);
-            assert.equal(refused.body.error.message, 'Some systems or records changed after the import. Undo those changes first, then try again.');
-            assert.deepEqual(refused.body.error.details.hexKeys, ['Demo/1910']);
-            assert.deepEqual(refused.body.error.details.recordIds, []);
-            assert.equal((await hexRead(target, 'Chart/0101')).state, 'removed', 'nothing was written');
 
-            // A placed import into empty space makes a sector; its undo takes the sector away.
-            const placedTarget = await made(bHeaders, 'Placed');
-            const placement = { anchor: 'Demo/1910', to: '~slot_-3_0/1910' };
-            const preview = await jsonFetch(`${base}/api/universes/${placedTarget}/install/preview?packageId=${packageId}&version=1&anchor=${encodeURIComponent(placement.anchor)}&to=${encodeURIComponent(placement.to)}`, { headers: { cookie: reader } });
-            assert.equal(preview.status, 200, JSON.stringify(preview.body));
-            // Demo/1910 lands in slot (-3,0); Chart/0101, 50 columns west of it, lands in column 1 of slot (-4,0).
-            assert.deepEqual(preview.body.data.sectorsCreated.map((plan) => plan.slot).sort((a, b) => a.x - b.x), [{ x: -4, y: 0 }, { x: -3, y: 0 }]);
-            const madeId = preview.body.data.sectorsCreated.find((plan) => plan.slot.x === -3).id;
-            const placed = await jsonFetch(`${base}/api/universes/${placedTarget}/install`, {
-                method: 'POST', headers: bHeaders,
-                body: JSON.stringify({ packageId, version: 1, placement, resolutions: {}, recordResolutions: {}, expect: { conflicts: preview.body.data.conflicts } }),
-            });
-            assert.equal(placed.status, 200, JSON.stringify(placed.body));
-            let sectors = await jsonFetch(`${base}/api/universes/${placedTarget}/sectors`, { headers: { cookie: reader } });
-            assert.ok(sectors.body.data.items.some((item) => item.id === madeId), JSON.stringify(sectors.body.data));
-            const placedUndo = await jsonFetch(`${base}/api/universes/${placedTarget}/snapshots/${placed.body.data.snapshotId}/restore`, { method: 'POST', headers: bHeaders, body: '{}' });
-            assert.equal(placedUndo.status, 200, JSON.stringify(placedUndo.body));
-            assert.equal(placedUndo.body.data.sectors, 2);
-            sectors = await jsonFetch(`${base}/api/universes/${placedTarget}/sectors`, { headers: { cookie: reader } });
-            assert.equal(sectors.body.data.items.some((item) => item.id === madeId), false);
+            const removePath = (id) => `${base}/api/universes/${target}/installs/${id}`;
+            const signedOut = await jsonFetch(removePath(installId), { method: 'DELETE' });
+            assert.equal(signedOut.status, 401);
+            const notOwner = await jsonFetch(removePath(installId), { method: 'DELETE', headers: { cookie: author } });
+            assert.equal(notOwner.status, 404);
+            assert.equal(notOwner.body.error.message, 'No such universe.');
+            const unknown = await jsonFetch(removePath('in_missing'), { method: 'DELETE', headers: { cookie: reader } });
+            assert.equal(unknown.status, 404);
+            assert.equal(unknown.body.error.message, 'No such import.');
+
+            const removed = await jsonFetch(removePath(installId), { method: 'DELETE', headers: { cookie: reader } });
+            assert.equal(removed.status, 200, JSON.stringify(removed.body));
+            assert.deepEqual(removed.body.data, { hexes: 3, records: 1, sectors: 1 });
+            const chartBack = await hexAt(target, 'Chart/1910');
+            assert.deepEqual([chartBack.status, chartBack.body], [chartBefore.status, chartBefore.body]);
+            assert.equal((await hexAt(target, 'Chart/1911')).status, 404, 'an own row with no chart under it is gone');
+            const sectors = await jsonFetch(`${base}/api/universes/${target}/sectors`, { headers: { cookie: reader } });
+            assert.equal(sectors.body.data.items.some((item) => item.id === madeId), false, JSON.stringify(sectors.body.data));
+            const campaign = await jsonFetch(`${base}/api/universes/${target}/campaign`, { headers: { cookie: reader } });
+            const left = campaign.body.data.records.find((row) => row.id === RECORD);
+            assert.ok(!left || left.deleted === true, JSON.stringify(left));
+            list = await jsonFetch(`${base}/api/universes/${target}/installs`, { headers: { cookie: reader } });
+            assert.deepEqual(list.body.data.items, []);
+            const twice = await jsonFetch(removePath(installId), { method: 'DELETE', headers: { cookie: reader } });
+            assert.equal(twice.status, 404);
+
+            // Removed, it can be imported again.
+            const back = await install({ version: 2, placement });
+            assert.equal(back.status, 200, JSON.stringify(back.body));
         } finally {
             if (child) stopDev(child.pid);
             rmSync(persistTo, { recursive: true, force: true });

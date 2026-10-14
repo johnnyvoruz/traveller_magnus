@@ -221,7 +221,6 @@ export const InstallResult = z.object({
     written: z.number().int().nonnegative(),
     skipped: z.number().int().nonnegative(),
     records: z.number().int().nonnegative(),
-    snapshotId: z.string(),
 }).strict();
 export type InstallResult = z.infer<typeof InstallResult>;
 
@@ -236,19 +235,16 @@ export const InstallRow = z.object({
     hexCount: z.number().int().nonnegative(),
     installedAt: z.string(),
     updatedAt: z.string(),
-    /** F13. The import was undone. */
-    removed: z.boolean(),
 }).strict();
 export type InstallRow = z.infer<typeof InstallRow>;
 
 export const InstallList = z.object({ items: z.array(InstallRow) }).strict();
 export type InstallList = z.infer<typeof InstallList>;
 
-/** F13. The answer of undoing an import. */
-export const InstallRestored = z.object({
-    snapshotId: z.string(),
+/** F14. The answer of removing an import: what was deleted. */
+export const InstallRemoved = z.object({
     hexes: z.number().int().nonnegative(),
     records: z.number().int().nonnegative(),
     sectors: z.number().int().nonnegative(),
 }).strict();
-export type InstallRestored = z.infer<typeof InstallRestored>;
+export type InstallRemoved = z.infer<typeof InstallRemoved>;
