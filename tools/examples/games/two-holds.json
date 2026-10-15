@@ -1,0 +1,80 @@
+{
+  "game": "Two Holds",
+  "referee": "lamp_on_two",
+  "showReferee": true,
+  "clockDays": 403504,
+  "ships": [
+    {
+      "name": "Grey Parcel",
+      "crew": [
+        "Oda Kline",
+        "Ruf Bennet"
+      ],
+      "legs": [
+        {
+          "from": "Spinward_Marches/0321",
+          "to": "Spinward_Marches/0421",
+          "departs": 403474,
+          "arrives": 403480
+        },
+        {
+          "from": "Spinward_Marches/0421",
+          "to": "Spinward_Marches/0620",
+          "departs": 403481,
+          "arrives": 403487
+        },
+        {
+          "from": "Spinward_Marches/0620",
+          "to": "Spinward_Marches/0618",
+          "departs": 403488,
+          "arrives": 403494
+        }
+      ]
+    },
+    {
+      "name": "Cold Lamp",
+      "crew": [
+        "Mina Sol",
+        "Paz Iven"
+      ],
+      "legs": [
+        {
+          "from": "Spinward_Marches/0425",
+          "to": "Spinward_Marches/0426",
+          "departs": 403474,
+          "arrives": 403480
+        },
+        {
+          "from": "Spinward_Marches/0426",
+          "to": "Spinward_Marches/0427",
+          "departs": 403481,
+          "arrives": 403487
+        },
+        {
+          "from": "Spinward_Marches/0427",
+          "to": "Spinward_Marches/0429",
+          "departs": 403488,
+          "arrives": 403494
+        }
+      ]
+    }
+  ],
+  "journal": [
+    {
+      "title": "Two ships, two ends",
+      "body": "Grey Parcel finished at Dekalb. Oda Kline and Ruf Bennet are aboard. Cold Lamp finished at Kardin with Mina Sol and Paz Iven. The referee has both logs.",
+      "when": {
+        "year": 1105,
+        "day": 170
+      }
+    },
+    {
+      "title": "No shared stop",
+      "body": "The two ships did not meet on this run. Each crew kept its own list. This note only says that both runs are finished.",
+      "when": {
+        "year": 1105,
+        "day": 178
+      }
+    }
+  ]
+}

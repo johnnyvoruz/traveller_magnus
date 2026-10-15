@@ -52,6 +52,7 @@ export {
     CampaignEntry,
     mentionsOf,
     CampaignLink,
+    Party,
     CampaignSettings,
     CampaignClock,
     ClockChange,
@@ -70,11 +71,20 @@ export {
 } from './schemas/campaign.ts';
 export type { CampaignRecordType, CampaignEntryKind, CampaignLinkKind, SystemAnchor, LocateAt } from './schemas/campaign.ts';
 export { copyRecords } from './campaign_copy.ts';
-export { PUBLIC_DEFAULT_DAYS, publicMarkHex } from './public_hex.ts';
-export type { PublicHex } from './public_hex.ts';
+export { PUBLIC_DEFAULT_DAYS, fitPublicCard, publicCardJournal, publicFinishedLegs, publicFirstHex, publicMarkId, publicShips } from './public_hex.ts';
+export type { PublicHex, PublicShipPlace } from './public_hex.ts';
 export {
+    PUBLIC_CARD_BODY,
+    PUBLIC_CARD_BYTES,
+    PUBLIC_CARD_ENTRIES,
+    PUBLIC_NAMES_PER_SHIP,
+    PUBLIC_SHIPS_PER_HEX,
+    PublicFinishedLeg,
     PublicGamesSetting,
     PublicGamesHex,
+    PublicJournalNote,
+    PublicShipCard,
+    PublicShipMark,
     PublicGamesSector,
     PublicGamesSectorSlug,
     PublicGamesTruthVersion,

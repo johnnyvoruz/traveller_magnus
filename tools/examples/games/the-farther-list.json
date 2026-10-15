@@ -1,0 +1,108 @@
+{
+  "game": "The Farther List",
+  "referee": "last_cabin",
+  "showReferee": false,
+  "clockDays": 403496,
+  "ships": [
+    {
+      "name": "Low Cabin",
+      "crew": [
+        "Ryn Cole"
+      ],
+      "legs": [
+        {
+          "from": "Gvurrdon/0104",
+          "to": "Gvurrdon/0202",
+          "departs": 403464,
+          "arrives": 403470
+        },
+        {
+          "from": "Gvurrdon/0202",
+          "to": "Gvurrdon/0401",
+          "departs": 403471,
+          "arrives": 403477
+        },
+        {
+          "from": "Gvurrdon/0401",
+          "to": "Gvurrdon/0402",
+          "departs": 403478,
+          "arrives": 403484
+        }
+      ]
+    },
+    {
+      "name": "Pale Stamp",
+      "crew": [
+        "Tamsin Bole",
+        "Uri Dane",
+        "Vera Lott",
+        "Ned Nair"
+      ],
+      "legs": [
+        {
+          "from": "Gvurrdon/0112",
+          "to": "Gvurrdon/0113",
+          "departs": 403464,
+          "arrives": 403470
+        },
+        {
+          "from": "Gvurrdon/0113",
+          "to": "Gvurrdon/0212",
+          "departs": 403471,
+          "arrives": 403477
+        },
+        {
+          "from": "Gvurrdon/0212",
+          "to": "Gvurrdon/0411",
+          "departs": 403478,
+          "arrives": 403484
+        }
+      ]
+    },
+    {
+      "name": "Far Column",
+      "crew": [
+        "Xela Dorn",
+        "Yorim Blake"
+      ],
+      "legs": [
+        {
+          "from": "Gvurrdon/0130",
+          "to": "Gvurrdon/0131",
+          "departs": 403464,
+          "arrives": 403470
+        },
+        {
+          "from": "Gvurrdon/0131",
+          "to": "Gvurrdon/0230",
+          "departs": 403471,
+          "arrives": 403477
+        },
+        {
+          "from": "Gvurrdon/0230",
+          "to": "Gvurrdon/0231",
+          "departs": 403478,
+          "arrives": 403484
+        }
+      ]
+    }
+  ],
+  "journal": [
+    {
+      "title": "Three ships, three worlds",
+      "body": "Low Cabin is at Knoelurzudal with Ryn Cole. Pale Stamp is at Zuts Asgning. Far Column is at Tseezh. Each crew sent one line, and this note is that line.",
+      "when": {
+        "year": 1105,
+        "day": 160
+      }
+    },
+    {
+      "title": "Who is aboard",
+      "body": "Tamsin Bole, Uri Dane, Vera Lott, and Ned Nair are on Pale Stamp. Xela Dorn and Yorim Blake are on Far Column. Ryn Cole is alone on Low Cabin.",
+      "when": {
+        "year": 1105,
+        "day": 168
+      }
+    }
+  ]
+}

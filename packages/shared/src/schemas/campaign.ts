@@ -26,6 +26,8 @@ export const CAMPAIGN_LIMITS = {
     entryTitle: 200,
     entryBody: 100_000,
     mentions: 200,
+    /** Party ships. A table of spare hulls fits; the public feed lists the same number on one hex. */
+    partyShips: 20,
 } as const;
 
 /**
@@ -121,6 +123,8 @@ export type CampaignAnchor = z.infer<typeof CampaignAnchor>;
 const Rev = z.number().int().nonnegative();
 const Stamp = z.string().min(1);
 const Visibility = z.enum(['referee', 'players']);
+/** Journal only. Records and links stay on `Visibility`. */
+const EntryVisibility = z.enum(['referee', 'players', 'public']);
 
 /** Where a copied or shared row came from. Null on a row born in this campaign. */
 const CopiedProvenance = z.object({
@@ -232,12 +236,52 @@ export const CampaignLink = z.object({
 }).strict();
 export type CampaignLink = z.infer<typeof CampaignLink>;
 
+const RecordId = z.string().regex(RECORD_ID);
+
+/**
+ * A stored party from before vessel lists: one ship, and every member aboard it.
+ * `vesselId` null is no ship. The new shape is what callers read.
+ */
+function liftParty(value: unknown): unknown {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+    const party = value as Record<string, unknown>;
+    if ('vesselIds' in party) return value;
+    if (!('vesselId' in party)) return value;
+    const vesselId = party.vesselId;
+    const memberIds = Array.isArray(party.memberIds) ? party.memberIds : [];
+    const aboard: Record<string, unknown> = {};
+    if (typeof vesselId === 'string') {
+        for (const id of memberIds) {
+            if (typeof id === 'string') aboard[id] = vesselId;
+        }
+    }
+    return {
+        vesselIds: vesselId == null ? [] : [vesselId],
+        aboard,
+        memberIds: party.memberIds,
+        anchor: party.anchor,
+    };
+}
+
+const PartyObject = z.object({
+    vesselIds: z.array(RecordId).max(CAMPAIGN_LIMITS.partyShips),
+    aboard: z.record(RecordId, RecordId),
+    memberIds: z.array(RecordId),
+    anchor: CampaignAnchor,
+}).strict().superRefine((party, ctx) => {
+    if (new Set(party.vesselIds).size !== party.vesselIds.length) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'a ship is listed twice', path: ['vesselIds'] });
+    }
+    if (Object.keys(party.aboard).length > CAMPAIGN_LIMITS.records) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'too many people aboard', path: ['aboard'] });
+    }
+});
+
+export const Party = z.preprocess(liftParty, PartyObject);
+export type Party = z.infer<typeof PartyObject>;
+
 export const CampaignSettings = z.object({
-    party: z.object({
-        vesselId: z.string().regex(RECORD_ID).nullable(),
-        memberIds: z.array(z.string().regex(RECORD_ID)),
-        anchor: CampaignAnchor,
-    }).strict(),
+    party: Party,
     kinds: z.record(z.string(), z.array(z.string())),
     calendar: z.object({
         dateFormat: z.enum(['imperial', 'long']),
@@ -262,7 +306,7 @@ const CampaignEntryObject = z.object({
     realDate: z.string().regex(REAL_DATE).nullable(),
     sequence: z.number().int().min(1).nullable(),
     author: z.enum(['referee', 'players']),
-    visibility: Visibility,
+    visibility: EntryVisibility,
     anchor: CampaignAnchor,
     mentions: z.array(z.union([z.string().regex(RECORD_ID), z.string().regex(MENTION_HEX)])).max(CAMPAIGN_LIMITS.mentions),
     /**
@@ -349,6 +393,8 @@ export const Universe = z.object({
     lastSnapshotAt: z.string().nullable(),
     /** Present only when migration 0013 is applied. Omitted on an older database. */
     publicGames: z.boolean().optional(),
+    /** Present only when migration 0018 is applied. Omitted on an older database. */
+    showReferee: z.boolean().optional(),
 }).strict();
 export type Universe = z.infer<typeof Universe>;
 

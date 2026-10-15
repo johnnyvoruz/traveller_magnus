@@ -100,7 +100,15 @@ export type PackPlan = {
     records: PackRecord[];
     entries: PackEntry[];
     links: PackLink[];
-    party: { members: { id: string; name: string }[]; ship: { id: string; name: string } | null };
+    party: {
+        members: { id: string; name: string }[];
+        /** The first players ship, kept for a one-ship reader. */
+        ship: { id: string; name: string } | null;
+        /** Every players ship, in party order, with the players members aboard it. */
+        ships: { id: string; name: string; aboard: { id: string; name: string }[] }[];
+        /** Players members who are aboard no ship. */
+        ashore: { id: string; name: string }[];
+    };
     timeline: PackTimelineRow[];
 };
 
@@ -282,9 +290,10 @@ export function planPack(input: PackInput): PackPlan {
         });
     }
 
-    const party = { members: [] as { id: string; name: string }[], ship: null as { id: string; name: string } | null };
+    const party: PackPlan['party'] = { members: [], ship: null, ships: [], ashore: [] };
     const settingsParty = input.settings ? input.settings.party : null;
     if (settingsParty) {
+        const playersMembers: { id: string; name: string }[] = [];
         for (const id of settingsParty.memberIds) {
             const record = input.records[id];
             if (!record || record.deleted) continue;
@@ -292,14 +301,29 @@ export function planPack(input: PackInput): PackPlan {
                 counts.partyMembers += 1;
                 continue;
             }
-            party.members.push({ id: record.id, name: record.name });
+            const listed = { id: record.id, name: record.name };
+            party.members.push(listed);
+            playersMembers.push(listed);
         }
-        if (settingsParty.vesselId) {
-            const vessel = input.records[settingsParty.vesselId];
-            if (vessel && !vessel.deleted && vessel.type === 'vessel') {
-                if (playersRecord(vessel)) party.ship = { id: vessel.id, name: vessel.name };
-                else counts.ship += 1;
+        const vesselIds = Array.isArray(settingsParty.vesselIds) ? settingsParty.vesselIds : [];
+        const aboard = settingsParty.aboard && typeof settingsParty.aboard === 'object' ? settingsParty.aboard : {};
+        for (const vesselId of vesselIds) {
+            const vessel = input.records[vesselId];
+            if (!vessel || vessel.deleted || vessel.type !== 'vessel') continue;
+            if (!playersRecord(vessel)) {
+                counts.ship += 1;
+                continue;
             }
+            const onBoard = playersMembers.filter((member) => aboard[member.id] === vesselId);
+            party.ships.push({ id: vessel.id, name: vessel.name, aboard: onBoard });
+        }
+        party.ship = party.ships[0] ? { id: party.ships[0].id, name: party.ships[0].name } : null;
+        const listedIds = new Set(party.ships.flatMap((ship) => ship.aboard.map((member) => member.id)));
+        for (const member of playersMembers) {
+            const shipId = aboard[member.id];
+            if (shipId && vesselIds.includes(shipId)) continue;
+            if (listedIds.has(member.id)) continue;
+            party.ashore.push(member);
         }
     }
 

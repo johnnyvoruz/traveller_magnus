@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { placeAt } from '../../apps/web/src/campaign/place.ts';
-import { vesselsOnMap } from '../../apps/web/src/map/vessel_marks.ts';
+import { partyShipMarks, vesselsOnMap } from '../../apps/web/src/map/vessel_marks.ts';
 import { partyMarker } from '../../apps/web/src/workspace/party_where.ts';
 
 const STAMP = '2026-10-06T00:00:00.000Z';
@@ -62,7 +62,7 @@ function records() {
     };
 }
 
-const party = { vesselId: SHIP, memberIds: [], anchor: null };
+const party = { vesselIds: [SHIP], aboard: {}, memberIds: [], anchor: null };
 
 function shipAt(days) {
     return vesselsOnMap(records(), party, days).find((mark) => mark.id === SHIP);
@@ -102,5 +102,21 @@ test('a tracked vessel at four dates, and one with no track', () => {
     assert.equal(courier.hexKey, JEWELL.hexKey);
     assert.equal(courier.party, false);
     assert.equal(courier.inJump, false);
-    assert.equal(vesselsOnMap(records(), { vesselId: null, memberIds: [], anchor: null }, 15).some((mark) => mark.party), false);
+    assert.equal(vesselsOnMap(records(), { vesselIds: [], aboard: {}, memberIds: [], anchor: null }, 15).some((mark) => mark.party), false);
+});
+
+test('one party mark per ship, the lead flagged, with the names aboard', () => {
+    const rows = records();
+    const fleet = {
+        vesselIds: [SHIP, COURIER],
+        aboard: { [PERSON]: COURIER },
+        memberIds: [PERSON],
+        anchor: null,
+    };
+    const marks = partyShipMarks(rows, fleet, 25);
+    assert.deepEqual(marks.map((mark) => [mark.id, mark.lead, mark.aboard, mark.inJump]), [
+        [SHIP, true, [], true],
+        [COURIER, false, ['Voss'], false],
+    ]);
+    assert.equal(vesselsOnMap(rows, fleet, 25).filter((mark) => mark.party).map((mark) => mark.id).join(), SHIP);
 });

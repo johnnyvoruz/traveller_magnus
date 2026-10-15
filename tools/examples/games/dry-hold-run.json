@@ -1,0 +1,44 @@
+{
+  "game": "Dry Hold Run",
+  "referee": "north_copy",
+  "showReferee": true,
+  "clockDays": 403474,
+  "ships": [
+    {
+      "name": "Dry Hold",
+      "crew": [
+        "Renna Quist"
+      ],
+      "legs": [
+        {
+          "from": "Spinward_Marches/0122",
+          "to": "Spinward_Marches/0223",
+          "departs": 403446,
+          "arrives": 403452
+        },
+        {
+          "from": "Spinward_Marches/0223",
+          "to": "Spinward_Marches/0325",
+          "departs": 403453,
+          "arrives": 403459
+        },
+        {
+          "from": "Spinward_Marches/0325",
+          "to": "Spinward_Marches/0326",
+          "departs": 403460,
+          "arrives": 403466
+        }
+      ]
+    }
+  ],
+  "journal": [
+    {
+      "title": "Ektron, last line",
+      "body": "Dry Hold finished at Ektron. Renna Quist walked the bay once and sat back down. The next order can wait.",
+      "when": {
+        "year": 1105,
+        "day": 142
+      }
+    }
+  ]
+}

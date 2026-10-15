@@ -4,19 +4,19 @@ import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter, type Rout
 import type { SectorHex, SectorIndex, TreeEnvelope, TruthManifest, TruthOverview } from '@voyage/shared';
 import { campaign } from '../campaign/store.ts';
 import { centreAbove, fit, flight, SHORT_HOP, toWorld, zoomAt, type Camera, type Viewport } from '../map/camera.ts';
-import { standInSnapshot, type CampaignSnapshot } from '../map/campaign_layer.ts';
-import { vesselsOnMap } from '../map/vessel_marks.ts';
+import { partyShipTags, standInSnapshot, type CampaignSnapshot } from '../map/campaign_layer.ts';
+import { partyShipMarks, vesselsOnMap } from '../map/vessel_marks.ts';
 import { campaignDays, partyMarker } from '../workspace/party_where.ts';
 import { formatHex, fromGlobal, hexAt, parseHex, SECTOR_ROWS, sectorRect, stepGlobal, toGlobal, type HexStep } from '../map/geometry.ts';
 import { attachInput, type InputWhy } from '../map/input.ts';
-import { MapRenderer } from '../map/MapRenderer.ts';
+import { MapRenderer, type PublicShipHit } from '../map/MapRenderer.ts';
 import { dossierRoute, homeRect, targetFor, type DossierRoute } from '../map/routes.ts';
 import { bindBuilder } from '../builder/bind.ts';
 import { subsectorHexes, subsectorLetter, subsectorPath } from '../builder/address.ts';
 import { readMotion, readTheme } from '../map/theme.ts';
 import { PPP_NAMES, tierFor, type Tier } from '../map/tiers.ts';
 import { TruthClient } from '../map/truth_client.ts';
-import { publicGamesOverlay, watchPublicGames } from '../map/public_games.ts';
+import { dropPublicShip, publicGamesOverlay, watchPublicGames } from '../map/public_games.ts';
 import OmniBox from '../components/OmniBox.vue';
 import { bodyKeys, overviewModel, pickSystem, type AllegianceName, type TreeRow } from '../dossier/model.ts';
 import { askPaneEscape, setFrame } from '../shell/frame.ts';
@@ -28,6 +28,11 @@ import { dismissToast, showToast, toasts } from '../shell/toast.ts';
 import AccountMenu from '../workspace/AccountMenu.vue';
 import { editDateNext } from '../workspace/list_state.ts';
 import StardateChip from '../workspace/StardateChip.vue';
+import PublicShipCardView from '../workspace/PublicShipCard.vue';
+import PublicShipSheet, { type ShipSheetState } from '../workspace/PublicShipSheet.vue';
+import ShipPings from '../workspace/ShipPings.vue';
+import { fetchShipCard } from '../workspace/public_card.ts';
+import { SHIP_SHEET_BELOW, SHIP_SHEET_SHARE } from '../workspace/public_ship_card.ts';
 import FirstHint from '../workspace/FirstHint.vue';
 import { FIRST_PLACE, FIRST_WORLD, firstNear, HINT_KEY, hintShown, LAST_VIEW_KEY, openingFor, parseView, viewText } from '../workspace/first_visit.ts';
 import { afterClear } from '../workspace/build/clear.ts';
@@ -182,6 +187,21 @@ let pointerAt: { x: number; y: number } | null = null;
 let dragging: Gesture | null = null;
 /** The hover last drawn, so a pointer that stays on one hex draws nothing new. */
 let hoverSig = '';
+/** The public ship card shown, in the canvas's pixels; the mark a tap pinned it to; what pressed last. */
+const shipCard = ref<{ card: PublicShipHit; width: number; height: number } | null>(null);
+let shipPinned: string | null = null;
+let pressKind = 'mouse';
+/** The read-only card open on someone else's ship, the mark's key on the map, and the map's size for it. */
+const shipSheet = ref<ShipSheetState | null>(null);
+const shipSheetSize = ref({ width: 0, height: 0 });
+let shipSheetKey: string | null = null;
+/** False once the server said it has no cards (before 0018): the darts stay hover-only. */
+let shipCardsReady: boolean | null = null;
+/** Where each hex of public ships pings, and the last positions handed over. */
+const shipPings = ref<{ key: string; x: number; y: number }[]>([]);
+let shipPingSig = '';
+/** Pings on screen at once: the rest of the ships still glow, without a ring. */
+const SHIP_PINGS_MAX = 60;
 /** The camera the address asked for, until the visitor moves the chart: when the pane's width arrives it is aimed again at the chart the pane leaves. */
 let routeAim: { kind: 'camera'; camera: Camera } | { kind: 'fit'; rect: { x0: number; y0: number; x1: number; y1: number } } | null = null;
 /** The right-click menu: where it opened and the hexes it acts on. */
@@ -794,6 +814,16 @@ function setWidth(px: number): void {
     markDirty();
 }
 
+/** The feed answered: the next frame draws its ships (frame()). */
+let publicArrived = false;
+/** The sectors the last frame asked the feed for, at the hex tier; null further out. */
+let publicSectors: string[] | null = null;
+
+function onPublicGames(): void {
+    publicArrived = true;
+    markDirty();
+}
+
 function markDirty(): void {
     dirty = true;
     if (!raf) raf = nextFrame(frame);
@@ -816,6 +846,12 @@ function frame(): void {
     if (!dirty) return;
     dirty = false;
     if (renderer) {
+        // The feed answered since the last frame: its ships go in before this draw, not after it, or a
+        // map that has nothing else to redraw (a phone, signed out) would never show them.
+        if (publicArrived) {
+            publicArrived = false;
+            renderer.setPublicGames(publicSectors ? publicGamesOverlay(publicSectors) : null);
+        }
         const drawn = renderer.draw(cam);
         const el = canvasEl.value;
         if (el) el.dataset.drawMs = drawn.ms.toFixed(2);
@@ -825,7 +861,8 @@ function frame(): void {
             signedIn: session.user !== null,
             truthVersion: version ? version : null,
             sectors: drawn.tier === 'hex' ? drawn.sectorsOnScreen : [],
-        }, markDirty);
+        }, onPublicGames);
+        publicSectors = drawn.tier === 'hex' ? drawn.sectorsOnScreen : null;
         renderer.setPublicGames(drawn.tier === 'hex' ? publicGamesOverlay(drawn.sectorsOnScreen) : null);
         if (drawn.tier === 'hex' && version) {
             requestIndexes(drawn.sectorsOnScreen);
@@ -850,6 +887,8 @@ function frame(): void {
             placeEl.value.place(cam, viewport());
         }
         if (pointerAt) paintHover();
+        paintShipCard();
+        paintShipPings();
         if (sectorUi.moving) {
             const seen = slotsInView(cam, viewport());
             const held = viewSlots.value;
@@ -1418,6 +1457,24 @@ function chartClick(sx: number, sy: number): void {
         openVessel(vesselId);
         return;
     }
+    // Someone else's public ship: its read-only card. With a server before 0018 there is none, and the
+    // dart stays hover-only: a click lands on the hex, and a tap shows what hovering shows.
+    const ship = renderer ? renderer.publicShipAt(sx, sy) : null;
+    if (ship && shipCardsReady !== false) {
+        void openShip(ship, sx, sy);
+        return;
+    }
+    if (ship && pressKind === 'touch') {
+        shipPinned = ship.key;
+        paintShipCard();
+        return;
+    }
+    if (shipPinned) {
+        shipPinned = null;
+        paintShipCard();
+    }
+    // A click anywhere else on the map closes an open card, and goes on to what it would do.
+    if (shipSheet.value) closeShip(false);
     const world = toWorld(cam, viewport(), sx, sy);
     const hit = hexAt(world.x, world.y);
     const place = fromGlobal(hit.q, hit.r);
@@ -1666,11 +1723,121 @@ function onPointerHover(event: PointerEvent): void {
     }
     pointerAt = point;
     paintHover();
+    paintShipCard();
 }
 
 function onPointerOut(): void {
     pointerAt = null;
     paintHover();
+    paintShipCard();
+}
+
+/** What pressed the chart last: a tap on a public ship shows its card, a click does not. */
+function notePress(event: PointerEvent): void {
+    pressKind = event.pointerType;
+}
+
+/**
+ * Other people's public ships (prompts/d_public_ships_map.md): the card follows the mark under
+ * the mouse, or the one a finger tapped, while the map moves. Gone when its mark leaves the screen.
+ */
+function paintShipCard(): void {
+    let hit: PublicShipHit | null = null;
+    if (renderer && shipPinned) hit = renderer.publicShipByKey(shipPinned);
+    else if (renderer && pointerAt) hit = renderer.publicShipAt(pointerAt.x, pointerAt.y);
+    if (shipPinned && !hit) shipPinned = null;
+    // The ship whose card is open needs no hover card over it.
+    if (hit && shipSheet.value && hit.key === shipSheetKey) hit = null;
+    const sheet = shipSheet.value;
+    if (sheet && shipSheetKey && renderer) {
+        const mark = renderer.publicShipByKey(shipSheetKey);
+        const vp = viewport();
+        if (mark && (mark.place.x0 !== sheet.place.x0 || mark.place.y0 !== sheet.place.y0)) shipSheet.value = { ...sheet, place: mark.place };
+        if (shipSheetSize.value.width !== vp.width || shipSheetSize.value.height !== vp.height) shipSheetSize.value = { width: vp.width, height: vp.height };
+    }
+    const held = shipCard.value;
+    if (!hit) {
+        if (held) shipCard.value = null;
+        return;
+    }
+    const vp = viewport();
+    const was = held ? held.card.place : null;
+    const box = hit.place;
+    if (held && was && held.card.key === hit.key && held.width === vp.width && held.height === vp.height
+        && was.x0 === box.x0 && was.y0 === box.y0 && was.x1 === box.x1) return;
+    shipCard.value = { card: hit, width: vp.width, height: vp.height };
+}
+
+/** The pings follow their hexes while the map moves. Handed over only when one has moved a pixel. */
+function paintShipPings(): void {
+    const next = renderer ? renderer.publicShipPings() : [];
+    let sig = '';
+    const kept: { key: string; x: number; y: number }[] = [];
+    for (const ping of next) {
+        if (kept.length >= SHIP_PINGS_MAX) break;
+        const x = Math.round(ping.x);
+        const y = Math.round(ping.y);
+        kept.push({ key: ping.key, x, y });
+        sig += ping.key + ':' + x + ',' + y + '|';
+    }
+    if (sig === shipPingSig) return;
+    shipPingSig = sig;
+    shipPings.value = kept;
+}
+
+/**
+ * A click or a tap on someone else's ship opens its read-only card (prompts/d_party_ships_map.md
+ * item 2). A stack further out opens its first ship. What the feed said shows while the card loads.
+ */
+async function openShip(hit: PublicShipHit, sx: number, sy: number): Promise<void> {
+    const first = hit.ships[0];
+    if (!first) return;
+    const vp = viewport();
+    shipPinned = null;
+    shipSheetKey = hit.key;
+    shipSheetSize.value = { width: vp.width, height: vp.height };
+    shipSheet.value = { mark: first.mark, status: 'loading', ship: first.ship, aboard: first.aboard, example: first.example === true, card: null, place: hit.place };
+    if (renderer) renderer.setPublicRoute(null);
+    paintShipCard();
+    markDirty();
+    // On a phone the card is a sheet along the bottom: the ship glides into the band above it.
+    if (vp.width < SHIP_SHEET_BELOW) {
+        const mark = toWorld(cam, vp, (hit.place.x0 + hit.place.x1) / 2, (hit.place.y0 + hit.place.y1) / 2);
+        flyTo(centreAbove(cam, vp, mark.x, mark.y, vp.height * SHIP_SHEET_SHARE + 8));
+    }
+    const answer = await fetchShipCard(fetch, first.mark);
+    const now = shipSheet.value;
+    if (!now || now.mark !== first.mark) return;
+    if (answer.kind === 'off') {
+        // A server before 0018: no cards this visit. The press does what it did before cards.
+        shipCardsReady = false;
+        closeShip(false);
+        chartClick(sx, sy);
+        return;
+    }
+    if (answer.kind === 'card') {
+        shipCardsReady = true;
+        shipSheet.value = { ...now, status: 'card', card: answer.card };
+        if (renderer) renderer.setPublicRoute(answer.card.legs);
+    } else if (answer.kind === 'gone') {
+        // No longer public: the card says so and the dart goes.
+        shipSheet.value = { ...now, status: 'gone' };
+        dropPublicShip(first.mark);
+        if (renderer && version && chart) renderer.setPublicGames(publicGamesOverlay(chart.sectors.map((sector) => sector.slug).filter((slug) => hit.key.startsWith(slug + '/'))));
+    } else {
+        shipSheet.value = { ...now, status: 'failed' };
+    }
+    markDirty();
+}
+
+/** The card closes: its route goes with it. Focus goes back to the chart unless a click put it elsewhere. */
+function closeShip(refocus = true): void {
+    if (!shipSheet.value) return;
+    shipSheet.value = null;
+    shipSheetKey = null;
+    if (renderer) renderer.setPublicRoute(null);
+    if (refocus && canvasEl.value) canvasEl.value.focus({ preventScroll: true });
+    markDirty();
 }
 
 /** Shift, Alt and Space change what the next press does: the cursor and the hover say so at once, without a move. */
@@ -1942,12 +2109,19 @@ function snapshotFromStore(): CampaignSnapshot | null {
     if (!open && !locating.recordId) return null;
     // The party stands where its ship's track puts it at the campaign date (party_where.ts).
     const days = campaignDays(campaign.clock);
-    const mark = open && campaign.settings ? partyMarker(campaign.settings.party, campaign.records, days) : null;
+    const settings = open ? campaign.settings : null;
+    // One marker per party ship, each at its own place (vessel_marks.ts). A party with no ship on the
+    // map keeps the one marker where it stands.
+    const ships = settings ? partyShipMarks(campaign.records, settings.party, days) : [];
+    const mark = settings && ships.length === 0 ? partyMarker(settings.party, campaign.records, days) : null;
+    const partyIds = new Set(settings && Array.isArray(settings.party.vesselIds) ? settings.party.vesselIds : []);
     return {
         party: mark ? { name: mark.name, hexKey: mark.hexKey, focused: false } : null,
+        ships: partyShipTags(ships),
         locate: locateLine(),
         reducedMotion: prefersReducedMotion(),
-        vessels: open && campaign.settings ? vesselsOnMap(campaign.records, campaign.settings.party, days) : [],
+        // A party ship is drawn as the party's, so it is not drawn again as another vessel.
+        vessels: settings ? vesselsOnMap(campaign.records, settings.party, days).map((vessel) => ({ ...vessel, party: partyIds.has(vessel.id) })) : [],
     };
 }
 
@@ -2192,6 +2366,11 @@ function onMoveKey(event: KeyboardEvent): void {
 }
 
 function onMapKey(event: KeyboardEvent): void {
+    if (event.key === 'Escape' && shipSheet.value) {
+        event.preventDefault();
+        closeShip();
+        return;
+    }
     if (onMenuKey(event)) return;
     const step = NEIGHBOUR_KEY[event.code];
     if (step && buildReady() && selectionAnchor() && !event.ctrlKey && !event.altKey && !event.metaKey && !typingTarget(event)) {
@@ -2320,6 +2499,7 @@ onBeforeUnmount(() => {
     @keydown.capture="onMoveKey"
     @keydown="onMapKey"
     @keyup.capture="onHeldKey"
+    @pointerdown.capture="notePress"
     @pointermove="onPointerHover"
     @pointerleave="onPointerOut"
     @contextmenu="onBuildMenu"
@@ -2344,6 +2524,13 @@ onBeforeUnmount(() => {
       :slug-at="placeSlugAt"
       :key-at="placeKeyAt"
     />
+    <ShipPings :pings="shipPings" />
+    <PublicShipCardView
+      :card="shipCard ? shipCard.card : null"
+      :width="shipCard ? shipCard.width : 0"
+      :height="shipCard ? shipCard.height : 0"
+    />
+    <PublicShipSheet :state="shipSheet" :width="shipSheetSize.width" :height="shipSheetSize.height" @close="closeShip()" />
     <Rail
       ref="railEl"
       :panel-open="dossierShown"

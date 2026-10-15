@@ -11,7 +11,7 @@ import { ownedUniverse, type UniverseRow } from '../universe/forward';
 import { mountBuilderRoutes } from './builder';
 import { mountCampaignExport } from './campaign_export';
 import { mountObjectRoutes } from './objects';
-import { detectPublicGames, publicGamesReady, readPublicGames } from '../auth/public_schema';
+import { detectPublicCards, detectPublicGames, publicCardsReady, publicGamesReady, readPublicGames } from '../auth/public_schema';
 import { deletePublicMark } from '../universe/public_mark';
 import { refreshAfterCampaign, setPublicGames } from './public_games';
 
@@ -27,7 +27,7 @@ function database(c: { env: AppEnv['Bindings'] }) {
     return drizzle(c.env.DB, { schema: { universes } });
 }
 
-function present(row: UniverseRow, publicGames?: boolean) {
+function present(row: UniverseRow, flags?: { publicGames?: boolean; showReferee?: boolean }) {
     const body = {
         id: row.id,
         ownerId: row.ownerId,
@@ -44,17 +44,55 @@ function present(row: UniverseRow, publicGames?: boolean) {
         objectBytes: row.objectBytes,
         lastSnapshotAt: row.lastSnapshotAt,
     };
-    if (publicGames === undefined) return body;
-    return { ...body, publicGames };
+    if (!flags) return body;
+    return { ...body, ...flags };
 }
 
-/** Attach `publicGames` only when migration 0013 is present. */
+/** Attach `publicGames` only when migration 0013 is present, and `showReferee` only when 0018 is. */
 async function presentOwned(c: { env: AppEnv['Bindings'] }, row: UniverseRow) {
     await detectPublicGames(c.env.DB);
+    await detectPublicCards(c.env.DB);
     if (!publicGamesReady()) return present(row);
     const flag = await readPublicGames(c.env.DB, row.id);
     if (flag === null) return present(row);
-    return present(row, flag === 1);
+    const flags: { publicGames: boolean; showReferee?: boolean } = { publicGames: flag === 1 };
+    if (publicCardsReady()) {
+        const extra = await c.env.DB.prepare(
+            `SELECT show_referee AS showReferee FROM universes WHERE id = ?`,
+        ).bind(row.id).first<{ showReferee: number }>();
+        flags.showReferee = Number(extra?.showReferee) === 1;
+    }
+    return present(row, flags);
+}
+
+/** The current bundle sends this. A cached tab does not, and still needs the rewrite. */
+function asksForPublicJournal(request: Request): boolean {
+    return request.headers.get('x-voyage-journal') === 'public';
+}
+
+/** A cached tab cannot parse `visibility: "public"`. The stored row stays public. */
+async function maskOwnerJournal(request: Request, response: Response): Promise<Response> {
+    if (asksForPublicJournal(request)) return response;
+    if (!response.ok) return response;
+    const text = await response.text();
+    let body: { data?: { journal?: { visibility?: string }[]; conflicts?: { table?: string; current?: { visibility?: string } }[] } };
+    try {
+        body = JSON.parse(text) as typeof body;
+    } catch {
+        return new Response(text, { status: response.status, headers: response.headers });
+    }
+    const data = body.data;
+    if (data) {
+        for (const entry of data.journal ?? []) {
+            if (entry && entry.visibility === 'public') entry.visibility = 'players';
+        }
+        for (const conflict of data.conflicts ?? []) {
+            if (conflict?.table === 'journal' && conflict.current?.visibility === 'public') conflict.current.visibility = 'players';
+        }
+    }
+    const headers = new Headers(response.headers);
+    headers.delete('content-length');
+    return new Response(JSON.stringify(body), { status: response.status, headers });
 }
 
 function slugFor(name: string, id: string): string {
@@ -79,13 +117,21 @@ universesRoute.get('/', async (c) => {
         isNull(universes.deletedAt),
     )).orderBy(asc(universes.createdAt));
     await detectPublicGames(c.env.DB);
+    await detectPublicCards(c.env.DB);
     if (!publicGamesReady()) return ok(c, rows.map((row) => present(row)));
+    const cards = publicCardsReady();
     const flags = await c.env.DB.prepare(
-        `SELECT id, public_games AS publicGames FROM universes WHERE owner_id = ? AND deleted_at IS NULL`,
-    ).bind(actor.id).all<{ id: string; publicGames: number }>();
-    const on = new Map<string, boolean>();
-    for (const flag of flags.results ?? []) on.set(String(flag.id), Number(flag.publicGames) === 1);
-    return ok(c, rows.map((row) => present(row, on.get(row.id) === true)));
+        cards
+            ? `SELECT id, public_games AS publicGames, show_referee AS showReferee FROM universes WHERE owner_id = ? AND deleted_at IS NULL`
+            : `SELECT id, public_games AS publicGames FROM universes WHERE owner_id = ? AND deleted_at IS NULL`,
+    ).bind(actor.id).all<{ id: string; publicGames: number; showReferee?: number }>();
+    const on = new Map<string, { publicGames: boolean; showReferee?: boolean }>();
+    for (const flag of flags.results ?? []) {
+        const item: { publicGames: boolean; showReferee?: boolean } = { publicGames: Number(flag.publicGames) === 1 };
+        if (cards) item.showReferee = Number(flag.showReferee) === 1;
+        on.set(String(flag.id), item);
+    }
+    return ok(c, rows.map((row) => present(row, on.get(row.id) ?? { publicGames: false, ...(cards ? { showReferee: false } : {}) })));
 });
 
 universesRoute.post('/', async (c) => {
@@ -204,7 +250,7 @@ universesRoute.get('/:id/campaign', async (c) => {
     if (owned instanceof Response) return owned;
     const url = new URL(c.req.url);
     url.pathname = '/campaign';
-    return owned.forward(new Request(url, c.req.raw));
+    return maskOwnerJournal(c.req.raw, await owned.forward(new Request(url, c.req.raw)));
 });
 
 universesRoute.patch('/:id/campaign/changes', async (c) => {
@@ -214,7 +260,7 @@ universesRoute.patch('/:id/campaign/changes', async (c) => {
     url.pathname = '/campaign/changes';
     const response = await owned.forward(new Request(url, c.req.raw));
     await refreshAfterCampaign(c.env, owned, response);
-    return response;
+    return maskOwnerJournal(c.req.raw, response);
 });
 
 universesRoute.patch('/:id/public-games', async (c) => {

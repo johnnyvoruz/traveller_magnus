@@ -14,7 +14,7 @@ import {
 } from './glyphs.ts';
 import { routeSegments, type RouteSegment } from './route_lines.ts';
 import { drawCampaignLayer, partyContains, vesselContains, type CampaignSnapshot, type PartyMark, type VesselHit } from './campaign_layer.ts';
-import type { PublicGameMark } from './public_games.ts';
+import type { PublicGameMark, PublicShipMark } from './public_games.ts';
 import type { MapTheme } from './theme.ts';
 import { PPP_GRID, PPP_NAMES, tierFor, type Tier } from './tiers.ts';
 import { boxesOverlap, clampTitle, fadeToward, stepScale, titleAnchor, titleInView, zoomStep, type Box } from './titles.ts';
@@ -40,6 +40,76 @@ const TITLE_PILL_ALPHA = 0.55;
 const TITLE_TEXT_ALPHA = 0.95;
 /** A new zoom step whose spot lands within this many pixels of the old one is the same spot: no cross-fade. */
 const TITLE_SAME_PX = 2;
+/**
+ * Public ships: the first dart sits this far right of and above the hex centre, in parsecs. Inside
+ * the hex, clear of the hex number, the starport letter and the gas giant.
+ */
+const SHIP_X = 0.3;
+const SHIP_Y = -0.36;
+/** The dart's half length: 0.08 parsec, held between 6 and 8 pixels so it reads at every hex zoom. */
+const SHIP_HALF = 0.08;
+const SHIP_HALF_MIN = 6;
+const SHIP_HALF_MAX = 8;
+/** Pixels between darts where names show. */
+const SHIP_ROW = 18;
+/** Further out, each dart of a hex's stack sits this many half lengths up and right of the one in front. */
+const SHIP_DECK = 0.55;
+/** Darts on one hex. Past it: two darts and a "+N". */
+const SHIP_SHOWN = 3;
+const SHIP_FONT = 12;
+const SHIP_TAG_H = 17;
+const SHIP_TAG_PAD = 5;
+const SHIP_TAG_ALPHA = 0.82;
+/** A longer name is cut with an ellipsis on the map; the card says it whole. */
+const SHIP_TAG_MAX = 150;
+/** The dart's glow, in half lengths of blur. */
+const SHIP_GLOW = 1.6;
+const SHIP_EXAMPLE_FONT = 10;
+const EXAMPLE_WORD = 'Example';
+/** The open card's route: dot size per parsec, the gap in dot widths, its alpha, its stop rings, and one gap's march. */
+const ROUTE_WIDTH = 0.045;
+const ROUTE_GAP = 2.6;
+const ROUTE_ALPHA = 0.9;
+const ROUTE_RING = 0.09;
+const ROUTE_MARCH_MS = 140;
+/** A dart this far off the left or top edge may still have its name on screen. */
+const SHIP_PAD = 200;
+
+/** One hex of other people's ships, at the first dart's screen point. */
+type Fleet = { sx: number; sy: number; key: string; count: number; ships: readonly PublicShipMark[] };
+
+/**
+ * What a public ship mark says when hovered or tapped: the ships under it, how many more the
+ * hex holds that the feed did not list, and the mark's screen box. `key` is the sector, the
+ * hex and the mark (or `more`), so a card can follow its mark while the map moves.
+ */
+export type PublicShipHit = {
+    key: string;
+    ships: readonly PublicShipMark[];
+    more: number;
+    box: { x0: number; y0: number; x1: number; y1: number };
+    /** Where the card goes beside: the box around every mark of the hex. */
+    place: { x0: number; y0: number; x1: number; y1: number };
+};
+
+type ShipHit = PublicShipHit;
+
+/** Where a hex of public ships stands on the screen this frame, keyed by sector and hex. */
+export type ShipPing = { key: string; x: number; y: number };
+
+function shipHit(key: string, ships: readonly PublicShipMark[], more: number, x0: number, cy: number, x1: number, half: number): ShipHit {
+    const reach = Math.max(half, SHIP_TAG_H / 2) + 1;
+    const box = { x0: x0 - 1, y0: cy - reach, x1: x1 + 1, y1: cy + reach };
+    return { key, ships, more, box, place: { ...box } };
+}
+
+/** The label cut to fit `max` pixels, with an ellipsis when it was cut. */
+export function fitLabel(label: string, width: (text: string) => number, max: number): string {
+    if (width(label) <= max) return label;
+    let keep = label.length;
+    while (keep > 1 && width(label.slice(0, keep).trimEnd() + '…') > max) keep -= 1;
+    return label.slice(0, keep).trimEnd() + '…';
+}
 
 type FarLabel = { sector: string; hex: string; name: string };
 type Selection = { slug: string; hhhh: string };
@@ -193,8 +263,16 @@ export class MapRenderer {
     private campaignSnapshot: CampaignSnapshot | null = null;
     private partyMark: PartyMark | null = null;
     private vesselMarks: VesselHit[] = [];
+    /** The party's ships drawn this frame, lead included. */
+    private partyShips: PartyMark[] = [];
     /** Public games by sector slug. Empty draws nothing and adds no hit target. */
     private publicGames = new Map<string, readonly PublicGameMark[]>();
+    /** Public ship marks drawn this frame, for the hover card. Never a click target. */
+    private publicShipHits: ShipHit[] = [];
+    /** The front dart of each hex of public ships this frame. */
+    private publicPings: ShipPing[] = [];
+    /** The finished legs of the ship whose card is open. */
+    private publicRoute: { from: string; to: string }[] | null = null;
 
     constructor(canvas: HTMLCanvasElement, theme: MapTheme) {
         const ctx = canvas.getContext('2d');
@@ -260,8 +338,8 @@ export class MapRenderer {
 
     /**
      * Public games for the sectors on screen. Null clears them.
-     * The diamond is not a hit: `partyAt` and `vesselAt` do not read it,
-     * so a click still lands on the hex underneath.
+     * The diamond and the ship darts are not a hit: `partyAt` and `vesselAt` do not read them,
+     * so a click still lands on the hex underneath. `publicShipAt` is for the hover card only.
      */
     setPublicGames(marks: ReadonlyMap<string, readonly PublicGameMark[]> | null): void {
         this.publicGames = marks ? new Map(marks) : new Map();
@@ -273,6 +351,7 @@ export class MapRenderer {
         if (!snapshot) {
             this.partyMark = null;
             this.vesselMarks = [];
+            this.partyShips = [];
         }
     }
 
@@ -281,7 +360,17 @@ export class MapRenderer {
      * A zoomed-out point shares its pixels with the system, so it is never a hit.
      */
     partyAt(sx: number, sy: number): boolean {
+        if (this.partyShipAt(sx, sy) !== null) return true;
         return this.partyMark ? partyContains(this.partyMark, sx, sy) : false;
+    }
+
+    /** The party ship whose marker is under the point, or null. The system glyph and a point are not a hit. */
+    partyShipAt(sx: number, sy: number): string | null {
+        for (let i = this.partyShips.length - 1; i >= 0; i -= 1) {
+            const mark = this.partyShips[i];
+            if (mark.id && partyContains(mark, sx, sy)) return mark.id;
+        }
+        return null;
     }
 
     /** The vessel under the point, or null. The system glyph and a zoomed-out point are not a hit. */
@@ -365,20 +454,28 @@ export class MapRenderer {
         this.selectionOutline(cam, vp, tier);
         let animating = tier === 'hex' && cam.ppp >= PPP_NAMES ? this.subsectorTitles(ready, marks, cam, vp) : false;
         if (namesPending) animating = true;
+        if (this.paintRoute(cam, vp)) animating = true;
         if (tier === 'hex') this.paintPublic(on, cam, vp);
+        else {
+            this.publicShipHits = [];
+            this.publicPings = [];
+        }
         if (this.paintCampaign(cam, vp)) animating = true;
 
         return { tier, sectorsOnScreen: on.map((sector) => sector.slug), ms: now() - started, animating };
     }
 
     /**
-     * One diamond per public game, off the world disc. No path is stored for hits.
-     * Names and counts are drawn at the same zoom as hex labels. Nothing is drawn
+     * One diamond per public game, off the world disc, or one dart per ship where the feed lists
+     * them. Names and counts are drawn at the same zoom as hex labels. Nothing is drawn
      * when the map is empty, and the canvas is not touched in that case.
      */
     private paintPublic(sectors: DrawSector[], cam: Camera, vp: Viewport): void {
+        this.publicShipHits = [];
+        this.publicPings = [];
         if (this.publicGames.size === 0) return;
         const drawn: { sx: number; sy: number; label: string | null }[] = [];
+        const fleets: Fleet[] = [];
         const pad = 24;
         for (const sector of sectors) {
             const rows = this.publicGames.get(sector.slug);
@@ -389,6 +486,14 @@ export class MapRenderer {
                 const global = toGlobal(sector.x, sector.y, local.col, local.row);
                 const centre = hexCentre(global.q, global.r);
                 const screen = toScreen(cam, vp, centre.x, centre.y);
+                // Once 0017 is applied a hex lists its ships: one mark each. Without the list it is today's diamond.
+                if (row.ships && row.ships.length > 0) {
+                    const fx = screen.sx + SHIP_X * cam.ppp;
+                    const fy = screen.sy + SHIP_Y * cam.ppp;
+                    if (fx < -SHIP_PAD || fy < -SHIP_PAD || fx > vp.width + pad || fy > vp.height + pad) continue;
+                    fleets.push({ sx: fx, sy: fy, key: sector.slug + '/' + row.hex, count: row.count, ships: row.ships });
+                    continue;
+                }
                 const sx = screen.sx + PUBLIC_X * cam.ppp;
                 const sy = screen.sy + PUBLIC_Y * cam.ppp;
                 if (sx < -pad || sy < -pad || sx > vp.width + pad || sy > vp.height + pad) continue;
@@ -398,7 +503,12 @@ export class MapRenderer {
                 drawn.push({ sx, sy, label });
             }
         }
-        if (drawn.length === 0) return;
+        if (drawn.length > 0) this.paintDiamonds(drawn, cam);
+        if (fleets.length > 0) this.paintShips(fleets, cam);
+    }
+
+    /** Today's mark, for a hex the server sent without its ships: a diamond, and a name or a count. */
+    private paintDiamonds(drawn: { sx: number; sy: number; label: string | null }[], cam: Camera): void {
         const ctx = this.ctx;
         const radius = Math.max(2, PUBLIC_R * cam.ppp);
         ctx.save();
@@ -424,10 +534,222 @@ export class MapRenderer {
         ctx.restore();
     }
 
+    /**
+     * Other people's ships. Where world names show: one dart each, stacked up from the top right
+     * of the hex, each with its ship's name on a backed tag; more than SHIP_SHOWN on one hex is
+     * two darts and a "+N" for the rest. Further out: one stack of up to SHIP_SHOWN darts per hex,
+     * and "+N" past that. The marks are hover targets for the card, never click targets: a click
+     * still lands on the hex underneath.
+     */
+    private paintShips(fleets: Fleet[], cam: Camera): void {
+        const ctx = this.ctx;
+        const names = cam.ppp >= PPP_NAMES;
+        const half = Math.min(SHIP_HALF_MAX, Math.max(SHIP_HALF_MIN, SHIP_HALF * cam.ppp));
+        const hits: ShipHit[] = [];
+        const pings: ShipPing[] = [];
+        ctx.save();
+        ctx.font = 'italic 600 ' + SHIP_FONT + 'px ' + this.theme.fontText;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.lineJoin = 'round';
+        for (const fleet of fleets) {
+            const total = Math.max(fleet.count, fleet.ships.length);
+            const rows: ShipHit[] = [];
+            if (names) {
+                const step = Math.max(SHIP_ROW, half * 2.6);
+                const shown = fleet.ships.slice(0, total <= SHIP_SHOWN ? SHIP_SHOWN : SHIP_SHOWN - 1);
+                for (let i = 0; i < shown.length; i += 1) {
+                    const ship = shown[i];
+                    const cy = fleet.sy - i * step;
+                    this.shipDart(fleet.sx, cy, half);
+                    let right = this.shipTag(ship.ship, fleet.sx + half + 4, cy).x1;
+                    if (ship.example) right = this.exampleTag(right + 3, cy);
+                    rows.push(shipHit(fleet.key + '|' + ship.mark, [ship], 0, fleet.sx - half, cy, right, half));
+                }
+                const hidden = total - shown.length;
+                if (hidden > 0) {
+                    const cy = fleet.sy - shown.length * step;
+                    const right = this.shipTag('+' + String(hidden), fleet.sx - half - 2, cy).x1;
+                    rows.push(shipHit(fleet.key + '|more', fleet.ships.slice(shown.length), total - fleet.ships.length, fleet.sx - half, cy, right, half));
+                }
+            } else {
+                // One stack for the hex, the front dart at the place and each one behind it up and to the right.
+                const deck = Math.min(SHIP_SHOWN, total);
+                const off = half * SHIP_DECK;
+                for (let i = deck - 1; i >= 0; i -= 1) this.shipDart(fleet.sx + i * off, fleet.sy - i * off, half);
+                let right = fleet.sx + half + (deck - 1) * off;
+                if (total > SHIP_SHOWN) right = this.shipTag('+' + String(total - SHIP_SHOWN), right + 3, fleet.sy - (deck - 1) * off).x1;
+                const hit = shipHit(fleet.key + '|all', fleet.ships, total - fleet.ships.length, fleet.sx - half, fleet.sy, right, half);
+                hit.box.y0 -= (deck - 1) * off;
+                rows.push(hit);
+            }
+            // The card opens beside, or on a phone above, all of the hex's marks, never over one of them.
+            const place = {
+                x0: Math.min(...rows.map((row) => row.box.x0)),
+                y0: Math.min(...rows.map((row) => row.box.y0)),
+                x1: Math.max(...rows.map((row) => row.box.x1)),
+                y1: Math.max(...rows.map((row) => row.box.y1)),
+            };
+            for (const row of rows) row.place = place;
+            hits.push(...rows);
+            pings.push({ key: fleet.key, x: fleet.sx, y: fleet.sy });
+        }
+        ctx.restore();
+        this.publicShipHits = hits;
+        this.publicPings = pings;
+    }
+
+    /** A dart pointing right, with a notched tail: a ship, not a world, a base or the party's ring. */
+    private shipDart(cx: number, cy: number, half: number): void {
+        const ctx = this.ctx;
+        ctx.beginPath();
+        ctx.moveTo(cx + half, cy);
+        ctx.lineTo(cx - half, cy - half * 0.8);
+        ctx.lineTo(cx - half * 0.4, cy);
+        ctx.lineTo(cx - half, cy + half * 0.8);
+        ctx.closePath();
+        ctx.strokeStyle = this.theme.bg0;
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+        // A soft glow of its own colour: the ship is lit, not printed on the chart.
+        ctx.shadowColor = this.theme.chart.publicGame;
+        ctx.shadowBlur = half * SHIP_GLOW;
+        ctx.fillStyle = this.theme.chart.publicGame;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+    }
+
+    /** "Example" after a ship's name: outlined, smaller and muted, quieter than the name. Returns its right edge. */
+    private exampleTag(x: number, cy: number): number {
+        const ctx = this.ctx;
+        const font = ctx.font;
+        ctx.font = '600 ' + SHIP_EXAMPLE_FONT + 'px ' + this.theme.fontText;
+        const w = ctx.measureText(EXAMPLE_WORD).width + SHIP_TAG_PAD * 1.6;
+        const h = SHIP_TAG_H - 4;
+        ctx.globalAlpha = SHIP_TAG_ALPHA;
+        ctx.fillStyle = this.theme.bg0;
+        ctx.beginPath();
+        ctx.roundRect(x, cy - h / 2, w, h, h / 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = this.theme.textMuted;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.fillStyle = this.theme.textMuted;
+        ctx.fillText(EXAMPLE_WORD, x + SHIP_TAG_PAD * 0.8, cy);
+        ctx.font = font;
+        return x + w;
+    }
+
+    /**
+     * The finished route of the ship whose card is open: each leg a line of round dots from hex to
+     * hex, marching slowly the way the ship went, with a ring at each stop. Violet and dotted, so it
+     * is not a trade route (solid or dashed, in an allegiance's colour) and not a track of your own.
+     * Drawn at every zoom while the card is open. Returns true while it marches.
+     */
+    private paintRoute(cam: Camera, vp: Viewport): boolean {
+        const legs = this.publicRoute;
+        if (!legs || legs.length === 0) return false;
+        const ctx = this.ctx;
+        const stops = new Map<string, { sx: number; sy: number }>();
+        const lines: [{ sx: number; sy: number }, { sx: number; sy: number }][] = [];
+        for (const leg of legs) {
+            const a = this.hexKeyScreen(leg.from, cam, vp);
+            const b = this.hexKeyScreen(leg.to, cam, vp);
+            if (!a || !b) continue;
+            stops.set(leg.from, a);
+            stops.set(leg.to, b);
+            if (leg.from !== leg.to) lines.push([a, b]);
+        }
+        if (stops.size === 0) return false;
+        const still = prefersReducedMotion();
+        const width = Math.max(2.5, Math.min(4, cam.ppp * ROUTE_WIDTH));
+        const gap = width * ROUTE_GAP;
+        ctx.save();
+        ctx.strokeStyle = this.theme.chart.publicGame;
+        ctx.lineCap = 'round';
+        ctx.lineWidth = width;
+        ctx.setLineDash([0.1, gap]);
+        ctx.lineDashOffset = still ? 0 : -(((now() / ROUTE_MARCH_MS) * gap) % gap);
+        ctx.globalAlpha = ROUTE_ALPHA;
+        ctx.beginPath();
+        for (const [a, b] of lines) {
+            ctx.moveTo(a.sx, a.sy);
+            ctx.lineTo(b.sx, b.sy);
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.lineWidth = 1.5;
+        const ring = Math.max(4, Math.min(9, cam.ppp * ROUTE_RING));
+        ctx.beginPath();
+        for (const stop of stops.values()) {
+            ctx.moveTo(stop.sx + ring, stop.sy);
+            ctx.arc(stop.sx, stop.sy, ring, 0, Math.PI * 2);
+        }
+        ctx.stroke();
+        ctx.restore();
+        return !still && lines.length > 0;
+    }
+
+    /** A chart hex key ("Spinward_Marches/1910") on the screen, or null for a sector the chart does not hold. */
+    private hexKeyScreen(key: string, cam: Camera, vp: Viewport): { sx: number; sy: number } | null {
+        const slash = key.lastIndexOf('/');
+        if (slash <= 0) return null;
+        const local = parseHex(key.slice(slash + 1));
+        if (!local) return null;
+        const slug = key.slice(0, slash);
+        const sector = this.sectors.find((item) => item.slug === slug);
+        if (!sector) return null;
+        const global = toGlobal(sector.x, sector.y, local.col, local.row);
+        const centre = hexCentre(global.q, global.r);
+        return toScreen(cam, vp, centre.x, centre.y);
+    }
+
+    /** The open card's finished legs, drawn until it closes. Null clears them. */
+    setPublicRoute(legs: readonly { from: string; to: string }[] | null): void {
+        this.publicRoute = legs && legs.length > 0 ? [...legs] : null;
+    }
+
+    /** One point per hex of other people's ships, where its front dart is: the map's pings sit there. */
+    publicShipPings(): readonly ShipPing[] {
+        return this.publicPings;
+    }
+
+    /** A name or a count on a backed tag, so it reads over the chart. Returns its right edge. */
+    private shipTag(label: string, x: number, cy: number): { x1: number } {
+        const ctx = this.ctx;
+        const said = fitLabel(label, (text) => ctx.measureText(text).width, SHIP_TAG_MAX);
+        const w = ctx.measureText(said).width + SHIP_TAG_PAD * 2;
+        ctx.globalAlpha = SHIP_TAG_ALPHA;
+        ctx.fillStyle = this.theme.bg0;
+        ctx.beginPath();
+        ctx.roundRect(x, cy - SHIP_TAG_H / 2, w, SHIP_TAG_H, 3);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = this.theme.chart.publicGame;
+        ctx.fillText(said, x + SHIP_TAG_PAD, cy);
+        return { x1: x + w };
+    }
+
+    /** The public ship mark under a point: what its card says. Null off every mark. */
+    publicShipAt(sx: number, sy: number): PublicShipHit | null {
+        for (let i = this.publicShipHits.length - 1; i >= 0; i -= 1) {
+            const hit = this.publicShipHits[i];
+            if (sx >= hit.box.x0 && sx <= hit.box.x1 && sy >= hit.box.y0 && sy <= hit.box.y1) return hit;
+        }
+        return null;
+    }
+
+    /** The mark a card was opened on, where it is drawn now. Null once it has left the screen. */
+    publicShipByKey(key: string): PublicShipHit | null {
+        return this.publicShipHits.find((hit) => hit.key === key) ?? null;
+    }
+
     private paintCampaign(cam: Camera, vp: Viewport): boolean {
         if (!this.campaignSnapshot) {
             this.partyMark = null;
             this.vesselMarks = [];
+            this.partyShips = [];
             return false;
         }
         const frame = drawCampaignLayer(this.ctx, {
@@ -446,6 +768,7 @@ export class MapRenderer {
         });
         this.partyMark = frame.mark;
         this.vesselMarks = frame.vessels;
+        this.partyShips = frame.ships;
         return frame.animating;
     }
 

@@ -1,0 +1,65 @@
+{
+  "game": "The Long Haul",
+  "referee": "quiet_navigator",
+  "showReferee": true,
+  "clockDays": 403501,
+  "ships": [
+    {
+      "name": "Kestrel's Due",
+      "crew": [
+        "Mara Quell",
+        "Tobin Ashe"
+      ],
+      "legs": [
+        {
+          "from": "Spinward_Marches/2005",
+          "to": "Spinward_Marches/1805",
+          "departs": 403464,
+          "arrives": 403470
+        },
+        {
+          "from": "Spinward_Marches/1805",
+          "to": "Spinward_Marches/1604",
+          "departs": 403471,
+          "arrives": 403477
+        },
+        {
+          "from": "Spinward_Marches/1604",
+          "to": "Spinward_Marches/1705",
+          "departs": 403478,
+          "arrives": 403484
+        },
+        {
+          "from": "Spinward_Marches/1705",
+          "to": "Spinward_Marches/1806",
+          "departs": 403485,
+          "arrives": 403491
+        },
+        {
+          "from": "Spinward_Marches/1806",
+          "to": "Spinward_Marches/2007",
+          "departs": 403492,
+          "arrives": 403498
+        }
+      ]
+    }
+  ],
+  "journal": [
+    {
+      "title": "Rice after the last leg",
+      "body": "Mara Quell closed the log when Kestrel's Due reached Roup. Tobin Ashe cooked rice and tea. The ship is staying here until the referee sends the next order.",
+      "when": {
+        "year": 1105,
+        "day": 174
+      }
+    },
+    {
+      "title": "Whanga, then Roup",
+      "body": "Whanga was the stop before Roup. The crates stayed put, and both of them slept in shifts. This note is only the public line.",
+      "when": {
+        "year": 1105,
+        "day": 175
+      }
+    }
+  ]
+}

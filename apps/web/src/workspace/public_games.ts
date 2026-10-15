@@ -18,11 +18,25 @@ const NOT_REACHED = 'The server could not be reached. Try again.';
 
 /** What a write answered, by universe: the list this browser holds is older than the switch. */
 const written = reactive<Record<string, boolean>>({});
+/** The name switch's answer, by universe. Separate from `written`, so `{ public }` alone does not change it. */
+const named = reactive<Record<string, boolean>>({});
 
 /** On, off, or null when the server does not have the setting: null shows no switch. */
 export function publicGamesOf(universe: { id: string; publicGames?: boolean } | null): boolean | null {
     if (!universe || typeof universe.publicGames !== 'boolean') return null;
     return universe.id in written ? written[universe.id] : universe.publicGames;
+}
+
+/**
+ * Whether the referee's name is on public cards. Null hides the switch: public is off,
+ * or the universe has no `showReferee` (a server before 0018) and this browser has not
+ * saved one. Default off when the field is present and false.
+ */
+export function showRefereeOf(universe: { id: string; publicGames?: boolean; showReferee?: boolean } | null): boolean | null {
+    if (!universe || publicGamesOf(universe) !== true) return null;
+    if (universe.id in named) return named[universe.id];
+    if (typeof universe.showReferee !== 'boolean') return null;
+    return universe.showReferee;
 }
 
 /**
@@ -58,7 +72,34 @@ export async function setPublicGames(id: string, on: boolean, fetchImpl: typeof 
     return { ok: false, message: said || NOT_SAVED };
 }
 
+export type NameResult = { ok: true; showReferee: boolean } | { ok: false; message: string };
+
+/**
+ * The name switch. Sent only while public is on, as `{ public: true, showReferee }`.
+ * `{ public }` alone stays on `setPublicGames` and does not write this cache.
+ */
+export async function setShowReferee(id: string, on: boolean, fetchImpl: typeof fetch = fetch): Promise<NameResult> {
+    let res: Response;
+    try {
+        res = await apiFetch(fetchImpl, '/api/universes/' + encodeURIComponent(id) + '/public-games', {
+            method: 'PATCH',
+            body: JSON.stringify({ public: true, showReferee: on }),
+        });
+    } catch {
+        return { ok: false, message: NOT_REACHED };
+    }
+    const body = await res.json().catch(() => null) as { public?: unknown; showReferee?: unknown; error?: { message?: unknown } } | null;
+    if (res.ok && body && typeof body.showReferee === 'boolean') {
+        named[id] = body.showReferee;
+        if (typeof body.public === 'boolean') written[id] = body.public;
+        return { ok: true, showReferee: body.showReferee };
+    }
+    const said = body && body.error && typeof body.error.message === 'string' ? body.error.message : '';
+    return { ok: false, message: said || NOT_SAVED };
+}
+
 /** Tests start clean. */
 export function _forgetPublicGames(): void {
     for (const key of Object.keys(written)) delete written[key];
+    for (const key of Object.keys(named)) delete named[key];
 }

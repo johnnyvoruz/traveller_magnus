@@ -1,0 +1,1111 @@
+{
+  "universe": {
+    "id": "example-free-traders",
+    "name": "Free traders of the Marches",
+    "truthVersion": "v10"
+  },
+  "exportedAt": "2026-10-14T18:00:00.000Z",
+  "records": [
+    {
+      "id": "cr_e1000000-0000-4000-8000-000000000001",
+      "type": "vessel",
+      "kind": "far trader",
+      "name": "Bright Ledger",
+      "summary": "A far trader whose home berth is Regina.",
+      "details": "Mael Dorr and three crew haul small lots out of Regina and back. They want steady work and a manifest the port will accept. Regina is rich and high technology, and the port monitors traffic closely, so they file everything they are willing to show.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/1910"
+      },
+      "when": null,
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000000-0000-4000-8000-000000000002",
+      "type": "person",
+      "kind": "captain",
+      "name": "Mael Dorr",
+      "summary": "Captain of Bright Ledger, berthed at Regina.",
+      "details": "Mael Dorr keeps Bright Ledger on small lots and clean paperwork. He wants the next season to be ordinary work. He tells the crew the manifest is the whole story.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/1910"
+      },
+      "when": null,
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000000-0000-4000-8000-000000000003",
+      "type": "person",
+      "kind": "crew",
+      "name": "Joss Pell",
+      "summary": "Deck hand on Bright Ledger.",
+      "details": "Joss Pell handles lines and the hold at Regina. Joss wants the runs to stay short and the manifests to match the crates. Joss does not ask what Mael owes.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/1910"
+      },
+      "when": null,
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000000-0000-4000-8000-000000000004",
+      "type": "person",
+      "kind": "crew",
+      "name": "Ren Aoki",
+      "summary": "Mechanic on Bright Ledger.",
+      "details": "Ren Aoki keeps Bright Ledger ready for the next berth after Regina. Ren wants parts paid for in advance. The last repair was not.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/1910"
+      },
+      "when": null,
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000000-0000-4000-8000-000000000005",
+      "type": "person",
+      "kind": "crew",
+      "name": "Salle Venn",
+      "summary": "Cargo hand on Bright Ledger.",
+      "details": "Salle Venn counts crates against the manifest at Regina. Salle wants every crate to have a plate. Salle has started to notice when Mael adds a line after the count.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/1910"
+      },
+      "when": null,
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000000-0000-4000-8000-000000000006",
+      "type": "vessel",
+      "kind": "small freighter",
+      "name": "Paper Kite",
+      "summary": "A small freighter berthed at Lanth.",
+      "details": "Idra Solm, Hob Tench and Pria Noll carry mixed freight for hire. Lanth is non-industrial, so the freight is what other worlds send in. They want a season of work that does not depend on one broker. A broker there keeps the better runs and tells other crews that Paper Kite is late.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/1719"
+      },
+      "when": null,
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000000-0000-4000-8000-000000000007",
+      "type": "person",
+      "kind": "captain",
+      "name": "Idra Solm",
+      "summary": "Captain of Paper Kite, berthed at Lanth.",
+      "details": "Idra Solm takes mixed freight into Lanth and back out. Idra wants a season of work that does not go through one broker. Idra will not say which broker, except that the runs have gone thin.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/1719"
+      },
+      "when": null,
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000000-0000-4000-8000-000000000008",
+      "type": "person",
+      "kind": "crew",
+      "name": "Hob Tench",
+      "summary": "Deck hand on Paper Kite.",
+      "details": "Hob Tench works the deck on Paper Kite. Hob wants the freight to be ordinary and the broker to stop talking about the ship. Hob hears the late stories at the port and repeats none of them.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/1719"
+      },
+      "when": null,
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000000-0000-4000-8000-000000000009",
+      "type": "person",
+      "kind": "crew",
+      "name": "Pria Noll",
+      "summary": "Cargo hand on Paper Kite.",
+      "details": "Pria Noll matches Lanth freight to the hold. Pria wants a full load that is not a favour. Pria can list the runs the ship used to get and no longer does.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/1719"
+      },
+      "when": null,
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000000-0000-4000-8000-00000000000a",
+      "type": "vessel",
+      "kind": "frontier hauler",
+      "name": "Cold Manifest",
+      "summary": "A frontier hauler whose home berth is Rhylanor.",
+      "details": "Vess Okun and three crew take loads other ships pass over. Rhylanor has an excellent starport and light restrictions, and they want one clean contract there. They do not talk about the last crate they took aboard.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/2716"
+      },
+      "when": null,
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000000-0000-4000-8000-00000000000b",
+      "type": "person",
+      "kind": "captain",
+      "name": "Vess Okun",
+      "summary": "Captain of Cold Manifest, berthed at Rhylanor.",
+      "details": "Vess Okun looks for loads other captains refuse. Vess wants one clean contract at Rhylanor. Vess will not describe the last load, and told the crew not to discuss it.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/2716"
+      },
+      "when": null,
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000000-0000-4000-8000-00000000000c",
+      "type": "person",
+      "kind": "crew",
+      "name": "Tam Brice",
+      "summary": "Deck hand on Cold Manifest.",
+      "details": "Tam Brice handles the deck at Rhylanor. Tam wants the next contract in writing. Tam has not described the last load.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/2716"
+      },
+      "when": null,
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000000-0000-4000-8000-00000000000d",
+      "type": "person",
+      "kind": "crew",
+      "name": "Ludo Fenn",
+      "summary": "Mechanic on Cold Manifest.",
+      "details": "Ludo Fenn keeps Cold Manifest fit for another departure from Rhylanor. Ludo wants no extra mass lashed in the engineering bay. Ludo was told the last load stays in the hold.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/2716"
+      },
+      "when": null,
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000000-0000-4000-8000-00000000000e",
+      "type": "person",
+      "kind": "crew",
+      "name": "Ara Silt",
+      "summary": "Cargo hand on Cold Manifest.",
+      "details": "Ara Silt logs every crate that has a plate. Ara wants the hold to match the manifest the port sees. Ara does not discuss the last load.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/2716"
+      },
+      "when": null,
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000000-0000-4000-8000-00000000000f",
+      "type": "vessel",
+      "kind": "far trader",
+      "name": "Second Bell",
+      "summary": "A far trader berthed at Aramis.",
+      "details": "Nila Kest, Orun Vale and Sef Marin run out of Aramis and home again. The air outside the port is exotic, so the crew stays inside the port between trips. They want the yard to release their usual berth. They do not discuss the yard bill.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/3110"
+      },
+      "when": null,
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000000-0000-4000-8000-000000000010",
+      "type": "person",
+      "kind": "captain",
+      "name": "Nila Kest",
+      "summary": "Captain of Second Bell, berthed at Aramis.",
+      "details": "Nila Kest keeps Second Bell inside the Aramis port between trips. Nila wants the usual berth back from the yard. Nila will take a job that clears the storage bill and will not name the figure.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/3110"
+      },
+      "when": null,
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000000-0000-4000-8000-000000000011",
+      "type": "person",
+      "kind": "crew",
+      "name": "Orun Vale",
+      "summary": "Deck hand on Second Bell.",
+      "details": "Orun Vale works the locks at Aramis and does not go outside the port. Orun wants the usual berth, where the lines are already marked. Orun knows the yard is holding it and does not know the bill.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/3110"
+      },
+      "when": null,
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000000-0000-4000-8000-000000000012",
+      "type": "person",
+      "kind": "crew",
+      "name": "Sef Marin",
+      "summary": "Cargo hand on Second Bell.",
+      "details": "Sef Marin books cargo for Second Bell out of Aramis. Sef wants a departure date the yard will honour. Sef has stopped promising clients the usual berth.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/3110"
+      },
+      "when": null,
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000000-0000-4000-8000-000000000013",
+      "type": "vessel",
+      "kind": "free trader",
+      "name": "Moth Orchard",
+      "summary": "A free trader whose home berth is Mora.",
+      "details": "Harl Ibo and three crew work Mora's crowded port. Mora is high population and industrial, and the port's restrictions are heavy, so they keep their paperwork plain. They want a berth that stays theirs. Another broker has been taking the slot they used last season.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/3124"
+      },
+      "when": null,
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000000-0000-4000-8000-000000000014",
+      "type": "person",
+      "kind": "captain",
+      "name": "Harl Ibo",
+      "summary": "Captain of Moth Orchard, berthed at Mora.",
+      "details": "Harl Ibo keeps Moth Orchard's paperwork plain at Mora. Harl wants last season's berth back. Harl will not name the broker who took it, except to say the clients are going elsewhere.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/3124"
+      },
+      "when": null,
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000000-0000-4000-8000-000000000015",
+      "type": "person",
+      "kind": "crew",
+      "name": "Denni Crowe",
+      "summary": "Deck hand on Moth Orchard.",
+      "details": "Denni Crowe handles lines in Mora's crowded port. Denni wants the same slot as last season. Denni has watched another crew take it twice.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/3124"
+      },
+      "when": null,
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000000-0000-4000-8000-000000000016",
+      "type": "person",
+      "kind": "crew",
+      "name": "Ysa Quen",
+      "summary": "Mechanic on Moth Orchard.",
+      "details": "Ysa Quen keeps Moth Orchard ready between Mora departures. Ysa wants a berth long enough to finish a repair. The borrowed slots have been too short.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/3124"
+      },
+      "when": null,
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000000-0000-4000-8000-000000000017",
+      "type": "person",
+      "kind": "crew",
+      "name": "Kato Benn",
+      "summary": "Cargo hand on Moth Orchard.",
+      "details": "Kato Benn books plain cargo at Mora. Kato wants clients who still ask for Moth Orchard by name. Some of them have been sent to other ships.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/3124"
+      },
+      "when": null,
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000000-0000-4000-8000-000000000018",
+      "type": "note",
+      "kind": "hook",
+      "name": "The Regina lien",
+      "summary": "Bright Ledger owes a private lender at Regina.",
+      "details": "A lender at Regina covered a repair Bright Ledger could not pay. The sum is the referee's call. The lender wants a favour on the next run and will name it only in private. Mael Dorr wants the debt cleared before that favour is named.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/1910"
+      },
+      "when": null,
+      "visibility": "referee",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000000-0000-4000-8000-000000000019",
+      "type": "person",
+      "kind": "broker",
+      "name": "Cal Derrow",
+      "summary": "A Lanth broker who keeps the better runs from Paper Kite.",
+      "details": "Cal Derrow books freight at Lanth. He wants Paper Kite dependent on his thin runs, and he tells other crews the ship is late. Idra Solm wants a season that does not go through him. He has not said why he dislikes the ship. That reason is the referee's call.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/1719"
+      },
+      "when": null,
+      "visibility": "referee",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000000-0000-4000-8000-00000000001a",
+      "type": "item",
+      "kind": "cargo",
+      "name": "Unplated crate",
+      "summary": "A crate in Cold Manifest's hold with no plate on it.",
+      "details": "Someone at Rhylanor asked Vess Okun to carry this crate to the next world and not open it. There is no plate, no listed contents and no price. What is inside, and who wants it, is the referee's call. The crew was told not to scan it.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/2716"
+      },
+      "when": null,
+      "visibility": "referee",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000000-0000-4000-8000-00000000001b",
+      "type": "note",
+      "kind": "hook",
+      "name": "The Aramis yard bill",
+      "summary": "Second Bell owes the Aramis yard for storage.",
+      "details": "The yard at Aramis is holding Second Bell's usual berth against an unpaid storage bill. The amount is the referee's call. Nila Kest wants the berth back and will take a job that pays the bill. The yard will not release the berth on a promise.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/3110"
+      },
+      "when": null,
+      "visibility": "referee",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000000-0000-4000-8000-00000000001c",
+      "type": "person",
+      "kind": "broker",
+      "name": "Eda Voss",
+      "summary": "A Mora broker who took Moth Orchard's berth.",
+      "details": "Eda Voss books berths at Mora's port. She took the slot Moth Orchard used last season and has been sending clients to other ships. Harl Ibo wants the slot back. What Eda has against the ship is the referee's call.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/3124"
+      },
+      "when": null,
+      "visibility": "referee",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    }
+  ],
+  "links": [
+    {
+      "id": "cl_e1000000-0000-4000-8000-000000000001",
+      "from": "cr_e1000000-0000-4000-8000-000000000002",
+      "to": "cr_e1000000-0000-4000-8000-000000000001",
+      "kind": "commands",
+      "role": "captain",
+      "order": 1,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "players",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_e1000000-0000-4000-8000-000000000002",
+      "from": "cr_e1000000-0000-4000-8000-000000000003",
+      "to": "cr_e1000000-0000-4000-8000-000000000001",
+      "kind": "crew",
+      "role": "deck hand",
+      "order": 2,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "players",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_e1000000-0000-4000-8000-000000000003",
+      "from": "cr_e1000000-0000-4000-8000-000000000004",
+      "to": "cr_e1000000-0000-4000-8000-000000000001",
+      "kind": "crew",
+      "role": "mechanic",
+      "order": 3,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "players",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_e1000000-0000-4000-8000-000000000004",
+      "from": "cr_e1000000-0000-4000-8000-000000000005",
+      "to": "cr_e1000000-0000-4000-8000-000000000001",
+      "kind": "crew",
+      "role": "cargo hand",
+      "order": 4,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "players",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_e1000000-0000-4000-8000-000000000005",
+      "from": "cr_e1000000-0000-4000-8000-000000000007",
+      "to": "cr_e1000000-0000-4000-8000-000000000006",
+      "kind": "commands",
+      "role": "captain",
+      "order": 5,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "players",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_e1000000-0000-4000-8000-000000000006",
+      "from": "cr_e1000000-0000-4000-8000-000000000008",
+      "to": "cr_e1000000-0000-4000-8000-000000000006",
+      "kind": "crew",
+      "role": "deck hand",
+      "order": 6,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "players",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_e1000000-0000-4000-8000-000000000007",
+      "from": "cr_e1000000-0000-4000-8000-000000000009",
+      "to": "cr_e1000000-0000-4000-8000-000000000006",
+      "kind": "crew",
+      "role": "cargo hand",
+      "order": 7,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "players",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_e1000000-0000-4000-8000-000000000008",
+      "from": "cr_e1000000-0000-4000-8000-00000000000b",
+      "to": "cr_e1000000-0000-4000-8000-00000000000a",
+      "kind": "commands",
+      "role": "captain",
+      "order": 8,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "players",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_e1000000-0000-4000-8000-000000000009",
+      "from": "cr_e1000000-0000-4000-8000-00000000000c",
+      "to": "cr_e1000000-0000-4000-8000-00000000000a",
+      "kind": "crew",
+      "role": "deck hand",
+      "order": 9,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "players",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_e1000000-0000-4000-8000-00000000000a",
+      "from": "cr_e1000000-0000-4000-8000-00000000000d",
+      "to": "cr_e1000000-0000-4000-8000-00000000000a",
+      "kind": "crew",
+      "role": "mechanic",
+      "order": 10,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "players",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_e1000000-0000-4000-8000-00000000000b",
+      "from": "cr_e1000000-0000-4000-8000-00000000000e",
+      "to": "cr_e1000000-0000-4000-8000-00000000000a",
+      "kind": "crew",
+      "role": "cargo hand",
+      "order": 11,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "players",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_e1000000-0000-4000-8000-00000000000c",
+      "from": "cr_e1000000-0000-4000-8000-000000000010",
+      "to": "cr_e1000000-0000-4000-8000-00000000000f",
+      "kind": "commands",
+      "role": "captain",
+      "order": 12,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "players",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_e1000000-0000-4000-8000-00000000000d",
+      "from": "cr_e1000000-0000-4000-8000-000000000011",
+      "to": "cr_e1000000-0000-4000-8000-00000000000f",
+      "kind": "crew",
+      "role": "deck hand",
+      "order": 13,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "players",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_e1000000-0000-4000-8000-00000000000e",
+      "from": "cr_e1000000-0000-4000-8000-000000000012",
+      "to": "cr_e1000000-0000-4000-8000-00000000000f",
+      "kind": "crew",
+      "role": "cargo hand",
+      "order": 14,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "players",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_e1000000-0000-4000-8000-00000000000f",
+      "from": "cr_e1000000-0000-4000-8000-000000000014",
+      "to": "cr_e1000000-0000-4000-8000-000000000013",
+      "kind": "commands",
+      "role": "captain",
+      "order": 15,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "players",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_e1000000-0000-4000-8000-000000000010",
+      "from": "cr_e1000000-0000-4000-8000-000000000015",
+      "to": "cr_e1000000-0000-4000-8000-000000000013",
+      "kind": "crew",
+      "role": "deck hand",
+      "order": 16,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "players",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_e1000000-0000-4000-8000-000000000011",
+      "from": "cr_e1000000-0000-4000-8000-000000000016",
+      "to": "cr_e1000000-0000-4000-8000-000000000013",
+      "kind": "crew",
+      "role": "mechanic",
+      "order": 17,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "players",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_e1000000-0000-4000-8000-000000000012",
+      "from": "cr_e1000000-0000-4000-8000-000000000017",
+      "to": "cr_e1000000-0000-4000-8000-000000000013",
+      "kind": "crew",
+      "role": "cargo hand",
+      "order": 18,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "players",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_e1000000-0000-4000-8000-000000000013",
+      "from": "cr_e1000000-0000-4000-8000-000000000019",
+      "to": "cr_e1000000-0000-4000-8000-000000000007",
+      "kind": "rival",
+      "role": "broker",
+      "order": 19,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "referee",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_e1000000-0000-4000-8000-000000000014",
+      "from": "cr_e1000000-0000-4000-8000-00000000000b",
+      "to": "cr_e1000000-0000-4000-8000-00000000001a",
+      "kind": "owns",
+      "role": "carrier",
+      "order": 20,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "referee",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_e1000000-0000-4000-8000-000000000015",
+      "from": "cr_e1000000-0000-4000-8000-00000000001c",
+      "to": "cr_e1000000-0000-4000-8000-000000000014",
+      "kind": "rival",
+      "role": "broker",
+      "order": 21,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "referee",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    }
+  ],
+  "journal": [],
+  "settings": {
+    "party": {
+      "vesselId": null,
+      "memberIds": [],
+      "anchor": null
+    },
+    "kinds": {},
+    "calendar": {
+      "dateFormat": "imperial"
+    },
+    "rev": 0
+  },
+  "clock": null
+}

@@ -1,0 +1,47 @@
+{
+  "game": "The Even Column",
+  "referee": "low_orbit_note",
+  "showReferee": false,
+  "clockDays": 403524,
+  "ships": [
+    {
+      "name": "Even Keel",
+      "crew": [
+        "Noor Est",
+        "Pim Jad",
+        "Cora Lenz",
+        "Wes Talbot"
+      ],
+      "legs": [
+        {
+          "from": "Spinward_Marches/0202",
+          "to": "Spinward_Marches/0301",
+          "departs": 403492,
+          "arrives": 403498
+        },
+        {
+          "from": "Spinward_Marches/0301",
+          "to": "Spinward_Marches/0303",
+          "departs": 403499,
+          "arrives": 403505
+        },
+        {
+          "from": "Spinward_Marches/0303",
+          "to": "Spinward_Marches/0304",
+          "departs": 403506,
+          "arrives": 403512
+        }
+      ]
+    }
+  ],
+  "journal": [
+    {
+      "title": "Four aboard at Chronor",
+      "body": "Even Keel is at Chronor. Noor Est has the watch. Pim Jad, Cora Lenz, and Wes Talbot are in their bunks. The log is up to date.",
+      "when": {
+        "year": 1105,
+        "day": 188
+      }
+    }
+  ]
+}

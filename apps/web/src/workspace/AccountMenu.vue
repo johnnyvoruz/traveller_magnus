@@ -29,7 +29,7 @@ import { forgetOpening, retryCampaign } from './opening.ts';
 import { MY_PACKAGES_PATH } from './market/command.ts';
 import { liveRecords } from './records.ts';
 import { campaignDays, partyMarker } from './party_where.ts';
-import { partyOnChart, PUBLIC_GAMES_LABEL, PUBLIC_GAMES_NO_PLACE, PUBLIC_GAMES_SAY, publicGamesOf, publicGamesToast, setPublicGames } from './public_games.ts';
+import { partyOnChart, PUBLIC_GAMES_LABEL, PUBLIC_GAMES_NO_PLACE, PUBLIC_GAMES_SAY, publicGamesOf, publicGamesToast, setPublicGames, setShowReferee, showRefereeOf } from './public_games.ts';
 import SignInCard from './SignInCard.vue';
 import { noteReturn, RECOVERY_PATH } from './passkey/recovery.ts';
 import { APP_VERSION } from '../version.ts';
@@ -191,6 +191,8 @@ function remove(): void {
 
 /** Public games for the open campaign: on, off, or null when the server has no such setting (then no switch). */
 const publicOn = computed(() => publicGamesOf(openOne.value));
+/** The name on public cards. Null hides the switch: public is off, or the server has no such field. */
+const showName = computed(() => showRefereeOf(openOne.value));
 /** On, and the party has no place on the chart: nothing is shown to anyone yet, and the menu says what to do. */
 const publicNowhere = computed(() => {
     if (publicOn.value !== true || campaign.status !== 'ready' || !campaign.settings) return false;
@@ -213,6 +215,26 @@ async function togglePublic(): Promise<void> {
         busy.value = false;
         void nextTick(() => {
             const el = pop.value ? pop.value.querySelector<HTMLElement>('[data-command="public-games"]') : null;
+            if (el) el.focus();
+        });
+    }
+}
+
+/** The name switch. A refusal is said in the server's sentence, and the switch stays as it was. */
+async function toggleShowName(): Promise<void> {
+    const target = openOne.value;
+    const now = showName.value;
+    if (!target || now === null || busy.value) return;
+    busy.value = true;
+    trouble.value = '';
+    try {
+        const done = await setShowReferee(target.id, !now);
+        if (!done.ok) trouble.value = done.message;
+        else showToast(done.showReferee ? 'Your name is on this game’s public cards.' : 'Your name is not on this game’s public cards.');
+    } finally {
+        busy.value = false;
+        void nextTick(() => {
+            const el = pop.value ? pop.value.querySelector<HTMLElement>('[data-command="show-referee"]') : null;
             if (el) el.focus();
         });
     }
@@ -453,6 +475,18 @@ watch(() => props.open, (open) => {
         </button>
         <p v-if="openOne && publicOn !== null" id="account-public-say" class="account-say">{{ PUBLIC_GAMES_SAY }}</p>
         <p v-if="openOne && publicNowhere" class="account-say is-todo" role="status" data-public-nowhere>{{ PUBLIC_GAMES_NO_PLACE }}</p>
+        <button
+          v-if="openOne && showName !== null"
+          type="button"
+          role="menuitemcheckbox"
+          class="account-public account-show-name"
+          data-command="show-referee"
+          :aria-checked="showName ? 'true' : 'false'"
+          :disabled="busy"
+          @click="toggleShowName"
+        >
+          <Icon name="user" :size="15" /><span>Show my name on public cards</span><em>{{ showName ? 'On' : 'Off' }}</em>
+        </button>
         <button v-if="openOne" type="button" role="menuitem" class="account-delete" :disabled="busy" @click="begin('delete')">
           <Icon name="trash" :size="15" /><span>Delete {{ openOne.name }}</span>
         </button>

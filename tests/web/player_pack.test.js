@@ -172,7 +172,8 @@ function fixture() {
             journal,
             settings: {
                 party: {
-                    vesselId: ref.vessel.id,
+                    vesselIds: [ref.vessel.id],
+                    aboard: {},
                     memberIds: [play.person.id, ref.person.id, deleted.id],
                     anchor: { kind: 'system', hexKey: 'Secret_Sector/9999', locationLabel: 'ZREF_PARTY_PLACE' },
                 },
@@ -228,6 +229,29 @@ test('no date keeps every dated player row and says so', () => {
     assert.equal(plan.clockLabel, 'no date');
     assert.equal(plan.counts.timeline, 0);
     assert.equal(plan.timeline.some((row) => row.title === 'ZPLAY_FUTURE_NAME'), true);
+});
+
+test('the Player Pack names each players ship and who is aboard no ship', () => {
+    const { input, play, ref } = fixture();
+    const party = {
+        vesselIds: [play.vessel.id, ref.vessel.id],
+        aboard: { [play.person.id]: play.vessel.id },
+        memberIds: [play.person.id, ref.person.id],
+        anchor: null,
+    };
+    const settings = { ...input.settings, party };
+    const plan = planPack({ ...input, settings });
+    assert.deepEqual(plan.party.ships.map((row) => row.name), [play.vessel.name]);
+    assert.deepEqual(plan.party.ships[0].aboard.map((row) => row.name), [play.person.name]);
+    assert.deepEqual(plan.party.ashore, []);
+    assert.equal(plan.counts.ship, 1);
+    const ashore = planPack({ ...input, settings: { ...settings, party: { ...party, aboard: {} } } });
+    assert.deepEqual(ashore.party.ships[0].aboard, []);
+    assert.deepEqual(ashore.party.ashore.map((row) => row.name), [play.person.name]);
+    const file = buildPlayerPack({ ...input, settings: { ...settings, party: { ...party, aboard: {} } } }, PAINT);
+    assert.equal(file.html.includes('Aboard no ship'), true);
+    assert.equal(file.html.includes('Nobody aboard.'), true);
+    assert.equal(file.html.includes(ref.vessel.name), false);
 });
 
 test('a file name drops characters a file system refuses', () => {

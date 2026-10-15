@@ -535,7 +535,7 @@ function shuttleTo(rate: number): void {
 
 // ---- The ships (K12 points 1, 2, 2b, 5; K6d): the list, the strip, the plot, the jump ----
 
-const partyVesselId = computed(() => (campaign.settings ? campaign.settings.party.vesselId : null));
+const partyVesselId = computed(() => (campaign.settings ? campaign.settings.party.vesselIds[0] ?? null : null));
 /** The campaign's vessels in this system at the view's date, the party's first. Signed out: none. */
 const ships = computed(() => (canSetDate.value ? shipsHere(campaign.records, partyVesselId.value, hexKey.value, shownDays.value) : []));
 /** Their tracks, for the picture to place (orbit/ships.ts placeShips inside the canvas). Null signed out, so the dev stand-in can still show. */

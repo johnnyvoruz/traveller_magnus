@@ -10,6 +10,7 @@ import { toScreen } from '../../apps/web/src/map/camera.ts';
 import {
     drawCampaignLayer,
     partyContains,
+    partyShipLabels,
     resolvePartyHex,
     standInSnapshot,
     vesselContains,
@@ -131,6 +132,14 @@ test('a person aboard a vessel resolves to the vessel hex', () => {
     const many = paint(stand, 80, 0);
     assert.equal(one.calls.length > 0, true);
     assert.equal(many.calls.filter((call) => call.op === 'fillText').length, 1);
+    const labels = partyShipLabels([
+        { name: 'Far Margin', hexKey: HEX, lead: true, aboard: ['Voss'] },
+        { name: 'Kessler', hexKey: 'Spinward_Marches/1106', lead: false, aboard: [] },
+    ]);
+    assert.deepEqual(labels, [
+        { name: 'Far Margin', hexKey: HEX, lead: true, label: 'Far Margin · Voss' },
+        { name: 'Kessler', hexKey: 'Spinward_Marches/1106', lead: false, label: 'Kessler' },
+    ]);
 });
 
 test('the locator pulses after the camera arrives, and reduced motion stays still', () => {

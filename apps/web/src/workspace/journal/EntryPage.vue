@@ -86,7 +86,7 @@ function setKind(event: Event): void {
     write({ ...now, kind, sequence });
 }
 
-function setVisibility(visibility: 'referee' | 'players'): void {
+function setVisibility(visibility: 'referee' | 'players' | 'public'): void {
     const now = entry.value;
     if (!now || now.visibility === visibility) return;
     write({ ...now, visibility });
@@ -278,8 +278,10 @@ watch(() => props.id, greet, { immediate: true });
             <span class="ui-seg" role="group" aria-label="Who can read this">
               <button type="button" :aria-pressed="entry.visibility === 'referee' ? 'true' : 'false'" :disabled="readOnly" @click="setVisibility('referee')">Referee</button>
               <button type="button" :aria-pressed="entry.visibility === 'players' ? 'true' : 'false'" :disabled="readOnly" @click="setVisibility('players')">Players</button>
+              <button type="button" :aria-pressed="entry.visibility === 'public' ? 'true' : 'false'" :disabled="readOnly" @click="setVisibility('public')">Public</button>
             </span>
           </p>
+          <p class="jn-public-line">Shown on your ships' public cards when this game is public.</p>
         </div>
         <p v-if="changedHere || saveState !== 'saved'" class="rec-save" :class="'is-' + saveState" role="status">
           <template v-if="saveState === 'saving'">{{ saveWords }}</template>
@@ -385,6 +387,12 @@ watch(() => props.id, greet, { immediate: true });
 .jn-entry[data-beside="yes"] .jn-side {
   padding-left: 14px;
   border-left: 1px solid var(--line-1);
+}
+
+.jn-public-line {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font: 400 12.5px/1.45 var(--font-text);
 }
 
 .jn-entry[data-beside="no"] {

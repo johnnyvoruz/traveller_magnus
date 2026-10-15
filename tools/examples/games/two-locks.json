@@ -1,0 +1,53 @@
+{
+  "game": "Two Locks",
+  "referee": "berth_pencil",
+  "showReferee": false,
+  "clockDays": 403501,
+  "ships": [
+    {
+      "name": "Copper List",
+      "crew": [
+        "Orla Bex",
+        "Cam Harrow"
+      ],
+      "legs": [
+        {
+          "from": "Spinward_Marches/1810",
+          "to": "Spinward_Marches/1808",
+          "departs": 403474,
+          "arrives": 403480
+        },
+        {
+          "from": "Spinward_Marches/1808",
+          "to": "Spinward_Marches/1807",
+          "departs": 403481,
+          "arrives": 403487
+        },
+        {
+          "from": "Spinward_Marches/1807",
+          "to": "Spinward_Marches/2007",
+          "departs": 403488,
+          "arrives": 403494
+        }
+      ]
+    }
+  ],
+  "journal": [
+    {
+      "title": "The log at Roup",
+      "body": "Copper List is at Roup. Orla Bex wrote the time in the log. Cam Harrow stayed on the board. Neither of them has left the ship.",
+      "when": {
+        "year": 1105,
+        "day": 170
+      }
+    },
+    {
+      "title": "Another ship on this world",
+      "body": "Kestrel's Due is at Roup as well. Orla left that crew out of our log. The two ships did not trade, and neither crew asked the other's business.",
+      "when": {
+        "year": 1105,
+        "day": 176
+      }
+    }
+  ]
+}

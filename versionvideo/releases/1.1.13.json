@@ -1,0 +1,22 @@
+{
+  "version": "1.1.13",
+  "date": "2026-10-14",
+  "items": [
+    {
+      "area": "marketplace server",
+      "text": "Public catalogue, import in place, report and takedown"
+    },
+    {
+      "area": null,
+      "text": "Character sheet skills and profile row"
+    },
+    {
+      "area": null,
+      "text": "Phone bottom sheet and Back"
+    },
+    {
+      "area": null,
+      "text": "One modal frame"
+    }
+  ]
+}

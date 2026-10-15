@@ -292,6 +292,8 @@
   --chart-route-juru: lightblue;
   --chart-route-core-route: purple;
   --chart-public: #c4b5fd;       /* a public game: diamond, not a world, a vessel, or the selection */
+  --ship-ping: 4200ms;           /* one sonar ping round a hex of other people's ships (Lane D) */
+  --ship-ping-reach: 30px;       /* how far that ping spreads before it fades (Lane D) */
 }
 
 body {

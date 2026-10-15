@@ -49,6 +49,16 @@ VALUES ('${sessionId}', ${expires}, '${token}', ${now}, ${now}, '${userId}');
     return `__Secure-better-auth.session_token=${encodeURIComponent(`${token}.${signature}`)}`;
 }
 
+function assertPublic(body, rows) {
+    assert.equal(body.hexes.length, rows.length, JSON.stringify(body));
+    for (let i = 0; i < rows.length; i += 1) {
+        assert.equal(body.hexes[i].hex, rows[i].hex, JSON.stringify(body));
+        assert.equal(body.hexes[i].count, rows[i].count, JSON.stringify(body));
+        assert.equal(body.hexes[i].name, rows[i].name, JSON.stringify(body));
+        assert.equal(body.hexes[i].ships.length, rows[i].count, JSON.stringify(body));
+    }
+}
+
 function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -88,7 +98,7 @@ function record(over = {}) {
         tags: [],
         anchor: { kind: 'system', hexKey: 'Spinward_Marches/1910' },
         when: null,
-        visibility: 'referee',
+        visibility: 'players',
         playerNotes: 'zzmarkeremail@example.test',
         sheet: { secret: 'zzmarkersheet' },
         status: null,
@@ -148,7 +158,8 @@ VALUES ('${otherVersion}', '1.0.0', 'released', '${STAMP}', '${STAMP}', 0, 0);
             const headers = { 'content-type': 'application/json', cookie: owner, origin };
 
             const signedOut = await jsonFetch(`${base}/api/public-games?truthVersion=${version}&sector=Spinward_Marches`);
-            assert.equal(signedOut.status, 401, JSON.stringify(signedOut.body));
+            assert.equal(signedOut.status, 200, JSON.stringify(signedOut.body));
+            assert.deepEqual(signedOut.body, { hexes: [] });
             const missingVersion = await jsonFetch(`${base}/api/public-games?sector=Spinward_Marches`, { headers: { cookie: reader } });
             assert.equal(missingVersion.status, 400, JSON.stringify(missingVersion.body));
             assert.equal(missingVersion.body.error.message, 'truthVersion is required.');
@@ -192,11 +203,14 @@ VALUES ('${otherVersion}', '1.0.0', 'released', '${STAMP}', '${STAMP}', 0, 0);
             const seen = await jsonFetch(`${base}/api/public-games?truthVersion=${version}&sector=Spinward_Marches`, { headers: { cookie: reader } });
             assert.equal(seen.status, 200, JSON.stringify(seen.body));
             assert.equal(seen.headers.get('cache-control'), 'private, no-store');
-            assert.deepEqual(seen.body, { hexes: [{ hex: '1910', count: 1, name: 'Open game' }] });
+            assertPublic(seen.body, [{ hex: '1910', count: 1, name: 'Open game' }]);
+            assert.equal(seen.body.hexes[0].ships[0].ship, 'zzmarkervessel');
+            assert.deepEqual(seen.body.hexes[0].ships[0].aboard, []);
+            assert.match(seen.body.hexes[0].ships[0].mark, /^pm_[0-9A-HJKMNP-TV-Z]{26}$/);
             const ownOnly = await jsonFetch(`${base}/api/public-games?truthVersion=${version}&sector=Spinward_Marches`, { headers: { cookie: owner } });
             assert.deepEqual(ownOnly.body, { hexes: [] });
             const leaked = JSON.stringify(seen.body);
-            for (const marker of ['zzmarkervessel', 'zzmarkerdetails', 'zzmarkeremail', 'zzmarkersheet', 'cr_', 'universeId', 'vesselId', 'referee', 'journal']) {
+            for (const marker of ['zzmarkerdetails', 'zzmarkeremail', 'zzmarkersheet', 'cr_', 'universeId', 'vesselId', 'referee', 'journal']) {
                 assert.equal(leaked.includes(marker), false, marker);
             }
 
@@ -208,7 +222,7 @@ VALUES ('${otherVersion}', '1.0.0', 'released', '${STAMP}', '${STAMP}', 0, 0);
             });
             assert.equal(moved.status, 200, JSON.stringify(moved.body));
             const afterMove = await jsonFetch(`${base}/api/public-games?truthVersion=${version}&sector=Spinward_Marches`, { headers: { cookie: reader } });
-            assert.deepEqual(afterMove.body.hexes, [{ hex: '1911', count: 1, name: 'Open game' }]);
+            assertPublic(afterMove.body, [{ hex: '1911', count: 1, name: 'Open game' }]);
 
             const noted = await jsonFetch(`${base}/api/universes/${id}/campaign/changes`, {
                 method: 'PATCH',
@@ -236,7 +250,7 @@ VALUES ('${otherVersion}', '1.0.0', 'released', '${STAMP}', '${STAMP}', 0, 0);
             });
             assert.equal(noted.status, 200, JSON.stringify(noted.body));
             const afterNote = await jsonFetch(`${base}/api/public-games?truthVersion=${version}&sector=Spinward_Marches`, { headers: { cookie: reader } });
-            assert.deepEqual(afterNote.body.hexes, [{ hex: '1911', count: 1, name: 'Open game' }]);
+            assertPublic(afterNote.body, [{ hex: '1911', count: 1, name: 'Open game' }]);
             assert.equal(JSON.stringify(afterNote.body).includes('zzmarkerjournal'), false);
 
             const other = await jsonFetch(`${base}/api/universes`, {
@@ -263,11 +277,11 @@ VALUES ('${otherVersion}', '1.0.0', 'released', '${STAMP}', '${STAMP}', 0, 0);
             });
             assert.equal(otherOn.status, 200, JSON.stringify(otherOn.body));
             const ownCrowded = await jsonFetch(`${base}/api/public-games?truthVersion=${version}&sector=Spinward_Marches`, { headers: { cookie: owner } });
-            assert.deepEqual(ownCrowded.body.hexes, [{ hex: '1911', count: 1, name: 'Second game' }]);
+            assertPublic(ownCrowded.body, [{ hex: '1911', count: 1, name: 'Second game' }]);
             const secondFeed = await jsonFetch(`${base}/api/public-games?truthVersion=${version}&sector=Spinward_Marches`, { headers: { cookie: second } });
-            assert.deepEqual(secondFeed.body.hexes, [{ hex: '1911', count: 1, name: 'Open game' }]);
+            assertPublic(secondFeed.body, [{ hex: '1911', count: 1, name: 'Open game' }]);
             const crowded = await jsonFetch(`${base}/api/public-games?truthVersion=${version}&sector=Spinward_Marches`, { headers: { cookie: reader } });
-            assert.deepEqual(crowded.body.hexes, [{ hex: '1911', count: 2, name: null }]);
+            assertPublic(crowded.body, [{ hex: '1911', count: 2, name: null }]);
             assert.equal(JSON.stringify(crowded.body).includes('Open game'), false);
             assert.equal(JSON.stringify(crowded.body).includes('Second game'), false);
 
@@ -293,7 +307,7 @@ VALUES ('${otherVersion}', '1.0.0', 'released', '${STAMP}', '${STAMP}', 0, 0);
             const sameChart = await jsonFetch(`${base}/api/public-games?truthVersion=${version}&sector=Spinward_Marches`, { headers: { cookie: reader } });
             assert.equal(sameChart.body.hexes[0].count, 2);
             const otherChart = await jsonFetch(`${base}/api/public-games?truthVersion=${otherVersion}&sector=Spinward_Marches`, { headers: { cookie: reader } });
-            assert.deepEqual(otherChart.body.hexes, [{ hex: '1911', count: 1, name: 'Other chart' }]);
+            assertPublic(otherChart.body, [{ hex: '1911', count: 1, name: 'Other chart' }]);
 
             const scratch = await jsonFetch(`${base}/api/universes`, {
                 method: 'POST',
@@ -328,7 +342,7 @@ VALUES ('${otherVersion}', '1.0.0', 'released', '${STAMP}', '${STAMP}', 0, 0);
             assert.equal(afterOff.body.hexes[0].count, 1);
             assert.equal(afterOff.body.hexes[0].name, 'Second game');
             const ownerAfterOff = await jsonFetch(`${base}/api/public-games?truthVersion=${version}&sector=Spinward_Marches`, { headers: { cookie: owner } });
-            assert.deepEqual(ownerAfterOff.body.hexes, [{ hex: '1911', count: 1, name: 'Second game' }]);
+            assertPublic(ownerAfterOff.body, [{ hex: '1911', count: 1, name: 'Second game' }]);
             const secondAfterOff = await jsonFetch(`${base}/api/public-games?truthVersion=${version}&sector=Spinward_Marches`, { headers: { cookie: second } });
             assert.deepEqual(secondAfterOff.body, { hexes: [] });
 

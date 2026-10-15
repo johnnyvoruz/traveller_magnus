@@ -7,7 +7,7 @@
  * A vessel with no place is left out. Nothing here is drawn.
  */
 import type { CampaignRecord } from '@voyage/shared';
-import { resolveAnchor, type Party } from '../workspace/party.ts';
+import { leadVesselId, memberVessel, partyMembers, partyVessels, resolveAnchor, type Party } from '../workspace/party.ts';
 import { vesselWhere } from '../workspace/party_where.ts';
 
 export type MapVessel = {
@@ -37,8 +37,48 @@ export function vesselsOnMap(
             id: record.id,
             name: record.name,
             hexKey: place.hexKey,
-            party: party.vesselId === record.id,
+            party: leadVesselId(party) === record.id,
             inJump: !!underway && underway.state === 'jump',
+        });
+    }
+    return marks;
+}
+
+/**
+ * One mark per party ship, at that ship's own place. The lead is flagged.
+ * `aboard` is the live members on that ship, in member order, for a label.
+ * D should switch the party marker from `partyMarker` and from `vesselsOnMap`'s
+ * `party` flag to this. Those two stay until that pass.
+ */
+export type PartyShipMark = {
+    id: string;
+    name: string;
+    hexKey: string;
+    lead: boolean;
+    inJump: boolean;
+    aboard: string[];
+};
+
+export function partyShipMarks(
+    records: Readonly<Record<string, CampaignRecord>>,
+    party: Party,
+    days: number,
+): PartyShipMark[] {
+    const lead = leadVesselId(party);
+    const members = partyMembers(party, records);
+    const marks: PartyShipMark[] = [];
+    for (const vessel of partyVessels(party, records)) {
+        const where = vesselWhere(vessel, records, days);
+        const place = resolveAnchor(where.anchor, records);
+        if (!place) continue;
+        const underway = where.underway;
+        marks.push({
+            id: vessel.id,
+            name: vessel.name,
+            hexKey: place.hexKey,
+            lead: vessel.id === lead,
+            inJump: !!underway && underway.state === 'jump',
+            aboard: members.filter((member) => memberVessel(party, member.id) === vessel.id).map((member) => member.name),
         });
     }
     return marks;

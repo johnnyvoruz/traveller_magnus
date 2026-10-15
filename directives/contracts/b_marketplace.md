@@ -594,3 +594,20 @@ Johnny, 2026-10-14: "make the record and then CRUD delete it vs. all this undo."
 - Imports made on 1.1.13 and 1.1.14 delete the same way. Their snapshot rows and meta keys stay where they are.
 
 Single systems and records from an import stay editable and deletable through the normal Builder and campaign routes.
+
+## F15. The manifest carries own-sector slots - **on disk, unpushed**
+
+- `PackageManifest.ownSectors` (optional): `{ [ownSectorId]: { x, y } }` for each own sector a published hex sits in. The publish job writes it from the source universe at publish time; it is left out when the piece has no own-sector hex.
+- `place()` in `routes/installs.ts` reads source slots from `manifest.ownSectors` first. Only a manifest without the field (published before F15) falls back to the source universe's Durable Object.
+- So a placed preview and a placed import land the same after the source universe is emptied or deleted.
+- Deleting content never claws it back from anyone who installed it: deleting the source universe or taking the package down leaves the installed hexes, objects and records in other campaigns byte-identical.
+- Test: `tests/api/install_source_gone.test.js`.
+## F16. Links travel in a package - **on disk, unpushed**
+
+- `PackageManifest.records.links` (optional): `{ contentHash, count }`, a content-addressed list of the source campaign's live links whose two ends are both published records, sorted by id, each as stored (visibility, role, notes, order, since, until included).
+- The publish job reads them from the source universe's object (`GET /campaign`, paged) at publish time. No such link: the field is left out.
+- An install writes them after the records, through the campaign change path, each with provenance `{ mode: 'package', packageId, version, installId, at }`. Record ids are kept on install, so the ends need no rewrite. A link lands only when both its ends are live records in the campaign.
+- `InstallResult.links` (optional): links written.
+- Remove (F14) deletes the links of the import with its records: a tombstone at a new rev and seq, also when both ends stay because they were kept as "mine".
+- A manifest without `links` parses and installs as before.
+- Test: `tests/api/install_links.test.js`.

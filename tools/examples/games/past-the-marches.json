@@ -1,0 +1,71 @@
+{
+  "game": "Past the Marches",
+  "referee": "dry_receipt",
+  "showReferee": false,
+  "clockDays": 403479,
+  "ships": [
+    {
+      "name": "North Copy",
+      "crew": [
+        "Len Maru",
+        "Sia Kade"
+      ],
+      "legs": [
+        {
+          "from": "Deneb/0108",
+          "to": "Deneb/0207",
+          "departs": 403452,
+          "arrives": 403458
+        },
+        {
+          "from": "Deneb/0207",
+          "to": "Deneb/0208",
+          "departs": 403459,
+          "arrives": 403465
+        },
+        {
+          "from": "Deneb/0208",
+          "to": "Deneb/0209",
+          "departs": 403466,
+          "arrives": 403472
+        }
+      ]
+    },
+    {
+      "name": "Shore Step",
+      "crew": [
+        "Brogan Ives"
+      ],
+      "legs": [
+        {
+          "from": "Deneb/0113",
+          "to": "Deneb/0211",
+          "departs": 403452,
+          "arrives": 403458
+        },
+        {
+          "from": "Deneb/0211",
+          "to": "Deneb/0310",
+          "departs": 403459,
+          "arrives": 403465
+        },
+        {
+          "from": "Deneb/0310",
+          "to": "Deneb/0311",
+          "departs": 403466,
+          "arrives": 403472
+        }
+      ]
+    }
+  ],
+  "journal": [
+    {
+      "title": "Kretikaa and Fennec",
+      "body": "North Copy is at Kretikaa with Len Maru and Sia Kade. Shore Step is at Fennec with Brogan Ives. Both runs are done. This note names the ships and the worlds and nothing more.",
+      "when": {
+        "year": 1105,
+        "day": 148
+      }
+    }
+  ]
+}

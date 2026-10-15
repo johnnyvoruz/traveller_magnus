@@ -1,0 +1,39 @@
+{
+  "game": "A Short Margin",
+  "referee": "salt_stamp",
+  "showReferee": false,
+  "clockDays": 403514,
+  "ships": [
+    {
+      "name": "Red Thread",
+      "crew": [
+        "Soren Dal",
+        "Kit Amos"
+      ],
+      "legs": [
+        {
+          "from": "Spinward_Marches/0111",
+          "to": "Spinward_Marches/0212",
+          "departs": 403491,
+          "arrives": 403497
+        },
+        {
+          "from": "Spinward_Marches/0212",
+          "to": "Spinward_Marches/0114",
+          "departs": 403498,
+          "arrives": 403504
+        }
+      ]
+    }
+  ],
+  "journal": [
+    {
+      "title": "Stopped at Yiktor",
+      "body": "Red Thread is at Yiktor. Soren Dal has the log. Kit Amos is off watch. This note is the whole report.",
+      "when": {
+        "year": 1105,
+        "day": 180
+      }
+    }
+  ]
+}

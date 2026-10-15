@@ -67,6 +67,8 @@ export type RowFace = {
     meta: string;
     /** The entry's images. The first one is the row's avatar. Null when there are none. */
     images: CampaignEntry['images'];
+    /** True when the entry is marked Public, for the small mark on the row. */
+    public: boolean;
 };
 
 export function kindWord(kind: CampaignEntryKind): string {
@@ -193,6 +195,7 @@ export function rowFace(entry: CampaignEntry, records: Readonly<Record<string, C
         summary: line && line !== name ? line : null,
         meta: metaLine(entry, entryPlace(anchorOf(entry), records)),
         images: entry.images ?? null,
+        public: entry.visibility === 'public',
     };
 }
 

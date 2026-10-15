@@ -1,0 +1,267 @@
+{
+  "universe": {
+    "id": "example-hollow-verge",
+    "name": "Hollow Verge",
+    "truthVersion": "v10"
+  },
+  "exportedAt": "2026-10-14T18:00:00.000Z",
+  "records": [
+    {
+      "id": "cr_a4000000-0000-4000-8000-000000000001",
+      "type": "place",
+      "kind": "beacon station",
+      "name": "Verge Lantern",
+      "summary": "A crewed beacon station at the near edge of the Hollow Verge.",
+      "details": "Ships that come into the Verge call the Lantern first. The keepers log every arrival and sell fuel and news to anyone who asks. Hook: the night log shows one more arrival than the station has berths for.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "~00000000000000000000000000/0101"
+      },
+      "when": null,
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_a4000000-0000-4000-8000-000000000002",
+      "type": "person",
+      "kind": "beacon keeper",
+      "name": "Tamsin Reeve",
+      "summary": "The night keeper at Verge Lantern.",
+      "details": "Tamsin has kept the night log for a long time and trusts it more than she trusts most captains. She will trade news for news. Hook: she wants someone to find the ship that was logged and never docked.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "record",
+        "id": "cr_a4000000-0000-4000-8000-000000000001"
+      },
+      "when": null,
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_a4000000-0000-4000-8000-000000000003",
+      "type": "organization",
+      "kind": "survey office",
+      "name": "Verge Survey Office",
+      "summary": "A small office that pays for charts of the Verge.",
+      "details": "The office buys survey data from any crew that brings it in clean. Its charts of the Verge are short of detail, and it says so. Hook: it pays a bonus for a first full survey of any system it has not charted.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "~00000000000000000000000000/0202"
+      },
+      "when": null,
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_a4000000-0000-4000-8000-000000000004",
+      "type": "person",
+      "kind": "survey clerk",
+      "name": "Corin Hale",
+      "summary": "The clerk who signs survey contracts for the office.",
+      "details": "Corin reads every survey that comes in and checks it against the last one. He is careful and slow, and he asks for the raw logs as well as the summary. Hook: two surveys of the same system disagree, and he wants a third.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "~00000000000000000000000000/0202"
+      },
+      "when": null,
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_a4000000-0000-4000-8000-000000000005",
+      "type": "job",
+      "kind": "survey",
+      "name": "A third survey",
+      "summary": "Survey the far system of the Verge and settle a disagreement.",
+      "details": "Two crews brought back surveys of the same system, and they do not match. Corin Hale will pay for a third survey, with full logs, from a crew that has not seen either of the first two.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "~00000000000000000000000000/0302"
+      },
+      "when": null,
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_a4000000-0000-4000-8000-000000000006",
+      "type": "event",
+      "kind": "disappearance",
+      "name": "The tender that stopped calling",
+      "summary": "A survey tender stopped answering the Lantern on its way out.",
+      "details": "A tender left the Lantern for the far side of the Verge and called in on schedule twice. Then it stopped. The Lantern logged an arrival at the same hour the tender went quiet. Secret: the arrival is the tender, which came back without its crew and drifts in a parking orbit.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "~00000000000000000000000000/0103"
+      },
+      "when": null,
+      "visibility": "referee",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    }
+  ],
+  "links": [
+    {
+      "id": "cl_b4000000-0000-4000-8000-000000000001",
+      "from": "cr_a4000000-0000-4000-8000-000000000002",
+      "to": "cr_a4000000-0000-4000-8000-000000000001",
+      "kind": "member",
+      "role": "night keeper",
+      "order": 1,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "players",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_b4000000-0000-4000-8000-000000000002",
+      "from": "cr_a4000000-0000-4000-8000-000000000004",
+      "to": "cr_a4000000-0000-4000-8000-000000000003",
+      "kind": "member",
+      "role": "clerk",
+      "order": 2,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "players",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_b4000000-0000-4000-8000-000000000003",
+      "from": "cr_a4000000-0000-4000-8000-000000000003",
+      "to": "cr_a4000000-0000-4000-8000-000000000005",
+      "kind": "patron",
+      "role": "",
+      "order": 3,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "players",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_b4000000-0000-4000-8000-000000000004",
+      "from": "cr_a4000000-0000-4000-8000-000000000002",
+      "to": "cr_a4000000-0000-4000-8000-000000000004",
+      "kind": "contact",
+      "role": "",
+      "order": 4,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "players",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_b4000000-0000-4000-8000-000000000005",
+      "from": "cr_a4000000-0000-4000-8000-000000000002",
+      "to": "cr_a4000000-0000-4000-8000-000000000006",
+      "kind": "involved",
+      "role": "logged the arrival",
+      "order": 5,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "referee",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    }
+  ],
+  "journal": [],
+  "settings": {
+    "party": {
+      "vesselId": null,
+      "memberIds": [],
+      "anchor": null
+    },
+    "kinds": {},
+    "calendar": {
+      "dateFormat": "imperial"
+    },
+    "rev": 0
+  },
+  "clock": null
+}

@@ -6,6 +6,8 @@ import {
     CampaignChanges,
     CampaignLink,
     CampaignRecord,
+    CampaignSettings,
+    Party,
     mentionsOf,
     type CampaignChangesResult,
     type CampaignClock,
@@ -13,7 +15,6 @@ import {
     type CampaignLink as CampaignLinkRow,
     type CampaignPage,
     type CampaignRecord as CampaignRecordRow,
-    type CampaignSettings,
     type EntryChange,
     type LinkChange,
     type RecordChange,
@@ -173,17 +174,30 @@ function countLive(sql: Sql, table: 'campaign_records' | 'campaign_links' | 'cam
 
 function defaultSettings(): CampaignSettings {
     return {
-        party: { vesselId: null, memberIds: [], anchor: null },
+        party: { vesselIds: [], aboard: {}, memberIds: [], anchor: null },
         kinds: {},
         calendar: { dateFormat: 'imperial' },
         rev: 0,
     };
 }
 
+function settingsFrom(raw: unknown): CampaignSettings {
+    const parsed = CampaignSettings.safeParse(raw);
+    return parsed.success ? parsed.data : defaultSettings();
+}
+
 function readSettings(sql: Sql): CampaignSettings {
     const rows = sql.exec(`SELECT payload FROM lists WHERE kind = 'campaignSettings'`);
     if (!rows.length || rows[0].payload == null) return defaultSettings();
-    return parseJson(rows[0].payload) as CampaignSettings;
+    return settingsFrom(parseJson(rows[0].payload));
+}
+
+/** A 1.2.0 tab sends `vesselId` and no `vesselIds`. That write must not replace a stored ship list. */
+function legacySettingsWrite(changes: unknown): boolean {
+    if (!changes || typeof changes !== 'object') return false;
+    const party = (changes as { settings?: { party?: unknown } }).settings?.party;
+    if (!party || typeof party !== 'object' || Array.isArray(party)) return false;
+    return 'vesselId' in party && !('vesselIds' in party);
 }
 
 function readClock(sql: Sql): CampaignClock | null {
@@ -290,6 +304,16 @@ function isFullLink(change: LinkChange): change is Extract<LinkChange, { from: s
 
 function isFullEntry(change: EntryChange): change is Extract<EntryChange, { kind: string }> {
     return 'kind' in change;
+}
+
+/**
+ * A cached tab loads a public entry as `players` and saves that word back.
+ * That save keeps `public` unless the caller sent `X-Voyage-Journal: public`.
+ * `referee` and an explicit `public` are stored as sent.
+ */
+function journalVisibility(change: { visibility: string }, stored: SqlRow | null, acknowledgePublic: boolean): string {
+    if (!acknowledgePublic && stored && String(stored.visibility) === 'public' && change.visibility === 'players') return 'public';
+    return change.visibility;
 }
 
 /** A patch writes images only when the field is present. Omitting it leaves the stored list. */
@@ -428,7 +452,8 @@ function requireRoom(
     }
 }
 
-export function applyCampaignChanges(sql: Sql, changes: unknown, now: string): CampaignChangesResult {
+export function applyCampaignChanges(sql: Sql, changes: unknown, now: string, acknowledgePublic = false): CampaignChangesResult {
+    const legacyParty = legacySettingsWrite(changes);
     const parsed = CampaignChanges.safeParse(changes);
     if (!parsed.success) {
         const tooLarge = parsed.error.issues.some((issue) => issue.message === 'too_large');
@@ -444,14 +469,26 @@ export function applyCampaignChanges(sql: Sql, changes: unknown, now: string): C
     return sql.transaction(() => {
         if (input.settings) {
             const stored = sql.exec(`SELECT rev, payload FROM lists WHERE kind = 'campaignSettings'`);
-            const current = stored.length ? parseJson(stored[0].payload) as CampaignSettings : defaultSettings();
+            const raw = stored.length && stored[0].payload != null ? parseJson(stored[0].payload) : null;
+            const current = raw == null ? defaultSettings() : settingsFrom(raw);
             if (input.settings.baseRev !== current.rev) {
                 conflicts.push({ table: 'settings', id: 'campaignSettings', current });
             } else {
                 const rev = current.rev + 1;
                 const seq = nextSeq(sql);
                 const { baseRev: _baseRev, ...body } = input.settings;
-                const next = { ...body, rev };
+                const rawParty = raw && typeof raw === 'object' ? (raw as { party?: { vesselIds?: unknown; aboard?: unknown } }).party : null;
+                let party = body.party;
+                if (legacyParty && rawParty && Array.isArray(rawParty.vesselIds)) {
+                    const kept = Party.safeParse({
+                        vesselIds: rawParty.vesselIds,
+                        aboard: rawParty.aboard ?? {},
+                        memberIds: body.party.memberIds,
+                        anchor: body.party.anchor,
+                    });
+                    if (kept.success) party = kept.data;
+                }
+                const next = { ...body, party, rev };
                 const payload = JSON.stringify(next);
                 if (!stored.length) {
                     sql.exec(
@@ -703,7 +740,7 @@ export function applyCampaignChanges(sql: Sql, changes: unknown, now: string): C
                     change.realDate,
                     change.sequence,
                     change.author,
-                    change.visibility,
+                    journalVisibility(change, null, acknowledgePublic),
                     jsonText(change.anchor),
                     JSON.stringify(mentions),
                     imagesWrite(change) ?? null,
@@ -745,7 +782,7 @@ export function applyCampaignChanges(sql: Sql, changes: unknown, now: string): C
                         change.realDate,
                         change.sequence,
                         change.author,
-                        change.visibility,
+                        journalVisibility(change, stored, acknowledgePublic),
                         jsonText(change.anchor),
                         JSON.stringify(mentions),
                         rev,
@@ -768,7 +805,7 @@ export function applyCampaignChanges(sql: Sql, changes: unknown, now: string): C
                         change.realDate,
                         change.sequence,
                         change.author,
-                        change.visibility,
+                        journalVisibility(change, stored, acknowledgePublic),
                         jsonText(change.anchor),
                         JSON.stringify(mentions),
                         images,

@@ -1,19 +1,19 @@
 # Board
 
-One line per lane. Only the orchestrator edits this file. Updated 2026-10-14 17:00 (by the clock).
+One line per lane. Only the orchestrator edits this file. Updated 2026-10-14 20:05 (by the clock).
 
-**Last push: `392671b`, version 1.1.15, engine e1.2, 2026-10-14, live** (GitHub run green;
-live index `index-BI9NdrnN.js`; the DELETE route answers 401 signed out). Truth v10.
+**Last push: `2680edf` (1.2.0 amended without the WAV, force-pushed 19:45), version 1.2.0 (the marketplace), engine e1.2, 2026-10-14, live** (live
+index `index-DF2lx3IJ.js`; `GET /api/packages` signed out answers 200 with no items). Truth v10.
 **Deploys run on push** (Johnny, 2026-10-14): push commands no longer include `npm run deploy:ci`.
 
 | Lane | Status | Current prompt | Blocker / next |
 |---|---|---|---|
-| A | free | (none) | `a_sheet_row_and_skills` accepted |
-| B | free | (none) | the marketplace moved to Z (Johnny, 2026-10-14) |
-| C | free | (none) | no-sea accepted |
-| D | free | (none) | `d_small_polish` accepted |
-| E | free | (none) | `e_phone_sheet` accepted |
-| Z | free | prompts/z_marketplace.md | the marketplace is done: phases 1 to 4b accepted; in app 1.2.0 |
+| A | free | (none) | `a_party_ships` accepted |
+| B | pause | prompts/b_public_overview.md | started early by Johnny; no code changed yet (20:05); pause until 1.2.1 is pushed |
+| C | free | (none) | `c_example_games` with Fix 1 accepted |
+| D | pause | prompts/d_public_overview_map.md | started early by Johnny; no code changed yet (20:05); pause until 1.2.1 is pushed |
+| E | free | (none) | `e_example_packs` Fix 2 accepted |
+| Z | free | (none) | `z_example_packages` done: F15, F16, loader, copy, games seed; rehearsed on the twelve |
 | F | retired | (none) | Johnny, 2026-10-11: unreliable (runs out of budget); do not use or propose until he says it is back |
 
 ## Naming (Johnny, 2026-10-14)
@@ -140,11 +140,27 @@ lane's letter as the first message of a new session; from then on "go" is enough
   the blank request body (read from what the server stored).
 
 ## Pending push
-**App 1.2.0 called for, 2026-10-14 17:00:** `findings/push/release_2026-10-14d.md` (45 paths, no
-migration). Rehearsed in `scratchpad/outer20`. Out: the ten parked truth-build files and
-`versionvideo/` (a changelog-video tool, untracked, made 14:23 by no lane on the board).
+**App 1.2.1 called for, 2026-10-14 19:55, not yet pushed at 20:05 (origin still 2680edf):** `findings/push/release_2026-10-14e.md` (161 paths, migrations 0017 and 0018). Rehearsed in `scratchpad/outer21` on 2680edf: 1757 / 1717 / 0 fail; check, typecheck, build clean.
+
+## Shared files, this turn (2026-10-14 18:30)
+- B: apps/api, packages/shared (not Z's package.ts), campaign/store.ts and commit.ts (lent), the browser's read-parse call sites.
+- D: views/MapView.vue, map/MapRenderer.ts, map/public_games.ts, map/campaign_layer.ts (lent from A), workspace/PublicShipCard.vue, public_ship_card.ts, new card files.
+- E: workspace/PartyPanel.vue (lent from D), workspace/journal/, workspace/AccountMenu.vue and workspace/public_games.ts (lent).
+- C: tools/examples/games/.
+- Z: packages/shared/src/schemas/package.ts, apps/api/src/jobs/publish_queue.ts, routes/installs.ts, universe/install.ts,
+  contracts/b_marketplace.md, tools/examples/ (not the four packs/ folders).
+
+## Shared files, example packages (2026-10-14 18:05)
+- tools/examples/: Z, except tools/examples/packs/regina-highport-contacts/ and jewell-patrons/ (C),
+  free-traders-of-the-marches/ and the-glass-hand/ (E). No lane runs anything against production.
 
 ## Decisions from Johnny
+- 2026-10-14 19:35, Johnny: remove the 1.2.0 WAV from history (amend 20fc3c8, force-push with lease; `*.wav` ignored in versionvideo); yes to public ships glowing and pinging when zoomed out (B overview feed, D drawing, after 1.2.1).
+- 2026-10-14 19:20, orchestrator: example handles follow `judgeUsername`; example emails `<handle>@example.invalid`. D's zoomed-out ships question asked.
+- 2026-10-14 18:45, orchestrator (Z questions): links travel in a package (F16, ends both published); house universes stay live; Hollow Verge keeps the engine's names; provenance left; records packs keep their charted hexes. Production order: push 1.2.1, then the package copy, then the example games.
+- 2026-10-14 18:30, orchestrator: a public ship with nobody published aboard shows no "Aboard:" line (D's question). Old-tab compatibility goes to old tabs only: the new browser identifies itself with `X-Voyage-Journal: public`; browser reads ignore unknown keys from now on.
+- 2026-10-14 17:50, Johnny: a publisher deleting their content never claws it back from anyone who installed it (an install is a full copy; checked: it copies trees, images and records into the installer's own prefix and campaign). Z's manifest slots close the one dependency (placing from a deleted source map).
+- 2026-10-14 18:40, orchestrator: Z's halt answered: the manifest carries each own sector's slot so a placed import never needs the source map (a deleted source map broke it too); the charted-system pack is records only.
 - 2026-10-10: the file bus replaces pasting.
 - 2026-10-10: B builds the one-act "make a sector and generate" (done).
 - The dossier-open frame does not hold the push.
@@ -388,6 +404,20 @@ migration). Rehearsed in `scratchpad/outer20`. Out: the ten parked truth-build f
 - 2026-10-14, yes to all four: the orbit picker keeps its fade; imported records name their package (provenance mode `package`); restore an import's undo point (after placement); a takedown keeps a private manifest copy.
 - 2026-10-14 12:45: no undo machinery for imports: removing an import is a plain delete of what it brought ("make the record and then CRUD delete it"); one import per package per campaign; importing into a never-opened map pins it (phase 4); no quota refund on removal.
 - 2026-10-14 13:45: a package's install count never goes down (a remove leaves it).
+- 2026-10-14 18:15, Johnny: the house account is `Traveller_Voyage` (user id e2b2245a-5260-4b91-8f33-1e02997fd9d5), made on production.
+- 2026-10-14 18:05, Johnny: example marketplace content ("it's empty right now"). The public card:
+  example games carry an "Example" tag and are easy to remove; a journal entry can be "Public" and
+  shows on the card; the referee chooses game name only or game name and their handle; signed-out
+  visitors see public ships.
+- 2026-10-14 17:40, Johnny: ships move separately (own track and position; each member aboard
+  one ship or none); one public mark per ship with its name; every party ship of a public game
+  shows, with who is aboard; a public route shows only finished legs; it is flavour, read-only,
+  a "community" feel. Example games (6 or 12 accounts, each with a ship) to show it off.
+- 2026-10-14 17:40, orchestrator: the public switch stays per game; a referee-only record is
+  never named in public; `party.vesselIds` + `party.aboard` replace `party.vesselId`.
+- 2026-10-14 17:15, Johnny: `versionvideo/` is his (another agent, for social media posts); it
+  goes in the next push (1.2.1). Next leg: more than one ship per party; then sharing ships
+  across the galaxy ("so we can see everyone's adventures"). Design questions asked 17:15.
 - 2026-10-14 17:00, orchestrator (Z 4b questions, no behaviour change): an in-place
   re-import of a package the campaign holds in place is the same import re-applied, not a
   second one, so it is allowed; an admin's view of a hidden package has no outline or Import.
@@ -397,7 +427,7 @@ migration). Rehearsed in `scratchpad/outer20`. Out: the ten parked truth-build f
 - 2026-10-14, a Back "<" left of the pane's X: one pane back; X still closes the pane.
 
 ## Open with Johnny
-(none).
+(none)
 
 ## Decided by the orchestrator, 2026-10-13
 - The public games feed leaves out the caller's own universes (built, B).

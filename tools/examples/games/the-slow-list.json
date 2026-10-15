@@ -1,0 +1,46 @@
+{
+  "game": "The Slow List",
+  "referee": "even_column",
+  "showReferee": true,
+  "clockDays": 403484,
+  "ships": [
+    {
+      "name": "Salt Lantern",
+      "crew": [
+        "Idris Cho",
+        "Willa Brant",
+        "Poe Lumen"
+      ],
+      "legs": [
+        {
+          "from": "Spinward_Marches/0101",
+          "to": "Spinward_Marches/0102",
+          "departs": 403454,
+          "arrives": 403460
+        },
+        {
+          "from": "Spinward_Marches/0102",
+          "to": "Spinward_Marches/0103",
+          "departs": 403461,
+          "arrives": 403467
+        },
+        {
+          "from": "Spinward_Marches/0103",
+          "to": "Spinward_Marches/0104",
+          "departs": 403468,
+          "arrives": 403474
+        }
+      ]
+    }
+  ],
+  "journal": [
+    {
+      "title": "Cantrel, and stopped",
+      "body": "Salt Lantern ended this run at Cantrel. Idris Cho checked the seals. Willa Brant and Poe Lumen ate on the mess deck and turned in.",
+      "when": {
+        "year": 1105,
+        "day": 150
+      }
+    }
+  ]
+}

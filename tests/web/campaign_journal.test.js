@@ -80,7 +80,7 @@ function vessel() {
 
 function settings(party) {
     return {
-        party: party || { vesselId: null, memberIds: [], anchor: null },
+        party: party || { vesselIds: [], aboard: {}, memberIds: [], anchor: null },
         kinds: {},
         calendar: { dateFormat: 'imperial' },
         rev: 0,
@@ -182,7 +182,8 @@ test('a session draft takes the clock and the party, and a note draft takes neit
     assert.equal(dated.anchor, null);
 
     campaign.settings = settings({
-        vesselId: VESSEL,
+        vesselIds: [VESSEL],
+        aboard: {},
         memberIds: [],
         anchor: { kind: 'system', hexKey: OTHER },
     });
@@ -191,7 +192,8 @@ test('a session draft takes the clock and the party, and a note draft takes neit
     assert.deepEqual(aboard.anchor, { kind: 'system', hexKey: HEX, locationLabel: 'Regina' });
 
     campaign.settings = settings({
-        vesselId: null,
+        vesselIds: [],
+        aboard: {},
         memberIds: [],
         anchor: { kind: 'system', hexKey: OTHER },
     });

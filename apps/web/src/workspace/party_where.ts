@@ -9,7 +9,7 @@ import type { CampaignAnchor, CampaignClock, CampaignRecord, TrackLeg } from '@v
 import { positionAt, trackOf, whereAreWe, type TrackFix } from '../campaign/track.ts';
 import { DEFAULT_START, totalDays } from '../orbit/clock.ts';
 import { isPoint, statusWords, whenWords } from '../orbit/ship_list.ts';
-import { partyVessel, resolveAnchor, type Party } from './party.ts';
+import { memberVessel, partyVessel, partyVessels, resolveAnchor, type Party } from './party.ts';
 import { anchorName } from './track_rows.ts';
 
 /** The campaign date as the orbit clock counts it; a campaign with no date yet is on the default start. */
@@ -44,6 +44,7 @@ function whereOf(at: CampaignAnchor | TrackFix | null, vessel: CampaignRecord | 
     return { anchor: standing(at.leg), underway: { state, text: words ? words.text : '' } };
 }
 
+/** Where the lead ship is. Every screen that asks "where are we" uses this. */
 export function partyWhere(party: Party, records: Readonly<Record<string, CampaignRecord>>, days: number): PartyWhere {
     return whereOf(whereAreWe(party, records, days), partyVessel(party, records), records, days);
 }
@@ -56,6 +57,28 @@ export function vesselWhere(vessel: CampaignRecord, records: Readonly<Record<str
     const track = trackOf(vessel);
     const at = track ? positionAt(track, days) ?? vessel.anchor : vessel.anchor;
     return whereOf(at, vessel, records, days);
+}
+
+export type ShipWhere = { id: string; name: string; where: PartyWhere };
+
+/** One vesselWhere per party ship, in list order. */
+export function shipsWhere(party: Party, records: Readonly<Record<string, CampaignRecord>>, days: number): ShipWhere[] {
+    return partyVessels(party, records).map((vessel) => ({
+        id: vessel.id,
+        name: vessel.name,
+        where: vesselWhere(vessel, records, days),
+    }));
+}
+
+/**
+ * Where a member is: their ship's place, or the party's own anchor when they are aboard none.
+ * A ship id that is not a live vessel uses that same anchor.
+ */
+export function memberWhere(party: Party, records: Readonly<Record<string, CampaignRecord>>, memberId: string, days: number): PartyWhere {
+    const shipId = memberVessel(party, memberId);
+    const vessel = shipId ? records[shipId] : null;
+    if (vessel && !vessel.deleted && vessel.type === 'vessel') return vesselWhere(vessel, records, days);
+    return { anchor: party.anchor, underway: null };
 }
 
 /** The party's marker on the map: the hex it stands on and its tag, or null when it is nowhere. */

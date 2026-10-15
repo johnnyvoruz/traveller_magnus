@@ -1,0 +1,534 @@
+{
+  "universe": {
+    "id": "example-glass-hand",
+    "name": "The Glass Hand",
+    "truthVersion": "v10"
+  },
+  "exportedAt": "2026-10-14T18:00:00.000Z",
+  "records": [
+    {
+      "id": "cr_e1000000-0000-4000-8000-00000000001d",
+      "type": "organization",
+      "kind": "ring",
+      "name": "The Glass Hand",
+      "summary": "A quiet ring that moves sealed parcels between four Regina-subsector worlds.",
+      "details": "The Glass Hand is Wynn Solas's ring. The public face is Lantern Chandlery at Regina, where monitoring is heavy, so nothing questionable sits on the shelf. Staging is a nameless warehouse at Efate, which places no restrictions. A cabin at Whanga and a lookout at Dentus complete the circuit. They want a crew that can carry one sealed parcel and not open it. What the parcel is, and what it pays, is the referee's call.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/1910"
+      },
+      "when": null,
+      "visibility": "referee",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000000-0000-4000-8000-00000000001e",
+      "type": "person",
+      "kind": "chandler",
+      "name": "Wynn Solas",
+      "summary": "Owner of Lantern Chandlery at Regina's port.",
+      "details": "Wynn Solas sells lamps, seals and small tools to crews who berth at Regina. She wants regular customers and a reputation for exact change. She takes letters for people who do not come into the shop. She does not talk about where those letters go.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/1910"
+      },
+      "when": null,
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000000-0000-4000-8000-00000000001f",
+      "type": "person",
+      "kind": "clerk",
+      "name": "Ivo Tarn",
+      "summary": "Clerk at Lantern Chandlery.",
+      "details": "Ivo Tarn keeps the shelves and the letter drawer at Lantern Chandlery. He wants the drawer emptied on time and no questions from the port. He tells crews the letters are for customers who travel.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/1910"
+      },
+      "when": null,
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000000-0000-4000-8000-000000000020",
+      "type": "person",
+      "kind": "clerk",
+      "name": "Nessa Holt",
+      "summary": "Door clerk at Lantern Chandlery.",
+      "details": "Nessa Holt watches who comes into Lantern Chandlery and how long they stay. She wants the shop to look like any other fitting shop on Regina's concourse. She remembers faces and does not write them down.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/1910"
+      },
+      "when": null,
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000000-0000-4000-8000-000000000021",
+      "type": "person",
+      "kind": "courier",
+      "name": "Edric Holm",
+      "summary": "Moves sealed parcels through an unmarked berth at Efate.",
+      "details": "Edric Holm works the unmarked warehouse berth at Efate. He wants parcels in and out within two days and no name on the door. He does not know what is in them, and he does not ask Wynn Solas.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/1705"
+      },
+      "when": null,
+      "visibility": "referee",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000000-0000-4000-8000-000000000022",
+      "type": "person",
+      "kind": "courier",
+      "name": "Odile Venn",
+      "summary": "Keeps a sealed cabin on Whanga for one visitor at a time.",
+      "details": "Odile Venn lives at the Green Cabin, a short walk from Whanga's frontier port. The world has few people, and she wants it to stay that way. She meets one courier at a time and turns the rest away.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/1806"
+      },
+      "when": null,
+      "visibility": "referee",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000000-0000-4000-8000-000000000023",
+      "type": "person",
+      "kind": "lookout",
+      "name": "Harun Peck",
+      "summary": "Watches scout traffic at Dentus for the Glass Hand.",
+      "details": "Harun Peck works the routine port at Dentus, which has a scout base and places no restrictions. He notes which scout ships arrive and which leave with a blank log line. He wants those notes to reach Wynn Solas and no one else.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/2201"
+      },
+      "when": null,
+      "visibility": "referee",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000000-0000-4000-8000-000000000024",
+      "type": "place",
+      "kind": "chandlery",
+      "name": "Lantern Chandlery",
+      "summary": "A small chandlery on Regina's port concourse.",
+      "details": "Lantern Chandlery sells lamps, seals and hand tools. Crews know it as a place to buy a fitting and leave a letter. The shelves hold nothing a port clerk would question. Regina's port monitors traffic closely, and the shop is built to pass that look.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/1910"
+      },
+      "when": null,
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000000-0000-4000-8000-000000000025",
+      "type": "place",
+      "kind": "warehouse",
+      "name": "Unmarked berth, warehouse row",
+      "summary": "A warehouse berth at Efate with no name on the door.",
+      "details": "The berth sits in Efate's industrial port, among many like it. Efate has an excellent starport, a high population and no restrictions on what a warehouse may hold. The Glass Hand stages sealed parcels here for a day or two. There is no sign and no published rate.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/1705"
+      },
+      "when": null,
+      "visibility": "referee",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000000-0000-4000-8000-000000000026",
+      "type": "place",
+      "kind": "cabin",
+      "name": "Green Cabin",
+      "summary": "A sealed cabin on Whanga, away from the frontier port.",
+      "details": "Whanga has few people and a frontier starport. The cabin is a short walk from the pad and is kept sealed. Odile Venn meets one visitor at a time. The world's restrictions are heavy, so visitors do not advertise the cabin.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/1806"
+      },
+      "when": null,
+      "visibility": "referee",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000000-0000-4000-8000-000000000027",
+      "type": "note",
+      "kind": "rumour",
+      "name": "Letters with no address",
+      "summary": "Crews hear that a Regina chandlery takes letters for people who never shop.",
+      "details": "Dock talk at Regina says Lantern Chandlery will hold a letter for a name that is not on any berth list. The staff call them customers who travel. No one at the port has called this a crime. A crew that asks too directly is told the drawer is full.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/1910"
+      },
+      "when": null,
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000000-0000-4000-8000-000000000028",
+      "type": "note",
+      "kind": "rumour",
+      "name": "The door with no name",
+      "summary": "Dock talk at Efate names a warehouse door with no sign.",
+      "details": "Crews at Efate's excellent port say one berth on warehouse row never posts a name or a rate. Parcels go in after dark and leave within two days. Efate places no restrictions on a warehouse, so the talk is curiosity, not a charge. No one has opened a parcel and admitted it.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/1705"
+      },
+      "when": null,
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000000-0000-4000-8000-000000000029",
+      "type": "note",
+      "kind": "rumour",
+      "name": "A log line left blank",
+      "summary": "A rumour at Dentus says a scout ship left with a blank line in the log.",
+      "details": "The rumour a crew might hear is thin: a scout ship at Dentus departed with one log line left blank. The referee's version is that Harun Peck asked for the blank line and passed the time of departure to Wynn Solas. What the ship carried is the referee's call. Dentus has a scout base, so a scout ship at the port is ordinary.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/2201"
+      },
+      "when": null,
+      "visibility": "referee",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    }
+  ],
+  "links": [
+    {
+      "id": "cl_e1000000-0000-4000-8000-000000000016",
+      "from": "cr_e1000000-0000-4000-8000-00000000001e",
+      "to": "cr_e1000000-0000-4000-8000-00000000001d",
+      "kind": "member",
+      "role": "leader",
+      "order": 22,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "referee",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_e1000000-0000-4000-8000-000000000017",
+      "from": "cr_e1000000-0000-4000-8000-00000000001f",
+      "to": "cr_e1000000-0000-4000-8000-00000000001d",
+      "kind": "member",
+      "role": "member",
+      "order": 23,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "referee",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_e1000000-0000-4000-8000-000000000018",
+      "from": "cr_e1000000-0000-4000-8000-000000000020",
+      "to": "cr_e1000000-0000-4000-8000-00000000001d",
+      "kind": "member",
+      "role": "member",
+      "order": 24,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "referee",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_e1000000-0000-4000-8000-000000000019",
+      "from": "cr_e1000000-0000-4000-8000-000000000021",
+      "to": "cr_e1000000-0000-4000-8000-00000000001d",
+      "kind": "member",
+      "role": "member",
+      "order": 25,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "referee",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_e1000000-0000-4000-8000-00000000001a",
+      "from": "cr_e1000000-0000-4000-8000-000000000022",
+      "to": "cr_e1000000-0000-4000-8000-00000000001d",
+      "kind": "member",
+      "role": "member",
+      "order": 26,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "referee",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_e1000000-0000-4000-8000-00000000001b",
+      "from": "cr_e1000000-0000-4000-8000-000000000023",
+      "to": "cr_e1000000-0000-4000-8000-00000000001d",
+      "kind": "member",
+      "role": "member",
+      "order": 27,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "referee",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_e1000000-0000-4000-8000-00000000001c",
+      "from": "cr_e1000000-0000-4000-8000-00000000001e",
+      "to": "cr_e1000000-0000-4000-8000-00000000001d",
+      "kind": "commands",
+      "role": "leader",
+      "order": 28,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "referee",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_e1000000-0000-4000-8000-00000000001d",
+      "from": "cr_e1000000-0000-4000-8000-00000000001e",
+      "to": "cr_e1000000-0000-4000-8000-000000000024",
+      "kind": "owns",
+      "role": "owner",
+      "order": 29,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "players",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_e1000000-0000-4000-8000-00000000001e",
+      "from": "cr_e1000000-0000-4000-8000-00000000001d",
+      "to": "cr_e1000000-0000-4000-8000-000000000025",
+      "kind": "owns",
+      "role": "staging",
+      "order": 30,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "referee",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_e1000000-0000-4000-8000-00000000001f",
+      "from": "cr_e1000000-0000-4000-8000-00000000001d",
+      "to": "cr_e1000000-0000-4000-8000-000000000026",
+      "kind": "owns",
+      "role": "safehouse",
+      "order": 31,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "referee",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    }
+  ],
+  "journal": [],
+  "settings": {
+    "party": {
+      "vesselId": null,
+      "memberIds": [],
+      "anchor": null
+    },
+    "kinds": {},
+    "calendar": {
+      "dateFormat": "imperial"
+    },
+    "rev": 0
+  },
+  "clock": null
+}

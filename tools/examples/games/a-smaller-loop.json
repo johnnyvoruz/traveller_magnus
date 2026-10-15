@@ -1,0 +1,48 @@
+{
+  "game": "A Smaller Loop",
+  "referee": "third_margin",
+  "showReferee": true,
+  "clockDays": 403464,
+  "ships": [
+    {
+      "name": "Small Orbit",
+      "crew": [
+        "Ana Vesk",
+        "Bo Tern",
+        "Cira Dodd",
+        "Fal Unwin",
+        "Gita Shore"
+      ],
+      "legs": [
+        {
+          "from": "Spinward_Marches/0215",
+          "to": "Spinward_Marches/0414",
+          "departs": 403434,
+          "arrives": 403440
+        },
+        {
+          "from": "Spinward_Marches/0414",
+          "to": "Spinward_Marches/0412",
+          "departs": 403441,
+          "arrives": 403447
+        },
+        {
+          "from": "Spinward_Marches/0412",
+          "to": "Spinward_Marches/0311",
+          "departs": 403448,
+          "arrives": 403454
+        }
+      ]
+    }
+  ],
+  "journal": [
+    {
+      "title": "All five accounted for",
+      "body": "Small Orbit is at Mizan-fel. Ana Vesk called the roll. Bo Tern, Cira Dodd, Fal Unwin, and Gita Shore each answered. They are staying with the ship.",
+      "when": {
+        "year": 1105,
+        "day": 130
+      }
+    }
+  ]
+}

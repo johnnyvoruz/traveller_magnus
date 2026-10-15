@@ -65,7 +65,7 @@ function idsAt(records, days, hex) {
 test('a person aboard follows the ship: anchor, flight, jump, arrival, and a moved date', () => {
     const track = legs();
     const records = aboard(track);
-    const party = { vesselId: VESSEL, anchor: null };
+    const party = { vesselIds: [VESSEL], anchor: null };
 
     assert.equal(positionAt(track, 5), null);
     assert.deepEqual(whereAreWe(party, records, 5), REGINA);
@@ -105,7 +105,7 @@ test('with no campaign date, an emptied track, or a cycle, the place is the anch
 
     const emptied = aboard([]);
     assert.deepEqual(placeAt(PERSON, emptied, 33.5), { kind: 'here', anchor: REGINA });
-    assert.deepEqual(whereAreWe({ vesselId: VESSEL, anchor: null }, emptied, 33.5), REGINA);
+    assert.deepEqual(whereAreWe({ vesselIds: [VESSEL], anchor: null }, emptied, 33.5), REGINA);
     rebuildCampaignIndex(emptied, {}, 33.5);
     assert.deepEqual(recordsAtHex(REGINA.hexKey), [VESSEL, PERSON]);
 
@@ -133,8 +133,8 @@ test('a record at a point is in that system and at no body', () => {
     const records = { [VESSEL]: ship, [PERSON]: person };
     assert.deepEqual(placeAt(VESSEL, records, 10), { kind: 'here', anchor: POINT });
     assert.deepEqual(placeAt(PERSON, records, null), { kind: 'here', anchor: POINT });
-    assert.deepEqual(whereAreWe({ vesselId: VESSEL, anchor: null }, records, 10), POINT);
-    assert.deepEqual(whereAreWe({ vesselId: null, anchor: POINT }, {}, 10), POINT);
+    assert.deepEqual(whereAreWe({ vesselIds: [VESSEL], anchor: null }, records, 10), POINT);
+    assert.deepEqual(whereAreWe({ vesselIds: [], anchor: POINT }, {}, 10), POINT);
     rebuildCampaignIndex(records, {}, 10);
     assert.deepEqual(recordsAtHex(POINT.hexKey), [VESSEL, PERSON]);
     assert.deepEqual(recordsAtBody('w0'), []);
@@ -142,7 +142,7 @@ test('a record at a point is in that system and at no body', () => {
     const orbit = [{ from: POINT, to: POINT, departs: 0, arrives: 20, mode: 'orbit' }];
     const moving = { [VESSEL]: row({ anchor: REGINA, status: { track: orbit } }), [PERSON]: person };
     assert.deepEqual(placeAt(PERSON, moving, 10), { kind: 'here', anchor: POINT });
-    assert.deepEqual(whereAreWe({ vesselId: VESSEL, anchor: null }, moving, 10), POINT);
+    assert.deepEqual(whereAreWe({ vesselIds: [VESSEL], anchor: null }, moving, 10), POINT);
     rebuildCampaignIndex(moving, {}, 10);
     assert.deepEqual(recordsAtHex(POINT.hexKey), [VESSEL, PERSON]);
     assert.deepEqual(recordsAtBody(REGINA.bodyKey), []);

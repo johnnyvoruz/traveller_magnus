@@ -11,6 +11,7 @@ import {
 import { newId, storageGet, storageSet } from '../platform/browser.ts';
 import { apiFetch } from '../platform/http.ts';
 import { commit, flushCampaign, pending } from './commit.ts';
+import { JOURNAL_PUBLIC_HEADERS, parseRead } from './read.ts';
 import { rebuildCampaignIndex } from './index.ts';
 import { rebuildJournalIndex } from './journal.ts';
 
@@ -120,7 +121,7 @@ async function readList(): Promise<UniverseRow[] | null> {
         return null;
     }
     if (!listed.ok) return null;
-    const universes = Universe.array().parse((await listed.json()).data);
+    const universes = parseRead(Universe.array(), (await listed.json()).data);
     campaign.universes = universes;
     return universes;
 }
@@ -152,7 +153,7 @@ async function postCampaign(name: string): Promise<UniverseRow | null> {
     }
     if (created.status !== 201 && created.status !== 200) return null;
     pendingUniverseId = null;
-    const universe = Universe.parse((await created.json()).data);
+    const universe = parseRead(Universe, (await created.json()).data);
     const index = campaign.universes.findIndex((item) => item.id === universe.id);
     if (index >= 0) campaign.universes[index] = universe;
     else campaign.universes.push(universe);
@@ -174,6 +175,7 @@ async function loadPages(universe: UniverseRow): Promise<void> {
         const pageRes = await apiFetch(
             transport.fetch,
             `/api/universes/${encodeURIComponent(universe.id)}/campaign?after=${after}&limit=1000`,
+            { headers: JOURNAL_PUBLIC_HEADERS },
         );
         if (pageRes.status === 401) {
             signOutLocal();
@@ -183,7 +185,7 @@ async function loadPages(universe: UniverseRow): Promise<void> {
             campaign.status = 'error';
             return;
         }
-        const page = CampaignPage.parse((await pageRes.json()).data);
+        const page = parseRead(CampaignPage, (await pageRes.json()).data);
         for (const record of page.records) records[record.id] = record;
         for (const link of page.links) links[link.id] = link;
         for (const entry of page.journal ?? []) journal[entry.id] = entry;
@@ -292,7 +294,7 @@ export async function renameCampaign(id: string, name: string): Promise<void> {
         return;
     }
     if (!res.ok) throw new Error('The campaign could not be renamed.');
-    const updated = Universe.parse((await res.json()).data);
+    const updated = parseRead(Universe, (await res.json()).data);
     const index = campaign.universes.findIndex((item) => item.id === id);
     if (index >= 0) campaign.universes[index] = updated;
     else campaign.universes.push(updated);

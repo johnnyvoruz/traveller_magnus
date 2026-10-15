@@ -62,7 +62,8 @@ export class UniverseDO extends DurableObject<Env> {
                 return Response.json({ ok: false, error: { code: 'validation', message: 'Invalid JSON.' } }, { status: 400 });
             }
             try {
-                const result = applyCampaignChanges(sql, body, new Date().toISOString());
+                const acknowledgePublic = request.headers.get('x-voyage-journal') === 'public';
+                const result = applyCampaignChanges(sql, body, new Date().toISOString(), acknowledgePublic);
                 return Response.json({ ok: true, data: result });
             } catch (err) {
                 if (err instanceof CampaignRefusal) {

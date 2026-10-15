@@ -17,6 +17,7 @@ import { apiFetch } from '../platform/http.ts';
 import { clearToasts, showToast } from '../shell/toast.ts';
 import { rebuildCampaignIndex } from './index.ts';
 import { rebuildJournalIndex } from './journal.ts';
+import { JOURNAL_PUBLIC_HEADERS, parseRead } from './read.ts';
 import { campaign, resetCampaignState, transport } from './store.ts';
 
 /** True while a change is queued or being sent. With `lastError`, this is saving / saved / offline. */
@@ -208,10 +209,11 @@ export async function flushCampaign(): Promise<void> {
     try {
         const res = await apiFetch(transport.fetch, `/api/universes/${encodeURIComponent(campaign.universeId)}/campaign/changes`, {
             method: 'PATCH',
+            headers: JOURNAL_PUBLIC_HEADERS,
             body: JSON.stringify(bodyOf(records, links, journal, settings, clock)),
         });
         if (!res.ok) throw new Error('offline');
-        const result = CampaignChangesResult.parse((await res.json()).data);
+        const result = parseRead(CampaignChangesResult, (await res.json()).data);
         const handled = new Set<string>();
         let settingsHandled = false;
         let clockHandled = false;

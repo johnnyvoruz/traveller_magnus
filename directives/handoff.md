@@ -7157,3 +7157,75 @@ that failed at the close no longer does. Ready note `findings/builder_form_ready
 - **D `d_small_polish` accepted:** the date chip at every width (under the search, right, from 680 px down; hidden beside an open side panel from 600 to 680 px); `h1`/`p` reset in `base.css` (pixel-identical); the picker's card on the frame.
 - **`versionvideo/`** appeared at 14:23 (a changelog-video jig with its own `node_modules`); no lane was asked for it. Left out of the push; asked Johnny.
 - `APP_VERSION` **1.2.0**. Gates: 1707 / 1678 / 0; check; typecheck; build `index-DF2lx3IJ.js`; worker suites 8 / 8. Clean copy `outer20`: the known zod failure only.
+
+## 275. Next leg: more than one ship per party, then shared adventures (2026-10-14 17:15)
+
+- Johnny: `versionvideo/` is his (another agent, social media posts); into push 1.2.1. Read it before listing it.
+- **Facts for the ship leg:** a vessel is already a campaign record with its own `Track` (`TrackLeg` "one dated leg of a vessel's track"); only `CampaignSettings.party.vesselId` (one id, nullable) makes one of them the party's. Single-ship assumptions: `apps/api/src/universe/campaign.ts`, `public_mark.ts`, `packages/shared/src/public_hex.ts`, web `campaign/journal.ts`, `campaign/track.ts`, `map/campaign_layer.ts`, `map/vessel_marks.ts`, `pack/plan.ts`, `views/MapView.vue`, `views/OrbitView.vue`, `workspace/party.ts`, `PersonField.vue`, `sheet_people.ts`.
+- **Public games as built (`contracts/b_public_games.md`):** opt-in per universe; one D1 row per universe (`public_marks`), the hex of the party ship's last saved position; shown on other people's maps on the same chart version as a diamond, with the universe's name when it is alone in the hex; no ship name, no history, no click-through. Journal `visibility` is `referee | players`; nothing is public.
+- Asked Johnny four design questions; B (contract), A (store), D (screens) wait for them.
+
+## 276. 1.2.0 live; more than one ship per party goes to B (2026-10-14 17:40)
+
+- **Push 1.2.0 live:** `20fc3c8` on origin; live index `index-DF2lx3IJ.js`; `GET /api/packages` signed out 200, no items (no package published yet).
+- **Johnny's answers (17:40):** ships move separately; one public mark per ship with its name; every party ship of a public game shows, with who is aboard; public routes show finished legs only; it is flavour and read-only. He wants 6 or 12 example accounts, each with a ship, to show the feature.
+- **Orchestrator decisions:** the public switch stays per game; a referee-only record is never named in public; the party becomes `vesselIds` (ordered) + `aboard` (member to ship).
+- **B go: `prompts/b_party_ships.md`.** Contract `b_party_ships.md`, schema, read of old settings as one ship with everyone aboard, an old-shape save from a cached 1.2.0 tab must never drop a ship, per-ship positions, public rows per ship (0017, either order), feed keeps `hex/count/name` and adds `ships`. One-line compile fixes in the web files; A and D build the screens after.
+- **Held (B's second pass):** the public card (route, journal, owner), example games, signed-out visitors. Four questions asked 17:40.
+- `versionvideo/` goes in 1.2.1.
+
+## 277. Example marketplace content; the public card decided (2026-10-14 18:05)
+
+- Johnny: "let's have some of the agents make some example content for the marketplace, it's empty right now". Six packages on v10 by one house account: C `regina-highport-contacts` (people), `jewell-patrons` (patrons); E `free-traders-of-the-marches` (ships), `the-glass-hand` (organization), as campaign export files under `tools/examples/packs/`; Z two map packs (a placeable own-sector piece, a charted system), the loader `build_local.mjs`, the copy `seed_production.mjs` (dry by default, `--apply`, `--remove`, idempotent; Johnny runs it; rehearsed on a second local state). Original content only, no statistics, anchored to real v10 hexes, every truth fact cited.
+- Johnny's answers on the card: example games tagged "Example", easy to remove; journal entries can be Public; the referee picks name only or name and handle; signed-out visitors see public ships. Written as `prompts/b_public_card.md` (0018), after `b_party_ships` is accepted. The example games themselves are Z's pass after that contract.
+- Open: the house account's handle (default `traveller`).
+
+- 18:15: house account `Traveller_Voyage`, user id `e2b2245a-5260-4b91-8f33-1e02997fd9d5` (Johnny made it on production). Written into `z_example_packages.md`; the copy checks id and handle together. A production read to confirm it was refused here (auto mode); the copy's own check covers it.
+
+## 278. Party ships server accepted; example packs in; A and D on several ships (2026-10-14 18:40)
+
+- **B `b_party_ships` accepted.** Contract `b_party_ships.md`: `vesselIds` (limit 20) + `aboard`; an old row reads as one ship with everyone aboard; a 1.2.0 save keeps the stored list and map (a reload of a 1.2.0 tab fails its strict parse and needs the new bundle); `public_ships` (0017) with `pm_` mark ids (SHA-256 of universe and vessel, opaque); the feed keeps `hex/count/name` and adds `ships`, with `count` now counting ships; aboard names are live `players` members only. B soft-deleted six local leftover test universes (local only). Gates rerun by the orchestrator on the combined tree: 1716 / 1686 / 0, check, typecheck green.
+- **C accepted:** `regina-highport-contacts` (8 people, 3 businesses, 2 places, Regina 1910), `jewell-patrons` (6 jobs on six worlds, 2 events). No statistics or prices found by a scan.
+- **E:** `free-traders-of-the-marches` (5 ships, crews) and `the-glass-hand`. Its Sera Quill and Bram Keller are different people with the same names as C's: Fix 1 renames them and adds a cross-pack name test. E's question (keep the empty old-shape settings) answered yes.
+- **Z halted** (no code): a placed import reads the source map's own-sector slots from the source Durable Object, which a production copy cannot fill, and which a real deleted source map also breaks. Answer: change 2, the manifest carries the slots; Z makes it. The charted system pack is records only.
+- **Go:** A `a_party_ships` (the logic), D `d_public_ships_map` (public ship marks), B `b_public_card`, E Fix 1, Z again. D's own-party markers per ship come after A.
+
+- 17:42 by the clock: Johnny said all lanes reported, but no lane had written anything since the 278 prompts (no reports, no Progress lines, no file changes). They answered from their previous finished jobs; Johnny re-sends go. Stamps in 276 to 278 ran ahead of the clock.
+
+- 17:50, Johnny: deleting content never claws it back from installers. Checked: install copies into u/<universe>/objects and the campaign; universe delete is soft; takedown removes manifests only. Z prompt step 5: test that an install survives the source universe deleted and the package taken down.
+
+## 279. A, B (card), D (public ship marks), E Fix 1 accepted; next round (2026-10-14 18:30)
+
+- **A `a_party_ships` accepted:** `partyVessels`, `withVesselAdded` (first ship boards everyone; 20 max, "A party can have 20 ships."), `withVesselRemoved`, `withLeadVessel`, `withAboard`, `memberVessel`; `shipsWhere`, `memberWhere`; `partyShipMarks`, `partyShipLabels`; `whereIsVessel`; Player Pack lists ships and who is aboard (also `pack/html.ts`). PartyPanel minimal edits. Its typecheck failure was B mid-pass; green on the orchestrator's rerun.
+- **B `b_public_card` accepted with Fix 1:** 0018 (`show_referee`, `example`, `public_cards`), `GET /api/public-ships/:mark`, signed-out feed and card (IP rate limit), journal `public`. Fault: the owner's read rewrites `public` to `players` and a `players` write keeps `public`, so the new screen could never see or clear Public. Fix 1: header `X-Voyage-Journal: public` from the new bundle gets literal values; browser reads ignore unknown keys. Note: after 0018 a cached tab's strict `Universe` parse fails on `showReferee` until reload.
+- **D `d_public_ships_map` accepted:** violet darts per ship, names at the names tier, +N, hover/tap card ("Aboard:"), no click, old feed keeps the diamond. Shots kb21 checked. Its question decided: no "Aboard:" line when nobody published is aboard.
+- **E Fix 1 accepted:** Wynn Solas and Edric Holm; cross-pack name test.
+- **Gates, combined tree, orchestrator:** 1733 / 1701 / 0; check; typecheck; build `index-B1a50xfr.js`.
+- **Z** still working (no report): `installs.ts`, `publish_queue.ts`, `package.ts` modified, `tools/examples/` started.
+- **Go:** B Fix 1; D `d_party_ships_map` (own ships per marker, the card with the finished route, Example, signed-out); E `e_party_panel_public_journal` (panel, Public entries, show my name).
+
+## 280. Z example packages partial, accepted; links and example games next (2026-10-14 18:45)
+
+- **Z:** F15 (`PackageManifest.ownSectors`; `place()` reads it, the source object only for an older manifest), never-claw-back test `install_source_gone.test.js`, `tools/examples/` (lib, build_local with `--record`/`--bare`, seed_production dry/`--apply`/`--remove`/`--to-local`/`--production`, README), its packs `packs_z/feri-terraces` (Feri 2005 unchanged, records on bodies) and `packs_z/hollow-verge` (six engine systems, recorded once and restored; names are engine Earth names). Rehearsal: six packages by @Traveller_Voyage, all import, Hollow Verge placed with no source universe; **0 of 64 links arrived** (packages carry records only). Shots kb20 checked.
+- Answers: F16 links (Z), keep house universes live, keep engine names, leave provenance, keep charted hexes. Then `seed_games.mjs`: example accounts that cannot sign in, universes `example = 1`, D1 `public_ships`/`public_cards` written directly with B's functions; Durable Objects stay empty.
+- **C go `c_example_games`:** 12 games, ~18 ships, finished legs at most 2 hexes, two games sharing a hex, handles, public entries.
+- Production order: push 1.2.1 (F15, F16, 0017, 0018), then the package copy, then the games.
+
+## 281. Several ships and public cards accepted; the 1.2.0 WAV mistake; 1.2.1 prepared (2026-10-14 19:20)
+
+- **Accepted:** B Fix 1 (`X-Voyage-Journal: public` from `campaign/store.ts` and `commit.ts`; `campaign/read.ts` `parseRead` drops unknown keys on the four read shapes; writes stay strict); D `d_party_ships_map` (own ships one marker each, the lead full size; the read-only card from `GET /api/public-ships/:mark` with the finished route drawn as moving violet dots; Example tag; signed-out feed; pings and glow, Johnny's "make the blips sing" given to D directly; a frame bug fixed); E `e_party_panel_public_journal` (ships list, lead, add and remove, Aboard per member; Public third choice; "Show my name on public cards"); C `c_example_games` (12 games, 18 ships, Spinward Marches, Deneb, Trojan Reach, Gvurrdon; stacked pair at Spinward_Marches/2007); Z F16 (links in packages, 64 of 64). Reports moved to `reports/done/` except Z's.
+- **Open needs:** D asks for a way to open the Party tab on one ship (E, later). D's question to Johnny: public ships when zoomed out past hexes.
+- **Mistake, the orchestrator's:** the 1.2.0 push list held `"versionvideo/assets/SciFi Trailer.wav"`. `git status --porcelain` quotes paths with spaces, so the `^(findings|versionvideo)/` filter missed it, and `--pathspec-from-file` unquoted it. It is in `20fc3c8` (16.8 MB) on the public fork `johnnyvoruz/traveller_magnus`. Fixed in `clean_copy21.sh`: `-z`, no `.wav`, and a stop on any quote in the list. Asked Johnny: keep, untrack, or rewrite history.
+- **The "known zod failure" in clean copies was the copy's own fault:** `packages/shared` and `apps/api` have their own `node_modules` (zod 3 beside the root's 4.6.5). Junctioning them makes the clean copy match `npm ci`.
+- **1.2.1 prepared:** `APP_VERSION` 1.2.1; list `findings/push/release_2026-10-14e_files.txt` (159 paths: party ships, public ships and cards, 0017, 0018, F15, F16, tools/examples, `versionvideo/` without WAVs). Rehearsal outer21: 1752 tests, 4 fail, all reading gitignored `truth-local/v10` (would be red on GitHub): C Fix 1 and E Fix 2 skip those checks when the folder is absent. Check, typecheck and build (`index-UTD7M5x3.js`) clean. Re-rehearse after C, E and Z.
+
+- 19:35, Johnny: remove the WAV from history; yes to zoomed-out public ships. Commands given: `git rm --cached` the WAV, `commit --amend --no-edit`, `push --force-with-lease=campaign:20fc3c8`. `versionvideo/.gitignore` now ignores `*.wav` (goes in 1.2.1). Prompts `b_public_overview` (`GET /api/public-games/overview`, `{ hexes: [{ key, count }] }`, public cache 60 s, own ships included) and `d_public_overview_map` written, held until 1.2.1 is live because they touch 1.2.1 files. After the force-push, the 1.2.1 rehearsal is rebuilt on the new HEAD.
+
+## 282. 1.2.0 amended; C, E, Z accepted; 1.2.1 called (2026-10-14 19:55)
+
+- Force-push verified: origin/campaign `2680edf`, 44 files, no WAV in the tree.
+- C Fix 1 and E Fix 2: chart checks skip when truth-local/v10 is absent (`VOYAGE_TRUTH_SECTORS` to prove it). Z answer 3: `judgeUsername`; C's twelve seeded on a stand-in (Spinward Marches 10 ships on 9 hexes, Deneb 2, Trojan Reach 3, Gvurrdon 3, all `example`); 18 cards 200; remove leaves zero. Z found: a 390 px tap on a far-zoom dart opens the hex sheet; a far-zoom stack opens only its first ship. Both added to `d_public_overview_map` items 6 and 7.
+- **1.2.1 called:** `findings/push/release_2026-10-14e.md`, 161 paths; clean copy outer21 on 2680edf: 1757 / 1717 / 0 / 40 skipped; check; typecheck; build `index-UTD7M5x3.js`. All reports moved to done.
+- After the push: check the live index, `GET /api/public-games?truthVersion=v10&sector=Spinward_Marches` signed out = 200 (0018 applied; 401 means not), then give Johnny the package copy and the games seed commands from `tools/examples/README.md`; then go B `b_public_overview` and D `d_public_overview_map`.
+
+- 20:05: Johnny said pushed and deployed, but origin is still 2680edf, no 1.2.1 commit exists, live index is still DF2lx3IJ, `/api/public-ships/...` is "No such route." (the force-push was what deployed). B and D were started early; neither had changed code (every list path matched outer21 except directives). The list named `reports/z_example_packages.md` after the orchestrator moved it to `done/` (git add would have refused the list): regenerated, 161 paths, all exist. Asked Johnny to pause B and D, push, then resume them.

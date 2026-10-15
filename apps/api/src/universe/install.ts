@@ -5,7 +5,7 @@
  * hex against the stored rows and, on install, writes them in one transaction.
  * Records go through the campaign change path afterwards.
  */
-import { CampaignRecord, type InstallOutcome } from '@voyage/shared';
+import { CampaignLink, CampaignRecord, type InstallOutcome } from '@voyage/shared';
 import { applyCampaignChanges, deleteInstalledRecord, storedCampaignRecord, type Sql, type SqlRow } from './campaign.ts';
 import { chartTree, deleteInstalledHex, HexRefusal, ownSectorKey, storedEntry, storedHexRow, writeInstalled } from './hexes.ts';
 import { dropImportSector, makeImportSector } from './sectors.ts';
@@ -50,6 +50,8 @@ export type InstallBody = {
     publishedAt: string;
     hexes: InstallHexInput[];
     records: InstallRecordInput[];
+    /** F16. Links between the package's records; ends are record ids, which an install keeps. */
+    links?: Record<string, unknown>[];
     resolutions: Record<string, 'theirs' | 'mine'>;
     recordResolutions: Record<string, 'theirs' | 'mine'>;
     /** Own sectors a placement needs; made in the same transaction as the hexes. */
@@ -164,11 +166,16 @@ export function previewInstall(sql: Sql, body: { packageId: string; sourceUniver
 }
 
 const RECORD_KEYS = CampaignRecord.keyof().options as string[];
+const LINK_KEYS = CampaignLink.keyof().options as string[];
+
+function liveRecord(sql: Sql, id: unknown): boolean {
+    return typeof id === 'string' && sql.exec(`SELECT 1 AS one FROM campaign_records WHERE id = ? AND deleted = 0`, id).length > 0;
+}
 
 /** Meta key of the own sectors an import made, so removing it can delete them. */
 const SECTORS_KEY = (installId: string) => `installsectors:${installId}`;
 
-export function applyInstall(sql: Sql, body: InstallBody, now: string): { written: number; skipped: number; records: number } {
+export function applyInstall(sql: Sql, body: InstallBody, now: string): { written: number; skipped: number; records: number; links: number } {
     const preview = previewInstall(sql, {
         packageId: body.packageId,
         sourceUniverseId: body.sourceUniverseId,
@@ -243,7 +250,28 @@ export function applyInstall(sql: Sql, body: InstallBody, now: string): { writte
     }
     let records = 0;
     if (changes.length) records = applyCampaignChanges(sql, { records: changes }, now).applied.filter((item) => item.table === 'records').length;
-    return { written, skipped, records };
+    // F16. A link lands when both its ends are live records here, with provenance like the records.
+    const linkChanges = [];
+    for (const link of body.links ?? []) {
+        if (!liveRecord(sql, link.from) || !liveRecord(sql, link.to)) continue;
+        const stored = sql.exec(`SELECT rev FROM campaign_links WHERE id = ?`, String(link.id))[0];
+        const change: Record<string, unknown> = {};
+        for (const key of LINK_KEYS) if (key in link) change[key] = link[key];
+        change.provenance = { mode: 'package', packageId: body.packageId, version: body.version, installId: body.installId, at: now };
+        change.deleted = false;
+        change.baseRev = stored ? Number(stored.rev) : 0;
+        linkChanges.push(change);
+    }
+    let links = 0;
+    if (linkChanges.length) links = applyCampaignChanges(sql, { links: linkChanges }, now).applied.filter((item) => item.table === 'links').length;
+    return { written, skipped, records, links };
+}
+
+/** The campaign's next seq, the same counter campaign.ts keeps in meta `campaignSeq`. */
+function nextCampaignSeq(sql: Sql): number {
+    const seq = Number(metaValue(sql, 'campaignSeq') ?? 0) + 1;
+    setMeta(sql, 'campaignSeq', String(seq));
+    return seq;
 }
 
 function metaValue(sql: Sql, key: string): string | null {
@@ -316,6 +344,13 @@ export function removeInstall(sql: Sql, body: InstallRemoveBody, now: string): {
         for (const row of sql.exec(`SELECT id, provenance FROM campaign_records WHERE deleted = 0 AND provenance IS NOT NULL`)) {
             const prov = jsonObject(row.provenance);
             if (prov?.mode === 'package' && ours(prov) && deleteInstalledRecord(sql, String(row.id), now)) records += 1;
+        }
+        // F16. Links the import wrote go too, even when both ends stay (a "mine" record keeps its own
+        // provenance). A tombstone at a new rev and seq, as the record delete does it.
+        for (const row of sql.exec(`SELECT id, rev, provenance FROM campaign_links WHERE deleted = 0 AND provenance IS NOT NULL`)) {
+            const prov = jsonObject(row.provenance);
+            if (prov?.mode !== 'package' || !ours(prov)) continue;
+            sql.exec(`UPDATE campaign_links SET deleted = 1, rev = ?, seq = ?, updated_at = ? WHERE id = ?`, Number(row.rev) + 1, nextCampaignSeq(sql), now, String(row.id));
         }
         let sectors = 0;
         for (const id of made) if (dropImportSector(sql, id, now)) sectors += 1;

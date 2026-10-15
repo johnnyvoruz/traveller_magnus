@@ -12,7 +12,7 @@ import { appendLeg, trackOf } from '../../apps/web/src/campaign/track.ts';
 import { DEFAULT_START, totalDays } from '../../apps/web/src/orbit/clock.ts';
 import { clearToasts, toasts } from '../../apps/web/src/shell/toast.ts';
 import { createRecord, forgetDeleted, saveRecord } from '../../apps/web/src/workspace/actions.ts';
-import { campaignDays, dockedLeg, moveRefusal, partyMarker, partyWhere } from '../../apps/web/src/workspace/party_where.ts';
+import { campaignDays, dockedLeg, memberWhere, moveRefusal, partyMarker, partyWhere, shipsWhere } from '../../apps/web/src/workspace/party_where.ts';
 import { systemAnchor } from '../../apps/web/src/workspace/places.ts';
 import { newRecord } from '../../apps/web/src/workspace/records.ts';
 import { dockShipAt } from '../../apps/web/src/workspace/track_actions.ts';
@@ -30,7 +30,7 @@ const LEGS = [
 ];
 const SHIP_ID = 'cr_00000001-0000-4000-8000-000000000000';
 const ship = (over = {}) => ({ ...newRecord('vessel', SHIP_ID, STAMP), name: 'Far Margin', rev: 1, anchor: A1, status: { track: LEGS }, ...over });
-const PARTY = { vesselId: SHIP_ID, memberIds: [], anchor: null };
+const PARTY = { vesselIds: [SHIP_ID], aboard: {}, memberIds: [], anchor: null };
 
 test('the campaign date: the clock, or the default start when the campaign has none', () => {
     assert.equal(campaignDays({ days: 12.5 }), 12.5);
@@ -55,7 +55,7 @@ test('where are we: at a place, mid-flight, between legs, mid-jump and after arr
 
     // No track: the ship's anchor, as before. No ship: the party's own anchor.
     assert.deepEqual(partyWhere(PARTY, { [SHIP_ID]: ship({ status: null }) }, D0 + 5), { anchor: A1, underway: null });
-    assert.deepEqual(partyWhere({ ...PARTY, vesselId: null, anchor: FERI_SYSTEM }, records, D0), { anchor: FERI_SYSTEM, underway: null });
+    assert.deepEqual(partyWhere({ vesselIds: [], aboard: {}, memberIds: [], anchor: FERI_SYSTEM }, records, D0), { anchor: FERI_SYSTEM, underway: null });
 });
 
 test('the marker: the hex the party stands on, tagged in jump, absent when nowhere', () => {
@@ -63,8 +63,8 @@ test('the marker: the hex the party stands on, tagged in jump, absent when nowhe
     assert.deepEqual(partyMarker(PARTY, records, D0 + 0.5), { hexKey: REGINA, name: 'Far Margin' });
     assert.deepEqual(partyMarker(PARTY, records, D0 + 5), { hexKey: REGINA, name: 'Far Margin · in jump' });
     assert.deepEqual(partyMarker(PARTY, records, D0 + 9), { hexKey: FERI, name: 'Far Margin' });
-    assert.equal(partyMarker({ vesselId: null, memberIds: [], anchor: null }, records, D0), null);
-    assert.deepEqual(partyMarker({ vesselId: null, memberIds: [], anchor: FERI_SYSTEM }, records, D0), { hexKey: FERI, name: 'Party' });
+    assert.equal(partyMarker({ vesselIds: [], aboard: {}, memberIds: [], anchor: null }, records, D0), null);
+    assert.deepEqual(partyMarker({ vesselIds: [], aboard: {}, memberIds: [], anchor: FERI_SYSTEM }, records, D0), { hexKey: FERI, name: 'Party' });
 });
 
 test('a docked leg is refused in plain words when the track cannot take it', () => {
@@ -100,7 +100,7 @@ test('"Move the party" on a ship with a track, against the store: accepted, undo
     assert.equal(dockShipAt(id, A1, D0 + 10), true);
     assert.deepEqual(trackOf(campaign.records[id])[2], dockedLeg(A1, D0 + 10));
     assert.match(toasts[0].message, /^Far Margin docked at Regina A-I, \d{3}-\d{4} 00:00\.$/);
-    const party = { vesselId: id, memberIds: [], anchor: null };
+    const party = { vesselIds: [id], aboard: {}, memberIds: [], anchor: null };
     assert.deepEqual(partyWhere(party, campaign.records, D0 + 10), { anchor: A1, underway: null });
     toasts[0].action.run();
     assert.equal(trackOf(campaign.records[id]).length, 2, 'undo removes the leg');
@@ -128,6 +128,24 @@ test('a ship holding at a point: the Party tab, the vessel page and the Track se
     assert.deepEqual(partyWhere(PARTY, records, D0 + 2), held);
     assert.deepEqual(vesselWhere(records[SHIP_ID], records, D0 + 2), held);
     assert.deepEqual(partyMarker(PARTY, records, D0 + 2), { hexKey: REGINA, name: 'Far Margin' }, 'still here on the map');
+    const otherId = 'cr_00000002-0000-4000-8000-000000000000';
+    const voss = 'cr_00000003-0000-4000-8000-000000000000';
+    const two = {
+        ...records,
+        [otherId]: { ...ship(), id: otherId, name: 'Kessler', anchor: FERI_SYSTEM, status: null },
+    };
+    const fleet = {
+        vesselIds: [SHIP_ID, otherId],
+        aboard: { [voss]: otherId },
+        memberIds: [voss],
+        anchor: A1,
+    };
+    const places = shipsWhere(fleet, two, D0 + 5);
+    assert.deepEqual(places.map((row) => row.id), [SHIP_ID, otherId]);
+    assert.deepEqual(places[0].where, partyWhere(PARTY, records, D0 + 5));
+    assert.deepEqual(places[1].where, { anchor: FERI_SYSTEM, underway: null });
+    assert.deepEqual(memberWhere(fleet, two, voss, D0 + 5), { anchor: FERI_SYSTEM, underway: null });
+    assert.deepEqual(memberWhere(fleet, two, 'cr_00000009-0000-4000-8000-000000000000', D0 + 5), { anchor: A1, underway: null });
     assert.equal(anchorName(HOLD, records), '1.02 AU · near A-II · 0.02 AU', 'not "… system"');
     assert.equal(anchorName({ kind: 'system', hexKey: REGINA, point: { x: 3, y: 4 } }, records), '5.00 AU out, in open space');
     const rows = trackRows(legs, records);

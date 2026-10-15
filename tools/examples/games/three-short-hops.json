@@ -1,0 +1,119 @@
+{
+  "game": "Three Short Hops",
+  "referee": "mile_note",
+  "showReferee": true,
+  "clockDays": 403534,
+  "ships": [
+    {
+      "name": "Open Hold",
+      "crew": [
+        "Tess Arlo",
+        "Vic Penn"
+      ],
+      "legs": [
+        {
+          "from": "Trojan_Reach/0103",
+          "to": "Trojan_Reach/0201",
+          "departs": 403504,
+          "arrives": 403510
+        },
+        {
+          "from": "Trojan_Reach/0201",
+          "to": "Trojan_Reach/0202",
+          "departs": 403511,
+          "arrives": 403517
+        },
+        {
+          "from": "Trojan_Reach/0202",
+          "to": "Trojan_Reach/0204",
+          "departs": 403518,
+          "arrives": 403524
+        }
+      ]
+    },
+    {
+      "name": "Last Receipt",
+      "crew": [
+        "Ada Fen",
+        "Gil Mott",
+        "Joze Rill"
+      ],
+      "legs": [
+        {
+          "from": "Trojan_Reach/0110",
+          "to": "Trojan_Reach/0209",
+          "departs": 403504,
+          "arrives": 403510
+        },
+        {
+          "from": "Trojan_Reach/0209",
+          "to": "Trojan_Reach/0210",
+          "departs": 403511,
+          "arrives": 403517
+        },
+        {
+          "from": "Trojan_Reach/0210",
+          "to": "Trojan_Reach/0310",
+          "departs": 403518,
+          "arrives": 403524
+        }
+      ]
+    },
+    {
+      "name": "Third Copy",
+      "crew": [
+        "Nils Acker",
+        "Opal Dern",
+        "Quin Sabe",
+        "Rhee Tol",
+        "Uma Zet"
+      ],
+      "legs": [
+        {
+          "from": "Trojan_Reach/0116",
+          "to": "Trojan_Reach/0317",
+          "departs": 403504,
+          "arrives": 403510
+        },
+        {
+          "from": "Trojan_Reach/0317",
+          "to": "Trojan_Reach/0218",
+          "departs": 403511,
+          "arrives": 403517
+        },
+        {
+          "from": "Trojan_Reach/0218",
+          "to": "Trojan_Reach/0119",
+          "departs": 403518,
+          "arrives": 403524
+        }
+      ]
+    }
+  ],
+  "journal": [
+    {
+      "title": "Dustpan",
+      "body": "Open Hold is at Dustpan. Tess Arlo and Vic Penn closed their log and left it at that.",
+      "when": {
+        "year": 1105,
+        "day": 200
+      }
+    },
+    {
+      "title": "Trossachs",
+      "body": "Last Receipt is at Trossachs. Ada Fen has the watch. Gil Mott and Joze Rill are asleep.",
+      "when": {
+        "year": 1105,
+        "day": 201
+      }
+    },
+    {
+      "title": "Bolsush",
+      "body": "Third Copy is at Bolsush. Nils Acker called the roll and all five answered. The ship is staying put.",
+      "when": {
+        "year": 1105,
+        "day": 202
+      }
+    }
+  ]
+}

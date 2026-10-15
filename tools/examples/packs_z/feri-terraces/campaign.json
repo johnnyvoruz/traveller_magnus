@@ -1,0 +1,360 @@
+{
+  "universe": {
+    "id": "example-feri-terraces",
+    "name": "Feri terraces",
+    "truthVersion": "v10"
+  },
+  "exportedAt": "2026-10-14T18:00:00.000Z",
+  "records": [
+    {
+      "id": "cr_a3000000-0000-4000-8000-000000000001",
+      "type": "place",
+      "kind": "farmland",
+      "name": "The Orchard Terraces",
+      "summary": "Stepped orchards on the slopes above the Feri downport.",
+      "details": "The terraces climb the hills behind the port in long green steps. Pickers work them by hand, and the fruit goes up to orbit in sealed crates the same day. Visitors are welcome on the lower steps. Hook: one upper terrace has been fenced off since last season, and nobody at the port will say who paid for the fence.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/2005",
+        "bodyKey": "w1"
+      },
+      "when": null,
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_a3000000-0000-4000-8000-000000000002",
+      "type": "organization",
+      "kind": "growers' combine",
+      "name": "Terrace Growers' Combine",
+      "summary": "The growers who own most of the terraces and sell as one.",
+      "details": "The Combine sets one price for the whole harvest and books ships months ahead. It pays well and on time. It does not forgive a late arrival. Hook: the Combine needs a ship that can carry a cold cargo and leave on the day the fruit is picked.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/2005",
+        "bodyKey": "w1"
+      },
+      "when": null,
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_a3000000-0000-4000-8000-000000000003",
+      "type": "person",
+      "kind": "factor",
+      "name": "Ilse Marrow",
+      "summary": "The Combine's factor at the downport.",
+      "details": "Ilse books every hold the Combine fills. She is polite, exact and short of time in the harvest weeks. She keeps a list of crews who were late once, and she does not hire them again. Hook: she has a second contract she will not put through the Combine's books.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/2005",
+        "bodyKey": "w1"
+      },
+      "when": null,
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_a3000000-0000-4000-8000-000000000004",
+      "type": "place",
+      "kind": "claim field",
+      "name": "The Second Belt claims",
+      "summary": "Mining claims staked across the second belt of the system.",
+      "details": "Small outfits work the rocks of the second belt under claims filed at the downport. Most claims are marked with a beacon that answers on a fixed call. Hook: a beacon on one of the oldest claims has stopped answering.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/2005",
+        "bodyKey": "w3"
+      },
+      "when": null,
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_a3000000-0000-4000-8000-000000000005",
+      "type": "person",
+      "kind": "prospector",
+      "name": "Doran Vey",
+      "summary": "A belter who holds an old claim in the second belt.",
+      "details": "Doran has worked the same claim for years and talks about it as if it were a person. He comes down to the port to sell ore and to argue with the claims office. Hook: his claim is the one whose beacon went quiet, and he says he was not there when it stopped.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/2005",
+        "bodyKey": "w3"
+      },
+      "when": null,
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_a3000000-0000-4000-8000-000000000006",
+      "type": "job",
+      "kind": "recovery",
+      "name": "The quiet beacon",
+      "summary": "Go out to the second belt and find out why a claim beacon stopped.",
+      "details": "The claims office will clear a claim whose beacon is silent long enough. Doran Vey wants a crew to reach his claim first, see what happened, and bring back the beacon log. Ilse Marrow will pay the same crew to bring back a sealed case she says is hers, and she asks them not to tell Doran.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/2005",
+        "bodyKey": "w3"
+      },
+      "when": null,
+      "visibility": "referee",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_a3000000-0000-4000-8000-000000000007",
+      "type": "place",
+      "kind": "relay",
+      "name": "The A-IV-b relay",
+      "summary": "An automated relay on the second moon of the fourth planet.",
+      "details": "The relay passes traffic between the belt claims and the downport. It needs a visit every few months to clear its antennas. Hook: the relay holds a copy of every beacon call, including the last calls from the quiet claim.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/2005",
+        "bodyKey": "w4m1"
+      },
+      "when": null,
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_a3000000-0000-4000-8000-000000000008",
+      "type": "note",
+      "kind": "referee note",
+      "name": "Feri: using this pack",
+      "summary": "How the Feri records fit together.",
+      "details": "The Combine and the belt are separate halves of the system: one ships fruit, the other ships ore. Ilse links them. The sealed case and the quiet beacon are the same story; decide what is in the case before the crew opens it.",
+      "tags": [
+        "example"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/2005"
+      },
+      "when": null,
+      "visibility": "referee",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    }
+  ],
+  "links": [
+    {
+      "id": "cl_b3000000-0000-4000-8000-000000000001",
+      "from": "cr_a3000000-0000-4000-8000-000000000003",
+      "to": "cr_a3000000-0000-4000-8000-000000000002",
+      "kind": "member",
+      "role": "factor",
+      "order": 1,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "players",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_b3000000-0000-4000-8000-000000000002",
+      "from": "cr_a3000000-0000-4000-8000-000000000002",
+      "to": "cr_a3000000-0000-4000-8000-000000000001",
+      "kind": "owns",
+      "role": "",
+      "order": 2,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "players",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_b3000000-0000-4000-8000-000000000003",
+      "from": "cr_a3000000-0000-4000-8000-000000000005",
+      "to": "cr_a3000000-0000-4000-8000-000000000004",
+      "kind": "owns",
+      "role": "claim holder",
+      "order": 3,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "players",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_b3000000-0000-4000-8000-000000000004",
+      "from": "cr_a3000000-0000-4000-8000-000000000005",
+      "to": "cr_a3000000-0000-4000-8000-000000000006",
+      "kind": "patron",
+      "role": "",
+      "order": 4,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "players",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_b3000000-0000-4000-8000-000000000005",
+      "from": "cr_a3000000-0000-4000-8000-000000000003",
+      "to": "cr_a3000000-0000-4000-8000-000000000006",
+      "kind": "patron",
+      "role": "secret",
+      "order": 5,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "referee",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_b3000000-0000-4000-8000-000000000006",
+      "from": "cr_a3000000-0000-4000-8000-000000000007",
+      "to": "cr_a3000000-0000-4000-8000-000000000006",
+      "kind": "involved",
+      "role": "holds the log",
+      "order": 6,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "players",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_b3000000-0000-4000-8000-000000000007",
+      "from": "cr_a3000000-0000-4000-8000-000000000003",
+      "to": "cr_a3000000-0000-4000-8000-000000000005",
+      "kind": "rival",
+      "role": "",
+      "order": 7,
+      "since": null,
+      "until": null,
+      "notes": "",
+      "visibility": "referee",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-14T18:00:00.000Z",
+      "updatedAt": "2026-10-14T18:00:00.000Z",
+      "deleted": false
+    }
+  ],
+  "journal": [],
+  "settings": {
+    "party": {
+      "vesselId": null,
+      "memberIds": [],
+      "anchor": null
+    },
+    "kinds": {},
+    "calendar": {
+      "dateFormat": "imperial"
+    },
+    "rev": 0
+  },
+  "clock": null
+}

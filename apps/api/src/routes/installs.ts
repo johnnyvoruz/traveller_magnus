@@ -56,6 +56,8 @@ type Loaded = {
     manifest: Manifest;
     hexes: InstallHexInput[];
     records: InstallRecordInput[];
+    /** F16. The manifest's links, empty for an older manifest. */
+    links: Record<string, unknown>[];
 };
 
 type Previewed = Loaded & { hexes: InstallHexInput[]; preview: { hexes: PreviewHex[]; records: PreviewRecords }; missing: string[]; placedMissing: string[]; bytes: number };
@@ -192,9 +194,18 @@ async function load(c: Ctx, owned: OwnedUniverse, packageId: string, version: nu
             }
         }
     }
+    const links: Record<string, unknown>[] = [];
+    if (manifest.records.links && manifest.records.links.count > 0) {
+        const stored = await c.env.PUBLIC_BUCKET.get(`objects/${manifest.records.links.contentHash}`);
+        if (!stored) throw new Error('Missing object.');
+        const list = JSON.parse(await stored.text()) as unknown;
+        for (const item of Array.isArray(list) ? list : []) {
+            if (item && typeof item === 'object' && typeof (item as { id?: unknown }).id === 'string') links.push(item as Record<string, unknown>);
+        }
+    }
     const loaded: Loaded = {
         ...target, sectors: [], placedTrees: new Map(),
-        packageId: pkg.id, version, title: pkg.title, sourceUniverseId: pkg.universeId, manifest, hexes, records,
+        packageId: pkg.id, version, title: pkg.title, sourceUniverseId: pkg.universeId, manifest, hexes, records, links,
     };
     if (target.placement) await place(c, owned, loaded, target.placement, pkg.title);
     return loaded;
@@ -203,7 +214,10 @@ async function load(c: Ctx, owned: OwnedUniverse, packageId: string, version: nu
 /** Move every key of the piece to the placement (F5) and rewrite trees, summaries and records. */
 async function place(c: Ctx, owned: OwnedUniverse, loaded: Loaded, placement: PlacementShape, title: string): Promise<void> {
     const sourceChart = await chartSlots(c.env, loaded.manifest.truthVersion ?? null);
-    const sourceOwn = await ownSlots(c.env, loaded.sourceUniverseId);
+    // F15: the manifest's own-sector slots first; the source universe's object only for an older manifest.
+    const sourceOwn = loaded.manifest.ownSectors
+        ? new Map(Object.entries(loaded.manifest.ownSectors))
+        : await ownSlots(c.env, loaded.sourceUniverseId);
     const targetChart = await chartSlots(c.env, owned.row.truthVersion);
     const targetOwn = await ownSlots(c.env, owned.row.id);
     const at = (chart: Map<string, Slot>, own: Map<string, Slot>) => (slug: string) => chart.get(slug) ?? own.get(slug) ?? null;
@@ -423,7 +437,7 @@ installsRoute.post('/:id/install', async (c) => {
     // One charge per call; the row id stays the same across updates.
     const chargeId = `in_${ulid()}`;
     const rowId = previewed.rowId ?? `in_${ulid()}`;
-    const called = await doCall<{ written: number; skipped: number; records: number }>(owned, c, '/install', {
+    const called = await doCall<{ written: number; skipped: number; records: number; links: number }>(owned, c, '/install', {
         installId: rowId,
         packageId: previewed.packageId,
         version: previewed.version,
@@ -432,6 +446,7 @@ installsRoute.post('/:id/install', async (c) => {
         publishedAt: previewed.manifest.publishedAt,
         hexes: previewed.hexes,
         records: previewed.records,
+        links: previewed.links,
         resolutions: input.resolutions,
         recordResolutions: input.recordResolutions,
         sectors: previewed.sectors,

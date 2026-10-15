@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { campaign, transport } from '../../apps/web/src/campaign/store.ts';
 import { flushCampaign, resetCampaign } from '../../apps/web/src/campaign/commit.ts';
-import { appendLeg, positionAt, removeLastLeg, replaceLegsFrom, trackOf, whereAreWe } from '../../apps/web/src/campaign/track.ts';
+import { appendLeg, positionAt, removeLastLeg, replaceLegsFrom, trackOf, whereAreWe, whereIsVessel } from '../../apps/web/src/campaign/track.ts';
 
 const VESSEL = 'cr_11111111-1111-1111-1111-111111111111';
 const STAMP = '2026-10-05T00:00:00.000Z';
@@ -89,13 +89,14 @@ test('positionAt at four dates, and Where are we follows the track', () => {
     assert.deepEqual(positionAt(legs, 40), JEWELL);
 
     const records = { [VESSEL]: vessel({ status: { track: legs } }) };
-    const party = { vesselId: VESSEL, anchor: null };
+    const party = { vesselIds: [VESSEL], anchor: null };
     assert.equal(positionAt(legs, 5), null);
     assert.deepEqual(whereAreWe(party, records, 5), REGINA);
     assert.deepEqual(whereAreWe(party, records, 25), positionAt(legs, 25));
     const anchored = { [VESSEL]: vessel() };
     assert.deepEqual(whereAreWe(party, anchored, 25), REGINA);
-    assert.equal(whereAreWe({ vesselId: null, anchor: JEWELL }, {}, 25), JEWELL);
+    assert.equal(whereAreWe({ vesselIds: [], anchor: JEWELL }, {}, 25), JEWELL);
+    assert.deepEqual(whereIsVessel(VESSEL, records, 25), whereAreWe(party, records, 25));
 });
 
 test('a ship whose only leg was removed is at its anchor', async () => {
@@ -109,7 +110,7 @@ test('a ship whose only leg was removed is at its anchor', async () => {
     assert.deepEqual(ship.status.track, []);
     assert.equal(trackOf(ship), null);
     assert.equal(positionAt([], 15), null);
-    assert.deepEqual(whereAreWe({ vesselId: VESSEL, anchor: null }, campaign.records, 15), REGINA);
+    assert.deepEqual(whereAreWe({ vesselIds: [VESSEL], anchor: null }, campaign.records, 15), REGINA);
 });
 
 test('a leg out of time order is refused', () => {

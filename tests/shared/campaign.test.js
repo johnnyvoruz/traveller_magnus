@@ -135,6 +135,21 @@ test('each campaign schema accepts a good value', () => {
     assert.equal(CampaignRecord.safeParse(record({ name: 'V'.repeat(CAMPAIGN_LIMITS.name), summary: 's'.repeat(CAMPAIGN_LIMITS.summary), details: 'd'.repeat(CAMPAIGN_LIMITS.details), tags: Array.from({ length: CAMPAIGN_LIMITS.tags }, () => 't'.repeat(CAMPAIGN_LIMITS.tag)) })).success, true);
     assert.equal(CampaignLink.safeParse(link()).success, true);
     assert.equal(CampaignSettings.safeParse(settings()).success, true);
+    const member = 'cr_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3';
+    const lifted = CampaignSettings.safeParse(settings({
+        party: { vesselId: RECORD, memberIds: [member], anchor: null },
+    }));
+    assert.equal(lifted.success, true);
+    assert.deepEqual(lifted.data.party, {
+        vesselIds: [RECORD],
+        aboard: { [member]: RECORD },
+        memberIds: [member],
+        anchor: null,
+    });
+    const listed = Array.from({ length: CAMPAIGN_LIMITS.partyShips + 1 }, (_, n) => idFor('cr', n + 10));
+    assert.equal(CampaignSettings.safeParse(settings({
+        party: { vesselIds: listed, aboard: {}, memberIds: [], anchor: null },
+    })).success, false);
     assert.equal(CampaignClock.safeParse({ days: 403326.5, rev: 1 }).success, true);
     assert.equal(CampaignClock.safeParse({ days: 0, rev: 0 }).success, true);
     assert.equal(CampaignChanges.safeParse({ records: [{ ...record(), baseRev: 0 }] }).success, true);
@@ -349,6 +364,9 @@ test('a journal entry keeps a session numbered and every other kind unnumbered',
     assert.equal(CampaignEntry.safeParse(entry({ kind: 'note' })).success, true);
     assert.equal(CampaignEntry.safeParse(entry({ kind: 'handout', visibility: 'players', sequence: null })).success, true);
     assert.equal(CampaignEntry.safeParse(entry({ kind: 'handout', visibility: 'referee' })).success, true);
+    assert.equal(CampaignEntry.safeParse(entry({ kind: 'note', visibility: 'public' })).success, true);
+    assert.equal(CampaignRecord.safeParse(record({ visibility: 'public' })).success, false);
+    assert.equal(CampaignLink.safeParse({ ...link(), visibility: 'public' }).success, false);
     assert.equal(CampaignEntry.safeParse(entry({ kind: 'rumor', title: '' })).success, true);
     assert.equal(CampaignEntry.safeParse(entry({ kind: 'session', sequence: null })).success, false);
     assert.equal(CampaignEntry.safeParse(entry({ kind: 'note', sequence: 2 })).success, false);

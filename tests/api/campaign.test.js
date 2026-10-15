@@ -208,7 +208,7 @@ if (process.env.RUN_API_TESTS !== '1') {
                 assert.equal(empty.body.data.done, true);
                 assert.equal(empty.body.data.clock, null);
                 assert.deepEqual(empty.body.data.settings, {
-                    party: { vesselId: null, memberIds: [], anchor: null },
+                    party: { vesselIds: [], aboard: {}, memberIds: [], anchor: null },
                     kinds: {},
                     calendar: { dateFormat: 'imperial' },
                     rev: 0,
@@ -360,7 +360,12 @@ if (process.env.RUN_API_TESTS !== '1') {
                 assert.equal(staleParty.body.data.applied.length, 0);
                 assert.equal(staleParty.body.data.conflicts[0].table, 'settings');
                 assert.equal(staleParty.body.data.conflicts[0].current.rev, settingsRev);
-                assert.equal(staleParty.body.data.conflicts[0].current.party.vesselId, VESSEL);
+                assert.deepEqual(staleParty.body.data.conflicts[0].current.party, {
+                    vesselIds: [VESSEL],
+                    aboard: { [PERSON]: VESSEL },
+                    memberIds: [PERSON],
+                    anchor: { kind: 'system', hexKey: HEX, locationLabel: 'Regina' },
+                });
 
                 const hiddenGet = await jsonFetch(`${base}/api/universes/${id}/campaign?after=0&limit=1000`, {
                     headers: { cookie: other },

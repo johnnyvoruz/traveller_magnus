@@ -1,0 +1,45 @@
+{
+  "game": "Counted Miles",
+  "referee": "open_keel",
+  "showReferee": false,
+  "clockDays": 403489,
+  "ships": [
+    {
+      "name": "Mile Marker",
+      "crew": [
+        "Jem Oak",
+        "Tovi Rend"
+      ],
+      "legs": [
+        {
+          "from": "Spinward_Marches/0430",
+          "to": "Spinward_Marches/0530",
+          "departs": 403462,
+          "arrives": 403468
+        },
+        {
+          "from": "Spinward_Marches/0530",
+          "to": "Spinward_Marches/0528",
+          "departs": 403469,
+          "arrives": 403475
+        },
+        {
+          "from": "Spinward_Marches/0528",
+          "to": "Spinward_Marches/0526",
+          "departs": 403476,
+          "arrives": 403482
+        }
+      ]
+    }
+  ],
+  "journal": [
+    {
+      "title": "Rorre, last line",
+      "body": "Mile Marker is at Rorre. Jem Oak filed the log. Tovi Rend made tea. That is the whole of the public note.",
+      "when": {
+        "year": 1105,
+        "day": 158
+      }
+    }
+  ]
+}

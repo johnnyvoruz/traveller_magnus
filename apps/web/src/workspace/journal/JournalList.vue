@@ -471,6 +471,7 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
               <span class="jn-name">
                 <b v-if="face.number" class="jn-num">{{ face.number }}</b>
                 <b :class="{ 'is-soft': face.soft }">{{ face.name }}</b>
+                <span v-if="face.public" class="ui-chip jn-public">Public</span>
                 <span class="ui-chip jn-kind">{{ face.chip }}</span>
               </span>
               <span v-if="face.summary" class="camp-row-sum">{{ face.summary }}</span>
@@ -517,6 +518,10 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
   color: var(--signal);
   font: 700 14px/1.2 var(--font-code);
   font-variant-numeric: var(--tabular);
+}
+
+.jn-public {
+  flex: 0 0 auto;
 }
 
 .jn-kind {

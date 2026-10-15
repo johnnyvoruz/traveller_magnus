@@ -137,14 +137,15 @@ function localDate(now: Date): string {
     return now.getFullYear() + '-' + month + '-' + day;
 }
 
-/** The party's place: the vessel through placeAt, else the party's own anchor. */
+/** A new entry's place follows the lead ship. */
 function partyAnchor(): CampaignAnchor {
     const settings = campaign.settings;
     if (!settings) return null;
     const party = settings.party;
     const days = campaign.clock ? campaign.clock.days : null;
-    if (party.vesselId) {
-        const vessel = campaign.records[party.vesselId];
+    const vesselId = Array.isArray(party.vesselIds) ? party.vesselIds[0] ?? null : null;
+    if (vesselId) {
+        const vessel = campaign.records[vesselId];
         if (vessel && !vessel.deleted && vessel.type === 'vessel') {
             const place = placeAt(vessel.id, campaign.records, days);
             if (place && place.kind === 'here') return place.anchor;

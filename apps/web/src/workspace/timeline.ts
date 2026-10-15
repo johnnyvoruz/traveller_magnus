@@ -26,7 +26,7 @@ export type TimelineRow = {
     /** Empty when the row has no place. */
     place: string;
     hexKey: string | null;
-    visibility: 'referee' | 'players';
+    visibility: 'referee' | 'players' | 'public';
     avatar: { name: string; type: CampaignRecordType; images: CampaignRecord['images'] };
     /** Set for a journal entry, whose avatar is not a record type. */
     icon: FaIconName | null;

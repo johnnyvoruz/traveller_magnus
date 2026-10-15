@@ -100,9 +100,17 @@ export function renderPack(plan: PackPlan, paint: PackPaint): string {
     const partyMembers = plan.party.members.length
         ? '<ul>' + plan.party.members.map((member) => '<li><a href="#r-' + escapeHtml(member.id) + '">' + escapeHtml(member.name) + '</a></li>').join('') + '</ul>'
         : '<p>No party member is marked for players.</p>';
-    const ship = plan.party.ship
-        ? '<p>Ship: <a href="#r-' + escapeHtml(plan.party.ship.id) + '">' + escapeHtml(plan.party.ship.name) + '</a></p>'
+    const ship = plan.party.ships.length
+        ? plan.party.ships.map((row) => (
+            '<p>Ship: <a href="#r-' + escapeHtml(row.id) + '">' + escapeHtml(row.name) + '</a></p>'
+            + (row.aboard.length
+                ? '<ul>' + row.aboard.map((member) => '<li><a href="#r-' + escapeHtml(member.id) + '">' + escapeHtml(member.name) + '</a></li>').join('') + '</ul>'
+                : '<p>Nobody aboard.</p>')
+        )).join('')
         : '<p>No ship is marked for players.</p>';
+    const ashore = plan.party.ashore.length
+        ? '<p>Aboard no ship</p><ul>' + plan.party.ashore.map((member) => '<li><a href="#r-' + escapeHtml(member.id) + '">' + escapeHtml(member.name) + '</a></li>').join('') + '</ul>'
+        : '';
 
     const timeline = plan.timeline.length
         ? '<ol class="timeline">' + plan.timeline.map((row) => (
@@ -171,7 +179,7 @@ export function renderPack(plan: PackPlan, paint: PackPaint): string {
         + '<h2>Left out</h2><ul class="audit">' + auditList + '</ul>'
         + notes('cover')
         + '<h2>Contents</h2><ul>' + contents + '</ul></header>'
-        + '<section id="party"><h2>Party</h2>' + ship + partyMembers + notes('party') + '</section>'
+        + '<section id="party"><h2>Party</h2>' + ship + ashore + partyMembers + notes('party') + '</section>'
         + '<section id="timeline"><h2>Timeline</h2>'
         + (plan.noDate ? '<p>This campaign has no date.</p>' : '')
         + timeline + notes('timeline') + '</section>'

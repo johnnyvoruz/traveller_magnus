@@ -25,6 +25,12 @@ export const PackageManifest = z.object({
     /** Null when the package was published from an own map (contracts/b_marketplace.md F1). */
     truthVersion: z.string().nullable(),
     hexes: z.record(z.string(), PackageHex),
+    /**
+     * F15. Where each own sector of the piece sat on its source map, by sector id. A placed
+     * import reads source slots from here, so it lands the same after the source map is
+     * emptied or deleted. Absent on a manifest written before 1.2.0.
+     */
+    ownSectors: z.record(z.string(), z.object({ x: z.number().int(), y: z.number().int() })).optional(),
     lists: z.object({
         routes: z.string(),
         borderPaths: z.string(),
@@ -33,6 +39,11 @@ export const PackageManifest = z.object({
         contentHash: z.string(),
         count: z.number(),
         imageHashes: z.array(z.string()),
+        /**
+         * F16. The links whose two ends are both published records, as one content-addressed
+         * list. Absent on a manifest written before 1.2.1 or with no such link.
+         */
+        links: z.object({ contentHash: z.string(), count: z.number() }).optional(),
     }),
     publishedAt: z.string(),
 });
@@ -224,6 +235,8 @@ export const InstallResult = z.object({
     written: z.number().int().nonnegative(),
     skipped: z.number().int().nonnegative(),
     records: z.number().int().nonnegative(),
+    /** F16. Links written. Absent from a server before 1.2.1. */
+    links: z.number().int().nonnegative().optional(),
 }).strict();
 export type InstallResult = z.infer<typeof InstallResult>;
 

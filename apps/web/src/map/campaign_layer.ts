@@ -26,8 +26,23 @@ export type CampaignLocate = {
     arrivedAt: number | null;
 };
 
+/**
+ * One of the party's ships (prompts/d_party_ships_map.md item 1), from partyShipMarks and
+ * partyShipLabels. The lead is drawn as the party marker always was; the others are the same
+ * marker, quieter. `label` is the ship and who is aboard.
+ */
+export type CampaignPartyShip = {
+    id: string;
+    name: string;
+    hexKey: string;
+    lead: boolean;
+    label: string;
+};
+
 export type CampaignSnapshot = {
     party: CampaignParty | null;
+    /** The party's ships, lead first. When present and not empty, drawn instead of `party`. */
+    ships?: readonly CampaignPartyShip[];
     locate: CampaignLocate | null;
     reducedMotion: boolean;
     /** Live vessels beside the party. Absent is the same as none. */
@@ -47,6 +62,9 @@ export type CampaignInk = {
 };
 
 export type PartyMark = {
+    /** The ship this marker is, when the party has ships. */
+    id?: string;
+    lead?: boolean;
     tier: 'names' | 'chevron' | 'point';
     cx: number;
     cy: number;
@@ -102,11 +120,28 @@ export function resolvePartyHex(
     return locate(anchor.id, live)?.hexKey ?? null;
 }
 
+/**
+ * Label text for one marker per party ship. drawCampaignLayer still paints the
+ * single snapshot.party mark. D should switch that mark to partyShipMarks
+ * (map/vessel_marks.ts), which supplies the place, the lead flag, and these names.
+ */
+export function partyShipLabels(
+    ships: readonly { name: string; hexKey: string; lead: boolean; aboard: readonly string[] }[],
+): { name: string; hexKey: string; lead: boolean; label: string }[] {
+    return ships.map((ship) => ({
+        name: ship.name,
+        hexKey: ship.hexKey,
+        lead: ship.lead,
+        label: ship.aboard.length === 0 ? ship.name : ship.name + ' · ' + ship.aboard.join(', '),
+    }));
+}
+
 /** A closed campaign, or an open one with nothing on the map. */
 export function campaignIsBlank(snapshot: CampaignSnapshot | null): boolean {
     if (snapshot == null) return true;
     const vessels = snapshot.vessels;
-    return snapshot.party == null && snapshot.locate == null && !(vessels && vessels.length > 0);
+    const ships = snapshot.ships;
+    return snapshot.party == null && snapshot.locate == null && !(vessels && vessels.length > 0) && !(ships && ships.length > 0);
 }
 
 export function vesselContains(hit: VesselHit, sx: number, sy: number): boolean {
@@ -145,8 +180,8 @@ export function drawCampaignLayer(
         ink: CampaignInk;
         nowMs: number;
     },
-): { animating: boolean; mark: PartyMark | null; vessels: VesselHit[] } {
-    if (campaignIsBlank(args.snapshot) || !args.snapshot) return { animating: false, mark: null, vessels: [] };
+): { animating: boolean; mark: PartyMark | null; vessels: VesselHit[]; ships: PartyMark[] } {
+    if (campaignIsBlank(args.snapshot) || !args.snapshot) return { animating: false, mark: null, vessels: [], ships: [] };
     const snapshot = args.snapshot;
     ctx.save();
     let animating = false;
@@ -156,12 +191,16 @@ export function drawCampaignLayer(
         const place = placeHex(snapshot.locate.hexKey, args.sectors, args.cam, args.vp);
         if (place) animating = drawLocate(ctx, place, snapshot, args.ink, args.cam, args.vp, args.nowMs);
     }
-    if (snapshot.party) {
+    let ships: PartyMark[] = [];
+    if (snapshot.ships && snapshot.ships.length > 0) {
+        ships = drawPartyShips(ctx, snapshot.ships, args.sectors, args.cam, args.vp, args.ink);
+        mark = ships.find((item) => item.lead) ?? null;
+    } else if (snapshot.party) {
         const place = placeHex(snapshot.party.hexKey, args.sectors, args.cam, args.vp);
         if (place) mark = drawParty(ctx, place, snapshot, args.cam, args.ink);
     }
     ctx.restore();
-    return { animating, mark, vessels };
+    return { animating, mark, vessels, ships };
 }
 
 let standInHex: { count: number; hexKey: string } | null = null;
@@ -445,4 +484,148 @@ function drawParty(
         ctx.fillText(label, x + 6, cy);
     }
     return { tier, cx, cy, worldX: place.sx, worldY: place.sy, glyphR, hitR, tag };
+}
+
+/** A ship other than the lead: the same marker, its ring and chevron quieter, a size smaller. */
+const QUIET_ALPHA = 0.62;
+const QUIET_SHRINK = 0.8;
+/** Pixels between two of the party's ships on one hex, beyond the markers themselves. */
+const SHIP_GAP = 6;
+
+/**
+ * The party's ships, each at its own place (prompts/d_party_ships_map.md item 1). Ships on one hex
+ * stand one above another, lead first, each with its own tag, so both read. Zoomed out to points,
+ * one point a hex: the lead's when it is there.
+ */
+function drawPartyShips(
+    ctx: CanvasRenderingContext2D,
+    ships: readonly CampaignPartyShip[],
+    sectors: readonly SectorAt[],
+    cam: Camera,
+    vp: Viewport,
+    ink: CampaignInk,
+): PartyMark[] {
+    const tier = markerTier(cam.ppp);
+    const byHex = new Map<string, CampaignPartyShip[]>();
+    for (const ship of ships) {
+        const list = byHex.get(ship.hexKey);
+        if (list) list.push(ship);
+        else byHex.set(ship.hexKey, [ship]);
+    }
+    const marks: PartyMark[] = [];
+    // Quiet ships first, so a lead sharing a crowded patch of map is drawn on top.
+    const order = [...byHex.entries()].sort((a, b) => Number(a[1].some((ship) => ship.lead)) - Number(b[1].some((ship) => ship.lead)));
+    for (const [hexKey, list] of order) {
+        const place = placeHex(hexKey, sectors, cam, vp);
+        if (!place) continue;
+        list.sort((a, b) => Number(b.lead) - Number(a.lead));
+        if (tier === 'point') {
+            const first = list[0];
+            marks.push(drawShipPoint(ctx, place, first, cam, ink));
+            continue;
+        }
+        const leadR = tier === 'names' ? 11 : 8;
+        const step = leadR * 2 + SHIP_GAP;
+        for (let i = 0; i < list.length; i += 1) {
+            const ship = list[i];
+            const dy = (i - (list.length - 1) / 2) * step;
+            marks.push(drawShipMarker(ctx, place, ship, dy, tier, cam, ink));
+        }
+    }
+    return marks;
+}
+
+function drawShipPoint(ctx: CanvasRenderingContext2D, place: Placed, ship: CampaignPartyShip, cam: Camera, ink: CampaignInk): PartyMark {
+    const hitR = ship.lead ? 7 : 5.5;
+    ctx.globalAlpha = ship.lead ? 1 : QUIET_ALPHA;
+    ctx.fillStyle = ink.signal;
+    ctx.beginPath();
+    ctx.arc(place.sx, place.sy, ship.lead ? 3.5 : 2.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = ink.signal;
+    ctx.lineWidth = ship.lead ? 1.5 : 1;
+    ctx.beginPath();
+    ctx.arc(place.sx, place.sy, hitR, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    void cam;
+    return { id: ship.id, lead: ship.lead, tier: 'point', cx: place.sx, cy: place.sy, worldX: place.sx, worldY: place.sy, glyphR: 0, hitR, tag: null };
+}
+
+/**
+ * One ship's marker right of its hex: the lead exactly as the party marker always was; any other
+ * ship a size smaller, its ring thinner and its chevron and tag quieter. The tag is the ship and
+ * who is aboard, where names show (the lead's also when its subsector chevron has focus).
+ */
+function drawShipMarker(
+    ctx: CanvasRenderingContext2D,
+    place: Placed,
+    ship: CampaignPartyShip,
+    dy: number,
+    tier: 'names' | 'chevron',
+    cam: Camera,
+    ink: CampaignInk,
+): PartyMark {
+    const glyphR = DISC_R * cam.ppp;
+    const leadR = tier === 'names' ? 11 : 8;
+    const hitR = ship.lead ? leadR : leadR * QUIET_SHRINK;
+    const offset = tier === 'names' ? Math.max(22, glyphR + 12) : Math.max(14, glyphR + 10);
+    const cx = place.sx + offset;
+    const cy = place.sy + dy;
+    const quiet = ship.lead ? 1 : QUIET_ALPHA;
+    ctx.fillStyle = ink.tag;
+    ctx.globalAlpha = TAG_ALPHA;
+    ctx.beginPath();
+    ctx.arc(cx, cy, hitR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = quiet;
+    ctx.strokeStyle = ink.signal;
+    ctx.lineWidth = ship.lead ? 1.5 : 1;
+    ctx.stroke();
+    ctx.fillStyle = ink.signal;
+    ctx.beginPath();
+    ctx.moveTo(cx - hitR * 0.28, cy - hitR * 0.42);
+    ctx.lineTo(cx + hitR * 0.4, cy);
+    ctx.lineTo(cx - hitR * 0.28, cy + hitR * 0.42);
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    let tag: PartyMark['tag'] = null;
+    if (tier === 'names' && ship.label) {
+        ctx.font = NAME_FONT + 'px ' + ink.font;
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'left';
+        const width = ctx.measureText(ship.label).width;
+        const x = cx + hitR + 6;
+        const h = ship.lead ? TAG_H : TAG_H - 2;
+        const y = cy - h / 2;
+        const w = width + 12;
+        tag = { x, y, w, h };
+        ctx.fillStyle = ink.tag;
+        ctx.globalAlpha = TAG_ALPHA;
+        ctx.beginPath();
+        ctx.roundRect(x, y, w, h, 3);
+        ctx.fill();
+        ctx.globalAlpha = ship.lead ? 1 : QUIET_ALPHA + 0.2;
+        ctx.fillStyle = ink.signal;
+        ctx.fillText(ship.label, x + 6, cy);
+        ctx.globalAlpha = 1;
+    }
+    return { id: ship.id, lead: ship.lead, tier, cx, cy, worldX: place.sx, worldY: place.sy, glyphR, hitR, tag };
+}
+
+/**
+ * The party ships' tags: the ship's name in capitals, as the party's tag always was, then who is
+ * aboard as written. From A's partyShipLabels, so the words are one module's.
+ */
+export function partyShipTags(
+    ships: readonly { id: string; name: string; hexKey: string; lead: boolean; inJump: boolean; aboard: readonly string[] }[],
+): CampaignPartyShip[] {
+    const labels = partyShipLabels(ships.map((ship) => ({ ...ship, name: ship.inJump ? ship.name + ' \u00B7 in jump' : ship.name })));
+    return ships.map((ship, i) => {
+        const row = labels[i];
+        const named = row ? row.name : ship.name;
+        const label = row ? named.toUpperCase() + row.label.slice(named.length) : named.toUpperCase();
+        return { id: ship.id, name: ship.name, hexKey: ship.hexKey, lead: ship.lead, label };
+    });
 }

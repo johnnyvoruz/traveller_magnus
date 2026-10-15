@@ -27,6 +27,53 @@ export type ResolvedPublish = {
     imageHashes: string[];
 };
 
+const EMPTY_SLOT = /^~slot_-?\d+_-?\d+$/;
+
+/**
+ * F15. The slot of every own sector the piece's hexes sit in, read from the source universe's
+ * object at publish time. A sector it cannot find is left out; the install then refuses it.
+ */
+async function ownSectorSlots(env: Env, universeId: string, hexKeys: string[]): Promise<Record<string, { x: number; y: number }>> {
+    const wanted = new Set(hexKeys.filter(ownSectorKey).map((key) => sectorOf(key).sector).filter((slug) => !EMPTY_SLOT.test(slug)));
+    const out: Record<string, { x: number; y: number }> = {};
+    if (!wanted.size) return out;
+    const stub = env.UNIVERSE.get(env.UNIVERSE.idFromName(universeId));
+    const response = await stub.fetch(new Request('https://universe.internal/sectors', { headers: { 'x-voyage-universe-id': universeId } }));
+    if (!response.ok) return out;
+    const parsed = await response.json() as { data?: { items?: unknown }; items?: unknown };
+    const items = (parsed.data?.items ?? parsed.items ?? []) as { id?: unknown; slot?: { x?: unknown; y?: unknown } }[];
+    for (const item of Array.isArray(items) ? items : []) {
+        if (typeof item.id !== 'string' || !wanted.has(item.id)) continue;
+        if (typeof item.slot?.x === 'number' && typeof item.slot?.y === 'number') out[item.id] = { x: item.slot.x, y: item.slot.y };
+    }
+    return out;
+}
+
+/**
+ * F16. The live links of the source campaign whose two ends are both published records,
+ * read page by page from the universe's object, sorted by id.
+ */
+async function publishedLinks(env: Env, universeId: string, recordIds: string[]): Promise<Record<string, unknown>[]> {
+    const ends = new Set(recordIds);
+    if (ends.size < 2) return [];
+    const stub = env.UNIVERSE.get(env.UNIVERSE.idFromName(universeId));
+    const out: Record<string, unknown>[] = [];
+    let after = 0;
+    for (let page = 0; page < 1000; page += 1) {
+        const response = await stub.fetch(new Request(`https://universe.internal/campaign?after=${after}&limit=1000`, { headers: { 'x-voyage-universe-id': universeId } }));
+        const parsed = await response.json() as { data?: { links?: Record<string, unknown>[]; seq?: number; done?: boolean } };
+        if (!response.ok || !parsed.data) throw new Error('Publish read failed.');
+        for (const link of parsed.data.links ?? []) {
+            if (link.deleted === true || typeof link.from !== 'string' || typeof link.to !== 'string') continue;
+            if (ends.has(link.from) && ends.has(link.to)) out.push(link);
+        }
+        if (parsed.data.done !== false || typeof parsed.data.seq !== 'number' || parsed.data.seq <= after) break;
+        after = parsed.data.seq;
+    }
+    const byId = new Map(out.map((link) => [String(link.id), link]));
+    return [...byId.keys()].sort().map((id) => byId.get(id)!);
+}
+
 function unique(values: string[]): string[] {
     const seen = new Set<string>();
     const out: string[] = [];
@@ -242,9 +289,14 @@ export async function runPublish(env: Env, message: { packageId: string; version
         if (copied.wrote) imageBytes += copied.bytes;
     }
 
+    const ownSectors = await ownSectorSlots(env, pkg.universeId, Object.keys(resolved.hexes));
     const recordsText = stable(resolved.records);
     const contentHash = await sha256Hex(recordsText);
     await putAddressed(env.PUBLIC_BUCKET, contentHash, recordsText);
+    const links = await publishedLinks(env, pkg.universeId, recordIds);
+    const linksText = links.length ? stable(links) : '';
+    const linksHash = links.length ? await sha256Hex(linksText) : '';
+    if (links.length) await putAddressed(env.PUBLIC_BUCKET, linksHash, linksText);
     const emptyList = await sha256Hex(stable([]));
     const manifest = PackageManifest.parse({
         format: 'voyage-package',
@@ -258,13 +310,19 @@ export async function runPublish(env: Env, message: { packageId: string; version
         engineVersion: universe.engineVersion,
         truthVersion: universe.truthVersion,
         hexes: resolved.hexes,
+        ...(Object.keys(ownSectors).length ? { ownSectors } : {}),
         lists: { routes: emptyList, borderPaths: emptyList },
-        records: { contentHash, count: resolved.records.length, imageHashes },
+        records: {
+            contentHash,
+            count: resolved.records.length,
+            imageHashes,
+            ...(links.length ? { links: { contentHash: linksHash, count: links.length } } : {}),
+        },
         publishedAt: new Date().toISOString(),
     });
     const manifestText = stable(manifest);
     await env.PUBLIC_BUCKET.put(manifestKey, manifestText, { httpMetadata: { contentType: 'application/json' } });
-    const bytes = new TextEncoder().encode(manifestText).byteLength + new TextEncoder().encode(recordsText).byteLength + imageBytes;
+    const bytes = new TextEncoder().encode(manifestText).byteLength + new TextEncoder().encode(recordsText).byteLength + new TextEncoder().encode(linksText).byteLength + imageBytes;
     await markDone(env, message.packageId, message.version, await sha256Hex(manifestText), contentHash, bytes);
 }
 

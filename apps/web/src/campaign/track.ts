@@ -43,9 +43,14 @@ const PAST_END = 'There is no leg there.';
 const DEPARTED = 'That leg has already departed.';
 
 type PartyLike = {
-    vesselId: string | null;
+    vesselIds?: readonly string[];
     anchor: CampaignAnchor;
 };
+
+function leadVesselId(party: PartyLike): string | null {
+    if (!Array.isArray(party.vesselIds)) return null;
+    return party.vesselIds[0] ?? null;
+}
 
 /** The track on a vessel, when status.track is a non-empty valid list. An empty list is no track. */
 export function trackOf(record: CampaignRecord): Leg[] | null {
@@ -89,29 +94,36 @@ export function positionAt(track: readonly Leg[], days: number): CampaignAnchor 
     return place;
 }
 
-function liveVessel(party: PartyLike, records: Readonly<Record<string, CampaignRecord>>): CampaignRecord | null {
-    if (!party.vesselId) return null;
-    const found = records[party.vesselId];
+/**
+ * Where one vessel is at `days`.
+ * Its track answers when it has one. Before the first departure, and when the
+ * track is empty, the vessel answers from its own anchor. Null when that id
+ * is not a live vessel.
+ */
+export function whereIsVessel(
+    vesselId: string,
+    records: Readonly<Record<string, CampaignRecord>>,
+    days: number,
+): CampaignAnchor | TrackFix | null {
+    const found = records[vesselId];
     if (!found || found.deleted || found.type !== 'vessel') return null;
-    return found;
+    const track = trackOf(found);
+    if (!track) return found.anchor;
+    return positionAt(track, days) ?? found.anchor;
 }
 
 /**
- * "Where are we" at `days`.
- * The party's ship answers from its track when it has one.
- * Before the first departure, and when the track is empty, the ship answers
- * from its own anchor. With no ship, the party's own anchor.
+ * "Where are we" at `days`: the lead ship's place, or the party's own anchor
+ * when that ship is missing.
  */
 export function whereAreWe(
     party: PartyLike,
     records: Readonly<Record<string, CampaignRecord>>,
     days: number,
 ): CampaignAnchor | TrackFix | null {
-    const vessel = liveVessel(party, records);
-    if (!vessel) return party.anchor;
-    const track = trackOf(vessel);
-    if (!track) return vessel.anchor;
-    return positionAt(track, days) ?? vessel.anchor;
+    const vesselId = leadVesselId(party);
+    if (!vesselId) return party.anchor;
+    return whereIsVessel(vesselId, records, days) ?? party.anchor;
 }
 
 function openVessel(recordId: string): CampaignRecord | TrackResult {
