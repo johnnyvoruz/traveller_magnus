@@ -84,6 +84,18 @@ export function readSource(dir) {
     return { built, packages, versions, universes, manifests, objects, covers };
 }
 
+/**
+ * The duplicate guard: a target package by the example author with a source package's title but another id
+ * means the source state is not the one the target was seeded from. One sentence naming both ids, or null.
+ */
+export function duplicateRefusal(sourcePackages, targetRows) {
+    for (const p of sourcePackages) {
+        const other = targetRows.find((row) => row.title === p.title && row.id !== p.id);
+        if (other) return `The target already has "${p.title}" as ${other.id}, and this source has it as ${p.id}; seed from the state the target came from. Nothing written.`;
+    }
+    return null;
+}
+
 /** Whether the target has 0019's columns. */
 export function targetHasCovers(to) {
     return to.select(`SELECT COUNT(*) AS n FROM pragma_table_info('packages') WHERE name = 'cover_hash'`)[0].n > 0;
@@ -113,7 +125,19 @@ ON CONFLICT (${key.join(', ')}) DO ${update ? 'UPDATE SET ' + update : 'NOTHING'
 }
 
 /** The SQL for an apply. Universes are bare rows owned by the house account; installs start at 0. */
-export function planSql({ packages, versions, universes }) {
+/**
+ * Keeps only the columns the target has, so a source state with a newer migration (for example 0020's
+ * universes.show_course) still seeds a target without it. `columns` maps a table to its names; absent keeps all.
+ */
+export function fitColumns(rows, names) {
+    if (!names) return rows;
+    return rows.map((row) => Object.fromEntries(Object.entries(row).filter(([k]) => names.includes(k))));
+}
+
+export function planSql({ packages, versions, universes }, columns = {}) {
+    universes = fitColumns(universes, columns.universes);
+    packages = fitColumns(packages, columns.packages);
+    versions = fitColumns(versions, columns.package_versions);
     const now = new Date().toISOString();
     const out = [];
     for (const u of universes) {
@@ -144,6 +168,9 @@ async function main() {
     if (!house.length) throw new Error(`No account ${EXAMPLE_USER_ID} with a profile on the target. Nothing written.`);
     if (house[0].handle !== EXAMPLE_HANDLE) throw new Error(`Account ${EXAMPLE_USER_ID} has handle ${house[0].handle}, not ${EXAMPLE_HANDLE}. Nothing written.`);
     console.log(`House account found: ${house[0].handle} (${house[0].id}).`);
+    const titled = to.select(`SELECT id, title FROM packages WHERE author_id = ${q(EXAMPLE_USER_ID)} AND title IN (${source.packages.map((p) => q(p.title)).join(', ')})`);
+    const refusal = duplicateRefusal(source.packages, titled);
+    if (refusal) throw new Error(refusal);
     const present = to.select(`SELECT id, installs FROM packages WHERE id IN (${source.packages.map((p) => q(p.id)).join(', ')})`);
     const held = new Map(present.map((r) => [r.id, r.installs]));
     if (flag('--remove')) {
@@ -163,6 +190,7 @@ async function main() {
         const v = source.versions.filter((x) => x.package_id === p.id);
         console.log(`  ${held.has(p.id) ? 'update' : 'insert'}  ${p.id}  ${p.kind.padEnd(13)} ${p.title}  (versions ${v.map((x) => x.version).join(', ')}; installs ${held.has(p.id) ? held.get(p.id) + ', kept' : '0'})`);
     }
+    console.log(`  new packages ${source.packages.filter((p) => !held.has(p.id)).length}, updated ${source.packages.filter((p) => held.has(p.id)).length}`);
     for (const c of source.covers) console.log(`  cover   ${c.packageId}  ${c.title}  objects/${c.hash.slice(0, 12)}… and thumbnail objects/${c.thumbHash.slice(0, 12)}…`);
     console.log(`  universes ${source.universes.length}, manifests ${source.manifests.size}, objects ${source.objects.size}, covers ${source.covers.length}`);
     if (!targetHasCovers(to) && source.packages.some((p) => 'cover_hash' in p)) {
@@ -175,7 +203,8 @@ async function main() {
     }
     for (const [key, body] of source.objects) to.put(key, body);
     for (const [key, body] of source.manifests) to.put(key, body);
-    to.exec(planSql(source));
+    const columns = Object.fromEntries(['universes', 'packages', 'package_versions'].map((t) => [t, to.select(`SELECT name FROM pragma_table_info('${t}')`).map((r) => r.name)]));
+    to.exec(planSql(source, columns));
     const after = to.select(`SELECT id, installs, latest_version AS v FROM packages WHERE id IN (${source.packages.map((p) => q(p.id)).join(', ')})`);
     console.log(`Applied: ${after.length} packages on the target.`);
 }

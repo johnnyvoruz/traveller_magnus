@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'nod
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { readPack, fingerprint, coverFiles } from '../../tools/examples/build_local.mjs';
-import { planSql, removeSql, coversToDelete } from '../../tools/examples/seed_production.mjs';
+import { planSql, removeSql, coversToDelete, duplicateRefusal } from '../../tools/examples/seed_production.mjs';
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { EXAMPLE_HANDLE, EXAMPLE_USER_ID, objectHashes, packFolders } from '../../tools/examples/lib.mjs';
@@ -114,4 +114,20 @@ test('the seeding dry run names each cover', { skip: existsSync(path.join(builtS
     assert.equal(lines.length, 6, r.stdout);
     for (const line of lines) assert.match(line, /objects\/[0-9a-f]{12}… and thumbnail objects\/[0-9a-f]{12}…/);
     assert.match(r.stdout, /covers 6/);
+});
+
+test('the seed refuses a target that holds an example package under another id', () => {
+    const source = [{ id: 'pk_NEW', title: 'Feri terraces' }, { id: 'pk_B', title: 'Hollow Verge' }];
+    assert.equal(duplicateRefusal(source, [{ id: 'pk_B', title: 'Hollow Verge' }]), null, 'same ids: an update');
+    assert.equal(duplicateRefusal(source, []), null, 'a fresh target');
+    assert.equal(
+        duplicateRefusal(source, [{ id: 'pk_OLD', title: 'Feri terraces' }]),
+        'The target already has "Feri terraces" as pk_OLD, and this source has it as pk_NEW; seed from the state the target came from. Nothing written.',
+    );
+});
+
+test('the copy keeps only the columns the target has', () => {
+    const sql = planSql({ universes: [{ id: 'u1', name: 'U', show_course: 1, created_at: 'T' }], packages: [], versions: [] }, { universes: ['id', 'name', 'created_at'] });
+    assert.doesNotMatch(sql, /show_course/);
+    assert.match(sql, /INSERT INTO universes \(id, name, created_at, owner_id/);
 });

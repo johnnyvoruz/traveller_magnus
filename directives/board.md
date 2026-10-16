@@ -1,18 +1,18 @@
 # Board
 
-One line per lane. Only the orchestrator edits this file. Updated 2026-10-15 19:40 (by the clock).
+One line per lane. Only the orchestrator edits this file. Updated 2026-10-15 22:25 (by the clock).
 
-**Last push: `55fe998`, version 1.2.1, engine e1.2, 2026-10-14, live** (index `index-UTD7M5x3.js`; 0017 and 0018 applied: the signed-out feed answers 200). Truth v10.
+**Last push: `7b6f4e5`, version 1.2.2, engine e1.2, 2026-10-15, live** (index `index--F8jS_o3.js`; tests green on GitHub; 0019 applied). Truth v10. Every catalogue card answers `cover: null` until Z's safe seed.
 **Deploys run on push** (Johnny, 2026-10-14): push commands no longer include `npm run deploy:ci`.
 
 | Lane | Status | Current prompt | Blocker / next |
 |---|---|---|---|
 | A | free | (none) | `a_store_art` accepted: 8 kind defaults (apps/web/public/covers/), 4 example covers; contact sheet findings/art/store_art_contact_sheet.png awaits Johnny |
-| B | free | (none) | `b_public_overview` accepted (its two red tests were Z's mid-run; green on the combined tree) |
-| C | free | (none) | `c_example_games` with Fix 1 accepted |
-| D | free | (none) | `d_storefront` accepted 20:50 (kb26 shots; in push 1.2.2). Next, not written: the lime public card and the featured row's heading (Queue) |
-| E | free | (none) | `e_example_packs` Fix 2 accepted |
-| Z | free | (none) | `z_package_covers` Fix 1 accepted 20:50 (both covers looked at: no chrome, framed). Cover seeding on production after 1.2.2 is live |
+| B | free | (none) | `b_public_course` accepted 22:20: `course` on the card, `show_course`, 0020; **held out of 1.2.3** until D's checkbox ships (no course public before a referee can turn it off) |
+| C | free | (none) | `c_surface_zoom` accepted (cap 320 px per hex, sharp window; parity exit 0 with pinned counts); in 1.2.3 |
+| D | go | prompts/d_store_2.md | `d_store_scroll` accepted (in 1.2.3). Now: the filter column and sheet; solid routes, the course ahead and the dimmed track; lime card without the Route row; the course checkbox; Back restores the store's scroll |
+| E | free | (none) | `e_uwp_dots` accepted (in 1.2.3) |
+| Z | go | prompts/z_records_only.md (Answer at its foot) | `z_cover_seed` accepted (guard, column fit; Johnny's two commands). Records-only: halt answered (chart anchors kept, own-sector anchors dropped and counted) |
 | F | retired | (none) | Johnny, 2026-10-11: unreliable (runs out of budget); do not use or propose until he says it is back |
 
 ## Naming (Johnny, 2026-10-14)
@@ -37,6 +37,7 @@ the ledger.
 lane's letter as the first message of a new session; from then on "go" is enough.
 
 ## Shared files this turn
+- apps/api/src/db/schema.ts: B (0020 lines); Z adds none in `z_records_only` without saying so. packages/shared/src/index.ts: B and Z each add export lines only.
 - packages/engines, tests/golden/fixtures/engine_1.2.0/, tests/generation/parity*, tools/truth/: nobody (Z has finished).
 - apps/api/src/jobs/generate_queue.ts, jobs/one_sector.ts, routes/builder.ts: B (taken over from Z's patch).
 - views/MapView.vue, workspace/build/, workspace/passkey/: D.
@@ -468,13 +469,13 @@ rest, name on hover, as built; (3) A's covers ship as they are; (4) the ship dis
   2; after the push).
 
 ## Queue (prompts not yet written)
-- D, with the lime card: the featured row is headed "Most imported" while every package has 0 imports (it shows the latest three). Head it truthfully, or hide it until something has been imported.
+- A: make `tests/web/renderer.test.js` "draw reports animating while a title fades in" independent of wall-clock load (it failed in the 1.2.3 rehearsal under the full suite, passes alone; second sighting).
+- Johnny, after records-only ships: convert the four records packs to records-only (Z recommends; Regina highport contacts first).
+- D, seen by the orchestrator in the kb26 shots: the product page's "What's inside" box draws a few tiny hex outlines in a large empty panel (show the chart piece itself, or shrink the box to fit); map covers (Hollow Verge) read as a few dots at card size.
+- D, after Z's `z_records_only` report: the records-only screens (a publish entry from the campaign's records, card facts, the product page without the hex box, import without placement).
 - A: export `encodeWebp` and `sha256Hex` from `campaign/images.ts`; D's `market/cover_image.ts` then imports them (two copies of one encoder today).
 - B, later: catalogue `family=` and `author=` queries (D's question 1).
 - Someone checks Z's note: the map draws the Hollow Verge own sector about 15 hexes from where Z's slot-to-hex arithmetic put it. Z's arithmetic may be the wrong one; a note, not a fault yet.
-- Johnny, after 1.2.2 is live: `seed_production.mjs` cover commands (Z's pair is accepted).
-- D, after `d_storefront`: the public ship card's name, border and route line in
-  `--chart-traffic` (lime) to match its track (Johnny, 2026-10-15, answer 1).
 - After 1.1.12: Johnny rebuilds v10 locally, uploads (`tools/truth/upload_truth.js`, bulk
   over R2's S3 interface, keys in `.env`) and releases. His commands only.
 - D: E's suggested words ("Full system, from the star outward."); the Build pane saying

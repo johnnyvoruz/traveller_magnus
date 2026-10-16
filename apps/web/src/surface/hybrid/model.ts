@@ -17,7 +17,7 @@
  */
 import { hashString, mulberry32 } from '../vanilla/map.ts';
 import { edgeTemp } from '../ice_edge.ts';
-import { buildCDF, buildContinentSeeds, buildGrid3D, continentHeight, fbm3D, remapHeight } from '../vanilla/map_fields.ts';
+import { CONTINENT_FREQ, buildCDF, buildContinentSeeds, buildGrid3D, continentHeight, fbm3D, remapHeight, sample3D } from '../vanilla/map_fields.ts';
 import { VANILLA_MASTER_SEED } from '../identity.ts';
 import type { AccentCode, FeatureCode, TerrainCode } from './codes.ts';
 import { dot, gridOf, hexSpacing, norm, sphere, type Grid, type V3 } from './grid.ts';
@@ -97,6 +97,11 @@ export type HybridModel = {
     readonly height: (p: V3) => number;
     readonly iceNoise: (p: V3) => number;
     readonly texture: (p: V3) => number;
+    /**
+     * Two octaves finer than `texture`, on the same grid and seed.
+     * The baked sheet does not read it. A sharp window adds it as grain.
+     */
+    readonly fineGrain: (p: V3) => number;
     readonly tempAt: (p: V3, elevation: number) => number;
     readonly seasonalBand: (latDeg: number) => number;
     /** Sea share of the area after the hydro correction. */
@@ -168,6 +173,7 @@ export function startHybridBuild(world: HybridWorld, options: BuildOptions = {})
     let height!: (p: V3) => number;
     let iceNoise!: (p: V3) => number;
     let texture!: (p: V3) => number;
+    let fineGrain!: (p: V3) => number;
     let liquid!: string | null;
     let phaseKnown!: boolean;
     let meltK!: number;
@@ -251,6 +257,17 @@ export function startHybridBuild(world: HybridWorld, options: BuildOptions = {})
             const gtr = buildGrid3D(stream(seed, 'tr'));
             iceNoise = (p: V3): number => clamp((fbm3D(gic, p[0] * 1.3 + 3.1, p[1] * 1.3, p[2] * 1.3, 4, 0.55) - 0.5) * 4.5, -1, 1);
             texture = (p: V3): number => clamp((fbm3D(gtr, p[0] * 0.9, p[1] * 0.9 + 5.3, p[2] * 0.9, 3, 0.5) - 0.5) * 4, -1, 1);
+            // Octaves 3 and 4 of the same texture grid. texture() stops at octave 2.
+            fineGrain = (p: V3): number => {
+                const x = p[0] * 0.9;
+                const y = p[1] * 0.9 + 5.3;
+                const z = p[2] * 0.9;
+                const f0 = CONTINENT_FREQ * 8;
+                const f1 = CONTINENT_FREQ * 16;
+                const a = sample3D(gtr, x * f0, y * f0, z * f0);
+                const b = sample3D(gtr, x * f1, y * f1, z * f1);
+                return clamp(((a * 0.5 + b * 0.25) / 0.75) * 2 - 1, -1, 1);
+            };
             liquid = world.liquid;
             phaseKnown = world.meltK !== null && world.boilK !== null;
             meltK = world.meltK ?? 273;
@@ -342,7 +359,7 @@ export function startHybridBuild(world: HybridWorld, options: BuildOptions = {})
             }
             model = {
                 world, grid, seaRank, meltK, boilK, phaseKnown, layout, life, airless, sub, ringDeg, hexes,
-                height, iceNoise, texture, tempAt, seasonalBand, seaShare, starportLon: null, starportHex: null,
+                height, iceNoise, texture, fineGrain, tempAt, seasonalBand, seaShare, starportLon: null, starportHex: null,
             };
             id = 0;
             phase = 4;

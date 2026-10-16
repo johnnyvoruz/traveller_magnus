@@ -7274,3 +7274,30 @@ that failed at the close no longer does. Ready note `findings/builder_form_ready
 - **Z Fix 1 accepted:** orchestrator read both covers (Z's tools refuse images). Feri terraces centred on 2005, no chrome; Hollow Verge's six systems centred at zoom 240. Z's note: the map draws that own sector about 15 hexes from Z's slot arithmetic (queued as a note).
 - **D `d_storefront` accepted:** 1769 pass on D's run; shots kb26 (catalogue, chips, empty, none, three cover sources, product page, lightbox, author paste and remove, publish paste, sticky Import). Orchestrator looked at catalogue 1600 and 390 and the record page 1600: store-grade. Flaw queued: "Most imported" heads a row of packages with 0 imports. D's four questions decided by the orchestrator (board). Needs: A's encoder export, B's `family=`/`author=` (queued).
 - **Push 1.2.2 re-cut:** 103 paths, clean copy `outer23`: 1798 tests, 1755 pass, 0 fail, 43 skipped; checker, typecheck clean; build `index--F8jS_o3.js`. Note `findings/push/release_2026-10-15.md`.
+
+## 289. 1.2.2 live; Johnny's notes; covers cannot be seeded as built; D and Z go (2026-10-15 21:12)
+
+- **1.2.2 live and checked:** `7b6f4e5` on origin; GitHub test run green; live index `index--F8jS_o3.js` (the rehearsal's); 0019 applied (`cover_hash` present); overview route signed out 200 `public, max-age=60`; catalogue cards `cover: null`. Johnny: "looks fantastic, exactly what we were going for."
+- **Seeding trap found:** `findings/examples/local_covers` has six package ids different from production's (`findings/examples/local`); `seed_production.mjs` upserts by id, so seeding from it would duplicate six packages. Z `z_cover_seed.md`: covers onto `local`, a duplicate guard, a stand-in proof, then Johnny's commands.
+- **Johnny's notes:** route dots should be solid lines; the store does not scroll (live, critical); filters into a left column, Amazon patterns; remove the card's "N finished legs, drawn on the map"; can campaign elements exist without a hex (packages require one hex: `PackagePublish.hexKeys` `min(1)`).
+- Answered in chat: the public route line is past movement (finished legs only; the planned course is not on the wire).
+- The scroll fault: no global lock found in the source (no html/body/#app overflow, no body.style, no window wheel listener); D reproduces on production.
+- **Prompts:** D `d_store_2.md` (scroll first; the filter column and sheet; solid routes with an arrowhead at the present hex; lime card, Route row removed; a live look for the orchestrator). Z `z_cover_seed.md`, then `z_records_only.md` (0 hexes allowed with at least one record; no placement; anchor rules; contract section for D).
+- The orchestrator's session cannot start headless Edge (no DevTools port after 40 s, from Bash and PowerShell); live looks go to D.
+
+## 290. Course public with a switch; UWP dots; surface zoom; the scroll cause found in Chrome (2026-10-15 21:50)
+
+- **Johnny:** make the course public, with a referee's checkbox to turn it off; remove the dotted underline in each UWP tile; zoom in much further on the surface map; "see if you can use chrome now" (the claude-in-chrome extension works from this session; headless Edge does not).
+- **Scroll cause (Chrome, production):** `App.vue` `.app { position: fixed; inset: 0 }`; the store's `main.mk-page` is `overflow: visible`, 1,239 px in a 1,034 px window; html/body/#app are 0 px, so nothing scrolls. The account page is right (`.pk-page` absolute, inset 0, overflow-y auto). Written into `d_store_scroll.md` with the fix pattern.
+- **Decided:** the course switch is per game (`universes.show_course`, default on, beside `show_referee`); the course is the leg under way plus the planned legs; it outranks old finished legs in the card budget. Surface cap one hex at 320 px (today `HEX_READ_PX` 48), redrawn crisp past the 1600 x 800 bake.
+- **Prompts:** B `b_public_course.md`; C `c_surface_zoom.md`; E `e_uwp_dots.md` (cause: `CodeNote.vue` 95 `underline dotted`, used by `UwpRibbon.vue` 26). D's course drawing and checkbox are queued after B.
+
+## 291. Six reports; 1.2.3 called without B's course; Z's covers ready to seed (2026-10-15 22:25)
+
+- **D `d_store_scroll` accepted:** `.mk-scroll` full-window scroller in `PackagesView.vue` (the account page's pattern), reset to top on a new path; proof at 1600/768/390 with wheel over the margins. D's question decided: Back restores the store's scroll (in `d_store_2` 4c).
+- **E `e_uwp_dots` accepted:** `bare` CodeNote on the ribbon tiles, hover lift; orchestrator looked at `kb27_uwp_1600_hover`.
+- **C `c_surface_zoom` accepted:** `HEX_READ_PX` 320, a sharp window past the bake, fine grain octaves 3 and 4; parity script exit 0 (its `ok: false` is the pinned known differences, as in `c_surface_map_2`). Orchestrator looked at temperate 48 and 320 and vanilla ice 320. A full window on a large stage paints in seconds (chunked, bake shown meanwhile).
+- **B `b_public_course` accepted, held:** shipping it alone would publish courses before the checkbox exists. D's `d_store_2` now draws `course` and adds the checkbox; B's paths ride with that push. B's question (old example cards keep `course: []` until rewritten): leave until the next seed.
+- **Z `z_cover_seed` accepted:** covers onto `findings/examples/local` (production's ids), duplicate guard, column fit, stand-in proof; Johnny's two commands given. Z's questions: yes to rewriting the six rows with their own values; delete `local_backup_pre_covers` after production shows the covers.
+- **Z `z_records_only` halted, answered:** today's install keeps every anchor; decided: hex packages unchanged; records-only keeps chart anchors whatever the truth version, drops own-sector anchors and counts them. Halt report filed as `done/z_records_only_halt.md`.
+- **1.2.3 called:** `findings/push/release_2026-10-15b.md`, 37 paths, `outer24`: 1766 pass, 1 fail (the known renderer timing flake; 3 of 3 alone), build `index-CTGrh87X.js`. `versionvideo/` held (Johnny's edits).

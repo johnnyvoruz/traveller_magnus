@@ -62,15 +62,15 @@ export type FieldBuild = {
     readonly field: Field;
 };
 
-export function fieldBuild(layout: SheetLayout, n: number): FieldBuild {
+export function fieldBuild(layout: SheetLayout, n: number, cache = true): FieldBuild {
     const key = fieldKey(layout, n);
-    const cached = fields.get(key);
+    const cached = cache ? fields.get(key) : undefined;
     if (cached) return { row: () => true, field: cached };
     const build = buildField(layout, gridOf(n));
     return {
         row(): boolean {
             if (!build.row()) return false;
-            if (!fields.has(key)) {
+            if (cache && !fields.has(key)) {
                 if (fields.size > 8) fields.clear();
                 fields.set(key, build.field);
             }

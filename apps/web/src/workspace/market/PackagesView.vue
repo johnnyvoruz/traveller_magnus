@@ -100,6 +100,12 @@ function clearFilters(): void {
     go({ q: '', kind: '', tag: '' });
 }
 
+/** The router scrolls the window, which never moves here: a new page starts at its top. */
+const scroller = ref<HTMLElement | null>(null);
+watch(() => route.path, () => {
+    if (scroller.value) scroller.value.scrollTop = 0;
+});
+
 function load(): void {
     if (!packageId.value) void loadCards();
 }
@@ -118,97 +124,108 @@ onMounted(async () => {
 </script>
 
 <template>
-  <main class="mk-page" :class="{ 'is-store': !packageId }">
-    <header class="mk-bar">
-      <RouterLink class="ui-btn" to="/"><Icon name="arrow-left" :size="13" />Map</RouterLink>
-      <RouterLink v-if="packageId || mineView" class="ui-btn" to="/packages"><Icon name="store" :size="13" />Marketplace</RouterLink>
-      <RouterLink v-if="session.user && !mineView" class="ui-btn" to="/packages?mine=1">My packages</RouterLink>
-      <h1 v-if="!packageId" class="mk-title">{{ mineView ? 'My packages' : 'Marketplace' }}</h1>
-    </header>
+  <div ref="scroller" class="mk-scroll">
+    <main class="mk-page" :class="{ 'is-store': !packageId }">
+      <header class="mk-bar">
+        <RouterLink class="ui-btn" to="/"><Icon name="arrow-left" :size="13" />Map</RouterLink>
+        <RouterLink v-if="packageId || mineView" class="ui-btn" to="/packages"><Icon name="store" :size="13" />Marketplace</RouterLink>
+        <RouterLink v-if="session.user && !mineView" class="ui-btn" to="/packages?mine=1">My packages</RouterLink>
+        <h1 v-if="!packageId" class="mk-title">{{ mineView ? 'My packages' : 'Marketplace' }}</h1>
+      </header>
 
-    <div v-if="ready && mineView && !session.user" class="mk-empty">
-      <p><b>Sign in to see your packages.</b></p>
-      <button type="button" class="ui-btn is-primary" @click="signIn()">Sign in</button>
-    </div>
+      <div v-if="ready && mineView && !session.user" class="mk-empty">
+        <p><b>Sign in to see your packages.</b></p>
+        <button type="button" class="ui-btn is-primary" @click="signIn()">Sign in</button>
+      </div>
 
-    <template v-else-if="!packageId">
-      <section v-if="featuredCards.length" class="mk-featured" aria-labelledby="mk-featured-h">
-        <h2 id="mk-featured-h" class="ui-heading">Most imported</h2>
-        <ul class="mk-featured-row">
-          <li v-for="item in featuredCards" :key="item.id"><StoreCard :card="item" :cdn="CDN" :now="now" wide /></li>
+      <template v-else-if="!packageId">
+        <section v-if="featuredCards.length" class="mk-featured" aria-labelledby="mk-featured-h">
+          <h2 id="mk-featured-h" class="ui-heading">Most imported</h2>
+          <ul class="mk-featured-row">
+            <li v-for="item in featuredCards" :key="item.id"><StoreCard :card="item" :cdn="CDN" :now="now" wide /></li>
+          </ul>
+        </section>
+
+        <div class="mk-toolbar">
+          <form class="mk-find" role="search" @submit.prevent="search">
+            <input v-model="q" class="mk-box mk-q" type="search" placeholder="Search titles, descriptions and tags" aria-label="Search packages" maxlength="100" />
+            <button type="submit" class="ui-btn">Search</button>
+          </form>
+          <label class="mk-sort">
+            <span>Sort by</span>
+            <select v-model="sort" class="mk-box" @change="go({ sort })">
+              <option value="updated">Recently updated</option>
+              <option value="installs">Most imported</option>
+              <option value="title">Title</option>
+            </select>
+          </label>
+          <label v-if="isAdmin && !mineView" class="mk-check"><input v-model="hiddenOnly" type="checkbox" @change="go({})" /> Hidden</label>
+        </div>
+
+        <div v-if="chips.length || family || tag" class="mk-chips" role="group" aria-label="Kind">
+          <button type="button" class="mk-chip" :aria-pressed="family === '' ? 'true' : 'false'" @click="go({ kind: '' })">All</button>
+          <button v-for="name in chips" :key="name" type="button" class="mk-chip" :aria-pressed="family === name ? 'true' : 'false'" @click="go({ kind: name })">{{ FAMILY_WORDS[name] }}</button>
+          <button v-if="family && !chips.includes(family)" type="button" class="mk-chip" aria-pressed="true" @click="go({ kind: '' })">{{ FAMILY_WORDS[family] }}</button>
+          <button v-if="tag" type="button" class="mk-chip is-tag" aria-pressed="true" :aria-label="'Tag ' + tag + '. Clear the tag.'" @click="go({ tag: '' })">Tag: {{ tag }} <Icon name="xmark" :size="10" /></button>
+        </div>
+
+        <p v-if="error" class="mk-err" role="alert">{{ error }} <button type="button" class="build-link" @click="loadCards()">Try again</button></p>
+        <ul v-if="!ready || (loading && !cards.length)" class="mk-grid" aria-busy="true" aria-label="Loading packages">
+          <li v-for="n in 8" :key="n" class="mk-card is-ghost"><span class="mk-cover"></span><span class="mk-card-body"><b>&nbsp;</b><small>&nbsp;</small><small>&nbsp;</small></span></li>
         </ul>
-      </section>
+        <div v-else-if="!shown.length && !error && (filtered || mineView || hiddenView)" class="mk-empty">
+          <template v-if="mineView && !filtered">
+            <p><b>You have not published a package yet.</b></p>
+            <p>To publish one, open the map, turn on Build, select hexes, a subsector, or a sector, and then select Publish selection.</p>
+          </template>
+          <p v-else-if="hiddenView && !filtered"><b>No package is hidden.</b></p>
+          <template v-else>
+            <p><b>No packages match.</b></p>
+            <button type="button" class="ui-btn" @click="clearFilters()">Clear filters</button>
+          </template>
+        </div>
+        <div v-else-if="!shown.length && !error" class="mk-empty is-first">
+          <img class="mk-empty-art" :src="defaultCoverUrl('other', true)" alt="" width="640" height="360">
+          <p><b>No packages yet.</b></p>
+          <template v-if="session.user">
+            <p>Share a sector, a ship, or your contacts. Open the map, turn on Build, select what to share, and then select Publish selection.</p>
+            <RouterLink class="ui-btn is-primary" to="/">Publish a package</RouterLink>
+          </template>
+        </div>
+        <ul v-else class="mk-grid">
+          <li v-for="item in shown" :key="item.id"><StoreCard :card="item" :cdn="CDN" :now="now" /></li>
+        </ul>
+        <div v-if="nextCursor" class="mk-more"><button type="button" class="ui-btn" :disabled="loading" @click="loadCards(true)">Show more</button></div>
+        <ImportsList v-if="session.user && !mineView" />
+      </template>
 
-      <div class="mk-toolbar">
-        <form class="mk-find" role="search" @submit.prevent="search">
-          <input v-model="q" class="mk-box mk-q" type="search" placeholder="Search titles, descriptions and tags" aria-label="Search packages" maxlength="100" />
-          <button type="submit" class="ui-btn">Search</button>
-        </form>
-        <label class="mk-sort">
-          <span>Sort by</span>
-          <select v-model="sort" class="mk-box" @change="go({ sort })">
-            <option value="updated">Recently updated</option>
-            <option value="installs">Most imported</option>
-            <option value="title">Title</option>
-          </select>
-        </label>
-        <label v-if="isAdmin && !mineView" class="mk-check"><input v-model="hiddenOnly" type="checkbox" @change="go({})" /> Hidden</label>
-      </div>
-
-      <div v-if="chips.length || family || tag" class="mk-chips" role="group" aria-label="Kind">
-        <button type="button" class="mk-chip" :aria-pressed="family === '' ? 'true' : 'false'" @click="go({ kind: '' })">All</button>
-        <button v-for="name in chips" :key="name" type="button" class="mk-chip" :aria-pressed="family === name ? 'true' : 'false'" @click="go({ kind: name })">{{ FAMILY_WORDS[name] }}</button>
-        <button v-if="family && !chips.includes(family)" type="button" class="mk-chip" aria-pressed="true" @click="go({ kind: '' })">{{ FAMILY_WORDS[family] }}</button>
-        <button v-if="tag" type="button" class="mk-chip is-tag" aria-pressed="true" :aria-label="'Tag ' + tag + '. Clear the tag.'" @click="go({ tag: '' })">Tag: {{ tag }} <Icon name="xmark" :size="10" /></button>
-      </div>
-
-      <p v-if="error" class="mk-err" role="alert">{{ error }} <button type="button" class="build-link" @click="loadCards()">Try again</button></p>
-      <ul v-if="!ready || (loading && !cards.length)" class="mk-grid" aria-busy="true" aria-label="Loading packages">
-        <li v-for="n in 8" :key="n" class="mk-card is-ghost"><span class="mk-cover"></span><span class="mk-card-body"><b>&nbsp;</b><small>&nbsp;</small><small>&nbsp;</small></span></li>
-      </ul>
-      <div v-else-if="!shown.length && !error && (filtered || mineView || hiddenView)" class="mk-empty">
-        <template v-if="mineView && !filtered">
-          <p><b>You have not published a package yet.</b></p>
-          <p>To publish one, open the map, turn on Build, select hexes, a subsector, or a sector, and then select Publish selection.</p>
-        </template>
-        <p v-else-if="hiddenView && !filtered"><b>No package is hidden.</b></p>
-        <template v-else>
-          <p><b>No packages match.</b></p>
-          <button type="button" class="ui-btn" @click="clearFilters()">Clear filters</button>
-        </template>
-      </div>
-      <div v-else-if="!shown.length && !error" class="mk-empty is-first">
-        <img class="mk-empty-art" :src="defaultCoverUrl('other', true)" alt="" width="640" height="360">
-        <p><b>No packages yet.</b></p>
-        <template v-if="session.user">
-          <p>Share a sector, a ship, or your contacts. Open the map, turn on Build, select what to share, and then select Publish selection.</p>
-          <RouterLink class="ui-btn is-primary" to="/">Publish a package</RouterLink>
-        </template>
-      </div>
-      <ul v-else class="mk-grid">
-        <li v-for="item in shown" :key="item.id"><StoreCard :card="item" :cdn="CDN" :now="now" /></li>
-      </ul>
-      <div v-if="nextCursor" class="mk-more"><button type="button" class="ui-btn" :disabled="loading" @click="loadCards(true)">Show more</button></div>
-      <ImportsList v-if="session.user && !mineView" />
-    </template>
-
-    <ProductPage
-      v-else
-      :package-id="packageId"
-      :cdn="CDN"
-      :ready="ready"
-      :watching="watching"
-      :import-for="one(route.query.import)"
-      :update-id="one(route.query.update)"
-      :placed-back="one(route.query.placed) === '1'"
-    />
-  </main>
+      <ProductPage
+        v-else
+        :package-id="packageId"
+        :cdn="CDN"
+        :ready="ready"
+        :watching="watching"
+        :import-for="one(route.query.import)"
+        :update-id="one(route.query.update)"
+        :placed-back="one(route.query.placed) === '1'"
+      />
+    </main>
+  </div>
 </template>
 <style>
+/* The page scrolls on its own, as the account page does: the app frame around it is fixed to
+   the window (App.vue), so the document never scrolls. The whole window is the scroller, so the
+   wheel works over the side margins too. */
+.mk-scroll {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  background: var(--bg-0);
+}
+
 .mk-page {
   box-sizing: border-box;
   width: min(1240px, 100%);
-  min-height: 100vh;
   margin: 0 auto;
   padding: 20px 16px 40px;
   background: var(--bg-0);

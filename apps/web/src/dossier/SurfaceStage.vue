@@ -21,13 +21,16 @@ import Icon from '../design/Icon.vue';
 import { cancelFrame, createCanvas, devicePixelRatio, fetchJson, loadImageAsync, nextFrame, now, prefersReducedMotion } from '../platform/browser.ts';
 import { hybridCaption, sheetCaption } from '../surface/caption.ts';
 import type { SurfaceMode } from '../surface/contracts.ts';
-import { CONTINENTAL_DEFINITION, COASTLINE_COMPLEXITY, canMapWorld, worldMapData } from '../surface/identity.ts';
+import { CONTINENTAL_DEFINITION, COASTLINE_COMPLEXITY, VANILLA_MASTER_SEED, canMapWorld, diamondMapSpec, worldMapData } from '../surface/identity.ts';
 import {
     dayNightOverlay, enhancedFlags, iconSetName, mapStyle, onDayNightOverlay, onMapStyle, onSurfaceMode, setDayNightOverlay, setMapStyle, surfaceMode, type MapStyle,
 } from '../surface/preferences.ts';
 import { cancelSurface, hybridInputsFor, requestMap } from '../surface/service.ts';
 import { SURFACE_WEBGL_NOTICE, webglMissing } from '../surface/webgl_notice.ts';
-import { drawMapOverlay, renderDiamondBlank } from '../surface/vanilla/map.ts';
+import { drawMapOverlay, renderDiamondBlank, type DiamondMapInputs } from '../surface/vanilla/map.ts';
+import { HEX_STROKE, SEPARATOR_STROKE, applyDiamondClip, drawDiamondSeparators, drawHexGrid, rgbaCss, vanillaHexesAcross } from '../surface/vanilla/map_grid.ts';
+import { parseStat } from '../surface/vanilla/map_palette.ts';
+import { mountSharpView } from '../surface/sharp_view.ts';
 import { iconPaint, loadIconSet, type IconImage, type IconSet, type Tinter } from '../surface/hybrid/icons.ts';
 import { drawSunMark, drawTerminus } from '../surface/hybrid/chrome.ts';
 import { LARGE_SHEET, SHEET_LAYOUT, sheetPoint } from '../surface/hybrid/field.ts';
@@ -39,7 +42,7 @@ import { frameDue } from '../surface/hybrid/motion.ts';
 import { mapSun, netClipPath, netOutline } from '../surface/hybrid/stage.ts';
 import { CODE_TABLE, type SurfaceCode } from '../surface/hybrid/codes.ts';
 import { drawMarks, drawSymbols, symbolOf } from '../surface/hybrid/symbols.ts';
-import { FIT_VIEW, hexCssPx, maxZoom, panBy, zoomAbout, ZOOM_KEY, ZOOM_NOTCH_PX, ZOOM_WHEEL, type MapView } from '../surface/hybrid/view.ts';
+import { FIT_VIEW, hexCssPx, hexGridCss, maxZoom, panBy, zoomAbout, ZOOM_KEY, ZOOM_NOTCH_PX, ZOOM_WHEEL, type MapView } from '../surface/hybrid/view.ts';
 import { clockDays, clockJumps, offerStart, simClock, subscribeSimClock } from '../orbit/sim_clock.ts';
 import { portTimeText, type Subsolar } from '../orbit/sun.ts';
 import { wrapFocus } from '../workspace/focus_trap.ts';
@@ -70,6 +73,10 @@ const props = defineProps<{
 type State = 'waiting' | 'ready' | 'revealing' | 'full';
 
 const sheetEl = ref<HTMLCanvasElement | null>(null);
+const sharpEl = ref<HTMLCanvasElement | null>(null);
+/** Bumped when the sharp window shows or hides, so the canvas style follows it. */
+const sharpTick = ref(0);
+let sharp: ReturnType<typeof mountSharpView> | null = null;
 const marksEl = ref<HTMLCanvasElement | null>(null);
 const shadowEl = ref<HTMLCanvasElement | null>(null);
 const glowEl = ref<HTMLCanvasElement | null>(null);
@@ -237,14 +244,50 @@ function stageBox(): { w: number; h: number } {
 }
 
 function viewLimit(): number {
-    const m = model.value;
     const box = stageBox();
     const layout = activeLayout.value;
-    if (!m || !box.w) return 1;
-    return maxZoom(box.w, layout.width, layout.side, m.grid.n);
+    if (!box.w) return 1;
+    const m = model.value;
+    if (m) return maxZoom(box.w, layout.width, layout.side, m.grid.n);
+    const body = props.target ? worldMapData(props.target.body) : null;
+    const across = vanillaHexesAcross(body ? parseStat(body.size) : 1);
+    return maxZoom(box.w, layout.width, layout.width, across);
 }
 
-function applyView(next: MapView): void {
+function sharpRead() {
+    if (!large.value || state.value !== 'full' || !props.target) return null;
+    const box = stageBox();
+    if (!box.w || !box.h) return null;
+    const layout = activeLayout.value;
+    let vanilla: DiamondMapInputs | null = null;
+    if (mode.value !== 'enhanced') {
+        const spec = diamondMapSpec(props.target.body, props.target.hexKey);
+        if (!spec) return null;
+        vanilla = {
+            worldData: spec.worldData,
+            imageSeed: spec.seed,
+            masterSeed: VANILLA_MASTER_SEED,
+            continentalDefinition: CONTINENTAL_DEFINITION,
+            coastlineComplexity: COASTLINE_COMPLEXITY,
+            printMode: false,
+        };
+    } else if (!model.value) {
+        return null;
+    }
+    return {
+        active: true,
+        mode: mode.value,
+        model: model.value,
+        vanilla,
+        base: layout,
+        view: mapView.value,
+        stageW: box.w,
+        stageH: box.h,
+        dpr: devicePixelRatio(),
+    };
+}
+
+function applyView(next: MapView, reason: 'burst' | 'step' | 'pan' = 'step'): void {
     const box = stageBox();
     if (!large.value || !box.w) {
         mapView.value = FIT_VIEW;
@@ -252,6 +295,7 @@ function applyView(next: MapView): void {
         const zoom = Math.min(Math.max(1, next.zoom), viewLimit());
         mapView.value = panBy({ zoom, x: next.x, y: next.y }, box.w, box.h, 0, 0);
     }
+    sharp?.note(large.value ? reason : 'step');
     drawLayers();
 }
 
@@ -267,14 +311,34 @@ function drawLayers(): void {
     fitCanvas(canvas, Math.max(1, Math.round(sw * dpr)), Math.max(1, Math.round(sh * dpr)));
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    const m = model.value;
-    if (!hybrid.value || !m) return;
     const zoom = large.value ? mapView.value.zoom : 1;
     const ox = large.value ? mapView.value.x : 0;
     const oy = large.value ? mapView.value.y : 0;
     const cssPerSheet = (sw / layout.width) * zoom;
     const scale = cssPerSheet * dpr;
     ctx.setTransform(scale, 0, 0, scale, ox * dpr, oy * dpr);
+    if (large.value && mode.value !== 'enhanced' && sharp?.box.live && props.target) {
+        const sizeCode = parseStat(worldMapData(props.target.body).size);
+        if (sizeCode > 0) {
+            const colStep = layout.width / vanillaHexesAcross(sizeCode);
+            const hexCss = colStep * cssPerSheet;
+            const sheetLine = (hexGridCss(hexCss) * dpr) / Math.max(scale, 0.001);
+            ctx.save();
+            applyDiamondClip(ctx, layout.width, layout.height, 5);
+            drawHexGrid(ctx, layout.width, layout.height, sizeCode, 5, rgbaCss(HEX_STROKE), sheetLine);
+            ctx.restore();
+            drawDiamondSeparators(ctx, layout.width, layout.height, 5, rgbaCss(SEPARATOR_STROKE), sheetLine);
+        }
+    }
+    const m = model.value;
+    if (!hybrid.value || !m) {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        if (figureEl.value) {
+            figureEl.value.dataset.zoom = zoom.toFixed(2);
+            figureEl.value.dataset.sharp = sharp?.box.live ? 'live' : 'off';
+        }
+        return;
+    }
     const began = now();
     const oneCss = 1 / Math.max(cssPerSheet, 0.001);
     const hexCss = hexCssPx(sw, layout.width, layout.side, m.grid.n, zoom);
@@ -284,7 +348,7 @@ function drawLayers(): void {
         set: iconSet.value,
         tint,
         icons: symbols,
-        outlineWidth: oneCss,
+        outlineWidth: hexGridCss(hexCss) * oneCss,
         iconRadius: iconCss * oneCss,
         highlight: highlight.value,
     });
@@ -305,6 +369,7 @@ function drawLayers(): void {
         figureEl.value.dataset.gridPx = (oneCss * cssPerSheet * dpr).toFixed(2);
         figureEl.value.dataset.zoom = zoom.toFixed(2);
         figureEl.value.dataset.hexPx = hexCss.toFixed(1);
+        figureEl.value.dataset.sharp = sharp?.box.live ? 'live' : 'off';
     }
     hexBar.value = Math.round(hexCss);
 }
@@ -532,10 +597,12 @@ function start(): void {
             arrival.value = lastArrival;
             timing.value = { sheet: '0', worker: '', chunk: '0', cached: 'true' };
             scheduleIconWarm();
+            sharp?.note('step');
         }
         return;
     }
     state.value = 'waiting';
+    sharp?.note('step');
     beam.value = 'scan-down';
     void ticket.done.then((sheet) => {
         // A late answer for a body the visitor has left is dropped here as well as in the service.
@@ -549,6 +616,7 @@ function start(): void {
         };
         // No beam to wait for under reduced motion: the sheet simply appears.
         state.value = prefersReducedMotion() ? 'full' : 'ready';
+        if (state.value === 'full') sharp?.note('step');
         scheduleIconWarm();
     });
 }
@@ -563,13 +631,16 @@ function onBeamEnd(): void {
 }
 
 function onSheetEnd(): void {
-    if (state.value === 'revealing') state.value = 'full';
+    if (state.value === 'revealing') {
+        state.value = 'full';
+        sharp?.note('step');
+    }
 }
 
 function noteWidth(): void {
     const width = figureEl.value ? figureEl.value.clientWidth : 0;
     if (width && width !== viewPx.value) viewPx.value = width;
-    if (large.value) applyView(mapView.value);
+    if (large.value) applyView(mapView.value, 'burst');
     else drawLayers();
 }
 
@@ -614,10 +685,10 @@ function localPoint(event: { clientX: number; clientY: number }): { x: number; y
     return { x: event.clientX - rect.left, y: event.clientY - rect.top };
 }
 
-function zoomAtPoint(sx: number, sy: number, factor: number): void {
+function zoomAtPoint(sx: number, sy: number, factor: number, reason: 'burst' | 'step' = 'step'): void {
     const box = stageBox();
     if (!box.w) return;
-    applyView(zoomAbout(mapView.value, box.w, box.h, sx, sy, factor, viewLimit()));
+    applyView(zoomAbout(mapView.value, box.w, box.h, sx, sy, factor, viewLimit()), reason);
 }
 
 function zoomBy(factor: number): void {
@@ -657,7 +728,7 @@ function onStageKey(event: KeyboardEvent): void {
         if (pan) {
             const dx = event.key === 'ArrowLeft' ? box.w * 0.15 : event.key === 'ArrowRight' ? -box.w * 0.15 : 0;
             const dy = event.key === 'ArrowUp' ? box.h * 0.15 : event.key === 'ArrowDown' ? -box.h * 0.15 : 0;
-            applyView(panBy(mapView.value, box.w, box.h, dx, dy));
+            applyView(panBy(mapView.value, box.w, box.h, dx, dy), 'pan');
         } else {
             const dLon = event.key === 'ArrowLeft' ? -1 : event.key === 'ArrowRight' ? 1 : 0;
             const dLat = event.key === 'ArrowUp' ? 1 : event.key === 'ArrowDown' ? -1 : 0;
@@ -689,7 +760,7 @@ function onStageWheel(event: WheelEvent): void {
     if (event.deltaMode === 1) pixels *= 16;
     else if (event.deltaMode === 2) pixels *= stageBox().h;
     const factor = Math.pow(ZOOM_WHEEL, -pixels / ZOOM_NOTCH_PX);
-    zoomAtPoint(point.x, point.y, factor);
+    zoomAtPoint(point.x, point.y, factor, 'burst');
 }
 
 function onStageDown(event: PointerEvent): void {
@@ -733,12 +804,12 @@ function onStageMove(event: PointerEvent): void {
             { zoom: pinchStart.zoom, x: pinchStart.x, y: pinchStart.y },
             box.w, box.h, mid.x, mid.y, dist / pinchStart.dist, viewLimit(),
         );
-        applyView(zoomed);
+        applyView(zoomed, 'burst');
         return;
     }
     if (dragLast && pointers.size === 1) {
         const box = stageBox();
-        applyView(panBy(mapView.value, box.w, box.h, point.x - dragLast.x, point.y - dragLast.y));
+        applyView(panBy(mapView.value, box.w, box.h, point.x - dragLast.x, point.y - dragLast.y), 'pan');
         dragLast = point;
         return;
     }
@@ -778,6 +849,7 @@ function closeLarge(): void {
     if (!large.value) return;
     large.value = false;
     mapView.value = FIT_VIEW;
+    sharp?.note('step');
     highlight.value = null;
     document.removeEventListener('focusin', holdFocus);
     void nextTick(() => {
@@ -792,7 +864,33 @@ watch(() => props.target, start, { flush: 'post' });
 watch(() => props.sun, wake);
 watch(() => [simClock.playing, simClock.rate], wake);
 watch(hybrid, wake);
+const sharpOn = computed(() => {
+    sharpTick.value;
+    return sharp?.box.live === true;
+});
+const sharpStyle = computed(() => {
+    sharpTick.value;
+    const place = sharp?.box.placement;
+    return place ?? undefined;
+});
+
 onMounted(() => {
+    sharp = mountSharpView({
+        canvas: () => sharpEl.value,
+        read: sharpRead,
+        onChange: () => {
+            sharpTick.value += 1;
+            if (figureEl.value && sharp) figureEl.value.dataset.sharp = sharp.box.live ? 'live' : 'off';
+            // The vanilla hex grid is drawn in screen space only while the sharp window is up.
+            drawLayers();
+        },
+        onPaint: (info) => {
+            if (!figureEl.value) return;
+            figureEl.value.dataset.sharpMs = info.ms.toFixed(0);
+            figureEl.value.dataset.sharpKind = info.kind;
+            figureEl.value.dataset.sharpPx = String(info.pixels);
+        },
+    });
     mode.value = surfaceMode();
     offerStart(typeof props.startDays === 'number' ? props.startDays : nowDays.value);
     stopStyle = onMapStyle((next) => {
@@ -824,6 +922,8 @@ onMounted(() => {
     stageEl.value?.addEventListener('wheel', onStageWheel, { passive: false });
 });
 onBeforeUnmount(() => {
+    sharp?.stop();
+    sharp = null;
     if (stopMode) stopMode();
     if (stopStyle) stopStyle();
     if (stopClock) stopClock();
@@ -890,6 +990,7 @@ watch(highlight, () => drawLayers());
           :aria-label="'Surface map of ' + worldName"
           @animationend="onSheetEnd"
         />
+        <canvas ref="sharpEl" class="doss-sharp" :class="{ 'is-live': sharpOn }" :style="sharpStyle" aria-hidden="true" />
         <div class="doss-stage-daynight" :data-on="dayNight && hybrid ? 'true' : 'false'" aria-hidden="true">
           <canvas ref="shadowEl" class="doss-layer doss-shadow" :width="sheetW" :height="sheetH" />
           <canvas ref="glowEl" class="doss-layer doss-glow" :width="sheetW" :height="sheetH" />
@@ -1106,6 +1207,17 @@ watch(highlight, () => drawLayers());
   position: absolute;
   inset: 0;
   transform-origin: 0 0;
+}
+
+/* The sharp window sits on the bake, under the day and night layer. Hidden until its pixels are in. */
+.doss-sharp {
+  position: absolute;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.doss-sharp.is-live {
+  visibility: visible;
 }
 
 .doss-zoom-tools {

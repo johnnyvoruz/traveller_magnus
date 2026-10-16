@@ -23,7 +23,7 @@ const label = computed(() => {
       <span v-if="index === 7" class="doss-dash">{{ ribbon.dash }}</span>
       <span class="doss-cell">
         <b>
-          <CodeNote v-if="ribbonCellWords(cell.label, cell.digit)" :text="ribbonCellWords(cell.label, cell.digit) || ''" :quiet="quiet" :code="cell.label">{{ cell.digit }}</CodeNote>
+          <CodeNote v-if="ribbonCellWords(cell.label, cell.digit)" bare :text="ribbonCellWords(cell.label, cell.digit) || ''" :quiet="quiet" :code="cell.label">{{ cell.digit }}</CodeNote>
           <template v-else>{{ cell.digit }}</template>
         </b>
         <small>{{ cell.label }}</small>
@@ -58,6 +58,19 @@ const label = computed(() => {
   padding: 6px 1px 5px;
   border-radius: var(--r-2);
   background: var(--wash-faint);
+  transition: background var(--t-fast) var(--ease-out), box-shadow var(--t-fast) var(--ease-out);
+}
+
+.doss-cell:hover,
+.doss-cell:focus-within {
+  background: var(--wash);
+  box-shadow: inset 0 0 0 1px var(--signal-edge);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .doss-cell {
+    transition: none;
+  }
 }
 
 .doss-cell b {

@@ -1,33 +1,22 @@
-# Orchestrator state — 2026-10-15 20:55 (written for the next orchestrator session)
+# Orchestrator state — 2026-10-15 22:25 (written for the next orchestrator session)
 
-Overwritten every turn. History: `handoff.md` (last section 288; read by offset, it is large).
+Overwritten every turn. History: `handoff.md` (last section 291; read by offset, it is large).
 `orchestrator_start_here.md` is the 2026-10-07 page and is stale. This file and
 `board.md` are the state. Lane sessions D and Z were restarted at 19:30.
 
 ## Where the roadmap is
-Live: **1.2.1 (`55fe998`), engine e1.2**, truth v10; 0017 and 0018 applied; six example
-packages and twelve example games on production. **Called, not yet pushed (20:55): 1.2.2**,
-103 paths: the storefront, the ship traffic display, the published overview, package covers
-(0019), A's default art, the example covers (Z's Fix 1 accepted). Note
-`findings/push/release_2026-10-15.md`; rehearsed green in this session's scratchpad `outer23`.
+Live: **1.2.2 (`7b6f4e5`)**. **Called: 1.2.3** (`findings/push/release_2026-10-15b.md`, 37 paths: scroll fix, surface zoom, UWP tiles, seed guard). Held for 1.2.4: B's public course (ships with D's checkbox). Johnny has Z's cover-seed commands.
 
 ## Lanes
-All free (A, B, C, D, E, Z). F retired: never assign or propose. Next prompts are in the
-board's Queue (D: lime card and the featured row's heading; A: encoder export; B later:
-`family=`/`author=`).
+D go `d_store_2`; Z go `z_records_only` (answer at its foot); A, B, C, E free. F retired. Use the claude-in-chrome extension for live looks (Johnny's signed-in Chrome).
 
 ## Next turn
-1. Verify the push: `git log origin/campaign -1` must show "1.2.2 the marketplace as a
-   storefront…". Then: `d1_migrations` has 0019 (`wrangler d1 execute voyage --remote`),
-   the live index is the new one and holds a storefront string (e.g. "Most imported"),
-   `GET /api/public-games/overview?truthVersion=v10` signed out = 200 with
-   `public, max-age=60`, a catalogue card carries `cover`.
-2. Then give Johnny the `tools/examples/seed_production.mjs` cover commands (dry run first;
-   read the script's usage before writing them).
-3. Write D's follow-up prompt (lime public card; the featured heading) and A's encoder export.
+1. Verify 1.2.3 (`git log origin/campaign -1`, GitHub run, live index `index-CTGrh87X.js`), then in Chrome: /packages scrolls, a dossier's UWP tiles, the surface zoom.
+2. After Johnny runs the cover seed: `GET /api/packages` cards carry `cover`; then delete `findings/examples/local_backup_pre_covers`.
+3. Review D `d_store_2` and Z `z_records_only`. 1.2.4 = D's pass + B's held course paths (0020; read the code again) + Z's records-only if accepted.
 
 ## Versions
-Each push list bumps `APP_VERSION` in `apps/web/src/version.ts` (1.2.1 live; 1.2.2 called and on disk) and the commit message starts with it. Engine version is 1.2.0 on disk, 1.1.0
+Each push list bumps `APP_VERSION` in `apps/web/src/version.ts` (1.2.2 live; 1.2.3 called; next 1.2.4) and the commit message starts with it. Engine version is 1.2.0 on disk, 1.1.0
 live.
 
 ## Traps

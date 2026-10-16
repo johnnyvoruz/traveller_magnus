@@ -10,8 +10,21 @@ export const ZOOM_WHEEL = 1.1;
 export const ZOOM_NOTCH_PX = 100;
 /** One key or button step, the same as the chart's plus and minus keys. */
 export const ZOOM_KEY = 1.5;
-/** A hex at maximum zoom, in CSS pixels. Large enough to read the symbol in it. */
-export const HEX_READ_PX = 48;
+/**
+ * A hex at maximum zoom, in CSS pixels. 320 is about 6.7 times the old 48 px
+ * cap: one hex fills a reading width. Past the bake, sharp.ts redraws the
+ * window so that size stays crisp.
+ */
+export const HEX_READ_PX = 320;
+/** Grid stroke stays one CSS pixel until a hex is this wide, then grows to two at HEX_READ_PX. */
+export const HEX_GRID_QUIET_PX = 48;
+
+/** Hex-grid stroke in CSS pixels. One at the old cap, two at HEX_READ_PX. */
+export function hexGridCss(hexCss: number): number {
+    const span = HEX_READ_PX - HEX_GRID_QUIET_PX;
+    const t = span <= 0 ? 1 : (hexCss - HEX_GRID_QUIET_PX) / span;
+    return 1 + Math.max(0, Math.min(1, t));
+}
 
 export type MapView = {
     readonly zoom: number;

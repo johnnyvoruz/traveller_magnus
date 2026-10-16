@@ -16,6 +16,11 @@ export function rgbaCss(color: Rgba): string {
     return `rgba(${color.r},${color.g},${color.b},${color.a})`;
 }
 
+/** Hexes across the diamond sheet. planet_renderer.js 917-965. */
+export function vanillaHexesAcross(size: number): number {
+    return Math.max(1, Math.round(Math.PI * Math.max(size, 0) * 1600 / 1005));
+}
+
 /** planet_renderer.js 917-965 */
 export function drawHexGrid(
     ctx: CanvasRenderingContext2D,
@@ -24,9 +29,10 @@ export function drawHexGrid(
     size: number,
     numLobes: number,
     stroke: string = rgbaCss(HEX_STROKE),
+    lineWidth = 0.6,
 ): void {
     if (size <= 0) return;
-    const hexesAcross = Math.max(1, Math.round(Math.PI * size * 1600 / 1005));
+    const hexesAcross = vanillaHexesAcross(size);
     const colStep = W / hexesAcross;
     const R       = colStep / Math.sqrt(3);
     const rowStep = 1.5 * R;
@@ -40,7 +46,7 @@ export function drawHexGrid(
     const xPhase = numLobes ? colStep / 2 : 0;
 
     ctx.strokeStyle = stroke;
-    ctx.lineWidth   = 0.6;
+    ctx.lineWidth   = lineWidth;
 
     const rowCount = Math.ceil(H / rowStep) + 2;
     const colCount = hexesAcross + 2;
@@ -98,12 +104,13 @@ export function drawDiamondSeparators(
     H: number,
     N: number,
     stroke: string = rgbaCss(SEPARATOR_STROKE),
+    lineWidth = 1,
 ): void {
     const hw      = W / (2 * N);
     const bandTop = Math.round(POLE_FRAC * H);
     const bandBot = H - bandTop;
     ctx.strokeStyle = stroke;
-    ctx.lineWidth   = 1.0;
+    ctx.lineWidth   = lineWidth;
     for (let li = 0; li <= N; li++) {
         const cx = li * W / N;
         ctx.beginPath();

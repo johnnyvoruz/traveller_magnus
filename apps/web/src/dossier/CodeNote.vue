@@ -13,7 +13,9 @@ const props = withDefaults(defineProps<{
     /** Show the sentence while a parent control, such as the row button, has focus. */
     force?: boolean;
     code?: string;
-}>(), { quiet: false, force: false, code: '' });
+    /** A tile already reads as a control, so it keeps the note without the dotted underline. */
+    bare?: boolean;
+}>(), { quiet: false, force: false, code: '', bare: false });
 
 const root = ref<HTMLElement | null>(null);
 const hover = ref(false);
@@ -74,6 +76,7 @@ onBeforeUnmount(clearOutside);
   >
     <span
       class="doss-note-term"
+      :class="{ 'doss-note-underline': !props.bare }"
       :tabindex="props.quiet ? undefined : 0"
       :aria-describedby="open ? tipId : undefined"
       @focus="focused = true"
@@ -92,10 +95,14 @@ onBeforeUnmount(clearOutside);
 }
 
 .doss-note-term {
+  text-decoration: none;
+  cursor: help;
+}
+
+.doss-note-underline {
   text-decoration: underline dotted;
   text-decoration-color: var(--text-muted);
   text-underline-offset: 2px;
-  cursor: help;
 }
 
 .doss-note-term:focus-visible {

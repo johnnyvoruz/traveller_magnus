@@ -150,3 +150,35 @@ Lane A, auth (from `contracts/b_auth.md`, this same pass): link Google, Discord,
 Lane D, the switch: read `publicGames` from `GET /api/universes` and from `GET /api/universes/:id`. It is a boolean when 0013 is present and absent otherwise. Do not treat a missing field as on.
 
 Lane D: the local passkey recipe is in `contracts/b_auth.md`. `BETTER_AUTH_URL` is the page origin (`localhost`, not `127.0.0.1`), and `wrangler dev` needs `--host localhost:<port> --local-upstream localhost:<port>`. Production `rpID` is `traveller.voyage` and the expected origin is `https://traveller.voyage`, from `BETTER_AUTH_URL` in `wrangler.toml`, not from the request host.
+
+## Course ahead (0020) — for Lane D
+
+A public card gains `course`. It is the ship's track legs that have not arrived at the campaign date, in track order: the leg under way, then the planned legs. `legs` stays the finished legs only. A leg is in one list or the other, never both.
+
+Each course leg has the same shape as a finished leg: `from`, `to`, `departs`, `arrives`. `from` and `to` are system hex keys (`sector/1910`). The track already stores both ends and both dates for a leg that is still ahead, so there is no second type. A body, a point, and a note are left out. An end that is not a chart hex drops that whole leg. The list is empty when nothing ahead has two chart ends.
+
+`PublicShipCard` in `packages/shared/src/schemas/public_games.ts` requires `course`. Draw it as the route still to come. Draw nothing when the array is empty. An open 1.2.2 tab reads answers leniently and drops the key. Do not require the key in a parser that an old bundle still ships.
+
+The course shares the card's byte budget (`PUBLIC_CARD_BYTES`, 100,000). The measured bytes are the stored `legs` JSON, the stored `course` JSON, and the stored `journal` JSON, added together. Over the budget, the oldest finished legs are dropped first, then the oldest notes. The course is kept whole, even when it alone is over the budget.
+
+### The switch
+
+`universes.show_course` is an integer, default 1 (on). Migration `apps/api/src/db/migrations/0020_public_course.sql` adds it and adds `public_cards.course` (`text NOT NULL DEFAULT '[]'`). Neither column is on a Drizzle table. A whole-row read would fail before 0020.
+
+It sits beside `show_referee` and is set on the same route, `PATCH /api/universes/:id/public-games`.
+
+`PublicGamesSetting` gains optional `showCourse`. A body that is only `{ public }` does not change `show_course`. A body may set `showCourse` without sending `showReferee`. The other switch stays as it was.
+
+When 0020 is applied, the PATCH answer is `{ public, showReferee, showCourse }` if 0018 is also applied, which it is wherever 0020 has been applied. `showCourse` is a boolean. `GET /api/universes` and `GET /api/universes/:id` add `showCourse` for the owner on the same rule as `showReferee`: the key is absent until 0020. A new universe is on (`true` when the field is present). `Universe.showCourse` is optional in `packages/shared/src/schemas/campaign.ts`.
+
+When the switch is off, every card of that game has `course: []`. The PATCH rewrites the cards before it answers, the same way a public-games write already rewrites the mark while public is on. Refetch `GET /api/public-ships/:mark` after the PATCH. The PATCH body does not include the card.
+
+### Before 0020
+
+The Worker answers `course: []` on every card and does not store a course. It treats the switch as on, and it does not save a value, because the column is not there.
+
+A PATCH that includes `showCourse` before both columns exist is 503 `course_unavailable`, with the sentence "The course switch is not available yet." Nothing else in that request is saved. A PATCH that does not include `showCourse` still turns public on or off, and still sets `showReferee` when 0018 is applied.
+
+The probe is the same shape as the cover probe: a yes is remembered for the isolate, a no is asked again. Applying 0020 does not need a Worker restart. The deploy and the migration can land in either order.
+
+A card row written before 0020 keeps `course` as `[]` until the next public write. That write is a campaign save that already refreshes the mark, or a public-games PATCH while the game is on. The card read does not open the campaign.

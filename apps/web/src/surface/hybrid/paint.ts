@@ -57,9 +57,19 @@ export type HybridPaintJob = {
     readonly longestMs: number;
 };
 
+export type HybridPaintOptions = {
+    /**
+     * Sheet the accents were placed on. Defaults to `layout`.
+     * A sharp window passes the bake, so craters stay where the bake put them.
+     */
+    readonly place?: SheetLayout;
+    /** A sharp window passes false: its field is large and is not kept. */
+    readonly cacheField?: boolean;
+};
+
 /** The sheet in one call. */
-export function paintHybrid(model: HybridModel, layout: SheetLayout): Uint8ClampedArray {
-    const job = createHybridPaint(() => model, layout, () => 0, Number.POSITIVE_INFINITY);
+export function paintHybrid(model: HybridModel, layout: SheetLayout, options?: HybridPaintOptions): Uint8ClampedArray {
+    const job = createHybridPaint(() => model, layout, () => 0, Number.POSITIVE_INFINITY, [], null, options);
     while (!job.step()) { /* runs to the end in one step */ }
     return job.pixels;
 }
@@ -69,8 +79,11 @@ export function paintHybrid(model: HybridModel, layout: SheetLayout): Uint8Clamp
  * steps one per turn (modelPreparation), one model slice per turn when a build is passed,
  * the field rows, the height rows, the colour rows, then coasts and accents.
  */
-export function createHybridPaint(modelOf: () => HybridModel, layout: SheetLayout, clock: () => number, budgetMs: number, prepare: readonly (() => void)[] = [], modelBuild: HybridBuild | null = null): HybridPaintJob {
+export function createHybridPaint(modelOf: () => HybridModel, layout: SheetLayout, clock: () => number, budgetMs: number, prepare: readonly (() => void)[] = [], modelBuild: HybridBuild | null = null, options?: HybridPaintOptions): HybridPaintJob {
     const { width: W, height: H } = layout;
+    const place = options?.place ?? layout;
+    const detail = layout.side > place.side + 1e-3;
+    const cacheField = options?.cacheField !== false;
     const out = new Uint8ClampedArray(W * H * 4);
     let model: HybridModel | null = null;
     let field: Field | null = null;
@@ -100,13 +113,13 @@ export function createHybridPaint(modelOf: () => HybridModel, layout: SheetLayou
                     phase = 0.25;
                     break;
                 }
-                build = fieldBuild(layout, model.grid.n);
+                build = fieldBuild(layout, model.grid.n, cacheField);
                 field = build.field;
                 h = new Float32Array(W * H);
                 phase = 0.5;
                 if (spent()) break;
             } else if (phase === 0.25) {
-                build = fieldBuild(layout, (model as HybridModel).grid.n);
+                build = fieldBuild(layout, (model as HybridModel).grid.n, cacheField);
                 field = build.field;
                 h = new Float32Array(W * H);
                 phase = 0.5;
@@ -129,12 +142,12 @@ export function createHybridPaint(modelOf: () => HybridModel, layout: SheetLayou
                 if (row >= H) { phase = 2; row = 0; }
                 if (spent()) break;
             } else if (phase === 2) {
-                paintRow(out, field as Field, model as HybridModel, h as Float32Array, row);
+                paintRow(out, field as Field, model as HybridModel, h as Float32Array, row, detail);
                 row += 1;
                 if (row >= H) phase = 3;
                 if (spent()) break;
             } else if (phase === 3) {
-                finish(out, field as Field, model as HybridModel, h as Float32Array);
+                finish(out, field as Field, model as HybridModel, h as Float32Array, place);
                 phase = 4;
                 break;
             } else {
@@ -152,7 +165,7 @@ export function createHybridPaint(modelOf: () => HybridModel, layout: SheetLayou
     };
 }
 
-function paintRow(out: Uint8ClampedArray, field: Field, model: HybridModel, h: Float32Array, y: number): void {
+function paintRow(out: Uint8ClampedArray, field: Field, model: HybridModel, h: Float32Array, y: number, detail: boolean): void {
     const layout = field.layout;
     const { width: W, height: H } = layout;
     const sea = seaColoursOf(model.world.liquid);
@@ -238,7 +251,8 @@ function paintRow(out: Uint8ClampedArray, field: Field, model: HybridModel, h: F
             const hy1 = y + 1 < H && field.face[k + W] >= 0 ? h[k + W] : hN;
             const hy0 = y > 0 && field.face[k - W] >= 0 ? h[k - W] : hN;
             const shade = 1 + clamp(((hx0 - hx1) + (hy0 - hy1)) * 9 * (layout.side / 136), -0.28, 0.28);
-            const grain = 1 + 0.05 * model.texture([p[0] * 7, p[1] * 7, p[2] * 7]);
+            let grain = 1 + 0.05 * model.texture([p[0] * 7, p[1] * 7, p[2] * 7]);
+            if (detail) grain += 0.045 * model.fineGrain(p);
             c = [c[0] * shade * grain, c[1] * shade * grain, c[2] * shade * grain];
         }
         if (nearEdge) {
@@ -260,7 +274,7 @@ function paintRow(out: Uint8ClampedArray, field: Field, model: HybridModel, h: F
     }
 }
 
-function finish(out: Uint8ClampedArray, field: Field, model: HybridModel, h: Float32Array): void {
+function finish(out: Uint8ClampedArray, field: Field, model: HybridModel, h: Float32Array, place: SheetLayout): void {
     const { width: W, height: H } = field.layout;
     const sr = model.seaRank;
     // Coastline.
@@ -276,7 +290,7 @@ function finish(out: Uint8ClampedArray, field: Field, model: HybridModel, h: Flo
             }
         }
     }
-    paintAccents(out, field, model, h);
+    paintAccents(out, field, model, h, place);
 }
 
 function blendPixel(out: Uint8ClampedArray, field: Field, x: number, y: number, rgb: RGB, alpha: number): void {
@@ -320,8 +334,17 @@ function stampCrater(out: Uint8ClampedArray, field: Field, cx: number, cy: numbe
     }
 }
 
-function paintAccents(out: Uint8ClampedArray, field: Field, model: HybridModel, h: Float32Array): void {
+/** A point on `place` in `layout` pixels. The same sheet returns the point unchanged. */
+function placedPoint(place: SheetLayout, layout: SheetLayout, x: number, y: number): [number, number] {
+    if (place === layout) return [x, y];
+    const nx = (x + 0.5 - place.ox) / place.side;
+    const ny = (y + 0.5 - place.oy) / place.side;
+    return [layout.ox + nx * layout.side - 0.5, layout.oy + ny * layout.side - 0.5];
+}
+
+function paintAccents(out: Uint8ClampedArray, field: Field, model: HybridModel, h: Float32Array, place: SheetLayout): void {
     const layout = field.layout;
+    const fit = layout.side / place.side;
     const r = (layout.side / model.grid.n) * 0.36;
     for (const hx of model.hexes) {
         const isVolcano = hx.accents.includes('VO');
@@ -333,17 +356,30 @@ function paintAccents(out: Uint8ClampedArray, field: Field, model: HybridModel, 
     }
     if (model.airless) {
         // Decorative small craters. Their own stream ('cr'), never the terrain's.
+        // Count and positions stay on `place` (the bake) so a window does not move them.
         const rnd = mulberry32(hashString('hybrid-craters-' + model.world.seed));
-        const count = Math.round(420 * (layout.width * layout.height) / (800 * 400));
-        const scale = layout.side / 136;
+        const count = Math.round(420 * (place.width * place.height) / (800 * 400));
+        const scale = place.side / 136;
         for (let i = 0; i < count; i += 1) {
-            const x = Math.floor(rnd() * layout.width);
-            const y = Math.floor(rnd() * layout.height);
+            const x = Math.floor(rnd() * place.width);
+            const y = Math.floor(rnd() * place.height);
             const size = (1.5 + rnd() * rnd() * 9) * scale;
-            const k = y * layout.width + x;
-            if (field.face[k] < 0) continue;
-            if (model.seaRank > 0 && h[k] < model.seaRank) continue;
-            stampCrater(out, field, x, y, size);
+            const [fx, fy] = placedPoint(place, layout, x, y);
+            const reach = size * fit + 2;
+            if (fx < -reach || fy < -reach || fx >= layout.width + reach || fy >= layout.height + reach) continue;
+            if (place === layout) {
+                const k = y * layout.width + x;
+                if (field.face[k] < 0) continue;
+                if (model.seaRank > 0 && h[k] < model.seaRank) continue;
+                stampCrater(out, field, x, y, size);
+            } else {
+                const sx = Math.max(0, Math.min(layout.width - 1, Math.floor(fx)));
+                const sy = Math.max(0, Math.min(layout.height - 1, Math.floor(fy)));
+                const k = sy * layout.width + sx;
+                if (field.face[k] < 0) continue;
+                if (model.seaRank > 0 && h[k] < model.seaRank) continue;
+                stampCrater(out, field, fx, fy, size * fit);
+            }
         }
     }
 }
