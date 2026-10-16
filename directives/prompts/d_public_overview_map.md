@@ -69,3 +69,6 @@ Stop when the gates pass and the report is written. Write
 After each meaningful step append one line under Progress: "done: X. next: Y."
 
 ## Progress
+done: overview reader + watch (public_games.ts), glow + pings off the hex zoom (MapRenderer paintOverview, ShipPings far), TOUCH_PX targets on darts and own ships, card steps through a hex's ships (1 of N); tests/web/public_overview_map.test.js; my older assertions updated. next: browser check, once B's route is in.
+done: browser pass on Z's example games (stack 1 of 2 with Next/Previous at 1600 and 390; finger 14 px off a far dart opens the card, on the world opens the world; finger beside own ship opens Party); overview preview shots with a page-made answer (B's route not in); glow strengthened. Servers stopped. next: gates and report.
+done: gates pass (1771 tests, 0 fail; check clean; typecheck; build); servers stopped; report written as partial. next: the zoomed-out browser check on B's real route once reports/b_public_overview.md is in.

@@ -1,19 +1,18 @@
 # Board
 
-One line per lane. Only the orchestrator edits this file. Updated 2026-10-14 20:05 (by the clock).
+One line per lane. Only the orchestrator edits this file. Updated 2026-10-15 19:40 (by the clock).
 
-**Last push: `2680edf` (1.2.0 amended without the WAV, force-pushed 19:45), version 1.2.0 (the marketplace), engine e1.2, 2026-10-14, live** (live
-index `index-DF2lx3IJ.js`; `GET /api/packages` signed out answers 200 with no items). Truth v10.
+**Last push: `55fe998`, version 1.2.1, engine e1.2, 2026-10-14, live** (index `index-UTD7M5x3.js`; 0017 and 0018 applied: the signed-out feed answers 200). Truth v10.
 **Deploys run on push** (Johnny, 2026-10-14): push commands no longer include `npm run deploy:ci`.
 
 | Lane | Status | Current prompt | Blocker / next |
 |---|---|---|---|
-| A | free | (none) | `a_party_ships` accepted |
-| B | pause | prompts/b_public_overview.md | started early by Johnny; no code changed yet (20:05); pause until 1.2.1 is pushed |
+| A | free | (none) | `a_store_art` accepted: 8 kind defaults (apps/web/public/covers/), 4 example covers; contact sheet findings/art/store_art_contact_sheet.png awaits Johnny |
+| B | free | (none) | `b_public_overview` accepted (its two red tests were Z's mid-run; green on the combined tree) |
 | C | free | (none) | `c_example_games` with Fix 1 accepted |
-| D | pause | prompts/d_public_overview_map.md | started early by Johnny; no code changed yet (20:05); pause until 1.2.1 is pushed |
+| D | free | (none) | `d_storefront` accepted 20:50 (kb26 shots; in push 1.2.2). Next, not written: the lime public card and the featured row's heading (Queue) |
 | E | free | (none) | `e_example_packs` Fix 2 accepted |
-| Z | free | (none) | `z_example_packages` done: F15, F16, loader, copy, games seed; rehearsed on the twelve |
+| Z | free | (none) | `z_package_covers` Fix 1 accepted 20:50 (both covers looked at: no chrome, framed). Cover seeding on production after 1.2.2 is live |
 | F | retired | (none) | Johnny, 2026-10-11: unreliable (runs out of budget); do not use or propose until he says it is back |
 
 ## Naming (Johnny, 2026-10-14)
@@ -140,7 +139,7 @@ lane's letter as the first message of a new session; from then on "go" is enough
   the blank request body (read from what the server stored).
 
 ## Pending push
-**App 1.2.1 called for, 2026-10-14 19:55, not yet pushed at 20:05 (origin still 2680edf):** `findings/push/release_2026-10-14e.md` (161 paths, migrations 0017 and 0018). Rehearsed in `scratchpad/outer21` on 2680edf: 1757 / 1717 / 0 fail; check, typecheck, build clean.
+(none called; held on Open with Johnny 1 to 4). **Next 1.2.2, on disk and green at 10:05** (1791 tests, 0 fail; check; typecheck; build `index-AhKLQxxr.js`): B overview route; D traffic display (tracks, sweep, phone targets, 1 of N; `ShipPings.vue` and `PublicShipCard.vue` deleted); Z covers server (0019, `routes/package_covers.ts`, F17) and the example tools' cover step; A's covers (`apps/web/public/covers/`, `tools/examples/covers/`) only once Johnny passes the contact sheet; the lowercase example handle. Never `findings/art/originals/`. The ten parked truth-build files stay out. Rehearse with clean_copy21 renamed (outer22). After the push, Johnny runs `seed_production.mjs --production` (dry, then `--apply`) to put covers on the six example packages.
 
 ## Shared files, this turn (2026-10-14 18:30)
 - B: apps/api, packages/shared (not Z's package.ts), campaign/store.ts and commit.ts (lent), the browser's read-parse call sites.
@@ -155,6 +154,11 @@ lane's letter as the first message of a new session; from then on "go" is enough
   free-traders-of-the-marches/ and the-glass-hand/ (E). No lane runs anything against production.
 
 ## Decisions from Johnny
+- 2026-10-15 10:05, orchestrator (Z's questions): covers count against no quota (one pair per package, at most 2.2 MB, a replaced pair is deleted); a hidden package's cover shows only to admins, as its page does (2026-10-14 15:45); Z's two map covers are retaken without the app chrome (Fix 1).
+- 2026-10-15, Johnny: nothing on the site is ever sold ("we can't charge money for anything"); the marketplace borrows store patterns because users know them. Import is the buy button.
+- 2026-10-15 08:55, Johnny (storefront): a package uses its records' art when it has some; sectors get a generic default or the publisher's pasted screenshot (no automatic snapshot yet); the Grok lanes (A, B, C, E; Z enhanced) make the images themselves and say so if they cannot; style is RPG concept art with no shared palette ("too same-y"). Orchestrator: cover order upload, then first record image, then the kind default; everything free, Import is the buy button (Johnny may overrule); a takedown pulls an uploaded cover off the public bucket.
+- 2026-10-14 21:00, Johnny (live map): ships barely visible at the hex zoom and absent zoomed out; lose the "Example" text; "think tactical CIC or air traffic control"; blips must not fight the map, "way way way too cluttered". Orchestrator design in `d_traffic_display.md` (decided): constant-size diamond, dark casing, one measured `--chart-traffic`, own ships filled cyan / others open, invisible 6 s sweep that paints each track, no text at rest, hover data block, click zoomed out flies to the hex; card keeps one quiet "Example game" footer line (Johnny may drop it). A dimmed "scope" view with a track list only if Johnny asks after the shots.
+- 2026-10-14 20:35: example content is live on production (six packages by traveller_voyage, twelve example games, 18 ships). Removal: `--production --remove --apply` on `seed_production.mjs` and `seed_games.mjs`.
 - 2026-10-14 19:35, Johnny: remove the 1.2.0 WAV from history (amend 20fc3c8, force-push with lease; `*.wav` ignored in versionvideo); yes to public ships glowing and pinging when zoomed out (B overview feed, D drawing, after 1.2.1).
 - 2026-10-14 19:20, orchestrator: example handles follow `judgeUsername`; example emails `<handle>@example.invalid`. D's zoomed-out ships question asked.
 - 2026-10-14 18:45, orchestrator (Z questions): links travel in a package (F16, ends both published); house universes stay live; Hollow Verge keeps the engine's names; provenance left; records packs keep their charted hexes. Production order: push 1.2.1, then the package copy, then the example games.
@@ -427,7 +431,15 @@ lane's letter as the first message of a new session; from then on "go" is enough
 - 2026-10-14, a Back "<" left of the pane's X: one pane back; X still closes the pane.
 
 ## Open with Johnny
-(none)
+Nothing. Answered 2026-10-15 19:40, "yes to all four": (1) the public ship card goes lime
+to match its track: a D follow-up after `d_storefront`; (2) the lead's tag stays off at
+rest, name on hover, as built; (3) A's covers ship as they are; (4) the ship display ships.
+
+## Decided by the orchestrator, 2026-10-15 (D's storefront questions)
+1. Kind chips and "More by" filter in the browser over the loaded page (up to 100 cards) while the catalogue is small; B adds `family=` and `author=` queries later (Queue).
+2. Focus stays the manifesto's one amber ring; cyan only on Import, the active chip and hover borders.
+3. A new package's cover goes up once its first version is accepted; a refused cover does not stop the publish; an existing package's cover changes only on its page.
+4. Signed out, Import goes to social sign-in as before; the passkey modal waits for B's auth in pushes.
 
 ## Decided by the orchestrator, 2026-10-13
 - The public games feed leaves out the caller's own universes (built, B).
@@ -456,6 +468,13 @@ lane's letter as the first message of a new session; from then on "go" is enough
   2; after the push).
 
 ## Queue (prompts not yet written)
+- D, with the lime card: the featured row is headed "Most imported" while every package has 0 imports (it shows the latest three). Head it truthfully, or hide it until something has been imported.
+- A: export `encodeWebp` and `sha256Hex` from `campaign/images.ts`; D's `market/cover_image.ts` then imports them (two copies of one encoder today).
+- B, later: catalogue `family=` and `author=` queries (D's question 1).
+- Someone checks Z's note: the map draws the Hollow Verge own sector about 15 hexes from where Z's slot-to-hex arithmetic put it. Z's arithmetic may be the wrong one; a note, not a fault yet.
+- Johnny, after 1.2.2 is live: `seed_production.mjs` cover commands (Z's pair is accepted).
+- D, after `d_storefront`: the public ship card's name, border and route line in
+  `--chart-traffic` (lime) to match its track (Johnny, 2026-10-15, answer 1).
 - After 1.1.12: Johnny rebuilds v10 locally, uploads (`tools/truth/upload_truth.js`, bulk
   over R2's S3 interface, keys in `.env`) and releases. His commands only.
 - D: E's suggested words ("Full system, from the star outward."); the Build pane saying

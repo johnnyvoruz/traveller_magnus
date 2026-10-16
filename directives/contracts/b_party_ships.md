@@ -240,4 +240,34 @@ Everything the feed still withholds, plus:
 
 `detectPublicCards` reads `sqlite_master` for `public_cards` once per isolate.
 
-When the table is missing, the feed is the 0017 feed (no `example` key, signed-in only) and `PATCH` ignores `showReferee`. The card route is 503 for a signed-in caller. `showReferee` is omitted from universe reads.
+When the table is missing, the feed is the 0017 feed (no `example` key, signed-in only) and `PATCH` ignores `showReferee`. The card route is 503 for a signed-in caller. `showReferee` is omitted from universe reads. The overview is 401 for a signed-out caller, the same as that feed.
+
+## The overview
+
+`GET /api/public-games/overview?truthVersion=` is the zoomed-out picture. One item per hex that holds at least one public ship on that chart version:
+
+```
+{ hexes: [ { key: "Spinward_Marches/1910", count: 2 } ] }
+```
+
+`key` is the full hex key. `count` is the number of public ship rows on that hex. The array is ordered by `key`. `PUBLIC_OVERVIEW_MAX` is 20,000. Past that, the query stops and the later keys are omitted.
+
+The body is the same for every caller. It includes the caller's own ships. A shared cache can store one answer: `Cache-Control: public, max-age=60`. That is acceptable because the body is counts on hexes. It does not name a ship, a game, or a person, and the caller already knows their own ship. The sector feed still leaves the caller's own games out, because that feed names the ships.
+
+Signed in or signed out once migration 0018 is applied. Before 0018, a signed-out caller is 401, as on the sector feed. A recovery session is still 403. The rate limit is the feed's limit: 60 calls in 60 seconds, counted by user id when signed in and by `CF-Connecting-IP` when signed out. The overview and the sector feed share that budget.
+
+One query groups `public_ships` by sector and local hex, joined to universes that are still live and still public. `public_ships_chart` leads with `truth_version`, so the filter is that index. The join still reads `universe_id` off each row, so a wider index would not make the query index-only. No further index is added. Before `public_ships` exists the answer is `{ hexes: [] }` for a signed-in caller, with the same cache header.
+
+A sector slug that starts with `~` is excluded in the query, and so is a local hex that is not four digits. A game with public off, or a deleted universe, contributes no rows.
+
+Errors, before the query: 400 `validation`, `truthVersion is required.` 400 `validation`, `Invalid request.` when the version fails `PublicGamesTruthVersion`. Those responses are not given the public cache header.
+
+### What must never appear in the overview
+
+Every key of a sector-feed hex, and any name:
+
+- `hex`, `name`, `ships`, `mark`, `ship`, `aboard`, `example`, `game`
+- `universeId`, `ownerId`, `authorId`, `userId`, `handle`, `email`
+- `vesselId`, `memberIds`, `recordId`, and any `cr_` id
+- `bodyKey`, `point`, `jump`, `referee`, `player`, `journal`, `notes`, `sheet`
+- a key whose sector starts with `~`

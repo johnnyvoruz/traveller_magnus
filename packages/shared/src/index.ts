@@ -78,10 +78,13 @@ export {
     PUBLIC_CARD_BYTES,
     PUBLIC_CARD_ENTRIES,
     PUBLIC_NAMES_PER_SHIP,
+    PUBLIC_OVERVIEW_MAX,
     PUBLIC_SHIPS_PER_HEX,
     PublicFinishedLeg,
     PublicGamesSetting,
     PublicGamesHex,
+    PublicGamesOverview,
+    PublicGamesOverviewHex,
     PublicJournalNote,
     PublicShipCard,
     PublicShipMark,
@@ -213,3 +216,4 @@ export { parseXmlElements, parseMetadataXml } from './parsers/metadata_xml.ts';
 export type { XmlEl, MetadataXml } from './parsers/metadata_xml.ts';
 export { EXTRA_LINE_GUARD, EXTRA_LINE_MIN, extraFieldName, numberedSkillLabels, parseExtraName } from './character_extra.ts';
 export type { ExtraLineName, ExtraPart } from './character_extra.ts';
+export { PackageCover } from './schemas/package.ts';

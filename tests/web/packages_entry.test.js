@@ -57,7 +57,9 @@ describe('my packages entry', { concurrency: 1 }, () => {
     test('a cold load of /packages/:packageId renders the package shell', async () => {
         session.user = null;
         const html = await renderAt('/packages/anything');
-        assert.match(html, /<h1 class="mk-title">Package<\/h1>/);
+        // The product page's title is its hero's h1, painted once the package is read.
+        assert.match(html, /aria-label="Loading the package"/);
+        assert.doesNotMatch(html, /class="mk-title"/);
         assert.match(html, /href="\/packages"/);
         assert.doesNotMatch(html, /Loading packages/);
         assert.doesNotMatch(html, /coming soon/i);

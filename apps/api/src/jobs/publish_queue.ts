@@ -5,6 +5,65 @@ import type { PublishSources } from '../universe/publish_read.ts';
 
 const HASH = /^[0-9a-f]{64}$/;
 
+// F17. Cover art, kept here so the job and its node tests need no route module.
+let ready = false;
+
+/** 0019 probe. A yes is kept for the isolate; a no is asked again, so applying the migration needs no restart. */
+export async function coversReady(env: Env): Promise<boolean> {
+    if (ready) return true;
+    try {
+        const row = await env.DB.prepare(`SELECT COUNT(*) AS n FROM pragma_table_info('packages') WHERE name = 'cover_hash'`).first<{ n: number }>();
+        ready = Number(row?.n ?? 0) > 0;
+    } catch {
+        // A database that cannot answer the probe has no covers.
+        ready = false;
+    }
+    return ready;
+}
+
+export type ArtPair = { hash: string; thumbHash: string };
+
+/** The first image of the first record that has one, in record order. */
+export function recordArt(records: unknown[]): ArtPair | null {
+    for (const record of records) {
+        if (!record || typeof record !== 'object') continue;
+        const images = (record as { images?: unknown }).images;
+        if (!Array.isArray(images) || images.length === 0) continue;
+        const first = images[0] as { hash?: unknown; thumbHash?: unknown } | null;
+        if (first && typeof first.hash === 'string' && HASH.test(first.hash) && typeof first.thumbHash === 'string' && HASH.test(first.thumbHash)) {
+            return { hash: first.hash, thumbHash: first.thumbHash };
+        }
+    }
+    return null;
+}
+
+/** Written by the publish job, and by `fillArt` for a version published before 0019. */
+export async function storeArt(env: Env, packageId: string, version: number, art: ArtPair | null, imageHashes: string[]): Promise<void> {
+    if (!(await coversReady(env))) return;
+    await env.DB.prepare(
+        `UPDATE package_versions SET art_hash = ?, art_thumb_hash = ?, image_hashes = ?, art_filled = 1 WHERE package_id = ? AND version = ?`,
+    ).bind(art?.hash ?? null, art?.thumbHash ?? null, JSON.stringify(imageHashes), packageId, version).run();
+}
+
+/**
+ * The backfill: a done version published before 0019 gets its record art and image hashes
+ * from its manifest once, on first read. A taken-down version is read from where takedown keeps it.
+ */
+export async function fillArt(env: Env, packageId: string, version: number): Promise<void> {
+    const object = await env.PUBLIC_BUCKET.get(`packages/${packageId}/${version}/manifest.json`)
+        ?? await env.PRIVATE_BUCKET.get(`takedown/packages/${packageId}/${version}/manifest.json`);
+    if (!object) return;
+    const parsed = PackageManifest.safeParse(JSON.parse(await object.text()));
+    if (!parsed.success) return;
+    const records = await env.PUBLIC_BUCKET.get(`objects/${parsed.data.records.contentHash}`);
+    let list: unknown[] = [];
+    if (records) {
+        const value = JSON.parse(await records.text()) as unknown;
+        if (Array.isArray(value)) list = value;
+    }
+    await storeArt(env, packageId, version, recordArt(list), parsed.data.records.imageHashes);
+}
+
 export class PublishRefusal extends Error {
     readonly details: unknown;
 
@@ -223,6 +282,7 @@ async function finishStored(env: Env, packageId: string, version: number, text: 
     const contentHash = parsed.records.contentHash;
     const recordsObject = await env.PUBLIC_BUCKET.head(`objects/${contentHash}`);
     const bytes = new TextEncoder().encode(text).byteLength + (recordsObject?.size ?? 0);
+    await fillArt(env, packageId, version);
     await markDone(env, packageId, version, manifestHash, contentHash, bytes);
 }
 
@@ -322,6 +382,8 @@ export async function runPublish(env: Env, message: { packageId: string; version
     });
     const manifestText = stable(manifest);
     await env.PUBLIC_BUCKET.put(manifestKey, manifestText, { httpMetadata: { contentType: 'application/json' } });
+    // F17. The record-art pair is worked out here, so the catalogue never opens a manifest.
+    await storeArt(env, message.packageId, message.version, recordArt(resolved.records), imageHashes);
     const bytes = new TextEncoder().encode(manifestText).byteLength + new TextEncoder().encode(recordsText).byteLength + new TextEncoder().encode(linksText).byteLength + imageBytes;
     await markDone(env, message.packageId, message.version, await sha256Hex(manifestText), contentHash, bytes);
 }

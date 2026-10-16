@@ -61,6 +61,22 @@ export const PublicGamesSector = z.object({
 }).strict();
 export type PublicGamesSector = z.infer<typeof PublicGamesSector>;
 
+/** Hexes returned by one overview. Past this, the rest are omitted, in key order. */
+export const PUBLIC_OVERVIEW_MAX = 20_000;
+
+/** One hex on the zoomed-out feed. `key` is `sector/1910`. `count` is public ships there. */
+export const PublicGamesOverviewHex = z.object({
+    key: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,80}\/\d{4}$/),
+    count: z.number().int().positive(),
+}).strict();
+export type PublicGamesOverviewHex = z.infer<typeof PublicGamesOverviewHex>;
+
+/** The zoomed-out feed. The same body for every caller. */
+export const PublicGamesOverview = z.object({
+    hexes: z.array(PublicGamesOverviewHex).max(PUBLIC_OVERVIEW_MAX),
+}).strict();
+export type PublicGamesOverview = z.infer<typeof PublicGamesOverview>;
+
 /** Chart slug. An own sector id (`~`) is not a public sector. */
 export const PublicGamesSectorSlug = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,80}$/);
 

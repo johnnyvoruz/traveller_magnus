@@ -19,6 +19,8 @@ const props = defineProps<{
     readOnly: boolean;
     /** The record's name, for an image with no caption. */
     name: string;
+    /** Where an image is served; the owner's object route when absent (a package page passes the CDN). */
+    urlOf?: (hash: string) => string;
 }>();
 
 const emit = defineEmits<{
@@ -113,7 +115,7 @@ onBeforeUnmount(() => {
         <button v-if="count > 1" type="button" class="lightbox-step is-prev" aria-label="Previous image" title="Previous (Left)" @click="step(-1)">
           <Icon name="chevron-left" :size="16" />
         </button>
-        <img v-if="image" class="lightbox-img" :src="imageUrl(universeId, image.hash)" :alt="image.caption || name">
+        <img v-if="image" class="lightbox-img" :src="urlOf ? urlOf(image.hash) : imageUrl(universeId, image.hash)" :alt="image.caption || name">
         <button v-if="count > 1" type="button" class="lightbox-step is-next" aria-label="Next image" title="Next (Right)" @click="step(1)">
           <Icon name="chevron-right" :size="16" />
         </button>

@@ -2,10 +2,12 @@
  * Package takedown and restore (contracts/b_marketplace.md F2). Admin only, audit logged.
  * Kept out of routes/admin.ts on purpose (z_marketplace.md phase 2 go).
  * A takedown hides the package and moves each version's manifest off the public bucket
- * into the private one, so restore can put it back. Content-addressed objects stay.
+ * into the private one, so restore can put it back. Content-addressed objects stay, except an
+ * uploaded cover, which goes to the private bucket as manifests do (F17).
  */
 import { Hono } from 'hono';
 import { PackageTakedown } from '@voyage/shared';
+import { restoreCover, takeDownCover } from './package_covers';
 import { originAllowed, requireRole, ulid } from '../auth/session';
 import type { AppEnv } from '../env';
 import { fail, ok } from '../http';
@@ -57,13 +59,14 @@ adminPackagesRoute.post('/:packageId/takedown', async (c) => {
         });
         await c.env.PUBLIC_BUCKET.delete(publicKey(pkg.id, version));
     }
+    const covers = await takeDownCover(c.env, pkg.id);
     await c.env.DB.prepare(`UPDATE packages SET hidden = 1, takedown_reason = ?, takedown_by = ? WHERE id = ?`)
         .bind(parsed.data.reason, actor.id, pkg.id).run();
     const reports = await c.env.DB.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'package_reports'`).first<{ name: string }>();
     if (reports?.name === 'package_reports') {
         await c.env.DB.prepare(`UPDATE package_reports SET state = 'closed' WHERE package_id = ? AND state = 'open'`).bind(pkg.id).run();
     }
-    await audit(c, actor.id, 'package.takedown', pkg.id, { reason: parsed.data.reason, versions });
+    await audit(c, actor.id, 'package.takedown', pkg.id, { reason: parsed.data.reason, versions, covers });
     return ok(c, { hidden: true });
 });
 
@@ -82,7 +85,8 @@ adminPackagesRoute.post('/:packageId/restore', async (c) => {
         });
         await c.env.PRIVATE_BUCKET.delete(heldKey(pkg.id, version));
     }
+    const covers = await restoreCover(c.env, pkg.id);
     await c.env.DB.prepare(`UPDATE packages SET hidden = 0, takedown_reason = NULL, takedown_by = NULL WHERE id = ?`).bind(pkg.id).run();
-    await audit(c, actor.id, 'package.restore', pkg.id, { versions });
+    await audit(c, actor.id, 'package.restore', pkg.id, { versions, covers });
     return ok(c, { hidden: false });
 });

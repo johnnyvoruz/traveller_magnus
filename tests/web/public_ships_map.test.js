@@ -1,13 +1,14 @@
 /**
- * Everyone's ships on the map (prompts/d_public_ships_map.md): the feed's `ships` read when the
- * server sends them and today's dot when it does not, one dart per ship with its name where world
- * names show, "+N" past three, and a hover card with the name and who is aboard, never an id and
- * never a click target.
+ * Everyone's ships on the map (prompts/d_public_ships_map.md, drawn as tracks since
+ * prompts/d_traffic_display.md): the feed's `ships` read when the server sends them, one track per
+ * ship at the hex zoom, three and a fourth that stands for the rest, no text on the chart, and the
+ * card's words never an id.
  */
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { fitLabel, MapRenderer } from '../../apps/web/src/map/MapRenderer.ts';
+import { MapRenderer } from '../../apps/web/src/map/MapRenderer.ts';
+import { fitLabel, TRACK_SHOWN } from '../../apps/web/src/map/traffic.ts';
 import { sectorRect } from '../../apps/web/src/map/geometry.ts';
 import { PPP_NAMES } from '../../apps/web/src/map/tiers.ts';
 import { bindPublicGames, publicMarks, resetPublicGames, watchPublicGames } from '../../apps/web/src/map/public_games.ts';
@@ -115,18 +116,6 @@ function centre(ppp) {
     return { x: (rect.x0 + rect.x1) / 2, y: (rect.y0 + rect.y1) / 2, ppp };
 }
 
-/** The darts drawn: each starts by setting the backing stroke, then its nose is the next moveTo. */
-function darts(calls) {
-    const out = [];
-    for (let i = 0; i < calls.length; i += 1) {
-        const call = calls[i];
-        if (call[0] !== 'moveTo') continue;
-        const stroke = calls.slice(i + 1, i + 8).find((next) => next[0] === 'set' && next[1] === 'strokeStyle');
-        if (stroke && stroke[2] === 'bg') out.push({ x: call[1], y: call[2] });
-    }
-    return out;
-}
-
 const texts = (calls) => calls.filter((call) => call[0] === 'fillText').map((call) => call[1]);
 
 function renderer() {
@@ -147,56 +136,53 @@ const SHIPS = [
     { hex: '1820', count: 1, name: 'Old server' },
 ];
 
-test('one dart per ship where names show, two and a "+N" past three; further out one stack per hex; today’s diamond without a list', () => {
+const theirs = (map) => map.trafficTracks().filter((track) => !track.mine);
+
+test('one track per ship at the hex zoom at every hex zoom, three and a fourth for the rest; no text on the chart; a hex without a list is one track with no card', () => {
     const { map, calls } = renderer();
     map.setPublicGames(new Map([['On', SHIPS]]));
-
-    calls.length = 0;
-    map.draw(centre(PPP_NAMES + 1));
-    assert.equal(darts(calls).length, 2 + 1 + 2);
-    const named = texts(calls);
-    for (const label of ['Beowulf', 'Kestrel', 'Far Trader Ilse', 'Hull 1', 'Hull 2', '+5', 'Old server']) assert.ok(named.includes(label), label);
-    assert.equal(named.includes('Hull 3'), false);
-    assert.equal(named.some((label) => /pm_|cr_|uni_/.test(String(label))), false, 'never an id');
-    // The old server's hex keeps the diamond: its stroke is the public colour, the darts' is the backing.
-    assert.equal(calls.filter((call) => call[0] === 'set' && call[1] === 'strokeStyle' && call[2] === 'public').length, 1);
-
-    calls.length = 0;
-    map.draw(centre(30));
-    assert.equal(darts(calls).length, 2 + 1 + 3, 'a stack of at most three a hex');
-    const quiet = texts(calls);
-    assert.deepEqual(quiet.filter((label) => label !== '+4' && label !== 'On Sector'), [], 'no names below the names tier');
-    assert.ok(quiet.includes('+4'));
-    // Further out, the stack is one hover target for the hex: its card lists every ship.
-    const stack = darts(calls)[0];
-    const all = map.publicShipAt(stack.x - 2, stack.y);
-    assert.deepEqual(all.ships.map((ship) => ship.ship).sort(), ['Beowulf', 'Kestrel']);
+    for (const ppp of [PPP_NAMES + 1, 30]) {
+        calls.length = 0;
+        map.draw(centre(ppp));
+        const tracks = theirs(map);
+        assert.equal(tracks.length, 2 + 1 + (TRACK_SHOWN + 1) + 1, 'at ' + ppp);
+        const said = texts(calls);
+        assert.equal(said.some((label) => /Beowulf|Kestrel|Ilse|Hull|Old server|\+\d/i.test(String(label))), false, 'no names or counts on the chart');
+        const hull = tracks.filter((track) => track.key.startsWith('On/1720|'));
+        assert.deepEqual(hull.map((track) => track.many), [false, false, false, true], 'the fourth means more');
+        assert.equal(hull[3].label, 'HULL 4 +3', 'its block names the next and counts the rest');
+        assert.deepEqual(hull.map((track) => track.y), [hull[0].y, hull[0].y, hull[0].y, hull[0].y], 'side by side');
+        const old = tracks.find((track) => track.key === 'On/1820|all');
+        assert.equal(old.hit.ships.length, 0, 'an old server\'s hex has no card');
+        assert.equal(map.publicShipAt(old.x, old.y), null);
+    }
 });
 
-test('the dart is a hover target for the card, never a click target, and the card holds no id', () => {
+test('a track is a target for the card, holds no id in its words, and the card opens beside all of its hex\'s tracks', () => {
     const { map, calls } = renderer();
     map.setPublicGames(new Map([['On', SHIPS]]));
     calls.length = 0;
     map.draw(centre(PPP_NAMES + 1));
-    const [first, second] = darts(calls);
-    const on = map.publicShipAt(first.x - 2, first.y);
+    const [first, second] = theirs(map);
+    const on = map.publicShipAt(first.x, first.y);
     assert.ok(on);
     assert.deepEqual(on.ships.map((ship) => ship.ship), ['Beowulf']);
-    assert.equal(map.publicShipAt(second.x - 2, second.y).ships[0].ship, 'Kestrel');
-    assert.equal(map.partyAt(first.x - 2, first.y), false);
-    assert.equal(map.vesselAt(first.x - 2, first.y), null);
+    assert.equal(first.label, 'BEOWULF');
+    assert.equal(map.publicShipAt(second.x, second.y).ships[0].ship, 'Kestrel');
+    assert.equal(map.partyAt(first.x, first.y), false);
+    assert.equal(map.vesselAt(first.x, first.y), null);
     assert.equal(map.publicShipByKey(on.key), on);
-    // The card opens beside all of the hex's marks, never over one of them.
-    const other = map.publicShipAt(second.x - 2, second.y);
-    assert.ok(on.place.x1 >= other.box.x1 && on.place.x1 >= on.box.x1);
+    const other = map.publicShipAt(second.x, second.y);
+    assert.equal(on.place.x0, Math.min(on.box.x0, other.box.x0));
+    assert.equal(on.place.x1, Math.max(on.box.x1, other.box.x1));
     assert.equal(on.place.y0, Math.min(on.box.y0, other.box.y0));
-    assert.equal(on.place.y1, Math.max(on.box.y1, other.box.y1));
 
-    const last = darts(calls)[4];
-    const more = map.publicShipAt(last.x - 2, last.y - 18);
-    assert.ok(more, 'the "+N" row');
-    assert.deepEqual(more.ships.map((ship) => ship.ship), ['Hull 3', 'Hull 4', 'Hull 5']);
+    const last = theirs(map).find((track) => track.key === 'On/1720|more');
+    const more = map.publicShipAt(last.x, last.y);
+    assert.ok(more, 'the fourth');
+    assert.deepEqual(more.ships.map((ship) => ship.ship), ['Hull 4', 'Hull 5']);
     assert.equal(more.more, 2, 'the hex holds two the feed did not list');
+    assert.equal(theirs(map).some((track) => /pm_|cr_|uni_/.test(String(track.label))), false, 'never an id');
 
     const card = shipCardLines(on.ships, on.more);
     assert.deepEqual(card, { ships: [{ ship: 'Beowulf', aboard: 'Tamsin Vore, Aric Hale' }], rest: null });
@@ -207,11 +193,11 @@ test('the dart is a hover target for the card, never a click target, and the car
 
     map.setPublicGames(null);
     map.draw(centre(PPP_NAMES + 1));
-    assert.equal(map.publicShipAt(first.x - 2, first.y), null);
+    assert.equal(map.publicShipAt(first.x, first.y), null);
     map.setPublicGames(new Map([['On', SHIPS]]));
     map.draw(centre(PPP_NAMES + 1));
     map.draw(centre(3));
-    assert.equal(map.publicShipAt(first.x - 2, first.y), null, 'zoomed out, no marks and no card');
+    assert.equal(map.publicShipAt(first.x, first.y), null, 'zoomed out, no card: a track there flies in');
 });
 
 test('the card sits beside its marks, or above them on a phone, always inside the map', () => {
@@ -234,16 +220,13 @@ test('the card sits beside its marks, or above them on a phone, always inside th
     assert.ok(cut.endsWith('…') && cut.length * 6 <= 60);
 });
 
-test('the hover card is not a control: no pointer cursor, it takes no pointer, tokens only; a click opens the read-only card', () => {
-    const card = read('workspace/PublicShipCard.vue');
-    assert.match(card, /\.pship-layer \{[^}]*pointer-events: none;/);
-    assert.equal(/cursor:|:hover|<button|tabindex/.test(card), false);
-    assert.equal(/#[0-9a-fA-F]{3,8}\b/.test(card.slice(card.indexOf('<style>'))), false);
+test('the hover is the track\'s data block: no hover card; a click opens the read-only card; a tap on an old server pins the block', () => {
     const view = read('views/MapView.vue');
     assert.match(view, /if \(ship && shipCardsReady !== false\) \{\s*void openShip\(ship, sx, sy\);\s*return;/);
-    // Before 0018 the dart stays hover-only: a tap still shows what hovering shows.
-    assert.match(view, /if \(ship && pressKind === 'touch'\) \{\s*shipPinned = ship\.key;\s*paintShipCard\(\);\s*return;/);
-    assert.equal(view.split('<PublicShipCardView').length - 1, 1);
+    assert.match(view, /if \(ship && pressKind === 'touch'\) \{\s*shipPinned = ship\.key;\s*paintTrackHover\(\);\s*return;/);
+    // The block shows for a mouse only: a finger has no hover, so pointerAt stays null for it.
+    assert.match(view, /const point = event\.pointerType === 'touch' \? null : canvasPoint\(event\);/);
+    assert.match(view, /const track = renderer\.trackAt\(pointerAt\.x, pointerAt\.y, false, true\);/);
     const renderer = read('map/MapRenderer.ts');
-    assert.equal(/#[0-9a-fA-F]{3,8}\b/.test(renderer.slice(renderer.indexOf('const SHIP_X'), renderer.indexOf('type ShipHit'))), false);
+    assert.equal(/#[0-9a-fA-F]{3,8}\b/.test(renderer.slice(renderer.indexOf('const SHIP_X'), renderer.indexOf('export const TOUCH_PX'))), false);
 });

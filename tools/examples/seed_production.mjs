@@ -25,7 +25,8 @@ export function target() {
             name: `local state ${path.relative(ROOT, st.dir)}`,
             select: (sql) => select(st, sql),
             exec: (sql) => sqlFile(st, sql),
-            put: (key, body) => { const f = path.join(st.dir, 'seed.tmp'); writeFileSync(f, body); wrangler(st, ['r2', 'object', 'put', 'voyage-public/' + key, '--file', f]); },
+            put: (key, body, type) => { const f = path.join(st.dir, 'seed.tmp'); writeFileSync(f, body); wrangler(st, ['r2', 'object', 'put', 'voyage-public/' + key, '--file', f, ...(type ? ['--content-type', type] : [])]); },
+            del: (key) => wrangler(st, ['r2', 'object', 'delete', 'voyage-public/' + key]),
         };
     }
     if (!flag('--production')) throw new Error('Name the target: --to-local <dir> or --production.');
@@ -41,7 +42,8 @@ export function target() {
         name: 'production (remote)',
         select: (sql) => { const out = run(['d1', 'execute', 'voyage', '--json', '--command', sql]); return JSON.parse(out.slice(out.indexOf('[')))[0].results; },
         exec: (sql) => { const f = path.join(tmp, 'seed.sql'); writeFileSync(f, sql); run(['d1', 'execute', 'voyage', '--file', f]); },
-        put: (key, body) => { const f = path.join(tmp, 'seed.tmp'); writeFileSync(f, body); run(['r2', 'object', 'put', 'voyage-public/' + key, '--file', f]); },
+        put: (key, body, type) => { const f = path.join(tmp, 'seed.tmp'); writeFileSync(f, body); run(['r2', 'object', 'put', 'voyage-public/' + key, '--file', f, ...(type ? ['--content-type', type] : [])]); },
+        del: (key) => run(['r2', 'object', 'delete', 'voyage-public/' + key]),
     };
 }
 
@@ -70,7 +72,36 @@ export function readSource(dir) {
             if (object) objects.set(`objects/${hash}`, object);
         }
     }
-    return { built, packages, versions, universes, manifests, objects };
+    // F17. Each uploaded cover pair, read from the built state's rows and bucket.
+    const covers = [];
+    for (const p of packages) {
+        if (!p.cover_hash || !p.cover_thumb_hash) continue;
+        const image = r2Get(st, `objects/${p.cover_hash}`);
+        const thumb = r2Get(st, `objects/${p.cover_thumb_hash}`);
+        if (!image || !thumb) throw new Error(`The cover of ${p.id} is missing from the built state.`);
+        covers.push({ packageId: p.id, title: p.title, hash: p.cover_hash, thumbHash: p.cover_thumb_hash, image, thumb });
+    }
+    return { built, packages, versions, universes, manifests, objects, covers };
+}
+
+/** Whether the target has 0019's columns. */
+export function targetHasCovers(to) {
+    return to.select(`SELECT COUNT(*) AS n FROM pragma_table_info('packages') WHERE name = 'cover_hash'`)[0].n > 0;
+}
+
+/** The cover objects --remove deletes: those no package outside the examples names, as a cover or a record image. */
+export function coversToDelete(to, source) {
+    if (!source.covers.length || !targetHasCovers(to)) return [];
+    const ours = source.packages.map((p) => q(p.id)).join(', ');
+    const out = [];
+    for (const hash of new Set(source.covers.flatMap((c) => [c.hash, c.thumbHash]))) {
+        const named = to.select(`SELECT
+            (SELECT COUNT(*) FROM packages WHERE id NOT IN (${ours}) AND (cover_hash = ${q(hash)} OR cover_thumb_hash = ${q(hash)}))
+          + (SELECT COUNT(*) FROM package_versions WHERE package_id NOT IN (${ours}) AND image_hashes IS NOT NULL
+               AND EXISTS (SELECT 1 FROM json_each(package_versions.image_hashes) WHERE json_each.value = ${q(hash)})) AS n`)[0].n;
+        if (!named) out.push(hash);
+    }
+    return out;
 }
 
 const columns = (row) => Object.keys(row);
@@ -119,15 +150,29 @@ async function main() {
         console.log(`Remove: ${held.size} of ${source.packages.length} packages are on the target.`);
         for (const p of source.packages) console.log(`  ${held.has(p.id) ? 'delete' : 'absent'}  ${p.id}  ${p.title}`);
         console.log('  Manifests and objects in R2 stay; they are content-addressed and nothing lists them once the rows are gone.');
-        if (apply) { to.exec(removeSql(source)); console.log('Removed.'); }
+        const drop = coversToDelete(to, source);
+        for (const hash of drop) console.log(`  delete cover object  objects/${hash}`);
+        if (apply) {
+            to.exec(removeSql(source));
+            for (const hash of drop) to.del(`objects/${hash}`);
+            console.log('Removed.');
+        }
         return;
     }
     for (const p of source.packages) {
         const v = source.versions.filter((x) => x.package_id === p.id);
         console.log(`  ${held.has(p.id) ? 'update' : 'insert'}  ${p.id}  ${p.kind.padEnd(13)} ${p.title}  (versions ${v.map((x) => x.version).join(', ')}; installs ${held.has(p.id) ? held.get(p.id) + ', kept' : '0'})`);
     }
-    console.log(`  universes ${source.universes.length}, manifests ${source.manifests.size}, objects ${source.objects.size}`);
+    for (const c of source.covers) console.log(`  cover   ${c.packageId}  ${c.title}  objects/${c.hash.slice(0, 12)}… and thumbnail objects/${c.thumbHash.slice(0, 12)}…`);
+    console.log(`  universes ${source.universes.length}, manifests ${source.manifests.size}, objects ${source.objects.size}, covers ${source.covers.length}`);
+    if (!targetHasCovers(to) && source.packages.some((p) => 'cover_hash' in p)) {
+        throw new Error('The target has no 0019 columns (packages.cover_hash). Apply the migrations there first. Nothing written.');
+    }
     if (!apply) return;
+    for (const c of source.covers) {
+        to.put(`objects/${c.hash}`, c.image, 'image/webp');
+        to.put(`objects/${c.thumbHash}`, c.thumb, 'image/webp');
+    }
     for (const [key, body] of source.objects) to.put(key, body);
     for (const [key, body] of source.manifests) to.put(key, body);
     to.exec(planSql(source));

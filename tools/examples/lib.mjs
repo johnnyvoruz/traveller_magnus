@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 export const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.resolve(HERE, '../..');
-export const EXAMPLE_HANDLE = process.env.EXAMPLE_HANDLE ?? 'Traveller_Voyage';
+export const EXAMPLE_HANDLE = process.env.EXAMPLE_HANDLE ?? 'traveller_voyage';
 export const EXAMPLE_USER_ID = process.env.EXAMPLE_USER_ID ?? 'e2b2245a-5260-4b91-8f33-1e02997fd9d5';
 export const TRUTH_VERSION = 'v10';
 export const EDITION = 'MgT2E';

@@ -111,6 +111,8 @@ export function resetPublicGames(): void {
     queued.clear();
     fetchImpl = fetch;
     clock = realClock;
+    overview = { truth: null, rows: EMPTY_OVERVIEW, askedAt: null, flying: false, refused: false };
+    overviewNotify = null;
 }
 
 function prune(now: number): void {
@@ -366,4 +368,91 @@ export function dropPublicShip(mark: string): boolean {
         row.marks = next;
     }
     return dropped;
+}
+
+// ---- The overview: every hex with public ships on the chart, for the zoomed-out map ----------------
+
+/** One hex holding public ships, from `GET /api/public-games/overview`: its full key and how many. */
+export type PublicOverviewHex = { key: string; count: number };
+
+/** The overview is cached for 60 s by the server: asked at most once a minute while the map stays out. */
+export const PUBLIC_OVERVIEW_EVERY_MS = 60_000;
+/** The most hexes read from one answer (B's cap is named in contracts/b_party_ships.md, "The overview"). */
+export const PUBLIC_OVERVIEW_MAX = 20_000;
+
+const OVERVIEW_KEY = /^[A-Za-z0-9][A-Za-z0-9_-]{0,80}\/\d{4}$/;
+const EMPTY_OVERVIEW: readonly PublicOverviewHex[] = [];
+
+type OverviewState = {
+    truth: string | null;
+    rows: readonly PublicOverviewHex[];
+    /** When the last ask went out, for the once-a-minute rule. Null before the first. */
+    askedAt: number | null;
+    flying: boolean;
+    /** A signed-out ask was refused (a server before 0018): none again until a sign-in. */
+    refused: boolean;
+};
+
+let overview: OverviewState = { truth: null, rows: EMPTY_OVERVIEW, askedAt: null, flying: false, refused: false };
+let overviewNotify: (() => void) | null = null;
+
+/** The answer read leniently: a hex that cannot be read is left out, and so is any key it carries besides `key` and `count`. */
+export function readOverview(body: unknown): PublicOverviewHex[] | null {
+    if (!body || typeof body !== 'object') return null;
+    const hexes = (body as { hexes?: unknown }).hexes;
+    if (!Array.isArray(hexes)) return null;
+    const out: PublicOverviewHex[] = [];
+    for (const item of hexes) {
+        if (out.length >= PUBLIC_OVERVIEW_MAX) break;
+        if (!item || typeof item !== 'object') continue;
+        const row = item as { key?: unknown; count?: unknown };
+        if (typeof row.key !== 'string' || !OVERVIEW_KEY.test(row.key)) continue;
+        if (typeof row.count !== 'number' || !Number.isInteger(row.count) || row.count < 1) continue;
+        out.push({ key: row.key, count: row.count });
+    }
+    return out;
+}
+
+async function askOverview(truth: string, signedIn: boolean): Promise<void> {
+    const gen = generation;
+    overview.flying = true;
+    overview.askedAt = clock.now();
+    let rows: readonly PublicOverviewHex[] | null = null;
+    try {
+        const res = await apiFetch(fetchImpl, '/api/public-games/overview?' + new URLSearchParams({ truthVersion: truth }).toString());
+        if (res.status === 401 && !signedIn) overview.refused = true;
+        if (res.ok) rows = readOverview(await res.json().catch(() => null));
+    } catch {
+        // Offline, or no such route yet: nothing to draw, and the next ask waits its minute.
+    }
+    if (gen !== generation) return;
+    overview.flying = false;
+    if (overview.truth !== truth) return;
+    if (rows) overview.rows = rows;
+    if (overviewNotify) overviewNotify();
+}
+
+/**
+ * The map is zoomed out past the hex level (`out`) on the chart `truthVersion`. Safe to call on
+ * every frame: it asks when the map first leaves the hex zoom, then at most once a minute while it
+ * stays out. A null pin asks nothing. `onChange` runs when an answer has arrived.
+ */
+export function watchPublicOverview(next: { signedIn: boolean; truthVersion: string | null; out: boolean }, onChange?: () => void): void {
+    if (onChange) overviewNotify = onChange;
+    const truth = next.truthVersion && next.truthVersion.length > 0 ? next.truthVersion : null;
+    if (truth !== overview.truth) overview = { truth, rows: EMPTY_OVERVIEW, askedAt: null, flying: false, refused: false };
+    if (next.signedIn && overview.refused) {
+        overview.refused = false;
+        overview.askedAt = null;
+    }
+    if (!truth || !next.out || overview.flying) return;
+    if (overview.refused && !next.signedIn) return;
+    const now = clock.now();
+    if (overview.askedAt !== null && now - overview.askedAt < PUBLIC_OVERVIEW_EVERY_MS) return;
+    void askOverview(truth, next.signedIn);
+}
+
+/** The hexes with public ships on the watched chart. Empty until an answer has arrived. */
+export function publicOverview(): readonly PublicOverviewHex[] {
+    return overview.rows;
 }

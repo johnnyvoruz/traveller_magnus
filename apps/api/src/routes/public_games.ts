@@ -1,5 +1,7 @@
 import {
+    PUBLIC_OVERVIEW_MAX,
     PUBLIC_SHIPS_PER_HEX,
+    PublicGamesOverviewHex,
     PublicGamesSectorSlug,
     PublicGamesSetting,
     PublicGamesTruthVersion,
@@ -139,6 +141,50 @@ async function shipHexes(env: Env, truthVersion: string, sector: string, callerI
                 }),
             };
         });
+}
+
+/** Zoomed-out counts. The same body for every caller, so the success answer is cacheable. */
+export async function getPublicOverview(c: AppContext): Promise<Response> {
+    await detectPublicGames(c.env.DB);
+    await detectPublicShips(c.env.DB);
+    await detectPublicCards(c.env.DB);
+    const actor = await requireUser(c);
+    let callerId: string | null;
+    if (actor instanceof Response) {
+        if (!(publicCardsReady() && actor.status === 401)) return actor;
+        callerId = null;
+    } else {
+        callerId = actor.id;
+    }
+    if (publicLimited(c, callerId)) return fail(c, 429, 'rate_limited', 'Too many requests.');
+    const truthVersion = c.req.query('truthVersion');
+    if (truthVersion === undefined || truthVersion === '') {
+        return fail(c, 400, 'validation', 'truthVersion is required.');
+    }
+    if (!PublicGamesTruthVersion.safeParse(truthVersion).success) {
+        return fail(c, 400, 'validation', 'Invalid request.');
+    }
+    if (!publicShipsReady()) return c.json({ hexes: [] }, 200, { 'cache-control': 'public, max-age=60' });
+    const listed = await c.env.DB.prepare(
+        `SELECT m.sector_slug || '/' || m.local_hex AS key, COUNT(*) AS count
+         FROM public_ships m
+         JOIN universes u ON u.id = m.universe_id
+         WHERE m.truth_version = ?
+           AND u.deleted_at IS NULL
+           AND u.public_games = 1
+           AND m.sector_slug NOT LIKE '~%'
+           AND length(m.local_hex) = 4
+           AND m.local_hex GLOB '[0-9][0-9][0-9][0-9]'
+         GROUP BY m.sector_slug, m.local_hex
+         ORDER BY m.sector_slug, m.local_hex
+         LIMIT ?`,
+    ).bind(truthVersion, PUBLIC_OVERVIEW_MAX).all<{ key: string; count: number }>();
+    const hexes = [];
+    for (const row of listed.results ?? []) {
+        const parsed = PublicGamesOverviewHex.safeParse({ key: row.key, count: Number(row.count) });
+        if (parsed.success) hexes.push(parsed.data);
+    }
+    return c.json({ hexes }, 200, { 'cache-control': 'public, max-age=60' });
 }
 
 export async function setPublicGames(c: AppContext, owned: OwnedUniverse): Promise<Response> {

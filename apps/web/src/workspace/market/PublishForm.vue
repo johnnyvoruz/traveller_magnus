@@ -11,8 +11,11 @@ import { buildStore } from '../build/seam.ts';
 import { draftHandle, edit } from '../build/edit.ts';
 import { build } from '../build/state.ts';
 import {
-    closePublish, formProblems, hexWords, MARKET_LIMITS, marketStore, marketUi, parseTags, plural, publish, publishKeys, recordsOn, removedWords,
+    closePublish, coverDraft, formProblems, hexWords, MARKET_LIMITS, marketStore, marketUi, parseTags, plural, publish, publishKeys, recordsOn, removedWords,
 } from './market.ts';
+import { defaultCoverUrl, kindFamily } from '../../marketplace/covers.ts';
+import CoverEditor from './CoverEditor.vue';
+import type { PreparedCover } from './cover_image.ts';
 
 const props = defineProps<{ keys: string[] }>();
 
@@ -48,6 +51,18 @@ const tried = ref(false);
 const fieldProblems = computed(() => problems.value.filter((item) => item.field !== 'hexes' && item.field !== 'records' && (tried.value || item.field === 'description' || item.field === 'tags')));
 const nextVersion = computed(() => (target.value ? target.value.latestVersion + 1 : 1));
 const sendLabel = computed(() => (marketUi.busy ? 'Publishing…' : isNew.value ? 'Publish' : 'Publish version ' + nextVersion.value));
+
+/** The draft cover's preview, as an object address; let go when it changes or the form closes. */
+const draftUrl = ref('');
+watch(coverDraft, (draft) => {
+    if (draftUrl.value) URL.revokeObjectURL(draftUrl.value);
+    draftUrl.value = draft ? URL.createObjectURL(new Blob([draft.image as BlobPart], { type: 'image/webp' })) : '';
+}, { immediate: true });
+const coverSrc = computed(() => draftUrl.value || defaultCoverUrl(kindFamily(marketUi.kind), true));
+
+function takeCover(cover: PreparedCover): void {
+    coverDraft.value = cover;
+}
 
 function problem(field: string): string {
     const found = problems.value.find((item) => item.field === field);
@@ -93,6 +108,7 @@ watch(() => draftHandle.value !== null || edit.opening || build.preview !== null
 });
 onBeforeUnmount(() => {
     if (props.keys.length === 1) closePublish();
+    if (draftUrl.value) URL.revokeObjectURL(draftUrl.value);
 });
 </script>
 
@@ -132,12 +148,22 @@ onBeforeUnmount(() => {
           <input v-model="marketUi.tags" class="mk-box" type="text" autocomplete="off" placeholder="Separate tags with commas" :disabled="marketUi.busy" />
           <small>{{ tags.length }} of {{ MARKET_LIMITS.tags }} tags</small>
         </label>
+        <CoverEditor
+          :src="coverSrc"
+          :source="coverDraft ? 'upload' : 'default'"
+          :can-remove="!!coverDraft"
+          :busy="marketUi.busy"
+          :title="marketUi.title.trim() || 'this package'"
+          @take="takeCover"
+          @remove="coverDraft = null"
+        />
         <p v-for="item in fieldProblems" :key="item.field" class="mk-err" role="alert">{{ item.text }}</p>
       </template>
       <dl v-else-if="target" class="mk-kv">
         <dt>Title</dt><dd>{{ target.title }}</dd>
         <dt>Kind</dt><dd>{{ target.kind }}</dd>
         <dt>Latest version</dt><dd>{{ target.latestVersion }} · {{ plural(target.hexCount, 'hex', 'hexes') }}</dd>
+        <dt>Cover</dt><dd>To change it, open the package's page.</dd>
       </dl>
 
       <fieldset v-if="records.length" class="mk-recs">

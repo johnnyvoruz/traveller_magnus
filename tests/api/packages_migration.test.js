@@ -59,7 +59,8 @@ if (!existsSync(wranglerBin)) {
             assert.ok(freshColumns.includes('record_ids'));
             assert.ok(freshColumns.includes('state'));
 
-            const files = readdirSync(migrations).filter((name) => name.endsWith('.sql') && name !== '0010_packages.sql').sort();
+            // 0019 alters packages, so it waits with 0010 and both apply on the upgrade.
+            const files = readdirSync(migrations).filter((name) => name.endsWith('.sql') && !['0010_packages.sql', '0019_package_covers.sql'].includes(name)).sort();
             const statements = [];
             for (const name of files) {
                 const text = readFileSync(path.join(migrations, name), 'utf8');
@@ -82,6 +83,8 @@ if (!existsSync(wranglerBin)) {
             assert.ok(upgraded.includes('hex_keys'), upgraded.join(','));
             assert.ok(upgraded.includes('record_ids'));
             assert.equal(names(upgrade).includes('package_installs'), true);
+            assert.ok(upgraded.includes('art_filled'), 'F17: 0019 applies after 0010');
+            assert.ok(rows(upgrade, `PRAGMA table_info(packages)`).map((row) => row.name).includes('cover_hash'));
         } finally {
             rmSync(fresh, { recursive: true, force: true });
             rmSync(upgrade, { recursive: true, force: true });

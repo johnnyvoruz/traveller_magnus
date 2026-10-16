@@ -1,6 +1,6 @@
 # Example packages
 
-Six example packages on chart v10, published by the house account (handle `Traveller_Voyage`, user id
+Six example packages on chart v10, published by the house account (handle `traveller_voyage` (the app stores handles in lowercase), user id
 `e2b2245a-5260-4b91-8f33-1e02997fd9d5`). Override both with `EXAMPLE_HANDLE` and `EXAMPLE_USER_ID`.
 
 | Pack | Folder | Kind | Imports |
@@ -94,3 +94,7 @@ functions in `packages/shared/src/public_hex.ts`, so they match what a real game
 
 To take them all away: `--production --remove` prints, `--production --remove --apply` deletes every example
 universe (and with it every ship row and card), then each example account and its profile.
+## Covers (F17)
+
+A `listing.json` may name `"cover": "covers/<pack-folder>.webp"`. `covers/<pack-folder>_640.webp` beside it is the thumbnail. The image is at most 1600 px and 2 MB, and the thumbnail at most 640 px and 200 KB. `build_local.mjs` uploads the cover after publishing. `seed_production.mjs` names each cover in the dry run and copies it with `--apply`. `--remove --apply` deletes each cover object that no other package names. Lane A made the four records-pack covers. The Feri terraces and Hollow Verge covers are 1600x900 headless shots of the local map, made with `sharp`.
+

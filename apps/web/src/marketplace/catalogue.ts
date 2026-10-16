@@ -10,7 +10,9 @@ import type {
     InstallRemoved,
     InstallResult,
     InstallRow,
+    CampaignImage,
     PackageCard,
+    PackageCover,
     PackageCardPage,
     PackagePublicPage,
     PackageSort,
@@ -18,7 +20,7 @@ import type {
 } from '@voyage/shared';
 import { apiFetch } from '../platform/http.ts';
 
-export type { InstallPreview, InstallRemoved, InstallResult, InstallRow, PackageCard, PackagePublicPage, PackageSort, Placement };
+export type { InstallPreview, InstallRemoved, InstallResult, InstallRow, PackageCard, PackageCover, PackagePublicPage, PackageSort, Placement };
 
 export type FetchLike = typeof fetch;
 
@@ -56,7 +58,10 @@ const uni = (universeId: string) => '/api/universes/' + encodeURIComponent(unive
 async function call<T>(fetchImpl: FetchLike, method: string, url: string, body?: unknown): Promise<T> {
     let res: Response;
     try {
-        res = await apiFetch(fetchImpl, url, { method, body: body === undefined ? undefined : JSON.stringify(body) });
+        res = body instanceof FormData
+            // A form carries its own content type and boundary; apiFetch would name JSON.
+            ? await fetchImpl(url, { method, body, credentials: 'same-origin' })
+            : await apiFetch(fetchImpl, url, { method, body: body === undefined ? undefined : JSON.stringify(body) });
     } catch (err) {
         throw new MarketError(err instanceof Error && err.message ? err.message : READ_FAILED);
     }
@@ -100,6 +105,19 @@ export function installBody(ask: InstallAsk): Record<string, unknown> {
     return body;
 }
 
+/** A cover ready to send (F17): the full WebP and its thumbnail, each named by its SHA-256. */
+export type CoverUpload = { image: Uint8Array; thumb: Uint8Array; hash: string; thumbHash: string };
+
+/** F17: one multipart form with `image`, `thumb`, `hash` and `thumbHash`. */
+export function coverForm(upload: CoverUpload): FormData {
+    const form = new FormData();
+    form.set('image', new Blob([upload.image as BlobPart], { type: 'image/webp' }), 'cover.webp');
+    form.set('thumb', new Blob([upload.thumb as BlobPart], { type: 'image/webp' }), 'cover_640.webp');
+    form.set('hash', upload.hash);
+    form.set('thumbHash', upload.thumbHash);
+    return form;
+}
+
 export function marketWire(fetchImpl: FetchLike = fetch) {
     return {
         catalogue: (query: CatalogueQuery) => call<PackageCardPage>(fetchImpl, 'GET', cataloguePath(query)),
@@ -111,6 +129,10 @@ export function marketWire(fetchImpl: FetchLike = fetch) {
         preview: (universeId: string, ask: PreviewAsk) => call<InstallPreview>(fetchImpl, 'GET', previewPath(universeId, ask)),
         install: (universeId: string, ask: InstallAsk) => call<InstallResult>(fetchImpl, 'POST', uni(universeId) + '/install', installBody(ask)),
         remove: (universeId: string, installId: string) => call<InstallRemoved>(fetchImpl, 'DELETE', uni(universeId) + '/installs/' + encodeURIComponent(installId)),
+        /** F17. The author's own cover; answers what now shows. */
+        putCover: async (packageId: string, upload: CoverUpload) => (await call<{ cover: PackageCover | null }>(fetchImpl, 'PUT', pk(packageId) + '/cover', coverForm(upload))).cover,
+        /** F17. A plain delete; answers what now shows (record art, or null for the default). */
+        dropCover: async (packageId: string) => (await call<{ cover: PackageCover | null }>(fetchImpl, 'DELETE', pk(packageId) + '/cover')).cover,
     };
 }
 
@@ -129,4 +151,67 @@ export async function versionKeys(fetchImpl: FetchLike, cdnBase: string, package
     } catch {
         return null;
     }
+}
+
+/** A published record as the package page reads it from the CDN. */
+export type PublicRecord = { id: string; name: string; type: string; images: CampaignImage[] };
+
+/** What a published version holds, read from its manifest and records list on the CDN. */
+export type VersionContents = {
+    keys: string[];
+    /** The sector ids that are own sectors of the piece (F15). */
+    ownSectors: string[];
+    /** Null when the records list could not be read. */
+    records: PublicRecord[] | null;
+};
+
+function imagesOf(value: unknown): CampaignImage[] {
+    if (!Array.isArray(value)) return [];
+    return value.filter((item): item is CampaignImage => !!item && typeof item === 'object'
+        && typeof (item as CampaignImage).hash === 'string' && typeof (item as CampaignImage).thumbHash === 'string');
+}
+
+/** The records list's rows, kept loosely: a row with no id or name is left out. */
+export function publicRecords(value: unknown): PublicRecord[] {
+    if (!Array.isArray(value)) return [];
+    const out: PublicRecord[] = [];
+    for (const row of value) {
+        if (!row || typeof row !== 'object') continue;
+        const item = row as { id?: unknown; name?: unknown; type?: unknown; images?: unknown; deleted?: unknown };
+        if (typeof item.id !== 'string' || typeof item.name !== 'string' || item.deleted === true) continue;
+        out.push({ id: item.id, name: item.name, type: typeof item.type === 'string' ? item.type : 'note', images: imagesOf(item.images) });
+    }
+    return out;
+}
+
+/**
+ * A published version's hexes and records (`packages/<id>/<version>/manifest.json`, then
+ * `objects/<records.contentHash>`). Null when the manifest cannot be read.
+ */
+export async function versionContents(fetchImpl: FetchLike, cdnBase: string, packageId: string, version: number): Promise<VersionContents | null> {
+    const base = cdnBase.replace(/\/$/, '');
+    let manifest: { hexes?: unknown; ownSectors?: unknown; records?: { contentHash?: unknown } };
+    try {
+        const res = await fetchImpl(base + '/packages/' + encodeURIComponent(packageId) + '/' + version + '/manifest.json');
+        if (!res.ok) return null;
+        manifest = await res.json() as typeof manifest;
+    } catch {
+        return null;
+    }
+    if (!manifest || !manifest.hexes || typeof manifest.hexes !== 'object') return null;
+    const keys = Object.keys(manifest.hexes as object).sort();
+    const ownSectors = manifest.ownSectors && typeof manifest.ownSectors === 'object' ? Object.keys(manifest.ownSectors as object) : [];
+    const hash = manifest.records && typeof manifest.records.contentHash === 'string' ? manifest.records.contentHash : '';
+    let records: PublicRecord[] | null = null;
+    if (hash) {
+        try {
+            const res = await fetchImpl(base + '/objects/' + encodeURIComponent(hash));
+            if (res.ok) records = publicRecords(await res.json());
+        } catch {
+            records = null;
+        }
+    } else {
+        records = [];
+    }
+    return { keys, ownSectors, records };
 }

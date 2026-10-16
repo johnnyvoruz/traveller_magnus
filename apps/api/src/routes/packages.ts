@@ -19,6 +19,7 @@ import { originAllowed, requireUser, ulid, type SessionUser } from '../auth/sess
 import type { AppEnv } from '../env';
 import { fail, ok } from '../http';
 import { markPublishFailed, PublishRefusal, resolvePublish } from '../jobs/publish_queue';
+import { coverOf, mountCoverRoutes } from './package_covers';
 
 const HEX_CAP = 1280;
 const RECORD_CAP = 500;
@@ -288,9 +289,11 @@ async function viewer(c: Ctx): Promise<SessionUser | null> {
     return actor instanceof Response ? null : actor;
 }
 
-async function cardOf(c: Ctx, row: CardRow, fallbackHandle: string): Promise<PackageCard> {
+async function cardOf(c: Ctx, row: CardRow, fallbackHandle: string, admin: boolean): Promise<PackageCard> {
     const listing = await listingOf(c, row, fallbackHandle);
-    return PackageCard.parse({ ...listing, installs: Number(row.installs) || 0, updatedAt: row.updatedAt, hidden: Number(row.hidden) === 1 });
+    const hidden = Number(row.hidden) === 1;
+    const cover = await coverOf(c.env, row.id, Number(row.latestVersion), hidden, admin);
+    return PackageCard.parse({ ...listing, installs: Number(row.installs) || 0, updatedAt: row.updatedAt, hidden, cover });
 }
 
 async function handleOf(c: Ctx, authorId: string): Promise<string> {
@@ -407,10 +410,12 @@ packagesRoute.get('/', async (c) => {
     const rows = listed.results ?? [];
     const page = rows.slice(0, limit);
     const handles = new Map<string, string>();
+    const reader = await viewer(c);
+    const readerAdmin = !!reader && roleSatisfies(reader.role, 'admin');
     const items: PackageCard[] = [];
     for (const row of page) {
         if (!handles.has(row.authorId)) handles.set(row.authorId, await handleOf(c, row.authorId));
-        items.push(await cardOf(c, { ...row, hexCount: 0 }, handles.get(row.authorId) ?? ''));
+        items.push(await cardOf(c, { ...row, hexCount: 0 }, handles.get(row.authorId) ?? '', readerAdmin));
     }
     const last = page[page.length - 1];
     let nextCursor: string | null = null;
@@ -465,7 +470,7 @@ packagesRoute.get('/:packageId', async (c) => {
         manifestHash: string | null;
         error: string | null;
     }>();
-    const card = await cardOf(c, { ...pkg, hexCount: 0 }, fallback);
+    const card = await cardOf(c, { ...pkg, hexCount: 0 }, fallback, admin);
     return ok(c, PackagePublicPage.parse({
         ...card,
         description: pkg.description,
@@ -506,4 +511,5 @@ packagesRoute.post('/:packageId/report', async (c) => {
     ).bind(`pr_${ulid()}`, pkg.id, actor.id, parsed.data.reason, new Date().toISOString()).run();
     return ok(c, { reported: true }, 201);
 });
+mountCoverRoutes(packagesRoute);
 export { packagesRoute };

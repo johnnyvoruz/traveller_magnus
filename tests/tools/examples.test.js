@@ -3,8 +3,10 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { readPack, fingerprint } from '../../tools/examples/build_local.mjs';
-import { planSql, removeSql } from '../../tools/examples/seed_production.mjs';
+import { readPack, fingerprint, coverFiles } from '../../tools/examples/build_local.mjs';
+import { planSql, removeSql, coversToDelete } from '../../tools/examples/seed_production.mjs';
+import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { EXAMPLE_HANDLE, EXAMPLE_USER_ID, objectHashes, packFolders } from '../../tools/examples/lib.mjs';
 
 test('six packs parse as CampaignExport on chart v10', () => {
@@ -21,7 +23,7 @@ test('six packs parse as CampaignExport on chart v10', () => {
 });
 
 test('house account defaults', () => {
-    assert.equal(EXAMPLE_HANDLE, 'Traveller_Voyage');
+    assert.equal(EXAMPLE_HANDLE, 'traveller_voyage');
     assert.equal(EXAMPLE_USER_ID, 'e2b2245a-5260-4b91-8f33-1e02997fd9d5');
 });
 
@@ -73,4 +75,43 @@ test('the copy starts installs at 0, keeps them on a rerun, and removes only its
     const removal = removeSql(source);
     assert.match(removal, /DELETE FROM packages WHERE id IN \('pk_1'\) AND author_id = 'e2b2245a/);
     assert.match(removal, /DELETE FROM universes WHERE id IN \('u1'\) AND owner_id = 'e2b2245a/);
+});
+test('every pack names a cover that is WebP within the limits (F17)', () => {
+    const packs = packFolders().map(readPack);
+    for (const p of packs) {
+        assert.equal(p.listing.cover, `covers/${p.slug}.webp`, p.slug);
+        assert.ok(p.cover.image.bytes.byteLength <= 2 * 1024 * 1024, p.slug);
+        assert.ok(p.cover.thumb.bytes.byteLength <= 200 * 1024, p.slug);
+        assert.match(p.cover.image.hash, /^[0-9a-f]{64}$/);
+        assert.notEqual(p.cover.image.hash, p.cover.thumb.hash);
+    }
+    assert.throws(() => coverFiles('art/x.png', 'listing.json'), /listing.json: cover: Expected "covers\/<name>.webp"/);
+    assert.throws(() => coverFiles('covers/not-there.webp', 'listing.json'), /does not exist/);
+});
+
+test('--remove deletes only the cover objects nothing outside the examples names', () => {
+    const asked = [];
+    const to = {
+        select: (sql) => {
+            asked.push(sql);
+            if (sql.includes('pragma_table_info')) return [{ n: 1 }];
+            return [{ n: sql.includes("'shared'") ? 1 : 0 }];
+        },
+    };
+    const source = { packages: [{ id: 'pk_A' }], covers: [{ packageId: 'pk_A', hash: 'own', thumbHash: 'shared' }] };
+    assert.deepEqual(coversToDelete(to, source), ['own']);
+    assert.ok(asked.some((sql) => sql.includes("NOT IN ('pk_A')") && sql.includes('image_hashes')));
+    assert.deepEqual(coversToDelete({ select: () => [{ n: 0 }] }, source), [], 'a target without 0019 deletes nothing');
+});
+
+const builtState = path.resolve('findings/examples/local_covers');
+const standIn = path.resolve('findings/examples/standin_covers');
+test('the seeding dry run names each cover', { skip: existsSync(path.join(builtState, 'built.json')) && existsSync(path.join(standIn, 'state')) ? false : 'no built state and stand-in (build_local.mjs, then --bare)' }, () => {
+    const r = spawnSync(process.execPath, ['tools/examples/seed_production.mjs', '--from', builtState, '--to-local', standIn, '--port', '8872'], { encoding: 'utf8', windowsHide: true });
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /print only/);
+    const lines = r.stdout.split(/\r?\n/).filter((line) => line.trim().startsWith('cover '));
+    assert.equal(lines.length, 6, r.stdout);
+    for (const line of lines) assert.match(line, /objects\/[0-9a-f]{12}… and thumbnail objects\/[0-9a-f]{12}…/);
+    assert.match(r.stdout, /covers 6/);
 });

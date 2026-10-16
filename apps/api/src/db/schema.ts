@@ -167,6 +167,9 @@ export const packages = sqliteTable('packages', {
     hidden: integer('hidden').notNull().default(0),
     takedownReason: text('takedown_reason'),
     takedownBy: text('takedown_by'),
+    /** 0019. The publisher's uploaded cover (F17). */
+    coverHash: text('cover_hash'),
+    coverThumbHash: text('cover_thumb_hash'),
 }, (t) => [
     index('packages_author_id').on(t.authorId),
 ]);
@@ -184,6 +187,11 @@ export const packageVersions = sqliteTable('package_versions', {
     hexKeys: text('hex_keys').notNull(),
     recordIds: text('record_ids').notNull(),
     createdAt: text('created_at').notNull(),
+    /** 0019. The record-art pair, every published image hash, and whether they were worked out (F17). */
+    artHash: text('art_hash'),
+    artThumbHash: text('art_thumb_hash'),
+    imageHashes: text('image_hashes'),
+    artFilled: integer('art_filled').notNull().default(0),
 }, (t) => [
     primaryKey({ columns: [t.packageId, t.version] }),
     check('package_versions_state_check', sql`${t.state} in ('queued', 'running', 'done', 'failed')`),

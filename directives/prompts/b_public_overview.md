@@ -63,3 +63,6 @@ Stop when the gates pass and the report is written. Write
 each meaningful step append one line under Progress: "done: X. next: Y."
 
 ## Progress
+
+done: the overview route, the schema, and the contract section. next: the shared test, then the worker suite.
+done: the overview worker suite passed, with 0018 and with public_cards dropped. next: the report.

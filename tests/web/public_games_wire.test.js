@@ -76,12 +76,12 @@ test('the card opened from Build says what Build is; from anywhere else, todayâ€
 
 test('the map view hands the feed its watch on every frame and the renderer its marks at the hex tier', () => {
     const view = read('apps/web/src/views/MapView.vue');
-    assert.ok(view.includes("import { dropPublicShip, publicGamesOverlay, watchPublicGames } from '../map/public_games.ts';"));
+    assert.ok(view.includes("import { dropPublicShip, publicGamesOverlay, publicOverview, watchPublicGames, watchPublicOverview } from '../map/public_games.ts';"));
     const frame = view.slice(view.indexOf('const drawn = renderer.draw(cam);'));
     const lines = frame.slice(0, frame.indexOf('renderer.setPublicGames') + 120);
     assert.match(lines, /signedIn: session\.user !== null,\s+truthVersion: version \? version : null,\s+sectors: drawn\.tier === 'hex' \? drawn\.sectorsOnScreen : \[\],\s+\}, onPublicGames\);/);
     // An answer is drawn by the very next frame: its ships go to the renderer before that frame draws.
-    assert.match(view, /if \(publicArrived\) \{\s*publicArrived = false;\s*renderer\.setPublicGames\(publicSectors \? publicGamesOverlay\(publicSectors\) : null\);\s*\}\s*const drawn = renderer\.draw\(cam\);/);
+    assert.match(view, /if \(publicArrived\) \{\s*publicArrived = false;\s*renderer\.setPublicGames\(publicSectors \? publicGamesOverlay\(publicSectors\) : null\);\s*\}[^]*?const drawn = renderer\.draw\(cam\);/);
     assert.match(view, /function onPublicGames\(\): void \{\s*publicArrived = true;\s*markDirty\(\);/);
     // The server leaves the caller's own games out: every game it sends is drawn, and no name is handed over to drop.
     assert.ok(!lines.includes('ownName'));

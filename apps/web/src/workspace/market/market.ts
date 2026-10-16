@@ -13,6 +13,7 @@ import { campaign } from '../../campaign/store.ts';
 import { recordsAtHex } from '../../campaign/index.ts';
 import { apiFetch } from '../../platform/http.ts';
 import { asMarketplaceStore, openMarketplace, type MarketplaceStore, type PackageListing, type PackageVersion, type PublishSource } from '../../marketplace/index.ts';
+import { marketWire, type CoverUpload } from '../../marketplace/catalogue.ts';
 import { parseHexKey } from '../places.ts';
 
 /** The contract's limits (contracts/b_marketplace.md, "Limits", approved by Johnny). */
@@ -194,7 +195,22 @@ export const marketUi = reactive({
     left: [] as string[],
     busy: false,
     error: '',
+    /** The package this form made, so a second try still sends the cover. */
+    madeId: '',
 });
+
+/** A new package's cover, read but not sent: it goes up once the package exists (F17). */
+export const coverDraft = shallowRef<CoverUpload | null>(null);
+
+/** A cover that did not go up after a publish, said on that package's page. */
+export const coverMissed = shallowRef<{ packageId: string; message: string } | null>(null);
+
+/** How the cover is sent; a test hands in its own. */
+let sendCover: (packageId: string, cover: CoverUpload) => Promise<unknown> = (packageId, cover) => marketWire().putCover(packageId, cover);
+
+export function useCoverSender(fn: ((packageId: string, cover: CoverUpload) => Promise<unknown>) | null): void {
+    sendCover = fn ?? ((packageId, cover) => marketWire().putCover(packageId, cover));
+}
 
 export function openPublish(kind: string): void {
     if (!marketUi.open) {
@@ -220,6 +236,8 @@ function resetForm(): void {
     marketUi.tags = '';
     marketUi.left = [];
     marketUi.error = '';
+    marketUi.madeId = '';
+    coverDraft.value = null;
 }
 
 /** The universe a publish comes from: its id, its owner, its chart. Null when none is open. */
@@ -241,6 +259,8 @@ export async function publish(universe: MarketUniverse, hexKeys: readonly string
     const source = sourceOf(universe);
     marketUi.busy = true;
     marketUi.error = '';
+    /** The cover is offered on the form for a new package only; an existing one changes it on its page. */
+    const isNewCover = marketUi.target === 'new' || marketUi.target === marketUi.madeId;
     try {
         let packageId = marketUi.target;
         if (packageId === 'new') {
@@ -254,10 +274,20 @@ export async function publish(universe: MarketUniverse, hexKeys: readonly string
             packageId = made.id;
             // A second try after a failed version adds a version to this package, not another package.
             marketUi.target = packageId;
+            marketUi.madeId = packageId;
         }
         const handle = store.publish(packageId, { universeId: universe.id, hexKeys: [...hexKeys], recordIds: [...recordIds] }, source);
         handle.finished.catch(() => undefined);
         const accepted = await handle.accepted;
+        const cover = isNewCover ? coverDraft.value : null;
+        if (cover) {
+            coverMissed.value = null;
+            try {
+                await sendCover(packageId, cover);
+            } catch (err) {
+                coverMissed.value = { packageId, message: err instanceof Error && err.message ? err.message : 'The cover was not saved.' };
+            }
+        }
         resetForm();
         return packagePath(packageId, accepted.version);
     } catch (err) {

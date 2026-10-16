@@ -1,32 +1,33 @@
-# Orchestrator state — 2026-10-14 19:55 (written for the next orchestrator session)
+# Orchestrator state — 2026-10-15 20:55 (written for the next orchestrator session)
 
-Overwritten every turn. History: `handoff.md` (last section 282; read by offset, it is large).
+Overwritten every turn. History: `handoff.md` (last section 288; read by offset, it is large).
 `orchestrator_start_here.md` is the 2026-10-07 page and is stale. This file and
-`board.md` are the state.
+`board.md` are the state. Lane sessions D and Z were restarted at 19:30.
 
 ## Where the roadmap is
-Live and deployed: **1.2.0 (`20fc3c8`), engine e1.2**, HEAD and origin. Truth v10 live
-(released 2026-10-14). **On disk, unpushed, gates
-green at 20:45:** public games (server, feed), the first-visit fixes, the dossier codes,
-and **engine 1.2.0** (Lane Z's water and ice patch, applied by Z at 20:11 before C's
-review came back). **This leg:** 1.1.12 with all of it once Z's fix is in; then Johnny
-rebuilds, uploads and releases truth v10.
+Live: **1.2.1 (`55fe998`), engine e1.2**, truth v10; 0017 and 0018 applied; six example
+packages and twelve example games on production. **Called, not yet pushed (20:55): 1.2.2**,
+103 paths: the storefront, the ship traffic display, the published overview, package covers
+(0019), A's default art, the example covers (Z's Fix 1 accepted). Note
+`findings/push/release_2026-10-15.md`; rehearsed green in this session's scratchpad `outer23`.
 
-## Lanes (2026-10-13 21:50)
-All free. F is retired: never assign or propose.
-
-## Naming
-Engine versions are **e1.2** to Johnny and in prose (his word, 2026-10-14); app versions 1.1.N.
-Code and fixture paths keep `1.2.0`. **App 1.2.0 = the push that finishes the marketplace**
-(Z phase 4); pushes before it stay 1.1.N.
+## Lanes
+All free (A, B, C, D, E, Z). F retired: never assign or propose. Next prompts are in the
+board's Queue (D: lime card and the featured row's heading; A: encoder export; B later:
+`family=`/`author=`).
 
 ## Next turn
-1. Check push 1.2.1: origin, live index `index-UTD7M5x3.js`, signed-out `GET /api/public-games?truthVersion=v10&sector=Spinward_Marches` is 200 (0018 applied).
-2. Give Johnny the package copy, then the example games seed (tools/examples/README.md, `--production`, dry run first, then `--apply`). Check the catalogue and the map signed out after each.
-3. Go B `b_public_overview` and D `d_public_overview_map` (overview, phone tap, stacks). Later: Party tab on one ship.
+1. Verify the push: `git log origin/campaign -1` must show "1.2.2 the marketplace as a
+   storefront…". Then: `d1_migrations` has 0019 (`wrangler d1 execute voyage --remote`),
+   the live index is the new one and holds a storefront string (e.g. "Most imported"),
+   `GET /api/public-games/overview?truthVersion=v10` signed out = 200 with
+   `public, max-age=60`, a catalogue card carries `cover`.
+2. Then give Johnny the `tools/examples/seed_production.mjs` cover commands (dry run first;
+   read the script's usage before writing them).
+3. Write D's follow-up prompt (lime public card; the featured heading) and A's encoder export.
 
 ## Versions
-Each push list bumps `APP_VERSION` in `apps/web/src/version.ts` (1.2.1 on disk, not pushed) and the commit message starts with it. Engine version is 1.2.0 on disk, 1.1.0
+Each push list bumps `APP_VERSION` in `apps/web/src/version.ts` (1.2.1 live; 1.2.2 called and on disk) and the commit message starts with it. Engine version is 1.2.0 on disk, 1.1.0
 live.
 
 ## Traps

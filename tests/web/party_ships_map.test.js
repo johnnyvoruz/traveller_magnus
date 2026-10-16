@@ -77,15 +77,18 @@ test('the renderer says which of your ships was clicked; the map opens the party
     map.resize(VP.width, VP.height, 1);
     map.setCampaign({ party: null, ships: SHIPS, locate: null, reducedMotion: false });
     map.draw(cam(PPP_NAMES + 10));
-    const shot = paint({ party: null, ships: SHIPS, locate: null, reducedMotion: false }, PPP_NAMES + 10).frame.ships;
-    const two = shot.find((mark) => mark.id === 'cr_two');
-    assert.equal(map.partyShipAt(two.cx, two.cy), 'cr_two');
-    assert.equal(map.partyAt(two.cx, two.cy), true);
+    // Your other ships are filled tracks (prompts/d_traffic_display.md); the lead keeps its chevron on the chart.
+    const two = map.trafficTracks().find((track) => track.key === 'own|cr_two');
+    assert.equal(two.mine, true);
+    assert.equal(map.partyShipAt(two.x, two.y), 'cr_two');
+    assert.equal(map.partyAt(two.x, two.y), true);
+    const lead = paint({ party: null, ships: [SHIPS[0]], locate: null, reducedMotion: false }, PPP_NAMES + 10).frame.ships[0];
+    assert.equal(map.partyShipAt(lead.cx, lead.cy), 'cr_lead');
     const view = read('views/MapView.vue');
     assert.match(view, /const ships = settings \? partyShipMarks\(campaign\.records, settings\.party, days\) : \[\];/);
     assert.match(view, /ships: partyShipTags\(ships\),/);
     assert.match(view, /party: partyIds\.has\(vessel\.id\)/);
-    assert.match(view, /if \(renderer && renderer\.partyAt\(sx, sy\)\) \{\s*openParty\(\);/);
+    assert.match(view, /if \(renderer && renderer\.partyAt\(sx, sy, touch\)\) \{\s*openParty\(\);/);
 });
 
 // ---- the feed ----------------------------------------------------------------------------------
@@ -175,11 +178,14 @@ test('a click\'s answers: the card, gone (404), no cards yet (503 or 401), or fa
 test('the card is read-only, closes three ways, and is a sheet on a phone', () => {
     const sheet = read('workspace/PublicShipSheet.vue');
     const template = sheet.slice(sheet.indexOf('<template>'), sheet.indexOf('<style>'));
-    assert.equal((template.match(/<button/g) || []).length, 1, 'one control: Close');
+    // Close, and Previous and Next on a stack (prompts/d_public_overview_map.md): nothing that changes a ship.
+    assert.equal((template.match(/<button/g) || []).length, 3);
+    assert.deepEqual([...template.matchAll(/<button[^>]*aria-label="([^"]+)"/g)].map((m) => m[1]), ['Previous ship', 'Next ship', 'Close']);
     assert.equal(/<input|<textarea|<select|contenteditable/.test(template), false);
     assert.match(template, /aria-label="Close" title="Close \(Esc\)"/);
     assert.match(template, /@keydown\.esc\.stop\.prevent="emit\('close'\)"/);
-    assert.match(template, /<span v-if="example" class="psheet-example" data-example>Example<\/span>/);
+    assert.match(template, /<footer v-if="example" class="psheet-foot" data-example>Example game<\/footer>/);
+    assert.equal(/psheet-example|>Example</.test(template), false, 'no Example tag by the name');
     assert.match(template, /<div v-if="state\.card\.referee" data-referee>/);
     assert.match(template, /<p v-if="aboard" class="psheet-aboard">/);
     assert.match(sheet, /\.psheet\.is-sheet \{[^}]*bottom: 8px;/);
@@ -232,7 +238,7 @@ function chartRenderer() {
     return { map, calls, centre: (ppp) => ({ x: (rect.x0 + rect.x1) / 2, y: (rect.y0 + rect.y1) / 2, ppp }) };
 }
 
-test('an example ship says so after its name, quieter; each dart glows; each hex pings', () => {
+test('an example ship carries no text on the map: no tag, no name, no glow; it is a track like any other', () => {
     const { map, calls, centre } = chartRenderer();
     map.setPublicGames(new Map([['On', [
         { hex: '1620', count: 1, name: 'G', ships: [{ mark: MARK(1), ship: 'Beowulf', aboard: [], example: true }] },
@@ -241,36 +247,31 @@ test('an example ship says so after its name, quieter; each dart glows; each hex
     calls.length = 0;
     map.draw(centre(PPP_NAMES + 1));
     const said = calls.filter((call) => call[0] === 'fillText').map((call) => call[1]);
-    assert.equal(said.filter((word) => word === 'Example').length, 1);
-    const example = calls.findIndex((call) => call[0] === 'fillText' && call[1] === 'Example');
-    const ink = calls.slice(0, example).reverse().find((call) => call[0] === 'set' && call[1] === 'fillStyle');
-    assert.equal(ink[2], 'muted', 'quieter than the name');
-    assert.equal(calls.filter((call) => call[0] === 'set' && call[1] === 'shadowColor' && call[2] === 'public').length, 2, 'a glow per dart');
-    assert.deepEqual(map.publicShipPings().map((ping) => ping.key), ['On/1620', 'On/1622']);
-    calls.length = 0;
-    map.draw(centre(3));
-    assert.deepEqual(map.publicShipPings(), [], 'no pings zoomed out, where no dart is drawn');
+    assert.deepEqual(said.filter((word) => /Example|Beowulf|Kestrel|BEOWULF|KESTREL/.test(String(word))), []);
+    assert.equal(calls.some((call) => call[0] === 'set' && call[1] === 'shadowBlur'), false, 'no glow');
+    assert.deepEqual(map.trafficTracks().map((track) => track.key).sort(), ['On/1620|' + MARK(1), 'On/1622|' + MARK(2)]);
+    assert.deepEqual(map.trafficTracks().map((track) => track.mine), [false, false]);
 });
 
-test('the open card\'s route: violet round dots that march, a ring per stop, at every zoom; gone when it closes', (t) => {
-    let reduced = false;
-    const had = globalThis.window;
-    globalThis.window = { matchMedia: () => ({ matches: reduced }) };
-    t.after(() => { globalThis.window = had; });
+test('the open card\'s route: a track\'s history in the traffic colour, still dots, the oldest leg faintest, at every zoom; gone when it closes', (t) => {
     const { map, calls, centre } = chartRenderer();
-    map.setPublicRoute([{ from: 'On/1620', to: 'On/1622' }, { from: 'On/1622', to: 'On/1622' }, { from: 'Elsewhere/0101', to: 'On/1620' }]);
+    map.setTrafficColour('traffic');
+    map.setPublicRoute([{ from: 'On/1620', to: 'On/1622' }, { from: 'On/1622', to: 'On/1622' }, { from: 'On/1622', to: 'On/1820' }, { from: 'Elsewhere/0101', to: 'On/1620' }]);
     for (const ppp of [PPP_NAMES + 1, 30, 3]) {
         calls.length = 0;
         const drawn = map.draw(centre(ppp));
-        const dash = calls.find((call) => call[0] === 'setLineDash' && call[1].length === 2);
-        assert.ok(dash, 'dotted at ' + ppp);
+        assert.ok(calls.find((call) => call[0] === 'setLineDash' && call[1].length === 2), 'dotted at ' + ppp);
         assert.equal(calls.some((call) => call[0] === 'set' && call[1] === 'lineCap' && call[2] === 'round'), true);
-        assert.equal(calls.some((call) => call[0] === 'set' && call[1] === 'strokeStyle' && call[2] === 'public'), true);
-        assert.equal(calls.filter((call) => call[0] === 'arc').length >= 2, true, 'a ring per stop');
-        assert.equal(drawn.animating, true, 'it marches');
+        assert.equal(calls.some((call) => call[0] === 'set' && call[1] === 'strokeStyle' && call[2] === 'traffic'), true);
+        assert.equal(calls.some((call) => call[0] === 'set' && call[1] === 'lineDashOffset'), false, 'it does not march');
+        assert.equal(calls.filter((call) => call[0] === 'arc').length, 0, 'no rings');
+        const from = calls.findIndex((call) => call[0] === 'setLineDash' && call[1].length === 2);
+        const route = calls.slice(from, calls.findIndex((call, i) => i > from && call[0] === 'restore'));
+        const alphas = route.filter((call) => call[0] === 'set' && call[1] === 'globalAlpha').map((call) => call[2]);
+        assert.equal(alphas.length, 2, 'one alpha per drawn leg');
+        assert.ok(alphas[0] < alphas[1], 'the older leg is fainter');
+        assert.equal(drawn.animating, false);
     }
-    reduced = true;
-    assert.equal(map.draw(centre(30)).animating, false, 'still under reduced motion');
     map.setPublicRoute(null);
     calls.length = 0;
     map.draw(centre(30));
@@ -278,15 +279,14 @@ test('the open card\'s route: violet round dots that march, a ring per stop, at 
     t.diagnostic('route drawn at three zooms');
 });
 
-test('the pings are compositor CSS that take no pointer, from tokens, and still under reduced motion', () => {
-    const pings = read('workspace/ShipPings.vue');
-    assert.match(pings, /\.ship-pings \{[^}]*pointer-events: none;/);
-    assert.match(pings, /animation: ship-ping var\(--ship-ping\) var\(--ease-out\) infinite;/);
-    assert.match(pings, /@media \(prefers-reduced-motion: reduce\) \{\s*\.ship-pings \{\s*display: none;/);
-    assert.equal(/#[0-9a-fA-F]{3,8}\b|\d+ms\b/.test(pings), false);
+test('no pings and no glow: ShipPings is gone, its tokens retired, and the view lays the traffic canvas over the chart', () => {
     const tokens = read('design/tokens.css');
-    assert.match(tokens, /--ship-ping: \d+ms;/);
-    assert.match(tokens, /--ship-ping-reach: \d+px;/);
+    assert.equal(/--ship-ping/.test(tokens), false);
+    assert.match(tokens, /--chart-traffic: #[0-9a-fA-F]{6};/);
     const view = read('views/MapView.vue');
-    assert.match(view, /<ShipPings :pings="shipPings" \/>/);
+    assert.equal(/ShipPings|PublicShipCard\b|PublicShipCardView/.test(view), false);
+    assert.match(view, /<canvas ref="trafficEl" class="traffic" aria-hidden="true"><\/canvas>/);
+    assert.match(view, /\.map > canvas\.traffic \{\s*pointer-events: none;/);
+    assert.throws(() => read('workspace/ShipPings.vue'));
+    assert.throws(() => read('workspace/PublicShipCard.vue'));
 });

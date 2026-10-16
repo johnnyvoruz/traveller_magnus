@@ -813,3 +813,10 @@ alongside the new one. Were those your own pending old-app work being committed?
 the last open box on the slice 0 checklist that only you can close.)
 
 **Answer:**
+
+### 2026-10-15, the four that held 1.2.2
+
+1. Public ship card in the lime traffic colour. **Answer (19:40):** yes.
+2. Lead ship's tag at rest at the hex zoom: off, name on hover. **Answer:** yes, as built.
+3. A's twelve covers ship as they are. **Answer:** yes.
+4. The ship display ships as it is. **Answer:** yes.

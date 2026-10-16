@@ -611,3 +611,101 @@ Single systems and records from an import stay editable and deletable through th
 - Remove (F14) deletes the links of the import with its records: a tombstone at a new rev and seq, also when both ends stay because they were kept as "mine".
 - A manifest without `links` parses and installs as before.
 - Test: `tests/api/install_links.test.js`.
+## F17. Covers - **on disk, unpushed**
+
+### The order
+1. **An upload:** the publisher's own image (for example a screenshot of their sector), set with `PUT /api/packages/:packageId/cover`.
+2. **Record art:** the first image (`images[0]`) of the first record that has one, in the package's record order, in the **latest done version**.
+3. **Nothing:** `cover: null`. The browser shows the default for the package's kind. The server never names a default.
+
+### On the wire
+- `PackageCard.cover` and `PackagePublicPage.cover`: `{ hash, thumbHash, source: 'upload' | 'record' } | null` (`PackageCover` in `packages/shared/src/schemas/package.ts`).
+- Both hashes name objects in the public bucket. The browser builds the addresses itself: `https://cdn.traveller.voyage/objects/<hash>` and `.../objects/<thumbHash>`.
+- This server always sends the field. The schema marks it optional, so a card from an older server still parses.
+- An open tab from before F17 ignores the field: `marketplace/catalogue.ts` casts the payload (`payload.data as T`) and does not parse it strictly. Checked on 2026-10-15.
+- `cover` is null:
+  - before 0019;
+  - when there is neither an upload nor record art;
+  - on a hidden package for anyone but an admin. That includes the author, in `?mine=1` and on the page.
+
+### `PUT /api/packages/:packageId/cover`
+- The author only. Anyone else gets 404 "No such package.". The origin is checked as on every write.
+- **Body:** one `multipart/form-data` request with four parts:
+  - `image`: the full image, a WebP file;
+  - `thumb`: the thumbnail, a WebP file;
+  - `hash`: the SHA-256 of `image`, as 64 lowercase hex characters;
+  - `thumbHash`: the SHA-256 of `thumb`, in the same form.
+- **Limits:**
+  - The image is at most 2 MB and at most 1600 px on its long side.
+  - The thumbnail is at most 200 KB and at most 640 px on its long side.
+  - Any aspect ratio is accepted. D crops to 16:9 on the card and shows the image whole on the page.
+  - The size is read from the WebP header (VP8, VP8L or VP8X).
+- **Answer:** 200 `{ cover: { hash, thumbHash, source: 'upload' } }`.
+- **Refusals,** in the order they are checked:
+
+| Status | Code | Message |
+|---|---|---|
+| 401 / 403 | (session and origin, as elsewhere) | |
+| 503 | unavailable | Covers are not available yet. (no 0019) |
+| 404 | not_found | No such package. (not the author, or no such id) |
+| 403 | forbidden | A hidden package cannot change its cover. |
+| 400 | too_large | A cover is at most 2 MB. (when the body is larger than both limits plus 64 KB) |
+| 400 | validation | Send the cover as a form with image, thumb, hash, and thumbHash. |
+| 400 | validation | Hash must be 64 lowercase hex characters. (either hash) |
+| 400 | too_large | A cover is at most 2 MB. |
+| 400 | validation | A cover is a WebP image. |
+| 400 | validation | A cover is at most 1600 px on its long side. |
+| 400 | validation | The hash does not match the cover. |
+| 400 | too_large | A cover thumbnail is at most 200 KB. |
+| 400 | validation | A cover thumbnail is a WebP image. |
+| 400 | validation | A cover thumbnail is at most 640 px on its long side. |
+| 400 | validation | The thumbHash does not match the thumbnail. |
+
+- **Storage:** the bytes go straight to the public bucket at `objects/<hash>` with content type `image/webp`. An object that is already there is not written again.
+- **Quota:** covers count against no quota. Each package has one pair, at most 2.2 MB, and a replaced or removed pair is deleted. The universe's 250 MB is for the publisher's private objects, and a cover is not one of them.
+
+### `DELETE /api/packages/:packageId/cover`
+- A plain delete. It has the same author, origin, 0019 and hidden refusals as the upload.
+- It answers 200 `{ cover }`: whatever now shows, either record art or null. There is no undo.
+- It succeeds when there is no upload.
+
+### Replacing and removing
+- The old object is deleted from the public bucket unless something still names it:
+  - another package's upload (`packages.cover_hash` or `cover_thumb_hash`), or
+  - an image of any record in any done version, this package's included (`package_versions.image_hashes`, a JSON array the publish job writes from `records.imageHashes`).
+- That is how we know an object is still named: one D1 query each, with no manifest read. Any done version whose row has not been filled yet is filled first (see the backfill).
+
+### Takedown and restore
+- **Takedown** copies the uploaded pair to the private bucket at `takedown/covers/<packageId>/<hash>`. It then deletes the public object, unless another package or a published record names it (the same check as above).
+- **Restore** puts each held object back on the public bucket and deletes the held copy.
+- Both are written to the audit log under `details.covers`.
+- Record art stays on takedown, as record objects do today.
+- A hidden package cannot take or drop a cover, and its cover shows to admins only.
+- The report form covers the cover with no change in wording: a reader reports the package, cover included.
+
+### Migration 0019 and the probe
+- `0019_package_covers.sql` adds:
+  - on `packages`: `cover_hash` and `cover_thumb_hash`;
+  - on `package_versions`: `art_hash`, `art_thumb_hash`, `image_hashes` and `art_filled` (integer, default 0).
+- The Worker probes for `packages.cover_hash` (`coversReady` in `jobs/publish_queue.ts`). A yes is kept for the isolate. A no is asked again, so applying the migration needs no redeploy.
+- Without 0019:
+  - `cover` is null everywhere;
+  - an upload or delete answers 503 "Covers are not available yet.";
+  - publish, takedown and restore work as before.
+- Both states are tested.
+
+### Record art at publish, and the backfill
+- The publish job writes `art_hash`, `art_thumb_hash`, `image_hashes` and `art_filled = 1` on the version row as it stores the manifest. The catalogue never opens a manifest for a version published after 0019.
+- **The backfill is a lazy fill on first read.** A done version with `art_filled = 0` (published before 0019) is filled once from its manifest and its records object. This happens when its cover is first read, or before an "is it still named" check.
+  - The manifest is read from the public bucket, or from the takedown copy for a hidden package.
+  - There is no script to run.
+- Tests: `tests/api/package_covers.test.js` (both states), `tests/shared/package_cover.test.js`, `tests/tools/examples.test.js`.
+
+### The example packs
+- A `listing.json` may name `"cover": "covers/<pack-folder>.webp"`. `covers/<pack-folder>_640.webp` beside it is the thumbnail.
+- `build_local.mjs` uploads the cover through the route after publishing.
+- `seed_production.mjs`:
+  - names each cover in the dry run;
+  - copies the pair with `--apply`;
+  - refuses a target without 0019;
+  - with `--remove --apply`, deletes each cover object that no package outside the examples names.

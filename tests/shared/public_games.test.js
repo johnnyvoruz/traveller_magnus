@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {
     PUBLIC_CARD_BODY,
     PUBLIC_DEFAULT_DAYS,
+    PUBLIC_OVERVIEW_MAX,
+    PublicGamesOverview,
     PublicGamesSector,
     PublicGamesSetting,
     publicCardJournal,
@@ -206,4 +208,14 @@ test('a public card keeps finished chart hexes and public notes', () => {
     assert.equal(notes[0].body.length, PUBLIC_CARD_BODY);
     assert.equal(PublicGamesSetting.safeParse({ public: true, showReferee: false }).success, true);
     assert.equal(PublicGamesSetting.safeParse({ public: true }).success, true);
+});
+
+test('an overview is hex keys and counts', () => {
+    assert.equal(PUBLIC_OVERVIEW_MAX, 20_000);
+    const parsed = PublicGamesOverview.safeParse({ hexes: [{ key: 'Spinward_Marches/1910', count: 2 }] });
+    assert.equal(parsed.success, true);
+    assert.equal(PublicGamesOverview.safeParse({ hexes: [{ key: 'Spinward_Marches/1910', count: 2, name: 'Open' }] }).success, false);
+    assert.equal(PublicGamesOverview.safeParse({ hexes: [{ key: '~mine/1910', count: 1 }] }).success, false);
+    assert.equal(PublicGamesOverview.safeParse({ hexes: [{ key: 'Spinward_Marches/1910', count: 0 }] }).success, false);
+    assert.equal(PublicGamesOverview.safeParse({ hexes: [], later: true }).success, false);
 });

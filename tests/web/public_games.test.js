@@ -254,7 +254,7 @@ function publicOps(calls) {
     return calls.slice(at);
 }
 
-test('the public mark draws only at the hex tier and does not take the click', (t) => {
+test('public games are tracks at the hex tier, drawn on their own layer, never on the chart, and take no party or vessel click', (t) => {
     const { canvas, calls } = recordingCanvas();
     const renderer = new MapRenderer(canvas, theme);
     renderer.setChart({
@@ -270,48 +270,41 @@ test('the public mark draws only at the hex tier and does not take the click', (
     calls.length = 0;
     renderer.draw(cam);
     const baseline = calls.length;
-    assert.equal(publicOps(calls).length, 0);
     calls.length = 0;
     renderer.setPublicGames(new Map());
     renderer.draw(cam);
     assert.equal(calls.length, baseline);
-    assert.equal(publicOps(calls).length, 0);
+    assert.deepEqual(renderer.trafficTracks(), []);
 
     const ten = marksOf(10);
     renderer.setPublicGames(new Map([['On', ten]]));
-    const low = { ...centre(), ppp: 30 };
-    renderer.draw(low);
-    const lowOps = publicOps(calls);
-    assert.equal(lowOps.filter((call) => call[0] === 'moveTo').length, 10);
-    assert.equal(lowOps.some((call) => call[0] === 'fillText'), false);
     calls.length = 0;
+    renderer.draw({ ...centre(), ppp: 30 });
+    assert.equal(renderer.trafficTracks().length, 10);
+    assert.deepEqual(publicOps(calls), [], 'nothing of theirs on the chart');
     renderer.draw({ ...centre(), ppp: 8 });
-    assert.equal(publicOps(calls).length, 0);
+    assert.deepEqual(renderer.trafficTracks(), [], 'zoomed out the feed adds nothing: the overview does');
 
     calls.length = 0;
     const t10 = renderer.draw(cam).ms;
-    const named = publicOps(calls);
-    assert.equal(named.filter((call) => call[0] === 'moveTo').length, 10);
-    assert.equal(named.filter((call) => call[0] === 'fillText' && call[1] === '4').length, 1);
-    assert.equal(named.filter((call) => call[0] === 'fillText' && call[1] === 'Game 1').length, 1);
-    const top = named.find((call) => call[0] === 'moveTo');
-    assert.equal(renderer.partyAt(top[1], top[2]), false);
-    assert.equal(renderer.vesselAt(top[1], top[2]), null);
-    renderer.setSelection({ slug: 'On', hhhh: '0101' });
-    calls.length = 0;
-    renderer.draw(cam);
-    assert.equal(publicOps(calls).some((call) => call[0] === 'moveTo'), true);
-    assert.equal(calls.some((call) => call[0] === 'set' && call[1] === 'strokeStyle' && call[2] === 'selected'), true);
-    assert.equal(renderer.partyAt(top[1], top[2]), false);
+    assert.equal(calls.length, baseline, 'the chart draws the same with ten games as with none');
+    const tracks = renderer.trafficTracks();
+    assert.equal(tracks.length, 10);
+    assert.deepEqual(tracks.map((track) => track.many), [true, ...new Array(9).fill(false)], 'four ships on one hex: an inner diamond');
+    assert.equal(tracks.some((track) => track.label !== null), false, 'a game sent without ships has no words');
+    const top = tracks[0];
+    assert.equal(renderer.partyAt(top.x, top.y), false);
+    assert.equal(renderer.vesselAt(top.x, top.y), null);
+    assert.equal(renderer.publicShipAt(top.x, top.y), null, 'and no card without ships');
 
     const twoHundred = marksOf(200);
     renderer.setPublicGames(new Map([['On', twoHundred]]));
     calls.length = 0;
     const t200 = renderer.draw(cam).ms;
-    assert.equal(publicOps(calls).filter((call) => call[0] === 'moveTo').length, 200);
+    assert.equal(renderer.trafficTracks().length, 200);
     renderer.setPublicGames(null);
     calls.length = 0;
     const t0 = renderer.draw(cam).ms;
-    assert.equal(publicOps(calls).length, 0);
-    t.diagnostic(`public marks draw ms: 0=${t0.toFixed(2)} 10=${t10.toFixed(2)} 200=${t200.toFixed(2)}`);
+    assert.deepEqual(renderer.trafficTracks(), []);
+    t.diagnostic(`chart draw ms with tracks: 0=${t0.toFixed(2)} 10=${t10.toFixed(2)} 200=${t200.toFixed(2)}`);
 });

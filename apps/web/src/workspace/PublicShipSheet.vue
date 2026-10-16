@@ -1,10 +1,13 @@
 <script setup lang="ts">
 /**
  * The read-only card of someone else's public ship (prompts/d_party_ships_map.md item 2): the
- * ship, who is aboard, the game, the referee when they chose to be named, an "Example" tag, and
- * the public journal, newest first. Nothing on it changes anything. Beside the ship's marks on a
+ * ship, who is aboard, the game, the referee when they chose to be named, and the public journal,
+ * newest first, with one quiet "Example game" line at the foot of an example's card
+ * (prompts/d_traffic_display.md item 8). Nothing on it changes anything. Beside the ship's marks on a
  * wide window; a sheet along the bottom of a phone. Closes with Esc, its close button, or a click
- * on empty map (MapView). Its finished route is drawn on the map while it is open.
+ * on empty map (MapView). Its finished route is drawn on the map while it is open. Opened on a
+ * hex with several ships, it says "1 of 3" and steps through them with Previous and Next
+ * (prompts/d_public_overview_map.md item 7): those only change which ship is shown.
  */
 import { computed, nextTick, ref, watch } from 'vue';
 import Icon from '../design/Icon.vue';
@@ -12,8 +15,13 @@ import { routeWords, SHIP_FAILED, SHIP_GONE, type ShipCardBody } from './public_
 import { SHIP_SHEET_BELOW, shipCardPlace, type ShipCardBox } from './public_ship_card.ts';
 
 export type ShipSheetState = {
-    /** The mark it was opened on: a new one moves focus to the card again. */
+    /** Counts each opening: a new one moves focus to the card. Stepping through a stack does not. */
+    opened: number;
+    /** The ship shown. */
     mark: string;
+    /** How many ships the hex's list holds, and which of them this is (0-based). */
+    count: number;
+    index: number;
     status: 'loading' | 'card' | 'gone' | 'failed';
     /** What the feed said, shown while the card loads. */
     ship: string;
@@ -24,7 +32,7 @@ export type ShipSheetState = {
 };
 
 const props = defineProps<{ state: ShipSheetState | null; width: number; height: number }>();
-const emit = defineEmits<{ close: [] }>();
+const emit = defineEmits<{ close: []; step: [delta: number] }>();
 
 const CARD_W = 340;
 const CARD_H = 460;
@@ -55,9 +63,11 @@ const style = computed(() => {
     return { left: at.left + 'px', top: at.top + 'px', width: at.width + 'px', maxHeight: h + 'px' };
 });
 
+const position = computed(() => (props.state && props.state.count > 1 ? String(props.state.index + 1) + ' of ' + String(props.state.count) : null));
+
 // Focus goes to the card when it opens on a ship, so Esc and the keyboard reach it.
-watch(() => (props.state ? props.state.mark : null), (mark) => {
-    if (!mark) return;
+watch(() => (props.state ? props.state.opened : null), (opened) => {
+    if (opened === null) return;
     void nextTick(() => { if (sheetEl.value) sheetEl.value.focus({ preventScroll: true }); });
 });
 </script>
@@ -80,11 +90,21 @@ watch(() => (props.state ? props.state.mark : null), (mark) => {
       <header class="psheet-head">
         <div class="psheet-title">
           <h2 class="psheet-ship">{{ ship }}</h2>
-          <span v-if="example" class="psheet-example" data-example>Example</span>
         </div>
-        <button type="button" class="ui-btn is-icon psheet-close" aria-label="Close" title="Close (Esc)" @click="emit('close')">
-          <Icon name="xmark" :size="14" />
-        </button>
+        <div class="psheet-tools">
+          <template v-if="position">
+            <button type="button" class="ui-btn is-icon" aria-label="Previous ship" title="Previous ship" :disabled="state.index === 0" data-step="-1" @click="emit('step', -1)">
+              <Icon name="chevron-left" :size="14" />
+            </button>
+            <span class="psheet-position" aria-live="polite" data-position>{{ position }}</span>
+            <button type="button" class="ui-btn is-icon" aria-label="Next ship" title="Next ship" :disabled="state.index >= state.count - 1" data-step="1" @click="emit('step', 1)">
+              <Icon name="chevron-right" :size="14" />
+            </button>
+          </template>
+          <button type="button" class="ui-btn is-icon psheet-close" aria-label="Close" title="Close (Esc)" @click="emit('close')">
+            <Icon name="xmark" :size="14" />
+          </button>
+        </div>
       </header>
       <div class="psheet-body">
         <p v-if="aboard" class="psheet-aboard"><span>Aboard:</span> {{ aboard }}</p>
@@ -107,6 +127,7 @@ watch(() => (props.state ? props.state.mark : null), (mark) => {
           </section>
         </template>
       </div>
+      <footer v-if="example" class="psheet-foot" data-example>Example game</footer>
     </section>
   </div>
 </template>
@@ -163,6 +184,22 @@ watch(() => (props.state ? props.state.mark : null), (mark) => {
   padding: 12px 10px 6px 16px;
 }
 
+.psheet-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+
+.psheet-position {
+  min-width: 46px;
+  color: var(--text-muted);
+  font: 400 12px/1 var(--font-code);
+  font-variant-numeric: var(--tabular);
+  text-align: center;
+  white-space: nowrap;
+}
+
 .psheet-title {
   display: flex;
   flex-wrap: wrap;
@@ -179,12 +216,12 @@ watch(() => (props.state ? props.state.mark : null), (mark) => {
   overflow-wrap: anywhere;
 }
 
-.psheet-example {
-  padding: 1px 8px;
-  border: 1px solid var(--line-2);
-  border-radius: var(--r-pill);
+.psheet-foot {
+  flex: none;
+  padding: 8px 16px 10px;
+  border-top: 1px solid var(--line-1);
   color: var(--text-muted);
-  font: 600 11px/1.5 var(--font-text);
+  font: 400 12px/1.4 var(--font-text);
 }
 
 .psheet-body {

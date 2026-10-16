@@ -26,12 +26,45 @@ export function readPack(folder) {
         if (typeof listing[field] !== 'string' || !listing[field].trim()) throw new Error(`${path.relative(ROOT, listingFile)}: ${field}: Required`);
     }
     if (!Array.isArray(listing.tags) || listing.tags.some((t) => typeof t !== 'string')) throw new Error(`${path.relative(ROOT, listingFile)}: tags: Expected array of strings`);
+    const cover = listing.cover === undefined ? null : coverFiles(listing.cover, path.relative(ROOT, listingFile));
     const packFile = path.join(folder, 'pack.json');
     const pack = existsSync(packFile) ? JSON.parse(readFileSync(packFile, 'utf8')) : { mode: 'records' };
     const doc = parsed.document;
     if (doc.universe.truthVersion !== TRUTH_VERSION) throw new Error(`${path.relative(ROOT, campaignFile)}: universe.truthVersion: Expected ${TRUTH_VERSION}`);
     const anchors = [...new Set(doc.records.map((r) => r.anchor?.kind === 'system' ? r.anchor.hexKey : null).filter((k) => k && !k.startsWith('~')))].sort();
-    return { slug: path.basename(folder), folder, doc, listing, pack, anchors };
+    return { slug: path.basename(folder), folder, doc, listing, pack, anchors, cover };
+}
+
+/**
+ * F17. A listing's `"cover": "covers/<name>.webp"` names the full image; `covers/<name>_640.webp` beside it is
+ * the thumbnail. Both must exist, be WebP, and keep within the server's limits; the refusal names the file.
+ */
+export function coverFiles(value, where) {
+    if (typeof value !== 'string' || !/^covers\/[a-z0-9-]+\.webp$/.test(value)) throw new Error(`${where}: cover: Expected "covers/<name>.webp"`);
+    const full = path.join(HERE, value);
+    const thumb = full.replace(/\.webp$/, '_640.webp');
+    const out = {};
+    for (const [name, file, maxBytes] of [['image', full, 2 * 1024 * 1024], ['thumb', thumb, 200 * 1024]]) {
+        if (!existsSync(file)) throw new Error(`${where}: cover: ${path.relative(ROOT, file)} does not exist`);
+        const bytes = readFileSync(file);
+        if (bytes.subarray(0, 4).toString('latin1') !== 'RIFF' || bytes.subarray(8, 12).toString('latin1') !== 'WEBP') throw new Error(`${path.relative(ROOT, file)}: not WebP`);
+        if (bytes.byteLength > maxBytes) throw new Error(`${path.relative(ROOT, file)}: larger than ${maxBytes} bytes`);
+        out[name] = { file, bytes, hash: sha256(bytes) };
+    }
+    return out;
+}
+
+/** Uploads a pack's cover through the app's route, after publishing. */
+export async function uploadCover(st, cookie, packageId, cover) {
+    const form = new FormData();
+    form.set('image', new Blob([cover.image.bytes], { type: 'image/webp' }), 'cover.webp');
+    form.set('thumb', new Blob([cover.thumb.bytes], { type: 'image/webp' }), 'thumb.webp');
+    form.set('hash', cover.image.hash);
+    form.set('thumbHash', cover.thumb.hash);
+    const r = await fetch(`${st.api}/api/packages/${packageId}/cover`, { method: 'PUT', headers: { cookie, origin: st.api }, body: form });
+    const body = await r.json().catch(() => null);
+    if (r.status >= 300) throw new Error(`cover ${packageId}: ${r.status} ${JSON.stringify(body)}`);
+    return body.data.cover;
 }
 
 /** PATCH batches within the campaign limits, records then links, each row at baseRev 0. */
@@ -154,7 +187,8 @@ async function main() {
     const truth = await prepare(st, hexKeys.length ? hexKeys : ['Spinward_Marches/1910']);
     console.log(`State ${path.relative(ROOT, st.dir)}: ${truth.version}, house account ${EXAMPLE_HANDLE} (${EXAMPLE_USER_ID}).`);
     if (flag('--bare')) return;
-    const call = client(st, account(st, EXAMPLE_USER_ID, EXAMPLE_HANDLE));
+    const cookie = account(st, EXAMPLE_USER_ID, EXAMPLE_HANDLE);
+    const call = client(st, cookie);
     const child = startApi(st);
     console.log(`API pid ${child.pid} on ${st.api}`);
     const built = [];
@@ -169,6 +203,11 @@ async function main() {
                 await loadRecords(call, id, p.doc.records, p.doc.links);
                 const keys = p.pack.mode === 'charted' ? p.pack.hexKeys : p.anchors;
                 built.push({ slug: p.slug, universeId: id, packageId: await publish(call, id, p.listing, keys, p.doc.records.map((r) => r.id)) });
+            }
+            const last = built[built.length - 1];
+            if (p.cover && last) {
+                last.cover = await uploadCover(st, cookie, last.packageId, p.cover);
+                console.log('  cover', p.slug, last.cover.hash.slice(0, 12));
             }
             console.log('  published', p.slug);
         }

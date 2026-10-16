@@ -113,11 +113,28 @@ export const PackageListPage = z.object({
 }).strict();
 export type PackageListPage = z.infer<typeof PackageListPage>;
 
+/**
+ * F17. A package's cover: the publisher's upload, else the first image of the first record
+ * that has one in the latest done version. Both hashes are objects in the public bucket.
+ * Null when there is neither; the browser shows the default for the kind.
+ */
+export const PackageCover = z.object({
+    hash: z.string().regex(/^[0-9a-f]{64}$/),
+    thumbHash: z.string().regex(/^[0-9a-f]{64}$/),
+    source: z.enum(['upload', 'record']),
+}).strict();
+export type PackageCover = z.infer<typeof PackageCover>;
+
 /** Full marketplace, contracts/b_marketplace.md F2. The catalogue card. */
 export const PackageCard = PackageListing.extend({
     installs: z.number().int().nonnegative(),
     updatedAt: z.string(),
     hidden: z.boolean(),
+    /**
+     * F17. Null before 0019, with no cover, and on a hidden package for anyone but an admin.
+     * This server always sends it; optional so a card from an older server still parses.
+     */
+    cover: PackageCover.nullable().optional(),
 }).strict();
 export type PackageCard = z.infer<typeof PackageCard>;
 
@@ -146,6 +163,8 @@ export const PackagePublicPage = PackagePage.extend({
     installs: z.number().int().nonnegative(),
     updatedAt: z.string(),
     hidden: z.boolean(),
+    /** F17. As on the card. */
+    cover: PackageCover.nullable().optional(),
     /** Only on an admin's view of a hidden package. */
     takedownReason: z.string().nullable().optional(),
 }).strict();
