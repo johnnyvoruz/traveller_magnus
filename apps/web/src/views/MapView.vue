@@ -31,6 +31,7 @@ import { editDateNext } from '../workspace/list_state.ts';
 import StardateChip from '../workspace/StardateChip.vue';
 import PublicShipSheet, { type ShipSheetState } from '../workspace/PublicShipSheet.vue';
 import { fetchShipCard } from '../workspace/public_card.ts';
+import { courseWrites } from '../workspace/public_course.ts';
 import { SHIP_SHEET_BELOW, SHIP_SHEET_SHARE } from '../workspace/public_ship_card.ts';
 import FirstHint from '../workspace/FirstHint.vue';
 import { FIRST_PLACE, FIRST_WORLD, firstNear, HINT_KEY, hintShown, LAST_VIEW_KEY, openingFor, parseView, viewText } from '../workspace/first_visit.ts';
@@ -1847,7 +1848,7 @@ async function showShip(index: number, place: PublicShipHit['place'], press: { s
     if (answer.kind === 'card') {
         shipCardsReady = true;
         shipSheet.value = { ...now, status: 'card', card: answer.card };
-        if (renderer) renderer.setPublicRoute(answer.card.legs);
+        if (renderer) renderer.setPublicRoute({ legs: answer.card.legs, course: answer.card.course });
     } else if (answer.kind === 'gone') {
         // No longer public: the card says so and the track goes.
         shipSheet.value = { ...now, status: 'gone' };
@@ -1859,6 +1860,12 @@ async function showShip(index: number, place: PublicShipHit['place'], press: { s
     }
     markDirty();
 }
+
+/** The referee changed the course switch: the server has rewritten the cards, so an open card is fetched again. */
+watch(() => courseWrites.count, () => {
+    const now = shipSheet.value;
+    if (now) void showShip(now.index, now.place, null);
+});
 
 /** The card closes: its route goes with it. Focus goes back to the chart unless a click put it elsewhere. */
 function closeShip(refocus = true): void {

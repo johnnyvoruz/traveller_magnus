@@ -181,6 +181,7 @@ const PAIRS = [
     ['--text-1', '--bg-1', TEXT, 'person card: the summary (13.5 px)'],
     ['--text-muted', '--bg-1', TEXT, 'person card: where (12.5 px)'],
     ['--text-muted', '--bg-1', SMALL, 'person card: the type label (11 px)'],
+    ['--chart-traffic', '--bg-1', TEXT, 'public ship card: the ship name, in the traffic colour (18 px)'],
     ['--text-0', '--surface-2', TEXT, 'orbit view layer chip, checked'],
     ['--signal', '--surface-2', MARK, 'orbit view layer chip icon, checked'],
     ['--daylight', '--night-sky', MARK, 'day and night strip: light against dark'],

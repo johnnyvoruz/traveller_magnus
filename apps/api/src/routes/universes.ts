@@ -11,7 +11,7 @@ import { ownedUniverse, type UniverseRow } from '../universe/forward';
 import { mountBuilderRoutes } from './builder';
 import { mountCampaignExport } from './campaign_export';
 import { mountObjectRoutes } from './objects';
-import { detectPublicCards, detectPublicGames, publicCardsReady, publicGamesReady, readPublicGames } from '../auth/public_schema';
+import { courseReady, detectPublicCards, detectPublicGames, publicCardsReady, publicGamesReady, readPublicGames } from '../auth/public_schema';
 import { deletePublicMark } from '../universe/public_mark';
 import { refreshAfterCampaign, setPublicGames } from './public_games';
 
@@ -27,7 +27,7 @@ function database(c: { env: AppEnv['Bindings'] }) {
     return drizzle(c.env.DB, { schema: { universes } });
 }
 
-function present(row: UniverseRow, flags?: { publicGames?: boolean; showReferee?: boolean }) {
+function present(row: UniverseRow, flags?: { publicGames?: boolean; showReferee?: boolean; showCourse?: boolean }) {
     const body = {
         id: row.id,
         ownerId: row.ownerId,
@@ -55,12 +55,24 @@ async function presentOwned(c: { env: AppEnv['Bindings'] }, row: UniverseRow) {
     if (!publicGamesReady()) return present(row);
     const flag = await readPublicGames(c.env.DB, row.id);
     if (flag === null) return present(row);
-    const flags: { publicGames: boolean; showReferee?: boolean } = { publicGames: flag === 1 };
-    if (publicCardsReady()) {
+    const flags: { publicGames: boolean; showReferee?: boolean; showCourse?: boolean } = { publicGames: flag === 1 };
+    const course = await courseReady(c.env.DB);
+    if (publicCardsReady() && course) {
+        const extra = await c.env.DB.prepare(
+            `SELECT show_referee AS showReferee, show_course AS showCourse FROM universes WHERE id = ?`,
+        ).bind(row.id).first<{ showReferee: number; showCourse: number }>();
+        flags.showReferee = Number(extra?.showReferee) === 1;
+        flags.showCourse = Number(extra?.showCourse) !== 0;
+    } else if (publicCardsReady()) {
         const extra = await c.env.DB.prepare(
             `SELECT show_referee AS showReferee FROM universes WHERE id = ?`,
         ).bind(row.id).first<{ showReferee: number }>();
         flags.showReferee = Number(extra?.showReferee) === 1;
+    } else if (course) {
+        const extra = await c.env.DB.prepare(
+            `SELECT show_course AS showCourse FROM universes WHERE id = ?`,
+        ).bind(row.id).first<{ showCourse: number }>();
+        flags.showCourse = Number(extra?.showCourse) !== 0;
     }
     return present(row, flags);
 }
@@ -120,18 +132,29 @@ universesRoute.get('/', async (c) => {
     await detectPublicCards(c.env.DB);
     if (!publicGamesReady()) return ok(c, rows.map((row) => present(row)));
     const cards = publicCardsReady();
+    const course = await courseReady(c.env.DB);
     const flags = await c.env.DB.prepare(
-        cards
-            ? `SELECT id, public_games AS publicGames, show_referee AS showReferee FROM universes WHERE owner_id = ? AND deleted_at IS NULL`
-            : `SELECT id, public_games AS publicGames FROM universes WHERE owner_id = ? AND deleted_at IS NULL`,
-    ).bind(actor.id).all<{ id: string; publicGames: number; showReferee?: number }>();
-    const on = new Map<string, { publicGames: boolean; showReferee?: boolean }>();
+        cards && course
+            ? `SELECT id, public_games AS publicGames, show_referee AS showReferee, show_course AS showCourse FROM universes WHERE owner_id = ? AND deleted_at IS NULL`
+            : cards
+                ? `SELECT id, public_games AS publicGames, show_referee AS showReferee FROM universes WHERE owner_id = ? AND deleted_at IS NULL`
+                : course
+                    ? `SELECT id, public_games AS publicGames, show_course AS showCourse FROM universes WHERE owner_id = ? AND deleted_at IS NULL`
+                    : `SELECT id, public_games AS publicGames FROM universes WHERE owner_id = ? AND deleted_at IS NULL`,
+    ).bind(actor.id).all<{ id: string; publicGames: number; showReferee?: number; showCourse?: number }>();
+    const on = new Map<string, { publicGames: boolean; showReferee?: boolean; showCourse?: boolean }>();
     for (const flag of flags.results ?? []) {
-        const item: { publicGames: boolean; showReferee?: boolean } = { publicGames: Number(flag.publicGames) === 1 };
+        const item: { publicGames: boolean; showReferee?: boolean; showCourse?: boolean } = { publicGames: Number(flag.publicGames) === 1 };
         if (cards) item.showReferee = Number(flag.showReferee) === 1;
+        if (course) item.showCourse = Number(flag.showCourse) !== 0;
         on.set(String(flag.id), item);
     }
-    return ok(c, rows.map((row) => present(row, on.get(row.id) ?? { publicGames: false, ...(cards ? { showReferee: false } : {}) })));
+    const absent = {
+        publicGames: false,
+        ...(cards ? { showReferee: false } : {}),
+        ...(course ? { showCourse: true } : {}),
+    };
+    return ok(c, rows.map((row) => present(row, on.get(row.id) ?? absent)));
 });
 
 universesRoute.post('/', async (c) => {

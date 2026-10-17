@@ -5,13 +5,14 @@
  * newest first, with one quiet "Example game" line at the foot of an example's card
  * (prompts/d_traffic_display.md item 8). Nothing on it changes anything. Beside the ship's marks on a
  * wide window; a sheet along the bottom of a phone. Closes with Esc, its close button, or a click
- * on empty map (MapView). Its finished route is drawn on the map while it is open. Opened on a
+ * on empty map (MapView). While it is open the map shows its route, and its name and border
+ * are the traffic colour, the map's colour for other people's ships (prompts/d_store_2.md item 4). Opened on a
  * hex with several ships, it says "1 of 3" and steps through them with Previous and Next
  * (prompts/d_public_overview_map.md item 7): those only change which ship is shown.
  */
 import { computed, nextTick, ref, watch } from 'vue';
 import Icon from '../design/Icon.vue';
-import { routeWords, SHIP_FAILED, SHIP_GONE, type ShipCardBody } from './public_card.ts';
+import { SHIP_FAILED, SHIP_GONE, type ShipCardBody } from './public_card.ts';
 import { SHIP_SHEET_BELOW, shipCardPlace, type ShipCardBox } from './public_ship_card.ts';
 
 export type ShipSheetState = {
@@ -48,7 +49,6 @@ const aboard = computed(() => {
     return names.join(', ');
 });
 const example = computed(() => (props.state ? (props.state.card ? props.state.card.example : props.state.example) : false));
-const route = computed(() => (props.state && props.state.card ? routeWords(props.state.card.legs) : null));
 const note = computed(() => {
     const status = props.state ? props.state.status : null;
     if (status === 'gone') return SHIP_GONE;
@@ -115,7 +115,6 @@ watch(() => (props.state ? props.state.opened : null), (opened) => {
             <div><dt>Game</dt><dd>{{ state.card.game }}</dd></div>
             <div v-if="state.card.referee" data-referee><dt>Referee</dt><dd>{{ state.card.referee }}</dd></div>
           </dl>
-          <p v-if="route" class="psheet-route"><Icon name="route" :size="13" />{{ route }}</p>
           <section class="psheet-journal" aria-label="Journal">
             <h3>Journal</h3>
             <article v-for="(entry, i) in state.card.journal" :key="i" class="psheet-entry">
@@ -150,10 +149,10 @@ watch(() => (props.state ? props.state.opened : null), (opened) => {
   flex-direction: column;
   box-sizing: border-box;
   pointer-events: auto;
-  border: 1px solid color-mix(in srgb, var(--chart-public) 45%, var(--line-1));
+  border: 1px solid color-mix(in srgb, var(--chart-traffic) 45%, var(--line-1));
   border-radius: var(--r-4);
   background: var(--bg-1);
-  box-shadow: var(--shadow-pop), 0 0 0 1px color-mix(in srgb, var(--chart-public) 12%, transparent);
+  box-shadow: var(--shadow-pop), 0 0 0 1px color-mix(in srgb, var(--chart-traffic) 12%, transparent);
   color: var(--text-1);
   font: 400 14px/1.5 var(--font-text);
   animation: psheet-in var(--t-fast) var(--ease-out);
@@ -210,7 +209,7 @@ watch(() => (props.state ? props.state.opened : null), (opened) => {
 
 .psheet .psheet-ship {
   margin: 0;
-  color: var(--chart-public);
+  color: var(--chart-traffic);
   font: italic 600 18px/1.3 var(--font-text);
   letter-spacing: 0;
   overflow-wrap: anywhere;
@@ -266,14 +265,6 @@ watch(() => (props.state ? props.state.opened : null), (opened) => {
   margin: 0;
   color: var(--text-0);
   overflow-wrap: anywhere;
-}
-
-.psheet .psheet-route {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--chart-public);
-  font-size: 13px;
 }
 
 .psheet-journal {

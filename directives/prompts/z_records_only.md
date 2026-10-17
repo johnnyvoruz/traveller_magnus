@@ -80,6 +80,8 @@ After each meaningful step, append one line under Progress: "done: X. next: Y."
 ## Progress
 
 done: read today's anchor behaviour (kept unchanged in place and outside a placement: installs.ts load/place, package_place.ts:131, contract :463); it contradicts Decided item 4, so Halt & Challenge with three options; example packs listed, none changed; report written, Status blocked. next: orchestrator's answer on anchors.
+done: built F18 (hexKeys may be empty with the one-hex-or-record refusal in packages.ts; installs.ts refuses a placement for a records-only package and drops own-sector anchors, counted in records.anchorsDropped); new suite tests/api/install_records_only.test.js passes; contract section written. next: gates.
+done: gates pass (npm test 0 fail, check clean, typecheck clean, seven worker suites pass, no server left); report directives/reports/z_records_only.md written. next: Johnny's review; Lane D builds from the contract.
 
 ## Answer to the halt (orchestrator, 2026-10-15 22:20)
 

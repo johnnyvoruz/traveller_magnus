@@ -29,6 +29,7 @@ import { forgetOpening, retryCampaign } from './opening.ts';
 import { MY_PACKAGES_PATH } from './market/command.ts';
 import { liveRecords } from './records.ts';
 import { campaignDays, partyMarker } from './party_where.ts';
+import { COURSE_LABEL, COURSE_LATER, setShowCourse, showCourseOf } from './public_course.ts';
 import { partyOnChart, PUBLIC_GAMES_LABEL, PUBLIC_GAMES_NO_PLACE, PUBLIC_GAMES_SAY, publicGamesOf, publicGamesToast, setPublicGames, setShowReferee, showRefereeOf } from './public_games.ts';
 import SignInCard from './SignInCard.vue';
 import { noteReturn, RECOVERY_PATH } from './passkey/recovery.ts';
@@ -193,6 +194,11 @@ function remove(): void {
 const publicOn = computed(() => publicGamesOf(openOne.value));
 /** The name on public cards. Null hides the switch: public is off, or the server has no such field. */
 const showName = computed(() => showRefereeOf(openOne.value));
+/** The course switch: null hides it (public is off); not available on a server before 0020. */
+const showCourse = computed(() => showCourseOf(openOne.value, publicOn.value));
+/** The server's sentence when the course switch was refused, said by the switch. */
+const courseTrouble = ref('');
+watch(() => (openOne.value ? openOne.value.id : ''), () => { courseTrouble.value = ''; });
 /** On, and the party has no place on the chart: nothing is shown to anyone yet, and the menu says what to do. */
 const publicNowhere = computed(() => {
     if (publicOn.value !== true || campaign.status !== 'ready' || !campaign.settings) return false;
@@ -235,6 +241,26 @@ async function toggleShowName(): Promise<void> {
         busy.value = false;
         void nextTick(() => {
             const el = pop.value ? pop.value.querySelector<HTMLElement>('[data-command="show-referee"]') : null;
+            if (el) el.focus();
+        });
+    }
+}
+
+/** The course switch. A refusal is said in the server's sentence by the switch, and the switch stays as it was. */
+async function toggleShowCourse(): Promise<void> {
+    const target = openOne.value;
+    const now = showCourse.value;
+    if (!target || !now || !now.available || busy.value) return;
+    busy.value = true;
+    courseTrouble.value = '';
+    try {
+        const done = await setShowCourse(target.id, !now.on);
+        if (!done.ok) courseTrouble.value = done.message;
+        else showToast(done.showCourse ? 'This game’s public cards show where its ships are going.' : 'This game’s public cards no longer show where its ships are going.');
+    } finally {
+        busy.value = false;
+        void nextTick(() => {
+            const el = pop.value ? pop.value.querySelector<HTMLElement>('[data-command="show-course"]') : null;
             if (el) el.focus();
         });
     }
@@ -487,6 +513,21 @@ watch(() => props.open, (open) => {
         >
           <Icon name="user" :size="15" /><span>Show my name on public cards</span><em>{{ showName ? 'On' : 'Off' }}</em>
         </button>
+        <button
+          v-if="openOne && showCourse"
+          type="button"
+          role="menuitemcheckbox"
+          class="account-public account-show-course"
+          data-command="show-course"
+          :aria-checked="showCourse.on ? 'true' : 'false'"
+          :aria-describedby="!showCourse.available || courseTrouble ? 'account-course-say' : undefined"
+          :disabled="busy || !showCourse.available"
+          @click="toggleShowCourse"
+        >
+          <Icon name="route" :size="15" /><span>{{ COURSE_LABEL }}</span><em>{{ showCourse.on ? 'On' : 'Off' }}</em>
+        </button>
+        <p v-if="openOne && showCourse && courseTrouble" id="account-course-say" class="account-say is-todo" role="alert" data-course-trouble>{{ courseTrouble }}</p>
+        <p v-else-if="openOne && showCourse && !showCourse.available" id="account-course-say" class="account-say" data-course-later>{{ COURSE_LATER }}</p>
         <button v-if="openOne" type="button" role="menuitem" class="account-delete" :disabled="busy" @click="begin('delete')">
           <Icon name="trash" :size="15" /><span>Delete {{ openOne.name }}</span>
         </button>

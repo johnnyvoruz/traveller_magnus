@@ -8,6 +8,11 @@ import { CAMPAIGN_LIMITS } from './campaign.ts';
 export const PublicGamesSetting = z.object({
     public: z.boolean(),
     showReferee: z.boolean().optional(),
+    /**
+     * The referee's course switch. Optional so a tab can still send `{ public }` alone.
+     * The server refuses `showCourse` until migration 0020 is applied.
+     */
+    showCourse: z.boolean().optional(),
 }).strict();
 export type PublicGamesSetting = z.infer<typeof PublicGamesSetting>;
 
@@ -28,7 +33,10 @@ export const PUBLIC_CARD_ENTRIES = 20;
  */
 export const PUBLIC_CARD_BODY = 2_000;
 
-/** Bytes of `legs` plus `journal` stored on one ship. A longer card drops the oldest legs, then the oldest notes. */
+/**
+ * Bytes of `legs`, `course`, and `journal` stored on one ship.
+ * A longer card drops the oldest finished legs, then the oldest notes. The course is kept.
+ */
 export const PUBLIC_CARD_BYTES = 100_000;
 
 const MARK_ID = /^pm_[0-9A-HJKMNP-TV-Z]{26}$/;
@@ -114,6 +122,12 @@ export const PublicShipCard = z.object({
     ship: z.string().min(1).max(CAMPAIGN_LIMITS.name),
     aboard: z.array(z.string().min(1).max(CAMPAIGN_LIMITS.name)).max(PUBLIC_NAMES_PER_SHIP),
     legs: z.array(PublicFinishedLeg).max(CAMPAIGN_LIMITS.track),
+    /**
+     * The leg under way, then the planned legs. Same shape as `legs`.
+     * Empty when nothing ahead is a chart hex, or when the game's course switch is off.
+     * An open 1.2.2 tab drops this key.
+     */
+    course: z.array(PublicFinishedLeg).max(CAMPAIGN_LIMITS.track),
     journal: z.array(PublicJournalNote).max(PUBLIC_CARD_ENTRIES),
 }).strict();
 export type PublicShipCard = z.infer<typeof PublicShipCard>;

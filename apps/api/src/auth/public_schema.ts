@@ -1,6 +1,7 @@
 let ready: boolean | null = null;
 let shipsReady: boolean | null = null;
 let cardsReady: boolean | null = null;
+let courseColumn = false;
 let logged = false;
 
 export function publicGamesReady(): boolean {
@@ -50,6 +51,26 @@ export async function detectPublicCards(db: D1Database): Promise<boolean> {
     ).first<{ name: string }>();
     cardsReady = row?.name === 'public_cards';
     return cardsReady;
+}
+
+/**
+ * 0020 probe. A yes is kept for the isolate. A no is asked again, so applying the migration
+ * needs no restart. Both columns are required: the switch without the card column cannot be stored.
+ */
+export async function courseReady(db: D1Database): Promise<boolean> {
+    if (courseColumn) return true;
+    try {
+        const ship = await db.prepare(
+            `SELECT COUNT(*) AS n FROM pragma_table_info('universes') WHERE name = 'show_course'`,
+        ).first<{ n: number }>();
+        const card = await db.prepare(
+            `SELECT COUNT(*) AS n FROM pragma_table_info('public_cards') WHERE name = 'course'`,
+        ).first<{ n: number }>();
+        courseColumn = Number(ship?.n ?? 0) > 0 && Number(card?.n ?? 0) > 0;
+    } catch {
+        courseColumn = false;
+    }
+    return courseColumn;
 }
 
 /** 1 or 0 when 0013 is applied and the row exists. Null when the column is absent or the row is gone. */

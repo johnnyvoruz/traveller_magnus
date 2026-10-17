@@ -1,22 +1,23 @@
-# Orchestrator state — 2026-10-15 22:25 (written for the next orchestrator session)
+# Orchestrator state — 2026-10-16 18:05 (written for the next orchestrator session)
 
-Overwritten every turn. History: `handoff.md` (last section 291; read by offset, it is large).
+Overwritten every turn. History: `handoff.md` (last section 292; read by offset, it is large).
 `orchestrator_start_here.md` is the 2026-10-07 page and is stale. This file and
-`board.md` are the state. Lane sessions D and Z were restarted at 19:30.
+`board.md` are the state.
 
 ## Where the roadmap is
-Live: **1.2.2 (`7b6f4e5`)**. **Called: 1.2.3** (`findings/push/release_2026-10-15b.md`, 37 paths: scroll fix, surface zoom, UWP tiles, seed guard). Held for 1.2.4: B's public course (ships with D's checkbox). Johnny has Z's cover-seed commands.
+Live: **1.2.3 (`10e6d8d`)**, index `index-CTGrh87X.js`. **Called: 1.2.4** (`findings/push/release_2026-10-16.md`, 46 paths + directives, 0020): D's store filters, solid routes with the course, course switch; B's course; Z's records-only server. Johnny answered yes to D's three at 18:10; the push stands as built.
 
 ## Lanes
-D go `d_store_2`; Z go `z_records_only` (answer at its foot); A, B, C, E free. F retired. Use the claude-in-chrome extension for live looks (Johnny's signed-in Chrome).
+A (`a_test_flakes`) and D (`d_store_3`) go after Johnny pushes 1.2.4; B, C, E, Z free. F retired. Use the claude-in-chrome extension for live looks (Johnny's signed-in Chrome).
 
 ## Next turn
-1. Verify 1.2.3 (`git log origin/campaign -1`, GitHub run, live index `index-CTGrh87X.js`), then in Chrome: /packages scrolls, a dossier's UWP tiles, the surface zoom.
-2. After Johnny runs the cover seed: `GET /api/packages` cards carry `cover`; then delete `findings/examples/local_backup_pre_covers`.
-3. Review D `d_store_2` and Z `z_records_only`. 1.2.4 = D's pass + B's held course paths (0020; read the code again) + Z's records-only if accepted.
+1. Johnny pushes 1.2.4, then says go to A and D.
+2. Covers seeded and checked (18:03), backup deleted. Chrome 18:06: /packages on index-CTGrh87X scrolls to its foot, nine cover images load (640 px). Not yet looked at live: UWP tiles, surface zoom.
+3. After 1.2.4 is live: `git log origin/campaign -1`, live index `index-Cpo2OS6L.js`, `d1_migrations` has 0020, a public card answers `course`; in Chrome the filter column and a route.
+4. Written: `d_store_3`, `a_test_flakes`.
 
 ## Versions
-Each push list bumps `APP_VERSION` in `apps/web/src/version.ts` (1.2.2 live; 1.2.3 called; next 1.2.4) and the commit message starts with it. Engine version is 1.2.0 on disk, 1.1.0
+Each push list bumps `APP_VERSION` in `apps/web/src/version.ts` (1.2.3 live; 1.2.4 called; next 1.2.5) and the commit message starts with it. Engine version is 1.2.0 on disk, 1.1.0
 live.
 
 ## Traps

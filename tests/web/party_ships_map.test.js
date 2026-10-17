@@ -12,7 +12,8 @@ import { hexCentre, sectorRect, toGlobal } from '../../apps/web/src/map/geometry
 import { MapRenderer } from '../../apps/web/src/map/MapRenderer.ts';
 import { PPP_NAMES } from '../../apps/web/src/map/tiers.ts';
 import { bindPublicGames, dropPublicShip, publicMarks, resetPublicGames, watchPublicGames } from '../../apps/web/src/map/public_games.ts';
-import { fetchShipCard, noteDate, readShipCard, routeWords, SHIP_FAILED, SHIP_GONE } from '../../apps/web/src/workspace/public_card.ts';
+import { fetchShipCard, noteDate, readShipCard, SHIP_FAILED, SHIP_GONE } from '../../apps/web/src/workspace/public_card.ts';
+import { arrowHead, routeChains } from '../../apps/web/src/map/traffic.ts';
 import { recordingContext } from './orbit_fixture.js';
 
 const read = (file) => readFileSync(new URL('../../apps/web/src/' + file, import.meta.url), 'utf8');
@@ -154,8 +155,15 @@ test('the card is read leniently: unknown keys and unreadable legs or notes are 
     assert.equal(readShipCard({ ...CARD, referee: null }).referee, null);
     assert.equal(readShipCard({ ship: 'x' }), null);
     assert.equal(noteDate({ year: 1105, day: 400 }, null), null);
-    assert.equal(routeWords(card.legs), 'One finished leg, drawn on the map.');
-    assert.equal(routeWords([]), null);
+    // An older server sends no course: none, never a refusal (contracts/b_public_games.md, 0020).
+    assert.deepEqual(card.course, []);
+    const ahead = readShipCard({ ...CARD, course: [
+        { from: 'Spinward_Marches/1910', to: 'Spinward_Marches/1810', departs: 20, arrives: 27 },
+        { from: 'Spinward_Marches/1810', to: 'Spinward_Marches/1711', departs: 28, arrives: 35 },
+        { from: 'Spinward_Marches/1711', to: 'not a hex', departs: 36, arrives: 40 },
+    ] });
+    assert.deepEqual(ahead.course.map((leg) => leg.to), ['Spinward_Marches/1810', 'Spinward_Marches/1711']);
+    assert.deepEqual(readShipCard({ ...CARD, course: 'nonsense' }).course, []);
 });
 
 test('a click\'s answers: the card, gone (404), no cards yet (503 or 401), or failed', async () => {
@@ -193,7 +201,10 @@ test('the card is read-only, closes three ways, and is a sheet on a phone', () =
     const view = read('views/MapView.vue');
     assert.match(view, /if \(event\.key === 'Escape' && shipSheet\.value\) \{\s*event\.preventDefault\(\);\s*closeShip\(\);/);
     assert.match(view, /if \(shipSheet\.value\) closeShip\(false\);/);
-    assert.match(view, /renderer\.setPublicRoute\(answer\.card\.legs\)/);
+    assert.match(view, /renderer\.setPublicRoute\(\{ legs: answer\.card\.legs, course: answer\.card\.course \}\)/);
+    // The Route row is gone (Johnny, 2026-10-15): the line on the map says it.
+    assert.equal(/psheet-route|finished leg|drawn on the map/.test(sheet), false);
+    assert.match(sheet, /\.psheet \.psheet-ship \{\s*margin: 0;\s*color: var\(--chart-traffic\);/);
     assert.match(view, /dropPublicShip\(first\.mark\)/);
 });
 
@@ -253,29 +264,72 @@ test('an example ship carries no text on the map: no tag, no name, no glow; it i
     assert.deepEqual(map.trafficTracks().map((track) => track.mine), [false, false]);
 });
 
-test('the open card\'s route: a track\'s history in the traffic colour, still dots, the oldest leg faintest, at every zoom; gone when it closes', (t) => {
+test('route geometry: legs chain where one ends and the next starts; a leg on its hex or off the chart draws nothing', () => {
+    const at = (key) => (key.startsWith('On/') ? { x: Number(key.slice(3, 5)), y: Number(key.slice(5, 7)) } : null);
+    const chains = routeChains([
+        { from: 'On/1020', to: 'On/1022' },
+        { from: 'On/1022', to: 'On/1022' },
+        { from: 'On/1022', to: 'On/1220' },
+        { from: 'Elsewhere/0101', to: 'On/1020' },
+        { from: 'On/3030', to: 'On/3232' },
+    ], at);
+    assert.deepEqual(chains, [[{ x: 10, y: 20 }, { x: 10, y: 22 }, { x: 12, y: 20 }], [{ x: 30, y: 30 }, { x: 32, y: 32 }]]);
+    // The head's tip is the last point; its barbs sit back along the last segment, either side of it.
+    const head = arrowHead([[{ x: 0, y: 0 }, { x: 100, y: 0 }]], 9);
+    assert.deepEqual(head, [{ x: 100, y: 0 }, { x: 91, y: 3 }, { x: 91, y: -3 }]);
+    assert.equal(arrowHead([], 9), null);
+});
+
+test('the open card\'s route: solid lines in the traffic colour, the finished track dimmed, the course bright with an arrowhead at its end, at every zoom; gone when it closes', (t) => {
     const { map, calls, centre } = chartRenderer();
     map.setTrafficColour('traffic');
-    map.setPublicRoute([{ from: 'On/1620', to: 'On/1622' }, { from: 'On/1622', to: 'On/1622' }, { from: 'On/1622', to: 'On/1820' }, { from: 'Elsewhere/0101', to: 'On/1620' }]);
+    const legs = [{ from: 'On/1620', to: 'On/1622' }, { from: 'On/1622', to: 'On/1622' }, { from: 'On/1622', to: 'On/1820' }, { from: 'Elsewhere/0101', to: 'On/1620' }];
+    const course = [{ from: 'On/1820', to: 'On/1921' }, { from: 'On/1921', to: 'On/2020' }];
+    // The route is the only part of a frame that turns dashes off and then sets a round cap.
+    const routeCalls = () => {
+        const from = calls.findIndex((call, i) => call[0] === 'setLineDash' && call[1].length === 0 && calls[i + 1] && calls[i + 1][1] === 'lineCap');
+        return from < 0 ? [] : calls.slice(from, calls.findIndex((call, i) => i > from && call[0] === 'restore'));
+    };
+    const alphas = (route) => route.filter((call) => call[0] === 'set' && call[1] === 'globalAlpha').map((call) => call[2]);
+    map.setPublicRoute({ legs, course });
     for (const ppp of [PPP_NAMES + 1, 30, 3]) {
         calls.length = 0;
         const drawn = map.draw(centre(ppp));
-        assert.ok(calls.find((call) => call[0] === 'setLineDash' && call[1].length === 2), 'dotted at ' + ppp);
-        assert.equal(calls.some((call) => call[0] === 'set' && call[1] === 'lineCap' && call[2] === 'round'), true);
-        assert.equal(calls.some((call) => call[0] === 'set' && call[1] === 'strokeStyle' && call[2] === 'traffic'), true);
-        assert.equal(calls.some((call) => call[0] === 'set' && call[1] === 'lineDashOffset'), false, 'it does not march');
+        const route = routeCalls();
+        assert.ok(route.length > 0, 'drawn at ' + ppp);
+        assert.equal(route.some((call) => call[0] === 'setLineDash' && call[1].length > 0), false, 'solid, no dots');
+        assert.equal(route.some((call) => call[0] === 'set' && call[1] === 'lineJoin' && call[2] === 'round'), true);
+        assert.equal(route.some((call) => call[0] === 'set' && call[1] === 'lineDashOffset'), false, 'it does not march');
+        // Two lines, each cased in the chart's dark and then inked: the track at 70% (45% measured under 3:1), the course at full.
+        assert.deepEqual(alphas(route).slice(0, 4), [0.9, 0.7, 0.9, 1]);
+        assert.equal(route.filter((call) => call[0] === 'set' && call[1] === 'strokeStyle' && call[2] === 'traffic').length, 2);
+        assert.equal(route.filter((call) => call[0] === 'set' && call[1] === 'lineWidth' && call[2] === 2).length, 2, 'about 2 px');
+        // One arrowhead, filled in the traffic colour, at the end of the course.
+        assert.equal(route.filter((call) => call[0] === 'fill').length, 1);
+        assert.equal(route.some((call) => call[0] === 'set' && call[1] === 'fillStyle' && call[2] === 'traffic'), true);
         assert.equal(calls.filter((call) => call[0] === 'arc').length, 0, 'no rings');
-        const from = calls.findIndex((call) => call[0] === 'setLineDash' && call[1].length === 2);
-        const route = calls.slice(from, calls.findIndex((call, i) => i > from && call[0] === 'restore'));
-        const alphas = route.filter((call) => call[0] === 'set' && call[1] === 'globalAlpha').map((call) => call[2]);
-        assert.equal(alphas.length, 2, 'one alpha per drawn leg');
-        assert.ok(alphas[0] < alphas[1], 'the older leg is fainter');
         assert.equal(drawn.animating, false);
     }
+    // No course (or an older server's card): the track only, and a small arrowhead whose tip is the present hex.
+    map.setPublicRoute({ legs });
+    calls.length = 0;
+    map.draw(centre(30));
+    let route = routeCalls();
+    assert.deepEqual(alphas(route).slice(0, 2), [0.9, 0.7]);
+    assert.equal(route.filter((call) => call[0] === 'fill').length, 1);
+    const present = route.filter((call) => call[0] === 'lineTo')[1];
+    const tip = route.filter((call) => call[0] === 'moveTo').pop();
+    assert.deepEqual([tip[1], tip[2]], [present[1], present[2]]);
+    // A course and no finished legs: the course alone, bright.
+    map.setPublicRoute({ legs: [], course });
+    calls.length = 0;
+    map.draw(centre(30));
+    route = routeCalls();
+    assert.deepEqual(alphas(route).slice(0, 2), [0.9, 1]);
     map.setPublicRoute(null);
     calls.length = 0;
     map.draw(centre(30));
-    assert.equal(calls.some((call) => call[0] === 'setLineDash' && call[1].length === 2), false);
+    assert.deepEqual(routeCalls(), []);
     t.diagnostic('route drawn at three zooms');
 });
 

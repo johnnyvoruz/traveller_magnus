@@ -163,6 +163,25 @@ type JournalLike = {
     updatedAt: string;
 };
 
+/** Legs that have not arrived at `days`, in track order. The leg under way is first, then the planned legs. Ends that are not a chart hex are left out. */
+export function publicCourseLegs(
+    vessel: CampaignRecord,
+    records: Readonly<Record<string, CampaignRecord>>,
+    days: number,
+): PublicFinishedLeg[] {
+    const track = trackOf(vessel);
+    if (!track) return [];
+    const legs: PublicFinishedLeg[] = [];
+    for (const leg of track) {
+        if (leg.arrives <= days) continue;
+        const from = chartKey(leg.from, records);
+        const to = chartKey(leg.to, records);
+        if (!from || !to) continue;
+        legs.push({ from, to, departs: leg.departs, arrives: leg.arrives });
+    }
+    return legs;
+}
+
 /** Finished legs of one ship at `days`. A leg still underway is left out. Ends that are not a chart hex are left out. */
 export function publicFinishedLegs(
     vessel: CampaignRecord,
@@ -200,16 +219,27 @@ export function publicCardJournal(entries: readonly JournalLike[]): PublicJourna
     return notes;
 }
 
-/** Drops the oldest finished legs, then the oldest notes, until `legs` and `journal` fit in `PUBLIC_CARD_BYTES`. */
-export function fitPublicCard(legs: PublicFinishedLeg[], journal: PublicJournalNote[]): { legs: PublicFinishedLeg[]; journal: PublicJournalNote[] } {
+/**
+ * Drops the oldest finished legs, then the oldest notes, until `legs`, `course`, and `journal`
+ * fit in `PUBLIC_CARD_BYTES`. The course is never dropped. `course` defaults to empty so a
+ * caller that has not moved to 0020 still fits the finished legs and the notes.
+ */
+export function fitPublicCard(
+    legs: PublicFinishedLeg[],
+    journal: PublicJournalNote[],
+    course: PublicFinishedLeg[] = [],
+): { legs: PublicFinishedLeg[]; course: PublicFinishedLeg[]; journal: PublicJournalNote[] } {
     const nextLegs = [...legs];
+    const nextCourse = [...course];
     const nextJournal = [...journal];
-    const size = () => new TextEncoder().encode(JSON.stringify({ legs: nextLegs, journal: nextJournal })).length;
+    const size = () => new TextEncoder().encode(JSON.stringify(nextLegs)).length
+        + new TextEncoder().encode(JSON.stringify(nextCourse)).length
+        + new TextEncoder().encode(JSON.stringify(nextJournal)).length;
     while (size() > PUBLIC_CARD_BYTES && (nextLegs.length > 0 || nextJournal.length > 0)) {
         if (nextLegs.length > 0) nextLegs.shift();
         else nextJournal.pop();
     }
-    return { legs: nextLegs, journal: nextJournal };
+    return { legs: nextLegs, course: nextCourse, journal: nextJournal };
 }
 
 function chartKey(anchor: CampaignAnchor, records: Readonly<Record<string, CampaignRecord>>): string | null {

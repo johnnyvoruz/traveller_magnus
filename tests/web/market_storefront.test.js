@@ -15,7 +15,7 @@ import { COVER_LIMITS, prepareCover } from '../../apps/web/src/workspace/market/
 import { fakeMarketStore } from '../../apps/web/src/workspace/market/fake_store.ts';
 import { closePublish, coverDraft, coverMissed, marketUi, publish, useCoverSender, useMarketStore } from '../../apps/web/src/workspace/market/market.ts';
 import {
-    cardFacts, familiesIn, featured, galleryImages, hexesInside, kindWords, moreBy, ofFamily, recordGroups, sectorNames, updatedWords,
+    cardFacts, featured, galleryImages, hexesInside, kindWords, moreBy, recordGroups, sectorNames, updatedWords,
 } from '../../apps/web/src/workspace/market/storefront.ts';
 
 const H = (n) => String(n).repeat(64).slice(0, 64);
@@ -77,18 +77,12 @@ test('the cover shown: the server cover by its hashes on the CDN, else the defau
 
 test('the featured row: the three most imported, hidden below six packages', () => {
     const five = [1, 2, 3, 4, 5].map((n) => card({ id: 'pk_' + n, installs: n }));
-    assert.deepEqual(featured(five), []);
+    assert.deepEqual(featured(five).cards, []);
     const six = [...five, card({ id: 'pk_6', installs: 9 })];
-    assert.deepEqual(featured(six).map((item) => item.id), ['pk_6', 'pk_5', 'pk_4']);
+    assert.equal(featured(six).heading, 'Most imported');
+    assert.deepEqual(featured(six).cards.map((item) => item.id), ['pk_6', 'pk_5', 'pk_4']);
     const tied = [...six, card({ id: 'pk_7', installs: 9, updatedAt: '2026-10-16T00:00:00.000Z' })];
-    assert.deepEqual(featured(tied).map((item) => item.id), ['pk_7', 'pk_6', 'pk_5']);
-});
-
-test('chips: one per family present, in table order; a chip keeps that family', () => {
-    const cards = [card({ id: 'a', kind: 'people' }), card({ id: 'b', kind: 'sector piece' }), card({ id: 'c', kind: 'contacts' }), card({ id: 'd', kind: 'misc' })];
-    assert.deepEqual(familiesIn(cards), ['map', 'people', 'other']);
-    assert.deepEqual(ofFamily(cards, 'people').map((item) => item.id), ['a', 'c']);
-    assert.equal(ofFamily(cards, '').length, 4);
+    assert.deepEqual(featured(tied).cards.map((item) => item.id), ['pk_7', 'pk_6', 'pk_5']);
 });
 
 test('a card: facts in priority order, and Updated as a relative date', () => {

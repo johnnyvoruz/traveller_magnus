@@ -71,7 +71,7 @@ export {
 } from './schemas/campaign.ts';
 export type { CampaignRecordType, CampaignEntryKind, CampaignLinkKind, SystemAnchor, LocateAt } from './schemas/campaign.ts';
 export { copyRecords } from './campaign_copy.ts';
-export { PUBLIC_DEFAULT_DAYS, fitPublicCard, publicCardJournal, publicFinishedLegs, publicFirstHex, publicMarkId, publicShips } from './public_hex.ts';
+export { PUBLIC_DEFAULT_DAYS, fitPublicCard, publicCardJournal, publicCourseLegs, publicFinishedLegs, publicFirstHex, publicMarkId, publicShips } from './public_hex.ts';
 export type { PublicHex, PublicShipPlace } from './public_hex.ts';
 export {
     PUBLIC_CARD_BODY,

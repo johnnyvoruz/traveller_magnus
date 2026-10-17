@@ -395,6 +395,8 @@ export const Universe = z.object({
     publicGames: z.boolean().optional(),
     /** Present only when migration 0018 is applied. Omitted on an older database. */
     showReferee: z.boolean().optional(),
+    /** Present only when migration 0020 is applied. Omitted on an older database. Default on. */
+    showCourse: z.boolean().optional(),
 }).strict();
 export type Universe = z.infer<typeof Universe>;
 

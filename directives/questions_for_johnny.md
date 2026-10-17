@@ -820,3 +820,9 @@ the last open box on the slice 0 checklist that only you can close.)
 2. Lead ship's tag at rest at the hex zoom: off, name on hover. **Answer:** yes, as built.
 3. A's twelve covers ship as they are. **Answer:** yes.
 4. The ship display ships as it is. **Answer:** yes.
+
+### 2026-10-16, D's three from `d_store_2` (1 and 3 hold the 1.2.4 push)
+
+1. The finished track at 70% brightness instead of 45% (45% fails 3:1 on the chart). Recommended: yes. **Answer (18:10):** yes.
+2. Your own ships' routes drawn solid with the arrowhead in party cyan, for the selected ship while the Party tab is open. Recommended: yes, a small D pass. **Answer:** yes.
+3. A tag link filters the loaded cards in the browser until B's catalogue queries. Recommended: yes. **Answer:** yes.

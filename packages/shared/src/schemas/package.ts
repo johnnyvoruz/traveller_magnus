@@ -60,9 +60,10 @@ export const PackageCreate = z.object({
 export type PackageCreate = z.infer<typeof PackageCreate>;
 
 /** The version body. Caps are enforced by the route so the too-large sentences stay exact. */
+/** F18. `hexKeys` may be empty: a records-only version. The route asks for at least one hex or one record. */
 export const PackagePublish = z.object({
     universeId: z.string().min(1),
-    hexKeys: z.array(HexKey).min(1),
+    hexKeys: z.array(HexKey),
     recordIds: z.array(z.string().regex(RECORD_ID)),
 }).strict().superRefine((value, ctx) => {
     if (new Set(value.hexKeys).size !== value.hexKeys.length) {
@@ -224,6 +225,8 @@ export const InstallPreview = z.object({
         add: z.number().int().nonnegative(),
         replace: z.number().int().nonnegative(),
         conflicts: z.array(z.string()),
+        /** F18. Own-sector anchors a records-only import drops. Absent from a server before F18. */
+        anchorsDropped: z.number().int().nonnegative().optional(),
     }).strict(),
     bytes: z.number().int().nonnegative(),
     conflicts: z.number().int().nonnegative(),

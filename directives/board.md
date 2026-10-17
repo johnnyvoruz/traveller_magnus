@@ -1,18 +1,19 @@
 # Board
 
-One line per lane. Only the orchestrator edits this file. Updated 2026-10-15 22:25 (by the clock).
+One line per lane. Only the orchestrator edits this file. Updated 2026-10-16 18:05 (by the clock).
 
-**Last push: `7b6f4e5`, version 1.2.2, engine e1.2, 2026-10-15, live** (index `index--F8jS_o3.js`; tests green on GitHub; 0019 applied). Truth v10. Every catalogue card answers `cover: null` until Z's safe seed.
+**Last push: `10e6d8d`, version 1.2.3, engine e1.2, 2026-10-16, live** (index `index-CTGrh87X.js`). Truth v10. Covers seeded: all six catalogue cards carry `cover` (18:03); `local_backup_pre_covers` deleted.
+**Called 18:10: 1.2.4** (`findings/push/release_2026-10-16.md`, 46 paths, 0020).
 **Deploys run on push** (Johnny, 2026-10-14): push commands no longer include `npm run deploy:ci`.
 
 | Lane | Status | Current prompt | Blocker / next |
 |---|---|---|---|
-| A | free | (none) | `a_store_art` accepted: 8 kind defaults (apps/web/public/covers/), 4 example covers; contact sheet findings/art/store_art_contact_sheet.png awaits Johnny |
-| B | free | (none) | `b_public_course` accepted 22:20: `course` on the card, `show_course`, 0020; **held out of 1.2.3** until D's checkbox ships (no course public before a referee can turn it off) |
+| A | go after the 1.2.4 push | prompts/a_test_flakes.md | the renderer and store_scroll timing flakes, tests only |
+| B | free | (none) | `b_public_course` accepted; in the 1.2.4 list with D's switch |
 | C | free | (none) | `c_surface_zoom` accepted (cap 320 px per hex, sharp window; parity exit 0 with pinned counts); in 1.2.3 |
-| D | go | prompts/d_store_2.md | `d_store_scroll` accepted (in 1.2.3). Now: the filter column and sheet; solid routes, the course ahead and the dimmed track; lime card without the Route row; the course checkbox; Back restores the store's scroll |
+| D | go after the 1.2.4 push | prompts/d_store_3.md | `d_store_2` accepted (in 1.2.4). Next: records-only screens, featured row without repeats, your own ships' routes in cyan |
 | E | free | (none) | `e_uwp_dots` accepted (in 1.2.3) |
-| Z | go | prompts/z_records_only.md (Answer at its foot) | `z_cover_seed` accepted (guard, column fit; Johnny's two commands). Records-only: halt answered (chart anchors kept, own-sector anchors dropped and counted) |
+| Z | free | (none) | `z_records_only` accepted 18:05 (server only: 0 hexes with a record, no placement, own-sector anchors dropped and counted; contract section F18); in the 1.2.4 list |
 | F | retired | (none) | Johnny, 2026-10-11: unreliable (runs out of budget); do not use or propose until he says it is back |
 
 ## Naming (Johnny, 2026-10-14)
@@ -432,9 +433,11 @@ lane's letter as the first message of a new session; from then on "go" is enough
 - 2026-10-14, a Back "<" left of the pane's X: one pane back; X still closes the pane.
 
 ## Open with Johnny
-Nothing. Answered 2026-10-15 19:40, "yes to all four": (1) the public ship card goes lime
-to match its track: a D follow-up after `d_storefront`; (2) the lead's tag stays off at
-rest, name on hover, as built; (3) A's covers ship as they are; (4) the ship display ships.
+Nothing. Answered 2026-10-16 18:10, "yes to all three": (1) the finished track at 70%; (2) your own ships' routes drawn the same way, in cyan (D `d_store_3`); (3) tag links filter in the browser until B's catalogue queries.
+
+## Decided by the orchestrator, 2026-10-16
+- Z's question 2: the dropped-anchor count stays on the preview only, not on the install answer.
+- Z's question 1 (example packs to records-only) is already Johnny's, after records-only ships with D's screens (Queue).
 
 ## Decided by the orchestrator, 2026-10-15 (D's storefront questions)
 1. Kind chips and "More by" filter in the browser over the loaded page (up to 100 cards) while the catalogue is small; B adds `family=` and `author=` queries later (Queue).
@@ -469,10 +472,8 @@ rest, name on hover, as built; (3) A's covers ship as they are; (4) the ship dis
   2; after the push).
 
 ## Queue (prompts not yet written)
-- A: make `tests/web/renderer.test.js` "draw reports animating while a title fades in" independent of wall-clock load (it failed in the 1.2.3 rehearsal under the full suite, passes alone; second sighting).
 - Johnny, after records-only ships: convert the four records packs to records-only (Z recommends; Regina highport contacts first).
 - D, seen by the orchestrator in the kb26 shots: the product page's "What's inside" box draws a few tiny hex outlines in a large empty panel (show the chart piece itself, or shrink the box to fit); map covers (Hollow Verge) read as a few dots at card size.
-- D, after Z's `z_records_only` report: the records-only screens (a publish entry from the campaign's records, card facts, the product page without the hex box, import without placement).
 - A: export `encodeWebp` and `sha256Hex` from `campaign/images.ts`; D's `market/cover_image.ts` then imports them (two copies of one encoder today).
 - B, later: catalogue `family=` and `author=` queries (D's question 1).
 - Someone checks Z's note: the map draws the Hollow Verge own sector about 15 hexes from where Z's slot-to-hex arithmetic put it. Z's arithmetic may be the wrong one; a note, not a fault yet.

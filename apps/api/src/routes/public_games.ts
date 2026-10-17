@@ -6,7 +6,7 @@ import {
     PublicGamesSetting,
     PublicGamesTruthVersion,
 } from '@voyage/shared';
-import { detectPublicCards, detectPublicGames, detectPublicShips, publicCardsReady, publicGamesReady, publicShipsReady, readPublicGames } from '../auth/public_schema';
+import { courseReady, detectPublicCards, detectPublicGames, detectPublicShips, publicCardsReady, publicGamesReady, publicShipsReady, readPublicGames } from '../auth/public_schema';
 import { requireUser, type AppContext } from '../auth/session';
 import { fail } from '../http';
 import type { Env } from '../env';
@@ -14,6 +14,7 @@ import { deletePublicMark, placeTouched, writePublicMark } from '../universe/pub
 import type { OwnedUniverse } from '../universe/forward';
 
 export const PUBLIC_GAMES_UNAVAILABLE = 'Public games are not available yet.';
+export const COURSE_UNAVAILABLE = 'The course switch is not available yet.';
 
 const WINDOW_MS = 60 * 1000;
 const LIMIT = 60;
@@ -202,21 +203,44 @@ export async function setPublicGames(c: AppContext, owned: OwnedUniverse): Promi
     }
     const parsed = PublicGamesSetting.safeParse(body);
     if (!parsed.success) return fail(c, 400, 'validation', 'Invalid request.');
+    const courseOn = await courseReady(c.env.DB);
+    if (parsed.data.showCourse !== undefined && !courseOn) {
+        return fail(c, 503, 'course_unavailable', COURSE_UNAVAILABLE);
+    }
     const flag = parsed.data.public ? 1 : 0;
     const now = new Date().toISOString();
     const cards = publicCardsReady();
+    const sets = ['public_games = ?', 'updated_at = ?'];
+    const binds: (string | number)[] = [flag, now];
     if (cards && parsed.data.showReferee !== undefined) {
-        await c.env.DB.prepare(
-            `UPDATE universes SET public_games = ?, show_referee = ?, updated_at = ? WHERE id = ?`,
-        ).bind(flag, parsed.data.showReferee ? 1 : 0, now, owned.row.id).run();
-    } else {
-        await c.env.DB.prepare(
-            `UPDATE universes SET public_games = ?, updated_at = ? WHERE id = ?`,
-        ).bind(flag, now, owned.row.id).run();
+        sets.push('show_referee = ?');
+        binds.push(parsed.data.showReferee ? 1 : 0);
     }
+    if (courseOn && parsed.data.showCourse !== undefined) {
+        sets.push('show_course = ?');
+        binds.push(parsed.data.showCourse ? 1 : 0);
+    }
+    binds.push(owned.row.id);
+    await c.env.DB.prepare(`UPDATE universes SET ${sets.join(', ')} WHERE id = ?`).bind(...binds).run();
     if (flag === 1) await writePublicMark(c.env, owned.row.id, owned.row.truthVersion);
     else await deletePublicMark(c.env, owned.row.id);
-    if (!cards) return c.json({ public: parsed.data.public });
+    if (!cards && !courseOn) return c.json({ public: parsed.data.public });
+    if (cards && courseOn) {
+        const row = await c.env.DB.prepare(
+            `SELECT show_referee AS showReferee, show_course AS showCourse FROM universes WHERE id = ?`,
+        ).bind(owned.row.id).first<{ showReferee: number; showCourse: number }>();
+        return c.json({
+            public: parsed.data.public,
+            showReferee: Number(row?.showReferee) === 1,
+            showCourse: Number(row?.showCourse) !== 0,
+        });
+    }
+    if (!cards) {
+        const row = await c.env.DB.prepare(
+            `SELECT show_course AS showCourse FROM universes WHERE id = ?`,
+        ).bind(owned.row.id).first<{ showCourse: number }>();
+        return c.json({ public: parsed.data.public, showCourse: Number(row?.showCourse) !== 0 });
+    }
     const row = await c.env.DB.prepare(
         `SELECT show_referee AS showReferee FROM universes WHERE id = ?`,
     ).bind(owned.row.id).first<{ showReferee: number }>();

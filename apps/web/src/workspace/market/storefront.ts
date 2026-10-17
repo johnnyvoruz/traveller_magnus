@@ -1,11 +1,11 @@
 /**
- * The marketplace as a storefront (prompts/d_storefront.md): the featured row, the kind chips,
+ * The marketplace as a storefront (prompts/d_storefront.md): the featured row, the kind families,
  * a card's facts, relative dates, and what a package page lists inside. Everything is free:
  * Import is the buy button, and no money word appears anywhere. Pure: it runs under Node.
  */
 import type { CampaignImage } from '@voyage/shared';
 import type { PackageCard, PublicRecord } from '../../marketplace/catalogue.ts';
-import { FAMILIES, kindFamily, type KindFamily } from '../../marketplace/covers.ts';
+import { FAMILIES, type KindFamily } from '../../marketplace/covers.ts';
 import { parseHexKey } from '../places.ts';
 import { plural } from './market.ts';
 
@@ -13,23 +13,17 @@ import { plural } from './market.ts';
 export const FEATURED_MIN = 6;
 export const FEATURED_COUNT = 3;
 
-/** The three most-imported packages; none while the catalogue is thin. Ties go to the latest update. */
-export function featured(cards: readonly PackageCard[]): PackageCard[] {
-    if (cards.length < FEATURED_MIN) return [];
-    return [...cards]
-        .sort((a, b) => b.installs - a.installs || b.updatedAt.localeCompare(a.updatedAt) || a.title.localeCompare(b.title))
-        .slice(0, FEATURED_COUNT);
-}
-
-/** The families present among these cards, in chip order. */
-export function familiesIn(cards: readonly { kind: string }[]): KindFamily[] {
-    const present = new Set(cards.map((card) => kindFamily(card.kind)));
-    return FAMILIES.filter((family) => present.has(family));
-}
-
-/** The cards of one family; every card for "" (All). */
-export function ofFamily<T extends { kind: string }>(cards: readonly T[], family: KindFamily | ''): T[] {
-    return family ? cards.filter((card) => kindFamily(card.kind) === family) : [...cards];
+/**
+ * The featured row: the three most-imported packages while any package has an import, else the
+ * three latest ("New in the store"); none while the catalogue is thin. Ties go to the latest update.
+ */
+export function featured(cards: readonly PackageCard[]): { heading: string; cards: PackageCard[] } {
+    if (cards.length < FEATURED_MIN) return { heading: '', cards: [] };
+    const latest = (a: PackageCard, b: PackageCard) => b.updatedAt.localeCompare(a.updatedAt) || a.title.localeCompare(b.title);
+    if (cards.some((card) => card.installs > 0)) {
+        return { heading: 'Most imported', cards: [...cards].sort((a, b) => b.installs - a.installs || latest(a, b)).slice(0, FEATURED_COUNT) };
+    }
+    return { heading: 'New in the store', cards: [...cards].sort(latest).slice(0, FEATURED_COUNT) };
 }
 
 export function isFamily(text: string): text is KindFamily {

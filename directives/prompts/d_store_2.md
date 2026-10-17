@@ -143,3 +143,9 @@ Write `directives/reports/d_store_2.md` from the template. After each meaningful
 one line under Progress: "done: X. next: Y."
 
 ## Progress
+done: read the prompt, the course contract, the store, the map route code and the card. next: item 2, filters.ts (pure) and the column.
+done: item 2 — filters.ts, StoreFilters.vue (column and sheet body), PackagesView rewired (results line, active chips, sheet, featured heading, client pages of 24), item 4c scroll memory; tests store_filters + updated scroll/storefront tests. next: browser check of item 2, then item 3.
+done: items 3 and 4 — solid route with dimmed track, bright course and arrowheads (MapRenderer paintRoute, traffic.ts routeChains/arrowHead), card reads course leniently, Route row removed, name and border lime, token comment; tests updated. next: item 4b, the course switch.
+done: item 4b — public_course.ts (switch state, PATCH, 503 sentence, write counter), the switch in AccountMenu.vue after the name switch, MapView refetches an open card; tests/web/public_course.test.js. next: browser pass.
+done: browser pass of the store (store2.log, kb27_store2_*), the route (kb27_route_*), contrast measured (route_contrast.log): course 9.4 median, track at 45% failed (2.3), raised to 70% (4.8 on the course shot). next: the gates, then the report.
+done: gates green (npm test 1834/1797 pass/0 fail/37 skipped, check, typecheck, build) and the report written (directives/reports/d_store_2.md); servers stopped. next: none, stopped.

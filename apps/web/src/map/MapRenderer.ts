@@ -15,7 +15,7 @@ import { routeSegments, type RouteSegment } from './route_lines.ts';
 import { drawCampaignLayer, partyContains, vesselContains, type CampaignPartyShip, type CampaignSnapshot, type PartyMark, type VesselHit } from './campaign_layer.ts';
 import type { PublicGameMark, PublicShipMark } from './public_games.ts';
 import type { MapTheme } from './theme.ts';
-import { mergeTracks, TRACK_MERGE_PX, TRACK_SHOWN, TRACK_STEP, trackBox, type Track, type TrackBox } from './traffic.ts';
+import { arrowHead, mergeTracks, routeChains, TRACK_CASE, TRACK_MERGE_PX, TRACK_SHOWN, TRACK_STEP, trackBox, type RouteLeg, type Track, type TrackBox } from './traffic.ts';
 import { PPP_GRID, PPP_NAMES, tierFor, type Tier } from './tiers.ts';
 import { boxesOverlap, clampTitle, fadeToward, stepScale, titleAnchor, titleInView, zoomStep, type Box } from './titles.ts';
 import { baseMarks, hasGasGiant, starport, worldHasWater, worldIsBelt } from './uwp.ts';
@@ -49,12 +49,18 @@ const TITLE_SAME_PX = 2;
 const SHIP_X = 0.3;
 const SHIP_Y = -0.36;
 const TRACK_NEAR = 10;
-/** The open card's route: dot size per parsec, the gap in dot widths, and the oldest and newest leg's alpha. */
-const ROUTE_WIDTH = 0.045;
-const ROUTE_GAP = 2.6;
-const ROUTE_OLD = 0.3;
-const ROUTE_NEW = 0.95;
-const ROUTE_CASE = 1.5;
+/**
+ * The open card's route (prompts/d_store_2.md item 3): solid lines, cased in the chart's dark like
+ * the tracks. The course ahead is the bright line, the finished track the same colour dimmed.
+ */
+const ROUTE_LINE = 2;
+const ROUTE_CASE = TRACK_CASE;
+const ROUTE_CASE_ALPHA = 0.9;
+/** The finished track's ink: 70%, not the 45% first asked for, which measured 2.3:1 on the chart (findings: d_store_2 report). */
+const ROUTE_TRACK_ALPHA = 0.7;
+/** The arrowhead at the end of the course, and the small one at the present hex when there is no course: length along the line. */
+const ROUTE_HEAD = 10;
+const ROUTE_HEAD_SMALL = 7;
 
 /**
  * What a public ship mark says when hovered or tapped: the ships under it, how many more the
@@ -285,8 +291,8 @@ export class MapRenderer {
     /** The ship whose card is open, by its mark, and the track that stands for it this frame. */
     private selectedMark: string | null = null;
     private selectedKey: string | null = null;
-    /** The finished legs of the ship whose card is open. */
-    private publicRoute: { from: string; to: string }[] | null = null;
+    /** The route of the ship whose card is open: its finished legs and its course ahead. */
+    private publicRoute: { legs: RouteLeg[]; course: RouteLeg[] } | null = null;
     /** The traffic colour (traffic.ts), for that route. */
     private trafficColour = '';
 
@@ -702,35 +708,67 @@ export class MapRenderer {
     }
 
     /**
-     * The finished route of the ship whose card is open, as a track's history: a line of dots from
-     * hex to hex in the traffic colour, cased in the chart's dark, the oldest leg faintest. It does
-     * not move. Drawn at every zoom while the card is open.
+     * The route of the ship whose card is open, at every zoom while the card is open. It does not move.
+     * The finished track (`legs`) is a dimmed line that runs into the ship's present hex, with no
+     * arrowhead. The course ahead (`course`) is the bright line, with rounded joins and an arrowhead at
+     * its end, the last planned hex. With no course, a small arrowhead at the present hex points the way
+     * the ship came in. Both lines are cased in the chart's dark, as the tracks are.
      */
     private paintRoute(cam: Camera, vp: Viewport): void {
-        const legs = this.publicRoute;
-        if (!legs || legs.length === 0) return;
+        const route = this.publicRoute;
+        if (!route) return;
+        const at = (key: string) => {
+            const point = this.hexKeyScreen(key, cam, vp);
+            return point ? { x: point.sx, y: point.sy } : null;
+        };
+        const track = routeChains(route.legs, at);
+        const course = routeChains(route.course, at);
+        if (track.length === 0 && course.length === 0) return;
+        const colour = this.trafficColour || this.theme.chart.publicGame;
         const ctx = this.ctx;
-        const width = Math.max(2.5, Math.min(4, cam.ppp * ROUTE_WIDTH));
         ctx.save();
+        ctx.setLineDash([]);
         ctx.lineCap = 'round';
-        ctx.setLineDash([0.1, width * ROUTE_GAP + ROUTE_CASE * 2]);
-        legs.forEach((leg, i) => {
-            if (leg.from === leg.to) return;
-            const a = this.hexKeyScreen(leg.from, cam, vp);
-            const b = this.hexKeyScreen(leg.to, cam, vp);
-            if (!a || !b) return;
-            const age = legs.length > 1 ? i / (legs.length - 1) : 1;
+        ctx.lineJoin = 'round';
+        const head = course.length > 0 ? arrowHead(course, ROUTE_HEAD) : arrowHead(track, ROUTE_HEAD_SMALL);
+        const lines = (chains: readonly { x: number; y: number }[][]) => {
             ctx.beginPath();
-            ctx.moveTo(a.sx, a.sy);
-            ctx.lineTo(b.sx, b.sy);
-            ctx.globalAlpha = ROUTE_OLD + (ROUTE_NEW - ROUTE_OLD) * age;
+            for (const chain of chains) {
+                ctx.moveTo(chain[0].x, chain[0].y);
+                for (let i = 1; i < chain.length; i += 1) ctx.lineTo(chain[i].x, chain[i].y);
+            }
+        };
+        const drawn: { chains: { x: number; y: number }[][]; alpha: number }[] = [
+            { chains: track, alpha: ROUTE_TRACK_ALPHA },
+            { chains: course, alpha: 1 },
+        ];
+        for (const item of drawn) {
+            if (item.chains.length === 0) continue;
+            lines(item.chains);
+            ctx.globalAlpha = ROUTE_CASE_ALPHA;
             ctx.strokeStyle = this.theme.bg0;
-            ctx.lineWidth = width + ROUTE_CASE * 2;
+            ctx.lineWidth = ROUTE_LINE + ROUTE_CASE * 2;
             ctx.stroke();
-            ctx.strokeStyle = this.trafficColour || this.theme.chart.publicGame;
-            ctx.lineWidth = width;
+            ctx.globalAlpha = item.alpha;
+            ctx.strokeStyle = colour;
+            ctx.lineWidth = ROUTE_LINE;
             ctx.stroke();
-        });
+        }
+        if (head) {
+            ctx.beginPath();
+            ctx.moveTo(head[0].x, head[0].y);
+            ctx.lineTo(head[1].x, head[1].y);
+            ctx.lineTo(head[2].x, head[2].y);
+            ctx.closePath();
+            ctx.globalAlpha = ROUTE_CASE_ALPHA;
+            ctx.strokeStyle = this.theme.bg0;
+            ctx.lineWidth = ROUTE_CASE * 2;
+            ctx.lineJoin = 'miter';
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = colour;
+            ctx.fill();
+        }
         ctx.restore();
     }
 
@@ -752,9 +790,11 @@ export class MapRenderer {
         return world ? toScreen(cam, vp, world.x, world.y) : null;
     }
 
-    /** The open card's finished legs, drawn until it closes. Null clears them. */
-    setPublicRoute(legs: readonly { from: string; to: string }[] | null): void {
-        this.publicRoute = legs && legs.length > 0 ? [...legs] : null;
+    /** The open card's finished legs and course ahead, drawn until it closes. Null clears them. */
+    setPublicRoute(route: { legs: readonly RouteLeg[]; course?: readonly RouteLeg[] } | null): void {
+        const legs = route ? [...route.legs] : [];
+        const course = route && route.course ? [...route.course] : [];
+        this.publicRoute = legs.length > 0 || course.length > 0 ? { legs, course } : null;
     }
 
     /** Zoomed out: the hexes with public ships, from the overview. Null clears them. */

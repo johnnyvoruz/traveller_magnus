@@ -37,7 +37,8 @@ test('package publish rejects a duplicate hex and accepts an empty record list',
     if (!parsed.success) {
         assert.ok(parsed.error.flatten().fieldErrors.hexKeys.includes('duplicate hex key'));
     }
-    assert.equal(PackagePublish.safeParse({ universeId: 'uni', hexKeys: [], recordIds: [] }).success, false);
+    // F18: the schema takes an empty hex list; the route refuses a version with neither hexes nor records.
+    assert.equal(PackagePublish.safeParse({ universeId: 'uni', hexKeys: [], recordIds: [] }).success, true);
     assert.equal(PackagePublish.safeParse({ universeId: 'uni', hexKeys: [HEX], recordIds: [RECORD] }).success, true);
     assert.equal(PackagePublish.safeParse({ universeId: 'uni', hexKeys: Array.from({ length: 1281 }, (_, i) => `s${i}/0101`), recordIds: [] }).success, true);
     const accepted = PackagePublishAccepted.parse({ jobId: 'pk_1:1', version: 1 });

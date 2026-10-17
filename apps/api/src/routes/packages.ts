@@ -191,6 +191,7 @@ packagesRoute.post('/:packageId/versions', async (c) => {
     const parsed = PackagePublish.safeParse(body);
     if (!parsed.success) return fail(c, 400, 'validation', 'Invalid request.', parsed.error.flatten());
     const input = parsed.data;
+    if (input.hexKeys.length === 0 && input.recordIds.length === 0) return fail(c, 400, 'validation', 'A package needs at least one hex or one record.');
     if (input.hexKeys.length > HEX_CAP) return fail(c, 400, 'too_large', 'A package holds at most 1280 hexes.');
     if (input.recordIds.length > RECORD_CAP) return fail(c, 400, 'too_large', 'A package holds at most 500 records.');
     const pkg = await packageOf(c, c.req.param('packageId') ?? '', actor.id);

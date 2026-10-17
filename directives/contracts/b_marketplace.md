@@ -709,3 +709,35 @@ Single systems and records from an import stay editable and deletable through th
   - copies the pair with `--apply`;
   - refuses a target without 0019;
   - with `--remove --apply`, deletes each cover object that no package outside the examples names.
+
+## Records-only packages (F18)
+
+A package version can carry records and no hexes: a cast of people, a set of factions. This
+section is for Lane D. Nothing new is on the wire except `records.anchorsDropped`.
+
+### Publishing from records
+
+- `POST /api/packages/:id/versions` accepts `hexKeys: []` with a non-empty `recordIds`.
+- With both empty, the server answers 400 `validation`, "A package needs at least one hex or one record."
+- The caps are unchanged.
+- The manifest has an empty `hexes` map. `truthVersion` and `edition` are recorded as for any version.
+- Offer a publish entry from the records list. Don't ask for a hex selection.
+
+### The card and the page
+
+- The card and the page show `hexCount` 0 and the version's `recordCount`.
+- On the page, hide the hex box when `hexCount` is 0. Show the record count instead.
+
+### Import
+
+- A records-only package has no placement. A `placement` on `POST /api/universes/:id/install`,
+  or `anchor` and `to` on the preview, is 400 `validation`, "Invalid request." Don't show the placement step.
+- It installs into a campaign on any truth version. Records are written with provenance, as for any package.
+- Anchors:
+  - Chart anchors (`Sector/0000`) are kept, whatever the target's truth version.
+  - Own-sector anchors (`~` keys) are dropped: the record is installed with no anchor.
+  - No anchor is rewritten.
+- The preview's `records.anchorsDropped` counts the dropped anchors. It's sent for every
+  package, 0 when none are dropped, and is optional in the schema for older servers.
+  When it's above 0, say so before the install, for example "2 records lose their place on the map."
+- Packages with hexes are unchanged (F6).

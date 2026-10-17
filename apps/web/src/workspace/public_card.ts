@@ -18,6 +18,8 @@ export type ShipCardBody = {
     ship: string;
     aboard: string[];
     legs: ShipCardLeg[];
+    /** The legs still ahead at the campaign date (0020): the leg under way, then the planned ones. Empty from an older server. */
+    course: ShipCardLeg[];
     journal: ShipCardNote[];
 };
 
@@ -61,6 +63,20 @@ export function noteDate(when: unknown, realDate: unknown): string | null {
     return null;
 }
 
+/** Legs in departure order; one that cannot be read is left out. Anything but a list is none. */
+function readLegs(value: unknown): ShipCardLeg[] {
+    const legs: ShipCardLeg[] = [];
+    if (!Array.isArray(value)) return legs;
+    for (const item of value) {
+        if (!item || typeof item !== 'object' || legs.length >= CAMPAIGN_LIMITS.track) continue;
+        const leg = item as Record<string, unknown>;
+        if (typeof leg.from !== 'string' || typeof leg.to !== 'string' || !HEX_KEY.test(leg.from) || !HEX_KEY.test(leg.to)) continue;
+        if (typeof leg.departs !== 'number' || typeof leg.arrives !== 'number' || !Number.isFinite(leg.departs) || !Number.isFinite(leg.arrives)) continue;
+        legs.push({ from: leg.from, to: leg.to, departs: leg.departs, arrives: leg.arrives });
+    }
+    return legs.sort((a, b) => a.departs - b.departs);
+}
+
 /** The card's body, or null when it is not a card. */
 export function readShipCard(body: unknown): ShipCardBody | null {
     if (!body || typeof body !== 'object') return null;
@@ -75,17 +91,7 @@ export function readShipCard(body: unknown): ShipCardBody | null {
             if (kept && aboard.length < PUBLIC_NAMES_PER_SHIP) aboard.push(kept);
         }
     }
-    const legs: ShipCardLeg[] = [];
-    if (Array.isArray(row.legs)) {
-        for (const item of row.legs) {
-            if (!item || typeof item !== 'object' || legs.length >= CAMPAIGN_LIMITS.track) continue;
-            const leg = item as Record<string, unknown>;
-            if (typeof leg.from !== 'string' || typeof leg.to !== 'string' || !HEX_KEY.test(leg.from) || !HEX_KEY.test(leg.to)) continue;
-            if (typeof leg.departs !== 'number' || typeof leg.arrives !== 'number' || !Number.isFinite(leg.departs) || !Number.isFinite(leg.arrives)) continue;
-            legs.push({ from: leg.from, to: leg.to, departs: leg.departs, arrives: leg.arrives });
-        }
-    }
-    legs.sort((a, b) => a.departs - b.departs);
+    const legs = readLegs(row.legs);
     const journal: ShipCardNote[] = [];
     if (Array.isArray(row.journal)) {
         for (const item of row.journal) {
@@ -98,7 +104,8 @@ export function readShipCard(body: unknown): ShipCardBody | null {
         }
     }
     const referee = text(row.referee, CAMPAIGN_LIMITS.name);
-    return { game, referee, example: row.example === true, ship, aboard, legs, journal };
+    // The course key is absent from a server before 0020: no course, never a refusal.
+    return { game, referee, example: row.example === true, ship, aboard, legs, course: readLegs(row.course), journal };
 }
 
 /** One card, by the opaque mark from the feed. Never throws. */
@@ -114,11 +121,4 @@ export async function fetchShipCard(fetchImpl: typeof fetch, mark: string): Prom
     } catch {
         return { kind: 'failed' };
     }
-}
-
-/** "Route" line on the card: how many finished legs the map is showing. Null with none. */
-export function routeWords(legs: readonly ShipCardLeg[]): string | null {
-    const moves = legs.filter((leg) => leg.from !== leg.to).length;
-    if (moves === 0) return null;
-    return moves === 1 ? 'One finished leg, drawn on the map.' : String(moves) + ' finished legs, drawn on the map.';
 }

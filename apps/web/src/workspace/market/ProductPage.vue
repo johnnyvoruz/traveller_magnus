@@ -373,7 +373,7 @@ watch(() => [props.packageId, props.watching, props.ready, session.user ? sessio
       </section>
 
       <footer class="mk-foot">
-        <button v-if="session.user && !isAuthor && !page.hidden" type="button" class="build-link" @click="asking = 'report'; askError = ''">Report this package</button>
+        <button v-if="session.user && !isAuthor && !page.hidden" type="button" class="mk-link" @click="asking = 'report'; askError = ''">Report this package</button>
         <button v-if="isAdmin && !page.hidden" type="button" class="ui-btn" @click="asking = 'takedown'; askError = ''">Take down</button>
         <button v-if="isAdmin && page.hidden" type="button" class="ui-btn" @click="asking = 'restore'; askError = ''">Restore</button>
       </footer>

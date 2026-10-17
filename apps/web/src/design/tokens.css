@@ -292,7 +292,7 @@
   --chart-route-juru: lightblue;
   --chart-route-core-route: purple;
   --chart-public: #c4b5fd;       /* a public game: diamond, not a world, a vessel, or the selection */
-  --chart-traffic: #d4ff3a;      /* other people's ships as tracks, and the open card's route; nothing else. Measured: findings/traffic_colour.md (Lane D) */
+  --chart-traffic: #d4ff3a;      /* other people's ships as tracks, the open card's route on the map, and that card's ship name and border. Measured: findings/traffic_colour.md (Lane D) */
   --store-placeholder: color-mix(in srgb, var(--panel-raised) 70%, var(--bg-0));  /* a cover's box while its image loads (Lane D, the storefront) */
   --store-badge: color-mix(in srgb, var(--bg-0) 78%, transparent);  /* the one kind badge over a cover: a neutral dark glass, no tint */
 }

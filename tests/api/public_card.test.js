@@ -238,9 +238,10 @@ VALUES ('${version}', '1.2.0', 'released', '${STAMP}', '${STAMP}', 0, 0);
             assert.equal(card.body.ship, 'Far Margin');
             assert.deepEqual(card.body.aboard, ['Voss']);
             assert.deepEqual(card.body.legs, [{ from: 'Spinward_Marches/1910', to: 'Spinward_Marches/1911', departs: 1, arrives: 10 }]);
+            assert.deepEqual(card.body.course, [{ from: 'Spinward_Marches/1911', to: 'zzunfinished/1912', departs: 20, arrives: 500 }]);
             assert.deepEqual(card.body.journal, [{ title: 'At Regina', body: 'zzpublicbody', when: null, realDate: null }]);
             const leaked = JSON.stringify(card.body);
-            for (const marker of [email, 'zzrefereejournal', 'zzsecretbody', 'zzplayersjournal', 'zzsecretnote', 'zzunfinished', 'cr_', 'cj_', id, 'universeId', 'w1', 'bodyKey']) {
+            for (const marker of [email, 'zzrefereejournal', 'zzsecretbody', 'zzplayersjournal', 'zzsecretnote', 'cr_', 'cj_', id, 'universeId', 'w1', 'bodyKey']) {
                 assert.equal(leaked.includes(marker), false, marker);
             }
 

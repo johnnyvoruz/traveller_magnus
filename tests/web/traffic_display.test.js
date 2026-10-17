@@ -141,7 +141,7 @@ test('someone else\'s track is open in the traffic colour, yours is filled in th
     assert.equal(many.calls.filter((call) => call[0] === 'moveTo').length, 4, 'two diamonds, cased and stroked');
 });
 
-test('--chart-traffic is one token, read by the traffic layer only, and used for nothing else', () => {
+test('--chart-traffic is one token, read by the traffic layer and the public card only, and used for nothing else', () => {
     assert.match(read('design/tokens.css'), /--chart-traffic: #[0-9a-fA-F]{6};/);
     const users = [];
     const walk = (dir) => {
@@ -152,7 +152,7 @@ test('--chart-traffic is one token, read by the traffic layer only, and used for
         }
     };
     walk(SRC);
-    assert.deepEqual(users.sort(), ['design/tokens.css', 'map/traffic.ts']);
+    assert.deepEqual(users.sort(), ['design/tokens.css', 'map/traffic.ts', 'workspace/PublicShipSheet.vue']);
     assert.equal(/#[0-9a-fA-F]{3,8}\b/.test(read('map/traffic.ts')), false);
 });
 

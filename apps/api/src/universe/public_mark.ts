@@ -2,6 +2,7 @@ import {
     PUBLIC_DEFAULT_DAYS,
     fitPublicCard,
     publicCardJournal,
+    publicCourseLegs,
     publicFinishedLegs,
     publicFirstHex,
     publicMarkId,
@@ -10,7 +11,7 @@ import {
     type CampaignPage,
     type CampaignRecord,
 } from '@voyage/shared';
-import { detectPublicCards, detectPublicShips, publicCardsReady, publicShipsReady } from '../auth/public_schema';
+import { courseReady, detectPublicCards, detectPublicShips, publicCardsReady, publicShipsReady } from '../auth/public_schema';
 import type { Env } from '../env';
 
 const PLACE_TABLES = new Set(['records', 'settings', 'clock', 'journal']);
@@ -58,6 +59,14 @@ async function readDocument(env: Env, universeId: string): Promise<{
 
 type CardMeta = { game: string; example: number; referee: string | null };
 
+/** On when 0020 is absent. The caller still does not store a course until the column exists. */
+async function readShowCourse(env: Env, universeId: string): Promise<boolean> {
+    const row = await env.DB.prepare(
+        `SELECT show_course AS showCourse FROM universes WHERE id = ?`,
+    ).bind(universeId).first<{ showCourse: number }>();
+    return Number(row?.showCourse) !== 0;
+}
+
 async function readCardMeta(env: Env, universeId: string): Promise<CardMeta | null> {
     return env.DB.prepare(
         `SELECT u.name AS game, u.example AS example,
@@ -89,6 +98,8 @@ export async function writePublicMark(env: Env, universeId: string, truthVersion
         const days = document.clock ? document.clock.days : PUBLIC_DEFAULT_DAYS;
         const meta = publicCardsReady() ? await readCardMeta(env, universeId) : null;
         const journal = meta ? publicCardJournal(document.journal) : [];
+        const storeCourse = await courseReady(env.DB);
+        const showCourse = storeCourse ? await readShowCourse(env, universeId) : true;
         for (const ship of ships) {
             const mark = await publicMarkId(universeId, ship.vesselId);
             statements.push(env.DB.prepare(
@@ -98,10 +109,17 @@ export async function writePublicMark(env: Env, universeId: string, truthVersion
             if (meta) {
                 const vessel = recordMap[ship.vesselId];
                 const legs = vessel ? publicFinishedLegs(vessel, recordMap, days) : [];
-                const fitted = fitPublicCard(legs, journal);
-                statements.push(env.DB.prepare(
-                    `INSERT INTO public_cards (mark_id, universe_id, legs, journal, updated_at) VALUES (?, ?, ?, ?, ?)`,
-                ).bind(mark, universeId, JSON.stringify(fitted.legs), JSON.stringify(fitted.journal), now));
+                const course = vessel && showCourse ? publicCourseLegs(vessel, recordMap, days) : [];
+                const fitted = fitPublicCard(legs, journal, course);
+                if (storeCourse) {
+                    statements.push(env.DB.prepare(
+                        `INSERT INTO public_cards (mark_id, universe_id, legs, course, journal, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
+                    ).bind(mark, universeId, JSON.stringify(fitted.legs), JSON.stringify(fitted.course), JSON.stringify(fitted.journal), now));
+                } else {
+                    statements.push(env.DB.prepare(
+                        `INSERT INTO public_cards (mark_id, universe_id, legs, journal, updated_at) VALUES (?, ?, ?, ?, ?)`,
+                    ).bind(mark, universeId, JSON.stringify(fitted.legs), JSON.stringify(fitted.journal), now));
+                }
             }
         }
         await env.DB.batch(statements);

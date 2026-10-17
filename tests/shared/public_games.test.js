@@ -8,7 +8,10 @@ import {
     PublicGamesSector,
     PublicGamesSetting,
     publicCardJournal,
+    fitPublicCard,
+    publicCourseLegs,
     publicFinishedLegs,
+    PublicShipCard,
     publicFirstHex,
     publicMarkId,
     publicShips,
@@ -208,6 +211,36 @@ test('a public card keeps finished chart hexes and public notes', () => {
     assert.equal(notes[0].body.length, PUBLIC_CARD_BODY);
     assert.equal(PublicGamesSetting.safeParse({ public: true, showReferee: false }).success, true);
     assert.equal(PublicGamesSetting.safeParse({ public: true }).success, true);
+    assert.equal(PublicGamesSetting.safeParse({ public: true, showCourse: false }).success, true);
+    assert.equal(PublicGamesSetting.safeParse({ public: true, showCourse: false, later: true }).success, false);
+    const course = publicCourseLegs(ship, { [VESSEL]: ship }, 100);
+    assert.deepEqual(course, [{ from: 'Spinward_Marches/1911', to: 'zzunfinished/1912', departs: 20, arrives: 500 }]);
+    assert.equal(PublicShipCard.safeParse({ game: 'Open', referee: null, example: false, ship: 'Far', aboard: [], legs: [], journal: [] }).success, false);
+});
+
+test('the course stays when the card is over its byte budget', () => {
+    const wide = 'W'.repeat(4000);
+    const finished = {
+        from: `${wide}/1910`,
+        to: `${wide}/1911`,
+        departs: 1,
+        arrives: 2,
+    };
+    const ahead = {
+        from: `${wide}/1912`,
+        to: `${wide}/1913`,
+        departs: 10,
+        arrives: 20,
+    };
+    const note = { title: 'Kept', body: 'x'.repeat(2000), when: null, realDate: null };
+    const fitted = fitPublicCard(Array.from({ length: 40 }, () => finished), [note], [ahead]);
+    assert.deepEqual(fitted.course, [ahead]);
+    assert.equal(fitted.legs.length < 40, true);
+    assert.equal(fitted.journal.length, 1);
+    const alone = fitPublicCard([finished], [note], Array.from({ length: 40 }, () => ahead));
+    assert.equal(alone.legs.length, 0);
+    assert.deepEqual(alone.journal, []);
+    assert.equal(alone.course.length, 40);
 });
 
 test('an overview is hex keys and counts', () => {

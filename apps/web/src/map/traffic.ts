@@ -138,6 +138,61 @@ export function mergeTracks<T extends { x: number; y: number }>(items: readonly 
     return groups.map((group) => group.members);
 }
 
+/** A leg of a ship's route: system hex keys at both ends. */
+export type RouteLeg = { from: string; to: string };
+
+type Point = { x: number; y: number };
+
+/**
+ * A route's legs as screen polylines, in order: a leg that starts where the last one ended
+ * continues its line; any other starts a new one. A leg that stays on its hex, or whose ends are
+ * not on the chart, draws nothing.
+ */
+export function routeChains(legs: readonly RouteLeg[], at: (key: string) => Point | null): Point[][] {
+    const chains: Point[][] = [];
+    let last: { key: string; chain: Point[] } | null = null;
+    for (const leg of legs) {
+        if (leg.from === leg.to) continue;
+        const a = at(leg.from);
+        const b = at(leg.to);
+        if (!a || !b) {
+            last = null;
+            continue;
+        }
+        if (last && last.key === leg.from) {
+            last.chain.push(b);
+        } else {
+            const chain = [a, b];
+            chains.push(chain);
+            last = { key: leg.to, chain };
+        }
+        last.key = leg.to;
+    }
+    return chains;
+}
+
+/**
+ * The arrowhead at the end of the last chain, pointing along its last segment: the tip on the
+ * hex, then the two barbs. `length` is the head's length along the line; it is two thirds as wide.
+ * Null when there is no segment.
+ */
+export function arrowHead(chains: readonly Point[][], length: number): [Point, Point, Point] | null {
+    const chain = chains[chains.length - 1];
+    if (!chain || chain.length < 2) return null;
+    const tip = chain[chain.length - 1];
+    const from = chain[chain.length - 2];
+    const dx = tip.x - from.x;
+    const dy = tip.y - from.y;
+    const run = Math.hypot(dx, dy);
+    if (run === 0) return null;
+    const ux = dx / run;
+    const uy = dy / run;
+    const half = length / 3;
+    const bx = tip.x - ux * length;
+    const by = tip.y - uy * length;
+    return [tip, { x: bx - uy * half, y: by + ux * half }, { x: bx + uy * half, y: by - ux * half }];
+}
+
 /** A track's box for a mouse: the diamond and its casing. */
 export function trackBox(x: number, y: number): TrackBox {
     const r = TRACK_PX / 2 + TRACK_STROKE / 2 + TRACK_CASE;

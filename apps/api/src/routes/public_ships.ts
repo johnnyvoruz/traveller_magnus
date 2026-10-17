@@ -1,5 +1,5 @@
 import { PublicShipCard } from '@voyage/shared';
-import { detectPublicCards, publicCardsReady } from '../auth/public_schema';
+import { courseReady, detectPublicCards, publicCardsReady } from '../auth/public_schema';
 import { requireUser, type AppContext } from '../auth/session';
 import { fail } from '../http';
 import { publicLimited } from './public_games';
@@ -41,24 +41,36 @@ export async function getPublicShip(c: AppContext): Promise<Response> {
     if (publicLimited(c, callerId)) return fail(c, 429, 'rate_limited', 'Too many requests.');
     const mark = c.req.param('mark') ?? '';
     if (!MARK.test(mark)) return fail(c, 404, 'not_found', 'No such ship.');
+    const courseOn = await courseReady(c.env.DB);
     const row = await c.env.DB.prepare(
-        `SELECT u.name AS game, u.example AS example,
-                CASE WHEN u.show_referee = 1 THEN (SELECT handle FROM profile WHERE user_id = u.owner_id) ELSE NULL END AS referee,
-                s.ship_name AS ship, s.aboard_names AS aboard, c.legs AS legs, c.journal AS journal
-         FROM public_cards c
-         JOIN public_ships s ON s.mark_id = c.mark_id
-         JOIN universes u ON u.id = c.universe_id
-         WHERE c.mark_id = ? AND u.deleted_at IS NULL AND u.public_games = 1`,
+        courseOn
+            ? `SELECT u.name AS game, u.example AS example, u.show_course AS showCourse,
+                      CASE WHEN u.show_referee = 1 THEN (SELECT handle FROM profile WHERE user_id = u.owner_id) ELSE NULL END AS referee,
+                      s.ship_name AS ship, s.aboard_names AS aboard, c.legs AS legs, c.course AS course, c.journal AS journal
+               FROM public_cards c
+               JOIN public_ships s ON s.mark_id = c.mark_id
+               JOIN universes u ON u.id = c.universe_id
+               WHERE c.mark_id = ? AND u.deleted_at IS NULL AND u.public_games = 1`
+            : `SELECT u.name AS game, u.example AS example,
+                      CASE WHEN u.show_referee = 1 THEN (SELECT handle FROM profile WHERE user_id = u.owner_id) ELSE NULL END AS referee,
+                      s.ship_name AS ship, s.aboard_names AS aboard, c.legs AS legs, c.journal AS journal
+               FROM public_cards c
+               JOIN public_ships s ON s.mark_id = c.mark_id
+               JOIN universes u ON u.id = c.universe_id
+               WHERE c.mark_id = ? AND u.deleted_at IS NULL AND u.public_games = 1`,
     ).bind(mark).first<{
         game: string;
         example: number;
+        showCourse?: number;
         referee: string | null;
         ship: string;
         aboard: string;
         legs: string;
+        course?: string;
         journal: string;
     }>();
     if (!row) return fail(c, 404, 'not_found', 'No such ship.');
+    const course = courseOn && Number(row.showCourse) !== 0 ? parseList(row.course ?? '[]') : [];
     const parsed = PublicShipCard.safeParse({
         game: row.game,
         referee: typeof row.referee === 'string' ? row.referee : null,
@@ -66,6 +78,7 @@ export async function getPublicShip(c: AppContext): Promise<Response> {
         ship: row.ship,
         aboard: names(row.aboard),
         legs: parseList(row.legs),
+        course,
         journal: parseList(row.journal),
     });
     if (!parsed.success) return fail(c, 404, 'not_found', 'No such ship.');

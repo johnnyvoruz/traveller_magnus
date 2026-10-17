@@ -58,6 +58,8 @@ type Loaded = {
     records: InstallRecordInput[];
     /** F16. The manifest's links, empty for an older manifest. */
     links: Record<string, unknown>[];
+    /** Records-only packages: own-sector anchors dropped on import (F18). */
+    anchorsDropped: number;
 };
 
 type Previewed = Loaded & { hexes: InstallHexInput[]; preview: { hexes: PreviewHex[]; records: PreviewRecords }; missing: string[]; placedMissing: string[]; bytes: number };
@@ -203,9 +205,22 @@ async function load(c: Ctx, owned: OwnedUniverse, packageId: string, version: nu
             if (item && typeof item === 'object' && typeof (item as { id?: unknown }).id === 'string') links.push(item as Record<string, unknown>);
         }
     }
+    // F18. A records-only package has no placement. Its chart anchors are kept, whatever the truth
+    // version; an own-sector anchor cannot resolve in another universe and is dropped. No anchor is rewritten.
+    let anchorsDropped = 0;
+    if (hexes.length === 0) {
+        if (target.placement) throw new Stop(fail(c, 400, 'validation', 'Invalid request.'));
+        for (const item of records) {
+            const anchor = item.record.anchor as { kind?: unknown; hexKey?: unknown } | null | undefined;
+            if (anchor && anchor.kind === 'system' && typeof anchor.hexKey === 'string' && ownSectorKey(anchor.hexKey)) {
+                item.record = { ...item.record, anchor: null };
+                anchorsDropped += 1;
+            }
+        }
+    }
     const loaded: Loaded = {
         ...target, sectors: [], placedTrees: new Map(),
-        packageId: pkg.id, version, title: pkg.title, sourceUniverseId: pkg.universeId, manifest, hexes, records, links,
+        packageId: pkg.id, version, title: pkg.title, sourceUniverseId: pkg.universeId, manifest, hexes, records, links, anchorsDropped,
     };
     if (target.placement) await place(c, owned, loaded, target.placement, pkg.title);
     return loaded;
@@ -342,7 +357,7 @@ function answerOf(p: Previewed): InstallPreview {
         placement: p.placement,
         sectorsCreated: p.sectors,
         hexes: p.preview.hexes,
-        records: { add: p.preview.records.add.length, replace: p.preview.records.replace.length, conflicts: p.preview.records.conflicts },
+        records: { add: p.preview.records.add.length, replace: p.preview.records.replace.length, conflicts: p.preview.records.conflicts, anchorsDropped: p.anchorsDropped },
         bytes: p.bytes,
         conflicts,
     });
