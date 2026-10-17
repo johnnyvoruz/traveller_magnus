@@ -826,3 +826,9 @@ the last open box on the slice 0 checklist that only you can close.)
 1. The finished track at 70% brightness instead of 45% (45% fails 3:1 on the chart). Recommended: yes. **Answer (18:10):** yes.
 2. Your own ships' routes drawn solid with the arrowhead in party cyan, for the selected ship while the Party tab is open. Recommended: yes, a small D pass. **Answer:** yes.
 3. A tag link filters the loaded cards in the browser until B's catalogue queries. Recommended: yes. **Answer:** yes.
+
+### 2026-10-16, D's three from `d_store_3` (2 and 3 hold the 1.2.5 push)
+
+1. An optional `recordCount` on the catalogue card (Lane B), so a records-only card reads "People · 12 records" instead of "Records only". Recommended: yes. **Answer (2026-10-17):** yes (Lane Z: it owns the catalogue route).
+2. Your own ship's route shows for the party ship whose record is open, else the lead while the Party tab is open; no new ship picker. Recommended: yes. **Answer:** yes.
+3. Publish records starts with the narrowed list's records, and with none when the whole list shows. Recommended: yes. **Answer:** yes.

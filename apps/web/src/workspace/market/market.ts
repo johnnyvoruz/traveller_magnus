@@ -7,7 +7,7 @@
  *
  * The pure parts run under Node.
  */
-import { reactive, shallowRef } from 'vue';
+import { computed, reactive, shallowRef } from 'vue';
 import { session } from '../../account/session.ts';
 import { campaign } from '../../campaign/store.ts';
 import { recordsAtHex } from '../../campaign/index.ts';
@@ -139,12 +139,39 @@ export function kindOfKeys(keys: readonly string[]): string {
     return 'hexes';
 }
 
+/** The kind a set of records suggests: their type when they share one ("people", "ships"), else "records". Only the box's first value. */
+export function kindOfRecords(types: readonly string[]): string {
+    const one = new Set(types);
+    if (one.size !== 1) return 'records';
+    return RECORD_KIND_WORDS[[...one][0]] ?? 'records';
+}
+
+const RECORD_KIND_WORDS: Readonly<Record<string, string>> = {
+    person: 'people',
+    place: 'places',
+    business: 'businesses',
+    organization: 'organizations',
+    job: 'jobs',
+    event: 'events',
+    item: 'items',
+    note: 'notes',
+    vessel: 'ships',
+};
+
 export type FormProblem = { field: 'hexes' | 'records' | 'title' | 'kind' | 'description' | 'tags'; text: string };
 
-/** What stops Publish, each in words, with what to do. Empty when the form can be sent. */
-export function formProblems(input: { isNew: boolean; title: string; kind: string; description: string; tags: readonly string[]; hexes: number; records: number }): FormProblem[] {
+/** The server's sentence for a package with nothing in it (contract F18), said before asking too. */
+export const NEEDS_ONE = 'A package needs at least one hex or one record.';
+
+/**
+ * What stops Publish, each in words, with what to do. Empty when the form can be sent. From the
+ * records list (`from: 'records'`, F18) there are no hexes: at least one record is asked for instead.
+ */
+export function formProblems(input: { isNew: boolean; title: string; kind: string; description: string; tags: readonly string[]; hexes: number; records: number; from?: 'hexes' | 'records' }): FormProblem[] {
     const out: FormProblem[] = [];
-    if (input.hexes === 0) out.push({ field: 'hexes', text: 'No selected hex holds a system. To publish, select hexes that hold systems.' });
+    if (input.from === 'records') {
+        if (input.records === 0) out.push({ field: 'records', text: NEEDS_ONE });
+    } else if (input.hexes === 0) out.push({ field: 'hexes', text: 'No selected hex holds a system. To publish, select hexes that hold systems.' });
     if (input.hexes > MARKET_LIMITS.hexes) out.push({ field: 'hexes', text: 'A package holds at most 1,280 hexes. To publish, select ' + plural(input.hexes - MARKET_LIMITS.hexes, 'fewer hex', 'fewer hexes') + '.' });
     if (input.records > MARKET_LIMITS.records) out.push({ field: 'records', text: 'A package holds at most 500 records. To publish, clear ' + plural(input.records - MARKET_LIMITS.records, 'record', 'records') + '.' });
     if (!input.isNew) return out;
@@ -210,6 +237,22 @@ let sendCover: (packageId: string, cover: CoverUpload) => Promise<unknown> = (pa
 
 export function useCoverSender(fn: ((packageId: string, cover: CoverUpload) => Promise<unknown>) | null): void {
     sendCover = fn ?? ((packageId, cover) => marketWire().putCover(packageId, cover));
+}
+
+/** The package a publish goes to, for the form: your packages, the one chosen, and whether it is a new one. */
+export function usePublishTarget() {
+    const store = marketStore();
+    const mine = computed(() => { void store.tick(); return store.listings(); });
+    const target = computed(() => (marketUi.target === 'new' ? null : mine.value.find((item) => item.id === marketUi.target) ?? null));
+    const isNew = computed(() => marketUi.target === 'new' || !target.value);
+    return { mine, target, isNew };
+}
+
+/** The universe on screen, as a publish needs it; null when there is none or it is not yours (only an owner publishes). */
+export function ownUniverse(): MarketUniverse | null {
+    const row = campaign.universes.find((item) => item.id === campaign.universeId);
+    if (!row || !session.user || row.ownerId !== session.user.id) return null;
+    return { id: row.id, truthVersion: row.truthVersion };
 }
 
 export function openPublish(kind: string): void {

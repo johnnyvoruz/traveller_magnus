@@ -11,7 +11,8 @@ import { useRouter } from 'vue-router';
 import { campaign, listCampaigns, switchCampaign } from '../../campaign/store.ts';
 import { session } from '../../account/session.ts';
 import { marketWire, type InstallPreview, type PackagePublicPage } from '../../marketplace/catalogue.ts';
-import { byOutcome, placing, previewLine, startPlacing, stopPlacing, hexWords } from './place.ts';
+import { atPane } from '../../shell/pane.ts';
+import { anchorsDroppedWords, byOutcome, placing, previewLine, startPlacing, stopPlacing, hexWords } from './place.ts';
 
 const props = defineProps<{
     page: PackagePublicPage;
@@ -36,6 +37,9 @@ const recordChoices = ref<Record<string, 'theirs' | 'mine'>>({});
 
 const mine = computed(() => campaign.universes.filter((item) => session.user && item.ownerId === session.user.id));
 const latest = computed(() => props.page.latestVersion);
+/** Records and no hexes (F18): nothing to place, so no placement step. */
+const recordsOnly = computed(() => props.page.hexCount === 0);
+const dropped = computed(() => (preview.value ? anchorsDroppedWords(preview.value) : ''));
 const groups = computed(() => (preview.value ? byOutcome(preview.value) : []));
 const unanswered = computed(() => {
     const p = preview.value;
@@ -45,7 +49,7 @@ const unanswered = computed(() => {
 });
 
 function placement(): { anchor: string; to: string } | null {
-    if (props.updateId || mode.value !== 'place') return null;
+    if (props.updateId || recordsOnly.value || mode.value !== 'place') return null;
     return placing.chosen && placing.packageId === props.page.id ? placing.chosen : null;
 }
 
@@ -103,7 +107,9 @@ async function confirmImport(): Promise<void> {
         const first = p.hexes.find((hex) => !hex.removes) ?? p.hexes[0];
         const at = first ? first.to : '';
         const cut = at.lastIndexOf('/');
-        void router.push(cut > 0 ? '/s/' + encodeURIComponent(at.slice(0, cut)) + '/' + at.slice(cut + 1) : '/');
+        // Records only: the campaign's records list, where they landed.
+        if (cut > 0) void router.push('/s/' + encodeURIComponent(at.slice(0, cut)) + '/' + at.slice(cut + 1));
+        else void router.push(p.hexes.length === 0 ? atPane('/', {}, { kind: 'campaign', record: null }) : '/');
     } catch (err) {
         fail(err);
     } finally {
@@ -143,12 +149,13 @@ onMounted(async () => {
             <option v-for="item in mine" :key="item.id" :value="item.id">{{ item.name }}</option>
           </select>
         </label>
-        <div v-if="!updateId" class="ui-seg" role="group" aria-label="Where it goes">
+        <div v-if="!updateId && !recordsOnly" class="ui-seg" role="group" aria-label="Where it goes">
           <button type="button" :aria-pressed="mode === 'in' ? 'true' : 'false'" @click="mode = 'in'">In place</button>
           <button type="button" :aria-pressed="mode === 'place' ? 'true' : 'false'" :disabled="!keys || !keys.length" @click="mode = 'place'">Place on the map</button>
         </div>
       </div>
-      <p v-if="mode === 'place' && placement()" class="build-fine">Placed, starting at {{ hexWords(placement()!.to) }}. <button type="button" class="build-link" @click="place()">Move it</button></p>
+      <p v-if="recordsOnly" class="build-fine" data-records-only>Records only. They go into the campaign, with nothing to place on the map.</p>
+      <p v-else-if="mode === 'place' && placement()" class="build-fine">Placed, starting at {{ hexWords(placement()!.to) }}. <button type="button" class="build-link" @click="place()">Move it</button></p>
       <p v-else-if="mode === 'place'" class="build-fine">The map opens with the piece's outline. Drag it where it goes, then select Preview.</p>
       <p v-else-if="!updateId" class="build-fine">Every hex goes where it is in the package.</p>
       <p v-if="error" class="mk-err" role="alert">{{ error }}</p>
@@ -158,6 +165,7 @@ onMounted(async () => {
 
       <div v-if="preview" class="mk-prev" aria-live="polite">
         <p class="mk-sum"><b>{{ previewLine(preview) }}</b></p>
+        <p v-if="dropped" class="mk-imp-dropped" role="status" data-anchors-dropped>{{ dropped }}</p>
         <p v-for="plan in preview.sectorsCreated" :key="plan.id" class="build-fine">A new sector is made at slot {{ plan.slot.x }}, {{ plan.slot.y }}.</p>
         <div v-if="preview.conflicts" class="mk-acts is-start">
           <span class="build-fine">For every conflict:</span>
@@ -205,6 +213,14 @@ onMounted(async () => {
   border: 1px solid var(--line-1);
   border-radius: var(--r-3);
   background: var(--panel-raised);
+}
+
+.mk-imp-dropped {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-left: 3px solid var(--attention);
+  background: var(--bg-2);
+  color: var(--text-0);
 }
 
 .mk-imp-row {

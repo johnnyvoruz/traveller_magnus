@@ -24,7 +24,7 @@ import ImportsList from './ImportsList.vue';
 import ProductPage from './ProductPage.vue';
 import StoreCard from './StoreCard.vue';
 import StoreFiltersBody from './StoreFilters.vue';
-import { featured } from './storefront.ts';
+import { featured, withoutFeatured } from './storefront.ts';
 
 const route = useRoute();
 const router = useRouter();
@@ -60,15 +60,18 @@ const nextCursor = ref<string | null>(null);
 const pageCount = ref(PAGE_SIZE);
 
 const matching = computed(() => applyFilters(cards.value, filters.value, now.value));
-const shown = computed(() => matching.value.slice(0, pageCount.value));
 const counts = computed(() => facets(cards.value, filters.value, now.value));
 const chips = computed(() => activeFilters(filters.value));
 const chosen = computed(() => activeCount(filters.value));
 const filtered = computed(() => !!searched.value || chosen.value > 0);
-const resultsLine = computed(() => resultsWords(shown.value.length, matching.value.length, !!nextCursor.value, searched.value));
 /** The featured row: the plain storefront only, like a store's home page; never on results. */
 const featuredRow = computed(() => (filtered.value || mineView.value || hiddenView.value ? { heading: '', cards: [] } : featured(cards.value)));
-const canShowMore = computed(() => shown.value.length < matching.value.length || !!nextCursor.value);
+/** The grid leaves out what the featured row shows, so nothing is shown twice. */
+const gridCards = computed(() => withoutFeatured(matching.value, featuredRow.value.cards));
+const shown = computed(() => gridCards.value.slice(0, pageCount.value));
+/** The results line counts every result, the featured row's included. */
+const resultsLine = computed(() => resultsWords(shown.value.length + featuredRow.value.cards.length, matching.value.length, !!nextCursor.value, searched.value));
+const canShowMore = computed(() => shown.value.length < gridCards.value.length || !!nextCursor.value);
 
 async function loadCards(more = false): Promise<void> {
     loading.value = true;
@@ -89,7 +92,7 @@ async function loadCards(more = false): Promise<void> {
 /** The next page: the loaded cards first, then the server's next page when they run out. */
 async function showMore(): Promise<void> {
     pageCount.value += PAGE_SIZE;
-    if (matching.value.length < pageCount.value && nextCursor.value) await loadCards(true);
+    if (gridCards.value.length < pageCount.value && nextCursor.value) await loadCards(true);
 }
 
 // ---- the Filters sheet, below 1024 px -----------------------------------------------------------------------

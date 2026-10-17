@@ -79,10 +79,16 @@ const latest = computed(() => (page.value ? page.value.versions.find((item) => i
 const facts = computed(() => {
     const p = page.value;
     if (!p) return '';
-    const parts = [plural(p.hexCount, 'hex', 'hexes')];
+    // A records-only package (F18) has no "0 hexes": its records are the size.
+    const parts = p.hexCount > 0 ? [plural(p.hexCount, 'hex', 'hexes')] : [];
     if (latest.value) parts.push(plural(latest.value.recordCount, 'record', 'records'));
     parts.push(plural(p.installs, 'import', 'imports'));
     return parts.join(' · ');
+});
+/** A records-only package's box: the version's record count, else the records read. */
+const recordsInside = computed(() => {
+    const count = latest.value ? latest.value.recordCount : contents.value && contents.value.records ? contents.value.records.length : 0;
+    return plural(count, 'record', 'records');
 });
 const keys = computed(() => (contents.value ? contents.value.keys : null));
 const outline = computed(() => (keys.value && keys.value.length ? outlineHexes(keys.value) : null));
@@ -296,7 +302,11 @@ watch(() => [props.packageId, props.watching, props.ready, session.user ? sessio
         <p v-if="!contentsRead" class="build-fine" aria-busy="true">Reading the package…</p>
         <p v-else-if="!contents" class="build-fine">The contents could not be read.</p>
         <div v-else class="mk-inside">
-          <div class="mk-inside-hexes">
+          <div v-if="page.hexCount === 0" class="mk-inside-hexes is-records" data-records-only>
+            <p class="mk-inside-line"><b>{{ recordsInside }}</b></p>
+            <p class="build-fine">Records only. Nothing is placed on the map.</p>
+          </div>
+          <div v-else class="mk-inside-hexes">
             <p class="mk-inside-line"><b>{{ hexesInside(contents.keys, contents.ownSectors) }}</b></p>
             <figure v-if="outline && outline.points.length" class="mk-shape">
               <svg :viewBox="outline.viewBox" role="img" :aria-label="'Outline of ' + plural(outline.points.length, 'hex', 'hexes')">
@@ -359,7 +369,7 @@ watch(() => [props.packageId, props.watching, props.ready, session.user ? sessio
           <li v-for="item in versions" :key="item.version">
             <b>Version {{ item.version }}</b>
             <span class="mk-st" :data-state="item.state">{{ stateWords(item.state) }}</span>
-            <span class="mk-changes-what">{{ plural(item.hexCount, 'hex', 'hexes') }}, {{ plural(item.recordCount, 'record', 'records') }}</span>
+            <span class="mk-changes-what"><template v-if="item.hexCount > 0">{{ plural(item.hexCount, 'hex', 'hexes') }}, </template>{{ plural(item.recordCount, 'record', 'records') }}</span>
             <small v-if="item.error">{{ item.error }}</small>
           </li>
         </ol>

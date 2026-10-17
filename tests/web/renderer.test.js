@@ -482,9 +482,10 @@ test('a title whose anchor has left by the left edge is not drawn, and is never 
     assert.equal(drawn.animating, false);
 });
 
-test('draw reports animating while a title fades in, then settles (B1.12b)', async () => {
+test('draw reports animating while a title fades in, then settles (B1.12b)', () => {
     const { canvas, calls } = recordingCanvas();
-    const renderer = new MapRenderer(canvas, { ...theme, tFast: 0.05 });
+    const fade = { ...theme, tFast: 0.05 };
+    const renderer = new MapRenderer(canvas, fade);
     renderer.setChart({
         sectors: [{ slug: 'On', name: 'On Sector', x: 0, y: 0, canonical: true }],
     }, { truthVersion: 'v2', sectors: [] }, 'canonical');
@@ -493,6 +494,13 @@ test('draw reports animating while a title fades in, then settles (B1.12b)', asy
     renderer.resize(1200, 900, 1);
     const hadWindow = 'window' in globalThis;
     const previous = globalThis.window;
+    const realNow = performance.now;
+    // MapRenderer steps the fade from performance.now() over tFast (50 ms). A fifth of
+    // that per frame cannot finish the fade in one frame. A wall-clock wait can, when
+    // the suite delays the timer past the whole fade.
+    const stepMs = fade.tFast * 1000 / 5;
+    let clock = 0;
+    performance.now = () => clock;
     globalThis.window = { matchMedia: () => ({ matches: false }) };
     try {
         const cam = { x: 2.5, y: 3, ppp: 80 };
@@ -502,7 +510,7 @@ test('draw reports animating while a title fades in, then settles (B1.12b)', asy
         assert.equal(calls.filter((call) => call[0] === 'roundRect').length, 0);
         let frames = 0;
         while (drawn.animating && frames < 100) {
-            await new Promise((resolve) => setTimeout(resolve, 10));
+            clock += stepMs;
             calls.length = 0;
             drawn = renderer.draw(cam);
             frames += 1;
@@ -513,6 +521,7 @@ test('draw reports animating while a title fades in, then settles (B1.12b)', asy
         // Settled: a further draw is not animating either.
         assert.equal(renderer.draw(cam).animating, false);
     } finally {
+        performance.now = realNow;
         if (hadWindow) globalThis.window = previous;
         else delete globalThis.window;
     }

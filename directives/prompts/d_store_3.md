@@ -65,3 +65,6 @@ publish entry (name the file in your report), tests under `tests/web/` except
 After each meaningful step, append one line under Progress: "done: X. next: Y."
 
 ## Progress
+done: records-only screens (card facts, product page without the hex box, import without placement and with the dropped-anchors notice, Publish records from the records list via shared PublishFields) and the featured row left out of the grid. next: your own ships' routes in cyan.
+done: own ships' routes (workspace/party_route.ts, MapRenderer setPartyRoute in --signal, MapView wiring) and tests (party_route, records_only); npm test, check and vue-tsc clean. next: browser pass and kb28 shots.
+done: browser pass (kb28 shots, 22), cyan contrast (course 8.67:1 median, track 4.48:1), gates green (npm test 1843/1806 pass/0 fail/37 skipped, check, typecheck, build) and the report written (directives/reports/d_store_3.md); servers stopped. next: none, stopped.

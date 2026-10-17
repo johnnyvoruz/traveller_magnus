@@ -2,7 +2,8 @@
 /**
  * Publish selection (findings/marketplace_screens_design.md §2; mockups km_form, km_version,
  * km_limits, km_uncharted). Shown in the Build pane in place of its acts while it is open:
- * what goes in is what is selected. A new package, or a new version of one of yours.
+ * what goes in is what is selected. A new package, or a new version of one of yours. The
+ * package's fields are PublishFields, shared with Publish records (RecordsPublish.vue).
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
@@ -11,16 +12,13 @@ import { buildStore } from '../build/seam.ts';
 import { draftHandle, edit } from '../build/edit.ts';
 import { build } from '../build/state.ts';
 import {
-    closePublish, coverDraft, formProblems, hexWords, MARKET_LIMITS, marketStore, marketUi, parseTags, plural, publish, publishKeys, recordsOn, removedWords,
+    closePublish, formProblems, hexWords, marketUi, parseTags, plural, publish, publishKeys, recordsOn, removedWords, usePublishTarget,
 } from './market.ts';
-import { defaultCoverUrl, kindFamily } from '../../marketplace/covers.ts';
-import CoverEditor from './CoverEditor.vue';
-import type { PreparedCover } from './cover_image.ts';
+import PublishFields from './PublishFields.vue';
 
 const props = defineProps<{ keys: string[] }>();
 
 const router = useRouter();
-const store = marketStore();
 const root = ref<HTMLElement | null>(null);
 
 const universe = computed(() => {
@@ -30,10 +28,7 @@ const universe = computed(() => {
 const hexes = computed(() => publishKeys(props.keys, hexState));
 const records = computed(() => recordsOn(hexes.value));
 const chosen = computed(() => records.value.filter((item) => !marketUi.left.includes(item.id)));
-const mine = computed(() => { void store.tick(); return store.listings(); });
-const target = computed(() => (marketUi.target === 'new' ? null : mine.value.find((item) => item.id === marketUi.target) ?? null));
-const isNew = computed(() => marketUi.target === 'new' || !target.value);
-const tags = computed(() => parseTags(marketUi.tags));
+const { target, isNew } = usePublishTarget();
 const summary = computed(() => hexWords(hexes.value, (slug) => placeNames(slug + '/0101').sector || slug) + ' · ' + plural(chosen.value.length, 'record', 'records'));
 const removed = computed(() => removedWords(hexes.value, hexState));
 const problems = computed(() => formProblems({
@@ -41,33 +36,15 @@ const problems = computed(() => formProblems({
     title: marketUi.title,
     kind: marketUi.kind,
     description: marketUi.description,
-    tags: tags.value,
+    tags: parseTags(marketUi.tags),
     hexes: hexes.value.length,
     records: chosen.value.length,
 }));
 const selectionProblems = computed(() => problems.value.filter((item) => item.field === 'hexes' || item.field === 'records'));
-/** A missing title or kind is said once Publish is tried; a limit passed is said at once. */
+/** A missing title or kind is said once Publish is tried. */
 const tried = ref(false);
-const fieldProblems = computed(() => problems.value.filter((item) => item.field !== 'hexes' && item.field !== 'records' && (tried.value || item.field === 'description' || item.field === 'tags')));
 const nextVersion = computed(() => (target.value ? target.value.latestVersion + 1 : 1));
 const sendLabel = computed(() => (marketUi.busy ? 'Publishing…' : isNew.value ? 'Publish' : 'Publish version ' + nextVersion.value));
-
-/** The draft cover's preview, as an object address; let go when it changes or the form closes. */
-const draftUrl = ref('');
-watch(coverDraft, (draft) => {
-    if (draftUrl.value) URL.revokeObjectURL(draftUrl.value);
-    draftUrl.value = draft ? URL.createObjectURL(new Blob([draft.image as BlobPart], { type: 'image/webp' })) : '';
-}, { immediate: true });
-const coverSrc = computed(() => draftUrl.value || defaultCoverUrl(kindFamily(marketUi.kind), true));
-
-function takeCover(cover: PreparedCover): void {
-    coverDraft.value = cover;
-}
-
-function problem(field: string): string {
-    const found = problems.value.find((item) => item.field === field);
-    return found ? found.text : '';
-}
 
 function toggle(id: string, on: boolean): void {
     marketUi.left = on ? marketUi.left.filter((item) => item !== id) : [...marketUi.left, id];
@@ -108,7 +85,6 @@ watch(() => draftHandle.value !== null || edit.opening || build.preview !== null
 });
 onBeforeUnmount(() => {
     if (props.keys.length === 1) closePublish();
-    if (draftUrl.value) URL.revokeObjectURL(draftUrl.value);
 });
 </script>
 
@@ -119,52 +95,7 @@ onBeforeUnmount(() => {
       <p class="mk-sum"><b>{{ summary }}</b><span v-if="removed">{{ removed }}</span></p>
       <p v-for="item in selectionProblems" :key="item.text" class="mk-err" role="alert">{{ item.text }}</p>
 
-      <label class="mk-fld">
-        <span>Package</span>
-        <select v-model="marketUi.target" class="mk-box" :disabled="marketUi.busy">
-          <option value="new">A new package</option>
-          <option v-for="item in mine" :key="item.id" :value="item.id">{{ item.title }} · {{ item.latestVersion ? 'version ' + item.latestVersion : 'not published yet' }}</option>
-        </select>
-      </label>
-
-      <template v-if="isNew">
-        <label class="mk-fld">
-          <span>Title</span>
-          <input v-model="marketUi.title" class="mk-box" type="text" :maxlength="MARKET_LIMITS.title" autocomplete="off" :disabled="marketUi.busy" :aria-invalid="tried && problem('title') ? 'true' : undefined" />
-          <small :class="{ 'is-full': marketUi.title.length >= MARKET_LIMITS.title }">{{ marketUi.title.length }} of {{ MARKET_LIMITS.title }} characters</small>
-        </label>
-        <label class="mk-fld">
-          <span>Kind</span>
-          <input v-model="marketUi.kind" class="mk-box" type="text" :maxlength="MARKET_LIMITS.kind" autocomplete="off" :disabled="marketUi.busy" />
-          <small>For example: system, subsector, sector, or hexes.</small>
-        </label>
-        <label class="mk-fld">
-          <span>Description</span>
-          <textarea v-model="marketUi.description" class="mk-box" rows="3" :maxlength="MARKET_LIMITS.description" :disabled="marketUi.busy"></textarea>
-          <small>{{ marketUi.description.length.toLocaleString('en-US') }} of 2,000 characters</small>
-        </label>
-        <label class="mk-fld">
-          <span>Tags</span>
-          <input v-model="marketUi.tags" class="mk-box" type="text" autocomplete="off" placeholder="Separate tags with commas" :disabled="marketUi.busy" />
-          <small>{{ tags.length }} of {{ MARKET_LIMITS.tags }} tags</small>
-        </label>
-        <CoverEditor
-          :src="coverSrc"
-          :source="coverDraft ? 'upload' : 'default'"
-          :can-remove="!!coverDraft"
-          :busy="marketUi.busy"
-          :title="marketUi.title.trim() || 'this package'"
-          @take="takeCover"
-          @remove="coverDraft = null"
-        />
-        <p v-for="item in fieldProblems" :key="item.field" class="mk-err" role="alert">{{ item.text }}</p>
-      </template>
-      <dl v-else-if="target" class="mk-kv">
-        <dt>Title</dt><dd>{{ target.title }}</dd>
-        <dt>Kind</dt><dd>{{ target.kind }}</dd>
-        <dt>Latest version</dt><dd>{{ target.latestVersion }} · {{ plural(target.hexCount, 'hex', 'hexes') }}</dd>
-        <dt>Cover</dt><dd>To change it, open the package's page.</dd>
-      </dl>
+      <PublishFields :problems="problems" :tried="tried" />
 
       <fieldset v-if="records.length" class="mk-recs">
         <legend>Records on these hexes <b>{{ chosen.length }} of {{ records.length }}</b></legend>
@@ -185,128 +116,3 @@ onBeforeUnmount(() => {
     </form>
   </section>
 </template>
-
-<style>
-.mk-form > .ui-heading {
-  margin-top: 0;
-}
-
-.mk-fields {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin: 0;
-}
-
-.mk-sum span {
-  display: block;
-  margin-top: 4px;
-  color: var(--text-1);
-}
-
-.mk-sum {
-  margin: 0;
-  padding: 8px 10px;
-  border-left: 3px solid var(--signal);
-  background: var(--bg-2);
-  color: var(--text-0);
-}
-
-.mk-fld {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  color: var(--text-muted);
-  font: 500 12px/1.3 var(--font-text);
-}
-
-.mk-fld small {
-  font-weight: 400;
-  font-size: 11.5px;
-}
-
-.mk-fld small.is-full {
-  color: var(--attention);
-}
-
-.mk-box {
-  box-sizing: border-box;
-  width: 100%;
-  margin: 0;
-  padding: 7px 10px;
-  border: 1px solid var(--control-line);
-  border-radius: var(--r-2);
-  background: var(--bg-2);
-  color: var(--text-0);
-  font: 400 14px/1.35 var(--font-text);
-}
-
-textarea.mk-box {
-  resize: vertical;
-}
-
-.mk-kv {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 4px 14px;
-  margin: 0;
-}
-
-.mk-kv dt {
-  color: var(--text-muted);
-}
-
-.mk-kv dd {
-  margin: 0;
-  color: var(--text-0);
-}
-
-.mk-recs {
-  margin: 0;
-  padding: 6px 10px 8px;
-  border: 1px solid var(--line-1);
-  border-radius: var(--r-2);
-}
-
-.mk-recs legend {
-  padding: 0 4px;
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-.mk-recs label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 3px 0;
-  color: var(--text-0);
-}
-
-.mk-recs small {
-  margin-left: auto;
-  color: var(--text-muted);
-  text-transform: capitalize;
-}
-
-.mk-note {
-  margin: 0;
-  padding: 8px 10px;
-  border-left: 3px solid var(--attention);
-  background: var(--bg-2);
-  color: var(--text-0);
-}
-
-.mk-err {
-  margin: 0;
-  padding: 8px 10px;
-  border-left: 3px solid var(--danger);
-  background: var(--bg-2);
-  color: var(--text-1);
-}
-
-.mk-acts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-</style>

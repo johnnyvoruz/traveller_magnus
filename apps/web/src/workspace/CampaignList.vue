@@ -5,8 +5,9 @@
  * campaign from the store and asks the panel to open or create; it changes nothing itself
  * but a delete and a restore.
  */
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, nextTick, onMounted, ref, watch } from 'vue';
 import { CAMPAIGN_LIMITS, type CampaignRecordType } from '@voyage/shared';
+import { session } from '../account/session.ts';
 import { campaign, renameCampaign } from '../campaign/store.ts';
 import Icon from '../design/Icon.vue';
 import { deleteRecord, recentlyDeleted, restoreRecord } from './actions.ts';
@@ -32,6 +33,9 @@ const emit = defineEmits<{
     map: [];
     timeline: [];
 }>();
+
+/** Publish records (contract F18), loaded when first opened. */
+const RecordsPublish = defineAsyncComponent(() => import('./market/RecordsPublish.vue'));
 
 const query = recordQuery;
 const filter = recordFilter;
@@ -82,6 +86,14 @@ const places = computed(() => {
     return found;
 });
 const first = computed(() => all.value.length === 0);
+/** Publish records: offered to the campaign's owner, signed in and online, once there is a record. */
+const canPublish = computed(() => {
+    const row = campaign.universes.find((item) => item.id === campaign.universeId);
+    return !props.readOnly && all.value.length > 0 && !!row && !!session.user && row.ownerId === session.user.id;
+});
+const publishing = ref(false);
+/** The rows the list shows are chosen when the list is narrowed (a type, a search, here); the whole list starts with none. */
+const publishStart = computed(() => (filter.value !== 'all' || query.value || atHere.value ? rows.value.map((record) => record.id) : []));
 const campaignName = computed(() => {
     const found = campaign.universes.find((item) => item.id === campaign.universeId);
     return found ? found.name : '';
@@ -227,6 +239,9 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
           >
         </label>
         <button type="button" class="ui-btn" @click="emit('timeline')">Timeline</button>
+        <button v-if="canPublish" type="button" class="ui-btn camp-publish" title="Publish records to the Marketplace" data-publish-records @click="publishing = true">
+          <Icon name="store" :size="13" />Publish
+        </button>
         <AddButton :type="addType" :disabled="readOnly" @add="add" />
       </div>
 
@@ -315,6 +330,8 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
         </button>
       </div>
     </template>
+
+    <RecordsPublish v-if="publishing" :start="publishStart" @close="publishing = false" />
 
     <details v-if="recentlyDeleted.length" class="camp-gone">
       <summary>Recently deleted <span class="ui-count">{{ recentlyDeleted.length }}</span></summary>

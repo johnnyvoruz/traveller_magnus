@@ -1,19 +1,19 @@
 # Board
 
-One line per lane. Only the orchestrator edits this file. Updated 2026-10-16 18:05 (by the clock).
+One line per lane. Only the orchestrator edits this file. Updated 2026-10-17 (by the clock).
 
-**Last push: `10e6d8d`, version 1.2.3, engine e1.2, 2026-10-16, live** (index `index-CTGrh87X.js`). Truth v10. Covers seeded: all six catalogue cards carry `cover` (18:03); `local_backup_pre_covers` deleted.
-**Called 18:10: 1.2.4** (`findings/push/release_2026-10-16.md`, 46 paths, 0020).
+**Last push: `0c387f2`, version 1.2.4, engine e1.2, 2026-10-16, live** (index `index-Cpo2OS6L.js`; 0020 applied: `showCourse` on `/api/universes`). Truth v10. Covers live on all six example packages.
+**Called 2026-10-17 (yes to D's three): 1.2.5** (`findings/push/release_2026-10-16b.md`).
 **Deploys run on push** (Johnny, 2026-10-14): push commands no longer include `npm run deploy:ci`.
 
 | Lane | Status | Current prompt | Blocker / next |
 |---|---|---|---|
-| A | go after the 1.2.4 push | prompts/a_test_flakes.md | the renderer and store_scroll timing flakes, tests only |
-| B | free | (none) | `b_public_course` accepted; in the 1.2.4 list with D's switch |
+| A | free | (none) | `a_test_flakes` accepted: the title-fade test steps `performance.now`; store_scroll left (reads source only); in 1.2.5 |
+| B | free | (none) | `b_public_course` live in 1.2.4. Later: catalogue `family=` and `author=` queries |
 | C | free | (none) | `c_surface_zoom` accepted (cap 320 px per hex, sharp window; parity exit 0 with pinned counts); in 1.2.3 |
-| D | go after the 1.2.4 push | prompts/d_store_3.md | `d_store_2` accepted (in 1.2.4). Next: records-only screens, featured row without repeats, your own ships' routes in cyan |
+| D | go after the 1.2.5 push | prompts/d_import_style.md | `d_store_3` accepted (in 1.2.5). Next: the import panel's styles on a cold product page |
 | E | free | (none) | `e_uwp_dots` accepted (in 1.2.3) |
-| Z | free | (none) | `z_records_only` accepted 18:05 (server only: 0 hexes with a record, no placement, own-sector anchors dropped and counted; contract section F18); in the 1.2.4 list |
+| Z | go | prompts/z_card_record_count.md | optional `recordCount` on the catalogue card (its files are not in 1.2.5) |
 | F | retired | (none) | Johnny, 2026-10-11: unreliable (runs out of budget); do not use or propose until he says it is back |
 
 ## Naming (Johnny, 2026-10-14)
@@ -433,7 +433,7 @@ lane's letter as the first message of a new session; from then on "go" is enough
 - 2026-10-14, a Back "<" left of the pane's X: one pane back; X still closes the pane.
 
 ## Open with Johnny
-Nothing. Answered 2026-10-16 18:10, "yes to all three": (1) the finished track at 70%; (2) your own ships' routes drawn the same way, in cyan (D `d_store_3`); (3) tag links filter in the browser until B's catalogue queries.
+Nothing. Answered 2026-10-17, "yes to all three" (D's `d_store_3` questions): `recordCount` on the card (Lane Z, which owns the catalogue route); the route follows the open ship record, else the lead with the Party tab open; Publish records starts with the narrowed list, or none.
 
 ## Decided by the orchestrator, 2026-10-16
 - Z's question 2: the dropped-anchor count stays on the preview only, not on the install answer.
@@ -472,6 +472,7 @@ Nothing. Answered 2026-10-16 18:10, "yes to all three": (1) the finished track a
   2; after the push).
 
 ## Queue (prompts not yet written)
+- `tests/tools/examples.test.js` "the seeding dry run names each cover" starts wrangler on fixed port 8872 against the shared `findings/examples/standin_covers`; it failed in A's run while D's suite ran at the same time, and passes alone (11/11). Not a code fault: two lanes' suites collide.
 - Johnny, after records-only ships: convert the four records packs to records-only (Z recommends; Regina highport contacts first).
 - D, seen by the orchestrator in the kb26 shots: the product page's "What's inside" box draws a few tiny hex outlines in a large empty panel (show the chart piece itself, or shrink the box to fit); map covers (Hollow Verge) read as a few dots at card size.
 - A: export `encodeWebp` and `sha256Hex` from `campaign/images.ts`; D's `market/cover_image.ts` then imports them (two copies of one encoder today).

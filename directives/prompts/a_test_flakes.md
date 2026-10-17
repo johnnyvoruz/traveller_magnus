@@ -28,3 +28,7 @@ Write `directives/reports/a_test_flakes.md` from the template.
 After each meaningful step, append one line under Progress: "done: X. next: Y."
 
 ## Progress
+done: progress was empty and both test files were clean at 0c387f2 (1.2.4 is HEAD). The fade test waits on setTimeout(10) while MapRenderer steps the title by performance.now() over a 50 ms tFast, so one late timer finishes the fade in a single frame. store_scroll.test.js only reads source. next: pass counts under CPU load, before any edit.
+done: before the edit, under 32 CPU burners, renderer.test.js 20/20 and store_scroll.test.js 20/20. A separate 80 ms gap on the old loop finished the fade in one frame (animating false, one pill). The fade test now steps performance.now by a fifth of tFast and restores it. store_scroll left as it is: no timer, no rAF, and the reads are stable on this tree. next: 20 runs under load, then npm test and npm run check.
+done: after the edit, under 32 CPU burners, both files 20/20. npm run check clean. npm test 1796 pass, 1 fail, in tests/tools/examples.test.js (not this prompt). next: the report.
+done: report written (directives/reports/a_test_flakes.md). next: none, stopped.

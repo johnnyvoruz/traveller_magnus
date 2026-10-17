@@ -105,12 +105,24 @@ export function byOutcome(preview: InstallPreview): { outcome: string; words: st
 
 /** One line under the preview. */
 export function previewLine(preview: InstallPreview): string {
-    const parts = [plural(preview.hexes.length, 'hex', 'hexes')];
     const records = preview.records.add + preview.records.replace + preview.records.conflicts.length;
+    // A records-only package (F18) says its records, not "0 hexes".
+    const parts = preview.hexes.length > 0 || records === 0 ? [plural(preview.hexes.length, 'hex', 'hexes')] : [];
     if (records) parts.push(plural(records, 'record', 'records'));
     if (preview.sectorsCreated.length) parts.push(plural(preview.sectorsCreated.length, 'new sector', 'new sectors'));
     if (preview.conflicts) parts.push(plural(preview.conflicts, 'conflict', 'conflicts'));
     return parts.join(', ') + '.';
+}
+
+/**
+ * A records-only import drops the records' own-sector places (F18): said before the install.
+ * Empty when none is dropped; an older server sends no count, which reads as none.
+ */
+export function anchorsDroppedWords(preview: Pick<InstallPreview, 'records'>): string {
+    const dropped = preview.records.anchorsDropped ?? 0;
+    if (dropped <= 0) return '';
+    if (dropped === 1) return '1 record loses its place on the map.';
+    return dropped.toLocaleString('en-US') + ' records lose their place on the map.';
 }
 
 /** The Remove confirmation, as Johnny worded it. */

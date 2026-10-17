@@ -293,6 +293,8 @@ export class MapRenderer {
     private selectedKey: string | null = null;
     /** The route of the ship whose card is open: its finished legs and its course ahead. */
     private publicRoute: { legs: RouteLeg[]; course: RouteLeg[] } | null = null;
+    /** The party's selected ship's route (the lead's when none is selected), drawn in the signal colour while no card is open. */
+    private partyRoute: { legs: RouteLeg[]; course: RouteLeg[] } | null = null;
     /** The traffic colour (traffic.ts), for that route. */
     private trafficColour = '';
 
@@ -708,14 +710,15 @@ export class MapRenderer {
     }
 
     /**
-     * The route of the ship whose card is open, at every zoom while the card is open. It does not move.
-     * The finished track (`legs`) is a dimmed line that runs into the ship's present hex, with no
-     * arrowhead. The course ahead (`course`) is the bright line, with rounded joins and an arrowhead at
-     * its end, the last planned hex. With no course, a small arrowhead at the present hex points the way
-     * the ship came in. Both lines are cased in the chart's dark, as the tracks are.
+     * One route at a time, at every zoom. It does not move. The ship whose card is open, in the
+     * traffic colour; else the party's selected ship, in the signal colour. The finished track
+     * (`legs`) is a dimmed line that runs into the ship's present hex, with no arrowhead. The course
+     * ahead (`course`) is the bright line, with rounded joins and an arrowhead at its end, the last
+     * planned hex. With no course, a small arrowhead at the present hex points the way the ship came
+     * in. Both lines are cased in the chart's dark, as the tracks are.
      */
     private paintRoute(cam: Camera, vp: Viewport): void {
-        const route = this.publicRoute;
+        const route = this.publicRoute ?? this.partyRoute;
         if (!route) return;
         const at = (key: string) => {
             const point = this.hexKeyScreen(key, cam, vp);
@@ -724,7 +727,7 @@ export class MapRenderer {
         const track = routeChains(route.legs, at);
         const course = routeChains(route.course, at);
         if (track.length === 0 && course.length === 0) return;
-        const colour = this.trafficColour || this.theme.chart.publicGame;
+        const colour = this.publicRoute ? this.trafficColour || this.theme.chart.publicGame : this.theme.signal;
         const ctx = this.ctx;
         ctx.save();
         ctx.setLineDash([]);
@@ -795,6 +798,13 @@ export class MapRenderer {
         const legs = route ? [...route.legs] : [];
         const course = route && route.course ? [...route.course] : [];
         this.publicRoute = legs.length > 0 || course.length > 0 ? { legs, course } : null;
+    }
+
+    /** The party's selected ship's finished legs and course ahead; an open card's route is drawn instead while it is open. Null clears them. */
+    setPartyRoute(route: { legs: readonly RouteLeg[]; course?: readonly RouteLeg[] } | null): void {
+        const legs = route ? [...route.legs] : [];
+        const course = route && route.course ? [...route.course] : [];
+        this.partyRoute = legs.length > 0 || course.length > 0 ? { legs, course } : null;
     }
 
     /** Zoomed out: the hexes with public ships, from the overview. Null clears them. */

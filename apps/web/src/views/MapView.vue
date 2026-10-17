@@ -32,6 +32,7 @@ import StardateChip from '../workspace/StardateChip.vue';
 import PublicShipSheet, { type ShipSheetState } from '../workspace/PublicShipSheet.vue';
 import { fetchShipCard } from '../workspace/public_card.ts';
 import { courseWrites } from '../workspace/public_course.ts';
+import { partyRoute, routeShipId } from '../workspace/party_route.ts';
 import { SHIP_SHEET_BELOW, SHIP_SHEET_SHARE } from '../workspace/public_ship_card.ts';
 import FirstHint from '../workspace/FirstHint.vue';
 import { FIRST_PLACE, FIRST_WORLD, firstNear, HINT_KEY, hintShown, LAST_VIEW_KEY, openingFor, parseView, viewText } from '../workspace/first_visit.ts';
@@ -1174,6 +1175,7 @@ onMounted(() => {
     renderer = new MapRenderer(el, readTheme(el));
     const ink = readTrafficInk(el);
     renderer.setTrafficColour(ink.traffic);
+    renderer.setPartyRoute(partyRouteNow.value);
     if (trafficEl.value) traffic = new TrafficLayer(trafficEl.value, ink);
     renderer.setIndexSource((slug) => mapIndex(slug));
     observer = new ResizeObserver(() => onResize());
@@ -1862,6 +1864,22 @@ async function showShip(index: number, place: PublicShipHit['place'], press: { s
 }
 
 /** The referee changed the course switch: the server has rewritten the cards, so an open card is fetched again. */
+/**
+ * Your own ship's route (workspace/party_route.ts): the lead's while the Party tab is open, or the
+ * party ship open as a record, from the records at the campaign date. Drawn in the signal colour; an
+ * open card's route is drawn instead while the card is open.
+ */
+const partyRouteNow = computed(() => {
+    void campaign.seq;
+    const party = campaign.settings ? campaign.settings.party : null;
+    return partyRoute(routeShipId(shownPane.value, party), campaign.records, campaignDays(campaign.clock));
+});
+watch(partyRouteNow, (now) => {
+    if (!renderer) return;
+    renderer.setPartyRoute(now);
+    markDirty();
+});
+
 watch(() => courseWrites.count, () => {
     const now = shipSheet.value;
     if (now) void showShip(now.index, now.place, null);

@@ -26,6 +26,13 @@ export function featured(cards: readonly PackageCard[]): { heading: string; card
     return { heading: 'New in the store', cards: [...cards].sort(latest).slice(0, FEATURED_COUNT) };
 }
 
+/** The grid under the featured row: every card but the ones the row shows, in the grid's order. */
+export function withoutFeatured<T extends { id: string }>(cards: readonly T[], shownAbove: readonly { id: string }[]): T[] {
+    if (shownAbove.length === 0) return [...cards];
+    const above = new Set(shownAbove.map((card) => card.id));
+    return cards.filter((card) => !above.has(card.id));
+}
+
 export function isFamily(text: string): text is KindFamily {
     return (FAMILIES as readonly string[]).includes(text);
 }
@@ -36,9 +43,19 @@ export function kindWords(kind: string): string {
     return text ? text[0].toUpperCase() + text.slice(1) : text;
 }
 
-/** A card's one line of facts, in priority order: kind, hexes, imports. */
-export function cardFacts(card: Pick<PackageCard, 'kind' | 'hexCount' | 'installs'>): string {
-    return [kindWords(card.kind), plural(card.hexCount, 'hex', 'hexes'), plural(card.installs, 'import', 'imports')].join(' · ');
+/**
+ * A card's one line of facts, in priority order: kind, hexes, imports. A package with no hexes
+ * (records only, contract F18) names its records instead, never "0 hexes": the count when the
+ * card carries one, else "Records only" (the catalogue card has no record count yet).
+ */
+export function cardFacts(card: Pick<PackageCard, 'kind' | 'hexCount' | 'installs'> & { recordCount?: number }): string {
+    return [kindWords(card.kind), sizeWords(card.hexCount, card.recordCount), plural(card.installs, 'import', 'imports')].join(' · ');
+}
+
+/** "6 hexes"; with no hexes, "12 records", or "Records only" when the count is not known. */
+export function sizeWords(hexCount: number, recordCount?: number | null): string {
+    if (hexCount > 0) return plural(hexCount, 'hex', 'hexes');
+    return typeof recordCount === 'number' ? plural(recordCount, 'record', 'records') : 'Records only';
 }
 
 const DAY = 86_400_000;
