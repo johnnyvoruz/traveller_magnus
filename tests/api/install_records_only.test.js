@@ -212,6 +212,14 @@ if (process.env.RUN_API_TESTS !== '1') {
             const page = await jsonFetch(`${base}/api/packages/${packageId}`);
             assert.equal(page.body.data.hexCount, 0);
             assert.equal(page.body.data.versions[0].recordCount, 3);
+            assert.equal(page.body.data.recordCount, 3, 'the page carries the record count');
+            const listed = await jsonFetch(`${base}/api/packages?kind=people`);
+            assert.equal(listed.status, 200, JSON.stringify(listed.body));
+            const roCard = listed.body.data.items.find((item) => item.id === packageId);
+            assert.equal(roCard.hexCount, 0);
+            assert.equal(roCard.recordCount, 3, 'a records-only card carries its record count');
+            const mineList = await jsonFetch(`${base}/api/packages?mine=1`, { headers: { cookie: author } });
+            assert.equal(mineList.body.data.items.find((item) => item.id === packageId).recordCount, 3);
 
             // A campaign on another truth version.
             const target = await made(bHeaders, 'Target', other);

@@ -102,13 +102,13 @@ function onPaste(event: ClipboardEvent): void {
       </div>
       <div class="mk-cover-ed-side">
         <p class="mk-cover-ed-src"><b>Cover</b> {{ sourceWords(source) }}</p>
-        <p class="build-fine">Add a picture for your package. For a map, take a screenshot of it and paste it here.</p>
+        <p class="mk-fine">Add a picture for your package. For a map, take a screenshot of it and paste it here.</p>
         <div class="mk-cover-ed-acts">
           <button type="button" class="ui-btn" :disabled="reading || busy" @click="pick"><Icon name="plus" :size="13" />{{ source === 'upload' ? 'Replace cover' : 'Add a cover' }}</button>
           <button v-if="canRemove" type="button" class="ui-btn" :disabled="reading || busy" @click="emit('remove')">Remove cover</button>
         </div>
-        <p v-if="reading" class="build-fine" role="status">Reading the image…</p>
-        <p v-else-if="busy" class="build-fine" role="status">Saving the cover…</p>
+        <p v-if="reading" class="mk-fine" role="status">Reading the image…</p>
+        <p v-else-if="busy" class="mk-fine" role="status">Saving the cover…</p>
         <p v-if="problem || error" class="mk-err" role="alert">{{ problem || error }}</p>
       </div>
     </div>

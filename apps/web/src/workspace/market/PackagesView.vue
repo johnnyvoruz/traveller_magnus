@@ -25,6 +25,7 @@ import ProductPage from './ProductPage.vue';
 import StoreCard from './StoreCard.vue';
 import StoreFiltersBody from './StoreFilters.vue';
 import { featured, withoutFeatured } from './storefront.ts';
+import './market.css';
 
 const route = useRoute();
 const router = useRouter();

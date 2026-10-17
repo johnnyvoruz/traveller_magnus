@@ -32,3 +32,7 @@ shots and report.
 After each meaningful step, append one line under Progress: "done: X. next: Y."
 
 ## Progress
+done: listed the classes (.mk-sum only in PublishFields; build-fine only in the Build pane and GenerateSheet, with ProductPage's .mk-buy copy; build-link only in BuildPane) and moved them: new market/market.css (.mk-sum, .mk-fine) imported by PackagesView and PublishFields, the store's fine print as .mk-fine, Move it as .mk-link. next: the test.
+done: tests/web/import_style.test.js (4 tests; reads the sources, follows the store's static imports, matches each element's classes against every rule with its ancestors; fails on the old ImportPanel with 9 borrowed classes, passes now). next: gates and the browser pass.
+done: browser pass (kb29, 7 shots: records and hex pages cold at 1600 and 390 with the import previewed, the Publish records dialog at 1600; no publish-form or Build module fetched; dialog differs from kb28 only in the cover hint) and the panel's own spacing; gates green (npm test 1849/1812 pass/0 fail/37 skipped, check, typecheck, build); servers stopped. next: the report.
+done: report written (directives/reports/d_import_style.md). next: none, stopped.

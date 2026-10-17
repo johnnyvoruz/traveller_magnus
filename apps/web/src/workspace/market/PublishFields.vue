@@ -10,6 +10,7 @@ import { defaultCoverUrl, kindFamily } from '../../marketplace/covers.ts';
 import CoverEditor from './CoverEditor.vue';
 import type { PreparedCover } from './cover_image.ts';
 import { sizeWords } from './storefront.ts';
+import './market.css';
 
 const props = defineProps<{
     problems: readonly FormProblem[];
@@ -103,20 +104,6 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 10px;
   margin: 0;
-}
-
-.mk-sum span {
-  display: block;
-  margin-top: 4px;
-  color: var(--text-1);
-}
-
-.mk-sum {
-  margin: 0;
-  padding: 8px 10px;
-  border-left: 3px solid var(--signal);
-  background: var(--bg-2);
-  color: var(--text-0);
 }
 
 .mk-fld {

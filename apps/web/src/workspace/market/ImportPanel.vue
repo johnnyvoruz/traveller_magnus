@@ -140,7 +140,7 @@ onMounted(async () => {
 <template>
   <section class="mk-imp" aria-label="Import">
     <h2 class="ui-heading">{{ updateId ? 'Update' : 'Import' }}</h2>
-    <p v-if="!mine.length" class="build-fine">You have no campaign to import into. Make one from the Campaign panel first.</p>
+    <p v-if="!mine.length" class="mk-fine">You have no campaign to import into. Make one from the Campaign panel first.</p>
     <template v-else>
       <div class="mk-imp-row">
         <label class="mk-fld">
@@ -154,10 +154,10 @@ onMounted(async () => {
           <button type="button" :aria-pressed="mode === 'place' ? 'true' : 'false'" :disabled="!keys || !keys.length" @click="mode = 'place'">Place on the map</button>
         </div>
       </div>
-      <p v-if="recordsOnly" class="build-fine" data-records-only>Records only. They go into the campaign, with nothing to place on the map.</p>
-      <p v-else-if="mode === 'place' && placement()" class="build-fine">Placed, starting at {{ hexWords(placement()!.to) }}. <button type="button" class="build-link" @click="place()">Move it</button></p>
-      <p v-else-if="mode === 'place'" class="build-fine">The map opens with the piece's outline. Drag it where it goes, then select Preview.</p>
-      <p v-else-if="!updateId" class="build-fine">Every hex goes where it is in the package.</p>
+      <p v-if="recordsOnly" class="mk-fine" data-records-only>Records only. They go into the campaign, with nothing to place on the map.</p>
+      <p v-else-if="mode === 'place' && placement()" class="mk-fine">Placed, starting at {{ hexWords(placement()!.to) }}. <button type="button" class="mk-link" @click="place()">Move it</button></p>
+      <p v-else-if="mode === 'place'" class="mk-fine">The map opens with the piece's outline. Drag it where it goes, then select Preview.</p>
+      <p v-else-if="!updateId" class="mk-fine">Every hex goes where it is in the package.</p>
       <p v-if="error" class="mk-err" role="alert">{{ error }}</p>
       <div v-if="!preview" class="mk-acts">
         <button type="button" class="ui-btn is-primary" :disabled="busy || !universeId" @click="next()">{{ mode === 'place' && !updateId && !placement() ? 'Place on the map' : 'Preview' }}</button>
@@ -166,9 +166,9 @@ onMounted(async () => {
       <div v-if="preview" class="mk-prev" aria-live="polite">
         <p class="mk-sum"><b>{{ previewLine(preview) }}</b></p>
         <p v-if="dropped" class="mk-imp-dropped" role="status" data-anchors-dropped>{{ dropped }}</p>
-        <p v-for="plan in preview.sectorsCreated" :key="plan.id" class="build-fine">A new sector is made at slot {{ plan.slot.x }}, {{ plan.slot.y }}.</p>
+        <p v-for="plan in preview.sectorsCreated" :key="plan.id" class="mk-fine">A new sector is made at slot {{ plan.slot.x }}, {{ plan.slot.y }}.</p>
         <div v-if="preview.conflicts" class="mk-acts is-start">
-          <span class="build-fine">For every conflict:</span>
+          <span class="mk-fine">For every conflict:</span>
           <button type="button" class="ui-btn" @click="setAll('theirs')">Take theirs</button>
           <button type="button" class="ui-btn" @click="setAll('mine')">Keep mine</button>
         </div>
@@ -200,7 +200,7 @@ onMounted(async () => {
           <button type="button" class="ui-btn" :disabled="busy" @click="preview = null">Back</button>
           <button type="button" class="ui-btn is-primary" :disabled="busy || unanswered > 0" @click="confirmImport()">{{ updateId ? 'Update' : 'Import' }}</button>
         </div>
-        <p v-if="unanswered" class="build-fine">Choose theirs or mine for {{ unanswered }} more.</p>
+        <p v-if="unanswered" class="mk-fine">Choose theirs or mine for {{ unanswered }} more.</p>
       </div>
     </template>
   </section>
@@ -213,6 +213,16 @@ onMounted(async () => {
   border: 1px solid var(--line-1);
   border-radius: var(--r-3);
   background: var(--panel-raised);
+}
+
+/* The panel's own spacing: a line under the campaign row, the preview under its button. */
+.mk-imp > p,
+.mk-prev {
+  margin-top: 10px;
+}
+
+.mk-prev > .mk-fine {
+  margin-top: 8px;
 }
 
 .mk-imp-dropped {

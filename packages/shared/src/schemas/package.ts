@@ -128,6 +128,11 @@ export type PackageCover = z.infer<typeof PackageCover>;
 
 /** Full marketplace, contracts/b_marketplace.md F2. The catalogue card. */
 export const PackageCard = PackageListing.extend({
+    /**
+     * The latest version's record count, from the same version as `hexCount`; 0 with no version.
+     * This server always sends it; optional so a card from an older server still parses.
+     */
+    recordCount: z.number().int().nonnegative().optional(),
     installs: z.number().int().nonnegative(),
     updatedAt: z.string(),
     hidden: z.boolean(),
@@ -166,6 +171,8 @@ export const PackagePublicPage = PackagePage.extend({
     hidden: z.boolean(),
     /** F17. As on the card. */
     cover: PackageCover.nullable().optional(),
+    /** As on the card: the latest version's record count. Optional for an older server. */
+    recordCount: z.number().int().nonnegative().optional(),
     /** Only on an admin's view of a hidden package. */
     takedownReason: z.string().nullable().optional(),
 }).strict();

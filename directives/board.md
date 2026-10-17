@@ -1,19 +1,19 @@
 # Board
 
-One line per lane. Only the orchestrator edits this file. Updated 2026-10-17 (by the clock).
+One line per lane. Only the orchestrator edits this file. Updated 2026-10-17 12:40 (by the clock).
 
-**Last push: `0c387f2`, version 1.2.4, engine e1.2, 2026-10-16, live** (index `index-Cpo2OS6L.js`; 0020 applied: `showCourse` on `/api/universes`). Truth v10. Covers live on all six example packages.
-**Called 2026-10-17 (yes to D's three): 1.2.5** (`findings/push/release_2026-10-16b.md`).
+**Last push: `2f16058`, version 1.2.5, engine e1.2, 2026-10-17, live** (index `index-rWBScAd1.js`). Truth v10. Covers live.
+**Called 12:40: 1.2.6** (`findings/push/release_2026-10-17.md`, 24 paths: Z's `recordCount`, D's import styles).
 **Deploys run on push** (Johnny, 2026-10-14): push commands no longer include `npm run deploy:ci`.
 
 | Lane | Status | Current prompt | Blocker / next |
 |---|---|---|---|
-| A | free | (none) | `a_test_flakes` accepted: the title-fade test steps `performance.now`; store_scroll left (reads source only); in 1.2.5 |
-| B | free | (none) | `b_public_course` live in 1.2.4. Later: catalogue `family=` and `author=` queries |
-| C | free | (none) | `c_surface_zoom` accepted (cap 320 px per hex, sharp window; parity exit 0 with pinned counts); in 1.2.3 |
-| D | go after the 1.2.5 push | prompts/d_import_style.md | `d_store_3` accepted (in 1.2.5). Next: the import panel's styles on a cold product page |
-| E | free | (none) | `e_uwp_dots` accepted (in 1.2.3) |
-| Z | go | prompts/z_card_record_count.md | optional `recordCount` on the catalogue card (its files are not in 1.2.5) |
+| A | go | prompts/a_shared_encoder.md | one `encodeWebp`/`sha256Hex` (D's `cover_image.ts` imports A's); test suites that can run side by side (free port, temp stand-in) |
+| B | go | prompts/b_quota_reservation.md | the 250 MB race closed with a reservation in the universe's DO (B's own 0013 design) |
+| C | go | prompts/c_own_sector_offset.md | investigation: where an own sector sits (Hollow Verge 15 hexes); fix only in its own files |
+| D | go after the 1.2.6 push | prompts/d_store_harden.md | `d_import_style` accepted (in 1.2.6). Next: the store inside the app frame, the videos' look, filters that hold still, the manifesto table, a Publish chooser; plus the publish forms' limits line to `mk-fine` |
+| E | go | prompts/e_changelog.md | "Version 1.2.5 · What's new" opens the changelog; `changelog.ts` backfilled from git log; `/changes`; a test ties the first entry to APP_VERSION |
+| Z | go | prompts/z_parked_truth_build.md | the ten parked truth-build files: what they are, run them in a scratch copy, recommend finish, shelve or split |
 | F | retired | (none) | Johnny, 2026-10-11: unreliable (runs out of budget); do not use or propose until he says it is back |
 
 ## Naming (Johnny, 2026-10-14)
@@ -435,6 +435,10 @@ lane's letter as the first message of a new session; from then on "go" is enough
 ## Open with Johnny
 Nothing. Answered 2026-10-17, "yes to all three" (D's `d_store_3` questions): `recordCount` on the card (Lane Z, which owns the catalogue route); the route follows the open ship record, else the lead with the Party tab open; Publish records starts with the narrowed list, or none.
 
+## Decided by the orchestrator, 2026-10-17 (D's `d_import_style` questions)
+1. The cover hint keeps the store's fine print (`mk-fine`) everywhere.
+2. The publish forms' limits line moves to `mk-fine` too, in `d_store_harden` (one extra line in its item 3).
+
 ## Decided by the orchestrator, 2026-10-16
 - Z's question 2: the dropped-anchor count stays on the preview only, not on the install answer.
 - Z's question 1 (example packs to records-only) is already Johnny's, after records-only ships with D's screens (Queue).
@@ -472,17 +476,14 @@ Nothing. Answered 2026-10-17, "yes to all three" (D's `d_store_3` questions): `r
   2; after the push).
 
 ## Queue (prompts not yet written)
-- `tests/tools/examples.test.js` "the seeding dry run names each cover" starts wrangler on fixed port 8872 against the shared `findings/examples/standin_covers`; it failed in A's run while D's suite ran at the same time, and passes alone (11/11). Not a code fault: two lanes' suites collide.
+- Every push list from 1.2.6 on: the orchestrator adds the release's entry to `apps/web/src/changelog.ts` (after E's pass lands; a test fails without it).
 - Johnny, after records-only ships: convert the four records packs to records-only (Z recommends; Regina highport contacts first).
 - D, seen by the orchestrator in the kb26 shots: the product page's "What's inside" box draws a few tiny hex outlines in a large empty panel (show the chart piece itself, or shrink the box to fit); map covers (Hollow Verge) read as a few dots at card size.
-- A: export `encodeWebp` and `sha256Hex` from `campaign/images.ts`; D's `market/cover_image.ts` then imports them (two copies of one encoder today).
 - B, later: catalogue `family=` and `author=` queries (D's question 1).
-- Someone checks Z's note: the map draws the Hollow Verge own sector about 15 hexes from where Z's slot-to-hex arithmetic put it. Z's arithmetic may be the wrong one; a note, not a fault yet.
 - After 1.1.12: Johnny rebuilds v10 locally, uploads (`tools/truth/upload_truth.js`, bulk
   over R2's S3 interface, keys in `.env`) and releases. His commands only.
 - D: E's suggested words ("Full system, from the star outward."); the Build pane saying
   the one-sector limit before a request is sent (after B's contract).
-- The 250 MB quota race: B's reservation design (reports/done/b_public_games_0013.md).
 - D's review, left over: finding 18
   (520 px: the dossier hides the world), the shared modal frame (`Lightbox.vue`,
   `build/OrbitPicker.vue`, `PersonCard.vue`, `PlanModal.vue`, `design/base.css`), the

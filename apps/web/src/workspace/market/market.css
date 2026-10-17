@@ -1,0 +1,25 @@
+/* The market's shared lines, one definition each (prompts/d_import_style.md). Imported by the store
+   (PackagesView.vue) and by the publish forms (PublishFields.vue), so a product page opened cold and a
+   publish form opened on the map both have them, whichever loads first. */
+
+/* A summary: the preview's "11 records.", a publish form's "12 hexes, 3 records". */
+.mk-sum {
+  margin: 0;
+  padding: 8px 10px;
+  border-left: 3px solid var(--signal);
+  background: var(--bg-2);
+  color: var(--text-0);
+}
+
+.mk-sum span {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-1);
+}
+
+/* Fine print: a hint, a state, an empty list. */
+.mk-fine {
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+}

@@ -313,7 +313,7 @@ Query:
 
 Answer: 200 `PackageListPage` of `PackageCard`.
 
-`PackageCard` = `PackageListing` plus `installs` (integer ≥ 0), `updatedAt` (ISO), `hidden` (boolean; always false on the public list, true possible with `mine=1`).
+`PackageCard` = `PackageListing` plus `recordCount` (integer, 0 or more: the latest version's count, from the same version and query as `hexCount`, 0 with no version; optional in the schema so an older server's card parses; the page carries it too), `installs` (integer ≥ 0), `updatedAt` (ISO), `hidden` (boolean; always false on the public list, true possible with `mine=1`).
 
 Errors: 400 `validation`, `Invalid limit.` 400 `validation`, `Invalid request.` (bad `sort`, `q` too long, bad cursor).
 
@@ -725,7 +725,7 @@ section is for Lane D. Nothing new is on the wire except `records.anchorsDropped
 
 ### The card and the page
 
-- The card and the page show `hexCount` 0 and the version's `recordCount`.
+- The card and the page show `hexCount` 0 and the latest version's `recordCount`, which `PackageCard` and `PackagePublicPage` now carry: "People · 12 records".
 - On the page, hide the hex box when `hexCount` is 0. Show the record count instead.
 
 ### Import

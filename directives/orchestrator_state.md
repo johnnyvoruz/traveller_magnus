@@ -1,23 +1,24 @@
-# Orchestrator state — 2026-10-17 (written for the next orchestrator session)
+# Orchestrator state — 2026-10-17 12:40 (written for the next orchestrator session)
 
-Overwritten every turn. History: `handoff.md` (last section 293, with a 2026-10-17 line; read by offset, it is large).
+Overwritten every turn. History: `handoff.md` (last section 295; read by offset, it is large).
 `orchestrator_start_here.md` is the 2026-10-07 page and is stale. This file and
 `board.md` are the state.
 
 ## Where the roadmap is
-Live: **1.2.4 (`0c387f2`)**, index `index-Cpo2OS6L.js`, 0020 applied, covers live. **Called: 1.2.5** (`findings/push/release_2026-10-16b.md`): D's records-only screens, featured row, own ship's route; A's fade test. Johnny said yes to D's three; the push stands as built.
+Live: **1.2.5 (`2f16058`)**. **Called: 1.2.6** (`findings/push/release_2026-10-17.md`, 24 paths). Then: D's store hardening and E's changelog (1.2.7 or later).
 
 ## Lanes
-Z go `z_card_record_count`; D `d_import_style` after Johnny pushes 1.2.5; A, B, C, E free. F retired. Use the claude-in-chrome extension for live looks (Johnny's signed-in Chrome).
+All six working: A `a_shared_encoder`, B `b_quota_reservation`, C `c_own_sector_offset`, E `e_changelog`, Z `z_parked_truth_build` go now; D `d_store_harden` after Johnny pushes 1.2.6. F retired.
 
 ## Next turn
-1. Johnny pushes 1.2.5 and says go to D. Z is already go.
-2. After 1.2.5 is live: `git log origin/campaign -1`, live index `index-rWBScAd1.js`; in Chrome a records-only package page.
-3. Not yet looked at live: 1.2.3's UWP tiles and surface zoom; 1.2.4's routes on the live map.
-4. Review Z `z_card_record_count`, D `d_import_style` (1.2.6). Queue: the examples test's fixed port.
+1. Verify 1.2.6 live: `git log origin/campaign -1`, index `index-CF1BRS3K.js`.
+2. Johnny's answers to the two direction questions (handoff 295): Z's next build after the parked-files report; the example packs to records-only.
+3. Review in order of arrival. A's `cover_image.ts` lines sit in D's folder: check D's and A's edits don't cross.
+4. From the push after E's pass: each push list adds its `changelog.ts` entry.
+5. Not yet looked at live: 1.2.3's UWP tiles and surface zoom; the routes on the live map.
 
 ## Versions
-Each push list bumps `APP_VERSION` in `apps/web/src/version.ts` (1.2.4 live; 1.2.5 called; next 1.2.6) and the commit message starts with it. Engine version is 1.2.0 on disk, 1.1.0
+Each push list bumps `APP_VERSION` in `apps/web/src/version.ts` (1.2.5 live; 1.2.6 called; next 1.2.7) and the commit message starts with it. Engine version is 1.2.0 on disk, 1.1.0
 live.
 
 ## Traps

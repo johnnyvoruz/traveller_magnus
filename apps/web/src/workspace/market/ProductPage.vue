@@ -268,7 +268,7 @@ watch(() => [props.packageId, props.watching, props.ready, session.user ? sessio
           <span class="mk-hero-facts">{{ page.edition }} · {{ page.truthVersion ? 'chart ' + page.truthVersion : 'own map' }}</span>
           <div v-if="canImport && ready" class="mk-buy">
             <button type="button" class="ui-btn is-primary mk-buy-btn" data-market-import @click="buy()">{{ updateId ? 'Update' : 'Import' }}</button>
-            <span v-if="!session.user" class="build-fine">Sign in to import it into a campaign.</span>
+            <span v-if="!session.user" class="mk-fine">Sign in to import it into a campaign.</span>
             <span v-if="!session.user && session.error" class="mk-err" role="alert">{{ session.error }}</span>
           </div>
         </div>
@@ -299,12 +299,12 @@ watch(() => [props.packageId, props.watching, props.ready, session.user ? sessio
 
       <section v-if="page.latestVersion > 0" class="mk-sec" aria-labelledby="mk-inside">
         <h2 id="mk-inside" class="ui-heading">What's inside</h2>
-        <p v-if="!contentsRead" class="build-fine" aria-busy="true">Reading the package…</p>
-        <p v-else-if="!contents" class="build-fine">The contents could not be read.</p>
+        <p v-if="!contentsRead" class="mk-fine" aria-busy="true">Reading the package…</p>
+        <p v-else-if="!contents" class="mk-fine">The contents could not be read.</p>
         <div v-else class="mk-inside">
           <div v-if="page.hexCount === 0" class="mk-inside-hexes is-records" data-records-only>
             <p class="mk-inside-line"><b>{{ recordsInside }}</b></p>
-            <p class="build-fine">Records only. Nothing is placed on the map.</p>
+            <p class="mk-fine">Records only. Nothing is placed on the map.</p>
           </div>
           <div v-else class="mk-inside-hexes">
             <p class="mk-inside-line"><b>{{ hexesInside(contents.keys, contents.ownSectors) }}</b></p>
@@ -315,8 +315,8 @@ watch(() => [props.packageId, props.watching, props.ready, session.user ? sessio
             </figure>
           </div>
           <div class="mk-inside-recs">
-            <p v-if="contents.records === null" class="build-fine">The records could not be read.</p>
-            <p v-else-if="!groups.length" class="build-fine">No records.</p>
+            <p v-if="contents.records === null" class="mk-fine">The records could not be read.</p>
+            <p v-else-if="!groups.length" class="mk-fine">No records.</p>
             <div v-for="group in groups" :key="group.type" class="mk-recgroup">
               <h3>{{ group.words }} <span class="ui-count">{{ group.items.length }}</span></h3>
               <ul>
@@ -356,7 +356,7 @@ watch(() => [props.packageId, props.watching, props.ready, session.user ? sessio
       <section class="mk-sec" aria-labelledby="mk-about">
         <h2 id="mk-about" class="ui-heading">About</h2>
         <p v-if="page.description" class="mk-desc">{{ page.description }}</p>
-        <p v-else class="build-fine">No description.</p>
+        <p v-else class="mk-fine">No description.</p>
         <p v-if="page.tags.length" class="mk-tags">
           <RouterLink v-for="t in page.tags" :key="t" class="mk-tag" :to="{ path: '/packages', query: { tag: t } }">{{ t }}</RouterLink>
         </p>
@@ -364,7 +364,7 @@ watch(() => [props.packageId, props.watching, props.ready, session.user ? sessio
 
       <section class="mk-sec" aria-labelledby="mk-versions">
         <h2 id="mk-versions" class="ui-heading">Versions <span class="ui-count">{{ versions.length }}</span></h2>
-        <p v-if="!versions.length" class="build-fine">No version is published yet.</p>
+        <p v-if="!versions.length" class="mk-fine">No version is published yet.</p>
         <ol v-else class="mk-changes">
           <li v-for="item in versions" :key="item.version">
             <b>Version {{ item.version }}</b>
@@ -499,11 +499,6 @@ watch(() => [props.packageId, props.watching, props.ready, session.user ? sessio
   width: 100%;
   max-width: 320px;
   margin-top: 14px;
-}
-
-.mk-buy .build-fine {
-  color: var(--text-muted);
-  font-size: 12.5px;
 }
 
 .mk-sec .mk-tags {

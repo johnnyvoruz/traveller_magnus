@@ -438,6 +438,7 @@ VALUES ('${version}', '1.1.0', 'M1105', 'TravellerMagnus', '${SETTINGS}', '[]', 
             assert.equal(full.body.data.versions[0].version, 2);
             assert.equal(full.body.data.versions[1].version, 1);
             assert.equal(full.body.data.versions[0].state, 'done');
+            assert.equal(full.body.data.recordCount, full.body.data.versions[0].recordCount, 'the page counts records from the latest version');
             const noVersion = await jsonFetch(`${base}/api/packages/${packageId}/versions/9`, { headers: { cookie: owner } });
             assert.equal(noVersion.status, 404);
             assert.equal(noVersion.body.error.message, 'No such version.');
@@ -459,6 +460,8 @@ VALUES ('${version}', '1.1.0', 'M1105', 'TravellerMagnus', '${SETTINGS}', '[]', 
             assert.ok(titles.includes('Regina belt'));
             assert.equal(titles.includes('Capped'), false);
             assert.deepEqual([...titles].sort(), titles);
+            const catalogueCard = catalogue.body.data.items.find((item) => item.id === packageId);
+            assert.equal(catalogueCard.recordCount, full.body.data.versions[0].recordCount, 'the card counts records from the latest version');
             const searched = await jsonFetch(`${base}/api/packages?q=REGINA`);
             assert.deepEqual(searched.body.data.items.map((item) => item.id), [packageId]);
             const byTag = await jsonFetch(`${base}/api/packages?tag=belt`);
@@ -474,6 +477,7 @@ VALUES ('${version}', '1.1.0', 'M1105', 'TravellerMagnus', '${SETTINGS}', '[]', 
             assert.equal(wrongCursor.status, 400);
             const mine = await jsonFetch(`${base}/api/packages?mine=1`, { headers: { cookie: owner } });
             assert.ok(mine.body.data.items.some((item) => item.id === capId));
+            assert.equal(mine.body.data.items.find((item) => item.id === capId).recordCount, 0, 'no done version counts 0, like hexCount');
 
             // Report and takedown.
             const reportPath = `${base}/api/packages/${packageId}/report`;

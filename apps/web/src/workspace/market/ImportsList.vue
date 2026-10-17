@@ -78,8 +78,8 @@ onMounted(async () => {
     </div>
     <p v-if="said" class="mk-status" role="status">{{ said }}</p>
     <p v-if="error" class="mk-err" role="alert">{{ error }}</p>
-    <p v-if="!mine.length" class="build-fine">You have no campaign yet.</p>
-    <p v-else-if="!loading && !rows.length && !error" class="build-fine">Nothing is imported into this campaign.</p>
+    <p v-if="!mine.length" class="mk-fine">You have no campaign yet.</p>
+    <p v-else-if="!loading && !rows.length && !error" class="mk-fine">Nothing is imported into this campaign.</p>
     <ul v-else class="mk-ins-list">
       <li v-for="row in rows" :key="row.installId">
         <div class="mk-ins-what">

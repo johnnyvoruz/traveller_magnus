@@ -117,12 +117,19 @@ async function authorHandle(c: Ctx, packageId: string, latestVersion: number, fa
 }
 
 async function listingOf(c: Ctx, row: PackageRow, fallbackHandle: string): Promise<PackageListing> {
-    const hexCount = row.latestVersion > 0
-        ? (await c.env.DB.prepare(
-            `SELECT hex_count AS hexCount FROM package_versions WHERE package_id = ? AND version = ?`,
-        ).bind(row.id, row.latestVersion).first<{ hexCount: number }>())?.hexCount ?? 0
-        : 0;
-    return PackageListing.parse({
+    return (await countedListingOf(c, row, fallbackHandle)).listing;
+}
+
+/** The listing and the latest version's record count, read with its hex count in one query. */
+async function countedListingOf(c: Ctx, row: PackageRow, fallbackHandle: string): Promise<{ listing: PackageListing; recordCount: number }> {
+    const counts = row.latestVersion > 0
+        ? await c.env.DB.prepare(
+            `SELECT hex_count AS hexCount, record_count AS recordCount FROM package_versions WHERE package_id = ? AND version = ?`,
+        ).bind(row.id, row.latestVersion).first<{ hexCount: number; recordCount: number }>()
+        : null;
+    const hexCount = counts?.hexCount ?? 0;
+    const recordCount = counts?.recordCount ?? 0;
+    const listing = PackageListing.parse({
         id: row.id,
         title: row.title,
         authorHandle: await authorHandle(c, row.id, row.latestVersion, fallbackHandle),
@@ -133,6 +140,7 @@ async function listingOf(c: Ctx, row: PackageRow, fallbackHandle: string): Promi
         tags: tagsOf(row.tags),
         latestVersion: row.latestVersion,
     });
+    return { listing, recordCount };
 }
 
 function versionNumber(value: string | undefined): number | null {
@@ -291,10 +299,10 @@ async function viewer(c: Ctx): Promise<SessionUser | null> {
 }
 
 async function cardOf(c: Ctx, row: CardRow, fallbackHandle: string, admin: boolean): Promise<PackageCard> {
-    const listing = await listingOf(c, row, fallbackHandle);
+    const { listing, recordCount } = await countedListingOf(c, row, fallbackHandle);
     const hidden = Number(row.hidden) === 1;
     const cover = await coverOf(c.env, row.id, Number(row.latestVersion), hidden, admin);
-    return PackageCard.parse({ ...listing, installs: Number(row.installs) || 0, updatedAt: row.updatedAt, hidden, cover });
+    return PackageCard.parse({ ...listing, recordCount, installs: Number(row.installs) || 0, updatedAt: row.updatedAt, hidden, cover });
 }
 
 async function handleOf(c: Ctx, authorId: string): Promise<string> {
