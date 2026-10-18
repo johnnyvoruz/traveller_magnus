@@ -139,13 +139,13 @@ test('sign-up: taken, reserved, the hourly limit, a cancelled ceremony, then the
     mode = 'cancel';
     const closed = await signUp('ranger');
     assert.equal(closed.code, CEREMONY_CANCELLED);
-    assert.equal(closed.message, 'The passkey ceremony was cancelled.');
+    assert.equal(closed.message, 'You closed the passkey prompt.');
     mode = 'throw';
     assert.equal((await signUp('ranger')).code, CEREMONY_CANCELLED);
     mode = 'plugin';
-    assert.deepEqual(await signUp('ranger'), { ok: false, code: 'ceremony_failed', message: 'The passkey ceremony did not finish.' });
+    assert.deepEqual(await signUp('ranger'), { ok: false, code: 'ceremony_failed', message: 'The passkey could not be used. Try again.' });
     mode = 'wrapped';
-    assert.deepEqual(await signUp('ranger'), { ok: false, code: 'ceremony_cancelled', message: 'The passkey ceremony was cancelled.' });
+    assert.deepEqual(await signUp('ranger'), { ok: false, code: 'ceremony_cancelled', message: 'You closed the passkey prompt.' });
     mode = 'ok';
     const store = new Map();
     globalThis.localStorage = { getItem: (key) => store.get(key) ?? null, setItem: (key, value) => { store.set(key, String(value)); } };
@@ -201,8 +201,8 @@ test('sign-in replaces the previous account allowance', async () => {
         passkey: () => ({ data: null, error: { code: 'ERROR_PASSTHROUGH_SEE_CAUSE_PROPERTY', message: 'Auth cancelled' } }),
         http: () => json(500, {}),
     });
-    assert.deepEqual(await signInWithPasskey(), { ok: false, code: 'ceremony_cancelled', message: 'The passkey ceremony was cancelled.' });
-    assert.deepEqual(await addPasskey('Phone'), { ok: false, code: 'ceremony_cancelled', message: 'The passkey ceremony was cancelled.' });
+    assert.deepEqual(await signInWithPasskey(), { ok: false, code: 'ceremony_cancelled', message: 'You closed the passkey prompt.' });
+    assert.deepEqual(await addPasskey('Phone'), { ok: false, code: 'ceremony_cancelled', message: 'You closed the passkey prompt.' });
     assert.equal(session.user.id, 'bea');
 });
 

@@ -1,6 +1,8 @@
 import { integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { drizzle } from 'drizzle-orm/durable-sqlite';
 import { installCampaignSchema, type SqlRow } from './campaign';
+import { installProposalSchema } from './proposals';
+import { RESERVATION_TABLE } from './quota';
 
 export const meta = sqliteTable('meta', {
     key: text('key').primaryKey(),
@@ -211,14 +213,17 @@ export async function migrate(storage: DurableObjectStorage): Promise<void> {
         INSERT INTO hexes_fts(hexes_fts, rowid, name, hex_key, uwp) VALUES ('delete', old.rowid, old.name, old.hex_key, old.uwp);
         INSERT INTO hexes_fts(rowid, name, hex_key, uwp) VALUES (new.rowid, new.name, new.hex_key, new.uwp);
     END`);
-    installCampaignSchema({
-        exec(query, ...params) {
+    storage.sql.exec(RESERVATION_TABLE);
+    const campaignSql = {
+        exec(query: string, ...params: unknown[]) {
             return storage.sql.exec(query, ...params).toArray() as SqlRow[];
         },
-        transaction(fn) {
+        transaction<T>(fn: () => T): T {
             return storage.transactionSync(fn);
         },
-    });
+    };
+    installCampaignSchema(campaignSql);
+    installProposalSchema(campaignSql);
     drizzle(storage, { schema: doSchema });
     console.log(JSON.stringify({ event: 'UniverseDO migration', schemaVersion: 3 }));
 }

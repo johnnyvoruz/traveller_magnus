@@ -32,6 +32,8 @@ const props = defineProps<{
     /** "2 parsecs · about 20 tons · 100-ton hull assumed"; empty while the parsecs are not known. */
     jumpEstimate: string;
     narrow: boolean;
+    /** The empty line is for an open campaign panel. A shut panel leaves the picture clear. */
+    campaignOpen: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -101,7 +103,7 @@ const jumpNote = computed(() => {
         </button>
       </li>
     </ul>
-    <p v-else class="orbit-ships-none">No ships here</p>
+    <p v-else-if="campaignOpen" class="orbit-ships-none">No ships here</p>
 
     <!-- Marking a jump: where to. -->
     <div v-if="status && ships.length && status.state !== 'jump'" class="orbit-jump-to" :class="{ 'is-marked': jumpTarget }" role="group" aria-label="Jump destination">
@@ -158,10 +160,11 @@ const jumpNote = computed(() => {
   max-width: 100%;
   height: 34px;
   padding: 0 4px 0 12px;
-  border: 1px solid var(--line-1);
+  border: 1px solid var(--line-2);
   border-radius: var(--r-3);
   background: var(--chrome-glass);
-  box-shadow: var(--shadow-chrome);
+  /* The videos' frame edge and teal halo, over the chrome shadow. */
+  box-shadow: var(--shadow-chrome), 0 0 24px var(--frame-glow);
   backdrop-filter: blur(8px);
   color: var(--text-1);
   font: 500 12.5px/1 var(--font-text);
@@ -294,10 +297,11 @@ const jumpNote = computed(() => {
   gap: 6px;
   max-width: 100%;
   padding: 6px 8px;
-  border: 1px solid var(--line-1);
+  border: 1px solid var(--line-2);
   border-radius: var(--r-3);
   background: var(--chrome-glass);
-  box-shadow: var(--shadow-chrome);
+  /* The videos' frame edge and teal halo, over the chrome shadow. */
+  box-shadow: var(--shadow-chrome), 0 0 24px var(--frame-glow);
   backdrop-filter: blur(8px);
   color: var(--text-1);
   font: 400 12.5px/1.3 var(--font-text);

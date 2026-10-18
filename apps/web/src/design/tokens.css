@@ -148,6 +148,7 @@
 
   /* motion */
   --t-fast: 200ms;        /* hover, toggles */
+  --t-chevron: 150ms;     /* world-panel section chevron */
   --t-stagger: 40ms;      /* one step between the groups of an opening drawer (orbit) */
   --t-base: 300ms;        /* panel reveal, dissolve */
   --t-slow: 450ms;        /* locator connect, camera short hop */
@@ -161,6 +162,7 @@
   --t-pulse: 2400ms;      /* one beat of the focus pulse round a selected body (system_viewer.js:3028) */
   --t-lineup: 650ms;      /* bodies travelling between the orbits, row and column layouts (plan 7.8) */
   --t-sweep: 8000ms;      /* one turn of the scan sweep (system_viewer.js:2099) */
+  --t-ripple: 6000ms;     /* news ripples: one play of the scrubber, day 0 to the horizon (spec_xboat_ripples.md §3.3, Lane D) */
 
   /* layout of the floating chrome (legacy #map-chrome and #system-inspector) */
   --chrome-inset: 10px;   /* viewport edge to chrome */
@@ -293,8 +295,64 @@
   --chart-route-core-route: purple;
   --chart-public: #c4b5fd;       /* a public game: diamond, not a world, a vessel, or the selection */
   --chart-traffic: #d4ff3a;      /* other people's ships as tracks, the open card's route on the map, and that card's ship name and border. Measured: findings/traffic_colour.md (Lane D) */
+  --chart-news: #ff7ad9;         /* news ripples: the systems news has reached and the X-boat lines it runs along (spec_xboat_ripples.md §3.2). Pink, apart from the signal, traffic, public, zone, water and route colours. Lane D */
   --store-placeholder: color-mix(in srgb, var(--panel-raised) 70%, var(--bg-0));  /* a cover's box while its image loads (Lane D, the storefront) */
   --store-badge: color-mix(in srgb, var(--bg-0) 78%, transparent);  /* the one kind badge over a cover: a neutral dark glass, no tint */
+  --print-paper: #ffffff;        /* print and PDF (DU31): the page. The app prints ink on white whatever its theme. Lane D */
+  --print-ink: #16181c;          /* print: every word and mark on the page */
+  --print-line: #8a8f98;         /* print: rules, field lines and borders */
+  /* The version-video look (Lane M, base.css "The version-video look"; values from versionvideo/scene/scene.css) */
+  --mark-red: #d8202a;           /* the V in public/favicon.svg: the NEW tag, the wordmark's dot, the red rule */
+  --on-mark-red: #ffffff;        /* the NEW tag's words on --mark-red: --text-0 is 4.29:1 there, white is 5:1 */
+  --mark-red-glow: color-mix(in srgb, var(--mark-red) 55%, transparent);  /* the halo round the NEW tag and the red rule */
+  --frame-glow: color-mix(in srgb, var(--signal) 14%, transparent);       /* the faint teal halo round a .ui-frame */
+  --ground-fill: radial-gradient(ellipse at 30% 20%, var(--bg-1), var(--bg-0) 70%);  /* the ground's own fill, for a component whose background rule comes after base.css */
+  --ground-grid-alpha: 0.32;     /* the hex grid on .ui-ground, drawn in --line-1 at this strength (the videos' grid) */
+  --ground-grid-size: 72px 41.569px;  /* one tile of the grid: three hex radii by root 3 radii, radius 24 px */
+  --ground-grid: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='41.57'%3E%3Cpath d='M24 0L12 20.78L-12 20.78L-24 0L-12 -20.78L12 -20.78ZM24 41.57L12 62.35L-12 62.35L-24 41.57L-12 20.78L12 20.78ZM60 20.78L48 41.57L24 41.57L12 20.78L24 0L48 0ZM96 0L84 20.78L60 20.78L48 0L60 -20.78L84 -20.78ZM96 41.57L84 62.35L60 62.35L48 41.57L60 20.78L84 20.78Z' fill='none' stroke='black' stroke-width='1'/%3E%3C/svg%3E");  /* a mask: the shape only, the colour is --line-1 */
+  --ground-stars: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='331' height='331'%3E%3Ccircle cx='197.63' cy='99.06' r='0.99' fill-opacity='0.79'/%3E%3Ccircle cx='222.49' cy='175.17' r='1.28' fill-opacity='0.75'/%3E%3Ccircle cx='24.68' cy='330.13' r='0.69' fill-opacity='0.36'/%3E%3Ccircle cx='328.6' cy='19.54' r='0.85' fill-opacity='0.27'/%3E%3Ccircle cx='23.83' cy='222.99' r='1.33' fill-opacity='0.7'/%3E%3Ccircle cx='245.35' cy='21.09' r='1.06' fill-opacity='0.52'/%3E%3Ccircle cx='67.49' cy='295.36' r='0.56' fill-opacity='0.69'/%3E%3Ccircle cx='48.44' cy='9.01' r='1.14' fill-opacity='0.66'/%3E%3Ccircle cx='285.72' cy='270.63' r='1.25' fill-opacity='0.66'/%3E%3C/svg%3E"), url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='211' height='211'%3E%3Ccircle cx='7.64' cy='71.53' r='0.64' fill-opacity='0.61'/%3E%3Ccircle cx='80.83' cy='63.18' r='1.21' fill-opacity='0.42'/%3E%3Ccircle cx='184.51' cy='117.76' r='0.68' fill-opacity='0.5'/%3E%3Ccircle cx='121.13' cy='87.59' r='0.77' fill-opacity='0.71'/%3E%3C/svg%3E");  /* a mask of two tiles at prime sizes, so the repeat does not show; the colour is --text-0 */
+  --ground-stars-size: 331px 331px, 211px 211px;
+  --ground-stars-alpha: 0.7;     /* the star field's strength: sparse and static, nothing moves behind text */
+  --ease-video: cubic-bezier(0.33, 1, 0.68, 1);  /* the version videos' ease (GSAP power2.out, versionvideo/scene/lib.js): the store's dissolve and its glide back to the results (Lane D) */
+  /* Local comms receiver (CC1). The locked bars instrument. Each value is a colour from receiver/comms-receiver.css. */
+  --comms-amber: #ffc45c;
+  --comms-cyan: #68fbec;
+  --comms-muted: #839fa8;
+  --comms-edge: #3accc6;
+  --comms-ink: #eaf4f6;
+  --comms-status: #a8c4cb;
+  --comms-lamp-idle: #b1a075;
+  --comms-clock: #9cbfc5;
+  --comms-chip: #b7d2d5;
+  --comms-channel: #a8cdd0;
+  --comms-sig: #5fe9dc;
+  --comms-sig-end: #e7b253;
+  --comms-speaker: #67f4e6;
+  --comms-caret: #84fff0;
+  --comms-idle: #668d94;
+  --comms-guide: #1e7f83;
+  --comms-ticks: #45bdb8;
+  --comms-under: #68e6df;
+  --comms-playhead: #92fff6;
+  --comms-playhead-core: #63e4dc;
+  --comms-endcap: #69e7d8;
+  --comms-endcap-glow: #4ddace;
+  --comms-wave-label: #5b8b92;
+  --comms-micro: #70ffec;
+  --comms-micro-glow: #5ef0df;
+  --comms-bar-0: #47e4d7;
+  --comms-bar-1: #72fff2;
+  --comms-bar-2: #e9ab42;
+  --comms-bar-3: #68f5e6;
+  --comms-bar-4: #f4bd5d;
+  --comms-bar-5: #58e7dc;
+  --comms-glow: #7dfff0;
+  /* CC3 emergency theme. The only reds the receiver may use. Durations live here so the component stays free of ms literals. */
+  --comms-emergency: #e32d3f;
+  --comms-emergency-hi: #ff5360;
+  --comms-emergency-glow: rgba(227, 45, 63, 0.35);
+  --comms-theme-in: 700ms;
+  --comms-theme-out: 900ms;
 }
 
 body {

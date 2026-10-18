@@ -133,7 +133,7 @@ function linked(slot: SlotName): readonly { id: string; name: string }[] {
 
 <template>
   <section class="sheet csheet">
-    <h3 class="ui-heading csheet-head">
+    <h3 class="ui-heading ui-kicker csheet-head">
       <span>Character sheet</span>
       <!-- Who the sheet belongs to, and whether it is this game's own: the page says, or says nothing. -->
       <slot name="owner" />
@@ -423,8 +423,9 @@ function linked(slot: SlotName): readonly { id: string; name: string }[] {
 
 .csheet-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: 6px 10px;
 }
 
 .csheet-tools {

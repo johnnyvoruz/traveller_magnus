@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { runWrangler } from './session.js';
+import { removeTree, runWrangler } from './session.js';
 import { startDev, stopDev } from './server.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -111,7 +111,7 @@ if (process.env.RUN_API_TESTS !== '1') {
                 makeSectors: [{ name: 'Far', slot: { x: 1, y: 1 } }],
             });
             assert.equal(signedOut.status, 401, JSON.stringify(signedOut.body));
-            assert.equal(signedOut.body.error.message, 'Sign in required.');
+            assert.equal(signedOut.body.error.message, 'Sign in to continue.');
             const stranger = await post(base, id, { 'content-type': 'application/json', cookie: other }, '/generate', {
                 hexKeys: ['~slot_1_1/1910'], edition: 'MgT2E', generator: 'top-down', roll: 0, baseRev: 0,
                 makeSectors: [{ name: 'Far', slot: { x: 1, y: 1 } }],
@@ -142,7 +142,7 @@ if (process.env.RUN_API_TESTS !== '1') {
                 makeSectors: [{ name: 'No', slot: { x: 2, y: 2 } }],
             });
             assert.equal(refused.status, 400, JSON.stringify(refused.body));
-            assert.equal(refused.body.error.message, 'That engine and generator are not available yet.');
+            assert.equal(refused.body.error.message, 'That way of generating is not available yet.');
             assert.equal(refused.body.error.details.reason, 'generator_unavailable');
             const afterRefuse = await jsonFetch(`${base}/api/universes/${id}/sectors`, { headers: { cookie } });
             assert.equal(afterRefuse.body.data.items.length, 1);
@@ -271,7 +271,7 @@ if (process.env.RUN_API_TESTS !== '1') {
             assert.equal(typeof right.body.data.jobId, 'string');
         } finally {
             if (child) stopDev(child.pid);
-            rmSync(persistTo, { recursive: true, force: true });
+            removeTree(persistTo);
         }
     });
 }

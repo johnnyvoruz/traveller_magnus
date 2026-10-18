@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { runWrangler } from './session.js';
+import { removeTree, runWrangler } from './session.js';
 import { startDev, stopDev, wranglerBin } from './server.js';
 
 /**
@@ -72,7 +72,7 @@ if (process.env.RUN_API_TESTS !== '1') {
             assert.equal(names.includes('Rega49'), false);
         } finally {
             stopDev(child?.pid);
-            rmSync(persistTo, { recursive: true, force: true });
+            removeTree(persistTo);
         }
     });
 }

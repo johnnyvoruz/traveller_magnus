@@ -17,12 +17,12 @@ export const LOST_PASSKEY = 'I lost my passkey';
 export const RECOVER_HEADING = 'Sign in with a recovery code';
 export const RECOVER_LEAD = 'Enter your username and one of the recovery codes you saved when you made the account.';
 export const OTHER_ACCOUNTS = 'Or sign in with another account';
-export const NO_WEBAUTHN_PROVIDERS = 'This browser can’t use passkeys. Sign in with another account instead.';
-export const NO_WEBAUTHN_ALONE = 'This browser can’t use passkeys. Open this page in a browser that can.';
+export const NO_WEBAUTHN_PROVIDERS = 'This browser cannot use passkeys. Sign in with another account instead.';
+export const NO_WEBAUTHN_ALONE = 'This browser cannot use passkeys. Open this page in a browser that can.';
 /** The account is lost when every way in is lost: said once where the codes are shown, and once by the passkey list. */
-export const LOST_MEANS_LOST = 'If you lose your passkeys, these codes, and every linked account, this account can’t be recovered.';
+export const LOST_MEANS_LOST = 'If you lose your passkeys, these codes, and every linked account, this account cannot be recovered.';
 export const CODES_HEADING = 'Save your recovery codes';
-export const CODES_LEAD = 'If you can’t use your passkey, sign in with one of these codes. Each code works once. This is the only time they’re shown, so save them now: copy them into a password manager, or download the file.';
+export const CODES_LEAD = 'If you cannot use your passkey, sign in with one of these codes. Each code works once. This is the only time they’re shown, so save them now: copy them into a password manager, or download the file.';
 export const CODES_SAVED = 'I saved these codes';
 export const NUDGE_HEADING = 'Add a second passkey';
 export const NUDGE_LEAD = 'Add a passkey on another device, such as your phone, so you can still sign in if you lose this one.';
@@ -33,7 +33,7 @@ export const LAST_PROVIDER_SAY = 'This is your only way to sign in. Add a passke
 export const NEW_CODES_ASK = 'Your current codes stop working when you make new ones.';
 export const RECOVERY_HEADING = 'Add a passkey to finish';
 export const RECOVERY_USED = 'You signed in with a recovery code. That code is used up.';
-export const RECOVERY_DO = 'Add a passkey to finish. Until you do, you can’t use the rest of this account.';
+export const RECOVERY_DO = 'Add a passkey to finish. Until you do, you cannot use the rest of this account.';
 export const PASSKEY_ADDED = 'Passkey added.';
 export const NEW_CODES_OFFER = 'Make new codes if you think someone else has seen yours.';
 export const CODES_FILE = 'traveller-voyage-recovery-codes.txt';
@@ -91,7 +91,7 @@ export function codesFile(username: string, codes: readonly string[], at: Date =
         '',
         ...codes,
         '',
-        'Each code works once. If you can’t use your passkey, choose "I lost my passkey" on the sign-in card and enter your username and one code.',
+        'Each code works once. If you cannot use your passkey, choose "I lost my passkey" on the sign-in card and enter your username and one code.',
         LOST_MEANS_LOST,
         '',
     );

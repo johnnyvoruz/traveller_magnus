@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { densityKeeps } from '@voyage/generation';
-import { runWrangler } from './session.js';
+import { removeTree, runWrangler } from './session.js';
 import { startDev, stopDev } from './server.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -251,7 +251,7 @@ if (process.env.RUN_API_TESTS !== '1') {
             assert.equal(sectorUndo.status, 200, JSON.stringify(sectorUndo.body));
         } finally {
             if (child) stopDev(child.pid);
-            rmSync(persistTo, { recursive: true, force: true });
+            removeTree(persistTo);
         }
     });
 }

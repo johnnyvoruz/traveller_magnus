@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { CAMPAIGN_RECORD_TYPES } from '@voyage/shared';
 import { totalDays } from '../../apps/web/src/orbit/clock.ts';
 import { campaignCrumb } from '../../apps/web/src/workspace/crumb.ts';
-import { buildTimeline, timelineAdvice, todayIndex } from '../../apps/web/src/workspace/timeline.ts';
+import { buildTimeline, timelineAdvice, timelineKeeps, todayIndex } from '../../apps/web/src/workspace/timeline.ts';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const view = fs.readFileSync(path.join(root, 'apps/web/src/workspace/TimelineList.vue'), 'utf8');
@@ -166,6 +166,48 @@ test('Today is inserted when that day has no row, and a missing clock adds none'
     const plain = buildTimeline({ entries: [row], records: {}, clockDays: null });
     assert.equal(plain.years.length, 1);
     assert.equal(plain.years[0].days[0].today, false);
+});
+
+test('a type keeps that record type, and a ship keeps the lead ship, who is aboard, and entries anchored there', () => {
+    const ship = record(1, 'vessel', { name: 'Beowulf', when: { start: { year: 1105, day: 1 } } });
+    const person = record(2, 'person', { name: 'Voss', when: { start: { year: 1105, day: 2 } } });
+    const place = record(3, 'place', { name: 'Startown', when: { start: { year: 1105, day: 3 } } });
+    const aboardEntry = entry(1, {
+        title: 'Aboard',
+        when: { year: 1105, day: 4 },
+        anchor: { kind: 'record', id: person.id },
+    });
+    const systemEntry = entry(2, {
+        title: 'In system',
+        when: { year: 1105, day: 5 },
+        anchor: { kind: 'system', hexKey: 'Spinward_Marches/1910', locationLabel: 'Regina' },
+    });
+    const model = buildTimeline({
+        entries: [aboardEntry, systemEntry],
+        records: { [ship.id]: ship, [person.id]: person, [place.id]: place },
+        clockDays: null,
+    });
+    const rows = Object.fromEntries(model.years.flatMap((year) => year.days.flatMap((day) => day.rows.map((row) => [row.id, row]))));
+    const narrow = {
+        type: null,
+        shipId: null,
+        aboard: { [person.id]: ship.id },
+        recordType: (id) => ({ [ship.id]: 'vessel', [person.id]: 'person', [place.id]: 'place' })[id] ?? null,
+        entryAnchorId: (id) => (id === aboardEntry.id ? person.id : null),
+    };
+    for (const row of Object.values(rows)) assert.equal(timelineKeeps(row, narrow), true);
+    assert.equal(timelineKeeps(rows[person.id], { ...narrow, type: 'person' }), true);
+    assert.equal(timelineKeeps(rows[place.id], { ...narrow, type: 'person' }), false);
+    assert.equal(timelineKeeps(rows[aboardEntry.id], { ...narrow, type: 'person' }), false);
+    const onShip = { ...narrow, shipId: ship.id };
+    assert.equal(timelineKeeps(rows[ship.id], onShip), true);
+    assert.equal(timelineKeeps(rows[person.id], onShip), true);
+    assert.equal(timelineKeeps(rows[place.id], onShip), false);
+    assert.equal(timelineKeeps(rows[aboardEntry.id], onShip), true);
+    assert.equal(timelineKeeps(rows[systemEntry.id], onShip), false);
+    assert.match(view, /All types/);
+    assert.match(view, /Only this ship/);
+    assert.match(view, /The party has no ship yet\./);
 });
 
 test('the trail returns to Campaign, and the list is one tab stop that only reads', () => {

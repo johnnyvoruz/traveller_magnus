@@ -7,7 +7,9 @@
  * computed from one. The deck plan (K9) sits inside it, in the slot at the end. Passengers
  * and crew can be people of the campaign (follow-up 9): a Passenger Name field holds one
  * as a pill, with the record id beside the name in `sheet.fields`; the Crew box's people
- * are the vessel's crew connections (sheet_people.ts).
+ * are the vessel's crew connections (sheet_people.ts). The sixteen Cargo rows and sixteen Passenger
+ * rows are a view of the vessel's manifest, `status.cargo` and `status.passengers` (vessel_trade.ts;
+ * streams/D.md DT1): an edit there edits the manifest, which the Cargo section shows too.
  */
 import { computed, ref } from 'vue';
 import type { CampaignRecord } from '@voyage/shared';
@@ -19,8 +21,10 @@ import PersonField from './PersonField.vue';
 import SheetPanel from './SheetPanel.vue';
 import { isPersonField, newPersonName, peopleOfKind, personOf, SECTION_KIND, withoutPerson, withPerson } from './sheet_people.ts';
 import {
-    fieldsOf, isTall, sheetSections, sheetWithFields, valueOf, withValue, type Row, type SheetField, type Table,
+    isTall, sheetSections, sheetWithFields, valueOf, withValue, type Row, type SheetField, type Table,
 } from './ship_sheet.ts';
+import { editedSheet, isManifestField, sheetView, writeTrade } from './vessel_trade.ts';
+import type { SheetValues } from './sheet_fields.ts';
 
 const props = defineProps<{
     id: string;
@@ -32,7 +36,26 @@ const record = computed(() => {
     const found = campaign.records[props.id];
     return found && !found.deleted && found.type === 'vessel' ? found : null;
 });
-const values = computed(() => (record.value ? fieldsOf(record.value.sheet) : null));
+/** The sheet's own values with the Cargo and Passenger rows written from the manifest. */
+const values = computed(() => (record.value ? sheetView(record.value) : null));
+
+/**
+ * Saves the sheet's values. A Cargo or Passenger row edits the manifest; so does any edit on a vessel
+ * from before the manifest, whose rows are still on its sheet (the first edit moves them over).
+ */
+function store(next: SheetValues, field: Pick<SheetField, 'name'>): void {
+    const now = record.value;
+    if (!now) return;
+    const status = now.status && typeof now.status === 'object' ? now.status as Record<string, unknown> : {};
+    const moved = Array.isArray(status.cargo) && Array.isArray(status.passengers);
+    if (isManifestField(field.name) || !moved) {
+        writeTrade(now, editedSheet(now, next));
+        return;
+    }
+    const own: SheetValues = {};
+    for (const [name, value] of Object.entries(next)) if (!isManifestField(name)) own[name] = value;
+    saveRecord(props.id, { sheet: sheetWithFields(now.sheet, own) });
+}
 const sections = sheetSections();
 
 /** Which sections are folded, kept for the session (follow-up 8): all open until one is folded. */
@@ -78,8 +101,7 @@ function ticked(field: SheetField): boolean {
 
 function save(field: SheetField, value: string | boolean): void {
     if (props.readOnly || !record.value) return;
-    const next = withValue(values.value, field, value);
-    saveRecord(props.id, { sheet: sheetWithFields(record.value.sheet, next) });
+    store(withValue(values.value, field, value), field);
 }
 
 // ---- Passengers and crew as people (follow-up 9) --------------------------------
@@ -95,12 +117,12 @@ function personIn(field: SheetField): CampaignRecord | null {
 
 function holdPerson(field: SheetField, person: CampaignRecord): void {
     if (props.readOnly || !record.value) return;
-    saveRecord(props.id, { sheet: sheetWithFields(record.value.sheet, withPerson(values.value, field, person)) });
+    store(withPerson(values.value, field, person), field);
 }
 
 function releasePerson(field: SheetField): void {
     if (props.readOnly || !record.value) return;
-    saveRecord(props.id, { sheet: sheetWithFields(record.value.sheet, withoutPerson(values.value, field)) });
+    store(withoutPerson(values.value, field), field);
 }
 
 function onText(field: SheetField, event: Event): void {
@@ -151,7 +173,7 @@ function columnHeadings(table: Table): string[] {
 
 <template>
   <section v-if="record" class="sheet">
-    <h3 class="ui-heading">Sheet</h3>
+    <h3 class="ui-heading ui-kicker">Sheet</h3>
     <div class="sheet-frame">
       <template v-for="section in sections" :key="section.page + ' ' + section.name">
         <SheetPanel :name="section.name" :open="isOpen(section)" :count="filledIn(section)" @toggle="toggleSection(section)">

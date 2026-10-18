@@ -2,7 +2,8 @@
 
 Markdown is the source of truth here. The orchestrator writes lane prompts and stream queues
 from these files; lanes work from them and report to files. Code follows documents, never the
-reverse. Rewritten 2026-10-17 (the directives cleanup).
+reverse. Rewritten 2026-10-17 (the directives cleanup). Local development is `npm run dev`
+(`scripts/dev.mjs`): the Worker and Vite together.
 
 ## Read first
 

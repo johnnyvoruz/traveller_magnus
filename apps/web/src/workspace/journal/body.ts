@@ -24,6 +24,25 @@ function chipLabel(target: string, written: string | undefined, nameOf: (target:
     return target;
 }
 
+/**
+ * The token that starts at `index`, or null. Callers that draw more than chips
+ * (bold, italic, a list, a link) skip this span so a `]` inside it stays part of the token.
+ */
+export function mentionAt(
+    text: string,
+    index: number,
+    nameOf: (target: string) => string | null,
+): { part: Exclude<BodyPart, { kind: 'text' }>; end: number } | null {
+    TOKEN.lastIndex = index;
+    const match = TOKEN.exec(text);
+    if (!match || match.index !== index) return null;
+    const target = match[1] ?? '';
+    const label = chipLabel(target, match[2], nameOf);
+    const end = index + match[0].length;
+    if (target.startsWith('hex:')) return { part: { kind: 'hex', hexKey: target.slice(4), label }, end };
+    return { part: { kind: 'record', id: target, label }, end };
+}
+
 /** The body split into text and chips, in order. `nameOf` returns the current name, or null. */
 export function bodyParts(text: string, nameOf: (target: string) => string | null): BodyPart[] {
     const parts: BodyPart[] = [];

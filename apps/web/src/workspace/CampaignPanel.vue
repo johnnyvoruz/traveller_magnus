@@ -7,27 +7,34 @@
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { frame } from '../shell/frame.ts';
 import { addressPane, atPane, type Pane } from '../shell/pane.ts';
 import type { CampaignEntryKind, CampaignRecordType } from '@voyage/shared';
 import { entriesNewestFirst } from '../campaign/journal.ts';
-import { registerCommand } from '../shell/registry.ts';
+import { handleKey, registerCommand } from '../shell/registry.ts';
 import { session } from '../account/session.ts';
 import { campaign } from '../campaign/store.ts';
 import { isOnline, observeSize, onOnlineChange } from '../platform/browser.ts';
 import Icon from '../design/Icon.vue';
 import Panel from '../shell/Panel.vue';
-import { readSpan, writeSpan, type PanelSpan } from '../shell/panel_state.ts';
+import { onSpan, readSpan, writeSpan, type PanelSpan } from '../shell/panel_state.ts';
 import { createRecord, justCreated, recentlyDeleted } from './actions.ts';
 import CampaignCrumb from './CampaignCrumb.vue';
 import CampaignList from './CampaignList.vue';
 import { campaignCrumb, listCrumbLabel, type CrumbGo } from './crumb.ts';
 import TimelineList from './TimelineList.vue';
+import RelationshipWeb from './web/RelationshipWeb.vue';
 import type { TimelineRow } from './timeline.ts';
+import { timelineAt } from './timeline_focus.ts';
+import { campaignAsk } from './campaign_command.ts';
 import ClockLine from './ClockLine.vue';
+import FirstRun from './FirstRun.vue';
+import { dateIsSet, vesselHasPlace, worldIsOpen } from './first_run.ts';
 import { editDateNext, journalFilter, journalQuery, recordFilter, recordQuery } from './list_state.ts';
 import PartyPanel from './PartyPanel.vue';
 import { partyWords } from './party.ts';
 import { ensureCampaign, openFailed, retryCampaign } from './opening.ts';
+import { hexKeyOf, systemAnchor } from './places.ts';
 import { typeInfo } from './records.ts';
 import RecordPage from './RecordPage.vue';
 import SignInCard from './SignInCard.vue';
@@ -35,6 +42,14 @@ import { createEntry, justMade } from './journal/create.ts';
 import { entryHeading, filterWord } from './journal/list.ts';
 import EntryPage from './journal/EntryPage.vue';
 import JournalList from './journal/JournalList.vue';
+import { watchCampaignPanel } from '../campaign/poll.ts';
+import { NOT_IN_CAMPAIGN } from './campaigns.ts';
+import PlayerParty from './players/PlayerParty.vue';
+import PlayerRecordPage from './players/PlayerRecordPage.vue';
+import { createPlayerNote, isPlayerView, ownNote } from './players/player_mode.ts';
+import { endViewAs, viewAs } from './players/view_as.ts';
+import ViewAsBar from './players/ViewAsBar.vue';
+import './campaign_touch.css';
 
 const props = defineProps<{
     open: boolean;
@@ -60,9 +75,15 @@ const list = ref<{ focusSearch: () => void } | null>(null);
 const clockLine = ref<{ edit: () => void } | null>(null);
 
 const span = ref<PanelSpan>(readSpan());
-/** The timeline is a view on the records tab. It is not its own address. */
-const showTimeline = ref(false);
-const onTimeline = computed(() => showTimeline.value && props.tab === 'records' && !props.recordId && !props.entryId);
+let stopSpan: (() => void) | null = null;
+/** The timeline is its own address: panel=timeline, with the type, the ship, and a row. */
+const timelinePane = computed(() => {
+    const pane = addressPane(route.path, route.query).pane;
+    return pane.kind === 'timeline' ? pane : null;
+});
+const onTimeline = computed(() => timelinePane.value !== null && props.tab === 'records' && !props.recordId && !props.entryId);
+/** The relationship web (DU39): panel=web. */
+const onWeb = computed(() => addressPane(route.path, route.query).pane.kind === 'web' && props.tab === 'records' && !props.recordId && !props.entryId);
 const online = ref(true);
 let stopSize: (() => void) | null = null;
 let stopOnline: (() => void) | null = null;
@@ -71,9 +92,16 @@ let sized: HTMLElement | null = null;
 const signedIn = computed(() => session.user !== null);
 /** The open campaign's own name, once the store has listed it. */
 const campaignName = computed(() => {
-    const found = campaign.universes.find((item) => item.id === campaign.universeId);
+    const found = campaign.universes.find((item) => item.id === campaign.universeId)
+        ?? campaign.playing.find((item) => item.id === campaign.universeId);
     return found ? found.name : '';
 });
+
+/** A player's panel (P6): theirs as a member, or the referee viewing as players. Nothing but a players note can be written. */
+const isPlayer = isPlayerView;
+const ro = computed(() => !online.value || isPlayer.value);
+/** A player may write only their own players note (A's commit guard says the same). */
+const entryReadOnly = computed(() => !online.value || (isPlayer.value && !ownNote(props.entryId ? campaign.journal[props.entryId] : null)));
 
 /** What the panel shows: the store's status, or an error when the open itself threw. */
 const status = computed(() => {
@@ -96,10 +124,7 @@ const shownRecord = computed(() => {
 const title = computed(() => {
     if (span.value === 'full') return 'Campaign';
     if (shownRecord.value) return shownRecord.value.name;
-    if (props.entryId) {
-        const found = campaign.journal[props.entryId];
-        return entryHeading(found && !found.deleted ? found : null);
-    }
+    if (props.entryId) return entryName(props.entryId);
     return 'Campaign';
 });
 /** The tabs' counts and words. */
@@ -113,8 +138,13 @@ const partyLine = computed(() => (campaign.settings ? partyWords(campaign.settin
 const TABS = ['records', 'party', 'journal'] as const;
 
 /** The records tab, the party's, or the journal's: each is an address, so Back works. */
+function entryName(id: string): string {
+    const found = campaign.journal[id];
+    if (!found || found.deleted) return 'Missing entry';
+    return entryHeading(found);
+}
+
 function showTab(tab: 'records' | 'party' | 'journal'): void {
-    showTimeline.value = false;
     if (tab === 'party') pushPane({ kind: 'party' });
     else if (tab === 'journal') pushPane({ kind: 'journal', entry: null });
     else pushPane({ kind: 'campaign', record: null });
@@ -124,6 +154,8 @@ function samePane(now: Pane, pane: Pane): boolean {
     if (now.kind !== pane.kind) return false;
     if (now.kind === 'campaign' && pane.kind === 'campaign') return now.record === pane.record;
     if (now.kind === 'journal' && pane.kind === 'journal') return now.entry === pane.entry;
+    // The Timeline's type, ship and row are its address: the narrowing controls change them (DU6).
+    if (now.kind === 'timeline' && pane.kind === 'timeline') return now.type === pane.type && now.ship === pane.ship && now.row === pane.row;
     return true;
 }
 
@@ -162,9 +194,11 @@ const crumb = computed(() => {
     if (onTimeline.value) {
         return campaignCrumb({ level: 'timeline', beside: false, middle: 'Timeline', pageName: 'Timeline' });
     }
+    if (onWeb.value) {
+        return campaignCrumb({ level: 'web', beside: false, middle: 'Relationships', pageName: 'Relationships' });
+    }
     if (props.entryId) {
-        const found = campaign.journal[props.entryId];
-        const name = entryHeading(found && !found.deleted ? found : null);
+        const name = entryName(props.entryId);
         const many = journalFilter.value === 'all' ? 'Journal' : filterWord(journalFilter.value);
         return campaignCrumb({
             level: 'entry', beside: span.value === 'full', pageName: name,
@@ -219,18 +253,54 @@ function showMap(): void {
 
 /** The list, or a record, on the view that is already open. */
 function openTimeline(): void {
-    if (props.tab !== 'records' || props.recordId || props.entryId) pushPane({ kind: 'campaign', record: null });
-    showTimeline.value = true;
+    const row = timelineAt.value;
+    pushPane({ kind: 'timeline', type: null, ship: false, row });
 }
 
+function setNarrow(next: { type: string | null; ship: boolean }): void {
+    const now = timelinePane.value;
+    pushPane({ kind: 'timeline', type: next.type, ship: next.ship, row: now ? now.row : null });
+}
+
+/** A record page asked for its row on the timeline: the timeline opens, and opens at that row. */
+watch(timelineAt, (id) => { if (id) openTimeline(); });
+
+/** The palette's campaign commands (campaign_command.ts), carried out once the campaign is open. */
+watch(() => [campaignAsk.create, campaignAsk.find, campaignAsk.timeline, status.value, props.open] as const, () => {
+    if (!props.open || status.value !== 'ready') return;
+    const type = campaignAsk.create;
+    campaignAsk.create = null;
+    if (type) create(type);
+    if (campaignAsk.timeline) {
+        campaignAsk.timeline = false;
+        openTimeline();
+    }
+    if (campaignAsk.find) {
+        campaignAsk.find = false;
+        if (timelinePane.value) pushPane({ kind: 'campaign', record: null });
+        void nextTick(() => { if (list.value) list.value.focusSearch(); });
+    }
+}, { flush: 'post', immediate: true });
+
+/** A timeline row opens what it is: an entry, a record, or for a leg or Today, its ship (the Party tab when there is none). */
 function openTimed(row: TimelineRow): void {
-    showTimeline.value = false;
     if (row.source === 'entry') goEntry(row.id);
-    else go(row.id);
+    else if (row.source === 'record') go(row.id);
+    else if (row.shipId) go(row.shipId);
+    else showTab('party');
 }
 
 function go(id: string | null): void {
     pushPane({ kind: 'campaign', record: id });
+}
+
+/** The relationship web takes the panel's width: from a column it opens at Half, the map still beside it. */
+function openWeb(): void {
+    if (span.value === 'column') {
+        span.value = 'half';
+        void nextTick(publish);
+    }
+    pushPane({ kind: 'web' });
 }
 
 function goEntry(id: string | null): void {
@@ -239,13 +309,37 @@ function goEntry(id: string | null): void {
 
 function makeEntry(kind: CampaignEntryKind): void {
     if (!online.value) return;
-    const id = createEntry(kind);
+    if (isPlayer.value && kind !== 'note') return;
+    const id = isPlayer.value ? createPlayerNote() : createEntry(kind);
     if (id) goEntry(id);
 }
 
 function create(type: CampaignRecordType): void {
     if (!online.value) return;
     go(createRecord(type));
+}
+
+/** The list is on screen: not the party, the journal, the timeline, the web, or a record page at column width. */
+const showFirstRun = computed(() => {
+    if (status.value !== 'ready' || isPlayer.value || props.tab !== 'records' || onTimeline.value || onWeb.value || props.entryId) return false;
+    if (props.recordId && span.value !== 'full') return false;
+    const card = vesselHasPlace(campaign.records) && dateIsSet(campaign.clock);
+    return !card;
+});
+
+/** A new vessel at the open world, then its page. The world has to be open; nothing is stored for the tick. */
+function addFirstShip(): void {
+    if (!online.value) return;
+    const live = frame();
+    const dossier = live ? live.dossier : null;
+    if (!dossier || !worldIsOpen(dossier)) return;
+    const id = createRecord('vessel', systemAnchor(hexKeyOf(dossier.slug, dossier.hex), dossier.entry ? dossier.entry.name : '', null));
+    go(id);
+}
+
+function editFirstDate(): void {
+    if (!online.value) return;
+    void nextTick(() => { if (clockLine.value) clockLine.value.edit(); });
 }
 
 /** "/" goes to the list's search, unless a field is being typed in. */
@@ -266,10 +360,10 @@ function onKey(event: KeyboardEvent): void {
             go(null);
             return;
         }
-        if (showTimeline.value) {
+        if (onTimeline.value || onWeb.value) {
             event.preventDefault();
             event.stopPropagation();
-            showTimeline.value = false;
+            pushPane({ kind: 'campaign', record: null });
             return;
         }
         if (props.tab === 'party') {
@@ -286,10 +380,7 @@ function onKey(event: KeyboardEvent): void {
     const target = event.target as HTMLElement | null;
     const tag = target ? target.tagName : '';
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-    if (!list.value) return;
-    event.preventDefault();
-    event.stopPropagation();
-    list.value.focusSearch();
+    if (handleKey(event)) event.stopPropagation();
 }
 
 function panelElement(): HTMLElement | null {
@@ -377,17 +468,22 @@ function bindCommands(): void {
     if (props.tab !== 'journal') return;
     const make = (kind: CampaignEntryKind) => () => { makeEntry(kind); };
     const offs = [
-        registerCommand({ id: 'journal-new-session', name: 'New session', runnable: () => online.value, run: make('session') }),
+        registerCommand({ id: 'journal-new-session', name: 'New session', runnable: () => online.value && !isPlayer.value, run: make('session') }),
         registerCommand({ id: 'journal-new-note', name: 'New note', runnable: () => online.value, run: make('note') }),
-        registerCommand({ id: 'journal-new-handout', name: 'New handout', runnable: () => online.value, run: make('handout') }),
-        registerCommand({ id: 'journal-new-rumour', name: 'New rumour', runnable: () => online.value, run: make('rumor') }),
+        registerCommand({ id: 'journal-new-handout', name: 'New handout', runnable: () => online.value && !isPlayer.value, run: make('handout') }),
+        registerCommand({ id: 'journal-new-rumour', name: 'New rumour', runnable: () => online.value && !isPlayer.value, run: make('rumor') }),
     ];
     stopCommands = () => { for (const off of offs) off(); };
 }
 
 watch(() => props.tab, bindCommands);
 
+watch(() => props.open && status.value === 'ready' && !viewAs.on, (on) => { watchCampaignPanel(on); }, { immediate: true });
+// Closing the panel ends View as players: the store goes back to the referee's campaign.
+watch(() => props.open, (open) => { if (!open && viewAs.on) void endViewAs(); });
+
 onMounted(() => {
+    stopSpan = onSpan(() => { span.value = readSpan(); });
     online.value = isOnline();
     stopOnline = onOnlineChange((now) => { online.value = now; });
     bindCommands();
@@ -397,9 +493,11 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+    if (stopSpan) stopSpan();
     if (stopCommands) stopCommands();
     if (stopSize) stopSize();
     if (stopOnline) stopOnline();
+    watchCampaignPanel(false);
     emit('width', 0);
 });
 
@@ -412,7 +510,7 @@ defineExpose({ remeasure: publish });
       ref="panel"
       :open="open"
       :title="title"
-      :meta="signedIn && !eyebrow ? 'Private to you, on top of the released map' : ''"
+      :meta="signedIn && !eyebrow ? (isPlayer ? 'Shared with you by the referee.' : 'Private to you. Nothing you add changes the map.') : ''"
       chip=""
       :span="span"
       @close="$emit('close')"
@@ -422,9 +520,10 @@ defineExpose({ remeasure: publish });
         <CampaignCrumb :parts="crumb" @go="onCrumb" />
       </template>
       <template v-else-if="eyebrow" #eyebrow>{{ eyebrow }}</template>
-      <div class="camp" :data-span="span" :data-status="status" :data-view="entryId ? 'entry' : recordId ? 'record' : onTimeline ? 'timeline' : tab === 'party' ? 'party' : tab === 'journal' ? 'journal' : 'list'">
+      <div class="camp" :data-span="span" :data-status="status" :data-view="entryId ? 'entry' : recordId ? 'record' : onTimeline ? 'timeline' : onWeb ? 'web' : tab === 'party' ? 'party' : tab === 'journal' ? 'journal' : 'list'">
         <SignInCard v-if="!signedIn" />
         <template v-else>
+          <ViewAsBar v-if="status === 'ready'" />
           <div v-if="status === 'ready' && ((!recordId && !entryId) || span === 'full')" class="camp-head">
           <div class="camp-tabs" role="tablist" aria-label="Campaign">
             <button type="button" role="tab" class="camp-tab" :aria-selected="tab === 'records' ? 'true' : 'false'" :tabindex="tab === 'records' ? 0 : -1" @click="showTab('records')" @keydown="onTabKey">
@@ -438,38 +537,60 @@ defineExpose({ remeasure: publish });
             </button>
           </div>
             <button type="button" class="camp-timeline" :aria-pressed="onTimeline ? 'true' : 'false'" @click="openTimeline">Timeline</button>
+            <button type="button" class="camp-timeline" :aria-pressed="onWeb ? 'true' : 'false'" data-open-web @click="openWeb">Relationships</button>
           </div>
-          <ClockLine v-if="status === 'ready' && ((!recordId && !entryId) || span === 'full')" ref="clockLine" :read-only="!online" />
+          <ClockLine v-if="status === 'ready' && ((!recordId && !entryId) || span === 'full')" ref="clockLine" :read-only="ro" />
           <p v-if="!online" class="camp-strip" role="status">
             You are offline. This is what was loaded; changes wait until you are back.
           </p>
-          <div v-if="status === 'error'" class="camp-strip is-error" role="alert">
+          <p v-if="status === 'gone'" class="camp-strip is-error" role="alert" data-campaign-gone>{{ NOT_IN_CAMPAIGN }}</p>
+          <div v-else-if="status === 'error'" class="camp-strip is-error" role="alert">
             <span>Your campaign could not be loaded.</span>
             <button type="button" class="ui-btn" @click="retry">Try again</button>
           </div>
           <ul v-else-if="status !== 'ready'" class="camp-skeleton" aria-label="Loading your campaign" aria-busy="true">
             <li v-for="n in 4" :key="n"><i></i><span><i></i><i></i><i></i></span></li>
           </ul>
-          <TimelineList v-else-if="onTimeline" :read-only="!online" @open="openTimed" @map="showMap" @journal="showTab('journal')" />
+          <TimelineList
+            v-else-if="onTimeline && timelinePane"
+            :read-only="ro"
+            :type="timelinePane.type"
+            :ship="timelinePane.ship"
+            :row="timelinePane.row"
+            @open="openTimed"
+            @map="showMap"
+            @journal="showTab('journal')"
+            @narrow="setNarrow"
+          />
+          <RelationshipWeb v-else-if="onWeb" @open="go" @map="showMap" />
+          <PlayerParty v-else-if="tab === 'party' && !recordId && isPlayer" @open="go" @map="showMap" />
           <PartyPanel v-else-if="tab === 'party' && !recordId" :read-only="!online" @map="showMap" />
           <div v-else-if="span === 'full' && tab === 'journal'" class="camp-split">
-            <JournalList ref="list" :selected="entryId" follow :read-only="!online" @open="goEntry" @create="makeEntry" @map="showMap" />
+            <JournalList ref="list" :selected="entryId" follow :read-only="!online" :player="isPlayer" @open="goEntry" @create="makeEntry" @map="showMap" />
             <div class="camp-detail">
-              <EntryPage v-if="entryId" :id="entryId" beside :read-only="!online" @back="goEntry(null)" @map="showMap" />
+              <EntryPage v-if="entryId" :id="entryId" beside :read-only="entryReadOnly" @back="goEntry(null)" @map="showMap" />
               <p v-else class="camp-hint">Choose an entry to read it here.</p>
             </div>
           </div>
           <div v-else-if="span === 'full'" class="camp-split">
-            <CampaignList ref="list" :selected="recordId" :read-only="!online" @open="go" @create="create" @map="showMap" @timeline="openTimeline" />
+            <div class="camp-col">
+              <FirstRun v-if="showFirstRun" :read-only="!online" @ship="addFirstShip" @date="editFirstDate" />
+              <CampaignList ref="list" :selected="recordId" :read-only="ro" :player="isPlayer" :hide-empty="showFirstRun" @open="go" @create="create" @map="showMap" @timeline="openTimeline" />
+            </div>
             <div class="camp-detail">
-              <RecordPage v-if="recordId" :id="recordId" beside :read-only="!online" @back="go(null)" @map="showMap" />
+              <PlayerRecordPage v-if="recordId && isPlayer" :id="recordId" beside @back="go(null)" @open="go" @map="showMap" />
+              <RecordPage v-else-if="recordId" :id="recordId" beside :read-only="!online" @back="go(null)" @map="showMap" />
               <p v-else class="camp-hint">Choose a record to read it here.</p>
             </div>
           </div>
-          <EntryPage v-else-if="entryId" :id="entryId" :beside="false" :read-only="!online" @back="goEntry(null)" @map="showMap" />
-          <JournalList v-else-if="tab === 'journal'" ref="list" :selected="null" :follow="false" :read-only="!online" @open="goEntry" @create="makeEntry" @map="showMap" />
+          <EntryPage v-else-if="entryId" :id="entryId" :beside="false" :read-only="entryReadOnly" @back="goEntry(null)" @map="showMap" />
+          <JournalList v-else-if="tab === 'journal'" ref="list" :selected="null" :follow="false" :read-only="!online" :player="isPlayer" @open="goEntry" @create="makeEntry" @map="showMap" />
+          <PlayerRecordPage v-else-if="recordId && isPlayer" :id="recordId" :beside="false" @back="go(null)" @open="go" @map="showMap" />
           <RecordPage v-else-if="recordId" :id="recordId" :beside="false" :read-only="!online" @back="go(null)" @map="showMap" />
-          <CampaignList v-else ref="list" :selected="null" :read-only="!online" @open="go" @create="create" @map="showMap" @timeline="openTimeline" />
+          <div v-else class="camp-col">
+            <FirstRun v-if="showFirstRun" :read-only="!online" @ship="addFirstShip" @date="editFirstDate" />
+            <CampaignList ref="list" :selected="null" :read-only="ro" :player="isPlayer" :hide-empty="showFirstRun" @open="go" @create="create" @map="showMap" @timeline="openTimeline" />
+          </div>
         </template>
       </div>
     </Panel>
@@ -492,6 +613,7 @@ defineExpose({ remeasure: publish });
 /* The records, the party, and the journal, with the timeline beside them. */
 .camp-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
   gap: 8px;
   margin: -4px 0 12px;
@@ -501,11 +623,11 @@ defineExpose({ remeasure: publish });
 .camp-tabs {
   display: flex;
   flex: 1 1 auto;
+  flex-wrap: wrap;
   gap: 6px;
   min-width: 0;
   margin: 0;
   border-bottom: 0;
-  overflow-x: auto;
 }
 
 .camp-timeline {
@@ -535,6 +657,7 @@ defineExpose({ remeasure: publish });
   display: inline-flex;
   align-items: center;
   gap: 7px;
+  min-width: 0;
   margin: 0 0 -1px;
   padding: 6px 10px 8px;
   border: 0;
@@ -595,6 +718,10 @@ defineExpose({ remeasure: publish });
   flex: 1 1 auto;
   grid-template-columns: minmax(360px, 460px) minmax(0, 1fr);
   gap: 0 22px;
+}
+
+.camp-col {
+  min-width: 0;
 }
 
 .camp-detail {

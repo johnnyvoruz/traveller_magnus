@@ -48,6 +48,11 @@ export {
     CampaignImage,
     TrackLeg,
     Track,
+    CargoLot,
+    PassengerLot,
+    LedgerLine,
+    OwnerShare,
+    ShipPayment,
     CampaignRecord,
     CampaignEntry,
     mentionsOf,
@@ -72,6 +77,19 @@ export {
 export type { CampaignRecordType, CampaignEntryKind, CampaignLinkKind, SystemAnchor, LocateAt } from './schemas/campaign.ts';
 export { copyRecords } from './campaign_copy.ts';
 export { PUBLIC_DEFAULT_DAYS, fitPublicCard, publicCardJournal, publicCourseLegs, publicFinishedLegs, publicFirstHex, publicMarkId, publicShips } from './public_hex.ts';
+export { playersObjectHashes, playersView, redactPlayersText } from './players_view.ts';
+export {
+    PlayersPage,
+    PlayerInvite,
+    PlayerList,
+    PlayerPerson,
+    PlayerStatus,
+    JoinBody,
+    JoinClaim,
+    JoinPreview,
+    PlayingList,
+} from './schemas/players.ts';
+export type { CampaignRead, PlayersClock, PlayersEntry, PlayersLink, PlayersRecord, PlayersSettings, PlayersView } from './players_view.ts';
 export type { PublicHex, PublicShipPlace } from './public_hex.ts';
 export {
     PUBLIC_CARD_BODY,
@@ -217,3 +235,45 @@ export type { XmlEl, MetadataXml } from './parsers/metadata_xml.ts';
 export { EXTRA_LINE_GUARD, EXTRA_LINE_MIN, extraFieldName, numberedSkillLabels, parseExtraName } from './character_extra.ts';
 export type { ExtraLineName, ExtraPart } from './character_extra.ts';
 export { PackageCover } from './schemas/package.ts';
+export { PACKAGE_KIND_FAMILIES, PackageFamily } from './schemas/package.ts';
+export { PackageContents, PackageFacet, PackageFacets, PackageFacetsQuery } from './schemas/package.ts';
+export { ChatterWhen, ChatterLine, ChatterFile } from './schemas/chatter.ts';
+export type { ChatterWhenData, ChatterLineData, ChatterFileData } from './schemas/chatter.ts';
+export { hashString, mulberry32 } from './seed.ts';
+export { SHIP_ADJECTIVES, SHIP_NOUNS, shipNameFor } from './ship_names.ts';
+export {
+    PROPOSAL_LIMITS,
+    Evidence,
+    RecordDraft,
+    RecordPatch,
+    RecordAppend,
+    EntryDraft,
+    Proposal,
+    ProposalSource,
+    ProposalBatchSubmit,
+    ProposalState,
+    StoredProposal,
+    ProposalBatch,
+    ProposalBatchList,
+    ProposalDecision,
+    ProposalResolve,
+    ProposalResolveResult,
+    CampaignIndex,
+    CampaignSearchPage,
+    AgentCampaignList,
+    ACCESS_SCOPES,
+    AccessScope,
+    AccessTokenCreate,
+    AccessTokenRow,
+    AccessTokenCreated,
+    AccessTokenList,
+    PlatformFlagSet,
+} from './schemas/proposals.ts';
+export {
+    TABLE_KINDS,
+    TABLE_SET_BYTES,
+    TableKind,
+    TableSet,
+    validateTableSet,
+} from './schemas/table_sets.ts';
+export type { TableCheck, TableProblem, TableSetData } from './schemas/table_sets.ts';

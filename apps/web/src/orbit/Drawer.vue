@@ -6,7 +6,8 @@
  * its groups land one step apart (--t-stagger); closed, it climbs back at --t-fast with no
  * stagger. Under reduced motion it is there or it is not. Closed, it is inert, so nothing
  * in it takes focus or a key. The groups are the slot's children with class orbit-drawer-group
- * and a --i order; the drawer stays mounted so a close can animate.
+ * and a --i order; the drawer stays mounted so a close can animate. The drawer's name leads the
+ * shelf as a kicker (design/base.css, the version-video look); the region's label already says it.
  */
 import { ref } from 'vue';
 import { DRAWERS, type DrawerId } from './commands.ts';
@@ -48,6 +49,7 @@ function onKey(event: KeyboardEvent): void {
     @keydown="onKey"
   >
     <div class="orbit-drawer-body">
+      <span class="ui-kicker orbit-drawer-kicker" aria-hidden="true">{{ label }}</span>
       <slot />
     </div>
     <i class="orbit-drawer-edge" aria-hidden="true"></i>
@@ -83,6 +85,19 @@ function onKey(event: KeyboardEvent): void {
   align-items: center;
   gap: 10px 16px;
   padding: 10px 14px 12px;
+}
+
+/* The kicker sits on the controls' centre line; on a narrow shelf it takes a row of its own. */
+.orbit-drawer-kicker {
+  flex: 0 0 auto;
+  min-width: 64px;
+  letter-spacing: 0.24em;
+}
+
+@media (max-width: 620px) {
+  .orbit-drawer-kicker {
+    flex-basis: 100%;
+  }
 }
 
 /* The hairline draws left to right as the shelf unrolls. */

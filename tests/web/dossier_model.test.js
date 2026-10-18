@@ -132,7 +132,7 @@ test('Regina overview and Caesillian 0914 partial follow the inspector', async (
     assert.equal(mainBody.glyph.kind, mainRow.moon ? 'moon' : 'world');
     assert.deepEqual(mainRow.glyph, mainBody.glyph);
     assert.equal(mainBody.crumbSystem, 'Regina system');
-    assert.equal(mainBody.place, 'Mainworld of the Regina system · 1910');
+    assert.equal(mainBody.place, 'Regina system · Hex 1910');
     assert.ok(mainBody.journey);
     assert.deepEqual(mainBody.journey.map((item) => item.g), [1, 2, 3, 4, 5, 6]);
     assert.deepEqual(mainBody.journey.map((item) => item.hours), host.journeyTimes.map((hours) => String(hours) + 'h'));
@@ -247,7 +247,7 @@ test('Regina overview and Caesillian 0914 partial follow the inspector', async (
         const expected = formerTen(doc.body);
         assert.deepEqual(got.map((row) => row.label + '\t' + row.text), expected.map((row) => row.label + '\t' + row.text), hex);
         assert.equal(worldPage.crumbSystem, page.header.title, hex);
-        assert.equal(worldPage.place.startsWith('Mainworld of the '), true, hex);
+        assert.equal(worldPage.place.includes(' · Hex '), true, hex);
         if (worldPage.journey) {
             assert.equal(page.journey, null, hex);
             assert.equal(page.journeyNote, '', hex);

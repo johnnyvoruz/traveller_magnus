@@ -142,7 +142,7 @@ export function hybridCaption(model: {
         'Hybrid hex map: ' + model.hexes.length + ' hexes.',
         because ? because : (liquid ? 'Sea: ' + (named || w.liquid || 'unnamed') + (w.liquidAssumed && !named ? ' (the data names no liquid; water is assumed)' : '') + '.' : 'No sea.'),
         'Ice: ' + iced + ' hexes.',
-        'Temperatures: ' + (w.tempSource === 'engine' ? 'engine' : 'climate word only') + ', mean ' + Math.round(w.meanK) + ' K (' + Math.round(w.lowK) + '–' + Math.round(w.highK) + ' K).',
+        'Temperatures: ' + (w.tempSource === 'engine' ? 'from its figures' : 'from its climate word only') + ', mean ' + Math.round(w.meanK) + ' K (' + Math.round(w.lowK) + '–' + Math.round(w.highK) + ' K).',
     ];
     return { text: 'Enhanced · ' + sea + frozen + locked, title: notes.join(' ') };
 }

@@ -50,7 +50,8 @@ test('a 503 course_unavailable is the server\'s sentence, and nothing is kept', 
 });
 
 test('the menu puts it after the name switch, says why it is fixed or refused, and the map fetches an open card again', () => {
-    const menu = read('workspace/AccountMenu.vue');
+    // DU10: the switches are on the Campaigns panel's card now.
+    const menu = read('workspace/CampaignsPanel.vue');
     const name = menu.indexOf('data-command="show-referee"');
     const course = menu.indexOf('data-command="show-course"');
     assert.ok(name > 0 && course > name, 'beside "Show my name on public cards"');

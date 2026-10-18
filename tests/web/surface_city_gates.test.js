@@ -4,7 +4,7 @@
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { cityNight, citySeen, cloudTransmission } from '../../apps/web/src/surface/enhanced/city_gates.ts';
+import { cityGlowShow, cityNight, citySeen, cloudTransmission } from '../../apps/web/src/surface/enhanced/city_gates.ts';
 import { ENHANCED_DRAW_FRAG } from '../../apps/web/src/surface/enhanced/draw.ts';
 import { DRAW_FRAG } from '../../apps/web/src/surface/vanilla/gl_shade.ts';
 
@@ -22,18 +22,23 @@ test('cloud transmission, the night ramp and the limb gate', () => {
     assert.ok(cityNight(0, 0) >= 0.8);
     assert.equal(citySeen(0, 1), 0);
     assert.ok(citySeen(1, 0) > 0.9);
+    assert.ok(near(cityGlowShow(0), 1));
+    assert.ok(near(cityGlowShow(0.2), Math.exp(-0.27)));
+    assert.ok(cityGlowShow(1) < 0.3);
+    assert.ok(cityGlowShow(0.2) > 0.7);
 });
 
-test('the enhanced program gates city light and leaves vanilla bytes alone', () => {
+test('the enhanced program gates city light and neither program paints it in the air', () => {
     assert.notEqual(ENHANCED_DRAW_FRAG, DRAW_FRAG);
-    assert.equal(DRAW_FRAG.includes('uCityHaze * 0.25'), true);
+    assert.equal(DRAW_FRAG.includes('uCityHaze * 0.25'), false);
+    assert.equal(DRAW_FRAG.includes('uCityHaze * pow(1.0 - z, 3.0)'), false);
     assert.equal(ENHANCED_DRAW_FRAG.includes('uCityHaze *'), false);
     assert.equal(ENHANCED_DRAW_FRAG.includes('uCityColor'), true);
-    const halo = ENHANCED_DRAW_FRAG.slice(
-        ENHANCED_DRAW_FRAG.indexOf('vec4 halo'),
-        ENHANCED_DRAW_FRAG.indexOf('float seenPort'),
-    );
-    assert.equal(halo.includes('uCityColor'), false);
+    for (const source of [DRAW_FRAG, ENHANCED_DRAW_FRAG]) {
+        const halo = source.slice(source.indexOf('vec4 halo'), source.indexOf('float seenPort'));
+        assert.equal(halo.includes('uCityColor'), false);
+        assert.equal(halo.includes('uCityHaze *'), false);
+    }
     assert.ok(ENHANCED_DRAW_FRAG.includes('float T = exp(-3.0 * c / max(z, 0.35)) * clear;'));
     assert.ok(ENHANCED_DRAW_FRAG.includes('float night = max(1.0 - smoothstep(-0.16, 0.08, geo), 0.8 * (1.0 - lit));'));
     assert.ok(ENHANCED_DRAW_FRAG.includes('float seen = smoothstep(0.02, 0.30, z) * exp(-uAirStrength * 0.22 * (path - 1.0));'));
@@ -46,7 +51,7 @@ test('the enhanced program gates city light and leaves vanilla bytes alone', () 
     const discard = planet.indexOf('if (d > 1.0 + aa) return vec4(0.0);');
     const gate = planet.indexOf('float T =');
     const cloudMix = planet.indexOf('color = mix(color, uCloudColor');
-    const cityAdd = planet.indexOf('color += city * (1.0 - clamp(cloud, 0.0, 1.0) * 0.92)');
+    const cityAdd = planet.indexOf('color += city * (uGas < 0.5 ? 1.0 : 0.0)');
     const limb = planet.indexOf('color += tint * uSun * uAirStrength');
     assert.ok(discard >= 0 && gate > discard);
     assert.ok(cloudMix > discard && cityAdd > cloudMix && limb > cityAdd);
@@ -54,4 +59,8 @@ test('the enhanced program gates city light and leaves vanilla bytes alone', () 
     assert.ok(planet.includes('cityRaw += baked.rgb;'));
     assert.ok(planet.includes('uGas < 0.5 ? 1.0 : 0.0'));
     assert.ok(planet.includes('density > 0.002'));
+    assert.ok(planet.includes('float lineShow = 1.0 - cover * 0.92;'));
+    assert.ok(planet.includes('float glowShow = exp(-1.35 * cover);'));
+    assert.ok(planet.includes('bias + log2(3.0)'));
+    assert.ok(planet.includes('bias + log2(8.0)'));
 });

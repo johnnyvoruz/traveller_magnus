@@ -1,0 +1,855 @@
+TRADE
+As they explore the galaxy, Travellers will have plenty
+of opportunities to earn money and either become rich
+or simply keep their spacecraft running. Some may
+hire out their services as mercenaries, while others
+concentrate on developing a network of contacts that
+allow them to easily find wealthy patrons. However,
+everyone can indulge in a little speculative trade or
+other commercial interests.
+Travellers traditionally deal in three forms of
+commerce; taking on passengers, shipping freight
+and speculative trade.
+
+ON TRADE
+At first glance, the trading rules in this chapter
+may look like they will take time away from
+adventuring and involve a lot of dice rolling.
+However, a canny referee can use them to their
+advantage without increasing their workload.
+We recommend that, for most campaigns,
+referees hand over this entire chapter to the
+Travellers and simply let them get on with it.
+You will find they should be able to generate a
+fairly regular amount of cash, which will cover
+their ship expenses and perhaps allow them
+some new equipment. Occasionally they will get
+a ‘big score’ and occasionally they will make a
+loss. However, overall there should be a steady
+progression upwards in their bank balance.
+Letting the Travellers handle all their own trading
+allows the referee to concentrate on their own
+adventure, perhaps quickly revising the next
+section or prepping a new encounter while the
+Travellers work out what they want to trade next
+and where. It also encourages the Travellers
+to consult star maps and read planetary
+descriptions, which helps immerse themselves in
+the universe.
+In short, referees have little to fear in letting their
+Travellers loose in this chapter and everyone
+stands to gain.
+
+PASSENGERS
+Passage on board any ship is standardised into three
+categories; high passage, middle passage, basic
+passage and low passage, reflecting the quality of
+service that can be expected during the journey (in
+a way reflecting first class, business class and cattle
+class on airlines today). The cost increases with the
+distance travelled and is for a single jump.
+High Passage: This is the equivalent of a luxury cruise
+or flight in first class. Comfortable quarters, good food
+and staff to wait on hand and foot are expected. It
+requires a stateroom, one ton of cargo space and one
+level of Steward per 10 passengers.
+Middle Passage: This is ‘standard’ class. There will
+be a stateroom for every passenger and occasional
+service from the steward but it is considered more
+functional than enjoyable as an experience. It requires a
+stateroom, 100kg of cargo and one level of Steward per
+100 passengers.
+Basic Passage: For those not willing to risk low berths,
+the option of basic passage, or steerage as it is often
+called, exists. Staterooms will be shared (typically two
+people to a stateroom) or, on some less scrupulous ships,
+areas in the cargo bay or engineering will be set aside
+for very basic accommodation and services (which may
+only extend to two meals a day and meagre washroom
+facilities). This requires two tons of spare room on the
+spacecraft, a resilient personality on the part of the
+passenger and comes with a 10kg baggage allowance.
+Low Passage: This involves being cryogenically
+frozen and stuffed into a tube with the intention of
+being thawed out when the destination is reached. It is
+by no means unknown for Travellers to die during low
+passage, whether from system shock at being frozen,
+being improperly revived or simply a malfunction of the
+low berth. This requires a low berth and comes with a
+10kg baggage allowance.
+Travellers considering taking passengers on their own
+ships should consult the Spacecraft Operations chapter
+for the requirements needed to do so.
+
+SEEKING PASSENGERS
+Having enough staterooms (or low berths) on board a
+spacecraft is one thing – but Travellers looking to make
+money from bringing passengers on board must find
+them first.
+The number of potential passengers seeking passage
+to any given destination varies depending on a number
+of factors. When looking to see how many passengers
+are available, roll 2D on the Passenger Traffic table
+four times, once each for Low, Basic, Middle and High
+passengers and apply the following modifiers:
+The Effect of an Average (8+) Broker, Carouse or
+Streetwise check
+Chief Steward DM+ highest
+Steward skill on ship
+Rolling for High Passengers DM-4
+Rolling for Low Passengers DM+1
+For both source and destination worlds, apply these
+DMs:
+World Population 1 or less DM-4
+World Population 6–7 DM+1
+World Population 8 or more DM+3
+Starport A DM+2
+Starport B DM+1
+Starport E DM-1
+Starport X DM-3
+Amber Zone DM+1
+Red Zone DM-4
+Each parsec of destination past the first DM-1
+The referee may add their own modifiers as they see
+fit, factoring in a war that might induce people to leave
+a world, for example, or a tourist attraction or booming
+economy drawing people to a planet.
+
+Passengers pay an amount for their passage
+depending on the distance travelled and degree of
+luxury as shown on the Passage and Freight table.
+More details on passengers can be found on page
+240. The number of passengers available cannot
+usually exceed the number of people resident on a
+planet, except in unusual circumstances. For example,
+a passenger liner might break down in a nearly
+uninhabited system, so a planet with a population of
+only a few dozen might have hundreds of passengers
+clamouring for transport out.
+FREIGHT
+Travellers not wishing to risk speculative trade can go for
+the safer option of shipping freight. Freight shipments pay
+a fixed rate as shown on the Passage and Freight table.
+Freight lots must be transported in their entirety and
+come in three sizes.
+
+Passenger Traffic
+2D Passengers
+1 or less 0
+2 1D
+3 1D
+4 2D
+5 2D
+6 2D
+7 3D
+8 3D
+9 3D
+10 3D
+11 4D
+12 4D
+13 4D
+14 5D
+15 5D
+16 6D
+17 7D
+18 8D
+19 9D
+20 or more 10D
+
+Passage and Freight
+Parsecs Travelled High Passage Middle Passage Basic Passage Low Passage Freight (per Ton)
+1 Cr9000 Cr6500 Cr2000 Cr700 Cr1000
+2 Cr14000 Cr10000 Cr3000 Cr1300 Cr1600
+3 Cr21000 Cr14000 Cr5000 Cr2200 Cr2600
+4 Cr34000 Cr23000 Cr8000 Cr3900 Cr4400
+5 Cr60000 Cr40000 Cr14000 Cr7200 Cr8500
+6 Cr210000 Cr130000 Cr55000 Cr27000 Cr32000
+
+Major Cargo lots are composed of 1D x 10 tons of freight.
+Minor Cargo lots are composed of 1D x 5 tons of freight.
+Incidental Cargo lots are composed of 1D tons of freight.
+To determine the number of cargo lots available, roll
+2D on the Freight Traffic table three times, once each
+for Incidental, Minor and Major lots, and apply the
+following modifiers:
+The Effect of an Average (8+) Broker or Streetwise check
+Rolling for Major Cargo DM-4
+Rolling for Incidental Cargo DM+2
+For both source and destination worlds, apply these
+DMs:
+World Population 1 or less DM-4
+World Population 6–7 DM+2
+World Population 8 or more DM+4
+Starport A DM+2
+Starport B DM+1
+Starport E DM-1
+Starport X DM-3
+Tech Level 6 or less DM-1
+Tech Level 9 or more DM+2
+Amber Zone DM-2
+Red Zone DM-6
+Each parsec of destination past the first DM-1
+
+EXCITING PASSENGERS
+Referees on the ball will have already spotted
+the possibility of using passengers as a way
+to spice up the lives of their Travellers. This is
+in perfect keeping with Traveller and has our
+wholehearted support.
+For example, passengers may be wanted
+criminals, a runaway couple hoping to escape
+their cruel parents, a desperate escapee from
+prison looking to hijack a ship to freedom, a
+rogue psion… or anything else the referee can
+devise to make life ‘interesting’ for the Travellers.
+While this is not recommended for every time
+the Travellers take passengers on board their
+ship, referees might like to use the Random
+Passenger table as a starting point to creating
+passengers the Travellers will remember or
+perhaps even the Allies and Enemies or Random
+Quirks and Personalities tables on page 92.
+
+Random Passenger
+D66 Passenger D66 Passenger
+11 Refugee – Political 41 Ex-Scout
+12 Refugee – Economic 42 Wanderer
+13 Starting a New Life Offworld 43 Thief or Other Criminal
+14 Mercenary 44 Scientist
+15 Spy 45 Journalist or Researcher
+16 Corporate Executive 46 Entertainer (Steward and Perform 1D–1 each)
+21 Out to See the Universe 51 Gambler (Gambler 1D–1)
+22 Tourist (1–3: Irritating, 4–6: Charming) 52 Rich Noble – Complains a Lot
+23 Wide-Eyed Yokel 53 Rich Noble – Eccentric
+24 Adventurer 54 Rich Noble – Raconteur
+25 Explorer 55 Diplomat on a Mission
+26 Claustrophobic 56 Agent on a Mission
+31 Expectant Mother 61 Patron
+32 Wants to Stowaway or Join the Crew 62 Alien
+33 Possesses Something Dangerous or Illegal 63 Bounty Hunter
+34 Causes Trouble (1–3: Drunkard, 4–5: Violent, 6:
+Insane)
+
+64 On the Run
+35 Unusually Pretty or Handsome 65 Wants to be on Board the Travellers’ Ship for
+Some Reason
+36 Engineer (Mechanic and Engineer 1D–1 each) 66 Hijacker or Pirate Agent
+
+The referee may add their own modifiers as they see
+fit. An industrial revolution will likely increase available
+cargo, for example, while a famine will reduce it.
+Freight Traffic
+2D Lots
+1 or less 0
+2 1D
+3 1D
+4 2D
+5 2D
+6 3D
+7 3D
+8 3D
+9 4D
+10 4D
+11 4D
+12 5D
+13 5D
+14 5D
+15 6D
+16 6D
+17 7D
+18 8D
+19 9D
+20 or more 10D
+A freight lot cannot be broken up. Cargo is paid for
+upon delivery, assuming it is delivered on time. Failing
+to deliver cargo on time reduces the amount paid by
+1D+4 x 10%.
+MAIL
+Mail is a special form of freight, consisting of large
+data storage drums that contain a vast amount of
+information, as well as physical packages, which must
+be transported from one world to another but not vital
+enough to be entrusted to the x-boat service or a
+private courier. To determine if there is mail available,
+roll 2D and then apply the modifiers on the Mail table.
+Mail
+Freight Traffic DM–10 or less: DM-2
+Freight Traffic DM–9 to –5: DM-1
+Freight Traffic DM–4 to +4: DM+0
+Freight Traffic DM 5 to 9: DM+1
+Freight Traffic DM 10 or more: DM+2
+Travellers’ ship is armed: DM+2
+World is TL of 5 or less: DM-4
++ Travellers’ highest Naval or Scout rank
++ Travellers’ highest SOC DM
+
+On 12 or more, the Travellers are chosen to transport
+mail to the destination world. Mail containers take
+up five tons of space and the Travellers will be paid
+Cr25000 for transporting the container. There will be
+1D containers available to transport and the Travellers
+must take them all or none at all.
+Mail deliveries are priced at a flat-rate and the payment
+does not scale with distance.
+SPECULATIVE TRADE & SMUGGLING
+The greatest profits and losses are to be found
+in speculative trade – buying low and selling high
+across the stars. It sounds simple but while great
+fortunes have been made through speculative trade,
+many ships have found themselves bankrupted by
+the same process.
+Speculative trade is performed by going through the
+following steps:
+Trade Checklist
+1. Find a supplier or local broker
+2. Determine goods available
+3. Determine purchase price
+4. Purchase goods
+5. Travel to another market
+6. Find a buyer or local broker
+7. Determine sale price
+FIND A SUPPLIER
+On worlds regularly visited by trade vessels, finding
+a supplier is easy. There are traders and brokers at
+the starport eager to deal with offworlders and the
+whole planetary economy may rely on trade with other
+planets. Technologically advanced worlds will have
+computer networks that can be searched for suppliers,
+while on lower-tech worlds traders seek out suppliers in
+markets and bazaars. Travellers can search for multiple
+suppliers but there is DM-1 per previous attempt on a
+planet in the same month.
+The following skill checks are used to find suppliers:
+Finding a Supplier or Broker: Average (8+) Broker
+check (1D days, EDU or SOC).
+Finding a Black Market Supplier or Broker of Illegal
+Goods: Average (8+) Streetwise check (1D days, EDU
+or SOC).
+Finding an Online Supplier or Broker (TL8+ worlds
+only): Average (8+) Admin check (1D hours, EDU).
+
+The size of the Starport provides a bonus to finding
+a supplier.
+Class A: DM+6
+Class B: DM+4
+Class C: DM+2
+DETERMINE GOODS AVAILABLE
+Goods are divided into two categories; Common and
+Trade Goods. Common Goods can be purchased on
+any world. Trade Goods can usually only be found on a
+world with a matching Trade code. The amount of each
+type of goods available is limited – the tons column on
+the Trade Goods table determines how many tons of a
+given type of goods are available for purchase.
+Availability is influenced by the size of the market.
+On Population 3– apply DM–3 to the roll for quantity.
+This can result in a number of zero or less, reflecting
+no availability of even common goods. Conversely,
+Population 9+ worlds have vast economies and grant
+DM+3 on the roll for lot quantities.
+A supplier will have all Common Goods available, the
+Trade Goods that match the world’s Trade codes and
+a quantity of randomly determined goods equal to the
+
+LOCAL BROKERS
+A trader can hire a local broker to help find
+goods and negotiate a deal. Local brokers will
+have a Broker skill of 2D/3 and will normally
+charge a flat fee of 10% of the gross proceeds
+of a transaction. Local brokers gain DM+2 on
+negotiations, since their local knowledge helps
+them find the best deal and avoid the pitfalls of
+dealing with outsiders.
+For illegal goods, a local broker or fixer will
+have a Streetwise skill of 2D/3 and gain DM+2
+on negotiations but charge 20% of the gross
+proceeds, possibly higher for highly illegal or
+dangerous cargos. If the roll to determine the
+fixer’s skill is a natural 2, they are an informer,
+government agent or double-crosser. The referee
+should determine resulting events, which should
+remind the Travellers why it is best to tread
+carefully when dealing in illegal goods.
+
+MAKING A LIVING
+Speculative trading can be harsh to the
+newcomer, especially if they are unskilled, and
+even the most experienced broker can be caught
+by a bad trade and lose tens of thousands of
+Credits – or more.
+It may occur to some Travellers to ask how can
+the big shipping corporations even survive, let
+alone make a profit, if they are doing the same
+risky speculative trading as everyone else. The
+answer is simple.
+They don’t.
+Just as in our world, the big boys follow
+different rules to the little guy. A big, interstellar
+corporation not only has far larger ships that
+can carry far more cargo but also government
+contracts, the ability to bribe their way ahead of
+small competitors, contacts among suppliers, tax
+breaks and many other ploys that keep them one
+step ahead.
+
+Population code of the world. Roll on the Trade Goods
+table to randomly determine the goods available, re-
+rolling results 61–65 unless dealing with a black market
+supplier. If you roll the same type of goods multiple
+times, then the supplier has extra amounts of those
+goods available.
+Some goods are illegal and can be purchased only
+through a black market supplier. A black market
+supplier has whatever illegal goods match world’s
+Trade codes, as well as any randomly rolled illegal
+goods. Roll 1D on the Trade Goods table and use ‘6’
+as the leading digit. Illegal goods can include illegal
+exotics, which may not be strictly illegal but have
+‘questionable’ providence.
+For example, the Travellers have contacted a
+supplier on an Industrial world. Consulting the Trade
+Goods table, the supplier has the following goods
+available: Common Electronics, Common Machine
+Parts, Common Manufactured Goods, Common Raw
+Materials, Common Vehicles, Common Ore, Advanced
+
+Electronics, Advanced Machine Parts, Advanced
+Manufactured Goods, Advanced Weapons, Advanced
+Vehicles, Polymers & Robots, as all those goods are
+Common or Industrial. The referee can now generate
+an additional number of goods equal to the world’s
+Population code to reflect the random items the
+supplier has.
+DETERMINE PURCHASE PRICE
+To determine the purchase price, roll 3D and apply the
+following modifiers:
++The Traveller’s Broker skill (or the local broker’s skill)
++any DM from the Purchase DM column
+–any DM from the Sale DM column
+–the supplier’s Broker skill (this is assumed to be
+Broker 2, but may vary)
+In cases where multiple Purchase or Sale DMs apply,
+use only the largest from each column.
+Next, consult the Purchase column of the Modified
+Price table. The trader does not have to accept this
+price but if they reject the deal, they cannot deal with
+that supplier again for at least a month.
+
+ILLEGAL GOODS
+Some goods are illegal throughout the Imperium.
+These are marked as illegal in the Trade Goods
+tables. Other goods are illegal only on particular
+worlds (see Law Level, page 255).
+Trade in illegal goods is highly profitable but
+risky. Universally illegal goods have high Sale
+DMs. For other banned goods, their Sale DM is
+the difference between the Law Level they are
+banned at and the Law Level of the world. For
+example, Military Weapons are banned at Law
+Level 3. If a trader smuggles any weapons onto
+a Law Level 9 world, the weapons have Sale
+DM+6 (if a type of goods is both universally and
+locally illegal, use whichever Sale DM is higher).
+The downside of smuggling is that if the trader
+is caught, they face fines or imprisonment. See
+Law Levels, page 255.
+
+Purchase and Sale Prices are calculated as a
+percentage of the Base Price.
+Modified Price
+Result Purchase Price Sale Price
+-3 or less 300% 10%
+-2 250% 20%
+-1 200% 30%
+0 175% 40%
+1 150% 45%
+2 135% 50%
+3 125% 55%
+4 120% 60%
+5 115% 65%
+6 110% 70%
+7 105% 75%
+8 100% 80%
+9 95% 85%
+10 90% 90%
+11 85% 100%
+12 80% 105%
+13 75% 110%
+14 70% 115%
+15 65% 120%
+16 60% 125%
+17 55% 130%
+18 50% 140%
+19 45% 150%
+20 40% 160%
+21 35% 175%
+22 30% 200%
+23 25% 250%
+24 20% 300%
+25+ 15% 400%
+SELLING GOODS
+Selling goods works just like purchasing goods, with
+the following changes. A Traveller must find a buyer,
+instead of a supplier. The same rules apply.
+When selling goods, add the Sale DMs for the world’s
+Trade codes and subtract the Purchase DMs. Deduct
+the purchaser's Broker skill (this is assumed to be
+Broker 2, but may vary).
+If a Traveller does not accept the price offered for their
+goods, they must find another buyer or wait a month.
+
+Trade Goods
+D66 Type Availability Tons Base Price Purchase DM Sale DM Examples
+11 Common
+Electronics
+
+All 2D x 10 Cr20000 Industrial +2, High
+Tech +3, Rich +1
+
+Non-Industrial +2, Low
+Tech +1, Poor +1
+
+Simple electronics including basic
+computers up to TL10
+
+12 Common
+Industrial Goods
+
+All 2D x 10 Cr10000 Non-Agricultural +2,
+Industrial +5
+
+Non-Industrial +3,
+Agricultural +2
+
+Machine components and spare
+parts for common machinery
+
+13 Common
+Manufactured
+Goods
+
+All 2D x 10 Cr20000 Non-Agricultural +2,
+Industrial +5
+
+Non-Industrial +3, High
+Population +2
+
+Household appliances, clothing and
+so forth
+
+14 Common Raw
+Materials
+
+All 2D x 20 Cr5000 Agricultural +3,
+Garden +2
+
+Industrial +2, Poor +2 Metal, plastics, chemicals and other
+basic materials
+
+15 Common
+Consumables
+
+All 2D x 20 Cr500 Agricultural +3, Water
+World +2, Garden +1,
+Asteroid -4
+
+Asteroid +1, Fluid
+Oceans +1, Ice-Capped
++1, High Population +1
+
+Food, drink and other agricultural
+products
+
+16 Common Ore All 2D x 20 Cr1000 Asteroid +4 Industrial +3, Non-
+Industrial +1
+
+Ore bearing common metals
+
+21 Advanced
+Electronics
+
+Industrial, High
+Tech
+
+1D x 5 Cr100000 Industrial +2, High
+Tech +3
+
+Non-Industrial +1, Rich
++2, Asteroid +3
+
+Advanced sensors, computers and
+other electronics up to TL15
+
+22 Advanced
+Machine Parts
+
+Industrial, High
+Tech
+
+1D x 5 Cr75000 Industrial +2, High
+Tech +1
+
+Asteroid +2, Non-
+Industrial +1
+
+Machine components and spare
+parts, including gravitic components
+
+23 Advanced
+Manufactured
+Goods
+
+Industrial, High
+Tech
+
+1D x 5 Cr100000 Industrial +1 High Population +1, Rich
++2
+
+Devices and clothing incorporating
+advanced technologies
+
+24 Advanced
+Weapons
+
+Industrial, High
+Tech
+
+1D x 5 Cr150000 High Tech +2 Poor +1, Amber Zone
++2, Red Zone +4
+
+Firearms, explosives, ammunition,
+artillery and other military-grade
+weaponry
+
+25 Advanced
+Vehicles
+
+Industrial, High
+Tech
+
+1D x 5 Cr180000 High Tech +2 Asteroid +2, Rich +2 Air/rafts, spacecraft, grav tanks and
+other vehicles up to TL15
+
+26 Biochemicals Agricultural, Water
+World
+
+1D x 5 Cr50000 Agricultural +1, Water
+World +2
+
+Industrial +2 Biofuels, organic chemicals, extracts
+
+31 Crystals & Gems Asteroid, Desert,
+Ice-Capped
+
+1D x 5 Cr20000 Asteroid +2, Desert
++1, Ice-Capped +1
+
+Industrial +3, Rich +2 Diamonds, synthetic or natural
+gemstones
+32 Cybernetics High-Tech 1D Cr250000 High Tech +1 Asteroid +1, Ice-Capped
++1, Rich +2
+
+Cybernetic components,
+replacement limbs
+
+33 Live Animals Agricultural,
+Garden
+
+1D x 10 Cr10000 Agricultural +2 Low Population +3 Riding animals, beasts of burden,
+exotic pets
+
+34 Luxury
+Consumables
+
+Agricultural,
+Garden, Water
+World
+
+1D x 10 Cr20000 Agricultural +2, Water
+World +1
+
+Rich +2, High Population
++2
+
+Rare foods, fine liquors
+
+35 Luxury Goods High Pop 1D Cr200000 High Population +1 Rich +4 Rare or extremely high-quality
+manufactured goods
+36 Medical Supplies High Tech ,High
+Pop
+
+1D x 5 Cr50000 High Tech +2 Industrial +2, Poor +1,
+Rich +1
+
+Diagnostic equipment, basic drugs,
+cloning technology
+
+41 Petrochemicals Desert, Fluid
+Oceans, Ice-
+Capped, Water
+World
+
+1D x 10 Cr10000 Desert +2 Industrial +2, Agricultural
++1, Low Tech +2
+
+Oil, liquid fuels
+
+42 Pharmaceuticals Asteroid, Desert,
+High Pop, Water
+World
+
+1D Cr100000 Asteroid +2, High
+Population +1
+
+Rich +2, Low Tech +1 Drugs, medical supplies, anagathics,
+fast or slow drugs
+43 Polymers Industrial 1D x 10 Cr7000 Industrial +1 Rich +2, Non-Industrial
++1
+
+Plastics and other synthetics
+
+44 Precious Metals Asteroid, Desert,
+Ice Capped, Fluid
+Oceans
+
+1D Cr50000 Asteroid +3, Desert
++1, Ice-Capped +2
+
+Rich +3, Industrial +2,
+High Tech +1
+
+Gold, silver, platinum, rare elements
+
+45 Radioactives Asteroid, Desert,
+Low Pop
+
+1D MCr1 Asteroid +2, Low
+Population +2
+
+Industrial +3, High Tech
++1, Non-Industrial -2,
+Agricultural -3
+
+Uranium, plutonium, unobtanium,
+rare elements
+
+46 Robots Industrial 1D x 5 Cr400000 Industrial +1 Agricultural +2, High
+Tech +1
+
+Industrial and personal robots and
+drones
+
+51 Spices Garden, Desert,
+Water World
+
+1D x 10 Cr6000 Desert +2 High Population +2, Rich
++3, Poor +3
+
+Preservatives, luxury food additives,
+natural drugs
+
+52 Textiles Agricultural, Non-
+Industrial
+
+1D x 20 Cr3000 Agricultural +7 High Population +3,
+Non-Agricultural +2
+
+Clothing and fabrics
+
+53 Uncommon Ore Asteroid, Ice
+Capped
+
+1D x 20 Cr5000 Asteroid +4 Industrial +3, Non-
+Industrial +1
+
+Ore containing precious or valuable
+metals
+
+54 Uncommon Raw
+Materials
+
+Agricultural,
+Desert, Water
+World
+
+1D x 10 Cr20000 Agricultural +2, Water
+World +1
+
+Industrial +2, High Tech
++1
+
+Valuable metals like titanium, rare
+elements
+
+55 Wood Agricultural,
+Garden
+
+1D x 20 Cr1000 Agricultural +6 Rich +2, Industrial +1 Hard or beautiful woods and plant
+extracts
+
+56 Vehicles Industrial, High
+Tech
+
+1D x 10 Cr15000 Industrial +2, High
+Tech +1
+
+Non-Industrial +2, High
+Population +1
+
+Wheeled, tracked and other vehicles
+from TL10 or lower
+
+61 Illegal
+Biochemicals
+
+Agricultural, Water
+World
+
+1D x 5 Cr50000 Water World +2 Industrial +6 Dangerous chemicals, extracts from
+endangered species
+
+62 Cybernetics,
+Illegal
+
+High Tech 1D Cr250000 High Tech +1 Asteroid +4, Ice-Capped
++4, Rich +8, Amber Zone
++6, Red Zone +6
+
+Combat cybernetics, illegal
+enhancements
+
+63 Drugs, Illegal Asteroid, Desert,
+High Pop, Water
+World
+
+1D Cr100000 Asteroid +1, Desert
++1, Garden +1, Water
+World +1
+
+Rich +6, High Population
++6
+
+Addictive drugs, combat drugs
+
+64 Luxuries, Illegal Agricultural,
+Garden, Water
+World
+
+1D Cr50000 Agricultural +2, Water
+World +1
+
+Rich +6, High Population
++4
+
+Debauched or addictive luxuries
+
+65 Weapons, Illegal Industrial, High
+Tech
+
+1D x 5 Cr150000 High Tech +2 Poor +6, Amber Zone
++8, Red Zone +10
+
+Weapons of mass destruction, naval
+weapons
+66 Exotics Exotic goods are outside the normal trade rules, and covers such things are alien relics, prototype technology, unique plant or animal
+life, priceless treasures and so forth. Buying and selling exotic goods is a matter for roleplaying and adventure.

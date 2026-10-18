@@ -6,11 +6,12 @@
  * The mainworld carries the same star that marks it on the picture; when the mainworld is a
  * moon, the star sits on its world's moons button, so it can be found without opening the list.
  */
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import BodyGlyph from '../dossier/BodyGlyph.vue';
 import Icon from '../design/Icon.vue';
 import type { BodyChip } from './bodies.ts';
 
-defineProps<{
+const props = defineProps<{
     chips: BodyChip[];
     /** The selected body's key, or null. */
     selected: string | null;
@@ -44,10 +45,38 @@ function moonsTitle(chip: BodyChip): string {
     const main = satellites(chip).find((moon) => moon.mainworld) || null;
     return 'Moons of ' + chip.name + (main ? ', with the mainworld ' + main.name : '');
 }
+
+const scroller = ref<HTMLElement | null>(null);
+const cutStart = ref(false);
+const cutEnd = ref(false);
+let stopSize: ResizeObserver | null = null;
+
+/** A fade only on an edge the row has actually cut. */
+function measureCut(): void {
+    const el = scroller.value;
+    if (!el) return;
+    cutStart.value = el.scrollLeft > 1;
+    cutEnd.value = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
+}
+
+onMounted(() => {
+    measureCut();
+    void nextTick(measureCut);
+    if (typeof ResizeObserver === 'undefined' || !scroller.value) return;
+    stopSize = new ResizeObserver(() => { measureCut(); });
+    stopSize.observe(scroller.value);
+});
+
+watch(() => props.chips.length, () => { void nextTick(measureCut); });
+
+onBeforeUnmount(() => {
+    if (stopSize) stopSize.disconnect();
+});
 </script>
 
 <template>
-  <nav class="orbit-chips" aria-label="Bodies in this system">
+  <div class="orbit-chip-bar" :class="{ 'is-cut-start': cutStart, 'is-cut-end': cutEnd }">
+  <nav ref="scroller" class="orbit-chips" aria-label="Bodies in this system" @scroll.passive="measureCut">
     <div v-for="chip in chips" :key="chip.key" class="orbit-chip-group" :class="{ 'is-held': holds(chip, selected) }">
       <button
         type="button"
@@ -74,7 +103,7 @@ function moonsTitle(chip: BodyChip): string {
           @click="$emit('moons', moonsOpen === chip.key ? null : chip.key)"
         >
           <Icon name="moon" :size="11" />
-          <span>{{ satellites(chip).length }}</span>
+          <span class="orbit-chip-count">{{ satellites(chip).length }}</span>
           <Icon v-if="mainMoon(chip)" class="orbit-chip-main" name="star" :size="11" />
         </button>
         <div v-if="moonsOpen === chip.key" class="orbit-pop-backdrop" @click="$emit('moons', null)"></div>
@@ -111,6 +140,7 @@ function moonsTitle(chip: BodyChip): string {
       </button>
     </div>
   </nav>
+  </div>
 </template>
 
 <style>
@@ -209,6 +239,13 @@ function moonsTitle(chip: BodyChip): string {
   font-variant-numeric: var(--tabular);
 }
 
+/* The moon count as a frame's count: Orbitron, teal. */
+.orbit-chip-count {
+  color: var(--signal);
+  font: 700 12px/1 var(--font-display);
+  letter-spacing: 0.04em;
+}
+
 .orbit-chip-moons .ui-icon:not(.orbit-chip-main) {
   color: var(--signal-dim);
 }
@@ -242,6 +279,55 @@ function moonsTitle(chip: BodyChip): string {
 
 .orbit-moons .orbit-chip {
   justify-content: flex-start;
+}
+
+/*
+ * The phone (599 px): the chips are one row that scrolls sideways, so the picture keeps its height.
+ * The scroller would clip a moons list hung from its chip, so the list stands over the chip row,
+ * across the card, instead.
+ */
+@media (max-width: 599px) {
+  .orbit-chips {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    padding: 8px 10px;
+  }
+
+  .orbit-chips::-webkit-scrollbar {
+    display: none;
+  }
+
+  .orbit-chip {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* A mask fades the chips themselves, including the light type, at a cut edge. */
+  .orbit-chip-bar.is-cut-end .orbit-chips {
+    -webkit-mask-image: linear-gradient(to right, black calc(100% - 48px), transparent);
+    mask-image: linear-gradient(to right, black calc(100% - 48px), transparent);
+  }
+
+  .orbit-chip-bar.is-cut-start .orbit-chips {
+    -webkit-mask-image: linear-gradient(to right, transparent, black 48px);
+    mask-image: linear-gradient(to right, transparent, black 48px);
+  }
+
+  .orbit-chip-bar.is-cut-start.is-cut-end .orbit-chips {
+    -webkit-mask-image: linear-gradient(to right, transparent, black 48px, black calc(100% - 48px), transparent);
+    mask-image: linear-gradient(to right, transparent, black 48px, black calc(100% - 48px), transparent);
+  }
+
+  .orbit-moons {
+    position: fixed;
+    right: calc(var(--chrome-inset) + 10px);
+    bottom: calc(var(--chrome-inset) + max(var(--sheet-cover, 0px), env(safe-area-inset-bottom, 0px)) + 68px);
+    left: calc(var(--rail-width) + var(--chrome-inset) + 10px);
+    max-height: min(320px, 40vh);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

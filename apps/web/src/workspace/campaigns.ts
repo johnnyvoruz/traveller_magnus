@@ -10,6 +10,9 @@ export const CAMPAIGN_CAP = 10;
 
 export type CampaignRow = { id: string; name: string };
 
+/** Shown when a players read answers 403 not_a_member or 404 and the store is `gone`. */
+export const NOT_IN_CAMPAIGN = 'You are not in this campaign.';
+
 /** A campaign's name as it may be stored: trimmed, single-spaced, cut to the limit. Empty when nothing is left. */
 export function cleanCampaignName(text: string): string {
     return text.replace(/\s+/g, ' ').trim().slice(0, CAMPAIGN_LIMITS.name);

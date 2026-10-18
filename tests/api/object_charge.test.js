@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
-import { chargeObjectBytes } from '../../apps/api/src/jobs/object_charge.ts';
+import { accountSettledBytes, chargeObjectBytes } from '../../apps/api/src/jobs/object_charge.ts';
 
 /**
  * D1 batch runs both statements in one transaction. This stand-in does the same
@@ -67,6 +67,23 @@ function open(options = {}) {
     };
     return api;
 }
+
+test('a crash after the byte add retries the settled mark and counts once', async () => {
+    const db = open();
+    let marks = 0;
+    await assert.rejects(() => accountSettledBytes(db, 'u', 'job-1', 40, async () => {
+        marks += 1;
+        throw new Error('crash');
+    }), /crash/);
+    assert.equal(db.bytes(), 50);
+    assert.equal(marks, 1);
+    await accountSettledBytes(db, 'u', 'job-1', 40, async () => {
+        marks += 1;
+    });
+    assert.equal(db.bytes(), 50);
+    assert.equal(db.charges(), 1);
+    assert.equal(marks, 2);
+});
 
 test('a repeated object-byte charge adds the bytes once', async () => {
     const db = open();

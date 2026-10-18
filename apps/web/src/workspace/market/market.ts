@@ -102,6 +102,15 @@ export function plural(count: number, one: string, many: string): string {
 export type RecordRow = { id: string; name: string; type: string };
 
 /** The live campaign records on these hexes, each once, by name. */
+/** Under a chosen record that is referee-only (DF18, players question 6): what publishing it does. No change to the data. */
+export const REFEREE_ONLY_NOTE = 'This record is referee-only. Its "For players" text is published as it stands.';
+
+/** The record is seen by the referee only. */
+export function refereeOnly(id: string, read: (id: string) => { visibility?: string } | undefined = (key) => campaign.records[key]): boolean {
+    const record = read(id);
+    return !!record && record.visibility === 'referee';
+}
+
 export function recordsOn(keys: readonly string[], at: (hexKey: string) => readonly string[] = recordsAtHex, read: (id: string) => { name: string; type: string } | undefined = (id) => campaign.records[id]): RecordRow[] {
     const seen = new Set<string>();
     const out: RecordRow[] = [];
@@ -205,6 +214,21 @@ export function listingLine(item: PackageListing): string {
 /** The address of a package page; `version` is the one being published, which the page watches. */
 export function packagePath(packageId: string, version?: number): string {
     return '/packages/' + encodeURIComponent(packageId) + (version ? '?version=' + version : '');
+}
+
+/** The store filtered by one kind (filters.ts `kind`): where a kind's name links. */
+export function kindPath(family: string): string {
+    return '/packages?kind=' + encodeURIComponent(family);
+}
+
+/** The store filtered by one publisher (filters.ts `by`): where an author's handle links. */
+export function byPath(handle: string): string {
+    return '/packages?by=' + encodeURIComponent(handle);
+}
+
+/** The store filtered by one tag (filters.ts `tag`): where a tag links. */
+export function tagPath(tag: string): string {
+    return '/packages?tag=' + encodeURIComponent(tag);
 }
 
 // ---- the form ------------------------------------------------------------------------------------------

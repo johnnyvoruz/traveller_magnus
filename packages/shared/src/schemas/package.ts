@@ -154,15 +154,74 @@ export const PackageSort = z.enum(['updated', 'installs', 'title']);
 export type PackageSort = z.infer<typeof PackageSort>;
 
 /** Catalogue query. Every field optional; `mine` and `hidden` (admin only) are the literal "1". */
+/**
+ * The store's kind families, as `apps/web/src/marketplace/covers.ts` `KIND_FAMILIES` maps them:
+ * first match in this order, case-insensitive, by keyword anywhere in the kind; no match is `other`.
+ * The catalogue's `family=` filters by the same table.
+ */
+export const PACKAGE_KIND_FAMILIES = [
+    { family: 'map', words: ['sector', 'subsector', 'piece', 'map', 'region'] },
+    { family: 'system', words: ['system'] },
+    { family: 'ship', words: ['ship', 'ships', 'vessel', 'fleet'] },
+    { family: 'people', words: ['people', 'contact', 'npc', 'crew', 'character'] },
+    { family: 'patrons', words: ['patron', 'job', 'mission', 'hook'] },
+    { family: 'organization', words: ['organization', 'organisation', 'faction', 'corporation', 'house'] },
+    { family: 'adventure', words: ['adventure', 'scenario', 'event', 'campaign'] },
+] as const;
+export const PackageFamily = z.enum(['map', 'system', 'ship', 'people', 'patrons', 'organization', 'adventure', 'other']);
+export type PackageFamily = z.infer<typeof PackageFamily>;
+
 export const PackageCatalogueQuery = z.object({
     q: z.string().trim().min(1).max(100).optional(),
     kind: z.string().trim().min(1).max(40).optional(),
+    /** Repeatable: OR within the key, AND with the other keys. */
+    family: z.array(PackageFamily).min(1).max(8).optional(),
+    /** A publisher's handle, exact. */
+    author: z.string().trim().min(1).max(64).optional(),
     tag: z.string().trim().min(1).max(40).optional(),
     sort: PackageSort.optional(),
     mine: z.literal('1').optional(),
     hidden: z.literal('1').optional(),
 }).strict();
 export type PackageCatalogueQuery = z.infer<typeof PackageCatalogueQuery>;
+
+/** What a package holds, as the store's Contents section says it: map hexes, or records only. */
+export const PackageContents = z.enum(['hexes', 'records']);
+export type PackageContents = z.infer<typeof PackageContents>;
+
+/** `GET /api/packages/facets` (Z6). Repeatable keys are OR within the key, AND across keys. */
+export const PackageFacetsQuery = z.object({
+    q: z.string().trim().min(1).max(100).optional(),
+    family: z.array(PackageFamily).min(1).max(8).optional(),
+    contents: z.array(PackageContents).min(1).max(2).optional(),
+    edition: z.array(z.string().trim().min(1).max(40)).min(1).max(20).optional(),
+    tag: z.array(z.string().trim().min(1).max(40)).min(1).max(20).optional(),
+    updated: z.enum(['7', '30']).optional(),
+    author: z.array(z.string().trim().min(1).max(64)).min(1).max(20).optional(),
+}).strict();
+export type PackageFacetsQuery = z.infer<typeof PackageFacetsQuery>;
+
+const FacetCount = z.number().int().nonnegative();
+export const PackageFacet = z.object({ value: z.string(), count: FacetCount });
+export type PackageFacet = z.infer<typeof PackageFacet>;
+
+/**
+ * The store's column over the whole catalogue for a query. Each section's counts are taken over the
+ * packages every other section lets through; `total` passes every section. `scanned` packages
+ * matched `q`; `capped` is true when there were more than the server counts.
+ */
+export const PackageFacets = z.object({
+    total: FacetCount,
+    scanned: FacetCount,
+    capped: z.boolean(),
+    kinds: z.array(z.object({ value: PackageFamily, count: FacetCount })),
+    contents: z.array(z.object({ value: PackageContents, count: FacetCount })),
+    editions: z.array(PackageFacet),
+    tags: z.array(PackageFacet),
+    updated: z.array(z.object({ value: z.enum(['7', '30', '']), count: FacetCount })),
+    by: z.array(PackageFacet),
+});
+export type PackageFacets = z.infer<typeof PackageFacets>;
 
 /** The package page for a reader. The author's view of their own package uses the same shape. */
 export const PackagePublicPage = PackagePage.extend({

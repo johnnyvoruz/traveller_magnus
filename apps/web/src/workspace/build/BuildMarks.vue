@@ -340,18 +340,21 @@ defineExpose({
 }
 
 /* The chip: the hex's number and name, above the hex (or below it), never on it. */
+/* The hex's tag: the videos' outlined Orbitron box (design/base.css .ui-date), on the chart's glass. */
 .build-chip {
   position: absolute;
   top: 0;
   left: 0;
   margin: 0;
-  padding: 3px 8px;
-  border: 1px solid var(--control-line);
-  border-radius: var(--r-2);
-  background: var(--bg-2);
+  padding: 3px 8px 2px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-1);
+  background: var(--chrome-glass);
   box-shadow: var(--shadow-chrome);
   color: var(--text-0);
-  font: 600 12px/1.4 var(--font-code);
+  font: 700 11px/1.4 var(--font-display);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
   font-variant-numeric: var(--tabular);
   white-space: nowrap;
   translate: -50% -100%;

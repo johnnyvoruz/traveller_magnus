@@ -49,9 +49,9 @@ export function signV4({ method, url, headers = {}, payloadHash, accessKeyId, se
 const RETRY_STATUS = new Set([408, 429, 500, 502, 503, 504]);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** PUT one file; retries on network errors, 408/429/5xx, with exponential backoff and jitter. */
-export async function putObject({ endpoint, bucket, key, file, contentType, cacheControl, credentials, attempts = 6, baseDelayMs = 250, fetchImpl = fetch }) {
-    const body = fs.readFileSync(file);
+/** PUT one file (or the given bytes); retries on network errors, 408/429/5xx, with exponential backoff and jitter. */
+export async function putObject({ endpoint, bucket, key, file, bytes, contentType, cacheControl, credentials, attempts = 6, baseDelayMs = 250, fetchImpl = fetch }) {
+    const body = bytes !== undefined ? Buffer.from(bytes) : fs.readFileSync(file);
     const payloadHash = sha256(body);
     const url = `${endpoint.replace(/\/$/, '')}/${bucket}/${key}`;
     let last;
@@ -69,6 +69,38 @@ export async function putObject({ endpoint, bucket, key, file, contentType, cach
             if (res.ok) {
                 await res.arrayBuffer().catch(() => null);
                 return { bytes: body.length, etag: res.headers.get('etag'), attempts: attempt };
+            }
+            const text = await res.text().catch(() => '');
+            last = new Error(`HTTP ${res.status} ${text.slice(0, 200)}`);
+            if (!RETRY_STATUS.has(res.status)) throw Object.assign(last, { fatal: true });
+        } catch (err) {
+            if (err.fatal) throw err;
+            last = err;
+        }
+        if (attempt < attempts) await sleep(baseDelayMs * 2 ** (attempt - 1) * (0.5 + Math.random()));
+    }
+    throw last;
+}
+
+/**
+ * GET one object, signed like the PUT, with the same retries. Returns { status: 404 } when it is
+ * absent, else { status: 200, bytes, contentType, cacheControl, etag }.
+ */
+export async function getObject({ endpoint, bucket, key, credentials, attempts = 6, baseDelayMs = 250, fetchImpl = fetch }) {
+    const payloadHash = sha256('');
+    const url = `${endpoint.replace(/\/$/, '')}/${bucket}/${key}`;
+    let last;
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+        const headers = signV4({ method: 'GET', url, payloadHash, ...credentials, headers: { 'x-amz-content-sha256': payloadHash } });
+        try {
+            const res = await fetchImpl(url, { method: 'GET', headers });
+            if (res.status === 404) {
+                await res.arrayBuffer().catch(() => null);
+                return { status: 404 };
+            }
+            if (res.ok) {
+                const bytes = Buffer.from(await res.arrayBuffer());
+                return { status: 200, bytes, contentType: res.headers.get('content-type'), cacheControl: res.headers.get('cache-control'), etag: res.headers.get('etag') };
             }
             const text = await res.text().catch(() => '');
             last = new Error(`HTTP ${res.status} ${text.slice(0, 200)}`);

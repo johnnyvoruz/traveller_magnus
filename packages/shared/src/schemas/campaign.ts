@@ -189,9 +189,82 @@ export const Track = z.array(TrackLeg).max(CAMPAIGN_LIMITS.track).superRefine((l
 });
 export type Track = z.infer<typeof Track>;
 
-/** `track`, when present, is a vessel's ordered legs. Other status keys stay free. */
+/**
+ * One lot in a vessel's hold (campaign_manager_plan.md §5.3).
+ * `itemId` points at an item record when the lot has one. The sheet's sixteen
+ * Cargo rows are a view of the first sixteen lots (`campaign/cargo.ts`).
+ */
+export const CargoLot = z.object({
+    itemId: z.string().regex(RECORD_ID).optional(),
+    label: z.string(),
+    tons: z.number().finite().nonnegative(),
+    value: z.number().finite().optional(),
+    origin: z.string().optional(),
+    destination: z.string().optional(),
+    note: z.string().optional(),
+}).strict();
+export type CargoLot = z.infer<typeof CargoLot>;
+
+/**
+ * One passenger (§5.3), plus the sheet's Notes box.
+ * `class` is the Passage box. `personId` points at a person record when set.
+ */
+export const PassengerLot = z.object({
+    personId: z.string().regex(RECORD_ID).optional(),
+    label: z.string(),
+    class: z.string(),
+    note: z.string().optional(),
+}).strict();
+export type PassengerLot = z.infer<typeof PassengerLot>;
+
+/** One posted line (§5.3). `amount` is the credit change as stored. `when` is a campaign day. */
+export const LedgerLine = z.object({
+    when: Day,
+    amount: z.number().finite(),
+    memo: z.string(),
+    kind: z.enum(['income', 'expense', 'recurring']),
+}).strict();
+export type LedgerLine = z.infer<typeof LedgerLine>;
+
+/**
+ * One holder's shares (T1c). The holder is a person or organization record, or the party.
+ * `shares` is the count the referee typed. Nothing here prices a share.
+ */
+export const OwnerShare = z.object({
+    holder: z.union([
+        z.object({
+            kind: z.literal('record'),
+            id: z.string().regex(RECORD_ID),
+        }).strict(),
+        z.literal('party'),
+    ]),
+    shares: z.number().finite(),
+}).strict();
+export type OwnerShare = z.infer<typeof OwnerShare>;
+
+/**
+ * A ship payment the referee typed (T1c). `everyDays` is whole campaign days.
+ * No period is filled in when this object is absent.
+ */
+export const ShipPayment = z.object({
+    amountCr: z.number().finite(),
+    everyDays: z.number().int().positive(),
+    nextDueDay: Day,
+    payee: z.string().optional(),
+}).strict();
+export type ShipPayment = z.infer<typeof ShipPayment>;
+
+/** `track`, when present, is a vessel's ordered legs. Cargo, passengers, the ledger, owners, payment and fuel are optional. Other status keys stay free. */
 const RecordStatus = z.object({
     track: Track.optional(),
+    cargo: z.array(CargoLot).optional(),
+    passengers: z.array(PassengerLot).optional(),
+    ledger: z.array(LedgerLine).optional(),
+    owners: z.array(OwnerShare).optional(),
+    payment: ShipPayment.optional(),
+    fuelTons: z.number().finite().optional(),
+    /** Naval or scout base fuel. Players never see this key (AF2). */
+    fuelMark: z.enum(['naval', 'scout']).optional(),
 }).passthrough();
 
 export const CampaignRecord = z.object({
@@ -286,6 +359,17 @@ export const CampaignSettings = z.object({
     calendar: z.object({
         dateFormat: z.enum(['imperial', 'long']),
     }).strict(),
+    /**
+     * Systems that feel alive (spec_living_systems.md §4, LS3): the referee's two switches. Absent
+     * means both off; players get the referee's choice in their view and cannot change it.
+     */
+    living: z.object({ chatter: z.boolean(), traffic: z.boolean() }).strict().optional(),
+    /**
+     * The campaign's chosen table for a kind (findings/trade_tables_design.md §9.6, TS2b):
+     * kind to set id. A kind left out means the official set. Players receive this map.
+     * The trade-code name check waits for a name-to-code table in rules/.
+     */
+    tableSets: z.record(z.string()).optional(),
     rev: Rev,
 }).strict();
 export type CampaignSettings = z.infer<typeof CampaignSettings>;
@@ -397,6 +481,18 @@ export const Universe = z.object({
     showReferee: z.boolean().optional(),
     /** Present only when migration 0020 is applied. Omitted on an older database. Default on. */
     showCourse: z.boolean().optional(),
+    /**
+     * Present only when migration 0022 is applied. Omitted on an older database.
+     * Null until a campaign write has stored a summary row. The card builds the
+     * party line and the date. This object does not carry those sentences.
+     */
+    summary: z.object({
+        vessels: z.array(z.string()),
+        aboard: z.number().int().nonnegative(),
+        clockDays: z.number().finite().nullable(),
+        records: z.number().int().nonnegative(),
+        changedAt: Stamp,
+    }).strict().nullable().optional(),
 }).strict();
 export type Universe = z.infer<typeof Universe>;
 

@@ -59,10 +59,18 @@ export function characterRooms(env: Env): CharacterRooms {
     };
 }
 
-export async function openSocket(env: Env, id: string, request: Request, userId: string, name: string, role: 'owner' | 'editor'): Promise<Response> {
-    const headers = new Headers(request.headers);
+/** Drop every client `x-voyage-*` header, then set the ones this socket owns. */
+export function headersForSocket(client: Headers, userId: string, name: string, role: 'owner' | 'editor'): Headers {
+    const headers = new Headers(client);
+    for (const headerName of [...headers.keys()]) {
+        if (headerName.toLowerCase().startsWith('x-voyage-')) headers.delete(headerName);
+    }
     headers.set('x-voyage-user-id', userId);
     headers.set('x-voyage-user-name', encodeURIComponent(name));
     headers.set('x-voyage-role', role);
-    return stub(env, id).fetch(new Request(request, { headers }));
+    return headers;
+}
+
+export async function openSocket(env: Env, id: string, request: Request, userId: string, name: string, role: 'owner' | 'editor'): Promise<Response> {
+    return stub(env, id).fetch(new Request(request, { headers: headersForSocket(request.headers, userId, name, role) }));
 }

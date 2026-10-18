@@ -3,10 +3,10 @@ import { BUILDER_LIMITS, SectorHex, sha256Hex, stable } from '@voyage/shared';
 import type { Env } from '../env';
 import { chartHoldsSystem, chartTree, generationSeed, sectorOf } from '../universe/hexes';
 import { BUSY_SENTENCE, busyDelayMs, nextSliceOffset } from './generate_pace';
-import { chargeObjectBytes } from './object_charge';
+import { accountSettledBytes } from './object_charge';
 import { ONE_SECTOR_LIMIT, sectorCount } from './one_sector';
+import { releaseObjectBytes, reserveObjectBytes } from '../universe/quota';
 
-const OBJECT_QUOTA_BYTES = 250 * 1024 * 1024;
 // Workers allow 6 simultaneous outgoing connections per invocation.
 const OPEN_CONNECTIONS = 6;
 // One post is one universe mutation. 32 is faster on an 80-hex subsector than
@@ -123,7 +123,6 @@ async function runSlices(env: Env, universeId: string, jobId: string, offset: nu
     const total = first.spec.total;
     let cursor = nextSliceOffset(first.job.applied ?? [], total, size);
     const charts = new Map<string, Record<string, unknown> | null>();
-    let baseline = await objectBytes(env, universeId);
     let sliceMs = 0;
     let stopMs = 0;
     let generateMs = 0;
@@ -196,9 +195,8 @@ async function runSlices(env: Env, universeId: string, jobId: string, offset: nu
         if (pending.length > 0) {
             try {
                 const storeAt = Date.now();
-                const stored = await storeTrees(env, universeId, pending.map((item) => item.bytes), baseline);
+                const stored = await storeTrees(env, universeId, jobId, pending.map((item) => item.bytes));
                 storeMs += since(storeAt);
-                baseline = stored.baseline;
                 addedBytes = stored.added;
                 pending.forEach((item, index) => {
                     const captured = spec.captured[item.hexKey];
@@ -255,17 +253,15 @@ async function finishCounts(env: Env, universeId: string, jobId: string, account
     const countAt = Date.now();
     const pending = Math.max(0, Math.floor(accounted) - Math.floor(settled));
     if (pending > 0) {
-        await chargeObjectBytes(env.DB, universeId, jobId, pending);
-        await call(env, universeId, `/jobs/${encodeURIComponent(jobId)}/settled`, 'POST', { bytes: accounted });
+        await accountSettledBytes(env.DB, universeId, jobId, pending, async () => {
+            const released = await releaseObjectBytes(env, universeId, jobId, pending);
+            if (!released) throw new Error('The quota release failed.');
+            await call(env, universeId, `/jobs/${encodeURIComponent(jobId)}/settled`, 'POST', { bytes: accounted });
+        });
     }
     const count = (await call(env, universeId, '/hexes/count')).data as { count: number };
     await env.DB.prepare(`UPDATE universes SET hex_override_count = ? WHERE id = ?`).bind(count.count, universeId).run();
     return since(countAt);
-}
-
-async function objectBytes(env: Env, universeId: string): Promise<number> {
-    const row = await env.DB.prepare(`SELECT object_bytes AS objectBytes FROM universes WHERE id = ?`).bind(universeId).first<{ objectBytes: number }>();
-    return row?.objectBytes ?? 0;
 }
 
 async function chartHexes(env: Env, version: string | null, sector: string, cache: Map<string, Record<string, unknown> | null>): Promise<Record<string, unknown> | null> {
@@ -283,7 +279,7 @@ async function chartHexes(env: Env, version: string | null, sector: string, cach
     return hexes;
 }
 
-async function storeTrees(env: Env, universeId: string, payloads: string[], baseline: number): Promise<{ hashes: string[]; added: number; baseline: number }> {
+async function storeTrees(env: Env, universeId: string, jobId: string, payloads: string[]): Promise<{ hashes: string[]; added: number }> {
     const prepared = await Promise.all(payloads.map(async (bytes) => {
         const hash = await sha256Hex(bytes);
         return { bytes, hash, key: `u/${universeId}/objects/${hash}`, size: new TextEncoder().encode(bytes).byteLength };
@@ -300,12 +296,17 @@ async function storeTrees(env: Env, universeId: string, payloads: string[], base
         });
     }
     const added = missing.reduce((sum, item) => sum + item.size, 0);
-    if (baseline + added > OBJECT_QUOTA_BYTES) throw new Error('250 MB of objects per universe.');
-    for (let index = 0; index < missing.length; index += OPEN_CONNECTIONS) {
-        const chunk = missing.slice(index, index + OPEN_CONNECTIONS);
-        await Promise.all(chunk.map((item) => env.PRIVATE_BUCKET.put(item.key, item.bytes, {
-            httpMetadata: { contentType: 'application/json' },
-        })));
+    if (added > 0) await reserveObjectBytes(env, universeId, jobId, added);
+    try {
+        for (let index = 0; index < missing.length; index += OPEN_CONNECTIONS) {
+            const chunk = missing.slice(index, index + OPEN_CONNECTIONS);
+            await Promise.all(chunk.map((item) => env.PRIVATE_BUCKET.put(item.key, item.bytes, {
+                httpMetadata: { contentType: 'application/json' },
+            })));
+        }
+    } catch (err) {
+        if (added > 0) await releaseObjectBytes(env, universeId, jobId, added);
+        throw err;
     }
-    return { hashes: prepared.map((item) => item.hash), added, baseline: baseline + added };
+    return { hashes: prepared.map((item) => item.hash), added };
 }

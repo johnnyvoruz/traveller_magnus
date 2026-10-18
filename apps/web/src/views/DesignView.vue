@@ -217,9 +217,9 @@ function open(key: string): void {
             <button type="button" class="ui-btn" disabled><Icon name="retry" :size="13" />Disabled</button>
           </div>
           <div class="design-row">
-            <button type="button" class="ui-btn is-icon" aria-label="Previous"><Icon name="chevron-left" :size="13" /></button>
-            <button type="button" class="ui-btn is-icon" aria-label="Next"><Icon name="chevron-right" :size="13" /></button>
-            <button type="button" class="ui-btn is-icon" aria-label="Next, disabled" disabled><Icon name="chevron-right" :size="13" /></button>
+            <button type="button" class="ui-btn is-icon" aria-label="Previous" title="Previous"><Icon name="chevron-left" :size="13" /></button>
+            <button type="button" class="ui-btn is-icon" aria-label="Next" title="Next"><Icon name="chevron-right" :size="13" /></button>
+            <button type="button" class="ui-btn is-icon" aria-label="Next, disabled" title="Next, disabled" disabled><Icon name="chevron-right" :size="13" /></button>
             <button type="button" class="ui-btn design-focus">Focus ring</button>
           </div>
           <p class="design-note">Hover moves the border to teal. Focus is a 2 px amber ring at 3 px, everywhere.</p>
@@ -259,7 +259,7 @@ function open(key: string): void {
             <p v-for="n in 12" :key="n">Scrolling pane, line {{ n }}. The bar keeps a stable gutter clear of the text.</p>
           </div>
           <h3>Empty and muted</h3>
-          <p class="doss-muted design-flat">This hex has no world in the sector index.</p>
+          <p class="doss-muted design-flat">This hex has no world on the chart.</p>
         </div>
         <div class="design-card">
           <h3>Icons <code>design/Icon.vue</code>: the legacy Font Awesome glyphs (Pro-only ones marked)</h3>
@@ -442,9 +442,9 @@ function open(key: string): void {
             <BodyGlyph :glyph="sample.body.glyph" mainworld :size="26" />
           </template>
           <template v-if="showBody" #actions>
-            <button type="button" class="ui-btn is-icon" aria-label="Previous body" title="Previous"><Icon name="chevron-left" :size="13" /></button>
+            <button type="button" class="ui-btn is-icon" aria-label="Previous body" title="Previous body"><Icon name="chevron-left" :size="13" /></button>
             <span class="doss-position">{{ sample.body.index }} / {{ sample.body.total }}</span>
-            <button type="button" class="ui-btn is-icon" aria-label="Next body" title="Next"><Icon name="chevron-right" :size="13" /></button>
+            <button type="button" class="ui-btn is-icon" aria-label="Next body" title="Next body"><Icon name="chevron-right" :size="13" /></button>
           </template>
           <DossierBody v-if="showBody" :model="sample.body" :span="span" :day-night="sampleDay" :tick="sampleTick" live :place="placeSample" @open="open" />
           <DossierOverview v-else :model="sample.overview" :span="span" :error="false" orbit-link @open="showBody = true" />
@@ -472,7 +472,7 @@ function open(key: string): void {
         <div class="design-card">
           <h3>Field (live: focus turns the border teal)</h3>
           <div class="design-omni">
-            <OmniBox version="" :manifest="null" />
+            <OmniBox version="" :manifest="null" :live="false" />
           </div>
         </div>
         <div class="design-card">
@@ -498,6 +498,60 @@ function open(key: string): void {
           </div>
         </div>
       </div>
+    </section>
+
+    <section class="design-section">
+      <h2 class="ui-heading">The version-video look</h2>
+      <p class="design-note">
+        The release videos' pieces as shared classes in <code>design/base.css</code>. Use them together: a ground, the
+        brand at the top, a kicker over each section, frames round groups, dates in boxes, steps for anything in order.
+      </p>
+      <div class="ui-ground design-look">
+        <span class="ui-brand">Traveller<span class="ui-brand-dot">.</span>voyage</span>
+        <div class="ui-kicker-row design-look-head">
+          <span class="ui-new">New</span>
+          <span class="ui-kicker is-signal">On the map</span>
+        </div>
+        <div class="ui-rule"></div>
+        <p class="design-look-title">See every ship on the map</p>
+        <div class="design-look-grid">
+          <section class="ui-frame">
+            <div class="ui-frame-label">Public ships <span class="ui-frame-count">6</span></div>
+            <ol class="ui-steps">
+              <li class="ui-step">
+                <span class="ui-kicker is-signal">Map</span>
+                <p class="design-look-text">Every public ship on the chart as a lime track</p>
+              </li>
+              <li class="ui-step">
+                <span class="ui-kicker is-signal">Marketplace</span>
+                <p class="design-look-text">A storefront with a featured row and a page for each package</p>
+              </li>
+              <li class="ui-step" aria-current="step">
+                <span class="ui-kicker is-signal">Covers</span>
+                <p class="design-look-text">Add a cover from a file, by dropping, or by pasting</p>
+              </li>
+            </ol>
+          </section>
+          <div>
+            <span class="ui-kicker">Version</span>
+            <p class="design-look-version">1.2.3</p>
+            <div class="ui-rule is-red"></div>
+            <span class="ui-date">October 15, 2026</span>
+            <div class="ui-rule is-signal"></div>
+            <span class="ui-kicker">Browse by kind</span>
+          </div>
+        </div>
+      </div>
+      <dl class="design-scales">
+        <div><dt><code>.ui-ground</code></dt><dd>Radial gradient from --bg-1 at the upper left to --bg-0, the hex grid in --line-1 and a sparse star field; static. Uses its own ::before and ::after.</dd></div>
+        <div><dt><code>.ui-brand</code></dt><dd>The red-V mark and the wordmark, Orbitron 700, 0.14em. The dot is <code>.ui-brand-dot</code>, in --mark-red.</dd></div>
+        <div><dt><code>.ui-kicker</code></dt><dd>Orbitron 700 12 px capitals, 0.4em, --signal-dim. <code>.is-signal</code>: --signal, 0.24em, beside a NEW tag or over a step.</dd></div>
+        <div><dt><code>.ui-new</code></dt><dd>The NEW tag: --on-mark-red on --mark-red with its halo. <code>.ui-kicker-row</code> sets it beside a kicker.</dd></div>
+        <div><dt><code>.ui-rule</code></dt><dd>The hairline under a heading, fading to the right: red into teal; <code>.is-signal</code> teal; <code>.is-red</code> red with a halo.</dd></div>
+        <div><dt><code>.ui-frame</code></dt><dd>Thin --line-2 border, --bg-0, a faint teal halo. <code>.ui-frame-label</code> in the corner, <code>.ui-frame-count</code> beside it.</dd></div>
+        <div><dt><code>.ui-date</code></dt><dd>Outlined Orbitron date box, 12 px, --text-1 on a --line-2 edge.</dd></div>
+        <div><dt><code>.ui-steps</code></dt><dd>An <code>ol</code> of <code>.ui-step</code>: hex nodes on a vertical line in --signal-dim; the current step (<code>aria-current</code> or <code>.is-lit</code>) in --signal.</dd></div>
+      </dl>
     </section>
   </main>
 </template>
@@ -568,6 +622,43 @@ function open(key: string): void {
   border: 1px solid var(--line-1);
   border-radius: var(--r-4);
   background: var(--bg-1);
+}
+
+.design-look {
+  margin-top: var(--sp-3);
+  padding: var(--sp-6);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-4);
+  overflow: hidden;
+}
+
+.design-look-head {
+  margin-top: var(--sp-6);
+}
+
+.design-look-title {
+  color: var(--text-0);
+  font: 700 26px/1.2 var(--font-display);
+}
+
+.design-look-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: var(--sp-6);
+  margin-top: var(--sp-4);
+}
+
+.design-look-text {
+  margin: 2px 0 0;
+  color: var(--text-0);
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.design-look-version {
+  color: var(--signal);
+  font: 700 56px/1.1 var(--font-display);
+  text-shadow: 0 0 14px var(--signal-glow);
 }
 
 .design-row {

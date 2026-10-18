@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { runWrangler } from './session.js';
+import { removeTree, runWrangler } from './session.js';
 import { startDev, stopDev, wranglerBin } from './server.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -136,7 +136,7 @@ if (process.env.RUN_API_TESTS !== '1') {
 } else {
     test('a public card shows the finished route and public notes', { timeout: 180000 }, async () => {
         const persistTo = path.join(root, '.tmp', 'lane-b-card');
-        rmSync(persistTo, { recursive: true, force: true });
+        removeTree(persistTo);
         const port = 18868;
         const base = `http://127.0.0.1:${port}`;
         let child;
@@ -338,13 +338,13 @@ VALUES ('${version}', '1.2.0', 'released', '${STAMP}', '${STAMP}', 0, 0);
             assert.equal(otherIp.status, 404, JSON.stringify(otherIp.body));
         } finally {
             stopDev(child?.pid);
-            rmSync(persistTo, { recursive: true, force: true });
+            removeTree(persistTo);
         }
     });
 
     test('without 0018 the card is refused and the feed stays signed in', { timeout: 180000 }, async () => {
         const persistTo = path.join(root, '.tmp', 'lane-b-card-old');
-        rmSync(persistTo, { recursive: true, force: true });
+        removeTree(persistTo);
         const port = 18872;
         const base = `http://127.0.0.1:${port}`;
         let child;
@@ -407,7 +407,7 @@ VALUES ('${version}', '1.2.0', 'released', '${STAMP}', '${STAMP}', 0, 0);
             assert.equal(refusedIn.body.error.message, 'Public ship cards are not available yet.');
         } finally {
             stopDev(child?.pid);
-            rmSync(persistTo, { recursive: true, force: true });
+            removeTree(persistTo);
         }
     });
 }

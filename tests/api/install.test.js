@@ -219,7 +219,7 @@ VALUES ('${version}', '1.1.0', 'M1105', 'TravellerMagnus', '${SETTINGS}', '[]', 
             const previewPath = (universeId, v) => `${base}/api/universes/${universeId}/install/preview?packageId=${packageId}&version=${v}`;
             const signedOut = await jsonFetch(previewPath(target, 1));
             assert.equal(signedOut.status, 401);
-            assert.equal(signedOut.body.error.message, 'Sign in required.');
+            assert.equal(signedOut.body.error.message, 'Sign in to continue.');
             const notMine = await jsonFetch(previewPath(source, 1), { headers: { cookie: reader } });
             assert.equal(notMine.status, 404);
             assert.equal(notMine.body.error.message, 'No such universe.');
@@ -231,7 +231,7 @@ VALUES ('${version}', '1.1.0', 'M1105', 'TravellerMagnus', '${SETTINGS}', '[]', 
             assert.equal(noPackage.body.error.message, 'No such package.');
             const badQuery = await jsonFetch(`${base}/api/universes/${target}/install/preview?packageId=${packageId}&version=x`, { headers: { cookie: reader } });
             assert.equal(badQuery.status, 400);
-            assert.equal(badQuery.body.error.message, 'Invalid request.');
+            assert.equal(badQuery.body.error.message, 'That request could not be read. Try again.');
             const placed = await jsonFetch(`${previewPath(target, 1)}&placement=%7B%7D`, { headers: { cookie: reader } });
             assert.equal(placed.status, 400);
             const edition = await jsonFetch(previewPath(otherEdition, 1), { headers: { cookie: reader } });

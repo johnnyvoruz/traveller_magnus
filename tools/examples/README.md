@@ -98,3 +98,34 @@ universe (and with it every ship row and card), then each example account and it
 
 A `listing.json` may name `"cover": "covers/<pack-folder>.webp"`. `covers/<pack-folder>_640.webp` beside it is the thumbnail. The image is at most 1600 px and 2 MB, and the thumbnail at most 640 px and 200 KB. `build_local.mjs` uploads the cover after publishing. `seed_production.mjs` names each cover in the dry run and copies it with `--apply`. `--remove --apply` deletes each cover object that no other package names. Lane A made the four records-pack covers. The Feri terraces and Hollow Verge covers are 1600x900 headless shots of the local map, made with `sharp`.
 
+
+## Records-only versions (answer 6, 2026-10-17)
+
+"Regina highport contacts" and "Jewell patrons" carry records only from version 2: no hexes, the same records as
+version 1, the same package ids. Version 1 stays, so a campaign that imported it keeps what it has.
+
+- `records_only_v2.mjs` publishes the new versions in a built local state through `POST /api/packages/:id/versions`
+  (`hexKeys: []`, the latest version's `recordIds`), waits for each, and checks the manifest and row: 0 hexes, the
+  same record ids. Without `--apply` it prints the plan; a package that is already records-only is skipped.
+  ```sh
+  node tools/examples/records_only_v2.mjs --state findings/examples/local
+  node tools/examples/records_only_v2.mjs --state findings/examples/local --apply
+  ```
+- `findings/examples/local` (the state production was seeded from) already has both version 2s. Production gets
+  them with the usual copy: the dry run shows `versions 1, 2` on the two packages and `manifests 8`.
+
+## Map covers trimmed as D5 trims them (Z10, 2026-10-17)
+
+D5 (`apps/web/src/workspace/market/cover_image.ts`, `prepareCover` with `trim`) trims a map or system package's cover to its systems when the author adds it. The examples were added before that. `trim_covers.mjs` does the same trim to the files in `covers/`, using the same rule (`cover_trim.ts` `chartTrim` on a 400 px look) and the same limits (1600 px and 2 MB, 640 px and 200 KB, WebP quality 85, 72, 60 or 45). Then it re-adds the covers through the app's cover route.
+
+```sh
+node tools/examples/trim_covers.mjs                       # the plan; nothing written
+node tools/examples/trim_covers.mjs --apply               # trim covers/; the old pair goes to covers/untrimmed/
+node tools/examples/trim_covers.mjs --upload --state findings/examples/local   # PUT /api/packages/:id/cover
+```
+
+- **Hollow Verge** is trimmed: 1600x900 becomes a 1148x644 box round its six systems, with a 640x359 thumbnail. A second run keeps it whole.
+- **Feri terraces** stays whole, because D5's rule keeps it. Bright pixels reach all four edges of the 400 px look, so the box would keep the whole picture.
+- The four records packs are not maps, so they are untouched.
+- `findings/examples/local` now names the trimmed pair. Production gets it with the usual `seed_production.mjs` copy: the dry run's `cover` line for Hollow Verge names `objects/99fd85f0522f…`.
+- `findings/examples/local_backup_pre_z10` is a copy of the state from before.

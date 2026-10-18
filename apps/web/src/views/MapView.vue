@@ -6,7 +6,16 @@ import { campaign } from '../campaign/store.ts';
 import { centreAbove, fit, flight, SHORT_HOP, toWorld, zoomAt, type Camera, type Viewport } from '../map/camera.ts';
 import { partyShipTags, standInSnapshot, type CampaignSnapshot } from '../map/campaign_layer.ts';
 import { partyShipMarks, vesselsOnMap } from '../map/vessel_marks.ts';
-import { campaignDays, partyMarker } from '../workspace/party_where.ts';
+import { campaignDays, partyMarker, vesselWhere } from '../workspace/party_where.ts';
+import { JumpRingLayer, jumpNumberOf, jumpRing, type JumpRing, type RingInk } from '../map/jump_ring.ts';
+import { frameFor, NewsLayer, newsHoverWords, nodeAt, type NewsHover, type NewsInk, type Ripple, type RippleMode } from '../map/news_layer.ts';
+import NewsScrubber from '../map/NewsScrubber.vue';
+import { onNewsAsk, type NewsAsk } from '../map/news_ask.ts';
+import { newsArrivals } from '../news/arrivals.ts';
+import { buildNewsGraph, type NewsIndex } from '../news/graph.ts';
+import { NEWS_PARAMS } from '../news/params.ts';
+import { resolveAnchor as resolvePartyAnchor } from '../workspace/party.ts';
+import { fieldsOf } from '../workspace/sheet_fields.ts';
 import { formatHex, fromGlobal, hexAt, parseHex, SECTOR_ROWS, sectorRect, stepGlobal, toGlobal, type HexStep } from '../map/geometry.ts';
 import { attachInput, type InputWhy } from '../map/input.ts';
 import { MapRenderer, type PublicShipHit } from '../map/MapRenderer.ts';
@@ -17,8 +26,9 @@ import { readMotion, readTheme } from '../map/theme.ts';
 import { readTrafficInk, TrafficLayer } from '../map/traffic.ts';
 import { PPP_NAMES, tierFor, type Tier } from '../map/tiers.ts';
 import { TruthClient } from '../map/truth_client.ts';
+import { holdChart } from '../search/chart_hold.ts';
+import { paletteOpen } from '../search/palette_state.ts';
 import { dropPublicShip, publicGamesOverlay, publicOverview, watchPublicGames, watchPublicOverview } from '../map/public_games.ts';
-import OmniBox from '../components/OmniBox.vue';
 import { bodyKeys, overviewModel, pickSystem, type AllegianceName, type TreeRow } from '../dossier/model.ts';
 import { askPaneEscape, setFrame } from '../shell/frame.ts';
 import { addressPane, atPane, hostsCampaign, withQuery } from '../shell/pane.ts';
@@ -35,6 +45,12 @@ import { courseWrites } from '../workspace/public_course.ts';
 import { partyRoute, routeShipId } from '../workspace/party_route.ts';
 import { SHIP_SHEET_BELOW, SHIP_SHEET_SHARE } from '../workspace/public_ship_card.ts';
 import FirstHint from '../workspace/FirstHint.vue';
+import QuickCapture from '../workspace/QuickCapture.vue';
+import type { CaptureContext } from '../workspace/journal/quick_note.ts';
+import ChartHover from '../workspace/ChartHover.vue';
+import { worldUnder, type ChartHoverMark, type HoverSources } from '../map/hover_hit.ts';
+import MapHelp from '../workspace/MapHelp.vue';
+import { HELP_KEY, helpDue } from '../workspace/map_help.ts';
 import { FIRST_PLACE, FIRST_WORLD, firstNear, HINT_KEY, hintShown, LAST_VIEW_KEY, openingFor, parseView, viewText } from '../workspace/first_visit.ts';
 import { afterClear } from '../workspace/build/clear.ts';
 import { locateOriginY, locating, startLocate, stopLocate, systemSubject } from '../workspace/locate.ts';
@@ -104,7 +120,6 @@ function addressedScope(): { slug: string; letter: string | null } | null {
     if (view.kind === 'subsector') return { slug: view.sector, letter: view.letter };
     return null;
 }
-const omniOpen = ref(false);
 const treeRef = ref<TreeEnvelope | null>(null);
 const treeError = ref(false);
 const pendingSector = ref(false);
@@ -133,6 +148,10 @@ let unregisterClose: (() => void) | null = null;
 let unregisterSystem: (() => void) | null = null;
 let unregisterCampaign: (() => void) | null = null;
 let unregisterLocate: (() => void) | null = null;
+let unregisterQuickNote: (() => void) | null = null;
+let unregisterNews: (() => void) | null = null;
+let unregisterNewsTo: (() => void) | null = null;
+let stopNewsAsk: (() => void) | null = null;
 /** The camera has been put somewhere: a route with no place of its own leaves it there. */
 let placed = false;
 let stopDpr: (() => void) | null = null;
@@ -157,6 +176,8 @@ let sheetPx = 0;
 let locateArrived: number | null = null;
 /** The line of help for a first visit is over: dismissed, or a hex has been opened (workspace/first_visit.ts). */
 const hintDone = ref(storageGet(HINT_KEY) === '1');
+/** The map's help has been seen, by itself or from "?" (DU36). */
+const helpSeen = ref(storageGet(HELP_KEY) === '1');
 /** The tier the chart drew last: Build's first step depends on it. */
 const tierNow = ref<Tier>('galaxy');
 /**
@@ -184,6 +205,14 @@ let boxFrame = 0;
 const held: Held = { shift: false, alt: false, space: false };
 /** The mouse over the chart, in canvas pixels; null when it is elsewhere or the pointer is a finger. */
 let pointerAt: { x: number; y: number } | null = null;
+/** The zoomed-out hover's layer (DF8), the chart being dragged, and the one frame its hit-test waits for. */
+const chartHoverEl = ref<InstanceType<typeof ChartHover> | null>(null);
+/** The jump-range ring's own canvas and layer (DU2), and its ink. */
+const ringEl = ref<HTMLCanvasElement | null>(null);
+let ringLayer: JumpRingLayer | null = null;
+let ringInk: RingInk = { line: '', fill: '' };
+let chartPanning = false;
+let chartHoverFrame = 0;
 /** The drag under way: the chart moving, or a box. */
 let dragging: Gesture | null = null;
 /** The hover last drawn, so a pointer that stays on one hex draws nothing new. */
@@ -363,8 +392,46 @@ function showStatus(): void {
     if (fallbackNote) status.value = fallbackNote;
     else if (!version) status.value = 'Loading the chart.';
     else if (!overviewReady) status.value = 'Loading the overview.';
-    else if (pendingIndexes.size > 0) status.value = 'Loading ' + pendingIndexes.size + ' sector indexes.';
+    else if (pendingIndexes.size > 0) status.value = 'Loading ' + (pendingIndexes.size === 1 ? '1 sector.' : pendingIndexes.size + ' sectors.');
     else status.value = selectionLine();
+    announceSelection();
+}
+
+// ---- The map's live region (DU22b): the selection, said once when it changes ----
+/**
+ * What a screen reader hears, politely, when the selection changes by a click, a key or a search: the
+ * system and its place ("Regina, Spinward Marches 1910"), an empty hex in Build, or how many hexes are
+ * selected. Never on hover (hover does not change the selection), never the loading lines or a UWP's
+ * letters. A hex whose sector has not loaded yet is said once it has.
+ */
+const announced = ref('');
+let announcedKey = '';
+
+function selectionWords(): string {
+    if (buildReady() && build.selection.length > 1) return plural(build.selection.length, 'hex', 'hexes') + ' selected';
+    if (!selected || !chart) return '';
+    const index = mapIndex(selected.slug);
+    if (!index) return '';
+    let sectorName = selected.slug;
+    for (const sector of chart.sectors) if (sector.slug === selected.slug) sectorName = sector.name;
+    const place = sectorName + ' ' + selected.hhhh;
+    const row = index.hexes[selected.hhhh];
+    if (row) return (row.name || 'Unnamed system') + ', ' + place;
+    return buildReady() ? 'Empty hex, ' + place : '';
+}
+
+function announceSelection(): void {
+    const many = buildReady() && build.selection.length > 1;
+    const key = many ? 'many:' + build.selection.length : selected ? selected.slug + '/' + selected.hhhh : '';
+    if (!key) {
+        announcedKey = '';
+        return;
+    }
+    if (key === announcedKey) return;
+    const words = selectionWords();
+    if (!words) return;
+    announcedKey = key;
+    announced.value = words;
 }
 
 const dossier = computed(() => dossierRoute(route.path));
@@ -401,6 +468,7 @@ function syncSelection(): void {
     // The same for a hex being previewed: it is drawn dashed until the system is kept.
     const marked = buildReady() && (build.selection.length > 1 || build.preview !== null || build.rolling !== '');
     if (renderer) renderer.setSelection(marked ? null : selected);
+    announceSelection();
 }
 
 function placeKey(state: DossierRoute): string {
@@ -706,7 +774,7 @@ function onEscape(): void {
             return;
         }
     }
-    if (omniOpen.value && (campaignOpen.value || dossierShown.value)) return;
+    if (paletteOpen.value && (campaignOpen.value || dossierShown.value)) return;
     const state = dossierRoute(route.path);
     let bodyOpen = state.kind === 'body';
     if (state.kind === 'body' && treeRef.value) {
@@ -748,6 +816,23 @@ function chromeRow(): number {
     const canvas = canvasEl.value;
     if (!field || !canvas) return 0;
     return Math.max(0, field.getBoundingClientRect().bottom - canvas.getBoundingClientRect().top);
+}
+
+/**
+ * Where subsector titles may stick (DS5): under the lowest floating control at the top of the chart, the
+ * search row or, on a phone, the date chip on the row under it. Measured, not assumed, as chromeRow is.
+ */
+function titleTop(): number {
+    const canvas = canvasEl.value;
+    const app = canvas ? canvas.closest('.app') : null;
+    if (!canvas || !app) return 0;
+    const top = canvas.getBoundingClientRect().top;
+    let bottom = 0;
+    for (const el of app.querySelectorAll('.omni-field, .stardate')) {
+        const box = el.getBoundingClientRect();
+        if (box.height > 0) bottom = Math.max(bottom, box.bottom - top);
+    }
+    return bottom > 0 ? bottom + TITLE_CLEAR : 0;
 }
 
 /** A camera the address asked for, put in the middle of the chart the pane leaves. */
@@ -793,6 +878,9 @@ function clearPane(): void {
     const next = clearGlide(base, area(true), box, CLEAR_MARGIN);
     if (next) flyTo(next);
 }
+
+/** Subsector titles stick this far below the lowest floating control (legacy insetT's 6). */
+const TITLE_CLEAR = 6;
 
 /** A toast needs this much of the chart beside the panel; with less it goes to the search row. */
 const TOAST_ROOM = 400;
@@ -856,8 +944,14 @@ function frame(): void {
         // Zoomed out, every hex with public ships is a track (the overview); the renderer uses it only off the hex zoom.
         renderer.setPublicOverview(publicOverview());
         const drawn = renderer.draw(cam);
+        if (ringLayer) ringLayer.draw(cam, viewport(), shownRing.value, ringInk);
+        if (newsLayer) newsLayer.draw(cam, viewport(), ripple && news.value ? frameFor(ripple, news.value.t) : null, newsInk, newsHoverNow());
+        // The camera may have moved under a still mouse: the hover follows, at most once a frame.
+        if (pointerAt) queueChartHover();
         const el = canvasEl.value;
-        if (el) el.dataset.drawMs = drawn.ms.toFixed(2);
+        if (el) {
+            el.dataset.drawMs = drawn.ms.toFixed(2);
+        }
         if (tierNow.value !== drawn.tier) tierNow.value = drawn.tier;
         // Other people's public games on this chart (map/public_games.ts): asked for once a sector, drawn at the hex tier.
         watchPublicGames({
@@ -1134,7 +1228,10 @@ function onResize(): void {
     const el = canvasEl.value;
     if (!el || !renderer) return;
     renderer.resize(el.clientWidth, el.clientHeight, devicePixelRatio());
+    renderer.setTitleTop(titleTop());
     if (traffic) traffic.resize(el.clientWidth, el.clientHeight, devicePixelRatio());
+    if (ringLayer) ringLayer.resize(el.clientWidth, el.clientHeight, devicePixelRatio());
+    if (newsLayer) newsLayer.resize(el.clientWidth, el.clientHeight, devicePixelRatio());
     if (pendingApply) applyRoute();
     markDirty();
 }
@@ -1143,6 +1240,7 @@ async function boot(): Promise<void> {
     try {
         version = await client.currentVersion();
         versionRef.value = version;
+        holdChart(version, null);
         const manifestPromise = client.manifest(version);
         const overviewPromise = client.overview(version);
         const politiesPromise = client.polities(version);
@@ -1155,6 +1253,7 @@ async function boot(): Promise<void> {
         const manifest = await manifestPromise;
         truthChart = manifest;
         manifestRef.value = manifest;
+        holdChart(version, manifest);
         applyChart();
         showStatus();
         applyRoute();
@@ -1165,7 +1264,9 @@ async function boot(): Promise<void> {
         showStatus();
         markDirty();
     } catch (err) {
-        status.value = err instanceof Error ? err.message : 'The chart could not be loaded.';
+        // One sentence for the person; the client's own words ("TruthClient: ...") are not theirs (Lane E's E2).
+        void err;
+        status.value = 'The chart could not be loaded.';
     }
 }
 
@@ -1177,6 +1278,19 @@ onMounted(() => {
     renderer.setTrafficColour(ink.traffic);
     renderer.setPartyRoute(partyRouteNow.value);
     if (trafficEl.value) traffic = new TrafficLayer(trafficEl.value, ink);
+    if (ringEl.value) {
+        ringLayer = new JumpRingLayer(ringEl.value);
+        const signal = getComputedStyle(el).getPropertyValue('--signal').trim();
+        ringInk = { line: signal, fill: signal };
+    }
+    if (newsEl.value) {
+        newsLayer = new NewsLayer(newsEl.value);
+        const style = getComputedStyle(el);
+        newsInk = { line: style.getPropertyValue('--chart-news').trim(), bg: style.getPropertyValue('--bg-0').trim(), font: style.getPropertyValue('--font-data').trim() };
+        const ms = Number.parseFloat(style.getPropertyValue('--t-ripple'));
+        if (Number.isFinite(ms) && ms > 0) newsPlayMs = ms;
+    }
+    stopNewsArrive = client.onArrive((slug) => { if (news.value && newsSlugs.includes(slug)) runNews(); });
     renderer.setIndexSource((slug) => mapIndex(slug));
     observer = new ResizeObserver(() => onResize());
     observer.observe(el);
@@ -1205,7 +1319,9 @@ onMounted(() => {
         box: { wants: boxWants, start: boxStart, move: boxMove, end: boxEnd, cancel: boxCancel },
         panning: (on) => {
             dragging = on && buildReady() ? 'pan' : null;
+            chartPanning = on;
             paintHover();
+            queueChartHover();
         },
         // Legacy js/canvas_input.js:361-373: a double click on a system with orbit data enters its orbit view.
         doubleClick: (sx, sy) => {
@@ -1251,6 +1367,30 @@ onMounted(() => {
         name: 'Close panel',
         keys: ['Escape'],
         run: () => { onEscape(); },
+    });
+    // News ripples (XD1): from the selected system, from the palette.
+    unregisterNews = registerCommand({
+        id: 'news-from-here',
+        name: 'How fast does news travel from here',
+        runnable: () => newsSource() !== null,
+        run: () => { startNews(); },
+    });
+    // The reverse (XD2): from the party's system, from the palette and the Party tab's Where card.
+    unregisterNewsTo = registerCommand({
+        id: 'news-to-party',
+        name: 'How old is the news here',
+        runnable: () => partyNewsSource() !== null,
+        run: () => { startNews('to'); },
+    });
+    // A record or an entry as the news (XD3): from its place, on its date.
+    stopNewsAsk = onNewsAsk(spreadNews);
+    // Quick capture (DU7): Q, or "Quick note" in the palette, with a campaign open.
+    unregisterQuickNote = registerCommand({
+        id: 'quick-note',
+        name: 'Quick note',
+        keys: ['q'],
+        runnable: () => session.user !== null && campaign.status === 'ready',
+        run: () => { openCapture(); },
     });
     unregisterLocate = registerCommand({
         id: 'locate-system',
@@ -1310,6 +1450,30 @@ watch(
 
 /** Build can be switched on: signed in, with a universe open. */
 const buildOffered = computed(() => session.user !== null && campaign.status === 'ready' && campaign.universeId !== null);
+
+// ---- Quick capture (streams/D.md DU7) ----
+/** The box, and what it mentions: the selected hex and the record open in the campaign panel, when they were opened. */
+const capture = ref<CaptureContext | null>(null);
+
+function openCapture(): void {
+    const hexKey = selected ? selected.slug + '/' + selected.hhhh : null;
+    const pane = shownPane.value;
+    const recordId = pane.kind === 'campaign' && pane.record ? pane.record : null;
+    const record = recordId ? campaign.records[recordId] : null;
+    capture.value = {
+        hex: hexKey ? { key: hexKey, name: hexName(hexKey) } : null,
+        record: record && !record.deleted ? { id: record.id, name: record.name } : null,
+    };
+}
+
+function closeCapture(): void {
+    capture.value = null;
+    if (canvasEl.value) canvasEl.value.focus();
+}
+
+function openCaptured(entryId: string): void {
+    void router.push(atPane(route.path, route.query, { kind: 'journal', entry: entryId }));
+}
 const buildUniverse = computed(() => {
     void campaign.universeId;
     const store = buildStore();
@@ -1346,6 +1510,21 @@ const hintOn = computed(() => hintShown({
     paneOpen: shownPane.value.kind !== 'shut',
     buildOn: build.on && buildOffered.value,
 }));
+
+// ---- The map's own help (workspace/map_help.ts, DU36): by itself once, after the line of help ----
+const helpAuto = computed(() => helpDue({
+    seen: helpSeen.value,
+    hintDone: hintDone.value,
+    chartReady: manifestRef.value !== null,
+    paneOpen: shownPane.value.kind !== 'shut',
+    buildOn: build.on && buildOffered.value,
+}));
+
+function helpWasSeen(): void {
+    if (helpSeen.value) return;
+    helpSeen.value = true;
+    storageSet(HELP_KEY, '1');
+}
 
 function endHint(): void {
     if (hintDone.value) return;
@@ -1438,6 +1617,236 @@ function centrePlacing(): void {
     }
 }
 
+/**
+ * The jump-range ring (DU2): with a party ship's record open in the campaign panel, the hexes within its
+ * jump number (the Jump Drive Output typed on its sheet) of the system it is at. Null otherwise: no ship
+ * record open, not a party ship, no jump number typed, or nowhere on the chart.
+ */
+const shownRing = computed((): JumpRing | null => {
+    void campaign.seq;
+    const pane = shownPane.value;
+    const id = pane.kind === 'campaign' ? pane.record : null;
+    const ship = id ? campaign.records[id] : null;
+    const party = campaign.settings ? campaign.settings.party : null;
+    if (!ship || ship.deleted || ship.type !== 'vessel' || !party || !party.vesselIds.includes(ship.id)) return null;
+    const jump = jumpNumberOf(fieldsOf(ship.sheet));
+    if (jump === null) return null;
+    const where = vesselWhere(ship, campaign.records, campaignDays(campaign.clock));
+    const place = resolvePartyAnchor(where.anchor, campaign.records);
+    const at = place ? parseHexKey(place.hexKey) : null;
+    const sector = at ? sectorOf(at.slug) : null;
+    const local = at ? parseHex(at.hex) : null;
+    if (!sector || !local) return null;
+    const global = toGlobal(sector.x, sector.y, local.col, local.row);
+    return jumpRing({ q: global.q, r: global.r }, jump);
+});
+watch(shownRing, () => markDirty());
+
+// ---- How fast news travels (spec_xboat_ripples.md §3; streams/D.md XD1) ----------------------------------
+
+/** The ripple's own canvas and layer, its ink, and how long one play takes (`--t-ripple`). */
+const newsEl = ref<HTMLCanvasElement | null>(null);
+let newsLayer: NewsLayer | null = null;
+let newsInk: NewsInk = { line: '', bg: '', font: '' };
+let newsPlayMs = 6000;
+/** What the scrubber says and where it is; null with no ripple. */
+const news = ref<{ mode: RippleMode; source: string; sourceName: string; day0: number; t: number; horizon: number; playing: boolean; capped: boolean } | null>(null);
+/** The system under the mouse, or the one last tapped, while a ripple shows: its sentence is drawn (§3.4). */
+let newsPointed: string | null = null;
+let newsPinned: string | null = null;
+/** Lane A's run over the sectors the ripple has loaded, and those sectors (it grows to the cap as the news reaches). */
+let ripple: Ripple | null = null;
+let newsSlugs: string[] = [];
+let newsFrame = 0;
+let playStart = 0;
+let playFrom = 0;
+let stopNewsArrive: (() => void) | null = null;
+const canPlayNews = !prefersReducedMotion();
+
+/** The selected system, when it has one: where the news starts. */
+function newsSource(): { key: string; slug: string; name: string } | null {
+    if (!selected || !chart || !version) return null;
+    return systemSource(selected.slug, selected.hhhh);
+}
+
+/** A system on the chart as a ripple's source: its key and its name. Null when the hex has none. */
+function systemSource(slug: string, hhhh: string): { key: string; slug: string; name: string } | null {
+    const index = mapIndex(slug);
+    const row = index ? index.hexes[hhhh] : null;
+    if (!row) return null;
+    return { key: slug + '/' + hhhh, slug, name: newsName(slug, hhhh) };
+}
+
+/** A system's name for the sentences: its own, else the sector and hex. */
+function newsName(slug: string, hhhh: string): string {
+    const index = mapIndex(slug);
+    const row = index ? index.hexes[hhhh] : null;
+    return (row && row.name) || slug.replace(/_/g, ' ') + ' ' + hhhh;
+}
+
+/** The party's system at the campaign date (party_where.ts), for the reverse. */
+function partyNewsSource(): { key: string; slug: string; name: string } | null {
+    if (campaign.status !== 'ready' || !campaign.settings || !chart || !version) return null;
+    const mark = partyMarker(campaign.settings.party, campaign.records, campaignDays(campaign.clock));
+    const place = mark ? parseHexKey(mark.hexKey) : null;
+    return place ? systemSource(place.slug, place.hex) : null;
+}
+
+function startNews(mode: RippleMode = 'from'): void {
+    const source = mode === 'to' ? partyNewsSource() : newsSource();
+    if (!source) return;
+    stopPlay();
+    newsSlugs = [source.slug];
+    newsPointed = null;
+    newsPinned = null;
+    news.value = { mode, source: source.key, sourceName: source.name, day0: campaignDays(campaign.clock), t: 0, horizon: NEWS_PARAMS.horizonDays, playing: false, capped: false };
+    runNews();
+}
+
+/**
+ * "Spread this news" (§4.2): the ripple from the record's place on the record's date, the scrubber
+ * at Today, so the first thing seen is where the news is now. Before the news, or with no campaign
+ * date, it opens on its own day.
+ */
+function spreadNews(ask: NewsAsk): void {
+    const place = parseHexKey(ask.hexKey);
+    if (!place || !chart || !version) return;
+    const sector = chart.sectors.find((item) => item.slug === place.slug);
+    if (!sector) return;
+    const index = mapIndex(place.slug);
+    if (index && !index.hexes[place.hex]) return;
+    stopPlay();
+    newsSlugs = [place.slug];
+    newsPointed = null;
+    newsPinned = null;
+    const today = campaign.clock ? campaign.clock.days - ask.day0 : 0;
+    news.value = { mode: 'from', source: ask.hexKey, sourceName: newsName(place.slug, place.hex), day0: ask.day0, t: Math.max(0, Math.min(today, NEWS_PARAMS.horizonDays)), horizon: NEWS_PARAMS.horizonDays, playing: false, capped: false };
+    if (!index) client.want(version, [place.slug]);
+    runNews();
+}
+
+/** The data block for the system pointed at or tapped, while a ripple shows. */
+function newsHoverNow(): NewsHover | null {
+    const state = news.value;
+    const key = newsPointed ?? newsPinned;
+    if (!ripple || !state || !key) return null;
+    const node = ripple.graph.nodes.find((item) => item.key === key);
+    if (!node) return null;
+    const place = parseHexKey(key);
+    const words = newsHoverWords(ripple, key, { source: state.sourceName, here: place ? newsName(place.slug, place.hex) : key });
+    const at = nodeAt(ripple, node.q, node.r);
+    return at ? { x: at.x, y: at.y, words } : null;
+}
+
+/** The ripple's system under a point on the chart canvas, or null. */
+function newsKeyAt(point: { x: number; y: number } | null): string | null {
+    if (!ripple || !point) return null;
+    const world = toWorld(cam, viewport(), point.x, point.y);
+    const hit = hexAt(world.x, world.y);
+    const node = nodeAt(ripple, hit.q, hit.r);
+    return node ? node.key : null;
+}
+
+/** The mouse moved or left: the block follows it, redrawn only when the system under it changes. */
+function paintNewsHover(): void {
+    const key = newsKeyAt(pointerAt);
+    if (key === newsPointed) return;
+    newsPointed = key;
+    markDirty();
+}
+
+/**
+ * Lane A's run over the sectors loaded so far; the sectors its frontier reaches are asked for, up to
+ * the cap, and the run goes again as each arrives (client.onArrive). Already loaded ones go at once.
+ */
+function runNews(): void {
+    const now = news.value;
+    if (!now || !chart || !version) return;
+    for (let round = 0; round < NEWS_PARAMS.sectorCap; round++) {
+        const indexes: NewsIndex[] = [];
+        for (const slug of newsSlugs) {
+            const index = client.index(version, slug);
+            const sector = chart.sectors.find((item) => item.slug === slug);
+            if (index && sector) indexes.push({ slug, x: sector.x, y: sector.y, hexes: index.hexes, metadata: index.metadata });
+        }
+        const graph = buildNewsGraph(indexes, [], NEWS_PARAMS);
+        const run = newsArrivals(graph, NEWS_PARAMS, now.source);
+        ripple = { source: now.source, mode: now.mode, day0: now.day0, horizonDays: run.horizonDays ?? NEWS_PARAMS.horizonDays, graph, arrivals: run.arrivals };
+        now.horizon = ripple.horizonDays;
+        const more: string[] = [];
+        let capped = false;
+        for (const want of run.wanted) {
+            const sector = chart.sectors.find((item) => item.x === want.sx && item.y === want.sy && item.canonical);
+            if (!sector || newsSlugs.includes(sector.slug) || more.includes(sector.slug)) continue;
+            if (newsSlugs.length + more.length >= NEWS_PARAMS.sectorCap) {
+                capped = true;
+                break;
+            }
+            more.push(sector.slug);
+        }
+        now.capped = capped;
+        if (!more.length) break;
+        newsSlugs.push(...more);
+        client.want(version, more);
+        // Run again now only when one of them was already loaded; otherwise its arrival runs it.
+        if (!more.some((slug) => client.index(version, slug) !== null)) break;
+    }
+    markDirty();
+}
+
+function seekNews(t: number): void {
+    const state = news.value;
+    if (!state) return;
+    state.t = Math.max(0, Math.min(t, ripple ? ripple.horizonDays : NEWS_PARAMS.horizonDays));
+    if (state.playing) {
+        playFrom = state.t;
+        playStart = now();
+    }
+    markDirty();
+}
+
+/** Play: day 0 to the horizon over one `--t-ripple`, again and again until paused. */
+function playNews(): void {
+    const state = news.value;
+    if (!state || !canPlayNews) return;
+    const horizon = ripple ? ripple.horizonDays : NEWS_PARAMS.horizonDays;
+    if (state.t >= horizon) state.t = 0;
+    state.playing = true;
+    playFrom = state.t;
+    playStart = now();
+    const step = (): void => {
+        newsFrame = 0;
+        const live = news.value;
+        if (!live || !live.playing) return;
+        const t = playFrom + ((now() - playStart) / newsPlayMs) * horizon;
+        if (t >= horizon) {
+            live.t = horizon;
+            playFrom = 0;
+            playStart = now();
+        } else live.t = t;
+        markDirty();
+        newsFrame = nextFrame(step);
+    };
+    newsFrame = nextFrame(step);
+}
+
+function stopPlay(): void {
+    if (news.value) news.value.playing = false;
+    if (newsFrame) cancelFrame(newsFrame);
+    newsFrame = 0;
+}
+
+function closeNews(): void {
+    stopPlay();
+    news.value = null;
+    ripple = null;
+    newsSlugs = [];
+    newsPointed = null;
+    newsPinned = null;
+    markDirty();
+    if (canvasEl.value) canvasEl.value.focus();
+}
+
 function sectorOf(slug: string): SectorPlace | null {
     const slot = parseSlot(slug);
     if (slot) return { slug, x: slot.x, y: slot.y };
@@ -1497,6 +1906,11 @@ function chartClick(sx: number, sy: number): void {
     const place = fromGlobal(hit.q, hit.r);
     const hhhh = formatHex(place.col, place.row);
     const onWorld = holdsWorld(place.sx, place.sy, hhhh);
+    // While a ripple shows, a tap on a system says its sentence, as hovering does with a mouse (§3.6).
+    if (ripple && pressKind === 'touch') {
+        newsPinned = newsKeyAt({ x: sx, y: sy });
+        markDirty();
+    }
     // A record's place is being picked: a system clicked goes to it, and nothing else happens.
     if (picking.value) {
         const sector = onWorld && chart ? chart.sectors.find((item) => item.x === place.sx && item.y === place.sy && item.canonical) : null;
@@ -1640,8 +2054,14 @@ function hexTier(): boolean {
     return tierFor(cam.ppp) === 'hex';
 }
 
+/** A player does not get the Builder's right-click menu or Select hexes (P8). The rail's Build button stays; P6 locks that. */
+function playerMap(): boolean {
+    return campaign.role === 'player';
+}
+
 /** A press in Build draws a box when Shift is held, or the Select hexes tool is on (Space, the middle button and two fingers still move the chart). */
 function boxWants(event: PointerEvent): boolean {
+    if (playerMap()) return false;
     if (!buildReady() || sectorUi.moving || picking.value) return false;
     readHeld(event);
     return gestureFor({ ...held, build: true, tool: build.selecting, button: event.button, hexTier: hexTier() }) !== 'pan';
@@ -1741,12 +2161,90 @@ function onPointerHover(event: PointerEvent): void {
     pointerAt = point;
     paintHover();
     paintTrackHover();
+    paintNewsHover();
+    queueChartHover();
 }
 
 function onPointerOut(): void {
     pointerAt = null;
     paintHover();
     paintTrackHover();
+    paintNewsHover();
+    queueChartHover();
+}
+
+// ---- Zoomed out, what a click opens (streams/D.md DF8) ---------------------------------------------
+
+/** Where the hover finds a world and its words: what is loaded, never a fetch (map/hover_hit.ts). */
+const hoverSources: HoverSources = {
+    sectorAt: (sx, sy) => {
+        const sector = chart ? chart.sectors.find((item) => item.x === sx && item.y === sy && item.canonical) : null;
+        return sector ? { slug: sector.slug, name: sector.name } : null;
+    },
+    cells: (slug) => {
+        const found = overview ? overview.sectors.find((item) => item.slug === slug) : null;
+        return found ? found.cells : null;
+    },
+    name: (slug, hhhh) => {
+        const index = mapIndex(slug);
+        const entry = index ? index.hexes[hhhh] : null;
+        if (entry && entry.name) return entry.name;
+        return renderer ? renderer.farLabelName(slug, hhhh) : null;
+    },
+};
+
+/** A place's words from world units: its system's name where it is loaded, else its sector and hex. */
+function placeAt(wx: number, wy: number): string {
+    const hit = hexAt(wx, wy);
+    const place = fromGlobal(hit.q, hit.r);
+    const sector = hoverSources.sectorAt(place.sx, place.sy);
+    if (!sector) return '';
+    const hhhh = formatHex(place.col, place.row);
+    return hoverSources.name(sector.slug, hhhh) || sector.name + ' ' + hhhh;
+}
+
+/**
+ * What a click at the mouse would open below the hex tier, in chartClick's own order: a track flies
+ * in, the party's or a vessel's marker opens it, a hex that holds a world opens its system. Null at the
+ * hex tier (it has its own marks), in Build (its hover is BuildMarks'), while picking or dragging.
+ */
+function chartHoverMark(): ChartHoverMark | null {
+    const at = pointerAt;
+    if (!renderer || !at || chartPanning || picking.value || buildReady() || tierFor(cam.ppp) === 'hex') return null;
+    const track = renderer.trackAt(at.x, at.y);
+    if (track && track.fly) {
+        const ring = renderer.markRing(at.x, at.y);
+        const where = placeAt(track.fly.x, track.fly.y);
+        if (ring) return { ...ring, title: where || 'Ships', line: 'Ships here. Select to zoom in.' };
+    }
+    if (renderer.partyAt(at.x, at.y)) {
+        const ring = renderer.markRing(at.x, at.y);
+        if (ring) return { ...ring, title: 'The party', line: 'Select to open the Party tab.' };
+    }
+    const vesselId = renderer.vesselAt(at.x, at.y);
+    if (vesselId) {
+        const ring = renderer.markRing(at.x, at.y);
+        const record = campaign.records[vesselId];
+        if (ring) return { ...ring, title: record ? record.name : 'A vessel', line: 'Select to open its record.' };
+    }
+    return worldUnder(at.x, at.y, cam, viewport(), hoverSources);
+}
+
+function queueChartHover(): void {
+    if (chartHoverFrame) return;
+    chartHoverFrame = nextFrame(paintChartHover);
+}
+
+/** The hover on its own layer, and the pointer cursor while it shows; the chart is not redrawn. */
+function paintChartHover(): void {
+    chartHoverFrame = 0;
+    const layer = chartHoverEl.value;
+    const el = canvasEl.value;
+    if (!layer || !el) return;
+    const mark = chartHoverMark();
+    layer.show(mark, el.clientWidth);
+    if (mark) el.dataset.hoverable = '1';
+    else delete el.dataset.hoverable;
 }
 
 /** What pressed the chart last: a tap on a public ship shows its card, a click does not. */
@@ -1963,9 +2461,10 @@ let hoverWordsHeld = '';
 
 /** Right-click in Build: the acts for the hex under the pointer, or for the selection it is part of. */
 function onBuildMenu(event: MouseEvent): void {
+    if (playerMap()) return;
     if (!buildReady()) return;
     // The menu key opened it already (a browser may still send its own contextmenu after the key).
-    if (performance.now() - keyMenuAt < 400) {
+    if (now() - keyMenuAt < 400) {
         event.preventDefault();
         return;
     }
@@ -1993,6 +2492,7 @@ function onBuildMenu(event: MouseEvent): void {
 let keyMenuAt = 0;
 function onMenuKey(event: KeyboardEvent): boolean {
     if (!(event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10'))) return false;
+    if (playerMap()) return false;
     if (!buildReady() || typingTarget(event)) return false;
     event.preventDefault();
     const keys = menuKeysFor(selected ? selected.slug + '/' + selected.hhhh : null, actingKeys());
@@ -2001,7 +2501,7 @@ function onMenuKey(event: KeyboardEvent): boolean {
     const world = hexWorldBox(keys[0], sectorOf);
     const rect = el ? el.getBoundingClientRect() : { left: 0, top: 0 };
     const box = world ? screenBox(cam, viewport(), world) : { left: 0, top: 0, right: 0, bottom: 0 };
-    keyMenuAt = performance.now();
+    keyMenuAt = now();
     menuRef.value = { anchor: { left: rect.left + box.left, top: rect.top + box.top, right: rect.left + box.right, bottom: rect.top + box.bottom }, keys };
     return true;
 }
@@ -2057,10 +2557,11 @@ watch(buildOffered, (offered) => {
         : null;
 }, { immediate: true });
 
-watch(() => build.on && buildOffered.value, (on) => {
+watch(() => [build.on && buildOffered.value, campaign.role] as const, ([on]) => {
     for (const remove of unregisterBuildActs) remove();
+    const commands = playerMap() ? BUILD_COMMANDS.filter((item) => item.id !== 'build-select') : BUILD_COMMANDS;
     unregisterBuildActs = on
-        ? BUILD_COMMANDS.map((item) => registerCommand({
+        ? commands.map((item) => registerCommand({
             id: item.id,
             name: item.name,
             ...(item.keys ? { keys: [...item.keys] } : {}),
@@ -2068,6 +2569,7 @@ watch(() => build.on && buildOffered.value, (on) => {
             run: () => { runBuildAct(item.id, actingKeys()); },
         }))
         : [];
+    if (playerMap()) build.selecting = false;
     if (!on) menuRef.value = null;
 }, { immediate: true });
 
@@ -2527,6 +3029,7 @@ onBeforeUnmount(() => {
     if (raf) cancelFrame(raf);
     if (traffic) traffic.destroy();
     if (queryFrame) cancelFrame(queryFrame);
+    if (chartHoverFrame) cancelFrame(chartHoverFrame);
     if (detachInput) detachInput();
     if (stopDpr) stopDpr();
     if (observer) observer.disconnect();
@@ -2536,6 +3039,12 @@ onBeforeUnmount(() => {
     if (unregisterSystem) unregisterSystem();
     if (unregisterCampaign) unregisterCampaign();
     if (unregisterLocate) unregisterLocate();
+    if (unregisterQuickNote) unregisterQuickNote();
+    if (unregisterNews) unregisterNews();
+    if (unregisterNewsTo) unregisterNewsTo();
+    if (stopNewsAsk) stopNewsAsk();
+    if (newsFrame) cancelFrame(newsFrame);
+    if (stopNewsArrive) stopNewsArrive();
     if (unregisterBuild) unregisterBuild();
     for (const remove of unregisterBuildActs) remove();
     setBuildMap(null);
@@ -2583,36 +3092,60 @@ onBeforeUnmount(() => {
       :slug-at="placeSlugAt"
       :key-at="placeKeyAt"
     />
+    <canvas ref="ringEl" class="jump-ring" aria-hidden="true"></canvas>
+    <canvas ref="newsEl" class="news-layer" aria-hidden="true"></canvas>
     <canvas ref="trafficEl" class="traffic" aria-hidden="true"></canvas>
+    <ChartHover ref="chartHoverEl" />
     <PublicShipSheet :state="shipSheet" :width="shipSheetSize.width" :height="shipSheetSize.height" @close="closeShip()" @step="stepShip" />
     <Rail
       ref="railEl"
       :panel-open="dossierShown"
-      :search-open="omniOpen"
+      :search-open="paletteOpen"
       :campaign-open="campaignOpen"
       :account-open="accountOpen"
       :build-offered="buildOffered"
       :build-on="build.on && buildOffered"
     />
+    <!-- P8: Select hexes is hidden when campaign.role is player (this :select-hexes binding). -->
     <BuildStrip
       v-if="build.on && buildUniverse"
       :name="buildUniverse.name"
       :truth-version="buildUniverse.truthVersion"
       :pane-open="dossierShown"
       :tier="tierNow"
+      :select-hexes="campaign.role !== 'player'"
       @clear="clearSelection()"
       @width="setStripWidth"
       @start="startBuild"
     />
     <BuildMenu v-if="menuRef && buildMenu" :title="buildMenu.title" :items="buildMenu.items" :anchor="menuRef.anchor" @pick="pickBuildMenu" @close="closeBuildMenu" />
-    <OmniBox :version="versionRef" :manifest="manifestRef" @open="omniOpen = $event" />
-    <FirstHint v-if="hintOn" @dismiss="dismissHint" />
+    <FirstHint v-if="hintOn && !capture" @dismiss="dismissHint" />
+    <QuickCapture v-if="capture" :context="capture" @close="closeCapture" @open="openCaptured" />
+    <NewsScrubber
+      v-if="news"
+      :reverse="news.mode === 'to'"
+      :source-name="news.sourceName"
+      :t="news.t"
+      :horizon-days="news.horizon"
+      :day0="news.day0"
+      :playing="news.playing"
+      :can-play="canPlayNews"
+      :today-at="campaign.clock ? campaign.clock.days - news.day0 : null"
+      :capped="news.capped"
+      @seek="seekNews"
+      @play="playNews"
+      @pause="stopPlay"
+      @close="closeNews"
+    />
+    <MapHelp v-if="!shipSheet" :build="buildOffered" :auto="helpAuto" @seen="helpWasSeen" />
     <!-- The pane paints above this view. The date has to leave it, or a full sheet covers the chip. -->
     <Teleport to=".app">
       <StardateChip @open="openDateEditor" />
     </Teleport>
     <AccountMenu :open="accountOpen" @close="closeAccount" @campaign="openCampaignFromMenu" />
-    <p class="status ui-status" aria-live="polite">{{ status }}</p>
+    <p class="status ui-status">{{ status }}</p>
+    <!-- DU22b: the live region speaks only when the selection changes; the status line above changes as the map loads. -->
+    <p class="map-announce" aria-live="polite" data-map-announce>{{ announced }}</p>
   </div>
 </template>
 
@@ -2636,6 +3169,18 @@ onBeforeUnmount(() => {
 /* The ships' tracks, over the chart and in its pixels. They take no pointer: the chart hit-tests them. */
 .map > canvas.traffic {
   pointer-events: none;
+}
+/* The jump-range ring (DU2) takes no pointer either: the chart under it is clicked as before. */
+.map > canvas.jump-ring {
+  pointer-events: none;
+}
+/* Nor the news ripple's layer (XD1). */
+.map > canvas.news-layer {
+  pointer-events: none;
+}
+/* Zoomed out, over something a click opens (DF8). Build's own cursors, below, win where they are set. */
+.map > canvas[data-hoverable] {
+  cursor: pointer;
 }
 .map > canvas:focus {
   outline: 1px solid var(--signal);
@@ -2675,6 +3220,13 @@ onBeforeUnmount(() => {
   --toast-flow: row-reverse;
   --toast-align: flex-start;
   --toast-max: none;
+}
+.map-announce {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
 }
 .map .status {
   position: absolute;

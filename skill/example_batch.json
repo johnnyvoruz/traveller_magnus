@@ -1,0 +1,120 @@
+{
+  "format": "voyage-proposals",
+  "schemaVersion": 1,
+  "idempotencyKey": "7d2f1c4e-5b3a-4c9e-9f0a-1b2c3d4e5f60",
+  "source": {
+    "kind": "transcript",
+    "label": "Session 12, 2026-10-16",
+    "realDate": "2026-10-16",
+    "durationSeconds": 440,
+    "tool": "example"
+  },
+  "proposals": [
+    {
+      "ref": "teague",
+      "op": "record.create",
+      "record": {
+        "type": "person",
+        "kind": "contact",
+        "name": "Harlan Teague",
+        "summary": "Freight broker at the Startown office of Teague Freight, Regina.",
+        "details": "Offered eleven tons of machine parts for Efate at Cr2,000 a ton, paid on delivery. Mentioned a woman, Mira Sato, asking after the ship.",
+        "tags": ["broker"],
+        "anchor": { "kind": "system", "hexKey": "Spinward_Marches/1910", "locationLabel": "Startown" }
+      },
+      "evidence": [{ "at": "00:00:40", "quote": "Harlan Teague. He's at the Startown office of Teague Freight, same as before." }]
+    },
+    {
+      "ref": "teague-freight",
+      "op": "record.create",
+      "record": {
+        "type": "business",
+        "kind": "",
+        "name": "Teague Freight",
+        "summary": "Freight brokerage with a Startown office on Regina.",
+        "details": "",
+        "tags": [],
+        "anchor": { "kind": "system", "hexKey": "Spinward_Marches/1910", "locationLabel": "Startown" }
+      },
+      "evidence": [{ "at": "00:00:40", "quote": "the Startown office of Teague Freight" }]
+    },
+    {
+      "ref": "teague-member",
+      "op": "link.create",
+      "link": { "from": { "ref": "teague" }, "to": { "ref": "teague-freight" }, "kind": "member", "role": "Broker" },
+      "evidence": [{ "at": "00:00:40", "quote": "He's at the Startown office of Teague Freight" }]
+    },
+    {
+      "ref": "teague-contact",
+      "op": "link.create",
+      "link": { "from": { "id": "cr_00000000-0000-4000-8000-000000000003" }, "to": { "ref": "teague" }, "kind": "contact", "role": "" },
+      "evidence": [{ "at": "00:00:31", "quote": "Rhys wants to find the broker again. The one from the bar, Harlan something." }]
+    },
+    {
+      "ref": "sato",
+      "op": "record.create",
+      "record": {
+        "type": "person",
+        "kind": "",
+        "name": "Mira Sato",
+        "summary": "Asked after the ship at Teague Freight. Left a card for the Imperial Navy liaison office.",
+        "details": "",
+        "tags": [],
+        "anchor": null
+      },
+      "evidence": [{ "at": "00:02:44", "quote": "He only has a name. Mira Sato. She left a card for the Imperial Navy liaison office." }]
+    },
+    {
+      "ref": "cargo",
+      "op": "cargo.append",
+      "id": "cr_00000000-0000-4000-8000-000000000002",
+      "baseRev": 4,
+      "lots": [
+        { "label": "Machine parts", "tons": 11, "value": 22000, "origin": "Regina", "destination": "Efate", "note": "Cr2,000 a ton, paid on delivery. From Harlan Teague." }
+      ],
+      "evidence": [{ "at": "00:03:52", "quote": "Done. Manifest: eleven tons machine parts, Regina to Efate, Cr22,000 on delivery." }]
+    },
+    {
+      "ref": "jump",
+      "op": "track.append",
+      "id": "cr_00000000-0000-4000-8000-000000000002",
+      "baseRev": 4,
+      "leg": {
+        "from": { "kind": "system", "hexKey": "Spinward_Marches/1910", "locationLabel": "Regina highport" },
+        "to": { "kind": "system", "hexKey": "Spinward_Marches/1705", "locationLabel": "Efate orbit" },
+        "departs": 36501,
+        "arrives": 36508,
+        "mode": "jump",
+        "note": "As said at the table: lift day 101, arrive day 108."
+      },
+      "evidence": [{ "at": "00:05:18", "quote": "You lift on day one hundred and one. One week in jump. You arrive Efate orbit on day one hundred and eight." }]
+    },
+    {
+      "ref": "clock",
+      "op": "clock.set",
+      "days": 36508,
+      "baseRev": 3,
+      "evidence": [{ "at": "00:07:20", "quote": "Okay, Efate orbit, day one hundred and eight. We'll stop there." }]
+    },
+    {
+      "ref": "session-log",
+      "op": "journal.create",
+      "entry": {
+        "kind": "session",
+        "title": "Session 12: the Teague contract",
+        "body": "At Regina highport. [[cr_00000000-0000-4000-8000-000000000003|Captain Rhys]] found the broker Harlan Teague at Teague Freight in Startown and took eleven tons of machine parts for Efate, Cr22,000 on delivery. Teague mentioned a woman, Mira Sato, asking after the ship; she left a card for the Imperial Navy liaison office. [[cr_00000000-0000-4000-8000-000000000004|Voss]] stayed aboard. The ship lifted on day 101 and arrived in Efate orbit on day 108.",
+        "when": { "year": 1105, "day": 108 },
+        "realDate": "2026-10-16",
+        "sequence": 12,
+        "anchor": { "kind": "system", "hexKey": "Spinward_Marches/1705" }
+      },
+      "evidence": [{ "at": "00:00:12", "quote": "Okay, last time you were docked at Regina highport with the mail contract." }]
+    },
+    {
+      "ref": "navy-thread",
+      "op": "question",
+      "text": "The Imperial Navy liaison thread is open. The table asked what it is about and you said you would come back to it.",
+      "evidence": [{ "at": "00:06:10", "quote": "Not yet. Note it, I'll come back to it." }]
+    }
+  ]
+}

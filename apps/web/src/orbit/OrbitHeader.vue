@@ -37,8 +37,8 @@ const KEYS: [string, string][] = [
 
 <template>
   <header class="orbit-nav" :class="{ 'is-narrow': narrow }">
-    <button type="button" class="orbit-btn orbit-back" data-command="orbit-escape" title="Back to the map (Esc)" @click="$emit('back')">
-      <Icon name="arrow-left" :size="13" /><span class="orbit-back-word">Map</span>
+    <button type="button" class="orbit-btn orbit-back" data-command="orbit-escape" :aria-label="narrow ? 'Back to the map' : undefined" title="Back to the map (Esc)" @click="$emit('back')">
+      <Icon name="arrow-left" :size="13" /><span class="orbit-back-word">Back to the map</span>
     </button>
     <div class="orbit-identity">
       <div class="orbit-identity-title">
@@ -67,6 +67,7 @@ const KEYS: [string, string][] = [
         @toggle="$emit('keys', !keysOpen)"
         @close="$emit('keys', false)"
       >
+        <p class="ui-kicker orbit-keys-kicker">Keyboard and mouse</p>
         <dl class="orbit-keys">
           <template v-for="row in KEYS" :key="row[0]">
             <dt>{{ row[0] }}</dt>
@@ -156,13 +157,17 @@ const KEYS: [string, string][] = [
   display: none;
 }
 
+/* The place and age as a kicker over the title (the version-video look's values, as the dossier's head). */
 .orbit-identity-meta {
+  order: -1;
   display: flex;
   gap: 0 8px;
   min-height: 16px;
   margin: 0;
-  color: var(--text-muted);
-  font: 400 12px/1.35 var(--font-text);
+  color: var(--signal-dim);
+  font: 700 12px/1.35 var(--font-display);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -188,6 +193,41 @@ const KEYS: [string, string][] = [
   align-items: center;
   gap: 8px;
   margin-left: auto;
+}
+
+/*
+ * The phone (599 px, the panel's sheet breakpoint): two rows. The back button and the name on the first;
+ * the clock and the drawer tabs on the second, at 44 px each (views/OrbitView.vue sets the targets).
+ * The keyboard help goes: there is no keyboard to help with.
+ */
+@media (max-width: 599px) {
+  .orbit-nav,
+  .orbit-nav.is-narrow {
+    flex-wrap: wrap;
+    gap: 6px 4px;
+    padding: 6px 8px;
+  }
+
+  .orbit-nav .orbit-identity {
+    flex: 1 1 calc(100% - 56px);
+  }
+
+  .orbit-nav .orbit-nav-tools {
+    gap: 2px;
+  }
+
+  .orbit-nav .orbit-nav-tools .orbit-pop {
+    display: none;
+  }
+
+  .orbit-nav .orbit-tabs {
+    gap: 2px;
+  }
+}
+
+.orbit-pop-panel .orbit-keys-kicker {
+  margin: 0 0 var(--sp-3);
+  letter-spacing: 0.24em;
 }
 
 .orbit-keys {

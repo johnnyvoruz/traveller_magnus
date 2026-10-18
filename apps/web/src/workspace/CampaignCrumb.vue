@@ -67,18 +67,44 @@ function trail(parts: readonly CrumbPart[]): string {
   cursor: pointer;
 }
 
+/* The trail stays in Inter: Orbitron capitals are too wide for a column panel's trail (Lane M tried them). */
+.camp-crumb .doss-crumb-sep {
+  color: var(--signal-dim);
+}
+
 .camp-crumb .doss-crumb:hover {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
 
-.camp-crumb-root,
-.camp-crumb-here {
+.camp-crumb-root {
   flex: 0 0 auto;
   white-space: nowrap;
 }
 
+/*
+ * A long page name used to push the trail under the panel's width control and squeeze the middle
+ * to nothing. Now the middle keeps a few letters and the name ends in an ellipsis; the whole trail
+ * is the crumb's title.
+ */
+/* Block, not flex, so the ellipsis can show; the line height keeps the 32 px target. */
+.camp-crumb .camp-crumb-mid,
+.camp-crumb .camp-crumb-here {
+  display: block;
+  line-height: 32px;
+}
+
 .camp-crumb-mid {
+  flex: 0 1 auto;
+  min-width: 3em;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.camp-crumb-here {
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

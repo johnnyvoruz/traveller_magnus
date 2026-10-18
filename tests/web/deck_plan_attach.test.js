@@ -79,7 +79,7 @@ test('a person cannot take a deck plan', () => {
 test('a file that is not a shipyard plan is refused', () => {
     setup();
     const vessel = hold({ ...newRecord('vessel', id(4), STAMP), rev: 1 });
-    assert.deepEqual(importDeckPlan(vessel.id, '{'), { ok: false, message: 'This file is not JSON.' });
+    assert.deepEqual(importDeckPlan(vessel.id, '{'), { ok: false, message: 'This file could not be read. Choose a Geomorph Shipyard file.' });
     assert.equal(campaign.records[vessel.id].sheet, null);
     assert.deepEqual(
         importDeckPlan(vessel.id, JSON.stringify({ meta: 'other', name: 'No', parts: [] })),
@@ -110,7 +110,7 @@ test('a plan that does not fit the 1 MB patch is not saved', () => {
     };
     const result = importDeckPlan(vessel.id, JSON.stringify(huge));
     assert.equal(result.ok, false);
-    assert.equal(result.message, 'This deck plan is too large to save. It has to fit in one update.');
+    assert.equal(result.message, 'This deck plan is too large to save.');
     assert.equal(JSON.stringify(campaign.records[vessel.id]), before);
     assert.equal(pending.value, false);
     resetCampaign();

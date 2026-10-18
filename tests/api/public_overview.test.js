@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { runWrangler } from './session.js';
+import { removeTree, runWrangler } from './session.js';
 import { startDev, stopDev, wranglerBin } from './server.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -140,7 +140,7 @@ if (process.env.RUN_API_TESTS !== '1') {
 } else {
     test('the overview counts every public ship, including the caller\'s', { timeout: 180000 }, async () => {
         const persistTo = path.join(root, '.tmp', 'lane-b-overview');
-        rmSync(persistTo, { recursive: true, force: true });
+        removeTree(persistTo);
         const port = 18884;
         const base = `http://127.0.0.1:${port}`;
         let child;
@@ -161,10 +161,10 @@ VALUES ('${version}', '1.2.0', 'released', '${STAMP}', '${STAMP}', 0, 0);
 
             const missing = await jsonFetch(`${base}/api/public-games/overview`);
             assert.equal(missing.status, 400, JSON.stringify(missing.body));
-            assert.equal(missing.body.error.message, 'truthVersion is required.');
+            assert.equal(missing.body.error.message, 'That request could not be read. Try again.');
             const bad = await jsonFetch(`${base}/api/public-games/overview?truthVersion=${'x'.repeat(65)}`);
             assert.equal(bad.status, 400, JSON.stringify(bad.body));
-            assert.equal(bad.body.error.message, 'Invalid request.');
+            assert.equal(bad.body.error.message, 'That request could not be read. Try again.');
 
             const empty = await jsonFetch(`${base}/api/public-games/overview?truthVersion=${version}`);
             assert.equal(empty.status, 200, JSON.stringify(empty.body));
@@ -213,13 +213,13 @@ VALUES ('pm_00000000000000000000000001', '${ownerId}', '${version}', '~secret', 
             assert.deepEqual(none.body, { hexes: [] });
         } finally {
             stopDev(child?.pid);
-            rmSync(persistTo, { recursive: true, force: true });
+            removeTree(persistTo);
         }
     });
 
     test('without 0018 a signed-out overview is refused', { timeout: 180000 }, async () => {
         const persistTo = path.join(root, '.tmp', 'lane-b-overview-old');
-        rmSync(persistTo, { recursive: true, force: true });
+        removeTree(persistTo);
         const port = 18885;
         const base = `http://127.0.0.1:${port}`;
         let child;
@@ -247,7 +247,7 @@ VALUES ('${version}', '1.2.0', 'released', '${STAMP}', '${STAMP}', 0, 0);
             assert.equal(stillOut.status, 401, JSON.stringify(stillOut.body));
         } finally {
             stopDev(child?.pid);
-            rmSync(persistTo, { recursive: true, force: true });
+            removeTree(persistTo);
         }
     });
 }

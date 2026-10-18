@@ -45,6 +45,8 @@ import { modelPreparation, startHybridBuild } from './hybrid/model.ts';
 import { openDiscLink, type DiscLink } from './disc_link.ts';
 import { clearDiscs, discHeld, retainDiscs } from './disc_hold.ts';
 import { discShadeRequest } from './disc_shade.ts';
+import { disposeSoftDiscs, prepareSoftDiscs } from './soft/link.ts';
+import { webglState } from './webgl_notice.ts';
 import { discRendererVersion } from './enhanced/bake.ts';
 import { cityLook } from './enhanced/city_look.ts';
 import type { DiscEnvelope } from './enhanced/delivery.ts';
@@ -495,6 +497,17 @@ export function prepareDiscs(request: DiscBatchRequest): SurfaceReply {
         retainDiscs(frameKeys);
         return { status: 'ready', mode: request.mode, requestId };
     }
+    // The probe has not answered yet (a few frames): no disc path is started; the painter keeps its flat discs.
+    const gl = webglState();
+    if (gl === 'unknown') {
+        retainDiscs(frameKeys);
+        return { status: 'pending', mode: request.mode, requestId };
+    }
+    // No WebGL in this browser: the discs are painted in software from the globes (soft/).
+    if (gl === 'missing') {
+        retainDiscs(frameKeys);
+        return { status: prepareSoftDiscs(request, shades, envelope.generation, frameKeys), mode: request.mode, requestId };
+    }
     const link = openDiscs();
     if (link) link.note(envelope, frameKeys);
     if (!link || link.failed()) return { status: 'unavailable', mode: request.mode, requestId };
@@ -543,6 +556,7 @@ export function disposeSurfaces(): void {
     if (discLink) discLink.dispose();
     discLink = null;
     discBroken = false;
+    disposeSoftDiscs();
     discMode = null;
     discGeneration = 0;
     discEpoch = '';

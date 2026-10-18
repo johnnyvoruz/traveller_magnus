@@ -10,6 +10,7 @@
 import { reactive } from 'vue';
 import { PlaceError, placeCells, placeKeys } from '@voyage/shared';
 import type { InstallPreview, InstallRow } from '../../marketplace/catalogue.ts';
+import { hexCentre, parseHex, toGlobal } from '../../map/geometry.ts';
 
 export type Slot = { x: number; y: number };
 
@@ -150,28 +151,41 @@ export function landingWords(count: number, to: string): string {
 }
 // ---- the outline on the package page -------------------------------------------------------------------
 
+/** The drawing's unit: a hex's corner radius. The map's is HEX_SIZE (2/3 of a column), so 1.5 map units. */
+const OUTLINE_SCALE = 1.5;
+
 /**
- * A small drawing of the piece: one flat-topped hex per key, even columns half a hex down, as
- * on the chart. Sectors the page does not know sit side by side in key order. Returns the
- * polygons and the view box that holds them.
+ * Each key's hex centre in the drawing: the map's own position (map/geometry.ts `toGlobal`,
+ * `hexCentre`), scaled so a hex's corner radius is 1. One formula with the chart, so the drawing
+ * and the map agree hex for hex (reports/done/c_own_sector_offset.md). Sectors the page does not
+ * know sit side by side in key order.
  */
-export function outlineHexes(keys: readonly string[], slotOf: (slug: string) => Slot | null = () => null): { points: string[]; viewBox: string } {
+export function outlineCentres(keys: readonly string[], slotOf: (slug: string) => Slot | null = () => null): { x: number; y: number }[] {
     const order = new Map<string, number>();
     const cells: { x: number; y: number }[] = [];
     for (const key of keys) {
         const at = key.lastIndexOf('/');
         const slug = key.slice(0, at);
-        const local = key.slice(at + 1);
-        if (!/^\d{4}$/.test(local)) continue;
+        const hex = parseHex(key.slice(at + 1));
+        if (!hex) continue;
         let slot = slotOf(slug);
         if (!slot) {
             if (!order.has(slug)) order.set(slug, order.size);
             slot = { x: order.get(slug)!, y: 0 };
         }
-        const col = slot.x * 32 + Number(local.slice(0, 2));
-        const row = slot.y * 40 + Number(local.slice(2));
-        cells.push({ x: col * 1.5, y: (row + (col % 2 === 0 ? 0.5 : 0)) * Math.sqrt(3) });
+        const { q, r } = toGlobal(slot.x, slot.y, hex.col, hex.row);
+        const centre = hexCentre(q, r);
+        cells.push({ x: centre.x * OUTLINE_SCALE, y: centre.y * OUTLINE_SCALE });
     }
+    return cells;
+}
+
+/**
+ * A small drawing of the piece: one flat-topped hex per key at the map's own place for it
+ * (`outlineCentres`). Returns the polygons and the view box that holds them.
+ */
+export function outlineHexes(keys: readonly string[], slotOf: (slug: string) => Slot | null = () => null): { points: string[]; viewBox: string } {
+    const cells = outlineCentres(keys, slotOf);
     if (!cells.length) return { points: [], viewBox: '0 0 1 1' };
     const r = 1;
     const h = Math.sqrt(3) / 2;

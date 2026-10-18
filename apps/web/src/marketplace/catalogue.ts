@@ -37,7 +37,8 @@ export class MarketError extends Error {
     }
 }
 
-export type CatalogueQuery = { q?: string; kind?: string; tag?: string; sort?: PackageSort; mine?: boolean; hidden?: boolean; cursor?: string };
+/** `family` (repeatable, OR) and `author` (one handle) are contract F2's server filters. */
+export type CatalogueQuery = { q?: string; kind?: string; tag?: string; family?: readonly string[]; author?: string; sort?: PackageSort; mine?: boolean; hidden?: boolean; cursor?: string };
 
 /** The catalogue address; every field is left out when empty. */
 export function cataloguePath(query: CatalogueQuery): string {
@@ -45,6 +46,8 @@ export function cataloguePath(query: CatalogueQuery): string {
     if (query.q && query.q.trim()) params.set('q', query.q.trim());
     if (query.kind && query.kind.trim()) params.set('kind', query.kind.trim());
     if (query.tag && query.tag.trim()) params.set('tag', query.tag.trim());
+    for (const family of query.family ?? []) params.append('family', family);
+    if (query.author && query.author.trim()) params.set('author', query.author.trim());
     params.set('sort', query.sort ?? 'updated');
     if (query.mine) params.set('mine', '1');
     if (query.hidden) params.set('hidden', '1');

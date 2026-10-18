@@ -247,12 +247,13 @@ onBeforeUnmount(() => {
   box-sizing: border-box;
   max-width: 460px;
   padding: 9px 8px 9px 14px;
-  border: 1px solid var(--line-2);
-  border-left: 3px solid var(--signal-dim);
-  border-radius: var(--r-2);
-  background: var(--bg-1);
-  box-shadow: var(--shadow-pop);
-  color: var(--text-1);
+  /* The videos' toast: a raised card with a teal edge and a halo. */
+  border: 1px solid var(--signal-dim);
+  border-left: 3px solid var(--signal);
+  border-radius: var(--r-3);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-pop), 0 0 18px var(--signal-glow);
+  color: var(--text-0);
   font: 400 13.5px/1.4 var(--font-text);
   pointer-events: auto;
   animation: toast-in var(--t-fast) var(--ease-out) both;

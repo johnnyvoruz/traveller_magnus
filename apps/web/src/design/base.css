@@ -76,10 +76,16 @@ p {
   padding-inline-end: 14px;
 }
 
-/* Focus: one ring everywhere. */
+/*
+ * Focus: one ring everywhere. The extra pseudos beat a later outline:none on a control.
+ * Offset stays on the plain rule, so a segment or a rail item can pull the ring inward.
+ */
 :focus-visible {
-  outline: 2px solid var(--focus-ring);
   outline-offset: 3px;
+}
+
+*:focus-visible:not(:disabled):not([inert]) {
+  outline: 2px solid var(--focus-ring);
 }
 
 /* Buttons. */
@@ -434,4 +440,329 @@ p {
   .ui-modal {
     animation: none;
   }
+}
+
+/*
+ * The version-video look (Lane M, 2026-10-17). The pieces the release videos are drawn with
+ * (versionvideo/scene/scene.css, spotlight.js), as classes every screen can use: the ground, the
+ * kicker, the NEW tag, the rule, the frame, the date box, the steps and the brand. Copied, not
+ * imported: the video jig stays Johnny's tool. The design page shows each one.
+ */
+
+/*
+ * The ground: the videos' backdrop. A radial gradient from --bg-1 at the upper left to --bg-0,
+ * a faint hex grid and a sparse star field, all static. The grid and the stars are the element's
+ * ::before and ::after under its content, so an element that draws its own ::before or ::after
+ * puts the ground on a wrapper instead.
+ */
+.ui-ground {
+  position: relative;
+  isolation: isolate;
+  background: var(--ground-fill);
+}
+
+.ui-ground::before,
+.ui-ground::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.ui-ground::before {
+  background: var(--line-1);
+  opacity: var(--ground-grid-alpha);
+  -webkit-mask: var(--ground-grid) 0 0 / var(--ground-grid-size) repeat;
+  mask: var(--ground-grid) 0 0 / var(--ground-grid-size) repeat;
+}
+
+.ui-ground::after {
+  background: var(--text-0);
+  opacity: var(--ground-stars-alpha);
+  -webkit-mask-image: var(--ground-stars);
+  mask-image: var(--ground-stars);
+  -webkit-mask-size: var(--ground-stars-size);
+  mask-size: var(--ground-stars-size);
+}
+
+/*
+ * The empty card (.camp-first.ui-ground): one title, one sentence, one action, on the ground.
+ * The same rules live with the campaign list, which loads on its own. These copies are here so a
+ * page that never opens that list, such as the store, still draws the card.
+ */
+.camp-first {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  max-width: 620px;
+  padding: 24px 22px;
+  border: 1px solid var(--signal-line);
+  border-radius: var(--r-3);
+  background: var(--panel-raised);
+}
+
+.camp-first h2 {
+  margin: 0;
+  color: var(--text-0);
+  font: 700 21px/1.25 var(--font-text);
+}
+
+.camp-first p {
+  margin: 0;
+  color: var(--text-1);
+  font-size: 14.5px;
+}
+
+.camp-first > .camp-glyph {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border: 1px solid var(--signal-line);
+  border-radius: var(--r-2);
+  background: var(--wash-faint);
+  color: var(--signal);
+}
+
+.camp-first.ui-ground {
+  border-color: var(--line-2);
+  border-radius: var(--r-4);
+  background: var(--ground-fill);
+  box-shadow: 0 0 24px var(--frame-glow);
+  overflow: hidden;
+}
+
+.camp-first.ui-ground h2 {
+  font: 700 19px/1.3 var(--font-display);
+  letter-spacing: 0.02em;
+}
+
+.camp-first.ui-ground > .camp-glyph {
+  width: 56px;
+  height: 50px;
+  border: 0;
+  border-radius: 0;
+  background: var(--wash);
+  clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
+}
+
+.camp-first-starts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.camp-first-starts .ui-btn {
+  min-height: 36px;
+  padding: 0 12px;
+}
+
+/* The kicker: small Orbitron capitals spaced wide over a section. 12 px is the floor (contrast). */
+.ui-kicker {
+  display: block;
+  margin: 0;
+  color: var(--signal-dim);
+  font: 700 12px/1.4 var(--font-display);
+  letter-spacing: 0.4em;
+  text-transform: uppercase;
+}
+
+/*
+ * A panel's section heading as a kicker: <h3 class="ui-heading ui-kicker">. It keeps the heading's
+ * row and spacing (the kicker alone has none), and a .ui-count in it reads as a frame's count.
+ */
+.ui-heading.ui-kicker {
+  display: flex;
+  align-items: center;
+  margin: 18px 0 8px;
+}
+
+.ui-kicker .ui-count {
+  margin-left: 10px;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--signal);
+  font: 700 15px/1 var(--font-display);
+  letter-spacing: 0.04em;
+}
+
+/* The bright kicker beside a NEW tag or over a step, as the spotlights have it. */
+.ui-kicker.is-signal {
+  color: var(--signal);
+  letter-spacing: 0.24em;
+}
+
+/* The NEW tag: white Orbitron capitals on the mark's red, with its halo. */
+.ui-new {
+  display: inline-block;
+  flex: 0 0 auto;
+  padding: 3px 7px 2px 9px;
+  border-radius: var(--r-1);
+  background: var(--mark-red);
+  box-shadow: 0 0 10px var(--mark-red-glow);
+  color: var(--on-mark-red);
+  font: 700 12px/1.3 var(--font-display);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* A heading's head line: the NEW tag and a kicker side by side. */
+.ui-kicker-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+/*
+ * The rule under a heading, fading out to the right. Plain: red into teal, as under a spotlight's
+ * kicker. is-signal: teal alone. is-red: the mark's red with its halo, as under a version number.
+ */
+.ui-rule {
+  height: 2px;
+  margin: var(--sp-2) 0 var(--sp-3);
+  border: 0;
+  background: linear-gradient(90deg, var(--mark-red), var(--mark-red) 45%, transparent);
+}
+
+.ui-rule.is-signal {
+  background: linear-gradient(90deg, var(--signal), transparent);
+}
+
+.ui-rule.is-red {
+  background: linear-gradient(90deg, var(--mark-red) 60%, transparent);
+  box-shadow: 0 0 8px var(--mark-red-glow);
+}
+
+/*
+ * The frame: a thin-bordered panel with a faint teal halo, a label in its corner and an Orbitron
+ * count beside it ("PUBLIC SHIPS 6"). The label is the frame's first child.
+ */
+.ui-frame {
+  position: relative;
+  min-width: 0;
+  padding: var(--sp-3) var(--sp-4) var(--sp-4);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-4);
+  background: var(--bg-0);
+  box-shadow: 0 0 24px var(--frame-glow);
+}
+
+.ui-frame-label {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  margin: 0 0 var(--sp-3);
+  color: var(--signal-dim);
+  font: 700 12px/1.4 var(--font-display);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.ui-frame-count {
+  color: var(--signal);
+  font: 700 18px/1 var(--font-display);
+  letter-spacing: 0.04em;
+  font-variant-numeric: var(--tabular);
+}
+
+/* The date box: small outlined Orbitron, as under a version number. */
+.ui-date {
+  display: inline-block;
+  flex: 0 0 auto;
+  padding: 3px 8px 2px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-1);
+  color: var(--text-1);
+  font: 700 12px/1.4 var(--font-display);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  font-variant-numeric: var(--tabular);
+}
+
+/*
+ * The steps: a vertical line through hex nodes, one per item, as the videos' route. A node is
+ * --signal-dim; the current step (aria-current or is-lit) is --signal with a glow. Each item is a
+ * .ui-step; what goes inside is the caller's (a .ui-kicker.is-signal over the text reads as the video).
+ */
+.ui-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ui-step {
+  position: relative;
+  min-width: 0;
+  padding: 0 0 var(--sp-4) 34px;
+}
+
+.ui-step::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 10px;
+  bottom: -10px;
+  width: 2px;
+  background: var(--signal-dim);
+}
+
+.ui-step:last-child::before {
+  display: none;
+}
+
+.ui-step::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 2px;
+  width: 18px;
+  height: 16px;
+  background: var(--signal-dim);
+  clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
+}
+
+.ui-step[aria-current]::after,
+.ui-step.is-lit::after {
+  background: var(--signal);
+  filter: drop-shadow(0 0 6px var(--signal-glow));
+}
+
+.ui-step:last-child {
+  padding-bottom: 0;
+}
+
+/*
+ * The brand: the red-V mark and the TRAVELLER.VOYAGE wordmark, Orbitron 700 spaced 0.14em, the
+ * dot in the mark's red. Markup: <span class="ui-brand">Traveller<span class="ui-brand-dot">.</span>voyage</span>.
+ */
+.ui-brand {
+  display: inline-block;
+  color: var(--text-0);
+  font: 700 16px/1 var(--font-display);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.ui-brand::before {
+  content: '';
+  display: inline-block;
+  width: 1.75em;
+  height: 1.75em;
+  margin-right: 0.5em;
+  vertical-align: middle;
+  background: url('/favicon.svg') center / contain no-repeat;
+}
+
+.ui-brand-dot {
+  color: var(--mark-red);
 }

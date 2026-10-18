@@ -102,7 +102,7 @@ function set(id: string, value: FormValue): void {
     <HandDesigner v-if="edit.mode === 'hand'" :span="span" />
     <template v-else>
     <section v-for="section in sections" :key="section.id" class="sysed-section" :data-section="section.id">
-      <h3 class="ui-heading">{{ section.label }}</h3>
+      <h3 class="ui-heading ui-kicker">{{ section.label }}</h3>
       <template v-for="group in section.groups" :key="group.owner || section.id">
         <div v-if="!group.owner && section.id === 'profile'" class="sysed-cells">
           <EditField
@@ -148,7 +148,7 @@ function set(id: string, value: FormValue): void {
         <template v-for="group in section.groups" :key="'w' + group.owner">
           <template v-for="field in group.fields" :key="'w' + field.id">
             <details v-if="!(field.id in edit.mine) && whyOf(field.id, changed)" class="sysed-strip is-note sysed-why">
-              <summary>{{ field.label }}: {{ firstLine(whyOf(field.id, changed)) }}<em v-if="moreLines(whyOf(field.id, changed))">and {{ moreLines(whyOf(field.id, changed)) }} more lines from the engine</em></summary>
+              <summary>{{ field.label }}: {{ firstLine(whyOf(field.id, changed)) }}<em v-if="moreLines(whyOf(field.id, changed))">and {{ moreLines(whyOf(field.id, changed)) }} more lines</em></summary>
               <p v-if="moreLines(whyOf(field.id, changed))">{{ whyOf(field.id, changed) }}</p>
             </details>
             <p v-for="(message, index) in messagesFor(field.id, messages)" :key="field.id + index" class="sysed-strip" :class="{ 'is-error': message.holds }">{{ field.label }}: {{ message.text }}</p>

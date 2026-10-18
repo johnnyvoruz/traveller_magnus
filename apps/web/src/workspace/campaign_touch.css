@@ -1,0 +1,65 @@
+/*
+ * The campaign panel on a phone (streams/D.md DU4; UX backlog U4: "every control reachable with a
+ * thumb"). Below 600 px, where the panel is the bottom sheet (shell/Panel.vue), every control in the
+ * party, a record's page, the journal, the timeline and the dice row is at least 44 px tall: buttons,
+ * tabs, switches, selects and the buttons inside chips. The store does the same (market.css, D6).
+ * Typed fields keep their height: the ship sheet's cells are wide, and 44 px rows would double the
+ * sheet. Inline words that act (the date's "Set it", the breadcrumb, a name in the party) keep their
+ * look; their hit area reaches 44 px round them instead.
+ */
+@media (max-width: 599px) {
+  .camp .ui-btn,
+  .camp select,
+  .camp input[type="search"],
+  .camp .camp-tab,
+  .camp .camp-timeline,
+  .camp .dice-pick,
+  .camp .camp-type,
+  .camp .camp-group-head,
+  .camp .camp-locate,
+  .camp .ui-seg button,
+  .camp .sheet-tab,
+  .camp .edit-view,
+  .camp .rec-tag-add,
+  .camp .lnk-open,
+  .camp .lnk-role,
+  .camp .lnk-x {
+    min-height: 44px;
+  }
+
+  .camp .ui-btn.is-icon,
+  .camp .camp-locate,
+  .camp .lnk-x {
+    min-width: 44px;
+  }
+
+  /*
+   * The three tabs on one row: the Party tab's line ("Bright Ledger and Cold Manifest") made them
+   * stack, one 44 px row each, in a half-height sheet. The Party tab says it again at its top.
+   */
+  .camp .camp-tab small {
+    display: none;
+  }
+
+  /* A tag's own remove button sits inside the tag: its hit area grows, not the tag. */
+  .camp .rec-tag button,
+  .camp .clock-date,
+  .camp .doss-crumb,
+  .camp .party-name {
+    position: relative;
+  }
+
+  .camp .rec-tag button::before,
+  .camp .clock-date::before,
+  .camp .doss-crumb::before,
+  .camp .party-name::before {
+    position: absolute;
+    inset: -13px -6px;
+    content: "";
+  }
+
+  /* The smallest: a tag's 16 px remove button. */
+  .camp .rec-tag button::before {
+    inset: -14px;
+  }
+}

@@ -39,15 +39,15 @@ async function audit(c: Ctx, actorId: string, action: string, packageId: string,
 adminPackagesRoute.post('/:packageId/takedown', async (c) => {
     const actor = await requireRole(c, 'admin');
     if (actor instanceof Response) return actor;
-    if (!originAllowed(c)) return fail(c, 403, 'forbidden', 'Origin check failed.');
+    if (!originAllowed(c)) return fail(c, 403, 'forbidden', 'That request was blocked. Reload the page and try again.');
     let body: unknown;
     try {
         body = await c.req.json();
     } catch {
-        return fail(c, 400, 'validation', 'Invalid JSON.');
+        return fail(c, 400, 'validation', 'That request could not be read. Try again.');
     }
     const parsed = PackageTakedown.safeParse(body);
-    if (!parsed.success) return fail(c, 400, 'validation', 'Invalid request.', parsed.error.flatten());
+    if (!parsed.success) return fail(c, 400, 'validation', 'That request could not be read. Try again.', parsed.error.flatten());
     const pkg = await c.env.DB.prepare(`SELECT id FROM packages WHERE id = ?`).bind(c.req.param('packageId') ?? '').first<{ id: string }>();
     if (!pkg) return fail(c, 404, 'not_found', 'No such package.');
     const versions = await doneVersions(c, pkg.id);
@@ -73,7 +73,7 @@ adminPackagesRoute.post('/:packageId/takedown', async (c) => {
 adminPackagesRoute.post('/:packageId/restore', async (c) => {
     const actor = await requireRole(c, 'admin');
     if (actor instanceof Response) return actor;
-    if (!originAllowed(c)) return fail(c, 403, 'forbidden', 'Origin check failed.');
+    if (!originAllowed(c)) return fail(c, 403, 'forbidden', 'That request was blocked. Reload the page and try again.');
     const pkg = await c.env.DB.prepare(`SELECT id FROM packages WHERE id = ?`).bind(c.req.param('packageId') ?? '').first<{ id: string }>();
     if (!pkg) return fail(c, 404, 'not_found', 'No such package.');
     const versions = await doneVersions(c, pkg.id);

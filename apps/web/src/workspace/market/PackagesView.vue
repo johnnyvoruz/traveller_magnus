@@ -12,25 +12,159 @@
  * The page is its own full-window scroller (the app frame is fixed), and it keeps its scroll
  * position per history entry: Back and Forward return to the same place, a new path starts at the top.
  */
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import Icon from '../../design/Icon.vue';
 import { loadSession, session, signIn } from '../../account/session.ts';
 import { marketWire, type PackageCard, type PackageSort } from '../../marketplace/catalogue.ts';
 import { defaultCoverUrl } from '../../marketplace/covers.ts';
 import { cancelFrame, nextFrame } from '../../platform/browser.ts';
-import { activeCount, activeFilters, applyFilters, facets, filterQuery, NO_FILTERS, PAGE_SIZE, readFilters, resultsWords, toggle, type FilterKey, type StoreFilters } from './filters.ts';
+import { activeCount, activeFilters, applyFilters, facets, filterQuery, NO_FILTERS, PAGE_SIZE, readFilters, remember as rememberSeen, resultsWords, serverNarrowing, toggle, type FilterKey, type Seen, type StoreFilters } from './filters.ts';
+import { backToResults, dissolve, glide } from './steady.ts';
+import { differs, keep, recall, storeSeen, type CatalogueQuery } from './catalogue_memory.ts';
 import ImportsList from './ImportsList.vue';
 import ProductPage from './ProductPage.vue';
 import StoreCard from './StoreCard.vue';
 import StoreFiltersBody from './StoreFilters.vue';
 import { featured, withoutFeatured } from './storefront.ts';
+import Rail from '../../shell/Rail.vue';
+import { registerCommand } from '../../shell/registry.ts';
+import { atPane } from '../../shell/pane.ts';
+import { campaign, listCampaigns, openCampaign } from '../../campaign/store.ts';
+import { showToast } from '../../shell/toast.ts';
+import AccountMenu from '../AccountMenu.vue';
+import { build, setBuildOn } from '../build/state.ts';
+import { liveRecords } from '../records.ts';
+import { publishAsk } from './command.ts';
+import { ownUniverse } from './market.ts';
+import PublishChooser from './PublishChooser.vue';
 import './market.css';
 
 const route = useRoute();
 const router = useRouter();
 const wire = marketWire();
 const CDN = import.meta.env.VITE_CDN_BASE || 'https://cdn.traveller.voyage';
+
+// ---- the app's frame: the rail and the account pop-up, as on the map (prompts/d_store_harden.md item 1) ----
+
+/** Where the rail's Map item goes: the map address the store was opened from, else the map's start. */
+const mapReturn = ((): string => {
+    const back = router.options.history.state.back;
+    return typeof back === 'string' && back.startsWith('/') && !back.startsWith('/packages') && !back.startsWith('/account') ? back : '/';
+})();
+const accountOpen = ref(false);
+const railEl = ref<{ focusAccount: () => void } | null>(null);
+/** Build, as on the map, for anyone signed in: it opens the map with Build on, and the map opens the campaign. */
+const buildOffered = computed(() => session.user !== null);
+
+function closeAccount(): void {
+    if (!accountOpen.value) return;
+    accountOpen.value = false;
+    if (railEl.value) railEl.value.focusAccount();
+}
+
+function goToCampaign(): void {
+    accountOpen.value = false;
+    void router.push(atPane('/', {}, { kind: 'campaign', record: null }));
+}
+
+/** Build from the store: the map, with Build on. */
+function openBuild(): void {
+    accountOpen.value = false;
+    if (!build.on) setBuildOn(true);
+    void router.push(mapReturn);
+}
+
+const unregister: (() => void)[] = [];
+
+// ---- Publish: the chooser (prompts/d_store_harden.md item 4) ------------------------------------------------
+
+const RecordsPublish = defineAsyncComponent(() => import('./RecordsPublish.vue'));
+const choosing = ref(false);
+const chooseNote = ref('');
+const chooseSignIn = ref(false);
+const chooseBusy = ref(false);
+const publishingRecords = ref(false);
+
+function openChooser(): void {
+    chooseNote.value = '';
+    chooseSignIn.value = false;
+    choosing.value = true;
+}
+
+function closeChooser(): void {
+    choosing.value = false;
+    chooseBusy.value = false;
+}
+
+/** Says what to do first, in the chooser (opened if it was not, as for the command palette's ask). */
+function sayFirst(note: string, signInFirst = false): void {
+    chooseNote.value = note;
+    chooseSignIn.value = signInFirst;
+    choosing.value = true;
+}
+
+/** Records: open the campaign if it is not open, then Publish records over the store. */
+async function publishRecords(): Promise<void> {
+    const user = session.user;
+    if (!user) {
+        sayFirst('Sign in first: records are published from your own campaign.', true);
+        return;
+    }
+    if (campaign.status !== 'ready') {
+        chooseBusy.value = true;
+        const list = campaign.universes.length ? campaign.universes : (await listCampaigns()) ?? [];
+        const mine = list.filter((item) => item.ownerId === user.id);
+        if (mine.length) {
+            const row = mine.find((item) => item.id === campaign.universeId) ?? mine[0]!;
+            // The map opens the campaign on its own; the store opens it only when Publish records needs it.
+            if (campaign.status !== 'loading') await openCampaign({ fetch, truthVersion: row.truthVersion, universeId: row.id });
+        }
+        chooseBusy.value = false;
+        if (!mine.length) {
+            sayFirst('Make a campaign first: open the Campaign panel on the map and add people, ships, or organizations.');
+            return;
+        }
+    }
+    if (campaign.status !== 'ready') {
+        sayFirst('Your campaign could not be opened. Open it from the Campaign panel on the map, then try again.');
+        return;
+    }
+    if (!ownUniverse()) {
+        sayFirst('Open a campaign you made first: you can publish only from your own campaign.');
+        return;
+    }
+    if (!liveRecords(campaign.records).length) {
+        sayFirst('Add records to your campaign first: people, ships, or organizations, in the Campaign panel.');
+        return;
+    }
+    closeChooser();
+    publishingRecords.value = true;
+}
+
+/** Map hexes: the map, with Build on and Select hexes on, then Publish selection. */
+function publishHexes(): void {
+    if (!session.user) {
+        sayFirst('Sign in first: Build, where you select the hexes, is for signed-in people.', true);
+        return;
+    }
+    closeChooser();
+    if (!build.on) setBuildOn(true);
+    build.selecting = true;
+    void router.push(mapReturn);
+    showToast('Select the hexes to publish, and then select Publish selection.');
+}
+
+function chooserSignIn(): void {
+    void signIn(fetch, route.fullPath);
+}
+
+/** "Publish records" from the command palette, while the store is open. */
+watch(() => publishAsk.records, (asked) => {
+    if (!asked) return;
+    publishAsk.records = false;
+    void publishRecords();
+}, { immediate: true });
 
 const one = (value: unknown): string => (Array.isArray(value) ? String(value[0] ?? '') : typeof value === 'string' ? value : '');
 const packageId = computed(() => (typeof route.params.packageId === 'string' ? route.params.packageId : ''));
@@ -43,7 +177,10 @@ const isAdmin = computed(() => !!session.user && session.user.role === 'admin');
 /** Admins only: the catalogue lists taken-down packages. */
 const hiddenView = computed(() => isAdmin.value && one(route.query.hidden) === '1');
 
-const ready = ref(false);
+/** The session has been read. On a return to the store it already was: nothing waits on it. */
+const ready = ref(storeSeen.session);
+/** Known to be signed out: Publish is "Sign in to publish" (DS9). */
+const visitor = computed(() => ready.value && !session.user);
 const loading = ref(false);
 const error = ref('');
 const now = ref(Date.now());
@@ -55,45 +192,129 @@ const searched = computed(() => one(route.query.q));
 const filters = computed(() => readFilters(route.query));
 const sort = ref<PackageSort>((['updated', 'installs', 'title'].includes(one(route.query.sort)) ? one(route.query.sort) : 'updated') as PackageSort);
 const hiddenOnly = ref(one(route.query.hidden) === '1');
-const cards = ref<PackageCard[]>([]);
-const nextCursor = ref<string | null>(null);
+/** The catalogue query the address and the session name now. */
+function catalogueQuery(): CatalogueQuery {
+    return { q: searched.value, sort: sort.value, mine: mineView.value, hidden: hiddenView.value, user: session.user ? session.user.id : '' };
+}
+/** Seen before this session: shown at once, and refreshed behind (catalogue_memory.ts). */
+const remembered = packageId.value ? null : recall(catalogueQuery());
+const cards = ref<PackageCard[]>(remembered ? remembered.items : []);
+const nextCursor = ref<string | null>(remembered ? remembered.nextCursor : null);
 /** Cards shown before "Show more": a page at a time. */
 const pageCount = ref(PAGE_SIZE);
 
-const matching = computed(() => applyFilters(cards.value, filters.value, now.value));
-const counts = computed(() => facets(cards.value, filters.value, now.value));
+// ---- the server's filters, once the catalogue is bigger than a page (contract F2; streams/D.md D8) ----
+
+/** What to ask the server for: null while the loaded cards are the whole catalogue. */
+const narrowing = computed(() => serverNarrowing(filters.value, !nextCursor.value));
+/** The server's answer for `narrowing`, page by page; null when nothing was asked. */
+const narrowCards = ref<PackageCard[] | null>(null);
+const narrowCursor = ref<string | null>(null);
+let narrowAsked = '';
+
+async function loadNarrow(more = false): Promise<void> {
+    const ask = narrowing.value;
+    const key = JSON.stringify([ask, searched.value, sort.value, mineView.value, hiddenView.value]);
+    if (!ask) {
+        narrowAsked = '';
+        narrowCards.value = null;
+        narrowCursor.value = null;
+        return;
+    }
+    if (!more && key === narrowAsked) return;
+    narrowAsked = key;
+    try {
+        const page = await wire.catalogue({ q: searched.value, sort: sort.value, mine: mineView.value, hidden: hiddenView.value, family: ask.family, author: ask.author, cursor: more && narrowCursor.value ? narrowCursor.value : undefined });
+        if (key !== narrowAsked) return;
+        if (cards.value.length && !more) holdResults();
+        narrowCards.value = more && narrowCards.value ? [...narrowCards.value, ...page.items] : page.items;
+        narrowCursor.value = page.nextCursor;
+        if (heldHeight.value) void nextTick(settleResults);
+    } catch (err) {
+        // The loaded cards stay filtered in the browser; the line says the rest could not be asked for.
+        if (key === narrowAsked) error.value = err instanceof Error && err.message ? err.message : 'The packages could not be loaded. Try again.';
+    }
+}
+
+watch(() => [narrowing.value, searched.value, sort.value, mineView.value, hiddenView.value] as const, () => { void loadNarrow(); });
+
+/** The cards the results are taken from: the server's for `narrowing`, else the loaded catalogue. */
+const pool = computed(() => narrowCards.value ?? cards.value);
+const poolCursor = computed(() => (narrowCards.value ? narrowCursor.value : nextCursor.value));
+const matching = computed(() => applyFilters(pool.value, filters.value, now.value));
+/** Every choice the column has listed this visit: it stays listed, dimmed at 0 (filters.ts). */
+const seen = ref<Seen>({});
+const counts = computed(() => facets(cards.value, filters.value, now.value, seen.value));
+watch(counts, (listed) => { seen.value = rememberSeen(seen.value, listed); }, { immediate: true });
 const chips = computed(() => activeFilters(filters.value));
 const chosen = computed(() => activeCount(filters.value));
 const filtered = computed(() => !!searched.value || chosen.value > 0);
 /** The featured row: the plain storefront only, like a store's home page; never on results. */
 const featuredRow = computed(() => (filtered.value || mineView.value || hiddenView.value ? { heading: '', cards: [] } : featured(cards.value)));
+/** The plain storefront: no search, filter or view, so the featured row and Browse by kind show. */
+const plainStore = computed(() => !filtered.value && !mineView.value && !hiddenView.value);
+/** Before the catalogue answers. */
+const firstLoad = computed(() => !cards.value.length && (!ready.value || loading.value));
+/** Browse by kind, under the featured row: every kind the store has, with its count. */
+const kindTiles = computed(() => (featuredRow.value.cards.length ? counts.value.kinds.filter((facet) => facet.count > 0) : []));
 /** The grid leaves out what the featured row shows, so nothing is shown twice. */
 const gridCards = computed(() => withoutFeatured(matching.value, featuredRow.value.cards));
 const shown = computed(() => gridCards.value.slice(0, pageCount.value));
 /** The results line counts every result, the featured row's included. */
-const resultsLine = computed(() => resultsWords(shown.value.length + featuredRow.value.cards.length, matching.value.length, !!nextCursor.value, searched.value));
-const canShowMore = computed(() => shown.value.length < gridCards.value.length || !!nextCursor.value);
+const resultsLine = computed(() => resultsWords(shown.value.length + featuredRow.value.cards.length, matching.value.length, !!poolCursor.value, searched.value));
+const canShowMore = computed(() => shown.value.length < gridCards.value.length || !!poolCursor.value);
 
+/**
+ * The catalogue for the address. A first page seen before this session shows at once and the
+ * server is asked behind it; a fresh answer that differs replaces it in place, held and dissolved
+ * as a filter change is. A failed refresh keeps what is shown.
+ */
 async function loadCards(more = false): Promise<void> {
+    const query = catalogueQuery();
+    const kept = more ? null : recall(query);
+    if (kept && !cardsAre(kept)) {
+        cards.value = kept.items;
+        nextCursor.value = kept.nextCursor;
+    }
     loading.value = true;
     error.value = '';
     now.value = Date.now();
     try {
-        const page = await wire.catalogue({ q: searched.value, sort: sort.value, mine: mineView.value, hidden: hiddenView.value, cursor: more && nextCursor.value ? nextCursor.value : undefined });
-        cards.value = more ? [...cards.value, ...page.items] : page.items;
-        nextCursor.value = page.nextCursor;
+        const page = await wire.catalogue({ q: query.q, sort: query.sort as PackageSort, mine: query.mine, hidden: query.hidden, cursor: more && nextCursor.value ? nextCursor.value : undefined });
+        if (more) {
+            cards.value = [...cards.value, ...page.items];
+            nextCursor.value = page.nextCursor;
+        } else {
+            keep(query, page);
+            if (!cardsAre(page)) {
+                if (cards.value.length) holdResults();
+                cards.value = page.items;
+                nextCursor.value = page.nextCursor;
+                if (heldHeight.value) void nextTick(settleResults);
+            }
+        }
     } catch (err) {
-        if (!more) cards.value = [];
+        if (!more && !kept) cards.value = [];
         error.value = err instanceof Error && err.message ? err.message : 'The packages could not be loaded. Try again.';
     } finally {
         loading.value = false;
     }
 }
 
+/** Whether the cards shown are this answer already. */
+function cardsAre(answer: { items: PackageCard[]; nextCursor: string | null }): boolean {
+    return !differs({ items: cards.value, nextCursor: nextCursor.value }, answer);
+}
+
 /** The next page: the loaded cards first, then the server's next page when they run out. */
 async function showMore(): Promise<void> {
     pageCount.value += PAGE_SIZE;
-    if (gridCards.value.length < pageCount.value && nextCursor.value) await loadCards(true);
+    if (gridCards.value.length >= pageCount.value) return;
+    if (narrowCards.value) {
+        if (narrowCursor.value) await loadNarrow(true);
+    } else if (nextCursor.value) {
+        await loadCards(true);
+    }
 }
 
 // ---- the Filters sheet, below 1024 px -----------------------------------------------------------------------
@@ -122,12 +343,15 @@ function storeQuery(change: { q?: string; filters?: StoreFilters; sort?: string;
 }
 
 /**
- * A new search, filter or sort is a new history entry, as on a store's results page: Back undoes it.
- * Inside the Filters sheet the sheet's own entry is changed instead, so Back closes the sheet.
+ * A filter, chip or sort change replaces the current entry: the URL stays shareable, and Back leaves
+ * the filtered store in one step. A search submit is a new entry (prompts/d_store_harden.md item 2).
+ * Inside the Filters sheet the sheet's own entry is changed, so Back closes the sheet.
  */
-function go(change: { q?: string; filters?: StoreFilters; sort?: string }): void {
+function go(change: { q?: string; filters?: StoreFilters; sort?: string }, push = false): void {
     const to = { path: '/packages', query: storeQuery(change) };
-    void (sheetOpen.value ? router.replace(to) : router.push(to));
+    const next = keyOf(change.q !== undefined ? change.q.trim() : searched.value, change.filters ?? filters.value, change.sort !== undefined ? change.sort : one(route.query.sort));
+    if (next !== resultsKey.value) holdResults();
+    void (push && !sheetOpen.value ? router.push(to) : router.replace(to));
 }
 
 function pick(key: FilterKey, value: string): void {
@@ -135,7 +359,7 @@ function pick(key: FilterKey, value: string): void {
 }
 
 function search(): void {
-    go({ q: q.value });
+    go({ q: q.value }, true);
 }
 
 function clearFilters(): void {
@@ -239,11 +463,57 @@ watch(() => route.fullPath, (_path, was) => {
     if (route.path !== (was ? was.split('?')[0] : '')) el.scrollTop = 0;
 });
 
+// ---- the results change in place -----------------------------------------------------------------------
+
+const resultsEl = ref<HTMLElement | null>(null);
+const resultsBody = ref<HTMLElement | null>(null);
+function keyOf(text: string, chosenFilters: StoreFilters, sortBy: string): string {
+    return JSON.stringify([text, filterQuery(chosenFilters), sortBy === 'updated' ? '' : sortBy, mineView.value, hiddenView.value]);
+}
+/** What the results show: a change dissolves them to the new set. */
+const resultsKey = computed(() => keyOf(searched.value, filters.value, one(route.query.sort)));
+/** The results' height, held through a change so a smaller set can't make the scroller clamp and jump. */
+const heldHeight = ref(0);
+
+function holdResults(): void {
+    if (resultsEl.value && !packageId.value) heldHeight.value = resultsEl.value.offsetHeight;
+}
+
+function releaseResults(): void {
+    heldHeight.value = 0;
+}
+
+/**
+ * After a change the column stays where it was: it is sticky, and the results hold their height,
+ * so the scroller never clamps. When the results' top went above the window, the scroller glides
+ * it back into view, the column still stuck in place; then the hold lets go. The results dissolve
+ * to the new set, the featured row with them.
+ */
+function settleResults(): void {
+    const el = scroller.value;
+    const results = resultsEl.value;
+    if (resultsBody.value) dissolve(resultsBody.value);
+    if (!el || !results || sheetOpen.value) {
+        releaseResults();
+        return;
+    }
+    const to = backToResults(el.scrollTop, results.getBoundingClientRect().top, el.getBoundingClientRect().top, 12);
+    if (to === null) releaseResults();
+    else glide(el, to, releaseResults);
+}
+
+watch(resultsKey, (key, was) => {
+    if (packageId.value || key === was) return;
+    void nextTick(settleResults);
+});
+
 function load(): void {
     if (!packageId.value) void loadCards();
 }
 
-watch(() => [packageId.value, mineView.value, searched.value, one(route.query.sort), one(route.query.hidden), session.user ? session.user.id : ''] as const, () => {
+// A string, not an array: a new array each run would fire on every change to the address (a filter's tick
+// too) and ask for the catalogue again; the string changes only when what the catalogue answers for does.
+watch(() => JSON.stringify([packageId.value, mineView.value, searched.value, one(route.query.sort), one(route.query.hidden), session.user ? session.user.id : '']), () => {
     q.value = searched.value;
     hiddenOnly.value = one(route.query.hidden) === '1';
     load();
@@ -255,166 +525,265 @@ watch(() => [searched.value, JSON.stringify(filterQuery(filters.value)), mineVie
 });
 
 onMounted(async () => {
+    unregister.push(
+        registerCommand({ id: 'home', name: 'Return to map', run: () => { void router.push(mapReturn); } }),
+        registerCommand({ id: 'account', name: 'Account', run: () => { accountOpen.value = !accountOpen.value; } }),
+        registerCommand({ id: 'campaign', name: 'Campaign', run: goToCampaign }),
+        registerCommand({ id: 'build', name: 'Build: open the map with Build on', run: openBuild }),
+    );
     await loadSession();
     ready.value = true;
+    storeSeen.session = true;
     load();
 });
 
 onBeforeUnmount(() => {
+    for (const stop of unregister.splice(0)) stop();
     stopPop();
     if (restoring) cancelFrame(restoring);
 });
 </script>
 
 <template>
-  <div ref="scroller" class="mk-scroll" @scroll.passive="remember">
-    <main class="mk-page" :class="{ 'is-store': !packageId }">
-      <header class="mk-bar">
-        <RouterLink class="ui-btn" to="/"><Icon name="arrow-left" :size="13" />Map</RouterLink>
-        <RouterLink v-if="packageId || mineView" class="ui-btn" to="/packages"><Icon name="store" :size="13" />Marketplace</RouterLink>
-        <RouterLink v-if="session.user && !mineView" class="ui-btn" to="/packages?mine=1">My packages</RouterLink>
-        <h1 v-if="!packageId" class="mk-title">{{ mineView ? 'My packages' : 'Marketplace' }}</h1>
-      </header>
-
-      <div v-if="ready && mineView && !session.user" class="mk-empty">
-        <p><b>Sign in to see your packages.</b></p>
-        <button type="button" class="ui-btn is-primary" @click="signIn()">Sign in</button>
-      </div>
-
-      <template v-else-if="!packageId">
-        <form class="mk-find" role="search" @submit.prevent="search">
-          <input v-model="q" class="mk-box mk-q" type="search" placeholder="Search titles, descriptions and tags" aria-label="Search packages" maxlength="100" />
-          <button type="submit" class="ui-btn">Search</button>
-        </form>
-
-        <div class="mk-store">
-          <aside class="mk-side" aria-label="Filters">
-            <StoreFiltersBody :facets="counts" @toggle="pick" />
-          </aside>
-
-          <div class="mk-results">
-            <div class="mk-resbar">
-              <p class="mk-count" aria-live="polite">
-                <template v-if="ready && !(loading && !cards.length)">{{ resultsLine }}</template>
-              </p>
-              <button ref="filtersBtn" type="button" class="ui-btn mk-filters-btn" aria-haspopup="dialog" @click="openSheet">
-                <Icon name="sliders" :size="13" />Filters<template v-if="chosen"> ({{ chosen }})</template>
-              </button>
-              <label class="mk-sort">
-                <span>Sort by</span>
-                <select v-model="sort" class="mk-box" @change="go({ sort })">
-                  <option value="updated">Recently updated</option>
-                  <option value="installs">Most imported</option>
-                  <option value="title">Title</option>
-                </select>
-              </label>
-              <label v-if="isAdmin && !mineView" class="mk-check"><input v-model="hiddenOnly" type="checkbox" @change="go({})" /> Hidden</label>
-            </div>
-
-            <div v-if="chips.length" class="mk-active" role="group" aria-label="Active filters">
-              <button
-                v-for="chip in chips"
-                :key="chip.key + ':' + chip.value"
-                type="button"
-                class="mk-chip is-on"
-                :aria-label="'Remove ' + chip.words"
-                @click="pick(chip.key, chip.value)"
-              >{{ chip.words }} <Icon name="xmark" :size="10" /></button>
-              <button type="button" class="mk-link mk-clear" @click="clearFilters()">Clear all</button>
-            </div>
-
-            <section v-if="featuredRow.cards.length" class="mk-featured" aria-labelledby="mk-featured-h">
-              <h2 id="mk-featured-h" class="ui-heading">{{ featuredRow.heading }}</h2>
-              <ul class="mk-featured-row">
-                <li v-for="item in featuredRow.cards" :key="item.id"><StoreCard :card="item" :cdn="CDN" :now="now" wide /></li>
-              </ul>
-            </section>
-
-            <p v-if="error" class="mk-err" role="alert">{{ error }} <button type="button" class="mk-link" @click="loadCards()">Try again</button></p>
-            <ul v-if="!ready || (loading && !cards.length)" class="mk-grid" aria-busy="true" aria-label="Loading packages">
-              <li v-for="n in 6" :key="n" class="mk-card is-ghost"><span class="mk-cover"></span><span class="mk-card-body"><b>&nbsp;</b><small>&nbsp;</small><small>&nbsp;</small></span></li>
-            </ul>
-            <div v-else-if="!shown.length && !error && (filtered || mineView || hiddenView)" class="mk-empty">
-              <template v-if="mineView && !filtered">
-                <p><b>You have not published a package yet.</b></p>
-                <p>To publish one, open the map, turn on Build, select hexes, a subsector, or a sector, and then select Publish selection.</p>
-              </template>
-              <p v-else-if="hiddenView && !filtered"><b>No package is hidden.</b></p>
-              <template v-else>
-                <p><b>No packages match.</b></p>
-                <p>Try fewer filters or other search words.</p>
-                <button type="button" class="ui-btn" @click="clearFilters()">Clear all</button>
-              </template>
-            </div>
-            <div v-else-if="!shown.length && !error" class="mk-empty is-first">
-              <img class="mk-empty-art" :src="defaultCoverUrl('other', true)" alt="" width="640" height="360">
-              <p><b>No packages yet.</b></p>
-              <template v-if="session.user">
-                <p>Share a sector, a ship, or your contacts. Open the map, turn on Build, select what to share, and then select Publish selection.</p>
-                <RouterLink class="ui-btn is-primary" to="/">Publish a package</RouterLink>
-              </template>
-            </div>
-            <ul v-else class="mk-grid">
-              <li v-for="item in shown" :key="item.id"><StoreCard :card="item" :cdn="CDN" :now="now" /></li>
-            </ul>
-            <div v-if="shown.length && canShowMore" class="mk-more"><button type="button" class="ui-btn" :disabled="loading" @click="showMore()">Show more</button></div>
+  <div class="mk-app">
+    <Rail
+      ref="railEl"
+      :panel-open="false"
+      :search-open="false"
+      :account-open="accountOpen"
+      :build-offered="buildOffered"
+      :build-on="build.on && buildOffered"
+      market-open
+    />
+    <AccountMenu :open="accountOpen" @close="closeAccount" @campaign="goToCampaign" />
+    <!-- The videos' ground (design/base.css .ui-ground), still behind the page as it scrolls. -->
+    <div class="ui-ground mk-ground" aria-hidden="true"></div>
+    <div ref="scroller" class="mk-scroll" @scroll.passive="remember">
+      <main class="mk-page" :class="{ 'is-store': !packageId }">
+        <header class="mk-bar">
+          <RouterLink class="mk-brand" to="/packages" aria-label="Traveller.voyage Marketplace">
+            <span class="ui-brand" aria-hidden="true">Traveller<span class="ui-brand-dot">.</span>voyage</span>
+            <span class="mk-brand-where" aria-hidden="true">Marketplace</span>
+          </RouterLink>
+          <div class="mk-bar-acts">
+            <RouterLink v-if="session.user" class="ui-btn" :aria-current="mineView ? 'page' : undefined" to="/packages?mine=1">My packages</RouterLink>
+            <!-- Signed out, publishing starts with signing in (DS9); until the session is known, the place is held unseen. -->
+            <button v-if="!visitor" type="button" class="ui-btn is-primary" :class="{ 'is-unknown': !ready }" aria-haspopup="dialog" data-publish @click="openChooser()"><Icon name="plus" :size="13" />Publish</button>
+            <button v-else type="button" class="ui-btn" data-publish-sign-in @click="chooserSignIn()">Sign in to publish</button>
           </div>
+        </header>
+        <template v-if="!packageId">
+          <h1 class="mk-title">{{ mineView ? 'My packages' : 'Marketplace' }}</h1>
+          <div class="ui-rule mk-title-rule" aria-hidden="true"></div>
+        </template>
+
+        <div v-if="ready && mineView && !session.user" class="ui-frame mk-state">
+          <p class="ui-frame-label">My packages</p>
+          <p class="mk-state-head">Sign in to see your packages.</p>
+          <div class="mk-state-acts"><button type="button" class="ui-btn is-primary" @click="signIn()">Sign in</button></div>
         </div>
-        <ImportsList v-if="session.user && !mineView" />
 
-        <Teleport to="body">
-          <div v-if="sheetOpen" class="ui-modal mk-sheet" role="dialog" aria-modal="true" aria-labelledby="mk-sheet-h" @keydown="onSheetKey">
-            <div class="ui-modal-scrim" @click="closeSheet()"></div>
-            <div ref="sheetCard" class="ui-modal-card mk-sheet-card">
-              <div class="ui-modal-bar mk-sheet-bar">
-                <h2 id="mk-sheet-h" class="ui-modal-title mk-sheet-title">Filters</h2>
-                <button v-if="chosen" type="button" class="mk-link" @click="clearFilters()">Clear all</button>
-                <button type="button" class="ui-btn mk-sheet-close" aria-label="Close filters" @click="closeSheet()"><Icon name="xmark" :size="13" /></button>
-              </div>
-              <div class="mk-sheet-body">
-                <StoreFiltersBody :facets="counts" @toggle="pick" />
-              </div>
-              <div class="mk-sheet-foot">
-                <button type="button" class="ui-btn is-primary mk-sheet-show" @click="closeSheet()">
-                  {{ matching.length === 1 ? 'Show 1 result' : 'Show ' + matching.length.toLocaleString('en-US') + ' results' }}
+        <template v-else-if="!packageId">
+          <form class="mk-find" role="search" @submit.prevent="search">
+            <input v-model="q" class="mk-box mk-q" type="search" placeholder="Search titles, descriptions and tags" aria-label="Search packages" maxlength="100" />
+            <button type="submit" class="ui-btn">Search</button>
+          </form>
+
+          <div class="mk-store">
+            <aside class="mk-side" aria-label="Filters">
+              <StoreFiltersBody :facets="counts" @toggle="pick" />
+            </aside>
+
+            <div ref="resultsEl" class="mk-results" :style="heldHeight ? { minHeight: heldHeight + 'px' } : undefined">
+              <div class="mk-resbar">
+                <p class="mk-count" aria-live="polite">
+                  <template v-if="!firstLoad && !(error && !cards.length)">{{ resultsLine }}</template>
+                </p>
+                <button ref="filtersBtn" type="button" class="ui-btn mk-filters-btn" aria-haspopup="dialog" @click="openSheet">
+                  <Icon name="sliders" :size="13" />Filters<template v-if="chosen"> ({{ chosen }})</template>
                 </button>
+                <label class="mk-sort">
+                  <span>Sort by</span>
+                  <select v-model="sort" class="mk-box" @change="go({ sort })">
+                    <option value="updated">Recently updated</option>
+                    <option value="installs">Most imported</option>
+                    <option value="title">Title</option>
+                  </select>
+                </label>
+                <label v-if="isAdmin && !mineView" class="mk-check"><input v-model="hiddenOnly" type="checkbox" @change="go({})" /> Hidden</label>
               </div>
+
+              <div v-if="chips.length" class="mk-active" role="group" aria-label="Active filters">
+                <button
+                  v-for="chip in chips"
+                  :key="chip.key + ':' + chip.value"
+                  type="button"
+                  class="ui-chip mk-chip is-on"
+                  :aria-label="'Remove ' + chip.words"
+                  @click="pick(chip.key, chip.value)"
+                >{{ chip.words }} <Icon name="xmark" :size="10" /></button>
+                <button type="button" class="mk-link mk-clear" @click="clearFilters()">Clear all</button>
+              </div>
+
+              <div ref="resultsBody" class="mk-results-body">
+                <!-- The first paint holds the page's size: the featured frame and Browse by kind as placeholders too. -->
+                <template v-if="firstLoad && plainStore">
+                  <section class="mk-featured ui-frame is-ghost" aria-hidden="true">
+                    <p class="ui-frame-label">&nbsp;<span class="ui-frame-count">&nbsp;</span></p>
+                    <ul class="mk-featured-row">
+                      <li v-for="n in 3" :key="n"><span class="mk-card is-ghost is-wide"><span class="mk-cover"></span><span class="mk-card-body"><b class="mk-card-title">&nbsp;</b><small class="mk-card-by">&nbsp;</small><small class="mk-card-facts">&nbsp;</small><span class="mk-card-when"><span class="ui-date">&nbsp;</span></span></span></span></li>
+                    </ul>
+                  </section>
+                  <div class="mk-kinds is-ghost" aria-hidden="true"><p class="ui-kicker">&nbsp;</p><span class="mk-kind-ghost"></span></div>
+                </template>
+                <section v-if="featuredRow.cards.length" class="mk-featured ui-frame" aria-labelledby="mk-featured-h">
+                  <h2 id="mk-featured-h" class="ui-frame-label">{{ featuredRow.heading }} <span class="ui-frame-count">{{ featuredRow.cards.length }}</span></h2>
+                  <ul class="mk-featured-row">
+                    <li v-for="item in featuredRow.cards" :key="item.id"><StoreCard :card="item" :cdn="CDN" :now="now" wide /></li>
+                  </ul>
+                </section>
+
+                <section v-if="kindTiles.length" class="mk-kinds" aria-labelledby="mk-kinds-h">
+                  <h2 id="mk-kinds-h" class="ui-kicker">Browse by kind</h2>
+                  <ul class="mk-kind-row">
+                    <li v-for="facet in kindTiles" :key="facet.value">
+                      <button type="button" class="ui-btn mk-kind" @click="pick('kinds', facet.value)">{{ facet.words }} <span class="mk-kind-n">{{ facet.count }}</span></button>
+                    </li>
+                  </ul>
+                </section>
+
+                <!-- A refresh that failed while cards are shown: one line over them. -->
+                <p v-if="error && cards.length" class="mk-err" role="alert">{{ error }} <button type="button" class="mk-link" @click="loadCards()">Try again</button></p>
+                <ul v-if="firstLoad" class="mk-grid" aria-busy="true" aria-label="Loading packages">
+                  <li v-for="n in 6" :key="n" class="mk-card is-ghost"><span class="mk-cover"></span><span class="mk-card-body"><b class="mk-card-title">&nbsp;</b><small class="mk-card-by">&nbsp;</small><small class="mk-card-facts">&nbsp;</small><span class="mk-card-when"><span class="ui-date">&nbsp;</span></span></span></li>
+                </ul>
+                <!-- The catalogue could not be read and nothing is shown: say so in the results' place, with Try again. -->
+                <div v-else-if="error" class="ui-frame mk-state is-error" role="alert">
+                  <p class="ui-frame-label">Not loaded</p>
+                  <p class="mk-state-head">{{ error }}</p>
+                  <p class="mk-state-say">Check your connection, and then try again.</p>
+                  <div class="mk-state-acts"><button type="button" class="ui-btn is-primary" :disabled="loading" @click="loadCards()">Try again</button></div>
+                </div>
+                <div v-else-if="!shown.length && filtered" class="camp-first ui-ground">
+                  <span class="camp-glyph" aria-hidden="true"><Icon name="search" :size="22" /></span>
+                  <h2>No packages match</h2>
+                  <p>Try fewer filters, or search with other words.</p>
+                  <div class="camp-first-starts">
+                    <button type="button" class="ui-btn" @click="clearFilters()">Clear all</button>
+                  </div>
+                </div>
+                <div v-else-if="!shown.length && (mineView || hiddenView)" class="ui-frame mk-state">
+                  <template v-if="mineView">
+                    <p class="ui-frame-label">My packages</p>
+                    <p class="mk-state-head">You have not published a package yet.</p>
+                    <p class="mk-state-say">Publish records from your campaign (people, ships, organizations), or part of your map (systems, a subsector, a sector).</p>
+                    <div class="mk-state-acts"><button type="button" class="ui-btn is-primary" @click="openChooser()">Publish</button></div>
+                  </template>
+                  <template v-else>
+                    <p class="ui-frame-label">Hidden</p>
+                    <p class="mk-state-head">No package is hidden.</p>
+                  </template>
+                </div>
+                <div v-else-if="!shown.length" class="ui-frame mk-state is-first">
+                  <img class="mk-empty-art" :src="defaultCoverUrl('other', true)" alt="" width="640" height="360">
+                  <p class="ui-frame-label">The store</p>
+                  <p class="mk-state-head">No packages yet.</p>
+                  <p class="mk-state-say">Publish records from your campaign (people, ships, organizations), or part of your map (systems, a subsector, a sector).</p>
+                  <div class="mk-state-acts">
+                    <button v-if="visitor" type="button" class="ui-btn is-primary" @click="chooserSignIn()">Sign in to publish</button>
+                    <button v-else type="button" class="ui-btn is-primary" @click="openChooser()">Publish</button>
+                  </div>
+                </div>
+                <ul v-else class="mk-grid">
+                  <li v-for="item in shown" :key="item.id"><StoreCard :card="item" :cdn="CDN" :now="now" /></li>
+                </ul>
+                <div v-if="shown.length && canShowMore" class="mk-more"><button type="button" class="ui-btn" :disabled="loading" @click="showMore()">Show more</button></div>
+              </div>
+              <ImportsList v-if="session.user && mineView" />
             </div>
           </div>
-        </Teleport>
-      </template>
 
-      <ProductPage
-        v-else
-        :package-id="packageId"
-        :cdn="CDN"
-        :ready="ready"
-        :watching="watching"
-        :import-for="one(route.query.import)"
-        :update-id="one(route.query.update)"
-        :placed-back="one(route.query.placed) === '1'"
-      />
-    </main>
+          <Teleport to="body">
+            <div v-if="sheetOpen" class="ui-modal mk-sheet" role="dialog" aria-modal="true" aria-labelledby="mk-sheet-h" @keydown="onSheetKey">
+              <div class="ui-modal-scrim" @click="closeSheet()"></div>
+              <div ref="sheetCard" class="ui-modal-card mk-sheet-card">
+                <div class="ui-modal-bar mk-sheet-bar">
+                  <h2 id="mk-sheet-h" class="ui-modal-title mk-sheet-title">Filters</h2>
+                  <button v-if="chosen" type="button" class="mk-link" @click="clearFilters()">Clear all</button>
+                  <button type="button" class="ui-btn mk-sheet-close" aria-label="Close filters" @click="closeSheet()"><Icon name="xmark" :size="13" /></button>
+                </div>
+                <div class="mk-sheet-body">
+                  <StoreFiltersBody :facets="counts" @toggle="pick" />
+                </div>
+                <div class="mk-sheet-foot">
+                  <button type="button" class="ui-btn is-primary mk-sheet-show" @click="closeSheet()">
+                    {{ matching.length === 1 ? 'Show 1 result' : 'Show ' + matching.length.toLocaleString('en-US') + ' results' }}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </Teleport>
+        </template>
+
+        <ProductPage
+          v-else
+          :package-id="packageId"
+          :cdn="CDN"
+          :ready="ready"
+          :watching="watching"
+          :import-for="one(route.query.import)"
+          :update-id="one(route.query.update)"
+          :placed-back="one(route.query.placed) === '1'"
+        />
+      </main>
+    </div>
+    <PublishChooser
+      v-if="choosing"
+      :note="chooseNote"
+      :sign-in="chooseSignIn"
+      :busy="chooseBusy"
+      @records="publishRecords()"
+      @hexes="publishHexes()"
+      @signin="chooserSignIn()"
+      @close="closeChooser()"
+    />
+    <RecordsPublish v-if="publishingRecords" :start="[]" @close="publishingRecords = false" />
   </div>
 </template>
 
 <style>
 /* The page scrolls on its own, as the account page does: the app frame around it is fixed to
-   the window (App.vue), so the document never scrolls. The whole window is the scroller, so the
-   wheel works over the side margins too. */
+   the window (App.vue), so the document never scrolls. The store sits in the app's frame, right of
+   the rail (an expanded rail pushes it, as it pushes the chart); everything right of the rail is
+   the scroller, so the wheel works over the side margins too. */
 .mk-scroll {
   position: absolute;
-  inset: 0;
+  inset: 0 0 0 var(--rail-width);
   overflow-y: auto;
-  background: var(--bg-0);
+  transition: left var(--t-rail) ease;
 }
 
+/* The ground fills the same space and stays put: the page scrolls over it. */
+.mk-app .mk-ground {
+  position: absolute;
+  inset: 0 0 0 var(--rail-width);
+  transition: left var(--t-rail) ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mk-scroll,
+  .mk-app .mk-ground {
+    transition: none;
+  }
+}
+
+/* The room at the foot is the results' own (.mk-results), inside the column's row, so the sticky
+   column stays put down to the end of the page. */
 .mk-page {
   box-sizing: border-box;
   width: min(1240px, 100%);
   margin: 0 auto;
-  padding: 20px 16px 40px;
-  background: var(--bg-0);
+  padding: 20px 16px 12px;
   color: var(--text-0);
 }
 
@@ -422,13 +791,30 @@ onBeforeUnmount(() => {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: 10px 16px;
   margin-bottom: 16px;
 }
 
-.mk-bar .ui-btn,
-.mk-empty .ui-btn {
+.mk-bar-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.mk-bar .ui-btn[aria-current="page"] {
+  border-color: var(--row-active-line);
+  background: var(--row-active);
+  color: var(--signal-active);
+}
+
+.mk-bar .ui-btn {
   text-decoration: none;
+}
+
+/* Publish before the session is known: its place, unseen, so the row doesn't move when it is. */
+.mk-bar .ui-btn.is-unknown {
+  visibility: hidden;
 }
 
 /* A text button: See more, Clear all, Try again, Report. The store's own, so it is styled on a cold load. */
@@ -449,9 +835,13 @@ onBeforeUnmount(() => {
 }
 
 .mk-title {
-  flex: 1 1 100%;
   margin: 6px 0 0;
-  font: 700 24px/1.2 var(--font-display);
+  font: 700 26px/1.2 var(--font-display);
+}
+
+.mk-title-rule {
+  max-width: 560px;
+  margin-bottom: 16px;
 }
 
 /* The grid: 3 columns beside the filter column at 1600 px, 2 at 768, 1 at 390. */
@@ -468,17 +858,57 @@ onBeforeUnmount(() => {
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
 }
 
+/* A placeholder card: the real card's lines in their own fonts, so it is the real card's size. */
 .mk-card.is-ghost .mk-card-body b,
 .mk-card.is-ghost .mk-card-body small {
   display: block;
   width: 70%;
-  margin-bottom: 4px;
   border-radius: var(--r-1);
   background: var(--line-soft);
 }
 
 .mk-featured {
   margin-bottom: 20px;
+}
+
+.mk-featured .ui-frame-label {
+  margin-top: 0;
+}
+
+/* Browse by kind: one button per kind the store has, as the videos' storefront. */
+.mk-kinds {
+  margin-bottom: 20px;
+}
+
+.mk-kinds .ui-kicker {
+  margin-bottom: 10px;
+}
+
+.mk-kind-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A kind: the design system's button (.ui-btn) with the kind's count in Orbitron. */
+.mk-kind {
+  gap: 10px;
+  min-height: 36px;
+  padding: 6px 14px;
+}
+
+.mk-kind-ghost {
+  display: block;
+  height: 36px;
+}
+
+.mk-kind-n {
+  color: var(--signal);
+  font: 700 13px/1 var(--font-display);
+  font-variant-numeric: var(--tabular);
 }
 
 .mk-featured-row {
@@ -511,8 +941,15 @@ onBeforeUnmount(() => {
   display: none;
 }
 
+/* At least the window's height, so a smaller set never makes the scroller clamp and jump. */
+.mk-page:not(.is-store) {
+  padding-bottom: 40px;
+}
+
 .mk-results {
   min-width: 0;
+  min-height: 100vh;
+  padding-bottom: 28px;
 }
 
 .mk-resbar {
@@ -555,15 +992,11 @@ onBeforeUnmount(() => {
   margin-left: 4px;
 }
 
+/* An active filter: the design system's chip (.ui-chip) as a button, tall enough to tap, with its x. */
 .mk-chip {
-  display: inline-flex;
   align-items: center;
-  gap: 6px;
   min-height: 32px;
   padding: 4px 12px 4px 14px;
-  border: 1px solid var(--line-1);
-  border-radius: var(--r-pill);
-  background: var(--panel-raised);
   color: var(--text-0);
   font: 600 13px/1.2 var(--font-text);
   cursor: pointer;
@@ -575,6 +1008,20 @@ onBeforeUnmount(() => {
 
 .mk-chip .ui-icon {
   color: var(--text-muted);
+}
+
+/* Below the column's width the results bar (the count, Filters, Sort) stays at the top as the page
+   scrolls, so Filters is always one tap away and never moves. */
+@media (max-width: 1023px) {
+  .mk-resbar {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    margin: 0 -16px 12px;
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--line-1);
+    background: var(--bg-0);
+  }
 }
 
 @media (min-width: 1024px) {
@@ -672,36 +1119,15 @@ onBeforeUnmount(() => {
   margin: 0;
 }
 
+/* A tag: the design system's chip (.ui-chip) as a link to the store filtered by it. */
 .mk-tag {
-  padding: 2px 10px;
-  border: 1px solid var(--line-1);
-  border-radius: var(--r-pill);
-  background: var(--panel-raised);
-  color: var(--text-1);
-  font: 600 12px/1.5 var(--font-text);
+  font-weight: 600;
   text-decoration: none;
 }
 
 .mk-tag:hover {
   border-color: var(--signal-line);
   color: var(--text-0);
-}
-
-.mk-empty {
-  padding: 28px 16px;
-  border: 1px solid var(--line-1);
-  border-radius: var(--r-3);
-  background: var(--panel-raised);
-  text-align: center;
-}
-
-.mk-empty > p {
-  margin: 0 0 12px;
-}
-
-.mk-empty.is-first p {
-  max-width: 460px;
-  margin-inline: auto;
 }
 
 .mk-empty-art {

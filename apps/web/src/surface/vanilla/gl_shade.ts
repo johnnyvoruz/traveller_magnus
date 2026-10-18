@@ -1,8 +1,9 @@
 /**
  * Shade pass for the vanilla orbit disc.
- * DRAW_FRAG is js/planet_gl.js:320-688, character for character, including the
- * reversed-edge smoothstep calls (476, 481, 546, 617, 640, 644, 655, 666).
- * uTime is an argument. The backdrop shader is not ported.
+ * DRAW_FRAG follows js/planet_gl.js. City light is not added in the air:
+ * not outside the surface, and not as a limb haze. The reversed-edge
+ * smoothstep calls that remain are kept. uTime is an argument. The backdrop
+ * shader is not ported.
  */
 import type { BakeProfile, BakeStats } from './gl_bake.ts';
 import { axisBasis } from './gl_plan.ts';
@@ -166,9 +167,6 @@ vec4 halo(vec2 p, float d) {
         * smoothstep(-0.45, 0.45, facing) * smoothstep(reach, 1.0 + uHalo * 0.45, d);
     float sunset = exp(-pow((facing + 0.02) / 0.14, 2.0)) * (uGas > 0.5 ? 0.2 : 0.65);
     vec3 c = mix(airTint(alt * 0.35 + facing * 0.6 + 0.2, 0.85), vec3(1.0, 0.55, 0.31), sunset) * amount * uSun;
-    // A heavily built world's night-side air glows with its cities.
-    c += mix(uCityColor, vec3(0.75, 0.4, 1.0), uNeon * 0.6) * uCityHaze * 0.25
-        * exp(-alt * 1.6) * smoothstep(0.25, -0.35, facing) * smoothstep(reach, 1.0 + uHalo * 0.45, d);
     float a = clamp(max(c.r, max(c.g, c.b)), 0.0, 1.0);
     return vec4(min(c, vec3(a)), a);
 }
@@ -317,8 +315,6 @@ vec4 shadePlanet(vec2 p, float d, float aa, out float depth) {
             float nearGlow = texture(uB, qc, bias + 2.5).g;
             float spill = (nearGlow * 0.3 + skyGlow * 0.3 * (1.0 + cloud * 1.5)) * (1.0 - 0.9 * density);
             emit += glowTint * spill * uCityGlow * uCityGain;
-            // On a heavily built world, the night-side air glows toward the limb.
-            emit += glowTint * uCityHaze * pow(1.0 - z, 3.0) * 0.35;
         }
         // A soft shoulder, so the brightest districts saturate instead of clipping.
         emit = 1.0 - exp(-emit * 1.4);

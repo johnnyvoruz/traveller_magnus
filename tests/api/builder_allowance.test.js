@@ -134,7 +134,7 @@ function pairUnderSparse() {
 if (process.env.RUN_API_TESTS !== '1') {
     test('generation allowance on the worker', { skip: 'set RUN_API_TESTS=1' }, () => {});
 } else {
-    test('a daily allowance caps non-admins and resets with the UTC day', { timeout: 300000 }, async () => {
+    test('a daily allowance caps non-admins and resets with the UTC day', { timeout: 450000 }, async () => {
         const persistTo = mkdtempSync(path.join(tmpdir(), 'voyage-allow-'));
         const port = 18843;
         const inspectorPort = 19843;

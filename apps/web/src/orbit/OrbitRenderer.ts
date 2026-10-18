@@ -7,8 +7,9 @@
  * the same passes over a different picture. Where a body sits is the layout's business; this
  * file only draws what the picture says. Every colour comes from the theme.
  *
- * Worlds are flat discs with a night half (the legacy fallback, 4226-4231) until planet
- * imagery lands.
+ * A world is its shaded tile from the surface service (WebGL, or the software discs when the
+ * browser has none) where there is one, else a flat disc with a night half (the legacy
+ * fallback, 4226-4231).
  */
 import { shortLabel } from './bodies.ts';
 import { backdropBox, backdropShift, paintBackdrop, type BackdropBox } from './backdrop.ts';
@@ -26,7 +27,7 @@ import {
     type Picture, type Rocks, type StarDraw, type WorldDraw,
 } from './picture.ts';
 import { discBatch, sunColour, visualRate, type OrbitDiscBatch } from './disc_batch.ts';
-import { SURFACE_WEBGL_NOTICE, webglMissing } from '../surface/webgl_notice.ts';
+import { SURFACE_WEBGL_NOTICE, SURFACE_WEBGL_NOTICE_SHORT, webglMissing } from '../surface/webgl_notice.ts';
 import { pictureOfAu, pointWords } from './distance.ts';
 import { dockedBeside, pictureBodies, plotText, readoutPlace, type DrawnWaypoint, type PlotReadout, type ShipMark, type ShipShape } from './ships.ts';
 import { whenWords } from './ship_list.ts';
@@ -77,6 +78,8 @@ type GhostSpec = {
 };
 type HeldLayer = { bands: BandAt[]; jumps: JumpAt[]; paths: PathAt[]; panels: Panel[] };
 const TOGGLE_KEYS: readonly ToggleKey[] = ['habitable', 'jump', 'paths', 'moons', 'dayNight', 'scan', 'markMainworld'];
+/** Below this picture width (CSS px) the WebGL notice is its short line. */
+const NOTICE_SHORT_BELOW = 520;
 
 const TAU = Math.PI * 2;
 /** About three seconds of frames: how long a still picture keeps painting after its last missing tile. */
@@ -479,8 +482,9 @@ export class OrbitRenderer {
     }
 
     /**
-     * One quiet line when this browser has no WebGL. The discs stay the flat
-     * day-and-night fallback. The line sits on the picture, clear of the right edge.
+     * One quiet line when this browser has no WebGL: the discs are the software ones, plainer
+     * than WebGL's. The line sits on the picture, clear of the right edge. A narrow picture (a phone)
+     * gets the short line, so the notice doesn't cover it.
      */
     private paintWebglNotice(): void {
         if (!webglMissing()) return;
@@ -495,7 +499,8 @@ export class OrbitRenderer {
         const max = Math.max(80, this.w - 96);
         const lines: string[] = [];
         let line = '';
-        for (const word of SURFACE_WEBGL_NOTICE.split(' ')) {
+        const notice = this.w < NOTICE_SHORT_BELOW ? SURFACE_WEBGL_NOTICE_SHORT : SURFACE_WEBGL_NOTICE;
+        for (const word of notice.split(' ')) {
             const next = line ? line + ' ' + word : word;
             if (line && ctx.measureText(next).width > max) {
                 lines.push(line);
@@ -1094,14 +1099,14 @@ export class OrbitRenderer {
     private flatRings(x: number, y: number, radii: readonly number[], alpha: number): void {
         if (!(alpha > 0.004) || radii.length === 0) return;
         if (alpha >= 1) {
-            for (const r of radii) this.staticRing(x, y, r);
+            this.staticRings(x, y, radii);
             return;
         }
         const ctx = this.ctx;
         const current = ctx.globalAlpha;
         ctx.save();
         ctx.globalAlpha = (typeof current === 'number' ? current : 1) * alpha;
-        for (const r of radii) this.staticRing(x, y, r);
+        this.staticRings(x, y, radii);
         ctx.restore();
     }
 
@@ -1678,10 +1683,14 @@ export class OrbitRenderer {
     }
 
     /** js/system_viewer.js:3460-3466. */
-    private staticRing(x: number, y: number, r: number): void {
+    /** A world's ringlets as one path and one stroke: the same circles, without a stroke each. */
+    private staticRings(x: number, y: number, radii: readonly number[]): void {
         const ctx = this.ctx;
         ctx.beginPath();
-        ctx.arc(x, y, r, 0, TAU);
+        for (const r of radii) {
+            ctx.moveTo(x + r, y);
+            ctx.arc(x, y, r, 0, TAU);
+        }
         ctx.strokeStyle = this.theme.ring;
         ctx.lineWidth = 1;
         ctx.stroke();
@@ -1963,7 +1972,11 @@ export class OrbitRenderer {
             ctx.restore();
             return;
         }
-        // Glow under the lock.
+        // Glow under the lock. It begins at the body's own edge and never covers the body:
+        // painted over the limb, its translucent gold reads as a band of air round the night
+        // side, with the surface's city lights showing through it (findings/city_lights_fix).
+        // Outside the body the gradient is unchanged. A belt has no disc under the lock point.
+        const glowFrom = hit.innerR !== undefined ? R * 0.9 : (hit.visualR ?? hit.r);
         const glow = ctx.createRadialGradient(cx, cy, R * 0.9, cx, cy, R + 22);
         glow.addColorStop(0, theme.lockGlow[0]);
         glow.addColorStop(1, theme.lockGlow[1]);
@@ -1971,7 +1984,7 @@ export class OrbitRenderer {
         ctx.fillStyle = glow;
         ctx.beginPath();
         ctx.arc(cx, cy, R + 22, 0, TAU);
-        ctx.arc(cx, cy, R * 0.9, 0, TAU, true);
+        ctx.arc(cx, cy, glowFrom, 0, TAU, true);
         ctx.fill();
         // The ring draws itself on.
         ctx.globalAlpha = 0.95 * dim;

@@ -220,6 +220,16 @@ export function afterTask(fn: () => void): () => void {
     return () => clearTimeout(handle);
 }
 
+/** Runs fn after ms milliseconds. clearTimeout cancels the handle. */
+export function later(fn: () => void, ms: number): ReturnType<typeof setTimeout> {
+    return setTimeout(fn, ms);
+}
+
+/** An element in the page document. */
+export function createElement<K extends keyof HTMLElementTagNameMap>(tag: K): HTMLElementTagNameMap[K] {
+    return document.createElement(tag);
+}
+
 /** Long-task entries during a cold paint. No-op where the observer is missing. */
 export function observeLongTasks(fn: (duration: number) => void, buffered = true): () => void {
     if (typeof PerformanceObserver === 'undefined') return () => {};
@@ -249,4 +259,123 @@ export function loadImageAsync(src: string): Promise<HTMLImageElement | null> {
         image.onerror = () => resolve(null);
         image.src = src;
     });
+}
+
+/**
+ * A keydown anywhere on the page, after the view that had focus has seen it.
+ * A view that handled the key sets defaultPrevented; the listener can skip those.
+ */
+/** Immutable chart files only. Not the versions list, and not a place the campaign is saved. */
+const CHART_CACHE = 'voyage-chart';
+
+/** A chart file kept from an earlier visit, or null. Missing Cache API, or a locked cache, is a miss. */
+export async function chartMatch(url: string): Promise<Response | null> {
+    if (typeof caches === 'undefined') return null;
+    try {
+        const cache = await caches.open(CHART_CACHE);
+        const hit = await cache.match(url);
+        return hit ?? null;
+    } catch {
+        return null;
+    }
+}
+
+/** The version already swept. A later ask for the same version does not list the cache again. */
+let chartSwept: string | null = null;
+
+/** The truth version in a chart URL, or null when the URL is not under `/truth/<version>/`. */
+function chartVersionOf(url: string): string | null {
+    const found = /\/truth\/([^/]+)\//.exec(url);
+    return found ? found[1] : null;
+}
+
+/**
+ * Drops `voyage-chart` entries under any truth version other than `version`.
+ * Object bytes stay. They are named by hash, not by version. `chartMatch` is unchanged.
+ * A missing Cache API, or a cache that cannot list keys, is left as it is.
+ */
+export async function chartKeepVersion(version: string): Promise<void> {
+    if (!version || typeof caches === 'undefined' || chartSwept === version) return;
+    try {
+        const cache = await caches.open(CHART_CACHE);
+        if (typeof cache.keys !== 'function' || typeof cache.delete !== 'function') {
+            chartSwept = version;
+            return;
+        }
+        const keys = await cache.keys();
+        for (const request of keys) {
+            const url = typeof request === 'string' ? request : request.url;
+            const held = chartVersionOf(url);
+            if (held && held !== version) await cache.delete(request);
+        }
+        chartSwept = version;
+    } catch {
+        // The next version ask tries again.
+    }
+}
+
+/** Keeps one successful chart response. A failure here does not affect the read that just succeeded. */
+export async function chartPut(url: string, response: Response): Promise<void> {
+    if (typeof caches === 'undefined') return;
+    try {
+        const cache = await caches.open(CHART_CACHE);
+        await cache.put(url, response);
+    } catch {
+        // The network read already succeeded. The next visit fetches again.
+    }
+}
+
+/** The map locator pill's height, in CSS pixels. Zero when the line is absent or empty. */
+export function locatorHeight(): number {
+    if (typeof document === 'undefined') return 0;
+    const node = document.querySelector('.ui-status');
+    if (!(node instanceof HTMLElement)) return 0;
+    if (node.getClientRects().length === 0) return 0;
+    return node.offsetHeight;
+}
+
+/** A viewport resize. The map's locator line can wrap, so a card above it measures again. */
+export function onPageResize(fn: () => void): () => void {
+    if (typeof window === 'undefined') return () => {};
+    window.addEventListener('resize', fn);
+    return () => window.removeEventListener('resize', fn);
+}
+
+/** The installable shell. No-op where this browser has no service worker. */
+export function registerAppShell(): void {
+    if (typeof navigator === 'undefined' || navigator.serviceWorker == null) return;
+    void navigator.serviceWorker.register('/sw.js', { type: 'module' });
+}
+
+export function onPageKeyDown(fn: (event: KeyboardEvent) => void): () => void {
+    if (typeof window === 'undefined') return () => {};
+    window.addEventListener('keydown', fn);
+    return () => window.removeEventListener('keydown', fn);
+}
+
+/** The browser's print dialog, for the page as the print stylesheet shows it (DU31). */
+export function printPage(): void {
+    if (typeof window === 'undefined') return;
+    window.print();
+}
+
+/** Calls back each time the print dialog closes. Returns an unsubscribe. */
+export function onAfterPrint(fn: () => void): () => void {
+    if (typeof window === 'undefined') return () => {};
+    window.addEventListener('afterprint', fn);
+    return () => window.removeEventListener('afterprint', fn);
+}
+
+/** True when this tab is the one the reader is looking at. True where there is no document. */
+export function pageVisible(): boolean {
+    if (typeof document === 'undefined') return true;
+    return document.visibilityState === 'visible';
+}
+
+/** Fires when the tab is shown or hidden. Returns the function that stops it. */
+export function onPageVisibility(fn: () => void): () => void {
+    if (typeof document === 'undefined') return () => {};
+    const onVis = () => fn();
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
 }

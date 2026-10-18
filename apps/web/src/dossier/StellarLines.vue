@@ -9,7 +9,7 @@ defineProps<{ lines: StellarLine[] }>();
 
 <template>
   <div v-if="lines.length" class="doss-stellar">
-    <h3 class="ui-heading">Stellar configuration</h3>
+    <h3 class="ui-heading ui-kicker">Stellar configuration</h3>
     <p v-for="(line, index) in lines" :key="index" class="doss-star">
       <BodyGlyph :glyph="line.glyph" :size="16" />
       <CodeNote v-if="stellarWords(line.text)" :text="stellarWords(line.text) || ''" code="stellar">{{ line.text }}</CodeNote>

@@ -10,7 +10,7 @@ import { campaign } from '../../campaign/store.ts';
 import Icon from '../../design/Icon.vue';
 import { wrapFocus } from '../focus_trap.ts';
 import { liveRecords, typeInfo } from '../records.ts';
-import { closePublish, formProblems, kindOfRecords, marketStore, marketUi, ownUniverse, parseTags, plural, publish, usePublishTarget } from './market.ts';
+import { closePublish, formProblems, kindOfRecords, marketStore, marketUi, ownUniverse, parseTags, plural, publish, REFEREE_ONLY_NOTE, usePublishTarget } from './market.ts';
 import PublishFields from './PublishFields.vue';
 
 const props = defineProps<{
@@ -139,11 +139,12 @@ onMounted(() => {
             <label v-for="record in all" :key="record.id">
               <input type="checkbox" :checked="picked.has(record.id)" :disabled="marketUi.busy" @change="toggle(record.id, ($event.target as HTMLInputElement).checked)" />
               <span>{{ record.name }}</span><small>{{ typeInfo(record.type).one }}</small>
+              <em v-if="picked.has(record.id) && record.visibility === 'referee'" class="mk-rec-note" data-referee-only>{{ REFEREE_ONLY_NOTE }}</em>
             </label>
           </fieldset>
 
           <p class="mk-note">A published package is a snapshot of these records as they are now. Anyone who has its address can read it.</p>
-          <p class="build-fine">A package holds up to 500 records. Titles are up to 80 characters. Use up to 32 tags, each up to 40 characters.</p>
+          <p class="mk-fine">A package holds up to 500 records. Titles are up to 80 characters. Use up to 32 tags, each up to 40 characters.</p>
           <p v-if="marketUi.error" class="mk-err" role="alert">{{ marketUi.error }}</p>
           <div class="mk-acts">
             <button type="submit" class="ui-btn is-primary" data-market-publish :disabled="selectionProblems.length > 0 || marketUi.busy" :aria-busy="marketUi.busy ? 'true' : undefined">{{ sendLabel }}</button>

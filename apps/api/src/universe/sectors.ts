@@ -54,7 +54,7 @@ async function bodyOf(request: Request): Promise<unknown> {
     try {
         return await request.json();
     } catch {
-        throw new HexRefusal('validation', 'Invalid JSON.');
+        throw new HexRefusal('validation', 'That request could not be read. Try again.');
     }
 }
 
@@ -105,7 +105,7 @@ function slotTaken(sql: Sql, x: number, y: number, except: string): SqlRow | nul
 }
 
 function refuseSlot(sql: Sql, x: number, y: number, except: string, charted: boolean): void {
-    if (charted) throw new HexRefusal('validation', 'That slot holds a charted sector.', { reason: 'charted' });
+    if (charted) throw new HexRefusal('validation', 'That place already has a published chart.', { reason: 'charted' });
     const taken = slotTaken(sql, x, y, except);
     if (taken) throw new HexRefusal('conflict', 'That slot is in use. Choose another slot.', { code: 'slot_in_use', current: view(taken) });
 }
@@ -285,7 +285,7 @@ function undo(sql: Sql, id: string, toRev: number, baseRev: number, now: string)
     assertRev(row, baseRev);
     const history = sql.exec(`SELECT * FROM sector_history WHERE sector_slug = ? AND rev = ?`, id, toRev);
     const prior = history[0];
-    if (!prior || typeof prior.payload !== 'string') throw new HexRefusal('not_found', 'No such revision.');
+    if (!prior || typeof prior.payload !== 'string') throw new HexRefusal('not_found', 'There is nothing to undo.');
     const payload = JSON.parse(prior.payload) as Snapshot;
     if (!payload.sector.deleted) refuseSlot(sql, payload.sector.x, payload.sector.y, id, false);
     const rev = baseRev + 1;
@@ -319,7 +319,7 @@ export function resolveMadeSectors(
     seeds: { name: string; slot: { x: number; y: number } }[],
     ids: string[],
 ): { sectors: { id: string; name: string; x: number; y: number }[]; hexKeys: string[] } {
-    if (ids.length !== seeds.length) throw new HexRefusal('validation', 'Invalid request.');
+    if (ids.length !== seeds.length) throw new HexRefusal('validation', 'That request could not be read. Try again.');
     const bySlot = new Map<string, { id: string; name: string; x: number; y: number }>();
     for (let i = 0; i < seeds.length; i++) {
         const seed = seeds[i]!;
@@ -374,9 +374,9 @@ function undoInline(sql: Sql, sectorId: string, baseRev: number, pin: Pin, now: 
     const row = requireLive(sql, sectorId);
     assertRev(row, baseRev);
     const stored = sql.exec(`SELECT value FROM meta WHERE key = ?`, `generateAct:${sectorId}`)[0];
-    if (!stored || typeof stored.value !== 'string') throw new HexRefusal('validation', 'Nothing to undo.');
+    if (!stored || typeof stored.value !== 'string') throw new HexRefusal('validation', 'There is nothing to undo.');
     const act = JSON.parse(stored.value) as { hexKey?: unknown; rev?: unknown };
-    if (typeof act.hexKey !== 'string' || typeof act.rev !== 'number') throw new HexRefusal('validation', 'Nothing to undo.');
+    if (typeof act.hexKey !== 'string' || typeof act.rev !== 'number') throw new HexRefusal('validation', 'There is nothing to undo.');
     requireWrittenRev(sql, act.hexKey, act.rev, pin);
     const deleted = removeSector(sql, sectorId, baseRev, now);
     return SectorGenerateUndone.parse({
@@ -389,7 +389,7 @@ function undoInline(sql: Sql, sectorId: string, baseRev: number, pin: Pin, now: 
 function undoJobAct(sql: Sql, jobId: string, pin: Pin, now: string) {
     markJobStopped(sql, jobId, now);
     const bundle = readJobBundle(sql, jobId);
-    if (bundle.blob.undone) throw new HexRefusal('validation', 'Already undone.', { reason: 'already_undone' });
+    if (bundle.blob.undone) throw new HexRefusal('validation', 'That is already undone.', { reason: 'already_undone' });
     const made = bundle.spec.madeSectors ?? [];
     const madeIds = new Set(made.map((sector) => sector.id));
     for (const sector of made) {
@@ -441,15 +441,15 @@ async function routeSector(sql: Sql, request: Request, now: string, pin: Pin | n
         if (!pin) return json({ items: [] });
         return json(list(sql));
     }
-    if (!pin) throw new HexRefusal('validation', 'This universe has no generation pin. Open it again.');
+    if (!pin) throw new HexRefusal('validation', 'Open this campaign again, then try again.');
     if (request.method === 'POST' && path === '/sectors/generate') {
         const body = await bodyOf(request) as GenerateCommit;
-        if (!body || !Array.isArray(body.sectors)) throw new HexRefusal('validation', 'Invalid request.');
+        if (!body || !Array.isArray(body.sectors)) throw new HexRefusal('validation', 'That request could not be read. Try again.');
         return json(commitGenerate(sql, body, pin, now));
     }
     if (request.method === 'POST' && path === '/sectors/undo-generate') {
         const parsed = SectorGenerateUndo.safeParse(await bodyOf(request));
-        if (!parsed.success) throw new HexRefusal('validation', 'Invalid request.');
+        if (!parsed.success) throw new HexRefusal('validation', 'That request could not be read. Try again.');
         const data = parsed.data;
         return json(sql.transaction(() => ('jobId' in data
             ? undoJobAct(sql, data.jobId, pin, now)
@@ -458,13 +458,13 @@ async function routeSector(sql: Sql, request: Request, now: string, pin: Pin | n
     if (request.method === 'POST' && path === '/sectors') {
         const body = await bodyOf(request) as { id?: string; name?: string; slot?: unknown; charted?: boolean };
         const parsed = SectorMake.safeParse({ name: body.name, slot: body.slot });
-        if (!parsed.success || typeof body.id !== 'string') throw new HexRefusal('validation', 'Invalid request.');
+        if (!parsed.success || typeof body.id !== 'string') throw new HexRefusal('validation', 'That request could not be read. Try again.');
         return json(sql.transaction(() => make(sql, body.id!, parsed.data.name, parsed.data.slot.x, parsed.data.slot.y, chartedOf(body), now)), 201);
     }
     const subClear = /^\/sectors\/([^/]+)\/subsectors\/([A-P])\/clear$/.exec(path);
     if (request.method === 'POST' && subClear) {
         const body = await bodyOf(request) as { baseRev?: number };
-        if (typeof body.baseRev !== 'number') throw new HexRefusal('validation', 'Invalid request.');
+        if (typeof body.baseRev !== 'number') throw new HexRefusal('validation', 'That request could not be read. Try again.');
         const sectorId = decodeURIComponent(subClear[1]);
         const letter = subClear[2];
         return json(sql.transaction(() => clearSubsector(sql, sectorId, letter, body.baseRev as number, now)));
@@ -472,8 +472,8 @@ async function routeSector(sql: Sql, request: Request, now: string, pin: Pin | n
     const sub = /^\/sectors\/([^/]+)\/subsectors\/([A-P])$/.exec(path);
     if (request.method === 'POST' && sub) {
         const parsed = SubsectorRename.safeParse(await bodyOf(request));
-        if (!parsed.success) throw new HexRefusal('validation', 'Invalid request.');
-        if (!SubsectorLetter.safeParse(sub[2]).success) throw new HexRefusal('validation', 'Invalid subsector.');
+        if (!parsed.success) throw new HexRefusal('validation', 'That request could not be read. Try again.');
+        if (!SubsectorLetter.safeParse(sub[2]).success) throw new HexRefusal('validation', 'That request could not be read. Try again.');
         return json(sql.transaction(() => renameSubsector(sql, decodeURIComponent(sub[1]), sub[2], parsed.data.name, parsed.data.baseRev, now)));
     }
     const one = /^\/sectors\/([^/]+)\/(rename|move|delete|undo)$/.exec(path);
@@ -483,25 +483,25 @@ async function routeSector(sql: Sql, request: Request, now: string, pin: Pin | n
         const body = await bodyOf(request);
         if (action === 'rename') {
             const parsed = SectorRename.safeParse(body);
-            if (!parsed.success) throw new HexRefusal('validation', 'Invalid request.');
+            if (!parsed.success) throw new HexRefusal('validation', 'That request could not be read. Try again.');
             return json(sql.transaction(() => rename(sql, id, parsed.data.name, parsed.data.baseRev, now)));
         }
         if (action === 'move') {
             const record = body && typeof body === 'object' ? body as { slot?: unknown; baseRev?: unknown; charted?: boolean } : {};
             const parsed = SectorMove.safeParse({ slot: record.slot, baseRev: record.baseRev });
-            if (!parsed.success) throw new HexRefusal('validation', 'Invalid request.');
+            if (!parsed.success) throw new HexRefusal('validation', 'That request could not be read. Try again.');
             return json(sql.transaction(() => move(sql, id, parsed.data.slot.x, parsed.data.slot.y, parsed.data.baseRev, chartedOf(body), now)));
         }
         if (action === 'delete') {
             const baseRev = body && typeof body === 'object' ? (body as { baseRev?: unknown }).baseRev : undefined;
-            if (typeof baseRev !== 'number') throw new HexRefusal('validation', 'Invalid request.');
+            if (typeof baseRev !== 'number') throw new HexRefusal('validation', 'That request could not be read. Try again.');
             return json(sql.transaction(() => removeSector(sql, id, baseRev, now)));
         }
         const parsed = SectorUndo.safeParse(body);
-        if (!parsed.success) throw new HexRefusal('validation', 'Invalid request.');
+        if (!parsed.success) throw new HexRefusal('validation', 'That request could not be read. Try again.');
         return json(sql.transaction(() => undo(sql, id, parsed.data.toRev, parsed.data.baseRev, now)));
     }
-    throw new HexRefusal('not_found', 'No such route.');
+    throw new HexRefusal('not_found', 'That page does not exist.');
 }
 
 /**

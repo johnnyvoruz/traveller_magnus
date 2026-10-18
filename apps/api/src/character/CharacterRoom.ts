@@ -67,7 +67,7 @@ export class CharacterRoom extends DurableObject<Env> {
             try {
                 body = await request.json();
             } catch {
-                return problem(400, 'validation', 'Invalid JSON.');
+                return problem(400, 'validation', 'That request could not be read. Try again.');
             }
         }
         const record = body && typeof body === 'object' ? body as Record<string, unknown> : {};
@@ -111,7 +111,7 @@ export class CharacterRoom extends DurableObject<Env> {
             this.room(this.sockets()).retell(roles);
             return json({ roles });
         }
-        return problem(400, 'not_found', 'No such route.');
+        return problem(400, 'not_found', 'That page does not exist.');
     }
 
     private join(request: Request): Response {
@@ -120,7 +120,7 @@ export class CharacterRoom extends DurableObject<Env> {
         }
         const userId = request.headers.get('x-voyage-user-id') ?? '';
         const role = request.headers.get('x-voyage-role');
-        if (!userId || (role !== 'owner' && role !== 'editor')) return problem(401, 'unauthenticated', 'Sign in required.');
+        if (!userId || (role !== 'owner' && role !== 'editor')) return problem(401, 'unauthenticated', 'Sign in to continue.');
         let name = userId;
         try {
             name = decodeURIComponent(request.headers.get('x-voyage-user-name') ?? '') || userId;

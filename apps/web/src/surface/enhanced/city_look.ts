@@ -82,23 +82,27 @@ export const CITY_LOOK_B: CityLook = {
     sheet: 0,
 };
 
-/** B, plus a low carpet where cube C already has energy, on Rhylanor-class worlds. */
+/**
+ * B's network, a quieter carpet on population A, and wider light domes.
+ * Gain 1.2 at population 9 and above (population 5 stays at 1) so cores
+ * and threads stay brighter than the sheet. The sheet is 0.45.
+ */
 export const CITY_LOOK_C: CityLook = {
     id: 'C',
     index: 2,
     direct: 2.8,
-    tight: 2.6,
-    broad: 1.85,
-    tightFrom: 8,
-    tightTo: 20,
-    broadFrom: 12,
-    broadTo: 36,
+    tight: 3.2,
+    broad: 2.2,
+    tightFrom: 6,
+    tightTo: 36,
+    broadFrom: 10,
+    broadTo: 72,
     coreFrom: 0.004,
     coreTo: 0.07,
-    gain: 1.85,
+    gain: 1.2,
     arterial: 0.12,
     spread: 1,
-    sheet: 1.4,
+    sheet: 0.45,
 };
 
 const LOOKS: readonly CityLook[] = [CITY_LOOK_A, CITY_LOOK_B, CITY_LOOK_C];

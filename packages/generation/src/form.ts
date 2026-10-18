@@ -828,7 +828,7 @@ function applyRolls(copy: Copy, rolls: { id: string }[], messages: FormMessage[]
         const body = copy.bodies.find((item) => id.startsWith(item.id));
         const moon = body && body.moons.find((item) => id === `${item.id}.pd`);
         if (moon) { moon.pd = null; moon.manual = moon.manual.filter((item) => item !== 'pd'); rerun = true; continue; }
-        throw new FormRefusal('Nothing rolls this field.');
+        throw new FormRefusal('This field cannot be rolled.');
     }
     return { rerun, bodyId };
 }
@@ -1013,7 +1013,7 @@ function runEngine(copy: Copy, seed: Row, envelope: Envelope): Row {
         const sys = copy.edition === 'AoW'
             ? generateAoWSystemBottomUp(copy.hexKey, seed)
             : generateMgT2ESystemBottomUp(copy.hexKey, seed);
-        if (!sys) throw new FormRefusal('No system was produced.');
+        if (!sys) throw new FormRefusal('This system could not be built.');
         return sys;
     } finally {
         trace.enabled = false;
@@ -1247,7 +1247,7 @@ export function applyForm(envelope: Envelope | HandEnvelope, changes: FormChange
     for (const change of changes) {
         const item = known.get(change.id);
         if (!item) throw new FormRefusal('This form has no field with that name. Check the field and try again.');
-        if (item.permission === 'read') throw new FormRefusal(`You can't edit ${item.label}. Choose a field you can edit.`, change.id);
+        if (item.permission === 'read') throw new FormRefusal(`You cannot edit ${item.label}. Choose a field you can edit.`, change.id);
         if (change.id.startsWith('profile.')) profileChar(change.id, change.value);
     }
     if (changes.length === 0 && roll.length === 0) {

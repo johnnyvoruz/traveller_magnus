@@ -1,0 +1,32 @@
+GAME CONVENTIONS
+A quick discussion of terminology and conventions is
+needed before proceeding. Traveller uses two six-sided
+dice to resolve most actions. Some situations involve
+fewer or more dice.
+1D/2D: To avoid writing ‘roll two six-sided dice and add
+them together’ over and over again, Traveller uses the
+abbreviation ‘roll 2D’. Where you see ‘roll 2D’ read ‘roll
+two six-sided dice and add them together’. Sometimes
+you may also see ‘1D’, ‘3D’ or other numbers of ‘D’. This
+simply means roll one six-sided dice, three six-sided
+dice, or however many six-sided dice are indicated, and
+add them together to gain the final result.
+2D+3/3D-2: If an addition or subtraction appears after
+the normal dice abbreviation, that simply means add or
+subtract the number shown to the total rolled. So, for
+example, 2D+3 means ‘roll two dice, add them together
+and then add three’.
+D3: Occasionally, you may see a reference to D3.
+This means we treat the dice as if they have only three
+sides each, by dividing the number rolled by two and
+rounding upwards. So, a roll of 1–2 means one, a
+roll of 3–4 means two and a roll of 5–6 means three.
+If a number appears before the ‘D’ (such as 2D3,
+for example), this means roll two dice and divide the
+results of both by two before adding them together.
+D66: This is shorthand for a special way of rolling two
+six-sided dice. Before rolling nominate one dice as
+the ‘tens’ die and one as the ‘units’ die, to give you a
+two-digit number between 11 and 66. Some numbers
+cannot be rolled on a D66 (any number with a 7 or
+higher in it), giving you a total of 36 possible outcomes.

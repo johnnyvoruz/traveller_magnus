@@ -70,3 +70,19 @@ export async function chargeObjectBytes(db: D1Database, universeId: string, jobI
         throw err;
     }
 }
+
+/**
+ * Add the job's bytes, then run the settled mark.
+ * The add is idempotent by job id, so a crash after the add and before the mark
+ * retries the mark and does not add the bytes again.
+ */
+export async function accountSettledBytes(
+    db: D1Database,
+    universeId: string,
+    jobId: string,
+    bytes: number,
+    mark: () => Promise<void>,
+): Promise<void> {
+    await chargeObjectBytes(db, universeId, jobId, bytes);
+    await mark();
+}

@@ -10,7 +10,7 @@ export type AuthFailure = { ok: false; code: string; message: string };
 export type AuthResult<T> = ({ ok: true } & T) | AuthFailure;
 
 export const CEREMONY_CANCELLED = 'ceremony_cancelled';
-export const CEREMONY_CANCELLED_MESSAGE = 'The passkey ceremony was cancelled.';
+export const CEREMONY_CANCELLED_MESSAGE = 'You closed the passkey prompt.';
 export const PASSKEY_UNAVAILABLE = 'passkey_unavailable';
 export const PASSKEY_UNAVAILABLE_MESSAGE = 'This browser cannot create a passkey.';
 const NETWORK = 'network';
@@ -29,7 +29,7 @@ const SERVER_CODES = new Set([
     'passkey_unavailable', 'PROVIDER_NOT_FOUND',
 ]);
 const CEREMONY_FAILED = 'ceremony_failed';
-const CEREMONY_FAILED_MESSAGE = 'The passkey ceremony did not finish.';
+const CEREMONY_FAILED_MESSAGE = 'The passkey could not be used. Try again.';
 export type LinkedAccount = { id: string; providerId: string };
 
 type CeremonyError = { code?: string; message?: string; name?: string; cause?: unknown };

@@ -1,8 +1,13 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
+import { resetCampaign } from '../../apps/web/src/campaign/commit.ts';
+import { deleteEntry, saveEntry } from '../../apps/web/src/campaign/journal.ts';
+import { campaign } from '../../apps/web/src/campaign/store.ts';
+import { toasts } from '../../apps/web/src/shell/toast.ts';
 import { bodyParts } from '../../apps/web/src/workspace/journal/body.ts';
 import { parsePlayed, parseWhen } from '../../apps/web/src/workspace/journal/dates.ts';
-import { entryName, filterEntries, kindCounts, readLine, rowFace, visibleRange } from '../../apps/web/src/workspace/journal/list.ts';
+import { entryName, filterEntries, kindCounts, playerNoteAccess, readLine, rowFace, visibleRange, writtenBy } from '../../apps/web/src/workspace/journal/list.ts';
 
 const ID = 'cj_11111111-1111-4111-8111-111111111111';
 const RECORD = 'cr_22222222-2222-4222-8222-222222222222';
@@ -149,6 +154,61 @@ test('a body draws a record chip, a hex chip, and leaves an unknown token and a 
     assert.match(tail.kind === 'text' ? tail.text : '', /<script>alert\(1\)<\/script>/);
     const renamed = bodyParts('[[cr_22222222-2222-4222-8222-222222222222|Old]]', () => 'Beowulf');
     assert.equal(renamed[0].kind === 'record' && renamed[0].label, 'Beowulf');
+});
+
+test('a player note names who wrote it, and only that player edits it', () => {
+    const faced = rowFace(entry({
+        title: 'Docked',
+        author: 'players',
+        visibility: 'players',
+        rev: 4,
+        body: 'Met [[' + RECORD + ']].',
+    }), {}, () => 'a record', 'kim');
+    assert.equal(faced.author, 'kim');
+    assert.equal(writtenBy('kim'), 'Written by kim');
+    assert.equal(writtenBy('  '), null);
+    assert.equal(faced.summary, 'Met a record.');
+    assert.equal(faced.summary.includes(RECORD), false);
+    assert.deepEqual(playerNoteAccess(true, true), { edit: true, images: false });
+    assert.deepEqual(playerNoteAccess(true, false), { edit: false, images: false });
+    assert.deepEqual(playerNoteAccess(false, true), { edit: true, images: true });
+
+    const page = readFileSync(new URL('../../apps/web/src/workspace/journal/EntryPage.vue', import.meta.url), 'utf8');
+    const list = readFileSync(new URL('../../apps/web/src/workspace/journal/JournalList.vue', import.meta.url), 'utf8');
+    assert.match(page, /Written by/);
+    assert.match(page, /imageLocked/);
+    assert.match(page, /rec-delete/);
+    assert.match(list, /Written by/);
+
+    const note = entry({ author: 'players', visibility: 'players', rev: 4, title: 'Docked', body: 'We docked.' });
+    const other = entry({
+        id: 'cj_99999999-9999-4999-8999-999999999999',
+        author: 'referee',
+        visibility: 'referee',
+        rev: 2,
+        title: 'Private',
+        body: 'secret',
+    });
+    campaign.status = 'ready';
+    campaign.role = 'player';
+    campaign.journal[note.id] = note;
+    campaign.journal[other.id] = other;
+    campaign.authorNames[note.id] = 'kim';
+    try {
+        assert.equal(saveEntry({ ...note, body: 'We docked at Regina.' }), true);
+        assert.equal(campaign.journal[note.id].body, 'We docked at Regina.');
+        assert.equal(campaign.journal[note.id].rev, 4);
+        assert.equal(saveEntry({ ...other, body: 'leaked' }), true);
+        assert.equal(campaign.journal[other.id].body, 'secret');
+        campaign.role = 'owner';
+        assert.equal(deleteEntry(note.id), true);
+        assert.equal(campaign.journal[note.id].deleted, true);
+        assert.equal(toasts[0] && toasts[0].action && toasts[0].action.label, 'Undo');
+        toasts[0].action.run();
+        assert.equal(campaign.journal[note.id].deleted, false);
+    } finally {
+        resetCampaign();
+    }
 });
 
 test('the two date fields accept DDD-YYYY and YYYY-MM-DD and refuse a script', () => {

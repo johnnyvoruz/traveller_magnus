@@ -3,8 +3,10 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import test from 'node:test';
+import test, { after, before } from 'node:test';
+import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { TSV } from '../golden/cases.js';
 import { TRUTH_SEED, TRUTH_SETTINGS } from '../../tools/truth/settings.js';
 import { SectorIndex, TruthManifest, TruthOverview, TruthPolities, sha256Hex, stable } from '@voyage/shared';
@@ -12,8 +14,37 @@ import { reconcileTree, environmentPolicy } from '@voyage/engines';
 import { emptyReport, mergeReports, provenanceDocument, reconciliationDigests, reportForTree } from '../../apps/api/src/jobs/reconcile_transform.ts';
 import { deadLetterConsumer } from '../../apps/api/src/jobs/dead_letter.ts';
 import { truthBuildConsumer } from '../../apps/api/src/jobs/truth_build.ts';
-import { adminCookie, runWrangler } from './session.js';
-import { apiRoot, withDevServer, wranglerBin } from './server.js';
+
+// Stream Z9: run on its own wrangler state, never the shared apps/api/.wrangler/state. Run alone,
+// the suite makes a temp state folder and its own dev port (18877, inspector 19877), applies the
+// migrations there, and at the end stops its server and deletes the folder. Under
+// scripts/test_api_all.mjs the runner already sets VOYAGE_PERSIST_TO and the ports, and removes
+// the state itself. The env must be set before server.js is loaded (it reads the port once).
+const OWN_STATE = process.env.RUN_API_TESTS === '1' && !process.env.VOYAGE_PERSIST_TO
+    ? mkdtempSync(path.join(tmpdir(), 'voyage-truth-state-'))
+    : null;
+if (OWN_STATE) {
+    process.env.VOYAGE_PERSIST_TO = OWN_STATE;
+    process.env.VOYAGE_API_PORT ||= '18877';
+    process.env.VOYAGE_INSPECTOR_PORT ||= '19877';
+}
+const { adminCookie, removeTree, runWrangler } = await import('./session.js');
+const { stateRoot, withDevServer, wranglerBin } = await import('./server.js');
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+
+/** Stops the suite's own dev server (server.js's pid file for its port) and deletes its state. */
+function dropOwnState() {
+    if (!OWN_STATE) return;
+    const devDir = path.join(repoRoot, '.tmp', `api-dev-${process.env.VOYAGE_API_PORT}`);
+    const pidFile = path.join(devDir, 'pid');
+    if (existsSync(pidFile)) {
+        const pid = readFileSync(pidFile, 'utf8').trim();
+        if (pid) spawnSync('taskkill', ['/pid', pid, '/T', '/F'], { stdio: 'ignore' });
+        console.log(`truth_build: own dev server pid ${pid} on ${process.env.VOYAGE_API_PORT} stopped`);
+    }
+    removeTree(devDir);
+    removeTree(OWN_STATE);
+}
 
 const ATTRIBUTION = 'Sector data from the Traveller Map (travellermap.com), used under Far Future Enterprises\' Fair Use Policy. Traveller is a registered trademark of Far Future Enterprises.';
 const XML = '<Sector><Name>Fixture</Name><X>0</X><Y>0</Y></Sector>\n';
@@ -118,15 +149,15 @@ function openReadonly(file) {
     throw last;
 }
 
-function objectKeys() {
-    const dir = path.join(apiRoot, '.wrangler', 'state', 'v3', 'r2', 'miniflare-R2BucketObject');
+function bucketKeys(prefix) {
+    const dir = path.join(stateRoot(), 'v3', 'r2', 'miniflare-R2BucketObject');
     if (!existsSync(dir)) return [];
     const keys = [];
     for (const name of readdirSync(dir)) {
         if (!name.endsWith('.sqlite') || name === 'metadata.sqlite') continue;
         const db = openReadonly(path.join(dir, name));
         try {
-            const rows = db.prepare("SELECT key FROM _mf_objects WHERE key LIKE 'objects/%'").all();
+            const rows = db.prepare('SELECT key FROM _mf_objects WHERE key LIKE ?').all(`${prefix}%`);
             for (const row of rows) keys.push(row.key);
         } catch (err) {
             if (!/no such table/i.test(String(err))) throw err;
@@ -138,8 +169,12 @@ function objectKeys() {
     return keys;
 }
 
+function objectKeys() {
+    return bucketKeys('objects/');
+}
+
 function traceMessages(needle) {
-    const dir = path.join(apiRoot, '.wrangler', 'state', 'v3', 'observability', 'miniflare-wobs-trace-store');
+    const dir = path.join(stateRoot(), 'v3', 'observability', 'miniflare-wobs-trace-store');
     if (!existsSync(dir)) return [];
     const messages = [];
     for (const name of readdirSync(dir)) {
@@ -170,6 +205,11 @@ if (process.env.RUN_API_TESTS !== '1') {
 } else if (!existsSync(wranglerBin)) {
     test('truth build', { skip: 'wrangler is absent' }, () => {});
 } else {
+    before(() => {
+        if (OWN_STATE) runWrangler(['d1', 'migrations', 'apply', 'voyage', '--local']);
+    });
+    after(() => dropOwnState());
+
     test('truth build slice binding calls', async () => {
         const pinned = { seed: TRUTH_SEED, settings: { ...TRUTH_SETTINGS }, engineVersion: '1.0.0' };
         const xml = '<Sector><Name>Wide</Name><X>1</X><Y>2</Y></Sector>\n';
@@ -198,7 +238,7 @@ if (process.env.RUN_API_TESTS !== '1') {
                 ack() {},
             }],
         }, finished.env);
-        assert.deepEqual(finished.calls, { get: 4, put: 3, list: 1, send: 0, batch: 1, run: 2 });
+        assert.deepEqual(finished.calls, { get: 4, put: 3, list: 2, send: 0, batch: 1, run: 2 });
     });
 
     test('dead letter marks a building sector failed and leaves done alone', async () => {
@@ -401,7 +441,7 @@ if (process.env.RUN_API_TESTS !== '1') {
                 ack() {},
             }],
         }, alone.env);
-        assert.deepEqual(alone.calls, { get: 3, put: 1, list: 0, send: 0, batch: 1, run: 1 });
+        assert.deepEqual(alone.calls, { get: 3, put: 1, list: 1, send: 0, batch: 1, run: 1 });
         assert.deepEqual(alone.puts.filter((key) => key.startsWith('objects/')), []);
         assert.equal(alone.puts[0], 'truth/vderived/sectors/Wide/index.json');
         const written = await alone.env.PUBLIC_BUCKET.get('truth/vderived/sectors/Wide/index.json');
@@ -445,9 +485,11 @@ if (process.env.RUN_API_TESTS !== '1') {
                 puts.push(key);
                 files.set(key, String(body));
             },
-            async list() {
+            async list(options) {
                 calls.list += 1;
-                return { objects: [], truncated: false };
+                const prefix = options?.prefix ?? '';
+                const keys = [...files.keys()].filter((key) => key.startsWith(prefix)).sort();
+                return { objects: keys.map((key) => ({ key })), truncated: false };
             },
         });
         await truthBuildConsumer({
@@ -482,7 +524,7 @@ if (process.env.RUN_API_TESTS !== '1') {
                 async batch() { calls.batch += 1; },
             },
         });
-        assert.deepEqual(calls, { get: 3, put: 1, list: 0, send: 1, batch: 1, run: 1 });
+        assert.deepEqual(calls, { get: 3, put: 1, list: 1, send: 1, batch: 1, run: 1 });
         assert.deepEqual(puts.filter((key) => key.startsWith('objects/')), []);
         assert.equal(sent.length, 1);
         assert.equal(sent[0].version, 'vderived');
@@ -1123,7 +1165,7 @@ if (process.env.RUN_API_TESTS !== '1') {
                 'd1', 'execute', 'voyage', '--local', '--command',
                 "SELECT state, engine_version, seed, derived_from, manifest_hash FROM truth_versions WHERE version = 'vtest'",
             ]));
-            assert.deepEqual(sourceRowAfter, sourceRowBefore);
+            assert.deepEqual(sourceRowAfter[0].results, sourceRowBefore[0].results);
             const reconcileRow = jsonFrom(runWrangler([
                 'd1', 'execute', 'voyage', '--local', '--command',
                 "SELECT state, engine_version, seed, derived_from FROM truth_versions WHERE version = 'vreconcile'",
@@ -1220,7 +1262,60 @@ if (process.env.RUN_API_TESTS !== '1') {
                 'd1', 'execute', 'voyage', '--local', '--command',
                 "SELECT state, engine_version, seed, derived_from, manifest_hash FROM truth_versions WHERE version = 'vtest'",
             ]));
-            assert.deepEqual(sourceRowFinal, sourceRowBefore);
+            assert.deepEqual(sourceRowFinal[0].results, sourceRowBefore[0].results);
+
+            const mismatch = await fetch(`${base}/api/admin/truth/builds/vreconcile/remove`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json', cookie },
+                body: JSON.stringify({ version: 'vtest' }),
+            });
+            const mismatchBody = await mismatch.json();
+            assert.equal(mismatch.status, 400, JSON.stringify(mismatchBody));
+            const releasedRemove = await fetch(`${base}/api/admin/truth/builds/vtest/remove`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json', cookie },
+                body: JSON.stringify({ version: 'vtest' }),
+            });
+            const releasedRemoveBody = await releasedRemove.json();
+            assert.equal(releasedRemove.status, 409, JSON.stringify(releasedRemoveBody));
+            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_versions WHERE version = 'vwithdrawn'"]);
+            runWrangler(['d1', 'execute', 'voyage', '--local', '--command',
+                "INSERT INTO truth_versions (version, engine_version, milieu, seed, settings, sectors, state, started_at, released_at, notes, manifest_hash, sectors_total, sectors_done, sectors_failed) VALUES ('vwithdrawn', '1.0.0', 'M1105', 's', '{}', '[]', 'withdrawn', '2020-01-01T00:00:00.000Z', NULL, NULL, NULL, 0, 0, '[]')"]);
+            const withdrawnRemove = await fetch(`${base}/api/admin/truth/builds/vwithdrawn/remove`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json', cookie },
+                body: JSON.stringify({ version: 'vwithdrawn' }),
+            });
+            const withdrawnRemoveBody = await withdrawnRemove.json();
+            assert.equal(withdrawnRemove.status, 409, JSON.stringify(withdrawnRemoveBody));
+            const keptObjects = objectKeys();
+            const removeAt = new Date().toISOString();
+            const removed = await fetch(`${base}/api/admin/truth/builds/vreconcile/remove`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json', cookie },
+                body: JSON.stringify({ version: 'vreconcile' }),
+            });
+            const removedBody = await removed.json();
+            assert.equal(removed.status, 200, JSON.stringify(removedBody));
+            assert.ok(removedBody.data.removedKeys > 0);
+            const gone = await fetch(`${base}/api/admin/truth/builds/vreconcile`, { headers: { cookie } });
+            assert.equal(gone.status, 404);
+            const removedRows = jsonFrom(runWrangler([
+                'd1', 'execute', 'voyage', '--local', '--command',
+                "SELECT (SELECT COUNT(*) FROM truth_versions WHERE version = 'vreconcile') AS versions, (SELECT COUNT(*) FROM truth_build_sectors WHERE version = 'vreconcile') AS sectors, (SELECT COUNT(*) FROM truth_systems WHERE version = 'vreconcile') AS systems",
+            ]));
+            assert.equal(removedRows[0].results[0].versions, 0);
+            assert.equal(removedRows[0].results[0].sectors, 0);
+            assert.equal(removedRows[0].results[0].systems, 0);
+            assert.deepEqual(bucketKeys('truth/vreconcile/'), []);
+            assert.deepEqual(objectKeys(), keptObjects);
+            const audit = jsonFrom(runWrangler([
+                'd1', 'execute', 'voyage', '--local', '--command',
+                `SELECT action FROM audit_log WHERE target_id = 'vreconcile' AND action = 'truth.remove' AND at >= '${removeAt}'`,
+            ]));
+            assert.equal(audit[0].results.length, 1);
+            runWrangler(['r2', 'object', 'get', 'voyage-public/truth/vtest/sectors/Fixture/index.json', '--file', sourceAgainFile, '--local']);
+            assert.equal(readFileSync(sourceAgainFile, 'utf8'), sourceIndexBytes);
 
             const wideTsvFile = path.join(dir, 'Wide.tsv');
             const wideXmlFile = path.join(dir, 'Wide.xml');
@@ -1394,7 +1489,8 @@ if (process.env.RUN_API_TESTS !== '1') {
             runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_systems WHERE version = 'vfeed'"]);
             runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_build_sectors WHERE version = 'vfeed'"]);
             runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_versions WHERE version = 'vfeed'"]);
-            const feedPosted = await fetch(`${base}/api/admin/truth/build`, {
+            // One sector per request (the cap, 1.1.12): "all" over the 14-sector catalogue is refused and creates nothing.
+            const feedAll = await fetch(`${base}/api/admin/truth/build`, {
                 method: 'POST',
                 headers: { 'content-type': 'application/json', cookie },
                 body: JSON.stringify({
@@ -1406,25 +1502,27 @@ if (process.env.RUN_API_TESTS !== '1') {
                     sectors: 'all',
                 }),
             });
+            const feedAllBody = await feedAll.json();
+            assert.equal(feedAll.status, 400, JSON.stringify(feedAllBody));
+            assert.equal(feedAllBody.error.message, 'The limit is one sector per request.');
+            assert.equal(feedAllBody.error.details.reason, 'one_sector');
+            const feedNone = await fetch(`${base}/api/admin/truth/builds/vfeed`, { headers: { cookie } });
+            assert.equal(feedNone.status, 404);
+            const feedPosted = await fetch(`${base}/api/admin/truth/build`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json', cookie },
+                body: JSON.stringify({
+                    milieu: 'M1105',
+                    version: 'vfeed',
+                    engineVersion: '1.0.0',
+                    seed: TRUTH_SEED,
+                    settings: { ...TRUTH_SETTINGS },
+                    sectors: [feedSlugs[0]],
+                }),
+            });
             const feedPostedBody = await feedPosted.json();
             assert.equal(feedPosted.status, 202, JSON.stringify(feedPostedBody));
-            assert.equal(feedPostedBody.data.enqueued, 14);
-            const feedEarly = await fetch(`${base}/api/admin/truth/builds/vfeed`, { headers: { cookie } });
-            const feedEarlyBody = await feedEarly.json();
-            assert.equal(feedEarly.status, 200, JSON.stringify(feedEarlyBody));
-            assert.equal(feedEarlyBody.data.sectorsTotal, 14, JSON.stringify(feedEarlyBody));
-            assert.equal(feedEarlyBody.data.sectors.length, 14, JSON.stringify(feedEarlyBody));
-            const earlyStates = ['queued', 'building', 'done'];
-            for (const item of feedEarlyBody.data.sectors) {
-                assert.equal(earlyStates.includes(item.state), true, JSON.stringify(item));
-            }
-            const earlyQueued = feedEarlyBody.data.sectors.filter((item) => item.state === 'queued').length;
-            const earlyBuilding = feedEarlyBody.data.sectors.filter((item) => item.state === 'building').length;
-            const earlyDone = feedEarlyBody.data.sectors.filter((item) => item.state === 'done').length;
-            assert.equal(earlyQueued + earlyBuilding + earlyDone, 14, JSON.stringify(feedEarlyBody));
-            assert.equal(feedEarlyBody.data.sectorsQueued, earlyQueued, JSON.stringify(feedEarlyBody));
-            assert.equal(feedEarlyBody.data.sectorsDone, earlyDone, JSON.stringify(feedEarlyBody));
-            assert.equal(feedEarlyBody.data.sectorsFailed, 0, JSON.stringify(feedEarlyBody));
+            assert.deepEqual(feedPostedBody.data.sectors, [feedSlugs[0]]);
             let feedBuild;
             const feedDeadline = Date.now() + 180000;
             while (Date.now() < feedDeadline) {
@@ -1433,10 +1531,11 @@ if (process.env.RUN_API_TESTS !== '1') {
                 assert.equal(response.status, 200, JSON.stringify(feedBuild));
                 const failed = feedBuild.data.sectors.find((item) => item.state === 'failed');
                 if (failed) throw new Error(JSON.stringify(feedBuild));
-                if (feedBuild.data.sectorsDone === 14) break;
-                await sleep(1000);
+                if (feedBuild.data.sectorsDone === 1) break;
+                await new Promise((resolve) => setTimeout(resolve, 250));
             }
-            assert.equal(feedBuild.data.sectorsDone, 14, JSON.stringify(feedBuild));
+            assert.equal(feedBuild.data.sectorsTotal, 1, JSON.stringify(feedBuild));
+            assert.equal(feedBuild.data.sectorsDone, 1, JSON.stringify(feedBuild));
             assert.equal(feedBuild.data.sectorsQueued, 0);
             assert.equal(feedBuild.data.sectorsFailed, 0);
             for (const sector of feedBuild.data.sectors) assert.equal(sector.state, 'done', JSON.stringify(sector));

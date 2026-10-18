@@ -6,6 +6,7 @@
 import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { addressPane, atPane, escapePane, focusTarget, hostsCampaign, type FocusTarget, type Pane } from './pane.ts';
+import RecordCard from '../workspace/RecordCard.vue';
 import { notePane, sheetFull } from './pane_back.ts';
 import { frame, onFrame, setPaneEscape, type ViewFrame } from './frame.ts';
 
@@ -19,6 +20,7 @@ const shown = computed(() => addressPane(route.path, route.query).pane);
 const dossierOpen = computed(() => shown.value.kind === 'dossier');
 const campaignOpen = computed(() => hostsCampaign(shown.value));
 const charactersOpen = computed(() => shown.value.kind === 'characters');
+const campaignsOpen = computed(() => shown.value.kind === 'campaigns');
 const campaignRecord = computed(() => (shown.value.kind === 'campaign' ? shown.value.record : null));
 const campaignTab = computed((): 'records' | 'party' | 'journal' => {
     if (shown.value.kind === 'party') return 'party';
@@ -30,15 +32,18 @@ const journalEntry = computed(() => (shown.value.kind === 'journal' ? shown.valu
 const dossierLive = ref(false);
 const campaignLive = ref(false);
 const charactersLive = ref(false);
+const campaignsLive = ref(false);
 watch(shown, (pane) => {
     if (pane.kind === 'dossier') dossierLive.value = true;
     if (hostsCampaign(pane)) campaignLive.value = true;
     if (pane.kind === 'characters') charactersLive.value = true;
+    if (pane.kind === 'campaigns') campaignsLive.value = true;
 }, { immediate: true });
 
 const DossierPanel = defineAsyncComponent(() => import('../dossier/DossierPanel.vue'));
 const CampaignPanel = defineAsyncComponent(() => import('../workspace/CampaignPanel.vue'));
 const CharactersPanel = defineAsyncComponent(() => import('../characters/screens/CharactersPanel.vue'));
+const CampaignsPanel = defineAsyncComponent(() => import('../workspace/CampaignsPanel.vue'));
 
 const active = computed(() => live.value !== null && live.value.kind !== 'none');
 
@@ -75,6 +80,10 @@ function onCampaignWidth(px: number): void {
 
 function onCharactersWidth(px: number): void {
     if (charactersOpen.value) applyWidth(px);
+}
+
+function onCampaignsWidth(px: number): void {
+    if (campaignsOpen.value) applyWidth(px);
 }
 
 watch(shown, (pane) => {
@@ -192,6 +201,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="pane-host" @keydown="onPaneKey">
+  <RecordCard />
   <DossierPanel
     v-if="active && dossierLive && live && live.dossier"
     :orbit="live.dossier.orbit || undefined"
@@ -226,6 +236,12 @@ onBeforeUnmount(() => {
     :open="charactersOpen"
     @close="closePane"
     @width="onCharactersWidth"
+  />
+  <CampaignsPanel
+    v-if="active && campaignsLive && live"
+    :open="campaignsOpen"
+    @close="closePane"
+    @width="onCampaignsWidth"
   />
   </div>
 </template>

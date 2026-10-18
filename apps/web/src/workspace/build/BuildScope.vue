@@ -32,7 +32,7 @@ const cells = computed(() => subsectorCells(props.slug, (hexKey) => placeNames(h
 <template>
   <div class="build-scope">
     <nav v-if="letter === null" class="build-subs" aria-label="Subsectors">
-      <h3 class="ui-heading">Subsectors</h3>
+      <h3 class="ui-heading ui-kicker">Subsectors</h3>
       <div class="build-subs-grid">
         <button v-for="cell in cells" :key="cell.letter" type="button" @click="$emit('subsector', cell.letter)">
           <b>{{ cell.letter }}</b><span :class="{ 'is-unnamed': cell.name === 'Subsector ' + cell.letter }">{{ cell.name }}</span>

@@ -32,11 +32,19 @@ defineEmits<{ dismiss: [] }>();
   box-sizing: border-box;
   max-width: min(440px, calc(100% - var(--rail-width) - 2 * var(--chrome-inset)));
   padding: 6px 6px 6px 14px;
-  border: 1px solid var(--control-line);
+  border: 1px solid var(--line-2);
   border-left: 3px solid var(--signal);
   border-radius: var(--r-3);
   background: var(--chrome-glass);
-  box-shadow: var(--shadow-chrome);
+  /* The search field's frame and halo, so the two read as one piece. */
+  box-shadow: var(--shadow-chrome), 0 0 24px var(--frame-glow);
+}
+
+/* Below 680 px the date chip sits under the search field (workspace/StardateChip.vue): the hint goes under the chip. */
+@media (max-width: 680px) {
+  .first-hint {
+    top: calc(var(--chrome-top) + 2 * (var(--chrome-height) + 8px));
+  }
 }
 
 .first-hint p {

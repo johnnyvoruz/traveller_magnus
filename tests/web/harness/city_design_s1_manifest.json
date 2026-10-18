@@ -1,0 +1,1647 @@
+{
+  "step": 1,
+  "date": "002-1105",
+  "time": "0000",
+  "days": 403326,
+  "animationTime": 0,
+  "renderer": {
+    "vanilla": "vanilla",
+    "enhanced": "enhanced-cities-1"
+  },
+  "note": "Frames are the orbit view at its true light. No harness lighting override. Step 1 enhanced draws the vanilla baseline. DPR 1 files use the design names. DPR 2 files add _dpr2 and are device pixels. Far crops are the CSS diameter, not enlarged.",
+  "worlds": [
+    {
+      "slug": "rhylanor",
+      "hex": "2716",
+      "quotedUwp": "A434934-F",
+      "indexUwp": "A434934-F",
+      "indexName": "Rhylanor",
+      "uwpAgrees": true,
+      "tree": "41e34642dc82f420ae300f656452c569b4c36dfd4257dceaae0aeda3646ddfc8",
+      "treeBytes": 39926,
+      "treeSha256": "41e34642dc82f420ae300f656452c569b4c36dfd4257dceaae0aeda3646ddfc8",
+      "engineVersion": "1.0.0",
+      "hexKey": "Spinward_Marches/2716",
+      "bodyKey": "w5",
+      "bodyName": "Rhylanor",
+      "bodyUwp": "A434934-F",
+      "bodyType": "Mainworld",
+      "basePx": 3.472864429927985,
+      "fitDiameterCss": 6.94572885985597,
+      "date": "002-1105",
+      "time": "0000",
+      "days": 403326,
+      "animationTime": 0,
+      "light": [
+        0.8581063688764279,
+        -0.513471965830377
+      ],
+      "starAngle": -0.5392259937462462,
+      "spin": -0.5392259937462462,
+      "cloudSpin": -0.5392259937462462,
+      "sweep": 0,
+      "tiltDeg": 0,
+      "pop": "9",
+      "tl": "F",
+      "profileId": "Spinward_Marches/2716|Rhylanor|Mainworld|A434934-F|6093|0.1381960594338141||desert",
+      "kind": "desert",
+      "lights": {
+        "pop": 9,
+        "color": [
+          255,
+          238,
+          226
+        ],
+        "neon": 1,
+        "gain": 1.18,
+        "urban": [
+          146,
+          154,
+          168
+        ],
+        "glass": [
+          176,
+          200,
+          228
+        ],
+        "shine": 0.28,
+        "glow": 1.8,
+        "coverage": 0.38,
+        "haze": 0.396
+      },
+      "profile": {
+        "id": "Spinward_Marches/2716|Rhylanor|Mainworld|A434934-F|6093|0.1381960594338141||desert",
+        "seed": 3695317898,
+        "kind": "desert",
+        "offsets": [
+          76.49062841641717,
+          87.65865781670436,
+          90.81504879705608
+        ],
+        "axisAzimuth": 5.146400422451904,
+        "vortices": [
+          [
+            0.9428199714935331,
+            -0.3090547181977019,
+            -0.1248025741428137,
+            2.966643057996407
+          ],
+          [
+            -0.4925671351034917,
+            -0.6691873743316867,
+            -0.5563864443451166,
+            4.9811758163850754
+          ],
+          [
+            0.5543147972992611,
+            -0.5720388000888622,
+            -0.6045715149492026,
+            4.330857821274549
+          ]
+        ],
+        "rock": {
+          "low": [
+            102,
+            56,
+            38
+          ],
+          "high": [
+            220,
+            168,
+            124
+          ]
+        },
+        "liquid": {
+          "shallow": [
+            206,
+            224,
+            238
+          ],
+          "deep": [
+            156,
+            190,
+            216
+          ],
+          "frozen": true
+        },
+        "water": 0,
+        "liquidName": "Ice",
+        "climate": {
+          "kelvin": 327.72514820158193,
+          "meanC": 54.57514820158195,
+          "spread": 248.8553838177404,
+          "locked": true
+        },
+        "air": {
+          "strength": 0.289396020483773,
+          "pressure": 0.056782352162059395,
+          "tint": [
+            176,
+            188,
+            210
+          ],
+          "iridescent": false
+        },
+        "life": {
+          "cover": 0,
+          "canopy": [
+            156,
+            136,
+            40
+          ],
+          "scrub": [
+            153,
+            138,
+            70
+          ],
+          "maturity": 0.15
+        },
+        "geology": {
+          "volcanism": 0.00625,
+          "mountains": 0.21,
+          "relief": 0.81,
+          "craters": 0.5346171393693496
+        },
+        "clouds": {
+          "cover": 0.04051544286772822,
+          "color": [
+            236,
+            208,
+            184
+          ]
+        },
+        "lights": {
+          "pop": 9,
+          "color": [
+            255,
+            238,
+            226
+          ],
+          "neon": 1,
+          "gain": 1.18,
+          "urban": [
+            146,
+            154,
+            168
+          ],
+          "glass": [
+            176,
+            200,
+            228
+          ],
+          "shine": 0.28,
+          "glow": 1.8,
+          "coverage": 0.38,
+          "haze": 0.396
+        },
+        "rings": {
+          "icy": false,
+          "inner": [
+            198,
+            180,
+            156
+          ],
+          "outer": [
+            142,
+            124,
+            108
+          ],
+          "opacity": 0.7,
+          "gaps": [
+            0.5444621011149138,
+            0.8758869679179043
+          ],
+          "seed": 49.15596283972263
+        },
+        "port": {
+          "cls": "A",
+          "down": 1,
+          "high": true,
+          "color": [
+            150,
+            236,
+            255
+          ]
+        },
+        "rotation": {
+          "hours": 745.9277101807489,
+          "tilt": 0.4,
+          "locked": true
+        },
+        "albedo": 0.8240000000000001,
+        "gas": null
+      }
+    },
+    {
+      "slug": "pavabid",
+      "hex": "1238",
+      "quotedUwp": "C6678D8-6",
+      "indexUwp": "C6678D8-6",
+      "indexName": "Pavabid",
+      "uwpAgrees": true,
+      "tree": "27a9682ed47cfd3450fc5bb7bc6c572a2ec4aa7b1781bfb0ec420509fb127c01",
+      "treeBytes": 53848,
+      "treeSha256": "27a9682ed47cfd3450fc5bb7bc6c572a2ec4aa7b1781bfb0ec420509fb127c01",
+      "engineVersion": "1.0.0",
+      "hexKey": "Spinward_Marches/1238",
+      "bodyKey": "w10",
+      "bodyName": "Pavabid",
+      "bodyUwp": "C6678D8-6",
+      "bodyType": "Mainworld",
+      "basePx": 4.232799124665845,
+      "fitDiameterCss": 8.46559824933169,
+      "date": "002-1105",
+      "time": "0000",
+      "days": 403326,
+      "animationTime": 0,
+      "light": [
+        0.32827894513052985,
+        -0.9445808245904563
+      ],
+      "starAngle": -1.2363153601810108,
+      "spin": 5.451011830008282,
+      "cloudSpin": 1.0278169106198876,
+      "sweep": 0,
+      "tiltDeg": 0.2,
+      "pop": "8",
+      "tl": "6",
+      "profileId": "Spinward_Marches/1238|Pavabid|Mainworld|C6678D8-6|9760|0.3928389091794498||temperate",
+      "kind": "temperate",
+      "lights": {
+        "pop": 8,
+        "color": [
+          255,
+          200,
+          138
+        ],
+        "neon": 0,
+        "gain": 0.75,
+        "urban": [
+          134,
+          130,
+          124
+        ],
+        "glass": [
+          156,
+          156,
+          156
+        ],
+        "shine": 0.05,
+        "glow": 0.28,
+        "coverage": 0.2,
+        "haze": 0
+      },
+      "profile": {
+        "id": "Spinward_Marches/1238|Pavabid|Mainworld|C6678D8-6|9760|0.3928389091794498||temperate",
+        "seed": 521999895,
+        "kind": "temperate",
+        "offsets": [
+          40.925355756888166,
+          3.802833555964753,
+          84.06962612946518
+        ],
+        "axisAzimuth": 0.6418256129672933,
+        "vortices": [
+          [
+            0.24320034045448014,
+            0.6854204584753337,
+            -0.6863325648009777,
+            -4.585214169928804
+          ],
+          [
+            0.15685165249572264,
+            0.9876010931074388,
+            0.006452906504273437,
+            -3.8513578090351075
+          ],
+          [
+            -0.7627527696614438,
+            0.27581057086292127,
+            0.5849245604127646,
+            -2.1914288634434342
+          ]
+        ],
+        "rock": {
+          "low": [
+            84,
+            78,
+            72
+          ],
+          "high": [
+            156,
+            146,
+            132
+          ]
+        },
+        "liquid": {
+          "shallow": [
+            52,
+            142,
+            164
+          ],
+          "deep": [
+            10,
+            34,
+            86
+          ],
+          "frozen": false
+        },
+        "water": 0.5,
+        "liquidName": "Water",
+        "climate": {
+          "kelvin": 280.62543818079473,
+          "meanC": 7.475438180794754,
+          "spread": 369.7737139988751,
+          "locked": false
+        },
+        "air": {
+          "strength": 0.9206735594546462,
+          "pressure": 1.4356624925113284,
+          "tint": [
+            104,
+            164,
+            255
+          ],
+          "iridescent": false
+        },
+        "life": {
+          "cover": 0.8333333333333334,
+          "canopy": [
+            43.75,
+            104.25,
+            73
+          ],
+          "scrub": [
+            128.125,
+            139.625,
+            98.375
+          ],
+          "maturity": 1
+        },
+        "geology": {
+          "volcanism": 0.015625,
+          "mountains": 0.385,
+          "relief": 0.6900000000000001,
+          "craters": 0
+        },
+        "clouds": {
+          "cover": 0.3685818610527545,
+          "color": [
+            255,
+            255,
+            255
+          ]
+        },
+        "lights": {
+          "pop": 8,
+          "color": [
+            255,
+            200,
+            138
+          ],
+          "neon": 0,
+          "gain": 0.75,
+          "urban": [
+            134,
+            130,
+            124
+          ],
+          "glass": [
+            156,
+            156,
+            156
+          ],
+          "shine": 0.05,
+          "glow": 0.28,
+          "coverage": 0.2,
+          "haze": 0
+        },
+        "rings": {
+          "icy": false,
+          "inner": [
+            198,
+            180,
+            156
+          ],
+          "outer": [
+            142,
+            124,
+            108
+          ],
+          "opacity": 0.7,
+          "gaps": [
+            0.6226202776189893,
+            0.8304403873533011
+          ],
+          "seed": 14.585216320119798
+        },
+        "port": {
+          "cls": "C",
+          "down": 0.7,
+          "high": true,
+          "color": [
+            255,
+            226,
+            170
+          ]
+        },
+        "rotation": {
+          "hours": 38.00333333333333,
+          "tilt": 0.2,
+          "locked": false
+        },
+        "albedo": 1.028,
+        "gas": null
+      }
+    },
+    {
+      "slug": "cantrel",
+      "hex": "0104",
+      "quotedUwp": "C566243-9",
+      "indexUwp": "C566243-9",
+      "indexName": "Cantrel",
+      "uwpAgrees": true,
+      "tree": "f6464b0220ab4f04194cf0ab2a438f0047e5df1b42db3b09f5c1e85b0ded8bab",
+      "treeBytes": 53093,
+      "treeSha256": "f6464b0220ab4f04194cf0ab2a438f0047e5df1b42db3b09f5c1e85b0ded8bab",
+      "engineVersion": "1.0.0",
+      "hexKey": "Spinward_Marches/0104",
+      "bodyKey": "w5",
+      "bodyName": "Cantrel",
+      "bodyUwp": "C566243-9",
+      "bodyType": "Mainworld",
+      "basePx": 3.9052743414846827,
+      "fitDiameterCss": 7.810548682969365,
+      "date": "002-1105",
+      "time": "0000",
+      "days": 403326,
+      "animationTime": 0,
+      "light": [
+        -0.7017339840916441,
+        -0.7124390609524918
+      ],
+      "starAngle": -2.348624785459901,
+      "spin": 3.980771938283959,
+      "cloudSpin": 0.26745205985753473,
+      "sweep": 0,
+      "tiltDeg": 60,
+      "pop": "2",
+      "tl": "9",
+      "profileId": "Spinward_Marches/0104|Cantrel|Mainworld|C566243-9|8057|4.3912||desert",
+      "kind": "desert",
+      "lights": {
+        "pop": 2,
+        "color": [
+          255,
+          238,
+          226
+        ],
+        "neon": 0,
+        "gain": 0.89,
+        "urban": [
+          138,
+          140,
+          144
+        ],
+        "glass": [
+          160,
+          172,
+          188
+        ],
+        "shine": 0.12,
+        "glow": 0.4,
+        "coverage": 0.004,
+        "haze": 0
+      },
+      "profile": {
+        "id": "Spinward_Marches/0104|Cantrel|Mainworld|C566243-9|8057|4.3912||desert",
+        "seed": 1746685292,
+        "kind": "desert",
+        "offsets": [
+          5.318644652841613,
+          43.56028641760349,
+          84.36393011943437
+        ],
+        "axisAzimuth": 1.5511612246626507,
+        "vortices": [
+          [
+            0.9755172995116445,
+            0.12052139858674257,
+            -0.1839581225067377,
+            -4.177503785118461
+          ],
+          [
+            -0.8135962070299304,
+            -0.47884054880633803,
+            -0.32980742976069455,
+            3.7602338320575655
+          ],
+          [
+            0.7896821054106373,
+            0.5470796391303927,
+            -0.2776797451078892,
+            -3.284624474355951
+          ]
+        ],
+        "rock": {
+          "low": [
+            102,
+            56,
+            38
+          ],
+          "high": [
+            220,
+            168,
+            124
+          ]
+        },
+        "liquid": {
+          "shallow": [
+            206,
+            224,
+            238
+          ],
+          "deep": [
+            156,
+            190,
+            216
+          ],
+          "frozen": true
+        },
+        "water": 0,
+        "liquidName": "Ice",
+        "climate": {
+          "kelvin": 230.60342522392588,
+          "meanC": -42.546574776074095,
+          "spread": 129.7300951024623,
+          "locked": false
+        },
+        "air": {
+          "strength": 0.5335582032532633,
+          "pressure": 0.1980596499890089,
+          "tint": [
+            104,
+            164,
+            255
+          ],
+          "iridescent": false
+        },
+        "life": {
+          "cover": 0,
+          "canopy": [
+            86,
+            70,
+            150
+          ],
+          "scrub": [
+            118,
+            105,
+            125
+          ],
+          "maturity": 0.15
+        },
+        "geology": {
+          "volcanism": 0.009375,
+          "mountains": 0.21,
+          "relief": 0.75,
+          "craters": 0.14534673592893793
+        },
+        "clouds": {
+          "cover": 0.07469814845545687,
+          "color": [
+            236,
+            208,
+            184
+          ]
+        },
+        "lights": {
+          "pop": 2,
+          "color": [
+            255,
+            238,
+            226
+          ],
+          "neon": 0,
+          "gain": 0.89,
+          "urban": [
+            138,
+            140,
+            144
+          ],
+          "glass": [
+            160,
+            172,
+            188
+          ],
+          "shine": 0.12,
+          "glow": 0.4,
+          "coverage": 0.004,
+          "haze": 0
+        },
+        "rings": {
+          "icy": false,
+          "inner": [
+            198,
+            180,
+            156
+          ],
+          "outer": [
+            142,
+            124,
+            108
+          ],
+          "opacity": 0.7,
+          "gaps": [
+            0.46727133239619434,
+            0.7885388358402997
+          ],
+          "seed": 44.71365078352392
+        },
+        "port": {
+          "cls": "C",
+          "down": 0.7,
+          "high": true,
+          "color": [
+            255,
+            226,
+            170
+          ]
+        },
+        "rotation": {
+          "hours": 4.953055555555555,
+          "tilt": 60,
+          "locked": false
+        },
+        "albedo": 0.812,
+        "gas": null
+      }
+    }
+  ],
+  "shots": [
+    {
+      "file": "city_design_s1_rhylanor_002-1105_near320_vanilla.png",
+      "world": "rhylanor",
+      "size": "near320",
+      "mode": "vanilla",
+      "dpr": 1,
+      "zoom": 46.1,
+      "target": 46.071478811891836,
+      "click": {
+        "x": 288.17721046761056,
+        "y": 406.42851632832696
+      },
+      "placed": {
+        "dx": -1.5993268199711963,
+        "dy": 2.75247454432764,
+        "side": 320
+      }
+    },
+    {
+      "file": "city_design_s1_rhylanor_002-1105_far20_vanilla.png",
+      "world": "rhylanor",
+      "size": "far20",
+      "mode": "vanilla",
+      "dpr": 1,
+      "zoom": 2.9,
+      "target": 2.8794674257432398,
+      "click": {
+        "x": 288.17721046761056,
+        "y": 406.42851632832696
+      },
+      "placed": {
+        "dx": 0.37179534167750994,
+        "dy": -0.6886419029119093,
+        "side": 20
+      }
+    },
+    {
+      "file": "city_design_s1_rhylanor_002-1105_far40_vanilla.png",
+      "world": "rhylanor",
+      "size": "far40",
+      "mode": "vanilla",
+      "dpr": 1,
+      "zoom": 5.7,
+      "target": 5.7589348514864795,
+      "click": {
+        "x": 288.17721046761056,
+        "y": 406.42851632832696
+      },
+      "placed": {
+        "dx": 1.246499467524636,
+        "dy": -1.0589892547035333,
+        "side": 40
+      }
+    },
+    {
+      "file": "city_design_s1_rhylanor_002-1105_far60_vanilla.png",
+      "world": "rhylanor",
+      "size": "far60",
+      "mode": "vanilla",
+      "dpr": 1,
+      "zoom": 8.7,
+      "target": 8.63840227722972,
+      "click": {
+        "x": 288.17721046761056,
+        "y": 406.42851632832696
+      },
+      "placed": {
+        "dx": 0.9366764739569042,
+        "dy": -0.5306177114981772,
+        "side": 60
+      }
+    },
+    {
+      "file": "city_design_s1_rhylanor_002-1105_near320_enhanced.png",
+      "world": "rhylanor",
+      "size": "near320",
+      "mode": "enhanced",
+      "dpr": 1,
+      "zoom": 45.9,
+      "target": 46.071478811891836,
+      "placed": {
+        "dx": -1.6020397119843324,
+        "dy": 2.5915680660197893,
+        "side": 320
+      }
+    },
+    {
+      "file": "city_design_s1_rhylanor_002-1105_far20_enhanced.png",
+      "world": "rhylanor",
+      "size": "far20",
+      "mode": "enhanced",
+      "dpr": 1,
+      "zoom": 2.9,
+      "target": 2.8794674257432398,
+      "placed": {
+        "dx": 0.4298053166295883,
+        "dy": -0.5905549347467272,
+        "side": 20
+      }
+    },
+    {
+      "file": "city_design_s1_rhylanor_002-1105_far40_enhanced.png",
+      "world": "rhylanor",
+      "size": "far40",
+      "mode": "enhanced",
+      "dpr": 1,
+      "zoom": 5.7,
+      "target": 5.7589348514864795,
+      "placed": {
+        "dx": 1.273903879876329,
+        "dy": -1.0669102334282137,
+        "side": 40
+      }
+    },
+    {
+      "file": "city_design_s1_rhylanor_002-1105_far60_enhanced.png",
+      "world": "rhylanor",
+      "size": "far60",
+      "mode": "enhanced",
+      "dpr": 1,
+      "zoom": 8.7,
+      "target": 8.63840227722972,
+      "placed": {
+        "dx": 0.8010701813403145,
+        "dy": -0.1812326204438044,
+        "side": 60
+      }
+    },
+    {
+      "file": "city_design_s1_pavabid_002-1105_near320_vanilla.png",
+      "world": "pavabid",
+      "size": "near320",
+      "mode": "vanilla",
+      "dpr": 1,
+      "zoom": 37.9,
+      "target": 37.80004561700789,
+      "click": {
+        "x": 347.2508918703461,
+        "y": 373.943102323944
+      },
+      "placed": {
+        "dx": 15.92512681606891,
+        "dy": -56.86885952756741,
+        "side": 320
+      }
+    },
+    {
+      "file": "city_design_s1_pavabid_002-1105_far20_vanilla.png",
+      "world": "pavabid",
+      "size": "far20",
+      "mode": "vanilla",
+      "dpr": 1,
+      "zoom": 2.4,
+      "target": 2.362502851062993,
+      "click": {
+        "x": 347.2508918703461,
+        "y": 373.943102323944
+      },
+      "placed": {
+        "dx": 1.3085542744806329,
+        "dy": -2.903251686945433,
+        "side": 20
+      }
+    },
+    {
+      "file": "city_design_s1_pavabid_002-1105_far40_vanilla.png",
+      "world": "pavabid",
+      "size": "far40",
+      "mode": "vanilla",
+      "dpr": 1,
+      "zoom": 4.6,
+      "target": 4.725005702125986,
+      "click": {
+        "x": 347.2508918703461,
+        "y": 373.943102323944
+      },
+      "placed": {
+        "dx": 3.1361200245252903,
+        "dy": -6.467665833595289,
+        "side": 40
+      }
+    },
+    {
+      "file": "city_design_s1_pavabid_002-1105_far60_vanilla.png",
+      "world": "pavabid",
+      "size": "far60",
+      "mode": "vanilla",
+      "dpr": 1,
+      "zoom": 7.2,
+      "target": 7.08750855318898,
+      "click": {
+        "x": 347.2508918703461,
+        "y": 373.943102323944
+      },
+      "placed": {
+        "dx": 4.060663230603247,
+        "dy": -10.019321993151326,
+        "side": 60
+      }
+    },
+    {
+      "file": "city_design_s1_pavabid_002-1105_near320_enhanced.png",
+      "world": "pavabid",
+      "size": "near320",
+      "mode": "enhanced",
+      "dpr": 1,
+      "zoom": 37.6,
+      "target": 37.80004561700789,
+      "placed": {
+        "dx": 15.765134161901784,
+        "dy": -56.551068320052096,
+        "side": 320
+      }
+    },
+    {
+      "file": "city_design_s1_pavabid_002-1105_far20_enhanced.png",
+      "world": "pavabid",
+      "size": "far20",
+      "mode": "enhanced",
+      "dpr": 1,
+      "zoom": 2.4,
+      "target": 2.362502851062993,
+      "placed": {
+        "dx": 1.3415992802820291,
+        "dy": -2.8083803207347815,
+        "side": 20
+      }
+    },
+    {
+      "file": "city_design_s1_pavabid_002-1105_far40_enhanced.png",
+      "world": "pavabid",
+      "size": "far40",
+      "mode": "enhanced",
+      "dpr": 1,
+      "zoom": 4.6,
+      "target": 4.725005702125986,
+      "placed": {
+        "dx": 3.1138014263573623,
+        "dy": -6.499918921531634,
+        "side": 40
+      }
+    },
+    {
+      "file": "city_design_s1_pavabid_002-1105_far60_enhanced.png",
+      "world": "pavabid",
+      "size": "far60",
+      "mode": "enhanced",
+      "dpr": 1,
+      "zoom": 7.2,
+      "target": 7.08750855318898,
+      "placed": {
+        "dx": 3.872480806479274,
+        "dy": -9.304524076588542,
+        "side": 60
+      }
+    },
+    {
+      "file": "city_design_s1_cantrel_002-1105_near320_vanilla.png",
+      "world": "cantrel",
+      "size": "near320",
+      "mode": "vanilla",
+      "dpr": 1,
+      "zoom": 40.9,
+      "target": 40.97023307693467,
+      "click": {
+        "x": 462.8129347071497,
+        "y": 419.4237089893913
+      },
+      "placed": {
+        "dx": -47.54932753769832,
+        "dy": -49.65535952971041,
+        "side": 320
+      }
+    },
+    {
+      "file": "city_design_s1_cantrel_002-1105_far20_vanilla.png",
+      "world": "cantrel",
+      "size": "far20",
+      "mode": "vanilla",
+      "dpr": 1,
+      "zoom": 2.6,
+      "target": 2.560639567308417,
+      "click": {
+        "x": 462.8129347071497,
+        "y": 419.4237089893913
+      },
+      "placed": {
+        "dx": -2.225885801015335,
+        "dy": -1.408305856492385,
+        "side": 20
+      }
+    },
+    {
+      "file": "city_design_s1_cantrel_002-1105_far40_vanilla.png",
+      "world": "cantrel",
+      "size": "far40",
+      "mode": "vanilla",
+      "dpr": 1,
+      "zoom": 5,
+      "target": 5.121279134616834,
+      "click": {
+        "x": 462.8129347071497,
+        "y": 419.4237089893913
+      },
+      "placed": {
+        "dx": -3.429904199718873,
+        "dy": -5.210818456188811,
+        "side": 40
+      }
+    },
+    {
+      "file": "city_design_s1_cantrel_002-1105_far60_vanilla.png",
+      "world": "cantrel",
+      "size": "far60",
+      "mode": "vanilla",
+      "dpr": 1,
+      "zoom": 7.7,
+      "target": 7.68191870192525,
+      "click": {
+        "x": 462.8129347071497,
+        "y": 419.4237089893913
+      },
+      "placed": {
+        "dx": -7.066830394872266,
+        "dy": -7.8068389299371574,
+        "side": 60
+      }
+    },
+    {
+      "file": "city_design_s1_cantrel_002-1105_near320_enhanced.png",
+      "world": "cantrel",
+      "size": "near320",
+      "mode": "enhanced",
+      "dpr": 1,
+      "zoom": 41.2,
+      "target": 40.97023307693467,
+      "placed": {
+        "dx": -48.144016740127455,
+        "dy": -50.37072125190558,
+        "side": 320
+      }
+    },
+    {
+      "file": "city_design_s1_cantrel_002-1105_far20_enhanced.png",
+      "world": "cantrel",
+      "size": "far20",
+      "mode": "enhanced",
+      "dpr": 1,
+      "zoom": 2.6,
+      "target": 2.560639567308417,
+      "placed": {
+        "dx": -2.0884431768863534,
+        "dy": -1.090327980655962,
+        "side": 20
+      }
+    },
+    {
+      "file": "city_design_s1_cantrel_002-1105_far40_enhanced.png",
+      "world": "cantrel",
+      "size": "far40",
+      "mode": "enhanced",
+      "dpr": 1,
+      "zoom": 5,
+      "target": 5.121279134616834,
+      "placed": {
+        "dx": -3.449743913562056,
+        "dy": -5.2002946748053045,
+        "side": 40
+      }
+    },
+    {
+      "file": "city_design_s1_cantrel_002-1105_far60_enhanced.png",
+      "world": "cantrel",
+      "size": "far60",
+      "mode": "enhanced",
+      "dpr": 1,
+      "zoom": 7.8,
+      "target": 7.68191870192525,
+      "placed": {
+        "dx": -6.617937999384889,
+        "dy": -6.958420421664439,
+        "side": 60
+      }
+    },
+    {
+      "file": "city_design_s1_rhylanor_002-1105_near320_vanilla_dpr2.png",
+      "world": "rhylanor",
+      "size": "near320",
+      "mode": "vanilla",
+      "dpr": 2,
+      "zoom": 46.1,
+      "target": 46.071478811891836,
+      "click": {
+        "x": 288.17721046761056,
+        "y": 406.42851632832696
+      },
+      "placed": {
+        "dx": 0.29294547800117243,
+        "dy": 4.045703643255592,
+        "side": 640
+      }
+    },
+    {
+      "file": "city_design_s1_rhylanor_002-1105_far20_vanilla_dpr2.png",
+      "world": "rhylanor",
+      "size": "far20",
+      "mode": "vanilla",
+      "dpr": 2,
+      "zoom": 2.9,
+      "target": 2.8794674257432398,
+      "click": {
+        "x": 288.17721046761056,
+        "y": 406.42851632832696
+      },
+      "placed": {
+        "dx": 0.6323615997702312,
+        "dy": -0.3873756013498948,
+        "side": 40
+      }
+    },
+    {
+      "file": "city_design_s1_rhylanor_002-1105_far40_vanilla_dpr2.png",
+      "world": "rhylanor",
+      "size": "far40",
+      "mode": "vanilla",
+      "dpr": 2,
+      "zoom": 5.7,
+      "target": 5.7589348514864795,
+      "click": {
+        "x": 288.17721046761056,
+        "y": 406.42851632832696
+      },
+      "placed": {
+        "dx": 1.738522508394837,
+        "dy": -1.3135619683979058,
+        "side": 80
+      }
+    },
+    {
+      "file": "city_design_s1_rhylanor_002-1105_far60_vanilla_dpr2.png",
+      "world": "rhylanor",
+      "size": "far60",
+      "mode": "vanilla",
+      "dpr": 2,
+      "zoom": 8.7,
+      "target": 8.63840227722972,
+      "click": {
+        "x": 288.17721046761056,
+        "y": 406.42851632832696
+      },
+      "placed": {
+        "dx": 0.8749975546928681,
+        "dy": -0.15835854131485405,
+        "side": 120
+      }
+    },
+    {
+      "file": "city_design_s1_rhylanor_002-1105_near320_enhanced_dpr2.png",
+      "world": "rhylanor",
+      "size": "near320",
+      "mode": "enhanced",
+      "dpr": 2,
+      "zoom": 45.9,
+      "target": 46.071478811891836,
+      "placed": {
+        "dx": 0.1796866571507394,
+        "dy": 3.741330847757638,
+        "side": 640
+      }
+    },
+    {
+      "file": "city_design_s1_rhylanor_002-1105_far20_enhanced_dpr2.png",
+      "world": "rhylanor",
+      "size": "far20",
+      "mode": "enhanced",
+      "dpr": 2,
+      "zoom": 2.9,
+      "target": 2.8794674257432398,
+      "placed": {
+        "dx": 0.520994615103632,
+        "dy": -0.23413105211684027,
+        "side": 40
+      }
+    },
+    {
+      "file": "city_design_s1_rhylanor_002-1105_far40_enhanced_dpr2.png",
+      "world": "rhylanor",
+      "size": "far40",
+      "mode": "enhanced",
+      "dpr": 2,
+      "zoom": 5.7,
+      "target": 5.7589348514864795,
+      "placed": {
+        "dx": 1.7553028151121097,
+        "dy": -1.3007289987132538,
+        "side": 80
+      }
+    },
+    {
+      "file": "city_design_s1_rhylanor_002-1105_far60_enhanced_dpr2.png",
+      "world": "rhylanor",
+      "size": "far60",
+      "mode": "enhanced",
+      "dpr": 2,
+      "zoom": 8.7,
+      "target": 8.63840227722972,
+      "placed": {
+        "dx": 0.7679350659261033,
+        "dy": -0.15036200369035413,
+        "side": 120
+      }
+    },
+    {
+      "file": "city_design_s1_pavabid_002-1105_near320_vanilla_dpr2.png",
+      "world": "pavabid",
+      "size": "near320",
+      "mode": "vanilla",
+      "dpr": 2,
+      "zoom": 37.9,
+      "target": 37.80004561700789,
+      "click": {
+        "x": 347.2508918703461,
+        "y": 373.943102323944
+      },
+      "placed": {
+        "dx": 31.634530161632654,
+        "dy": -113.49163941253164,
+        "side": 640
+      }
+    },
+    {
+      "file": "city_design_s1_pavabid_002-1105_far20_vanilla_dpr2.png",
+      "world": "pavabid",
+      "size": "far20",
+      "mode": "vanilla",
+      "dpr": 2,
+      "zoom": 2.4,
+      "target": 2.362502851062993,
+      "click": {
+        "x": 347.2508918703461,
+        "y": 373.943102323944
+      },
+      "placed": {
+        "dx": 2.6031323616578277,
+        "dy": -6.453028253567792,
+        "side": 40
+      }
+    },
+    {
+      "file": "city_design_s1_pavabid_002-1105_far40_vanilla_dpr2.png",
+      "world": "pavabid",
+      "size": "far40",
+      "mode": "vanilla",
+      "dpr": 2,
+      "zoom": 4.6,
+      "target": 4.725005702125986,
+      "click": {
+        "x": 347.2508918703461,
+        "y": 373.943102323944
+      },
+      "placed": {
+        "dx": 5.878766127671014,
+        "dy": -13.996468423114049,
+        "side": 80
+      }
+    },
+    {
+      "file": "city_design_s1_pavabid_002-1105_far60_vanilla_dpr2.png",
+      "world": "pavabid",
+      "size": "far60",
+      "mode": "vanilla",
+      "dpr": 2,
+      "zoom": 7.2,
+      "target": 7.08750855318898,
+      "click": {
+        "x": 347.2508918703461,
+        "y": 373.943102323944
+      },
+      "placed": {
+        "dx": 7.424701018586873,
+        "dy": -20.35770599614729,
+        "side": 120
+      }
+    },
+    {
+      "file": "city_design_s1_pavabid_002-1105_near320_enhanced_dpr2.png",
+      "world": "pavabid",
+      "size": "near320",
+      "mode": "enhanced",
+      "dpr": 2,
+      "zoom": 37.6,
+      "target": 37.80004561700789,
+      "placed": {
+        "dx": 31.00125722858843,
+        "dy": -111.61815849119989,
+        "side": 640
+      }
+    },
+    {
+      "file": "city_design_s1_pavabid_002-1105_far20_enhanced_dpr2.png",
+      "world": "pavabid",
+      "size": "far20",
+      "mode": "enhanced",
+      "dpr": 2,
+      "zoom": 2.4,
+      "target": 2.362502851062993,
+      "placed": {
+        "dx": 2.6310254995995734,
+        "dy": -6.509672584268962,
+        "side": 40
+      }
+    },
+    {
+      "file": "city_design_s1_pavabid_002-1105_far40_enhanced_dpr2.png",
+      "world": "pavabid",
+      "size": "far40",
+      "mode": "enhanced",
+      "dpr": 2,
+      "zoom": 4.6,
+      "target": 4.725005702125986,
+      "placed": {
+        "dx": 5.866731203349566,
+        "dy": -14.044576213669426,
+        "side": 80
+      }
+    },
+    {
+      "file": "city_design_s1_pavabid_002-1105_far60_enhanced_dpr2.png",
+      "world": "pavabid",
+      "size": "far60",
+      "mode": "enhanced",
+      "dpr": 2,
+      "zoom": 7.2,
+      "target": 7.08750855318898,
+      "placed": {
+        "dx": 7.143769420605864,
+        "dy": -19.547031543554247,
+        "side": 120
+      }
+    },
+    {
+      "file": "city_design_s1_cantrel_002-1105_near320_vanilla_dpr2.png",
+      "world": "cantrel",
+      "size": "near320",
+      "mode": "vanilla",
+      "dpr": 2,
+      "zoom": 40.9,
+      "target": 40.97023307693467,
+      "click": {
+        "x": 462.8129347071497,
+        "y": 419.4237089893913
+      },
+      "placed": {
+        "dx": -93.86608306656015,
+        "dy": -99.06343076014866,
+        "side": 640
+      }
+    },
+    {
+      "file": "city_design_s1_cantrel_002-1105_far20_vanilla_dpr2.png",
+      "world": "cantrel",
+      "size": "far20",
+      "mode": "vanilla",
+      "dpr": 2,
+      "zoom": 2.6,
+      "target": 2.560639567308417,
+      "click": {
+        "x": 462.8129347071497,
+        "y": 419.4237089893913
+      },
+      "placed": {
+        "dx": -5.304168201865586,
+        "dy": -3.9644958649949107,
+        "side": 40
+      }
+    },
+    {
+      "file": "city_design_s1_cantrel_002-1105_far40_vanilla_dpr2.png",
+      "world": "cantrel",
+      "size": "far40",
+      "mode": "vanilla",
+      "dpr": 2,
+      "zoom": 5,
+      "target": 5.121279134616834,
+      "click": {
+        "x": 462.8129347071497,
+        "y": 419.4237089893913
+      },
+      "placed": {
+        "dx": -6.976026319132366,
+        "dy": -12.601265881044739,
+        "side": 80
+      }
+    },
+    {
+      "file": "city_design_s1_cantrel_002-1105_far60_vanilla_dpr2.png",
+      "world": "cantrel",
+      "size": "far60",
+      "mode": "vanilla",
+      "dpr": 2,
+      "zoom": 7.7,
+      "target": 7.68191870192525,
+      "click": {
+        "x": 462.8129347071497,
+        "y": 419.4237089893913
+      },
+      "placed": {
+        "dx": -14.229701981723863,
+        "dy": -18.468360139784245,
+        "side": 120
+      }
+    },
+    {
+      "file": "city_design_s1_cantrel_002-1105_near320_enhanced_dpr2.png",
+      "world": "cantrel",
+      "size": "near320",
+      "mode": "enhanced",
+      "dpr": 2,
+      "zoom": 41.2,
+      "target": 40.97023307693467,
+      "placed": {
+        "dx": -95.81801475401366,
+        "dy": -101.48236381360141,
+        "side": 640
+      }
+    },
+    {
+      "file": "city_design_s1_cantrel_002-1105_far20_enhanced_dpr2.png",
+      "world": "cantrel",
+      "size": "far20",
+      "mode": "enhanced",
+      "dpr": 2,
+      "zoom": 2.6,
+      "target": 2.560639567308417,
+      "placed": {
+        "dx": -5.372428853982285,
+        "dy": -4.294182150133034,
+        "side": 40
+      }
+    },
+    {
+      "file": "city_design_s1_cantrel_002-1105_far40_enhanced_dpr2.png",
+      "world": "cantrel",
+      "size": "far40",
+      "mode": "enhanced",
+      "dpr": 2,
+      "zoom": 5,
+      "target": 5.121279134616834,
+      "placed": {
+        "dx": -7.063250835393518,
+        "dy": -11.89256431850906,
+        "side": 80
+      }
+    },
+    {
+      "file": "city_design_s1_cantrel_002-1105_far60_enhanced_dpr2.png",
+      "world": "cantrel",
+      "size": "far60",
+      "mode": "enhanced",
+      "dpr": 2,
+      "zoom": 7.8,
+      "target": 7.68191870192525,
+      "placed": {
+        "dx": -14.27332944019787,
+        "dy": -18.51455443760873,
+        "side": 120
+      }
+    }
+  ],
+  "regina": [
+    {
+      "kind": "regina-mode-switch",
+      "first": {
+        "width": 780,
+        "height": 699,
+        "hash": 3069884541
+      },
+      "compare": {
+        "mismatches": 0,
+        "max": 0,
+        "bytes": 2180880
+      },
+      "longestMs": 8.5,
+      "toEnhanced": {
+        "count": 85,
+        "longest": 8.5,
+        "frames": [
+          8.299999999999272,
+          8.200000000000728,
+          8.399999999999636,
+          8.399999999999636,
+          8.300000000001091,
+          8.299999999999272,
+          8.399999999999636,
+          8.300000000001091,
+          8.299999999999272,
+          8.399999999999636,
+          8.300000000001091,
+          8.399999999999636,
+          8.299999999999272,
+          8.300000000001091,
+          8.399999999999636,
+          8.299999999999272,
+          8.399999999999636,
+          8.300000000001091,
+          8.299999999999272,
+          8.300000000001091,
+          8.399999999999636,
+          8.299999999999272,
+          8.300000000001091,
+          8.399999999999636,
+          8.399999999999636,
+          8.299999999999272,
+          8.300000000001091,
+          8.299999999999272,
+          8.399999999999636,
+          8.300000000001091,
+          8.299999999999272,
+          8.399999999999636,
+          8.300000000001091,
+          8.399999999999636,
+          8.299999999999272,
+          8.300000000001091,
+          8.299999999999272,
+          8.5,
+          8.200000000000728,
+          8.399999999999636,
+          8.299999999999272,
+          8.300000000001091,
+          8.399999999999636,
+          8.299999999999272,
+          8.300000000001091,
+          8.399999999999636,
+          8.299999999999272,
+          8.400000000001455,
+          8.299999999999272,
+          8.299999999999272,
+          8.400000000001455,
+          8.199999999998909,
+          8.399999999999636,
+          8.300000000001091,
+          8.399999999999636,
+          8.299999999999272,
+          8.300000000001091,
+          8.399999999999636,
+          8.399999999999636,
+          8.300000000001091,
+          8.299999999999272,
+          8.399999999999636,
+          8.200000000000728,
+          8.399999999999636,
+          8.299999999999272,
+          8.400000000001455,
+          8.299999999999272,
+          8.299999999999272,
+          8.5,
+          8.300000000001091,
+          8.299999999999272,
+          8.300000000001091,
+          8.299999999999272,
+          8.399999999999636,
+          8.300000000001091,
+          8.299999999999272,
+          8.399999999999636,
+          8.300000000001091,
+          8.299999999999272,
+          8.399999999999636,
+          8.300000000001091,
+          8.299999999999272,
+          8.399999999999636,
+          8.300000000001091,
+          8.299999999999272
+        ]
+      },
+      "toVanilla": {
+        "count": 84,
+        "longest": 8.400000000001455,
+        "frames": [
+          8.300000000001091,
+          8.399999999999636,
+          8.299999999999272,
+          8.400000000001455,
+          8.299999999999272,
+          8.299999999999272,
+          8.300000000001091,
+          8.399999999999636,
+          8.399999999999636,
+          8.300000000001091,
+          8.299999999999272,
+          8.299999999999272,
+          8.300000000001091,
+          8.399999999999636,
+          8.299999999999272,
+          8.400000000001455,
+          8.299999999999272,
+          8.299999999999272,
+          8.400000000001455,
+          8.299999999999272,
+          8.399999999999636,
+          8.300000000001091,
+          8.299999999999272,
+          8.299999999999272,
+          8.400000000001455,
+          8.299999999999272,
+          8.399999999999636,
+          8.300000000001091,
+          8.399999999999636,
+          8.299999999999272,
+          8.300000000001091,
+          8.399999999999636,
+          8.299999999999272,
+          8.300000000001091,
+          8.299999999999272,
+          8.399999999999636,
+          8.300000000001091,
+          8.399999999999636,
+          8.299999999999272,
+          8.399999999999636,
+          8.300000000001091,
+          8.399999999999636,
+          8.200000000000728,
+          8.299999999999272,
+          8.399999999999636,
+          8.399999999999636,
+          8.200000000000728,
+          8.399999999999636,
+          8.399999999999636,
+          8.300000000001091,
+          8.299999999999272,
+          8.300000000001091,
+          8.399999999999636,
+          8.299999999999272,
+          8.399999999999636,
+          8.300000000001091,
+          8.299999999999272,
+          8.399999999999636,
+          8.300000000001091,
+          8.299999999999272,
+          8.399999999999636,
+          8.300000000001091,
+          8.299999999999272,
+          8.399999999999636,
+          8.300000000001091,
+          8.399999999999636,
+          8.200000000000728,
+          8.399999999999636,
+          8.299999999999272,
+          8.399999999999636,
+          8.300000000001091,
+          8.399999999999636,
+          8.200000000000728,
+          8.399999999999636,
+          8.299999999999272,
+          8.399999999999636,
+          8.300000000001091,
+          8.299999999999272,
+          8.399999999999636,
+          8.400000000001455,
+          8.199999999998909,
+          8.399999999999636,
+          8.300000000001091,
+          8.399999999999636
+        ]
+      }
+    }
+  ]
+}

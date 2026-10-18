@@ -1,58 +1,51 @@
-# Orchestrator state — 2026-10-17 15:25 (written for the next orchestrator session)
+# Orchestrator state — 2026-10-17 22:45 (written for the next orchestrator session)
 
-Overwritten every turn. History: `handoff.md` (sections 291 on; the next is 298) and
-`archive/handoff_sections_1_to_290.md` (history). This file and `board.md` are the state;
-`decisions.md` holds every decision.
+Overwritten every turn. History: `handoff.md` (sections 291 on; the next is 322) and
+`archive/handoff_sections_1_to_290.md`. This file and `board.md` are the state; `decisions.md` holds every decision.
+Use `date` for time labels (labels between 18:50 and 20:20 on 10-17 ran ~35 minutes ahead).
 
 ## Where the roadmap is
-Live: **1.2.6 (`d6658f5`)**, index `index-CF1BRS3K.js`. **No push for a while (Johnny, 14:00):** "the goal is maximum productivity where agents can just be working full stop." Work piles up in the tree; the next push is a big one, rehearsed with care (the changelog needs a 1.2.7 entry, `CHANGELOG[0]` is tested against APP_VERSION).
+Live: **1.2.6 (`d6658f5`)**, engine e1.2, truth v10. **1.3.0 commands handed 2026-10-18 14:00** (`findings/push/release_2026-10-18.md`); confirm with `git log origin/campaign`, then lift the FREEZE lines.
+Direction (Johnny, 10-17): players first (Epic P), the landing, trade first (Epic T), the UX backlog; then session
+ingest (spec done; build after P2), living systems (chatter and traffic, building), X-boat news ripples (building),
+your own table sets (designed; contract written). Public API paused except the session-ingest MCP.
+
+**Epic P:** P1b, P1c done (A). B: contract done (P2a + B2c), leak suite skeleton (P2b1), data 0021 (P2b2), the DO
+(P2b3) done; **P2b4, the Worker routes, is next**; done when all 35 leak cases pass and §3 of the review is re-read.
+Then P3 (A), P9, P4 to P8, P10 (`players_build_plan.md`).
 
 ## Lanes
-- **Streams** (`directives/streams/`, README = the loop; `claims.md` = file locks): L, M, N, today only. They never stop; entries land in `reports/<lane>_stream.md`. Review those entries by item; nothing to say "go" to.
-- Streams also: D, E, Z (Z1 = `z_install_reservation`). Prompts: A `a_encoder_merge`, B `b_universes_pin`. C free. F retired. All started 14:15.
+All on streams. A, B, C, D, E, Z running; L, M, N wrapped (resumable); F retired. Lane `X` (high effort, one prompt)
+finished the city lights fix 22:30: the band was the lock glow in `OrbitRenderer.ts`, not the renderers; report in
+`reports/done/x_city_lights_fix.md`. C may take the surface files again (CW1, CS9), not `OrbitRenderer.ts` `selection()`.
 
 ## Next turn
-- Stream mode on and off: `streams/HOW_TO_RUN.md`. L, M, N wrapped with resumable queues.
-- Before the next push: rerun `public_games.test.js` ("tracks at the hex tier") on the settled tree; it failed in M's run while L5 changed the grid. Review `reports/x_integration_sweep.md`.
-0. The two backlogs (`directives/backlog_*.md`) are the source for new work: issue from them into streams; Epic P's build (P2+) waits on Johnny's P questions and B2's contract review.
-1. Read new entries in `reports/l_stream.md`, `m_stream.md`, `n_stream.md`; answer proposals and blocked items in their queues (write the answer under the item).
-2. Review D `d_store_harden` (steady.log, kb30_filters.gif, the manifesto table, the look) when filed.
-3. When A or B reports: put it on a stream too (areas: A builder/characters logic; B the Worker outside the marketplace).
-4. Before the next push: a full clean-copy rehearsal of everything (many lanes' work), `test:api:all` once B has it, and the 1.2.7 changelog entry.
+0. **2026-10-18: remind Johnny first thing** to run the example-pack production seed (board, "Open with Johnny";
+   `reports/z_stream.md` Z10 has the commands and checks). Delete the memory `reminder-2026-10-18-seed.md` once done.
+1. Questions 79 to 83 answered 22:40 (decisions.md): 80 done (spec rewritten), 81 queued as C's CS10 with Johnny's
+   "up the glow, very sci-fi" folded in (G6 holds: glow inside the disc, X's pixel test untouched). Review CS10's shots
+   with Johnny's eye; expect a second round on the look. Johnny has not yet said X's fix looks right on his screen.
+2. Review stream entries; refill queues from the backlogs and the three specs (`spec_session_ingest.md`,
+   `spec_living_systems.md`, `spec_xboat_ripples.md`; Johnny answered all their questions 20:27).
+3. **Push 1.3.0 called (09:20).** Waiting on C CC1b and B SI1b; then re-run `clean_copy28.sh` (scratchpad), `test:api:all` on the tree (`generate_speed`, `builder_density` alone), finish `findings/push/release_2026-10-18.md` and hand Johnny: commit the staged cleanup first, then `git add --pathspec-from-file=findings/push/release_2026-10-18_files.txt` (rebuild the list after the cleanup commit or as is: staged-only paths are left out), commit, push; after deploy, `d1_migrations` shows 0021 to 0024; then the example seed (10-18 reminder).
 
 ## Versions
-Each push list bumps `APP_VERSION` in `apps/web/src/version.ts` (1.2.6 live; next 1.2.7) and the commit message starts with it. Engine e1.2 (1.2.0 in code) is live since 1.2.0; the app is 1.2.6, next 1.2.7.
+Each push bumps `APP_VERSION` in `apps/web/src/version.ts` (1.2.6 live; next 1.3.0); `CHANGELOG[0]` must equal it.
 
 ## Traps
 - **Read `decisions.md` before deciding anything; do not re-decide.**
-- **Flow: QUESTIONS, GO, PUSH.** No GO for a lane while a question could change its
-  prompt; a held part is named inside the prompt. Questions in full, numbered,
-  recommended answer first. Never ask Johnny to paste anything.
-- **"Pushed" is checked** with `git log` and `git log origin/campaign` before a hash
-  is recorded. **Push before go**: lanes keep editing after a list is checked.
-- **Read new server code before pushing**: per-request reads and dependence on
-  migration order are deploy hazards. Every migration must be safe either order.
-- **Lane Z works outside the file bus** and has applied a patch to the tree unasked.
-  `ls -lt findings | head` and `git status` each turn. A checklist in a Z report is
-  Z's, not Johnny's: check it against the other lanes' reports before following it.
-- **Never put backticks in a double-quoted shell string.** It happened again on
-  2026-10-13 (a `node -e "..."` holding markdown): the shell ran each quoted name,
-  including `npm run deploy:ci\`, which failed only because of the stray backslash.
-  Directive files are written with the Write tool or a script file, never inline.
-- A live fault: look at the live site first (`curl` is enough for a route). Sector
-  slug `Spinward_Marches`.
-- `findings/` is git-ignored: never in a push list. Push notes live there anyway.
-- **Clean copy:** `scratchpad/clean_copy.sh` in this session's scratchpad does it all (last: outer16); `outerN/node_modules` =
-  junction to the repo's; `clean` = `git archive HEAD` + push paths; junctions
-  `clean/node_modules/@voyage/{engines,generation,shared}` -> `clean/packages/*`,
-  `api` -> `clean/apps/api`; `gen_rules_esm.js`, `gen_names_esm.js`, `node --test
-  "tests/**/*.test.js"`, `check_manifesto.js`. Known: one zod failure in
-  `tests/web/campaign_import.test.js` ("a bad document is refused").
-- Always out of pushes: the ten parked truth-build paths (named in
-  `prompts/c_liquid_minimal_review.md` question 2), except the cap's hunks in
-  `routes/admin.ts`. The six engine paths are no longer held: 1.2.0 replaces them.
-- "All reported" and "frozen" are checked against `reports/`, Progress lines, file
-  times (`find ... -newermt`). Read "Needs from others" before writing the next prompt.
-- Undo is low priority. Google developer style for all copy. Legacy polish is the bar.
-- Prompts with the Write tool; scripts as files; `date` for time stamps; never print
-  golden assertion output; rules questions from `rules/` with citations only.
+- **QUESTIONS, GO, PUSH.** No item released while a question could change it (HOLD in the queue). Questions in full,
+  numbered, recommended answer first. Never ask Johnny to paste anything.
+- **"Pushed" is checked** with `git log` and `git log origin/campaign`.
+- **Read new server code before pushing**; every migration safe in either order.
+- **Rules files:** edit only on Johnny's word, as a minimal insertion (a whole-file rewrite reformatted
+  `mgt2e_space_travel.json` once on 10-17 and was restored).
+- **`questions_for_johnny.md` holds only open questions:** add new ones after the open ones; move an answered one to `decisions.md`. Never replace the section wholesale (10-18 09:40 dropped 84 to 92; restored).
+- **Never trade sharpness for speed** (half resolution was rejected and removed, DF6).
+- **Never put backticks in a double-quoted shell string.** Directive edits by script files; heredocs with quotes
+  have failed: write the script with the Write tool.
+- `findings/` is git-ignored. Push lists from `git status --porcelain -z`; no `.wav`, no `versionvideo/`. Z2 shelved
+  the parked truth-build files under `findings/parked/`.
+- **Clean copy:** `clean_copyNN.sh` in the session scratchpad (last outer27).
+- Local dev is `npm run dev` (state in `apps/api/.wrangler/dev`).
+- Google developer style for all copy. Legacy polish is the bar.

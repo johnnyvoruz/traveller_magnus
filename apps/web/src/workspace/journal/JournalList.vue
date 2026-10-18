@@ -9,6 +9,7 @@ import { campaign } from '../../campaign/store.ts';
 import { deleteEntry, entriesAtHex, entriesNewestFirst } from '../../campaign/journal.ts';
 import Icon from '../../design/Icon.vue';
 import { saveBlob } from '../../platform/browser.ts';
+import { commandScope, handleKey, registerCommand, setCommandScope } from '../../shell/registry.ts';
 import { showToast } from '../../shell/toast.ts';
 import RecordAvatar from '../RecordAvatar.vue';
 import { journalFilter, journalQuery } from '../list_state.ts';
@@ -28,6 +29,8 @@ const props = defineProps<{
     /** Full width: Up and Down open the row they land on. */
     follow: boolean;
     readOnly: boolean;
+    /** A player's journal (P6): what is shared with them, and one way to write, Add a note. */
+    player?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -83,7 +86,7 @@ function nameOf(target: string): string | null {
 const rows = computed(() => filterEntries(all.value, { kind: filter.value, query: needle.value, hexIds: hexIds.value, nameOf }));
 const faces = computed(() => {
     const records = campaign.records;
-    return rows.value.map((entry) => rowFace(entry, records, nameOf));
+    return rows.value.map((entry) => rowFace(entry, records, nameOf, campaign.authorNames[entry.id] ?? null));
 });
 const range = computed(() => visibleRange(
     faces.value.length,
@@ -112,10 +115,12 @@ function readHere(): void {
 }
 
 onMounted(() => {
+    bindKeys();
     readHere();
     void nextTick(bindScroll);
 });
 onBeforeUnmount(() => {
+    releaseListKeys();
     if (searchWait) clearTimeout(searchWait);
     if (scrollEl) scrollEl.removeEventListener('scroll', readScroll);
 });
@@ -229,7 +234,70 @@ function focusRow(index: number): void {
     });
 }
 
-function onRowKey(event: KeyboardEvent, id: string): void {
+const LIST_SCOPE = 'journal-list';
+let releaseKeys: (() => void)[] = [];
+let replay = false;
+
+function inPanel(): boolean {
+    const target = document.activeElement;
+    return target instanceof HTMLElement && !!target.closest('.campaign-root');
+}
+
+function rowFocused(): boolean {
+    const target = document.activeElement;
+    return target instanceof HTMLElement && !!listEl.value?.contains(target) && target.classList.contains('camp-row');
+}
+
+function replayRow(key: string): void {
+    const target = document.activeElement;
+    if (!(target instanceof HTMLElement) || !listEl.value?.contains(target)) return;
+    const id = target.dataset.id;
+    if (!id) return;
+    replay = true;
+    onRowKey({
+        key,
+        ctrlKey: false,
+        metaKey: false,
+        altKey: false,
+        preventDefault() {},
+        stopPropagation() {},
+    }, id);
+}
+
+function bindKeys(): void {
+    setCommandScope(LIST_SCOPE);
+    const key = (id: string, name: string, keys: string[], run: () => void, live: () => boolean) => registerCommand({
+        id, name, keys, scope: LIST_SCOPE, runnable: live, run,
+    });
+    releaseKeys = [
+        key('journal-list-next', 'Next row (Down)', ['ArrowDown'], () => replayRow('ArrowDown'), rowFocused),
+        key('journal-list-prev', 'Previous row (Up)', ['ArrowUp'], () => replayRow('ArrowUp'), rowFocused),
+        key('journal-list-open', 'Open (Enter)', ['Enter'], () => replayRow('Enter'), rowFocused),
+        key('journal-list-locate', 'Locate (L)', ['l', 'L'], () => replayRow('l'), rowFocused),
+        key('journal-list-delete', 'Delete (Delete)', ['Delete'], () => replayRow('Delete'), rowFocused),
+        key('journal-list-search', 'Search this list (/)', ['/'], () => { if (searchEl.value) searchEl.value.focus(); }, inPanel),
+    ];
+}
+
+function releaseListKeys(): void {
+    for (const release of releaseKeys) release();
+    releaseKeys = [];
+    if (commandScope() === LIST_SCOPE) setCommandScope(null);
+}
+
+function onRowKey(event: {
+    key: string;
+    ctrlKey: boolean;
+    metaKey: boolean;
+    altKey: boolean;
+    preventDefault(): void;
+    stopPropagation(): void;
+}, id: string): void {
+    if (!replay && handleKey(event as unknown as KeyboardEvent)) {
+        event.stopPropagation();
+        return;
+    }
+    replay = false;
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault();
         event.stopPropagation();
@@ -356,8 +424,8 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
 </script>
 
 <template>
-  <div class="camp-list" @keydown="onListKey">
-    <div v-if="!first" class="jn-pack">
+  <div class="camp-list jn-list" @keydown="onListKey">
+    <div v-if="!first && !player" class="jn-pack">
       <button type="button" class="ui-btn" data-command="journal-pack" :disabled="packBusy" @click="askPack">Download the Player Pack</button>
       <div v-if="packAsk" class="jn-ask" role="alertdialog" aria-labelledby="jn-pack-title">
         <p id="jn-pack-title">Download the Player Pack?</p>
@@ -366,7 +434,17 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
         <button type="button" class="ui-btn" data-command="journal-pack-cancel" @click="packAsk = null">Cancel</button>
       </div>
     </div>
-    <div v-if="first" class="camp-first">
+    <div v-if="first && player" class="camp-first ui-ground" data-player-journal-empty>
+      <span class="camp-glyph is-large" aria-hidden="true"><Icon name="book-atlas" :size="22" /></span>
+      <h2>Notes for the players land here.</h2>
+      <p>Add a note for your group. The referee can read it too.</p>
+      <div class="camp-first-starts">
+        <button type="button" class="ui-btn is-primary" data-command="journal-new-note" :disabled="readOnly" @click="make('note')">
+          <Icon name="plus" :size="13" />Add a note
+        </button>
+      </div>
+    </div>
+    <div v-else-if="first" class="camp-first ui-ground">
       <span class="camp-glyph is-large" aria-hidden="true"><Icon name="book-atlas" :size="22" /></span>
       <h2>Sessions, notes, handouts and rumours land here.</h2>
       <p>A session takes the campaign date and where the party is. A note waits until you date it.</p>
@@ -391,12 +469,16 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
             @keydown="onSearchKey"
           >
         </label>
+        <button v-if="player" type="button" class="ui-btn is-primary" data-command="journal-new-note" data-player-add-note :disabled="readOnly" @click="make('note')">
+          <Icon name="plus" :size="13" />Add a note
+        </button>
+        <template v-else>
         <button type="button" class="ui-btn is-primary" data-command="journal-new-session" :disabled="readOnly" @click="make('session')">
           <Icon name="plus" :size="13" />New session
         </button>
         <button type="button" class="ui-btn" data-command="journal-new-note" :disabled="readOnly" @click="make('note')">New note</button>
         <span class="jn-more">
-          <button type="button" class="ui-btn is-icon" data-command="journal-new-handout" aria-label="Handout or rumour" aria-haspopup="menu" :disabled="readOnly" @click="menuOpen = !menuOpen">
+          <button type="button" class="ui-btn is-icon" data-command="journal-new-handout" aria-label="Handout or rumour" title="Handout or rumour" aria-haspopup="menu" :disabled="readOnly" @click="menuOpen = !menuOpen">
             <Icon name="caret-down" :size="12" />
           </button>
           <span v-if="menuOpen" class="camp-add-backdrop" @click="menuOpen = false"></span>
@@ -409,6 +491,7 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
             </button>
           </span>
         </span>
+        </template>
       </div>
 
       <div ref="typesEl" class="camp-types" role="radiogroup" aria-label="Kind" @keydown="onTypesKey">
@@ -438,15 +521,30 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
         </button>
       </div>
 
-      <p v-if="needle.trim() && rows.length === 0" class="jn-none">
-        No entries match "{{ needle.trim() }}".
-        <button type="button" class="ui-btn" @click="query = ''">Clear the search</button>
-      </p>
-      <p v-else-if="kindEmpty" class="jn-none">
-        {{ kindEmpty.line }}
-        <button type="button" class="ui-btn" :disabled="readOnly" @click="make(kindEmpty.make)">{{ kindEmpty.action }}</button>
-      </p>
-      <p v-else-if="rows.length === 0" class="jn-none">No entries here.</p>
+      <div v-if="needle.trim() && rows.length === 0" class="camp-first ui-ground">
+        <span class="camp-glyph" aria-hidden="true"><Icon name="search" :size="22" /></span>
+        <h2>No entries match</h2>
+        <p>Nothing matches “{{ needle.trim() }}”{{ atHere && here ? ' ' + here.label.replace(/^At/, 'at') : '' }}.</p>
+        <div class="camp-first-starts">
+          <button type="button" class="ui-btn" @click="query = ''">Clear the search</button>
+        </div>
+      </div>
+      <div v-else-if="kindEmpty" class="camp-first ui-ground">
+        <span class="camp-glyph" aria-hidden="true"><Icon name="book-atlas" :size="22" /></span>
+        <h2>{{ kindEmpty.line.replace(/\.$/, '') }}</h2>
+        <p>Add one. It stays in your campaign.</p>
+        <div class="camp-first-starts">
+          <button v-if="!player || kindEmpty.make === 'note'" type="button" class="ui-btn is-primary" :disabled="readOnly" @click="make(kindEmpty.make)">{{ kindEmpty.action }}</button>
+        </div>
+      </div>
+      <div v-else-if="rows.length === 0" class="camp-first ui-ground">
+        <span class="camp-glyph" aria-hidden="true"><Icon name="location-dot" :size="22" /></span>
+        <h2>Nothing of yours here</h2>
+        <p>{{ here ? 'Nothing of yours ' + here.label.replace(/^At/, 'at') + '.' : 'No entries here.' }}</p>
+        <div class="camp-first-starts">
+          <button type="button" class="ui-btn" @click="atHere = false">Show every entry</button>
+        </div>
+      </div>
 
       <ul v-else ref="listEl" class="camp-rows" aria-label="Journal">
         <li v-if="padBefore > 0" class="jn-pad" aria-hidden="true" :style="{ height: padBefore + 'px' }"></li>
@@ -468,14 +566,15 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
             />
             <span v-else class="camp-glyph" aria-hidden="true"><Icon :name="face.icon" :size="16" /></span>
             <span class="camp-row-text">
+              <span class="ui-kicker is-signal jn-kind">{{ face.chip }}</span>
               <span class="jn-name">
                 <b v-if="face.number" class="jn-num">{{ face.number }}</b>
                 <b :class="{ 'is-soft': face.soft }">{{ face.name }}</b>
                 <span v-if="face.public" class="ui-chip jn-public">Public</span>
-                <span class="ui-chip jn-kind">{{ face.chip }}</span>
+                <span v-if="face.author" class="jn-by">Written by <span class="ui-chip">{{ face.author }}</span></span>
               </span>
               <span v-if="face.summary" class="camp-row-sum">{{ face.summary }}</span>
-              <span class="camp-row-meta">{{ face.meta }}</span>
+              <span class="camp-row-meta jn-meta"><span v-if="face.when" class="ui-date">{{ face.when }}</span><span v-if="face.metaRest">{{ face.metaRest }}</span></span>
             </span>
           </button>
           <button
@@ -516,7 +615,7 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
 
 .jn-num {
   color: var(--signal);
-  font: 700 14px/1.2 var(--font-code);
+  font: 700 14px/1.2 var(--font-display);
   font-variant-numeric: var(--tabular);
 }
 
@@ -524,24 +623,62 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
   flex: 0 0 auto;
 }
 
+/* The version-video look (Lane M): the rows in a frame, the kind as a kicker over the name, hex glyphs, the date in its box. */
+.jn-list .camp-rows {
+  border-color: var(--line-2);
+  border-radius: var(--r-4);
+  background: var(--bg-0);
+  box-shadow: 0 0 24px var(--frame-glow);
+}
+
+.jn-list .camp-row {
+  align-items: flex-start;
+  padding: 12px 14px;
+}
+
+.jn-list .camp-row-text {
+  gap: 3px;
+}
+
 .jn-kind {
-  flex: 0 0 auto;
-  margin-left: auto;
+  letter-spacing: 0.24em;
+}
+
+.jn-list .camp-glyph {
+  width: 40px;
+  height: 36px;
+  margin-top: 2px;
+  border: 0;
+  border-radius: 0;
+  background: var(--wash);
+  clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
+}
+
+/* On a narrow panel the buttons go under the search rather than squeeze it. */
+.jn-list .camp-tool {
+  flex-wrap: wrap;
+}
+
+.jn-list .camp-search {
+  flex: 1 1 200px;
+}
+
+.jn-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin-top: 2px;
+}
+
+.jn-meta .ui-date {
+  padding: 1px 6px 0;
 }
 
 .jn-pad {
   margin: 0;
   padding: 0;
   border: 0;
-}
-
-.jn-none {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin: 8px 0;
-  color: var(--text-1);
 }
 
 .jn-pack {

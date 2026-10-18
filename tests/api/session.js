@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { createHmac } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { apiRoot, wranglerBin } from './server.js';
@@ -9,6 +9,23 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 
 function sleep(ms) {
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+const locked = /database is locked|SQLITE_BUSY|SQLITE_IOERR|disk I\/O error|Workers runtime failed to start/i;
+
+/** Windows keeps the sqlite directory open for a moment after wrangler exits. */
+export function removeTree(dir) {
+    let last = null;
+    for (let attempt = 0; attempt < 40; attempt++) {
+        try {
+            rmSync(dir, { recursive: true, force: true });
+            return;
+        } catch (error) {
+            last = error;
+            sleep(500);
+        }
+    }
+    throw last;
 }
 
 export function runWrangler(args) {
@@ -25,7 +42,7 @@ export function runWrangler(args) {
         });
         last = `${result.stdout || ''}\n${result.stderr || ''}`;
         if (result.status === 0) return result.stdout || '';
-        if (/database is locked|SQLITE_BUSY/i.test(last)) {
+        if (locked.test(last)) {
             sleep(500);
             continue;
         }
@@ -60,7 +77,7 @@ export function adminCookie() {
             token = (result.stdout || '').trim();
             break;
         }
-        if (/database is locked|SQLITE_BUSY/i.test(last)) {
+        if (locked.test(last)) {
             sleep(500);
             continue;
         }

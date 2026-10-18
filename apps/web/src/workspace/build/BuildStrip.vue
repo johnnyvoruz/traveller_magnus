@@ -13,14 +13,18 @@ import { allowanceNow, allowanceSpent } from './allowance_words.ts';
 import { draftHandle } from './edit.ts';
 import { build, firstStep, SELECTION_CAP, STARTED_KEY, stripLine, YOURS_KEY, yoursNote } from './state.ts';
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
     name: string;
     truthVersion: string | null;
     /** The hex pane is open: it says the allowance by its Generate button, so the strip doesn't say it twice. */
     paneOpen?: boolean;
     /** How far out the chart is drawn: the first step depends on it. */
     tier?: Tier;
-}>();
+    /** False for a player: the Select hexes switch is hidden and cannot be turned on (P8). */
+    selectHexes?: boolean;
+}>(), {
+    selectHexes: true,
+});
 const emit = defineEmits<{ clear: []; width: [px: number]; start: [how: 'go' | 'zoom'] }>();
 
 const root = ref<HTMLElement | null>(null);
@@ -51,7 +55,13 @@ watch(() => build.job !== null || build.preview !== null || build.rolling !== ''
     started.value = true;
     storageSet(STARTED_KEY, '1');
 }, { immediate: true });
-const step = computed(() => (!started.value && build.selection.length === 0 && !props.paneOpen && !build.selecting ? firstStep(props.tier ?? 'hex') : null));
+const selectOn = computed(() => props.selectHexes !== false);
+const step = computed(() => {
+    if (started.value || build.selection.length !== 0 || props.paneOpen || build.selecting) return null;
+    const next = firstStep(props.tier ?? 'hex');
+    if (next && next.does === 'select' && !selectOn.value) return null;
+    return next;
+});
 function takeStep(): void {
     const now = step.value;
     if (!now) return;
@@ -59,10 +69,14 @@ function takeStep(): void {
         emit('start', now.does);
         return;
     }
+    if (!selectOn.value) return;
     // The note goes when the tool is on: focus moves to the switch, which now reads as pressed.
     build.selecting = true;
     void nextTick(() => { if (selectEl.value) selectEl.value.focus(); });
 }
+watch(selectOn, (on) => {
+    if (!on) build.selecting = false;
+});
 let stop: (() => void) | null = null;
 
 onMounted(() => {
@@ -85,6 +99,7 @@ onBeforeUnmount(() => {
       <b>{{ name }}<em> · {{ stripLine(name, truthVersion).what }}</em></b>
     </span>
     <button
+      v-if="selectOn"
       ref="selectEl"
       type="button"
       class="ui-btn"
@@ -134,10 +149,10 @@ onBeforeUnmount(() => {
   max-width: calc(100% - var(--rail-width) - 2 * var(--chrome-inset));
   height: var(--chrome-height);
   padding: 0 8px 0 14px;
-  border: 1px solid var(--control-line);
+  border: 1px solid var(--line-2);
   border-radius: var(--r-4);
   background: var(--chrome-glass);
-  box-shadow: var(--shadow-chrome);
+  box-shadow: var(--shadow-chrome), 0 0 24px var(--frame-glow);
   white-space: nowrap;
 }
 
@@ -149,18 +164,25 @@ onBeforeUnmount(() => {
   line-height: 1.25;
 }
 
+/* The videos' kicker over the map's name in Orbitron, as over a version number. */
 .build-strip-who small {
-  color: var(--signal);
-  font: 700 10px/1.3 var(--font-text);
-  letter-spacing: 0.08em;
+  color: var(--signal-dim);
+  font: 700 12px/1.3 var(--font-display);
+  letter-spacing: 0.3em;
   text-transform: uppercase;
 }
 
 .build-strip-who b {
   overflow: hidden;
   color: var(--text-0);
-  font: 700 13.5px/1.25 var(--font-text);
+  font: 700 13px/1.3 var(--font-display);
+  letter-spacing: 0.02em;
   text-overflow: ellipsis;
+}
+
+.build-strip-who em {
+  font-family: var(--font-text);
+  letter-spacing: 0;
 }
 
 .build-strip-who em {
@@ -202,11 +224,12 @@ onBeforeUnmount(() => {
   box-sizing: border-box;
   width: 100%;
   padding: 10px 10px 10px 14px;
-  border: 1px solid var(--control-line);
+  border: 1px solid var(--line-2);
   border-left: 3px solid var(--signal);
   border-radius: var(--r-3);
   background: var(--chrome-glass);
-  box-shadow: var(--shadow-chrome);
+  /* The strip's frame and halo, so the notes read as hanging from it. */
+  box-shadow: var(--shadow-chrome), 0 0 24px var(--frame-glow);
   white-space: normal;
 }
 
@@ -254,6 +277,14 @@ onBeforeUnmount(() => {
   /* The words for the tool give way first: the switch itself says it is on. */
   .build-strip-say {
     display: none;
+  }
+}
+
+/* Below 680 px the date chip takes the row under the search (workspace/StardateChip.vue): the strip,
+   and the notes that hang from it, go a row lower, so the chip never covers Select hexes. */
+@media (max-width: 680px) {
+  .build-strip {
+    top: calc(var(--chrome-top) + 2 * (var(--chrome-height) + 8px));
   }
 }
 </style>

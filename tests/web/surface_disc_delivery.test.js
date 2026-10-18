@@ -66,12 +66,12 @@ after(() => {
 
 test('step 3 keeps the vanilla program and bakes cube C', () => {
     assert.notEqual(ENHANCED_DRAW_FRAG, DRAW_FRAG);
-    assert.equal(DRAW_FRAG.includes('uCityHaze * pow(1.0 - z, 3.0)'), true);
+    assert.equal(DRAW_FRAG.includes('uCityHaze * pow(1.0 - z, 3.0)'), false);
     assert.equal(ENHANCED_DRAW_FRAG.includes('uCityHaze *'), false);
     assert.equal(DRAW_FRAG.includes('samplerCube uC'), false);
     assert.equal(ENHANCED_DRAW_FRAG.includes('samplerCube uC'), true);
     assert.deepEqual([...ENHANCED_BAKE_PASSES], ['C']);
-    assert.equal(ENHANCED_CITY_VERSION, 'enhanced-cities-4c');
+    assert.equal(ENHANCED_CITY_VERSION, 'enhanced-cities-4d');
     assert.equal(VANILLA_DISC_VERSION, 'vanilla');
 });
 

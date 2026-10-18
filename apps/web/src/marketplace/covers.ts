@@ -4,23 +4,16 @@
  * package's kind family (`apps/web/public/covers/<family>.webp` and `<family>_640.webp`). The
  * server never names a default. Pure: it runs under Node.
  */
-import type { PackageCover } from '@voyage/shared';
+import { PACKAGE_KIND_FAMILIES, type PackageCover, type PackageFamily } from '@voyage/shared';
 
-export type KindFamily = 'map' | 'system' | 'ship' | 'people' | 'patrons' | 'organization' | 'adventure' | 'other';
+export type KindFamily = PackageFamily;
 
 /**
  * Kind to family, first match, case-insensitive, by keyword anywhere in the kind
- * (reports/done/a_store_art.md). A kind that matches none is `other`.
+ * (reports/done/a_store_art.md). A kind that matches none is `other`. The table is the server's
+ * (`PACKAGE_KIND_FAMILIES`, contract F2), so the store's families and its `family=` query agree.
  */
-export const KIND_FAMILIES: readonly { family: Exclude<KindFamily, 'other'>; words: readonly string[] }[] = [
-    { family: 'map', words: ['sector', 'subsector', 'piece', 'map', 'region'] },
-    { family: 'system', words: ['system'] },
-    { family: 'ship', words: ['ship', 'ships', 'vessel', 'fleet'] },
-    { family: 'people', words: ['people', 'contact', 'npc', 'crew', 'character'] },
-    { family: 'patrons', words: ['patron', 'job', 'mission', 'hook'] },
-    { family: 'organization', words: ['organization', 'organisation', 'faction', 'corporation', 'house'] },
-    { family: 'adventure', words: ['adventure', 'scenario', 'event', 'campaign'] },
-];
+export const KIND_FAMILIES: readonly { family: Exclude<KindFamily, 'other'>; words: readonly string[] }[] = PACKAGE_KIND_FAMILIES;
 
 /** Every family, in the order the store's chips list them. */
 export const FAMILIES: readonly KindFamily[] = [...KIND_FAMILIES.map((row) => row.family), 'other'];

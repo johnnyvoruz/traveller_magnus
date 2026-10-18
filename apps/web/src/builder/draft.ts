@@ -346,7 +346,7 @@ export async function startDraft(port: DraftPort, hexKey: string): Promise<Draft
             if (token === epoch) break;
         }
         const held = messages.value.find((item) => item.holds);
-        if (held) throw new Error(held.text || 'The engine could not build this system.');
+        if (held) throw new Error(held.text || 'This system could not be built.');
         if (replaced.value) return null;
         if (!dirty.value) return null;
         const mark = epoch;

@@ -12,7 +12,7 @@
  * session again itself. No email is shown anywhere, including the stand-in address the server
  * stores.
  */
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, nextTick, onMounted, ref, watch } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
 import {
     linkProvider, listLinkedAccounts, listPasskeys, regenerateRecoveryCodes, removePasskey, renamePasskey, setUsername, unlinkAccount,
@@ -39,6 +39,8 @@ import {
 
 type Phase = 'loading' | 'out' | 'codes' | 'nudge' | 'recovery' | 'account';
 const ORDER = ['twitter', 'discord', 'google'];
+const ChangelogWindow = defineAsyncComponent(() => import('../ChangelogWindow.vue'));
+const changesOpen = ref(false);
 
 const router = useRouter();
 const phase = ref<Phase>('loading');
@@ -351,13 +353,14 @@ watch(() => (session.user ? session.user.id : ''), (id) => {
 </script>
 
 <template>
-  <main class="pk-page">
+  <main class="pk-page ui-ground">
     <div class="pk-page-inner">
+      <span class="ui-brand pk-brand">Traveller<span class="ui-brand-dot">.</span>voyage</span>
       <RouterLink v-if="phase !== 'recovery'" :to="returnPath()" class="pk-back">Back to the map</RouterLink>
 
       <p v-if="phase === 'loading'" class="pk-quiet" role="status">Loading your account…</p>
 
-      <section v-else-if="phase === 'out'" class="pk-page-body" aria-label="Sign in">
+      <section v-else-if="phase === 'out'" class="pk-page-body pk-frame" aria-label="Sign in">
         <SignInBody heading />
       </section>
 
@@ -538,7 +541,8 @@ watch(() => (session.user ? session.user.id : ''), (id) => {
         </template>
       </section>
       <!-- Signed out, the sign-in card below says the version itself. -->
-      <p v-if="phase !== 'out' && phase !== 'loading'" class="pk-version" data-version>Version {{ APP_VERSION }}</p>
+      <button v-if="phase !== 'out' && phase !== 'loading'" type="button" class="pk-version" data-version @click="changesOpen = true">Version {{ APP_VERSION }} · What's new</button>
+      <ChangelogWindow v-if="changesOpen" @close="changesOpen = false" />
     </div>
   </main>
 </template>
@@ -549,7 +553,7 @@ watch(() => (session.user ? session.user.id : ''), (id) => {
   position: absolute;
   inset: 0;
   overflow-y: auto;
-  background: var(--bg-0);
+  background: var(--ground-fill);
   color: var(--text-1);
   font: 400 14px/1.55 var(--font-text);
 }
@@ -580,14 +584,24 @@ watch(() => (session.user ? session.user.id : ''), (id) => {
   gap: 14px;
 }
 
-/* The app's version, last on the page: the smallest text, muted, selectable. */
+/* The app's version, last on the page. Same look as the store's text links. */
 .pk-page .pk-version {
-  margin: 20px 0 0;
-  color: var(--text-muted);
-  font-size: 11px;
-  line-height: 1.3;
+  display: block;
+  margin: 20px 0 0 0;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--signal);
+  font: 600 13px/1.4 var(--font-text);
   text-align: right;
-  user-select: text;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.pk-page .pk-version:hover {
+  color: var(--signal-bright);
 }
 
 .pk-head {
@@ -597,11 +611,33 @@ watch(() => (session.user ? session.user.id : ''), (id) => {
   gap: 4px 14px;
 }
 
+/* The version-video look: the page on the ground (its grid and stars held to the window as the page scrolls), the brand at the top, the sign-in and the cards in frames, titles in Orbitron. */
+.pk-page.ui-ground::before,
+.pk-page.ui-ground::after {
+  position: fixed;
+}
+
+.pk-brand {
+  display: block;
+  width: max-content;
+  margin-bottom: 18px;
+}
+
+.pk-frame {
+  box-sizing: border-box;
+  max-width: 462px;
+  padding: 20px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-4);
+  background: var(--bg-0);
+  box-shadow: 0 0 24px var(--frame-glow);
+}
+
 .pk-h1 {
   margin: 0;
   color: var(--text-0);
-  font: 700 24px/1.25 var(--font-text);
-  letter-spacing: 0;
+  font: 700 24px/1.25 var(--font-display);
+  letter-spacing: 0.02em;
   outline: none;
 }
 
@@ -622,9 +658,10 @@ watch(() => (session.user ? session.user.id : ''), (id) => {
   flex-direction: column;
   gap: 10px;
   padding: 16px;
-  border: 1px solid var(--line-1);
+  border: 1px solid var(--line-2);
   border-radius: var(--r-4);
-  background: var(--bg-1);
+  background: var(--bg-0);
+  box-shadow: 0 0 24px var(--frame-glow);
 }
 
 .pk-rows {

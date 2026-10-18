@@ -150,7 +150,7 @@ export function characterService(db: CatalogueDb, rooms: CharacterRooms, clock: 
 
         async create(actor: Actor, body: unknown): Promise<Outcome> {
             const parsed = CharacterCreate.safeParse(body);
-            if (!parsed.success) return bad(400, 'validation', 'Invalid request.', parsed.error.flatten());
+            if (!parsed.success) return bad(400, 'validation', 'That request could not be read. Try again.', parsed.error.flatten());
             let name = parsed.data.name ?? '';
             let boxes: Array<{ name: string; value: string | boolean }> = [];
             if (parsed.data.from) {
@@ -160,7 +160,7 @@ export function characterService(db: CatalogueDb, rooms: CharacterRooms, clock: 
                 const doc = await rooms.read(parsed.data.from);
                 boxes = Object.entries(doc.fields).map(([field, value]) => ({ name: field, value }));
             } else if (!name) {
-                return bad(400, 'validation', 'Invalid request.');
+                return bad(400, 'validation', 'That request could not be read. Try again.');
             }
             const id = newId('ch');
             const now = clock().toISOString();
@@ -200,7 +200,7 @@ export function characterService(db: CatalogueDb, rooms: CharacterRooms, clock: 
             if (!access) return bad(404, 'not_found', 'No such character.');
             if (access.role !== 'owner') return bad(403, 'forbidden', 'The owner does that.');
             const parsed = CharacterPatch.safeParse(body);
-            if (!parsed.success) return bad(400, 'validation', 'Invalid request.', parsed.error.flatten());
+            if (!parsed.success) return bad(400, 'validation', 'That request could not be read. Try again.', parsed.error.flatten());
             const name = parsed.data.name ?? String(access.row.name);
             const summary = parsed.data.summary ?? String(access.row.summary);
             const now = clock().toISOString();
@@ -233,7 +233,7 @@ export function characterService(db: CatalogueDb, rooms: CharacterRooms, clock: 
             const access = await accessFor(db, id, actor.id);
             if (!access) return bad(404, 'not_found', 'No such character.');
             const parsed = CharacterFieldsWrite.safeParse(body);
-            if (!parsed.success) return bad(400, 'validation', 'Invalid request.', parsed.error.flatten());
+            if (!parsed.success) return bad(400, 'validation', 'That request could not be read. Try again.', parsed.error.flatten());
             const result = await rooms.apply(id, parsed.data.sets, actor.id);
             if (!result.ok) return bad(400, 'validation', 'Invalid field.', { field: result.field, why: result.why });
             return good(CharacterFieldsResult.parse({ doc: result.doc, applied: result.applied }));
@@ -282,7 +282,7 @@ export function characterService(db: CatalogueDb, rooms: CharacterRooms, clock: 
             if (!access) return bad(404, 'not_found', 'No such character.');
             if (access.role !== 'owner') return bad(403, 'forbidden', 'The owner does that.');
             const parsed = CharacterOwnerChange.safeParse(body);
-            if (!parsed.success) return bad(400, 'validation', 'Invalid request.', parsed.error.flatten());
+            if (!parsed.success) return bad(400, 'validation', 'That request could not be read. Try again.', parsed.error.flatten());
             if (parsed.data.userId === actor.id) return bad(400, 'validation', 'That account already owns this character.');
             const target = await db.get(
                 `SELECT role FROM character_access WHERE character_id = ? AND user_id = ?`,
@@ -393,7 +393,7 @@ export function characterService(db: CatalogueDb, rooms: CharacterRooms, clock: 
 
         async claim(actor: Actor, body: unknown): Promise<Outcome> {
             const parsed = CharacterClaim.safeParse(body);
-            if (!parsed.success) return bad(400, 'validation', 'Invalid request.', parsed.error.flatten());
+            if (!parsed.success) return bad(400, 'validation', 'That request could not be read. Try again.', parsed.error.flatten());
             const tokenHash = await sha256Hex(parsed.data.token);
             const invite = await db.get(
                 `SELECT i.id, i.character_id, i.created_by, i.expires_at, i.claimed_at, i.revoked_at, c.deleted_at

@@ -4,6 +4,10 @@
  * and the body of the Filters sheet below it. Kind, Contents, Edition, Tags, Updated and Publisher,
  * each a heading and its choices with counts in grey. Ticking a box changes the URL at once
  * (PackagesView.vue); this component only says which choice was pressed.
+ *
+ * Nothing here moves under the pointer (prompts/d_store_harden.md item 2): a choice listed once
+ * stays listed (filters.ts `seen`), dimmed and not tickable at a count of 0; "See more" keeps its
+ * place, and the rest of the tags open below it.
  */
 import { computed, ref } from 'vue';
 import { TAGS_SHOWN, type Facet, type Facets, type FilterKey } from './filters.ts';
@@ -12,12 +16,10 @@ const props = defineProps<{ facets: Facets }>();
 const emit = defineEmits<{ (e: 'toggle', key: FilterKey, value: string): void }>();
 
 const allTags = ref(false);
-const tags = computed(() => {
-    const list = props.facets.tags;
-    if (allTags.value) return list;
-    // A tag that is on stays in view even past the first ten.
-    return list.filter((facet, i) => i < TAGS_SHOWN || facet.on);
-});
+/** The first ten tags; "See more" opens the rest below its own button, so the button stays put. */
+const firstTags = computed(() => props.facets.tags.slice(0, TAGS_SHOWN));
+/** Past the first ten: all of them when open, else only those that are on (a tag that is on stays in view). */
+const moreTags = computed(() => props.facets.tags.slice(TAGS_SHOWN).filter((facet) => allTags.value || facet.on));
 
 type Section = { key: Exclude<FilterKey, 'updated' | 'tags'>; heading: string; list: Facet[] };
 const lists = computed((): Section[] => [
@@ -31,11 +33,11 @@ const lists = computed((): Section[] => [
   <div class="mk-filters">
     <template v-for="section in lists" :key="section.key">
       <section v-if="section.list.length" class="mk-fsec" :data-filter="section.key">
-        <h2 class="mk-fhead">{{ section.heading }}</h2>
+        <h2 class="mk-fhead ui-kicker">{{ section.heading }}</h2>
         <ul class="mk-flist">
           <li v-for="facet in section.list" :key="facet.value">
-            <label class="mk-fopt">
-              <input type="checkbox" :checked="facet.on" @change="emit('toggle', section.key, facet.value)" />
+            <label class="mk-fopt" :class="{ 'is-dim': facet.dim }">
+              <input type="checkbox" :checked="facet.on" :disabled="facet.dim" @change="emit('toggle', section.key, facet.value)" />
               <span class="mk-fwords">{{ facet.words }}</span>
               <span class="mk-fcount">{{ facet.count }}</span>
             </label>
@@ -45,26 +47,35 @@ const lists = computed((): Section[] => [
     </template>
 
     <section v-if="facets.tags.length" class="mk-fsec" data-filter="tags">
-      <h2 class="mk-fhead">Tags</h2>
+      <h2 class="mk-fhead ui-kicker">Tags</h2>
       <ul class="mk-flist">
-        <li v-for="facet in tags" :key="facet.value">
-          <label class="mk-fopt">
-            <input type="checkbox" :checked="facet.on" @change="emit('toggle', 'tags', facet.value)" />
+        <li v-for="facet in firstTags" :key="facet.value">
+          <label class="mk-fopt" :class="{ 'is-dim': facet.dim }">
+            <input type="checkbox" :checked="facet.on" :disabled="facet.dim" @change="emit('toggle', 'tags', facet.value)" />
             <span class="mk-fwords">{{ facet.words }}</span>
             <span class="mk-fcount">{{ facet.count }}</span>
           </label>
         </li>
       </ul>
-      <button v-if="facets.tags.length > TAGS_SHOWN" type="button" class="mk-link mk-fmore" :aria-expanded="allTags ? 'true' : 'false'" @click="allTags = !allTags">
+      <button v-if="facets.tags.length > TAGS_SHOWN" type="button" class="mk-link mk-fmore" aria-controls="mk-more-tags" :aria-expanded="allTags ? 'true' : 'false'" @click="allTags = !allTags">
         {{ allTags ? 'See fewer' : 'See more' }}
       </button>
+      <ul v-if="moreTags.length" id="mk-more-tags" class="mk-flist mk-fmore-list">
+        <li v-for="facet in moreTags" :key="facet.value">
+          <label class="mk-fopt" :class="{ 'is-dim': facet.dim }">
+            <input type="checkbox" :checked="facet.on" :disabled="facet.dim" @change="emit('toggle', 'tags', facet.value)" />
+            <span class="mk-fwords">{{ facet.words }}</span>
+            <span class="mk-fcount">{{ facet.count }}</span>
+          </label>
+        </li>
+      </ul>
     </section>
 
     <section class="mk-fsec" data-filter="updated">
-      <h2 class="mk-fhead">Updated</h2>
+      <h2 class="mk-fhead ui-kicker">Updated</h2>
       <ul class="mk-flist">
         <li v-for="facet in facets.updated" :key="facet.value">
-          <button type="button" class="mk-flink" :aria-pressed="facet.on ? 'true' : 'false'" @click="emit('toggle', 'updated', facet.value)">
+          <button type="button" class="mk-flink" :class="{ 'is-dim': facet.dim }" :aria-pressed="facet.on ? 'true' : 'false'" :disabled="facet.dim" @click="emit('toggle', 'updated', facet.value)">
             <span class="mk-fwords">{{ facet.words }}</span>
             <span class="mk-fcount">{{ facet.count }}</span>
           </button>
@@ -73,11 +84,11 @@ const lists = computed((): Section[] => [
     </section>
 
     <section v-if="facets.by.length" class="mk-fsec" data-filter="by">
-      <h2 class="mk-fhead">Publisher</h2>
+      <h2 class="mk-fhead ui-kicker">Publisher</h2>
       <ul class="mk-flist">
         <li v-for="facet in facets.by" :key="facet.value">
-          <label class="mk-fopt">
-            <input type="checkbox" :checked="facet.on" @change="emit('toggle', 'by', facet.value)" />
+          <label class="mk-fopt" :class="{ 'is-dim': facet.dim }">
+            <input type="checkbox" :checked="facet.on" :disabled="facet.dim" @change="emit('toggle', 'by', facet.value)" />
             <span class="mk-fwords">{{ facet.words }}</span>
             <span class="mk-fcount">{{ facet.count }}</span>
           </label>
@@ -96,10 +107,9 @@ const lists = computed((): Section[] => [
   font: 400 13.5px/1.4 var(--font-text);
 }
 
+/* The section heads are the videos' kickers (design/base.css .ui-kicker). */
 .mk-fhead {
-  margin: 0 0 6px;
-  color: var(--text-0);
-  font: 700 13.5px/1.3 var(--font-text);
+  margin: 0 0 8px;
 }
 
 .mk-flist {
@@ -129,8 +139,8 @@ const lists = computed((): Section[] => [
   cursor: pointer;
 }
 
-.mk-fopt:hover,
-.mk-flink:hover {
+.mk-fopt:not(.is-dim):hover,
+.mk-flink:not(.is-dim):hover {
   background: var(--neutral-wash);
   color: var(--text-0);
 }
@@ -164,5 +174,16 @@ const lists = computed((): Section[] => [
 .mk-fmore {
   margin-top: 4px;
   padding-left: 4px;
+}
+
+.mk-fmore-list {
+  margin-top: 4px;
+}
+
+/* At a count of 0: still listed, in its place, dimmed and not tickable. */
+.mk-fopt.is-dim,
+.mk-flink.is-dim {
+  opacity: 0.45;
+  cursor: default;
 }
 </style>

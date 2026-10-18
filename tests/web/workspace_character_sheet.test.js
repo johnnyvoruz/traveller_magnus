@@ -6,6 +6,8 @@
  */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { test } from 'node:test';
 import { EXTRA_LINE_MIN, extraFieldName, numberedSkillLabels, parseExtraName } from '@voyage/shared';
 import {
@@ -200,13 +202,16 @@ test('the sheet mounts from a plain object with no store: every box of the PDF i
     const { createServer } = await import('vite');
     const { createSSRApp } = await import('vue');
     const { renderToString } = await import('vue/server-renderer');
-    const server = await createServer({
-        root: new URL('../../apps/web/', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'),
-        server: { middlewareMode: true, hmr: false, ws: false },
-        appType: 'custom',
-        logLevel: 'silent',
-    });
+    const cacheDir = fs.mkdtempSync(path.join(tmpdir(), 'character-sheet-ssr-'));
+    let server;
     try {
+        server = await createServer({
+            root: new URL('../../apps/web/', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'),
+            cacheDir,
+            server: { middlewareMode: true, hmr: false, ws: false },
+            appType: 'custom',
+            logLevel: 'silent',
+        });
         const sheet = (await server.ssrLoadModule('/src/workspace/CharacterSheet.vue')).default;
         const doc = { schema: CHARACTER_SCHEMA, fields: { Name: 'Marc Hault', Strength: '7', 'Career Survival 1': true, 'Weapon Type 8': 'last weapon' } };
         const app = createSSRApp(sheet, {
@@ -243,6 +248,7 @@ test('the sheet mounts from a plain object with no store: every box of the PDF i
         const fixed = await renderToString(createSSRApp(sheet, { doc, editable: false }));
         assert.equal((fixed.match(/<(?:input|textarea)[^>]* disabled/g) ?? []).length, 420 - hidden);
     } finally {
-        await server.close();
+        if (server) await server.close();
+        fs.rmSync(cacheDir, { recursive: true, force: true });
     }
 });

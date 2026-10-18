@@ -40,8 +40,8 @@ const what = computed(() => (handUi.removing && handUi.removing.kind === 'star' 
   </div>
   <div v-else-if="!remove" class="sysed-strip design-ask" role="alertdialog" aria-label="Design by hand">
     <p><b>Design {{ handUi.askName || 'this system' }} by hand?</b></p>
-    <p>The engine stops generating this system. You add, remove, type, and arrange every star, world, and moon yourself. To go back to the previous version, select Undo in the message that appears. To roll the system again later, select Generate a system.</p>
-    <p class="design-ask-fine">Copied: the system’s name, its stars, each world’s name and kind, and the mainworld’s profile, notes, zone, allegiance, trade codes, and bases. Not copied: masses, orbits, distances, and everything else the engine rolled.</p>
+    <p>Building stops for this system. You add, remove, type, and arrange every star, world, and moon yourself. To go back to the previous version, select Undo in the message that appears. To roll the system again later, select Generate a system.</p>
+    <p class="design-ask-fine">Copied: the system’s name, its stars, each world’s name and kind, and the mainworld’s profile, notes, zone, allegiance, trade codes, and bases. Not copied: masses, orbits, distances, and everything else that was rolled.</p>
     <div class="sysed-strip-acts">
       <button type="button" class="ui-btn is-primary" data-command="build-design-hand" :disabled="handUi.askBusy" :aria-busy="handUi.askBusy ? 'true' : undefined" @click="confirmDesign()">{{ handUi.askBusy ? 'Changing…' : 'Design by hand' }}</button>
       <button type="button" class="ui-btn" data-design-cancel :disabled="handUi.askBusy" @click="cancelDesign()">Cancel</button>

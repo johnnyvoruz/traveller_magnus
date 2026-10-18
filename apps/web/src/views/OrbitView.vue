@@ -7,11 +7,11 @@
  * orbit/OrbitCanvas.vue; this file holds the clock's number, the frame loop and the wiring.
  */
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 import type { SectorHex, SectorIndex, TreeEnvelope, TruthOverview } from '@voyage/shared';
 import Icon from '../design/Icon.vue';
 import { formatDisplayNumber } from '../dossier/labels.ts';
-import { overviewModel, pickSystem, type AllegianceName, type TreeRow } from '../dossier/model.ts';
+import { overviewModel, pickSystem, type AllegianceName, type HexBody, type SystemDoc, type TreeRow } from '../dossier/model.ts';
 import { parsecsBetween } from '../map/geometry.ts';
 import { TruthClient } from '../map/truth_client.ts';
 import BodyChips from '../orbit/BodyChips.vue';
@@ -28,7 +28,7 @@ import { appendLeg, removeLastLeg, replaceLegsFrom, trackOf } from '../campaign/
 import type { CampaignAnchor } from '@voyage/shared';
 import { rollJumpHours } from '../campaign/travel.ts';
 import { formatDistance } from '../design/units.ts';
-import { pointWords, realDistanceKmBetween, type PlaceEnd } from '../orbit/distance.ts';
+import { pointWords, realDistanceKmBetween, realPositionAu, type PlaceEnd } from '../orbit/distance.ts';
 import {
     appendedTail, courseLegs, courseReady, courseTotals, editedTail, lastThrust, movedWaypoint, picturePreview, planCourse, routeFixed, routePreview, samePlace,
     storedRoute, tagWords, toGoWords, underwayWords, type EditedTail, type PlannedLeg, type Waypoint,
@@ -42,11 +42,12 @@ import { escapeStep, toggleDrawer, type DrawerState } from '../orbit/drawers.ts'
 import DrawerTabs from '../orbit/DrawerTabs.vue';
 import HeaderClock from '../orbit/HeaderClock.vue';
 import LayerKey from '../orbit/LayerKey.vue';
-import { AU_KM, planSystem } from '../orbit/layout.ts';
+import { AU_KM, planSystem, type Plan } from '../orbit/layout.ts';
 import LineupSearch from '../orbit/LineupSearch.vue';
 import OrbitPopover from '../orbit/OrbitPopover.vue';
 import { DEFAULT_LAYERS, type Layers, type Mode } from '../orbit/picture.ts';
-import { bodyChips, dossierPath, findChip, orbitPath, shortLabel, subsectorLetter } from '../orbit/bodies.ts';
+import { bodyChips, dossierPath, findChip, mainworldByKey, orbitPath, shortLabel, subsectorLetter } from '../orbit/bodies.ts';
+import { openingKey, showsSystemOverview } from '../orbit/opening.ts';
 import {
     advance, DAY_SECONDS, formatLinkDate, scrubbed, speedText, skipWeeks, startDays, tickRate, timeFieldValue, REAL_TIME,
 } from '../orbit/clock.ts';
@@ -57,13 +58,20 @@ import { presentTree } from '../orbit/hand_present.ts';
 import { treeAsk } from '../orbit/tree_source.ts';
 import TimeControls from '../orbit/TimeControls.vue';
 import { noteDriverState, registerClockDriver } from '../orbit/sim_clock.ts';
-import { cancelFrame, nextFrame, now, observeSize, pageOrigin } from '../platform/browser.ts';
+import { cancelFrame, later, nextFrame, now, observeSize, pageOrigin } from '../platform/browser.ts';
 import { nextTick } from 'vue';
 import { askPaneEscape, setFrame } from '../shell/frame.ts';
 import { addressPane, atPane, hostsCampaign, withQuery } from '../shell/pane.ts';
+import { holdSpan, readSpan, releaseSpan } from '../shell/panel_state.ts';
 import Rail from '../shell/Rail.vue';
 import { loadSession, session } from '../account/session.ts';
 import { campaign, setCampaignDate } from '../campaign/store.ts';
+import CommsReceiver from '../living/CommsReceiver.vue';
+import { systemFacts } from '../living/facts.ts';
+import { maydayKeyPresent, pageMayday } from '../living/comms/mayday.ts';
+import { device, deviceComms, deviceTraffic, livingShown, setCommsShown, setTrafficShown } from '../living/quiet.ts';
+import { corpusLines, sampleLines } from '../living/lines.ts';
+import { FAST_DAYS_PER_SECOND, trafficAtRest, trafficSchedule, type TrafficBody } from '../living/traffic.ts';
 import { bindBuilder, builderEpoch } from '../builder/bind.ts';
 import { buildStore } from '../workspace/build/seam.ts';
 import { isOwnSlug } from '../workspace/build/sectors.ts';
@@ -204,7 +212,25 @@ const chips = computed(() => (overview.value && overview.value.tree
     ? bodyChips(overview.value.tree.rows, overview.value.header.title)
     : []));
 
-const selectedKey = computed(() => (findChip(chips.value, bodyParam.value || null) ? bodyParam.value : null));
+/** Cleared when the visitor turns the opening mainworld off without naming another body. */
+const openingDismissed = ref(false);
+watch(() => slug.value + '/' + hex.value, () => { openingDismissed.value = false; });
+
+const mainKey = computed(() => {
+    const body = tree.value && !treeError.value ? tree.value.body : null;
+    if (!body || typeof body !== 'object') return null;
+    const system = pickSystem(body as SystemDoc);
+    const found = system ? mainworldByKey(system) : null;
+    return found ? found.key : null;
+});
+
+/** An address with no body shows the mainworld. A named body, or a cleared visit, does not. */
+const opening = computed(() => {
+    const key = openingKey(bodyParam.value, mainKey.value, openingDismissed.value || showsSystemOverview(route.query));
+    return key && findChip(chips.value, key) ? key : null;
+});
+
+const selectedKey = computed(() => (findChip(chips.value, bodyParam.value || null) ? bodyParam.value : opening.value));
 
 /** The rules edition the system was generated under (orbit/system.ts detectSystem), or empty. */
 const edition = computed(() => {
@@ -395,7 +421,9 @@ function frame(): void {
 /** The link carries the date whenever the visitor has set it; a running clock does not rewrite the link. */
 function writeLink(): void {
     const link = formatLinkDate(days);
-    void router.replace({ path: route.path, query: withQuery(route.query, { date: link.date, time: link.time ?? null }) });
+    const changes: Record<string, string | null> = { date: link.date, time: link.time ?? null };
+    if (showsSystemOverview(route.query)) changes.overview = '1';
+    void router.replace({ path: route.path, query: withQuery(route.query, changes) });
 }
 
 function setDays(next: number): void {
@@ -539,6 +567,67 @@ const partyVesselId = computed(() => (campaign.settings ? campaign.settings.part
 /** The campaign's vessels in this system at the view's date, the party's first. Signed out: none. */
 const ships = computed(() => (canSetDate.value ? shipsHere(campaign.records, partyVesselId.value, hexKey.value, shownDays.value) : []));
 /** Their tracks, for the picture to place (orbit/ships.ts placeShips inside the canvas). Null signed out, so the dev stand-in can still show. */
+/** The campaign draws traffic, and this device is not quiet. The chip can still hide it. */
+const campaignTraffic = computed(() => livingShown(campaign.settings, device.quiet).traffic);
+const trafficBucket = computed(() => Math.floor(shownDays.value));
+
+function placedBodies(plan: Plan, days: number): TrafficBody[] {
+    const out: TrafficBody[] = [];
+    for (const world of plan.worlds) {
+        const at = realPositionAu(plan, world.key, days);
+        if (at) {
+            out.push({
+                key: world.key,
+                x: at.x,
+                y: at.y,
+                jumpAU: world.jumpAU,
+                mainworld: world.mainworld || world.mainworldBelt,
+                gasGiant: world.body.type === 'Gas Giant',
+                belt: world.belt,
+            });
+        }
+        for (const moon of world.moons) {
+            const moonAt = realPositionAu(plan, moon.key, days);
+            if (!moonAt) continue;
+            out.push({
+                key: moon.key,
+                x: moonAt.x,
+                y: moonAt.y,
+                jumpAU: world.jumpAU,
+                mainworld: moon.mainworld,
+                gasGiant: false,
+                belt: moon.belt === true,
+            });
+        }
+    }
+    return out;
+}
+
+const chatterPool = computed(() => [...sampleLines(), ...corpusLines()]);
+
+const backgroundTracks = computed(() => {
+    if (!canSetDate.value || !campaignTraffic.value || !deviceTraffic.shown) return [];
+    const plan = searchPlan.value;
+    const facts = commsFacts.value;
+    if (!plan || !facts) return [];
+    return trafficSchedule({
+        hexKey: hexKey.value,
+        truthVersion: version.value,
+        profile: {
+            starport: facts.starport,
+            pop: facts.pop,
+            tl: facts.tl,
+            zone: facts.zone,
+            bases: facts.bases,
+            highport: facts.highport === true,
+            xboat: facts.xboat,
+        },
+        bodies: placedBodies(plan, trafficBucket.value),
+        facts,
+        lines: chatterPool.value,
+    }, trafficBucket.value);
+});
+
 const tracks = computed((): ShipTrack[] | null => {
     if (!canSetDate.value) return null;
     const out: ShipTrack[] = [];
@@ -546,6 +635,11 @@ const tracks = computed((): ShipTrack[] | null => {
         const track = shipTrack(ship, partyVesselId.value);
         if (track) out.push(track);
     }
+    const rate = tickRate(paused.value, speed.value, shuttle.value);
+    const scenery = rate > FAST_DAYS_PER_SECOND
+        ? backgroundTracks.value.filter((track) => trafficAtRest(track, shownDays.value))
+        : backgroundTracks.value;
+    out.push(...scenery);
     return out;
 });
 const selectedShip = ref<string | null>(null);
@@ -629,6 +723,132 @@ const plotAccel = ref<number | null>(null);
 /** The thrust last set for each ship this visit; before that, its last flight leg's (course.ts lastThrust). */
 const thrustSet = new Map<string, number>();
 const canPlot = computed(() => canSetDate.value && ships.value.length > 0 && state.value === 'ready');
+/** System Comms sits above the planet tabs while the switch is on for this device. */
+const commsOn = computed(() => state.value === 'ready' && deviceComms.shown);
+/** `mayday` on this orbit address arms the archive once per page load. The device switch stays as it is. */
+const maydayVisit = ref(false);
+function armMayday(): void {
+    if (maydayVisit.value) return;
+    if (pageMayday.claim(maydayKeyPresent(route.query))) maydayVisit.value = true;
+}
+onMounted(armMayday);
+watch(() => route.query.mayday, armMayday);
+/** The receiver is wanted for System Comms, and also for that one archive when the switch is off. */
+const commsWanted = computed(() => state.value === 'ready' && (deviceComms.shown || maydayVisit.value));
+/** Mounted through the fade, so turning it off does not pop. */
+const commsHeld = ref(false);
+const commsLeaving = ref(false);
+const commsEntered = ref(false);
+let commsLeaveTimer: ReturnType<typeof setTimeout> | null = null;
+let releaseRouteLeave: (() => void) | null = null;
+
+function finishCommsLeave(): void {
+    if (commsLeaveTimer !== null) {
+        clearTimeout(commsLeaveTimer);
+        commsLeaveTimer = null;
+    }
+    commsLeaving.value = false;
+    commsHeld.value = false;
+    commsEntered.value = false;
+    const go = releaseRouteLeave;
+    releaseRouteLeave = null;
+    if (go) go();
+}
+
+function beginCommsLeave(): void {
+    if (!commsHeld.value || commsLeaving.value) return;
+    commsLeaving.value = true;
+    if (commsLeaveTimer !== null) clearTimeout(commsLeaveTimer);
+    commsLeaveTimer = later(() => {
+        commsLeaveTimer = null;
+        if (commsLeaving.value) finishCommsLeave();
+    }, 400);
+}
+
+function onCommsFade(event: TransitionEvent): void {
+    if (event.propertyName !== 'opacity' || event.target !== event.currentTarget) return;
+    if (commsLeaving.value) finishCommsLeave();
+}
+
+watch(commsWanted, (want) => {
+    if (want) {
+        if (commsLeaveTimer !== null) {
+            clearTimeout(commsLeaveTimer);
+            commsLeaveTimer = null;
+        }
+        commsLeaving.value = false;
+        commsHeld.value = true;
+        commsEntered.value = false;
+        nextFrame(() => {
+            if (commsHeld.value && !commsLeaving.value) commsEntered.value = true;
+        });
+        return;
+    }
+    beginCommsLeave();
+}, { immediate: true });
+
+onBeforeRouteLeave(() => {
+    if (!commsHeld.value) return true;
+    beginCommsLeave();
+    return new Promise<void>((resolve) => {
+        releaseRouteLeave = () => resolve();
+    });
+});
+/** The picture Fit shows pressed while the camera is at the fitted view. */
+const pictureFitted = ref(true);
+const footEl = ref<HTMLElement | null>(null);
+const footHeight = ref(0);
+let stopFootSize: (() => void) | null = null;
+watch(footEl, (foot) => {
+    if (stopFootSize) stopFootSize();
+    stopFootSize = null;
+    footHeight.value = 0;
+    if (!foot) return;
+    const measureFoot = (): void => { footHeight.value = foot.offsetHeight; };
+    measureFoot();
+    stopFootSize = observeSize(foot, measureFoot);
+});
+const commsEl = ref<HTMLElement | null>(null);
+const commsHeight = ref(0);
+let stopCommsSize: (() => void) | null = null;
+watch(commsEl, (el) => {
+    if (stopCommsSize) stopCommsSize();
+    stopCommsSize = null;
+    commsHeight.value = 0;
+    if (!el) return;
+    const measureComms = (): void => { commsHeight.value = el.offsetHeight; };
+    measureComms();
+    stopCommsSize = observeSize(el, measureComms);
+});
+/** The system on screen, for the comms controller. The chart alone leaves the party away. */
+const commsFacts = computed(() => {
+    const row = entry.value;
+    if (!row) return null;
+    const own = refereeSector();
+    const body = tree.value && !treeError.value && tree.value.body && typeof tree.value.body === 'object'
+        ? tree.value.body as HexBody
+        : null;
+    const leadShip = body ? ships.value[0] : undefined;
+    return systemFacts({
+        hexKey: hexKey.value,
+        entry: {
+            allegiance: row.allegiance,
+            name: row.name,
+            uwp: row.uwp,
+            zone: row.zone,
+            bases: row.bases,
+            tradeCodes: row.tradeCodes,
+            pbg: row.pbg,
+        },
+        sectorName: own ? own.name : (index.value ? index.value.name : slug.value.replace(/_/g, ' ')),
+        subsectorNames: index.value ? index.value.metadata.names : undefined,
+        allegiances: index.value?.metadata.allegiances,
+        routes: index.value ? index.value.metadata.routes : undefined,
+        state: body,
+        lead: leadShip ? statusWords(leadShip, shownDays.value, anchorName).state : null,
+        day: Math.floor(shownDays.value),
+    });
+});
 /** The plotter is live: a press on the picture lays a waypoint. Until a thrust is set, or laying has ended, a press is an ordinary selection. */
 const live = computed(() => laying.value && plotAccel.value !== null);
 
@@ -1381,6 +1601,7 @@ function orbitCommand(id: string, run: () => void, runnable?: () => boolean): ()
 function select(key: string): void {
     moonsOpen.value = null;
     const next = selectedKey.value === key ? null : key;
+    if (next === null && !bodyParam.value) openingDismissed.value = true;
     void router.push({ path: orbitPath(slug.value, hex.value, next), query: withQuery(route.query, {}) });
 }
 
@@ -1490,9 +1711,18 @@ function setMoons(key: string | null): void {
 
 function onKey(event: KeyboardEvent): void {
     // Space on a focused control is that control's own key (legacy 4900-4906).
+    // A number, time, or range field does not take a space, so Play still runs there.
     if (event.key === ' ') {
         const target = event.target;
-        if (target instanceof HTMLElement && target.closest('button, a, summary, select, input, textarea')) return;
+        const field = target instanceof HTMLElement ? target.closest('button, a, summary, select, input, textarea') : null;
+        const passesSpace = field instanceof HTMLInputElement && (field.type === 'number' || field.type === 'time' || field.type === 'range');
+        // The shared key map ignores a key typed into a field, so Play is called from here.
+        if (passesSpace) {
+            event.preventDefault();
+            togglePlay();
+            return;
+        }
+        if (field) return;
     }
     // A slider is not a text field: a letter or digit pressed on it is still the view's key.
     const target = event.target;
@@ -1541,7 +1771,37 @@ watch(
 // asked for once the session and the truth version are known, never before the first frame.
 watch(() => [session.user, version.value] as const, () => { void ensureCampaign(version.value); });
 
+/**
+ * The shell writes --panel-width after the pane has been measured. Until that number exists,
+ * the card uses the same span the pane will open at, so its left edge does not slide in.
+ */
+holdSpan('column');
+const reserveSpan = readSpan();
+const reserving = ref(false);
+let stopReserve: (() => void) | null = null;
+
+function watchPanelWidth(): void {
+    if (shownPane.value.kind === 'shut') return;
+    reserving.value = true;
+    const root = document.querySelector('.app');
+    if (!(root instanceof HTMLElement)) return;
+    let posted = false;
+    const placed = (): void => {
+        const px = Number.parseFloat(root.style.getPropertyValue('--panel-width'));
+        if (posted || !(px > 0)) return;
+        posted = true;
+        if (stopReserve) stopReserve();
+        stopReserve = null;
+        requestAnimationFrame(() => { reserving.value = false; });
+    };
+    placed();
+    const observer = new MutationObserver(placed);
+    observer.observe(root, { attributes: true, attributeFilter: ['style'] });
+    stopReserve = () => observer.disconnect();
+}
+
 onMounted(() => {
+    watchPanelWidth();
     bound.sync();
     openSectors();
     // While this view is open the surface map's time bar steers this clock (orbit/sim_clock.ts).
@@ -1573,6 +1833,7 @@ onMounted(() => {
         orbitCommand('orbit-set-campaign', setAsCampaignDate, () => canSetDate.value),
         ...LAYOUTS.map((item) => orbitCommand(item.id, () => { mode.value = item.mode; }, ready)),
         ...LAYERS.map((item) => orbitCommand(item.id, () => { layers.value = toggled(layers.value, item.key); }, ready)),
+        orbitCommand('orbit-layer-traffic', () => { setTrafficShown(!deviceTraffic.shown); }, () => campaignTraffic.value),
         orbitCommand('orbit-fit', () => { if (stageEl.value) stageEl.value.fit(); }, ready),
         orbitCommand('orbit-plot', () => {
             if (!plotting.value) setPlotting(true);
@@ -1625,7 +1886,8 @@ function publishFrame(): void {
     const ownNow = refereeSector();
     setFrame({
         kind: 'orbit',
-        panelTop: 'var(--chrome-inset)',
+        // The map's panel top sits under the search row. The same top keeps the title clear of the field.
+        panelTop: null,
         truthVersion: version.value,
         setWidth: () => {},
         retry,
@@ -1669,10 +1931,20 @@ watch(
 );
 
 onBeforeUnmount(() => {
+    releaseSpan();
+    if (stopReserve) stopReserve();
     if (raf) cancelFrame(raf);
     if (stopArrive) stopArrive();
     if (stopStageSize) stopStageSize();
     if (stopFlightSize) stopFlightSize();
+    if (stopFootSize) stopFootSize();
+    if (commsLeaveTimer !== null) clearTimeout(commsLeaveTimer);
+    if (releaseRouteLeave) {
+        const go = releaseRouteLeave;
+        releaseRouteLeave = null;
+        go();
+    }
+    if (stopCommsSize) stopCommsSize();
     for (const off of unregister) off();
     setPlaceSource(null);
     setFrame(null);
@@ -1711,7 +1983,12 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
   >
     <Rail ref="railEl" :panel-open="dossierOpen" :search-open="false" :campaign-open="campaignOpen" :account-open="accountOpen" />
     <AccountMenu :open="accountOpen" @close="closeAccount" @campaign="toggleCampaign" />
-    <section class="orbit-card" aria-label="Orbit view">
+    <section
+      class="orbit-card"
+      :class="{ 'is-reserving': reserving }"
+      :data-span="reserving ? reserveSpan : undefined"
+      aria-label="Orbit view"
+    >
       <OrbitHeader
         :title="title"
         :chip="hexChip"
@@ -1741,7 +2018,7 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
           <DrawerTabs ref="tabsEl" :open="drawer" :narrow="compact" @toggle="toggleTab" />
         </template>
       </OrbitHeader>
-      <div ref="stageBox" class="orbit-stage" :class="{ 'is-narrow': narrow, 'is-plotting': live, 'has-drawer': drawer !== '' }" :style="{ '--drawer-height': drawerHeight + 'px', '--flight-strip-height': (flightHeight ? flightHeight + 8 : 0) + 'px' }" :data-state="state" :data-ship="shipOutside === null ? 'off' : (shipOutside ? 'outside' : 'inside')" :data-ship-at="shipAt">
+      <div ref="stageBox" class="orbit-stage" :class="{ 'is-narrow': narrow, 'is-plotting': live, 'has-drawer': drawer !== '' }" :style="{ '--drawer-height': drawerHeight + 'px', '--flight-strip-height': (flightHeight ? flightHeight + 8 : 0) + 'px', '--foot-height': footHeight + 'px', '--comms-height': commsHeight + 'px' }" :data-state="state" :data-ship="shipOutside === null ? 'off' : (shipOutside ? 'outside' : 'inside')" :data-ship-at="shipAt">
         <!-- The three control drawers hang from the header over the picture; one open at a time. -->
         <Drawer id="time" :ref="drawerEls.time" :open="drawer === 'time'" @close="closeDrawer">
           <TimeControls
@@ -1826,7 +2103,7 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
           </div>
         </Drawer>
         <Drawer id="layers" :ref="drawerEls.layers" :open="drawer === 'layers'" @close="closeDrawer">
-          <LayerKey :layers="layers" @layers="layers = $event" />
+          <LayerKey :layers="layers" :traffic="campaignTraffic ? deviceTraffic.shown : null" @layers="layers = $event" @traffic="setTrafficShown" />
         </Drawer>
         <OrbitCanvas
           v-if="state === 'ready' && system"
@@ -1834,6 +2111,7 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
           :system="system"
           :hex-key="hexKey"
           :selected="selectedKey"
+          :frame-key="opening"
           :mode="mode"
           :layers="layers"
           :tracks="tracks"
@@ -1857,12 +2135,14 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
           :preview="flightPreview"
           @plot="setDestination"
           @plot-point="setDestinationPoint"
+          @fitted="pictureFitted = $event"
         >
           <template #overlay>
             <!-- The K12 place, on the picture: the status strip with Jump, the ship list, the jump destination and the ship's nav console. Signed in with a campaign only. -->
             <div ref="flightEl" class="orbit-flight">
               <ShipStrip
                 v-if="canSetDate && state === 'ready'"
+                :campaign-open="campaignOpen"
                 :ships="ships"
                 :selected="selectedShip"
                 :party-vessel-id="partyVesselId"
@@ -1940,7 +2220,7 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
             <button type="button" class="orbit-btn" @click="backToMap"><Icon name="arrow-left" :size="13" />Back to the map</button>
           </template>
           <template v-else-if="state === 'missing'">
-            <p>This hex has no world in the sector index.</p>
+            <p>This hex has no world on the chart.</p>
             <button type="button" class="orbit-btn" @click="backToMap"><Icon name="arrow-left" :size="13" />Back to the map</button>
           </template>
           <template v-else>
@@ -1952,15 +2232,54 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
           </template>
         </div>
         <p v-if="state === 'ready' && noWorlds" class="orbit-empty-worlds" role="status">No worlds in this system.</p>
-        <BodyChips
-          v-if="chips.length"
-          class="orbit-stage-chips"
-          :chips="chips"
-          :selected="selectedKey"
-          :moons-open="moonsOpen"
-          @select="select"
-          @moons="setMoons"
-        />
+        <div ref="footEl" class="orbit-foot">
+          <div class="orbit-stage-tools">
+            <button
+              type="button"
+              class="orbit-btn orbit-comms-btn"
+              data-command="system-comms"
+              :aria-pressed="deviceComms.shown ? 'true' : 'false'"
+              :title="deviceComms.shown ? 'System Comms on' : 'System Comms off'"
+              @click="setCommsShown(!deviceComms.shown)"
+            >
+              <Icon name="radar" :size="12" />System Comms
+            </button>
+            <button
+              type="button"
+              class="orbit-btn orbit-fit"
+              data-command="orbit-fit"
+              title="Fit the whole system (F, or double-click empty space)"
+              :aria-pressed="pictureFitted ? 'true' : 'false'"
+              @click="stageEl && stageEl.fit()"
+            >
+              <Icon name="expand" :size="13" />Fit
+            </button>
+          </div>
+          <div
+            v-if="commsHeld"
+            ref="commsEl"
+            class="orbit-comms"
+            :class="{ 'is-hidden': commsLeaving || !commsEntered }"
+            @transitionend="onCommsFade"
+          >
+          <CommsReceiver
+            :facts="commsFacts"
+            :truth-version="version"
+            :campaign-key="campaign.universeId || 'none'"
+            :shown="commsOn && !commsLeaving"
+            :mayday="maydayVisit"
+          />
+          </div>
+          <BodyChips
+            v-if="chips.length"
+            class="orbit-stage-chips"
+            :chips="chips"
+            :selected="selectedKey"
+            :moons-open="moonsOpen"
+            @select="select"
+            @moons="setMoons"
+          />
+        </div>
       </div>
     </section>
   </div>
@@ -1976,14 +2295,19 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
 
 .orbit-card {
   position: absolute;
+  box-sizing: border-box;
   top: var(--chrome-inset);
   right: var(--chrome-inset);
-  bottom: var(--chrome-inset);
+  /* On a phone the panel is a sheet over the lower half (shell/PanelHost.vue publishes --sheet-cover):
+     the card stops above it, and above the browser's own bar. */
+  bottom: calc(var(--chrome-inset) + max(var(--sheet-cover, 0px), env(safe-area-inset-bottom, 0px)));
   left: calc(var(--rail-width) + max(var(--chrome-inset), var(--panel-width, 0px)));
   display: flex;
   flex-direction: column;
   min-width: 0;
   overflow: hidden;
+  /* The picture loads inside this box. The height is the viewport minus the insets from the first paint. */
+  min-height: calc(100dvh - var(--chrome-inset) - max(var(--chrome-inset), env(safe-area-inset-bottom, 0px)) - var(--sheet-cover, 0px));
   border: 1px solid var(--signal-dim);
   border-radius: var(--r-4);
   background: var(--bg-0);
@@ -1991,6 +2315,42 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
   color: var(--text-1);
   font: 400 14px/1.5 var(--font-text);
   transition: left var(--t-rail) ease;
+}
+
+/*
+ * Below 600 px the card is the full width, and the search row occupies the top left.
+ * The card starts under that row, so Back to the map is not covered.
+ */
+@media (max-width: 599px) {
+  .orbit-card {
+    top: calc(var(--chrome-top) + var(--chrome-height) + var(--chrome-inset));
+    min-height: calc(100dvh - var(--chrome-top) - var(--chrome-height) - var(--chrome-inset) - max(var(--chrome-inset), env(safe-area-inset-bottom, 0px)) - var(--sheet-cover, 0px));
+  }
+}
+
+/*
+ * Before the shell has measured the open pane, hold the card at that pane's width.
+ * The measured pane is the card plus a gutter on each side (shell/Panel.vue).
+ * Below 600 px the pane is a sheet and does not take width from the card.
+ */
+@media (min-width: 600px) {
+  .orbit-card.is-reserving[data-span="column"] {
+    --panel-width: calc(min(var(--panel-column), calc(100vw - var(--rail-width) - 2 * var(--chrome-inset))) + 2 * var(--chrome-inset));
+    transition: none;
+  }
+
+  .orbit-card.is-reserving[data-span="half"] {
+    --panel-width: calc(min(
+      calc(100vw - var(--rail-width) - 2 * var(--chrome-inset)),
+      max(var(--panel-column), calc((100vw - var(--rail-width) - 2 * var(--chrome-inset)) / 2))
+    ) + 2 * var(--chrome-inset));
+    transition: none;
+  }
+
+  .orbit-card.is-reserving[data-span="full"] {
+    --panel-width: calc(100vw - var(--rail-width));
+    transition: none;
+  }
 }
 
 .orbit-card *,
@@ -2002,13 +2362,69 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
 /* The View drawer's groups: the layout radios, Fit, the picture's two controls. */
 .orbit-layouts {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
 }
 
+/*
+ * The phone (the panel's sheet breakpoint, 599 px): every control is a 44 px touch target. min-height and
+ * min-width win over each control's own height and width, so one rule covers the drawers, the chips and
+ * the card. The look is unchanged above it.
+ */
+@media (max-width: 599px) {
+  .orbit-card .orbit-btn,
+  .orbit-card .orbit-tab,
+  .orbit-card .orbit-key-item,
+  .orbit-card .orbit-chip,
+  .orbit-card .orbit-scrub-end,
+  .orbit-card .orbit-field input,
+  .orbit-card .orbit-body-card-close,
+  .orbit-card .orbit-season-help {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .orbit-card .orbit-jog {
+    height: 44px;
+  }
+
+  /* A drawer taller than the picture scrolls inside it. */
+  .orbit-card .orbit-drawer {
+    max-height: calc(100% - var(--foot-height, 0px) - var(--comms-height, 0px) - 8px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .orbit-pop-check input {
+    width: 22px;
+    height: 22px;
+  }
+
+  .orbit-pop-check {
+    min-height: 44px;
+  }
+}
+
 .orbit-btn.orbit-layout,
-.orbit-btn.orbit-fit-btn {
+.orbit-btn.orbit-fit-btn,
+.orbit-btn.orbit-comms-btn,
+.orbit-btn.orbit-fit {
   height: 32px;
   gap: 7px;
+}
+
+.orbit-btn.orbit-comms-btn[aria-pressed="true"] {
+  border-color: var(--signal);
+  background: var(--row-active);
+}
+
+.orbit-btn.orbit-fit {
+  background: var(--chrome-glass);
+}
+
+.orbit-btn.orbit-fit[aria-pressed="true"] {
+  border-color: var(--line-2);
+  color: var(--text-muted);
 }
 
 .orbit-btn.orbit-layout:not(.is-on) {
@@ -2205,12 +2621,54 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
   text-align: center;
 }
 
+/* The open drawer stops above the foot, so it does not cover System Comms, Fit, or the chips. */
+.orbit-stage > .orbit-drawer {
+  max-height: calc(100% - var(--foot-height, 0px) - var(--comms-height, 0px) - 8px);
+  overflow-y: auto;
+}
+
+.orbit-stage-tools {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 8px 0 8px 10px;
+}
+
 .orbit-stage-chips {
   position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.orbit-foot {
+  position: relative;
+  display: flex;
   flex: 0 0 auto;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.orbit-comms {
+  position: absolute;
+  right: 18px;
+  bottom: calc(100% + 8px);
+  z-index: 4;
+  width: min(506px, calc(100% - 36px));
+  opacity: 1;
+  transition: opacity var(--t-base) var(--ease-out);
+}
+
+.orbit-comms.is-hidden {
+  opacity: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .orbit-comms {
+    transition-duration: var(--t-fast);
+  }
+
   .orbit-card,
   .orbit-stage .orbit-flight,
   .orbit-stage:not(.has-drawer) .orbit-flight,

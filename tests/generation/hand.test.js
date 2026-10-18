@@ -21,7 +21,7 @@ test('a hand edit writes the document only', () => {
         { id: 'b1.mainworld', value: true },
         { id: 's1.type', value: 'K' },
     ], [{ id: 's1.type' }]);
-    assert.equal(named.answer.messages[0].text, 'Nothing rolls this field.');
+    assert.equal(named.answer.messages[0].text, 'This field cannot be rolled.');
     assert.equal(named.answer.messages[0].holds, false);
     assert.equal(named.envelope.system.name, 'Referee');
     assert.equal(named.envelope.system.stars.length, 1);
@@ -152,7 +152,7 @@ test('one draft adds several bodies, names them, and orbits two paired stars', (
         { id: 'b1.order', value: 0 },
     ], [{ id: 'w.name' }]);
     assert.equal(stable(blank), before);
-    assert.equal(once.answer.messages[0].text, 'Nothing rolls this field.');
+    assert.equal(once.answer.messages[0].text, 'This field cannot be rolled.');
     assert.equal(once.answer.messages[0].holds, false);
     assert.equal(once.envelope.system.stars.map((star) => star.id).join(','), 's1,companion');
     assert.equal(once.envelope.system.stars[1].parentId, 's1');

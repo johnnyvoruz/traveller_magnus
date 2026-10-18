@@ -271,7 +271,7 @@ export function ensurePin(sql: Sql, pin: Pin): Pin {
 }
 
 export function readHexPage(sql: Sql, sector: string, cursor: string | null, limit: number, pin: Pin): BuilderHexPage {
-    if (!sector) throw new HexRefusal('validation', 'sector is required.');
+    if (!sector) throw new HexRefusal('validation', 'That request could not be read. Try again.');
     const size = Math.min(Math.max(limit, 1), BUILDER_LIMITS.page);
     const rows = cursor
         ? sql.exec(
@@ -392,7 +392,7 @@ export function removeHex(sql: Sql, hexKey: string, baseRev: number, pin: Pin, n
         if (!row) {
             if (ownMap(pin) || ownSectorKey(hexKey) || !chart) throw new HexRefusal('validation', 'Nothing to remove.', { reason: 'empty' });
             const parsed = SectorHex.safeParse(chart.entry);
-            if (!parsed.success) throw new HexRefusal('validation', 'The chart entry is not a sector hex.');
+            if (!parsed.success) throw new HexRefusal('validation', 'That hex is not on the chart.');
             insertHex(sql, {
                 hexKey,
                 rev: nextRev(sql, hexKey, baseRev),
@@ -433,7 +433,7 @@ export function restoreHex(sql: Sql, hexKey: string, baseRev: number, pin: Pin, 
     void now;
     return sql.transaction(() => {
         assertRev(sql, hexKey, baseRev, pin);
-        if (ownMap(pin) || ownSectorKey(hexKey)) throw new HexRefusal('validation', 'This universe has no chart.', { reason: 'no_chart' });
+        if (ownMap(pin) || ownSectorKey(hexKey)) throw new HexRefusal('validation', 'This campaign has no chart.', { reason: 'no_chart' });
         const row = current(sql, hexKey);
         if (!row) throw new HexRefusal('validation', 'Nothing to restore.', { reason: 'empty' });
         sql.exec(`DELETE FROM hexes WHERE hex_key = ?`, hexKey);
@@ -451,7 +451,7 @@ export function revertHex(sql: Sql, hexKey: string, toRev: number, baseRev: numb
         }
         const history = sql.exec(`SELECT * FROM hex_history WHERE hex_key = ? AND rev = ?`, hexKey, toRev);
         const prior = history[0];
-        if (!prior) throw new HexRefusal('not_found', 'No such revision.');
+        if (!prior) throw new HexRefusal('not_found', 'There is nothing to undo.');
         const parsed = parseSummary(prior.summary);
         const treeHash = prior.tree_hash ? String(prior.tree_hash) : null;
         const fields: HexFields = {
@@ -647,10 +647,10 @@ export function readJobSlice(sql: Sql, id: string, offset: number, count: number
     rows: Array<SliceHex | null>;
 } {
     if (!Number.isInteger(offset) || offset < 0 || !Number.isInteger(count) || count < 1 || count > BUILDER_LIMITS.batch) {
-        throw new HexRefusal('validation', 'Invalid request.');
+        throw new HexRefusal('validation', 'That request could not be read. Try again.');
     }
     const pin = readPin(sql);
-    if (!pin) throw new HexRefusal('validation', 'This universe has no generation pin. Open it again.');
+    if (!pin) throw new HexRefusal('validation', 'Open this campaign again, then try again.');
     const jobRow = sql.exec(`SELECT state, done, total, failures FROM jobs WHERE id = ?`, id)[0];
     if (!jobRow) throw new HexRefusal('not_found', 'No such job.');
     const blob = jobBlob(jobRow.failures);
@@ -791,7 +791,7 @@ export function undoJob(sql: Sql, id: string, pin: Pin, now: string): BuilderJob
             throw new HexRefusal('validation', 'The job is still running.', { reason: 'running' });
         }
         const blob = jobBlob(row.failures);
-        if (blob.undone) throw new HexRefusal('validation', 'Already undone.', { reason: 'already_undone' });
+        if (blob.undone) throw new HexRefusal('validation', 'That is already undone.', { reason: 'already_undone' });
         const spec = readJobSpec(sql, id);
         let restored = 0;
         const conflicts: string[] = [];
@@ -926,7 +926,7 @@ async function bodyOf(request: Request): Promise<unknown> {
     try {
         return await request.json();
     } catch {
-        throw new HexRefusal('validation', 'Invalid JSON.');
+        throw new HexRefusal('validation', 'That request could not be read. Try again.');
     }
 }
 
@@ -939,7 +939,7 @@ export async function respondBuilder(sql: Sql, request: Request, now: string): P
         if (request.method === 'POST' && path === '/pin') {
             const incoming = await bodyOf(request) as Pin;
             if (!incoming || typeof incoming.seed !== 'string' || !incoming.settings) {
-                throw new HexRefusal('validation', 'Invalid pin.');
+                throw new HexRefusal('validation', 'Open this campaign again, then try again.');
             }
             return json(ensurePin(sql, {
                 seed: incoming.seed,
@@ -948,20 +948,20 @@ export async function respondBuilder(sql: Sql, request: Request, now: string): P
             }));
         }
         if (request.method === 'GET' && path === '/pin') {
-            if (!pin) throw new HexRefusal('not_found', 'No pin.');
+            if (!pin) throw new HexRefusal('not_found', 'Open this campaign again, then try again.');
             return json(pin);
         }
         if (request.method === 'GET' && path === '/hexes/hold-rows') {
             const raw = url.searchParams.get('sectors') ?? '';
             const sectors = raw.split(',').map((item) => item.trim()).filter(Boolean);
-            if (sectors.length < 1 || sectors.length > 1280) throw new HexRefusal('validation', 'Invalid request.');
+            if (sectors.length < 1 || sectors.length > 1280) throw new HexRefusal('validation', 'That request could not be read. Try again.');
             if (!pin) return json(sectors.map((sector) => ({ sector, rows: [] })));
             return json(readHoldRows(sql, sectors));
         }
         if (request.method === 'GET' && path === '/hexes/dot-rows') {
             const raw = url.searchParams.get('sectors') ?? '';
             const sectors = raw.split(',').map((item) => item.trim()).filter(Boolean);
-            if (sectors.length < 1 || sectors.length > 32) throw new HexRefusal('validation', 'Invalid request.');
+            if (sectors.length < 1 || sectors.length > 32) throw new HexRefusal('validation', 'That request could not be read. Try again.');
             if (!pin) return json(sectors.map((sector) => ({ sector, rows: [] })));
             return json(readDotRows(sql, sectors));
         }
@@ -972,13 +972,13 @@ export async function respondBuilder(sql: Sql, request: Request, now: string): P
             return respondSectors(sql, request, now, pin);
         }
         if (!pin && (path.startsWith('/hex') || path.startsWith('/job'))) {
-            throw new HexRefusal('validation', 'This universe has no generation pin. Open it again.');
+            throw new HexRefusal('validation', 'Open this campaign again, then try again.');
         }
         if (request.method === 'GET' && path === '/hexes') {
             const sector = url.searchParams.get('sector') ?? '';
             const cursor = url.searchParams.get('cursor');
             const limit = Number(url.searchParams.get('limit') ?? '100');
-            if (!Number.isInteger(limit)) throw new HexRefusal('validation', 'Invalid limit.');
+            if (!Number.isInteger(limit)) throw new HexRefusal('validation', 'That request could not be read. Try again.');
             return json(readHexPage(sql, sector, cursor, limit, pin!));
         }
         if (request.method === 'GET' && path === '/hexes/count') return json({ count: countHexes(sql) });
@@ -1034,7 +1034,7 @@ export async function respondBuilder(sql: Sql, request: Request, now: string): P
                 try {
                     body = JSON.parse(text) as { reason?: unknown; hexKey?: unknown };
                 } catch {
-                    throw new HexRefusal('validation', 'Invalid JSON.');
+                    throw new HexRefusal('validation', 'That request could not be read. Try again.');
                 }
                 if (typeof body.reason === 'string') reason = body.reason;
                 if (typeof body.hexKey === 'string') hexKey = body.hexKey;

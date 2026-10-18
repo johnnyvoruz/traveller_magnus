@@ -239,7 +239,7 @@ export async function confirmDesign(): Promise<void> {
     try {
         const back = await port.designByHand(hexKey, row ? row.rev : 0);
         cancelDesign();
-        showToast((name || 'This system') + ' is now designed by hand. The engine no longer generates it.', {
+        showToast((name || 'This system') + ' is now designed by hand. Building no longer generates it.', {
             action: {
                 label: 'Undo',
                 run: () => {

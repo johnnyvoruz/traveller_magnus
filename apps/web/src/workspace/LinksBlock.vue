@@ -15,6 +15,7 @@ import { addLink, removeLink, setLinkRole } from './actions.ts';
 import { alreadyLinked, connectionsOf, groupConnections, kindChoices, recordsAboard, ROLE_MAX, type KindChoice } from './links.ts';
 import RecordPicker from './RecordPicker.vue';
 import { typeInfo } from './records.ts';
+import { vRecordCard } from './record_card.ts';
 
 const props = defineProps<{
     id: string;
@@ -166,9 +167,9 @@ watch(() => props.id, () => {
 </script>
 
 <template>
-  <section v-if="record" ref="rootEl" class="lnk" :data-adding="adding ? 'true' : 'false'">
+  <section v-if="record" ref="rootEl" class="lnk ui-frame" :data-adding="adding ? 'true' : 'false'">
     <div class="lnk-head">
-      <h3 class="ui-heading">Connections <span v-if="connections.length" class="ui-count">{{ connections.length }}</span></h3>
+      <h3 class="ui-frame-label">Connections <span v-if="connections.length" class="ui-frame-count">{{ connections.length }}</span></h3>
       <button v-if="!adding" ref="addBtn" type="button" class="ui-btn lnk-add" :disabled="readOnly" @click="startAdd">
         <Icon name="plus" :size="12" />Add a connection
       </button>
@@ -221,7 +222,7 @@ watch(() => props.id, () => {
       <h4>{{ group.label }}</h4>
       <div class="lnk-chips">
         <span v-for="item in group.items" :key="item.link.id" class="lnk-chip" :data-id="item.link.id">
-          <button type="button" class="lnk-open" :title="'Open ' + item.other.name" @click="open(item.other)">
+          <button v-record-card="item.other.id" type="button" class="lnk-open" :title="'Open ' + item.other.name" @click="open(item.other)">
             <Icon :name="info(item.other).icon" :size="12" />{{ item.other.name }}
           </button>
           <input
@@ -253,7 +254,7 @@ watch(() => props.id, () => {
       <h4>Aboard</h4>
       <div class="lnk-chips">
         <span v-for="item in aboard" :key="item.id" class="lnk-chip is-aboard">
-          <button type="button" class="lnk-open" :title="'Open ' + item.name" @click="open(item)">
+          <button v-record-card="item.id" type="button" class="lnk-open" :title="'Open ' + item.name" @click="open(item)">
             <Icon :name="info(item).icon" :size="12" />{{ item.name }}
           </button>
         </span>
@@ -269,12 +270,12 @@ watch(() => props.id, () => {
   gap: 10px;
 }
 
-.lnk-head .ui-heading {
+.lnk-head .ui-frame-label {
   flex: 1 1 auto;
   gap: 8px;
 }
 
-.lnk-head .ui-heading .ui-count {
+.lnk-head .ui-frame-label .ui-frame-count {
   margin-left: 0;
 }
 

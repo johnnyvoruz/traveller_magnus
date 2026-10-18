@@ -63,7 +63,7 @@ async function search(startDays: number, shown: Lineup | null, matchSpread?: num
         if (words.land !== null) emit('show', words.land);
     } catch (error) {
         if (mine !== ticket) return;
-        status.value = 'Search failed: ' + (error instanceof Error ? error.message : String(error));
+        status.value = 'The search could not finish. Try again.';
     } finally {
         if (mine === ticket) busy.value = false;
     }

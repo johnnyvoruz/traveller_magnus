@@ -71,6 +71,7 @@ listing what was created, what was stubbed or skipped and every Halt & Challenge
 | `npm run check` | manifesto checker over `apps/*/src` and `packages/*/src` |
 | `npm run rules:gen` | regenerates `packages/engines/src/generated/rules/` from `rules/` |
 | `npm run truth:build` | builds `truth/<version>/` from `universe/raw/` with pinned seed and settings |
+| `npm run dev` | Worker and Vite together on http://localhost:5173, local D1 migrated, chart from production (`scripts/dev.mjs`) |
 | `npm run dev:web` / `npm run dev:api` | Vite dev server / `wrangler dev` |
 | `npm run build` / `npm run deploy` | builds `apps/web/dist` and deploys the Worker (deploy is Johnny's) |
 

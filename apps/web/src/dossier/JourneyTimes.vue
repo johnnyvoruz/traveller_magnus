@@ -12,7 +12,7 @@ function parts(text: string): { figure: string; unit: string } {
 
 <template>
   <section class="doss-section doss-journey-section">
-    <h3 class="ui-heading">100D Jump Travel Times</h3>
+    <h3 class="ui-heading ui-kicker">100D Jump Travel Times</h3>
     <dl class="doss-journey">
       <div v-for="item in journey" :key="item.g" class="doss-fact doss-journey-tile">
         <dt><b>{{ item.g }}</b>G</dt>

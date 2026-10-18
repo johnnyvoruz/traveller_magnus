@@ -97,7 +97,7 @@ defineExpose({ edit });
     <template v-else>
       <button ref="button" type="button" class="clock-date" :disabled="readOnly" :title="said ? 'Change the campaign date' : 'Set the campaign date'" @click="edit">
         <template v-if="said"><b>{{ said.date }}</b><span>{{ said.weekday }}</span></template>
-        <template v-else><span class="clock-none">No campaign date yet</span><span>Set it</span></template>
+        <template v-else><span class="clock-none">No campaign date yet</span><span v-if="!readOnly">Set it</span></template>
       </button>
       <span v-if="saveState !== 'saved'" class="clock-save" :class="'is-' + saveState" role="status">{{ saveState === 'saving' ? 'Saving…' : 'Not saved' }}</span>
     </template>
@@ -143,6 +143,19 @@ defineExpose({ edit });
   border-color: var(--line-2);
   background: var(--panel-raised);
   color: var(--text-1);
+}
+
+/* The version-video look (Lane M): the campaign date in its outlined Orbitron box. Scoped to the line: the record and entry dates style their own. */
+.clock .clock-date b {
+  padding: 2px 8px 1px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-1);
+  font: 700 13px/1.4 var(--font-display);
+  letter-spacing: 0.12em;
+}
+
+.clock .clock-date:not(:disabled):hover b {
+  border-color: var(--signal-dim);
 }
 
 .clock-none {

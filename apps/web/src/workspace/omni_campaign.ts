@@ -5,10 +5,11 @@
  */
 import type { CampaignRecord } from '@voyage/shared';
 import { recordIdsForWord } from '../campaign/index.ts';
+import { markedLine, type TextMark } from '../search/omni.ts';
 import { thumbUrl } from './images.ts';
 import { placeLine, typeInfo } from './records.ts';
 
-export type CampaignMatch = { kind: 'record'; name: string; detail: string; id: string; thumb: string | null };
+export type CampaignMatch = { kind: 'record'; name: string; detail: string; id: string; thumb: string | null; mark?: TextMark };
 
 export const CAMPAIGN_GROUP_CAP = 5;
 
@@ -18,6 +19,22 @@ function words(text: string): string[] {
 
 function nameStartsWith(record: CampaignRecord, prefix: string): boolean {
     return words(record.name).some((word) => word.startsWith(prefix));
+}
+
+function wordIn(text: string, word: string): boolean {
+    return words(text).includes(word);
+}
+
+/** A live record whose details hold every typed word, even when the name index does not. */
+function detailIds(query: string, records: Readonly<Record<string, CampaignRecord>>): string[] {
+    const typed = words(query);
+    if (!typed.length) return [];
+    const ids: string[] = [];
+    for (const record of Object.values(records)) {
+        if (record.deleted) continue;
+        if (typed.every((word) => wordIn(record.details || '', word))) ids.push(record.id);
+    }
+    return ids;
 }
 
 /** The ids of the live records every typed word is in; the last word may be the start of a name's word. */
@@ -43,16 +60,23 @@ export function campaignMatches(
     cap = CAMPAIGN_GROUP_CAP,
     universeId: string | null = null,
 ): { items: CampaignMatch[]; total: number } {
-    const ids = matchingRecordIds(query, records);
+    const typed = words(query);
+    const needle = typed.length ? typed[typed.length - 1] : '';
+    const ids = [...new Set([...matchingRecordIds(query, records), ...detailIds(query, records)])];
     const rows = ids.map((id) => records[id]).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));
     return {
-        items: rows.slice(0, cap).map((record) => ({
-            kind: 'record',
-            name: record.name,
-            detail: typeInfo(record.type).one + ' · ' + placeLine(record, records),
-            id: record.id,
-            thumb: thumbUrl(universeId, record),
-        })),
+        items: rows.slice(0, cap).map((record) => {
+            const mark = needle ? markedLine(record.details || '', needle) ?? undefined : undefined;
+            const line = mark ? mark.before + mark.word + mark.after : '';
+            return {
+                kind: 'record' as const,
+                name: record.name,
+                detail: line || (typeInfo(record.type).one + ' · ' + placeLine(record, records)),
+                id: record.id,
+                thumb: thumbUrl(universeId, record),
+                ...(mark ? { mark } : {}),
+            };
+        }),
         total: rows.length,
     };
 }

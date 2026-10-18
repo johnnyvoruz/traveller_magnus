@@ -251,7 +251,7 @@ defineExpose({
       <button
         type="button"
         class="orbit-btn is-icon orbit-speed-reset"
-        aria-label="Real time"
+        aria-label="Back to real time: one game second per second"
         title="Back to real time: one game second per second"
         :aria-pressed="isRealTime(speed) ? 'true' : 'false'"
         @click="$emit('speed', REAL_TIME)"
@@ -446,10 +446,20 @@ defineExpose({
   width: 92px;
 }
 
+/* The phone (599 px): the speed's readout takes the next line when the row is full. */
+@media (max-width: 599px) {
+  .orbit-speed {
+    flex-wrap: wrap;
+    gap: 6px 10px;
+  }
+}
+
 .orbit-speed-value {
   min-width: 68px;
   color: var(--signal);
-  font: 600 12px/1 var(--font-text);
+  /* The speed as a frame's count, in Orbitron (the version-video look). */
+  font: 700 12px/1 var(--font-display);
+  letter-spacing: 0.04em;
   font-variant-numeric: var(--tabular);
 }
 

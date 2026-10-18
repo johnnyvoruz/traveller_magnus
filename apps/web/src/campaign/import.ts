@@ -57,7 +57,7 @@ const NOT_JSON = 'The file is not JSON.';
 const NOT_OPEN = 'That campaign is not open.';
 const NOT_EMPTY = 'That campaign is not empty.';
 const NOT_SAVED = 'The next batch did not save.';
-const TOO_LARGE = 'A row is over the update limit.';
+const TOO_LARGE = 'One part of this campaign is too large to import.';
 
 const DOCUMENT_KEYS = ['universe', 'exportedAt', 'records', 'links', 'journal', 'settings', 'clock'];
 const EXPORTED_AT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/;

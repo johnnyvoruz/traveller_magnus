@@ -81,9 +81,9 @@ watch(() => props.id, () => { all.value = false; });
 </script>
 
 <template>
-  <section v-if="record" ref="rootEl" class="trk" :data-legs="rows.length">
+  <section v-if="record" ref="rootEl" class="trk ui-frame" :data-legs="rows.length">
     <div class="trk-head">
-      <h3 class="ui-heading">Track <span v-if="rows.length" class="ui-count">{{ rows.length }}</span></h3>
+      <h3 class="ui-frame-label">Track <span v-if="rows.length" class="ui-frame-count">{{ rows.length }}</span></h3>
       <button
         v-if="rows.length"
         type="button"
@@ -134,13 +134,20 @@ watch(() => props.id, () => { all.value = false; });
   gap: 10px;
 }
 
-.trk-head .ui-heading {
-  flex: 1 1 auto;
-  gap: 8px;
+/* The track sits in a frame (the version-video look), as the connections do. */
+.trk-head {
+  margin-bottom: 10px;
 }
 
-.trk-head .ui-heading .ui-count {
-  margin-left: 0;
+.trk-head .ui-frame-label {
+  flex: 1 1 auto;
+  gap: 8px;
+  margin: 0;
+}
+
+.trk.ui-frame .trk-legs {
+  border-color: var(--line-1);
+  background: transparent;
 }
 
 .ui-btn.trk-remove {

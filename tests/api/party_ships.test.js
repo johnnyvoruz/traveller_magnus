@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { runWrangler } from './session.js';
+import { removeTree, runWrangler } from './session.js';
 import { startDev, stopDev, wranglerBin } from './server.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -113,7 +113,7 @@ if (process.env.RUN_API_TESTS !== '1') {
 } else {
     test('an old-shape save keeps every ship, and each public ship is its own mark', { timeout: 180000 }, async () => {
         const persistTo = path.join(root, '.tmp', 'lane-b-party');
-        rmSync(persistTo, { recursive: true, force: true });
+        removeTree(persistTo);
         const port = 18866;
         const base = `http://127.0.0.1:${port}`;
         let child;
@@ -209,13 +209,13 @@ VALUES ('${version}', '1.2.0', 'released', '${STAMP}', '${STAMP}', 0, 0);
             assert.deepEqual(again.body.hexes.map((row) => row.hex), ['1910', '1911']);
         } finally {
             stopDev(child?.pid);
-            rmSync(persistTo, { recursive: true, force: true });
+            removeTree(persistTo);
         }
     });
 
     test('without 0017 the feed is still one mark for the first ship', { timeout: 180000 }, async () => {
         const persistTo = path.join(root, '.tmp', 'lane-b-party-old');
-        rmSync(persistTo, { recursive: true, force: true });
+        removeTree(persistTo);
         const port = 18867;
         const base = `http://127.0.0.1:${port}`;
         let child;
@@ -274,7 +274,7 @@ VALUES ('${version}', '1.2.0', 'released', '${STAMP}', '${STAMP}', 0, 0);
             assert.equal(Object.hasOwn(seen.body.hexes[0], 'ships'), false);
         } finally {
             stopDev(child?.pid);
-            rmSync(persistTo, { recursive: true, force: true });
+            removeTree(persistTo);
         }
     });
 }

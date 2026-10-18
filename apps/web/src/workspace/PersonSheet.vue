@@ -291,7 +291,7 @@ function openLink(id: string): void {
       @open-link="openLink"
     />
     <section v-else class="sheet psheet-none">
-      <h3 class="ui-heading">Character sheet</h3>
+      <h3 class="ui-heading ui-kicker">Character sheet</h3>
       <div class="psheet-empty">
         <p>No character sheet yet.</p>
         <p class="psheet-note">The sheet is the official character sheet’s boxes. It stores what you type and works nothing out.</p>

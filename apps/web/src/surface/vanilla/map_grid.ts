@@ -21,6 +21,37 @@ export function vanillaHexesAcross(size: number): number {
     return Math.max(1, Math.round(Math.PI * Math.max(size, 0) * 1600 / 1005));
 }
 
+/** The diamond hex lattice drawHexGrid strokes. Shared so a hover uses the same centres. */
+export type VanillaHexLattice = {
+    readonly hexesAcross: number;
+    readonly colStep: number;
+    readonly R: number;
+    readonly rowStep: number;
+    readonly yOffset: number;
+    readonly xPhase: number;
+};
+
+/** Null when the sheet draws no hexes (size 0, or a zero sheet). */
+export function vanillaHexLattice(W: number, H: number, size: number, numLobes: number): VanillaHexLattice | null {
+    if (!(size > 0) || !(W > 0) || !(H > 0)) return null;
+    const hexesAcross = vanillaHexesAcross(size);
+    const colStep = W / hexesAcross;
+    const R = colStep / Math.sqrt(3);
+    const rowStep = 1.5 * R;
+    const bandTop = H * POLE_FRAC;
+    const bandBot = H - bandTop;
+    const modTop = bandTop - Math.floor(bandTop / rowStep) * rowStep;
+    const modBot = bandBot - Math.floor(bandBot / rowStep) * rowStep;
+    return {
+        hexesAcross,
+        colStep,
+        R,
+        rowStep,
+        yOffset: (modTop + modBot) / 2,
+        xPhase: numLobes ? colStep / 2 : 0,
+    };
+}
+
 /** planet_renderer.js 917-965 */
 export function drawHexGrid(
     ctx: CanvasRenderingContext2D,
@@ -31,19 +62,9 @@ export function drawHexGrid(
     stroke: string = rgbaCss(HEX_STROKE),
     lineWidth = 0.6,
 ): void {
-    if (size <= 0) return;
-    const hexesAcross = vanillaHexesAcross(size);
-    const colStep = W / hexesAcross;
-    const R       = colStep / Math.sqrt(3);
-    const rowStep = 1.5 * R;
-
-    const bandTop = H * POLE_FRAC;
-    const bandBot = H - bandTop;
-    const modTop  = bandTop - Math.floor(bandTop / rowStep) * rowStep;
-    const modBot  = bandBot - Math.floor(bandBot / rowStep) * rowStep;
-    const yOffset = (modTop + modBot) / 2;
-
-    const xPhase = numLobes ? colStep / 2 : 0;
+    const lattice = vanillaHexLattice(W, H, size, numLobes);
+    if (!lattice) return;
+    const { hexesAcross, colStep, R, rowStep, yOffset, xPhase } = lattice;
 
     ctx.strokeStyle = stroke;
     ctx.lineWidth   = lineWidth;

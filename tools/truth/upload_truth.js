@@ -8,6 +8,15 @@
  *   node tools/truth/upload_truth.js v10 --remote --yes           # production: R2 over S3 in parallel, then D1
  *   options: --concurrency <1-128> (default 64)
  *
+ * The seal, run after POST /api/admin/truth/release/<v> (the same targets, the same keys and --yes):
+ *   node tools/truth/upload_truth.js v10 --seal                   # dry run: the count, no network
+ *   node tools/truth/upload_truth.js v10 --seal --remote --yes    # production: R2 over S3
+ * It reads truth/<v>/manifest.json (written by the release) and re-puts each sector index, and, when
+ * truth/<v>/reconciliation.json exists, each reconciliation report, with the same bytes and
+ * 'public, max-age=31536000, immutable'. An object that already has that Cache-Control is left
+ * alone, so a re-run sends only what is missing. A version whose truth_versions.state is not
+ * 'released' is refused before any read of the bucket.
+ *
  * --remote needs R2_ACCOUNT_ID, R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY (an R2 API token with
  * Object Read & Write on both buckets) and a wrangler login for D1. Bucket names come from
  * apps/api/wrangler.toml (PUBLIC_BUCKET, PRIVATE_BUCKET).
@@ -22,7 +31,8 @@
  *
  * Writes what the Worker truth build would have written:
  *   public  objects/<hash>                          (immutable)
- *   public  truth/<v>/sectors/<slug>/index.json     (max-age=60; sealed by release)
+ *   public  truth/<v>/sectors/<slug>/index.json     (max-age=60 until the version is released;
+ *                                                    then --seal re-puts it immutable)
  *   private inputs/<v>/sectors.json, <slug>.tsv, <slug>.xml (inputs the release reads)
  *   D1 voyage  truth_versions (state building), truth_build_sectors (done), truth_systems
  * Then release with POST /api/admin/truth/release/<v>, which writes overview, polities and manifest.
@@ -33,12 +43,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { bucketFromWrangler, bulkPut, openLedger } from './r2_s3.js';
+import os from 'node:os';
+import { bucketFromWrangler, bulkPut, getObject, openLedger, putObject } from './r2_s3.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const IMMUTABLE = 'public, max-age=31536000, immutable';
 const SHORT = 'public, max-age=60';
-const USAGE = 'usage: node tools/truth/upload_truth.js v<N> [--local | --endpoint <url> --yes | --remote --yes] [--concurrency N]';
+const USAGE = 'usage: node tools/truth/upload_truth.js v<N> [--seal] [--local | --endpoint <url> --yes | --remote --yes] [--concurrency N]';
 
 const q = value => (value === undefined || value === null ? 'NULL' : `'${String(value).replace(/'/g, "''")}'`);
 /** SQL that is true only while the version row is 'building'. */
@@ -72,7 +83,131 @@ export function parseArgs(argv, env = {}) {
     const concurrency = Math.min(128, Math.max(1, Number(argValue('--concurrency') || 64)));
     const target = remote ? 'remote' : local ? 'local' : hasEndpoint ? 'endpoint' : 'dry-run';
     const endpoint = remote ? `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com` : hasEndpoint ? testEndpoint : null;
-    return { version, target, concurrency, endpoint, credentials };
+    return { version, target, concurrency, endpoint, credentials, seal: argv.includes('--seal') };
+}
+
+/** The seal runs only on a released version. */
+export function sealRefusal(version, state) {
+    if (state === 'released') return null;
+    return `${version} is ${state === null ? 'not in truth_versions' : state}, not released: only a released version is sealed.`;
+}
+
+/** The keys the seal re-puts: every sector index, then the reconciliation reports if reconciled. */
+export function sealKeys(version, slugs, reconciled) {
+    const keys = slugs.map(slug => ({ key: `truth/${version}/sectors/${slug}/index.json`, report: false }));
+    if (reconciled) {
+        for (const slug of slugs) keys.push({ key: `truth/${version}/reconciliation/sectors/${slug}.json`, report: true });
+        keys.push({ key: `truth/${version}/reconciliation/report.json`, report: true });
+    }
+    return keys;
+}
+
+const unquote = etag => (etag ? String(etag).replace(/^W\//, '').replace(/"/g, '') : null);
+
+/** The object store the seal reads and writes: wrangler's local emulation, or S3. */
+function sealStore(target, { run, endpoint, credentials, s3 }) {
+    if (target === 'local') {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'truth-seal-'));
+        let n = 0;
+        return {
+            async get(bucket, key) {
+                const file = path.join(dir, `${n += 1}.json`);
+                try {
+                    run(['r2', 'object', 'get', `${bucket}/${key}`, '--local', '--file', file]);
+                } catch (err) {
+                    if (/does not exist|not found|404/i.test(wranglerError(err))) return { status: 404 };
+                    throw new Error(wranglerError(err));
+                }
+                if (!fs.existsSync(file)) return { status: 404 };
+                return { status: 200, bytes: fs.readFileSync(file), contentType: 'application/json', cacheControl: null, file };
+            },
+            async put(bucket, key, got) {
+                run(['r2', 'object', 'put', `${bucket}/${key}`, '--local', '--file', got.file, '--content-type', got.contentType || 'application/json', '--cache-control', IMMUTABLE]);
+            },
+            close() { fs.rmSync(dir, { recursive: true, force: true }); },
+        };
+    }
+    return {
+        get: (bucket, key) => s3.getObject({ endpoint, credentials, bucket, key }),
+        put: (bucket, key, got) => s3.putObject({ endpoint, credentials, bucket, key, bytes: got.bytes, contentType: got.contentType || 'application/json', cacheControl: IMMUTABLE }),
+        close() {},
+    };
+}
+
+/** --seal: refuse unless released, then re-put each index and report immutable, same bytes. */
+async function seal(opts, { root, log, error, run, readState, s3 }) {
+    const { version, target, concurrency, endpoint, credentials } = opts;
+    const toml = fs.readFileSync(path.join(root, 'apps', 'api', 'wrangler.toml'), 'utf8');
+    const PUBLIC = bucketFromWrangler(toml, 'PUBLIC_BUCKET');
+    if (target === 'dry-run') {
+        const local = path.join(root, 'truth-local', version, 'manifest.json');
+        const slugs = fs.existsSync(local) ? JSON.parse(fs.readFileSync(local, 'utf8')).sectors.map(s => s.slug) : null;
+        log(JSON.stringify({
+            version, seal: true, target, bucket: PUBLIC, cacheControl: IMMUTABLE,
+            indexes: slugs ? slugs.length : null,
+            reports: slugs ? `${slugs.length + 1} more if truth/${version}/reconciliation.json exists` : null,
+            from: slugs ? path.relative(root, local) : `no local manifest: the count is read from truth/${version}/manifest.json when the seal runs`,
+            then: 'add --remote --yes (production), --endpoint <url> --yes or --local; only a released version is sealed',
+        }, null, 2));
+        return 0;
+    }
+    const stateFrom = target === 'remote' ? 'remote' : 'local';
+    let state;
+    try {
+        state = await readState(version, stateFrom);
+    } catch (err) {
+        error(`cannot read truth_versions.state for ${version} (${stateFrom} D1): ${err && err.stderr ? wranglerError(err) : err && err.message ? err.message : String(err)}. Nothing was sealed.`);
+        return 3;
+    }
+    const refusal = sealRefusal(version, state);
+    if (refusal) { error(`${refusal} Nothing was sealed.`); return 3; }
+
+    const store = sealStore(target, { run, endpoint, credentials, s3 });
+    const started = Date.now();
+    try {
+        const manifest = await store.get(PUBLIC, `truth/${version}/manifest.json`);
+        if (manifest.status !== 200) { error(`no truth/${version}/manifest.json in ${PUBLIC}: release ${version} first. Nothing was sealed.`); return 1; }
+        const slugs = JSON.parse(manifest.bytes.toString('utf8')).sectors.map(s => s.slug);
+        const provenance = await store.get(PUBLIC, `truth/${version}/reconciliation.json`);
+        const keys = sealKeys(version, slugs, provenance.status === 200);
+        const result = { sealed: 0, alreadySealed: 0, absent: [], failed: [] };
+        let next = 0;
+        const worker = async () => {
+            while (next < keys.length) {
+                const item = keys[next];
+                next += 1;
+                try {
+                    const got = await store.get(PUBLIC, item.key);
+                    if (got.status !== 200) {
+                        if (item.report) result.absent.push(item.key);
+                        else result.failed.push({ key: item.key, error: 'absent' });
+                        continue;
+                    }
+                    if (got.cacheControl === IMMUTABLE) { result.alreadySealed += 1; continue; }
+                    const put = await store.put(PUBLIC, item.key, got);
+                    // Same bytes: S3 answers with the new object's ETag (an MD5 for a single PUT).
+                    if (unquote(got.etag) && put && unquote(put.etag) && unquote(got.etag) !== unquote(put.etag)) throw new Error(`ETag changed (${got.etag} to ${put.etag})`);
+                    result.sealed += 1;
+                } catch (err) {
+                    result.failed.push({ key: item.key, error: String(err.message || err).slice(0, 300) });
+                }
+            }
+        };
+        await Promise.all(Array.from({ length: Math.max(1, Math.min(target === 'local' ? 1 : concurrency, keys.length)) }, worker));
+        log(JSON.stringify({
+            version, seal: true, target, bucket: PUBLIC, cacheControl: IMMUTABLE,
+            indexes: slugs.length, reports: keys.length - slugs.length, reconciled: provenance.status === 200,
+            sealed: result.sealed, alreadySealed: result.alreadySealed,
+            absent: result.absent.slice(0, 20), absentCount: result.absent.length,
+            failed: result.failed.slice(0, 20), failedCount: result.failed.length, ms: Date.now() - started,
+        }, null, 2));
+        return result.failed.length ? 1 : 0;
+    } catch (err) {
+        error(`seal stopped: ${String(err.message || err)}`);
+        return 1;
+    } finally {
+        store.close();
+    }
 }
 
 /** Decide from a truth_versions.state read. null = no row yet (a new version). */
@@ -130,8 +265,8 @@ export function readStateWith(run, version, where) {
 }
 
 /**
- * Run the upload. deps: { root, env, log, error, run, readState, put }. Returns the exit code.
- * Every R2 put and D1 write happens after the state check.
+ * Run the upload (or, with --seal, the seal). deps: { root, env, log, error, run, readState, put, s3 }.
+ * Returns the exit code. Every R2 put and D1 write happens after the state check.
  */
 export async function main(argv, deps = {}) {
     const root = deps.root || ROOT;
@@ -145,6 +280,7 @@ export async function main(argv, deps = {}) {
 
     const opts = parseArgs(argv, env);
     if (opts.error) { error(opts.error); return opts.code; }
+    if (opts.seal) return seal(opts, { root, log, error, run, readState, s3: deps.s3 || { getObject, putObject } });
     const { version, target, concurrency, endpoint, credentials } = opts;
     const OUT = path.join(root, 'truth-local');
     const toml = fs.readFileSync(path.join(api, 'wrangler.toml'), 'utf8');

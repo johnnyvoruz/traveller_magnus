@@ -15,12 +15,12 @@ import { campaign } from '../campaign/store.ts';
 export type DeckPlanResult = { ok: true } | { ok: false; message: string };
 
 const NOT_SHIPYARD = 'This is not a Geomorph Shipyard file.';
-const NOT_JSON = 'This file is not JSON.';
+const NOT_JSON = 'This file could not be read. Choose a Geomorph Shipyard file.';
 const NOT_VESSEL = 'A deck plan can only be added to a vessel.';
 const MISSING = 'That record is not in this campaign.';
 const DELETED = 'This vessel has been deleted.';
 const NOT_DOCUMENT = "This vessel's sheet is not a document, so the plan was not saved.";
-const TOO_LARGE = 'This deck plan is too large to save. It has to fit in one update.';
+const TOO_LARGE = 'This deck plan is too large to save.';
 const NOT_SAVED = 'This deck plan could not be saved.';
 const NO_PLAN = 'This vessel has no deck plan.';
 

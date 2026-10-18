@@ -150,15 +150,17 @@ test('a panel query wins on a legacy campaign path, and paneOf does not', () => 
 });
 
 test('pane changes are the query the screens write', () => {
-    assert.deepEqual(paneChanges(SHUT), { panel: 'closed', record: null, entry: null, character: null });
-    assert.deepEqual(paneChanges(DOSSIER), { panel: null, record: null, entry: null, character: null });
-    assert.deepEqual(paneChanges(PARTY), { panel: 'party', record: null, entry: null, character: null });
-    assert.deepEqual(paneChanges(LIST), { panel: 'campaign', record: null, entry: null, character: null });
-    assert.deepEqual(paneChanges({ kind: 'campaign', record: 'beowulf' }), { panel: 'campaign', record: 'beowulf', entry: null, character: null });
-    assert.deepEqual(paneChanges({ kind: 'journal', entry: null }), { panel: 'journal', record: null, entry: null, character: null });
-    assert.deepEqual(paneChanges({ kind: 'journal', entry: 'cj_1' }), { panel: 'journal', record: null, entry: 'cj_1', character: null });
-    assert.deepEqual(paneChanges({ kind: 'characters', character: null }), { panel: 'characters', record: null, entry: null, character: null });
-    assert.deepEqual(paneChanges({ kind: 'characters', character: 'ch_1' }), { panel: 'characters', record: null, entry: null, character: 'ch_1' });
+    assert.deepEqual(paneChanges(SHUT), { panel: 'closed', record: null, entry: null, character: null, tl: null, tlType: null, tlShip: null });
+    assert.deepEqual(paneChanges(DOSSIER), { panel: null, record: null, entry: null, character: null, tl: null, tlType: null, tlShip: null });
+    assert.deepEqual(paneChanges(PARTY), { panel: 'party', record: null, entry: null, character: null, tl: null, tlType: null, tlShip: null });
+    assert.deepEqual(paneChanges(LIST), { panel: 'campaign', record: null, entry: null, character: null, tl: null, tlType: null, tlShip: null });
+    assert.deepEqual(paneChanges({ kind: 'campaign', record: 'beowulf' }), { panel: 'campaign', record: 'beowulf', entry: null, character: null, tl: null, tlType: null, tlShip: null });
+    assert.deepEqual(paneChanges({ kind: 'journal', entry: null }), { panel: 'journal', record: null, entry: null, character: null, tl: null, tlType: null, tlShip: null });
+    assert.deepEqual(paneChanges({ kind: 'journal', entry: 'cj_1' }), { panel: 'journal', record: null, entry: 'cj_1', character: null, tl: null, tlType: null, tlShip: null });
+    assert.deepEqual(paneChanges({ kind: 'characters', character: null }), { panel: 'characters', record: null, entry: null, character: null, tl: null, tlType: null, tlShip: null });
+    assert.deepEqual(paneChanges({ kind: 'characters', character: 'ch_1' }), { panel: 'characters', record: null, entry: null, character: 'ch_1', tl: null, tlType: null, tlShip: null });
+    assert.deepEqual(paneChanges({ kind: 'timeline', type: null, ship: false, row: null }), { panel: 'timeline', record: null, entry: null, character: null, tl: null, tlType: null, tlShip: null });
+    assert.deepEqual(paneChanges({ kind: 'timeline', type: 'person', ship: true, row: 'cr_1' }), { panel: 'timeline', record: null, entry: null, character: null, tl: 'cr_1', tlType: 'person', tlShip: '1' });
     const orbitPath = '/s/' + SECTOR + '/' + HEX + '/orbit';
     const opened = withQuery({ date: '120', time: '0800', x: '1' }, paneChanges(LIST));
     assert.deepEqual(addressPane(orbitPath, opened).pane, LIST);
@@ -229,6 +231,19 @@ test('focus stays on a cold load, and follows the pane table after that', () => 
         path: '/',
         query: { panel: 'closed', date: '120' },
     });
+    assert.deepEqual(addressPane('/', { panel: 'timeline', tl: 'cr_1', tlType: 'person', tlShip: '1' }).pane, {
+        kind: 'timeline', type: 'person', ship: true, row: 'cr_1',
+    });
+    assert.deepEqual(escapePane('/', { panel: 'timeline', tl: 'cr_1', tlType: 'person', tlShip: '1', date: '120' }), {
+        path: '/',
+        query: { panel: 'timeline', tlType: 'person', tlShip: '1', date: '120' },
+    });
+    assert.deepEqual(escapePane('/', { panel: 'timeline', date: '120' }), {
+        path: '/',
+        query: { panel: 'campaign', date: '120' },
+    });
+    assert.equal(focusTarget(list, { kind: 'timeline', type: null, ship: false, row: null }), 'leave');
+    assert.equal(hostsCampaign({ kind: 'timeline', type: null, ship: false, row: null }), true);
     assert.deepEqual(withQuery({ panel: 'journal', entry: 'cj_1', date: '120' }, { date: '121' }), {
         panel: 'journal',
         entry: 'cj_1',

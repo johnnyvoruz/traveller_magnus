@@ -167,6 +167,43 @@ export function boxesOverlap(a: Box, b: Box): boolean {
     return overlaps(a, b);
 }
 
+/** Two titles closer than this, in pixels, read as one run of words: they are kept apart (DS5). */
+export const TITLE_GAP = 64;
+
+/** One title in view this frame: its spot and size, and its own subsector on screen. */
+export type TitleSpot = { x: number; y: number; w: number; h: number; home: Box };
+
+function tooClose(a: Box, b: Box, gap: number): boolean {
+    return a.x < b.x + b.w + gap && b.x < a.x + a.w + gap && a.y < b.y + b.h + gap && b.y < a.y + a.h + gap;
+}
+
+/**
+ * Titles kept apart (DS5): two subsectors side by side both held at the top edge put their titles on
+ * one line, touching or on top of each other. In the order given (the first is kept first), a title
+ * keeps its spot when it is at least `gap` from every title kept before it; otherwise it slides
+ * sideways to the nearest spot beside one of them, still inside its own subsector and the view; with
+ * no such spot it is not shown (null). y never changes, so the sticky top edge holds.
+ */
+export function separateTitles(spots: TitleSpot[], bounds: Box, gap: number = TITLE_GAP): ({ x: number; y: number } | null)[] {
+    const kept: Box[] = [];
+    return spots.map((spot) => {
+        const lo = Math.max(spot.home.x, bounds.x) + MARGIN;
+        const hi = Math.min(spot.home.x + spot.home.w, bounds.x + bounds.w) - MARGIN - spot.w;
+        const tries = [spot.x];
+        for (const other of kept) tries.push(other.x - gap - spot.w, other.x + other.w + gap);
+        let best: number | null = null;
+        for (const x of tries) {
+            if (x !== spot.x && (x < lo || x > hi)) continue;
+            const box = { x, y: spot.y, w: spot.w, h: spot.h };
+            if (kept.some((other) => tooClose(box, other, gap))) continue;
+            if (best === null || Math.abs(x - spot.x) < Math.abs(best - spot.x)) best = x;
+        }
+        if (best === null) return null;
+        kept.push({ x: best, y: spot.y, w: spot.w, h: spot.h });
+        return { x: best, y: spot.y };
+    });
+}
+
 /** One step of a linear fade: `value` moves toward `target` by at most `amount`. */
 export function fadeToward(value: number, target: number, amount: number): number {
     if (!(amount > 0)) return value;

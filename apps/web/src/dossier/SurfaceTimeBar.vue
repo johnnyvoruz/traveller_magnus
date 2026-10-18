@@ -5,10 +5,11 @@
  * own clock while that view is open, else the store's. It shows the date and, on a turning
  * world, the starport's local time; on a world locked to its star it says the shadow is still.
  */
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import Icon from '../design/Icon.vue';
 import { dateText, formatLinkDate, parseLinkDate } from '../orbit/clock.ts';
 import { MAP_SPEEDS, setClockDays, setClockPlaying, setClockRate, simClock, clockToNow } from '../orbit/sim_clock.ts';
+import { timePopoverCloses } from './world_panel.ts';
 
 const props = defineProps<{
     /** The campaign date in days (Now), or the view's date when there is no campaign. */
@@ -23,6 +24,8 @@ const props = defineProps<{
 
 const typed = ref('');
 const bad = ref(false);
+const open = ref(false);
+const barEl = ref<HTMLElement | null>(null);
 
 const speedIndex = computed(() => {
     let best = 0;
@@ -36,6 +39,10 @@ const dateLine = computed(() => dateText(simClock.days));
 
 function toggle(): void {
     setClockPlaying(!simClock.playing);
+}
+
+function toggleOpen(): void {
+    open.value = !open.value;
 }
 
 function onSpeed(event: Event): void {
@@ -53,7 +60,35 @@ function jump(): void {
     setClockPlaying(false);
     setClockDays(days);
     typed.value = '';
+    if (timePopoverCloses({ go: true, key: '', inside: true })) open.value = false;
 }
+
+function onDocPointer(event: Event): void {
+    if (!open.value) return;
+    const root = barEl.value;
+    const target = event.target;
+    const inside = !!(root && target instanceof Node && root.contains(target));
+    if (timePopoverCloses({ go: false, key: '', inside })) open.value = false;
+}
+
+function onDocKey(event: KeyboardEvent): void {
+    if (!open.value) return;
+    if (timePopoverCloses({ go: false, key: event.key, inside: true })) open.value = false;
+}
+
+onMounted(() => {
+    const doc = globalThis.document;
+    if (!doc) return;
+    doc.addEventListener('pointerdown', onDocPointer);
+    doc.addEventListener('keydown', onDocKey);
+});
+
+onBeforeUnmount(() => {
+    const doc = globalThis.document;
+    if (!doc) return;
+    doc.removeEventListener('pointerdown', onDocPointer);
+    doc.removeEventListener('keydown', onDocKey);
+});
 
 function now(): void {
     clockToNow(props.nowDays);
@@ -66,54 +101,59 @@ const placeholder = computed(() => {
 </script>
 
 <template>
-  <div class="doss-timebar" role="group" aria-label="Surface map time">
+  <div v-if="!locked" ref="barEl" class="doss-timebar" role="group" aria-label="Surface map time">
     <button
       type="button"
       class="ui-btn is-icon"
       :aria-label="simClock.playing ? 'Pause' : 'Play'"
       :title="simClock.playing ? 'Pause' : 'Play'"
-      :disabled="locked"
       @click="toggle"
     >
       <Icon :name="simClock.playing ? 'pause' : 'play'" :size="12" />
     </button>
     <label class="doss-timebar-speed">
       <span class="sr-only">Speed</span>
-      <select :value="speedIndex" :disabled="locked" aria-label="Speed" @change="onSpeed">
+      <select :value="speedIndex" aria-label="Speed" @change="onSpeed">
         <option v-for="(row, index) in MAP_SPEEDS" :key="row.label" :value="index">{{ row.label }}</option>
       </select>
     </label>
-    <form class="doss-timebar-jump" @submit.prevent="jump">
-      <input
-        v-model="typed"
-        type="text"
-        inputmode="numeric"
-        :placeholder="placeholder"
-        :aria-invalid="bad ? 'true' : undefined"
-        aria-label="Jump to date, DDD-YYYY and optional HHMM"
-        title="Jump to a date: DDD-YYYY, optionally followed by HHMM"
-      />
-      <button type="submit" class="ui-btn">Go</button>
-    </form>
+    <span class="doss-timebar-jump">
+      <button
+        type="button"
+        class="ui-btn doss-timebar-readout"
+        aria-haspopup="dialog"
+        :aria-expanded="open ? 'true' : 'false'"
+        @click="toggleOpen"
+      >
+        {{ dateLine }}<template v-if="localTime"> · {{ localTime }}</template>
+      </button>
+      <form v-if="open" class="doss-timebar-pop" role="dialog" aria-label="Jump to a date" @submit.prevent="jump">
+        <input
+          v-model="typed"
+          type="text"
+          inputmode="numeric"
+          :placeholder="placeholder"
+          :aria-invalid="bad ? 'true' : undefined"
+          aria-label="Jump to date, DDD-YYYY and optional HHMM"
+          title="Jump to a date: DDD-YYYY, optionally followed by HHMM"
+        />
+        <button type="submit" class="ui-btn">Go</button>
+      </form>
+    </span>
     <button type="button" class="ui-btn" title="The campaign date" @click="now">
       <Icon name="clock-rotate-left" :size="12" />Now
     </button>
-    <p class="doss-timebar-read" aria-live="off">
-      <span>{{ dateLine }}</span>
-      <span v-if="locked"> · locked to its star: the shadow is still</span>
-      <span v-else-if="localTime"> · starport {{ localTime }}</span>
-      <span v-if="averaged && !locked"> · day-averaged</span>
-    </p>
   </div>
 </template>
 
 <style>
 .doss-timebar {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 6px;
-  padding-top: 6px;
+  gap: var(--sp-2);
+  min-width: 0;
+  margin-top: var(--sp-2);
   font-size: 11.5px;
 }
 
@@ -141,23 +181,38 @@ const placeholder = computed(() => {
 }
 
 .doss-timebar-jump {
-  display: flex;
-  gap: 4px;
-  margin: 0;
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
-.doss-timebar-jump input {
+.doss-timebar-readout {
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.doss-timebar-pop {
+  position: absolute;
+  z-index: 3;
+  top: 100%;
+  left: 0;
+  display: flex;
+  gap: var(--sp-1);
+  margin-top: var(--sp-1);
+  padding: var(--sp-2);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-2);
+  background: var(--bg-1);
+}
+
+.doss-timebar-pop input {
   width: 108px;
 }
 
-.doss-timebar-jump input[aria-invalid="true"] {
+.doss-timebar-pop input[aria-invalid="true"] {
   border-color: var(--danger);
-}
-
-.doss-timebar-read {
-  flex: 1 1 100%;
-  margin: 0;
-  color: var(--text-muted);
 }
 
 .doss-timebar :focus-visible {

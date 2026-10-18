@@ -97,9 +97,9 @@ export function dossierRoute(path: string, keys?: readonly string[]): DossierRou
 /** Route path to a camera target. Account and design are pages, not cameras. */
 export function targetFor(route: { path: string }, manifest: ChartManifest): Target {
     const path = route.path;
-    if (path === '/' || path === '') {
+    if (path === '/' || path === '' || path === '/changes' || path.startsWith('/changes/') || path === '/help' || path === '/welcome') {
         const rect = homeRect(manifest);
-        if (!rect) return { kind: 'unknown', message: 'This truth has no OTU sectors.' };
+        if (!rect) return { kind: 'unknown', message: 'This chart has no sectors.' };
         return { kind: 'fit', rect };
     }
     if (path === '/account') return { kind: 'account' };
@@ -110,25 +110,25 @@ export function targetFor(route: { path: string }, manifest: ChartManifest): Tar
     if (parts[0] === 's' && (parts.length === 2 || parts.length === 3 || bodyPath || subsectorPath)) {
         const slug = decodeURIComponent(parts[1]);
         const sector = findSector(manifest, slug);
-        if (!sector) return { kind: 'unknown', message: 'No sector ' + slug + '.' };
+        if (!sector) return { kind: 'unknown', message: slug + ' is not on this chart.' };
         if (sector.canonical === false) {
-            return { kind: 'unknown', message: (sector.name || sector.slug) + ' is not on the canonical chart.' };
+            return { kind: 'unknown', message: (sector.name || sector.slug) + ' is not on this chart.' };
         }
         if (parts.length === 2) return { kind: 'fit', rect: sectorRect(sector.x, sector.y) };
         if (parts.length === 4 && parts[2] === 'sub') {
             const letter = decodeURIComponent(parts[3]);
             const origin = subsectorOrigin(letter);
-            if (!origin) return { kind: 'unknown', message: 'No subsector ' + letter + '.' };
+            if (!origin) return { kind: 'unknown', message: 'There is no subsector ' + letter + '.' };
             return { kind: 'fit', rect: subsectorRect(sector.x, sector.y, origin.col, origin.row) };
         }
         const hhhh = decodeURIComponent(parts[2]);
         const local = parseHex(hhhh);
         if (!local || local.col < 1 || local.col > SECTOR_COLS || local.row < 1 || local.row > SECTOR_ROWS) {
-            return { kind: 'unknown', message: 'No hex ' + hhhh + '.' };
+            return { kind: 'unknown', message: 'There is no hex ' + hhhh + '.' };
         }
         const global = toGlobal(sector.x, sector.y, local.col, local.row);
         const centre = hexCentre(global.q, global.r);
         return { kind: 'camera', camera: { x: centre.x, y: centre.y, ppp: HEX_PPP } };
     }
-    return { kind: 'unknown', message: 'Unknown route ' + path + '.' };
+    return { kind: 'unknown', message: 'That address is not on the map.' };
 }

@@ -4,6 +4,146 @@ A dated ledger, newest first, moved here unchanged on 2026-10-17 from `board.md`
 
 ## Decisions from Johnny
 
+## 2026-10-18 14:05 by `date`: the release is 1.3.0
+- Johnny: "This feels like a v 1.3 to me, can we refactor to align around this v number?" `APP_VERSION` and the changelog entry are 1.3.0 (was to be 1.2.7); the queues, board and push notes say 1.3.0; later pushes are 1.3.N. The engine stays e1.2; the tidal E1 deviation still ships as engine e1.3 (a separate number, Johnny 13:10).
+
+## 2026-10-18 13:10 by `date`: E1 timing; three lines of comms
+- Johnny: "117 next engine change, 118 yes, 119 engine number - also local system comms either needs to be wider or one more character line taller to support 3 lines of text".
+- **117:** E1 ships with the next engine change. **118:** as e1.3 (1.3.0). **119:** Regina takes the engine's number (about 135 h solar day); no correction pin. Z ZE1 held until then.
+- **Three lines:** the receiver one line taller (the width kept for 390), fixed at that size: C CC4b, blocks 1.2.7.
+
+## 2026-10-18 12:58 by `date`: tidal locking fixes
+- Johnny pasted a brief ("additional fix for this rev"), saved whole as `prompts/tidal_locking.md`. W1 (the web profile's moon test) in 1.2.7: C CW3. E1 (the engine's lunar mainworld period, a planned deviation) held: questions 117 to 119; the brief itself says to bundle it with the next engine change, and a bump needs a truth rebuild.
+
+## 2026-10-18 12:45 by `date`: System Comms, one name; the receiver far right, fixed, SIG alive
+- Johnny: "we can move the local comms to the far right of the page now that we moved the buttons and then we lost the SIG animation, it should be at zero until there's a message and then it sorta fluctuates. and then during the beowulf comms, the ui shifts slightly I don't know if that's to fit the text or not. the local comms container should never shift or grow, and then we should unify the feature, either call it local comms or system comms - let's call it system comms."
+- C CC4, blocks 1.2.7. Accepted first: C CW2 (one header corner; the crumb opens the overview and stays in the orbit view, `overview=1`) and CC2b (the layout test reads the public chart, skips offline).
+
+## 2026-10-18 11:57 by `date`: comms for a system the ship is not in
+- Johnny: "oh, I want to show comms even if my ship isn't in the system, so the players / ref can get a peek of what's going on there". Confirms the orchestrator's 11:55 rule (the view listens); Z ZC2 as written.
+
+## 2026-10-18 11:28 by `date`: comms whole in 1.2.7
+- Johnny: "I want comms working before the push". C's CC3 (the red theme and `mayday`) moves above the freeze line and blocks 1.2.7, with an end-to-end proof in Edge (real transmissions within a minute, across a system change and a tab hide; `?mayday` red and back).
+
+## 2026-10-18 11:28 by `date`: `mayday` plays the Easter egg
+- Johnny: "Also I want to add a url variable like &mayday that will trigger the comms easteregg after 3 seconds on page load with that URL". Orchestrator's details: orbit-view addresses only; 3 s after the receiver mounts; skips the rarity roll and the once-only check and does not mark it played; plays even with System Comms off, for that visit only; once per page load. In C's CC3 (after the push).
+
+## 2026-10-18 11:17 by `date`: the comms emergency red theme
+- Johnny pasted a brief ("Note for traveller comms work"): Beowulf turns the receiver Traveller Red (700 ms in, red through every fragment, 900 ms back), label EMERGENCY, by explicit metadata, reusable for later emergency events, nothing else changed. Saved whole in `prompts/c_comms_emergency_theme.md`; C CC3, after 1.2.7 (orchestrator: an Easter egg does not hold the push).
+
+## 2026-10-18 10:40 by `date`: System Comms in the orbit view, on; Copy for your AI by part
+- Johnny: "System chatter enable / disable should be in the orbit view maybe above the Fit button in the lower right. have it enabled to on, maybe the button name is System Comms - I have another agent doing some work on additional messages. - I think maybe give the copy / export a few different options, maybe we do a phases, one for ship / characters / campaign items (people places things). or all of it, the user can decide what aspect or how it can work with their process or AI budget"
+- **System Comms:** a toggle above Fit in the orbit view, **on by default for everyone**, remembered per device; the campaign settings' chatter switch goes (background traffic's stays). Supersedes the 23:50 note that the referee's `living` switch governs chatter. C CC2, in 1.2.7.
+- **More messages coming** from another agent of Johnny's: when they arrive, they go through the corpus review as the package's did (Z's adapter and the four blocked categories), never pasted in whole.
+- **Copy for your AI by part:** the referee picks **All**, or any of **Ships** (vessels: cargo, ledger, finances, track), **Characters** (with their sheets), **People, places and things** (the campaign records), **Journal**; the date, the party and the instructions always come with it. The size of each choice shows beside it, so it fits the AI budget. This answers questions 110 (sheets come with Characters; images never) and 111 (size shown per choice; above 150,000 tokens the warning).
+
+## 2026-10-18 10:15 by `date`: two ways back, no model on our side
+- Johnny: "I must have a fundamental misunderstanding of MCP, I don't want a model to actually intepret anything on our side, what I want is for a user to be able to use their agent with our API and their campaign token or whatever and they can use their AI to write to their campaign in the database (JUST THEIR DATA ONLY!!) - 108 there should be no snapshots? Just you click the copy for your AI and then that's what you use instead. So the process is always copy for your AI, paste that into your AI with transcript and our skill file and then they can either use the AI to do the write or yeah, now I see, they can paste the output of their AI into a place where our API can parse and make updates to their campaign, that might work"
+- **No model runs on our side, ever.** MCP is a request format agents speak; our `/mcp` and our API only check and store structured data (the zod schemas). Confirmed as built.
+- **A token reaches one campaign only:** bound to one universe and its owner (`ownedDoor`, `mcp/server.ts:45`); it reads that campaign and sends proposals to it; nothing else.
+- **The flow:** Copy for your AI (the whole campaign, Copy or Download) + the transcript + the skill go into the referee's own AI. Back by either door: (a) the AI sends the proposals itself (API or MCP, with a token), or (b) **Paste your AI's reply** into the campaign: our API parses it (no AI), checks it against the proposal format, and it lands in the same Proposals list. This replaces the 10:00 "no paste box" (107). Paste needs only the referee's sign-in, not agent access, so it can ship while agent access is off (109 then concerns only the token door).
+- **"Snapshot" is not a word in the app.** The button is "Copy for your AI". Each record in the copied text carries its version number, so an update to a record edited after the copy still shows a conflict (108's protection, unchanged, no screen word "snapshot").
+- **Review stays:** proposals from either door wait in the Proposals list for accept, edit or drop (Johnny 10-17 20:24, spec §0).
+
+## 2026-10-18 10:00 by `date`: the snapshot for the referee's AI (105 to 108); jump times advance the clock
+- Johnny: "105 - wither an md or just copy to clipboard / 106. I'd do the whole record for each item, it's the only way to ensure full context is maintained across systems / 107. no paste proposals box, we shouldn't have an AI running on our side, it's my understanding that the prompt will tell the user agent how to submit the data for their campaign, am I incorrect in this? 108. I need more information, I don't understand what problem this is solving. Also I want to add an additional feature that when a user clicks on any of the 100D jump travel times, it will advance the time in their campaign by the amount on the jump time."
+- **105:** "Copy for your AI" gives both: **Copy** (to the clipboard) and **Download** (`<campaign>-for-your-ai.md`), the same text.
+- **106:** the **whole record** for every item (every field the referee sees: details, For players, tags, place, links, visibility, rev), no 300-character cut, no "names only".
+- **107:** **no Paste proposals box.** The prompt tells the referee's agent how to send its proposals: MCP (`POST /mcp`) or HTTPS with an agent token (`POST /api/universes/:id/campaign/proposals`). The token is never in the prompt (the referee gives it to their agent from Agent access). So the way back needs **agent access on**, which ships off in 1.2.7 (SI1b): question 109.
+- **108 withdrawn:** already built. Each record in the snapshot carries its version (`rev`); an update proposal names the version it read (`base_rev`); if the referee edited that record after the snapshot, accepting it is a conflict and shows both, as when two browsers edit the same record (spec §1.4, contract `resolve`). The review screen uses the existing conflict look (SI3).
+- **Jump times advance the clock** (orchestrator, presentation and the campaign's own clock; no rule): D DJ1.
+
+## 2026-10-18 09:50 by `date`: the skill in `skill/`; two doors for the referee's AI
+- Johnny: "move the referee skill from findings to the new /skill folder and anything else that is in an ignored folder - I have a feeling we're really going to need some duality to ensure the AI/SI tools work correctly. I think the pattern will have to be that the ref clicks \"campaign snapshot for MCP\" that generates a propmt for the user AI that essentially says what is already created and then they use that context plus their campaign transcription so that their LLM doesn't re-create listings that already exist, and then knows how to update existing ones."
+- Done: Z ZF1b (the skill to repo-root `skill/`, blocks 1.2.7). The audit of ignored folders: nothing else the product or a test needs lives there; the other clean-copy skips are generated data (truth-local v10, `universe/raw`, `dist`, wrangler); the two unapproved rules drafts (starports, climate bands) and the character sheet transcription stay in `findings/` under rule 1 until Johnny approves them into `rules/`.
+- The snapshot design is questions 105 to 108 (written as the orchestrator recommends); SI2 to SI4 are not issued until answered.
+
+### 2026-10-17 22:40 by `date`, questions 79 to 83 (the city lights fix) and a brighter glow
+Johnny: "go with recommendation on all five and feel free to up the glow on these lights, I'd like them to feel very sci-fi please".
+- **79:** the lock glow stays as X fixed it: it begins at the body's drawn edge; outside the body unchanged.
+- **80:** `planet_rendering.md` "Tech level, bloom" rewritten by the orchestrator: domes inside the surface disc only; city light on the surface, night side, under cloud and the air's scattering; the air shell carries no city light on any side at any zoom. The legacy limb-glow sentence is gone.
+- **81:** a C item, CS10: neon as an accent on street and arterial lines only, gold highways, near-white cores, look C's gain and sheet lowered on population A; **and the glow raised**: bigger, softer domes around cores and along the threads, strongest at TL 12+, inside the disc and under the air (G6 holds; X's pixel test stays untouched and green).
+- **82:** the limb fade stays as it is.
+- **83:** the service worker keeps registering under Vite dev; no guard.
+
+
+### 2026-10-18 00:00 by `date`, the Comms evidence is the orchestrator's
+Johnny: "The changed files / tests / transcripts / screenshots would really be just for you in case we need to fix anything, I'm not using that other agent moving forward". The lanes still write full entries (paths, tests, transcripts, shots); the orchestrator reviews them and keeps them for fixes; Johnny gets a short summary. Nothing goes back to the agent that wrote the package.
+
+### 2026-10-17 23:50 by `date`, Living Systems Comms: the supplied package is authoritative
+Johnny: "Implement the complete Traveller Living Systems Comms feature using the attached `Traveller_Comms_Complete_Handoff` package. [...] These are the authoritative instructions and supersede all earlier prototypes. The visual design is approved and locked. Use the supplied bars-only receiver [...] do not reintroduce a skip button or waveform selector. [...] Complete the implementation, run the required tests, and report the actual code changes and results." (package in `assets/Traveller_Living_Systems_Comms_FINAL/`).
+- Supersedes 20:27 answers 43 (placement: now lower right above the planet tabs, one transmission at a time), 45 (categories: `rumour`, `distress`, `news`, `advert` off by default; allowlist control, customs, market, weather, vetted ship, gated by UWP) and 47 (the supplied 1,178-row corpus replaces E's 1,000 lines). C's LS4 withdrawn. LS5 (background ships), the switches, quiet, seeds, "no line restates a rule" and LS7 stand.
+- Split (orchestrator): Z ZC1 the engine, adapter, mixer, single-timer controller, Beowulf, audit; C CC1 the bars-only receiver in Vue, mounted and wired; one interface between them (`prompts/comms_receiver.md`). The orchestrator assembles the brief's §8 report from both entries.
+
+### 2026-10-17 21:55 by `date`, dice: D66, a readable result, and the full conventions
+Johnny 21:50: "Dice roller looks good, we also want to have a d66 and then the font for the number result should be like a monospace font, I rolled a 17 and the sci-fi font the 7 was too bendy and hard to make out." 21:55: "full dice rules" with the MgT2E Game Conventions text (1D/2D, 2D+3/3D-2, D3 and 2D3, D66), saved verbatim as `assets/dice_conventions.txt`. A: AD2 (D66, mono result), AD3 (a DM stepper, D3 and 2D3), cited to that file. Still no typed notation (the 2026-10-17 "simple and streamlined" rule stands).
+
+### 2026-10-17 20:39 by `date`, questions 63 to 78
+Johnny: "63. yes / 64. just ref named ships that players are attached to / 65 - 68 = go with recommendation | 69 - 78 = go with recommendation".
+- **63:** the starport fuel moved into `rules/mgt2e_space_travel.json` by the orchestrator on his word: `fuel.byStarportClass` (A, B refined; C, D unrefined; E, X none; `assets/2eWorldCreation.txt` 1127-1158), `fuel.bases` (N, S refined for the named ships; C and W fuel null), `fuel.basesNote`. A ten-line insertion, nothing else changed; `rules:gen`; refuel, travel and rules tests 16/16.
+- **64:** base fuel is offered only on a ship the players are attached to (a party vessel) that the referee marks naval or scout; the orchestrator's reading of "just ref named ships that players are attached to".
+- **65 to 68 as recommended:** base fuel unpriced (the referee decides); corsair grade unset; a Way Station offers none; berthing, facilities and base rolls left out.
+- **69 to 78 as recommended:** whole sets; kept on the referee's account (a new D1 table and R2 objects), chosen per campaign; no campaign one-off copy at first; "from scratch" = copy then clear; players see the chosen set's tables read-only; no marketplace yet; 256 KB a set, 20 sets an account; only kinds with a roller; one route family `/api/table-sets?kind=`; the passenger editor first.
+
+### 2026-10-17 20:27 by `date`, "yes to all": questions 24 to 62
+Johnny: "yes to all - streams have reported in". Every recommendation as written in `questions_for_johnny.md` (moved here):
+- **24:** the trade draft moved unchanged to `rules/mgt2e_trade.json` by the orchestrator; `npm run rules:gen`; tests pass. Johnny may still spot-check the 18 split rows before the push.
+- **25: link previews not now.** B5's `wrangler.toml` change (`run_worker_first`) is reverted to the 1.2.6 line by B; `preview_tags.ts` stays in the tree unused and parked.
+- **Session ingest 26, 28 to 36:** phase 1 = tokens, the MCP endpoint and the routes under it, proposals, the review screen; SI0 (B, paper) and SI5 (Z) now; server after P2b, store after P3, screens after P6. Nothing applies without review (a rule, not a setting). Keep up to three 300-character quotes per proposal; pending 30 days, reviewed 90; never audio or transcripts. Sheets in phase 4. Referee only until phase 5. Words: "Proposals", "Agent access", "Bring in a session", "your AI agent"; "SI" not in app copy. OAuth when asked. Billing alert $20 a month before SI1 ships. A token bound to one campaign by default. The referee's agent may read referee-only text.
+- **37:** the X-boat network = bare route records plus the 15 typed "Xboat" (`xboatRouteRule`), for both specs; chart colours unchanged.
+- **Living systems 38 to 51:** all 15 dials; activity by the Freight Traffic world DMs (a dial); none civilian at X or Red (Red: patrols); arrivals at 1.15x the mainworld's 100-diameter limit; the role triggers; ticker in the orbit view's lower left and under the dossier header, never on the chart; players same as referee, own mute; **the sample approved, minus the customs line that paraphrases the Law Level table (no line restates a rule)**; `living` in campaign settings; E writes the 1,000 by hand; "Quiet on this device" and a "Traffic" chip; two-word ship names from a new list; hover = name, role, one line; the AI hook after Epic P and the 1,000 lines, 2,000 calls a day.
+- **X-boat 52 to 62:** one leg 148+6D h (154/169/184); station hold 0 until given; off-network within 2 parsecs, shown X-boat only until the wait is given; two-way; the eleven 5-parsec routes kept with a setting; the button in all four places; players may run it; per-campaign settings later; no schedules or Monte Carlo in v1; whole-Imperium only on request; own sectors out of scope.
+
+### 2026-10-17 20:24 by `date`, session ingest: the referee's agent does everything but the last step
+Johnny: "Oh whoops, the skill for them to transcribe the game was not for US to do the recording, but for the ref to do all of it with the prompt we give them and then their agent basically makes the MCP call to update their campaign, I don't want to do the processing for all the intenstive part. Its up to them to get that sorted out and then we just ingest their last step."
+- The referee's own agent (with our skill and prompt) records, transcribes and extracts; we ingest only its proposal batch, over MCP. Question 27 answered: the referee. Phase 6 (our transcription) dropped for good. The MCP endpoint is part of phase 1, not phase 2 (the orchestrator's reading of "their agent basically makes the MCP call"). Note at the top of `spec_session_ingest.md`.
+
+### 2026-10-17 19:55, question 23: the Random Passenger table into `rules/`
+Johnny: "yes to 23, move it into rules and remember we will want to tweak so the user can select other random tables in case I need to swap this out".
+- Copied unchanged from `findings/rules_drafts/mgt2e_random_passenger.json` to `rules/mgt2e_random_passenger.json` by the orchestrator on his word (CLAUDE.md rule 1); `npm run rules:gen` run; book and page blank. Goes in the next push. A's AT3b and D's DT3b released.
+- **Selectable tables:** the referee will be able to pick other random tables, as with trade tables (18:40). One mechanism for every rules table a roller reads (Z, ZT1b); the roller reads its table through one replaceable function.
+
+### 2026-10-17 19:20, ship finances on the list
+Johnny: "I also want to add additional ship metrics like who owns the ship / ship shares / what's the ship payment when is it due / how much fuel is and how much is upkeep on top of ship mortgage, we might have some of this already, I just wanted to make sure I have it added to my list". Backlog step **T1c** (owners and shares, payment and due date, fuel aboard, upkeep), every value typed; queued as A's AT1c (after AP1b) and D's DT1c (after AT1c). Computing payments, maintenance or share values from the price waits on a rules source from Johnny.
+
+### 2026-10-17 19:10, systems that feel alive; X-boat news ripples (two specs)
+Johnny: "two options for refs that will make the systems feel more alive, I want to generate like 1,000 various system "chatter" lines that will give life (when it gets cheap enough, I'll want to send actual system data to a cheap LLM and generate actual chatter that's reactive to what's going on) the other option I want to be able to turn on is other ship traffic in the system, it doesn't have to be real and not tracked via the universal tracking system. I just want the systems to feel alive. It would depend on the mainworld tech and other UWP factors that make sense. The other thing I want to figure out is how to best and cheaply simulate how X-Boat traffic would work, and you could click a button to see how fast information is travelling (almost like ripples from systems). These can be also given to more high effort models".
+- Two one-session specs for a high-effort model: `prompts/x_living_systems_spec.md` (chatter lines with a 100-line sample, the later LLM hook, background traffic in the orbit view; referee switches, off by default; browser-only, never stored, zero server cost) and `prompts/x_xboat_ripples_spec.md` (the X-boat graph, shortest-path news arrival, the ripple picture over campaign days). Both: every traffic or speed number cited from `rules/`/`assets/` or a named parameter with a question; nothing from memory.
+- 19:10 also: Johnny gave `x_session_ingest_spec.md` to a higher-effort model (running).
+
+### 2026-10-17 18:40, the 22 questions: "all of your recommendations look right", with three changes
+Johnny: "There could be more than 500 notes per campaign, especially if we can make some AI connectivity (which we will eventually want) [...] Other than that, all of your recommendations look right, the text file will not use page numbers, so let's just leave them blank. For trade I will also want to be able to load our own trade tables or create others so the user can pick, just in case Mongoose changes their mind (we have their permission right now for concepting the application to use whatever we want as long as we're not charging and we're not charging anything)".
+- **Players 1 to 4, 6 to 8: yes as recommended.** A players ship's leg to a hidden place shows the hex, not the name; an owner-archived player can't rejoin through a live link (a self-archived one can); a non-member gets 404 "No such universe." (403 only for an archived member); own notes keep `rev`; the publish form warns when a chosen record is referee-only; `seq` climbing is accepted; `/join/*` and `/claim/*` masked in the log.
+- **Players 5, changed:** no 500-notes cap. The per-minute guards stay (10 note writes, 60 reads a minute per player); the live-notes count is a guard only, **65,535 per player** (the orchestrator's pick in the spirit of "something dumb like 255"), never a design limit.
+- **Players 9: yes, B may build P2** after the orchestrator reviews the contract (P2a).
+- **Trade draft 10 to 18 and 20: yes as recommended** (four passages; Z's split of the 18 rows; names as printed with an approved name-to-code table in the module; Exotics out of every roll with nulls; Exotics' illegal flag null; the Population sentence as one; Steward DM = highest Steward skill aboard; Mail rows = the Freight Traffic roll's total DM; selling 3D; `tradeRoutes` dropped). **19: page numbers stay blank.**
+- **21: yes,** Z drafts which starports sell which fuel from `assets/2eWorldCreation.txt`. **22: crop a map cover to its systems when it's added** (D5).
+- **New, trade tables the user picks:** besides the official tables, a referee can load their own trade tables or make others, and choose which a campaign uses ("just in case Mongoose changes their mind"). Extends backlog T3c from one copied table to whole selectable table sets. Design first (Z, ZT1).
+- **Permission (Johnny's statement, recorded for reference):** Mongoose has given permission, for now, to use whatever we want while concepting the application, as long as nothing is charged; nothing is charged.
+- **New, session ingest:** "a skill that you can record your game, transcribe it with an SI (superintelligence, new word for AI) Agent, and then we have an API or MCP that will automatically update your campaign on traveller.voyage - I want that to be a thing". A spec first: `prompts/x_session_ingest_spec.md`, one high-effort session. This lifts the 15:20 pause **for the spec only**; building waits on Johnny's yes to a phase with its costs.
+
+### 2026-10-17 17:00, players: no 12 cap; playing and archived (replaces "12 players" of 15:30)
+"What's with the 12 player limit? Maybe we remove that because players might cycle in and out of a game,
+maybe they can be active or archived or some other friendly name, if we have to have a limit make it
+something dumb like 255 or whatever." Built as: members are active or archived (screens say "Playing"
+and "Archived"; actions "Archive" and "Bring back"); a guard of 255 active members; archiving replaces
+removing, so a player's notes keep their name and a returning player comes back to the same row.
+
+### 2026-10-17 16:50, stream mode is the default
+"I'd like to default us to this stream mode of doing things, so we can keep that going." Every lane
+runs on a stream unless the orchestrator has a reason for a one-off prompt (a single bounded job, a
+halt answer, a fresh lane's first task). How: `streams/HOW_TO_RUN.md`.
+
+### 2026-10-17 16:45, "yes to both"
+- `BOOT.md` step 2 sends a "stream" row to its queue, as `lanes/START.md` does.
+- Stream queues' `reports/done/` paths repointed to `archive/reports/` (paths only).
+
+### 2026-10-17 16:40, the cleanup's questions
+- The legacy tree (`hex_map.html`, `js/`, `style.css`): **kept frozen for now** ("keep frozen for now").
+- D2, sign-in providers: **closed.** Discord and Google are on and working ("they are working right now … just leave it the way it is").
+- D4, three commits of 2 to 3 October with old-app files: **closed.** Johnny doesn't remember; it no longer matters (the slice 0 checklist it closed is history).
+- G22, a claimed pregen, shared or given: **closed as built.** A character's share link carries a role (`character_invites.role`, `owner` or `editor`), so the referee can share it (the player edits, the referee keeps it) and can later hand ownership to an editor (`apps/api/src/character/service.ts`, "Ownership goes to an editor."). No new decision needed.
+
 ### 2026-10-17 15:30, "yes to all eight" (was the board's "Open with Johnny")
 Nothing open. Answered 2026-10-17 15:30, "yes to all eight":
 - Epic P: players write journal notes (kind note, visible to players, with their name); 12 players per campaign; no second referee in this leg.
@@ -1075,6 +1215,167 @@ subsector (80 hexes) per request, with per-user metering. Is that right?
 **Answer:**
 
 ## Decided by the orchestrator
+
+## Decided by the orchestrator, 2026-10-18 14:00 by `date` (C's CW3; 1.2.7 ready)
+- **CW3 accepted:** locked moons not star-locked (Regina's system 8 moons, Zeycude 3); both ESM profile fixtures regenerated; legacy untouched; Regina's globe in bands.
+- **1.2.7 ready:** rehearsal `outer29` green but the pixel test's copy-layout artifact; commands in `findings/push/release_2026-10-18.md`.
+
+## Decided by the orchestrator, 2026-10-18 13:40 by `date` (Z's ZC3)
+- **ZC3 accepted:** `maydayUsed` set when the archive starts playing; a re-arm after a context change keeps the first deadline (3 s from the first arm, as Johnny's "after 3 seconds on page load"); the campaign key arriving still resets the band (Beowulf's once-only flag is per campaign). 5 new tests; full suite 0 fail. Not proved live signed in (Z could not use `npm run dev`); Johnny's check on his dev server.
+
+## Decided by the orchestrator, 2026-10-18 13:37 by `date` (C's CC4b, CW3)
+- **CC4b accepted:** the receiver 240 px tall (212 under 540), width unchanged; three lines fit at 1600 and 390; the longest corpus line still clips its fourth line at 390 (C's question: leave it; Johnny asked for three lines). The fade from CC4 is in (`commsLeaving`, unmount after the opacity falls).
+- **CW3 unblocked:** the moon test flips `locked` on every tidally locked moon (Regina's system: w1m0 to w1m3, w2m1, w2m3, w5m0, w5m1; Zeycude: w1m1, w1m2, w6m0), not only Regina. That is the brief's rule (a locked moon keeps one face to its planet, not its star), so both ESM fixtures `profile_regina.json` and `profile_zeycude.json` regenerate; legacy fixtures untouched.
+
+## Decided by the orchestrator, 2026-10-18 13:33 by `date`
+- `?mayday` fails signed in: the controller marks it used when armed, and the campaign key arriving inside the 3 s cancels the timer. Z ZC3, blocks 1.2.7. Checked working signed out (bare Vite, Regina and Velpare; Johnny's dev server, Velpare).
+
+## Decided by the orchestrator, 2026-10-18 13:12 by `date` (C's CC4)
+- **CC4 accepted for (1) to (4):** the receiver far right on the stage inset; the SIG bars (never wired in the port) now follow the envelope, 0 idle, 0.30 to 0.51 mid-line; the frame fixed (506 x 221 at 1600, 264 x 193 at 390; it grew 12 to 65 px before); SYSTEM COMMS and "System communications". **(5) the fade was missed** (added mid-item): folded into CC4b.
+
+## Decided by the orchestrator, 2026-10-18 12:25 by `date` (ZC2)
+- **Z ZC2 accepted:** ambient comms play for any system on screen, signed out or with the party away; party-addressed lines (the beacon, `when.party` lines) only with the lead ship there; a jump no longer cuts the band; `?mayday` at 3 s with no ship. Live in Edge, nothing forced: Regina a line at 11 s, Efate after a switch at 9 s, `?mayday` red then teal. Z's questions: 114 none (the orchestrator named Capital's address for Regina; Regina is `/s/Spinward_Marches/1910`); 115 C CC2b, blocks 1.2.7; 116 keep (the natural 1-in-2048 Beowulf stays a find for a party in the system).
+
+## Decided by the orchestrator, 2026-10-18 12:17 by `date`
+- **D DF15 accepted:** the wheel listener stayed on the old stage element after a body change rebuilt it (`v-if`); now `@wheel` in the template, and the size observer follows the elements. Checked in Edge: wheel zooms after the round trip; the small map still scrolls the dossier. **Z ZF1c accepted** (fixture in `tests/web/harness/`; passes in a copy without `findings/`). Watch in the rehearsal: C's `orbit_stage_layout.test.js` (headless Edge) timed out once in Z's loaded run.
+
+## Decided by the orchestrator, 2026-10-18 12:02 by `date`
+- Johnny's shot: the span switch over the panel's Back, and the "← <system>" crumb looping in the orbit view. Both new in 1.2.7 (CW1's header with Panel's Back): C CW2 blocks the push.
+
+## Decided by the orchestrator, 2026-10-18 11:55 by `date` (comms dead air)
+- C CC2, the CC2 amendment and CC3 accepted as built (System Comms and Fit lower left; `voyage.comms.on`, absent = on; the red theme and `mayday`). But Johnny sees only dead air: the engine plays nothing unless the lead ship is in the system (the package brief's "no away chatter"), so every signed-out visit and every system the party is not in is silent. Decided, from Johnny's 10:40 "on for everyone": **the view listens**; ambient lines play for whoever watches; party-addressed lines need the lead ship there; `mayday` needs no ship (C's question 1 answered the other way). Z ZC2, blocks 1.2.7, with a live proof. C's CC2 question 1 (Quiet mutes only background traffic now): as C recommends; E's words later. Question 2 superseded by ZC2.
+
+## Decided by the orchestrator, 2026-10-18 11:25 by `date`
+- Johnny's bug (the surface map lost scroll zoom) is a 1.2.3 regression: D DF15 blocks 1.2.7. D, not C: C holds the orbit view for CC2; D is idle and did the map's hover (DF8).
+
+## Decided by the orchestrator, 2026-10-18 10:18 by `date` (CC1b, SI1b, TS4b to TS4d, ZF1, ZF1b, SI6)
+- **Accepted:** C CC1b (controller created and destroyed with the receiver; chatter help words; the traffic switch is back because LS5, in progress, shows it), B SI1b (agent access off for no table, no row, a read error; fresh database: `/mcp` and `POST /api/tokens` 503 "Agent access is paused."; zod as the alias `zod4` = `npm:zod@4.6.5`; to turn on: `POST /api/admin/flags` body `{"key":"agent_access","value":"on"}`, audit logged), TS4b, TS4c, Z ZF1, ZF1b (`skill/`), SI6 (written before the paste door; SI6b amends it).
+- **New blocker:** `tests/web/harness/city_pixels.mjs` reads `findings/city_design_s1_manifest.json`: Z ZF1c (Z's question 109, decided: the fixture moves into the harness folder; the check is unchanged, so 22:40 item 81 holds).
+- **Z's question 110 decided:** keep `skill/` in the tree (Johnny's folder); when it is handed out, the download is a folder named `voyage-session-ingest` to match the frontmatter.
+- **Z's question 113 decided:** the 50 latest journal entries by in-game date, then sequence, undated first (as specced).
+- **TS4d decided yes** (refuse a settings write naming another account's table set: "No such table set." unless `official:<kind>` or the owner's live row), as "just their data" (Johnny 10:15); after the push.
+- Not blocking: `receiver_render.ts` keeps its own `setInterval` display clock (`:405`); a follow-up routes it through `platform/browser.ts`.
+- Push freeze lines in every queue (10:20); C finishing LS5 (background traffic), then the final rehearsal.
+
+## Decided by the orchestrator, 2026-10-18 09:35 by `date` (all entries since 00:05; push 1.2.7)
+- **Accepted:** A P9, P3b, P8, TS2b, AU6; E EU28b, XE1, P4, P7, P10; C CS10; D DU40, P5, P6, DU6. Lane questions settled as each lane recommended: A P9 (poll on while the panel is open and not View as players), E P4 (token in session storage), E P7 (a player may change kind and visibility on their own note; the commit drops what fails), E P10 (date format, living switches, table sets left out of What players see), D DU40 (`commands` is the leader; no new link kind), D DU6 (Vessels keeps the legs: one line in `timelineKeeps`, A).
+- **AU37 (one-step Undo) declined:** Johnny 2026-10-14 "CRUD over undo" decides it; editing back by hand.
+- **CC1 accepted as the receiver, not wired:** C CC1b first; it blocks 1.2.7 (a referee who turns chatter on would see a dead panel).
+- **B BC1b, SI1, TS4 and Z ZC1, ZT6 accepted** (migrations 0021 to 0024 create only; each reader checks its table exists: safe in either order). **SI1b blocks 1.2.7:** agent access (tokens and `/mcp`) ships **off** (no row, no table or a read error = off), consistent with Johnny's "API and MCP paused" (10-17); Johnny turns it on by the admin switch when he wants it. `wrangler.toml`'s `run_worker_first` gains `/mcp`, `/mcp/*` (SI1): in the 1.2.7 list, Johnny told. TS4b (owner check on a member's set read) right after. Z's questions renumbered 93 to 102 (92 was taken).
+- **Clean copy `outer28` (09:42): 2411 tests, 14 fail, typecheck 1 error** — all from files not committed: the rules-draft tests and the session-ingest tests read `findings/`, the corpus test reads the held-out Comms package, `mcp/server.ts` imports zod by a relative `node_modules` path. Z ZF1 (the skill moves to `tools/session_ingest/`, tracked) and B SI1b's addendum; both block 1.2.7. The city-light pixel test's timeout there is the rehearsal's layout (no root `node_modules/vite` in the copy), not the code: it passes in the tree. Build passes (`index-DImMHsPI.js`).
+- Gates on the working tree 09:30: check clean, typecheck clean, `npm test` 2417 / 2371 pass / 0 fail / 46 skipped, build passes.
+- Follow-ups (not blocking): `globalThis.sessionStorage`/`history` in `JoinPage.vue`, `router.ts:111`, `dossier/world_panel.ts` bypass `platform/browser.ts` and the checker misses `globalThis.`; a player's reload opens the account's own first campaign (A); a player's own note still shows the kind menu, visibility and Add an image (E, check P7); CS10's neon share is a minority at TL15 (question to Johnny); P5's invite link state after reload (question).
+
+## Decided by the orchestrator, 2026-10-17 23:40 by `date` (A's P3, Z's ZT5)
+- **P3 accepted:** `applyPlayersPage` with `visible` reconciliation (F1), `'gone'` on 404 or 403 `not_a_member` (F23), held rows `rev: 0` except own notes, `commit` drops everything but a players note for a player, the membership calls, the players schemas exported; 6/6 tests. Gap: `authorName` dropped on held notes (A P3b, first). A's question: P6 mounts the gone sentence (D's P6 note).
+- **ZT5 accepted as logic** (`campaign/trade.ts`, 18 seeded tests, every result cites `_src`; five numbers spot-checked against `assets/trade.txt`). Its eight readings of the rules text are questions 84 to 91; the name-to-code table is question 92. Z next: ZT6 (freight and passengers available at a world).
+- Typecheck clean at 23:32 (the duplicate players exports were A's mid-edit).
+
+## Decided by the orchestrator, 2026-10-17 23:32 by `date` (C and D entries)
+- Accepted: C CW1b (Edge without a GPU, Youghal and Efate, Column and Half, 1600 and 390); D DU31 (Print on record pages and entries through the browser's print, a print stylesheet with three print tokens; Bright Ledger prints 11 pages with its ship sheet), DF14 (one `placeNow`: a vessel's header, list row and web bar follow its track), XD3b, DU40 (the org chart: `commands` as leader, decided).
+- DU31's subsector print parked until Johnny asks. The typecheck red other lanes saw (`packages/shared/src/index.ts` duplicate players exports, A mid-P3) is clean at 23:32.
+
+## Decided by the orchestrator, 2026-10-17 23:15 by `date` (B and E entries; P2b green)
+- **P2b accepted: the players server is in.** 35 of 35 leak cases pass (the system-hex companion included), `test:api:all` 38/38 on B's run; header stripping, `memberUniverse` (owner/member/archived/none), no-store on every branch, the rate guards, log masking, `GET /api/join/:token`, `/api/me/playing` with `truthVersion`; B wrote "checked" per row of the review's §3 matrix; no new migration (0021 safe in either order). Next: P3 and P9 (A), then P4 to P8, P10.
+- SI0b accepted. BC1 accepted with three changes (summary in the write's response; upsert only on change, once a minute; next free migration number): BC1b. SI1 and TS4 queued for B (unblocked by P2b).
+- E: EH1 accepted; EU28 accepted with `rel="noopener noreferrer nofollow"` and a redacted-mention test (EU28b); E's two questions as recommended.
+- Z has filed nothing since 22:01: ZT5 is open and unblocked.
+
+## Decided by the orchestrator, 2026-10-17 23:10 by `date` (A, C, D entries)
+- Accepted: A TS1, TS2 (resolver only; storage gap: TS2b), TS3, XA2b; C CS9 (hover outline on its own canvas, Edge with and without a GPU), CW1b in substance (shots owed); D XD1, XD2, XD3, DF13, DU2, DU39, and DT3b earlier.
+- D's questions: XD3 hide the button without a date, unable only with a date and no place; DU39 opens at Half; DU2 reads Jump Drive Output. A's TS1 question: the trade-code name check waits for a rules table. XD1's deviations stand.
+- Refills: A TS2b, AU6, AU37 (proposal first); D XD3b, DU40, DU6.
+- Flag for the parallel session's file: `tests/web/surface_city_pixels.test.js` hits EPERM on `rmSync` at times (`maxRetries: 5` would fix it).
+
+## Decided by the orchestrator, 2026-10-17 22:35 by `date` (Lane X, city lights)
+- **X's report accepted** after checking the tree: the fix is one line in `apps/web/src/orbit/OrbitRenderer.ts` `selection()` (the lock glow annulus starts at `visualR`, a belt keeps 0.9 R); `tests/web/orbit_lock_glow.test.js` and `tests/web/surface_city_pixels.test.js` (Vite + headless Edge with SwiftShader, skips without a browser) pass on the orchestrator's own run; the proof shot (glow stop in magenta turns the whole band magenta on every side) and the after shots confirm it. Nothing under `surface/` changed; CS8 stays as C left it. Root cause recorded: the "atmosphere band" Johnny saw three times was the selection lock's glow (`#ffce73` at 16 %) painted over the outer tenth of every planet after the worlds; the surface's city lights showed through it. Legacy `system_viewer.js:2225-2235` draws the same annulus.
+- Step 0: the service worker registers under Vite dev but is network-first for the shell list only, so it cannot serve stale code. No change (question 83).
+- CS8b (night-side proof) stays withdrawn: X's shots cover it. The `planet_rendering.md` edit waits on question 80; the city look item for C waits on 81. Lane X is done; its row stays on the board as done.
+
+## Decided by the orchestrator, 2026-10-17 22:20 by `date` (A, C, D entries)
+- Accepted: A XA2 (three Dijkstra runs, under 5 ms for Spinward Marches), AD2 (D66 from `assets/dice_conventions.txt` 29-34; `--font-data` tabular result; a close button on the popover, the sheet and the card); C CW1 (Johnny's world panel brief, every checklist item passed at 1600 and 390 on Youghal and Efate; one new token `--t-chevron`; star tiles keep kelvin; the readout shows the campaign clock and the local time, left as C recommends); D DU10 (the account menu keeps the person, seven items; a Campaigns panel), DU13 (`?` opens Keyboard shortcuts from the registry).
+- C CW1b: the `doss-stat` class collision (every lane's red test) and the Edge-without-GPU check. D DF13: `jump_ring.ts` and `party_ships_map` red mid-DU2. DU10: My packages stays. B BC1: a per-campaign summary in the list (after P2b4, SI0b).
+- Johnny asked to be reminded on 2026-10-18 to run the production seed (Z4 + Z10 in one apply): board, state and memory carry it.
+
+## Decided by the orchestrator, 2026-10-17 22:05 by `date` (A, B, D, E, Z entries)
+- Accepted: A XA1 (news graph: Spinward Marches 439 nodes, 86 bare edges, under 10 ms); B P2b3 (the member read with `visible`, the own-note rule in the DO before `baseRev`, anchors null/system/players record, hidden and missing alike, 65,535 guard, `openSocket` header strip; case 29 passes); D LS3b, DU18b; E E11, E12, E13; Z Z10 (Hollow Verge trimmed; Feri stays whole), SI5 (`schemas/proposals.ts`, 13 tests; the skill 0.2-draft).
+- EDF1: one date form (`DDD-YYYY`, weekday where shown); no "long" form, no control. SI5: publish the skill in a folder named `voyage-session-ingest/`; `targetId` (B fixes the contract word, SI0b). Z10: Feri whole; backups may go after Johnny's seed.
+- Refills: A XA2 (explicit); E EH1 (dice help), EU28 (rich text design); D DU2, DU39, DU31; Z ZT5 (the trade procedure's logic).
+- In-progress breakage seen by lanes (C's CW1 badge prop, X's dossier/surface classes, Z's comma): transient, cleared on reruns; re-check at the rehearsal.
+
+## Decided by the orchestrator, 2026-10-17 21:45 by `date` (A, B, D, E entries)
+- Accepted: A AT2c, LS1b, AF2, AD1 (Dice on the rail before Marketplace; popover; bottom sheet at 390; gone from the campaign panel; `/account` has no rail: left so); B P2b2 (0021 `universe_members`, `universe_invites`; `author_id` by pragma; owner reads omit `authorId`; case 29 a todo until P2b3); D LS3, DF12b, DU7 (quick note on **Q**: Ctrl+Shift+N opens a private window before the page sees it), DU22b (polite live region names the selection; the status line no longer speaks); E E10, LS2 (1,000 lines in `corpus.json`, customs lines name no ban; 60 + 60 ship-name words).
+- DU18 as D recommends: units keep Johnny's Celsius-first rule; date form per campaign (E, EDF1); reduced motion stays the system's; density and sound out; DU18b is only "This device" with Quiet. E's questions (E10, LS2) as recommended; the settings screen reads `words.ts` (D LS3b); the ticker uses both pools (C's LS4 note).
+- D refilled: DU10 (Campaigns panel), DU13 (keyboard help from the registry).
+
+## Decided by the orchestrator, 2026-10-17 21:40 by `date` (city lights, again)
+- Johnny 21:35: "City lights are still on the atmospheric layer - give me prompt I can give to higher effort model to fix finally. Then prep C for next stream" (shot `findings/johnny_shots_2026-10-17/city_lights_still_2135.png`, Capital A586A98-F, night side, lights in the top limb's atmosphere band). `prompts/x_city_lights_fix.md` written (may edit the renderer files, claims as lane X; step 0 checks the service worker under Vite dev; a pixel test, not source text). C's CS8b withdrawn; C's area refreshed (renderers are X's this turn); C next: CW1, CS9, LS4, LS5.
+
+## Decided by the orchestrator, 2026-10-17 21:33 by `date` (C's CS8)
+- CS8 accepted as code (vanilla `gl_shade.ts` and enhanced `draw.ts`: no city colour in the air scatter or the night limb haze; the parity test strips the two sites; `js/` untouched). Its shots face the day side, so CS8b: night-side and limb shots before and after, a pixel check if possible, before CW1.
+
+## Decided by the orchestrator, 2026-10-17 21:32 by `date` (B's entries)
+- Accepted: P2b1b (case 29 a todo until P2b2), B5b (`run_worker_first` back to `["/api/*"]`; previews parked; the worker case skipped), SI0 (`contracts/b_session_ingest.md`: own `access_tokens` table, Better Auth 1.7.7 has no API-key plugin; MCP `POST /mcp` in phase 1 on the same Worker; every stored proposal referee-only; 10 submits a minute per token and per universe outside the 120 budget; kill switch `platform_flags.agent_access`; migration 0022), TS0 (`contracts/b_table_sets.md`: `table_sets` D1 table plus R2 objects; `/api/table-sets?kind=`; kinds trade and randomPassenger).
+- `test:api:all` under load: `players_leaks` red until P2b4 (expected); `generate_speed` and `builder_density` failed only in the loaded all-run and pass alone. Before 1.2.7: run those two alone in the rehearsal.
+
+## Decided by the orchestrator, 2026-10-17 21:10 by `date` (A, C, D, E entries)
+- Accepted: A AT2b, LS1; C CL4b; D DF9 (galaxy dots as kept bitmaps on whole pixels; 33 to 46 fps without a GPU), DU3b, DF10 (dots drawn after lines), DT2b (the naval/scout mark; Refuel offers what the class sells); E E5d, EU12, E9.
+- LS1's question: all three weapon customs lines go (they tie a ban to a Law Level range; "no line restates a rule"): LS1b; E writes rule-free customs lines.
+- DT2b's need: `fuelMark` referee-only in the schema and the projection (A, AF2, first).
+- DF12: "Post this month" posts the five upkeep boxes, the Upkeep figure (A AT2c, D DF12b). Product, not a rule: the boxes are typed.
+- DF11 (kept galaxy layer): only if a real machine is slow. EU12's three questions as E recommends.
+- D refilled: DU7 quick capture, DU18 per-device settings, DU22b the map's live region.
+
+## Decided by the orchestrator, 2026-10-17 20:30 by `date` (all streams' entries)
+- Accepted: A AF1, AP1c, AT1c, AT3b (`usePassengerTable` is the one replaceable function), AU17 (`shell_cache.js`: `/api`, `/join`, `/claim` network-only; shell network-first; old caches deleted); B P2b1 (case 29 to `todo` first: P2b1b); C CC5, CS4, CS6, CU35, CS7; D DS9, DU3, DU36, D5, DF18, DU4, DU27, DF6 (no half-resolution code left), DF7, DF8, DT1c; E EU22, E7b, EU44 (E5c: one preview line out, E5d); Z ZR1.
+- Decided: C's CL4b first-run card as C recommends; D's DF9 (galaxy dots batched, same pixels) yes, label sprites wait; D's DU3 question as D recommends (DU3b); E's EU22 questions as recommended; EU44's preview question moot (previews parked). Z told lanes may read `rules/`. Z10: re-add the example covers D5 crops.
+- To Johnny: Z8's starport questions (63 to 68) and ZT1/ZT1b's table-set questions (69 to 78).
+
+## Decided by the orchestrator, 2026-10-17 19:55 by `date` (B's entries; the players contract)
+- Accepted: B0b (`npm run dev` on `apps/api/.wrangler/dev`; a local released row newer than production's newest is withdrawn), B4 (`door_headers.ts`; no-store; log masking; 36/36 suites), B6. B5's code accepted but **its `wrangler.toml` change is Johnny's**: question 25; out of the push until he answers.
+- The players contract (P2a) checked against the review's §6: 15 of 17 right; fixes (a) member note anchors null/system/projected record, (b) B writes `PlayersPage`, (c) `visible` on `after=0`, (d) `authorName` on the owner's read, (e) route order: B2c. B's questions: 1 yes (live Origin sentence), 2 yes (pre-0014 fallback stays). P2b queued as P2b1 to P2b4. `character/rooms.ts` `openSocket` header copy folded into P2b3.
+
+## Decided by the orchestrator, 2026-10-17 19:50 by `date` (A's and E's entries)
+- Clock note: labels from 18:50 to 20:20 in this file and the handoff ran ahead of `date` by about 35 minutes; from here labels are `date`.
+- Accepted: A AM1, AS3, AS3b, AU16b, AB3 (golden and generation 208 pass, 0 fail: output unchanged), AU15; E E5b, E7, E8. E7's leftover "engine" sentences: E7b now. E5b's draft: drop the half-resolution line, add AU15 (E5c). A's AB3 leftovers: `contracts/b_builder.md` quotes old sentences (B, when next in it), `tests/web/builder_draft.test.js` fake reply (harmless).
+
+## Decided by the orchestrator, 2026-10-17 20:10 (half resolution out)
+- Johnny 20:10: "Oof, the half resolution pan looks terrible." DL5 (half resolution while the camera moves, on browsers without WebGL or with slow frames) comes out entirely: D's DF6. Speed without a GPU comes from cheaper drawing, never lower sharpness. (The look is the bar: legacy-look memory.)
+
+## Decided by the orchestrator, 2026-10-17 19:35 (A's AP1b)
+- AP1b accepted: party lists filtered, a hidden track end becomes the system hex (hexKey, bodyKey) or null, hidden cargo and passenger ids dropped, object hashes from images only, own-note `rev` and `authorName`; probe 1 prints the filtered party, a system anchor and `true`. Q1 (`authorName: ''` for an unknown handle): keep. Q2: the party anchor follows the track-end rule (Johnny's question 1 said "track or anchor"): AP1c.
+
+## Decided by the orchestrator, 2026-10-17 19:15 (E's entries)
+- Accepted: ES2 (signed out: "Sign in to build here.", the Sign in button opens the rail's card; `dossier_signed_out.test.js`), ES10 (one static import of the router; `shell/go.ts`; no INEFFECTIVE_DYNAMIC_IMPORT), EL7 (help "Start here", links to `/welcome`), EL6 (About draft, `findings/landing_about_draft.md`, four sentences for Johnny to confirm; nothing ships).
+- ES2's run saw two failures in `tests/shared/players_view.test.js` while Lane A held it for AP1b: A's item in progress, not E's.
+
+## Decided by the orchestrator, 2026-10-17 18:35 (all stream entries, the players review, the integration sweep)
+
+- **Accepted:** A AT4a, AU14, AU16; B B0, B3; C C1, C2, C3, C4, C6, CL4; D D6, D7, D8, DF1, D9, DF2, DF3, DF4, DF5, DL5, DT1, DT2; E E3 (all areas; Build left correctly), E4, E5, E6, EN1, EM7, EM9; Z Z2, Z3; ZT0 as a proposal for Johnny.
+- **The players review** (`reports/x_players_review.md`, `players_build_plan.md`) is the plan for Epic P. P1b (A) and P2a (B, B2b plus §6) are queued **on hold** until Johnny answers its §7 questions 1 to 8 and says yes to P2 (question 9): the rule is QUESTIONS before GO. B4 (F5 header hygiene, F9 no-store) goes now: no question touches it and it holds for the owner today.
+- A's questions (AT4a 1 and 2, AU14 1 to 3, AU16 1): as A recommended. AU16's note (a version released twice; the cache never evicts): AU16b.
+- AU14 edited `views/MapView.vue` (D's) while D's DL5 did too; no collision (both changes are in). Noted to both: a screen edit is claimed.
+- AU17 (installable): the service worker never caches `/api/*`, `/join/*`, `/claim/*` (review F9, F22, F23).
+- C1's `#0b0c10` literal in `apps/web/index.html` (theme-color): accepted as a documented exception; `meta.test.js` ties it to `--bg-0`.
+- C2: the four pane sentences stand until Johnny edits them (decision of 15:30). C2 Q2, Q3, C4 Q1: as C recommended. C5 approved (presentation, not a rule) and given to C with `orbit/` while L is wrapped; C6's orbit card height to C; the shell header and `StatRows.vue` shifts later.
+- D8 counts: the browser keeps counting until the store passes 100 packages; Z6 (server facets) stays in Z's queue.
+- DT1 Q2: a cargo lot with a price posts its payment to the ledger by default, dated by the campaign clock (product, not a rule). DT1 Q3: the minus sign moves into `formatCredits` (A, AM1).
+- DT2's starports question needs a rule: asked of Johnny (Z8 drafts it on his yes). Until then the vessel shows the class and the referee decides.
+- B0 Q: the two local 503 dot answers stay. B3 Q: "That version is not released." yes. B3's leftovers: Z7 (Z's routes), AB3 (generation words).
+- Integration sweep: nothing blocks 1.2.7. Finding 2 decided: signed out, "Sign in to build here." with the sign-in link (E, ES2). Findings 3 and the Boon/Bane reach (A), 4 and 6 (C), 5 and 9 (D), 10 (E); 1 and 8 likely closed by AU14 (retest at the rehearsal); 7 by design.
+- Z5 held: Epic P now covers players seeing a campaign; re-scope before anyone starts it.
+- E7 and E8 released to E with their files (D is not in `workspace/build/` or `passkey/` this turn).
+
+## Decided by the orchestrator, 2026-10-17 17:15 (A's stream questions: all as A recommended)
+- A4: "largest" systems by body count. AP1: an included link keeps its role and notes; party place and settings text stay in the players' read (**the players review may overrule this**: referee text in the party's place is a candidate leak).
+- AT1: `amount` is the signed credit change, `kind` doesn't flip it; blank sheet rows aren't stored and the sheet is a view of the dense list; `PassengerLot.note` stays. AT2: costs post negative; `refuelHours` unread; the starport check is the screen's; Purchase Cost posts with the others when typed; Lane D mounts the buttons (DT2).
+
+## Decided by the orchestrator, 2026-10-17 16:55 (B's players contract, five questions)
+1. `universe_invites` keeps `token` beside `token_hash` so Copy returns the same link: owner routes only, never logged, cleared on revoke (a reusable, revocable campaign link, unlike a character's single-use one).
+2. `campaign_full` counts current members; removing one frees a seat.
+3. The owner's `PATCH /api/universes/:id/players/:userId` `{ personId }` is part of P2.
+4. The later players' publish revoke is `DELETE /api/universes/:id/players/publishes/:publishId`.
+5. The projection drops every `rev`; a deleted player note the member could see travels as `deleted: true` on the poll.
 
 ## Decided by the orchestrator, 2026-10-17 16:20
 - M's M7 question: the changelog shows each release's date in the `.ui-date` box (E, EM7).

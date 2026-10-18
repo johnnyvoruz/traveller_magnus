@@ -6,12 +6,12 @@
  * follow-up 6 it lives in the Layers drawer (findings/orbit_drawers_design.md §2), not at
  * the picture's foot.
  */
-import { LAYERS, toggled } from './commands.ts';
+import { LAYERS, TRAFFIC_LAYER, toggled } from './commands.ts';
 import Icon from '../design/Icon.vue';
 import type { Layers } from './picture.ts';
 
-const props = defineProps<{ layers: Layers }>();
-const emit = defineEmits<{ layers: [layers: Layers] }>();
+const props = defineProps<{ layers: Layers; traffic?: boolean | null }>();
+const emit = defineEmits<{ layers: [layers: Layers]; traffic: [shown: boolean] }>();
 
 function flip(key: (typeof LAYERS)[number]['key']): void {
     emit('layers', toggled(props.layers, key));
@@ -36,6 +36,20 @@ function flip(key: (typeof LAYERS)[number]['key']): void {
       </span>
       <span class="orbit-key-word">{{ item.label }}</span>
       <kbd aria-hidden="true">{{ item.hotkey }}</kbd>
+    </button>
+    <button
+      v-if="traffic !== null && traffic !== undefined"
+      type="button"
+      class="orbit-key-item"
+      :class="{ 'is-off': !traffic }"
+      data-command="orbit-layer-traffic"
+      :aria-pressed="traffic ? 'true' : 'false'"
+      :title="(traffic ? 'Hide ' : 'Show ') + TRAFFIC_LAYER.label.toLowerCase() + ' (' + TRAFFIC_LAYER.hotkey + ') — ' + TRAFFIC_LAYER.title"
+      @click="emit('traffic', !traffic)"
+    >
+      <span class="orbit-key-mark is-traffic" aria-hidden="true"></span>
+      <span class="orbit-key-word">{{ TRAFFIC_LAYER.label }}</span>
+      <kbd aria-hidden="true">{{ TRAFFIC_LAYER.hotkey }}</kbd>
     </button>
   </div>
 </template>
@@ -136,6 +150,14 @@ function flip(key: (typeof LAYERS)[number]['key']): void {
   height: 11px;
   border: 1px solid var(--signal);
   border-radius: 2px;
+}
+
+.orbit-key-mark.is-traffic::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--text-muted);
+  border-radius: 50%;
 }
 
 .orbit-key-item kbd {

@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, cpSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { createServer } from 'node:net';
 import path from 'node:path';
 import { readPack, fingerprint, coverFiles } from '../../tools/examples/build_local.mjs';
 import { planSql, removeSql, coversToDelete, duplicateRefusal } from '../../tools/examples/seed_production.mjs';
@@ -106,14 +107,40 @@ test('--remove deletes only the cover objects nothing outside the examples names
 
 const builtState = path.resolve('findings/examples/local_covers');
 const standIn = path.resolve('findings/examples/standin_covers');
-test('the seeding dry run names each cover', { skip: existsSync(path.join(builtState, 'built.json')) && existsSync(path.join(standIn, 'state')) ? false : 'no built state and stand-in (build_local.mjs, then --bare)' }, () => {
-    const r = spawnSync(process.execPath, ['tools/examples/seed_production.mjs', '--from', builtState, '--to-local', standIn, '--port', '8872'], { encoding: 'utf8', windowsHide: true });
-    assert.equal(r.status, 0, r.stderr);
-    assert.match(r.stdout, /print only/);
-    const lines = r.stdout.split(/\r?\n/).filter((line) => line.trim().startsWith('cover '));
-    assert.equal(lines.length, 6, r.stdout);
-    for (const line of lines) assert.match(line, /objects\/[0-9a-f]{12}… and thumbnail objects\/[0-9a-f]{12}…/);
-    assert.match(r.stdout, /covers 6/);
+
+/** An unused TCP port, closed before the caller binds it. */
+function freePort() {
+    const server = createServer();
+    return new Promise((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(0, '127.0.0.1', () => {
+            const address = server.address();
+            const port = address && typeof address === 'object' ? address.port : 0;
+            server.close(() => resolve(port));
+        });
+    });
+}
+
+test('the seeding dry run names each cover', { skip: existsSync(path.join(builtState, 'built.json')) && existsSync(path.join(standIn, 'state')) ? false : 'no built state and stand-in (build_local.mjs, then --bare)' }, async () => {
+    // The dry run writes a wrangler config into both states and runs wrangler against them.
+    // A second suite on the shared folders loses a manifest read. Each run gets its own copies.
+    const port = await freePort();
+    const dir = mkdtempSync(path.join(tmpdir(), 'seed-dry-'));
+    const from = path.join(dir, 'from');
+    const to = path.join(dir, 'standin');
+    cpSync(builtState, from, { recursive: true });
+    cpSync(standIn, to, { recursive: true });
+    try {
+        const r = spawnSync(process.execPath, ['tools/examples/seed_production.mjs', '--from', from, '--to-local', to, '--port', String(port)], { encoding: 'utf8', windowsHide: true });
+        assert.equal(r.status, 0, r.stderr);
+        assert.match(r.stdout, /print only/);
+        const lines = r.stdout.split(/\r?\n/).filter((line) => line.trim().startsWith('cover '));
+        assert.equal(lines.length, 6, r.stdout);
+        for (const line of lines) assert.match(line, /objects\/[0-9a-f]{12}… and thumbnail objects\/[0-9a-f]{12}…/);
+        assert.match(r.stdout, /covers 6/);
+    } finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
 });
 
 test('the seed refuses a target that holds an example package under another id', () => {

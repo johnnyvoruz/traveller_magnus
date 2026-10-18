@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { check, index, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { check, index, integer, primaryKey, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { user } from './auth-schema';
 
 export { account, accountRelations, passkey, passkeyRelations, session, sessionRelations, user, userRelations, verification } from './auth-schema';
@@ -236,4 +236,92 @@ export const auditLog = sqliteTable('audit_log', {
     targetKind: text('target_kind'),
     targetId: text('target_id'),
     details: text('details'),
+});
+
+/** 0021. One row per account that plays in a universe. The owner is not a row. */
+export const universeMembers = sqliteTable('universe_members', {
+    universeId: text('universe_id').notNull().references(() => universes.id),
+    userId: text('user_id').notNull().references(() => user.id),
+    role: text('role').notNull(),
+    personId: text('person_id'),
+    status: text('status').notNull().default('active'),
+    archivedAt: text('archived_at'),
+    archivedBy: text('archived_by'),
+    createdAt: text('created_at').notNull(),
+}, (t) => [
+    primaryKey({ columns: [t.universeId, t.userId] }),
+    index('universe_members_user_id').on(t.userId),
+    check('universe_members_role_check', sql`${t.role} = 'player'`),
+    check('universe_members_status_check', sql`${t.status} in ('active', 'archived')`),
+    check('universe_members_archived_by_check', sql`${t.archivedBy} is null or ${t.archivedBy} in ('owner', 'self')`),
+]);
+
+/** 0021. One invite link. `uses` counts claims and never refuses. There is no max_uses column. */
+export const universeInvites = sqliteTable('universe_invites', {
+    id: text('id').primaryKey(),
+    universeId: text('universe_id').notNull().references(() => universes.id),
+    token: text('token'),
+    tokenHash: text('token_hash').notNull().unique(),
+    role: text('role').notNull(),
+    expiresAt: text('expires_at').notNull(),
+    revokedAt: text('revoked_at'),
+    uses: integer('uses').notNull().default(0),
+    createdAt: text('created_at').notNull(),
+}, (t) => [
+    index('universe_invites_universe_id').on(t.universeId),
+    check('universe_invites_role_check', sql`${t.role} = 'player'`),
+]);
+
+/** 0023. One bearer token. The secret is stored only as a SHA-256 hex. */
+export const accessTokens = sqliteTable('access_tokens', {
+    id: text('id').primaryKey(),
+    userId: text('user_id').notNull().references(() => user.id),
+    name: text('name').notNull(),
+    prefix: text('prefix').notNull(),
+    tokenHash: text('token_hash').notNull().unique(),
+    scopes: text('scopes').notNull(),
+    universeId: text('universe_id'),
+    createdAt: text('created_at').notNull(),
+    expiresAt: text('expires_at').notNull(),
+    lastUsedAt: text('last_used_at'),
+    revokedAt: text('revoked_at'),
+}, (t) => [
+    index('access_tokens_user_id').on(t.userId),
+]);
+
+/** 0023. Tokens and MCP stay off until `agent_access` is the row `on`. */
+export const platformFlags = sqliteTable('platform_flags', {
+    key: text('key').primaryKey(),
+    value: text('value').notNull(),
+    updatedAt: text('updated_at').notNull(),
+    updatedBy: text('updated_by').notNull(),
+});
+
+/** 0024. One custom rules table per account. The bytes live in R2. A deleted row stays so a campaign can fall back. */
+export const tableSets = sqliteTable('table_sets', {
+    id: text('id').primaryKey(),
+    ownerId: text('owner_id').notNull().references(() => user.id),
+    kind: text('kind').notNull(),
+    name: text('name').notNull(),
+    basedOn: text('based_on'),
+    edition: text('edition').notNull(),
+    objectKey: text('object_key').notNull(),
+    bytes: integer('bytes').notNull(),
+    sha256: text('sha256').notNull(),
+    rev: integer('rev').notNull(),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+    deletedAt: text('deleted_at'),
+}, (t) => [
+    index('table_sets_owner_kind').on(t.ownerId, t.kind, t.updatedAt),
+]);
+
+/** 0022. One campaign-list summary per universe. The list joins this and does not call the Durable Object. */
+export const universeSummaries = sqliteTable('universe_summaries', {
+    universeId: text('universe_id').primaryKey().references(() => universes.id),
+    vessels: text('vessels').notNull(),
+    aboard: integer('aboard').notNull(),
+    clockDays: real('clock_days'),
+    recordCount: integer('record_count').notNull(),
+    changedAt: text('changed_at').notNull(),
 });

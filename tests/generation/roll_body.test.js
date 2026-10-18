@@ -116,7 +116,7 @@ test('rulings that stay as they were: moon period, shared orbit, inner orbit, an
     assert.deepEqual(orbits, [0, 0]);
     const aow = blankEnvelope('spin/2008', 'AoW', pinned, {});
     const rolled = applyForm(aow, [{ id: 'star.add', value: 's1' }, { id: 'body.add', value: 'w' }], [{ id: 'w.profile.roll' }]);
-    assert.equal(rolled.answer.messages[0].text, 'Nothing rolls this field.');
+    assert.equal(rolled.answer.messages[0].text, 'This field cannot be rolled.');
     const form = formOf(envelope);
     const beltFields = form.sections.flatMap((section) => section.fields).filter((field) => field.id.startsWith('main.profile.'));
     assert.equal(beltFields.length, 8);
@@ -174,7 +174,7 @@ test('a bad star number is refused, and a star with no class rolls when the four
             () => applyForm(envelope, [{ id: 's1.mass', value }], []),
             (err) => {
                 assert.ok(err instanceof FormRefusal);
-                assert.equal(err.message, 'Mass cannot hold that. Type a finite number above 0.');
+                assert.equal(err.message, 'Mass cannot hold that. Type a number greater than 0.');
                 assert.equal(err.fieldId, 's1.mass');
                 return true;
             },

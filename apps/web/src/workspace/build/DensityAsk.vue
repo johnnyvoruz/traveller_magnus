@@ -49,7 +49,7 @@ onMounted(() => {
   <form ref="root" class="build-ask" data-density-ask aria-labelledby="build-ask-title" @submit.prevent="go" @keydown="onKey">
     <h3 id="build-ask-title" class="build-ask-title">{{ words }}</h3>
     <fieldset class="build-opts">
-      <legend class="ui-heading">Hexes to fill</legend>
+      <legend class="ui-heading ui-kicker">Hexes to fill</legend>
       <label v-for="item in DENSITIES" :key="item.id" class="build-opt" :class="{ 'is-on': chosen === item.id }">
         <input v-model="chosen" type="radio" :name="name" :value="item.id" />
         <span><b>{{ item.name }}:</b> {{ item.meaning }}</span>

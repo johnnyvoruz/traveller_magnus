@@ -63,7 +63,7 @@ test('a non-canonical sector gives the home view and that message', () => {
     };
     const off = targetFor({ path: '/s/Rigel/3103' }, chart);
     assert.equal(off.kind, 'unknown');
-    assert.equal(off.message, 'Rigel is not on the canonical chart.');
+    assert.equal(off.message, 'Rigel is not on this chart.');
     const home = targetFor({ path: '/' }, chart);
     assert.equal(home.kind, 'fit');
     assert.deepEqual(home.rect, homeRect(chart));

@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { runWrangler } from './session.js';
+import { removeTree, runWrangler } from './session.js';
 import { startDev, stopDev, wranglerBin } from './server.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -131,8 +131,8 @@ if (process.env.RUN_API_TESTS !== '1') {
     test('public games on the worker', { timeout: 180000 }, async () => {
         const persistTo = path.join(root, '.tmp', 'lane-b-public');
         const bare = path.join(root, '.tmp', 'lane-b-no0013');
-        rmSync(persistTo, { recursive: true, force: true });
-        rmSync(bare, { recursive: true, force: true });
+        removeTree(persistTo);
+        removeTree(bare);
         const before = process.env.VOYAGE_BEFORE_0013 === '1';
         const port = 18850;
         const base = `http://127.0.0.1:${port}`;
@@ -162,12 +162,12 @@ VALUES ('${otherVersion}', '1.0.0', 'released', '${STAMP}', '${STAMP}', 0, 0);
             assert.deepEqual(signedOut.body, { hexes: [] });
             const missingVersion = await jsonFetch(`${base}/api/public-games?sector=Spinward_Marches`, { headers: { cookie: reader } });
             assert.equal(missingVersion.status, 400, JSON.stringify(missingVersion.body));
-            assert.equal(missingVersion.body.error.message, 'truthVersion is required.');
+            assert.equal(missingVersion.body.error.message, 'That request could not be read. Try again.');
             const missingSector = await jsonFetch(`${base}/api/public-games?truthVersion=${version}`, { headers: { cookie: reader } });
-            assert.equal(missingSector.body.error.message, 'sector is required.');
+            assert.equal(missingSector.body.error.message, 'That request could not be read. Try again.');
             const badSector = await jsonFetch(`${base}/api/public-games?truthVersion=${version}&sector=bad%20slug`, { headers: { cookie: reader } });
             assert.equal(badSector.status, 400, JSON.stringify(badSector.body));
-            assert.equal(badSector.body.error.message, 'Invalid request.');
+            assert.equal(badSector.body.error.message, 'That request could not be read. Try again.');
 
             const created = await jsonFetch(`${base}/api/universes`, {
                 method: 'POST',
@@ -397,8 +397,8 @@ VALUES ('${otherVersion}', '1.0.0', 'released', '${STAMP}', '${STAMP}', 0, 0);
             assert.deepEqual(empty.body, { hexes: [] });
         } finally {
             stopDev(bareChild?.pid);
-            rmSync(persistTo, { recursive: true, force: true });
-            rmSync(bare, { recursive: true, force: true });
+            removeTree(persistTo);
+            removeTree(bare);
         }
     });
 }

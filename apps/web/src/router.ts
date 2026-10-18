@@ -1,9 +1,14 @@
 import { createRouter, createWebHistory } from 'vue-router';
+import { loadSession, session } from './account/session.ts';
 import { scrollToTop } from './platform/browser.ts';
+import { bindRouter } from './shell/go.ts';
 import { addressPane, campaignRedirect, hostsCampaign, type Query } from './shell/pane.ts';
 import Account from './views/Account.vue';
 import MapView from './views/MapView.vue';
+import { FIRST_PLACE, FIRST_WORLD, LAST_VIEW_KEY, parseView, WELCOME_KEY, welcomeDue } from './workspace/first_visit.ts';
 import { guardRecovery } from './workspace/passkey/recovery.ts';
+
+const joinPage = () => import('./characters/screens/JoinPage.vue');
 
 /** Starts the pane chunk the address names. Not awaited: the view paints first. */
 function preloadPane(path: string, query: Query): void {
@@ -31,13 +36,21 @@ export const router = createRouter({
         { path: '/s/:sector/:hex/orbit/b/:body', name: 'orbit-body', component: () => import('./views/OrbitView.vue') },
         { path: '/account', name: 'account', component: Account },
         { path: '/claim/:token', name: 'claim', component: () => import('./characters/screens/ClaimPage.vue') },
+        { path: '/join/:token', name: 'join', component: joinPage },
+        { path: '/join', name: 'join-held', component: joinPage },
         { path: '/packages', name: 'packages', component: () => import('./workspace/market/PackagesView.vue') },
         { path: '/packages/:packageId', name: 'package', component: () => import('./workspace/market/PackagesView.vue') },
+        { path: '/changes', name: 'changes', component: () => import('./views/ChangesView.vue') },
+        { path: '/changes/:version', name: 'change', component: () => import('./views/ChangesView.vue') },
+        { path: '/help', name: 'help', component: () => import('./views/HelpView.vue') },
+        { path: '/welcome', name: 'welcome', component: () => import('./views/WelcomeView.vue') },
         { path: '/campaign/r/:record', redirect: (to) => legacyRedirect(to) },
         { path: '/campaign/party', redirect: (to) => legacyRedirect(to) },
         { path: '/campaign', redirect: (to) => legacyRedirect(to) },
     ],
 });
+
+bindRouter(router);
 
 /** The three old campaign paths, replaced so Back does not stop on them. */
 function legacyRedirect(to: { path: string; query: Query }): { path: string; query: Record<string, string>; replace: true } | { path: string } {
@@ -92,3 +105,28 @@ router.afterEach((to, from) => {
 
 // Account.vue also calls this until Lane D removes that line. The guard installs once per router.
 guardRecovery(router);
+
+function stored(key: string): string | null {
+    try {
+        return globalThis.localStorage.getItem(key);
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * A signed-out first visit opens /welcome once, after the address has settled and the
+ * session is known. A named address, a returning camera, and a signed-in person stay put.
+ */
+if (typeof window !== 'undefined') {
+    void router.isReady().then(() => loadSession()).then(() => {
+        const path = router.currentRoute.value.path;
+        const home = path === '/' || path === '' || path === FIRST_PLACE || path === FIRST_WORLD;
+        const due = welcomeDue({
+            signedIn: session.user !== null,
+            shown: stored(WELCOME_KEY) === '1',
+            returning: parseView(stored(LAST_VIEW_KEY)) !== null,
+        });
+        if (home && due) void router.push('/welcome');
+    });
+}

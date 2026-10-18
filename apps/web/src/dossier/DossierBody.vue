@@ -1,18 +1,20 @@
 <script setup lang="ts">
+import { computed, onMounted, ref } from 'vue';
 import type { PanelSpan } from '../shell/panel_state.ts';
 import type { BodyLink, BodyModel } from './model.ts';
 import BodyRow from './BodyRow.vue';
 import type { DayNightFigure, StarportTick } from '../orbit/daynight.ts';
 import type { Subsolar } from '../orbit/sun.ts';
-import DayNight from './DayNight.vue';
 import FactTiles from './FactTiles.vue';
 import JourneyTimes from './JourneyTimes.vue';
 import SocioBlock from './SocioBlock.vue';
 import StatRows from './StatRows.vue';
 import SurfaceStage, { type SurfaceTarget } from './SurfaceStage.vue';
 import UwpRibbon from './UwpRibbon.vue';
+import WorldSection from './WorldSection.vue';
+import { fieldSummary, foldId, hasTwilight, loadFolds, openFolds, presentRows, saveFolds, type FoldId } from './world_panel.ts';
 
-defineProps<{
+const props = defineProps<{
     model: BodyModel;
     span: PanelSpan;
     /** Tiles the view restates, by label (the Year tile, said in standard days). */
@@ -40,18 +42,49 @@ defineEmits<{ open: [key: string] }>();
 function factsOf(link: BodyLink): string {
     return link.facts[0] || '';
 }
+
+const folds = ref(openFolds());
+onMounted(() => { folds.value = loadFolds(); });
+
+function toggle(id: FoldId): void {
+    const next = { ...folds.value, [id]: !folds.value[id] };
+    folds.value = next;
+    saveFolds(next);
+}
+
+const twilight = computed(() => props.model.sideSections.some((block) => hasTwilight(block.rows)));
+
+const folded = computed(() => props.model.sideSections.flatMap((block) => {
+    const id = foldId(block.heading);
+    if (!id) return [];
+    const rows = presentRows(block.rows);
+    return [{ id, heading: block.heading, rows, summary: fieldSummary(rows.length) }];
+}));
 </script>
 
 <template>
   <div class="doss-body" :data-span="span">
     <div class="doss-main">
-      <SurfaceStage :badge="model.mapBadge" :target="surface ?? null" :sun="sun ?? null" :now-days="nowDays" :start-days="startDays" />
+      <SurfaceStage :target="surface ?? null" :sun="sun ?? null" :now-days="nowDays" :start-days="startDays" />
       <UwpRibbon v-if="model.ribbon" :ribbon="model.ribbon" />
-      <FactTiles :facts="model.facts" :restated="restated" />
-      <DayNight v-if="dayNight" :figure="dayNight" :name="model.title" :tick="tick ?? null" :live="live === true" :place="place" />
+      <FactTiles :facts="model.facts" :restated="restated" :twilight="twilight" />
+    </div>
+    <div class="doss-body-side">
+      <slot name="records" :open="folds.records" :toggle="() => toggle('records')" />
+      <WorldSection
+        v-for="block in folded"
+        :key="block.id"
+        :title="block.heading"
+        :open="folds[block.id]"
+        :body-id="'doss-fold-' + block.id"
+        :summary="block.summary"
+        @toggle="toggle(block.id)"
+      >
+        <StatRows :rows="block.rows" />
+      </WorldSection>
       <JourneyTimes v-if="model.journey" :journey="model.journey" />
       <section v-for="block in model.mainSections" :key="block.heading" class="doss-section">
-        <h3 class="ui-heading">{{ block.heading }}</h3>
+        <h3 class="ui-heading ui-kicker">{{ block.heading }}</h3>
         <StatRows :rows="block.rows" />
       </section>
       <SocioBlock
@@ -61,15 +94,8 @@ function factsOf(link: BodyLink): string {
         :empty="model.socio.empty"
         :span="span"
       />
-    </div>
-    <div class="doss-body-side">
-      <slot name="records" />
-      <section v-for="block in model.sideSections" :key="block.heading" class="doss-section">
-        <h3 class="ui-heading">{{ block.heading }}</h3>
-        <StatRows :rows="block.rows" />
-      </section>
       <section v-if="model.moons.length" class="doss-section">
-        <h3 class="ui-heading">Moons</h3>
+        <h3 class="ui-heading ui-kicker">Moons</h3>
         <BodyRow
           v-for="link in model.moons"
           :key="link.key"
@@ -82,7 +108,7 @@ function factsOf(link: BodyLink): string {
         />
       </section>
       <section v-if="model.worlds.length" class="doss-section">
-        <h3 class="ui-heading">Worlds</h3>
+        <h3 class="ui-heading ui-kicker">Worlds</h3>
         <BodyRow
           v-for="link in model.worlds"
           :key="link.key"
@@ -97,3 +123,11 @@ function factsOf(link: BodyLink): string {
     </div>
   </div>
 </template>
+
+<style>
+.doss-main {
+  container-type: inline-size;
+  container-name: dossier;
+  min-width: 0;
+}
+</style>

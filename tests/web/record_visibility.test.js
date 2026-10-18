@@ -5,13 +5,14 @@
  */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const webRoot = path.join(root, 'apps', 'web');
-const cacheDir = path.join(root, '.tmp', 'e-visibility-ssr');
+let cacheDir = '';
 const personId = 'cr_00000001-0000-4000-8000-000000000000';
 const placeId = 'cr_00000002-0000-4000-8000-000000000000';
 
@@ -20,7 +21,7 @@ describe('record visibility and player notes', { concurrency: 1 }, () => {
     let server = null;
 
     test.before(async () => {
-        fs.rmSync(cacheDir, { recursive: true, force: true });
+        cacheDir = fs.mkdtempSync(path.join(tmpdir(), 'e-visibility-ssr-'));
         const { createServer } = await import('vite');
         server = await createServer({
             root: webRoot,
@@ -33,7 +34,7 @@ describe('record visibility and player notes', { concurrency: 1 }, () => {
 
     test.after(async () => {
         if (server) await server.close();
-        fs.rmSync(cacheDir, { recursive: true, force: true });
+        if (cacheDir) fs.rmSync(cacheDir, { recursive: true, force: true });
     });
 
     test('a person and a place show the journal words, and empty player notes name the way to add', async () => {
@@ -43,10 +44,10 @@ describe('record visibility and player notes', { concurrency: 1 }, () => {
             assert.match(html, /aria-label="Who can read this"/);
             assert.match(html, /aria-pressed="true"[^>]*>Referee</);
             assert.match(html, /aria-pressed="false"[^>]*>Players</);
-            assert.match(html, /Player notes/);
+            assert.match(html, /For players/);
             assert.match(html, /Players see this text when you share the record\./);
-            assert.match(html, /No player notes yet\./);
-            assert.match(html, /Add player notes/);
+            assert.match(html, /No notes for players yet\./);
+            assert.match(html, /Add notes for players/);
             assert.match(html, /class="rec-when"/);
             assert.match(html, /No date/);
             assert.match(html, /Set a date/);
@@ -64,7 +65,7 @@ describe('record visibility and player notes', { concurrency: 1 }, () => {
         assert.match(html, /aria-pressed="false"[^>]*>Referee</);
         assert.match(html, /aria-pressed="true"[^>]*>Players</);
         assert.match(html, /Bring the letter\./);
-        assert.doesNotMatch(html, /No player notes yet\./);
+        assert.doesNotMatch(html, /No notes for players yet\./);
     });
 
     test('a dated record shows both days in the page head', async () => {
@@ -80,14 +81,15 @@ describe('record visibility and player notes', { concurrency: 1 }, () => {
         assert.doesNotMatch(html, /Add an end date/);
     });
 
-    test('the account menu hides the file input with the shipyard rule, and Import still asks for a file', () => {
-        const menu = fs.readFileSync(path.join(webRoot, 'src', 'workspace', 'AccountMenu.vue'), 'utf8');
+    test('the Campaigns panel hides the file input with the shipyard rule, and Import still asks for a file', () => {
+        // DU10: Import moved from the account menu to the open campaign's card.
+        const menu = fs.readFileSync(path.join(webRoot, 'src', 'workspace', 'CampaignsPanel.vue'), 'utf8');
         const plan = fs.readFileSync(path.join(webRoot, 'src', 'workspace', 'VesselPlan.vue'), 'utf8');
         const rule = plan.slice(plan.indexOf('.vplan-file {'), plan.indexOf('.vplan-file {') + 120);
         assert.match(menu, /class="vplan-file"/);
         assert.match(menu, /tabindex="-1"/);
         assert.match(menu, /aria-hidden="true"/);
-        assert.match(menu, /Import into \{\{ openOne\.name \}\}…/);
+        assert.match(menu, /Import into \{\{ openOne\?\.name \}\}…/);
         for (const line of ['position: absolute;', 'width: 1px;', 'height: 1px;', 'opacity: 0;', 'pointer-events: none;']) {
             assert.match(rule, new RegExp(line.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
             assert.match(menu, new RegExp(line.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));

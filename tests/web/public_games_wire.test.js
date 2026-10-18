@@ -21,11 +21,12 @@ test('absent is not on: a universe without the field shows no switch', () => {
     assert.equal(publicGamesOf({ id: 'uni_a' }), null);
     assert.equal(publicGamesOf({ id: 'uni_a', publicGames: false }), false);
     assert.equal(publicGamesOf({ id: 'uni_a', publicGames: true }), true);
-    const menu = read('apps/web/src/workspace/AccountMenu.vue');
-    assert.match(menu, /v-if="openOne && publicOn !== null"\s+type="button"\s+role="menuitemcheckbox"/);
-    assert.match(menu, /:aria-checked="publicOn \? 'true' : 'false'"/);
-    // The arrow keys walk the switch with the other items.
-    assert.ok(menu.includes(`'[role="menuitem"], [role="menuitemcheckbox"]'`));
+    // DU10: the switch is on the Campaigns panel's card, a switch rather than a menu item.
+    const panel = read('apps/web/src/workspace/CampaignsPanel.vue');
+    assert.match(panel, /v-if="openOne && publicOn !== null"\s+type="button"\s+role="switch"/);
+    assert.match(panel, /:aria-checked="publicOn \? 'true' : 'false'"/);
+    // The arrow keys still walk the account menu's items, its quiet switch among them.
+    assert.ok(read('apps/web/src/workspace/AccountMenu.vue').includes(`'[role="menuitem"], [role="menuitemcheckbox"]'`));
 });
 
 test('the switch: PATCH with { public }, the raw answer is what is shown from then on', async () => {
@@ -60,7 +61,7 @@ test('a refusal is said in the server’s sentence and changes nothing', async (
 
 test('the sentence beside the switch says what other people see, and no more', () => {
     assert.equal(PUBLIC_GAMES_SAY, 'When this is on, people on the same published chart see one mark on your party’s hex, with this campaign’s name. They see nothing else.');
-    assert.ok(read('apps/web/src/workspace/AccountMenu.vue').includes('id="account-public-say" class="account-say">{{ PUBLIC_GAMES_SAY }}'));
+    assert.ok(read('apps/web/src/workspace/CampaignsPanel.vue').includes('id="account-public-say" class="account-say">{{ PUBLIC_GAMES_SAY }}'));
     assert.equal(publicGamesToast(true, 'Deneb run'), 'Other people on this chart now see Deneb run where your party is.');
     assert.equal(publicGamesToast(false, 'Deneb run'), 'Deneb run is no longer shown on other maps.');
 });

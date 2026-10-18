@@ -1533,3 +1533,12 @@ test('shipTags draws every designator and no name, and off leaves the names', ()
     assert.ok(moved.some((args) => args[0] === courier.x && args[1] === courier.y));
     assert.ok(moved.some((args) => args[0] === hit.cx + 80 && args[1] === hit.cy));
 });
+
+test('a background ship is a muted wireframe', () => {
+    const extra = extraCalls({
+        ships: [{ id: 't', name: 'Far Margin', kind: 'traffic', shape: 'circle', x: 200, y: 90 }],
+    });
+    const strokes = extra.filter((call) => call.op === 'stroke');
+    assert.ok(strokes.some((call) => call.stroke === 'muted'));
+    assert.equal(strokes.some((call) => call.stroke === 'signal'), false);
+});

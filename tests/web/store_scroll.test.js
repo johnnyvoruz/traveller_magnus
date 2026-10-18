@@ -2,7 +2,8 @@
  * The store scrolls (prompts/d_store_scroll.md). The app frame is fixed to the window
  * (App.vue), so html and body are 0 px tall and the document never scrolls: a page taller than
  * the window that does not scroll itself spills out of the frame and cannot be reached. The
- * store and the account page are each their own full-window scroller.
+ * store and the account page are each their own full-window scroller. The store sits in the app's
+ * frame (prompts/d_store_harden.md item 1): its scroller is everything right of the rail.
  */
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -27,12 +28,12 @@ test('the app frame is fixed to the window, so a page must scroll itself', () =>
     assert.equal(app.inset, '0');
 });
 
-test('the store and the product page sit in one full-window scroller', () => {
+test('the store and the product page sit in one scroller, right of the rail', () => {
     const text = read('workspace/market/PackagesView.vue');
     const template = text.slice(text.indexOf('\n<template>') + '\n<template>'.length).trimStart();
-    assert.match(template, /^<div ref="scroller" class="mk-scroll"[^>]*>\s*<main class="mk-page"/);
+    assert.match(template, /^<div class="mk-app">\s*<Rail[\s\S]*?market-open\s*\/>\s*<AccountMenu [^>]*\/>\s*(?:<!--[^>]*-->\s*)?<div class="ui-ground mk-ground" aria-hidden="true"><\/div>\s*<div ref="scroller" class="mk-scroll"[^>]*>\s*<main class="mk-page"/);
     const scroll = rule(text, '.mk-scroll');
-    for (const [key, value] of Object.entries(SCROLLER)) assert.equal(scroll[key], value, '.mk-scroll ' + key);
+    for (const [key, value] of Object.entries({ ...SCROLLER, inset: '0 0 0 var(--rail-width)' })) assert.equal(scroll[key], value, '.mk-scroll ' + key);
     // The column inside does not scroll or clip on its own.
     const page = rule(text, '.mk-page');
     assert.equal(page.overflow, undefined);

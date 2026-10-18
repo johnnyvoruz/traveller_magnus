@@ -10,7 +10,9 @@ Whenever Johnny says "go":
 1. Read CLAUDE.md, directives/manifesto.md, directives/board.md and
    directives/lanes/<X>.md.
 2. Find your row in the board's lane table. If its status is "free", "parked" or
-   "blocked", say so in one line and stop. Otherwise read the prompt file it names
+   "blocked", say so in one line and stop. **If its status is "stream", read
+   directives/streams/README.md and directives/streams/<X>.md and work that loop without
+   stopping; the rest of this list doesn't apply.** Otherwise read the prompt file it names
    (the first one, if it names several) in directives/prompts/. If
    directives/reports/, directives/reports/done/ or directives/archive/reports/ already holds a report for that
    prompt and the board names a second prompt, take the second.

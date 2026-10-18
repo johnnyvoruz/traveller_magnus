@@ -44,8 +44,8 @@ function reset(on: boolean): void {
       :class="'is-' + resetState({ hasCampaignDate: true, onCampaignDate })"
       data-command="orbit-go-campaign"
       :aria-disabled="onCampaignDate ? 'true' : 'false'"
-      :aria-label="onCampaignDate ? 'The view is on the campaign date, ' + campaignDate.date : 'Return the view to the campaign date, ' + campaignDate.date"
-      :title="onCampaignDate ? 'The view is on the campaign date, ' + campaignDate.date : 'Back to the campaign date, ' + campaignDate.date + ' (C)'"
+      :aria-label="onCampaignDate ? 'The view is on the campaign date, ' + campaignDate.date : 'Back to the campaign date'"
+      :title="onCampaignDate ? 'The view is on the campaign date, ' + campaignDate.date : 'Back to the campaign date (C)'"
       @click="reset(onCampaignDate)"
     >
       <Icon name="rotate-left" :size="13" />
@@ -54,9 +54,9 @@ function reset(on: boolean): void {
       type="button"
       class="orbit-btn is-icon orbit-play"
       data-command="orbit-play"
-      :aria-label="paused ? 'Play simulation' : 'Pause simulation'"
+      aria-label="Play or pause"
       :aria-pressed="paused ? 'false' : 'true'"
-      title="Play / pause (Space)"
+      title="Play or pause (Space)"
       @click="$emit('toggle')"
     >
       <Icon :name="paused ? 'play' : 'pause'" :size="13" />
@@ -74,7 +74,7 @@ function reset(on: boolean): void {
       @click="$emit('date')"
     >
       <Icon name="calendar-star" :size="12" />
-      <b>{{ said.date }}</b>
+      <b class="ui-date orbit-readout-date">{{ said.date }}</b>
       <template v-if="!narrow"><span class="orbit-readout-sep">·</span><span>{{ said.weekday }}</span><span class="orbit-readout-sep">·</span><span class="orbit-readout-time">{{ time }}</span></template>
     </button>
   </div>
@@ -98,8 +98,9 @@ function reset(on: boolean): void {
   box-sizing: border-box;
   justify-content: flex-start;
   gap: 6px;
-  /* The allowance is the icon, the gaps and the same 14 px at each end of the longest reading (measured). */
-  width: calc(var(--readout-chars) * 1ch + 45px);
+  /* The allowance is the icon, the gaps and the same 14 px at each end of the longest reading (measured),
+     plus what the date box adds: Orbitron is wider than the code face, and the box has an edge and padding. */
+  width: calc(var(--readout-chars) * 1ch + 45px + 28px);
   height: 32px;
   border-color: var(--control-line);
   background: var(--bg-2);
@@ -122,6 +123,17 @@ function reset(on: boolean): void {
 
 .orbit-btn.orbit-readout[aria-expanded='true'] {
   border-color: var(--signal);
+}
+
+/* The date in the videos' date box (.ui-date), on the readout's line: teal, a quiet edge. */
+.orbit-btn.orbit-readout .orbit-readout-date {
+  padding: 2px 6px 1px;
+  color: var(--signal);
+  letter-spacing: 0.08em;
+}
+
+.orbit-btn.orbit-readout[aria-expanded='true'] .orbit-readout-date {
+  border-color: var(--signal-dim);
 }
 
 /* On the campaign date the readout's calendar is teal; off it, quiet: the amber belongs to the reset. */
@@ -161,8 +173,26 @@ function reset(on: boolean): void {
 }
 
 .orbit-clock.is-narrow .orbit-btn.orbit-readout {
+  /* Narrow, the button is the box: the date drops its own edge and the calendar goes, so Orbitron fits the old width. */
   width: calc(var(--readout-chars) * 1ch + 37px);
   padding: 0 8px;
+}
+
+.orbit-clock.is-narrow .orbit-btn.orbit-readout .orbit-readout-date {
+  padding: 0;
+  border-color: transparent;
+}
+
+.orbit-clock.is-narrow .orbit-btn.orbit-readout .ui-icon {
+  display: none;
+}
+
+/* The phone (599 px): the readout's own padding shrinks so the clock and the drawer tabs share a row. */
+@media (max-width: 599px) {
+  .orbit-clock.is-narrow .orbit-btn.orbit-readout {
+    width: calc(var(--readout-chars) * 1ch + 26px);
+    padding: 0 6px;
+  }
 }
 
 .orbit-clock.is-narrow .orbit-btn.orbit-play,

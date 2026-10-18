@@ -1,11 +1,13 @@
 <script setup lang="ts">
 /**
- * The record list (design §2): search, Add, the type chips with their counts, the rows, the
- * empty states, the first-run card, and this session's deletes at the foot. It reads the
+ * The record list (design §2): search, Add, the type chips with their counts, the rows grouped
+ * by type under headings that fold (kept per campaign on this device), the empty states, the
+ * first-run card, and this session's deletes at the foot. Past VIRTUAL_FROM rows it draws only
+ * the items near the view. It reads the
  * campaign from the store and asks the panel to open or create; it changes nothing itself
  * but a delete and a restore.
  */
-import { computed, defineAsyncComponent, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { CAMPAIGN_LIMITS, type CampaignRecordType } from '@voyage/shared';
 import { session } from '../account/session.ts';
 import { campaign, renameCampaign } from '../campaign/store.ts';
@@ -15,15 +17,25 @@ import AddButton from './AddButton.vue';
 import { locating, startLocate, stopLocate } from './locate.ts';
 import RecordAvatar from './RecordAvatar.vue';
 import { handedQuery, listSort, recordFilter, recordQuery } from './list_state.ts';
+import { publishAsk } from './market/command.ts';
 import { placeSource } from './place_source.ts';
+import { commandScope, handleKey, registerCommand, setCommandScope } from '../shell/registry.ts';
+import { showToast } from '../shell/toast.ts';
 import { hexKeyOf, hexWords, liveById, resolvePlace, type Resolved } from './places.ts';
-import { RECORD_TYPES, filterRecords, liveRecords, placeLine, typeCounts, typeInfo } from './records.ts';
+import { placeNow } from './place_now.ts';
+import { RECORD_TYPES, filterRecords, liveRecords, typeCounts, typeInfo } from './records.ts';
+import { vRecordCard } from './record_card.ts';
+import { HEAD_GUESS, ROW_GUESS, VIRTUAL_FROM, groupItems, readFolded, windowOf, writeFolded } from './record_groups.ts';
 
 const props = defineProps<{
     /** The record open beside the list (full width), or null. */
     selected: string | null;
     /** Changes cannot be made just now (offline). */
     readOnly: boolean;
+    /** The first-run card is up, so this list does not also say that nothing is here. */
+    hideEmpty?: boolean;
+    /** A player's list (P6): what is shared with them, with no Add and no Publish. */
+    player?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -54,6 +66,97 @@ const rows = computed(() => filterRecords(
     campaign.records,
 ));
 
+/** The types folded in this campaign, kept on this device. */
+const folded = ref<Set<CampaignRecordType>>(readFolded(campaign.universeId));
+watch(() => campaign.universeId, (id) => { folded.value = readFolded(id); });
+/** "All" groups the rows by type; a chosen type is one group, so it needs no heading. */
+const grouped = computed(() => filter.value === 'all');
+/** A typed search unfolds every group: a match is never hidden. */
+const items = computed(() => groupItems(rows.value, grouped.value, folded.value, !!query.value.trim()));
+
+function toggleGroup(type: CampaignRecordType): void {
+    const next = new Set(folded.value);
+    if (next.has(type)) next.delete(type);
+    else next.add(type);
+    folded.value = next;
+    writeFolded(campaign.universeId, next);
+}
+
+/* The window a long list draws. Heights are measured as items are drawn; until then a guess. */
+const virtual = computed(() => rows.value.length >= VIRTUAL_FROM);
+const known = new Map<string, number>();
+const sizes = ref(0);
+const scrollTop = ref(0);
+const viewHeight = ref(0);
+const listTop = ref(0);
+let scrollEl: HTMLElement | null = null;
+
+const heights = computed(() => {
+    void sizes.value;
+    return items.value.map((item) => known.get(item.key) ?? (item.kind === 'head' ? HEAD_GUESS : ROW_GUESS));
+});
+const win = computed(() => (virtual.value
+    ? windowOf(heights.value, scrollTop.value - listTop.value, viewHeight.value || 640)
+    : { start: 0, end: items.value.length, padBefore: 0, padAfter: 0 }));
+const shownItems = computed(() => items.value.slice(win.value.start, win.value.end));
+
+function readScroll(): void {
+    if (!scrollEl) return;
+    scrollTop.value = scrollEl.scrollTop;
+    viewHeight.value = scrollEl.clientHeight;
+    const list = listEl.value;
+    if (!list) return;
+    listTop.value = list.getBoundingClientRect().top - scrollEl.getBoundingClientRect().top + scrollEl.scrollTop;
+    let changed = false;
+    for (const el of list.querySelectorAll<HTMLElement>(':scope > li[data-key]')) {
+        const key = el.dataset.key;
+        const height = el.getBoundingClientRect().height;
+        if (!key || !(height > 0)) continue;
+        const had = known.get(key);
+        if (had === undefined || Math.abs(had - height) > 0.5) {
+            known.set(key, height);
+            changed = true;
+        }
+    }
+    if (changed) sizes.value += 1;
+}
+
+function bindScroll(): void {
+    const list = listEl.value;
+    const next = list ? list.closest<HTMLElement>('.panel-body') : null;
+    if (next !== scrollEl) {
+        if (scrollEl) scrollEl.removeEventListener('scroll', readScroll);
+        scrollEl = next;
+        if (scrollEl) scrollEl.addEventListener('scroll', readScroll, { passive: true });
+    }
+    readScroll();
+}
+
+watch(shownItems, () => { void nextTick(bindScroll); });
+onBeforeUnmount(() => {
+    releaseListKeys();
+    if (scrollEl) scrollEl.removeEventListener('scroll', readScroll);
+});
+
+/** Brings item `index` into the view, drawing it if the window had left it out, then focuses it. */
+function focusItem(index: number): void {
+    const item = items.value[index];
+    if (!item) return;
+    const scroller = scrollEl;
+    if (scroller && virtual.value) {
+        let top = listTop.value;
+        for (let i = 0; i < index; i++) top += heights.value[i] ?? ROW_GUESS;
+        const bottom = top + (heights.value[index] ?? ROW_GUESS);
+        if (top < scroller.scrollTop) scroller.scrollTop = top;
+        else if (bottom > scroller.scrollTop + scroller.clientHeight) scroller.scrollTop = bottom - scroller.clientHeight;
+        readScroll();
+    }
+    void nextTick(() => {
+        const el = listEl.value ? listEl.value.querySelector<HTMLElement>('li[data-key="' + item.key + '"] > button') : null;
+        if (el) el.focus();
+    });
+}
+
 function readHere(): void {
     const source = placeSource();
     const now = source ? source.current() : null;
@@ -62,7 +165,9 @@ function readHere(): void {
 }
 
 onMounted(() => {
+    bindKeys();
     readHere();
+    void nextTick(bindScroll);
     // A search handed over by the omnibox ("All 12 matches") is applied once.
     if (handedQuery.value) {
         query.value = handedQuery.value;
@@ -94,6 +199,14 @@ const canPublish = computed(() => {
 const publishing = ref(false);
 /** The rows the list shows are chosen when the list is narrowed (a type, a search, here); the whole list starts with none. */
 const publishStart = computed(() => (filter.value !== 'all' || query.value || atHere.value ? rows.value.map((record) => record.id) : []));
+
+/** "Publish records" from the command palette (market/command.ts): opened here once the campaign is open. */
+watch(() => [publishAsk.records, campaign.status] as const, ([asked, status]) => {
+    if (!asked || props.readOnly || status === 'loading' || status === 'signed-out') return;
+    publishAsk.records = false;
+    if (canPublish.value) publishing.value = true;
+    else showToast(all.value.length ? 'You can publish only from a campaign you made.' : 'Add a record first: a person, a ship, or an organization.');
+}, { immediate: true });
 const campaignName = computed(() => {
     const found = campaign.universes.find((item) => item.id === campaign.universeId);
     return found ? found.name : '';
@@ -125,21 +238,90 @@ function locateRow(id: string): void {
 }
 
 function rowButtons(): HTMLElement[] {
-    return listEl.value ? Array.from(listEl.value.querySelectorAll<HTMLElement>('.camp-row')) : [];
+    return listEl.value ? Array.from(listEl.value.querySelectorAll<HTMLElement>('.camp-row, .camp-group-head')) : [];
 }
 
-/** Up and Down walk the rows; L locates the row in focus; Delete deletes it and moves focus to its neighbour. */
-function onRowKey(event: KeyboardEvent, id: string): void {
+/**
+ * Up and Down walk the rows and the group headings, drawing what a long list had left out; on a
+ * row, L locates it and Delete deletes it and moves focus to its neighbour.
+ */
+const LIST_SCOPE = 'campaign-list';
+let releaseKeys: (() => void)[] = [];
+let replay = false;
+
+function replayRow(key: string): void {
+    const target = document.activeElement;
+    if (!(target instanceof HTMLElement) || !listEl.value) return;
+    const button = target.closest<HTMLElement>('.camp-row, .camp-group-head');
+    if (!button || !listEl.value.contains(button)) return;
+    const id = button.classList.contains('camp-row') ? (button.dataset.id || null) : null;
+    replay = true;
+    onRowKey({
+        key,
+        ctrlKey: false,
+        metaKey: false,
+        altKey: false,
+        currentTarget: button,
+        preventDefault() {},
+        stopPropagation() {},
+    }, id);
+}
+
+function rowFocused(): boolean {
+    const target = document.activeElement;
+    return target instanceof HTMLElement && !!listEl.value?.contains(target) && !!target.closest('.camp-row, .camp-group-head');
+}
+
+function bindKeys(): void {
+    setCommandScope(LIST_SCOPE);
+    const key = (id: string, name: string, keys: string[], run: () => void, live: () => boolean) => registerCommand({
+        id, name, keys, scope: LIST_SCOPE, runnable: live, run,
+    });
+    releaseKeys = [
+        key('campaign-list-next', 'Next row (Down)', ['ArrowDown'], () => replayRow('ArrowDown'), rowFocused),
+        key('campaign-list-prev', 'Previous row (Up)', ['ArrowUp'], () => replayRow('ArrowUp'), rowFocused),
+        key('campaign-list-locate', 'Locate (L)', ['l', 'L'], () => replayRow('l'), rowFocused),
+        key('campaign-list-delete', 'Delete (Delete)', ['Delete'], () => replayRow('Delete'), rowFocused),
+        key('campaign-list-search', 'Search this list (/)', ['/'], () => { if (searchEl.value) searchEl.value.focus(); }, () => {
+            const target = document.activeElement;
+            return target instanceof HTMLElement && !!target.closest('.campaign-root');
+        }),
+    ];
+}
+
+function releaseListKeys(): void {
+    for (const release of releaseKeys) release();
+    releaseKeys = [];
+    if (commandScope() === LIST_SCOPE) setCommandScope(null);
+}
+
+function onRowKey(event: {
+    key: string;
+    ctrlKey: boolean;
+    metaKey: boolean;
+    altKey: boolean;
+    currentTarget: EventTarget | null;
+    preventDefault(): void;
+    stopPropagation(): void;
+}, id: string | null): void {
+    if (!replay && handleKey(event as unknown as KeyboardEvent)) {
+        event.stopPropagation();
+        return;
+    }
+    replay = false;
     const buttons = rowButtons();
     const at = buttons.indexOf(event.currentTarget as HTMLElement);
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-        const next = buttons[at + (event.key === 'ArrowDown' ? 1 : -1)];
+        const step = event.key === 'ArrowDown' ? 1 : -1;
         event.preventDefault();
         event.stopPropagation();
-        if (next) next.focus();
-        else if (event.key === 'ArrowUp' && searchEl.value) searchEl.value.focus();
+        const key = (event.currentTarget as HTMLElement).closest<HTMLElement>('li')?.dataset.key;
+        const index = items.value.findIndex((item) => item.key === key);
+        if (index >= 0 && items.value[index + step]) focusItem(index + step);
+        else if (step < 0 && searchEl.value) searchEl.value.focus();
         return;
     }
+    if (!id) return;
     if ((event.key === 'l' || event.key === 'L') && !event.ctrlKey && !event.metaKey && !event.altKey) {
         if (!places.value.has(id)) return;
         event.preventDefault();
@@ -194,10 +376,11 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
 
 <template>
   <div class="camp-list">
-    <div v-if="first && !query" class="camp-first">
+    <p v-if="first && player" class="camp-first-player" data-player-empty>No records here yet.</p>
+    <div v-else-if="first && !query && !hideEmpty" class="camp-first ui-ground">
       <span class="camp-glyph is-large" aria-hidden="true"><Icon name="book-sparkles" :size="22" /></span>
       <h2>Your campaign starts here</h2>
-      <p>It is private to you and sits on top of the released map. Nothing you add changes the map.</p>
+      <p>It is private to you. Nothing you add changes the map.</p>
       <div class="camp-first-starts">
         <button type="button" class="ui-btn is-primary" :disabled="readOnly" @click="add('person')">
           <Icon name="user" :size="13" />Add a person
@@ -242,7 +425,7 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
         <button v-if="canPublish" type="button" class="ui-btn camp-publish" title="Publish records to the Marketplace" data-publish-records @click="publishing = true">
           <Icon name="store" :size="13" />Publish
         </button>
-        <AddButton :type="addType" :disabled="readOnly" @add="add" />
+        <AddButton v-if="!player" :type="addType" :disabled="readOnly" @add="add" />
       </div>
 
       <div class="camp-types" role="radiogroup" aria-label="Type">
@@ -280,54 +463,85 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
         </label>
       </div>
 
-      <ul v-if="rows.length" ref="listEl" class="camp-rows" aria-label="Records">
-        <li v-for="record in rows" :key="record.id" :class="{ 'has-locate': places.has(record.id) }">
-          <button
-            type="button"
-            class="camp-row"
-            :data-id="record.id"
-            :class="{ 'is-on': record.id === selected }"
-            :aria-current="record.id === selected ? 'true' : undefined"
-            @click="emit('open', record.id)"
-            @keydown="onRowKey($event, record.id)"
-          >
-            <RecordAvatar :record="record" :universe-id="campaign.universeId" size="row" />
-            <span class="camp-row-text">
-              <b>{{ record.name }}</b>
-              <span v-if="record.summary" class="camp-row-sum">{{ record.summary }}</span>
-              <span class="camp-row-meta">{{ typeInfo(record.type).one }} · {{ placeLine(record, campaign.records) }}</span>
-              <span v-if="record.tags.length" class="camp-row-tags">
-                <span v-for="tag in record.tags" :key="tag" class="ui-chip">{{ tag }}</span>
+      <ul v-if="rows.length" ref="listEl" class="camp-rows" :class="{ 'is-grouped': grouped }" aria-label="Records">
+        <li v-if="win.padBefore > 0" class="camp-pad" aria-hidden="true" :style="{ height: win.padBefore + 'px' }"></li>
+        <template v-for="item in shownItems" :key="item.key">
+          <li v-if="item.kind === 'head'" class="camp-group" :data-key="item.key">
+            <button
+              type="button"
+              class="camp-group-head"
+              :aria-expanded="item.folded ? 'false' : 'true'"
+              :title="item.folded ? 'Show the ' + typeInfo(item.type).many.toLowerCase() : 'Hide the ' + typeInfo(item.type).many.toLowerCase()"
+              @click="toggleGroup(item.type)"
+              @keydown="onRowKey($event, null)"
+            >
+              <Icon name="chevron-right" :size="11" />
+              <span class="ui-kicker">{{ typeInfo(item.type).many }}</span>
+              <span class="ui-count">{{ item.count }}</span>
+            </button>
+          </li>
+          <li v-else :data-key="item.key" :class="{ 'has-locate': places.has(item.record.id) }">
+            <button
+              v-record-card="item.record.id"
+              type="button"
+              class="camp-row"
+              :data-id="item.record.id"
+              :class="{ 'is-on': item.record.id === selected }"
+              :aria-current="item.record.id === selected ? 'true' : undefined"
+              @click="emit('open', item.record.id)"
+              @keydown="onRowKey($event, item.record.id)"
+            >
+              <RecordAvatar :record="item.record" :universe-id="campaign.universeId" size="row" />
+              <span class="camp-row-text">
+                <b>{{ item.record.name }}</b>
+                <span v-if="item.record.summary" class="camp-row-sum">{{ item.record.summary }}</span>
+                <span class="camp-row-meta">{{ typeInfo(item.record.type).one }} · {{ placeNow(item.record) }}</span>
+                <span v-if="item.record.tags.length" class="camp-row-tags">
+                  <span v-for="tag in item.record.tags" :key="tag" class="ui-chip">{{ tag }}</span>
+                </span>
               </span>
-            </span>
-          </button>
-          <button
-            v-if="places.has(record.id)"
-            type="button"
-            class="camp-locate"
-            :data-id="record.id"
-            :aria-pressed="locating.recordId === record.id ? 'true' : 'false'"
-            :aria-label="(locating.recordId === record.id ? 'Stop locating ' : 'Locate ') + record.name"
-            :title="locating.recordId === record.id ? 'Stop locating' : 'Show on the map (L)'"
-            @click="locateRow(record.id)"
-          >
-            <Icon name="location-crosshairs" :size="14" />
-          </button>
-        </li>
+            </button>
+            <button
+              v-if="places.has(item.record.id)"
+              type="button"
+              class="camp-locate"
+              :data-id="item.record.id"
+              :aria-pressed="locating.recordId === item.record.id ? 'true' : 'false'"
+              :aria-label="(locating.recordId === item.record.id ? 'Stop locating ' : 'Locate ') + item.record.name"
+              :title="locating.recordId === item.record.id ? 'Stop locating' : 'Show on the map (L)'"
+              @click="locateRow(item.record.id)"
+            >
+              <Icon name="location-crosshairs" :size="14" />
+            </button>
+          </li>
+        </template>
+        <li v-if="win.padAfter > 0" class="camp-pad" aria-hidden="true" :style="{ height: win.padAfter + 'px' }"></li>
       </ul>
-      <div v-else-if="query" class="camp-empty">
-        <p>No records match “{{ query }}”{{ atHere && here ? ' ' + here.label.replace(/^At/, 'at') : '' }}.</p>
-        <button type="button" class="ui-btn" @click="query = ''">Clear the search</button>
+      <div v-else-if="query" class="camp-first ui-ground">
+        <span class="camp-glyph is-large" aria-hidden="true"><Icon name="search" :size="22" /></span>
+        <h2>No records match</h2>
+        <p>Nothing matches “{{ query }}”{{ atHere && here ? ' ' + here.label.replace(/^At/, 'at') : '' }}.</p>
+        <div class="camp-first-starts">
+          <button type="button" class="ui-btn" @click="query = ''">Clear the search</button>
+        </div>
       </div>
-      <div v-else-if="atHere && here" class="camp-empty">
+      <div v-else-if="atHere && here" class="camp-first ui-ground">
+        <span class="camp-glyph is-large" aria-hidden="true"><Icon name="location-dot" :size="22" /></span>
+        <h2>Nothing of yours here</h2>
         <p>Nothing of yours {{ here.label.replace(/^At/, 'at') }}.</p>
-        <button type="button" class="ui-btn" @click="atHere = false">Show every record</button>
+        <div class="camp-first-starts">
+          <button type="button" class="ui-btn" @click="atHere = false">Show every record</button>
+        </div>
       </div>
-      <div v-else class="camp-empty">
-        <p>No {{ typeInfo(addType).many.toLowerCase() }} yet.</p>
-        <button type="button" class="ui-btn is-primary" :disabled="readOnly" @click="add(addType)">
-          <Icon name="plus" :size="13" />Add {{ typeInfo(addType).a }}
-        </button>
+      <div v-else-if="!hideEmpty" class="camp-first ui-ground">
+        <span class="camp-glyph is-large" aria-hidden="true"><Icon name="book-sparkles" :size="22" /></span>
+        <h2>No {{ typeInfo(addType).many.toLowerCase() }} yet</h2>
+        <p>Add one. It stays in your campaign.</p>
+        <div class="camp-first-starts">
+          <button type="button" class="ui-btn is-primary" :disabled="readOnly" @click="add(addType)">
+            <Icon name="plus" :size="13" />Add {{ typeInfo(addType).a }}
+          </button>
+        </div>
       </div>
     </template>
 
@@ -357,13 +571,15 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
   min-width: 0;
 }
 
+/* On a narrow panel the buttons go under the search rather than squeeze it. */
 .camp-tool {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
 .camp-search {
-  flex: 1 1 auto;
+  flex: 1 1 200px;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -486,14 +702,16 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
 }
 
 /* Rows: the legacy record row. A mark, the name, a line of summary, a muted line of type and place. */
+/* The rows sit in a frame (the version-video look): the records list and the journal. */
 .camp-rows {
   margin: 0;
   padding: 0;
   list-style: none;
-  border: 1px solid var(--line-1);
-  border-radius: var(--r-3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-4);
   overflow: hidden;
-  background: var(--panel-raised);
+  background: var(--bg-0);
+  box-shadow: 0 0 24px var(--frame-glow);
 }
 
 .camp-rows li {
@@ -502,6 +720,56 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
 
 .camp-rows li + li {
   border-top: 1px solid var(--line-soft);
+}
+
+/* The space standing in for the items a long list leaves undrawn. */
+.camp-rows li.camp-pad {
+  border-top: 0;
+}
+
+/* A type's heading in the grouped list: its name, its count, and the fold. */
+.camp-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 9px 12px 7px;
+  border: 0;
+  background: var(--wash-faint);
+  color: var(--text-muted);
+  text-align: left;
+  cursor: pointer;
+}
+
+.camp-group-head:hover {
+  background: var(--surface-1);
+}
+
+.camp-group-head:focus-visible {
+  outline-offset: -3px;
+}
+
+.camp-group-head .ui-icon {
+  transition: transform var(--t-fast) var(--ease-out);
+}
+
+.camp-group-head[aria-expanded="true"] .ui-icon {
+  transform: rotate(90deg);
+}
+
+.camp-group-head .ui-count {
+  margin-left: auto;
+  padding: 0;
+  background: none;
+  color: var(--signal);
+  font: 700 13px/1 var(--font-display);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .camp-group-head .ui-icon {
+    transition: none;
+  }
 }
 
 /* Locate sits at the row's right end, a button of its own beside the row's. */
@@ -637,22 +905,13 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
   height: 52px;
 }
 
-.camp-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 22px 16px;
-  border: 1px dashed var(--line-2);
-  border-radius: var(--r-3);
-  color: var(--text-muted);
-}
-
-.camp-empty p {
-  margin: 0;
-}
-
 /* The first visit: what this is, and three ways to start. */
+.camp-first-player {
+  margin: 16px 0;
+  color: var(--text-muted);
+  font: 400 13px/1.5 var(--font-text);
+}
+
 .camp-first {
   display: flex;
   flex-direction: column;
@@ -675,6 +934,32 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
   margin: 0;
   color: var(--text-1);
   font-size: 14.5px;
+}
+
+/*
+ * A first visit on the ground (the version-video look): the records here, and the journal and the
+ * party, whose cards add .ui-ground too. The card sets its own background, so it names the ground's.
+ */
+.camp-first.ui-ground {
+  border-color: var(--line-2);
+  border-radius: var(--r-4);
+  background: var(--ground-fill);
+  box-shadow: 0 0 24px var(--frame-glow);
+  overflow: hidden;
+}
+
+.camp-first.ui-ground h2 {
+  font: 700 19px/1.3 var(--font-display);
+  letter-spacing: 0.02em;
+}
+
+.camp-first.ui-ground > .camp-glyph {
+  width: 56px;
+  height: 50px;
+  border: 0;
+  border-radius: 0;
+  background: var(--wash);
+  clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
 }
 
 .camp-first-starts {

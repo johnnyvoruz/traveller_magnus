@@ -1,16 +1,25 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { TruthManifest } from '@voyage/shared';
 import {
+    entryResults,
+    groupOf,
+    packageResults,
     rankResults,
     sectorMatches,
     systemResults,
     type OmniResult,
     type SearchItem,
 } from '../search/omni.ts';
+import { chartNow, ensureChart } from '../search/chart_hold.ts';
+import { paletteOpen } from '../search/palette_state.ts';
+import { recentResults, rememberRecent } from '../search/recent.ts';
+import { onPageKeyDown } from '../platform/browser.ts';
 import { atPane, withQuery } from '../shell/pane.ts';
-import { commands, registerCommand } from '../shell/registry.ts';
+import { keysWords } from '../shell/key_help.ts';
+import { commands, handleKey, onCommandsChanged, registerCommand } from '../shell/registry.ts';
+import { keptPackages } from '../workspace/market/catalogue_memory.ts';
 import { session } from '../account/session.ts';
 import { campaign } from '../campaign/store.ts';
 import { createRecord } from '../workspace/actions.ts';
@@ -25,7 +34,9 @@ const props = withDefaults(defineProps<{
     version: string;
     manifest: TruthManifest | null;
     layer?: 'canonical' | 'all';
-}>(), { layer: 'canonical' });
+    /** The one palette for the page. A design sample passes false and does not take keys. */
+    live?: boolean;
+}>(), { layer: 'canonical', live: true });
 
 const emit = defineEmits<{ open: [open: boolean] }>();
 
@@ -47,9 +58,16 @@ let timer = 0;
 let controller: AbortController | null = null;
 let generation = 0;
 let unregister: (() => void) | null = null;
+/** Keyboard shortcuts (DU13): `?` opens the sheet the registry fills. */
+const KeyHelp = defineAsyncComponent(() => import('../workspace/KeyHelp.vue'));
+const keysOpen = ref(false);
+let unregisterKeys: (() => void) | null = null;
+let stopKeys: (() => void) | null = null;
 const cache = new Map<string, SearchItem[]>();
+/** Rows at the front of an empty search that were opened earlier this session. */
+const recentShown = ref(0);
 
-/** Shown until the person types. There is no list of recent places. */
+/** Shown until the person types, after anything opened earlier this session. */
 const EXAMPLES: OmniResult[] = [
     { kind: 'example', name: 'Regina', detail: 'A world' },
     { kind: 'example', name: 'Spinward Marches', detail: 'A sector' },
@@ -69,7 +87,9 @@ function commandResults(): OmniResult[] {
     const out: OmniResult[] = [];
     for (const command of commands()) {
         if (!commandListed(command)) continue;
-        out.push({ kind: 'command', name: command.name, detail: 'Command', id: command.id });
+        // The key beside the command (DU13), read from the registry like everything else here.
+        const keys = keysWords(command.keys);
+        out.push({ kind: 'command', name: command.name, detail: keys ? 'Command · ' + keys : 'Command', id: command.id });
     }
     return out;
 }
@@ -79,8 +99,11 @@ function commandResults(): OmniResult[] {
  * stamp also reads the fields that register or unregister commands (the session, the campaign,
  * whether Build is on) and the route, which is what moves the one selected hex.
  */
+const commandsTick = ref(0);
+
 const commandStamp = computed(() => {
     const bits = [
+        String(commandsTick.value),
         session.user ? '1' : '0',
         campaign.status,
         campaign.universeId ?? '',
@@ -104,14 +127,14 @@ function remember(key: string, items: SearchItem[]): void {
     }
 }
 
-async function loadSystems(text: string, signal: AbortSignal): Promise<SearchItem[]> {
-    const key = text;
+async function loadSystems(text: string, version: string, signal: AbortSignal): Promise<SearchItem[]> {
+    const key = version + '\n' + text;
     const cached = cache.get(key);
     if (cached) {
         remember(key, cached);
         return cached;
     }
-    const url = '/api/truth/search?q=' + encodeURIComponent(text) + '&version=' + encodeURIComponent(props.version);
+    const url = '/api/truth/search?q=' + encodeURIComponent(text) + '&version=' + encodeURIComponent(version);
     const response = await fetch(url, { signal });
     if (!response.ok) throw new Error('search');
     const body = await response.json() as { ok?: boolean; data?: { items?: SearchItem[] } };
@@ -125,36 +148,58 @@ async function search(): Promise<void> {
     const localCommands = commandResults();
     if (text.trim() === '') {
         if (controller) controller.abort();
-        results.value = [...EXAMPLES, ...localCommands];
+        const recent = recentResults();
+        recentShown.value = recent.length;
+        results.value = [...recent, ...EXAMPLES, ...localCommands];
         note.value = 'Try a world, a sector, or a subsector.';
         active.value = -1;
         open.value = true;
         return;
     }
-    const sectors = props.manifest ? sectorMatches(text, props.manifest, props.layer) : [];
+    recentShown.value = 0;
+    let version = props.version;
+    let manifest = props.manifest;
+    let failed = false;
+    if (props.live && (!version || !manifest)) {
+        try {
+            await ensureChart();
+            const held = chartNow();
+            version = held.version || version;
+            manifest = held.manifest ?? manifest;
+        } catch {
+            failed = true;
+        }
+    }
+    const sectors = manifest ? sectorMatches(text, manifest, props.layer) : [];
     const ticket = ++generation;
     if (controller) controller.abort();
     controller = new AbortController();
     const signal = controller.signal;
     let systems: OmniResult[] = [];
-    let failed = false;
-    try {
-        const items = await loadSystems(text, signal);
-        if (props.manifest) systems = systemResults(items, props.manifest, props.layer);
-    } catch {
-        if (signal.aborted || ticket !== generation) return;
-        failed = true;
+    if (version) {
+        try {
+            const items = await loadSystems(text, version, signal);
+            if (manifest) systems = systemResults(items, manifest, props.layer);
+        } catch {
+            if (signal.aborted || ticket !== generation) return;
+            failed = true;
+        }
+    } else if (!props.live) {
+        failed = text.trim() !== '';
     }
     if (ticket !== generation) return;
-    const worlds = rankResults(text, [...systems, ...sectors, ...localCommands]);
-    // The campaign group leads, at most five, then a row for the rest (design §6).
+    const worlds = rankResults(text, [...systems, ...sectors]);
     const mine: OmniResult[] = [];
+    const entries: OmniResult[] = [];
     if (withCampaign.value) {
         const found = campaignMatches(text, campaign.records, undefined, campaign.universeId);
         mine.push(...found.items);
         if (found.total > found.items.length) mine.push({ kind: 'more', name: 'All ' + found.total + ' matches', detail: 'Open the list with this search', query: text });
+        entries.push(...rankResults(text, entryResults(Object.values(campaign.journal), text)).slice(0, 5));
     }
-    const listed = [...mine, ...worlds];
+    const commandHits = rankResults(text, localCommands);
+    const packages = rankResults(text, packageResults(keptPackages())).slice(0, 5);
+    const listed = [...worlds, ...mine, ...entries, ...commandHits, ...packages];
     results.value = listed;
     if (failed) note.value = 'Search is unavailable.';
     else if (listed.length === 0) note.value = 'No results match your search.';
@@ -164,16 +209,16 @@ async function search(): Promise<void> {
     open.value = true;
 }
 
-/** Where a group begins: the campaign's rows, then the worlds. */
+/** Worlds, then records, entries, commands and packages. Recent rows lead an empty field. */
 function groupBefore(index: number): string {
     const result = results.value[index];
-    const before = index > 0 ? results.value[index - 1] : null;
-    const mine = (item: OmniResult | null): boolean => !!item && (item.kind === 'record' || item.kind === 'more');
     if (!result) return '';
-    if (result.kind === 'example') return index === 0 ? 'Try' : '';
-    if (mine(result)) return index === 0 ? 'Your campaign' : '';
-    if (before && (mine(before) || before.kind === 'example')) return before.kind === 'example' && result.kind === 'command' ? 'Commands' : 'The chart';
-    return '';
+    const name = index < recentShown.value ? 'Recent' : groupOf(result);
+    if (index === 0) return name;
+    const previous = results.value[index - 1];
+    if (!previous) return name;
+    const before = index - 1 < recentShown.value ? 'Recent' : groupOf(previous);
+    return name === before ? '' : name;
 }
 
 /** A chosen place drops the camera query, so the map flies to that place. */
@@ -213,6 +258,7 @@ function openResult(index: number): void {
         void search();
         return;
     }
+    if (result.kind !== 'more' && result.kind !== 'command') rememberRecent(result);
     if (result.kind === 'system') {
         if (action.value === 1 || action.value === 2) {
             makeHere(index, action.value === 1 ? 'person' : 'place');
@@ -223,6 +269,10 @@ function openResult(index: number): void {
         else void router.push({ path: '/s/' + encodeURIComponent(result.sector) + '/' + result.hex, query: placeQuery() });
     } else if (result.kind === 'record') {
         void router.push(atPane(route.path, route.query, { kind: 'campaign', record: result.id }));
+    } else if (result.kind === 'entry') {
+        void router.push(atPane(route.path, route.query, { kind: 'journal', entry: result.id }));
+    } else if (result.kind === 'package') {
+        void router.push({ path: '/packages/' + encodeURIComponent(result.id) });
     } else if (result.kind === 'more') {
         handedQuery.value = result.query;
         void router.push(atPane(route.path, route.query, { kind: 'campaign', record: null }));
@@ -271,25 +321,47 @@ function onKeydown(event: KeyboardEvent): void {
     }
 }
 
-watch(open, (value) => { emit('open', value); });
+watch(open, (value) => {
+    emit('open', value);
+    if (props.live) paletteOpen.value = value;
+});
 
 watch(commandStamp, () => {
     if (open.value) void search();
 });
 
+let stopCommands: (() => void) | null = null;
+
 onMounted(() => {
+    stopCommands = onCommandsChanged(() => { commandsTick.value += 1; });
+    // The page listener is what Ctrl+K uses on screens that do not call handleKey themselves.
+    if (!props.live) return;
+    stopKeys = onPageKeyDown((event) => {
+        if (event.defaultPrevented) return;
+        handleKey(event);
+    });
     unregister = registerCommand({
         id: 'search',
         name: 'Search',
         keys: ['/', 'Ctrl+K'],
         run: () => { inputEl.value?.focus(); },
     });
+    unregisterKeys = registerCommand({
+        id: 'keyboard-help',
+        name: 'Keyboard shortcuts',
+        keys: ['?'],
+        run: () => { keysOpen.value = true; },
+    });
 });
 
 onBeforeUnmount(() => {
     if (timer) clearTimeout(timer);
     if (controller) controller.abort();
+    if (stopCommands) stopCommands();
+    if (stopKeys) stopKeys();
     if (unregister) unregister();
+    if (unregisterKeys) unregisterKeys();
+    if (props.live) paletteOpen.value = false;
 });
 </script>
 
@@ -334,7 +406,10 @@ onBeforeUnmount(() => {
               <strong>{{ result.name }}</strong>
               <span class="omni-kind">{{ result.kind === 'record' ? 'yours' : result.kind === 'more' ? 'list' : result.kind === 'example' ? 'try' : result.kind }}</span>
             </span>
-            <span class="omni-detail">{{ result.detail }}</span>
+            <span class="omni-detail">
+              <template v-if="'mark' in result && result.mark">{{ result.mark.before }}<mark class="omni-hit">{{ result.mark.word }}</mark>{{ result.mark.after }}</template>
+              <template v-else>{{ result.detail }}</template>
+            </span>
             <span v-if="result.kind === 'system' && withCampaign" class="omni-new" aria-label="Make a record here">
               <button type="button" class="omni-new-btn" :class="{ 'is-on': index === active && action === 1 }" tabindex="-1" @mousedown.prevent @click.stop="makeHere(index, 'person')">
                 <Icon name="plus" :size="10" />Person here
@@ -347,6 +422,7 @@ onBeforeUnmount(() => {
         </template>
       </div>
     </div>
+    <KeyHelp v-if="keysOpen" @close="keysOpen = false" />
   </div>
 </template>
 
@@ -373,10 +449,12 @@ onBeforeUnmount(() => {
   box-sizing: border-box;
   height: var(--chrome-height);
   padding: 0 14px;
+  /* A field's edge is held to 3:1 (WCAG 1.4.11): --line-2 is 2.15:1 on this glass, --control-line 3.43:1. */
   border: 1px solid var(--control-line);
   border-radius: var(--r-4);
   background: var(--chrome-glass);
-  box-shadow: var(--shadow-chrome);
+  /* The version videos' frame: a thin edge and a faint teal halo (design/base.css .ui-frame). */
+  box-shadow: var(--shadow-chrome), 0 0 24px var(--frame-glow);
   transition: border-color var(--t-fast) var(--ease-out);
 }
 
@@ -414,7 +492,7 @@ onBeforeUnmount(() => {
   border: 1px solid var(--line-2);
   border-radius: var(--r-4);
   background: var(--chrome-bg);
-  box-shadow: var(--shadow-pop);
+  box-shadow: var(--shadow-pop), 0 0 24px var(--frame-glow);
   overflow: hidden;
 }
 
@@ -462,13 +540,12 @@ onBeforeUnmount(() => {
   color: var(--text-1);
 }
 
-/* Group labels between the campaign's rows and the chart's. */
+/* Group labels between the campaign's rows and the chart's: the videos' kickers (.ui-kicker), a size down. */
 .omni-group {
-  padding: 8px 14px 2px;
-  color: var(--text-muted);
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
+  padding: 10px 14px 2px;
+  color: var(--signal-dim);
+  font: 700 12px/1.4 var(--font-display);
+  letter-spacing: 0.3em;
   text-transform: uppercase;
 }
 
@@ -533,9 +610,8 @@ onBeforeUnmount(() => {
 .omni-kind {
   flex: 0 0 auto;
   color: var(--text-muted);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
+  font: 700 10px/1.4 var(--font-display);
+  letter-spacing: 0.16em;
   text-transform: uppercase;
 }
 
@@ -543,6 +619,17 @@ onBeforeUnmount(() => {
   color: var(--text-muted);
   font-size: 12px;
   font-variant-numeric: var(--tabular);
+}
+
+.omni-hit {
+  color: var(--text-0);
+  background: color-mix(in srgb, var(--signal) 28%, transparent);
+  border-radius: var(--r-1);
+}
+
+/* The store's own bar starts at the top of the page. Leave the chrome row clear. */
+.app:has(.mk-app) .mk-page {
+  padding-top: calc(var(--chrome-top) + var(--chrome-height) + 8px);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -21,9 +21,12 @@ import { type BodyPart } from './body.ts';
 import { justMade } from './create.ts';
 import { parsePlayed, parseWhen } from './dates.ts';
 import JournalBody from './JournalBody.vue';
+import PrintButton from '../PrintButton.vue';
 import RecordAvatar from '../RecordAvatar.vue';
 import { placeSource } from '../place_source.ts';
-import { kindWord, whenText, whenWeekday } from './list.ts';
+import { kindWord, playerNoteAccess, whenText, whenWeekday } from './list.ts';
+import { isPlayerView } from '../players/player_mode.ts';
+import { vRecordCard } from '../record_card.ts';
 
 const props = defineProps<{
     id: string;
@@ -53,6 +56,12 @@ const entry = computed((): CampaignEntry | null => {
     const found = campaign.journal[props.id];
     return found && !found.deleted ? found : null;
 });
+
+/** The handle on this entry, when the read names who wrote it. */
+const authorHandle = computed(() => (campaign.authorNames[props.id] ?? '').trim());
+
+/** A player never changes images. The text follows the page's own read-only flag. */
+const imageLocked = computed(() => !playerNoteAccess(isPlayerView.value, !props.readOnly).images);
 
 const upload = computed(() => uploads[props.id] ?? null);
 const saveState = computed((): 'saving' | 'failed' | 'saved' => {
@@ -263,7 +272,7 @@ watch(() => props.id, greet, { immediate: true });
     </div>
 
     <header class="rec-ident" :class="{ 'is-players': entry.visibility === 'players' }">
-        <EntryGallery :id="id" part="avatar" :read-only="readOnly" />
+        <EntryGallery :id="id" part="avatar" :read-only="imageLocked" />
         <div class="rec-names">
           <EditableText ref="titleField" title label="Title" prompt="Add a title" :value="entry.title" :max="CAMPAIGN_LIMITS.entryTitle" :disabled="readOnly" @save="rename" />
           <p class="rec-meta">
@@ -275,13 +284,14 @@ watch(() => props.id, greet, { immediate: true });
             </label>
             <b v-if="entry.kind === 'session' && entry.sequence != null" class="jn-num">{{ entry.sequence }}</b>
             <span v-if="entry.author === 'players'">Players</span>
+            <span v-if="authorHandle" class="jn-by">Written by <span class="ui-chip">{{ authorHandle }}</span></span>
             <span class="ui-seg" role="group" aria-label="Who can read this">
               <button type="button" :aria-pressed="entry.visibility === 'referee' ? 'true' : 'false'" :disabled="readOnly" @click="setVisibility('referee')">Referee</button>
               <button type="button" :aria-pressed="entry.visibility === 'players' ? 'true' : 'false'" :disabled="readOnly" @click="setVisibility('players')">Players</button>
               <button type="button" :aria-pressed="entry.visibility === 'public' ? 'true' : 'false'" :disabled="readOnly" @click="setVisibility('public')">Public</button>
             </span>
           </p>
-          <p class="jn-public-line">Shown on your ships' public cards when this game is public.</p>
+          <p class="jn-public-line">When this entry is public and this game is public, your ships' public cards show it.</p>
         </div>
         <p v-if="changedHere || saveState !== 'saved'" class="rec-save" :class="'is-' + saveState" role="status">
           <template v-if="saveState === 'saving'">{{ saveWords }}</template>
@@ -295,9 +305,10 @@ watch(() => props.id, greet, { immediate: true });
       <JournalBody ref="bodyField" :value="entry.body" :disabled="readOnly" :records="campaign.records" :name-of="nameOf" @save="saveBody" @open="openPart" />
     </section>
 
-    <EntryGallery :id="id" part="strip" :read-only="readOnly" />
+    <EntryGallery :id="id" part="strip" :read-only="imageLocked" />
 
     <footer class="rec-foot">
+      <PrintButton target=".jn-entry" :title="entry.title || 'Journal entry'" />
       <span class="rec-gap"></span>
       <button type="button" class="ui-btn rec-delete" :disabled="readOnly" @click="remove"><Icon name="trash" :size="13" />Delete</button>
     </footer>
@@ -346,12 +357,13 @@ watch(() => props.id, greet, { immediate: true });
       </div>
 
       <WhereBlock :anchor="entry.anchor" :locate-id="entry.id" :read-only="readOnly" :vessel-choice="true" @save="place" @map="emit('map')" />
+      <SpreadNews :when="entry.when" :anchor="entry.anchor" :locate-id="entry.id" @map="emit('map')" />
 
       <section class="jn-mentioned">
         <h3 class="ui-heading">Mentioned</h3>
         <p v-if="entry.mentions.length === 0" class="jn-quiet">Nothing mentioned yet.</p>
         <p v-else class="jn-rail">
-          <button v-for="target in entry.mentions" :key="target" type="button" class="ui-chip jn-token" @click="openPart(mentionPart(target))">
+          <button v-for="target in entry.mentions" :key="target" v-record-card="target.startsWith('cr_') ? target : null" type="button" class="ui-chip jn-token" @click="openPart(mentionPart(target))">
             <RecordAvatar v-if="campaign.records[target] && !campaign.records[target].deleted" :record="campaign.records[target]" :universe-id="campaign.universeId" size="chip" />
             {{ mentionPart(target).label }}
           </button>
@@ -474,7 +486,73 @@ watch(() => props.id, greet, { immediate: true });
 
 .jn-num {
   color: var(--signal);
-  font: 700 14px/1.2 var(--font-code);
+  font: 700 14px/1.2 var(--font-display);
   font-variant-numeric: var(--tabular);
+}
+
+/*
+ * The version-video look (Lane M): the title in Orbitron over the red-into-teal rule, the section
+ * headings as kickers, the dates in boxes, the images in a frame. The headings include the Where
+ * block's and the gallery's: on an entry they read as one page.
+ */
+.jn-entry .edit.is-title .edit-view,
+.jn-entry .edit.is-title .edit-field {
+  font: 700 20px/1.3 var(--font-display);
+  letter-spacing: 0.02em;
+}
+
+.jn-entry .rec-ident {
+  padding-bottom: 14px;
+  background: linear-gradient(90deg, var(--mark-red), var(--signal) 45%, transparent) left bottom / 100% 2px no-repeat;
+}
+
+.jn-entry .rec-ident.is-players {
+  padding: 8px 8px 14px;
+}
+
+.jn-entry .ui-heading {
+  margin: 20px 0 8px;
+  color: var(--signal-dim);
+  font: 700 12px/1.4 var(--font-display);
+  letter-spacing: 0.4em;
+}
+
+.jn-entry .ui-heading .ui-count {
+  margin-left: 8px;
+  padding: 0;
+  background: none;
+  color: var(--signal);
+  font: 700 15px/1 var(--font-display);
+  letter-spacing: 0.04em;
+}
+
+.jn-dates label {
+  flex-wrap: wrap;
+  color: var(--signal-dim);
+  font: 700 12px/1.4 var(--font-display);
+  letter-spacing: 0.2em;
+  white-space: nowrap;
+}
+
+.jn-dates .clock-date b {
+  padding: 2px 8px 1px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-1);
+  color: var(--text-1);
+  font: 700 12.5px/1.4 var(--font-display);
+  letter-spacing: 0.12em;
+}
+
+.jn-entry .jn-images {
+  margin-top: 18px;
+  padding: 12px 16px 14px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-4);
+  background: var(--bg-0);
+  box-shadow: 0 0 24px var(--frame-glow);
+}
+
+.jn-entry .jn-images > .ui-heading {
+  margin-top: 0;
 }
 </style>

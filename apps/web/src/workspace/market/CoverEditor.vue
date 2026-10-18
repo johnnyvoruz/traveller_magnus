@@ -2,7 +2,8 @@
 /**
  * "Add a cover" (prompts/d_storefront.md point 5): a file chooser, a drop target and paste, as on
  * a record's gallery (RecordGallery.vue). The preview is the 16:9 crop the card uses. The file is
- * read into a WebP pair here (cover_image.ts); the parent sends it, or keeps it until publish.
+ * read into a WebP pair here (cover_image.ts); the parent sends it, or keeps it until publish. A map
+ * package's screenshot is trimmed to its systems first (D5), and the editor says so.
  * Remove is a plain delete, with no undo.
  */
 import { ref } from 'vue';
@@ -20,6 +21,8 @@ const props = defineProps<{
     /** The parent's sentence, for a send that failed. */
     error?: string;
     title: string;
+    /** A map or system package: a screenshot of the map is trimmed to its systems. */
+    map?: boolean;
 }>();
 
 const emit = defineEmits<{ take: [cover: PreparedCover]; remove: [] }>();
@@ -28,6 +31,8 @@ const fileEl = ref<HTMLInputElement | null>(null);
 const reading = ref(false);
 const problem = ref('');
 const dragging = ref(false);
+/** The last picture taken was trimmed to its systems. */
+const trimmed = ref(false);
 
 async function take(files: readonly File[]): Promise<void> {
     const file = imageFiles(files)[0];
@@ -39,9 +44,11 @@ async function take(files: readonly File[]): Promise<void> {
     reading.value = true;
     problem.value = '';
     try {
-        const made = await prepareCover(file);
-        if (made.ok) emit('take', made.cover);
-        else problem.value = made.message;
+        const made = await prepareCover(file, undefined, props.map === true);
+        if (made.ok) {
+            trimmed.value = made.trimmed;
+            emit('take', made.cover);
+        } else problem.value = made.message;
     } finally {
         reading.value = false;
     }
@@ -102,12 +109,13 @@ function onPaste(event: ClipboardEvent): void {
       </div>
       <div class="mk-cover-ed-side">
         <p class="mk-cover-ed-src"><b>Cover</b> {{ sourceWords(source) }}</p>
-        <p class="mk-fine">Add a picture for your package. For a map, take a screenshot of it and paste it here.</p>
+        <p class="mk-fine">Add a picture for your package. For a map, take a screenshot of it and paste it here{{ map ? ': the empty chart round the systems is trimmed away, so they read on a card' : '' }}.</p>
         <div class="mk-cover-ed-acts">
           <button type="button" class="ui-btn" :disabled="reading || busy" @click="pick"><Icon name="plus" :size="13" />{{ source === 'upload' ? 'Replace cover' : 'Add a cover' }}</button>
           <button v-if="canRemove" type="button" class="ui-btn" :disabled="reading || busy" @click="emit('remove')">Remove cover</button>
         </div>
         <p v-if="reading" class="mk-fine" role="status">Reading the image…</p>
+        <p v-else-if="trimmed && source === 'upload'" class="mk-fine" role="status" data-cover-trimmed>Trimmed to the systems, so they read on a card.</p>
         <p v-else-if="busy" class="mk-fine" role="status">Saving the cover…</p>
         <p v-if="problem || error" class="mk-err" role="alert">{{ problem || error }}</p>
       </div>

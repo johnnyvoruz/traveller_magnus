@@ -24,11 +24,14 @@ const props = defineProps<{
     hexKey?: string;
     /** Build is on: Explore orbits is a plain button, so the pane has one filled control. */
     plainOrbit?: boolean;
+    /** Offer News, how fast news travels from here: the map has registered its command (XD2). */
+    news?: boolean;
 }>();
 
 defineEmits<{
     open: [key: string];
     orbit: [];
+    news: [];
     retry: [];
 }>();
 
@@ -89,6 +92,9 @@ function toggleLocate(): void {
         >
           <Icon name="location-crosshairs" :size="13" />{{ isLocating ? 'Locating' : 'Locate' }}
         </button>
+        <button v-if="news && hexKey" type="button" class="ui-btn" title="How fast news travels from this system" data-command="news-from-here" @click="$emit('news')">
+          <Icon name="radar" :size="13" />News
+        </button>
       </div>
       <button
         v-if="model.ribbon && model.mainworldKey"
@@ -134,6 +140,9 @@ function toggleLocate(): void {
             @click="toggleLocate"
           >
             <Icon name="location-crosshairs" :size="13" />{{ isLocating ? 'Locating' : 'Locate' }}
+          </button>
+          <button v-if="news && hexKey" type="button" class="ui-btn" title="How fast news travels from this system" data-command="news-from-here" @click="$emit('news')">
+            <Icon name="radar" :size="13" />News
           </button>
         </div>
       </div>

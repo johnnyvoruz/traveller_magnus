@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
- * The Party tab (design §5): "Where are we" first, then the ship, then who is aboard, then
- * members who are not. The party is the settings document's `party` (slice §0.6), written
+ * The Party tab (design §5): "Where are we" first, then "Where is everyone" (DU3: each ship and
+ * who is aboard it, then who is ashore, each with its place and Locate), then the ships, then the
+ * people. The party is the settings document's `party` (slice §0.6), written
  * as one change; the party's place is the ship's at the campaign date, from its track when it
  * has one (party_where.ts), or the party's own anchor when there is no ship.
  */
@@ -15,13 +16,15 @@ import Icon from '../design/Icon.vue';
 import { atPane } from '../shell/pane.ts';
 import { saveParty, saveRecord } from './actions.ts';
 import { connectionsOf } from './links.ts';
-import { EMPTY_PARTY, memberVessel, partyMembers, partyVessel, partyVessels, resolveAnchor, withAboard, withAnchor, withLeadVessel, withMember, withoutMember, withVesselAdded, withVesselRemoved } from './party.ts';
+import { locating, startLocate, stopLocate } from './locate.ts';
+import { EMPTY_PARTY, memberVessel, partyMembers, partyVessel, partyVessels, withAboard, withAnchor, withLeadVessel, withMember, withoutMember, withVesselAdded, withVesselRemoved } from './party.ts';
+import { everyoneWhere, standsAt, type EveryoneRow } from './party_everyone.ts';
 import { campaignDays, partyWhere } from './party_where.ts';
-import { placeWords } from './places.ts';
 import RecordPicker from './RecordPicker.vue';
 import RecordAvatar from './RecordAvatar.vue';
 import { dockShipAt } from './track_actions.ts';
 import WhereBlock from './WhereBlock.vue';
+import PlayersSection from './players/PlayersSection.vue';
 
 const props = defineProps<{
     /** Changes cannot be made just now (offline). */
@@ -62,15 +65,43 @@ function moved(next: CampaignAnchor): void {
     else saveRecord(vessel.value.id, { anchor: next });
 }
 
-type Row = { record: CampaignRecord; role: string; shipId: string };
+// ---- Where is everyone (DU3) ----------------------------------------------------------
 
-/** Where the party stands, for a member who is aboard no ship. */
-const standing = computed(() => {
-    if (where.value.underway) return where.value.underway.text;
-    const place = resolveAnchor(where.value.anchor, campaign.records);
-    if (!place) return 'Nowhere in particular';
-    return placeWords(place).join(' · ');
+const everyoneEl = ref<HTMLElement | null>(null);
+const everyone = computed((): EveryoneRow[] => {
+    void campaign.seq;
+    return everyoneWhere(party.value, campaign.records, days.value);
 });
+
+/** Locate: the map flies to the row's hex and the line runs from its button. Pressed again, it ends. */
+function locateRow(row: EveryoneRow): void {
+    const id = row.record.id;
+    if (!row.hexKey) return;
+    if (locating.recordId === id) {
+        stopLocate();
+        return;
+    }
+    emit('map');
+    startLocate(id, row.hexKey, () => {
+        if (!everyoneEl.value) return null;
+        for (const el of everyoneEl.value.querySelectorAll<HTMLElement>('.party-locate')) {
+            if (el.dataset.id !== id) continue;
+            const box = el.getBoundingClientRect();
+            return box.height > 0 ? box.top + box.height / 2 : null;
+        }
+        return null;
+    });
+}
+
+// A row's place changed under its locate (the date moved, the ship sailed): the locate ends, and can be asked again.
+watch(() => {
+    const row = everyone.value.find((item) => item.record.id === locating.recordId);
+    return row ? row.hexKey : null;
+}, (hexKey) => {
+    if (locating.recordId && hexKey !== null && hexKey !== locating.hexKey) stopLocate();
+});
+
+type Row = { record: CampaignRecord; role: string; shipId: string; standing: string };
 
 /** A member's row: their crew role on the lead ship, and which party ship they are aboard. */
 const rows = computed((): Row[] => {
@@ -84,7 +115,9 @@ const rows = computed((): Row[] => {
                 .find((item) => item.other.id === shipId && (item.link.kind === 'crew' || item.link.kind === 'commands'));
             role = link ? (link.link.role || link.label) : '';
         }
-        return { record, role, shipId };
+        // Aboard no ship: where the card says too (party_everyone.ts standsAt, DU3b).
+        const standing = shipId ? '' : standsAt(party.value, campaign.records, record, days.value).words;
+        return { record, role, shipId, standing };
     });
 });
 
@@ -206,7 +239,7 @@ watch(() => campaign.universeId, () => { choosing.value = ''; });
 
 <template>
   <section ref="rootEl" class="party" :data-empty="empty ? 'true' : 'false'" @keydown="onKey">
-    <div v-if="empty && !choosing" class="camp-first party-first">
+    <div v-if="empty && !choosing" class="camp-first ui-ground">
       <span class="camp-glyph is-large" aria-hidden="true"><Icon name="shuttle-space" :size="22" /></span>
       <h2>No party yet</h2>
       <p>Choose the ship and who is aboard. Where the ship is, the party is: the map marks it.</p>
@@ -259,22 +292,47 @@ watch(() => campaign.universeId, () => { choosing.value = ''; });
         </p>
       </header>
 
+      <section v-if="everyone.length" ref="everyoneEl" class="party-everyone" data-everyone aria-labelledby="party-everyone-h">
+        <h3 id="party-everyone-h" class="ui-heading ui-kicker">Where is everyone</h3>
+        <ul class="party-rows">
+          <li v-for="row in everyone" :key="row.record.id" :class="{ 'is-aboard': row.aboard }">
+            <RecordAvatar :record="row.record" :universe-id="campaign.universeId" size="chip" />
+            <span class="party-who">
+              <button type="button" class="party-name" @click="open(row.record)">{{ row.record.name }}</button>
+              <span class="party-where">{{ row.words }}</span>
+            </span>
+            <span v-if="row.lead" class="ui-chip party-lead">Lead</span>
+            <button
+              v-if="row.hexKey"
+              type="button"
+              class="ui-btn party-locate"
+              :data-id="row.record.id"
+              :aria-pressed="locating.recordId === row.record.id ? 'true' : 'false'"
+              :aria-label="(locating.recordId === row.record.id ? 'Stop locating ' : 'Locate ') + row.record.name"
+              @click="locateRow(row)"
+            >
+              <Icon name="location-crosshairs" :size="12" />{{ locating.recordId === row.record.id ? 'Locating' : 'Locate' }}
+            </button>
+          </li>
+        </ul>
+      </section>
+
       <section class="party-ship">
         <div class="party-people-head">
-          <h3 class="ui-heading">Ships <span class="ui-count">{{ ships.length }}</span></h3>
+          <h3 class="ui-heading ui-kicker">Ships <span class="ui-count">{{ ships.length }}</span></h3>
           <button type="button" class="ui-btn party-add-ship" :disabled="readOnly" @click="addShip('.party-add-ship')">
             <Icon name="plus" :size="12" />Add a ship
           </button>
         </div>
         <p v-if="shipNote" class="party-none-line" role="status">{{ shipNote }}</p>
-        <p v-if="!ships.length" class="party-none-line">No ship. The party is wherever it was put.</p>
+        <p v-if="!ships.length" class="party-none-line">No ship yet. The party stays where you put it.</p>
         <ul v-else class="party-rows">
           <li v-for="(ship, index) in ships" :key="ship.id">
             <RecordAvatar :record="ship" :universe-id="campaign.universeId" size="chip" />
             <button type="button" class="party-name" @click="open(ship)">{{ ship.name }}</button>
             <span v-if="index === 0" class="ui-chip party-lead">Lead</span>
             <button v-else type="button" class="ui-btn party-lead-set" :disabled="readOnly" @click="makeLead(ship.id)">Make lead</button>
-            <button type="button" class="ui-btn is-icon party-remove" :disabled="readOnly" :aria-label="'Remove ' + ship.name" title="Remove this ship" @click="askRemoveShip(ship.id)">
+            <button type="button" class="ui-btn is-icon party-remove" :disabled="readOnly" :aria-label="'Remove ' + ship.name" :title="'Remove ' + ship.name" @click="askRemoveShip(ship.id)">
               <Icon name="xmark" :size="12" />
             </button>
           </li>
@@ -288,7 +346,7 @@ watch(() => campaign.universeId, () => { choosing.value = ''; });
 
       <section class="party-people">
         <div class="party-people-head">
-          <h3 class="ui-heading">The party <span class="ui-count">{{ rows.length }}</span></h3>
+          <h3 class="ui-heading ui-kicker">The party <span class="ui-count">{{ rows.length }}</span></h3>
           <button type="button" class="ui-btn party-add-people" :disabled="readOnly" @click="choose('people', '.party-add-people')">
             <Icon name="plus" :size="12" />Add someone
           </button>
@@ -299,7 +357,7 @@ watch(() => campaign.universeId, () => { choosing.value = ''; });
             <RecordAvatar :record="row.record" :universe-id="campaign.universeId" size="chip" />
             <button type="button" class="party-name" @click="open(row.record)">{{ row.record.name }}</button>
             <span v-if="row.role" class="party-role">{{ row.role }}</span>
-            <span v-if="!row.shipId" class="party-role">{{ standing }}</span>
+            <span v-if="!row.shipId" class="party-role">{{ row.standing }}</span>
             <label class="party-aboard">
               <span class="rec-sr">Aboard</span>
               <select :aria-label="'Aboard for ' + row.record.name" :value="row.shipId" :disabled="readOnly" @change="setAboard(row.record, $event)">
@@ -307,13 +365,15 @@ watch(() => campaign.universeId, () => { choosing.value = ''; });
                 <option v-for="ship in ships" :key="ship.id" :value="ship.id">{{ ship.name }}</option>
               </select>
             </label>
-            <button type="button" class="ui-btn is-icon party-remove" :disabled="readOnly" :aria-label="'Remove ' + row.record.name + ' from the party'" title="Remove from the party" @click="remove(row.record)">
+            <button type="button" class="ui-btn is-icon party-remove" :disabled="readOnly" :aria-label="'Remove ' + row.record.name + ' from the party'" :title="'Remove ' + row.record.name + ' from the party'" @click="remove(row.record)">
               <Icon name="xmark" :size="12" />
             </button>
           </li>
         </ul>
       </section>
     </template>
+    <!-- The referee's players (P5): the invite link and who plays. -->
+    <PlayersSection v-if="campaign.role === 'owner'" :read-only="readOnly" />
   </section>
 </template>
 
@@ -416,14 +476,20 @@ watch(() => campaign.universeId, () => { choosing.value = ''; });
   margin-left: 0;
 }
 
+.party-people-head .ui-heading.ui-kicker {
+  gap: 10px;
+}
+
+/* The ships and the people sit in frames (the version-video look). */
 .party-rows {
   margin: 0;
   padding: 0;
   list-style: none;
-  border: 1px solid var(--line-1);
-  border-radius: var(--r-3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-4);
   overflow: hidden;
-  background: var(--panel-raised);
+  background: var(--bg-0);
+  box-shadow: 0 0 24px var(--frame-glow);
 }
 
 .party-rows li {
@@ -505,6 +571,47 @@ watch(() => campaign.universeId, () => { choosing.value = ''; });
   font: 600 12.5px/1.2 var(--font-text);
 }
 
+/* Where is everyone: a name over its place; the people aboard a ship sit under it, set in. */
+.party-everyone {
+  margin-bottom: 8px;
+}
+
+.party-who {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.party-who .party-name {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  padding: 0;
+}
+
+.party-where {
+  color: var(--text-muted);
+  font: 400 12px/1.4 var(--font-text);
+  overflow-wrap: anywhere;
+}
+
+.party-everyone li.is-aboard {
+  padding-left: 30px;
+}
+
+.ui-btn.party-locate {
+  flex: 0 0 auto;
+  height: 28px;
+  padding: 0 9px;
+  font-size: 12.5px;
+}
+
+.ui-btn.party-locate[aria-pressed="true"] {
+  border-color: var(--signal);
+  background: var(--row-active);
+  color: var(--signal);
+}
+
 .party-drop {
   display: flex;
   flex-wrap: wrap;
@@ -526,6 +633,15 @@ watch(() => campaign.universeId, () => { choosing.value = ''; });
 
   .party-aboard {
     flex: 1 1 100%;
+  }
+
+  /* A name, its place and Locate stay on one row: the place wraps under the name instead. */
+  .party-everyone .party-rows li {
+    flex-wrap: nowrap;
+  }
+
+  .party-everyone li.is-aboard {
+    padding-left: 18px;
   }
 }
 </style>

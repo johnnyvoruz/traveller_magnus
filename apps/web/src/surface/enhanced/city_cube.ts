@@ -76,7 +76,10 @@ vec3 districtTint(float id) {
         : hue < 0.7 ? vec3(0.38, 0.32, 1.0)
         : hue < 0.86 ? vec3(1.0, 0.32, 0.42)
         : vec3(0.72, 0.28, 1.0);
-    return mix(uCityColor, neon * 1.5, step(fract(id * 3.71), uNeon * 0.9));
+    // A minority of districts, a bit more at tech level 15 than at 12.
+    // The mix stays short of a full neon replace, so the street colour remains.
+    float share = mix(0.18, 0.36, clamp(uNeon, 0.0, 1.0));
+    return mix(uCityColor, neon, 0.62 * step(fract(id * 3.71), share));
 }
 vec3 faceDir(int face, vec2 fc) {
     float a = 2.0 * fc.x / uSize - 1.0;
@@ -117,13 +120,14 @@ void main() {
     float A = roads(w2, 0.03, texel * 26.0);
     float S = roads(w3, 0.05, texel * 90.0);
     float K = exp(-pow(w1.x / (0.10 + 0.18 * U), 2.0));
-    float fabric = 0.035 + 0.10 * K + 0.24 * H + 0.14 * A
-        + 0.055 * S * smoothstep(0.05, 0.5, U);
-    if (uLook > 0.5) fabric += ${CITY_LOOK_B.arterial} * A;
-    vec3 base = uCityColor;
+    float art = 0.14;
+    if (uLook > 0.5) art += ${CITY_LOOK_B.arterial};
+    vec3 tech = uCityColor;
+    vec3 coreCol = mix(tech, vec3(1.0), 0.82);
+    vec3 gold = mix(tech, vec3(1.0, 0.78, 0.35), 0.78);
     vec3 accent = districtTint(w2.z);
-    vec3 tint = mix(base, accent, 0.30 * uNeon);
-    vec3 E = U * (tint * fabric + base * 0.35 * K * K);
+    float fill = 0.035 + 0.10 * K;
+    vec3 E = U * (tech * fill + coreCol * (0.35 * K * K) + gold * (0.24 * H) + accent * (art * A + 0.055 * S * smoothstep(0.05, 0.5, U)));
     outC = vec4(clamp(E, 0.0, 1.0), clamp(U * K * K, 0.0, 1.0));
 }`;
 

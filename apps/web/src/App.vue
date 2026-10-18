@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { RouterView } from 'vue-router';
+import DiceRoller from './dice/DiceRoller.vue';
+import OmniBox from './components/OmniBox.vue';
+import { chartManifest, chartVersion } from './search/chart_hold.ts';
 import PanelHost from './shell/PanelHost.vue';
 import ToastStrip from './shell/ToastStrip.vue';
 </script>
@@ -8,7 +11,9 @@ import ToastStrip from './shell/ToastStrip.vue';
   <div class="app">
     <RouterView />
     <PanelHost />
+    <OmniBox :version="chartVersion" :manifest="chartManifest" />
     <ToastStrip />
+    <DiceRoller />
   </div>
 </template>
 

@@ -6,7 +6,7 @@ import type { SurfaceMode } from '../contracts.ts';
 import { cityLook } from './city_look.ts';
 
 /** Renderer version family. The live string also names the look, so a change rebakes C. */
-export const ENHANCED_CITY_VERSION = 'enhanced-cities-4c';
+export const ENHANCED_CITY_VERSION = 'enhanced-cities-4d';
 
 /**
  * The vanilla disc program has no renderer version of its own.

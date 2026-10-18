@@ -52,7 +52,7 @@ export async function requireUser(c: AppContext): Promise<SessionUser | Response
         if (recoveryRefusal(error)) return fail(c, 403, RECOVERY_CODE, RECOVERY_MESSAGE);
         throw error;
     }
-    if (!session?.user) return fail(c, 401, 'unauthenticated', 'Sign in required.');
+    if (!session?.user) return fail(c, 401, 'unauthenticated', 'Sign in to continue.');
     if (isRecoverySession(session as { session?: { mustAddPasskey?: boolean | number } })) {
         return fail(c, 403, RECOVERY_CODE, RECOVERY_MESSAGE);
     }
@@ -66,6 +66,6 @@ export async function requireUser(c: AppContext): Promise<SessionUser | Response
 export async function requireRole(c: AppContext, role: RoleName): Promise<SessionUser | Response> {
     const user = await requireUser(c);
     if (user instanceof Response) return user;
-    if (!roleSatisfies(user.role, role)) return fail(c, 403, 'forbidden', 'Role required.');
+    if (!roleSatisfies(user.role, role)) return fail(c, 403, 'forbidden', 'You do not have access to that.');
     return user;
 }

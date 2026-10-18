@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * The orbit stage: the canvas, its pointer input, the docked body card and the
- * Fit button.
+ * The orbit stage: the canvas, its pointer input, and the docked body card.
+ * Fit sits with System Comms in the view, clear of this picture.
  * It only binds. The layouts are orbit/layout.ts and orbit/lineup.ts, the move between them
  * orbit/tween.ts, the camera orbit/camera.ts and orbit/stage.ts, the paint
  * orbit/OrbitRenderer.ts, the card orbit/card.ts. The view owns the clock and the frame loop
@@ -9,7 +9,6 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import Icon from '../design/Icon.vue';
 import {
     createCanvas, devicePixelRatio, loadImage, now, observeSize, onDevicePixelRatioChange,
     prefersReducedMotion,
@@ -27,6 +26,7 @@ import { publishOrbitClock } from './running.ts';
 import { bodiesAtOf, datedBodies, pressMeans, sameHover, sceneBodies, shipMarkOf, shipStanding, shipTags as tagsFor, tagBoxes, type PlotHover, type ShipStanding, type ShipTag, type TagsMore } from './ship_marks.ts';
 import { BODY_SNAP_PX, pictureOfAu, placeAtPicture, type PictureLayout } from './distance.ts';
 import { pictureBodies, placeShips, shipAt, waypointAt, standInMarks, type PlotReadout, type ShipMark, type ShipTrack } from './ships.ts';
+import { blockPlace, fitLabel } from '../map/traffic.ts';
 import ShipTags from './ShipTags.vue';
 import { readOrbitMotion, readOrbitTheme, type OrbitMotion } from './theme.ts';
 
@@ -37,6 +37,11 @@ const props = defineProps<{
     hexKey: string;
     /** The selected body's dossier key, or null. */
     selected: string | null;
+    /**
+     * When set, frame this body on its orbit once the picture has a size.
+     * An address with no body passes the mainworld. A named body passes null.
+     */
+    frameKey?: string | null;
     /** Orbits, Row or Column. */
     mode: Mode;
     /** The layer switches and the View popover's settings. */
@@ -94,6 +99,8 @@ const emit = defineEmits<{
     wayDrop: [moved: boolean];
     /** Right-click while a ship is in hand: stop laying. */
     stopPlotting: [];
+    /** The picture is at the fitted view, or the user has moved it. */
+    fitted: [on: boolean];
 }>();
 
 const route = useRoute();
@@ -268,9 +275,67 @@ function onDown(event: PointerEvent): void {
     grabbing.value = grabbed !== null;
 }
 
+/** The traffic mark under the pointer. A press does not select it. */
+let trafficHover = '';
+
+function trafficUnder(at: { x: number; y: number }): string | null {
+    return shipAt(lastMarks.filter((mark) => mark.kind === 'traffic'), at);
+}
+
+function trafficCard(id: string): { title: string; line: string } | null {
+    const track = props.tracks ? props.tracks.find((item) => item.id === id) : undefined;
+    if (!track || track.kind !== 'traffic') return null;
+    const extra = track as ShipTrack & { roleWord?: string; line?: string };
+    const title = extra.roleWord ? track.name + ' · ' + extra.roleWord : track.name;
+    return { title, line: extra.line ?? '' };
+}
+
+function paintTrafficBlock(view: View): void {
+    if (!trafficHover || !canvasEl.value) return;
+    const card = trafficCard(trafficHover);
+    const mark = lastMarks.find((item) => item.id === trafficHover && !item.jump);
+    if (!card || !mark) return;
+    const canvas = canvasEl.value;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const dpr = canvas.width / Math.max(1, canvas.clientWidth);
+    const style = getComputedStyle(canvas);
+    const token = (name: string): string => style.getPropertyValue(name).trim();
+    const colour = token('--text-muted') || token('--text-1');
+    const bg = token('--bg-0');
+    const fontName = token('--font-data') || token('--font-text') || 'sans-serif';
+    ctx.save();
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.font = '11px ' + fontName;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    const said = fitLabel(card.line ? card.title + ' — ' + card.line : card.title, (text) => ctx.measureText(text).width, 260);
+    const w = Math.ceil(ctx.measureText(said).width) + 12;
+    const at = blockPlace(mark.x, mark.y, w, view.w, view.h);
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = bg;
+    ctx.fillRect(at.x, at.y, w, 18);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = colour;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(at.ax, at.ay);
+    ctx.lineTo(at.bx, at.by);
+    ctx.stroke();
+    ctx.strokeRect(at.x + 0.5, at.y + 0.5, w - 1, 17);
+    ctx.fillStyle = colour;
+    ctx.fillText(said, at.x + 6, at.y + 9.5);
+    ctx.restore();
+}
+
 function onMove(event: PointerEvent): void {
     const at = local(event);
     pointer = at;
+    const nextTraffic = press ? '' : (trafficUnder(at) ?? '');
+    if (nextTraffic !== trafficHover) {
+        trafficHover = nextTraffic;
+        stale = true;
+    }
     if (standInCount() > 0 || props.plotting) stale = true;
     if (!press) {
         setHover(at.x, at.y);
@@ -329,6 +394,10 @@ function onUp(event: PointerEvent): void {
 
 function onLeave(): void {
     pointer = null;
+    if (trafficHover) {
+        trafficHover = '';
+        stale = true;
+    }
     if (standInCount() > 0 || props.plotting) stale = true;
     if (!press) hover.value = null;
 }
@@ -530,7 +599,8 @@ let tagSignature = '';
 
 function placeTags(picture: Picture, view: View): void {
     const half = (value: number): number => Math.round(value * 2) / 2;
-    const found = props.shipTags && props.tracks ? tagsFor(lastMarks, picture.hits, openedStacks.value) : { tags: [], more: [] };
+    const campaignMarks = lastMarks.filter((mark) => mark.kind !== 'traffic');
+    const found = props.shipTags && props.tracks ? tagsFor(campaignMarks, picture.hits, openedStacks.value) : { tags: [], more: [] };
     const tags = found.tags.map((tag) => ({ ...tag, markX: half(tag.markX), markY: half(tag.markY), kneeX: half(tag.kneeX), kneeY: half(tag.kneeY), x: half(tag.x) }));
     const more = found.more.map((item) => ({ ...item, markX: half(item.markX), markY: half(item.markY), kneeX: half(item.kneeX), kneeY: half(item.kneeY), x: half(item.x) }));
     tagMarks = tags.map((tag) => ({ id: tag.id, name: tag.name, kind: tag.kind, shape: tag.shape, x: tag.markX, y: tag.markY }));
@@ -699,6 +769,7 @@ function resize(): void {
     }
     renderer.resize(w, h, dpr);
     stage.resize(w, h, days);
+    frameOpening();
     stage.invalidate();
     stale = true;
 }
@@ -715,6 +786,7 @@ let costAt = 0;
 /** Called by the view once a frame with the clock's date and the wall time in milliseconds. */
 function paint(clockDays: number, time: number): void {
     days = clockDays;
+    if (props.frameKey && framedKey !== props.frameKey) frameOpening();
     // OrbitView calls this once a frame with the running clock. The dossier hears it here.
     publishOrbitClock(clockDays);
     const current = plan.value;
@@ -726,7 +798,10 @@ function paint(clockDays: number, time: number): void {
     const frame = stage.tick(clockDays, time);
     if (!frame) return;
     lastFrame = frame;
-    if (fitted.value !== stage.fitted) fitted.value = stage.fitted;
+    if (fitted.value !== stage.fitted) {
+        fitted.value = stage.fitted;
+        emit('fitted', stage.fitted);
+    }
     if (time - cardAt > 200) {
         cardAt = time;
         if (cardDays.value !== clockDays) cardDays.value = clockDays;
@@ -763,6 +838,7 @@ function paint(clockDays: number, time: number): void {
         ...(props.dockTag ? { dockTag: true } : {}),
         ...(props.shipTags ? { shipTags: true } : {}),
     });
+    paintTrafficBlock(frame.view);
     const cost = now() - started;
     costSum += cost;
     costFrames += 1;
@@ -778,11 +854,25 @@ function paint(clockDays: number, time: number): void {
     }
 }
 
+/** The opening body already framed, so a later select follows instead of framing again. */
+let framedKey: string | null = null;
+
+function frameOpening(): boolean {
+    const key = props.frameKey;
+    if (!key || framedKey === key) return framedKey === key && !!key;
+    if (!(stage.size.w > 1) || !(stage.size.h > 1) || !plan.value) return false;
+    if (!stage.frame(key, days, now())) return false;
+    framedKey = key;
+    return true;
+}
+
 function loadPlan(): void {
     plan.value = props.system ? planSystem(props.system, props.hexKey) : null;
     planTurn += 1;
     stage.setPlan(plan.value);
+    framedKey = null;
     hover.value = null;
+    frameOpening();
     stale = true;
 }
 
@@ -820,8 +910,13 @@ watch(() => props.selected, (key) => {
         stage.release();
         return;
     }
+    if (props.frameKey === key && framedKey !== key) {
+        if (frameOpening()) return;
+    }
     if (key !== stage.tracked) stage.follow(key, now());
 });
+
+watch(() => props.frameKey, () => { frameOpening(); });
 
 onMounted(() => {
     const wrap = wrapEl.value;
@@ -907,16 +1002,6 @@ defineExpose({ paint, fit, shipStatus, waypoints });
     </div>
     <!-- The layout control, the key and whatever else stands on the picture (views/OrbitView.vue). -->
     <slot name="overlay" />
-    <button
-      type="button"
-      class="orbit-btn orbit-fit"
-      data-command="orbit-fit"
-      title="Fit the whole system (F, or double-click empty space)"
-      :aria-pressed="fitted"
-      @click="fit"
-    >
-      <Icon name="expand" :size="13" />Fit
-    </button>
   </div>
 </template>
 
@@ -947,16 +1032,4 @@ defineExpose({ paint, fit, shipStatus, waypoints });
   cursor: move;
 }
 
-.orbit-fit {
-  position: absolute;
-  right: 14px;
-  bottom: 14px;
-  z-index: 2;
-  background: var(--chrome-glass);
-}
-
-.orbit-fit[aria-pressed="true"] {
-  border-color: var(--line-2);
-  color: var(--text-muted);
-}
 </style>

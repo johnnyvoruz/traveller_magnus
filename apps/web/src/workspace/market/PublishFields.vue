@@ -29,6 +29,8 @@ watch(coverDraft, (draft) => {
     if (draftUrl.value) URL.revokeObjectURL(draftUrl.value);
     draftUrl.value = draft ? URL.createObjectURL(new Blob([draft.image as BlobPart], { type: 'image/webp' })) : '';
 }, { immediate: true });
+/** A map or system package: its screenshot cover is trimmed to the systems (D5). */
+const coverFamily = computed(() => kindFamily(marketUi.kind));
 const coverSrc = computed(() => draftUrl.value || defaultCoverUrl(kindFamily(marketUi.kind), true));
 
 function takeCover(cover: PreparedCover): void {
@@ -81,6 +83,7 @@ onBeforeUnmount(() => {
       :can-remove="!!coverDraft"
       :busy="marketUi.busy"
       :title="marketUi.title.trim() || 'this package'"
+      :map="coverFamily === 'map' || coverFamily === 'system'"
       @take="takeCover"
       @remove="coverDraft = null"
     />
@@ -170,6 +173,7 @@ textarea.mk-box {
 
 .mk-recs label {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   padding: 3px 0;
@@ -180,6 +184,14 @@ textarea.mk-box {
   margin-left: auto;
   color: var(--text-muted);
   text-transform: capitalize;
+}
+
+/* A chosen record that is referee-only: one line under it, past the box (DF18). */
+.mk-rec-note {
+  flex: 1 1 100%;
+  padding-left: 24px;
+  color: var(--text-muted);
+  font: italic 400 12px/1.45 var(--font-text);
 }
 
 .mk-note {

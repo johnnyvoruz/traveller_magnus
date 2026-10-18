@@ -50,10 +50,8 @@ watch(() => props.bodyKey, () => { helpOpen.value = false; });
       <Icon name="xmark" :size="12" />
     </button>
     <div class="orbit-body-card-body">
-    <h2 class="orbit-body-card-title">
-      {{ model.title }}
-      <span v-if="model.sub" class="orbit-body-card-sub">({{ model.sub }})</span>
-    </h2>
+    <p v-if="model.sub" class="ui-frame-label orbit-body-card-kind">{{ model.sub }}</p>
+    <h2 class="orbit-body-card-title">{{ model.title }}</h2>
     <dl class="orbit-body-card-lines">
       <div v-for="line in shown" :key="line.label" :class="{ 'has-gap': line.gap }" :title="line.hint || undefined">
         <dt>{{ line.label }}</dt>
@@ -120,10 +118,11 @@ watch(() => props.bodyKey, () => { helpOpen.value = false; });
   max-width: 100%;
   padding: 10px 12px;
   pointer-events: auto;
-  border: 1px solid var(--signal-line);
+  border: 1px solid var(--line-2);
   border-radius: var(--r-2);
   background: var(--chrome-glass);
-  box-shadow: 0 0 24px var(--wash), 0 0 0 1px var(--wash-faint);
+  /* The videos' frame: a quiet edge and the teal halo; the bracket corners stay the inspector's. */
+  box-shadow: 0 0 24px var(--frame-glow), 0 0 0 1px var(--wash-faint);
   color: var(--text-1);
   font: 400 12px/1.5 var(--font-text);
   animation: orbit-card-dock var(--t-rail) ease-out;
@@ -218,6 +217,12 @@ watch(() => props.bodyKey, () => { helpOpen.value = false; });
   }
 }
 
+/* The body's kind as the frame's corner label, over its name. */
+.orbit-body-card .orbit-body-card-kind {
+  margin: 0 0 2px;
+}
+
+.orbit-body-card.is-closable .orbit-body-card-kind,
 .orbit-body-card.is-closable .orbit-body-card-title {
   padding-right: 22px;
 }
@@ -258,14 +263,10 @@ watch(() => props.bodyKey, () => { helpOpen.value = false; });
   margin: 0 0 5px;
   padding-bottom: 4px;
   border-bottom: 1px solid var(--line-1);
-  color: var(--signal);
-  font: 600 12px/1.5 var(--font-text);
+  color: var(--text-0);
+  font: 700 15px/1.3 var(--font-display);
+  letter-spacing: 0.04em;
   overflow-wrap: anywhere;
-}
-
-.orbit-body-card-sub {
-  color: var(--text-muted);
-  font-weight: 400;
 }
 
 .orbit-body-card-lines {

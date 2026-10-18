@@ -7,6 +7,7 @@
  */
 import {
     CAMPAIGN_LINK_KINDS,
+    playersView,
     type CampaignAnchor,
     type CampaignEntry,
     type CampaignLink,
@@ -204,6 +205,17 @@ function linkKind(kind: CampaignLink['kind']): string {
 
 /** The selection, the redaction, and the counts. The HTML is built from this. */
 export function planPack(input: PackInput): PackPlan {
+    // The same read the server will hand a player (Epic P, decision 3).
+    const view = playersView({
+        records: Object.values(input.records),
+        links: Object.values(input.links),
+        journal: Object.values(input.journal),
+        settings: input.settings,
+        clock: input.clockDays == null || !Number.isFinite(input.clockDays) ? null : { days: input.clockDays, rev: 0 },
+    });
+    const inRecord = new Set(view.records.map((row) => row.id));
+    const inEntry = new Set(view.journal.map((row) => row.id));
+    const inLink = new Set(view.links.map((row) => row.id));
     const counts: PackCounts = {
         recordsLeftOut: 0,
         entriesLeftOut: 0,
@@ -221,7 +233,7 @@ export function planPack(input: PackInput): PackPlan {
 
     for (const record of Object.values(input.records)) {
         if (record.deleted) continue;
-        if (record.visibility !== 'players') {
+        if (!inRecord.has(record.id)) {
             counts.recordsLeftOut += 1;
             continue;
         }
@@ -249,7 +261,7 @@ export function planPack(input: PackInput): PackPlan {
     const entries: PackEntry[] = [];
     for (const entry of Object.values(input.journal)) {
         if (entry.deleted) continue;
-        if (entry.visibility !== 'players') {
+        if (!inEntry.has(entry.id)) {
             counts.entriesLeftOut += 1;
             continue;
         }
@@ -276,7 +288,7 @@ export function planPack(input: PackInput): PackPlan {
         const to = input.records[link.to];
         const shownFrom = playersRecord(from);
         const shownTo = playersRecord(to);
-        if (!shownFrom || !shownTo) {
+        if (!inLink.has(link.id) || !shownFrom || !shownTo) {
             counts.linksLeftOut += 1;
             continue;
         }
@@ -345,7 +357,7 @@ export function planPack(input: PackInput): PackPlan {
         });
     }
     for (const entry of Object.values(input.journal)) {
-        if (entry.deleted || entry.visibility !== 'players' || !entry.when) continue;
+        if (entry.deleted || !inEntry.has(entry.id) || !entry.when) continue;
         if (afterClock(entry.when, clock)) {
             counts.timeline += 1;
             continue;

@@ -3,16 +3,21 @@
  * The icon rail (legacy #app-nav, hex_map.html 1320-1345, style.css 2030-2053): icons when
  * collapsed, labels when expanded, the active item marked. Expanded, it pushes the rest of the
  * shell aside (.app sets --rail-width while the rail is expanded). Every item runs a command from
- * the registry; the rail holds no behaviour of its own beyond expanding.
+ * the registry, except Dice, which opens the roller. The palette keeps Roll dice, Boon, and Bane.
  *
  * The foot button is the account (findings/campaign_workspace_design.md §1): "Sign in" while
  * signed out, the user's initials once signed in. It never waits on the session: until the
  * session is known it is the signed-out button.
  */
-import { computed, nextTick, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { loadSession, session } from '../account/session.ts';
 import Icon from '../design/Icon.vue';
+import { BUILD_REFEREE } from '../workspace/players/player_mode.ts';
+import { campaign } from '../campaign/store.ts';
+import DiceButton from '../dice/DiceButton.vue';
+import { onPageResize } from '../platform/browser.ts';
 import { displayName, initials, signInFrom } from '../workspace/account.ts';
+import { currentRoute } from './go.ts';
 import { commands } from './registry.ts';
 
 const props = withDefaults(defineProps<{
@@ -28,11 +33,20 @@ const props = withDefaults(defineProps<{
     buildOffered?: boolean;
     /** The Build switch is on. */
     buildOn?: boolean;
-}>(), { campaignOpen: false, accountOpen: false, buildOffered: false, buildOn: false });
+    /** The store is the page showing (the store mounts the rail too): Marketplace is the current item. */
+    marketOpen?: boolean;
+}>(), { campaignOpen: false, accountOpen: false, buildOffered: false, buildOn: false, marketOpen: false });
 
 const accountButton = ref<HTMLButtonElement | null>(null);
 const campaignButton = ref<HTMLButtonElement | null>(null);
 const systemButton = ref<HTMLButtonElement | null>(null);
+/** The map is the page, including a window over it. The store, account, design, and orbit are not. */
+const onMap = computed(() => {
+    if (props.marketOpen) return false;
+    const path = currentRoute()?.path ?? '';
+    if (path === '' || path.startsWith('/packages') || path.startsWith('/account') || path === '/design' || path.includes('/orbit')) return false;
+    return true;
+});
 const mark = computed(() => initials(session.user));
 const who = computed(() => displayName(session.user));
 
@@ -43,6 +57,10 @@ defineExpose({
 });
 
 const expanded = ref(false);
+const diceButton = ref<HTMLButtonElement | null>(null);
+const diceOpen = ref(false);
+const diceX = ref(0);
+const diceY = ref(0);
 /** The locked item with keyboard focus, so its reason is on screen and not only in a tooltip. */
 const lockFocus = ref<'campaign' | 'build' | ''>('');
 const ready = ref(0);
@@ -55,6 +73,16 @@ const BUILD_LOCK = 'Build: sign in to generate systems and sectors on your map.'
 
 /** Signed out, and we know it: Campaign and Build stay in the list, switched off. The account command opens the sign-in card. */
 const lockedGuest = computed(() => sessionKnown.value && session.user === null && has('account'));
+/** A player (P6): Build stays on the rail, switched off, because it is the referee's. */
+const playerLock = computed(() => campaign.role === 'player');
+const buildLocked = computed(() => lockedGuest.value || playerLock.value);
+const buildWhy = computed(() => (lockedGuest.value ? BUILD_LOCK : BUILD_REFEREE));
+
+function buildPressed(): void {
+    if (lockedGuest.value) onLocked('build');
+    else if (playerLock.value) lockFocus.value = 'build';
+    else run('build');
+}
 
 function findCommand(id: string) {
     void ready.value;
@@ -94,10 +122,41 @@ function hint(id: string, label: string): string {
     return key ? label + ' (' + key + ')' : label;
 }
 
+/** The popover sits beside the rail. At 390 the sheet ignores these and pins to the bottom. */
+function placeDice(): void {
+    const button = diceButton.value;
+    if (!button) return;
+    const box = button.getBoundingClientRect();
+    diceX.value = Math.round(box.right + 8);
+    diceY.value = Math.round(box.top);
+}
+
+function toggleDice(): void {
+    diceOpen.value = !diceOpen.value;
+    if (diceOpen.value) void nextTick(placeDice);
+}
+
+function onDiceKey(event: KeyboardEvent): void {
+    if (!diceOpen.value || event.key !== 'Escape') return;
+    diceOpen.value = false;
+}
+
+let stopDiceResize = (): void => {};
+
+watch(expanded, () => {
+    if (diceOpen.value) void nextTick(placeDice);
+});
+
 onMounted(() => {
     // Commands register in the parents' mounted hooks, which run after this one.
     void nextTick(() => { ready.value += 1; });
     void loadSession().then(() => { sessionKnown.value = true; });
+    document.addEventListener('keydown', onDiceKey, true);
+    stopDiceResize = onPageResize(() => { if (diceOpen.value) placeDice(); });
+});
+onBeforeUnmount(() => {
+    document.removeEventListener('keydown', onDiceKey, true);
+    stopDiceResize();
 });
 </script>
 
@@ -116,7 +175,7 @@ onMounted(() => {
     </button>
     <div class="rail-scroll">
       <div class="rail-group" role="group" aria-label="Explore">
-        <button type="button" class="rail-item" aria-label="Map" :title="hint('home', 'Map')" @click="run('home')">
+        <button type="button" class="rail-item" aria-label="Map" :title="hint('home', 'Map')" :aria-current="onMap ? 'page' : undefined" @click="run('home')">
           <Icon name="map" :size="20" />
           <span class="rail-label">Map</span>
         </button>
@@ -156,28 +215,51 @@ onMounted(() => {
           <span v-if="lockedGuest && !expanded && lockFocus === 'campaign'" class="rail-pop" role="status">{{ CAMPAIGN_LOCK }}</span>
         </button>
         <button
-          v-if="lockedGuest || buildOffered"
+          v-if="lockedGuest || buildOffered || playerLock"
           type="button"
           class="rail-item"
-          :class="{ 'is-locked': lockedGuest }"
-          :aria-label="lockedGuest ? BUILD_LOCK : 'Build'"
-          :title="lockedGuest ? BUILD_LOCK : hint('build', buildOn ? 'Build: on' : 'Build: generate and remove systems on your map')"
-          :aria-disabled="lockedGuest ? 'true' : undefined"
-          :aria-describedby="lockedGuest ? 'rail-why-build' : undefined"
-          :aria-pressed="lockedGuest ? undefined : (buildOn ? 'true' : 'false')"
+          :class="{ 'is-locked': buildLocked }"
+          :aria-label="buildLocked ? buildWhy : 'Build'"
+          :title="buildLocked ? buildWhy : hint('build', buildOn ? 'Build: on' : 'Build: generate and remove systems on your map')"
+          :aria-disabled="buildLocked ? 'true' : undefined"
+          :aria-describedby="buildLocked ? 'rail-why-build' : undefined"
+          :aria-pressed="buildLocked ? undefined : (buildOn ? 'true' : 'false')"
+          data-rail-build
           @focus="lockFocus = 'build'"
           @blur="lockFocus = ''"
-          @click="lockedGuest ? onLocked('build') : run('build')"
+          @click="buildPressed"
         >
           <Icon name="draw-polygon" :size="20" />
           <span class="rail-label">
             Build
-            <span v-if="lockedGuest" id="rail-why-build" class="rail-why">{{ BUILD_LOCK }}</span>
+            <span v-if="buildLocked" id="rail-why-build" class="rail-why">{{ buildWhy }}</span>
           </span>
-          <span v-if="lockedGuest && !expanded && lockFocus === 'build'" class="rail-pop" role="status">{{ BUILD_LOCK }}</span>
+          <span v-if="buildLocked && !expanded && lockFocus === 'build'" class="rail-pop" role="status">{{ buildWhy }}</span>
+        </button>
+        <button
+          ref="diceButton"
+          type="button"
+          class="rail-item"
+          aria-label="Dice"
+          :title="hint('dice', 'Dice')"
+          aria-haspopup="dialog"
+          aria-controls="dice-rail-pop"
+          :aria-expanded="diceOpen ? 'true' : 'false'"
+          @click="toggleDice"
+        >
+          <Icon name="dice" :size="20" />
+          <span class="rail-label">Dice</span>
         </button>
         <!-- Lent to Lane Z (marketplace phase 4): the catalogue, signed in or out. -->
-        <button v-if="has('marketplace')" type="button" class="rail-item" aria-label="Marketplace" :title="hint('marketplace', 'Marketplace')" @click="run('marketplace')">
+        <button
+          v-if="has('marketplace')"
+          type="button"
+          class="rail-item"
+          aria-label="Marketplace"
+          :title="hint('marketplace', 'Marketplace')"
+          :aria-current="marketOpen ? 'page' : undefined"
+          @click="run('marketplace')"
+        >
           <Icon name="store" :size="20" />
           <span class="rail-label">Marketplace</span>
         </button>
@@ -201,6 +283,19 @@ onMounted(() => {
         <span class="rail-label">{{ session.user ? who : 'Sign in' }}</span>
       </button>
     </div>
+    <Teleport to="body">
+      <div
+        v-if="diceOpen"
+        id="dice-rail-pop"
+        class="dice-rail-pop"
+        role="dialog"
+        aria-label="Dice"
+        :style="{ '--dice-x': diceX + 'px', '--dice-y': diceY + 'px' }"
+      >
+        <button type="button" class="ui-btn is-icon dice-rail-x" aria-label="Close dice" @click="diceOpen = false">×</button>
+        <DiceButton />
+      </div>
+    </Teleport>
   </nav>
 </template>
 
@@ -286,7 +381,8 @@ onMounted(() => {
 }
 
 .rail-item[aria-expanded="true"],
-.rail-item[aria-pressed="true"] {
+.rail-item[aria-pressed="true"],
+.rail-item[aria-current="page"] {
   background: var(--row-active);
   border-color: var(--row-active-line);
   color: var(--signal-active);
@@ -304,7 +400,8 @@ onMounted(() => {
 }
 
 .rail-item[aria-expanded="true"] .ui-icon,
-.rail-item[aria-pressed="true"] .ui-icon {
+.rail-item[aria-pressed="true"] .ui-icon,
+.rail-item[aria-current="page"] .ui-icon {
   color: var(--signal-bright);
 }
 
@@ -362,6 +459,64 @@ onMounted(() => {
   text-align: left;
   white-space: normal;
   box-shadow: var(--shadow-pop);
+}
+
+/* Beside the rail, out of its overflow. At 390 it is a bottom sheet. */
+.dice-rail-pop {
+  position: fixed;
+  left: var(--dice-x);
+  top: var(--dice-y);
+  z-index: 20;
+  padding: 8px 42px 8px 10px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-2);
+  background: var(--chrome-bg);
+  box-shadow: var(--shadow-pop);
+}
+
+.dice-rail-x {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+}
+
+.dice-rail-pop .dice-picks {
+  margin: 0;
+}
+
+@media (max-width: 390px) {
+  .dice-rail-pop {
+    left: 0;
+    right: 0;
+    top: auto;
+    bottom: 0;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    border-radius: var(--r-2) var(--r-2) 0 0;
+    padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
+  }
+
+  .dice-rail-x {
+    position: static;
+    flex: 0 0 auto;
+    order: 2;
+  }
+
+  .dice-rail-pop .dice-picks {
+    flex: 1 1 auto;
+    order: 1;
+    flex-wrap: wrap;
+    justify-content: center;
+    row-gap: 4px;
+  }
+}
+
+/* Touch, below 640 px: each item is a 44 px target, on the map and in the store alike. */
+@media (max-width: 640px) {
+  .rail-item {
+    height: 44px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

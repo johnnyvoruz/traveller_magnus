@@ -230,6 +230,9 @@ const PAIRS = [
     ['--chart-zone-amber', '--bg-0', MARK, 'amber zone ring'],
     ['--chart-zone-red', '--bg-0', MARK, 'red zone ring'],
     ['--chart-selected', '--bg-0', MARK, 'selected hex outline'],
+    ['--chart-news', '--bg-0', MARK, 'news ripple (XD1): a reached system and the X-boat line the news runs along'],
+    ['--print-ink', '--print-paper', TEXT, 'print and PDF (DU31): every word on the printed page'],
+    ['--print-line', '--print-paper', MARK, 'print: field lines and borders'],
     // Account and design pages
     ['--text-2', '--bg-0', TEXT, 'account page text'],
     ['--text-faint', '--bg-0', TEXT, 'design page captions'],
@@ -499,6 +502,31 @@ const PAIRS = [
     ['--focus-ring', '--panel-raised', MARK, 'surface: the focus ring on a time-bar field'],
     ['--control-line', '--panel-raised', MARK, 'surface: the edge of a time-bar field'],
     ['--danger', '--panel-raised', MARK, 'surface: a date the time bar cannot read'],
+    // The version-video look (Lane M, base.css): the ground runs --bg-1 to --bg-0 under a --line-1 grid at 32%.
+    // The wordmark dot (--mark-red on --bg-0, 2.7:1) is part of a logotype, which WCAG 1.4.3 exempts; the word reads without it.
+    ['--on-mark-red', '--mark-red', TEXT, 'NEW tag (12 px bold Orbitron)'],
+    ['--signal-dim', '--bg-0', TEXT, 'kicker, frame label (12 px bold Orbitron) on the ground and in a frame'],
+    ['--signal-dim', '--bg-1', TEXT, 'kicker at the bright corner of the ground, in a panel (12 px)'],
+    ['--signal-dim', ['--line-1@0.32', '--bg-1'], TEXT, 'kicker across a grid line of the ground (12 px)'],
+    ['--signal-dim', '--panel-raised', TEXT, 'kicker on a raised card (12 px)'],
+    ['--signal-dim', '--surface-1', TEXT, 'kicker on a panel header (12 px)'],
+    ['--signal', ['--line-1@0.32', '--bg-1'], TEXT, 'bright kicker, step kicker, frame count on the ground'],
+    ['--signal', '--bg-1', TEXT, 'bright kicker, frame count in a panel'],
+    ['--text-0', ['--line-1@0.32', '--bg-1'], TEXT, 'wordmark, look titles and step text on the ground'],
+    ['--text-1', ['--line-1@0.32', '--bg-1'], TEXT, 'date box text on the ground (12 px)'],
+    ['--text-1', '--bg-0', TEXT, 'date box text in a frame (12 px)'],
+    ['--text-1', '--panel-raised', TEXT, 'date box text on a raised card (12 px)'],
+    ['--signal-dim', '--bg-0', MARK, 'step node and line in a frame'],
+    ['--signal-dim', '--bg-1', MARK, 'step node and line in a panel'],
+    ['--signal-dim', '--panel-raised', MARK, 'step node and line on a raised card'],
+    ['--text-0', '--bg-0', TEXT, 'journal and timeline rows in their frame: the name'],
+    ['--signal', ['--wash', '--bg-0'], MARK, 'journal row: the kind glyph in its hex'],
+    ['--signal', '--bg-0', TEXT, 'journal row: the kind kicker (12 px), the session number'],
+    ['--signal', ['--wash-faint', '--bg-0'], TEXT, 'records list: the count of a group on its band (13 px bold Orbitron)'],
+    ['--signal-dim', ['--wash-faint', '--bg-0'], TEXT, 'records list: the kicker of a group on its band (12 px)'],
+    ['--control-line', OMNI_FIELD, MARK, 'omnibox: the field edge on its glass (Lane M, M8: --line-2 there is 2.15:1)'],
+    ['--text-0', '--surface-1', TEXT, 'toast: its words on the raised card'],
+    ['--signal-dim', '--surface-1', MARK, 'toast: its edge'],
 ];
 
 if (process.env.CONTRAST_REPORT) {

@@ -92,7 +92,8 @@ test('under the switch, on, with the party nowhere on the chart: one line, gone 
     assert.equal(partyOnChart(''), false);
     assert.equal(partyOnChart('~slot_3_-1/0101'), false);
     assert.equal(partyOnChart('Spinward_Marches/1910'), true);
-    const menu = read('apps/web/src/workspace/AccountMenu.vue');
+    // DU10: the switch and its line are on the Campaigns panel's card now.
+    const menu = read('apps/web/src/workspace/CampaignsPanel.vue');
     assert.match(menu, /if \(publicOn\.value !== true \|\| campaign\.status !== 'ready' \|\| !campaign\.settings\) return false;/);
     assert.match(menu, /<p v-if="openOne && publicNowhere" class="account-say is-todo" role="status" data-public-nowhere>\{\{ PUBLIC_GAMES_NO_PLACE \}\}<\/p>/);
 });

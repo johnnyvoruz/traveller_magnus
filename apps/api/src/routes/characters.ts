@@ -25,12 +25,12 @@ async function readJson(c: AppContext): Promise<unknown | Response> {
     try {
         return await c.req.json();
     } catch {
-        return fail(c, 400, 'validation', 'Invalid JSON.');
+        return fail(c, 400, 'validation', 'That request could not be read. Try again.');
     }
 }
 
 async function actor(c: AppContext, mutate: boolean) {
-    if (mutate && !originAllowed(c)) return fail(c, 403, 'forbidden', 'Origin check failed.');
+    if (mutate && !originAllowed(c)) return fail(c, 403, 'forbidden', 'That request was blocked. Reload the page and try again.');
     return requireUser(c);
 }
 

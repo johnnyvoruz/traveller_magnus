@@ -87,7 +87,7 @@ function remove(): void {
     <template v-if="plan">
       <div class="vplan-view">
         <DeckPlanView :plan="plan" />
-        <button type="button" class="ui-btn is-icon vplan-expand" aria-label="See the plan at full size" title="Full size (Esc to leave)" @click="large = true">
+        <button type="button" class="ui-btn is-icon vplan-expand" aria-label="See the plan at full size" title="See the plan at full size (Esc)" @click="large = true">
           <Icon name="up-right-and-down-left-from-center" :size="13" />
         </button>
       </div>
@@ -102,7 +102,7 @@ function remove(): void {
       </div>
     </template>
     <div v-else class="vplan-empty">
-      <p>No deck plan yet. Import the JSON file the Geomorph Shipyard exports; the plan is drawn from its tiles.</p>
+      <p>No deck plan yet. Import the file the Geomorph Shipyard exports. The plan is drawn from its tiles.</p>
       <button type="button" class="ui-btn vplan-import" :disabled="readOnly || busy" @click="pick">
         <Icon name="file-import" :size="13" />Import a shipyard file
       </button>

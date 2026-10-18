@@ -123,7 +123,11 @@ export function applyFilters(cards: readonly PackageCard[], filters: StoreFilter
     return cards.filter((card) => passes(card, filters, now));
 }
 
-export type Facet = { value: string; words: string; count: number; on: boolean };
+/** A choice. At a count of 0 it is still listed, dimmed (`dim`), and can't be ticked unless it is on. */
+export type Facet = { value: string; words: string; count: number; on: boolean; dim: boolean };
+
+/** The choices each section has listed this visit (prompts/d_store_harden.md item 2): they stay listed. */
+export type Seen = Partial<Record<FilterKey, readonly string[]>>;
 
 export type Facets = {
     kinds: Facet[];
@@ -132,7 +136,6 @@ export type Facets = {
     /** The ten most used first; "See more" shows the rest. */
     tags: Facet[];
     updated: Facet[];
-    /** Empty while the loaded cards have one publisher. */
     by: Facet[];
 };
 
@@ -144,34 +147,63 @@ function ranked(values: readonly string[]): string[] {
 }
 
 /**
- * Every section's choices with counts. A choice is listed while it has a count or is on, so a
- * box never vanishes under the pointer that ticked it. "Records only" is listed only while some
- * loaded package has no map hexes.
+ * Every section's choices with counts. A choice is listed while a loaded card has it, while it is
+ * on, or once it has been listed this visit (`seen`), so nothing vanishes under the pointer: at a
+ * count of 0 it dims. The order is the loaded cards' (most used first), so a tick never reorders a
+ * list. A section shows when any loaded card has a value for it, or one of its choices is on.
  */
-export function facets(cards: readonly PackageCard[], filters: StoreFilters, now: number): Facets {
+export function facets(cards: readonly PackageCard[], filters: StoreFilters, now: number, seen: Seen = {}): Facets {
     const others = (key: FilterKey) => cards.filter((card) => passes(card, filters, now, key));
     const list = (key: FilterKey, values: readonly string[], valueOf: (card: PackageCard) => string[], words: (value: string) => string, on: readonly string[]): Facet[] => {
         const pool = others(key);
-        return values
-            .map((value) => ({ value, words: words(value), count: pool.filter((card) => valueOf(card).includes(value)).length, on: on.includes(value) }))
-            .filter((facet) => facet.count > 0 || facet.on);
+        const kept = seen[key] ?? [];
+        return [...values, ...kept.filter((value) => !values.includes(value))].map((value) => {
+            const count = pool.filter((card) => valueOf(card).includes(value)).length;
+            const isOn = on.includes(value);
+            return { value, words: words(value), count, on: isOn, dim: count === 0 && !isOn };
+        });
     };
-    const anyRecordsOnly = cards.some((card) => contentsOf(card) === 'records');
-    const handles = ranked(cards.map((card) => card.authorHandle));
+    const filled = (values: readonly string[]) => values.filter((value) => value !== '');
     const updatedPool = others('updated');
     return {
-        kinds: list('kinds', FAMILIES, (card) => [kindFamily(card.kind)], (value) => FAMILY_WORDS[value as KindFamily], filters.kinds),
-        contents: list('contents', anyRecordsOnly || filters.contents.includes('records') ? ['hexes', 'records'] : ['hexes'], (card) => [contentsOf(card)], (value) => CONTENTS_WORDS[value as Contents], filters.contents),
-        editions: list('editions', ranked([...cards.map((card) => card.edition), ...filters.editions]), (card) => [card.edition], (value) => value, filters.editions),
-        tags: list('tags', ranked([...cards.flatMap((card) => card.tags), ...filters.tags]), (card) => card.tags, (value) => value, filters.tags),
-        updated: (['7', '30', ''] as const).map((value) => ({
-            value,
-            words: UPDATED_WORDS[value],
-            count: updatedPool.filter((card) => within(card, value, now)).length,
-            on: filters.updated === value,
-        })),
-        by: handles.length > 1 || filters.by.length ? list('by', ranked([...handles, ...filters.by]), (card) => [card.authorHandle], (value) => '@' + value, filters.by) : [],
+        kinds: list('kinds', FAMILIES.filter((family) => filters.kinds.includes(family) || cards.some((card) => kindFamily(card.kind) === family)), (card) => [kindFamily(card.kind)], (value) => FAMILY_WORDS[value as KindFamily], filters.kinds),
+        contents: list('contents', (['hexes', 'records'] as const).filter((item) => filters.contents.includes(item) || cards.some((card) => contentsOf(card) === item)), (card) => [contentsOf(card)], (value) => CONTENTS_WORDS[value as Contents], filters.contents),
+        editions: list('editions', filled(ranked([...cards.map((card) => card.edition), ...filters.editions])), (card) => [card.edition], (value) => value, filters.editions),
+        tags: list('tags', filled(ranked([...cards.flatMap((card) => card.tags), ...filters.tags])), (card) => card.tags, (value) => value, filters.tags),
+        updated: (['7', '30', ''] as const).map((value) => {
+            const count = updatedPool.filter((card) => within(card, value, now)).length;
+            const isOn = filters.updated === value;
+            return { value, words: UPDATED_WORDS[value], count, on: isOn, dim: count === 0 && !isOn };
+        }),
+        by: list('by', filled(ranked([...cards.map((card) => card.authorHandle), ...filters.by])), (card) => [card.authorHandle], (value) => '@' + value, filters.by),
     };
+}
+
+/** `seen` with every choice `listed` shows added: the same object when nothing is new. */
+export function remember(seen: Seen, listed: Facets): Seen {
+    let next: Seen | null = null;
+    for (const key of ['kinds', 'contents', 'editions', 'tags', 'by'] as const) {
+        const had = seen[key] ?? [];
+        const add = listed[key].map((facet) => facet.value).filter((value) => !had.includes(value));
+        if (!add.length) continue;
+        next = next ?? { ...seen };
+        next[key] = [...had, ...add];
+    }
+    return next ?? seen;
+}
+
+/**
+ * What to ask the server for (contract F2's `family=` and `author=`; streams/D.md D8). While the
+ * loaded cards are the whole catalogue (`complete`), the browser filters them exactly and nothing is
+ * asked. When the server has more, kinds go as `family` and one publisher as `author`, so the
+ * results hold every match and not only the loaded ones. Two or more publishers stay in the browser
+ * (the server takes one handle). Null when there is nothing to ask.
+ */
+export function serverNarrowing(filters: StoreFilters, complete: boolean): { family: KindFamily[]; author?: string } | null {
+    if (complete) return null;
+    const author = filters.by.length === 1 ? filters.by[0] : undefined;
+    if (!filters.kinds.length && !author) return null;
+    return { family: [...filters.kinds], ...(author ? { author } : {}) };
 }
 
 /** One choice turned on or off; Updated is one choice of three. */

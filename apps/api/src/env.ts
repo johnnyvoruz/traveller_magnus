@@ -22,11 +22,15 @@ export interface Env {
     X_CONSUMER_KEY?: string;
     X_CONSUMER_SECRET?: string;
     X_BEARER_TOKEN?: string;
+    /** Shortens the object-byte reservation in a test. Unset means fifteen minutes. */
+    QUOTA_RESERVATION_MS?: string;
 }
 
 export type AppVariables = {
     requestId: string;
     userId: string | null;
+    via: 'cookie' | 'token' | null;
+    tokenId: string | null;
 };
 
 export type AppEnv = { Bindings: Env; Variables: AppVariables };

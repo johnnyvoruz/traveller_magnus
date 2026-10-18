@@ -65,10 +65,16 @@ export type RowFace = {
     /** The body's first line, left off when it would repeat the name. */
     summary: string | null;
     meta: string;
+    /** The in-fiction date out of `meta`, for the row's date box. Null when the entry has none. */
+    when: string | null;
+    /** `meta` without that date: what the row prints beside the box. */
+    metaRest: string;
     /** The entry's images. The first one is the row's avatar. Null when there are none. */
     images: CampaignEntry['images'];
     /** True when the entry is marked Public, for the small mark on the row. */
     public: boolean;
+    /** The handle on a players note, when the read names who wrote it. */
+    author: string | null;
 };
 
 export function kindWord(kind: CampaignEntryKind): string {
@@ -160,10 +166,10 @@ export function entryPlace(anchor: CampaignAnchor, records: Readonly<Record<stri
     return hexWords(anchor.hexKey);
 }
 
-function metaLine(entry: CampaignEntry, place: string): string {
+function metaLine(entry: CampaignEntry, place: string, withWhen = true): string {
     const parts: string[] = [];
     if (entry.kind === 'handout' && entry.visibility === 'players') parts.push('Players');
-    if (entry.when) parts.push(whenText(entry.when));
+    if (entry.when && withWhen) parts.push(whenText(entry.when));
     if (entry.realDate) parts.push(entry.kind === 'session' ? 'played ' + entry.realDate : entry.realDate);
     parts.push(place);
     return parts.join(' · ');
@@ -179,11 +185,31 @@ function resolveName(target: string, records: Readonly<Record<string, CampaignRe
     return null;
 }
 
-export function rowFace(entry: CampaignEntry, records: Readonly<Record<string, CampaignRecord>>, nameOf: NameOf = () => null): RowFace {
+/** "Written by <handle>". Empty when the read does not name an author. */
+export function writtenBy(handle: string | null | undefined): string | null {
+    const name = (handle ?? '').trim();
+    return name ? 'Written by ' + name : null;
+}
+
+/**
+ * Who may change a note. A player edits and deletes only their own note, and never its images.
+ * The referee edits and deletes any note, images included. Offline is not writable.
+ */
+export function playerNoteAccess(player: boolean, writable: boolean): { edit: boolean; images: boolean } {
+    return { edit: writable, images: writable && !player };
+}
+
+export function rowFace(
+    entry: CampaignEntry,
+    records: Readonly<Record<string, CampaignRecord>>,
+    nameOf: NameOf = () => null,
+    authorName: string | null = null,
+): RowFace {
     const resolve = (target: string) => resolveName(target, records, nameOf);
     const name = entryName(entry, resolve);
     const line = readLine(firstLine(entry.body), resolve);
     const titled = entry.title.trim().length > 0;
+    const place = entryPlace(anchorOf(entry), records);
     return {
         id: entry.id,
         kind: entry.kind,
@@ -193,9 +219,12 @@ export function rowFace(entry: CampaignEntry, records: Readonly<Record<string, C
         name,
         soft: !titled && entry.kind !== 'session',
         summary: line && line !== name ? line : null,
-        meta: metaLine(entry, entryPlace(anchorOf(entry), records)),
+        meta: metaLine(entry, place),
+        when: entry.when ? whenText(entry.when) : null,
+        metaRest: metaLine(entry, place, false),
         images: entry.images ?? null,
         public: entry.visibility === 'public',
+        author: writtenBy(authorName) ? (authorName ?? '').trim() : null,
     };
 }
 

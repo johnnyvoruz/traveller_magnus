@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { onBeforeUnmount, onMounted, ref, useId } from 'vue';
 import { useRouter } from 'vue-router';
 import Icon from '../design/Icon.vue';
 import type { PanelSpan } from './panel_state.ts';
 import { backTo, canPaneBack, sheetFull, toggleSheet } from './pane_back.ts';
 
 const element = ref<HTMLElement | null>(null);
+const titleId = useId();
 const phone = ref(false);
 const router = useRouter();
 let stopMedia: (() => void) | null = null;
@@ -83,6 +84,8 @@ function onGrabClick(): void {
   <section
     ref="element"
     class="panel"
+    role="region"
+    :aria-labelledby="titleId"
     :data-span="span"
     :data-sheet="phone ? (sheetFull ? 'full' : 'half') : 'side'"
     :class="{ 'is-open': open, 'is-sheet-full': sheetFull }"
@@ -111,13 +114,14 @@ function onGrabClick(): void {
           <div class="panel-title-row">
             <span v-if="$slots.glyph" class="panel-glyph"><slot name="glyph" /></span>
             <!-- The title, or a box in its place while it is being renamed. -->
-            <h1><slot name="title">{{ title }}</slot></h1>
+            <h1 :id="titleId"><slot name="title">{{ title }}</slot></h1>
             <!-- The chip text is the hex chip of the legacy title row; the eyebrow slot is the breadcrumb. -->
             <span v-if="chip && (keepChip || !$slots.eyebrow)" class="ui-hex">{{ chip }}</span>
           </div>
           <p v-if="meta" class="panel-meta">{{ meta }}</p>
         </div>
         <div class="panel-tools">
+          <div v-if="$slots.pager" class="panel-pager"><slot name="pager" /></div>
           <div class="ui-seg panel-spans" role="group" aria-label="Panel width">
             <button type="button" title="Column" :aria-pressed="span === 'column'" @click="$emit('span', 'column')">Column</button>
             <button type="button" title="Half page" :aria-pressed="span === 'half'" @click="$emit('span', 'half')">Half</button>
@@ -127,7 +131,7 @@ function onGrabClick(): void {
         <button v-if="canPaneBack" type="button" class="panel-back" aria-label="Back" title="Back" @click="onBack">
           <Icon name="chevron-left" :size="18" />
         </button>
-        <button type="button" class="panel-close" aria-label="Close panel" title="Close" @click="$emit('close')">
+        <button type="button" class="panel-close" aria-label="Close panel" title="Close panel" @click="$emit('close')">
           <Icon name="xmark" :size="18" />
         </button>
       </header>
@@ -142,6 +146,14 @@ function onGrabClick(): void {
 </template>
 
 <style>
+/* The width switch in the videos' type: small Orbitron capitals, as their kickers. */
+.panel-spans button {
+  padding: 5px 9px 4px;
+  font: 700 10px/1.4 var(--font-display);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
 /*
  * The measured box is the card plus its side gutters, so the map's workspace starts one inset
  * past the card (legacy --inspector-width is the pane width plus 20).
@@ -206,12 +218,17 @@ function onGrabClick(): void {
 }
 
 .panel-head {
+  /* One corner: Close, and Back when the pane stack has a previous pane. Tools stay in the content box. */
+  --corner-edge: 10px;
+  --corner-size: 30px;
+  --corner-gap: 4px;
+  --corner-extra: 8px;
   position: relative;
   display: flex;
   flex: 0 0 auto;
   align-items: center;
   min-height: 58px;
-  padding: 12px 48px 12px 16px;
+  padding: 12px calc(var(--corner-edge) + var(--corner-size) + var(--corner-extra)) 12px 16px;
   background: var(--surface-1);
   border-bottom: 1px solid var(--signal-line);
 }
@@ -282,11 +299,11 @@ function onGrabClick(): void {
 .panel-back {
   position: absolute;
   top: 50%;
-  right: 10px;
+  right: var(--corner-edge);
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: var(--corner-size);
+  height: var(--corner-size);
   margin: 0;
   padding: 0;
   border: 0;
@@ -299,11 +316,111 @@ function onGrabClick(): void {
 }
 
 .panel-back {
-  right: 44px;
+  right: calc(var(--corner-edge) + var(--corner-size) + var(--corner-gap));
 }
 
 .panel-head:has(.panel-back) {
-  padding-right: 84px;
+  padding-right: calc(var(--corner-edge) + (2 * var(--corner-size)) + var(--corner-gap) + var(--corner-extra));
+}
+
+/*
+ * At Column (DF7), a header with a location line ("Spinward Marches - Vilis") is two rows: the title
+ * and its hex badge across the top with back and close in the corner, then the location line with the
+ * width switch beside it. On one row the switch crowded the title and pushed the badge under it. Half
+ * and Full keep one row; a phone is the bottom sheet, with no switch.
+ */
+@media (min-width: 600px) {
+  .panel[data-span="column"] .panel-head:has(.panel-meta) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 3px 12px;
+    padding-right: 16px;
+  }
+
+  .panel[data-span="column"] .panel-head:has(.panel-meta) .panel-titles {
+    display: contents;
+  }
+
+  .panel[data-span="column"] .panel-head:has(.panel-meta) .panel-eyebrow,
+  .panel[data-span="column"] .panel-head:has(.panel-meta) .panel-title-row {
+    grid-column: 1 / -1;
+    padding-right: calc(var(--corner-edge) + var(--corner-size) + var(--corner-extra));
+  }
+
+  .panel[data-span="column"] .panel-head:has(.panel-meta):has(.panel-back) .panel-eyebrow,
+  .panel[data-span="column"] .panel-head:has(.panel-meta):has(.panel-back) .panel-title-row {
+    padding-right: calc(var(--corner-edge) + (2 * var(--corner-size)) + var(--corner-gap) + var(--corner-extra));
+  }
+
+  .panel[data-span="column"] .panel-head:has(.panel-meta) .panel-meta {
+    grid-column: 1;
+  }
+
+  .panel[data-span="column"] .panel-head:has(.panel-meta) .panel-tools {
+    grid-column: 2;
+    margin-left: 0;
+    padding-left: 0;
+  }
+
+  .panel[data-span="column"] .panel-head:has(.panel-meta) .panel-close,
+  .panel[data-span="column"] .panel-head:has(.panel-meta) .panel-back {
+    top: 10px;
+    transform: none;
+  }
+
+  .panel[data-span="column"] .panel-head:has(.panel-meta) .panel-close:active,
+  .panel[data-span="column"] .panel-head:has(.panel-meta) .panel-back:active {
+    transform: scale(0.9);
+  }
+}
+
+/*
+ * A panel with a pager (the world profile) supersedes DF7. Column: the width switch sits on the
+ * first row of the tools, the pager on the second. Half and full keep one row: pager, then the
+ * switch. Close stays in the corner. A header with no pager keeps DF7.
+ */
+@media (min-width: 600px) {
+  .panel[data-span="column"] .panel-head:has(.panel-pager) {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: flex-start;
+    padding-right: calc(var(--corner-edge) + var(--corner-size) + var(--corner-extra));
+  }
+
+  .panel[data-span="column"] .panel-head:has(.panel-pager):has(.panel-back) {
+    padding-right: calc(var(--corner-edge) + (2 * var(--corner-size)) + var(--corner-gap) + var(--corner-extra));
+  }
+
+  .panel[data-span="column"] .panel-head:has(.panel-pager) .panel-titles {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+  }
+
+  .panel[data-span="column"] .panel-head:has(.panel-pager) .panel-eyebrow,
+  .panel[data-span="column"] .panel-head:has(.panel-pager) .panel-title-row {
+    grid-column: auto;
+  }
+
+  .panel[data-span="column"] .panel-head:has(.panel-pager) .panel-tools:has(.panel-pager) {
+    flex-direction: column;
+    align-items: flex-end;
+  }
+
+  .panel[data-span="column"] .panel-head:has(.panel-pager) .panel-pager {
+    order: 1;
+  }
+
+  .panel[data-span="column"] .panel-head:has(.panel-pager) .panel-spans {
+    order: 0;
+  }
+}
+
+.panel-pager {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
 }
 
 .panel-close:hover,
@@ -392,13 +509,18 @@ function onGrabClick(): void {
     place-items: center;
     flex: 0 0 auto;
     width: 100%;
-    height: 22px;
+    height: 32px;
     margin: 0;
     padding: 0;
     border: 0;
     background: transparent;
     color: var(--signal-dim);
     cursor: grab;
+  }
+
+  /* A thumb's size on the sheet (DU4): the close and back buttons are 44 px square. */
+  .panel-head {
+    --corner-size: 44px;
   }
 
   .panel-grab:active {

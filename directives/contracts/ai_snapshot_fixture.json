@@ -1,0 +1,204 @@
+{
+  "options": {
+    "universeId": "u_fixture",
+    "origin": "https://traveller.voyage"
+  },
+  "campaign": {
+    "name": "The Efate Run",
+    "records": [
+      {
+        "id": "cr_00000000-0000-4000-8000-000000000001",
+        "type": "person",
+        "kind": "pc",
+        "name": "Rhys Calder",
+        "summary": "Pilot of the Far Margin.",
+        "details": "",
+        "tags": [
+          "crew"
+        ],
+        "anchor": {
+          "kind": "record",
+          "id": "cr_00000000-0000-4000-8000-000000000002"
+        },
+        "when": null,
+        "visibility": "players",
+        "playerNotes": "Your pilot.",
+        "sheet": null,
+        "status": null,
+        "images": null,
+        "provenance": null,
+        "rev": 7,
+        "createdAt": "2026-10-17T20:00:00.000Z",
+        "updatedAt": "2026-10-17T20:00:00.000Z",
+        "deleted": false
+      },
+      {
+        "id": "cr_00000000-0000-4000-8000-000000000002",
+        "type": "vessel",
+        "kind": "Free Trader",
+        "name": "Far Margin",
+        "summary": "The party's Type A.",
+        "details": "Bought on mortgage at Regina.",
+        "tags": [],
+        "anchor": {
+          "kind": "system",
+          "hexKey": "Spinward_Marches/1910",
+          "bodyKey": "w3",
+          "locationLabel": "Highport"
+        },
+        "when": null,
+        "visibility": "players",
+        "playerNotes": null,
+        "sheet": null,
+        "status": {
+          "cargo": [
+            {
+              "label": "Machine parts",
+              "tons": 11
+            }
+          ]
+        },
+        "images": null,
+        "provenance": null,
+        "rev": 4,
+        "createdAt": "2026-10-17T20:00:00.000Z",
+        "updatedAt": "2026-10-17T20:00:00.000Z",
+        "deleted": false
+      },
+      {
+        "id": "cr_00000000-0000-4000-8000-000000000003",
+        "type": "business",
+        "kind": "broker",
+        "name": "Teague Freight",
+        "summary": "Freight broker in Startown.",
+        "details": "Harlan Teague runs the Startown office.",
+        "tags": [],
+        "anchor": {
+          "kind": "system",
+          "hexKey": "Spinward_Marches/1910",
+          "locationLabel": "Startown"
+        },
+        "when": null,
+        "visibility": "referee",
+        "playerNotes": null,
+        "sheet": null,
+        "status": null,
+        "images": null,
+        "provenance": null,
+        "rev": 2,
+        "createdAt": "2026-10-17T20:00:00.000Z",
+        "updatedAt": "2026-10-17T20:00:00.000Z",
+        "deleted": false
+      },
+      {
+        "id": "cr_00000000-0000-4000-8000-000000000004",
+        "type": "person",
+        "kind": "",
+        "name": "Old Name",
+        "summary": "",
+        "details": "",
+        "tags": [],
+        "anchor": null,
+        "when": null,
+        "visibility": "referee",
+        "playerNotes": null,
+        "sheet": null,
+        "status": null,
+        "images": null,
+        "provenance": null,
+        "rev": 1,
+        "createdAt": "2026-10-17T20:00:00.000Z",
+        "updatedAt": "2026-10-17T20:00:00.000Z",
+        "deleted": true
+      }
+    ],
+    "links": [
+      {
+        "id": "cl_00000000-0000-4000-8000-000000000001",
+        "from": "cr_00000000-0000-4000-8000-000000000001",
+        "to": "cr_00000000-0000-4000-8000-000000000002",
+        "kind": "crew",
+        "role": "pilot",
+        "order": 0,
+        "since": {
+          "year": 1105,
+          "day": 30
+        },
+        "until": null,
+        "notes": "",
+        "visibility": "players",
+        "provenance": null,
+        "rev": 1,
+        "createdAt": "2026-10-17T20:00:00.000Z",
+        "updatedAt": "2026-10-17T20:00:00.000Z",
+        "deleted": false
+      }
+    ],
+    "journal": [
+      {
+        "id": "cj_00000000-0000-4000-8000-000000000001",
+        "kind": "session",
+        "title": "Session 11: Regina",
+        "body": "The crew took the Teague contract.",
+        "when": {
+          "year": 1105,
+          "day": 44
+        },
+        "realDate": "2026-10-09",
+        "sequence": 11,
+        "author": "referee",
+        "visibility": "players",
+        "anchor": null,
+        "mentions": [
+          "cr_00000000-0000-4000-8000-000000000003"
+        ],
+        "images": null,
+        "rev": 1,
+        "createdAt": "2026-10-17T20:00:00.000Z",
+        "updatedAt": "2026-10-17T20:00:00.000Z",
+        "deleted": false
+      },
+      {
+        "id": "cj_00000000-0000-4000-8000-000000000002",
+        "kind": "rumor",
+        "title": "Pirates near Efate",
+        "body": "A rumour heard in Startown.",
+        "when": null,
+        "realDate": null,
+        "sequence": null,
+        "author": "referee",
+        "visibility": "referee",
+        "anchor": null,
+        "mentions": [],
+        "images": null,
+        "rev": 2,
+        "createdAt": "2026-10-17T20:00:00.000Z",
+        "updatedAt": "2026-10-17T20:00:00.000Z",
+        "deleted": false
+      }
+    ],
+    "settings": {
+      "party": {
+        "vesselIds": [
+          "cr_00000000-0000-4000-8000-000000000002"
+        ],
+        "aboard": {
+          "cr_00000000-0000-4000-8000-000000000001": "cr_00000000-0000-4000-8000-000000000002"
+        },
+        "memberIds": [
+          "cr_00000000-0000-4000-8000-000000000001"
+        ],
+        "anchor": null
+      },
+      "kinds": {},
+      "calendar": {
+        "dateFormat": "imperial"
+      },
+      "rev": 3
+    },
+    "clock": {
+      "days": 403371,
+      "rev": 12
+    }
+  }
+}

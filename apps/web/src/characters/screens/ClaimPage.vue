@@ -90,7 +90,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main class="claim-page">
+  <main class="claim-page ui-ground">
+    <span class="ui-brand claim-brand">Traveller<span class="ui-brand-dot">.</span>voyage</span>
     <section class="claim-card" :aria-label="face.title">
       <h1>{{ face.title }}</h1>
       <p v-if="!checked">Checking the session.</p>
@@ -123,9 +124,10 @@ onBeforeUnmount(() => {
   inset: 0;
   display: flex;
   align-items: center;
+  flex-direction: column;
+  gap: 20px;
   justify-content: center;
   padding: 24px;
-  background: var(--bg-0);
   color: var(--text-1);
 }
 
@@ -133,15 +135,22 @@ onBeforeUnmount(() => {
   box-sizing: border-box;
   width: min(420px, 100%);
   padding: 24px;
-  border: 1px solid var(--line-1);
+  border: 1px solid var(--line-2);
   border-radius: var(--r-4);
-  background: var(--panel-raised);
+  background: var(--bg-0);
+  box-shadow: 0 0 24px var(--frame-glow);
+}
+
+/* The page on the ground, the brand over a framed card (the version-video look). */
+.claim-page.ui-ground {
+  position: absolute;
 }
 
 .claim-card h1 {
   margin: 0 0 8px;
   color: var(--text-0);
-  font: 500 22px/1.3 var(--font-display);
+  font: 700 22px/1.3 var(--font-display);
+  letter-spacing: 0.02em;
 }
 
 .claim-card p {

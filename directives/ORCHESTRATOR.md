@@ -13,6 +13,10 @@ Read, in order:
    directives/handoff.md (it is short now).
 Everything under directives/archive/ is history.
 
+**Lanes run on streams by default** (Johnny, 2026-10-17): keep every lane's queue in
+`directives/streams/<X>.md` full and reviewed; a one-off prompt is the exception.
+How: `directives/streams/HOW_TO_RUN.md`.
+
 Each turn:
 - Check every report against the tree (git status, git diff, file times) before believing it.
 - Write each next lane prompt as a file in directives/prompts/ with a "## Progress" section,

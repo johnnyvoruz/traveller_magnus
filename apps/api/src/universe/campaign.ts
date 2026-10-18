@@ -9,11 +9,14 @@ import {
     CampaignSettings,
     Party,
     mentionsOf,
+    playersObjectHashes,
+    playersView,
     type CampaignChangesResult,
     type CampaignClock,
     type CampaignEntry,
     type CampaignLink as CampaignLinkRow,
     type CampaignPage,
+    type PlayersView,
     type CampaignRecord as CampaignRecordRow,
     type EntryChange,
     type LinkChange,
@@ -39,10 +42,10 @@ const LINK_PROVENANCE = 'provenance' in CampaignLink.shape;
 const ANCESTOR = 'An organization cannot be its own ancestor.';
 
 export class CampaignRefusal extends Error {
-    readonly code: 'validation' | 'too_large';
+    readonly code: 'validation' | 'too_large' | 'forbidden';
     readonly details: unknown;
 
-    constructor(code: 'validation' | 'too_large', message: string, details?: unknown) {
+    constructor(code: 'validation' | 'too_large' | 'forbidden', message: string, details?: unknown) {
         super(message);
         this.code = code;
         this.details = details;
@@ -113,11 +116,15 @@ export function installCampaignSchema(sql: Sql): void {
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         deleted INTEGER NOT NULL,
-        images TEXT
+        images TEXT,
+        author_id TEXT
     )`);
     const journalColumns = sql.exec(`SELECT name AS name FROM pragma_table_info('campaign_journal')`);
     if (!journalColumns.some((row) => row.name === 'images')) {
         sql.exec(`ALTER TABLE campaign_journal ADD COLUMN images TEXT`);
+    }
+    if (!journalColumns.some((row) => row.name === 'author_id')) {
+        sql.exec(`ALTER TABLE campaign_journal ADD COLUMN author_id TEXT`);
     }
     sql.exec(`CREATE INDEX IF NOT EXISTS campaign_journal_seq ON campaign_journal(seq)`);
     sql.exec(`CREATE INDEX IF NOT EXISTS campaign_journal_kind ON campaign_journal(kind)`);
@@ -135,8 +142,80 @@ export function installCampaignSchema(sql: Sql): void {
         payload_hash TEXT,
         PRIMARY KEY (kind, rev)
     )`);
+    sql.exec(`CREATE TABLE IF NOT EXISTS campaign_summary (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        vessels TEXT NOT NULL,
+        aboard INTEGER NOT NULL,
+        clock_days REAL,
+        record_count INTEGER NOT NULL,
+        changed_at TEXT NOT NULL
+    )`);
     sql.exec(`INSERT INTO meta (key, value) VALUES ('schemaVersion', '3') ON CONFLICT(key) DO UPDATE SET value = '3'`);
     sql.exec(`INSERT INTO meta (key, value) VALUES ('campaignSeq', '0') ON CONFLICT(key) DO NOTHING`);
+}
+
+/** The list card's facts. The card builds the party line and the date. */
+export type CampaignSummary = {
+    vessels: string[];
+    aboard: number;
+    clockDays: number | null;
+    records: number;
+    changedAt: string;
+};
+
+export type CampaignWriteResult = CampaignChangesResult & { summary?: CampaignSummary };
+
+/**
+ * One row, replaced when a campaign write stored a change.
+ * Vessel names follow `party.vesselIds`. A missing or deleted id is skipped.
+ * `aboard` counts `party.memberIds` that still point at a live record.
+ */
+export function writeCampaignSummary(sql: Sql, now: string): CampaignSummary {
+    const settings = readSettings(sql);
+    const vessels: string[] = [];
+    for (const id of settings.party.vesselIds) {
+        const row = sql.exec(`SELECT name FROM campaign_records WHERE id = ? AND deleted = 0`, id)[0];
+        if (row) vessels.push(String(row.name));
+    }
+    let aboard = 0;
+    for (const id of settings.party.memberIds) {
+        const row = sql.exec(`SELECT id FROM campaign_records WHERE id = ? AND deleted = 0`, id)[0];
+        if (row) aboard += 1;
+    }
+    const clock = readClock(sql);
+    const summary: CampaignSummary = {
+        vessels,
+        aboard,
+        clockDays: clock ? clock.days : null,
+        records: countLive(sql, 'campaign_records'),
+        changedAt: now,
+    };
+    sql.exec(
+        `INSERT INTO campaign_summary (id, vessels, aboard, clock_days, record_count, changed_at)
+         VALUES (1, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+            vessels = excluded.vessels,
+            aboard = excluded.aboard,
+            clock_days = excluded.clock_days,
+            record_count = excluded.record_count,
+            changed_at = excluded.changed_at`,
+        JSON.stringify(summary.vessels),
+        summary.aboard,
+        summary.clockDays,
+        summary.records,
+        summary.changedAt,
+    );
+    return summary;
+}
+
+function storedResult(
+    sql: Sql,
+    now: string,
+    applied: CampaignChangesResult['applied'],
+    conflicts: CampaignChangesResult['conflicts'],
+): CampaignWriteResult {
+    if (!applied.length) return { applied, conflicts };
+    return { applied, conflicts, summary: writeCampaignSummary(sql, now) };
 }
 
 function text(value: unknown): string | null {
@@ -252,7 +331,10 @@ function linkFrom(row: SqlRow) {
     return { ...link, provenance: parseJson(row.provenance) };
 }
 
-function entryFrom(row: SqlRow): CampaignEntry {
+/** A stored journal row. `authorId` is the player's account, or null on a referee note. */
+type StoredJournalEntry = CampaignEntry & { authorId: string | null };
+
+function entryFrom(row: SqlRow): StoredJournalEntry {
     return {
         id: String(row.id),
         kind: row.kind as CampaignEntry['kind'],
@@ -270,7 +352,15 @@ function entryFrom(row: SqlRow): CampaignEntry {
         createdAt: String(row.created_at),
         updatedAt: String(row.updated_at),
         deleted: bit(row.deleted),
+        authorId: text(row.author_id),
     };
+}
+
+/** The owner page is the campaign schema. `authorId` stays off that body. */
+function ownerEntry(row: SqlRow): CampaignEntry {
+    const { authorId, ...entry } = entryFrom(row);
+    void authorId;
+    return entry;
 }
 
 function loadRecord(sql: Sql, id: string): SqlRow | null {
@@ -376,7 +466,7 @@ function liveRecord(sql: Sql, id: string): boolean {
     return rows.length > 0 && !bit(rows[0].deleted);
 }
 
-export function readCampaign(sql: Sql, afterSeq: number, limit: number): CampaignPage {
+export function readCampaign(sql: Sql, afterSeq: number, limit: number, withAuthor = false): CampaignPage {
     const cap = Math.min(1000, Math.max(1, Math.floor(limit)));
     const records = sql.exec(
         `SELECT * FROM campaign_records WHERE seq > ? ORDER BY seq LIMIT ?`,
@@ -406,12 +496,118 @@ export function readCampaign(sql: Sql, afterSeq: number, limit: number): Campaig
     return {
         records: page.filter((item) => item.table === 'records').map((item) => recordFrom(item.row)) as CampaignPage['records'],
         links: page.filter((item) => item.table === 'links').map((item) => linkFrom(item.row)) as CampaignPage['links'],
-        journal: page.filter((item) => item.table === 'journal').map((item) => entryFrom(item.row)) as CampaignPage['journal'],
+        journal: page.filter((item) => item.table === 'journal').map((item) => (
+            withAuthor ? entryFrom(item.row) : ownerEntry(item.row)
+        )) as CampaignPage['journal'],
         settings: readSettings(sql),
         clock: readClock(sql),
         seq,
         done,
     };
+}
+
+export type PlayersCaller = {
+    userId: string;
+    handles: Readonly<Record<string, string>>;
+};
+
+export type PlayersCampaignPage = {
+    records: PlayersView['records'];
+    links: PlayersView['links'];
+    journal: PlayersView['journal'];
+    settings: PlayersView['settings'];
+    clock: PlayersView['clock'];
+    seq: number;
+    done: boolean;
+    visible?: { records: string[]; links: string[]; journal: string[] };
+};
+
+function liveRows(sql: Sql): { records: SqlRow[]; links: SqlRow[]; journal: SqlRow[] } {
+    return {
+        records: sql.exec(`SELECT * FROM campaign_records WHERE deleted = 0`),
+        links: sql.exec(`SELECT * FROM campaign_links WHERE deleted = 0`),
+        journal: sql.exec(`SELECT * FROM campaign_journal WHERE deleted = 0`),
+    };
+}
+
+function projectLive(sql: Sql, rows: { records: SqlRow[]; links: SqlRow[]; journal: SqlRow[] }, caller: PlayersCaller): PlayersView {
+    return playersView({
+        records: rows.records.map((row) => recordFrom(row)) as CampaignPage['records'],
+        links: rows.links.map((row) => linkFrom(row)) as CampaignPage['links'],
+        journal: rows.journal.map((row) => entryFrom(row)),
+        settings: readSettings(sql),
+        clock: readClock(sql),
+    }, caller);
+}
+
+/**
+ * One table can fill `limit` without pushing another table off the page.
+ * A merged window of 1000 drops a late link when the records already fill it.
+ * When a table is cut, `seq` is the earliest cut so the next page still sees that table.
+ */
+function pageKind<T extends { id: string }>(
+    rows: readonly T[],
+    seqOf: ReadonlyMap<string, number>,
+    kind: string,
+    afterSeq: number,
+    cap: number,
+): { rows: T[]; last: number | null; truncated: boolean } {
+    const sorted = rows
+        .map((row) => ({ row, seq: seqOf.get(`${kind}:${row.id}`) ?? 0 }))
+        .filter((item) => item.seq > afterSeq)
+        .sort((a, b) => a.seq - b.seq);
+    const page = sorted.slice(0, cap);
+    return {
+        rows: page.map((item) => item.row),
+        last: page.length ? page[page.length - 1].seq : null,
+        truncated: sorted.length > cap,
+    };
+}
+
+/** The member read. The whole live set is projected, then each table is paged on its own. */
+export function readPlayersCampaign(sql: Sql, afterSeq: number, limit: number, caller: PlayersCaller): PlayersCampaignPage {
+    const cap = Math.min(1000, Math.max(1, Math.floor(limit)));
+    const rows = liveRows(sql);
+    const seqOf = new Map<string, number>();
+    for (const row of rows.records) seqOf.set(`records:${String(row.id)}`, Number(row.seq));
+    for (const row of rows.links) seqOf.set(`links:${String(row.id)}`, Number(row.seq));
+    for (const row of rows.journal) seqOf.set(`journal:${String(row.id)}`, Number(row.seq));
+    const view = projectLive(sql, rows, caller);
+    const records = pageKind(view.records, seqOf, 'records', afterSeq, cap);
+    const links = pageKind(view.links, seqOf, 'links', afterSeq, cap);
+    const journal = pageKind(view.journal, seqOf, 'journal', afterSeq, cap);
+    const cut = [records, links, journal].filter((item) => item.truncated && item.last != null);
+    const counter = sql.exec(`SELECT value FROM meta WHERE key = 'campaignSeq'`);
+    const universeSeq = Number(counter[0]?.value ?? 0);
+    const done = cut.length === 0;
+    const seq = done ? universeSeq : Math.min(...cut.map((item) => item.last as number));
+    const body: PlayersCampaignPage = {
+        records: records.rows,
+        links: links.rows,
+        journal: journal.rows,
+        settings: view.settings,
+        clock: view.clock,
+        seq,
+        done,
+    };
+    if (afterSeq === 0 || seq > afterSeq) {
+        body.visible = {
+            records: view.records.map((row) => row.id),
+            links: view.links.map((row) => row.id),
+            journal: view.journal.map((row) => row.id),
+        };
+    }
+    return body;
+}
+
+/** Image hashes on the projected records and notes. The caller does not change the set. */
+export function playersCampaignHashes(sql: Sql): string[] {
+    return playersObjectHashes(projectLive(sql, liveRows(sql), { userId: '', handles: {} }));
+}
+
+export function journalAuthorReady(sql: Sql): boolean {
+    const rows = sql.exec(`SELECT name FROM pragma_table_info('campaign_journal')`);
+    return rows.some((row) => row.name === 'author_id');
 }
 
 function tombstoneLinks(sql: Sql, recordId: string, now: string, applied: CampaignChangesResult['applied']): void {
@@ -452,14 +648,194 @@ function requireRoom(
     }
 }
 
-export function applyCampaignChanges(sql: Sql, changes: unknown, now: string, acknowledgePublic = false): CampaignChangesResult {
+const PLAYER_NOTES = 65_535;
+const PLAYER_NOTE_SENTENCE = 'You have 65,535 notes in this campaign, the most one player can keep.';
+const MEMBER_FORBIDDEN = 'You cannot change that.';
+
+export type MemberCaller = { userId: string };
+
+function countPlayerNotes(sql: Sql, userId: string): number {
+    const rows = sql.exec(`SELECT COUNT(*) AS n FROM campaign_journal WHERE deleted = 0 AND author_id = ?`, userId);
+    return Number(rows[0]?.n ?? 0);
+}
+
+function refuseMember(): never {
+    throw new CampaignRefusal('forbidden', MEMBER_FORBIDDEN);
+}
+
+function assertMemberAnchor(sql: Sql, anchor: CampaignEntry['anchor']): void {
+    if (anchor == null || anchor.kind === 'system') return;
+    const rows = sql.exec(
+        `SELECT id FROM campaign_records WHERE id = ? AND deleted = 0 AND visibility = 'players'`,
+        anchor.id,
+    );
+    if (!rows.length) throw new CampaignRefusal('validation', 'Invalid request.');
+}
+
+function assertMemberNote(change: EntryChange): void {
+    if (!isFullEntry(change)) return;
+    if (change.kind !== 'note' || change.author !== 'players' || change.visibility !== 'players') refuseMember();
+    if (Object.prototype.hasOwnProperty.call(change, 'images') && change.images != null) refuseMember();
+}
+
+/**
+ * A member writes their own players notes. The per-player live count is the guard.
+ * Those notes are not refused by the universe journal cap.
+ */
+function applyMemberNotes(sql: Sql, changes: unknown, now: string, member: MemberCaller): CampaignWriteResult {
+    const parsed = CampaignChanges.safeParse(changes);
+    if (!parsed.success) {
+        const tooLarge = parsed.error.issues.some((issue) => issue.message === 'too_large');
+        throw new CampaignRefusal(
+            tooLarge ? 'too_large' : 'validation',
+            tooLarge ? 'This change is over the campaign limit.' : journalImageOverflow(parsed.error) ? 'An entry can hold 12 images.' : 'That request could not be read. Try again.',
+            parsed.error.flatten(),
+        );
+    }
+    const input = parsed.data;
+    if (input.records || input.links || input.settings || input.clock) refuseMember();
+    const applied: CampaignChangesResult['applied'] = [];
+    const conflicts: CampaignChangesResult['conflicts'] = [];
+    return sql.transaction(() => {
+        for (const change of input.journal ?? []) {
+            const stored = loadEntry(sql, change.id);
+            if (!stored) {
+                if (!isFullEntry(change) || change.baseRev !== 0) refuseMember();
+                assertMemberNote(change);
+                assertMemberAnchor(sql, change.anchor);
+                if (!change.deleted && countPlayerNotes(sql, member.userId) >= PLAYER_NOTES) {
+                    throw new CampaignRefusal('too_large', PLAYER_NOTE_SENTENCE);
+                }
+                const rev = 1;
+                const seq = nextSeq(sql);
+                const mentions = mentionsOf(change.body);
+                sql.exec(
+                    `INSERT INTO campaign_journal (
+                        id, kind, title, body, when_json, real_date, sequence, author, visibility,
+                        anchor, mentions, images, rev, seq, created_at, updated_at, deleted, author_id
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    change.id,
+                    change.kind,
+                    change.title,
+                    change.body,
+                    jsonText(change.when),
+                    change.realDate,
+                    change.sequence,
+                    change.author,
+                    'players',
+                    jsonText(change.anchor),
+                    JSON.stringify(mentions),
+                    imagesWrite(change) ?? null,
+                    rev,
+                    seq,
+                    now,
+                    now,
+                    change.deleted ? 1 : 0,
+                    member.userId,
+                );
+                applied.push({ table: 'journal', id: change.id, rev, seq });
+                continue;
+            }
+            if (text(stored.author_id) !== member.userId) refuseMember();
+            if (isFullEntry(change)) {
+                assertMemberNote(change);
+                assertMemberAnchor(sql, change.anchor);
+            }
+            if (change.baseRev !== Number(stored.rev)) {
+                conflicts.push({
+                    table: 'journal',
+                    id: change.id,
+                    current: ownerEntry(stored) as Extract<CampaignChangesResult['conflicts'][number], { table: 'journal' }>['current'],
+                });
+                continue;
+            }
+            const rev = Number(stored.rev) + 1;
+            const seq = nextSeq(sql);
+            const willDelete = change.deleted === true;
+            if (bit(stored.deleted) && !willDelete && countPlayerNotes(sql, member.userId) >= PLAYER_NOTES) {
+                throw new CampaignRefusal('too_large', PLAYER_NOTE_SENTENCE);
+            }
+            if (isFullEntry(change)) {
+                const mentions = mentionsOf(change.body);
+                const images = imagesWrite(change);
+                if (images === undefined) {
+                    sql.exec(
+                        `UPDATE campaign_journal SET
+                            kind = ?, title = ?, body = ?, when_json = ?, real_date = ?, sequence = ?,
+                            author = ?, visibility = ?, anchor = ?, mentions = ?,
+                            rev = ?, seq = ?, updated_at = ?, deleted = ?
+                         WHERE id = ?`,
+                        change.kind,
+                        change.title,
+                        change.body,
+                        jsonText(change.when),
+                        change.realDate,
+                        change.sequence,
+                        change.author,
+                        'players',
+                        jsonText(change.anchor),
+                        JSON.stringify(mentions),
+                        rev,
+                        seq,
+                        now,
+                        willDelete ? 1 : 0,
+                        change.id,
+                    );
+                } else {
+                    sql.exec(
+                        `UPDATE campaign_journal SET
+                            kind = ?, title = ?, body = ?, when_json = ?, real_date = ?, sequence = ?,
+                            author = ?, visibility = ?, anchor = ?, mentions = ?, images = ?,
+                            rev = ?, seq = ?, updated_at = ?, deleted = ?
+                         WHERE id = ?`,
+                        change.kind,
+                        change.title,
+                        change.body,
+                        jsonText(change.when),
+                        change.realDate,
+                        change.sequence,
+                        change.author,
+                        'players',
+                        jsonText(change.anchor),
+                        JSON.stringify(mentions),
+                        images,
+                        rev,
+                        seq,
+                        now,
+                        willDelete ? 1 : 0,
+                        change.id,
+                    );
+                }
+            } else {
+                sql.exec(
+                    `UPDATE campaign_journal SET deleted = 1, rev = ?, seq = ?, updated_at = ? WHERE id = ?`,
+                    rev,
+                    seq,
+                    now,
+                    change.id,
+                );
+            }
+            applied.push({ table: 'journal', id: change.id, rev, seq });
+        }
+        return storedResult(sql, now, applied, conflicts);
+    });
+}
+
+export function applyCampaignChanges(
+    sql: Sql,
+    changes: unknown,
+    now: string,
+    acknowledgePublic = false,
+    member?: MemberCaller | null,
+): CampaignWriteResult {
+    if (member) return applyMemberNotes(sql, changes, now, member);
     const legacyParty = legacySettingsWrite(changes);
     const parsed = CampaignChanges.safeParse(changes);
     if (!parsed.success) {
         const tooLarge = parsed.error.issues.some((issue) => issue.message === 'too_large');
         throw new CampaignRefusal(
             tooLarge ? 'too_large' : 'validation',
-            tooLarge ? 'This change is over the campaign limit.' : journalImageOverflow(parsed.error) ? 'An entry can hold 12 images.' : 'Invalid request.',
+            tooLarge ? 'This change is over the campaign limit.' : journalImageOverflow(parsed.error) ? 'An entry can hold 12 images.' : 'That request could not be read. Try again.',
             parsed.error.flatten(),
         );
     }
@@ -757,7 +1133,7 @@ export function applyCampaignChanges(sql: Sql, changes: unknown, now: string, ac
                 conflicts.push({
                     table: 'journal',
                     id: change.id,
-                    current: entryFrom(stored) as Extract<CampaignChangesResult['conflicts'][number], { table: 'journal' }>['current'],
+                    current: ownerEntry(stored) as Extract<CampaignChangesResult['conflicts'][number], { table: 'journal' }>['current'],
                 });
                 continue;
             }
@@ -827,7 +1203,7 @@ export function applyCampaignChanges(sql: Sql, changes: unknown, now: string, ac
             }
             applied.push({ table: 'journal', id: change.id, rev, seq });
         }
-        return { applied, conflicts };
+        return storedResult(sql, now, applied, conflicts);
     });
 }
 

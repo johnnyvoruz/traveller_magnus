@@ -137,7 +137,7 @@ function onKey(event: KeyboardEvent): void {
         :disabled="readOnly"
         @click="open('start')"
       >
-        <template v-if="when"><b>{{ whenText(when.start) }}</b><span>{{ whenWeekday(when.start) }}</span></template>
+        <template v-if="when"><b class="ui-date">{{ whenText(when.start) }}</b><span>{{ whenWeekday(when.start) }}</span></template>
         <template v-else><span class="clock-none">No date</span><span>Set a date</span></template>
       </button>
     </label>
@@ -169,7 +169,7 @@ function onKey(event: KeyboardEvent): void {
       </template>
       <template v-else-if="when.end">
         <button ref="endBtn" type="button" class="clock-date" :disabled="readOnly" @click="open('end')">
-          <span>to</span><b>{{ whenText(when.end) }}</b><span>{{ whenWeekday(when.end) }}</span>
+          <span>to</span><b class="ui-date">{{ whenText(when.end) }}</b><span>{{ whenWeekday(when.end) }}</span>
         </button>
       </template>
       <button v-else ref="endBtn" type="button" class="ui-btn" :disabled="readOnly" @click="open('end')">Add an end date</button>
@@ -206,6 +206,12 @@ function onKey(event: KeyboardEvent): void {
   font-weight: 400;
   letter-spacing: 0;
   text-transform: none;
+}
+
+/* The date in the shared date box: the clock line's own bold mono would otherwise win inside the button. */
+.rec-when .clock-date b.ui-date {
+  color: var(--text-1);
+  font: 700 12px/1.4 var(--font-display);
 }
 
 .rec-when .edit-hint {

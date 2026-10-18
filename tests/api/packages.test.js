@@ -177,7 +177,7 @@ VALUES ('${version}', '1.1.0', 'M1105', 'TravellerMagnus', '${SETTINGS}', '[]', 
             assert.equal(publicMissing.body.error.message, 'No such package.');
             const mineSignedOut = await jsonFetch(`${base}/api/packages?mine=1`);
             assert.equal(mineSignedOut.status, 401);
-            assert.equal(mineSignedOut.body.error.message, 'Sign in required.');
+            assert.equal(mineSignedOut.body.error.message, 'Sign in to continue.');
             for (const [method, pathName] of [
                 ['POST', '/api/packages'],
                 ['POST', '/api/packages/pk_missing/report'],
@@ -191,7 +191,7 @@ VALUES ('${version}', '1.1.0', 'M1105', 'TravellerMagnus', '${SETTINGS}', '[]', 
                 });
                 assert.equal(response.status, 401, `${method} ${pathName} ${JSON.stringify(response.body)}`);
                 assert.equal(response.body.error.code, 'unauthenticated');
-                assert.equal(response.body.error.message, 'Sign in required.');
+                assert.equal(response.body.error.message, 'Sign in to continue.');
             }
 
             const bare = await jsonFetch(`${base}/api/universes`, {
@@ -231,7 +231,7 @@ VALUES ('${version}', '1.1.0', 'M1105', 'TravellerMagnus', '${SETTINGS}', '[]', 
                 body: JSON.stringify({ title: 'Evil', kind: 'subsector', description: '', tags: [], universeId: bare.body.data.id }),
             });
             assert.equal(foreignOrigin.status, 403);
-            assert.equal(foreignOrigin.body.error.message, 'Origin check failed.');
+            assert.equal(foreignOrigin.body.error.message, 'That request was blocked. Reload the page and try again.');
 
             const createdUniverse = await jsonFetch(`${base}/api/universes`, {
                 method: 'POST', headers, body: JSON.stringify({ name: 'Charted map', truthVersion: version, editionDefault: 'MgT2E' }),
@@ -279,12 +279,12 @@ VALUES ('${version}', '1.1.0', 'M1105', 'TravellerMagnus', '${SETTINGS}', '[]', 
 
             const badLimit = await jsonFetch(`${base}/api/packages?limit=nope`, { headers: { cookie: owner } });
             assert.equal(badLimit.status, 400);
-            assert.equal(badLimit.body.error.message, 'Invalid limit.');
+            assert.equal(badLimit.body.error.message, 'That request could not be read. Try again.');
             const duplicate = await jsonFetch(`${base}/api/packages/${packageId}/versions`, {
                 method: 'POST', headers, body: JSON.stringify({ universeId, hexKeys: ['Demo/1910', 'Demo/1910'], recordIds: [] }),
             });
             assert.equal(duplicate.status, 400, JSON.stringify(duplicate.body));
-            assert.equal(duplicate.body.error.message, 'Invalid request.');
+            assert.equal(duplicate.body.error.message, 'That request could not be read. Try again.');
             assert.ok(duplicate.body.error.details.fieldErrors.hexKeys.includes('duplicate hex key'));
             const tooManyHexes = await jsonFetch(`${base}/api/packages/${packageId}/versions`, {
                 method: 'POST', headers,
@@ -470,7 +470,7 @@ VALUES ('${version}', '1.1.0', 'M1105', 'TravellerMagnus', '${SETTINGS}', '[]', 
             assert.deepEqual(byKind.body.data.items, []);
             const badSort = await jsonFetch(`${base}/api/packages?sort=random`);
             assert.equal(badSort.status, 400);
-            assert.equal(badSort.body.error.message, 'Invalid request.');
+            assert.equal(badSort.body.error.message, 'That request could not be read. Try again.');
             const firstCard = await jsonFetch(`${base}/api/packages?sort=installs&limit=1`);
             assert.equal(typeof firstCard.body.data.nextCursor, 'string');
             const wrongCursor = await jsonFetch(`${base}/api/packages?sort=title&cursor=${encodeURIComponent(firstCard.body.data.nextCursor)}`);
@@ -487,7 +487,7 @@ VALUES ('${version}', '1.1.0', 'M1105', 'TravellerMagnus', '${SETTINGS}', '[]', 
             const otherHeaders = { 'content-type': 'application/json', cookie: other };
             const emptyReport = await jsonFetch(reportPath, { method: 'POST', headers: otherHeaders, body: JSON.stringify({ reason: ' ' }) });
             assert.equal(emptyReport.status, 400);
-            assert.equal(emptyReport.body.error.message, 'Invalid request.');
+            assert.equal(emptyReport.body.error.message, 'That request could not be read. Try again.');
             const reported = await jsonFetch(reportPath, { method: 'POST', headers: otherHeaders, body: JSON.stringify({ reason: 'Spam.' }) });
             assert.equal(reported.status, 201, JSON.stringify(reported.body));
             const reportedAgain = await jsonFetch(reportPath, { method: 'POST', headers: otherHeaders, body: JSON.stringify({ reason: 'Spam.' }) });
@@ -495,7 +495,7 @@ VALUES ('${version}', '1.1.0', 'M1105', 'TravellerMagnus', '${SETTINGS}', '[]', 
             const takedownPath = `${base}/api/admin/packages/${packageId}/takedown`;
             const notAdmin = await jsonFetch(takedownPath, { method: 'POST', headers: otherHeaders, body: JSON.stringify({ reason: 'Spam.' }) });
             assert.equal(notAdmin.status, 403);
-            assert.equal(notAdmin.body.error.message, 'Role required.');
+            assert.equal(notAdmin.body.error.message, 'You do not have access to that.');
             sqlFile(persistTo, `UPDATE user SET role = 'admin' WHERE id = 'mku${stamp}';`);
             const noTarget = await jsonFetch(`${base}/api/admin/packages/pk_missing/takedown`, { method: 'POST', headers: otherHeaders, body: JSON.stringify({ reason: 'Spam.' }) });
             assert.equal(noTarget.status, 404);
@@ -522,7 +522,7 @@ VALUES ('${version}', '1.1.0', 'M1105', 'TravellerMagnus', '${SETTINGS}', '[]', 
                 const refused = await jsonFetch(`${base}/api/packages?hidden=1`, cookie ? { headers: { cookie } } : {});
                 assert.equal(refused.status, 403);
                 assert.equal(refused.body.error.code, 'forbidden');
-                assert.equal(refused.body.error.message, 'Role required.');
+                assert.equal(refused.body.error.message, 'You do not have access to that.');
             }
             const hiddenList = await jsonFetch(`${base}/api/packages?hidden=1`, { headers: { cookie: other } });
             assert.equal(hiddenList.status, 200, JSON.stringify(hiddenList.body));

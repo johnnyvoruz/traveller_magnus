@@ -5,13 +5,14 @@
  */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const webRoot = path.join(root, 'apps', 'web');
-const cacheDir = path.join(root, '.tmp', 'e-packages-ssr');
+let cacheDir = '';
 
 describe('my packages entry', { concurrency: 1 }, () => {
     /** @type {import('vite').ViteDevServer | null} */
@@ -20,7 +21,7 @@ describe('my packages entry', { concurrency: 1 }, () => {
     let session = { user: null };
 
     test.before(async () => {
-        fs.rmSync(cacheDir, { recursive: true, force: true });
+        cacheDir = fs.mkdtempSync(path.join(tmpdir(), 'e-packages-ssr-'));
         const { createServer } = await import('vite');
         server = await createServer({
             root: webRoot,
@@ -35,7 +36,7 @@ describe('my packages entry', { concurrency: 1 }, () => {
     test.after(async () => {
         session.user = null;
         if (server) await server.close();
-        fs.rmSync(cacheDir, { recursive: true, force: true });
+        if (cacheDir) fs.rmSync(cacheDir, { recursive: true, force: true });
     });
 
     test('the router table names both package routes', () => {
@@ -47,7 +48,16 @@ describe('my packages entry', { concurrency: 1 }, () => {
     test('a cold load of /packages renders the list shell', async () => {
         session.user = null;
         const html = await renderAt('/packages');
-        assert.match(html, /^<div class="mk-scroll"><main class="is-store mk-page">/);
+        // The app's frame (prompts/d_store_harden.md item 1): the rail, Marketplace its current item,
+        // the brand at the top, and no "Map" button of the store's own.
+        assert.match(html, /^<div class="mk-app"><nav class="rail"/);
+        assert.match(html, /<button[^>]*aria-label="Marketplace"[^>]*aria-current="page"/);
+        assert.match(html, /<div class="mk-scroll"><main class="is-store mk-page"><header class="mk-bar"><a [^>]*class="[^"]*mk-brand"/);
+        assert.match(html, /<span class="ui-brand" aria-hidden="true">Traveller<span class="ui-brand-dot">\.<\/span>voyage<\/span>/);
+        // The videos' ground behind the page, and the rule under the heading (item 5).
+        assert.match(html, /<div class="ui-ground mk-ground" aria-hidden="true"><\/div>/);
+        assert.match(html, /<h1 class="mk-title">Marketplace<\/h1><div class="ui-rule mk-title-rule" aria-hidden="true"><\/div>/);
+        assert.doesNotMatch(html, />Map<\/a>/);
         assert.match(html, /<h1 class="mk-title">Marketplace<\/h1>/);
         assert.match(html, /aria-label="Loading packages"/);
         assert.match(html, /aria-label="Search packages"/);
@@ -58,7 +68,9 @@ describe('my packages entry', { concurrency: 1 }, () => {
     test('a cold load of /packages/:packageId renders the package shell', async () => {
         session.user = null;
         const html = await renderAt('/packages/anything');
-        assert.match(html, /^<div class="mk-scroll"><main class="mk-page">/);
+        assert.match(html, /^<div class="mk-app"><nav class="rail"/);
+        assert.match(html, /<button[^>]*aria-label="Marketplace"[^>]*aria-current="page"/);
+        assert.match(html, /<div class="mk-scroll"><main class="mk-page"><header class="mk-bar"><a [^>]*class="[^"]*mk-brand"/);
         // The product page's title is its hero's h1, painted once the package is read.
         assert.match(html, /aria-label="Loading the package"/);
         assert.doesNotMatch(html, /class="mk-title"/);

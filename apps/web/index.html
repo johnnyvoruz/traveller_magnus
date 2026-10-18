@@ -2,10 +2,22 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="referrer" content="same-origin" />
     <link rel="icon" href="/favicon.ico" sizes="48x48" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <title>Traveller.voyage</title>
+    <meta name="description" content="A map of the charted Traveller universe, with a private campaign on top of it." />
+    <!-- theme-color is --bg-0 from apps/web/src/design/tokens.css. A meta tag cannot read a CSS variable, so this is the one literal colour outside tokens.css. -->
+    <meta name="theme-color" content="#0b0c10" />
+    <meta property="og:title" content="Traveller.voyage" />
+    <meta property="og:description" content="A map of the charted Traveller universe, with a private campaign on top of it." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://traveller.voyage/" />
+    <meta property="og:image" content="https://traveller.voyage/og.png" />
+    <meta property="og:site_name" content="Traveller.voyage" />
+    <meta name="twitter:card" content="summary_large_image" />
   </head>
   <body>
     <div id="app"></div>

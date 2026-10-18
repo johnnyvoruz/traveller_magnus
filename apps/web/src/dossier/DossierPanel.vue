@@ -6,8 +6,10 @@ import { observeSize } from '../platform/browser.ts';
 import Icon from '../design/Icon.vue';
 import Panel from '../shell/Panel.vue';
 import { addressPane } from '../shell/pane.ts';
-import { readSpan, writeSpan, type PanelSpan } from '../shell/panel_state.ts';
+import { onSpan, readSpan, writeSpan, type PanelSpan } from '../shell/panel_state.ts';
 import { session } from '../account/session.ts';
+import { commands, onCommandsChanged } from '../shell/registry.ts';
+import { signInFrom } from '../workspace/account.ts';
 import { campaign } from '../campaign/store.ts';
 import { retryCampaign } from '../workspace/opening.ts';
 import { bodyCounts, hexKeyOf } from '../workspace/places.ts';
@@ -72,6 +74,7 @@ const router = useRouter();
 const panel = ref<{ element: HTMLElement | null } | null>(null);
 const span = ref<PanelSpan>(readSpan());
 let stopSize: (() => void) | null = null;
+let stopSpan: (() => void) | null = null;
 let sized: HTMLElement | null = null;
 
 /** This hex as a key, when the panel shows one. */
@@ -287,6 +290,13 @@ const slotOff = computed(() => {
     return view.kind === 'sector' && parseSlot(view.sector) !== null;
 });
 
+/** Signed out, Build cannot be switched on. Opens the same sign-in card as the rail's Build item. */
+function signInToBuild(): void {
+    signInFrom.value = 'build';
+    const account = commands().find((item) => item.id === 'account');
+    if (account && (!account.runnable || account.runnable())) account.run();
+}
+
 const title = computed(() => {
     if (scopeOff.value) return slotOff.value ? 'Empty slot' : props.sectorName || 'Sector';
     if (buildMode.value === 'slot') return 'Empty slot';
@@ -392,7 +402,29 @@ function openKey(key: string): void {
 }
 
 function showOverview(): void {
-    void router.push({ path: pathTo(null), query: route.query });
+    // On the map, no body is the system. In the orbit view that same path is also the
+    // opening mainworld, so the crumb marks the overview and Back can return to the body.
+    const query = props.orbit ? { ...route.query, overview: '1' } : route.query;
+    void router.push({ path: pathTo(null), query });
+}
+
+/**
+ * How fast news travels from this system (spec_xboat_ripples.md §3.1; streams/D.md XD2): the map's
+ * command, so the button shows only where the map has registered it. A full panel gives way to
+ * the column, as the campaign panel does for a locate, so the ripple can be seen.
+ */
+const newsOffered = ref(false);
+const hasNews = (): boolean => commands().some((item) => item.id === 'news-from-here');
+let stopCommands: (() => void) | null = null;
+
+function spreadNews(): void {
+    const command = commands().find((item) => item.id === 'news-from-here');
+    if (!command || (command.runnable && !command.runnable())) return;
+    if (span.value === 'full') {
+        span.value = 'column';
+        void nextTick(publish);
+    }
+    command.run();
 }
 
 /** Into the orbit view, on this body when one is open. The pane, the camera and the clock stay. */
@@ -405,10 +437,15 @@ watch(span, () => { void nextTick(() => { bindSize(); publish(); }); });
 
 onMounted(() => {
     bindSize();
+    stopSpan = onSpan(() => { span.value = readSpan(); });
+    newsOffered.value = hasNews();
+    stopCommands = onCommandsChanged(() => { newsOffered.value = hasNews(); });
     void nextTick(publish);
 });
 
 onBeforeUnmount(() => {
+    if (stopSpan) stopSpan();
+    if (stopCommands) stopCommands();
     if (stopSize) stopSize();
     emit('width', 0);
 });
@@ -466,34 +503,43 @@ defineExpose({ remeasure: publish });
         />
       </template>
       <template v-else-if="unnamed && buildMode === 'scope'" #title><span class="panel-title-unnamed">{{ title }}</span></template>
-      <template v-if="profile || buildMode === 'system' || (own && buildMode === 'scope')" #actions>
-        <template v-if="profile && !drafting">
-          <button
-            type="button"
-            class="ui-btn is-icon"
-            aria-label="Previous body"
-            title="Previous"
-            :disabled="!profile.prev"
-            @click="profile.prev && openKey(profile.prev)"
-          >
-            <Icon name="chevron-left" :size="13" />
-          </button>
-          <span class="doss-position">{{ profile.index }} / {{ profile.total }}</span>
-          <button
-            type="button"
-            class="ui-btn is-icon"
-            aria-label="Next body"
-            title="Next"
-            :disabled="!profile.next"
-            @click="profile.next && openKey(profile.next)"
-          >
-            <Icon name="chevron-right" :size="13" />
-          </button>
-          <button v-if="!orbit && !preview" type="button" class="ui-btn doss-orbits" title="Open the orbit view on this body" @click="openOrbit(bodyKey)">
-            <Icon name="solar-system" :size="13" />Orbits
-          </button>
-        </template>
-        <SectorBar v-else-if="own && buildMode === 'scope' && scope" :name="own.name" :subsector="scope.letter !== null" />
+      <template v-else-if="profile && !drafting" #title>
+        {{ profile.title }}
+        <span v-if="profile.mapBadge" class="ui-badge"><Icon name="star" :size="10.5" /><span>{{ profile.mapBadge }}</span></span>
+      </template>
+      <template v-if="profile && !drafting" #pager>
+        <button
+          type="button"
+          class="ui-btn is-icon"
+          aria-label="Previous body"
+          title="Previous body"
+          :disabled="!profile.prev"
+          @click="profile.prev && openKey(profile.prev)"
+        >
+          <Icon name="chevron-left" :size="13" />
+        </button>
+        <span class="doss-position">{{ profile.index }} / {{ profile.total }}</span>
+        <button
+          type="button"
+          class="ui-btn is-icon"
+          aria-label="Next body"
+          title="Next body"
+          :disabled="!profile.next"
+          @click="profile.next && openKey(profile.next)"
+        >
+          <Icon name="chevron-right" :size="13" />
+        </button>
+      </template>
+      <template v-if="profile && !drafting && !orbit && !preview" #actions>
+        <button v-if="newsOffered" type="button" class="ui-btn doss-news" title="How fast news travels from this system" data-command="news-from-here" @click="spreadNews">
+          <Icon name="radar" :size="13" />News
+        </button>
+        <button type="button" class="ui-btn doss-orbits" :class="{ 'is-after': newsOffered }" title="Open the orbit view on this body" @click="openOrbit(bodyKey)">
+          <Icon name="solar-system" :size="13" />Orbits
+        </button>
+      </template>
+      <template v-else-if="(buildMode === 'system' || (own && buildMode === 'scope')) && !(profile && !drafting)" #actions>
+        <SectorBar v-if="own && buildMode === 'scope' && scope" :name="own.name" :subsector="scope.letter !== null" />
         <BuildBar v-else :hex-key="hexKey" :name="overview ? (overview.header.name || overview.header.title) : hex" />
       </template>
       <SectorPane v-if="buildMode === 'slot'" />
@@ -508,7 +554,7 @@ defineExpose({ remeasure: publish });
       <PublishForm v-else-if="marketUi.open && buildMode === 'system'" class="build-pane" :keys="[hexKey]" />
       <SystemEditor v-else-if="drafting" :span="span" />
       <DossierBody v-else-if="profile" :model="profile" :span="span" :day-night="dayNight" :tick="tick" :live="orbit === true" :place="placeOnStrip" :restated="restated" :surface="bodySurface" :sun="sunOnSurface" :now-days="nowDays" :start-days="clockDays" @open="openKey">
-        <template #records>
+        <template #records="{ open, toggle }">
           <RecordsHere
             v-if="!preview"
             :slug="slug"
@@ -516,6 +562,8 @@ defineExpose({ remeasure: publish });
             :system-name="overview ? (overview.header.name || overview.header.title) : ''"
             :body-key="bodyKey"
             :body-name="profile.title"
+            :fold-open="open"
+            @toggle="toggle"
             @retry="retryCampaign()"
           />
         </template>
@@ -536,8 +584,10 @@ defineExpose({ remeasure: publish });
           :plain-orbit="buildMode !== null"
           :hex-key="preview ? undefined : hexKey"
           :counts="recordCounts"
+          :news="newsOffered && !orbit && !preview"
           @open="openKey"
           @orbit="openOrbit(null)"
+          @news="spreadNews"
           @retry="$emit('retry')"
         >
           <template #records>
@@ -545,9 +595,15 @@ defineExpose({ remeasure: publish });
           </template>
         </DossierOverview>
       </template>
-      <p v-else-if="slotOff" class="doss-muted doss-pad">Build is off. Switch it on to make a sector in this slot.</p>
-      <p v-else-if="scopeOff" class="doss-muted doss-pad">Build is off. Switch it on to select and generate in this {{ scopeOff }}.</p>
-      <p v-else-if="missing" class="doss-muted doss-pad">This hex has no world in the sector index.</p>
+      <p v-else-if="slotOff" class="doss-muted doss-pad">
+        <template v-if="session.user">Build is off. Switch it on to make a sector in this slot.</template>
+        <template v-else><button type="button" class="doss-signin" @click="signInToBuild">Sign in</button> to build here.</template>
+      </p>
+      <p v-else-if="scopeOff" class="doss-muted doss-pad">
+        <template v-if="session.user">Build is off. Switch it on to select and generate in this {{ scopeOff }}.</template>
+        <template v-else><button type="button" class="doss-signin" @click="signInToBuild">Sign in</button> to build here.</template>
+      </p>
+      <p v-else-if="missing" class="doss-muted doss-pad">This hex has no world on the chart.</p>
       <p v-else-if="pending" class="doss-muted doss-pad">Loading this sector.</p>
     </Panel>
   </div>
@@ -571,6 +627,18 @@ defineExpose({ remeasure: publish });
 .doss-pad {
   margin: 0;
   padding: 22px 16px;
+}
+
+.doss-signin {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--signal);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
 }
 
 .doss-crumb {
@@ -646,8 +714,13 @@ defineExpose({ remeasure: publish });
   white-space: nowrap;
 }
 
-.doss-orbits {
+.doss-orbits,
+.doss-news {
   margin-left: auto;
+}
+
+.doss-orbits.is-after {
+  margin-left: 0;
 }
 
 .doss-actions {

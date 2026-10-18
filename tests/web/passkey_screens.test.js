@@ -88,8 +88,8 @@ test('a recovery session: every other route goes to /account, and the open route
 
 test('a closed prompt and no WebAuthn have their own words, with no alarm', () => {
     assert.equal(words.PASSKEY_CLOSED, 'You closed the passkey prompt.');
-    assert.equal(words.NO_WEBAUTHN_PROVIDERS, 'This browser can’t use passkeys. Sign in with another account instead.');
-    assert.equal(words.NO_WEBAUTHN_ALONE, 'This browser can’t use passkeys. Open this page in a browser that can.');
+    assert.equal(words.NO_WEBAUTHN_PROVIDERS, 'This browser cannot use passkeys. Sign in with another account instead.');
+    assert.equal(words.NO_WEBAUTHN_ALONE, 'This browser cannot use passkeys. Open this page in a browser that can.');
 });
 
 test('when a passkey was added, in the house form for a real date; unreadable says nothing', () => {

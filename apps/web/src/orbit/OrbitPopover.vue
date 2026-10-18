@@ -66,10 +66,11 @@ defineEmits<{ toggle: []; close: [] }>();
   width: max-content;
   max-width: min(420px, 80vw);
   padding: 12px 14px;
-  border: 1px solid var(--signal-dim);
+  /* The videos' frame: the quiet edge and the teal halo, over the pop shadow. */
+  border: 1px solid var(--line-2);
   border-radius: var(--r-4);
   background: var(--stage-head);
-  box-shadow: var(--shadow-pop);
+  box-shadow: var(--shadow-pop), 0 0 24px var(--frame-glow);
   color: var(--text-1);
   font: 400 13px/1.5 var(--font-text);
 }

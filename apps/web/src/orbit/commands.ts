@@ -53,6 +53,18 @@ export const LAYERS: readonly { key: LayerToggle; id: string; label: string; hot
     { key: 'markMainworld', id: 'orbit-layer-mainworld', label: 'Mainworld', hotkey: '0', title: 'The cyan star that marks the mainworld' },
 ];
 
+/**
+ * Background ships (spec_living_systems.md §4). Not a picture layer: the chip
+ * shows when the campaign's traffic switch is on, and it hides those ships on
+ * this device only. Quiet still hides them too.
+ */
+export const TRAFFIC_LAYER = {
+    id: 'orbit-layer-traffic',
+    label: 'Traffic',
+    hotkey: '-',
+    title: 'Ships that come and go in this system. Scenery, not tracked ships.',
+} as const;
+
 /** The commands in the order the Keys popover lists them. */
 export const ORBIT_COMMANDS: readonly OrbitCommand[] = [
     { id: 'orbit-play', name: 'Play or pause', keys: [' '], help: 'play or pause' },
@@ -69,6 +81,7 @@ export const ORBIT_COMMANDS: readonly OrbitCommand[] = [
     { id: 'orbit-set-campaign', name: 'Set as campaign date', keys: ['C'], help: 'the campaign date to the view’s' },
     ...LAYOUTS.map((item) => ({ id: item.id, name: 'Layout: ' + item.label, keys: [item.key], help: 'the ' + item.label.toLowerCase() + ' layout' })),
     ...LAYERS.map((item) => ({ id: item.id, name: 'Show or hide: ' + item.label, keys: [item.hotkey], help: item.label.toLowerCase() + ' on or off' })),
+    { id: TRAFFIC_LAYER.id, name: 'Show or hide: ' + TRAFFIC_LAYER.label, keys: [TRAFFIC_LAYER.hotkey], help: TRAFFIC_LAYER.title },
     { id: 'orbit-fit', name: 'Fit the system', keys: ['f'], help: 'fit the whole system' },
     { id: 'orbit-plot', name: 'Plotting mode', keys: ['p', 'P'], help: 'the selected ship’s nav console on (selecting a ship opens it too). With a ship already in hand, P starts laying again from the last waypoint, or stops laying if it was on. Set the thrust, then the plotter follows the pointer; press open space to lay a point, or a body to lay the arrival and stop laying' },
     { id: 'orbit-stop-plotting', name: 'Stop plotting', keys: [], help: 'right-click on the picture while a ship is in hand: laying ends, the course stays uncommitted, and the ship stays in hand. P, or Lay from here, starts laying again from the last waypoint' },

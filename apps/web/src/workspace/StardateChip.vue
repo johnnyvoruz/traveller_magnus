@@ -77,11 +77,12 @@ const said = computed(() => {
   line-height: 1;
 }
 
+/* The date in Orbitron, as the version videos set it (Lane M). */
 .stardate b {
   color: var(--text-0);
-  font: 700 16px/1 var(--font-code);
+  font: 700 15px/1 var(--font-display);
   font-variant-numeric: var(--tabular);
-  letter-spacing: 0.02em;
+  letter-spacing: 0.1em;
 }
 
 .stardate.is-mine {
@@ -112,7 +113,6 @@ const said = computed(() => {
 
 .stardate.is-quiet b {
   color: var(--text-1);
-  font-weight: 600;
 }
 
 /* A narrow window: the weekday goes, and "No campaign date" leaves its icon. */

@@ -416,3 +416,15 @@ test('a journal entry keeps a session numbered and every other kind unnumbered',
     });
     assert.equal(result.success, true);
 });
+
+test('LS3: the living switches are optional settings; old rows parse, new rows round-trip, nothing else is taken', () => {
+    const old = settings();
+    assert.equal(CampaignSettings.safeParse(old).success, true, 'a row from before has no living, and both are off');
+    const on = CampaignSettings.safeParse(settings({ living: { chatter: true, traffic: false } }));
+    assert.equal(on.success, true);
+    assert.deepEqual(on.data.living, { chatter: true, traffic: false });
+    assert.equal(CampaignChanges.safeParse({ settings: { ...settings({ living: { chatter: false, traffic: true } }), baseRev: 0 } }).success, true, 'written as one settings change');
+    assert.equal(CampaignSettings.safeParse(settings({ living: { chatter: true } })).success, false, 'both switches, always');
+    assert.equal(CampaignSettings.safeParse(settings({ living: { chatter: true, traffic: true, ticker: true } })).success, false);
+    assert.equal(CampaignSettings.safeParse(settings({ living: { chatter: 'yes', traffic: false } })).success, false);
+});

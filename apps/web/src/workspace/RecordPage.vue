@@ -1,10 +1,12 @@
 <script setup lang="ts">
 /**
  * One record (design §3): its name, type, who can see it, place, summary, details, player notes and tags, each edited
- * where it stands, its connections (K5d), the saving mark, and Delete; a vessel also carries
+ * where it stands, its connections (K5d), the journal entries that mention it and its rows on
+ * the timeline (manifesto: Connected), the saving mark, and Delete; a vessel also carries
  * its track (K12) and its ship sheet (K13) with its deck plan (K9) inside.
  */
 import { computed, defineAsyncComponent, nextTick, onMounted, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { CAMPAIGN_LIMITS, type CampaignAnchor, type CampaignRecord, type CampaignRecordType } from '@voyage/shared';
 import { flushCampaign, lastError, pending } from '../campaign/commit.ts';
 import { campaign } from '../campaign/store.ts';
@@ -17,10 +19,19 @@ import { uploadWords } from './images.ts';
 import LinksBlock from './LinksBlock.vue';
 import { campaignDays, vesselWhere } from './party_where.ts';
 import RecordGallery from './RecordGallery.vue';
+import RecordMentions from './RecordMentions.vue';
+import RecordTimeline from './RecordTimeline.vue';
+import { placeNow } from './place_now.ts';
+import { placeSource } from './place_source.ts';
+import PrintButton from './PrintButton.vue';
 import RecordWhen from './RecordWhen.vue';
-import { RECORD_TYPES, addTag, cleanDetails, cleanName, cleanSummary, placeLine } from './records.ts';
+import SpreadNews from './SpreadNews.vue';
+import { RECORD_TYPES, addTag, cleanDetails, cleanName, cleanSummary } from './records.ts';
+import type { BodyPart } from './journal/body.ts';
+import { atPane, paneChanges, withQuery } from '../shell/pane.ts';
 import { dockShipAt } from './track_actions.ts';
 import TrackBlock from './TrackBlock.vue';
+import VesselTrade from './VesselTrade.vue';
 import VesselPlan from './VesselPlan.vue';
 import WhereBlock from './WhereBlock.vue';
 
@@ -37,6 +48,36 @@ const emit = defineEmits<{
     /** The map has to be seen (a pick, a locate): the panel gives way when it covers it. */
     map: [];
 }>();
+
+const route = useRoute();
+const router = useRouter();
+
+function nameOf(target: string): string | null {
+    if (target.startsWith('cr_')) {
+        const found = campaign.records[target];
+        return found && !found.deleted ? found.name : null;
+    }
+    if (!target.startsWith('hex:')) return null;
+    const key = target.slice(4);
+    const source = placeSource();
+    const now = source ? source.current() : null;
+    if (now && now.name && now.slug + '/' + now.hex === key) return now.name;
+    return null;
+}
+
+function openRich(part: Exclude<BodyPart, { kind: 'text' }>): void {
+    if (part.kind === 'record') {
+        void router.push(atPane(route.path, route.query, { kind: 'campaign', record: part.id }));
+        return;
+    }
+    const cut = part.hexKey.lastIndexOf('/');
+    if (cut < 0) return;
+    emit('map');
+    void router.push({
+        path: '/s/' + encodeURIComponent(part.hexKey.slice(0, cut)) + '/' + part.hexKey.slice(cut + 1),
+        query: withQuery(route.query, paneChanges({ kind: 'campaign', record: props.id })),
+    });
+}
 
 /** The ship sheet carries the PDF's 312 fields: loaded when a vessel's page first needs it. */
 const ShipSheet = defineAsyncComponent(() => import('./ShipSheet.vue'));
@@ -202,7 +243,7 @@ watch(() => props.id, () => {
             <button ref="playersBtn" type="button" :aria-pressed="record.visibility === 'players' ? 'true' : 'false'" :disabled="readOnly" @click="setVisibility('players')">Players</button>
           </span>
           <span v-if="isPlayerCharacter" class="rec-pc" title="A player character: in the party">PC</span>
-          <span>· {{ placeLine(record, campaign.records) }}</span>
+          <span>· {{ placeNow(record) }}</span>
         </p>
         <RecordWhen :key="id" :when="record.when" :clock-days="campaign.clock ? campaign.clock.days : null" :read-only="readOnly" @save="setWhen" />
       </div>
@@ -223,9 +264,10 @@ watch(() => props.id, () => {
       @save="place"
       @map="emit('map')"
     />
+    <SpreadNews :when="record.when ? record.when.start : null" :anchor="where.anchor" :locate-id="id" @map="emit('map')" />
 
     <section>
-      <h3 class="ui-heading">Summary</h3>
+      <h3 class="ui-heading ui-kicker">Summary</h3>
       <EditableText
         label="Summary"
         prompt="Add a summary"
@@ -237,26 +279,29 @@ watch(() => props.id, () => {
     </section>
 
     <section>
-      <h3 class="ui-heading">Details</h3>
+      <h3 class="ui-heading ui-kicker">Details</h3>
       <EditableText
         multiline
+        rich
         label="Details"
         prompt="Add details"
         :value="record.details"
+        :name-of="nameOf"
         :max="CAMPAIGN_LIMITS.details"
         :disabled="readOnly"
         @save="saveRecord(id, { details: cleanDetails($event) })"
+        @open="openRich"
       />
     </section>
 
     <section>
-      <h3 class="ui-heading">Player notes</h3>
+      <h3 class="ui-heading ui-kicker">For players</h3>
       <p class="rec-notes-why">Players see this text when you share the record.</p>
-      <p v-if="!record.playerNotes" class="rec-notes-empty">No player notes yet.</p>
+      <p v-if="!record.playerNotes" class="rec-notes-empty">No notes for players yet.</p>
       <EditableText
         multiline
-        label="Player notes"
-        prompt="Add player notes"
+        label="For players"
+        prompt="Add notes for players"
         :value="record.playerNotes ?? ''"
         :max="CAMPAIGN_LIMITS.details"
         :disabled="readOnly"
@@ -265,7 +310,7 @@ watch(() => props.id, () => {
     </section>
 
     <section>
-      <h3 class="ui-heading">Tags</h3>
+      <h3 class="ui-heading ui-kicker">Tags</h3>
       <div class="rec-tags">
         <span v-for="tag in record.tags" :key="tag" class="ui-chip rec-tag">
           {{ tag }}
@@ -301,7 +346,13 @@ watch(() => props.id, () => {
 
     <LinksBlock :id="id" :read-only="readOnly" />
 
+    <RecordMentions :id="id" />
+
+    <RecordTimeline :id="id" />
+
     <TrackBlock v-if="record.type === 'vessel'" :id="id" :read-only="readOnly" />
+
+    <VesselTrade v-if="record.type === 'vessel'" :id="id" :read-only="readOnly" />
 
     <PersonSheet v-if="record.type === 'person'" :id="id" :read-only="readOnly" />
 
@@ -310,6 +361,7 @@ watch(() => props.id, () => {
     </ShipSheet>
 
     <footer class="rec-foot">
+      <PrintButton target=".rec" :title="record.name" />
       <span class="rec-gap"></span>
       <button type="button" class="ui-btn rec-delete" :disabled="readOnly" @click="remove">
         <Icon name="trash" :size="13" />Delete
@@ -317,13 +369,14 @@ watch(() => props.id, () => {
     </footer>
   </article>
 
-  <div v-else class="camp-empty rec-missing">
-    <p>{{ wasDeleted ? 'This record was deleted.' : 'This record is gone.' }}</p>
-    <div class="rec-missing-acts">
-      <button v-if="wasDeleted" type="button" class="ui-btn is-primary" :disabled="readOnly" @click="restoreRecord(id)">
+  <div v-else class="camp-first ui-ground">
+    <span class="camp-glyph" aria-hidden="true"><Icon name="book-sparkles" :size="22" /></span>
+    <h2>{{ wasDeleted ? 'This record was deleted' : 'This record is gone' }}</h2>
+    <p>{{ wasDeleted ? 'You can put it back.' : 'It is not in this campaign.' }}</p>
+    <div v-if="wasDeleted" class="camp-first-starts">
+      <button type="button" class="ui-btn is-primary" :disabled="readOnly" @click="restoreRecord(id)">
         <Icon name="rotate-left" :size="12" />Undo the delete
       </button>
-
     </div>
   </div>
 </template>
@@ -338,6 +391,16 @@ watch(() => props.id, () => {
 
 .rec section > .ui-heading:first-child {
   margin-top: 16px;
+}
+
+/* A kicker keeps the heading's gap to what it heads. */
+.rec .ui-heading.ui-kicker {
+  margin-bottom: 8px;
+}
+
+/* The gallery and the connections sit in frames (the shared look): the gap a heading gave them. */
+.rec > .ui-frame {
+  margin-top: 18px;
 }
 
 .rec-ident {
@@ -522,9 +585,4 @@ watch(() => props.id, () => {
   border-color: var(--danger);
 }
 
-.rec-missing-acts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
 </style>

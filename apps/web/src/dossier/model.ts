@@ -1014,7 +1014,7 @@ export function bodyModel(tree: TreeEnvelope, bodyKey: string): BodyModel | null
         crumbSystem: title,
         crumbParent: parent && parentKey ? { key: parentKey, name: bodyName(parent).replace(bare + ' ', '') } : null,
         place: body.type === 'Mainworld'
-            ? 'Mainworld of the ' + title + ' \u00B7 ' + hex
+            ? title + ' \u00B7 Hex ' + hex
             : bodyPlace(system, body) + ' \u00B7 ' + hex,
         ribbon: ribbonOf(body.uwp),
         mapBadge: body.type === 'Mainworld' ? 'Mainworld' : '',

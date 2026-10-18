@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { runWrangler } from './session.js';
+import { removeTree, runWrangler } from './session.js';
 import { wranglerBin } from './server.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -18,26 +19,71 @@ function jsonFrom(text) {
     return JSON.parse(text.slice(at));
 }
 
-function rows(persistTo, sql) {
-    const text = runWrangler(['d1', 'execute', 'voyage', '--local', '--persist-to', persistTo, '--command', sql]);
+function freePort() {
+    const server = createServer();
+    return new Promise((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(0, '127.0.0.1', () => {
+            const address = server.address();
+            const port = address && typeof address === 'object' ? address.port : 0;
+            server.close(() => resolve(port));
+        });
+    });
+}
+
+// d1 execute has no --port flag. A private config still names a free dev port and inspector
+// port, and --cwd keeps wrangler's own files out of apps/api while other lanes run.
+function localConfig(dir, port, inspector) {
+    const file = path.join(dir, 'wrangler.toml');
+    const migrationsDir = migrations.replace(/\\/g, '/');
+    writeFileSync(file, `name = "voyage"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+[dev]
+port = ${port}
+inspector_port = ${inspector}
+
+[[d1_databases]]
+binding = "DB"
+database_name = "voyage"
+database_id = "dce853bf-fd23-4073-99b6-1f8e1d2f569a"
+migrations_dir = "${migrationsDir}"
+`);
+    return file;
+}
+
+function wrangler(dir, config, args) {
+    return runWrangler(['--config', config, '--cwd', dir, ...args]);
+}
+
+function rows(dir, config, persistTo, sql) {
+    const text = wrangler(dir, config, ['d1', 'execute', 'voyage', '--local', '--persist-to', persistTo, '--command', sql]);
     const parsed = jsonFrom(text);
     const table = Array.isArray(parsed) ? parsed[0] : parsed;
     return table.results ?? table;
 }
 
-function names(persistTo) {
-    return rows(persistTo, `SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name`).map((row) => row.name);
+function names(dir, config, persistTo) {
+    return rows(dir, config, persistTo, `SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name`).map((row) => row.name);
 }
 
 if (!existsSync(wranglerBin)) {
     test('package migration', { skip: 'wrangler is absent' }, () => {});
 } else {
-    test('package tables apply on a fresh local D1 and on today\'s schema', { timeout: 180000 }, () => {
-        const fresh = mkdtempSync(path.join(tmpdir(), 'voyage-pkg-fresh-'));
-        const upgrade = mkdtempSync(path.join(tmpdir(), 'voyage-pkg-upgrade-'));
+    test('package tables apply on a fresh local D1 and on today\'s schema', { timeout: 180000 }, async () => {
+        const dir = mkdtempSync(path.join(tmpdir(), 'voyage-pkg-'));
+        const fresh = path.join(dir, 'fresh');
+        const upgrade = path.join(dir, 'upgrade');
+        mkdirSync(fresh);
+        mkdirSync(upgrade);
+        const port = await freePort();
+        const inspector = await freePort();
+        const config = localConfig(dir, port, inspector);
         try {
-            runWrangler(['d1', 'migrations', 'apply', 'voyage', '--local', '--persist-to', fresh]);
-            const freshNames = names(fresh);
+            wrangler(dir, config, ['d1', 'migrations', 'apply', 'voyage', '--local', '--persist-to', fresh]);
+            const freshNames = names(dir, config, fresh);
             assert.ok(freshNames.includes('packages'), freshNames.join(','));
             assert.ok(freshNames.includes('package_versions'));
             for (const banned of ['proposals', 'reports']) {
@@ -46,15 +92,15 @@ if (!existsSync(wranglerBin)) {
             // 0015: installs and reports exist; packages.truth_version keeps NOT NULL (own maps store '').
             assert.ok(freshNames.includes('package_installs'));
             assert.ok(freshNames.includes('package_reports'));
-            const installColumns = rows(fresh, `PRAGMA table_info(package_installs)`).map((row) => row.name);
+            const installColumns = rows(dir, config, fresh, `PRAGMA table_info(package_installs)`).map((row) => row.name);
             for (const column of ['id', 'universe_id', 'package_id', 'version', 'placement', 'hex_count', 'record_count', 'created_at', 'updated_at']) {
                 assert.ok(installColumns.includes(column), column);
             }
             // Re-running 0015 on a database that has it changes nothing (IF NOT EXISTS throughout).
             const again = path.join(fresh, 'again.sql');
             writeFileSync(again, readFileSync(path.join(migrations, '0015_marketplace.sql'), 'utf8').split('--> statement-breakpoint').join('\n'));
-            runWrangler(['d1', 'execute', 'voyage', '--local', '--persist-to', fresh, '--file', again]);
-            const freshColumns = rows(fresh, `PRAGMA table_info(package_versions)`).map((row) => row.name);
+            wrangler(dir, config, ['d1', 'execute', 'voyage', '--local', '--persist-to', fresh, '--file', again]);
+            const freshColumns = rows(dir, config, fresh, `PRAGMA table_info(package_versions)`).map((row) => row.name);
             assert.ok(freshColumns.includes('hex_keys'), freshColumns.join(','));
             assert.ok(freshColumns.includes('record_ids'));
             assert.ok(freshColumns.includes('state'));
@@ -71,23 +117,22 @@ if (!existsSync(wranglerBin)) {
             }
             const prior = path.join(upgrade, 'prior.sql');
             writeFileSync(prior, `${statements.join(';\n')};\n`);
-            runWrangler(['d1', 'execute', 'voyage', '--local', '--persist-to', upgrade, '--file', prior]);
-            const before = names(upgrade);
+            wrangler(dir, config, ['d1', 'execute', 'voyage', '--local', '--persist-to', upgrade, '--file', prior]);
+            const before = names(dir, config, upgrade);
             assert.equal(before.includes('packages'), false);
             assert.ok(before.includes('universes'));
             const booked = files.map((name) => `('${name}')`).join(', ');
-            runWrangler(['d1', 'execute', 'voyage', '--local', '--persist-to', upgrade, '--command',
+            wrangler(dir, config, ['d1', 'execute', 'voyage', '--local', '--persist-to', upgrade, '--command',
                 `CREATE TABLE IF NOT EXISTS d1_migrations (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, applied_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL); INSERT INTO d1_migrations (name) VALUES ${booked};`]);
-            runWrangler(['d1', 'migrations', 'apply', 'voyage', '--local', '--persist-to', upgrade]);
-            const upgraded = rows(upgrade, `PRAGMA table_info(package_versions)`).map((row) => row.name);
+            wrangler(dir, config, ['d1', 'migrations', 'apply', 'voyage', '--local', '--persist-to', upgrade]);
+            const upgraded = rows(dir, config, upgrade, `PRAGMA table_info(package_versions)`).map((row) => row.name);
             assert.ok(upgraded.includes('hex_keys'), upgraded.join(','));
             assert.ok(upgraded.includes('record_ids'));
-            assert.equal(names(upgrade).includes('package_installs'), true);
+            assert.equal(names(dir, config, upgrade).includes('package_installs'), true);
             assert.ok(upgraded.includes('art_filled'), 'F17: 0019 applies after 0010');
-            assert.ok(rows(upgrade, `PRAGMA table_info(packages)`).map((row) => row.name).includes('cover_hash'));
+            assert.ok(rows(dir, config, upgrade, `PRAGMA table_info(packages)`).map((row) => row.name).includes('cover_hash'));
         } finally {
-            rmSync(fresh, { recursive: true, force: true });
-            rmSync(upgrade, { recursive: true, force: true });
+            removeTree(dir);
         }
     });
 }

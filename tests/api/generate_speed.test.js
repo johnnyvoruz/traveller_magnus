@@ -9,7 +9,7 @@ import { generateHex } from '@voyage/generation';
 import { stable } from '@voyage/shared';
 import enginesPackage from '../../packages/engines/package.json' with { type: 'json' };
 import { DEFAULT_GENERATION_SEED, DEFAULT_GENERATION_SETTINGS } from '../../apps/api/src/universe/defaults.ts';
-import { runWrangler } from './session.js';
+import { removeTree, runWrangler } from './session.js';
 import { startDev, stopDev } from './server.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -216,8 +216,7 @@ if (process.env.RUN_API_TESTS !== '1') {
             assert.equal(refused.body.error.message, 'Too many requests.');
         } finally {
             if (child) stopDev(child.pid);
-            await sleep(300);
-            rmSync(persistTo, { recursive: true, force: true });
+            removeTree(persistTo);
         }
     });
 }

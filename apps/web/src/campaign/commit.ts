@@ -149,8 +149,25 @@ function bodyOf(
     return body;
 }
 
-/** Applies the change locally, queues it, and sends one PATCH at most every 800 ms. */
+function playersNote(row: EntryChange): boolean {
+    if (!('kind' in row)) {
+        const held = campaign.journal[row.id];
+        return !!held && held.kind === 'note' && held.author === 'players' && held.visibility === 'players';
+    }
+    return row.kind === 'note' && row.author === 'players' && row.visibility === 'players';
+}
+
+/**
+ * Applies the change locally, queues it, and sends one PATCH at most every 800 ms.
+ * A player may queue a players note, and nothing else. The note's baseRev is the one the caller
+ * built from the rev the store holds.
+ */
 export function commit(changes: CampaignChanges): void {
+    if (campaign.role === 'player') {
+        const journal = (changes.journal ?? []).filter(playersNote);
+        if (journal.length === 0) return;
+        changes = { journal };
+    }
     for (const row of changes.records ?? []) {
         applyRecord(row);
         rememberBase(queuedRecords, row);

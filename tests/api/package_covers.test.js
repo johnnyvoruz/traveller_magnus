@@ -264,7 +264,7 @@ if (process.env.RUN_API_TESTS !== '1') {
             const cards = Object.fromEntries(catalogue.body.data.items.map((item) => [item.id, item]));
             assert.deepEqual(cards[P].cover, { hash: art2.hash, thumbHash: thumb2.hash, source: 'record' });
             assert.equal(cards[Q].cover, null);
-            assert.deepEqual(Object.keys(cards[P]).sort(), ['authorHandle', 'cover', 'edition', 'hexCount', 'hidden', 'id', 'installs', 'kind', 'latestVersion', 'tags', 'title', 'truthVersion', 'updatedAt']);
+            assert.deepEqual(Object.keys(cards[P]).sort(), ['authorHandle', 'cover', 'edition', 'hexCount', 'hidden', 'id', 'installs', 'kind', 'latestVersion', 'recordCount', 'tags', 'title', 'truthVersion', 'updatedAt']);
 
             // Backfill: a version from before 0019 has no art row; the first read fills it from the manifest.
             sqlFile(persistTo, `UPDATE package_versions SET art_hash = NULL, art_thumb_hash = NULL, image_hashes = NULL, art_filled = 0 WHERE package_id = '${P}';`);
@@ -284,11 +284,11 @@ if (process.env.RUN_API_TESTS !== '1') {
                 assert.equal(res.status, status, JSON.stringify(res.body));
                 assert.equal(res.body.error.message, message);
             };
-            await refused(JSON.stringify({ hash: cover.hash }), 'Send the cover as a form with image, thumb, hash, and thumbHash.');
+            await refused(JSON.stringify({ hash: cover.hash }), 'The cover could not be read. Choose the image again.');
             const partial = new FormData();
             partial.set('image', new Blob([cover.bytes]), 'c.webp');
-            await refused(partial, 'Send the cover as a form with image, thumb, hash, and thumbHash.');
-            await refused(coverForm(cover, thumb, 'ABC'), 'Hash must be 64 lowercase hex characters.');
+            await refused(partial, 'The cover could not be read. Choose the image again.');
+            await refused(coverForm(cover, thumb, 'ABC'), 'That image could not be checked. Choose the file again.');
             const huge = fakeWebp(2 * 1024 * 1024 + 1);
             await refused(coverForm(huge, thumb), 'A cover is at most 2 MB.');
             const png = await (await import('sharp')).default({ create: { width: 10, height: 10, channels: 3, background: '#000' } }).png().toBuffer();
@@ -298,7 +298,7 @@ if (process.env.RUN_API_TESTS !== '1') {
             await refused(coverForm(cover, fakeWebp(200 * 1024 + 1)), 'A cover thumbnail is at most 200 KB.');
             await refused(coverForm(cover, { bytes: png, hash: createHash('sha256').update(png).digest('hex') }), 'A cover thumbnail is a WebP image.');
             await refused(coverForm(cover, thumb, thumb.hash, thumb.hash), 'The hash does not match the cover.');
-            await refused(coverForm(cover, thumb, cover.hash, cover.hash), 'The thumbHash does not match the thumbnail.');
+            await refused(coverForm(cover, thumb, cover.hash, cover.hash), 'The thumbnail does not match. Choose the image again.');
             const stranger = await send(P, coverForm(cover, thumb), reader);
             assert.equal(stranger.status, 404, 'not the author');
             assert.equal(has(persistTo, 'voyage-public', `objects/${cover.hash}`), false, 'nothing stored by a refusal');

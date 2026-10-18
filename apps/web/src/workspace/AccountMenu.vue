@@ -1,39 +1,32 @@
 <script setup lang="ts">
 /**
  * The pop-up at the rail's foot (design §1; K5f). Signed out it is the sign-in card; signed
- * in it is the account menu: who, the campaigns (open one, switch to another, make, rename,
- * delete, export, import), the characters, My packages, the party, sign out. It opens over the map and nothing waits on
- * it; a click anywhere else, or Esc, closes it and focus goes back to the rail's button. A
- * delete asks once, in a dialog of its own here (the server's delete is soft and cannot be
- * undone). Export saves the campaign's file; Import reads one into an open, empty campaign
- * through campaign/import.ts, whose words are shown as given.
+ * in it is the account menu, the person's own things (DU10, U10): who, Campaigns… (the Campaigns
+ * panel, where the campaigns are opened, made, renamed, deleted, exported and imported, and their
+ * switches set), Characters, My packages, Account and sign-in, Help, this device's quiet, Sign out,
+ * then About and What's new. It opens over the map and nothing waits on it; a click anywhere else,
+ * or Esc, closes it and focus goes back to the rail's button.
  */
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { CAMPAIGN_LIMITS } from '@voyage/shared';
 import { session, signOut } from '../account/session.ts';
 import { resetCampaign } from '../campaign/commit.ts';
-import { importCampaign, parseExport } from '../campaign/import.ts';
-import { campaign, createCampaign, deleteCampaign, renameCampaign, switchCampaign } from '../campaign/store.ts';
-import { apiFetch } from '../platform/http.ts';
-import { saveBlob } from '../platform/browser.ts';
+import { campaign } from '../campaign/store.ts';
 import Icon from '../design/Icon.vue';
 import { addressPane, atPane } from '../shell/pane.ts';
 import { registerCommand } from '../shell/registry.ts';
-import { showToast } from '../shell/toast.ts';
 import { accountLine, displayName, initials, signInFrom } from './account.ts';
 import { forgetDeleted } from './actions.ts';
-import { CAMPAIGN_CAP, canCreate, cleanCampaignName, deleteWords, freshName, sortCampaigns } from './campaigns.ts';
-import { stopLocate } from './locate.ts';
-import { forgetOpening, retryCampaign } from './opening.ts';
+import { HELP_PATH } from './help_command.ts';
+import { forgetOpening } from './opening.ts';
 import { MY_PACKAGES_PATH } from './market/command.ts';
-import { liveRecords } from './records.ts';
-import { campaignDays, partyMarker } from './party_where.ts';
-import { COURSE_LABEL, COURSE_LATER, setShowCourse, showCourseOf } from './public_course.ts';
-import { partyOnChart, PUBLIC_GAMES_LABEL, PUBLIC_GAMES_NO_PLACE, PUBLIC_GAMES_SAY, publicGamesOf, publicGamesToast, setPublicGames, setShowReferee, showRefereeOf } from './public_games.ts';
+import LivingSettings from './LivingSettings.vue';
 import SignInCard from './SignInCard.vue';
 import { noteReturn, RECOVERY_PATH } from './passkey/recovery.ts';
 import { APP_VERSION } from '../version.ts';
+
+const ChangelogWindow = defineAsyncComponent(() => import('./ChangelogWindow.vue'));
+const changesOpen = ref(false);
 
 const props = defineProps<{ open: boolean }>();
 
@@ -50,57 +43,24 @@ const menu = ref<HTMLElement | null>(null);
 const pop = ref<HTMLElement | null>(null);
 const leaving = ref(false);
 
-// ---- The campaigns ---------------------------------------------------------------
+// ---- The campaigns live on their own panel now (DU10); the menu keeps the person ---------------
 
-/** What the pop-up shows instead of the menu: a name for a new campaign, a new name, or the delete's question. */
-const mode = ref<'' | 'new' | 'rename' | 'delete'>('');
-const draft = ref('');
-const busy = ref(false);
 const trouble = ref('');
-
-const campaigns = computed(() => sortCampaigns(campaign.universes));
-const openOne = computed(() => campaign.universes.find((item) => item.id === campaign.universeId) ?? null);
 const ready = computed(() => campaign.status === 'ready' || campaign.status === 'error');
-const full = computed(() => !canCreate(campaign.universes.length));
-const recordCount = computed(() => liveRecords(campaign.records).length);
-/** Import takes an open campaign with no records and no links (campaign/import.ts says so too). */
-const emptyCampaign = computed(() => Object.keys(campaign.records).length === 0 && Object.keys(campaign.links).length === 0);
-const fileEl = ref<HTMLInputElement | null>(null);
-const question = computed(() => (openOne.value ? deleteWords(openOne.value.name, recordCount.value) : ''));
+/** The open campaign's name, beside Campaigns… */
+const openName = computed(() => (campaign.universes.find((item) => item.id === campaign.universeId) ?? { name: '' }).name);
 
-function focusField(): void {
-    void nextTick(() => {
-        const el = pop.value ? pop.value.querySelector<HTMLElement>('.account-form input, .account-form .is-primary') : null;
-        if (el) el.focus();
-    });
-}
-
-function begin(next: 'new' | 'rename' | 'delete'): void {
-    trouble.value = '';
-    draft.value = next === 'new' ? freshName(campaign.universes.map((item) => item.name)) : next === 'rename' && openOne.value ? openOne.value.name : '';
-    mode.value = next;
-    focusField();
-}
-
-function back(): void {
-    mode.value = '';
-    trouble.value = '';
-    void nextTick(focusFirst);
-}
-
-/** Another campaign is open now: what belonged to the last one is let go, and the panel shows the list. */
-function changed(): void {
-    forgetDeleted();
-    stopLocate();
+/** The Campaigns panel: the referee's campaigns as cards, with their actions and switches. */
+function openCampaigns(): void {
     const pane = addressPane(route.path, route.query).pane;
-    if (pane.kind === 'party' || (pane.kind === 'campaign' && pane.record)) {
-        void router.push(atPane(route.path, route.query, { kind: 'campaign', record: null }));
-    }
+    if (pane.kind !== 'campaigns') void router.push(atPane(route.path, route.query, { kind: 'campaigns' }));
+    emit('close');
 }
 
-function openParty(): void {
-    const pane = addressPane(route.path, route.query).pane;
-    if (pane.kind !== 'party') void router.push(atPane(route.path, route.query, { kind: 'party' }));
+/** Help, from the menu as from the palette. */
+function openHelp(): void {
+    if (route.path !== HELP_PATH) void router.push(HELP_PATH);
+    emit('close');
 }
 
 /** The Characters list, with or without a campaign. From a character, this returns to the list. */
@@ -126,213 +86,6 @@ onBeforeUnmount(() => {
     if (stopCharacters) stopCharacters();
 });
 
-async function run(work: () => Promise<void>, then: () => void): Promise<void> {
-    if (busy.value) return;
-    busy.value = true;
-    trouble.value = '';
-    try {
-        await work();
-        if (campaign.status === 'error') {
-            // The store marks the whole campaign in error when a list call fails; the open one is read back so the panel stands.
-            trouble.value = 'That could not be done. Try again.';
-            void retryCampaign();
-            return;
-        }
-        then();
-    } catch {
-        trouble.value = 'That could not be done. Try again.';
-    } finally {
-        busy.value = false;
-    }
-}
-
-/** The campaign pressed: the open one shows its panel; another is switched to, then shown. */
-function pick(id: string): void {
-    if (id === campaign.universeId) {
-        emit('campaign');
-        return;
-    }
-    void run(() => switchCampaign(id), () => {
-        changed();
-        emit('campaign');
-    });
-}
-
-function create(): void {
-    const name = cleanCampaignName(draft.value);
-    if (!name || full.value) return;
-    void run(async () => { await createCampaign(name); }, () => {
-        changed();
-        mode.value = '';
-        emit('campaign');
-    });
-}
-
-function rename(): void {
-    const name = cleanCampaignName(draft.value);
-    const target = openOne.value;
-    if (!name || !target) return;
-    if (name === target.name) {
-        back();
-        return;
-    }
-    void run(() => renameCampaign(target.id, name), back);
-}
-
-function remove(): void {
-    const target = openOne.value;
-    if (!target) return;
-    void run(() => deleteCampaign(target.id), () => {
-        changed();
-        mode.value = '';
-        showToast('Deleted ' + target.name + '.');
-        emit('close');
-    });
-}
-
-/** Public games for the open campaign: on, off, or null when the server has no such setting (then no switch). */
-const publicOn = computed(() => publicGamesOf(openOne.value));
-/** The name on public cards. Null hides the switch: public is off, or the server has no such field. */
-const showName = computed(() => showRefereeOf(openOne.value));
-/** The course switch: null hides it (public is off); not available on a server before 0020. */
-const showCourse = computed(() => showCourseOf(openOne.value, publicOn.value));
-/** The server's sentence when the course switch was refused, said by the switch. */
-const courseTrouble = ref('');
-watch(() => (openOne.value ? openOne.value.id : ''), () => { courseTrouble.value = ''; });
-/** On, and the party has no place on the chart: nothing is shown to anyone yet, and the menu says what to do. */
-const publicNowhere = computed(() => {
-    if (publicOn.value !== true || campaign.status !== 'ready' || !campaign.settings) return false;
-    const mark = partyMarker(campaign.settings.party, campaign.records, campaignDays(campaign.clock));
-    return !partyOnChart(mark ? mark.hexKey : null);
-});
-
-/** The switch: the server's answer is what is shown; a refusal is said in its sentence, and the switch stays as it was. */
-async function togglePublic(): Promise<void> {
-    const target = openOne.value;
-    const now = publicOn.value;
-    if (!target || now === null || busy.value) return;
-    busy.value = true;
-    trouble.value = '';
-    try {
-        const done = await setPublicGames(target.id, !now);
-        if (!done.ok) trouble.value = done.message;
-        else showToast(publicGamesToast(done.public, target.name));
-    } finally {
-        busy.value = false;
-        void nextTick(() => {
-            const el = pop.value ? pop.value.querySelector<HTMLElement>('[data-command="public-games"]') : null;
-            if (el) el.focus();
-        });
-    }
-}
-
-/** The name switch. A refusal is said in the server's sentence, and the switch stays as it was. */
-async function toggleShowName(): Promise<void> {
-    const target = openOne.value;
-    const now = showName.value;
-    if (!target || now === null || busy.value) return;
-    busy.value = true;
-    trouble.value = '';
-    try {
-        const done = await setShowReferee(target.id, !now);
-        if (!done.ok) trouble.value = done.message;
-        else showToast(done.showReferee ? 'Your name is on this game’s public cards.' : 'Your name is not on this game’s public cards.');
-    } finally {
-        busy.value = false;
-        void nextTick(() => {
-            const el = pop.value ? pop.value.querySelector<HTMLElement>('[data-command="show-referee"]') : null;
-            if (el) el.focus();
-        });
-    }
-}
-
-/** The course switch. A refusal is said in the server's sentence by the switch, and the switch stays as it was. */
-async function toggleShowCourse(): Promise<void> {
-    const target = openOne.value;
-    const now = showCourse.value;
-    if (!target || !now || !now.available || busy.value) return;
-    busy.value = true;
-    courseTrouble.value = '';
-    try {
-        const done = await setShowCourse(target.id, !now.on);
-        if (!done.ok) courseTrouble.value = done.message;
-        else showToast(done.showCourse ? 'This game’s public cards show where its ships are going.' : 'This game’s public cards no longer show where its ships are going.');
-    } finally {
-        busy.value = false;
-        void nextTick(() => {
-            const el = pop.value ? pop.value.querySelector<HTMLElement>('[data-command="show-course"]') : null;
-            if (el) el.focus();
-        });
-    }
-}
-
-/** The campaign's file, from the server, saved as it names it. */
-function exportCampaign(): void {
-    const target = openOne.value;
-    if (!target) return;
-    void run(async () => {
-        const res = await apiFetch(fetch, '/api/universes/' + encodeURIComponent(target.id) + '/campaign/export');
-        if (!res.ok) throw new Error('export ' + res.status);
-        const found = /filename="([^"]+)"/.exec(res.headers.get('content-disposition') || '');
-        saveBlob(await res.blob(), found ? found[1] : target.name + '.campaign.json');
-    }, () => {
-        showToast('Exported ' + target.name + '.');
-        emit('close');
-    });
-}
-
-function pickImport(): void {
-    if (busy.value || !openOne.value) return;
-    trouble.value = '';
-    if (fileEl.value) fileEl.value.click();
-}
-
-/** A file chosen for Import: parsed and brought in; the module's words are shown as given. */
-async function onImportFile(event: Event): Promise<void> {
-    const input = event.target;
-    if (!(input instanceof HTMLInputElement)) return;
-    const file = input.files && input.files[0];
-    input.value = '';
-    const target = openOne.value;
-    if (!file || !target || busy.value) return;
-    busy.value = true;
-    trouble.value = '';
-    try {
-        const parsed = parseExport(await file.text());
-        if (!parsed.ok) {
-            trouble.value = parsed.message;
-            return;
-        }
-        const result = await importCampaign(parsed.document, target.id);
-        if (!result.ok) {
-            trouble.value = result.message;
-            return;
-        }
-        showToast('Imported ' + result.landed + (result.landed === 1 ? ' row' : ' rows') + ' into ' + target.name + '.');
-        emit('close');
-    } catch {
-        trouble.value = 'That file could not be read.';
-    } finally {
-        busy.value = false;
-    }
-}
-
-function onFormKey(event: KeyboardEvent): void {
-    if (event.key === 'Escape') {
-        event.preventDefault();
-        event.stopPropagation();
-        back();
-        return;
-    }
-    if (event.key === 'Enter' && mode.value !== 'delete') {
-        event.preventDefault();
-        event.stopPropagation();
-        if (mode.value === 'new') create();
-        else rename();
-        return;
-    }
-    event.stopPropagation();
-}
 
 const name = computed(() => displayName(session.user));
 // A passkey account's name is its username: the @ line would only say it again.
@@ -411,8 +164,12 @@ function openAccount(): void {
     emit('close');
 }
 
+function openAbout(): void {
+    emit('close');
+    void router.push('/welcome');
+}
+
 watch(() => props.open, (open) => {
-    mode.value = '';
     trouble.value = '';
     // The card opened from Build says so only that once.
     if (!open) signInFrom.value = null;
@@ -441,129 +198,44 @@ watch(() => props.open, (open) => {
           <span v-if="line">{{ line }}</span>
         </div>
       </div>
-      <div v-if="mode === 'delete'" class="account-form" role="alertdialog" aria-labelledby="account-delete-q" @keydown="onFormKey">
-        <p id="account-delete-q" class="account-q">{{ question }}</p>
-        <p v-if="trouble" class="account-trouble" role="alert">{{ trouble }}</p>
-        <div class="account-form-acts">
-          <button type="button" class="ui-btn is-primary is-danger account-delete-go" :disabled="busy" @click="remove">
-            <Icon name="trash" :size="12" />{{ busy ? 'Deleting…' : 'Delete' }}
-          </button>
-          <button type="button" class="ui-btn account-keep" :disabled="busy" @click="back">Keep it</button>
-        </div>
-      </div>
-      <div v-else-if="mode" class="account-form" role="group" :aria-label="mode === 'new' ? 'New campaign' : 'Rename the campaign'" @keydown="onFormKey">
-        <label class="account-field">
-          <span>{{ mode === 'new' ? 'Name the new campaign' : 'A new name' }}</span>
-          <input v-model="draft" type="text" class="camp-input" :maxlength="CAMPAIGN_LIMITS.name" :disabled="busy">
-        </label>
-        <p v-if="trouble" class="account-trouble" role="alert">{{ trouble }}</p>
-        <div class="account-form-acts">
-          <button type="button" class="ui-btn is-primary account-go" :disabled="busy || !cleanCampaignName(draft)" @click="mode === 'new' ? create() : rename()">
-            <Icon name="check" :size="12" />{{ busy ? 'Saving…' : mode === 'new' ? 'Create' : 'Rename' }}
-          </button>
-          <button type="button" class="ui-btn account-cancel" :disabled="busy" @click="back">Cancel</button>
-        </div>
-      </div>
-      <div v-else ref="menu" class="account-items" role="menu" aria-label="Account" @keydown="onMenuKey">
-        <p v-if="ready && campaigns.length" class="account-group">Your campaigns</p>
-        <button
-          v-for="item in campaigns"
-          :key="item.id"
-          type="button"
-          role="menuitem"
-          class="account-campaign"
-          :class="{ 'is-open': item.id === campaign.universeId }"
-          :disabled="busy"
-          :title="item.id === campaign.universeId ? 'Open the Campaign panel' : 'Switch to ' + item.name"
-          @click="pick(item.id)"
-        >
-          <Icon :name="item.id === campaign.universeId ? 'book-sparkles' : 'circle-dashed'" :size="15" /><span>{{ item.name }}</span><em v-if="item.id === campaign.universeId">open</em>
+      <div ref="menu" class="account-items" role="menu" aria-label="Account" @keydown="onMenuKey">
+        <button type="button" role="menuitem" class="account-campaigns" data-command="campaigns" @click="openCampaigns">
+          <Icon name="book-sparkles" :size="15" /><span>Campaigns…</span><em v-if="openName">{{ openName }}</em>
         </button>
-        <button v-if="ready" type="button" role="menuitem" class="account-new" :disabled="busy || full" :title="full ? 'Ten campaigns is the most an account holds' : 'Make another campaign'" @click="begin('new')">
-          <Icon name="plus" :size="15" /><span>New campaign…</span><em v-if="full">{{ CAMPAIGN_CAP }} is the most</em>
-        </button>
-        <button v-if="openOne" type="button" role="menuitem" class="account-rename" :disabled="busy" @click="begin('rename')">
-          <Icon name="pen-to-square" :size="15" /><span>Rename {{ openOne.name }}</span>
-        </button>
-        <!-- Public games: only when the server has the setting. Off until the referee turns it on. -->
-        <button
-          v-if="openOne && publicOn !== null"
-          type="button"
-          role="menuitemcheckbox"
-          class="account-public"
-          data-command="public-games"
-          :aria-checked="publicOn ? 'true' : 'false'"
-          aria-describedby="account-public-say"
-          :disabled="busy"
-          @click="togglePublic"
-        >
-          <Icon name="eye" :size="15" /><span>{{ PUBLIC_GAMES_LABEL }}</span><em>{{ publicOn ? 'On' : 'Off' }}</em>
-        </button>
-        <p v-if="openOne && publicOn !== null" id="account-public-say" class="account-say">{{ PUBLIC_GAMES_SAY }}</p>
-        <p v-if="openOne && publicNowhere" class="account-say is-todo" role="status" data-public-nowhere>{{ PUBLIC_GAMES_NO_PLACE }}</p>
-        <button
-          v-if="openOne && showName !== null"
-          type="button"
-          role="menuitemcheckbox"
-          class="account-public account-show-name"
-          data-command="show-referee"
-          :aria-checked="showName ? 'true' : 'false'"
-          :disabled="busy"
-          @click="toggleShowName"
-        >
-          <Icon name="user" :size="15" /><span>Show my name on public cards</span><em>{{ showName ? 'On' : 'Off' }}</em>
-        </button>
-        <button
-          v-if="openOne && showCourse"
-          type="button"
-          role="menuitemcheckbox"
-          class="account-public account-show-course"
-          data-command="show-course"
-          :aria-checked="showCourse.on ? 'true' : 'false'"
-          :aria-describedby="!showCourse.available || courseTrouble ? 'account-course-say' : undefined"
-          :disabled="busy || !showCourse.available"
-          @click="toggleShowCourse"
-        >
-          <Icon name="route" :size="15" /><span>{{ COURSE_LABEL }}</span><em>{{ showCourse.on ? 'On' : 'Off' }}</em>
-        </button>
-        <p v-if="openOne && showCourse && courseTrouble" id="account-course-say" class="account-say is-todo" role="alert" data-course-trouble>{{ courseTrouble }}</p>
-        <p v-else-if="openOne && showCourse && !showCourse.available" id="account-course-say" class="account-say" data-course-later>{{ COURSE_LATER }}</p>
-        <button v-if="openOne" type="button" role="menuitem" class="account-delete" :disabled="busy" @click="begin('delete')">
-          <Icon name="trash" :size="15" /><span>Delete {{ openOne.name }}</span>
-        </button>
-        <button v-if="openOne" type="button" role="menuitem" class="account-export" :disabled="busy" @click="exportCampaign">
-          <Icon name="file-export" :size="15" /><span>Export {{ openOne.name }}</span>
-        </button>
-        <button v-if="openOne" type="button" role="menuitem" class="account-import" :disabled="busy || !emptyCampaign" :title="emptyCampaign ? 'Bring a campaign file into this empty campaign' : 'Import takes an empty campaign: make a new one first'" @click="pickImport">
-          <Icon name="file-import" :size="15" /><span>Import into {{ openOne.name }}…</span><em v-if="!emptyCampaign">not empty</em>
-        </button>
-        <input ref="fileEl" class="vplan-file" type="file" accept="application/json,.json" tabindex="-1" aria-hidden="true" @change="onImportFile">
         <button v-if="ready" type="button" role="menuitem" class="account-characters" data-command="characters" @click="openCharacters">
           <Icon name="user" :size="15" /><span>Characters</span>
         </button>
         <button type="button" role="menuitem" class="account-packages" @click="openPackages">
           <Icon name="store" :size="15" /><span>My packages</span>
         </button>
-        <button v-if="ready" type="button" role="menuitem" class="account-party" @click="openParty(); $emit('close')">
-          <Icon name="shuttle-space" :size="15" /><span>Go to the party</span>
-        </button>
         <button type="button" role="menuitem" class="account-page" data-command="account-page" @click="openAccount">
           <Icon name="gear" :size="15" /><span>Account and sign-in</span>
         </button>
+        <button type="button" role="menuitem" class="account-help" data-command="help" @click="openHelp">
+          <Icon name="circle-question" :size="15" /><span>Help</span>
+        </button>
+        <!-- This device (DU18b): its quiet switch. The campaign's own switches are on the Campaigns panel. -->
+        <LivingSettings part="device" :can-change="false" />
         <p v-if="trouble" class="account-trouble" role="alert">{{ trouble }}</p>
         <button type="button" role="menuitem" data-command="sign-out" :disabled="leaving" @click="leave">
           <Icon name="arrow-left" :size="15" /><span>{{ leaving ? 'Signing out…' : 'Sign out' }}</span>
         </button>
       </div>
-      <p class="account-version" data-version>Version {{ APP_VERSION }}</p>
+      <button type="button" class="account-version" data-command="about" @click="openAbout">About Traveller.voyage</button>
+      <button type="button" class="account-version" data-version @click="changesOpen = true">Version {{ APP_VERSION }} · What's new</button>
+      <ChangelogWindow v-if="changesOpen" @close="changesOpen = false" />
     </template>
-    <SignInCard v-else ref="card" heading />
+    <template v-else>
+      <SignInCard ref="card" heading />
+      <button type="button" class="account-version" data-command="about" @click="openAbout">About Traveller.voyage</button>
+    </template>
   </section>
   </Teleport>
 </template>
 
 <style>
-/* VesselPlan.vue owns this class, and that page is not on the map, so the menu carries the same rule. */
+/* VesselPlan.vue owns this class, and that page is not on the map; the store's cover editor uses it
+   too, and the menu is on every page, so the menu carries the same rule. */
 .vplan-file {
   position: absolute;
   width: 1px;
@@ -584,14 +256,24 @@ body:has(.rail.is-expanded) .account-pop {
   --rail-width: var(--rail-width-open);
 }
 
-/* The app's version, last in the menu, outside its items: the smallest text, muted, selectable. */
+/* The app's version, last in the menu, outside its items. Same look as the store's text links. */
 .account-pop .account-version {
+  display: block;
+  width: 100%;
   margin: 8px 0 0;
-  color: var(--text-muted);
-  font-size: 11px;
-  line-height: 1.3;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--signal);
+  font: 600 13px/1.4 var(--font-text);
   text-align: right;
-  user-select: text;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.account-pop .account-version:hover {
+  color: var(--signal-bright);
 }
 
 .account-pop {

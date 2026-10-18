@@ -3,10 +3,12 @@
  * at most 1600 px on its long side and 2 MB, and a thumbnail at most 640 px and 200 KB, each named
  * by its SHA-256. The same approach as a record image (campaign/images.ts, Lane A), at the cover's
  * limits; the quality steps down until both files fit. Any aspect ratio goes: the card crops to 16:9.
+ * A map package's screenshot is first trimmed to its systems (cover_trim.ts, D5), so it reads on a card.
  */
 import type { CoverUpload } from '../../marketplace/catalogue.ts';
-import type { EncodedWebp, WebpEncode } from '../../campaign/images.ts';
+import { encodeWebp, sha256Hex, type EncodedWebp, type WebpEncode } from '../../campaign/images.ts';
 import { acceptFile } from '../images.ts';
+import { chartTrim, lumaOf } from './cover_trim.ts';
 
 export const COVER_LIMITS = { side: 1600, bytes: 2 * 1024 * 1024, thumbSide: 640, thumbBytes: 200 * 1024 } as const;
 
@@ -14,37 +16,6 @@ export const COVER_LIMITS = { side: 1600, bytes: 2 * 1024 * 1024, thumbSide: 640
 export const COVER_QUALITIES = [0.85, 0.72, 0.6, 0.45] as const;
 
 export type PreparedCover = CoverUpload & { width: number; height: number; bytes: number };
-
-async function sha256Hex(bytes: Uint8Array): Promise<string> {
-    const copy = new Uint8Array(bytes.byteLength);
-    copy.set(bytes);
-    const digest = await crypto.subtle.digest('SHA-256', copy);
-    return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
-}
-
-async function encodeWebp(source: Blob, longest: number, quality: number): Promise<EncodedWebp | null> {
-    if (typeof createImageBitmap !== 'function' || typeof document === 'undefined') return null;
-    let bitmap: ImageBitmap;
-    try {
-        bitmap = await createImageBitmap(source);
-    } catch {
-        return null;
-    }
-    try {
-        const scale = Math.min(1, longest / Math.max(1, bitmap.width, bitmap.height));
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-        canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return null;
-        ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-        const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', quality));
-        if (!blob || blob.type !== 'image/webp') return null;
-        return { bytes: new Uint8Array(await blob.arrayBuffer()), width: canvas.width, height: canvas.height };
-    } finally {
-        bitmap.close();
-    }
-}
 
 async function fitted(file: Blob, side: number, max: number, encode: WebpEncode): Promise<EncodedWebp | null | 'large'> {
     for (const quality of COVER_QUALITIES) {
@@ -55,15 +26,63 @@ async function fitted(file: Blob, side: number, max: number, encode: WebpEncode)
     return 'large';
 }
 
-/** Reads a file into a cover pair. Says why not in a sentence. */
-export async function prepareCover(file: File, encode: WebpEncode = encodeWebp): Promise<{ ok: true; cover: PreparedCover } | { ok: false; message: string }> {
+/** The picture is looked at this small to find the systems: enough to see them, quick on any file. */
+const TRIM_LOOK = 400;
+
+/**
+ * A map screenshot trimmed to its systems, as a lossless picture to encode, or null to use the file
+ * as it is (not a map screenshot, nothing to gain, or a browser without OffscreenCanvas).
+ */
+export async function trimmedChart(file: Blob): Promise<Blob | null> {
+    if (typeof createImageBitmap !== 'function' || typeof OffscreenCanvas !== 'function') return null;
+    let bitmap: ImageBitmap;
+    try {
+        bitmap = await createImageBitmap(file);
+    } catch {
+        return null;
+    }
+    try {
+        const scale = Math.min(1, TRIM_LOOK / Math.max(bitmap.width, bitmap.height));
+        const w = Math.max(1, Math.round(bitmap.width * scale));
+        const h = Math.max(1, Math.round(bitmap.height * scale));
+        const look = new OffscreenCanvas(w, h);
+        const seen = look.getContext('2d', { willReadFrequently: true });
+        if (!seen) return null;
+        seen.drawImage(bitmap, 0, 0, w, h);
+        const box = chartTrim(lumaOf(seen.getImageData(0, 0, w, h).data, w * h), w, h);
+        if (!box) return null;
+        const sx = Math.round(box.x / scale);
+        const sy = Math.round(box.y / scale);
+        const sw = Math.min(bitmap.width - sx, Math.round(box.w / scale));
+        const sh = Math.min(bitmap.height - sy, Math.round(box.h / scale));
+        const cut = new OffscreenCanvas(sw, sh);
+        const ctx = cut.getContext('2d');
+        if (!ctx) return null;
+        ctx.drawImage(bitmap, sx, sy, sw, sh, 0, 0, sw, sh);
+        return await cut.convertToBlob({ type: 'image/png' });
+    } catch {
+        return null;
+    } finally {
+        bitmap.close();
+    }
+}
+
+/**
+ * Reads a file into a cover pair. Says why not in a sentence. `trim`: a map package's cover, trimmed
+ * to its systems when it is a screenshot of the map.
+ */
+export async function prepareCover(file: File, encode: WebpEncode = encodeWebp, trim = false): Promise<{ ok: true; cover: PreparedCover; trimmed: boolean } | { ok: false; message: string }> {
     const accepted = acceptFile(file);
     if (!accepted.ok) return accepted;
     let full: EncodedWebp | null | 'large';
     let thumb: EncodedWebp | null | 'large';
+    let trimmed = false;
     try {
-        full = await fitted(file, COVER_LIMITS.side, COVER_LIMITS.bytes, encode);
-        thumb = full && full !== 'large' ? await fitted(file, COVER_LIMITS.thumbSide, COVER_LIMITS.thumbBytes, encode) : null;
+        const cut = trim ? await trimmedChart(file) : null;
+        trimmed = cut !== null;
+        const source = cut ?? file;
+        full = await fitted(source, COVER_LIMITS.side, COVER_LIMITS.bytes, encode);
+        thumb = full && full !== 'large' ? await fitted(source, COVER_LIMITS.thumbSide, COVER_LIMITS.thumbBytes, encode) : null;
     } catch {
         return { ok: false, message: 'This image could not be read.' };
     }
@@ -71,6 +90,7 @@ export async function prepareCover(file: File, encode: WebpEncode = encodeWebp):
     if (!full || !thumb) return { ok: false, message: 'This browser cannot encode WebP.' };
     return {
         ok: true,
+        trimmed,
         cover: {
             image: full.bytes,
             thumb: thumb.bytes,

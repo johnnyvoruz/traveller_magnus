@@ -4,6 +4,7 @@
  * A pane counts once. Closing the pane clears the stack.
  */
 import { computed, ref } from 'vue';
+import { showsSystemOverview } from '../orbit/opening.ts';
 import { addressPane, type Query } from './pane.ts';
 
 export type SeenPane = { path: string; query: Record<string, string> };
@@ -25,7 +26,11 @@ export function toggleSheet(): void {
 export function paneId(path: string, query: Query): string {
     const address = addressPane(path, query);
     if (address.pane.kind === 'shut') return '';
-    return JSON.stringify({ path, view: address.view, pane: address.pane });
+    // The system overview shares the body-less orbit path with the opening mainworld.
+    // The query keeps those two panes apart, so Back can return to the body.
+    const overview = address.view.kind === 'orbit' && address.view.body === null && showsSystemOverview(query);
+    const id = { path, view: address.view, pane: address.pane, ...(overview ? { overview: '1' } : {}) };
+    return JSON.stringify(id);
 }
 
 function strings(query: Query): Record<string, string> {

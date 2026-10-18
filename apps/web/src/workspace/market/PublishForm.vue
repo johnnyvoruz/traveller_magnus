@@ -12,7 +12,7 @@ import { buildStore } from '../build/seam.ts';
 import { draftHandle, edit } from '../build/edit.ts';
 import { build } from '../build/state.ts';
 import {
-    closePublish, formProblems, hexWords, marketUi, parseTags, plural, publish, publishKeys, recordsOn, removedWords, usePublishTarget,
+    closePublish, formProblems, hexWords, marketUi, parseTags, plural, publish, publishKeys, recordsOn, REFEREE_ONLY_NOTE, refereeOnly, removedWords, usePublishTarget,
 } from './market.ts';
 import PublishFields from './PublishFields.vue';
 
@@ -102,12 +102,13 @@ onBeforeUnmount(() => {
         <label v-for="item in records" :key="item.id">
           <input type="checkbox" :checked="!marketUi.left.includes(item.id)" :disabled="marketUi.busy" @change="toggle(item.id, ($event.target as HTMLInputElement).checked)" />
           <span>{{ item.name }}</span><small>{{ item.type }}</small>
+          <em v-if="!marketUi.left.includes(item.id) && refereeOnly(item.id)" class="mk-rec-note" data-referee-only>{{ REFEREE_ONLY_NOTE }}</em>
         </label>
       </fieldset>
-      <p v-else class="build-fine">No campaign records are on these hexes.</p>
+      <p v-else class="mk-fine">No campaign records are on these hexes.</p>
 
       <p class="mk-note">A published package is a snapshot of these hexes and records as they are now. Anyone who has its address can read it.</p>
-      <p class="build-fine">A package holds up to 1,280 hexes and 500 records. Titles are up to 80 characters. Use up to 32 tags, each up to 40 characters.</p>
+      <p class="mk-fine">A package holds up to 1,280 hexes and 500 records. Titles are up to 80 characters. Use up to 32 tags, each up to 40 characters.</p>
       <p v-if="marketUi.error" class="mk-err" role="alert">{{ marketUi.error }}</p>
       <div class="mk-acts">
         <button type="submit" class="ui-btn is-primary" data-market-publish :disabled="selectionProblems.length > 0 || marketUi.busy" :aria-busy="marketUi.busy ? 'true' : undefined">{{ sendLabel }}</button>

@@ -22,7 +22,10 @@ VALUES ('${sessionId}', ${expires}, '${token}', ${now}, ${now}, '${userId}');
 const dir = mkdtempSync(path.join(tmpdir(), 'voyage-admin-'));
 const file = path.join(dir, 'admin.sql');
 writeFileSync(file, sql);
-const result = spawnSync(process.execPath, [wrangler, 'd1', 'execute', 'voyage', '--local', '--file', file], {
+const persist = process.env.VOYAGE_PERSIST_TO;
+const wranglerArgs = [wrangler, 'd1', 'execute', 'voyage', '--local', '--file', file];
+if (persist) wranglerArgs.push('--persist-to', persist);
+const result = spawnSync(process.execPath, wranglerArgs, {
     cwd: path.join(root, 'apps', 'api'),
     env: { ...process.env, CI: '1' },
     encoding: 'utf8',

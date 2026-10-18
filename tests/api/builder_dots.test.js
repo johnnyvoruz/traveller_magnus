@@ -8,7 +8,7 @@ import test from 'node:test';
 import { dotIndex } from '@voyage/generation';
 import { sha256Hex } from '@voyage/shared';
 import { TRUTH_SEED, TRUTH_SETTINGS } from '../../tools/truth/settings.js';
-import { runWrangler } from './session.js';
+import { removeTree, runWrangler } from './session.js';
 import { startDev, stopDev } from './server.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -302,7 +302,7 @@ VALUES ('${version}', '1.1.0', '', '${TRUTH_SEED}', '${settings}', '[]', 'releas
             }
         } finally {
             if (child) stopDev(child.pid);
-            rmSync(persistTo, { recursive: true, force: true });
+            removeTree(persistTo);
         }
     });
 }

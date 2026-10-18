@@ -1,15 +1,12 @@
 /**
  * Enhanced city draw program, step 4b.
- * Built from the vanilla draw source. The vanilla string is not edited.
+ * Built from the vanilla draw source. City light stays on the surface.
  * Cube C supplies the network. Looks A, B and C are one uniform apart.
  * The shoulder runs after the samples are averaged.
  */
 import { DRAW_FRAG } from '../vanilla/gl_shade.ts';
+import { CITY_GLOW_CLOUD } from './city_gates.ts';
 import { CITY_LOOK_A as LOOK_A, CITY_LOOK_B as LOOK_B, CITY_LOOK_C as LOOK_C } from './city_look.ts';
-
-const HAZE_IN_HALO = `    c += mix(uCityColor, vec3(0.75, 0.4, 1.0), uNeon * 0.6) * uCityHaze * 0.25
-        * exp(-alt * 1.6) * smoothstep(0.25, -0.35, facing) * smoothstep(reach, 1.0 + uHalo * 0.45, d);
-`;
 
 const CITY_AND_PORT = `        float night = max(smoothstep(0.08, -0.16, geo), (1.0 - lit) * 0.8);
         // Lights near the limb are seen through more air and foreshortened, so
@@ -24,8 +21,6 @@ const CITY_AND_PORT = `        float night = max(smoothstep(0.08, -0.16, geo), (
             float nearGlow = texture(uB, qc, bias + 2.5).g;
             float spill = (nearGlow * 0.3 + skyGlow * 0.3 * (1.0 + cloud * 1.5)) * (1.0 - 0.9 * density);
             emit += glowTint * spill * uCityGlow * uCityGain;
-            // On a heavily built world, the night-side air glows toward the limb.
-            emit += glowTint * uCityHaze * pow(1.0 - z, 3.0) * 0.35;
         }
         // A soft shoulder, so the brightest districts saturate instead of clipping.
         emit = 1.0 - exp(-emit * 1.4);
@@ -38,12 +33,16 @@ const GATED_CITY = `        float c = clamp(cloud, 0.0, 1.0);
         float path = min(7.0, 1.0 / max(z, 0.07));
         float seen = smoothstep(0.02, 0.30, z) * exp(-uAirStrength * 0.22 * (path - 1.0));
         vec3 glow = (tightW * glowTight * admitTight + broadW * glowBroad * admitBroad) * uCityGlow;
-        vec3 rawCity = uCityGain * gainK * uCityOn * night * seen * (direct * cityRaw + glow + sheetAcc);
+        vec3 dome = mix(glow, glow * vec3(0.85, 0.55, 1.15), clamp(uNeon, 0.0, 1.0) * 0.4);
+        float cover = clamp(cloud, 0.0, 1.0);
+        float lineShow = 1.0 - cover * 0.92;
+        float glowShow = exp(-${CITY_GLOW_CLOUD} * cover);
+        vec3 rawCity = uCityGain * gainK * uCityOn * night * seen * (direct * cityRaw * lineShow + (dome + sheetAcc) * glowShow);
         float peak = max(rawCity.r, max(rawCity.g, rawCity.b));
         vec3 city = rawCity / (1.0 + peak);
-        // The cloud mix already ran. This fraction is the ground still showing,
-        // so the add matches lights placed on the ground before that mix.
-        color += city * (1.0 - clamp(cloud, 0.0, 1.0) * 0.92) * (uGas < 0.5 ? 1.0 : 0.0);`;
+        // Crisp lines stay under the cloud deck. The dome fades more slowly,
+        // so thin cloud still shows it. Both terms are already inside the disc.
+        color += city * (uGas < 0.5 ? 1.0 : 0.0);`;
 
 const PORT = `    if (uPort.w > 0.0 && uLightMode < 0.5) {
         float gap = length(qc - uPort.xyz);
@@ -167,14 +166,14 @@ const SAMPLE_C = `        albedo += texture(uA, q, bias).rgb;
         cityCore += baked.a;
         float spread = 1.0;
         if (admitTight > 0.0) {
-            vec4 g1 = texture(uC, q, bias + log2(2.0));
-            g1.rgb *= smoothstep(core0, core1, g1.a);
-            glowTight += g1.rgb * spread;
+            vec4 g1 = texture(uC, q, bias + log2(3.0));
+            float coreW = smoothstep(core0, core1, g1.a);
+            glowTight += g1.rgb * mix(0.28, 1.0, coreW);
         }
         if (admitBroad > 0.0) {
-            vec4 g2 = texture(uC, q, bias + log2(5.0));
-            g2.rgb *= smoothstep(core0, core1, g2.a);
-            glowBroad += g2.rgb * spread;
+            vec4 g2 = texture(uC, q, bias + log2(8.0));
+            float coreW = smoothstep(core0, core1, g2.a);
+            glowBroad += g2.rgb * mix(0.4, 1.0, coreW);
         }
         if (sheetK > 0.0) {
             vec3 carpet = texture(uC, q, bias + log2(7.0)).rgb;
@@ -268,7 +267,6 @@ function once(source: string, from: string, to: string, label: string): string {
 /** The enhanced program. Throws if the vanilla source no longer has the markers. */
 export function enhancedDrawSource(vanilla: string): string {
     let source = once(vanilla, HAZE_GATE, AIR_GATE, 'halo haze gate');
-    source = once(source, HAZE_IN_HALO, '', 'city colour in halo');
     source = once(source, SAMPLERS, SAMPLERS_C, 'cube C samplers');
     source = once(source, ACCUM, ACCUM_C, 'city accumulators');
     source = once(source, SAMPLE, SAMPLE_C, 'per-sample city');

@@ -201,7 +201,7 @@ function endDrag(): void {
 <template>
   <div v-if="form" ref="root" class="hand" :data-span="span">
     <section class="hand-bodies" data-section="bodies">
-      <h3 class="ui-heading">Bodies <span class="ui-count">{{ nodes.length }}</span></h3>
+      <h3 class="ui-heading ui-kicker">Bodies <span class="ui-count">{{ nodes.length }}</span></h3>
       <DesignAsk v-if="handUi.removing" remove class="hand-ask" />
       <p v-if="!nodes.length" class="hand-empty">This system has no bodies. To add a star, select Add star. Then add the worlds that orbit it.</p>
       <ul v-else class="hand-list" aria-label="Bodies in this system">
@@ -307,7 +307,7 @@ function endDrag(): void {
       </div>
       <template v-if="fields.profile.length">
         <div class="hand-profile-head">
-          <h3 class="ui-heading">Profile</h3>
+          <h3 class="ui-heading ui-kicker">Profile</h3>
           <button
             v-if="selected.kind !== 'star'"
             type="button"
@@ -348,7 +348,7 @@ function endDrag(): void {
     </section>
 
     <section class="hand-system" data-section="system">
-      <h3 class="ui-heading">System</h3>
+      <h3 class="ui-heading ui-kicker">System</h3>
       <div class="sysed-group">
         <EditField
           v-for="field in system"

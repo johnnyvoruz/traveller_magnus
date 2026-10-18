@@ -113,7 +113,7 @@ const readout = computed(() => props.figure.locked ? scoutReadout(props.figure) 
 
 <template>
   <section class="doss-section doss-daynight">
-    <h3 class="ui-heading" :title="NOTE">Day and night</h3>
+    <h3 class="ui-heading ui-kicker" :title="NOTE">Day and night</h3>
     <div v-if="figure.locked" class="doss-scout" role="group" :aria-label="summary">
       <div class="doss-scout-line doss-scout-head" style="--i: 0">
         <span>Scout survey</span>

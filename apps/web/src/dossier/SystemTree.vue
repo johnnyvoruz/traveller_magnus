@@ -13,7 +13,7 @@ defineEmits<{ open: [key: string] }>();
 
 <template>
   <section class="doss-tree">
-    <h3 class="ui-heading">System <span class="ui-count">{{ count }}</span></h3>
+    <h3 class="ui-heading ui-kicker">System <span class="ui-count">{{ count }}</span></h3>
     <BodyRow
       v-for="row in rows"
       :key="row.key"

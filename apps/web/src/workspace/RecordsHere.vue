@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
  * "Your records here" in a dossier (design §4): the campaign's records at this system, or on
- * the one body shown, and a button that makes a new one anchored there. Signed out it is not
+ * the one body shown, and a button that makes a new one anchored there; under them, the journal
+ * entries that mention the system or are set there (JournalHere). Signed out it is not
  * there at all: no section and no invitation. It reads the campaign already in memory and
  * never fetches.
  */
@@ -16,10 +17,14 @@ import { isOnline, onOnlineChange } from '../platform/browser.ts';
 import { createRecord } from './actions.ts';
 import AddButton from './AddButton.vue';
 import { thumbUrl } from './images.ts';
+import JournalHere from './JournalHere.vue';
 import { locating, startLocate, stopLocate } from './locate.ts';
 import { openFailed } from './opening.ts';
 import { hexKeyOf, liveById, recordsHere, resolvePlace, systemAnchor, withinSystem } from './places.ts';
 import { typeInfo } from './records.ts';
+import { vRecordCard } from './record_card.ts';
+import WorldSection from '../dossier/WorldSection.vue';
+import { recordsSummary } from '../dossier/world_panel.ts';
 
 const props = defineProps<{
     slug: string;
@@ -30,9 +35,11 @@ const props = defineProps<{
     bodyKey: string | null;
     /** That body's name, kept on the anchor beside its key. */
     bodyName: string;
+    /** Set on the world panel. Absent on the system overview, which keeps its own heading. */
+    foldOpen?: boolean;
 }>();
 
-const emit = defineEmits<{ retry: [] }>();
+const emit = defineEmits<{ retry: []; toggle: [] }>();
 
 const route = useRoute();
 const router = useRouter();
@@ -83,6 +90,12 @@ const rows = computed(() => {
     });
 });
 const title = computed(() => (props.bodyKey ? 'Your records on this world' : 'Your records here'));
+const folding = computed(() => props.foldOpen !== undefined);
+const foldSummary = computed(() => {
+    if (state.value === 'loading') return 'Loading';
+    if (state.value === 'error') return 'Unavailable';
+    return recordsSummary(rows.value.length);
+});
 
 /** A record opens in the campaign pane on this view, so the orbit clock stays in the address. */
 function open(id: string): void {
@@ -97,10 +110,69 @@ function add(type: CampaignRecordType): void {
 </script>
 
 <template>
-  <section v-if="state !== 'hidden'" class="here" :data-state="state">
-    <div class="here-head">
-      <h3 class="ui-heading">{{ title }} <span v-if="state === 'ready'" class="ui-count">{{ rows.length }}</span></h3>
+  <WorldSection
+    v-if="folding && state !== 'hidden'"
+    title="Your records"
+    :open="foldOpen === true"
+    body-id="doss-records"
+    :summary="foldSummary"
+    @toggle="emit('toggle')"
+  >
+    <template #tools>
       <AddButton
+        quiet
+        type="person"
+        label="Add here"
+        :menu-label="bodyKey ? 'Add a record on this world' : 'Add a record here'"
+        :disabled="!online || state !== 'ready'"
+        @add="add"
+      />
+    </template>
+    <div class="here is-fold" :data-state="state">
+      <p v-if="state === 'loading'" class="here-note" role="status">Loading your records.</p>
+      <p v-else-if="state === 'error'" class="here-note" role="alert">
+        Your records could not be loaded.
+        <button type="button" class="ui-btn" @click="emit('retry')">Try again</button>
+      </p>
+      <div v-else-if="!rows.length" class="camp-first ui-ground">
+        <span class="camp-glyph" aria-hidden="true"><Icon name="book-sparkles" :size="22" /></span>
+        <h2>Nothing of yours here yet</h2>
+        <p>{{ bodyKey ? 'Add a record on this world. It stays in your campaign.' : 'Add a record here. It stays in your campaign.' }}</p>
+      </div>
+      <ul v-else ref="listEl" class="here-rows">
+        <li v-for="row in rows" :key="row.record.id" :class="{ 'has-locate': onMap }">
+          <button v-record-card="row.record.id" type="button" class="here-row" :data-id="row.record.id" @click="open(row.record.id)">
+            <img v-if="thumbUrl(campaign.universeId, row.record)" class="here-glyph is-thumb" :src="thumbUrl(campaign.universeId, row.record) || ''" alt="" loading="lazy">
+            <span v-else class="here-glyph" aria-hidden="true"><Icon :name="row.info.icon" :size="13" /></span>
+            <span class="here-text">
+              <b>{{ row.record.name }}</b>
+              <small>{{ row.info.one }} · {{ row.where }}</small>
+            </span>
+            <Icon name="chevron-right" :size="11" />
+          </button>
+          <button
+            v-if="onMap"
+            type="button"
+            class="here-locate"
+            :data-id="row.record.id"
+            :aria-pressed="locating.recordId === row.record.id ? 'true' : 'false'"
+            :aria-label="(locating.recordId === row.record.id ? 'Stop locating ' : 'Locate ') + row.record.name"
+            :title="locating.recordId === row.record.id ? 'Stop locating' : 'Show on the map'"
+            @click="locate(row.record.id)"
+          >
+            <Icon name="location-crosshairs" :size="13" />
+          </button>
+        </li>
+      </ul>
+      <JournalHere :hex-key="hexKey" :on-world="bodyKey !== null" />
+    </div>
+  </WorldSection>
+  <JournalHere v-else-if="folding" :hex-key="hexKey" :on-world="bodyKey !== null" />
+  <section v-else-if="state !== 'hidden'" class="here" :data-state="state">
+    <div class="here-head">
+      <h3 class="ui-heading ui-kicker">{{ title }} <span v-if="state === 'ready'" class="ui-count">{{ rows.length }}</span></h3>
+      <AddButton
+        v-if="rows.length || state !== 'ready'"
         quiet
         type="person"
         label="Add here"
@@ -114,10 +186,23 @@ function add(type: CampaignRecordType): void {
       Your records could not be loaded.
       <button type="button" class="ui-btn" @click="emit('retry')">Try again</button>
     </p>
-    <p v-else-if="!rows.length" class="here-note">Nothing of yours here yet.</p>
+    <div v-else-if="!rows.length" class="camp-first ui-ground">
+      <span class="camp-glyph" aria-hidden="true"><Icon name="book-sparkles" :size="22" /></span>
+      <h2>Nothing of yours here yet</h2>
+      <p>{{ bodyKey ? 'Add a record on this world. It stays in your campaign.' : 'Add a record here. It stays in your campaign.' }}</p>
+      <div class="camp-first-starts">
+        <AddButton
+          type="person"
+          label="Add a person"
+          :menu-label="bodyKey ? 'Add a record on this world' : 'Add a record here'"
+          :disabled="!online"
+          @add="add"
+        />
+      </div>
+    </div>
     <ul v-else ref="listEl" class="here-rows">
       <li v-for="row in rows" :key="row.record.id" :class="{ 'has-locate': onMap }">
-        <button type="button" class="here-row" :data-id="row.record.id" @click="open(row.record.id)">
+        <button v-record-card="row.record.id" type="button" class="here-row" :data-id="row.record.id" @click="open(row.record.id)">
           <img v-if="thumbUrl(campaign.universeId, row.record)" class="here-glyph is-thumb" :src="thumbUrl(campaign.universeId, row.record) || ''" alt="" loading="lazy">
           <span v-else class="here-glyph" aria-hidden="true"><Icon :name="row.info.icon" :size="13" /></span>
           <span class="here-text">
@@ -141,11 +226,16 @@ function add(type: CampaignRecordType): void {
       </li>
     </ul>
   </section>
+  <JournalHere v-if="!folding" :hex-key="hexKey" :on-world="bodyKey !== null" />
 </template>
 
 <style>
 .here {
   margin: 18px 0 0;
+}
+
+.here.is-fold {
+  margin-top: 0;
 }
 
 .here-head {

@@ -4,7 +4,7 @@
  */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { CAMPAIGN_RECORD_TYPES, CAMPAIGN_ENTRY_KINDS } from '@voyage/shared';
+import { CAMPAIGN_RECORD_TYPES, CAMPAIGN_ENTRY_KINDS, playersView } from '@voyage/shared';
 import { totalDays } from '../../apps/web/src/orbit/clock.ts';
 import { buildPlayerPack, packFileName } from '../../apps/web/src/pack/build.ts';
 import { planPack } from '../../apps/web/src/pack/plan.ts';
@@ -256,6 +256,24 @@ test('the Player Pack names each players ship and who is aboard no ship', () => 
 
 test('a file name drops characters a file system refuses', () => {
     assert.equal(packFileName('A/B:C', 'no date'), 'ABC - Player Pack - no date.html');
+});
+
+test('the pack and the member read agree', () => {
+    const { input } = fixture();
+    const plan = planPack(input);
+    const view = playersView({
+        records: Object.values(input.records),
+        links: Object.values(input.links),
+        journal: Object.values(input.journal),
+        settings: input.settings,
+        clock: { days: input.clockDays, rev: 0 },
+    });
+    const ids = (rows) => rows.map((row) => row.id).sort();
+    assert.deepEqual(ids(plan.records), ids(view.records));
+    assert.deepEqual(ids(plan.entries), ids(view.journal));
+    const byEnds = new Map(Object.values(input.links).map((link) => [link.from + ' ' + link.to, link.id]));
+    const planLinkIds = plan.links.map((link) => byEnds.get(link.fromId + ' ' + link.toId)).sort();
+    assert.deepEqual(planLinkIds, ids(view.links));
 });
 
 test('ten copies of the fixture build a file and report its size', () => {

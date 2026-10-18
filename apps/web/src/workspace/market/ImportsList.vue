@@ -2,13 +2,15 @@
 /**
  * A campaign's imports (contracts/b_marketplace.md F3, F14): title, version, in place or
  * placed, "Update available" with Update (the same preview, its placement kept), and Remove,
- * a plain delete confirmed in the app modal. There is no undo.
+ * a plain delete confirmed in the app modal. There is no undo. It sits under My packages as
+ * "In this campaign" (prompts/d_store_harden.md item 2), not on the storefront.
  */
 import { computed, onMounted, ref, watch } from 'vue';
 import { RouterLink } from 'vue-router';
 import { session } from '../../account/session.ts';
 import { campaign, listCampaigns } from '../../campaign/store.ts';
 import { marketWire, type InstallRow } from '../../marketplace/catalogue.ts';
+import { showToast } from '../../shell/toast.ts';
 import MarketAsk from './MarketAsk.vue';
 import { placementWords, plural, removeWords } from './place.ts';
 
@@ -20,7 +22,6 @@ const error = ref('');
 const asking = ref<InstallRow | null>(null);
 const busy = ref(false);
 const askError = ref('');
-const said = ref('');
 
 const mine = computed(() => campaign.universes.filter((item) => session.user && item.ownerId === session.user.id));
 
@@ -50,7 +51,7 @@ async function remove(): Promise<void> {
     try {
         const done = await wire.remove(universeId.value, row.installId);
         asking.value = null;
-        said.value = 'Removed ' + row.title + ': ' + plural(done.hexes, 'hex', 'hexes') + ', ' + plural(done.records, 'record', 'records') + '.';
+        showToast('Removed ' + row.title + ': ' + plural(done.hexes, 'hex', 'hexes') + ', ' + plural(done.records, 'record', 'records') + '.');
         await load();
     } catch (err) {
         askError.value = err instanceof Error && err.message ? err.message : 'The import could not be removed. Try again.';
@@ -59,7 +60,7 @@ async function remove(): Promise<void> {
     }
 }
 
-watch(universeId, () => { said.value = ''; void load(); });
+watch(universeId, () => { void load(); });
 
 onMounted(async () => {
     if (!campaign.universes.length) await listCampaigns();
@@ -69,14 +70,13 @@ onMounted(async () => {
 </script>
 
 <template>
-  <section class="mk-ins" aria-label="Imports">
+  <section class="mk-ins" aria-labelledby="mk-ins-h">
     <div class="mk-ins-bar">
-      <h2 class="ui-heading">Imports</h2>
+      <h2 id="mk-ins-h" class="ui-kicker">In this campaign</h2>
       <select v-if="mine.length" v-model="universeId" class="mk-box mk-ins-pick" aria-label="Campaign">
         <option v-for="item in mine" :key="item.id" :value="item.id">{{ item.name }}</option>
       </select>
     </div>
-    <p v-if="said" class="mk-status" role="status">{{ said }}</p>
     <p v-if="error" class="mk-err" role="alert">{{ error }}</p>
     <p v-if="!mine.length" class="mk-fine">You have no campaign yet.</p>
     <p v-else-if="!loading && !rows.length && !error" class="mk-fine">Nothing is imported into this campaign.</p>
@@ -112,13 +112,16 @@ onMounted(async () => {
 
 .mk-ins-bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 8px 12px;
 }
 
+/* As wide as the campaign's name needs, never wider than the page (390 px). */
 .mk-ins-pick {
   width: auto;
-  min-width: 180px;
+  min-width: min(180px, 100%);
+  max-width: 100%;
 }
 
 .mk-ins-list {

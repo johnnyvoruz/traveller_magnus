@@ -1,0 +1,1843 @@
+{
+  "_readme": [
+    "Draft of the MgT2E trade rules, filled only from assets/trade.txt (Johnny's extracted text of the Trade chapter) by stream Z on 2026-10-17. Every row carries _src: the line or lines of assets/trade.txt it came from. Nothing was taken from memory and nothing inferred; a cell the text does not settle is null. Johnny answered the ZT0 questions on 2026-10-17 (directives/streams/Z.md, ZT0b); a row his answer settles carries _answer, and every null left says why in _answer.",
+    "Shape: the skeleton's keys, with these changes. goods became an object: goods.table is the Trade Goods table (one entry per D66 row) and goods.availability holds the rules for what a supplier has. fares is new: the Passage and Freight table, one row per parsec, read by passengers and freight. localBrokers is the skeleton's broker, named as the text names it. illegalGoods is new (the ILLEGAL GOODS box). tradeRoutes is dropped (Johnny, ZT0 Q11): the text has no trade routes table.",
+    "Rows rebuilt from wrapped extraction cite every line used. Where a Trade Goods row has its Purchase DM and Sale DM columns on one line with no comma between them (for example line 563, 'Asteroid +4 Industrial +3, Non-'), the column break is taken at the missing comma: entries inside one column are comma-separated in every row of the table (question 2).",
+    "Values: credits are numbers in Cr (MCr1 is 1000000); dice stay as printed ('2D x 10', '1D'); percentages are numbers; DM keys and availability are the printed words, line wraps joined, spelling untouched (Johnny, ZT0 Q3: names stay as printed; a name-to-trade-code table goes in the trade module later).",
+    "Also settled by Johnny on 2026-10-17: four passages (high, middle, basic, low), as line 44's list has (Q1); the Population-code goods sentence split across lines 352 and 395 is one sentence (Q6); selling is 3D (Q9).",
+    "The Random Passenger table (lines 213-236) is already in findings/rules_drafts/mgt2e_random_passenger.json and is not repeated here.",
+    "Moves to rules/mgt2e_trade.json only on Johnny's word (CLAUDE.md rule 1), then npm run rules:gen."
+  ],
+  "source": {
+    "file": "assets/trade.txt",
+    "chapter": "TRADE",
+    "book": "Mongoose Traveller 2nd Edition Core Rulebook",
+    "pages": null,
+    "_answer": "Johnny 2026-10-17 (ZT0 Q10): pages stay blank; no page numbers.",
+    "_src": "assets/trade.txt:1"
+  },
+  "checklist": {
+    "steps": [
+      "Find a supplier or local broker",
+      "Determine goods available",
+      "Determine purchase price",
+      "Purchase goods",
+      "Travel to another market",
+      "Find a buyer or local broker",
+      "Determine sale price"
+    ],
+    "_src": "assets/trade.txt:303-310"
+  },
+  "passengers": {
+    "_src": "assets/trade.txt:43-50",
+    "passages": [
+      {
+        "name": "High",
+        "requires": {
+          "stateroom": 1,
+          "cargoTons": 1,
+          "stewardLevelsPer": 10
+        },
+        "text": "It requires a stateroom, one ton of cargo space and one level of Steward per 10 passengers.",
+        "_src": "assets/trade.txt:51-55"
+      },
+      {
+        "name": "Middle",
+        "requires": {
+          "stateroom": 1,
+          "cargoKg": 100,
+          "stewardLevelsPer": 100
+        },
+        "text": "It requires a stateroom, 100kg of cargo and one level of Steward per 100 passengers.",
+        "_src": "assets/trade.txt:56-61"
+      },
+      {
+        "name": "Basic",
+        "requires": {
+          "spareTons": 2,
+          "baggageKg": 10
+        },
+        "text": "This requires two tons of spare room on the spacecraft, a resilient personality on the part of the passenger and comes with a 10kg baggage allowance.",
+        "_src": "assets/trade.txt:62-71"
+      },
+      {
+        "name": "Low",
+        "requires": {
+          "lowBerth": 1,
+          "baggageKg": 10
+        },
+        "text": "This requires a low berth and comes with a 10kg baggage allowance.",
+        "_src": "assets/trade.txt:72-79"
+      }
+    ],
+    "traffic": {
+      "_src": "assets/trade.txt:89-94",
+      "roll": "2D",
+      "rolls": [
+        "Low",
+        "Basic",
+        "Middle",
+        "High"
+      ],
+      "dms": [
+        {
+          "label": "The Effect of an Average (8+) Broker, Carouse or Streetwise check",
+          "dm": "Effect",
+          "_src": "assets/trade.txt:95-96"
+        },
+        {
+          "label": "Chief Steward",
+          "dm": "highest Steward skill on ship",
+          "_answer": "Johnny 2026-10-17 (ZT0 Q7): a DM equal to the highest Steward skill aboard.",
+          "_src": "assets/trade.txt:97-98"
+        },
+        {
+          "label": "Rolling for High Passengers",
+          "dm": -4,
+          "_src": "assets/trade.txt:99"
+        },
+        {
+          "label": "Rolling for Low Passengers",
+          "dm": 1,
+          "_src": "assets/trade.txt:100"
+        }
+      ],
+      "worldDms": {
+        "appliesTo": "both source and destination worlds",
+        "_src": "assets/trade.txt:101-102",
+        "rows": [
+          {
+            "label": "World Population 1 or less",
+            "dm": -4,
+            "_src": "assets/trade.txt:103"
+          },
+          {
+            "label": "World Population 6-7",
+            "dm": 1,
+            "_src": "assets/trade.txt:104"
+          },
+          {
+            "label": "World Population 8 or more",
+            "dm": 3,
+            "_src": "assets/trade.txt:105"
+          },
+          {
+            "label": "Starport A",
+            "dm": 2,
+            "_src": "assets/trade.txt:106"
+          },
+          {
+            "label": "Starport B",
+            "dm": 1,
+            "_src": "assets/trade.txt:107"
+          },
+          {
+            "label": "Starport E",
+            "dm": -1,
+            "_src": "assets/trade.txt:108"
+          },
+          {
+            "label": "Starport X",
+            "dm": -3,
+            "_src": "assets/trade.txt:109"
+          },
+          {
+            "label": "Amber Zone",
+            "dm": 1,
+            "_src": "assets/trade.txt:110"
+          },
+          {
+            "label": "Red Zone",
+            "dm": -4,
+            "_src": "assets/trade.txt:111"
+          },
+          {
+            "label": "Each parsec of destination past the first",
+            "dm": -1,
+            "_src": "assets/trade.txt:112"
+          }
+        ]
+      },
+      "table": [
+        {
+          "roll": "1 or less",
+          "dice": "0",
+          "_src": "assets/trade.txt:138"
+        },
+        {
+          "roll": "2",
+          "dice": "1D",
+          "_src": "assets/trade.txt:139"
+        },
+        {
+          "roll": "3",
+          "dice": "1D",
+          "_src": "assets/trade.txt:140"
+        },
+        {
+          "roll": "4",
+          "dice": "2D",
+          "_src": "assets/trade.txt:141"
+        },
+        {
+          "roll": "5",
+          "dice": "2D",
+          "_src": "assets/trade.txt:142"
+        },
+        {
+          "roll": "6",
+          "dice": "2D",
+          "_src": "assets/trade.txt:143"
+        },
+        {
+          "roll": "7",
+          "dice": "3D",
+          "_src": "assets/trade.txt:144"
+        },
+        {
+          "roll": "8",
+          "dice": "3D",
+          "_src": "assets/trade.txt:145"
+        },
+        {
+          "roll": "9",
+          "dice": "3D",
+          "_src": "assets/trade.txt:146"
+        },
+        {
+          "roll": "10",
+          "dice": "3D",
+          "_src": "assets/trade.txt:147"
+        },
+        {
+          "roll": "11",
+          "dice": "4D",
+          "_src": "assets/trade.txt:148"
+        },
+        {
+          "roll": "12",
+          "dice": "4D",
+          "_src": "assets/trade.txt:149"
+        },
+        {
+          "roll": "13",
+          "dice": "4D",
+          "_src": "assets/trade.txt:150"
+        },
+        {
+          "roll": "14",
+          "dice": "5D",
+          "_src": "assets/trade.txt:151"
+        },
+        {
+          "roll": "15",
+          "dice": "5D",
+          "_src": "assets/trade.txt:152"
+        },
+        {
+          "roll": "16",
+          "dice": "6D",
+          "_src": "assets/trade.txt:153"
+        },
+        {
+          "roll": "17",
+          "dice": "7D",
+          "_src": "assets/trade.txt:154"
+        },
+        {
+          "roll": "18",
+          "dice": "8D",
+          "_src": "assets/trade.txt:155"
+        },
+        {
+          "roll": "19",
+          "dice": "9D",
+          "_src": "assets/trade.txt:156"
+        },
+        {
+          "roll": "20 or more",
+          "dice": "10D",
+          "_src": "assets/trade.txt:157"
+        }
+      ]
+    },
+    "notes": [
+      {
+        "text": "The referee may add their own modifiers as they see fit.",
+        "_src": "assets/trade.txt:113-116"
+      },
+      {
+        "text": "Passengers pay an amount for their passage depending on the distance travelled and degree of luxury as shown on the Passage and Freight table.",
+        "_src": "assets/trade.txt:118-120"
+      },
+      {
+        "text": "The number of passengers available cannot usually exceed the number of people resident on a planet, except in unusual circumstances.",
+        "_src": "assets/trade.txt:122-128"
+      }
+    ]
+  },
+  "fares": {
+    "_src": "assets/trade.txt:159-160",
+    "perJump": true,
+    "rows": [
+      {
+        "parsecs": 1,
+        "high": 9000,
+        "middle": 6500,
+        "basic": 2000,
+        "low": 700,
+        "freightPerTon": 1000,
+        "_src": "assets/trade.txt:161"
+      },
+      {
+        "parsecs": 2,
+        "high": 14000,
+        "middle": 10000,
+        "basic": 3000,
+        "low": 1300,
+        "freightPerTon": 1600,
+        "_src": "assets/trade.txt:162"
+      },
+      {
+        "parsecs": 3,
+        "high": 21000,
+        "middle": 14000,
+        "basic": 5000,
+        "low": 2200,
+        "freightPerTon": 2600,
+        "_src": "assets/trade.txt:163"
+      },
+      {
+        "parsecs": 4,
+        "high": 34000,
+        "middle": 23000,
+        "basic": 8000,
+        "low": 3900,
+        "freightPerTon": 4400,
+        "_src": "assets/trade.txt:164"
+      },
+      {
+        "parsecs": 5,
+        "high": 60000,
+        "middle": 40000,
+        "basic": 14000,
+        "low": 7200,
+        "freightPerTon": 8500,
+        "_src": "assets/trade.txt:165"
+      },
+      {
+        "parsecs": 6,
+        "high": 210000,
+        "middle": 130000,
+        "basic": 55000,
+        "low": 27000,
+        "freightPerTon": 32000,
+        "_src": "assets/trade.txt:166"
+      }
+    ],
+    "notes": [
+      {
+        "text": "The cost increases with the distance travelled and is for a single jump.",
+        "_src": "assets/trade.txt:49-50"
+      }
+    ]
+  },
+  "freight": {
+    "_src": "assets/trade.txt:129-134",
+    "lots": [
+      {
+        "name": "Major",
+        "tons": "1D x 10",
+        "_src": "assets/trade.txt:168"
+      },
+      {
+        "name": "Minor",
+        "tons": "1D x 5",
+        "_src": "assets/trade.txt:169"
+      },
+      {
+        "name": "Incidental",
+        "tons": "1D",
+        "_src": "assets/trade.txt:170"
+      }
+    ],
+    "traffic": {
+      "_src": "assets/trade.txt:171-174",
+      "roll": "2D",
+      "rolls": [
+        "Incidental",
+        "Minor",
+        "Major"
+      ],
+      "dms": [
+        {
+          "label": "The Effect of an Average (8+) Broker or Streetwise check",
+          "dm": "Effect",
+          "_src": "assets/trade.txt:175"
+        },
+        {
+          "label": "Rolling for Major Cargo",
+          "dm": -4,
+          "_src": "assets/trade.txt:176"
+        },
+        {
+          "label": "Rolling for Incidental Cargo",
+          "dm": 2,
+          "_src": "assets/trade.txt:177"
+        }
+      ],
+      "worldDms": {
+        "appliesTo": "both source and destination worlds",
+        "_src": "assets/trade.txt:178-179",
+        "rows": [
+          {
+            "label": "World Population 1 or less",
+            "dm": -4,
+            "_src": "assets/trade.txt:180"
+          },
+          {
+            "label": "World Population 6-7",
+            "dm": 2,
+            "_src": "assets/trade.txt:181"
+          },
+          {
+            "label": "World Population 8 or more",
+            "dm": 4,
+            "_src": "assets/trade.txt:182"
+          },
+          {
+            "label": "Starport A",
+            "dm": 2,
+            "_src": "assets/trade.txt:183"
+          },
+          {
+            "label": "Starport B",
+            "dm": 1,
+            "_src": "assets/trade.txt:184"
+          },
+          {
+            "label": "Starport E",
+            "dm": -1,
+            "_src": "assets/trade.txt:185"
+          },
+          {
+            "label": "Starport X",
+            "dm": -3,
+            "_src": "assets/trade.txt:186"
+          },
+          {
+            "label": "Tech Level 6 or less",
+            "dm": -1,
+            "_src": "assets/trade.txt:187"
+          },
+          {
+            "label": "Tech Level 9 or more",
+            "dm": 2,
+            "_src": "assets/trade.txt:188"
+          },
+          {
+            "label": "Amber Zone",
+            "dm": -2,
+            "_src": "assets/trade.txt:189"
+          },
+          {
+            "label": "Red Zone",
+            "dm": -6,
+            "_src": "assets/trade.txt:190"
+          },
+          {
+            "label": "Each parsec of destination past the first",
+            "dm": -1,
+            "_src": "assets/trade.txt:191"
+          }
+        ]
+      },
+      "table": [
+        {
+          "roll": "1 or less",
+          "dice": "0",
+          "_src": "assets/trade.txt:243"
+        },
+        {
+          "roll": "2",
+          "dice": "1D",
+          "_src": "assets/trade.txt:244"
+        },
+        {
+          "roll": "3",
+          "dice": "1D",
+          "_src": "assets/trade.txt:245"
+        },
+        {
+          "roll": "4",
+          "dice": "2D",
+          "_src": "assets/trade.txt:246"
+        },
+        {
+          "roll": "5",
+          "dice": "2D",
+          "_src": "assets/trade.txt:247"
+        },
+        {
+          "roll": "6",
+          "dice": "3D",
+          "_src": "assets/trade.txt:248"
+        },
+        {
+          "roll": "7",
+          "dice": "3D",
+          "_src": "assets/trade.txt:249"
+        },
+        {
+          "roll": "8",
+          "dice": "3D",
+          "_src": "assets/trade.txt:250"
+        },
+        {
+          "roll": "9",
+          "dice": "4D",
+          "_src": "assets/trade.txt:251"
+        },
+        {
+          "roll": "10",
+          "dice": "4D",
+          "_src": "assets/trade.txt:252"
+        },
+        {
+          "roll": "11",
+          "dice": "4D",
+          "_src": "assets/trade.txt:253"
+        },
+        {
+          "roll": "12",
+          "dice": "5D",
+          "_src": "assets/trade.txt:254"
+        },
+        {
+          "roll": "13",
+          "dice": "5D",
+          "_src": "assets/trade.txt:255"
+        },
+        {
+          "roll": "14",
+          "dice": "5D",
+          "_src": "assets/trade.txt:256"
+        },
+        {
+          "roll": "15",
+          "dice": "6D",
+          "_src": "assets/trade.txt:257"
+        },
+        {
+          "roll": "16",
+          "dice": "6D",
+          "_src": "assets/trade.txt:258"
+        },
+        {
+          "roll": "17",
+          "dice": "7D",
+          "_src": "assets/trade.txt:259"
+        },
+        {
+          "roll": "18",
+          "dice": "8D",
+          "_src": "assets/trade.txt:260"
+        },
+        {
+          "roll": "19",
+          "dice": "9D",
+          "_src": "assets/trade.txt:261"
+        },
+        {
+          "roll": "20 or more",
+          "dice": "10D",
+          "_src": "assets/trade.txt:262"
+        }
+      ]
+    },
+    "late": {
+      "label": "Failing to deliver cargo on time reduces the amount paid by",
+      "reduction": "1D+4 x 10%",
+      "_src": "assets/trade.txt:264-266"
+    },
+    "notes": [
+      {
+        "text": "Freight lots must be transported in their entirety.",
+        "_src": "assets/trade.txt:133-134"
+      },
+      {
+        "text": "A freight lot cannot be broken up. Cargo is paid for upon delivery, assuming it is delivered on time.",
+        "_src": "assets/trade.txt:263-264"
+      },
+      {
+        "text": "The referee may add their own modifiers as they see fit.",
+        "_src": "assets/trade.txt:238-240"
+      }
+    ]
+  },
+  "mail": {
+    "_src": "assets/trade.txt:267-274",
+    "roll": "2D",
+    "dms": [
+      {
+        "label": "Freight Traffic DM-10 or less",
+        "dm": -2,
+        "_answer": "Johnny 2026-10-17 (ZT0 Q8): the label is the total DM that applied to the Freight Traffic roll.",
+        "_src": "assets/trade.txt:276"
+      },
+      {
+        "label": "Freight Traffic DM-9 to -5",
+        "dm": -1,
+        "_answer": "Johnny 2026-10-17 (ZT0 Q8): the label is the total DM that applied to the Freight Traffic roll.",
+        "_src": "assets/trade.txt:277"
+      },
+      {
+        "label": "Freight Traffic DM-4 to +4",
+        "dm": 0,
+        "_answer": "Johnny 2026-10-17 (ZT0 Q8): the label is the total DM that applied to the Freight Traffic roll.",
+        "_src": "assets/trade.txt:278"
+      },
+      {
+        "label": "Freight Traffic DM 5 to 9",
+        "dm": 1,
+        "_answer": "Johnny 2026-10-17 (ZT0 Q8): the label is the total DM that applied to the Freight Traffic roll.",
+        "_src": "assets/trade.txt:279"
+      },
+      {
+        "label": "Freight Traffic DM 10 or more",
+        "dm": 2,
+        "_answer": "Johnny 2026-10-17 (ZT0 Q8): the label is the total DM that applied to the Freight Traffic roll.",
+        "_src": "assets/trade.txt:280"
+      },
+      {
+        "label": "Travellers' ship is armed",
+        "dm": 2,
+        "_src": "assets/trade.txt:281"
+      },
+      {
+        "label": "World is TL of 5 or less",
+        "dm": -4,
+        "_src": "assets/trade.txt:282"
+      },
+      {
+        "label": "Travellers' highest Naval or Scout rank",
+        "dm": "rank",
+        "_src": "assets/trade.txt:283"
+      },
+      {
+        "label": "Travellers' highest SOC DM",
+        "dm": "SOC DM",
+        "_src": "assets/trade.txt:284"
+      }
+    ],
+    "target": 12,
+    "containerTons": 5,
+    "payPerContainer": 25000,
+    "containers": "1D",
+    "allOrNone": true,
+    "notes": [
+      {
+        "text": "On 12 or more, the Travellers are chosen to transport mail to the destination world. Mail containers take up five tons of space and the Travellers will be paid Cr25000 for transporting the container. There will be 1D containers available to transport and the Travellers must take them all or none at all.",
+        "_src": "assets/trade.txt:286-291"
+      },
+      {
+        "text": "Mail deliveries are priced at a flat-rate and the payment does not scale with distance.",
+        "_src": "assets/trade.txt:292-293"
+      }
+    ]
+  },
+  "supplier": {
+    "_src": "assets/trade.txt:311-321",
+    "repeatAttemptDm": {
+      "label": "per previous attempt on a planet in the same month",
+      "dm": -1,
+      "_src": "assets/trade.txt:319-321"
+    },
+    "checks": [
+      {
+        "name": "Finding a Supplier or Broker",
+        "difficulty": "Average (8+)",
+        "skill": "Broker",
+        "time": "1D days",
+        "characteristic": [
+          "EDU",
+          "SOC"
+        ],
+        "_src": "assets/trade.txt:323-324"
+      },
+      {
+        "name": "Finding a Black Market Supplier or Broker of Illegal Goods",
+        "difficulty": "Average (8+)",
+        "skill": "Streetwise",
+        "time": "1D days",
+        "characteristic": [
+          "EDU",
+          "SOC"
+        ],
+        "_src": "assets/trade.txt:325-327"
+      },
+      {
+        "name": "Finding an Online Supplier or Broker",
+        "worlds": "TL8+ worlds only",
+        "difficulty": "Average (8+)",
+        "skill": "Admin",
+        "time": "1D hours",
+        "characteristic": [
+          "EDU"
+        ],
+        "_src": "assets/trade.txt:328-329"
+      }
+    ],
+    "starportDms": [
+      {
+        "label": "Class A",
+        "dm": 6,
+        "_src": "assets/trade.txt:333"
+      },
+      {
+        "label": "Class B",
+        "dm": 4,
+        "_src": "assets/trade.txt:334"
+      },
+      {
+        "label": "Class C",
+        "dm": 2,
+        "_src": "assets/trade.txt:335"
+      }
+    ],
+    "notes": [
+      {
+        "text": "The size of the Starport provides a bonus to finding a supplier.",
+        "_src": "assets/trade.txt:331-332"
+      },
+      {
+        "text": "A Traveller must find a buyer, instead of a supplier. The same rules apply.",
+        "_src": "assets/trade.txt:492-493"
+      }
+    ]
+  },
+  "goods": {
+    "_src": "assets/trade.txt:336-343",
+    "availability": {
+      "_src": [
+        "assets/trade.txt:337-352",
+        "assets/trade.txt:395-406"
+      ],
+      "rules": [
+        {
+          "text": "Common Goods can be purchased on any world. Trade Goods can usually only be found on a world with a matching Trade code.",
+          "_src": "assets/trade.txt:338-340"
+        },
+        {
+          "text": "The tons column on the Trade Goods table determines how many tons of a given type of goods are available for purchase.",
+          "_src": "assets/trade.txt:340-343"
+        },
+        {
+          "label": "On Population 3- apply DM-3 to the roll for quantity",
+          "dm": -3,
+          "appliesTo": "quantity roll",
+          "_src": "assets/trade.txt:344-347"
+        },
+        {
+          "label": "Population 9+ worlds have vast economies and grant DM+3 on the roll for lot quantities",
+          "dm": 3,
+          "appliesTo": "quantity roll",
+          "_src": "assets/trade.txt:347-349"
+        },
+        {
+          "text": "A supplier will have all Common Goods available, the Trade Goods that match the world's Trade codes and a quantity of randomly determined goods equal to the Population code of the world.",
+          "_src": [
+            "assets/trade.txt:350-352",
+            "assets/trade.txt:395"
+          ]
+        },
+        {
+          "text": "Roll on the Trade Goods table to randomly determine the goods available, re-rolling results 61-65 unless dealing with a black market supplier. If you roll the same type of goods multiple times, then the supplier has extra amounts of those goods available.",
+          "_src": "assets/trade.txt:395-400"
+        },
+        {
+          "text": "A black market supplier has whatever illegal goods match world's Trade codes, as well as any randomly rolled illegal goods. Roll 1D on the Trade Goods table and use 6 as the leading digit.",
+          "_src": "assets/trade.txt:401-406"
+        }
+      ]
+    },
+    "table": [
+      {
+        "d66": "11",
+        "type": "Common Electronics",
+        "availability": [
+          "All"
+        ],
+        "tons": "2D x 10",
+        "basePrice": 20000,
+        "purchaseDM": {
+          "Industrial": 2,
+          "High Tech": 3,
+          "Rich": 1
+        },
+        "saleDM": {
+          "Non-Industrial": 2,
+          "Low Tech": 1,
+          "Poor": 1
+        },
+        "examples": "Simple electronics including basic computers up to TL10",
+        "illegal": false,
+        "_src": "assets/trade.txt:503-513"
+      },
+      {
+        "d66": "12",
+        "type": "Common Industrial Goods",
+        "availability": [
+          "All"
+        ],
+        "tons": "2D x 10",
+        "basePrice": 10000,
+        "purchaseDM": {
+          "Non-Agricultural": 2,
+          "Industrial": 5
+        },
+        "saleDM": {
+          "Non-Industrial": 3,
+          "Agricultural": 2
+        },
+        "examples": "Machine components and spare parts for common machinery",
+        "illegal": false,
+        "_src": "assets/trade.txt:515-525"
+      },
+      {
+        "d66": "13",
+        "type": "Common Manufactured Goods",
+        "availability": [
+          "All"
+        ],
+        "tons": "2D x 10",
+        "basePrice": 20000,
+        "purchaseDM": {
+          "Non-Agricultural": 2,
+          "Industrial": 5
+        },
+        "saleDM": {
+          "Non-Industrial": 3,
+          "High Population": 2
+        },
+        "examples": "Household appliances, clothing and so forth",
+        "illegal": false,
+        "_src": "assets/trade.txt:527-538"
+      },
+      {
+        "d66": "14",
+        "type": "Common Raw Materials",
+        "availability": [
+          "All"
+        ],
+        "tons": "2D x 20",
+        "basePrice": 5000,
+        "purchaseDM": {
+          "Agricultural": 3,
+          "Garden": 2
+        },
+        "saleDM": {
+          "Industrial": 2,
+          "Poor": 2
+        },
+        "examples": "Metal, plastics, chemicals and other basic materials",
+        "illegal": false,
+        "_src": "assets/trade.txt:540-547"
+      },
+      {
+        "d66": "15",
+        "type": "Common Consumables",
+        "availability": [
+          "All"
+        ],
+        "tons": "2D x 20",
+        "basePrice": 500,
+        "purchaseDM": {
+          "Agricultural": 3,
+          "Water World": 2,
+          "Garden": 1,
+          "Asteroid": -4
+        },
+        "saleDM": {
+          "Asteroid": 1,
+          "Fluid Oceans": 1,
+          "Ice-Capped": 1,
+          "High Population": 1
+        },
+        "examples": "Food, drink and other agricultural products",
+        "illegal": false,
+        "_src": "assets/trade.txt:549-561"
+      },
+      {
+        "d66": "16",
+        "type": "Common Ore",
+        "availability": [
+          "All"
+        ],
+        "tons": "2D x 20",
+        "basePrice": 1000,
+        "purchaseDM": {
+          "Asteroid": 4
+        },
+        "saleDM": {
+          "Industrial": 3,
+          "Non-Industrial": 1
+        },
+        "examples": "Ore bearing common metals",
+        "illegal": false,
+        "_answer": "Johnny 2026-10-17 (ZT0 Q2): the Purchase DM and Sale DM columns split at the missing comma, accepted.",
+        "_src": "assets/trade.txt:563-566"
+      },
+      {
+        "d66": "21",
+        "type": "Advanced Electronics",
+        "availability": [
+          "Industrial",
+          "High Tech"
+        ],
+        "tons": "1D x 5",
+        "basePrice": 100000,
+        "purchaseDM": {
+          "Industrial": 2,
+          "High Tech": 3
+        },
+        "saleDM": {
+          "Non-Industrial": 1,
+          "Rich": 2,
+          "Asteroid": 3
+        },
+        "examples": "Advanced sensors, computers and other electronics up to TL15",
+        "illegal": false,
+        "_src": "assets/trade.txt:568-581"
+      },
+      {
+        "d66": "22",
+        "type": "Advanced Machine Parts",
+        "availability": [
+          "Industrial",
+          "High Tech"
+        ],
+        "tons": "1D x 5",
+        "basePrice": 75000,
+        "purchaseDM": {
+          "Industrial": 2,
+          "High Tech": 1
+        },
+        "saleDM": {
+          "Asteroid": 2,
+          "Non-Industrial": 1
+        },
+        "examples": "Machine components and spare parts, including gravitic components",
+        "illegal": false,
+        "_src": "assets/trade.txt:583-596"
+      },
+      {
+        "d66": "23",
+        "type": "Advanced Manufactured Goods",
+        "availability": [
+          "Industrial",
+          "High Tech"
+        ],
+        "tons": "1D x 5",
+        "basePrice": 100000,
+        "purchaseDM": {
+          "Industrial": 1
+        },
+        "saleDM": {
+          "High Population": 1,
+          "Rich": 2
+        },
+        "examples": "Devices and clothing incorporating advanced technologies",
+        "illegal": false,
+        "_answer": "Johnny 2026-10-17 (ZT0 Q2): the Purchase DM and Sale DM columns split at the missing comma, accepted.",
+        "_src": "assets/trade.txt:598-609"
+      },
+      {
+        "d66": "24",
+        "type": "Advanced Weapons",
+        "availability": [
+          "Industrial",
+          "High Tech"
+        ],
+        "tons": "1D x 5",
+        "basePrice": 150000,
+        "purchaseDM": {
+          "High Tech": 2
+        },
+        "saleDM": {
+          "Poor": 1,
+          "Amber Zone": 2,
+          "Red Zone": 4
+        },
+        "examples": "Firearms, explosives, ammunition, artillery and other military-grade weaponry",
+        "illegal": false,
+        "_answer": "Johnny 2026-10-17 (ZT0 Q2): the Purchase DM and Sale DM columns split at the missing comma, accepted.",
+        "_src": "assets/trade.txt:611-622"
+      },
+      {
+        "d66": "25",
+        "type": "Advanced Vehicles",
+        "availability": [
+          "Industrial",
+          "High Tech"
+        ],
+        "tons": "1D x 5",
+        "basePrice": 180000,
+        "purchaseDM": {
+          "High Tech": 2
+        },
+        "saleDM": {
+          "Asteroid": 2,
+          "Rich": 2
+        },
+        "examples": "Air/rafts, spacecraft, grav tanks and other vehicles up to TL15",
+        "illegal": false,
+        "_answer": "Johnny 2026-10-17 (ZT0 Q2): the Purchase DM and Sale DM columns split at the missing comma, accepted.",
+        "_src": "assets/trade.txt:624-631"
+      },
+      {
+        "d66": "26",
+        "type": "Biochemicals",
+        "availability": [
+          "Agricultural",
+          "Water World"
+        ],
+        "tons": "1D x 5",
+        "basePrice": 50000,
+        "purchaseDM": {
+          "Agricultural": 1,
+          "Water World": 2
+        },
+        "saleDM": {
+          "Industrial": 2
+        },
+        "examples": "Biofuels, organic chemicals, extracts",
+        "illegal": false,
+        "_src": "assets/trade.txt:633-639"
+      },
+      {
+        "d66": "31",
+        "type": "Crystals & Gems",
+        "availability": [
+          "Asteroid",
+          "Desert",
+          "Ice-Capped"
+        ],
+        "tons": "1D x 5",
+        "basePrice": 20000,
+        "purchaseDM": {
+          "Asteroid": 2,
+          "Desert": 1,
+          "Ice-Capped": 1
+        },
+        "saleDM": {
+          "Industrial": 3,
+          "Rich": 2
+        },
+        "examples": "Diamonds, synthetic or natural gemstones",
+        "illegal": false,
+        "_src": "assets/trade.txt:641-648"
+      },
+      {
+        "d66": "32",
+        "type": "Cybernetics",
+        "availability": [
+          "High-Tech"
+        ],
+        "tons": "1D",
+        "basePrice": 250000,
+        "purchaseDM": {
+          "High Tech": 1
+        },
+        "saleDM": {
+          "Asteroid": 1,
+          "Ice-Capped": 1,
+          "Rich": 2
+        },
+        "examples": "Cybernetic components, replacement limbs",
+        "illegal": false,
+        "_answer": "Johnny 2026-10-17 (ZT0 Q2): the Purchase DM and Sale DM columns split at the missing comma, accepted.",
+        "_src": "assets/trade.txt:649-653"
+      },
+      {
+        "d66": "33",
+        "type": "Live Animals",
+        "availability": [
+          "Agricultural",
+          "Garden"
+        ],
+        "tons": "1D x 10",
+        "basePrice": 10000,
+        "purchaseDM": {
+          "Agricultural": 2
+        },
+        "saleDM": {
+          "Low Population": 3
+        },
+        "examples": "Riding animals, beasts of burden, exotic pets",
+        "illegal": false,
+        "_answer": "Johnny 2026-10-17 (ZT0 Q2): the Purchase DM and Sale DM columns split at the missing comma, accepted.",
+        "_src": "assets/trade.txt:655-659"
+      },
+      {
+        "d66": "34",
+        "type": "Luxury Consumables",
+        "availability": [
+          "Agricultural",
+          "Garden",
+          "Water World"
+        ],
+        "tons": "1D x 10",
+        "basePrice": 20000,
+        "purchaseDM": {
+          "Agricultural": 2,
+          "Water World": 1
+        },
+        "saleDM": {
+          "Rich": 2,
+          "High Population": 2
+        },
+        "examples": "Rare foods, fine liquors",
+        "illegal": false,
+        "_src": "assets/trade.txt:661-674"
+      },
+      {
+        "d66": "35",
+        "type": "Luxury Goods",
+        "availability": [
+          "High Pop"
+        ],
+        "tons": "1D",
+        "basePrice": 200000,
+        "purchaseDM": {
+          "High Population": 1
+        },
+        "saleDM": {
+          "Rich": 4
+        },
+        "examples": "Rare or extremely high-quality manufactured goods",
+        "illegal": false,
+        "_answer": "Johnny 2026-10-17 (ZT0 Q2): the Purchase DM and Sale DM columns split at the missing comma, accepted.",
+        "_src": "assets/trade.txt:676-677"
+      },
+      {
+        "d66": "36",
+        "type": "Medical Supplies",
+        "availability": [
+          "High Tech",
+          "High Pop"
+        ],
+        "tons": "1D x 5",
+        "basePrice": 50000,
+        "purchaseDM": {
+          "High Tech": 2
+        },
+        "saleDM": {
+          "Industrial": 2,
+          "Poor": 1,
+          "Rich": 1
+        },
+        "examples": "Diagnostic equipment, basic drugs, cloning technology",
+        "illegal": false,
+        "_answer": "Johnny 2026-10-17 (ZT0 Q2): the Purchase DM and Sale DM columns split at the missing comma, accepted.",
+        "_src": "assets/trade.txt:678-685"
+      },
+      {
+        "d66": "41",
+        "type": "Petrochemicals",
+        "availability": [
+          "Desert",
+          "Fluid Oceans",
+          "Ice-Capped",
+          "Water World"
+        ],
+        "tons": "1D x 10",
+        "basePrice": 10000,
+        "purchaseDM": {
+          "Desert": 2
+        },
+        "saleDM": {
+          "Industrial": 2,
+          "Agricultural": 1,
+          "Low Tech": 2
+        },
+        "examples": "Oil, liquid fuels",
+        "illegal": false,
+        "_answer": "Johnny 2026-10-17 (ZT0 Q2): the Purchase DM and Sale DM columns split at the missing comma, accepted.",
+        "_src": "assets/trade.txt:687-695"
+      },
+      {
+        "d66": "42",
+        "type": "Pharmaceuticals",
+        "availability": [
+          "Asteroid",
+          "Desert",
+          "High Pop",
+          "Water World"
+        ],
+        "tons": "1D",
+        "basePrice": 100000,
+        "purchaseDM": {
+          "Asteroid": 2,
+          "High Population": 1
+        },
+        "saleDM": {
+          "Rich": 2,
+          "Low Tech": 1
+        },
+        "examples": "Drugs, medical supplies, anagathics, fast or slow drugs",
+        "illegal": false,
+        "_src": "assets/trade.txt:697-705"
+      },
+      {
+        "d66": "43",
+        "type": "Polymers",
+        "availability": [
+          "Industrial"
+        ],
+        "tons": "1D x 10",
+        "basePrice": 7000,
+        "purchaseDM": {
+          "Industrial": 1
+        },
+        "saleDM": {
+          "Rich": 2,
+          "Non-Industrial": 1
+        },
+        "examples": "Plastics and other synthetics",
+        "illegal": false,
+        "_answer": "Johnny 2026-10-17 (ZT0 Q2): the Purchase DM and Sale DM columns split at the missing comma, accepted.",
+        "_src": "assets/trade.txt:706-709"
+      },
+      {
+        "d66": "44",
+        "type": "Precious Metals",
+        "availability": [
+          "Asteroid",
+          "Desert",
+          "Ice Capped",
+          "Fluid Oceans"
+        ],
+        "tons": "1D",
+        "basePrice": 50000,
+        "purchaseDM": {
+          "Asteroid": 3,
+          "Desert": 1,
+          "Ice-Capped": 2
+        },
+        "saleDM": {
+          "Rich": 3,
+          "Industrial": 2,
+          "High Tech": 1
+        },
+        "examples": "Gold, silver, platinum, rare elements",
+        "illegal": false,
+        "_src": "assets/trade.txt:711-721"
+      },
+      {
+        "d66": "45",
+        "type": "Radioactives",
+        "availability": [
+          "Asteroid",
+          "Desert",
+          "Low Pop"
+        ],
+        "tons": "1D",
+        "basePrice": 1000000,
+        "purchaseDM": {
+          "Asteroid": 2,
+          "Low Population": 2
+        },
+        "saleDM": {
+          "Industrial": 3,
+          "High Tech": 1,
+          "Non-Industrial": -2,
+          "Agricultural": -3
+        },
+        "examples": "Uranium, plutonium, unobtanium, rare elements",
+        "illegal": false,
+        "_src": "assets/trade.txt:723-734"
+      },
+      {
+        "d66": "46",
+        "type": "Robots",
+        "availability": [
+          "Industrial"
+        ],
+        "tons": "1D x 5",
+        "basePrice": 400000,
+        "purchaseDM": {
+          "Industrial": 1
+        },
+        "saleDM": {
+          "Agricultural": 2,
+          "High Tech": 1
+        },
+        "examples": "Industrial and personal robots and drones",
+        "illegal": false,
+        "_answer": "Johnny 2026-10-17 (ZT0 Q2): the Purchase DM and Sale DM columns split at the missing comma, accepted.",
+        "_src": "assets/trade.txt:736-740"
+      },
+      {
+        "d66": "51",
+        "type": "Spices",
+        "availability": [
+          "Garden",
+          "Desert",
+          "Water World"
+        ],
+        "tons": "1D x 10",
+        "basePrice": 6000,
+        "purchaseDM": {
+          "Desert": 2
+        },
+        "saleDM": {
+          "High Population": 2,
+          "Rich": 3,
+          "Poor": 3
+        },
+        "examples": "Preservatives, luxury food additives, natural drugs",
+        "illegal": false,
+        "_answer": "Johnny 2026-10-17 (ZT0 Q2): the Purchase DM and Sale DM columns split at the missing comma, accepted.",
+        "_src": "assets/trade.txt:742-749"
+      },
+      {
+        "d66": "52",
+        "type": "Textiles",
+        "availability": [
+          "Agricultural",
+          "Non-Industrial"
+        ],
+        "tons": "1D x 20",
+        "basePrice": 3000,
+        "purchaseDM": {
+          "Agricultural": 7
+        },
+        "saleDM": {
+          "High Population": 3,
+          "Non-Agricultural": 2
+        },
+        "examples": "Clothing and fabrics",
+        "illegal": false,
+        "_answer": "Johnny 2026-10-17 (ZT0 Q2): the Purchase DM and Sale DM columns split at the missing comma, accepted.",
+        "_src": "assets/trade.txt:751-757"
+      },
+      {
+        "d66": "53",
+        "type": "Uncommon Ore",
+        "availability": [
+          "Asteroid",
+          "Ice Capped"
+        ],
+        "tons": "1D x 20",
+        "basePrice": 5000,
+        "purchaseDM": {
+          "Asteroid": 4
+        },
+        "saleDM": {
+          "Industrial": 3,
+          "Non-Industrial": 1
+        },
+        "examples": "Ore containing precious or valuable metals",
+        "illegal": false,
+        "_answer": "Johnny 2026-10-17 (ZT0 Q2): the Purchase DM and Sale DM columns split at the missing comma, accepted.",
+        "_src": "assets/trade.txt:759-766"
+      },
+      {
+        "d66": "54",
+        "type": "Uncommon Raw Materials",
+        "availability": [
+          "Agricultural",
+          "Desert",
+          "Water World"
+        ],
+        "tons": "1D x 10",
+        "basePrice": 20000,
+        "purchaseDM": {
+          "Agricultural": 2,
+          "Water World": 1
+        },
+        "saleDM": {
+          "Industrial": 2,
+          "High Tech": 1
+        },
+        "examples": "Valuable metals like titanium, rare elements",
+        "illegal": false,
+        "_src": "assets/trade.txt:768-782"
+      },
+      {
+        "d66": "55",
+        "type": "Wood",
+        "availability": [
+          "Agricultural",
+          "Garden"
+        ],
+        "tons": "1D x 20",
+        "basePrice": 1000,
+        "purchaseDM": {
+          "Agricultural": 6
+        },
+        "saleDM": {
+          "Rich": 2,
+          "Industrial": 1
+        },
+        "examples": "Hard or beautiful woods and plant extracts",
+        "illegal": false,
+        "_answer": "Johnny 2026-10-17 (ZT0 Q2): the Purchase DM and Sale DM columns split at the missing comma, accepted.",
+        "_src": "assets/trade.txt:784-788"
+      },
+      {
+        "d66": "56",
+        "type": "Vehicles",
+        "availability": [
+          "Industrial",
+          "High Tech"
+        ],
+        "tons": "1D x 10",
+        "basePrice": 15000,
+        "purchaseDM": {
+          "Industrial": 2,
+          "High Tech": 1
+        },
+        "saleDM": {
+          "Non-Industrial": 2,
+          "High Population": 1
+        },
+        "examples": "Wheeled, tracked and other vehicles from TL10 or lower",
+        "illegal": false,
+        "_src": "assets/trade.txt:790-800"
+      },
+      {
+        "d66": "61",
+        "type": "Illegal Biochemicals",
+        "availability": [
+          "Agricultural",
+          "Water World"
+        ],
+        "tons": "1D x 5",
+        "basePrice": 50000,
+        "purchaseDM": {
+          "Water World": 2
+        },
+        "saleDM": {
+          "Industrial": 6
+        },
+        "examples": "Dangerous chemicals, extracts from endangered species",
+        "illegal": true,
+        "_answer": "Johnny 2026-10-17 (ZT0 Q2): the Purchase DM and Sale DM columns split at the missing comma, accepted.",
+        "_src": "assets/trade.txt:802-809"
+      },
+      {
+        "d66": "62",
+        "type": "Cybernetics, Illegal",
+        "availability": [
+          "High Tech"
+        ],
+        "tons": "1D",
+        "basePrice": 250000,
+        "purchaseDM": {
+          "High Tech": 1
+        },
+        "saleDM": {
+          "Asteroid": 4,
+          "Ice-Capped": 4,
+          "Rich": 8,
+          "Amber Zone": 6,
+          "Red Zone": 6
+        },
+        "examples": "Combat cybernetics, illegal enhancements",
+        "illegal": true,
+        "_answer": "Johnny 2026-10-17 (ZT0 Q2): the Purchase DM and Sale DM columns split at the missing comma, accepted.",
+        "_src": "assets/trade.txt:811-819"
+      },
+      {
+        "d66": "63",
+        "type": "Drugs, Illegal",
+        "availability": [
+          "Asteroid",
+          "Desert",
+          "High Pop",
+          "Water World"
+        ],
+        "tons": "1D",
+        "basePrice": 100000,
+        "purchaseDM": {
+          "Asteroid": 1,
+          "Desert": 1,
+          "Garden": 1,
+          "Water World": 1
+        },
+        "saleDM": {
+          "Rich": 6,
+          "High Population": 6
+        },
+        "examples": "Addictive drugs, combat drugs",
+        "illegal": true,
+        "_src": "assets/trade.txt:821-832"
+      },
+      {
+        "d66": "64",
+        "type": "Luxuries, Illegal",
+        "availability": [
+          "Agricultural",
+          "Garden",
+          "Water World"
+        ],
+        "tons": "1D",
+        "basePrice": 50000,
+        "purchaseDM": {
+          "Agricultural": 2,
+          "Water World": 1
+        },
+        "saleDM": {
+          "Rich": 6,
+          "High Population": 4
+        },
+        "examples": "Debauched or addictive luxuries",
+        "illegal": true,
+        "_src": "assets/trade.txt:834-844"
+      },
+      {
+        "d66": "65",
+        "type": "Weapons, Illegal",
+        "availability": [
+          "Industrial",
+          "High Tech"
+        ],
+        "tons": "1D x 5",
+        "basePrice": 150000,
+        "purchaseDM": {
+          "High Tech": 2
+        },
+        "saleDM": {
+          "Poor": 6,
+          "Amber Zone": 8,
+          "Red Zone": 10
+        },
+        "examples": "Weapons of mass destruction, naval weapons",
+        "illegal": true,
+        "_answer": "Johnny 2026-10-17 (ZT0 Q2): the Purchase DM and Sale DM columns split at the missing comma, accepted.",
+        "_src": "assets/trade.txt:846-853"
+      },
+      {
+        "d66": "66",
+        "type": "Exotics",
+        "availability": null,
+        "tons": null,
+        "basePrice": null,
+        "purchaseDM": null,
+        "saleDM": null,
+        "examples": "alien relics, prototype technology, unique plant or animal life, priceless treasures and so forth",
+        "illegal": null,
+        "text": "Exotic goods are outside the normal trade rules. Buying and selling exotic goods is a matter for roleplaying and adventure.",
+        "_answer": "Johnny 2026-10-17 (ZT0 Q4, Q5): Exotics keep their nulls and stay out of every roll; illegal stays null, the referee decides.",
+        "_src": "assets/trade.txt:854-855"
+      }
+    ],
+    "notes": [
+      {
+        "text": "Illegal goods can include illegal exotics, which may not be strictly illegal but have questionable providence.",
+        "_answer": "Johnny 2026-10-17 (ZT0 Q5): illegal stays null for Exotics; the referee decides.",
+        "_src": "assets/trade.txt:406-408"
+      }
+    ]
+  },
+  "purchase": {
+    "_src": "assets/trade.txt:423-430",
+    "roll": "3D",
+    "modifiers": [
+      {
+        "label": "The Traveller's Broker skill (or the local broker's skill)",
+        "sign": "+",
+        "_src": "assets/trade.txt:426"
+      },
+      {
+        "label": "any DM from the Purchase DM column",
+        "sign": "+",
+        "_src": "assets/trade.txt:427"
+      },
+      {
+        "label": "any DM from the Sale DM column",
+        "sign": "-",
+        "_src": "assets/trade.txt:428"
+      },
+      {
+        "label": "the supplier's Broker skill",
+        "sign": "-",
+        "assumed": 2,
+        "_src": "assets/trade.txt:429-430"
+      }
+    ],
+    "notes": [
+      {
+        "text": "In cases where multiple Purchase or Sale DMs apply, use only the largest from each column.",
+        "_src": "assets/trade.txt:431-432"
+      },
+      {
+        "text": "The trader does not have to accept this price but if they reject the deal, they cannot deal with that supplier again for at least a month.",
+        "_src": "assets/trade.txt:434-436"
+      }
+    ]
+  },
+  "sale": {
+    "_src": "assets/trade.txt:490-493",
+    "roll": "3D",
+    "_rollFrom": "line 491 (selling works just like purchasing) with line 424 (roll 3D)",
+    "modifiers": [
+      {
+        "label": "the Sale DMs for the world's Trade codes",
+        "sign": "+",
+        "_src": "assets/trade.txt:494-495"
+      },
+      {
+        "label": "the Purchase DMs",
+        "sign": "-",
+        "_src": "assets/trade.txt:494-495"
+      },
+      {
+        "label": "the purchaser's Broker skill",
+        "sign": "-",
+        "assumed": 2,
+        "_src": "assets/trade.txt:495-497"
+      }
+    ],
+    "notes": [
+      {
+        "text": "If a Traveller does not accept the price offered for their goods, they must find another buyer or wait a month.",
+        "_src": "assets/trade.txt:498-499"
+      }
+    ]
+  },
+  "modifiedPrice": {
+    "_src": "assets/trade.txt:457-460",
+    "of": "Base Price",
+    "rows": [
+      {
+        "result": "-3 or less",
+        "purchasePercent": 300,
+        "salePercent": 10,
+        "_src": "assets/trade.txt:461"
+      },
+      {
+        "result": "-2",
+        "purchasePercent": 250,
+        "salePercent": 20,
+        "_src": "assets/trade.txt:462"
+      },
+      {
+        "result": "-1",
+        "purchasePercent": 200,
+        "salePercent": 30,
+        "_src": "assets/trade.txt:463"
+      },
+      {
+        "result": "0",
+        "purchasePercent": 175,
+        "salePercent": 40,
+        "_src": "assets/trade.txt:464"
+      },
+      {
+        "result": "1",
+        "purchasePercent": 150,
+        "salePercent": 45,
+        "_src": "assets/trade.txt:465"
+      },
+      {
+        "result": "2",
+        "purchasePercent": 135,
+        "salePercent": 50,
+        "_src": "assets/trade.txt:466"
+      },
+      {
+        "result": "3",
+        "purchasePercent": 125,
+        "salePercent": 55,
+        "_src": "assets/trade.txt:467"
+      },
+      {
+        "result": "4",
+        "purchasePercent": 120,
+        "salePercent": 60,
+        "_src": "assets/trade.txt:468"
+      },
+      {
+        "result": "5",
+        "purchasePercent": 115,
+        "salePercent": 65,
+        "_src": "assets/trade.txt:469"
+      },
+      {
+        "result": "6",
+        "purchasePercent": 110,
+        "salePercent": 70,
+        "_src": "assets/trade.txt:470"
+      },
+      {
+        "result": "7",
+        "purchasePercent": 105,
+        "salePercent": 75,
+        "_src": "assets/trade.txt:471"
+      },
+      {
+        "result": "8",
+        "purchasePercent": 100,
+        "salePercent": 80,
+        "_src": "assets/trade.txt:472"
+      },
+      {
+        "result": "9",
+        "purchasePercent": 95,
+        "salePercent": 85,
+        "_src": "assets/trade.txt:473"
+      },
+      {
+        "result": "10",
+        "purchasePercent": 90,
+        "salePercent": 90,
+        "_src": "assets/trade.txt:474"
+      },
+      {
+        "result": "11",
+        "purchasePercent": 85,
+        "salePercent": 100,
+        "_src": "assets/trade.txt:475"
+      },
+      {
+        "result": "12",
+        "purchasePercent": 80,
+        "salePercent": 105,
+        "_src": "assets/trade.txt:476"
+      },
+      {
+        "result": "13",
+        "purchasePercent": 75,
+        "salePercent": 110,
+        "_src": "assets/trade.txt:477"
+      },
+      {
+        "result": "14",
+        "purchasePercent": 70,
+        "salePercent": 115,
+        "_src": "assets/trade.txt:478"
+      },
+      {
+        "result": "15",
+        "purchasePercent": 65,
+        "salePercent": 120,
+        "_src": "assets/trade.txt:479"
+      },
+      {
+        "result": "16",
+        "purchasePercent": 60,
+        "salePercent": 125,
+        "_src": "assets/trade.txt:480"
+      },
+      {
+        "result": "17",
+        "purchasePercent": 55,
+        "salePercent": 130,
+        "_src": "assets/trade.txt:481"
+      },
+      {
+        "result": "18",
+        "purchasePercent": 50,
+        "salePercent": 140,
+        "_src": "assets/trade.txt:482"
+      },
+      {
+        "result": "19",
+        "purchasePercent": 45,
+        "salePercent": 150,
+        "_src": "assets/trade.txt:483"
+      },
+      {
+        "result": "20",
+        "purchasePercent": 40,
+        "salePercent": 160,
+        "_src": "assets/trade.txt:484"
+      },
+      {
+        "result": "21",
+        "purchasePercent": 35,
+        "salePercent": 175,
+        "_src": "assets/trade.txt:485"
+      },
+      {
+        "result": "22",
+        "purchasePercent": 30,
+        "salePercent": 200,
+        "_src": "assets/trade.txt:486"
+      },
+      {
+        "result": "23",
+        "purchasePercent": 25,
+        "salePercent": 250,
+        "_src": "assets/trade.txt:487"
+      },
+      {
+        "result": "24",
+        "purchasePercent": 20,
+        "salePercent": 300,
+        "_src": "assets/trade.txt:488"
+      },
+      {
+        "result": "25+",
+        "purchasePercent": 15,
+        "salePercent": 400,
+        "_src": "assets/trade.txt:489"
+      }
+    ]
+  },
+  "localBrokers": {
+    "_src": "assets/trade.txt:354-355",
+    "kinds": [
+      {
+        "name": "Local broker",
+        "skill": "Broker",
+        "skillRoll": "2D/3",
+        "feePercent": 10,
+        "of": "gross proceeds",
+        "negotiationDm": 2,
+        "_src": "assets/trade.txt:356-362"
+      },
+      {
+        "name": "Local broker or fixer",
+        "goods": "illegal goods",
+        "skill": "Streetwise",
+        "skillRoll": "2D/3",
+        "feePercent": 20,
+        "of": "gross proceeds",
+        "negotiationDm": 2,
+        "_note": "possibly higher for highly illegal or dangerous cargos",
+        "_src": "assets/trade.txt:363-367"
+      }
+    ],
+    "notes": [
+      {
+        "text": "If the roll to determine the fixer's skill is a natural 2, they are an informer, government agent or double-crosser. The referee should determine resulting events.",
+        "_src": "assets/trade.txt:367-372"
+      }
+    ]
+  },
+  "illegalGoods": {
+    "_src": "assets/trade.txt:438-442",
+    "notes": [
+      {
+        "text": "Some goods are illegal throughout the Imperium. These are marked as illegal in the Trade Goods tables. Other goods are illegal only on particular worlds (see Law Level, page 255).",
+        "_src": "assets/trade.txt:439-442"
+      },
+      {
+        "text": "Universally illegal goods have high Sale DMs. For other banned goods, their Sale DM is the difference between the Law Level they are banned at and the Law Level of the world.",
+        "_src": "assets/trade.txt:444-447"
+      },
+      {
+        "text": "Military Weapons are banned at Law Level 3. If a trader smuggles any weapons onto a Law Level 9 world, the weapons have Sale DM+6 (if a type of goods is both universally and locally illegal, use whichever Sale DM is higher).",
+        "_src": "assets/trade.txt:447-452"
+      },
+      {
+        "text": "If the trader is caught, they face fines or imprisonment. See Law Levels, page 255.",
+        "_src": "assets/trade.txt:453-455"
+      }
+    ]
+  }
+}

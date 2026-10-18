@@ -1,12 +1,20 @@
 import { reactive } from 'vue';
 import {
+    CampaignEntry,
     CampaignPage,
+    PlayersPage,
     Universe,
     type CampaignClock,
-    type CampaignEntry,
+    type CampaignEntry as CampaignEntryRow,
     type CampaignLink,
     type CampaignRecord,
     type CampaignSettings,
+    type PlayersClock,
+    type PlayersLink,
+    type PlayersPage as PlayersPageData,
+    type PlayersRecord,
+    type PlayersSettings,
+    type PlayingList,
 } from '@voyage/shared';
 import { newId, storageGet, storageSet } from '../platform/browser.ts';
 import { apiFetch } from '../platform/http.ts';
@@ -23,12 +31,16 @@ type UniverseRow = ReturnType<typeof Universe.parse>;
 export const CAMPAIGN_UNIVERSE_KEY = 'voyage.campaign.universeId';
 
 export const campaign = reactive({
-    status: 'signed-out' as 'signed-out' | 'loading' | 'ready' | 'error',
+    status: 'signed-out' as 'signed-out' | 'loading' | 'ready' | 'error' | 'gone',
+    role: null as 'owner' | 'player' | null,
     universeId: null as string | null,
     universes: [] as UniverseRow[],
+    playing: [] as PlayingList['items'],
     records: {} as Record<string, CampaignRecord>,
     links: {} as Record<string, CampaignLink>,
-    journal: {} as Record<string, CampaignEntry>,
+    journal: {} as Record<string, CampaignEntryRow>,
+    /** Profile handle for a journal row, keyed by entry id. Not part of the entry, so a save cannot send it. */
+    authorNames: {} as Record<string, string>,
     settings: null as CampaignSettings | null,
     clock: null as CampaignClock | null,
     seq: 0,
@@ -59,6 +71,7 @@ function clearRows(): void {
     for (const key of Object.keys(campaign.records)) delete campaign.records[key];
     for (const key of Object.keys(campaign.links)) delete campaign.links[key];
     for (const key of Object.keys(campaign.journal)) delete campaign.journal[key];
+    for (const key of Object.keys(campaign.authorNames)) delete campaign.authorNames[key];
     campaign.settings = null;
     campaign.clock = null;
     campaign.seq = 0;
@@ -70,12 +83,16 @@ function clearRows(): void {
 function signOutLocal(): void {
     clearRows();
     campaign.universes = [];
+    campaign.playing = [];
+    campaign.role = null;
     campaign.status = 'signed-out';
 }
 
 export function resetCampaignState(): void {
     clearRows();
     campaign.universes = [];
+    campaign.playing = [];
+    campaign.role = null;
     campaign.status = 'signed-out';
     pinnedTruth = null;
     pendingUniverseId = null;
@@ -83,10 +100,103 @@ export function resetCampaignState(): void {
     transport.schedule = defaultSchedule;
 }
 
+/** The chart a later new campaign pins to. A "Playing in" campaign pins the map to its own. */
+export function pinTruthVersion(version: string | null): void {
+    pinnedTruth = version;
+}
+
+/** A 401 on a membership call. The campaign list and the playing list both go. */
+export function noteUnauthorized(): void {
+    signOutLocal();
+}
+
+/** The signed-in account is no longer a member of the open campaign. */
+export function markMembershipGone(): void {
+    markGone();
+}
+
+function markGone(): void {
+    clearRows();
+    campaign.role = 'player';
+    campaign.status = 'gone';
+}
+
+async function memberRefused(res: Response): Promise<boolean> {
+    if (res.status === 404) return true;
+    if (res.status !== 403) return false;
+    try {
+        const body = await res.json() as { error?: { code?: string } };
+        return body.error?.code === 'not_a_member';
+    } catch {
+        return false;
+    }
+}
+
+function holdRecord(row: PlayersRecord): CampaignRecord {
+    return { ...row, provenance: null, rev: 0 };
+}
+
+function holdLink(row: PlayersLink): CampaignLink {
+    return { ...row, provenance: null, rev: 0 };
+}
+
+function holdEntry(row: unknown): CampaignEntryRow {
+    const raw = { ...(row as Record<string, unknown>) };
+    const authorName = typeof raw.authorName === 'string' ? raw.authorName : undefined;
+    delete raw.authorName;
+    if (typeof raw.rev !== 'number') raw.rev = 0;
+    const held = CampaignEntry.parse(raw);
+    if (authorName === undefined) delete campaign.authorNames[held.id];
+    else campaign.authorNames[held.id] = authorName;
+    return held;
+}
+
+function holdSettings(row: PlayersSettings): CampaignSettings {
+    return { ...row, rev: 0 };
+}
+
+function holdClock(row: PlayersClock): CampaignClock {
+    return { ...row, rev: 0 };
+}
+
+function retain(rows: Record<string, { id: string }>, ids: readonly string[]): void {
+    const allowed = new Set(ids);
+    for (const id of Object.keys(rows)) if (!allowed.has(id)) delete rows[id];
+}
+
+/**
+ * Merges one players page into the open store.
+ * A page that carries `visible` drops every held record, link and entry whose id is not listed.
+ * Rows other than the caller's own notes are stored at rev 0.
+ */
+export function applyPlayersPage(page: PlayersPageData): void {
+    for (const record of page.records) campaign.records[record.id] = holdRecord(record);
+    for (const link of page.links) campaign.links[link.id] = holdLink(link);
+    for (const entry of page.journal) {
+        const held = holdEntry(entry);
+        campaign.journal[held.id] = held;
+    }
+    if (page.settings) campaign.settings = holdSettings(page.settings);
+    campaign.clock = page.clock ? holdClock(page.clock) : null;
+    campaign.seq = page.seq;
+    if (page.visible) {
+        retain(campaign.records, page.visible.records);
+        retain(campaign.links, page.visible.links);
+        retain(campaign.journal, page.visible.journal);
+        const named = new Set(page.visible.journal);
+        for (const id of Object.keys(campaign.authorNames)) {
+            if (!named.has(id)) delete campaign.authorNames[id];
+        }
+    }
+    const days = campaign.clock ? campaign.clock.days : null;
+    rebuildCampaignIndex(campaign.records, campaign.links, days);
+    rebuildJournalIndex(campaign.journal, campaign.records, days);
+}
+
 function replaceRows(
     records: Record<string, CampaignRecord>,
     links: Record<string, CampaignLink>,
-    journal: Record<string, CampaignEntry>,
+    journal: Record<string, CampaignEntryRow>,
     settings: CampaignSettings,
     clock: CampaignClock | null,
     seq: number,
@@ -94,6 +204,7 @@ function replaceRows(
     for (const key of Object.keys(campaign.records)) delete campaign.records[key];
     for (const key of Object.keys(campaign.links)) delete campaign.links[key];
     for (const key of Object.keys(campaign.journal)) delete campaign.journal[key];
+    for (const key of Object.keys(campaign.authorNames)) delete campaign.authorNames[key];
     Object.assign(campaign.records, records);
     Object.assign(campaign.links, links);
     Object.assign(campaign.journal, journal);
@@ -160,13 +271,14 @@ async function postCampaign(name: string): Promise<UniverseRow | null> {
     return universe;
 }
 
-async function loadPages(universe: UniverseRow): Promise<void> {
+async function loadPages(universe: { id: string }, role: 'owner' | 'player' = 'owner'): Promise<void> {
     clearRows();
+    campaign.role = role;
     campaign.universeId = universe.id;
     campaign.status = 'loading';
     const records: Record<string, CampaignRecord> = {};
     const links: Record<string, CampaignLink> = {};
-    const journal: Record<string, CampaignEntry> = {};
+    const journal: Record<string, CampaignEntryRow> = {};
     let settings: CampaignSettings | null = null;
     let clock: CampaignClock | null = null;
     let seq = 0;
@@ -181,11 +293,27 @@ async function loadPages(universe: UniverseRow): Promise<void> {
             signOutLocal();
             return;
         }
+        if (role === 'player' && await memberRefused(pageRes)) {
+            markGone();
+            return;
+        }
         if (!pageRes.ok) {
             campaign.status = 'error';
             return;
         }
-        const page = parseRead(CampaignPage, (await pageRes.json()).data);
+        const body = (await pageRes.json()).data;
+        if (role === 'player') {
+            const parsed = parseRead(PlayersPage, body);
+            applyPlayersPage(parsed);
+            if (parsed.done) break;
+            if (parsed.seq <= after) {
+                campaign.status = 'error';
+                return;
+            }
+            after = parsed.seq;
+            continue;
+        }
+        const page = parseRead(CampaignPage, body);
         for (const record of page.records) records[record.id] = record;
         for (const link of page.links) links[link.id] = link;
         for (const entry of page.journal ?? []) journal[entry.id] = entry;
@@ -199,6 +327,17 @@ async function loadPages(universe: UniverseRow): Promise<void> {
         }
         after = page.seq;
     }
+    if (role === 'player') {
+        if (!campaign.settings) {
+            campaign.status = 'error';
+            return;
+        }
+        campaign.universeId = universe.id;
+        campaign.role = 'player';
+        campaign.status = 'ready';
+        remember(universe.id);
+        return;
+    }
     if (!settings) {
         campaign.status = 'error';
         return;
@@ -207,6 +346,11 @@ async function loadPages(universe: UniverseRow): Promise<void> {
     campaign.universeId = universe.id;
     campaign.status = 'ready';
     remember(universe.id);
+}
+
+/** Opens a campaign the account is playing in. The read is the players page. */
+export async function loadPlayerPages(id: string): Promise<void> {
+    await loadPages({ id }, 'player');
 }
 
 /**

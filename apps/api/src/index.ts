@@ -17,11 +17,17 @@ import { universesRoute } from './routes/universes';
 import { getPublicGames, getPublicOverview } from './routes/public_games';
 import { getPublicShip } from './routes/public_ships';
 import { charactersRoute } from './routes/characters';
+import { mountAccountPlayerRoutes } from './routes/players';
+import { tokensRoute } from './routes/tokens';
+import { tableSetsRoute } from './routes/table_sets';
+import { agentCampaigns } from './routes/agent';
+import { mcpFetch } from './mcp/server';
 import { deadLetterConsumer } from './jobs/dead_letter';
 import { generateConsumer } from './jobs/generate_queue';
 import { publishConsumer } from './jobs/publish_queue';
 import { truthBuildConsumer } from './jobs/truth_build';
 import { fail, ok } from './http';
+import { previewDocument } from './preview_document';
 export { UniverseDO } from './universe/UniverseDO';
 export { CharacterRoom } from './character/CharacterRoom';
 
@@ -55,13 +61,22 @@ app.route('/api/admin/packages', adminPackagesRoute);
 app.route('/api/admin', admin);
 app.route('/api/universes', installsRoute);
 app.route('/api/universes', universesRoute);
+app.route('/api/tokens', tokensRoute);
+app.route('/api/table-sets', tableSetsRoute);
+app.get('/api/agent/campaigns', agentCampaigns);
+app.all('/mcp', mcpFetch);
 app.get('/api/public-games/overview', getPublicOverview);
 app.get('/api/public-games', getPublicGames);
 app.get('/api/public-ships/:mark', getPublicShip);
 app.route('/api/packages', packagesRoute);
 app.route('/api/characters', charactersRoute);
-app.onError((err, c) => { console.error(JSON.stringify({ requestId: c.get('requestId'), err: String(err), stack: (err as Error).stack })); return fail(c, 500, 'internal', 'Something went wrong.', { requestId: c.get('requestId') }); });
-app.notFound((c) => c.req.path.startsWith('/api/') ? fail(c, 404, 'not_found', 'No such route.') : c.env.ASSETS.fetch(c.req.raw));
+mountAccountPlayerRoutes(app);
+app.onError((err, c) => { console.error(JSON.stringify({ requestId: c.get('requestId'), err: String(err), stack: (err as Error).stack })); return fail(c, 500, 'internal', 'Something went wrong. Try again.', { requestId: c.get('requestId') }); });
+app.notFound(async (c) => {
+    if (c.req.path.startsWith('/api/')) return fail(c, 404, 'not_found', 'That page does not exist.');
+    const asset = await c.env.ASSETS.fetch(c.req.raw);
+    return previewDocument(c.env, c.req.raw, asset);
+});
 
 export default {
     fetch: app.fetch,

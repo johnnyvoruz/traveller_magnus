@@ -1,0 +1,9 @@
+# Public pages are indexed. Private and API paths are not.
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /account
+Disallow: /claim/
+Disallow: /join/
+
+Sitemap: https://traveller.voyage/sitemap.xml

@@ -396,7 +396,7 @@ test('a session with no sequence is validation', () => {
     }, NOW));
     assert.ok(err instanceof CampaignRefusal);
     assert.equal(err.code, 'validation');
-    assert.equal(err.message, 'Invalid request.');
+    assert.equal(err.message, 'That request could not be read. Try again.');
 });
 
 test('the 20001st live journal entry is too_large', () => {
@@ -592,5 +592,78 @@ test('an old journal table gains the images column and reads null', () => {
     }, NOW);
     assert.equal(saved.conflicts.length, 0, JSON.stringify(saved));
     assert.deepEqual(readCampaign(sql, 0, 10).journal.find((row) => row.id === J).images, [picture('a')]);
+});
+
+test('an old journal table gains author_id and the owner read leaves it off', () => {
+    const db = new DatabaseSync(':memory:');
+    const sql = {
+        exec(query, ...params) {
+            const statement = query.trim();
+            if (/^(begin|commit|rollback)\b/i.test(statement)) {
+                db.exec(statement);
+                return [];
+            }
+            const prepared = db.prepare(statement);
+            if (/^(select|with|pragma)\b/i.test(statement)) return prepared.all(...params);
+            prepared.run(...params);
+            return [];
+        },
+        transaction(fn) {
+            db.exec('BEGIN');
+            try {
+                const result = fn();
+                db.exec('COMMIT');
+                return result;
+            } catch (err) {
+                db.exec('ROLLBACK');
+                throw err;
+            }
+        },
+    };
+    db.exec(`CREATE TABLE campaign_journal (
+        id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL,
+        title TEXT NOT NULL,
+        body TEXT NOT NULL,
+        when_json TEXT,
+        real_date TEXT,
+        sequence INTEGER,
+        author TEXT NOT NULL,
+        visibility TEXT NOT NULL,
+        anchor TEXT,
+        mentions TEXT NOT NULL,
+        rev INTEGER NOT NULL,
+        seq INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        deleted INTEGER NOT NULL
+    )`);
+    db.prepare(`INSERT INTO campaign_journal (
+        id, kind, title, body, when_json, real_date, sequence, author, visibility,
+        anchor, mentions, rev, seq, created_at, updated_at, deleted
+    ) VALUES (?, 'note', 'Old', '', NULL, NULL, NULL, 'referee', 'referee', NULL, '[]', 1, 1, ?, ?, 0)`).run(J, NOW, NOW);
+    installCampaignSchema(sql);
+    const names = db.prepare(`SELECT name FROM pragma_table_info('campaign_journal')`).all().map((row) => row.name);
+    assert.equal(names.includes('author_id'), true);
+    assert.equal(names.includes('images'), true);
+    const version = db.prepare(`SELECT value FROM meta WHERE key = 'schemaVersion'`).get();
+    assert.equal(version.value, '3');
+    db.prepare(`UPDATE campaign_journal SET author_id = ? WHERE id = ?`).run('user_player', J);
+    const page = readCampaign(sql, 0, 10);
+    assert.equal(page.journal[0].images, null);
+    assert.equal('authorId' in page.journal[0], false);
+    const clash = applyCampaignChanges(sql, {
+        journal: [entry(J, { title: 'Old', baseRev: 0, rev: 0 })],
+    }, NOW);
+    assert.equal(clash.conflicts.length, 1);
+    assert.equal('authorId' in clash.conflicts[0].current, false);
+    const fresh = open();
+    const created = fresh.db.prepare(`SELECT name FROM pragma_table_info('campaign_journal')`).all().map((row) => row.name);
+    assert.equal(created.includes('author_id'), true);
+    const made = applyCampaignChanges(fresh.sql, { journal: [entry(J2)] }, NOW);
+    assert.equal(made.applied.length, 1);
+    fresh.db.prepare(`UPDATE campaign_journal SET author_id = ? WHERE id = ?`).run('user_player', J2);
+    const again = readCampaign(fresh.sql, 0, 10);
+    assert.equal('authorId' in again.journal[0], false);
 });
 

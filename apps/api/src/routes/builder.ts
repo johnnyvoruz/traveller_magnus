@@ -50,12 +50,41 @@ import { ONE_SECTOR_LIMIT, sectorCount } from '../jobs/one_sector';
 import { defaultPin } from '../universe/defaults';
 import { ownedUniverse, type OwnedUniverse } from '../universe/forward';
 import { chartHoldsSystem, chartTree, generationSeed, hexDoorPath, HexRefusal, sectorOf, type ChartHex, type Pin } from '../universe/hexes';
+import { isQuotaFull, releaseObjectBytes, reserveObjectBytes } from '../universe/quota';
 import { resolveMadeSectors } from '../universe/sectors';
-
-const OBJECT_QUOTA_BYTES = 250 * 1024 * 1024;
 
 function database(env: AppEnv['Bindings']) {
     return drizzle(env.DB, { schema: { universes } });
+}
+
+/** Reserve, then put. A failed put releases. The caller releases again after the D1 add. */
+async function putHeldObject(env: AppEnv['Bindings'], universeId: string, key: string, bytes: string, reservationId: string, size: number): Promise<void> {
+    await reserveObjectBytes(env, universeId, reservationId, size);
+    try {
+        await env.PRIVATE_BUCKET.put(key, bytes, { httpMetadata: { contentType: 'application/json' } });
+    } catch (err) {
+        await releaseObjectBytes(env, universeId, reservationId, size);
+        throw err;
+    }
+}
+
+async function settleHeldObject(env: AppEnv['Bindings'], universeId: string, reservationId: string, added: number): Promise<void> {
+    if (added <= 0) return;
+    try {
+        await database(env).update(universes).set({
+            objectBytes: sql`${universes.objectBytes} + ${added}`,
+        }).where(eq(universes.id, universeId)).run();
+    } catch (err) {
+        await releaseObjectBytes(env, universeId, reservationId, added);
+        throw err;
+    }
+    await releaseObjectBytes(env, universeId, reservationId, added);
+}
+
+async function discardHeldObject(env: AppEnv['Bindings'], universeId: string, key: string, reservationId: string, added: number): Promise<void> {
+    if (added <= 0) return;
+    await env.PRIVATE_BUCKET.delete(key);
+    await releaseObjectBytes(env, universeId, reservationId, added);
 }
 
 async function door(owned: OwnedUniverse, path: string, method: string, body?: unknown): Promise<Response> {
@@ -224,7 +253,7 @@ export function mountBuilderRoutes(route: Hono<AppEnv>): void {
         const owned = await ownedUniverse(c);
         if (owned instanceof Response) return owned;
         const sectors = sectorList(c.req.query('sectors') ?? '');
-        if (!sectors) return fail(c, 400, 'validation', 'Invalid request.');
+        if (!sectors) return fail(c, 400, 'validation', 'That request could not be read. Try again.');
         const built = await dotSectors(c, owned, sectors);
         if (built instanceof Response) return built;
         const data = BuilderDotsPage.parse({ sectors: built.out, stamp: built.stamp });
@@ -237,9 +266,9 @@ export function mountBuilderRoutes(route: Hono<AppEnv>): void {
         const owned = await ownedUniverse(c);
         if (owned instanceof Response) return owned;
         let sector = c.req.param('sector');
-        try { sector = decodeURIComponent(sector); } catch { return fail(c, 400, 'validation', 'Invalid request.'); }
+        try { sector = decodeURIComponent(sector); } catch { return fail(c, 400, 'validation', 'That request could not be read. Try again.'); }
         const sectors = sectorList(sector);
-        if (!sectors) return fail(c, 400, 'validation', 'Invalid request.');
+        if (!sectors) return fail(c, 400, 'validation', 'That request could not be read. Try again.');
         const built = await dotSectors(c, owned, sectors);
         if (built instanceof Response) return built;
         const data = BuilderDots.parse({ cells: built.out[0].cells, stamp: built.out[0].stamp });
@@ -270,9 +299,9 @@ export function mountBuilderRoutes(route: Hono<AppEnv>): void {
         const owned = await ownedUniverse(c);
         if (owned instanceof Response) return owned;
         let body: unknown;
-        try { body = await c.req.json(); } catch { return fail(c, 400, 'validation', 'Invalid JSON.'); }
+        try { body = await c.req.json(); } catch { return fail(c, 400, 'validation', 'That request could not be read. Try again.'); }
         const parsed = HexRevert.safeParse(body);
-        if (!parsed.success) return fail(c, 400, 'validation', 'Invalid request.', parsed.error.flatten());
+        if (!parsed.success) return fail(c, 400, 'validation', 'That request could not be read. Try again.', parsed.error.flatten());
         await door(owned, '/pin', 'POST', await pinFor(c.env, owned.row.truthVersion));
         const response = await door(owned, '/hexes/revert', 'POST', {
             hexKey: keyOf(c),
@@ -286,7 +315,7 @@ export function mountBuilderRoutes(route: Hono<AppEnv>): void {
         const owned = await ownedUniverse(c);
         if (owned instanceof Response) return owned;
         const raw = c.req.query('since');
-        if (raw !== undefined && !/^\d+$/.test(raw)) return fail(c, 400, 'validation', 'Invalid request.');
+        if (raw !== undefined && !/^\d+$/.test(raw)) return fail(c, 400, 'validation', 'That request could not be read. Try again.');
         const since = raw === undefined ? '' : `?since=${raw}`;
         return door(owned, `/jobs/${encodeURIComponent(c.req.param('jobId'))}${since}`, 'GET');
     });
@@ -315,7 +344,7 @@ export function mountBuilderRoutes(route: Hono<AppEnv>): void {
         const row = await storedHex(owned, hexKey);
         if (row instanceof Response) return row;
         const hash = currentTree(row, await chartOf(c.env, pin, hexKey));
-        if (!hash) return fail(c, 404, 'not_found', 'No stored tree.');
+        if (!hash) return fail(c, 404, 'not_found', 'This hex has no saved system.');
         const loaded = await loadEnvelope(c, owned, hexKey, hash, row, pin);
         if (loaded instanceof Response) return loaded;
         try {
@@ -364,7 +393,7 @@ export function mountBuilderRoutes(route: Hono<AppEnv>): void {
             return refusedForm(c, err);
         }
         if (applied.answer.messages.some((item) => item.holds)) {
-            return fail(c, 400, 'validation', 'The engine could not build this system.', { messages: applied.answer.messages });
+            return fail(c, 400, 'validation', 'This system could not be built.', { messages: applied.answer.messages });
         }
         const chart = await chartOf(c.env, pin, hexKey);
         return storeTree(c, owned, {
@@ -402,7 +431,7 @@ export function mountBuilderRoutes(route: Hono<AppEnv>): void {
         const pin = await pinFor(c.env, owned.row.truthVersion);
         await door(owned, '/pin', 'POST', pin);
         const charted = await chartedSlot(c.env, pin.truthVersion, input.slot.x, input.slot.y);
-        if (charted === 'unloaded') return fail(c, 400, 'validation', 'The chart is not loaded.');
+        if (charted === 'unloaded') return fail(c, 400, 'validation', 'The chart is still loading. Try again in a moment.');
         return door(owned, '/sectors', 'POST', {
             ...input,
             id: `~${ulid()}`,
@@ -427,7 +456,7 @@ export function mountBuilderRoutes(route: Hono<AppEnv>): void {
         const pin = await pinFor(c.env, owned.row.truthVersion);
         await door(owned, '/pin', 'POST', pin);
         const charted = await chartedSlot(c.env, pin.truthVersion, input.slot.x, input.slot.y);
-        if (charted === 'unloaded') return fail(c, 400, 'validation', 'The chart is not loaded.');
+        if (charted === 'unloaded') return fail(c, 400, 'validation', 'The chart is still loading. Try again in a moment.');
         return door(owned, sectorDoor(c.req.param('sectorId'), 'move'), 'POST', { ...input, charted });
     });
 
@@ -453,7 +482,7 @@ export function mountBuilderRoutes(route: Hono<AppEnv>): void {
         const owned = await ownedUniverse(c);
         if (owned instanceof Response) return owned;
         const letter = SubsectorLetter.safeParse(c.req.param('letter'));
-        if (!letter.success) return fail(c, 400, 'validation', 'Invalid subsector.');
+        if (!letter.success) return fail(c, 400, 'validation', 'That request could not be read. Try again.');
         const input = await readJson(c, SectorRev);
         if (input instanceof Response) return input;
         await door(owned, '/pin', 'POST', await pinFor(c.env, owned.row.truthVersion));
@@ -464,7 +493,7 @@ export function mountBuilderRoutes(route: Hono<AppEnv>): void {
         const owned = await ownedUniverse(c);
         if (owned instanceof Response) return owned;
         const letter = SubsectorLetter.safeParse(c.req.param('letter'));
-        if (!letter.success) return fail(c, 400, 'validation', 'Invalid subsector.');
+        if (!letter.success) return fail(c, 400, 'validation', 'That request could not be read. Try again.');
         const input = await readJson(c, SubsectorRename);
         if (input instanceof Response) return input;
         await door(owned, '/pin', 'POST', await pinFor(c.env, owned.row.truthVersion));
@@ -496,7 +525,7 @@ export function mountBuilderRoutes(route: Hono<AppEnv>): void {
             });
         } catch (err) {
             if (err instanceof FormRefusal) return refusedForm(c, err);
-            return fail(c, 400, 'validation', 'The generator refused this hex.', { reason: String(err).slice(0, 200) });
+            return fail(c, 400, 'validation', 'This hex could not be generated.', { reason: String(err).slice(0, 200) });
         }
         return storeTree(c, owned, {
             hexKey,
@@ -518,7 +547,7 @@ export function mountBuilderRoutes(route: Hono<AppEnv>): void {
         const row = await storedHex(owned, hexKey);
         if (row instanceof Response) return row;
         const hash = currentTree(row, await chartOf(c.env, pin, hexKey));
-        if (!hash) return fail(c, 404, 'not_found', 'No stored tree.');
+        if (!hash) return fail(c, 404, 'not_found', 'This hex has no saved system.');
         const loaded = await loadEnvelope(c, owned, hexKey, hash, row, pin);
         if (loaded instanceof Response) return loaded;
         if (loaded.kind === 'hand') return fail(c, 400, 'validation', 'This system is already designed by hand.');
@@ -542,7 +571,7 @@ export function mountBuilderRoutes(route: Hono<AppEnv>): void {
         const owned = await ownedUniverse(c);
         if (owned instanceof Response) return owned;
         let body: unknown;
-        try { body = await c.req.json(); } catch { return fail(c, 400, 'validation', 'Invalid JSON.'); }
+        try { body = await c.req.json(); } catch { return fail(c, 400, 'validation', 'That request could not be read. Try again.'); }
         if (body && typeof body === 'object' && Array.isArray((body as { makeSectors?: unknown }).makeSectors)) {
             const listed = (body as { makeSectors: unknown[] }).makeSectors;
             if (listed.length > 0) return generateWithSectors(c, owned, body);
@@ -550,11 +579,11 @@ export function mountBuilderRoutes(route: Hono<AppEnv>): void {
             body = rest;
         }
         const parsed = BuilderGenerate.safeParse(body);
-        if (!parsed.success) return fail(c, 400, 'validation', 'Invalid request.', parsed.error.flatten());
+        if (!parsed.success) return fail(c, 400, 'validation', 'That request could not be read. Try again.', parsed.error.flatten());
         const input = parsed.data;
         if (sectorCount(input.hexKeys) > 1) return fail(c, 400, 'validation', ONE_SECTOR_LIMIT, { reason: 'one_sector' });
         if (!builderPairReady(input.edition, input.generator)) {
-            return fail(c, 400, 'validation', 'That engine and generator are not available yet.', { reason: 'generator_unavailable' });
+            return fail(c, 400, 'validation', 'That way of generating is not available yet.', { reason: 'generator_unavailable' });
         }
         const pin = await pinFor(c.env, owned.row.truthVersion);
         const counted = await systemsToGenerate(c, owned, pin, input.hexKeys, input.density, input.filledToo);
@@ -624,7 +653,7 @@ export function mountBuilderRoutes(route: Hono<AppEnv>): void {
             });
         } catch (err) {
             await releaseAllowance(c.env, owned.actor.id, owned.actor.role, counted);
-            return fail(c, 400, 'validation', 'The generator refused this hex.', { reason: String(err).slice(0, 200) });
+            return fail(c, 400, 'validation', 'This hex could not be generated.', { reason: String(err).slice(0, 200) });
         }
         const bytes = stable(envelope);
         const size = new TextEncoder().encode(bytes).byteLength;
@@ -632,12 +661,16 @@ export function mountBuilderRoutes(route: Hono<AppEnv>): void {
         const key = `u/${owned.row.id}/objects/${hash}`;
         const prior = await c.env.PRIVATE_BUCKET.head(key);
         let added = 0;
+        let heldId = '';
         if (!prior) {
-            if (owned.row.objectBytes + size > OBJECT_QUOTA_BYTES) {
+            heldId = `hex:${hash}:${ulid()}`;
+            try {
+                await putHeldObject(c.env, owned.row.id, key, bytes, heldId, size);
+            } catch (err) {
+                if (!isQuotaFull(err)) throw err;
                 await releaseAllowance(c.env, owned.actor.id, owned.actor.role, counted);
                 return fail(c, 400, 'too_large', '250 MB of objects per universe.');
             }
-            await c.env.PRIVATE_BUCKET.put(key, bytes, { httpMetadata: { contentType: 'application/json' } });
             added = size;
         }
         const applied = await door(owned, '/hexes/apply', 'POST', {
@@ -650,15 +683,11 @@ export function mountBuilderRoutes(route: Hono<AppEnv>): void {
             entry: indexed(envelope, hash),
         });
         if (!applied.ok) {
-            if (added) await c.env.PRIVATE_BUCKET.delete(key);
+            await discardHeldObject(c.env, owned.row.id, key, heldId, added);
             await releaseAllowance(c.env, owned.actor.id, owned.actor.role, counted);
             return applied;
         }
-        if (added) {
-            await database(c.env).update(universes).set({
-                objectBytes: sql`${universes.objectBytes} + ${added}`,
-            }).where(eq(universes.id, owned.row.id)).run();
-        }
+        await settleHeldObject(c.env, owned.row.id, heldId, added);
         await recount(c.env, owned.row.id, owned);
         const stored = await applied.json() as { data: unknown };
         return ok(c, BuilderGenerateDone.parse({ rows: [stored.data], skipped: [], leftEmpty: 0, allowance }));
@@ -700,9 +729,9 @@ async function removalChart(env: AppEnv['Bindings'], pin: Pin, hexKey: string): 
 
 async function mutate(c: Parameters<typeof fail>[0], owned: OwnedUniverse, action: 'remove' | 'restore', hexKey: string): Promise<Response> {
     let body: unknown;
-    try { body = await c.req.json(); } catch { return fail(c, 400, 'validation', 'Invalid JSON.'); }
+    try { body = await c.req.json(); } catch { return fail(c, 400, 'validation', 'That request could not be read. Try again.'); }
     const parsed = (action === 'remove' ? HexRemove : HexRestore).safeParse(body);
-    if (!parsed.success) return fail(c, 400, 'validation', 'Invalid request.', parsed.error.flatten());
+    if (!parsed.success) return fail(c, 400, 'validation', 'That request could not be read. Try again.', parsed.error.flatten());
     const pin = await pinFor(c.env, owned.row.truthVersion);
     await door(owned, '/pin', 'POST', pin);
     const response = await door(owned, `/hexes/${action}`, 'POST', {
@@ -761,9 +790,9 @@ async function storedHex(owned: OwnedUniverse, hexKey: string): Promise<StoredHe
 
 async function readJson<T>(c: Ctx, schema: { safeParse: (value: unknown) => { success: true; data: T } | { success: false; error: { flatten: () => unknown } } }): Promise<T | Response> {
     let body: unknown;
-    try { body = await c.req.json(); } catch { return fail(c, 400, 'validation', 'Invalid JSON.'); }
+    try { body = await c.req.json(); } catch { return fail(c, 400, 'validation', 'That request could not be read. Try again.'); }
     const parsed = schema.safeParse(body);
-    if (!parsed.success) return fail(c, 400, 'validation', 'Invalid request.', parsed.error.flatten());
+    if (!parsed.success) return fail(c, 400, 'validation', 'That request could not be read. Try again.', parsed.error.flatten());
     return parsed.data;
 }
 
@@ -776,7 +805,7 @@ function refusedForm(c: Ctx, err: unknown): Response {
 }
 
 async function loadEnvelope(c: Ctx, owned: OwnedUniverse, hexKey: string, hash: string, row: StoredHex | null, pin: Pin): Promise<TreeEnvelope | HandEnvelope | Response> {
-    if (row?.state === 'removed') return fail(c, 404, 'not_found', 'No stored tree.');
+    if (row?.state === 'removed') return fail(c, 404, 'not_found', 'This hex has no saved system.');
     if (row?.treeHash && row.treeHash !== hash) {
         return fail(c, 409, 'conflict', 'This hex changed. Reload it, then try again.', { code: 'hex_changed', current: row });
     }
@@ -788,16 +817,16 @@ async function loadEnvelope(c: Ctx, owned: OwnedUniverse, hexKey: string, hash: 
         const object = await c.env.PUBLIC_BUCKET.get(`objects/${hash}`);
         text = object ? await object.text() : null;
     }
-    if (text == null) return fail(c, 404, 'not_found', 'No stored tree.');
+    if (text == null) return fail(c, 404, 'not_found', 'This hex has no saved system.');
     let value: unknown;
-    try { value = JSON.parse(text); } catch { return fail(c, 404, 'not_found', 'No stored tree.'); }
+    try { value = JSON.parse(text); } catch { return fail(c, 404, 'not_found', 'This hex has no saved system.'); }
     if (value && typeof value === 'object' && (value as { kind?: unknown }).kind === 'hand') {
         const hand = HandEnvelope.safeParse(value);
-        if (!hand.success || hand.data.hexKey !== hexKey) return fail(c, 404, 'not_found', 'No stored tree.');
+        if (!hand.success || hand.data.hexKey !== hexKey) return fail(c, 404, 'not_found', 'This hex has no saved system.');
         return hand.data;
     }
     const parsed = TreeEnvelope.safeParse(value);
-    if (!parsed.success || parsed.data.hexKey !== hexKey) return fail(c, 404, 'not_found', 'No stored tree.');
+    if (!parsed.success || parsed.data.hexKey !== hexKey) return fail(c, 404, 'not_found', 'This hex has no saved system.');
     return parsed.data;
 }
 
@@ -814,9 +843,15 @@ async function storeTree(c: Ctx, owned: OwnedUniverse, write: {
     const key = `u/${owned.row.id}/objects/${hash}`;
     const prior = await c.env.PRIVATE_BUCKET.head(key);
     let added = 0;
+    let heldId = '';
     if (!prior) {
-        if (owned.row.objectBytes + size > OBJECT_QUOTA_BYTES) return fail(c, 400, 'too_large', '250 MB of objects per universe.');
-        await c.env.PRIVATE_BUCKET.put(key, bytes, { httpMetadata: { contentType: 'application/json' } });
+        heldId = `keep:${hash}:${ulid()}`;
+        try {
+            await putHeldObject(c.env, owned.row.id, key, bytes, heldId, size);
+        } catch (err) {
+            if (!isQuotaFull(err)) throw err;
+            return fail(c, 400, 'too_large', '250 MB of objects per universe.');
+        }
         added = size;
     }
     const applied = await door(owned, '/hexes/apply', 'POST', {
@@ -830,14 +865,10 @@ async function storeTree(c: Ctx, owned: OwnedUniverse, write: {
         action: 'keep',
     });
     if (!applied.ok) {
-        if (added) await c.env.PRIVATE_BUCKET.delete(key);
+        await discardHeldObject(c.env, owned.row.id, key, heldId, added);
         return applied;
     }
-    if (added) {
-        await database(c.env).update(universes).set({
-            objectBytes: sql`${universes.objectBytes} + ${added}`,
-        }).where(eq(universes.id, owned.row.id)).run();
-    }
+    await settleHeldObject(c.env, owned.row.id, heldId, added);
     await recount(c.env, owned.row.id, owned);
     return applied;
 }
@@ -845,11 +876,11 @@ async function storeTree(c: Ctx, owned: OwnedUniverse, write: {
 /** One box: make the named sectors and generate every hex. One hex is inline. More than one is one job. */
 async function generateWithSectors(c: Ctx, owned: OwnedUniverse, body: unknown): Promise<Response> {
     const parsed = SectorGenerate.safeParse(body);
-    if (!parsed.success) return fail(c, 400, 'validation', 'Invalid request.', parsed.error.flatten());
+    if (!parsed.success) return fail(c, 400, 'validation', 'That request could not be read. Try again.', parsed.error.flatten());
     const input = parsed.data;
     if (sectorCount(input.hexKeys) > 1) return fail(c, 400, 'validation', ONE_SECTOR_LIMIT, { reason: 'one_sector' });
     if (!builderPairReady(input.edition, input.generator)) {
-        return fail(c, 400, 'validation', 'That engine and generator are not available yet.', { reason: 'generator_unavailable' });
+        return fail(c, 400, 'validation', 'That way of generating is not available yet.', { reason: 'generator_unavailable' });
     }
     const pin = await pinFor(c.env, owned.row.truthVersion);
     await door(owned, '/pin', 'POST', pin);
@@ -863,11 +894,11 @@ async function generateWithSectors(c: Ctx, owned: OwnedUniverse, body: unknown):
     const sectors: { id: string; name: string; x: number; y: number; charted: false }[] = [];
     for (const sector of planned.sectors) {
         const charted = await chartedSlot(c.env, pin.truthVersion, sector.x, sector.y);
-        if (charted === 'unloaded') return fail(c, 400, 'validation', 'The chart is not loaded.');
-        if (charted) return fail(c, 400, 'validation', 'That slot holds a charted sector.', { reason: 'charted' });
+        if (charted === 'unloaded') return fail(c, 400, 'validation', 'The chart is still loading. Try again in a moment.');
+        if (charted) return fail(c, 400, 'validation', 'That place already has a published chart.', { reason: 'charted' });
         sectors.push({ ...sector, charted: false });
     }
-    if (input.hexKeys.length === 1 && input.baseRev === undefined) return fail(c, 400, 'validation', 'Invalid request.');
+    if (input.hexKeys.length === 1 && input.baseRev === undefined) return fail(c, 400, 'validation', 'That request could not be read. Try again.');
     const counted = await systemsToGenerate(c, owned, pin, planned.hexKeys, input.density, input.filledToo);
     if (typeof counted !== 'number') return counted;
     const taken = await chargeAllowance(c, owned.actor, counted);
@@ -890,7 +921,7 @@ async function generateWithSectors(c: Ctx, owned: OwnedUniverse, body: unknown):
             });
         } catch (err) {
             await releaseAllowance(c.env, owned.actor.id, owned.actor.role, counted);
-            return fail(c, 400, 'validation', 'The generator refused this hex.', { reason: String(err).slice(0, 200) });
+            return fail(c, 400, 'validation', 'This hex could not be generated.', { reason: String(err).slice(0, 200) });
         }
         const bytes = stable(envelope);
         const size = new TextEncoder().encode(bytes).byteLength;
@@ -898,12 +929,16 @@ async function generateWithSectors(c: Ctx, owned: OwnedUniverse, body: unknown):
         const key = `u/${owned.row.id}/objects/${hash}`;
         const prior = await c.env.PRIVATE_BUCKET.head(key);
         let added = 0;
+        let heldId = '';
         if (!prior) {
-            if (owned.row.objectBytes + size > OBJECT_QUOTA_BYTES) {
+            heldId = `sec:${hash}:${ulid()}`;
+            try {
+                await putHeldObject(c.env, owned.row.id, key, bytes, heldId, size);
+            } catch (err) {
+                if (!isQuotaFull(err)) throw err;
                 await releaseAllowance(c.env, owned.actor.id, owned.actor.role, counted);
                 return fail(c, 400, 'too_large', '250 MB of objects per universe.');
             }
-            await c.env.PRIVATE_BUCKET.put(key, bytes, { httpMetadata: { contentType: 'application/json' } });
             added = size;
         }
         const applied = await door(owned, '/sectors/generate', 'POST', {
@@ -920,15 +955,11 @@ async function generateWithSectors(c: Ctx, owned: OwnedUniverse, body: unknown):
             job: null,
         });
         if (!applied.ok) {
-            if (added) await c.env.PRIVATE_BUCKET.delete(key);
+            await discardHeldObject(c.env, owned.row.id, key, heldId, added);
             await releaseAllowance(c.env, owned.actor.id, owned.actor.role, counted);
             return applied;
         }
-        if (added) {
-            await database(c.env).update(universes).set({
-                objectBytes: sql`${universes.objectBytes} + ${added}`,
-            }).where(eq(universes.id, owned.row.id)).run();
-        }
+        await settleHeldObject(c.env, owned.row.id, heldId, added);
         await recount(c.env, owned.row.id, owned);
         const stored = await applied.json() as { data?: { sectors?: unknown; hex?: unknown } };
         return ok(c, SectorGenerateDone.parse({

@@ -16,11 +16,17 @@ import { drawCampaignLayer, partyContains, vesselContains, type CampaignPartyShi
 import type { PublicGameMark, PublicShipMark } from './public_games.ts';
 import type { MapTheme } from './theme.ts';
 import { arrowHead, mergeTracks, routeChains, TRACK_CASE, TRACK_MERGE_PX, TRACK_SHOWN, TRACK_STEP, trackBox, type RouteLeg, type Track, type TrackBox } from './traffic.ts';
-import { PPP_GRID, PPP_NAMES, tierFor, type Tier } from './tiers.ts';
-import { boxesOverlap, clampTitle, fadeToward, stepScale, titleAnchor, titleInView, zoomStep, type Box } from './titles.ts';
+import { PPP_DOTS, PPP_GRID, PPP_NAMES, tierFor, type Tier } from './tiers.ts';
+import { boxesOverlap, clampTitle, fadeToward, separateTitles, stepScale, titleAnchor, titleInView, zoomStep, type Box } from './titles.ts';
 import { baseMarks, hasGasGiant, starport, worldHasWater, worldIsBelt } from './uwp.ts';
 
 const HEX_OUTLINE_CAP = 12000;
+/** The grid's outlines are cached in world space a sector-sized block of hexes at a time. */
+const OUTLINE_TILE_COLS = SECTOR_COLS;
+const OUTLINE_TILE_ROWS = SECTOR_ROWS;
+const OUTLINE_TILES_KEPT = 96;
+/** prefers-reduced-motion is read again at most this often (ms): each read is a media query. */
+const REDUCED_MOTION_TTL_MS = 1000;
 const NAME_MAX_PX = 2400;
 const NAME_SIZE = 18;
 const NAME_MIN_SIZE = 9;
@@ -162,6 +168,9 @@ type DrawnPolity = {
 
 type DrawnRegion = { color: string; path: Path2D };
 
+/** One sector's galaxy-zoom dots as a bitmap (DF9), and what it was drawn for. */
+type DotTile = { ppp: number; dpr: number; cells: string; ink: string; tile: OffscreenCanvas; pad: number };
+
 type Mark = {
     sx: number;
     sy: number;
@@ -224,6 +233,24 @@ function subsectorName(index: SectorIndex, letter: string): string {
     return found ? found : 'Subsector ' + letter;
 }
 
+type HexBounds = { q0: number; q1: number; r0: number; r1: number; count: number };
+
+/** The rows and columns visibleHexes covers, and how many hexes that is, without building the list. */
+function visibleHexBounds(view: Rect): HexBounds {
+    const q0 = Math.floor(view.x0) - 1;
+    const q1 = Math.ceil(view.x1) + 1;
+    let r0 = Infinity, r1 = -Infinity, count = 0;
+    for (let q = q0; q <= q1; q++) {
+        const offset = (q & 1) ? 0.5 : 0;
+        const from = Math.floor(view.y0 / ROW_STEP - offset) - 1;
+        const to = Math.ceil(view.y1 / ROW_STEP - offset) + 1;
+        if (from < r0) r0 = from;
+        if (to > r1) r1 = to;
+        count += Math.max(0, to - from + 1);
+    }
+    return { q0, q1, r0, r1, count };
+}
+
 function visibleHexes(view: Rect): { q: number; r: number }[] {
     const q0 = Math.floor(view.x0) - 1;
     const q1 = Math.ceil(view.x1) + 1;
@@ -264,14 +291,23 @@ export class MapRenderer {
     private readonly regionPaths = new WeakMap<object, DrawnRegion[]>();
     /** code and canonical in the file are ignored. */
     private labels: FarLabel[] = farLabels.labels;
+    private labelNames: Map<string, string> | null = null;
+    /** The galaxy zoom's dot bitmaps by sector slug (DF9), and the zoom the last frame drew dots at. */
+    private readonly dotTiles = new Map<string, DotTile>();
+    private lastDotPpp = -1;
     private selected: Selection | null = null;
     /** Left inset for subsector titles, in CSS pixels. 0 keeps titles at the viewport edge. */
     private workspaceLeft = 0;
+    /** Subsector titles stick below this y, in CSS pixels: below the floating controls at the top (DS5). */
+    private titleTop = TITLE_TOP;
     /** Subsector titles by "slug:letter": placement per zoom step and the current fade. */
     private readonly titleStates = new Map<string, TitleState>();
     /** World centres per index object, for title placement. */
     private readonly titleWorlds = new WeakMap<object, { x: number; y: number }[]>();
     private titleTime = 0;
+    private readonly outlineTiles = new Map<string, Path2D>();
+    private reducedAt = Number.NEGATIVE_INFINITY;
+    private reduced = false;
     private width = 0;
     private height = 0;
     private dpr = 1;
@@ -355,6 +391,16 @@ export class MapRenderer {
     /** Test hook. The bundled list is the default. */
     setLabels(labels: FarLabel[]): void {
         this.labels = labels;
+        this.labelNames = null;
+    }
+
+    /** A world's far label, by sector slug and hex, for the zoomed-out hover's words (DF8); null for none. */
+    farLabelName(slug: string, hhhh: string): string | null {
+        if (!this.labelNames) {
+            this.labelNames = new Map();
+            for (const label of this.labels) this.labelNames.set(label.sector + '/' + label.hex, label.name);
+        }
+        return this.labelNames.get(slug + '/' + hhhh) ?? null;
     }
 
     setSelection(selection: Selection | null): void {
@@ -412,6 +458,25 @@ export class MapRenderer {
         return best;
     }
 
+    /**
+     * Where the hover ring goes (DF8) for a mouse over a mark a click acts on: a track, a party ship's
+     * marker, the party's, a vessel's. Its centre and radius on screen, by the same tests as the click.
+     */
+    markRing(sx: number, sy: number): { x: number; y: number; r: number } | null {
+        const track = this.trackAt(sx, sy);
+        if (track) return { x: track.x, y: track.y, r: Math.max(8, Math.hypot(track.box.x1 - track.box.x0, track.box.y1 - track.box.y0) / 2 + 2) };
+        for (let i = this.partyShips.length - 1; i >= 0; i -= 1) {
+            const mark = this.partyShips[i];
+            if (mark.id && partyContains(mark, sx, sy)) return { x: mark.cx, y: mark.cy, r: Math.max(8, mark.hitR + 2) };
+        }
+        if (this.partyMark && partyContains(this.partyMark, sx, sy)) return { x: this.partyMark.cx, y: this.partyMark.cy, r: Math.max(8, this.partyMark.hitR + 2) };
+        for (let i = this.vesselMarks.length - 1; i >= 0; i -= 1) {
+            const hit = this.vesselMarks[i];
+            if (vesselContains(hit, sx, sy)) return { x: hit.cx, y: hit.cy, r: Math.max(8, hit.hitR + 2) };
+        }
+        return null;
+    }
+
     /** The vessel under the point, or null. The system glyph and a zoomed-out point are not a hit. */
     vesselAt(sx: number, sy: number): string | null {
         for (let i = this.vesselMarks.length - 1; i >= 0; i -= 1) {
@@ -424,6 +489,14 @@ export class MapRenderer {
     /** Subsector titles start at this x when the panel covers the left of the map. */
     setWorkspaceLeft(px: number): void {
         this.workspaceLeft = px > 0 ? px : 0;
+    }
+
+    /**
+     * Subsector titles stick below this y (DS5): the host measures its floating controls, as on a
+     * phone the date sits on a second row under the search. Never above the search row's own line.
+     */
+    setTitleTop(px: number): void {
+        this.titleTop = px > TITLE_TOP ? px : TITLE_TOP;
     }
 
     resize(width: number, height: number, dpr: number): void {
@@ -468,19 +541,21 @@ export class MapRenderer {
         } else {
             this.paintPolityFills(cam, vp, view, POLITY_FILL_ALPHA);
             this.paintPolityStrokes(cam, vp, view);
-            this.overviewPoints(on, cam, vp);
         }
 
         if (tier !== 'galaxy') {
             this.subsectorLines(on, cam, vp);
             this.strokeRects(on, cam, vp, this.theme.line2);
         }
+        // Zoomed out the dots go over the subsector and sector lines (DF10): a line crossing a system's
+        // dot no longer splits it in two.
+        if (tier !== 'hex') this.overviewPoints(on, cam, vp);
         if (tier === 'hex') {
-            const hexes = visibleHexes(view);
+            const hexes = visibleHexBounds(view);
             const fillAlpha = TERRITORY_FILL_ALPHA;
             this.paintPolityFills(cam, vp, view, fillAlpha);
             if (cam.ppp >= PPP_GRID) this.paintRegions(ready, cam, vp);
-            if (hexes.length <= HEX_OUTLINE_CAP) this.hexOutlines(hexes, cam, vp);
+            if (hexes.count <= HEX_OUTLINE_CAP) this.hexOutlines(hexes, view, cam, vp);
             if (cam.ppp >= PPP_GRID) this.routes(ready, cam, vp);
             this.paintPolityStrokes(cam, vp, view);
             marks = this.marks(ready, cam, vp);
@@ -872,19 +947,60 @@ export class MapRenderer {
         const size = Math.max(1, cam.ppp * POINT_PARSEC) / this.dpr;
         const ctx = this.ctx;
         ctx.fillStyle = this.theme.textMuted;
+        // DF9: at the galaxy zoom a sector's dots are drawn once into a bitmap and copied while the map
+        // pans; the zoom must hold still for a frame first, so a zoom in progress draws them as before.
+        const steady = cam.ppp === this.lastDotPpp;
+        this.lastDotPpp = cam.ppp;
+        if (!steady && this.dotTiles.size) this.dotTiles.clear();
+        const tiles = steady && cam.ppp < PPP_DOTS && typeof OffscreenCanvas === 'function';
+        // In device pixels, each dot on a whole pixel: drawn here or copied from its sector's bitmap, the
+        // pixels are the same, and a dot is never smeared across two.
+        const sizeDev = size * this.dpr;
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
         for (const sector of sectors) {
             const cells = this.dotOverlay.get(sector.slug) ?? sector.cells;
             if (!cells) continue;
-            for (let i = 0; i < cells.length; i++) {
-                if (cells.charAt(i) === '.') continue;
-                const col = Math.floor(i / SECTOR_ROWS) + 1;
-                const row = (i % SECTOR_ROWS) + 1;
-                const global = toGlobal(sector.x, sector.y, col, row);
-                const centre = hexCentre(global.q, global.r);
-                const screen = toScreen(cam, vp, centre.x, centre.y);
-                ctx.fillRect(screen.sx - size / 2, screen.sy - size / 2, size, size);
-            }
+            const origin = toScreen(cam, vp, sector.rect.x0, sector.rect.y0);
+            const ox = Math.round(origin.sx * this.dpr);
+            const oy = Math.round(origin.sy * this.dpr);
+            const tile = tiles ? this.dotTile(sector, cells, cam.ppp, sizeDev) : null;
+            if (tile) ctx.drawImage(tile.tile, ox - tile.pad, oy - tile.pad);
+            else this.sectorDots(ctx, sector, cells, cam.ppp, sizeDev, ox, oy);
         }
+        ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    }
+
+    /** One sector's dots, a square each, in device pixels, from the sector's top-left corner at whole pixel (ox, oy). */
+    private sectorDots(target: { fillRect(x: number, y: number, w: number, h: number): void }, sector: DrawSector, cells: string, ppp: number, sizeDev: number, ox: number, oy: number): void {
+        const scale = ppp * this.dpr;
+        for (let i = 0; i < cells.length; i++) {
+            if (cells.charAt(i) === '.') continue;
+            const col = Math.floor(i / SECTOR_ROWS) + 1;
+            const row = (i % SECTOR_ROWS) + 1;
+            const global = toGlobal(sector.x, sector.y, col, row);
+            const centre = hexCentre(global.q, global.r);
+            const x = ox + Math.round((centre.x - sector.rect.x0) * scale - sizeDev / 2);
+            const y = oy + Math.round((centre.y - sector.rect.y0) * scale - sizeDev / 2);
+            target.fillRect(x, y, sizeDev, sizeDev);
+        }
+    }
+
+    /** A sector's dots as a bitmap at this zoom (DF9), kept until the zoom, the pixel ratio, the ink or the cells change. */
+    private dotTile(sector: DrawSector, cells: string, ppp: number, sizeDev: number): DotTile | null {
+        const ink = this.theme.textMuted;
+        const have = this.dotTiles.get(sector.slug);
+        if (have && have.ppp === ppp && have.dpr === this.dpr && have.cells === cells && have.ink === ink) return have;
+        const pad = Math.ceil(sizeDev) + 1;
+        const w = Math.ceil((sector.rect.x1 - sector.rect.x0) * ppp * this.dpr) + 2 * pad;
+        const h = Math.ceil((sector.rect.y1 - sector.rect.y0) * ppp * this.dpr) + 2 * pad;
+        const tile = new OffscreenCanvas(Math.max(1, w), Math.max(1, h));
+        const tctx = tile.getContext('2d');
+        if (!tctx) return null;
+        tctx.fillStyle = ink;
+        this.sectorDots(tctx, sector, cells, ppp, sizeDev, pad, pad);
+        const kept: DotTile = { ppp, dpr: this.dpr, cells, ink, tile, pad };
+        this.dotTiles.set(sector.slug, kept);
+        return kept;
     }
 
     private routes(ready: { sector: DrawSector; index: SectorIndex }[], cam: Camera, vp: Viewport): void {
@@ -1226,7 +1342,70 @@ export class MapRenderer {
         this.ctx.lineTo(b.sx, b.sy);
     }
 
-    private hexOutlines(hexes: { q: number; r: number }[], cam: Camera, vp: Viewport): void {
+    /** prefers-reduced-motion, read again at most once a second (it was a media query on every frame). */
+    private reducedMotion(time: number): boolean {
+        if (time - this.reducedAt >= REDUCED_MOTION_TTL_MS) {
+            this.reduced = prefersReducedMotion();
+            this.reducedAt = time;
+        }
+        return this.reduced;
+    }
+
+    /**
+     * The grid. Its outlines are fixed in world space, so each sector-sized block is built once as a
+     * Path2D and stroked under the camera's transform, with the line kept 1 px wide. Building some
+     * twelve thousand hexes' corners every frame was the sector zoom's longest task. Where there is no
+     * Path2D (tests), the hexes are drawn one by one as before.
+     */
+    private hexOutlines(hexes: HexBounds, view: Rect, cam: Camera, vp: Viewport): void {
+        if (hexes.count === 0) return;
+        if (typeof Path2D === 'undefined') {
+            this.hexOutlinesEach(visibleHexes(view), cam, vp);
+            return;
+        }
+        const minQ = hexes.q0, maxQ = hexes.q1, minR = hexes.r0, maxR = hexes.r1;
+        const ctx = this.ctx;
+        const scale = this.dpr * cam.ppp;
+        ctx.save();
+        ctx.setTransform(scale, 0, 0, scale, this.dpr * (vp.width / 2 - cam.x * cam.ppp), this.dpr * (vp.height / 2 - cam.y * cam.ppp));
+        ctx.strokeStyle = this.theme.chart.grid;
+        ctx.lineWidth = 1 / cam.ppp;
+        for (let tq = Math.floor(minQ / OUTLINE_TILE_COLS); tq <= Math.floor(maxQ / OUTLINE_TILE_COLS); tq += 1) {
+            for (let tr = Math.floor(minR / OUTLINE_TILE_ROWS); tr <= Math.floor(maxR / OUTLINE_TILE_ROWS); tr += 1) {
+                ctx.stroke(this.outlineTile(tq, tr));
+            }
+        }
+        ctx.restore();
+    }
+
+    /** One block of the grid in world space, kept until OUTLINE_TILES_KEPT newer blocks push it out. */
+    private outlineTile(tq: number, tr: number): Path2D {
+        const key = tq + ',' + tr;
+        const held = this.outlineTiles.get(key);
+        if (held) {
+            this.outlineTiles.delete(key);
+            this.outlineTiles.set(key, held);
+            return held;
+        }
+        const path = new Path2D();
+        for (let q = tq * OUTLINE_TILE_COLS; q < (tq + 1) * OUTLINE_TILE_COLS; q += 1) {
+            for (let r = tr * OUTLINE_TILE_ROWS; r < (tr + 1) * OUTLINE_TILE_ROWS; r += 1) {
+                const centre = hexCentre(q, r);
+                const corners = hexCorners(centre.x, centre.y);
+                path.moveTo(corners[0], corners[1]);
+                for (let i = 2; i < corners.length; i += 2) path.lineTo(corners[i], corners[i + 1]);
+                path.closePath();
+            }
+        }
+        this.outlineTiles.set(key, path);
+        if (this.outlineTiles.size > OUTLINE_TILES_KEPT) {
+            const oldest = this.outlineTiles.keys().next().value;
+            if (oldest !== undefined) this.outlineTiles.delete(oldest);
+        }
+        return path;
+    }
+
+    private hexOutlinesEach(hexes: { q: number; r: number }[], cam: Camera, vp: Viewport): void {
         const ctx = this.ctx;
         ctx.beginPath();
         ctx.strokeStyle = this.theme.chart.grid;
@@ -1338,14 +1517,14 @@ export class MapRenderer {
         const elapsed = time - this.titleTime;
         this.titleTime = time;
         const duration = this.theme.tFast * 1000;
-        const instant = !(duration > 0) || prefersReducedMotion();
+        const instant = !(duration > 0) || this.reducedMotion(time);
         const amount = instant ? 1 : elapsed / duration;
         const step = zoomStep(cam.ppp);
         const bounds: Box = {
             x: this.workspaceLeft,
-            y: TITLE_TOP,
+            y: this.titleTop,
             w: vp.width - this.workspaceLeft,
-            h: vp.height - TITLE_TOP,
+            h: vp.height - this.titleTop,
         };
         const guard = this.selectedGuard(cam, vp, cam.ppp / 1.5);
         const spanX = SECTOR_COLS / 4;
@@ -1353,6 +1532,8 @@ export class MapRenderer {
         const live = new Set<string>();
         let moving = false;
         let drew = false;
+        const selectedKey = this.selectedSubsector();
+        const titles: { key: string; state: TitleState; pill: TitlePill; spot: { x: number; y: number }; home: Box; inView: boolean; first: boolean; seen: number }[] = [];
         for (const item of ready) {
             for (let row = 0; row < 4; row++) {
                 for (let col = 0; col < 4; col++) {
@@ -1402,24 +1583,46 @@ export class MapRenderer {
                     if (!pill) continue;
                     const at = toScreen(cam, vp, pill.x, pill.y);
                     const spot = clampTitle({ x: at.sx, y: at.sy }, pill.h, home, bounds);
-                    const covers = guard !== null && boxesOverlap({ x: spot.x, y: spot.y, w: pill.w, h: pill.h }, guard);
-                    const target = !covers && titleInView(spot, pill.w, pill.h, bounds) ? 1 : 0;
-                    if (instant) {
-                        state.alpha = target;
-                        state.moving = false;
-                    } else if (state.moving) {
-                        state.alpha = fadeToward(state.alpha, target, amount);
-                        state.moving = state.alpha !== target;
-                    } else if (state.alpha !== target) {
-                        // The fade starts this frame; it advances from the next one.
-                        state.moving = true;
-                    }
-                    if (state.moving) moving = true;
-                    if (state.alpha > 0) {
-                        this.paintTitle(state.label, pill, spot, state.alpha);
-                        drew = true;
-                    }
+                    const seenW = Math.min(home.x + home.w, bounds.x + bounds.w) - Math.max(home.x, bounds.x);
+                    const seenH = Math.min(home.y + home.h, bounds.y + bounds.h) - Math.max(home.y, bounds.y);
+                    titles.push({
+                        key, state, pill, spot, home,
+                        inView: titleInView(spot, pill.w, pill.h, bounds),
+                        first: key === selectedKey,
+                        seen: Math.max(0, seenW) * Math.max(0, seenH),
+                    });
                 }
+            }
+        }
+        // Kept apart (DS5): the selected hex's subsector first, then a title already showing (so two
+        // titles don't trade places while panning), then the subsector with more of it on screen.
+        titles.sort((a, b) => Number(b.first) - Number(a.first)
+            || Number(b.state.alpha > 0) - Number(a.state.alpha > 0)
+            || b.seen - a.seen
+            || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+        const inView = titles.filter((title) => title.inView);
+        const apart = separateTitles(inView.map((title) => ({ ...title.spot, w: title.pill.w, h: title.pill.h, home: title.home })), bounds);
+        const placed = new Map(inView.map((title, i) => [title, apart[i]]));
+        for (const title of titles) {
+            const { state, pill } = title;
+            const kept = placed.get(title) ?? null;
+            const spot = kept ?? title.spot;
+            const covers = guard !== null && boxesOverlap({ x: spot.x, y: spot.y, w: pill.w, h: pill.h }, guard);
+            const target = kept !== null && !covers ? 1 : 0;
+            if (instant) {
+                state.alpha = target;
+                state.moving = false;
+            } else if (state.moving) {
+                state.alpha = fadeToward(state.alpha, target, amount);
+                state.moving = state.alpha !== target;
+            } else if (state.alpha !== target) {
+                // The fade starts this frame; it advances from the next one.
+                state.moving = true;
+            }
+            if (state.moving) moving = true;
+            if (state.alpha > 0) {
+                this.paintTitle(state.label, pill, spot, state.alpha);
+                drew = true;
             }
         }
         for (const key of this.titleStates.keys()) if (!live.has(key)) this.titleStates.delete(key);
@@ -1479,6 +1682,16 @@ export class MapRenderer {
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
         ctx.fillText(label, spot.x + pill.fontPx * TITLE_PAD_X, spot.y + pill.h / 2);
+    }
+
+    /** The selected hex's subsector as "slug:letter" (A to P, four across, ten rows and eight columns each). */
+    private selectedSubsector(): string | null {
+        const selected = this.selected;
+        if (!selected) return null;
+        const local = parseHex(selected.hhhh);
+        if (!local) return null;
+        const letter = String.fromCharCode(65 + Math.floor((local.row - 1) / (SECTOR_ROWS / 4)) * 4 + Math.floor((local.col - 1) / (SECTOR_COLS / 4)));
+        return selected.slug + ':' + letter;
     }
 
     /** Axis-aligned square around the selected hex. Radius is one hex size. */

@@ -2,6 +2,9 @@
 export const MUTATION_BUDGET = 120;
 export const MUTATION_WINDOW_MS = 60_000;
 
+/** Submits a minute on one universe. This does not spend `allowMutation`. */
+export const PROPOSAL_SUBMIT_BUDGET = 10;
+
 /**
  * A generate job's own batch and fail posts are the worker finishing work the
  * person already asked for. They do not spend the budget that protects the

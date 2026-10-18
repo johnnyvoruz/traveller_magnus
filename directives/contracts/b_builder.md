@@ -64,7 +64,20 @@ A stale `baseRev` writes nothing. Hex: 409 `conflict`, `This hex changed. Reload
 
 Object cap: a new private object that would pass 250 MB is 400 `too_large`, `250 MB of objects per universe.` The door write is not applied, and the new object is deleted.
 
-A finished generate job adds its new object bytes once. When `object_byte_charges` is present, migration `0014_object_byte_charges.sql` stores one row per job id. The insert and the `object_bytes` add are one D1 batch, so a crash rolls both back. A retry that finds the row adds nothing, then writes the settled mark. The Worker reads `sqlite_master` once per D1 binding. When the table is absent, the job runs the plain `UPDATE universes SET object_bytes = object_bytes + ?` and nothing else, which is what 1.1.11 did, and then writes the settled mark. A batch that still fails because the table is missing has rolled back, so that same plain update runs once. Two generate jobs on one universe can still both pass the 250 MB check. That race is open. A lock held from the slice read until the job ends would stall the second job, so it is not built.
+A finished generate job adds its new object bytes once. When `object_byte_charges` is present, migration `0014_object_byte_charges.sql` stores one row per job id. The insert and the `object_bytes` add are one D1 batch, so a crash rolls both back. A retry that finds the row adds nothing, then writes the settled mark. The Worker reads `sqlite_master` once per D1 binding. When the table is absent, the job runs the plain `UPDATE universes SET object_bytes = object_bytes + ?` and nothing else, which is what 1.1.11 did, and then writes the settled mark. A batch that still fails because the table is missing has rolled back, so that same plain update runs once.
+
+Before a writer puts new private objects, the universe Durable Object reserves those bytes. The reservation is one row in the DO's sqlite table `object_reservations`, keyed by holder. A generate job uses its job id, and each slice adds that slice's new bytes to the same row. An image upload, a one-hex generate, Keep, and a one-hex generate-with-sectors each use a fresh id and release it in the same request. The DO reads `object_bytes`, drops expired rows, and refuses when `object_bytes` plus the bytes still reserved plus this request is over 250 MB. Equal to 250 MB is allowed. The refusal is 400 `too_large`, `250 MB of objects per universe.` The second writer is refused. It is not made to wait. A failed put releases the bytes it reserved. `finishCounts` adds the bytes to D1 and then releases that many. Releasing first would leave a gap where both writers pass.
+
+Each row expires 15 minutes after its last reserve. One sector finishes in seconds, so 15 minutes covers a slow retry, and a dead job stops counting. A later slice on the same job id refreshes that expiry. The table is created when the DO wakes. There is no D1 migration. Old code ignores the table. New code creates it. Either order is safe. A test may set `QUOTA_RESERVATION_MS` to a shorter life, from 1 second up to 15 minutes. Production leaves it unset.
+
+Writers of `universes.object_bytes`:
+
+- The generate job, in `finishCounts` through `chargeObjectBytes`. The bytes are reserved first.
+- `PUT /api/universes/:id/objects/:hash` in `routes/objects.ts`. Reserved, then released in that request.
+- The one-hex generate, Keep, and the one-hex generate-with-sectors path in `routes/builder.ts`. Reserved, then released in that request.
+- An install, in `routes/installs.ts` (Lane Z, 2026-10-17): it reserves the preview's bytes under the install's charge id before the copy and releases that id in a `finally`, after `chargeObjectBytes` or on any failure. A refusal is 400 `too_large`, "This universe is out of space." (`reports/done/z_install_reservation.md`; orchestrator's edit of this line.)
+
+Package takedown and package covers put private objects and do not change `object_bytes`. Parked truth-build puts are outside this rule.
 
 ## One sector per request
 

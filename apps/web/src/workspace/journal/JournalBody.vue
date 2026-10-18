@@ -1,12 +1,15 @@
 <script setup lang="ts">
 /**
- * The entry's body (journal design §4). Reading, tokens are chips. Editing, the text is the
- * text, and Enter is a new line. A chip opens what it names. Nothing here is HTML.
+ * The entry's body (journal design §4). Reading, tokens are chips, and bold, italic, lists,
+ * and links draw as themselves. Editing, the text is the text, and Enter is a new line.
+ * A chip opens what it names. A tag in the source stays text.
  */
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { CAMPAIGN_LIMITS, type CampaignRecord } from '@voyage/shared';
-import { bodyParts, type BodyPart } from './body.ts';
+import { type BodyPart } from './body.ts';
 import MentionList from './MentionList.vue';
+import RichNodes from './RichNodes.vue';
+import { parseRich } from './rich.ts';
 import { filterMentions, mentionBackspace, mentionQuery, mentionToken } from './mention.ts';
 
 const props = defineProps<{
@@ -34,7 +37,7 @@ const mentionList = ref<{ $el?: HTMLElement } | null>(null);
 let leaving = false;
 let frameObserver: ResizeObserver | null = null;
 
-const parts = computed(() => bodyParts(props.value, props.nameOf));
+const nodes = computed(() => parseRich(props.value, props.nameOf));
 const mention = computed(() => {
     if (!editing.value) return null;
     const found = mentionQuery(draft.value, caret.value);
@@ -244,7 +247,7 @@ function onKey(event: KeyboardEvent): void {
 
 function onReadClick(event: MouseEvent): void {
     const target = event.target;
-    if (target instanceof HTMLElement && target.closest('button')) return;
+    if (target instanceof HTMLElement && target.closest('button, a')) return;
     edit();
 }
 
@@ -296,7 +299,7 @@ defineExpose({ edit, view });
     <div
       v-else
       ref="view"
-      class="edit-view jn-read"
+      class="edit-view jn-read is-rich"
       :class="{ 'is-empty': !value }"
       tabindex="0"
       role="textbox"
@@ -305,12 +308,7 @@ defineExpose({ edit, view });
       @click="onReadClick"
       @keydown="onReadKey"
     >
-      <template v-if="value">
-        <template v-for="(part, index) in parts" :key="index">
-          <span v-if="part.kind === 'text'">{{ part.text }}</span>
-          <button v-else type="button" class="ui-chip jn-token" @click="emit('open', part)">{{ part.label }}</button>
-        </template>
-      </template>
+      <RichNodes v-if="value" :nodes="nodes" @open="emit('open', $event)" />
       <template v-else>Write the entry</template>
     </div>
   </div>
@@ -319,11 +317,5 @@ defineExpose({ edit, view });
 <style>
 .jn-read {
   cursor: text;
-}
-
-.jn-token {
-  margin: 0 2px;
-  vertical-align: baseline;
-  cursor: pointer;
 }
 </style>

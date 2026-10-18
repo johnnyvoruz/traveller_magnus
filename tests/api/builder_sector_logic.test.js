@@ -181,7 +181,7 @@ test('a refused inline write leaves no sector, and a charted slot writes nothing
         job: null,
     });
     assert.equal(charted.status, 400, JSON.stringify(charted.body));
-    assert.equal(charted.body.error.message, 'That slot holds a charted sector.');
+    assert.equal(charted.body.error.message, 'That place already has a published chart.');
     assert.equal(charted.body.error.details.reason, 'charted');
     assert.equal(sql.exec(`SELECT sector_slug FROM sectors`).length, 0);
 });
@@ -230,7 +230,7 @@ test('undo-generate stops a running job, and undoing the delete puts the hexes b
     assert.equal(sql.exec(`SELECT hex_key FROM hexes WHERE sector_slug = ?`, ID).length, 1);
     const again = await call(sql, 'POST', '/sectors/undo-generate', { jobId: 'job-run' });
     assert.equal(again.status, 400, JSON.stringify(again.body));
-    assert.equal(again.body.error.message, 'Already undone.');
+    assert.equal(again.body.error.message, 'That is already undone.');
 });
 
 test('a moved sector rev or a moved hex rev writes nothing', async () => {

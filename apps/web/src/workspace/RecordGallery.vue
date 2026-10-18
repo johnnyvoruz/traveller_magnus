@@ -231,14 +231,14 @@ watch(() => props.id, () => { closeLightbox(); });
   <section
     v-else-if="part === 'strip' && record && images.length"
     ref="stripEl"
-    class="img"
+    class="img ui-frame"
     :class="{ 'is-dragging': dragging }"
     @dragover.prevent="dragging = !readOnly"
     @dragleave="dragging = false"
     @drop.prevent="onDrop"
     @paste="onPaste"
   >
-    <h3 class="ui-heading">Images <span v-if="images.length" class="ui-count">{{ images.length }}</span></h3>
+    <h3 class="ui-frame-label">Images <span v-if="images.length" class="ui-frame-count">{{ images.length }}</span></h3>
     <input ref="fileEl" class="vplan-file" type="file" accept="image/*" multiple tabindex="-1" aria-hidden="true" @change="onFiles">
     <div class="img-strip" role="list" aria-label="Images">
       <div v-for="(image, index) in images" :key="image.hash" role="listitem" class="img-thumb" :class="{ 'is-primary': index === 0 }">

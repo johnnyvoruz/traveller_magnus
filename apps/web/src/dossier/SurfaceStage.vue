@@ -26,14 +26,15 @@ import {
     dayNightOverlay, enhancedFlags, iconSetName, mapStyle, onDayNightOverlay, onMapStyle, onSurfaceMode, setDayNightOverlay, setMapStyle, surfaceMode, type MapStyle,
 } from '../surface/preferences.ts';
 import { cancelSurface, hybridInputsFor, requestMap } from '../surface/service.ts';
-import { SURFACE_WEBGL_NOTICE, webglMissing } from '../surface/webgl_notice.ts';
+import { webglMissing } from '../surface/webgl_notice.ts';
 import { drawMapOverlay, renderDiamondBlank, type DiamondMapInputs } from '../surface/vanilla/map.ts';
 import { HEX_STROKE, SEPARATOR_STROKE, applyDiamondClip, drawDiamondSeparators, drawHexGrid, rgbaCss, vanillaHexesAcross } from '../surface/vanilla/map_grid.ts';
+import { hybridHit, hybridOutline, queueHover, vanillaHit } from '../surface/hover_hex.ts';
 import { parseStat } from '../surface/vanilla/map_palette.ts';
 import { mountSharpView } from '../surface/sharp_view.ts';
 import { iconPaint, loadIconSet, type IconImage, type IconSet, type Tinter } from '../surface/hybrid/icons.ts';
 import { drawSunMark, drawTerminus } from '../surface/hybrid/chrome.ts';
-import { LARGE_SHEET, SHEET_LAYOUT, sheetPoint } from '../surface/hybrid/field.ts';
+import { LARGE_SHEET, SHEET_LAYOUT } from '../surface/hybrid/field.ts';
 import { hexSpacing } from '../surface/hybrid/grid.ts';
 import { hybridModel } from '../surface/hybrid/index.ts';
 import type { HybridModel } from '../surface/hybrid/model.ts';
@@ -48,6 +49,7 @@ import { portTimeText, type Subsolar } from '../orbit/sun.ts';
 import { wrapFocus } from '../workspace/focus_trap.ts';
 import SurfaceKey from './SurfaceKey.vue';
 import SurfaceTimeBar from './SurfaceTimeBar.vue';
+import { lightingOf } from './world_panel.ts';
 
 export type SurfaceTarget = {
     /** The full released hex key, `Spinward_Marches/1910`. */
@@ -58,7 +60,6 @@ export type SurfaceTarget = {
 };
 
 const props = defineProps<{
-    badge: string;
     /** The body to map, or null when there is none. A body the legacy rule rejects shows nothing. */
     target: SurfaceTarget | null;
     /** Where the star stands over this body on a date (orbit/sun.ts), or null when unknown. */
@@ -95,9 +96,16 @@ const viewPx = ref(0);
 const mapView = ref<MapView>(FIT_VIEW);
 /** Legend row under the pointer or keyboard focus. */
 const highlight = ref<SurfaceCode | null>(null);
-/** Name of the hex under the pointer, or the keyboard cursor. */
+/** Name in the toolbar: the hex under the pointer, or the one a click or the keyboard pinned. */
 const picked = ref('');
+const pinName = ref('');
+const hoverName = ref('');
 const cursorId = ref<number | null>(null);
+/** Sheet polygon of the hovered hex. Empty when the pointer is off a hex or the pointer is a touch. */
+let hoverRing: [number, number][] = [];
+let hoverKey = '';
+const hoverSlot: { point: { x: number; y: number } | null; open: boolean } = { point: null, open: false };
+const hoverEl = ref<HTMLCanvasElement | null>(null);
 /** On-screen width of one hex, in CSS pixels. The scale sentence does not change with zoom. */
 const hexBar = ref(0);
 const blankEl = ref<HTMLCanvasElement | null>(null);
@@ -110,8 +118,8 @@ const timing = ref<{ sheet: string; worker: string; chunk: string; cached: strin
 
 /** The mode in force: the device's preference, followed while this is on screen. */
 const mode = ref<SurfaceMode>(surfaceMode());
-/** Empty when this browser can paint WebGL. The map itself is a 2D canvas and still paints. */
-const webglNotice = webglMissing() ? SURFACE_WEBGL_NOTICE : '';
+/** The map is a 2D canvas and loses nothing without WebGL: no notice here, only the data attribute. */
+const webglOff = webglMissing();
 const mappable = computed(() => props.target !== null && canMapWorld(props.target.body));
 /** Which painter drew the sheet and, in enhanced, what its sea is; the reason is the tooltip. */
 const style = ref<MapStyle>(mapStyle());
@@ -127,6 +135,9 @@ const hybrid = computed(() => mode.value === 'enhanced' && model.value !== null)
 const caption = computed(() => (hybrid.value && model.value
     ? hybridCaption(model.value, props.target ? props.target.body : null)
     : sheetCaption(mode.value, props.target ? props.target.body : null)));
+/** The caption without the locked-lighting clause, and that clause as the map overlay. */
+const lighting = computed(() => lightingOf(caption.value.text));
+const infoLabel = computed(() => 'Surface map · ' + lighting.value.info);
 /** Enhanced large view bakes 1600 × 800. Vanilla stays 800 × 400 and scales in CSS. */
 const activeLayout = computed(() => (large.value && mode.value === 'enhanced' ? LARGE_SHEET : SHEET_LAYOUT));
 const sheetW = computed(() => activeLayout.value.width);
@@ -303,7 +314,10 @@ function drawLayers(): void {
     const layout = activeLayout.value;
     const canvas = marksEl.value;
     const ctx = canvas ? canvas.getContext('2d') : null;
-    if (!ctx || !canvas) return;
+    if (!ctx || !canvas) {
+        drawHover();
+        return;
+    }
     const box = stageBox();
     const dpr = devicePixelRatio();
     const sw = box.w || layout.width;
@@ -337,6 +351,7 @@ function drawLayers(): void {
             figureEl.value.dataset.zoom = zoom.toFixed(2);
             figureEl.value.dataset.sharp = sharp?.box.live ? 'live' : 'off';
         }
+        drawHover();
         return;
     }
     const began = now();
@@ -372,6 +387,7 @@ function drawLayers(): void {
         figureEl.value.dataset.sharp = sharp?.box.live ? 'live' : 'off';
     }
     hexBar.value = Math.round(hexCss);
+    drawHover();
 }
 
 function sheetFromStage(sx: number, sy: number): [number, number] | null {
@@ -386,37 +402,124 @@ function sheetFromStage(sx: number, sy: number): [number, number] | null {
     return [u * layout.width, v * layout.height];
 }
 
-function nameHex(id: number): void {
-    const m = model.value;
-    if (!m) return;
-    const hex = m.hexes[id];
-    if (!hex) return;
-    const code = symbolOf(hex) ?? hex.terrain;
-    picked.value = CODE_TABLE[code] ? CODE_TABLE[code].name : '';
-    cursorId.value = id;
+function showName(): void {
+    picked.value = hoverName.value || pinName.value;
 }
 
-function pickAt(sx: number, sy: number): void {
+function terrainName(id: number): string {
     const m = model.value;
+    if (!m) return '';
+    const hex = m.hexes[id];
+    if (!hex) return '';
+    const code = symbolOf(hex) ?? hex.terrain;
+    return CODE_TABLE[code] ? CODE_TABLE[code].name : '';
+}
+
+function nameHex(id: number): void {
+    pinName.value = terrainName(id);
+    cursorId.value = id;
+    showName();
+}
+
+/** The hex under a stage point: hybrid on the enhanced map, the diamond grid on vanilla. */
+function hitAt(sx: number, sy: number): { key: string; ring: [number, number][]; name: string; id: number | null } | null {
     const at = sheetFromStage(sx, sy);
-    if (!m || !at) return;
+    if (!at) return null;
     const layout = activeLayout.value;
-    let best = -1;
-    let bestD = Infinity;
-    const limit = (layout.side / m.grid.n) * 0.7;
-    for (let id = 0; id < m.grid.count; id += 1) {
-        const p = sheetPoint(layout, m.grid.P[id]);
-        const d = (p[0] - at[0]) * (p[0] - at[0]) + (p[1] - at[1]) * (p[1] - at[1]);
-        if (d < bestD) {
-            bestD = d;
-            best = id;
-        }
+    const m = model.value;
+    if (mode.value === 'enhanced' && m) {
+        const id = hybridHit(m.grid, layout, at[0], at[1]);
+        if (id == null) return null;
+        return { key: 'h' + id, ring: hybridOutline(m.grid, layout, id), name: terrainName(id), id };
     }
-    if (best < 0 || bestD > limit * limit) {
-        picked.value = '';
+    if (!props.target) return null;
+    const sizeCode = parseStat(worldMapData(props.target.body).size);
+    const hit = vanillaHit(at[0], at[1], layout.width, layout.height, sizeCode, 5);
+    if (!hit) return null;
+    return { key: 'v' + hit.row + ':' + hit.col, ring: hit.ring, name: '', id: null };
+}
+
+/** A click, or the keyboard, keeps the name after the pointer leaves. */
+function pinAt(sx: number, sy: number): void {
+    if (!(mode.value === 'enhanced' && model.value)) return;
+    const hit = hitAt(sx, sy);
+    if (!hit || hit.id == null) {
+        pinName.value = '';
+        cursorId.value = null;
+        showName();
         return;
     }
-    nameHex(best);
+    nameHex(hit.id);
+}
+
+function drawHover(): void {
+    const canvas = hoverEl.value;
+    const ctx = canvas ? canvas.getContext('2d') : null;
+    if (!ctx || !canvas) return;
+    const layout = activeLayout.value;
+    const box = stageBox();
+    const dpr = devicePixelRatio();
+    const sw = box.w || layout.width;
+    const sh = box.h || layout.height;
+    fitCanvas(canvas, Math.max(1, Math.round(sw * dpr)), Math.max(1, Math.round(sh * dpr)));
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (hoverRing.length < 3) return;
+    const zoom = large.value ? mapView.value.zoom : 1;
+    const ox = large.value ? mapView.value.x : 0;
+    const oy = large.value ? mapView.value.y : 0;
+    const cssPerSheet = (sw / layout.width) * zoom;
+    if (!(cssPerSheet > 0)) return;
+    ctx.setTransform(cssPerSheet * dpr, 0, 0, cssPerSheet * dpr, ox * dpr, oy * dpr);
+    ctx.strokeStyle = iconPaint('--surface-pick');
+    ctx.lineWidth = 1.5 / cssPerSheet;
+    ctx.lineJoin = 'miter';
+    ctx.miterLimit = 2;
+    ctx.beginPath();
+    hoverRing.forEach((p, i) => {
+        if (i === 0) ctx.moveTo(p[0], p[1]);
+        else ctx.lineTo(p[0], p[1]);
+    });
+    ctx.closePath();
+    ctx.stroke();
+}
+
+function clearHover(): void {
+    hoverName.value = '';
+    const had = hoverKey !== '';
+    hoverKey = '';
+    hoverRing = [];
+    showName();
+    if (had) drawHover();
+}
+
+function applyHover(sx: number, sy: number): void {
+    const hit = hitAt(sx, sy);
+    hoverName.value = hit ? hit.name : '';
+    showName();
+    const key = hit ? hit.key : '';
+    if (key === hoverKey) return;
+    hoverKey = key;
+    hoverRing = hit ? hit.ring : [];
+    drawHover();
+}
+
+let hoverFrame = 0;
+
+function queuePointer(x: number, y: number): void {
+    queueHover(hoverSlot, { x, y }, (run) => {
+        hoverFrame = nextFrame(() => {
+            hoverFrame = 0;
+            run();
+        });
+    }, (point) => applyHover(point.x, point.y));
+}
+
+function dropHoverFrame(): void {
+    if (hoverFrame) cancelFrame(hoverFrame);
+    hoverFrame = 0;
+    hoverSlot.point = null;
+    hoverSlot.open = false;
 }
 
 /** What the day and night layer needs from the page: canvases, ImageData, the motion setting. */
@@ -564,6 +667,12 @@ function start(): void {
     const mine = token;
     // Nothing of the last body may show under the new one.
     clearSheet();
+    pinName.value = '';
+    hoverName.value = '';
+    cursorId.value = null;
+    hoverKey = '';
+    hoverRing = [];
+    showName();
     arrival.value = '';
     const options = { continentalDefinition: CONTINENTAL_DEFINITION, coastlineComplexity: COASTLINE_COMPLEXITY, flags: enhancedFlags() };
     if (mode.value === 'enhanced') {
@@ -751,6 +860,7 @@ function onStageKey(event: KeyboardEvent): void {
 let pointers = new Map<number, { x: number; y: number }>();
 let dragLast: { x: number; y: number } | null = null;
 let pinchStart: { dist: number; zoom: number; x: number; y: number } | null = null;
+let press: { x: number; y: number; pointerId: number } | null = null;
 
 function onStageWheel(event: WheelEvent): void {
     if (!large.value) return;
@@ -764,10 +874,12 @@ function onStageWheel(event: WheelEvent): void {
 }
 
 function onStageDown(event: PointerEvent): void {
-    if (!large.value || event.button !== 0) return;
+    if (event.button !== 0) return;
     const target = event.target;
     if (target instanceof Element && target.closest('button')) return;
     const point = localPoint(event);
+    press = { x: point.x, y: point.y, pointerId: event.pointerId };
+    if (!large.value) return;
     pointers.set(event.pointerId, point);
     stageEl.value?.setPointerCapture(event.pointerId);
     if (pointers.size === 2) {
@@ -784,7 +896,7 @@ function onStageDown(event: PointerEvent): void {
 function onStageMove(event: PointerEvent): void {
     const point = localPoint(event);
     if (!large.value) {
-        pickAt(point.x, point.y);
+        if (event.pointerType !== 'touch') queuePointer(point.x, point.y);
         return;
     }
     // A move with the button up is a hover. A missed pointer-up must not keep the drag.
@@ -805,22 +917,39 @@ function onStageMove(event: PointerEvent): void {
             box.w, box.h, mid.x, mid.y, dist / pinchStart.dist, viewLimit(),
         );
         applyView(zoomed, 'burst');
+        clearHover();
         return;
     }
     if (dragLast && pointers.size === 1) {
         const box = stageBox();
         applyView(panBy(mapView.value, box.w, box.h, point.x - dragLast.x, point.y - dragLast.y), 'pan');
         dragLast = point;
+        clearHover();
         return;
     }
-    pickAt(point.x, point.y);
+    if (event.pointerType !== 'touch') queuePointer(point.x, point.y);
 }
 
 function onStageUp(event: PointerEvent): void {
+    const point = localPoint(event);
+    const start = press && press.pointerId === event.pointerId ? press : null;
+    if (start) press = null;
+    const wasPinch = pointers.size >= 2;
+    const stage = stageEl.value;
+    if (stage?.hasPointerCapture(event.pointerId)) stage.releasePointerCapture(event.pointerId);
     pointers.delete(event.pointerId);
     if (pointers.size < 2) pinchStart = null;
     if (pointers.size === 0) dragLast = null;
     else if (pointers.size === 1) dragLast = [...pointers.values()][0];
+    if (!start || wasPinch || pointers.size > 0) return;
+    if (Math.hypot(point.x - start.x, point.y - start.y) > 5) return;
+    pinAt(point.x, point.y);
+    if (event.pointerType !== 'touch') queuePointer(point.x, point.y);
+}
+
+function onStageLeave(): void {
+    dropHoverFrame();
+    clearHover();
 }
 
 function onStageDouble(event: MouseEvent): void {
@@ -913,13 +1042,10 @@ onMounted(() => {
         loadIcons();
     });
     start();
-    if (typeof ResizeObserver !== 'undefined' && figureEl.value) {
+    if (typeof ResizeObserver !== 'undefined') {
         resizeObs = new ResizeObserver(() => noteWidth());
-        resizeObs.observe(figureEl.value);
-        if (stageEl.value) resizeObs.observe(stageEl.value);
-        noteWidth();
+        observeSize();
     }
-    stageEl.value?.addEventListener('wheel', onStageWheel, { passive: false });
 });
 onBeforeUnmount(() => {
     sharp?.stop();
@@ -929,12 +1055,26 @@ onBeforeUnmount(() => {
     if (stopClock) stopClock();
     if (stopDayNight) stopDayNight();
     if (resizeObs) resizeObs.disconnect();
-    stageEl.value?.removeEventListener('wheel', onStageWheel);
+    dropHoverFrame();
     document.removeEventListener('focusin', holdFocus);
     rest();
     drop();
 });
 watch(highlight, () => drawLayers());
+
+/**
+ * The stage is rebuilt whenever the body shown stops being mappable and becomes mappable again (a gas
+ * giant and back), so the observer follows the elements. The wheel is bound in the template for the
+ * same reason.
+ */
+function observeSize(): void {
+    if (!resizeObs) return;
+    resizeObs.disconnect();
+    if (figureEl.value) resizeObs.observe(figureEl.value);
+    if (stageEl.value) resizeObs.observe(stageEl.value);
+    if (figureEl.value) noteWidth();
+}
+watch([figureEl, stageEl], observeSize, { flush: 'post' });
 </script>
 
 <template>
@@ -965,7 +1105,7 @@ watch(highlight, () => drawLayers());
     :data-worker-start-ms="timing.worker"
     :data-longest-chunk-ms="timing.chunk"
     :data-from-cache="timing.cached"
-    :data-webgl="webglNotice ? 'off' : 'on'"
+    :data-webgl="webglOff ? 'off' : 'on'"
   >
     <div
       ref="stageEl"
@@ -976,8 +1116,10 @@ watch(highlight, () => drawLayers());
       @pointermove="onStageMove"
       @pointerup="onStageUp"
       @pointercancel="onStageUp"
+      @pointerleave="onStageLeave"
       @dblclick="onStageDouble"
       @keydown="onStageKey"
+      @wheel="onStageWheel"
     >
       <div class="doss-zoom" :style="zoomStyle">
         <canvas
@@ -997,6 +1139,7 @@ watch(highlight, () => drawLayers());
         </div>
       </div>
       <canvas ref="marksEl" class="doss-layer doss-marks" aria-hidden="true" />
+      <canvas ref="hoverEl" class="doss-layer doss-hover" aria-hidden="true" />
       <div v-if="large" class="doss-zoom-tools" role="group" aria-label="Zoom">
         <button type="button" class="ui-btn is-icon" aria-label="Zoom in" title="Zoom in" @click="zoomBy(ZOOM_KEY)">
           <Icon name="plus" :size="13" />
@@ -1008,6 +1151,7 @@ watch(highlight, () => drawLayers());
           <span>Fit</span>
         </button>
       </div>
+      <p v-if="lighting.light" class="doss-light">{{ lighting.light }}</p>
       <div v-show="state !== 'full'" class="doss-scan" aria-hidden="true">
         <canvas ref="blankEl" class="doss-blank" :width="sheetW" :height="sheetH" />
         <div class="doss-scan-field" :style="clipPath ? { clipPath } : undefined">
@@ -1015,58 +1159,60 @@ watch(highlight, () => drawLayers());
         </div>
       </div>
     </div>
-    <p v-if="scaleText" class="doss-scale">
-      <span class="doss-scale-bar" :style="{ width: hexBar + 'px' }" aria-hidden="true"></span>
-      <span>{{ scaleText }}</span>
-      <span v-if="picked" class="doss-pick">{{ picked }}</span>
-    </p>
-    <figcaption class="doss-map-caption">
-      <p v-if="badge" class="ui-badge doss-badge"><Icon name="star" :size="10.5" /><span>{{ badge }}</span></p>
+    <div class="doss-toolbar">
+      <p class="doss-scale">
+        <span v-if="scaleText" class="doss-scale-bar" :style="{ width: hexBar + 'px' }" aria-hidden="true"></span>
+        <span v-if="scaleText">{{ scaleText }}</span>
+        <span v-if="picked" class="doss-pick">{{ picked }}</span>
+      </p>
       <div v-if="hybrid" class="doss-toggles" role="group" aria-label="Map layers">
         <button
           type="button"
           class="doss-toggle"
+          aria-label="Day/Night"
           :aria-pressed="dayNight ? 'true' : 'false'"
           :title="dayNight ? 'Day and night on: hide the light and shadow of the star' : 'Day and night off: show the light and shadow of the star on the clock date'"
           @click="toggleDayNight"
         >
           <Icon name="circle-half-stroke" :size="11" />
-          <span>Day/Night</span>
+          <span class="doss-toggle-word">Day/Night</span>
           <span class="doss-pip" aria-hidden="true"></span>
         </button>
         <button
           type="button"
           class="doss-toggle"
+          aria-label="Symbols"
           :aria-pressed="style === 'symbols' ? 'true' : 'false'"
           :title="style === 'symbols' ? 'Symbols on: hide the symbols' : 'Symbols off: show the symbols over the painted map'"
           @click="toggleStyle"
         >
           <Icon name="layer-group" :size="11" />
-          <span>Symbols</span>
+          <span class="doss-toggle-word">Symbols</span>
           <span class="doss-pip" aria-hidden="true"></span>
         </button>
       </div>
+      <button type="button" class="ui-btn is-icon" :title="infoLabel" :aria-label="infoLabel">
+        <Icon name="circle-question" :size="13" />
+      </button>
       <button
         v-if="!large"
         ref="expandBtn"
         type="button"
-        class="ui-btn doss-open"
-        :title="hybrid ? 'Open the map large, with the key' : 'Open the map large'"
+        class="ui-btn is-icon"
+        aria-label="Open map and key"
+        title="Open map and key"
         @click="openLarge"
       >
         <Icon name="up-right-and-down-left-from-center" :size="13" />
-        <span>{{ hybrid ? 'Map and key' : 'Open the map large' }}</span>
       </button>
-      <span class="doss-hint" :title="caption.title">Surface map · {{ caption.text }}</span>
-    </figcaption>
+    </div>
     <SurfaceTimeBar
-      v-if="hybrid && dayNight && (sun || (model && model.sub))"
+      v-if="hybrid && dayNight && sun && !(model && model.sub)"
       :now-days="nowDays"
       :local-time="portTime"
-      :locked="!!(model && model.sub)"
+      :locked="false"
       :averaged="averagedShown"
     />
-    <p v-if="webglNotice" class="doss-webgl" role="status">{{ webglNotice }}</p>
   </figure>
   <SurfaceKey v-if="hybrid && large" :model="model" :icon-set="iconSet" :active="highlight" @highlight="highlight = $event" />
   </div>
@@ -1325,6 +1471,7 @@ watch(highlight, () => drawLayers());
 }
 
 .doss-toggle {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -1493,29 +1640,47 @@ watch(highlight, () => drawLayers());
   font: 400 12px/16px var(--font-text);
 }
 
-.doss-map-caption {
+.doss-toolbar {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  min-height: 28px;
-  padding-top: 8px;
-  font-size: 12px;
-  line-height: 16px;
+  gap: var(--sp-2);
+  min-width: 0;
+  margin-top: var(--sp-2);
 }
 
-.doss-hint {
-  margin-left: auto;
-  color: var(--text-muted);
-  text-align: right;
+.doss-toolbar .doss-scale {
+  flex: 1 1 auto;
+  margin: 0;
+  overflow: hidden;
 }
 
-/* The same quiet line the orbit picture draws when WebGL is off. */
-.doss-webgl {
-  margin: 8px 0 0;
-  color: var(--text-muted);
-  font: 400 12px/1.4 var(--font-text);
+.doss-light {
+  position: absolute;
+  left: var(--sp-2);
+  bottom: var(--sp-2);
+  z-index: 2;
+  margin: 0;
+  padding: var(--sp-1) var(--sp-2);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-1);
+  background: color-mix(in srgb, var(--bg-0) 82%, transparent);
+  color: var(--text-1);
+  font: 400 12px/1.3 var(--font-text);
+  pointer-events: none;
+}
+
+/* The left column names the container. Under 480px the layer words hide; the large map is outside it. */
+@container dossier (max-width: 479px) {
+  .doss-toggle-word {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 
 /* Reduced motion: the blank, then the sheet. No beam, no fades. */

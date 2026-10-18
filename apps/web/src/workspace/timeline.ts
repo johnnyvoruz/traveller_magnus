@@ -1,20 +1,24 @@
 /**
- * The Campaign timeline as a list (campaign_manager_plan.md §7.3). A reading of dated
- * journal entries and dated records. Nothing here is stored, and nothing is written.
- * Link since/until and vessel track legs stay off this list: they are not a journal
- * entry and they are not a record's when.
+ * The Campaign timeline as a list (campaign_manager_plan.md §7.3; UX backlog U6).
+ * A reading of dated journal entries, dated records, and, on the campaign timeline,
+ * vessel legs and where the party is today. Nothing here is stored, and nothing is written.
+ * Link since/until stay off. The record page's own list does not ask for legs (N0).
+ * The campaign list does (U6; that reversal is this list only). D mounts the screen.
  */
-import type { CampaignEntry, CampaignRecord, CampaignRecordType } from '@voyage/shared';
+import { Track, type CampaignAnchor, type CampaignEntry, type CampaignRecord, type CampaignRecordType, type TrackLeg } from '@voyage/shared';
 import type { FaIconName } from '../design/icons.ts';
 import { entryIcon, entryName, entryPlace, kindWord, whenText } from './journal/list.ts';
-import { resolveAnchor } from './party.ts';
-import { liveById, resolvePlace } from './places.ts';
+import { resolveAnchor, type Party } from './party.ts';
+import { partyWhere } from './party_where.ts';
+import { liveById, placeWords, resolvePlace } from './places.ts';
 import { placeLine, typeInfo } from './records.ts';
 import { stardate, weekdayName } from './stardate.ts';
 
 export type TimelineRow = {
     id: string;
-    source: 'entry' | 'record';
+    source: 'entry' | 'record' | 'leg' | 'party';
+    /** The vessel a leg or the party row belongs to. Null on a journal entry or another record. */
+    shipId: string | null;
     year: number;
     day: number;
     /** DDD-YYYY of the row's own date (a record's start). */
@@ -78,6 +82,10 @@ export function buildTimeline(input: {
     entries: readonly CampaignEntry[];
     records: Readonly<Record<string, CampaignRecord>>;
     clockDays: number | null;
+    /** Campaign timeline only. The record page leaves this off, so its list stays entries and records. */
+    includeLegs?: boolean;
+    /** Where the party is on the campaign date. Drawn only with a clock. */
+    party?: Party | null;
 }): TimelineModel {
     const live = liveById(input.records);
     const rows: TimelineRow[] = [];
@@ -89,6 +97,7 @@ export function buildTimeline(input: {
         rows.push({
             id: entry.id,
             source: 'entry',
+            shipId: null,
             year: entry.when.year,
             day: entry.when.day,
             date: whenText(entry.when),
@@ -113,6 +122,7 @@ export function buildTimeline(input: {
         rows.push({
             id: record.id,
             source: 'record',
+            shipId: null,
             year: start.year,
             day: start.day,
             date: whenText(start),
@@ -128,8 +138,44 @@ export function buildTimeline(input: {
         } as TimelineRow & { createdAt: string });
     }
 
-    const stamped = rows as (TimelineRow & { createdAt: string })[];
-    stamped.sort((a, b) => newer(a, b) || byCreated(a, b));
+    if (input.includeLegs) {
+        for (const record of Object.values(input.records)) {
+            const legs = legsOf(record);
+            if (!legs) continue;
+            legs.forEach((leg, index) => {
+                for (const event of legEvents(leg)) {
+                    const when = stardate(event.days);
+                    const said = sayAnchor(event.anchor, input.records);
+                    rows.push({
+                        id: record.id + ':leg:' + index + ':' + event.end,
+                        source: 'leg',
+                        shipId: record.id,
+                        year: when.year,
+                        day: when.day,
+                        date: when.date,
+                        until: null,
+                        title: record.name,
+                        kind: event.kind,
+                        place: said.place,
+                        hexKey: said.hexKey,
+                        visibility: record.visibility,
+                        avatar: { name: record.name, type: 'vessel', images: record.images },
+                        icon: null,
+                        createdAt: record.createdAt,
+                        rank: 1,
+                    } as TimelineRow & { createdAt: string; rank: number });
+                }
+            });
+        }
+    }
+
+    if (input.party && input.clockDays !== null && Number.isFinite(input.clockDays)) {
+        const standing = partyRow(input.party, input.records, input.clockDays);
+        if (standing) rows.push(standing);
+    }
+
+    const stamped = rows as (TimelineRow & { createdAt: string; rank?: number })[];
+    stamped.sort((a, b) => newer(a, b) || (a.rank ?? 1) - (b.rank ?? 1) || byCreated(a, b));
 
     const days: TimelineDay[] = [];
     for (const row of stamped) {
@@ -176,10 +222,106 @@ export function buildTimeline(input: {
     return { years, count: stamped.length };
 }
 
+/** The campaign timeline: dated entries, dated records, each vessel's legs, and the party today. */
+export function campaignTimeline(input: {
+    entries: readonly CampaignEntry[];
+    records: Readonly<Record<string, CampaignRecord>>;
+    clockDays: number | null;
+    party: Party | null;
+}): TimelineModel {
+    return buildTimeline({ ...input, includeLegs: true });
+}
+
+function legsOf(record: CampaignRecord): TrackLeg[] | null {
+    if (record.deleted || record.type !== 'vessel') return null;
+    const status = record.status;
+    if (!status || typeof status !== 'object' || Array.isArray(status) || !Object.prototype.hasOwnProperty.call(status, 'track')) return null;
+    const parsed = Track.safeParse((status as { track: unknown }).track);
+    if (!parsed.success || parsed.data.length === 0) return null;
+    return parsed.data;
+}
+
+function sayAnchor(anchor: CampaignAnchor, records: Readonly<Record<string, CampaignRecord>>): { place: string; hexKey: string | null } {
+    const resolved = resolveAnchor(anchor, records);
+    if (!resolved) return { place: '', hexKey: null };
+    return { place: placeWords(resolved)[0], hexKey: resolved.hexKey };
+}
+
+/** One end of a leg. A jump is entry and exit. Any other leg departs, and arrives when that is a later day count. A stay is one arrival. */
+function legEvents(leg: TrackLeg): { days: number; anchor: CampaignAnchor; kind: string; end: 'out' | 'in' }[] {
+    if (leg.mode === 'jump') {
+        return [
+            { days: leg.departs, anchor: leg.from, kind: 'Jump entry', end: 'out' },
+            { days: leg.arrives, anchor: leg.to, kind: 'Jump exit', end: 'in' },
+        ];
+    }
+    if (leg.arrives === leg.departs) {
+        const stay = leg.mode === 'docked' || leg.mode === 'orbit';
+        return [{ days: leg.departs, anchor: stay ? leg.to : leg.from, kind: stay ? 'Arrival' : 'Departure', end: 'out' }];
+    }
+    return [
+        { days: leg.departs, anchor: leg.from, kind: 'Departure', end: 'out' },
+        { days: leg.arrives, anchor: leg.to, kind: 'Arrival', end: 'in' },
+    ];
+}
+
+function partyRow(party: Party, records: Readonly<Record<string, CampaignRecord>>, days: number): (TimelineRow & { createdAt: string; rank: number }) | null {
+    const where = partyWhere(party, records, days);
+    if (!where.anchor && !where.underway) return null;
+    const when = stardate(days);
+    const said = where.anchor ? sayAnchor(where.anchor, records) : { place: '', hexKey: null };
+    const leadId = party.vesselIds[0] ?? null;
+    const lead = leadId ? records[leadId] : undefined;
+    const name = lead && !lead.deleted ? lead.name : 'Party';
+    return {
+        id: 'party-today',
+        source: 'party',
+        shipId: lead && !lead.deleted && lead.type === 'vessel' ? lead.id : null,
+        year: when.year,
+        day: when.day,
+        date: when.date,
+        until: null,
+        title: name,
+        kind: 'Today',
+        place: where.underway ? where.underway.text : said.place,
+        hexKey: said.hexKey,
+        visibility: lead && !lead.deleted ? lead.visibility : 'players',
+        avatar: { name, type: lead && !lead.deleted ? lead.type : 'note', images: lead && !lead.deleted ? lead.images : null },
+        icon: null,
+        createdAt: '9999-01-01T00:00:00.000Z',
+        rank: 0,
+    };
+}
+
 /**
  * The empty timeline's one next step. With no campaign date, set that date.
  * With a date, add a session: a session takes the date when it is written.
  */
+/**
+ * Whether a row stays once the timeline is narrowed. A record type keeps records of that
+ * type. "Only this ship" keeps the lead ship, the records aboard it, and journal entries
+ * anchored to one of those records.
+ */
+export function timelineKeeps(
+    row: TimelineRow,
+    narrow: {
+        type: string | null;
+        shipId: string | null;
+        aboard: Readonly<Record<string, string>>;
+        recordType: (id: string) => string | null;
+        entryAnchorId: (id: string) => string | null;
+    },
+): boolean {
+    if (narrow.type) {
+        if (row.source !== 'record' || narrow.recordType(row.id) !== narrow.type) return false;
+    }
+    if (!narrow.shipId) return true;
+    if (row.source === 'leg' || row.source === 'party') return row.shipId === narrow.shipId;
+    if (row.source === 'record') return row.id === narrow.shipId || narrow.aboard[row.id] === narrow.shipId;
+    const anchor = narrow.entryAnchorId(row.id);
+    return anchor === narrow.shipId || (anchor !== null && narrow.aboard[anchor] === narrow.shipId);
+}
+
 export function timelineAdvice(hasClock: boolean): { text: string; act: 'date' | 'journal'; label: string } {
     if (!hasClock) {
         return {

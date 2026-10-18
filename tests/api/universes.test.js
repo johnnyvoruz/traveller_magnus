@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import enginesPackage from '../../packages/engines/package.json' with { type: 'json' };
 import { runWrangler } from './session.js';
 
 function jsonFrom(text) {
@@ -111,7 +112,7 @@ if (process.env.RUN_API_TESTS !== '1') {
             assert.equal(created.body.data.name, 'My campaign');
             assert.equal(created.body.data.truthVersion, null);
             assert.equal(created.body.data.editionDefault, 'MgT2E');
-            assert.equal(created.body.data.engineVersion, '1.1.0');
+            assert.equal(created.body.data.engineVersion, enginesPackage.version);
             assert.equal(created.body.data.deletedAt, null);
             const id = created.body.data.id;
 
@@ -211,7 +212,7 @@ VALUES ('${released}', '1.0.0', 'released', '2026-10-04T00:00:00.000Z', '2026-10
             });
             assert.equal(eleventh.status, 400);
             assert.equal(eleventh.body.error.code, 'too_large');
-            assert.equal(eleventh.body.error.message, 'Ten universes per account.');
+            assert.equal(eleventh.body.error.message, 'An account holds at most ten campaigns.');
             const atCap = await jsonFetch(`${base}/api/universes`, { headers: { cookie: owner } });
             assert.equal(atCap.body.data.length, 10);
             const replayAtCap = await jsonFetch(`${base}/api/universes`, {

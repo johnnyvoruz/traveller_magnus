@@ -190,7 +190,7 @@ onBeforeUnmount(() => listen(false));
         <button ref="pillBtn" type="button" class="lnk-open pf-name" :title="'See ' + person.name" @click="emit('show', person)">
           <Icon name="user" :size="11" /><span class="pf-name-text">{{ person.name }}</span>
         </button>
-        <button type="button" class="lnk-x pf-x" :aria-label="'Take ' + person.name + ' out of ' + label" title="Take out" :disabled="readOnly" @click="release">
+        <button type="button" class="lnk-x pf-x" :aria-label="'Take ' + person.name + ' out of ' + label" :title="'Take ' + person.name + ' out of ' + label" :disabled="readOnly" @click="release">
           <Icon name="xmark" :size="11" />
         </button>
       </span>
@@ -203,7 +203,7 @@ onBeforeUnmount(() => listen(false));
         class="ui-btn is-icon pf-plus"
         :aria-label="'Add a person to ' + label"
         :aria-expanded="step === 'closed' ? 'false' : 'true'"
-        title="A person from the campaign"
+        :title="'Add a person to ' + label"
         :disabled="readOnly"
         @click="step === 'closed' ? openMenu() : close()"
       >

@@ -35,7 +35,7 @@ type Shot = {
     lod: number | null;
 };
 
-const MANIFEST = '/@fs/D:/webstorm/traveller_magnus/findings/city_design_s1_manifest.json';
+const MANIFEST = new URL('../../../../../tests/web/harness/city_design_s1_manifest.json', import.meta.url).href;
 const route = useRoute();
 const status = ref('Starting the enhanced disc.');
 const lines = ref<string[]>([]);

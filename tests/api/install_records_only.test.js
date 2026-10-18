@@ -231,13 +231,13 @@ if (process.env.RUN_API_TESTS !== '1') {
 
             const placedPreview = await jsonFetch(`${base}/api/universes/${target}/install/preview?packageId=${packageId}&version=1&anchor=Chart/1910&to=Chart/1911`, { headers: { cookie: reader } });
             assert.equal(placedPreview.status, 400);
-            assert.equal(placedPreview.body.error.message, 'Invalid request.');
+            assert.equal(placedPreview.body.error.message, 'That request could not be read. Try again.');
             const placed = await jsonFetch(`${base}/api/universes/${target}/install`, {
                 method: 'POST', headers: bHeaders,
                 body: JSON.stringify({ packageId, version: 1, placement: { anchor: 'Chart/1910', to: 'Chart/1911' }, resolutions: {}, recordResolutions: {}, expect: { conflicts: 0 } }),
             });
             assert.equal(placed.status, 400);
-            assert.equal(placed.body.error.message, 'Invalid request.');
+            assert.equal(placed.body.error.message, 'That request could not be read. Try again.');
 
             const installed = await jsonFetch(`${base}/api/universes/${target}/install`, {
                 method: 'POST', headers: bHeaders,

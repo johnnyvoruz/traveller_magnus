@@ -89,10 +89,22 @@ test('orbit disc shaders match js/planet_gl.js', () => {
         .replace(oceanIce, oceanLegacy)
         .replace(landIce, landLegacy);
     assert.equal(bakeWithoutCap, bake);
-    assert.equal(DRAW_FRAG, grab(text, 'DRAW_FRAG'));
+    // City light stays on the surface. js/planet_gl.js still adds it in the air.
+    const cityInAir = [
+        "    // A heavily built world's night-side air glows with its cities.",
+        '    c += mix(uCityColor, vec3(0.75, 0.4, 1.0), uNeon * 0.6) * uCityHaze * 0.25',
+        '        * exp(-alt * 1.6) * smoothstep(0.25, -0.35, facing) * smoothstep(reach, 1.0 + uHalo * 0.45, d);',
+        '',
+    ].join('\n');
+    const limbInAir = [
+        '            // On a heavily built world, the night-side air glows toward the limb.',
+        '            emit += glowTint * uCityHaze * pow(1.0 - z, 3.0) * 0.35;',
+        '',
+    ].join('\n');
+    const drawLegacy = grab(text, 'DRAW_FRAG').replace(cityInAir, '').replace(limbInAir, '');
+    assert.equal(DRAW_FRAG, drawLegacy);
     for (const call of [
         'smoothstep(reach, 1.0 + uHalo * 0.45, d)',
-        'smoothstep(0.25, -0.35, facing)',
         'smoothstep(0.08, 0.0, w3.x)',
         'smoothstep(0.08, -0.16, geo)',
         'smoothstep(0.6, 0.05, z)',

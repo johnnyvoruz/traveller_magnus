@@ -32,7 +32,9 @@ export async function resolveCatalogue(
     while (tried.length < MAX_INPUT_STEPS) {
         tried.push(current);
         const object = await bucket.get(`inputs/${current}/sectors.json`);
-        if (object) return { version: current, text: await object.text() };
+        if (object && await catalogueHasSectorFile(bucket, current)) {
+            return { version: current, text: await object.text() };
+        }
         let next: string | undefined;
         if (hint) {
             next = hint;
@@ -47,4 +49,23 @@ export async function resolveCatalogue(
         current = next;
     }
     throw new InputChainError(tried, tried.length >= MAX_INPUT_STEPS);
+}
+
+/**
+ * A leftover sectors.json with no sector file is not a catalogue. A truncated
+ * list has more than that one object, so it is usable.
+ */
+async function catalogueHasSectorFile(bucket: R2Bucket, version: string): Promise<boolean> {
+    const catalogueKey = `inputs/${version}/sectors.json`;
+    let cursor: string | undefined;
+    do {
+        const page = await bucket.list({ prefix: `inputs/${version}/`, cursor, limit: 1000 });
+        for (const item of page.objects) {
+            if (item.key !== catalogueKey) return true;
+        }
+        if (!page.truncated) return false;
+        if (!page.cursor || page.cursor === cursor) return true;
+        cursor = page.cursor;
+    } while (cursor);
+    return false;
 }

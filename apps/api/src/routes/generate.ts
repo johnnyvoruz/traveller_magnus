@@ -31,7 +31,7 @@ function summaryOf(inputs: unknown): Record<string, any> {
 export const generate = new Hono<AppEnv>();
 
 generate.post('/generate/preview', async (c) => {
-    if (!originAllowed(c)) return fail(c, 403, 'forbidden', 'Origin check failed.');
+    if (!originAllowed(c)) return fail(c, 403, 'forbidden', 'That request was blocked. Reload the page and try again.');
     const actor = await requireUser(c);
     if (actor instanceof Response) return actor;
     if (rateLimited(actor.id)) return fail(c, 429, 'rate_limited', 'Too many requests.');
@@ -39,10 +39,10 @@ generate.post('/generate/preview', async (c) => {
     try {
         body = await c.req.json();
     } catch {
-        return fail(c, 400, 'validation', 'Invalid JSON.');
+        return fail(c, 400, 'validation', 'That request could not be read. Try again.');
     }
     const parsed = GeneratePreview.safeParse(body);
-    if (!parsed.success) return fail(c, 400, 'validation', 'Invalid request.', parsed.error.flatten());
+    if (!parsed.success) return fail(c, 400, 'validation', 'That request could not be read. Try again.', parsed.error.flatten());
     const input = parsed.data;
     const taken = await takeAllowance(c.env, actor.id, actor.role, 1);
     if (isAllowanceRefusal(taken)) return fail(c, 429, taken.details.code, taken.message, taken.details);
@@ -61,7 +61,7 @@ generate.post('/generate/preview', async (c) => {
         });
     } catch (err) {
         await releaseAllowance(c.env, actor.id, actor.role, 1);
-        return fail(c, 400, 'validation', 'The generator refused this hex.', { reason: String(err).slice(0, 200) });
+        return fail(c, 400, 'validation', 'This hex could not be generated.', { reason: String(err).slice(0, 200) });
     }
     const hash = await sha256Hex(stable(envelope));
     const row = envelope.body && typeof envelope.body === 'object' ? envelope.body as Record<string, unknown> : {};

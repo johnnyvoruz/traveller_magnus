@@ -23,3 +23,152 @@
   font-size: 12.5px;
   line-height: 1.45;
 }
+
+/* The store's header: the brand (design/base.css .ui-brand, the videos' mark and wordmark), then where
+   you are. The brand links to the store. */
+.mk-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--text-0);
+  text-decoration: none;
+}
+
+.mk-brand-where {
+  padding-left: 12px;
+  border-left: 1px solid var(--line-1);
+  color: var(--text-muted);
+  font: 600 13px/1 var(--font-text);
+  white-space: nowrap;
+}
+
+/* Narrow, the page's heading says where you are: the brand alone, a size down. */
+@media (max-width: 640px) {
+  .mk-brand .ui-brand {
+    font-size: 13px;
+    letter-spacing: 0.1em;
+  }
+
+  .mk-brand-where {
+    display: none;
+  }
+}
+
+/*
+ * Touch, below 640 px (streams/D.md D6): every control in the store and its dialogs is at least 44 px
+ * tall, and a close button 44 px square. Words that are links inside a card or a line (the author, the
+ * kind, the breadcrumb, See more) keep their look; their hit area reaches 44 px round them.
+ */
+@media (max-width: 640px) {
+  .mk-app .ui-btn,
+  .mk-app .mk-box,
+  .mk-app .mk-chip,
+  .mk-sheet .ui-btn,
+  .mk-choose .ui-btn,
+  .mk-rpub .ui-btn,
+  .mk-rpub .mk-box,
+  .mk-ask .ui-btn,
+  .mk-ask .mk-box,
+  .mk-imp .ui-seg button {
+    min-height: 44px;
+  }
+
+  .mk-sheet .mk-fopt,
+  .mk-sheet .mk-flink {
+    min-height: 44px;
+  }
+
+  .mk-sheet-close,
+  .mk-choose-close,
+  .mk-rpub .ui-modal-bar .ui-btn[aria-label="Close"] {
+    justify-content: center;
+    min-width: 44px;
+  }
+
+  /* The badge is placed already (absolute); the others take a place for their hit area. */
+  .mk-card-by,
+  .mk-crumbs a,
+  .mk-hero-kind,
+  .mk-hero-by a,
+  .mk-fmore,
+  .mk-app .mk-link {
+    position: relative;
+  }
+
+  /* The brand clips its overflow, so it is simply 44 px tall. */
+  .mk-brand {
+    min-height: 44px;
+  }
+
+  /* A card clips above its kind badge (8 px from its edge): the badge is taller instead, so with
+     its hit area below it reaches 44 px. */
+  .mk-badge {
+    padding-block: 6px;
+  }
+
+  .mk-card-by::before,
+  .mk-badge::before,
+  .mk-crumbs a::before,
+  .mk-hero-kind::before,
+  .mk-hero-by a::before,
+  .mk-fmore::before,
+  .mk-app .mk-link::before {
+    content: '';
+    position: absolute;
+    inset: -12px -6px;
+  }
+}
+
+/*
+ * A state in the results' or the page's place (streams/D.md D7): empty, not loaded, not found. The
+ * videos' frame (.ui-frame) with its label as the kicker, one headline, one sentence, one action.
+ * A candidate for the shared set (design/base.css), as Lane M's M9 asks for one empty-state pattern.
+ */
+.mk-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 26px 20px 24px;
+  text-align: center;
+}
+
+.mk-state .ui-frame-label {
+  margin: 0;
+}
+
+.mk-state-head {
+  max-width: 52ch;
+  margin: 0;
+  color: var(--text-0);
+  font: 700 17px/1.35 var(--font-display);
+}
+
+.mk-state-say {
+  max-width: 60ch;
+  margin: 0;
+  color: var(--text-1);
+}
+
+.mk-state-acts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.mk-state-acts .ui-btn {
+  text-decoration: none;
+}
+
+.mk-state.is-error {
+  border-color: color-mix(in srgb, var(--danger) 55%, var(--line-2));
+}
+
+.mk-state .mk-empty-art {
+  margin-bottom: 6px;
+}

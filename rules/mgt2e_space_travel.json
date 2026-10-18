@@ -3,7 +3,16 @@
   "fuel": {
     "refinedCrPerTon": 500,
     "unrefinedCrPerTon": 100,
-    "refuelHours": { "base": 0, "dice": 1 }
+    "refuelHours": { "base": 0, "dice": 1 },
+    "byStarportClass": { "A": "refined", "B": "refined", "C": "unrefined", "D": "unrefined", "E": "none", "X": "none" },
+    "byStarportClassSource": "assets/2eWorldCreation.txt:1127-1158 (Starport Facilities table, Fuel column); 1177-1178",
+    "bases": {
+      "N": { "fuel": "refined", "for": "naval vessels", "crPerTon": null, "source": "assets/2eWorldCreation.txt:1309-1312" },
+      "S": { "fuel": "refined", "for": "scout ships (including retired scout ships obtained by retired scouts)", "crPerTon": null, "source": "assets/2eWorldCreation.txt:1320-1322" },
+      "C": { "fuel": null, "for": "corsair ships", "crPerTon": null, "source": "assets/2eWorldCreation.txt:1294-1296" },
+      "W": { "fuel": null, "for": "scout ships", "crPerTon": null, "source": "assets/2eWorldCreation.txt:1324-1326" }
+    },
+    "basesNote": "Johnny 2026-10-17: base fuel serves only the ships the text names, offered only on a ship the players are attached to that the referee marks naval or scout. crPerTon null: the referee decides. fuel null: not offered (a corsair base's grade is unstated; a Way Station names no fuel)."
   },
   "jump": {
     "fuelHullFractionPerParsec": 0.1,

@@ -90,3 +90,157 @@ Decisions live in `decisions.md`, not here.
 - **M wrapped:** M1 to M8 accepted (records list, party, characters, dossier kickers, Build pane, account page and changelog window, toast; OmniBox's field edge put back to 3:1). M's question decided: changelog dates in `.ui-date` (E, EM7). M9 and M1b to E (EM9); M10 stays in its queue.
 - To check before the next push: M8's full run failed "public games are tracks at the hex tier, drawn on their own layer…" while L5 was changing `MapRenderer.ts`'s grid; rerun on the settled tree.
 - **`streams/HOW_TO_RUN.md`** (Johnny: "make a note on how we can go back into stream mode again later or for any of the lanes"): turning a lane into a stream, starting, running, wrapping up, resuming L, M, N or any lane, going back to prompts, the push after.
+- **16:30:** Johnny asked for the four questions again and to stage the cleanup list: staged on his word (419 files: 383 renames, 22 added, 14 modified; not committed). Local dev: no one command; 500s (migrations, local truth) and 403s (BETTER_AUTH_URL production in `[vars]`, wrangler's Origin rewrite, `__Secure-` cookies on http). B0 queued after B2 in B's stream: `npm run dev` via `scripts/dev.mjs`, proven end to end.
+- **16:40, Johnny:** legacy tree kept frozen; D2 closed (Discord and Google working); D4 closed (no longer matters); G22 closed as built (share link role owner/editor, ownership transfer). Questions file now empty. Cleanup questions 3 and 4 (BOOT.md stream line, stream paths to archive) still open in the chat.
+- **16:45, Johnny: "yes to both".** `BOOT.md` step 2 gains the stream line; D's queue's two `reports/done/` paths now `archive/reports/`; `HOW_TO_RUN.md` updated. Nothing open with Johnny.
+- **16:55, Johnny: stream mode is the default** (decisions.md; ORCHESTRATOR.md, HOW_TO_RUN.md, board, memory). B2 (players contract, `contracts/b_players.md`) in as a proposal; its five questions decided by the orchestrator; Johnny reviews the contract before P2. B is on B0 (`npm run dev`, `scripts/dev.mjs` in progress).
+- **17:00, Johnny: no 12-player cap.** Members active or archived ("Playing" / "Archived"; "Archive" / "Bring back"), a 255-active guard, archive instead of remove. B2b queued after B0 to update `contracts/b_players.md`. P2's build still waits on Johnny's yes.
+- **17:10, Johnny is running `prompts/x_players_review.md`** (one expensive session: leak map, permissions table, attacks, fixes with tests, rewritten P1–P9 in `players_build_plan.md`). B2b held for it; B does B0 then B3.
+- **17:15, A's entries accepted:** A4 (dossier model fast enough: no call over 16 ms on a quiet machine), AP1 (`players_view.ts`; the pack uses it), AT1 (cargo, passengers, ledger shapes; sheet rows a view), AT2 (refuel and monthly cost lines, numbers only). Questions decided as recommended (decisions.md); AP1's party-place text flagged for the players review. A's queue refilled: AT4a, AU14, AU16, AU17. D gets DT2 (the buttons). E's N9b also updates `record_card.test.js`.
+
+## 300. All reports in; the players review; queues refilled (2026-10-17 18:35, by the clock)
+
+- Clock note: my bullets labelled 17:00 to 17:15 in §299 were written about 16:10 by the clock; from here labels are `date`.
+- **Reviewed (three forks, read-only, against the tree):** every new entry in A, B, C, D, E and Z, the integration sweep, ZT0. All accepted (decisions.md 18:35). The forks ran the flagged tests: `builder_sector_logic`, `campaign_logic`, `changelog`, `public_games` ("tracks at the hex tier"), `vessel_trade`, `map_low_res`: 41 of 41 pass, so the public_games rerun owed before the push is done.
+- **Players review in** (`reports/x_players_review.md`, 28 findings, matrix, 35-case leak suite; `players_build_plan.md`: P1b, P2a, P2b, P3, P9, P4 to P8, P10). Its §7 eight questions plus "yes to P2" are questions 1 to 9. P1b (A) and B2b/P2a (B) queued on hold. B4 (F5, F9) goes now.
+- **Queues refilled:** A (AP1b hold, AM1, AS3, AS3b, AU16b, AB3, AU15; AU17 gains the no-`/api` cache line); B (B2b hold rewritten as P2a, B4, B5 = L5, B6); C (CC5, CC6, CS4, CS6, CL4b); D (DS5, DS9, DU3, DU36, DU4, DU27); E (E7, E8 released, ES2, ES10, EL7, EL6, E5b); Z (Z5 held, Z7, Z8 hold).
+- **Questions to Johnny:** 22 in `questions_for_johnny.md` (players 9, trade 11, starport fuel, map covers).
+- **B0 works:** `npm run dev` from the root; http://localhost:5173; production chart read-only, local accounts (passkey), Discord/Google not local; Ctrl+C stops both.
+- **Z2 changed the push rule:** the ten parked truth-build files are shelved under `findings/parked/truth_build_2026-10-07/files/`; four finished ones stay in the tree and go with the next push (check at the rehearsal).
+
+## 301. Johnny's answers; session ingest spec; trade tables; local dev fix (2026-10-17 18:50)
+
+- **18:40, Johnny:** all 22 recommendations yes, except: no 500-notes cap (guard 65,535 per player); trade page numbers blank. New: trade tables the referee loads or makes and picks (Z, ZT1; backlog T3c widened); Mongoose permission for concepting while nothing is charged (recorded). New: session ingest (record a game, an AI transcribes, an API or MCP updates the campaign): `prompts/x_session_ingest_spec.md` for one high-effort session; the API pause is lifted for the spec only.
+- Released: A's AP1b, B's B2b as P2a (then P2b; Johnny's yes to P2 given), Z's Z8, D's D5. New: D DF18 (publish warning), Z ZT0b and ZT1, B4 gains log masking.
+- **Johnny's first `npm run dev`:** 404s for `cdn.traveller.voyage/truth/vtest/*`. Cause: `truth_build.test.js` (Z2's run, 15:55) left a released `vtest` row in the shared local D1, newer than v10. The orchestrator deleted the `vtest` rows from local D1 (local only); v10 is current locally. Root fixes queued: B0b (`npm run dev` on its own state; current = production's newest), Z9 (the suite on its own state). The 401 is `/api/me` signed out.
+
+## 302. E reviewed; two more specs: living systems, X-boat ripples (2026-10-17 19:15)
+- E accepted: ES2, ES10, EL7, EL6 (decisions.md 19:15). E gains EU22 (focus and screen readers), EU44 (a changelog people read). Open: E5b, E7, E8.
+- Johnny 19:10: chatter lines and background traffic as referee switches; X-boat news ripples. Prompts written: `prompts/x_living_systems_spec.md` (writes `spec_living_systems.md`, `reports/x_living_systems.md`, `findings/living_systems/chatter_sample.json`), `prompts/x_xboat_ripples_spec.md` (writes `spec_xboat_ripples.md`, `reports/x_xboat_ripples.md`). Facts for them: `orbit/ships.ts` already has `ShipKind 'traffic'` (dev stand-in); `map/route_lines.ts` draws `xboat` routes from sector data; `assets/` mentions the x-boat service (2eWorldCreation 1325, trade 272) but gives no speeds: expect questions.
+- `x_session_ingest_spec.md` is running on a higher-effort model (Johnny 19:10). Claims at 19:10: B on `b_players.md` (P2a), `door_headers.test.js` (B4); Z on the trade draft (ZT0b); D on `MapRenderer.ts` (DS5).
+
+## 303. Ship finances, T1c (2026-10-17 19:25)
+- Johnny 19:20: owners and shares, the payment and when it's due, fuel aboard, upkeep beyond the mortgage. Backlog step T1c written (what exists: the seven cost boxes, AT2 refuel and recurring lines, DT2 buttons, the character's Ship Shares and Ship Payments boxes). Queued: A AT1c (shape and `campaign/ship_finance.ts`, after AP1b), D DT1c (the vessel's Owners, Payment, Fuel, Upkeep, after AT1c). Everything typed; computing from the price needs a rules source (asked of Johnny, not holding anything).
+- Johnny 19:20: both specs started (living systems, X-boat ripples).
+
+## 304. AP1b accepted (2026-10-17 19:35)
+- A's P1b done and accepted; AP1c queued (party anchor to a hidden place shows the hex). Backlog Epic P now points at `players_build_plan.md`. Johnny asked whether the players review summary is in the backlog: yes (report, plan, answers 18:40, P1b done, B on P2a).
+
+## 305. The passenger table (2026-10-17 19:45)
+- Johnny asked whether the 15:28 session's passenger-table work is captured. Draft and backlog T3b were; nothing was queued and the file never moved to `rules/` (no word from Johnny recorded). Asked as question 23; A AT3b and D DT3b queued on hold. Found: `rules/guideline_4_1_starports_bases_trade_codes.md` (X-boat routes "capable of Jump-4") and `guideline_4_4_trade_density_and_interconnectivity.md` (WTN, traffic scaling) are rules sources the living-systems and X-boat specs will read (both prompts say "every file in rules/"). T1b (player credits) and T3 (fares) remain unissued in the backlog.
+
+## 306. Passenger table in rules/ (2026-10-17 19:55)
+- On Johnny's yes: `rules/mgt2e_random_passenger.json` copied unchanged (cmp same), `npm run rules:gen` (wrapper `mgt2e_random_passenger.js`), rules draft tests 8/8. Untracked: **add it to the 1.2.7 push list.** AT3b, DT3b released. ZT1b queued (one table-set mechanism for every roller table).
+
+## 307. Z entries (2026-10-17 20:00)
+- Z4 (two packs records-only v2, local and stand-in proven; production seed commands for Johnny), Z7 (sentences), Z9 (truth_build on its own state) done. ZT0b: draft has 0 `_question`, 27 `_answer`: asked Johnny as question 24 (move into rules/). ZT1 design in `findings/trade_tables_design.md` with 8 questions; Q7 overtaken by Johnny 19:55 (passenger table joins the one mechanism): ask the rest after ZT1b revises. Z8 starport draft `findings/rules_drafts/mgt2e_starports.json` (classes A-X fuel from 2eWorldCreation 1127-1158). ZT0b and Z8 entries are cut off mid-sentence in z_stream.md: ZR1 asks Z to re-write them.
+
+## 308. Dots swell while zooming (2026-10-17 20:05)
+- Johnny runs locally now. Bug: dots grow during zoom at the dots tier. Cause: DL5 half resolution (lowResAllowed with no WebGL) and `overviewPoints` min size of 1 backing pixel (`Math.max(1, ...) / this.dpr`). D, DF6, first.
+
+## 309. Half resolution out (2026-10-17 20:10)
+- Johnny 20:10: "the half resolution pan looks terrible" (he also first thought the dot bug was signed-out only, then reproduced it signed in). DF6 rewritten: remove DL5 entirely; any speed work keeps every frame sharp.
+
+## 310. Three faults from Johnny (2026-10-17 20:15)
+- Shots saved in `findings/johnny_shots_2026-10-17/`. D DF7: the panel header at Column (after DF6). C CS7: the global OmniBox over the orbit view's panel header (next). C CS8: city lights on the atmosphere (reported 2026-10-12, handoff in archive line ~6756, never issued; lost in the cleanup's Queue trim).
+
+- 20:20, Johnny: hover on clickable things when zoomed out (he did not know they were clickable). D DF8, after DF7.
+
+## 311. A, B, E and the three specs reviewed (2026-10-17 ~20:00 by `date`)
+- Clock: my labels from 18:50 to 20:20 ran ~35 min ahead of `date`; from here `date`.
+- A: AM1, AS3, AS3b, AU16b, AB3 (golden/generation unchanged), AU15 accepted; AF1 (dice_roll.test failing) queued first. E: E5b, E7, E8 accepted; E7b, E5c (changelog: drop the half-resolution line, add AU15), EU12 queued.
+- B: B0b, B4, B6 accepted; B5's code fine but it changed `wrangler.toml` (`run_worker_first` adds `/`, `/s/*`, `/packages*`): question 25, out of the push until answered. Contract P2a: 15/17; fixes (a)-(e) as B2c; P2b1 to P2b4 queued (leak suite first). B0b means Johnny's local accounts from his first run are in the old state folder: he signs up again.
+- Specs in: session ingest (11 questions), living systems (15), X-boat ripples (12); the X-boat network question is shared: 37. All in `questions_for_johnny.md` as 26 to 62. Startable without answers: X-boat A1/A2 (pure graph, parameters), living `seed.ts`/`facts.ts`; not queued yet (A's queue is full).
+
+- 20:24: Johnny clarified session ingest: the referee's agent does all of it; we ingest the last step over MCP. Spec annotated (phase 6 dropped, MCP into phase 1); question 27 answered; 26 revised.
+
+## 312. "Yes to all" (2026-10-17 20:27)
+- Questions 24 to 62 answered (decisions.md). `rules/mgt2e_trade.json` in (cmp same, rules:gen, tests 8/8; untracked: push list). Queued: B B5b (toml back to 1.2.6, previews parked), SI0; Z SI5; A LS1, XA1/XA2; E LS2, XE1; D LS3, XD1-3 (D.md has no "Found by me" heading now: appended at the end); C LS4, LS5.
+- **Push list for 1.2.7 must include** `rules/mgt2e_random_passenger.json`, `rules/mgt2e_trade.json`; must not include B5's toml change (B5b reverts it).
+
+## 313. All streams reviewed (2026-10-17 20:30)
+- See decisions.md 20:30. Only red gate: `players_logic.test.js` case 29 (B P2b1b first). CS8 city lights not started (C next). Questions 63 to 78 to Johnny. Look-by-eye list on the board.
+
+## 314. Starport fuel in rules/; table sets decided (2026-10-17 20:39)
+- 63 to 78 answered. `rules/mgt2e_space_travel.json` gains `fuel.byStarportClass`, `fuel.bases`, `fuel.basesNote` (10 lines; first attempt reformatted the file and was restored before the minimal insert). Queued: A AT2b, TS1; D DT2b; B TS0. Push list: the three rules files (`mgt2e_random_passenger.json`, `mgt2e_trade.json` new; `mgt2e_space_travel.json` modified).
+
+- 20:45, Johnny: hover on surface map hexes. C CS9 (after CS8 city lights; `SurfaceStage.vue` already names terrain on click).
+
+- 20:50, Johnny: dice out of the Campaign tab into an always-available tool (rail before Marketplace, or above the "?"). Orchestrator picked the rail (the "?" is map-only). A AD1, after AT2b.
+
+- 20:55, Johnny: the world panel streamlined (pasted brief). Saved unchanged with orchestrator notes as `prompts/c_world_panel_streamline.md`; C CW1 after CS8, before CS9 (hover builds on its toolbar) and LS4. Step 1 supersedes D's DF7 Column header for panels with a pager. "Mainworld of the" lives in A's `dossier/model.ts`: C claims that string only.
+
+## 315. A, C, D, E reviewed (2026-10-17 21:10)
+- See decisions.md 21:10. All accepted. A: AF2 (fuelMark referee-only) first, AT2c, LS1b. D: LS3 released, DF12b, DU7, DU18, DU22b. Still owed by C: CS8 city lights, CW1 world panel, CS9 hover.
+
+- 21:32: B accepted: P2b1b, B5b (toml back to 1.2.6), SI0 and TS0 contracts. B next: P2b2 to P2b4 (the players server). Rehearsal note: generate_speed and builder_density flake only under the loaded all-run.
+
+- 21:33: C CS8 accepted as code; CS8b asks for night-side proof before CW1.
+
+## 316. City lights, a third time (2026-10-17 21:40)
+- Johnny saw the fault after CS8. `prompts/x_city_lights_fix.md` for a high-effort session (edits allowed in the renderers, claimed as X). C prepped: area refreshed, CS8b withdrawn, CW1 next. Suspect list in the prompt: another draw path, shell geometry sampling the city texture, or a stale bundle (AU17 service worker under Vite dev).
+
+## 317. A, B, D, E reviewed (2026-10-17 21:45)
+- All accepted (decisions.md 21:45). E wrote the 1,000 chatter lines (`living/lines/corpus.json`). B's 0021 is written (no routes yet). Z has nothing new since ZT1b (open: Z10, SI5).
+
+- 21:50, Johnny: dice roller good; add D66 (tens and units) and a monospace result (Orbitron 7 hard to read). A AD2, first.
+
+- 21:55, Johnny pasted the dice conventions: saved as `assets/dice_conventions.txt`. A AD3 (DM stepper, D3, 2D3) after AD2. A is on XA1 now (news graph).
+
+- 21:57, Johnny: an X to close the dice popover; folded into AD2.
+
+## 318. Streams reviewed (2026-10-17 22:05)
+- All accepted (decisions.md 22:05). Johnny's optional production seed (Z4 + Z10 in one apply) is in `reports/z_stream.md` Z10. City lights session (X) is working (claims 21:56).
+
+## 319. Streams reviewed; a reminder for 10-18 (2026-10-17 22:20)
+- See decisions.md 22:20. Johnny asked to be reminded on 10-18 to apply the example-pack production seed (Z4 + Z10): on the board, in orchestrator_state Next turn 0, and in memory.
+
+## 320. Lane X: city lights were the lock glow (2026-10-17 22:35)
+- X's report checked against the tree and accepted (decisions.md 22:35). The brown "atmosphere band" was the selection lock's glow painted over the outer tenth of the planet in `OrbitRenderer.ts` `selection()`; the glow now starts at the body's edge; two new tests, 32 shots and a proof shot in `findings/city_lights_fix/`. Gates green on X's run; the two new tests pass on mine. Report moved to `reports/done/`.
+- Questions 79 to 83 to Johnny (keep the glow as fixed; strike the spec's limb-glow line; neon as an accent with gold highways and white cores, a C item; limb fade; the service worker in dev). No lane item released on 80 to 83 until answered.
+- 1.2.7 not called; when it is, X's files join the list: `apps/web/src/orbit/OrbitRenderer.ts`, `tests/web/orbit_lock_glow.test.js`, `tests/web/surface_city_pixels.test.js`, `tests/web/harness/city_pixels.html`, `tests/web/harness/city_pixels.mjs`.
+
+## 321. Questions 79 to 83 answered; the glow goes up (2026-10-17 22:45)
+- Johnny 22:40: all five as recommended, "and feel free to up the glow on these lights, I'd like them to feel very sci-fi please". Recorded in decisions.md 22:40.
+- Done by the orchestrator: `planet_rendering.md` "Tech level, bloom" rewritten to G6's rule (80). C's queue: CS10 (neon accent, gold highways, white cores, lower population-A gain, and a bigger glow inside the disc and under the air; X's pixel test untouched), after CW1b, before CS9. Nothing for A (83: no guard) or on 82.
+- Still with Johnny: look at Capital's night limb after X's fix; 1.2.7 when he likes; the 10-18 seed reminder.
+
+## 322b. Reviews 23:10 to 23:15 (this session; the parallel session wrote §320 and §321)
+- A, C, D accepted (decisions 23:10); B's P2b green, 35/35 (decisions 23:15); E EH1, EU28. Queued: A P3, P9 first, TS2b, AU6, AU37; B BC1b, SI1, TS4; C CW1b shots; D XD3b, DU40, DU6; E EU28b, XE1 note. Z idle since 22:01 (ZT5 open).
+
+- 00:05: the players steps after P3 queued with their gates: A P8; D P5, P6; E P4, P7, P10. EU28 ticked; XE1 released.
+
+- 23:40: A's P3 accepted (P3b authorName first); C CW1b, D DU31/DF14/XD3b/DU40 accepted (23:32); Z's ZT5 accepted, questions 84 to 92 to Johnny; Z next ZT6. E has filed nothing since 22:35 and holds no claims: likely stopped.
+
+## 323. Living Systems Comms (2026-10-17 23:50)
+- Johnny supplied `assets/Traveller_Living_Systems_Comms_FINAL/` (brief, receiver, procedural engine, 1,178-row corpus, Beowulf). `prompts/comms_receiver.md`: Z ZC1 (engine, scheduler, audit), C CC1 (receiver, mount). Supersedes answers 43, 45, 47; C LS4 withdrawn. Manifesto notes: the receiver JS uses `window.*` and a global constructor (route through `platform/browser.ts`), its CSS has 22 hex colours (to tokens).
+
+## 324. Push 1.2.7 called; every entry since 00:05 reviewed (2026-10-18 09:40)
+- Johnny 09:20: get to a push. Reviewed (forks, read-only): A P9 P3b P8 TS2b AU6 (AU37 declined); B BC1b SI1 TS4; C CS10 CC1; D DU40 P5 P6 DU6; E EU28b XE1 P4 P7 P10; Z ZC1 ZT6. Decisions 09:35.
+- Blockers queued: C CC1b (controller not wired; traffic switch hidden; chatter help words), B SI1b (agent access default off), then TS4b.
+- Tree gates 09:30 green (2417 tests, 0 fail). Changelog 1.2.7 (six items; `tests/web/changelog.test.js` assertions moved to 1.2.7) and APP_VERSION in. Clean copy `outer28` script `clean_copy28.sh`, list builder `pushlist.py` (scratchpad; handles staged renames).
+- Slip: my 09:40 script replaced every open question with the new ones; 84 to 92 restored from turn2340.py at 09:45. The questions file keeps only open questions: append, never replace.
+- 09:42: clean copy outer28: 14 tests and 1 typecheck error from uncommitted files (findings/, the held Comms package, a relative zod import). Z ZF1 and B SI1b addendum queued; both block 1.2.7.
+- 09:50: Johnny: the skill to `skill/`, and two doors for the referee's AI (a snapshot prompt out, proposals in). Z ZF1b queued (blocks 1.2.7). Questions 105 to 108; SI2 to SI4 held until answered.
+- 10:00: 105 to 108 answered (Copy and Download; whole records; no paste box; 108 withdrawn, already built). Queued: Z SI6 (snapshot spec, skill, template) after ZF1b; A SI2, D SI3, E SI4 held on it; D DJ1 jump times advance the clock. Question 109 (agent access on with the screens).
+- 10:15: Johnny: no model on our side (confirmed), a token reaches one campaign, both doors back (the AI with a token, or paste its reply); no "snapshot" word. Z SI6b, B SI1c queued; A SI2, D SI3, E SI4 amended.
+- 10:18: CC1b, SI1b, TS4b/c, ZF1, ZF1b, SI6 accepted; ZF1c (city pixel fixture out of findings) blocks 1.2.7, placed above Z's freeze line; TS4d approved for after the push; Z's 109, 110, 113 decided, 111 and 112 asked as 110 and 111. Freeze lines in every queue; waiting on C's LS5.
+- 10:40: Johnny: System Comms toggle above Fit, on by default (C CC2, blocks 1.2.7, above C's freeze); Copy for your AI by part (Z SI6b, A SI2, D SI3 amended); 110 and 111 answered by it. C's LS5 done 10:24.
+- 11:17: Johnny's comms emergency-theme brief saved whole as `prompts/c_comms_emergency_theme.md`; C CC3 after the push.
+- 11:18: Johnny's shot: the comms receiver covers Fit. Folded into C's CC2 (in progress): System Comms and Fit to the lower left, nothing overlapping at 1600/1366/1024/390, a rectangle test.
+- 11:25: Johnny: surface map wheel zoom lost. D DF15 (blocks 1.2.7, above D's freeze): likely the wheel listener attached in onMounted while the stage is behind v-if/Teleport.
+- 11:28: Johnny: `mayday` in the address plays Beowulf after 3 s; folded into C's CC3 (after the push).
+- 11:28: Johnny wants comms working before the push: C CC3 moved above the freeze, blocks 1.2.7, with an end-to-end proof in Edge.
+- 11:55: C CC2, CC3 done. Johnny sees dead air: the engine needs the lead ship in the system. Decided: the view listens; Z ZC2 (blocks 1.2.7, live proof in Edge).
+- 12:02: Johnny's shot: span switch over Back; the system crumb loops in the orbit view. C CW2, blocks 1.2.7.
+- 12:17: DF15, ZF1c accepted. Left: Z ZC2 (in flight), C CW2 (not started; Johnny to say go).
+- 12:25: Z ZC2 accepted (comms live for any viewer). C CC2b queued after CW2 (layout test depends on a running API). Left for 1.2.7: C CW2, CC2b.
+- 12:45: C CW2, CC2b accepted; API suite 42/42 green; changelog comms line updated. Johnny: C CC4 (far right, SIG, fixed box, 'System Comms' everywhere), blocks 1.2.7.
+- 12:55: Johnny: System Comms off pops; folded into C's CC4 (in progress) as (5): fade out and in, unmount after the fade.
+- 12:58: Johnny's tidal locking brief: W1 to C (CW3, blocks 1.2.7, after CC4); E1 to Z held on questions 117 to 119.
+- 13:10: 117-119 answered (E1 with the next engine change, e1.3, Regina's engine number). C CC4b (three lines) before CW3. CC4 done 13:07, to review.
+- 13:33: ?mayday fails signed in (controller consumes it on arm; campaign key change cancels). Z ZC3, blocks 1.2.7.
+- 13:37: CC4b accepted (fade confirmed in). CW3 unblocked: both ESM profile fixtures regenerate (every locked moon). Left: Z ZC3, C CW3.
+- 13:40: Z ZC3 accepted. Left for 1.2.7: C CW3, then the rehearsal.
+- 14:00: CW3 accepted; final rehearsal outer29 green (pixel artifact only); 1.2.7 commands handed to Johnny. After push: d1_migrations check, the example seed, lift FREEZE lines, refill queues.
+- 14:05: Johnny: the release is 1.3.0. version.ts, changelog.ts, release notes, queues and board updated; changelog tests green.

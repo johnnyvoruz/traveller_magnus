@@ -138,8 +138,8 @@ onMounted(async () => {
 </script>
 
 <template>
-  <section class="mk-imp" aria-label="Import">
-    <h2 class="ui-heading">{{ updateId ? 'Update' : 'Import' }}</h2>
+  <section class="mk-imp ui-frame" aria-labelledby="mk-imp-h">
+    <h2 id="mk-imp-h" class="ui-frame-label">{{ updateId ? 'Update' : 'Import' }}</h2>
     <p v-if="!mine.length" class="mk-fine">You have no campaign to import into. Make one from the Campaign panel first.</p>
     <template v-else>
       <div class="mk-imp-row">
@@ -207,12 +207,9 @@ onMounted(async () => {
 </template>
 
 <style>
+/* The videos' framed panel (design/base.css .ui-frame); the label is the panel's heading. */
 .mk-imp {
   margin-top: 18px;
-  padding: 12px 14px;
-  border: 1px solid var(--line-1);
-  border-radius: var(--r-3);
-  background: var(--panel-raised);
 }
 
 /* The panel's own spacing: a line under the campaign row, the preview under its button. */

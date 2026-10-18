@@ -31,7 +31,9 @@ import { chartHex } from '../jobs/publish_queue';
 import { defaultPin } from '../universe/defaults';
 import { ownSectorKey, type Pin } from '../universe/hexes';
 import { ownedUniverse, type OwnedUniverse } from '../universe/forward';
+import { isQuotaFull, releaseObjectBytes, reserveObjectBytes } from '../universe/quota';
 import type { InstallHexInput, InstallRecordInput, PreviewHex, PreviewRecords } from '../universe/install';
+import { liftSummary, rememberCampaignSummary } from '../universe/summary_sync';
 
 /** The same number as `OBJECT_QUOTA_BYTES` in jobs/generate_queue.ts. */
 const QUOTA_BYTES = 250 * 1024 * 1024;
@@ -209,7 +211,7 @@ async function load(c: Ctx, owned: OwnedUniverse, packageId: string, version: nu
     // version; an own-sector anchor cannot resolve in another universe and is dropped. No anchor is rewritten.
     let anchorsDropped = 0;
     if (hexes.length === 0) {
-        if (target.placement) throw new Stop(fail(c, 400, 'validation', 'Invalid request.'));
+        if (target.placement) throw new Stop(fail(c, 400, 'validation', 'That request could not be read. Try again.'));
         for (const item of records) {
             const anchor = item.record.anchor as { kind?: unknown; hexKey?: unknown } | null | undefined;
             if (anchor && anchor.kind === 'system' && typeof anchor.hexKey === 'string' && ownSectorKey(anchor.hexKey)) {
@@ -241,7 +243,7 @@ async function place(c: Ctx, owned: OwnedUniverse, loaded: Loaded, placement: Pl
     try {
         cells = placeCells(keys, placement, at(sourceChart, sourceOwn), at(targetChart, targetOwn));
     } catch (err) {
-        if (err instanceof PlaceError) throw new Stop(fail(c, 400, 'validation', PLACE_MESSAGES[err.reason] ?? 'Invalid request.', { reason: err.reason, hexKey: err.hexKey }));
+        if (err instanceof PlaceError) throw new Stop(fail(c, 400, 'validation', PLACE_MESSAGES[err.reason] ?? 'That request could not be read. Try again.', { reason: err.reason, hexKey: err.hexKey }));
         throw err;
     }
     const bySlot = new Map<string, string>();
@@ -380,17 +382,17 @@ installsRoute.get('/:id/install/preview', async (c) => {
     if (owned instanceof Response) return owned;
     if (!(await installsReady(c.env))) return unavailable(c);
     const url = new URL(c.req.url);
-    if (url.searchParams.has('placement')) return fail(c, 400, 'validation', 'Invalid request.');
+    if (url.searchParams.has('placement')) return fail(c, 400, 'validation', 'That request could not be read. Try again.');
     const packageId = url.searchParams.get('packageId') ?? '';
     const version = versionOf(url.searchParams.get('version') ?? undefined);
-    if (!packageId || version == null) return fail(c, 400, 'validation', 'Invalid request.');
+    if (!packageId || version == null) return fail(c, 400, 'validation', 'That request could not be read. Try again.');
     const anchor = url.searchParams.get('anchor');
     const to = url.searchParams.get('to');
     const installId = url.searchParams.get('installId');
     let placement: PlacementShape | null = null;
     if (anchor !== null || to !== null) {
         const parsedPlacement = Placement.safeParse({ anchor, to });
-        if (!parsedPlacement.success) return fail(c, 400, 'validation', 'Invalid request.');
+        if (!parsedPlacement.success) return fail(c, 400, 'validation', 'That request could not be read. Try again.');
         if (installId) return fail(c, 400, 'validation', 'An update keeps its placement. Leave the anchor out.');
         placement = parsedPlacement.data;
     }
@@ -413,10 +415,10 @@ installsRoute.post('/:id/install', async (c) => {
     try {
         body = await c.req.json();
     } catch {
-        return fail(c, 400, 'validation', 'Invalid JSON.');
+        return fail(c, 400, 'validation', 'That request could not be read. Try again.');
     }
     const parsed = InstallRequest.safeParse(body);
-    if (!parsed.success) return fail(c, 400, 'validation', 'Invalid request.', parsed.error.flatten());
+    if (!parsed.success) return fail(c, 400, 'validation', 'That request could not be read. Try again.', parsed.error.flatten());
     const input = parsed.data;
     let previewed: Previewed;
     try {
@@ -434,45 +436,59 @@ installsRoute.post('/:id/install', async (c) => {
         return fail(c, 409, 'conflict', 'Choose theirs or mine for every conflict.', { hexKeys: missingHexes, recordIds: missingRecords });
     }
     if (await overQuota(c.env, owned.row.id, previewed.bytes)) return fail(c, 400, 'too_large', 'This universe is out of space.');
-    let copied = 0;
-    for (const hash of previewed.missing) {
-        const source = await c.env.PUBLIC_BUCKET.get(`objects/${hash}`);
-        if (!source) throw new Error('Missing object.');
-        const bytes = await source.arrayBuffer();
-        await c.env.PRIVATE_BUCKET.put(`u/${owned.row.id}/objects/${hash}`, bytes, {
-            httpMetadata: { contentType: source.httpMetadata?.contentType || 'application/json' },
-        });
-        copied += bytes.byteLength;
-    }
-    for (const hash of previewed.placedMissing) {
-        const text = previewed.placedTrees.get(hash)!;
-        await c.env.PRIVATE_BUCKET.put(`u/${owned.row.id}/objects/${hash}`, text, { httpMetadata: { contentType: 'application/json' } });
-        copied += new TextEncoder().encode(text).byteLength;
-    }
-    // One charge per call; the row id stays the same across updates.
+    // One charge per call; the row id stays the same across updates. The charge id holds the
+    // reservation (contracts/b_builder.md): reserved before the puts, released after the D1 charge,
+    // and released on any failure on the way. A refusal answers as a full universe does.
     const chargeId = `in_${ulid()}`;
     const rowId = previewed.rowId ?? `in_${ulid()}`;
-    const called = await doCall<{ written: number; skipped: number; records: number; links: number }>(owned, c, '/install', {
-        installId: rowId,
-        packageId: previewed.packageId,
-        version: previewed.version,
-        title: previewed.title,
-        sourceUniverseId: previewed.sourceUniverseId,
-        publishedAt: previewed.manifest.publishedAt,
-        hexes: previewed.hexes,
-        records: previewed.records,
-        links: previewed.links,
-        resolutions: input.resolutions,
-        recordResolutions: input.recordResolutions,
-        sectors: previewed.sectors,
-    });
-    if (!called.parsed.ok || !called.parsed.data) {
-        const error = called.parsed.error;
-        if (called.status === 409 && error) return fail(c, 409, 'conflict', error.message, error.details);
-        if (called.status === 429) return fail(c, 429, 'rate_limited', 'Too many requests.');
-        throw new Error(error?.message || 'Install failed.');
+    try {
+        await reserveObjectBytes(c.env, owned.row.id, chargeId, previewed.bytes);
+    } catch (err) {
+        if (isQuotaFull(err)) return fail(c, 400, 'too_large', 'This universe is out of space.');
+        throw err;
     }
-    await chargeObjectBytes(c.env.DB, owned.row.id, chargeId, copied);
+    let called: Awaited<ReturnType<typeof doCall<{ written: number; skipped: number; records: number; links: number }>>>;
+    try {
+        let copied = 0;
+        for (const hash of previewed.missing) {
+            const source = await c.env.PUBLIC_BUCKET.get(`objects/${hash}`);
+            if (!source) throw new Error('Missing object.');
+            const bytes = await source.arrayBuffer();
+            await c.env.PRIVATE_BUCKET.put(`u/${owned.row.id}/objects/${hash}`, bytes, {
+                httpMetadata: { contentType: source.httpMetadata?.contentType || 'application/json' },
+            });
+            copied += bytes.byteLength;
+        }
+        for (const hash of previewed.placedMissing) {
+            const text = previewed.placedTrees.get(hash)!;
+            await c.env.PRIVATE_BUCKET.put(`u/${owned.row.id}/objects/${hash}`, text, { httpMetadata: { contentType: 'application/json' } });
+            copied += new TextEncoder().encode(text).byteLength;
+        }
+        called = await doCall<{ written: number; skipped: number; records: number; links: number }>(owned, c, '/install', {
+            installId: rowId,
+            packageId: previewed.packageId,
+            version: previewed.version,
+            title: previewed.title,
+            sourceUniverseId: previewed.sourceUniverseId,
+            publishedAt: previewed.manifest.publishedAt,
+            hexes: previewed.hexes,
+            records: previewed.records,
+            links: previewed.links,
+            resolutions: input.resolutions,
+            recordResolutions: input.recordResolutions,
+            sectors: previewed.sectors,
+        });
+        if (!called.parsed.ok || !called.parsed.data) {
+            const error = called.parsed.error;
+            if (called.status === 409 && error) return fail(c, 409, 'conflict', error.message, error.details);
+            if (called.status === 429) return fail(c, 429, 'rate_limited', 'Too many requests.');
+            throw new Error(error?.message || 'Install failed.');
+        }
+        await rememberCampaignSummary(c.env.DB, owned.row.id, liftSummary(called.parsed.data));
+        await chargeObjectBytes(c.env.DB, owned.row.id, chargeId, copied);
+    } finally {
+        await releaseObjectBytes(c.env, owned.row.id, chargeId, previewed.bytes);
+    }
     const now = new Date().toISOString();
     const hexCount = previewed.hexes.length;
     if (previewed.rowId) {
@@ -509,6 +525,7 @@ installsRoute.delete('/:id/installs/:installId', async (c) => {
         if (called.status === 429) return fail(c, 429, 'rate_limited', 'Too many requests.');
         throw new Error(called.parsed.error?.message || 'Remove failed.');
     }
+    await rememberCampaignSummary(c.env.DB, owned.row.id, liftSummary(called.parsed.data));
     await c.env.DB.prepare(`DELETE FROM package_installs WHERE id = ? AND universe_id = ?`).bind(row.id, owned.row.id).run();
     return ok(c, InstallRemoved.parse(called.parsed.data));
 });

@@ -6,7 +6,7 @@
  * Records go through the campaign change path afterwards.
  */
 import { CampaignLink, CampaignRecord, type InstallOutcome } from '@voyage/shared';
-import { applyCampaignChanges, deleteInstalledRecord, storedCampaignRecord, type Sql, type SqlRow } from './campaign.ts';
+import { applyCampaignChanges, deleteInstalledRecord, storedCampaignRecord, writeCampaignSummary, type CampaignSummary, type Sql, type SqlRow } from './campaign.ts';
 import { chartTree, deleteInstalledHex, HexRefusal, ownSectorKey, storedEntry, storedHexRow, writeInstalled } from './hexes.ts';
 import { dropImportSector, makeImportSector } from './sectors.ts';
 
@@ -175,7 +175,7 @@ function liveRecord(sql: Sql, id: unknown): boolean {
 /** Meta key of the own sectors an import made, so removing it can delete them. */
 const SECTORS_KEY = (installId: string) => `installsectors:${installId}`;
 
-export function applyInstall(sql: Sql, body: InstallBody, now: string): { written: number; skipped: number; records: number; links: number } {
+export function applyInstall(sql: Sql, body: InstallBody, now: string): { written: number; skipped: number; records: number; links: number; summary: CampaignSummary } {
     const preview = previewInstall(sql, {
         packageId: body.packageId,
         sourceUniverseId: body.sourceUniverseId,
@@ -264,7 +264,7 @@ export function applyInstall(sql: Sql, body: InstallBody, now: string): { writte
     }
     let links = 0;
     if (linkChanges.length) links = applyCampaignChanges(sql, { links: linkChanges }, now).applied.filter((item) => item.table === 'links').length;
-    return { written, skipped, records, links };
+    return { written, skipped, records, links, summary: writeCampaignSummary(sql, now) };
 }
 
 /** The campaign's next seq, the same counter campaign.ts keeps in meta `campaignSeq`. */
@@ -321,7 +321,7 @@ export type InstallRemoveBody = {
  * when a 1.1.14 campaign holds the package twice the per-call ids are read back from
  * the `installed:<id>` and `installrow:<rowId>` meta keys 1.1.14 wrote.
  */
-export function removeInstall(sql: Sql, body: InstallRemoveBody, now: string): { hexes: number; records: number; sectors: number } {
+export function removeInstall(sql: Sql, body: InstallRemoveBody, now: string): { hexes: number; records: number; sectors: number; summary: CampaignSummary } {
     return sql.transaction(() => {
         const ids = new Set<string>([body.installId]);
         const made = new Set<string>(jsonList(metaValue(sql, SECTORS_KEY(body.installId))));
@@ -355,6 +355,6 @@ export function removeInstall(sql: Sql, body: InstallRemoveBody, now: string): {
         let sectors = 0;
         for (const id of made) if (dropImportSector(sql, id, now)) sectors += 1;
         sql.exec(`DELETE FROM meta WHERE key = ?`, SECTORS_KEY(body.installId));
-        return { hexes, records, sectors };
+        return { hexes, records, sectors, summary: writeCampaignSummary(sql, now) };
     });
 }

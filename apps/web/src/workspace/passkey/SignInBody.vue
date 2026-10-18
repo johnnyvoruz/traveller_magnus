@@ -11,13 +11,15 @@
  * A new account and a recovery code both go on to /account, where the codes and the recovery
  * screen have a whole page and no click outside can close them.
  */
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { CEREMONY_CANCELLED, PASSKEY_UNAVAILABLE, passkeySupported, redeemRecovery, signInWithPasskey, signUp } from '../../account/passkey.ts';
 import { session, signIn } from '../../account/session.ts';
 import { apiFetch } from '../../platform/http.ts';
 import { isOnline, onOnlineChange } from '../../platform/browser.ts';
 import { APP_VERSION } from '../../version.ts';
+
+const ChangelogBody = defineAsyncComponent(() => import('../ChangelogBody.vue'));
 import { offeredProviders, readProviders, SIGN_IN_FINE, SIGN_IN_OFFLINE, signInFrom, signInPitch, type SignInProvider } from '../account.ts';
 import {
     atUsername, CREATE_ACCOUNT, guardRecovery, heldCodes, LOST_PASSKEY, NO_WEBAUTHN_ALONE, NO_WEBAUTHN_PROVIDERS, NOT_REACHED, OTHER_ACCOUNTS,
@@ -34,8 +36,8 @@ defineProps<{
 const emit = defineEmits<{ ready: [] }>();
 
 const router = useRouter();
-/** What the card shows: the choices, the username form, or the recovery-code form. */
-const mode = ref<'card' | 'create' | 'lost'>('card');
+/** What the card shows: the choices, the username form, the recovery-code form, or the changelog. */
+const mode = ref<'card' | 'create' | 'lost' | 'changes'>('card');
 /** The ceremony or request under way: '' when none, else what it is for (or a provider's id). */
 const busy = ref('');
 const offered = ref<SignInProvider[]>(offeredProviders(null));
@@ -57,6 +59,8 @@ const createEl = ref<HTMLButtonElement | null>(null);
 const lostEl = ref<HTMLButtonElement | null>(null);
 const nameEl = ref<HTMLInputElement | null>(null);
 const recoverEl = ref<HTMLInputElement | null>(null);
+const versionEl = ref<HTMLButtonElement | null>(null);
+const changesBack = ref<HTMLButtonElement | null>(null);
 let stopOnline: (() => void) | null = null;
 
 const nameSay = computed(() => nameRefused.value || usernameProblem(username.value, typing.value));
@@ -71,13 +75,15 @@ function focusLater(el: () => HTMLElement | null): void {
     });
 }
 
-function show(next: 'card' | 'create' | 'lost'): void {
+function show(next: 'card' | 'create' | 'lost' | 'changes'): void {
     const from = mode.value;
     mode.value = next;
     said.value = null;
     nameRefused.value = '';
     if (next === 'create') focusLater(() => nameEl.value);
     else if (next === 'lost') focusLater(() => recoverEl.value);
+    else if (next === 'changes') focusLater(() => changesBack.value);
+    else if (from === 'changes') focusLater(() => versionEl.value);
     else focusLater(() => (from === 'lost' ? lostEl.value : createEl.value));
 }
 
@@ -179,6 +185,14 @@ function onNameInput(): void {
     nameRefused.value = '';
 }
 
+/** Esc on the changelog returns to the sign-in choices. The card is already a dialog. */
+function onChangesKey(event: KeyboardEvent): void {
+    if (mode.value !== 'changes' || event.key !== 'Escape') return;
+    event.preventDefault();
+    event.stopPropagation();
+    show('card');
+}
+
 /** Esc inside a form goes back to the card; it doesn't close the pop-up around it. */
 function onFormKey(event: KeyboardEvent): void {
     if (event.key !== 'Escape' || busy.value) return;
@@ -207,7 +221,12 @@ defineExpose({ focus: () => { const top = createEl.value || first.value; if (top
 </script>
 
 <template>
-  <div class="signin">
+  <div class="signin" @keydown="onChangesKey">
+    <template v-if="mode === 'changes'">
+      <button ref="changesBack" type="button" class="signin-link" data-changes="back" @click="show('card')">Back</button>
+      <ChangelogBody />
+    </template>
+    <template v-else>
     <h2 v-if="heading && mode !== 'lost'" class="signin-title">Sign in</h2>
 
     <!-- The recovery-code form, in the card's place. -->
@@ -308,7 +327,8 @@ defineExpose({ focus: () => { const top = createEl.value || first.value; if (top
       <p v-else-if="session.error" class="signin-error" role="alert">{{ session.error }}</p>
       <p class="signin-fine">{{ SIGN_IN_FINE }}</p>
     </template>
-    <p class="signin-version" data-version>Version {{ APP_VERSION }}</p>
+    <button ref="versionEl" type="button" class="signin-version" data-version @click="show('changes')">Version {{ APP_VERSION }} · What's new</button>
+    </template>
   </div>
 </template>
 
@@ -325,7 +345,8 @@ defineExpose({ focus: () => { const top = createEl.value || first.value; if (top
 .signin-title {
   margin: 0;
   color: var(--text-0);
-  font: 700 17px/1.3 var(--font-text);
+  font: 700 17px/1.3 var(--font-display);
+  letter-spacing: 0.02em;
 }
 
 .signin p {
@@ -461,13 +482,29 @@ defineExpose({ focus: () => { const top = createEl.value || first.value; if (top
   font-size: 12px;
 }
 
-/* The app's version, last in the card: the smallest text, muted, selectable. */
+/* The app's version, last in the card. Same look as the store's text links. */
 .signin .signin-version {
+  display: block;
+  width: 100%;
   margin: -4px 0 0;
-  color: var(--text-muted);
-  font-size: 11px;
-  line-height: 1.3;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--signal);
+  font: 600 13px/1.4 var(--font-text);
   text-align: right;
-  user-select: text;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.signin .signin-version:hover {
+  color: var(--signal-bright);
+}
+
+/* The changelog replaces this card. The list scrolls so Back stays on screen. */
+.signin .changes-body {
+  max-height: calc(100vh - 140px);
+  overflow: auto;
 }
 </style>

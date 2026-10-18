@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * "Generate with…": the engine, how, and for many hexes what happens to the ones already
+ * "Generate with…": the rules, how, and for many hexes what happens to the ones already
  * filled (findings/builder_system_design.md §2). In the pane, not a second screen. The
  * settings are the universe's and are only shown here.
  */
@@ -63,7 +63,7 @@ const goWords = computed(() => {
 <template>
   <form class="build-sheet" @submit.prevent="go" @keydown.esc.stop.prevent="$emit('cancel')">
     <fieldset class="build-opts">
-      <legend class="ui-heading">Engine</legend>
+      <legend class="ui-heading ui-kicker">Rules</legend>
       <label v-for="item in ENGINES" :key="item.id" class="build-opt" :class="{ 'is-on': draft.engine === item.id, 'is-off': !item.ready }">
         <input type="radio" name="build-engine" :value="item.id" :checked="draft.engine === item.id" :disabled="!item.ready" @change="pickEngine(item.id)" />
         <span>{{ item.label }}</span>
@@ -72,7 +72,7 @@ const goWords = computed(() => {
       </label>
     </fieldset>
     <fieldset class="build-opts">
-      <legend class="ui-heading">Method</legend>
+      <legend class="ui-heading ui-kicker">Method</legend>
       <label v-for="generator in engine.generators" :key="generator" class="build-opt" :class="{ 'is-on': draft.generator === generator }">
         <input type="radio" name="build-generator" :value="generator" :checked="draft.generator === generator" @change="pickGenerator(generator)" />
         <span>{{ GENERATOR_LABEL[generator] }}</span>
@@ -80,14 +80,14 @@ const goWords = computed(() => {
     </fieldset>
     <!-- How many of the empty hexes a run fills: one hex always generates, so it has no choice here. -->
     <div v-if="many" class="build-opts build-density">
-      <label class="ui-heading" for="build-density">Hexes to fill</label>
+      <label class="ui-heading ui-kicker" for="build-density">Hexes to fill</label>
       <select id="build-density" v-model="density" class="build-density-box">
         <option v-for="item in DENSITIES" :key="item.id" :value="item.id">{{ item.name }}: {{ item.meaning }}</option>
       </select>
       <small class="build-fine">{{ DENSITY_HINT }}</small>
     </div>
     <fieldset v-if="many && filled > 0" class="build-opts">
-      <legend class="ui-heading">The {{ plural(filled, 'hex', 'hexes') }} that already {{ filled === 1 ? 'holds' : 'hold' }} a system</legend>
+      <legend class="ui-heading ui-kicker">The {{ plural(filled, 'hex', 'hexes') }} that already {{ filled === 1 ? 'holds' : 'hold' }} a system</legend>
       <label class="build-opt" :class="{ 'is-on': !filledToo }">
         <input type="radio" name="build-filled" :checked="!filledToo" @change="filledToo = false" /><span>Leave {{ filled === 1 ? 'it as it is' : 'them as they are' }}</span>
       </label>
@@ -96,7 +96,7 @@ const goWords = computed(() => {
       </label>
     </fieldset>
     <section v-if="settings.length">
-      <h3 class="ui-heading">Settings <span class="ui-count">your map</span></h3>
+      <h3 class="ui-heading ui-kicker">Settings <span class="ui-count">your map</span></h3>
       <dl class="build-set">
         <div v-for="row in settings" :key="row.label"><dt>{{ row.label }}</dt><dd>{{ row.value }}</dd></div>
       </dl>
@@ -192,6 +192,18 @@ const goWords = computed(() => {
 
 .build-density .ui-heading {
   display: block;
+}
+
+/* The sheet's kickers (the version-video look) run tighter: one is a whole question. "your map" beside Settings is a note, not a count. */
+.build-sheet .ui-kicker {
+  letter-spacing: 0.24em;
+}
+
+.build-sheet .ui-kicker .ui-count {
+  color: var(--text-muted);
+  font: 400 12px/1 var(--font-text);
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .build-density-box {

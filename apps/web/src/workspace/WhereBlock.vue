@@ -16,7 +16,7 @@ import BodyRow from '../dossier/BodyRow.vue';
 import type { TreeRow } from '../dossier/model.ts';
 import { orbitPath } from '../orbit/bodies.ts';
 import { atPane, withQuery } from '../shell/pane.ts';
-import { commands } from '../shell/registry.ts';
+import { commands, onCommandsChanged } from '../shell/registry.ts';
 import { locating, startLocate, stopLocate } from './locate.ts';
 import { beginPick, endPick, type PickedSystem } from './pick.ts';
 import { placeSource, type SystemInfo } from './place_source.ts';
@@ -124,6 +124,20 @@ function showOrbit(): void {
     const where = at ? parseHexKey(at.hexKey) : null;
     if (!at || !where) return;
     void router.push({ path: orbitPath(where.slug, where.hex, matched.value ? at.bodyKey : null), query: withQuery(route.query, {}) });
+}
+
+// ---- How old the news is where the party is (spec_xboat_ripples.md §3.5; streams/D.md XD2) ----
+
+/** The map's reverse command: offered on the party's block only, where the map has registered it. */
+const hasNewsTo = (): boolean => commands().some((item) => item.id === 'news-to-party');
+const newsToOffered = ref(hasNewsTo());
+const stopCommands = onCommandsChanged(() => { newsToOffered.value = hasNewsTo(); });
+
+function newsHere(): void {
+    const command = commands().find((item) => item.id === 'news-to-party');
+    if (!command || (command.runnable && !command.runnable())) return;
+    emit('map');
+    command.run();
 }
 
 // ---- Changing the place --------------------------------------------------------
@@ -301,13 +315,14 @@ watch(() => props.locateId, () => {
 });
 
 onBeforeUnmount(() => {
+    stopCommands();
     if (pickingHere) endPick();
 });
 </script>
 
 <template>
   <section ref="rootEl" class="where" :class="{ 'is-big': big }" :data-editing="editing ? 'true' : 'false'" @keydown="onKey">
-    <h3 class="ui-heading">{{ heading }}</h3>
+    <h3 class="ui-heading ui-kicker">{{ heading }}</h3>
 
     <template v-if="!editing">
       <p class="where-line">
@@ -344,6 +359,16 @@ onBeforeUnmount(() => {
         </button>
         <button v-if="place && place.bodyKey && matched" type="button" class="ui-btn where-orbit" @click="showOrbit">
           <Icon name="solar-system" :size="13" />Show in orbit
+        </button>
+        <button
+          v-if="place && locateId === 'party' && newsToOffered"
+          type="button"
+          class="ui-btn where-news"
+          title="How long news from each system takes to reach the party"
+          data-command="news-to-party"
+          @click="newsHere"
+        >
+          <Icon name="clock-rotate-left" :size="13" />How old is the news here
         </button>
         <button ref="changeBtn" type="button" class="ui-btn where-change" :disabled="readOnly" @click="open">
           <Icon name="pen-to-square" :size="13" />{{ anchor ? changeLabel : 'Set a place' }}
@@ -432,6 +457,11 @@ onBeforeUnmount(() => {
 </template>
 
 <style>
+/* The kicker (the shared look) keeps the heading's gap to the place under it. */
+.where > .ui-heading.ui-kicker {
+  margin-bottom: 8px;
+}
+
 .where-line {
   display: flex;
   flex-wrap: wrap;

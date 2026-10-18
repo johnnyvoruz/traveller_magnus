@@ -4,7 +4,10 @@
  * is pressed on it, then it is a field with the same words. Enter saves a single line,
  * Ctrl+Enter saves a paragraph, leaving the field saves, Esc puts the old words back.
  */
-import { nextTick, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
+import type { BodyPart } from './journal/body.ts';
+import RichNodes from './journal/RichNodes.vue';
+import { parseRich } from './journal/rich.ts';
 
 const props = withDefaults(defineProps<{
     value: string;
@@ -18,14 +21,22 @@ const props = withDefaults(defineProps<{
     /** The record's name: larger, and never left empty. */
     title?: boolean;
     disabled?: boolean;
-}>(), { prompt: '', multiline: false, title: false, disabled: false });
+    /** Bold, italic, lists, and links. The read view is a div so a link is not inside a button. */
+    rich?: boolean;
+    /** A mention's current name. Null keeps the written label. */
+    nameOf?: (target: string) => string | null;
+}>(), { prompt: '', multiline: false, title: false, disabled: false, rich: false });
 
-const emit = defineEmits<{ save: [text: string] }>();
+const emit = defineEmits<{
+    save: [text: string];
+    open: [part: Exclude<BodyPart, { kind: 'text' }>];
+}>();
 
 const editing = ref(false);
 const draft = ref('');
 const field = ref<HTMLInputElement | HTMLTextAreaElement | null>(null);
-const view = ref<HTMLButtonElement | null>(null);
+const view = ref<HTMLElement | null>(null);
+const nodes = computed(() => (props.rich ? parseRich(props.value, props.nameOf ?? (() => null)) : []));
 let leaving = false;
 
 function grow(): void {
@@ -93,6 +104,18 @@ watch(() => props.value, () => {
     if (editing.value && !leaving) draft.value = props.value;
 });
 
+function onRichClick(event: MouseEvent): void {
+    const target = event.target;
+    if (target instanceof HTMLElement && target.closest('a, button')) return;
+    edit(false);
+}
+
+function onRichKey(event: KeyboardEvent): void {
+    if (event.key !== 'Enter' || event.target !== view.value) return;
+    event.preventDefault();
+    edit(false);
+}
+
 defineExpose({ edit });
 </script>
 
@@ -127,6 +150,21 @@ defineExpose({ edit });
         <span v-if="draft.length > max * 0.8" class="edit-count">{{ draft.length }} / {{ max }}</span>
       </p>
     </template>
+    <div
+      v-else-if="rich"
+      ref="view"
+      class="edit-view is-rich"
+      :class="{ 'is-empty': !value }"
+      tabindex="0"
+      role="textbox"
+      aria-readonly="true"
+      :aria-label="value ? label + ': ' + value + '. Edit' : prompt || 'Add ' + label.toLowerCase()"
+      @click="onRichClick"
+      @keydown="onRichKey"
+    >
+      <RichNodes v-if="value" :nodes="nodes" @open="emit('open', $event)" />
+      <template v-else>{{ prompt }}</template>
+    </div>
     <button
       v-else
       ref="view"

@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHmac, randomBytes } from 'node:crypto';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { adminCookie, runWrangler } from './session.js';
+import { adminCookie, removeTree, runWrangler } from './session.js';
 import { startDev, stopDev, withDevServer, wranglerBin } from './server.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -60,7 +60,7 @@ async function jsonFetch(url, options) {
     } catch {
         body = { raw: text };
     }
-    return { status: response.status, body };
+    return { status: response.status, body, headers: response.headers };
 }
 
 function sleep(ms) {
@@ -201,6 +201,18 @@ if (process.env.RUN_API_TESTS !== '1') {
                     headers: { cookie: owner },
                 });
                 assert.equal(empty.status, 200, JSON.stringify(empty.body));
+                assert.equal(empty.headers.get('cache-control'), 'private, no-store');
+                const forged = await jsonFetch(`${base}/api/universes/${id}/campaign?after=0&limit=1000`, {
+                    headers: {
+                        cookie: owner,
+                        'x-voyage-user-id': 'forged-user',
+                        'x-voyage-worker': 'generate',
+                        'x-voyage-member': 'forged-member',
+                    },
+                });
+                assert.equal(forged.status, 200, JSON.stringify(forged.body));
+                assert.deepEqual(forged.body, empty.body);
+                assert.equal(forged.headers.get('cache-control'), 'private, no-store');
                 assert.deepEqual(empty.body.data.records, []);
                 assert.deepEqual(empty.body.data.links, []);
                 assert.deepEqual(empty.body.data.journal, []);
@@ -367,6 +379,19 @@ if (process.env.RUN_API_TESTS !== '1') {
                     anchor: { kind: 'system', hexKey: HEX, locationLabel: 'Regina' },
                 });
 
+                // LS3: the living switches ride in the same settings document, on the held revision, and are kept.
+                const living = await jsonFetch(`${base}/api/universes/${id}/campaign/changes`, {
+                    method: 'PATCH',
+                    headers,
+                    body: JSON.stringify({ settings: { ...party, rev: settingsRev, living: { chatter: true, traffic: false }, baseRev: settingsRev } }),
+                });
+                assert.equal(living.status, 200, JSON.stringify(living.body));
+                assert.equal(living.body.data.applied[0].table, 'settings', JSON.stringify(living.body));
+                const livingRead = await jsonFetch(`${base}/api/universes/${id}/campaign?after=0&limit=1000`, {
+                    headers: { cookie: owner },
+                });
+                assert.deepEqual(livingRead.body.data.settings.living, { chatter: true, traffic: false });
+
                 const hiddenGet = await jsonFetch(`${base}/api/universes/${id}/campaign?after=0&limit=1000`, {
                     headers: { cookie: other },
                 });
@@ -423,6 +448,7 @@ if (process.env.RUN_API_TESTS !== '1') {
                     body: JSON.stringify({ journal: [journalEntry(JOURNAL)] }),
                 });
                 assert.equal(written.status, 200, JSON.stringify(written.body));
+                assert.equal(written.headers.get('cache-control'), 'private, no-store');
                 assert.equal(written.body.data.conflicts.length, 0, JSON.stringify(written.body));
                 assert.equal(written.body.data.applied[0].table, 'journal');
                 assert.equal(written.body.data.applied[0].id, JOURNAL);
@@ -677,7 +703,7 @@ if (process.env.RUN_API_TESTS !== '1') {
             assert.deepEqual(afterRestart.body.data.clock, before.body.data.clock);
         } finally {
             if (child) stopDev(child.pid);
-            rmSync(persistTo, { recursive: true, force: true });
+            removeTree(persistTo);
         }
     });
 }

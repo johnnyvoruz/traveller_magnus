@@ -29,6 +29,13 @@ Success: `{ ok: true, data }`. Status 200 unless a route says 201 or 202.
 
 Failure: `{ ok: false, error: { code, message, details? } }`. A bad shape sends Zod `flatten()` as `details`. Invalid JSON is 400 `validation`, `Invalid JSON.`
 
+**Sentences (Z7, 2026-10-17).** The `message` strings quoted below are the codes' old words. Since B3 and Z7, the server sends the sentence a person reads, and `code` is unchanged. Match on `code`, never on `message`:
+
+- `Invalid JSON.`, `Invalid request.`, `Invalid limit.`: "That request could not be read. Try again."
+- `Origin check failed.`: "That request was blocked. Reload the page and try again."
+- `Role required.`: "You do not have access to that."
+- `Sign in required.`: "Sign in to continue." (`requireUser`, B3)
+
 ## Shared shapes
 
 | Name | File |
@@ -306,10 +313,14 @@ Query:
 |---|---|
 | `q` | optional, 1–100 characters after trim; matches title, description and tags (case-insensitive `LIKE` in phase 2; FTS is later) |
 | `kind` | optional, exact match after trim |
+| `family` | optional, repeatable, one of `map`, `system`, `ship`, `people`, `patrons`, `organization`, `adventure`, `other`. A package is in the family the store gives its kind: the first row of `PACKAGE_KIND_FAMILIES` (`packages/shared/src/schemas/package.ts`, the same table as `KIND_FAMILIES` in `apps/web/src/marketplace/covers.ts`) with a word anywhere in the kind, case-insensitive; no word is `other`. Repeated values are OR. Any other value is 400 `validation`, `Invalid request.` |
+| `author` | optional, 1-64 characters after trim; the publisher's current profile handle, exact match. A handle nobody has answers an empty page |
 | `tag` | optional, exact match on one tag |
 | `sort` | `updated` (default, newest `updated_at` first), `installs` (most first), `title` (A to Z) |
 | `mine` | `1` returns the caller's own packages, hidden and unpublished included: the stub's list. Signed out with `mine=1` is 401 `unauthenticated`, `Sign in required.` |
 | `cursor`, `limit` | as the stub; the cursor is opaque and only valid for the same `sort` |
+
+Keys combine with AND (`kind`, `family`, `author`, `tag`, `q`, `mine`). For Lane D: the store can ask for `family=` and `author=` instead of counting and filtering the first 100 cards in the browser. `family` or `author` alone also selects the catalogue, not the stub's list.
 
 Answer: 200 `PackageListPage` of `PackageCard`.
 
@@ -318,6 +329,38 @@ Answer: 200 `PackageListPage` of `PackageCard`.
 Errors: 400 `validation`, `Invalid limit.` 400 `validation`, `Invalid request.` (bad `sort`, `q` too long, bad cursor).
 
 The client in this tree that calls `GET /api/packages` for "my packages" moves to `?mine=1` in phase 4. Until then the route keeps the stub answer when the caller is signed in and sends no query, so nothing breaks in between. Signed in with any of `q`, `kind`, `tag`, `sort` gives the catalogue.
+
+### `GET /api/packages/facets` (Z6, 2026-10-17)
+
+Who: anyone, signed out included. It counts the same packages as the public catalogue: not hidden, `latest_version > 0`.
+
+The store's filter column, counted over the whole catalogue for a query instead of the loaded cards, so the column is right past 100 packages.
+
+Query (any other key is 400 `validation`, `Invalid request.`; `PackageFacetsQuery` in `packages/shared/src/schemas/package.ts`):
+
+| Name | Rule |
+|---|---|
+| `q` | optional, 1-100 characters after trim; the same match as the catalogue's `q` |
+| `family` | optional, repeatable; the catalogue's families and first-match rule |
+| `contents` | optional, repeatable, `hexes` (the latest version has a hex) or `records` (it has none) |
+| `edition` | optional, repeatable, exact |
+| `tag` | optional, repeatable; a package with any of the tags |
+| `updated` | optional, `7` or `30`: `updated_at` within that many days |
+| `author` | optional, repeatable; the publisher's current profile handle, exact |
+
+Values of one key are OR; keys are AND, the store's own rule (`apps/web/src/workspace/market/filters.ts`).
+
+Answer: 200 `PackageFacets`:
+
+- `total`: the packages that pass every key, for "N results".
+- `scanned`: the packages that match `q`.
+- `capped`: true when more than 5,000 match `q`; then the counts cover the 5,000 most recently updated.
+- `kinds`, `contents`, `editions`, `tags`, `by`: lists of `{ value, count }`. Each section is counted over the packages every other key lets through, so a count is what ticking that box would show. A value is listed when a package matching `q` has it, or it is in the query, at 0 if nobody has it. `kinds` and `contents` are in the store's fixed order. The others are ranked by how many packages matching `q` have the value, then by name. Blank values are left out, so a package with no handle counts in `total` but has no `by` row.
+- `updated`: always three rows, `7`, `30` and `''` (any time), counted over the packages the other keys let through.
+
+For Lane D: send the URL filters as they are (`kinds` → `family`, `by` → `author`) and use the answer's counts in place of `facets()` over the loaded cards. Keep the visit's `seen` values on your side. Words (`FAMILY_WORDS`, `@handle`) stay in the browser.
+
+Errors: 400 `validation`, `Invalid request.` (an unknown key, a bad value, `q` too long).
 
 ### `GET /api/packages/:packageId` — **contract only**
 
@@ -534,7 +577,7 @@ Johnny's phase-2 answers: routes and border paths that leave the piece are dropp
 - **Record provenance.** `CampaignProvenance` is strict (`mode, universeId, recordId, rev, at`, `schemas/campaign.ts` 126), and that file is not in this go. Installed records carry `{ mode: 'copy', universeId: <the package's source universe>, recordId, rev, at: <manifest publishedAt> }`; a record whose id is already here with that `copy` provenance is `replace`, any other is a conflict. The package id is not on the record (report question 1).
 - **Journal entries** are not in packages (`PackagePublish` has no journal ids), so none are written.
 - **F7, lists.** The Durable Object stores no routes or border paths (only `campaignSettings` and `campaignTime` rows in `lists`), so publish still writes the empty-array hashes. Johnny's "drop the ones that leave the piece" applies when routes are stored.
-- **F8, limits.** Quota: 400 `too_large`, `This universe is out of space.`, checked at preview and install against `universes.object_bytes` + bytes not yet held; charged with `chargeObjectBytes` keyed by `installId`. Daily cap: not touched. Mutation budget: `/install` takes one mutation in the Durable Object (429 `Too many requests.`).
+- **F8, limits.** Quota: 400 `too_large`, `This universe is out of space.`, checked at preview and install against `universes.object_bytes` + bytes not yet held; charged with `chargeObjectBytes` keyed by `installId`. The install also goes through the universe's reservation (`contracts/b_builder.md`): before the copy it reserves the preview's `bytes` under its charge id with `POST /quota/reserve`, and it releases that id after `chargeObjectBytes`, or on any failure on the way (a failed put, a 409 or 429 from the Durable Object). A refusal while another writer holds the room is the same 400 `too_large`, `This universe is out of space.` The preview still reads D1 only. Daily cap: not touched. Mutation budget: `/install` takes one mutation in the Durable Object (429 `Too many requests.`).
 - **F9, migration** `0015_marketplace.sql`: `package_installs` and `package_reports`, every statement `IF NOT EXISTS`, no change to existing tables. Worker before migration: install, installs list and report answer 503 `The marketplace is being updated. Try again soon.` (probed per request); catalogue, page and publish keep working. Migration before Worker: the old Worker never names the new tables.
 - **Undo.** No restore route (see F4 undo). The undo point is written.
 ## F13. Phase 3 as built (2026-10-14) - **on disk, unpushed**

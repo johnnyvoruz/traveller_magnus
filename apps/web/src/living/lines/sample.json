@@ -1,0 +1,1436 @@
+{
+    "schemaVersion": 1,
+    "written": "2026-10-17",
+    "notes": [
+        "The first 97 chatter lines, in the ChatterLine shape of directives/spec_living_systems.md section 1.2. Original writing; no published text, no real-world brands, no polity names, no rule or number stated as fact.",
+        "Every `when` key is a field of SystemFacts (chatter_schema.md lists them with the source each one is read from). A slot in `text` is resolved from the same facts; a slot that needs a thing (a gas giant, a belt, a moon, a port) carries that thing as a condition, so a line never claims what the system's data contradicts. check_sample.mjs enforces both.",
+        "Conditions that look like rules cite the text they come from in chatter_schema.md (the Law Level table, the Atmosphere table, the Starport Facilities table, Bases, Travel Codes, the trade DMs). The lines themselves state nothing as a rule.",
+        "weight: 1 unless written. Distress lines are 0.2, so a system hears them rarely.",
+        "customs-001, customs-002 and customs-003 are not shipped. Each ties a ban to a Law Level range. Johnny, 2026-10-17 21:10: no line restates a rule. E writes customs lines that ask crews to declare or show papers."
+    ],
+    "lines": [
+        {
+            "id": "control-001",
+            "category": "control",
+            "voice": "control",
+            "text": "{port} control to all traffic: hold your approach lanes, the outbound queue clears in a few minutes.",
+            "when": {
+                "starport": [
+                    "A",
+                    "B",
+                    "C"
+                ]
+            }
+        },
+        {
+            "id": "control-002",
+            "category": "control",
+            "voice": "control",
+            "text": "{ship}, you are cleared to dock. Keep to the marked lane and mind the tugs.",
+            "when": {
+                "starport": [
+                    "A",
+                    "B"
+                ],
+                "highport": true
+            }
+        },
+        {
+            "id": "control-003",
+            "category": "control",
+            "voice": "control",
+            "text": "All craft inbound to {world}: the downport beacon is on and the pad lights are lit. Land where you are told.",
+            "when": {
+                "starport": [
+                    "A",
+                    "B",
+                    "C",
+                    "D"
+                ]
+            }
+        },
+        {
+            "id": "control-004",
+            "category": "control",
+            "voice": "control",
+            "text": "Approach control advises that the orbital lanes above {world} are busy. Expect a wait before docking.",
+            "when": {
+                "starport": [
+                    "A",
+                    "B"
+                ],
+                "pop": {
+                    "min": 8
+                }
+            }
+        },
+        {
+            "id": "control-005",
+            "category": "control",
+            "voice": "control",
+            "text": "{port} control: the landing field is clear. Set down on the beacon and shut down on the pad.",
+            "when": {
+                "starport": [
+                    "D",
+                    "E"
+                ]
+            }
+        },
+        {
+            "id": "control-006",
+            "category": "control",
+            "voice": "control",
+            "text": "This is the {world} beacon. There is no port here. Land at your own risk.",
+            "when": {
+                "starport": [
+                    "X"
+                ]
+            }
+        },
+        {
+            "id": "control-007",
+            "category": "control",
+            "voice": "control",
+            "text": "Traffic control reminds all masters that departures from {world} file a course before they light their drives.",
+            "when": {
+                "starport": [
+                    "A",
+                    "B",
+                    "C"
+                ]
+            }
+        },
+        {
+            "id": "control-008",
+            "category": "control",
+            "voice": "control",
+            "text": "{ship} is cleared for departure. Clear the hundred-diameter line before you jump.",
+            "when": {
+                "starport": [
+                    "A",
+                    "B",
+                    "C",
+                    "D"
+                ]
+            }
+        },
+        {
+            "id": "control-009",
+            "category": "control",
+            "voice": "control",
+            "text": "Scout traffic has priority on the inner lane this watch. Merchants hold at the outer marker.",
+            "when": {
+                "bases": [
+                    "S",
+                    "W"
+                ]
+            }
+        },
+        {
+            "id": "control-010",
+            "category": "control",
+            "voice": "control",
+            "text": "Navy picket to all shipping: squawk your transponder on approach or you will be boarded.",
+            "when": {
+                "bases": [
+                    "N"
+                ]
+            }
+        },
+        {
+            "id": "control-011",
+            "category": "control",
+            "voice": "control",
+            "text": "{world} approach is closed to civilian traffic. Turn back now. This is your only warning.",
+            "when": {
+                "zone": [
+                    "red"
+                ]
+            }
+        },
+        {
+            "id": "control-012",
+            "category": "control",
+            "voice": "control",
+            "text": "Traffic control: the ferry to {moon} leaves on the hour. It will not wait.",
+            "when": {
+                "starport": [
+                    "A",
+                    "B",
+                    "C"
+                ],
+                "moons": {
+                    "min": 1
+                }
+            }
+        },
+        {
+            "id": "control-013",
+            "category": "control",
+            "voice": "control",
+            "text": "The highport's number three arm is out of service. Expect berthing on the planetside pads instead.",
+            "when": {
+                "starport": [
+                    "A",
+                    "B",
+                    "C"
+                ],
+                "highport": true
+            }
+        },
+        {
+            "id": "control-014",
+            "category": "control",
+            "voice": "control",
+            "text": "Attention shuttles: the surface run to {world} is delayed until the weather below clears.",
+            "when": {
+                "highport": true,
+                "atm": {
+                    "min": 1
+                }
+            }
+        },
+        {
+            "id": "customs-004",
+            "category": "customs",
+            "voice": "customs",
+            "text": "Customs on {world} is light today. Walk through, show your papers, and welcome.",
+            "when": {
+                "law": {
+                    "max": 1
+                },
+                "starport": [
+                    "A",
+                    "B",
+                    "C",
+                    "D"
+                ],
+                "pop": {
+                    "min": 1
+                }
+            }
+        },
+        {
+            "id": "customs-005",
+            "category": "customs",
+            "voice": "local",
+            "text": "A reminder that {world} has no customs service. What you carry is your own business, and so is what happens next.",
+            "when": {
+                "gov": {
+                    "max": 0
+                },
+                "law": {
+                    "max": 0
+                },
+                "pop": {
+                    "min": 1
+                }
+            }
+        },
+        {
+            "id": "customs-006",
+            "category": "customs",
+            "voice": "customs",
+            "text": "Company security will meet every ship at the berth. Non-employees are escorted at all times.",
+            "when": {
+                "gov": {
+                    "min": 1,
+                    "max": 1
+                },
+                "starport": [
+                    "A",
+                    "B",
+                    "C",
+                    "D"
+                ]
+            }
+        },
+        {
+            "id": "customs-007",
+            "category": "customs",
+            "voice": "news",
+            "text": "Port police report a quiet night. Two drunks, one lost cargo seal, no arrests.",
+            "when": {
+                "law": {
+                    "min": 1,
+                    "max": 5
+                },
+                "pop": {
+                    "min": 5
+                },
+                "starport": [
+                    "A",
+                    "B",
+                    "C"
+                ]
+            }
+        },
+        {
+            "id": "customs-008",
+            "category": "customs",
+            "voice": "customs",
+            "text": "Immigration advises offworlders that a visitor's pass is required to leave the port precinct.",
+            "when": {
+                "law": {
+                    "min": 7
+                },
+                "pop": {
+                    "min": 4
+                },
+                "starport": [
+                    "A",
+                    "B",
+                    "C",
+                    "D"
+                ]
+            }
+        },
+        {
+            "id": "customs-009",
+            "category": "customs",
+            "voice": "customs",
+            "text": "All cargo landing at {world} is subject to inspection. Sealed lots will be opened.",
+            "when": {
+                "law": {
+                    "min": 4
+                },
+                "starport": [
+                    "A",
+                    "B",
+                    "C"
+                ]
+            }
+        },
+        {
+            "id": "customs-010",
+            "category": "customs",
+            "voice": "news",
+            "text": "Customs has impounded a lot of unmarked crates from an unnamed free trader. Enquiries continue.",
+            "when": {
+                "law": {
+                    "min": 3
+                },
+                "starport": [
+                    "A",
+                    "B",
+                    "C"
+                ]
+            }
+        },
+        {
+            "id": "customs-011",
+            "category": "customs",
+            "voice": "customs",
+            "text": "The port advises that berthing fees are settled weekly at the harbourmaster's office.",
+            "when": {
+                "starport": [
+                    "A",
+                    "B",
+                    "C",
+                    "D"
+                ]
+            }
+        },
+        {
+            "id": "news-001",
+            "category": "news",
+            "voice": "news",
+            "text": "In the news this hour: the harvest on {world} is in, and the first bulk lots are already moving to the port.",
+            "when": {
+                "tradeCodes": [
+                    "Ag"
+                ],
+                "starport": [
+                    "A",
+                    "B",
+                    "C",
+                    "D"
+                ]
+            }
+        },
+        {
+            "id": "news-002",
+            "category": "news",
+            "voice": "news",
+            "text": "Local news: the foundries on {world} report another record quarter. The air outside the domes, less so.",
+            "when": {
+                "tradeCodes": [
+                    "In"
+                ],
+                "atm": {
+                    "max": 4
+                }
+            }
+        },
+        {
+            "id": "news-003",
+            "category": "news",
+            "voice": "news",
+            "text": "{world} today: the authorities sit on the water question again, and again without a decision.",
+            "when": {
+                "hydro": {
+                    "max": 2
+                },
+                "pop": {
+                    "min": 5
+                }
+            }
+        },
+        {
+            "id": "news-004",
+            "category": "news",
+            "voice": "news",
+            "text": "News from {belt}: a prospecting crew has staked a claim on a rock they say is mostly nickel.",
+            "when": {
+                "belts": {
+                    "min": 1
+                }
+            }
+        },
+        {
+            "id": "news-005",
+            "category": "news",
+            "voice": "news",
+            "text": "The {sector} news service reports shipping across the {subsector} subsector is running normally this week.",
+            "when": {
+                "starport": [
+                    "A",
+                    "B",
+                    "C"
+                ]
+            }
+        },
+        {
+            "id": "news-006",
+            "category": "news",
+            "voice": "news",
+            "text": "Scout service bulletin: the way station on {world} is taking mail for the next boat. Courier departures continue on schedule.",
+            "when": {
+                "bases": [
+                    "W"
+                ]
+            }
+        },
+        {
+            "id": "news-007",
+            "category": "news",
+            "voice": "news",
+            "text": "Navy news: a patrol squadron has rotated through the base at {world}. Shore leave, says the port, has been lively.",
+            "when": {
+                "bases": [
+                    "N"
+                ],
+                "pop": {
+                    "min": 3
+                }
+            }
+        },
+        {
+            "id": "news-008",
+            "category": "news",
+            "voice": "news",
+            "text": "Local news, {date}: {world} keeps the Holiday. Port services run a reduced watch until tomorrow.",
+            "when": {
+                "day": {
+                    "min": 1,
+                    "max": 1
+                },
+                "pop": {
+                    "min": 1
+                }
+            }
+        },
+        {
+            "id": "news-009",
+            "category": "news",
+            "voice": "news",
+            "text": "Sports: the dome league final on {world} drew a crowd that filled every seat and most of the aisles.",
+            "when": {
+                "pop": {
+                    "min": 6
+                },
+                "atm": {
+                    "max": 3
+                }
+            }
+        },
+        {
+            "id": "news-010",
+            "category": "news",
+            "voice": "news",
+            "text": "Weather and tides lead the bulletin again on {world}, where the sea is the news.",
+            "when": {
+                "tradeCodes": [
+                    "Wa"
+                ]
+            }
+        },
+        {
+            "id": "news-011",
+            "category": "news",
+            "voice": "news",
+            "text": "Breaking: a liner out of {world} has turned back with a drive fault. No injuries. Passengers are being rebooked.",
+            "when": {
+                "starport": [
+                    "A",
+                    "B"
+                ],
+                "pop": {
+                    "min": 6
+                }
+            }
+        },
+        {
+            "id": "news-012",
+            "category": "news",
+            "voice": "news",
+            "text": "The port on {world} will take refined fuel deliveries from the new cracking plant from next week, the authority says.",
+            "when": {
+                "starport": [
+                    "A",
+                    "B"
+                ]
+            }
+        },
+        {
+            "id": "news-013",
+            "category": "news",
+            "voice": "news",
+            "text": "Trade talk on {world}: the merchants' guild wants a bigger starport. The port says it wants bigger merchants.",
+            "when": {
+                "starport": [
+                    "C",
+                    "D",
+                    "E"
+                ],
+                "pop": {
+                    "min": 4
+                }
+            }
+        },
+        {
+            "id": "market-001",
+            "category": "market",
+            "voice": "trader",
+            "text": "Markets: grain and preserved foods are plentiful on {world} this season. Buyers from offworld are few, so prices are soft.",
+            "when": {
+                "tradeCodes": [
+                    "Ag"
+                ]
+            }
+        },
+        {
+            "id": "market-002",
+            "category": "market",
+            "voice": "trader",
+            "text": "Markets: manufactured goods are coming off the lines faster than the freighters can lift them. A buyer's week on {world}.",
+            "when": {
+                "tradeCodes": [
+                    "In"
+                ],
+                "starport": [
+                    "A",
+                    "B",
+                    "C"
+                ]
+            }
+        },
+        {
+            "id": "market-003",
+            "category": "market",
+            "voice": "trader",
+            "text": "Markets: anything grown is dear on {world}, and anything that eats is dearer.",
+            "when": {
+                "tradeCodes": [
+                    "Na",
+                    "Po"
+                ],
+                "pop": {
+                    "min": 1
+                }
+            }
+        },
+        {
+            "id": "market-004",
+            "category": "market",
+            "voice": "trader",
+            "text": "Markets: luxury goods move briskly on {world}. The rich are buying and the port knows it.",
+            "when": {
+                "tradeCodes": [
+                    "Ri"
+                ],
+                "starport": [
+                    "A",
+                    "B",
+                    "C"
+                ]
+            }
+        },
+        {
+            "id": "market-005",
+            "category": "market",
+            "voice": "trader",
+            "text": "Markets: ice and water sell by the ton on {world}, and the price moves with every ship that lands.",
+            "when": {
+                "hydro": {
+                    "max": 1
+                },
+                "pop": {
+                    "min": 3
+                },
+                "starport": [
+                    "A",
+                    "B",
+                    "C",
+                    "D",
+                    "E"
+                ]
+            }
+        },
+        {
+            "id": "market-006",
+            "category": "market",
+            "voice": "trader",
+            "text": "Markets: ore from {belt} is piling up at the port. Prospectors are undercutting one another to clear it.",
+            "when": {
+                "belts": {
+                    "min": 1
+                },
+                "starport": [
+                    "A",
+                    "B",
+                    "C"
+                ]
+            }
+        },
+        {
+            "id": "market-007",
+            "category": "market",
+            "voice": "trader",
+            "text": "Markets: with only unrefined fuel to sell, fuel is the one thing on {world} that never gets cheaper.",
+            "when": {
+                "starport": [
+                    "C",
+                    "D"
+                ]
+            }
+        },
+        {
+            "id": "market-008",
+            "category": "market",
+            "voice": "trader",
+            "text": "Markets: a few passengers are asking for passage out of {world}, and they are not fussy about where.",
+            "when": {
+                "zone": [
+                    "amber"
+                ],
+                "pop": {
+                    "min": 1
+                },
+                "starport": [
+                    "A",
+                    "B",
+                    "C",
+                    "D",
+                    "E"
+                ]
+            }
+        },
+        {
+            "id": "market-009",
+            "category": "market",
+            "voice": "trader",
+            "text": "Markets: there is more cargo on the docks of {world} than there are holds to carry it. Masters with space are in demand.",
+            "when": {
+                "pop": {
+                    "min": 8
+                },
+                "starport": [
+                    "A",
+                    "B",
+                    "C"
+                ]
+            }
+        },
+        {
+            "id": "market-010",
+            "category": "market",
+            "voice": "trader",
+            "text": "Markets: the one shop at the landing field on {world} sells fuel, rations and patience. Bring your own of the last.",
+            "when": {
+                "starport": [
+                    "E"
+                ],
+                "pop": {
+                    "min": 1,
+                    "max": 3
+                }
+            }
+        },
+        {
+            "id": "market-011",
+            "category": "market",
+            "voice": "trader",
+            "text": "Markets: high-technology imports are moving quietly on {world}. Nobody is saying who the buyers are.",
+            "when": {
+                "tradeCodes": [
+                    "Lt"
+                ],
+                "pop": {
+                    "min": 4
+                }
+            }
+        },
+        {
+            "id": "weather-001",
+            "category": "weather",
+            "voice": "local",
+            "text": "Weather for {world}: clear over the port, light winds, a fine day to be outside without a suit.",
+            "when": {
+                "atm": {
+                    "in": [
+                        5,
+                        6,
+                        8
+                    ]
+                },
+                "starport": [
+                    "A",
+                    "B",
+                    "C",
+                    "D",
+                    "E"
+                ]
+            }
+        },
+        {
+            "id": "weather-002",
+            "category": "weather",
+            "voice": "local",
+            "text": "Weather for {world}: the taint is thick today. Filters on before you step off the ramp.",
+            "when": {
+                "atm": {
+                    "in": [
+                        2,
+                        4,
+                        7,
+                        9
+                    ]
+                },
+                "starport": [
+                    "A",
+                    "B",
+                    "C",
+                    "D",
+                    "E"
+                ]
+            }
+        },
+        {
+            "id": "weather-003",
+            "category": "weather",
+            "voice": "local",
+            "text": "Weather for {world}: there is no weather. There is no air. The sky is black and the ground is cold.",
+            "when": {
+                "atm": {
+                    "max": 0
+                }
+            }
+        },
+        {
+            "id": "weather-004",
+            "category": "weather",
+            "voice": "local",
+            "text": "Weather for {world}: a storm front is crossing the ocean toward the port. Small craft stay down.",
+            "when": {
+                "hydro": {
+                    "min": 5
+                },
+                "atm": {
+                    "min": 4
+                },
+                "starport": [
+                    "A",
+                    "B",
+                    "C",
+                    "D",
+                    "E"
+                ]
+            }
+        },
+        {
+            "id": "weather-005",
+            "category": "weather",
+            "voice": "local",
+            "text": "Weather for {world}: dust. Dust this morning, dust this afternoon, dust at night. Seal the intakes.",
+            "when": {
+                "hydro": {
+                    "max": 1
+                },
+                "atm": {
+                    "min": 2,
+                    "max": 9
+                }
+            }
+        },
+        {
+            "id": "weather-006",
+            "category": "weather",
+            "voice": "local",
+            "text": "Weather for {world}: the overcast never lifts here. Ground crews work by floodlight at noon.",
+            "when": {
+                "atm": {
+                    "min": 10
+                },
+                "starport": [
+                    "A",
+                    "B",
+                    "C",
+                    "D",
+                    "E"
+                ]
+            }
+        },
+        {
+            "id": "weather-007",
+            "category": "weather",
+            "voice": "local",
+            "text": "Weather for {world}: fog off the sea until midday, then a bright afternoon.",
+            "when": {
+                "hydro": {
+                    "min": 3
+                },
+                "atm": {
+                    "in": [
+                        5,
+                        6,
+                        8
+                    ]
+                }
+            }
+        },
+        {
+            "id": "weather-008",
+            "category": "weather",
+            "voice": "local",
+            "text": "Weather for {world}: the ice fields are as they were yesterday and will be tomorrow. Mind the glare.",
+            "when": {
+                "tradeCodes": [
+                    "Ic"
+                ]
+            }
+        },
+        {
+            "id": "weather-009",
+            "category": "weather",
+            "voice": "local",
+            "text": "Weather for {world}: it is raining something that is not water. Keep it off the hull paint.",
+            "when": {
+                "tradeCodes": [
+                    "Fl"
+                ]
+            }
+        },
+        {
+            "id": "weather-010",
+            "category": "weather",
+            "voice": "local",
+            "text": "Weather for {world}: a long dusk tonight as the sun goes down over the sea. The port bars are open.",
+            "when": {
+                "hydro": {
+                    "min": 4
+                },
+                "atm": {
+                    "in": [
+                        5,
+                        6,
+                        8
+                    ]
+                },
+                "starport": [
+                    "A",
+                    "B",
+                    "C",
+                    "D"
+                ],
+                "pop": {
+                    "min": 4
+                }
+            }
+        },
+        {
+            "id": "weather-011",
+            "category": "weather",
+            "voice": "local",
+            "text": "Weather for {world}: the thin air is bitterly cold on the high ground. Respirators are advised beyond the port.",
+            "when": {
+                "atm": {
+                    "in": [
+                        2,
+                        3
+                    ]
+                },
+                "starport": [
+                    "A",
+                    "B",
+                    "C",
+                    "D",
+                    "E"
+                ]
+            }
+        },
+        {
+            "id": "advert-001",
+            "category": "advert",
+            "voice": "advert",
+            "text": "Tired of ship's rations? The port canteen on {world} serves a hot meal to any crew with a berth number.",
+            "when": {
+                "starport": [
+                    "A",
+                    "B",
+                    "C"
+                ],
+                "pop": {
+                    "min": 3
+                }
+            }
+        },
+        {
+            "id": "advert-002",
+            "category": "advert",
+            "voice": "advert",
+            "text": "The {world} shipyard takes bookings for annual maintenance. Mention this notice for a free hull inspection.",
+            "when": {
+                "starport": [
+                    "A",
+                    "B"
+                ]
+            }
+        },
+        {
+            "id": "advert-003",
+            "category": "advert",
+            "voice": "advert",
+            "text": "Looking for crew? Looking for a berth? The hiring hall at {port} opens at the start of every watch.",
+            "when": {
+                "starport": [
+                    "A",
+                    "B",
+                    "C"
+                ],
+                "pop": {
+                    "min": 4
+                }
+            }
+        },
+        {
+            "id": "advert-004",
+            "category": "advert",
+            "voice": "advert",
+            "text": "Low berths out of {world} to the main routes of {sector}. Cold, cheap, and you will not remember a thing.",
+            "when": {
+                "starport": [
+                    "A",
+                    "B",
+                    "C"
+                ],
+                "pop": {
+                    "min": 4
+                }
+            }
+        },
+        {
+            "id": "advert-005",
+            "category": "advert",
+            "voice": "advert",
+            "text": "Fuel, water, and a fair price at the {world} landing field. We are the only ones here, and we know it.",
+            "when": {
+                "starport": [
+                    "D",
+                    "E"
+                ],
+                "pop": {
+                    "min": 1
+                }
+            }
+        },
+        {
+            "id": "advert-006",
+            "category": "advert",
+            "voice": "advert",
+            "text": "Insure your cargo before you lift. The brokers of {world} write cover for any hold, any route, any risk.",
+            "when": {
+                "starport": [
+                    "A",
+                    "B"
+                ],
+                "pop": {
+                    "min": 6
+                }
+            }
+        },
+        {
+            "id": "advert-007",
+            "category": "advert",
+            "voice": "advert",
+            "text": "The navy is recruiting on {world}. See the worlds. Learn a trade. Ask at the base gate.",
+            "when": {
+                "bases": [
+                    "N"
+                ],
+                "pop": {
+                    "min": 3
+                }
+            }
+        },
+        {
+            "id": "advert-008",
+            "category": "advert",
+            "voice": "advert",
+            "text": "Need a guide beyond the fence? Licensed guides for {world} wait at the port gate. Unlicensed ones wait further along.",
+            "when": {
+                "law": {
+                    "min": 5
+                },
+                "pop": {
+                    "min": 4
+                },
+                "starport": [
+                    "A",
+                    "B",
+                    "C",
+                    "D"
+                ]
+            }
+        },
+        {
+            "id": "advert-009",
+            "category": "advert",
+            "voice": "advert",
+            "text": "Private couriers from {world}: faster than the mail, slower than a rumour, cheaper than being there.",
+            "when": {
+                "starport": [
+                    "A",
+                    "B",
+                    "C"
+                ],
+                "pop": {
+                    "min": 5
+                }
+            }
+        },
+        {
+            "id": "advert-010",
+            "category": "advert",
+            "voice": "advert",
+            "text": "Vacc suits serviced while you wait. The {world} outfitters, by the main lock.",
+            "when": {
+                "atm": {
+                    "max": 1
+                },
+                "pop": {
+                    "min": 2
+                },
+                "starport": [
+                    "A",
+                    "B",
+                    "C",
+                    "D",
+                    "E"
+                ]
+            }
+        },
+        {
+            "id": "advert-011",
+            "category": "advert",
+            "voice": "advert",
+            "text": "Fresh produce direct from the farms of {world}, lifted daily to the port. Ask for the morning crate.",
+            "when": {
+                "tradeCodes": [
+                    "Ag"
+                ],
+                "starport": [
+                    "A",
+                    "B",
+                    "C",
+                    "D"
+                ]
+            }
+        },
+        {
+            "id": "ship-001",
+            "category": "ship",
+            "voice": "crew",
+            "text": "{ship} to any vessel on the approach: one of our passengers left a bag at the highport. Blue, one strap. Reward.",
+            "when": {
+                "highport": true
+            }
+        },
+        {
+            "id": "ship-002",
+            "category": "ship",
+            "voice": "crew",
+            "text": "{ship} calling the port. Our drive is nominal and our purser is not. Request a berth with a bar nearby.",
+            "when": {
+                "starport": [
+                    "A",
+                    "B",
+                    "C"
+                ],
+                "pop": {
+                    "min": 3
+                }
+            }
+        },
+        {
+            "id": "ship-003",
+            "category": "ship",
+            "voice": "crew",
+            "text": "Any free trader in the {world} system: we are buying spare parts for a jump drive. Will pay in fuel.",
+            "when": {
+                "starport": [
+                    "A",
+                    "B",
+                    "C",
+                    "D",
+                    "E"
+                ]
+            }
+        },
+        {
+            "id": "ship-004",
+            "category": "ship",
+            "voice": "crew",
+            "text": "{ship} to {ship2}: we have your lane. Take the next one and nobody has to file a report.",
+            "when": {
+                "starport": [
+                    "A",
+                    "B",
+                    "C"
+                ]
+            }
+        },
+        {
+            "id": "ship-005",
+            "category": "ship",
+            "voice": "crew",
+            "text": "Engineering to the bridge: the number two coil is warm again. We can jump, but I would rather not.",
+            "when": {
+                "party": [
+                    "inSystem",
+                    "docked",
+                    "inJump"
+                ]
+            }
+        },
+        {
+            "id": "ship-006",
+            "category": "ship",
+            "voice": "crew",
+            "text": "This is {ship}, outbound for {gasGiant} to skim. Back in a couple of days if the skimming is clean.",
+            "when": {
+                "gasGiants": {
+                    "min": 1
+                }
+            }
+        },
+        {
+            "id": "ship-007",
+            "category": "ship",
+            "voice": "crew",
+            "text": "{ship} to all craft: the beacon at {belt} is unlit. Steer by your own plot until it is fixed.",
+            "when": {
+                "belts": {
+                    "min": 1
+                }
+            }
+        },
+        {
+            "id": "ship-008",
+            "category": "ship",
+            "voice": "crew",
+            "text": "Watch change aboard {ship}. Nothing to report but the hum of the drive and the long dark between stars.",
+            "when": {
+                "party": [
+                    "inJump"
+                ]
+            }
+        },
+        {
+            "id": "ship-009",
+            "category": "ship",
+            "voice": "crew",
+            "text": "{ship} to {port}: we have a medical case aboard, stable, no quarantine. Request a doctor meet us at the berth.",
+            "when": {
+                "starport": [
+                    "A",
+                    "B",
+                    "C"
+                ],
+                "pop": {
+                    "min": 4
+                }
+            }
+        },
+        {
+            "id": "ship-010",
+            "category": "ship",
+            "voice": "crew",
+            "text": "{ship} to the scout station at {world}: do you have anything for us to carry? We are going your way.",
+            "when": {
+                "bases": [
+                    "S",
+                    "W"
+                ]
+            }
+        },
+        {
+            "id": "ship-011",
+            "category": "ship",
+            "voice": "crew",
+            "text": "Bridge to all hands: we are in jump. Lights to night cycle, watches as posted. Try to sleep.",
+            "when": {
+                "party": [
+                    "inJump"
+                ]
+            }
+        },
+        {
+            "id": "ship-012",
+            "category": "ship",
+            "voice": "crew",
+            "text": "{ship} to {ship2}: did you see that? No, neither did we. Log it as nothing and keep going.",
+            "when": {}
+        },
+        {
+            "id": "rumour-001",
+            "category": "rumour",
+            "voice": "local",
+            "text": "Heard in the port bar on {world}: somebody is paying well for a ship that asks no questions.",
+            "when": {
+                "starport": [
+                    "A",
+                    "B",
+                    "C",
+                    "D"
+                ],
+                "pop": {
+                    "min": 3
+                }
+            }
+        },
+        {
+            "id": "rumour-002",
+            "category": "rumour",
+            "voice": "local",
+            "text": "Heard at the scout station: there is a world two jumps out that is not on anybody's chart. The scouts just smile.",
+            "when": {
+                "bases": [
+                    "S",
+                    "W"
+                ]
+            }
+        },
+        {
+            "id": "rumour-003",
+            "category": "rumour",
+            "voice": "local",
+            "text": "They say the naval base at {world} is storing more than fuel and spares. They say a lot of things.",
+            "when": {
+                "bases": [
+                    "N"
+                ]
+            }
+        },
+        {
+            "id": "rumour-004",
+            "category": "rumour",
+            "voice": "local",
+            "text": "A rumour on {world}: the company is about to cut the night shift and nobody has told the night shift.",
+            "when": {
+                "gov": {
+                    "min": 1,
+                    "max": 1
+                },
+                "pop": {
+                    "min": 3
+                }
+            }
+        },
+        {
+            "id": "rumour-005",
+            "category": "rumour",
+            "voice": "local",
+            "text": "Talk at {belt}: a claim was jumped last week and the jumper has not been seen since.",
+            "when": {
+                "belts": {
+                    "min": 1
+                }
+            }
+        },
+        {
+            "id": "rumour-006",
+            "category": "rumour",
+            "voice": "local",
+            "text": "They say the amber flag on {world} is coming down soon. They said that last year too.",
+            "when": {
+                "zone": [
+                    "amber"
+                ]
+            }
+        },
+        {
+            "id": "rumour-007",
+            "category": "rumour",
+            "voice": "local",
+            "text": "Quiet word at the port: a liner's purser is selling passages at half price and does not care to whom.",
+            "when": {
+                "starport": [
+                    "A",
+                    "B"
+                ],
+                "pop": {
+                    "min": 6
+                }
+            }
+        },
+        {
+            "id": "rumour-008",
+            "category": "rumour",
+            "voice": "local",
+            "text": "Someone on {world} swears they saw a ship come out of jump far too close to {body}. Nobody else saw it.",
+            "when": {
+                "otherBodies": {
+                    "min": 1
+                },
+                "pop": {
+                    "min": 1
+                }
+            }
+        },
+        {
+            "id": "rumour-009",
+            "category": "rumour",
+            "voice": "local",
+            "text": "Heard on {world}: the harbourmaster can be persuaded. The persuasion is not cheap.",
+            "when": {
+                "law": {
+                    "max": 3
+                },
+                "starport": [
+                    "A",
+                    "B",
+                    "C",
+                    "D"
+                ],
+                "pop": {
+                    "min": 2
+                }
+            }
+        },
+        {
+            "id": "rumour-010",
+            "category": "rumour",
+            "voice": "local",
+            "text": "The word on the docks: a prospector came back from {belt} with something that is not ore, and left on the next ship.",
+            "when": {
+                "belts": {
+                    "min": 1
+                },
+                "starport": [
+                    "A",
+                    "B",
+                    "C",
+                    "D"
+                ]
+            }
+        },
+        {
+            "id": "rumour-011",
+            "category": "rumour",
+            "voice": "local",
+            "text": "People on {world} say the sky was not always this colour. They do not say what changed it.",
+            "when": {
+                "atm": {
+                    "min": 10
+                },
+                "pop": {
+                    "min": 1
+                }
+            }
+        },
+        {
+            "id": "distress-001",
+            "category": "distress",
+            "voice": "beacon",
+            "weight": 0.2,
+            "text": "Mayday, mayday. This is {ship}, drive failure, drifting outbound from {world}. Any vessel, please respond.",
+            "when": {}
+        },
+        {
+            "id": "distress-002",
+            "category": "distress",
+            "voice": "beacon",
+            "weight": 0.2,
+            "text": "Pan-pan. {ship} here, we have a cargo fire contained and a crewman hurt. Request medical on the pad.",
+            "when": {
+                "starport": [
+                    "A",
+                    "B",
+                    "C",
+                    "D"
+                ]
+            }
+        },
+        {
+            "id": "distress-003",
+            "category": "distress",
+            "voice": "beacon",
+            "weight": 0.2,
+            "text": "Automated distress beacon: an unregistered craft near {belt}. No voice contact.",
+            "when": {
+                "belts": {
+                    "min": 1
+                }
+            }
+        },
+        {
+            "id": "distress-004",
+            "category": "distress",
+            "voice": "beacon",
+            "weight": 0.2,
+            "text": "Mayday relay from the port: a shuttle on the surface run to {world} is overdue. All craft keep watch on the beacon frequency.",
+            "when": {
+                "highport": true
+            }
+        },
+        {
+            "id": "distress-005",
+            "category": "distress",
+            "voice": "beacon",
+            "weight": 0.2,
+            "text": "{ship}, in the murk near {gasGiant}: we are low on fuel and out of ideas. Can anyone see us?",
+            "when": {
+                "gasGiants": {
+                    "min": 1
+                }
+            }
+        },
+        {
+            "id": "distress-006",
+            "category": "distress",
+            "voice": "beacon",
+            "weight": 0.2,
+            "text": "Pan-pan. A lifeboat from the liner {ship} is adrift inside the system. Six aboard, air for a day. Please hurry.",
+            "when": {
+                "starport": [
+                    "A",
+                    "B"
+                ],
+                "pop": {
+                    "min": 6
+                }
+            }
+        }
+    ]
+}

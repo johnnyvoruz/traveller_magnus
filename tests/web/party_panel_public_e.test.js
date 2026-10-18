@@ -51,7 +51,8 @@ test('the party panel lists ships, keeps the lead separate, and says who a remov
     assert.ok(panel.includes('>Lead</span>'));
     assert.ok(panel.includes('Make lead'));
     assert.ok(panel.includes('>No ship</option>'));
-    assert.ok(panel.includes('{{ standing }}'));
+    // Aboard no ship: the card's rule, per row (DU3b).
+    assert.ok(panel.includes('{{ row.standing }}'));
     assert.match(panel, /@media \(max-width: 599px\)/);
     assert.equal(panel.includes('window.confirm'), false);
     assert.equal(panel.includes('window.alert'), false);
@@ -60,7 +61,7 @@ test('the party panel lists ships, keeps the lead separate, and says who a remov
 test('a public journal entry is a third choice and a mark on the list', () => {
     const page = read('apps/web/src/workspace/journal/EntryPage.vue');
     assert.ok(page.includes("setVisibility('public')\">Public</button>"));
-    assert.ok(page.includes("Shown on your ships' public cards when this game is public."));
+    assert.ok(page.includes("When this entry is public and this game is public, your ships' public cards show it."));
     const list = read('apps/web/src/workspace/journal/JournalList.vue');
     assert.match(list, /v-if="face\.public" class="ui-chip jn-public">Public<\/span>/);
     assert.equal(rowFace(entry({ visibility: 'public' }), {}).public, true);
@@ -88,7 +89,8 @@ test('the name switch sends showReferee and leaves { public } alone', async () =
     assert.equal(showRefereeOf({ id: 'uni_a', publicGames: false, showReferee: false }), true);
     assert.deepEqual(await setPublicGames('uni_a', false, answer(200, { public: false })), { ok: true, public: false });
     assert.equal(showRefereeOf({ id: 'uni_a', publicGames: true, showReferee: true }), null);
-    const menu = read('apps/web/src/workspace/AccountMenu.vue');
+    // DU10: the switches are on the Campaigns panel's card now.
+    const menu = read('apps/web/src/workspace/CampaignsPanel.vue');
     assert.match(menu, /v-if="openOne && showName !== null"/);
     assert.ok(menu.includes('Show my name on public cards'));
     assert.ok(menu.includes('data-command="show-referee"'));

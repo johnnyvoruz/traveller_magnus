@@ -37,9 +37,11 @@ test('cube C uses the two-cube mip estimate, halved', () => {
 
 test('the bake stores the design fabric and writes zero on an empty cell', () => {
     assert.ok(CITY_BAKE_FRAG.includes('float K = exp(-pow(w1.x / (0.10 + 0.18 * U), 2.0));'));
-    assert.ok(CITY_BAKE_FRAG.includes('0.035 + 0.10 * K + 0.24 * H + 0.14 * A'));
+    assert.ok(CITY_BAKE_FRAG.includes('float fill = 0.035 + 0.10 * K;'));
+    assert.ok(CITY_BAKE_FRAG.includes('gold * (0.24 * H)'));
     assert.ok(CITY_BAKE_FRAG.includes('0.055 * S * smoothstep(0.05, 0.5, U)'));
-    assert.ok(CITY_BAKE_FRAG.includes('vec3 E = U * (tint * fabric + base * 0.35 * K * K);'));
+    assert.ok(CITY_BAKE_FRAG.includes('coreCol * (0.35 * K * K)'));
+    assert.ok(CITY_BAKE_FRAG.includes('mix(0.18, 0.36, clamp(uNeon, 0.0, 1.0))'));
     assert.ok(CITY_BAKE_FRAG.includes('outC = vec4(clamp(E, 0.0, 1.0), clamp(U * K * K, 0.0, 1.0));'));
     assert.ok(CITY_BAKE_FRAG.includes('if (uGas > 0.5 || U <= 0.0)'));
     assert.equal(depth(CITY_BAKE_FRAG), 0);
@@ -62,11 +64,12 @@ test('the enhanced draw samples C and leaves the vanilla source alone', () => {
     assert.ok(planet.includes('direct * cityRaw'));
     assert.ok(planet.includes('uCityGain * gainK * uCityOn * night * seen'));
     assert.ok(planet.includes('rawCity / (1.0 + peak)'));
-    assert.ok(planet.includes('bias + log2(2.0)'));
-    assert.ok(planet.includes('bias + log2(5.0)'));
+    assert.ok(planet.includes('bias + log2(3.0)'));
+    assert.ok(planet.includes('bias + log2(8.0)'));
     assert.ok(planet.includes('smoothstep(core0, core1, g1.a)'));
     assert.ok(planet.includes('float core0 = 0.01'));
-    assert.ok(planet.includes('if (uPop >= 9.0 && uNeon >= 0.25) sheetK = 1.4'));
+    assert.ok(planet.includes('if (uPop >= 9.0 && uNeon >= 0.25) sheetK = 0.45'));
+    assert.ok(planet.includes('mix(1.0, 1.2, clamp((uPop - 5.0) / 4.0, 0.0, 1.0))'));
     assert.equal(planet.includes('bias + 2.5'), false);
     assert.equal(planet.includes('bias + 4.5'), false);
     assert.equal(planet.includes('1.0 - exp(-emit'), false);
@@ -75,7 +78,7 @@ test('the enhanced draw samples C and leaves the vanilla source alone', () => {
     assert.ok(planet.includes('mix(uUrbanColor, uGlassColor, clamp(cityCore, 0.0, 1.0))'));
     assert.equal(depth(ENHANCED_DRAW_FRAG), 0);
     assert.deepEqual([...ENHANCED_BAKE_PASSES], ['C']);
-    assert.equal(ENHANCED_CITY_VERSION, 'enhanced-cities-4c');
+    assert.equal(ENHANCED_CITY_VERSION, 'enhanced-cities-4d');
     assert.equal(discRendererVersion('enhanced'), ENHANCED_CITY_VERSION + '-' + cityLook().id + '-ice2');
     assert.equal(discRendererVersion('vanilla'), 'vanilla');
 });

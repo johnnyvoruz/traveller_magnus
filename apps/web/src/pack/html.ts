@@ -3,6 +3,7 @@
  * The file asks for nothing over the network. Colours are the app's tokens,
  * passed in already resolved, so this file has no colour literal of its own.
  */
+import { parseRich, richHtml } from '../workspace/journal/rich.ts';
 import type { PackPaint } from './paint.ts';
 import type { PackPlan } from './plan.ts';
 
@@ -30,6 +31,12 @@ function notes(id: string): string {
 function block(title: string, text: string | null): string {
     if (!text || !text.trim()) return '';
     return '<h3>' + escapeHtml(title) + '</h3><p>' + escapeHtml(text).replace(/\n/g, '<br>') + '</p>';
+}
+
+/** Details only. The text is already redacted. Summary, notes, the sheet, and status stay plain. */
+function richBlock(title: string, text: string | null): string {
+    if (!text || !text.trim()) return '';
+    return '<h3>' + escapeHtml(title) + '</h3><div class="rich">' + richHtml(parseRich(text)) + '</div>';
 }
 
 const NOTES_SCRIPT = [
@@ -127,11 +134,11 @@ export function renderPack(plan: PackPlan, paint: PackPaint): string {
         + '<p class="kind">' + escapeHtml(row.typeName) + (row.kind ? ' · ' + escapeHtml(row.kind) : '') + '</p>'
         + '<h2>' + escapeHtml(row.name) + '</h2>'
         + block('Summary', row.summary)
-        + block('Details', row.details)
+        + richBlock('Details', row.details)
         + (row.tags.length ? '<p class="tags">' + row.tags.map((tag) => '<span>' + escapeHtml(tag) + '</span>').join('') + '</p>' : '')
         + (row.when ? '<p>In fiction: ' + escapeHtml(row.when) + '</p>' : '')
         + (row.place ? '<p>Place: ' + escapeHtml(row.place) + '</p>' : '')
-        + block('Notes for players', row.playerNotes)
+        + block('For players', row.playerNotes)
         + block('Sheet', row.sheet)
         + block('Status', row.status)
         + '<h3>Connections</h3>'
@@ -146,7 +153,7 @@ export function renderPack(plan: PackPlan, paint: PackPaint): string {
         + '<h2>' + escapeHtml(row.title) + '</h2>'
         + '<p>' + escapeHtml(row.author) + (row.when ? ' · ' + escapeHtml(row.when) : '') + (row.played ? ' · Played ' + escapeHtml(row.played) : '') + '</p>'
         + (row.place ? '<p>Place: ' + escapeHtml(row.place) + '</p>' : '')
-        + '<div class="body"><p>' + escapeHtml(row.body).replace(/\n/g, '<br>') + '</p></div>'
+        + '<div class="body">' + richHtml(parseRich(row.body)) + '</div>'
         + notes('e-' + row.id)
         + '</article>'
     )).join('');

@@ -1,17 +1,33 @@
 import type { SectorIndex, TreeEnvelope, TruthManifest, TruthOverview, TruthPolities } from '@voyage/shared';
+import { chartKeepVersion, chartMatch, chartPut } from '../platform/browser.ts';
 
 type FetchLike = typeof fetch;
 
 type ReleasedRow = { version?: string; releasedAt?: string | null };
+
+/** Successful CDN responses, one jar per injected fetch, so a new client in this page does not load them again. */
+const jars = new WeakMap<FetchLike, Map<string, Promise<unknown>>>();
+
+function jarFor(fetchImpl: FetchLike): Map<string, Promise<unknown>> {
+    let jar = jars.get(fetchImpl);
+    if (!jar) {
+        jar = new Map();
+        jars.set(fetchImpl, jar);
+    }
+    return jar;
+}
 
 /**
  * Reads released truth. fetch is injected.
  * Indexes: at most maxIndexes parsed (least recently read dropped), at most maxInFlight fetches.
  * A failed fetch is not cached. The next want() may retry it. This class never retries on its own.
  * want() fetches missing slugs in the order given. The caller passes the most central first.
+ * A successful immutable file (anything under cdnBase) is kept for the session and shared by
+ * every client constructed with the same fetch. The versions list is not immutable, so it is not kept.
  */
 export class TruthClient {
     private readonly fetch: FetchLike;
+    private readonly injected: FetchLike;
     private readonly cdnBase: string;
     private readonly apiBase: string;
     private readonly maxIndexes: number;
@@ -25,13 +41,12 @@ export class TruthClient {
     /** At most 16 parsed trees, least recently read first. A failed fetch is not stored. */
     private readonly trees = new Map<string, TreeEnvelope>();
     private readonly treeFlying = new Map<string, Promise<TreeEnvelope>>();
-    /** One polities document per version. A 404 is cached as an empty document. A failure is not. */
-    private readonly polityDocs = new Map<string, Promise<TruthPolities>>();
 
     constructor(opts: { cdnBase: string; apiBase: string; fetch: FetchLike; maxIndexes?: number; maxInFlight?: number }) {
         // The browser's fetch throws "Illegal invocation" when called as a method of another
         // object, so it is never stored and called as this.fetch(url).
         const injected = opts.fetch;
+        this.injected = injected;
         this.fetch = (input, init) => injected(input, init);
         this.cdnBase = opts.cdnBase.replace(/\/+$/, '');
         this.apiBase = opts.apiBase.replace(/\/+$/, '');
@@ -51,6 +66,7 @@ export class TruthClient {
             if (!best || row.releasedAt > best.releasedAt) best = { version: row.version, releasedAt: row.releasedAt };
         }
         if (!best) throw new Error('TruthClient: no released truth version');
+        await chartKeepVersion(best.version);
         return best.version;
     }
 
@@ -67,18 +83,19 @@ export class TruthClient {
      * resolves to an empty document and is cached. Any other failure is not cached.
      */
     polities(version: string): Promise<TruthPolities> {
-        const existing = this.polityDocs.get(version);
-        if (existing) return existing;
         const url = this.cdnBase + '/truth/' + version + '/polities.json';
+        const jar = jarFor(this.injected);
+        const existing = jar.get(url);
+        if (existing) return existing as Promise<TruthPolities>;
         const tracked = Promise.resolve(this.fetch(url)).then(async (res) => {
             if (res.status === 404) return { truthVersion: version, polities: [] };
             if (!res.ok) throw new Error('TruthClient: ' + res.status + ' ' + url);
             return await res.json() as TruthPolities;
         }).catch((err: unknown) => {
-            if (this.polityDocs.get(version) === tracked) this.polityDocs.delete(version);
+            if (jar.get(url) === tracked) jar.delete(url);
             throw err;
         });
-        this.polityDocs.set(version, tracked);
+        jar.set(url, tracked);
         return tracked;
     }
 
@@ -149,15 +166,34 @@ export class TruthClient {
     }
 
     private load(url: string): Promise<unknown> {
-        const existing = this.urls.get(url);
+        // Truth files and object bytes are immutable. The versions list is not, and stays on `urls`.
+        const keep = url.startsWith(this.cdnBase + '/');
+        const bag = keep ? jarFor(this.injected) : this.urls;
+        const existing = bag.get(url);
         if (existing) return existing;
-        const tracked = Promise.resolve(this.fetch(url)).then(async (res) => {
+        const read = (res: Awaited<ReturnType<FetchLike>>): Promise<unknown> => {
             if (!res.ok) throw new Error('TruthClient: ' + res.status + ' ' + url);
+            if (keep && typeof res.clone === 'function') void chartPut(url, res.clone());
             return res.json() as Promise<unknown>;
-        }).finally(() => {
-            if (this.urls.get(url) === tracked) this.urls.delete(url);
-        });
-        this.urls.set(url, tracked);
+        };
+        // No cache: start the request now, so a burst still overlaps. A cache hit never starts one.
+        const fromNetwork = (): Promise<unknown> => Promise.resolve(this.fetch(url)).then(read);
+        const tracked = keep && typeof caches !== 'undefined'
+            ? chartMatch(url).catch(() => null).then((hit) => {
+                if (!hit) return fromNetwork();
+                return (hit.json() as Promise<unknown>).catch(() => fromNetwork());
+            })
+            : fromNetwork();
+        bag.set(url, tracked);
+        if (keep) {
+            tracked.catch(() => {
+                if (bag.get(url) === tracked) bag.delete(url);
+            });
+        } else {
+            tracked.finally(() => {
+                if (bag.get(url) === tracked) bag.delete(url);
+            });
+        }
         return tracked;
     }
 

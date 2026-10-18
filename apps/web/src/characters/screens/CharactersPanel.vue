@@ -10,7 +10,7 @@ import Icon from '../../design/Icon.vue';
 import { observeSize } from '../../platform/browser.ts';
 import { atPane, addressPane } from '../../shell/pane.ts';
 import Panel from '../../shell/Panel.vue';
-import { readSpan, writeSpan, type PanelSpan } from '../../shell/panel_state.ts';
+import { onSpan, readSpan, writeSpan, type PanelSpan } from '../../shell/panel_state.ts';
 import { registerCommand } from '../../shell/registry.ts';
 import { showToast } from '../../shell/toast.ts';
 import CharacterSheet from '../../workspace/CharacterSheet.vue';
@@ -57,6 +57,7 @@ const route = useRoute();
 const router = useRouter();
 const panel = ref<{ element: HTMLElement | null } | null>(null);
 const span = ref<PanelSpan>(readSpan());
+let stopSpan: (() => void) | null = null;
 const query = ref('');
 const making = ref(false);
 const draft = ref('');
@@ -395,12 +396,14 @@ watch(characterId, (id) => {
 }, { immediate: true });
 
 onMounted(() => {
+    stopSpan = onSpan(() => { span.value = readSpan(); });
     bindCommands();
     bindSize();
     void nextTick(publish);
 });
 
 onBeforeUnmount(() => {
+    if (stopSpan) stopSpan();
     if (stopCommands) stopCommands();
     if (stopSize) stopSize();
     if (confirm.open) answerConfirm(false);
@@ -446,11 +449,11 @@ onBeforeUnmount(() => {
             <button type="button" class="ui-btn" :disabled="busy" @click="making = false">Cancel</button>
           </form>
           <p v-if="characters.status === 'loading'" class="ch-empty">Loading characters.</p>
-          <div v-else-if="characters.items.length === 0 && !query.trim()" class="ch-first">
+          <div v-else-if="characters.items.length === 0 && !query.trim()" class="ch-first ui-ground">
             <p class="ch-empty">{{ EMPTY_ALL }}</p>
           </div>
           <template v-else>
-            <h2 class="ui-heading">Mine</h2>
+            <h2 class="ui-heading ui-kicker">Mine</h2>
             <p v-if="mine.length === 0" class="ch-empty">{{ query.trim() ? 'No character matches.' : EMPTY_MINE }}</p>
             <ul v-else class="ch-rows">
               <li v-for="face in mine" :key="face.id">
@@ -462,7 +465,7 @@ onBeforeUnmount(() => {
                 <button type="button" class="ui-btn" data-command="character-duplicate" :disabled="busy" @click="duplicateOf(face.id, face.name)">Duplicate</button>
               </li>
             </ul>
-            <h2 class="ui-heading">Shared with me</h2>
+            <h2 class="ui-heading ui-kicker">Shared with me</h2>
             <p v-if="shared.length === 0" class="ch-empty">{{ query.trim() ? 'No character matches.' : EMPTY_SHARED }}</p>
             <ul v-else class="ch-rows">
               <li v-for="face in shared" :key="face.id">
@@ -515,7 +518,7 @@ onBeforeUnmount(() => {
             @leave="sheet.leave"
           />
           <section v-if="live.status !== 'gone'" class="ch-share" :aria-label="share.readOnly ? 'Who has access' : 'Share'">
-            <h2 class="ui-heading">{{ share.readOnly ? 'Who has access' : 'Share' }}</h2>
+            <h2 class="ui-heading ui-kicker">{{ share.readOnly ? 'Who has access' : 'Share' }}</h2>
             <p v-if="share.readOnly" class="ch-empty">You can edit the sheet. You cannot change who else can.</p>
             <div v-if="share.canInvite" class="ch-acts">
               <button type="button" class="ui-btn" data-command="character-share" @click="makeLink">Share by link</button>
@@ -692,19 +695,46 @@ onBeforeUnmount(() => {
   font: 600 13px/1.4 var(--font-text);
 }
 
+/* The rows sit in one frame (the version-video look), as the journal's do. */
 .ch-rows {
   margin: 0;
   padding: 0;
   list-style: none;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-4);
+  overflow: hidden;
+  background: var(--bg-0);
+  box-shadow: 0 0 24px var(--frame-glow);
 }
 
 .ch-rows li {
   display: flex;
   align-items: stretch;
   gap: 8px;
-  margin: 0 0 8px;
-  border-radius: var(--r-2);
-  background: var(--panel-raised);
+  margin: 0;
+}
+
+.ch-rows li + li {
+  border-top: 1px solid var(--line-soft);
+}
+
+.ch-row:hover {
+  background: var(--surface-1);
+}
+
+/* No characters yet: the line on the ground, in a frame. */
+.ch-first.ui-ground {
+  padding: 22px 20px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-4);
+  box-shadow: 0 0 24px var(--frame-glow);
+  overflow: hidden;
+}
+
+.ch-first .ch-empty {
+  margin: 0;
+  color: var(--text-1);
+  font-size: 14px;
 }
 
 .ch-row {

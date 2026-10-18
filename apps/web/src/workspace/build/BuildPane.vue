@@ -230,7 +230,7 @@ const asking = computed(() => {
       <p v-else-if="mode === 'empty' && edit.error && edit.hexKey === one" class="build-error" role="alert">{{ edit.error }}</p>
 
       <div v-if="mode === 'many'" class="build-acts build-more">
-        <button v-if="filled > 0" type="button" class="ui-btn" :disabled="busy" :title="build.job ? JOB_HOLD : 'Choose an engine, and then select “Regenerate them too”'" @click="build.sheetOpen = true">
+        <button v-if="filled > 0" type="button" class="ui-btn" :disabled="busy" :title="build.job ? JOB_HOLD : 'Open Generate with…, then select “Regenerate them too”.'" @click="build.sheetOpen = true">
           <Icon name="wand-magic-sparkles" :size="13" />Regenerate the {{ plural(filled, 'system', 'systems') }}…
         </button>
         <button v-if="canRestore.length > 0" type="button" class="ui-btn" :disabled="busy" :title="build.job ? JOB_HOLD : undefined" @click="restoreHexes(keys)">
@@ -246,7 +246,7 @@ const asking = computed(() => {
       <p v-else-if="mode === 'removed'" class="build-fine">While Build is on, a removed hex shows as a faint outline. When Build is off, the hex doesn’t show.</p>
       </div>
       <div v-if="mode === 'many'" class="build-side">
-        <h3 class="ui-heading">Selected <span class="ui-count">{{ keys.length }}</span></h3>
+        <h3 class="ui-heading ui-kicker">Selected <span class="ui-count">{{ keys.length }}</span></h3>
         <ul class="build-list">
           <li v-for="row in rows" :key="row.key">
             <button type="button" @click="$emit('open', row.key)">
@@ -321,12 +321,14 @@ const asking = computed(() => {
   font-size: 12px;
 }
 
+/* The acts and the list sit in frames (the version-video look). The tallies stay in the code face: Orbitron's slashed 0 reads as a box at this size. */
 .build-card {
   margin-top: 14px;
   padding: 14px;
-  border: 1px solid var(--signal-line);
-  border-radius: var(--r-3);
-  background: var(--panel-raised);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-4);
+  background: var(--bg-0);
+  box-shadow: 0 0 24px var(--frame-glow);
 }
 
 .build-acts {
@@ -504,9 +506,10 @@ const asking = computed(() => {
   margin: 0;
   padding: 0;
   overflow: hidden;
-  border: 1px solid var(--line-1);
-  border-radius: var(--r-3);
-  background: var(--panel-raised);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-4);
+  background: var(--bg-0);
+  box-shadow: 0 0 24px var(--frame-glow);
   list-style: none;
 }
 

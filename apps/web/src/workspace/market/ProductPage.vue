@@ -7,6 +7,9 @@
  * description and tags, versions as a short changelog, more by the author, and Report at the
  * foot. The author adds or removes the cover here. `?version=N` is a version being published,
  * watched until it is done. Everything is free: Import is the buy button.
+ *
+ * Every name is a link (prompts/d_store_harden.md item 3): the breadcrumb goes back to the store
+ * filtered by this kind, the kind and the author filter the store, as the tags do.
  */
 import { computed, nextTick, ref, watch } from 'vue';
 import { RouterLink } from 'vue-router';
@@ -15,16 +18,19 @@ import type { PackageVersion } from '../../marketplace/index.ts';
 import {
     MarketError, marketWire, versionContents, type PackageCard, type PackageCover, type PackagePublicPage, type VersionContents,
 } from '../../marketplace/catalogue.ts';
-import { objectUrl, shownCover } from '../../marketplace/covers.ts';
+import { FAMILY_WORDS, kindFamily, objectUrl, shownCover } from '../../marketplace/covers.ts';
+import { showToast } from '../../shell/toast.ts';
 import ImportPanel from './ImportPanel.vue';
 import Lightbox from '../Lightbox.vue';
 import MarketAsk from './MarketAsk.vue';
 import CoverEditor from './CoverEditor.vue';
 import StoreCard from './StoreCard.vue';
+import PieceChart from './PieceChart.vue';
 import type { PreparedCover } from './cover_image.ts';
-import { coverMissed, marketStore, plural, stateWords } from './market.ts';
+import { byPath, coverMissed, kindPath, marketStore, plural, stateWords, tagPath } from './market.ts';
 import { outlineHexes } from './place.ts';
-import { galleryImages, hexesInside, kindWords, moreBy, recordGroups, updatedWords } from './storefront.ts';
+import { keep, keepContents, keepPage, recall, recallContents, recallPage } from './catalogue_memory.ts';
+import { dateWords, galleryImages, hexesInside, isNew, kindWords, moreBy, recordGroups, updatedWords } from './storefront.ts';
 
 const props = defineProps<{
     packageId: string;
@@ -51,12 +57,13 @@ const notFound = ref(false);
 const asking = ref<'' | 'report' | 'takedown' | 'restore'>('');
 const askBusy = ref(false);
 const askError = ref('');
-const said = ref('');
 const importOpen = ref(false);
 const importEl = ref<HTMLElement | null>(null);
 const shownAt = ref<number | null>(null);
 const coverBusy = ref(false);
 const coverError = ref('');
+/** The chart piece found no rows to draw (a manifest from before the rows were kept): the outline instead. */
+const pieceEmpty = ref(false);
 const now = ref(Date.now());
 
 const isAdmin = computed(() => !!session.user && session.user.role === 'admin');
@@ -95,42 +102,80 @@ const outline = computed(() => (keys.value && keys.value.length ? outlineHexes(k
 const groups = computed(() => (contents.value && contents.value.records ? recordGroups(contents.value.records) : []));
 const gallery = computed(() => (contents.value && contents.value.records ? galleryImages(contents.value.records) : []));
 const canImport = computed(() => !!page.value && page.value.latestVersion > 0 && !page.value.hidden);
+const family = computed(() => (page.value ? kindFamily(page.value.kind) : 'other'));
 const urlOf = (hash: string): string => objectUrl(props.cdn, hash);
 
 let watchedKey = '';
 
-async function load(): Promise<void> {
-    const id = props.packageId;
-    loading.value = true;
-    error.value = '';
-    notFound.value = false;
-    said.value = '';
+/** A version's hexes and records: kept for the session once read (immutable once published). */
+function showContents(id: string, got: PackagePublicPage): void {
+    if (got.latestVersion <= 0) {
+        contents.value = null;
+        contentsRead.value = true;
+        return;
+    }
+    const kept = recallContents(id, got.latestVersion);
+    if (kept) {
+        contents.value = kept;
+        contentsRead.value = true;
+        return;
+    }
     contents.value = null;
     contentsRead.value = false;
-    others.value = [];
+    void versionContents(fetch, props.cdn, got.id, got.latestVersion).then((found) => {
+        if (found) keepContents(id, got.latestVersion, found);
+        if (props.packageId !== id) return;
+        contents.value = found;
+        contentsRead.value = true;
+    });
+}
+
+/**
+ * The package's page. Seen before this session (streams/D.md D9), it paints at once from memory and
+ * is read again behind; "More by" comes from the store's kept catalogue when there is one. A failed
+ * read keeps what is shown, with the error line.
+ */
+async function load(): Promise<void> {
+    const id = props.packageId;
+    const kept = recallPage(id);
+    error.value = '';
+    notFound.value = false;
+    pieceEmpty.value = false;
     importOpen.value = !!(props.importFor || props.updateId || props.placedBack);
     now.value = Date.now();
+    const user = session.user ? session.user.id : '';
+    const keptList = recall({ q: '', sort: 'installs', mine: false, hidden: false, user });
+    if (kept) {
+        page.value = kept;
+        showContents(id, kept);
+        others.value = keptList ? moreBy(keptList.items, kept.authorHandle, kept.id) : [];
+    } else {
+        contents.value = null;
+        contentsRead.value = false;
+        others.value = [];
+    }
+    loading.value = !kept;
     try {
-        page.value = await wire.page(id);
+        const fresh = await wire.page(id);
+        if (props.packageId !== id) return;
+        keepPage(fresh);
+        page.value = fresh;
     } catch (err) {
-        page.value = null;
-        if (err instanceof MarketError && err.status === 404) notFound.value = true;
-        else error.value = err instanceof Error && err.message ? err.message : 'The package could not be loaded. Try again.';
+        if (!kept) page.value = null;
+        if (err instanceof MarketError && err.status === 404) {
+            page.value = null;
+            notFound.value = true;
+        } else {
+            error.value = err instanceof Error && err.message ? err.message : 'The package could not be loaded. Try again.';
+        }
     } finally {
         loading.value = false;
     }
     const got = page.value;
     if (!got) return;
-    if (got.latestVersion > 0) {
-        void versionContents(fetch, props.cdn, got.id, got.latestVersion).then((found) => {
-            if (props.packageId !== id) return;
-            contents.value = found;
-            contentsRead.value = true;
-        });
-    } else {
-        contentsRead.value = true;
-    }
+    if (!kept || kept.latestVersion !== got.latestVersion) showContents(id, got);
     void wire.catalogue({ sort: 'installs' }).then((list) => {
+        keep({ q: '', sort: 'installs', mine: false, hidden: false, user }, list);
         if (props.packageId === id) others.value = moreBy(list.items, got.authorHandle, got.id);
     }).catch(() => undefined);
     void follow(id, got);
@@ -189,7 +234,7 @@ async function answer(reason: string): Promise<void> {
         else if (what === 'takedown') await wire.takedown(id, reason);
         else if (what === 'restore') await wire.restore(id);
         asking.value = '';
-        said.value = what === 'report' ? 'Thanks. An admin will look at it.' : what === 'takedown' ? 'Taken down. It no longer shows in the catalogue.' : 'Restored. It shows in the catalogue again.';
+        showToast(what === 'report' ? 'Thanks. An admin will look at it.' : what === 'takedown' ? 'Taken down. It no longer shows in the catalogue.' : 'Restored. It shows in the catalogue again.');
         if (what !== 'report') page.value = await wire.page(id).catch(() => page.value);
     } catch (err) {
         askError.value = err instanceof Error && err.message ? err.message : 'That did not work. Try again.';
@@ -238,10 +283,20 @@ watch(() => [props.packageId, props.watching, props.ready, session.user ? sessio
 
 <template>
   <section class="mk-pk" :class="{ 'has-buybar': canImport }">
-    <p v-if="error" class="mk-err" role="alert">{{ error }}</p>
-    <div v-if="notFound" class="mk-empty">
-      <p><b>Listing not found.</b></p>
-      <RouterLink class="ui-btn" to="/packages">Back to the Marketplace</RouterLink>
+    <!-- The package could not be read: in the hero's place, with Try again. Read before, a line over the page. -->
+    <div v-if="error && !page" class="ui-frame mk-state is-error" role="alert">
+      <p class="ui-frame-label">Not loaded</p>
+      <p class="mk-state-head">{{ error }}</p>
+      <p class="mk-state-say">Check your connection, and then try again.</p>
+      <div class="mk-state-acts"><button type="button" class="ui-btn is-primary" :disabled="loading" @click="load()">Try again</button></div>
+    </div>
+    <p v-else-if="error" class="mk-err" role="alert">{{ error }}</p>
+    <!-- A removed package's address, or one that never was. -->
+    <div v-if="notFound" class="ui-frame mk-state">
+      <p class="ui-frame-label">Not found</p>
+      <p class="mk-state-head">This package is not in the store.</p>
+      <p class="mk-state-say">Its author or an admin may have taken it down, or the link is wrong. Campaigns that imported it keep their copy.</p>
+      <div class="mk-state-acts"><RouterLink class="ui-btn is-primary" to="/packages">Back to the Marketplace</RouterLink></div>
     </div>
     <div v-if="!page && (loading || !ready)" class="mk-hero is-ghost" aria-busy="true" aria-label="Loading the package">
       <div class="mk-hero-cover"></div>
@@ -252,19 +307,31 @@ watch(() => [props.packageId, props.watching, props.ready, session.user ? sessio
       <p v-if="page.hidden && isAuthor && !isAdmin" class="mk-err" role="status">Taken down. Only you can see it.</p>
       <p v-else-if="page.hidden" class="mk-err" role="status"><b>Hidden</b><template v-if="page.takedownReason">. Reason: {{ page.takedownReason }}</template></p>
       <p v-if="statusLine" class="mk-status" :data-state="live ? live.state : ''" role="status" aria-live="polite">{{ statusLine }}</p>
-      <p v-if="said" class="mk-status" role="status">{{ said }}</p>
       <p v-if="isAuthor && coverMissed && coverMissed.packageId === page.id" class="mk-err" role="alert">The cover was not saved: {{ coverMissed.message }} Add it again under the title.</p>
+
+      <nav class="mk-crumbs" aria-label="Breadcrumb">
+        <RouterLink to="/packages">Marketplace</RouterLink>
+        <span aria-hidden="true">/</span>
+        <RouterLink :to="kindPath(family)">{{ FAMILY_WORDS[family] }}</RouterLink>
+      </nav>
 
       <div class="mk-hero">
         <figure class="mk-hero-cover" :data-cover="cover.source">
           <img :src="cover.full" :alt="page.title" decoding="async">
         </figure>
         <div class="mk-hero-info">
-          <span class="mk-hero-kind">{{ kindWords(page.kind) }}</span>
+          <div class="ui-kicker-row mk-hero-head">
+            <span v-if="isNew(page.updatedAt, now)" class="ui-new">New</span>
+            <RouterLink class="ui-kicker is-signal mk-hero-kind" :to="kindPath(family)">{{ kindWords(page.kind) }}</RouterLink>
+          </div>
           <h1 class="mk-hero-title">{{ page.title }}</h1>
-          <span class="mk-hero-by">by @{{ page.authorHandle }}</span>
+          <div class="ui-rule mk-hero-rule" aria-hidden="true"></div>
+          <span class="mk-hero-by">by <RouterLink :to="byPath(page.authorHandle)">@{{ page.authorHandle }}</RouterLink></span>
           <span class="mk-hero-facts">{{ facts }}</span>
-          <span class="mk-hero-facts">{{ page.latestVersion ? 'Version ' + page.latestVersion : 'Not published yet' }} · {{ updatedWords(page.updatedAt, now) }}</span>
+          <span class="mk-hero-facts mk-hero-when">
+            <span>{{ page.latestVersion ? 'Version ' + page.latestVersion : 'Not published yet' }}</span>
+            <time class="ui-date" :datetime="page.updatedAt" :title="updatedWords(page.updatedAt, now)">{{ dateWords(page.updatedAt) }}</time>
+          </span>
           <span class="mk-hero-facts">{{ page.edition }} · {{ page.truthVersion ? 'chart ' + page.truthVersion : 'own map' }}</span>
           <div v-if="canImport && ready" class="mk-buy">
             <button type="button" class="ui-btn is-primary mk-buy-btn" data-market-import @click="buy()">{{ updateId ? 'Update' : 'Import' }}</button>
@@ -282,6 +349,7 @@ watch(() => [props.packageId, props.watching, props.ready, session.user ? sessio
         :busy="coverBusy"
         :error="coverError"
         :title="page.title"
+        :map="family === 'map' || family === 'system'"
         @take="sendCover"
         @remove="dropCover"
       />
@@ -297,8 +365,12 @@ watch(() => [props.packageId, props.watching, props.ready, session.user ? sessio
         />
       </div>
 
-      <section v-if="page.latestVersion > 0" class="mk-sec" aria-labelledby="mk-inside">
-        <h2 id="mk-inside" class="ui-heading">What's inside</h2>
+      <section v-if="page.latestVersion > 0" class="mk-sec mk-inside-frame ui-frame" aria-labelledby="mk-inside">
+        <h2 id="mk-inside" class="ui-frame-label">
+          <span>What's inside</span>
+          <span v-if="page.hexCount > 0" class="mk-frame-pair">Hexes <span class="ui-frame-count">{{ page.hexCount }}</span></span>
+          <span v-if="latest" class="mk-frame-pair">Records <span class="ui-frame-count">{{ latest.recordCount }}</span></span>
+        </h2>
         <p v-if="!contentsRead" class="mk-fine" aria-busy="true">Reading the package…</p>
         <p v-else-if="!contents" class="mk-fine">The contents could not be read.</p>
         <div v-else class="mk-inside">
@@ -308,7 +380,17 @@ watch(() => [props.packageId, props.watching, props.ready, session.user ? sessio
           </div>
           <div v-else class="mk-inside-hexes">
             <p class="mk-inside-line"><b>{{ hexesInside(contents.keys, contents.ownSectors) }}</b></p>
-            <figure v-if="outline && outline.points.length" class="mk-shape">
+            <PieceChart
+              v-if="!pieceEmpty"
+              :key="page.id + ':' + page.latestVersion"
+              :package-id="page.id"
+              :version="page.latestVersion"
+              :truth-version="page.truthVersion"
+              :cdn="cdn"
+              :title="page.title"
+              @empty="pieceEmpty = true"
+            />
+            <figure v-else-if="outline && outline.points.length" class="mk-shape">
               <svg :viewBox="outline.viewBox" role="img" :aria-label="'Outline of ' + plural(outline.points.length, 'hex', 'hexes')">
                 <polygon v-for="(pts, i) in outline.points" :key="i" :points="pts" />
               </svg>
@@ -332,7 +414,7 @@ watch(() => [props.packageId, props.watching, props.ready, session.user ? sessio
       </section>
 
       <section v-if="gallery.length" class="mk-sec" aria-labelledby="mk-gallery">
-        <h2 id="mk-gallery" class="ui-heading">Gallery <span class="ui-count">{{ gallery.length }}</span></h2>
+        <h2 id="mk-gallery" class="ui-kicker mk-kicker">Gallery <span class="ui-count">{{ gallery.length }}</span></h2>
         <ul class="mk-gallery">
           <li v-for="(image, index) in gallery" :key="image.hash">
             <button type="button" class="mk-gallery-open" :title="image.caption" @click="shownAt = index">
@@ -354,16 +436,16 @@ watch(() => [props.packageId, props.watching, props.ready, session.user ? sessio
       </section>
 
       <section class="mk-sec" aria-labelledby="mk-about">
-        <h2 id="mk-about" class="ui-heading">About</h2>
+        <h2 id="mk-about" class="ui-kicker mk-kicker">About</h2>
         <p v-if="page.description" class="mk-desc">{{ page.description }}</p>
         <p v-else class="mk-fine">No description.</p>
         <p v-if="page.tags.length" class="mk-tags">
-          <RouterLink v-for="t in page.tags" :key="t" class="mk-tag" :to="{ path: '/packages', query: { tag: t } }">{{ t }}</RouterLink>
+          <RouterLink v-for="t in page.tags" :key="t" class="ui-chip mk-tag" :to="tagPath(t)">{{ t }}</RouterLink>
         </p>
       </section>
 
       <section class="mk-sec" aria-labelledby="mk-versions">
-        <h2 id="mk-versions" class="ui-heading">Versions <span class="ui-count">{{ versions.length }}</span></h2>
+        <h2 id="mk-versions" class="ui-kicker mk-kicker">Versions <span class="ui-count">{{ versions.length }}</span></h2>
         <p v-if="!versions.length" class="mk-fine">No version is published yet.</p>
         <ol v-else class="mk-changes">
           <li v-for="item in versions" :key="item.version">
@@ -376,7 +458,10 @@ watch(() => [props.packageId, props.watching, props.ready, session.user ? sessio
       </section>
 
       <section v-if="others.length" class="mk-sec" aria-labelledby="mk-more">
-        <h2 id="mk-more" class="ui-heading">More by @{{ page.authorHandle }}</h2>
+        <div class="mk-sec-head">
+          <h2 id="mk-more" class="ui-kicker mk-kicker">More by @{{ page.authorHandle }}</h2>
+          <RouterLink class="mk-link" :to="byPath(page.authorHandle)">See all by @{{ page.authorHandle }}</RouterLink>
+        </div>
         <ul class="mk-grid is-more">
           <li v-for="item in others" :key="item.id"><StoreCard :card="item" :cdn="cdn" :now="now" /></li>
         </ul>
@@ -467,11 +552,74 @@ watch(() => [props.packageId, props.watching, props.ready, session.user ? sessio
   min-width: 0;
 }
 
+/* The videos' head line: NEW beside the kind's kicker, the title, then the rule fading out. */
 .mk-hero-kind {
+  text-decoration: none;
+}
+
+.mk-hero-rule {
+  width: 100%;
+  margin: 2px 0 4px;
+}
+
+.mk-hero-when {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+
+/* A section's kicker: the videos' small Orbitron capitals, with room under it. */
+.mk-kicker {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 12px;
+}
+
+/* What's inside, framed as the videos' panels: the label, then a count per kind of content. */
+.mk-inside-frame .ui-frame-label {
+  flex-wrap: wrap;
+  gap: 6px 22px;
+}
+
+.mk-frame-pair {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+/* Back to the store, filtered by this package's kind. */
+.mk-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
   color: var(--text-muted);
-  font: 600 12px/1.4 var(--font-text);
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
+  font: 600 13px/1.4 var(--font-text);
+}
+
+.mk-crumbs a,
+.mk-hero-by a {
+  color: var(--signal);
+  text-decoration: none;
+}
+
+.mk-crumbs a:hover,
+.mk-hero-kind:hover,
+.mk-hero-by a:hover {
+  color: var(--signal-bright);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.mk-sec-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 16px;
 }
 
 .mk-hero-title {
@@ -669,11 +817,12 @@ watch(() => [props.packageId, props.watching, props.ready, session.user ? sessio
     padding-bottom: 72px;
   }
 
+  /* Right of the rail, as the page is: the rail's foot (the account) stays in reach. */
   .mk-buybar {
     position: fixed;
     right: 0;
     bottom: 0;
-    left: 0;
+    left: var(--rail-width);
     z-index: 5;
     display: flex;
     align-items: center;

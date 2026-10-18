@@ -380,14 +380,14 @@ function truthy(value: FormValue): boolean {
 function starMeasure(id: string, value: FormValue, label: string): number | null {
     if (value === null || value === '') return null;
     if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
-        throw new HandRefusal(`${label} cannot hold that. Type a finite number above 0.`, id);
+        throw new HandRefusal(`${label} cannot hold that. Type a number greater than 0.`, id);
     }
     return value;
 }
 
 function orbitNumber(id: string, value: FormValue): number | null {
     if (value === null || value === '') return null;
-    if (typeof value !== 'number' || !Number.isFinite(value)) throw new HandRefusal(holdText(id, 'Type a finite number.'), id);
+    if (typeof value !== 'number' || !Number.isFinite(value)) throw new HandRefusal(holdText(id, 'Type a number.'), id);
     return value;
 }
 
@@ -692,7 +692,7 @@ export function applyHand(envelope: HandEnv, changes: FormChange[] = [], roll: {
     const known = knownIds(before);
     for (const change of changes) {
         const item = known.get(change.id);
-        if (item?.permission === 'read') throw new HandRefusal(`You can't edit ${item.label}. Choose a field you can edit.`, change.id);
+        if (item?.permission === 'read') throw new HandRefusal(`You cannot edit ${item.label}. Choose a field you can edit.`, change.id);
         if (change.id.includes('.profile.')) oneChar(change.id, change.value);
     }
     const messages: FormMessage[] = [];
@@ -783,13 +783,13 @@ function mainworldBaseline(system: HandSystem, exceptId: string): { name: string
 function rollProfiles(envelope: HandEnv, system: HandSystem, rolls: { id: string }[], messages: FormMessage[]): void {
     for (const item of rolls) {
         if (!item.id.endsWith('.profile.roll')) {
-            messages.push({ id: item.id, text: 'Nothing rolls this field.', holds: false });
+            messages.push({ id: item.id, text: 'This field cannot be rolled.', holds: false });
             continue;
         }
         const bodyId = item.id.slice(0, -'.profile.roll'.length);
         const body = system.bodies.find((candidate) => candidate.id === bodyId);
         if (!body || envelope.edition !== 'MgT2E' || (body.kind !== 'world' && body.kind !== 'gas' && body.kind !== 'belt')) {
-            messages.push({ id: item.id, text: 'Nothing rolls this field.', holds: false });
+            messages.push({ id: item.id, text: 'This field cannot be rolled.', holds: false });
             continue;
         }
         const stars = byOrder(system.stars);

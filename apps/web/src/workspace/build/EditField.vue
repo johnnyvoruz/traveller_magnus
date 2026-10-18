@@ -122,7 +122,7 @@ const changed = computed(() => props.mark !== 'none' && props.was !== undefined 
         class="ui-btn is-icon ef-roll"
         :disabled="busy"
         :aria-label="'Roll ' + field.label + ' again'"
-        :title="locked ? 'Roll again. The engine replaces the value you typed' : 'Roll again'"
+        :title="locked ? 'Roll again. This replaces the value you typed' : 'Roll again'"
         @click="$emit('roll')"
       >
         <Icon name="wand-magic-sparkles" :size="12" />
@@ -133,7 +133,7 @@ const changed = computed(() => props.mark !== 'none' && props.was !== undefined 
     <!-- The engine's own words. A long trace is folded to its first line, so one change does not bury the form. -->
     <p v-if="why && whyLines.length <= 3" class="ef-why">{{ why }}</p>
     <details v-else-if="why" class="ef-why is-long">
-      <summary>{{ whyLines[0] }}<em>and {{ whyLines.length - 1 }} more lines from the engine</em></summary>
+      <summary>{{ whyLines[0] }}<em>and {{ whyLines.length - 1 }} more lines</em></summary>
       <p>{{ whyRest }}</p>
     </details>
     <p v-for="(message, index) in messages" :key="index" class="ef-message" :class="{ 'is-hold': message.holds }" role="status">{{ message.text }}</p>

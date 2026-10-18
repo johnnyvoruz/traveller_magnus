@@ -56,11 +56,11 @@ export async function getPublicGames(c: AppContext): Promise<Response> {
     const truthVersion = c.req.query('truthVersion');
     const sector = c.req.query('sector');
     if (truthVersion === undefined || truthVersion === '') {
-        return fail(c, 400, 'validation', 'truthVersion is required.');
+        return fail(c, 400, 'validation', 'That request could not be read. Try again.');
     }
-    if (sector === undefined || sector === '') return fail(c, 400, 'validation', 'sector is required.');
+    if (sector === undefined || sector === '') return fail(c, 400, 'validation', 'That request could not be read. Try again.');
     if (!PublicGamesTruthVersion.safeParse(truthVersion).success || !PublicGamesSectorSlug.safeParse(sector).success) {
-        return fail(c, 400, 'validation', 'Invalid request.');
+        return fail(c, 400, 'validation', 'That request could not be read. Try again.');
     }
     if (publicShipsReady()) return c.json({ hexes: await shipHexes(c.env, truthVersion, sector, callerId, publicCardsReady()) });
     if (!callerId) return c.json({ hexes: [] });
@@ -160,10 +160,10 @@ export async function getPublicOverview(c: AppContext): Promise<Response> {
     if (publicLimited(c, callerId)) return fail(c, 429, 'rate_limited', 'Too many requests.');
     const truthVersion = c.req.query('truthVersion');
     if (truthVersion === undefined || truthVersion === '') {
-        return fail(c, 400, 'validation', 'truthVersion is required.');
+        return fail(c, 400, 'validation', 'That request could not be read. Try again.');
     }
     if (!PublicGamesTruthVersion.safeParse(truthVersion).success) {
-        return fail(c, 400, 'validation', 'Invalid request.');
+        return fail(c, 400, 'validation', 'That request could not be read. Try again.');
     }
     if (!publicShipsReady()) return c.json({ hexes: [] }, 200, { 'cache-control': 'public, max-age=60' });
     const listed = await c.env.DB.prepare(
@@ -199,10 +199,10 @@ export async function setPublicGames(c: AppContext, owned: OwnedUniverse): Promi
     try {
         body = await c.req.json();
     } catch {
-        return fail(c, 400, 'validation', 'Invalid JSON.');
+        return fail(c, 400, 'validation', 'That request could not be read. Try again.');
     }
     const parsed = PublicGamesSetting.safeParse(body);
-    if (!parsed.success) return fail(c, 400, 'validation', 'Invalid request.');
+    if (!parsed.success) return fail(c, 400, 'validation', 'That request could not be read. Try again.');
     const courseOn = await courseReady(c.env.DB);
     if (parsed.data.showCourse !== undefined && !courseOn) {
         return fail(c, 503, 'course_unavailable', COURSE_UNAVAILABLE);

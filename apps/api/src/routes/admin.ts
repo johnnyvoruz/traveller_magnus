@@ -2,10 +2,12 @@ import { ONE_SECTOR_LIMIT } from '../jobs/one_sector';
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { Hono } from 'hono';
+import { z } from 'zod';
 import { polityOutlines, sectorOverview } from '@voyage/generation';
 import polityColourFile from '../../../../universe/polity_colours.json' with { type: 'json' };
-import { SectorIndex, sha256Hex, stable, TruthBuild, TruthManifest, TruthOverview, TruthPolities, TruthRetry } from '@voyage/shared';
+import { PlatformFlagSet, SectorIndex, sha256Hex, stable, TruthBuild, TruthManifest, TruthOverview, TruthPolities, TruthRetry } from '@voyage/shared';
 import { originAllowed, requireRole, ulid, type AppContext } from '../auth/session';
+import { noteAgentAccess } from '../auth/tokens';
 import { auditLog, truthVersions } from '../db/schema';
 import type { AppEnv } from '../env';
 import { fail, ok } from '../http';
@@ -14,6 +16,7 @@ import { provenanceDocument } from '../jobs/reconcile_transform';
 
 const ATTRIBUTION = 'Sector data from the Traveller Map (travellermap.com), used under Far Future Enterprises\' Fair Use Policy. Traveller is a registered trademark of Far Future Enterprises.';
 const FEED = 12;
+const TruthRemove = z.object({ version: z.string().min(1) });
 
 export const admin = new Hono<AppEnv>();
 
@@ -22,30 +25,30 @@ function db(c: AppContext) {
 }
 
 admin.post('/truth/build', async (c) => {
-    if (!originAllowed(c)) return fail(c, 403, 'forbidden', 'Origin check failed.');
+    if (!originAllowed(c)) return fail(c, 403, 'forbidden', 'That request was blocked. Reload the page and try again.');
     const actor = await requireRole(c, 'admin');
     if (actor instanceof Response) return actor;
     let body: unknown;
     try {
         body = await c.req.json();
     } catch {
-        return fail(c, 400, 'validation', 'Invalid JSON.');
+        return fail(c, 400, 'validation', 'That request could not be read. Try again.');
     }
     const parsed = TruthBuild.safeParse(body);
-    if (!parsed.success) return fail(c, 400, 'validation', 'Invalid request.', parsed.error.flatten());
+    if (!parsed.success) return fail(c, 400, 'validation', 'That request could not be read. Try again.', parsed.error.flatten());
     const input = parsed.data;
     const existing = await db(c).select().from(truthVersions).where(eq(truthVersions.version, input.version)).get();
-    if (existing) return fail(c, 409, 'conflict', 'That truth version already exists.');
+    if (existing) return fail(c, 409, 'conflict', 'That version already exists.');
     let sourceSectors: string[] | null = null;
     if (input.from) {
         const source = await db(c).select().from(truthVersions).where(eq(truthVersions.version, input.from)).get();
-        if (!source) return fail(c, 404, 'not_found', 'No such source truth version.');
-        if (source.state !== 'released') return fail(c, 409, 'conflict', 'The source truth version is not released.');
+        if (!source) return fail(c, 404, 'not_found', 'No such source version.');
+        if (source.state !== 'released') return fail(c, 409, 'conflict', 'The source version is not released.');
         const mismatch = sourceMismatch(input, source);
         if (mismatch) return fail(c, 409, 'conflict', `${mismatch} differs from the source version.`);
         if (input.sectors !== 'all') return fail(c, 400, 'validation', "sectors must be 'all'.");
         sourceSectors = parseStringArray(source.sectors);
-        if (!sourceSectors.length) return fail(c, 400, 'validation', 'Source truth version has no sectors.');
+        if (!sourceSectors.length) return fail(c, 400, 'validation', 'The source version has no sectors.');
     }
     let resolved: { version: string; text: string };
     try {
@@ -146,7 +149,7 @@ admin.get('/truth/builds/:version', async (c) => {
     if (actor instanceof Response) return actor;
     const version = c.req.param('version');
     const row = await db(c).select().from(truthVersions).where(eq(truthVersions.version, version)).get();
-    if (!row) return fail(c, 404, 'not_found', 'No such truth build.');
+    if (!row) return fail(c, 404, 'not_found', 'No such build.');
     const slugs = parseStringArray(row.sectors);
     const progress = await progressBySlug(c.env.DB, version);
     const sectors = slugs.map((slug) => {
@@ -176,7 +179,7 @@ admin.get('/truth/builds/:version', async (c) => {
 });
 
 admin.post('/truth/builds/:version/retry', async (c) => {
-    if (!originAllowed(c)) return fail(c, 403, 'forbidden', 'Origin check failed.');
+    if (!originAllowed(c)) return fail(c, 403, 'forbidden', 'That request was blocked. Reload the page and try again.');
     const actor = await requireRole(c, 'admin');
     if (actor instanceof Response) return actor;
     const version = c.req.param('version');
@@ -186,14 +189,14 @@ admin.post('/truth/builds/:version/retry', async (c) => {
         try {
             raw = JSON.parse(text);
         } catch {
-            return fail(c, 400, 'validation', 'Invalid JSON.');
+            return fail(c, 400, 'validation', 'That request could not be read. Try again.');
         }
     }
     const parsed = TruthRetry.safeParse(raw);
-    if (!parsed.success) return fail(c, 400, 'validation', 'Invalid request.', parsed.error.flatten());
+    if (!parsed.success) return fail(c, 400, 'validation', 'That request could not be read. Try again.', parsed.error.flatten());
     const row = await db(c).select().from(truthVersions).where(eq(truthVersions.version, version)).get();
-    if (!row) return fail(c, 404, 'not_found', 'No such truth build.');
-    if (row.state === 'released') return fail(c, 409, 'conflict', 'That truth version is already released.');
+    if (!row) return fail(c, 404, 'not_found', 'No such build.');
+    if (row.state === 'released') return fail(c, 409, 'conflict', 'That version is already released.');
     const recorded = await c.env.DB.prepare(
         `SELECT sector_slug, state, updated_at FROM truth_build_sectors WHERE version = ?`,
     ).bind(version).all<{ sector_slug: string; state: string; updated_at: string }>();
@@ -251,14 +254,73 @@ admin.post('/truth/builds/:version/retry', async (c) => {
     return ok(c, { version, enqueued: targets.length }, 202);
 });
 
+admin.post('/truth/builds/:version/remove', async (c) => {
+    if (!originAllowed(c)) return fail(c, 403, 'forbidden', 'That request was blocked. Reload the page and try again.');
+    const actor = await requireRole(c, 'admin');
+    if (actor instanceof Response) return actor;
+    const version = c.req.param('version');
+    if (!version || version.includes('/') || version.includes('\\')) {
+        return fail(c, 400, 'validation', 'That version name is not valid.');
+    }
+    let raw: unknown;
+    try {
+        raw = await c.req.json();
+    } catch {
+        return fail(c, 400, 'validation', 'That request could not be read. Try again.');
+    }
+    const parsed = TruthRemove.safeParse(raw);
+    if (!parsed.success) return fail(c, 400, 'validation', 'That request could not be read. Try again.', parsed.error.flatten());
+    if (parsed.data.version !== version) {
+        return fail(c, 400, 'validation', 'The version in the body does not match the path.');
+    }
+    const row = await db(c).select().from(truthVersions).where(eq(truthVersions.version, version)).get();
+    if (!row) return fail(c, 404, 'not_found', 'No such build.');
+    if (row.state === 'released') return fail(c, 409, 'conflict', 'That version is already released.');
+    if (row.state !== 'building' && row.state !== 'failed') {
+        return fail(c, 409, 'conflict', 'That version cannot be removed.');
+    }
+    const removedKeys = await deleteTruthPrefix(c.env.PUBLIC_BUCKET, `truth/${version}/`);
+    await c.env.DB.batch([
+        c.env.DB.prepare('DELETE FROM truth_systems WHERE version = ?').bind(version),
+        c.env.DB.prepare('DELETE FROM truth_build_sectors WHERE version = ?').bind(version),
+        c.env.DB.prepare('DELETE FROM truth_versions WHERE version = ?').bind(version),
+    ]);
+    const now = new Date().toISOString();
+    await db(c).insert(auditLog).values({
+        id: ulid(),
+        at: now,
+        actorId: actor.id,
+        action: 'truth.remove',
+        targetKind: 'truth_version',
+        targetId: version,
+        details: JSON.stringify({ removedKeys }),
+    }).run();
+    return ok(c, { version, removedKeys });
+});
+
+async function deleteTruthPrefix(bucket: R2Bucket, prefix: string): Promise<number> {
+    let removed = 0;
+    let cursor: string | undefined;
+    do {
+        const page = await bucket.list({ prefix, cursor, limit: 1000 });
+        const keys = page.objects.map((object) => object.key);
+        if (keys.length > 0) {
+            await bucket.delete(keys);
+            removed += keys.length;
+        }
+        cursor = page.truncated ? page.cursor : undefined;
+    } while (cursor);
+    return removed;
+}
+
 admin.post('/truth/release/:version', async (c) => {
-    if (!originAllowed(c)) return fail(c, 403, 'forbidden', 'Origin check failed.');
+    if (!originAllowed(c)) return fail(c, 403, 'forbidden', 'That request was blocked. Reload the page and try again.');
     const actor = await requireRole(c, 'admin');
     if (actor instanceof Response) return actor;
     const version = c.req.param('version');
     const row = await db(c).select().from(truthVersions).where(eq(truthVersions.version, version)).get();
-    if (!row) return fail(c, 404, 'not_found', 'No such truth build.');
-    if (row.state === 'released') return fail(c, 409, 'conflict', 'That truth version is already released.');
+    if (!row) return fail(c, 404, 'not_found', 'No such build.');
+    if (row.state === 'released') return fail(c, 409, 'conflict', 'That version is already released.');
     const done = await c.env.DB.prepare(
         `SELECT COUNT(*) AS n FROM truth_build_sectors WHERE version = ? AND state = 'done'`,
     ).bind(version).first<{ n: number }>();
@@ -358,6 +420,57 @@ admin.post('/truth/release/:version', async (c) => {
         details: JSON.stringify({ manifestHash }),
     }).run();
     return ok(c, { version, manifestHash });
+});
+
+admin.get('/flags', async (c) => {
+    const actor = await requireRole(c, 'admin');
+    if (actor instanceof Response) return actor;
+    try {
+        const table = await c.env.DB.prepare(
+            `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'platform_flags'`,
+        ).first<{ name: string }>();
+        if (!table) return ok(c, { flag: null });
+        const row = await c.env.DB.prepare(
+            `SELECT key, value, updated_at AS updatedAt, updated_by AS updatedBy FROM platform_flags WHERE key = 'agent_access'`,
+        ).first<{ key: string; value: string; updatedAt: string; updatedBy: string }>();
+        return ok(c, { flag: row ?? null });
+    } catch {
+        return ok(c, { flag: null });
+    }
+});
+
+admin.post('/flags', async (c) => {
+    if (!originAllowed(c)) return fail(c, 403, 'forbidden', 'That request was blocked. Reload the page and try again.');
+    const actor = await requireRole(c, 'admin');
+    if (actor instanceof Response) return actor;
+    let body: unknown;
+    try {
+        body = await c.req.json();
+    } catch {
+        return fail(c, 400, 'validation', 'Invalid request.');
+    }
+    const parsed = PlatformFlagSet.safeParse(body);
+    if (!parsed.success) return fail(c, 400, 'validation', 'Invalid request.');
+    const table = await c.env.DB.prepare(
+        `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'platform_flags'`,
+    ).first<{ name: string }>();
+    if (!table) return fail(c, 503, 'tokens_unavailable', 'Agent access is not available yet.');
+    const now = new Date().toISOString();
+    await c.env.DB.prepare(
+        `INSERT INTO platform_flags (key, value, updated_at, updated_by) VALUES (?, ?, ?, ?)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
+    ).bind(parsed.data.key, parsed.data.value, now, actor.id).run();
+    noteAgentAccess(parsed.data.value);
+    await db(c).insert(auditLog).values({
+        id: ulid(),
+        at: now,
+        actorId: actor.id,
+        action: 'agent_access.set',
+        targetKind: 'platform_flag',
+        targetId: parsed.data.key,
+        details: JSON.stringify({ value: parsed.data.value }),
+    }).run();
+    return ok(c, parsed.data);
 });
 
 async function inputKeys(bucket: R2Bucket, version: string): Promise<Set<string>> {

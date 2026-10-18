@@ -4,13 +4,14 @@
  */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const webRoot = path.join(root, 'apps', 'web');
-const cacheDir = path.join(root, '.tmp', 'e-uwp-ssr');
+let cacheDir = '';
 
 const cells = {
     kind: 'cells',
@@ -27,7 +28,7 @@ describe('UWP ribbon notes', { concurrency: 1 }, () => {
     let server = null;
 
     test.before(async () => {
-        fs.rmSync(cacheDir, { recursive: true, force: true });
+        cacheDir = fs.mkdtempSync(path.join(tmpdir(), 'e-uwp-ssr-'));
         const { createServer } = await import('vite');
         server = await createServer({
             root: webRoot,
@@ -40,7 +41,7 @@ describe('UWP ribbon notes', { concurrency: 1 }, () => {
 
     test.after(async () => {
         if (server) await server.close();
-        fs.rmSync(cacheDir, { recursive: true, force: true });
+        if (cacheDir) fs.rmSync(cacheDir, { recursive: true, force: true });
     });
 
     async function render(file, props) {

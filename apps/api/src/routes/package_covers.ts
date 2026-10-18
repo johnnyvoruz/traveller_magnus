@@ -26,8 +26,8 @@ const FORM_SLACK = 64 * 1024;
 export const COVER_REFUSALS = {
     unavailable: 'Covers are not available yet.',
     hidden: 'A hidden package cannot change its cover.',
-    form: 'Send the cover as a form with image, thumb, hash, and thumbHash.',
-    hash: 'Hash must be 64 lowercase hex characters.',
+    form: 'The cover could not be read. Choose the image again.',
+    hash: 'That image could not be checked. Choose the file again.',
     imageBytes: 'A cover is at most 2 MB.',
     thumbBytes: 'A cover thumbnail is at most 200 KB.',
     imageType: 'A cover is a WebP image.',
@@ -35,7 +35,7 @@ export const COVER_REFUSALS = {
     imageSide: 'A cover is at most 1600 px on its long side.',
     thumbSide: 'A cover thumbnail is at most 640 px on its long side.',
     imageHash: 'The hash does not match the cover.',
-    thumbHash: 'The thumbHash does not match the thumbnail.',
+    thumbHash: 'The thumbnail does not match. Choose the image again.',
 } as const;
 
 async function fillUnfilled(env: Env): Promise<void> {
@@ -125,7 +125,7 @@ async function checkPart(part: Part, maxBytes: number, maxSide: number, refuse: 
 async function authorPackage(c: Ctx): Promise<Response | { id: string; hidden: boolean; latestVersion: number; hash: string | null; thumbHash: string | null }> {
     const actor = await requireUser(c);
     if (actor instanceof Response) return actor;
-    if (!originAllowed(c)) return fail(c, 403, 'forbidden', 'Origin check failed.');
+    if (!originAllowed(c)) return fail(c, 403, 'forbidden', 'That request was blocked. Reload the page and try again.');
     if (!(await coversReady(c.env))) return fail(c, 503, 'unavailable', COVER_REFUSALS.unavailable);
     const row = await c.env.DB.prepare(
         `SELECT id, hidden, latest_version AS latestVersion, cover_hash AS hash, cover_thumb_hash AS thumbHash FROM packages WHERE id = ? AND author_id = ?`,

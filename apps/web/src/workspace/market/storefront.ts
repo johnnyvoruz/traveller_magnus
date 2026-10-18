@@ -74,6 +74,21 @@ export function updatedWords(iso: string, now: number = Date.now()): string {
     return 'Updated ' + (years === 1 ? '1 year' : years + ' years') + ' ago';
 }
 
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+/** "October 15, 2026", the day in UTC, for the date box (design/base.css .ui-date, as in the videos). */
+export function dateWords(iso: string): string {
+    const at = new Date(iso);
+    if (!Number.isFinite(at.getTime())) return '';
+    return MONTHS[at.getUTCMonth()] + ' ' + at.getUTCDate() + ', ' + at.getUTCFullYear();
+}
+
+/** The NEW tag (design/base.css .ui-new): a package updated in the last 7 days. */
+export function isNew(iso: string, now: number = Date.now()): boolean {
+    const at = Date.parse(iso);
+    return Number.isFinite(at) && now - at <= 7 * DAY;
+}
+
 // ---- what's inside ------------------------------------------------------------------------------------
 
 /** "Spinward Marches", or the own sectors counted, in the order first met. */

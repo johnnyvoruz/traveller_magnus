@@ -3,6 +3,10 @@ import {
     PackageCard,
     PackageCardPage,
     PackageCatalogueQuery,
+    PackageFacets,
+    PackageFacetsQuery,
+    PACKAGE_KIND_FAMILIES,
+    type PackageFamily,
     PackageCreate,
     PackageListPage,
     PackageListing,
@@ -20,6 +24,7 @@ import type { AppEnv } from '../env';
 import { fail, ok } from '../http';
 import { markPublishFailed, PublishRefusal, resolvePublish } from '../jobs/publish_queue';
 import { coverOf, mountCoverRoutes } from './package_covers';
+import { facetCounts, facetRows } from './package_facets';
 
 const HEX_CAP = 1280;
 const RECORD_CAP = 500;
@@ -73,7 +78,7 @@ async function readJson(c: Ctx): Promise<unknown | Response> {
     try {
         return await c.req.json();
     } catch {
-        return fail(c, 400, 'validation', 'Invalid JSON.');
+        return fail(c, 400, 'validation', 'That request could not be read. Try again.');
     }
 }
 
@@ -152,11 +157,11 @@ function versionNumber(value: string | undefined): number | null {
 packagesRoute.post('/', async (c) => {
     const actor = await requireUser(c);
     if (actor instanceof Response) return actor;
-    if (!originAllowed(c)) return fail(c, 403, 'forbidden', 'Origin check failed.');
+    if (!originAllowed(c)) return fail(c, 403, 'forbidden', 'That request was blocked. Reload the page and try again.');
     const body = await readJson(c);
     if (body instanceof Response) return body;
     const parsed = PackageCreate.safeParse(body);
-    if (!parsed.success) return fail(c, 400, 'validation', 'Invalid request.', parsed.error.flatten());
+    if (!parsed.success) return fail(c, 400, 'validation', 'That request could not be read. Try again.', parsed.error.flatten());
     const universe = await universeOf(c, parsed.data.universeId, actor.id);
     if (!universe) return fail(c, 404, 'not_found', 'No such universe.');
     const profile = await ensureProfile(c.env, actor.id, actor.email);
@@ -193,11 +198,11 @@ packagesRoute.post('/', async (c) => {
 packagesRoute.post('/:packageId/versions', async (c) => {
     const actor = await requireUser(c);
     if (actor instanceof Response) return actor;
-    if (!originAllowed(c)) return fail(c, 403, 'forbidden', 'Origin check failed.');
+    if (!originAllowed(c)) return fail(c, 403, 'forbidden', 'That request was blocked. Reload the page and try again.');
     const body = await readJson(c);
     if (body instanceof Response) return body;
     const parsed = PackagePublish.safeParse(body);
-    if (!parsed.success) return fail(c, 400, 'validation', 'Invalid request.', parsed.error.flatten());
+    if (!parsed.success) return fail(c, 400, 'validation', 'That request could not be read. Try again.', parsed.error.flatten());
     const input = parsed.data;
     if (input.hexKeys.length === 0 && input.recordIds.length === 0) return fail(c, 400, 'validation', 'A package needs at least one hex or one record.');
     if (input.hexKeys.length > HEX_CAP) return fail(c, 400, 'too_large', 'A package holds at most 1280 hexes.');
@@ -250,14 +255,14 @@ async function ownList(c: Ctx, actor: SessionUser): Promise<Response> {
     const rawLimit = c.req.query('limit');
     let limit = 100;
     if (rawLimit !== undefined) {
-        if (!/^-?\d+$/.test(rawLimit)) return fail(c, 400, 'validation', 'Invalid limit.');
+        if (!/^-?\d+$/.test(rawLimit)) return fail(c, 400, 'validation', 'That request could not be read. Try again.');
         limit = Math.min(100, Math.max(1, Number(rawLimit)));
     }
     const rawCursor = c.req.query('cursor');
     let cursor: { updatedAt: string; id: string } | null = null;
     if (rawCursor) {
         const pipe = rawCursor.lastIndexOf('|');
-        if (pipe <= 0 || pipe === rawCursor.length - 1) return fail(c, 400, 'validation', 'Invalid request.');
+        if (pipe <= 0 || pipe === rawCursor.length - 1) return fail(c, 400, 'validation', 'That request could not be read. Try again.');
         cursor = { updatedAt: rawCursor.slice(0, pipe), id: rawCursor.slice(pipe + 1) };
     }
     const profile = await ensureProfile(c.env, actor.id, actor.email);
@@ -331,7 +336,31 @@ function likeOf(text: string): string {
     return `%${text.toLowerCase().replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
 }
 
-const CATALOGUE_KEYS = ['q', 'kind', 'tag', 'sort', 'mine', 'hidden'];
+const CATALOGUE_KEYS = ['q', 'kind', 'family', 'author', 'tag', 'sort', 'mine', 'hidden'];
+/** Keys that may repeat. */
+const REPEATED_KEYS = new Set(['family']);
+
+/**
+ * One SQL test per family, matching the store's first-match rule: the kind holds one of the family's
+ * words and none of an earlier family's. `other` holds none at all. ASCII words, so lower() is enough.
+ */
+function familySql(families: readonly PackageFamily[]): { sql: string; binds: string[] } {
+    const parts: string[] = [];
+    const binds: string[] = [];
+    const anyOf = (words: readonly string[]) => {
+        binds.push(...words);
+        return '(' + words.map(() => 'instr(lower(kind), ?) > 0').join(' OR ') + ')';
+    };
+    for (const family of new Set(families)) {
+        const at = PACKAGE_KIND_FAMILIES.findIndex((row) => row.family === family);
+        const earlier = (at === -1 ? PACKAGE_KIND_FAMILIES : PACKAGE_KIND_FAMILIES.slice(0, at)).flatMap((row) => row.words);
+        const tests: string[] = [];
+        if (at !== -1) tests.push(anyOf(PACKAGE_KIND_FAMILIES[at]!.words));
+        if (earlier.length) tests.push('NOT ' + anyOf(earlier));
+        parts.push('(' + tests.join(' AND ') + ')');
+    }
+    return { sql: '(' + parts.join(' OR ') + ')', binds };
+}
 
 /** F2. Signed in with no catalogue key keeps the stub's own list, so the client in this tree keeps working. */
 packagesRoute.get('/', async (c) => {
@@ -341,23 +370,28 @@ packagesRoute.get('/', async (c) => {
         const actor = await viewer(c);
         if (actor) return ownList(c, actor);
     }
-    const query: Record<string, string> = {};
+    const query: Record<string, string | string[]> = {};
     for (const key of CATALOGUE_KEYS) {
+        if (REPEATED_KEYS.has(key)) {
+            const values = url.searchParams.getAll(key);
+            if (values.length) query[key] = values;
+            continue;
+        }
         const value = url.searchParams.get(key);
         if (value !== null) query[key] = value;
     }
     const parsed = PackageCatalogueQuery.safeParse(query);
-    if (!parsed.success) return fail(c, 400, 'validation', 'Invalid request.', parsed.error.flatten());
+    if (!parsed.success) return fail(c, 400, 'validation', 'That request could not be read. Try again.', parsed.error.flatten());
     const input = parsed.data;
     const rawLimit = url.searchParams.get('limit');
     let limit = 100;
     if (rawLimit !== null) {
-        if (!/^-?\d+$/.test(rawLimit)) return fail(c, 400, 'validation', 'Invalid limit.');
+        if (!/^-?\d+$/.test(rawLimit)) return fail(c, 400, 'validation', 'That request could not be read. Try again.');
         limit = Math.min(100, Math.max(1, Number(rawLimit)));
     }
     if (input.hidden) {
         const actor = await viewer(c);
-        if (!actor || !roleSatisfies(actor.role, 'admin')) return fail(c, 403, 'forbidden', 'Role required.');
+        if (!actor || !roleSatisfies(actor.role, 'admin')) return fail(c, 403, 'forbidden', 'You do not have access to that.');
     }
     let mineId: string | null = null;
     if (input.mine) {
@@ -368,7 +402,7 @@ packagesRoute.get('/', async (c) => {
     const sort = input.sort ?? 'updated';
     const rawCursor = url.searchParams.get('cursor');
     const cursor = rawCursor ? decodeCursor(rawCursor, sort) : null;
-    if (rawCursor && !cursor) return fail(c, 400, 'validation', 'Invalid request.');
+    if (rawCursor && !cursor) return fail(c, 400, 'validation', 'That request could not be read. Try again.');
     const where: string[] = [];
     const binds: (string | number)[] = [];
     if (input.hidden) {
@@ -379,6 +413,15 @@ packagesRoute.get('/', async (c) => {
         binds.push(mineId);
     } else if (!input.hidden) {
         where.push('hidden = 0', 'latest_version > 0');
+    }
+    if (input.family) {
+        const family = familySql(input.family);
+        where.push(family.sql);
+        binds.push(...family.binds);
+    }
+    if (input.author) {
+        where.push('author_id IN (SELECT user_id FROM profile WHERE handle = ?)');
+        binds.push(input.author);
     }
     if (input.kind) {
         where.push('kind = ?');
@@ -433,6 +476,27 @@ packagesRoute.get('/', async (c) => {
         nextCursor = encodeCursor({ s: sort, v, id: last.id });
     }
     return ok(c, PackageCardPage.parse({ items, nextCursor }));
+});
+
+/** Facets keys that may repeat (Z6); `q` and `updated` are single. */
+const FACET_REPEATED = new Set(['family', 'contents', 'edition', 'tag', 'author']);
+
+/**
+ * Z6. The store's filter column over the whole public catalogue for a query: Kind, Contents, Edition,
+ * Tags, Updated and Publisher, each counted over the packages every other section lets through.
+ * Registered before `/:packageId`, so "facets" is never read as a package id.
+ */
+packagesRoute.get('/facets', async (c) => {
+    const url = new URL(c.req.url);
+    const query: Record<string, string | string[]> = {};
+    for (const key of new Set(url.searchParams.keys())) {
+        query[key] = FACET_REPEATED.has(key) ? url.searchParams.getAll(key) : url.searchParams.get(key) ?? '';
+    }
+    const parsed = PackageFacetsQuery.safeParse(query);
+    if (!parsed.success) return fail(c, 400, 'validation', 'That request could not be read. Try again.', parsed.error.flatten());
+    const { rows, capped } = await facetRows(c.env.DB, parsed.data.q, likeOf);
+    const counts = facetCounts(rows, parsed.data, Date.now());
+    return ok(c, PackageFacets.parse({ ...counts, scanned: rows.length, capped }));
 });
 packagesRoute.get('/:packageId/versions/:version', async (c) => {
     const actor = await requireUser(c);
@@ -502,11 +566,11 @@ async function reportsReady(c: Ctx): Promise<boolean> {
 packagesRoute.post('/:packageId/report', async (c) => {
     const actor = await requireUser(c);
     if (actor instanceof Response) return actor;
-    if (!originAllowed(c)) return fail(c, 403, 'forbidden', 'Origin check failed.');
+    if (!originAllowed(c)) return fail(c, 403, 'forbidden', 'That request was blocked. Reload the page and try again.');
     const body = await readJson(c);
     if (body instanceof Response) return body;
     const parsed = PackageReport.safeParse(body);
-    if (!parsed.success) return fail(c, 400, 'validation', 'Invalid request.', parsed.error.flatten());
+    if (!parsed.success) return fail(c, 400, 'validation', 'That request could not be read. Try again.', parsed.error.flatten());
     const pkg = await c.env.DB.prepare(`SELECT id, author_id AS authorId, hidden, latest_version AS latestVersion FROM packages WHERE id = ?`)
         .bind(c.req.param('packageId') ?? '').first<{ id: string; authorId: string; hidden: number; latestVersion: number }>();
     if (!pkg || Number(pkg.hidden) === 1 || pkg.latestVersion < 1) return fail(c, 404, 'not_found', 'No such package.');

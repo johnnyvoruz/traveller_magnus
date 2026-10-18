@@ -228,7 +228,8 @@ export function surfaceProfile(body: Body, id: string, look?: ProfileLook | null
     const tl = digit(tlRaw) ?? num(tlRaw);
 
     const tilt = clamp(num(body.axialTilt) ?? 0, 0, 180);
-    const locked = !!(body.tidallyLocked || body.isTwilightZone);
+    const moon = body.isMoon === true || body.isSatellite === true || body.type === 'Satellite';
+    const locked = !moon && (body.tidallyLocked === true || body.isTwilightZone === true);
 
     let gas: Record<string, any> | null = null;
     if (family === 'gas') {

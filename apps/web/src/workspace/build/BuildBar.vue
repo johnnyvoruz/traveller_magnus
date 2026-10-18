@@ -45,7 +45,7 @@ const heldWhy = computed(() => {
     const atField = handle !== null && handle.messages.value.some((item) => item.holds && item.id !== null && ids.has(item.id));
     return atField
         ? 'To keep the draft, first correct the value the server refused. Its sentence is under that field'
-        : 'The engine can’t build this system. To find out why, read the engine’s message in the form';
+        : 'This system could not be built. To find out why, read the message in the form';
 });
 /**
  * Whether this system is designed by hand. Read as soon as the bar shows, not when the menu
@@ -69,7 +69,7 @@ const items = computed((): MenuItem[] => {
     // Hand and generated go both ways: a generated system offers the designer, a system by hand offers Generate.
     // One item under one id, so the menu keeps its place and its focus whichever it says; none until the server has said which.
     if (mode.value === 'hand') out.push({ id: 'other-way', label: 'Generate a system', say: 'Shows a preview. If you select Keep, it replaces the system designed by hand', icon: 'wand-magic-sparkles', key: 'G' });
-    else if (mode.value === 'generated') out.push({ id: 'other-way', label: 'Design by hand…', say: 'You type and arrange every body. The engine stops generating this system', icon: 'draw-polygon' });
+    else if (mode.value === 'generated') out.push({ id: 'other-way', label: 'Design by hand…', say: 'You type and arrange every body. Building stops for this system', icon: 'draw-polygon' });
     out.push({
         id: 'remove',
         label: 'Remove',
@@ -130,7 +130,7 @@ watch(() => (preview.value ? preview.value.roll : -1), (roll) => {
     <template v-else-if="drafting">
       <span class="build-tag is-preview">Draft</span>
       <span class="build-bar-word" role="status">{{ dirty ? line : 'no changes yet' }}</span>
-      <span v-if="edit.mode === 'hand'" class="build-tag is-yours" title="Designed by hand. The engine doesn’t generate this system">By hand</span>
+      <span v-if="edit.mode === 'hand'" class="build-tag is-yours" title="Designed by hand. Building does not generate this system">By hand</span>
       <span class="build-bar-gap"></span>
       <button type="button" class="ui-btn" data-command="build-draft-discard" :disabled="edit.keeping" @click="discard()">{{ dirty ? 'Discard' : 'Close' }}</button>
       <button

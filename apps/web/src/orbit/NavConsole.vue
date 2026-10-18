@@ -234,8 +234,8 @@ defineExpose({
           <output>{{ here ? here.arrives : course && course.arrives ? course.arrives : '–––-–––– ––:––' }}</output>
         </p>
         <div class="nav-aim" role="group" aria-label="Plotter">
-          <button type="button" class="orbit-btn is-icon" data-command="orbit-plot-prev-body" :disabled="!canStep" aria-label="Plot to the body before" title="The body before (,)" @click="emit('step', -1)"><Icon name="chevron-left" :size="11" /></button>
-          <button type="button" class="orbit-btn is-icon" data-command="orbit-plot-next-body" :disabled="!canStep" aria-label="Plot to the next body" title="The next body (.)" @click="emit('step', 1)"><Icon name="chevron-right" :size="11" /></button>
+          <button type="button" class="orbit-btn is-icon" data-command="orbit-plot-prev-body" :disabled="!canStep" aria-label="Plot to the body before" title="Plot to the body before (,)" @click="emit('step', -1)"><Icon name="chevron-left" :size="11" /></button>
+          <button type="button" class="orbit-btn is-icon" data-command="orbit-plot-next-body" :disabled="!canStep" aria-label="Plot to the next body" title="Plot to the next body (.)" @click="emit('step', 1)"><Icon name="chevron-right" :size="11" /></button>
           <button type="button" class="orbit-btn nav-lay" data-command="orbit-plot-commit" :disabled="!here" title="Lay a waypoint here (M, or press the picture)" @click="emit('commit')">
             <Icon name="plus" :size="11" />Waypoint
           </button>
@@ -257,7 +257,7 @@ defineExpose({
                 </select>
                 <Icon name="caret-down" :size="9" />
               </span>
-              <button type="button" class="nav-x" data-command="orbit-waypoint-remove" :aria-label="'Remove waypoint ' + row.n + ' from the route'" title="Remove this waypoint (Delete)" @click="removeRow('route', index)"><Icon name="xmark" :size="11" /></button>
+              <button type="button" class="nav-x" data-command="orbit-waypoint-remove" aria-label="Remove the focused waypoint" title="Remove the focused waypoint (Delete)" @click="removeRow('route', index)"><Icon name="xmark" :size="11" /></button>
             </template>
             <template v-else>
               <b class="nav-leg-name" :title="row.name">{{ row.name }}</b>
@@ -301,7 +301,7 @@ defineExpose({
               <input type="number" min="0.1" step="0.1" required :value="row.hours ?? ''" :class="{ 'is-typed': row.typed }" :title="row.typed ? 'This leg’s hours, as typed' : 'This leg’s hours: the estimate, or type your own'" @input="emit('legHours', index, typedHours($event))" @keydown.stop>
               <span aria-hidden="true">h</span>
             </label>
-            <button type="button" class="nav-x" data-command="orbit-waypoint-remove" :aria-label="'Remove waypoint ' + row.n" title="Remove this waypoint (Delete)" @click="removeRow('course', index)"><Icon name="xmark" :size="11" /></button>
+            <button type="button" class="nav-x" data-command="orbit-waypoint-remove" aria-label="Remove the focused waypoint" title="Remove the focused waypoint (Delete)" @click="removeRow('course', index)"><Icon name="xmark" :size="11" /></button>
             <span class="nav-leg-est">{{ row.estimate }}</span>
             <span class="nav-leg-arr">{{ row.arrives }}</span>
           </li>
@@ -333,8 +333,8 @@ defineExpose({
             :class="{ 'is-off': !course.typed }"
             data-command="orbit-plot-estimate"
             :disabled="!course.typed"
-            aria-label="Return every leg’s hours to its estimate"
-            title="Return to the estimates"
+            aria-label="Return the course’s hours to the estimates"
+            title="Return the course’s hours to the estimates"
             @click="useEstimate"
           ><Icon name="rotate-left" :size="11" /></button>
         </div>
@@ -362,7 +362,7 @@ defineExpose({
   overflow-y: auto;
   scrollbar-width: thin;
   background: var(--chrome-glass);
-  box-shadow: inset 0 0 0 1px var(--signal-line);
+  box-shadow: inset 0 0 0 1px var(--signal-line), 0 0 24px var(--frame-glow);
   backdrop-filter: blur(8px);
   clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
   color: var(--text-1);
@@ -426,10 +426,11 @@ defineExpose({
 }
 
 /* A label on an instrument: small capitals, quiet. */
+/* Labels and section rules as kickers (the version-video look): Orbitron capitals in --signal-dim. */
 .nav-label {
-  color: var(--text-muted);
-  font: 700 12px/1.3 var(--font-text);
-  letter-spacing: 0.08em;
+  color: var(--signal-dim);
+  font: 700 12px/1.3 var(--font-display);
+  letter-spacing: 0.16em;
   text-transform: uppercase;
 }
 
@@ -623,16 +624,17 @@ defineExpose({
   align-items: center;
   gap: 8px;
   margin: 2px 0 0;
-  color: var(--text-muted);
-  font: 700 12px/1.3 var(--font-text);
-  letter-spacing: 0.08em;
+  color: var(--signal-dim);
+  font: 700 12px/1.3 var(--font-display);
+  letter-spacing: 0.24em;
   text-transform: uppercase;
 }
 
+/* The rule fades out to the right, as .ui-rule.is-signal. */
 .nav-rule::after {
   flex: 1 1 auto;
   height: 1px;
-  background: var(--line-1);
+  background: linear-gradient(90deg, var(--signal-dim), transparent);
   content: '';
 }
 

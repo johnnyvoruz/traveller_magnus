@@ -14,6 +14,23 @@ import { PPP_NAMES } from '../map/tiers.ts';
 export const LAST_VIEW_KEY = 'voyage_last_view';
 /** Set once the line of help is dismissed, or a hex has been opened. */
 export const HINT_KEY = 'voyage_first_hint_done';
+/** Set once the welcome window has been closed or left. A signed-out first visit opens it once. */
+export const WELCOME_KEY = 'voyage_welcome_shown';
+
+/** True while the welcome window is on the map, so the hint waits until it closes. */
+let welcomeCovering = false;
+
+export function setWelcomeCovering(on: boolean): void {
+    welcomeCovering = on;
+}
+
+/**
+ * The welcome window opens by itself only for a signed-out browser that has not
+ * stored a camera and has not already dismissed the welcome.
+ */
+export function welcomeDue(at: { signedIn: boolean; shown: boolean; returning: boolean }): boolean {
+    return !at.signedIn && !at.shown && !at.returning;
+}
 
 /** The Regina subsector of the Spinward Marches: Regina (1910) is in view and the names can be read. */
 export const FIRST_PLACE = '/s/Spinward_Marches/sub/C';
@@ -61,5 +78,5 @@ export function openingFor(at: { named: boolean; linked: boolean; stored: Camera
  * the field; the list of results opens over it.
  */
 export function hintShown(at: { done: boolean; chartReady: boolean; paneOpen: boolean; buildOn: boolean }): boolean {
-    return !at.done && at.chartReady && !at.paneOpen && !at.buildOn;
+    return !welcomeCovering && !at.done && at.chartReady && !at.paneOpen && !at.buildOn;
 }

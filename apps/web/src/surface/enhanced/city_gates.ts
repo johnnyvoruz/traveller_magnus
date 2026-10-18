@@ -25,3 +25,15 @@ export function citySeen(nz: number, air: number): number {
     const path = Math.min(7, 1 / Math.max(nz, 0.07));
     return smoothstep(0.02, 0.3, nz) * Math.exp(-air * 0.22 * (path - 1));
 }
+
+/**
+ * How fast a light dome fades under cloud. Clear sky is 1.
+ * Cloud 1 leaves about 0.26, so a thick deck still covers the glow.
+ */
+export const CITY_GLOW_CLOUD = 1.35;
+
+/** Glow showing through cloud. Thin cloud keeps most of the dome. */
+export function cityGlowShow(cloud: number): number {
+    const c = Math.min(1, Math.max(0, cloud));
+    return Math.exp(-CITY_GLOW_CLOUD * c);
+}
