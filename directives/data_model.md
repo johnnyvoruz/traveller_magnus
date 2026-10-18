@@ -290,7 +290,7 @@ are applied by pointing their hexes at the proposal's objects instead of the gen
 
 ## 6. The overlay document v3 (export file and import body)
 
-Unchanged in shape from `persistence_v2.md` §2.1, owned by `packages/shared` as `OverlayDoc`:
+Unchanged in shape from `archive/persistence_v2.md` §2.1, owned by `packages/shared` as `OverlayDoc`:
 
 - `base` is `null | { milieu, truthVersion, engineVersion, sectors: [{ slug, x, y }] }`.
 - `hexes[hexKey]` is a `HexState` with the tree inlined (the file is self-contained) or a

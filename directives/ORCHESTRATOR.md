@@ -8,9 +8,10 @@ Read, in order:
 1. CLAUDE.md and directives/manifesto.md.
 2. directives/orchestrator_state.md (the current state; trust it over older pages).
 3. directives/board.md (the lane table and Queue).
-4. Every file in directives/reports/ (not done/). The latest sections of
-   directives/handoff.md only as needed; it is large, read by offset.
-orchestrator_start_here.md and orchestrator_handoff_*.md are stale history.
+4. directives/decisions.md (every decision so far; do not re-decide).
+5. Every file in directives/reports/ (not done/), and the last sections of
+   directives/handoff.md (it is short now).
+Everything under directives/archive/ is history.
 
 Each turn:
 - Check every report against the tree (git status, git diff, file times) before believing it.

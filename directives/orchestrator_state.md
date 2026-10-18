@@ -1,27 +1,30 @@
-# Orchestrator state — 2026-10-17 12:40 (written for the next orchestrator session)
+# Orchestrator state — 2026-10-17 15:25 (written for the next orchestrator session)
 
-Overwritten every turn. History: `handoff.md` (last section 295; read by offset, it is large).
-`orchestrator_start_here.md` is the 2026-10-07 page and is stale. This file and
-`board.md` are the state.
+Overwritten every turn. History: `handoff.md` (sections 291 on; the next is 298) and
+`archive/handoff_sections_1_to_290.md` (history). This file and `board.md` are the state;
+`decisions.md` holds every decision.
 
 ## Where the roadmap is
-Live: **1.2.5 (`2f16058`)**. **Called: 1.2.6** (`findings/push/release_2026-10-17.md`, 24 paths). Then: D's store hardening and E's changelog (1.2.7 or later).
+Live: **1.2.6 (`d6658f5`)**, index `index-CF1BRS3K.js`. **No push for a while (Johnny, 14:00):** "the goal is maximum productivity where agents can just be working full stop." Work piles up in the tree; the next push is a big one, rehearsed with care (the changelog needs a 1.2.7 entry, `CHANGELOG[0]` is tested against APP_VERSION).
 
 ## Lanes
-All six working: A `a_shared_encoder`, B `b_quota_reservation`, C `c_own_sector_offset`, E `e_changelog`, Z `z_parked_truth_build` go now; D `d_store_harden` after Johnny pushes 1.2.6. F retired.
+- **Streams** (`directives/streams/`, README = the loop; `claims.md` = file locks): L, M, N, today only. They never stop; entries land in `reports/<lane>_stream.md`. Review those entries by item; nothing to say "go" to.
+- Streams also: D, E, Z (Z1 = `z_install_reservation`). Prompts: A `a_encoder_merge`, B `b_universes_pin`. C free. F retired. All started 14:15.
 
 ## Next turn
-1. Verify 1.2.6 live: `git log origin/campaign -1`, index `index-CF1BRS3K.js`.
-2. Johnny's answers to the two direction questions (handoff 295): Z's next build after the parked-files report; the example packs to records-only.
-3. Review in order of arrival. A's `cover_image.ts` lines sit in D's folder: check D's and A's edits don't cross.
-4. From the push after E's pass: each push list adds its `changelog.ts` entry.
-5. Not yet looked at live: 1.2.3's UWP tiles and surface zoom; the routes on the live map.
+- Stream mode on and off: `streams/HOW_TO_RUN.md`. L, M, N wrapped with resumable queues.
+- Before the next push: rerun `public_games.test.js` ("tracks at the hex tier") on the settled tree; it failed in M's run while L5 changed the grid. Review `reports/x_integration_sweep.md`.
+0. The two backlogs (`directives/backlog_*.md`) are the source for new work: issue from them into streams; Epic P's build (P2+) waits on Johnny's P questions and B2's contract review.
+1. Read new entries in `reports/l_stream.md`, `m_stream.md`, `n_stream.md`; answer proposals and blocked items in their queues (write the answer under the item).
+2. Review D `d_store_harden` (steady.log, kb30_filters.gif, the manifesto table, the look) when filed.
+3. When A or B reports: put it on a stream too (areas: A builder/characters logic; B the Worker outside the marketplace).
+4. Before the next push: a full clean-copy rehearsal of everything (many lanes' work), `test:api:all` once B has it, and the 1.2.7 changelog entry.
 
 ## Versions
-Each push list bumps `APP_VERSION` in `apps/web/src/version.ts` (1.2.5 live; 1.2.6 called; next 1.2.7) and the commit message starts with it. Engine version is 1.2.0 on disk, 1.1.0
-live.
+Each push list bumps `APP_VERSION` in `apps/web/src/version.ts` (1.2.6 live; next 1.2.7) and the commit message starts with it. Engine e1.2 (1.2.0 in code) is live since 1.2.0; the app is 1.2.6, next 1.2.7.
 
 ## Traps
+- **Read `decisions.md` before deciding anything; do not re-decide.**
 - **Flow: QUESTIONS, GO, PUSH.** No GO for a lane while a question could change its
   prompt; a held part is named inside the prompt. Questions in full, numbered,
   recommended answer first. Never ask Johnny to paste anything.

@@ -1,3 +1,5 @@
+> Status 2026-10-17: parked plan, kept because the board's Queue (the engine pass for the Regina fault) depends on it; parked. History, not a plan; nothing here is scheduled.
+
 # Engine correction pass
 
 2026-10-04. Design only, for orchestrator review. No engine, rules, tests,

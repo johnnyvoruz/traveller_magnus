@@ -1,5 +1,7 @@
 # Traveller.voyage — the end-to-end plan
 
+> **Status 2026-10-17:** slices 0 to 2 built and live, slice 3 (campaign) largely built, slice 4 (sharing) is the marketplace and public games, live. Current direction and the next work: `orchestrator_state.md`, `board.md`, the two `backlog_*.md`. The milestone table in §5 is the 2026-10-02 plan, kept for history.
+
 **Status:** ADOPTED 2026-10-02 (Johnny). This is the master document. Every other directive
 written after this date hangs off it. Read in this order: `manifesto.md` → this file →
 `architecture.md` → `data_model.md` → `api.md` → `design_reference.md` → the slice recipe you
@@ -61,7 +63,7 @@ Each slice ships on its own and is useful on its own. The order is chosen so tha
 users have today breaks while the new app grows beside it, and so the first visible thing
 needs no database at all.
 
-### Slice 0 — Foundation (recipe: `slice_0_foundation.md`)
+### Slice 0 — Foundation (recipe: `archive/slice_0_foundation.md`)
 Nothing visible. The safety net and the skeleton.
 - **Ships:** headless harness over the legacy engines (test oracle only); golden fixtures;
   the monorepo (`packages/engines`, `packages/shared`, `apps/web`, `apps/api`); rules as ESM
@@ -122,7 +124,7 @@ something people would want to use, including the optional login. Our first pass
 everyone has their own campaign layer for the base truth map, and then we can look at
 creating their own maps."
 
-So the next slice is **Campaign on the truth** (recipe: `slice_2_campaign.md`, to be written):
+So the next slice is **Campaign on the truth** (recipe: `archive/slice_2_campaign.md`, to be written):
 optional sign-in; each account gets one private universe **pinned to the released truth with
 no map edits**, holding only campaign records (Slice 3 below, on the storage of Slice 2).
 Generation, hex and system editing, routes, borders and own maps stay in the Builder, which
@@ -145,7 +147,7 @@ legacy name pools (`feature_inventory.md`); the "system rollups" are the legacy
 both there). **The engine corrections (`plan_engine_corrections.md`) must land before the
 Builder generates anything for users**, as decided on 2026-10-04; F2 (the climate table) is
 the one answer still open for it. The Builder starts when the campaign MVP steps in
-`slice_2_campaign.md` are done.
+`archive/slice_2_campaign.md` are done.
 
 ### Slice 2 — Builder
 Accounts and universes. The product for the two hundred.
@@ -293,10 +295,10 @@ legacy tree is frozen; it is deleted from the repo at M2.
 | `api.md` | every endpoint by slice, envelope, auth, errors |
 | `design_reference.md` | the sci-fi look: tokens, components, motion, with the legacy sources named |
 | `feature_inventory.md` | every legacy feature and its verdict |
-| `slice_0_foundation.md` | the slice 0 recipe |
+| `archive/slice_0_foundation.md` | the slice 0 recipe |
 | `slice_N_*.md` | written when slice N starts |
 | `campaign_manager_plan.md` | campaign data model v2 and feel (still the source for slice 3) |
-| `persistence_v2.md`, `bugfix_pass.md` | legacy; the overlay document §2.1 remains the contract |
+| `archive/persistence_v2.md`, `archive/legacy/bugfix_pass.md` | legacy; the overlay document §2.1 remains the contract |
 
 ## 7. Open items for Johnny
 

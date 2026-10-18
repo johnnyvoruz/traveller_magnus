@@ -7,7 +7,7 @@ The orchestrator checked these against the files and they match: the hex-number 
 (`renderer.js:1450`), the starport rule (1455-1459), the two default filter rules
 (`filter_engine.js:44-62`), the gas giant and base constants (`constants.js:229-247`).
 Everything else is as reported; **re-read the cited lines before a part B step depends on
-one.** What was concluded from this is in `slice_1_viewer.md` §B. This file is the evidence.
+one.** What was concluded from this is in `archive/slice_1_viewer.md` §B. This file is the evidence.
 
 Line numbers are `js/renderer.js` unless a file is named. Legacy geometry: `baseHexSize = 50`
 world units, so one parsec (one column step) is 75 units. To convert a legacy world-unit

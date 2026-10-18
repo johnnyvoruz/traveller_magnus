@@ -1,50 +1,56 @@
 # Directives
 
-Markdown is the source of truth here. The AI orchestrator reads these files, writes recipes
-from them, and the implementer executes recipes. Code follows documents, never the reverse.
+Markdown is the source of truth here. The orchestrator writes lane prompts and stream queues
+from these files; lanes work from them and report to files. Code follows documents, never the
+reverse. Rewritten 2026-10-17 (the directives cleanup).
 
-## Current plan — Traveller.voyage (adopted 2026-10-02)
-
-Read in this order.
+## Read first
 
 | File | Holds |
 |---|---|
-| `questions_for_johnny.md` | every open decision that only Johnny can make, each with an Answer line to type into; the orchestrator reads it back and records the decisions |
-| `implementer_brief.md` | what a fresh implementer session reads first: the rules, the commands, what already exists, how to report |
-| `manifesto.md` | the rules every session obeys and their checks; decisions taken |
-| `plan.md` | what we are building, roles and protocol, the six slices, milestones |
-| `handoff.md` | where the work stands right now, what is in flight, traps already hit; kept current by the orchestrator |
+| `BOOT.md` | what a lane reads when Johnny boots it (`lanes/START.md` is the paste block) |
+| `ORCHESTRATOR.md` | what an orchestrator session reads first, and the shape of its reply |
+| `orchestrator_state.md` | where things stand right now; overwritten every orchestrator turn |
+| `board.md` | the lane table, direction, known faults, what is open with Johnny, the queue |
+| `decisions.md` | every decision, Johnny's and the orchestrator's, dated, newest first; read before deciding anything |
+| `questions_for_johnny.md` | only the questions still open, each with an Answer line |
+
+## The file bus
+
+| Path | Holds |
+|---|---|
+| `lanes/` | one file per lane: its area and its rules; `START.md`, the boot block |
+| `streams/` | the queues lanes work without stopping (`README.md` is the loop; `HOW_TO_RUN.md` starts, stops and resumes stream mode); `claims.md` locks files |
+| `prompts/` | one-off lane prompts, each with a Progress section |
+| `reports/` | lane reports and stream reports; `reports/done/` takes reviewed ones until the next cleanup |
+| `contracts/` | the server's promises to the browser lanes, one file per area |
+| `backlog_players_landing_trade.md`, `backlog_ux_industry_best.md` | the backlog (2026-10-17): Epics P, L, T and U1 to U44 |
+| `handoff.md` | the orchestrator's log, one section per turn (sections 1 to 290 are in the archive) |
+
+## Specs
+
+| File | Holds |
+|---|---|
+| `manifesto.md` | the rules every session obeys and their checks |
+| `plan.md` | what we are building, the slices and milestones (status note at its top) |
 | `architecture.md` | stack, topology, repo layout, Worker configuration, sync model, budgets |
 | `data_model.md` | D1 tables, R2 key schemes, truth files, overlay v3, package format |
-| `api.md` | every endpoint by slice, envelope, auth, errors |
+| `api.md` | every endpoint, envelope, auth, errors |
 | `design_reference.md` | the sci-fi look: tokens, components, motion, legacy sources |
-| `feature_inventory.md` | every legacy feature with keep / wrap / rebuild / drop and its slice |
-| `slice_0_foundation.md` | the slice 0 recipe (legacy oracle, golden fixtures, monorepo, engines as ESM, parsers, generation package, Worker with Queues, truth v1 on the platform, CI) |
-| `slice_1_viewer.md` | the slice 1 recipe: part A (overview file, map data path, the rebuilt map renderer) in full; parts B and C as outlines |
-| `legacy_map_inventory.md` | what the legacy renderer draws, rule by rule with line references; the evidence for slice 1 part B |
-| `recipe_planet_surfaces.md` | slice 1 part C4: one generated surface per world, shown as the dossier's hex map and as the lit disc in orbit; a brief written by Agent D, reviewed by Agent F, issued with step owners |
-| `planet_rendering.md` | the data-to-appearance specification for planets; kept true by the surfaces work |
-| `orchestrator_start_here.md` | the state on one page for a new orchestrator session (2026-10-05); read before `handoff.md` |
-| `slice_2_campaign.md` | the current slice: optional sign-in and one private campaign per account over the released truth (records, places, links, the party), K1 to K5 issued |
-| `plan_engine_corrections.md` | parked: the 21 engine defects and the two-tier fix (reconcile labels, then regenerate); to be done before the Builder |
-| `slice_N_*.md` | written just-in-time when slice N starts |
+| `feature_inventory.md` | every legacy feature with keep / wrap / rebuild / drop |
+| `legacy_map_inventory.md` | what the legacy renderer draws, rule by rule |
+| `planet_rendering.md` | the data-to-appearance specification for planets |
+| `plan_engine_corrections.md` | parked: the engine defects and the two-tier fix |
+| `campaign_manager_plan.md` | campaign data model v2; cited by the trade backlog and stream A |
 
-## Still current from before
-
-| File | Holds |
-|---|---|
-| `campaign_manager_plan.md` | campaign data model v2 and the ten feelings; the source for slice 3 |
-| `persistence_v2.md` | §2.1 overlay document v3 is the client/server contract; the rest is legacy |
-
-## Legacy (frozen with the single-file app)
-
-`bugfix_pass.md` (stopped after Step 2), `fog_of_war_field_tags.md`, `html_extract_manifest.md`,
-`planet_rendering.md`, `project_manifest.md`, `route_*_spec.md`, `update_version.md`.
+`archive/` is history: finished prompts and reviewed reports, old orientation pages, finished
+recipes, the legacy app's specs, and the handoff's first 290 sections. Never read at session start.
 
 ## Principles
 
 - Directives are living documents; when the code and a directive disagree, fix the directive
   first, then the code.
 - Do not delete or overwrite a directive without Johnny's confirmation.
-- A recipe never changes the approach. If it cannot be written without doing so, the spec is
+- Do not delete a directive; move it to `archive/` and say so in the report.
+- A prompt never changes the approach. If it cannot be written without doing so, the spec is
   wrong and is fixed first.

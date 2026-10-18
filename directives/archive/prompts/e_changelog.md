@@ -75,3 +75,7 @@ and report.
 After each meaningful step, append one line under Progress: "done: X. next: Y."
 
 ## Progress
+done: changelog entries for 1.1.1 through 1.2.6, and the window component. next: wire the three version buttons, /changes, and the tests.
+done: version buttons, sign-in body swap, /changes, and the changelog tests. next: the full gates, then shots.
+done: check, typecheck and the web build are clean. The card height includes its padding, and the window shots sit inside the viewport. next: the report.
+done: report written. next: stop.

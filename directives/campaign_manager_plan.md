@@ -1,3 +1,5 @@
+> Status 2026-10-17: completed recipe, kept because streams/A.md and backlog_players_landing_trade.md cite it. History, not a plan.
+
 # Campaign Manager — Design Plan
 
 **Status:** PLAN, awaiting review. Nothing here is implemented. Drafted 2026-10-02.
@@ -85,7 +87,7 @@ Ten rules. Each later section cites them by number.
    into JS from memory. Where data is absent the sheet degrades to a free-form sheet, it
    never invents.
 7. **No modal for the common path.** There is no undo (decided 2026-10-02, see
-   `directives/persistence_v2.md`). Destroy → **tombstone** + toast with *Restore*; bulk
+   `directives/archive/persistence_v2.md`). Destroy → **tombstone** + toast with *Restore*; bulk
    actions take an autosave first. `confirm()` is reserved for Clear Canvas / Clear Sector.
 8. **Keyboard parity.** Every pointer interaction has a keyboard route; a shortcut
    registry generates the help screen.
@@ -256,7 +258,7 @@ A failure leaves the legacy key untouched and sets `_campaignLoadError` exactly 
 
 ### 3.2 Deletes and Restore (no undo)
 
-There is no undo stack (`directives/persistence_v2.md`). A deleted record, link or journal
+There is no undo stack (`directives/archive/persistence_v2.md`). A deleted record, link or journal
 entry becomes a **tombstone** (`{ id, deleted: true, rev, updatedAt }`), hidden by the index,
 restorable from the toast ("Deleted *Captain Voss* — Restore") or from a *Trash* view in
 the Campaign workspace, and purged by the GC after 90 days. Bulk campaign actions (import
@@ -276,7 +278,7 @@ offer "link to an existing X named Y?" — no silent dangling edges.
 
 The cloud version (§13) must be a sync adapter over this store, not a second app. That
 costs the local version four small things. The hex-side ones (`rev`, tombstones,
-`campaignId`) are delivered by `directives/persistence_v2.md` before this plan starts; the
+`campaignId`) are delivered by `directives/archive/persistence_v2.md` before this plan starts; the
 campaign-document ones land in Phase 0:
 
 - Every campaign document carries `rev` (integer, +1 per write) beside `updatedAt`.
@@ -781,7 +783,7 @@ No target numbers, no task rules, until §10 Q6 is answered.
 
 ## 6. Motion, loading and chrome (the meticulous part)
 
-> Delivered earlier by `directives/bugfix_pass.md` Step 3 (§G): the LOD frame dissolve
+> Delivered earlier by `directives/archive/legacy/bugfix_pass.md` Step 3 (§G): the LOD frame dissolve
 > (presentation-only, no repaint), threshold hysteresis, eased wheel zoom, frame coalescing
 > through `scheduleDraw()`, and the `uiShow`/`uiHide` chrome convention. §6.1–6.2 below build
 > on those and do not change them.

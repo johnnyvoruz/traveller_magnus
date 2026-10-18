@@ -108,11 +108,16 @@ frame every 3 s with ffmpeg, before you design. Read those files; don't edit or 
 - **Motion:** the videos' easing on the dissolve in item 2, from the motion tokens.
 - **Covers:** keep the package covers. (The videos draw their cards in code because covers stay
   out of promo; that rule is for videos, not the store.)
-- **Tokens only.** `scene.css` copies colours as hex because it's outside the app. Use the tokens;
-  where the videos use a value with no token (the mark's red `#d8202a`, the glow), append one token
-  line each in `tokens.css` with a comment.
-- **Do this first:** the header, the ground, the kickers and one framed panel, with shots at 1600 and
-  390 (`kb30_look_*`). Then finish the rest in the same look.
+- **Use the shared pieces, don't build your own (amended 2026-10-17).** Lane M is adding these to
+  `apps/web/src/design/base.css` today ("The version-video look": `.ui-ground`, `.ui-kicker`,
+  `.ui-new`, `.ui-rule`, `.ui-frame` with `.ui-frame-label` and `.ui-frame-count`, `.ui-date`,
+  `.ui-steps`, `.ui-brand`) and the tokens they need; see `prompts/m_video_look.md`. Its Progress
+  line "done: shared pieces in base.css" says they are in. Do items 1 to 4 first; by item 5 they
+  should be there. Where the store needs something the pieces lack, put it in `market/market.css`
+  and list it in your report as a candidate for the shared set. Don't edit `base.css` yourself. If
+  M's line is not there when you reach item 5, stop item 5, report the rest, and say so.
+- **Do this first in item 5:** the header (`.ui-brand`), the ground, the kickers and one framed panel,
+  with shots at 1600 and 390 (`kb30_look_*`). Then finish the rest in the same look.
 
 ## Gates
 - `npm test`, `npm run check`, the typecheck and `npm run build`.
@@ -136,3 +141,10 @@ shots, logs and report.
 After each meaningful step, append one line under Progress: "done: X. next: Y."
 
 ## Progress
+started: read the prompt, the store, the rail and the orbit view's way of mounting the rail; M's shared pieces not in base.css yet, so items 1 to 4 first. next: item 1, the store inside the rail.
+done: item 1 in code (store and product page inside Rail.vue with the account pop-up, Marketplace current via a new marketOpen prop, brand header from the videos in market.css, Map/Build/Account/Campaign commands registered by the store; MapView unchanged). done: item 2 in code (filters.ts keeps every listed choice, dimmed at 0; See more stays put; results min-height 100vh; dissolve and glide from steady.ts; filter, chip and sort replace the entry; imports under My packages as In this campaign); store tests updated. next: browser check and the steadiness script.
+done: steadiness (steady.mjs, steady.log): every click steady at 1600 x 900 and 390 x 844 (results hold their height through a change, then glide back to the results; the page's foot room moved inside the results row so the sticky column holds to the end; the results bar sticks below 1024 px); history: only the Filters sheet pushes; one Back leaves the store. next: item 3 (the manifesto table and its fixes) and item 4 (the Publish chooser).
+done: item 3 fixes in code (card: title link over the card, kind and author links; product page: breadcrumb to the store by kind, kind and author links, See all by; report, takedown and import-removal confirmations through the one toast; Open the Marketplace and Publish records commands; publish forms' limits line and records hint in mk-fine) and item 4 (PublishChooser.vue in the modal frame; Records opens the campaign if needed then Publish records over the store; Map hexes goes to the map with Build and Select hexes on; empty states name both ways; the palette's Publish records opens the records list's dialog off the store). next: browser check, then item 5 (M's pieces are in base.css).
+done: item 5 (M's pieces): header .ui-brand, .ui-ground behind the page, kickers on the filter column and the product page's sections, framed featured row, What's inside (HEXES n, RECORDS n) and import panel, rule under the page heading and the package title, NEW on packages updated in 7 days, dates in .ui-date, Browse by kind under the featured row; --ease-video token (power2.out, the videos' ease) for the dissolve and glide; kb30_look_1600/390 first. next: the kb30 shots, a source test for this pass, gates, the GIF, the report.
+done: zero layout shift on the first paint (ghost featured frame, Browse by kind and grid match the loaded page to the pixel at 1600), buy bar right of the rail, tests/web/store_harden.test.js (11), steady.log rerun with the router's history position (filters, chips, sort hold it; the sheet pushes; one Back leaves), kb30_filters.gif. next: gates, the report.
+done: shared .ui-chip and .ui-btn for chips, tags and Browse by kind; shots, steady.log (22 of 22) and the GIF retaken on the final code; gates green (npm test 1909/1871 pass/0 fail/38 skipped, check, typecheck, build); servers stopped; report written (directives/reports/d_store_harden.md). next: none, stopped.

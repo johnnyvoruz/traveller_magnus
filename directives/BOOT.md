@@ -12,7 +12,7 @@ Whenever Johnny says "go":
 2. Find your row in the board's lane table. If its status is "free", "parked" or
    "blocked", say so in one line and stop. Otherwise read the prompt file it names
    (the first one, if it names several) in directives/prompts/. If
-   directives/reports/ or directives/reports/done/ already holds a report for that
+   directives/reports/, directives/reports/done/ or directives/archive/reports/ already holds a report for that
    prompt and the board names a second prompt, take the second.
 3. You may be replacing a session that froze. Before new work, look at that prompt's
    "## Progress" lines and at git status and git diff for the files the prompt lets

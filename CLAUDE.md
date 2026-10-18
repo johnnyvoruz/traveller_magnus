@@ -15,27 +15,29 @@ This repository now holds two things:
    rows, manifests for versions, snapshots and packages (`directives/architecture.md` §2).
 2. **The legacy single-file app** ("As Above, So Below", `hex_map.html` + `js/` + `style.css`) —
    **frozen** as the reference implementation. Read it to learn behaviour and to copy engine
-   logic. Never extend it. It is deleted at milestone M2.
+   logic. Never extend it. Its removal is Johnny's call (question in
+   `directives/questions_for_johnny.md`).
 
-**Start every session by reading, in order:** `directives/manifesto.md` → `directives/plan.md`
-→ `directives/handoff.md` (current state, what is in flight, traps already hit) → the
-directive for the slice you are on. This is the one reading order; `directives/README.md` and
-the handoff repeat it. `architecture.md`, `data_model.md`, `api.md` and
-`design_reference.md` are the specs those point to. `feature_inventory.md` says what happens to
-every legacy feature.
+**Start every session by reading:** a lane reads `directives/BOOT.md`; the orchestrator reads
+`directives/ORCHESTRATOR.md`. Both then follow what those files say. `architecture.md`,
+`data_model.md`, `api.md` and `design_reference.md` are the specs they point to.
+`feature_inventory.md` says what happens to every legacy feature.
 
-## Roles and protocol (from `directives/plan.md` §3)
+## Roles and protocol
 
 - **Johnny** is the referee: owns `rules/`, product decisions, Halt & Challenge answers, git,
   deploys and secrets.
-- **Orchestrator sessions** write recipes just-in-time from the specs, review reports and keep
-  the directives true.
-- **Implementer sessions** (lower-effort model) execute one recipe exactly as written and
-  report. They never change approach, never "clean up", never touch `rules/` or the legacy
-  tree, never run git.
+- **The orchestrator** writes lane prompts and stream queues as files in `directives/`, reviews
+  reports against the tree, and keeps `board.md`, `orchestrator_state.md`, `decisions.md` and
+  `handoff.md` true.
+- **Lanes** (A to E, and L, M, N when Johnny adds them, on prompts or streams; Z, heavy effort;
+  F retired) read their prompt or queue from files, claim files in `directives/streams/claims.md`,
+  and report to files, never to chat. Johnny says "go"; nothing is pasted. Lanes never change
+  approach, never "clean up" beyond their item, never touch `rules/` or the legacy tree, never
+  run git but read-only.
 
-A recipe is numbered steps naming the file, the function, the exact code and a one-line check.
-Done means `npm test` green, `npm run check` clean, every verification box ticked, and a report
+A prompt or queue item names the files, what to build and its check. Done means `npm test`
+green, `npm run check` clean, `npm run typecheck` clean, `npm run build` passing, and a report
 listing what was created, what was stubbed or skipped and every Halt & Challenge item raised.
 
 ## Critical rules (The Johnny Protocol)
@@ -101,5 +103,5 @@ Script load order is in `hex_map.html` lines 16-121. Per-edition files follow
 `window.activeFilterRules`). The headless harness `tests/harness/legacy.js` loads this layer
 into a Node `vm` context; use it instead of a browser when you need legacy behaviour.
 
-The legacy version procedure (`directives/update_version.md`) no longer applies; the new app's
+The legacy version procedure (`directives/archive/legacy/update_version.md`) no longer applies; the new app's
 version is `packages/engines/package.json` and `apps/web/src/version.ts`.
