@@ -36,6 +36,7 @@ const ROUTES = [
     { path: '/campaign/r/:record', sample: '/campaign/r/rec_example' },
     { path: '/campaign/party', sample: '/campaign/party' },
     { path: '/campaign', sample: '/campaign' },
+    { path: '/universes/:universe/proposals/:batch', sample: '/universes/01M512HB5HWM4PCPMYXXPCZC4B/proposals/pb_01M58Y6S5H0Q9PR24QN41QFN01' },
 ];
 
 function routeTable() {
@@ -122,28 +123,30 @@ describe('cold load render', { concurrency: 1 }, () => {
         return html + ((ctx.teleports && ctx.teleports.body) || '');
     }
 
-    test('/account renders the account page', async () => {
-        const html = await render('/src/views/Account.vue', '/account');
-        assert.match(html, /Traveller/);
+    test('/account is the account panel over the map (DU11): its title, the account loading, no page of its own', async () => {
+        const html = await render('/src/workspace/passkey/AccountPanel.vue', '/?panel=account');
+        assert.match(html, />Account</);
         assert.match(html, /Loading your account/);
+        assert.doesNotMatch(html, /Back to the map/);
+        assert.doesNotMatch(html, /<main/);
     });
 
     test('/claim/:token renders the claim page', async () => {
         const html = await render('/src/characters/screens/ClaimPage.vue', '/claim/share-token');
         assert.match(html, /A character has been shared with you/);
-        assert.match(html, /Checking the session/);
+        assert.match(html, /Checking your session/);
     });
 
     test('/join/:token renders the join page', async () => {
         const html = await render('/src/characters/screens/JoinPage.vue', '/join/share-token');
         assert.match(html, /You&#39;re invited/);
-        assert.match(html, /Checking the session/);
+        assert.match(html, /Checking your session/);
     });
 
     test('/join renders the same join page', async () => {
         const html = await render('/src/characters/screens/JoinPage.vue', '/join');
         assert.match(html, /You&#39;re invited/);
-        assert.match(html, /Checking the session/);
+        assert.match(html, /Checking your session/);
     });
 
     test('/packages renders the marketplace', async () => {

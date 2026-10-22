@@ -1,5 +1,5 @@
 import type { Env } from '../env';
-import type { CharacterRooms, RoomDoc } from './service.ts';
+import type { CharacterRooms, RoomDoc, RoomLedger } from './service.ts';
 
 function stub(env: Env, id: string) {
     return env.CHARACTER.get(env.CHARACTER.idFromName(id));
@@ -11,6 +11,20 @@ async function call(env: Env, id: string, path: string, body?: unknown): Promise
         headers: body === undefined ? undefined : { 'content-type': 'application/json' },
         body: body === undefined ? undefined : JSON.stringify(body),
     }));
+}
+
+async function roomLedger(response: Response): Promise<RoomLedger> {
+    const body = await response.json() as { ok?: boolean; data?: unknown; error?: { code?: string; message?: string } };
+    if (response.ok && body.ok) {
+        return { ok: true, status: response.status === 201 ? 201 : 200, data: body.data };
+    }
+    const status = response.status === 404 ? 404 : response.status === 503 ? 503 : 400;
+    return {
+        ok: false,
+        status,
+        code: typeof body.error?.code === 'string' ? body.error.code : 'validation',
+        message: typeof body.error?.message === 'string' ? body.error.message : 'Invalid request.',
+    };
 }
 
 async function payload<T>(response: Response): Promise<T> {
@@ -55,6 +69,18 @@ export function characterRooms(env: Env): CharacterRooms {
         },
         async retell(id, roles) {
             await payload(await call(env, id, '/retell', { roles }));
+        },
+        async ledgerRead(id, after) {
+            return roomLedger(await call(env, id, `/ledger?after=${encodeURIComponent(String(after))}`));
+        },
+        async ledgerPost(id, body, by, pending) {
+            return roomLedger(await call(env, id, '/ledger', { ...body, by, pending }));
+        },
+        async ledgerVoid(id, lineId, by) {
+            return roomLedger(await call(env, id, `/ledger/${encodeURIComponent(lineId)}/void`, { by }));
+        },
+        async ledgerAccept(id, lineId, by) {
+            return roomLedger(await call(env, id, `/ledger/${encodeURIComponent(lineId)}/accept`, { by }));
         },
     };
 }

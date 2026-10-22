@@ -30,6 +30,13 @@ async function readOk(res: Response): Promise<unknown | null> {
     return body.data ?? null;
 }
 
+/** One campaign this account plays in, from a fresh playing list. Null when the list fails or the id is not on it. */
+export async function findPlaying(id: string): Promise<PlayingList['items'][number] | null> {
+    const items = await loadPlaying();
+    if (!items) return null;
+    return items.find((row) => row.id === id) ?? null;
+}
+
 /** Campaigns this account plays in. A 401 signs the store out. A failed list returns null. */
 export async function loadPlaying(): Promise<PlayingList['items'] | null> {
     const res = await apiFetch(transport.fetch, '/api/me/playing');

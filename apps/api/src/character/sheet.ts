@@ -287,6 +287,11 @@ export class SheetRoom {
         for (const socket of this.sockets) socket.send(message);
     }
 
+    broadcastLedger(line: unknown, balance: number): void {
+        const message = JSON.stringify({ t: 'ledger', line, balance });
+        for (const socket of this.sockets) socket.send(message);
+    }
+
     leave(socket: SheetSocket): void {
         const index = this.sockets.indexOf(socket);
         if (index >= 0) this.sockets.splice(index, 1);

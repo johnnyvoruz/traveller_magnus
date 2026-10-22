@@ -12,7 +12,7 @@ import { applyPlayersPage, campaign, switchCampaign } from '../../campaign/store
 
 export const viewAs = reactive({ on: false, busy: false });
 
-export const VIEW_AS_BANNER = "You're seeing what players see";
+export const VIEW_AS_BANNER = "You're seeing what players see.";
 
 /** Only the referee, with the campaign open and nothing waiting to save. */
 export function canViewAs(): boolean {

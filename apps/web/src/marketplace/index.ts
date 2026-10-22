@@ -3,19 +3,5 @@
  */
 export { asMarketplaceStore } from './screen.ts';
 export type { MarketplaceStore } from './screen.ts';
-export { MarketplaceError, openMarketplace } from './store.ts';
-export type { Marketplace, OpenMarketplaceOptions } from './store.ts';
-export type {
-    MarketplaceAccount,
-    PackageCreate,
-    PackageListPage,
-    PackageListQuery,
-    PackageListing,
-    PackagePage,
-    PackagePublish,
-    PackagePublishAccepted,
-    PackageVersion,
-    PackageVersionState,
-    PublishHandle,
-    PublishSource,
-} from './types.ts';
+export { openMarketplace } from './store.ts';
+export type { PackageCreate, PackageListing, PackagePage, PackagePublish, PackageVersion, PublishSource } from './types.ts';

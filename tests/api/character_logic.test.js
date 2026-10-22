@@ -6,6 +6,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
 import { claimRateLimited } from '../../apps/api/src/character/rate.ts';
 import { WIDGET_COUNT } from '../../apps/api/src/character/widgets.ts';
+import { acceptLedger, postLedger, readLedger, voidLedger } from '../../apps/api/src/character/ledger.ts';
 import { applySets, installSheet, readDoc, replaceBoxes, SheetRoom } from '../../apps/api/src/character/sheet.ts';
 import { characterService } from '../../apps/api/src/character/service.ts';
 
@@ -81,6 +82,7 @@ function boot() {
         },
     };
     const sessions = new Map();
+    let lineCount = 0;
     function session(id) {
         if (!sessions.has(id)) {
             const { sql } = sheetSql();
@@ -117,6 +119,32 @@ function boot() {
         async retell(id, roles) {
             rooms.retold.push({ id, roles });
             new SheetRoom(session(id).sql, session(id).sockets).retell(roles);
+        },
+        async ledgerRead(id, after) {
+            const result = readLedger(session(id).sql, after);
+            if (!result.ok) return { ok: false, status: result.status, code: result.code, message: result.message };
+            return { ok: true, status: 200, data: { lines: result.lines, balance: result.balance, credits: result.credits } };
+        },
+        async ledgerPost(id, body, by, pending) {
+            const held = session(id);
+            const result = postLedger(held.sql, body, by, NOW, pending, () => `ln_${++lineCount}`);
+            if (!result.ok) return { ok: false, status: result.status, code: result.code, message: result.message };
+            new SheetRoom(held.sql, held.sockets).broadcastLedger(result.line, result.balance);
+            return { ok: true, status: 201, data: result.line };
+        },
+        async ledgerVoid(id, lineId, by) {
+            const held = session(id);
+            const result = voidLedger(held.sql, lineId, by, NOW, () => `ln_${++lineCount}`);
+            if (!result.ok) return { ok: false, status: result.status, code: result.code, message: result.message };
+            new SheetRoom(held.sql, held.sockets).broadcastLedger(result.line, result.balance);
+            return { ok: true, status: 201, data: result.line };
+        },
+        async ledgerAccept(id, lineId, by) {
+            const held = session(id);
+            const result = acceptLedger(held.sql, lineId, by);
+            if (!result.ok) return { ok: false, status: result.status, code: result.code, message: result.message };
+            new SheetRoom(held.sql, held.sockets).broadcastLedger(result.line, result.balance);
+            return { ok: true, status: 200, data: result.line };
         },
     };
     let now = new Date(NOW);
@@ -273,6 +301,10 @@ test('duplicate, invite claim, handover, and a stranger on every route', async (
         api.revokeInvite(stranger, id, 'ci_00000000-0000-4000-8000-000000000099'),
         api.claim(stranger, { token: 'missing-token' }),
         api.live(stranger, id),
+        api.ledgerRead(stranger, id, 0),
+        api.ledgerPost(stranger, id, { kind: 'pay', amount: 1, memo: 'no' }, false),
+        api.ledgerVoid(stranger, id, 'ln_missing'),
+        api.ledgerAccept(stranger, id, 'ln_missing', false),
     ];
     for (const pending of routes) {
         const result = await pending;

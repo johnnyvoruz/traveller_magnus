@@ -26,7 +26,7 @@ test('the instrument is bars only, one line, and it does not ship the preview', 
     assert.match(vue, /data-waveform="bars"/);
     assert.match(vue, /Awaiting transmission/);
     assert.match(vue, /SYSTEM COMMS/);
-    assert.match(vue, /aria-label="System communications"/);
+    assert.match(vue, /aria-label="System Comms"/);
     assert.doesNotMatch(vue, /LOCAL COMMS/);
     assert.match(vue, /data-trx-sig/);
     assert.match(vue, /data-signal="0"/);
@@ -393,7 +393,7 @@ test('a mounted receiver completes one transmission from a facts fixture', { tim
         const said = host.querySelector('[data-trx-a11y]');
         assert.match(said.textContent, /Welcome to Regina/);
         assert.match(host.textContent, /SYSTEM COMMS/);
-        assert.equal(host.querySelector('.trx-receiver').getAttribute('aria-label'), 'System communications');
+        assert.equal(host.querySelector('.trx-receiver').getAttribute('aria-label'), 'System Comms');
         assert.equal(host.querySelector('[data-trx-sig]').getAttribute('data-signal'), '0');
         app.unmount();
         app = null;

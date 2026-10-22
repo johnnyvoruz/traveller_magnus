@@ -1,7 +1,7 @@
 /** Sentences a person can read. Google developer documentation style. */
 
-export const USERNAME_INVALID = 'Use 3 to 24 letters, digits, or underscores.';
-export const USERNAME_RESERVED = 'That username is reserved.';
+import { USERNAME_INVALID, USERNAME_RESERVED } from '@voyage/shared';
+
 export const USERNAME_TAKEN = 'That username is taken.';
 export const SIGNUP_LIMIT = 'You can start 5 passkey sign-ups an hour from this network. Try again later.';
 export const SIGNUP_SESSION = 'Sign-up has to create a session after the passkey is verified.';

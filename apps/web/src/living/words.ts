@@ -8,7 +8,7 @@ export const LIVING_WORDS = {
     trafficLabel: 'Show background traffic',
     trafficHelp: "Ships that come and go in the orbit view. They're scenery, not tracked ships.",
     quietLabel: 'Quiet on this device',
-    quietHelp: 'Hides chatter and background traffic on this device only.',
+    quietHelp: 'Hides background traffic on this device only. System Comms has its own switch.',
     trafficChip: 'Traffic',
     hideVisit: 'Hide for this visit',
 } as const;

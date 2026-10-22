@@ -165,15 +165,6 @@ export type SymbolOptions = {
     readonly highlight?: SurfaceCode | null;
 };
 
-/**
- * Grid stroke in sheet pixels. About one device pixel: `dpr × (sheet / css)`, held between
- * 0.6 and 1.25 so a narrow column stays quiet and a wide map stays visible.
- */
-export function hexOutlineWidth(sheetWidth: number, cssWidth: number, dpr: number): number {
-    const raw = dpr * (sheetWidth / Math.max(cssWidth, 1));
-    return Math.max(0.6, Math.min(raw, 1.25));
-}
-
 /** Hex outlines and symbols. The context is in sheet pixels (scale it for a sharper canvas). */
 export function drawSymbols(ctx: Ctx2D, model: HybridModel, layout: SheetLayout, options: SymbolOptions): void {
     const grid = model.grid;
@@ -417,19 +408,6 @@ export function drawMarks(ctx: Ctx2D, model: HybridModel, layout: SheetLayout, o
         ctx.textBaseline = 'alphabetic';
         ctx.fillText(label, x0 + px + 5, y0 - 1);
     }
-}
-
-/** Settlements on the night side, where the star is more than 4° below the horizon. */
-export function nightLights(model: HybridModel, layout: SheetLayout, sun: V3): [number, number][] {
-    const out: [number, number][] = [];
-    const lit = new Set(['city', 'arcology', 'town', 'starport']);
-    for (const hex of model.hexes) {
-        if (!hex.features.some((f) => lit.has(f))) continue;
-        const p = model.grid.P[hex.id];
-        if (dot(p, sun) > Math.sin(-4 * D2R)) continue;
-        out.push(sheetPoint(layout, p));
-    }
-    return out;
 }
 
 /** How strongly each kind of settlement glows at night (the brightest feature of a hex counts). */

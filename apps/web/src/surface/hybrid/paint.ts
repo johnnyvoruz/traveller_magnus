@@ -35,17 +35,6 @@ export function seaColoursOf(liquid: string | null): SeaColours {
 
 const BLEND_EXCLUDED = new Set(['IC', 'FR', 'BK', 'SI', 'IF', 'EV']);
 
-/** Per-pixel height of the world on a field. */
-export function heightsOn(field: Field, model: HybridModel): Float32Array {
-    const { width: W, height: H } = field.layout;
-    const h = new Float32Array(W * H);
-    for (let k = 0; k < W * H; k += 1) {
-        if (field.face[k] < 0) continue;
-        h[k] = model.height([field.P[k * 3], field.P[k * 3 + 1], field.P[k * 3 + 2]]);
-    }
-    return h;
-}
-
 /** A step yields at this many ms even when the budget is larger, as map_chunks.ts does. */
 const YIELD_AT_MS = 16;
 

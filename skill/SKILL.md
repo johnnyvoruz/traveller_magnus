@@ -4,7 +4,7 @@ description: Turns a recorded or transcribed tabletop RPG session into a batch o
 license: Proprietary. Draft for Traveller.voyage; not yet published.
 compatibility: Needs network access to traveller.voyage and a Traveller.voyage access token in the VOYAGE_TOKEN environment variable (or the traveller-voyage MCP server connected). Transcription needs a local speech-to-text tool or the referee's own speech-to-text API key.
 metadata:
-  version: "0.3-draft"
+  version: "0.4-draft"
   written: "2026-10-18"
   owner: "Traveller.voyage"
 ---
@@ -31,12 +31,16 @@ sent 23 proposals"). Do not invent other names for them.
 2. **Consent.** Ask once: "Did everyone at the table agree to the recording?" If the answer is not
    yes, stop. Do not transcribe. (`references/transcription.md` lists where the law requires everyone's
    agreement.)
-3. **Access.** You need either the `traveller-voyage` MCP server connected, or the REST routes with a
-   token in `VOYAGE_TOKEN`. The token is a secret: never print it, never put it in a file you write,
-   never paste it into a message. If neither is present, tell the referee to make a token under
-   Account > Agent access on traveller.voyage, and stop. (You can read the campaign without either, from
-   the snapshot below, but you cannot send the batch.)
-4. **Which campaign.** If the referee gave you the campaign snapshot (step 1), its part 2 names the
+3. **Access.** Two ways back, and either is fine:
+   - **Paste (no token):** the referee gave you the text from **Copy for your AI** (step 1). You end
+     your reply with the batch in one fenced `json` block, and the referee pastes your reply into
+     Proposals, **Paste your AI's reply** (step 6).
+   - **A token:** the `traveller-voyage` MCP server connected, or the REST routes with a token in
+     `VOYAGE_TOKEN`. The token is a secret: never print it, never put it in a file you write, never
+     paste it into a message.
+   With neither the copied text nor a token, ask the referee to press **Copy for your AI** in the
+   campaign and give you the text, or to make a token under Account > Agent access; then stop.
+4. **Which campaign.** If the referee gave you the text from **Copy for your AI** (step 1), its part 2 names the
    campaign and its `universeId`; use that. Otherwise call `traveller-voyage:list_campaigns` (or `GET /api/agent/campaigns`). A token
    is bound to one campaign unless the referee ticked "all my campaigns", so one is usually listed; use
    it. If more than one is listed, ask the referee which. Keep its `universeId`.
@@ -57,7 +61,7 @@ the referee.
   make a `question` for the referee.
 - **Search before you create.** Every person, place, ship, item, organization, job or event you hear
   gets a `search_records` call by name (and by nickname or surname when the table used one), or, with
-  the snapshot, a look through its records. An existing record is an update or a link, never a second
+  the copied text, a look through its records and its "Also in the campaign" list. An existing record is an update or a link, never a second
   record.
 - **One proposal per fact, with evidence.** Each proposal carries one to three quotes of at most 300
   characters with the time or line they came from. Quote the shortest span that supports the proposal.
@@ -73,11 +77,13 @@ the referee.
 
 ### 1. Read the campaign
 The campaign comes one of two ways, with the same things in it:
-- **The snapshot.** The referee pressed **Copy for your AI** (or **Download**) in the campaign and gave
-  you the text, pasted or as a file named `<campaign>-for-your-ai.md`. It is current as of that
-  moment. Part 2 is the campaign: the date with the clock's `days` and `rev`, the party, and every
-  live record whole, one JSON line each (`id`, `type`, `kind`, `name`, `tags`, `place`, `links`,
-  `details`, `rev` and the rest). Part 3 is the last 50 journal entries and the next session's
+- **Copy for your AI.** The referee pressed **Copy for your AI** (or **Download**) in the campaign and
+  gave you the text, pasted or as a file named `<campaign>-for-your-ai.md`. It is current as of that
+  moment. Part 2 is the campaign: the date with the clock's `days` and `rev`, the party, the parts the
+  referee chose (Ships, Characters, People, places and things, Journal, or all of it), each chosen
+  record whole, one JSON line each (`id`, `type`, `kind`, `name`, `tags`, `place`, `links`, `details`,
+  `rev` and the rest), and every other record by name, `id` and `rev` under "Also in the campaign, not
+  in this copy". Part 3 is the last 50 journal entries (when chosen) and the next session's
   `sequence`. Parts 4 to 6 repeat this skill's shape, rules and sending in short; where they and this
   file differ, follow this file. Do not call `read_campaign_index` as well, and do not ask for a
   fresher copy unless the referee says the campaign changed since.
@@ -106,8 +112,10 @@ Read it in order and note, with the timestamp of each:
 - open threads, promises, rule questions the referee deferred, anything you could not place.
 
 ### 4. Match names to records
-With the snapshot, match each name, surname and nickname against its records first; every field you
-need (`details`, `status`, `rev`) is already there. Over MCP, for each name, call `traveller-voyage:search_records` with the name, then with the surname or the
+With the copied text, match each name, surname and nickname against its records and its "Also in the
+campaign" list first; a copied record has every field you need (`details`, `status`, `rev`), a listed
+one has its `id` and `rev` (with a token, read it with `traveller-voyage:read_records`; without one,
+append or link by that `id` and `rev`, never a second record). Over MCP, for each name, call `traveller-voyage:search_records` with the name, then with the surname or the
 nickname. Read matched records with `traveller-voyage:read_records` when you need their current
 `details`, `status` or `rev`. A match becomes a `record.update`, a `*.append`, or a `link.create` with
 the stored `id` and the `rev` you read. No match becomes a `record.create` with a `ref` you choose
@@ -122,8 +130,15 @@ title, and a body of 150 to 400 words in plain past tense that mentions existing
 played, if known. Put every open thread in a `question`.
 
 ### 6. Submit
-Call `traveller-voyage:submit_proposals` with the `universeId` and the batch. On success it returns a
-`batch` with an `id` and a `reviewUrl`.
+**Without a token:** end your reply with the whole batch (the object in `references/shape.md`, not
+loose proposals) in one fenced `json` block, and nothing after it. The referee pastes your reply
+into Proposals, **Paste your AI's reply**; the site reads the first `json` block (or the whole reply
+when it is only the JSON), checks it, and names any proposal that failed and why. If the referee
+brings such a message back, fix that proposal and give the whole block again with the same
+idempotency key.
+
+**With a token:** call `traveller-voyage:submit_proposals` with the `universeId` and the batch. On
+success it returns a `batch` with an `id` and a `reviewUrl`.
 - `409 idempotency_conflict`: you changed the batch after a submit; make a new key and resubmit.
 - `429`: wait the `retry-after` seconds and resubmit with the same key.
 - `400 validation`: read `details`, fix the named field, make a new key, resubmit.
@@ -140,7 +155,7 @@ Call `traveller-voyage:submit_proposals` with the `universeId` and the batch. On
 
 ### 7. Report and stop
 Tell the referee, as your AI agent: how many proposals, grouped by kind (new records, links, updates, cargo and money,
-jumps, the journal entry, the date, questions); the `reviewUrl` (their Proposals list); and the three things you were least
+jumps, the journal entry, the date, questions); the `reviewUrl` when you sent them yourself (their Proposals list); and the three things you were least
 sure of, each with its timestamp. Then stop. Do not poll the batch, do not resubmit, do not try to
 apply. If the referee later asks what they kept, call `traveller-voyage:read_proposal_batch` with the
 batch `id`.

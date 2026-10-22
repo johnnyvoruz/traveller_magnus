@@ -22,7 +22,7 @@ import {
     type GpuSpan,
     type LinkedProgram,
 } from './gl_bake.ts';
-import { axisBasis as axisOf, bestCubeSize, FRAME_BAKE_MS, HALO, packAtlas, planFrame, tileSide } from './gl_plan.ts';
+import { bestCubeSize, FRAME_BAKE_MS, HALO, packAtlas, planFrame, tileSide } from './gl_plan.ts';
 import { attachShade, DRAW_FRAG, shadePort, type ShadeDraw, type ShadeRequest } from './gl_shade.ts';
 import { BAKE_FRAG, BAKE_FRAG_TILT, STATS_FRAG, VERT } from './gl_shaders.ts';
 import { gasStats, STATS_BATCH, thresholdsFromStats, type DecodedThresholds } from './gl_stats.ts';
@@ -982,9 +982,4 @@ export function createDiscBaker(
             return true;
         },
     };
-}
-
-/** Same basis the shade pass uploads. profile.axisAzimuth, tilt in degrees. */
-export function axisBasis(profile: { axisAzimuth: number }, tiltDeg: number) {
-    return axisOf(profile, tiltDeg);
 }

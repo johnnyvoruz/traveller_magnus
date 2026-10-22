@@ -9,7 +9,7 @@ import { test } from 'node:test';
 const source = readFileSync(new URL('../../apps/web/src/views/OrbitView.vue', import.meta.url), 'utf8');
 
 test('the orbit card reserves its height while the picture loads', () => {
-    assert.match(source, /\.orbit-card \{[\s\S]*?min-height: calc\(100dvh - var\(--chrome-inset\) - max\(var\(--chrome-inset\), env\(safe-area-inset-bottom, 0px\)\) - var\(--sheet-cover, 0px\)\);/);
+    assert.match(source, /\.orbit-card \{[\s\S]*?min-height: calc\(100dvh - var\(--chrome-inset\) - var\(--under-search\) - max\(var\(--chrome-inset\), env\(safe-area-inset-bottom, 0px\)\) - var\(--sheet-cover, 0px\)\);/);
 });
 
 test('the orbit card holds the pane width, without sliding, until the shell measures it', () => {

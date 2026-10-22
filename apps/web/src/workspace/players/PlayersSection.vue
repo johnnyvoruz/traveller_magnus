@@ -46,7 +46,7 @@ async function loadList(): Promise<void> {
         res = await apiFetch(transport.fetch, `/api/universes/${encodeURIComponent(id)}/players`);
     } catch {
         listState.value = 'failed';
-        listWords.value = 'The players could not be loaded. You seem to be offline.';
+        listWords.value = 'The players could not be loaded. You are offline.';
         return;
     }
     if (id !== campaign.universeId) return;

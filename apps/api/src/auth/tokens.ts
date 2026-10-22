@@ -33,7 +33,6 @@ export const TOKENS_UNAVAILABLE = 'Agent access is not available yet.';
 export const AGENTS_PAUSED = 'Agent access is paused.';
 export const TOKEN_INVALID = 'That token is not valid.';
 export const SCOPE_MISSING = 'That token cannot do that.';
-export const TEN_TOKENS = 'An account holds at most ten tokens.';
 
 export type AgentActor = SessionUser & {
     via: 'cookie' | 'token';
@@ -54,12 +53,6 @@ type TokenRow = {
 let tokensReady: boolean | null = null;
 let flagOn = false;
 let flagAt = 0;
-
-export function resetTokenLimits(): void {
-    clearTokenHits();
-    flagAt = 0;
-    tokensReady = null;
-}
 
 /** A yes is kept. A no is asked again, so applying 0023 needs no restart. */
 export async function detectTokens(db: D1Database): Promise<boolean> {

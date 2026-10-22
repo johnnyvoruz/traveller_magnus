@@ -27,7 +27,7 @@ test('a panel is a region named by its title', () => {
     const panel = read('shell/Panel.vue');
     assert.match(panel, /role="region"/);
     assert.match(panel, /:aria-labelledby="titleId"/);
-    assert.match(panel, /<h1 :id="titleId">/);
+    assert.match(panel, /<h1 :id="titleId"/);
 });
 
 test('the focus ring beats a control that clears its outline', () => {

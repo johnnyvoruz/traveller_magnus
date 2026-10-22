@@ -3,10 +3,12 @@ import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, r
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter, type RouteLocationNormalized } from 'vue-router';
 import type { SectorHex, SectorIndex, TreeEnvelope, TruthManifest, TruthOverview } from '@voyage/shared';
 import { campaign } from '../campaign/store.ts';
+import { readingDay, resetViewDay, viewDay, viewIsOff, viewingLabel } from '../campaign/view_day.ts';
 import { centreAbove, fit, flight, SHORT_HOP, toWorld, zoomAt, type Camera, type Viewport } from '../map/camera.ts';
 import { partyShipTags, standInSnapshot, type CampaignSnapshot } from '../map/campaign_layer.ts';
-import { partyShipMarks, vesselsOnMap } from '../map/vessel_marks.ts';
+import { partyShipMarks, thenPlaces, vesselsOnMap } from '../map/vessel_marks.ts';
 import { campaignDays, partyMarker, vesselWhere } from '../workspace/party_where.ts';
+import { sameDay } from '../workspace/stardate.ts';
 import { JumpRingLayer, jumpNumberOf, jumpRing, type JumpRing, type RingInk } from '../map/jump_ring.ts';
 import { frameFor, NewsLayer, newsHoverWords, nodeAt, type NewsHover, type NewsInk, type Ripple, type RippleMode } from '../map/news_layer.ts';
 import NewsScrubber from '../map/NewsScrubber.vue';
@@ -1287,8 +1289,8 @@ onMounted(() => {
         newsLayer = new NewsLayer(newsEl.value);
         const style = getComputedStyle(el);
         newsInk = { line: style.getPropertyValue('--chart-news').trim(), bg: style.getPropertyValue('--bg-0').trim(), font: style.getPropertyValue('--font-data').trim() };
-        const ms = Number.parseFloat(style.getPropertyValue('--t-ripple'));
-        if (Number.isFinite(ms) && ms > 0) newsPlayMs = ms;
+        const ms = Number.parseFloat(style.getPropertyValue('--t-news-day'));
+        if (Number.isFinite(ms) && ms > 0) newsDayMs = ms;
     }
     stopNewsArrive = client.onArrive((slug) => { if (news.value && newsSlugs.includes(slug)) runNews(); });
     renderer.setIndexSource((slug) => mapIndex(slug));
@@ -1442,9 +1444,13 @@ onMounted(() => {
 });
 
 watch(
-    () => [campaign.status, campaign.seq, campaign.clock ? campaign.clock.days : null, route.query.campaignStandIn] as const,
+    () => [campaign.status, campaign.seq, campaign.clock ? campaign.clock.days : null, viewDay.value, route.query.campaignStandIn] as const,
     () => { applyCampaign(); },
 );
+
+watch(() => campaign.universeId, (id, prev) => {
+    if (prev && id !== prev) resetViewDay();
+});
 
 // ---- Build: the switch, the selection, the commands (findings/builder_system_design.md §1) ----
 
@@ -1631,7 +1637,7 @@ const shownRing = computed((): JumpRing | null => {
     if (!ship || ship.deleted || ship.type !== 'vessel' || !party || !party.vesselIds.includes(ship.id)) return null;
     const jump = jumpNumberOf(fieldsOf(ship.sheet));
     if (jump === null) return null;
-    const where = vesselWhere(ship, campaign.records, campaignDays(campaign.clock));
+    const where = vesselWhere(ship, campaign.records, markDay());
     const place = resolvePartyAnchor(where.anchor, campaign.records);
     const at = place ? parseHexKey(place.hexKey) : null;
     const sector = at ? sectorOf(at.slug) : null;
@@ -1644,11 +1650,11 @@ watch(shownRing, () => markDirty());
 
 // ---- How fast news travels (spec_xboat_ripples.md §3; streams/D.md XD1) ----------------------------------
 
-/** The ripple's own canvas and layer, its ink, and how long one play takes (`--t-ripple`). */
+/** The ripple's own canvas and layer, its ink, and how long one day of Play takes (`--t-news-day`). */
 const newsEl = ref<HTMLCanvasElement | null>(null);
 let newsLayer: NewsLayer | null = null;
 let newsInk: NewsInk = { line: '', bg: '', font: '' };
-let newsPlayMs = 6000;
+let newsDayMs = 333;
 /** What the scrubber says and where it is; null with no ripple. */
 const news = ref<{ mode: RippleMode; source: string; sourceName: string; day0: number; t: number; horizon: number; playing: boolean; capped: boolean } | null>(null);
 /** The system under the mouse, or the one last tapped, while a ripple shows: its sentence is drawn (§3.4). */
@@ -1805,7 +1811,10 @@ function seekNews(t: number): void {
     markDirty();
 }
 
-/** Play: day 0 to the horizon over one `--t-ripple`, again and again until paused. */
+/**
+ * Play: one day per `--t-news-day` (about 3 days a second, so a day can be read), stopping at the horizon
+ * (DF16: it looped at 10 days a second). Play again from the horizon starts from day 0.
+ */
 function playNews(): void {
     const state = news.value;
     if (!state || !canPlayNews) return;
@@ -1818,12 +1827,14 @@ function playNews(): void {
         newsFrame = 0;
         const live = news.value;
         if (!live || !live.playing) return;
-        const t = playFrom + ((now() - playStart) / newsPlayMs) * horizon;
+        const t = playFrom + (now() - playStart) / newsDayMs;
         if (t >= horizon) {
             live.t = horizon;
-            playFrom = 0;
-            playStart = now();
-        } else live.t = t;
+            live.playing = false;
+            markDirty();
+            return;
+        }
+        live.t = t;
         markDirty();
         newsFrame = nextFrame(step);
     };
@@ -2129,7 +2140,7 @@ function boxEnd(sx: number, sy: number, moved: boolean): void {
     }
     const inside = boxedKeys({ ...box, x1: sx, y1: sy });
     const result = boxResult(have, inside, box.mode, SELECTION_CAP);
-    if (result.over || inside.length > SELECTION_CAP) showToast('A selection holds at most ' + SELECTION_CAP.toLocaleString('en') + ' hexes: the box was cut there.');
+    if (result.over || inside.length > SELECTION_CAP) showToast('A selection holds at most ' + SELECTION_CAP.toLocaleString('en') + ' hexes. The box was cut there.');
     if (result.changed.length) selectKeys(result.keys, result.changed[result.changed.length - 1]);
 }
 
@@ -2663,25 +2674,55 @@ function devStandIn(): CampaignSnapshot | null {
     return standInSnapshot(count, now());
 }
 
+/** The day the marks are drawn at: the shared view day, or the campaign date when the session has not moved. */
+function markDay(): number {
+    const camp = campaignDays(campaign.clock);
+    return campaign.clock ? readingDay(campaign.clock.days) : camp;
+}
+
+const viewOff = computed(() => campaign.status === 'ready' && campaign.clock !== null && viewIsOff(campaign.clock.days));
+const viewLabel = computed(() => (viewDay.value === null ? '' : viewingLabel(viewDay.value)));
+
+function backToCampaignDate(): void {
+    resetViewDay();
+}
+
 function snapshotFromStore(): CampaignSnapshot | null {
     const open = campaign.status === 'ready' && campaign.settings !== null;
     // A system can be located by anyone: the line is handed over with no campaign open, and signed out.
     if (!open && !locating.recordId) return null;
-    // The party stands where its ship's track puts it at the campaign date (party_where.ts).
-    const days = campaignDays(campaign.clock);
+    // The party stands where its ship's track puts it on the day the session is looking at (party_where.ts).
+    const days = markDay();
     const settings = open ? campaign.settings : null;
     // One marker per party ship, each at its own place (vessel_marks.ts). A party with no ship on the
     // map keeps the one marker where it stands.
     const ships = settings ? partyShipMarks(campaign.records, settings.party, days) : [];
     const mark = settings && ships.length === 0 ? partyMarker(settings.party, campaign.records, days) : null;
     const partyIds = new Set(settings && Array.isArray(settings.party.vesselIds) ? settings.party.vesselIds : []);
+    const vessels = settings ? vesselsOnMap(campaign.records, settings.party, days).map((vessel) => ({ ...vessel, party: partyIds.has(vessel.id) })) : [];
+    const camp = campaign.clock ? campaign.clock.days : null;
+    const earlierShips = settings && camp !== null && !sameDay(days, camp) ? partyShipMarks(campaign.records, settings.party, camp) : [];
+    const earlierVessels = settings && camp !== null && !sameDay(days, camp) ? vesselsOnMap(campaign.records, settings.party, camp) : [];
+    const earlierParty = settings && ships.length === 0 && camp !== null && !sameDay(days, camp) ? partyMarker(settings.party, campaign.records, camp) : null;
     return {
         party: mark ? { name: mark.name, hexKey: mark.hexKey, focused: false } : null,
         ships: partyShipTags(ships),
+        then: settings && camp !== null && !sameDay(days, camp) ? thenPlaces(
+            [
+                ...ships.map((ship) => ({ id: ship.id, hexKey: ship.hexKey })),
+                ...vessels.filter((vessel) => !vessel.party).map((vessel) => ({ id: vessel.id, hexKey: vessel.hexKey })),
+                ...(mark ? [{ id: 'party', hexKey: mark.hexKey }] : []),
+            ],
+            [
+                ...earlierShips.map((ship) => ({ id: ship.id, hexKey: ship.hexKey, lead: ship.lead })),
+                ...earlierVessels.filter((vessel) => !partyIds.has(vessel.id)).map((vessel) => ({ id: vessel.id, hexKey: vessel.hexKey, lead: false })),
+                ...(earlierParty ? [{ id: 'party', hexKey: earlierParty.hexKey, lead: true }] : []),
+            ],
+        ) : undefined,
         locate: locateLine(),
         reducedMotion: prefersReducedMotion(),
         // A party ship is drawn as the party's, so it is not drawn again as another vessel.
-        vessels: settings ? vesselsOnMap(campaign.records, settings.party, days).map((vessel) => ({ ...vessel, party: partyIds.has(vessel.id) })) : [],
+        vessels,
     };
 }
 
@@ -3073,6 +3114,7 @@ onBeforeUnmount(() => {
     @contextmenu="onBuildMenu"
   >
     <canvas ref="canvasEl" tabindex="0"></canvas>
+    <button v-if="viewOff" type="button" class="map-viewday" @click="backToCampaignDate">{{ viewLabel }}</button>
     <BuildMarks
       v-if="build.on && buildUniverse"
       ref="marksEl"
@@ -3157,6 +3199,40 @@ onBeforeUnmount(() => {
 }
 /* The chart begins at the rail's edge, so the camera centres on what is visible. Only the
    chart: the dossier draws canvases of its own inside this view. */
+.map-viewday {
+  position: absolute;
+  z-index: 4;
+  top: calc(var(--chrome-top) + var(--chrome-height) + 8px);
+  left: calc(var(--rail-width) + max(var(--chrome-inset), var(--panel-width, 0px)));
+  max-width: min(420px, calc(100% - var(--rail-width) - 2 * var(--chrome-inset)));
+  margin: 0;
+  padding: 6px 12px;
+  border: 1px solid var(--signal-edge);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg-0) 88%, transparent);
+  color: var(--text-0);
+  font: 500 13px/1.3 var(--font-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.map-viewday:hover {
+  border-color: var(--signal);
+}
+
+.map-viewday:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Below 680 px the date chip takes this row (StardateChip.vue). The pill sits under it. */
+@media (max-width: 680px) {
+  .map-viewday {
+    top: calc(var(--chrome-top) + 2 * (var(--chrome-height) + 8px));
+    max-width: calc(100% - var(--rail-width) - 2 * var(--chrome-inset));
+  }
+}
+
 .map > canvas {
   position: absolute;
   top: 0;

@@ -46,8 +46,8 @@ test('the panel: a card a campaign; the open one with its facts, actions and swi
     for (const action of ['data-campaign-records', 'data-campaign-rename', 'data-campaign-export', 'data-campaign-delete', 'data-campaign-open', 'data-campaign-new']) {
         assert.ok(panel.includes(action), action);
     }
-    // Delete asks once, on the card.
-    assert.match(panel, /role="alertdialog" aria-labelledby="cps-delete-q"/);
+    // Delete asks once, in the app's one confirm (DU23).
+    assert.match(panel, /<AskModal\s+v-if="mode === 'delete' && openOne"\s+:title="'Delete ' \+ openOne\.name \+ '\?'"\s+:text="question"\s+confirm="Delete"\s+cancel-label="Keep it"\s+danger/);
     assert.match(panel, /<details class="cps-back" data-campaign-settings>\s+<summary>Settings<\/summary>/);
     assert.match(panel, /<LivingSettings part="campaign" :can-change="!!openOne" :busy="busy" \/>/);
     const host = read('shell/PanelHost.vue');

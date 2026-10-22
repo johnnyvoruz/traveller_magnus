@@ -54,7 +54,7 @@ export function joinFace(input: {
     if (input.refused) {
         return {
             state: 'refused',
-            title: 'This link will not open',
+            title: 'This link does not open',
             line: input.refusal.trim() || MISSING,
         };
     }
@@ -66,7 +66,7 @@ export function joinFace(input: {
         return {
             state: 'signed-out',
             title,
-            line: who + 'Sign in to join. You come back to this page.',
+            line: who + 'Sign in to join. You return to this page.',
         };
     }
     if (input.chosen) {

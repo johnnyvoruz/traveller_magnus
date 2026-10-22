@@ -39,6 +39,8 @@ export type MapTheme = {
     tag: string;
     /** --t-pulse in seconds. One beat of the locator ring. */
     tPulse: number;
+    /** --signal-edge. The campaign-date mark is a stroke in this mix. Absent falls back to --signal. */
+    signalEdge?: string;
     chart: ChartColours;
     routeColours: Record<string, string>;
 };
@@ -77,6 +79,7 @@ export function readTheme(el: HTMLElement): MapTheme {
         tFast: token(style, '--t-fast') === '' ? 0 : cssTime(token(style, '--t-fast')),
         tag: token(style, '--orbit-tag'),
         tPulse: token(style, '--t-pulse') === '' ? 0 : cssTime(token(style, '--t-pulse')),
+        signalEdge: token(style, '--signal-edge'),
         chart: {
             world: token(style, '--chart-world'),
             water: token(style, '--chart-water'),

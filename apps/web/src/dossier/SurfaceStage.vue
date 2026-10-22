@@ -1111,7 +1111,7 @@ watch([figureEl, stageEl], observeSize, { flush: 'post' });
       ref="stageEl"
       class="doss-stage"
       :tabindex="large ? 0 : undefined"
-      :aria-label="large ? 'Surface map. Plus and minus zoom, 0 fits, arrows pan.' : undefined"
+      :aria-label="large ? 'Surface map. Plus and minus zoom. 0 fits the map. Arrow keys pan.' : undefined"
       @pointerdown="onStageDown"
       @pointermove="onStageMove"
       @pointerup="onStageUp"
@@ -1171,7 +1171,7 @@ watch([figureEl, stageEl], observeSize, { flush: 'post' });
           class="doss-toggle"
           aria-label="Day/Night"
           :aria-pressed="dayNight ? 'true' : 'false'"
-          :title="dayNight ? 'Day and night on: hide the light and shadow of the star' : 'Day and night off: show the light and shadow of the star on the clock date'"
+          :title="dayNight ? 'Day and night is on. Select to hide the light and shadow of the star.' : 'Day and night is off. Select to show the light and shadow of the star on the clock date.'"
           @click="toggleDayNight"
         >
           <Icon name="circle-half-stroke" :size="11" />
@@ -1183,7 +1183,7 @@ watch([figureEl, stageEl], observeSize, { flush: 'post' });
           class="doss-toggle"
           aria-label="Symbols"
           :aria-pressed="style === 'symbols' ? 'true' : 'false'"
-          :title="style === 'symbols' ? 'Symbols on: hide the symbols' : 'Symbols off: show the symbols over the painted map'"
+          :title="style === 'symbols' ? 'Symbols are on. Select to hide them.' : 'Symbols are off. Select to show them over the painted map.'"
           @click="toggleStyle"
         >
           <Icon name="layer-group" :size="11" />

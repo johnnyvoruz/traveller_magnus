@@ -19,11 +19,12 @@ import Icon from '../design/Icon.vue';
 import { observeSize, saveBlob } from '../platform/browser.ts';
 import { apiFetch } from '../platform/http.ts';
 import { addressPane, atPane } from '../shell/pane.ts';
+import AskModal from '../shell/AskModal.vue';
 import Panel from '../shell/Panel.vue';
 import { onSpan, readSpan, writeSpan, type PanelSpan } from '../shell/panel_state.ts';
 import { showToast } from '../shell/toast.ts';
 import { forgetDeleted } from './actions.ts';
-import { CAMPAIGN_CAP, canCreate, cleanCampaignName, deleteWords, freshName, sortCampaigns } from './campaigns.ts';
+import { CAMPAIGN_CAP, canCreate, cleanCampaignName, deleteWhat, freshName, sortCampaigns } from './campaigns.ts';
 import LivingSettings from './LivingSettings.vue';
 import PlayingIn from './players/PlayingIn.vue';
 import { stopLocate } from './locate.ts';
@@ -94,7 +95,8 @@ const recordCount = computed(() => liveRecords(campaign.records).length);
 /** Import takes an open campaign with no records and no links (campaign/import.ts says so too). */
 const emptyCampaign = computed(() => Object.keys(campaign.records).length === 0 && Object.keys(campaign.links).length === 0);
 const fileEl = ref<HTMLInputElement | null>(null);
-const question = computed(() => (openOne.value ? deleteWords(openOne.value.name, recordCount.value) : ''));
+/** What the delete takes with it, under the confirm's title "Delete <name>?". */
+const question = computed(() => deleteWhat(recordCount.value));
 
 /** The open campaign, said on its card: who the party is, where, the date, the records. */
 const openFacts = computed(() => {
@@ -409,14 +411,19 @@ onBeforeUnmount(() => {
                   </div>
                 </template>
                 <template v-else>
-                  <div v-if="mode === 'delete'" class="cps-form" role="alertdialog" aria-labelledby="cps-delete-q" @keydown="onFormKey">
-                    <p id="cps-delete-q" class="cps-q">{{ question }}</p>
-                    <div class="cps-acts">
-                      <button type="button" class="ui-btn is-primary is-danger" :disabled="busy" data-campaign-delete-go @click="remove"><Icon name="trash" :size="12" />{{ busy ? 'Deleting…' : 'Delete' }}</button>
-                      <button type="button" class="ui-btn" :disabled="busy" @click="back">Keep it</button>
-                    </div>
-                  </div>
-                  <div v-else-if="mode === 'rename'" class="cps-form" role="group" aria-label="Rename the campaign" @keydown="onFormKey">
+                  <AskModal
+                    v-if="mode === 'delete' && openOne"
+                    :title="'Delete ' + openOne.name + '?'"
+                    :text="question"
+                    confirm="Delete"
+                    cancel-label="Keep it"
+                    danger
+                    busy-text="Deleting…"
+                    :busy="busy"
+                    @confirm="remove"
+                    @cancel="back"
+                  />
+                  <div v-if="mode === 'rename'" class="cps-form" role="group" aria-label="Rename the campaign" @keydown="onFormKey">
                     <label class="cps-field"><span>A new name</span><input v-model="draft" type="text" class="camp-input" :maxlength="CAMPAIGN_LIMITS.name" :disabled="busy"></label>
                     <div class="cps-acts">
                       <button type="button" class="ui-btn is-primary" :disabled="busy || !cleanCampaignName(draft)" @click="rename"><Icon name="check" :size="12" />{{ busy ? 'Saving…' : 'Rename' }}</button>
@@ -591,11 +598,6 @@ onBeforeUnmount(() => {
   gap: 4px;
   color: var(--text-muted);
   font: 500 12px/1.3 var(--font-text);
-}
-
-.cps-q {
-  margin: 0;
-  color: var(--text-0);
 }
 
 /* The card's back: its switches, folded until asked for. */

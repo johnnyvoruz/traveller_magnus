@@ -120,9 +120,3 @@ export function setCityLook(id: CityLookId): void {
     const next = LOOKS.find((look) => look.id === id);
     if (next) active = next;
 }
-
-export function cityLookFromIndex(index: number): CityLook {
-    if (index >= 1.5) return CITY_LOOK_C;
-    if (index >= 0.5) return CITY_LOOK_B;
-    return CITY_LOOK_A;
-}

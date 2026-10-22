@@ -46,7 +46,7 @@ test('every new broadcast is reachable, resolves its sender, and retains determi
         assert.deepEqual(event, nextCorpusEvent(pool, f, ctx));
         assert.doesNotMatch(event.turns[0].speaker + event.turns[0].text, /[{}]/);
         assert.equal(nextCorpusEvent(pool, f, { ...ctx, avoidIds: [event.id] }), null);
-        assert.equal(corpusPool([line], { ...f, party: 'inJump' }).length, 0);
+        assert.equal(corpusPool([line], { ...f, party: 'inJump' }).length, 1, `ZC4: ${line.id} plays with the party in jump`);
     }
 });
 

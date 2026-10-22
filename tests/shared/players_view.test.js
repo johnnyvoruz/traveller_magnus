@@ -514,3 +514,48 @@ test('only own notes carry rev, and a note names its author', () => {
     assert.equal(hasOwn(view.links, 'rev'), false);
     assert.equal(hasOwn(view.settings, 'rev'), false);
 });
+
+test('a referee block is absent for players, and an unclosed one takes the rest of the field', () => {
+    const outside = 'The port is open.';
+    const inside = 'The password is nightfall.';
+    const hidden = record(9, 'person', false);
+    const closed = outside + '\n:::referee\n' + inside + ' ' + hidden.id + '\n:::\nStill ' + outside;
+    const unclosed = outside + '\n:::referee\n' + inside + '\nStill ' + outside;
+    const person = record(1, 'person', true, { details: closed, summary: closed, playerNotes: closed, sheet: { line: closed } });
+    const open = record(2, 'person', true, { details: unclosed });
+    const note = entry(1, 'note', true, { title: closed, body: closed });
+    const openNote = entry(2, 'note', true, { body: unclosed });
+    const view = playersView({
+        records: [person, hidden, open],
+        links: [],
+        journal: [note, openNote],
+        settings: null,
+        clock: null,
+    });
+    const raw = JSON.stringify(view);
+    assert.equal(raw.includes(inside), false);
+    assert.equal(raw.includes(hidden.id), false);
+    assert.equal(raw.includes(':::referee'), false);
+    assert.equal(raw.includes('\n:::'), false);
+    const shown = view.records.find((row) => row.id === person.id);
+    const dropped = view.records.find((row) => row.id === open.id);
+    assert.ok(shown);
+    assert.ok(dropped);
+    assert.match(shown.details, /The port is open\./);
+    assert.match(shown.details, /Still The port is open\./);
+    assert.match(shown.summary, /Still The port is open\./);
+    assert.match(shown.playerNotes, /Still The port is open\./);
+    assert.match(shown.sheet.line, /Still The port is open\./);
+    assert.equal(dropped.details.includes('Still'), false);
+    assert.match(dropped.details, /The port is open\./);
+    const keptNote = view.journal.find((row) => row.id === note.id);
+    const lostNote = view.journal.find((row) => row.id === openNote.id);
+    assert.match(keptNote.title, /Still The port is open\./);
+    assert.match(keptNote.body, /Still The port is open\./);
+    assert.equal(lostNote.body.includes(inside), false);
+    assert.equal(lostNote.body.includes('Still'), false);
+    const inline = record(3, 'person', true, { details: 'Say :::referee in a sentence. ' + outside });
+    const inlineView = playersView({ records: [inline], links: [], journal: [], settings: null, clock: null });
+    assert.match(inlineView.records[0].details, /Say :::referee in a sentence/);
+    assert.match(inlineView.records[0].details, /The port is open\./);
+});

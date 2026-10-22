@@ -3,12 +3,11 @@
  * the hexes it holds, and the sixteen subsectors of a sector as a grid to climb down by.
  * A subsector is eighty hexes with an address; a sector is all sixteen. Pure: runs under Node.
  */
+import { SUBSECTOR_LETTERS } from '@voyage/shared';
 import { subsectorHexes } from '../../builder/address.ts';
 
 /** `letter` null is the whole sector. */
 export type Scope = { slug: string; letter: string | null };
-
-export const SUBSECTOR_LETTERS: readonly string[] = 'ABCDEFGHIJKLMNOP'.split('');
 
 /** Every hex of the scope as a key, subsector by subsector, each row by row. Empty for a letter that is not A to P. */
 export function scopeKeys(scope: Scope): string[] {

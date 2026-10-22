@@ -3,6 +3,7 @@
  * account page and the recovery-session screen (findings/passkey_screens_design.md). It runs
  * under Node; the calls are Lane A's, in account/passkey.ts.
  */
+import { USERNAME_INVALID, USERNAME_RESERVED } from '@voyage/shared';
 import { shallowRef } from 'vue';
 
 /** Said on the account page, by the passkey list. Off the sign-in card since 2026-10-13. */
@@ -40,9 +41,7 @@ export const CODES_FILE = 'traveller-voyage-recovery-codes.txt';
 /** A sentence for a failure that came with none: a network fault, or an answer that could not be read. */
 export const NOT_REACHED = 'The server could not be reached. Try again.';
 
-/** The contract's username refusals (contracts/b_auth.md, Username), used for the check as typed. */
-export const USERNAME_INVALID = 'Use 3 to 24 letters, digits, or underscores.';
-export const USERNAME_RESERVED = 'That username is reserved.';
+/** The names refused as typed. The two refusal sentences (contracts/b_auth.md, Username) are `@voyage/shared`'s, username_words.ts. */
 const RESERVED = ['admin', 'api', 'support', 'user'];
 
 /**

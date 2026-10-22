@@ -4,7 +4,8 @@
  */
 import assert from 'node:assert/strict';
 import { createHmac, randomBytes } from 'node:crypto';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -76,6 +77,49 @@ async function jsonFetch(url, options = {}) {
     let body = null;
     try { body = text ? JSON.parse(text) : null; } catch { body = { raw: text }; }
     return { status: response.status, body, headers: response.headers };
+}
+
+function sqliteFiles(dir, out = []) {
+    let names = [];
+    try { names = readdirSync(dir); } catch { return out; }
+    for (const name of names) {
+        const full = path.join(dir, name);
+        let info;
+        try { info = statSync(full); } catch { continue; }
+        if (info.isDirectory()) sqliteFiles(full, out);
+        else if (name.endsWith('.sqlite')) out.push(full);
+    }
+    return out;
+}
+
+/** The worker refuses a new foreign id, so a pre-check choice is written on the Durable Object file. */
+function plantForeignChoice(persistTo, foreignId) {
+    for (const file of sqliteFiles(persistTo)) {
+        let db;
+        try { db = new DatabaseSync(file); } catch { continue; }
+        try {
+            const tables = db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'lists'`).all();
+            if (!tables.length) {
+                db.close();
+                continue;
+            }
+            const row = db.prepare(`SELECT payload FROM lists WHERE kind = 'campaignSettings'`).get();
+            if (!row) {
+                db.close();
+                continue;
+            }
+            const payload = JSON.parse(row.payload);
+            payload.tableSets = { ...(payload.tableSets ?? {}), randomPassenger: foreignId };
+            db.prepare(`UPDATE lists SET payload = ? WHERE kind = 'campaignSettings'`).run(JSON.stringify(payload));
+            db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+            db.close();
+            return;
+        } catch (err) {
+            try { db.close(); } catch { /* already closed */ }
+            throw err;
+        }
+    }
+    throw new Error('campaign settings were not in the local state.');
 }
 
 if (process.env.RUN_API_TESTS !== '1') {
@@ -305,12 +349,108 @@ VALUES ('${version}', '1.2.0', 'released', '${STAMP}', '${STAMP}', 0, 0);
                     },
                 }),
             });
-            assert.equal(pointed.status, 200, JSON.stringify(pointed.body));
-            assert.equal(pointed.body.data.applied[0].table, 'settings');
+            assert.equal(pointed.status, 404, JSON.stringify(pointed.body));
+            assert.equal(pointed.body.error.code, 'not_found');
+            assert.equal(pointed.body.error.message, 'No such table set.');
+            const stillChosen = await jsonFetch(`${sets}/${id}`, { headers: { cookie: player } });
+            assert.equal(stillChosen.status, 200, JSON.stringify(stillChosen.body));
             const playerForeign = await jsonFetch(`${sets}/${foreignId}`, { headers: { cookie: player } });
             const foreignMissing = await jsonFetch(`${sets}/ts_missing`, { headers: { cookie: player } });
             assert.equal(playerForeign.status, 404);
             assert.equal(JSON.stringify(playerForeign.body), JSON.stringify(foreignMissing.body));
+
+            const tradeSet = await jsonFetch(sets, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ copyOf: 'official:trade', name: 'House trade' }),
+            });
+            assert.equal(tradeSet.status, 201, JSON.stringify(tradeSet.body));
+            const wrongKind = await jsonFetch(`${base}/api/universes/${universeId}/campaign/changes`, {
+                method: 'PATCH',
+                headers,
+                body: JSON.stringify({
+                    settings: {
+                        party: { vesselIds: [], aboard: {}, memberIds: [], anchor: null },
+                        kinds: {},
+                        calendar: { dateFormat: 'imperial' },
+                        tableSets: { randomPassenger: tradeSet.body.data.id },
+                        rev: 0,
+                        baseRev: chosen.body.data.applied[0].rev,
+                    },
+                }),
+            });
+            assert.equal(wrongKind.status, 404, JSON.stringify(wrongKind.body));
+            assert.equal(wrongKind.body.error.message, 'No such table set.');
+            const dropTrade = await jsonFetch(`${sets}/${tradeSet.body.data.id}`, { method: 'DELETE', headers });
+            assert.equal(dropTrade.status, 200, JSON.stringify(dropTrade.body));
+
+            const droppedChoice = await jsonFetch(`${sets}/${id}`, { method: 'DELETE', headers });
+            assert.equal(droppedChoice.status, 200, JSON.stringify(droppedChoice.body));
+            const calendar = await jsonFetch(`${base}/api/universes/${universeId}/campaign/changes`, {
+                method: 'PATCH',
+                headers,
+                body: JSON.stringify({
+                    settings: {
+                        party: { vesselIds: [], aboard: {}, memberIds: [], anchor: null },
+                        kinds: {},
+                        calendar: { dateFormat: 'long' },
+                        tableSets: { randomPassenger: id },
+                        rev: 0,
+                        baseRev: chosen.body.data.applied[0].rev,
+                    },
+                }),
+            });
+            assert.equal(calendar.status, 200, JSON.stringify(calendar.body));
+            assert.equal(calendar.body.data.applied[0].table, 'settings');
+            assert.equal(calendar.body.data.conflicts.length, 0);
+            const keptDeleted = await jsonFetch(`${base}/api/universes/${universeId}/campaign?after=0&limit=1`, { headers: { cookie: owner } });
+            assert.equal(keptDeleted.status, 200, JSON.stringify(keptDeleted.body));
+            assert.equal(keptDeleted.body.data.settings.calendar.dateFormat, 'long');
+            assert.equal(keptDeleted.body.data.settings.tableSets.randomPassenger, id);
+
+            const official = await jsonFetch(`${base}/api/universes/${universeId}/campaign/changes`, {
+                method: 'PATCH',
+                headers,
+                body: JSON.stringify({
+                    settings: {
+                        party: { vesselIds: [], aboard: {}, memberIds: [], anchor: null },
+                        kinds: {},
+                        calendar: { dateFormat: 'long' },
+                        tableSets: { randomPassenger: 'official:randomPassenger' },
+                        rev: 0,
+                        baseRev: calendar.body.data.applied[0].rev,
+                    },
+                }),
+            });
+            assert.equal(official.status, 200, JSON.stringify(official.body));
+            assert.equal(official.body.data.applied[0].table, 'settings');
+
+            stopDev(child.pid);
+            child = null;
+            await sleep(1000);
+            plantForeignChoice(persistTo, foreignId);
+            child = startDev({ port, persistTo, inspectorPort: 19895 });
+            await up(base);
+            const party = await jsonFetch(`${base}/api/universes/${universeId}/campaign/changes`, {
+                method: 'PATCH',
+                headers,
+                body: JSON.stringify({
+                    settings: {
+                        party: { vesselIds: [], aboard: {}, memberIds: [], anchor: null },
+                        kinds: {},
+                        calendar: { dateFormat: 'long' },
+                        tableSets: { randomPassenger: foreignId },
+                        rev: 0,
+                        baseRev: official.body.data.applied[0].rev,
+                    },
+                }),
+            });
+            assert.equal(party.status, 200, JSON.stringify(party.body));
+            assert.equal(party.body.data.applied[0].table, 'settings');
+            assert.equal(party.body.data.conflicts.length, 0);
+            const keptForeign = await jsonFetch(`${base}/api/universes/${universeId}/campaign?after=0&limit=1`, { headers: { cookie: owner } });
+            assert.equal(keptForeign.status, 200, JSON.stringify(keptForeign.body));
+            assert.equal(keptForeign.body.data.settings.tableSets.randomPassenger, foreignId);
 
             const playerOther = await jsonFetch(`${sets}/${copyId}`, { headers: { cookie: player } });
             assert.equal(playerOther.status, 404);
@@ -338,7 +478,8 @@ VALUES ('${version}', '1.2.0', 'released', '${STAMP}', '${STAMP}', 0, 0);
             const trade = await jsonFetch(`${sets}?kind=trade`, { headers: { cookie: owner } });
             assert.equal(trade.body.data.items.length, 0);
 
-            let made = 1;
+            // The chosen passenger set and its copy are both deleted, so no live set remains.
+            let made = 0;
             while (made < 20) {
                 const extra = await jsonFetch(sets, {
                     method: 'POST',

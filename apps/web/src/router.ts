@@ -1,9 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import { loadSession, session } from './account/session.ts';
-import { scrollToTop } from './platform/browser.ts';
+import { scrollToTop, storageGet } from './platform/browser.ts';
 import { bindRouter } from './shell/go.ts';
-import { addressPane, campaignRedirect, hostsCampaign, type Query } from './shell/pane.ts';
-import Account from './views/Account.vue';
+import { addressPane, campaignRedirect, hostsCampaign, withQuery, type Query } from './shell/pane.ts';
 import MapView from './views/MapView.vue';
 import { FIRST_PLACE, FIRST_WORLD, LAST_VIEW_KEY, parseView, WELCOME_KEY, welcomeDue } from './workspace/first_visit.ts';
 import { guardRecovery } from './workspace/passkey/recovery.ts';
@@ -34,7 +33,7 @@ export const router = createRouter({
         { path: '/s/:sector/:hex/b/:body', name: 'body', component: MapView },
         { path: '/s/:sector/:hex/orbit', name: 'orbit', component: () => import('./views/OrbitView.vue') },
         { path: '/s/:sector/:hex/orbit/b/:body', name: 'orbit-body', component: () => import('./views/OrbitView.vue') },
-        { path: '/account', name: 'account', component: Account },
+        { path: '/account', redirect: (to) => accountRedirect(to.query) },
         { path: '/claim/:token', name: 'claim', component: () => import('./characters/screens/ClaimPage.vue') },
         { path: '/join/:token', name: 'join', component: joinPage },
         { path: '/join', name: 'join-held', component: joinPage },
@@ -47,10 +46,22 @@ export const router = createRouter({
         { path: '/campaign/r/:record', redirect: (to) => legacyRedirect(to) },
         { path: '/campaign/party', redirect: (to) => legacyRedirect(to) },
         { path: '/campaign', redirect: (to) => legacyRedirect(to) },
+        // A batch's review link (the server's reviewUrl): the Proposals pane on that batch, in its campaign.
+        { path: '/universes/:universe/proposals/:batch', redirect: (to) => reviewRedirect(to.params) },
     ],
 });
 
 bindRouter(router);
+
+/** The account is a panel over the map (DU11). /account stays, so the recovery flow and a provider's callback keep their address. */
+function accountRedirect(query: Query): { path: string; query: Record<string, string>; replace: true } {
+    return { path: '/', query: withQuery(query, { panel: 'account' }), replace: true };
+}
+
+/** A batch's review link onto the Proposals pane; the section opens that campaign when another is open. */
+function reviewRedirect(params: Record<string, string | string[]>): { path: string; query: Record<string, string>; replace: true } {
+    return { path: '/', query: { panel: 'proposals', batch: String(params.batch), universe: String(params.universe) }, replace: true };
+}
 
 /** The three old campaign paths, replaced so Back does not stop on them. */
 function legacyRedirect(to: { path: string; query: Query }): { path: string; query: Record<string, string>; replace: true } | { path: string } {
@@ -103,15 +114,11 @@ router.afterEach((to, from) => {
     if (to.path !== from.path && !to.hash) scrollToTop();
 });
 
-// Account.vue also calls this until Lane D removes that line. The guard installs once per router.
+// The guard installs once per router.
 guardRecovery(router);
 
 function stored(key: string): string | null {
-    try {
-        return globalThis.localStorage.getItem(key);
-    } catch {
-        return null;
-    }
+    return storageGet(key);
 }
 
 /**
@@ -121,7 +128,9 @@ function stored(key: string): string | null {
 if (typeof window !== 'undefined') {
     void router.isReady().then(() => loadSession()).then(() => {
         const path = router.currentRoute.value.path;
-        const home = path === '/' || path === '' || path === FIRST_PLACE || path === FIRST_WORLD;
+        // An address that asked for the account (/account redirects to /?panel=account) gets it, not the welcome.
+        const asked = addressPane(path, router.currentRoute.value.query).pane.kind === 'account';
+        const home = !asked && (path === '/' || path === '' || path === FIRST_PLACE || path === FIRST_WORLD);
         const due = welcomeDue({
             signedIn: session.user !== null,
             shown: stored(WELCOME_KEY) === '1',

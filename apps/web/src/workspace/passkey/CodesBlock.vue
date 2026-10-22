@@ -4,7 +4,7 @@
  * §2). The codes come in as a prop and stay in this component's memory; nothing is stored or logged.
  */
 import { ref } from 'vue';
-import { saveBlob } from '../../platform/browser.ts';
+import { saveBlob, writeClipboard } from '../../platform/browser.ts';
 import { CODES_FILE, codesFile, LOST_MEANS_LOST } from './words.ts';
 
 const props = defineProps<{ codes: readonly string[]; username: string }>();
@@ -13,7 +13,7 @@ const status = ref('');
 
 async function copy(): Promise<void> {
     try {
-        await globalThis.navigator.clipboard.writeText(props.codes.join('\n'));
+        await writeClipboard(props.codes.join('\n'));
         status.value = 'Copied.';
     } catch {
         status.value = 'The codes could not be copied. Select them, or download the file.';

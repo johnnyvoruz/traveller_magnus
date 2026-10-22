@@ -9,6 +9,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import Icon from '../design/Icon.vue';
 import { dateText, formatLinkDate, parseLinkDate } from '../orbit/clock.ts';
 import { MAP_SPEEDS, setClockDays, setClockPlaying, setClockRate, simClock, clockToNow } from '../orbit/sim_clock.ts';
+import { onDocumentEvent } from '../platform/browser.ts';
 import { timePopoverCloses } from './world_panel.ts';
 
 const props = defineProps<{
@@ -76,18 +77,17 @@ function onDocKey(event: KeyboardEvent): void {
     if (timePopoverCloses({ go: false, key: event.key, inside: true })) open.value = false;
 }
 
+let stopPointer: (() => void) | null = null;
+let stopKey: (() => void) | null = null;
+
 onMounted(() => {
-    const doc = globalThis.document;
-    if (!doc) return;
-    doc.addEventListener('pointerdown', onDocPointer);
-    doc.addEventListener('keydown', onDocKey);
+    stopPointer = onDocumentEvent('pointerdown', onDocPointer);
+    stopKey = onDocumentEvent('keydown', onDocKey);
 });
 
 onBeforeUnmount(() => {
-    const doc = globalThis.document;
-    if (!doc) return;
-    doc.removeEventListener('pointerdown', onDocPointer);
-    doc.removeEventListener('keydown', onDocKey);
+    stopPointer?.();
+    stopKey?.();
 });
 
 function now(): void {
@@ -134,13 +134,13 @@ const placeholder = computed(() => {
           inputmode="numeric"
           :placeholder="placeholder"
           :aria-invalid="bad ? 'true' : undefined"
-          aria-label="Jump to date, DDD-YYYY and optional HHMM"
-          title="Jump to a date: DDD-YYYY, optionally followed by HHMM"
+          aria-label="Jump to a date, DDD-YYYY, and optional HHMM"
+          title="Jump to a date. Use DDD-YYYY, and add HHMM if you want a time."
         />
         <button type="submit" class="ui-btn">Go</button>
       </form>
     </span>
-    <button type="button" class="ui-btn" title="The campaign date" @click="now">
+    <button type="button" class="ui-btn" title="Set the map to the campaign date" @click="now">
       <Icon name="clock-rotate-left" :size="12" />Now
     </button>
   </div>

@@ -14,9 +14,6 @@ export type EnhancedFlags = {
 /** Public coordinates. Latitude is north-positive. Longitude is east-positive. Degrees. */
 export type GeoDegrees = { readonly lat: number; readonly lon: number };
 
-/** Internal sampling coordinates. Same signs as GeoDegrees. Radians. */
-export type GeoRadians = { readonly lat: number; readonly lon: number };
-
 /**
  * Immutable copy of one released body. Callers pass a snapshot.
  * Painters must not write back into a live dossier or profile object.

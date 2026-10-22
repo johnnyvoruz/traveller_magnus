@@ -7,8 +7,9 @@
  * Credit doubling is an original nod to Jita local, not copied EVE dialogue.
  */
 import { ChatterLine, type ChatterLineData, type ChatterWhenData } from '@voyage/shared';
+import { nodLines, nodSources } from './nods.ts';
 
-export const broadcastSources = new Map<string, { speaker: string; channel: 'common' | 'services' }>();
+export const broadcastSources = new Map<string, { speaker: string; channel: 'common' | 'services' }>(nodSources);
 
 function group(category: ChatterLineData['category'], start: number, speaker: string,
     channel: 'common' | 'services', when: ChatterWhenData, texts: string[], weight = 1): ChatterLineData[] {
@@ -106,4 +107,4 @@ export const broadcastLines: ChatterLineData[] = [
 ];
 
 /** Only these newly reviewed commercials are enabled, not the legacy advert corpus. */
-export const broadcastAdvertIds: ReadonlySet<string> = new Set(broadcastLines.filter(l => l.category === 'advert').map(l => l.id));
+export const broadcastAdvertIds: ReadonlySet<string> = new Set([...broadcastLines, ...nodLines].filter(l => l.category === 'advert').map(l => l.id));

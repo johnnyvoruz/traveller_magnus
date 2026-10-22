@@ -67,14 +67,6 @@ export function rebuildCampaignIndex(
     for (const map of [byType, byTag, byHex, byBody, fromId, toId, words]) sorted(map);
 }
 
-export function recordsOfType(type: string): readonly string[] {
-    return byType.get(type) ?? [];
-}
-
-export function recordsWithTag(tag: string): readonly string[] {
-    return byTag.get(tag.toLowerCase()) ?? [];
-}
-
 /** Live records at this hex on the date the index was built, including someone aboard a vessel there. A record in jump is not here. */
 export function recordsAtHex(hexKey: string): readonly string[] {
     return byHex.get(hexKey) ?? [];

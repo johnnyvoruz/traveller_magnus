@@ -65,7 +65,7 @@ function leader(tag: { markX: number; markY: number; kneeX: number; kneeY: numbe
         type="button"
         class="orbit-tag is-more"
         :style="{ left: item.x + 'px', top: item.kneeY + 'px' }"
-        :aria-label="item.count + ' more ships here. Show them'"
+        :aria-label="'Show ' + item.count + ' more ships.'"
         :title="'Show ' + item.count + ' more'"
         @click="$emit('open', item.bodyKey)"
       >

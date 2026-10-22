@@ -104,6 +104,9 @@ function harness(seed = []) {
         if (init.body != null) {
             assert.equal(new Headers(init.headers).get('content-type'), 'application/json');
         }
+        if (target === '/api/me/playing' && method === 'GET') {
+            return jsonResponse(200, { ok: true, data: { items: [] } });
+        }
         if (target === '/api/universes' && method === 'GET') {
             if (server.failList) {
                 server.failList = false;

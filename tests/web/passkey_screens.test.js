@@ -81,6 +81,7 @@ test('a recovery session: every other route goes to /account, and the open route
     assert.deepEqual(replaced, ['/account'], 'the open route is left');
     assert.equal(guards[0]({ path: '/s/spin/1910' }), '/account');
     assert.equal(guards[0]({ path: '/account' }), undefined);
+    assert.equal(guards[0]({ path: '/s/spin/1910', query: { panel: 'account' } }), undefined, 'the account panel, where /account redirects (DU11)');
     session.gate = 'open';
     assert.equal(guards[0]({ path: '/s/spin/1910' }), undefined);
     session.gate = 'signed-out';

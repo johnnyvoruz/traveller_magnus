@@ -401,9 +401,9 @@ function channelOf(family: string): RadioChannel {
 }
 
 /**
- * The party is in local radio range. Since ZC2 (Johnny 2026-10-18 11:55, 11:57) this gates only
- * what is addressed to the party (the welcome beacon, corpus lines that name a party place);
- * the view listens to the system on screen whoever watches and wherever the party is.
+ * The party is in local radio range. Since ZC4 (Johnny 2026-10-18 14:44) this gates only the
+ * welcome beacon, an arrival event; every line and scene plays whoever watches and wherever
+ * the party is.
  */
 export function partyHears(f: SystemFacts): boolean {
     return f.party === 'inSystem' || f.party === 'docked';
@@ -486,5 +486,3 @@ export function suggestedGapSeconds(f: SystemFacts, truthVersion: string, day: n
     const [min, max] = GAP_SECONDS[cadenceOf(f)];
     return number(r, min, max);
 }
-
-export function scenarioCount(f: SystemFacts): number { return scenarios.filter((s) => s.when(f)).length; }

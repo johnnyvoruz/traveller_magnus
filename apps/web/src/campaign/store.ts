@@ -19,6 +19,7 @@ import {
 import { newId, storageGet, storageSet } from '../platform/browser.ts';
 import { apiFetch } from '../platform/http.ts';
 import { commit, flushCampaign, pending } from './commit.ts';
+import { resetViewDay } from './view_day.ts';
 import { JOURNAL_PUBLIC_HEADERS, parseRead } from './read.ts';
 import { rebuildCampaignIndex } from './index.ts';
 import { rebuildJournalIndex } from './journal.ts';
@@ -374,16 +375,23 @@ export async function openCampaign(options: {
         if (campaign.status === 'loading') campaign.status = 'error';
         return;
     }
-    let universe = options.universeId
-        ? universes.find((item) => item.id === options.universeId)
-        : undefined;
-    if (options.universeId && !universe) {
-        campaign.status = 'error';
-        return;
-    }
-    if (!universe) {
-        const last = remembered();
-        universe = last ? universes.find((item) => item.id === last) : undefined;
+    const asked = options.universeId || null;
+    const last = asked ? null : remembered();
+    const wanted = asked || last;
+    let universe = wanted ? universes.find((item) => item.id === wanted) : undefined;
+    if (!universe && wanted) {
+        const { findPlaying } = await import('./membership.ts');
+        const played = await findPlaying(wanted);
+        if ((campaign.status as string) === 'signed-out') return;
+        if (played) {
+            pinTruthVersion(played.truthVersion);
+            await loadPlayerPages(played.id);
+            return;
+        }
+        if (asked) {
+            campaign.status = 'error';
+            return;
+        }
     }
     if (!universe) universe = universes[0];
     if (!universe) {
@@ -397,10 +405,11 @@ export async function openCampaign(options: {
     await loadPages(universe);
 }
 
-/** Queues the campaign date. `days` is the orbit clock's day count. The server's rev wins. */
+/** Queues the campaign date. `days` is the orbit clock's day count. The server's rev wins. A write that lands clears the session's view day. */
 export function setCampaignDate(days: number): void {
     const baseRev = campaign.clock ? campaign.clock.rev : 0;
     commit({ clock: { days, baseRev } });
+    if (campaign.clock && Math.floor(campaign.clock.days) === Math.floor(days)) resetViewDay();
 }
 
 /** Saves the open campaign, then loads `id`. A failed save leaves the open one in place. */

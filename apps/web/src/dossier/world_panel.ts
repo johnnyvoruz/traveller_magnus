@@ -4,6 +4,7 @@
  */
 import type { FactTile, StatRow } from './model.ts';
 import { tempLines } from '../design/units.ts';
+import { storageGet, storageSet } from '../platform/browser.ts';
 
 export const SECTION_KEY = 'worldPanel.sections';
 
@@ -32,23 +33,11 @@ export function readFolds(raw: string | null): FoldOpen {
 }
 
 export function loadFolds(): FoldOpen {
-    try {
-        const storage = globalThis.localStorage;
-        if (!storage) return openFolds();
-        return readFolds(storage.getItem(SECTION_KEY));
-    } catch {
-        return openFolds();
-    }
+    return readFolds(storageGet(SECTION_KEY));
 }
 
 export function saveFolds(state: FoldOpen): void {
-    try {
-        const storage = globalThis.localStorage;
-        if (!storage) return;
-        storage.setItem(SECTION_KEY, JSON.stringify(state));
-    } catch {
-        // The panel keeps the state it already shows.
-    }
+    storageSet(SECTION_KEY, JSON.stringify(state));
 }
 
 const HIDDEN = new Set(['Tidally locked', 'Twilight zone', 'Orbital period (days)']);

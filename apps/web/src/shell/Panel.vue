@@ -19,6 +19,8 @@ defineProps<{
     span: PanelSpan;
     /** Show the chip beside the title even under a breadcrumb (Build's line to climb). */
     keepChip?: boolean;
+    /** Full crumb, for the title attribute when the line truncates. */
+    eyebrowTitle?: string;
 }>();
 
 defineEmits<{
@@ -107,33 +109,40 @@ function onGrabClick(): void {
         <span class="panel-grab-bar"></span>
       </button>
       <header class="panel-head">
-        <div class="panel-titles">
-          <p v-if="$slots.eyebrow" class="panel-eyebrow">
-            <slot name="eyebrow" />
-          </p>
-          <div class="panel-title-row">
-            <span v-if="$slots.glyph" class="panel-glyph"><slot name="glyph" /></span>
-            <!-- The title, or a box in its place while it is being renamed. -->
-            <h1 :id="titleId"><slot name="title">{{ title }}</slot></h1>
-            <!-- The chip text is the hex chip of the legacy title row; the eyebrow slot is the breadcrumb. -->
-            <span v-if="chip && (keepChip || !$slots.eyebrow)" class="ui-hex">{{ chip }}</span>
+        <div class="panel-box panel-box-nav">
+          <div class="panel-crumb">
+            <p v-if="$slots.eyebrow" class="panel-eyebrow" :title="eyebrowTitle || undefined">
+              <span class="panel-eyebrow-line"><slot name="eyebrow" /></span>
+            </p>
           </div>
-          <p v-if="meta" class="panel-meta">{{ meta }}</p>
-        </div>
-        <div class="panel-tools">
-          <div v-if="$slots.pager" class="panel-pager"><slot name="pager" /></div>
           <div class="ui-seg panel-spans" role="group" aria-label="Panel width">
             <button type="button" title="Column" :aria-pressed="span === 'column'" @click="$emit('span', 'column')">Column</button>
             <button type="button" title="Half page" :aria-pressed="span === 'half'" @click="$emit('span', 'half')">Half</button>
             <button type="button" title="Full page" :aria-pressed="span === 'full'" @click="$emit('span', 'full')">Full</button>
           </div>
+          <div class="panel-corner">
+            <button v-if="canPaneBack" type="button" class="panel-back" aria-label="Back" title="Back" @click="onBack">
+              <Icon name="chevron-left" :size="18" />
+            </button>
+            <button type="button" class="panel-close" aria-label="Close panel" title="Close panel" @click="$emit('close')">
+              <Icon name="xmark" :size="18" />
+            </button>
+          </div>
         </div>
-        <button v-if="canPaneBack" type="button" class="panel-back" aria-label="Back" title="Back" @click="onBack">
-          <Icon name="chevron-left" :size="18" />
-        </button>
-        <button type="button" class="panel-close" aria-label="Close panel" title="Close panel" @click="$emit('close')">
-          <Icon name="xmark" :size="18" />
-        </button>
+        <div class="panel-box panel-box-name">
+          <div class="panel-title-row">
+            <span v-if="$slots.glyph" class="panel-glyph"><slot name="glyph" /></span>
+            <!-- The title, or a box in its place while it is being renamed. -->
+            <h1 :id="titleId" :title="title || undefined"><slot name="title">{{ title }}</slot></h1>
+            <!-- The chip text is the hex chip of the legacy title row; the eyebrow slot is the breadcrumb. -->
+            <span v-if="chip && (keepChip || !$slots.eyebrow)" class="ui-hex">{{ chip }}</span>
+          </div>
+          <div v-if="$slots.pager" class="panel-pager"><slot name="pager" /></div>
+          <div v-if="meta || $slots.badge" class="panel-place">
+            <slot name="badge" />
+            <p v-if="meta" class="panel-meta" :title="meta">{{ meta }}</p>
+          </div>
+        </div>
       </header>
       <div v-if="$slots.actions" class="panel-bar">
         <slot name="actions" />
@@ -218,38 +227,79 @@ function onGrabClick(): void {
 }
 
 .panel-head {
-  /* One corner: Close, and Back when the pane stack has a previous pane. Tools stay in the content box. */
-  --corner-edge: 10px;
+  /* Two stacked boxes. The corner buttons sit in the top row, not over the title. */
   --corner-size: 30px;
   --corner-gap: 4px;
-  --corner-extra: 8px;
   position: relative;
   display: flex;
   flex: 0 0 auto;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
   min-height: 58px;
-  padding: 12px calc(var(--corner-edge) + var(--corner-size) + var(--corner-extra)) 12px 16px;
+  padding: 12px 16px;
   background: var(--surface-1);
   border-bottom: 1px solid var(--signal-line);
 }
 
-.panel-titles {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
+.panel-box-nav,
+.panel-box-name {
+  display: grid;
+  align-items: center;
+  column-gap: 12px;
   min-width: 0;
 }
 
+.panel-box-nav {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+.panel-box-name {
+  grid-template-columns: minmax(0, 1fr) auto;
+  row-gap: 4px;
+}
+
+.panel-crumb {
+  grid-column: 1;
+  min-width: 0;
+}
+
+.panel-spans {
+  grid-column: 2;
+}
+
+.panel-corner {
+  grid-column: 3;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-self: end;
+  gap: var(--corner-gap);
+}
+
 .panel-title-row {
+  grid-column: 1;
+  grid-row: 1;
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 4px 10px;
   min-width: 0;
 }
 
-.panel-title-row:has(.panel-glyph) {
+.panel-pager {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.panel-place {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  display: flex;
+  align-items: center;
   flex-wrap: nowrap;
+  gap: 8px;
+  min-width: 0;
 }
 
 .panel-glyph {
@@ -257,50 +307,77 @@ function onGrabClick(): void {
   flex: 0 0 auto;
 }
 
-.panel-titles h1 {
+.panel-title-row h1 {
   margin: 0;
   min-width: 0;
+  overflow: hidden;
   color: var(--text-0);
   font: 700 21px/1.2 var(--font-text);
   letter-spacing: -0.2px;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.panel-title-row h1:has(.panel-title-box) {
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.panel-title-row .ui-hex {
+  flex: 0 0 auto;
 }
 
 .panel-eyebrow {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
+  min-width: 0;
   margin: 0;
+  overflow: hidden;
   color: var(--signal);
   font: 600 10.5px/1.3 var(--font-text);
   letter-spacing: 1.2px;
   text-transform: uppercase;
-  overflow-wrap: anywhere;
+}
+
+.panel-eyebrow-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.panel-eyebrow .doss-crumb {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.panel-eyebrow .doss-crumb-sep,
+.panel-eyebrow .doss-crumb-word {
+  flex: 0 0 auto;
 }
 
 .panel-meta {
+  flex: 1 1 auto;
+  min-width: 0;
   margin: 0;
+  overflow: hidden;
   color: var(--text-muted);
   font: 400 12px/1.35 var(--font-text);
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
-.panel-tools {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
-  padding-left: 12px;
+.panel-place .ui-badge {
+  flex: 0 1 auto;
 }
 
 .panel-close,
 .panel-back {
-  position: absolute;
-  top: 50%;
-  right: var(--corner-edge);
   display: grid;
+  flex: 0 0 auto;
   place-items: center;
   width: var(--corner-size);
   height: var(--corner-size);
@@ -311,116 +388,15 @@ function onGrabClick(): void {
   background: transparent;
   color: var(--signal-dim);
   cursor: pointer;
-  transform: translateY(-50%);
   transition: background var(--t-fast) var(--ease-out), color var(--t-fast) var(--ease-out);
-}
-
-.panel-back {
-  right: calc(var(--corner-edge) + var(--corner-size) + var(--corner-gap));
-}
-
-.panel-head:has(.panel-back) {
-  padding-right: calc(var(--corner-edge) + (2 * var(--corner-size)) + var(--corner-gap) + var(--corner-extra));
-}
-
-/*
- * At Column (DF7), a header with a location line ("Spinward Marches - Vilis") is two rows: the title
- * and its hex badge across the top with back and close in the corner, then the location line with the
- * width switch beside it. On one row the switch crowded the title and pushed the badge under it. Half
- * and Full keep one row; a phone is the bottom sheet, with no switch.
- */
-@media (min-width: 600px) {
-  .panel[data-span="column"] .panel-head:has(.panel-meta) {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 3px 12px;
-    padding-right: 16px;
-  }
-
-  .panel[data-span="column"] .panel-head:has(.panel-meta) .panel-titles {
-    display: contents;
-  }
-
-  .panel[data-span="column"] .panel-head:has(.panel-meta) .panel-eyebrow,
-  .panel[data-span="column"] .panel-head:has(.panel-meta) .panel-title-row {
-    grid-column: 1 / -1;
-    padding-right: calc(var(--corner-edge) + var(--corner-size) + var(--corner-extra));
-  }
-
-  .panel[data-span="column"] .panel-head:has(.panel-meta):has(.panel-back) .panel-eyebrow,
-  .panel[data-span="column"] .panel-head:has(.panel-meta):has(.panel-back) .panel-title-row {
-    padding-right: calc(var(--corner-edge) + (2 * var(--corner-size)) + var(--corner-gap) + var(--corner-extra));
-  }
-
-  .panel[data-span="column"] .panel-head:has(.panel-meta) .panel-meta {
-    grid-column: 1;
-  }
-
-  .panel[data-span="column"] .panel-head:has(.panel-meta) .panel-tools {
-    grid-column: 2;
-    margin-left: 0;
-    padding-left: 0;
-  }
-
-  .panel[data-span="column"] .panel-head:has(.panel-meta) .panel-close,
-  .panel[data-span="column"] .panel-head:has(.panel-meta) .panel-back {
-    top: 10px;
-    transform: none;
-  }
-
-  .panel[data-span="column"] .panel-head:has(.panel-meta) .panel-close:active,
-  .panel[data-span="column"] .panel-head:has(.panel-meta) .panel-back:active {
-    transform: scale(0.9);
-  }
-}
-
-/*
- * A panel with a pager (the world profile) supersedes DF7. Column: the width switch sits on the
- * first row of the tools, the pager on the second. Half and full keep one row: pager, then the
- * switch. Close stays in the corner. A header with no pager keeps DF7.
- */
-@media (min-width: 600px) {
-  .panel[data-span="column"] .panel-head:has(.panel-pager) {
-    display: flex;
-    flex-wrap: nowrap;
-    align-items: flex-start;
-    padding-right: calc(var(--corner-edge) + var(--corner-size) + var(--corner-extra));
-  }
-
-  .panel[data-span="column"] .panel-head:has(.panel-pager):has(.panel-back) {
-    padding-right: calc(var(--corner-edge) + (2 * var(--corner-size)) + var(--corner-gap) + var(--corner-extra));
-  }
-
-  .panel[data-span="column"] .panel-head:has(.panel-pager) .panel-titles {
-    display: flex;
-    flex-direction: column;
-    flex: 1 1 auto;
-  }
-
-  .panel[data-span="column"] .panel-head:has(.panel-pager) .panel-eyebrow,
-  .panel[data-span="column"] .panel-head:has(.panel-pager) .panel-title-row {
-    grid-column: auto;
-  }
-
-  .panel[data-span="column"] .panel-head:has(.panel-pager) .panel-tools:has(.panel-pager) {
-    flex-direction: column;
-    align-items: flex-end;
-  }
-
-  .panel[data-span="column"] .panel-head:has(.panel-pager) .panel-pager {
-    order: 1;
-  }
-
-  .panel[data-span="column"] .panel-head:has(.panel-pager) .panel-spans {
-    order: 0;
-  }
 }
 
 .panel-pager {
   display: flex;
+  flex-wrap: nowrap;
   align-items: center;
   gap: var(--sp-1);
+  white-space: nowrap;
 }
 
 .panel-close:hover,
@@ -431,7 +407,7 @@ function onGrabClick(): void {
 
 .panel-close:active,
 .panel-back:active {
-  transform: translateY(-50%) scale(0.9);
+  transform: scale(0.9);
 }
 
 .panel-grab {

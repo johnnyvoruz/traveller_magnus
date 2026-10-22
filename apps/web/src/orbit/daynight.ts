@@ -139,16 +139,6 @@ export function markerAt(turning: Turning, days: number, starAngle: number): num
     return tick ? tick.at : null;
 }
 
-/**
- * Reduced motion: the marker holds one place for a minute of this world's day,
- * then steps. `at` is the continuous share from markerAt.
- */
-export function markerMinute(at: number, solarDayHours: number): number {
-    const minutes = Math.max(1, Math.round(solarDayHours * 60));
-    const share = ((at % 1) + 1) % 1;
-    return Math.floor(share * minutes + 1e-9) / minutes;
-}
-
 // ---- How long the day is, and how it changes over the year --------------------------------
 
 /** The latitude the daylight range is quoted for. A display choice, in one place. */

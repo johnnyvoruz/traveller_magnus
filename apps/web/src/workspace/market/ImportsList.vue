@@ -11,7 +11,7 @@ import { session } from '../../account/session.ts';
 import { campaign, listCampaigns } from '../../campaign/store.ts';
 import { marketWire, type InstallRow } from '../../marketplace/catalogue.ts';
 import { showToast } from '../../shell/toast.ts';
-import MarketAsk from './MarketAsk.vue';
+import AskModal from '../../shell/AskModal.vue';
 import { placementWords, plural, removeWords } from './place.ts';
 
 const wire = marketWire();
@@ -91,7 +91,7 @@ onMounted(async () => {
         <button type="button" class="ui-btn" @click="asking = row; askError = ''">Remove</button>
       </li>
     </ul>
-    <MarketAsk
+    <AskModal
       v-if="asking"
       :title="'Remove ' + asking.title"
       :text="removeWords(asking, asking.recordCount)"

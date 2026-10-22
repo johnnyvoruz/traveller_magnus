@@ -32,7 +32,7 @@ async function call<T>(suffix: string, init: RequestInit, schema: { parse(data: 
     try {
         res = await apiFetch(transport.fetch, path, init);
     } catch {
-        return { ok: false, message: 'You seem to be offline. Try again when you are back.' };
+        return { ok: false, message: 'You are offline. Try again when you are back online.' };
     }
     if (res.status === 401) {
         noteUnauthorized();

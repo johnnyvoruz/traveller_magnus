@@ -3,7 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { locatorHeight, nextFrame, onPageResize, prefersReducedMotion } from '../platform/browser.ts';
 import { closeRoller, diceAsk } from './command.ts';
 import DiceButton from './DiceButton.vue';
-import { d3Face } from './roll.ts';
+import { d3Face, threeDdLine } from './roll.ts';
 
 const PIPS: Record<number, number[]> = {
     1: [5],
@@ -39,6 +39,7 @@ const title = computed(() => {
     if (roll.mode === 'boon') return 'Boon';
     if (roll.mode === 'bane') return 'Bane';
     if (roll.mode === 'd66') return 'D66';
+    if (roll.mode === '3dd') return '3DD';
     if (roll.mode === 'd3') return 'D3';
     if (roll.mode === '2d3') return '2D3';
     return `${roll.dice.length}D`;
@@ -46,7 +47,9 @@ const title = computed(() => {
 
 const formula = computed(() => {
     const roll = latest.value;
-    if (!roll || roll.dm === 0 || roll.mode === 'd66') return '';
+    if (!roll) return '';
+    if (roll.mode === '3dd') return `3DD ${threeDdLine(roll.dice)}`;
+    if (roll.dm === 0 || roll.mode === 'd66') return '';
     const sign = roll.dm > 0 ? '+' : '−';
     return `${title.value}${sign}${Math.abs(roll.dm)} = ${roll.total + roll.dm}`;
 });
@@ -54,7 +57,7 @@ const formula = computed(() => {
 const shownTotal = computed(() => {
     const roll = latest.value;
     if (!roll) return '';
-    if (roll.mode === 'd66') return String(roll.total);
+    if (roll.mode === 'd66' || roll.mode === '3dd') return String(roll.total);
     return String(roll.total + roll.dm);
 });
 
@@ -202,7 +205,7 @@ onBeforeUnmount(() => {
       v-if="diceAsk.open"
       class="dice-bar"
       role="region"
-      aria-label="Dice roller"
+      aria-label="Dice"
       :style="{ '--locator-height': locatorPx + 'px', '--dice-card-height': cardPx + 'px' }"
     >
       <DiceButton />

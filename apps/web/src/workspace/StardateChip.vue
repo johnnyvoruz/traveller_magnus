@@ -3,21 +3,24 @@
  * The date beside the search bar (Johnny, 2026-10-05; K6c). Signed in it is the campaign
  * date, DDD-YYYY and the weekday, and pressing it opens the date's editor in the Campaign
  * panel; with no date set yet it says so and opens the same. Signed out it is the date the
- * orbit view opens on, quieter and not a control.
+ * orbit view opens on, quieter and not a control. The example campaign (DL8) shows its own date,
+ * quiet too: it is read-only.
  */
 import { computed } from 'vue';
 import { session } from '../account/session.ts';
 import { campaign } from '../campaign/store.ts';
 import Icon from '../design/Icon.vue';
 import { DEFAULT_START, totalDays } from '../orbit/clock.ts';
+import { example } from './example_campaign.ts';
 import { stardate } from './stardate.ts';
 
 const emit = defineEmits<{ open: [] }>();
 
-const signedIn = computed(() => session.user !== null);
+const signedIn = computed(() => session.user !== null && !example.on);
 const ready = computed(() => campaign.status === 'ready');
 const said = computed(() => {
     if (signedIn.value) return campaign.clock ? stardate(campaign.clock.days) : null;
+    if (example.on && campaign.clock) return stardate(campaign.clock.days);
     return stardate(totalDays(DEFAULT_START.year, DEFAULT_START.day));
 });
 </script>
@@ -37,7 +40,7 @@ const said = computed(() => {
     <template v-else-if="ready"><span>No campaign date</span></template>
     <template v-else><span>…</span></template>
   </button>
-  <p v-else class="stardate is-quiet" title="The date the orbit view opens on">
+  <p v-else class="stardate is-quiet" :title="example.on ? 'The example campaign’s date' : 'The date the orbit view opens on'">
     <Icon name="calendar-star" :size="14" />
     <b>{{ said?.date }}</b><span>{{ said?.weekday }}</span>
   </p>

@@ -61,6 +61,31 @@ test('a players record inside bold keeps its current name', () => {
     assert.equal(nodes[0].children[1].label, 'Beowulf');
 });
 
+test('a referee block is a shaded passage, and an unclosed one is labelled', () => {
+    const closed = parseRich('Before\n:::referee\nThe password is nightfall.\n:::\nAfter');
+    assert.equal(closed[0].kind, 'text');
+    assert.equal(closed[0].text, 'Before');
+    assert.equal(closed[2].kind, 'referee');
+    assert.equal(closed[2].closed, true);
+    assert.match(richHtml([closed[2]]), /<aside class="rich-referee"><span class="rich-referee-label">Referee<\/span>/);
+    assert.match(richHtml([closed[2]]), /The password is nightfall\./);
+    const open = parseRich('Before\n:::referee\nThe password is nightfall.\nStill here');
+    const block = open.find((node) => node.kind === 'referee');
+    assert.ok(block && block.kind === 'referee');
+    assert.equal(block.closed, false);
+    assert.match(richHtml([block]), /Unclosed referee block/);
+    assert.match(richHtml([block]), /Still here/);
+    const inline = richHtml(parseRich('Say :::referee in a sentence.'));
+    assert.match(inline, /Say :::referee in a sentence\./);
+    assert.equal(inline.includes('<aside'), false);
+    const nested = parseRich(':::referee\n:::referee\nsecret\n:::');
+    assert.equal(nested[0].kind, 'referee');
+    assert.equal(nested[0].closed, true);
+    const inner = richHtml(nested[0].children);
+    assert.match(inner, /:::referee/);
+    assert.equal(inner.includes('<aside'), false);
+});
+
 test('a tag, a javascript address, an image, and an unclosed mark stay text', () => {
     const html = richHtml(parseRich('<script>alert(1)</script>\n[Click](javascript:alert(1))\n![Map](https://example.com/a.png)\n**no close\na_snake_case_name'));
     assert.equal(html.includes('<script'), false);

@@ -14,8 +14,11 @@ function inRange(value: number, range: { min?: number; max?: number; in?: number
     return true;
 }
 
-/** The selection's eligibility test. Moved from findings/living_systems/check_sample.mjs. */
-export function eligible(line: ChatterLineData, facts: SystemFacts): boolean {
+/**
+ * The selection's eligibility test. Moved from findings/living_systems/check_sample.mjs.
+ * `anyParty` skips `when.party`: the comms receiver plays those lines wherever the party is (ZC4).
+ */
+export function eligible(line: ChatterLineData, facts: SystemFacts, opts: { anyParty?: boolean } = {}): boolean {
     const w = line.when;
     if (w.allegiance && !w.allegiance.some((code) => code === facts.allegiance || code === facts.allegianceBase)) return false;
     if (w.starport && !w.starport.includes(facts.starport as 'A')) return false;
@@ -42,7 +45,7 @@ export function eligible(line: ChatterLineData, facts: SystemFacts): boolean {
     if (w.bases && !w.bases.some((code) => facts.bases.includes(code))) return false;
     if (w.notBases && w.notBases.some((code) => facts.bases.includes(code))) return false;
     if (w.xboat !== undefined && facts.xboat !== w.xboat) return false;
-    if (w.party && !w.party.includes(facts.party)) return false;
+    if (!opts.anyParty && w.party && !w.party.includes(facts.party)) return false;
     if (w.day && (facts.day < w.day.min || facts.day > w.day.max)) return false;
     return true;
 }

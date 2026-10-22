@@ -1,7 +1,9 @@
 <script setup lang="ts">
 /**
- * The account page at /account (findings/passkey_screens_design.md §2 to §4), loaded as its own
- * chunk by views/Account.vue. What it shows follows the session this browser holds:
+ * The account (findings/passkey_screens_design.md §2 to §4), in the account panel
+ * (AccountPanel.vue, `?panel=account`; /account redirects there, DU11) with `panel` set: the panel
+ * gives the title and the close, so the brand and "Back to the map" go. Without `panel` it is the
+ * old full page. What it shows follows the session this browser holds:
  *
  * - signed out: the sign-in card;
  * - a new account: its recovery codes, once, then the nudge to add a second passkey;
@@ -20,12 +22,14 @@ import {
 } from '../../account/passkey.ts';
 import { loadSession, session, signOut } from '../../account/session.ts';
 import { resetCampaign } from '../../campaign/commit.ts';
+import { assignPage } from '../../platform/browser.ts';
 import { apiFetch } from '../../platform/http.ts';
 import { APP_VERSION } from '../../version.ts';
 import { readProviders } from '../account.ts';
 import { forgetDeleted } from '../actions.ts';
 import { forgetOpening } from '../opening.ts';
 import CodesBlock from './CodesBlock.vue';
+import AgentAccess from '../proposals/AgentAccess.vue';
 import PasskeyAdd from './PasskeyAdd.vue';
 import { returnPath } from './recovery.ts';
 import RecoveryScreen from './RecoveryScreen.vue';
@@ -38,6 +42,7 @@ import {
 } from './words.ts';
 
 type Phase = 'loading' | 'out' | 'codes' | 'nudge' | 'recovery' | 'account';
+const props = withDefaults(defineProps<{ panel?: boolean }>(), { panel: false });
 const ORDER = ['twitter', 'discord', 'google'];
 const ChangelogWindow = defineAsyncComponent(() => import('../ChangelogWindow.vue'));
 const changesOpen = ref(false);
@@ -319,7 +324,7 @@ async function link(id: string): Promise<void> {
         if (done.ok) url = done.url;
         return done;
     }, id);
-    if (ok && url) globalThis.location.assign(url);
+    if (ok && url) assignPage(url);
 }
 
 /** Sign out. When the server doesn't end the session, the page says so by the button and the person stays signed in. */
@@ -353,10 +358,10 @@ watch(() => (session.user ? session.user.id : ''), (id) => {
 </script>
 
 <template>
-  <main class="pk-page ui-ground">
+  <component :is="props.panel ? 'div' : 'main'" class="pk-page" :class="props.panel ? 'is-panel' : 'ui-ground'">
     <div class="pk-page-inner">
-      <span class="ui-brand pk-brand">Traveller<span class="ui-brand-dot">.</span>voyage</span>
-      <RouterLink v-if="phase !== 'recovery'" :to="returnPath()" class="pk-back">Back to the map</RouterLink>
+      <span v-if="!props.panel" class="ui-brand pk-brand">Traveller<span class="ui-brand-dot">.</span>voyage</span>
+      <RouterLink v-if="!props.panel && phase !== 'recovery'" :to="returnPath()" class="pk-back">Back to the map</RouterLink>
 
       <p v-if="phase === 'loading'" class="pk-quiet" role="status">Loading your account…</p>
 
@@ -534,6 +539,8 @@ watch(() => (session.user ? session.user.id : ''), (id) => {
             <p v-if="onlyProvider" id="pk-last-link" class="pk-note">{{ LAST_PROVIDER_SAY }}</p>
           </section>
 
+          <AgentAccess />
+
           <div class="pk-foot">
             <button type="button" class="ui-btn" data-account="sign-out" :disabled="busy !== ''" @click="leave">{{ busy === 'sign-out' ? 'Signing out…' : 'Sign out' }}</button>
             <p v-if="rowSay && rowSay.id === 'sign-out'" class="pk-alert" role="alert" data-account="sign-out-say">{{ rowSay.text }}</p>
@@ -544,7 +551,7 @@ watch(() => (session.user ? session.user.id : ''), (id) => {
       <button v-if="phase !== 'out' && phase !== 'loading'" type="button" class="pk-version" data-version @click="changesOpen = true">Version {{ APP_VERSION }} · What's new</button>
       <ChangelogWindow v-if="changesOpen" @close="changesOpen = false" />
     </div>
-  </main>
+  </component>
 </template>
 
 <style>
@@ -563,6 +570,34 @@ watch(() => (session.user ? session.user.id : ''), (id) => {
   width: min(640px, 100%);
   margin: 0 auto;
   padding: 32px 16px 64px;
+}
+
+/* In the account panel (DU11): the panel scrolls and frames it; the page's own ground and width go. */
+.pk-page.is-panel {
+  position: static;
+  overflow: visible;
+  background: none;
+}
+
+.pk-page.is-panel .pk-page-inner {
+  width: auto;
+  padding: 4px 16px 24px;
+}
+
+/* The panel's title says Account: the page's own "Your account" stays for screen readers and focus only. */
+.pk-page.is-panel .pk-head .pk-h1 {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.pk-page.is-panel .pk-frame {
+  max-width: none;
+  padding: 16px;
+  box-shadow: none;
 }
 
 .pk-page p {

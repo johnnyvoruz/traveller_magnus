@@ -38,6 +38,10 @@ const emit = defineEmits<{
       </li>
     </ul>
     <br v-else-if="part.kind === 'break'">
+    <aside v-else-if="part.kind === 'referee'" class="rich-referee">
+      <span class="rich-referee-label">{{ part.closed ? 'Referee' : 'Unclosed referee block' }}</span>
+      <RichNodes :nodes="part.children" @open="emit('open', $event)" />
+    </aside>
     <button
       v-else
       v-record-card="part.kind === 'record' ? part.id : null"
@@ -66,5 +70,20 @@ const emit = defineEmits<{
   margin: 0 2px;
   vertical-align: baseline;
   cursor: pointer;
+}
+
+.rich-referee {
+  display: block;
+  margin: 0.35em 0;
+  padding: 0.4em 0.6em;
+  background: var(--panel-raised);
+  border-left: 2px solid var(--text-muted);
+}
+
+.rich-referee-label {
+  display: block;
+  margin-bottom: 0.25em;
+  color: var(--text-muted);
+  font: 600 11px/1.2 var(--font-text);
 }
 </style>

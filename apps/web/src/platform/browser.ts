@@ -39,6 +39,45 @@ export function pageOrigin(): string {
     return location.origin;
 }
 
+/** Page origin, or empty where this process has no location. */
+export function locationOrigin(): string {
+    try {
+        return globalThis.location?.origin ?? '';
+    } catch {
+        return '';
+    }
+}
+
+/** Leaves this page for url. */
+export function assignPage(url: string): void {
+    globalThis.location.assign(url);
+}
+
+/** The credentials object, or null where this process has no navigator. */
+export function webCredentials(): { create?: unknown; get?: unknown } | null {
+    try {
+        const credentials = globalThis.navigator?.credentials as { create?: unknown; get?: unknown } | undefined;
+        return credentials ?? null;
+    } catch {
+        return null;
+    }
+}
+
+/** Copies text. Throws when the browser refuses. */
+export async function writeClipboard(text: string): Promise<void> {
+    await globalThis.navigator.clipboard.writeText(text);
+}
+
+/** A document event. No-op where there is no document. Returns the function that stops it. */
+export function onDocumentEvent<K extends 'pointerdown' | 'keydown'>(
+    type: K,
+    fn: (event: DocumentEventMap[K]) => void,
+): () => void {
+    if (typeof document === 'undefined') return () => {};
+    document.addEventListener(type, fn as EventListener);
+    return () => document.removeEventListener(type, fn as EventListener);
+}
+
 /** Instant jump to the top after a path change. No smooth scroll. */
 export function scrollToTop(): void {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
@@ -59,6 +98,43 @@ export function storageSet(key: string, value: string): void {
     } catch {
         // The span stays at the default when storage is blocked.
     }
+}
+
+/** This tab's session storage. A private window can refuse it. */
+export function sessionGet(key: string): string | null {
+    try {
+        return sessionStorage.getItem(key);
+    } catch {
+        return null;
+    }
+}
+
+export function sessionSet(key: string, value: string): void {
+    try {
+        sessionStorage.setItem(key, value);
+    } catch {
+        // The value stays on the page when storage is blocked.
+    }
+}
+
+export function sessionRemove(key: string): void {
+    try {
+        sessionStorage.removeItem(key);
+    } catch {
+        // A later visit asks again.
+    }
+}
+
+/** The path of this page. Empty where there is no location. */
+export function pagePath(): string {
+    if (typeof location === 'undefined') return '';
+    return location.pathname;
+}
+
+/** Replaces the address bar without loading a page. No-op where there is no history. */
+export function replaceUrl(url: string): void {
+    if (typeof history === 'undefined') return;
+    history.replaceState(history.state, '', url);
 }
 
 /** Fires when an element's border box changes. Returns an unsubscribe. */
@@ -223,6 +299,12 @@ export function afterTask(fn: () => void): () => void {
 /** Runs fn after ms milliseconds. clearTimeout cancels the handle. */
 export function later(fn: () => void, ms: number): ReturnType<typeof setTimeout> {
     return setTimeout(fn, ms);
+}
+
+/** Runs fn every ms milliseconds. The returned function stops it. */
+export function every(fn: () => void, ms: number): () => void {
+    const handle = setInterval(fn, ms);
+    return () => clearInterval(handle);
 }
 
 /** An element in the page document. */

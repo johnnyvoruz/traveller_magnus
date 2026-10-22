@@ -6,15 +6,12 @@
  */
 import { BEOWULF_SEGMENTS } from '../../apps/web/src/living/comms/beowulf.ts';
 import assert from 'node:assert/strict';
-import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-
-const require = createRequire('D:/webstorm/traveller_magnus/.tmp/atlas-testing/package.json');
-const { chromium } = require('playwright');
+import { edgeProfile, edgeSkipReason, launchEdge, removeProfile } from './harness/edge_launch.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const webRoot = path.join(root, 'apps', 'web');
@@ -57,6 +54,50 @@ function overlap(a, b) {
     return w > 1 && h > 1;
 }
 
+/** Vite on a port the OS chooses, so two suites can listen at once. */
+async function serveWeb(prefix) {
+    const cacheDir = fs.mkdtempSync(path.join(tmpdir(), prefix));
+    const { createServer } = await import('vite');
+    const server = await createServer({
+        root: webRoot,
+        cacheDir,
+        server: { host: '127.0.0.1', port: 0, strictPort: true, hmr: false },
+        logLevel: 'silent',
+    });
+    await server.listen();
+    const address = server.httpServer.address();
+    const port = address && typeof address === 'object' ? address.port : 0;
+    return { server, cacheDir, origin: 'http://127.0.0.1:' + port };
+}
+
+/** One Edge, one temp profile. A miss skips the test. */
+async function openEdge(t, prefix) {
+    const profileDir = edgeProfile(prefix);
+    try {
+        const context = await launchEdge(profileDir);
+        await context.addInitScript(() => {
+            localStorage.setItem('voyage_welcome_shown', '1');
+            localStorage.setItem('voyage_first_hint_done', '1');
+            localStorage.setItem('voyage_panel_span', 'column');
+            localStorage.setItem('voyage.comms.on', '1');
+        });
+        return { context, profileDir };
+    } catch (error) {
+        removeProfile(profileDir);
+        t.skip(edgeSkipReason(error));
+        return null;
+    }
+}
+
+async function closeEdge(edge) {
+    if (!edge) return;
+    await Promise.race([
+        edge.context.close(),
+        new Promise((resolve) => setTimeout(resolve, 5000)),
+    ]);
+    removeProfile(edge.profileDir);
+}
+
 const WIDTHS = [
     { name: '1600', width: 1600, height: 900, closePanel: true },
     { name: '1366', width: 1366, height: 768, closePanel: false },
@@ -70,36 +111,25 @@ test('System Comms, Fit, the receiver and the chips do not overlap', { timeout: 
         t.skip('the chart at ' + origin + ' cannot be reached');
         return;
     }
-    const cacheDir = fs.mkdtempSync(path.join(tmpdir(), 'c-stage-'));
-    const { createServer } = await import('vite');
-    const server = await createServer({
-        root: webRoot,
-        cacheDir,
-        server: { host: '127.0.0.1', port: 6227, strictPort: true, hmr: false },
-        logLevel: 'silent',
-    });
-    await server.listen();
-    const browser = await chromium.launch({ channel: 'msedge', headless: true });
+    let web;
+    let edge;
     const hits = [];
     let oneRow = false;
     let twoRows = false;
     try {
+        web = await serveWeb('c-stage-');
+        edge = await openEdge(t, 'c-stage-edge-');
+        if (!edge) return;
         for (const size of WIDTHS) {
-            const context = await browser.newContext({
-                viewport: { width: size.width, height: size.height },
-                deviceScaleFactor: 1,
-            });
-            await context.addInitScript(() => {
-                localStorage.setItem('voyage_welcome_shown', '1');
-                localStorage.setItem('voyage_first_hint_done', '1');
-                localStorage.setItem('voyage_panel_span', 'column');
-            });
-            const page = await context.newPage();
-            await page.goto('http://127.0.0.1:6227/s/Spinward_Marches/1910/orbit', { waitUntil: 'networkidle', timeout: 60000 });
+            const page = await edge.context.newPage();
+            await page.setViewportSize({ width: size.width, height: size.height });
+            await page.goto(web.origin + '/s/Spinward_Marches/1910/orbit', { waitUntil: 'networkidle', timeout: 60000 });
             await page.waitForSelector('.orbit-stage[data-state="ready"]', { timeout: 60000 });
             if (size.closePanel) {
-                const close = page.locator('[aria-label="Close panel"]');
-                if (await close.count()) await close.first().click();
+                await page.evaluate(() => {
+                    const close = document.querySelector('[aria-label="Close panel"]');
+                    if (close instanceof HTMLElement) close.click();
+                });
                 await page.waitForTimeout(300);
             }
             const measure = () => page.evaluate(() => {
@@ -233,14 +263,176 @@ test('System Comms, Fit, the receiver and the chips do not overlap', { timeout: 
                 if (during !== before) hits.push('1600 fade moved ' + before + ' to ' + during);
                 await page.waitForSelector('.orbit-comms', { state: 'detached', timeout: 2000 });
             }
-            await context.close();
+            await page.close();
         }
     } finally {
-        await browser.close();
-        await server.close();
-        fs.rmSync(cacheDir, { recursive: true, force: true });
+        await closeEdge(edge);
+        if (web) {
+            await web.server.close();
+            fs.rmSync(web.cacheDir, { recursive: true, force: true });
+        }
     }
     assert.deepEqual(hits, [], hits.join('; '));
     assert.equal(oneRow, true, 'chips on one row');
     assert.equal(twoRows, true, 'chips on two rows');
+});
+
+/**
+ * CW4: the panel header is two stacked rows. The crumb and the title stay on
+ * one line. Back, Close, the width switch and the pager do not cover them.
+ */
+test('the world panel header does not overlap or wrap', { timeout: 240000 }, async (t) => {
+    const origin = process.env.VOYAGE_TRUTH_API;
+    if (!(await chartReachable(origin))) {
+        t.skip('the chart at ' + origin + ' cannot be reached');
+        return;
+    }
+    let web;
+    let edge;
+    const hits = [];
+    const widths = [
+        { name: '1600', width: 1600, height: 900 },
+        { name: '1366', width: 1366, height: 768 },
+        { name: '390', width: 390, height: 844 },
+    ];
+    const spans = ['column', 'half', 'full'];
+    const worlds = [
+        { hex: '0511', name: 'Terra Nova', widths, spans },
+        { hex: '3010', name: "L'oeul d'Dieu", widths: widths.filter((size) => size.name !== '1366'), spans: ['column'] },
+    ];
+
+    async function setSpan(page, span) {
+        const label = span === 'column' ? 'Column' : span === 'half' ? 'Half' : 'Full';
+        await page.evaluate((name) => {
+            const button = [...document.querySelectorAll('.panel-spans button')].find((el) => (el.textContent || '').trim() === name);
+            if (button instanceof HTMLElement) button.click();
+        }, label);
+        await page.waitForFunction((name) => document.querySelector('.panel')?.getAttribute('data-span') === name, span);
+    }
+
+    async function headerHits(page) {
+        return page.evaluate(() => {
+            function box(el) {
+                if (!el) return null;
+                const style = getComputedStyle(el);
+                if (style.display === 'none' || style.visibility === 'hidden') return null;
+                const r = el.getBoundingClientRect();
+                if (r.width < 1 || r.height < 1) return null;
+                return { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+            }
+            function overlapBox(a, b) {
+                const w = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+                const h = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+                return w > 1 && h > 1;
+            }
+            function wraps(el) {
+                if (!el) return false;
+                const lh = parseFloat(getComputedStyle(el).lineHeight);
+                if (!Number.isFinite(lh) || lh === 0) return false;
+                return el.getBoundingClientRect().height > lh * 1.6;
+            }
+            const found = [];
+            const specs = [
+                ['crumb', document.querySelector('.panel-eyebrow')],
+                ['spans', document.querySelector('.panel-spans')],
+                ['back', document.querySelector('.panel-back')],
+                ['close', document.querySelector('.panel-close')],
+                ['title', document.querySelector('.panel-head h1')],
+                ['glyph', document.querySelector('.panel-glyph')],
+                ['pager', document.querySelector('.panel-pager')],
+                ['badge', document.querySelector('.panel-place .ui-badge')],
+                ['meta', document.querySelector('.panel-meta')],
+            ];
+            const boxes = [];
+            for (const [name, el] of specs) {
+                const next = box(el);
+                if (next) boxes.push([name, next]);
+                if ((name === 'crumb' || name === 'title') && wraps(el)) found.push(name + ' wraps');
+            }
+            const heading = document.querySelector('.panel-head h1');
+            if (heading && !heading.querySelector('input')) {
+                const text = (heading.textContent || '').replace(/\s+/g, ' ').trim();
+                if (text && heading.getAttribute('title') !== text) found.push('title attr');
+                if (getComputedStyle(heading).whiteSpace !== 'nowrap') found.push('title can wrap');
+            }
+            const crumb = document.querySelector('.panel-eyebrow');
+            if (crumb) {
+                const title = crumb.getAttribute('title') || '';
+                const text = (crumb.textContent || '').replace(/\s+/g, ' ').trim();
+                const flat = (value) => value.replace(/\s+/g, '').toLowerCase();
+                if (!title) found.push('crumb attr missing');
+                else if (flat(text) !== flat(title)) found.push('crumb attr [' + title + '] [' + text + ']');
+            }
+            const badge = document.querySelector('.panel-head .ui-badge');
+            if (badge && !badge.closest('.panel-place')) found.push('badge off the place row');
+            for (let i = 0; i < boxes.length; i += 1) {
+                for (let j = i + 1; j < boxes.length; j += 1) {
+                    if (overlapBox(boxes[i][1], boxes[j][1])) found.push(boxes[i][0] + '/' + boxes[j][0]);
+                }
+            }
+            return {
+                hits: found,
+                back: !!document.querySelector('.panel-back'),
+                pager: !!document.querySelector('.panel-pager'),
+            };
+        });
+    }
+
+    function note(where, state, result, wantBack, wantPager) {
+        if (result.back !== wantBack) hits.push(where + ' ' + state + ' back ' + result.back);
+        if (result.pager !== wantPager) hits.push(where + ' ' + state + ' pager ' + result.pager);
+        for (const hit of result.hits) hits.push(where + ' ' + state + ' ' + hit);
+    }
+
+    try {
+        web = await serveWeb('c-head-');
+        edge = await openEdge(t, 'c-head-edge-');
+        if (!edge) return;
+        for (const world of worlds) {
+            for (const size of world.widths) {
+                const page = await edge.context.newPage();
+                await page.setViewportSize({ width: size.width, height: size.height });
+                const surfaces = [
+                    { name: 'orbit', root: `${web.origin}/s/Spinward_Marches/${world.hex}/orbit` },
+                    { name: 'map', root: `${web.origin}/s/Spinward_Marches/${world.hex}` },
+                ];
+                for (const surface of surfaces) {
+                    for (const span of world.spans) {
+                        const where = surface.name + ' ' + world.hex + ' ' + size.name + ' ' + span;
+                        await page.goto(surface.root + (surface.name === 'orbit' ? '?overview=1' : ''), { waitUntil: 'domcontentloaded', timeout: 90000 });
+                        if (surface.name === 'orbit') await page.waitForSelector('.orbit-stage[data-state="ready"]', { timeout: 90000 });
+                        await page.locator('.doss-row.is-mainworld').first().waitFor({ state: 'visible', timeout: 90000 });
+                        await page.locator('.doss-row.is-mainworld').first().click();
+                        await page.waitForSelector('.panel-pager', { timeout: 30000 });
+                        const bodyUrl = page.url();
+                        await setSpan(page, span);
+                        note(where, 'back pager', await headerHits(page), true, true);
+                        await page.goto(bodyUrl, { waitUntil: 'domcontentloaded', timeout: 90000 });
+                        if (surface.name === 'orbit') await page.waitForSelector('.orbit-stage[data-state="ready"]', { timeout: 90000 });
+                        await page.waitForSelector('.panel-pager', { timeout: 90000 });
+                        await setSpan(page, span);
+                        note(where, 'pager', await headerHits(page), false, true);
+                        await page.locator('.panel-eyebrow .doss-crumb').first().click();
+                        await page.waitForFunction(() => !document.querySelector('.panel-pager'));
+                        await page.waitForSelector('.panel-back', { timeout: 15000 });
+                        note(where, 'back', await headerHits(page), true, false);
+                        const overview = surface.root + (surface.name === 'orbit' ? '?overview=1' : '');
+                        await page.goto(overview, { waitUntil: 'domcontentloaded', timeout: 90000 });
+                        if (surface.name === 'orbit') await page.waitForSelector('.orbit-stage[data-state="ready"]', { timeout: 90000 });
+                        await page.waitForSelector('.panel-head h1', { timeout: 90000 });
+                        await setSpan(page, span);
+                        note(where, 'plain', await headerHits(page), false, false);
+                    }
+                }
+                await page.close();
+            }
+        }
+    } finally {
+        await closeEdge(edge);
+        if (web) {
+            await web.server.close();
+            fs.rmSync(web.cacheDir, { recursive: true, force: true });
+        }
+    }
+    assert.deepEqual(hits, [], hits.join('; '));
 });

@@ -6,6 +6,8 @@
 import type { DeckPlan } from '@voyage/shared';
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { devicePixelRatio } from '../platform/browser.ts';
+import { WHEEL_STEP } from '../map/input.ts';
+import { WHEEL_NOTCH_PX } from '../orbit/camera.ts';
 import { drawDeck, fitFrame, tileUrl, type DeckFrame } from './draw.ts';
 import { placeShip, type GeomorphManifest, type PlacedShip } from './place.ts';
 
@@ -19,8 +21,6 @@ const status = ref('');
 const MIN_SCALE = 0.02;
 const MAX_SCALE = 80;
 const KEY_ZOOM = 1.5;
-const WHEEL_STEP = 1.1;
-const WHEEL_NOTCH_PX = 100;
 const PAN_FRACTION = 0.15;
 
 let placed: PlacedShip | null = null;
@@ -91,24 +91,24 @@ async function load(): Promise<void> {
     try {
         response = await fetch(tileUrl('manifest.json'));
     } catch {
-        if (gen === generation) status.value = 'The tile catalogue could not be loaded.';
+        if (gen === generation) status.value = 'The tile catalog could not be loaded.';
         return;
     }
     if (gen !== generation) return;
     if (!response.ok) {
-        status.value = 'The tile catalogue could not be loaded.';
+        status.value = 'The tile catalog could not be loaded.';
         return;
     }
     let manifest: GeomorphManifest;
     try {
         manifest = await response.json() as GeomorphManifest;
     } catch {
-        if (gen === generation) status.value = 'The tile catalogue could not be loaded.';
+        if (gen === generation) status.value = 'The tile catalog could not be loaded.';
         return;
     }
     if (gen !== generation) return;
     if (!manifest || !Array.isArray(manifest.images)) {
-        status.value = 'The tile catalogue could not be loaded.';
+        status.value = 'The tile catalog could not be loaded.';
         return;
     }
     placed = placeShip(manifest, props.plan.parts);
@@ -229,7 +229,7 @@ watch(() => props.plan, () => { void load(); }, { immediate: true });
       @keydown="onKey"
     ></canvas>
     <ul v-if="skipped.length" class="skipped">
-      <li>Not in the tile catalogue:</li>
+      <li>Not in the tile catalog:</li>
       <li v-for="(item, index) in skipped" :key="index">{{ item }}</li>
     </ul>
     <p class="credit">{{ credit }}</p>

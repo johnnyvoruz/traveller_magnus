@@ -8,7 +8,7 @@
  */
 import { formatHex, parseHex } from '../map/geometry.ts';
 
-const LETTERS = /^[A-P]$/;
+const LETTER_PATTERN = /^[A-P]$/;
 
 /** Letter A–P for a local hex "CCRR", or null when it is not a sector hex. */
 export function subsectorLetter(hhhh: string): string | null {
@@ -21,7 +21,7 @@ export function subsectorLetter(hhhh: string): string | null {
 
 /** The 80 local hexes of one letter, row by row, left to right. Empty when the letter is not A–P. */
 export function subsectorHexes(letter: string): string[] {
-    if (!LETTERS.test(letter)) return [];
+    if (!LETTER_PATTERN.test(letter)) return [];
     const index = letter.charCodeAt(0) - 65;
     const col0 = (index % 4) * 8 + 1;
     const row0 = Math.floor(index / 4) * 10 + 1;

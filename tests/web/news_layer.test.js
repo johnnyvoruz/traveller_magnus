@@ -86,7 +86,7 @@ test('the map view: the command needs a system; the layer is its own canvas; pla
     assert.match(view, /if \(newsSlugs\.length \+ more\.length >= NEWS_PARAMS\.sectorCap\)/);
     const scrubber = read('map/NewsScrubber.vue');
     assert.match(scrubber, /<button\s+v-if="canPlay"/);
-    assert.match(scrubber, /Shown as far as nine sectors\./);
+    assert.match(scrubber, /The map shows this news as far as nine sectors\./);
     const tokens = read('design/tokens.css');
     assert.match(tokens, /--chart-news: #[0-9a-fA-F]{6};/);
     assert.match(tokens, /--t-ripple: \d+ms;/);

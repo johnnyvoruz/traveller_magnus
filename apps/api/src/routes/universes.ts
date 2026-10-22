@@ -20,6 +20,7 @@ import { courseReady, detectPublicCards, detectPublicGames, publicCardsReady, pu
 import { deletePublicMark } from '../universe/public_mark';
 import { refreshAfterCampaign, setPublicGames } from './public_games';
 import { readSummaries, readSummary, rememberCampaignSummary, splitSummary } from '../universe/summary_sync';
+import { storedTableChoice, tableChoiceOf, tableChoiceRefusal } from './table_sets';
 
 const LIVE_LIMIT = CAMPAIGN_LIMITS.universes;
 const PURGE_DAYS = 30;
@@ -385,6 +386,17 @@ universesRoute.patch('/:id/campaign/changes', async (c) => {
             await rememberCampaignSummary(c.env.DB, access.row.id, taken.summary);
         }
         return privateNoStore(taken.response);
+    }
+    let choice: Record<string, string> | null = null;
+    try {
+        choice = tableChoiceOf(await c.req.raw.clone().json());
+    } catch {
+        choice = null;
+    }
+    if (choice) {
+        const stored = await storedTableChoice(c.env, access.row.id);
+        const refusal = await tableChoiceRefusal(c.env.DB, access.row.ownerId, choice, stored);
+        if (refusal) return privateNoStore(fail(c, refusal.status, refusal.code, refusal.message));
     }
     const forwarded = await access.forward(new Request(url, c.req.raw));
     const taken = await splitSummary(forwarded);

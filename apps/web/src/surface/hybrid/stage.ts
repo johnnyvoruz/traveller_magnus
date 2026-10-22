@@ -50,16 +50,3 @@ export function mapSun(model: HybridModel, sub: Subsolar | null, playing: boolea
     const sun = sunVector(sub.latDeg, lon);
     return { shadow: { kind: 'instant', sun }, sun, averaged: false, still: false };
 }
-
-/** True when two sun states draw the same shadow (to skip repainting). */
-export function sameShadow(a: MapSun | null, b: MapSun): boolean {
-    if (!a || !a.shadow || !b.shadow) return a?.shadow === b.shadow;
-    if (a.shadow.kind !== b.shadow.kind) return false;
-    if (a.shadow.kind === 'averaged' && b.shadow.kind === 'averaged') return Math.abs(a.shadow.declinationDeg - b.shadow.declinationDeg) < 0.05;
-    if (a.shadow.kind === 'instant' && b.shadow.kind === 'instant') {
-        const p = a.shadow.sun;
-        const q = b.shadow.sun;
-        return Math.abs(p[0] - q[0]) + Math.abs(p[1] - q[1]) + Math.abs(p[2] - q[2]) < 1e-4;
-    }
-    return false;
-}

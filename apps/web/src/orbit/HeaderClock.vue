@@ -69,8 +69,8 @@ function reset(on: boolean): void {
       :style="{ '--readout-chars': narrow ? 8 : READOUT_CHARS }"
       :aria-expanded="timeOpen ? 'true' : 'false'"
       aria-controls="orbit-drawer-time"
-      :aria-label="'The view’s date and time, ' + said.date + ' ' + said.weekday + ' ' + time + (campaignDate ? (onCampaignDate ? ', the campaign date' : ', off the campaign date ' + campaignDate.date) : '') + '. Press for the Time drawer'"
-      :title="'The view’s date and time; press to type one (T)' + (campaignDate ? (onCampaignDate ? '. The view is on the campaign date' : '. The campaign date is ' + campaignDate.date) : '')"
+      :aria-label="'The view’s date and time, ' + said.date + ' ' + said.weekday + ' ' + time + (campaignDate ? (onCampaignDate ? ', the campaign date' : ', off the campaign date ' + campaignDate.date) : '') + '. Select for the Time drawer'"
+      :title="'The view’s date and time. Select to enter one (T)' + (campaignDate ? (onCampaignDate ? '. The view is on the campaign date' : '. The campaign date is ' + campaignDate.date) : '')"
       @click="$emit('date')"
     >
       <Icon name="calendar-star" :size="12" />

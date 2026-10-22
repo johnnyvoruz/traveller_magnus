@@ -47,6 +47,22 @@ venv/
 # Review notes, design audits and screenshots: working papers, kept local.
 findings/
 
+# Agent swarm and session instructions. The app does not load these.
+# The voyage-session-ingest skill in skill/ stays: the help text tells referees to install it.
+/directives/
+/CLAUDE.md
+/AGENT.md
+/agent.md
+/.claude/
+/.clinerules
+/execution/
+.grok/
+.cursor/
+
 # Deck plan tiles (3,025 PNGs, 83 MB) live on the CDN under geomorphs/, not in git.
 # manifest.json, REBUILD.md and ATTRIBUTION.txt stay tracked.
 assets/geomorphs/**/*.png
+
+# Font Awesome Pro kit. Johnny keeps his copy locally. The app embeds the outlines it shows.
+assets/fontawesome/
+/versionvideo/

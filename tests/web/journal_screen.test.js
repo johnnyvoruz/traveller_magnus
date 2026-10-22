@@ -177,7 +177,13 @@ test('a player note names who wrote it, and only that player edits it', () => {
     const list = readFileSync(new URL('../../apps/web/src/workspace/journal/JournalList.vue', import.meta.url), 'utf8');
     assert.match(page, /Written by/);
     assert.match(page, /imageLocked/);
+    assert.match(page, /hide-adds="isPlayerView"/);
+    assert.match(page, /v-if="!isPlayerView" class="rec-type"/);
+    assert.match(page, /v-if="!isPlayerView" class="ui-seg"/);
     assert.match(page, /rec-delete/);
+    const gallery = readFileSync(new URL('../../apps/web/src/workspace/journal/EntryGallery.vue', import.meta.url), 'utf8');
+    assert.match(gallery, /v-else-if="!hideAdds"/);
+    assert.match(gallery, /v-if="!hideAdds" type="button" class="img-add"/);
     assert.match(list, /Written by/);
 
     const note = entry({ author: 'players', visibility: 'players', rev: 4, title: 'Docked', body: 'We docked.' });

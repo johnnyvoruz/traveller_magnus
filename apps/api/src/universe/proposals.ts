@@ -47,12 +47,14 @@ const UNAVAILABLE = 'Proposals are not available yet.';
 export class ProposalRefusal extends Error {
     readonly status: 400 | 404 | 409 | 429 | 503;
     readonly code: string;
+    readonly details?: unknown;
 
-    constructor(status: 400 | 404 | 409 | 429 | 503, code: string, message: string) {
+    constructor(status: 400 | 404 | 409 | 429 | 503, code: string, message: string, details?: unknown) {
         super(message);
         this.name = 'ProposalRefusal';
         this.status = status;
         this.code = code;
+        if (details !== undefined) this.details = details;
     }
 }
 
@@ -71,8 +73,13 @@ export function installProposalSchema(sql: Sql): void {
         dropped INTEGER NOT NULL,
         created_at TEXT NOT NULL,
         reviewed_at TEXT,
-        expires_at TEXT NOT NULL
+        expires_at TEXT NOT NULL,
+        pasted INTEGER NOT NULL DEFAULT 0
     )`);
+    const batchColumns = sql.exec(`SELECT name AS name FROM pragma_table_info('proposal_batches')`);
+    if (batchColumns.length > 0 && !batchColumns.some((row) => row.name === 'pasted')) {
+        sql.exec(`ALTER TABLE proposal_batches ADD COLUMN pasted INTEGER NOT NULL DEFAULT 0`);
+    }
     sql.exec(`CREATE INDEX IF NOT EXISTS proposal_batches_state ON proposal_batches(state, created_at)`);
     sql.exec(`CREATE TABLE IF NOT EXISTS proposals (
         id TEXT PRIMARY KEY,
@@ -140,7 +147,8 @@ function submitIssue(issues: Issue[]): ProposalRefusal {
     const count = issues.some((issue) => issue.code === 'too_big' && issue.path.length === 1 && issue.path[0] === 'proposals');
     if (count) return new ProposalRefusal(400, 'too_large', BATCH_COUNT);
     if (issues.some((issue) => issue.message === 'too_large')) return new ProposalRefusal(400, 'too_large', BATCH_BYTES);
-    return new ProposalRefusal(400, 'validation', INVALID);
+    const path = issuePath(issues[0] ?? { message: '', path: [] }).join('.');
+    return new ProposalRefusal(400, 'validation', INVALID, path ? { path } : undefined);
 }
 
 function resolveIssue(issues: Issue[]): ProposalRefusal {
@@ -166,6 +174,7 @@ type BatchRow = SqlRow & {
     expires_at: string;
     body_hash?: string;
     idempotency_key?: string;
+    pasted?: number | null;
 };
 
 function toStored(row: SqlRow) {
@@ -191,6 +200,7 @@ function toBatch(row: BatchRow, universeId: string, proposals?: ReturnType<typeo
         reviewedAt: row.reviewed_at == null ? null : String(row.reviewed_at),
         expiresAt: String(row.expires_at),
         reviewUrl: reviewUrl(universeId, String(row.id)),
+        pasted: Number(row.pasted) === 1,
         ...(proposals ? { proposals } : {}),
     };
 }
@@ -284,6 +294,7 @@ export function submitProposals(
     tokenId: string | null,
     universeId: string,
     charge?: () => boolean,
+    pasted = false,
 ): SubmitResult {
     requireReady(sql);
     sweepProposals(sql, now);
@@ -338,8 +349,8 @@ export function submitProposals(
     sql.transaction(() => {
         sql.exec(
             `INSERT INTO proposal_batches (
-                id, idempotency_key, body_hash, token_id, source, state, pending, accepted, dropped, created_at, reviewed_at, expires_at
-            ) VALUES (?, ?, ?, ?, ?, 'open', ?, 0, 0, ?, NULL, ?)`,
+                id, idempotency_key, body_hash, token_id, source, state, pending, accepted, dropped, created_at, reviewed_at, expires_at, pasted
+            ) VALUES (?, ?, ?, ?, ?, 'open', ?, 0, 0, ?, NULL, ?, ?)`,
             batchId,
             input.idempotencyKey,
             hash,
@@ -348,6 +359,7 @@ export function submitProposals(
             rows.length,
             now,
             expires,
+            pasted ? 1 : 0,
         );
         for (const row of rows) {
             sql.exec(
@@ -751,7 +763,9 @@ export function searchRecords(sql: Sql, q: string, type: string | null, limit: n
 
 export function proposalError(err: ProposalRefusal): Response {
     const headers = err.status === 429 ? { 'retry-after': '60' } : undefined;
-    return Response.json({ ok: false, error: { code: err.code, message: err.message } }, { status: err.status, headers });
+    const error: { code: string; message: string; details?: unknown } = { code: err.code, message: err.message };
+    if (err.details !== undefined) error.details = err.details;
+    return Response.json({ ok: false, error }, { status: err.status, headers });
 }
 
 export async function respondProposals(
@@ -790,7 +804,16 @@ export async function respondProposals(
             } catch {
                 throw new ProposalRefusal(400, 'validation', INVALID);
             }
-            const result = submitProposals(sql, body, now, request.headers.get('x-voyage-token-id'), options.universeId, options.allowProposal);
+            const pasted = request.headers.get('x-voyage-pasted') === '1';
+            const result = submitProposals(
+                sql,
+                body,
+                now,
+                request.headers.get('x-voyage-token-id'),
+                options.universeId,
+                pasted ? options.allowMutation : options.allowProposal,
+                pasted,
+            );
             return Response.json({ ok: true, data: { batch: result.batch } }, { status: result.created ? 201 : 200 });
         }
         const batchMatch = /^\/campaign\/proposals\/([^/]+)$/.exec(path);

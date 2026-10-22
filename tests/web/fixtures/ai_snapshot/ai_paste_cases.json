@@ -1,0 +1,130 @@
+[
+  {
+    "name": "a reply with prose, then the block",
+    "text": "Here is what I found in session 12.\n\n```json\n{\n  \"format\": \"voyage-proposals\",\n  \"schemaVersion\": 1,\n  \"idempotencyKey\": \"7d2f1c4e-5b3a-4c9e-9f0a-1b2c3d4e5f60\",\n  \"source\": {\n    \"kind\": \"transcript\",\n    \"label\": \"Session 12\",\n    \"realDate\": \"2026-10-16\"\n  },\n  \"proposals\": [\n    {\n      \"op\": \"record.update\",\n      \"id\": \"cr_00000000-0000-4000-8000-000000000001\",\n      \"baseRev\": 7,\n      \"append\": {\n        \"details\": \"Owes Harlan Teague a favour.\"\n      },\n      \"evidence\": [\n        {\n          \"at\": \"01:12:40\",\n          \"quote\": \"I owe you one, Harlan.\"\n        }\n      ]\n    },\n    {\n      \"op\": \"question\",\n      \"text\": \"Did the party pay the berthing fee?\",\n      \"evidence\": [\n        {\n          \"at\": \"01:20:05\",\n          \"quote\": \"We'll sort the berth later.\"\n        }\n      ]\n    }\n  ]\n}\n```\n",
+    "expect": {
+      "ok": true,
+      "from": "block",
+      "counts": {
+        "record.update": 1,
+        "question": 1
+      }
+    }
+  },
+  {
+    "name": "the JSON alone",
+    "text": "{\"format\":\"voyage-proposals\",\"schemaVersion\":1,\"idempotencyKey\":\"7d2f1c4e-5b3a-4c9e-9f0a-1b2c3d4e5f60\",\"source\":{\"kind\":\"transcript\",\"label\":\"Session 12\",\"realDate\":\"2026-10-16\"},\"proposals\":[{\"op\":\"record.update\",\"id\":\"cr_00000000-0000-4000-8000-000000000001\",\"baseRev\":7,\"append\":{\"details\":\"Owes Harlan Teague a favour.\"},\"evidence\":[{\"at\":\"01:12:40\",\"quote\":\"I owe you one, Harlan.\"}]},{\"op\":\"question\",\"text\":\"Did the party pay the berthing fee?\",\"evidence\":[{\"at\":\"01:20:05\",\"quote\":\"We'll sort the berth later.\"}]}]}",
+    "expect": {
+      "ok": true,
+      "from": "whole",
+      "counts": {
+        "record.update": 1,
+        "question": 1
+      }
+    }
+  },
+  {
+    "name": "an upper-case info string",
+    "text": "Batch:\n```JSON\n{\n  \"format\": \"voyage-proposals\",\n  \"schemaVersion\": 1,\n  \"idempotencyKey\": \"7d2f1c4e-5b3a-4c9e-9f0a-1b2c3d4e5f60\",\n  \"source\": {\n    \"kind\": \"transcript\",\n    \"label\": \"Session 12\",\n    \"realDate\": \"2026-10-16\"\n  },\n  \"proposals\": [\n    {\n      \"op\": \"record.update\",\n      \"id\": \"cr_00000000-0000-4000-8000-000000000001\",\n      \"baseRev\": 7,\n      \"append\": {\n        \"details\": \"Owes Harlan Teague a favour.\"\n      },\n      \"evidence\": [\n        {\n          \"at\": \"01:12:40\",\n          \"quote\": \"I owe you one, Harlan.\"\n        }\n      ]\n    },\n    {\n      \"op\": \"question\",\n      \"text\": \"Did the party pay the berthing fee?\",\n      \"evidence\": [\n        {\n          \"at\": \"01:20:05\",\n          \"quote\": \"We'll sort the berth later.\"\n        }\n      ]\n    }\n  ]\n}\n```",
+    "expect": {
+      "ok": true,
+      "from": "block",
+      "counts": {
+        "record.update": 1,
+        "question": 1
+      }
+    }
+  },
+  {
+    "name": "two blocks: the first is read",
+    "text": "```json\n{\n  \"format\": \"voyage-proposals\",\n  \"schemaVersion\": 1,\n  \"idempotencyKey\": \"7d2f1c4e-5b3a-4c9e-9f0a-1b2c3d4e5f60\",\n  \"source\": {\n    \"kind\": \"transcript\",\n    \"label\": \"Session 12\",\n    \"realDate\": \"2026-10-16\"\n  },\n  \"proposals\": [\n    {\n      \"op\": \"record.update\",\n      \"id\": \"cr_00000000-0000-4000-8000-000000000001\",\n      \"baseRev\": 7,\n      \"append\": {\n        \"details\": \"Owes Harlan Teague a favour.\"\n      },\n      \"evidence\": [\n        {\n          \"at\": \"01:12:40\",\n          \"quote\": \"I owe you one, Harlan.\"\n        }\n      ]\n    },\n    {\n      \"op\": \"question\",\n      \"text\": \"Did the party pay the berthing fee?\",\n      \"evidence\": [\n        {\n          \"at\": \"01:20:05\",\n          \"quote\": \"We'll sort the berth later.\"\n        }\n      ]\n    }\n  ]\n}\n```\n\nAn older draft:\n```json\n{\n  \"format\": \"voyage-proposals\",\n  \"schemaVersion\": 1,\n  \"idempotencyKey\": \"7d2f1c4e-5b3a-4c9e-9f0a-1b2c3d4e5f60\",\n  \"source\": {\n    \"kind\": \"transcript\",\n    \"label\": \"Session 12\",\n    \"realDate\": \"2026-10-16\"\n  },\n  \"proposals\": []\n}\n```",
+    "expect": {
+      "ok": true,
+      "from": "block",
+      "counts": {
+        "record.update": 1,
+        "question": 1
+      }
+    }
+  },
+  {
+    "name": "no block",
+    "text": "I could not find anything to propose in this session.",
+    "expect": {
+      "ok": false,
+      "code": "no_block",
+      "problems": [],
+      "sentences": [
+        "No proposals found. Your AI's reply should end with one ```json block holding the batch."
+      ]
+    }
+  },
+  {
+    "name": "a block that is not JSON",
+    "text": "```json\n{ \"format\": \"voyage-proposals\", proposals: [ }\n```",
+    "expect": {
+      "ok": false,
+      "code": "not_json",
+      "problems": [],
+      "sentences": [
+        "The ```json block is not valid JSON. Ask your AI to give the whole block again."
+      ]
+    }
+  },
+  {
+    "name": "a wrong type and an unknown op",
+    "text": "```json\n{\n  \"format\": \"voyage-proposals\",\n  \"schemaVersion\": 1,\n  \"idempotencyKey\": \"7d2f1c4e-5b3a-4c9e-9f0a-1b2c3d4e5f60\",\n  \"source\": {\n    \"kind\": \"transcript\",\n    \"label\": \"Session 12\",\n    \"realDate\": \"2026-10-16\"\n  },\n  \"proposals\": [\n    {\n      \"op\": \"record.update\",\n      \"id\": \"cr_00000000-0000-4000-8000-000000000001\",\n      \"baseRev\": \"7\",\n      \"append\": {\n        \"details\": \"Owes Harlan Teague a favour.\"\n      },\n      \"evidence\": [\n        {\n          \"at\": \"01:12:40\",\n          \"quote\": \"I owe you one, Harlan.\"\n        }\n      ]\n    },\n    {\n      \"op\": \"question\",\n      \"text\": \"Did the party pay the berthing fee?\",\n      \"evidence\": [\n        {\n          \"at\": \"01:20:05\",\n          \"quote\": \"We'll sort the berth later.\"\n        }\n      ]\n    },\n    {\n      \"op\": \"record.delete\",\n      \"id\": \"cr_00000000-0000-4000-8000-000000000003\",\n      \"evidence\": [\n        {\n          \"at\": \"01:30:00\",\n          \"quote\": \"Forget Teague.\"\n        }\n      ]\n    }\n  ]\n}\n```",
+    "expect": {
+      "ok": false,
+      "code": "invalid",
+      "problems": [
+        {
+          "proposal": 1,
+          "op": "record.update",
+          "ref": null,
+          "path": "baseRev",
+          "message": "Expected number, received string"
+        },
+        {
+          "proposal": 3,
+          "op": "record.delete",
+          "ref": null,
+          "path": "op",
+          "message": "Invalid discriminator value. Expected 'record.create' | 'record.update' | 'link.create' | 'journal.create' | 'clock.set' | 'track.append' | 'cargo.append' | 'passengers.append' | 'ledger.append' | 'question'"
+        }
+      ],
+      "sentences": [
+        "Proposal 1 (record.update): baseRev has the wrong type of value.",
+        "Proposal 3 (record.delete): that action is not one this campaign takes."
+      ]
+    }
+  },
+  {
+    "name": "the wrong envelope",
+    "text": "```json\n{\n  \"format\": \"proposals\",\n  \"schemaVersion\": 2,\n  \"idempotencyKey\": \"7d2f1c4e-5b3a-4c9e-9f0a-1b2c3d4e5f60\",\n  \"source\": {\n    \"kind\": \"transcript\",\n    \"label\": \"Session 12\",\n    \"realDate\": \"2026-10-16\"\n  },\n  \"proposals\": [\n    {\n      \"op\": \"record.update\",\n      \"id\": \"cr_00000000-0000-4000-8000-000000000001\",\n      \"baseRev\": 7,\n      \"append\": {\n        \"details\": \"Owes Harlan Teague a favour.\"\n      },\n      \"evidence\": [\n        {\n          \"at\": \"01:12:40\",\n          \"quote\": \"I owe you one, Harlan.\"\n        }\n      ]\n    },\n    {\n      \"op\": \"question\",\n      \"text\": \"Did the party pay the berthing fee?\",\n      \"evidence\": [\n        {\n          \"at\": \"01:20:05\",\n          \"quote\": \"We'll sort the berth later.\"\n        }\n      ]\n    }\n  ]\n}\n```",
+    "expect": {
+      "ok": false,
+      "code": "invalid",
+      "problems": [
+        {
+          "proposal": null,
+          "op": null,
+          "ref": null,
+          "path": "format",
+          "message": "Invalid literal value, expected \"voyage-proposals\""
+        },
+        {
+          "proposal": null,
+          "op": null,
+          "ref": null,
+          "path": "schemaVersion",
+          "message": "Invalid literal value, expected 1"
+        }
+      ],
+      "sentences": [
+        "The batch: format is not one this campaign reads.",
+        "The batch: schemaVersion is not one this campaign reads."
+      ]
+    }
+  }
+]

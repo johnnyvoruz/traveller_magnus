@@ -36,6 +36,8 @@ export {
 } from './schemas/package.ts';
 export { placeCells, placeKeys, placeTree, placeSummary, placeRecord, placeLists, cubeOf, offsetOf, PlaceError } from './package_place.ts';
 export type { PlaceCell, SectorAt } from './package_place.ts';
+export { HEX_SIZE, ROW_STEP, SECTOR_COLS, SECTOR_ROWS, SQRT3 } from './package_place.ts';
+export { USERNAME_INVALID, USERNAME_RESERVED } from './username_words.ts';
 export {
     CAMPAIGN_LIMITS,
     POINT_AU_LIMIT,

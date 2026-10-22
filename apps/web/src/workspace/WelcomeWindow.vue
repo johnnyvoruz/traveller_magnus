@@ -2,12 +2,15 @@
 /**
  * Welcome, in the app's one modal frame. Escape, Close, the scrim, and Just explore leave it.
  * Create an account shows the sign-in card. The three panes go to Regina, an example ship, and the marketplace.
+ * Run also opens the example campaign in the Campaign panel (DL8) when one is published: the entry
+ * shows only once the route has answered, so a 404 or a 503 leaves no dead button.
  */
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import Icon from '../design/Icon.vue';
 import { APP_VERSION } from '../version.ts';
 import SignInCard from './SignInCard.vue';
+import { checkExample, enterExample, example, EXAMPLE_ENTRY } from './example_campaign.ts';
 import { fetchShipCard, type ShipCardBody } from './public_card.ts';
 import {
     loadExampleShip,
@@ -36,7 +39,19 @@ function onKey(event: KeyboardEvent): void {
 
 onMounted(() => {
     document.addEventListener('keydown', onKey);
+    void checkExample();
 });
+
+const entering = ref(false);
+
+async function lookAround(): Promise<void> {
+    if (entering.value) return;
+    entering.value = true;
+    markWelcomeShown();
+    // Going in leaves /welcome for the Campaign panel; closing here would replace that address with /.
+    await enterExample(router);
+    entering.value = false;
+}
 onBeforeUnmount(() => {
     document.removeEventListener('keydown', onKey);
 });
@@ -100,7 +115,10 @@ async function run(): Promise<void> {
             <img class="welcome-shot" :src="'/landing/' + pane.id + '.webp'" :alt="pane.picture" width="640" height="400">
             <p>{{ pane.text }}</p>
             <button v-if="pane.id === 'fly'" type="button" class="ui-btn" @click="fly">{{ pane.button }}</button>
-            <button v-else-if="pane.id === 'run'" type="button" class="ui-btn" :disabled="shipBusy" @click="run">{{ pane.button }}</button>
+            <div v-else-if="pane.id === 'run'" class="welcome-run">
+              <button v-if="example.available" type="button" class="ui-btn is-primary" :disabled="entering" data-example-enter @click="lookAround">{{ entering ? 'Opening…' : EXAMPLE_ENTRY }}</button>
+              <button type="button" class="ui-btn" :disabled="shipBusy" @click="run">{{ pane.button }}</button>
+            </div>
             <button v-else type="button" class="ui-btn" @click="share">{{ pane.button }}</button>
           </li>
         </ol>
@@ -135,6 +153,12 @@ async function run(): Promise<void> {
 
 .welcome-close {
   margin-left: auto;
+}
+
+.welcome-run {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .welcome-line {

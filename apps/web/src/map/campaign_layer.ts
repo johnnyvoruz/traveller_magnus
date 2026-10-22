@@ -43,6 +43,11 @@ export type CampaignSnapshot = {
     party: CampaignParty | null;
     /** The party's ships, lead first. When present and not empty, drawn instead of `party`. */
     ships?: readonly CampaignPartyShip[];
+    /**
+     * The campaign date's place, when it is not the place being shown. Stroke only,
+     * drawn where that day puts the ship. No slide: the next draw is the new place.
+     */
+    then?: readonly { id: string; hexKey: string; lead: boolean }[];
     locate: CampaignLocate | null;
     reducedMotion: boolean;
     /** Live vessels beside the party. Absent is the same as none. */
@@ -59,6 +64,8 @@ export type CampaignInk = {
     font: string;
     /** One beat of the locator ring, in milliseconds. */
     pulseMs: number;
+    /** --signal-edge. The campaign-date stroke. Absent uses `signal`. */
+    then?: string;
 };
 
 export type PartyMark = {
@@ -186,6 +193,7 @@ export function drawCampaignLayer(
     ctx.save();
     let animating = false;
     let mark: PartyMark | null = null;
+    if (snapshot.then && snapshot.then.length > 0) drawThenMarks(ctx, snapshot.then, args.sectors, args.cam, args.vp, args.ink);
     const vessels = drawVessels(ctx, snapshot, args.sectors, args.cam, args.vp, args.ink);
     if (snapshot.locate) {
         const place = placeHex(snapshot.locate.hexKey, args.sectors, args.cam, args.vp);
@@ -402,6 +410,51 @@ function drawVessels(
         }
     }
     return hits;
+}
+
+/**
+ * The campaign date, when the view is on another day. A ring and a chevron, stroke
+ * only, in the signal mix. The mark is at that day's hex on this frame. Reduced
+ * motion uses the same place: nothing is kept from the previous frame to slide from.
+ */
+function drawThenMarks(
+    ctx: CanvasRenderingContext2D,
+    marks: readonly { id: string; hexKey: string; lead: boolean }[],
+    sectors: readonly SectorAt[],
+    cam: Camera,
+    vp: Viewport,
+    ink: CampaignInk,
+): void {
+    const colour = ink.then && ink.then.length > 0 ? ink.then : ink.signal;
+    const tier = markerTier(cam.ppp);
+    ctx.strokeStyle = colour;
+    ctx.lineWidth = 1.5;
+    for (const mark of marks) {
+        const place = placeHex(mark.hexKey, sectors, cam, vp);
+        if (!place) continue;
+        if (tier === 'point') {
+            ctx.beginPath();
+            ctx.arc(place.sx, place.sy, mark.lead ? 7 : 5.5, 0, Math.PI * 2);
+            ctx.stroke();
+            continue;
+        }
+        const leadR = tier === 'names' ? 11 : 8;
+        const hitR = mark.lead ? leadR : leadR * QUIET_SHRINK;
+        const glyphR = DISC_R * cam.ppp;
+        const offset = tier === 'names' ? Math.max(22, glyphR + 12) : Math.max(14, glyphR + 10);
+        const cx = place.sx + offset;
+        const cy = place.sy;
+        ctx.lineWidth = mark.lead ? 1.5 : 1;
+        ctx.beginPath();
+        ctx.arc(cx, cy, hitR, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx - hitR * 0.28, cy - hitR * 0.42);
+        ctx.lineTo(cx + hitR * 0.4, cy);
+        ctx.lineTo(cx - hitR * 0.28, cy + hitR * 0.42);
+        ctx.closePath();
+        ctx.stroke();
+    }
 }
 
 function markerTier(ppp: number): PartyMark['tier'] {

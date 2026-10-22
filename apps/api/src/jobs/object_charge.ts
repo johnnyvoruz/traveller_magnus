@@ -2,8 +2,8 @@ const INSERT_CHARGE = `INSERT INTO object_byte_charges (job_id, universe_id, byt
 const ADD_BYTES = `UPDATE universes SET object_bytes = object_bytes + ? WHERE id = ?`;
 const TABLE_PROBE = `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'object_byte_charges'`;
 
-/** One answer per D1 binding, which is one per isolate. */
-const tableReady = new WeakMap<object, boolean>();
+/** A yes stays for this binding. A no is not stored, so the table can arrive while the Worker is up. */
+const tableReady = new WeakMap<object, true>();
 let logged = false;
 
 function alreadyCharged(err: unknown): boolean {
@@ -18,16 +18,14 @@ function missingChargesTable(err: unknown): boolean {
 
 /**
  * True when migration 0014 is on this database.
- * Probed once per binding, the same way public games probe 0013.
- * A missing table then takes the 1.1.11 update and never starts the batch,
- * so that batch cannot add the bytes and the fallback add them again.
+ * A yes stays for this binding. A no is asked again, so the table can arrive while the Worker is up.
+ * A missing table takes the plain update and never starts the batch.
  */
 async function chargesReady(db: D1Database): Promise<boolean> {
-    const known = tableReady.get(db);
-    if (known !== undefined) return known;
+    if (tableReady.get(db) === true) return true;
     const row = await db.prepare(TABLE_PROBE).first<{ name: string }>();
     const ready = row?.name === 'object_byte_charges';
-    tableReady.set(db, ready);
+    if (ready) tableReady.set(db, true);
     if (!ready && !logged) {
         logged = true;
         console.log(JSON.stringify({
@@ -61,9 +59,9 @@ export async function chargeObjectBytes(db: D1Database, universeId: string, jobI
         ]);
     } catch (err) {
         if (alreadyCharged(err)) return;
-        // The batch rolls back. One plain add, and later calls skip the table.
+        // The batch rolls back. One plain add. The next call asks again.
         if (missingChargesTable(err)) {
-            tableReady.set(db, false);
+            tableReady.delete(db);
             await addBytes(db, universeId, bytes);
             return;
         }
@@ -73,8 +71,8 @@ export async function chargeObjectBytes(db: D1Database, universeId: string, jobI
 
 /**
  * Add the job's bytes, then run the settled mark.
- * The add is idempotent by job id, so a crash after the add and before the mark
- * retries the mark and does not add the bytes again.
+ * The add is idempotent by job id once the charge table exists, so a crash after the add
+ * and before the mark retries the mark and does not add the bytes again.
  */
 export async function accountSettledBytes(
     db: D1Database,

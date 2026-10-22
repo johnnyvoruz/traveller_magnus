@@ -1,10 +1,8 @@
 /** World space is parsecs. One column step is 1. Copied from packages/engines hex.js at HEX_SIZE. */
 
-export const SECTOR_COLS = 32;
-export const SECTOR_ROWS = 40;
-export const SQRT3 = Math.sqrt(3);
-export const ROW_STEP = SQRT3 / 1.5;
-export const HEX_SIZE = 1 / 1.5;
+import { HEX_SIZE, ROW_STEP, SECTOR_COLS, SECTOR_ROWS } from '@voyage/shared';
+
+export { HEX_SIZE, ROW_STEP, SECTOR_COLS, SECTOR_ROWS };
 
 export type Rect = { x0: number; y0: number; x1: number; y1: number };
 

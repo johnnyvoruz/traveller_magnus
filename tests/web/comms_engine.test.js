@@ -66,19 +66,23 @@ test('every audited id names a real corpus line', () => {
 });
 
 // ZC2 (Johnny 2026-10-18 11:55, 11:57): the view listens to the system on screen.
-test('away and in jump the system still talks, and nothing addressed to the party plays', () => {
+// ZC4 (Johnny 14:44, "all comms play no matter if ship is in system or not"): the lines written for the party too.
+test('away and in jump every line still plays, the party lines included; only the beacon waits for the party', () => {
+    let partyLines = 0;
     for (const [port, f] of Object.entries(WORLDS)) {
-        const here = corpusPool(LINES, f).filter((line) => !line.when.party).map((line) => line.id);
+        const here = corpusPool(LINES, f).map((line) => line.id);
         for (const party of ['away', 'inJump']) {
             const g = { ...f, party };
             assert.equal(welcomeFor(g, 'tv1'), null, `${port} ${party}: no beacon`);
             const pool = corpusPool(LINES, g);
-            assert.ok(pool.every((line) => !line.when.party), `${port} ${party}: a line for the party`);
-            assert.deepEqual(pool.map((line) => line.id), here, `${port} ${party}: the ambient lines are the same`);
+            partyLines += pool.filter((line) => line.when.party).length;
+            assert.ok(pool.every((line) => !line.when.party || line.when.party.includes('inSystem') || line.when.party.includes('docked')), `${port} ${party}: an in-jump log on the radio`);
+            assert.deepEqual(pool.map((line) => line.id), here, `${port} ${party}: the same lines as with the party here`);
             for (let i = 0; i < 50; i++) assert.deepEqual(nextProceduralEvent(g, ctx(i)), nextProceduralEvent(f, ctx(i)));
             if ('ABCD'.includes(port)) assert.ok(sample(g, 50).length > 0, `${port} ${party}: dead air`);
         }
     }
+    assert.ok(partyLines > 0, 'no line written for the party plays with the party away');
 });
 
 test('rumour, distress and news never reach the air; commercials use the reviewed pool', () => {
@@ -211,8 +215,8 @@ test('Beowulf is verbatim, rare, gated and one event', () => {
     assert.equal(shouldQueueBeowulf(gate), true);
     assert.equal(shouldQueueBeowulf({ ...gate, alreadyPlayed: true }), false);
     assert.equal(shouldQueueBeowulf({ ...gate, starport: 'X' }), false);
-    assert.equal(shouldQueueBeowulf({ ...gate, party: 'inJump' }), false);
-    assert.equal(shouldQueueBeowulf({ ...gate, party: 'away' }), false);
+    assert.equal(shouldQueueBeowulf({ ...gate, party: 'inJump' }), true, 'ZC4: the roll needs no party');
+    assert.equal(shouldQueueBeowulf({ ...gate, party: 'away' }), true, 'ZC4: the roll needs no party');
     assert.equal(shouldQueueBeowulf({ ...gate, campaignKey: '' }), false);
     const event = beowulfEvent();
     assert.equal(event.theme, 'emergency');

@@ -26,6 +26,8 @@ const props = defineProps<{
     part: 'avatar' | 'strip';
     /** Changes cannot be made just now (offline). */
     readOnly: boolean;
+    /** A player never adds or changes images, so the add control is not drawn. */
+    hideAdds?: boolean;
 }>();
 
 const fileEl = ref<HTMLInputElement | null>(null);
@@ -244,7 +246,7 @@ watch(() => props.id, () => { closeLightbox(); });
       <RecordAvatar :record="face" :universe-id="universeId" size="head" :icon="entryIcon(entry.kind)" />
     </button>
     <button
-      v-else
+      v-else-if="!hideAdds"
       type="button"
       class="rec-avatar-open"
       :disabled="readOnly || full"
@@ -254,6 +256,9 @@ watch(() => props.id, () => { closeLightbox(); });
       <RecordAvatar :record="face" :universe-id="universeId" size="head" :icon="entryIcon(entry.kind)" />
       <span v-if="!readOnly" class="rec-avatar-label">Add an image</span>
     </button>
+    <div v-else class="rec-avatar-open">
+      <RecordAvatar :record="face" :universe-id="universeId" size="head" :icon="entryIcon(entry.kind)" />
+    </div>
     <span v-if="primary && !readOnly" class="rec-avatar-acts">
       <button type="button" :disabled="full" @click="changeImage">Change</button>
       <button type="button" @click="remove(primary.hash)">Remove</button>
@@ -293,12 +298,12 @@ watch(() => props.id, () => { closeLightbox(); });
           </button>
         </span>
       </div>
-      <button type="button" class="img-add" :disabled="readOnly || full || !!upload && upload.stage !== 'failed'" :title="full ? ENTRY_FULL : 'Add an image: choose a file, drop one here, or paste one'" @click="pick">
+      <button v-if="!hideAdds" type="button" class="img-add" :disabled="readOnly || full || !!upload && upload.stage !== 'failed'" :title="full ? ENTRY_FULL : 'Add an image: choose a file, drop one here, or paste one'" @click="pick">
         <Icon name="plus" :size="14" />
         <span>{{ images.length ? 'Add' : 'Add an image' }}</span>
       </button>
     </div>
-    <p class="img-hint">Drop images here, or paste one. They are kept as WebP, 2,048 px at most.</p>
+    <p v-if="!hideAdds" class="img-hint">Drop images here, or paste one. They are kept as WebP, 2,048 px at most.</p>
     <Lightbox
       v-if="shown !== null && images[shown] && face"
       :images="images"

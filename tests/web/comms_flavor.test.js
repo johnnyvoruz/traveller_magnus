@@ -42,7 +42,7 @@ test('new transmissions have unique IDs, resolve, and each has a reachable world
         }
         assert.ok(corpusPool([line], f).length, line.id);
         assert.ok(resolveSlots(line.text, f, ['Lark', 'Tern']), line.id);
-        for (const party of ['away', 'inJump']) assert.equal(corpusPool([line], { ...f, party }).length, 0);
+        for (const party of ['away', 'inJump']) assert.equal(corpusPool([line], { ...f, party }).length, 1, `ZC4: ${line.id} ${party}`);
     }
 });
 

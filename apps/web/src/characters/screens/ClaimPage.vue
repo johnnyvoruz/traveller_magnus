@@ -94,7 +94,7 @@ onBeforeUnmount(() => {
     <span class="ui-brand claim-brand">Traveller<span class="ui-brand-dot">.</span>voyage</span>
     <section class="claim-card" :aria-label="face.title">
       <h1>{{ face.title }}</h1>
-      <p v-if="!checked">Checking the session.</p>
+      <p v-if="!checked">Checking your session.</p>
       <p v-else>{{ face.line }}</p>
       <p v-if="session.error" class="claim-trouble" role="alert">{{ session.error }}</p>
       <button

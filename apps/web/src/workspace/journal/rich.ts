@@ -13,7 +13,8 @@ export type RichNode =
     | { kind: 'list'; items: RichNode[][] }
     | { kind: 'break' }
     | { kind: 'record'; id: string; label: string }
-    | { kind: 'hex'; hexKey: string; label: string };
+    | { kind: 'hex'; hexKey: string; label: string }
+    | { kind: 'referee'; closed: boolean; children: RichNode[] };
 
 type NameOf = (target: string) => string | null;
 
@@ -132,13 +133,26 @@ function parseInline(text: string, nameOf: NameOf): RichNode[] {
     return parseRange(text, 0, text.length, nameOf);
 }
 
-/** The text as nodes. `nameOf` returns a record's or a system's current name, or null. */
-export function parseRich(text: string, nameOf: NameOf = () => null): RichNode[] {
-    const lines = text.replace(/\r\n?/g, '\n').split('\n');
+function parseLines(lines: string[], nameOf: NameOf, fences: boolean): RichNode[] {
     const nodes: RichNode[] = [];
     let i = 0;
     while (i < lines.length) {
-        if (lines[i].startsWith('- ')) {
+        if (fences && lines[i].trim() === ':::referee') {
+            let close = -1;
+            for (let j = i + 1; j < lines.length; j++) {
+                if (lines[j].trim() === ':::') {
+                    close = j;
+                    break;
+                }
+            }
+            const end = close < 0 ? lines.length : close;
+            nodes.push({
+                kind: 'referee',
+                closed: close >= 0,
+                children: parseLines(lines.slice(i + 1, end), nameOf, false),
+            });
+            i = close < 0 ? lines.length : close + 1;
+        } else if (lines[i].startsWith('- ')) {
             const items: RichNode[][] = [];
             while (i < lines.length && lines[i].startsWith('- ')) {
                 items.push(parseInline(lines[i].slice(2), nameOf));
@@ -152,6 +166,11 @@ export function parseRich(text: string, nameOf: NameOf = () => null): RichNode[]
         if (i < lines.length) nodes.push({ kind: 'break' });
     }
     return nodes;
+}
+
+/** The text as nodes. `nameOf` returns a record's or a system's current name, or null. */
+export function parseRich(text: string, nameOf: NameOf = () => null): RichNode[] {
+    return parseLines(text.replace(/\r\n?/g, '\n').split('\n'), nameOf, true);
 }
 
 function escapeHtml(text: string): string {
@@ -175,7 +194,11 @@ export function richHtml(nodes: readonly RichNode[]): string {
         } else if (node.kind === 'list') {
             out += '<ul>' + node.items.map((item) => '<li>' + richHtml(item) + '</li>').join('') + '</ul>';
         } else if (node.kind === 'break') out += '<br>';
-        else out += escapeHtml(node.label);
+        else if (node.kind === 'referee') {
+            const label = node.closed ? 'Referee' : 'Unclosed referee block';
+            out += '<aside class="rich-referee"><span class="rich-referee-label">' + escapeHtml(label) + '</span>'
+                + richHtml(node.children) + '</aside>';
+        } else out += escapeHtml(node.label);
     }
     return out;
 }

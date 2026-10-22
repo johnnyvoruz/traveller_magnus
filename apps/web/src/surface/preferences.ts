@@ -195,17 +195,6 @@ export function iconSetName(): string {
     return DEFAULT_ICON_SET_NAME;
 }
 
-/** Choose an icon set by folder name; null goes back to the default. */
-export function setIconSetName(name: string | null): void {
-    const next = name && /^[a-z0-9][a-z0-9_-]{0,40}$/.test(name) ? name : DEFAULT_ICON_SET_NAME;
-    sessionIconSet = next;
-    try {
-        storageSet(ICON_SET_KEY, next);
-    } catch {
-        // The session keeps it.
-    }
-}
-
 // ---- Hybrid map: the day and night overlay ---------------------------------------------------
 
 const DAY_NIGHT_KEY = 'voyage_surface_daynight';

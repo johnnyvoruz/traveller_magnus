@@ -4,9 +4,7 @@
  * string or false means the box is clear.
  */
 import {
-    CHARACTER_LIMITS,
     CHARACTER_SCHEMA,
-    HISTORY_FIELD,
     Character as CharacterSchema,
     CharacterAccessRow as CharacterAccessRowSchema,
     CharacterClaimResult,
@@ -15,18 +13,12 @@ import {
     CharacterInvite as CharacterInviteSchema,
     CharacterInviteCreate,
     CharacterListItem as CharacterListItemSchema,
-    CharacterOpen as CharacterOpenSchema,
     CharacterRole as CharacterRoleSchema,
     CharacterServerMessage,
     characterBoxLimit as boxLimit,
 } from '@voyage/shared';
 
 export { CHARACTER_SCHEMA };
-
-/** A text box holds at most this many characters. The history box is the exception. */
-export const CHARACTER_BOX_LIMIT = CHARACTER_LIMITS.box;
-export const CHARACTER_HISTORY_LIMIT = CHARACTER_LIMITS.history;
-export const CHARACTER_HISTORY_FIELD = HISTORY_FIELD;
 
 export function characterBoxLimit(field: string): number {
     return boxLimit(field);
@@ -180,14 +172,6 @@ export function parseDoc(value: unknown): CharacterDoc | null {
         fields[name] = held;
     }
     return { fields, revs: parsed.data.revs, seq: parsed.data.seq };
-}
-
-export function parseOpen(value: unknown): CharacterOpen | null {
-    const parsed = CharacterOpenSchema.safeParse(value);
-    if (!parsed.success) return null;
-    const doc = parseDoc(parsed.data.doc);
-    if (!doc) return null;
-    return { character: parsed.data.character, role: parsed.data.role, doc };
 }
 
 export function parseInvite(value: unknown): CharacterInvite | null {

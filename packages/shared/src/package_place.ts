@@ -8,6 +8,11 @@
 
 export const SECTOR_COLS = 32;
 export const SECTOR_ROWS = 40;
+/** The hex grid's root-three, the one definition (apps/web map/geometry.ts and packages/generation geometry.ts import it). */
+export const SQRT3 = Math.sqrt(3);
+/** A hex row's height and a hex's corner radius, in parsecs (one column step is 1). */
+export const ROW_STEP = SQRT3 / 1.5;
+export const HEX_SIZE = 1 / 1.5;
 /** `SectorSlot` bounds (schemas/sector.ts), the limit the server enforces. */
 export const SLOT_MIN = -1000;
 export const SLOT_MAX = 1000;

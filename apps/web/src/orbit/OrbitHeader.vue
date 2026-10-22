@@ -44,7 +44,7 @@ const KEYS: [string, string][] = [
       <div class="orbit-identity-title">
         <h1>{{ title }}</h1>
         <span v-if="chip && !narrow" class="ui-hex">{{ chip }}</span>
-        <span v-if="edition" class="ui-badge orbit-edition" title="The rules edition this system was generated under">{{ edition }}</span>
+        <span v-if="edition" class="ui-badge orbit-edition" title="The rules edition for this system">{{ edition }}</span>
       </div>
       <p v-if="!narrow" class="orbit-identity-meta">
         <span v-if="place">{{ place }}</span>

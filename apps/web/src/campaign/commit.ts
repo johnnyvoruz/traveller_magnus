@@ -22,6 +22,9 @@ import { campaign, resetCampaignState, transport } from './store.ts';
 
 /** True while a change is queued or being sent. With `lastError`, this is saving / saved / offline. */
 export const pending = ref(false);
+
+/** The example campaign is open. It has no universe, so a write is not queued and not sent. */
+export const exampleRead = { on: false };
 export const lastError = ref('');
 
 const FLUSH_MS = 800;
@@ -163,6 +166,8 @@ function playersNote(row: EntryChange): boolean {
  * built from the rev the store holds.
  */
 export function commit(changes: CampaignChanges): void {
+    if (campaign.universeId != null) exampleRead.on = false;
+    if (exampleRead.on) return;
     if (campaign.role === 'player') {
         const journal = (changes.journal ?? []).filter(playersNote);
         if (journal.length === 0) return;
@@ -336,6 +341,7 @@ function restoreUnhandled(
 }
 
 export function resetCampaign(): void {
+    exampleRead.on = false;
     clearTimers();
     queuedRecords.clear();
     queuedLinks.clear();

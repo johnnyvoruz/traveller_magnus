@@ -41,6 +41,74 @@ export async function detectTableSets(db: D1Database): Promise<boolean> {
     return tableSetsReady;
 }
 
+/** The `tableSets` map on a campaign settings write, or null when this body does not carry one. */
+export function tableChoiceOf(body: unknown): Record<string, string> | null {
+    if (!body || typeof body !== 'object') return null;
+    const settings = (body as { settings?: unknown }).settings;
+    if (!settings || typeof settings !== 'object') return null;
+    const tableSets = (settings as { tableSets?: unknown }).tableSets;
+    if (tableSets == null || typeof tableSets !== 'object' || Array.isArray(tableSets)) return null;
+    const choice: Record<string, string> = {};
+    for (const [kind, id] of Object.entries(tableSets as Record<string, unknown>)) {
+        if (typeof id !== 'string') return null;
+        choice[kind] = id;
+    }
+    return choice;
+}
+
+/**
+ * The campaign's stored `tableSets`, or null when that read did not answer.
+ * An empty map means the campaign answered and has no stored choice.
+ */
+export async function storedTableChoice(env: Env, universeId: string): Promise<Record<string, string> | null> {
+    const stub = env.UNIVERSE.get(env.UNIVERSE.idFromName(universeId));
+    const response = await stub.fetch(new Request('https://universe.internal/campaign?after=0&limit=1'));
+    if (!response.ok) return null;
+    let body: { data?: { settings?: { tableSets?: unknown } } };
+    try {
+        body = await response.json();
+    } catch {
+        return null;
+    }
+    const tableSets = body.data?.settings?.tableSets;
+    if (tableSets == null || typeof tableSets !== 'object' || Array.isArray(tableSets)) return {};
+    const stored: Record<string, string> = {};
+    for (const [kind, id] of Object.entries(tableSets as Record<string, unknown>)) {
+        if (typeof id === 'string') stored[kind] = id;
+    }
+    return stored;
+}
+
+/**
+ * A settings write may name `official:<kind>`, keep an id already stored for that kind,
+ * or name a live set this owner holds for that kind.
+ * A changed id that is another account's, deleted, or the wrong kind is missing.
+ * A new custom id while `table_sets` is absent is unavailable.
+ * `stored` null means the campaign read failed, so nothing is treated as already stored.
+ */
+export async function tableChoiceRefusal(
+    db: D1Database,
+    ownerId: string,
+    tableSets: Record<string, string>,
+    stored: Record<string, string> | null,
+): Promise<{ status: 404 | 503; code: string; message: string } | null> {
+    const custom: { kind: string; id: string }[] = [];
+    for (const [kind, id] of Object.entries(tableSets)) {
+        if (id === `official:${kind}`) continue;
+        if (stored && stored[kind] === id) continue;
+        custom.push({ kind, id });
+    }
+    if (custom.length === 0) return null;
+    if (!await detectTableSets(db)) return { status: 503, code: 'table_sets_unavailable', message: UNAVAILABLE };
+    for (const item of custom) {
+        const row = await db.prepare(
+            `SELECT kind FROM table_sets WHERE id = ? AND owner_id = ? AND deleted_at IS NULL`,
+        ).bind(item.id, ownerId).first<{ kind: string }>();
+        if (!row || row.kind !== item.kind) return { status: 404, code: 'not_found', message: MISSING };
+    }
+    return null;
+}
+
 type SetRow = {
     id: string;
     ownerId: string;

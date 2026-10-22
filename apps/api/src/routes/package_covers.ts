@@ -11,8 +11,6 @@ import type { AppEnv, Env } from '../env';
 import { fail, ok } from '../http';
 import { coversReady, fillArt } from '../jobs/publish_queue';
 
-export { coversReady, fillArt, recordArt, storeArt } from '../jobs/publish_queue';
-
 type Ctx = Parameters<typeof fail>[0];
 
 const HASH = /^[0-9a-f]{64}$/;

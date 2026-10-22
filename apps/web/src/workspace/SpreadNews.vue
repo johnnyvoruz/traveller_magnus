@@ -62,7 +62,7 @@ function spread(): void {
       class="ui-btn"
       :aria-disabled="state.ok ? undefined : 'true'"
       :aria-describedby="state.ok ? undefined : 'spread-why-' + locateId"
-      :title="state.ok ? 'How far this news has travelled by today' : state.why"
+      :title="state.ok ? 'How far this news has traveled by today' : state.why"
       data-spread-news
       @click="spread"
     >

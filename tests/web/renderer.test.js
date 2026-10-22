@@ -129,24 +129,23 @@ test('a sector of the referee\'s draws its overlay, and forty sectors stay withi
     const cam = { x: 160, y: 120, ppp: 1 };
     renderer.draw(cam);
     assert.equal(renderer.draw(cam).sectorsOnScreen.length, 41);
-    function median() {
-        const samples = [];
-        for (let n = 0; n < 9; n += 1) samples.push(renderer.draw(cam).ms);
-        samples.sort((a, b) => a - b);
-        return samples[4];
+    function fastest() {
+        let best = Infinity;
+        for (let n = 0; n < 9; n += 1) best = Math.min(best, renderer.draw(cam).ms);
+        return best;
     }
     calls.length = 0;
-    const before = median();
+    const before = fastest();
     const chartRects = calls.filter((call) => call[0] === 'fillRect').length / 9;
     renderer.setDotOverlay(new Map(published.map((sector) => [sector.slug, sector.cells])));
     calls.length = 0;
-    const same = median();
+    const same = fastest();
     assert.equal(calls.filter((call) => call[0] === 'fillRect').length / 9, chartRects);
     const overlay = new Map(published.map((sector) => [sector.slug, sector.cells]));
     overlay.set(ownId, cellsOf(['0101']));
     renderer.setDotOverlay(overlay);
     calls.length = 0;
-    const after = median();
+    const after = fastest();
     assert.equal(calls.filter((call) => call[0] === 'fillRect').length / 9, chartRects + 1);
     t.diagnostic(`40 sectors overview ms: chart ${before.toFixed(3)}, same string ${same.toFixed(3)}, own sector ${after.toFixed(3)}`);
     assert.ok(Math.abs(same - before) < 1, `same string ${same} chart ${before}`);

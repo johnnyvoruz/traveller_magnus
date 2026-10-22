@@ -7,6 +7,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { entriesByDate } from '../campaign/journal.ts';
 import { campaign } from '../campaign/store.ts';
+import { readingDay } from '../campaign/view_day.ts';
 import { commandScope, handleKey, registerCommand, setCommandScope } from '../shell/registry.ts';
 import Icon from '../design/Icon.vue';
 import RecordAvatar from './RecordAvatar.vue';
@@ -14,9 +15,10 @@ import { locating, startLocate } from './locate.ts';
 import { editDateNext } from './list_state.ts';
 import { EMPTY_PARTY, leadVesselId } from './party.ts';
 import { RECORD_TYPES } from './records.ts';
-import { campaignTimeline, timelineAdvice, timelineKeeps, todayIndex, type TimelineDay, type TimelineRow, type TimelineYear } from './timeline.ts';
+import { campaignTimeline, dayIsAfter, timelineAdvice, timelineKeeps, todayIndex, type TimelineDay, type TimelineRow, type TimelineYear } from './timeline.ts';
 import { timelineAt } from './timeline_focus.ts';
 import { vRecordCard } from './record_card.ts';
+import { vWorldCard } from './world_card.ts';
 
 const props = defineProps<{
     /** Changes cannot be made just now (offline). The list itself only reads. */
@@ -40,6 +42,17 @@ const emit = defineEmits<{
 }>();
 
 const advice = computed(() => timelineAdvice(campaign.clock !== null));
+
+/** The day the session is looking at. Today on the list stays the campaign date. */
+const lookedAt = computed(() => {
+    void campaign.seq;
+    if (!campaign.clock) return null;
+    return readingDay(campaign.clock.days);
+});
+
+function afterView(day: { year: number; day: number }): boolean {
+    return dayIsAfter(day, lookedAt.value);
+}
 
 function followAdvice(): void {
     if (advice.value.act === 'date') {
@@ -341,10 +354,11 @@ onBeforeUnmount(releaseListKeys);
           v-for="day in year.days"
           :key="day.date"
           class="tl-day ui-step"
-          :class="{ 'is-lit': day.today }"
+          :class="{ 'is-lit': day.today, 'is-after': afterView(day) }"
           role="group"
           :aria-label="day.today ? day.date + ', today' : day.date"
           :data-today="day.today ? 'true' : undefined"
+          :data-after="afterView(day) ? 'true' : undefined"
         >
           <h4>
             <span class="ui-date">{{ day.date }}</span>
@@ -369,7 +383,7 @@ onBeforeUnmount(releaseListKeys);
             <span class="camp-row-text">
               <b>{{ row.title }}</b>
               <span class="camp-row-meta">
-                {{ row.kind }}<template v-if="row.place"> · {{ row.place }}</template><template v-if="row.until"> · <span class="tl-until">to {{ row.until }}</span></template>
+                {{ row.kind }}<template v-if="row.place"> · <span v-world-card="row.hexKey || null" class="tl-place">{{ row.place }}</span></template><template v-if="row.until"> · <span class="tl-until">to {{ row.until }}</span></template>
               </span>
             </span>
           </div>
@@ -464,6 +478,18 @@ onBeforeUnmount(releaseListKeys);
   font: 700 12px/1.3 var(--font-display);
   letter-spacing: 0.24em;
   text-transform: uppercase;
+}
+
+/* A day after the one the session is looking at. Today keeps its name in the signal colour. */
+.tl-day.is-after h4,
+.tl-day.is-after .camp-row,
+.tl-day.is-after .camp-row-text b,
+.tl-day.is-after .camp-row-meta {
+  color: var(--text-faint);
+}
+
+.tl-day.is-after[data-today="true"] h4 .tl-today {
+  color: var(--signal);
 }
 
 .tl-day .camp-row {

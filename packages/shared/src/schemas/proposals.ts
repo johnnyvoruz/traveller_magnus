@@ -188,6 +188,8 @@ export const ProposalBatch = z.object({
     reviewedAt: z.string().nullable(),
     expiresAt: z.string(),
     reviewUrl: z.string(),
+    /** True when the referee pasted the batch. A token submit is false. Not part of `source`. */
+    pasted: z.boolean(),
     proposals: z.array(StoredProposal).optional(),
 }).strict();
 export type ProposalBatch = z.infer<typeof ProposalBatch>;

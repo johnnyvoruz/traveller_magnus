@@ -35,6 +35,12 @@ const props = defineProps<{
     nowDays?: number;
     /** Where the shared clock starts when nothing has set it: the view's date. */
     startDays?: number;
+    /** The season word for this date. Absent when the body has no tilt to read. */
+    season?: string | null;
+    /** The temperature band for the mean, or null when the tree has no mean. */
+    band?: string | null;
+    /** The orbit-driven second line, or empty. */
+    orbit?: string;
 }>();
 
 defineEmits<{ open: [key: string] }>();
@@ -68,6 +74,11 @@ const folded = computed(() => props.model.sideSections.flatMap((block) => {
       <SurfaceStage :target="surface ?? null" :sun="sun ?? null" :now-days="nowDays" :start-days="startDays" />
       <UwpRibbon v-if="model.ribbon" :ribbon="model.ribbon" />
       <FactTiles :facts="model.facts" :restated="restated" :twilight="twilight" />
+      <p v-if="season" class="doss-season">
+        <span>{{ season }}</span>
+        <span v-if="band" class="doss-season-band">{{ band }}</span>
+        <small v-if="orbit">{{ orbit }}</small>
+      </p>
     </div>
     <div class="doss-body-side">
       <slot name="records" :open="folds.records" :toggle="() => toggle('records')" />
@@ -129,5 +140,25 @@ const folded = computed(() => props.model.sideSections.flatMap((block) => {
   container-type: inline-size;
   container-name: dossier;
   min-width: 0;
+}
+
+.doss-season {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin: 8px 0 0;
+  color: var(--text-0);
+  font: 400 14px/1.4 var(--font-text);
+}
+
+.doss-season-band {
+  color: var(--text-1);
+}
+
+.doss-season small {
+  flex-basis: 100%;
+  color: var(--text-muted);
+  font: 400 12px/1.4 var(--font-text);
 }
 </style>

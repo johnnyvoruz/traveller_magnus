@@ -76,7 +76,7 @@ function toggleLocate(): void {
           type="button"
           class="ui-btn"
           :class="{ 'is-primary': !plainOrbit }"
-          title="Open orbit view for this system (or double-click it on the map)"
+          title="Open the orbit view for this system (or double-click it on the map)"
           @click="$emit('orbit')"
         >
           <Icon name="solar-system" :size="13" />Explore orbits
@@ -124,7 +124,7 @@ function toggleLocate(): void {
             type="button"
             class="ui-btn"
             :class="{ 'is-primary': !plainOrbit }"
-            title="Open orbit view for this system (or double-click it on the map)"
+            title="Open the orbit view for this system (or double-click it on the map)"
             @click="$emit('orbit')"
           >
             <Icon name="solar-system" :size="13" />Explore orbits
@@ -151,7 +151,7 @@ function toggleLocate(): void {
       <p v-if="model.notice" class="doss-muted">{{ model.notice }}</p>
       <p v-if="error" class="doss-muted">This world's system could not be loaded.</p>
       <div v-if="error" class="doss-actions">
-        <button type="button" class="ui-btn" @click="$emit('retry')"><Icon name="retry" :size="13" />Retry</button>
+        <button type="button" class="ui-btn" @click="$emit('retry')"><Icon name="retry" :size="13" />Try again</button>
       </div>
     </div>
     <div class="doss-side">

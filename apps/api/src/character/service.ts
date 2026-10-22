@@ -44,19 +44,38 @@ export interface CharacterRooms {
     closeUser(id: string, userId: string): Promise<void>;
     closeAll(id: string): Promise<void>;
     retell(id: string, roles: Record<string, 'owner' | 'editor'>): Promise<void>;
+    ledgerRead(id: string, after: number): Promise<RoomLedger>;
+    ledgerPost(id: string, body: LedgerPost, by: string, pending: 0 | 1): Promise<RoomLedger>;
+    ledgerVoid(id: string, lineId: string, by: string): Promise<RoomLedger>;
+    ledgerAccept(id: string, lineId: string, by: string): Promise<RoomLedger>;
 }
+
+export type LedgerPost = {
+    kind: unknown;
+    amount: unknown;
+    memo: unknown;
+    whenDay?: unknown;
+    linkId?: unknown;
+};
+
+export type RoomLedger =
+    | { ok: true; status: 200 | 201; data: unknown }
+    | { ok: false; status: 400 | 404 | 503; code: string; message: string };
 
 export type Actor = { id: string };
 
+/** A boolean, or a lookup run only when the caller has no character access. */
+export type RefereeGate = boolean | (() => Promise<boolean>);
+
 export type Outcome =
     | { ok: true; status: 200 | 201; data: unknown }
-    | { ok: false; status: 400 | 403 | 404; code: string; message: string; details?: unknown };
+    | { ok: false; status: 400 | 403 | 404 | 503; code: string; message: string; details?: unknown };
 
 function good(data: unknown, status: 200 | 201 = 200): Outcome {
     return { ok: true, status, data };
 }
 
-function bad(status: 400 | 403 | 404, code: string, message: string, details?: unknown): Outcome {
+function bad(status: 400 | 403 | 404 | 503, code: string, message: string, details?: unknown): Outcome {
     return details === undefined
         ? { ok: false, status, code, message }
         : { ok: false, status, code, message, details };
@@ -445,6 +464,57 @@ export function characterService(db: CatalogueDb, rooms: CharacterRooms, clock: 
             if (!access) return bad(404, 'not_found', 'No such character.');
             return good({ role: access.role, name: await personName(db, actor.id) });
         },
+
+        async ledgerRead(actor: Actor, id: string, after: number): Promise<Outcome> {
+            const access = await accessFor(db, id, actor.id);
+            if (!access) return bad(404, 'not_found', 'No such character.');
+            return fromRoom(await rooms.ledgerRead(id, after));
+        },
+
+        async ledgerPost(actor: Actor, id: string, body: LedgerPost, referee: RefereeGate): Promise<Outcome> {
+            const access = await accessFor(db, id, actor.id);
+            if (access) return fromRoom(await rooms.ledgerPost(id, body, actor.id, 0));
+            if (!(await refereeOf(referee))) return bad(404, 'not_found', 'No such character.');
+            return fromRoom(await rooms.ledgerPost(id, body, actor.id, 1));
+        },
+
+        async ledgerVoid(actor: Actor, id: string, lineId: string): Promise<Outcome> {
+            const access = await accessFor(db, id, actor.id);
+            if (!access) return bad(404, 'not_found', 'No such character.');
+            return fromRoom(await rooms.ledgerVoid(id, lineId, actor.id));
+        },
+
+        /**
+         * An editor accepts a pending line. The campaign owner who posted it is
+         * not an editor: the only answer they receive is the waiting sentence.
+         * Anyone else's line stays pending and answers as a missing character.
+         */
+        async ledgerAccept(actor: Actor, id: string, lineId: string, referee: RefereeGate): Promise<Outcome> {
+            const access = await accessFor(db, id, actor.id);
+            if (access) return fromRoom(await rooms.ledgerAccept(id, lineId, actor.id));
+            if (!(await refereeOf(referee))) return bad(404, 'not_found', 'No such character.');
+            const page = await rooms.ledgerRead(id, 0);
+            if (!page.ok) return fromRoom(page);
+            const lines = linesOf(page.data);
+            const named = lines.find((line) => String(line.id) === lineId);
+            if (!named || String(named.byUser) !== actor.id) return bad(404, 'not_found', 'No such character.');
+            return fromRoom(await rooms.ledgerAccept(id, lineId, actor.id));
+        },
     };
+}
+
+async function refereeOf(gate: RefereeGate): Promise<boolean> {
+    return typeof gate === 'function' ? gate() : gate;
+}
+
+function fromRoom(result: RoomLedger): Outcome {
+    if (!result.ok) return bad(result.status, result.code, result.message);
+    return good(result.data, result.status);
+}
+
+function linesOf(data: unknown): Array<{ id?: unknown; byUser?: unknown }> {
+    if (!data || typeof data !== 'object' || !('lines' in data)) return [];
+    const lines = (data as { lines?: unknown }).lines;
+    return Array.isArray(lines) ? lines as Array<{ id?: unknown; byUser?: unknown }> : [];
 }
 

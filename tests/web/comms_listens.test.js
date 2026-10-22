@@ -8,6 +8,7 @@ import { test } from 'node:test';
 import { TIMING, createCommsController } from '../../apps/web/src/living/comms/controller.ts';
 import { BEOWULF_SEGMENTS } from '../../apps/web/src/living/comms/beowulf.ts';
 import { systemFacts } from '../../apps/web/src/living/facts.ts';
+import { receiverLines } from '../../apps/web/src/living/lines.ts';
 
 const REGINA = {
     hexKey: 'Spinward_Marches/1910', sectorName: 'Spinward Marches', day: 2,
@@ -58,7 +59,7 @@ function rig() {
     };
     const transmits = () => calls.filter((c) => c[0] === 'transmit').map((c) => ({ ...c[1], at: c[2] }));
     const c = createCommsController({ screen, clock, store, visibility });
-    return { c, drive, advance, transmits, calls, now: () => now };
+    return { c, drive, advance, transmits, calls, map, now: () => now };
 }
 
 const input = (facts, extra = {}) => ({ facts, truthVersion: 'tv1', campaignKey: 'none', shown: true, ...extra });
@@ -97,6 +98,26 @@ test('a campaign with the party away: ambient lines, nothing addressed to the pa
     const heard = r.transmits();
     assert.ok(heard.length >= 10, `only ${heard.length} lines in half an hour`);
     assert.ok(!heard.some((m) => m.from === BEACON));
+    r.c.destroy();
+});
+
+test('ZC4: signed out on Regina, a line written for the party is on air within ten minutes', () => {
+    const facts = systemFacts(REGINA);
+    assert.equal(facts.party, 'away');
+    const forParty = new Set(receiverLines().filter((line) => line.when.party).map((line) => `line:${line.id}`));
+    const r = rig();
+    r.c.update(input(facts));
+    const aired = new Set();
+    for (let t = 0; t < 600_000; t += 10_000) {
+        r.drive(10_000);
+        for (const value of r.map.values()) {
+            const recent = JSON.parse(value).recent;
+            if (Array.isArray(recent)) for (const id of recent) aired.add(id);
+        }
+    }
+    const hits = [...aired].filter((id) => forParty.has(id));
+    assert.ok(hits.length > 0, `none of ${aired.size} events was a party line`);
+    assert.ok(!r.transmits().some((m) => m.from === BEACON), 'the beacon is still for the party');
     r.c.destroy();
 });
 

@@ -4,7 +4,7 @@
  * and drives the SIG meter from the same envelope. No demo loop, no skip control,
  * and no waveform switch.
  */
-import { cancelFrame, createElement, later as delay, nextFrame, now, pageVisible, prefersReducedMotion } from '../../platform/browser.ts';
+import { cancelFrame, createElement, every, later as delay, nextFrame, now, pageVisible, prefersReducedMotion } from '../../platform/browser.ts';
 
 export type CommsMessage = {
     ch?: string;
@@ -423,14 +423,14 @@ export function mountCommsReceiver(root: HTMLElement, options: CommsOptions = {}
         }
     }
 
-    const clockInterval = setInterval(tickClock, 1000);
+    const stopClock = every(tickClock, 1000);
 
     function destroy(): void {
         dead = true;
         clearTimers();
         labelTimers.forEach(clearTimeout);
         labelTimers.clear();
-        clearInterval(clockInterval);
+        stopClock();
         cancelFrame(anim);
         live.delete(root);
     }

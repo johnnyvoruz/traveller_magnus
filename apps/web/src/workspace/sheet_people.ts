@@ -11,7 +11,6 @@ import type { SheetField, SheetValues } from './ship_sheet.ts';
 
 /** The link kind a person has to a vessel from each section. */
 export const SECTION_KIND = { Passengers: 'passenger', Crew: 'crew' } as const;
-export type PeopleSection = keyof typeof SECTION_KIND;
 
 /** True for the name fields that can hold a person: "Passenger Name 1" … "Passenger Name 16". */
 export function isPersonField(field: Pick<SheetField, 'name' | 'section'>): boolean {

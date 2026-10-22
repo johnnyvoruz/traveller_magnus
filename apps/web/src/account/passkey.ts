@@ -2,8 +2,9 @@
  * Passkey sign-in for the screens. Loaded by a dynamic import of the two libraries,
  * so neither is in the first chunk. Recovery codes are returned to the caller and stored nowhere.
  *
- * The contract's sample names `window`. This file uses `globalThis`: the manifesto forbids `window`.
+ * The contract's sample names `window`. Browser objects are read through platform/browser.ts.
  */
+import { locationOrigin, webCredentials } from '../platform/browser.ts';
 import { enterRecovery, reloadSession, session } from './session.ts';
 
 export type AuthFailure = { ok: false; code: string; message: string };
@@ -59,7 +60,7 @@ async function loadReal(): Promise<PasskeyApi> {
         import('better-auth/client'),
         import('@better-auth/passkey/client'),
     ]);
-    const origin = globalThis.location?.origin ?? '';
+    const origin = locationOrigin();
     return createAuthClient({ baseURL: origin, plugins: [passkeyClient()] }) as unknown as PasskeyApi;
 }
 
@@ -76,7 +77,7 @@ async function client(): Promise<PasskeyApi> {
 
 /** True when this browser can run a passkey ceremony. Call it before one starts. */
 export function passkeySupported(): boolean {
-    const credentials = globalThis.navigator?.credentials as { create?: unknown; get?: unknown } | undefined;
+    const credentials = webCredentials();
     return typeof credentials?.create === 'function' && typeof credentials?.get === 'function';
 }
 

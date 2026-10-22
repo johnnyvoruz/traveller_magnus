@@ -38,12 +38,6 @@ let live: DiscEnvelope | null = null;
 let keys = new Set<string>();
 const recipes = new WeakMap<object, Map<string, Recipe | null>>();
 
-/** Tests pass a fake worker. Null restores the real one. */
-export function configureSoftDiscs(spawn: (() => WorkerLike) | null): void {
-    spawnOverride = spawn;
-    disposeSoftDiscs();
-}
-
 /** The envelope version tiles from this path carry. */
 export function softEnvelope(mode: SurfaceMode, generation: number): DiscEnvelope {
     return { mode, version: SOFT_DISC_VERSION, generation };

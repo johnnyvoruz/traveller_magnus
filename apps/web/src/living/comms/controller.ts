@@ -5,8 +5,8 @@
  * then a 1-3 s dwell; after the last turn the screen keeps the line, clears, and
  * the band goes quiet for the cadence gap.
  *
- * The receiver listens to the system on screen (ZC2, Johnny 2026-10-18 11:55 and 11:57):
- * ambient traffic plays whoever watches and wherever the party is; the welcome beacon,
+ * The receiver listens to the system on screen (ZC2, Johnny 2026-10-18 11:55 and 11:57; ZC4, 14:44):
+ * every line, every scene and the Beowulf roll play whoever watches and wherever the party is; the welcome beacon,
  * addressed to the party, plays once when the lead ship arrives (inSystem or docked),
  * also while the view is already on air; `mayday` needs no ship.
  *
@@ -340,7 +340,7 @@ export function createCommsController(deps: CommsDeps): CommsController {
         if (!ev && !beowulfChecked) {
             beowulfChecked = true;
             const alreadyPlayed = read(beowulfStorageKey(campaign)) === '1';
-            if (shouldQueueBeowulf({ campaignKey: campaign, hexKey: f.hexKey, party: f.party, starport: f.starport, alreadyPlayed })) ev = beowulfEvent();
+            if (shouldQueueBeowulf({ campaignKey: campaign, hexKey: f.hexKey, starport: f.starport, alreadyPlayed })) ev = beowulfEvent();
         }
         if (!ev) {
             const h = load(f.hexKey, tv);

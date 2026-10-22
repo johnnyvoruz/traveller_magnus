@@ -25,10 +25,12 @@ function narrow(text, marker) {
 
 test('every control in the store and its dialogs is 44 px tall below 640 px', () => {
     const block = narrow(read('workspace/market/market.css'), 'Touch, below 640 px');
-    for (const sel of ['.mk-app .ui-btn', '.mk-app .mk-box', '.mk-sheet .ui-btn', '.mk-choose .ui-btn', '.mk-rpub .ui-btn', '.mk-rpub .mk-box', '.mk-ask .ui-btn', '.mk-imp .ui-seg button', '.mk-sheet .mk-fopt']) {
+    for (const sel of ['.mk-app .ui-btn', '.mk-app .mk-box', '.mk-sheet .ui-btn', '.mk-choose .ui-btn', '.mk-rpub .ui-btn', '.mk-rpub .mk-box', '.mk-imp .ui-seg button', '.mk-sheet .mk-fopt']) {
         assert.ok(block.includes(sel), sel);
     }
     assert.match(block, /min-height: 44px;/);
+    // The store's confirms are the app's one confirm now (DU23), with its own 44 px rule.
+    assert.match(read('shell/AskModal.vue'), /@media \(max-width: 639px\), \(pointer: coarse\) \{\s+\.ui-ask \.ui-btn,\s+\.ui-ask-box \{\s+min-height: 44px;/);
     assert.match(block, /\.mk-sheet-close,\n\s*\.mk-choose-close,[\s\S]*?min-width: 44px;/);
     // Inline links keep their look; their hit area reaches round them.
     assert.match(block, /\.mk-card-by::before,[\s\S]*?inset: -12px -6px;/);

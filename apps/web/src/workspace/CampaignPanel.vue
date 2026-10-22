@@ -49,6 +49,10 @@ import PlayerRecordPage from './players/PlayerRecordPage.vue';
 import { createPlayerNote, isPlayerView, ownNote } from './players/player_mode.ts';
 import { endViewAs, viewAs } from './players/view_as.ts';
 import ViewAsBar from './players/ViewAsBar.vue';
+import ExampleBar from './ExampleBar.vue';
+import { example } from './example_campaign.ts';
+import CampaignMenu from './proposals/CampaignMenu.vue';
+import ProposalsSection from './proposals/ProposalsSection.vue';
 import './campaign_touch.css';
 
 const props = defineProps<{
@@ -84,6 +88,12 @@ const timelinePane = computed(() => {
 const onTimeline = computed(() => timelinePane.value !== null && props.tab === 'records' && !props.recordId && !props.entryId);
 /** The relationship web (DU39): panel=web. */
 const onWeb = computed(() => addressPane(route.path, route.query).pane.kind === 'web' && props.tab === 'records' && !props.recordId && !props.entryId);
+/** The referee's proposals (SI3): the batches, or one batch's cards. */
+const proposalsPane = computed(() => {
+    const pane = addressPane(route.path, route.query).pane;
+    return pane.kind === 'proposals' && props.tab === 'records' && !props.recordId && !props.entryId ? pane : null;
+});
+const onProposals = computed(() => proposalsPane.value !== null);
 const online = ref(true);
 let stopSize: (() => void) | null = null;
 let stopOnline: (() => void) | null = null;
@@ -100,11 +110,15 @@ const campaignName = computed(() => {
 /** A player's panel (P6): theirs as a member, or the referee viewing as players. Nothing but a players note can be written. */
 const isPlayer = isPlayerView;
 const ro = computed(() => !online.value || isPlayer.value);
+/** The campaign's menu and its proposals are the referee's, and not while they view as players. */
+const isReferee = computed(() => campaign.role === 'owner' && !isPlayer.value && !viewAs.on);
 /** A player may write only their own players note (A's commit guard says the same). */
-const entryReadOnly = computed(() => !online.value || (isPlayer.value && !ownNote(props.entryId ? campaign.journal[props.entryId] : null)));
+const entryReadOnly = computed(() => !online.value || example.on || (isPlayer.value && !ownNote(props.entryId ? campaign.journal[props.entryId] : null)));
 
 /** What the panel shows: the store's status, or an error when the open itself threw. */
 const status = computed(() => {
+    // The example campaign (DL8) shows signed out too: it is read with no account.
+    if (example.on) return campaign.status;
     if (!signedIn.value) return 'signed-out';
     if (openFailed.value) return 'error';
     return campaign.status === 'signed-out' ? 'loading' : campaign.status;
@@ -197,6 +211,7 @@ const crumb = computed(() => {
     if (onWeb.value) {
         return campaignCrumb({ level: 'web', beside: false, middle: 'Relationships', pageName: 'Relationships' });
     }
+    if (onProposals.value) return [{ label: 'Campaign', go: 'campaign' as const }, { label: 'Proposals', go: null }];
     if (props.entryId) {
         const name = entryName(props.entryId);
         const many = journalFilter.value === 'all' ? 'Journal' : filterWord(journalFilter.value);
@@ -229,6 +244,7 @@ function onCrumb(dest: CrumbGo): void {
 }
 
 const eyebrow = computed(() => {
+    if (example.on) return 'Example campaign';
     if (!signedIn.value) return '';
     if (shownRecord.value && span.value !== 'full') return 'Campaign · ' + typeInfo(shownRecord.value.type).many;
     return campaignName.value;
@@ -303,6 +319,10 @@ function openWeb(): void {
     pushPane({ kind: 'web' });
 }
 
+function openProposals(): void {
+    pushPane({ kind: 'proposals', batch: null });
+}
+
 function goEntry(id: string | null): void {
     pushPane({ kind: 'journal', entry: id });
 }
@@ -321,7 +341,7 @@ function create(type: CampaignRecordType): void {
 
 /** The list is on screen: not the party, the journal, the timeline, the web, or a record page at column width. */
 const showFirstRun = computed(() => {
-    if (status.value !== 'ready' || isPlayer.value || props.tab !== 'records' || onTimeline.value || onWeb.value || props.entryId) return false;
+    if (status.value !== 'ready' || isPlayer.value || props.tab !== 'records' || onTimeline.value || onWeb.value || onProposals.value || props.entryId) return false;
     if (props.recordId && span.value !== 'full') return false;
     const card = vesselHasPlace(campaign.records) && dateIsSet(campaign.clock);
     return !card;
@@ -360,7 +380,7 @@ function onKey(event: KeyboardEvent): void {
             go(null);
             return;
         }
-        if (onTimeline.value || onWeb.value) {
+        if (onTimeline.value || onWeb.value || onProposals.value) {
             event.preventDefault();
             event.stopPropagation();
             pushPane({ kind: 'campaign', record: null });
@@ -520,16 +540,17 @@ defineExpose({ remeasure: publish });
         <CampaignCrumb :parts="crumb" @go="onCrumb" />
       </template>
       <template v-else-if="eyebrow" #eyebrow>{{ eyebrow }}</template>
-      <div class="camp" :data-span="span" :data-status="status" :data-view="entryId ? 'entry' : recordId ? 'record' : onTimeline ? 'timeline' : onWeb ? 'web' : tab === 'party' ? 'party' : tab === 'journal' ? 'journal' : 'list'">
-        <SignInCard v-if="!signedIn" />
+      <div class="camp" :data-span="span" :data-status="status" :data-view="entryId ? 'entry' : recordId ? 'record' : onTimeline ? 'timeline' : onWeb ? 'web' : onProposals ? 'proposals' : tab === 'party' ? 'party' : tab === 'journal' ? 'journal' : 'list'">
+        <SignInCard v-if="!signedIn && !example.on" />
         <template v-else>
-          <ViewAsBar v-if="status === 'ready'" />
+          <ExampleBar v-if="example.on && status === 'ready'" />
+          <ViewAsBar v-if="status === 'ready' && !example.on" />
           <div v-if="status === 'ready' && ((!recordId && !entryId) || span === 'full')" class="camp-head">
           <div class="camp-tabs" role="tablist" aria-label="Campaign">
             <button type="button" role="tab" class="camp-tab" :aria-selected="tab === 'records' ? 'true' : 'false'" :tabindex="tab === 'records' ? 0 : -1" @click="showTab('records')" @keydown="onTabKey">
               <Icon name="book-sparkles" :size="12" />Records <b>{{ recordCount }}</b>
             </button>
-            <button type="button" role="tab" class="camp-tab" :aria-selected="tab === 'party' ? 'true' : 'false'" :tabindex="tab === 'party' ? 0 : -1" @click="showTab('party')" @keydown="onTabKey">
+            <button type="button" role="tab" class="camp-tab camp-tab-party" :aria-selected="tab === 'party' ? 'true' : 'false'" :tabindex="tab === 'party' ? 0 : -1" @click="showTab('party')" @keydown="onTabKey">
               <Icon name="shuttle-space" :size="12" />Party <small>{{ partyLine }}</small>
             </button>
             <button type="button" role="tab" class="camp-tab" :aria-selected="tab === 'journal' ? 'true' : 'false'" :tabindex="tab === 'journal' ? 0 : -1" @click="showTab('journal')" @keydown="onTabKey">
@@ -538,6 +559,7 @@ defineExpose({ remeasure: publish });
           </div>
             <button type="button" class="camp-timeline" :aria-pressed="onTimeline ? 'true' : 'false'" @click="openTimeline">Timeline</button>
             <button type="button" class="camp-timeline" :aria-pressed="onWeb ? 'true' : 'false'" data-open-web @click="openWeb">Relationships</button>
+            <CampaignMenu v-if="isReferee" @proposals="openProposals" />
           </div>
           <ClockLine v-if="status === 'ready' && ((!recordId && !entryId) || span === 'full')" ref="clockLine" :read-only="ro" />
           <p v-if="!online" class="camp-strip" role="status">
@@ -563,10 +585,11 @@ defineExpose({ remeasure: publish });
             @narrow="setNarrow"
           />
           <RelationshipWeb v-else-if="onWeb" @open="go" @map="showMap" />
+          <ProposalsSection v-else-if="onProposals && isReferee" :batch-id="proposalsPane ? proposalsPane.batch : null" :read-only="!online" @open="go" />
           <PlayerParty v-else-if="tab === 'party' && !recordId && isPlayer" @open="go" @map="showMap" />
           <PartyPanel v-else-if="tab === 'party' && !recordId" :read-only="!online" @map="showMap" />
           <div v-else-if="span === 'full' && tab === 'journal'" class="camp-split">
-            <JournalList ref="list" :selected="entryId" follow :read-only="!online" :player="isPlayer" @open="goEntry" @create="makeEntry" @map="showMap" />
+            <JournalList ref="list" :selected="entryId" follow :read-only="!online || example.on" :player="isPlayer" @open="goEntry" @create="makeEntry" @map="showMap" />
             <div class="camp-detail">
               <EntryPage v-if="entryId" :id="entryId" beside :read-only="entryReadOnly" @back="goEntry(null)" @map="showMap" />
               <p v-else class="camp-hint">Choose an entry to read it here.</p>
@@ -584,7 +607,7 @@ defineExpose({ remeasure: publish });
             </div>
           </div>
           <EntryPage v-else-if="entryId" :id="entryId" :beside="false" :read-only="entryReadOnly" @back="goEntry(null)" @map="showMap" />
-          <JournalList v-else-if="tab === 'journal'" ref="list" :selected="null" :follow="false" :read-only="!online" :player="isPlayer" @open="goEntry" @create="makeEntry" @map="showMap" />
+          <JournalList v-else-if="tab === 'journal'" ref="list" :selected="null" :follow="false" :read-only="!online || example.on" :player="isPlayer" @open="goEntry" @create="makeEntry" @map="showMap" />
           <PlayerRecordPage v-else-if="recordId && isPlayer" :id="recordId" :beside="false" @back="go(null)" @open="go" @map="showMap" />
           <RecordPage v-else-if="recordId" :id="recordId" :beside="false" :read-only="!online" @back="go(null)" @map="showMap" />
           <div v-else class="camp-col">
@@ -620,10 +643,11 @@ defineExpose({ remeasure: publish });
   border-bottom: 1px solid var(--line-1);
 }
 
+/* The three tabs keep one row: the Party tab's line gives way (its ellipsis), not the Journal tab. */
 .camp-tabs {
   display: flex;
   flex: 1 1 auto;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 6px;
   min-width: 0;
   margin: 0;
@@ -655,6 +679,7 @@ defineExpose({ remeasure: publish });
 
 .camp-tab {
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 7px;
   min-width: 0;
@@ -673,7 +698,12 @@ defineExpose({ remeasure: publish });
   font: 700 11.5px/1 var(--font-code);
 }
 
+.camp-tab.camp-tab-party {
+  flex: 0 1 auto;
+}
+
 .camp-tab small {
+  min-width: 0;
   max-width: 180px;
   overflow: hidden;
   color: var(--text-muted);

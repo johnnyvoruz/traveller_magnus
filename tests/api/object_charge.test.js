@@ -63,6 +63,15 @@ function open(options = {}) {
         charges() {
             return db.prepare(`SELECT COUNT(*) AS n FROM object_byte_charges`).get().n;
         },
+        createCharges() {
+            db.exec(`
+                CREATE TABLE object_byte_charges (
+                    job_id TEXT PRIMARY KEY NOT NULL,
+                    universe_id TEXT NOT NULL,
+                    bytes INTEGER NOT NULL
+                );
+            `);
+        },
         gate,
     };
     return api;
@@ -116,6 +125,19 @@ test('a missing charge table adds the bytes once and does not throw', async () =
     const db = open({ charges: false });
     await chargeObjectBytes(db, 'u', 'job-1', 40);
     assert.equal(db.bytes(), 50);
+});
+
+test('a charge table that arrives is used on the next add', async () => {
+    const db = open({ charges: false });
+    await chargeObjectBytes(db, 'u', 'job-1', 40);
+    assert.equal(db.bytes(), 50);
+    db.createCharges();
+    await chargeObjectBytes(db, 'u', 'job-1', 40);
+    assert.equal(db.bytes(), 90);
+    assert.equal(db.charges(), 1);
+    await chargeObjectBytes(db, 'u', 'job-1', 40);
+    assert.equal(db.bytes(), 90);
+    assert.equal(db.charges(), 1);
 });
 
 test('a batch that reports a missing charge table adds the bytes once', async () => {

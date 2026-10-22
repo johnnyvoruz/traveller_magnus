@@ -132,7 +132,7 @@ describe('the Cargo and Ledger sections render', { concurrency: 1 }, () => {
     test('an empty vessel says what to do, and without a capacity says where to write it', async () => {
         const html = await render(vessel({ id: 'cr_33333333-3333-4333-8333-333333333333' }));
         assert.match(html, /Nothing in the hold\. The ship sheet&#39;s Cargo rows are this list too\./);
-        assert.match(html, /<b>0 t<\/b> aboard\. Write the Cargo Capacity on the ship sheet to see how full the hold is\./);
+        assert.match(html, /<b>0 t<\/b> aboard\. To see how full the hold is, write Cargo Capacity on the ship sheet\./);
         assert.match(html, /No lines yet\./);
         assert.match(html, /data-add-lot/);
         assert.match(html, /data-add-line/);
@@ -142,7 +142,7 @@ describe('the Cargo and Ledger sections render', { concurrency: 1 }, () => {
         const html = await render(vessel({ id: 'cr_55555555-5555-4555-8555-555555555555', sheet: sheet({ 'Fuel Capacity': '40', 'Mortgage Cost': '12,500', 'Life Support Cost': '2000', 'Running Cost': '' }) }));
         assert.match(html, /<section class="vt-sec ui-frame" data-vessel-costs/);
         // The store's map is not mounted here, so the world under the ship is not known: no Refuel.
-        assert.match(html, /Refuel when the ship is at a world/);
+        assert.match(html, /To refuel, put the ship at a world/);
         assert.doesNotMatch(html, /data-post-refuel/);
         assert.match(html, /<span class="vt-main">Mortgage Cost<\/span><span class="vt-num vt-amount is-minus">−Cr12,500<\/span>/);
         assert.match(html, /<span class="vt-main">Life Support Cost<\/span>/);
@@ -189,13 +189,13 @@ describe('the Cargo and Ledger sections render', { concurrency: 1 }, () => {
         assert.match(none, /No owners yet\. Add who holds the ship&#39;s shares: a person, an organization, or the party\./);
         assert.match(none, /No payment set\./);
         assert.match(none, /data-set-payment>[\s\S]*?Set a payment<\/button>/);
-        assert.match(none, /Write the Fuel Capacity on the ship sheet to see the fuel aboard against it\./);
+        assert.match(none, /To compare the fuel aboard with that capacity, write Fuel Capacity on the ship sheet\./);
     });
 
     test('over capacity says so', async () => {
         const html = await render(vessel({ id: 'cr_44444444-4444-4444-8444-444444444444', sheet: sheet({ 'Cargo Capacity': '10' }), status: { cargo: [{ label: 'Ore', tons: 14 }] } }));
         assert.match(html, /<div class="is-over vt-gauge">/);
-        assert.match(html, /Over capacity by 4 t\./);
+        assert.match(html, /The hold is over capacity by 4 t\./);
     });
 });
 
@@ -212,9 +212,9 @@ test('DT2b: Refuel offers what the world sells, from the rules file; the mark on
     assert.match(page, /<label v-if="inParty" class="vt-fld vt-mark"><span>Base fuel \(referee only\)<\/span>/);
     assert.match(page, /<option value="naval">Naval vessel<\/option>\s+<option value="scout">Scout ship<\/option>/);
     // A price the file leaves to the referee is typed before anything is posted.
-    assert.match(page, /<label v-if="offer && offer\.crPerTon === null" class="vt-fld"><span>Price \(Cr a ton\)<\/span>/);
+    assert.match(page, /<label v-if="offer && offer\.crPerTon === null" class="vt-fld"><span>Price \(Cr per ton\)<\/span>/);
     assert.match(page, /:disabled="readOnly \|\| fuelTons <= 0 \|\| fuelCost === null"/);
-    assert.match(page, /data-no-fuel>No fuel is sold here: starport \{\{ world\.port \}\} sells none/);
+    assert.match(page, /data-no-fuel>No fuel is sold here\. Starport \{\{ world\.port \}\} sells none/);
 });
 
 test('the record page shows the sections on a vessel, and the ship sheet edits the manifest', () => {

@@ -37,10 +37,9 @@ test('the date chip is never hidden by width: under the search below 680 px', ()
     assert.match(read('shell/Panel.vue'), /\.app \.stardate \{\s*display: inline-flex;/);
 });
 
-test('the h1 and p reset is base.css’s, unchanged, and Account.vue has no style', () => {
+test('the h1 and p reset is base.css’s, unchanged (views/Account.vue is gone: /account is the account panel, DU11)', () => {
     const base = read('design/base.css');
     assert.ok(base.includes('h1 {\n  margin: 0;\n  font-family: var(--font-display);\n  font-weight: 500;\n  color: var(--signal);\n  letter-spacing: 0.06em;\n}\np {\n  margin: 0;\n  color: var(--text-2);\n}\n'));
-    assert.doesNotMatch(read('views/Account.vue'), /<style/);
 });
 
 test('the orbit picker’s card is the frame’s colour and type', () => {

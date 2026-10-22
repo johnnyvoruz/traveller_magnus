@@ -83,7 +83,7 @@ defineExpose({ transmit, idle });
     data-waveform="bars"
     :data-comms-theme="themeMode"
     role="region"
-    aria-label="System communications"
+    aria-label="System Comms"
   >
     <div class="trx-rim">
       <div class="trx-rim-alert" aria-hidden="true"></div>
@@ -113,7 +113,7 @@ defineExpose({ transmit, idle });
           </div>
         </header>
         <div class="trx-rule" aria-hidden="true"></div>
-        <div class="trx-metadata" aria-label="Channel metadata">
+        <div class="trx-metadata" aria-label="Channel details">
           <span class="trx-chip trx-chip--cyan" data-trx-channel>CH 03</span>
           <span class="trx-chip trx-chip--channel" data-trx-kind>LOCAL APPROACH</span>
           <span class="trx-chip trx-chip--label">SRC</span>

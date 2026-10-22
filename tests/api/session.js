@@ -3,7 +3,7 @@ import { createHmac } from 'node:crypto';
 import { readFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { apiRoot, wranglerBin } from './server.js';
+import { apiRoot, dropIsolatedConfig, noteHome, wranglerBin, wranglerLaunch } from './server.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -29,26 +29,35 @@ export function removeTree(dir) {
 }
 
 export function runWrangler(args) {
-    let last = '';
-    for (let attempt = 0; attempt < 30; attempt++) {
+    const isolate = !args.includes('--config') && !args.includes('--cwd');
+    const launch = isolate ? wranglerLaunch(args) : null;
+    const command = launch ? launch.args : args;
+    try {
         const persist = process.env.VOYAGE_PERSIST_TO;
-        const full = persist && args.includes('--local') && !args.includes('--persist-to')
-            ? [...args, '--persist-to', persist]
-            : args;
-        const result = spawnSync(process.execPath, [wranglerBin, ...full], {
-            cwd: apiRoot,
-            env: { ...process.env, CI: '1' },
-            encoding: 'utf8',
-        });
-        last = `${result.stdout || ''}\n${result.stderr || ''}`;
-        if (result.status === 0) return result.stdout || '';
-        if (locked.test(last)) {
-            sleep(500);
-            continue;
+        if (launch && persist) noteHome(persist, launch.home);
+        let last = '';
+        for (let attempt = 0; attempt < 30; attempt++) {
+            const persist = process.env.VOYAGE_PERSIST_TO;
+            const full = persist && command.includes('--local') && !command.includes('--persist-to')
+                ? [...command, '--persist-to', persist]
+                : command;
+            const result = spawnSync(process.execPath, [wranglerBin, ...full], {
+                cwd: apiRoot,
+                env: { ...process.env, CI: '1' },
+                encoding: 'utf8',
+            });
+            last = `${result.stdout || ''}\n${result.stderr || ''}`;
+            if (result.status === 0) return result.stdout || '';
+            if (locked.test(last)) {
+                sleep(500);
+                continue;
+            }
+            throw new Error(last);
         }
         throw new Error(last);
+    } finally {
+        if (launch) dropIsolatedConfig(launch.home);
     }
-    throw new Error(last);
 }
 
 function authSecret() {

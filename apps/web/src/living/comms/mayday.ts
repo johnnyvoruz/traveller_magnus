@@ -1,10 +1,4 @@
-/**
- * The `mayday` query on an orbit address (CC3). One claim per page load.
- * A later route change in the same document does not arm it again.
- * The view reads the key from the router query. This module never reads the address.
- */
 
-export type MaydayQuery = { mayday?: unknown };
 
 /** True when the query carries `mayday`, with a value or without one. */
 export function maydayKeyPresent(query: object): boolean {

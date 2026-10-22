@@ -152,13 +152,13 @@ const REFUSED: Record<Exclude<ClaimOutcome, 'ready' | 'claimed'>, string> = {
     missing: 'This link cannot be used.',
 };
 
-/** The claim page's four states: signed out, ready, claimed, or a link that will not open. */
+/** The claim page's four states: signed out, ready, claimed, or a link that does not open. */
 export function claimFace(signedIn: boolean, outcome: ClaimOutcome): ClaimFace {
     if (!signedIn) {
         return {
             state: 'signed-out',
             title: 'A character has been shared with you',
-            line: 'Sign in to claim it. You come back to this page, and one press gives you edit access.',
+            line: 'Sign in to claim it. You return to this page, and one press gives you edit access.',
         };
     }
     if (outcome === 'ready') {
@@ -171,7 +171,7 @@ export function claimFace(signedIn: boolean, outcome: ClaimOutcome): ClaimFace {
     if (outcome === 'claimed') {
         return { state: 'claimed', title: 'You can edit this character', line: 'Opening it.' };
     }
-    return { state: 'refused', title: 'This link will not open', line: REFUSED[outcome] };
+    return { state: 'refused', title: 'This link does not open', line: REFUSED[outcome] };
 }
 
 /** A refused claim, from the server's code and message. Anything else is a link that cannot be used. */

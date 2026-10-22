@@ -100,3 +100,30 @@ test('today is the party row, and a hidden place is the hex with no name', () =>
         if (row.shipId === OTHER) assert.equal(timelineKeeps(row, narrow), false);
     }
 });
+
+test('a Vessels filter keeps ship legs, and another type drops them', () => {
+    const ship = vessel(SHIP, 'Beowulf', legs());
+    const party = { vesselIds: [SHIP], aboard: {}, memberIds: [], anchor: null };
+    const model = campaignTimeline({
+        entries: [],
+        records: { [SHIP]: ship },
+        clockDays: d3,
+        party,
+    });
+    const listed = model.years.flatMap((year) => year.days.flatMap((day) => day.rows));
+    const legRows = listed.filter((row) => row.source === 'leg');
+    const partyRows = listed.filter((row) => row.source === 'party');
+    assert.ok(legRows.length > 0);
+    assert.equal(partyRows.length, 1);
+    const base = {
+        shipId: null,
+        aboard: {},
+        recordType: (id) => (id === SHIP ? 'vessel' : null),
+        entryAnchorId: () => null,
+    };
+    for (const row of legRows) assert.equal(timelineKeeps(row, { ...base, type: 'vessel' }), true);
+    for (const row of legRows) assert.equal(timelineKeeps(row, { ...base, type: 'place' }), false);
+    for (const row of partyRows) assert.equal(timelineKeeps(row, { ...base, type: 'vessel' }), false);
+    for (const row of legRows) assert.equal(timelineKeeps(row, { ...base, type: 'vessel', shipId: SHIP }), true);
+    for (const row of legRows) assert.equal(timelineKeeps(row, { ...base, type: 'vessel', shipId: OTHER }), false);
+});

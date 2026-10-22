@@ -200,11 +200,11 @@ defineExpose({
       <slot name="lineup" />
     </div>
 
-    <div class="orbit-scrub orbit-drawer-group" style="--i: 1" title="Drag up to 30 days backward or forward; it springs back on release. Hold an end to shuttle.">
+    <div class="orbit-scrub orbit-drawer-group" style="--i: 1" title="Drag up to 30 days backward or forward. The slider returns when you release it. Hold an end to keep moving.">
       <button
         type="button"
         class="orbit-scrub-end"
-        aria-label="Shuttle backward while held"
+        aria-label="Move backward while held"
         @pointerdown.prevent="holdEnd(-1)"
         @pointerup="stopHold"
         @pointercancel="stopHold"
@@ -223,7 +223,7 @@ defineExpose({
           :min="-SCRUB_DAYS"
           :max="SCRUB_DAYS"
           step="0.001"
-          aria-label="Scrub time, thirty days backward or forward"
+          aria-label="Move through time, 30 days backward or forward"
           :aria-valuetext="dateText(days)"
           :value="scrubValue"
           @input="onScrub"
@@ -236,7 +236,7 @@ defineExpose({
       <button
         type="button"
         class="orbit-scrub-end"
-        aria-label="Shuttle forward while held"
+        aria-label="Move forward while held"
         @pointerdown.prevent="holdEnd(1)"
         @pointerup="stopHold"
         @pointercancel="stopHold"

@@ -18,6 +18,7 @@
 // @ts-expect-error -- the generated wrapper is JavaScript with no declaration.
 import published from '../../../../packages/engines/src/generated/rules/mgt2e_trade.js';
 import { validateTableSet, type TableSetData } from '@voyage/shared';
+import { setFor, type TableChoice } from './table_sets.ts';
 
 type Src = string | string[];
 
@@ -85,6 +86,20 @@ export type TradeRules = {
 
 const OFFICIAL = published as TradeRules;
 
+/** The published file in the envelope `setFor` stores for `official:trade`. */
+const OFFICIAL_SET: TableSetData = {
+    schemaVersion: 1,
+    kind: 'trade',
+    id: 'official:trade',
+    name: 'Official trade',
+    basedOn: null,
+    edition: 'MgT2E',
+    tables: published,
+};
+
+/** What Trade here says when the roll used the published file. */
+export const OFFICIAL_TRADE_LABEL = 'Official trade tables';
+
 /**
  * The tables to roll on. A trade set that passes its checks is used; anything else,
  * including null, is the official file. `setFor('trade', ...)` gives the set.
@@ -94,6 +109,25 @@ export function tradeTables(set?: TableSetData | null): TradeRules {
     const checked = validateTableSet(set);
     if (checked.ok && checked.set?.kind === 'trade') return checked.set.tables as TradeRules;
     return OFFICIAL;
+}
+
+/**
+ * The campaign's trade set. `settings` is the campaign's `tableSets`.
+ * `ownSets` is the account's trade sets already loaded. A missing or unreadable
+ * choice rolls the official file.
+ */
+export function tradeChoice(settings: TableChoice | null, ownSets: readonly TableSetData[] = []): {
+    tables: TradeRules;
+    label: string;
+    words: string | null;
+} {
+    const resolved = setFor('trade', settings, ownSets, { trade: OFFICIAL_SET });
+    const set = resolved.set;
+    return {
+        tables: tradeTables(set),
+        label: set && set.id !== 'official:trade' ? set.name : OFFICIAL_TRADE_LABEL,
+        words: resolved.words,
+    };
 }
 
 /** Approved name-to-code table (decisions.md:57). Every printed spelling of each code. */

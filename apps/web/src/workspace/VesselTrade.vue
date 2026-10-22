@@ -102,7 +102,7 @@ function addLot(): void {
     const label = lot.label.trim();
     const t = number(lot.tons);
     const paid = lot.paid.trim() ? number(lot.paid) : null;
-    if (!label) { lotError.value = 'Name the lot: what the cargo is.'; return; }
+    if (!label) { lotError.value = 'Name the lot. Say what the cargo is.'; return; }
     if (t === null || t < 0) { lotError.value = 'Give the tons as a number, 0 or more.'; return; }
     if (lot.paid.trim() && (paid === null || paid < 0)) { lotError.value = 'Give what was paid as a number of credits, or leave it empty.'; return; }
     const next: CargoLot = { label, tons: t };
@@ -304,7 +304,7 @@ const shares = computed(() => shareParts(owners.value));
 function holderName(holder: OwnerShare['holder']): string {
     if (holder === 'party') return 'The party';
     const found = campaign.records[holder.id];
-    return found && !found.deleted ? found.name : 'A record that is gone';
+    return found && !found.deleted ? found.name : 'A missing record';
 }
 
 /** A holder's part of the total, as a percentage: arithmetic on the typed counts, not a price. */
@@ -423,9 +423,9 @@ const KIND_WORDS: Record<LedgerLine['kind'], string> = { income: 'Income', expen
         <button v-if="!lotOpen" type="button" class="ui-btn" :disabled="readOnly" data-add-lot @click="openLot"><Icon name="plus" :size="12" />Add a lot</button>
       </div>
       <div class="vt-gauge" :class="{ 'is-over': over }">
-        <span class="vt-gauge-words"><b>{{ tons(used) }}</b><template v-if="capacity !== null"> of {{ tons(capacity) }}</template><template v-else> aboard. Write the Cargo Capacity on the ship sheet to see how full the hold is.</template></span>
+        <span class="vt-gauge-words"><b>{{ tons(used) }}</b><template v-if="capacity !== null"> of {{ tons(capacity) }}</template><template v-else> aboard. To see how full the hold is, write Cargo Capacity on the ship sheet.</template></span>
         <span v-if="capacity !== null" class="vt-gauge-bar" role="meter" :aria-valuenow="used" aria-valuemin="0" :aria-valuemax="capacity" :aria-label="'Cargo: ' + tons(used) + ' of ' + tons(capacity)"><i :style="{ width: gauge * 100 + '%' }"></i></span>
-        <span v-if="over" class="vt-over" role="status">Over capacity by {{ tons(used - capacity!) }}.</span>
+        <span v-if="over" class="vt-over" role="status">The hold is over capacity by {{ tons(used - capacity!) }}.</span>
       </div>
       <ol v-if="cargo.length" class="vt-rows">
         <li v-for="(item, i) in cargo" :key="i" class="vt-row">
@@ -471,7 +471,7 @@ const KIND_WORDS: Record<LedgerLine['kind'], string> = { income: 'Income', expen
         <label class="vt-fld vt-wide"><span>For</span><input v-model="line.memo" class="vt-box" maxlength="200" placeholder="Berthing fees" /></label>
         <label class="vt-fld vt-day"><span>Day</span><input v-model="line.day" class="vt-box vt-num" inputmode="numeric" /></label>
         <label class="vt-fld vt-day"><span>Year</span><input v-model="line.year" class="vt-box vt-num" inputmode="numeric" /></label>
-        <p class="vt-fine">An expense or a recurring cost is taken off the balance; income is added.</p>
+        <p class="vt-fine">An expense or a recurring cost comes off the balance. Income goes on.</p>
         <p v-if="lineError" class="vt-err" role="alert">{{ lineError }}</p>
         <div class="vt-acts">
           <button type="button" class="ui-btn" @click="lineOpen = false">Cancel</button>
@@ -604,7 +604,7 @@ const KIND_WORDS: Record<LedgerLine['kind'], string> = { income: 'Income', expen
       </div>
       <div class="vt-part" data-fuel>
         <h4 class="vt-part-head">Fuel</h4>
-        <p v-if="fuelCapacity === null" class="vt-none">Write the Fuel Capacity on the ship sheet to see the fuel aboard against it.</p>
+        <p v-if="fuelCapacity === null" class="vt-none">To compare the fuel aboard with that capacity, write Fuel Capacity on the ship sheet.</p>
         <template v-else>
           <div class="vt-gauge">
             <span class="vt-gauge-words"><b>{{ tons(fuelLevel) }}</b> of {{ tons(fuelCapacity) }}<template v-if="aboard === null">: type what is aboard</template></span>
@@ -623,19 +623,19 @@ const KIND_WORDS: Record<LedgerLine['kind'], string> = { income: 'Income', expen
       </div>
       <div class="vt-part" data-refuel>
         <h4 class="vt-part-head">Refuel</h4>
-        <p v-if="!world" class="vt-none">Refuel when the ship is at a world: under way, or at a hex the map has not read, there is nowhere to buy fuel.</p>
-        <p v-else-if="fuelCapacity === null" class="vt-none">At {{ world.name }}, starport {{ world.port }}. Write the Fuel Capacity on the ship sheet to refuel.</p>
+        <p v-if="!world" class="vt-none">To refuel, put the ship at a world. If the ship is under way, or the map has not read that hex, there is nowhere to buy fuel.</p>
+        <p v-else-if="fuelCapacity === null" class="vt-none">At {{ world.name }}, starport {{ world.port }}. To refuel, write Fuel Capacity on the ship sheet.</p>
         <template v-else>
           <p class="vt-at">At {{ world.name }}, starport <b>{{ world.port }}</b>.</p>
-          <p v-if="!offers.length" class="vt-none" data-no-fuel>No fuel is sold here: starport {{ world.port }} sells none<template v-if="mark">, and there is no {{ baseWords.toLowerCase() }}</template>.</p>
+          <p v-if="!offers.length" class="vt-none" data-no-fuel>No fuel is sold here. Starport {{ world.port }} sells none<template v-if="mark">, and there is no {{ baseWords.toLowerCase() }}</template>.</p>
           <div v-else class="vt-form is-inline">
             <label class="vt-fld"><span>Fuel</span>
               <select v-model="fuel.pick" class="vt-box" data-fuel-offer>
                 <option v-for="item in offers" :key="offerKey(item)" :value="offerKey(item)">{{ offerWords(item) }}</option>
               </select>
             </label>
-            <label v-if="offer && offer.crPerTon === null" class="vt-fld"><span>Price (Cr a ton)</span><input v-model="fuel.price" class="vt-box vt-num" inputmode="decimal" data-fuel-price /></label>
-            <p class="vt-fine" role="status">{{ fuelTons <= 0 ? 'The tanks are full: nothing to take on.' : fuelCost === null ? 'Type the price a ton to see what filling the tanks costs.' : 'Fills the tanks: takes on ' + tons(fuelTons) + ' for ' + credits(fuelCost) + '.' }}</p>
+            <label v-if="offer && offer.crPerTon === null" class="vt-fld"><span>Price (Cr per ton)</span><input v-model="fuel.price" class="vt-box vt-num" inputmode="decimal" data-fuel-price /></label>
+            <p class="vt-fine" role="status">{{ fuelTons <= 0 ? 'The tanks are full. There is nothing to take on.' : fuelCost === null ? 'Type the price per ton to see what filling the tanks costs.' : 'Filling the tanks takes on ' + tons(fuelTons) + ' for ' + credits(fuelCost) + '.' }}</p>
             <div class="vt-acts">
               <button type="button" class="ui-btn is-primary" data-post-refuel :disabled="readOnly || fuelTons <= 0 || fuelCost === null" @click="postRefuel">Post the refuel</button>
             </div>

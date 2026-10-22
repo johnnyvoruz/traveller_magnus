@@ -17,6 +17,7 @@ import { locating, startLocate, stopLocate } from '../locate.ts';
 import { placeSource } from '../place_source.ts';
 import { hexKeyOf, hexWords } from '../places.ts';
 import { resolveAnchor } from '../party.ts';
+import AskModal from '../../shell/AskModal.vue';
 import { emptyKind, filterEntries, filterWord, kindCounts, KIND_ORDER, rowFace, visibleRange, type KindFilter } from './list.ts';
 
 /** How long a search waits before the list is filtered again. */
@@ -368,12 +369,6 @@ async function savePack(): Promise<void> {
 }
 
 function onListKey(event: KeyboardEvent): void {
-    if (packAsk.value && event.key === 'Escape') {
-        event.preventDefault();
-        event.stopPropagation();
-        packAsk.value = null;
-        return;
-    }
     if (event.key !== 'Escape') return;
     const target = event.target;
     const tag = target instanceof HTMLElement ? target.tagName : '';
@@ -427,12 +422,16 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
   <div class="camp-list jn-list" @keydown="onListKey">
     <div v-if="!first && !player" class="jn-pack">
       <button type="button" class="ui-btn" data-command="journal-pack" :disabled="packBusy" @click="askPack">Download the Player Pack</button>
-      <div v-if="packAsk" class="jn-ask" role="alertdialog" aria-labelledby="jn-pack-title">
-        <p id="jn-pack-title">Download the Player Pack?</p>
-        <p>{{ packAsk }}</p>
-        <button type="button" class="ui-btn is-primary" data-command="journal-pack-save" :disabled="packBusy" @click="savePack">Download</button>
-        <button type="button" class="ui-btn" data-command="journal-pack-cancel" @click="packAsk = null">Cancel</button>
-      </div>
+      <AskModal
+        v-if="packAsk"
+        title="Download the Player Pack?"
+        :text="packAsk"
+        confirm="Download"
+        busy-text="Downloading…"
+        :busy="packBusy"
+        @confirm="savePack"
+        @cancel="packAsk = null"
+      />
     </div>
     <div v-if="first && player" class="camp-first ui-ground" data-player-journal-empty>
       <span class="camp-glyph is-large" aria-hidden="true"><Icon name="book-atlas" :size="22" /></span>
@@ -685,19 +684,4 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
   margin: 0 0 12px;
 }
 
-.jn-ask {
-  margin-top: 8px;
-  padding: 12px;
-  border: 1px solid var(--line-1);
-  border-radius: var(--r-2);
-  background: var(--surface-1);
-}
-
-.jn-ask p {
-  margin: 0 0 8px;
-}
-
-.jn-ask .ui-btn {
-  margin-right: 8px;
-}
 </style>

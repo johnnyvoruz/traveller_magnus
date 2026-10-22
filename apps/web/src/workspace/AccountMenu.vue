@@ -157,10 +157,16 @@ async function leave(): Promise<void> {
     }
 }
 
-/** The account page: passkeys, recovery codes, linked accounts. "Back to the map" there returns here. */
+/**
+ * The account panel (DU11): passkeys, recovery codes, linked accounts, Agent access. Over the map
+ * where it is open; from a page with no map (the store, Help), on the home map.
+ */
 function openAccount(): void {
     noteReturn(route.fullPath);
-    if (route.path !== RECOVERY_PATH) void router.push(RECOVERY_PATH);
+    const onMap = route.path === '/' || route.path.startsWith('/s/');
+    if (addressPane(route.path, route.query).pane.kind !== 'account') {
+        void router.push(onMap ? atPane(route.path, route.query, { kind: 'account' }) : RECOVERY_PATH);
+    }
     emit('close');
 }
 

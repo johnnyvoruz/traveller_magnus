@@ -1,7 +1,7 @@
 /**
  * The route guard that keeps a recovery session on /account (findings/passkey_screens_design.md
  * §4). It routes on `session.gate` (account/session.ts): `recovery` from the redeem call, or from
- * GET /api/me answering `passkey_required` after a reload. Small on purpose: views/Account.vue
+ * GET /api/me answering `passkey_required` after a reload. Small on purpose: router.ts
  * loads it with the first chunk.
  */
 import { watch } from 'vue';
@@ -10,9 +10,12 @@ import { session } from '../../account/session.ts';
 
 export const RECOVERY_PATH = '/account';
 
-/** Where a route goes in a recovery session: the account page, which shows the recovery screen. */
-export function recoveryRedirect(path: string): string | null {
-    if (session.gate !== 'recovery' || path === RECOVERY_PATH) return null;
+/**
+ * Where a route goes in a recovery session: /account, which redirects to the account panel
+ * (`panel=account`, DU11), where the recovery screen shows. The panel itself stays.
+ */
+export function recoveryRedirect(path: string, query: Record<string, unknown> = {}): string | null {
+    if (session.gate !== 'recovery' || path === RECOVERY_PATH || query.panel === 'account') return null;
     return RECOVERY_PATH;
 }
 
@@ -23,7 +26,7 @@ export function recoveryRedirect(path: string): string | null {
 let returnTo: string | null = null;
 
 export function noteReturn(path: string): void {
-    if (path && !path.startsWith(RECOVERY_PATH)) returnTo = path;
+    if (path && !path.startsWith(RECOVERY_PATH) && !/[?&]panel=account(&|$)/.test(path)) returnTo = path;
 }
 
 export function returnPath(): string {
@@ -40,12 +43,12 @@ const guarded = new WeakSet<object>();
  */
 export function guardRecovery(router: Guarded): void {
     const leave = (): void => {
-        const now = recoveryRedirect(router.currentRoute.value.path);
+        const now = recoveryRedirect(router.currentRoute.value.path, router.currentRoute.value.query);
         if (now) void router.replace(now);
     };
     if (!guarded.has(router)) {
         guarded.add(router);
-        router.beforeEach((to) => recoveryRedirect(to.path) ?? undefined);
+        router.beforeEach((to) => recoveryRedirect(to.path, to.query) ?? undefined);
         watch(() => session.gate, leave);
     }
     leave();

@@ -10,6 +10,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { loadSession, session, signIn } from '../../account/session.ts';
 import { loadPlaying, setPerson } from '../../campaign/membership.ts';
 import { campaign, loadPlayerPages, pinTruthVersion, transport } from '../../campaign/store.ts';
+import { pagePath, replaceUrl, sessionGet, sessionRemove, sessionSet } from '../../platform/browser.ts';
 import { apiFetch } from '../../platform/http.ts';
 import { registerCommand } from '../../shell/registry.ts';
 import { partyPeople } from '../../workspace/players/players_words.ts';
@@ -41,33 +42,21 @@ const face = computed(() => joinFace({
 }));
 
 function storedToken(): string {
-    try {
-        return globalThis.sessionStorage.getItem(JOIN_TOKEN_KEY) ?? '';
-    } catch {
-        return '';
-    }
+    return sessionGet(JOIN_TOKEN_KEY) ?? '';
 }
 
 function keepToken(token: string): void {
-    try {
-        globalThis.sessionStorage.setItem(JOIN_TOKEN_KEY, token);
-    } catch {
-        // The token stays on this page. A sign-in that leaves the page cannot bring it back.
-    }
+    // A sign-in that leaves the page reads this back. A blocked store keeps the token on this page only.
+    sessionSet(JOIN_TOKEN_KEY, token);
 }
 
 function clearToken(): void {
-    try {
-        globalThis.sessionStorage.removeItem(JOIN_TOKEN_KEY);
-    } catch {
-        // The bar is already clear. A later visit asks for the link again.
-    }
+    sessionRemove(JOIN_TOKEN_KEY);
 }
 
 function leaveTokenOutOfTheBar(): void {
-    const path = globalThis.location.pathname;
-    if (path === JOIN_BAR) return;
-    globalThis.history.replaceState(globalThis.history.state, '', JOIN_BAR);
+    if (pagePath() === JOIN_BAR) return;
+    replaceUrl(JOIN_BAR);
 }
 
 function paramToken(): string {
@@ -235,7 +224,7 @@ onBeforeUnmount(() => {
     <span class="ui-brand join-brand">Traveller<span class="ui-brand-dot">.</span>voyage</span>
     <section class="join-card" :aria-label="face.title" :data-join-state="checked ? face.state : 'checking'">
       <h1>{{ face.title }}</h1>
-      <p v-if="!checked">Checking the session.</p>
+      <p v-if="!checked">Checking your session.</p>
       <p v-else>{{ face.line }}</p>
       <p v-if="session.error || trouble" class="join-trouble" role="alert">{{ session.error || trouble }}</p>
       <button

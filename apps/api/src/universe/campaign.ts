@@ -466,7 +466,14 @@ function liveRecord(sql: Sql, id: string): boolean {
     return rows.length > 0 && !bit(rows[0].deleted);
 }
 
-export function readCampaign(sql: Sql, afterSeq: number, limit: number, withAuthor = false): CampaignPage {
+/** Pending proposal rows. Absent tables count as zero, so the poll works before that migration. */
+function pendingProposals(sql: Sql): number {
+    const tables = sql.exec(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'proposals'`);
+    if (!tables.length) return 0;
+    return Number(sql.exec(`SELECT COUNT(*) AS n FROM proposals WHERE state = 'pending'`)[0]?.n ?? 0);
+}
+
+export function readCampaign(sql: Sql, afterSeq: number, limit: number, withAuthor = false): CampaignPage & { pendingProposals: number } {
     const cap = Math.min(1000, Math.max(1, Math.floor(limit)));
     const records = sql.exec(
         `SELECT * FROM campaign_records WHERE seq > ? ORDER BY seq LIMIT ?`,
@@ -503,6 +510,7 @@ export function readCampaign(sql: Sql, afterSeq: number, limit: number, withAuth
         clock: readClock(sql),
         seq,
         done,
+        pendingProposals: pendingProposals(sql),
     };
 }
 
@@ -528,6 +536,33 @@ function liveRows(sql: Sql): { records: SqlRow[]; links: SqlRow[]; journal: SqlR
         links: sql.exec(`SELECT * FROM campaign_links WHERE deleted = 0`),
         journal: sql.exec(`SELECT * FROM campaign_journal WHERE deleted = 0`),
     };
+}
+
+/**
+ * A live person record whose sheet stores this character id.
+ * A missing `campaign_records` table is false. No universe id is written anywhere else.
+ */
+export function characterAttached(sql: Sql, characterId: string): boolean {
+    const tables = sql.exec(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'campaign_records'`);
+    if (!tables.length) return false;
+    const needle = `"characterId":${JSON.stringify(characterId)}`;
+    const rows = sql.exec(
+        `SELECT id FROM campaign_records WHERE deleted = 0 AND instr(sheet, ?) > 0 LIMIT 1`,
+        needle,
+    );
+    return rows.length > 0;
+}
+
+/** The anonymous example. No caller, so own-note `rev` and account handles stay off the body. */
+export function readDemoCampaign(sql: Sql): PlayersView {
+    const rows = liveRows(sql);
+    return playersView({
+        records: rows.records.map((row) => recordFrom(row)) as CampaignPage['records'],
+        links: rows.links.map((row) => linkFrom(row)) as CampaignPage['links'],
+        journal: rows.journal.map((row) => entryFrom(row)),
+        settings: readSettings(sql),
+        clock: readClock(sql),
+    });
 }
 
 function projectLive(sql: Sql, rows: { records: SqlRow[]; links: SqlRow[]; journal: SqlRow[] }, caller: PlayersCaller): PlayersView {

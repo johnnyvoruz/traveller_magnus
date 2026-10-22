@@ -17,6 +17,8 @@ import EditableText from './EditableText.vue';
 import { uploads } from './gallery_state.ts';
 import { uploadWords } from './images.ts';
 import LinksBlock from './LinksBlock.vue';
+import MarketsNearby from './MarketsNearby.vue';
+import { resolveAnchor } from './party.ts';
 import { campaignDays, vesselWhere } from './party_where.ts';
 import RecordGallery from './RecordGallery.vue';
 import RecordMentions from './RecordMentions.vue';
@@ -31,6 +33,7 @@ import type { BodyPart } from './journal/body.ts';
 import { atPane, paneChanges, withQuery } from '../shell/pane.ts';
 import { dockShipAt } from './track_actions.ts';
 import TrackBlock from './TrackBlock.vue';
+import TradeHere from './TradeHere.vue';
 import VesselTrade from './VesselTrade.vue';
 import VesselPlan from './VesselPlan.vue';
 import WhereBlock from './WhereBlock.vue';
@@ -118,6 +121,14 @@ const where = computed(() => {
     if (now.type !== 'vessel') return { anchor: now.anchor, underway: null };
     void campaign.seq;
     return vesselWhere(now, campaign.records, campaignDays(campaign.clock));
+});
+
+/** The world a vessel is at, for Markets (DT4a); null under way or with no place. */
+const marketsAt = computed((): string | null => {
+    const now = where.value;
+    if (now.underway || !now.anchor) return null;
+    const at = resolveAnchor(now.anchor, campaign.records);
+    return at ? at.hexKey : null;
 });
 
 function place(next: CampaignAnchor): void {
@@ -353,6 +364,10 @@ watch(() => props.id, () => {
     <TrackBlock v-if="record.type === 'vessel'" :id="id" :read-only="readOnly" />
 
     <VesselTrade v-if="record.type === 'vessel'" :id="id" :read-only="readOnly" />
+
+    <TradeHere v-if="record.type === 'vessel'" :id="id" :read-only="readOnly" />
+
+    <MarketsNearby v-if="record.type === 'vessel'" :hex-key="marketsAt" :no-place="where.underway ? 'Under way: the markets show when it is at a world.' : 'Set where it is to see the markets near it.'" />
 
     <PersonSheet v-if="record.type === 'person'" :id="id" :read-only="readOnly" />
 

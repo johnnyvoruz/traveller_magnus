@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { diceAsk, rollCount, rollD3Pick, rollD66Pick, setMode, stepDm } from './command.ts';
+import { diceAsk, roll3ddPick, rollCount, rollD3Pick, rollD66Pick, setMode, stepDm } from './command.ts';
 import type { DiceCount } from './roll.ts';
 
 const counts: DiceCount[] = [1, 2, 3];
 const locked = computed(() => diceAsk.mode === 'boon' || diceAsk.mode === 'bane');
-const special = computed(() => diceAsk.mode === 'd66' || diceAsk.mode === 'd3' || diceAsk.mode === '2d3');
+const special = computed(() => diceAsk.mode === 'd66' || diceAsk.mode === 'd3' || diceAsk.mode === '2d3' || diceAsk.mode === '3dd');
 const shown = computed(() => (special.value ? 0 : locked.value ? 2 : diceAsk.count));
-const dmOff = computed(() => diceAsk.mode === 'd66');
+const dmOff = computed(() => diceAsk.mode === 'd66' || diceAsk.mode === '3dd');
 </script>
 
 <template>
@@ -29,6 +29,7 @@ const dmOff = computed(() => diceAsk.mode === 'd66');
     <button type="button" class="dice-pick" :aria-pressed="diceAsk.mode === 'd3' ? 'true' : 'false'" @click="rollD3Pick(1)">D3</button>
     <button type="button" class="dice-pick" :aria-pressed="diceAsk.mode === '2d3' ? 'true' : 'false'" @click="rollD3Pick(2)">2D3</button>
     <button type="button" class="dice-pick" :aria-pressed="diceAsk.mode === 'd66' ? 'true' : 'false'" @click="rollD66Pick()">D66</button>
+    <button type="button" class="dice-pick" :aria-pressed="diceAsk.mode === '3dd' ? 'true' : 'false'" @click="roll3ddPick()">3DD</button>
     <button type="button" class="dice-pick" :aria-pressed="diceAsk.mode === 'boon' ? 'true' : 'false'" @click="setMode('boon')">Boon</button>
     <button type="button" class="dice-pick" :aria-pressed="diceAsk.mode === 'bane' ? 'true' : 'false'" @click="setMode('bane')">Bane</button>
   </div>

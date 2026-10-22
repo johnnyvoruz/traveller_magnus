@@ -103,7 +103,7 @@ const jumpNote = computed(() => {
         </button>
       </li>
     </ul>
-    <p v-else-if="campaignOpen" class="orbit-ships-none">No ships here</p>
+    <p v-else-if="campaignOpen" class="orbit-ships-none">No ships here.</p>
 
     <!-- Marking a jump: where to. -->
     <div v-if="status && ships.length && status.state !== 'jump'" class="orbit-jump-to" :class="{ 'is-marked': jumpTarget }" role="group" aria-label="Jump destination">
@@ -117,15 +117,15 @@ const jumpNote = computed(() => {
         <div class="orbit-jump-time">
           <label class="orbit-field is-hours">
             <span>Hours</span>
-            <input type="number" min="1" step="1" required :value="jumpHours ?? ''" title="How long the jump lasts: the roll, or type your own" @input="emit('jumpHours', typedHours($event))" @keydown.stop>
+            <input type="number" min="1" step="1" required :value="jumpHours ?? ''" title="How long the jump lasts: the roll, or enter your own" @input="emit('jumpHours', typedHours($event))" @keydown.stop>
           </label>
-          <span class="orbit-roll" :class="{ 'is-typed': !jumpRoll }">{{ jumpRoll || 'set by hand' }}</span>
+          <span class="orbit-roll" :class="{ 'is-typed': !jumpRoll }">{{ jumpRoll || 'Set by hand' }}</span>
           <button type="button" class="orbit-btn orbit-roll-again" data-command="orbit-jump-roll" title="Roll the jump’s duration again" @click="emit('rollAgain')"><Icon name="rotate-left" :size="11" />Roll again</button>
         </div>
       </template>
       <template v-else>
         <span class="orbit-jump-to-label">Destination:</span>
-        <button type="button" class="orbit-btn orbit-jump-pick" title="Choose the next system on the map" @click="emit('pickOnMap')"><Icon name="map" :size="12" />Pick on the map</button>
+        <button type="button" class="orbit-btn orbit-jump-pick" title="Select the next system on the map" @click="emit('pickOnMap')"><Icon name="map" :size="12" />Pick on the map</button>
         <button v-if="lastOpened" type="button" class="orbit-btn orbit-jump-last" :title="'Use ' + lastOpened.name + ' ' + lastOpened.hex" @click="emit('useLast')"><Icon name="location-dot" :size="12" />Use {{ lastOpened.name }}</button>
       </template>
     </div>

@@ -84,6 +84,6 @@ test('the buttons: News beside Orbits on a system, the reverse on the party bloc
     const scrubber = read('map/NewsScrubber.vue');
     assert.match(scrubber, /<section v-if="reverse"[^>]*data-news-legend/);
     assert.match(scrubber, /Age of the news at/);
-    assert.match(scrubber, /Just arrived/);
+    assert.match(scrubber, /Arrived/);
     assert.match(scrubber, /\{\{ horizonDays \}\} days later/);
 });

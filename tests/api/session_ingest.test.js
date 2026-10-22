@@ -258,6 +258,7 @@ INSERT INTO access_tokens (
                 body: JSON.stringify(proposalBatch(`name-${stamp}-001`, [recordCreate(SECRET_NAME)])),
             });
             assert.equal(proposed.status, 201, JSON.stringify(proposed.body?.error));
+            assert.equal(proposed.body.data.batch.pasted, false);
             const ownerPage = await jsonFetch(`${base}/api/universes/${id}/campaign?after=0&limit=1000`, { headers: { cookie: owner } });
             assert.equal(ownerPage.status, 200, JSON.stringify(ownerPage.body?.error));
             assert.equal(JSON.stringify(ownerPage.body).includes(SECRET_NAME), false);
@@ -444,7 +445,10 @@ INSERT INTO access_tokens (
             assert.equal(forged.status, 201, JSON.stringify(forged.body?.error));
             assert.equal(forged.body.data.batch.state, clean.body.data.batch.state);
             const afterForged = await jsonFetch(`${base}/api/universes/${id}/campaign?after=0&limit=1000`, { headers: { cookie: owner } });
-            assert.deepEqual(afterForged.body, beforeForged.body);
+            const { pendingProposals: beforeCount, ...beforeData } = beforeForged.body.data;
+            const { pendingProposals: afterCount, ...afterData } = afterForged.body.data;
+            assert.deepEqual(afterData, beforeData);
+            assert.equal(afterCount, beforeCount + 2);
 
             let pad = 0;
             let next = clean;
@@ -556,6 +560,35 @@ INSERT INTO access_tokens (
                 body: JSON.stringify({ key: 'agent_access', value: 'off' }),
             });
             assert.equal(paused.status, 200, JSON.stringify(paused.body));
+            const beforePaste = await jsonFetch(`${base}/api/universes/${id}/campaign?after=0&limit=1000`, { headers: { cookie: owner } });
+            assert.equal(beforePaste.status, 200, JSON.stringify(beforePaste.body?.error));
+            assert.equal(Number.isInteger(beforePaste.body.data.pendingProposals), true);
+            const pasted = await jsonFetch(`${base}/api/universes/${id}/campaign/proposals`, {
+                method: 'POST',
+                headers: cookie,
+                body: JSON.stringify(proposalBatch(`paste-${stamp}-key`, [question('Pasted while agent access is off.')])),
+            });
+            assert.equal(pasted.status, 201, JSON.stringify(pasted.body));
+            assert.equal(pasted.body.data.batch.pasted, true);
+            assert.equal(pasted.body.data.batch.source.label, 'Thursday table');
+            const afterPaste = await jsonFetch(`${base}/api/universes/${id}/campaign?after=0&limit=1000`, { headers: { cookie: owner } });
+            assert.equal(afterPaste.status, 200, JSON.stringify(afterPaste.body?.error));
+            assert.equal(afterPaste.body.data.pendingProposals, beforePaste.body.data.pendingProposals + 1);
+            const playerPaste = await jsonFetch(`${base}/api/universes/${id}/campaign/proposals`, {
+                method: 'POST',
+                headers: { ...cookie, cookie: player },
+                body: JSON.stringify(proposalBatch(`player-${stamp}-key`, [question('A player must not paste.')])),
+            });
+            assert.equal(playerPaste.status, 403, JSON.stringify(playerPaste.body));
+            assert.equal(playerPaste.body.error.message, 'The owner does that.');
+            const malformed = await jsonFetch(`${base}/api/universes/${id}/campaign/proposals`, {
+                method: 'POST',
+                headers: cookie,
+                body: JSON.stringify({ format: 'voyage-proposals', schemaVersion: 1, idempotencyKey: `bad-${stamp}-key`, source: { kind: 'transcript', label: 'Thursday table', realDate: null }, proposals: [{ op: 'question', evidence: [{ at: '00:01', quote: 'Heard at the table.' }] }] }),
+            });
+            assert.equal(malformed.status, 400, JSON.stringify(malformed.body));
+            assert.equal(malformed.body.error.code, 'validation');
+            assert.equal(malformed.body.error.details.path, 'proposals.0.text');
             const pausedToken = await jsonFetch(`${base}/api/tokens`, { headers: { cookie: owner } });
             const pausedMcp = await jsonFetch(`${base}/mcp`, { method: 'POST', headers: bearer, body: '{}' });
             const cookieStill = await jsonFetch(`${base}/api/universes/${id}/campaign?after=0&limit=1000`, { headers: { cookie: owner } });

@@ -117,16 +117,6 @@ export function elevationAt(p: V3, sun: V3): number {
     return Math.asin(Math.max(-1, Math.min(1, p[0] * sun[0] + p[1] * sun[1] + p[2] * sun[2]))) * R2D;
 }
 
-// ---- The animated layer (design §9, as built §13.10) -----------------------------------------
-//
-// paintDayNight fills the shadow image. The glow image stays clear: the edge is the shadow's
-// own fade, not a line. Elevations come from a lookup on sin ε. The averaged shading
-// crossfades in by `mix` (0 instant, 1 averaged).
-
-/** Kept so an older caller can name the colours. The layer no longer paints them. */
-export const GLOW_DAY: readonly [number, number, number] = [102, 252, 241];
-export const GLOW_DUSK: readonly [number, number, number] = [255, 196, 110];
-
 export type DayNightFrame = {
     /** The sun direction for the instant layer, or null (averaged only, or unknown). */
     readonly sun: V3 | null;

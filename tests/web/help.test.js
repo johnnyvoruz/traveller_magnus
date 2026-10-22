@@ -71,6 +71,7 @@ describe('rendered', { concurrency: 1 }, () => {
             'Your ship on other people&#39;s maps',
             'Dice',
             'News',
+            'System Comms',
             'Invite your players',
             'What players see',
         ]) {
@@ -98,6 +99,18 @@ describe('rendered', { concurrency: 1 }, () => {
         assert.match(html, /How fast does news travel from here/);
         assert.match(html, /How old is the news here/);
         assert.match(html, /adds no wait/);
+        assert.match(html, /System Comms sits beside Fit/);
+        assert.match(html, /whether or not your ship is there/);
+        assert.match(html, /Quiet on this device/);
+        assert.match(html, /leaves System Comms as it is/);
+        assert.match(html, /Bring in a session/);
+        assert.match(html, /Ask every player before you record/);
+        assert.match(html, /Copy for your AI/);
+        assert.match(html, /voyage-session-ingest skill from the skill folder/);
+        assert.match(html, /No AI runs here/);
+        assert.match(html, /Paste your AI&#39;s reply/);
+        assert.match(html, /A token reaches this one campaign only/);
+        assert.equal(html.toLowerCase().includes('snapshot'), false);
         assert.match(html, /Lower DM and Raise DM/);
         assert.match(html, /Boon keeps the best two of three dice/);
         assert.match(html, /Bane keeps the worst two/);
@@ -124,6 +137,9 @@ test('the dice section follows assets/dice_conventions.txt and does not quote it
     assert.match(guide, /six-sided dice and add them/);
     assert.match(guide, /1 or 2 as 1, 3 or 4 as 2, and 5 or 6 as 3/);
     assert.match(guide, /does not use the DM/);
+    // 3DD is not in that file. Johnny, 2026-10-18 15:54: roll 3D and multiply by 10. No DM.
+    assert.match(guide, /3DD: Roll three dice, add them, and multiply by 10\. It takes no DM/);
+    assert.match(guide, /Roll D66, Roll 3DD, Boon/);
     assert.equal(guide.includes('To avoid writing'), false);
     assert.equal(guide.includes('nominate one dice'), false);
     // Boon and Bane are not in that file. Johnny, 2026-10-17 15:15: "Boon rolls 3D keeps best two, bane keeps worst two."

@@ -22,7 +22,7 @@ import { FAMILY_WORDS, kindFamily, objectUrl, shownCover } from '../../marketpla
 import { showToast } from '../../shell/toast.ts';
 import ImportPanel from './ImportPanel.vue';
 import Lightbox from '../Lightbox.vue';
-import MarketAsk from './MarketAsk.vue';
+import AskModal from '../../shell/AskModal.vue';
 import CoverEditor from './CoverEditor.vue';
 import StoreCard from './StoreCard.vue';
 import PieceChart from './PieceChart.vue';
@@ -479,7 +479,7 @@ watch(() => [props.packageId, props.watching, props.ready, session.user ? sessio
         <button type="button" class="ui-btn is-primary" @click="buy()">{{ updateId ? 'Update' : 'Import' }}</button>
       </div>
 
-      <MarketAsk
+      <AskModal
         v-if="asking === 'report'"
         title="Report this package"
         text="Say what is wrong. An admin reads every report."
@@ -490,7 +490,7 @@ watch(() => [props.packageId, props.watching, props.ready, session.user ? sessio
         @confirm="answer"
         @cancel="asking = ''"
       />
-      <MarketAsk
+      <AskModal
         v-if="asking === 'takedown'"
         title="Take down this package"
         text="It leaves the catalogue. Campaigns keep their copies. The reason goes in the audit log."
@@ -502,7 +502,7 @@ watch(() => [props.packageId, props.watching, props.ready, session.user ? sessio
         @confirm="answer"
         @cancel="asking = ''"
       />
-      <MarketAsk
+      <AskModal
         v-if="asking === 'restore'"
         title="Restore this package"
         text="It shows in the catalogue again."

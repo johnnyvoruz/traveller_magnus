@@ -66,6 +66,7 @@ import { holdSpan, readSpan, releaseSpan } from '../shell/panel_state.ts';
 import Rail from '../shell/Rail.vue';
 import { loadSession, session } from '../account/session.ts';
 import { campaign, setCampaignDate } from '../campaign/store.ts';
+import { publishViewDay, resetViewDay, viewDay, viewReset } from '../campaign/view_day.ts';
 import CommsReceiver from '../living/CommsReceiver.vue';
 import { systemFacts } from '../living/facts.ts';
 import { maydayKeyPresent, pageMayday } from '../living/comms/mayday.ts';
@@ -397,6 +398,7 @@ function show(): void {
     if (second === shownSecond && shownDays.value === days) return;
     shownSecond = second;
     shownDays.value = days;
+    if (canSetDate.value) publishViewDay(days, campaign.clock ? campaign.clock.days : null);
 }
 
 function frame(): void {
@@ -450,18 +452,48 @@ const campaignDate = computed(() => {
     return { date: said.date, weekday: said.weekday, days: campaign.clock.days };
 });
 const onCampaignDate = computed(() => !!campaignDate.value && sameDay(shownDays.value, campaignDate.value.days));
+watch(canSetDate, (ok) => {
+    if (!ok) return;
+    // The campaign date has not arrived yet: publishing the untouched clock would pin a view day the open is about to replace.
+    if (!moved && !openedOnCampaign && route.query.date === undefined && viewDay.value === null) return;
+    publishViewDay(days, campaign.clock ? campaign.clock.days : null);
+});
 /** The view has been moved by hand this visit: it no longer follows the campaign date when that arrives. */
 let moved = false;
 let openedOnCampaign = false;
 
-/** With no date in the link, the view opens on the campaign date, once it is known and before the clock is touched. */
+/** With no date in the link, the view opens on the shared view day, or the campaign date once it is known, before the clock is touched. */
 watch(campaignDate, (now) => {
-    if (!now || moved || openedOnCampaign || route.query.date !== undefined) return;
+    if (moved || openedOnCampaign || route.query.date !== undefined) return;
+    const shared = viewDay.value;
+    if (shared !== null) {
+        openedOnCampaign = true;
+        shuttle.value = 0;
+        paused.value = true;
+        setDays(shared);
+        return;
+    }
+    if (!now) return;
     openedOnCampaign = true;
     shuttle.value = 0;
     paused.value = true;
     setDays(now.days);
 }, { immediate: true });
+
+/** A campaign-date write clears the view day. The clock follows, unless a scrub is still down or a later publish won. */
+watch(viewReset, () => {
+    if (viewDay.value !== null || scrubStart !== null) return;
+    const next = campaign.clock ? campaign.clock.days : null;
+    if (next === null) return;
+    shuttle.value = 0;
+    paused.value = true;
+    setDays(next);
+    writeLink();
+});
+
+watch(() => campaign.universeId, (id, prev) => {
+    if (prev && id !== prev) resetViewDay();
+});
 
 function goCampaign(): void {
     const now = campaignDate.value;
@@ -940,14 +972,14 @@ const aimPlace = computed((): { waypoint: Waypoint } | { note: string } => {
     const under = hover.value;
     let waypoint: Waypoint | null = null;
     if (stepped.value) waypoint = bodyWaypoint(stepped.value);
-    else if (!under) return { note: 'Pointer off the picture' };
-    else if ('blank' in under) return { note: 'No reading here' };
-    else if ('grab' in under) return { note: 'Drag to move this waypoint' };
+    else if (!under) return { note: 'The pointer is off the picture.' };
+    else if ('blank' in under) return { note: 'There is no reading here.' };
+    else if ('grab' in under) return { note: 'Drag to move this waypoint.' };
     else if ('ship' in under) {
         const found = campaign.records[under.ship];
-        return { note: (found ? found.name : 'A ship') + (under.ship === selectedShip.value ? ': press to release' : ': press to take it') };
+        return { note: (found ? found.name : 'A ship') + (under.ship === selectedShip.value ? '. Select to release it.' : '. Select to take it.') };
     } else waypoint = 'key' in under ? bodyWaypoint(under.key) : pointWaypoint(under.point);
-    return waypoint ? { waypoint } : { note: 'No reading here' };
+    return waypoint ? { waypoint } : { note: 'There is no reading here.' };
 });
 
 /** The same as the next waypoint a press would lay: the body the course already stands on is not a leg. */
@@ -1023,7 +1055,7 @@ function writeTail(tail: EditedTail | null, said: string): void {
     const track = shipRecord.value ? trackOf(shipRecord.value) : null;
     if (!id || !track || !tail) return;
     if (!tail.all) {
-        showToast('A leg of that route has no distance known here: the route is as it was.');
+        showToast('A leg of that route has no distance known here. The route is as it was.');
         return;
     }
     const before = track.slice(tail.index);
@@ -1185,12 +1217,12 @@ const here = computed(() => {
 const hereNote = computed(() => {
     if (grab.value) {
         const place = aimPlace.value;
-        return 'note' in place ? place.note : place.waypoint.name + ': not a place for this waypoint';
+        return 'note' in place ? place.note : place.waypoint.name + ' is not a place for this waypoint.';
     }
     const at = aim.value;
     if ('note' in at) return at.note;
-    if (courseTail.value.departs === null) return 'Waiting on the hours of the leg before';
-    return at.waypoint.name + ': no distance known';
+    if (courseTail.value.departs === null) return 'Waiting on the hours of the leg before this one.';
+    return at.waypoint.name + '. No distance is known.';
 });
 
 /** The course in the console's words. */
@@ -1200,9 +1232,9 @@ const course = computed(() => {
     if (!legs.length || g === null) return null;
     const rows = legs.map((leg) => {
         let estimate = '';
-        if (leg.departs === null) estimate = 'Waiting on the hours of the leg before';
+        if (leg.departs === null) estimate = 'Waiting on the hours of the leg before this one.';
         else if (leg.settled) estimate = formatDistance(leg.settled.km, AU_KM) + ' · ' + hoursWords(leg.settled.hours, leg.settled.settled);
-        else estimate = 'Distance unknown: type the hours';
+        else estimate = 'Distance is unknown. Enter the hours.';
         const body = typeof leg.waypoint.to === 'string';
         return {
             n: lead.value + leg.n,
@@ -2226,7 +2258,7 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
           <template v-else>
             <p>This system could not be loaded.</p>
             <div class="orbit-note-actions">
-              <button type="button" class="orbit-btn" @click="retry"><Icon name="retry" :size="13" />Retry</button>
+              <button type="button" class="orbit-btn" @click="retry"><Icon name="retry" :size="13" />Try again</button>
               <button type="button" class="orbit-btn" @click="backToMap"><Icon name="arrow-left" :size="13" />Back to the map</button>
             </div>
           </template>
@@ -2296,7 +2328,16 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
 .orbit-card {
   position: absolute;
   box-sizing: border-box;
-  top: var(--chrome-inset);
+  /* The search field is the chrome row, from the rail, at most 440px
+     (components/OmniBox.vue). This card starts at the rail, or past an open
+     panel. When that field still crosses the card, the card starts one row
+     lower, so the title, the hex and the age stay clear of the glass.
+     Any overlap drops the whole row: the spare length times 999, clamped to
+     one search row. An open panel wider than the field leaves the card up. */
+  --search-reach: calc(var(--chrome-inset) + min(440px, 100vw - var(--rail-width) - 2 * var(--chrome-inset)));
+  --card-origin: max(var(--chrome-inset), var(--panel-width, 0px));
+  --under-search: clamp(0px, (var(--search-reach) - var(--card-origin)) * 999, calc(var(--chrome-top) + var(--chrome-height)));
+  top: calc(var(--chrome-inset) + var(--under-search));
   right: var(--chrome-inset);
   /* On a phone the panel is a sheet over the lower half (shell/PanelHost.vue publishes --sheet-cover):
      the card stops above it, and above the browser's own bar. */
@@ -2307,14 +2348,14 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
   min-width: 0;
   overflow: hidden;
   /* The picture loads inside this box. The height is the viewport minus the insets from the first paint. */
-  min-height: calc(100dvh - var(--chrome-inset) - max(var(--chrome-inset), env(safe-area-inset-bottom, 0px)) - var(--sheet-cover, 0px));
+  min-height: calc(100dvh - var(--chrome-inset) - var(--under-search) - max(var(--chrome-inset), env(safe-area-inset-bottom, 0px)) - var(--sheet-cover, 0px));
   border: 1px solid var(--signal-dim);
   border-radius: var(--r-4);
   background: var(--bg-0);
   box-shadow: var(--shadow-panel);
   color: var(--text-1);
   font: 400 14px/1.5 var(--font-text);
-  transition: left var(--t-rail) ease;
+  transition: left var(--t-rail) ease, top var(--t-rail) ease;
 }
 
 /*

@@ -47,10 +47,6 @@ const ROW_TOLERANCE = 4;
 
 export const SHEET_RULES: SheetRules = generated as SheetRules;
 
-export function sheetFields(): SheetField[] {
-    return SHEET_RULES.fields;
-}
-
 /** The field a name denotes, or null. */
 export function fieldNamed(name: string): SheetField | null {
     return SHEET_RULES.fields.find((field) => field.name === name) ?? null;

@@ -12,7 +12,7 @@ test('the living switches use the spec sentences', () => {
     assert.equal(LIVING_WORDS.trafficLabel, 'Show background traffic');
     assert.equal(LIVING_WORDS.trafficHelp, "Ships that come and go in the orbit view. They're scenery, not tracked ships.");
     assert.equal(LIVING_WORDS.quietLabel, 'Quiet on this device');
-    assert.equal(LIVING_WORDS.quietHelp, 'Hides chatter and background traffic on this device only.');
+    assert.equal(LIVING_WORDS.quietHelp, 'Hides background traffic on this device only. System Comms has its own switch.');
     assert.equal(LIVING_WORDS.trafficChip, 'Traffic');
     assert.equal(LIVING_WORDS.hideVisit, 'Hide for this visit');
     const settings = readFileSync(new URL('../../apps/web/src/workspace/LivingSettings.vue', import.meta.url), 'utf8');

@@ -22,5 +22,12 @@
     "names:gen": "node scripts/gen_names_esm.js",
     "deploy:ci": "npx wrangler d1 migrations apply voyage --remote --config apps/api/wrangler.toml && npx wrangler deploy --config apps/api/wrangler.toml",
     "preview:ci": "npx wrangler versions upload --config apps/api/wrangler.toml"
+  },
+  "devDependencies": {
+    "@levischuck/tiny-cbor": "0.2.11",
+    "@vue/compiler-sfc": "3.5.44",
+    "playwright": "1.64.1",
+    "sharp": "0.35.5",
+    "undici": "7.30.1"
   }
 }

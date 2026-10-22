@@ -2,7 +2,7 @@ import { DurableObject } from 'cloudflare:workers';
 import type { Env } from '../env';
 import { chargesMutationBudget, MUTATION_BUDGET, MUTATION_WINDOW_MS, PROPOSAL_SUBMIT_BUDGET } from './budget';
 import { respondProposals } from './proposals';
-import { applyCampaignChanges, CampaignRefusal, journalAuthorReady, playersCampaignHashes, readCampaign, readPlayersCampaign, type Sql } from './campaign';
+import { applyCampaignChanges, CampaignRefusal, characterAttached, journalAuthorReady, playersCampaignHashes, readCampaign, readDemoCampaign, readPlayersCampaign, type Sql } from './campaign';
 import { respondBuilder } from './hexes';
 import { applyInstall, InstallRefusal, previewInstall, removeInstall, type InstallBody, type InstallRemoveBody } from './install';
 import { readPublishSources } from './publish_read';
@@ -82,6 +82,13 @@ export class UniverseDO extends DurableObject<Env> {
         }
         if (request.method === 'GET' && url.pathname === '/campaign/object-hashes') {
             return Response.json({ ok: true, data: { hashes: playersCampaignHashes(sql) } });
+        }
+        if (request.method === 'GET' && url.pathname === '/campaign/demo') {
+            return Response.json({ ok: true, data: readDemoCampaign(sql) });
+        }
+        if (request.method === 'GET' && url.pathname === '/campaign/holds-character') {
+            const id = url.searchParams.get('id') ?? '';
+            return Response.json({ ok: true, data: { holds: id !== '' && characterAttached(sql, id) } });
         }
         if (request.method === 'GET' && url.pathname === '/campaign/players') {
             const memberId = request.headers.get('x-voyage-member');

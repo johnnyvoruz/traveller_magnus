@@ -1,0 +1,798 @@
+{
+  "records": [
+    {
+      "id": "cr_e1000001-0000-4000-8000-000000000001",
+      "type": "vessel",
+      "kind": "Ship",
+      "name": "Bright Errand",
+      "summary": "Bright Errand carries the crew.",
+      "details": "The crew is Ilya Voss, Nia Calder, Tomas Reed, and Sera Quinn. The ship has called at Jenghe, Roup, and Regina.",
+      "tags": [],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/1910",
+        "locationLabel": "Regina"
+      },
+      "when": {
+        "start": {
+          "year": 1105,
+          "day": 2
+        }
+      },
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": {
+        "track": [
+          {
+            "from": {
+              "kind": "system",
+              "hexKey": "Spinward_Marches/1810",
+              "locationLabel": "Jenghe"
+            },
+            "to": {
+              "kind": "system",
+              "hexKey": "Spinward_Marches/1810",
+              "locationLabel": "Jenghe"
+            },
+            "departs": 403326,
+            "arrives": 403336,
+            "mode": "docked",
+            "note": "You wait at Jenghe."
+          },
+          {
+            "from": {
+              "kind": "system",
+              "hexKey": "Spinward_Marches/1810",
+              "locationLabel": "Jenghe"
+            },
+            "to": {
+              "kind": "system",
+              "hexKey": "Spinward_Marches/2007",
+              "locationLabel": "Roup"
+            },
+            "departs": 403336,
+            "arrives": 403343,
+            "mode": "jump",
+            "note": "You leave Jenghe for Roup."
+          },
+          {
+            "from": {
+              "kind": "system",
+              "hexKey": "Spinward_Marches/2007",
+              "locationLabel": "Roup"
+            },
+            "to": {
+              "kind": "system",
+              "hexKey": "Spinward_Marches/2007",
+              "locationLabel": "Roup"
+            },
+            "departs": 403343,
+            "arrives": 403348,
+            "mode": "docked",
+            "note": "You wait at Roup."
+          },
+          {
+            "from": {
+              "kind": "system",
+              "hexKey": "Spinward_Marches/2007",
+              "locationLabel": "Roup"
+            },
+            "to": {
+              "kind": "system",
+              "hexKey": "Spinward_Marches/1910",
+              "locationLabel": "Regina"
+            },
+            "departs": 403348,
+            "arrives": 403355,
+            "mode": "jump",
+            "note": "You leave Roup for Regina."
+          }
+        ]
+      },
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-18T21:05:00.000Z",
+      "updatedAt": "2026-10-18T21:05:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000001-0000-4000-8000-000000000002",
+      "type": "person",
+      "kind": "Captain",
+      "name": "Ilya Voss",
+      "summary": "Ilya commands Bright Errand.",
+      "details": "Ilya sets the course and carries a sealed letter for Harun Pell.",
+      "tags": [],
+      "anchor": {
+        "kind": "record",
+        "id": "cr_e1000001-0000-4000-8000-000000000001"
+      },
+      "when": {
+        "start": {
+          "year": 1105,
+          "day": 2
+        }
+      },
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-18T21:05:00.000Z",
+      "updatedAt": "2026-10-18T21:05:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000001-0000-4000-8000-000000000003",
+      "type": "person",
+      "kind": "Pilot",
+      "name": "Nia Calder",
+      "summary": "Nia flies Bright Errand.",
+      "details": "Nia takes the ship from world to world.",
+      "tags": [],
+      "anchor": {
+        "kind": "record",
+        "id": "cr_e1000001-0000-4000-8000-000000000001"
+      },
+      "when": {
+        "start": {
+          "year": 1105,
+          "day": 2
+        }
+      },
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-18T21:05:00.000Z",
+      "updatedAt": "2026-10-18T21:05:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000001-0000-4000-8000-000000000004",
+      "type": "person",
+      "kind": "Engineer",
+      "name": "Tomas Reed",
+      "summary": "Tomas keeps the ship working.",
+      "details": "Tomas looks after the machinery and holds the brass key.",
+      "tags": [],
+      "anchor": {
+        "kind": "record",
+        "id": "cr_e1000001-0000-4000-8000-000000000001"
+      },
+      "when": {
+        "start": {
+          "year": 1105,
+          "day": 2
+        }
+      },
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-18T21:05:00.000Z",
+      "updatedAt": "2026-10-18T21:05:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000001-0000-4000-8000-000000000005",
+      "type": "person",
+      "kind": "Cook",
+      "name": "Sera Quinn",
+      "summary": "Sera keeps the galley.",
+      "details": "Sera cooks for Ilya Voss, Nia Calder, Tomas Reed, and herself.",
+      "tags": [],
+      "anchor": {
+        "kind": "record",
+        "id": "cr_e1000001-0000-4000-8000-000000000001"
+      },
+      "when": {
+        "start": {
+          "year": 1105,
+          "day": 2
+        }
+      },
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-18T21:05:00.000Z",
+      "updatedAt": "2026-10-18T21:05:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000001-0000-4000-8000-000000000006",
+      "type": "person",
+      "kind": "Contact",
+      "name": "Harun Pell",
+      "summary": "Harun waits at Regina.",
+      "details": "Harun is not part of the crew. Harun meets the crew in the north room.",
+      "tags": [],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/1910",
+        "locationLabel": "Regina"
+      },
+      "when": {
+        "start": {
+          "year": 1105,
+          "day": 31
+        }
+      },
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-18T21:05:00.000Z",
+      "updatedAt": "2026-10-18T21:05:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000001-0000-4000-8000-000000000007",
+      "type": "place",
+      "kind": "Berth",
+      "name": "Berth 4",
+      "summary": "The crew waits here at Jenghe.",
+      "details": "Jenghe is in the Spinward Marches, hex 1810. Its UWP is C799663-9.",
+      "tags": [],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/1810",
+        "locationLabel": "Jenghe"
+      },
+      "when": {
+        "start": {
+          "year": 1105,
+          "day": 2
+        }
+      },
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-18T21:05:00.000Z",
+      "updatedAt": "2026-10-18T21:05:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000001-0000-4000-8000-000000000008",
+      "type": "place",
+      "kind": "Stalls",
+      "name": "Stall row",
+      "summary": "A row of stalls at Roup.",
+      "details": "Roup is in the Spinward Marches, hex 2007. Its UWP is C77A9A9-7.",
+      "tags": [],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/2007",
+        "locationLabel": "Roup"
+      },
+      "when": {
+        "start": {
+          "year": 1105,
+          "day": 19
+        }
+      },
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-18T21:05:00.000Z",
+      "updatedAt": "2026-10-18T21:05:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000001-0000-4000-8000-000000000009",
+      "type": "place",
+      "kind": "Room",
+      "name": "North room",
+      "summary": "Harun Pell waits in this room at Regina.",
+      "details": "Regina is in the Spinward Marches, hex 1910. Its UWP is A788899-C.",
+      "tags": [],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/1910",
+        "locationLabel": "Regina"
+      },
+      "when": {
+        "start": {
+          "year": 1105,
+          "day": 31
+        }
+      },
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-18T21:05:00.000Z",
+      "updatedAt": "2026-10-18T21:05:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000001-0000-4000-8000-00000000000a",
+      "type": "item",
+      "kind": "Letter",
+      "name": "Sealed letter",
+      "summary": "A letter for Harun Pell.",
+      "details": "Ilya Voss carries this letter. The journal holds the words.",
+      "tags": [],
+      "anchor": {
+        "kind": "record",
+        "id": "cr_e1000001-0000-4000-8000-000000000002"
+      },
+      "when": {
+        "start": {
+          "year": 1105,
+          "day": 2
+        }
+      },
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-18T21:05:00.000Z",
+      "updatedAt": "2026-10-18T21:05:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cr_e1000001-0000-4000-8000-00000000000b",
+      "type": "item",
+      "kind": "Key",
+      "name": "Brass key",
+      "summary": "A key to the north room.",
+      "details": "Tomas Reed holds this key. It opens the north room at Regina.",
+      "tags": [],
+      "anchor": {
+        "kind": "record",
+        "id": "cr_e1000001-0000-4000-8000-000000000004"
+      },
+      "when": {
+        "start": {
+          "year": 1105,
+          "day": 2
+        }
+      },
+      "visibility": "players",
+      "playerNotes": null,
+      "sheet": null,
+      "status": null,
+      "images": null,
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-18T21:05:00.000Z",
+      "updatedAt": "2026-10-18T21:05:00.000Z",
+      "deleted": false
+    }
+  ],
+  "links": [
+    {
+      "id": "cl_e1000001-0000-4000-8000-000000000001",
+      "from": "cr_e1000001-0000-4000-8000-000000000002",
+      "to": "cr_e1000001-0000-4000-8000-000000000001",
+      "kind": "crew",
+      "role": "Captain",
+      "order": 0,
+      "since": {
+        "year": 1105,
+        "day": 2
+      },
+      "until": null,
+      "notes": "",
+      "visibility": "players",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-18T21:05:00.000Z",
+      "updatedAt": "2026-10-18T21:05:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_e1000001-0000-4000-8000-000000000002",
+      "from": "cr_e1000001-0000-4000-8000-000000000003",
+      "to": "cr_e1000001-0000-4000-8000-000000000001",
+      "kind": "crew",
+      "role": "Pilot",
+      "order": 1,
+      "since": {
+        "year": 1105,
+        "day": 2
+      },
+      "until": null,
+      "notes": "",
+      "visibility": "players",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-18T21:05:00.000Z",
+      "updatedAt": "2026-10-18T21:05:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_e1000001-0000-4000-8000-000000000003",
+      "from": "cr_e1000001-0000-4000-8000-000000000004",
+      "to": "cr_e1000001-0000-4000-8000-000000000001",
+      "kind": "crew",
+      "role": "Engineer",
+      "order": 2,
+      "since": {
+        "year": 1105,
+        "day": 2
+      },
+      "until": null,
+      "notes": "",
+      "visibility": "players",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-18T21:05:00.000Z",
+      "updatedAt": "2026-10-18T21:05:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_e1000001-0000-4000-8000-000000000004",
+      "from": "cr_e1000001-0000-4000-8000-000000000005",
+      "to": "cr_e1000001-0000-4000-8000-000000000001",
+      "kind": "crew",
+      "role": "Cook",
+      "order": 3,
+      "since": {
+        "year": 1105,
+        "day": 2
+      },
+      "until": null,
+      "notes": "",
+      "visibility": "players",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-18T21:05:00.000Z",
+      "updatedAt": "2026-10-18T21:05:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_e1000001-0000-4000-8000-000000000005",
+      "from": "cr_e1000001-0000-4000-8000-000000000002",
+      "to": "cr_e1000001-0000-4000-8000-000000000001",
+      "kind": "commands",
+      "role": "Captain",
+      "order": 0,
+      "since": {
+        "year": 1105,
+        "day": 2
+      },
+      "until": null,
+      "notes": "",
+      "visibility": "players",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-18T21:05:00.000Z",
+      "updatedAt": "2026-10-18T21:05:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_e1000001-0000-4000-8000-000000000006",
+      "from": "cr_e1000001-0000-4000-8000-000000000002",
+      "to": "cr_e1000001-0000-4000-8000-000000000006",
+      "kind": "contact",
+      "role": "",
+      "order": 0,
+      "since": {
+        "year": 1105,
+        "day": 2
+      },
+      "until": null,
+      "notes": "",
+      "visibility": "players",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-18T21:05:00.000Z",
+      "updatedAt": "2026-10-18T21:05:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_e1000001-0000-4000-8000-000000000007",
+      "from": "cr_e1000001-0000-4000-8000-000000000002",
+      "to": "cr_e1000001-0000-4000-8000-00000000000a",
+      "kind": "owns",
+      "role": "",
+      "order": 0,
+      "since": {
+        "year": 1105,
+        "day": 2
+      },
+      "until": null,
+      "notes": "",
+      "visibility": "players",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-18T21:05:00.000Z",
+      "updatedAt": "2026-10-18T21:05:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cl_e1000001-0000-4000-8000-000000000008",
+      "from": "cr_e1000001-0000-4000-8000-000000000004",
+      "to": "cr_e1000001-0000-4000-8000-00000000000b",
+      "kind": "owns",
+      "role": "",
+      "order": 0,
+      "since": {
+        "year": 1105,
+        "day": 2
+      },
+      "until": null,
+      "notes": "",
+      "visibility": "players",
+      "provenance": null,
+      "rev": 1,
+      "createdAt": "2026-10-18T21:05:00.000Z",
+      "updatedAt": "2026-10-18T21:05:00.000Z",
+      "deleted": false
+    }
+  ],
+  "settings": {
+    "party": {
+      "vesselIds": [
+        "cr_e1000001-0000-4000-8000-000000000001"
+      ],
+      "aboard": {
+        "cr_e1000001-0000-4000-8000-000000000002": "cr_e1000001-0000-4000-8000-000000000001",
+        "cr_e1000001-0000-4000-8000-000000000003": "cr_e1000001-0000-4000-8000-000000000001",
+        "cr_e1000001-0000-4000-8000-000000000004": "cr_e1000001-0000-4000-8000-000000000001",
+        "cr_e1000001-0000-4000-8000-000000000005": "cr_e1000001-0000-4000-8000-000000000001"
+      },
+      "memberIds": [
+        "cr_e1000001-0000-4000-8000-000000000002",
+        "cr_e1000001-0000-4000-8000-000000000003",
+        "cr_e1000001-0000-4000-8000-000000000004",
+        "cr_e1000001-0000-4000-8000-000000000005"
+      ],
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/1910",
+        "locationLabel": "Regina"
+      }
+    },
+    "kinds": {
+      "person": [
+        "Captain",
+        "Pilot",
+        "Engineer",
+        "Cook",
+        "Contact"
+      ],
+      "place": [
+        "Berth",
+        "Stalls",
+        "Room"
+      ],
+      "item": [
+        "Letter",
+        "Key"
+      ],
+      "vessel": [
+        "Ship"
+      ]
+    },
+    "calendar": {
+      "dateFormat": "imperial"
+    },
+    "rev": 1
+  },
+  "clock": {
+    "days": 403364,
+    "rev": 1
+  },
+  "journal": [
+    {
+      "id": "cj_e1000001-0000-4000-8000-000000000001",
+      "kind": "session",
+      "title": "You leave Jenghe",
+      "body": "You leave [[cr_e1000001-0000-4000-8000-000000000007|Berth 4]] at [[hex:Spinward_Marches/1810|Jenghe]] on [[cr_e1000001-0000-4000-8000-000000000001|Bright Errand]]. [[cr_e1000001-0000-4000-8000-000000000002|Ilya Voss]] sets the course. [[cr_e1000001-0000-4000-8000-000000000003|Nia Calder]] flies. [[cr_e1000001-0000-4000-8000-000000000004|Tomas Reed]] watches the machinery. [[cr_e1000001-0000-4000-8000-000000000005|Sera Quinn]] keeps the galley.",
+      "when": {
+        "year": 1105,
+        "day": 12
+      },
+      "realDate": null,
+      "sequence": 1,
+      "author": "referee",
+      "visibility": "players",
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/1810",
+        "locationLabel": "Jenghe"
+      },
+      "mentions": [
+        "cr_e1000001-0000-4000-8000-000000000007",
+        "hex:Spinward_Marches/1810",
+        "cr_e1000001-0000-4000-8000-000000000001",
+        "cr_e1000001-0000-4000-8000-000000000002",
+        "cr_e1000001-0000-4000-8000-000000000003",
+        "cr_e1000001-0000-4000-8000-000000000004",
+        "cr_e1000001-0000-4000-8000-000000000005"
+      ],
+      "images": null,
+      "rev": 1,
+      "createdAt": "2026-10-18T21:05:00.000Z",
+      "updatedAt": "2026-10-18T21:05:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cj_e1000001-0000-4000-8000-000000000002",
+      "kind": "session",
+      "title": "You stop at Roup",
+      "body": "You stop at [[hex:Spinward_Marches/2007|Roup]] and walk [[cr_e1000001-0000-4000-8000-000000000008|Stall row]]. [[cr_e1000001-0000-4000-8000-00000000000a|The sealed letter]] stays with [[cr_e1000001-0000-4000-8000-000000000002|Ilya Voss]].",
+      "when": {
+        "year": 1105,
+        "day": 19
+      },
+      "realDate": null,
+      "sequence": 2,
+      "author": "referee",
+      "visibility": "players",
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/2007",
+        "locationLabel": "Roup"
+      },
+      "mentions": [
+        "hex:Spinward_Marches/2007",
+        "cr_e1000001-0000-4000-8000-000000000008",
+        "cr_e1000001-0000-4000-8000-00000000000a",
+        "cr_e1000001-0000-4000-8000-000000000002"
+      ],
+      "images": null,
+      "rev": 1,
+      "createdAt": "2026-10-18T21:05:00.000Z",
+      "updatedAt": "2026-10-18T21:05:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cj_e1000001-0000-4000-8000-000000000003",
+      "kind": "note",
+      "title": "The letter stays with Ilya",
+      "body": "[[cr_e1000001-0000-4000-8000-00000000000a|The sealed letter]] is still sealed. [[cr_e1000001-0000-4000-8000-000000000002|Ilya Voss]] carries it to [[hex:Spinward_Marches/1910|Regina]].",
+      "when": {
+        "year": 1105,
+        "day": 31
+      },
+      "realDate": null,
+      "sequence": null,
+      "author": "referee",
+      "visibility": "players",
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/1910",
+        "locationLabel": "Regina"
+      },
+      "mentions": [
+        "cr_e1000001-0000-4000-8000-00000000000a",
+        "cr_e1000001-0000-4000-8000-000000000002",
+        "hex:Spinward_Marches/1910"
+      ],
+      "images": null,
+      "rev": 1,
+      "createdAt": "2026-10-18T21:05:00.000Z",
+      "updatedAt": "2026-10-18T21:05:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cj_e1000001-0000-4000-8000-000000000004",
+      "kind": "handout",
+      "title": "A letter for Harun Pell",
+      "body": "Give this letter to [[cr_e1000001-0000-4000-8000-000000000006|Harun Pell]] at [[hex:Spinward_Marches/1910|Regina]].\n\nHarun,\n\nThe north room is open to you. Ask [[cr_e1000001-0000-4000-8000-000000000002|Ilya Voss]] for [[cr_e1000001-0000-4000-8000-00000000000b|the brass key]]. The key travels on [[cr_e1000001-0000-4000-8000-000000000001|Bright Errand]].",
+      "when": {
+        "year": 1105,
+        "day": 31
+      },
+      "realDate": null,
+      "sequence": null,
+      "author": "referee",
+      "visibility": "players",
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/1910",
+        "locationLabel": "Regina"
+      },
+      "mentions": [
+        "cr_e1000001-0000-4000-8000-000000000006",
+        "hex:Spinward_Marches/1910",
+        "cr_e1000001-0000-4000-8000-000000000002",
+        "cr_e1000001-0000-4000-8000-00000000000b",
+        "cr_e1000001-0000-4000-8000-000000000001"
+      ],
+      "images": null,
+      "rev": 1,
+      "createdAt": "2026-10-18T21:05:00.000Z",
+      "updatedAt": "2026-10-18T21:05:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cj_e1000001-0000-4000-8000-000000000005",
+      "kind": "rumor",
+      "title": "A name you hear at Regina",
+      "body": "At [[hex:Spinward_Marches/1910|Regina]] you hear that [[cr_e1000001-0000-4000-8000-000000000006|Harun Pell]] waits in [[cr_e1000001-0000-4000-8000-000000000009|the north room]].",
+      "when": {
+        "year": 1105,
+        "day": 32
+      },
+      "realDate": null,
+      "sequence": null,
+      "author": "referee",
+      "visibility": "players",
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/1910",
+        "locationLabel": "Regina"
+      },
+      "mentions": [
+        "hex:Spinward_Marches/1910",
+        "cr_e1000001-0000-4000-8000-000000000006",
+        "cr_e1000001-0000-4000-8000-000000000009"
+      ],
+      "images": null,
+      "rev": 1,
+      "createdAt": "2026-10-18T21:05:00.000Z",
+      "updatedAt": "2026-10-18T21:05:00.000Z",
+      "deleted": false
+    },
+    {
+      "id": "cj_e1000001-0000-4000-8000-000000000006",
+      "kind": "session",
+      "title": "You reach the north room",
+      "body": "You arrive at [[hex:Spinward_Marches/1910|Regina]] on [[cr_e1000001-0000-4000-8000-000000000001|Bright Errand]]. [[cr_e1000001-0000-4000-8000-000000000004|Tomas Reed]] brings [[cr_e1000001-0000-4000-8000-00000000000b|the brass key]]. [[cr_e1000001-0000-4000-8000-000000000006|Harun Pell]] meets you in [[cr_e1000001-0000-4000-8000-000000000009|the north room]].",
+      "when": {
+        "year": 1105,
+        "day": 40
+      },
+      "realDate": null,
+      "sequence": 3,
+      "author": "referee",
+      "visibility": "players",
+      "anchor": {
+        "kind": "system",
+        "hexKey": "Spinward_Marches/1910",
+        "locationLabel": "Regina"
+      },
+      "mentions": [
+        "hex:Spinward_Marches/1910",
+        "cr_e1000001-0000-4000-8000-000000000001",
+        "cr_e1000001-0000-4000-8000-000000000004",
+        "cr_e1000001-0000-4000-8000-00000000000b",
+        "cr_e1000001-0000-4000-8000-000000000006",
+        "cr_e1000001-0000-4000-8000-000000000009"
+      ],
+      "images": null,
+      "rev": 1,
+      "createdAt": "2026-10-18T21:05:00.000Z",
+      "updatedAt": "2026-10-18T21:05:00.000Z",
+      "deleted": false
+    }
+  ],
+  "seq": 1,
+  "done": true
+}

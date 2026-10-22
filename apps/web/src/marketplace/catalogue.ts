@@ -139,8 +139,6 @@ export function marketWire(fetchImpl: FetchLike = fetch) {
     };
 }
 
-export type MarketWire = ReturnType<typeof marketWire>;
-
 /**
  * The hex keys of a published version, read from its public manifest on the CDN
  * (`packages/<id>/<version>/manifest.json`). Null when it cannot be read.

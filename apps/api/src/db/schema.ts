@@ -107,8 +107,8 @@ export const universes = sqliteTable('universes', {
 }, (t) => [
     index('universes_owner_id').on(t.ownerId),
 ]);
-// 0013 `public_games`, 0018 `show_referee` and `example`, and 0020 `show_course` stay off this
-// table. A Drizzle whole-row select would name the column and fail before that migration.
+// 0013 `public_games`, 0018 `show_referee` and `example`, 0020 `show_course`, and 0025 `demo`
+// stay off this table. A Drizzle whole-row select would name the column and fail before that migration.
 // `public_cards.course` (0020) is raw SQL for the same reason. There is no Drizzle table for it.
 
 export const characters = sqliteTable('characters', {

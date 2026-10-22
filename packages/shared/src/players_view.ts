@@ -117,8 +117,30 @@ function hideBareIds(text: string, hiddenIds: readonly string[]): string {
     return raw;
 }
 
+/** A `:::referee` line through its closer, or through the end when it never closes. */
+function stripRefereeBlocks(text: string): string {
+    const lines = text.split('\n');
+    const kept: string[] = [];
+    for (let i = 0; i < lines.length; i++) {
+        if (lines[i].replace(/\r$/, '').trim() !== ':::referee') {
+            kept.push(lines[i]);
+            continue;
+        }
+        let close = -1;
+        for (let j = i + 1; j < lines.length; j++) {
+            if (lines[j].replace(/\r$/, '').trim() === ':::') {
+                close = j;
+                break;
+            }
+        }
+        if (close < 0) return kept.join('\n');
+        i = close;
+    }
+    return kept.join('\n');
+}
+
 function redactString(text: string, records: readonly CampaignRecord[], hiddenIds: readonly string[]): string {
-    return hideBareIds(redactPlayersText(text, records), hiddenIds);
+    return hideBareIds(redactPlayersText(stripRefereeBlocks(text), records), hiddenIds);
 }
 
 function redactValue(value: unknown, records: readonly CampaignRecord[], hiddenIds: readonly string[]): unknown {

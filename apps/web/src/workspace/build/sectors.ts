@@ -5,10 +5,8 @@
  * by where it is. Everything here is pure and runs under Node: the list laid into the
  * chart's manifest so the map draws it, the empty index the map reads for it, and the words.
  */
-import type { SectorIndex, TruthManifest } from '@voyage/shared';
+import { SUBSECTOR_LETTERS, type SectorIndex, type TruthManifest } from '@voyage/shared';
 import type { OwnSector, Slot } from './seam.ts';
-
-export const LETTERS: readonly string[] = 'ABCDEFGHIJKLMNOP'.split('');
 
 /** The longest name the server stores for a sector or a subsector. */
 export const NAME_MAX = 80;
@@ -69,7 +67,7 @@ export function withOwn(manifest: TruthManifest, own: readonly OwnSector[]): Tru
 /** The index the map reads for a sector of the referee's: no chart hexes, and the names they gave its subsectors. */
 export function ownIndex(sector: OwnSector, truthVersion: string): SectorIndex {
     const names: Record<string, string> = {};
-    LETTERS.forEach((letter, at) => {
+    SUBSECTOR_LETTERS.forEach((letter, at) => {
         const name = sector.subsectors[at];
         if (name) names[letter] = name;
     });
@@ -93,7 +91,7 @@ export function ownIndex(sector: OwnSector, truthVersion: string): SectorIndex {
 
 /** The name the referee gave a subsector, or empty when it has none of its own. */
 export function subsectorOwnName(sector: OwnSector, letter: string): string {
-    const at = LETTERS.indexOf(letter);
+    const at = (SUBSECTOR_LETTERS as readonly string[]).indexOf(letter);
     return at >= 0 ? sector.subsectors[at] ?? '' : '';
 }
 
@@ -147,7 +145,7 @@ export function slotGroups(keys: readonly string[]): { slug: string; slot: Slot;
         const hex = key.slice(cut + 1);
         const col = Number(hex.slice(0, 2));
         const row = Number(hex.slice(2));
-        const letter = LETTERS[Math.floor((row - 1) / 10) * 4 + Math.floor((col - 1) / 8)] ?? '';
+        const letter = SUBSECTOR_LETTERS[Math.floor((row - 1) / 10) * 4 + Math.floor((col - 1) / 8)] ?? '';
         const held = out.get(slug) ?? { slug, slot, count: 0, letters: [] };
         held.count += 1;
         if (letter && !held.letters.includes(letter)) held.letters.push(letter);

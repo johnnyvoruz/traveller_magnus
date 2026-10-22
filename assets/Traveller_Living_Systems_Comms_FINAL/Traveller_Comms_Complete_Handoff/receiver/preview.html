@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Traveller Comms - Final Vertical Bars Receiver</title>
+<link rel="stylesheet" href="comms-receiver.css"/>
+<style>
+html,body{margin:0;min-height:100%;background:#03090b;color:#c9e5e6;font-family:Inter,'Segoe UI',Arial,sans-serif}
+.scene{position:relative;width:100vw;height:100vh;overflow:hidden;background:#040a0d}
+.scene>img{position:absolute;inset:0;width:100%;height:100%;object-fit:fill;opacity:.97}
+.dock{position:absolute;right:29px;bottom:110px;z-index:3}
+.controls{position:absolute;top:69px;right:30px;z-index:4;display:flex;gap:7px;flex-wrap:wrap;max-width:min(840px,calc(100vw - 550px));justify-content:flex-end}
+.controls button{font:600 10px/1.2 Consolas,monospace;cursor:pointer;background:rgba(7,32,39,.92);color:#89e6de;border:1px solid rgba(64,186,176,.5);padding:8px 12px;border-radius:4px}
+.controls button:hover{background:#13545a}
+.custom-sample{position:absolute;z-index:4;top:117px;right:30px;width:min(390px,calc(100vw - 52px));border:1px solid rgba(62,175,170,.39);border-radius:5px;background:#061b22ec;color:#8ddfd9;padding:9px;box-sizing:border-box;box-shadow:0 6px 30px #000a}
+.custom-sample summary{cursor:pointer;font:600 10px Consolas,monospace;letter-spacing:.6px}
+.custom-sample[open]{padding-bottom:12px}
+.custom-form{margin-top:9px;display:grid;gap:7px}
+.custom-form label{font:600 10px Consolas,monospace;letter-spacing:.3px}
+.custom-form input,.custom-form textarea{width:100%;box-sizing:border-box;background:#071017;color:#d1f0ef;border:1px solid #29636d;border-radius:3px;padding:8px;font:12px/1.45 Consolas,monospace}
+.custom-form textarea{resize:vertical;min-height:68px}
+.custom-form button{border:1px solid #409b96;background:#0a4a50;color:#b7fff1;padding:7px 12px;cursor:pointer;font:600 11px Consolas,monospace}
+.preview-note{position:absolute;left:540px;bottom:15px;color:#6b9ca2;font:10px Consolas,monospace;z-index:1}
+@media(max-width:900px){.controls{max-width:calc(100vw - 26px)}.dock{right:12px;bottom:70px}.controls{right:14px;top:68px}.preview-note{display:none}.scene>img{object-fit:cover;object-position:center}}
+@media(max-width:600px){.dock{right:9px;bottom:18px}.controls{top:12px;right:9px}}
+</style>
+</head>
+<body><main class="scene"><img src="susadi-system.png" alt="Susadi system background UI screenshot"/>
+<div class="controls" aria-label="Prototype controls"><button type="button" id="demo-idle">Monitor / idle</button><button type="button" id="demo-resume">Resume demo</button><button type="button" id="demo-beowulf">Beowulf (Easter egg)</button></div>
+<details class="custom-sample" id="custom-sample"><summary>TEST ANY MESSAGE / GENERATED CHATTER</summary>
+ <div class="custom-form"><label for="custom-source">SOURCE</label>
+ <input id="custom-source" value="HARBOR CONTROL NINE" maxlength="90" />
+ <label for="custom-text">TRANSMISSION</label>
+ <textarea id="custom-text">Valdez Seven, reduce relative speed. We have a service lighter crossing your approach. Stand by for revised vector.</textarea>
+ <button id="demo-custom" type="button">TRANSMIT CUSTOM TEXT</button></div></details>
+<div class="dock" id="comms-dock"></div><span class="preview-note">VISUAL PROTOTYPE · NO AUDIO</span></main>
+<script src="comms-receiver.js"></script>
+<script>
+(async function(){
+const target=document.getElementById('comms-dock');
+const html=await fetch('comms-receiver.html').then(r=>r.text());
+target.innerHTML=html;
+const args=new URLSearchParams(location.search);
+const demo=window.TravellerCommsDemo.runDemo(target.querySelector('.trx-receiver'),{still:args.has('still'),idle:args.has('idle')});
+document.getElementById('demo-idle').onclick=demo.quiet;
+document.getElementById('demo-resume').onclick=demo.play;
+document.getElementById('demo-beowulf').onclick=demo.playBeowulf;
+document.getElementById('demo-custom').onclick=()=>demo.custom({
+ ch:'CH 03',type:'LOCAL TRAFFIC',
+ from:document.getElementById('custom-source').value||'UNIDENTIFIED',
+ text:document.getElementById('custom-text').value
+});
+window.addEventListener('beforeunload',demo.stop);
+})();
+</script></body></html>

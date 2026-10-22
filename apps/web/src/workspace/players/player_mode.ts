@@ -12,7 +12,7 @@ import { justMade } from '../journal/create.ts';
 /** The panel is a player's: theirs as a member, or the referee viewing as players. */
 export const isPlayerView = computed(() => campaign.role === 'player');
 
-export const BUILD_REFEREE = "Build is the referee's.";
+export const BUILD_REFEREE = 'Only the referee can use Build.';
 
 /** Notes this player made in this session: theirs before the server has given them a revision. */
 const madeHere = reactive(new Set<string>());

@@ -3,6 +3,7 @@
 // Each suite gets its own port, inspector port, and state folder. Hardcoded ports in a file
 // stay as they are, and two files that name the same port wait for each other.
 import { spawn, spawnSync } from 'node:child_process';
+import { dropIsolatedConfig, dropRecordedHome, dropRecordedHomes, tmpBundleNames, wranglerLaunch } from '../tests/api/server.js';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import net from 'node:net';
 import { tmpdir } from 'node:os';
@@ -90,6 +91,11 @@ function firstAssertion(text) {
     return failed ? failed.slice(0, 200) : 'failed';
 }
 
+function dropState(dir) {
+    dropRecordedHomes(dir);
+    removeTree(dir);
+}
+
 function removeTree(dir) {
     for (let attempt = 0; attempt < 20; attempt++) {
         try {
@@ -105,14 +111,14 @@ function stopShared(port) {
     const dir = path.join(root, '.tmp', `api-dev-${port}`);
     const pidFile = path.join(dir, 'pid');
     if (existsSync(pidFile)) killPid(readFileSync(pidFile, 'utf8').trim());
+    dropRecordedHome(dir);
     removeTree(dir);
 }
 
 function applyMigrations(state) {
+    const launch = wranglerLaunch(['d1', 'migrations', 'apply', 'voyage', '--local', '--persist-to', state]);
     return new Promise((resolve) => {
-        const child = spawn(process.execPath, [
-            wranglerBin, 'd1', 'migrations', 'apply', 'voyage', '--local', '--persist-to', state,
-        ], {
+        const child = spawn(process.execPath, [wranglerBin, ...launch.args], {
             cwd: apiRoot,
             env: { ...process.env, CI: '1' },
             windowsHide: true,
@@ -124,6 +130,7 @@ function applyMigrations(state) {
         child.stderr.on('data', keep);
         child.on('close', (code) => {
             children.delete(child.pid);
+            dropIsolatedConfig(launch.home);
             resolve(code === 0 ? '' : output.slice(-2000));
         });
     });
@@ -164,7 +171,7 @@ function runOne(suite, envPorts) {
                 children.delete(child.pid);
                 killPid(child.pid);
                 stopShared(envPorts.api);
-                removeTree(state);
+                dropState(state);
                 const seconds = (Date.now() - started) / 1000;
                 const timedOut = seconds >= SUITE_MS / 1000 - 1 && code !== 0;
                 resolve({
@@ -184,7 +191,7 @@ function runOne(suite, envPorts) {
                 begin();
                 return;
             }
-            removeTree(state);
+            dropState(state);
             resolve({
                 name: suite.name,
                 result: 'fail',
@@ -227,6 +234,8 @@ function printTable(rows) {
 
 for (const [name, note] of PARKED) console.log(`${name}  ${note}`);
 
+const tmpBefore = tmpBundleNames();
+
 const pending = suites();
 const blocked = new Set();
 for (const suite of pending) for (const port of suite.hardPorts) blocked.add(port);
@@ -259,4 +268,10 @@ results.sort((a, b) => a.name.localeCompare(b.name));
 printTable(results);
 const failed = results.filter((row) => row.result !== 'pass');
 console.log(`${results.length - failed.length} pass, ${failed.length} fail, ${results.length} suites`);
+const tmpAfter = tmpBundleNames();
+const tmpSame = tmpBefore.length === tmpAfter.length && tmpBefore.every((name, index) => name === tmpAfter[index]);
+if (!tmpSame) {
+    console.log('apps/api/.wrangler/tmp changed during this run');
+    process.exit(1);
+}
 process.exit(failed.length === 0 ? 0 : 1);

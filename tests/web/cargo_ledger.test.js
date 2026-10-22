@@ -120,3 +120,19 @@ test('credits and megacredits format, and party cash is not these modules', () =
     const names = [...Object.keys(cargo), ...Object.keys(ledger), ...Object.keys(money)];
     assert.equal(names.some((name) => /cash|hand/i.test(name)), false);
 });
+
+test('the passenger view is the first sixteen lots, and the rest are a count', () => {
+    assert.deepEqual(cargo.passengerView([]), { rows: [], more: 0 });
+    const sixteen = [];
+    for (let i = 1; i <= 16; i += 1) sixteen.push({ label: 'P' + i, class: 'Low' });
+    const full = cargo.passengerView(sixteen);
+    assert.equal(full.rows.length, 16);
+    assert.equal(full.more, 0);
+    assert.equal(full.rows[0].label, 'P1');
+    const more = sixteen.concat([{ label: 'P17', class: 'High' }, { label: 'P18', class: 'Middle' }]);
+    const view = cargo.passengerView(more);
+    assert.equal(view.rows.length, 16);
+    assert.equal(view.rows[15].label, 'P16');
+    assert.equal(view.more, 2);
+    assert.equal(more.length, 18);
+});

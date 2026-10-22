@@ -7,6 +7,7 @@ import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, r
 import { useRoute, useRouter } from 'vue-router';
 import { addressPane, atPane, escapePane, focusTarget, hostsCampaign, type FocusTarget, type Pane } from './pane.ts';
 import RecordCard from '../workspace/RecordCard.vue';
+import WorldCard from '../workspace/WorldCard.vue';
 import { notePane, sheetFull } from './pane_back.ts';
 import { frame, onFrame, setPaneEscape, type ViewFrame } from './frame.ts';
 
@@ -21,6 +22,7 @@ const dossierOpen = computed(() => shown.value.kind === 'dossier');
 const campaignOpen = computed(() => hostsCampaign(shown.value));
 const charactersOpen = computed(() => shown.value.kind === 'characters');
 const campaignsOpen = computed(() => shown.value.kind === 'campaigns');
+const accountOpen = computed(() => shown.value.kind === 'account');
 const campaignRecord = computed(() => (shown.value.kind === 'campaign' ? shown.value.record : null));
 const campaignTab = computed((): 'records' | 'party' | 'journal' => {
     if (shown.value.kind === 'party') return 'party';
@@ -33,17 +35,20 @@ const dossierLive = ref(false);
 const campaignLive = ref(false);
 const charactersLive = ref(false);
 const campaignsLive = ref(false);
+const accountLive = ref(false);
 watch(shown, (pane) => {
     if (pane.kind === 'dossier') dossierLive.value = true;
     if (hostsCampaign(pane)) campaignLive.value = true;
     if (pane.kind === 'characters') charactersLive.value = true;
     if (pane.kind === 'campaigns') campaignsLive.value = true;
+    if (pane.kind === 'account') accountLive.value = true;
 }, { immediate: true });
 
 const DossierPanel = defineAsyncComponent(() => import('../dossier/DossierPanel.vue'));
 const CampaignPanel = defineAsyncComponent(() => import('../workspace/CampaignPanel.vue'));
 const CharactersPanel = defineAsyncComponent(() => import('../characters/screens/CharactersPanel.vue'));
 const CampaignsPanel = defineAsyncComponent(() => import('../workspace/CampaignsPanel.vue'));
+const AccountPanel = defineAsyncComponent(() => import('../workspace/passkey/AccountPanel.vue'));
 
 const active = computed(() => live.value !== null && live.value.kind !== 'none');
 
@@ -84,6 +89,10 @@ function onCharactersWidth(px: number): void {
 
 function onCampaignsWidth(px: number): void {
     if (campaignsOpen.value) applyWidth(px);
+}
+
+function onAccountWidth(px: number): void {
+    if (accountOpen.value) applyWidth(px);
 }
 
 watch(shown, (pane) => {
@@ -202,6 +211,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="pane-host" @keydown="onPaneKey">
   <RecordCard />
+  <WorldCard />
   <DossierPanel
     v-if="active && dossierLive && live && live.dossier"
     :orbit="live.dossier.orbit || undefined"
@@ -242,6 +252,12 @@ onBeforeUnmount(() => {
     :open="campaignsOpen"
     @close="closePane"
     @width="onCampaignsWidth"
+  />
+  <AccountPanel
+    v-if="active && accountLive && live"
+    :open="accountOpen"
+    @close="closePane"
+    @width="onAccountWidth"
   />
   </div>
 </template>

@@ -14,7 +14,7 @@ import {
     setPerson,
 } from '../../apps/web/src/campaign/membership.ts';
 import { commit, flushCampaign, pending, resetCampaign } from '../../apps/web/src/campaign/commit.ts';
-import { applyPlayersPage, campaign, createCampaign, loadPlayerPages, transport } from '../../apps/web/src/campaign/store.ts';
+import { applyPlayersPage, CAMPAIGN_UNIVERSE_KEY, campaign, createCampaign, loadPlayerPages, openCampaign, transport } from '../../apps/web/src/campaign/store.ts';
 import { NOT_IN_CAMPAIGN } from '../../apps/web/src/workspace/campaigns.ts';
 
 const memory = new Map();
@@ -368,4 +368,63 @@ test('playing, join, invite, person and leave', async () => {
     assert.equal(campaign.role, 'player');
     assert.ok(seen.includes('DELETE /api/universes/uni-play/players/user-1'));
     session.user = null;
+});
+
+test('a player reload on a played campaign opens that campaign', async () => {
+    resetCampaign();
+    memory.clear();
+    const own = {
+        id: 'uni-own',
+        ownerId: 'user-1',
+        name: 'My map',
+        slug: 'my-map',
+        truthVersion: 'v5',
+        engineVersion: '1.0.0',
+        editionDefault: 'MgT2E',
+        createdAt: STAMP,
+        updatedAt: STAMP,
+        deletedAt: null,
+        purgeAfter: null,
+        hexOverrideCount: 0,
+        objectBytes: 0,
+        lastSnapshotAt: null,
+    };
+    const played = { id: 'uni-play', name: 'Regina', ownerHandle: 'ref', truthVersion: 'v9' };
+    const playerPage = {
+        records: [],
+        links: [],
+        journal: [],
+        settings: settings(),
+        clock: null,
+        seq: 1,
+        done: true,
+        visible: { records: [], links: [], journal: [] },
+    };
+    const hits = [];
+    const fetchImpl = async (url) => {
+        const target = String(url);
+        hits.push(target);
+        if (target === '/api/universes') return jsonResponse(200, { ok: true, data: [own] });
+        if (target === '/api/me/playing') return jsonResponse(200, { ok: true, data: { items: [played] } });
+        if (target.startsWith('/api/universes/uni-play/campaign')) return jsonResponse(200, { ok: true, data: playerPage });
+        throw new Error('unexpected ' + target);
+    };
+    await openCampaign({ fetch: fetchImpl, truthVersion: 'v5', universeId: 'uni-play' });
+    assert.equal(campaign.universeId, 'uni-play');
+    assert.equal(campaign.role, 'player');
+    assert.equal(campaign.status, 'ready');
+    assert.equal(hits.some((hit) => hit.includes('uni-own')), false);
+
+    resetCampaign();
+    memory.set(CAMPAIGN_UNIVERSE_KEY, 'uni-play');
+    await openCampaign({ fetch: fetchImpl, truthVersion: 'v5' });
+    assert.equal(campaign.universeId, 'uni-play');
+    assert.equal(campaign.role, 'player');
+
+    resetCampaign();
+    memory.set(CAMPAIGN_UNIVERSE_KEY, 'uni-own');
+    await openCampaign({ fetch: fetchImpl, truthVersion: 'v5', universeId: 'uni-play' });
+    assert.equal(campaign.universeId, 'uni-play');
+    assert.equal(campaign.role, 'player');
+    assert.equal(memory.get(CAMPAIGN_UNIVERSE_KEY), 'uni-play');
 });

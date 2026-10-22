@@ -1,0 +1,67 @@
+<!-- Self-contained component markup. Position the wrapper via the application, not this component. -->
+<section class="trx-receiver" id="traveller-comms" data-mode="idle" data-waveform="bars" role="region" aria-label="Local system communications">
+  <div class="trx-rim">
+    <div class="trx-panel">
+      <div class="trx-microline trx-microline--top" aria-hidden="true"><b></b><i></i><i></i><i></i></div>
+      <header class="trx-header">
+        <div class="trx-brand">
+          <span class="trx-antenna" aria-hidden="true">
+            <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <!-- Static guide arcs keep the tower legible when motion is reduced. -->
+              <path class="trx-air trx-air--far" d="M7.2 5.1c-6.3 6.5-6.3 15.3 0 21.8M24.8 5.1c6.3 6.5 6.3 15.3 0 21.8" />
+              <path class="trx-air trx-air--near" d="M10.9 8.5c-3.8 4.3-3.8 9.7 0 14M21.1 8.5c3.8 4.3 3.8 9.7 0 14" />
+              <!-- Three independent outward wavefronts; CSS-only, never speech-linked. -->
+              <g class="trx-tower-broadcast" aria-hidden="true">
+                <path class="trx-tower-ping trx-tower-ping--a" d="M10.9 8.5c-3.8 4.3-3.8 9.7 0 14M21.1 8.5c3.8 4.3 3.8 9.7 0 14" />
+                <path class="trx-tower-ping trx-tower-ping--b" d="M10.9 8.5c-3.8 4.3-3.8 9.7 0 14M21.1 8.5c3.8 4.3 3.8 9.7 0 14" />
+                <path class="trx-tower-ping trx-tower-ping--c" d="M10.9 8.5c-3.8 4.3-3.8 9.7 0 14M21.1 8.5c3.8 4.3 3.8 9.7 0 14" />
+              </g>
+              <circle class="trx-antenna-dot" cx="16" cy="14" r="2.7" />
+              <path class="trx-antenna-mast" d="M16 16.5v10.2M12.8 27l3.2-9 3.2 9M13.6 23.6h4.8"/>
+            </svg>
+          </span>
+          <span class="trx-heading">LOCAL COMMS</span>
+        </div>
+        <div class="trx-top-status"><span class="trx-live-dot" aria-hidden="true"></span>
+          <span data-trx-status>MONITORING</span><span class="trx-counter" data-trx-clock>00:00:00</span>
+        </div>
+      </header>
+      <div class="trx-rule" aria-hidden="true"><span></span></div>
+      <div class="trx-metadata" aria-label="Channel metadata">
+        <span class="trx-chip trx-chip--cyan" data-trx-channel>CH 03</span>
+        <span class="trx-chip trx-chip--channel" data-trx-kind>LOCAL APPROACH</span>
+        <span class="trx-chip trx-chip--label">SRC</span>
+        <span class="trx-chip trx-chip--source" data-trx-source>PORT CONTROL</span>
+        <span class="trx-chip trx-chip--signal"><b>SIG</b><span class="trx-sigbars" data-trx-sig aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></span>
+      </div>
+      <div class="trx-copy" data-trx-copy>
+        <div class="trx-speaker" data-trx-speaker>OPEN BAND</div>
+        <div class="trx-transcription" data-trx-words><span class="trx-idle-label">Awaiting transmission</span></div>
+        <span class="trx-a11y" aria-live="polite" aria-atomic="true" data-trx-a11y></span>
+      </div>
+      <div class="trx-wave-frame" aria-hidden="true">
+        <div class="trx-wave-headline"><span>LOCAL SIGNAL</span><span data-trx-band>OPEN BAND</span></div>
+        <svg class="trx-wave" viewBox="0 0 700 43" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" data-trx-wave>
+          <defs>
+            <linearGradient id="trx-spectrum" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stop-color="#47e4d7"/><stop offset="0.29" stop-color="#72fff2"/>
+              <stop offset="0.47" stop-color="#e9ab42"/><stop offset="0.64" stop-color="#68f5e6"/>
+              <stop offset="0.84" stop-color="#f4bd5d"/><stop offset="1" stop-color="#58e7dc"/>
+            </linearGradient>
+            <linearGradient id="trx-playhead-glow" x1="0" y1="0" x2="1" y2="0">
+              <stop stop-color="#7dfff0" stop-opacity="0"/><stop offset=".5" stop-color="#7dfff0" stop-opacity=".23"/><stop offset="1" stop-color="#7dfff0" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+          <path class="trx-wave-guide" d="M0 8H700 M0 21.5H700 M0 35H700" />
+          <path class="trx-wave-ticks" d="" data-trx-ticks />
+          <path class="trx-wave-under" d="M0 21.5H700" data-trx-ghost/>
+          <path class="trx-wave-trace" d="M0 21.5H700" data-trx-trace/>
+          <rect class="trx-wave-playhead-halo" x="0" y="0" width="18" height="43" fill="url(#trx-playhead-glow)" data-trx-headhalo/>
+          <line class="trx-wave-playhead" x1="0" y1="2" x2="0" y2="41" data-trx-playhead />
+        </svg>
+        <div class="trx-wave-endcap"></div>
+      </div>
+      <div class="trx-microline trx-microline--bottom" aria-hidden="true"><b></b><i></i><i></i></div>
+    </div>
+  </div>
+</section>

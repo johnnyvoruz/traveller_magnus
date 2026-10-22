@@ -5,7 +5,6 @@
  * and it stays on the main thread. No index.
  */
 import type { CampaignAnchor, CampaignEntry, CampaignEntryKind, CampaignRecord } from '@voyage/shared';
-import { resolveAnchor } from '../party.ts';
 import { hexWords } from '../places.ts';
 import { weekdayName } from '../stardate.ts';
 
@@ -230,12 +229,6 @@ export function rowFace(
 
 function anchorOf(entry: CampaignEntry): CampaignAnchor {
     return entry.anchor;
-}
-
-/** Touches the anchor through resolveAnchor so a record aboard a vessel follows that vessel's hex in the caller's own filter. */
-export function entryHex(entry: CampaignEntry, records: Readonly<Record<string, CampaignRecord>>): string | null {
-    const place = resolveAnchor(entry.anchor, records);
-    return place ? place.hexKey : null;
 }
 
 export type JournalFilter = {

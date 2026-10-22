@@ -2,8 +2,6 @@ import type { Env } from '../env';
 import { allowanceSentence, resetsAt, utcDay } from './allowance_clock';
 import { roleSatisfies } from './roles';
 
-export { allowanceSentence, resetsAt, utcDay } from './allowance_clock';
-
 /** Non-admins. The same rank as `requireRole(c, 'admin')`. A reviewer is capped. */
 export const ALLOWANCE_CODE = 'generation_allowance';
 export const DEFAULT_DAILY_LIMIT = 100;

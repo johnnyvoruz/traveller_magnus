@@ -24,7 +24,7 @@ function loadOnLocked() {
 test('choosing the switched-off Build item sets where the card was opened, and Campaign clears it', () => {
     const before = signInFrom.value;
     const onLocked = loadOnLocked();
-    // A guest gets the sign-in card; a player (P6) gets the lock's words, "Build is the referee's."; anyone else, Build.
+    // A guest gets the sign-in card; a player (P6) gets the lock's words, "Only the referee can use Build."; anyone else, Build.
     assert.match(source, /if \(lockedGuest\.value\) onLocked\('build'\);\s+else if \(playerLock\.value\) lockFocus\.value = 'build';\s+else run\('build'\);/);
     assert.match(source, /@click="buildPressed"/);
     assert.match(source, /lockedGuest \? onLocked\('campaign'\) : run\('campaign'\)/);

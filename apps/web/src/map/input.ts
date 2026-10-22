@@ -1,10 +1,10 @@
 import { cancelFrame, nextFrame, now, prefersReducedMotion } from '../platform/browser.ts';
+import { WHEEL_NOTCH_PX } from '../orbit/camera.ts';
 import { panBy, zoomAt, type Camera, type Viewport } from './camera.ts';
 import { readMotion } from './theme.ts';
 
 /** Legacy wheel notch (js/canvas_input.js). deltaMode 0 reports about 100 CSS pixels per notch. */
-const WHEEL_STEP = 1.1;
-const WHEEL_NOTCH_PX = 100;
+export const WHEEL_STEP = 1.1;
 const LINE_PX = 16;
 const CLICK_PX = 4;
 

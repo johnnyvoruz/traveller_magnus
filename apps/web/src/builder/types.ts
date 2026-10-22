@@ -7,8 +7,6 @@ import type { SectorHex } from '@voyage/shared';
 import type { BuilderGenerator, BuilderJobState } from '@voyage/shared';
 import type { OwnSector } from '../workspace/build/seam.ts';
 
-export type { BuilderEdition, BuilderGenerator, BuilderHex, BuilderJob } from '@voyage/shared';
-
 /** What one hex is after the chart and the loaded row are laid together. rev is 0 when there is no row. */
 export type HexView = {
     hexKey: string;

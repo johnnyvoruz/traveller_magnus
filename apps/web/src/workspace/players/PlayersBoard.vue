@@ -54,14 +54,14 @@ const personName = (id: string | null): string => (id ? props.people.find((item)
         <p class="players-fine">{{ inviteLine(invite) }}. Anyone with the link can join as a player.</p>
       </template>
       <template v-else>
-        <p class="players-fine">Players join with an invite link. They see what you share with players, and can add notes to the journal.</p>
+        <p class="players-fine">Players join with an invite link. They see what you share, and they can add notes to the journal.</p>
         <button type="button" class="ui-btn is-primary" :disabled="readOnly || inviteBusy" data-players-link @click="emit('link')">
           <Icon name="plus" :size="12" />Get the invite link
         </button>
       </template>
     </div>
 
-    <p v-if="listState === 'loading'" class="party-none-line" role="status">Loading the players…</p>
+    <p v-if="listState === 'loading'" class="party-none-line" role="status">Loading the players.</p>
     <p v-else-if="listState === 'failed'" class="party-none-line" role="status">{{ listWords }}</p>
     <template v-else-if="list">
       <p v-if="isFull(list.playing.length)" class="players-fine is-full" role="status">{{ PLAYERS_FULL }}</p>

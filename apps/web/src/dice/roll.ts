@@ -9,11 +9,13 @@
  * A DM, lines 14 to 18: add or subtract the number shown to the total rolled.
  * D3, lines 19 to 26: divide the face by two and round up. 2D3 does that
  * to each die, then adds them.
+ * 3DD, Johnny, 2026-10-18 15:54 (directives/streams/A.md): "3DD - roll 3D
+ * and x10 the result". Three dice, the total times ten. No DM.
  */
 
 export type DiceCount = 1 | 2 | 3;
 
-export type RollMode = 'plain' | 'boon' | 'bane' | 'd66' | 'd3' | '2d3';
+export type RollMode = 'plain' | 'boon' | 'bane' | 'd66' | 'd3' | '2d3' | '3dd';
 
 export type KeepMode = 'plain' | 'boon' | 'bane';
 
@@ -83,4 +85,17 @@ export function rollD3(count: 1 | 2, face: () => number = cryptoFace): Rolled {
     for (let i = 0; i < count; i++) dice.push(face());
     const total = dice.reduce((sum, value) => sum + d3Face(value), 0);
     return { mode: count === 1 ? 'd3' : '2d3', dice, kept: dice.map(() => true), total, dm: 0 };
+}
+
+/** 3DD. Three faces, total times ten. Johnny, 2026-10-18 15:54. No DM. */
+export function roll3dd(face: () => number = cryptoFace): Rolled {
+    const dice = [face(), face(), face()];
+    const sum = dice.reduce((total, value) => total + value, 0);
+    return { mode: '3dd', dice, kept: [true, true, true], total: sum * 10, dm: 0 };
+}
+
+/** The card line: the sum of the three faces, then times ten. */
+export function threeDdLine(dice: readonly number[]): string {
+    const sum = dice.reduce((total, value) => total + value, 0);
+    return `${sum} × 10 = ${sum * 10}`;
 }

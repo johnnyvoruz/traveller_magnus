@@ -6,7 +6,7 @@
  */
 import { reactive } from 'vue';
 import type { Command } from '../shell/registry.ts';
-import { cryptoFace, rollD3, rollD66, rollSix, type DiceCount, type RollMode, type Rolled } from './roll.ts';
+import { cryptoFace, roll3dd, rollD3, rollD66, rollSix, type DiceCount, type RollMode, type Rolled } from './roll.ts';
 
 const KEPT = 20;
 
@@ -45,7 +45,7 @@ export function closeRoller(): void {
 }
 
 function withDm(rolled: Rolled): Rolled {
-    if (rolled.mode === 'd66') return rolled;
+    if (rolled.mode === 'd66' || rolled.mode === '3dd') return rolled;
     return { ...rolled, dm: diceAsk.dm };
 }
 
@@ -60,6 +60,7 @@ function keep(rolled: Rolled): Rolled {
 /** Rolls the count and mode currently chosen. D66 reads tens then units. */
 export function makeRoll(face: () => number = cryptoFace): Rolled {
     if (diceAsk.mode === 'd66') return keep(rollD66(face));
+    if (diceAsk.mode === '3dd') return keep(roll3dd(face));
     if (diceAsk.mode === 'd3') return keep(withDm(rollD3(1, face)));
     if (diceAsk.mode === '2d3') return keep(withDm(rollD3(2, face)));
     return keep(withDm(rollSix(diceAsk.count, diceAsk.mode, face)));
@@ -84,6 +85,12 @@ export function rollCount(count: DiceCount, face: () => number = cryptoFace): vo
 export function rollD66Pick(face: () => number = cryptoFace): void {
     diceAsk.mode = 'd66';
     keep(rollD66(face));
+}
+
+/** 3DD. Three dice times ten. It rolls at once. No DM, no Boon, no Bane. */
+export function roll3ddPick(face: () => number = cryptoFace): void {
+    diceAsk.mode = '3dd';
+    keep(roll3dd(face));
 }
 
 /** D3 or 2D3. It rolls at once. assets/dice_conventions.txt lines 19 to 26. */
@@ -113,7 +120,7 @@ export function chooseMode(mode: 'boon' | 'bane'): void {
 
 /** The palette and the R key: 2D at once, or Boon or Bane when that toggle is on. */
 export function rollDefault(face: () => number = cryptoFace): void {
-    if (diceAsk.mode === 'd66' || diceAsk.mode === 'd3' || diceAsk.mode === '2d3') diceAsk.mode = 'plain';
+    if (diceAsk.mode === 'd66' || diceAsk.mode === 'd3' || diceAsk.mode === '2d3' || diceAsk.mode === '3dd') diceAsk.mode = 'plain';
     if (diceAsk.mode === 'plain') diceAsk.count = 2;
     makeRoll(face);
 }
@@ -166,6 +173,15 @@ export function offerDice(register: (command: Command) => () => void, rTaken: ()
         run: () => {
             openRoller();
             rollD3Pick(2);
+        },
+    }));
+    drop.push(register({
+        id: 'dice-3dd',
+        name: 'Roll 3DD',
+        runnable: () => true,
+        run: () => {
+            openRoller();
+            roll3ddPick();
         },
     }));
     drop.push(register({

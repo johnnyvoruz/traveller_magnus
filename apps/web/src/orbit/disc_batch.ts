@@ -19,7 +19,7 @@
  */
 import type { DiscBatchRequest, DiscRequest, DiscRing } from '../surface/contracts.ts';
 import { turningOf } from './daynight.ts';
-import { moonOrbitRadius, placeWorld, type MoonAt, type Plan } from './layout.ts';
+import { moonOrbitRadius, placeWorld, RING_OUTER, type MoonAt, type Plan } from './layout.ts';
 import type { Picture, WorldDraw } from './picture.ts';
 
 const TAU = Math.PI * 2;
@@ -36,15 +36,12 @@ export function discWantsTexture(radiusPx: number): boolean {
 export const RING_HOURS = 7;
 /** The rings' inner edge and their widest reach, in planet radii (2740, 243). */
 export const RING_INNER = 1.22;
-export const RING_OUTER = 2.05;
+export { RING_OUTER };
 /** A world is shaded no larger than this, in device pixels, and scaled up when drawn (2763). */
 export const DISC_MAX_RADIUS = 1100;
 export const DISC_MAX_REACH = 2000;
 /** The cloud deck turns a little faster than the ground (2756). */
 export const CLOUD_DRIFT = 1.03;
-
-/** The batch and its entries are the service's own types (surface/contracts.ts, handoff §61). */
-export type OrbitDisc = DiscRequest;
 export type OrbitDiscBatch = DiscBatchRequest;
 export type { DiscRing };
 

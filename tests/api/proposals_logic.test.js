@@ -100,6 +100,7 @@ function recordCreate(name = 'PatronSecretName') {
 test('case 3 and case 6: a stored create is referee-only and publish does not see it', () => {
     const { sql } = open();
     const submitted = submitProposals(sql, batch('create-key1', [recordCreate()]), NOW, null, UNIVERSE, () => true);
+    assert.equal(submitted.batch.pasted, false);
     const stored = submitted.batch.proposals[0];
     assert.equal(stored.proposal.record.visibility, undefined);
     assert.equal(readPublishSources(sql, { recordIds: [stored.targetId] }).records[0].found, false);
@@ -112,6 +113,28 @@ test('case 3 and case 6: a stored create is referee-only and publish does not se
     const written = readCampaign(sql, 0, 1000).records.find((row) => row.id === stored.targetId);
     assert.equal(written.visibility, 'referee');
     assert.equal(written.name, 'PatronSecretName');
+});
+
+test('a paste stores pasted, and an older table gains the column', () => {
+    const { sql } = open(false);
+    sql.exec(`CREATE TABLE proposal_batches (
+        id TEXT PRIMARY KEY,
+        idempotency_key TEXT NOT NULL UNIQUE,
+        body_hash TEXT NOT NULL,
+        token_id TEXT,
+        source TEXT NOT NULL,
+        state TEXT NOT NULL,
+        pending INTEGER NOT NULL,
+        accepted INTEGER NOT NULL,
+        dropped INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        reviewed_at TEXT,
+        expires_at TEXT NOT NULL
+    )`);
+    installProposalSchema(sql);
+    const pasted = submitProposals(sql, batch('paste-key01', [question('Pasted at the table.')]), NOW, null, UNIVERSE, () => true, true);
+    assert.equal(pasted.batch.pasted, true);
+    assert.equal(pasted.batch.source.label, 'Thursday table');
 });
 
 test('case 21: a 31-day-old open batch expires and a 91-day-old reviewed batch is deleted', () => {
@@ -277,6 +300,14 @@ test('the same key returns the stored batch, and a different body conflicts', ()
     assert.ok(err instanceof ProposalRefusal);
     assert.equal(err.status, 409);
     assert.equal(err.code, 'idempotency_conflict');
+});
+
+test('the owner page counts pending proposals, and a page without the table counts zero', () => {
+    const { sql } = open();
+    submitProposals(sql, batch('count-key01', [question('One pending question.'), question('Another pending question.')]), NOW, null, UNIVERSE, () => true);
+    assert.equal(readCampaign(sql, 0, 10).pendingProposals, 2);
+    const bare = open(false);
+    assert.equal(readCampaign(bare.sql, 0, 10).pendingProposals, 0);
 });
 
 test('index answers while proposal tables are absent, and a submit does not', () => {

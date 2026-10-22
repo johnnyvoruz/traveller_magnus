@@ -23,6 +23,7 @@ import { placeSource, type SystemInfo } from './place_source.ts';
 import { resolveAnchor } from './party.ts';
 import { bodyMatched, hexKeyOf, hexWords, parseHexKey, placeWords, systemAnchor } from './places.ts';
 import RecordPicker from './RecordPicker.vue';
+import { vWorldCard } from './world_card.ts';
 
 const props = withDefaults(defineProps<{
     /** The anchor as it is now. */
@@ -335,7 +336,7 @@ onBeforeUnmount(() => {
         </template>
         <template v-else-if="place">
           <span v-if="host" class="where-sep" aria-hidden="true">›</span>
-          <span class="where-place" :class="{ 'is-via': host }"><Icon v-if="!host" name="location-dot" :size="13" />{{ words[0] }}</span>
+          <span v-world-card="place.hexKey" class="where-place" :class="{ 'is-via': host }" tabindex="0" data-where-world><Icon v-if="!host" name="location-dot" :size="13" />{{ words[0] }}</span>
           <span v-if="words[1]" class="where-sys">{{ words[1] }}</span>
         </template>
         <span v-else-if="host" class="where-sys">which is nowhere in particular</span>

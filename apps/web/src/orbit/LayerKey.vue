@@ -19,7 +19,7 @@ function flip(key: (typeof LAYERS)[number]['key']): void {
 </script>
 
 <template>
-  <div class="orbit-key orbit-drawer-group" style="--i: 0" role="group" aria-label="Key: press an entry to show or hide it">
+  <div class="orbit-key orbit-drawer-group" style="--i: 0" role="group" aria-label="Key: select an entry to show or hide it">
     <button
       v-for="item in LAYERS"
       :key="item.key"

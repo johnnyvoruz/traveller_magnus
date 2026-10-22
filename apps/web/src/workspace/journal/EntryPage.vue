@@ -62,6 +62,12 @@ const authorHandle = computed(() => (campaign.authorNames[props.id] ?? '').trim(
 
 /** A player never changes images. The text follows the page's own read-only flag. */
 const imageLocked = computed(() => !playerNoteAccess(isPlayerView.value, !props.readOnly).images);
+const visibilityWord = computed(() => {
+    const value = entry.value?.visibility;
+    if (value === 'public') return 'Public';
+    if (value === 'players') return 'Players';
+    return 'Referee';
+});
 
 const upload = computed(() => uploads[props.id] ?? null);
 const saveState = computed((): 'saving' | 'failed' | 'saved' => {
@@ -272,24 +278,26 @@ watch(() => props.id, greet, { immediate: true });
     </div>
 
     <header class="rec-ident" :class="{ 'is-players': entry.visibility === 'players' }">
-        <EntryGallery :id="id" part="avatar" :read-only="imageLocked" />
+        <EntryGallery :id="id" part="avatar" :read-only="imageLocked" :hide-adds="isPlayerView" />
         <div class="rec-names">
           <EditableText ref="titleField" title label="Title" prompt="Add a title" :value="entry.title" :max="CAMPAIGN_LIMITS.entryTitle" :disabled="readOnly" @save="rename" />
           <p class="rec-meta">
-            <label class="rec-type">
+            <label v-if="!isPlayerView" class="rec-type">
               <span class="rec-sr">Kind</span>
               <select :value="entry.kind" :disabled="readOnly" aria-label="Kind" @change="setKind" @keydown="onSelectKey">
                 <option v-for="kind in CAMPAIGN_ENTRY_KINDS" :key="kind" :value="kind">{{ kindWord(kind) }}</option>
               </select>
             </label>
+            <span v-else class="rec-type">{{ kindWord(entry.kind) }}</span>
             <b v-if="entry.kind === 'session' && entry.sequence != null" class="jn-num">{{ entry.sequence }}</b>
             <span v-if="entry.author === 'players'">Players</span>
             <span v-if="authorHandle" class="jn-by">Written by <span class="ui-chip">{{ authorHandle }}</span></span>
-            <span class="ui-seg" role="group" aria-label="Who can read this">
+            <span v-if="!isPlayerView" class="ui-seg" role="group" aria-label="Who can read this">
               <button type="button" :aria-pressed="entry.visibility === 'referee' ? 'true' : 'false'" :disabled="readOnly" @click="setVisibility('referee')">Referee</button>
               <button type="button" :aria-pressed="entry.visibility === 'players' ? 'true' : 'false'" :disabled="readOnly" @click="setVisibility('players')">Players</button>
               <button type="button" :aria-pressed="entry.visibility === 'public' ? 'true' : 'false'" :disabled="readOnly" @click="setVisibility('public')">Public</button>
             </span>
+            <span v-else class="ui-chip">{{ visibilityWord }}</span>
           </p>
           <p class="jn-public-line">When this entry is public and this game is public, your ships' public cards show it.</p>
         </div>
@@ -305,7 +313,7 @@ watch(() => props.id, greet, { immediate: true });
       <JournalBody ref="bodyField" :value="entry.body" :disabled="readOnly" :records="campaign.records" :name-of="nameOf" @save="saveBody" @open="openPart" />
     </section>
 
-    <EntryGallery :id="id" part="strip" :read-only="imageLocked" />
+    <EntryGallery :id="id" part="strip" :read-only="imageLocked" :hide-adds="isPlayerView" />
 
     <footer class="rec-foot">
       <PrintButton target=".jn-entry" :title="entry.title || 'Journal entry'" />

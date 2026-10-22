@@ -13,6 +13,7 @@ import { signInFrom } from '../workspace/account.ts';
 import { campaign } from '../campaign/store.ts';
 import { retryCampaign } from '../workspace/opening.ts';
 import { bodyCounts, hexKeyOf } from '../workspace/places.ts';
+import MarketsNearby from '../workspace/MarketsNearby.vue';
 import RecordsHere from '../workspace/RecordsHere.vue';
 import { buildReady, hexState, placeNames } from '../workspace/build/acts.ts';
 import BuildBar from '../workspace/build/BuildBar.vue';
@@ -43,6 +44,7 @@ import { dayNightFigure, markerAt, starportTick, turningOf, yearFigure } from '.
 import { subsolarOn, type Subsolar } from '../orbit/sun.ts';
 import { planSystem, type Plan } from '../orbit/layout.ts';
 import { bodyAngle } from '../orbit/maths.ts';
+import { seasonOnMoon, seasonOnWorld, type SeasonShown } from '../orbit/season_on.ts';
 import { bodyKeys, bodyModel, overviewModel, pickSystem, type AllegianceName } from './model.ts';
 import type { SurfaceTarget } from './SurfaceStage.vue';
 
@@ -179,6 +181,25 @@ const clockDays = computed(() => {
     const stored = campaign.clock ? campaign.clock.days : null;
     if (stored !== null && Number.isFinite(stored)) return stored;
     return startDays(null);
+});
+
+/**
+ * The season word and the temperature band for the date this panel is on.
+ * Null when the body has no tilt to read, and for a star, a belt, or a ring.
+ */
+const seasonShown = computed((): SeasonShown | null => {
+    const tree = liveTree.value;
+    if (!tree || !props.bodyKey || liveError.value) return null;
+    const system = pickSystem(tree.body);
+    if (!system) return null;
+    const plan = planSystem(system as Record<string, any>, tree.hexKey);
+    const key = props.bodyKey;
+    const days = clockDays.value;
+    const world = plan.worlds.find((item) => item.key === key);
+    if (world) return seasonOnWorld(world, days);
+    const host = plan.worlds.find((item) => item.moons.some((moon) => moon.key === key));
+    const moon = host ? host.moons.find((item) => item.key === key) : undefined;
+    return host && moon ? seasonOnMoon(moon, host, days) : null;
 });
 
 /**
@@ -339,6 +360,24 @@ const buildWord = computed(() => {
     return '';
 });
 
+/** The crumb as one line, kept for the title attribute when the header truncates it. */
+const eyebrowTitle = computed(() => {
+    if (profile.value && !drafting.value) {
+        const parts = [profile.value.crumbSystem];
+        if (profile.value.crumbParent) parts.push(profile.value.crumbParent.name);
+        return parts.join(' / ');
+    }
+    if (!buildMode.value) return '';
+    const parts: string[] = [];
+    if (buildMode.value === 'slot') parts.push(universeName.value || 'Your map');
+    else if (buildMode.value === 'scope' && scope.value && !scope.value.letter) parts.push('Sector');
+    else parts.push(places.value.sector || props.sectorName || '');
+    if (buildMode.value === 'scope' && scope.value && scope.value.letter) parts.push('Subsector');
+    else if (buildMode.value !== 'scope' && places.value.subsector) parts.push(places.value.subsector);
+    if (buildWord.value) parts.push(buildWord.value);
+    return parts.filter((part) => part !== '').join(' / ');
+});
+
 function openSubsector(letter: string): void {
     // A sector's or a subsector's pane opens only when the address asks for it (Build is on here).
     void router.push({ path: '/s/' + encodeURIComponent(props.slug) + '/sub/' + letter, query: { ...route.query, panel: 'dossier' } });
@@ -455,7 +494,7 @@ defineExpose({ remeasure: publish });
 
 <template>
   <div class="dossier-root">
-    <Panel ref="panel" :open="open" :title="title" :meta="meta" :chip="chip" :span="span" :keep-chip="buildMode !== null" @close="$emit('close')" @span="chooseSpan">
+    <Panel ref="panel" :open="open" :title="title" :meta="meta" :chip="chip" :span="span" :keep-chip="buildMode !== null" :eyebrow-title="eyebrowTitle" @close="$emit('close')" @span="chooseSpan">
       <template v-if="profile || buildMode" #eyebrow>
         <template v-if="profile && !drafting">
           <button type="button" class="doss-crumb" @click="showOverview">
@@ -503,9 +542,9 @@ defineExpose({ remeasure: publish });
         />
       </template>
       <template v-else-if="unnamed && buildMode === 'scope'" #title><span class="panel-title-unnamed">{{ title }}</span></template>
-      <template v-else-if="profile && !drafting" #title>
-        {{ profile.title }}
-        <span v-if="profile.mapBadge" class="ui-badge"><Icon name="star" :size="10.5" /><span>{{ profile.mapBadge }}</span></span>
+      <template v-else-if="profile && !drafting" #title>{{ profile.title }}</template>
+      <template v-if="profile && !drafting && profile.mapBadge" #badge>
+        <span class="ui-badge"><Icon name="star" :size="10.5" /><span>{{ profile.mapBadge }}</span></span>
       </template>
       <template v-if="profile && !drafting" #pager>
         <button
@@ -553,7 +592,7 @@ defineExpose({ remeasure: publish });
       <BuildPane v-else-if="buildMode === 'many' || buildMode === 'empty' || buildMode === 'removed'" :mode="buildMode" :keys="buildKeys" :span="span" @open="openHex" />
       <PublishForm v-else-if="marketUi.open && buildMode === 'system'" class="build-pane" :keys="[hexKey]" />
       <SystemEditor v-else-if="drafting" :span="span" />
-      <DossierBody v-else-if="profile" :model="profile" :span="span" :day-night="dayNight" :tick="tick" :live="orbit === true" :place="placeOnStrip" :restated="restated" :surface="bodySurface" :sun="sunOnSurface" :now-days="nowDays" :start-days="clockDays" @open="openKey">
+      <DossierBody v-else-if="profile" :model="profile" :span="span" :day-night="dayNight" :tick="tick" :live="orbit === true" :place="placeOnStrip" :restated="restated" :surface="bodySurface" :sun="sunOnSurface" :now-days="nowDays" :start-days="clockDays" :season="seasonShown ? seasonShown.season : null" :band="seasonShown ? seasonShown.band : null" :orbit="seasonShown ? seasonShown.orbit : ''" @open="openKey">
         <template #records="{ open, toggle }">
           <RecordsHere
             v-if="!preview"
@@ -592,6 +631,7 @@ defineExpose({ remeasure: publish });
         >
           <template #records>
             <RecordsHere v-if="!preview" :slug="slug" :hex="hex" :system-name="overview.header.name || overview.header.title" :body-key="null" body-name="" @retry="retryCampaign()" />
+            <MarketsNearby v-if="!preview && !slug.startsWith('~')" fold :hex-key="hexKey" />
           </template>
         </DossierOverview>
       </template>

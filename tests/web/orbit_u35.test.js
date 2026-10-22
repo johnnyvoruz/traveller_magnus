@@ -10,7 +10,7 @@ const strip = readFileSync(new URL('../../apps/web/src/orbit/ShipStrip.vue', imp
 const view = readFileSync(new URL('../../apps/web/src/views/OrbitView.vue', import.meta.url), 'utf8');
 
 test('No ships here is shown only while the campaign panel is open', () => {
-    assert.match(strip, /<p v-else-if="campaignOpen" class="orbit-ships-none">No ships here<\/p>/);
+    assert.match(strip, /<p v-else-if="campaignOpen" class="orbit-ships-none">No ships here\.<\/p>/);
     assert.match(view, /:campaign-open="campaignOpen"/);
 });
 

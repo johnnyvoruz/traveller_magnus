@@ -128,8 +128,6 @@ export function diamondMapSpec(body: Body | null | undefined, hexId: string): Di
     return { worldData, seed };
 }
 
-export const legacyMapInputs = { worldMapData, canMapWorld, diamondMapSpec };
-
 /**
  * js/system_viewer.js:3655-3657. hexId stands in for the closed-over page hex.
  * || and ?? are kept as the legacy line writes them. There is no master seed.

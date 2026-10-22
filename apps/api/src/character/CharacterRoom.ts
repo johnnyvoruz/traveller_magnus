@@ -1,5 +1,6 @@
 import { DurableObject } from 'cloudflare:workers';
 import type { Env } from '../env';
+import { acceptLedger, installLedger, postLedger, readLedger, voidLedger, type LedgerFail, type LedgerPage, type LedgerStored } from './ledger.ts';
 import {
     applySets,
     colourFor,
@@ -18,6 +19,16 @@ function json(data: unknown, status = 200): Response {
     return Response.json({ ok: true, data }, { status });
 }
 
+function ledgerJson(result: LedgerPage | LedgerStored | LedgerFail, storedStatus: 200 | 201 = 201): Response {
+    if (!result.ok) {
+        return Response.json({ ok: false, error: { code: result.code, message: result.message } }, { status: result.status });
+    }
+    if ('lines' in result) {
+        return Response.json({ ok: true, data: { lines: result.lines, balance: result.balance, credits: result.credits } });
+    }
+    return Response.json({ ok: true, data: result.line }, { status: storedStatus });
+}
+
 function problem(status: 400 | 401, code: string, message: string, details?: unknown): Response {
     const error: { code: string; message: string; details?: unknown } = { code, message };
     if (details !== undefined) error.details = details;
@@ -29,6 +40,7 @@ export class CharacterRoom extends DurableObject<Env> {
         super(ctx, env);
         ctx.blockConcurrencyWhile(async () => {
             installSheet(this.sql());
+            installLedger(this.sql());
         });
     }
 
@@ -62,6 +74,7 @@ export class CharacterRoom extends DurableObject<Env> {
         // The worker forwards the public request, whose path is /api/characters/<id>/live.
         if (request.method === 'GET' && (url.pathname === '/live' || url.pathname.endsWith('/live'))) return this.join(request);
         if (request.method === 'GET' && url.pathname === '/doc') return json(readDoc(this.sql()));
+        if (url.pathname === '/ledger' || url.pathname.startsWith('/ledger/')) return this.ledger(request, url);
         let body: unknown = null;
         if (request.method === 'POST') {
             try {
@@ -112,6 +125,56 @@ export class CharacterRoom extends DurableObject<Env> {
             return json({ roles });
         }
         return problem(400, 'not_found', 'That page does not exist.');
+    }
+
+    private async ledger(request: Request, url: URL): Promise<Response> {
+        const sql = this.sql();
+        const at = new Date().toISOString();
+        const mint = () => `ln_${crypto.randomUUID()}`;
+        if (request.method === 'GET' && url.pathname === '/ledger') {
+            const raw = url.searchParams.get('after');
+            const after = raw == null || raw === '' ? 0 : Number(raw);
+            return ledgerJson(readLedger(sql, after));
+        }
+        if (request.method !== 'POST') return problem(400, 'not_found', 'That page does not exist.');
+        let record: Record<string, unknown> = {};
+        const text = await request.text();
+        if (text) {
+            try {
+                const parsed: unknown = JSON.parse(text);
+                if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+                    return problem(400, 'validation', 'That request could not be read. Try again.');
+                }
+                record = parsed as Record<string, unknown>;
+            } catch {
+                return problem(400, 'validation', 'That request could not be read. Try again.');
+            }
+        }
+        const by = typeof record.by === 'string' ? record.by : '';
+        const room = this.room(this.sockets());
+        const voidMatch = /^\/ledger\/([^/]+)\/void$/.exec(url.pathname);
+        const acceptMatch = /^\/ledger\/([^/]+)\/accept$/.exec(url.pathname);
+        let result: LedgerPage | LedgerStored | LedgerFail;
+        let storedStatus: 200 | 201 = 201;
+        if (url.pathname === '/ledger') {
+            const pending = record.pending === 1 ? 1 : 0;
+            result = postLedger(sql, {
+                kind: record.kind,
+                amount: record.amount,
+                memo: record.memo,
+                whenDay: record.whenDay,
+                linkId: record.linkId,
+            }, by, at, pending, mint);
+        } else if (voidMatch) {
+            result = voidLedger(sql, decodeURIComponent(voidMatch[1]), by, at, mint);
+        } else if (acceptMatch) {
+            storedStatus = 200;
+            result = acceptLedger(sql, decodeURIComponent(acceptMatch[1]), by);
+        } else {
+            return problem(400, 'not_found', 'That page does not exist.');
+        }
+        if (result.ok && 'line' in result) room.broadcastLedger(result.line, result.balance);
+        return ledgerJson(result, storedStatus);
     }
 
     private join(request: Request): Response {

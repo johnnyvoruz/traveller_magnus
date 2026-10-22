@@ -16,6 +16,8 @@ import { spaceWeatherRevisions } from '../lines/revisions.ts';
 import { spaceLines } from '../lines/space.ts';
 import { imperialLines, imperialSources } from '../lines/imperial.ts';
 import { travellerLines } from '../lines/traveller.ts';
+import { nodLines } from '../lines/nods.ts';
+import { glitchedLines } from '../lines/glitched.ts';
 
 export const PLAYABLE = ['control', 'customs', 'market', 'weather', 'ship', 'advert'] as const;
 export const BLOCKED = ['rumour', 'distress', 'news'] as const;
@@ -36,7 +38,7 @@ export const EXCLUDED: ReadonlySet<string> = new Set([
 
 /** Ship lines are a positive list: everyday traffic only. */
 export const SHIP_ALLOWED: ReadonlySet<string> = new Set(ids('ship',
-    '026 027 030 033 037 038 043 046 047 048 049 050 051 052 053 055 057 059 060 061 062 063 064 065 067 070 079 080 081 084 085 086 087 088 090 091 092 093 095 099 102 103 104 108 109 113 116 119 126 136 141').concat([...flavorLines, ...broadcastLines, ...spaceLines, ...imperialLines, ...travellerLines].filter((line) => line.category === 'ship').map((line) => line.id)));
+    '026 027 030 033 037 038 043 046 047 048 049 050 051 052 053 055 057 059 060 061 062 063 064 065 067 070 079 080 081 084 085 086 087 088 090 091 092 093 095 099 102 103 104 108 109 113 116 119 126 136 141').concat([...flavorLines, ...broadcastLines, ...spaceLines, ...imperialLines, ...travellerLines, ...nodLines, ...glitchedLines].filter((line) => line.category === 'ship').map((line) => line.id)));
 
 /** Ship lines that talk to a port office: they need a staffed A-D port. */
 export const SHIP_NEEDS_STAFF: ReadonlySet<string> = new Set(ids('ship', '027 030 033 037 038 043 090 092 093 099 102 103 104 116 126 136 141'));
@@ -55,6 +57,7 @@ export function corpusGate(line: ChatterLineData, f: SystemFacts): boolean {
     if (line.category === 'advert' && !broadcastAdvertIds.has(line.id)) return false;
     if (EXCLUDED.has(line.id)) return false;
     if (f.atm <= 1 && AIR_WORDS.test(line.text)) return false;
+    // The ship's own in-jump logs (`when.party` only inJump) are not system radio.
     const party = line.when.party;
     if (party && !party.includes('inSystem') && !party.includes('docked')) return false;
     switch (line.category) {
@@ -75,13 +78,14 @@ export function corpusGate(line: ChatterLineData, f: SystemFacts): boolean {
             if (SHIP_NEEDS_STAFF.has(line.id) && !portStaffed(f)) return false;
             break;
     }
-    return eligible(line, f);
+    return eligible(line, f, { anyParty: true });
 }
 
 /**
- * The lines the view can hear. Ambient lines play wherever the party is (ZC2); a line whose
- * `when.party` names a party place is addressed to the party and passes only when the lead
- * ship is there (eligible() reads `when.party`, and the gate above keeps in-jump logs out).
+ * The lines the view can hear, wherever the party is, in jump included (ZC4, Johnny 14:44:
+ * "all comms play no matter if ship is in system or not"). A line whose `when.party` names
+ * inSystem or docked plays for whoever watches; its `{ship}` is a roster ship, never the
+ * party's. Only the in-jump logs stay out (the gate above).
  */
 export function corpusPool(lines: readonly ChatterLineData[], f: SystemFacts): ChatterLineData[] {
     return lines.filter((line) => corpusGate(line, f) && resolveSlots(line.text, f, ['a', 'b']) !== null);

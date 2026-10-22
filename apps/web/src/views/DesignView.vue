@@ -252,7 +252,7 @@ function open(key: string): void {
           <h3>Status pill <code>.ui-status</code></h3>
           <div class="design-row">
             <p class="ui-status">Regina · Spinward Marches 1910 · A788899-C</p>
-            <p class="ui-status">Loading 3 sector indexes.</p>
+            <p class="ui-status">Loading 3 sectors.</p>
           </div>
           <h3>Scrollbar</h3>
           <div class="design-scroll ui-scroll">
@@ -456,7 +456,7 @@ function open(key: string): void {
           <h3>System could not be loaded</h3>
           <p class="doss-muted design-flat">This world's system could not be loaded.</p>
           <div class="doss-actions">
-            <button type="button" class="ui-btn"><Icon name="retry" :size="13" />Retry</button>
+            <button type="button" class="ui-btn"><Icon name="retry" :size="13" />Try again</button>
           </div>
         </div>
         <div class="design-card">

@@ -22,10 +22,6 @@ export function handNodes(): HandNode[] {
     return handle && edit.mode === 'hand' ? handList(handle.form.value) : [];
 }
 
-export function selectedNode(): HandNode | null {
-    return handNodes().find((item) => item.id === handUi.selected) ?? null;
-}
-
 /** The world a new moon is given to: the selected world, or the world the selected moon orbits. */
 export function moonHost(): HandNode | null {
     const list = handNodes();

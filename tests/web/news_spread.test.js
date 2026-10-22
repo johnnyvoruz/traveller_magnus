@@ -17,7 +17,7 @@ test('date and place: the news, from that place on that day', () => {
 });
 
 test('a date and no place: unable, and the line says the place is missing; no date: no button', () => {
-    assert.deepEqual(spreadState({ year: 1105, day: 141 }, null), { ok: false, why: 'Give it a place to spread this news from there.' });
+    assert.deepEqual(spreadState({ year: 1105, day: 141 }, null), { ok: false, why: 'To spread this news, add a place.' });
     assert.equal(spreadState(null, 'Spinward_Marches/1910'), null, 'a place and no date: no button (decided 23:10)');
     assert.equal(spreadState(null, null), null);
 });

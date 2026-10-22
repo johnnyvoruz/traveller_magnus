@@ -19,7 +19,7 @@ import { endViewAs, startViewAs, VIEW_AS_BANNER, viewAs } from './view_as.ts';
     v-else-if="campaign.role === 'owner' && campaign.status === 'ready'"
     type="button"
     class="ui-btn viewas-start"
-    title="See the campaign as your players see it. Nothing can be changed while you look."
+    title="See the campaign as your players see it. You can't change anything while you look."
     :disabled="viewAs.busy"
     data-view-as
     @click="startViewAs"

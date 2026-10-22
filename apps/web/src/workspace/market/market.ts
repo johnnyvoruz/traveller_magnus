@@ -27,9 +27,6 @@ export const MARKET_LIMITS = {
     tag: 40,
 } as const;
 
-/** The server's sentences the screens say before asking (contracts/b_marketplace.md). An own map publishes too (F1). */
-export const SIGN_IN = 'Sign in to publish and to see your packages.';
-
 // ---- the store ---------------------------------------------------------------------------------------
 
 const current = shallowRef<MarketplaceStore | null>(null);

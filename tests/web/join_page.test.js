@@ -43,7 +43,7 @@ test('the invite names the campaign and the referee', () => {
         people: [],
     });
     assert.equal(signedOut.title, "You're invited to Hollow Verge");
-    assert.equal(signedOut.line, 'ada runs this campaign. Sign in to join. You come back to this page.');
+    assert.equal(signedOut.line, 'ada runs this campaign. Sign in to join. You return to this page.');
     const ready = joinFace({
         signedIn: true,
         refused: false,
@@ -102,8 +102,10 @@ test('the token leaves the address bar and stays for the return from sign-in', (
     assert.equal(heldJoinToken('', 'kept-token'), 'kept-token');
     assert.equal(heldJoinToken('raw-token', 'kept-token'), 'raw-token');
     assert.equal(JOIN_TOKEN_KEY, 'voyage.join.token');
-    assert.match(page, /history\.replaceState\([\s\S]*JOIN_BAR\)/);
-    assert.match(page, /sessionStorage\.setItem\(JOIN_TOKEN_KEY/);
+    assert.match(page, /replaceUrl\(JOIN_BAR\)/);
+    assert.match(page, /sessionSet\(JOIN_TOKEN_KEY/);
+    assert.match(page, /sessionGet\(JOIN_TOKEN_KEY\)/);
+    assert.match(page, /sessionRemove\(JOIN_TOKEN_KEY\)/);
     assert.match(page, /signIn\(fetch, JOIN_BAR\)/);
     assert.match(page, /panel: 'campaign'/);
     assert.match(page, /'Join'/);

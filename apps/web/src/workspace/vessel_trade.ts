@@ -6,7 +6,7 @@
  * on the sheet: they are the manifest until the first edit writes it. Pure apart from `writeTrade`, which
  * is one commit, as the track's writes are.
  */
-import type { CampaignRecord, CargoLot, LedgerLine, OwnerShare, PassengerLot, ShipPayment } from '@voyage/shared';
+import type { CampaignRecord, CargoLot, EntryChange, LedgerLine, OwnerShare, PassengerLot, ShipPayment } from '@voyage/shared';
 import { cargoFromSheet, MANIFEST_ROWS, passengersFromSheet, sheetFromCargo, sheetFromPassengers } from '../campaign/cargo.ts';
 import { commit } from '../campaign/commit.ts';
 import { splitDays } from '../orbit/clock.ts';
@@ -108,9 +108,15 @@ export function statusWithTrade(
     return { ...statusOf(record), ...change };
 }
 
-/** One commit of the record's new sheet and status, as the track's writes are (campaign/track.ts). */
-export function writeTrade(record: CampaignRecord, change: { sheet?: Record<string, unknown>; status: Status }): void {
-    commit({ records: [{ ...record, ...(change.sheet ? { sheet: change.sheet } : {}), status: change.status as CampaignRecord['status'], baseRev: record.rev }] });
+/**
+ * One commit of the record's new sheet and status, as the track's writes are (campaign/track.ts).
+ * A journal list, when given, is that same commit: the cargo, the ledger and the note leave together.
+ */
+export function writeTrade(record: CampaignRecord, change: { sheet?: Record<string, unknown>; status: Status }, journal?: EntryChange[]): void {
+    commit({
+        records: [{ ...record, ...(change.sheet ? { sheet: change.sheet } : {}), status: change.status as CampaignRecord['status'], baseRev: record.rev }],
+        ...(journal && journal.length ? { journal } : {}),
+    });
 }
 
 /** The referee's mark on a party vessel (DT2b): naval or scout, for base fuel; undefined clears it. */

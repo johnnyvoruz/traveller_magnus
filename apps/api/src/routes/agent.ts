@@ -3,7 +3,8 @@ import type { AppEnv } from '../env';
 import { fail } from '../http';
 import { requireAgent, rateLimited, tokenReadLimited, tokenSubmitLimited, type AgentActor } from '../auth/tokens';
 import { privateNoStore } from '../universe/door_headers';
-import { ownedUniverse, type OwnedUniverse } from '../universe/forward';
+import { originAllowed } from '../auth/session';
+import { memberUniverse, ownedUniverse, type OwnedUniverse } from '../universe/forward';
 import { rememberCampaignSummary, splitSummary } from '../universe/summary_sync';
 import { refreshAfterCampaign } from './public_games';
 
@@ -87,12 +88,27 @@ export function mountAgentRoutes(route: Hono<AppEnv>): void {
     });
 
     route.post('/:id/campaign/proposals', async (c) => {
-        const access = await readAgent(c, 'proposals:write');
-        if (access instanceof Response) return privateNoStore(access);
+        const actor = await requireAgent(c, 'proposals:write');
+        if (actor instanceof Response) return privateNoStore(actor);
         const url = new URL(c.req.url);
         url.pathname = '/campaign/proposals';
-        const extra = access.actor.tokenId ? { 'x-voyage-token-id': access.actor.tokenId } : undefined;
-        return privateNoStore(await door(access.owned, url, c.req.raw, extra));
+        if (actor.via === 'token') {
+            if (actor.tokenId && tokenSubmitLimited(actor.tokenId)) return privateNoStore(rateLimited(c));
+            const owned = await ownedUniverse(c, actor);
+            if (owned instanceof Response) return privateNoStore(owned);
+            const extra = actor.tokenId ? { 'x-voyage-token-id': actor.tokenId } : undefined;
+            return privateNoStore(await door(owned, url, c.req.raw, extra));
+        }
+        if (!originAllowed(c)) return privateNoStore(fail(c, 403, 'forbidden', 'That request was blocked. Reload the page and try again.'));
+        const member = await memberUniverse(c);
+        if (member instanceof Response) return privateNoStore(member);
+        if (member.role !== 'owner') return privateNoStore(fail(c, 403, 'forbidden', 'The owner does that.'));
+        return privateNoStore(await door(
+            { row: member.row, actor: member.actor, forward: member.forward },
+            url,
+            c.req.raw,
+            { 'x-voyage-pasted': '1' },
+        ));
     });
 
     route.get('/:id/campaign/proposals', async (c) => {

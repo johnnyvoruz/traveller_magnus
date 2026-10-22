@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { chooseMode, clearRolls, closeRoller, diceAsk, makeRoll, offerDice, openRoller, rollCount, rollD3Pick, rollD66Pick, rollDefault, setMode, stepDm } from '../../apps/web/src/dice/command.ts';
-import { cryptoFace, d3Face, rollD66, rollSix } from '../../apps/web/src/dice/roll.ts';
+import { chooseMode, clearRolls, closeRoller, diceAsk, makeRoll, offerDice, openRoller, roll3ddPick, rollCount, rollD3Pick, rollD66Pick, rollDefault, setMode, stepDm } from '../../apps/web/src/dice/command.ts';
+import { cryptoFace, d3Face, roll3dd, rollD66, rollSix, threeDdLine } from '../../apps/web/src/dice/roll.ts';
 import { rankResults } from '../../apps/web/src/search/omni.ts';
 
 function facesOf(faces) {
@@ -206,6 +206,37 @@ test('a DM shifts the total, D3 halves each face, and D66 takes no DM', () => {
     });
     assert.equal(registered.find((item) => item.id === 'dice-d3').name, 'Roll D3');
     assert.equal(registered.find((item) => item.id === 'dice-2d3').name, 'Roll 2D3');
+    clearRolls();
+});
+
+test('3DD is three dice times ten, and a DM is ignored', () => {
+    // Johnny, 2026-10-18 15:54: "3DD - roll 3D and x10 the result".
+    const rolled = roll3dd(facesOf([2, 5, 6]));
+    assert.deepEqual(rolled.dice, [2, 5, 6]);
+    assert.deepEqual(rolled.kept, [true, true, true]);
+    assert.equal(rolled.total, 130);
+    assert.equal(rolled.dm, 0);
+    assert.equal(rolled.mode, '3dd');
+    assert.equal(threeDdLine(rolled.dice), '13 × 10 = 130');
+    clearRolls();
+    stepDm(3);
+    assert.equal(diceAsk.dm, 3);
+    roll3ddPick(facesOf([2, 5, 6]));
+    assert.equal(diceAsk.mode, '3dd');
+    assert.equal(diceAsk.rolls[0].total, 130);
+    assert.equal(diceAsk.rolls[0].dm, 0);
+    const registered = [];
+    offerDice((command) => {
+        registered.push(command);
+        return () => {};
+    });
+    const command = registered.find((item) => item.id === 'dice-3dd');
+    assert.equal(command.name, 'Roll 3DD');
+    const button = readFileSync(new URL('../../apps/web/src/dice/DiceButton.vue', import.meta.url), 'utf8');
+    assert.match(button, /roll3ddPick\(\)">3DD<\/button>/);
+    const roller = readFileSync(new URL('../../apps/web/src/dice/DiceRoller.vue', import.meta.url), 'utf8');
+    assert.match(roller, /return '3DD'/);
+    assert.match(roller, /threeDdLine/);
     clearRolls();
 });
 

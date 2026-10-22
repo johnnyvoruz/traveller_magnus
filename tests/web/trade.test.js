@@ -12,6 +12,7 @@ import {
     quantityDm,
     rollLocalBroker,
     rollTons,
+    purchaseDm,
     saleDm,
     salePrice,
     starportDm,
@@ -164,6 +165,23 @@ test('price DMs: only the largest in each column', () => {
     assert.deepEqual(columnDm(tradeGood('11').purchaseDM, world({ tradeCodes: ['In', 'Ht', 'Ri'] })), { dm: 3, name: 'High Tech' });
     assert.deepEqual(columnDm(tradeGood('11').purchaseDM, world({ tradeCodes: ['Ag'] })), { dm: 0, name: null });
     assert.deepEqual(columnDm(tradeGood('15').purchaseDM, world({ tradeCodes: ['As'] })), { dm: -4, name: 'Asteroid' });
+});
+
+test('purchase DM is that column, labelled, and none when the world matches nothing', () => {
+    const good = tradeGood('11');
+    const hit = purchaseDm(good, world({ tradeCodes: ['In', 'Ht', 'Ri'] }));
+    assert.equal(hit.label, 'Purchase DM, High Tech');
+    assert.equal(hit.dm, 3);
+    citedFromTradeText(hit.cites);
+    const miss = purchaseDm(good, world({ tradeCodes: [] }));
+    assert.equal(miss.label, 'Purchase DM, none');
+    assert.equal(miss.dm, 0);
+    const absent = purchaseDm({ ...good, purchaseDM: null }, world({ tradeCodes: ['In'] }));
+    assert.equal(absent.label, 'Purchase DM, none');
+    assert.equal(absent.dm, 0);
+    const tied = purchaseDm({ ...good, purchaseDM: { Industrial: 2, Rich: 2 } }, world({ tradeCodes: ['In', 'Ri'] }));
+    assert.equal(tied.label, 'Purchase DM, Industrial');
+    assert.equal(tied.dm, 2);
 });
 
 test('illegal goods: a local ban gives Law difference as Sale DM, the higher of that and the column', () => {

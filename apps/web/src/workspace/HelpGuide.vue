@@ -54,11 +54,21 @@ import { PUBLIC_GAMES_LABEL } from './public_games.ts';
       </li>
       <li class="ui-step">
         <h3>Dice</h3>
-        <p>Select Dice on the rail. 1D, 2D, and 3D each roll that many six-sided dice and add them. Lower DM and Raise DM change the number you add or subtract. They show as − and +, and the number runs from −6 to +6. D3 reads a face of 1 or 2 as 1, 3 or 4 as 2, and 5 or 6 as 3. 2D3 does that for two dice, then adds them. D66 reads the first die as tens and the second as units, from 11 to 66, and it does not use the DM. Boon keeps the best two of three dice. Bane keeps the worst two. The command palette lists Roll dice, Roll D3, Roll 2D3, Roll D66, Boon, and Bane. R rolls 2D when nothing else is using that key.</p>
+        <p>Select Dice on the rail. 1D, 2D, and 3D each roll that many six-sided dice and add them. Lower DM and Raise DM change the number you add or subtract. They show as − and +, and the number runs from −6 to +6. D3 reads a face of 1 or 2 as 1, 3 or 4 as 2, and 5 or 6 as 3. 2D3 does that for two dice, then adds them. D66 reads the first die as tens and the second as units, from 11 to 66, and it does not use the DM. 3DD: Roll three dice, add them, and multiply by 10. It takes no DM. Boon keeps the best two of three dice. Bane keeps the worst two. The command palette lists Roll dice, Roll D3, Roll 2D3, Roll D66, Roll 3DD, Boon, and Bane. R rolls 2D when nothing else is using that key.</p>
       </li>
       <li class="ui-step">
         <h3>News</h3>
         <p>On a world, select News. You can also open the command palette and select How fast does news travel from here. The days run from that date out to 60 days. Hover a world to read when the news arrives. Where the party is, select How old is the news here. Nothing in the rules sets how long a message waits at a station, so this picture adds no wait.</p>
+      </li>
+      <li class="ui-step">
+        <h3>System Comms</h3>
+        <p>In the orbit view, System Comms sits beside Fit. It starts on, and this device remembers when you turn it off. It plays the system on screen, whether or not your ship is there. Open Account at the foot of the rail and select Quiet on this device to hide background traffic on this device only. That switch leaves System Comms as it is.</p>
+      </li>
+      <li class="ui-step">
+        <h3>Bring in a session</h3>
+        <p>Ask every player before you record. Ask everyone when the players are in different places. These places require everyone's agreement for a conversation: California, Delaware, Florida, Illinois, Maryland, Massachusetts, Montana, Nevada, New Hampshire, Pennsylvania, and Washington. Michigan is contested. Oregon and Missouri require everyone's agreement for an in-person conversation. Connecticut and Nevada require it for a call. Germany requires it, under section 201 of its criminal code. New South Wales requires it. Canada and United States federal law let one person in the conversation agree. In the United Kingdom and the European Union, a private recording can fall under the household exemption. Uploading that recording to a cloud service may not.</p>
+        <p>Record on your own phone or computer. Traveller.voyage does not receive the recording or the transcript. Open Campaign and select Copy for your AI. It copies your whole campaign, including referee notes. Give that text only to your own AI. Install the voyage-session-ingest skill from the skill folder, and give the skill to that AI with the copied text and your notes from the session.</p>
+        <p>No AI runs here. Proposals come back in one of two ways. Your AI sends them with a token you make under Agent access. Open Account at the foot of the rail, then Agent access, and select Make a token. A token reaches this one campaign only. Or open Proposals and select Paste your AI's reply. A proposal waits until you accept it, edit it, or drop it.</p>
       </li>
     </ol>
   </div>

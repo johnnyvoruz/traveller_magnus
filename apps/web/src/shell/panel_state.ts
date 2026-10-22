@@ -46,13 +46,3 @@ export function releaseSpan(): void {
 }
 
 export type EscapeAction = 'ignore' | 'overview' | 'close';
-
-/**
- * Escape closes the panel when the omnibox is shut and no body is open.
- * A selected body returns to the overview. A shut panel or an open omnibox stays.
- */
-export function escapeAction(state: { omniOpen: boolean; panelOpen: boolean; bodyOpen: boolean }): EscapeAction {
-    if (state.omniOpen || !state.panelOpen) return 'ignore';
-    if (state.bodyOpen) return 'overview';
-    return 'close';
-}

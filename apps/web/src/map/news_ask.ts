@@ -18,7 +18,7 @@ export type SpreadState = { ok: true; ask: NewsAsk } | { ok: false; why: string 
  */
 export function spreadState(when: { year: number; day: number } | null, hexKey: string | null): SpreadState {
     if (when && hexKey) return { ok: true, ask: { hexKey, day0: totalDays(when.year, when.day) } };
-    if (when) return { ok: false, why: 'Give it a place to spread this news from there.' };
+    if (when) return { ok: false, why: 'To spread this news, add a place.' };
     return null;
 }
 

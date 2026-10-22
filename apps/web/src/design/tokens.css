@@ -163,6 +163,7 @@
   --t-lineup: 650ms;      /* bodies travelling between the orbits, row and column layouts (plan 7.8) */
   --t-sweep: 8000ms;      /* one turn of the scan sweep (system_viewer.js:2099) */
   --t-ripple: 6000ms;     /* news ripples: one play of the scrubber, day 0 to the horizon (spec_xboat_ripples.md §3.3, Lane D) */
+  --t-news-day: 333ms;    /* news ripples: one day of Play, about 3 days a second (60 days in 20 s); replaces --t-ripple (DF16) */
 
   /* layout of the floating chrome (legacy #map-chrome and #system-inspector) */
   --chrome-inset: 10px;   /* viewport edge to chrome */

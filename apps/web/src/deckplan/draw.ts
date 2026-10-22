@@ -70,11 +70,6 @@ export function tileUrl(path: string, config?: TileUrlConfig): string {
     return base + '/geomorphs/' + encoded;
 }
 
-/** Dev-middleware address. Production drawing uses `tileUrl`. */
-export function geomorphUrl(path: string): string {
-    return tileUrl(path, { dev: true });
-}
-
 function loadImage(url: string): Promise<DeckImage | null> {
     return new Promise((resolve) => {
         const image = new Image();
@@ -90,11 +85,6 @@ function remember(url: string, load: (url: string) => Promise<DeckImage | null>)
     const pending = Promise.resolve().then(() => load(url));
     cache.set(url, pending);
     return pending;
-}
-
-/** One request per URL. A tile that fails to load stays skipped. */
-export function loadTile(url: string): Promise<DeckImage | null> {
-    return remember(url, loadImage);
 }
 
 function imageSize(image: DeckImage): { w: number; h: number } | null {

@@ -72,6 +72,14 @@ function sameWhen(a: { year: number; day: number }, b: { year: number; day: numb
     return a.year === b.year && a.day === b.day;
 }
 
+/** A timeline day dated after the day the session is looking at. Today itself is not decided here. */
+export function dayIsAfter(day: { year: number; day: number }, viewDays: number | null): boolean {
+    if (viewDays === null || !Number.isFinite(viewDays)) return false;
+    const when = stardate(viewDays);
+    if (day.year !== when.year) return day.year > when.year;
+    return day.day > when.day;
+}
+
 /**
  * Dated journal entries and dated records, grouped by year then day, newest first.
  * `entries` is the journal's date order (`entriesByDate`). Undated rows are left out.
@@ -299,8 +307,8 @@ function partyRow(party: Party, records: Readonly<Record<string, CampaignRecord>
  */
 /**
  * Whether a row stays once the timeline is narrowed. A record type keeps records of that
- * type. "Only this ship" keeps the lead ship, the records aboard it, and journal entries
- * anchored to one of those records.
+ * type. Vessels also keeps the ships' legs. "Only this ship" keeps the lead ship, the
+ * records aboard it, and journal entries anchored to one of those records.
  */
 export function timelineKeeps(
     row: TimelineRow,
@@ -312,7 +320,7 @@ export function timelineKeeps(
         entryAnchorId: (id: string) => string | null;
     },
 ): boolean {
-    if (narrow.type) {
+    if (narrow.type && !(row.source === 'leg' && narrow.type === 'vessel')) {
         if (row.source !== 'record' || narrow.recordType(row.id) !== narrow.type) return false;
     }
     if (!narrow.shipId) return true;

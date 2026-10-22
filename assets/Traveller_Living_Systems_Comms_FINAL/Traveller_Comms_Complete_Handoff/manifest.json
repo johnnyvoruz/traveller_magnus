@@ -1,0 +1,106 @@
+{
+  "name": "Traveller Living Systems Comms Final Handoff",
+  "visualVersion": "bars-only-final",
+  "rows": 1178,
+  "categories": {
+    "control": 143,
+    "customs": 113,
+    "news": 182,
+    "market": 160,
+    "weather": 134,
+    "advert": 124,
+    "ship": 145,
+    "rumour": 135,
+    "distress": 42
+  },
+  "files": {
+    "IMPLEMENTATION_BRIEF.md": {
+      "sha256": "2518ff983e0b997fa778a3442081d55c8665463d5efbeeca1d63b7187df1a732",
+      "size": 22169
+    },
+    "START_HERE.md": {
+      "sha256": "641f6ecc1298eec3fd822a07d0cd7d5f96b1e00ad39f3b36ace880b087a63107",
+      "size": 3630
+    },
+    "Traveller_Comms_Final_Live_Preview.html": {
+      "sha256": "f6591ced2392b75ec5c6fb06e07ee9ad8e35303a8dd5a6f88852c7890c411353",
+      "size": 2195249
+    },
+    "content/README.md": {
+      "sha256": "6f5a8c1244c83f352abac8b68f4e14ca96790c661721eca000b71da3e00128b9",
+      "size": 823
+    },
+    "content/corpus.json": {
+      "sha256": "297a756ba42b1faa9bffc9afc4cdb7c93f4fab4316180bbcd40fa66fadb0d571",
+      "size": 323729
+    },
+    "engine/README.md": {
+      "sha256": "06662d9e2ed0b665d25abc70bba08c78be751cca1a46b57b8314e1b36eacc991",
+      "size": 1158
+    },
+    "engine/chatterProcedural.ts": {
+      "sha256": "004ef9e0ff0fd34bf79cfec36a11288195dc3804a4ed321d0c67f9ba1fbda4cd",
+      "size": 29983
+    },
+    "qa/TEST_RESULTS.md": {
+      "sha256": "a1986b86b03c10500069c3c49650a349ea6bb78591ca7e7d8976610a8a48329f",
+      "size": 1507
+    },
+    "qa/final-receiver-on-susadi.png": {
+      "sha256": "ae39c8622c2e3f9e61bb54c718fae06c399f3eb1cb067d86ec65cd073301154e",
+      "size": 879674
+    },
+    "qa/test_receiver_final.py": {
+      "sha256": "2a987eceea9d4d91069640deea0dabd35b68dcd16c5cb3a63d376b39973d4d75",
+      "size": 4612
+    },
+    "receiver/README.md": {
+      "sha256": "dd6b206f2b9bd624ff835f23ad8c92218cca5c18fbb0e1d7051dce91988eeb54",
+      "size": 1817
+    },
+    "receiver/comms-receiver.css": {
+      "sha256": "b762d286b0692dfde54a4fde6eec6c12bc37b78fc9d0c85a11ec0a66e303a527",
+      "size": 11884
+    },
+    "receiver/comms-receiver.html": {
+      "sha256": "ae0413794b2714634edd62af9008ba1fbd8ec7a89aac2f84f60a4117a622c8b2",
+      "size": 4718
+    },
+    "receiver/comms-receiver.js": {
+      "sha256": "de5e245cbe77379cbb9b01a236a62a4de3ab65b8cf358c94f132ace5bb6c1c9d",
+      "size": 21637
+    },
+    "receiver/preview.html": {
+      "sha256": "0fd52d2db853618cb502bf7fcb6b0f3eb5f74edad6a6a3c8633ed4608dda7e52",
+      "size": 4180
+    },
+    "receiver/susadi-system.png": {
+      "sha256": "e83043113b0ee7843c67696c043841f36e8021a237569626dd82008d1cc0c565",
+      "size": 1614634
+    },
+    "reference/chatter.ts": {
+      "sha256": "73f560f8d1a690ed62764b8ee75529047d97a20467c3fe957fd5ccd7d40b6d1d",
+      "size": 3835
+    },
+    "reference/facts.ts": {
+      "sha256": "01c4dcb3dd9b138fdde544ff6b7fbf4b52c5c5da8b3adff296fb86724bbfb3fd",
+      "size": 12147
+    },
+    "reference/lines.ts": {
+      "sha256": "e9cfcdb2e65ae6664c4873d8887a0ba00488ca247449cda08a9eb8c0c112572c",
+      "size": 563
+    },
+    "reference/quiet.ts": {
+      "sha256": "ebe395870c94fe2e49bce63e7f9d7940d21e2f21d2fbea196b036f0cbcd24aac",
+      "size": 2035
+    },
+    "reference/scenario-preview.txt": {
+      "sha256": "cfe1e5d620b2f6ae282d242b6a541d505643f8509000ea3b2da9da9eda113117",
+      "size": 6712
+    },
+    "reference/words.ts": {
+      "sha256": "6161193c2274f798c52e98806d57d488e53ad3ef37dc321382808a41e04f452d",
+      "size": 657
+    }
+  }
+}

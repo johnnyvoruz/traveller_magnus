@@ -914,6 +914,7 @@ export class MapRenderer {
                 bg: this.theme.bg0,
                 font: this.theme.fontText,
                 pulseMs: (this.theme.tPulse > 0 ? this.theme.tPulse : 2.4) * 1000,
+                then: this.theme.signalEdge || this.theme.signal,
             },
             nowMs: now(),
         });

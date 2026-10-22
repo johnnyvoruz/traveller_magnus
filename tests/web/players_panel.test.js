@@ -121,11 +121,12 @@ test('the panel: player screens in place of the referee\'s; the journal\'s one w
     assert.match(panel, /<PlayerRecordPage v-else-if="recordId && isPlayer"/);
     assert.match(panel, /<PlayerParty v-else-if="tab === 'party' && !recordId && isPlayer"/);
     assert.match(panel, /:read-only="ro" :player="isPlayer"/);
-    assert.match(panel, /:read-only="!online" :player="isPlayer"/);
+    // Read-only offline, and in the example campaign (DL8).
+    assert.match(panel, /:read-only="!online \|\| example\.on" :player="isPlayer"/);
     assert.match(panel, /if \(isPlayer\.value && kind !== 'note'\) return;/);
     assert.match(panel, /<p v-if="status === 'gone'" class="camp-strip is-error" role="alert" data-campaign-gone>\{\{ NOT_IN_CAMPAIGN \}\}<\/p>/);
     assert.match(panel, /watch\(\(\) => props\.open && status\.value === 'ready' && !viewAs\.on, \(on\) => \{ watchCampaignPanel\(on\); \}, \{ immediate: true \}\);/);
-    assert.match(panel, /<ViewAsBar v-if="status === 'ready'" \/>/);
+    assert.match(panel, /<ViewAsBar v-if="status === 'ready' && !example\.on" \/>/, 'not in the example campaign (DL8)');
     const journal = read('workspace/journal/JournalList.vue');
     assert.match(journal, /<button v-if="player"[^>]*data-player-add-note[^>]*>\s*<Icon name="plus" :size="13" \/>Add a note/);
     assert.match(journal, /<div v-if="!first && !player" class="jn-pack">/, 'the Player Pack and its counts are the referee\'s');
@@ -134,7 +135,7 @@ test('the panel: player screens in place of the referee\'s; the journal\'s one w
     assert.match(list, /<p v-if="first && player" class="camp-first-player" data-player-empty>No records here yet\.<\/p>/);
     const rail = read('shell/Rail.vue');
     assert.match(rail, /v-if="lockedGuest \|\| buildOffered \|\| playerLock"/);
-    assert.match(read('workspace/players/player_mode.ts'), /export const BUILD_REFEREE = "Build is the referee's\.";/);
+    assert.match(read('workspace/players/player_mode.ts'), /export const BUILD_REFEREE = 'Only the referee can use Build\.';/);
     for (const file of ['workspace/players/PlayerRecordPage.vue', 'workspace/players/PlayerParty.vue', 'workspace/players/ViewAsBar.vue']) {
         assert.doesNotMatch(words(read(file).split('<template>')[1].split('<style>')[0]), HIDDEN_WORDS, file);
     }

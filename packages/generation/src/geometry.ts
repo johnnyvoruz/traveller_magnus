@@ -1,10 +1,8 @@
 /** World space is parsecs. One column step is 1. Copied from apps/web/src/map/geometry.ts. */
 
-export const SECTOR_COLS = 32;
-export const SECTOR_ROWS = 40;
-export const SQRT3 = Math.sqrt(3);
-export const ROW_STEP = SQRT3 / 1.5;
-export const HEX_SIZE = 1 / 1.5;
+import { HEX_SIZE, ROW_STEP, SECTOR_COLS, SECTOR_ROWS } from '@voyage/shared';
+
+export { HEX_SIZE, SECTOR_ROWS };
 
 export function toGlobal(sx: number, sy: number, col: number, row: number): { q: number; r: number } {
     return { q: sx * SECTOR_COLS + (col - 1), r: sy * SECTOR_ROWS + (row - 1) };

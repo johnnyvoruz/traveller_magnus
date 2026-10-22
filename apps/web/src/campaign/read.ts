@@ -100,3 +100,19 @@ function dropUnknown(schema: LooseSchema, value: unknown): unknown {
     }
     return value;
 }
+
+/**
+ * How many proposals are still open, when a poll page or an index carries that count.
+ * Absent means this page does not say. The campaign page itself has no such field today;
+ * an index page does (`counts.pendingProposals`).
+ */
+export function pendingProposalCount(page: unknown): number | null {
+    if (!page || typeof page !== 'object') return null;
+    const body = page as { pendingProposals?: unknown; counts?: { pendingProposals?: unknown } };
+    if (typeof body.pendingProposals === 'number' && Number.isInteger(body.pendingProposals) && body.pendingProposals >= 0) {
+        return body.pendingProposals;
+    }
+    const nested = body.counts?.pendingProposals;
+    if (typeof nested === 'number' && Number.isInteger(nested) && nested >= 0) return nested;
+    return null;
+}

@@ -57,7 +57,7 @@ function onKey(event: KeyboardEvent): void {
       <span class="news-legend">
         <span class="news-legend-bar" aria-hidden="true"></span>
         <span class="news-legend-ends">
-          <span>Just arrived</span>
+          <span>Arrived</span>
           <span>{{ horizonDays }} days later</span>
         </span>
       </span>
@@ -65,7 +65,7 @@ function onKey(event: KeyboardEvent): void {
         <Icon name="xmark" :size="13" />
       </button>
     </div>
-    <p v-if="capped" class="news-scrub-fine" role="status">Shown as far as nine sectors.</p>
+    <p v-if="capped" class="news-scrub-fine" role="status">The map shows this news as far as nine sectors.</p>
   </section>
   <section v-else class="news-scrub" role="group" :aria-label="'News from ' + sourceName" data-news-scrubber @keydown="onKey">
     <p class="news-scrub-say">
@@ -100,13 +100,13 @@ function onKey(event: KeyboardEvent): void {
           data-news-range
           @input="onInput"
         />
-        <span v-if="todayLeft !== null" class="news-scrub-today" :style="{ left: todayLeft + '%' }">Today</span>
+        <span v-if="todayLeft !== null" class="news-scrub-today" :style="{ left: todayLeft + '%', translate: -todayLeft + '% 0' }" data-news-today>Today</span>
       </span>
-      <button type="button" class="ui-btn is-icon news-scrub-x" aria-label="Close the news ripple" title="Close" data-news-close @click="emit('close')">
+      <button type="button" class="ui-btn is-icon news-scrub-x" aria-label="Close the news" title="Close" data-news-close @click="emit('close')">
         <Icon name="xmark" :size="13" />
       </button>
     </div>
-    <p v-if="capped" class="news-scrub-fine" role="status">Shown as far as nine sectors.</p>
+    <p v-if="capped" class="news-scrub-fine" role="status">The map shows this news as far as nine sectors.</p>
   </section>
 </template>
 
@@ -168,12 +168,15 @@ function onKey(event: KeyboardEvent): void {
   accent-color: var(--chart-news);
 }
 
+/*
+ * Today stays inside the track's own box, clear of Play (DF16): its left edge at the start, its middle at
+ * the middle, its right edge at the end (left X%, moved back X% of its own width).
+ */
 .news-scrub-today {
   position: absolute;
   bottom: 0;
   color: var(--text-muted);
   font: 600 10px/1 var(--font-text);
-  translate: -50% 0;
   white-space: nowrap;
 }
 

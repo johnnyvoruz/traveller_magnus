@@ -23,7 +23,7 @@ export type CourseRow = {
     /** What the hours field shows: the estimate to a tenth, or what was typed; null when neither. */
     hours: number | null;
     typed: boolean;
-    /** "31.4 AU · about 11 d 5 h", "Distance unknown: type the hours", "Waiting on the leg before". */
+    /** "31.4 AU · about 11 d 5 h", "Distance is unknown. Enter the hours.", "Waiting on the hours of the leg before this one.". */
     estimate: string;
     /** "148-1105 05:15", or empty. */
     arrives: string;
@@ -236,7 +236,7 @@ defineExpose({
         <div class="nav-aim" role="group" aria-label="Plotter">
           <button type="button" class="orbit-btn is-icon" data-command="orbit-plot-prev-body" :disabled="!canStep" aria-label="Plot to the body before" title="Plot to the body before (,)" @click="emit('step', -1)"><Icon name="chevron-left" :size="11" /></button>
           <button type="button" class="orbit-btn is-icon" data-command="orbit-plot-next-body" :disabled="!canStep" aria-label="Plot to the next body" title="Plot to the next body (.)" @click="emit('step', 1)"><Icon name="chevron-right" :size="11" /></button>
-          <button type="button" class="orbit-btn nav-lay" data-command="orbit-plot-commit" :disabled="!here" title="Lay a waypoint here (M, or press the picture)" @click="emit('commit')">
+          <button type="button" class="orbit-btn nav-lay" data-command="orbit-plot-commit" :disabled="!here" title="Lay a waypoint here (M, or select the picture)" @click="emit('commit')">
             <Icon name="plus" :size="11" />Waypoint
           </button>
         </div>
@@ -298,7 +298,7 @@ defineExpose({
             </span>
             <label class="nav-hours">
               <span class="nav-sr">Hours for leg {{ row.n }}</span>
-              <input type="number" min="0.1" step="0.1" required :value="row.hours ?? ''" :class="{ 'is-typed': row.typed }" :title="row.typed ? 'This leg’s hours, as typed' : 'This leg’s hours: the estimate, or type your own'" @input="emit('legHours', index, typedHours($event))" @keydown.stop>
+              <input type="number" min="0.1" step="0.1" required :value="row.hours ?? ''" :class="{ 'is-typed': row.typed }" :title="row.typed ? 'This leg’s hours, as entered' : 'This leg’s hours: the estimate, or enter your own'" @input="emit('legHours', index, typedHours($event))" @keydown.stop>
               <span aria-hidden="true">h</span>
             </label>
             <button type="button" class="nav-x" data-command="orbit-waypoint-remove" aria-label="Remove the focused waypoint" title="Remove the focused waypoint (Delete)" @click="removeRow('course', index)"><Icon name="xmark" :size="11" /></button>

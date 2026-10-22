@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
-import { applyCampaignChanges, CampaignRefusal, installCampaignSchema, readPlayersCampaign } from '../../apps/api/src/universe/campaign.ts';
+import { applyCampaignChanges, CampaignRefusal, installCampaignSchema, readDemoCampaign, readPlayersCampaign } from '../../apps/api/src/universe/campaign.ts';
 import { loggedRoute } from '../../apps/api/src/http.ts';
 
 const NOW = '2026-10-04T00:00:00.000Z';
@@ -208,4 +208,45 @@ test('a member read projects the live set and keeps visible when seq moves', () 
     assert.equal(climbed.visible.records.includes(PLACE), true);
     assert.equal(climbed.visible.records.includes(HIDDEN), false);
     assert.equal(climbed.seq > page.seq, true);
+});
+
+test('a member read drops a referee block, closed or unclosed, and so does the demo read', () => {
+    const { sql } = open();
+    const outside = 'The port is open.';
+    const inside = 'The password is nightfall.';
+    const closed = `${outside}\n:::referee\n${inside}\n:::\nStill ${outside}`;
+    const unclosed = `${outside}\n:::referee\n${inside}\nStill ${outside}`;
+    const shown = 'cr_00000000-0000-4000-8000-000000000020';
+    const openId = 'cr_00000000-0000-4000-8000-000000000021';
+    applyCampaignChanges(sql, {
+        records: [
+            record(shown, { visibility: 'players', name: 'Port', details: closed }),
+            record(openId, { visibility: 'players', name: 'Yard', details: unclosed }),
+        ],
+        journal: [
+            entry(jid(20), { title: 'Heard', body: closed }),
+            entry(jid(21), { title: 'Open', body: unclosed }),
+        ],
+    }, NOW);
+    const member = readPlayersCampaign(sql, 0, 1000, { userId: MEMBER, handles: {} });
+    const demo = readDemoCampaign(sql);
+    for (const body of [member, demo]) {
+        const raw = JSON.stringify(body);
+        assert.equal(raw.includes(inside), false);
+        assert.equal(raw.includes(':::referee'), false);
+        assert.equal(raw.includes('\n:::'), false);
+        assert.equal(raw.includes(outside), true);
+        const kept = body.records.find((row) => row.id === shown);
+        const dropped = body.records.find((row) => row.id === openId);
+        assert.match(kept.details, /The port is open\./);
+        assert.match(kept.details, /Still The port is open\./);
+        assert.match(dropped.details, /The port is open\./);
+        assert.equal(dropped.details.includes('Still'), false);
+        const keptNote = body.journal.find((row) => row.id === jid(20));
+        const lostNote = body.journal.find((row) => row.id === jid(21));
+        assert.match(keptNote.body, /Still The port is open\./);
+        assert.equal(lostNote.body.includes(inside), false);
+        assert.equal(lostNote.body.includes('Still'), false);
+        assert.match(lostNote.body, /The port is open\./);
+    }
 });

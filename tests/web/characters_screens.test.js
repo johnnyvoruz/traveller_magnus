@@ -94,6 +94,8 @@ test('the share panel is the owner’s to change, and an editor’s to read', ()
 
 test('the claim page has four states, and a bad link says which', () => {
     assert.equal(claimFace(false, 'ready').state, 'signed-out');
+    assert.match(claimFace(false, 'ready').line, /You return to this page/);
+    assert.equal(claimFace(true, 'missing').title, 'This link does not open');
     assert.equal(claimFace(true, 'ready').state, 'ready');
     assert.equal(claimFace(true, 'claimed').state, 'claimed');
     assert.equal(claimFace(true, 'used').state, 'refused');

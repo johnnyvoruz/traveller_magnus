@@ -1,0 +1,176 @@
+## Industrial highport: Bellweather — Class A, Pop 9, LL 10, TL 14
+Eligible scenarios: 47
+BEACON: Welcome to Bellweather. Highport arrivals, contact approach on channel 6. Surface-bound traffic use the published descent corridor. Surface transit credentials may be requested before departure from the port.
+
+[common | comms-antenna]
+COMMON CAUSE 39: Lark 26, your return signal is low.
+LARK 26: We're rolling to clear the antenna. One moment.
+
+[services | security-identity]
+SECURITY: Kiln 13, confirm captain and operating company.
+KILN 13: Captain recorded on the filing. Independent operator.
+SECURITY: Received.
+
+[approach | approach-clearance]
+MICA 42: Bellweather Highport, Mica 42. Request approach.
+BELLWEATHER HIGHPORT: Mica 42, report passing ten thousand. Expect vector on this frequency.
+MICA 42: Passing ten thousand. Standing by.
+
+[services | security-permit]
+TRANSIT OFFICE: Mica 42, surface travel permit is not attached to your arrival packet.
+MICA 42: We're not going surface-side.
+TRANSIT OFFICE: Acknowledged. Record marked transit only.
+
+[common | technical-automation]
+DOCK SYSTEM: Second Wind 58, berthing receipt transmitted. Reply only for a correction.
+SECOND WIND 58: No correction.
+
+[services | security-repeat]
+ACCESS CONTROL: Second Wind 58, read your permit number clearly. No abbreviations.
+SECOND WIND 58: Repeating the number now.
+
+[services | bureaucracy-reference]
+RECORDS: Lark 26, quote reference 535 when you call the desk.
+LARK 26: Copy reference. Is that also the landing number?
+RECORDS: No. Separate number.
+
+[common | technical-test]
+MAINTENANCE: Dock power, this is a test. Acknowledge on receipt.
+DOCK POWER: Received. No faults.
+
+[common | dispatch-clear]
+COMMON CAUSE 39: Any vessel on the common channel, radio check.
+TRINITY 58: Reading you, Common Cause 39.
+COMMON CAUSE 39: Thanks. That's all.
+
+[common | technical-maintenance-slot]
+YARD SERVICES: Common Cause 39, you'll need to clear the engine room for the inspection.
+COMMON CAUSE 39: We can do that after shift change.
+YARD SERVICES: Copy. Marking late watch.
+
+## Agricultural frontier: Tenlow — Class E, Pop 3, LL 2, TL 6
+Eligible scenarios: 15
+BEACON: Tenlow landing marker. No positive traffic control. Announce intentions on common.
+
+[common | dispatch-location]
+NETTLE 20: Traffic near the outer worlds, Nettle 20. Crossing the transfer lane outbound.
+
+[common | comms-antenna]
+TRINITY 17: Mica 70, your return signal is low.
+MICA 70: We're rolling to clear the antenna. One moment.
+
+[common | dispatch-clock]
+MORROW 8: Quiet Hours 78, were you on the last traffic update?
+QUIET HOURS 78: Negative. Send it again.
+MORROW 8: Copy. Relaying.
+
+[common | dispatch-clear]
+LARK 41: Any vessel on the common channel, radio check.
+MORROW 8: Reading you, Lark 41.
+LARK 41: Thanks. That's all.
+
+[common | gasgiant-traffic]
+TRINITY 26: Skim traffic, Trinity 26 leaving the collection track. Clear to your aft.
+LARK 41: Copy. Taking the next pass.
+
+[common | comms-narrow]
+LONG HAUL 45: Nightingale 21, you're cutting out. Shift to narrowband.
+NIGHTINGALE 21: Narrowband now. Better?
+LONG HAUL 45: Better.
+
+[common | field-crosswind]
+TRINITY 26: Tenlow traffic, crosswind on final. We'll make another circuit.
+
+[common | dispatch-hold]
+MICA 70: Morrow 8, we've cleared your stern. You can turn now.
+MORROW 8: Copy, turning.
+
+[common | field-landing]
+NIGHTINGALE 21: Tenlow traffic. Making one pass over the marker before we land.
+NIGHTINGALE 21: No other traffic observed. Continuing descent.
+
+[common | gasgiant-skimmer-check]
+LARK 41: Skimmer Seven, check your separator reading before the second pass.
+SKIMMER SEVEN: Reading normal. Sending the numbers.
+
+## Airless mining port: Korven — Class C, Pop 4, LL 4, TL 10
+Eligible scenarios: 35
+BEACON: Welcome to Korven. Arrivals call Korven approach on channel 9. Have your vessel registration ready. Berth charges are processed through port accounts.
+
+[common | freight-wait]
+TRINITY 19: Warehouse, confirming the load is ready?
+WAREHOUSE: The paperwork is ready. Freight's still being weighed.
+TRINITY 19: Copy. We'll hold on the ship.
+
+[common | gasgiant-traffic]
+MICA 12: Skim traffic, Mica 12 leaving the collection track. Clear to your aft.
+LARK 57: Copy. Taking the next pass.
+
+[common | comms-narrow]
+BLACKCAP 42: Mica 12, you're cutting out. Shift to narrowband.
+MICA 12: Narrowband now. Better?
+BLACKCAP 42: Better.
+
+[approach | approach-radio-check]
+LARK 48: Korven Control, radio check.
+KORVEN CONTROL: Reading you. A little thin.
+LARK 48: That's this transmitter. Thanks.
+
+[approach | approach-passing]
+KORVEN CONTROL: Quiet Hours 79, traffic crossing above you. Range 3 thousand. No course change.
+QUIET HOURS 79: Traffic in sight. Holding course.
+
+[services | corporate-billing]
+PORT ACCOUNTS: Morrow 21, the berth charge is posted. Confirm your billing contact.
+MORROW 21: Same account as last call.
+PORT ACCOUNTS: We still need you to confirm it.
+
+[approach | approach-clearance]
+PEREGRINE 32: Korven Control, Peregrine 32. Request approach.
+KORVEN CONTROL: Peregrine 32, report passing ten thousand. Expect vector on this frequency.
+PEREGRINE 32: Passing ten thousand. Standing by.
+
+[common | gasgiant-skimmer-check]
+QUIET HOURS 79: Skimmer Seven, check your separator reading before the second pass.
+SKIMMER SEVEN: Reading normal. Sending the numbers.
+
+[common | freight-reefer]
+FREIGHT: Trinity 19, who's paying power on your chilled containers?
+TRINITY 19: Receiver. Account ends 6463.
+FREIGHT: Got it.
+
+[common | freight-mass]
+FREIGHT: Peregrine 75, bill of lading reads 59 tonnes. Scales say 61.
+PEREGRINE 75: Use the scale. I'll send a corrected sheet.
+
+## Uninhabited unported world: Calf — Class X, Pop 0, LL 0, TL 0
+Eligible scenarios: 7
+
+[common | dispatch-clear]
+NIGHTINGALE 48: Any vessel on the common channel, radio check.
+GANNET 37: Reading you, Nightingale 48.
+NIGHTINGALE 48: Thanks. That's all.
+
+[common | dispatch-hold]
+LEDA 63: Nightingale 52, we've cleared your stern. You can turn now.
+NIGHTINGALE 52: Copy, turning.
+
+[common | noport-traffic]
+LONG HAUL 62: Calf local traffic, crossing high above the primary. No surface approach planned.
+
+[common | dispatch-clock]
+NIGHTINGALE 20: Morrow 19, were you on the last traffic update?
+MORROW 19: Negative. Send it again.
+NIGHTINGALE 20: Copy. Relaying.
+
+[common | comms-narrow]
+NIGHTINGALE 52: Cassia 9, you're cutting out. Shift to narrowband.
+CASSIA 9: Narrowband now. Better?
+NIGHTINGALE 52: Better.
+
+[common | noport-cross]
+COMMON CAUSE 59: Uncontrolled traffic, Common Cause 59 crossing Calf orbit. Estimate 13 minutes to clear.
+
+[common | comms-antenna]
+NIGHTINGALE 48: Kiln 33, your return signal is low.
+KILN 33: We're rolling to clear the antenna. One moment.

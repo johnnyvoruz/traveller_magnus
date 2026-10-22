@@ -1,5 +1,5 @@
 /**
- * Live vessels as the chart's marks, at the campaign date.
+ * Live vessels as the chart's marks, at the day the caller passes.
  * The hex and the in-jump flag follow vesselWhere, the same rule as the party marker
  * (workspace/party_where.ts): a flight stands in the system it is crossing, and a jump
  * is held at the system it left. placeAt disagrees: a flight is in the system the ship
@@ -82,4 +82,22 @@ export function partyShipMarks(
         });
     }
     return marks;
+}
+
+/**
+ * Places at an earlier day that are not the place being shown. The map draws these
+ * as a stroke. A ship that has not moved is left out.
+ */
+export function thenPlaces(
+    now: readonly { id: string; hexKey: string }[],
+    earlier: readonly { id: string; hexKey: string; lead?: boolean }[],
+): { id: string; hexKey: string; lead: boolean }[] {
+    const at = new Map<string, string>();
+    for (const item of now) at.set(item.id, item.hexKey);
+    const out: { id: string; hexKey: string; lead: boolean }[] = [];
+    for (const item of earlier) {
+        if (at.get(item.id) === item.hexKey) continue;
+        out.push({ id: item.id, hexKey: item.hexKey, lead: item.lead === true });
+    }
+    return out;
 }

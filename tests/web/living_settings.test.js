@@ -74,7 +74,7 @@ describe('the switches render', { concurrency: 1 }, () => {
         assert.match(html, /data-command="living-traffic" aria-checked="false"[^>]*>[\s\S]*?Show background traffic<\/span><em>Off<\/em>/);
         assert.match(html, /Ships that come and go in the orbit view/);
         assert.match(html, /data-command="living-quiet"[\s\S]*?Quiet on this device<\/span><em>Off<\/em>/);
-        assert.match(html, /Hides chatter and background traffic on this device only\./);
+        assert.match(html, /Hides background traffic on this device only\. System Comms has its own switch\./);
         assert.doesNotMatch(html, /data-living-read-only/);
     });
 
@@ -108,7 +108,7 @@ test('the campaign\'s switches are on its Campaigns card, this device\'s quiet i
 test('LS3b: the sentences are in Lane E\'s words.ts, not written out twice; DU18b: under This device', () => {
     const view = fs.readFileSync(path.join(webRoot, 'src/workspace/LivingSettings.vue'), 'utf8');
     const template = view.slice(view.indexOf('<template>'));
-    for (const words of ['Show system chatter', 'Show background traffic', 'Quiet on this device', 'Short radio', 'Ships that come', 'Hides chatter']) {
+    for (const words of ['Show system chatter', 'Show background traffic', 'Quiet on this device', 'Short radio', 'Ships that come', 'Hides background traffic']) {
         assert.equal(template.includes(words), false, words + ' is written in words.ts only');
     }
     assert.match(view, /import \{ LIVING_WORDS \} from '\.\.\/living\/words\.ts';/);

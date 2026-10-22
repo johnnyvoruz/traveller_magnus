@@ -29,11 +29,16 @@ export function sortCampaigns<T extends CampaignRow>(list: readonly T[]): T[] {
 
 /** What a delete takes with it, said before it is done. `records` is known for the open campaign only. */
 export function deleteWords(name: string, records: number | null): string {
+    return 'Delete ' + name + '? ' + deleteWhat(records);
+}
+
+/** What deleting a campaign takes with it: the confirm's text under its title (DU23). */
+export function deleteWhat(records: number | null): string {
     const what = records === null ? 'Everything in it goes with it'
         : records === 0 ? 'It has no records'
             : records === 1 ? 'Its one record goes with it'
                 : 'Its ' + records + ' records go with it';
-    return 'Delete ' + name + '? ' + what + '. This cannot be undone.';
+    return what + '. This cannot be undone.';
 }
 
 /** A name for the next campaign that is not already taken: "My campaign", "My campaign 2", … */

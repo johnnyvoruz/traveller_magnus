@@ -13,5 +13,8 @@
   },
   "packages/generation/src/territories.ts": {
     "colour literal": "published chart colour tables"
+  },
+  "apps/web/src/dev/surface-parity/GlParity.vue": {
+    "globalThis browser": "dev parity page reads location.search for probe, stall, and trace flags"
   }
 }

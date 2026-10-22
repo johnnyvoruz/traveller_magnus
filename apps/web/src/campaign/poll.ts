@@ -9,7 +9,8 @@ import { apiFetch } from '../platform/http.ts';
 import { rebuildCampaignIndex } from './index.ts';
 import { rebuildJournalIndex } from './journal.ts';
 import { pending } from './commit.ts';
-import { JOURNAL_PUBLIC_HEADERS, parseRead } from './read.ts';
+import { notePendingCount } from './proposals.ts';
+import { JOURNAL_PUBLIC_HEADERS, parseRead, pendingProposalCount } from './read.ts';
 import {
     applyPlayersPage,
     campaign,
@@ -110,6 +111,8 @@ async function pull(): Promise<boolean> {
         }
         const page = parseRead(CampaignPage, data);
         applyOwnerPage(page);
+        const pendingCount = pendingProposalCount(data);
+        if (pendingCount !== null) notePendingCount(pendingCount);
         if (page.done) return false;
         if (page.seq <= after) return false;
         after = page.seq;
