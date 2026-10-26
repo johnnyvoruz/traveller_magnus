@@ -30,11 +30,6 @@ export type CommsOptions = {
 
 const live = new WeakMap<HTMLElement, CommsReceiver>();
 
-/** The receiver mounted on this element, for a test or a later wire-up. */
-export function commsAt(root: HTMLElement): CommsReceiver | undefined {
-    return live.get(root);
-}
-
 let gradientSerial = 0;
 
 /** Gradient ids that stay unique when more than one receiver is on the page. */

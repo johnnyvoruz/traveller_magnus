@@ -1,5 +1,6 @@
 import type { SectorIndex, TreeEnvelope, TruthManifest, TruthOverview, TruthPolities } from '@voyage/shared';
 import { chartKeepVersion, chartMatch, chartPut } from '../platform/browser.ts';
+import { rememberVersion } from './chart_version.ts';
 
 type FetchLike = typeof fetch;
 
@@ -54,8 +55,14 @@ export class TruthClient {
         this.maxInFlight = opts.maxInFlight ?? 4;
     }
 
-    async currentVersion(): Promise<string> {
-        const body = await this.load(this.apiBase + '/api/truth/versions') as { ok?: boolean; data?: ReleasedRow[] };
+    /**
+     * The newest released version. `fresh` asks the Worker past the browser's HTTP cache (the list is
+     * sent with a short max-age), for a caller that boots from a remembered version and needs to know
+     * whether it is still the current one. The answer is remembered for the next visit.
+     */
+    async currentVersion(opts: { fresh?: boolean } = {}): Promise<string> {
+        const url = this.apiBase + '/api/truth/versions';
+        const body = await (opts.fresh ? this.loadFresh(url) : this.load(url)) as { ok?: boolean; data?: ReleasedRow[] };
         if (!body || body.ok !== true || !Array.isArray(body.data)) {
             throw new Error('TruthClient: versions response is not an ok envelope');
         }
@@ -66,6 +73,7 @@ export class TruthClient {
             if (!best || row.releasedAt > best.releasedAt) best = { version: row.version, releasedAt: row.releasedAt };
         }
         if (!best) throw new Error('TruthClient: no released truth version');
+        rememberVersion(best.version);
         await chartKeepVersion(best.version);
         return best.version;
     }
@@ -163,6 +171,13 @@ export class TruthClient {
     onArrive(fn: (slug: string) => void): () => void {
         this.listeners.add(fn);
         return () => { this.listeners.delete(fn); };
+    }
+
+    private loadFresh(url: string): Promise<unknown> {
+        return Promise.resolve(this.fetch(url, { cache: 'no-cache' })).then((res) => {
+            if (!res.ok) throw new Error('TruthClient: ' + res.status + ' ' + url);
+            return res.json() as Promise<unknown>;
+        });
     }
 
     private load(url: string): Promise<unknown> {

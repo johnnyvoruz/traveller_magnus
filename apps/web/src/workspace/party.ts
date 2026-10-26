@@ -4,7 +4,8 @@
  * open on. Each member is aboard one of those ships or none. With no ship, the party
  * stands on its own anchor. Pure: it runs under Node. The write is one settings change.
  */
-import { CAMPAIGN_LIMITS, type CampaignAnchor, type CampaignRecord, type CampaignSettings, type SettingsChange } from '@voyage/shared';
+import { CAMPAIGN_LIMITS } from '@voyage/shared/campaign_core';
+import type { CampaignAnchor, CampaignRecord, CampaignSettings, SettingsChange } from '@voyage/shared';
 import { liveById, resolvePlace, type Resolved } from './places.ts';
 
 export type Party = CampaignSettings['party'];

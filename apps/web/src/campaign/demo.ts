@@ -4,7 +4,8 @@
  * role player, then applyPlayersPage. There is no universe id and no poll, so a write
  * has nothing to send.
  */
-import { PlayersPage, type PlayersPage as PlayersPageData } from '@voyage/shared';
+import type { PlayersPage as PlayersPageData } from '@voyage/shared';
+import { loadSchemas, type Schemas } from '../platform/schemas.ts';
 import { exampleRead } from './commit.ts';
 import { applyPlayersPage, campaign, transport } from './store.ts';
 
@@ -23,7 +24,7 @@ function idsOf(rows: readonly unknown[]): string[] {
  * View as players loads a PlayersPage, so the missing page fields are filled here:
  * one page, done, and the ids the body already listed.
  */
-function projectionPage(data: unknown): PlayersPageData | null {
+function projectionPage(data: unknown, PlayersPage: Schemas['PlayersPage']): PlayersPageData | null {
     if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
     const body = data as Record<string, unknown>;
     if (!Array.isArray(body.records) || !Array.isArray(body.links) || !Array.isArray(body.journal)) return null;
@@ -49,6 +50,8 @@ function projectionPage(data: unknown): PlayersPageData | null {
 
 /** The example, or null when it is missing or not available yet. */
 export async function loadDemo(): Promise<PlayersPageData | null> {
+    // The schemas come down while the example does. A failed load is no example, like a failed fetch.
+    const shared = loadSchemas().catch(() => null);
     let res: Response;
     // A plain call: a browser's fetch called as transport.fetch(...) throws "Illegal invocation".
     const fetchNow = transport.fetch;
@@ -65,7 +68,8 @@ export async function loadDemo(): Promise<PlayersPageData | null> {
     } catch {
         return null;
     }
-    const page = projectionPage(data);
+    const loaded = await shared;
+    const page = loaded ? projectionPage(data, loaded.PlayersPage) : null;
     if (!page) return null;
     campaign.role = 'player';
     campaign.universeId = null;

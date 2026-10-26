@@ -3,7 +3,7 @@
  * the hexes it holds, and the sixteen subsectors of a sector as a grid to climb down by.
  * A subsector is eighty hexes with an address; a sector is all sixteen. Pure: runs under Node.
  */
-import { SUBSECTOR_LETTERS } from '@voyage/shared';
+import { SUBSECTOR_LETTERS } from '@voyage/shared/sector_core';
 import { subsectorHexes } from '../../builder/address.ts';
 
 /** `letter` null is the whole sector. */

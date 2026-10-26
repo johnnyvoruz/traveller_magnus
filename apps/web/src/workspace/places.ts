@@ -5,7 +5,8 @@
  * runs under Node. The body key is the dossier's (s0, w3, w3m1) and the body's name is kept
  * beside it as `locationLabel`, so a key that no longer matches can be said in words.
  */
-import { locate, type CampaignAnchor, type CampaignRecord } from '@voyage/shared';
+import { locate } from '@voyage/shared/campaign_core';
+import type { CampaignAnchor, CampaignRecord } from '@voyage/shared';
 
 export type SystemPlace = { slug: string; hex: string };
 

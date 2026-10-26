@@ -1,5 +1,9 @@
 import { z } from 'zod';
+import { builderPairReady } from '../builder_core.ts';
 import { SectorHex } from './truth.ts';
+
+/** `builderPairReady` lives in `../builder_core.ts`, which has no zod. It is re-exported here. */
+export { builderPairReady };
 
 /**
  * Builder step 1. Create, read, and delete one system or many.
@@ -43,17 +47,6 @@ export type BuilderGenerator = z.infer<typeof BuilderGenerator>;
  */
 export const GenerateDensity = z.enum(['every', 'sparse', 'standard', 'dense']);
 export type GenerateDensity = z.infer<typeof GenerateDensity>;
-
-/**
- * Pairs `generateHex` actually runs today.
- * Mongoose goes through `buildOne`, which generates top down.
- * Architect of Worlds goes through `generateAoWSystemBottomUp`.
- * The other editions, and the other pairing of these two, are not offered.
- */
-export function builderPairReady(edition: string, generator: string): boolean {
-    return (edition === 'MgT2E' && generator === 'top-down')
-        || (edition === 'AoW' && generator === 'bottom-up');
-}
 
 const Hash = z.string().regex(/^[0-9a-f]{64}$/);
 

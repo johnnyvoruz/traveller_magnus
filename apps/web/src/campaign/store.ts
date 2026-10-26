@@ -1,21 +1,19 @@
 import { reactive } from 'vue';
-import {
-    CampaignEntry,
-    CampaignPage,
-    PlayersPage,
+import type {
     Universe,
-    type CampaignClock,
-    type CampaignEntry as CampaignEntryRow,
-    type CampaignLink,
-    type CampaignRecord,
-    type CampaignSettings,
-    type PlayersClock,
-    type PlayersLink,
-    type PlayersPage as PlayersPageData,
-    type PlayersRecord,
-    type PlayersSettings,
-    type PlayingList,
+    CampaignClock,
+    CampaignEntry as CampaignEntryRow,
+    CampaignLink,
+    CampaignRecord,
+    CampaignSettings,
+    PlayersClock,
+    PlayersLink,
+    PlayersPage as PlayersPageData,
+    PlayersRecord,
+    PlayersSettings,
+    PlayingList,
 } from '@voyage/shared';
+import { loadSchemas, schemas } from '../platform/schemas.ts';
 import { newId, storageGet, storageSet } from '../platform/browser.ts';
 import { apiFetch } from '../platform/http.ts';
 import { commit, flushCampaign, pending } from './commit.ts';
@@ -26,7 +24,7 @@ import { rebuildJournalIndex } from './journal.ts';
 
 type FetchLike = typeof fetch;
 type Schedule = (fn: () => void, ms: number) => () => void;
-type UniverseRow = ReturnType<typeof Universe.parse>;
+type UniverseRow = Universe;
 
 /** Device key for the universe opened last. One browser, one choice. */
 export const CAMPAIGN_UNIVERSE_KEY = 'voyage.campaign.universeId';
@@ -146,7 +144,7 @@ function holdEntry(row: unknown): CampaignEntryRow {
     const authorName = typeof raw.authorName === 'string' ? raw.authorName : undefined;
     delete raw.authorName;
     if (typeof raw.rev !== 'number') raw.rev = 0;
-    const held = CampaignEntry.parse(raw);
+    const held = schemas().CampaignEntry.parse(raw);
     if (authorName === undefined) delete campaign.authorNames[held.id];
     else campaign.authorNames[held.id] = authorName;
     return held;
@@ -227,13 +225,15 @@ function remembered(): string | null {
 }
 
 async function readList(): Promise<UniverseRow[] | null> {
+    const shared = loadSchemas();
     const listed = await apiFetch(transport.fetch, '/api/universes');
     if (listed.status === 401) {
         signOutLocal();
         return null;
     }
     if (!listed.ok) return null;
-    const universes = parseRead(Universe.array(), (await listed.json()).data);
+    const { Universe: UniverseSchema } = await shared;
+    const universes = parseRead(UniverseSchema.array(), (await listed.json()).data);
     campaign.universes = universes;
     return universes;
 }
@@ -244,6 +244,7 @@ export async function listCampaigns(): Promise<UniverseRow[] | null> {
 }
 
 async function postCampaign(name: string): Promise<UniverseRow | null> {
+    const shared = loadSchemas();
     const id = universeIdForCreate();
     let created: Response;
     try {
@@ -265,7 +266,8 @@ async function postCampaign(name: string): Promise<UniverseRow | null> {
     }
     if (created.status !== 201 && created.status !== 200) return null;
     pendingUniverseId = null;
-    const universe = parseRead(Universe, (await created.json()).data);
+    const { Universe: UniverseSchema } = await shared;
+    const universe = parseRead(UniverseSchema, (await created.json()).data);
     const index = campaign.universes.findIndex((item) => item.id === universe.id);
     if (index >= 0) campaign.universes[index] = universe;
     else campaign.universes.push(universe);
@@ -273,6 +275,7 @@ async function postCampaign(name: string): Promise<UniverseRow | null> {
 }
 
 async function loadPages(universe: { id: string }, role: 'owner' | 'player' = 'owner'): Promise<void> {
+    const shared = loadSchemas();
     clearRows();
     campaign.role = role;
     campaign.universeId = universe.id;
@@ -304,7 +307,7 @@ async function loadPages(universe: { id: string }, role: 'owner' | 'player' = 'o
         }
         const body = (await pageRes.json()).data;
         if (role === 'player') {
-            const parsed = parseRead(PlayersPage, body);
+            const parsed = parseRead((await shared).PlayersPage, body);
             applyPlayersPage(parsed);
             if (parsed.done) break;
             if (parsed.seq <= after) {
@@ -314,7 +317,7 @@ async function loadPages(universe: { id: string }, role: 'owner' | 'player' = 'o
             after = parsed.seq;
             continue;
         }
-        const page = parseRead(CampaignPage, body);
+        const page = parseRead((await shared).CampaignPage, body);
         for (const record of page.records) records[record.id] = record;
         for (const link of page.links) links[link.id] = link;
         for (const entry of page.journal ?? []) journal[entry.id] = entry;
@@ -438,6 +441,7 @@ export async function createCampaign(name: string): Promise<UniverseRow | null> 
 }
 
 export async function renameCampaign(id: string, name: string): Promise<void> {
+    const shared = loadSchemas();
     const res = await apiFetch(transport.fetch, `/api/universes/${encodeURIComponent(id)}`, {
         method: 'PATCH',
         body: JSON.stringify({ name }),
@@ -447,7 +451,7 @@ export async function renameCampaign(id: string, name: string): Promise<void> {
         return;
     }
     if (!res.ok) throw new Error('The campaign could not be renamed.');
-    const updated = parseRead(Universe, (await res.json()).data);
+    const updated = parseRead((await shared).Universe, (await res.json()).data);
     const index = campaign.universes.findIndex((item) => item.id === id);
     if (index >= 0) campaign.universes[index] = updated;
     else campaign.universes.push(updated);

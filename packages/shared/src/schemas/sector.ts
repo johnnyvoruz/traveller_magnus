@@ -1,5 +1,9 @@
 import { z } from 'zod';
+import { SUBSECTOR_LETTERS } from '../sector_core.ts';
 import { BUILDER_LIMITS, BuilderEdition, BuilderGenerator, BuilderHex, GenerateDensity, GenerationAllowance, HexKey } from './builder.ts';
+
+/** The letters live in `../sector_core.ts`, which has no zod. They are re-exported here. */
+export { SUBSECTOR_LETTERS };
 
 /**
  * A sector the referee made.
@@ -12,12 +16,7 @@ import { BUILDER_LIMITS, BuilderEdition, BuilderGenerator, BuilderHex, GenerateD
 export const OwnSectorId = z.string().regex(/^~[0-9A-HJKMNP-TV-Z]{26}$/);
 export type OwnSectorId = z.infer<typeof OwnSectorId>;
 
-export const SUBSECTOR_LETTERS = [
-    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
-    'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
-] as const;
 export type SubsectorLetter = (typeof SUBSECTOR_LETTERS)[number];
-
 export const SubsectorLetter = z.enum(SUBSECTOR_LETTERS);
 
 /** Sixteen names, index 0 is A and index 15 is P. Empty is an unnamed subsector. */

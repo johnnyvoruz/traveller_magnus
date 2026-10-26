@@ -3,7 +3,8 @@
  * §1 and §2). The reactive part is one object; everything else is pure and runs under Node.
  */
 import { reactive } from 'vue';
-import { builderPairReady, type SectorHex, type SectorIndex, type Settings } from '@voyage/shared';
+import { builderPairReady } from '@voyage/shared/builder_core';
+import type { SectorHex, SectorIndex, Settings } from '@voyage/shared';
 import { storageGet, storageSet } from '../../platform/browser.ts';
 import { parseHexKey } from '../places.ts';
 import type { BuildRow, Density, GenerateChoice, Generator, HexState, JobProgress, Preview } from './seam.ts';

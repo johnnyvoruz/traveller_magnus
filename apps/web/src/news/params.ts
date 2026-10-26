@@ -4,37 +4,32 @@
  * rules do not: station hold 0, the bare route rule, off-network within
  * 2 parsecs, and no off-network wait yet.
  *
- * Zod 3 lives with @voyage/shared. The app does not import the root zod.
+ * The map loads this file at first paint, so it holds the values and the types and no schema
+ * library. The zod schema is `params_schema.ts`; the news tests check these values against it.
  */
-import { z } from '../../../../packages/shared/node_modules/zod/index.js';
 
 /** `rules/mgt2e_space_travel.json` `jump.durationHours`: base hours plus that many D. */
-export const JumpHours = z.object({
-    base: z.number().finite(),
-    dice: z.number().int().positive(),
-}).strict();
-export type JumpHours = z.infer<typeof JumpHours>;
+export type JumpHours = { base: number; dice: number };
 
 /**
  * `bare`: no Allegiance, no Type, no Color, plus Type "Xboat".
  * `chart`: no Allegiance and no Color.
  * `allegiances:<codes>`: those Allegiance codes, on top of `bare`.
  */
-export const RouteRule = z.string().regex(/^(bare|chart|allegiances:[^,]+(,[^,]+)*)$/);
+export type RouteRule = string;
 
-export const NewsParams = z.object({
-    jumpHours: JumpHours,
-    xboatLegHours: JumpHours,
-    stationHoldHours: z.number().finite(),
-    xboatMaxParsecs: z.number().int().positive(),
-    xboatRouteRule: RouteRule,
-    offNetworkOn: z.boolean(),
-    offNetworkParsecs: z.number().int().positive(),
-    offNetworkWaitHours: z.number().finite().nullable(),
-    horizonDays: z.number().int().positive(),
-    sectorCap: z.number().int().positive(),
-}).strict();
-export type NewsParams = z.infer<typeof NewsParams>;
+export type NewsParams = {
+    jumpHours: JumpHours;
+    xboatLegHours: JumpHours;
+    stationHoldHours: number;
+    xboatMaxParsecs: number;
+    xboatRouteRule: RouteRule;
+    offNetworkOn: boolean;
+    offNetworkParsecs: number;
+    offNetworkWaitHours: number | null;
+    horizonDays: number;
+    sectorCap: number;
+};
 
 /** All 1s, the mean (3.5 per die), and all 6s. Arithmetic over the cited dice, not a roll. */
 export function jumpSpan(hours: JumpHours): { earliest: number; likely: number; latest: number } {
@@ -45,7 +40,7 @@ export function jumpSpan(hours: JumpHours): { earliest: number; likely: number; 
     };
 }
 
-export const NEWS_PARAMS: NewsParams = NewsParams.parse({
+export const NEWS_PARAMS: NewsParams = {
     // rules/mgt2e_space_travel.json jump.durationHours. 148 + 6D is 154 / 169 / 184 hours.
     jumpHours: { base: 148, dice: 6 },
     // The same jump. Nothing in the rules says an X-boat leg is faster or slower.
@@ -67,4 +62,4 @@ export const NEWS_PARAMS: NewsParams = NewsParams.parse({
     horizonDays: 60,
     // Product: at most nine sectors in one ripple.
     sectorCap: 9,
-});
+};

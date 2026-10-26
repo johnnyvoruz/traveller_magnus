@@ -9,7 +9,6 @@
  */
 import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { CAMPAIGN_LIMITS, type CampaignRecordType } from '@voyage/shared';
-import { session } from '../account/session.ts';
 import { campaign, renameCampaign } from '../campaign/store.ts';
 import Icon from '../design/Icon.vue';
 import { deleteRecord, recentlyDeleted, restoreRecord } from './actions.ts';
@@ -18,6 +17,7 @@ import { locating, startLocate, stopLocate } from './locate.ts';
 import RecordAvatar from './RecordAvatar.vue';
 import { handedQuery, listSort, recordFilter, recordQuery } from './list_state.ts';
 import { publishAsk } from './market/command.ts';
+import { canPublishRecords } from './market/record_publish.ts';
 import { placeSource } from './place_source.ts';
 import { commandScope, handleKey, registerCommand, setCommandScope } from '../shell/registry.ts';
 import { showToast } from '../shell/toast.ts';
@@ -192,10 +192,7 @@ const places = computed(() => {
 });
 const first = computed(() => all.value.length === 0);
 /** Publish records: offered to the campaign's owner, signed in and online, once there is a record. */
-const canPublish = computed(() => {
-    const row = campaign.universes.find((item) => item.id === campaign.universeId);
-    return !props.readOnly && all.value.length > 0 && !!row && !!session.user && row.ownerId === session.user.id;
-});
+const canPublish = computed(() => canPublishRecords(props.readOnly, all.value.length));
 const publishing = ref(false);
 /** The rows the list shows are chosen when the list is narrowed (a type, a search, here); the whole list starts with none. */
 const publishStart = computed(() => (filter.value !== 'all' || query.value || atHere.value ? rows.value.map((record) => record.id) : []));

@@ -5,9 +5,8 @@
  * are labels, not rules: the vocabulary says which pairs of types a kind joins. Pure: it runs
  * under Node. The store's own index answers which links touch a record.
  */
-import {
-    CAMPAIGN_LINK_KINDS, linkAllowed, type CampaignLink, type CampaignLinkKindName, type CampaignRecord, type LinkChange,
-} from '@voyage/shared';
+import { CAMPAIGN_LINK_KINDS, linkAllowed } from '@voyage/shared/campaign_core';
+import type { CampaignLink, CampaignLinkKindName, CampaignRecord, LinkChange } from '@voyage/shared';
 import { linkIdsFrom, linkIdsTo } from '../campaign/index.ts';
 
 export const ROLE_MAX = 80;

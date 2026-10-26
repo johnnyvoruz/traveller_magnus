@@ -2,8 +2,15 @@
   "name": "@voyage/shared",
   "version": "1.0.0",
   "type": "module",
+  "sideEffects": false,
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./campaign_core": "./src/campaign_core.ts",
+    "./public_limits": "./src/public_limits.ts",
+    "./sector_core": "./src/sector_core.ts",
+    "./builder_core": "./src/builder_core.ts",
+    "./package_place": "./src/package_place.ts",
+    "./orbit_au": "./src/orbit_au.ts"
   },
   "dependencies": {
     "zod": "^3"

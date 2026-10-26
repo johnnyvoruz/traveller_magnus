@@ -8,7 +8,8 @@
  * the sector and its hexes from before, so Undo names the revision the delete made.
  */
 import { reactive } from 'vue';
-import { FormRead, RefereeSector, RefereeSectorPage } from '@voyage/shared';
+import type { RefereeSector } from '@voyage/shared';
+import { schemas } from '../platform/schemas.ts';
 import { parseHexKey } from '../workspace/places.ts';
 import type { OwnSector, OwnSectors, SectorUndoToken } from '../workspace/build/seam.ts';
 
@@ -72,7 +73,7 @@ export function openSectors(port: SectorPort): SectorBook {
 
     /** The sector as the server answered it: held, or dropped when it says deleted. */
     function land(data: unknown): OwnSector {
-        const row = RefereeSector.parse(data);
+        const row = schemas().RefereeSector.parse(data);
         const sector = asOwn(row);
         if (row.deleted) held.delete(row.id);
         else held.set(row.id, sector);
@@ -85,7 +86,7 @@ export function openSectors(port: SectorPort): SectorBook {
             return await port.request(method, url, body);
         } catch (err) {
             const current = conflictSector(err);
-            if (current !== undefined && RefereeSector.safeParse(current).success) land(current);
+            if (current !== undefined && schemas().RefereeSector.safeParse(current).success) land(current);
             throw new Error(messageOf(err));
         }
     }
@@ -97,7 +98,8 @@ export function openSectors(port: SectorPort): SectorBook {
     }
 
     async function load(): Promise<void> {
-        const page = RefereeSectorPage.parse(await call('GET', base + '/sectors'));
+        const raw1 = await call('GET', base + '/sectors');
+        const page = schemas().RefereeSectorPage.parse(raw1);
         held.clear();
         for (const row of page.items) if (!row.deleted) held.set(row.id, asOwn(row));
         state.loaded = true;
@@ -150,7 +152,7 @@ export function openSectors(port: SectorPort): SectorBook {
             } catch {
                 return null;
             }
-            const read = FormRead.safeParse(data);
+            const read = schemas().FormRead.safeParse(data);
             if (!read.success) return null;
             return read.data.form.mode === 'hand' ? 'hand' : 'generated';
         },

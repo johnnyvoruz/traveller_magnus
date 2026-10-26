@@ -12,6 +12,7 @@ import { wrapFocus } from '../focus_trap.ts';
 import { liveRecords, typeInfo } from '../records.ts';
 import { closePublish, formProblems, kindOfRecords, marketStore, marketUi, ownUniverse, parseTags, plural, publish, REFEREE_ONLY_NOTE, usePublishTarget } from './market.ts';
 import PublishFields from './PublishFields.vue';
+import { refereeLead } from './record_publish.ts';
 
 const props = defineProps<{
     /** The records chosen when it opens: the rows the list shows. */
@@ -26,6 +27,8 @@ const card = ref<HTMLElement | null>(null);
 const all = computed(() => liveRecords(campaign.records).sort((a, b) => a.name.localeCompare(b.name)));
 const picked = ref<Set<string>>(new Set(props.start));
 const chosen = computed(() => all.value.filter((record) => picked.value.has(record.id)));
+/** How many of the chosen records the referee alone sees: the dialog leads with a warning when it is any. */
+const refereeChosen = computed(() => chosen.value.filter((record) => record.visibility === 'referee').length);
 const { target, isNew } = usePublishTarget();
 const problems = computed(() => formProblems({
     isNew: isNew.value,
@@ -126,6 +129,7 @@ onMounted(() => {
         </div>
         <form class="mk-fields mk-rpub-body" @submit.prevent="send">
           <p class="mk-sum"><b>{{ plural(chosen.length, 'record', 'records') }}</b><span>Nothing is placed on the map. Whoever imports it gets these records in their campaign.</span></p>
+          <p v-if="refereeChosen > 0" class="mk-note" role="alert" data-referee-lead><b>{{ refereeLead(refereeChosen) }}</b> Anyone who has the package's address can read the whole record.</p>
           <p v-for="item in selectionProblems" :key="item.text" class="mk-err" role="alert">{{ item.text }}</p>
 
           <PublishFields :problems="problems" :tried="tried" />

@@ -1,18 +1,18 @@
 import { ref } from 'vue';
-import {
-    CampaignChangesResult,
-    type CampaignChanges,
-    type CampaignEntry,
-    type CampaignLink,
-    type CampaignRecord,
-    type CampaignSettings,
-    type ClockChange,
-    type EntryChange,
-    type LinkChange,
-    type RecordChange,
-    type SettingsChange,
+import type {
+    CampaignChanges,
+    CampaignEntry,
+    CampaignLink,
+    CampaignRecord,
+    CampaignSettings,
+    ClockChange,
+    EntryChange,
+    LinkChange,
+    RecordChange,
+    SettingsChange,
 } from '@voyage/shared';
 import { newId, onPageHide } from '../platform/browser.ts';
+import { loadSchemas } from '../platform/schemas.ts';
 import { apiFetch } from '../platform/http.ts';
 import { clearToasts, showToast } from '../shell/toast.ts';
 import { rebuildCampaignIndex } from './index.ts';
@@ -228,6 +228,7 @@ export async function flushCampaign(): Promise<void> {
     queuedClock = undefined;
     sending = true;
     pending.value = true;
+    const shared = loadSchemas();
     try {
         const res = await apiFetch(transport.fetch, `/api/universes/${encodeURIComponent(campaign.universeId)}/campaign/changes`, {
             method: 'PATCH',
@@ -235,7 +236,7 @@ export async function flushCampaign(): Promise<void> {
             body: JSON.stringify(bodyOf(records, links, journal, settings, clock)),
         });
         if (!res.ok) throw new Error('offline');
-        const result = parseRead(CampaignChangesResult, (await res.json()).data);
+        const result = parseRead((await shared).CampaignChangesResult, (await res.json()).data);
         const handled = new Set<string>();
         let settingsHandled = false;
         let clockHandled = false;

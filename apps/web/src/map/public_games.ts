@@ -14,7 +14,9 @@
  * more is asked until the visitor signs in (contracts/b_party_ships.md, "Signed-out viewers").
  */
 import type { PublicGamesHex } from '@voyage/shared';
-import { CAMPAIGN_LIMITS, PUBLIC_NAMES_PER_SHIP, PUBLIC_SHIPS_PER_HEX, type PublicShipMark } from '@voyage/shared';
+import { CAMPAIGN_LIMITS } from '@voyage/shared/campaign_core';
+import { PUBLIC_NAMES_PER_SHIP, PUBLIC_SHIPS_PER_HEX } from '@voyage/shared/public_limits';
+import type { PublicShipMark } from '@voyage/shared';
 import { apiFetch } from '../platform/http.ts';
 
 /** Calls kept in any 60 seconds. The server's cap is 60. */

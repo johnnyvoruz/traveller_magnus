@@ -4,9 +4,8 @@
  * screen sends (create, edit, delete, restore). Pure: it runs under Node. The store, the queue
  * and the server are apps/web/src/campaign; nothing here touches them.
  */
-import {
-    CAMPAIGN_LIMITS, CAMPAIGN_RECORD_TYPES, type CampaignAnchor, type CampaignRecord, type CampaignRecordType, type RecordChange,
-} from '@voyage/shared';
+import { CAMPAIGN_LIMITS, CAMPAIGN_RECORD_TYPES } from '@voyage/shared/campaign_core';
+import type { CampaignAnchor, CampaignRecord, CampaignRecordType, RecordChange } from '@voyage/shared';
 import type { FaIconName } from '../design/icons.ts';
 import { sameImages } from './images.ts';
 import { liveById, resolvePlace, sameAnchor } from './places.ts';

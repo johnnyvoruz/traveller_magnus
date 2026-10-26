@@ -2,7 +2,8 @@
  * The account's daily generation allowance. Pure helpers for the Build screens.
  * The number itself lives on the session: it arrives on GET /api/me, before any map is open.
  */
-import { GenerationAllowance, type GenerationAllowance as Allowance } from '@voyage/shared';
+import type { GenerationAllowance as Allowance } from '@voyage/shared';
+import { schemas } from '../platform/schemas.ts';
 
 /** A generate the server refused whole. The message is the server's sentence. */
 export class AllowanceRefused extends Error {
@@ -40,7 +41,7 @@ export function allowanceResetsLocal(allowance: Allowance | null): Date | null {
 
 /** The 429 details have no `used`. It is limit minus remaining. */
 export function allowanceFromRefusal(details: { remaining: number; limit: number; resetsAt: string }): Allowance | null {
-    const parsed = GenerationAllowance.safeParse({
+    const parsed = schemas().GenerationAllowance.safeParse({
         limit: details.limit,
         used: details.limit - details.remaining,
         remaining: details.remaining,

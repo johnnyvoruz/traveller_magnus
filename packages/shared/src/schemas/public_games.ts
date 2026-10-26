@@ -1,5 +1,9 @@
 import { z } from 'zod';
 import { CAMPAIGN_LIMITS } from './campaign.ts';
+import { PUBLIC_CARD_BODY, PUBLIC_CARD_BYTES, PUBLIC_CARD_ENTRIES, PUBLIC_NAMES_PER_SHIP, PUBLIC_SHIPS_PER_HEX } from '../public_limits.ts';
+
+/** The card limits live in `../public_limits.ts`, which has no zod. They are re-exported here. */
+export { PUBLIC_CARD_BODY, PUBLIC_CARD_BYTES, PUBLIC_CARD_ENTRIES, PUBLIC_NAMES_PER_SHIP, PUBLIC_SHIPS_PER_HEX };
 
 /**
  * Owner's on/off switch. `showReferee` is optional so a 1.2.x tab can still send `{ public }` alone.
@@ -17,27 +21,6 @@ export const PublicGamesSetting = z.object({
 export type PublicGamesSetting = z.infer<typeof PublicGamesSetting>;
 
 const LOCAL_HEX = /^\d{4}$/;
-
-/** Ships named on one hex. `count` stays the full number when this list is shorter. */
-export const PUBLIC_SHIPS_PER_HEX = 20;
-
-/** Names aboard one public ship, in party order. A longer crew is cut here. */
-export const PUBLIC_NAMES_PER_SHIP = 20;
-
-/** Public journal entries on one card, newest first. */
-export const PUBLIC_CARD_ENTRIES = 20;
-
-/**
- * Characters of one public entry body. A stored journal body may be 100,000 characters.
- * The card is copied onto each ship, and 2,000 characters is what the card shows.
- */
-export const PUBLIC_CARD_BODY = 2_000;
-
-/**
- * Bytes of `legs`, `course`, and `journal` stored on one ship.
- * A longer card drops the oldest finished legs, then the oldest notes. The course is kept.
- */
-export const PUBLIC_CARD_BYTES = 100_000;
 
 const MARK_ID = /^pm_[0-9A-HJKMNP-TV-Z]{26}$/;
 

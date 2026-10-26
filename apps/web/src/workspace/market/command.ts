@@ -7,6 +7,11 @@
  * "Publish records" (prompts/d_store_harden.md item 3), also while someone is signed in: it opens
  * the Publish records dialog for the open campaign. On the store the store opens it; anywhere else
  * the campaign's records list opens and opens it (CampaignList.vue). Either one watches `publishAsk`.
+ *
+ * "Publish this record…" (Johnny 2026-10-22 20:08, ZB1 question 4), only while a record's page is open:
+ * RecordPage.vue registers it while it is mounted, gated by the page's own `canPublishRecords`, and its
+ * run opens the same dialog with that one record chosen. It is not the build-publish command; that one
+ * keeps its name.
  */
 import { reactive, watch } from 'vue';
 import { session } from '../../account/session.ts';
@@ -30,6 +35,14 @@ export function askPublishRecords(): void {
     const here = currentRoute();
     if (!here || here.path.startsWith(MARKETPLACE_PATH)) return;
     pushRoute(atPane(here.path, here.query, { kind: 'campaign', record: null }));
+}
+
+export const PUBLISH_RECORD_ID = 'publish-record';
+export const PUBLISH_RECORD_NAME = 'Publish this record\u2026';
+
+/** The palette line for the record that is open. `canPublish` is the page's gate; `open` shows its dialog. */
+export function publishThisRecord(canPublish: () => boolean, open: () => void): Command {
+    return { id: PUBLISH_RECORD_ID, name: PUBLISH_RECORD_NAME, runnable: canPublish, run: open };
 }
 
 export function offerMarketplace(register: (command: Command) => () => void): void {

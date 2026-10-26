@@ -3,7 +3,8 @@
  * The chain walk is locate. When a date is given, a vessel with a track is placed by
  * positionAt instead of by its stored anchor. With no date, the answer is locate's.
  */
-import { locate, type CampaignAnchor, type CampaignRecord, type LocateAt, type SystemAnchor } from '@voyage/shared';
+import { locate } from '@voyage/shared/campaign_core';
+import type { CampaignAnchor, CampaignRecord, LocateAt, SystemAnchor } from '@voyage/shared';
 import { positionAt, trackOf } from './track.ts';
 
 /** At a system, with a body only when the place names one. */

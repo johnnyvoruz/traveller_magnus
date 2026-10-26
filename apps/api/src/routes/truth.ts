@@ -8,6 +8,10 @@ import { ok } from '../http';
 export const truth = new Hono<AppEnv>();
 
 truth.get('/versions', async (c) => {
+    // The list is public and changes only at a release. The map boots from its remembered version and asks
+    // past this cache (cache: 'no-cache'), so a release is seen at once there; the 15 s and the stale window
+    // only spare the repeat reads of other screens.
+    c.header('cache-control', 'public, max-age=15, stale-while-revalidate=60');
     const db = drizzle(c.env.DB, { schema: { truthVersions } });
     const rows = await db.select().from(truthVersions).where(eq(truthVersions.state, 'released'));
     const counts = await c.env.DB.prepare(

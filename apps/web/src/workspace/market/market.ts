@@ -100,7 +100,7 @@ export type RecordRow = { id: string; name: string; type: string };
 
 /** The live campaign records on these hexes, each once, by name. */
 /** Under a chosen record that is referee-only (DF18, players question 6): what publishing it does. No change to the data. */
-export const REFEREE_ONLY_NOTE = 'This record is referee-only. Its "For players" text is published as it stands.';
+export const REFEREE_ONLY_NOTE = 'This record is referee-only. Publishing sends the whole record: its referee-only text, its player notes and its sheet.';
 
 /** The record is seen by the referee only. */
 export function refereeOnly(id: string, read: (id: string) => { visibility?: string } | undefined = (key) => campaign.records[key]): boolean {

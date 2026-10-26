@@ -4,7 +4,8 @@
  * a key this screen does not know is left unread, and a leg or a note that cannot be read is
  * left out rather than failing the card.
  */
-import { CAMPAIGN_LIMITS, PUBLIC_CARD_BODY, PUBLIC_CARD_ENTRIES, PUBLIC_NAMES_PER_SHIP } from '@voyage/shared';
+import { CAMPAIGN_LIMITS } from '@voyage/shared/campaign_core';
+import { PUBLIC_CARD_BODY, PUBLIC_CARD_ENTRIES, PUBLIC_NAMES_PER_SHIP } from '@voyage/shared/public_limits';
 import { apiFetch } from '../platform/http.ts';
 import { totalDays } from '../orbit/clock.ts';
 import { stardate } from './stardate.ts';

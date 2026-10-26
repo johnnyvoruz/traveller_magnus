@@ -953,6 +953,7 @@ if (process.env.RUN_API_TESTS !== '1') {
             const versions = await fetch(`${base}/api/truth/versions`);
             const versionsBody = await versions.json();
             assert.equal(versions.status, 200, JSON.stringify(versionsBody));
+            assert.equal(versions.headers.get('cache-control'), 'public, max-age=15, stale-while-revalidate=60');
             const listed = versionsBody.data.find((item) => item.version === 'vtest');
             assert.ok(listed);
             assert.equal(listed.state, 'released');

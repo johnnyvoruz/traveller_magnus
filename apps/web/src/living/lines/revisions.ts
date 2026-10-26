@@ -65,9 +65,20 @@ export const spaceWeatherRevisions: Readonly<Record<string, string>> = {
     'weather-089': '{world} sensor bulletin. Stellar background readings are steady. The observation team has requested one uninterrupted cup of tea.',
 };
 
+/**
+ * Lines whose words belong to another voice than the corpus gave them. ship-037 reads "{ship}, port control.
+ * Sorry, wrong channel.", so the port's office sends it, not the roster ship (Johnny 2026-10-19 17:01, question 166;
+ * answered again as recommended 2026-10-22 20:08). The text and the id stay as they were.
+ */
+export const voiceRevisions: Readonly<Record<string, ChatterLineData['voice']>> = {
+    'ship-037': 'control',
+};
+
 export function reviseReceiverLine(line: ChatterLineData): ChatterLineData {
+    const voiced = voiceRevisions[line.id];
     const spaceText = spaceWeatherRevisions[line.id];
     if (spaceText) return { ...line, text: spaceText, when: { pop: { min: 1 } }, weight: 0.6 };
     const text = textRevisions[line.id];
-    return text ? { ...line, text } : line;
+    const revised = text ? { ...line, text } : line;
+    return voiced ? { ...revised, voice: voiced } : revised;
 }

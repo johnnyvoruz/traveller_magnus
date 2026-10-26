@@ -13,7 +13,8 @@ import { fileURLToPath } from 'node:url';
 import { parseMetadataXml, parseT5Tab } from '@voyage/shared';
 import { hexDistance } from '../../apps/web/src/map/geometry.ts';
 import { buildNewsGraph, edgePairs, sectorsWanted } from '../../apps/web/src/news/graph.ts';
-import { jumpSpan, NEWS_PARAMS, NewsParams } from '../../apps/web/src/news/params.ts';
+import { jumpSpan, NEWS_PARAMS } from '../../apps/web/src/news/params.ts';
+import { NewsParams } from '../../apps/web/src/news/params_schema.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -76,6 +77,8 @@ test('the cited jump is 154, 169 and 184 hours, and the defaults match the decis
     assert.equal(NEWS_PARAMS.offNetworkWaitHours, null);
     assert.equal(NEWS_PARAMS.horizonDays, 60);
     assert.equal(NEWS_PARAMS.sectorCap, 9);
+    // The defaults pass the schema (they were parsed at load before ZP2 moved the schema out of first paint).
+    assert.equal(NewsParams.safeParse(NEWS_PARAMS).success, true);
     assert.equal(NewsParams.safeParse({ ...NEWS_PARAMS, xboatRouteRule: 'nope' }).success, false);
     assert.equal(NewsParams.safeParse({ ...NEWS_PARAMS, offNetworkWaitHours: 12 }).success, true);
 });

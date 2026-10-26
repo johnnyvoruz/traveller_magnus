@@ -1,6 +1,6 @@
 /** World space is parsecs. One column step is 1. Copied from packages/engines hex.js at HEX_SIZE. */
 
-import { HEX_SIZE, ROW_STEP, SECTOR_COLS, SECTOR_ROWS } from '@voyage/shared';
+import { HEX_SIZE, ROW_STEP, SECTOR_COLS, SECTOR_ROWS } from '@voyage/shared/package_place';
 
 export { HEX_SIZE, ROW_STEP, SECTOR_COLS, SECTOR_ROWS };
 

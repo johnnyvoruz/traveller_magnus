@@ -2,7 +2,8 @@
  * The journal on the open campaign. Entries are read here and written through commit,
  * the same road records take. Nothing in this file draws a screen.
  */
-import { mentionsOf, type CampaignAnchor, type CampaignEntry, type CampaignEntryKind, type CampaignRecord } from '@voyage/shared';
+import { mentionsOf } from '@voyage/shared/campaign_core';
+import type { CampaignAnchor, CampaignEntry, CampaignEntryKind, CampaignRecord } from '@voyage/shared';
 import { splitDays } from '../orbit/clock.ts';
 import { showToast } from '../shell/toast.ts';
 import { commit, newEntryId } from './commit.ts';

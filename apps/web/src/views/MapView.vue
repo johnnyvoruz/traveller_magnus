@@ -28,6 +28,7 @@ import { readMotion, readTheme } from '../map/theme.ts';
 import { readTrafficInk, TrafficLayer } from '../map/traffic.ts';
 import { PPP_NAMES, tierFor, type Tier } from '../map/tiers.ts';
 import { TruthClient } from '../map/truth_client.ts';
+import { bootChart, rememberedVersion } from '../map/chart_version.ts';
 import { holdChart } from '../search/chart_hold.ts';
 import { paletteOpen } from '../search/palette_state.ts';
 import { dropPublicShip, publicGamesOverlay, publicOverview, watchPublicGames, watchPublicOverview } from '../map/public_games.ts';
@@ -1238,33 +1239,85 @@ function onResize(): void {
     markDirty();
 }
 
-async function boot(): Promise<void> {
-    try {
-        version = await client.currentVersion();
-        versionRef.value = version;
-        holdChart(version, null);
-        const manifestPromise = client.manifest(version);
-        const overviewPromise = client.overview(version);
-        const politiesPromise = client.polities(version);
-        void politiesPromise.then((doc) => {
-            if (renderer) renderer.setPolities(doc);
-            markDirty();
-        }).catch(() => {
-            // A 404 is an empty document inside the client. Any other failure leaves the chart without borders.
-        });
-        const manifest = await manifestPromise;
+/** Counts chart loads. A later load replaces an earlier one, and the earlier drops what it fetched. */
+let chartLoads = 0;
+/** True once a manifest is on screen. A load after that swaps versions instead of starting the chart. */
+let chartShown = false;
+
+/**
+ * Loads one released version and shows it. The first load builds the chart as the files arrive.
+ * A load for another version, when the fresh versions list names one, waits for that version's
+ * manifest and overview, then replaces the version, manifest, overview and borders in one step,
+ * so the old chart is never drawn with the new version's files, and the new indexes load as the
+ * map draws.
+ */
+async function loadChart(next: string): Promise<void> {
+    const mine = ++chartLoads;
+    const swapping = chartShown;
+    if (!swapping) {
+        version = next;
+        versionRef.value = next;
+        holdChart(next, null);
+    }
+    const manifestPromise = client.manifest(next);
+    const overviewPromise = client.overview(next);
+    const politiesPromise = client.polities(next);
+    void politiesPromise.then((doc) => {
+        if (mine !== chartLoads) return;
+        if (renderer) renderer.setPolities(doc);
+        markDirty();
+    }).catch(() => {
+        // A 404 is an empty document inside the client. Any other failure leaves the chart without borders.
+    });
+    if (swapping) {
+        const [manifest, nextOverview] = await Promise.all([manifestPromise, overviewPromise]);
+        if (mine !== chartLoads) return;
+        version = next;
+        versionRef.value = next;
+        ownIndexes.clear();
         truthChart = manifest;
         manifestRef.value = manifest;
-        holdChart(version, manifest);
-        applyChart();
-        showStatus();
-        applyRoute();
-        markDirty();
-        overview = await overviewPromise;
+        holdChart(next, manifest);
+        overview = nextOverview;
         overviewReady = true;
         applyChart();
         showStatus();
         markDirty();
+        return;
+    }
+    const manifest = await manifestPromise;
+    if (mine !== chartLoads) return;
+    truthChart = manifest;
+    manifestRef.value = manifest;
+    chartShown = true;
+    holdChart(version, manifest);
+    applyChart();
+    showStatus();
+    applyRoute();
+    markDirty();
+    const loaded = await overviewPromise;
+    if (mine !== chartLoads) return;
+    overview = loaded;
+    overviewReady = true;
+    applyChart();
+    showStatus();
+    markDirty();
+}
+
+/**
+ * The chart starts from the version this device last saw, without waiting for the versions list.
+ * The list is asked beside it, past the browser cache. When it names another version the chart
+ * swaps to that one (loadChart), so a release shows within one round trip; until then the files on
+ * screen are a released version's own. A version that cannot be read falls back to the list.
+ */
+async function boot(): Promise<void> {
+    try {
+        await bootChart({
+            remembered: rememberedVersion(),
+            ask: () => client.currentVersion({ fresh: true }),
+            load: loadChart,
+            late: () => undefined, // The chart on screen is still a released version; keep it.
+        });
     } catch (err) {
         // One sentence for the person; the client's own words ("TruthClient: ...") are not theirs (Lane E's E2).
         void err;

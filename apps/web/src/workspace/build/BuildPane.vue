@@ -8,6 +8,7 @@ import { computed, nextTick, ref, watch } from 'vue';
 import Icon from '../../design/Icon.vue';
 import { parseHexKey } from '../places.ts';
 import { allowanceFor, buildSettings, hexName, hexState, oneSectorFor, placeWords, previewAt, removeHexes, restorable, restoreHexes, stopBuild, tallyOf, truthAt } from './acts.ts';
+import { canBuild, runBuild } from './commands.ts';
 import { askDensity, runMany } from './density_ask.ts';
 import DensityAsk from './DensityAsk.vue';
 import { edit, openBlank } from './edit.ts';
@@ -235,6 +236,9 @@ const asking = computed(() => {
         </button>
         <button v-if="canRestore.length > 0" type="button" class="ui-btn" :disabled="busy" :title="build.job ? JOB_HOLD : undefined" @click="restoreHexes(keys)">
           <Icon name="rotate-left" :size="13" />Restore {{ canRestore.length }} to the chart
+        </button>
+        <button v-if="canBuild('build-publish', keys)" type="button" class="ui-btn" data-command="build-publish" :disabled="busy" :title="build.job ? JOB_HOLD : 'Shares the selected hexes and their records as a package'" @click="runBuild('build-publish', keys)">
+          <Icon name="store" :size="13" />Publish selection…
         </button>
         <button v-if="filled > 0" type="button" class="ui-btn is-danger" :disabled="busy" :title="build.job ? JOB_HOLD : undefined" @click="removeHexes(keys)">
           <Icon name="trash" :size="13" />Remove the {{ plural(filled, 'system', 'systems') }}

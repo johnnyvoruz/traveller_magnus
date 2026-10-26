@@ -65,7 +65,9 @@ test('Publish records: at least one record, no hexes asked for, the kind from th
     const list = read('workspace/CampaignList.vue');
     assert.match(list, /<button v-if="canPublish" type="button" class="ui-btn camp-publish"[^>]*data-publish-records @click="publishing = true">/);
     assert.match(list, /<RecordsPublish v-if="publishing" :start="publishStart" @close="publishing = false" \/>/);
-    assert.match(list, /row\.ownerId === session\.user\.id/);
+    // The owner test moved out of the list into the gate it shares with a record's own page (ZB1).
+    assert.match(list, /canPublishRecords\(props\.readOnly, all\.value\.length\)/);
+    assert.match(read('workspace/market/market.ts'), /row\.ownerId !== session\.user\.id/);
 });
 
 test('the featured row is left out of the grid; the results line counts every result', () => {

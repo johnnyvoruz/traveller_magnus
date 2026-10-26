@@ -13,7 +13,8 @@
  * Pure, and runs under Node.
  */
 import { reactive } from 'vue';
-import { mgt2eAuToOrbit, mgt2eOrbitToAu, type EditForm, type FormChange, type FormField, type FormValue } from '@voyage/shared';
+import { mgt2eAuToOrbit, mgt2eOrbitToAu } from '@voyage/shared/orbit_au';
+import type { EditForm, FormChange, FormField, FormValue } from '@voyage/shared';
 import { draftHandle, edit, setField } from './edit.ts';
 import { handUi, nodeTitle, orbitsValue, parentOptions, type HandKind, type HandNode } from './hand.ts';
 import { giveBody, handNodes } from './hand_acts.ts';

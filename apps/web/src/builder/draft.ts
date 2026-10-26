@@ -8,19 +8,17 @@
  * that is gone. Blank creates a system, then opens this same handle.
  */
 import { ref, type Ref } from 'vue';
-import {
-    FormAnswer,
-    FormRead,
-    type EditForm,
-    type FormChange,
-    type FormChanged,
-    FieldRefusalDetails,
+import type {
+    EditForm,
+    FormChange,
+    FormChanged,
     FormMessage,
-    type FormField,
-    type FormRoll,
-    type FormValue,
+    FormField,
+    FormRoll,
+    FormValue,
 } from '@voyage/shared';
 import type { BuilderHex as HexRow } from '@voyage/shared';
+import { loadSchemas, schemas } from '../platform/schemas.ts';
 import type { UndoToken } from './types.ts';
 
 type FetchResult = Promise<unknown>;
@@ -137,7 +135,7 @@ function writeField(form: EditForm, id: string, value: FormValue): void {
 
 /** A bare 400 names the field by `details.code` `field`. The sentence stays the message. */
 function fieldIdFrom(details: unknown): string | null {
-    const parsed = FieldRefusalDetails.safeParse(details);
+    const parsed = schemas().FieldRefusalDetails.safeParse(details);
     return parsed.success ? parsed.data.id : null;
 }
 
@@ -147,7 +145,7 @@ function listedMessages(details: unknown): FormMessage[] {
     if (!Array.isArray(raw)) return [];
     const out: FormMessage[] = [];
     for (const item of raw) {
-        const parsed = FormMessage.safeParse(item);
+        const parsed = schemas().FormMessage.safeParse(item);
         if (parsed.success) out.push(parsed.data);
     }
     return out;
@@ -171,8 +169,11 @@ function refusalMessages(err: unknown, _form: EditForm): FormMessage[] | null {
 }
 
 export async function startDraft(port: DraftPort, hexKey: string): Promise<DraftHandle> {
+    // The schemas come down while the form does. Everything below runs after this await, so `schemas()` is ready.
+    const shared = loadSchemas();
     const data = await port.request('GET', port.hexPath(hexKey, '/form'));
-    const read = FormRead.safeParse(data);
+    await shared;
+    const read = schemas().FormRead.safeParse(data);
     if (!read.success) throw new Error('The server sent a form the store could not read.');
 
     let hash = read.data.hash;
@@ -225,7 +226,7 @@ export async function startDraft(port: DraftPort, hexKey: string): Promise<Draft
 
     async function readForm(): Promise<{ hash: string; form: EditForm }> {
         const loaded = await port.request('GET', port.hexPath(hexKey, '/form'));
-        const parsed = FormRead.safeParse(loaded);
+        const parsed = schemas().FormRead.safeParse(loaded);
         if (!parsed.success) throw new Error('The server sent a form the store could not read.');
         return parsed.data;
     }
@@ -269,7 +270,7 @@ export async function startDraft(port: DraftPort, hexKey: string): Promise<Draft
             return;
         }
         if (token !== epoch) return;
-        const answer = FormAnswer.safeParse(answerData);
+        const answer = schemas().FormAnswer.safeParse(answerData);
         if (!answer.success) return;
         form.value = answer.data.form;
         changedByEngine.value = answer.data.changed;

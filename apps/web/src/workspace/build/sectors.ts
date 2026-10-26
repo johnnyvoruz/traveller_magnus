@@ -5,7 +5,8 @@
  * by where it is. Everything here is pure and runs under Node: the list laid into the
  * chart's manifest so the map draws it, the empty index the map reads for it, and the words.
  */
-import { SUBSECTOR_LETTERS, type SectorIndex, type TruthManifest } from '@voyage/shared';
+import { SUBSECTOR_LETTERS } from '@voyage/shared/sector_core';
+import type { SectorIndex, TruthManifest } from '@voyage/shared';
 import type { OwnSector, Slot } from './seam.ts';
 
 /** The longest name the server stores for a sector or a subsector. */

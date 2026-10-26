@@ -8,7 +8,7 @@
  * The pure parts run under Node.
  */
 import { reactive } from 'vue';
-import { PlaceError, placeCells, placeKeys } from '@voyage/shared';
+import { PlaceError, placeCells, placeKeys } from '@voyage/shared/package_place';
 import type { InstallPreview, InstallRow } from '../../marketplace/catalogue.ts';
 import { hexCentre, parseHex, toGlobal } from '../../map/geometry.ts';
 

@@ -159,6 +159,17 @@ watch(() => (preview.value ? preview.value.roll : -1), (roll) => {
         <Icon name="pen-to-square" :size="13" />{{ opening ? 'Opening…' : 'Edit' }}<kbd v-if="editable" class="build-key">E</kbd>
       </button>
       <button
+        v-if="publishCommand"
+        type="button"
+        class="ui-btn"
+        data-command="build-publish"
+        :disabled="busy"
+        :title="build.job ? JOB_HOLD : publishSay"
+        @click="publishCommand.run()"
+      >
+        <Icon name="store" :size="13" />Publish…
+      </button>
+      <button
         ref="more"
         type="button"
         class="ui-btn is-icon"

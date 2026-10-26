@@ -5,7 +5,7 @@
  * the timeline (manifesto: Connected), the saving mark, and Delete; a vessel also carries
  * its track (K12) and its ship sheet (K13) with its deck plan (K9) inside.
  */
-import { computed, defineAsyncComponent, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { CAMPAIGN_LIMITS, type CampaignAnchor, type CampaignRecord, type CampaignRecordType } from '@voyage/shared';
 import { flushCampaign, lastError, pending } from '../campaign/commit.ts';
@@ -25,12 +25,15 @@ import RecordMentions from './RecordMentions.vue';
 import RecordTimeline from './RecordTimeline.vue';
 import { placeNow } from './place_now.ts';
 import { placeSource } from './place_source.ts';
+import { publishThisRecord } from './market/command.ts';
+import { canPublishRecords } from './market/record_publish.ts';
 import PrintButton from './PrintButton.vue';
 import RecordWhen from './RecordWhen.vue';
 import SpreadNews from './SpreadNews.vue';
 import { RECORD_TYPES, addTag, cleanDetails, cleanName, cleanSummary } from './records.ts';
 import type { BodyPart } from './journal/body.ts';
 import { atPane, paneChanges, withQuery } from '../shell/pane.ts';
+import { registerCommand } from '../shell/registry.ts';
 import { dockShipAt } from './track_actions.ts';
 import TrackBlock from './TrackBlock.vue';
 import TradeHere from './TradeHere.vue';
@@ -86,6 +89,8 @@ function openRich(part: Exclude<BodyPart, { kind: 'text' }>): void {
 const ShipSheet = defineAsyncComponent(() => import('./ShipSheet.vue'));
 /** The character sheet carries the PDF's 420 boxes: loaded when a person's page first needs it. */
 const PersonSheet = defineAsyncComponent(() => import('./PersonSheet.vue'));
+/** Publish records: loaded when someone asks for it from this page. */
+const RecordsPublish = defineAsyncComponent(() => import('./market/RecordsPublish.vue'));
 
 const nameField = ref<{ edit: (select?: boolean) => void } | null>(null);
 const refereeBtn = ref<HTMLButtonElement | null>(null);
@@ -99,6 +104,13 @@ const record = computed(() => {
     return found && !found.deleted ? found : null;
 });
 /** The record is one of this session's deletes: it can be brought back from here. */
+/** Publish this record: offered to the campaign's owner, signed in, on a page that is not read-only (market/record_publish.ts). */
+const canPublish = computed(() => canPublishRecords(props.readOnly, record.value ? 1 : 0));
+const publishing = ref(false);
+const publishStart = computed(() => [props.id]);
+/** The palette's "Publish this record\u2026", offered while this page is open and the gate says yes (market/command.ts). */
+const stopPublishCommand = registerCommand(publishThisRecord(() => canPublish.value, () => { publishing.value = true; }));
+onBeforeUnmount(stopPublishCommand);
 const wasDeleted = computed(() => recentlyDeleted.some((item) => item.id === props.id));
 /** A player character is a person in the party (the campaign's settings hold the party's members). */
 const isPlayerCharacter = computed(() => !!record.value && record.value.type === 'person' && !!campaign.settings && campaign.settings.party.memberIds.includes(props.id));
@@ -377,11 +389,15 @@ watch(() => props.id, () => {
 
     <footer class="rec-foot">
       <PrintButton target=".rec" :title="record.name" />
+      <button v-if="canPublish" type="button" class="ui-btn rec-publish" title="Share this record as a package in the Marketplace" data-publish-record @click="publishing = true">
+        <Icon name="store" :size="13" />Publish…
+      </button>
       <span class="rec-gap"></span>
       <button type="button" class="ui-btn rec-delete" :disabled="readOnly" @click="remove">
         <Icon name="trash" :size="13" />Delete
       </button>
     </footer>
+    <RecordsPublish v-if="publishing" :start="publishStart" @close="publishing = false" />
   </article>
 
   <div v-else class="camp-first ui-ground">

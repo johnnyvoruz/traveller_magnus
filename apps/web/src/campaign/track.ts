@@ -6,13 +6,9 @@
  * its anchor. An empty track is no track. The stored list is left as it is.
  * The party screen calls this; it is not edited here.
  */
-import {
-    CAMPAIGN_LIMITS,
-    Track,
-    TrackLeg,
-    type CampaignAnchor,
-    type CampaignRecord,
-} from '@voyage/shared';
+import type { CampaignAnchor, CampaignRecord } from '@voyage/shared';
+import { CAMPAIGN_LIMITS } from '@voyage/shared/campaign_core';
+import { schemas } from '../platform/schemas.ts';
 import { commit } from './commit.ts';
 import { campaign } from './store.ts';
 
@@ -57,7 +53,7 @@ export function trackOf(record: CampaignRecord): Leg[] | null {
     const status = record.status;
     if (!status || typeof status !== 'object' || Array.isArray(status)) return null;
     if (!Object.prototype.hasOwnProperty.call(status, 'track')) return null;
-    const parsed = Track.safeParse((status as { track: unknown }).track);
+    const parsed = schemas().Track.safeParse((status as { track: unknown }).track);
     if (!parsed.success || parsed.data.length === 0) return null;
     return parsed.data;
 }
@@ -150,11 +146,11 @@ function writeTrack(record: CampaignRecord, track: Leg[]): void {
 export function appendLeg(recordId: string, leg: Leg): TrackResult {
     const record = openVessel(recordId);
     if (isRefusal(record)) return record;
-    if (!TrackLeg.safeParse(leg).success) return { ok: false, message: BAD_LEG };
+    if (!schemas().TrackLeg.safeParse(leg).success) return { ok: false, message: BAD_LEG };
     const current = trackOf(record) ?? [];
     if (current.length >= CAMPAIGN_LIMITS.track) return { ok: false, message: TOO_MANY };
     const next = current.concat([leg]);
-    if (!Track.safeParse(next).success) return { ok: false, message: OUT_OF_ORDER };
+    if (!schemas().Track.safeParse(next).success) return { ok: false, message: OUT_OF_ORDER };
     writeTrack(record, next);
     return { ok: true };
 }
@@ -183,11 +179,11 @@ export function replaceLegsFrom(recordId: string, index: number, legs: readonly 
     if (!Number.isInteger(index) || index < 0 || index > current.length) return { ok: false, message: PAST_END };
     if (index < current.length && current[index].departs < notBefore) return { ok: false, message: DEPARTED };
     for (const leg of legs) {
-        if (!TrackLeg.safeParse(leg).success) return { ok: false, message: BAD_LEG };
+        if (!schemas().TrackLeg.safeParse(leg).success) return { ok: false, message: BAD_LEG };
     }
     const next = current.slice(0, index).concat(legs);
     if (next.length > CAMPAIGN_LIMITS.track) return { ok: false, message: TOO_MANY };
-    if (!Track.safeParse(next).success) return { ok: false, message: OUT_OF_ORDER };
+    if (!schemas().Track.safeParse(next).success) return { ok: false, message: OUT_OF_ORDER };
     writeTrack(record, next);
     return { ok: true };
 }

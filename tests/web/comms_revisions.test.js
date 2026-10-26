@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ChatterLine } from '@voyage/shared';
 import { corpusLines, receiverLines } from '../../apps/web/src/living/lines.ts';
-import { spaceWeatherRevisions, textRevisions } from '../../apps/web/src/living/lines/revisions.ts';
+import { spaceWeatherRevisions, textRevisions, voiceRevisions } from '../../apps/web/src/living/lines/revisions.ts';
 import { corpusPool } from '../../apps/web/src/living/comms/corpus_events.ts';
 import { nextProceduralEvent, proceduralPool } from '../../apps/web/src/living/comms/events.ts';
 
@@ -23,6 +23,22 @@ test('editorial revisions preserve corpus identity and validate as complete chat
         assert.equal(output.get(id).category, source.get(id).category, id);
         assert.ok(ChatterLine.safeParse(output.get(id)).success, id);
     }
+});
+
+test('ship-037 is port control talking, so the port sends it and the words stay', () => {
+    const source = corpusLines().find(l => l.id === 'ship-037');
+    const output = receiverLines().find(l => l.id === 'ship-037');
+    assert.equal(source.voice, 'crew', 'the corpus itself is left as imported');
+    assert.equal(output.voice, 'control');
+    assert.equal(output.text, source.text);
+    assert.equal(output.category, source.category);
+    assert.deepEqual(output.when, source.when);
+    assert.ok(ChatterLine.safeParse(output).success);
+    assert.deepEqual(Object.keys(voiceRevisions), ['ship-037']);
+    for (const id of Object.keys(voiceRevisions)) assert.ok(!(id in spaceWeatherRevisions), id + ' keeps its own place rules');
+    const byId = new Map(corpusLines().map(l => [l.id, l]));
+    const revoiced = receiverLines().filter(l => byId.has(l.id) && byId.get(l.id).voice !== l.voice).map(l => l.id);
+    assert.deepEqual(revoiced, ['ship-037'], 'no other line changes voice');
 });
 
 test('space advisories reach vacuum worlds without dragging surface weather with them', () => {

@@ -3,7 +3,8 @@
  * never fetches, and it draws nothing when no campaign is open.
  * Records have no pins: the map marks are the party, the other vessels, and the locator.
  */
-import { locate, type CampaignAnchor } from '@voyage/shared';
+import { locate } from '@voyage/shared/campaign_core';
+import type { CampaignAnchor } from '@voyage/shared';
 import type { Camera, Viewport } from './camera.ts';
 import { toScreen } from './camera.ts';
 import { DISC_R } from './glyphs.ts';

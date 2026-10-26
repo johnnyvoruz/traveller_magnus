@@ -1,0 +1,28 @@
+# Cache headers for the static files Cloudflare serves from apps/web/dist.
+# Cloudflare Workers Static Assets reads this file (wrangler.toml [assets]) and applies it to
+# static responses only. The Worker's own /api and /mcp responses set their own headers.
+# Files with no rule keep the default (public, max-age=0, must-revalidate, with an ETag):
+# /, /index.html, /sw.js, /shell_cache.js, /manifest.webmanifest, /favicon.*, /robots.txt,
+# /sitemap.xml and /og.png. A deploy reaches the page through those.
+
+# Vite names every file under /assets/ with a hash of its contents, so one URL is one file
+# forever. A new build makes new URLs and the new index.html points at them.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Not hashed: the same URL can hold a different file after a change. A long age with no
+# `immutable`, so a reload still revalidates. Change a font by giving the file a new name.
+/fonts/*
+  Cache-Control: public, max-age=2592000
+
+# Not hashed. A week.
+/covers/*
+  Cache-Control: public, max-age=604800
+/landing/*
+  Cache-Control: public, max-age=604800
+/sheets/*
+  Cache-Control: public, max-age=604800
+/starports/*
+  Cache-Control: public, max-age=604800
+/surface-icons/*
+  Cache-Control: public, max-age=604800

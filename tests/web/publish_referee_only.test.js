@@ -1,7 +1,8 @@
 /**
  * DF18 (players question 6, answered yes 18:40): in both publish forms, a chosen record that is
- * referee-only has one line under it saying its "For players" text is published as it stands. Not
- * chosen, or seen by players, no line. No change to the data.
+ * referee-only has one line under it. Reworded 2026-10-22 (Johnny 20:08, ZB1 question 1): the line says
+ * the whole record goes out (referee-only text, player notes, sheet), not only its "For players" text.
+ * Not chosen, or seen by players, no line. No change to the data.
  */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -11,7 +12,9 @@ import { fileURLToPath } from 'node:url';
 import { REFEREE_ONLY_NOTE, refereeOnly } from '../../apps/web/src/workspace/market/market.ts';
 
 test('the sentence, and which records it is for', () => {
-    assert.equal(REFEREE_ONLY_NOTE, 'This record is referee-only. Its "For players" text is published as it stands.');
+    assert.equal(REFEREE_ONLY_NOTE, 'This record is referee-only. Publishing sends the whole record: its referee-only text, its player notes and its sheet.');
+    for (const part of ['whole record', 'referee-only text', 'player notes', 'sheet']) assert.ok(REFEREE_ONLY_NOTE.includes(part), part);
+    assert.ok(!REFEREE_ONLY_NOTE.includes('as it stands'), 'the old promise is gone');
     const records = { a: { visibility: 'referee' }, b: { visibility: 'players' } };
     const read = (id) => records[id];
     assert.equal(refereeOnly('a', read), true);

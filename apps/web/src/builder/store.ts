@@ -15,28 +15,17 @@
  * more op on this queue. A tree is handed on whole.
  */
 import { reactive, ref, type Ref } from 'vue';
-import {
-    BuilderAbsent,
-    BuilderDots,
-    BuilderDotsPage,
-    BuilderGenerateDone,
-    BuilderHex,
-    BuilderHexPage,
+import type {
+    BuilderGenerator,
+    BuilderHex as HexRow,
     BuilderJob,
-    BuilderJobUndo,
-    FieldRefusalDetails,
-    FormMessage,
-    RefereeSector,
-    SectorGenerateDone,
-    SectorGenerateUndone,
+    FormChange,
+    FormMessage as FormMessageRow,
+    FormRoll,
     SectorHex,
-    type BuilderGenerator,
-    type BuilderHex as HexRow,
-    type FormChange,
-    type FormMessage as FormMessageRow,
-    type FormRoll,
-    type Settings,
+    Settings,
 } from '@voyage/shared';
+import { loadSchemas, schemas } from '../platform/schemas.ts';
 import { noteAllowance, readAllowance, session } from '../account/session.ts';
 import { onPageHide } from '../platform/browser.ts';
 import { apiFetch } from '../platform/http.ts';
@@ -135,9 +124,9 @@ function hexPath(id: string, hexKey: string, suffix = ''): string {
 }
 
 function readRow(value: unknown): HexRow | null {
-    const row = BuilderHex.safeParse(value);
+    const row = schemas().BuilderHex.safeParse(value);
     if (row.success) return row.data;
-    const absent = BuilderAbsent.safeParse(value);
+    const absent = schemas().BuilderAbsent.safeParse(value);
     if (absent.success) return null;
     throw new Error('The server sent a row the store could not read.');
 }
@@ -197,7 +186,7 @@ function foldPlaced(incoming: readonly string[], accumulated: readonly string[],
 }
 
 function progressOf(
-    job: ReturnType<typeof BuilderJob.parse>,
+    job: BuilderJob,
     accumulated: readonly string[],
     state: JobProgress['state'] = job.state,
     full = false,
@@ -383,6 +372,8 @@ export function openMap(options: OpenMapOptions): Builder {
 
     async function request(method: string, url: string, body?: unknown): Promise<unknown> {
         requireId();
+        // The schemas come down while the answer does. Every parse below runs after a request, so they are ready.
+        const shared = loadSchemas();
         let res: Response;
         try {
             res = await apiFetch(options.fetch, url, {
@@ -393,6 +384,7 @@ export function openMap(options: OpenMapOptions): Builder {
             throw new HttpError(0, err instanceof Error ? err.message : 'offline');
         }
         const payload = await res.json().catch(() => null) as { data?: unknown; error?: { message?: string; details?: unknown } } | null;
+        await shared;
         if (!res.ok) {
             const message = payload && payload.error && payload.error.message;
             throw new HttpError(res.status, message || 'offline', payload && payload.error ? payload.error.details : undefined);
@@ -518,11 +510,11 @@ export function openMap(options: OpenMapOptions): Builder {
         const listed: FormMessageRow[] = [];
         if (isRecord(err.details) && Array.isArray(err.details.messages)) {
             for (const item of err.details.messages) {
-                const parsed = FormMessage.safeParse(item);
+                const parsed = schemas().FormMessage.safeParse(item);
                 if (parsed.success) listed.push(parsed.data);
             }
         }
-        const field = FieldRefusalDetails.safeParse(err.details);
+        const field = schemas().FieldRefusalDetails.safeParse(err.details);
         if (field.success && listed.length === 1 && listed[0].id === null) {
             return [{ ...listed[0], id: field.data.id }];
         }
@@ -670,7 +662,8 @@ export function openMap(options: OpenMapOptions): Builder {
         for (let page = 0; page < MAX_PAGES; page += 1) {
             if (stale?.()) return;
             const url = `/api/universes/${encodeURIComponent(id)}/hexes?sector=${encodeURIComponent(slug)}&limit=100` + (cursor ? `&cursor=${encodeURIComponent(cursor)}` : '');
-            const data = BuilderHexPage.parse(await request('GET', url));
+            const raw1 = await request('GET', url);
+            const data = schemas().BuilderHexPage.parse(raw1);
             fresh.push(...data.items);
             const next = data.nextCursor;
             if (!next || seen.has(next)) break;
@@ -740,7 +733,7 @@ export function openMap(options: OpenMapOptions): Builder {
         if (!isRecord(data) || data.envelope == null || typeof data.hash !== 'string') {
             throw new Error('The server did not send a system.');
         }
-        const parsed = SectorHex.safeParse(data.entry);
+        const parsed = schemas().SectorHex.safeParse(data.entry);
         return { envelope: data.envelope, hash: data.hash, roll, entry: parsed.success ? parsed.data : null };
     }
 
@@ -841,7 +834,7 @@ export function openMap(options: OpenMapOptions): Builder {
         try {
             const query = slugs.map((slug) => encodeURIComponent(slug)).join(',');
             const got = await readConditional(`/api/universes/${encodeURIComponent(id)}/hexes/dots?sectors=${query}`, null);
-            const page = BuilderDotsPage.parse(got.data);
+            const page = schemas().BuilderDotsPage.parse(got.data);
             for (const sector of page.sectors) keepDot(sector.sector, sector.cells, sector.stamp, null);
             return got.bytes;
         } finally {
@@ -865,7 +858,7 @@ export function openMap(options: OpenMapOptions): Builder {
                 else retry = true;
                 return 0;
             }
-            const one = BuilderDots.parse(got.data);
+            const one = schemas().BuilderDots.parse(got.data);
             keepDot(slug, one.cells, one.stamp, started);
             retry = dotDirty.has(slug);
             return got.bytes;
@@ -937,8 +930,9 @@ export function openMap(options: OpenMapOptions): Builder {
         return out;
     }
 
-    async function readJob(id: string, jobId: string, since: number): Promise<ReturnType<typeof BuilderJob.parse>> {
-        return BuilderJob.parse(await request('GET', `/api/universes/${encodeURIComponent(id)}/jobs/${encodeURIComponent(jobId)}?since=${since}`));
+    async function readJob(id: string, jobId: string, since: number): Promise<BuilderJob> {
+        const raw2 = await request('GET', `/api/universes/${encodeURIComponent(id)}/jobs/${encodeURIComponent(jobId)}?since=${since}`);
+        return schemas().BuilderJob.parse(raw2);
     }
 
     /** A grow undo that landed while this poll was asleep. The poll then ends as stopped. */
@@ -981,7 +975,8 @@ export function openMap(options: OpenMapOptions): Builder {
                 const stopping: JobProgress = { ...last, state: 'stopping', landed: [] };
                 announce(stopping);
                 onProgress?.(stopping);
-                job = BuilderJob.parse(await request('POST', `/api/universes/${encodeURIComponent(id)}/jobs/${encodeURIComponent(jobId)}/stop`, {}));
+                const raw3 = await request('POST', `/api/universes/${encodeURIComponent(id)}/jobs/${encodeURIComponent(jobId)}/stop`, {});
+                job = schemas().BuilderJob.parse(raw3);
                 if (!closed) await reload(slugs);
                 last = progressOf(job, accumulated, job.state, true);
                 accumulated = last.placed;
@@ -1060,7 +1055,7 @@ export function openMap(options: OpenMapOptions): Builder {
                 lastError.value = '';
                 return { undo, progress };
             }
-            const done = BuilderGenerateDone.parse(data);
+            const done = schemas().BuilderGenerateDone.parse(data);
             for (const row of done.rows) land(row.hexKey, row);
             for (const slug of slugs) loaded.add(slug);
             bump();
@@ -1190,7 +1185,7 @@ export function openMap(options: OpenMapOptions): Builder {
                     throw err;
                 }
                 applyAllowance(data, account);
-                const done = SectorGenerateDone.parse(data);
+                const done = schemas().SectorGenerateDone.parse(data);
                 const made = sectorBook().adopt(done.sectors);
                 if (made.length === 0) throw new Error('The server did not send the sector.');
                 const sectorIds = made.map((sector) => sector.id);
@@ -1230,7 +1225,7 @@ export function openMap(options: OpenMapOptions): Builder {
                 if (err instanceof HttpError && err.status === 409 && detailCode(err) === 'slot_in_use') {
                     const details = err.details;
                     const current = isRecord(details) ? details.current : undefined;
-                    if (RefereeSector.safeParse(current).success) sectorBook().adopt([current]);
+                    if (schemas().RefereeSector.safeParse(current).success) sectorBook().adopt([current]);
                 }
                 if (!lastError.value) lastError.value = err instanceof Error ? err.message : 'offline';
                 if (!acceptedSettled) {
@@ -1337,7 +1332,7 @@ export function openMap(options: OpenMapOptions): Builder {
         if (queue.size > 0) throw new Error(lastError.value || 'offline');
         const id = requireId();
         const data = await request('POST', `/api/universes/${encodeURIComponent(id)}/sectors/undo-generate`, rec.body);
-        const undone = SectorGenerateUndone.safeParse(data);
+        const undone = schemas().SectorGenerateUndone.safeParse(data);
         sectorBook().forget(rec.sectorIds);
         if ('jobId' in rec.body) {
             const placed = jobPlaced.get(rec.body.jobId) ?? [];
@@ -1369,7 +1364,7 @@ export function openMap(options: OpenMapOptions): Builder {
                 toRev: sector.toRev,
                 baseRev: sector.baseRev,
             });
-            if (RefereeSector.safeParse(data).success) sectorBook().adopt([data]);
+            if (schemas().RefereeSector.safeParse(data).success) sectorBook().adopt([data]);
             if (!slugs.includes(sector.id)) slugs.push(sector.id);
         }
         for (const hex of rec.hexes) {
@@ -1394,7 +1389,8 @@ export function openMap(options: OpenMapOptions): Builder {
             await flushMap();
             if (queue.size > 0) throw new Error(lastError.value || 'offline');
             const id = requireId();
-            const undone = BuilderJobUndo.parse(await request('POST', `/api/universes/${encodeURIComponent(id)}/jobs/${encodeURIComponent(rec.jobId)}/undo`, {}));
+            const raw4 = await request('POST', `/api/universes/${encodeURIComponent(id)}/jobs/${encodeURIComponent(rec.jobId)}/undo`, {});
+            const undone = schemas().BuilderJobUndo.parse(raw4);
             const placed = jobPlaced.get(rec.jobId) ?? [];
             for (const key of placed) paintDot(key, chartChar(key));
             jobPlaced.delete(rec.jobId);
