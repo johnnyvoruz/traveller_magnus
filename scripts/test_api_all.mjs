@@ -16,8 +16,8 @@ const apiRoot = path.join(root, 'apps', 'api');
 const wranglerBin = path.join(root, 'node_modules', 'wrangler', 'bin', 'wrangler.js');
 const AT_A_TIME = 3;
 const SUITE_MS = 8 * 60 * 1000;
-// Parked truth-build files. Lane Z is reworking this suite (stream Z2). It is not a failure of this run.
-const PARKED = new Map([['truth_build.test.js', 'parked, Lane Z (Z2)']]);
+// Nothing is parked. truth_build.test.js runs with the rest (BQ1). Its own port keeps it off a neighbour.
+const PARKED = new Map();
 const children = new Set();
 
 function killPid(pid) {

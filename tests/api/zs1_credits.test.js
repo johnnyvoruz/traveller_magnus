@@ -173,21 +173,101 @@ if (process.env.RUN_API_TESTS !== '1') {
                 assert.equal(evil.status, 403, evil.text);
             });
 
-            await t.test('ZS1 SECURITY: naming a character in your own campaign does not make you its referee', {
-                todo: 'SECURITY ZS1: campaignReferee trusts any owned campaign whose sheet names the id; PATCH /campaign/changes takes any characterId',
-            }, async () => {
-                const universe = await jsonFetch(`${base}/api/universes`, { method: 'POST', headers: json(c['zc-x']), body: JSON.stringify({ name: 'Not Voss table', truthVersion: null, editionDefault: 'MgT2E' }) });
-                assert.equal(universe.status, 201, universe.text);
-                const named = await jsonFetch(`${base}/api/universes/${universe.body.data.id}/campaign/changes`, {
+            async function openTable(name) {
+                const universe = await jsonFetch(`${base}/api/universes`, {
+                    method: 'POST',
+                    headers: json(c['zc-x']),
+                    body: JSON.stringify({ name, truthVersion: null, editionDefault: 'MgT2E' }),
+                });
+                assert.equal(universe.status, 201, universe.text.slice(0, 300));
+                return universe.body.data.id;
+            }
+
+            async function nameOnSheet(universeId, recordId, personName, characterId) {
+                const named = await jsonFetch(`${base}/api/universes/${universeId}/campaign/changes`, {
                     method: 'PATCH',
                     headers: json(c['zc-x']),
-                    body: JSON.stringify({ records: [record(rid(0x51), { type: 'person', name: 'Voss', sheet: { schema: 'mgt2e', characterId: id } })] }),
+                    body: JSON.stringify({ records: [record(recordId, { type: 'person', name: personName, sheet: { schema: 'mgt2e', characterId } })] }),
                 });
                 assert.equal(named.status, 200, named.text.slice(0, 300));
+            }
+
+            async function seat(universeId, who) {
+                const invite = await jsonFetch(`${base}/api/universes/${universeId}/players/invite`, { method: 'POST', headers: json(c['zc-x']) });
+                assert.equal(invite.status, 200, invite.text.slice(0, 300));
+                const token = invite.body.data.url.split('/join/')[1];
+                const joined = await jsonFetch(`${base}/api/join`, { method: 'POST', headers: json(c[who]), body: JSON.stringify({ token }) });
+                assert.equal(joined.status, 200, joined.text.slice(0, 300));
+            }
+
+            async function archive(universeId, who) {
+                const left = await jsonFetch(`${base}/api/universes/${universeId}/players/${who}`, { method: 'DELETE', headers: json(c['zc-x']) });
+                assert.equal(left.status, 200, left.text.slice(0, 300));
+            }
+
+            await t.test('ZS1 SECURITY: naming a character in your own campaign does not make you its referee', async () => {
+                const universeId = await openTable('Not Voss table');
+                await nameOnSheet(universeId, rid(0x51), 'Voss', id);
                 const post = await jsonFetch(ledger, { method: 'POST', headers: json(c['zc-x']), body: line('ZREF_forged') });
                 const read = await jsonFetch(ledger, { headers: { cookie: c['zc-owner'] } });
                 assert.equal(read.text.includes('ZREF_forged'), false, `the owner's register holds the stranger's line (post ${post.status})`);
                 assert.equal(post.status, 404, post.text.slice(0, 300));
+            });
+
+            await t.test('ZS1 SECURITY: a member character accepts a pending line, and a member who left does not', async () => {
+                const madePlayer = await jsonFetch(`${base}/api/characters`, { method: 'POST', headers: json(c['zc-player']), body: JSON.stringify({ name: 'Bea' }) });
+                assert.equal(madePlayer.status, 201, madePlayer.text.slice(0, 300));
+                const playerId = madePlayer.body.data.character.id;
+                const playerLedger = `${base}/api/characters/${encodeURIComponent(playerId)}/ledger`;
+                const universeId = await openTable('Bea table');
+                await seat(universeId, 'zc-player');
+                const early = await jsonFetch(playerLedger, { method: 'POST', headers: json(c['zc-x']), body: line('ZREF_unnamed') });
+                assert.equal(early.status, 404, early.text.slice(0, 300));
+                const earlyRead = await jsonFetch(playerLedger, { headers: { cookie: c['zc-player'] } });
+                assert.equal(earlyRead.text.includes('ZREF_unnamed'), false);
+                await nameOnSheet(universeId, rid(0x52), 'Bea', playerId);
+                const post = await jsonFetch(playerLedger, { method: 'POST', headers: json(c['zc-x']), body: line('ZREF_member') });
+                assert.equal(post.status, 201, post.text.slice(0, 300));
+                assert.equal(post.body.data.pending, 1);
+                const read = await jsonFetch(playerLedger, { headers: { cookie: c['zc-player'] } });
+                assert.equal(read.text.includes('ZREF_member'), true, read.text.slice(0, 300));
+                await archive(universeId, 'zc-player');
+                const after = await jsonFetch(playerLedger, { method: 'POST', headers: json(c['zc-x']), body: line('ZREF_left') });
+                assert.equal(after.status, 404, after.text.slice(0, 300));
+                const afterRead = await jsonFetch(playerLedger, { headers: { cookie: c['zc-player'] } });
+                assert.equal(afterRead.text.includes('ZREF_left'), false, afterRead.text.slice(0, 400));
+            });
+
+            await t.test('ZS1 SECURITY: an editor who is a member counts, and does not after they leave', async () => {
+                const madeAda = await jsonFetch(`${base}/api/characters`, { method: 'POST', headers: json(c['zc-owner']), body: JSON.stringify({ name: 'Ada' }) });
+                assert.equal(madeAda.status, 201, madeAda.text.slice(0, 300));
+                const adaId = madeAda.body.data.character.id;
+                const adaLedger = `${base}/api/characters/${encodeURIComponent(adaId)}/ledger`;
+                const invite = await jsonFetch(`${base}/api/characters/${adaId}/invites`, {
+                    method: 'POST',
+                    headers: { ...json(c['zc-owner']), 'x-forwarded-host': new URL(base).host },
+                });
+                assert.equal(invite.status, 201, invite.text.slice(0, 300));
+                const claimToken = invite.body.data.url.slice(invite.body.data.url.lastIndexOf('/') + 1);
+                const claimed = await jsonFetch(`${base}/api/characters/claim`, {
+                    method: 'POST',
+                    headers: json(c['zc-player']),
+                    body: JSON.stringify({ token: claimToken }),
+                });
+                assert.equal(claimed.status, 200, claimed.text.slice(0, 300));
+                const universeId = await openTable('Ada table');
+                await seat(universeId, 'zc-player');
+                await nameOnSheet(universeId, rid(0x53), 'Ada', adaId);
+                const post = await jsonFetch(adaLedger, { method: 'POST', headers: json(c['zc-x']), body: line('ZREF_editor') });
+                assert.equal(post.status, 201, post.text.slice(0, 300));
+                assert.equal(post.body.data.pending, 1);
+                const read = await jsonFetch(adaLedger, { headers: { cookie: c['zc-owner'] } });
+                assert.equal(read.text.includes('ZREF_editor'), true, read.text.slice(0, 300));
+                await archive(universeId, 'zc-player');
+                const after = await jsonFetch(adaLedger, { method: 'POST', headers: json(c['zc-x']), body: line('ZREF_editor_left') });
+                assert.equal(after.status, 404, after.text.slice(0, 300));
+                const afterRead = await jsonFetch(adaLedger, { headers: { cookie: c['zc-owner'] } });
+                assert.equal(afterRead.text.includes('ZREF_editor_left'), false, afterRead.text.slice(0, 400));
             });
         } finally {
             stopDev(child?.pid);

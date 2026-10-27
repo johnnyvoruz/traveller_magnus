@@ -100,12 +100,7 @@ for (const [name, text] of AGREE) {
     });
 }
 
-// SECURITY (ZS1): rich.ts reads a lone CR as a line break (text.replace(/\r\n?/g, '\n')), so the
-// referee sees a hidden block; players_view.ts splits on '\n' only, so the players read holds it.
-// Kept as todo so the gates stay green; the owning lane drops `todo` with the fix.
-test('ZS1 SECURITY: a referee block written with lone CR line breaks is absent for players', {
-    todo: 'SECURITY ZS1: stripRefereeBlocks splits on \\n only; rich.ts also breaks on a lone \\r',
-}, () => {
+test('ZS1 SECURITY: a referee block written with lone CR line breaks is absent for players', () => {
     const text = 'Open.\r:::referee\rZREF_cr\r:::\rStill.';
     const hidden = refereeTexts(parseRich(text)).map((item) => item.trim()).filter(Boolean);
     assert.deepEqual(hidden, ['ZREF_cr']);

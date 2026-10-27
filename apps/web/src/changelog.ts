@@ -1,6 +1,6 @@
 /**
  * What a player or a referee sees in each app version, newest first.
- * The orchestrator adds the next entry in the same push that bumps APP_VERSION.
+ * The orchestrator bumps APP_VERSION at the push. 1.3.1 is written ahead of that bump.
  * Words name the screen, not the work: no lane, file, or internal name.
  * `story` is the two lines on `/changes/<version>`. `picture` is set when that release's picture ships.
  */
@@ -17,6 +17,24 @@ export type Release = {
 
 export const CHANGELOG: readonly Release[] = [
     {
+        version: '1.3.1',
+        date: '2026-10-27',
+        title: 'Sessions and trade',
+        story: [
+            'You can copy your campaign for your own AI, paste the reply, and accept, edit, or drop each proposal.',
+            'Trade here finds a supplier where the ship is, buys and sells, and writes the lot to Cargo and the Ledger.',
+        ],
+        picture: '/changes/1.3.1.png',
+        items: [
+            'Copy for your AI copies your whole campaign, referee notes included. Paste your AI\'s reply into Proposals. Each proposal waits until you accept it, edit it, or drop it. A passage you mark for the referee is shaded for you and left out of what players read.',
+            'Trade here, on a vessel at its current world, finds a supplier and buys and sells. The lot is in Cargo and on the Ledger. Hire a local broker when you want one. Tick Log it to write the sale into the journal.',
+            'Players can no longer read a referee-only passage written with old line breaks; only a campaign\'s referee can post to a character\'s register.',
+            'Drag the time scrub to look at another day. The map shows where the party is on that day, and Back to the campaign date returns you. The world panel names the season. Dice adds 3DD: roll three dice, add them, and multiply by 10. It takes no DM.',
+            'Hover a world to read its card: the name, the hex, the UWP and codes, the bases, the zone, and the records under Here. In Build, Publish selection publishes the hexes you selected. A world and a record each have Publish. A referee-only record warns you that publishing sends the whole record, including its referee-only text, its player notes, and its sheet.',
+            'Look around an example campaign walks through a crew, a ship, and a journal. Quiet on this device hides background traffic only. System Comms still plays the system on screen.',
+        ],
+    },
+    {
         version: '1.3.0',
         date: '2026-10-18',
         title: 'Players',
@@ -24,6 +42,7 @@ export const CHANGELOG: readonly Release[] = [
             'Players can join your campaign with an invite link, see what you choose to show them, and write their own notes in the journal.',
             'Dice are on the rail on every screen, ships carry cargo, a ledger and owners, the timeline fills itself from ship tracks, and systems have local radio.',
         ],
+        picture: '/changes/1.3.0.png',
         items: [
             'Players join your campaign with an invite link. They see each record\'s For players text, the party, the timeline and the journal, and they write their own notes. View as players shows you what they see.',
             'Roll dice is on the rail on every screen: 1D, 2D, 3D, D3, 2D3 and D66, Boon or Bane, and a DM.',

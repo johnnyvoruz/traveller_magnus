@@ -798,6 +798,24 @@ if (process.env.RUN_API_TESTS !== '1') {
         writeFileSync(xml, XML);
         writeFileSync(catalogue, JSON.stringify(CATALOGUE));
         await withDevServer(async (base) => {
+            // Wrangler reloads the Worker when another lane saves a file it watches, and the open
+            // socket comes back ECONNRESET. Retry that drop. A real response is never retried.
+            const realFetch = globalThis.fetch.bind(globalThis);
+            globalThis.fetch = async (url, options) => {
+                let last;
+                for (let attempt = 0; attempt < 6; attempt++) {
+                    try {
+                        return await realFetch(url, options);
+                    } catch (err) {
+                        last = err;
+                        const code = err && err.cause && err.cause.code;
+                        if (code !== 'ECONNRESET' && code !== 'ECONNREFUSED') throw err;
+                        await sleep(500);
+                    }
+                }
+                throw last;
+            };
+            try {
             runWrangler(['r2', 'object', 'put', 'voyage-private/inputs/vtest/Fixture.tsv', '--file', tsv, '--local']);
             runWrangler(['r2', 'object', 'put', 'voyage-private/inputs/vtest/Fixture.xml', '--file', xml, '--local']);
             runWrangler(['r2', 'object', 'put', 'voyage-private/inputs/vtest/sectors.json', '--file', catalogue, '--local']);
@@ -1540,6 +1558,9 @@ if (process.env.RUN_API_TESTS !== '1') {
             assert.equal(feedBuild.data.sectorsQueued, 0);
             assert.equal(feedBuild.data.sectorsFailed, 0);
             for (const sector of feedBuild.data.sectors) assert.equal(sector.state, 'done', JSON.stringify(sector));
+            } finally {
+                globalThis.fetch = realFetch;
+            }
         });
     });
 

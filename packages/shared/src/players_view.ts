@@ -113,13 +113,17 @@ export function redactPlayersText(text: string, records: readonly CampaignRecord
 
 function hideBareIds(text: string, hiddenIds: readonly string[]): string {
     let raw = text;
-    for (const id of hiddenIds) raw = raw.split(id).join('a record');
+    for (const id of hiddenIds) {
+        if (id === '') continue;
+        const pattern = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        raw = raw.replace(new RegExp(pattern, 'gi'), 'a record');
+    }
     return raw;
 }
 
 /** A `:::referee` line through its closer, or through the end when it never closes. */
-function stripRefereeBlocks(text: string): string {
-    const lines = text.split('\n');
+export function stripRefereeBlocks(text: string): string {
+    const lines = text.replace(/\r\n?/g, '\n').split('\n');
     const kept: string[] = [];
     for (let i = 0; i < lines.length; i++) {
         if (lines[i].replace(/\r$/, '').trim() !== ':::referee') {

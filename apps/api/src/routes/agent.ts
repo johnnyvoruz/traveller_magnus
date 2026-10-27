@@ -102,6 +102,7 @@ export function mountAgentRoutes(route: Hono<AppEnv>): void {
         if (!originAllowed(c)) return privateNoStore(fail(c, 403, 'forbidden', 'That request was blocked. Reload the page and try again.'));
         const member = await memberUniverse(c);
         if (member instanceof Response) return privateNoStore(member);
+        if (member.role === 'none') return privateNoStore(fail(c, 404, 'not_found', 'No such universe.'));
         if (member.role !== 'owner') return privateNoStore(fail(c, 403, 'forbidden', 'The owner does that.'));
         return privateNoStore(await door(
             { row: member.row, actor: member.actor, forward: member.forward },

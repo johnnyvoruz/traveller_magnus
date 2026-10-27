@@ -559,3 +559,34 @@ test('a referee block is absent for players, and an unclosed one takes the rest 
     assert.match(inlineView.records[0].details, /Say :::referee in a sentence/);
     assert.match(inlineView.records[0].details, /The port is open\./);
 });
+
+test('a referee block with CR or CRLF breaks is absent, and a bare id matches in any case', () => {
+    const outside = 'The port is open.';
+    const inside = 'The password is nightfall.';
+    const hidden = record(9, 'person', false);
+    const upper = hidden.id.toUpperCase();
+    const cr = outside + '\r:::referee\r' + inside + '\r:::\rStill ' + outside;
+    const crlf = outside + '\r\n:::referee\r\n' + inside + '\r\n:::\r\nStill ' + outside;
+    const person = record(1, 'person', true, {
+        details: cr,
+        summary: crlf,
+        playerNotes: 'See ' + upper + ' in the margin.',
+    });
+    const view = playersView({
+        records: [person, hidden],
+        links: [],
+        journal: [],
+        settings: null,
+        clock: null,
+    });
+    const raw = JSON.stringify(view);
+    assert.equal(raw.includes(inside), false);
+    assert.equal(raw.includes(':::referee'), false);
+    assert.equal(raw.includes(hidden.id), false);
+    assert.equal(raw.includes(upper), false);
+    const shown = view.records.find((row) => row.id === person.id);
+    assert.ok(shown);
+    assert.match(shown.details, /Still The port is open\./);
+    assert.match(shown.summary, /Still The port is open\./);
+    assert.match(shown.playerNotes, /See a record in the margin\./);
+});

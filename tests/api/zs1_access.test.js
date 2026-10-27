@@ -261,9 +261,7 @@ ${tokenSql('at_zs1_player', 'zs-pa', players, '2099-01-01T00:00:00.000Z')}
                 assert.equal(list.text.includes('zs1-zs-'), false);
             });
 
-            await t.test('ZS1 FINDING: a stranger posting a paste to a real campaign gets the missing-campaign answer', {
-                todo: 'FINDING ZS1: POST /campaign/proposals answers a non-member 403 "The owner does that." where a missing id answers 404',
-            }, async () => {
+            await t.test('ZS1 FINDING: a stranger posting a paste to a real campaign gets the missing-campaign answer', async () => {
                 const body = JSON.stringify(batch('zs1-oracle-01', [{ op: 'question', text: 'Who?', evidence: evidence() }]));
                 const real = await jsonFetch(`${at(A)}/campaign/proposals`, { method: 'POST', headers: json(c['zs-x']), body });
                 const missing = await jsonFetch(`${base}/api/universes/uni_missing/campaign/proposals`, { method: 'POST', headers: json(c['zs-x']), body });
@@ -452,9 +450,7 @@ ${tokenSql('at_zs1_player', 'zs-pa', players, '2099-01-01T00:00:00.000Z')}
                 }
             });
 
-            await t.test('ZS1 SECURITY: a lone-CR referee block is absent for players and the demo', {
-                todo: 'SECURITY ZS1: stripRefereeBlocks splits on \\n only; rich.ts also breaks on a lone \\r',
-            }, async () => {
+            await t.test('ZS1 SECURITY: a lone-CR referee block is absent for players and the demo', async () => {
                 assert.equal(lone.status, 200, lone.text.slice(0, 300));
                 const member = await memberRead(A, c['zs-pa']);
                 assert.equal(member.text.includes('ZPLAY_cr'), true);

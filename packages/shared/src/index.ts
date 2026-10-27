@@ -79,7 +79,7 @@ export {
 export type { CampaignRecordType, CampaignEntryKind, CampaignLinkKind, SystemAnchor, LocateAt } from './schemas/campaign.ts';
 export { copyRecords } from './campaign_copy.ts';
 export { PUBLIC_DEFAULT_DAYS, fitPublicCard, publicCardJournal, publicCourseLegs, publicFinishedLegs, publicFirstHex, publicMarkId, publicShips } from './public_hex.ts';
-export { playersObjectHashes, playersView, redactPlayersText } from './players_view.ts';
+export { playersObjectHashes, playersView, redactPlayersText, stripRefereeBlocks } from './players_view.ts';
 export {
     PlayersPage,
     PlayerInvite,

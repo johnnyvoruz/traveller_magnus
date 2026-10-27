@@ -20,7 +20,11 @@ function parts(version) {
 }
 
 test('the first entry is this app version, and every release is in order', () => {
-    assert.equal(CHANGELOG[0].version, APP_VERSION);
+    const head = parts(CHANGELOG[0].version);
+    const app = parts(APP_VERSION);
+    const ahead = head[0] - app[0] || head[1] - app[1] || head[2] - app[2];
+    assert.ok(ahead >= 0, 'the first entry is this version or a newer one waiting on the push');
+    assert.equal(CHANGELOG.some((release) => release.version === APP_VERSION), true);
     const seen = new Set();
     for (let i = 0; i < CHANGELOG.length; i++) {
         const release = CHANGELOG[i];
@@ -42,7 +46,15 @@ test('the first entry is this app version, and every release is in order', () =>
         assert.ok(release.title.trim().length > 0, release.version);
         assert.ok(release.items.length >= 1 && release.items.length <= 6, release.version);
         assert.equal(release.story.length, 2, release.version);
-        assert.equal(release.picture, undefined, release.version);
+        if (release.version === '1.3.0' || release.version === '1.3.1') {
+            assert.equal(release.picture, '/changes/' + release.version + '.png', release.version);
+            const file = path.join(webRoot, 'public', 'changes', release.version + '.png');
+            const bytes = fs.readFileSync(file);
+            assert.ok(bytes.length < 300 * 1024, release.version);
+            assert.equal(bytes.readUInt32BE(16), 1200, release.version);
+        } else {
+            assert.equal(release.picture, undefined, release.version);
+        }
         for (const item of [...release.items, ...release.story]) {
             assert.equal(item.includes('`'), false, item);
             assert.equal(item.includes('/src/'), false, item);
@@ -108,19 +120,20 @@ describe('rendered', { concurrency: 1 }, () => {
         assert.match(html, /href="\/changes\/1\.2\.6"/);
     });
 
-    test('a version page is two lines, and the picture is not on the page yet', async () => {
+    test('a version page is two lines, a picture, and the list folded under it', async () => {
         const component = (await server.ssrLoadModule('/src/workspace/ChangelogBody.vue')).default;
         const { createSSRApp } = await import('vue');
         const { renderToString } = await import('vue/server-renderer');
-        const html = await renderToString(createSSRApp(component, { version: APP_VERSION }));
+        const html = await renderToString(createSSRApp(component, { version: '1.3.0' }));
         assert.match(html, /What&#39;s new/);
-        assert.match(html, new RegExp('>' + APP_VERSION.replaceAll('.', '\\.') + '<'));
+        assert.match(html, />1\.3\.0</);
         assert.match(html, /Players/);
         assert.match(html, /Players can join your campaign with an invite link/);
         assert.match(html, /href="\/changes"/);
         assert.match(html, /href="\/help"/);
-        assert.equal(html.includes('<img'), false);
-        assert.equal(html.includes('<details'), false);
+        assert.match(html, /src="\/changes\/1\.3\.0\.png"/);
+        assert.match(html, /The full list/);
+        assert.equal(html.includes('<details open'), false);
     });
 
     test('an unknown version says it is not listed', async () => {

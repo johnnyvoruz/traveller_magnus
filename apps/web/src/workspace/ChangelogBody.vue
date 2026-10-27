@@ -35,6 +35,12 @@ const missing = computed(() => props.version.length > 0 && page.value === null);
       <figure v-if="page.picture" class="changes-picture">
         <img :src="page.picture" :alt="page.title">
       </figure>
+      <details class="changes-more">
+        <summary>The full list</summary>
+        <ul>
+          <li v-for="item in page.items" :key="item">{{ item }}</li>
+        </ul>
+      </details>
       <p class="changes-help"><a href="/changes">All versions</a><a href="/help">Help</a> How to publish and share.</p>
     </article>
     <template v-else-if="missing">
@@ -44,11 +50,15 @@ const missing = computed(() => props.version.length > 0 && page.value === null);
     <template v-else>
       <ol class="ui-steps changes-steps">
         <li v-for="(release, index) in CHANGELOG" :key="release.version" class="ui-step changes-release" :class="{ 'is-lit': index === 0 }">
+          <p class="changes-ver"><span>{{ release.version }}</span><span class="ui-date">{{ writtenDate(release.date) }}</span></p>
+          <p class="changes-title"><a :href="'/changes/' + release.version">{{ release.title }}</a></p>
+          <p class="changes-story">{{ release.story[0] }}</p>
+          <p class="changes-story">{{ release.story[1] }}</p>
+          <figure v-if="release.picture" class="changes-picture">
+            <img :src="release.picture" :alt="release.title">
+          </figure>
           <details :open="index === 0 ? true : undefined">
-            <summary>
-              <span class="changes-ver"><span>{{ release.version }}</span><span class="ui-date">{{ writtenDate(release.date) }}</span></span>
-              <span class="changes-title"><a :href="'/changes/' + release.version" @click.stop>{{ release.title }}</a></span>
-            </summary>
+            <summary>The full list</summary>
             <ul>
               <li v-for="item in release.items" :key="item">{{ item }}</li>
             </ul>
@@ -146,7 +156,8 @@ const missing = computed(() => props.version.length > 0 && page.value === null);
   height: auto;
 }
 
-.changes-release ul {
+.changes-release ul,
+.changes-more ul {
   margin: 8px 0 0;
   padding-left: 18px;
 }
