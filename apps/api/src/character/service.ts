@@ -48,6 +48,7 @@ export interface CharacterRooms {
     ledgerPost(id: string, body: LedgerPost, by: string, pending: 0 | 1): Promise<RoomLedger>;
     ledgerVoid(id: string, lineId: string, by: string): Promise<RoomLedger>;
     ledgerAccept(id: string, lineId: string, by: string): Promise<RoomLedger>;
+    ledgerMode(id: string, credits: unknown): Promise<RoomLedger>;
 }
 
 export type LedgerPost = {
@@ -499,6 +500,13 @@ export function characterService(db: CatalogueDb, rooms: CharacterRooms, clock: 
             const named = lines.find((line) => String(line.id) === lineId);
             if (!named || String(named.byUser) !== actor.id) return bad(404, 'not_found', 'No such character.');
             return fromRoom(await rooms.ledgerAccept(id, lineId, actor.id));
+        },
+
+        /** Character access only. A campaign owner who is not an editor is the same 404 as a stranger. */
+        async ledgerMode(actor: Actor, id: string, credits: unknown): Promise<Outcome> {
+            const access = await accessFor(db, id, actor.id);
+            if (!access) return bad(404, 'not_found', 'No such character.');
+            return fromRoom(await rooms.ledgerMode(id, credits));
         },
     };
 }

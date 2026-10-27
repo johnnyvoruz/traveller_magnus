@@ -82,6 +82,9 @@ export function characterRooms(env: Env): CharacterRooms {
         async ledgerAccept(id, lineId, by) {
             return roomLedger(await call(env, id, `/ledger/${encodeURIComponent(lineId)}/accept`, { by }));
         },
+        async ledgerMode(id, credits) {
+            return roomLedger(await call(env, id, '/ledger/mode', { credits }));
+        },
     };
 }
 

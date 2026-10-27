@@ -13,10 +13,11 @@ export function canPublishRecords(readOnly: boolean, records: number): boolean {
 
 /**
  * The line that leads the Publish records dialog when some chosen record is referee-only. One record:
- * the sentence. More: the count, then the same promise said of each. Either way it says the whole record
- * goes out (its referee-only text, its player notes and its sheet), not only the "For players" text.
+ * the sentence. More: the count, then the same promise said of each. Either way it says what goes out
+ * (the name, kind and tags) and what stays (the text, the player notes and the sheet): the server leaves
+ * those out of a published package (1.3.2).
  */
 export function refereeLead(count: number): string {
     if (count <= 1) return REFEREE_ONLY_NOTE;
-    return count + ' of the chosen records are referee-only. Publishing sends each whole record: its referee-only text, its player notes and its sheet.';
+    return count + ' of the chosen records are referee-only. Publishing sends each one\'s name, kind and tags. Their text, player notes and sheets stay with you.';
 }

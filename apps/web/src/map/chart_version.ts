@@ -50,6 +50,20 @@ export type ChartBoot = {
  * - The remembered version cannot be read (released rows can be withdrawn): the list decides.
  *   When it names another version, that load's result is the result. Otherwise the first error stands.
  */
+/**
+ * When a version is already remembered, the versions list is asked only after `frame`.
+ * The first frame then neither waits on that list nor sends it. With nothing remembered,
+ * the list is asked at once, which is the fall-back the map uses.
+ */
+export function versionsAsk(
+    remembered: string | null,
+    ask: () => Promise<string>,
+    frame: () => Promise<void>,
+): Promise<string> {
+    if (!remembered) return ask();
+    return frame().then(ask);
+}
+
 export async function bootChart(opts: ChartBoot): Promise<void> {
     const { remembered, ask, load } = opts;
     const fresh = ask();

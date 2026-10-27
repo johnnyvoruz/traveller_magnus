@@ -17,6 +17,21 @@ export type Release = {
 
 export const CHANGELOG: readonly Release[] = [
     {
+        version: '1.3.2',
+        date: '2026-10-27',
+        title: 'Save the chart as a print image',
+        story: [
+            'Save image makes a 300 dpi picture of the subsector, the sector, or what is on screen, on paper or in full colour.',
+            'A published package now leaves out what players cannot see, and an orbit address opens at once.',
+        ],
+        items: [
+            'Save image, at the bottom right of the chart and on the right-click menu, saves a PNG at 300 dpi on A4, Letter, A3 or Tabloid. Choose the subsector, the sector, or what is on screen, and On paper or Full colour. The file is named for the place, the paper, and the resolution.',
+            'A published package leaves out a referee-only record\'s text, player notes and sheet, and strips referee-only passages from every record. The publish form says what goes out and what stays.',
+            'An orbit address opens at once on the chart version you last used, then switches if a newer one is released.',
+            'The Simple or Detailed choice on a character\'s credits is kept.',
+        ],
+    },
+    {
         version: '1.3.1',
         date: '2026-10-27',
         title: 'Sessions and trade',

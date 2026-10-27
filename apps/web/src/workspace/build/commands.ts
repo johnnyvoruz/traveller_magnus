@@ -21,7 +21,9 @@ export type BuildCommandId =
     | 'build-edit' | 'build-draft-keep' | 'build-draft-discard' | 'build-blank'
     | 'build-sector-new' | 'build-sector-rename' | 'build-sector-move' | 'build-sector-delete'
     | 'build-design-hand' | 'build-add-star' | 'build-add-world' | 'build-add-gas' | 'build-add-belt' | 'build-add-moon'
-    | 'build-body-up' | 'build-body-down' | 'build-body-mainworld' | 'build-body-remove' | 'build-body-orbit' | 'build-publish' | 'build-body-roll';
+    | 'build-body-up' | 'build-body-down' | 'build-body-mainworld' | 'build-body-remove' | 'build-body-orbit' | 'build-publish' | 'build-body-roll'
+    // Not Build's own: the chart's "Save image" (DP1) sits on the right-click menu too; the map runs it.
+    | 'save-image';
 
 export const BUILD_COMMANDS: readonly { id: BuildCommandId; name: string; keys?: string[] }[] = [
     { id: 'build-select', name: 'Select hexes', keys: ['s'] },
@@ -89,6 +91,7 @@ function replaceable(keys: readonly string[]): boolean {
 }
 
 export function canBuild(id: BuildCommandId, keys: readonly string[]): boolean {
+    if (id === 'save-image') return true;
     const busy = build.job !== null || build.rolling !== '';
     // A sector's acts answer to what the address selects, not to hexes.
     if (id === 'build-sector-new') return canNewSector();
@@ -132,6 +135,8 @@ export function canBuild(id: BuildCommandId, keys: readonly string[]): boolean {
 }
 
 export function runBuild(id: BuildCommandId, keys: readonly string[]): void {
+    // The map's own act (MapView picks it off the menu first); never Build's last branch.
+    if (id === 'save-image') return;
     if (!canBuild(id, keys)) return;
     if (id === 'build-sector-new') void newSector();
     else if (id === 'build-sector-rename') startRename();
@@ -239,6 +244,8 @@ export function menuFor(keys: readonly string[]): { title: string; items: BuildM
             rule: !items.some((item) => item.rule),
         });
     }
+    // The chart's image (DP1): the last line, under a rule, for anyone the menu opens for.
+    items.push({ id: 'save-image', label: 'Save image…', icon: 'file-export', rule: true });
     for (const item of items) item.disabled = !canBuild(item.id, keys);
     const two = build.job ? '' : oneSectorFor(keys);
     const first = two ? items.find((item) => item.id === 'build-generate') : undefined;

@@ -265,9 +265,10 @@ function visibleHexes(view: Rect): { q: number; r: number }[] {
 }
 
 export class MapRenderer {
-    private readonly canvas: HTMLCanvasElement;
-    private readonly ctx: CanvasRenderingContext2D;
-    private readonly theme: MapTheme;
+    /** The screen's canvas, context and theme. drawInto (DP1) swaps them for one frame and puts them back. */
+    private canvas: HTMLCanvasElement;
+    private ctx: CanvasRenderingContext2D;
+    private theme: MapTheme;
     private sectors: DrawSector[] = [];
     /**
      * Referee cells that differ from the chart string. A sector absent here
@@ -508,6 +509,87 @@ export class MapRenderer {
         if (this.canvas.width !== devW) this.canvas.width = devW;
         if (this.canvas.height !== devH) this.canvas.height = devH;
         this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    }
+
+    /** Polity and region fills at the theme's share of their alpha: 1 on screen, --print-chart-fill on paper. */
+    private fillScale(): number {
+        const scale = this.theme.fillScale;
+        return scale !== undefined && scale > 0 ? scale : 1;
+    }
+
+    /**
+     * One frame into another canvas (DP1, a saved image): the chart as it stands, under this camera,
+     * at this size and device pixel ratio, in this theme, with no selection and the title insets at
+     * zero. The screen's canvas, context, theme, size, insets, selection, title states and the frame's
+     * hit targets are saved first and put back in a finally, as the legacy captureSubsector did: the
+     * chart on screen is not drawn to and its next frame is the same as before. Titles come at full
+     * when the theme has no fade (tFast 0). Dot tiles made at the capture's zoom are dropped after.
+     * Returns the frame's tracks, for the caller to draw as the traffic layer would, or null when the
+     * canvas gives no context (the browser refused the size).
+     */
+    drawInto(
+        canvas: HTMLCanvasElement,
+        cam: Camera,
+        width: number,
+        height: number,
+        dpr: number,
+        theme: MapTheme,
+        opts: { titleTop: number; workspaceLeft: number; selection: Selection | null },
+    ): { tier: Tier; tracks: readonly TrafficTrack[] } | null {
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return null;
+        const live = {
+            canvas: this.canvas,
+            ctx: this.ctx,
+            theme: this.theme,
+            width: this.width,
+            height: this.height,
+            dpr: this.dpr,
+            titleTop: this.titleTop,
+            workspaceLeft: this.workspaceLeft,
+            selected: this.selected,
+            tracks: this.tracks,
+            partyMark: this.partyMark,
+            vesselMarks: this.vesselMarks,
+            partyShips: this.partyShips,
+            selectedKey: this.selectedKey,
+            titleTime: this.titleTime,
+            titles: [...this.titleStates].map(([key, state]): [string, TitleState] => [key, { ...state, out: state.out ? { ...state.out } : null }]),
+        };
+        try {
+            this.canvas = canvas;
+            this.ctx = ctx;
+            this.theme = theme;
+            this.titleTop = opts.titleTop > TITLE_TOP ? opts.titleTop : TITLE_TOP;
+            this.workspaceLeft = opts.workspaceLeft > 0 ? opts.workspaceLeft : 0;
+            this.selected = opts.selection;
+            this.dotTiles.clear();
+            this.lastDotPpp = -1;
+            this.resize(width, height, dpr);
+            const drawn = this.draw(cam);
+            return { tier: drawn.tier, tracks: this.tracks };
+        } finally {
+            this.canvas = live.canvas;
+            this.ctx = live.ctx;
+            this.theme = live.theme;
+            this.width = live.width;
+            this.height = live.height;
+            this.dpr = live.dpr;
+            this.titleTop = live.titleTop;
+            this.workspaceLeft = live.workspaceLeft;
+            this.selected = live.selected;
+            this.tracks = live.tracks;
+            this.partyMark = live.partyMark;
+            this.vesselMarks = live.vesselMarks;
+            this.partyShips = live.partyShips;
+            this.selectedKey = live.selectedKey;
+            this.titleTime = live.titleTime;
+            this.titleStates.clear();
+            for (const [key, state] of live.titles) this.titleStates.set(key, state);
+            this.dotTiles.clear();
+            this.lastDotPpp = -1;
+            this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+        }
     }
 
     /** `animating` is true while a title fade is in progress: the caller should draw again next frame. */
@@ -1063,7 +1145,7 @@ export class MapRenderer {
         if (!visible.length) return;
         const ctx = this.ctx;
         this.withCamera(cam, vp, () => {
-            ctx.globalAlpha = alpha;
+            ctx.globalAlpha = alpha * this.fillScale();
             for (const item of visible) {
                 ctx.fillStyle = item.color;
                 ctx.fill(item.path, 'evenodd');
@@ -1108,7 +1190,7 @@ export class MapRenderer {
         if (!shapes.length) return;
         const ctx = this.ctx;
         this.withCamera(cam, vp, () => {
-            ctx.globalAlpha = REGION_FILL_ALPHA;
+            ctx.globalAlpha = REGION_FILL_ALPHA * this.fillScale();
             for (const shape of shapes) {
                 ctx.fillStyle = shape.color;
                 ctx.fill(shape.path, 'evenodd');

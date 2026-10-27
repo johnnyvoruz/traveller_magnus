@@ -1,6 +1,6 @@
 import { DurableObject } from 'cloudflare:workers';
 import type { Env } from '../env';
-import { acceptLedger, installLedger, postLedger, readLedger, voidLedger, type LedgerFail, type LedgerPage, type LedgerStored } from './ledger.ts';
+import { acceptLedger, installLedger, postLedger, readLedger, setCreditsMode, voidLedger, type LedgerFail, type LedgerPage, type LedgerStored } from './ledger.ts';
 import {
     applySets,
     colourFor,
@@ -154,6 +154,11 @@ export class CharacterRoom extends DurableObject<Env> {
         const room = this.room(this.sockets());
         const voidMatch = /^\/ledger\/([^/]+)\/void$/.exec(url.pathname);
         const acceptMatch = /^\/ledger\/([^/]+)\/accept$/.exec(url.pathname);
+        if (url.pathname === '/ledger/mode') {
+            const mode = setCreditsMode(sql, record.credits);
+            if (!mode.ok) return ledgerJson(mode);
+            return json({ credits: mode.credits });
+        }
         let result: LedgerPage | LedgerStored | LedgerFail;
         let storedStatus: 200 | 201 = 201;
         if (url.pathname === '/ledger') {

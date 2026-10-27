@@ -8,7 +8,7 @@ import { centreAbove, fit, flight, SHORT_HOP, toWorld, zoomAt, type Camera, type
 import { partyShipTags, standInSnapshot, type CampaignSnapshot } from '../map/campaign_layer.ts';
 import { partyShipMarks, thenPlaces, vesselsOnMap } from '../map/vessel_marks.ts';
 import { campaignDays, partyMarker, vesselWhere } from '../workspace/party_where.ts';
-import { sameDay } from '../workspace/stardate.ts';
+import { sameDay, stardate } from '../workspace/stardate.ts';
 import { JumpRingLayer, jumpNumberOf, jumpRing, type JumpRing, type RingInk } from '../map/jump_ring.ts';
 import { frameFor, NewsLayer, newsHoverWords, nodeAt, type NewsHover, type NewsInk, type Ripple, type RippleMode } from '../map/news_layer.ts';
 import NewsScrubber from '../map/NewsScrubber.vue';
@@ -18,13 +18,17 @@ import { buildNewsGraph, type NewsIndex } from '../news/graph.ts';
 import { NEWS_PARAMS } from '../news/params.ts';
 import { resolveAnchor as resolvePartyAnchor } from '../workspace/party.ts';
 import { fieldsOf } from '../workspace/sheet_fields.ts';
-import { formatHex, fromGlobal, hexAt, parseHex, SECTOR_ROWS, sectorRect, stepGlobal, toGlobal, type HexStep } from '../map/geometry.ts';
+import { formatHex, fromGlobal, hexAt, parseHex, SECTOR_COLS, SECTOR_ROWS, sectorRect, stepGlobal, toGlobal, type HexStep, type Rect } from '../map/geometry.ts';
 import { attachInput, type InputWhy } from '../map/input.ts';
 import { MapRenderer, type PublicShipHit } from '../map/MapRenderer.ts';
 import { dossierRoute, homeRect, targetFor, type DossierRoute } from '../map/routes.ts';
 import { bindBuilder } from '../builder/bind.ts';
 import { subsectorHexes, subsectorLetter, subsectorPath } from '../builder/address.ts';
-import { readMotion, readTheme } from '../map/theme.ts';
+import { printTheme, readMotion, readTheme } from '../map/theme.ts';
+import { captionText, captureChart, captureName, TOO_LARGE } from '../map/capture.ts';
+import SaveImageButton from '../capture/SaveImageButton.vue';
+import SaveImageSheet, { type SheetArea, type SheetChoice } from '../capture/SaveImageSheet.vue';
+import { orientationFor, type CaptureArea } from '../capture/paper.ts';
 import { readTrafficInk, TrafficLayer } from '../map/traffic.ts';
 import { PPP_NAMES, tierFor, type Tier } from '../map/tiers.ts';
 import { TruthClient } from '../map/truth_client.ts';
@@ -152,6 +156,7 @@ let unregisterSystem: (() => void) | null = null;
 let unregisterCampaign: (() => void) | null = null;
 let unregisterLocate: (() => void) | null = null;
 let unregisterQuickNote: (() => void) | null = null;
+let unregisterSave: (() => void) | null = null;
 let unregisterNews: (() => void) | null = null;
 let unregisterNewsTo: (() => void) | null = null;
 let stopNewsAsk: (() => void) | null = null;
@@ -1440,6 +1445,13 @@ onMounted(() => {
     // A record or an entry as the news (XD3): from its place, on its date.
     stopNewsAsk = onNewsAsk(spreadNews);
     // Quick capture (DU7): Q, or "Quick note" in the palette, with a campaign open.
+    // The chart as an image (DP1): from the palette, the corner button and the right-click menu.
+    unregisterSave = registerCommand({
+        id: 'save-image',
+        name: 'Save image',
+        runnable: () => renderer !== null && chart !== null,
+        run: () => { openSaveSheet(); },
+    });
     unregisterQuickNote = registerCommand({
         id: 'quick-note',
         name: 'Quick note',
@@ -1512,6 +1524,120 @@ const buildOffered = computed(() => session.user !== null && campaign.status ===
 
 // ---- Quick capture (streams/D.md DU7) ----
 /** The box, and what it mentions: the selected hex and the record open in the campaign panel, when they were opened. */
+// ---- Save image (streams/D.md DP1): the chart at 300 dpi, on paper or as on screen ----------------------------
+
+const saveSheet = ref(false);
+const saving = ref(false);
+const saveAreas = ref<SheetArea[]>([]);
+
+type CaptureChoice = SheetArea & { area: CaptureArea; rect: Rect; hexes?: { q: number; r: number }[] };
+
+/** A sector's name for the caption: the index's (a referee's own sector has one), else the chart's. */
+function captureSectorName(slug: string): string {
+    const index = sectorIndex(slug);
+    return index ? index.name : sectorNameOf(slug);
+}
+
+/** Every local hex of a sector, "CCRR". */
+function sectorHexes(): string[] {
+    const out: string[] = [];
+    for (let row = 1; row <= SECTOR_ROWS; row++) for (let col = 1; col <= SECTOR_COLS; col++) out.push(formatHex(col, row));
+    return out;
+}
+
+/** Local hexes of a sector as the chart's global hexes; empty when the sector is not on the chart. */
+function globalHexes(slug: string, hexes: readonly string[]): { q: number; r: number }[] {
+    const sector = sectorOf(slug);
+    if (!sector) return [];
+    return hexes.map((hhhh) => toGlobal(sector.x, sector.y, Number(hhhh.slice(0, 2)), Number(hhhh.slice(2))));
+}
+
+/**
+ * What the image can be of now: what's on screen (the chart the pane leaves), the subsector under the
+ * chart's middle (or on the address) at the hex zoom, and that sector.
+ */
+function captureChoices(): CaptureChoice[] {
+    const vp = viewport();
+    const box = area();
+    const tl = toWorld(cam, vp, box.left, box.top);
+    const br = toWorld(cam, vp, box.right, box.bottom);
+    const mid = toWorld(cam, vp, (box.left + box.right) / 2, (box.top + box.bottom) / 2);
+    const hex = hexAt(mid.x, mid.y);
+    const place = fromGlobal(hex.q, hex.r);
+    const scope = addressedScope();
+    const slug = scope ? scope.slug : sectorAt(place.sx, place.sy);
+    const sector = slug ? captureSectorName(slug) : '';
+    const out: CaptureChoice[] = [];
+    const screenRect = { x0: tl.x, y0: tl.y, x1: br.x, y1: br.y };
+    out.push({ id: 'screen', label: 'What\'s on screen', orientation: orientationFor(br.x - tl.x, br.y - tl.y), area: { kind: 'screen', sector }, rect: screenRect });
+    if (!slug) return out;
+    const letter = scope && scope.letter ? scope.letter : (tierFor(cam.ppp) === 'hex' ? subsectorLetter(formatHex(place.col, place.row)) : null);
+    if (letter) {
+        const hexes = subsectorHexes(letter);
+        const rect = keysWorldBox(hexes.map((item) => slug + '/' + item), sectorOf);
+        const index = sectorIndex(slug);
+        const name = index && hexes[0] ? subsectorName(index, hexes[0]) : 'Subsector ' + letter;
+        if (rect) out.push({ id: 'subsector', label: 'Subsector ' + letter + (/^Subsector /.test(name) ? '' : ', ' + name), orientation: orientationFor(rect.x1 - rect.x0, rect.y1 - rect.y0), area: { kind: 'subsector', name, sector }, rect, hexes: globalHexes(slug, hexes) });
+    }
+    const all = sectorHexes();
+    const whole = keysWorldBox(all.map((item) => slug + '/' + item), sectorOf);
+    if (whole) out.push({ id: 'sector', label: 'Sector ' + sector, orientation: orientationFor(whole.x1 - whole.x0, whole.y1 - whole.y0), area: { kind: 'sector', sector }, rect: whole, hexes: globalHexes(slug, all) });
+    return out;
+}
+
+function openSaveSheet(): void {
+    if (!renderer || !chart) return;
+    saveAreas.value = captureChoices().map((item) => ({ id: item.id, label: item.label, orientation: item.orientation }));
+    saveSheet.value = true;
+}
+
+function closeSaveSheet(): void {
+    if (saving.value) return;
+    saveSheet.value = false;
+}
+
+/** One frame off screen at the paper's pixels, then the download. The chart on screen is not touched. */
+async function saveImage(choice: SheetChoice): Promise<void> {
+    const el = canvasEl.value;
+    if (!renderer || !el) return;
+    const pick = captureChoices().find((item) => item.id === choice.area);
+    if (!pick) return;
+    saving.value = true;
+    try {
+        const style = getComputedStyle(el);
+        const onScreen = choice.look === 'screen';
+        // On screen: the live theme with no title fade (one frame). On paper: the print tokens.
+        const theme = onScreen ? { ...readTheme(el), tFast: 0 } : printTheme(el);
+        const inks = onScreen
+            ? { traffic: readTrafficInk(el), ring: ringInk, news: newsInk }
+            : {
+                traffic: { traffic: style.getPropertyValue('--print-chart-traffic').trim(), own: theme.signal, bg: theme.bg0, font: theme.fontData },
+                ring: { line: theme.signal, fill: theme.signal },
+                news: { line: style.getPropertyValue('--print-chart-news').trim(), bg: theme.bg0, font: theme.fontData },
+            };
+        const date = campaign.status === 'ready' && campaign.clock ? stardate(markDay()).date : null;
+        const ok = await captureChart({
+            renderer,
+            rect: pick.rect,
+            hexes: pick.hexes,
+            area: pick.area,
+            paper: choice.paper,
+            look: choice.look,
+            theme,
+            inks,
+            ring: shownRing.value,
+            ripple: ripple && news.value ? frameFor(ripple, news.value.t) : null,
+            caption: captionText(pick.area, date, version ? version : null),
+            fileName: captureName(pick.area, choice.paper),
+        });
+        if (ok) saveSheet.value = false;
+        else showToast(TOO_LARGE);
+    } finally {
+        saving.value = false;
+        markDirty();
+    }
+}
+
 const capture = ref<CaptureContext | null>(null);
 
 function openCapture(): void {
@@ -2575,6 +2701,10 @@ const buildMenu = computed(() => (menuRef.value ? menuFor(menuRef.value.keys) : 
 function pickBuildMenu(id: string): void {
     const keys = menuRef.value ? menuRef.value.keys : [];
     closeBuildMenu();
+    if (id === 'save-image') {
+        openSaveSheet();
+        return;
+    }
     if (id !== 'build-edit') runBuildAct(id, keys);
 }
 
@@ -3134,6 +3264,7 @@ onBeforeUnmount(() => {
     if (unregisterCampaign) unregisterCampaign();
     if (unregisterLocate) unregisterLocate();
     if (unregisterQuickNote) unregisterQuickNote();
+    if (unregisterSave) unregisterSave();
     if (unregisterNews) unregisterNews();
     if (unregisterNewsTo) unregisterNewsTo();
     if (stopNewsAsk) stopNewsAsk();
@@ -3233,6 +3364,8 @@ onBeforeUnmount(() => {
       @close="closeNews"
     />
     <MapHelp v-if="!shipSheet" :build="buildOffered" :auto="helpAuto" @seen="helpWasSeen" />
+    <SaveImageButton v-if="!shipSheet && versionRef" title="Save an image of the chart" @click="openSaveSheet" />
+    <SaveImageSheet v-if="saveSheet" :areas="saveAreas" :busy="saving" @save="saveImage" @cancel="closeSaveSheet" />
     <!-- The pane paints above this view. The date has to leave it, or a full sheet covers the chip. -->
     <Teleport to=".app">
       <StardateChip @open="openDateEditor" />
@@ -3284,6 +3417,14 @@ onBeforeUnmount(() => {
     top: calc(var(--chrome-top) + 2 * (var(--chrome-height) + 8px));
     max-width: calc(100% - var(--rail-width) - 2 * var(--chrome-inset));
   }
+}
+
+/* Save image (DP1): at the map's bottom right, beside the help button. */
+.map > .save-img-btn {
+  position: absolute;
+  right: calc(var(--chrome-inset) + 48px);
+  bottom: var(--chrome-inset);
+  z-index: 3;
 }
 
 .map > canvas {

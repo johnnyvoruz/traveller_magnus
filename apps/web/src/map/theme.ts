@@ -43,6 +43,8 @@ export type MapTheme = {
     signalEdge?: string;
     chart: ChartColours;
     routeColours: Record<string, string>;
+    /** Polity and region fills at this share of their alpha. Absent is 1: the screen. On paper, --print-chart-fill. */
+    fillScale?: number;
 };
 
 /** Durations in seconds, read from the motion tokens. Callers own what they mean. */
@@ -109,5 +111,56 @@ export function readMotion(el: HTMLElement): MapMotion {
         tBase: cssTime(token(style, '--t-base')),
         tSlow: cssTime(token(style, '--t-slow')),
         tLong: cssTime(token(style, '--t-long')),
+    };
+}
+
+function printToken(style: CSSStyleDeclaration, name: string): string {
+    return token(style, '--print-chart-' + name);
+}
+
+/**
+ * The chart on paper (DP1): the same theme shape read from the --print-chart-* tokens, ink on
+ * --print-paper. Titles have no fade (tFast 0): a saved image is one frame. A route code with no
+ * print token of its own takes the "other" ink.
+ */
+export function printTheme(el: HTMLElement): MapTheme {
+    const style = getComputedStyle(el);
+    const other = printToken(style, 'route-other');
+    const routes: Record<string, string> = {};
+    for (const code of ROUTE_COLOUR_CODES) {
+        const own = token(style, '--print-chart-route-' + code.toLowerCase().replace(/ /g, '-'));
+        routes[code] = own === '' ? other : own;
+    }
+    const fill = Number.parseFloat(printToken(style, 'fill'));
+    return {
+        bg0: token(style, '--print-paper'),
+        line1: printToken(style, 'line-1'),
+        line2: printToken(style, 'line-2'),
+        signal: printToken(style, 'signal'),
+        signalDim: printToken(style, 'signal-dim'),
+        text1: printToken(style, 'text'),
+        textMuted: printToken(style, 'text-muted'),
+        fontDisplay: token(style, '--font-display'),
+        fontData: token(style, '--font-data'),
+        fontText: token(style, '--font-text'),
+        tFast: 0,
+        tag: printToken(style, 'tag'),
+        tPulse: 0,
+        signalEdge: printToken(style, 'signal-dim'),
+        chart: {
+            world: printToken(style, 'world'),
+            water: printToken(style, 'water'),
+            zoneAmber: printToken(style, 'zone-amber'),
+            zoneRed: printToken(style, 'zone-red'),
+            grid: printToken(style, 'grid'),
+            selected: printToken(style, 'selected'),
+            routeXboat: printToken(style, 'route-xboat'),
+            routeOther: other,
+            titleText: printToken(style, 'title-text'),
+            titlePill: printToken(style, 'title-pill'),
+            publicGame: printToken(style, 'public'),
+        },
+        routeColours: routes,
+        fillScale: Number.isFinite(fill) && fill > 0 ? fill : 1,
     };
 }

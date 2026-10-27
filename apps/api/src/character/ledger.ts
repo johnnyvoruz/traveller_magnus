@@ -118,6 +118,17 @@ function storedCredits(sql: Sql): unknown {
     return rows.length ? rows[0].value : null;
 }
 
+/** Stores the switch on the existing meta row. Does not read or create the ledger table, and deletes no line. */
+export function setCreditsMode(sql: Sql, credits: unknown): { ok: true; credits: CreditMode } | LedgerFail {
+    if (credits !== 'simple' && credits !== 'detailed') return INVALID;
+    sql.exec(
+        `INSERT INTO meta (key, value) VALUES ('credits', ?)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+        credits,
+    );
+    return { ok: true, credits };
+}
+
 export function readLedger(sql: Sql, after: number): LedgerPage | LedgerFail {
     if (!ledgerReady(sql)) return MISSING;
     if (!Number.isSafeInteger(after) || after < 0) return INVALID;

@@ -17,12 +17,13 @@ test('the gate says no on a read-only page and with no record, before it asks wh
     assert.equal(canPublishRecords(false, 0), false);
 });
 
-test('the warning is the one sentence for one record, and counts for more; both say the whole record goes out', () => {
+test('the warning is the one sentence for one record, and counts for more; both say what goes out and what stays', () => {
     assert.equal(refereeLead(1), REFEREE_ONLY_NOTE);
     assert.match(refereeLead(3), /^3 of the chosen records are referee-only\./);
     for (const line of [refereeLead(1), refereeLead(3)]) {
-        assert.match(line, /whole record/);
-        assert.match(line, /referee-only text, its player notes and its sheet/);
+        assert.match(line, /name, kind and tags/);
+        assert.match(line, /player notes and sheets? stay with you/);
+        assert.doesNotMatch(line, /whole record/);
         assert.doesNotMatch(line, /as it stands/);
     }
 });

@@ -13,6 +13,7 @@ import Icon from '../design/Icon.vue';
 import { formatDisplayNumber } from '../dossier/labels.ts';
 import { overviewModel, pickSystem, type AllegianceName, type HexBody, type SystemDoc, type TreeRow } from '../dossier/model.ts';
 import { parsecsBetween } from '../map/geometry.ts';
+import { bootChart, rememberedVersion, versionsAsk } from '../map/chart_version.ts';
 import { TruthClient } from '../map/truth_client.ts';
 import BodyChips from '../orbit/BodyChips.vue';
 import { LAYERS, LAYOUTS, LINEUP_SHOWN, ORBIT_COMMANDS, PARKED_COMMANDS, toggled, type DrawerId } from '../orbit/commands.ts';
@@ -361,17 +362,36 @@ function loadTree(): void {
     );
 }
 
+/** One version on screen: the sector index, then the system tree. */
+function showVersion(next: string): void {
+    version.value = next;
+    if (!client.index(next, slug.value)) client.want(next, [slug.value]);
+    loadTree();
+}
+
+/** The next paint. The versions list waits for this when a version is already remembered. */
+function firstFrame(): Promise<void> {
+    return new Promise((resolve) => { nextFrame(() => resolve()); });
+}
+
 async function load(): Promise<void> {
     versionError.value = false;
     treeError.value = false;
-    try {
-        if (!version.value) version.value = await client.currentVersion();
-    } catch {
-        versionError.value = true;
+    if (version.value) {
+        showVersion(version.value);
         return;
     }
-    if (!client.index(version.value, slug.value)) client.want(version.value, [slug.value]);
-    loadTree();
+    const remembered = rememberedVersion();
+    try {
+        await bootChart({
+            remembered,
+            ask: () => versionsAsk(remembered, () => client.currentVersion({ fresh: true }), firstFrame),
+            load: async (next) => { showVersion(next); },
+            late: () => undefined,
+        });
+    } catch {
+        versionError.value = true;
+    }
 }
 
 function retry(): void {

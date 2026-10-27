@@ -213,34 +213,7 @@ export class NewsLayer {
         this.drawn = true;
         ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
         ctx.clearRect(0, 0, this.width, this.height);
-        ctx.strokeStyle = ink.line;
-        ctx.fillStyle = ink.line;
-        ctx.lineCap = 'round';
-        ctx.lineWidth = cam.ppp >= PPP_GRID ? 3 : 2;
-        ctx.globalAlpha = 0.9;
-        ctx.beginPath();
-        for (const line of frame.lines) {
-            const a = toScreen(cam, vp, line.x1, line.y1);
-            const b = toScreen(cam, vp, line.x2, line.y2);
-            ctx.moveTo(a.sx, a.sy);
-            ctx.lineTo(b.sx, b.sy);
-        }
-        ctx.stroke();
-        // At the hex zoom a ring round the world (this layer is over the chart, so a filled disc would
-        // hide the world); further out, a dot over the system's own.
-        const near = cam.ppp >= PPP_GRID;
-        const r = near ? Math.max(7, cam.ppp * 0.36) : Math.max(2.5, cam.ppp * 0.3);
-        ctx.lineWidth = near ? 3 : 2;
-        for (const disc of frame.discs) {
-            const at = toScreen(cam, vp, disc.x, disc.y);
-            if (at.sx < -r || at.sy < -r || at.sx > this.width + r || at.sy > this.height + r) continue;
-            ctx.globalAlpha = disc.alpha;
-            ctx.beginPath();
-            ctx.arc(at.sx, at.sy, r, 0, Math.PI * 2);
-            if (near) ctx.stroke();
-            else ctx.fill();
-        }
-        ctx.globalAlpha = 1;
+        drawRipple(ctx, cam, vp, frame, ink);
         if (hover) this.block(cam, vp, hover, ink);
         this.canvas.dataset.newsHover = hover ? hover.words : '';
     }
@@ -269,4 +242,36 @@ export class NewsLayer {
         ctx.fillStyle = ink.line;
         ctx.fillText(said, place.x + BLOCK_PAD, place.y + BLOCK_H / 2 + 0.5);
     }
+}
+
+/** The ripple's lines and discs into any context in CSS pixels: the layer's frame, and a saved image (DP1). */
+export function drawRipple(ctx: CanvasRenderingContext2D, cam: Camera, vp: Viewport, frame: RippleFrame, ink: NewsInk): void {
+    ctx.strokeStyle = ink.line;
+    ctx.fillStyle = ink.line;
+    ctx.lineCap = 'round';
+    ctx.lineWidth = cam.ppp >= PPP_GRID ? 3 : 2;
+    ctx.globalAlpha = 0.9;
+    ctx.beginPath();
+    for (const line of frame.lines) {
+        const a = toScreen(cam, vp, line.x1, line.y1);
+        const b = toScreen(cam, vp, line.x2, line.y2);
+        ctx.moveTo(a.sx, a.sy);
+        ctx.lineTo(b.sx, b.sy);
+    }
+    ctx.stroke();
+    // At the hex zoom a ring round the world (this layer is over the chart, so a filled disc would
+    // hide the world); further out, a dot over the system's own.
+    const near = cam.ppp >= PPP_GRID;
+    const r = near ? Math.max(7, cam.ppp * 0.36) : Math.max(2.5, cam.ppp * 0.3);
+    ctx.lineWidth = near ? 3 : 2;
+    for (const disc of frame.discs) {
+        const at = toScreen(cam, vp, disc.x, disc.y);
+        if (at.sx < -r || at.sy < -r || at.sx > vp.width + r || at.sy > vp.height + r) continue;
+        ctx.globalAlpha = disc.alpha;
+        ctx.beginPath();
+        ctx.arc(at.sx, at.sy, r, 0, Math.PI * 2);
+        if (near) ctx.stroke();
+        else ctx.fill();
+    }
+    ctx.globalAlpha = 1;
 }

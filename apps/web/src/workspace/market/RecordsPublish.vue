@@ -129,7 +129,7 @@ onMounted(() => {
         </div>
         <form class="mk-fields mk-rpub-body" @submit.prevent="send">
           <p class="mk-sum"><b>{{ plural(chosen.length, 'record', 'records') }}</b><span>Nothing is placed on the map. Whoever imports it gets these records in their campaign.</span></p>
-          <p v-if="refereeChosen > 0" class="mk-note" role="alert" data-referee-lead><b>{{ refereeLead(refereeChosen) }}</b> Anyone who has the package's address can read the whole record.</p>
+          <p v-if="refereeChosen > 0" class="mk-note" role="alert" data-referee-lead><b>{{ refereeLead(refereeChosen) }}</b> Anyone who has the package's address can read what goes out.</p>
           <p v-for="item in selectionProblems" :key="item.text" class="mk-err" role="alert">{{ item.text }}</p>
 
           <PublishFields :problems="problems" :tried="tried" />

@@ -4,7 +4,8 @@ import path from 'node:path';
 import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
-import { acceptLedger, installLedger, postLedger, readLedger, voidLedger } from '../../apps/api/src/character/ledger.ts';
+import { CharacterPatch } from '@voyage/shared';
+import { acceptLedger, installLedger, postLedger, readLedger, setCreditsMode, voidLedger } from '../../apps/api/src/character/ledger.ts';
 import { installSheet, SheetRoom } from '../../apps/api/src/character/sheet.ts';
 import { characterService } from '../../apps/api/src/character/service.ts';
 import { characterAttached } from '../../apps/api/src/universe/campaign.ts';
@@ -264,6 +265,11 @@ function boot() {
             new SheetRoom(held.sql, held.sockets).broadcastLedger(result.line, result.balance);
             return { ok: true, status: 200, data: result.line };
         },
+        async ledgerMode(id, credits) {
+            const result = setCreditsMode(session(id).sql, credits);
+            if (!result.ok) return fail(result);
+            return { ok: true, status: 200, data: { credits: result.credits } };
+        },
     };
     return {
         db,
@@ -405,6 +411,72 @@ test('a campaign sheet names a character by the stored id, and a missing table d
     assert.equal(characterAttached(sql, 'ch_1'), true);
     assert.equal(characterAttached(sql, 'ch_2'), false);
     assert.equal(characterAttached(sql, 'ch_3'), false);
+});
+
+test('the mode write stores the switch and does not create the register or drop a line', () => {
+    const sql = sheetSql(false);
+    const stored = setCreditsMode(sql, 'detailed');
+    assert.equal(stored.ok, true);
+    assert.equal(stored.credits, 'detailed');
+    assert.equal(readLedger(sql, 0).status, 503);
+    assert.equal(sql.exec(`SELECT value FROM meta WHERE key = 'credits'`)[0].value, 'detailed');
+    assert.equal(sql.exec(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'ledger'`).length, 0);
+    assert.equal(setCreditsMode(sql, 'cash').status, 400);
+    assert.equal(setCreditsMode(sql, 'cash').message, 'Invalid request.');
+    assert.equal(sql.exec(`SELECT value FROM meta WHERE key = 'credits'`)[0].value, 'detailed');
+    installLedger(sql);
+    const ids = mint('ln');
+    const posted = postLedger(sql, { kind: 'pay', amount: 40, memo: 'berth' }, 'owner', NOW, 0, ids);
+    assert.equal(posted.ok, true);
+    const flipped = setCreditsMode(sql, 'simple');
+    assert.equal(flipped.credits, 'simple');
+    const page = readLedger(sql, 0);
+    assert.equal(page.credits, 'simple');
+    assert.equal(page.lines.length, 1);
+    assert.equal(page.lines[0].id, posted.line.id);
+    assert.equal(page.lines[0].amount, 40);
+    assert.equal(page.balance, 40);
+    assert.equal(CharacterPatch.safeParse({ name: 'Ada', credits: 'detailed' }).success, false);
+});
+
+test('an editor stores the switch; a campaign owner who is not an editor is 404 and is not asked', async () => {
+    const { db, api, addUser, rooms } = boot();
+    addUser('owner', 'Ada');
+    addUser('editor', 'Bea');
+    addUser('referee', 'Cam');
+    const owner = { id: 'owner' };
+    const editor = { id: 'editor' };
+    const referee = { id: 'referee' };
+    const created = await api.create(owner, { name: 'Voss' });
+    const id = created.data.character.id;
+    db.prepare(
+        `INSERT INTO character_access (character_id, user_id, role, granted_by, created_at) VALUES (?, 'editor', 'editor', 'owner', ?)`,
+    ).run(id, NOW);
+    const heard = { messages: [], send(text) { this.messages.push(JSON.parse(text)); } };
+    rooms.session(id).sockets.push(heard);
+    let asked = 0;
+    const gate = async () => {
+        asked += 1;
+        return true;
+    };
+    const closed = await api.ledgerRead(owner, id, 0);
+    assert.equal(closed.status, 503);
+    const before = await api.ledgerMode(owner, id, 'detailed');
+    assert.equal(before.status, 200);
+    assert.deepEqual(before.data, { credits: 'detailed' });
+    assert.equal((await api.ledgerRead(editor, id, 0)).status, 503);
+    const refused = await api.ledgerMode(referee, id, 'simple', gate);
+    assert.equal(refused.status, 404);
+    assert.equal(refused.message, 'No such character.');
+    assert.equal(asked, 0);
+    assert.equal(rooms.session(id).sql.exec(`SELECT value FROM meta WHERE key = 'credits'`)[0].value, 'detailed');
+    const bad = await api.ledgerMode(editor, id, 'both');
+    assert.equal(bad.status, 400);
+    assert.equal(bad.message, 'Invalid request.');
+    const editorSet = await api.ledgerMode(editor, id, 'simple');
+    assert.equal(editorSet.status, 200);
+    assert.deepEqual(editorSet.data, { credits: 'simple' });
+    assert.equal(heard.messages.length, 0);
 });
 
 test('an editor post does not ask who owns a campaign; an account with no access does', async () => {

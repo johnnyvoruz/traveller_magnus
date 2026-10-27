@@ -461,3 +461,14 @@ export function onPageVisibility(fn: () => void): () => void {
     document.addEventListener('visibilitychange', onVis);
     return () => document.removeEventListener('visibilitychange', onVis);
 }
+
+/** The canvas as a PNG, or null when the browser refuses it (an image too large). DP1. */
+export function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob | null> {
+    return new Promise((resolve) => {
+        try {
+            canvas.toBlob((blob) => resolve(blob), 'image/png');
+        } catch {
+            resolve(null);
+        }
+    });
+}

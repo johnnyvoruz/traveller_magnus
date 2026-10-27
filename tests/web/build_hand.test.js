@@ -437,7 +437,7 @@ test('a system by hand offers Generate in place of "Design by hand"; a generated
     assert.equal(handMode(key), null);
     assert.equal(isHandHex(key), false);
     const cold = menuFor([key]).items;
-    assert.deepEqual(cold.map((item) => item.id), ['build-edit', 'build-design-hand', 'build-remove']);
+    assert.deepEqual(cold.map((item) => item.id), ['build-edit', 'build-design-hand', 'build-remove', 'save-image']);
     assert.equal(cold[1].label, 'Checking…');
     assert.equal(cold[1].disabled, true);
     assert.equal(cold[1].say, undefined);
@@ -451,11 +451,11 @@ test('a system by hand offers Generate in place of "Design by hand"; a generated
     assert.equal(canBuild('build-generate', [other]), false);
     assert.equal(canBuild('build-design-hand', [other]), true);
     const hand = menuFor([key]).items.map((item) => item.id);
-    assert.deepEqual(hand, ['build-edit', 'build-generate', 'build-remove']);
+    assert.deepEqual(hand, ['build-edit', 'build-generate', 'build-remove', 'save-image']);
     // One line high, as "Checking…" was: the preview says that keeping replaces the hand system.
     assert.equal(menuFor([key]).items[1].say, undefined);
     assert.equal(menuFor([key]).items[1].disabled, false);
-    assert.deepEqual(menuFor([other]).items.map((item) => item.id), ['build-edit', 'build-design-hand', 'build-remove']);
+    assert.deepEqual(menuFor([other]).items.map((item) => item.id), ['build-edit', 'build-design-hand', 'build-remove', 'save-image']);
     // Asked once for a revision, however often the screen reads it.
     assert.deepEqual(asks, [key, other]);
     useBuildStore(null);

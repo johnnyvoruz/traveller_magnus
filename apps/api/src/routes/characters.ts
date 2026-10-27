@@ -168,6 +168,17 @@ charactersRoute.post('/:id/ledger/:lineId/accept', async (c) => {
     return respond(c, await service(c).ledgerAccept(user, id, c.req.param('lineId'), referee));
 });
 
+charactersRoute.post('/:id/ledger/mode', async (c) => {
+    const user = await actor(c, true);
+    if (user instanceof Response) return user;
+    const body = await readJson(c);
+    if (body instanceof Response) return body;
+    const credits = body && typeof body === 'object' && !Array.isArray(body)
+        ? (body as Record<string, unknown>).credits
+        : undefined;
+    return respond(c, await service(c).ledgerMode(user, c.req.param('id'), credits));
+});
+
 charactersRoute.post('/:id/ledger', async (c) => {
     const user = await actor(c, true);
     if (user instanceof Response) return user;

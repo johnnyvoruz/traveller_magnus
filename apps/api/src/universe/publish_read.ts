@@ -1,3 +1,4 @@
+import { stripRefereeBlocks } from '@voyage/shared';
 import { storedCampaignRecord, type Sql } from './campaign.ts';
 
 export type PublishHexSource = {
@@ -27,6 +28,39 @@ function asList(value: unknown): unknown[] {
 
 function textOrNull(value: unknown): string | null {
     return typeof value === 'string' && value ? value : null;
+}
+
+function stripValue(value: unknown): unknown {
+    if (typeof value === 'string') return stripRefereeBlocks(value);
+    if (Array.isArray(value)) return value.map(stripValue);
+    if (value && typeof value === 'object') {
+        const out: Record<string, unknown> = {};
+        for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+            if (key === 'fuelMark') continue;
+            out[key] = stripValue(item);
+        }
+        return out;
+    }
+    return value;
+}
+
+/**
+ * A record named in `recordIds` (the dialog's ticked list). Player notes never go out.
+ * The naval or scout mark never goes out. A `:::referee` passage never goes out.
+ * A record players cannot see also loses its writeup and its sheet.
+ */
+export function recordForPublish(record: unknown): unknown {
+    if (!record || typeof record !== 'object' || Array.isArray(record)) return record;
+    const source = record as Record<string, unknown>;
+    const hidden = source.visibility !== 'players';
+    const out = stripValue(source) as Record<string, unknown>;
+    out.playerNotes = null;
+    if (hidden) {
+        out.summary = '';
+        out.details = '';
+        out.sheet = null;
+    }
+    return out;
 }
 
 /** Rows the publish job copies. Missing ids come back with `found: false`. */
@@ -61,7 +95,8 @@ export function readPublishSources(sql: Sql, body: unknown): PublishSources {
     const records = asList(input.recordIds).filter((item): item is string => typeof item === 'string').map((id) => {
         const record = storedCampaignRecord(sql, id);
         if (!record) return { id, found: false, deleted: false, record: null };
-        return { id, found: true, deleted: record.deleted === true, record };
+        if (record.deleted === true) return { id, found: true, deleted: true, record };
+        return { id, found: true, deleted: false, record: recordForPublish(record) };
     });
     return { hexes, records };
 }

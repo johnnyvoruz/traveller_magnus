@@ -113,31 +113,36 @@ export class JumpRingLayer {
         this.drawn = true;
         ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
         ctx.clearRect(0, 0, this.width, this.height);
-        const fill = new Path2D();
-        for (const hex of ring.hexes) {
-            const centre = hexCentre(hex.q, hex.r);
-            const corners = hexCorners(centre.x, centre.y);
-            for (let i = 0; i < 6; i++) {
-                const at = toScreen(cam, vp, corners[i * 2], corners[i * 2 + 1]);
-                if (i === 0) fill.moveTo(at.sx, at.sy);
-                else fill.lineTo(at.sx, at.sy);
-            }
-            fill.closePath();
-        }
-        ctx.globalAlpha = 0.12;
-        ctx.fillStyle = ink.fill;
-        ctx.fill(fill);
-        ctx.globalAlpha = 1;
-        const edge = new Path2D();
-        for (const [x1, y1, x2, y2] of ring.outline) {
-            const a = toScreen(cam, vp, x1, y1);
-            const b = toScreen(cam, vp, x2, y2);
-            edge.moveTo(a.sx, a.sy);
-            edge.lineTo(b.sx, b.sy);
-        }
-        ctx.lineWidth = 2;
-        ctx.lineJoin = 'round';
-        ctx.strokeStyle = ink.line;
-        ctx.stroke(edge);
+        drawRing(ctx, cam, vp, ring, ink);
     }
+}
+
+/** The ring into any context in CSS pixels: the layer's frame, and a saved image (DP1). */
+export function drawRing(ctx: CanvasRenderingContext2D, cam: Camera, vp: Viewport, ring: JumpRing, ink: RingInk): void {
+    const fill = new Path2D();
+    for (const hex of ring.hexes) {
+        const centre = hexCentre(hex.q, hex.r);
+        const corners = hexCorners(centre.x, centre.y);
+        for (let i = 0; i < 6; i++) {
+            const at = toScreen(cam, vp, corners[i * 2], corners[i * 2 + 1]);
+            if (i === 0) fill.moveTo(at.sx, at.sy);
+            else fill.lineTo(at.sx, at.sy);
+        }
+        fill.closePath();
+    }
+    ctx.globalAlpha = 0.12;
+    ctx.fillStyle = ink.fill;
+    ctx.fill(fill);
+    ctx.globalAlpha = 1;
+    const edge = new Path2D();
+    for (const [x1, y1, x2, y2] of ring.outline) {
+        const a = toScreen(cam, vp, x1, y1);
+        const b = toScreen(cam, vp, x2, y2);
+        edge.moveTo(a.sx, a.sy);
+        edge.lineTo(b.sx, b.sy);
+    }
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = ink.line;
+    ctx.stroke(edge);
 }

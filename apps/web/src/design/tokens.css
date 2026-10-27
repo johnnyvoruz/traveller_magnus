@@ -362,3 +362,52 @@ body {
   color: var(--text-1);
   font-family: var(--font-text);
 }
+
+:root {
+  /* The chart on paper (DP1, Lane D): ink on --print-paper, read by map/theme.ts printTheme(). Checked
+     against the paper in tests/web/contrast.test.js: text at the text level, lines and marks at the mark
+     level. The hex outlines alone are kept lighter: a grid is a guide, not a mark. */
+  --print-chart-line-1: #8a8f98;     /* subsector lines */
+  --print-chart-line-2: #5b6168;     /* sector edges */
+  --print-chart-grid: #b4b9c1;       /* hex outlines, lighter on purpose */
+  --print-chart-text: #16181c;       /* sector names, far labels */
+  --print-chart-text-muted: #5b6168; /* the caption */
+  --print-chart-signal: #0b6b74;     /* the party and its ships, the jump ring, the locator */
+  --print-chart-signal-dim: #3e8a90; /* the "then" marks */
+  --print-chart-world: #16181c;      /* world discs, hex numbers, names, the UWP line */
+  --print-chart-water: #1d6fa8;      /* wet worlds */
+  --print-chart-zone-amber: #b26b00;
+  --print-chart-zone-red: #c0392b;
+  --print-chart-selected: #0b6b74;
+  --print-chart-title-text: #16181c; /* subsector titles */
+  --print-chart-title-pill: #ffffff;
+  --print-chart-tag: #ffffff;        /* the party tag's plate */
+  --print-chart-public: #6d28d9;     /* a public game's diamond */
+  --print-chart-traffic: #4d7c0f;    /* other people's ships */
+  --print-chart-news: #be185d;       /* news ripples */
+  --print-chart-route-xboat: #0f6e0f;
+  --print-chart-route-other: #6b7280;
+  --print-chart-route-im: #0f6e0f;
+  --print-chart-route-socf: #0f6e0f;
+  --print-chart-route-zhco: #1f6fb2;
+  --print-chart-route-as: #8a6d00;
+  --print-chart-route-asxx: #8a6d00;
+  --print-chart-route-hvfd: #5f6670;
+  --print-chart-route-kk: #5f6670;
+  --print-chart-route-kktw: #5f6670;
+  --print-chart-route-jupr: #2f7d32;
+  --print-chart-route-jaoz: #1f6fb2;
+  --print-chart-route-jasi: #1f6fb2;
+  --print-chart-route-jcok: #1f6fb2;
+  --print-chart-route-jhhk: #1f6fb2;
+  --print-chart-route-jlum: #1f6fb2;
+  --print-chart-route-jmen: #1f6fb2;
+  --print-chart-route-jpst: #1f6fb2;
+  --print-chart-route-jrar: #1f6fb2;
+  --print-chart-route-jukh: #1f6fb2;
+  --print-chart-route-jvug: #1f6fb2;
+  --print-chart-route-juhl: #1f6fb2;
+  --print-chart-route-juru: #1f6fb2;
+  --print-chart-route-core-route: #6b21a8;
+  --print-chart-fill: 0.55;          /* polity and region fills on paper: this share of their screen alpha */
+}
